@@ -356,6 +356,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
 
     <!-- 2. Timer -->
     <template v-else-if="stage === 'timing'">
+      <button class="btn-link cancel" type="button" @click="stage = 'setup'">← Cancel brew</button>
       <PourOverTimer
         :recipe-name="recipe?.name ?? 'Brew'"
         :bean-name="beanLabel"
@@ -365,7 +366,6 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         :steps="timerSteps"
         @complete="onTimerComplete"
       />
-      <button class="btn-link cancel" type="button" @click="stage = 'setup'">Cancel brew</button>
     </template>
 
     <!-- 3. Log -->
@@ -436,7 +436,8 @@ p {
   font-size: 0.85rem;
 }
 .cancel {
-  align-self: center;
+  align-self: flex-start;
+  margin: calc(-1 * var(--space-2)) 0 calc(-1 * var(--space-2)) calc(-1 * var(--space-2));
 }
 .manage {
   float: right;

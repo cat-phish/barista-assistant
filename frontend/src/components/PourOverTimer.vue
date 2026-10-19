@@ -10,7 +10,7 @@
 import { computed, onUnmounted, ref } from 'vue';
 import type { RecipeStep } from '../api/types';
 import { formatGrams, formatTime } from '../lib/format';
-import { finishStatus, pourAmounts, stepTitle, STEP_TYPES, timerPhase } from '../lib/steps';
+import { finishStatus, formatFinishWindow, pourAmounts, stepTitle, STEP_TYPES, timerPhase } from '../lib/steps';
 
 const props = defineProps<{
   recipeName: string;
@@ -36,19 +36,31 @@ const formattedTime = computed(() => formatTime(Math.floor(elapsedSec.value)));
 const phase = computed(() => timerPhase(props.steps, elapsedSec.value));
 const amounts = computed(() => pourAmounts(props.steps));
 
-// Progress through the current step's window.
+// Progress through the current phase's window (step, wait gap, or finishing).
+// Finishing runs to the end of the target window if there is one, else full.
 const progress = computed(() => {
   const p = phase.value;
-  if (p.kind !== 'step') return 0;
-  const span = Math.max(0.001, p.endsAt - p.step.startSec);
-  return Math.min(1, Math.max(0, (elapsedSec.value - p.step.startSec) / span));
+  if (p.kind === 'idle') return 0;
+  const to = p.to ?? props.expectedFinishMaxSec;
+  if (to === null || to <= p.from) return p.kind === 'done' ? 1 : 0;
+  return Math.min(1, Math.max(0, (elapsedSec.value - p.from) / (to - p.from)));
 });
-// The step after the current one, for the "Up next" preview.
-const upNext = computed(() => (phase.value.kind === 'step' ? props.steps[phase.value.index + 1] : undefined));
 
-function pourText(step: RecipeStep, amount: number | null | undefined): string | null {
-  if (step.targetWaterGrams === null) return null;
-  return `Pour to ${formatGrams(step.targetWaterGrams)} g${amount != null ? ` (+${formatGrams(amount)} g)` : ''}`;
+const prevStep = computed(() => (phase.value.kind === 'idle' || phase.value.prevIndex === null ? null : props.steps[phase.value.prevIndex] ?? null));
+// During a wait, "Up next" is the step being waited for.
+const nextStep = computed(() => (phase.value.kind === 'idle' || phase.value.nextIndex === null ? null : props.steps[phase.value.nextIndex] ?? null));
+
+// One-line summary for the Previous / Up next cards.
+function sideText(step: RecipeStep): string {
+  const i = props.steps.indexOf(step);
+  const water = step.targetWaterGrams !== null ? ` · to ${formatGrams(step.targetWaterGrams)} g` : '';
+  return `${stepTitle(step)} · ${formatTime(step.startSec)}${step.endSec !== step.startSec ? `–${formatTime(step.endSec)}` : ''}${water}${i >= 0 && amounts.value[i] != null ? ` (+${formatGrams(amounts.value[i]!)} g)` : ''}`;
+}
+const started = computed(() => isRunning.value || elapsedMs.value > 0);
+
+function pourValue(step: RecipeStep, amount: number | null | undefined): string {
+  if (step.targetWaterGrams === null) return 'No pour';
+  return `${formatGrams(step.targetWaterGrams)} g${amount != null ? ` (+${formatGrams(amount)})` : ''}`;
 }
 
 // "Target 2:45–3:15 · in 0:40" / "· in the window" / "· 0:12 over"
@@ -108,47 +120,10 @@ onUnmounted(() => {
 
     <div class="clock-display" role="timer" aria-live="off">
       <span class="time">{{ formattedTime }}</span>
+      <p v-if="finishNote" class="finish-note" :class="{ late: finishLate }">{{ finishNote }}</p>
     </div>
 
-    <!-- Current step -->
-    <div v-if="phase.kind === 'step'" class="step-card active-step" :class="`type-${phase.step.stepType}`">
-      <span class="label">Step {{ phase.index + 1 }} of {{ steps.length }} · {{ STEP_TYPES[phase.step.stepType].label }}</span>
-      <h3 aria-live="polite">{{ stepTitle(phase.step) }}</h3>
-      <div class="step-metrics">
-        <div v-if="pourText(phase.step, phase.amount)" class="metric">
-          <span class="label">Target Weight</span>
-          <span class="value">{{ pourText(phase.step, phase.amount) }}</span>
-        </div>
-        <div class="metric">
-          <span class="label">Until</span>
-          <span class="value">{{ formatTime(phase.endsAt) }}</span>
-        </div>
-      </div>
-      <div class="progress" aria-hidden="true"><span :style="{ width: `${progress * 100}%` }" /></div>
-    </div>
-
-    <!-- Gap between steps -->
-    <div v-else-if="phase.kind === 'wait'" class="step-card wait-card">
-      <span class="label">Wait</span>
-      <h3 aria-live="polite">{{ isRunning || elapsedMs > 0 ? `Next in ${formatTime(Math.ceil(phase.startsIn))}` : 'Ready' }}</h3>
-      <p class="next-line">
-        {{ stepTitle(phase.next) }} at {{ formatTime(phase.next.startSec) }}<template v-if="pourText(phase.next, amounts[phase.nextIndex])"> · {{ pourText(phase.next, amounts[phase.nextIndex]) }}</template>
-      </p>
-    </div>
-
-    <!-- After the last step -->
-    <div v-else-if="phase.kind === 'done'" class="step-card done-card">
-      <span class="label">All steps done</span>
-      <h3 aria-live="polite">Drawdown / finishing</h3>
-    </div>
-
-    <div v-if="upNext" class="step-card next-step">
-      <span class="label">Up Next:</span>
-      <span>{{ stepTitle(upNext) }} at {{ formatTime(upNext.startSec) }}<template v-if="upNext.targetWaterGrams !== null"> · to {{ formatGrams(upNext.targetWaterGrams) }}g</template></span>
-    </div>
-
-    <p v-if="finishNote" class="finish-note" :class="{ late: finishLate }">{{ finishNote }}</p>
-
+    <!-- Right under the clock, so the step cards below stay on screen. -->
     <div class="controls">
       <button v-if="!isRunning && elapsedMs === 0" @click="startTimer" class="btn primary">
         Start Brew
@@ -157,6 +132,65 @@ onUnmounted(() => {
         Finish & Save
       </button>
     </div>
+
+    <template v-if="phase.kind !== 'idle'">
+      <div class="step-card side" aria-label="Previous step">
+        <span class="label">Previous</span>
+        <span class="side-text" :class="{ none: !prevStep }">{{ prevStep ? sideText(prevStep) : 'None' }}</span>
+      </div>
+
+      <!-- Same structure for every phase so the layout doesn't jump. -->
+      <div class="step-card current" :class="`phase-${phase.kind}${phase.kind === 'step' ? ` type-${phase.step.stepType}` : ''}`">
+        <template v-if="phase.kind === 'step'">
+          <span class="label">Step {{ phase.index + 1 }} of {{ steps.length }} · {{ STEP_TYPES[phase.step.stepType].label }}</span>
+          <h3 aria-live="polite">{{ stepTitle(phase.step) }}</h3>
+          <div class="step-metrics">
+            <div class="metric">
+              <span class="label">{{ phase.step.targetWaterGrams !== null ? 'Pour to' : 'Water' }}</span>
+              <span class="value">{{ pourValue(phase.step, phase.amount) }}</span>
+            </div>
+            <div class="metric right">
+              <span class="label">Until</span>
+              <span class="value">{{ formatTime(phase.endsAt) }}</span>
+            </div>
+          </div>
+        </template>
+        <template v-else-if="phase.kind === 'wait'">
+          <span class="label">Wait</span>
+          <h3 aria-live="polite">{{ started ? `Next in ${formatTime(Math.ceil(phase.startsIn))}` : 'Ready' }}</h3>
+          <div class="step-metrics">
+            <div class="metric">
+              <span class="label">Next step</span>
+              <span class="value">{{ stepTitle(phase.next) }}</span>
+            </div>
+            <div class="metric right">
+              <span class="label">Starts at</span>
+              <span class="value">{{ formatTime(phase.next.startSec) }}</span>
+            </div>
+          </div>
+        </template>
+        <template v-else>
+          <span class="label">All steps done</span>
+          <h3 aria-live="polite">Drawdown / finishing</h3>
+          <div class="step-metrics">
+            <div class="metric">
+              <span class="label">Last step ended</span>
+              <span class="value">{{ formatTime(phase.from) }}</span>
+            </div>
+            <div class="metric right">
+              <span class="label">Target finish</span>
+              <span class="value">{{ formatFinishWindow(expectedFinishMinSec, expectedFinishMaxSec) ?? '–' }}</span>
+            </div>
+          </div>
+        </template>
+        <div class="progress" aria-hidden="true"><span :style="{ width: `${progress * 100}%` }" /></div>
+      </div>
+
+      <div class="step-card side" aria-label="Next step">
+        <span class="label">Up next</span>
+        <span class="side-text" :class="{ none: !nextStep }">{{ nextStep ? sideText(nextStep) : 'None' }}</span>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -164,7 +198,7 @@ onUnmounted(() => {
 .timer-container {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 0.75rem;
   /* The reference adds 1.5rem padding; the page around it already pads, and
      doubling it narrowed the timer on phones. */
   padding: 0;
@@ -181,94 +215,132 @@ onUnmounted(() => {
 }
 .clock-display {
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 2rem;
+  gap: 0.25rem;
+  padding: 1rem;
   background: #f5f5f5;
   border-radius: 12px;
   border: 1px solid var(--border);
 }
 .time {
-  font-size: 4rem;
+  font-size: 3.75rem;
+  line-height: 1.1;
   font-variant-numeric: tabular-nums;
   font-weight: bold;
   color: #3e2723;
 }
 .step-card {
-  padding: 1rem;
+  padding: 0.75rem 1rem;
   border-radius: 8px;
   background: white;
   border: 1px solid #e0e0e0;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 .step-card h3 {
   margin: 0;
   font-size: 1.3rem;
 }
-.active-step {
+/* Current phase: fixed height so step -> wait -> step doesn't shift the page. */
+.current {
+  min-height: 9.25rem;
   border-left: 4px solid #3e2723;
 }
-.active-step.type-swirl,
-.active-step.type-stir,
-.active-step.type-press {
+.current.type-swirl,
+.current.type-stir,
+.current.type-press {
   border-left-color: #8d6e63;
 }
-.wait-card {
-  border-left: 4px solid var(--border);
-  background: var(--bg);
+/* Doing something = warm tint; waiting = plain white, so the two read differently. */
+.current.phase-step {
+  background: var(--brand-tint);
+  border-top-color: #d7ccc8;
+  border-right-color: #d7ccc8;
+  border-bottom-color: #d7ccc8;
 }
-.done-card {
-  border-left: 4px solid #2e7d32;
+.phase-step .progress {
+  background: #d7ccc8;
 }
-.next-line {
-  margin: 0;
+.current.phase-wait {
+  background: var(--surface);
+  border-left-color: #bcaaa4;
+}
+/* The step being waited for is also in "Up next", so keep it quiet here. */
+.phase-wait .metric:not(.right) .value {
+  font-size: 1rem;
+  font-weight: 400;
   color: var(--text-muted);
 }
-.next-step {
-  opacity: 0.7;
+.current.phase-done {
+  border-left-color: #2e7d32;
+}
+.side {
   font-size: 0.9rem;
   flex-direction: row;
-  flex-wrap: wrap;
+  align-items: baseline;
   gap: 0.5rem;
+  min-height: 2.75rem;
+  background: var(--bg);
+}
+.side .label {
+  flex-shrink: 0;
+  min-width: 4.5rem;
+}
+.side-text {
+  color: var(--text);
+}
+.side-text.none {
+  color: var(--text-muted);
+  font-style: italic;
 }
 .step-metrics {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
-  margin-top: 0.75rem;
+  margin: 0.5rem 0 0.6rem;
 }
 .metric {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+}
+.metric.right {
+  text-align: right;
 }
 .label {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: #757575;
   text-transform: uppercase;
 }
 .value {
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+/* Pinned to the card's bottom so it sits in the same place in every phase. */
 .progress {
-  margin-top: 0.75rem;
+  margin-top: auto;
   height: 6px;
   border-radius: 3px;
-  background: var(--brand-tint);
   overflow: hidden;
+  background: var(--brand-tint);
 }
 .progress span {
   display: block;
   height: 100%;
   background: var(--brand);
 }
+.phase-wait .progress span {
+  background: #a1887f;
+}
 .finish-note {
   margin: 0;
   text-align: center;
   color: var(--text-muted);
+  font-size: 0.9rem;
   font-variant-numeric: tabular-nums;
 }
 .finish-note.late {

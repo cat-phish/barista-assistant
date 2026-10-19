@@ -66,6 +66,10 @@ export default defineConfig({
     *   **Finish & Save** is available from the start, since a brew can end earlier or later than planned. It emits the elapsed seconds.
     *   A recipe with no steps works as a plain stopwatch.
     *   Instant steps (`startSec === endSec`, e.g. a quick swirl) show for about two seconds, so they aren't missed.
+*   **Layout** (supersedes the reference component's order), top to bottom: **Cancel brew** (in `BrewView`) → recipe header → clock with the target-finish note → **Start Brew / Finish & Save** → **Previous** → **Current** → **Up next**. Keeping the button under the clock means all three step cards stay on screen on a phone (390×844) without scrolling.
+    *   **Previous** and **Up next** are always shown as one-line cards; "None" when there is no such step. During a wait, Up next is the step being waited for.
+    *   **Current** has the same structure in every phase (step, wait, finishing) and a fixed minimum height, so the layout doesn't jump: a label line, a title, two values (left/right) and a progress bar. Step: "Pour to" / "Until", on a warm brand-tint background; wait: "Next step" (muted, since it repeats Up next) / "Starts at", on plain white; finishing: "Last step ended" / "Target finish".
+    *   **Progress bar:** a step runs from its start to its end (or the ~2 s display of an instant step); a wait runs from the previous step's end to the next step's start; finishing runs to the end of the target window, or stays full if there is none.
 
 ### Reference Component Implementation (`frontend/src/components/PourOverTimer.vue`)
 

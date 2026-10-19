@@ -213,25 +213,44 @@ export function recipeWarnings(opts: { waterGrams: number | null; finishMaxSec: 
 // Instant steps (start === end) stay on screen this long so they aren't missed.
 export const INSTANT_STEP_SEC = 2;
 
+// Every phase says which steps come before and after it (for the "Previous"
+// and "Up next" cards; null = none) and the window its progress bar spans
+// (`to` null = no fixed end, e.g. finishing with no target window).
+interface PhaseFrame {
+  prevIndex: number | null;
+  nextIndex: number | null;
+  from: number;
+  to: number | null;
+}
+
 export type TimerPhase =
   | { kind: 'idle' } // no steps: plain stopwatch
-  | { kind: 'step'; index: number; step: RecipeStep; endsAt: number; amount: number | null }
-  | { kind: 'wait'; next: RecipeStep; nextIndex: number; startsIn: number }
-  | { kind: 'done' }; // after the last step: drawdown / finishing
+  | (PhaseFrame & { kind: 'step'; index: number; step: RecipeStep; endsAt: number; amount: number | null })
+  | (PhaseFrame & { kind: 'wait'; next: RecipeStep; nextIndex: number; startsIn: number })
+  | (PhaseFrame & { kind: 'done' }); // after the last step: drawdown / finishing
 
 // What the timer should show `t` seconds into the brew (docs/timer_architecture.md §3).
 export function timerPhase(steps: RecipeStep[], t: number): TimerPhase {
   if (steps.length === 0) return { kind: 'idle' };
   const amounts = pourAmounts(steps);
+  // When each step stops being shown: its end, or for an instant step a short
+  // display window that never runs into the next step.
+  const shownUntil = steps.map((step, i) => {
+    if (step.endSec !== step.startSec) return step.endSec;
+    const nextStart = steps[i + 1]?.startSec ?? Infinity;
+    return Math.min(step.startSec + INSTANT_STEP_SEC, Math.max(nextStart, step.endSec));
+  });
+  const last = steps.length - 1;
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i]!;
-    const endsAt = step.endSec === step.startSec ? step.startSec + INSTANT_STEP_SEC : step.endSec;
-    if (t < step.startSec) return { kind: 'wait', next: step, nextIndex: i, startsIn: step.startSec - t };
-    // An instant step's display window can't run into the next step.
-    const nextStart = steps[i + 1]?.startSec ?? Infinity;
-    if (t < Math.min(endsAt, Math.max(nextStart, step.endSec))) {
-      return { kind: 'step', index: i, step, endsAt: step.endSec === step.startSec ? Math.min(endsAt, nextStart) : endsAt, amount: amounts[i] ?? null };
+    const prevIndex = i > 0 ? i - 1 : null;
+    if (t < step.startSec) {
+      return { kind: 'wait', next: step, nextIndex: i, startsIn: step.startSec - t, prevIndex, from: prevIndex === null ? 0 : shownUntil[prevIndex]!, to: step.startSec };
+    }
+    const until = shownUntil[i]!;
+    if (t < until) {
+      return { kind: 'step', index: i, step, endsAt: until, amount: amounts[i] ?? null, prevIndex, nextIndex: i < last ? i + 1 : null, from: step.startSec, to: until };
     }
   }
-  return { kind: 'done' };
+  return { kind: 'done', prevIndex: last, nextIndex: null, from: shownUntil[last]!, to: null };
 }
