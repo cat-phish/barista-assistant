@@ -17,7 +17,7 @@ import BrewFields from '../components/BrewFields.vue';
 import PourOverTimer from '../components/PourOverTimer.vue';
 import { useAnalysis } from '../composables/useAnalysis';
 import { emptyDraft, parseBrewDraft } from '../lib/brewDraft';
-import { formatDay, formatGrams, formatTime } from '../lib/format';
+import { formatDay, formatGrams, formatRatio, formatTime } from '../lib/format';
 import { chooseGrind, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -65,7 +65,8 @@ onMounted(async () => {
 // so their grind target is only a placeholder; the grind comes from chooseGrind.
 watch(recipe, (r) => {
   draft.dose = r ? formatGrams(r.targetDoseGrams) : '';
-  draft.yieldGrams = r ? formatGrams(r.targetYieldGrams) : '';
+  draft.water = r ? formatGrams(r.targetWaterGrams) : '';
+  draft.yieldGrams = ''; // measured after brewing
   draft.temp = r?.targetTempC != null ? String(r.targetTempC) : '';
   if (suggestion.value) applySuggestion(suggestion.value);
 });
@@ -138,7 +139,7 @@ async function refreshGrind(): Promise<void> {
   }
   if (request !== grindRequest) return;
   lastSetting.value = last;
-  const choice = chooseGrind({ lastSetting: last?.grindSetting ?? null, suggestion: suggestion.value, grinderId });
+  const choice = chooseGrind({ lastSetting: last?.grindSetting ?? null, suggestion: suggestion.value, grinderId, recipe: recipe.value });
   draft.grind = choice.value;
   grindSource.value = choice.source;
 }
@@ -146,7 +147,7 @@ watch([recipeId, () => draft.grinderId], () => {
   if (draft.grinderId !== NEW_GRINDER) void refreshGrind();
 });
 const grindPlaceholder = computed(() =>
-  recipe.value?.targetGrindSetting ? `Recipe: ${recipe.value.targetGrindSetting}` : 'e.g. 20 clicks',
+  'e.g. 20',
 );
 const suggestionGrinderMismatch = computed(
   () => !!suggestion.value && !suggestionFitsGrinder(suggestion.value, draft.grinderId === NEW_GRINDER ? '' : draft.grinderId),
@@ -292,7 +293,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <span v-if="grinderError" class="field-error full">{{ grinderError }}</span>
         </div>
         <p v-if="recipe" class="muted recipe-summary">
-          {{ formatGrams(recipe.targetDoseGrams) }} g → {{ formatGrams(recipe.targetYieldGrams) }} g
+          {{ formatGrams(recipe.targetDoseGrams) }} g : {{ formatGrams(recipe.targetWaterGrams) }} g ({{ formatRatio(recipe.targetDoseGrams, recipe.targetWaterGrams) }})
           <template v-if="recipe.targetTempC !== null"> · {{ recipe.targetTempC }} °C</template>
           <template v-if="recipe.steps.length"> · {{ recipe.steps.length }} steps</template>
         </p>
@@ -338,6 +339,9 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           Last time with {{ grinder?.name }} on {{ recipe?.name }}: {{ lastSetting.grindSetting }} ({{ formatDay(lastSetting.timestamp) }})
         </p>
         <p v-else-if="grindSource === 'suggestion'" class="muted small grind-hint">Grind from the analyzed brew; adjust as suggested.</p>
+        <p v-else-if="grindSource === 'recipe'" class="muted small grind-hint">
+          The recipe's approximate starting point for {{ grinder?.name }}. Adjust to taste; next time your own setting is used.
+        </p>
       </section>
 
       <div class="stack">
@@ -356,6 +360,8 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         :recipe-name="recipe?.name ?? 'Brew'"
         :bean-name="beanLabel"
         :target-dose="timerDose"
+        :expected-finish-min-sec="recipe?.expectedFinishMinSec ?? null"
+        :expected-finish-max-sec="recipe?.expectedFinishMaxSec ?? null"
         :steps="timerSteps"
         @complete="onTimerComplete"
       />
@@ -367,7 +373,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       <h1>How was it?</h1>
       <p class="muted">{{ beanLabel }}<template v-if="recipe"> · {{ recipe.name }}</template></p>
       <section class="card">
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="recipe?.expectedYieldGrams ?? null" />
       </section>
       <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
       <button class="btn btn-primary btn-block" type="submit" :disabled="saving">{{ saving ? 'Saving…' : 'Save brew' }}</button>

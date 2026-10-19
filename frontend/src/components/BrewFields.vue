@@ -4,10 +4,25 @@
 import { computed } from 'vue';
 import type { Grinder } from '../api/types';
 import type { BrewDraft, BrewDraftErrors } from '../lib/brewDraft';
+import { formatGrams } from '../lib/format';
 import RatingInput from './RatingInput.vue';
 
 const draft = defineModel<BrewDraft>({ required: true });
-const props = defineProps<{ errors: BrewDraftErrors; showErrors: boolean; grinders: Grinder[] }>();
+const props = defineProps<{
+  errors: BrewDraftErrors;
+  showErrors: boolean;
+  grinders: Grinder[];
+  expectedYieldGrams?: number | null; // the recipe's rough estimate, shown for comparison
+}>();
+
+// Measured yield vs the recipe's estimate, e.g. "+6 g vs expected 220 g".
+const yieldComparison = computed(() => {
+  const expected = props.expectedYieldGrams;
+  const measured = Number(draft.value.yieldGrams.replace(',', '.'));
+  if (expected == null || !draft.value.yieldGrams.trim() || !Number.isFinite(measured) || measured <= 0) return '';
+  const diff = Math.round((measured - expected) * 10) / 10;
+  return `${diff > 0 ? '+' : diff < 0 ? '−' : '±'}${Math.abs(diff)} g vs expected ${formatGrams(expected)} g`;
+});
 
 // Active grinders, plus the brew's own grinder even if it's since been retired.
 const grinderOptions = computed(() => props.grinders.filter((g) => !g.retiredAt || g.id === draft.value.grinderId));
@@ -22,10 +37,22 @@ const grinderOptions = computed(() => props.grinders.filter((g) => !g.retiredAt 
         <span v-if="showErrors && errors.dose" class="field-error">{{ errors.dose }}</span>
       </div>
       <div class="field">
-        <label for="brew-yield">Yield (g)</label>
-        <input id="brew-yield" v-model="draft.yieldGrams" inputmode="decimal" :aria-invalid="showErrors && !!errors.yieldGrams" />
-        <span v-if="showErrors && errors.yieldGrams" class="field-error">{{ errors.yieldGrams }}</span>
+        <label for="brew-water">Water (g)</label>
+        <input id="brew-water" v-model="draft.water" inputmode="decimal" :aria-invalid="showErrors && !!errors.water" />
+        <span v-if="showErrors && errors.water" class="field-error">{{ errors.water }}</span>
       </div>
+    </div>
+    <div class="field">
+      <label for="brew-yield">Yield (g) <span class="muted">(optional, weigh the brewed coffee)</span></label>
+      <input
+        id="brew-yield"
+        v-model="draft.yieldGrams"
+        inputmode="decimal"
+        :placeholder="expectedYieldGrams != null ? `Expected ~${formatGrams(expectedYieldGrams)}` : ''"
+        :aria-invalid="showErrors && !!errors.yieldGrams"
+      />
+      <span v-if="showErrors && errors.yieldGrams" class="field-error">{{ errors.yieldGrams }}</span>
+      <span v-else-if="yieldComparison" class="hint">{{ yieldComparison }}</span>
     </div>
     <div class="form-row">
       <div class="field">

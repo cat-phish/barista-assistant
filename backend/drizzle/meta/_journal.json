@@ -36,6 +36,20 @@
       "when": 1792399836981,
       "tag": "0004_strong_greymalkin",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1792430134728,
+      "tag": "0005_recipe_rework",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1792431478239,
+      "tag": "0006_finish_window",
+      "breakpoints": true
     }
   ]
 }

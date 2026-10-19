@@ -1,27 +1,24 @@
 <script setup lang="ts">
-// Pour-over timer, per docs/timer_architecture.md §3:
+// Brew timer, per docs/timer_architecture.md §3:
 //  - Never increments a counter: elapsed time is always Date.now() - startTime,
 //    recomputed in a requestAnimationFrame loop (accurate even if frames drop
 //    or the tab is backgrounded).
 //  - Holds a screen wake lock while running; released when finished or unmounted.
-// Differences from the reference: target times are formatted m:ss (the
-// reference printed "0:" + seconds, so 135 s showed as "0:135"), and a recipe
-// without steps (e.g. espresso) works as a plain stopwatch.
+//  - Clock-driven steps: what's shown comes from timerPhase(steps, elapsed)
+//    (current step, waiting in gaps, finishing after the last step). Finish &
+//    Save is available throughout. No steps = plain stopwatch.
 import { computed, onUnmounted, ref } from 'vue';
+import type { RecipeStep } from '../api/types';
 import { formatGrams, formatTime } from '../lib/format';
-
-export interface TimerStep {
-  stepOrder: number;
-  actionName: string;
-  targetTimeSec: number;
-  targetWaterGrams: number;
-}
+import { finishStatus, pourAmounts, stepTitle, STEP_TYPES, timerPhase } from '../lib/steps';
 
 const props = defineProps<{
   recipeName: string;
   beanName: string;
   targetDose: number;
-  steps: TimerStep[];
+  expectedFinishMinSec: number | null;
+  expectedFinishMaxSec: number | null;
+  steps: RecipeStep[];
 }>();
 
 const emit = defineEmits<{
@@ -31,14 +28,32 @@ const emit = defineEmits<{
 const isRunning = ref(false);
 const startTime = ref(0);
 const elapsedMs = ref(0);
-const currentStepIndex = ref(0);
 let animationFrameId: number | null = null;
 let wakeLock: WakeLockSentinel | null = null;
 
-const currentStep = computed(() => props.steps[currentStepIndex.value]);
-const nextStepPreview = computed(() => props.steps[currentStepIndex.value + 1]);
+const elapsedSec = computed(() => elapsedMs.value / 1000);
+const formattedTime = computed(() => formatTime(Math.floor(elapsedSec.value)));
+const phase = computed(() => timerPhase(props.steps, elapsedSec.value));
+const amounts = computed(() => pourAmounts(props.steps));
 
-const formattedTime = computed(() => formatTime(Math.floor(elapsedMs.value / 1000)));
+// Progress through the current step's window.
+const progress = computed(() => {
+  const p = phase.value;
+  if (p.kind !== 'step') return 0;
+  const span = Math.max(0.001, p.endsAt - p.step.startSec);
+  return Math.min(1, Math.max(0, (elapsedSec.value - p.step.startSec) / span));
+});
+// The step after the current one, for the "Up next" preview.
+const upNext = computed(() => (phase.value.kind === 'step' ? props.steps[phase.value.index + 1] : undefined));
+
+function pourText(step: RecipeStep, amount: number | null | undefined): string | null {
+  if (step.targetWaterGrams === null) return null;
+  return `Pour to ${formatGrams(step.targetWaterGrams)} g${amount != null ? ` (+${formatGrams(amount)} g)` : ''}`;
+}
+
+// "Target 2:45–3:15 · in 0:40" / "· in the window" / "· 0:12 over"
+const finishNote = computed(() => finishStatus(props.expectedFinishMinSec, props.expectedFinishMaxSec, elapsedSec.value));
+const finishLate = computed(() => props.expectedFinishMaxSec !== null && elapsedSec.value > props.expectedFinishMaxSec);
 
 const tick = () => {
   if (!isRunning.value) return;
@@ -70,12 +85,6 @@ const startTimer = async () => {
   animationFrameId = requestAnimationFrame(tick);
 };
 
-const advanceStep = () => {
-  if (currentStepIndex.value < props.steps.length - 1) {
-    currentStepIndex.value++;
-  }
-};
-
 const finishBrew = async () => {
   isRunning.value = false;
   if (animationFrameId) cancelAnimationFrame(animationFrameId);
@@ -83,16 +92,6 @@ const finishBrew = async () => {
   await releaseWakeLock();
   emit('complete', Math.floor(elapsedMs.value / 1000));
 };
-
-// Seconds into the current step's window, for the progress bar.
-const stepProgress = computed(() => {
-  const step = currentStep.value;
-  if (!step) return 0;
-  const prevEnd = props.steps[currentStepIndex.value - 1]?.targetTimeSec ?? 0;
-  const span = Math.max(1, step.targetTimeSec - prevEnd);
-  return Math.min(1, Math.max(0, (elapsedMs.value / 1000 - prevEnd) / span));
-});
-const overTime = computed(() => !!currentStep.value && elapsedMs.value / 1000 > currentStep.value.targetTimeSec);
 
 onUnmounted(() => {
   if (animationFrameId) cancelAnimationFrame(animationFrameId);
@@ -111,34 +110,50 @@ onUnmounted(() => {
       <span class="time">{{ formattedTime }}</span>
     </div>
 
-    <div v-if="currentStep" class="step-card active-step" :class="{ late: overTime && isRunning }">
-      <h3>{{ currentStep.actionName }}</h3>
+    <!-- Current step -->
+    <div v-if="phase.kind === 'step'" class="step-card active-step" :class="`type-${phase.step.stepType}`">
+      <span class="label">Step {{ phase.index + 1 }} of {{ steps.length }} · {{ STEP_TYPES[phase.step.stepType].label }}</span>
+      <h3 aria-live="polite">{{ stepTitle(phase.step) }}</h3>
       <div class="step-metrics">
-        <div class="metric">
+        <div v-if="pourText(phase.step, phase.amount)" class="metric">
           <span class="label">Target Weight</span>
-          <span class="value">{{ formatGrams(currentStep.targetWaterGrams) }}g</span>
+          <span class="value">{{ pourText(phase.step, phase.amount) }}</span>
         </div>
         <div class="metric">
-          <span class="label">Target Time</span>
-          <span class="value">{{ formatTime(currentStep.targetTimeSec) }}</span>
+          <span class="label">Until</span>
+          <span class="value">{{ formatTime(phase.endsAt) }}</span>
         </div>
       </div>
-      <div v-if="isRunning" class="progress" aria-hidden="true"><span :style="{ width: `${stepProgress * 100}%` }" /></div>
+      <div class="progress" aria-hidden="true"><span :style="{ width: `${progress * 100}%` }" /></div>
     </div>
 
-    <div v-if="nextStepPreview" class="step-card next-step">
-      <span class="label">Up Next:</span>
-      <span>{{ nextStepPreview.actionName }} to {{ formatGrams(nextStepPreview.targetWaterGrams) }}g</span>
+    <!-- Gap between steps -->
+    <div v-else-if="phase.kind === 'wait'" class="step-card wait-card">
+      <span class="label">Wait</span>
+      <h3 aria-live="polite">{{ isRunning || elapsedMs > 0 ? `Next in ${formatTime(Math.ceil(phase.startsIn))}` : 'Ready' }}</h3>
+      <p class="next-line">
+        {{ stepTitle(phase.next) }} at {{ formatTime(phase.next.startSec) }}<template v-if="pourText(phase.next, amounts[phase.nextIndex])"> · {{ pourText(phase.next, amounts[phase.nextIndex]) }}</template>
+      </p>
     </div>
+
+    <!-- After the last step -->
+    <div v-else-if="phase.kind === 'done'" class="step-card done-card">
+      <span class="label">All steps done</span>
+      <h3 aria-live="polite">Drawdown / finishing</h3>
+    </div>
+
+    <div v-if="upNext" class="step-card next-step">
+      <span class="label">Up Next:</span>
+      <span>{{ stepTitle(upNext) }} at {{ formatTime(upNext.startSec) }}<template v-if="upNext.targetWaterGrams !== null"> · to {{ formatGrams(upNext.targetWaterGrams) }}g</template></span>
+    </div>
+
+    <p v-if="finishNote" class="finish-note" :class="{ late: finishLate }">{{ finishNote }}</p>
 
     <div class="controls">
       <button v-if="!isRunning && elapsedMs === 0" @click="startTimer" class="btn primary">
         Start Brew
       </button>
-      <button v-else-if="isRunning && nextStepPreview" @click="advanceStep" class="btn secondary">
-        Next Step
-      </button>
-      <button v-else-if="isRunning && !nextStepPreview" @click="finishBrew" class="btn success">
+      <button v-else-if="isRunning" @click="finishBrew" class="btn success">
         Finish & Save
       </button>
     </div>
@@ -149,7 +164,7 @@ onUnmounted(() => {
 .timer-container {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
   /* The reference adds 1.5rem padding; the page around it already pads, and
      doubling it narrowed the timer on phones. */
   padding: 0;
@@ -184,26 +199,45 @@ onUnmounted(() => {
   border-radius: 8px;
   background: white;
   border: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 .step-card h3 {
   margin: 0;
+  font-size: 1.3rem;
 }
 .active-step {
   border-left: 4px solid #3e2723;
 }
-.active-step.late {
-  border-left-color: var(--danger);
+.active-step.type-swirl,
+.active-step.type-stir,
+.active-step.type-press {
+  border-left-color: #8d6e63;
+}
+.wait-card {
+  border-left: 4px solid var(--border);
+  background: var(--bg);
+}
+.done-card {
+  border-left: 4px solid #2e7d32;
+}
+.next-line {
+  margin: 0;
+  color: var(--text-muted);
 }
 .next-step {
   opacity: 0.7;
   font-size: 0.9rem;
-  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 .step-metrics {
   display: flex;
   justify-content: space-between;
-  margin-top: 1rem;
+  gap: 1rem;
+  margin-top: 0.75rem;
 }
 .metric {
   display: flex;
@@ -231,6 +265,15 @@ onUnmounted(() => {
   height: 100%;
   background: var(--brand);
 }
+.finish-note {
+  margin: 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.finish-note.late {
+  color: var(--danger);
+}
 .controls button {
   width: 100%;
   padding: 1rem;
@@ -243,6 +286,5 @@ onUnmounted(() => {
   min-height: var(--tap);
 }
 .btn.primary { background: #3e2723; color: white; }
-.btn.secondary { background: #e0e0e0; color: #333; }
 .btn.success { background: #2e7d32; color: white; }
 </style>

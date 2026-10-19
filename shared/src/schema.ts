@@ -138,22 +138,59 @@ export const recipes = mysqlTable("recipes", {
     .notNull()
     .references(() => brewMethods.id, { onDelete: "cascade" }),
   targetDoseGrams: decimal("target_dose_grams", { precision: 5, scale: 2, mode: "number" }).notNull(),
-  targetYieldGrams: decimal("target_yield_grams", { precision: 6, scale: 2, mode: "number" }).notNull(),
+  // Water poured in total; the coffee:water ratio is dose:water.
+  targetWaterGrams: decimal("target_water_grams", { precision: 6, scale: 2, mode: "number" }).notNull(),
+  // Rough estimate of beverage weight (water minus what the grounds retain).
+  expectedYieldGrams: decimal("expected_yield_grams", { precision: 6, scale: 2, mode: "number" }),
+  // Optional target window for the total brew time, in seconds. The API fills
+  // a missing end with the other ±15 s, so it's either both or neither.
+  expectedFinishMinSec: int("expected_finish_min_sec"),
+  expectedFinishMaxSec: int("expected_finish_max_sec"),
   targetTempC: decimal("target_temp_c", { precision: 4, scale: 1, mode: "number" }),
-  targetGrindSetting: varchar("target_grind_setting", { length: 100 }),
   showOnPublicMenu: boolean("show_on_public_menu").default(true).notNull(),
+  // Grind is per grinder: see recipeGrindSettings.
 });
 
-// 7. Recipe Steps (Time-Series Pour-Over Intervals)
+// 6b. Recipe Grind Starting Points (One Per Grinder)
+// An approximate starting setting for this recipe on a given grinder. The
+// brew flow prefers your last actual setting with that grinder and recipe.
+export const recipeGrindSettings = mysqlTable(
+  "recipe_grind_settings",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    recipeId: varchar("recipe_id", { length: 36 })
+      .notNull()
+      .references(() => recipes.id, { onDelete: "cascade" }),
+    grinderId: varchar("grinder_id", { length: 36 })
+      .notNull()
+      .references(() => grinders.id, { onDelete: "cascade" }),
+    setting: varchar("setting", { length: 100 }).notNull(), // e.g. "20"
+  },
+  (table) => ({
+    recipeGrinderUnique: unique("recipe_grind_settings_recipe_grinder_unique").on(table.recipeId, table.grinderId),
+  })
+);
+
+// 7. Recipe Steps (Timed Brew Steps)
+// Each step runs from startSec to endSec (seconds from the start of the brew);
+// gaps between steps are waiting time. stepType is one of RECIPE_STEP_TYPES.
+// Water types (bloom, pour) carry a cumulative "pour to" scale target.
+export const RECIPE_STEP_TYPES = ["bloom", "pour", "swirl", "stir", "wait", "press", "other"] as const;
+export const WATER_STEP_TYPES = ["bloom", "pour"] as const;
+
 export const recipeSteps = mysqlTable("recipe_steps", {
   id: varchar("id", { length: 36 }).primaryKey(),
   recipeId: varchar("recipe_id", { length: 36 })
     .notNull()
     .references(() => recipes.id, { onDelete: "cascade" }),
   stepOrder: int("step_order").notNull(), // 1, 2, 3...
-  actionName: varchar("action_name", { length: 255 }).notNull(), // 'Bloom', 'First Pour', 'Drawdown'
-  targetTimeSec: int("target_time_sec").notNull(), // Cumulative time in seconds when step ends
-  targetWaterGrams: decimal("target_water_grams", { precision: 6, scale: 2, mode: "number" }).notNull(), // Cumulative scale weight
+  stepType: varchar("step_type", { length: 20 }).notNull(), // 'bloom' | 'pour' | 'swirl' | ...
+  label: varchar("label", { length: 255 }), // optional, e.g. 'Second bloom', 'Center pour'
+  startSec: int("start_sec").notNull(),
+  endSec: int("end_sec").notNull(),
+  // Cumulative scale weight to pour to by endSec; only for water step types
+  // (and optional for 'other').
+  targetWaterGrams: decimal("target_water_grams", { precision: 6, scale: 2, mode: "number" }),
 });
 
 // 8. Brew Logs (Actual Execution & Tasting Notes)
@@ -178,7 +215,10 @@ export const brewLogs = mysqlTable("brew_logs", {
   }),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
   actualDoseGrams: decimal("actual_dose_grams", { precision: 5, scale: 2, mode: "number" }).notNull(),
-  actualYieldGrams: decimal("actual_yield_grams", { precision: 6, scale: 2, mode: "number" }).notNull(),
+  actualWaterGrams: decimal("actual_water_grams", { precision: 6, scale: 2, mode: "number" }).notNull(),
+  // Measured beverage weight (optional). With a TDS reading this gives
+  // extraction yield later; compared against the recipe's expected yield.
+  actualYieldGrams: decimal("actual_yield_grams", { precision: 6, scale: 2, mode: "number" }),
   actualTempC: decimal("actual_temp_c", { precision: 4, scale: 1, mode: "number" }),
   actualGrindSetting: varchar("actual_grind_setting", { length: 100 }),
   actualTimeSec: int("actual_time_sec").notNull(),
@@ -213,6 +253,8 @@ export type BeanFreeze = typeof beanFreezes.$inferSelect;
 export type NewBeanFreeze = typeof beanFreezes.$inferInsert;
 export type Grinder = typeof grinders.$inferSelect;
 export type NewGrinder = typeof grinders.$inferInsert;
+export type RecipeGrindSetting = typeof recipeGrindSettings.$inferSelect;
+export type RecipeStepType = (typeof RECIPE_STEP_TYPES)[number];
 export type Recipe = typeof recipes.$inferSelect;
 export type NewRecipe = typeof recipes.$inferInsert;
 export type RecipeStep = typeof recipeSteps.$inferSelect;

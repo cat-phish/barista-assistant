@@ -19,7 +19,7 @@ export interface PublicMenuResponse {
     Pick<Bean, "id" | "roasterName" | "beanName" | "process" | "roastDate" | "inventoryWeightGrams">
   >;
   recipes: Array<
-    Pick<Recipe, "id" | "name" | "targetDoseGrams" | "targetYieldGrams"> & { method: string }
+    Pick<Recipe, "id" | "name" | "targetDoseGrams" | "targetWaterGrams"> & { method: string }
   >;
 }
 
@@ -65,7 +65,7 @@ publicMenuRouter.get(
           name: recipes.name,
           method: brewMethods.name,
           targetDoseGrams: recipes.targetDoseGrams,
-          targetYieldGrams: recipes.targetYieldGrams,
+          targetWaterGrams: recipes.targetWaterGrams,
         })
         .from(recipes)
         .innerJoin(brewMethods, eq(recipes.methodId, brewMethods.id))

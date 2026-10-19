@@ -43,41 +43,6 @@ export function parseTime(text: string): Parsed<number> {
   return { ok: true, value: seconds };
 }
 
-export interface StepDraft {
-  actionName: string;
-  time: string; // m:ss
-  water: string; // grams
-}
-
-export interface ParsedStep {
-  actionName: string;
-  targetTimeSec: number;
-  targetWaterGrams: number;
-}
-
-// Validates the pour-steps editor. Steps are cumulative: each one ends later
-// than the previous one, and the scale weight never goes down (§5).
-export function parseSteps(drafts: StepDraft[]): { steps: ParsedStep[]; errors: Record<number, string> } {
-  const steps: ParsedStep[] = [];
-  const errors: Record<number, string> = {};
-  drafts.forEach((d, i) => {
-    const time = parseTime(d.time);
-    const water = parseDecimal(d.water, { scale: 2, min: 0, max: 10000, exclusiveMax: true });
-    const name = d.actionName.trim();
-    if (!name) errors[i] = 'Name this step, e.g. Bloom';
-    else if (!time.ok) errors[i] = `Time: ${time.error}`;
-    else if (!water.ok) errors[i] = `Water: ${water.error}`;
-    else {
-      const prev = steps[steps.length - 1];
-      if (prev && time.value <= prev.targetTimeSec) errors[i] = `Must end after the previous step (${formatTime(prev.targetTimeSec)})`;
-      else if (prev && water.value < prev.targetWaterGrams) errors[i] = `Water is cumulative: at least ${prev.targetWaterGrams} g`;
-      steps.push({ actionName: name, targetTimeSec: time.value, targetWaterGrams: water.value });
-    }
-  });
-  if (drafts.length > 20) errors[20] = 'At most 20 steps';
-  return { steps, errors };
-}
-
 // API roast dates are ISO datetimes at midnight UTC: keep just the date.
 export function toDateInput(iso: string | null): string {
   return iso ? iso.slice(0, 10) : '';

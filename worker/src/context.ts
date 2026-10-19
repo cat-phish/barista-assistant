@@ -4,6 +4,7 @@ import {
   brewLogs,
   brewMethods,
   grinders,
+  recipeGrindSettings,
   recipes,
   recipeSteps,
   type Bean,
@@ -25,8 +26,9 @@ export interface BrewSummary {
   // The grind setting only means something for this grinder (docs/api_spec.md §9).
   grinderName: string | null;
   actualDoseGrams: number;
-  actualYieldGrams: number;
-  brewRatio: number;
+  actualWaterGrams: number;
+  actualYieldGrams: number | null; // measured beverage weight, if recorded
+  brewRatio: number; // water / dose
   actualTempC: number | null;
   actualGrindSetting: string | null;
   actualTimeSec: number;
@@ -40,10 +42,22 @@ export interface BrewContext {
     name: string;
     method: string;
     targetDoseGrams: number;
-    targetYieldGrams: number;
+    targetWaterGrams: number;
+    expectedYieldGrams: number | null;
+    // Target window for total brew time, seconds (both or neither).
+    expectedFinishMinSec: number | null;
+    expectedFinishMaxSec: number | null;
     targetTempC: number | null;
-    targetGrindSetting: string | null;
-    steps: Array<{ stepOrder: number; actionName: string; targetTimeSec: number; targetWaterGrams: number }>;
+    // Approximate starting points, per grinder (the brew's grinder is in grinderName).
+    grindStartingPoints: Array<{ grinderName: string; setting: string }>;
+    steps: Array<{
+      stepOrder: number;
+      stepType: string;
+      label: string | null;
+      startSec: number;
+      endSec: number;
+      targetWaterGrams: number | null; // cumulative "pour to" weight
+    }>;
   } | null;
   brew: BrewSummary;
   previousBrews: BrewSummary[];
@@ -63,8 +77,9 @@ function summarize(brew: BrewRow, roastDate: Date | null, freezes: readonly Free
     recipeName: brew.recipeName,
     grinderName: brew.grinderName,
     actualDoseGrams: brew.actualDoseGrams,
+    actualWaterGrams: brew.actualWaterGrams,
     actualYieldGrams: brew.actualYieldGrams,
-    brewRatio: Math.round((brew.actualYieldGrams / brew.actualDoseGrams) * 100) / 100,
+    brewRatio: Math.round((brew.actualWaterGrams / brew.actualDoseGrams) * 100) / 100,
     actualTempC: brew.actualTempC,
     actualGrindSetting: brew.actualGrindSetting,
     actualTimeSec: brew.actualTimeSec,
@@ -121,9 +136,11 @@ async function loadRecipe(recipeId: string): Promise<BrewContext["recipe"]> {
       name: recipes.name,
       method: brewMethods.name,
       targetDoseGrams: recipes.targetDoseGrams,
-      targetYieldGrams: recipes.targetYieldGrams,
+      targetWaterGrams: recipes.targetWaterGrams,
+      expectedYieldGrams: recipes.expectedYieldGrams,
+      expectedFinishMinSec: recipes.expectedFinishMinSec,
+      expectedFinishMaxSec: recipes.expectedFinishMaxSec,
       targetTempC: recipes.targetTempC,
-      targetGrindSetting: recipes.targetGrindSetting,
     })
     .from(recipes)
     .innerJoin(brewMethods, eq(recipes.methodId, brewMethods.id))
@@ -131,16 +148,26 @@ async function loadRecipe(recipeId: string): Promise<BrewContext["recipe"]> {
     .limit(1);
   if (!row) return null;
 
-  const steps = await db
-    .select({
-      stepOrder: recipeSteps.stepOrder,
-      actionName: recipeSteps.actionName,
-      targetTimeSec: recipeSteps.targetTimeSec,
-      targetWaterGrams: recipeSteps.targetWaterGrams,
-    })
-    .from(recipeSteps)
-    .where(eq(recipeSteps.recipeId, recipeId))
-    .orderBy(asc(recipeSteps.stepOrder));
+  const [steps, grindStartingPoints] = await Promise.all([
+    db
+      .select({
+        stepOrder: recipeSteps.stepOrder,
+        stepType: recipeSteps.stepType,
+        label: recipeSteps.label,
+        startSec: recipeSteps.startSec,
+        endSec: recipeSteps.endSec,
+        targetWaterGrams: recipeSteps.targetWaterGrams,
+      })
+      .from(recipeSteps)
+      .where(eq(recipeSteps.recipeId, recipeId))
+      .orderBy(asc(recipeSteps.stepOrder)),
+    db
+      .select({ grinderName: grinders.name, setting: recipeGrindSettings.setting })
+      .from(recipeGrindSettings)
+      .innerJoin(grinders, eq(recipeGrindSettings.grinderId, grinders.id))
+      .where(eq(recipeGrindSettings.recipeId, recipeId))
+      .orderBy(asc(grinders.name)),
+  ]);
 
-  return { ...row, steps };
+  return { ...row, grindStartingPoints, steps };
 }

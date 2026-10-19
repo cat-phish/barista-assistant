@@ -14,7 +14,7 @@ async function setup() {
 }
 
 async function brew(user: TestUser, wsId: string, fields: Record<string, unknown>) {
-  const res = await user.agent.post(`/api/workspaces/${wsId}/brew-logs`).send({ actualDoseGrams: 15, actualYieldGrams: 250, actualTimeSec: 150, ...fields });
+  const res = await user.agent.post(`/api/workspaces/${wsId}/brew-logs`).send({ actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150, ...fields });
   return res;
 }
 
@@ -99,7 +99,7 @@ describe("brew logs with grinders", () => {
     const ode = await grinder("Ode");
     const v60 = await methodId(owner, ws.id, "V60");
     const mk = async (name: string) =>
-      (await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name, methodId: v60, targetDoseGrams: 15, targetYieldGrams: 250 })).body.recipe.id as string;
+      (await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name, methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250 })).body.recipe.id as string;
     const house = await mk("House");
     const iced = await mk("Iced");
     const at = (d: string) => `2026-10-${d}T08:00:00Z`;

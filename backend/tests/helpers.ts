@@ -56,7 +56,7 @@ export async function newBean(user: TestUser, workspaceId: string, fields: Recor
 export async function newBrewLog(user: TestUser, workspaceId: string, beanId: string, fields: Record<string, unknown> = {}): Promise<string> {
   const res = await user.agent
     .post(`/api/workspaces/${workspaceId}/brew-logs`)
-    .send({ beanId, actualDoseGrams: 15, actualYieldGrams: 250, actualTimeSec: 150, ...fields });
+    .send({ beanId, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150, ...fields });
   expect(res.status).toBe(201);
   return res.body.brewLog.id as string;
 }

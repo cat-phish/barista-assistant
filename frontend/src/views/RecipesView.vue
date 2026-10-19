@@ -6,6 +6,7 @@ import type { Recipe } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { formatGrams, formatRatio, formatTime } from '../lib/format';
+import { formatFinishWindow, stepTitle } from '../lib/steps';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
@@ -29,10 +30,11 @@ async function load(): Promise<void> {
 }
 onMounted(load);
 
+// "Bloom → Swirl → Main pour → Drawdown · ends 3:00"
 function stepsSummary(recipe: Recipe): string | null {
   const last = recipe.steps[recipe.steps.length - 1];
   if (!last) return null;
-  return `${recipe.steps.length} step${recipe.steps.length === 1 ? '' : 's'} · ${formatTime(last.targetTimeSec)}`;
+  return `${recipe.steps.map(stepTitle).join(' → ')} · ends ${formatTime(last.endSec)}`;
 }
 
 async function confirmDelete(): Promise<void> {
@@ -78,13 +80,17 @@ async function confirmDelete(): Promise<void> {
         </div>
         <p class="facts">
           <span>
-            {{ formatGrams(recipe.targetDoseGrams) }} g → {{ formatGrams(recipe.targetYieldGrams) }} g
-            <span class="muted">({{ formatRatio(recipe.targetDoseGrams, recipe.targetYieldGrams) }})</span>
+            {{ formatGrams(recipe.targetDoseGrams) }} g : {{ formatGrams(recipe.targetWaterGrams) }} g water
+            <span class="muted">({{ formatRatio(recipe.targetDoseGrams, recipe.targetWaterGrams) }})</span>
           </span>
+          <span v-if="recipe.expectedYieldGrams !== null">≈{{ formatGrams(recipe.expectedYieldGrams) }} g yield</span>
+          <span v-if="formatFinishWindow(recipe.expectedFinishMinSec, recipe.expectedFinishMaxSec)">finish {{ formatFinishWindow(recipe.expectedFinishMinSec, recipe.expectedFinishMaxSec) }}</span>
           <span v-if="recipe.targetTempC !== null">{{ recipe.targetTempC }} °C</span>
-          <span v-if="recipe.targetGrindSetting">Grind {{ recipe.targetGrindSetting }}</span>
-          <span v-if="stepsSummary(recipe)">{{ stepsSummary(recipe) }}</span>
         </p>
+        <p v-if="recipe.grindSettings.length" class="grind muted">
+          Grind ≈ {{ recipe.grindSettings.map((g) => `${g.setting} on ${g.grinderName}`).join(' · ') }}
+        </p>
+        <p v-if="stepsSummary(recipe)" class="steps-summary">{{ stepsSummary(recipe) }}</p>
         <div v-if="workspaces.canEdit" class="actions">
           <RouterLink class="btn-link" :to="{ name: 'recipe-edit', params: { id: recipe.id } }">Edit</RouterLink>
           <button class="btn-link danger" type="button" @click="pending = recipe; dialogError = ''">Delete</button>
@@ -143,6 +149,10 @@ p {
   flex-wrap: wrap;
   gap: var(--space-1) var(--space-3);
   font-size: 0.95rem;
+}
+.grind,
+.steps-summary {
+  font-size: 0.9rem;
 }
 .muted-badge {
   background: var(--bg);

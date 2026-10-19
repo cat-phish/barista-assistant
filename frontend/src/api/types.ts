@@ -57,12 +57,23 @@ export interface FreezePeriod {
   thawedOn: string | null;
 }
 
+// docs/api_spec.md §5
+export type StepType = 'bloom' | 'pour' | 'swirl' | 'stir' | 'wait' | 'press' | 'other';
+
 export interface RecipeStep {
   id: string;
   stepOrder: number;
-  actionName: string;
-  targetTimeSec: number; // cumulative
-  targetWaterGrams: number; // cumulative scale weight
+  stepType: StepType;
+  label: string | null;
+  startSec: number;
+  endSec: number;
+  targetWaterGrams: number | null; // cumulative "pour to" weight (water steps)
+}
+
+export interface RecipeGrindSetting {
+  grinderId: string;
+  grinderName: string;
+  setting: string; // approximate starting point for that grinder
 }
 
 export interface Recipe {
@@ -71,10 +82,13 @@ export interface Recipe {
   name: string;
   method: BrewMethod;
   targetDoseGrams: number;
-  targetYieldGrams: number;
+  targetWaterGrams: number;
+  expectedYieldGrams: number | null;
+  expectedFinishMinSec: number | null; // target finish window (both or neither)
+  expectedFinishMaxSec: number | null;
   targetTempC: number | null;
-  targetGrindSetting: string | null;
   showOnPublicMenu: boolean;
+  grindSettings: RecipeGrindSetting[];
   steps: RecipeStep[];
 }
 
@@ -99,14 +113,15 @@ export interface BrewLog {
   grinderId: string | null;
   timestamp: string;
   actualDoseGrams: number;
-  actualYieldGrams: number;
+  actualWaterGrams: number;
+  actualYieldGrams: number | null; // measured beverage weight
   actualTempC: number | null;
   actualGrindSetting: string | null;
   actualTimeSec: number;
   rating: number | null;
   tastingNotes: string | null;
   bean: { id: string; roasterName: string; beanName: string };
-  recipe: { id: string; name: string } | null;
+  recipe: { id: string; name: string; expectedYieldGrams: number | null } | null;
   grinder: { id: string; name: string } | null;
   brewer: { id: string; email: string } | null;
 }
