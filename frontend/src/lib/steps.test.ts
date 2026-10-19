@@ -71,10 +71,21 @@ describe('timerPhase', () => {
     expect(timerPhase(tight, 10.5)).toMatchObject({ kind: 'step', index: 0, endsAt: 11 });
     expect(timerPhase(tight, 11)).toMatchObject({ kind: 'step', index: 1 });
   });
+  it('every phase knows its previous/next step and its progress window', () => {
+    expect(timerPhase(steps, 3)).toMatchObject({ kind: 'step', prevIndex: null, nextIndex: 1, from: 0, to: 10 });
+    expect(timerPhase(steps, 11)).toMatchObject({ kind: 'step', index: 1, prevIndex: 0, nextIndex: 2, from: 10, to: 12 });
+    // The wait after the instant swirl runs from where the swirl stopped showing (12) to the pour (45).
+    expect(timerPhase(steps, 20)).toMatchObject({ kind: 'wait', prevIndex: 1, nextIndex: 2, from: 12, to: 45 });
+    expect(timerPhase(steps, 60)).toMatchObject({ kind: 'step', index: 2, prevIndex: 1, nextIndex: null });
+    expect(timerPhase(steps, 95)).toEqual({ kind: 'done', prevIndex: 2, nextIndex: null, from: 90, to: null });
+    const late = [s({ startSec: 5, endSec: 10, targetWaterGrams: 50 })];
+    expect(timerPhase(late, 2)).toMatchObject({ kind: 'wait', prevIndex: null, nextIndex: 0, from: 0, to: 5 });
+  });
+
   it('waits before the first step, is done after the last, idle without steps', () => {
     const late = [s({ startSec: 5, endSec: 10, targetWaterGrams: 50 })];
     expect(timerPhase(late, 2)).toMatchObject({ kind: 'wait', nextIndex: 0, startsIn: 3 });
-    expect(timerPhase(steps, 90)).toEqual({ kind: 'done' });
+    expect(timerPhase(steps, 90)).toMatchObject({ kind: 'done' });
     expect(timerPhase([], 30)).toEqual({ kind: 'idle' });
   });
 });
