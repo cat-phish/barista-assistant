@@ -1,0 +1,5 @@
+{
+  "//": "Test helpers shared by backend and worker suites (not an npm workspace). ESM, like the packages that import them.",
+  "private": true,
+  "type": "module"
+}

@@ -4,7 +4,7 @@ import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { isRole, requireMembership, type Role } from "../auth/membership.js";
 import { db } from "../db.js";
-import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
+import { isDuplicateEntryError, parseBody, parseQuery, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import {
   brewMethods,
@@ -103,3 +103,37 @@ workspacesRouter.patch(
     res.json({ workspace });
   }
 );
+
+const deleteWorkspaceQuery = z.object({ confirm: z.string().optional() });
+
+// Cascades to members, brew methods, beans, recipes, brew logs and analyses.
+// ?confirm must be the slug as typed by the owner (docs/api_spec.md §2).
+workspacesRouter.delete("/:workspaceId", async (req: Request<{ workspaceId: string }>, res: Response) => {
+  const { workspaceId } = req.params;
+  if (!(await requireMembership(res, authedUserId(req), workspaceId, ["owner"]))) return;
+
+  const query = parseQuery(deleteWorkspaceQuery, req, res);
+  if (!query) return;
+
+  const outcome = await db.transaction(async (tx) => {
+    const [workspace] = await tx
+      .select({ slug: workspaces.slug })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId))
+      .for("update");
+    if (!workspace) return "not_found" as const;
+    if (query.confirm !== workspace.slug) return "unconfirmed" as const;
+    await tx.delete(workspaces).where(eq(workspaces.id, workspaceId));
+    return "deleted" as const;
+  });
+
+  if (outcome === "not_found") {
+    sendError(res, 404, "Workspace not found");
+    return;
+  }
+  if (outcome === "unconfirmed") {
+    sendError(res, 400, "confirm: must equal the workspace's slug");
+    return;
+  }
+  res.status(204).end();
+});

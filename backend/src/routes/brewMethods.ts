@@ -71,6 +71,46 @@ brewMethodsRouter.post(
   }
 );
 
+// Recipes reference methods by ID, so a rename shows up everywhere at once.
+// Case-only renames ("v60" -> "V60") are allowed: the unique index only
+// compares against other rows.
+brewMethodsRouter.patch(
+  "/:methodId",
+  async (req: Request<WorkspaceParams & { methodId: string }>, res: Response<BrewMethodResponse>) => {
+    const { workspaceId, methodId } = req.params;
+    if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
+
+    const body = parseBody(createBrewMethodSchema, req, res);
+    if (!body) return;
+
+    let found: boolean;
+    try {
+      found = await db.transaction(async (tx) => {
+        const [method] = await tx
+          .select({ id: brewMethods.id })
+          .from(brewMethods)
+          .where(and(eq(brewMethods.id, methodId), eq(brewMethods.workspaceId, workspaceId)))
+          .for("update");
+        if (!method) return false;
+        await tx.update(brewMethods).set({ name: body.name }).where(eq(brewMethods.id, methodId));
+        return true;
+      });
+    } catch (err) {
+      if (isDuplicateEntryError(err)) {
+        sendError(res, 409, "A brew method with that name already exists");
+        return;
+      }
+      throw err;
+    }
+
+    if (!found) {
+      sendError(res, 404, "Brew method not found");
+      return;
+    }
+    res.json({ brewMethod: { id: methodId, name: body.name } });
+  }
+);
+
 // The FK cascades to recipes (so workspace deletion works), which makes this
 // check the only thing protecting recipes from losing their method.
 brewMethodsRouter.delete(

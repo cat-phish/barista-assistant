@@ -10,7 +10,9 @@
     "start": "node dist/index.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "migrate": "node dist/migrate.js"
+    "migrate": "node dist/migrate.js",
+    "test": "vitest run",
+    "typecheck:tests": "tsc -p tsconfig.test.json"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",
@@ -18,9 +20,12 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.6.5",
+    "@types/supertest": "^7.2.1",
     "drizzle-kit": "^0.31.11",
+    "supertest": "^7.3.1",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
   },
   "dependencies": {
     "@barista/shared": "^1.0.0",

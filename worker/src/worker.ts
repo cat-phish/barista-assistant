@@ -1,39 +1,10 @@
 import "dotenv/config";
-import { randomUUID } from "node:crypto";
 import { BREW_ANALYSIS_QUEUE, type BrewAnalysisJobData } from "@barista/shared/jobs";
-import { llmAnalyses } from "@barista/shared/schema";
 import { UnrecoverableError, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 import { config } from "./config.js";
-import { loadBrewContext } from "./context.js";
-import { db, pool } from "./db.js";
-import { analyzeWithLlm } from "./llm.js";
-
-type JobResult = { status: "saved"; analysisId: string } | { status: "skipped"; reason: string };
-
-async function processBrewAnalysis(job: Job<BrewAnalysisJobData>): Promise<JobResult> {
-  const { brewLogId } = job.data;
-
-  const context = await loadBrewContext(brewLogId);
-  if (!context) {
-    // Deleted after queueing: nothing to analyze, and retrying won't change that.
-    return { status: "skipped", reason: "brew log no longer exists" };
-  }
-
-  const analysis = await analyzeWithLlm(context);
-
-  const analysisId = randomUUID();
-  try {
-    await db.insert(llmAnalyses).values({ id: analysisId, brewLogId, ...analysis });
-  } catch (err) {
-    // The log may have been deleted while the LLM call was running (FK violation).
-    if ((await loadBrewContext(brewLogId)) === null) {
-      return { status: "skipped", reason: "brew log deleted during analysis" };
-    }
-    throw err;
-  }
-  return { status: "saved", analysisId };
-}
+import { pool } from "./db.js";
+import { processBrewAnalysis, type JobResult } from "./processor.js";
 
 // BullMQ workers need maxRetriesPerRequest: null (blocking commands).
 const connection = new Redis(config.redis.url, {
@@ -41,7 +12,7 @@ const connection = new Redis(config.redis.url, {
   ...(config.redis.password ? { password: config.redis.password } : {}),
 });
 
-const worker = new Worker<BrewAnalysisJobData, JobResult>(BREW_ANALYSIS_QUEUE, processBrewAnalysis, {
+const worker = new Worker<BrewAnalysisJobData, JobResult>(BREW_ANALYSIS_QUEUE, (job: Job<BrewAnalysisJobData>) => processBrewAnalysis(job.data), {
   connection,
   concurrency: config.concurrency,
 });

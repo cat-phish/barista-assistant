@@ -22,7 +22,8 @@ import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 export interface BrewLogDetails extends BrewLog {
   bean: Pick<Bean, "id" | "roasterName" | "beanName">;
   recipe: Pick<Recipe, "id" | "name"> | null;
-  brewer: { id: string; email: string };
+  // Null when the brewer deleted their account (the log is kept).
+  brewer: { id: string; email: string } | null;
 }
 
 export interface BrewLogListResponse {
@@ -128,7 +129,8 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
     .from(brewLogs)
     .innerJoin(beans, eq(brewLogs.beanId, beans.id))
     .leftJoin(recipes, eq(brewLogs.recipeId, recipes.id))
-    .innerJoin(users, eq(brewLogs.userId, users.id))
+    // Left join: logs of deleted accounts (userId null) must still be listed.
+    .leftJoin(users, eq(brewLogs.userId, users.id))
     .where(where)
     .orderBy(desc(brewLogs.timestamp), desc(brewLogs.id))
     .limit(limit)
@@ -139,9 +141,10 @@ function logInWorkspace(params: BrewLogParams): SQL | undefined {
   return and(eq(brewLogs.id, params.brewLogId), eq(brewLogs.workspaceId, params.workspaceId));
 }
 
-// Owners can change any log; baristas only their own.
-function canModify(role: Role, callerId: string, logUserId: string): boolean {
-  return role === "owner" || (role === "barista" && callerId === logUserId);
+// Owners can change any log; baristas only their own. Logs of deleted
+// accounts (logUserId null) belong to no barista, so only owners can change them.
+function canModify(role: Role, callerId: string, logUserId: string | null): boolean {
+  return role === "owner" || (role === "barista" && logUserId !== null && callerId === logUserId);
 }
 
 // Mounted at /api/workspaces/:workspaceId/brew-logs

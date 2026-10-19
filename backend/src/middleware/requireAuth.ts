@@ -1,5 +1,8 @@
+import { users } from "@barista/shared/schema";
+import { eq } from "drizzle-orm";
 import type { NextFunction, Request, Response } from "express";
-import { SESSION_COOKIE, verifySessionToken } from "../auth/session.js";
+import { clearSessionCookie, SESSION_COOKIE, verifySessionToken } from "../auth/session.js";
+import { db } from "../db.js";
 import { sendError } from "../http.js";
 
 declare module "express-serve-static-core" {
@@ -8,14 +11,29 @@ declare module "express-serve-static-core" {
   }
 }
 
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+// Valid signature isn't enough: the token's session version must still match
+// the user's (one primary-key lookup), so password changes revoke old sessions
+// and tokens of deleted accounts stop working.
+export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const token: unknown = req.cookies?.[SESSION_COOKIE];
-  const userId = typeof token === "string" ? verifySessionToken(token) : null;
-  if (!userId) {
+  const claims = typeof token === "string" ? verifySessionToken(token) : null;
+  if (!claims) {
     sendError(res, 401, "Not authenticated");
     return;
   }
-  req.userId = userId;
+
+  const [user] = await db
+    .select({ sessionVersion: users.sessionVersion })
+    .from(users)
+    .where(eq(users.id, claims.userId))
+    .limit(1);
+  if (!user || user.sessionVersion !== claims.sessionVersion) {
+    clearSessionCookie(res);
+    sendError(res, 401, "Not authenticated");
+    return;
+  }
+
+  req.userId = claims.userId;
   next();
 }
 

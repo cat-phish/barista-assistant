@@ -25,6 +25,9 @@ export const users = mysqlTable("users", {
   id: varchar("id", { length: 36 }).primaryKey(),
   email: varchar("email", { length: 255 }).unique().notNull(),
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
+  // Embedded in session tokens; bumping it (e.g. on password change) makes
+  // every older session invalid.
+  sessionVersion: int("session_version").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -130,9 +133,9 @@ export const brewLogs = mysqlTable("brew_logs", {
   workspaceId: varchar("workspace_id", { length: 36 })
     .notNull()
     .references(() => workspaces.id, { onDelete: "cascade" }),
-  userId: varchar("user_id", { length: 36 })
-    .notNull()
-    .references(() => users.id),
+  // Null once the brewer deletes their account: the log stays as shared
+  // workspace history, shown as a deleted user.
+  userId: varchar("user_id", { length: 36 }).references(() => users.id, { onDelete: "set null" }),
   beanId: varchar("bean_id", { length: 36 })
     .notNull()
     .references(() => beans.id, { onDelete: "cascade" }),

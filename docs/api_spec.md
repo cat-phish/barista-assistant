@@ -22,7 +22,8 @@
 ## 1. Authentication (JWT in httpOnly Cookie)
 
 The session is a signed JWT (`HS256`, secret from `process.env.JWT_SECRET`)
-with payload `{ "sub": "<userId>" }` and a 7-day expiry. It is stored in a
+with payload `{ "sub": "<userId>", "sv": <sessionVersion> }` and a 7-day
+expiry. It is stored in a
 cookie named `session` with `HttpOnly`, `SameSite=Lax`, `Path=/`, and
 `Secure` when `NODE_ENV=production`. The frontend must send requests with
 `credentials: "include"`. CORS allows only `process.env.CORS_ORIGIN` with
@@ -30,6 +31,16 @@ credentials enabled.
 
 Passwords are hashed with `scrypt` (Node `crypto`, random 16-byte salt) and
 compared in constant time.
+
+**Session invalidation:** every authenticated request compares the token's
+`sv` with `users.session_version`. Changing the password increments it, so all
+older sessions get `401` on their next request (the device that changed it is
+issued a new cookie). A token for a deleted account also gets `401`. In both
+cases the response clears the cookie.
+
+**`401` vs `403`:** `401` always means "not logged in" (the frontend should send
+the user to the login screen). A wrong *current* password in the endpoints
+below is `403`, so a typo doesn't look like a logout.
 
 ### `POST /api/auth/register`
 
@@ -61,6 +72,33 @@ compared in constant time.
 
 - **Auth Required:** `true`
 - **Success (`200 OK`):** `{ "user": { "id": "uuid", "email": "a@b.com" } }`
+
+### `POST /api/auth/password`
+
+Changes the caller's password and logs out all their **other** sessions.
+
+- **Auth Required:** `true`
+- **Body:** `{ "currentPassword": "...", "newPassword": "min 8 chars" }`
+- **Success (`204 No Content`):** sets a fresh `session` cookie for this device.
+- **Errors:** `400` invalid body, or `newPassword` equals `currentPassword`;
+  `403` `currentPassword` is wrong; `429` too many wrong attempts (same limit
+  and response as login).
+
+### `DELETE /api/auth/me`
+
+Deletes the caller's account. Their workspace memberships are removed. Their
+brew logs are **kept** as shared workspace history with `userId: null` and
+`brewer: null` (§6).
+
+- **Auth Required:** `true`
+- **Body:** `{ "password": "..." }` (re-entered, so an unattended logged-in
+  device can't delete the account)
+- **Success (`204 No Content`):** clears the `session` cookie.
+- **Errors:** `400` invalid body; `403` wrong password; `429` too many wrong
+  attempts; `409` the caller is the only owner of one or more workspaces, with
+  body `{ "error": "...", "workspaces": [ { "id", "name", "slug" } ] }`.
+  Nothing is deleted. They must promote another owner (§2 Members) or delete
+  those workspaces first.
 
 ---
 
@@ -103,6 +141,21 @@ Updates workspace settings, including turning the public menu on or off.
   `{ "name": "New Name", "isPublicMenuEnabled": true }`
 - **Success (`200 OK`):** `{ "workspace": { ...workspace } }`
 - **Errors:** `400` invalid or empty body; `403` not an owner.
+
+### `DELETE /api/workspaces/:workspaceId?confirm=<slug>`
+
+Permanently deletes the workspace and everything in it: members, brew methods,
+beans, recipes, brew logs and analyses.
+
+- **Auth Required:** `true` (role `owner`)
+- **Query:** `confirm` must equal the workspace's `slug`.
+- **Success (`204 No Content`)**
+- **Errors:** `400` `confirm` missing or not equal to the slug; `403` not an
+  owner.
+
+> **Frontend requirement:** ask the owner to type the workspace slug (like
+> GitHub's "type the repository name") and pass exactly what they typed as
+> `confirm`. Never fill it in automatically.
 
 ### Members
 
@@ -168,6 +221,18 @@ free text.
 - **Success (`201 Created`):** `{ "brewMethod": { "id": "uuid", "name": "Chemex" } }`
 - **Errors:** `400` invalid body; `403` viewer; `409` a method with that name
   already exists in this workspace (case-insensitive).
+
+### `PATCH /api/workspaces/:workspaceId/brew-methods/:methodId`
+
+Renames a brew method. Recipes reference it by ID, so they show the new name
+immediately (including on the public menu).
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:** `{ "name": "Hario V60" }` (trimmed, 1–100 chars)
+- **Success (`200 OK`):** `{ "brewMethod": { "id": "uuid", "name": "Hario V60" } }`
+- **Errors:** `400` invalid body; `403` viewer; `404` method not in this
+  workspace; `409` another method in this workspace already has that name
+  (case-insensitive). Changing only the case, e.g. `v60` to `V60`, is allowed.
 
 ### `DELETE /api/workspaces/:workspaceId/brew-methods/:methodId`
 
@@ -368,7 +433,8 @@ created it and can't be changed.
 ```
 
 `recipe` is `null` when `recipeId` is `null` (no recipe used, or the recipe was
-deleted later).
+deleted later). `userId` and `brewer` are `null` when the brewer deleted their
+account. Such logs can only be edited or deleted by owners.
 
 ### `GET /api/workspaces/:workspaceId/brew-logs`
 

@@ -50,29 +50,26 @@ export type BrewAnalysis = z.infer<typeof analysisSchema>;
 
 const openai = new OpenAI({ apiKey: config.openaiApiKey });
 
-export async function analyzeWithLlm(context: BrewContext): Promise<BrewAnalysis> {
-  let completion: OpenAI.Chat.Completions.ChatCompletion;
-  try {
-    completion = await openai.chat.completions.create({
-      model: config.openaiModel,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: JSON.stringify(context) },
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: { name: "brew_analysis", strict: true, schema: BREW_ANALYSIS_JSON_SCHEMA },
-      },
-    });
-  } catch (err) {
-    // Bad key, unknown model, malformed request: retrying won't help.
-    if (err instanceof OpenAI.APIError && err.status !== undefined && [400, 401, 403, 404].includes(err.status)) {
-      throw new UnrecoverableError(`OpenAI rejected the request (${err.status}): ${err.message}`);
-    }
-    throw err; // 429 / 5xx / network: let BullMQ retry with backoff
-  }
+// The exact request sent to OpenAI (pure, so tests can check it against §9).
+export function buildCompletionRequest(context: BrewContext): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
+  return {
+    model: config.openaiModel,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: JSON.stringify(context) },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: { name: "brew_analysis", strict: true, schema: BREW_ANALYSIS_JSON_SCHEMA },
+    },
+  };
+}
 
-  const message = completion.choices[0]?.message;
+// Turns the model's reply into a validated analysis, or throws (which makes
+// BullMQ retry the job).
+export function parseAnalysisMessage(
+  message: { content?: string | null; refusal?: string | null } | undefined
+): BrewAnalysis {
   if (message?.refusal) throw new Error(`LLM refused: ${message.refusal}`);
   if (!message?.content) throw new Error("LLM returned an empty response");
 
@@ -88,4 +85,18 @@ export async function analyzeWithLlm(context: BrewContext): Promise<BrewAnalysis
     throw new Error(`LLM response failed validation: ${result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
   }
   return result.data;
+}
+
+export async function analyzeWithLlm(context: BrewContext): Promise<BrewAnalysis> {
+  let completion: OpenAI.Chat.Completions.ChatCompletion;
+  try {
+    completion = await openai.chat.completions.create(buildCompletionRequest(context));
+  } catch (err) {
+    // Bad key, unknown model, malformed request: retrying won't help.
+    if (err instanceof OpenAI.APIError && err.status !== undefined && [400, 401, 403, 404].includes(err.status)) {
+      throw new UnrecoverableError(`OpenAI rejected the request (${err.status}): ${err.message}`);
+    }
+    throw err; // 429 / 5xx / network: let BullMQ retry with backoff
+  }
+  return parseAnalysisMessage(completion.choices[0]?.message);
 }

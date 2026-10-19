@@ -33,6 +33,10 @@
    - Backend/Worker: run `npx tsc --noEmit` or `npm run build` in the
      respective folder to verify compilation.
    - Frontend: run `npm run build` in `/frontend` to verify Vite compiles.
+   - Run `npm test` at the repo root (backend + worker suites). Needs the db
+     and redis containers up; first time only: `npm run test:db:create`.
+     Tests use `coffee_journal_test` and Redis db 1, never the real data.
+     Add or update tests with every API or worker change.
 5. **No Secrets:** Never commit `.env` files or hardcode API keys/passwords.
    Always use `process.env`.
    - Commits are scanned by a gitleaks pre-commit hook (`.githooks/pre-commit`,

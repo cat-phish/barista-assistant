@@ -7,8 +7,9 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true"
+    "test": "npm test -w backend && npm test -w worker",
+    "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true",
+    "test:db:create": "./scripts/create-test-db.sh"
   },
   "repository": {
     "type": "git",
@@ -26,5 +27,10 @@
     "frontend",
     "backend",
     "worker"
-  ]
+  ],
+  "overrides": {
+    "@esbuild-kit/core-utils": {
+      "esbuild": ">=0.25.0"
+    }
+  }
 }

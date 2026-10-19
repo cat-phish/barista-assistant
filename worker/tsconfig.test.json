@@ -1,0 +1,6 @@
+{
+  // Type-checks tests and the shared test helpers (npm run typecheck:tests).
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "rootDir": "..", "noEmit": true, "composite": false },
+  "include": ["src", "tests", "vitest.config.ts", "../testing"]
+}

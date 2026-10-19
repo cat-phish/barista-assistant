@@ -15,6 +15,13 @@
       "when": 1792391459183,
       "tag": "0001_jittery_malice",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1792395901340,
+      "tag": "0002_charming_firebird",
+      "breakpoints": true
     }
   ]
 }
