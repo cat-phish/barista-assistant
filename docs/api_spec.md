@@ -416,20 +416,71 @@ Ends the open freeze period.
 
 ## 5. Recipes
 
-A recipe's `method` is returned as `{ "id", "name" }` from its brew method.
-`steps` are the timed pour-over intervals used by the timer
-(`docs/timer_architecture.md`). They are returned in `stepOrder`, and the list
-may be empty (e.g. espresso).
+A recipe describes how to brew: `targetDoseGrams` of coffee and
+`targetWaterGrams` of water (the **coffee:water ratio** is dose:water, e.g.
+15 g : 250 g = 1:16.7, calculated by clients), plus an optional estimate of
+the beverage yield, an optional **target finish window** for the total brew
+time, and an optional water temperature.
+
+Recipes are grinder-neutral: instead of one grind setting they carry
+**approximate starting points per grinder** (`grindSettings`). The brew flow
+uses one only when there's no actual setting from your last brew with that
+grinder and recipe (§3b `last-setting`).
+
+**Steps** are what the timer runs (`docs/timer_architecture.md` §3). Each has a
+`stepType`, an optional `label` (e.g. "Second bloom"), and a start and end time
+in seconds from the start of the brew. Gaps between steps are waiting time.
+Water steps (`bloom`, `pour`) carry `targetWaterGrams`: the cumulative scale
+weight to **pour to** by the step's end (clients show the per-step amount, the
+difference from the previous water step, next to it).
+
+| `stepType` | Meaning | `targetWaterGrams` |
+|---|---|---|
+| `bloom` | Pour to wet the grounds and let them degas (repeatable for double blooms) | required |
+| `pour` | Pour | required |
+| `swirl` | Swirl the brewer | must be absent/`null` |
+| `stir` | Stir the slurry | must be absent/`null` |
+| `wait` | Wait / drawdown | must be absent/`null` |
+| `press` | Press / plunge (AeroPress, French press) | must be absent/`null` |
+| `other` | Anything else; give it a `label` | optional |
+
+**Recipe object** (every endpoint below returns this shape):
+
+```json
+{
+  "id": "uuid",
+  "workspaceId": "uuid",
+  "name": "House V60",
+  "method": { "id": "uuid", "name": "V60" },
+  "targetDoseGrams": 15,
+  "targetWaterGrams": 250,
+  "expectedYieldGrams": 220,
+  "expectedFinishMinSec": 165,
+  "expectedFinishMaxSec": 195,
+  "targetTempC": 94,
+  "showOnPublicMenu": true,
+  "grindSettings": [
+    { "grinderId": "uuid", "grinderName": "Comandante C40", "setting": "20" }
+  ],
+  "steps": [
+    { "id": "uuid", "stepOrder": 1, "stepType": "bloom", "label": null, "startSec": 0, "endSec": 10, "targetWaterGrams": 45 },
+    { "id": "uuid", "stepOrder": 2, "stepType": "swirl", "label": null, "startSec": 10, "endSec": 15, "targetWaterGrams": null },
+    { "id": "uuid", "stepOrder": 3, "stepType": "pour", "label": "Main pour", "startSec": 45, "endSec": 90, "targetWaterGrams": 250 }
+  ]
+}
+```
+
+`grindSettings` are sorted by grinder name and include retired grinders.
+`steps` are in `stepOrder` and may be empty.
 
 ### `GET /api/workspaces/:workspaceId/recipes`
 
 - **Auth Required:** `true` (any member)
-- **Success (`200 OK`):** `{ "recipes": [ { ...recipe } ] }`, sorted by
-  `name`, each shaped like the `POST` response below.
+- **Success (`200 OK`):** `{ "recipes": [ { ...recipe } ] }`, sorted by `name`.
 
 ### `POST /api/workspaces/:workspaceId/recipes`
 
-Creates a recipe and its steps in one transaction.
+Creates a recipe, its grind starting points and its steps in one transaction.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Body:**
@@ -438,57 +489,58 @@ Creates a recipe and its steps in one transaction.
     "name": "House V60",
     "methodId": "uuid",
     "targetDoseGrams": 15,
-    "targetYieldGrams": 250,
+    "targetWaterGrams": 250,
+    "expectedYieldGrams": 220,
+    "expectedFinishMinSec": 165,
+    "expectedFinishMaxSec": 195,
     "targetTempC": 94,
-    "targetGrindSetting": "18 clicks",
     "showOnPublicMenu": true,
+    "grindSettings": [{ "grinderId": "uuid", "setting": "20" }],
     "steps": [
-      { "actionName": "Bloom", "targetTimeSec": 45, "targetWaterGrams": 50 },
-      { "actionName": "First Pour", "targetTimeSec": 90, "targetWaterGrams": 150 },
-      { "actionName": "Second Pour", "targetTimeSec": 135, "targetWaterGrams": 250 }
+      { "stepType": "bloom", "startSec": 0, "endSec": 10, "targetWaterGrams": 45 },
+      { "stepType": "swirl", "startSec": 10, "endSec": 15 },
+      { "stepType": "pour", "label": "Main pour", "startSec": 45, "endSec": 90, "targetWaterGrams": 250 }
     ]
   }
   ```
-  - `methodId` must be a brew method in **this** workspace.
-  - Grams are numbers > 0 with at most 2 decimals (`targetDoseGrams` < 1000,
-    others < 10000). `targetTempC` is optional, 0–100, at most 1 decimal.
-  - `targetGrindSetting` is optional (≤100 chars). `showOnPublicMenu`
-    defaults to `true`. `steps` defaults to `[]`, max 20.
-  - `stepOrder` is assigned from array position (1, 2, 3...). Step times and
-    water weights are cumulative: `targetTimeSec` must strictly increase and
-    `targetWaterGrams` must not decrease from one step to the next.
-- **Success (`201 Created`):**
-  ```json
-  {
-    "recipe": {
-      "id": "uuid",
-      "workspaceId": "uuid",
-      "name": "House V60",
-      "method": { "id": "uuid", "name": "V60" },
-      "targetDoseGrams": 15,
-      "targetYieldGrams": 250,
-      "targetTempC": 94,
-      "targetGrindSetting": "18 clicks",
-      "showOnPublicMenu": true,
-      "steps": [
-        { "id": "uuid", "stepOrder": 1, "actionName": "Bloom", "targetTimeSec": 45, "targetWaterGrams": 50 }
-      ]
-    }
-  }
-  ```
-- **Errors:** `400` invalid body, or `methodId` not in this workspace;
-  `403` viewer.
+  - Required: `name`, `methodId` (a brew method in **this** workspace),
+    `targetDoseGrams` (> 0, < 1000, max 2 decimals), `targetWaterGrams`
+    (> 0, < 10000, max 2 decimals).
+  - Optional, nullable: `expectedYieldGrams` (same rules as water),
+    `targetTempC` (0–100, max 1 decimal). `showOnPublicMenu` defaults to
+    `true`.
+  - Target finish window: `expectedFinishMinSec` and `expectedFinishMaxSec`
+    (integers 0–86400, optional, nullable, min ≤ max). If only one is given,
+    the other defaults to it **±15 s**: min 165 → max 180; max 195 → min 180
+    (never below 0). So a stored window always has both ends, or neither.
+  - `grindSettings` (default `[]`): each `grinderId` must be a grinder in this
+    workspace (retired allowed), at most once; `setting` trimmed, 1–100 chars.
+  - `steps` (default `[]`, max 20), in order (`stepOrder` = array position):
+    - `stepType` from the table above; `label` optional, ≤ 255 chars, blank
+      becomes `null`.
+    - `startSec` and `endSec` are integers 0–86400 with `startSec ≤ endSec`
+      (equal is fine for an instant action), and steps don't overlap: each
+      starts at or after the previous one's `endSec`.
+    - `targetWaterGrams` as in the table (> 0, < 10000, max 2 decimals). Across
+      the steps that have one, it never decreases.
+  - Not enforced (clients warn instead): the last pour reaching
+    `targetWaterGrams`, and the finish window ending after the last step.
+- **Success (`201 Created`):** `{ "recipe": { ...recipe } }`
+- **Errors:** `400` invalid body, or `methodId`/`grinderId` not in this
+  workspace; `403` viewer.
 
 ### `PATCH /api/workspaces/:workspaceId/recipes/:recipeId`
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Body:** any non-empty subset of the `POST` fields, with the same rules.
-  Unknown fields are rejected. `targetTempC` and `targetGrindSetting` can be
-  set to `null`. If `steps` is present it **replaces** the whole step list
-  (`[]` removes all steps); if absent, steps are unchanged.
-- **Success (`200 OK`):** `{ "recipe": { ...recipe } }` (same shape as `POST`)
-- **Errors:** `400` invalid or empty body, or `methodId` not in this workspace;
-  `403` viewer; `404` recipe not in this workspace.
+  Unknown fields are rejected. The optional fields can be set to `null`.
+  The finish window is treated as a pair: sending only one end applies the
+  ±15 s default to the other; setting one end to `null` clears both.
+  `steps` and `grindSettings`, if present, each **replace** their whole list
+  (`[]` clears it); if absent, they're unchanged.
+- **Success (`200 OK`):** `{ "recipe": { ...recipe } }`
+- **Errors:** `400` invalid or empty body, or `methodId`/`grinderId` not in
+  this workspace; `403` viewer; `404` recipe not in this workspace.
 
 ### `DELETE /api/workspaces/:workspaceId/recipes/:recipeId`
 
@@ -523,7 +575,8 @@ created it and can't be changed.
   "recipeId": "uuid",
   "timestamp": "2026-10-18T08:55:00.000Z",
   "actualDoseGrams": 15,
-  "actualYieldGrams": 250,
+  "actualWaterGrams": 250,
+  "actualYieldGrams": 225,
   "actualTempC": 93,
   "grinderId": "uuid",
   "actualGrindSetting": "18 clicks",
@@ -531,14 +584,16 @@ created it and can't be changed.
   "rating": 3,
   "tastingNotes": "Sour, thin body",
   "bean": { "id": "uuid", "roasterName": "Onyx Coffee Lab", "beanName": "Southern Weather" },
-  "recipe": { "id": "uuid", "name": "House V60" },
+  "recipe": { "id": "uuid", "name": "House V60", "expectedYieldGrams": 220 },
   "grinder": { "id": "uuid", "name": "Comandante C40" },
   "brewer": { "id": "uuid", "email": "barista@example.com" }
 }
 ```
 
 `recipe` is `null` when `recipeId` is `null` (no recipe used, or the recipe was
-deleted later). `grinder` is `null` when no grinder was recorded; a retired
+deleted later); its `expectedYieldGrams` is the recipe's current estimate (or
+`null`), for comparing with the measured `actualYieldGrams`. `grinder` is
+`null` when no grinder was recorded; a retired
 grinder still appears here. `userId` and `brewer` are `null` when the brewer deleted their
 account. Such logs can only be edited or deleted by owners.
 
@@ -568,7 +623,8 @@ account. Such logs can only be edited or deleted by owners.
     "recipeId": "uuid",
     "timestamp": "2026-10-18T08:55:00.000Z",
     "actualDoseGrams": 15,
-    "actualYieldGrams": 250,
+    "actualWaterGrams": 250,
+    "actualYieldGrams": 225,
     "actualTempC": 93,
     "grinderId": "uuid",
     "actualGrindSetting": "18 clicks",
@@ -577,7 +633,7 @@ account. Such logs can only be edited or deleted by owners.
     "tastingNotes": "Sour, thin body"
   }
   ```
-  - Required: `beanId`, `actualDoseGrams`, `actualYieldGrams`, `actualTimeSec`.
+  - Required: `beanId`, `actualDoseGrams`, `actualWaterGrams`, `actualTimeSec`.
   - `beanId`, plus `recipeId` and `grinderId` (both optional, nullable), must belong
     to **this** workspace. A retired grinder is accepted (e.g. when logging an
     old brew afterwards); clients just don't offer it for new brews.
@@ -585,8 +641,12 @@ account. Such logs can only be edited or deleted by owners.
     can be logged afterwards, but it can't be more than 5 minutes in the
     future (allowing for clock skew).
   - Grams and °C follow the recipe rules in §5 (`actualDoseGrams` 0–1000,
-    `actualYieldGrams` 0–10000, both > 0, max 2 decimals; `actualTempC` 0–100,
+    `actualWaterGrams` 0–10000, both > 0, max 2 decimals; `actualTempC` 0–100,
     max 1 decimal, nullable).
+  - `actualYieldGrams` is the **measured** beverage weight: optional,
+    nullable, same rules as water. Unlike the recipe's rough
+    `expectedYieldGrams`, it's a measurement (with a TDS reading it will give
+    extraction yield), and clients show it against the recipe's expected yield.
   - `actualTimeSec`: integer 0–86400 (24 hours). `rating`: integer **1–5**,
     nullable. `actualGrindSetting` ≤ 100 chars, `tastingNotes` ≤ 5000 chars;
     both nullable, and blank becomes `null`.
@@ -647,7 +707,7 @@ filters for workspaces where `isPublicMenuEnabled = true` and items where
         "name": "House V60",
         "method": "V60",
         "targetDoseGrams": 15,
-        "targetYieldGrams": 250
+        "targetWaterGrams": 250
       }
     ]
   }
@@ -762,6 +822,10 @@ queue:
    - Each brew includes `grinderName` (or `null`), so the LLM knows which
      grinder a grind setting refers to and doesn't compare settings across
      different grinders.
+   - Each brew includes `actualWaterGrams`, the measured `actualYieldGrams`
+     (or `null`) and `brewRatio` (water ÷ dose). The recipe includes its
+     water, expected yield, finish window (`expectedFinishMinSec`/`MaxSec`),
+     and its steps with type, label, start/end and pour-to targets.
 2. It calls the LLM API using **Structured Outputs** (strict JSON schema mode).
 
 **System Prompt:**

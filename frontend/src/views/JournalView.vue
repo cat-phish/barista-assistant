@@ -93,7 +93,8 @@ watch(beanFilter, () => load(true));
             <strong>{{ log.bean.roasterName }} {{ log.bean.beanName }}</strong>
             <span v-if="log.recipe" class="muted">{{ log.recipe.name }}</span>
             <span class="facts">
-              <span>{{ formatGrams(log.actualDoseGrams) }} g → {{ formatGrams(log.actualYieldGrams) }} g ({{ formatRatio(log.actualDoseGrams, log.actualYieldGrams) }})</span>
+              <span>{{ formatGrams(log.actualDoseGrams) }} g : {{ formatGrams(log.actualWaterGrams) }} g ({{ formatRatio(log.actualDoseGrams, log.actualWaterGrams) }})</span>
+              <span v-if="log.actualYieldGrams !== null">→ {{ formatGrams(log.actualYieldGrams) }} g yield</span>
               <span>{{ formatTime(log.actualTimeSec) }}</span>
               <span v-if="log.actualTempC !== null">{{ log.actualTempC }} °C</span>
               <span v-if="log.actualGrindSetting || log.grinder">{{ [log.actualGrindSetting, log.grinder?.name].filter(Boolean).join(' · ') }}</span>

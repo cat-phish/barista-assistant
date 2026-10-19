@@ -22,7 +22,7 @@ import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
 export interface BrewLogDetails extends BrewLog {
   bean: Pick<Bean, "id" | "roasterName" | "beanName">;
-  recipe: Pick<Recipe, "id" | "name"> | null;
+  recipe: Pick<Recipe, "id" | "name" | "expectedYieldGrams"> | null;
   grinder: { id: string; name: string } | null; // retired grinders included
   // Null when the brewer deleted their account (the log is kept).
   brewer: { id: string; email: string } | null;
@@ -61,7 +61,9 @@ const brewLogFields = {
     .refine((d) => d.getTime() <= Date.now() + FUTURE_SKEW_MS, "can't be more than 5 minutes in the future")
     .optional(),
   actualDoseGrams: decimalSchema({ min: 0, max: 1000, scale: 2, exclusiveMin: true, exclusiveMax: true }),
-  actualYieldGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }),
+  actualWaterGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }),
+  // Measured beverage weight (optional; docs/api_spec.md §6).
+  actualYieldGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
   actualTempC: decimalSchema({ min: 0, max: 100, scale: 1 }).nullable().optional(),
   actualGrindSetting: optionalText(100),
   actualTimeSec: z.number().int().min(0).max(24 * 60 * 60),
@@ -129,6 +131,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       grinderId: brewLogs.grinderId,
       timestamp: brewLogs.timestamp,
       actualDoseGrams: brewLogs.actualDoseGrams,
+      actualWaterGrams: brewLogs.actualWaterGrams,
       actualYieldGrams: brewLogs.actualYieldGrams,
       actualTempC: brewLogs.actualTempC,
       actualGrindSetting: brewLogs.actualGrindSetting,
@@ -136,7 +139,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       rating: brewLogs.rating,
       tastingNotes: brewLogs.tastingNotes,
       bean: { id: beans.id, roasterName: beans.roasterName, beanName: beans.beanName },
-      recipe: { id: recipes.id, name: recipes.name },
+      recipe: { id: recipes.id, name: recipes.name, expectedYieldGrams: recipes.expectedYieldGrams },
       grinder: { id: grinders.id, name: grinders.name },
       brewer: { id: users.id, email: users.email },
     })

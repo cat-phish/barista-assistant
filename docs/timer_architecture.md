@@ -58,6 +58,14 @@ export default defineConfig({
 ## 3. Timer State Mechanics (`PourOverTimer.vue`)
 *   **Delta-Timestamp Calculation:** Never increment a counter inside `setInterval`. Store `startTime = Date.now() - elapsedMs` and compute `elapsedMs = Date.now() - startTime` inside a `requestAnimationFrame` loop.
 *   **Screen Wake Lock:** Request `navigator.wakeLock.request('screen')` when the brew starts and release it when finished or unmounted.
+*   **Clock-driven steps** (supersedes the reference component's manual "Next Step" button): recipe steps have a `stepType`, optional `label`, `startSec` and `endSec` (`docs/api_spec.md` §5). The timer derives everything from the elapsed time; nothing advances on taps:
+    *   **Current step** = the step whose window contains the elapsed time (`startSec ≤ t < endSec`). Show its type/label and, for water steps, "Pour to {targetWaterGrams} g (+{amount} g)" plus "until m:ss".
+    *   **Between steps** (a gap): show **Wait** with a countdown to the next step's start and a preview of it ("Pour to 250 g at 1:30, in 0:12").
+    *   **After the last step:** show "Drawdown / finishing".
+    *   **Target finish window** (recipe's `expectedFinishMinSec`–`expectedFinishMaxSec`, if set), shown throughout: "Target 2:45–3:15 · in 0:40" before the window, "· in the window" inside it, "· 0:12 over" after it.
+    *   **Finish & Save** is available from the start, since a brew can end earlier or later than planned. It emits the elapsed seconds.
+    *   A recipe with no steps works as a plain stopwatch.
+    *   Instant steps (`startSec === endSec`, e.g. a quick swirl) show for about two seconds, so they aren't missed.
 
 ### Reference Component Implementation (`frontend/src/components/PourOverTimer.vue`)
 

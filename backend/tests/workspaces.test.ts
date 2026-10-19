@@ -50,8 +50,8 @@ describe("deleting a workspace", () => {
       name: "House V60",
       methodId: v60,
       targetDoseGrams: 15,
-      targetYieldGrams: 250,
-      steps: [{ actionName: "Bloom", targetTimeSec: 45, targetWaterGrams: 50 }],
+      targetWaterGrams: 250,
+      steps: [{ stepType: "bloom", startSec: 0, endSec: 45, targetWaterGrams: 50 }],
     });
     expect(recipe.status).toBe(201);
     await newBrewLog(owner, ws.id, bean, { recipeId: recipe.body.recipe.id });

@@ -30,6 +30,15 @@ const grinders = ref<Grinder[]>([]);
 const loading = ref(true);
 const loadError = ref('');
 
+// "226 g (+6 vs ~220 expected)", or the expectation alone if not measured.
+function yieldText(l: BrewLog): string {
+  const expected = l.recipe?.expectedYieldGrams ?? null;
+  if (l.actualYieldGrams === null) return expected === null ? '–' : `Not measured (expected ~${formatGrams(expected)} g)`;
+  if (expected === null) return `${formatGrams(l.actualYieldGrams)} g`;
+  const diff = Math.round((l.actualYieldGrams - expected) * 10) / 10;
+  return `${formatGrams(l.actualYieldGrams)} g (${diff > 0 ? '+' : diff < 0 ? '−' : '±'}${Math.abs(diff)} vs ~${formatGrams(expected)} expected)`;
+}
+
 const canModify = computed(() => !!log.value && canModifyBrewLog(log.value, workspaces.current?.role, auth.user?.id));
 
 async function load(): Promise<void> {
@@ -127,7 +136,8 @@ async function remove(): Promise<void> {
       <!-- Details -->
       <section v-if="!editing" class="card stack">
         <dl class="details">
-          <div><dt>Dose → yield</dt><dd>{{ formatGrams(log.actualDoseGrams) }} g → {{ formatGrams(log.actualYieldGrams) }} g <span class="muted">({{ formatRatio(log.actualDoseGrams, log.actualYieldGrams) }})</span></dd></div>
+          <div><dt>Dose : water</dt><dd>{{ formatGrams(log.actualDoseGrams) }} g : {{ formatGrams(log.actualWaterGrams) }} g <span class="muted">({{ formatRatio(log.actualDoseGrams, log.actualWaterGrams) }})</span></dd></div>
+          <div><dt>Yield</dt><dd>{{ yieldText(log) }}</dd></div>
           <div><dt>Time</dt><dd>{{ formatTime(log.actualTimeSec) }}</dd></div>
           <div><dt>Water</dt><dd>{{ log.actualTempC !== null ? `${log.actualTempC} °C` : '–' }}</dd></div>
           <div><dt>Grind</dt><dd>{{ log.actualGrindSetting ?? '–' }}<template v-if="log.grinder"> · {{ log.grinder.name }}</template></dd></div>
@@ -147,7 +157,7 @@ async function remove(): Promise<void> {
       <!-- Edit -->
       <form v-else class="card stack" novalidate @submit.prevent="saveEdit">
         <h2>Edit brew</h2>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" />
         <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
         <div class="buttons">
           <button class="btn btn-secondary" type="button" :disabled="saving" @click="editing = false">Cancel</button>

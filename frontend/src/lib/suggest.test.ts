@@ -4,11 +4,11 @@ import { chooseGrind, startingParameters, suggestionFitsGrinder } from './sugges
 
 const brew = (over: Partial<BrewLog>): BrewLog => ({
   id: 'b1', workspaceId: 'w', userId: 'u', beanId: 'bean', recipeId: null, timestamp: '2026-10-18T08:00:00.000Z',
-  actualDoseGrams: 15, actualYieldGrams: 250, actualTempC: 93, actualGrindSetting: '22 clicks', actualTimeSec: 125,
+  actualDoseGrams: 15, actualWaterGrams: 250, actualYieldGrams: null, actualTempC: 93, actualGrindSetting: '22 clicks', actualTimeSec: 125,
   rating: 2, tastingNotes: null, bean: { id: 'bean', roasterName: 'R', beanName: 'B' }, recipe: null, brewer: null,
   grinderId: 'c40', grinder: { id: 'c40', name: 'Comandante C40' }, ...over,
 });
-const recipe = { targetTempC: 94, targetGrindSetting: '20 clicks' } as Recipe;
+const recipe = { targetTempC: 94, grindSettings: [{ grinderId: 'c40', grinderName: 'Comandante C40', setting: '19' }] } as unknown as Recipe;
 const suggestions = (over: Partial<Suggestions> = {}): Suggestions => ({
   latestAnalysis: { id: 'a', brewLogId: 'b1', reasoning: 'Under-extracted.', suggestedGrindDelta: 'finer', suggestedTempDelta: 1, createdAt: '' },
   analyzedBrew: brew({}),
@@ -23,9 +23,9 @@ describe('startingParameters', () => {
       basedOn: { isLatestBrew: true },
     });
   });
-  it('falls back to the recipe when the analyzed brew lacks temp/grind', () => {
+  it("falls back to the recipe's temp when the analyzed brew has none; grind base stays the brew's own", () => {
     const s = suggestions({ analyzedBrew: brew({ actualTempC: null, actualGrindSetting: null }) });
-    expect(startingParameters(s, recipe)).toMatchObject({ tempC: 95, grindBase: '20 clicks' });
+    expect(startingParameters(s, recipe)).toMatchObject({ tempC: 95, grindBase: null });
   });
   it('rounds and clamps the temperature', () => {
     const s = suggestions({ latestAnalysis: { ...suggestions().latestAnalysis!, suggestedTempDelta: 8.5 }, analyzedBrew: brew({ actualTempC: 96.2 }) });
@@ -57,7 +57,13 @@ describe('chooseGrind', () => {
     expect(suggestionFitsGrinder(noGrinder, '')).toBe(true);
     expect(suggestionFitsGrinder(noGrinder, 'c40')).toBe(false);
   });
-  it('never uses the grinder-neutral recipe target', () => {
-    expect(chooseGrind({ lastSetting: null, suggestion: null, grinderId: 'c40' })).toEqual({ value: '', source: 'none' });
+  it("then the recipe's approximate starting point for this grinder, else nothing", () => {
+    expect(chooseGrind({ lastSetting: null, suggestion: null, grinderId: 'c40', recipe })).toEqual({ value: '19', source: 'recipe' });
+    expect(chooseGrind({ lastSetting: null, suggestion: null, grinderId: 'ode', recipe })).toEqual({ value: '', source: 'none' });
+    expect(chooseGrind({ lastSetting: null, suggestion: null, grinderId: '', recipe })).toEqual({ value: '', source: 'none' });
+  });
+  it('a real setting beats the recipe starting point', () => {
+    expect(chooseGrind({ lastSetting: '21', suggestion: null, grinderId: 'c40', recipe })).toEqual({ value: '21', source: 'last' });
+    expect(chooseGrind({ lastSetting: null, suggestion: params, grinderId: 'c40', recipe }).source).toBe('suggestion');
   });
 });

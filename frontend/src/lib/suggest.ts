@@ -34,7 +34,7 @@ export function startingParameters(s: Suggestions, recipe: Recipe | null): Start
     tempC,
     // Whether "finer" means more or fewer clicks depends on the grinder, so
     // the setting itself is left for the person to adjust.
-    grindBase: brew.actualGrindSetting ?? recipe?.targetGrindSetting ?? null,
+    grindBase: brew.actualGrindSetting,
     grinder: brew.grinder,
     grindAdvice: GRIND_LABELS[analysis.suggestedGrindDelta],
     tempAdvice: delta === 0 ? 'Keep the temperature' : `${sign}${Math.abs(delta)} °C`,
@@ -49,19 +49,23 @@ export function suggestionFitsGrinder(p: StartingParameters, grinderId: string):
   return (p.grinder?.id ?? '') === grinderId;
 }
 
-export type GrindSource = 'last' | 'suggestion' | 'none';
+export type GrindSource = 'last' | 'suggestion' | 'recipe' | 'none';
 
 // What to pre-fill the grind setting with when starting a brew:
 //   1. the last setting used with this grinder and recipe,
 //   2. else the analyzed brew's setting, if that was on this grinder,
-//   3. else nothing (recipes are grinder-neutral; their target is only a hint).
+//   3. else the recipe's approximate starting point for this grinder,
+//   4. else nothing.
 export function chooseGrind(opts: {
   lastSetting: string | null;
   suggestion: StartingParameters | null;
   grinderId: string;
+  recipe?: Pick<Recipe, 'grindSettings'> | null;
 }): { value: string; source: GrindSource } {
   if (opts.lastSetting) return { value: opts.lastSetting, source: 'last' };
   const s = opts.suggestion;
   if (s?.grindBase && suggestionFitsGrinder(s, opts.grinderId)) return { value: s.grindBase, source: 'suggestion' };
+  const start = opts.grinderId ? opts.recipe?.grindSettings.find((g) => g.grinderId === opts.grinderId) : undefined;
+  if (start) return { value: start.setting, source: 'recipe' };
   return { value: '', source: 'none' };
 }

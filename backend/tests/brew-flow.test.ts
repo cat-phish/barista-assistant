@@ -15,7 +15,7 @@ describe("brew methods", () => {
   it("rename: case-only allowed, duplicates refused, recipes follow the new name", async () => {
     const { owner, ws, v60 } = await setup();
     const base = `/api/workspaces/${ws.id}/brew-methods`;
-    const recipe = await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name: "R", methodId: v60, targetDoseGrams: 15, targetYieldGrams: 250 });
+    const recipe = await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name: "R", methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250 });
 
     expect((await owner.agent.patch(`${base}/${v60}`).send({ name: "v60" })).status).toBe(200);
     expect((await owner.agent.patch(`${base}/${v60}`).send({ name: "espresso" })).status).toBe(409);
@@ -27,7 +27,7 @@ describe("brew methods", () => {
 
   it("delete is refused while recipes use the method", async () => {
     const { owner, ws, v60 } = await setup();
-    await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name: "R", methodId: v60, targetDoseGrams: 15, targetYieldGrams: 250 });
+    await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name: "R", methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250 });
     const res = await owner.agent.delete(`/api/workspaces/${ws.id}/brew-methods/${v60}`);
     expect(res.status).toBe(409);
     expect(res.body.recipeCount).toBe(1);
@@ -40,24 +40,24 @@ describe("beans and recipes", () => {
   it("decimals are JSON numbers; too many decimal places are rejected, not rounded", async () => {
     const { owner, ws, v60 } = await setup();
     const base = `/api/workspaces/${ws.id}/recipes`;
-    const ok = await owner.agent.post(base).send({ name: "R", methodId: v60, targetDoseGrams: 18.5, targetYieldGrams: 250, targetTempC: 93.5 });
-    expect(ok.body.recipe).toMatchObject({ targetDoseGrams: 18.5, targetYieldGrams: 250, targetTempC: 93.5 });
-    expect((await owner.agent.post(base).send({ name: "R", methodId: v60, targetDoseGrams: 15.123, targetYieldGrams: 250 })).status).toBe(400);
-    expect((await owner.agent.post(base).send({ name: "R", methodId: v60, targetDoseGrams: "15", targetYieldGrams: 250 })).status).toBe(400);
+    const ok = await owner.agent.post(base).send({ name: "R", methodId: v60, targetDoseGrams: 18.5, targetWaterGrams: 250, targetTempC: 93.5 });
+    expect(ok.body.recipe).toMatchObject({ targetDoseGrams: 18.5, targetWaterGrams: 250, targetTempC: 93.5 });
+    expect((await owner.agent.post(base).send({ name: "R", methodId: v60, targetDoseGrams: 15.123, targetWaterGrams: 250 })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ name: "R", methodId: v60, targetDoseGrams: "15", targetWaterGrams: 250 })).status).toBe(400);
   });
 
-  it("recipe steps must be cumulative, and a method from another workspace is refused", async () => {
+  it("recipe steps can't overlap, and a method from another workspace is refused", async () => {
     const { owner, ws, v60 } = await setup();
     const other = await newUser();
     const otherWs = await newWorkspace(other);
     const foreign = await methodId(other, otherWs.id, "V60");
     const base = `/api/workspaces/${ws.id}/recipes`;
     const steps = [
-      { actionName: "Bloom", targetTimeSec: 45, targetWaterGrams: 50 },
-      { actionName: "Pour", targetTimeSec: 45, targetWaterGrams: 100 },
+      { stepType: "bloom", startSec: 0, endSec: 45, targetWaterGrams: 50 },
+      { stepType: "pour", startSec: 30, endSec: 60, targetWaterGrams: 100 }, // overlaps the bloom
     ];
-    expect((await owner.agent.post(base).send({ name: "R", methodId: v60, targetDoseGrams: 15, targetYieldGrams: 250, steps })).status).toBe(400);
-    expect((await owner.agent.post(base).send({ name: "R", methodId: foreign, targetDoseGrams: 15, targetYieldGrams: 250 })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ name: "R", methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250, steps })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ name: "R", methodId: foreign, targetDoseGrams: 15, targetWaterGrams: 250 })).status).toBe(400);
   });
 
   it("PATCH changes only the fields sent", async () => {
@@ -84,7 +84,7 @@ describe("brew logs", () => {
     const { owner, ws } = await setup();
     const bean = await newBean(owner, ws.id);
     const base = `/api/workspaces/${ws.id}/brew-logs`;
-    const brew = { beanId: bean, actualDoseGrams: 15, actualYieldGrams: 250, actualTimeSec: 150 };
+    const brew = { beanId: bean, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150 };
     const future = new Date(Date.now() + 10 * 60 * 1000).toISOString();
     expect((await owner.agent.post(base).send({ ...brew, timestamp: future })).status).toBe(400);
     expect((await owner.agent.post(base).send({ ...brew, timestamp: "2026-10-01T08:00:00-07:00" })).body.brewLog.timestamp).toBe("2026-10-01T15:00:00.000Z");
@@ -169,15 +169,15 @@ describe("public menu", () => {
     const menu = `/api/public/menu/${ws.slug}`;
     await newBean(owner, ws.id, { beanName: "Shown" });
     await newBean(owner, ws.id, { beanName: "Hidden", showOnPublicMenu: false });
-    await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name: "Public", methodId: v60, targetDoseGrams: 15, targetYieldGrams: 250 });
-    await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name: "Secret", methodId: v60, targetDoseGrams: 15, targetYieldGrams: 250, showOnPublicMenu: false });
+    await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name: "Public", methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250 });
+    await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name: "Secret", methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250, showOnPublicMenu: false });
 
     expect((await request(app).get(menu)).status).toBe(404); // not enabled yet
     await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ isPublicMenuEnabled: true });
     const res = await request(app).get(menu);
     expect(res.status).toBe(200);
     expect(res.body.beans.map((b: { beanName: string }) => b.beanName)).toEqual(["Shown"]);
-    expect(res.body.recipes).toEqual([{ id: expect.any(String), name: "Public", method: "V60", targetDoseGrams: 15, targetYieldGrams: 250 }]);
+    expect(res.body.recipes).toEqual([{ id: expect.any(String), name: "Public", method: "V60", targetDoseGrams: 15, targetWaterGrams: 250 }]);
     expect((await request(app).get(menu.toUpperCase().replace("/API/PUBLIC/MENU/", "/api/public/menu/"))).status).toBe(404);
   });
 });
