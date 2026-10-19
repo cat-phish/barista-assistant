@@ -1,0 +1,149 @@
+services:
+  # Images build from the repo root: npm workspaces share one lockfile, and
+  # backend/worker depend on the shared/ workspace.
+  #
+  # Secrets: values come from the root .env (see .env.example) but reach the
+  # containers as files under /run/secrets via the `secrets:` section below,
+  # not as environment variables, so they don't show up in `docker inspect`.
+  # The apps read them through NAME_FILE variables (shared/src/env.ts).
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "127.0.0.1:5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:3000
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - DATABASE_URL=mysql://barista@db:3306/coffee_journal
+      - DATABASE_PASSWORD_FILE=/run/secrets/db_password
+      - REDIS_URL=redis://redis:6379
+      - REDIS_PASSWORD_FILE=/run/secrets/redis_password
+      - JWT_SECRET_FILE=/run/secrets/jwt_secret
+      - CORS_ORIGIN=http://localhost:5173
+      # The image defaults to production, which marks the session cookie
+      # Secure (HTTPS only). This stack serves plain http://localhost.
+      - NODE_ENV=development
+    secrets:
+      - db_password
+      - redis_password
+      - jwt_secret
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    environment:
+      - DATABASE_URL=mysql://barista@db:3306/coffee_journal
+      - DATABASE_PASSWORD_FILE=/run/secrets/db_password
+      - REDIS_URL=redis://redis:6379
+      - REDIS_PASSWORD_FILE=/run/secrets/redis_password
+      - OPENAI_API_KEY_FILE=/run/secrets/openai_api_key
+      - OPENAI_MODEL=${OPENAI_MODEL}
+    secrets:
+      - db_password
+      - redis_password
+      - openai_api_key
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      # Healthy only after its startup migrations ran, so tables exist.
+      backend:
+        condition: service_healthy
+
+  db:
+    image: mariadb:lts
+    # Same guard as redis: an empty variable means no secret file, and MariaDB
+    # must not initialize users with empty passwords.
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        for s in db_password db_root_password; do
+        [ -s "/run/secrets/$$s" ] || { echo "$$s secret is missing or empty: set MARIADB_PASSWORD and MARIADB_ROOT_PASSWORD in .env" >&2; exit 1; };
+        done;
+        exec docker-entrypoint.sh mariadbd
+    # Loopback only: containers reach it as db:3306 over the compose network;
+    # this mapping is just for tools on this machine (npm run dev, DB clients).
+    ports:
+      - "127.0.0.1:3306:3306"
+    environment:
+      - MARIADB_DATABASE=coffee_journal
+      # The app connects as this user, which only has rights on coffee_journal.
+      - MARIADB_USER=barista
+      - MARIADB_PASSWORD_FILE=/run/secrets/db_password
+      - MARIADB_ROOT_PASSWORD_FILE=/run/secrets/db_root_password
+    secrets:
+      - db_password
+      - db_root_password
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:alpine
+    # Redis can't read its password from a file, so read the secret here and
+    # hand off to the image's entrypoint (which drops to the redis user).
+    # Refuse to start without it: an empty REDIS_PASSWORD makes Compose skip
+    # the secret file, and `--requirepass ""` would mean NO password.
+    # AOF so queued jobs survive restarts; noeviction because BullMQ breaks if
+    # Redis evicts its keys under memory pressure.
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        pw="$$(cat /run/secrets/redis_password 2>/dev/null)";
+        [ -n "$$pw" ] || { echo "redis_password secret is missing or empty: set REDIS_PASSWORD in .env" >&2; exit 1; };
+        exec docker-entrypoint.sh redis-server
+        --appendonly yes --maxmemory-policy noeviction
+        --requirepass "$$pw"
+    secrets:
+      - redis_password
+    # Loopback only (see db).
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      # redis-cli exits 0 even on an auth error, so check for the PONG reply.
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$(cat /run/secrets/redis_password)\" redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+# Each secret is read from the variable of the same (upper-case) name in .env.
+secrets:
+  db_root_password:
+    environment: MARIADB_ROOT_PASSWORD
+  db_password:
+    environment: MARIADB_PASSWORD
+  redis_password:
+    environment: REDIS_PASSWORD
+  jwt_secret:
+    environment: JWT_SECRET
+  openai_api_key:
+    environment: OPENAI_API_KEY
+
+volumes:
+  db_data:
+  redis_data:

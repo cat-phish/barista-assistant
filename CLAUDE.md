@@ -1,0 +1,41 @@
+# Coffee Brew Journal PWA - Agent Instructions
+
+## The Stack (npm workspaces monorepo)
+
+- **Frontend (`/frontend`):** Vue 3 (`<script setup lang="ts">`), Vite, Pinia,
+  Vue Router, `vite-plugin-pwa`.
+- **Backend (`/backend`):** Node.js, TypeScript, Express, Drizzle ORM,
+  `mysql2`.
+- **Worker (`/worker`):** Node.js, TypeScript, Redis, BullMQ, OpenAI/LLM SDK
+  (Structured Outputs).
+- **Shared (`/shared`, package `@barista/shared`):** Drizzle schema
+  (`@barista/shared/schema`) and BullMQ job contracts (`@barista/shared/jobs`)
+  used by backend and worker. Built with `tsc -b`; backend and worker reference
+  it as a TypeScript project, so their `npm run build` builds it first.
+- **Database & Infrastructure:** MariaDB and Redis via root
+  `docker-compose.yml`.
+
+## Development Rules
+
+1. **Spec First (Progressive Disclosure):** Before writing code for a feature,
+   read the corresponding specification file. Do not deviate from defined
+   schemas or contracts without asking:
+   - Database models & migrations: read `docs/schema.md`.
+   - API routes, public menu & LLM worker jobs: read `docs/api_spec.md`.
+   - PWA config, mobile viewport & pour-over timer UI: read
+     `docs/timer_architecture.md`.
+2. **Small Diffs:** Implement one feature or route at a time. Plan your steps
+   before writing code and avoid massive multi-file refactors.
+3. **TypeScript Strict:** Use strict mode. Define proper interfaces for all API
+   payloads and infer types from Drizzle schemas where possible. No `any`
+   types.
+4. **Verification:** Never assume code works.
+   - Backend/Worker: run `npx tsc --noEmit` or `npm run build` in the
+     respective folder to verify compilation.
+   - Frontend: run `npm run build` in `/frontend` to verify Vite compiles.
+5. **No Secrets:** Never commit `.env` files or hardcode API keys/passwords.
+   Always use `process.env`.
+   - Commits are scanned by a gitleaks pre-commit hook (`.githooks/pre-commit`,
+     rules in `.gitleaks.toml`; `npm install` enables it). Never bypass it
+     with `--no-verify`. If it flags something, remove the secret; for a
+     genuine false positive, ask before adding an allowlist entry.

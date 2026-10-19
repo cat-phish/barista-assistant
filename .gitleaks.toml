@@ -1,0 +1,26 @@
+# gitleaks configuration, used by .githooks/pre-commit.
+# Starts from gitleaks' built-in rules (OpenAI keys, cloud credentials,
+# private keys, generic high-entropy tokens, ...) and adds project rules.
+title = "barista-assistant"
+
+[extend]
+useDefault = true
+
+# Real env files must never be committed, whatever they contain: this also
+# catches `git add -f .env` and secrets no content rule would recognize.
+# The *.env.example templates (no values) are allowed.
+[[rules]]
+id = "env-file"
+description = "Env file with real values (only .env.example templates may be committed)"
+path = '''(^|/)\.env(\.[^/]*)?$'''
+
+[[rules.allowlists]]
+paths = ['''(^|/)\.env\.example$''']
+
+# Passwords are passed separately from connection URLs (DATABASE_PASSWORD,
+# REDIS_PASSWORD), so a URL with an embedded password is a mistake.
+[[rules]]
+id = "url-with-password"
+description = "Connection URL with an embedded password"
+regex = '''\b[a-z][a-z0-9+.-]*://[^\s:/@"'`]*:([^\s/@"'`]{3,})@[^\s"'`]+'''
+secretGroup = 1

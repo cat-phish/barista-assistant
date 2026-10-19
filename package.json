@@ -1,0 +1,30 @@
+{
+  "name": "barista-assistant",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cat-phish/barista-assistant.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/cat-phish/barista-assistant/issues"
+  },
+  "homepage": "https://github.com/cat-phish/barista-assistant#readme",
+  "workspaces": [
+    "shared",
+    "frontend",
+    "backend",
+    "worker"
+  ]
+}

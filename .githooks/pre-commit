@@ -1,0 +1,21 @@
+#!/bin/sh
+# Blocks commits that contain secrets (API keys, passwords, tokens), using the
+# rules in .gitleaks.toml. Only staged changes are scanned, and findings are
+# printed with the secret redacted.
+#
+# Installed by `npm install` (the root `prepare` script sets core.hooksPath to
+# .githooks). If a finding is a false positive, add it to .gitleaks.toml or
+# put `gitleaks:allow` in a comment on that line. Don't use --no-verify.
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "pre-commit: gitleaks is not installed, so this commit can't be checked for secrets." >&2
+  echo "Install it (https://github.com/gitleaks/gitleaks#installing) and commit again." >&2
+  exit 1
+fi
+
+if ! gitleaks git --pre-commit --staged --redact --no-banner --verbose; then
+  echo "" >&2
+  echo "pre-commit: gitleaks found possible secrets in the staged changes (shown redacted above)." >&2
+  echo "Remove them (secrets belong in .env, which is git-ignored) and commit again." >&2
+  exit 1
+fi
