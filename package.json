@@ -7,7 +7,7 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "npm test -w backend && npm test -w worker",
+    "test": "npm test -w frontend && npm test -w backend && npm test -w worker",
     "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true",
     "test:db:create": "./scripts/create-test-db.sh"
   },

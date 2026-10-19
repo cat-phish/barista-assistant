@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { beans, brewLogs, brewMethods, llmAnalyses, recipes, recipeSteps, users, workspaces } from "@barista/shared/schema";
+import { beanFreezes, beans, brewLogs, brewMethods, grinders, llmAnalyses, recipes, recipeSteps, users, workspaces } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BrewContext } from "../src/context.js";
@@ -55,7 +55,7 @@ describe("processBrewAnalysis", () => {
 
     expect(result.status).toBe("saved");
     const context = llm.mock.calls[0]![0] as BrewContext;
-    expect(context.brew).toMatchObject({ tastingNotes: "day 8", roastAgeDays: 7, brewRatio: 16.67, recipeName: "House V60" });
+    expect(context.brew).toMatchObject({ tastingNotes: "day 8", roastAgeDays: 7, daysFrozenBeforeBrew: 0, brewRatio: 16.67, recipeName: "House V60" });
     expect(context.recipe).toMatchObject({ name: "House V60", method: "V60", steps: [{ actionName: "Bloom" }, { actionName: "Pour" }] });
     expect(context.bean).toEqual({ roasterName: "Onyx", beanName: "Guji", process: null, roastDate: "2026-10-01" });
     // Only earlier brews (day 9 is later), newest first, at most 5.
@@ -65,6 +65,32 @@ describe("processBrewAnalysis", () => {
     const saved = await db.select().from(llmAnalyses).where(eq(llmAnalyses.brewLogId, logIds.day8!));
     expect(saved).toHaveLength(1);
     expect(saved[0]).toMatchObject(ANALYSIS);
+  });
+
+  it("uses the effective roast age at each brew's date, excluding days frozen", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    // Roasted Oct 1; frozen Oct 4 -> Oct 6 (2 days). Brews on days 2..9.
+    await db.insert(beanFreezes).values({ id: randomUUID(), beanId, frozenOn: "2026-10-04", thawedOn: "2026-10-06" });
+    await processBrewAnalysis({ brewLogId: logIds.day8! });
+    const context = llm.mock.calls[0]![0] as BrewContext;
+    expect(context.brew).toMatchObject({ roastAgeDays: 5, daysFrozenBeforeBrew: 2 }); // Oct 8: 7 days - 2 frozen
+    const byDay = Object.fromEntries(context.previousBrews.map((b) => [b.tastingNotes, [b.roastAgeDays, b.daysFrozenBeforeBrew]]));
+    expect(byDay["day 3"]).toEqual([2, 0]); // before the freeze
+    expect(byDay["day 5"]).toEqual([3, 1]); // mid-freeze: age paused at 3
+    expect(byDay["day 7"]).toEqual([4, 2]); // after thawing: resumed
+  });
+
+  it("tells the LLM which grinder each brew used (retired grinders included)", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    const c40 = randomUUID();
+    await db.insert(grinders).values({ id: c40, workspaceId, name: "Comandante C40", retiredAt: new Date() });
+    await db.update(brewLogs).set({ grinderId: c40, actualGrindSetting: "20" }).where(eq(brewLogs.id, logIds.day8!));
+    await db.update(brewLogs).set({ grinderId: c40, actualGrindSetting: "22" }).where(eq(brewLogs.id, logIds.day6!));
+    await processBrewAnalysis({ brewLogId: logIds.day8! });
+    const context = llm.mock.calls[0]![0] as BrewContext;
+    expect(context.brew).toMatchObject({ grinderName: "Comandante C40", actualGrindSetting: "20" });
+    const byDay = Object.fromEntries(context.previousBrews.map((b) => [b.tastingNotes, b.grinderName]));
+    expect(byDay).toMatchObject({ "day 6": "Comandante C40", "day 7": null });
   });
 
   it("skips a brew log that was deleted after the job was queued, without calling the LLM", async () => {

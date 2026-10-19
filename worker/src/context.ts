@@ -1,7 +1,9 @@
 import {
+  beanFreezes,
   beans,
   brewLogs,
   brewMethods,
+  grinders,
   recipes,
   recipeSteps,
   type Bean,
@@ -9,15 +11,19 @@ import {
 } from "@barista/shared/schema";
 import { and, asc, desc, eq, lt, ne } from "drizzle-orm";
 import { db } from "./db.js";
+import { effectiveRoastAge, type FreezePeriodLike } from "./roastAge.js";
 
 const PREVIOUS_BREW_COUNT = 5;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 // What the LLM sees about one brew (docs/api_spec.md §9).
 export interface BrewSummary {
   timestamp: string;
+  // Effective age on the brew's date: days since roasting minus days frozen.
   roastAgeDays: number | null;
+  daysFrozenBeforeBrew: number | null;
   recipeName: string | null;
+  // The grind setting only means something for this grinder (docs/api_spec.md §9).
+  grinderName: string | null;
   actualDoseGrams: number;
   actualYieldGrams: number;
   brewRatio: number;
@@ -44,13 +50,18 @@ export interface BrewContext {
   ratingScale: "1-5";
 }
 
-type BrewRow = BrewLog & { recipeName: string | null };
+type BrewRow = BrewLog & { recipeName: string | null; grinderName: string | null };
 
-function summarize(brew: BrewRow, roastDate: Date | null): BrewSummary {
+function summarize(brew: BrewRow, roastDate: Date | null, freezes: readonly FreezePeriodLike[]): BrewSummary {
+  const age = roastDate
+    ? effectiveRoastAge(roastDate.toISOString(), freezes, brew.timestamp.toISOString().slice(0, 10))
+    : null;
   return {
     timestamp: brew.timestamp.toISOString(),
-    roastAgeDays: roastDate ? Math.floor((brew.timestamp.getTime() - roastDate.getTime()) / DAY_MS) : null,
+    roastAgeDays: age?.ageDays ?? null,
+    daysFrozenBeforeBrew: age?.daysFrozen ?? null,
     recipeName: brew.recipeName,
+    grinderName: brew.grinderName,
     actualDoseGrams: brew.actualDoseGrams,
     actualYieldGrams: brew.actualYieldGrams,
     brewRatio: Math.round((brew.actualYieldGrams / brew.actualDoseGrams) * 100) / 100,
@@ -64,28 +75,30 @@ function summarize(brew: BrewRow, roastDate: Date | null): BrewSummary {
 
 function selectBrews() {
   return db
-    .select({ brew: brewLogs, recipeName: recipes.name })
+    .select({ brew: brewLogs, recipeName: recipes.name, grinderName: grinders.name })
     .from(brewLogs)
-    .leftJoin(recipes, eq(brewLogs.recipeId, recipes.id));
+    .leftJoin(recipes, eq(brewLogs.recipeId, recipes.id))
+    .leftJoin(grinders, eq(brewLogs.grinderId, grinders.id));
 }
 
 // Returns null if the brew log was deleted after the job was queued.
 export async function loadBrewContext(brewLogId: string): Promise<BrewContext | null> {
   const [target] = await selectBrews().where(eq(brewLogs.id, brewLogId)).limit(1);
   if (!target) return null;
-  const brew: BrewRow = { ...target.brew, recipeName: target.recipeName };
+  const brew: BrewRow = { ...target.brew, recipeName: target.recipeName, grinderName: target.grinderName };
 
   const [beanRow] = await db.select().from(beans).where(eq(beans.id, brew.beanId)).limit(1);
   if (!beanRow) return null; // Bean deletion cascades, so this means the log is going too.
   const bean: Bean = beanRow;
 
-  const [previous, recipe] = await Promise.all([
+  const [previous, recipe, freezes] = await Promise.all([
     // "Previous" = earlier than the analyzed brew, newest first.
     selectBrews()
       .where(and(eq(brewLogs.beanId, brew.beanId), lt(brewLogs.timestamp, brew.timestamp), ne(brewLogs.id, brew.id)))
       .orderBy(desc(brewLogs.timestamp), desc(brewLogs.id))
       .limit(PREVIOUS_BREW_COUNT),
     brew.recipeId ? loadRecipe(brew.recipeId) : Promise.resolve(null),
+    db.select({ frozenOn: beanFreezes.frozenOn, thawedOn: beanFreezes.thawedOn }).from(beanFreezes).where(eq(beanFreezes.beanId, brew.beanId)),
   ]);
 
   return {
@@ -96,8 +109,8 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
       roastDate: bean.roastDate ? bean.roastDate.toISOString().slice(0, 10) : null,
     },
     recipe,
-    brew: summarize(brew, bean.roastDate),
-    previousBrews: previous.map((p) => summarize({ ...p.brew, recipeName: p.recipeName }, bean.roastDate)),
+    brew: summarize(brew, bean.roastDate, freezes),
+    previousBrews: previous.map((p) => summarize({ ...p.brew, recipeName: p.recipeName, grinderName: p.grinderName }, bean.roastDate, freezes)),
     ratingScale: "1-5",
   };
 }

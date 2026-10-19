@@ -248,13 +248,90 @@ protects them: a method that any recipe still uses can't be deleted.
 
 ---
 
+## 3b. Grinders
+
+Each workspace keeps its own grinders. Brew logs record which grinder was used
+(§6), because a grind setting like `"20"` only means something for one
+grinder. Recipes are grinder-neutral.
+
+**Grinder object:**
+`{ "id": "uuid", "name": "Comandante C40", "notes": "stepped, 0–40 clicks" | null, "retiredAt": null | "2026-10-18T…" }`
+
+A **retired** grinder (`retiredAt` set) is hidden from pickers for new brews,
+but past brews keep showing it, and it can be restored. A grinder that brews
+were logged with can't be deleted (retire it instead); an unused one can.
+
+### `GET /api/workspaces/:workspaceId/grinders`
+
+- **Auth Required:** `true` (any member)
+- **Success (`200 OK`):** `{ "grinders": [ { ...grinder } ] }`: active ones
+  first, then retired; each sorted by `name`.
+
+### `POST /api/workspaces/:workspaceId/grinders`
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:** `{ "name": "Comandante C40", "notes": "stepped" }` (`name` trimmed,
+  1–100 chars; `notes` optional, ≤ 255, blank becomes `null`)
+- **Success (`201 Created`):** `{ "grinder": { ...grinder } }`
+- **Errors:** `400` invalid body; `403` viewer; `409` a grinder with that name
+  already exists in this workspace (case-insensitive).
+
+### `PATCH /api/workspaces/:workspaceId/grinders/:grinderId`
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:** any non-empty subset of `{ "name", "notes", "retired": true | false }`.
+  `retired: true` sets `retiredAt` to now (unchanged if already retired);
+  `false` restores it.
+- **Success (`200 OK`):** `{ "grinder": { ...grinder } }`
+- **Errors:** `400`; `403` viewer; `404` not in this workspace; `409` name taken.
+
+### `DELETE /api/workspaces/:workspaceId/grinders/:grinderId`
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Success (`204 No Content`)**
+- **Errors:** `403` viewer; `404` not in this workspace; `409` brews were
+  logged with it, with body `{ "error": "...", "brewLogCount": 12 }`. Retire
+  it instead.
+
+### `GET /api/workspaces/:workspaceId/grinders/:grinderId/last-setting?recipeId=<id>`
+
+The grind setting of the most recent brew made with this grinder **and** this
+recipe. The brew flow uses it to pre-fill the grind when both are chosen.
+
+- **Auth Required:** `true` (any member)
+- **Query:** `recipeId` (required).
+- **Success (`200 OK`):**
+  `{ "lastSetting": { "grindSetting": "20", "timestamp": "…", "brewLogId": "uuid" } | null }`.
+  It's the newest such brew that has a grind setting (brews without one are
+  skipped), or `null` if there's none.
+- **Errors:** `400` missing/invalid `recipeId`; `404` grinder not in this
+  workspace.
+
+---
+
 ## 4. Beans
 
 ### `GET /api/workspaces/:workspaceId/beans`
 
 - **Auth Required:** `true` (any member)
 - **Success (`200 OK`):** `{ "beans": [ { ...bean } ] }`, sorted by
-  `roasterName`, then `beanName`. Each bean has every column in `beans`.
+  `roasterName`, then `beanName`. Each bean has every column in `beans`, plus
+  `freezePeriods` (oldest first):
+  ```json
+  "freezePeriods": [
+    { "id": "uuid", "frozenOn": "2026-10-03", "thawedOn": "2026-10-10" },
+    { "id": "uuid", "frozenOn": "2026-10-15", "thawedOn": null }
+  ]
+  ```
+  A bean is frozen when its last period has `thawedOn: null`. Every endpoint
+  that returns a bean includes `freezePeriods`.
+
+**Effective roast age** (days), computed by clients and the worker, as of
+calendar date `D`:
+`(D − roastDate) − Σ days frozen between roastDate and D`, where a period
+counts from `frozenOn` up to `thawedOn` (or `D` while still frozen). So the
+age stops while frozen and resumes after thawing. Without a `roastDate` there
+is no age.
 
 ### `POST /api/workspaces/:workspaceId/beans`
 
@@ -308,6 +385,32 @@ The schema cascades a bean's deletion to its `brew_logs` and their
 > instead** (`PATCH` `showOnPublicMenu: false`) and **Delete everything**
 > (retry with `?deleteBrewLogs=true`). Never send `deleteBrewLogs=true`
 > without the user confirming that dialog.
+
+### `POST /api/workspaces/:workspaceId/beans/:beanId/freeze`
+
+Starts a freeze period.
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:** `{ "date": "2026-10-15" }` (optional; defaults to the server's
+  current date). Clients should send the user's local date.
+- **Rules:** the date can't be before the bean's `roastDate`, before the
+  previous period's `thawedOn`, or more than one day after the server's
+  current date (allowing for time zones).
+- **Success (`200 OK`):** `{ "bean": { ...bean } }`
+- **Errors:** `400` invalid date or rule broken; `403` viewer; `404` bean not
+  in this workspace; `409` already frozen.
+
+### `POST /api/workspaces/:workspaceId/beans/:beanId/thaw`
+
+Ends the open freeze period.
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:** `{ "date": "2026-10-20" }` (optional, same as freeze)
+- **Rules:** the date can't be before that period's `frozenOn`, or more than
+  one day after the server's current date.
+- **Success (`200 OK`):** `{ "bean": { ...bean } }`
+- **Errors:** `400` invalid date or rule broken; `403` viewer; `404` bean not
+  in this workspace; `409` not frozen.
 
 ---
 
@@ -422,18 +525,21 @@ created it and can't be changed.
   "actualDoseGrams": 15,
   "actualYieldGrams": 250,
   "actualTempC": 93,
+  "grinderId": "uuid",
   "actualGrindSetting": "18 clicks",
   "actualTimeSec": 150,
   "rating": 3,
   "tastingNotes": "Sour, thin body",
   "bean": { "id": "uuid", "roasterName": "Onyx Coffee Lab", "beanName": "Southern Weather" },
   "recipe": { "id": "uuid", "name": "House V60" },
+  "grinder": { "id": "uuid", "name": "Comandante C40" },
   "brewer": { "id": "uuid", "email": "barista@example.com" }
 }
 ```
 
 `recipe` is `null` when `recipeId` is `null` (no recipe used, or the recipe was
-deleted later). `userId` and `brewer` are `null` when the brewer deleted their
+deleted later). `grinder` is `null` when no grinder was recorded; a retired
+grinder still appears here. `userId` and `brewer` are `null` when the brewer deleted their
 account. Such logs can only be edited or deleted by owners.
 
 ### `GET /api/workspaces/:workspaceId/brew-logs`
@@ -464,6 +570,7 @@ account. Such logs can only be edited or deleted by owners.
     "actualDoseGrams": 15,
     "actualYieldGrams": 250,
     "actualTempC": 93,
+    "grinderId": "uuid",
     "actualGrindSetting": "18 clicks",
     "actualTimeSec": 150,
     "rating": 3,
@@ -471,8 +578,9 @@ account. Such logs can only be edited or deleted by owners.
   }
   ```
   - Required: `beanId`, `actualDoseGrams`, `actualYieldGrams`, `actualTimeSec`.
-  - `beanId` and `recipeId` (optional, nullable) must belong to **this**
-    workspace.
+  - `beanId`, plus `recipeId` and `grinderId` (both optional, nullable), must belong
+    to **this** workspace. A retired grinder is accepted (e.g. when logging an
+    old brew afterwards); clients just don't offer it for new brews.
   - `timestamp` is optional (default: now). Backdating is allowed so a brew
     can be logged afterwards, but it can't be more than 5 minutes in the
     future (allowing for clock skew).
@@ -483,8 +591,8 @@ account. Such logs can only be edited or deleted by owners.
     nullable. `actualGrindSetting` ≤ 100 chars, `tastingNotes` ≤ 5000 chars;
     both nullable, and blank becomes `null`.
 - **Success (`201 Created`):** `{ "brewLog": { ...brewLog } }`
-- **Errors:** `400` invalid body, or `beanId`/`recipeId` not in this
-  workspace; `403` viewer.
+- **Errors:** `400` invalid body, or `beanId`/`recipeId`/`grinderId` not in
+  this workspace; `403` viewer.
 - Logging a brew does **not** change the bean's `inventoryWeightGrams`.
 
 ### `PATCH /api/workspaces/:workspaceId/brew-logs/:brewLogId`
@@ -648,8 +756,12 @@ queue:
    ("previous" = `timestamp` earlier than the target's, newest first).
    - If the brew log no longer exists (deleted after queueing), the job
      completes without calling the LLM.
-   - The prompt includes roast age in days at brew time when the bean has a
-     `roastDate`.
+   - The prompt includes the bean's **effective** roast age in days at brew
+     time (`roastAgeDays`, excluding days frozen; see §4) and
+     `daysFrozenBeforeBrew`, when the bean has a `roastDate`.
+   - Each brew includes `grinderName` (or `null`), so the LLM knows which
+     grinder a grind setting refers to and doesn't compare settings across
+     different grinders.
 2. It calls the LLM API using **Structured Outputs** (strict JSON schema mode).
 
 **System Prompt:**

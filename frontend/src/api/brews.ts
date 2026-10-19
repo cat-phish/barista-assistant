@@ -1,0 +1,45 @@
+import { api } from './client';
+import type { BrewLog, LlmAnalysis, Suggestions } from './types';
+
+export interface BrewLogInput {
+  beanId: string;
+  recipeId: string | null;
+  grinderId: string | null;
+  actualDoseGrams: number;
+  actualYieldGrams: number;
+  actualTempC: number | null;
+  actualGrindSetting: string | null;
+  actualTimeSec: number;
+  rating: number | null;
+  tastingNotes: string | null;
+}
+
+const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/brew-logs`;
+
+export const brewLogsApi = {
+  create: (workspaceId: string, input: BrewLogInput) => api.post<{ brewLog: BrewLog }>(base(workspaceId), input),
+  get: (workspaceId: string, id: string) =>
+    api.get<{ brewLog: BrewLog & { latestAnalysis: LlmAnalysis | null } }>(`${base(workspaceId)}/${id}`),
+  list: (workspaceId: string, query: { beanId?: string; limit?: number; offset?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (query.beanId) params.set('beanId', query.beanId);
+    if (query.limit !== undefined) params.set('limit', String(query.limit));
+    if (query.offset !== undefined) params.set('offset', String(query.offset));
+    const qs = params.toString();
+    return api.get<{ brewLogs: BrewLog[]; total: number }>(`${base(workspaceId)}${qs ? `?${qs}` : ''}`);
+  },
+  update: (workspaceId: string, id: string, input: Partial<BrewLogInput>) =>
+    api.patch<{ brewLog: BrewLog }>(`${base(workspaceId)}/${id}`, input),
+  // Also deletes the log's AI analyses (cascade).
+  remove: (workspaceId: string, id: string) => api.delete(`${base(workspaceId)}/${id}`),
+};
+
+export const suggestionsApi = {
+  forBean: (beanId: string) => api.get<Suggestions>(`/api/beans/${beanId}/suggestions`),
+};
+
+export const analysisApi = {
+  // Queues an LLM analysis (202). Repeat requests while queued reuse the job (§8).
+  request: (brewLogId: string) =>
+    api.post<{ status: 'queued'; jobId: string; message: string }>(`/api/brew-logs/${brewLogId}/analyze`),
+};

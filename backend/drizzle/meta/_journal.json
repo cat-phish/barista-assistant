@@ -22,6 +22,20 @@
       "when": 1792395901340,
       "tag": "0002_charming_firebird",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1792398053832,
+      "tag": "0003_gifted_boomer",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1792399836981,
+      "tag": "0004_strong_greymalkin",
+      "breakpoints": true
     }
   ]
 }

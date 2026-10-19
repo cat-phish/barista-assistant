@@ -9,6 +9,7 @@ import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import {
   beans,
   brewLogs,
+  grinders,
   llmAnalyses,
   recipes,
   users,
@@ -22,6 +23,7 @@ import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 export interface BrewLogDetails extends BrewLog {
   bean: Pick<Bean, "id" | "roasterName" | "beanName">;
   recipe: Pick<Recipe, "id" | "name"> | null;
+  grinder: { id: string; name: string } | null; // retired grinders included
   // Null when the brewer deleted their account (the log is kept).
   brewer: { id: string; email: string } | null;
 }
@@ -52,6 +54,7 @@ const FUTURE_SKEW_MS = 5 * 60 * 1000;
 const brewLogFields = {
   beanId: z.uuid(),
   recipeId: z.uuid().nullable().optional(),
+  grinderId: z.uuid().nullable().optional(),
   timestamp: z.iso
     .datetime({ offset: true })
     .transform((s) => new Date(s))
@@ -85,7 +88,7 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 async function referencesInWorkspace(
   tx: Tx,
   workspaceId: string,
-  refs: { beanId?: string; recipeId?: string | null }
+  refs: { beanId?: string; recipeId?: string | null; grinderId?: string | null }
 ): Promise<string | null> {
   if (refs.beanId) {
     const [bean] = await tx
@@ -103,6 +106,15 @@ async function referencesInWorkspace(
       .for("update");
     if (!recipe) return "recipeId: not a recipe in this workspace";
   }
+  if (refs.grinderId) {
+    // Retired grinders are accepted (docs/api_spec.md §6).
+    const [grinder] = await tx
+      .select({ id: grinders.id })
+      .from(grinders)
+      .where(and(eq(grinders.id, refs.grinderId), eq(grinders.workspaceId, workspaceId)))
+      .for("update");
+    if (!grinder) return "grinderId: not a grinder in this workspace";
+  }
   return null;
 }
 
@@ -114,6 +126,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       userId: brewLogs.userId,
       beanId: brewLogs.beanId,
       recipeId: brewLogs.recipeId,
+      grinderId: brewLogs.grinderId,
       timestamp: brewLogs.timestamp,
       actualDoseGrams: brewLogs.actualDoseGrams,
       actualYieldGrams: brewLogs.actualYieldGrams,
@@ -124,11 +137,13 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       tastingNotes: brewLogs.tastingNotes,
       bean: { id: beans.id, roasterName: beans.roasterName, beanName: beans.beanName },
       recipe: { id: recipes.id, name: recipes.name },
+      grinder: { id: grinders.id, name: grinders.name },
       brewer: { id: users.id, email: users.email },
     })
     .from(brewLogs)
     .innerJoin(beans, eq(brewLogs.beanId, beans.id))
     .leftJoin(recipes, eq(brewLogs.recipeId, recipes.id))
+    .leftJoin(grinders, eq(brewLogs.grinderId, grinders.id))
     // Left join: logs of deleted accounts (userId null) must still be listed.
     .leftJoin(users, eq(brewLogs.userId, users.id))
     .where(where)

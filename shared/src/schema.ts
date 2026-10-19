@@ -8,6 +8,7 @@ import {
   primaryKey,
   text,
   unique,
+  date,
 } from "drizzle-orm/mysql-core";
 
 // 1. Users
@@ -61,6 +62,22 @@ export const beans = mysqlTable("beans", {
   showOnPublicMenu: boolean("show_on_public_menu").default(true).notNull(),
 });
 
+// 4b. Bean Freeze Periods (Effective Roast Age)
+// A bean's effective age is the days since roasting minus every day spent
+// frozen. Each freeze is a period; thawedOn is null while still frozen, and a
+// bean has at most one open period (enforced by the API). Dates are calendar
+// dates (no time zone). Kept as history, not a flag, so the age at the time
+// of any past brew can be recomputed (the LLM worker sends it).
+export const beanFreezes = mysqlTable("bean_freezes", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  beanId: varchar("bean_id", { length: 36 })
+    .notNull()
+    .references(() => beans.id, { onDelete: "cascade" }),
+  frozenOn: date("frozen_on", { mode: "string" }).notNull(), // YYYY-MM-DD
+  thawedOn: date("thawed_on", { mode: "string" }), // null = still frozen
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // 5. Brew Methods (Per-Workspace Selectable List)
 // Seeded with DEFAULT_BREW_METHODS when a workspace is created. Members with
 // role 'owner' or 'barista' may add more. Recipes select from this list.
@@ -81,6 +98,28 @@ export const brewMethods = mysqlTable(
       table.workspaceId,
       table.name
     ),
+  })
+);
+
+// 5b. Grinders (Per-Workspace Equipment)
+// Brew logs record which grinder was used, since a grind setting ("20") only
+// means something for a specific grinder. Recipes stay grinder-neutral.
+// A grinder used by brew logs is retired (retiredAt set) rather than deleted:
+// it leaves the pickers but history keeps its name. Unused ones can be deleted.
+export const grinders = mysqlTable(
+  "grinders",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(), // e.g. "Comandante C40"
+    notes: varchar("notes", { length: 255 }), // e.g. "stepped, 0-40 clicks"
+    retiredAt: timestamp("retired_at"), // null = active
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("grinders_workspace_name_unique").on(table.workspaceId, table.name),
   })
 );
 
@@ -132,6 +171,11 @@ export const brewLogs = mysqlTable("brew_logs", {
   recipeId: varchar("recipe_id", { length: 36 }).references(() => recipes.id, {
     onDelete: "set null",
   }),
+  // Which grinder actualGrindSetting refers to. Optional. Grinders in use are
+  // retired, not deleted, so this normally survives; set null as a backstop.
+  grinderId: varchar("grinder_id", { length: 36 }).references(() => grinders.id, {
+    onDelete: "set null",
+  }),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
   actualDoseGrams: decimal("actual_dose_grams", { precision: 5, scale: 2, mode: "number" }).notNull(),
   actualYieldGrams: decimal("actual_yield_grams", { precision: 6, scale: 2, mode: "number" }).notNull(),
@@ -165,6 +209,10 @@ export type Bean = typeof beans.$inferSelect;
 export type NewBean = typeof beans.$inferInsert;
 export type BrewMethod = typeof brewMethods.$inferSelect;
 export type NewBrewMethod = typeof brewMethods.$inferInsert;
+export type BeanFreeze = typeof beanFreezes.$inferSelect;
+export type NewBeanFreeze = typeof beanFreezes.$inferInsert;
+export type Grinder = typeof grinders.$inferSelect;
+export type NewGrinder = typeof grinders.$inferInsert;
 export type Recipe = typeof recipes.$inferSelect;
 export type NewRecipe = typeof recipes.$inferInsert;
 export type RecipeStep = typeof recipeSteps.$inferSelect;
