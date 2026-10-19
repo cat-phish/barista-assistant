@@ -41,6 +41,7 @@ async function logout(): Promise<void> {
     <RouterLink :to="{ name: 'journal' }" active-class="active">Journal</RouterLink>
     <RouterLink :to="{ name: 'beans' }" active-class="active">Beans</RouterLink>
     <RouterLink :to="{ name: 'recipes' }" active-class="active">Recipes</RouterLink>
+    <RouterLink :to="{ name: 'grinders' }" active-class="active">Grinders</RouterLink>
   </nav>
 </template>
 
@@ -100,17 +101,32 @@ async function logout(): Promise<void> {
   align-items: center;
   flex-shrink: 0;
   min-height: var(--tap);
-  /* Five tabs must fit a 360px phone without scrolling. */
+  /* Six tabs must fit a 320px phone without scrolling (see the media queries). */
   padding: 0 var(--space-2);
   color: var(--text-muted);
   text-decoration: none;
   font-weight: 600;
   border-bottom: 3px solid transparent;
 }
-@media (max-width: 340px) {
+@media (max-width: 420px) {
   .tabs a {
     padding: 0 6px;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
+  }
+}
+@media (max-width: 370px) {
+  .tabs a {
+    padding: 0 4px;
+    font-size: 0.85rem;
+  }
+}
+@media (max-width: 340px) {
+  .tabs {
+    padding: 0 2px;
+  }
+  .tabs a {
+    padding: 0 3px;
+    font-size: 0.8rem;
   }
 }
 .tabs a.active {

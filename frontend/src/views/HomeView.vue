@@ -13,14 +13,18 @@ const workspaces = useWorkspaceStore();
       <p class="muted">Pick a bean and recipe, follow the timer, and log how it tasted.</p>
       <RouterLink v-if="workspaces.canEdit" class="btn btn-primary btn-block" :to="{ name: 'brew' }">Start a brew</RouterLink>
     </section>
-    <nav class="shortcuts" aria-label="Get started">
+    <nav class="shortcuts" aria-label="Sections">
+      <RouterLink class="card shortcut" :to="{ name: 'journal' }">
+        <strong>Journal</strong>
+        <span class="muted">Past brews and AI suggestions</span>
+      </RouterLink>
       <RouterLink class="card shortcut" :to="{ name: 'beans' }">
         <strong>Beans</strong>
         <span class="muted">Coffees, roast dates and stock</span>
       </RouterLink>
       <RouterLink class="card shortcut" :to="{ name: 'recipes' }">
         <strong>Recipes</strong>
-        <span class="muted">Doses, ratios and pour steps</span>
+        <span class="muted">Doses, ratios and recipe steps</span>
       </RouterLink>
       <RouterLink class="card shortcut" :to="{ name: 'grinders' }">
         <strong>Grinders</strong>
