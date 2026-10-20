@@ -203,36 +203,49 @@ Removes a member. Owners can remove anyone. Any member can remove themselves
 ## 3. Brew Methods
 
 Recipes must select a method from their workspace's list; methods are not
-free text.
+free text. Each method has a **kind**, one of `METHOD_KINDS`:
+
+| `kind` | Examples | Recipe fields (§5) |
+|---|---|---|
+| `pour_over` | V60, Kalita, Chemex | dose + water, estimated yield, steps with pours |
+| `immersion` | AeroPress, French press | same as `pour_over` for now |
+| `espresso` | Espresso | dose + target yield (no water), shot time and first-drop windows |
+
+New workspaces get V60 (`pour_over`), Espresso (`espresso`), Aeropress
+(`immersion`) and Latte (`espresso`, until drinks replace it).
 
 ### `GET /api/workspaces/:workspaceId/brew-methods`
 
 - **Auth Required:** `true` (any member)
 - **Success (`200 OK`):**
   ```json
-  { "brewMethods": [ { "id": "uuid", "name": "V60" } ] }
+  { "brewMethods": [ { "id": "uuid", "name": "V60", "kind": "pour_over" } ] }
   ```
   Sorted by `name`.
 
 ### `POST /api/workspaces/:workspaceId/brew-methods`
 
 - **Auth Required:** `true` (role `owner` or `barista`)
-- **Body:** `{ "name": "Chemex" }` (trimmed, 1–100 chars)
-- **Success (`201 Created`):** `{ "brewMethod": { "id": "uuid", "name": "Chemex" } }`
+- **Body:** `{ "name": "Chemex", "kind": "pour_over" }` (`name` trimmed,
+  1–100 chars; `kind` optional, default `pour_over`)
+- **Success (`201 Created`):** `{ "brewMethod": { "id": "uuid", "name": "Chemex", "kind": "pour_over" } }`
 - **Errors:** `400` invalid body; `403` viewer; `409` a method with that name
   already exists in this workspace (case-insensitive).
 
 ### `PATCH /api/workspaces/:workspaceId/brew-methods/:methodId`
 
-Renames a brew method. Recipes reference it by ID, so they show the new name
-immediately (including on the public menu).
+Renames a brew method or changes its kind. Recipes reference it by ID, so
+they show the new name immediately (including on the public menu).
 
 - **Auth Required:** `true` (role `owner` or `barista`)
-- **Body:** `{ "name": "Hario V60" }` (trimmed, 1–100 chars)
-- **Success (`200 OK`):** `{ "brewMethod": { "id": "uuid", "name": "Hario V60" } }`
-- **Errors:** `400` invalid body; `403` viewer; `404` method not in this
-  workspace; `409` another method in this workspace already has that name
-  (case-insensitive). Changing only the case, e.g. `v60` to `V60`, is allowed.
+- **Body:** `{ "name": "Hario V60" }` and/or `{ "kind": "pour_over" }`
+  (at least one; same rules as `POST`)
+- **Success (`200 OK`):** `{ "brewMethod": { "id": "uuid", "name": "Hario V60", "kind": "pour_over" } }`
+- **Errors:** `400` invalid or empty body; `403` viewer; `404` method not in
+  this workspace; `409` another method in this workspace already has that name
+  (case-insensitive), or the kind would change while recipes use the method
+  (recipe fields differ by kind), with body `{ "error": "...", "recipeCount": 2 }`.
+  Changing only the case, e.g. `v60` to `V60`, is allowed.
 
 ### `DELETE /api/workspaces/:workspaceId/brew-methods/:methodId`
 
@@ -425,6 +438,18 @@ A recipe describes how to brew: `targetDoseGrams` of coffee and
 the beverage yield, an optional **target finish window** for the total brew
 time, and an optional water temperature.
 
+**By method kind** (§3), checked against the recipe as it is after the
+request (so a `PATCH` that changes `methodId` must also send the fields the
+new kind needs):
+
+| | `pour_over` / `immersion` | `espresso` |
+|---|---|---|
+| `targetWaterGrams` | required | must be absent/`null` |
+| `expectedYieldGrams` | optional estimate | **required**: target shot weight; ratio is dose:yield (18 g → 36 g = 1:2) |
+| finish window | total brew time | total shot time |
+| `firstDropMinSec`/`MaxSec` | must be absent/`null` | optional window (pair, ±3 s default) |
+| steps | any | no `bloom`/`pour` steps and no `targetWaterGrams` |
+
 Recipes are grinder-neutral: instead of one grind setting they carry
 **approximate starting points per grinder** (`grindSettings`). The brew flow
 uses one only when there's no actual setting from your last brew with that
@@ -454,12 +479,14 @@ difference from the previous water step, next to it).
   "id": "uuid",
   "workspaceId": "uuid",
   "name": "House V60",
-  "method": { "id": "uuid", "name": "V60" },
+  "method": { "id": "uuid", "name": "V60", "kind": "pour_over" },
   "targetDoseGrams": 15,
   "targetWaterGrams": 250,
   "expectedYieldGrams": 220,
   "expectedFinishMinSec": 165,
   "expectedFinishMaxSec": 195,
+  "firstDropMinSec": null,
+  "firstDropMaxSec": null,
   "targetTempC": 94,
   "showOnPublicMenu": true,
   "grindSettings": [
@@ -507,11 +534,14 @@ Creates a recipe, its grind starting points and its steps in one transaction.
   }
   ```
   - Required: `name`, `methodId` (a brew method in **this** workspace),
-    `targetDoseGrams` (> 0, < 1000, max 2 decimals), `targetWaterGrams`
-    (> 0, < 10000, max 2 decimals).
-  - Optional, nullable: `expectedYieldGrams` (same rules as water),
-    `targetTempC` (0–100, max 1 decimal). `showOnPublicMenu` defaults to
-    `true`.
+    `targetDoseGrams` (> 0, < 1000, max 2 decimals), and by kind (table
+    above) `targetWaterGrams` or `expectedYieldGrams` (> 0, < 10000, max 2
+    decimals).
+  - Optional, nullable: `expectedYieldGrams` for pour-over/immersion (same
+    rules as water), `targetTempC` (0–100, max 1 decimal). `showOnPublicMenu`
+    defaults to `true`.
+  - First-drop window (espresso only): `firstDropMinSec`/`firstDropMaxSec`,
+    same pair rules as the finish window below but with a **±3 s** default.
   - Target finish window: `expectedFinishMinSec` and `expectedFinishMaxSec`
     (integers 0–86400, optional, nullable, min ≤ max). If only one is given,
     the other defaults to it **±15 s**: min 165 → max 180; max 195 → min 180
@@ -537,8 +567,9 @@ Creates a recipe, its grind starting points and its steps in one transaction.
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Body:** any non-empty subset of the `POST` fields, with the same rules.
   Unknown fields are rejected. The optional fields can be set to `null`.
-  The finish window is treated as a pair: sending only one end applies the
-  ±15 s default to the other; setting one end to `null` clears both.
+  The finish and first-drop windows are each treated as a pair: sending only
+  one end applies the default spread to the other; setting one end to `null`
+  clears both. The kind rules apply to the recipe as it is after the change.
   `steps` and `grindSettings`, if present, each **replace** their whole list
   (`[]` clears it); if absent, they're unchanged.
 - **Success (`200 OK`):** `{ "recipe": { ...recipe } }`
@@ -587,7 +618,7 @@ created it and can't be changed.
   "rating": 3,
   "tastingNotes": "Sour, thin body",
   "bean": { "id": "uuid", "roasterName": "Onyx Coffee Lab", "beanName": "Southern Weather" },
-  "recipe": { "id": "uuid", "name": "House V60", "expectedYieldGrams": 220 },
+  "recipe": { "id": "uuid", "name": "House V60", "expectedYieldGrams": 220, "methodKind": "pour_over" },
   "grinder": { "id": "uuid", "name": "Comandante C40" },
   "brewer": { "id": "uuid", "email": "barista@example.com" }
 }
@@ -595,7 +626,8 @@ created it and can't be changed.
 
 `recipe` is `null` when `recipeId` is `null` (no recipe used, or the recipe was
 deleted later); its `expectedYieldGrams` is the recipe's current estimate (or
-`null`), for comparing with the measured `actualYieldGrams`. `grinder` is
+target, for espresso), for comparing with the measured `actualYieldGrams`, and
+`methodKind` is its method's kind. `grinder` is
 `null` when no grinder was recorded; a retired
 grinder still appears here. `userId` and `brewer` are `null` when the brewer deleted their
 account. Such logs can only be edited or deleted by owners.
@@ -636,7 +668,10 @@ account. Such logs can only be edited or deleted by owners.
     "tastingNotes": "Sour, thin body"
   }
   ```
-  - Required: `beanId`, `actualDoseGrams`, `actualWaterGrams`, `actualTimeSec`.
+  - Required: `beanId`, `actualDoseGrams`, `actualTimeSec`, and
+    `actualWaterGrams`, except for **espresso**: when `recipeId` is an
+    espresso recipe, `actualWaterGrams` must be absent/`null` and
+    `actualYieldGrams` (the shot weight) is required.
   - `beanId`, plus `recipeId` and `grinderId` (both optional, nullable), must belong
     to **this** workspace. A retired grinder is accepted (e.g. when logging an
     old brew afterwards); clients just don't offer it for new brews.
@@ -662,7 +697,10 @@ account. Such logs can only be edited or deleted by owners.
 
 - **Auth Required:** `true` (owner, or the barista who created it)
 - **Body:** any non-empty subset of the `POST` fields, with the same rules.
-  Unknown fields are rejected.
+  Unknown fields are rejected. The espresso rule is checked against the log
+  as it is after the change, but only when the request sends `recipeId`,
+  `actualWaterGrams` or `actualYieldGrams` (so editing the notes of an old log
+  whose recipe later moved to another method still works).
 - **Success (`200 OK`):** `{ "brewLog": { ...brewLog } }`
 - **Errors:** `400` invalid or empty body, or `beanId`/`recipeId` not in this
   workspace; `403` viewer, or a barista editing someone else's log; `404` log
@@ -715,6 +753,7 @@ filters for workspaces where `isPublicMenuEnabled = true` and items where
     ]
   }
   ```
+  `targetWaterGrams` is `null` for espresso recipes.
 - **Error Responses:**
   - `404 Not Found`: Workspace slug does not exist or `isPublicMenuEnabled` is
     `false`. Slugs are matched exactly: `/menu/Jordans-Coffee-Bar` is a `404`,
@@ -827,10 +866,13 @@ queue:
    - Each brew includes `grinderName` (or `null`), so the LLM knows which
      grinder a grind setting refers to and doesn't compare settings across
      different grinders.
-   - Each brew includes `actualWaterGrams`, the measured `actualYieldGrams`
-     (or `null`) and `brewRatio` (water ÷ dose). The recipe includes its
-     water, expected yield, finish window (`expectedFinishMinSec`/`MaxSec`),
-     and its steps with type, label, start/end and pour-to targets.
+   - Each brew includes its recipe's `methodKind` (or `null` without a
+     recipe), `actualWaterGrams` (`null` for espresso), the measured
+     `actualYieldGrams` (or `null`) and `brewRatio`: water ÷ dose, or for
+     espresso yield ÷ dose. The recipe includes its method kind, water,
+     expected yield (the target for espresso), finish window
+     (`expectedFinishMinSec`/`MaxSec`), first-drop window (espresso), and
+     its steps with type, label, start/end and pour-to targets.
 2. It calls the LLM API using **Structured Outputs** (strict JSON schema mode).
 
 **System Prompt:**

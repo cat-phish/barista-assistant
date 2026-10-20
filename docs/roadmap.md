@@ -35,6 +35,10 @@ plan and the decisions behind it.
 
 ## Phase 2: Method kinds, espresso, machines, marks
 
+Built in steps on `feature-espresso`: **2a** method kinds + espresso recipes
+and logs (built); **2b** machines + equipment screens; **2c** shot timer +
+marks + AI.
+
 - Methods get a `kind`: `pour_over`, `immersion`, `espresso`. The kind picks
   the recipe fields, step types and timer behaviour.
 - Espresso: ratio is dose : yield out (no water in); first-drop window and
@@ -57,6 +61,9 @@ plan and the decisions behind it.
   electric. Machines: pre-infusion, flow control and pressure control kept
   separate. Only espresso brews show the machine picker; used machines are
   retired, not deleted.
+- 2b also adds a brew-methods screen: methods can only be added inline in the
+  recipe form today, so there's no UI yet to rename one or fix its kind (the
+  API supports both).
 - Brew logs get **marks**: tapped events with the second they happened, from
   a fixed list (`first_drop`, `preinfusion_end`, later `flow_change`…). First
   drop is a tap for everyone. Stored in their own table. The AI analysis

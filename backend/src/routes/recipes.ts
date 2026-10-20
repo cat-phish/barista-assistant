@@ -15,6 +15,7 @@ import {
   recipeSteps,
   WATER_STEP_TYPES,
   type BrewMethod,
+  type MethodKind,
   type Recipe,
   type RecipeStep,
 } from "@barista/shared/schema";
@@ -22,7 +23,7 @@ import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
 // docs/api_spec.md §5
 export interface RecipeDetails extends Omit<Recipe, "methodId"> {
-  method: Pick<BrewMethod, "id" | "name">;
+  method: Pick<BrewMethod, "id" | "name" | "kind">;
   grindSettings: Array<{ grinderId: string; grinderName: string; setting: string }>;
   steps: Array<Omit<RecipeStep, "recipeId">>;
 }
@@ -101,10 +102,13 @@ const recipeFields = {
   name: z.string().trim().min(1).max(255),
   methodId: z.uuid(),
   targetDoseGrams: decimalSchema({ min: 0, max: 1000, scale: 2, exclusiveMin: true, exclusiveMax: true }),
-  targetWaterGrams: waterGrams,
+  // Required or forbidden depending on the method's kind (kindError).
+  targetWaterGrams: waterGrams.nullable().optional(),
   expectedYieldGrams: waterGrams.nullable().optional(),
   expectedFinishMinSec: seconds.nullable().optional(),
   expectedFinishMaxSec: seconds.nullable().optional(),
+  firstDropMinSec: seconds.nullable().optional(),
+  firstDropMaxSec: seconds.nullable().optional(),
   targetTempC: decimalSchema({ min: 0, max: 100, scale: 1 }).nullable().optional(),
   showOnPublicMenu: z.boolean(),
   grindSettings: grindSettingsSchema,
@@ -127,36 +131,88 @@ interface RecipeParams extends WorkspaceParams {
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 const FINISH_DEFAULT_SPREAD_SEC = 15;
+const FIRST_DROP_DEFAULT_SPREAD_SEC = 3;
 
-// The finish window is a pair (docs/api_spec.md §5): one end alone gets the
-// other at ±15 s; null on either clears both; both must be in order.
-// Returns undefined when neither end was sent (leave unchanged).
-function finishWindow(
+// Time windows are pairs (docs/api_spec.md §5): one end alone gets the other
+// at ±spread; null on either clears both; both must be in order. Returns
+// undefined when neither end was sent (leave unchanged).
+function timeWindow(
   min: number | null | undefined,
-  max: number | null | undefined
-): { expectedFinishMinSec: number | null; expectedFinishMaxSec: number | null } | { error: string } | undefined {
+  max: number | null | undefined,
+  spread: number,
+  names: { min: string; max: string }
+): { min: number | null; max: number | null } | { error: string } | undefined {
   if (min === undefined && max === undefined) return undefined;
-  if (min === null || max === null) return { expectedFinishMinSec: null, expectedFinishMaxSec: null };
+  if (min === null || max === null) return { min: null, max: null };
   if (min !== undefined && max !== undefined) {
-    if (min > max) return { error: "expectedFinishMinSec: must not be after expectedFinishMaxSec" };
-    return { expectedFinishMinSec: min, expectedFinishMaxSec: max };
+    if (min > max) return { error: `${names.min}: must not be after ${names.max}` };
+    return { min, max };
   }
-  if (min !== undefined) return { expectedFinishMinSec: min, expectedFinishMaxSec: Math.min(MAX_SEC, min + FINISH_DEFAULT_SPREAD_SEC) };
+  if (min !== undefined) return { min, max: Math.min(MAX_SEC, min + spread) };
   const end = max as number;
-  return { expectedFinishMinSec: Math.max(0, end - FINISH_DEFAULT_SPREAD_SEC), expectedFinishMaxSec: end };
+  return { min: Math.max(0, end - spread), max: end };
+}
+
+type WindowFields = Partial<
+  Pick<Recipe, "expectedFinishMinSec" | "expectedFinishMaxSec" | "firstDropMinSec" | "firstDropMaxSec">
+>;
+
+// Both windows from a request body, as recipe columns, or the first error.
+function windows(body: {
+  expectedFinishMinSec?: number | null;
+  expectedFinishMaxSec?: number | null;
+  firstDropMinSec?: number | null;
+  firstDropMaxSec?: number | null;
+}): WindowFields | { error: string } {
+  const finish = timeWindow(body.expectedFinishMinSec, body.expectedFinishMaxSec, FINISH_DEFAULT_SPREAD_SEC, {
+    min: "expectedFinishMinSec",
+    max: "expectedFinishMaxSec",
+  });
+  if (finish && "error" in finish) return finish;
+  const drop = timeWindow(body.firstDropMinSec, body.firstDropMaxSec, FIRST_DROP_DEFAULT_SPREAD_SEC, {
+    min: "firstDropMinSec",
+    max: "firstDropMaxSec",
+  });
+  if (drop && "error" in drop) return drop;
+  return {
+    ...(finish ? { expectedFinishMinSec: finish.min, expectedFinishMaxSec: finish.max } : {}),
+    ...(drop ? { firstDropMinSec: drop.min, firstDropMaxSec: drop.max } : {}),
+  };
+}
+
+// What a recipe must look like for its method's kind (docs/api_spec.md §5),
+// checked against the recipe as it is after the request.
+interface KindCheck {
+  targetWaterGrams: number | null;
+  expectedYieldGrams: number | null;
+  firstDropMinSec: number | null;
+  steps: ReadonlyArray<{ stepType: string; targetWaterGrams?: number | null }>;
+}
+function kindError(kind: MethodKind, r: KindCheck): string | null {
+  if (kind === "espresso") {
+    if (r.targetWaterGrams !== null) return "targetWaterGrams: must be null for an espresso recipe";
+    if (r.expectedYieldGrams === null) return "expectedYieldGrams: is required for an espresso recipe (the target shot weight)";
+    const i = r.steps.findIndex((step) => isWaterType(step.stepType) || step.targetWaterGrams != null);
+    if (i >= 0) return `steps.${i}: espresso recipes can't have pour steps or pour-to targets`;
+    return null;
+  }
+  if (r.targetWaterGrams === null) return "targetWaterGrams: is required";
+  if (r.firstDropMinSec !== null) return "firstDropMinSec: only applies to espresso recipes";
+  return null;
 }
 
 // The FK only proves the method exists; it must also belong to this workspace.
 // Locks the method row (MariaDB has no FOR SHARE) so a concurrent brew-method
-// DELETE either finishes first (we see no row -> 400) or waits for us and then
-// sees this recipe (-> 409). Without it the insert hit an FK error -> 500.
-async function methodInWorkspace(tx: Tx, methodId: string, workspaceId: string): Promise<boolean> {
+// DELETE (or kind change) either finishes first or waits for us and then sees
+// this recipe (-> 409). Without it the insert hit an FK error -> 500.
+// Returns the method's kind, or null if it isn't in this workspace.
+async function methodKindInWorkspace(tx: Tx, methodId: string, workspaceId: string): Promise<MethodKind | null> {
   const [method] = await tx
-    .select({ id: brewMethods.id })
+    .select({ kind: brewMethods.kind })
     .from(brewMethods)
     .where(and(eq(brewMethods.id, methodId), eq(brewMethods.workspaceId, workspaceId)))
     .for("update");
-  return Boolean(method);
+  return method?.kind ?? null;
 }
 
 // Same idea for grind starting points: every grinder must be in this workspace
@@ -201,12 +257,14 @@ async function loadRecipes(workspaceId: string, recipeId?: string): Promise<Reci
       id: recipes.id,
       workspaceId: recipes.workspaceId,
       name: recipes.name,
-      method: { id: brewMethods.id, name: brewMethods.name },
+      method: { id: brewMethods.id, name: brewMethods.name, kind: brewMethods.kind },
       targetDoseGrams: recipes.targetDoseGrams,
       targetWaterGrams: recipes.targetWaterGrams,
       expectedYieldGrams: recipes.expectedYieldGrams,
       expectedFinishMinSec: recipes.expectedFinishMinSec,
       expectedFinishMaxSec: recipes.expectedFinishMaxSec,
+      firstDropMinSec: recipes.firstDropMinSec,
+      firstDropMaxSec: recipes.firstDropMaxSec,
       targetTempC: recipes.targetTempC,
       showOnPublicMenu: recipes.showOnPublicMenu,
     })
@@ -262,17 +320,25 @@ recipesRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Reci
   const body = parseBody(createRecipeSchema, req, res);
   if (!body) return;
 
-  const { steps, grindSettings, expectedFinishMinSec, expectedFinishMaxSec, ...rest } = body;
-  const window = finishWindow(expectedFinishMinSec, expectedFinishMaxSec);
-  if (window && "error" in window) {
+  const { steps, grindSettings, expectedFinishMinSec, expectedFinishMaxSec, firstDropMinSec, firstDropMaxSec, ...rest } = body;
+  const window = windows(body);
+  if ("error" in window) {
     sendError(res, 400, window.error);
     return;
   }
-  const recipeFields = { ...rest, ...(window ?? {}) };
+  const recipeFields = { ...rest, ...window };
   const recipeId = randomUUID();
 
   const error = await db.transaction(async (tx) => {
-    if (!(await methodInWorkspace(tx, body.methodId, workspaceId))) return "methodId: not a brew method in this workspace";
+    const kind = await methodKindInWorkspace(tx, body.methodId, workspaceId);
+    if (!kind) return "methodId: not a brew method in this workspace";
+    const wrongForKind = kindError(kind, {
+      targetWaterGrams: recipeFields.targetWaterGrams ?? null,
+      expectedYieldGrams: recipeFields.expectedYieldGrams ?? null,
+      firstDropMinSec: recipeFields.firstDropMinSec ?? null,
+      steps,
+    });
+    if (wrongForKind) return wrongForKind;
     if (!(await grindersInWorkspace(tx, grindSettings.map((g) => g.grinderId), workspaceId))) {
       return "grindSettings: grinderId not a grinder in this workspace";
     }
@@ -301,25 +367,44 @@ recipesRouter.patch("/:recipeId", async (req: Request<RecipeParams>, res: Respon
   const body = parseBody(updateRecipeSchema, req, res);
   if (!body) return;
 
-  const { steps, grindSettings, expectedFinishMinSec, expectedFinishMaxSec, ...rest } = body;
-  const window = finishWindow(expectedFinishMinSec, expectedFinishMaxSec);
-  if (window && "error" in window) {
+  const { steps, grindSettings, expectedFinishMinSec, expectedFinishMaxSec, firstDropMinSec, firstDropMaxSec, ...rest } = body;
+  const window = windows(body);
+  if ("error" in window) {
     sendError(res, 400, window.error);
     return;
   }
-  const recipeFields = { ...rest, ...(window ?? {}) };
+  const recipeFields = { ...rest, ...window };
 
   const outcome = await db.transaction(async (tx) => {
     const [existing] = await tx
-      .select({ id: recipes.id })
+      .select({
+        methodId: recipes.methodId,
+        targetWaterGrams: recipes.targetWaterGrams,
+        expectedYieldGrams: recipes.expectedYieldGrams,
+        firstDropMinSec: recipes.firstDropMinSec,
+      })
       .from(recipes)
       .where(and(eq(recipes.id, recipeId), eq(recipes.workspaceId, workspaceId)))
       .for("update");
     if (!existing) return { status: 404, error: "Recipe not found" } as const;
 
-    if (recipeFields.methodId && !(await methodInWorkspace(tx, recipeFields.methodId, workspaceId))) {
-      return { status: 400, error: "methodId: not a brew method in this workspace" } as const;
-    }
+    const kind = await methodKindInWorkspace(tx, recipeFields.methodId ?? existing.methodId, workspaceId);
+    if (!kind) return { status: 400, error: "methodId: not a brew method in this workspace" } as const;
+    // Kind rules apply to the recipe as it will be after this change (fields
+    // not sent keep their current values).
+    const after = { ...existing, ...recipeFields };
+    const wrongForKind = kindError(kind, {
+      targetWaterGrams: after.targetWaterGrams ?? null,
+      expectedYieldGrams: after.expectedYieldGrams ?? null,
+      firstDropMinSec: after.firstDropMinSec ?? null,
+      steps:
+        steps ??
+        (await tx
+          .select({ stepType: recipeSteps.stepType, targetWaterGrams: recipeSteps.targetWaterGrams })
+          .from(recipeSteps)
+          .where(eq(recipeSteps.recipeId, recipeId))),
+    });
+    if (wrongForKind) return { status: 400, error: wrongForKind } as const;
     if (grindSettings && !(await grindersInWorkspace(tx, grindSettings.map((g) => g.grinderId), workspaceId))) {
       return { status: 400, error: "grindSettings: grinderId not a grinder in this workspace" } as const;
     }

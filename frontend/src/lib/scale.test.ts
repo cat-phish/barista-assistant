@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RecipeStep } from '../api/types';
-import { brewRetention, estimateYield, GRAMS_PER_FL_OZ, retentionOf, scaleBatch, scaleSteps } from './scale';
+import { brewRetention, estimateYield, GRAMS_PER_FL_OZ, retentionOf, scaleBatch, scaleShot, scaleSteps } from './scale';
 
 const recipe = { targetDoseGrams: 15, targetWaterGrams: 250, expectedYieldGrams: null };
 
@@ -100,5 +100,20 @@ describe('scaleSteps', () => {
     expect(scaled.map((s) => s.targetWaterGrams)).toEqual([58, null, b.water]);
     expect(scaled.map((s) => [s.startSec, s.endSec])).toEqual(steps.map((s) => [s.startSec, s.endSec]));
     expect(scaleSteps(steps, 1)).toBe(steps);
+  });
+});
+
+describe('scaleShot', () => {
+  const classic = { targetDoseGrams: 18, expectedYieldGrams: 36 };
+  it('keeps the recipe exactly, scales either side at the ratio, and takes a custom ratio', () => {
+    expect(scaleShot(classic, { field: 'dose', value: 18 })).toEqual({ dose: 18, yield: 36, ratio: 2 });
+    expect(scaleShot(classic, { field: 'dose', value: 20 })).toEqual({ dose: 20, yield: 40, ratio: 2 });
+    expect(scaleShot(classic, { field: 'yield', value: 45 })).toEqual({ dose: 22.5, yield: 45, ratio: 2 });
+    expect(scaleShot(classic, { field: 'dose', value: 18 }, 2.5)).toEqual({ dose: 18, yield: 45, ratio: 2.5 });
+    expect(scaleShot(classic, { field: 'yield', value: 40 }, 2.5)!.dose).toBe(16);
+  });
+  it('refuses values that cannot make a shot', () => {
+    expect(scaleShot(classic, { field: 'dose', value: 0 })).toBeNull();
+    expect(scaleShot(classic, { field: 'dose', value: 18 }, Number.NaN)).toBeNull();
   });
 });

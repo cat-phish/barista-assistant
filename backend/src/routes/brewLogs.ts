@@ -9,6 +9,7 @@ import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import {
   beans,
   brewLogs,
+  brewMethods,
   grinders,
   llmAnalyses,
   recipes,
@@ -16,13 +17,14 @@ import {
   type Bean,
   type BrewLog,
   type LlmAnalysis,
+  type MethodKind,
   type Recipe,
 } from "@barista/shared/schema";
 import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
 export interface BrewLogDetails extends BrewLog {
   bean: Pick<Bean, "id" | "roasterName" | "beanName">;
-  recipe: Pick<Recipe, "id" | "name" | "expectedYieldGrams"> | null;
+  recipe: (Pick<Recipe, "id" | "name" | "expectedYieldGrams"> & { methodKind: MethodKind }) | null;
   grinder: { id: string; name: string } | null; // retired grinders included
   // Null when the brewer deleted their account (the log is kept).
   brewer: { id: string; email: string } | null;
@@ -61,8 +63,9 @@ const brewLogFields = {
     .refine((d) => d.getTime() <= Date.now() + FUTURE_SKEW_MS, "can't be more than 5 minutes in the future")
     .optional(),
   actualDoseGrams: decimalSchema({ min: 0, max: 1000, scale: 2, exclusiveMin: true, exclusiveMax: true }),
-  actualWaterGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }),
-  // Measured beverage weight (optional; docs/api_spec.md §6).
+  // Required, except null for espresso (espressoError).
+  actualWaterGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
+  // Measured beverage weight (optional, except for espresso; docs/api_spec.md §6).
   actualYieldGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
   actualTempC: decimalSchema({ min: 0, max: 100, scale: 1 }).nullable().optional(),
   actualGrindSetting: optionalText(100),
@@ -82,6 +85,26 @@ const listQuerySchema = z.object({
 });
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// Espresso brews record the shot weight instead of water (docs/api_spec.md §6).
+// kind is the method kind of the log's recipe, or null without a recipe.
+function espressoError(kind: MethodKind | null, water: number | null, yieldGrams: number | null): string | null {
+  if (kind === "espresso") {
+    if (water !== null) return "actualWaterGrams: must be null for an espresso brew";
+    if (yieldGrams === null) return "actualYieldGrams: is required for an espresso brew (the shot weight)";
+    return null;
+  }
+  return water === null ? "actualWaterGrams: is required" : null;
+}
+
+async function recipeKind(tx: Tx, recipeId: string): Promise<MethodKind | null> {
+  const [row] = await tx
+    .select({ kind: brewMethods.kind })
+    .from(recipes)
+    .innerJoin(brewMethods, eq(recipes.methodId, brewMethods.id))
+    .where(eq(recipes.id, recipeId));
+  return row?.kind ?? null;
+}
 
 // Lock the referenced bean/recipe rows, like recipes do with brew methods: a
 // concurrent bean or recipe DELETE either finishes first (we see no row -> 400)
@@ -121,7 +144,7 @@ async function referencesInWorkspace(
 }
 
 export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0): Promise<BrewLogDetails[]> {
-  return db
+  const rows = await db
     .select({
       id: brewLogs.id,
       workspaceId: brewLogs.workspaceId,
@@ -140,12 +163,15 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       tastingNotes: brewLogs.tastingNotes,
       bean: { id: beans.id, roasterName: beans.roasterName, beanName: beans.beanName },
       recipe: { id: recipes.id, name: recipes.name, expectedYieldGrams: recipes.expectedYieldGrams },
+      // Separate column: a nested object spanning two left joins isn't nulled as a whole.
+      recipeMethodKind: brewMethods.kind,
       grinder: { id: grinders.id, name: grinders.name },
       brewer: { id: users.id, email: users.email },
     })
     .from(brewLogs)
     .innerJoin(beans, eq(brewLogs.beanId, beans.id))
     .leftJoin(recipes, eq(brewLogs.recipeId, recipes.id))
+    .leftJoin(brewMethods, eq(recipes.methodId, brewMethods.id))
     .leftJoin(grinders, eq(brewLogs.grinderId, grinders.id))
     // Left join: logs of deleted accounts (userId null) must still be listed.
     .leftJoin(users, eq(brewLogs.userId, users.id))
@@ -153,6 +179,11 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
     .orderBy(desc(brewLogs.timestamp), desc(brewLogs.id))
     .limit(limit)
     .offset(offset);
+  // A recipe always has a method (inner FK), so its kind is set whenever recipe is.
+  return rows.map(({ recipeMethodKind, recipe, ...row }) => ({
+    ...row,
+    recipe: recipe && recipeMethodKind ? { ...recipe, methodKind: recipeMethodKind } : null,
+  }));
 }
 
 function logInWorkspace(params: BrewLogParams): SQL | undefined {
@@ -223,6 +254,9 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Bre
   const refError = await db.transaction(async (tx) => {
     const error = await referencesInWorkspace(tx, workspaceId, body);
     if (error) return error;
+    const kind = body.recipeId ? await recipeKind(tx, body.recipeId) : null;
+    const wrongForKind = espressoError(kind, body.actualWaterGrams ?? null, body.actualYieldGrams ?? null);
+    if (wrongForKind) return wrongForKind;
     await tx.insert(brewLogs).values({ id, workspaceId, userId, ...body });
     return null;
   });
@@ -252,7 +286,12 @@ brewLogsRouter.patch(
 
     const outcome = await db.transaction(async (tx) => {
       const [log] = await tx
-        .select({ userId: brewLogs.userId })
+        .select({
+          userId: brewLogs.userId,
+          recipeId: brewLogs.recipeId,
+          actualWaterGrams: brewLogs.actualWaterGrams,
+          actualYieldGrams: brewLogs.actualYieldGrams,
+        })
         .from(brewLogs)
         .where(logInWorkspace(req.params))
         .for("update");
@@ -261,6 +300,15 @@ brewLogsRouter.patch(
 
       const error = await referencesInWorkspace(tx, workspaceId, body);
       if (error) return { status: "bad_ref", error } as const;
+
+      // Only when the change touches it, so old logs whose recipe later moved
+      // to another method can still be edited (docs/api_spec.md §6).
+      if ("recipeId" in body || "actualWaterGrams" in body || "actualYieldGrams" in body) {
+        const after = { ...log, ...body };
+        const kind = after.recipeId ? await recipeKind(tx, after.recipeId) : null;
+        const wrongForKind = espressoError(kind, after.actualWaterGrams ?? null, after.actualYieldGrams ?? null);
+        if (wrongForKind) return { status: "bad_ref", error: wrongForKind } as const;
+      }
 
       await tx.update(brewLogs).set(body).where(eq(brewLogs.id, brewLogId));
       return { status: "updated" } as const;

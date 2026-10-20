@@ -21,6 +21,18 @@ describe('parseBrewDraft', () => {
   });
 });
 
+describe('parseBrewDraft for espresso', () => {
+  const shot = { ...emptyDraft(), dose: '18', water: '250', time: '0:28' };
+  it('needs the shot weight and sends no water', () => {
+    expect(parseBrewDraft(shot, 'espresso').errors).toEqual({ yieldGrams: 'Enter the shot weight' });
+    expect(parseBrewDraft({ ...shot, yieldGrams: '36.5' }, 'espresso').values).toMatchObject({ actualWaterGrams: null, actualYieldGrams: 36.5 });
+  });
+  it('other kinds still need water', () => {
+    expect(parseBrewDraft({ ...shot, water: '' }, 'pour_over').errors).toHaveProperty('water');
+    expect(parseBrewDraft({ ...shot, water: '' }, null).errors).toHaveProperty('water');
+  });
+});
+
 describe('draftFromLog', () => {
   it('round-trips a stored brew log', () => {
     const log = { actualDoseGrams: 15, actualWaterGrams: 250.5, actualYieldGrams: null, actualTempC: 93.5, grinderId: 'g1', actualGrindSetting: '20 clicks', actualTimeSec: 150, rating: null, tastingNotes: null } as BrewLog;

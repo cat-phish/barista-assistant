@@ -56,9 +56,10 @@ describe("processBrewAnalysis", () => {
 
     expect(result.status).toBe("saved");
     const context = llm.mock.calls[0]![0] as BrewContext;
-    expect(context.brew).toMatchObject({ tastingNotes: "day 8", roastAgeDays: 7, daysFrozenBeforeBrew: 0, brewRatio: 16.67, recipeName: "House V60", actualWaterGrams: 250, actualYieldGrams: 221.5 });
+    expect(context.brew).toMatchObject({ tastingNotes: "day 8", roastAgeDays: 7, daysFrozenBeforeBrew: 0, brewRatio: 16.67, recipeName: "House V60", methodKind: "pour_over", actualWaterGrams: 250, actualYieldGrams: 221.5 });
+    expect(context.previousBrews[0]).toMatchObject({ recipeName: null, methodKind: null });
     expect(context.recipe).toMatchObject({
-      name: "House V60", method: "V60", targetWaterGrams: 250, expectedYieldGrams: 220, expectedFinishMinSec: 165, expectedFinishMaxSec: 195, grindStartingPoints: [],
+      name: "House V60", method: "V60", methodKind: "pour_over", firstDropMinSec: null, targetWaterGrams: 250, expectedYieldGrams: 220, expectedFinishMinSec: 165, expectedFinishMaxSec: 195, grindStartingPoints: [],
       steps: [
         { stepType: "bloom", label: null, startSec: 0, endSec: 45, targetWaterGrams: 50 },
         { stepType: "swirl", label: "Gentle swirl", startSec: 45, endSec: 45, targetWaterGrams: null },
@@ -73,6 +74,21 @@ describe("processBrewAnalysis", () => {
     const saved = await db.select().from(llmAnalyses).where(eq(llmAnalyses.brewLogId, logIds.day8!));
     expect(saved).toHaveLength(1);
     expect(saved[0]).toMatchObject(ANALYSIS);
+  });
+
+  it("espresso brews: no water, ratio from the shot weight, first-drop window from the recipe", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    const methodId = randomUUID();
+    const recipeId = randomUUID();
+    const id = randomUUID();
+    await db.insert(brewMethods).values({ id: methodId, workspaceId, name: "Espresso", kind: "espresso" });
+    await db.insert(recipes).values({ id: recipeId, workspaceId, name: "Classic", methodId, targetDoseGrams: 18, expectedYieldGrams: 36, expectedFinishMinSec: 25, expectedFinishMaxSec: 32, firstDropMinSec: 6, firstDropMaxSec: 9 });
+    await db.insert(brewLogs).values({ id, workspaceId, userId, beanId, recipeId, timestamp: new Date("2026-10-09T09:00:00Z"), actualDoseGrams: 18, actualYieldGrams: 40, actualTimeSec: 27 });
+
+    await processBrewAnalysis({ brewLogId: id });
+    const context = llm.mock.calls[0]![0] as BrewContext;
+    expect(context.brew).toMatchObject({ methodKind: "espresso", actualWaterGrams: null, actualYieldGrams: 40, brewRatio: 2.22 });
+    expect(context.recipe).toMatchObject({ methodKind: "espresso", targetWaterGrams: null, expectedYieldGrams: 36, firstDropMinSec: 6, firstDropMaxSec: 9 });
   });
 
   it("uses the effective roast age at each brew's date, excluding days frozen", async () => {

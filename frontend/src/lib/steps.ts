@@ -165,7 +165,15 @@ export function insertStepAfter(drafts: StepDraft[], afterIndex: number, key: st
 export const FINISH_DEFAULT_SPREAD_SEC = 15; // same default as the API
 
 // "2:45" / "" -> window; one end alone gets the other ±15 s (docs/api_spec.md §5).
-export function parseFinishWindow(fromText: string, toText: string): Parsed<{ min: number; max: number } | null> {
+// Espresso first-drop window default spread (docs/api_spec.md §5).
+export const FIRST_DROP_DEFAULT_SPREAD_SEC = 3;
+
+// Also used for the first-drop window, with its own spread.
+export function parseFinishWindow(
+  fromText: string,
+  toText: string,
+  spread = FINISH_DEFAULT_SPREAD_SEC,
+): Parsed<{ min: number; max: number } | null> {
   const from = fromText.trim() ? parseTime(fromText) : null;
   const to = toText.trim() ? parseTime(toText) : null;
   if (from && !from.ok) return { ok: false, error: `From: ${from.error}` };
@@ -176,8 +184,8 @@ export function parseFinishWindow(fromText: string, toText: string): Parsed<{ mi
   if (min !== null && max !== null) {
     return min <= max ? { ok: true, value: { min, max } } : { ok: false, error: '"From" is after "to"' };
   }
-  if (min !== null) return { ok: true, value: { min, max: Math.min(24 * 3600, min + FINISH_DEFAULT_SPREAD_SEC) } };
-  return { ok: true, value: { min: Math.max(0, (max as number) - FINISH_DEFAULT_SPREAD_SEC), max: max as number } };
+  if (min !== null) return { ok: true, value: { min, max: Math.min(24 * 3600, min + spread) } };
+  return { ok: true, value: { min: Math.max(0, (max as number) - spread), max: max as number } };
 }
 
 export function formatFinishWindow(min: number | null, max: number | null): string | null {

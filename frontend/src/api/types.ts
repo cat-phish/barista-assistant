@@ -26,9 +26,13 @@ export interface ErrorBody {
   [extra: string]: unknown;
 }
 
+// docs/schema.md METHOD_KINDS: decides the recipe fields and timer (docs/api_spec.md §3).
+export type MethodKind = 'pour_over' | 'immersion' | 'espresso';
+
 export interface BrewMethod {
   id: string;
   name: string;
+  kind: MethodKind;
 }
 
 // docs/api_spec.md §3b
@@ -86,10 +90,12 @@ export interface Recipe {
   name: string;
   method: BrewMethod;
   targetDoseGrams: number;
-  targetWaterGrams: number;
-  expectedYieldGrams: number | null;
-  expectedFinishMinSec: number | null; // target finish window (both or neither)
+  targetWaterGrams: number | null; // null for espresso
+  expectedYieldGrams: number | null; // estimate; for espresso the target shot weight (always set)
+  expectedFinishMinSec: number | null; // target finish (shot time) window (both or neither)
   expectedFinishMaxSec: number | null;
+  firstDropMinSec: number | null; // espresso only (both or neither)
+  firstDropMaxSec: number | null;
   targetTempC: number | null;
   showOnPublicMenu: boolean;
   grindSettings: RecipeGrindSetting[];
@@ -117,7 +123,7 @@ export interface BrewLog {
   grinderId: string | null;
   timestamp: string;
   actualDoseGrams: number;
-  actualWaterGrams: number;
+  actualWaterGrams: number | null; // null for espresso
   actualYieldGrams: number | null; // measured beverage weight
   actualTempC: number | null;
   actualGrindSetting: string | null;
@@ -125,7 +131,7 @@ export interface BrewLog {
   rating: number | null;
   tastingNotes: string | null;
   bean: { id: string; roasterName: string; beanName: string };
-  recipe: { id: string; name: string; expectedYieldGrams: number | null } | null;
+  recipe: { id: string; name: string; expectedYieldGrams: number | null; methodKind: MethodKind } | null;
   grinder: { id: string; name: string } | null;
   brewer: { id: string; email: string } | null;
 }

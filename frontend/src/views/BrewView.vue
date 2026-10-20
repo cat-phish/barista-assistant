@@ -17,10 +17,10 @@ import BrewFields from '../components/BrewFields.vue';
 import PourOverTimer from '../components/PourOverTimer.vue';
 import { useAnalysis } from '../composables/useAnalysis';
 import { emptyDraft, parseBrewDraft } from '../lib/brewDraft';
-import { formatDay, formatGrams, formatRatio, formatTime } from '../lib/format';
+import { formatDay, formatDoseLine, formatGrams, formatTime } from '../lib/format';
 import { chooseGrind, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
 import { useWorkspaceStore } from '../stores/workspace';
-import { brewRetention, ROAST_LEVELS, scaleBatch, scaleSteps, type MeasuredBrew, type ScaleField } from '../lib/scale';
+import { brewRetention, ROAST_LEVELS, scaleBatch, scaleShot, scaleSteps, type MeasuredBrew, type ScaleField } from '../lib/scale';
 
 type Stage = 'setup' | 'timing' | 'log' | 'saved';
 
@@ -40,9 +40,26 @@ const recipe = computed(() => recipes.value.find((r) => r.id === recipeId.value)
 const suggestion = ref<StartingParameters | null>(null);
 const suggestionState = ref<'idle' | 'loading' | 'none' | 'error'>('idle');
 
+// Espresso recipes record dose → shot weight instead of water (docs/api_spec.md §6).
+const espresso = computed(() => recipe.value?.method.kind === 'espresso');
+// The recipe as a filter recipe (it has water), for batch scaling.
+const filterRecipe = computed(() => {
+  const r = recipe.value;
+  return r && r.targetWaterGrams !== null
+    ? { targetDoseGrams: r.targetDoseGrams, targetWaterGrams: r.targetWaterGrams, expectedYieldGrams: r.expectedYieldGrams }
+    : null;
+});
+// ...or as an espresso recipe (it has a target shot weight).
+const shotRecipe = computed(() => {
+  const r = recipe.value;
+  return r && espresso.value && r.expectedYieldGrams !== null
+    ? { targetDoseGrams: r.targetDoseGrams, expectedYieldGrams: r.expectedYieldGrams }
+    : null;
+});
+
 // Brew details: pre-filled from the recipe / suggestion, edited in the log form.
 const draft = reactive(emptyDraft());
-const parsed = computed(() => parseBrewDraft(draft));
+const parsed = computed(() => parseBrewDraft(draft, recipe.value?.method.kind ?? null));
 
 onMounted(async () => {
   const ws = workspaces.current?.id;
@@ -66,7 +83,7 @@ onMounted(async () => {
 // so their grind target is only a placeholder; the grind comes from chooseGrind.
 watch(recipe, (r) => {
   draft.dose = r ? formatGrams(r.targetDoseGrams) : '';
-  draft.water = r ? formatGrams(r.targetWaterGrams) : '';
+  draft.water = r?.targetWaterGrams != null ? formatGrams(r.targetWaterGrams) : '';
   draft.yieldGrams = ''; // measured after brewing
   draft.temp = r?.targetTempC != null ? String(r.targetTempC) : '';
   resetBatch();
@@ -76,6 +93,7 @@ watch(recipe, (r) => {
 // Batch size: type a dose, water or yield (g or fl oz) and the others follow
 // (docs/features.md). The ratio defaults to the recipe's and can be changed;
 // whatever was typed last is held. Pour targets scale with the water.
+// Espresso uses the same inputs for dose, ratio (1:2) and shot weight.
 const lead = ref<{ field: ScaleField; text: string }>({ field: 'dose', text: '' });
 const ratioText = ref<string | null>(null); // null = the recipe's ratio
 function resetBatch(): void {
@@ -104,7 +122,14 @@ async function loadMeasured(): Promise<void> {
   if (ws && beanId.value && recipeId.value) {
     try {
       const { brewLogs } = await brewLogsApi.list(ws, { beanId: beanId.value, limit: 50 });
-      list = brewLogs.filter((l) => l.recipe?.id === recipeId.value && l.actualYieldGrams !== null).slice(0, 10);
+      list = brewLogs
+        .filter((l) => l.recipe?.id === recipeId.value)
+        .flatMap((l) =>
+          l.actualWaterGrams !== null && l.actualYieldGrams !== null
+            ? [{ actualDoseGrams: l.actualDoseGrams, actualWaterGrams: l.actualWaterGrams, actualYieldGrams: l.actualYieldGrams }]
+            : [],
+        )
+        .slice(0, 10);
     } catch {
       list = []; // the estimate falls back to roast level
     }
@@ -113,30 +138,48 @@ async function loadMeasured(): Promise<void> {
 }
 watch([beanId, recipeId], () => void loadMeasured());
 
-const retention = computed(() => brewRetention({ roastLevel: bean.value?.roastLevel ?? null, recipe: recipe.value, measured: measured.value }));
+const retention = computed(() => brewRetention({ roastLevel: bean.value?.roastLevel ?? null, recipe: filterRecipe.value, measured: measured.value }));
+const customRatio = computed(() => (ratioText.value === null ? undefined : amount(ratioText.value)));
 const batch = computed(() => {
-  if (!recipe.value) return null;
-  const ratio = ratioText.value === null ? undefined : amount(ratioText.value);
-  return scaleBatch(recipe.value, { field: lead.value.field, value: amount(lead.value.text) }, retention.value.retention, ratio);
+  if (!filterRecipe.value) return null;
+  return scaleBatch(filterRecipe.value, { field: lead.value.field, value: amount(lead.value.text) }, retention.value.retention, customRatio.value);
+});
+const shot = computed(() => {
+  const field = lead.value.field;
+  if (!shotRecipe.value || (field !== 'dose' && field !== 'yield')) return null;
+  return scaleShot(shotRecipe.value, { field, value: amount(lead.value.text) }, customRatio.value);
 });
 watch(batch, (b) => {
   if (!b) return;
   draft.dose = formatGrams(b.dose);
   draft.water = formatGrams(b.water);
 });
+watch(shot, (s) => {
+  if (s) draft.dose = formatGrams(s.dose);
+});
+// Setup can continue once the batch (or shot) makes sense.
+const setupReady = computed(() => !recipe.value || (espresso.value ? !!shot.value : !!batch.value));
 function batchText(field: ScaleField): string {
   if (lead.value.field === field) return lead.value.text;
+  if (espresso.value) return shot.value && (field === 'dose' || field === 'yield') ? formatGrams(shot.value[field]) : '';
   return batch.value ? formatGrams(batch.value[field]) : '';
 }
 const ratioShown = computed(() => {
   if (ratioText.value !== null) return ratioText.value;
-  const r = recipe.value;
-  return r ? String(Math.round((r.targetWaterGrams / r.targetDoseGrams) * 10) / 10) : '';
+  const r = filterRecipe.value ?? shotRecipe.value;
+  if (!r) return '';
+  const out = 'targetWaterGrams' in r ? r.targetWaterGrams : r.expectedYieldGrams;
+  return String(Math.round((out / r.targetDoseGrams) * 10) / 10);
 });
 const scaled = computed(() => {
-  const b = batch.value;
   const r = recipe.value;
-  return !!b && !!r && (Math.abs(b.factor - 1) > 1e-9 || Math.abs(b.dose - r.targetDoseGrams) > 1e-9);
+  if (!r) return false;
+  if (espresso.value) {
+    const s = shot.value;
+    return !!s && (Math.abs(s.dose - r.targetDoseGrams) > 1e-9 || Math.abs(s.yield - (r.expectedYieldGrams ?? 0)) > 1e-9);
+  }
+  const b = batch.value;
+  return !!b && (Math.abs(b.factor - 1) > 1e-9 || Math.abs(b.dose - r.targetDoseGrams) > 1e-9);
 });
 const retentionNote = computed(() => {
   const s = retention.value.source;
@@ -148,6 +191,7 @@ const retentionNote = computed(() => {
 });
 // A deeper or shallower bed (more or less coffee) drains at a different speed.
 const grindNote = computed(() => {
+  if (espresso.value) return null; // a basket's dose range is narrow; dial in by taste instead
   const f = batch.value && recipe.value ? batch.value.dose / recipe.value.targetDoseGrams : 1;
   if (f >= 1.25) return 'Bigger batch than the recipe: a slightly coarser grind helps keep the brew time on target.';
   if (f <= 0.8) return 'Smaller batch than the recipe: a slightly finer grind helps keep the brew time on target.';
@@ -259,7 +303,9 @@ function applySuggestion(p: StartingParameters): void {
 }
 
 const timerSteps = computed(() => scaleSteps(recipe.value?.steps ?? [], batch.value?.factor ?? 1));
-const timerDose = computed(() => batch.value?.dose ?? recipe.value?.targetDoseGrams ?? 0);
+const timerDose = computed(() => (espresso.value ? shot.value?.dose : batch.value?.dose) ?? recipe.value?.targetDoseGrams ?? 0);
+// What the log form compares the measured yield / shot weight with.
+const expectedYield = computed(() => (espresso.value ? shot.value?.yield : batch.value?.yield) ?? recipe.value?.expectedYieldGrams ?? null);
 
 // An unfinished "add a new grinder" counts as no grinder once setup is done.
 function leaveSetup(next: Stage): void {
@@ -376,11 +422,33 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <span v-if="grinderError" class="field-error full">{{ grinderError }}</span>
         </div>
         <p v-if="recipe" class="muted recipe-summary">
-          {{ formatGrams(recipe.targetDoseGrams) }} g : {{ formatGrams(recipe.targetWaterGrams) }} g ({{ formatRatio(recipe.targetDoseGrams, recipe.targetWaterGrams) }})
+          {{ formatDoseLine(recipe.targetDoseGrams, recipe.targetWaterGrams, recipe.expectedYieldGrams) }}
           <template v-if="recipe.targetTempC !== null"> · {{ recipe.targetTempC }} °C</template>
           <template v-if="recipe.steps.length"> · {{ recipe.steps.length }} steps</template>
         </p>
-        <div v-if="recipe" class="batch" role="group" aria-labelledby="batch-label">
+        <div v-if="shotRecipe" class="batch" role="group" aria-labelledby="shot-label">
+          <span id="shot-label" class="batch-label">Shot</span>
+          <div class="batch-row">
+            <div class="field">
+              <label for="batch-dose">Dose (g)</label>
+              <input id="batch-dose" inputmode="decimal" :value="batchText('dose')" @input="setLead('dose', $event)" />
+            </div>
+            <div class="field">
+              <label for="batch-ratio">Ratio</label>
+              <div class="ratio-input">
+                <span aria-hidden="true">1 :</span>
+                <input id="batch-ratio" inputmode="decimal" :value="ratioShown" aria-label="Shot weight per gram of coffee" @input="setRatio" />
+              </div>
+            </div>
+            <div class="field">
+              <label for="batch-yield">Shot (g)</label>
+              <input id="batch-yield" inputmode="decimal" :value="batchText('yield')" @input="setLead('yield', $event)" />
+            </div>
+          </div>
+          <p v-if="!shot" class="field-error">Enter positive amounts.</p>
+          <button v-if="scaled" class="btn-link small batch-reset" type="button" @click="resetBatch">Reset to recipe</button>
+        </div>
+        <div v-else-if="filterRecipe" class="batch" role="group" aria-labelledby="batch-label">
           <span id="batch-label" class="batch-label">Batch size</span>
           <div class="batch-row">
             <div class="field">
@@ -465,10 +533,10 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       </section>
 
       <div class="stack">
-        <button class="btn btn-primary btn-block" type="button" :disabled="!bean || (!!recipe && !batch)" @click="leaveSetup('timing')">
-          {{ timerSteps.length ? 'Start timer' : 'Start stopwatch' }}
+        <button class="btn btn-primary btn-block" type="button" :disabled="!bean || !setupReady" @click="leaveSetup('timing')">
+          {{ espresso ? 'Start shot timer' : timerSteps.length ? 'Start timer' : 'Start stopwatch' }}
         </button>
-        <button class="btn btn-secondary btn-block" type="button" :disabled="!bean || (!!recipe && !batch)" @click="logWithoutTimer">
+        <button class="btn btn-secondary btn-block" type="button" :disabled="!bean || !setupReady" @click="logWithoutTimer">
           Log a brew without the timer
         </button>
       </div>
@@ -493,7 +561,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       <h1>How was it?</h1>
       <p class="muted">{{ beanLabel }}<template v-if="recipe"> · {{ recipe.name }}</template></p>
       <section class="card">
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="batch?.yield ?? recipe?.expectedYieldGrams ?? null" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="expectedYield" :espresso="espresso" />
       </section>
       <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
       <button class="btn btn-primary btn-block" type="submit" :disabled="saving">{{ saving ? 'Saving…' : 'Save brew' }}</button>

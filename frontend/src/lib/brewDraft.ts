@@ -1,13 +1,13 @@
 // Editable brew details (log form and journal edit), validated with the same
 // rules as the API (docs/api_spec.md §6). Unit-tested in brewDraft.test.ts.
 import type { BrewLogInput } from '../api/brews';
-import type { BrewLog } from '../api/types';
+import type { BrewLog, MethodKind } from '../api/types';
 import { formatGrams, formatTime, parseDecimal, parseTime } from './format';
 
 export interface BrewDraft {
   dose: string;
-  water: string;
-  yieldGrams: string; // measured beverage weight, optional
+  water: string; // unused for espresso
+  yieldGrams: string; // measured beverage weight: optional, but the shot weight (required) for espresso
   temp: string;
   grinderId: string; // '' = none
   grind: string;
@@ -26,7 +26,7 @@ export function emptyDraft(): BrewDraft {
 export function draftFromLog(log: BrewLog): BrewDraft {
   return {
     dose: formatGrams(log.actualDoseGrams),
-    water: formatGrams(log.actualWaterGrams),
+    water: log.actualWaterGrams === null ? '' : formatGrams(log.actualWaterGrams),
     yieldGrams: log.actualYieldGrams === null ? '' : formatGrams(log.actualYieldGrams),
     temp: log.actualTempC === null ? '' : String(log.actualTempC),
     grinderId: log.grinderId ?? '',
@@ -37,11 +37,18 @@ export function draftFromLog(log: BrewLog): BrewDraft {
   };
 }
 
-export function parseBrewDraft(d: BrewDraft): { errors: BrewDraftErrors; values: BrewValues | null } {
+// kind: the method kind of the brew's recipe (null without one). Espresso
+// records the shot weight instead of water.
+export function parseBrewDraft(d: BrewDraft, kind: MethodKind | null = null): { errors: BrewDraftErrors; values: BrewValues | null } {
+  const espresso = kind === 'espresso';
   const dose = parseDecimal(d.dose, { scale: 2, min: 0, max: 1000, exclusiveMin: true, exclusiveMax: true });
   const grams = { scale: 2, min: 0, max: 10000, exclusiveMin: true, exclusiveMax: true };
-  const water = parseDecimal(d.water, grams);
-  const yieldGrams = d.yieldGrams.trim() ? parseDecimal(d.yieldGrams, grams) : null;
+  const water = espresso ? ({ ok: true, value: null } as const) : parseDecimal(d.water, grams);
+  const yieldGrams = d.yieldGrams.trim()
+    ? parseDecimal(d.yieldGrams, grams)
+    : espresso
+      ? ({ ok: false, error: 'Enter the shot weight' } as const)
+      : null;
   const temp = d.temp.trim() ? parseDecimal(d.temp, { scale: 1, min: 0, max: 100 }) : null;
   const time = parseTime(d.time);
 

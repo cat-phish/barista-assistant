@@ -86,7 +86,17 @@ export const beanFreezes = mysqlTable("bean_freezes", {
 // 5. Brew Methods (Per-Workspace Selectable List)
 // Seeded with DEFAULT_BREW_METHODS when a workspace is created. Members with
 // role 'owner' or 'barista' may add more. Recipes select from this list.
-export const DEFAULT_BREW_METHODS = ["V60", "Espresso", "Aeropress", "Latte"] as const;
+// `kind` (one of METHOD_KINDS) decides which recipe fields apply and how the
+// timer behaves (docs/api_spec.md §3, §5). Latte is an espresso method until
+// drinks replace it (docs/roadmap.md phase 3).
+export const METHOD_KINDS = ["pour_over", "immersion", "espresso"] as const;
+export type MethodKind = (typeof METHOD_KINDS)[number];
+export const DEFAULT_BREW_METHODS = [
+  { name: "V60", kind: "pour_over" },
+  { name: "Espresso", kind: "espresso" },
+  { name: "Aeropress", kind: "immersion" },
+  { name: "Latte", kind: "espresso" },
+] as const satisfies ReadonlyArray<{ name: string; kind: MethodKind }>;
 
 export const brewMethods = mysqlTable(
   "brew_methods",
@@ -96,6 +106,7 @@ export const brewMethods = mysqlTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 100 }).notNull(),
+    kind: varchar("kind", { length: 20 }).$type<MethodKind>().default("pour_over").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
@@ -143,14 +154,21 @@ export const recipes = mysqlTable("recipes", {
     .notNull()
     .references(() => brewMethods.id, { onDelete: "cascade" }),
   targetDoseGrams: decimal("target_dose_grams", { precision: 5, scale: 2, mode: "number" }).notNull(),
-  // Water poured in total; the coffee:water ratio is dose:water.
-  targetWaterGrams: decimal("target_water_grams", { precision: 6, scale: 2, mode: "number" }).notNull(),
-  // Rough estimate of beverage weight (water minus what the grounds retain).
+  // Water poured in total; the coffee:water ratio is dose:water. Required for
+  // pour-over and immersion methods, null for espresso (enforced by the API).
+  targetWaterGrams: decimal("target_water_grams", { precision: 6, scale: 2, mode: "number" }),
+  // Pour-over/immersion: rough estimate of beverage weight (water minus what
+  // the grounds retain). Espresso: the target shot weight (required by the
+  // API); the ratio is dose:yield.
   expectedYieldGrams: decimal("expected_yield_grams", { precision: 6, scale: 2, mode: "number" }),
   // Optional target window for the total brew time, in seconds. The API fills
   // a missing end with the other ±15 s, so it's either both or neither.
   expectedFinishMinSec: int("expected_finish_min_sec"),
   expectedFinishMaxSec: int("expected_finish_max_sec"),
+  // Espresso only: target window for the first drop, seconds from the start
+  // of the shot. Both or neither (the API fills a missing end with ±3 s).
+  firstDropMinSec: int("first_drop_min_sec"),
+  firstDropMaxSec: int("first_drop_max_sec"),
   targetTempC: decimal("target_temp_c", { precision: 4, scale: 1, mode: "number" }),
   showOnPublicMenu: boolean("show_on_public_menu").default(true).notNull(),
   // Grind is per grinder: see recipeGrindSettings.
@@ -220,9 +238,11 @@ export const brewLogs = mysqlTable("brew_logs", {
   }),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
   actualDoseGrams: decimal("actual_dose_grams", { precision: 5, scale: 2, mode: "number" }).notNull(),
-  actualWaterGrams: decimal("actual_water_grams", { precision: 6, scale: 2, mode: "number" }).notNull(),
-  // Measured beverage weight (optional). With a TDS reading this gives
-  // extraction yield later; compared against the recipe's expected yield.
+  // Required unless the log's recipe is an espresso recipe, where it's null.
+  actualWaterGrams: decimal("actual_water_grams", { precision: 6, scale: 2, mode: "number" }),
+  // Measured beverage weight. Optional, except for espresso (the shot
+  // weight). With a TDS reading this gives extraction yield later; compared
+  // against the recipe's expected yield.
   actualYieldGrams: decimal("actual_yield_grams", { precision: 6, scale: 2, mode: "number" }),
   actualTempC: decimal("actual_temp_c", { precision: 4, scale: 1, mode: "number" }),
   actualGrindSetting: varchar("actual_grind_setting", { length: 100 }),

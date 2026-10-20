@@ -16,7 +16,9 @@ upcoming work is in `roadmap.md`.
   roast" stays meaningful for frozen coffee.
 
 ## Equipment
-- **Brew methods:** per-workspace list (V60, Espresso, …).
+- **Brew methods:** per-workspace list (V60, Espresso, …), each with a kind:
+  pour over, immersion or espresso. The kind decides the recipe fields; it's
+  chosen when adding a method and can't change while recipes use it.
 - **Grinders:** per workspace. Grinders that have been used are retired
   rather than deleted, so history keeps their names.
 
@@ -29,6 +31,9 @@ upcoming work is in `roadmap.md`.
   start/end time and, for pours, a cumulative "pour to" weight. Steps can be
   dragged to reorder (re-timed to fit) and inserted between others.
 - **Grind starting points** per grinder.
+- **Espresso recipes:** dose and target shot weight (ratio 1:2 style), target
+  shot time and first-drop windows, temperature. No water and no timed steps
+  yet (pre-infusion comes with the shot timer).
 
 ## Brewing
 - **Setup:** pick bean, recipe and grinder. The grind pre-fills from your
@@ -40,6 +45,10 @@ upcoming work is in `roadmap.md`.
   scale with the water; step times stay the same. A much bigger or smaller
   dose than the recipe suggests a coarser or finer grind. "Reset to recipe"
   undoes it all.
+- **Espresso shots:** the same setup shows dose, ratio and shot weight
+  instead; typing any one updates the others. "Start shot timer" runs the
+  timer with the shot-time window, and the log asks for the shot weight
+  (compared with the target) and shot time instead of water.
 - **Yield estimate:** water − retention × dose. Retention comes from your
   measured brews of this bean with this recipe (median), else the recipe's
   expected yield adjusted for the bean's roast, else a roast-level default.

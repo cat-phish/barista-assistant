@@ -6,9 +6,10 @@ import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
-import { brewMethods, recipes, type BrewMethod } from "@barista/shared/schema";
+import { brewMethods, METHOD_KINDS, recipes, type BrewMethod } from "@barista/shared/schema";
+import { updateSchema } from "../validation.js";
 
-type BrewMethodSummary = Pick<BrewMethod, "id" | "name">;
+type BrewMethodSummary = Pick<BrewMethod, "id" | "name" | "kind">;
 
 export interface BrewMethodListResponse {
   brewMethods: BrewMethodSummary[];
@@ -22,9 +23,17 @@ interface WorkspaceParams {
   workspaceId: string;
 }
 
-const createBrewMethodSchema = z.object({
+const brewMethodFields = {
   name: z.string().trim().min(1).max(100),
+  kind: z.enum(METHOD_KINDS),
+};
+
+const createBrewMethodSchema = z.object({
+  ...brewMethodFields,
+  kind: brewMethodFields.kind.default("pour_over"),
 });
+
+const updateBrewMethodSchema = updateSchema(brewMethodFields);
 
 // Mounted at /api/workspaces/:workspaceId/brew-methods
 export const brewMethodsRouter = Router({ mergeParams: true });
@@ -37,7 +46,7 @@ brewMethodsRouter.get(
     if (!(await requireMembership(res, authedUserId(req), workspaceId))) return;
 
     const rows = await db
-      .select({ id: brewMethods.id, name: brewMethods.name })
+      .select({ id: brewMethods.id, name: brewMethods.name, kind: brewMethods.kind })
       .from(brewMethods)
       .where(eq(brewMethods.workspaceId, workspaceId))
       .orderBy(asc(brewMethods.name));
@@ -55,7 +64,7 @@ brewMethodsRouter.post(
     const body = parseBody(createBrewMethodSchema, req, res);
     if (!body) return;
 
-    const brewMethod = { id: randomUUID(), name: body.name };
+    const brewMethod = { id: randomUUID(), name: body.name, kind: body.kind };
     try {
       // The unique index's collation is case-insensitive, so "v60" collides with "V60".
       await db.insert(brewMethods).values({ ...brewMethod, workspaceId });
@@ -73,27 +82,39 @@ brewMethodsRouter.post(
 
 // Recipes reference methods by ID, so a rename shows up everywhere at once.
 // Case-only renames ("v60" -> "V60") are allowed: the unique index only
-// compares against other rows.
+// compares against other rows. The kind can't change while recipes use the
+// method, since recipe fields differ by kind (docs/api_spec.md §3).
 brewMethodsRouter.patch(
   "/:methodId",
   async (req: Request<WorkspaceParams & { methodId: string }>, res: Response<BrewMethodResponse>) => {
     const { workspaceId, methodId } = req.params;
     if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
 
-    const body = parseBody(createBrewMethodSchema, req, res);
+    const body = parseBody(updateBrewMethodSchema, req, res);
     if (!body) return;
 
-    let found: boolean;
+    let outcome:
+      | { status: "not_found" }
+      | { status: "in_use"; recipeCount: number }
+      | { status: "updated"; brewMethod: BrewMethodSummary };
     try {
-      found = await db.transaction(async (tx) => {
+      outcome = await db.transaction(async (tx) => {
+        // Locked so a recipe can't start using it between the count and the update.
         const [method] = await tx
-          .select({ id: brewMethods.id })
+          .select({ id: brewMethods.id, name: brewMethods.name, kind: brewMethods.kind })
           .from(brewMethods)
           .where(and(eq(brewMethods.id, methodId), eq(brewMethods.workspaceId, workspaceId)))
           .for("update");
-        if (!method) return false;
-        await tx.update(brewMethods).set({ name: body.name }).where(eq(brewMethods.id, methodId));
-        return true;
+        if (!method) return { status: "not_found" } as const;
+        if (body.kind !== undefined && body.kind !== method.kind) {
+          const [{ recipeCount } = { recipeCount: 0 }] = await tx
+            .select({ recipeCount: count() })
+            .from(recipes)
+            .where(eq(recipes.methodId, methodId));
+          if (recipeCount > 0) return { status: "in_use", recipeCount } as const;
+        }
+        await tx.update(brewMethods).set(body).where(eq(brewMethods.id, methodId));
+        return { status: "updated", brewMethod: { ...method, ...body } } as const;
       });
     } catch (err) {
       if (isDuplicateEntryError(err)) {
@@ -103,11 +124,17 @@ brewMethodsRouter.patch(
       throw err;
     }
 
-    if (!found) {
+    if (outcome.status === "not_found") {
       sendError(res, 404, "Brew method not found");
       return;
     }
-    res.json({ brewMethod: { id: methodId, name: body.name } });
+    if (outcome.status === "in_use") {
+      sendError(res, 409, `${outcome.recipeCount} recipe(s) use this brew method, so its kind can't change.`, {
+        recipeCount: outcome.recipeCount,
+      });
+      return;
+    }
+    res.json({ brewMethod: outcome.brewMethod });
   }
 );
 

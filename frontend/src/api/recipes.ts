@@ -1,15 +1,17 @@
 import { api } from './client';
-import type { BrewMethod, Recipe, StepType } from './types';
+import type { BrewMethod, MethodKind, Recipe, StepType } from './types';
 
 // Request body for create/update (docs/api_spec.md §5).
 export interface RecipeInput {
   name: string;
   methodId: string;
   targetDoseGrams: number;
-  targetWaterGrams: number;
-  expectedYieldGrams: number | null;
+  targetWaterGrams: number | null; // null for espresso
+  expectedYieldGrams: number | null; // required for espresso
   expectedFinishMinSec: number | null;
   expectedFinishMaxSec: number | null;
+  firstDropMinSec: number | null; // espresso only
+  firstDropMaxSec: number | null;
   targetTempC: number | null;
   showOnPublicMenu: boolean;
   grindSettings: Array<{ grinderId: string; setting: string }>;
@@ -29,6 +31,6 @@ export const recipesApi = {
 export const brewMethodsApi = {
   list: (workspaceId: string) =>
     api.get<{ brewMethods: BrewMethod[] }>(`/api/workspaces/${workspaceId}/brew-methods`),
-  create: (workspaceId: string, name: string) =>
-    api.post<{ brewMethod: BrewMethod }>(`/api/workspaces/${workspaceId}/brew-methods`, { name }),
+  create: (workspaceId: string, name: string, kind: MethodKind) =>
+    api.post<{ brewMethod: BrewMethod }>(`/api/workspaces/${workspaceId}/brew-methods`, { name, kind }),
 };
