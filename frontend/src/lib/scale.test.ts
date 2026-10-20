@@ -88,17 +88,18 @@ describe('scaleBatch', () => {
 });
 
 describe('scaleSteps', () => {
+  const base = { label: null, advance: 'auto', targetTempC: null, pressureBar: null, pressureEndBar: null, flowRate: null, flowEndRate: null } as const;
   const steps: RecipeStep[] = [
-    { id: 'a', stepOrder: 1, stepType: 'bloom', label: null, startSec: 0, endSec: 45, targetWaterGrams: 50 },
-    { id: 'b', stepOrder: 2, stepType: 'swirl', label: null, startSec: 45, endSec: 45, targetWaterGrams: null },
-    { id: 'c', stepOrder: 3, stepType: 'pour', label: null, startSec: 60, endSec: 90, targetWaterGrams: 250 },
+    { ...base, id: 'a', stepOrder: 1, stepType: 'bloom', durationSec: 45, targetWaterGrams: 50 },
+    { ...base, id: 'b', stepOrder: 2, stepType: 'swirl', durationSec: 0, targetWaterGrams: null },
+    { ...base, id: 'c', stepOrder: 3, stepType: 'pour', durationSec: 30, targetWaterGrams: 250 },
   ];
 
   it('scales pour targets, keeps times, and ends on the batch water', () => {
     const b = scaleBatch(recipe, { field: 'dose', value: 17.3 }, 2)!;
     const scaled = scaleSteps(steps, b.factor);
     expect(scaled.map((s) => s.targetWaterGrams)).toEqual([58, null, b.water]);
-    expect(scaled.map((s) => [s.startSec, s.endSec])).toEqual(steps.map((s) => [s.startSec, s.endSec]));
+    expect(scaled.map((s) => s.durationSec)).toEqual(steps.map((s) => s.durationSec));
     expect(scaleSteps(steps, 1)).toBe(steps);
   });
 });

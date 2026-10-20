@@ -76,6 +76,11 @@ const machineOptions = computed(() => (props.machines ?? []).filter((m) => !m.re
         <input id="brew-time" v-model="draft.time" inputmode="numeric" placeholder="m:ss" :aria-invalid="showErrors && !!errors.time" />
         <span v-if="showErrors && errors.time" class="field-error">{{ errors.time }}</span>
       </div>
+      <div v-if="espresso" class="field">
+        <label for="brew-first-drop">First drop (s) <span class="muted">(optional)</span></label>
+        <input id="brew-first-drop" v-model="draft.firstDrop" inputmode="decimal" placeholder="e.g. 7.4" :aria-invalid="showErrors && !!errors.firstDrop" />
+        <span v-if="showErrors && errors.firstDrop" class="field-error">{{ errors.firstDrop }}</span>
+      </div>
       <div class="field">
         <label for="brew-temp">Water temp (°C)</label>
         <input id="brew-temp" v-model="draft.temp" inputmode="decimal" :aria-invalid="showErrors && !!errors.temp" />

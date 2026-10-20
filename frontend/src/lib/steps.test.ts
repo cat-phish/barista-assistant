@@ -1,124 +1,202 @@
 import { describe, expect, it } from 'vitest';
-import type { RecipeStep } from '../api/types';
-import { finishStatus, formatFinishWindow, insertStepAfter, moveStep, parseFinishWindow, parseSteps, pourAmounts, recipeWarnings, stepTitle, timerPhase, type StepDraft } from './steps';
+import type { Mark, StepFields } from '../api/types';
+import {
+  brewSchedule,
+  finishStatus,
+  formatFinishWindow,
+  insertStepAfter,
+  machineNote,
+  moveStep,
+  parseFinishWindow,
+  parseSteps,
+  plannedStarts,
+  pourAmounts,
+  recipeWarnings,
+  stepDraft,
+  stepInstruction,
+  stepTitle,
+  stepTypesFor,
+} from './steps';
 
-const d = (over: Partial<StepDraft>): StepDraft => ({ key: Math.random().toString(), stepType: 'pour', label: '', start: '0:00', end: '0:30', water: '', ...over });
+const step = (s: Partial<StepFields>): StepFields => ({
+  stepType: 'pour', label: null, durationSec: 10, advance: 'auto', targetWaterGrams: null, targetTempC: null,
+  pressureBar: null, pressureEndBar: null, flowRate: null, flowEndRate: null, ...s,
+});
+const draft = (s: Partial<StepFields> & { water?: string }) => ({ ...stepDraft('k', { durationSec: 10, ...s }), ...(s.water !== undefined ? { water: s.water } : {}) });
+const mark = (kind: Mark['kind'], atSec: number, stepOrder: number | null = null): Mark => ({ kind, stepOrder, atSec });
+
+describe('step types per kind', () => {
+  it('pour over and espresso get their own types, both get Other', () => {
+    expect(stepTypesFor('pour_over')).toEqual(['bloom', 'pour', 'swirl', 'stir', 'wait', 'press', 'other']);
+    expect(stepTypesFor('espresso')).toEqual(['preinfusion', 'soak', 'pressure', 'flow', 'other']);
+  });
+});
 
 describe('parseSteps', () => {
-  it('parses typed, timed steps with gaps; drops water from non-water types', () => {
-    const { steps, errors } = parseSteps([
-      d({ stepType: 'bloom', end: '0:10', water: '45' }),
-      d({ stepType: 'swirl', start: '0:10', end: '0:10', water: '99' }), // water ignored
-      d({ stepType: 'bloom', label: ' Second bloom ', start: '0:30', end: '0:40', water: '90' }),
-      d({ stepType: 'pour', start: '1:00', end: '2:00', water: '250' }),
-    ]);
+  it('parses durations, how each step moves on, and values', () => {
+    const { steps, errors } = parseSteps(
+      [
+        draft({ stepType: 'bloom', durationSec: 45, advance: 'tap', targetWaterGrams: 50, targetTempC: 85 }),
+        draft({ stepType: 'pour', durationSec: 30, targetWaterGrams: 250, targetTempC: 93 }),
+        { ...draft({ stepType: 'wait', label: 'Drawdown' }), duration: '' }, // last: until you finish
+      ],
+      'pour_over',
+    );
     expect(errors).toEqual({});
-    expect(steps.map((s) => [s.stepType, s.label, s.startSec, s.endSec, s.targetWaterGrams])).toEqual([
-      ['bloom', null, 0, 10, 45],
-      ['swirl', null, 10, 10, null],
-      ['bloom', 'Second bloom', 30, 40, 90],
-      ['pour', null, 60, 120, 250],
+    expect(steps.map((s) => [s.stepType, s.durationSec, s.advance, s.targetWaterGrams, s.targetTempC, s.label])).toEqual([
+      ['bloom', 45, 'tap', 50, 85, null],
+      ['pour', 30, 'auto', 250, 93, null],
+      ['wait', null, 'auto', null, null, 'Drawdown'],
     ]);
   });
+
   it('flags the same problems as the API, on the right step', () => {
-    expect(parseSteps([d({ water: '' })]).errors).toEqual({ 0: 'Enter the weight to pour to' });
-    expect(parseSteps([d({ start: '0:30', end: '0:10', water: '50' })]).errors).toEqual({ 0: 'Ends before it starts' });
-    expect(parseSteps([d({ water: '50' }), d({ start: '0:20', end: '0:40', water: '80' })]).errors).toEqual({ 1: 'Starts before the previous step ends (0:30)' });
-    expect(parseSteps([d({ water: '100' }), d({ start: '0:30', end: '0:40', water: '80' })]).errors).toEqual({ 1: 'Pour-to is a running total: at least 100 g' });
-    expect(parseSteps([d({ start: 'x', water: '50' })]).errors[0]).toMatch(/^Start:/);
+    const open = { ...draft({ stepType: 'wait' }), duration: '' };
+    expect(parseSteps([open, draft({ stepType: 'stir' })], 'pour_over').errors[0]).toMatch(/only the last step/);
+    expect(parseSteps([{ ...open, advance: 'auto_log' }], 'pour_over').errors[0]).toMatch(/how long/);
+    expect(parseSteps([draft({ stepType: 'pour', water: '' })], 'pour_over').errors[0]).toMatch(/weight to pour to/);
+    expect(parseSteps([draft({ water: '100' }), draft({ water: '50' })], 'pour_over').errors[1]).toMatch(/running total/);
+    expect(parseSteps([{ ...draft({ stepType: 'stir' }), duration: '1:7' }], 'pour_over').errors[0]).toMatch(/Time/);
+    expect(parseSteps([{ ...draft({ stepType: 'stir' }), advance: 'first_drop' }], 'pour_over').errors[0]).toMatch(/espresso/);
+    // A tap step's time is only a guide.
+    expect(parseSteps([{ ...draft({ stepType: 'stir', advance: 'tap' }), duration: '' }, draft({ stepType: 'stir' })], 'pour_over').errors).toEqual({});
   });
-  it("'other' takes optional water", () => {
-    expect(parseSteps([d({ stepType: 'other', label: 'Remove filter' })]).errors).toEqual({});
+
+  it('espresso: pressure/flow per type, ramps, one first-drop step; no water', () => {
+    const profile = [
+      { ...draft({ stepType: 'pressure', advance: 'first_drop' }), duration: '', pressure: '9' },
+      draft({ stepType: 'soak', durationSec: 10 }),
+      { ...draft({ stepType: 'flow' }), duration: '', flow: '4', flowEnd: '2' },
+    ];
+    const ok = parseSteps(profile, 'espresso');
+    expect(ok.errors).toEqual({});
+    expect(ok.steps.map((s) => [s.stepType, s.advance, s.durationSec, s.pressureBar, s.flowRate, s.flowEndRate])).toEqual([
+      ['pressure', 'first_drop', null, 9, null, null],
+      ['soak', 'auto', 10, null, null, null],
+      ['flow', 'auto', null, null, 4, 2],
+    ]);
+    expect(parseSteps([{ ...draft({ stepType: 'pressure' }), pressure: '' }], 'espresso').errors[0]).toMatch(/pressure/);
+    expect(parseSteps([{ ...draft({ stepType: 'flow' }), flowEnd: '2' }], 'espresso').errors[0]).toMatch(/flow/i);
+    expect(parseSteps([{ ...draft({ stepType: 'preinfusion' }), pressure: '3', flow: '2' }], 'espresso').errors[0]).toMatch(/not both/);
+    expect(parseSteps([{ ...draft({ stepType: 'pressure' }), pressure: '25' }], 'espresso').errors[0]).toMatch(/0–20/);
+    const twoDrops = [{ ...draft({ stepType: 'soak', advance: 'first_drop' }) }, { ...draft({ stepType: 'soak', advance: 'first_drop' }) }];
+    expect(parseSteps(twoDrops, 'espresso').errors[1]).toMatch(/Only one/);
+    // A pour-over step left over after switching the method to espresso.
+    expect(parseSteps([draft({ stepType: 'bloom', water: '50' })], 'espresso').errors[0]).toMatch(/shot profile step type/);
+    // Water typed on an espresso "other" step is ignored, not sent.
+    expect(parseSteps([{ ...draft({ stepType: 'other', label: 'x' }), water: '40' }], 'espresso').steps[0]?.targetWaterGrams).toBeNull();
+  });
+});
+
+describe('planned starts', () => {
+  it('add up durations; after a tap or first-drop step they are estimates; after an open step unknown', () => {
+    expect(plannedStarts([step({ durationSec: 45, advance: 'tap' }), step({ durationSec: 30 }), step({ durationSec: null })])).toEqual([
+      { at: 0, exact: true },
+      { at: 45, exact: false },
+      { at: 75, exact: false },
+    ]);
+    expect(plannedStarts([step({ durationSec: null, advance: 'first_drop' }), step({})])).toEqual([{ at: 0, exact: true }, null]);
+  });
+});
+
+describe('what a card says', () => {
+  it('instructions: pour-to with amount, pressure/flow (ramps), pump off', () => {
+    expect(stepInstruction(step({ targetWaterGrams: 150 }), 100, 'g_s')).toBe('Pour to 150 g (+100)');
+    expect(stepInstruction(step({ stepType: 'pressure', pressureBar: 9 }), null, 'g_s')).toBe('9 bar');
+    expect(stepInstruction(step({ stepType: 'pressure', pressureBar: 9, pressureEndBar: 6 }), null, 'g_s')).toBe('9 → 6 bar');
+    expect(stepInstruction(step({ stepType: 'flow', flowRate: 4, flowEndRate: 2 }), null, 'ml_s')).toBe('4 → 2 ml/s');
+    expect(stepInstruction(step({ stepType: 'soak' }), null, 'g_s')).toBe('Pump off');
+    expect(stepInstruction(step({ stepType: 'swirl' }), null, 'g_s')).toBeNull();
+  });
+  it("notes what the machine can't do", () => {
+    const basic = { preinfusion: 'none', flowControl: 'none', pressureControl: 'none' } as const;
+    expect(machineNote(step({ stepType: 'pressure', pressureBar: 6 }), basic)).toBe("Your machine can't set pressure");
+    expect(machineNote(step({ stepType: 'flow', flowRate: 2 }), { ...basic, flowControl: 'manual' })).toBeNull();
+    expect(machineNote(step({ stepType: 'preinfusion' }), basic)).toBe('Your machine has no pre-infusion');
+    expect(machineNote(step({ stepType: 'pressure', pressureBar: 6 }), null)).toBeNull();
+  });
+  it('titles fall back to the type name', () => {
+    expect(stepTitle({ stepType: 'soak', label: null })).toBe('Soak (pump off)');
+    expect(stepTitle({ stepType: 'pour', label: ' Center pour ' })).toBe('Center pour');
+  });
+});
+
+describe('brewSchedule', () => {
+  // Bloom waits for the kettle (tap, 45 s guide), then a timed pour, then drawdown until finish.
+  const v60 = [
+    step({ stepType: 'bloom', durationSec: 45, advance: 'tap', targetWaterGrams: 50 }),
+    step({ stepType: 'pour', durationSec: 30, targetWaterGrams: 250 }),
+    step({ stepType: 'wait', durationSec: null }),
+  ];
+
+  it('a tap step waits; past its guide it is due; later steps follow the real tap', () => {
+    expect(brewSchedule(v60, 20, [])).toMatchObject({ kind: 'step', index: 0, start: 0, end: null, guideEnd: 45, due: false, from: 0, to: 45, amount: 50 });
+    expect(brewSchedule(v60, 50, [])).toMatchObject({ index: 0, due: true });
+    const tapped = [mark('step_end', 52, 1)];
+    expect(brewSchedule(v60, 60, tapped)).toMatchObject({ index: 1, start: 52, end: 82, amount: 200, prevIndex: 0, nextIndex: 2 });
+    expect(brewSchedule(v60, 90, tapped, { finishMax: 180 })).toMatchObject({ index: 2, start: 82, end: null, from: 82, to: 180 });
+  });
+
+  it('auto steps run on the clock; a timed last step ends in done', () => {
+    const timed = [step({ durationSec: 30, targetWaterGrams: 100 }), step({ durationSec: 30, targetWaterGrams: 200 })];
+    expect(brewSchedule(timed, 45, [])).toMatchObject({ index: 1, start: 30, end: 60 });
+    expect(brewSchedule(timed, 61, [])).toEqual({ kind: 'done', prevIndex: 1, from: 60 });
+    // A logged moment doesn't change the schedule.
+    expect(brewSchedule([step({ advance: 'auto_log', durationSec: 30 }), step({})], 35, [mark('step_end', 40, 1)])).toMatchObject({ index: 1, start: 30 });
+  });
+
+  it('an instant step shows briefly without delaying the next', () => {
+    const steps = [step({ durationSec: 10 }), step({ stepType: 'swirl', durationSec: 0 }), step({ durationSec: 20 })];
+    expect(brewSchedule(steps, 11, [])).toMatchObject({ index: 1, from: 10, to: 12 });
+    expect(brewSchedule(steps, 12.5, [])).toMatchObject({ index: 2, start: 10, end: 30 });
+  });
+
+  it('espresso: first-drop step ends at the tap (or right away if it already happened)', () => {
+    const profile = [
+      step({ stepType: 'pressure', pressureBar: 9, advance: 'first_drop', durationSec: null }),
+      step({ stepType: 'soak', durationSec: 10 }),
+      step({ stepType: 'flow', flowRate: 4, flowEndRate: 2, durationSec: null }),
+    ];
+    expect(brewSchedule(profile, 5, [], { firstDropMax: 9 })).toMatchObject({ index: 0, end: null, to: 9 });
+    expect(brewSchedule(profile, 10, [mark('first_drop', 7.4)])).toMatchObject({ index: 1, start: 7.4, end: 17.4 });
+    expect(brewSchedule(profile, 20, [mark('first_drop', 7.4)])).toMatchObject({ index: 2, start: 17.4, end: null });
+    // Timed pre-infusion first; the drop came during it, so the first-drop step ends as soon as it starts.
+    const timed = [step({ stepType: 'preinfusion', durationSec: 8 }), step({ stepType: 'pressure', pressureBar: 9, advance: 'first_drop' }), step({ stepType: 'soak', durationSec: 5 })];
+    expect(brewSchedule(timed, 9, [mark('first_drop', 6)])).toMatchObject({ index: 2, start: 8 });
+  });
+
+  it('idle without steps', () => {
+    expect(brewSchedule([], 10, [])).toEqual({ kind: 'idle' });
+  });
+});
+
+describe('editing the list', () => {
+  it('moves without re-timing; no-ops out of range', () => {
+    expect(moveStep(['a', 'b', 'c'], 0, 2)).toEqual(['b', 'c', 'a']);
+    const list = ['a', 'b'];
+    expect(moveStep(list, 0, 5)).toBe(list);
+  });
+  it('inserts a 10 s pour to the running total, or a soak for espresso', () => {
+    const drafts = [draft({ stepType: 'bloom', targetWaterGrams: 50 }), draft({ stepType: 'stir' }), draft({ stepType: 'pour', targetWaterGrams: 250 })];
+    const { steps, index } = insertStepAfter(drafts, 1, 'new', 'pour_over');
+    expect(index).toBe(2);
+    expect(steps[2]).toMatchObject({ key: 'new', stepType: 'pour', duration: '0:10', water: '50' });
+    expect(insertStepAfter(drafts, -1, 'first', 'espresso').steps[0]).toMatchObject({ stepType: 'soak', duration: '0:10' });
+    expect(insertStepAfter(drafts, 9, 'x', 'pour_over').index).toBe(-1);
   });
 });
 
 describe('pourAmounts and warnings', () => {
   it('per-step amount = difference from the previous water step', () => {
-    expect(pourAmounts([{ targetWaterGrams: 45 }, { targetWaterGrams: null }, { targetWaterGrams: 150 }, { targetWaterGrams: 250 }])).toEqual([45, null, 105, 100]);
+    expect(pourAmounts([{ targetWaterGrams: 50 }, { targetWaterGrams: null }, { targetWaterGrams: 250 }])).toEqual([50, null, 200]);
   });
   it('warns when steps and recipe disagree', () => {
-    const steps = parseSteps([d({ water: '350', end: '2:30' })]).steps;
-    expect(recipeWarnings({ waterGrams: 250, finishMaxSec: 120, steps })).toEqual([
-      "The steps pour to 350 g, but the recipe's water is 250 g.",
-      'The target finish window ends (2:00) before the last step does (2:30).',
+    const steps = [step({ durationSec: 60, targetWaterGrams: 240 }), step({ durationSec: 120 })];
+    expect(recipeWarnings({ waterGrams: 250, finishMaxSec: 150, steps })).toEqual([
+      'The steps pour to 240 g, but the recipe\'s water is 250 g.',
+      'The target finish window ends (2:30) before the steps do (3:00).',
     ]);
-    expect(recipeWarnings({ waterGrams: 350, finishMaxSec: null, steps })).toEqual([]);
-  });
-  it('titles fall back to the type name', () => {
-    expect(stepTitle({ stepType: 'wait', label: null })).toBe('Wait / drawdown');
-    expect(stepTitle({ stepType: 'bloom', label: 'Second bloom' })).toBe('Second bloom');
-  });
-});
-
-describe('timerPhase', () => {
-  const s = (o: Partial<RecipeStep>): RecipeStep => ({ id: String(o.stepOrder), stepOrder: 1, stepType: 'pour', label: null, startSec: 0, endSec: 0, targetWaterGrams: null, ...o });
-  const steps = [
-    s({ stepOrder: 1, stepType: 'bloom', startSec: 0, endSec: 10, targetWaterGrams: 45 }),
-    s({ stepOrder: 2, stepType: 'swirl', startSec: 10, endSec: 10 }),
-    s({ stepOrder: 3, stepType: 'pour', startSec: 45, endSec: 90, targetWaterGrams: 250 }),
-  ];
-  it('shows the step whose window contains t, with its pour amount', () => {
-    expect(timerPhase(steps, 3)).toMatchObject({ kind: 'step', index: 0, endsAt: 10, amount: 45 });
-    expect(timerPhase(steps, 60)).toMatchObject({ kind: 'step', index: 2, endsAt: 90, amount: 205 });
-  });
-  it('keeps an instant step on screen briefly, then waits for the next', () => {
-    expect(timerPhase(steps, 10)).toMatchObject({ kind: 'step', index: 1, endsAt: 12 });
-    expect(timerPhase(steps, 11.5)).toMatchObject({ kind: 'step', index: 1 });
-    expect(timerPhase(steps, 12)).toMatchObject({ kind: 'wait', nextIndex: 2, startsIn: 33 });
-  });
-  it("an instant step's display never overlaps the next step", () => {
-    const tight = [s({ stepType: 'swirl', startSec: 10, endSec: 10 }), s({ stepOrder: 2, startSec: 11, endSec: 20, targetWaterGrams: 100 })];
-    expect(timerPhase(tight, 10.5)).toMatchObject({ kind: 'step', index: 0, endsAt: 11 });
-    expect(timerPhase(tight, 11)).toMatchObject({ kind: 'step', index: 1 });
-  });
-  it('every phase knows its previous/next step and its progress window', () => {
-    expect(timerPhase(steps, 3)).toMatchObject({ kind: 'step', prevIndex: null, nextIndex: 1, from: 0, to: 10 });
-    expect(timerPhase(steps, 11)).toMatchObject({ kind: 'step', index: 1, prevIndex: 0, nextIndex: 2, from: 10, to: 12 });
-    // The wait after the instant swirl runs from where the swirl stopped showing (12) to the pour (45).
-    expect(timerPhase(steps, 20)).toMatchObject({ kind: 'wait', prevIndex: 1, nextIndex: 2, from: 12, to: 45 });
-    expect(timerPhase(steps, 60)).toMatchObject({ kind: 'step', index: 2, prevIndex: 1, nextIndex: null });
-    expect(timerPhase(steps, 95)).toEqual({ kind: 'done', prevIndex: 2, nextIndex: null, from: 90, to: null });
-    const late = [s({ startSec: 5, endSec: 10, targetWaterGrams: 50 })];
-    expect(timerPhase(late, 2)).toMatchObject({ kind: 'wait', prevIndex: null, nextIndex: 0, from: 0, to: 5 });
-  });
-
-  it('waits before the first step, is done after the last, idle without steps', () => {
-    const late = [s({ startSec: 5, endSec: 10, targetWaterGrams: 50 })];
-    expect(timerPhase(late, 2)).toMatchObject({ kind: 'wait', nextIndex: 0, startsIn: 3 });
-    expect(timerPhase(steps, 90)).toMatchObject({ kind: 'done' });
-    expect(timerPhase([], 30)).toEqual({ kind: 'idle' });
-  });
-});
-
-describe('moveStep (re-time to fit)', () => {
-  // bloom 0:00-0:10, gap 20 s, second bloom 0:30-0:40, gap 20 s, pour 1:00-2:00
-  const steps = [
-    d({ key: 'a', stepType: 'bloom', start: '0:00', end: '0:10', water: '45' }),
-    d({ key: 'b', stepType: 'bloom', start: '0:30', end: '0:40', water: '90' }),
-    d({ key: 'c', stepType: 'pour', start: '1:00', end: '2:00', water: '250' }),
-  ];
-  const times = (list: StepDraft[]) => list.map((x) => `${x.key} ${x.start}-${x.end}`);
-
-  it('keeps each step\'s length and leading gap, laid out in the new order', () => {
-    expect(times(moveStep(steps, 2, 0))).toEqual(['c 0:20-1:20', 'a 1:20-1:30', 'b 1:50-2:00']);
-    expect(times(moveStep(steps, 0, 2))).toEqual(['b 0:20-0:30', 'c 0:50-1:50', 'a 1:50-2:00']);
-  });
-  it('keeps everything else on the row (type, label, water, key)', () => {
-    const moved = moveStep(steps, 2, 0);
-    expect(moved[0]).toMatchObject({ key: 'c', stepType: 'pour', water: '250' });
-  });
-  it('no-ops for the same or out-of-range positions', () => {
-    expect(moveStep(steps, 1, 1)).toBe(steps);
-    expect(moveStep(steps, 0, 5)).toBe(steps);
-  });
-  it('rows with unparsed times keep their text and do not move the clock', () => {
-    const withBad = [steps[0]!, d({ key: 'x', start: 'soon', end: '0:20', water: '60' }), steps[2]!];
-    expect(times(moveStep(withBad, 0, 2))).toEqual(['x soon-0:20', 'c 0:50-1:50', 'a 1:50-2:00']);
-  });
-  it('the result still validates (no overlaps)', () => {
-    const moved = moveStep(steps, 2, 0);
-    expect(parseSteps(moved).errors[0]).toBeUndefined();
-    expect(parseSteps(moved).errors).toEqual({ 1: 'Pour-to is a running total: at least 250 g', 2: 'Pour-to is a running total: at least 250 g' });
+    expect(recipeWarnings({ waterGrams: 240, finishMaxSec: 200, steps })).toEqual([]);
   });
 });
 
@@ -130,6 +208,7 @@ describe('finish window', () => {
     expect(parseFinishWindow('', '')).toEqual({ ok: true, value: null });
     expect(parseFinishWindow('3:20', '3:00')).toMatchObject({ ok: false, error: '"From" is after "to"' });
     expect(parseFinishWindow('x', '')).toMatchObject({ ok: false });
+    expect(parseFinishWindow('0:06', '', 3)).toEqual({ ok: true, value: { min: 6, max: 9 } });
   });
   it('formats and reports timer status', () => {
     expect(formatFinishWindow(165, 195)).toBe('2:45–3:15');
@@ -139,42 +218,5 @@ describe('finish window', () => {
     expect(finishStatus(165, 195, 170)).toBe('Target 2:45–3:15 · in the window');
     expect(finishStatus(165, 195, 207.5)).toBe('Target 2:45–3:15 · 0:12 over');
     expect(finishStatus(null, null, 10)).toBeNull();
-  });
-});
-
-describe('insertStepAfter', () => {
-  const times = (list: StepDraft[]) => list.map((x) => `${x.key} ${x.stepType} ${x.start}-${x.end}${x.water ? ` ${x.water}` : ''}`);
-  // bloom 0:00-0:10, wait 20 s, pour 0:30-1:30
-  const base = [
-    d({ key: 'a', stepType: 'bloom', start: '0:00', end: '0:10', water: '45' }),
-    d({ key: 'b', stepType: 'pour', start: '0:30', end: '1:30', water: '250' }),
-  ];
-
-  it('fits into a wait gap without moving anything', () => {
-    const { steps, index } = insertStepAfter(base, 0, 'n');
-    expect(index).toBe(1);
-    expect(times(steps)).toEqual(['a bloom 0:00-0:10 45', 'n pour 0:10-0:20 45', 'b pour 0:30-1:30 250']);
-    expect(parseSteps(steps).errors).toEqual({}); // valid as inserted
-  });
-
-  it('shifts later steps by just enough when the gap is too small', () => {
-    const tight = [base[0]!, d({ key: 'b', stepType: 'pour', start: '0:15', end: '1:15', water: '250' }), d({ key: 'c', stepType: 'wait', start: '1:30', end: '2:00' })];
-    const { steps } = insertStepAfter(tight, 0, 'n');
-    expect(times(steps)).toEqual(['a bloom 0:00-0:10 45', 'n pour 0:10-0:20 45', 'b pour 0:20-1:20 250', 'c wait 1:35-2:05']);
-  });
-
-  it('back-to-back steps move by the full 10 s', () => {
-    const backToBack = [base[0]!, d({ key: 'b', stepType: 'pour', start: '0:10', end: '0:40', water: '150' })];
-    expect(times(insertStepAfter(backToBack, 0, 'n').steps)).toEqual(['a bloom 0:00-0:10 45', 'n pour 0:10-0:20 45', 'b pour 0:20-0:50 150']);
-  });
-
-  it('pour-to defaults to the running total, skipping non-water steps', () => {
-    const withSwirl = [base[0]!, d({ key: 's', stepType: 'swirl', start: '0:10', end: '0:12' }), base[1]!];
-    const { steps } = insertStepAfter(withSwirl, 1, 'n');
-    expect(steps[2]).toMatchObject({ key: 'n', water: '45', start: '0:12', end: '0:22' });
-  });
-
-  it('ignores a bad index', () => {
-    expect(insertStepAfter(base, 5, 'n')).toEqual({ steps: base, index: -1 });
   });
 });

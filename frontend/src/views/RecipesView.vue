@@ -6,7 +6,7 @@ import type { Recipe } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { formatDoseLine, formatGrams, formatTime } from '../lib/format';
-import { formatFinishWindow, stepTitle } from '../lib/steps';
+import { formatFinishWindow, plannedStarts, stepTitle } from '../lib/steps';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
@@ -30,11 +30,16 @@ async function load(): Promise<void> {
 }
 onMounted(load);
 
-// "Bloom → Swirl → Main pour → Drawdown · ends 3:00"
+// "Bloom → Swirl → Main pour → Drawdown · ≈ 3:00": the planned end, when the
+// steps have one (≈ when a step waits for a tap or first drop).
 function stepsSummary(recipe: Recipe): string | null {
   const last = recipe.steps[recipe.steps.length - 1];
   if (!last) return null;
-  return `${recipe.steps.map(stepTitle).join(' → ')} · ends ${formatTime(last.endSec)}`;
+  const starts = plannedStarts(recipe.steps);
+  const lastStart = starts[starts.length - 1];
+  const end = lastStart && last.durationSec !== null ? lastStart.at + last.durationSec : null;
+  const titles = recipe.steps.map(stepTitle).join(' → ');
+  return end === null ? titles : `${titles} · ${lastStart?.exact ? 'ends' : 'ends ≈'} ${formatTime(end)}`;
 }
 
 async function confirmDelete(): Promise<void> {
@@ -53,11 +58,6 @@ async function confirmDelete(): Promise<void> {
   }
 }
 
-// Espresso pre-infusion length, from its step.
-function preinfusionSec(recipe: Recipe): number | null {
-  const step = recipe.steps.find((st) => st.stepType === 'preinfusion');
-  return step ? step.endSec - step.startSec : null;
-}
 </script>
 
 <template>
@@ -87,7 +87,6 @@ function preinfusionSec(recipe: Recipe): number | null {
         <p class="facts">
           <span>{{ formatDoseLine(recipe.targetDoseGrams, recipe.targetWaterGrams, recipe.expectedYieldGrams) }}</span>
           <span v-if="recipe.expectedYieldGrams !== null && recipe.targetWaterGrams !== null">≈{{ formatGrams(recipe.expectedYieldGrams) }} g yield</span>
-          <span v-if="preinfusionSec(recipe) !== null">pre-infusion {{ preinfusionSec(recipe) }} s</span>
           <span v-if="formatFinishWindow(recipe.firstDropMinSec, recipe.firstDropMaxSec)">first drop {{ formatFinishWindow(recipe.firstDropMinSec, recipe.firstDropMaxSec) }}</span>
           <span v-if="formatFinishWindow(recipe.expectedFinishMinSec, recipe.expectedFinishMaxSec)">{{ recipe.method.kind === 'espresso' ? 'shot' : 'finish' }} {{ formatFinishWindow(recipe.expectedFinishMinSec, recipe.expectedFinishMaxSec) }}</span>
           <span v-if="recipe.targetTempC !== null">{{ recipe.targetTempC }} °C</span>

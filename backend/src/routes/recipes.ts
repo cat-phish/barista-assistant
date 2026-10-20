@@ -8,8 +8,11 @@ import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import {
   brewMethods,
+  ESPRESSO_STEP_TYPES,
+  FLOW_UNITS,
   grinders,
   RECIPE_STEP_TYPES,
+  STEP_ADVANCE,
   recipeGrindSettings,
   recipes,
   recipeSteps,
@@ -44,26 +47,44 @@ const MAX_SEC = 24 * 60 * 60;
 const seconds = z.number().int().min(0).max(MAX_SEC);
 const waterGrams = decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true });
 const isWaterType = (t: string) => (WATER_STEP_TYPES as readonly string[]).includes(t);
+const isEspressoType = (t: string) => (ESPRESSO_STEP_TYPES as readonly string[]).includes(t);
+// Pressure / flow values allowed per type (docs/api_spec.md §5); "required" = must have it.
+const PRESSURE: Partial<Record<string, "required" | "optional">> = { pressure: "required", preinfusion: "optional", other: "optional" };
+const FLOW: Partial<Record<string, "required" | "optional">> = { flow: "required", preinfusion: "optional", other: "optional" };
+const profileValue = decimalSchema({ min: 0, max: 20, scale: 1 }).nullable().optional();
 
 const stepSchema = z
   .object({
     stepType: z.enum(RECIPE_STEP_TYPES),
     label: optionalText(255),
-    startSec: seconds,
-    endSec: seconds,
+    // null = open-ended: last step only (stepsSchema).
+    durationSec: seconds.nullable().optional(),
+    advance: z.enum(STEP_ADVANCE).default("auto"),
     targetWaterGrams: waterGrams.nullable().optional(),
+    targetTempC: decimalSchema({ min: 0, max: 100, scale: 1 }).nullable().optional(),
+    pressureBar: profileValue,
+    pressureEndBar: profileValue,
+    flowRate: profileValue,
+    flowEndRate: profileValue,
   })
   .superRefine((step, ctx) => {
-    if (step.endSec < step.startSec) {
-      ctx.addIssue({ code: "custom", path: ["endSec"], message: "must not be before startSec" });
-    }
+    const issue = (path: string, message: string) => ctx.addIssue({ code: "custom", path: [path], message });
     const hasWater = step.targetWaterGrams != null;
-    if (isWaterType(step.stepType) && !hasWater) {
-      ctx.addIssue({ code: "custom", path: ["targetWaterGrams"], message: `is required for a ${step.stepType} step` });
+    if (isWaterType(step.stepType) && !hasWater) issue("targetWaterGrams", `is required for a ${step.stepType} step`);
+    if (!isWaterType(step.stepType) && step.stepType !== "other" && hasWater) issue("targetWaterGrams", `isn't allowed for a ${step.stepType} step`);
+    for (const [start, end, rule] of [
+      ["pressureBar", "pressureEndBar", PRESSURE[step.stepType]],
+      ["flowRate", "flowEndRate", FLOW[step.stepType]],
+    ] as const) {
+      if (rule === "required" && step[start] == null) issue(start, `is required for a ${step.stepType} step`);
+      if (!rule && (step[start] != null || step[end] != null)) issue(start, `isn't allowed for a ${step.stepType} step`);
+      if (step[end] != null && step[start] == null) issue(end, `needs ${start} (a ramp goes from one to the other)`);
     }
-    if (!isWaterType(step.stepType) && step.stepType !== "other" && hasWater) {
-      ctx.addIssue({ code: "custom", path: ["targetWaterGrams"], message: `isn't allowed for a ${step.stepType} step` });
+    if (step.pressureBar != null && step.flowRate != null) issue("flowRate", "a step targets pressure or flow, not both");
+    if ((step.advance === "auto" || step.advance === "auto_log") && step.durationSec === undefined) {
+      issue("durationSec", "is required for a step that moves on by itself (null = until you finish, last step only)");
     }
+    if (step.advance === "auto_log" && step.durationSec === null) issue("durationSec", "is required for an auto_log step");
   });
 
 const stepsSchema = z
@@ -72,10 +93,9 @@ const stepsSchema = z
   .superRefine((steps, ctx) => {
     let lastWater: number | null = null;
     steps.forEach((step, i) => {
-      const prev = steps[i - 1];
-      // Steps don't overlap; gaps between them are waiting time.
-      if (prev && step.startSec < prev.endSec) {
-        ctx.addIssue({ code: "custom", path: [i, "startSec"], message: "must not be before the previous step's end" });
+      // Open-ended ("until you finish") only makes sense for the last step.
+      if (step.advance === "auto" && step.durationSec === null && i < steps.length - 1) {
+        ctx.addIssue({ code: "custom", path: [i, "durationSec"], message: "only the last step can run until you finish" });
       }
       // "Pour to" targets are cumulative scale weights.
       if (step.targetWaterGrams != null) {
@@ -109,8 +129,11 @@ const recipeFields = {
   expectedFinishMaxSec: seconds.nullable().optional(),
   firstDropMinSec: seconds.nullable().optional(),
   firstDropMaxSec: seconds.nullable().optional(),
+  flowUnit: z.enum(FLOW_UNITS),
   targetTempC: decimalSchema({ min: 0, max: 100, scale: 1 }).nullable().optional(),
   showOnPublicMenu: z.boolean(),
+  // Preselected when brewing this recipe (docs/api_spec.md §5).
+  defaultGrinderId: z.uuid().nullable().optional(),
   grindSettings: grindSettingsSchema,
   steps: stepsSchema,
 };
@@ -118,6 +141,7 @@ const recipeFields = {
 const createRecipeSchema = z.object({
   ...recipeFields,
   showOnPublicMenu: recipeFields.showOnPublicMenu.default(true),
+  flowUnit: recipeFields.flowUnit.default("g_s"),
   grindSettings: recipeFields.grindSettings.default([]),
   steps: recipeFields.steps.default([]),
 });
@@ -186,19 +210,27 @@ interface KindCheck {
   targetWaterGrams: number | null;
   expectedYieldGrams: number | null;
   firstDropMinSec: number | null;
-  steps: ReadonlyArray<{ stepType: string; targetWaterGrams?: number | null }>;
+  steps: ReadonlyArray<{
+    stepType: string;
+    advance: string;
+    targetWaterGrams?: number | null;
+    pressureBar?: number | null;
+    flowRate?: number | null;
+  }>;
 }
 function kindError(kind: MethodKind, r: KindCheck): string | null {
   if (kind === "espresso") {
     if (r.targetWaterGrams !== null) return "targetWaterGrams: must be null for an espresso recipe";
     if (r.expectedYieldGrams === null) return "expectedYieldGrams: is required for an espresso recipe (the target shot weight)";
-    const i = r.steps.findIndex((step) => isWaterType(step.stepType) || step.targetWaterGrams != null);
-    if (i >= 0) return `steps.${i}: espresso recipes can't have pour steps or pour-to targets`;
-    if (r.steps.filter((step) => step.stepType === "preinfusion").length > 1) return "steps: at most one preinfusion step";
+    const i = r.steps.findIndex((step) => !isEspressoType(step.stepType) || step.targetWaterGrams != null);
+    if (i >= 0) return `steps.${i}: espresso steps are pre-infusion, soak, pressure, flow or other, without pour-to targets`;
+    if (r.steps.filter((step) => step.advance === "first_drop").length > 1) return "steps: at most one step can end at first drop";
     return null;
   }
-  const p = r.steps.findIndex((step) => step.stepType === "preinfusion");
-  if (p >= 0) return `steps.${p}: pre-infusion steps are for espresso recipes`;
+  const p = r.steps.findIndex((step) => (isEspressoType(step.stepType) && step.stepType !== "other") || step.pressureBar != null || step.flowRate != null);
+  if (p >= 0) return `steps.${p}: pre-infusion, soak, pressure and flow steps are for espresso recipes`;
+  const d = r.steps.findIndex((step) => step.advance === "first_drop");
+  if (d >= 0) return `steps.${d}: only espresso steps can end at first drop`;
   if (r.targetWaterGrams === null) return "targetWaterGrams: is required";
   if (r.firstDropMinSec !== null) return "firstDropMinSec: only applies to espresso recipes";
   return null;
@@ -239,9 +271,14 @@ async function insertSteps(tx: Tx, recipeId: string, steps: z.infer<typeof steps
       stepOrder: i + 1,
       stepType: step.stepType,
       label: step.label ?? null,
-      startSec: step.startSec,
-      endSec: step.endSec,
+      durationSec: step.durationSec ?? null,
+      advance: step.advance,
       targetWaterGrams: step.targetWaterGrams ?? null,
+      targetTempC: step.targetTempC ?? null,
+      pressureBar: step.pressureBar ?? null,
+      pressureEndBar: step.pressureEndBar ?? null,
+      flowRate: step.flowRate ?? null,
+      flowEndRate: step.flowEndRate ?? null,
     }))
   );
 }
@@ -268,8 +305,10 @@ async function loadRecipes(workspaceId: string, recipeId?: string): Promise<Reci
       expectedFinishMaxSec: recipes.expectedFinishMaxSec,
       firstDropMinSec: recipes.firstDropMinSec,
       firstDropMaxSec: recipes.firstDropMaxSec,
+      flowUnit: recipes.flowUnit,
       targetTempC: recipes.targetTempC,
       showOnPublicMenu: recipes.showOnPublicMenu,
+      defaultGrinderId: recipes.defaultGrinderId,
     })
     .from(recipes)
     .innerJoin(brewMethods, eq(recipes.methodId, brewMethods.id))
@@ -345,6 +384,9 @@ recipesRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Reci
     if (!(await grindersInWorkspace(tx, grindSettings.map((g) => g.grinderId), workspaceId))) {
       return "grindSettings: grinderId not a grinder in this workspace";
     }
+    if (body.defaultGrinderId && !(await grindersInWorkspace(tx, [body.defaultGrinderId], workspaceId))) {
+      return "defaultGrinderId: not a grinder in this workspace";
+    }
     await tx.insert(recipes).values({ id: recipeId, workspaceId, ...recipeFields });
     await insertGrindSettings(tx, recipeId, grindSettings);
     await insertSteps(tx, recipeId, steps);
@@ -403,13 +445,22 @@ recipesRouter.patch("/:recipeId", async (req: Request<RecipeParams>, res: Respon
       steps:
         steps ??
         (await tx
-          .select({ stepType: recipeSteps.stepType, targetWaterGrams: recipeSteps.targetWaterGrams })
+          .select({
+            stepType: recipeSteps.stepType,
+            advance: recipeSteps.advance,
+            targetWaterGrams: recipeSteps.targetWaterGrams,
+            pressureBar: recipeSteps.pressureBar,
+            flowRate: recipeSteps.flowRate,
+          })
           .from(recipeSteps)
           .where(eq(recipeSteps.recipeId, recipeId))),
     });
     if (wrongForKind) return { status: 400, error: wrongForKind } as const;
     if (grindSettings && !(await grindersInWorkspace(tx, grindSettings.map((g) => g.grinderId), workspaceId))) {
       return { status: 400, error: "grindSettings: grinderId not a grinder in this workspace" } as const;
+    }
+    if (recipeFields.defaultGrinderId && !(await grindersInWorkspace(tx, [recipeFields.defaultGrinderId], workspaceId))) {
+      return { status: 400, error: "defaultGrinderId: not a grinder in this workspace" } as const;
     }
 
     if (Object.keys(recipeFields).length > 0) {

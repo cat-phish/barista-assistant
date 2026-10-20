@@ -37,7 +37,12 @@ plan and the decisions behind it.
 
 Built in steps on `feature-espresso`: **2a** method kinds + espresso recipes
 and logs (built); **2b** machines + equipment screens (built); **2c** shot
-timer + marks + AI (built).
+timer + marks + AI (built); **2d** step engine (built): steps run back to
+back for every recipe, each moving on automatically, with a "Log it" button,
+on a tap, or (espresso) at first drop, with optional temperature, pressure
+and flow (ramps as instructions). This brought phase 4 (profiles) forward:
+the shot profile *is* the step list. Pour-over gaps were migrated to Wait
+steps.
 
 - Methods get a `kind`: `pour_over`, `immersion`, `espresso`. The kind picks
   the recipe fields, step types and timer behaviour.
@@ -84,7 +89,7 @@ timer + marks + AI (built).
   plain drink for each public recipe. The "Latte" default method is retired
   (removed where unused).
 
-## Phase 4: Flow and pressure profiles
+## Phase 4: Flow and pressure profiles (done in 2d)
 
-- Optional target pressure (bar) and flow (ml/s) on steps, shown by the timer.
-  Works for manual control (as cues) and programmable machines (as reference).
+- Pressure (bar) and flow (g/s or ml/s per recipe) on espresso steps, held or
+  ramped, shown by the timer as instructions.

@@ -116,3 +116,29 @@ describe("brew logs with grinders", () => {
     expect((await owner.agent.get(`${base}/${c40}/last-setting`)).status).toBe(400);
   });
 });
+
+describe("recipe default grinder", () => {
+  it("is optional, must be in the workspace, and clears when the grinder is deleted", async () => {
+    const owner = await newUser("owner");
+    const ws = await newWorkspace(owner);
+    const v60 = await methodId(owner, ws.id, "V60");
+    const grinder = (await owner.agent.post(`/api/workspaces/${ws.id}/grinders`).send({ name: "C40" })).body.grinder.id as string;
+    const base = `/api/workspaces/${ws.id}/recipes`;
+    const recipe = { name: "R", methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250 };
+
+    expect((await owner.agent.post(base).send(recipe)).body.recipe.defaultGrinderId).toBeNull();
+    const created = await owner.agent.post(base).send({ ...recipe, defaultGrinderId: grinder });
+    expect(created.body.recipe.defaultGrinderId).toBe(grinder);
+
+    const other = await newWorkspace(owner);
+    const foreign = (await owner.agent.post(`/api/workspaces/${other.id}/grinders`).send({ name: "Elsewhere" })).body.grinder.id;
+    expect((await owner.agent.post(base).send({ ...recipe, defaultGrinderId: foreign })).body.error).toMatch(/defaultGrinderId/);
+    const url = `${base}/${created.body.recipe.id}`;
+    expect((await owner.agent.patch(url).send({ defaultGrinderId: foreign })).status).toBe(400);
+    expect((await owner.agent.patch(url).send({ defaultGrinderId: null })).body.recipe.defaultGrinderId).toBeNull();
+
+    await owner.agent.patch(url).send({ defaultGrinderId: grinder });
+    expect((await owner.agent.delete(`/api/workspaces/${ws.id}/grinders/${grinder}`)).status).toBe(204); // a default doesn't block deleting
+    expect((await owner.agent.get(base)).body.recipes.find((r: { id: string }) => r.id === created.body.recipe.id).defaultGrinderId).toBeNull();
+  });
+});

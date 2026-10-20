@@ -59,9 +59,9 @@ describe("espresso recipes", () => {
 
     expect((await owner.agent.post(base).send(shot(espresso, { expectedYieldGrams: null }))).body.error).toMatch(/expectedYieldGrams/);
     expect((await owner.agent.post(base).send(shot(espresso, { targetWaterGrams: 50 }))).body.error).toMatch(/targetWaterGrams/);
-    const pourStep = { steps: [{ stepType: "pour", startSec: 0, endSec: 5, targetWaterGrams: 40 }] };
+    const pourStep = { steps: [{ stepType: "pour", durationSec: 5, targetWaterGrams: 40 }] };
     expect((await owner.agent.post(base).send(shot(espresso, pourStep))).status).toBe(400);
-    const waitStep = { steps: [{ stepType: "wait", label: "Pre-infusion", startSec: 0, endSec: 8 }] };
+    const waitStep = { steps: [{ stepType: "soak", label: "Bloom", durationSec: 8 }] };
     expect((await owner.agent.post(base).send(shot(espresso, waitStep))).status).toBe(201);
   });
 
@@ -87,7 +87,7 @@ describe("espresso recipes", () => {
       methodId: v60,
       targetDoseGrams: 15,
       targetWaterGrams: 250,
-      steps: [{ stepType: "pour", startSec: 0, endSec: 30, targetWaterGrams: 250 }],
+      steps: [{ stepType: "pour", durationSec: 30, targetWaterGrams: 250 }],
     });
     const url = `${base}/${created.body.recipe.id}`;
 
@@ -137,19 +137,44 @@ describe("espresso brew logs", () => {
   });
 });
 
-describe("pre-infusion steps and shot marks", () => {
-  it("pre-infusion steps are espresso-only, at most one", async () => {
+describe("espresso profiles and marks", () => {
+  it("profile steps: pressure until first drop, soak, flow ramp until done", async () => {
     const { owner, ws, v60, espresso } = await setup();
     const base = `/api/workspaces/${ws.id}/recipes`;
-    const pi = { stepType: "preinfusion", startSec: 0, endSec: 8 };
-    const ok = await owner.agent.post(base).send(shot(espresso, { steps: [pi] }));
-    expect(ok.body.recipe.steps).toMatchObject([{ stepType: "preinfusion", startSec: 0, endSec: 8, targetWaterGrams: null }]);
-    expect((await owner.agent.post(base).send(shot(espresso, { steps: [pi, { ...pi, startSec: 8, endSec: 10 }] }))).body.error).toMatch(/at most one/);
-    const filter = { name: "F", methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250, steps: [pi] };
+    const profile = [
+      { stepType: "pressure", pressureBar: 9, advance: "first_drop", durationSec: null },
+      { stepType: "soak", durationSec: 10 },
+      { stepType: "flow", flowRate: 4, flowEndRate: 2, durationSec: null },
+    ];
+    const ok = await owner.agent.post(base).send(shot(espresso, { steps: profile, flowUnit: "ml_s" }));
+    expect(ok.status).toBe(201);
+    expect(ok.body.recipe.flowUnit).toBe("ml_s");
+    expect(ok.body.recipe.steps).toMatchObject([
+      { stepType: "pressure", pressureBar: 9, pressureEndBar: null, advance: "first_drop", durationSec: null },
+      { stepType: "soak", durationSec: 10, advance: "auto" },
+      { stepType: "flow", flowRate: 4, flowEndRate: 2, durationSec: null },
+    ]);
+    const timed = [
+      { stepType: "preinfusion", pressureBar: 3, durationSec: 10 },
+      { stepType: "soak", durationSec: 10 },
+      { stepType: "pressure", pressureBar: 9, pressureEndBar: 6, durationSec: null },
+    ];
+    expect((await owner.agent.post(base).send(shot(espresso, { steps: timed }))).status).toBe(201);
+
+    const bad = async (steps: unknown[]) => (await owner.agent.post(base).send(shot(espresso, { steps }))).body.error as string;
+    expect(await bad([{ stepType: "pressure", durationSec: 5 }])).toMatch(/pressureBar: is required/);
+    expect(await bad([{ stepType: "flow", flowEndRate: 2, flowRate: null, durationSec: 5 }])).toMatch(/flowRate/);
+    expect(await bad([{ stepType: "preinfusion", pressureBar: 3, flowRate: 2, durationSec: 5 }])).toMatch(/not both/);
+    expect(await bad([{ stepType: "soak", pressureBar: 1, durationSec: 5 }])).toMatch(/isn't allowed for a soak step/);
+    expect(await bad([{ stepType: "pressure", pressureBar: 25, durationSec: 5 }])).toMatch(/pressureBar/);
+    const twoDrops = [{ stepType: "soak", advance: "first_drop" }, { stepType: "soak", advance: "first_drop" }];
+    expect(await bad(twoDrops)).toMatch(/at most one step can end at first drop/);
+    expect((await owner.agent.post(base).send(shot(espresso, { flowUnit: "oz_s" }))).status).toBe(400);
+    const filter = { name: "F", methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250, steps: [timed[0]] };
     expect((await owner.agent.post(base).send(filter)).body.error).toMatch(/espresso recipes/);
   });
 
-  it("espresso logs save marks (earliest first); PATCH replaces them; other brews can't have them", async () => {
+  it("marks: first drop for espresso, step_end per step; PATCH replaces them", async () => {
     const { owner, ws, v60, espresso } = await setup();
     const bean = await newBean(owner, ws.id);
     const recipes = `/api/workspaces/${ws.id}/recipes`;
@@ -157,24 +182,40 @@ describe("pre-infusion steps and shot marks", () => {
     const base = `/api/workspaces/${ws.id}/brew-logs`;
     const log = { beanId: bean, recipeId: recipe, actualDoseGrams: 18, actualYieldGrams: 36, actualTimeSec: 28 };
 
-    const created = await owner.agent.post(base).send({ ...log, marks: [{ kind: "first_drop", atSec: 7.4 }, { kind: "preinfusion_end", atSec: 6 }] });
+    const created = await owner.agent.post(base).send({
+      ...log,
+      marks: [{ kind: "step_end", stepOrder: 2, atSec: 17.5 }, { kind: "first_drop", atSec: 7.4 }],
+    });
     expect(created.status).toBe(201);
-    expect(created.body.brewLog.marks).toEqual([{ kind: "preinfusion_end", atSec: 6 }, { kind: "first_drop", atSec: 7.4 }]);
+    expect(created.body.brewLog.marks).toEqual([
+      { kind: "first_drop", stepOrder: null, atSec: 7.4 },
+      { kind: "step_end", stepOrder: 2, atSec: 17.5 },
+    ]);
     const id = created.body.brewLog.id as string;
-    expect((await owner.agent.get(`${base}/${id}`)).body.brewLog.marks).toHaveLength(2);
 
-    expect((await owner.agent.post(base).send({ ...log, marks: [{ kind: "first_drop", atSec: 7 }, { kind: "first_drop", atSec: 8 }] })).status).toBe(400);
-    expect((await owner.agent.post(base).send({ ...log, marks: [{ kind: "first_drop", atSec: 30 }] })).body.error).toMatch(/within actualTimeSec/);
-    expect((await owner.agent.post(base).send({ ...log, marks: [{ kind: "first_drop", atSec: 7.25 }] })).status).toBe(400);
-    expect((await owner.agent.post(base).send({ ...log, marks: [{ kind: "crema", atSec: 7 }] })).status).toBe(400);
+    const post = async (marks: unknown[]) => owner.agent.post(base).send({ ...log, marks });
+    expect((await post([{ kind: "first_drop", atSec: 7 }, { kind: "first_drop", atSec: 8 }])).status).toBe(400);
+    expect((await post([{ kind: "step_end", atSec: 7 }])).status).toBe(400); // no stepOrder
+    expect((await post([{ kind: "first_drop", stepOrder: 1, atSec: 7 }])).status).toBe(400);
+    expect((await post([{ kind: "step_end", stepOrder: 1, atSec: 5 }, { kind: "step_end", stepOrder: 1, atSec: 6 }])).status).toBe(400);
+    expect((await post([{ kind: "first_drop", atSec: 30 }])).body.error).toMatch(/within actualTimeSec/);
+    expect((await post([{ kind: "first_drop", atSec: 7.25 }])).status).toBe(400);
+    expect((await post([{ kind: "preinfusion_end", atSec: 7 }])).status).toBe(400);
 
-    expect((await owner.agent.patch(`${base}/${id}`).send({ marks: [{ kind: "first_drop", atSec: 8 }] })).body.brewLog.marks).toEqual([{ kind: "first_drop", atSec: 8 }]);
+    expect((await owner.agent.patch(`${base}/${id}`).send({ marks: [{ kind: "first_drop", atSec: 8 }] })).body.brewLog.marks).toEqual([
+      { kind: "first_drop", stepOrder: null, atSec: 8 },
+    ]);
     expect((await owner.agent.patch(`${base}/${id}`).send({ actualTimeSec: 5 })).body.error).toMatch(/within actualTimeSec/);
     expect((await owner.agent.patch(`${base}/${id}`).send({ tastingNotes: "Sweet" })).body.brewLog.marks).toHaveLength(1);
     expect((await owner.agent.patch(`${base}/${id}`).send({ marks: [] })).body.brewLog.marks).toEqual([]);
 
+    // Pour-over: step_end marks are fine (a tap-to-continue bloom); a first drop isn't.
     const filter = (await owner.agent.post(recipes).send({ name: "F", methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250 })).body.recipe.id;
-    const filterLog = { beanId: bean, recipeId: filter, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150, marks: [{ kind: "first_drop", atSec: 7 }] };
-    expect((await owner.agent.post(base).send(filterLog)).body.error).toMatch(/only espresso brews record marks/);
+    const filterLog = { beanId: bean, recipeId: filter, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150 };
+    expect((await owner.agent.post(base).send({ ...filterLog, marks: [{ kind: "step_end", stepOrder: 1, atSec: 52 }] })).status).toBe(201);
+    expect((await owner.agent.post(base).send({ ...filterLog, marks: [{ kind: "first_drop", atSec: 7 }] })).body.error).toMatch(/first drop/);
+    // step_end needs a recipe to point into.
+    const noRecipe = { beanId: bean, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150 };
+    expect((await owner.agent.post(base).send({ ...noRecipe, marks: [{ kind: "step_end", stepOrder: 1, atSec: 52 }] })).body.error).toMatch(/needs a recipe/);
   });
 });

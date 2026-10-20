@@ -1,8 +1,9 @@
 // Editable brew details (log form and journal edit), validated with the same
 // rules as the API (docs/api_spec.md §6). Unit-tested in brewDraft.test.ts.
 import type { BrewLogInput } from '../api/brews';
-import type { BrewLog, MethodKind } from '../api/types';
+import type { BrewLog, Mark, MethodKind } from '../api/types';
 import { formatGrams, formatTime, parseDecimal, parseTime } from './format';
+import { parseMark } from './marks';
 
 export interface BrewDraft {
   dose: string;
@@ -11,6 +12,7 @@ export interface BrewDraft {
   temp: string;
   grinderId: string; // '' = none
   machineId: string; // '' = none; espresso only
+  firstDrop: string; // espresso: seconds, e.g. "7.4" ('' = not recorded); from the timer's tap or typed
   grind: string;
   time: string; // m:ss
   rating: number | null;
@@ -18,10 +20,10 @@ export interface BrewDraft {
 }
 
 export type BrewValues = Omit<BrewLogInput, 'beanId' | 'recipeId'>;
-export type BrewDraftErrors = Partial<Record<'dose' | 'water' | 'yieldGrams' | 'temp' | 'time', string>>;
+export type BrewDraftErrors = Partial<Record<'dose' | 'water' | 'yieldGrams' | 'temp' | 'time' | 'firstDrop', string>>;
 
 export function emptyDraft(): BrewDraft {
-  return { dose: '', water: '', yieldGrams: '', temp: '', grinderId: '', machineId: '', grind: '', time: '', rating: null, notes: '' };
+  return { dose: '', water: '', yieldGrams: '', temp: '', grinderId: '', machineId: '', firstDrop: '', grind: '', time: '', rating: null, notes: '' };
 }
 
 export function draftFromLog(log: BrewLog): BrewDraft {
@@ -32,6 +34,7 @@ export function draftFromLog(log: BrewLog): BrewDraft {
     temp: log.actualTempC === null ? '' : String(log.actualTempC),
     grinderId: log.grinderId ?? '',
     machineId: log.machineId ?? '',
+    firstDrop: firstDropOf(log.marks),
     grind: log.actualGrindSetting ?? '',
     time: formatTime(log.actualTimeSec),
     rating: log.rating,
@@ -41,7 +44,17 @@ export function draftFromLog(log: BrewLog): BrewDraft {
 
 // kind: the method kind of the brew's recipe (null without one). Espresso
 // records the shot weight instead of water.
-export function parseBrewDraft(d: BrewDraft, kind: MethodKind | null = null): { errors: BrewDraftErrors; values: BrewValues | null } {
+function firstDropOf(marks: readonly Mark[] | undefined): string {
+  const at = marks?.find((m) => m.kind === 'first_drop')?.atSec;
+  return at === undefined ? '' : String(at);
+}
+
+// values: the API fields; firstDropSec: the first drop for the marks list
+// (espresso; null = not recorded).
+export function parseBrewDraft(
+  d: BrewDraft,
+  kind: MethodKind | null = null,
+): { errors: BrewDraftErrors; values: BrewValues | null; firstDropSec: number | null } {
   const espresso = kind === 'espresso';
   const dose = parseDecimal(d.dose, { scale: 2, min: 0, max: 1000, exclusiveMin: true, exclusiveMax: true });
   const grams = { scale: 2, min: 0, max: 10000, exclusiveMin: true, exclusiveMax: true };
@@ -53,6 +66,7 @@ export function parseBrewDraft(d: BrewDraft, kind: MethodKind | null = null): { 
       : null;
   const temp = d.temp.trim() ? parseDecimal(d.temp, { scale: 1, min: 0, max: 100 }) : null;
   const time = parseTime(d.time);
+  const firstDrop = espresso ? parseMark(d.firstDrop) : null;
 
   const errors: BrewDraftErrors = {};
   if (!dose.ok) errors.dose = dose.error;
@@ -60,10 +74,15 @@ export function parseBrewDraft(d: BrewDraft, kind: MethodKind | null = null): { 
   if (yieldGrams && !yieldGrams.ok) errors.yieldGrams = yieldGrams.error;
   if (temp && !temp.ok) errors.temp = temp.error;
   if (!time.ok) errors.time = time.error;
-  if (!dose.ok || !water.ok || (yieldGrams && !yieldGrams.ok) || !time.ok || (temp && !temp.ok)) return { errors, values: null };
+  if (firstDrop && !firstDrop.ok) errors.firstDrop = firstDrop.error;
+  else if (firstDrop?.ok && time.ok && firstDrop.value > time.value) errors.firstDrop = 'After the end of the shot';
+  if (Object.keys(errors).length > 0 || !dose.ok || !water.ok || (yieldGrams && !yieldGrams.ok) || !time.ok || (temp && !temp.ok)) {
+    return { errors, values: null, firstDropSec: null };
+  }
 
   return {
     errors,
+    firstDropSec: firstDrop?.ok ? firstDrop.value : null,
     values: {
       actualDoseGrams: dose.value,
       actualWaterGrams: water.value,

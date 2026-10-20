@@ -13,8 +13,10 @@ import {
   type BrewLog,
   type Grinder,
   type Machine,
+  type FlowUnit,
   type MarkKind,
   type MethodKind,
+  type StepAdvance,
 } from "@barista/shared/schema";
 import { and, asc, desc, eq, inArray, lt, ne } from "drizzle-orm";
 import { db } from "./db.js";
@@ -41,7 +43,7 @@ export interface BrewSummary {
   grinder: GrinderInfo | null;
   machine: MachineInfo | null; // espresso only
   // Shot timer taps, earliest first (espresso): first drop, end of manual pre-infusion.
-  marks: Array<{ kind: MarkKind; atSec: number }>;
+  marks: Array<{ kind: MarkKind; stepOrder: number | null; atSec: number }>;
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso
   actualYieldGrams: number | null; // measured beverage weight (shot weight for espresso)
@@ -72,13 +74,21 @@ export interface BrewContext {
     targetTempC: number | null;
     // Approximate starting points, per grinder (the brew's grinder is in grinderName).
     grindStartingPoints: Array<{ grinderName: string; setting: string }>;
+    flowUnit: FlowUnit; // for flow steps: g/s or ml/s
+    // Back to back: each starts when the previous one actually ended
+    // (step_end marks say when, for tap/logged steps).
     steps: Array<{
       stepOrder: number;
       stepType: string;
       label: string | null;
-      startSec: number;
-      endSec: number;
+      durationSec: number | null; // null = until finish; a guide for tap steps
+      advance: StepAdvance;
       targetWaterGrams: number | null; // cumulative "pour to" weight
+      targetTempC: number | null;
+      pressureBar: number | null;
+      pressureEndBar: number | null; // ramp end
+      flowRate: number | null;
+      flowEndRate: number | null;
     }>;
   } | null;
   brew: BrewSummary;
@@ -131,7 +141,7 @@ function summarize(
 
 async function marksFor(brewLogIds: string[]): Promise<Map<string, BrewSummary["marks"]>> {
   const rows = await db
-    .select({ brewLogId: brewLogMarks.brewLogId, kind: brewLogMarks.kind, atSec: brewLogMarks.atSec })
+    .select({ brewLogId: brewLogMarks.brewLogId, kind: brewLogMarks.kind, stepOrder: brewLogMarks.stepOrder, atSec: brewLogMarks.atSec })
     .from(brewLogMarks)
     .where(inArray(brewLogMarks.brewLogId, brewLogIds))
     .orderBy(asc(brewLogMarks.atSec));
@@ -225,6 +235,7 @@ async function loadRecipe(recipeId: string): Promise<BrewContext["recipe"]> {
       expectedFinishMaxSec: recipes.expectedFinishMaxSec,
       firstDropMinSec: recipes.firstDropMinSec,
       firstDropMaxSec: recipes.firstDropMaxSec,
+      flowUnit: recipes.flowUnit,
       targetTempC: recipes.targetTempC,
     })
     .from(recipes)
@@ -239,9 +250,14 @@ async function loadRecipe(recipeId: string): Promise<BrewContext["recipe"]> {
         stepOrder: recipeSteps.stepOrder,
         stepType: recipeSteps.stepType,
         label: recipeSteps.label,
-        startSec: recipeSteps.startSec,
-        endSec: recipeSteps.endSec,
+        durationSec: recipeSteps.durationSec,
+        advance: recipeSteps.advance,
         targetWaterGrams: recipeSteps.targetWaterGrams,
+        targetTempC: recipeSteps.targetTempC,
+        pressureBar: recipeSteps.pressureBar,
+        pressureEndBar: recipeSteps.pressureEndBar,
+        flowRate: recipeSteps.flowRate,
+        flowEndRate: recipeSteps.flowEndRate,
       })
       .from(recipeSteps)
       .where(eq(recipeSteps.recipeId, recipeId))

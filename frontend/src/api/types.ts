@@ -94,23 +94,40 @@ export interface FreezePeriod {
 }
 
 // docs/api_spec.md §5
-export type StepType = 'bloom' | 'pour' | 'swirl' | 'stir' | 'wait' | 'press' | 'preinfusion' | 'other'; // preinfusion: espresso only
+// docs/api_spec.md §5: which types a recipe can use depends on its method's kind.
+export type StepType =
+  | 'bloom' | 'pour' | 'swirl' | 'stir' | 'wait' | 'press' // pour over / immersion
+  | 'preinfusion' | 'soak' | 'pressure' | 'flow' // espresso
+  | 'other';
+// How the timer moves on: auto (after the duration), auto_log (plus a "Log it"
+// button), tap (waits for Next), first_drop (espresso: waits for First drop).
+export type StepAdvance = 'auto' | 'auto_log' | 'tap' | 'first_drop';
+export type FlowUnit = 'g_s' | 'ml_s';
 
-// docs/api_spec.md §6: shot timer taps.
-export type MarkKind = 'first_drop' | 'preinfusion_end';
+// docs/api_spec.md §6: when things actually happened.
+export type MarkKind = 'first_drop' | 'step_end';
 export interface Mark {
   kind: MarkKind;
+  stepOrder: number | null; // step_end only: which step (1-based)
   atSec: number; // seconds from the start, 0.1 s
 }
 
-export interface RecipeStep {
-  id: string;
-  stepOrder: number;
+// Steps run back to back; each starts when the previous one actually ended.
+export interface StepFields {
   stepType: StepType;
   label: string | null;
-  startSec: number;
-  endSec: number;
+  durationSec: number | null; // null: last step = until you finish; tap/first_drop = no guide
+  advance: StepAdvance;
   targetWaterGrams: number | null; // cumulative "pour to" weight (water steps)
+  targetTempC: number | null;
+  pressureBar: number | null; // espresso; an end value makes a ramp
+  pressureEndBar: number | null;
+  flowRate: number | null; // in the recipe's flowUnit
+  flowEndRate: number | null;
+}
+export interface RecipeStep extends StepFields {
+  id: string;
+  stepOrder: number;
 }
 
 export interface RecipeGrindSetting {
@@ -131,8 +148,10 @@ export interface Recipe {
   expectedFinishMaxSec: number | null;
   firstDropMinSec: number | null; // espresso only (both or neither)
   firstDropMaxSec: number | null;
+  flowUnit: FlowUnit;
   targetTempC: number | null;
   showOnPublicMenu: boolean;
+  defaultGrinderId: string | null; // preselected when brewing this recipe
   grindSettings: RecipeGrindSetting[];
   steps: RecipeStep[];
 }

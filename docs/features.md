@@ -34,13 +34,23 @@ One **Equipment** section with three tabs:
 - **Expected yield** fills in automatically from a light-roast estimate
   (grounds keep ≈ 2 g of water per g of coffee). Typing your own number
   keeps it; "Use estimate" switches back.
-- **Timed steps:** bloom, pour, swirl, stir, wait, press, other; each with a
-  start/end time and, for pours, a cumulative "pour to" weight. Steps can be
-  dragged to reorder (re-timed to fit) and inserted between others.
-- **Grind starting points** per grinder.
+- **Steps** run one after another, each with a time and how it moves on:
+  **automatically**, **automatically with a "Log it" button** (to record when
+  you really did it), or **when you tap Next** (the time is a guide; e.g. a
+  bloom that waits for the kettle to reach temperature). Pour-over types:
+  bloom, pour, swirl, stir, wait, press, other, with a "pour to" weight and
+  an optional temperature ("pour at 93 °C"). Each row shows when it's planned
+  to start; drag to reorder, or insert between steps. The last step can run
+  until you finish.
+- **Grind starting points** per grinder, and an optional **default grinder**
+  that's selected for you when you brew the recipe (otherwise the last
+  grinder you used).
 - **Espresso recipes:** dose and target shot weight (ratio 1:2 style), target
-  shot time and first-drop windows, temperature and an optional pre-infusion
-  time. No water.
+  shot time and first-drop windows, temperature, and a **shot profile**: steps
+  of pre-infusion, soak (pump off), pressure (bar) or flow (g/s or ml/s, set
+  per recipe), each held or ramped ("9 → 6 bar", "4 → 2 g/s"), which can also
+  end **at first drop**. E.g. 9 bar until first drop → soak 10 s → flow 4 → 2
+  g/s until done; or pre-infuse 3 bar 10 s → soak 10 s → 9 bar.
 
 ## Brewing
 - **Setup:** pick bean, recipe and grinder. The grind pre-fills from your
@@ -54,21 +64,21 @@ One **Equipment** section with three tabs:
   undoes it all.
 - **Espresso shots:** the same setup shows dose, ratio and shot weight
   instead; typing any one updates the others, plus the machine.
-- **Shot timer:** a big **First drop** button (judged against the recipe's
-  window: early / in the window / late), and pre-infusion that follows the
-  machine: it runs by itself on automatic machines; on manual ones (or with
-  no machine chosen) it counts down to **Full pressure now** and a tap
-  records when you opened up; machines without pre-infusion skip it. The
-  taps are saved with the shot, shown in the journal and sent to the AI. The
-  log asks for the shot weight (compared with the target) and shot time.
+- **Timer** (pour over and espresso): Previous / Current / Up next cards; the
+  current one shows the instruction ("Pour to 150 g (+100)", "9 → 6 bar",
+  "Pump off"), the temperature and how it ends, with **Next** or **Log it**
+  buttons for steps that need them. Each step starts when the previous one
+  really ended. Espresso adds a big **First drop** button (judged against the
+  recipe's window), and notes when your machine can't set the pressure or
+  flow a step asks for. With no steps it's just the clock (+ First drop).
+  The real times (taps, logs, first drop) are saved with the brew, shown in
+  the journal and sent to the AI. The log asks for the shot weight, shot
+  time and an optional **first drop** you can type in if you didn't tap.
 - **Yield estimate:** water − retention × dose. Retention comes from your
   measured brews of this bean with this recipe (median), else the recipe's
   expected yield adjusted for the bean's roast, else a roast-level default.
   Fluid ounces assume brewed coffee weighs about 1 g per ml.
-- **Timer:** clock-driven (no tapping to advance). Shows Previous / Current /
-  Up next, with a progress bar for steps and waits; steps and waits have
-  different backgrounds. Finish & Save is available throughout. Keeps the
-  screen awake.
+- **Finish & Save** is available throughout; the screen stays awake.
 - **Log:** dose, water, measured yield, temperature, grind, time, rating and
   tasting notes; can also be logged without the timer.
 

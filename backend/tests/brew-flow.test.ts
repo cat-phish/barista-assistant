@@ -46,15 +46,15 @@ describe("beans and recipes", () => {
     expect((await owner.agent.post(base).send({ name: "R", methodId: v60, targetDoseGrams: "15", targetWaterGrams: 250 })).status).toBe(400);
   });
 
-  it("recipe steps can't overlap, and a method from another workspace is refused", async () => {
+  it("recipe steps are validated, and a method from another workspace is refused", async () => {
     const { owner, ws, v60 } = await setup();
     const other = await newUser();
     const otherWs = await newWorkspace(other);
     const foreign = await methodId(other, otherWs.id, "V60");
     const base = `/api/workspaces/${ws.id}/recipes`;
     const steps = [
-      { stepType: "bloom", startSec: 0, endSec: 45, targetWaterGrams: 50 },
-      { stepType: "pour", startSec: 30, endSec: 60, targetWaterGrams: 100 }, // overlaps the bloom
+      { stepType: "bloom", durationSec: 45, targetWaterGrams: 50 },
+      { stepType: "pour", durationSec: 30, targetWaterGrams: 40 }, // pour-to goes down
     ];
     expect((await owner.agent.post(base).send({ name: "R", methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250, steps })).status).toBe(400);
     expect((await owner.agent.post(base).send({ name: "R", methodId: foreign, targetDoseGrams: 15, targetWaterGrams: 250 })).status).toBe(400);

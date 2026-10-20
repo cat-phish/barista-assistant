@@ -26,12 +26,19 @@ import {
 } from "@barista/shared/schema";
 import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
+// docs/api_spec.md §6: first_drop (espresso), step_end (a step's real end).
+export interface Mark {
+  kind: MarkKind;
+  stepOrder: number | null; // step_end only
+  atSec: number;
+}
+
 export interface BrewLogDetails extends BrewLog {
   bean: Pick<Bean, "id" | "roasterName" | "beanName">;
   recipe: (Pick<Recipe, "id" | "name" | "expectedYieldGrams"> & { methodKind: MethodKind }) | null;
   grinder: { id: string; name: string } | null; // retired grinders included
   machine: { id: string; name: string } | null; // espresso only; retired included
-  marks: Array<{ kind: MarkKind; atSec: number }>; // shot timer taps, earliest first
+  marks: Mark[]; // when things actually happened, earliest first
   // Null when the brewer deleted their account (the log is kept).
   brewer: { id: string; email: string } | null;
 }
@@ -80,11 +87,20 @@ const brewLogFields = {
   actualTimeSec: z.number().int().min(0).max(24 * 60 * 60),
   rating: z.number().int().min(1).max(5).nullable().optional(),
   tastingNotes: optionalText(5000),
-  // Shot timer taps (espresso only), at most one of each kind.
+  // Timer marks: one first_drop (espresso), one step_end per step.
   marks: z
-    .array(z.object({ kind: z.enum(MARK_KINDS), atSec: decimalSchema({ min: 0, max: 24 * 60 * 60, scale: 1 }) }).strict())
-    .max(MARK_KINDS.length)
-    .refine((list) => new Set(list.map((m) => m.kind)).size === list.length, "at most one mark of each kind")
+    .array(
+      z
+        .object({
+          kind: z.enum(MARK_KINDS),
+          stepOrder: z.number().int().min(1).max(50).nullable().optional(),
+          atSec: decimalSchema({ min: 0, max: 24 * 60 * 60, scale: 1 }),
+        })
+        .strict()
+        .refine((m) => (m.kind === "step_end") === (m.stepOrder != null), "stepOrder is required for step_end and only for it")
+    )
+    .max(51)
+    .refine((list) => new Set(list.map((m) => `${m.kind}:${m.stepOrder ?? ""}`)).size === list.length, "at most one first_drop and one step_end per step")
     .optional(),
 };
 
@@ -110,17 +126,18 @@ function espressoError(
     actualYieldGrams: number | null;
     machineId: string | null;
     actualTimeSec: number;
-    marks: ReadonlyArray<{ atSec: number }>;
+    marks: ReadonlyArray<{ kind: MarkKind; atSec: number }>;
   }
 ): string | null {
   if (log.marks.some((m) => m.atSec > log.actualTimeSec)) return "marks: must be within actualTimeSec";
+  if (kind === null && log.marks.some((m) => m.kind === "step_end")) return "marks: step_end needs a recipe";
   if (kind === "espresso") {
     if (log.actualWaterGrams !== null) return "actualWaterGrams: must be null for an espresso brew";
     if (log.actualYieldGrams === null) return "actualYieldGrams: is required for an espresso brew (the shot weight)";
     return null;
   }
   if (log.machineId !== null) return "machineId: only espresso brews record a machine";
-  if (log.marks.length > 0) return "marks: only espresso brews record marks";
+  if (log.marks.some((m) => m.kind === "first_drop")) return "marks: only espresso brews record a first drop";
   return log.actualWaterGrams === null ? "actualWaterGrams: is required" : null;
 }
 
@@ -231,17 +248,21 @@ async function marksFor(brewLogIds: string[]): Promise<Map<string, BrewLogDetail
   const byLog = new Map<string, BrewLogDetails["marks"]>();
   if (brewLogIds.length === 0) return byLog;
   const rows = await db
-    .select({ brewLogId: brewLogMarks.brewLogId, kind: brewLogMarks.kind, atSec: brewLogMarks.atSec })
+    .select({ brewLogId: brewLogMarks.brewLogId, kind: brewLogMarks.kind, stepOrder: brewLogMarks.stepOrder, atSec: brewLogMarks.atSec })
     .from(brewLogMarks)
     .where(inArray(brewLogMarks.brewLogId, brewLogIds))
-    .orderBy(asc(brewLogMarks.atSec));
+    .orderBy(asc(brewLogMarks.atSec), asc(brewLogMarks.stepOrder));
   for (const { brewLogId, ...mark } of rows) byLog.set(brewLogId, [...(byLog.get(brewLogId) ?? []), mark]);
   return byLog;
 }
 
-async function insertMarks(tx: Tx, brewLogId: string, marks: ReadonlyArray<{ kind: MarkKind; atSec: number }>): Promise<void> {
+async function insertMarks(
+  tx: Tx,
+  brewLogId: string,
+  marks: ReadonlyArray<{ kind: MarkKind; stepOrder?: number | null; atSec: number }>
+): Promise<void> {
   if (marks.length === 0) return;
-  await tx.insert(brewLogMarks).values(marks.map((m) => ({ id: randomUUID(), brewLogId, ...m })));
+  await tx.insert(brewLogMarks).values(marks.map((m) => ({ id: randomUUID(), brewLogId, kind: m.kind, stepOrder: m.stepOrder ?? null, atSec: m.atSec })));
 }
 
 function logInWorkspace(params: BrewLogParams): SQL | undefined {
@@ -383,7 +404,7 @@ brewLogsRouter.patch(
           actualTimeSec: after.actualTimeSec,
           marks:
             marks ??
-            (await tx.select({ atSec: brewLogMarks.atSec }).from(brewLogMarks).where(eq(brewLogMarks.brewLogId, brewLogId))),
+            (await tx.select({ kind: brewLogMarks.kind, atSec: brewLogMarks.atSec }).from(brewLogMarks).where(eq(brewLogMarks.brewLogId, brewLogId))),
         });
         if (wrongForKind) return { status: "bad_ref", error: wrongForKind } as const;
       }

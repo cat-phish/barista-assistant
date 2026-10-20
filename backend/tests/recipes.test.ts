@@ -89,37 +89,45 @@ describe("grind starting points", () => {
 });
 
 describe("recipe steps", () => {
-  const bloom = { stepType: "bloom", startSec: 0, endSec: 10, targetWaterGrams: 45 };
+  const bloom = { stepType: "bloom", durationSec: 10, targetWaterGrams: 45 };
 
-  it("stores typed steps with labels, start/end and gaps; non-water steps have no water", async () => {
+  it("stores typed steps back to back: duration, how each moves on, values", async () => {
     const { owner, base, recipe } = await setup();
     const steps = [
-      bloom,
-      { stepType: "swirl", startSec: 10, endSec: 10 }, // instant
-      { stepType: "bloom", label: " Second bloom ", startSec: 30, endSec: 40, targetWaterGrams: 90 },
-      { stepType: "pour", startSec: 60, endSec: 120, targetWaterGrams: 250 }, // gap before = waiting
-      { stepType: "wait", label: "Drawdown", startSec: 120, endSec: 180 },
-      { stepType: "other", label: "Remove filter", startSec: 180, endSec: 185 },
+      { ...bloom, advance: "tap", targetTempC: 85 }, // waits for the kettle
+      { stepType: "swirl", durationSec: 0 }, // instant
+      { stepType: "wait", durationSec: 20 },
+      { stepType: "bloom", label: " Second bloom ", durationSec: 10, advance: "auto_log", targetWaterGrams: 90 },
+      { stepType: "pour", durationSec: 60, targetWaterGrams: 250, targetTempC: 93 },
+      { stepType: "wait", label: "Drawdown", durationSec: null }, // until you finish
     ];
     const res = await owner.agent.post(base).send({ ...recipe, steps });
     expect(res.status).toBe(201);
-    expect(res.body.recipe.steps.map((s: Record<string, unknown>) => [s.stepOrder, s.stepType, s.label, s.startSec, s.endSec, s.targetWaterGrams])).toEqual([
-      [1, "bloom", null, 0, 10, 45],
-      [2, "swirl", null, 10, 10, null],
-      [3, "bloom", "Second bloom", 30, 40, 90],
-      [4, "pour", null, 60, 120, 250],
-      [5, "wait", "Drawdown", 120, 180, null],
-      [6, "other", "Remove filter", 180, 185, null],
+    const shape = (s: Record<string, unknown>) => [s.stepOrder, s.stepType, s.label, s.durationSec, s.advance, s.targetWaterGrams, s.targetTempC];
+    expect(res.body.recipe.steps.map(shape)).toEqual([
+      [1, "bloom", null, 10, "tap", 45, 85],
+      [2, "swirl", null, 0, "auto", null, null],
+      [3, "wait", null, 20, "auto", null, null],
+      [4, "bloom", "Second bloom", 10, "auto_log", 90, null],
+      [5, "pour", null, 60, "auto", 250, 93],
+      [6, "wait", "Drawdown", null, "auto", null, null],
     ]);
+    expect(res.body.recipe).toMatchObject({ flowUnit: "g_s" });
+    // A tap step's duration is only a guide, so it can be left out.
+    expect((await owner.agent.post(base).send({ ...recipe, steps: [{ ...bloom, durationSec: undefined, advance: "tap" }] })).status).toBe(201);
   });
 
   it.each([
-    ["water missing on a pour", [{ stepType: "pour", startSec: 0, endSec: 30 }], /required for a pour step/],
-    ["water on a swirl", [{ stepType: "swirl", startSec: 0, endSec: 5, targetWaterGrams: 50 }], /isn't allowed for a swirl step/],
-    ["end before start", [{ ...bloom, startSec: 20, endSec: 10 }], /must not be before startSec/],
-    ["overlapping steps", [bloom, { stepType: "pour", startSec: 5, endSec: 30, targetWaterGrams: 100 }], /previous step's end/],
-    ["pour-to going down", [bloom, { stepType: "pour", startSec: 10, endSec: 30, targetWaterGrams: 40 }], /less than an earlier step/],
-    ["unknown type", [{ stepType: "flip", startSec: 0, endSec: 5 }], /stepType/],
+    ["water missing on a pour", [{ stepType: "pour", durationSec: 30 }], /required for a pour step/],
+    ["water on a swirl", [{ stepType: "swirl", durationSec: 5, targetWaterGrams: 50 }], /isn't allowed for a swirl step/],
+    ["an auto step without a duration", [{ stepType: "stir" }], /durationSec/],
+    ["open-ended before the last step", [{ stepType: "wait", durationSec: null }, bloom], /only the last step/],
+    ["an open-ended auto_log step", [{ stepType: "wait", durationSec: null, advance: "auto_log" }], /auto_log/],
+    ["pour-to going down", [bloom, { stepType: "pour", durationSec: 20, targetWaterGrams: 40 }], /less than an earlier step/],
+    ["pressure on a pour-over", [{ stepType: "other", label: "x", durationSec: 5, pressureBar: 9 }], /espresso/],
+    ["first drop on a pour-over", [{ ...bloom, advance: "first_drop" }], /espresso/],
+    ["an espresso step type", [{ stepType: "soak", durationSec: 10 }], /espresso/],
+    ["unknown type", [{ stepType: "flip", durationSec: 5 }], /stepType/],
   ])("rejects %s", async (_label, steps, error) => {
     const { owner, base, recipe } = await setup();
     const res = await owner.agent.post(base).send({ ...recipe, steps });
@@ -129,7 +137,7 @@ describe("recipe steps", () => {
 
   it("pour-to is compared across water steps only (non-water steps in between are fine)", async () => {
     const { owner, base, recipe } = await setup();
-    const steps = [bloom, { stepType: "stir", startSec: 10, endSec: 15 }, { stepType: "pour", startSec: 15, endSec: 40, targetWaterGrams: 45 }];
+    const steps = [bloom, { stepType: "stir", durationSec: 5 }, { stepType: "pour", durationSec: 25, targetWaterGrams: 45 }];
     expect((await owner.agent.post(base).send({ ...recipe, steps })).status).toBe(201);
   });
 });

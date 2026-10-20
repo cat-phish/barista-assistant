@@ -15,9 +15,9 @@ import { machinesApi } from '../api/machines';
 import type { Grinder, Machine, Mark } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import BrewFields from '../components/BrewFields.vue';
-import PourOverTimer from '../components/PourOverTimer.vue';
-import ShotTimer from '../components/ShotTimer.vue';
-import { formatMark, shotPlan } from '../lib/shot';
+import BrewTimer from '../components/BrewTimer.vue';
+import { formatMark } from '../lib/marks';
+import { stepTitle } from '../lib/steps';
 import { useAnalysis } from '../composables/useAnalysis';
 import { emptyDraft, parseBrewDraft } from '../lib/brewDraft';
 import { formatDay, formatDoseLine, formatGrams, formatTime } from '../lib/format';
@@ -96,6 +96,10 @@ watch(recipe, (r) => {
   draft.yieldGrams = ''; // measured after brewing
   draft.temp = r?.targetTempC != null ? String(r.targetTempC) : '';
   resetBatch();
+  // The recipe's default grinder, if it's still in use; else keep the current
+  // (last used) one.
+  const preferred = r?.defaultGrinderId;
+  if (preferred && activeGrinders.value.some((x) => x.id === preferred)) draft.grinderId = preferred;
   if (suggestion.value) applySuggestion(suggestion.value);
 });
 
@@ -319,12 +323,30 @@ const timerDose = computed(() => (espresso.value ? shot.value?.dose : batch.valu
 // What the log form compares the measured yield / shot weight with.
 const expectedYield = computed(() => (espresso.value ? shot.value?.yield : batch.value?.yield) ?? recipe.value?.expectedYieldGrams ?? null);
 
-// Espresso: the shot timer's plan (pre-infusion, first-drop window), the
-// chosen machine's pre-infusion capability, and the taps it records.
-const plan = computed(() => (recipe.value ? shotPlan(recipe.value) : null));
-const machinePreinfusion = computed(() => machines.value.find((x) => x.id === draft.machineId)?.preinfusion ?? null);
+// The timer: the chosen machine (espresso, for "can't set pressure" notes),
+// the header line, the first-drop window, and the marks it records.
+const machine = computed(() => (espresso.value ? (machines.value.find((x) => x.id === draft.machineId) ?? null) : null));
+const timerSubtitle = computed(() =>
+  espresso.value && shot.value
+    ? `${beanLabel.value} • ${formatGrams(shot.value.dose)} g → ${formatGrams(shot.value.yield)} g`
+    : `${beanLabel.value} • ${formatGrams(timerDose.value)}g dose`,
+);
+const firstDropWindow = computed(() => {
+  const r = recipe.value;
+  return r && r.firstDropMinSec !== null && r.firstDropMaxSec !== null ? { min: r.firstDropMinSec, max: r.firstDropMaxSec } : null;
+});
 const marks = ref<Mark[]>([]);
-const MARK_LABELS = { first_drop: 'First drop', preinfusion_end: 'Full pressure' } as const;
+// "Bloom ended 0:52 · Pour logged 1:30": the steps' real times, shown on the log form.
+const stepMarksLine = computed(() =>
+  marks.value
+    .filter((m) => m.kind === 'step_end' && m.stepOrder !== null)
+    .map((m) => {
+      const step = recipe.value?.steps[(m.stepOrder ?? 0) - 1];
+      const name = step ? stepTitle(step) : `Step ${m.stepOrder}`;
+      return `${name} ${step?.advance === 'auto_log' ? 'logged' : 'ended'} ${formatMark(m.atSec)}`;
+    })
+    .join(' · '),
+);
 
 // An unfinished "add a new grinder" counts as no grinder once setup is done.
 function leaveSetup(next: Stage): void {
@@ -336,9 +358,12 @@ function logWithoutTimer(): void {
   draft.time = '';
   leaveSetup('log');
 }
-function onTimerComplete(seconds: number, shotMarks: Mark[] = []): void {
+function onTimerComplete(seconds: number, timerMarks: Mark[] = []): void {
   draft.time = formatTime(seconds);
-  marks.value = shotMarks;
+  marks.value = timerMarks;
+  // The first drop goes in the log's field, where it can be fixed or typed in.
+  const drop = timerMarks.find((m) => m.kind === 'first_drop');
+  draft.firstDrop = drop ? String(drop.atSec) : '';
   stage.value = 'log';
 }
 
@@ -363,8 +388,12 @@ async function save(): Promise<void> {
       beanId: bean.value.id,
       recipeId: recipe.value?.id ?? null,
       ...values,
-      // The shot timer's taps; a time typed shorter than a tap drops it.
-      marks: espresso.value ? marks.value.filter((m) => m.atSec <= values.actualTimeSec) : [],
+      // The steps' real times, plus the first drop from the log's field. A time
+      // typed shorter than a tap drops that tap.
+      marks: [
+        ...(recipe.value ? marks.value.filter((m) => m.kind === 'step_end' && m.atSec <= values.actualTimeSec) : []),
+        ...(parsed.value.firstDropSec !== null ? [{ kind: 'first_drop' as const, stepOrder: null, atSec: parsed.value.firstDropSec }] : []),
+      ],
     });
     if (values.grinderId) remember('grinderId', values.grinderId);
     if (values.machineId) remember('machineId', values.machineId);
@@ -462,8 +491,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         <p v-if="recipe" class="muted recipe-summary">
           {{ formatDoseLine(recipe.targetDoseGrams, recipe.targetWaterGrams, recipe.expectedYieldGrams) }}
           <template v-if="recipe.targetTempC !== null"> · {{ recipe.targetTempC }} °C</template>
-          <template v-if="espresso && plan?.preinfusion"> · pre-infusion {{ plan.preinfusion.end - plan.preinfusion.start }} s</template>
-          <template v-else-if="!espresso && recipe.steps.length"> · {{ recipe.steps.length }} steps</template>
+          <template v-if="recipe.steps.length"> · {{ recipe.steps.length }} step{{ recipe.steps.length === 1 ? '' : 's' }}</template>
         </p>
         <div v-if="shotRecipe" class="batch" role="group" aria-labelledby="shot-label">
           <span id="shot-label" class="batch-label">Shot</span>
@@ -584,26 +612,16 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
     <!-- 2. Timer -->
     <template v-else-if="stage === 'timing'">
       <button class="btn-link cancel" type="button" @click="stage = 'setup'">← Cancel brew</button>
-      <ShotTimer
-        v-if="espresso && shot && plan && recipe"
-        :recipe-name="recipe.name"
-        :bean-name="beanLabel"
-        :dose="shot.dose"
-        :target-yield="shot.yield"
-        :expected-finish-min-sec="recipe.expectedFinishMinSec"
-        :expected-finish-max-sec="recipe.expectedFinishMaxSec"
-        :plan="plan"
-        :machine-preinfusion="machinePreinfusion"
-        @complete="onTimerComplete"
-      />
-      <PourOverTimer
-        v-else
+      <BrewTimer
         :recipe-name="recipe?.name ?? 'Brew'"
-        :bean-name="beanLabel"
-        :target-dose="timerDose"
+        :subtitle="timerSubtitle"
+        :steps="timerSteps"
+        :espresso="espresso"
+        :flow-unit="recipe?.flowUnit ?? 'g_s'"
         :expected-finish-min-sec="recipe?.expectedFinishMinSec ?? null"
         :expected-finish-max-sec="recipe?.expectedFinishMaxSec ?? null"
-        :steps="timerSteps"
+        :first-drop-window="firstDropWindow"
+        :machine="machine"
         @complete="onTimerComplete"
       />
     </template>
@@ -613,9 +631,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       <h1>How was it?</h1>
       <p class="muted">{{ beanLabel }}<template v-if="recipe"> · {{ recipe.name }}</template></p>
       <section class="card">
-        <p v-if="marks.length" class="muted small marks-line">
-          {{ marks.map((m) => `${MARK_LABELS[m.kind]} ${formatMark(m.atSec)}`).join(' · ') }}
-        </p>
+        <p v-if="stepMarksLine" class="muted small marks-line">{{ stepMarksLine }}</p>
         <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="expectedYield" :espresso="espresso" :machines="machines" />
       </section>
       <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>

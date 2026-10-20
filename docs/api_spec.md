@@ -543,30 +543,54 @@ new kind needs):
 | `expectedYieldGrams` | optional estimate | **required**: target shot weight; ratio is dose:yield (18 g → 36 g = 1:2) |
 | finish window | total brew time | total shot time |
 | `firstDropMinSec`/`MaxSec` | must be absent/`null` | optional window (pair, ±3 s default) |
-| steps | any except `preinfusion` | at most one `preinfusion` step; no `bloom`/`pour` steps and no `targetWaterGrams` |
+| step types | `bloom` `pour` `swirl` `stir` `wait` `press` `other` | `preinfusion` `soak` `pressure` `flow` `other` (`ESPRESSO_STEP_TYPES`) |
+| step `advance` | `auto`, `auto_log`, `tap` | also `first_drop` (at most one step) |
+| `flowUnit` | ignored (default `g_s`) | `g_s` or `ml_s` for flow steps |
 
 Recipes are grinder-neutral: instead of one grind setting they carry
 **approximate starting points per grinder** (`grindSettings`). The brew flow
 uses one only when there's no actual setting from your last brew with that
-grinder and recipe (§3b `last-setting`).
+grinder and recipe (§3b `last-setting`). A recipe can name a
+**`defaultGrinderId`**: the grinder the brew flow preselects for it (instead
+of the last grinder used), if that grinder isn't retired.
 
-**Steps** are what the timer runs (`docs/timer_architecture.md` §3). Each has a
-`stepType`, an optional `label` (e.g. "Second bloom"), and a start and end time
-in seconds from the start of the brew. Gaps between steps are waiting time.
-Water steps (`bloom`, `pour`) carry `targetWaterGrams`: the cumulative scale
-weight to **pour to** by the step's end (clients show the per-step amount, the
-difference from the previous water step, next to it).
+**Steps** are what the timer runs (`docs/timer_architecture.md` §3). They run
+**back to back**: each starts when the previous one actually ended, so a step
+you end with a tap (a bloom that waits for the kettle) moves everything after
+it. Each step has a `stepType`, an optional `label` (e.g. "Second bloom"), a
+`durationSec`, how it moves on (`advance`), and instruction values shown on its
+card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
 
-| `stepType` | Meaning | `targetWaterGrams` |
+| `advance` | The timer… | `durationSec` |
 |---|---|---|
-| `bloom` | Pour to wet the grounds and let them degas (repeatable for double blooms) | required |
-| `pour` | Pour | required |
-| `swirl` | Swirl the brewer | must be absent/`null` |
-| `stir` | Stir the slurry | must be absent/`null` |
-| `wait` | Wait / drawdown | must be absent/`null` |
-| `press` | Press / plunge (AeroPress, French press) | must be absent/`null` |
-| `preinfusion` | Espresso only: low-pressure pre-infusion from `startSec` to `endSec` | must be absent/`null` |
-| `other` | Anything else; give it a `label` | optional |
+| `auto` | moves on when the duration is up | required (0 = instant action, shown ~2 s); `null` only on the last step = until you finish |
+| `auto_log` | the same, plus a **Log it** button to record when you really did it | required |
+| `tap` | waits for **Next** | optional guide ("tap when ready" once it's passed) |
+| `first_drop` | espresso: ends when **First drop** is tapped | optional guide |
+
+| `stepType` | Meaning | Values |
+|---|---|---|
+| `bloom` | Pour to wet the grounds and let them degas (repeatable for double blooms) | `targetWaterGrams` required |
+| `pour` | Pour | `targetWaterGrams` required |
+| `swirl` / `stir` | Swirl the brewer / stir the slurry | – |
+| `wait` | Wait / drawdown | – |
+| `press` | Press / plunge (AeroPress, French press) | – |
+| `preinfusion` | Espresso: low-pressure / low-flow fill | pressure **or** flow, optional |
+| `soak` | Espresso: pump off | – |
+| `pressure` | Espresso: hold or ramp pressure | `pressureBar` required, `pressureEndBar` optional (ramp) |
+| `flow` | Espresso: hold or ramp flow | `flowRate` required, `flowEndRate` optional (ramp) |
+| `other` | Anything else; give it a `label` | pour-over: `targetWaterGrams` optional; espresso: pressure or flow optional |
+
+- `targetWaterGrams`: the cumulative scale weight to **pour to** by the step's
+  end (> 0, < 10000, max 2 decimals; never decreasing across steps). Clients
+  show the per-step amount next to it.
+- `targetTempC` (any step, optional, 0–100, 1 decimal): e.g. bloom at 85 °C,
+  pour at 93 °C.
+- `pressureBar`/`pressureEndBar` (0–20 bar, 1 decimal) and
+  `flowRate`/`flowEndRate` (0–20 in the recipe's `flowUnit`, 1 decimal): an end
+  value needs a start value and makes a ramp ("9 → 6 bar"). They're
+  instructions; the timer doesn't measure them. Any value not listed for a
+  type must be absent/`null`.
 
 **Recipe object** (every endpoint below returns this shape):
 
@@ -583,17 +607,30 @@ difference from the previous water step, next to it).
   "expectedFinishMaxSec": 195,
   "firstDropMinSec": null,
   "firstDropMaxSec": null,
+  "flowUnit": "g_s",
   "targetTempC": 94,
   "showOnPublicMenu": true,
+  "defaultGrinderId": "uuid",
   "grindSettings": [
     { "grinderId": "uuid", "grinderName": "Comandante C40", "setting": "20" }
   ],
   "steps": [
-    { "id": "uuid", "stepOrder": 1, "stepType": "bloom", "label": null, "startSec": 0, "endSec": 10, "targetWaterGrams": 45 },
-    { "id": "uuid", "stepOrder": 2, "stepType": "swirl", "label": null, "startSec": 10, "endSec": 15, "targetWaterGrams": null },
-    { "id": "uuid", "stepOrder": 3, "stepType": "pour", "label": "Main pour", "startSec": 45, "endSec": 90, "targetWaterGrams": 250 }
+    { "id": "uuid", "stepOrder": 1, "stepType": "bloom", "label": null, "durationSec": 45, "advance": "tap", "targetWaterGrams": 45, "targetTempC": 85, "pressureBar": null, "pressureEndBar": null, "flowRate": null, "flowEndRate": null },
+    { "id": "uuid", "stepOrder": 2, "stepType": "pour", "label": "Main pour", "durationSec": 45, "advance": "auto", "targetWaterGrams": 250, "targetTempC": 93, "pressureBar": null, "pressureEndBar": null, "flowRate": null, "flowEndRate": null },
+    { "id": "uuid", "stepOrder": 3, "stepType": "wait", "label": "Drawdown", "durationSec": null, "advance": "auto", "targetWaterGrams": null, "targetTempC": null, "pressureBar": null, "pressureEndBar": null, "flowRate": null, "flowEndRate": null }
   ]
 }
+```
+
+An espresso profile (pressure until first drop, pump off for 10 s, then flow
+down to 2 g/s until the shot is done):
+
+```json
+"steps": [
+  { "stepType": "pressure", "pressureBar": 9, "advance": "first_drop", "durationSec": null },
+  { "stepType": "soak", "advance": "auto", "durationSec": 10 },
+  { "stepType": "flow", "flowRate": 4, "flowEndRate": 2, "advance": "auto", "durationSec": null }
+]
 ```
 
 `grindSettings` are sorted by grinder name and include retired grinders.
@@ -623,9 +660,8 @@ Creates a recipe, its grind starting points and its steps in one transaction.
     "showOnPublicMenu": true,
     "grindSettings": [{ "grinderId": "uuid", "setting": "20" }],
     "steps": [
-      { "stepType": "bloom", "startSec": 0, "endSec": 10, "targetWaterGrams": 45 },
-      { "stepType": "swirl", "startSec": 10, "endSec": 15 },
-      { "stepType": "pour", "label": "Main pour", "startSec": 45, "endSec": 90, "targetWaterGrams": 250 }
+      { "stepType": "bloom", "durationSec": 45, "advance": "tap", "targetWaterGrams": 45, "targetTempC": 85 },
+      { "stepType": "pour", "label": "Main pour", "durationSec": 45, "targetWaterGrams": 250, "targetTempC": 93 }
     ]
   }
   ```
@@ -644,16 +680,18 @@ Creates a recipe, its grind starting points and its steps in one transaction.
     (never below 0). So a stored window always has both ends, or neither.
   - `grindSettings` (default `[]`): each `grinderId` must be a grinder in this
     workspace (retired allowed), at most once; `setting` trimmed, 1–100 chars.
+  - `defaultGrinderId` (optional, nullable): a grinder in this workspace
+    (retired allowed). Deleting the grinder sets it back to `null`.
+  - `flowUnit` (optional, default `g_s`): `g_s` or `ml_s`.
   - `steps` (default `[]`, max 20), in order (`stepOrder` = array position):
-    - `stepType` from the table above; `label` optional, ≤ 255 chars, blank
-      becomes `null`.
-    - `startSec` and `endSec` are integers 0–86400 with `startSec ≤ endSec`
-      (equal is fine for an instant action), and steps don't overlap: each
-      starts at or after the previous one's `endSec`.
-    - `targetWaterGrams` as in the table (> 0, < 10000, max 2 decimals). Across
-      the steps that have one, it never decreases.
+    - `stepType` allowed for the method's kind (tables above); `label`
+      optional, ≤ 255 chars, blank becomes `null`.
+    - `advance` (default `auto`) and `durationSec` (integer 0–86400, or
+      `null`) as in the advance table. Only the last step may be open-ended.
+    - The values allowed for the type (other values must be absent/`null`).
   - Not enforced (clients warn instead): the last pour reaching
-    `targetWaterGrams`, and the finish window ending after the last step.
+    `targetWaterGrams`, and the finish window ending after the planned last
+    step.
 - **Success (`201 Created`):** `{ "recipe": { ...recipe } }`
 - **Errors:** `400` invalid body, or `methodId`/`grinderId` not in this
   workspace; `403` viewer.
@@ -729,8 +767,8 @@ target, for espresso), for comparing with the measured `actualYieldGrams`, and
 `null` when no grinder was recorded; a retired
 grinder still appears here. `machine` (`{ "id", "name" }`, retired ones
 included) is set only for espresso brews that recorded one. `marks` lists
-the shot timer's taps (`{ "kind", "atSec" }`), earliest first; always `[]`
-for other brews. `userId` and `brewer` are `null` when the brewer deleted their
+the timer's marks (`{ "kind", "stepOrder", "atSec" }`, `stepOrder` `null`
+except for `step_end`), earliest first. `userId` and `brewer` are `null` when the brewer deleted their
 account. Such logs can only be edited or deleted by owners.
 
 ### `GET /api/workspaces/:workspaceId/brew-logs`
@@ -774,11 +812,14 @@ account. Such logs can only be edited or deleted by owners.
     `actualWaterGrams`, except for **espresso**: when `recipeId` is an
     espresso recipe, `actualWaterGrams` must be absent/`null` and
     `actualYieldGrams` (the shot weight) is required.
-  - `marks` (optional, default `[]`): taps recorded by the shot timer,
-    `[{ "kind": "first_drop", "atSec": 7.4 }]`. `kind` is one of `MARK_KINDS`
-    (`first_drop`, `preinfusion_end`), at most one of each; `atSec` is
-    0–`actualTimeSec` with at most 1 decimal. Espresso brews only (like
-    `machineId`).
+  - `marks` (optional, default `[]`): when things actually happened, recorded
+    by the timer: `[{ "kind": "first_drop", "atSec": 7.4 }, { "kind":
+    "step_end", "stepOrder": 1, "atSec": 52 }]`. `kind` is one of
+    `MARK_KINDS`; `atSec` is 0–`actualTimeSec` with at most 1 decimal.
+    - `first_drop`: espresso brews only, at most one, no `stepOrder`. It can
+      also be typed into the log form after the shot.
+    - `step_end`: the real end of a step that waited for a tap or was logged
+      (`stepOrder` 1–50, at most one per step); needs a `recipeId`.
   - `machineId` (optional, nullable; a machine in this workspace, retired
     accepted) only for espresso brews: with any other recipe, or none, it
     must be absent/`null`.
@@ -981,15 +1022,18 @@ queue:
      power), so the LLM knows which grinder a grind setting refers to, doesn't
      compare settings across different grinders, and can talk in steps.
    - Espresso brews include their `machine` (or `null`): name and
-     capabilities (pre-infusion, flow and pressure control), and their
-     `marks` (first drop, end of a manual pre-infusion), each `{ kind, atSec }`.
+     capabilities (pre-infusion, flow and pressure control).
+   - Each brew includes its `marks` (`{ kind, stepOrder, atSec }`): the first
+     drop for espresso, and the real end of steps that waited for a tap or
+     were logged, so the LLM sees e.g. that the bloom ran 52 s, not 45.
    - Each brew includes its recipe's `methodKind` (or `null` without a
      recipe), `actualWaterGrams` (`null` for espresso), the measured
      `actualYieldGrams` (or `null`) and `brewRatio`: water ÷ dose, or for
      espresso yield ÷ dose. The recipe includes its method kind, water,
      expected yield (the target for espresso), finish window
-     (`expectedFinishMinSec`/`MaxSec`), first-drop window (espresso), and
-     its steps with type, label, start/end and pour-to targets.
+     (`expectedFinishMinSec`/`MaxSec`), first-drop window (espresso), flow
+     unit, and its steps with type, label, duration, how each moves on, and
+     their values (pour-to, temperature, pressure, flow).
 2. It calls the LLM API using **Structured Outputs** (strict JSON schema mode).
 
 **System Prompt:**

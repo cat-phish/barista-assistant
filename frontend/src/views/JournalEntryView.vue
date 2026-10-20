@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { brewLogsApi } from '../api/brews';
 import { ApiError, errorMessage } from '../api/client';
-import type { BrewLog, LlmAnalysis, Machine } from '../api/types';
+import type { BrewLog, LlmAnalysis, Machine, Mark } from '../api/types';
 import AnalysisCard from '../components/AnalysisCard.vue';
 import { grindersApi } from '../api/grinders';
 import { machinesApi } from '../api/machines';
@@ -18,7 +18,7 @@ import { formatDoseLine, formatGrams, formatTime, formatWhen } from '../lib/form
 import { canModifyBrewLog } from '../lib/permissions';
 import { useAuthStore } from '../stores/auth';
 import { useWorkspaceStore } from '../stores/workspace';
-import { formatMark } from '../lib/shot';
+import { formatMark } from '../lib/marks';
 
 const props = defineProps<{ id: string }>();
 
@@ -98,7 +98,14 @@ async function saveEdit(): Promise<void> {
   saving.value = true;
   saveError.value = '';
   try {
-    log.value = (await brewLogsApi.update(ws, log.value.id, values)).brewLog;
+    // Espresso: the first drop is edited in the form; step times are kept.
+    const marks = espresso.value
+      ? [
+          ...log.value.marks.filter((m) => m.kind === 'step_end'),
+          ...(parsed.value.firstDropSec !== null ? [{ kind: 'first_drop' as const, stepOrder: null, atSec: parsed.value.firstDropSec }] : []),
+        ]
+      : undefined;
+    log.value = (await brewLogsApi.update(ws, log.value.id, { ...values, ...(marks ? { marks } : {}) })).brewLog;
     editing.value = false;
   } catch (err) {
     saveError.value = errorMessage(err);
@@ -124,7 +131,10 @@ async function remove(): Promise<void> {
     deleting.value = false;
   }
 }
-const MARK_LABELS = { first_drop: 'First drop', preinfusion_end: 'Full pressure' } as const;
+// "First drop" / "Step 2 ended" (the journal doesn't load the recipe's steps).
+function markLabel(m: Mark): string {
+  return m.kind === 'first_drop' ? 'First drop' : `Step ${m.stepOrder} ended`;
+}
 </script>
 
 <template>
@@ -151,7 +161,7 @@ const MARK_LABELS = { first_drop: 'First drop', preinfusion_end: 'Full pressure'
           <div><dt>Water</dt><dd>{{ log.actualTempC !== null ? `${log.actualTempC} °C` : '–' }}</dd></div>
           <div><dt>Grind</dt><dd>{{ log.actualGrindSetting ?? '–' }}<template v-if="log.grinder"> · {{ log.grinder.name }}</template></dd></div>
           <div v-if="espresso"><dt>Machine</dt><dd>{{ log.machine?.name ?? '–' }}</dd></div>
-          <div v-for="m in log.marks" :key="m.kind"><dt>{{ MARK_LABELS[m.kind] }}</dt><dd>{{ formatMark(m.atSec) }}</dd></div>
+          <div v-for="m in log.marks" :key="`${m.kind}-${m.stepOrder}`"><dt>{{ markLabel(m) }}</dt><dd>{{ formatMark(m.atSec) }}</dd></div>
           <div><dt>Rating</dt><dd><RatingStars :rating="log.rating" /></dd></div>
           <div><dt>Brewed by</dt><dd>{{ log.brewer?.email ?? 'Deleted user' }}</dd></div>
         </dl>

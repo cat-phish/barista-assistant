@@ -214,9 +214,14 @@ export const recipes = mysqlTable("recipes", {
   // of the shot. Both or neither (the API fills a missing end with ±3 s).
   firstDropMinSec: int("first_drop_min_sec"),
   firstDropMaxSec: int("first_drop_max_sec"),
+  // Unit for espresso flow steps: g/s (a scale) or ml/s (a machine's flow meter).
+  flowUnit: varchar("flow_unit", { length: 10 }).$type<FlowUnit>().default("g_s").notNull(),
   targetTempC: decimal("target_temp_c", { precision: 4, scale: 1, mode: "number" }),
   showOnPublicMenu: boolean("show_on_public_menu").default(true).notNull(),
-  // Grind is per grinder: see recipeGrindSettings.
+  // Grind is per grinder: see recipeGrindSettings. The default grinder is
+  // preselected when brewing this recipe (else the last one used); deleting
+  // the grinder clears it.
+  defaultGrinderId: varchar("default_grinder_id", { length: 36 }).references(() => grinders.id, { onDelete: "set null" }),
 });
 
 // 6b. Recipe Grind Starting Points (One Per Grinder)
@@ -239,13 +244,28 @@ export const recipeGrindSettings = mysqlTable(
   })
 );
 
-// 7. Recipe Steps (Timed Brew Steps)
-// Each step runs from startSec to endSec (seconds from the start of the brew);
-// gaps between steps are waiting time. stepType is one of RECIPE_STEP_TYPES.
-// Water types (bloom, pour) carry a cumulative "pour to" scale target.
-// "preinfusion" is for espresso recipes only (docs/api_spec.md §5).
-export const RECIPE_STEP_TYPES = ["bloom", "pour", "swirl", "stir", "wait", "press", "preinfusion", "other"] as const;
+// 7. Recipe Steps (The Brew's Schedule)
+// Steps run back to back: each starts when the previous one actually ended
+// (docs/api_spec.md §5, docs/timer_architecture.md §3). durationSec is the
+// plan (or a guide, for steps you end with a tap); `advance` says how the
+// timer moves on. Waiting is a "wait" (pour over) or "soak" (espresso) step.
+// stepType is one of RECIPE_STEP_TYPES; which types a recipe may use depends
+// on its method's kind. The values (water, temperature, pressure, flow) are
+// instructions shown on the step's card.
+export const RECIPE_STEP_TYPES = [
+  "bloom", "pour", "swirl", "stir", "wait", "press", // pour over / immersion
+  "preinfusion", "soak", "pressure", "flow", // espresso
+  "other", // any
+] as const;
 export const WATER_STEP_TYPES = ["bloom", "pour"] as const;
+export const ESPRESSO_STEP_TYPES = ["preinfusion", "soak", "pressure", "flow", "other"] as const;
+// auto: moves on after durationSec. auto_log: the same, plus a button to log
+// when you really did it. tap: waits for a tap (durationSec is a guide).
+// first_drop: espresso only; ends when First drop is tapped.
+export const STEP_ADVANCE = ["auto", "auto_log", "tap", "first_drop"] as const;
+export type StepAdvance = (typeof STEP_ADVANCE)[number];
+export const FLOW_UNITS = ["g_s", "ml_s"] as const;
+export type FlowUnit = (typeof FLOW_UNITS)[number];
 
 export const recipeSteps = mysqlTable("recipe_steps", {
   id: varchar("id", { length: 36 }).primaryKey(),
@@ -253,13 +273,21 @@ export const recipeSteps = mysqlTable("recipe_steps", {
     .notNull()
     .references(() => recipes.id, { onDelete: "cascade" }),
   stepOrder: int("step_order").notNull(), // 1, 2, 3...
-  stepType: varchar("step_type", { length: 20 }).notNull(), // 'bloom' | 'pour' | 'swirl' | ...
+  stepType: varchar("step_type", { length: 20 }).notNull(), // RECIPE_STEP_TYPES
   label: varchar("label", { length: 255 }), // optional, e.g. 'Second bloom', 'Center pour'
-  startSec: int("start_sec").notNull(),
-  endSec: int("end_sec").notNull(),
-  // Cumulative scale weight to pour to by endSec; only for water step types
-  // (and optional for 'other').
+  // Seconds; null only on the last step = "until you finish". 0 = instant.
+  durationSec: int("duration_sec"),
+  advance: varchar("advance", { length: 20 }).$type<StepAdvance>().default("auto").notNull(),
+  // Cumulative scale weight to pour to by the step's end; only for water step
+  // types (and optional for 'other' on pour-over/immersion recipes).
   targetWaterGrams: decimal("target_water_grams", { precision: 6, scale: 2, mode: "number" }),
+  targetTempC: decimal("target_temp_c", { precision: 4, scale: 1, mode: "number" }), // e.g. bloom at 85, pour at 93
+  // Espresso: target pressure (bar) or flow (recipes.flowUnit); an end value
+  // makes it a ramp shown as "9 → 6 bar".
+  pressureBar: decimal("pressure_bar", { precision: 4, scale: 1, mode: "number" }),
+  pressureEndBar: decimal("pressure_end_bar", { precision: 4, scale: 1, mode: "number" }),
+  flowRate: decimal("flow_rate", { precision: 4, scale: 1, mode: "number" }),
+  flowEndRate: decimal("flow_end_rate", { precision: 4, scale: 1, mode: "number" }),
 });
 
 // 8. Brew Logs (Actual Execution & Tasting Notes)
@@ -302,10 +330,10 @@ export const brewLogs = mysqlTable("brew_logs", {
 });
 
 // 8b. Brew Log Marks (Tapped Events During a Brew)
-// The shot timer records taps with the second they happened (docs/api_spec.md
-// §6): when the first drop appeared, when a manual pre-infusion ended. A
-// fixed list of kinds, at most one of each per log for now.
-export const MARK_KINDS = ["first_drop", "preinfusion_end"] as const;
+// When things actually happened, recorded by the timer (docs/api_spec.md §6):
+// the first drop (espresso), and the real end of steps that wait for a tap or
+// have a "log it" button (step_end, with that step's stepOrder).
+export const MARK_KINDS = ["first_drop", "step_end"] as const;
 export type MarkKind = (typeof MARK_KINDS)[number];
 export const brewLogMarks = mysqlTable("brew_log_marks", {
   id: varchar("id", { length: 36 }).primaryKey(),
@@ -313,6 +341,7 @@ export const brewLogMarks = mysqlTable("brew_log_marks", {
     .notNull()
     .references(() => brewLogs.id, { onDelete: "cascade" }),
   kind: varchar("kind", { length: 30 }).$type<MarkKind>().notNull(),
+  stepOrder: int("step_order"), // step_end only
   atSec: decimal("at_sec", { precision: 6, scale: 1, mode: "number" }).notNull(), // seconds from the start, 0.1 s
 });
 
