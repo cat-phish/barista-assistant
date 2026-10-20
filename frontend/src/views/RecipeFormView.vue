@@ -29,6 +29,7 @@ import {
 } from '../lib/steps';
 import { useWorkspaceStore } from '../stores/workspace';
 import { estimateYield, RECIPE_ROAST_LEVEL, ROAST_LEVELS } from '../lib/scale';
+import { METHOD_KINDS } from '../lib/equipment';
 
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 const NEW_METHOD = '__new__';
@@ -58,7 +59,6 @@ const steps = ref<StepDraft[]>([]);
 // Inline "add a new brew method" (methods are a per-workspace list, §3).
 const newMethodName = ref('');
 const newMethodKind = ref<MethodKind>('pour_over');
-const METHOD_KIND_LABELS: Record<MethodKind, string> = { pour_over: 'Pour over', immersion: 'Immersion', espresso: 'Espresso' };
 const addingMethod = ref(false);
 const methodError = ref('');
 const newMethodInput = ref<HTMLInputElement | null>(null);
@@ -381,7 +381,7 @@ async function save(): Promise<void> {
           <div class="field">
             <label for="new-method-kind">Kind</label>
             <select id="new-method-kind" v-model="newMethodKind">
-              <option v-for="(label, k) in METHOD_KIND_LABELS" :key="k" :value="k">{{ label }}</option>
+              <option v-for="(k, key) in METHOD_KINDS" :key="key" :value="key">{{ k.label }}</option>
             </select>
           </div>
           <button class="btn btn-secondary" type="button" :disabled="addingMethod || !newMethodName.trim()" @click="addMethod">Add</button>

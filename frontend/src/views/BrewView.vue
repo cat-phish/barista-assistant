@@ -11,7 +11,8 @@ import { recipesApi } from '../api/recipes';
 import type { Bean, Recipe } from '../api/types';
 import AnalysisCard from '../components/AnalysisCard.vue';
 import { grindersApi } from '../api/grinders';
-import type { Grinder } from '../api/types';
+import { machinesApi } from '../api/machines';
+import type { Grinder, Machine } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import BrewFields from '../components/BrewFields.vue';
 import PourOverTimer from '../components/PourOverTimer.vue';
@@ -31,6 +32,7 @@ const loadError = ref('');
 const beans = ref<Bean[]>([]);
 const recipes = ref<Recipe[]>([]);
 const grinders = ref<Grinder[]>([]);
+const machines = ref<Machine[]>([]);
 
 // Setup
 const beanId = ref('');
@@ -65,13 +67,18 @@ onMounted(async () => {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [b, r, g] = await Promise.all([beansApi.list(ws), recipesApi.list(ws), grindersApi.list(ws)]);
+    const [b, r, g, m] = await Promise.all([beansApi.list(ws), recipesApi.list(ws), grindersApi.list(ws), machinesApi.list(ws)]);
     beans.value = b.beans;
     recipes.value = r.recipes;
     grinders.value = g.grinders;
+    machines.value = m.machines;
     if (beans.value.length === 1) beanId.value = beans.value[0]?.id ?? '';
-    const saved = readSavedGrinder();
+    const saved = recall('grinderId');
     if (saved && activeGrinders.value.some((x) => x.id === saved)) draft.grinderId = saved;
+    // Machine: the last one used, or the only one there is.
+    const savedMachine = recall('machineId');
+    const machine = activeMachines.value.find((x) => x.id === savedMachine) ?? (activeMachines.value.length === 1 ? activeMachines.value[0] : undefined);
+    if (machine) draft.machineId = machine.id;
   } catch (err) {
     loadError.value = errorMessage(err);
   } finally {
@@ -202,17 +209,20 @@ const grindNote = computed(() => {
 const NEW_GRINDER = '__new__';
 const activeGrinders = computed(() => grinders.value.filter((x) => !x.retiredAt));
 const grinder = computed(() => grinders.value.find((x) => x.id === draft.grinderId) ?? null);
-const grinderKey = () => `brewlog.grinderId.${workspaces.current?.id ?? ''}`;
-function readSavedGrinder(): string | null {
+// Espresso brews also record a machine (picked like the grinder, no inline add).
+const activeMachines = computed(() => machines.value.filter((x) => !x.retiredAt));
+// The last grinder / machine used, remembered per workspace.
+const savedKey = (what: 'grinderId' | 'machineId') => `brewlog.${what}.${workspaces.current?.id ?? ''}`;
+function recall(what: 'grinderId' | 'machineId'): string | null {
   try {
-    return localStorage.getItem(grinderKey());
+    return localStorage.getItem(savedKey(what));
   } catch {
     return null;
   }
 }
-function saveGrinder(id: string): void {
+function remember(what: 'grinderId' | 'machineId', id: string): void {
   try {
-    if (id) localStorage.setItem(grinderKey(), id);
+    if (id) localStorage.setItem(savedKey(what), id);
   } catch {
     // Not remembering is fine.
   }
@@ -339,7 +349,8 @@ async function save(): Promise<void> {
   saveError.value = '';
   try {
     const { brewLog } = await brewLogsApi.create(ws, { beanId: bean.value.id, recipeId: recipe.value?.id ?? null, ...values });
-    if (values.grinderId) saveGrinder(values.grinderId);
+    if (values.grinderId) remember('grinderId', values.grinderId);
+    if (values.machineId) remember('machineId', values.machineId);
     savedLogId.value = brewLog.id;
     stage.value = 'saved';
   } catch (err) {
@@ -420,6 +431,16 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           </div>
           <button class="btn btn-secondary" type="button" :disabled="addingGrinder || !newGrinderName.trim()" @click="addGrinder">Add</button>
           <span v-if="grinderError" class="field-error full">{{ grinderError }}</span>
+        </div>
+        <div v-if="espresso" class="field">
+          <label for="machine">
+            Machine <span class="muted">(optional)</span>
+            <RouterLink class="manage" :to="{ name: 'machines' }">{{ activeMachines.length ? 'Manage' : 'Add one' }}</RouterLink>
+          </label>
+          <select id="machine" v-model="draft.machineId">
+            <option value="">No machine</option>
+            <option v-for="x in activeMachines" :key="x.id" :value="x.id">{{ x.name }}</option>
+          </select>
         </div>
         <p v-if="recipe" class="muted recipe-summary">
           {{ formatDoseLine(recipe.targetDoseGrams, recipe.targetWaterGrams, recipe.expectedYieldGrams) }}
@@ -561,7 +582,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       <h1>How was it?</h1>
       <p class="muted">{{ beanLabel }}<template v-if="recipe"> · {{ recipe.name }}</template></p>
       <section class="card">
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="expectedYield" :espresso="espresso" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="expectedYield" :espresso="espresso" :machines="machines" />
       </section>
       <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
       <button class="btn btn-primary btn-block" type="submit" :disabled="saving">{{ saving ? 'Saving…' : 'Save brew' }}</button>

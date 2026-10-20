@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { beanFreezes, beans, brewLogs, brewMethods, grinders, llmAnalyses, recipeGrindSettings, recipes, recipeSteps, users, workspaces } from "@barista/shared/schema";
+import { beanFreezes, beans, brewLogs, brewMethods, grinders, llmAnalyses, machines, recipeGrindSettings, recipes, recipeSteps, users, workspaces } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BrewContext } from "../src/context.js";
@@ -83,11 +83,14 @@ describe("processBrewAnalysis", () => {
     const id = randomUUID();
     await db.insert(brewMethods).values({ id: methodId, workspaceId, name: "Espresso", kind: "espresso" });
     await db.insert(recipes).values({ id: recipeId, workspaceId, name: "Classic", methodId, targetDoseGrams: 18, expectedYieldGrams: 36, expectedFinishMinSec: 25, expectedFinishMaxSec: 32, firstDropMinSec: 6, firstDropMaxSec: 9 });
-    await db.insert(brewLogs).values({ id, workspaceId, userId, beanId, recipeId, timestamp: new Date("2026-10-09T09:00:00Z"), actualDoseGrams: 18, actualYieldGrams: 40, actualTimeSec: 27 });
+    const machineId = randomUUID();
+    await db.insert(machines).values({ id: machineId, workspaceId, name: "Linea Mini", preinfusion: "manual", flowControl: "manual" });
+    await db.insert(brewLogs).values({ id, workspaceId, userId, beanId, recipeId, machineId, timestamp: new Date("2026-10-09T09:00:00Z"), actualDoseGrams: 18, actualYieldGrams: 40, actualTimeSec: 27 });
 
     await processBrewAnalysis({ brewLogId: id });
     const context = llm.mock.calls[0]![0] as BrewContext;
     expect(context.brew).toMatchObject({ methodKind: "espresso", actualWaterGrams: null, actualYieldGrams: 40, brewRatio: 2.22 });
+    expect(context.brew.machine).toEqual({ name: "Linea Mini", preinfusion: "manual", flowControl: "manual", pressureControl: "none" });
     expect(context.recipe).toMatchObject({ methodKind: "espresso", targetWaterGrams: null, expectedYieldGrams: 36, firstDropMinSec: 6, firstDropMaxSec: 9 });
   });
 
@@ -104,18 +107,19 @@ describe("processBrewAnalysis", () => {
     expect(byDay["day 7"]).toEqual([4, 2]); // after thawing: resumed
   });
 
-  it("tells the LLM which grinder each brew used (retired grinders included)", async () => {
+  it("tells the LLM which grinder each brew used, with its details (retired grinders included)", async () => {
     llm.mockResolvedValue(ANALYSIS);
     const c40 = randomUUID();
-    await db.insert(grinders).values({ id: c40, workspaceId, name: "Comandante C40", retiredAt: new Date() });
+    await db.insert(grinders).values({ id: c40, workspaceId, name: "Comandante C40", adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, retiredAt: new Date() });
     await db.update(brewLogs).set({ grinderId: c40, actualGrindSetting: "20" }).where(eq(brewLogs.id, logIds.day8!));
     await db.update(brewLogs).set({ grinderId: c40, actualGrindSetting: "22" }).where(eq(brewLogs.id, logIds.day6!));
     const recipeId = (await db.select({ id: recipes.id }).from(recipes))[0]!.id;
     await db.insert(recipeGrindSettings).values({ id: randomUUID(), recipeId, grinderId: c40, setting: "21" });
     await processBrewAnalysis({ brewLogId: logIds.day8! });
     const context = llm.mock.calls[0]![0] as BrewContext;
-    expect(context.brew).toMatchObject({ grinderName: "Comandante C40", actualGrindSetting: "20" });
-    const byDay = Object.fromEntries(context.previousBrews.map((b) => [b.tastingNotes, b.grinderName]));
+    expect(context.brew).toMatchObject({ actualGrindSetting: "20", machine: null });
+    expect(context.brew.grinder).toEqual({ name: "Comandante C40", adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, burrType: null, burrSizeMm: null, power: null });
+    const byDay = Object.fromEntries(context.previousBrews.map((b) => [b.tastingNotes, b.grinder?.name ?? null]));
     expect(byDay).toMatchObject({ "day 6": "Comandante C40", "day 7": null });
     expect(context.recipe?.grindStartingPoints).toEqual([{ grinderName: "Comandante C40", setting: "21" }]);
   });

@@ -64,6 +64,13 @@
       "when": 1792455981781,
       "tag": "0008_method_kinds_espresso",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1792457097737,
+      "tag": "0009_equipment",
+      "breakpoints": true
     }
   ]
 }

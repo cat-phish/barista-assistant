@@ -27,8 +27,8 @@ const workspaces = useWorkspaceStore();
         <span class="muted">Doses, ratios and recipe steps</span>
       </RouterLink>
       <RouterLink class="card shortcut" :to="{ name: 'grinders' }">
-        <strong>Grinders</strong>
-        <span class="muted">Track settings per grinder</span>
+        <strong>Equipment</strong>
+        <span class="muted">Grinders, espresso machines and brew methods</span>
       </RouterLink>
     </nav>
   </main>

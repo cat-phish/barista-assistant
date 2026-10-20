@@ -2,7 +2,7 @@
 // Brew detail inputs shared by the brew flow's log form and journal editing.
 // Validate with parseBrewDraft (lib/brewDraft.ts); pass its errors in.
 import { computed } from 'vue';
-import type { Grinder } from '../api/types';
+import type { Grinder, Machine } from '../api/types';
 import type { BrewDraft, BrewDraftErrors } from '../lib/brewDraft';
 import { formatGrams } from '../lib/format';
 import RatingInput from './RatingInput.vue';
@@ -13,7 +13,8 @@ const props = defineProps<{
   showErrors: boolean;
   grinders: Grinder[];
   expectedYieldGrams?: number | null; // the recipe's estimate (espresso: target), shown for comparison
-  espresso?: boolean; // shot weight instead of water (docs/api_spec.md §6)
+  espresso?: boolean; // shot weight instead of water, and a machine (docs/api_spec.md §6)
+  machines?: Machine[];
 }>();
 
 // Measured yield vs the recipe's estimate, e.g. "+6 g vs expected 220 g".
@@ -26,8 +27,9 @@ const yieldComparison = computed(() => {
   return `${diff > 0 ? '+' : diff < 0 ? '−' : '±'}${Math.abs(diff)} g vs ${expectedWord.value} ${formatGrams(expected)} g`;
 });
 
-// Active grinders, plus the brew's own grinder even if it's since been retired.
+// Active grinders/machines, plus the brew's own even if it's since been retired.
 const grinderOptions = computed(() => props.grinders.filter((g) => !g.retiredAt || g.id === draft.value.grinderId));
+const machineOptions = computed(() => (props.machines ?? []).filter((m) => !m.retiredAt || m.id === draft.value.machineId));
 </script>
 
 <template>
@@ -92,6 +94,13 @@ const grinderOptions = computed(() => props.grinders.filter((g) => !g.retiredAt 
         <label for="brew-grind">Grind setting</label>
         <input id="brew-grind" v-model="draft.grind" maxlength="100" />
       </div>
+    </div>
+    <div v-if="espresso && machineOptions.length" class="field">
+      <label for="brew-machine">Machine</label>
+      <select id="brew-machine" v-model="draft.machineId">
+        <option value="">None recorded</option>
+        <option v-for="m in machineOptions" :key="m.id" :value="m.id">{{ m.name }}{{ m.retiredAt ? ' (retired)' : '' }}</option>
+      </select>
     </div>
     <RatingInput v-model="draft.rating" />
     <div class="field">

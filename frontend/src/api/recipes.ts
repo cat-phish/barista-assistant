@@ -33,4 +33,9 @@ export const brewMethodsApi = {
     api.get<{ brewMethods: BrewMethod[] }>(`/api/workspaces/${workspaceId}/brew-methods`),
   create: (workspaceId: string, name: string, kind: MethodKind) =>
     api.post<{ brewMethod: BrewMethod }>(`/api/workspaces/${workspaceId}/brew-methods`, { name, kind }),
+  // 409 when the kind would change while recipes use it, or the name is taken (§3).
+  update: (workspaceId: string, id: string, input: { name?: string; kind?: MethodKind }) =>
+    api.patch<{ brewMethod: BrewMethod }>(`/api/workspaces/${workspaceId}/brew-methods/${id}`, input),
+  // 409 + recipeCount while recipes use it.
+  remove: (workspaceId: string, id: string) => api.delete(`/api/workspaces/${workspaceId}/brew-methods/${id}`),
 };

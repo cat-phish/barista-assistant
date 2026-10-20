@@ -5,6 +5,7 @@ export interface BrewLogInput {
   beanId: string;
   recipeId: string | null;
   grinderId: string | null;
+  machineId: string | null; // espresso only
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso
   actualYieldGrams: number | null;

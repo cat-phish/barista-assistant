@@ -4,11 +4,14 @@ import {
   brewLogs,
   brewMethods,
   grinders,
+  machines,
   recipeGrindSettings,
   recipes,
   recipeSteps,
   type Bean,
   type BrewLog,
+  type Grinder,
+  type Machine,
   type MethodKind,
 } from "@barista/shared/schema";
 import { and, asc, desc, eq, lt, ne } from "drizzle-orm";
@@ -16,6 +19,12 @@ import { db } from "./db.js";
 import { effectiveRoastAge, type FreezePeriodLike } from "./roastAge.js";
 
 const PREVIOUS_BREW_COUNT = 5;
+
+// The grinder a grind setting refers to, with whatever details are recorded
+// (range and step size let the LLM talk in clicks). docs/api_spec.md §9.
+export type GrinderInfo = Pick<Grinder, "name" | "adjustment" | "settingMin" | "settingMax" | "stepSize" | "burrType" | "burrSizeMm" | "power">;
+// Espresso brews: what the machine lets the barista control.
+export type MachineInfo = Pick<Machine, "name" | "preinfusion" | "flowControl" | "pressureControl">;
 
 // What the LLM sees about one brew (docs/api_spec.md §9).
 export interface BrewSummary {
@@ -27,7 +36,8 @@ export interface BrewSummary {
   // The recipe's method kind (pour_over / immersion / espresso), null without a recipe.
   methodKind: MethodKind | null;
   // The grind setting only means something for this grinder (docs/api_spec.md §9).
-  grinderName: string | null;
+  grinder: GrinderInfo | null;
+  machine: MachineInfo | null; // espresso only
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso
   actualYieldGrams: number | null; // measured beverage weight (shot weight for espresso)
@@ -72,7 +82,13 @@ export interface BrewContext {
   ratingScale: "1-5";
 }
 
-type BrewRow = BrewLog & { recipeName: string | null; methodKind: MethodKind | null; grinderName: string | null };
+interface BrewJoins {
+  recipeName: string | null;
+  methodKind: MethodKind | null;
+  grinder: GrinderInfo | null;
+  machine: MachineInfo | null;
+}
+type BrewRow = BrewLog & BrewJoins;
 
 function ratio(brew: BrewLog): number | null {
   const out = brew.actualWaterGrams ?? brew.actualYieldGrams;
@@ -89,7 +105,8 @@ function summarize(brew: BrewRow, roastDate: Date | null, freezes: readonly Free
     daysFrozenBeforeBrew: age?.daysFrozen ?? null,
     recipeName: brew.recipeName,
     methodKind: brew.methodKind,
-    grinderName: brew.grinderName,
+    grinder: brew.grinder,
+    machine: brew.machine,
     actualDoseGrams: brew.actualDoseGrams,
     actualWaterGrams: brew.actualWaterGrams,
     actualYieldGrams: brew.actualYieldGrams,
@@ -102,20 +119,45 @@ function summarize(brew: BrewRow, roastDate: Date | null, freezes: readonly Free
   };
 }
 
+function withJoins({ brew, ...joins }: { brew: BrewLog } & BrewJoins): BrewRow {
+  return { ...brew, ...joins };
+}
+
 function selectBrews() {
   return db
-    .select({ brew: brewLogs, recipeName: recipes.name, methodKind: brewMethods.kind, grinderName: grinders.name })
+    .select({
+      brew: brewLogs,
+      recipeName: recipes.name,
+      methodKind: brewMethods.kind,
+      grinder: {
+        name: grinders.name,
+        adjustment: grinders.adjustment,
+        settingMin: grinders.settingMin,
+        settingMax: grinders.settingMax,
+        stepSize: grinders.stepSize,
+        burrType: grinders.burrType,
+        burrSizeMm: grinders.burrSizeMm,
+        power: grinders.power,
+      },
+      machine: {
+        name: machines.name,
+        preinfusion: machines.preinfusion,
+        flowControl: machines.flowControl,
+        pressureControl: machines.pressureControl,
+      },
+    })
     .from(brewLogs)
     .leftJoin(recipes, eq(brewLogs.recipeId, recipes.id))
     .leftJoin(brewMethods, eq(recipes.methodId, brewMethods.id))
-    .leftJoin(grinders, eq(brewLogs.grinderId, grinders.id));
+    .leftJoin(grinders, eq(brewLogs.grinderId, grinders.id))
+    .leftJoin(machines, eq(brewLogs.machineId, machines.id));
 }
 
 // Returns null if the brew log was deleted after the job was queued.
 export async function loadBrewContext(brewLogId: string): Promise<BrewContext | null> {
   const [target] = await selectBrews().where(eq(brewLogs.id, brewLogId)).limit(1);
   if (!target) return null;
-  const brew: BrewRow = { ...target.brew, recipeName: target.recipeName, methodKind: target.methodKind, grinderName: target.grinderName };
+  const brew = withJoins(target);
 
   const [beanRow] = await db.select().from(beans).where(eq(beans.id, brew.beanId)).limit(1);
   if (!beanRow) return null; // Bean deletion cascades, so this means the log is going too.
@@ -141,7 +183,7 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
     },
     recipe,
     brew: summarize(brew, bean.roastDate, freezes),
-    previousBrews: previous.map((p) => summarize({ ...p.brew, recipeName: p.recipeName, methodKind: p.methodKind, grinderName: p.grinderName }, bean.roastDate, freezes)),
+    previousBrews: previous.map((p) => summarize(withJoins(p), bean.roastDate, freezes)),
     ratingScale: "1-5",
   };
 }

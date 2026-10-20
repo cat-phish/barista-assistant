@@ -117,6 +117,18 @@ export const brewMethods = mysqlTable(
   })
 );
 
+export const GRINDER_ADJUSTMENTS = ["stepped", "stepless"] as const;
+export const BURR_TYPES = ["conical", "flat"] as const;
+export const GRINDER_POWER = ["manual", "electric"] as const;
+// Machine capabilities: who controls pre-infusion, flow and pressure.
+export const PREINFUSION_MODES = ["none", "automatic", "manual"] as const;
+export const PROFILE_CONTROLS = ["none", "manual", "programmable"] as const;
+export type GrinderAdjustment = (typeof GRINDER_ADJUSTMENTS)[number];
+export type BurrType = (typeof BURR_TYPES)[number];
+export type GrinderPower = (typeof GRINDER_POWER)[number];
+export type Preinfusion = (typeof PREINFUSION_MODES)[number];
+export type ProfileControl = (typeof PROFILE_CONTROLS)[number];
+
 // 5b. Grinders (Per-Workspace Equipment)
 // Brew logs record which grinder was used, since a grind setting ("20") only
 // means something for a specific grinder. Recipes stay grinder-neutral.
@@ -131,11 +143,44 @@ export const grinders = mysqlTable(
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 100 }).notNull(), // e.g. "Comandante C40"
     notes: varchar("notes", { length: 255 }), // e.g. "stepped, 0-40 clicks"
+    // Optional details (docs/api_spec.md §3b). The range and step let the AI
+    // talk in clicks/steps; the rest is reference.
+    adjustment: varchar("adjustment", { length: 20 }).$type<GrinderAdjustment>(), // GRINDER_ADJUSTMENTS
+    settingMin: decimal("setting_min", { precision: 6, scale: 2, mode: "number" }), // with settingMax: both or neither
+    settingMax: decimal("setting_max", { precision: 6, scale: 2, mode: "number" }),
+    stepSize: decimal("step_size", { precision: 5, scale: 2, mode: "number" }), // e.g. 1 click
+    burrType: varchar("burr_type", { length: 20 }).$type<BurrType>(), // BURR_TYPES
+    burrSizeMm: int("burr_size_mm"),
+    power: varchar("power", { length: 20 }).$type<GrinderPower>(), // GRINDER_POWER
     retiredAt: timestamp("retired_at"), // null = active
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
     workspaceNameUnique: unique("grinders_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+
+// 5c. Espresso Machines (Per-Workspace Equipment)
+// Chosen on espresso brews only. Capabilities decide how the shot timer
+// treats pre-infusion and (later) flow/pressure profiles; a recipe works on
+// any machine. Retired like grinders once brews used them.
+export const machines = mysqlTable(
+  "machines",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(), // e.g. "Linea Mini"
+    notes: varchar("notes", { length: 255 }),
+    preinfusion: varchar("preinfusion", { length: 20 }).$type<Preinfusion>().default("none").notNull(),
+    flowControl: varchar("flow_control", { length: 20 }).$type<ProfileControl>().default("none").notNull(),
+    pressureControl: varchar("pressure_control", { length: 20 }).$type<ProfileControl>().default("none").notNull(),
+    retiredAt: timestamp("retired_at"), // null = active
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("machines_workspace_name_unique").on(table.workspaceId, table.name),
   })
 );
 
@@ -236,6 +281,10 @@ export const brewLogs = mysqlTable("brew_logs", {
   grinderId: varchar("grinder_id", { length: 36 }).references(() => grinders.id, {
     onDelete: "set null",
   }),
+  // Espresso brews only (docs/api_spec.md §6). Retired, not deleted, like grinders.
+  machineId: varchar("machine_id", { length: 36 }).references(() => machines.id, {
+    onDelete: "set null",
+  }),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
   actualDoseGrams: decimal("actual_dose_grams", { precision: 5, scale: 2, mode: "number" }).notNull(),
   // Required unless the log's recipe is an espresso recipe, where it's null.
@@ -278,6 +327,8 @@ export type BeanFreeze = typeof beanFreezes.$inferSelect;
 export type NewBeanFreeze = typeof beanFreezes.$inferInsert;
 export type Grinder = typeof grinders.$inferSelect;
 export type NewGrinder = typeof grinders.$inferInsert;
+export type Machine = typeof machines.$inferSelect;
+export type NewMachine = typeof machines.$inferInsert;
 export type RecipeGrindSetting = typeof recipeGrindSettings.$inferSelect;
 export type RecipeStepType = (typeof RECIPE_STEP_TYPES)[number];
 export type Recipe = typeof recipes.$inferSelect;

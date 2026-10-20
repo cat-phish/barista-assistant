@@ -268,7 +268,37 @@ Each workspace keeps its own grinders. Brew logs record which grinder was used
 grinder. Recipes are grinder-neutral.
 
 **Grinder object:**
-`{ "id": "uuid", "name": "Comandante C40", "notes": "stepped, 0–40 clicks" | null, "retiredAt": null | "2026-10-18T…" }`
+
+```json
+{
+  "id": "uuid",
+  "name": "Comandante C40",
+  "notes": "Red Clix",
+  "adjustment": "stepped",
+  "settingMin": 0,
+  "settingMax": 40,
+  "stepSize": 1,
+  "burrType": "conical",
+  "burrSizeMm": 39,
+  "power": "manual",
+  "retiredAt": null
+}
+```
+
+Everything after `name` is optional (`null` when unknown):
+
+| Field | Values |
+|---|---|
+| `notes` | text, ≤ 255 chars, blank becomes `null` |
+| `adjustment` | `stepped` (clicks/detents) or `stepless` (`GRINDER_ADJUSTMENTS`) |
+| `settingMin`, `settingMax` | the dial's range, numbers 0–9999 with ≤ 2 decimals; both or neither, min < max |
+| `stepSize` | one step/click on the dial, > 0, < 1000, ≤ 2 decimals |
+| `burrType` | `conical` or `flat` (`BURR_TYPES`) |
+| `burrSizeMm` | integer 10–200 |
+| `power` | `manual` or `electric` (`GRINDER_POWER`) |
+
+The range and step size are sent to the AI analysis so its reasoning can talk
+in steps ("2 clicks finer"); the rest is reference.
 
 A **retired** grinder (`retiredAt` set) is hidden from pickers for new brews,
 but past brews keep showing it, and it can be restored. A grinder that brews
@@ -283,8 +313,8 @@ were logged with can't be deleted (retire it instead); an unused one can.
 ### `POST /api/workspaces/:workspaceId/grinders`
 
 - **Auth Required:** `true` (role `owner` or `barista`)
-- **Body:** `{ "name": "Comandante C40", "notes": "stepped" }` (`name` trimmed,
-  1–100 chars; `notes` optional, ≤ 255, blank becomes `null`)
+- **Body:** `{ "name": "Comandante C40", ...details }` (`name` trimmed,
+  1–100 chars; the details from the table above, all optional and nullable)
 - **Success (`201 Created`):** `{ "grinder": { ...grinder } }`
 - **Errors:** `400` invalid body; `403` viewer; `409` a grinder with that name
   already exists in this workspace (case-insensitive).
@@ -292,9 +322,10 @@ were logged with can't be deleted (retire it instead); an unused one can.
 ### `PATCH /api/workspaces/:workspaceId/grinders/:grinderId`
 
 - **Auth Required:** `true` (role `owner` or `barista`)
-- **Body:** any non-empty subset of `{ "name", "notes", "retired": true | false }`.
-  `retired: true` sets `retiredAt` to now (unchanged if already retired);
-  `false` restores it.
+- **Body:** any non-empty subset of the `POST` fields plus
+  `"retired": true | false`. `retired: true` sets `retiredAt` to now
+  (unchanged if already retired); `false` restores it. The range is a pair:
+  send both ends, or `null` for either to clear both.
 - **Success (`200 OK`):** `{ "grinder": { ...grinder } }`
 - **Errors:** `400`; `403` viewer; `404` not in this workspace; `409` name taken.
 
@@ -319,6 +350,70 @@ recipe. The brew flow uses it to pre-fill the grind when both are chosen.
   skipped), or `null` if there's none.
 - **Errors:** `400` missing/invalid `recipeId`; `404` grinder not in this
   workspace.
+
+---
+
+## 3c. Espresso Machines
+
+Each workspace keeps its own machines. Only espresso brews record one (§6).
+Capabilities describe who controls each part of the shot, so the shot timer
+can treat a recipe's pre-infusion right on any machine (docs/roadmap.md
+phase 2c) and the AI knows what can be adjusted.
+
+**Machine object:**
+
+```json
+{
+  "id": "uuid",
+  "name": "Linea Mini",
+  "notes": null,
+  "preinfusion": "manual",
+  "flowControl": "manual",
+  "pressureControl": "none",
+  "retiredAt": null
+}
+```
+
+| Field | Values (default `none`) |
+|---|---|
+| `preinfusion` | `none`, `automatic` (the machine does it), `manual` (paddle, lever or button) — `PREINFUSION_MODES` |
+| `flowControl`, `pressureControl` | `none`, `manual` (paddle, lever, needle valve), `programmable` (profiles) — `PROFILE_CONTROLS` |
+
+Retiring and deleting work like grinders (§3b): retired machines leave the
+pickers but past brews keep showing them; a machine brews were logged with
+can't be deleted.
+
+### `GET /api/workspaces/:workspaceId/machines`
+
+- **Auth Required:** `true` (any member)
+- **Success (`200 OK`):** `{ "machines": [ { ...machine } ] }`: active first,
+  then retired; each sorted by `name`.
+
+### `POST /api/workspaces/:workspaceId/machines`
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:** `{ "name": "Linea Mini", "notes": null, "preinfusion": "manual", "flowControl": "manual", "pressureControl": "none" }`
+  (`name` trimmed, 1–100 chars; the rest optional: `notes` ≤ 255, blank
+  becomes `null`; capabilities default to `none`)
+- **Success (`201 Created`):** `{ "machine": { ...machine } }`
+- **Errors:** `400`; `403` viewer; `409` a machine with that name already
+  exists in this workspace (case-insensitive).
+
+### `PATCH /api/workspaces/:workspaceId/machines/:machineId`
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:** any non-empty subset of the `POST` fields plus `"retired": true | false`
+  (as for grinders).
+- **Success (`200 OK`):** `{ "machine": { ...machine } }`
+- **Errors:** `400`; `403` viewer; `404` not in this workspace; `409` name taken.
+
+### `DELETE /api/workspaces/:workspaceId/machines/:machineId`
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Success (`204 No Content`)**
+- **Errors:** `403` viewer; `404` not in this workspace; `409` brews were
+  logged with it, with body `{ "error": "...", "brewLogCount": 12 }`. Retire
+  it instead.
 
 ---
 
@@ -620,6 +715,7 @@ created it and can't be changed.
   "bean": { "id": "uuid", "roasterName": "Onyx Coffee Lab", "beanName": "Southern Weather" },
   "recipe": { "id": "uuid", "name": "House V60", "expectedYieldGrams": 220, "methodKind": "pour_over" },
   "grinder": { "id": "uuid", "name": "Comandante C40" },
+  "machine": null,
   "brewer": { "id": "uuid", "email": "barista@example.com" }
 }
 ```
@@ -629,7 +725,8 @@ deleted later); its `expectedYieldGrams` is the recipe's current estimate (or
 target, for espresso), for comparing with the measured `actualYieldGrams`, and
 `methodKind` is its method's kind. `grinder` is
 `null` when no grinder was recorded; a retired
-grinder still appears here. `userId` and `brewer` are `null` when the brewer deleted their
+grinder still appears here. `machine` (`{ "id", "name" }`, retired ones
+included) is set only for espresso brews that recorded one. `userId` and `brewer` are `null` when the brewer deleted their
 account. Such logs can only be edited or deleted by owners.
 
 ### `GET /api/workspaces/:workspaceId/brew-logs`
@@ -662,6 +759,7 @@ account. Such logs can only be edited or deleted by owners.
     "actualYieldGrams": 225,
     "actualTempC": 93,
     "grinderId": "uuid",
+    "machineId": null,
     "actualGrindSetting": "18 clicks",
     "actualTimeSec": 150,
     "rating": 3,
@@ -672,6 +770,9 @@ account. Such logs can only be edited or deleted by owners.
     `actualWaterGrams`, except for **espresso**: when `recipeId` is an
     espresso recipe, `actualWaterGrams` must be absent/`null` and
     `actualYieldGrams` (the shot weight) is required.
+  - `machineId` (optional, nullable; a machine in this workspace, retired
+    accepted) only for espresso brews: with any other recipe, or none, it
+    must be absent/`null`.
   - `beanId`, plus `recipeId` and `grinderId` (both optional, nullable), must belong
     to **this** workspace. A retired grinder is accepted (e.g. when logging an
     old brew afterwards); clients just don't offer it for new brews.
@@ -698,8 +799,9 @@ account. Such logs can only be edited or deleted by owners.
 - **Auth Required:** `true` (owner, or the barista who created it)
 - **Body:** any non-empty subset of the `POST` fields, with the same rules.
   Unknown fields are rejected. The espresso rule is checked against the log
-  as it is after the change, but only when the request sends `recipeId`,
-  `actualWaterGrams` or `actualYieldGrams` (so editing the notes of an old log
+  (and the machine rule) are checked against the log as it is after the
+  change, but only when the request sends `recipeId`, `actualWaterGrams`,
+  `actualYieldGrams` or `machineId` (so editing the notes of an old log
   whose recipe later moved to another method still works).
 - **Success (`200 OK`):** `{ "brewLog": { ...brewLog } }`
 - **Errors:** `400` invalid or empty body, or `beanId`/`recipeId` not in this
@@ -863,9 +965,12 @@ queue:
    - The prompt includes the bean's **effective** roast age in days at brew
      time (`roastAgeDays`, excluding days frozen; see §4) and
      `daysFrozenBeforeBrew`, when the bean has a `roastDate`.
-   - Each brew includes `grinderName` (or `null`), so the LLM knows which
-     grinder a grind setting refers to and doesn't compare settings across
-     different grinders.
+   - Each brew includes its `grinder` (or `null`): name plus whatever details
+     are recorded (adjustment, setting range, step size, burr type/size,
+     power), so the LLM knows which grinder a grind setting refers to, doesn't
+     compare settings across different grinders, and can talk in steps.
+   - Espresso brews include their `machine` (or `null`): name and
+     capabilities (pre-infusion, flow and pressure control).
    - Each brew includes its recipe's `methodKind` (or `null` without a
      recipe), `actualWaterGrams` (`null` for espresso), the measured
      `actualYieldGrams` (or `null`) and `brewRatio`: water ÷ dose, or for

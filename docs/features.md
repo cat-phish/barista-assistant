@@ -16,11 +16,18 @@ upcoming work is in `roadmap.md`.
   roast" stays meaningful for frozen coffee.
 
 ## Equipment
-- **Brew methods:** per-workspace list (V60, Espresso, …), each with a kind:
-  pour over, immersion or espresso. The kind decides the recipe fields; it's
-  chosen when adding a method and can't change while recipes use it.
-- **Grinders:** per workspace. Grinders that have been used are retired
-  rather than deleted, so history keeps their names.
+One **Equipment** section with three tabs:
+- **Grinders:** per workspace, with optional details: stepped/stepless,
+  setting range and step size, burr type and size, hand/electric. The range
+  and step let the AI talk in clicks. Grinders that have been used are
+  retired rather than deleted, so history keeps their names.
+- **Machines:** espresso machines with what they can do: pre-infusion (none
+  / automatic / manual), flow control and pressure control (none / manual /
+  programmable). Picked on espresso brews only (the last one used, or the
+  only one, is preselected); retired like grinders.
+- **Methods:** brew methods (V60, Espresso, …) with a kind: pour over,
+  immersion or espresso. The kind decides the recipe fields. Rename, change
+  kind (not while recipes use it), delete (not while recipes use it), add.
 
 ## Recipes
 - Dose, water (live coffee:water ratio), temperature, target finish window.
@@ -66,7 +73,8 @@ upcoming work is in `roadmap.md`.
 - **AI analysis:** after a brew, ask for a suggestion; a background worker
   asks the LLM for grind and temperature changes with reasoning, shown next
   time you brew that bean. It sees the bean's roast level and age, the
-  recipe, and your previous brews of that bean.
+  recipe, your previous brews of that bean, the grinder's details and, for
+  espresso, the machine's capabilities.
 
 ## Public menu
 - An optional public page per workspace listing beans and recipes marked as

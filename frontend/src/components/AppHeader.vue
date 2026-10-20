@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const auth = useAuthStore();
 const workspaces = useWorkspaceStore();
 const router = useRouter();
+const route = useRoute();
 const loggingOut = ref(false);
 
 async function logout(): Promise<void> {
@@ -41,7 +42,7 @@ async function logout(): Promise<void> {
     <RouterLink :to="{ name: 'journal' }" active-class="active">Journal</RouterLink>
     <RouterLink :to="{ name: 'beans' }" active-class="active">Beans</RouterLink>
     <RouterLink :to="{ name: 'recipes' }" active-class="active">Recipes</RouterLink>
-    <RouterLink :to="{ name: 'grinders' }" active-class="active">Grinders</RouterLink>
+    <RouterLink :to="{ name: 'grinders' }" :class="{ active: route.path.startsWith('/equipment') }">Equipment</RouterLink>
   </nav>
 </template>
 

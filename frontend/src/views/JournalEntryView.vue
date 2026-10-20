@@ -3,9 +3,10 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { brewLogsApi } from '../api/brews';
 import { ApiError, errorMessage } from '../api/client';
-import type { BrewLog, LlmAnalysis } from '../api/types';
+import type { BrewLog, LlmAnalysis, Machine } from '../api/types';
 import AnalysisCard from '../components/AnalysisCard.vue';
 import { grindersApi } from '../api/grinders';
+import { machinesApi } from '../api/machines';
 import type { Grinder } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import BrewFields from '../components/BrewFields.vue';
@@ -27,6 +28,7 @@ const router = useRouter();
 const log = ref<BrewLog | null>(null);
 const storedAnalysis = ref<LlmAnalysis | null>(null);
 const grinders = ref<Grinder[]>([]);
+const machines = ref<Machine[]>([]);
 const loading = ref(true);
 const loadError = ref('');
 
@@ -47,8 +49,9 @@ async function load(): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [{ brewLog }, g] = await Promise.all([brewLogsApi.get(ws, props.id), grindersApi.list(ws)]);
+    const [{ brewLog }, g, m] = await Promise.all([brewLogsApi.get(ws, props.id), grindersApi.list(ws), machinesApi.list(ws)]);
     grinders.value = g.grinders;
+    machines.value = m.machines;
     const { latestAnalysis, ...rest } = brewLog;
     log.value = rest;
     storedAnalysis.value = latestAnalysis;
@@ -145,6 +148,7 @@ async function remove(): Promise<void> {
           <div><dt>Time</dt><dd>{{ formatTime(log.actualTimeSec) }}</dd></div>
           <div><dt>Water</dt><dd>{{ log.actualTempC !== null ? `${log.actualTempC} °C` : '–' }}</dd></div>
           <div><dt>Grind</dt><dd>{{ log.actualGrindSetting ?? '–' }}<template v-if="log.grinder"> · {{ log.grinder.name }}</template></dd></div>
+          <div v-if="espresso"><dt>Machine</dt><dd>{{ log.machine?.name ?? '–' }}</dd></div>
           <div><dt>Rating</dt><dd><RatingStars :rating="log.rating" /></dd></div>
           <div><dt>Brewed by</dt><dd>{{ log.brewer?.email ?? 'Deleted user' }}</dd></div>
         </dl>
@@ -161,7 +165,7 @@ async function remove(): Promise<void> {
       <!-- Edit -->
       <form v-else class="card stack" novalidate @submit.prevent="saveEdit">
         <h2>Edit brew</h2>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" :espresso="espresso" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" :espresso="espresso" :machines="machines" />
         <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
         <div class="buttons">
           <button class="btn btn-secondary" type="button" :disabled="saving" @click="editing = false">Cancel</button>

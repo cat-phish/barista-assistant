@@ -36,11 +36,39 @@ export interface BrewMethod {
 }
 
 // docs/api_spec.md §3b
-export interface Grinder {
+// docs/api_spec.md §3b: details are optional (null when unknown).
+export type GrinderAdjustment = 'stepped' | 'stepless';
+export type BurrType = 'conical' | 'flat';
+export type GrinderPower = 'manual' | 'electric';
+export interface GrinderDetails {
+  notes: string | null;
+  adjustment: GrinderAdjustment | null;
+  settingMin: number | null; // dial range: both or neither
+  settingMax: number | null;
+  stepSize: number | null;
+  burrType: BurrType | null;
+  burrSizeMm: number | null;
+  power: GrinderPower | null;
+}
+export interface Grinder extends GrinderDetails {
+  id: string;
+  name: string;
+  retiredAt: string | null; // set = retired (hidden from pickers, kept in history)
+}
+
+// docs/api_spec.md §3c
+export type Preinfusion = 'none' | 'automatic' | 'manual';
+export type ProfileControl = 'none' | 'manual' | 'programmable';
+export interface MachineCapabilities {
+  preinfusion: Preinfusion;
+  flowControl: ProfileControl;
+  pressureControl: ProfileControl;
+}
+export interface Machine extends MachineCapabilities {
   id: string;
   name: string;
   notes: string | null;
-  retiredAt: string | null; // set = retired (hidden from pickers, kept in history)
+  retiredAt: string | null;
 }
 
 // docs/schema.md ROAST_LEVELS
@@ -121,6 +149,7 @@ export interface BrewLog {
   beanId: string;
   recipeId: string | null;
   grinderId: string | null;
+  machineId: string | null; // espresso only
   timestamp: string;
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso
@@ -133,6 +162,7 @@ export interface BrewLog {
   bean: { id: string; roasterName: string; beanName: string };
   recipe: { id: string; name: string; expectedYieldGrams: number | null; methodKind: MethodKind } | null;
   grinder: { id: string; name: string } | null;
+  machine: { id: string; name: string } | null;
   brewer: { id: string; email: string } | null;
 }
 
