@@ -1,11 +1,12 @@
 import { api } from './client';
-import type { BrewLog, LlmAnalysis, Suggestions } from './types';
+import type { BrewLog, LlmAnalysis, Mark, Suggestions } from './types';
 
 export interface BrewLogInput {
   beanId: string;
   recipeId: string | null;
   grinderId: string | null;
   machineId: string | null; // espresso only
+  marks?: Mark[]; // espresso only; PATCH replaces the list
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso
   actualYieldGrams: number | null;

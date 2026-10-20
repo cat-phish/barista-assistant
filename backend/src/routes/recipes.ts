@@ -194,8 +194,11 @@ function kindError(kind: MethodKind, r: KindCheck): string | null {
     if (r.expectedYieldGrams === null) return "expectedYieldGrams: is required for an espresso recipe (the target shot weight)";
     const i = r.steps.findIndex((step) => isWaterType(step.stepType) || step.targetWaterGrams != null);
     if (i >= 0) return `steps.${i}: espresso recipes can't have pour steps or pour-to targets`;
+    if (r.steps.filter((step) => step.stepType === "preinfusion").length > 1) return "steps: at most one preinfusion step";
     return null;
   }
+  const p = r.steps.findIndex((step) => step.stepType === "preinfusion");
+  if (p >= 0) return `steps.${p}: pre-infusion steps are for espresso recipes`;
   if (r.targetWaterGrams === null) return "targetWaterGrams: is required";
   if (r.firstDropMinSec !== null) return "firstDropMinSec: only applies to espresso recipes";
   return null;

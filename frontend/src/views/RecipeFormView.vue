@@ -2,8 +2,8 @@
 // Recipe editor (docs/api_spec.md §5): dose + water (live ratio), optional
 // expected yield / finish time / temperature, per-grinder grind starting
 // points, and typed, timed steps. Espresso methods instead take dose + target
-// shot weight (ratio dose:yield), a shot-time and first-drop window, no steps
-// yet (pre-infusion arrives with the shot timer, docs/roadmap.md phase 2c).
+// shot weight (ratio dose:yield), a shot-time and first-drop window, and an
+// optional pre-infusion time (saved as a "preinfusion" step from 0:00).
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ApiError, errorMessage } from '../api/client';
@@ -51,6 +51,7 @@ const finishFrom = ref('');
 const finishTo = ref('');
 const firstDropFrom = ref(''); // espresso only
 const firstDropTo = ref('');
+const preinfusion = ref(''); // espresso only: seconds
 const temp = ref('');
 const showOnPublicMenu = ref(true);
 const grindRows = ref<Array<{ grinderId: string; setting: string }>>([]);
@@ -83,6 +84,7 @@ const parsed = computed(() => ({
       : null,
   finish: parseFinishWindow(finishFrom.value, finishTo.value),
   firstDrop: espresso.value ? parseFinishWindow(firstDropFrom.value, firstDropTo.value, FIRST_DROP_DEFAULT_SPREAD_SEC) : ({ ok: true, value: null } as const),
+  preinfusion: espresso.value && preinfusion.value.trim() ? parseDecimal(preinfusion.value, { scale: 0, min: 1, max: 120 }) : null,
   temp: temp.value.trim() ? parseDecimal(temp.value, { scale: 1, min: 0, max: 100 }) : null,
 }));
 const stepsParsed = computed(() => parseSteps(steps.value));
@@ -117,6 +119,7 @@ const fieldErrors = computed(() => {
     expectedYield: p.expectedYield && !p.expectedYield.ok ? p.expectedYield.error : '',
     finish: p.finish.ok ? '' : p.finish.error,
     firstDrop: p.firstDrop.ok ? '' : p.firstDrop.error,
+    preinfusion: p.preinfusion && !p.preinfusion.ok ? p.preinfusion.error : '',
     temp: p.temp && !p.temp.ok ? p.temp.error : '',
   };
 });
@@ -196,7 +199,10 @@ onMounted(async () => {
     temp.value = recipe.targetTempC === null ? '' : String(recipe.targetTempC);
     showOnPublicMenu.value = recipe.showOnPublicMenu;
     grindRows.value = recipe.grindSettings.map((g) => ({ grinderId: g.grinderId, setting: g.setting }));
-    steps.value = recipe.steps.map((s) => ({
+    // Espresso's pre-infusion step has its own field.
+    const pi = recipe.steps.find((s) => s.stepType === 'preinfusion');
+    preinfusion.value = pi ? String(pi.endSec - pi.startSec) : '';
+    steps.value = recipe.steps.filter((s) => s.stepType !== 'preinfusion').map((s) => ({
       key: newStepKey(),
       stepType: s.stepType,
       label: s.label ?? '',
@@ -331,8 +337,12 @@ async function save(): Promise<void> {
     targetTempC: p.temp?.ok ? p.temp.value : null,
     showOnPublicMenu: showOnPublicMenu.value,
     grindSettings: grindRows.value.map((r) => ({ grinderId: r.grinderId, setting: r.setting.trim() })),
-    // Espresso steps (pre-infusion) come with the shot timer; pour steps don't apply.
-    steps: espresso.value ? [] : stepsParsed.value.steps,
+    // Espresso: just the pre-infusion, from the start of the shot.
+    steps: espresso.value
+      ? p.preinfusion?.ok
+        ? [{ stepType: 'preinfusion', label: null, startSec: 0, endSec: p.preinfusion.value, targetWaterGrams: null }]
+        : []
+      : stepsParsed.value.steps,
   };
   saving.value = true;
   error.value = '';
@@ -419,6 +429,12 @@ async function save(): Promise<void> {
               Use estimate ({{ formatGrams(yieldEstimate) }} g)
             </button>
           </div>
+          <div v-if="espresso" class="field">
+            <label for="preinfusion">Pre-infusion (s) <span class="muted">(optional)</span></label>
+            <input id="preinfusion" v-model="preinfusion" inputmode="numeric" placeholder="e.g. 8" :aria-invalid="submitted && !!fieldErrors.preinfusion" />
+            <span v-if="submitted && fieldErrors.preinfusion" class="field-error">{{ fieldErrors.preinfusion }}</span>
+            <span v-else class="hint">The shot timer cues it, or follows the machine.</span>
+          </div>
           <div class="field">
             <label for="temp">Water temp (°C) <span class="muted">(optional)</span></label>
             <input id="temp" v-model="temp" inputmode="decimal" placeholder="94" :aria-invalid="submitted && !!fieldErrors.temp" />
@@ -459,7 +475,7 @@ async function save(): Promise<void> {
           <span v-else-if="firstDropHint" class="hint">{{ firstDropHint }}</span>
         </fieldset>
         <p v-if="espresso && steps.length" class="note small">
-          Espresso recipes don't use timed steps yet, so this recipe's {{ steps.length }} step{{ steps.length === 1 ? '' : 's' }} will be removed when you save.
+          Espresso recipes only use a pre-infusion time, so this recipe's {{ steps.length }} other step{{ steps.length === 1 ? '' : 's' }} will be removed when you save.
         </p>
         <label class="checkbox">
           <input v-model="showOnPublicMenu" type="checkbox" />

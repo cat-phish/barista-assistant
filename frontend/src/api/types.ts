@@ -94,7 +94,14 @@ export interface FreezePeriod {
 }
 
 // docs/api_spec.md §5
-export type StepType = 'bloom' | 'pour' | 'swirl' | 'stir' | 'wait' | 'press' | 'other';
+export type StepType = 'bloom' | 'pour' | 'swirl' | 'stir' | 'wait' | 'press' | 'preinfusion' | 'other'; // preinfusion: espresso only
+
+// docs/api_spec.md §6: shot timer taps.
+export type MarkKind = 'first_drop' | 'preinfusion_end';
+export interface Mark {
+  kind: MarkKind;
+  atSec: number; // seconds from the start, 0.1 s
+}
 
 export interface RecipeStep {
   id: string;
@@ -163,6 +170,7 @@ export interface BrewLog {
   recipe: { id: string; name: string; expectedYieldGrams: number | null; methodKind: MethodKind } | null;
   grinder: { id: string; name: string } | null;
   machine: { id: string; name: string } | null;
+  marks: Mark[]; // earliest first; espresso only
   brewer: { id: string; email: string } | null;
 }
 

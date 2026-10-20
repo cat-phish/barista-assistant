@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { beanFreezes, beans, brewLogs, brewMethods, grinders, llmAnalyses, machines, recipeGrindSettings, recipes, recipeSteps, users, workspaces } from "@barista/shared/schema";
+import { beanFreezes, beans, brewLogMarks, brewLogs, brewMethods, grinders, llmAnalyses, machines, recipeGrindSettings, recipes, recipeSteps, users, workspaces } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BrewContext } from "../src/context.js";
@@ -86,11 +86,17 @@ describe("processBrewAnalysis", () => {
     const machineId = randomUUID();
     await db.insert(machines).values({ id: machineId, workspaceId, name: "Linea Mini", preinfusion: "manual", flowControl: "manual" });
     await db.insert(brewLogs).values({ id, workspaceId, userId, beanId, recipeId, machineId, timestamp: new Date("2026-10-09T09:00:00Z"), actualDoseGrams: 18, actualYieldGrams: 40, actualTimeSec: 27 });
+    await db.insert(brewLogMarks).values([
+      { id: randomUUID(), brewLogId: id, kind: "first_drop", atSec: 7.4 },
+      { id: randomUUID(), brewLogId: id, kind: "preinfusion_end", atSec: 6 },
+    ]);
 
     await processBrewAnalysis({ brewLogId: id });
     const context = llm.mock.calls[0]![0] as BrewContext;
     expect(context.brew).toMatchObject({ methodKind: "espresso", actualWaterGrams: null, actualYieldGrams: 40, brewRatio: 2.22 });
     expect(context.brew.machine).toEqual({ name: "Linea Mini", preinfusion: "manual", flowControl: "manual", pressureControl: "none" });
+    expect(context.brew.marks).toEqual([{ kind: "preinfusion_end", atSec: 6 }, { kind: "first_drop", atSec: 7.4 }]);
+    expect(context.previousBrews[0]?.marks).toEqual([]);
     expect(context.recipe).toMatchObject({ methodKind: "espresso", targetWaterGrams: null, expectedYieldGrams: 36, firstDropMinSec: 6, firstDropMaxSec: 9 });
   });
 

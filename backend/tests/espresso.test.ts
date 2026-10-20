@@ -136,3 +136,45 @@ describe("espresso brew logs", () => {
     expect((await owner.agent.patch(`${base}/${log}`).send({ recipeId: null })).status).toBe(200);
   });
 });
+
+describe("pre-infusion steps and shot marks", () => {
+  it("pre-infusion steps are espresso-only, at most one", async () => {
+    const { owner, ws, v60, espresso } = await setup();
+    const base = `/api/workspaces/${ws.id}/recipes`;
+    const pi = { stepType: "preinfusion", startSec: 0, endSec: 8 };
+    const ok = await owner.agent.post(base).send(shot(espresso, { steps: [pi] }));
+    expect(ok.body.recipe.steps).toMatchObject([{ stepType: "preinfusion", startSec: 0, endSec: 8, targetWaterGrams: null }]);
+    expect((await owner.agent.post(base).send(shot(espresso, { steps: [pi, { ...pi, startSec: 8, endSec: 10 }] }))).body.error).toMatch(/at most one/);
+    const filter = { name: "F", methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250, steps: [pi] };
+    expect((await owner.agent.post(base).send(filter)).body.error).toMatch(/espresso recipes/);
+  });
+
+  it("espresso logs save marks (earliest first); PATCH replaces them; other brews can't have them", async () => {
+    const { owner, ws, v60, espresso } = await setup();
+    const bean = await newBean(owner, ws.id);
+    const recipes = `/api/workspaces/${ws.id}/recipes`;
+    const recipe = (await owner.agent.post(recipes).send(shot(espresso))).body.recipe.id as string;
+    const base = `/api/workspaces/${ws.id}/brew-logs`;
+    const log = { beanId: bean, recipeId: recipe, actualDoseGrams: 18, actualYieldGrams: 36, actualTimeSec: 28 };
+
+    const created = await owner.agent.post(base).send({ ...log, marks: [{ kind: "first_drop", atSec: 7.4 }, { kind: "preinfusion_end", atSec: 6 }] });
+    expect(created.status).toBe(201);
+    expect(created.body.brewLog.marks).toEqual([{ kind: "preinfusion_end", atSec: 6 }, { kind: "first_drop", atSec: 7.4 }]);
+    const id = created.body.brewLog.id as string;
+    expect((await owner.agent.get(`${base}/${id}`)).body.brewLog.marks).toHaveLength(2);
+
+    expect((await owner.agent.post(base).send({ ...log, marks: [{ kind: "first_drop", atSec: 7 }, { kind: "first_drop", atSec: 8 }] })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ ...log, marks: [{ kind: "first_drop", atSec: 30 }] })).body.error).toMatch(/within actualTimeSec/);
+    expect((await owner.agent.post(base).send({ ...log, marks: [{ kind: "first_drop", atSec: 7.25 }] })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ ...log, marks: [{ kind: "crema", atSec: 7 }] })).status).toBe(400);
+
+    expect((await owner.agent.patch(`${base}/${id}`).send({ marks: [{ kind: "first_drop", atSec: 8 }] })).body.brewLog.marks).toEqual([{ kind: "first_drop", atSec: 8 }]);
+    expect((await owner.agent.patch(`${base}/${id}`).send({ actualTimeSec: 5 })).body.error).toMatch(/within actualTimeSec/);
+    expect((await owner.agent.patch(`${base}/${id}`).send({ tastingNotes: "Sweet" })).body.brewLog.marks).toHaveLength(1);
+    expect((await owner.agent.patch(`${base}/${id}`).send({ marks: [] })).body.brewLog.marks).toEqual([]);
+
+    const filter = (await owner.agent.post(recipes).send({ name: "F", methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250 })).body.recipe.id;
+    const filterLog = { beanId: bean, recipeId: filter, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150, marks: [{ kind: "first_drop", atSec: 7 }] };
+    expect((await owner.agent.post(base).send(filterLog)).body.error).toMatch(/only espresso brews record marks/);
+  });
+});

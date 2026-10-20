@@ -10,9 +10,12 @@ export const STEP_TYPES: Record<StepType, { label: string; water: 'required' | '
   stir: { label: 'Stir', water: 'none' },
   wait: { label: 'Wait / drawdown', water: 'none' },
   press: { label: 'Press', water: 'none' },
+  preinfusion: { label: 'Pre-infusion', water: 'none' },
   other: { label: 'Other', water: 'optional' },
 };
-export const STEP_TYPE_ORDER = Object.keys(STEP_TYPES) as StepType[];
+// The pour-over/immersion step picker: pre-infusion is espresso only (set
+// with its own field in the recipe form).
+export const STEP_TYPE_ORDER = (Object.keys(STEP_TYPES) as StepType[]).filter((t) => t !== 'preinfusion');
 
 export function stepTitle(step: { stepType: StepType; label: string | null }): string {
   return step.label?.trim() || STEP_TYPES[step.stepType].label;

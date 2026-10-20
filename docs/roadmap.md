@@ -37,7 +37,7 @@ plan and the decisions behind it.
 
 Built in steps on `feature-espresso`: **2a** method kinds + espresso recipes
 and logs (built); **2b** machines + equipment screens (built); **2c** shot
-timer + marks + AI.
+timer + marks + AI (built).
 
 - Methods get a `kind`: `pour_over`, `immersion`, `espresso`. The kind picks
   the recipe fields, step types and timer behaviour.

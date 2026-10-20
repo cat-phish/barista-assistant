@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, count, desc, eq, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, type SQL } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireMembership, WRITE_ROLES, type Role } from "../auth/membership.js";
@@ -8,6 +8,7 @@ import { parseBody, parseQuery, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import {
   beans,
+  brewLogMarks,
   brewLogs,
   brewMethods,
   grinders,
@@ -18,6 +19,8 @@ import {
   type Bean,
   type BrewLog,
   type LlmAnalysis,
+  MARK_KINDS,
+  type MarkKind,
   type MethodKind,
   type Recipe,
 } from "@barista/shared/schema";
@@ -28,6 +31,7 @@ export interface BrewLogDetails extends BrewLog {
   recipe: (Pick<Recipe, "id" | "name" | "expectedYieldGrams"> & { methodKind: MethodKind }) | null;
   grinder: { id: string; name: string } | null; // retired grinders included
   machine: { id: string; name: string } | null; // espresso only; retired included
+  marks: Array<{ kind: MarkKind; atSec: number }>; // shot timer taps, earliest first
   // Null when the brewer deleted their account (the log is kept).
   brewer: { id: string; email: string } | null;
 }
@@ -76,6 +80,12 @@ const brewLogFields = {
   actualTimeSec: z.number().int().min(0).max(24 * 60 * 60),
   rating: z.number().int().min(1).max(5).nullable().optional(),
   tastingNotes: optionalText(5000),
+  // Shot timer taps (espresso only), at most one of each kind.
+  marks: z
+    .array(z.object({ kind: z.enum(MARK_KINDS), atSec: decimalSchema({ min: 0, max: 24 * 60 * 60, scale: 1 }) }).strict())
+    .max(MARK_KINDS.length)
+    .refine((list) => new Set(list.map((m) => m.kind)).size === list.length, "at most one mark of each kind")
+    .optional(),
 };
 
 const createBrewLogSchema = z.object(brewLogFields);
@@ -95,14 +105,22 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 // or null without a recipe.
 function espressoError(
   kind: MethodKind | null,
-  log: { actualWaterGrams: number | null; actualYieldGrams: number | null; machineId: string | null }
+  log: {
+    actualWaterGrams: number | null;
+    actualYieldGrams: number | null;
+    machineId: string | null;
+    actualTimeSec: number;
+    marks: ReadonlyArray<{ atSec: number }>;
+  }
 ): string | null {
+  if (log.marks.some((m) => m.atSec > log.actualTimeSec)) return "marks: must be within actualTimeSec";
   if (kind === "espresso") {
     if (log.actualWaterGrams !== null) return "actualWaterGrams: must be null for an espresso brew";
     if (log.actualYieldGrams === null) return "actualYieldGrams: is required for an espresso brew (the shot weight)";
     return null;
   }
   if (log.machineId !== null) return "machineId: only espresso brews record a machine";
+  if (log.marks.length > 0) return "marks: only espresso brews record marks";
   return log.actualWaterGrams === null ? "actualWaterGrams: is required" : null;
 }
 
@@ -200,11 +218,30 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
     .orderBy(desc(brewLogs.timestamp), desc(brewLogs.id))
     .limit(limit)
     .offset(offset);
+  const marks = await marksFor(rows.map((r) => r.id));
   // A recipe always has a method (inner FK), so its kind is set whenever recipe is.
   return rows.map(({ recipeMethodKind, recipe, ...row }) => ({
     ...row,
     recipe: recipe && recipeMethodKind ? { ...recipe, methodKind: recipeMethodKind } : null,
+    marks: marks.get(row.id) ?? [],
   }));
+}
+
+async function marksFor(brewLogIds: string[]): Promise<Map<string, BrewLogDetails["marks"]>> {
+  const byLog = new Map<string, BrewLogDetails["marks"]>();
+  if (brewLogIds.length === 0) return byLog;
+  const rows = await db
+    .select({ brewLogId: brewLogMarks.brewLogId, kind: brewLogMarks.kind, atSec: brewLogMarks.atSec })
+    .from(brewLogMarks)
+    .where(inArray(brewLogMarks.brewLogId, brewLogIds))
+    .orderBy(asc(brewLogMarks.atSec));
+  for (const { brewLogId, ...mark } of rows) byLog.set(brewLogId, [...(byLog.get(brewLogId) ?? []), mark]);
+  return byLog;
+}
+
+async function insertMarks(tx: Tx, brewLogId: string, marks: ReadonlyArray<{ kind: MarkKind; atSec: number }>): Promise<void> {
+  if (marks.length === 0) return;
+  await tx.insert(brewLogMarks).values(marks.map((m) => ({ id: randomUUID(), brewLogId, ...m })));
 }
 
 function logInWorkspace(params: BrewLogParams): SQL | undefined {
@@ -275,14 +312,18 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Bre
   const refError = await db.transaction(async (tx) => {
     const error = await referencesInWorkspace(tx, workspaceId, body);
     if (error) return error;
-    const kind = body.recipeId ? await recipeKind(tx, body.recipeId) : null;
+    const { marks = [], ...fields } = body;
+    const kind = fields.recipeId ? await recipeKind(tx, fields.recipeId) : null;
     const wrongForKind = espressoError(kind, {
-      actualWaterGrams: body.actualWaterGrams ?? null,
-      actualYieldGrams: body.actualYieldGrams ?? null,
-      machineId: body.machineId ?? null,
+      actualWaterGrams: fields.actualWaterGrams ?? null,
+      actualYieldGrams: fields.actualYieldGrams ?? null,
+      machineId: fields.machineId ?? null,
+      actualTimeSec: fields.actualTimeSec,
+      marks,
     });
     if (wrongForKind) return wrongForKind;
-    await tx.insert(brewLogs).values({ id, workspaceId, userId, ...body });
+    await tx.insert(brewLogs).values({ id, workspaceId, userId, ...fields });
+    await insertMarks(tx, id, marks);
     return null;
   });
 
@@ -317,6 +358,7 @@ brewLogsRouter.patch(
           actualWaterGrams: brewLogs.actualWaterGrams,
           actualYieldGrams: brewLogs.actualYieldGrams,
           machineId: brewLogs.machineId,
+          actualTimeSec: brewLogs.actualTimeSec,
         })
         .from(brewLogs)
         .where(logInWorkspace(req.params))
@@ -329,18 +371,29 @@ brewLogsRouter.patch(
 
       // Only when the change touches it, so old logs whose recipe later moved
       // to another method can still be edited (docs/api_spec.md §6).
-      if ("recipeId" in body || "actualWaterGrams" in body || "actualYieldGrams" in body || "machineId" in body) {
-        const after = { ...log, ...body };
+      const { marks, ...fields } = body;
+      const touched = ["recipeId", "actualWaterGrams", "actualYieldGrams", "machineId", "marks", "actualTimeSec"];
+      if (touched.some((key) => key in body)) {
+        const after = { ...log, ...fields };
         const kind = after.recipeId ? await recipeKind(tx, after.recipeId) : null;
         const wrongForKind = espressoError(kind, {
           actualWaterGrams: after.actualWaterGrams ?? null,
           actualYieldGrams: after.actualYieldGrams ?? null,
           machineId: after.machineId ?? null,
+          actualTimeSec: after.actualTimeSec,
+          marks:
+            marks ??
+            (await tx.select({ atSec: brewLogMarks.atSec }).from(brewLogMarks).where(eq(brewLogMarks.brewLogId, brewLogId))),
         });
         if (wrongForKind) return { status: "bad_ref", error: wrongForKind } as const;
       }
 
-      await tx.update(brewLogs).set(body).where(eq(brewLogs.id, brewLogId));
+      if (Object.keys(fields).length > 0) await tx.update(brewLogs).set(fields).where(eq(brewLogs.id, brewLogId));
+      // A sent list replaces the old one entirely.
+      if (marks) {
+        await tx.delete(brewLogMarks).where(eq(brewLogMarks.brewLogId, brewLogId));
+        await insertMarks(tx, brewLogId, marks);
+      }
       return { status: "updated" } as const;
     });
 

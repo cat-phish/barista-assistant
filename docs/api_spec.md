@@ -543,7 +543,7 @@ new kind needs):
 | `expectedYieldGrams` | optional estimate | **required**: target shot weight; ratio is dose:yield (18 g → 36 g = 1:2) |
 | finish window | total brew time | total shot time |
 | `firstDropMinSec`/`MaxSec` | must be absent/`null` | optional window (pair, ±3 s default) |
-| steps | any | no `bloom`/`pour` steps and no `targetWaterGrams` |
+| steps | any except `preinfusion` | at most one `preinfusion` step; no `bloom`/`pour` steps and no `targetWaterGrams` |
 
 Recipes are grinder-neutral: instead of one grind setting they carry
 **approximate starting points per grinder** (`grindSettings`). The brew flow
@@ -565,6 +565,7 @@ difference from the previous water step, next to it).
 | `stir` | Stir the slurry | must be absent/`null` |
 | `wait` | Wait / drawdown | must be absent/`null` |
 | `press` | Press / plunge (AeroPress, French press) | must be absent/`null` |
+| `preinfusion` | Espresso only: low-pressure pre-infusion from `startSec` to `endSec` | must be absent/`null` |
 | `other` | Anything else; give it a `label` | optional |
 
 **Recipe object** (every endpoint below returns this shape):
@@ -716,6 +717,7 @@ created it and can't be changed.
   "recipe": { "id": "uuid", "name": "House V60", "expectedYieldGrams": 220, "methodKind": "pour_over" },
   "grinder": { "id": "uuid", "name": "Comandante C40" },
   "machine": null,
+  "marks": [],
   "brewer": { "id": "uuid", "email": "barista@example.com" }
 }
 ```
@@ -726,7 +728,9 @@ target, for espresso), for comparing with the measured `actualYieldGrams`, and
 `methodKind` is its method's kind. `grinder` is
 `null` when no grinder was recorded; a retired
 grinder still appears here. `machine` (`{ "id", "name" }`, retired ones
-included) is set only for espresso brews that recorded one. `userId` and `brewer` are `null` when the brewer deleted their
+included) is set only for espresso brews that recorded one. `marks` lists
+the shot timer's taps (`{ "kind", "atSec" }`), earliest first; always `[]`
+for other brews. `userId` and `brewer` are `null` when the brewer deleted their
 account. Such logs can only be edited or deleted by owners.
 
 ### `GET /api/workspaces/:workspaceId/brew-logs`
@@ -770,6 +774,11 @@ account. Such logs can only be edited or deleted by owners.
     `actualWaterGrams`, except for **espresso**: when `recipeId` is an
     espresso recipe, `actualWaterGrams` must be absent/`null` and
     `actualYieldGrams` (the shot weight) is required.
+  - `marks` (optional, default `[]`): taps recorded by the shot timer,
+    `[{ "kind": "first_drop", "atSec": 7.4 }]`. `kind` is one of `MARK_KINDS`
+    (`first_drop`, `preinfusion_end`), at most one of each; `atSec` is
+    0–`actualTimeSec` with at most 1 decimal. Espresso brews only (like
+    `machineId`).
   - `machineId` (optional, nullable; a machine in this workspace, retired
     accepted) only for espresso brews: with any other recipe, or none, it
     must be absent/`null`.
@@ -798,10 +807,12 @@ account. Such logs can only be edited or deleted by owners.
 
 - **Auth Required:** `true` (owner, or the barista who created it)
 - **Body:** any non-empty subset of the `POST` fields, with the same rules.
-  Unknown fields are rejected. The espresso rule is checked against the log
+  Unknown fields are rejected. `marks`, if present, replaces the whole list
+  (`[]` clears it). The espresso rule is checked against the log
   (and the machine rule) are checked against the log as it is after the
   change, but only when the request sends `recipeId`, `actualWaterGrams`,
-  `actualYieldGrams` or `machineId` (so editing the notes of an old log
+  `actualYieldGrams`, `machineId` or `marks` (marks must also fit within
+  `actualTimeSec`) (so editing the notes of an old log
   whose recipe later moved to another method still works).
 - **Success (`200 OK`):** `{ "brewLog": { ...brewLog } }`
 - **Errors:** `400` invalid or empty body, or `beanId`/`recipeId` not in this
@@ -970,7 +981,8 @@ queue:
      power), so the LLM knows which grinder a grind setting refers to, doesn't
      compare settings across different grinders, and can talk in steps.
    - Espresso brews include their `machine` (or `null`): name and
-     capabilities (pre-infusion, flow and pressure control).
+     capabilities (pre-infusion, flow and pressure control), and their
+     `marks` (first drop, end of a manual pre-infusion), each `{ kind, atSec }`.
    - Each brew includes its recipe's `methodKind` (or `null` without a
      recipe), `actualWaterGrams` (`null` for espresso), the measured
      `actualYieldGrams` (or `null`) and `brewRatio`: water ÷ dose, or for
@@ -985,8 +997,11 @@ queue:
 > "You are an expert specialty coffee roaster and barista. Analyze the provided
 > extraction log and historical brews for this coffee bean, including roast
 > level, roast age, dose, yield, total brew time, rating, and tasting notes. Suggest
-> concrete parameter adjustments for the next brew. Respond strictly matching
-> the provided JSON schema."
+> concrete parameter adjustments for the next brew. For espresso, judge flow
+> from the first drop time, shot time and ratio against the recipe's
+> windows, and consider the machine's capabilities (pre-infusion, flow and
+> pressure control) and the grinder's step size when explaining the change.
+> Respond strictly matching the provided JSON schema."
 
 **Strict JSON Schema** (sent as-is; no `$schema` key, which strict mode does
 not need):

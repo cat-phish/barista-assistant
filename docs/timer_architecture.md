@@ -72,6 +72,17 @@ export default defineConfig({
     *   **Current** has the same structure in every phase (step, wait, finishing) and a fixed minimum height, so the layout doesn't jump: a label line, a title, two values (left/right) and a progress bar. Step: "Pour to" / "Until", on a warm brand-tint background; wait: "Next step" (muted, since it repeats Up next) / "Starts at", on plain white; finishing: "Last step ended" / "Target finish".
     *   **Progress bar:** a step runs from its start to its end (or the ~2 s display of an instant step); a wait runs from the previous step's end to the next step's start; finishing runs to the end of the target window, or stays full if there is none.
 
+### Shot timer (`ShotTimer.vue`, espresso recipes)
+Same clock mechanics (delta timestamps, rAF loop, wake lock) and the same layout rules (Cancel above, buttons under the clock, consistent cards, everything visible on a 390×844 phone), with espresso content:
+*   **Header:** recipe name, bean, "18 g → 36 g" (batch dose and target shot weight). The clock shows the target shot-time window note.
+*   **First drop:** a large **First drop** button while running; one tap records a `first_drop` mark (elapsed seconds, 0.1 s). The card shows the target window and then the recorded time with "early" / "in the window" / "late" (or just the time without a window). Before the tap and past the window's end it says "Watching for first drop · window passed".
+*   **Pre-infusion** (if the recipe has a `preinfusion` step), driven by the machine's `preinfusion` capability (`docs/api_spec.md` §3c):
+    *   `automatic`: runs on the clock with a progress bar; nothing to tap.
+    *   `manual`, or no machine chosen: counts down to the step's end ("Full pressure in 0:03"), then cues **Full pressure now** (highlighted). A **Full pressure** button records a `preinfusion_end` mark whenever it's tapped.
+    *   `none`: greyed out, "This machine has no pre-infusion", so the recipe still works.
+*   **Finish & Save** emits the elapsed seconds and the marks; the log form shows the marks, and they're saved with the brew.
+*   Logic lives in `lib/shot.ts` (`shotState`), unit-tested like `timerPhase`.
+
 ### Reference Component Implementation (`frontend/src/components/PourOverTimer.vue`)
 
 ```vue

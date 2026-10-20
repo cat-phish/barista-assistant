@@ -1,6 +1,7 @@
 import {
   beanFreezes,
   beans,
+  brewLogMarks,
   brewLogs,
   brewMethods,
   grinders,
@@ -12,9 +13,10 @@ import {
   type BrewLog,
   type Grinder,
   type Machine,
+  type MarkKind,
   type MethodKind,
 } from "@barista/shared/schema";
-import { and, asc, desc, eq, lt, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, ne } from "drizzle-orm";
 import { db } from "./db.js";
 import { effectiveRoastAge, type FreezePeriodLike } from "./roastAge.js";
 
@@ -38,6 +40,8 @@ export interface BrewSummary {
   // The grind setting only means something for this grinder (docs/api_spec.md §9).
   grinder: GrinderInfo | null;
   machine: MachineInfo | null; // espresso only
+  // Shot timer taps, earliest first (espresso): first drop, end of manual pre-infusion.
+  marks: Array<{ kind: MarkKind; atSec: number }>;
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso
   actualYieldGrams: number | null; // measured beverage weight (shot weight for espresso)
@@ -95,7 +99,12 @@ function ratio(brew: BrewLog): number | null {
   return out === null ? null : Math.round((out / brew.actualDoseGrams) * 100) / 100;
 }
 
-function summarize(brew: BrewRow, roastDate: Date | null, freezes: readonly FreezePeriodLike[]): BrewSummary {
+function summarize(
+  brew: BrewRow,
+  roastDate: Date | null,
+  freezes: readonly FreezePeriodLike[],
+  marks: ReadonlyMap<string, BrewSummary["marks"]>
+): BrewSummary {
   const age = roastDate
     ? effectiveRoastAge(roastDate.toISOString(), freezes, brew.timestamp.toISOString().slice(0, 10))
     : null;
@@ -107,6 +116,7 @@ function summarize(brew: BrewRow, roastDate: Date | null, freezes: readonly Free
     methodKind: brew.methodKind,
     grinder: brew.grinder,
     machine: brew.machine,
+    marks: marks.get(brew.id) ?? [],
     actualDoseGrams: brew.actualDoseGrams,
     actualWaterGrams: brew.actualWaterGrams,
     actualYieldGrams: brew.actualYieldGrams,
@@ -117,6 +127,17 @@ function summarize(brew: BrewRow, roastDate: Date | null, freezes: readonly Free
     rating: brew.rating,
     tastingNotes: brew.tastingNotes,
   };
+}
+
+async function marksFor(brewLogIds: string[]): Promise<Map<string, BrewSummary["marks"]>> {
+  const rows = await db
+    .select({ brewLogId: brewLogMarks.brewLogId, kind: brewLogMarks.kind, atSec: brewLogMarks.atSec })
+    .from(brewLogMarks)
+    .where(inArray(brewLogMarks.brewLogId, brewLogIds))
+    .orderBy(asc(brewLogMarks.atSec));
+  const byLog = new Map<string, BrewSummary["marks"]>();
+  for (const { brewLogId, ...mark } of rows) byLog.set(brewLogId, [...(byLog.get(brewLogId) ?? []), mark]);
+  return byLog;
 }
 
 function withJoins({ brew, ...joins }: { brew: BrewLog } & BrewJoins): BrewRow {
@@ -173,6 +194,9 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
     db.select({ frozenOn: beanFreezes.frozenOn, thawedOn: beanFreezes.thawedOn }).from(beanFreezes).where(eq(beanFreezes.beanId, brew.beanId)),
   ]);
 
+  const previousRows = previous.map(withJoins);
+  const marks = await marksFor([brew.id, ...previousRows.map((p) => p.id)]);
+
   return {
     bean: {
       roasterName: bean.roasterName,
@@ -182,8 +206,8 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
       roastDate: bean.roastDate ? bean.roastDate.toISOString().slice(0, 10) : null,
     },
     recipe,
-    brew: summarize(brew, bean.roastDate, freezes),
-    previousBrews: previous.map((p) => summarize(withJoins(p), bean.roastDate, freezes)),
+    brew: summarize(brew, bean.roastDate, freezes, marks),
+    previousBrews: previousRows.map((p) => summarize(p, bean.roastDate, freezes, marks)),
     ratingScale: "1-5",
   };
 }

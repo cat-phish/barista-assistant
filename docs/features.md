@@ -39,8 +39,8 @@ One **Equipment** section with three tabs:
   dragged to reorder (re-timed to fit) and inserted between others.
 - **Grind starting points** per grinder.
 - **Espresso recipes:** dose and target shot weight (ratio 1:2 style), target
-  shot time and first-drop windows, temperature. No water and no timed steps
-  yet (pre-infusion comes with the shot timer).
+  shot time and first-drop windows, temperature and an optional pre-infusion
+  time. No water.
 
 ## Brewing
 - **Setup:** pick bean, recipe and grinder. The grind pre-fills from your
@@ -53,9 +53,14 @@ One **Equipment** section with three tabs:
   dose than the recipe suggests a coarser or finer grind. "Reset to recipe"
   undoes it all.
 - **Espresso shots:** the same setup shows dose, ratio and shot weight
-  instead; typing any one updates the others. "Start shot timer" runs the
-  timer with the shot-time window, and the log asks for the shot weight
-  (compared with the target) and shot time instead of water.
+  instead; typing any one updates the others, plus the machine.
+- **Shot timer:** a big **First drop** button (judged against the recipe's
+  window: early / in the window / late), and pre-infusion that follows the
+  machine: it runs by itself on automatic machines; on manual ones (or with
+  no machine chosen) it counts down to **Full pressure now** and a tap
+  records when you opened up; machines without pre-infusion skip it. The
+  taps are saved with the shot, shown in the journal and sent to the AI. The
+  log asks for the shot weight (compared with the target) and shot time.
 - **Yield estimate:** water − retention × dose. Retention comes from your
   measured brews of this bean with this recipe (median), else the recipe's
   expected yield adjusted for the bean's roast, else a roast-level default.
@@ -74,7 +79,7 @@ One **Equipment** section with three tabs:
   asks the LLM for grind and temperature changes with reasoning, shown next
   time you brew that bean. It sees the bean's roast level and age, the
   recipe, your previous brews of that bean, the grinder's details and, for
-  espresso, the machine's capabilities.
+  espresso, the machine's capabilities and the shot timer's taps.
 
 ## Public menu
 - An optional public page per workspace listing beans and recipes marked as

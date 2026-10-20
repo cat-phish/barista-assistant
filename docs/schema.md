@@ -252,7 +252,8 @@ export const recipeGrindSettings = mysqlTable(
 // Each step runs from startSec to endSec (seconds from the start of the brew);
 // gaps between steps are waiting time. stepType is one of RECIPE_STEP_TYPES.
 // Water types (bloom, pour) carry a cumulative "pour to" scale target.
-export const RECIPE_STEP_TYPES = ["bloom", "pour", "swirl", "stir", "wait", "press", "other"] as const;
+// "preinfusion" is for espresso recipes only (docs/api_spec.md §5).
+export const RECIPE_STEP_TYPES = ["bloom", "pour", "swirl", "stir", "wait", "press", "preinfusion", "other"] as const;
 export const WATER_STEP_TYPES = ["bloom", "pour"] as const;
 
 export const recipeSteps = mysqlTable("recipe_steps", {
@@ -307,6 +308,21 @@ export const brewLogs = mysqlTable("brew_logs", {
   actualTimeSec: int("actual_time_sec").notNull(),
   rating: int("rating"), // 1-5 or 1-100 scale
   tastingNotes: text("tasting_notes"),
+});
+
+// 8b. Brew Log Marks (Tapped Events During a Brew)
+// The shot timer records taps with the second they happened (docs/api_spec.md
+// §6): when the first drop appeared, when a manual pre-infusion ended. A
+// fixed list of kinds, at most one of each per log for now.
+export const MARK_KINDS = ["first_drop", "preinfusion_end"] as const;
+export type MarkKind = (typeof MARK_KINDS)[number];
+export const brewLogMarks = mysqlTable("brew_log_marks", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  brewLogId: varchar("brew_log_id", { length: 36 })
+    .notNull()
+    .references(() => brewLogs.id, { onDelete: "cascade" }),
+  kind: varchar("kind", { length: 30 }).$type<MarkKind>().notNull(),
+  atSec: decimal("at_sec", { precision: 6, scale: 1, mode: "number" }).notNull(), // seconds from the start, 0.1 s
 });
 
 // 9. LLM Analyses (AI Parameter Suggestions)

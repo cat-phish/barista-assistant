@@ -12,10 +12,12 @@ import type { Bean, Recipe } from '../api/types';
 import AnalysisCard from '../components/AnalysisCard.vue';
 import { grindersApi } from '../api/grinders';
 import { machinesApi } from '../api/machines';
-import type { Grinder, Machine } from '../api/types';
+import type { Grinder, Machine, Mark } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import BrewFields from '../components/BrewFields.vue';
 import PourOverTimer from '../components/PourOverTimer.vue';
+import ShotTimer from '../components/ShotTimer.vue';
+import { formatMark, shotPlan } from '../lib/shot';
 import { useAnalysis } from '../composables/useAnalysis';
 import { emptyDraft, parseBrewDraft } from '../lib/brewDraft';
 import { formatDay, formatDoseLine, formatGrams, formatTime } from '../lib/format';
@@ -317,17 +319,26 @@ const timerDose = computed(() => (espresso.value ? shot.value?.dose : batch.valu
 // What the log form compares the measured yield / shot weight with.
 const expectedYield = computed(() => (espresso.value ? shot.value?.yield : batch.value?.yield) ?? recipe.value?.expectedYieldGrams ?? null);
 
+// Espresso: the shot timer's plan (pre-infusion, first-drop window), the
+// chosen machine's pre-infusion capability, and the taps it records.
+const plan = computed(() => (recipe.value ? shotPlan(recipe.value) : null));
+const machinePreinfusion = computed(() => machines.value.find((x) => x.id === draft.machineId)?.preinfusion ?? null);
+const marks = ref<Mark[]>([]);
+const MARK_LABELS = { first_drop: 'First drop', preinfusion_end: 'Full pressure' } as const;
+
 // An unfinished "add a new grinder" counts as no grinder once setup is done.
 function leaveSetup(next: Stage): void {
   if (draft.grinderId === NEW_GRINDER) draft.grinderId = '';
+  marks.value = [];
   stage.value = next;
 }
 function logWithoutTimer(): void {
   draft.time = '';
   leaveSetup('log');
 }
-function onTimerComplete(seconds: number): void {
+function onTimerComplete(seconds: number, shotMarks: Mark[] = []): void {
   draft.time = formatTime(seconds);
+  marks.value = shotMarks;
   stage.value = 'log';
 }
 
@@ -348,7 +359,13 @@ async function save(): Promise<void> {
   saving.value = true;
   saveError.value = '';
   try {
-    const { brewLog } = await brewLogsApi.create(ws, { beanId: bean.value.id, recipeId: recipe.value?.id ?? null, ...values });
+    const { brewLog } = await brewLogsApi.create(ws, {
+      beanId: bean.value.id,
+      recipeId: recipe.value?.id ?? null,
+      ...values,
+      // The shot timer's taps; a time typed shorter than a tap drops it.
+      marks: espresso.value ? marks.value.filter((m) => m.atSec <= values.actualTimeSec) : [],
+    });
     if (values.grinderId) remember('grinderId', values.grinderId);
     if (values.machineId) remember('machineId', values.machineId);
     savedLogId.value = brewLog.id;
@@ -445,7 +462,8 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         <p v-if="recipe" class="muted recipe-summary">
           {{ formatDoseLine(recipe.targetDoseGrams, recipe.targetWaterGrams, recipe.expectedYieldGrams) }}
           <template v-if="recipe.targetTempC !== null"> · {{ recipe.targetTempC }} °C</template>
-          <template v-if="recipe.steps.length"> · {{ recipe.steps.length }} steps</template>
+          <template v-if="espresso && plan?.preinfusion"> · pre-infusion {{ plan.preinfusion.end - plan.preinfusion.start }} s</template>
+          <template v-else-if="!espresso && recipe.steps.length"> · {{ recipe.steps.length }} steps</template>
         </p>
         <div v-if="shotRecipe" class="batch" role="group" aria-labelledby="shot-label">
           <span id="shot-label" class="batch-label">Shot</span>
@@ -566,7 +584,20 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
     <!-- 2. Timer -->
     <template v-else-if="stage === 'timing'">
       <button class="btn-link cancel" type="button" @click="stage = 'setup'">← Cancel brew</button>
+      <ShotTimer
+        v-if="espresso && shot && plan && recipe"
+        :recipe-name="recipe.name"
+        :bean-name="beanLabel"
+        :dose="shot.dose"
+        :target-yield="shot.yield"
+        :expected-finish-min-sec="recipe.expectedFinishMinSec"
+        :expected-finish-max-sec="recipe.expectedFinishMaxSec"
+        :plan="plan"
+        :machine-preinfusion="machinePreinfusion"
+        @complete="onTimerComplete"
+      />
       <PourOverTimer
+        v-else
         :recipe-name="recipe?.name ?? 'Brew'"
         :bean-name="beanLabel"
         :target-dose="timerDose"
@@ -582,6 +613,9 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       <h1>How was it?</h1>
       <p class="muted">{{ beanLabel }}<template v-if="recipe"> · {{ recipe.name }}</template></p>
       <section class="card">
+        <p v-if="marks.length" class="muted small marks-line">
+          {{ marks.map((m) => `${MARK_LABELS[m.kind]} ${formatMark(m.atSec)}`).join(' · ') }}
+        </p>
         <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="expectedYield" :espresso="espresso" :machines="machines" />
       </section>
       <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>

@@ -18,6 +18,7 @@ import { formatDoseLine, formatGrams, formatTime, formatWhen } from '../lib/form
 import { canModifyBrewLog } from '../lib/permissions';
 import { useAuthStore } from '../stores/auth';
 import { useWorkspaceStore } from '../stores/workspace';
+import { formatMark } from '../lib/shot';
 
 const props = defineProps<{ id: string }>();
 
@@ -123,6 +124,7 @@ async function remove(): Promise<void> {
     deleting.value = false;
   }
 }
+const MARK_LABELS = { first_drop: 'First drop', preinfusion_end: 'Full pressure' } as const;
 </script>
 
 <template>
@@ -149,6 +151,7 @@ async function remove(): Promise<void> {
           <div><dt>Water</dt><dd>{{ log.actualTempC !== null ? `${log.actualTempC} °C` : '–' }}</dd></div>
           <div><dt>Grind</dt><dd>{{ log.actualGrindSetting ?? '–' }}<template v-if="log.grinder"> · {{ log.grinder.name }}</template></dd></div>
           <div v-if="espresso"><dt>Machine</dt><dd>{{ log.machine?.name ?? '–' }}</dd></div>
+          <div v-for="m in log.marks" :key="m.kind"><dt>{{ MARK_LABELS[m.kind] }}</dt><dd>{{ formatMark(m.atSec) }}</dd></div>
           <div><dt>Rating</dt><dd><RatingStars :rating="log.rating" /></dd></div>
           <div><dt>Brewed by</dt><dd>{{ log.brewer?.email ?? 'Deleted user' }}</dd></div>
         </dl>
