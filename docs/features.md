@@ -32,6 +32,9 @@ One **Equipment** section with three tabs:
   deleting is refused while recipes or drinks use it.
 
 ## Recipes
+- A recipe belongs to one brewer. **Duplicate** copies one (steps and grind
+  starting points included) to adapt it, e.g. for a second espresso machine,
+  which is preselected when there is one.
 - Dose, water (live coffee:water ratio), temperature, target finish window.
 - **Expected yield** fills in automatically from a light-roast estimate
   (grounds keep ≈ 2 g of water per g of coffee). Typing your own number
@@ -85,7 +88,10 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   one of its **brewers** (V60, Chemex) or **drinks** (variants under their
   parent; "On Delonghi" shows the drink's brewer), then one of that brewer's
   recipes, with the drink's default selected. The last choices are
-  remembered. A drink with a default size gets a
+  remembered. Every category is listed: an empty one says so and links to
+  adding a drink in it. A category can mix brewers (Specialty Drinks: The
+  Atlas on the V60, Orange Truffle on the espresso machine); the drink list
+  then names each drink's brewer. A drink with a default size gets a
   **Size** field: 12 fl oz on an 8 fl oz latte scales every ingredient ×1.5
   (rounded to whole ml/g, 0.1 fl oz, or half pumps/spoons). On a filter
   brewer the coffee batch scales too; an espresso shot stays as the recipe

@@ -97,6 +97,7 @@ async function confirmDelete(): Promise<void> {
         </p>
         <p v-if="stepsSummary(recipe)" class="steps-summary">{{ stepsSummary(recipe) }}</p>
         <div v-if="workspaces.canEdit" class="actions">
+          <RouterLink class="btn-link" :to="{ name: 'recipe-new', query: { from: recipe.id } }">Duplicate</RouterLink>
           <RouterLink class="btn-link" :to="{ name: 'recipe-edit', params: { id: recipe.id } }">Edit</RouterLink>
           <button class="btn-link danger" type="button" @click="pending = recipe; dialogError = ''">Delete</button>
         </div>

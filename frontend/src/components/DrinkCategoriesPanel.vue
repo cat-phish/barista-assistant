@@ -69,7 +69,7 @@ async function confirmDelete(): Promise<void> {
 <template>
   <section class="card stack" aria-labelledby="categories-title">
     <h2 id="categories-title">Categories</h2>
-    <p class="muted small">What you pick first when you brew, and the menu's sections, in this order. Drinks and brewers can each be in one.</p>
+    <p class="muted small">What you pick first when you brew, and the menu's sections, in this order. Drinks and brewers can each be in one, and a category can mix brewers: Specialty Drinks might hold a V60 drink and an espresso drink.</p>
     <ol v-if="categories.length" class="categories">
       <li v-for="(c, i) in categories" :key="c.id">
         <form v-if="editingId === c.id" class="row" novalidate @submit.prevent="saveEdit(c)">

@@ -5,6 +5,7 @@ import {
   categoryOptions,
   decodeCategory,
   decodeItem,
+  drinkOptionLabel,
   encodeBrewer,
   encodeCategory,
   encodeDrink,
@@ -58,14 +59,26 @@ describe('brew setup: category → brewer or drink → recipe', () => {
     expect(options.drinks.map((d) => d.id).sort()).toEqual(['Latte', 'The Atlas', 'Vanilla Latte']);
   });
 
-  it('offers categories in their order that hold something, then Other', () => {
-    expect(categoryOptions(options, categories)).toEqual([
-      { id: 'c-po', name: 'Pour Over' },
-      { id: 'c-es', name: 'Espresso' },
-      { id: 'c-milk', name: 'Espresso Milk Drinks' },
-      { id: 'c-sp', name: 'Specialty Drinks' },
-      { id: null, name: 'Other' },
+  it('offers every category in its order, flagging empty ones, then Other', () => {
+    const empty = cat('c-new', 'Seasonal', 5);
+    expect(categoryOptions(options, [...categories, empty])).toEqual([
+      { id: 'c-po', name: 'Pour Over', empty: false },
+      { id: 'c-es', name: 'Espresso', empty: false },
+      { id: 'c-milk', name: 'Espresso Milk Drinks', empty: false },
+      { id: 'c-sp', name: 'Specialty Drinks', empty: false },
+      { id: 'c-new', name: 'Seasonal', empty: true },
+      { id: null, name: 'Other', empty: false },
     ]);
+    // A category whose only brewer has no recipes is empty too.
+    expect(categoryOptions(brewable([kettleOnly], recipes, []), [special])).toEqual([{ id: 'c-sp', name: 'Specialty Drinks', empty: true }]);
+  });
+
+  it('a category can mix drinks on different brewers, naming the brewer only then', () => {
+    const truffle = drink('Orange Truffle', delonghi, special, 'shot');
+    const mixed = itemOptions(brewable(brewers, recipes, [atlas, truffle]), 'c-sp');
+    expect(mixed.drinks.map((d) => drinkOptionLabel(d.drink, mixed.drinks))).toEqual(['Orange Truffle · Delonghi', 'The Atlas · V60']);
+    const single = itemOptions(options, 'c-milk');
+    expect(drinkOptionLabel(latte, single.drinks)).toBe('Latte');
   });
 
   it("a category lists its brewers by name and its drinks with variants nested", () => {

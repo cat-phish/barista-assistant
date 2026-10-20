@@ -20,6 +20,7 @@ import {
   categoryOptions,
   decodeCategory,
   decodeItem,
+  drinkOptionLabel,
   encodeBrewer,
   encodeCategory,
   encodeDrink,
@@ -71,6 +72,10 @@ const categoryList = computed(() => categoryOptions(options.value, categories.va
 const items = computed(() => {
   const c = decodeCategory(what.value);
   return c ? itemOptions(options.value, c.categoryId) : { brewers: [], drinks: [] };
+});
+const chosenCategory = computed(() => {
+  const c = decodeCategory(what.value);
+  return c ? (categoryList.value.find((x) => x.id === c.categoryId) ?? null) : null;
 });
 const chosen = computed(() => decodeItem(item.value));
 const drink = computed(() => (chosen.value?.kind === 'drink' ? (drinks.value.find((d) => d.id === chosen.value?.id) ?? null) : null));
@@ -260,7 +265,8 @@ watch(shot, (s) => {
 });
 // Setup can continue once the batch (or shot) makes sense.
 const setupReady = computed(
-  () => (!baseSize.value || !!madeSize.value) && (!recipe.value || (espresso.value ? !!shot.value : !!batch.value)),
+  // An empty category has nothing to brew yet ("Something else" logs without a recipe).
+  () => !chosenCategory.value?.empty && (!baseSize.value || !!madeSize.value) && (!recipe.value || (espresso.value ? !!shot.value : !!batch.value)),
 );
 function batchText(field: ScaleField): string {
   if (lead.value.field === field) return lead.value.text;
@@ -550,7 +556,15 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             <option :value="NO_RECIPE">Something else (no recipe)</option>
           </select>
         </div>
-        <div v-if="decodeCategory(what)" class="field">
+        <div v-if="chosenCategory?.empty" class="card empty-category" role="status">
+          <p>Nothing in {{ chosenCategory.name }} yet.</p>
+          <p class="muted small">
+            <RouterLink v-if="workspaces.canEdit" :to="{ name: 'drink-new', query: { category: chosenCategory.id } }">Add a drink</RouterLink
+            ><template v-else>Add a drink</template> to it (a V60 or espresso drink with ingredients, say), or put a brewer in it under
+            <RouterLink :to="{ name: 'brewers' }">Equipment → Brewers</RouterLink>.
+          </p>
+        </div>
+        <div v-else-if="decodeCategory(what)" class="field">
           <label for="item">{{ items.drinks.length && !items.brewers.length ? 'Drink' : items.brewers.length && !items.drinks.length ? 'Brewer' : 'Brewer or drink' }}</label>
           <select id="item" v-model="item">
             <optgroup v-if="items.brewers.length && items.drinks.length" label="Brewers">
@@ -560,10 +574,10 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
               <option v-for="x in items.brewers" :key="x.id" :value="encodeBrewer(x.id)">{{ x.name }}</option>
             </template>
             <optgroup v-if="items.drinks.length && items.brewers.length" label="Drinks">
-              <option v-for="d in items.drinks" :key="d.drink.id" :value="encodeDrink(d.drink.id)">{{ '\u2003'.repeat(d.depth) }}{{ d.depth ? '↳ ' : '' }}{{ d.drink.name }}</option>
+              <option v-for="d in items.drinks" :key="d.drink.id" :value="encodeDrink(d.drink.id)">{{ '\u2003'.repeat(d.depth) }}{{ d.depth ? '↳ ' : '' }}{{ drinkOptionLabel(d.drink, items.drinks) }}</option>
             </optgroup>
             <template v-else>
-              <option v-for="d in items.drinks" :key="d.drink.id" :value="encodeDrink(d.drink.id)">{{ '\u2003'.repeat(d.depth) }}{{ d.depth ? '↳ ' : '' }}{{ d.drink.name }}</option>
+              <option v-for="d in items.drinks" :key="d.drink.id" :value="encodeDrink(d.drink.id)">{{ '\u2003'.repeat(d.depth) }}{{ d.depth ? '↳ ' : '' }}{{ drinkOptionLabel(d.drink, items.drinks) }}</option>
             </template>
           </select>
           <span v-if="drink" class="hint">On {{ drink.brewer.name }}</span>
@@ -841,6 +855,14 @@ p {
 }
 .batch-label {
   font-weight: 600;
+}
+.empty-category {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.empty-category p {
+  margin: 0;
 }
 .size-row {
   display: flex;

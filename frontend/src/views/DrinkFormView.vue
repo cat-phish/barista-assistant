@@ -2,7 +2,8 @@
 // Drink editor (docs/api_spec.md §5c): name, description, the brewer it's
 // built on (any of its recipes can make it; one can be the default), category,
 // what it's a variant of, the ingredients that finish it, and the menu switch.
-// /drinks/new?from=<id> starts a variant: a copy of that drink, linked to it.
+// /drinks/new?from=<id> starts a variant: a copy of that drink, linked to it;
+// ?category=<id> starts in that category.
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ApiError, errorMessage } from '../api/client';
@@ -150,6 +151,9 @@ onMounted(async () => {
       name.value = `${from.name} variant`;
       parentDrinkId.value = from.id;
     }
+    // From brew setup's "add a drink" in an empty category.
+    const category = categories.value.find((c) => c.id === route.query.category);
+    if (category) categoryId.value = category.id;
   } catch (err) {
     error.value = errorMessage(err);
   } finally {

@@ -34,12 +34,15 @@ export function brewable(brewers: Brewer[], recipes: Recipe[], drinks: Drink[]):
   return { brewers: usable, drinks: drinks.filter((d) => ids.has(d.brewer.id)) };
 }
 
-// Categories in their order that hold something brewable, then "Other" for
-// uncategorised brewers and drinks.
-export function categoryOptions(b: Brewable, categories: DrinkCategory[]): Array<{ id: string | null; name: string }> {
+// Every category in its order (empty ones flagged, so setup can suggest
+// adding a drink), then "Other" when there are uncategorised brewers or drinks.
+export function categoryOptions(b: Brewable, categories: DrinkCategory[]): Array<{ id: string | null; name: string; empty: boolean }> {
   const used = new Set<string | null>([...b.brewers.map((x) => x.categoryId), ...b.drinks.map((d) => d.category?.id ?? null)]);
-  const ordered = [...categories].sort((x, y) => x.position - y.position).filter((c) => used.has(c.id));
-  return [...ordered.map((c) => ({ id: c.id, name: c.name })), ...(used.has(null) ? [{ id: null, name: 'Other' }] : [])];
+  const ordered = [...categories].sort((x, y) => x.position - y.position);
+  return [
+    ...ordered.map((c) => ({ id: c.id, name: c.name, empty: !used.has(c.id) })),
+    ...(used.has(null) ? [{ id: null, name: 'Other', empty: false }] : []),
+  ];
 }
 
 // A category's brewers (by name) and drinks (variants nested).
@@ -53,6 +56,13 @@ export function itemOptions(b: Brewable, categoryId: string | null): { brewers: 
 // All item values of a category, in display order (brewers, then drinks).
 export function itemValues(items: ReturnType<typeof itemOptions>): string[] {
   return [...items.brewers.map((x) => encodeBrewer(x.id)), ...items.drinks.map((d) => encodeDrink(d.drink.id))];
+}
+
+// A drink's option: its brewer is named when the category mixes brewers
+// ("The Atlas · V60" next to "Orange Truffle · Delonghi").
+export function drinkOptionLabel(d: Drink, drinks: NestedDrink[]): string {
+  const mixed = new Set(drinks.map((x) => x.drink.brewer.id)).size > 1;
+  return mixed ? `${d.name} · ${d.brewer.name}` : d.name;
 }
 
 export function recipeOptions(brewerId: string | null, recipes: Recipe[]): Recipe[] {

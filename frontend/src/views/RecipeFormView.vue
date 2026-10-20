@@ -6,12 +6,12 @@
 // dose:yield), a shot-time and first-drop window, and a shot profile
 // (pre-infusion / soak / pressure / flow steps).
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { ApiError, errorMessage } from '../api/client';
 import { grindersApi } from '../api/grinders';
 import { brewersApi } from '../api/brewers';
 import { recipesApi, type RecipeInput } from '../api/recipes';
-import type { Brewer, FlowUnit, Grinder, MethodKind } from '../api/types';
+import type { Brewer, FlowUnit, Grinder, MethodKind, Recipe } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import { formatGrams, formatRatio, formatTime, parseDecimal, parseTime } from '../lib/format';
 import { VueDraggable } from 'vue-draggable-plus';
@@ -37,12 +37,13 @@ import {
 } from '../lib/steps';
 import { useWorkspaceStore } from '../stores/workspace';
 import { estimateYield, RECIPE_ROAST_LEVEL, ROAST_LEVELS } from '../lib/scale';
-import { METHOD_KINDS } from '../lib/equipment';
+import { METHOD_KINDS, pickCopyBrewer } from '../lib/equipment';
 
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 const NEW_METHOD = '__new__';
 
 const workspaces = useWorkspaceStore();
+const route = useRoute();
 const router = useRouter();
 const editing = computed(() => props.id !== undefined);
 
@@ -176,6 +177,28 @@ function grinderOptions(rowIndex: number): Grinder[] {
 }
 const canAddGrindRow = computed(() => grinders.value.some((g) => !g.retiredAt && !grindRows.value.some((r) => r.grinderId === g.id)));
 
+// Duplicating: the original's name, for the heading.
+const copyOf = ref<string | null>(null);
+
+function fill(recipe: Recipe): void {
+  name.value = recipe.name;
+  brewerId.value = recipe.brewer.id;
+  dose.value = formatGrams(recipe.targetDoseGrams);
+  water.value = recipe.targetWaterGrams === null ? '' : formatGrams(recipe.targetWaterGrams);
+  expectedYield.value = recipe.expectedYieldGrams === null ? '' : formatGrams(recipe.expectedYieldGrams);
+  // A saved yield that isn't the estimate was typed by someone: keep it.
+  yieldCustom.value = recipe.expectedYieldGrams !== null && recipe.expectedYieldGrams !== yieldEstimate.value;
+  finishFrom.value = recipe.expectedFinishMinSec === null ? '' : formatTime(recipe.expectedFinishMinSec);
+  finishTo.value = recipe.expectedFinishMaxSec === null ? '' : formatTime(recipe.expectedFinishMaxSec);
+  firstDropFrom.value = recipe.firstDropMinSec === null ? '' : formatTime(recipe.firstDropMinSec);
+  firstDropTo.value = recipe.firstDropMaxSec === null ? '' : formatTime(recipe.firstDropMaxSec);
+  temp.value = recipe.targetTempC === null ? '' : String(recipe.targetTempC);
+  defaultGrinderId.value = recipe.defaultGrinderId ?? '';
+  grindRows.value = recipe.grindSettings.map((g) => ({ grinderId: g.grinderId, setting: g.setting }));
+  flowUnit.value = recipe.flowUnit;
+  steps.value = recipe.steps.map((s) => stepDraft(newStepKey(), s));
+}
+
 onMounted(async () => {
   const ws = workspaces.current?.id;
   if (!ws) return;
@@ -183,32 +206,28 @@ onMounted(async () => {
     const [methodList, grinderList, recipeList] = await Promise.all([
       brewersApi.list(ws),
       grindersApi.list(ws),
-      editing.value ? recipesApi.list(ws) : Promise.resolve(null),
+      editing.value || route.query.from ? recipesApi.list(ws) : Promise.resolve(null),
     ]);
     methods.value = methodList.brewers;
     grinders.value = grinderList.grinders;
-    if (!editing.value) return;
-    const recipe = recipeList?.recipes.find((r) => r.id === props.id);
-    if (!recipe) {
-      error.value = 'This recipe no longer exists.';
+    if (editing.value) {
+      const recipe = recipeList?.recipes.find((r) => r.id === props.id);
+      if (!recipe) {
+        error.value = 'This recipe no longer exists.';
+        return;
+      }
+      fill(recipe);
       return;
     }
-    name.value = recipe.name;
-    brewerId.value = recipe.brewer.id;
-    dose.value = formatGrams(recipe.targetDoseGrams);
-    water.value = recipe.targetWaterGrams === null ? '' : formatGrams(recipe.targetWaterGrams);
-    expectedYield.value = recipe.expectedYieldGrams === null ? '' : formatGrams(recipe.expectedYieldGrams);
-    // A saved yield that isn't the estimate was typed by someone: keep it.
-    yieldCustom.value = recipe.expectedYieldGrams !== null && recipe.expectedYieldGrams !== yieldEstimate.value;
-    finishFrom.value = recipe.expectedFinishMinSec === null ? '' : formatTime(recipe.expectedFinishMinSec);
-    finishTo.value = recipe.expectedFinishMaxSec === null ? '' : formatTime(recipe.expectedFinishMaxSec);
-    firstDropFrom.value = recipe.firstDropMinSec === null ? '' : formatTime(recipe.firstDropMinSec);
-    firstDropTo.value = recipe.firstDropMaxSec === null ? '' : formatTime(recipe.firstDropMaxSec);
-    temp.value = recipe.targetTempC === null ? '' : String(recipe.targetTempC);
-    defaultGrinderId.value = recipe.defaultGrinderId ?? '';
-    grindRows.value = recipe.grindSettings.map((g) => ({ grinderId: g.grinderId, setting: g.setting }));
-    flowUnit.value = recipe.flowUnit;
-    steps.value = recipe.steps.map((s) => stepDraft(newStepKey(), s));
+    // Duplicate: a copy of that recipe, starting on another brewer of the same
+    // kind if there is one (e.g. a second espresso machine).
+    const from = recipeList?.recipes.find((r) => r.id === route.query.from);
+    if (from) {
+      fill(from);
+      name.value = `${from.name} (copy)`;
+      brewerId.value = pickCopyBrewer(methods.value, from.brewer);
+      copyOf.value = from.name;
+    }
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -380,7 +399,7 @@ async function save(): Promise<void> {
   <AppHeader />
   <main class="page">
     <div class="page-header">
-      <h1>{{ editing ? 'Edit recipe' : 'Add recipe' }}</h1>
+      <h1>{{ editing ? 'Edit recipe' : copyOf ? 'Duplicate recipe' : 'Add recipe' }}</h1>
     </div>
     <p v-if="loading" class="muted" aria-live="polite">Loading…</p>
 
@@ -399,6 +418,7 @@ async function save(): Promise<void> {
             <option v-for="m in brewerOptions" :key="m.id" :value="m.id">{{ m.name }}{{ m.retiredAt ? ' (retired)' : '' }}</option>
             <option :value="NEW_METHOD">+ Add a brewer…</option>
           </select>
+          <span v-if="copyOf" class="hint">A copy of {{ copyOf }}. Pick the brewer for the copy; the original stays as it is.</span>
           <span v-if="submitted && fieldErrors.brewer" class="field-error">{{ fieldErrors.brewer }}</span>
         </div>
         <div v-if="brewerId === NEW_METHOD" class="inline-add">
