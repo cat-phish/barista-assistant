@@ -58,20 +58,37 @@ One **Recipes** section with three tabs: Recipes, Drinks, Components.
   ice, water, other, each with free-text instructions (e.g. orange-infused
   cold foam: steep peel in cream overnight). A component a drink uses can't
   be deleted.
-- **Drinks:** what you serve. A drink can be made with any of its recipes
-  (one is the default) and finished with components in order, each with an
-  amount and a note ("Orange cold foam · 40 g · spooned on top"). A plain
-  "V60" is a drink with one recipe and nothing added. Drinks have an optional
-  **category** ("Espresso milk drinks", "Specialty drinks"; free text with
-  suggestions) that groups them in the list, when brewing and on the menu.
+- **Drinks:** what you serve. A drink is built on one **brew method** and
+  can be made with any recipe of that method (an optional default is
+  preselected), finished with components in order, each with an amount (a
+  number and a unit: fl oz, ml, g, or any typed unit like "pump", which is
+  then suggested next time) and a note ("Orange cold foam · 40 g · spooned on
+  top"). An optional **default size** (fl oz or ml) is what the amounts are
+  for. A plain "V60" isn't a
+  drink: it's the method itself, which can go on the menu (Equipment →
+  Methods: show on menu, description, category).
+- **Variants:** like cocktail riffs, a drink can be a variant of another
+  (Vanilla Latte of Latte, Iced Vanilla Latte of Vanilla Latte). **Make a
+  variant** copies the drink into a new, independent one linked to it; later
+  changes to either don't carry over. The list shows variants under their
+  parent; deleting a drink moves its variants up a level.
+- **Categories:** a managed, ordered list ("Espresso milk drinks", "Specialty
+  drinks") on the Drinks page: add, rename, reorder, delete (its drinks and
+  methods become uncategorised). They group drinks in the list, when brewing
+  and on the menu.
 
 ## Brewing
-- **What are you making?** First pick a **brew method** (V60, Espresso…:
-  then only its recipes), a **drink category** (then its drinks, then the
-  drink's recipes with the default selected), or **anything** (all recipes,
-  an optional drink, or no recipe). The last choice is remembered. A drink's
-  components show as **Finish with**, on setup and on the log, and the brew
-  is saved with the drink.
+- **Method → Drink → Recipe:** pick a **brew method** (V60, Espresso…; the
+  last one is remembered), then **Just V60** or one of its drinks (grouped by
+  category, variants under their parent), then one of the method's recipes,
+  with the drink's default selected. A drink with a default size gets a
+  **Size** field: 12 fl oz on an 8 fl oz latte scales every component ×1.5
+  (rounded to whole ml/g, 0.1 fl oz, or half pumps/spoons). On a filter
+  method the coffee batch scales too; an espresso shot stays as the recipe
+  says. The size made is saved on the log and shown in the journal, and the
+  AI sees the scaled amounts. **Other (no recipe)** logs a brew
+  without one. A drink's components show as **Finish with**, on setup and on
+  the log, and the brew is saved with the drink.
 - **Setup:** pick bean, recipe and grinder. The grind pre-fills from your
   last brew of that recipe on that grinder, else the AI suggestion, else the
   recipe's starting point.
@@ -112,10 +129,11 @@ One **Recipes** section with three tabs: Recipes, Drinks, Components.
   drink it was for (so milk in the tasting notes isn't blamed on the coffee).
 
 ## Public menu
-- An optional public page per workspace listing beans and **drinks** marked
-  as shown (name, description, category, brew methods, components; no recipe
-  details), drinks ordered by category for menu sections.
-  Recipes that were on the menu became plain drinks.
+- An optional public page per workspace listing beans, plus plain **brew
+  methods** and **drinks** marked as shown, in sections by category order
+  (name, description, method, the parent it's a variant of, components; no
+  recipe details). Plain drinks like "V60" became menu entries of their
+  method.
 
 ## App
 - Installable PWA, works on phones, offline-cached public menu.

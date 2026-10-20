@@ -1,19 +1,57 @@
 import { describe, expect, it } from 'vitest';
-import type { Drink } from '../api/types';
-import { componentLine, recipesLine } from './drinks';
+import type { Drink, DrinkCategory } from '../api/types';
+import { componentLine, drinkSections, nestDrinks, selfAndDescendants } from './drinks';
 
-const method = { id: 'm', name: 'V60', kind: 'pour_over' } as const;
-const drink: Drink = {
-  id: 'd', name: 'The Atlas', description: null, category: 'Specialty drinks', showOnPublicMenu: true, defaultRecipeId: 'b',
-  recipes: [{ id: 'a', name: 'V60 A', method }, { id: 'b', name: 'V60 B', method }],
-  components: [{ componentId: 'c', name: 'Orange cold foam', componentType: 'foam', amount: '40 g', note: 'spooned on top' }],
-};
+const method = { id: 'm', name: 'Espresso', kind: 'espresso' } as const;
+const milk: DrinkCategory = { id: 'milk', name: 'Espresso milk drinks', position: 2 };
+const special: DrinkCategory = { id: 'special', name: 'Specialty drinks', position: 1 };
+
+function drink(id: string, name: string, parent: Drink | null = null, category: DrinkCategory | null = milk): Drink {
+  return {
+    id, name, description: null, method, showOnPublicMenu: true, defaultRecipeId: null, servingSize: null, servingUnit: null, variants: [], components: [],
+    category: category && { id: category.id, name: category.name },
+    parent: parent && { id: parent.id, name: parent.name },
+  };
+}
+
+const latte = drink('latte', 'Latte');
+const vanilla = drink('vanilla', 'Vanilla Latte', latte);
+const iced = drink('iced', 'Iced Vanilla Latte', vanilla);
+const cortado = drink('cortado', 'Cortado');
+const atlas = drink('atlas', 'The Atlas', null, special);
+const plain = drink('plain', 'Affogato', null, null);
+const all = [iced, atlas, vanilla, plain, latte, cortado];
+const names = (rows: Array<{ drink: Drink; depth: number }>) => rows.map((r) => `${'-'.repeat(r.depth)}${r.drink.name}`);
 
 describe('drink summaries', () => {
-  it('lists components with amount and note, and marks the default recipe', () => {
-    expect(componentLine(drink.components[0]!)).toBe('Orange cold foam · 40 g · spooned on top');
-    expect(componentLine({ ...drink.components[0]!, amount: null, note: null })).toBe('Orange cold foam');
-    expect(recipesLine(drink)).toBe('V60 A, V60 B (default)');
-    expect(recipesLine({ ...drink, recipes: [drink.recipes[0]!], defaultRecipeId: 'a' })).toBe('V60 A');
+  it('lists components with amount and note, scaled for the size made', () => {
+    const c = { componentId: 'c', name: 'Orange cold foam', componentType: 'foam', amountValue: 40, amountUnit: 'g', note: 'spooned on top' } as const;
+    expect(componentLine(c)).toBe('Orange cold foam · 40 g · spooned on top');
+    expect(componentLine(c, 1.5)).toBe('Orange cold foam · 60 g · spooned on top');
+    expect(componentLine({ ...c, amountValue: null, amountUnit: null, note: null })).toBe('Orange cold foam');
+  });
+});
+
+describe('nesting variants', () => {
+  it('puts variants under their parent, by name at each level', () => {
+    expect(names(nestDrinks([iced, vanilla, latte, cortado]))).toEqual(['Cortado', 'Latte', '-Vanilla Latte', '--Iced Vanilla Latte']);
+  });
+
+  it('treats a drink whose parent is missing as top level', () => {
+    expect(names(nestDrinks([iced, latte]))).toEqual(['Iced Vanilla Latte', 'Latte']);
+  });
+
+  it('groups into sections in category order, uncategorised last', () => {
+    const sections = drinkSections(all, [milk, special, { id: 'empty', name: 'Empty', position: 3 }]);
+    expect(sections.map((s) => [s.category?.name ?? null, names(s.drinks)])).toEqual([
+      ['Specialty drinks', ['The Atlas']],
+      ['Espresso milk drinks', ['Cortado', 'Latte', '-Vanilla Latte', '--Iced Vanilla Latte']],
+      [null, ['Affogato']],
+    ]);
+  });
+
+  it('finds a drink and its variants at any depth', () => {
+    expect([...selfAndDescendants(all, 'latte')].sort()).toEqual(['iced', 'latte', 'vanilla']);
+    expect([...selfAndDescendants(all, 'iced')]).toEqual(['iced']);
   });
 });

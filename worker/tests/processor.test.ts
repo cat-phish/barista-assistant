@@ -106,24 +106,44 @@ describe("processBrewAnalysis", () => {
     const drinkId = randomUUID();
     const milk = randomUUID();
     const syrup = randomUUID();
-    await db.insert(drinks).values({ id: drinkId, workspaceId, name: "Vanilla Oat Latte" });
+    const [method] = await db.select({ id: brewMethods.id }).from(brewMethods).where(eq(brewMethods.workspaceId, workspaceId));
+    await db.insert(drinks).values({ id: drinkId, workspaceId, name: "Vanilla Oat Latte", methodId: method!.id });
     await db.insert(components).values([
       { id: milk, workspaceId, name: "Steamed oat milk", componentType: "milk" },
       { id: syrup, workspaceId, name: "Vanilla", componentType: "syrup" },
     ]);
     await db.insert(drinkComponents).values([
-      { id: randomUUID(), drinkId, componentId: syrup, position: 1, amount: "1 pump" },
-      { id: randomUUID(), drinkId, componentId: milk, position: 2, amount: "180 g", note: "microfoam" },
+      { id: randomUUID(), drinkId, componentId: syrup, position: 1, amountValue: 1, amountUnit: "pump" },
+      { id: randomUUID(), drinkId, componentId: milk, position: 2, amountValue: 180, amountUnit: "g", note: "microfoam" },
     ]);
     await db.update(brewLogs).set({ drinkId }).where(eq(brewLogs.id, logIds.day8!));
     await processBrewAnalysis({ brewLogId: logIds.day8! });
     const context = llm.mock.calls[0]![0] as BrewContext;
     expect(context.drink).toEqual({
       name: "Vanilla Oat Latte",
+      servingSize: null,
       components: [
         { name: "Vanilla", componentType: "syrup", amount: "1 pump", note: null },
         { name: "Steamed oat milk", componentType: "milk", amount: "180 g", note: "microfoam" },
       ],
+    });
+  });
+
+  it("scales the drink's amounts to the size made", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    const drinkId = randomUUID();
+    const syrup = randomUUID();
+    const [method] = await db.select({ id: brewMethods.id }).from(brewMethods).where(eq(brewMethods.workspaceId, workspaceId));
+    await db.insert(drinks).values({ id: drinkId, workspaceId, name: "Vanilla Latte", methodId: method!.id, servingSize: 8, servingUnit: "fl_oz" });
+    await db.insert(components).values({ id: syrup, workspaceId, name: "Vanilla", componentType: "syrup" });
+    await db.insert(drinkComponents).values({ id: randomUUID(), drinkId, componentId: syrup, position: 1, amountValue: 2, amountUnit: "pump" });
+    await db.update(brewLogs).set({ drinkId, servingSize: 12, servingUnit: "fl_oz" }).where(eq(brewLogs.id, logIds.day8!));
+    await processBrewAnalysis({ brewLogId: logIds.day8! });
+    const context = llm.mock.calls[0]![0] as BrewContext;
+    expect(context.drink).toEqual({
+      name: "Vanilla Latte",
+      servingSize: "12 fl oz",
+      components: [{ name: "Vanilla", componentType: "syrup", amount: "3 pump", note: null }],
     });
   });
 

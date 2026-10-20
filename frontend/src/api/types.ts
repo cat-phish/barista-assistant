@@ -33,7 +33,13 @@ export interface BrewMethod {
   id: string;
   name: string;
   kind: MethodKind;
+  // Menu fields: the plain brew ("V60") on the public menu (§3, §7).
+  description: string | null;
+  categoryId: string | null;
+  showOnPublicMenu: boolean;
 }
+// How recipes and drinks refer to their method.
+export type MethodRef = Pick<BrewMethod, 'id' | 'name' | 'kind'>;
 
 // docs/api_spec.md §3b
 // docs/api_spec.md §3b: details are optional (null when unknown).
@@ -140,7 +146,7 @@ export interface Recipe {
   id: string;
   workspaceId: string;
   name: string;
-  method: BrewMethod;
+  method: MethodRef;
   targetDoseGrams: number;
   targetWaterGrams: number | null; // null for espresso
   expectedYieldGrams: number | null; // estimate; for espresso the target shot weight (always set)
@@ -176,6 +182,8 @@ export interface BrewLog {
   grinderId: string | null;
   machineId: string | null; // espresso only
   drinkId: string | null; // the drink it was for
+  servingSize: number | null; // the size made, when the drink was scaled
+  servingUnit: ServingUnit | null;
   timestamp: string;
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso
@@ -211,14 +219,38 @@ export interface Component {
   drinkCount: number; // drinks that use it
 }
 
-// docs/api_spec.md §5c: what's served; the public menu lists these.
+// docs/api_spec.md §5c: a drink's default size, and the size a brew was made at.
+export type ServingUnit = 'fl_oz' | 'ml';
+export interface DrinkComponent {
+  componentId: string;
+  name: string;
+  componentType: ComponentType;
+  amountValue: number | null; // for the drink's default size
+  amountUnit: string | null; // 'fl oz', 'ml', 'g' or free text ('pump')
+  note: string | null;
+}
+
+// docs/api_spec.md §5d: ordered menu sections for drinks and methods.
+export interface DrinkCategory {
+  id: string;
+  name: string;
+  position: number;
+}
+
+// docs/api_spec.md §5c: what's served. Built on one brew method; any recipe
+// of that method can make it. A variant is an independent copy that
+// remembers its parent (Vanilla Latte of Latte).
 export interface Drink {
   id: string;
   name: string;
   description: string | null;
-  category: string | null; // groups drinks, e.g. "Espresso milk drinks"; null = other drinks
+  method: MethodRef;
+  category: { id: string; name: string } | null;
+  parent: { id: string; name: string } | null;
+  variants: Array<{ id: string; name: string }>; // direct variants, by name
   showOnPublicMenu: boolean;
-  defaultRecipeId: string | null; // one of recipes (null if none are left)
-  recipes: Array<{ id: string; name: string; method: BrewMethod }>;
-  components: Array<{ componentId: string; name: string; componentType: ComponentType; amount: string | null; note: string | null }>;
+  defaultRecipeId: string | null; // a recipe of the method, or null
+  servingSize: number | null; // default size; both or neither
+  servingUnit: ServingUnit | null;
+  components: DrinkComponent[];
 }

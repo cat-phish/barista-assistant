@@ -13,9 +13,11 @@ import AnalysisCard from '../components/AnalysisCard.vue';
 import { grindersApi } from '../api/grinders';
 import { machinesApi } from '../api/machines';
 import { drinksApi } from '../api/drinks';
+import { drinkCategoriesApi } from '../api/drinkCategories';
 import { componentLine } from '../lib/drinks';
-import { decodeWhat, drinkChoices, encodeDrinks, encodeMethod, recipeChoices as recipesFor, validWhat, whatOptions } from '../lib/brewChoice';
-import type { Drink, Grinder, Machine, Mark } from '../api/types';
+import { decodeMethod, drinkOptions, encodeMethod, methodOptions, NO_RECIPE, pickRecipe, recipeOptions, validMethod } from '../lib/brewChoice';
+import type { Drink, DrinkCategory, Grinder, Machine, Mark, ServingUnit } from '../api/types';
+import { convertSize, defaultSize, formatSize, SERVING_UNITS, sizeFactor, type Size } from '../lib/servings';
 import AppHeader from '../components/AppHeader.vue';
 import BrewFields from '../components/BrewFields.vue';
 import BrewTimer from '../components/BrewTimer.vue';
@@ -42,29 +44,63 @@ const machines = ref<Machine[]>([]);
 // Setup
 const beanId = ref('');
 const recipeId = ref('');
-// "What are you making?" (lib/brewChoice.ts): a brew method (only its
-// recipes), a drink category (its drinks, then the drink's recipes, default
-// preselected; docs/api_spec.md §5c), or anything.
+// Method → Drink → Recipe (lib/brewChoice.ts): a brew method, then the plain
+// brew or one of its drinks, then one of its recipes (the drink's default
+// preselected; docs/api_spec.md §5c). Or no recipe at all.
 const drinks = ref<Drink[]>([]);
+const categories = ref<DrinkCategory[]>([]);
 const drinkId = ref('');
 const drink = computed(() => drinks.value.find((d) => d.id === drinkId.value) ?? null);
-const what = ref('any');
-const whatChoice = computed(() => decodeWhat(what.value));
-const whatList = computed(() => whatOptions(recipes.value, drinks.value));
-const drinkList = computed(() => drinkChoices(whatChoice.value, drinks.value));
-const recipeChoices = computed(() => recipesFor(whatChoice.value, recipes.value, drink.value));
+const what = ref(NO_RECIPE);
+const methodId = computed(() => decodeMethod(what.value));
+const methodList = computed(() => methodOptions(recipes.value));
+const methodName = computed(() => methodList.value.find((m) => m.id === methodId.value)?.name ?? '');
+const drinkList = computed(() => drinkOptions(methodId.value, drinks.value, categories.value));
+const recipeChoices = computed(() => recipeOptions(methodId.value, recipes.value));
 watch(what, (value) => {
   remember('brewWhat', value);
-  const w = decodeWhat(value);
-  if (w.kind !== 'drinks') drinkId.value = ''; // a method has no drink; "anything" starts without one
-  if (w.kind === 'drinks' && !drinkList.value.some((d) => d.id === drinkId.value)) drinkId.value = drinkList.value[0]?.id ?? '';
-  // Keep the recipe if it still fits; a method always has one picked.
-  if (!recipeChoices.value.some((r) => r.id === recipeId.value)) recipeId.value = w.kind === 'method' ? (recipeChoices.value[0]?.id ?? '') : '';
+  if (drink.value?.method.id !== methodId.value) drinkId.value = ''; // the plain brew to start with
+  recipeId.value = pickRecipe(recipeChoices.value, drink.value, recipeId.value);
 });
 watch(drink, (d) => {
-  if (!d || d.recipes.some((x) => x.id === recipeId.value)) return;
-  recipeId.value = d.defaultRecipeId ?? d.recipes[0]?.id ?? '';
+  if (d) recipeId.value = pickRecipe(recipeChoices.value, d, recipeId.value);
 });
+// Drink size (lib/servings.ts): starts at the drink's default; a bigger or
+// smaller one scales the components and, on a filter method, the batch. An
+// espresso shot stays as the recipe says.
+const baseSize = computed(() => defaultSize(drink.value));
+const sizeText = ref('');
+const sizeUnit = ref<ServingUnit>('fl_oz');
+const madeSize = computed<Size | null>(() => {
+  const n = amount(sizeText.value);
+  return baseSize.value && n > 0 && n <= 2000 ? { size: Math.round(n * 10) / 10, unit: sizeUnit.value } : null;
+});
+const sizeScale = computed(() => sizeFactor(madeSize.value, baseSize.value));
+function resetSize(): void {
+  const b = baseSize.value;
+  sizeText.value = b ? formatGrams(b.size) : '';
+  sizeUnit.value = b?.unit ?? 'fl_oz';
+}
+watch(baseSize, () => {
+  resetSize();
+  sizeToBatch();
+});
+function setSize(event: Event): void {
+  sizeText.value = (event.target as HTMLInputElement).value;
+  sizeToBatch();
+}
+function setSizeUnit(unit: ServingUnit): void {
+  const s = madeSize.value;
+  if (s) sizeText.value = formatGrams(convertSize(s, unit).size);
+  sizeUnit.value = unit;
+}
+// A filter batch follows the size: water = the recipe's water × the factor.
+function sizeToBatch(): void {
+  const r = recipe.value;
+  if (!r || espresso.value || r.targetWaterGrams === null) return;
+  if (sizeScale.value === 1) resetBatch();
+  else lead.value = { field: 'water', text: formatGrams(Math.round(r.targetWaterGrams * sizeScale.value)) };
+}
 const bean = computed(() => beans.value.find((b) => b.id === beanId.value) ?? null);
 const recipe = computed(() => recipes.value.find((r) => r.id === recipeId.value) ?? null);
 const suggestion = ref<StartingParameters | null>(null);
@@ -95,14 +131,16 @@ onMounted(async () => {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [b, r, g, m, d] = await Promise.all([
+    const [b, r, g, m, d, c] = await Promise.all([
       beansApi.list(ws),
       recipesApi.list(ws),
       grindersApi.list(ws),
       machinesApi.list(ws),
       drinksApi.list(ws),
+      drinkCategoriesApi.list(ws),
     ]);
-    drinks.value = d.drinks.filter((x) => x.recipes.length > 0); // a drink needs a recipe to brew
+    drinks.value = d.drinks;
+    categories.value = c.categories;
     beans.value = b.beans;
     recipes.value = r.recipes;
     grinders.value = g.grinders;
@@ -114,7 +152,7 @@ onMounted(async () => {
     const savedMachine = recall('machineId');
     const machine = activeMachines.value.find((x) => x.id === savedMachine) ?? (activeMachines.value.length === 1 ? activeMachines.value[0] : undefined);
     if (machine) draft.machineId = machine.id;
-    what.value = validWhat(recall('brewWhat'), whatList.value); // the last choice, if it still exists
+    what.value = validMethod(recall('brewWhat'), methodList.value); // the last method, if it still has recipes
   } catch (err) {
     loadError.value = errorMessage(err);
   } finally {
@@ -130,6 +168,7 @@ watch(recipe, (r) => {
   draft.yieldGrams = ''; // measured after brewing
   draft.temp = r?.targetTempC != null ? String(r.targetTempC) : '';
   resetBatch();
+  sizeToBatch(); // a resized drink keeps its size with the new recipe
   // The recipe's default grinder, if it's still in use; else keep the current
   // (last used) one.
   const preferred = r?.defaultGrinderId;
@@ -205,7 +244,9 @@ watch(shot, (s) => {
   if (s) draft.dose = formatGrams(s.dose);
 });
 // Setup can continue once the batch (or shot) makes sense.
-const setupReady = computed(() => !recipe.value || (espresso.value ? !!shot.value : !!batch.value));
+const setupReady = computed(
+  () => (!baseSize.value || !!madeSize.value) && (!recipe.value || (espresso.value ? !!shot.value : !!batch.value)),
+);
 function batchText(field: ScaleField): string {
   if (lead.value.field === field) return lead.value.text;
   if (espresso.value) return shot.value && (field === 'dose' || field === 'yield') ? formatGrams(shot.value[field]) : '';
@@ -423,6 +464,8 @@ async function save(): Promise<void> {
       beanId: bean.value.id,
       recipeId: recipe.value?.id ?? null,
       drinkId: drink.value?.id ?? null,
+      servingSize: drink.value ? (madeSize.value?.size ?? null) : null,
+      servingUnit: drink.value ? (madeSize.value?.unit ?? null) : null,
       ...values,
       // The steps' real times, plus the first drop from the log's field. A time
       // typed shorter than a tap drops that tap.
@@ -489,35 +532,45 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           </select>
         </div>
         <div class="field">
-          <label for="what">What are you making?</label>
+          <label for="what">Brew method</label>
           <select id="what" v-model="what">
-            <option value="any">Anything (all recipes)</option>
-            <optgroup v-if="whatList.methods.length" label="Brew methods">
-              <option v-for="m in whatList.methods" :key="m.id" :value="encodeMethod(m.id)">{{ m.name }}</option>
-            </optgroup>
-            <optgroup v-if="whatList.categories.length" label="Drinks">
-              <option v-for="c in whatList.categories" :key="c ?? ''" :value="encodeDrinks(c)">{{ c ?? 'Other drinks' }}</option>
-            </optgroup>
+            <option v-for="m in methodList" :key="m.id" :value="encodeMethod(m.id)">{{ m.name }}</option>
+            <option :value="NO_RECIPE">Other (no recipe)</option>
           </select>
         </div>
-        <div v-if="whatChoice.kind === 'drinks' || (whatChoice.kind === 'any' && drinkList.length)" class="field">
-          <label for="drink">Drink <span v-if="whatChoice.kind === 'any'" class="muted">(optional)</span></label>
+        <div v-if="methodId && drinkList.length" class="field">
+          <label for="drink">Drink</label>
           <select id="drink" v-model="drinkId">
-            <option v-if="whatChoice.kind === 'any'" value="">None: just a recipe</option>
-            <option v-for="d in drinkList" :key="d.id" :value="d.id">{{ d.name }}</option>
+            <option value="">Just {{ methodName }}</option>
+            <optgroup v-for="s in drinkList" :key="s.category?.id ?? ''" :label="s.category?.name ?? 'Other drinks'">
+              <option v-for="d in s.drinks" :key="d.drink.id" :value="d.drink.id">{{ '\u2003'.repeat(d.depth) }}{{ d.depth ? '↳ ' : '' }}{{ d.drink.name }}</option>
+            </optgroup>
           </select>
         </div>
-        <div class="field">
-          <label for="recipe">Recipe <span class="muted">{{ drink ? `(${drink.name}'s)` : whatChoice.kind === 'any' ? '(optional)' : '' }}</span></label>
+        <div v-if="methodId" class="field">
+          <label for="recipe">Recipe</label>
           <select id="recipe" v-model="recipeId">
-            <option v-if="whatChoice.kind === 'any' && !drink" value="">No recipe</option>
-            <option v-for="r in recipeChoices" :key="r.id" :value="r.id">{{ r.name }}<template v-if="whatChoice.kind !== 'method'"> ({{ r.method.name }})</template></option>
+            <option v-for="r in recipeChoices" :key="r.id" :value="r.id">{{ r.name }}<template v-if="r.id === drink?.defaultRecipeId"> (default)</template></option>
           </select>
+        </div>
+        <div v-if="baseSize" class="batch" role="group" aria-labelledby="size-label">
+          <span id="size-label" class="batch-label">Size</span>
+          <div class="size-row">
+            <input id="drink-size" inputmode="decimal" :value="sizeText" aria-label="Drink size" @input="setSize" />
+            <select :value="sizeUnit" aria-label="Size unit" @change="setSizeUnit(($event.target as HTMLSelectElement).value as ServingUnit)">
+              <option v-for="(label, key) in SERVING_UNITS" :key="key" :value="key">{{ label }}</option>
+            </select>
+            <button v-if="sizeScale !== 1" class="btn-link small" type="button" @click="resetSize(); sizeToBatch()">Reset to {{ formatSize(baseSize) }}</button>
+          </div>
+          <p v-if="!madeSize" class="field-error">Enter a size.</p>
+          <p v-else-if="sizeScale !== 1" class="muted small">
+            ×{{ Math.round(sizeScale * 100) / 100 }} of {{ formatSize(baseSize) }}<template v-if="espresso">: the shot stays as the recipe says</template>
+          </p>
         </div>
         <div v-if="drink && drink.components.length" class="finish-with" aria-label="Finish with">
           <span class="batch-label">Finish with</span>
           <ul>
-            <li v-for="c in drink.components" :key="c.componentId">{{ componentLine(c) }}</li>
+            <li v-for="c in drink.components" :key="c.componentId">{{ componentLine(c, sizeScale) }}</li>
           </ul>
         </div>
         <div class="field">
@@ -691,9 +744,10 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
     <form v-else-if="stage === 'log'" class="stack" novalidate @submit.prevent="save">
       <h1>How was it?</h1>
       <p class="muted">
-        {{ beanLabel }}<template v-if="drink"> · {{ drink.name }}</template><template v-if="recipe"> · {{ recipe.name }}</template>
+        {{ beanLabel }}<template v-if="drink"> · {{ drink.name }}</template><template v-if="madeSize"> · {{ formatSize(madeSize) }}</template
+        ><template v-if="recipe"> · {{ recipe.name }}</template>
       </p>
-      <p v-if="drink && drink.components.length" class="note small">Finish with {{ drink.components.map(componentLine).join(', ') }}</p>
+      <p v-if="drink && drink.components.length" class="note small">Finish with {{ drink.components.map((c) => componentLine(c, sizeScale)).join(', ') }}</p>
       <section class="card">
         <p v-if="stepMarksLine" class="muted small marks-line">{{ stepMarksLine }}</p>
         <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="expectedYield" :espresso="espresso" :machines="machines" />
@@ -776,6 +830,18 @@ p {
 }
 .batch-label {
   font-weight: 600;
+}
+.size-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.size-row input {
+  width: 6rem;
+}
+.size-row select {
+  width: auto;
 }
 .batch-row {
   display: grid;

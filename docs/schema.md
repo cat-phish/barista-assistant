@@ -19,6 +19,7 @@ import {
   text,
   unique,
   date,
+  type AnyMySqlColumn,
 } from "drizzle-orm/mysql-core";
 
 // 1. Users
@@ -98,7 +99,8 @@ export const beanFreezes = mysqlTable("bean_freezes", {
 // role 'owner' or 'barista' may add more. Recipes select from this list.
 // `kind` (one of METHOD_KINDS) decides which recipe fields apply and how the
 // timer behaves (docs/api_spec.md §3, §5). Milk drinks like a latte are
-// drinks (espresso recipe + components), not methods.
+// drinks built on a method (7d), not methods. A method can also appear on the
+// public menu as the plain brew ("V60"), with a description and category.
 export const METHOD_KINDS = ["pour_over", "immersion", "espresso"] as const;
 export const DEFAULT_BREW_METHODS = [
   { name: "V60", kind: "pour_over" },
@@ -114,6 +116,9 @@ export const brewMethods = mysqlTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 100 }).notNull(),
+    description: varchar("description", { length: 500 }),
+    categoryId: varchar("category_id", { length: 36 }).references(() => drinkCategories.id, { onDelete: "set null" }),
+    showOnPublicMenu: boolean("show_on_public_menu").default(false).notNull(),
     kind: varchar("kind", { length: 20 }).default("pour_over").notNull(), // METHOD_KINDS
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
@@ -225,7 +230,7 @@ export const recipes = mysqlTable("recipes", {
   // Unit for espresso flow steps: g/s (a scale) or ml/s (a machine's flow meter).
   flowUnit: varchar("flow_unit", { length: 10 }).$type<FlowUnit>().default("g_s").notNull(),
   targetTempC: decimal("target_temp_c", { precision: 4, scale: 1, mode: "number" }),
-  // Recipes reach the public menu through drinks (7c).
+  // Recipes reach the public menu through their method or drinks (7d).
   // Grind is per grinder: see recipeGrindSettings. The default grinder is
   // preselected when brewing this recipe (else the last one used); deleting
   // the grinder clears it.
@@ -321,10 +326,37 @@ export const components = mysqlTable(
   })
 );
 
-// 7c. Drinks (What's Served; the Public Menu)
-// A drink is brewed with one of its recipes (the default is preselected) and
-// finished with components: "V60" (just a recipe), "Oat Latte", "The Atlas"
-// (V60 + orange cold foam). Deleting a recipe removes it from drinks.
+// 7c. Drink Categories (Ordered Menu Sections)
+// Group drinks and plain brew methods on the menu and in the brew picker,
+// e.g. "Espresso milk drinks", "Specialty drinks". Deleting one leaves its
+// drinks and methods uncategorised.
+export const drinkCategories = mysqlTable(
+  "drink_categories",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(),
+    position: int("position").notNull(), // 1, 2, 3...
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("drink_categories_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+
+// Serving sizes for drinks and brews (fl_oz = US fluid ounces).
+export const SERVING_UNITS = ["fl_oz", "ml"] as const;
+export type ServingUnit = (typeof SERVING_UNITS)[number];
+
+// 7d. Drinks (What's Served; the Public Menu)
+// A drink is built on one brew method: any recipe of that method can make it
+// (the default is preselected), finished with components: "Oat Latte"
+// (Espresso + steamed oat milk), "The Atlas" (V60 + orange cold foam).
+// A drink can be a variant of another (Vanilla Latte of Latte), like a
+// cocktail riff: an independent copy that remembers its parent. Deleting a
+// drink moves its variants up to its parent (the API; set null is a backstop).
 export const drinks = mysqlTable("drinks", {
   id: varchar("id", { length: 36 }).primaryKey(),
   workspaceId: varchar("workspace_id", { length: 36 })
@@ -332,32 +364,29 @@ export const drinks = mysqlTable("drinks", {
     .references(() => workspaces.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 255 }).notNull(),
   description: varchar("description", { length: 500 }),
-  // Groups drinks when brewing and on the menu, e.g. "Espresso milk drinks",
-  // "Specialty drinks". Free text (clients suggest the ones in use); null =
-  // uncategorised ("Other drinks").
-  category: varchar("category", { length: 100 }),
+  // Cascade so workspace deletion works; the API refuses (409) deleting a
+  // method that drinks use.
+  methodId: varchar("method_id", { length: 36 })
+    .notNull()
+    .references(() => brewMethods.id, { onDelete: "cascade" }),
+  categoryId: varchar("category_id", { length: 36 }).references(() => drinkCategories.id, { onDelete: "set null" }),
+  parentDrinkId: varchar("parent_drink_id", { length: 36 }).references((): AnyMySqlColumn => drinks.id, {
+    onDelete: "set null",
+  }),
+  // A recipe of methodId (enforced by the API), or null.
   defaultRecipeId: varchar("default_recipe_id", { length: 36 }).references(() => recipes.id, { onDelete: "set null" }),
+  // Default size, e.g. 8 fl oz: brewing scales the component amounts (and a
+  // filter method's batch) from it. Both or neither (the API); null = no scaling.
+  servingSize: decimal("serving_size", { precision: 6, scale: 1, mode: "number" }),
+  servingUnit: varchar("serving_unit", { length: 10 }).$type<ServingUnit>(), // SERVING_UNITS
   showOnPublicMenu: boolean("show_on_public_menu").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// Which recipes can make a drink (any number; one is the default above).
-export const drinkRecipes = mysqlTable(
-  "drink_recipes",
-  {
-    drinkId: varchar("drink_id", { length: 36 })
-      .notNull()
-      .references(() => drinks.id, { onDelete: "cascade" }),
-    recipeId: varchar("recipe_id", { length: 36 })
-      .notNull()
-      .references(() => recipes.id, { onDelete: "cascade" }),
-  },
-  (table) => ({
-    pk: primaryKey({ columns: [table.drinkId, table.recipeId] }),
-  })
-);
-
-// A drink's components, in order, with a free-text amount and note.
+// A drink's components, in order, with an amount for the drink's default size
+// and a note. The unit is free text: "fl oz", "ml" and "g" are built in,
+// others ("pump", "tsp") are typed. A value scales with the size; a unit alone
+// ("to taste") doesn't.
 export const drinkComponents = mysqlTable("drink_components", {
   id: varchar("id", { length: 36 }).primaryKey(),
   drinkId: varchar("drink_id", { length: 36 })
@@ -368,7 +397,8 @@ export const drinkComponents = mysqlTable("drink_components", {
     .notNull()
     .references(() => components.id, { onDelete: "cascade" }),
   position: int("position").notNull(), // 1, 2, 3...
-  amount: varchar("amount", { length: 50 }), // e.g. "40 g", "2 pumps"
+  amountValue: decimal("amount_value", { precision: 8, scale: 2, mode: "number" }), // e.g. 2
+  amountUnit: varchar("amount_unit", { length: 20 }), // e.g. "pump"
   note: varchar("note", { length: 255 }), // e.g. "spooned on top"
 });
 
@@ -392,8 +422,13 @@ export const brewLogs = mysqlTable("brew_logs", {
   grinderId: varchar("grinder_id", { length: 36 }).references(() => grinders.id, {
     onDelete: "set null",
   }),
-  // The drink this brew was for (optional; docs/api_spec.md §6).
+  // The drink this brew was for (optional; docs/api_spec.md §6). Null for a
+  // plain brew of the method.
   drinkId: varchar("drink_id", { length: 36 }).references(() => drinks.id, { onDelete: "set null" }),
+  // The size made, if the drink was scaled from its default (docs/api_spec.md
+  // §6). Both or neither, and only with a drink.
+  servingSize: decimal("serving_size", { precision: 6, scale: 1, mode: "number" }),
+  servingUnit: varchar("serving_unit", { length: 10 }).$type<ServingUnit>(), // SERVING_UNITS
   // Espresso brews only (docs/api_spec.md §6). Retired, not deleted, like grinders.
   machineId: varchar("machine_id", { length: 36 }).references(() => machines.id, {
     onDelete: "set null",

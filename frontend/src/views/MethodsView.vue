@@ -1,11 +1,13 @@
 <script setup lang="ts">
 // Brew methods (docs/api_spec.md §3), one tab of Equipment: rename, change
 // kind (refused while recipes use the method), delete (refused while recipes
-// use it), add.
+// or drinks use it), add. A method can also be on the public menu as the plain
+// brew ("V60"), with a description and category (§5d).
 import { onMounted, ref } from 'vue';
 import { ApiError, errorMessage } from '../api/client';
+import { drinkCategoriesApi } from '../api/drinkCategories';
 import { brewMethodsApi } from '../api/recipes';
-import type { BrewMethod, MethodKind } from '../api/types';
+import type { BrewMethod, DrinkCategory, MethodKind } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import EquipmentTabs from '../components/EquipmentTabs.vue';
@@ -14,6 +16,8 @@ import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
 const methods = ref<BrewMethod[]>([]);
+const categories = ref<DrinkCategory[]>([]);
+const categoryName = (id: string | null) => categories.value.find((c) => c.id === id)?.name ?? null;
 const loading = ref(true);
 const error = ref('');
 
@@ -21,6 +25,10 @@ const error = ref('');
 function conflictMessage(err: unknown, action: 'kind' | 'delete' | 'name'): string {
   if (!(err instanceof ApiError) || err.status !== 409) return errorMessage(err);
   const count = err.body?.recipeCount;
+  const drinkCount = err.body?.drinkCount;
+  if (action === 'delete' && typeof drinkCount === 'number' && drinkCount > 0 && count === 0) {
+    return `${drinkCount} drink${drinkCount === 1 ? ' is' : 's are'} built on this method. Move them to another method or delete them first.`;
+  }
   if (typeof count === 'number') {
     const recipes = `${count} recipe${count === 1 ? ' uses' : 's use'} this method`;
     return action === 'delete'
@@ -34,7 +42,9 @@ async function load(): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    methods.value = (await brewMethodsApi.list(ws)).brewMethods;
+    const [m, c] = await Promise.all([brewMethodsApi.list(ws), drinkCategoriesApi.list(ws)]);
+    methods.value = m.brewMethods;
+    categories.value = c.categories;
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -69,12 +79,18 @@ async function add(): Promise<void> {
 const editingId = ref<string | null>(null);
 const editName = ref('');
 const editKind = ref<MethodKind>('pour_over');
+const editMenu = ref(false);
+const editDescription = ref('');
+const editCategoryId = ref('');
 const editError = ref('');
 const busy = ref(false);
 function startEdit(m: BrewMethod): void {
   editingId.value = m.id;
   editName.value = m.name;
   editKind.value = m.kind;
+  editMenu.value = m.showOnPublicMenu;
+  editDescription.value = m.description ?? '';
+  editCategoryId.value = m.categoryId ?? '';
   editError.value = '';
 }
 async function saveEdit(m: BrewMethod): Promise<void> {
@@ -83,7 +99,13 @@ async function saveEdit(m: BrewMethod): Promise<void> {
   busy.value = true;
   editError.value = '';
   try {
-    const { brewMethod } = await brewMethodsApi.update(ws, m.id, { name: editName.value.trim(), kind: editKind.value });
+    const { brewMethod } = await brewMethodsApi.update(ws, m.id, {
+      name: editName.value.trim(),
+      kind: editKind.value,
+      showOnPublicMenu: editMenu.value,
+      description: editDescription.value.trim() || null,
+      categoryId: editCategoryId.value || null,
+    });
     methods.value = methods.value.map((x) => (x.id === m.id ? brewMethod : x)).sort((a, b) => a.name.localeCompare(b.name));
     editingId.value = null;
   } catch (err) {
@@ -121,7 +143,7 @@ async function confirmDelete(): Promise<void> {
       <h1>Equipment</h1>
     </div>
     <EquipmentTabs />
-    <p class="muted intro">Recipes pick a method; its kind decides which recipe fields apply.</p>
+    <p class="muted intro">Recipes and drinks pick a method; its kind decides which recipe fields apply. Put a method on the menu to serve it plain.</p>
 
     <p v-if="loading" class="muted" aria-live="polite">Loading brew methods…</p>
     <p v-else-if="error" class="form-error" role="alert">{{ error }}</p>
@@ -143,6 +165,23 @@ async function confirmDelete(): Promise<void> {
               </div>
             </div>
             <p class="muted small">{{ METHOD_KINDS[editKind].hint }}</p>
+            <label class="checkbox">
+              <input v-model="editMenu" type="checkbox" />
+              Show on the public menu as a plain brew
+            </label>
+            <div v-if="editMenu" class="form-row">
+              <div class="field">
+                <label :for="`edit-description-${m.id}`">Menu description <span class="muted">(optional)</span></label>
+                <input :id="`edit-description-${m.id}`" v-model="editDescription" maxlength="500" placeholder="e.g. Today's single origin, brewed to order" />
+              </div>
+              <div class="field">
+                <label :for="`edit-category-${m.id}`">Menu category <span class="muted">(optional)</span></label>
+                <select :id="`edit-category-${m.id}`" v-model="editCategoryId">
+                  <option value="">None</option>
+                  <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+                </select>
+              </div>
+            </div>
             <p v-if="editError" class="form-error" role="alert">{{ editError }}</p>
             <div class="buttons">
               <button class="btn btn-secondary" type="button" @click="editingId = null">Cancel</button>
@@ -153,6 +192,7 @@ async function confirmDelete(): Promise<void> {
             <div class="head">
               <h2>{{ m.name }}</h2>
               <span class="badge">{{ METHOD_KINDS[m.kind].label }}</span>
+              <span v-if="m.showOnPublicMenu" class="badge muted-badge">On menu{{ categoryName(m.categoryId) ? ` · ${categoryName(m.categoryId)}` : '' }}</span>
             </div>
             <div v-if="workspaces.canEdit" class="actions">
               <button class="btn-link" type="button" @click="startEdit(m)">Edit</button>

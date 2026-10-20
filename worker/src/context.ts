@@ -19,6 +19,7 @@ import {
   type FlowUnit,
   type MarkKind,
   type MethodKind,
+  type ServingUnit,
   type StepAdvance,
 } from "@barista/shared/schema";
 import { and, asc, desc, eq, inArray, lt, ne } from "drizzle-orm";
@@ -59,9 +60,23 @@ export interface BrewSummary {
 }
 
 // The drink a brew was made for: tasting notes may describe the whole drink.
+// servingSize is the size made ("12 fl oz"), and amounts are scaled to it.
 export interface DrinkInfo {
   name: string;
+  servingSize: string | null;
   components: Array<{ name: string; componentType: string; amount: string | null; note: string | null }>;
+}
+
+type Size = { size: number | null; unit: ServingUnit | null };
+const ML_PER_FL_OZ = 29.5735;
+const toMl = (s: Size) => (s.size === null || s.unit === null ? null : s.unit === "fl_oz" ? s.size * ML_PER_FL_OZ : s.size);
+const sizeLabel = (s: Size) => (s.size === null || s.unit === null ? null : `${s.size} ${s.unit === "fl_oz" ? "fl oz" : "ml"}`);
+
+// Scale a component amount from the drink's default size to the size made.
+export function scaledAmount(value: number | null, unit: string | null, factor: number): string | null {
+  if (value === null) return unit;
+  const n = Math.round(value * factor * 100) / 100;
+  return unit ? `${n} ${unit}` : String(n);
 }
 
 export interface BrewContext {
@@ -149,16 +164,33 @@ function summarize(
   };
 }
 
-async function loadDrink(drinkId: string): Promise<DrinkInfo | null> {
-  const [drink] = await db.select({ name: drinks.name }).from(drinks).where(eq(drinks.id, drinkId)).limit(1);
+async function loadDrink(drinkId: string, made: Size): Promise<DrinkInfo | null> {
+  const [drink] = await db
+    .select({ name: drinks.name, size: drinks.servingSize, unit: drinks.servingUnit })
+    .from(drinks)
+    .where(eq(drinks.id, drinkId))
+    .limit(1);
   if (!drink) return null;
   const parts = await db
-    .select({ name: components.name, componentType: components.componentType, amount: drinkComponents.amount, note: drinkComponents.note })
+    .select({
+      name: components.name,
+      componentType: components.componentType,
+      amountValue: drinkComponents.amountValue,
+      amountUnit: drinkComponents.amountUnit,
+      note: drinkComponents.note,
+    })
     .from(drinkComponents)
     .innerJoin(components, eq(drinkComponents.componentId, components.id))
     .where(eq(drinkComponents.drinkId, drinkId))
     .orderBy(asc(drinkComponents.position));
-  return { name: drink.name, components: parts };
+  // Amounts are for the drink's default size; scale them to the size made.
+  const [madeMl, defaultMl] = [toMl(made), toMl(drink)];
+  const factor = madeMl && defaultMl ? madeMl / defaultMl : 1;
+  return {
+    name: drink.name,
+    servingSize: sizeLabel(made) ?? sizeLabel(drink),
+    components: parts.map(({ amountValue, amountUnit, ...c }) => ({ ...c, amount: scaledAmount(amountValue, amountUnit, factor) })),
+  };
 }
 
 async function marksFor(brewLogIds: string[]): Promise<Map<string, BrewSummary["marks"]>> {
@@ -239,7 +271,7 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
     },
     recipe,
     brew: summarize(brew, bean.roastDate, freezes, marks),
-    drink: brew.drinkId ? await loadDrink(brew.drinkId) : null,
+    drink: brew.drinkId ? await loadDrink(brew.drinkId, { size: brew.servingSize, unit: brew.servingUnit }) : null,
     previousBrews: previousRows.map((p) => summarize(p, bean.roastDate, freezes, marks)),
     ratingScale: "1-5",
   };

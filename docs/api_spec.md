@@ -212,15 +212,21 @@ free text. Each method has a **kind**, one of `METHOD_KINDS`:
 | `espresso` | Espresso | dose + target yield (no water), shot time and first-drop windows |
 
 New workspaces get V60 (`pour_over`), Espresso (`espresso`) and Aeropress
-(`immersion`). Milk drinks like a latte are drinks (§5c): an espresso recipe
-plus components.
+(`immersion`). Milk drinks like a latte are drinks (§5c): built on a method,
+brewed with one of its recipes, plus components.
+
+A method can also appear on the public menu (§7) as itself, the plain brew
+("V60", "Espresso"), with an optional description and drink category (§5d).
+
+**Brew method object:**
+`{ "id": "uuid", "name": "V60", "kind": "pour_over", "description": null, "categoryId": null, "showOnPublicMenu": false }`
 
 ### `GET /api/workspaces/:workspaceId/brew-methods`
 
 - **Auth Required:** `true` (any member)
 - **Success (`200 OK`):**
   ```json
-  { "brewMethods": [ { "id": "uuid", "name": "V60", "kind": "pour_over" } ] }
+  { "brewMethods": [ { ...brewMethod } ] }
   ```
   Sorted by `name`.
 
@@ -228,8 +234,10 @@ plus components.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Body:** `{ "name": "Chemex", "kind": "pour_over" }` (`name` trimmed,
-  1–100 chars; `kind` optional, default `pour_over`)
-- **Success (`201 Created`):** `{ "brewMethod": { "id": "uuid", "name": "Chemex", "kind": "pour_over" } }`
+  1–100 chars; `kind` optional, default `pour_over`). Optional menu fields:
+  `description` (≤ 500, blank becomes `null`), `categoryId` (a drink
+  category in this workspace, or `null`), `showOnPublicMenu` (default `false`).
+- **Success (`201 Created`):** `{ "brewMethod": { ...brewMethod } }`
 - **Errors:** `400` invalid body; `403` viewer; `409` a method with that name
   already exists in this workspace (case-insensitive).
 
@@ -239,10 +247,10 @@ Renames a brew method or changes its kind. Recipes reference it by ID, so
 they show the new name immediately (including on the public menu).
 
 - **Auth Required:** `true` (role `owner` or `barista`)
-- **Body:** `{ "name": "Hario V60" }` and/or `{ "kind": "pour_over" }`
-  (at least one; same rules as `POST`)
-- **Success (`200 OK`):** `{ "brewMethod": { "id": "uuid", "name": "Hario V60", "kind": "pour_over" } }`
-- **Errors:** `400` invalid or empty body; `403` viewer; `404` method not in
+- **Body:** any non-empty subset of the `POST` fields (same rules)
+- **Success (`200 OK`):** `{ "brewMethod": { ...brewMethod } }`
+- **Errors:** `400` invalid or empty body, or a category not in this
+  workspace; `403` viewer; `404` method not in
   this workspace; `409` another method in this workspace already has that name
   (case-insensitive), or the kind would change while recipes use the method
   (recipe fields differ by kind), with body `{ "error": "...", "recipeCount": 2 }`.
@@ -250,15 +258,16 @@ they show the new name immediately (including on the public menu).
 
 ### `DELETE /api/workspaces/:workspaceId/brew-methods/:methodId`
 
-The database cascades a method's deletion to its recipes, so the API is what
-protects them: a method that any recipe still uses can't be deleted.
+The database cascades a method's deletion to its recipes and drinks, so the
+API is what protects them: a method that any recipe or drink still uses
+can't be deleted.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Success (`204 No Content`)**
 - **Errors:** `403` viewer; `404` method not in this workspace; `409` recipes
-  still use it, with body
-  `{ "error": "...", "recipeCount": 2 }`. Change those recipes' method or
-  delete them first.
+  or drinks still use it, with body
+  `{ "error": "...", "recipeCount": 2, "drinkCount": 1 }`. Change their
+  method or delete them first.
 
 ---
 
@@ -764,46 +773,54 @@ milk, vanilla syrup, ice. Per workspace.
 
 ## 5c. Drinks
 
-What's served, and what the public menu (§7) lists. A drink is brewed with
-**one of its recipes** (any number; one is the **default**, preselected when
-brewing) and finished with **components**. "V60" is a drink with one recipe
-and no components; "Oat Latte" is any espresso recipe plus steamed oat milk;
-"The Atlas" is a V60 recipe plus orange cold foam.
+What's served, and what the public menu (§7) lists alongside plain brew
+methods. A drink is **built on one brew method** and can be brewed with
+**any recipe of that method** (the **default**, if set, is preselected when
+brewing), then finished with **components**. "Latte" is the Espresso method
+plus steamed milk; "The Atlas" is V60 plus orange cold foam. The plain brew
+("V60") isn't a drink: it's the method itself (§3).
+
+A drink can be a **variant** of another drink (`parentDrinkId`), like a
+cocktail riff: Vanilla Latte is a variant of Latte, and Iced Vanilla Latte a
+variant of Vanilla Latte. A variant is a complete, independent drink (clients
+create one by copying the parent); nothing is inherited after that. Its method
+may differ from its parent's.
 
 **Drink object:**
 
 ```json
 {
   "id": "uuid",
-  "name": "The Atlas",
-  "description": "V60 with orange-infused cold foam",
-  "category": "Specialty drinks",
+  "name": "Vanilla Latte",
+  "description": null,
+  "method": { "id": "uuid", "name": "Espresso", "kind": "espresso" },
+  "category": { "id": "uuid", "name": "Espresso milk drinks" },
+  "parent": { "id": "uuid", "name": "Latte" },
+  "variants": [{ "id": "uuid", "name": "Iced Vanilla Latte" }],
   "showOnPublicMenu": true,
   "defaultRecipeId": "uuid",
-  "recipes": [
-    { "id": "uuid", "name": "V60 Standard", "method": { "id": "uuid", "name": "V60", "kind": "pour_over" } }
-  ],
+  "servingSize": 8,
+  "servingUnit": "fl_oz",
   "components": [
-    { "componentId": "uuid", "name": "Orange cold foam", "componentType": "foam", "amount": "40 g", "note": "spooned on top" }
+    { "componentId": "uuid", "name": "Steamed milk", "componentType": "milk", "amountValue": 6, "amountUnit": "fl oz", "note": null },
+    { "componentId": "uuid", "name": "Vanilla syrup", "componentType": "syrup", "amountValue": 2, "amountUnit": "pump", "note": "in the milk" }
   ]
 }
 ```
 
-`recipes` are sorted by name; `components` are in their order.
-`defaultRecipeId` is always one of `recipes` (or `null` when the drink has
-none left, e.g. after its recipes were deleted: deleting a recipe removes it
-from drinks).
+`servingSize` + `servingUnit` (`SERVING_UNITS`: `fl_oz`, `ml`) are the
+drink's default size, or both `null`. Component amounts are for that size;
+clients scale them when a brew is made bigger or smaller (and, for a filter
+method, the coffee batch too; an espresso shot stays as the recipe says).
+
+`category` and `parent` are `null` when not set; `variants` (direct children
+only) are sorted by name; `components` are in their order. `defaultRecipeId`
+is a recipe of the drink's method, or `null` (none set, or it was deleted).
 
 ### `GET /api/workspaces/:workspaceId/drinks`
 
 - **Auth Required:** `true` (any member)
 - **Success (`200 OK`):** `{ "drinks": [ { ...drink } ] }`, sorted by `name`.
-
-### `GET /api/workspaces/:workspaceId/drinks/categories`
-
-- **Auth Required:** `true` (any member)
-- **Success (`200 OK`):** `{ "categories": ["Espresso milk drinks", "Specialty drinks"] }`:
-  the distinct categories in use, sorted (for suggestions).
 
 ### `POST /api/workspaces/:workspaceId/drinks`
 
@@ -811,41 +828,97 @@ from drinks).
 - **Body:**
   ```json
   {
-    "name": "The Atlas",
-    "description": "V60 with orange-infused cold foam",
-    "category": "Specialty drinks",
+    "name": "Vanilla Latte",
+    "description": null,
+    "methodId": "uuid",
+    "categoryId": "uuid",
+    "parentDrinkId": "uuid",
     "showOnPublicMenu": true,
-    "recipeIds": ["uuid", "uuid"],
     "defaultRecipeId": "uuid",
-    "components": [{ "componentId": "uuid", "amount": "40 g", "note": "spooned on top" }]
+    "servingSize": 8,
+    "servingUnit": "fl_oz",
+    "components": [{ "componentId": "uuid", "amountValue": 2, "amountUnit": "pump", "note": null }]
   }
   ```
   - `name` trimmed, 1–255 chars; `description` optional, ≤ 500, blank
-    becomes `null`; `category` optional, ≤ 100, trimmed, blank becomes `null`
-    (free text; groups drinks when brewing and on the menu);
-    `showOnPublicMenu` defaults to `true`.
-  - `recipeIds`: 1–20 distinct recipes in **this** workspace.
-    `defaultRecipeId` must be one of them (default: the first).
+    becomes `null`; `showOnPublicMenu` defaults to `true`.
+  - `methodId` (required): a brew method in this workspace.
+  - `categoryId` (optional, nullable): a drink category (§5d) in this workspace.
+  - `parentDrinkId` (optional, nullable): another drink in this workspace.
+  - `defaultRecipeId` (optional, nullable): a recipe in this workspace whose
+    method is `methodId`.
+  - `servingSize` (> 0, ≤ 2000, 1 decimal) and `servingUnit` (`fl_oz` or
+    `ml`): optional, nullable, both or neither.
   - `components` (default `[]`, max 20, in order): each `componentId` a
-    component in this workspace (at most once); `amount` ≤ 50 chars and
-    `note` ≤ 255 chars, both optional, blank becomes `null`.
+    component in this workspace (at most once). All optional and nullable:
+    `amountValue` (> 0, ≤ 100000, 2 decimals); `amountUnit` (trimmed, ≤ 20,
+    blank becomes `null`; free text, clients offer `fl oz`, `ml`, `g` plus
+    the units already used); `note` ≤ 255 chars, blank becomes `null`. A unit
+    without a value ("to taste") doesn't scale.
 - **Success (`201 Created`):** `{ "drink": { ...drink } }`
-- **Errors:** `400` invalid body, or a recipe/component not in this
-  workspace; `403` viewer.
+- **Errors:** `400` invalid body, a method/category/parent/recipe/component
+  not in this workspace, or a default recipe of another method; `403` viewer.
 
 ### `PATCH /api/workspaces/:workspaceId/drinks/:drinkId`
 
 - **Auth Required:** `true` (role `owner` or `barista`)
-- **Body:** any non-empty subset of the `POST` fields. `recipeIds` and
-  `components`, if present, replace their lists. The default must be one of
-  the drink's recipes after the change (if `recipeIds` changes and drops the
-  current default, send a new `defaultRecipeId` or the first one is used).
+- **Body:** any non-empty subset of the `POST` fields. `components`, if
+  present, replaces the list. Changing `methodId` without sending a matching
+  `defaultRecipeId` clears a default of the old method.
 - **Success (`200 OK`):** `{ "drink": { ...drink } }`
-- **Errors:** as `POST`, plus `404` not in this workspace.
+- **Errors:** as `POST`, plus `400` when `parentDrinkId` is the drink itself
+  or one of its variants (at any depth); `404` not in this workspace.
 
 ### `DELETE /api/workspaces/:workspaceId/drinks/:drinkId`
 
-Brew logs made for it are kept, with `drinkId` set to `null`.
+Its variants move up to its own parent (or become top-level drinks). Brew
+logs made for it are kept, with `drinkId` set to `null`.
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Success (`204 No Content`)**
+- **Errors:** `403` viewer; `404` not in this workspace.
+
+---
+
+## 5d. Drink Categories
+
+An ordered list per workspace that groups drinks and brew methods into menu
+sections ("Espresso milk drinks", "Specialty drinks") and in the brew
+drink picker.
+
+**Category object:** `{ "id": "uuid", "name": "Specialty drinks", "position": 2 }`
+
+### `GET /api/workspaces/:workspaceId/drink-categories`
+
+- **Auth Required:** `true` (any member)
+- **Success (`200 OK`):** `{ "categories": [ { ...category } ] }`, by `position`.
+
+### `POST /api/workspaces/:workspaceId/drink-categories`
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:** `{ "name": "Specialty drinks" }` (trimmed, 1–100 chars, unique
+  per workspace, case-insensitive). It goes last.
+- **Success (`201 Created`):** `{ "category": { ...category } }`
+- **Errors:** `400`; `403` viewer; `409` name taken.
+
+### `PATCH /api/workspaces/:workspaceId/drink-categories/:categoryId`
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:** `{ "name": "..." }`
+- **Success (`200 OK`):** `{ "category": { ...category } }`
+- **Errors:** `400`; `403` viewer; `404` not in this workspace; `409` name taken.
+
+### `PUT /api/workspaces/:workspaceId/drink-categories/order`
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:** `{ "categoryIds": ["uuid", "uuid"] }`: every category of the
+  workspace exactly once, in the new order.
+- **Success (`200 OK`):** `{ "categories": [ { ...category } ] }`
+- **Errors:** `400` not exactly the workspace's categories; `403` viewer.
+
+### `DELETE /api/workspaces/:workspaceId/drink-categories/:categoryId`
+
+Drinks and methods in it become uncategorised.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Success (`204 No Content`)**
@@ -888,6 +961,8 @@ created it and can't be changed.
   "grinder": { "id": "uuid", "name": "Comandante C40" },
   "machine": null,
   "drink": { "id": "uuid", "name": "The Atlas" },
+  "servingSize": null,
+  "servingUnit": null,
   "marks": [],
   "brewer": { "id": "uuid", "email": "barista@example.com" }
 }
@@ -956,7 +1031,12 @@ account. Such logs can only be edited or deleted by owners.
     - `step_end`: the real end of a step that waited for a tap or was logged
       (`stepOrder` 1–50, at most one per step); needs a `recipeId`.
   - `drinkId` (optional, nullable): the drink this brew was for, in this
-    workspace. With a `recipeId`, the recipe must be one of the drink's.
+    workspace. With a `recipeId`, the recipe's method must be the drink's
+    method. A plain brew ("Just V60") has no drink.
+  - `servingSize` / `servingUnit` (optional, nullable; same rules as on a
+    drink, both or neither): the size made, when a drink was scaled from its
+    default. Only with a `drinkId`; on `PATCH`, checked against the log after
+    the change when any of the three is sent.
   - `machineId` (optional, nullable; a machine in this workspace, retired
     accepted) only for espresso brews: with any other recipe, or none, it
     must be absent/`null`.
@@ -1012,7 +1092,8 @@ Deletes the log and its `llm_analyses` (cascade).
 
 Retrieves the read-only menu for a workspace. Unauthenticated, but strictly
 filters for workspaces where `isPublicMenuEnabled = true` and items where
-`showOnPublicMenu = true`. The menu lists **drinks** (§5c) and beans.
+`showOnPublicMenu = true`. The menu lists **brew methods** (§3), **drinks**
+(§5c) and beans.
 
 - **URL:** `GET /api/public/menu/:slug`
 - **Auth Required:** `false`
@@ -1033,22 +1114,44 @@ filters for workspaces where `isPublicMenuEnabled = true` and items where
         "inventoryWeightGrams": 250
       }
     ],
-    "drinks": [
+    "sections": [
       {
-        "id": "uuid",
-        "name": "The Atlas",
-        "description": "V60 with orange-infused cold foam",
-        "category": "Specialty drinks",
-        "methods": ["V60"],
-        "components": ["Orange cold foam"]
+        "category": "Espresso milk drinks",
+        "items": [
+          {
+            "kind": "drink",
+            "id": "uuid",
+            "name": "Vanilla Latte",
+            "description": null,
+            "method": "Espresso",
+            "variantOf": "Latte",
+            "components": ["Steamed milk", "Vanilla syrup"]
+          }
+        ]
+      },
+      {
+        "category": null,
+        "items": [
+          {
+            "kind": "method",
+            "id": "uuid",
+            "name": "V60",
+            "description": "Single-origin pour over",
+            "method": "V60",
+            "variantOf": null,
+            "components": []
+          }
+        ]
       }
     ]
   }
   ```
-  Drinks are sorted by category (uncategorised last), then name, so clients
-  can show them in sections. `methods` are the brew methods of the drink's
-  recipes (distinct, sorted); `components` are the components' names in the
-  drink's order. Recipe details (doses, steps) aren't published.
+  Sections follow the categories' `position`; uncategorised items come last
+  (`category: null`), and empty sections are left out. In each section, plain
+  methods come first, then drinks, each sorted by name. `method` is the brew
+  method's name; `variantOf` the parent drink's name if that drink is also
+  shown, else `null`; `components` are the components' names in the drink's
+  order. Recipe details (doses, steps) aren't published.
 - **Error Responses:**
   - `404 Not Found`: Workspace slug does not exist or `isPublicMenuEnabled` is
     `false`. Slugs are matched exactly: `/menu/Jordans-Coffee-Bar` is a `404`,
@@ -1162,8 +1265,10 @@ queue:
      are recorded (adjustment, setting range, step size, burr type/size,
      power), so the LLM knows which grinder a grind setting refers to, doesn't
      compare settings across different grinders, and can talk in steps.
-   - The brew includes its `drink` (or `null`): name and components (name,
-     type, amount, note), since tasting notes may describe the whole drink
+   - The brew includes its `drink` (or `null`): name, `servingSize` (the size
+     made, else the drink's default, e.g. `"12 fl oz"`, or `null`) and
+     components (name, type, amount scaled to that size such as
+     `"3 pump"`, note), since tasting notes may describe the whole drink
      (e.g. with milk) rather than the coffee alone.
    - Espresso brews include their `machine` (or `null`): name and
      capabilities (pre-infusion, flow and pressure control).

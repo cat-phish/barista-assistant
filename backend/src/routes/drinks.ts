@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, inArray, isNotNull, type SQL } from "drizzle-orm";
+import { and, asc, eq, inArray, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
@@ -9,20 +10,32 @@ import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import {
   brewMethods,
   components,
+  drinkCategories,
   drinkComponents,
-  drinkRecipes,
   drinks,
   recipes,
+  SERVING_UNITS,
   type ComponentType,
   type Drink,
   type MethodKind,
 } from "@barista/shared/schema";
-import { optionalText, updateSchema } from "../validation.js";
+import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
 // docs/api_spec.md §5c
-export interface DrinkDetails extends Pick<Drink, "id" | "name" | "description" | "category" | "showOnPublicMenu" | "defaultRecipeId"> {
-  recipes: Array<{ id: string; name: string; method: { id: string; name: string; kind: MethodKind } }>;
-  components: Array<{ componentId: string; name: string; componentType: ComponentType; amount: string | null; note: string | null }>;
+export interface DrinkDetails
+  extends Pick<Drink, "id" | "name" | "description" | "showOnPublicMenu" | "defaultRecipeId" | "servingSize" | "servingUnit"> {
+  method: { id: string; name: string; kind: MethodKind };
+  category: { id: string; name: string } | null;
+  parent: { id: string; name: string } | null;
+  variants: Array<{ id: string; name: string }>;
+  components: Array<{
+    componentId: string;
+    name: string;
+    componentType: ComponentType;
+    amountValue: number | null; // for the default size
+    amountUnit: string | null; // "fl oz", "ml", "g" or free text ("pump")
+    note: string | null;
+  }>;
 }
 
 interface WorkspaceParams {
@@ -37,12 +50,25 @@ const distinct = (ids: readonly string[]) => new Set(ids).size === ids.length;
 const drinkFields = {
   name: z.string().trim().min(1).max(255),
   description: optionalText(500),
-  category: optionalText(100), // free text, groups drinks (docs/api_spec.md §5c)
+  methodId: z.uuid(),
+  categoryId: z.uuid().nullable().optional(),
+  parentDrinkId: z.uuid().nullable().optional(),
   showOnPublicMenu: z.boolean(),
-  recipeIds: z.array(z.uuid()).min(1).max(20).refine(distinct, "each recipe at most once"),
   defaultRecipeId: z.uuid().nullable().optional(),
+  // Both or neither (checked below).
+  servingSize: decimalSchema({ min: 0, max: 2000, scale: 1, exclusiveMin: true }).nullable().optional(),
+  servingUnit: z.enum(SERVING_UNITS).nullable().optional(),
   components: z
-    .array(z.object({ componentId: z.uuid(), amount: optionalText(50), note: optionalText(255) }).strict())
+    .array(
+      z
+        .object({
+          componentId: z.uuid(),
+          amountValue: decimalSchema({ min: 0, max: 100000, scale: 2, exclusiveMin: true }).nullable().optional(),
+          amountUnit: optionalText(20),
+          note: optionalText(255),
+        })
+        .strict()
+    )
     .max(20)
     .refine((list) => distinct(list.map((c) => c.componentId)), "each component at most once"),
 };
@@ -53,17 +79,21 @@ const createSchema = z.object({
 });
 const updateDrinkSchema = updateSchema(drinkFields);
 
+// A size needs both its number and unit, or neither.
+const SIZE_ERROR = "servingSize: servingSize and servingUnit go together";
+const sizeMismatch = (size: number | null | undefined, unit: string | null | undefined) => (size ?? null) === null !== ((unit ?? null) === null);
+
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-// Both lists must be in this workspace. Locked so a concurrent delete either
-// finishes first (we see fewer rows -> 400) or waits for us.
-async function recipesInWorkspace(tx: Tx, ids: string[], workspaceId: string): Promise<boolean> {
+// Everything a drink points at must be in its workspace. Rows are locked so a
+// concurrent delete either finishes first (we see it missing -> 400) or waits.
+async function inWorkspace(tx: Tx, table: typeof brewMethods | typeof drinkCategories | typeof drinks, id: string, workspaceId: string): Promise<boolean> {
   const found = await tx
-    .select({ id: recipes.id })
-    .from(recipes)
-    .where(and(inArray(recipes.id, ids), eq(recipes.workspaceId, workspaceId)))
+    .select({ id: table.id })
+    .from(table)
+    .where(and(eq(table.id, id), eq(table.workspaceId, workspaceId)))
     .for("update");
-  return found.length === ids.length;
+  return found.length === 1;
 }
 async function componentsInWorkspace(tx: Tx, ids: string[], workspaceId: string): Promise<boolean> {
   if (ids.length === 0) return true;
@@ -74,18 +104,50 @@ async function componentsInWorkspace(tx: Tx, ids: string[], workspaceId: string)
     .for("update");
   return found.length === ids.length;
 }
-
-async function replaceRecipes(tx: Tx, drinkId: string, recipeIds: string[]): Promise<void> {
-  await tx.delete(drinkRecipes).where(eq(drinkRecipes.drinkId, drinkId));
-  await tx.insert(drinkRecipes).values(recipeIds.map((recipeId) => ({ drinkId, recipeId })));
+// The default recipe must be in the workspace and use the drink's method.
+async function recipeFitsMethod(tx: Tx, recipeId: string, methodId: string, workspaceId: string): Promise<boolean> {
+  const found = await tx
+    .select({ id: recipes.id })
+    .from(recipes)
+    .where(and(eq(recipes.id, recipeId), eq(recipes.workspaceId, workspaceId), eq(recipes.methodId, methodId)))
+    .for("update");
+  return found.length === 1;
 }
+// True if making parentId the parent of drinkId would form a loop (parentId
+// is drinkId or one of its variants, at any depth). The workspace's drinks are
+// locked so two concurrent re-parentings can't build a loop between them.
+async function wouldLoop(tx: Tx, drinkId: string, parentId: string, workspaceId: string): Promise<boolean> {
+  const rows = await tx
+    .select({ id: drinks.id, parentDrinkId: drinks.parentDrinkId })
+    .from(drinks)
+    .where(eq(drinks.workspaceId, workspaceId))
+    .for("update");
+  const parentOf = new Map(rows.map((r) => [r.id, r.parentDrinkId]));
+  const seen = new Set<string>();
+  for (let at: string | null | undefined = parentId; at; at = parentOf.get(at)) {
+    if (at === drinkId || seen.has(at)) return true;
+    seen.add(at);
+  }
+  return false;
+}
+
 async function replaceComponents(tx: Tx, drinkId: string, list: z.infer<typeof drinkFields.components>): Promise<void> {
   await tx.delete(drinkComponents).where(eq(drinkComponents.drinkId, drinkId));
   if (list.length === 0) return;
   await tx.insert(drinkComponents).values(
-    list.map((c, i) => ({ id: randomUUID(), drinkId, componentId: c.componentId, position: i + 1, amount: c.amount ?? null, note: c.note ?? null }))
+    list.map((c, i) => ({
+      id: randomUUID(),
+      drinkId,
+      componentId: c.componentId,
+      position: i + 1,
+      amountValue: c.amountValue ?? null,
+      amountUnit: c.amountUnit ?? null,
+      note: c.note ?? null,
+    }))
   );
 }
+
+const parents = alias(drinks, "parent");
 
 export async function loadDrinks(where: SQL | undefined): Promise<DrinkDetails[]> {
   const rows = await db
@@ -93,35 +155,38 @@ export async function loadDrinks(where: SQL | undefined): Promise<DrinkDetails[]
       id: drinks.id,
       name: drinks.name,
       description: drinks.description,
-      category: drinks.category,
       showOnPublicMenu: drinks.showOnPublicMenu,
       defaultRecipeId: drinks.defaultRecipeId,
+      servingSize: drinks.servingSize,
+      servingUnit: drinks.servingUnit,
+      method: { id: brewMethods.id, name: brewMethods.name, kind: brewMethods.kind },
+      categoryId: drinkCategories.id,
+      categoryName: drinkCategories.name,
+      parentId: parents.id,
+      parentName: parents.name,
     })
     .from(drinks)
+    .innerJoin(brewMethods, eq(drinks.methodId, brewMethods.id))
+    .leftJoin(drinkCategories, eq(drinks.categoryId, drinkCategories.id))
+    .leftJoin(parents, eq(drinks.parentDrinkId, parents.id))
     .where(where)
     .orderBy(asc(drinks.name));
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
-  const [recipeRows, componentRows] = await Promise.all([
+  const [variantRows, componentRows] = await Promise.all([
     db
-      .select({
-        drinkId: drinkRecipes.drinkId,
-        id: recipes.id,
-        name: recipes.name,
-        method: { id: brewMethods.id, name: brewMethods.name, kind: brewMethods.kind },
-      })
-      .from(drinkRecipes)
-      .innerJoin(recipes, eq(drinkRecipes.recipeId, recipes.id))
-      .innerJoin(brewMethods, eq(recipes.methodId, brewMethods.id))
-      .where(inArray(drinkRecipes.drinkId, ids))
-      .orderBy(asc(recipes.name)),
+      .select({ parentDrinkId: drinks.parentDrinkId, id: drinks.id, name: drinks.name })
+      .from(drinks)
+      .where(inArray(drinks.parentDrinkId, ids))
+      .orderBy(asc(drinks.name)),
     db
       .select({
         drinkId: drinkComponents.drinkId,
         componentId: components.id,
         name: components.name,
         componentType: components.componentType,
-        amount: drinkComponents.amount,
+        amountValue: drinkComponents.amountValue,
+        amountUnit: drinkComponents.amountUnit,
         note: drinkComponents.note,
       })
       .from(drinkComponents)
@@ -129,9 +194,11 @@ export async function loadDrinks(where: SQL | undefined): Promise<DrinkDetails[]
       .where(inArray(drinkComponents.drinkId, ids))
       .orderBy(asc(drinkComponents.position)),
   ]);
-  return rows.map((row) => ({
+  return rows.map(({ categoryId, categoryName, parentId, parentName, ...row }) => ({
     ...row,
-    recipes: recipeRows.filter((r) => r.drinkId === row.id).map(({ drinkId: _drink, ...r }) => r),
+    category: categoryId && categoryName ? { id: categoryId, name: categoryName } : null,
+    parent: parentId && parentName ? { id: parentId, name: parentName } : null,
+    variants: variantRows.filter((v) => v.parentDrinkId === row.id).map(({ id, name }) => ({ id, name })),
     components: componentRows.filter((c) => c.drinkId === row.id).map(({ drinkId: _drink, ...c }) => c),
   }));
 }
@@ -146,35 +213,26 @@ drinksRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<{ drin
   res.json({ drinks: await loadDrinks(eq(drinks.workspaceId, workspaceId)) });
 });
 
-// The categories in use, for suggestions in the drink form.
-drinksRouter.get("/categories", async (req: Request<WorkspaceParams>, res: Response<{ categories: string[] }>) => {
-  const { workspaceId } = req.params;
-  if (!(await requireMembership(res, authedUserId(req), workspaceId))) return;
-  const rows = await db
-    .selectDistinct({ category: drinks.category })
-    .from(drinks)
-    .where(and(eq(drinks.workspaceId, workspaceId), isNotNull(drinks.category)))
-    .orderBy(asc(drinks.category));
-  res.json({ categories: rows.flatMap((r) => (r.category ? [r.category] : [])) });
-});
-
 drinksRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<{ drink: DrinkDetails }>) => {
   const { workspaceId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
   const body = parseBody(createSchema, req, res);
   if (!body) return;
-  const { recipeIds, components: list, defaultRecipeId, ...fields } = body;
-  const preferred = defaultRecipeId ?? recipeIds[0]!;
-  if (!recipeIds.includes(preferred)) {
-    sendError(res, 400, "defaultRecipeId: must be one of recipeIds");
+  const { components: list, ...fields } = body;
+  if (sizeMismatch(fields.servingSize, fields.servingUnit)) {
+    sendError(res, 400, SIZE_ERROR);
     return;
   }
   const id = randomUUID();
   const error = await db.transaction(async (tx) => {
-    if (!(await recipesInWorkspace(tx, recipeIds, workspaceId))) return "recipeIds: not all recipes are in this workspace";
+    if (!(await inWorkspace(tx, brewMethods, fields.methodId, workspaceId))) return "methodId: not a brew method in this workspace";
+    if (fields.categoryId && !(await inWorkspace(tx, drinkCategories, fields.categoryId, workspaceId))) return "categoryId: not a category in this workspace";
+    if (fields.parentDrinkId && !(await inWorkspace(tx, drinks, fields.parentDrinkId, workspaceId))) return "parentDrinkId: not a drink in this workspace";
+    if (fields.defaultRecipeId && !(await recipeFitsMethod(tx, fields.defaultRecipeId, fields.methodId, workspaceId))) {
+      return "defaultRecipeId: must be a recipe of the drink's method in this workspace";
+    }
     if (!(await componentsInWorkspace(tx, list.map((c) => c.componentId), workspaceId))) return "components: componentId not a component in this workspace";
-    await tx.insert(drinks).values({ id, workspaceId, ...fields, defaultRecipeId: preferred });
-    await replaceRecipes(tx, id, recipeIds);
+    await tx.insert(drinks).values({ id, workspaceId, ...fields });
     await replaceComponents(tx, id, list);
     return null;
   });
@@ -192,33 +250,38 @@ drinksRouter.patch("/:drinkId", async (req: Request<DrinkParams>, res: Response<
   if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
   const body = parseBody(updateDrinkSchema, req, res);
   if (!body) return;
-  const { recipeIds, components: list, defaultRecipeId, ...fields } = body;
+  const { components: list, ...fields } = body;
 
   const outcome = await db.transaction(async (tx) => {
     const [existing] = await tx
-      .select({ defaultRecipeId: drinks.defaultRecipeId })
+      .select({ methodId: drinks.methodId, defaultRecipeId: drinks.defaultRecipeId, servingSize: drinks.servingSize, servingUnit: drinks.servingUnit })
       .from(drinks)
       .where(and(eq(drinks.id, drinkId), eq(drinks.workspaceId, workspaceId)))
       .for("update");
     if (!existing) return { status: 404, error: "Drink not found" } as const;
+    const bad = (error: string) => ({ status: 400, error }) as const;
+    const size = fields.servingSize === undefined ? existing.servingSize : fields.servingSize;
+    const unit = fields.servingUnit === undefined ? existing.servingUnit : fields.servingUnit;
+    if (sizeMismatch(size, unit)) return bad(SIZE_ERROR);
 
-    // The default must be one of the drink's recipes after the change.
-    const recipeList =
-      recipeIds ?? (await tx.select({ id: drinkRecipes.recipeId }).from(drinkRecipes).where(eq(drinkRecipes.drinkId, drinkId))).map((r) => r.id);
-    let preferred = defaultRecipeId === undefined ? existing.defaultRecipeId : defaultRecipeId;
-    if (preferred === null || !recipeList.includes(preferred)) {
-      if (defaultRecipeId) return { status: 400, error: "defaultRecipeId: must be one of the drink's recipes" } as const;
-      preferred = recipeList[0] ?? null;
+    const methodId = fields.methodId ?? existing.methodId;
+    if (fields.methodId && !(await inWorkspace(tx, brewMethods, fields.methodId, workspaceId))) return bad("methodId: not a brew method in this workspace");
+    if (fields.categoryId && !(await inWorkspace(tx, drinkCategories, fields.categoryId, workspaceId))) return bad("categoryId: not a category in this workspace");
+    if (fields.parentDrinkId) {
+      if (!(await inWorkspace(tx, drinks, fields.parentDrinkId, workspaceId))) return bad("parentDrinkId: not a drink in this workspace");
+      if (await wouldLoop(tx, drinkId, fields.parentDrinkId, workspaceId)) return bad("parentDrinkId: a drink can't be a variant of itself or of its own variants");
     }
-
-    if (recipeIds && !(await recipesInWorkspace(tx, recipeIds, workspaceId))) {
-      return { status: 400, error: "recipeIds: not all recipes are in this workspace" } as const;
+    // The default must fit the method after the change; a default of the old
+    // method is cleared unless a new one is sent.
+    let defaultRecipeId = fields.defaultRecipeId === undefined ? existing.defaultRecipeId : fields.defaultRecipeId;
+    if (defaultRecipeId && !(await recipeFitsMethod(tx, defaultRecipeId, methodId, workspaceId))) {
+      if (fields.defaultRecipeId) return bad("defaultRecipeId: must be a recipe of the drink's method in this workspace");
+      defaultRecipeId = null;
     }
     if (list && !(await componentsInWorkspace(tx, list.map((c) => c.componentId), workspaceId))) {
-      return { status: 400, error: "components: componentId not a component in this workspace" } as const;
+      return bad("components: componentId not a component in this workspace");
     }
-    await tx.update(drinks).set({ ...fields, defaultRecipeId: preferred }).where(eq(drinks.id, drinkId));
-    if (recipeIds) await replaceRecipes(tx, drinkId, recipeIds);
+    await tx.update(drinks).set({ ...fields, defaultRecipeId }).where(eq(drinks.id, drinkId));
     if (list) await replaceComponents(tx, drinkId, list);
     return { status: 200 } as const;
   });
@@ -235,12 +298,23 @@ drinksRouter.patch("/:drinkId", async (req: Request<DrinkParams>, res: Response<
   res.json({ drink });
 });
 
-// Brew logs keep their history with drinkId set to null.
+// Its variants move up to its parent. Brew logs keep their history with
+// drinkId set to null.
 drinksRouter.delete("/:drinkId", async (req: Request<DrinkParams>, res: Response) => {
   const { workspaceId, drinkId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
-  const [result] = await db.delete(drinks).where(and(eq(drinks.id, drinkId), eq(drinks.workspaceId, workspaceId)));
-  if (result.affectedRows === 0) {
+  const found = await db.transaction(async (tx) => {
+    const [drink] = await tx
+      .select({ parentDrinkId: drinks.parentDrinkId })
+      .from(drinks)
+      .where(and(eq(drinks.id, drinkId), eq(drinks.workspaceId, workspaceId)))
+      .for("update");
+    if (!drink) return false;
+    await tx.update(drinks).set({ parentDrinkId: drink.parentDrinkId }).where(eq(drinks.parentDrinkId, drinkId));
+    await tx.delete(drinks).where(eq(drinks.id, drinkId));
+    return true;
+  });
+  if (!found) {
     sendError(res, 404, "Drink not found");
     return;
   }

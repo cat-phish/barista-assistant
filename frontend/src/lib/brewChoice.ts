@@ -1,51 +1,46 @@
-// "What are you making?" at the top of brew setup: a brew method (then only
-// its recipes) or a drink category (then its drinks, then the drink's
-// recipes), or anything. Stored as a string so it fits a <select> and
-// localStorage: "any" | "method:<id>" | "drinks:<category>" ("drinks:" =
-// uncategorised).
-import type { Drink, Recipe } from '../api/types';
+// Brew setup picks Method → Drink → Recipe (docs/api_spec.md §5c): a brew
+// method (only methods with recipes), then "just the method" or one of its
+// drinks (in category sections, variants under their parent), then one of the
+// method's recipes, with the drink's default preselected. "none" logs a brew
+// without a recipe. Stored as a string so it fits a <select> and
+// localStorage: "method:<id>" | "none".
+import type { Drink, DrinkCategory, Recipe } from '../api/types';
+import { drinkSections, type DrinkSection } from './drinks';
 
-export type BrewWhat = { kind: 'any' } | { kind: 'method'; methodId: string } | { kind: 'drinks'; category: string | null };
-
-export function decodeWhat(value: string): BrewWhat {
-  if (value.startsWith('method:')) return { kind: 'method', methodId: value.slice('method:'.length) };
-  if (value.startsWith('drinks:')) return { kind: 'drinks', category: value.slice('drinks:'.length) || null };
-  return { kind: 'any' };
-}
+export const NO_RECIPE = 'none';
 export const encodeMethod = (methodId: string) => `method:${methodId}`;
-export const encodeDrinks = (category: string | null) => `drinks:${category ?? ''}`;
+export function decodeMethod(value: string): string | null {
+  return value.startsWith('method:') ? value.slice('method:'.length) : null;
+}
 
-// The picker's options: methods that have recipes, and drink categories that
-// have brewable drinks (uncategorised last).
-export function whatOptions(recipes: Recipe[], drinks: Drink[]): { methods: Array<{ id: string; name: string }>; categories: Array<string | null> } {
+// Methods that have recipes, by name.
+export function methodOptions(recipes: Recipe[]): Array<{ id: string; name: string }> {
   const methods = new Map<string, string>();
   for (const r of recipes) methods.set(r.method.id, r.method.name);
-  const categories = [...new Set(drinks.filter((d) => d.recipes.length > 0).map((d) => d.category))].sort((a, b) =>
-    a === null ? 1 : b === null ? -1 : a.localeCompare(b),
-  );
-  return {
-    methods: [...methods].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)),
-    categories,
-  };
+  return [...methods].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function drinkChoices(what: BrewWhat, drinks: Drink[]): Drink[] {
-  const brewable = drinks.filter((d) => d.recipes.length > 0);
-  if (what.kind === 'drinks') return brewable.filter((d) => d.category === what.category);
-  return what.kind === 'any' ? brewable : [];
+export function drinkOptions(methodId: string | null, drinks: Drink[], categories: DrinkCategory[]): DrinkSection[] {
+  return methodId ? drinkSections(drinks.filter((d) => d.method.id === methodId), categories) : [];
 }
 
-export function recipeChoices(what: BrewWhat, recipes: Recipe[], drink: Drink | null): Recipe[] {
-  if (drink) return recipes.filter((r) => drink.recipes.some((x) => x.id === r.id));
-  if (what.kind === 'method') return recipes.filter((r) => r.method.id === what.methodId);
-  return what.kind === 'any' ? recipes : [];
+export function recipeOptions(methodId: string | null, recipes: Recipe[]): Recipe[] {
+  return methodId ? recipes.filter((r) => r.method.id === methodId) : [];
 }
 
-// A valid option to restore (e.g. the last choice), else "any".
-export function validWhat(value: string | null, options: ReturnType<typeof whatOptions>): string {
-  if (!value) return 'any';
-  const what = decodeWhat(value);
-  if (what.kind === 'method') return options.methods.some((m) => m.id === what.methodId) ? value : 'any';
-  if (what.kind === 'drinks') return options.categories.includes(what.category) ? value : 'any';
-  return 'any';
+// The recipe to select: the drink's default, else the current one if it
+// still fits, else the first.
+export function pickRecipe(choices: Recipe[], drink: Drink | null, current: string): string {
+  const fits = (id: string | null | undefined): id is string => !!id && choices.some((r) => r.id === id);
+  if (fits(drink?.defaultRecipeId)) return drink.defaultRecipeId;
+  if (fits(current)) return current;
+  return choices[0]?.id ?? '';
+}
+
+// A valid choice to restore (e.g. the last one), else the first method.
+export function validMethod(value: string | null, methods: Array<{ id: string }>): string {
+  if (value === NO_RECIPE) return value;
+  const id = value ? decodeMethod(value) : null;
+  if (id && methods.some((m) => m.id === id)) return value!;
+  return methods[0] ? encodeMethod(methods[0].id) : NO_RECIPE;
 }

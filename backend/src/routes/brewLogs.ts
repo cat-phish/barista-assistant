@@ -11,12 +11,12 @@ import {
   brewLogMarks,
   brewLogs,
   brewMethods,
-  drinkRecipes,
   drinks,
   grinders,
   llmAnalyses,
   machines,
   recipes,
+  SERVING_UNITS,
   users,
   type Bean,
   type BrewLog,
@@ -75,8 +75,11 @@ const brewLogFields = {
   grinderId: z.uuid().nullable().optional(),
   // Espresso brews only (espressoError).
   machineId: z.uuid().nullable().optional(),
-  // The drink it was for; with a recipe, one of the drink's (drinkError).
+  // The drink it was for; with a recipe, one of the drink's method (drinkError).
   drinkId: z.uuid().nullable().optional(),
+  // The size made, for a drink scaled from its default (sizeError).
+  servingSize: decimalSchema({ min: 0, max: 2000, scale: 1, exclusiveMin: true }).nullable().optional(),
+  servingUnit: z.enum(SERVING_UNITS).nullable().optional(),
   timestamp: z.iso
     .datetime({ offset: true })
     .transform((s) => new Date(s))
@@ -146,14 +149,23 @@ function espressoError(
   return log.actualWaterGrams === null ? "actualWaterGrams: is required" : null;
 }
 
-// A brew for a drink uses one of the drink's recipes (docs/api_spec.md §6).
+// A size is both its number and unit, and only for a drink (docs/api_spec.md §6).
+function sizeError(log: { drinkId?: string | null; servingSize?: number | null; servingUnit?: string | null }): string | null {
+  const hasSize = (log.servingSize ?? null) !== null;
+  if (hasSize !== ((log.servingUnit ?? null) !== null)) return "servingSize: servingSize and servingUnit go together";
+  if (hasSize && !log.drinkId) return "servingSize: only for a brew made for a drink";
+  return null;
+}
+
+// A brew for a drink uses a recipe of the drink's method (docs/api_spec.md §6).
 async function drinkError(tx: Tx, drinkId: string | null, recipeId: string | null): Promise<string | null> {
   if (!drinkId || !recipeId) return null;
   const [allowed] = await tx
-    .select({ recipeId: drinkRecipes.recipeId })
-    .from(drinkRecipes)
-    .where(and(eq(drinkRecipes.drinkId, drinkId), eq(drinkRecipes.recipeId, recipeId)));
-  return allowed ? null : "recipeId: not one of the drink's recipes";
+    .select({ id: recipes.id })
+    .from(recipes)
+    .innerJoin(drinks, eq(drinks.methodId, recipes.methodId))
+    .where(and(eq(drinks.id, drinkId), eq(recipes.id, recipeId)));
+  return allowed ? null : "recipeId: not a recipe of the drink's brew method";
 }
 
 async function recipeKind(tx: Tx, recipeId: string): Promise<MethodKind | null> {
@@ -230,6 +242,8 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       grinderId: brewLogs.grinderId,
       machineId: brewLogs.machineId,
       drinkId: brewLogs.drinkId,
+      servingSize: brewLogs.servingSize,
+      servingUnit: brewLogs.servingUnit,
       timestamp: brewLogs.timestamp,
       actualDoseGrams: brewLogs.actualDoseGrams,
       actualWaterGrams: brewLogs.actualWaterGrams,
@@ -369,7 +383,7 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Bre
       marks,
     });
     if (wrongForKind) return wrongForKind;
-    const wrongForDrink = await drinkError(tx, fields.drinkId ?? null, fields.recipeId ?? null);
+    const wrongForDrink = (await drinkError(tx, fields.drinkId ?? null, fields.recipeId ?? null)) ?? sizeError(fields);
     if (wrongForDrink) return wrongForDrink;
     await tx.insert(brewLogs).values({ id, workspaceId, userId, ...fields });
     await insertMarks(tx, id, marks);
@@ -408,6 +422,8 @@ brewLogsRouter.patch(
           actualYieldGrams: brewLogs.actualYieldGrams,
           machineId: brewLogs.machineId,
           drinkId: brewLogs.drinkId,
+          servingSize: brewLogs.servingSize,
+          servingUnit: brewLogs.servingUnit,
           actualTimeSec: brewLogs.actualTimeSec,
         })
         .from(brewLogs)
@@ -442,6 +458,10 @@ brewLogsRouter.patch(
         const after = { ...log, ...fields };
         const wrongForDrink = await drinkError(tx, after.drinkId ?? null, after.recipeId ?? null);
         if (wrongForDrink) return { status: "bad_ref", error: wrongForDrink } as const;
+      }
+      if ("drinkId" in body || "servingSize" in body || "servingUnit" in body) {
+        const wrongSize = sizeError({ ...log, ...fields });
+        if (wrongSize) return { status: "bad_ref", error: wrongSize } as const;
       }
       if (Object.keys(fields).length > 0) await tx.update(brewLogs).set(fields).where(eq(brewLogs.id, brewLogId));
       // A sent list replaces the old one entirely.

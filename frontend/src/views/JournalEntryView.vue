@@ -15,6 +15,7 @@ import RatingStars from '../components/RatingStars.vue';
 import { useAnalysis } from '../composables/useAnalysis';
 import { draftFromLog, emptyDraft, parseBrewDraft } from '../lib/brewDraft';
 import { formatDoseLine, formatGrams, formatTime, formatWhen } from '../lib/format';
+import { formatSize } from '../lib/servings';
 import { canModifyBrewLog } from '../lib/permissions';
 import { useAuthStore } from '../stores/auth';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -149,7 +150,7 @@ function markLabel(m: Mark): string {
         <div>
           <h1>{{ log.bean.roasterName }} {{ log.bean.beanName }}</h1>
           <p class="muted">
-            {{ formatWhen(log.timestamp) }}<template v-if="log.drink"> · {{ log.drink.name }}</template><template v-if="log.recipe"> · {{ log.recipe.name }}</template>
+            {{ formatWhen(log.timestamp) }}<template v-if="log.drink"> · {{ log.drink.name }}</template><template v-if="log.servingSize !== null && log.servingUnit"> · {{ formatSize({ size: log.servingSize, unit: log.servingUnit }) }}</template><template v-if="log.recipe"> · {{ log.recipe.name }}</template>
           </p>
         </div>
       </div>

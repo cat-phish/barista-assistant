@@ -44,8 +44,17 @@ describe("method kinds", () => {
       id: v60,
       name: "Hario V60",
       kind: "pour_over",
+      description: null,
+      categoryId: null,
+      showOnPublicMenu: false,
     });
     expect((await owner.agent.patch(`${base}/${v60}`).send({})).status).toBe(400);
+    // Menu fields (docs/api_spec.md §3): the plain brew on the public menu.
+    const menu = await owner.agent.patch(`${base}/${v60}`).send({ showOnPublicMenu: true, description: " Fruity " });
+    expect(menu.body.brewMethod).toMatchObject({ showOnPublicMenu: true, description: "Fruity" });
+    const fake = "00000000-0000-4000-8000-000000000000";
+    expect((await owner.agent.patch(`${base}/${v60}`).send({ categoryId: fake })).body.error).toMatch(/not a category/);
+    expect((await owner.agent.post(base).send({ name: "Chemex", categoryId: fake })).status).toBe(400);
   });
 });
 
