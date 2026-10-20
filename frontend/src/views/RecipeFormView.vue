@@ -2,7 +2,7 @@
 // Recipe editor (docs/api_spec.md §5): dose + water (live ratio), optional
 // expected yield / finish time / temperature, per-grinder grind starting
 // points, and typed, timed steps.
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ApiError, errorMessage } from '../api/client';
 import { grindersApi } from '../api/grinders';
@@ -25,6 +25,7 @@ import {
   type StepDraft,
 } from '../lib/steps';
 import { useWorkspaceStore } from '../stores/workspace';
+import { estimateYield, RECIPE_ROAST_LEVEL, ROAST_LEVELS } from '../lib/scale';
 
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 const NEW_METHOD = '__new__';
@@ -40,6 +41,8 @@ const methodId = ref('');
 const dose = ref('');
 const water = ref('');
 const expectedYield = ref('');
+// Expected yield follows a light-roast estimate until typed over.
+const yieldCustom = ref(false);
 const finishFrom = ref('');
 const finishTo = ref('');
 const temp = ref('');
@@ -107,6 +110,18 @@ const valid = computed(
     Object.keys(stepsParsed.value.errors).length === 0,
 );
 const ratio = computed(() => (parsed.value.dose.ok && parsed.value.water.ok ? formatRatio(parsed.value.dose.value, parsed.value.water.value) : null));
+const yieldEstimate = computed(() =>
+  parsed.value.dose.ok && parsed.value.water.ok
+    ? estimateYield(parsed.value.dose.value, parsed.value.water.value, ROAST_LEVELS[RECIPE_ROAST_LEVEL].retention)
+    : null,
+);
+const expectedYieldValue = computed(() => (parsed.value.expectedYield?.ok ? parsed.value.expectedYield.value : null));
+watch(yieldEstimate, (est) => {
+  if (!yieldCustom.value) expectedYield.value = est === null ? '' : formatGrams(est);
+}, { immediate: true });
+watch(yieldCustom, (custom) => {
+  if (!custom) expectedYield.value = yieldEstimate.value === null ? '' : formatGrams(yieldEstimate.value);
+});
 const warnings = computed(() =>
   recipeWarnings({
     waterGrams: parsed.value.water.ok ? parsed.value.water.value : null,
@@ -145,6 +160,8 @@ onMounted(async () => {
     dose.value = formatGrams(recipe.targetDoseGrams);
     water.value = formatGrams(recipe.targetWaterGrams);
     expectedYield.value = recipe.expectedYieldGrams === null ? '' : formatGrams(recipe.expectedYieldGrams);
+    // A saved yield that isn't the estimate was typed by someone: keep it.
+    yieldCustom.value = recipe.expectedYieldGrams !== null && recipe.expectedYieldGrams !== yieldEstimate.value;
     finishFrom.value = recipe.expectedFinishMinSec === null ? '' : formatTime(recipe.expectedFinishMinSec);
     finishTo.value = recipe.expectedFinishMaxSec === null ? '' : formatTime(recipe.expectedFinishMaxSec);
     temp.value = recipe.targetTempC === null ? '' : String(recipe.targetTempC);
@@ -345,9 +362,13 @@ async function save(): Promise<void> {
 
         <div class="form-row">
           <div class="field">
-            <label for="expected-yield">Expected yield (g) <span class="muted">(optional)</span></label>
-            <input id="expected-yield" v-model="expectedYield" inputmode="decimal" placeholder="e.g. 220" :aria-invalid="submitted && !!fieldErrors.expectedYield" />
+            <label for="expected-yield">Expected yield (g)</label>
+            <input id="expected-yield" v-model="expectedYield" inputmode="decimal" placeholder="e.g. 220" :aria-invalid="submitted && !!fieldErrors.expectedYield" @input="yieldCustom = true" />
             <span v-if="submitted && fieldErrors.expectedYield" class="field-error">{{ fieldErrors.expectedYield }}</span>
+            <span v-else-if="!yieldCustom && yieldEstimate !== null" class="muted small">Estimated for a {{ ROAST_LEVELS[RECIPE_ROAST_LEVEL].label.toLowerCase() }} roast</span>
+            <button v-else-if="yieldCustom && yieldEstimate !== null && expectedYieldValue !== yieldEstimate" class="btn-link small yield-reset" type="button" @click="yieldCustom = false">
+              Use estimate ({{ formatGrams(yieldEstimate) }} g)
+            </button>
           </div>
           <div class="field">
             <label for="temp">Water temp (°C) <span class="muted">(optional)</span></label>

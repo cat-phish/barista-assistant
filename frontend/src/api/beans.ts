@@ -1,11 +1,12 @@
 import { api } from './client';
-import type { Bean } from './types';
+import type { Bean, RoastLevel } from './types';
 
 // Request body for create/update (docs/api_spec.md §4).
 export interface BeanInput {
   roasterName: string;
   beanName: string;
   process: string | null;
+  roastLevel: RoastLevel | null;
   roastDate: string | null; // YYYY-MM-DD
   inventoryWeightGrams: number;
   showOnPublicMenu: boolean;

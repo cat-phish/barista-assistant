@@ -50,6 +50,13 @@
       "when": 1792431478239,
       "tag": "0006_finish_window",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1792453382513,
+      "tag": "0007_bean_roast_level",
+      "breakpoints": true
     }
   ]
 }

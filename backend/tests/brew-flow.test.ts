@@ -67,6 +67,17 @@ describe("beans and recipes", () => {
     expect(res.body.bean).toMatchObject({ beanName: "Renamed", process: "Washed", inventoryWeightGrams: 250, roastDate: "2026-10-01T00:00:00.000Z" });
   });
 
+  it("roast level is optional, limited to ROAST_LEVELS, and can be cleared", async () => {
+    const { owner, ws } = await setup();
+    const base = `/api/workspaces/${ws.id}/beans`;
+    const bean = await newBean(owner, ws.id, { roastLevel: "medium_light" });
+    expect((await owner.agent.get(base)).body.beans[0].roastLevel).toBe("medium_light");
+    expect((await owner.agent.patch(`${base}/${bean}`).send({ roastLevel: "very dark" })).status).toBe(400);
+    expect((await owner.agent.patch(`${base}/${bean}`).send({ roastLevel: null })).body.bean.roastLevel).toBeNull();
+    expect((await owner.agent.get(base)).body.beans[0].roastLevel).toBeNull();
+    expect((await owner.agent.post(base).send({ roasterName: "A", beanName: "B" })).body.bean.roastLevel).toBeNull();
+  });
+
   it("deleting a bean with brew logs needs ?deleteBrewLogs=true", async () => {
     const { owner, ws } = await setup();
     const bean = await newBean(owner, ws.id);

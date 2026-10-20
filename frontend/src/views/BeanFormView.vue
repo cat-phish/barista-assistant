@@ -6,6 +6,8 @@ import { errorMessage } from '../api/client';
 import AppHeader from '../components/AppHeader.vue';
 import { localDateInput, parseDecimal, toDateInput } from '../lib/format';
 import { useWorkspaceStore } from '../stores/workspace';
+import type { RoastLevel } from '../api/types';
+import { ROAST_LEVELS } from '../lib/scale';
 
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 
@@ -18,6 +20,7 @@ const editing = computed(() => props.id !== undefined);
 const roasterName = ref('');
 const beanName = ref('');
 const process = ref('');
+const roastLevel = ref<RoastLevel | ''>('');
 const roastDate = ref('');
 const inventory = ref('0');
 const showOnPublicMenu = ref(true);
@@ -48,6 +51,7 @@ onMounted(async () => {
     roasterName.value = bean.roasterName;
     beanName.value = bean.beanName;
     process.value = bean.process ?? '';
+    roastLevel.value = bean.roastLevel ?? '';
     roastDate.value = toDateInput(bean.roastDate);
     inventory.value = String(bean.inventoryWeightGrams);
     showOnPublicMenu.value = bean.showOnPublicMenu;
@@ -66,6 +70,7 @@ async function save(): Promise<void> {
     roasterName: roasterName.value.trim(),
     beanName: beanName.value.trim(),
     process: process.value.trim() || null,
+    roastLevel: roastLevel.value || null,
     roastDate: roastDate.value || null,
     inventoryWeightGrams: inventoryParsed.value.value,
     showOnPublicMenu: showOnPublicMenu.value,
@@ -112,10 +117,18 @@ async function save(): Promise<void> {
           </datalist>
         </div>
         <div class="field">
-          <label for="roast-date">Roast date <span class="muted">(optional)</span></label>
-          <input id="roast-date" v-model="roastDate" type="date" :max="today" />
+          <label for="roast-level">Roast level <span class="muted">(optional)</span></label>
+          <select id="roast-level" v-model="roastLevel">
+            <option value="">Not sure</option>
+            <option v-for="(r, key) in ROAST_LEVELS" :key="key" :value="key">{{ r.label }}</option>
+          </select>
         </div>
       </div>
+      <div class="field">
+        <label for="roast-date">Roast date <span class="muted">(optional)</span></label>
+        <input id="roast-date" v-model="roastDate" type="date" :max="today" />
+      </div>
+      <p class="muted small roast-hint">Roast level helps estimate how much coffee ends up in the cup when you scale a recipe.</p>
       <div class="field">
         <label for="inventory">In stock (grams)</label>
         <input id="inventory" v-model="inventory" inputmode="numeric" :aria-invalid="submitted && !!fieldErrors.inventory" />
@@ -136,6 +149,12 @@ async function save(): Promise<void> {
 </template>
 
 <style scoped>
+.small {
+  font-size: 0.85rem;
+}
+.roast-hint {
+  margin: calc(-1 * var(--space-2)) 0 0;
+}
 .buttons {
   display: flex;
   justify-content: flex-end;

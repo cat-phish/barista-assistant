@@ -39,12 +39,16 @@ export interface Grinder {
   retiredAt: string | null; // set = retired (hidden from pickers, kept in history)
 }
 
+// docs/schema.md ROAST_LEVELS
+export type RoastLevel = 'light' | 'medium_light' | 'medium' | 'medium_dark' | 'dark';
+
 export interface Bean {
   id: string;
   workspaceId: string;
   roasterName: string;
   beanName: string;
   process: string | null;
+  roastLevel: RoastLevel | null;
   roastDate: string | null; // ISO datetime at midnight UTC
   inventoryWeightGrams: number;
   showOnPublicMenu: boolean;
