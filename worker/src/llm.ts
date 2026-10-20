@@ -9,7 +9,7 @@ import type { BrewContext } from "./context.js";
 export const SYSTEM_PROMPT =
   "You are an expert specialty coffee roaster and barista. Analyze the provided " +
   "extraction log and historical brews for this coffee bean, including roast " +
-  "age, dose, yield, total brew time, rating, and tasting notes. Suggest " +
+  "level, roast age, dose, yield, total brew time, rating, and tasting notes. Suggest " +
   "concrete parameter adjustments for the next brew. Respond strictly matching " +
   "the provided JSON schema.";
 

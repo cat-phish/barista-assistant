@@ -819,6 +819,8 @@ queue:
    ("previous" = `timestamp` earlier than the target's, newest first).
    - If the brew log no longer exists (deleted after queueing), the job
      completes without calling the LLM.
+   - The bean includes its `roastLevel` (or `null` if unknown), which
+     matters for temperature advice.
    - The prompt includes the bean's **effective** roast age in days at brew
      time (`roastAgeDays`, excluding days frozen; see §4) and
      `daysFrozenBeforeBrew`, when the bean has a `roastDate`.
@@ -835,7 +837,7 @@ queue:
 
 > "You are an expert specialty coffee roaster and barista. Analyze the provided
 > extraction log and historical brews for this coffee bean, including roast
-> age, dose, yield, total brew time, rating, and tasting notes. Suggest
+> level, roast age, dose, yield, total brew time, rating, and tasting notes. Suggest
 > concrete parameter adjustments for the next brew. Respond strictly matching
 > the provided JSON schema."
 

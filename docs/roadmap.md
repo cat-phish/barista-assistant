@@ -47,9 +47,22 @@ plan and the decisions behind it.
 - Timer adapts to the machine: automatic pre-infusion runs on the clock;
   manual shows a cue and a tap records when it really ended; none greys the
   step out so the recipe still works.
+- Decisions (2026-10-19): existing methods map V60 → pour over, Espresso →
+  espresso, AeroPress → immersion, Latte → espresso (until phase 3), others →
+  pour over. A method's kind can't change while recipes use it. Immersion has
+  the pour-over fields for now. Espresso recipes need a target yield and have
+  no water; brew-log water becomes optional (not used for espresso).
+- Grinders get optional details: stepped / stepless, setting range and step
+  size (so the AI can say "2 clicks finer"), burr type and size, manual /
+  electric. Machines: pre-infusion, flow control and pressure control kept
+  separate. Only espresso brews show the machine picker; used machines are
+  retired, not deleted.
 - Brew logs get **marks**: tapped events with the second they happened, from
   a fixed list (`first_drop`, `preinfusion_end`, later `flow_change`…). First
-  drop is a tap for everyone. The AI analysis receives the marks.
+  drop is a tap for everyone. Stored in their own table. The AI analysis
+  receives the method kind, marks and machine capabilities; its response
+  format is unchanged for now.
+- **Later:** dose / yield suggestions for espresso from the AI.
 
 ## Phase 3: Drinks + components
 

@@ -56,7 +56,8 @@ upcoming work is in `roadmap.md`.
   edited or deleted.
 - **AI analysis:** after a brew, ask for a suggestion; a background worker
   asks the LLM for grind and temperature changes with reasoning, shown next
-  time you brew that bean.
+  time you brew that bean. It sees the bean's roast level and age, the
+  recipe, and your previous brews of that bean.
 
 ## Public menu
 - An optional public page per workspace listing beans and recipes marked as
