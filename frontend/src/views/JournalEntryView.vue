@@ -3,9 +3,10 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { brewLogsApi } from '../api/brews';
 import { ApiError, errorMessage } from '../api/client';
-import type { BrewLog, LlmAnalysis } from '../api/types';
+import type { BrewLog, LlmAnalysis, Machine, Mark } from '../api/types';
 import AnalysisCard from '../components/AnalysisCard.vue';
 import { grindersApi } from '../api/grinders';
+import { machinesApi } from '../api/machines';
 import type { Grinder } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import BrewFields from '../components/BrewFields.vue';
@@ -13,10 +14,11 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import RatingStars from '../components/RatingStars.vue';
 import { useAnalysis } from '../composables/useAnalysis';
 import { draftFromLog, emptyDraft, parseBrewDraft } from '../lib/brewDraft';
-import { formatGrams, formatRatio, formatTime, formatWhen } from '../lib/format';
+import { formatDoseLine, formatGrams, formatTime, formatWhen } from '../lib/format';
 import { canModifyBrewLog } from '../lib/permissions';
 import { useAuthStore } from '../stores/auth';
 import { useWorkspaceStore } from '../stores/workspace';
+import { formatMark } from '../lib/marks';
 
 const props = defineProps<{ id: string }>();
 
@@ -27,16 +29,19 @@ const router = useRouter();
 const log = ref<BrewLog | null>(null);
 const storedAnalysis = ref<LlmAnalysis | null>(null);
 const grinders = ref<Grinder[]>([]);
+const machines = ref<Machine[]>([]);
 const loading = ref(true);
 const loadError = ref('');
 
 // "226 g (+6 vs ~220 expected)", or the expectation alone if not measured.
+// Espresso compares the shot weight with the recipe's target.
 function yieldText(l: BrewLog): string {
   const expected = l.recipe?.expectedYieldGrams ?? null;
+  const vs = l.recipe?.methodKind === 'espresso' ? (e: number) => `${formatGrams(e)} g target` : (e: number) => `~${formatGrams(e)} expected`;
   if (l.actualYieldGrams === null) return expected === null ? '–' : `Not measured (expected ~${formatGrams(expected)} g)`;
   if (expected === null) return `${formatGrams(l.actualYieldGrams)} g`;
   const diff = Math.round((l.actualYieldGrams - expected) * 10) / 10;
-  return `${formatGrams(l.actualYieldGrams)} g (${diff > 0 ? '+' : diff < 0 ? '−' : '±'}${Math.abs(diff)} vs ~${formatGrams(expected)} expected)`;
+  return `${formatGrams(l.actualYieldGrams)} g (${diff > 0 ? '+' : diff < 0 ? '−' : '±'}${Math.abs(diff)} vs ${vs(expected)})`;
 }
 
 const canModify = computed(() => !!log.value && canModifyBrewLog(log.value, workspaces.current?.role, auth.user?.id));
@@ -45,8 +50,9 @@ async function load(): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [{ brewLog }, g] = await Promise.all([brewLogsApi.get(ws, props.id), grindersApi.list(ws)]);
+    const [{ brewLog }, g, m] = await Promise.all([brewLogsApi.get(ws, props.id), grindersApi.list(ws), machinesApi.list(ws)]);
     grinders.value = g.grinders;
+    machines.value = m.machines;
     const { latestAnalysis, ...rest } = brewLog;
     log.value = rest;
     storedAnalysis.value = latestAnalysis;
@@ -69,7 +75,9 @@ function analyze(): void {
 // Edit
 const editing = ref(false);
 const draft = reactive(emptyDraft());
-const parsed = computed(() => parseBrewDraft(draft));
+// The log's recipe kind decides water vs shot weight; a log without a recipe is a filter brew.
+const espresso = computed(() => log.value?.recipe?.methodKind === 'espresso');
+const parsed = computed(() => parseBrewDraft(draft, log.value?.recipe?.methodKind ?? null));
 const submitted = ref(false);
 const saving = ref(false);
 const saveError = ref('');
@@ -90,7 +98,14 @@ async function saveEdit(): Promise<void> {
   saving.value = true;
   saveError.value = '';
   try {
-    log.value = (await brewLogsApi.update(ws, log.value.id, values)).brewLog;
+    // Espresso: the first drop is edited in the form; step times are kept.
+    const marks = espresso.value
+      ? [
+          ...log.value.marks.filter((m) => m.kind === 'step_end'),
+          ...(parsed.value.firstDropSec !== null ? [{ kind: 'first_drop' as const, stepOrder: null, atSec: parsed.value.firstDropSec }] : []),
+        ]
+      : undefined;
+    log.value = (await brewLogsApi.update(ws, log.value.id, { ...values, ...(marks ? { marks } : {}) })).brewLog;
     editing.value = false;
   } catch (err) {
     saveError.value = errorMessage(err);
@@ -116,6 +131,10 @@ async function remove(): Promise<void> {
     deleting.value = false;
   }
 }
+// "First drop" / "Step 2 ended" (the journal doesn't load the recipe's steps).
+function markLabel(m: Mark): string {
+  return m.kind === 'first_drop' ? 'First drop' : `Step ${m.stepOrder} ended`;
+}
 </script>
 
 <template>
@@ -136,11 +155,13 @@ async function remove(): Promise<void> {
       <!-- Details -->
       <section v-if="!editing" class="card stack">
         <dl class="details">
-          <div><dt>Dose : water</dt><dd>{{ formatGrams(log.actualDoseGrams) }} g : {{ formatGrams(log.actualWaterGrams) }} g <span class="muted">({{ formatRatio(log.actualDoseGrams, log.actualWaterGrams) }})</span></dd></div>
-          <div><dt>Yield</dt><dd>{{ yieldText(log) }}</dd></div>
+          <div><dt>{{ espresso ? 'Dose → shot' : 'Dose : water' }}</dt><dd>{{ formatDoseLine(log.actualDoseGrams, log.actualWaterGrams, log.actualYieldGrams) }}</dd></div>
+          <div><dt>{{ espresso ? 'Shot weight' : 'Yield' }}</dt><dd>{{ yieldText(log) }}</dd></div>
           <div><dt>Time</dt><dd>{{ formatTime(log.actualTimeSec) }}</dd></div>
           <div><dt>Water</dt><dd>{{ log.actualTempC !== null ? `${log.actualTempC} °C` : '–' }}</dd></div>
           <div><dt>Grind</dt><dd>{{ log.actualGrindSetting ?? '–' }}<template v-if="log.grinder"> · {{ log.grinder.name }}</template></dd></div>
+          <div v-if="espresso"><dt>Machine</dt><dd>{{ log.machine?.name ?? '–' }}</dd></div>
+          <div v-for="m in log.marks" :key="`${m.kind}-${m.stepOrder}`"><dt>{{ markLabel(m) }}</dt><dd>{{ formatMark(m.atSec) }}</dd></div>
           <div><dt>Rating</dt><dd><RatingStars :rating="log.rating" /></dd></div>
           <div><dt>Brewed by</dt><dd>{{ log.brewer?.email ?? 'Deleted user' }}</dd></div>
         </dl>
@@ -157,7 +178,7 @@ async function remove(): Promise<void> {
       <!-- Edit -->
       <form v-else class="card stack" novalidate @submit.prevent="saveEdit">
         <h2>Edit brew</h2>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" :espresso="espresso" :machines="machines" />
         <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
         <div class="buttons">
           <button class="btn btn-secondary" type="button" :disabled="saving" @click="editing = false">Cancel</button>

@@ -21,7 +21,12 @@ export const router = createRouter({
     { path: '/brew', name: 'brew', component: () => import('../views/BrewView.vue'), meta: { requiresWorkspace: true } },
     { path: '/journal', name: 'journal', component: () => import('../views/JournalView.vue'), meta: { requiresWorkspace: true } },
     { path: '/journal/:id', name: 'journal-entry', component: () => import('../views/JournalEntryView.vue'), props: true, meta: { requiresWorkspace: true } },
-    { path: '/grinders', name: 'grinders', component: () => import('../views/GrindersView.vue'), meta: { requiresWorkspace: true } },
+    // Equipment: three tabs (components/EquipmentTabs.vue). /grinders is the old address.
+    { path: '/equipment', redirect: '/equipment/grinders' },
+    { path: '/grinders', redirect: '/equipment/grinders' },
+    { path: '/equipment/grinders', name: 'grinders', component: () => import('../views/GrindersView.vue'), meta: { requiresWorkspace: true } },
+    { path: '/equipment/machines', name: 'machines', component: () => import('../views/MachinesView.vue'), meta: { requiresWorkspace: true } },
+    { path: '/equipment/methods', name: 'brew-methods', component: () => import('../views/MethodsView.vue'), meta: { requiresWorkspace: true } },
     { path: '/beans', name: 'beans', component: () => import('../views/BeansView.vue'), meta: { requiresWorkspace: true } },
     { path: '/beans/new', name: 'bean-new', component: () => import('../views/BeanFormView.vue'), meta: { requiresWorkspace: true, requiresEditor: true } },
     { path: '/beans/:id/edit', name: 'bean-edit', component: () => import('../views/BeanFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresEditor: true } },

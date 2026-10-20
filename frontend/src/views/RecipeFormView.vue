@@ -1,31 +1,42 @@
 <script setup lang="ts">
 // Recipe editor (docs/api_spec.md §5): dose + water (live ratio), optional
 // expected yield / finish time / temperature, per-grinder grind starting
-// points, and typed, timed steps.
+// points, and typed steps that run back to back (each with a time and how it
+// moves on). Espresso methods instead take dose + target shot weight (ratio
+// dose:yield), a shot-time and first-drop window, and a shot profile
+// (pre-infusion / soak / pressure / flow steps).
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ApiError, errorMessage } from '../api/client';
 import { grindersApi } from '../api/grinders';
 import { brewMethodsApi, recipesApi, type RecipeInput } from '../api/recipes';
-import type { BrewMethod, Grinder, StepType } from '../api/types';
+import type { BrewMethod, FlowUnit, Grinder, MethodKind } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
-import { formatGrams, formatRatio, formatTime, parseDecimal } from '../lib/format';
+import { formatGrams, formatRatio, formatTime, parseDecimal, parseTime } from '../lib/format';
 import { VueDraggable } from 'vue-draggable-plus';
 import {
+  ADVANCE,
+  advancesFor,
+  FIRST_DROP_DEFAULT_SPREAD_SEC,
+  FLOW_UNITS,
   formatFinishWindow,
   insertStepAfter,
   moveStep,
   newStepKey,
   parseFinishWindow,
   parseSteps,
+  plannedStarts,
   pourAmounts,
   recipeWarnings,
-  STEP_TYPE_ORDER,
+  stepDraft,
+  stepRules,
   STEP_TYPES,
+  stepTypesFor,
   type StepDraft,
 } from '../lib/steps';
 import { useWorkspaceStore } from '../stores/workspace';
 import { estimateYield, RECIPE_ROAST_LEVEL, ROAST_LEVELS } from '../lib/scale';
+import { METHOD_KINDS } from '../lib/equipment';
 
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 const NEW_METHOD = '__new__';
@@ -45,13 +56,18 @@ const expectedYield = ref('');
 const yieldCustom = ref(false);
 const finishFrom = ref('');
 const finishTo = ref('');
+const firstDropFrom = ref(''); // espresso only
+const firstDropTo = ref('');
+const flowUnit = ref<FlowUnit>('g_s'); // espresso flow steps
 const temp = ref('');
 const showOnPublicMenu = ref(true);
+const defaultGrinderId = ref(''); // '' = none: brewing uses the last grinder
 const grindRows = ref<Array<{ grinderId: string; setting: string }>>([]);
 const steps = ref<StepDraft[]>([]);
 
 // Inline "add a new brew method" (methods are a per-workspace list, §3).
 const newMethodName = ref('');
+const newMethodKind = ref<MethodKind>('pour_over');
 const addingMethod = ref(false);
 const methodError = ref('');
 const newMethodInput = ref<HTMLInputElement | null>(null);
@@ -61,21 +77,30 @@ const saving = ref(false);
 const error = ref('');
 const submitted = ref(false);
 
+// The chosen method's kind decides the fields (docs/api_spec.md §5).
+const kind = computed<MethodKind | null>(() => methods.value.find((m) => m.id === methodId.value)?.kind ?? null);
+const espresso = computed(() => kind.value === 'espresso');
+
 const grams = { scale: 2, min: 0, max: 10000, exclusiveMin: true, exclusiveMax: true } as const;
 const parsed = computed(() => ({
   dose: parseDecimal(dose.value, { scale: 2, min: 0, max: 1000, exclusiveMin: true, exclusiveMax: true }),
-  water: parseDecimal(water.value, grams),
-  expectedYield: expectedYield.value.trim() ? parseDecimal(expectedYield.value, grams) : null,
+  water: espresso.value ? ({ ok: true, value: null } as const) : parseDecimal(water.value, grams),
+  expectedYield: expectedYield.value.trim()
+    ? parseDecimal(expectedYield.value, grams)
+    : espresso.value
+      ? ({ ok: false, error: 'Enter the target shot weight' } as const)
+      : null,
   finish: parseFinishWindow(finishFrom.value, finishTo.value),
+  firstDrop: espresso.value ? parseFinishWindow(firstDropFrom.value, firstDropTo.value, FIRST_DROP_DEFAULT_SPREAD_SEC) : ({ ok: true, value: null } as const),
   temp: temp.value.trim() ? parseDecimal(temp.value, { scale: 1, min: 0, max: 100 }) : null,
 }));
-const stepsParsed = computed(() => parseSteps(steps.value));
+const stepsParsed = computed(() => parseSteps(steps.value, kind.value));
 // "+X g" next to each pour-to, from whatever has been typed so far (even if
 // another field in that row still has an error).
 const amounts = computed(() =>
   pourAmounts(
     steps.value.map((d) => {
-      if (STEP_TYPES[d.stepType].water === 'none') return { targetWaterGrams: null };
+      if (stepRules(d.stepType, kind.value).water === 'none') return { targetWaterGrams: null };
       const w = parseDecimal(d.water, grams);
       return { targetWaterGrams: w.ok ? w.value : null };
     }),
@@ -100,6 +125,7 @@ const fieldErrors = computed(() => {
     water: p.water.ok ? '' : p.water.error,
     expectedYield: p.expectedYield && !p.expectedYield.ok ? p.expectedYield.error : '',
     finish: p.finish.ok ? '' : p.finish.error,
+    firstDrop: p.firstDrop.ok ? '' : p.firstDrop.error,
     temp: p.temp && !p.temp.ok ? p.temp.error : '',
   };
 });
@@ -109,9 +135,16 @@ const valid = computed(
     grindErrors.value.every((e) => !e) &&
     Object.keys(stepsParsed.value.errors).length === 0,
 );
-const ratio = computed(() => (parsed.value.dose.ok && parsed.value.water.ok ? formatRatio(parsed.value.dose.value, parsed.value.water.value) : null));
+// Coffee:water, or for espresso coffee:shot weight.
+const ratio = computed(() => {
+  const p = parsed.value;
+  if (!p.dose.ok) return null;
+  const out = espresso.value ? (p.expectedYield?.ok ? p.expectedYield.value : null) : p.water.ok ? p.water.value : null;
+  return out === null ? null : formatRatio(p.dose.value, out);
+});
+// Pour-over/immersion only: espresso's yield is a target, not an estimate.
 const yieldEstimate = computed(() =>
-  parsed.value.dose.ok && parsed.value.water.ok
+  !espresso.value && parsed.value.dose.ok && parsed.value.water.ok && parsed.value.water.value !== null
     ? estimateYield(parsed.value.dose.value, parsed.value.water.value, ROAST_LEVELS[RECIPE_ROAST_LEVEL].retention)
     : null,
 );
@@ -122,12 +155,15 @@ watch(yieldEstimate, (est) => {
 watch(yieldCustom, (custom) => {
   if (!custom) expectedYield.value = yieldEstimate.value === null ? '' : formatGrams(yieldEstimate.value);
 });
+// Pour checks don't apply to espresso (no water).
 const warnings = computed(() =>
-  recipeWarnings({
-    waterGrams: parsed.value.water.ok ? parsed.value.water.value : null,
-    finishMaxSec: parsed.value.finish.ok ? (parsed.value.finish.value?.max ?? null) : null,
-    steps: stepsParsed.value.steps,
-  }),
+  espresso.value
+    ? []
+    : recipeWarnings({
+        waterGrams: parsed.value.water.ok ? parsed.value.water.value : null,
+        finishMaxSec: parsed.value.finish.ok ? (parsed.value.finish.value?.max ?? null) : null,
+        steps: stepsParsed.value.steps,
+      }),
 );
 
 // Grinder choices for a row: active grinders, plus whatever this row already uses.
@@ -158,23 +194,20 @@ onMounted(async () => {
     name.value = recipe.name;
     methodId.value = recipe.method.id;
     dose.value = formatGrams(recipe.targetDoseGrams);
-    water.value = formatGrams(recipe.targetWaterGrams);
+    water.value = recipe.targetWaterGrams === null ? '' : formatGrams(recipe.targetWaterGrams);
     expectedYield.value = recipe.expectedYieldGrams === null ? '' : formatGrams(recipe.expectedYieldGrams);
     // A saved yield that isn't the estimate was typed by someone: keep it.
     yieldCustom.value = recipe.expectedYieldGrams !== null && recipe.expectedYieldGrams !== yieldEstimate.value;
     finishFrom.value = recipe.expectedFinishMinSec === null ? '' : formatTime(recipe.expectedFinishMinSec);
     finishTo.value = recipe.expectedFinishMaxSec === null ? '' : formatTime(recipe.expectedFinishMaxSec);
+    firstDropFrom.value = recipe.firstDropMinSec === null ? '' : formatTime(recipe.firstDropMinSec);
+    firstDropTo.value = recipe.firstDropMaxSec === null ? '' : formatTime(recipe.firstDropMaxSec);
     temp.value = recipe.targetTempC === null ? '' : String(recipe.targetTempC);
     showOnPublicMenu.value = recipe.showOnPublicMenu;
+    defaultGrinderId.value = recipe.defaultGrinderId ?? '';
     grindRows.value = recipe.grindSettings.map((g) => ({ grinderId: g.grinderId, setting: g.setting }));
-    steps.value = recipe.steps.map((s) => ({
-      key: newStepKey(),
-      stepType: s.stepType,
-      label: s.label ?? '',
-      start: formatTime(s.startSec),
-      end: formatTime(s.endSec),
-      water: s.targetWaterGrams === null ? '' : formatGrams(s.targetWaterGrams),
-    }));
+    flowUnit.value = recipe.flowUnit;
+    steps.value = recipe.steps.map((s) => stepDraft(newStepKey(), s));
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -196,7 +229,7 @@ async function addMethod(): Promise<void> {
   addingMethod.value = true;
   methodError.value = '';
   try {
-    const { brewMethod } = await brewMethodsApi.create(ws, trimmed);
+    const { brewMethod } = await brewMethodsApi.create(ws, trimmed, newMethodKind.value);
     methods.value = [...methods.value, brewMethod].sort((a, b) => a.name.localeCompare(b.name));
     methodId.value = brewMethod.id;
     newMethodName.value = '';
@@ -213,29 +246,52 @@ function addGrindRow(): void {
   grindRows.value.push({ grinderId: next?.id ?? '', setting: '' });
 }
 
-// New steps continue from the previous one: start where it ended, 30 s long,
-// and (for water steps) pour to the same total until edited.
+// New steps at the end. Pour over: a 30 s bloom first (2-3x the dose in
+// water), then 30 s pours to the running total. Espresso: full pressure until
+// first drop first, then a 10 s soak.
 function addStep(): void {
-  const last = stepsParsed.value.steps[stepsParsed.value.steps.length - 1];
-  const lastWater = [...stepsParsed.value.steps].reverse().find((s) => s.targetWaterGrams !== null)?.targetWaterGrams;
-  const doseValue = parsed.value.dose.ok ? parsed.value.dose.value : null;
+  const key = newStepKey();
   const first = steps.value.length === 0;
-  const startSec = last?.endSec ?? 0;
-  const type: StepType = first ? 'bloom' : 'pour';
-  steps.value.push({
-    key: newStepKey(),
-    stepType: type,
-    label: '',
-    start: formatTime(startSec),
-    end: formatTime(startSec + (first ? 10 : 30)),
-    // A bloom is commonly 2-3x the dose in water.
-    water: first ? (doseValue ? formatGrams(Math.round(doseValue * 3)) : '') : lastWater != null ? formatGrams(lastWater) : '',
-  });
+  if (espresso.value) {
+    steps.value.push(
+      first
+        ? stepDraft(key, { stepType: 'pressure', pressureBar: 9, advance: 'first_drop', durationSec: null })
+        : stepDraft(key, { stepType: 'soak', durationSec: 10 }),
+    );
+    return;
+  }
+  const lastWater = [...stepsParsed.value.steps].reverse().find((s) => s.targetWaterGrams !== null)?.targetWaterGrams ?? null;
+  const doseValue = parsed.value.dose.ok ? parsed.value.dose.value : null;
+  steps.value.push(
+    first
+      ? stepDraft(key, { stepType: 'bloom', durationSec: 30, targetWaterGrams: doseValue ? Math.round(doseValue * 3) : null })
+      : stepDraft(key, { stepType: 'pour', durationSec: 30, targetWaterGrams: lastWater }),
+  );
 }
 
-// "+ Add step here" between steps: see insertStepAfter for how times fit.
+// When each row is planned to start, from the times typed so far.
+const starts = computed(() =>
+  plannedStarts(
+    steps.value.map((d) => {
+      const t = d.duration.trim() ? parseTime(d.duration) : null;
+      return { durationSec: t?.ok ? t.value : null, advance: d.advance };
+    }),
+  ),
+);
+function startsText(i: number): string {
+  if (i === 0) return 'Starts at 0:00';
+  const at = starts.value[i];
+  return at ? `Starts ${at.exact ? 'at' : '≈'} ${formatTime(at.at)}` : `Starts after step ${i}`;
+}
+// The time field means a length, or only a guide for steps that wait.
+function timeLabel(step: StepDraft, i: number): string {
+  if (step.advance === 'tap' || step.advance === 'first_drop') return 'About (opt.)';
+  return step.advance === 'auto' && i === steps.value.length - 1 ? 'Time (opt.)' : 'Time';
+}
+
+// "+ Add step here" between steps (nothing needs re-timing: steps run back to back).
 async function insertAfter(index: number): Promise<void> {
-  const result = insertStepAfter(steps.value, index, newStepKey());
+  const result = insertStepAfter(steps.value, index, newStepKey(), kind.value);
   if (result.index < 0) return;
   steps.value = result.steps;
   moveAnnouncement.value = `Step added at position ${result.index + 1} of ${steps.value.length}`;
@@ -248,7 +304,7 @@ function removeStep(index: number): void {
 }
 
 // Drag and drop (touch-friendly, via SortableJS) and keyboard both go through
-// moveStep, which re-times the steps to fit their new order.
+// moveStep (steps run back to back, so only the order changes).
 function onDragUpdate(event: { oldIndex?: number; newIndex?: number }): void {
   if (event.oldIndex === undefined || event.newIndex === undefined) return;
   steps.value = moveStep(steps.value, event.oldIndex, event.newIndex);
@@ -277,6 +333,12 @@ const finishHint = computed(() => {
   const oneEnd = !finishFrom.value.trim() || !finishTo.value.trim();
   return oneEnd ? `Saved as ${formatFinishWindow(w.value.min, w.value.max)} (±15 s)` : '';
 });
+const firstDropHint = computed(() => {
+  const w = parsed.value.firstDrop;
+  if (!w.ok || !w.value) return '';
+  const oneEnd = !firstDropFrom.value.trim() || !firstDropTo.value.trim();
+  return oneEnd ? `Saved as ${formatFinishWindow(w.value.min, w.value.max)} (±${FIRST_DROP_DEFAULT_SPREAD_SEC} s)` : '';
+});
 
 async function save(): Promise<void> {
   submitted.value = true;
@@ -291,9 +353,13 @@ async function save(): Promise<void> {
     expectedYieldGrams: p.expectedYield?.ok ? p.expectedYield.value : null,
     expectedFinishMinSec: p.finish.ok ? (p.finish.value?.min ?? null) : null,
     expectedFinishMaxSec: p.finish.ok ? (p.finish.value?.max ?? null) : null,
+    firstDropMinSec: p.firstDrop.ok ? (p.firstDrop.value?.min ?? null) : null,
+    firstDropMaxSec: p.firstDrop.ok ? (p.firstDrop.value?.max ?? null) : null,
     targetTempC: p.temp?.ok ? p.temp.value : null,
     showOnPublicMenu: showOnPublicMenu.value,
+    defaultGrinderId: defaultGrinderId.value || null,
     grindSettings: grindRows.value.map((r) => ({ grinderId: r.grinderId, setting: r.setting.trim() })),
+    flowUnit: flowUnit.value,
     steps: stepsParsed.value.steps,
   };
   saving.value = true;
@@ -340,6 +406,12 @@ async function save(): Promise<void> {
             <label for="new-method">New method name</label>
             <input id="new-method" ref="newMethodInput" v-model="newMethodName" maxlength="100" placeholder="e.g. Chemex" @keydown.enter.prevent="addMethod" />
           </div>
+          <div class="field">
+            <label for="new-method-kind">Kind</label>
+            <select id="new-method-kind" v-model="newMethodKind">
+              <option v-for="(k, key) in METHOD_KINDS" :key="key" :value="key">{{ k.label }}</option>
+            </select>
+          </div>
           <button class="btn btn-secondary" type="button" :disabled="addingMethod || !newMethodName.trim()" @click="addMethod">Add</button>
           <span v-if="methodError" class="field-error full">{{ methodError }}</span>
         </div>
@@ -350,18 +422,23 @@ async function save(): Promise<void> {
             <input id="dose" v-model="dose" inputmode="decimal" placeholder="15" :aria-invalid="submitted && !!fieldErrors.dose" />
             <span v-if="submitted && fieldErrors.dose" class="field-error">{{ fieldErrors.dose }}</span>
           </div>
-          <div class="field">
+          <div v-if="espresso" class="field">
+            <label for="expected-yield">Shot weight (g)</label>
+            <input id="expected-yield" v-model="expectedYield" inputmode="decimal" placeholder="36" :aria-invalid="submitted && !!fieldErrors.expectedYield" @input="yieldCustom = true" />
+            <span v-if="submitted && fieldErrors.expectedYield" class="field-error">{{ fieldErrors.expectedYield }}</span>
+          </div>
+          <div v-else class="field">
             <label for="water">Water (g)</label>
             <input id="water" v-model="water" inputmode="decimal" placeholder="250" :aria-invalid="submitted && !!fieldErrors.water" />
             <span v-if="submitted && fieldErrors.water" class="field-error">{{ fieldErrors.water }}</span>
           </div>
         </div>
         <p class="ratio" aria-live="polite">
-          Coffee : water <strong>{{ ratio ?? '–' }}</strong>
+          {{ espresso ? 'Coffee : shot' : 'Coffee : water' }} <strong>{{ ratio ?? '–' }}</strong>
         </p>
 
         <div class="form-row">
-          <div class="field">
+          <div v-if="!espresso" class="field">
             <label for="expected-yield">Expected yield (g)</label>
             <input id="expected-yield" v-model="expectedYield" inputmode="decimal" placeholder="e.g. 220" :aria-invalid="submitted && !!fieldErrors.expectedYield" @input="yieldCustom = true" />
             <span v-if="submitted && fieldErrors.expectedYield" class="field-error">{{ fieldErrors.expectedYield }}</span>
@@ -377,7 +454,7 @@ async function save(): Promise<void> {
           </div>
         </div>
         <fieldset class="finish">
-          <legend>Target finish <span class="muted">(optional)</span></legend>
+          <legend>{{ espresso ? 'Target shot time' : 'Target finish' }} <span class="muted">(optional)</span></legend>
           <div class="finish-row">
             <div class="field">
               <label for="finish-from">From</label>
@@ -392,6 +469,22 @@ async function save(): Promise<void> {
           <!-- Shown live once both ends are filled: a backwards range is unambiguous. -->
           <span v-if="fieldErrors.finish && (submitted || (finishFrom.trim() && finishTo.trim()))" class="field-error">{{ fieldErrors.finish }}</span>
           <span v-else-if="finishHint" class="hint">{{ finishHint }}</span>
+        </fieldset>
+        <fieldset v-if="espresso" class="finish">
+          <legend>First drop <span class="muted">(optional)</span></legend>
+          <div class="finish-row">
+            <div class="field">
+              <label for="drop-from">From</label>
+              <input id="drop-from" v-model="firstDropFrom" inputmode="numeric" placeholder="m:ss" :aria-invalid="submitted && !!fieldErrors.firstDrop" />
+            </div>
+            <span class="dash" aria-hidden="true">–</span>
+            <div class="field">
+              <label for="drop-to">To</label>
+              <input id="drop-to" v-model="firstDropTo" inputmode="numeric" placeholder="m:ss" :aria-invalid="submitted && !!fieldErrors.firstDrop" />
+            </div>
+          </div>
+          <span v-if="fieldErrors.firstDrop && (submitted || (firstDropFrom.trim() && firstDropTo.trim()))" class="field-error">{{ fieldErrors.firstDrop }}</span>
+          <span v-else-if="firstDropHint" class="hint">{{ firstDropHint }}</span>
         </fieldset>
         <label class="checkbox">
           <input v-model="showOnPublicMenu" type="checkbox" />
@@ -409,6 +502,16 @@ async function save(): Promise<void> {
         <p v-if="grinders.length === 0" class="muted small">
           No grinders yet. <RouterLink :to="{ name: 'grinders' }">Add one</RouterLink> to save a starting point for it.
         </p>
+        <div v-else class="field">
+          <label for="default-grinder">Default grinder <span class="muted">(optional)</span></label>
+          <select id="default-grinder" v-model="defaultGrinderId">
+            <option value="">None: use the last grinder</option>
+            <option v-for="g in grinders.filter((x) => !x.retiredAt || x.id === defaultGrinderId)" :key="g.id" :value="g.id">
+              {{ g.name }}{{ g.retiredAt ? ' (retired)' : '' }}
+            </option>
+          </select>
+          <span class="hint">Selected for you when you brew this recipe.</span>
+        </div>
         <ul v-if="grindRows.length" class="grind-rows">
           <li v-for="(row, i) in grindRows" :key="i" class="grind-row">
             <div class="field">
@@ -431,11 +534,22 @@ async function save(): Promise<void> {
 
       <section class="card stack">
         <div class="steps-head">
-          <h2>Recipe steps</h2>
-          <span class="muted small">Times from the start of the brew. Gaps between steps are waiting time.</span>
+          <h2>{{ espresso ? 'Shot profile' : 'Recipe steps' }}</h2>
+          <span class="muted small">
+            Steps run one after another. Each moves on by itself after its time, or waits for your tap{{ espresso ? ' or the first drop' : '' }}.
+          </span>
         </div>
-        <p v-if="steps.length === 0" class="muted">No steps: the timer works as a stopwatch.</p>
-        <p v-if="steps.length > 1" class="muted small">Drag ⠿ to reorder; times shift to fit, keeping each step's length and the wait before it.</p>
+        <div v-if="espresso" class="field flow-unit">
+          <label for="flow-unit">Flow unit</label>
+          <select id="flow-unit" v-model="flowUnit">
+            <option value="g_s">g/s (scale)</option>
+            <option value="ml_s">ml/s (flow meter)</option>
+          </select>
+        </div>
+        <p v-if="steps.length === 0" class="muted">
+          {{ espresso ? 'No steps: the shot timer just times the shot and records the first drop.' : 'No steps: the timer works as a stopwatch.' }}
+        </p>
+        <p v-if="steps.length > 1" class="muted small">Drag ⠿ to reorder.</p>
         <span class="visually-hidden" aria-live="polite">{{ moveAnnouncement }}</span>
         <VueDraggable
           v-if="steps.length"
@@ -461,32 +575,60 @@ async function save(): Promise<void> {
               >⠿</button>
             </div>
             <div class="step-fields">
-              <div class="field">
+              <div class="field full">
                 <label :for="`step-type-${i}`">Type</label>
                 <select :id="`step-type-${i}`" v-model="step.stepType">
-                  <option v-for="t in STEP_TYPE_ORDER" :key="t" :value="t">{{ STEP_TYPES[t].label }}</option>
+                  <option v-for="t in stepTypesFor(kind)" :key="t" :value="t">{{ STEP_TYPES[t].label }}</option>
+                  <option v-if="!stepTypesFor(kind).includes(step.stepType)" :value="step.stepType" disabled>{{ STEP_TYPES[step.stepType].label }}</option>
                 </select>
               </div>
               <div class="field">
-                <label :for="`step-label-${i}`">Label <span class="muted">(optional)</span></label>
-                <input :id="`step-label-${i}`" v-model="step.label" maxlength="255" :placeholder="STEP_TYPES[step.stepType].label" />
+                <label :for="`step-time-${i}`">{{ timeLabel(step, i) }}</label>
+                <input :id="`step-time-${i}`" v-model="step.duration" inputmode="numeric" :placeholder="step.advance === 'auto' && i === steps.length - 1 ? 'until done' : 'm:ss'" />
               </div>
               <div class="field">
-                <label :for="`step-start-${i}`">Start</label>
-                <input :id="`step-start-${i}`" v-model="step.start" inputmode="numeric" placeholder="m:ss" />
+                <label :for="`step-advance-${i}`">Moves on</label>
+                <select :id="`step-advance-${i}`" v-model="step.advance">
+                  <option v-for="a in advancesFor(kind)" :key="a" :value="a">{{ ADVANCE[a].label }}</option>
+                </select>
               </div>
-              <div class="field">
-                <label :for="`step-end-${i}`">End</label>
-                <input :id="`step-end-${i}`" v-model="step.end" inputmode="numeric" placeholder="m:ss" />
-              </div>
-              <div v-if="STEP_TYPES[step.stepType].water !== 'none'" class="field pour-to">
+              <p class="step-when muted full">{{ startsText(i) }} · {{ ADVANCE[step.advance].hint }}</p>
+              <div v-if="stepRules(step.stepType, kind).water !== 'none'" class="field">
                 <label :for="`step-water-${i}`">
-                  Pour to (g)<span v-if="STEP_TYPES[step.stepType].water === 'optional'" class="muted"> (optional)</span>
+                  Pour to (g)<span v-if="stepRules(step.stepType, kind).water === 'optional'" class="muted"> (opt.)</span>
                 </label>
                 <div class="pour-row">
                   <input :id="`step-water-${i}`" v-model="step.water" inputmode="decimal" />
                   <span v-if="amounts[i] != null" class="amount" :aria-label="`adds ${amounts[i]} grams`">+{{ formatGrams(amounts[i]!) }} g</span>
                 </div>
+              </div>
+              <template v-if="stepRules(step.stepType, kind).pressure !== 'none'">
+                <div class="field">
+                  <label :for="`step-pressure-${i}`">Pressure (bar)<span v-if="stepRules(step.stepType, kind).pressure === 'optional'" class="muted"> (opt.)</span></label>
+                  <input :id="`step-pressure-${i}`" v-model="step.pressure" inputmode="decimal" placeholder="e.g. 9" />
+                </div>
+                <div class="field">
+                  <label :for="`step-pressure-end-${i}`">Ramp to <span class="muted">(opt.)</span></label>
+                  <input :id="`step-pressure-end-${i}`" v-model="step.pressureEnd" inputmode="decimal" placeholder="e.g. 6" />
+                </div>
+              </template>
+              <template v-if="stepRules(step.stepType, kind).flow !== 'none'">
+                <div class="field">
+                  <label :for="`step-flow-${i}`">Flow ({{ FLOW_UNITS[flowUnit] }})<span v-if="stepRules(step.stepType, kind).flow === 'optional'" class="muted"> (opt.)</span></label>
+                  <input :id="`step-flow-${i}`" v-model="step.flow" inputmode="decimal" placeholder="e.g. 4" />
+                </div>
+                <div class="field">
+                  <label :for="`step-flow-end-${i}`">Ramp to <span class="muted">(opt.)</span></label>
+                  <input :id="`step-flow-end-${i}`" v-model="step.flowEnd" inputmode="decimal" placeholder="e.g. 2" />
+                </div>
+              </template>
+              <div class="field">
+                <label :for="`step-label-${i}`">Label <span class="muted">(opt.)</span></label>
+                <input :id="`step-label-${i}`" v-model="step.label" maxlength="255" :placeholder="STEP_TYPES[step.stepType].label" />
+              </div>
+              <div class="field">
+                <label :for="`step-temp-${i}`">Temp (°C) <span class="muted">(opt.)</span></label>
+                <input :id="`step-temp-${i}`" v-model="step.temp" inputmode="decimal" placeholder="e.g. 93" />
               </div>
               <span v-if="stepsParsed.errors[i]" class="field-error full">{{ stepsParsed.errors[i] }}</span>
             </div>
@@ -526,6 +668,13 @@ h2 {
 }
 p {
   margin: 0;
+}
+.note {
+  margin: 0;
+  color: var(--brand);
+  background: var(--brand-tint);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
 }
 .small {
   font-size: 0.85rem;
@@ -627,6 +776,16 @@ p {
   font-weight: 600;
   cursor: pointer;
 }
+.step-when {
+  margin: calc(-1 * var(--space-1)) 0 0;
+  font-size: 0.8rem;
+}
+.full {
+  grid-column: 1 / -1;
+}
+.flow-unit {
+  max-width: 14rem;
+}
 /* A dashed rule on each side of the label, like a divider between steps. */
 .insert-here::before,
 .insert-here::after {
@@ -687,9 +846,10 @@ p {
   font-size: 0.85rem;
   font-weight: 700;
 }
+/* Right column a bit wider: "Moves on" options like "First drop" fit on a phone. */
 .step-fields {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
   gap: var(--space-2);
 }
 .step-fields label {

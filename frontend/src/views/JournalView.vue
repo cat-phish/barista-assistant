@@ -7,7 +7,7 @@ import { errorMessage } from '../api/client';
 import type { Bean, BrewLog } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import RatingStars from '../components/RatingStars.vue';
-import { formatGrams, formatRatio, formatTime, formatWhen } from '../lib/format';
+import { formatDoseLine, formatGrams, formatTime, formatWhen } from '../lib/format';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const PAGE_SIZE = 20;
@@ -93,8 +93,8 @@ watch(beanFilter, () => load(true));
             <strong>{{ log.bean.roasterName }} {{ log.bean.beanName }}</strong>
             <span v-if="log.recipe" class="muted">{{ log.recipe.name }}</span>
             <span class="facts">
-              <span>{{ formatGrams(log.actualDoseGrams) }} g : {{ formatGrams(log.actualWaterGrams) }} g ({{ formatRatio(log.actualDoseGrams, log.actualWaterGrams) }})</span>
-              <span v-if="log.actualYieldGrams !== null">→ {{ formatGrams(log.actualYieldGrams) }} g yield</span>
+              <span>{{ formatDoseLine(log.actualDoseGrams, log.actualWaterGrams, log.actualYieldGrams) }}</span>
+              <span v-if="log.actualYieldGrams !== null && log.actualWaterGrams !== null">→ {{ formatGrams(log.actualYieldGrams) }} g yield</span>
               <span>{{ formatTime(log.actualTimeSec) }}</span>
               <span v-if="log.actualTempC !== null">{{ log.actualTempC }} °C</span>
               <span v-if="log.actualGrindSetting || log.grinder">{{ [log.actualGrindSetting, log.grinder?.name].filter(Boolean).join(' · ') }}</span>

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { beanFreezes, beans, brewLogs, brewMethods, grinders, llmAnalyses, recipeGrindSettings, recipes, recipeSteps, users, workspaces } from "@barista/shared/schema";
+import { beanFreezes, beans, brewLogMarks, brewLogs, brewMethods, grinders, llmAnalyses, machines, recipeGrindSettings, recipes, recipeSteps, users, workspaces } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BrewContext } from "../src/context.js";
@@ -34,9 +34,9 @@ beforeEach(async () => {
   await db.insert(beans).values({ id: beanId, workspaceId, roasterName: "Onyx", beanName: "Guji", roastLevel: "light", roastDate: new Date("2026-10-01T00:00:00Z") });
   await db.insert(recipes).values({ id: recipeId, workspaceId, name: "House V60", methodId, targetDoseGrams: 15, targetWaterGrams: 250, expectedYieldGrams: 220, expectedFinishMinSec: 165, expectedFinishMaxSec: 195, targetTempC: 94 });
   await db.insert(recipeSteps).values([
-    { id: randomUUID(), recipeId, stepOrder: 1, stepType: "bloom", startSec: 0, endSec: 45, targetWaterGrams: 50 },
-    { id: randomUUID(), recipeId, stepOrder: 2, stepType: "swirl", label: "Gentle swirl", startSec: 45, endSec: 45 },
-    { id: randomUUID(), recipeId, stepOrder: 3, stepType: "pour", startSec: 60, endSec: 150, targetWaterGrams: 250 },
+    { id: randomUUID(), recipeId, stepOrder: 1, stepType: "bloom", durationSec: 45, advance: "tap", targetWaterGrams: 50, targetTempC: 85 },
+    { id: randomUUID(), recipeId, stepOrder: 2, stepType: "swirl", label: "Gentle swirl", durationSec: 0 },
+    { id: randomUUID(), recipeId, stepOrder: 3, stepType: "pour", durationSec: 90, targetWaterGrams: 250 },
   ]);
   for (let day = 2; day <= 9; day++) {
     const id = randomUUID();
@@ -56,13 +56,14 @@ describe("processBrewAnalysis", () => {
 
     expect(result.status).toBe("saved");
     const context = llm.mock.calls[0]![0] as BrewContext;
-    expect(context.brew).toMatchObject({ tastingNotes: "day 8", roastAgeDays: 7, daysFrozenBeforeBrew: 0, brewRatio: 16.67, recipeName: "House V60", actualWaterGrams: 250, actualYieldGrams: 221.5 });
+    expect(context.brew).toMatchObject({ tastingNotes: "day 8", roastAgeDays: 7, daysFrozenBeforeBrew: 0, brewRatio: 16.67, recipeName: "House V60", methodKind: "pour_over", actualWaterGrams: 250, actualYieldGrams: 221.5 });
+    expect(context.previousBrews[0]).toMatchObject({ recipeName: null, methodKind: null });
     expect(context.recipe).toMatchObject({
-      name: "House V60", method: "V60", targetWaterGrams: 250, expectedYieldGrams: 220, expectedFinishMinSec: 165, expectedFinishMaxSec: 195, grindStartingPoints: [],
+      name: "House V60", method: "V60", methodKind: "pour_over", firstDropMinSec: null, targetWaterGrams: 250, expectedYieldGrams: 220, expectedFinishMinSec: 165, expectedFinishMaxSec: 195, grindStartingPoints: [],
       steps: [
-        { stepType: "bloom", label: null, startSec: 0, endSec: 45, targetWaterGrams: 50 },
-        { stepType: "swirl", label: "Gentle swirl", startSec: 45, endSec: 45, targetWaterGrams: null },
-        { stepType: "pour", startSec: 60, endSec: 150, targetWaterGrams: 250 },
+        { stepType: "bloom", label: null, durationSec: 45, advance: "tap", targetWaterGrams: 50, targetTempC: 85, pressureBar: null },
+        { stepType: "swirl", label: "Gentle swirl", durationSec: 0, advance: "auto", targetWaterGrams: null },
+        { stepType: "pour", durationSec: 90, targetWaterGrams: 250 },
       ],
     });
     expect(context.bean).toEqual({ roasterName: "Onyx", beanName: "Guji", process: null, roastLevel: "light", roastDate: "2026-10-01" });
@@ -73,6 +74,30 @@ describe("processBrewAnalysis", () => {
     const saved = await db.select().from(llmAnalyses).where(eq(llmAnalyses.brewLogId, logIds.day8!));
     expect(saved).toHaveLength(1);
     expect(saved[0]).toMatchObject(ANALYSIS);
+  });
+
+  it("espresso brews: no water, ratio from the shot weight, first-drop window from the recipe", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    const methodId = randomUUID();
+    const recipeId = randomUUID();
+    const id = randomUUID();
+    await db.insert(brewMethods).values({ id: methodId, workspaceId, name: "Espresso", kind: "espresso" });
+    await db.insert(recipes).values({ id: recipeId, workspaceId, name: "Classic", methodId, targetDoseGrams: 18, expectedYieldGrams: 36, expectedFinishMinSec: 25, expectedFinishMaxSec: 32, firstDropMinSec: 6, firstDropMaxSec: 9 });
+    const machineId = randomUUID();
+    await db.insert(machines).values({ id: machineId, workspaceId, name: "Linea Mini", preinfusion: "manual", flowControl: "manual" });
+    await db.insert(brewLogs).values({ id, workspaceId, userId, beanId, recipeId, machineId, timestamp: new Date("2026-10-09T09:00:00Z"), actualDoseGrams: 18, actualYieldGrams: 40, actualTimeSec: 27 });
+    await db.insert(brewLogMarks).values([
+      { id: randomUUID(), brewLogId: id, kind: "first_drop", atSec: 7.4 },
+      { id: randomUUID(), brewLogId: id, kind: "step_end", stepOrder: 1, atSec: 6 },
+    ]);
+
+    await processBrewAnalysis({ brewLogId: id });
+    const context = llm.mock.calls[0]![0] as BrewContext;
+    expect(context.brew).toMatchObject({ methodKind: "espresso", actualWaterGrams: null, actualYieldGrams: 40, brewRatio: 2.22 });
+    expect(context.brew.machine).toEqual({ name: "Linea Mini", preinfusion: "manual", flowControl: "manual", pressureControl: "none" });
+    expect(context.brew.marks).toEqual([{ kind: "step_end", stepOrder: 1, atSec: 6 }, { kind: "first_drop", stepOrder: null, atSec: 7.4 }]);
+    expect(context.previousBrews[0]?.marks).toEqual([]);
+    expect(context.recipe).toMatchObject({ methodKind: "espresso", targetWaterGrams: null, expectedYieldGrams: 36, firstDropMinSec: 6, firstDropMaxSec: 9, flowUnit: "g_s" });
   });
 
   it("uses the effective roast age at each brew's date, excluding days frozen", async () => {
@@ -88,18 +113,19 @@ describe("processBrewAnalysis", () => {
     expect(byDay["day 7"]).toEqual([4, 2]); // after thawing: resumed
   });
 
-  it("tells the LLM which grinder each brew used (retired grinders included)", async () => {
+  it("tells the LLM which grinder each brew used, with its details (retired grinders included)", async () => {
     llm.mockResolvedValue(ANALYSIS);
     const c40 = randomUUID();
-    await db.insert(grinders).values({ id: c40, workspaceId, name: "Comandante C40", retiredAt: new Date() });
+    await db.insert(grinders).values({ id: c40, workspaceId, name: "Comandante C40", adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, retiredAt: new Date() });
     await db.update(brewLogs).set({ grinderId: c40, actualGrindSetting: "20" }).where(eq(brewLogs.id, logIds.day8!));
     await db.update(brewLogs).set({ grinderId: c40, actualGrindSetting: "22" }).where(eq(brewLogs.id, logIds.day6!));
     const recipeId = (await db.select({ id: recipes.id }).from(recipes))[0]!.id;
     await db.insert(recipeGrindSettings).values({ id: randomUUID(), recipeId, grinderId: c40, setting: "21" });
     await processBrewAnalysis({ brewLogId: logIds.day8! });
     const context = llm.mock.calls[0]![0] as BrewContext;
-    expect(context.brew).toMatchObject({ grinderName: "Comandante C40", actualGrindSetting: "20" });
-    const byDay = Object.fromEntries(context.previousBrews.map((b) => [b.tastingNotes, b.grinderName]));
+    expect(context.brew).toMatchObject({ actualGrindSetting: "20", machine: null });
+    expect(context.brew.grinder).toEqual({ name: "Comandante C40", adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, burrType: null, burrSizeMm: null, power: null });
+    const byDay = Object.fromEntries(context.previousBrews.map((b) => [b.tastingNotes, b.grinder?.name ?? null]));
     expect(byDay).toMatchObject({ "day 6": "Comandante C40", "day 7": null });
     expect(context.recipe?.grindStartingPoints).toEqual([{ grinderName: "Comandante C40", setting: "21" }]);
   });

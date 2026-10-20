@@ -26,17 +26,49 @@ export interface ErrorBody {
   [extra: string]: unknown;
 }
 
+// docs/schema.md METHOD_KINDS: decides the recipe fields and timer (docs/api_spec.md §3).
+export type MethodKind = 'pour_over' | 'immersion' | 'espresso';
+
 export interface BrewMethod {
   id: string;
   name: string;
+  kind: MethodKind;
 }
 
 // docs/api_spec.md §3b
-export interface Grinder {
+// docs/api_spec.md §3b: details are optional (null when unknown).
+export type GrinderAdjustment = 'stepped' | 'stepless';
+export type BurrType = 'conical' | 'flat';
+export type GrinderPower = 'manual' | 'electric';
+export interface GrinderDetails {
+  notes: string | null;
+  adjustment: GrinderAdjustment | null;
+  settingMin: number | null; // dial range: both or neither
+  settingMax: number | null;
+  stepSize: number | null;
+  burrType: BurrType | null;
+  burrSizeMm: number | null;
+  power: GrinderPower | null;
+}
+export interface Grinder extends GrinderDetails {
+  id: string;
+  name: string;
+  retiredAt: string | null; // set = retired (hidden from pickers, kept in history)
+}
+
+// docs/api_spec.md §3c
+export type Preinfusion = 'none' | 'automatic' | 'manual';
+export type ProfileControl = 'none' | 'manual' | 'programmable';
+export interface MachineCapabilities {
+  preinfusion: Preinfusion;
+  flowControl: ProfileControl;
+  pressureControl: ProfileControl;
+}
+export interface Machine extends MachineCapabilities {
   id: string;
   name: string;
   notes: string | null;
-  retiredAt: string | null; // set = retired (hidden from pickers, kept in history)
+  retiredAt: string | null;
 }
 
 // docs/schema.md ROAST_LEVELS
@@ -62,16 +94,40 @@ export interface FreezePeriod {
 }
 
 // docs/api_spec.md §5
-export type StepType = 'bloom' | 'pour' | 'swirl' | 'stir' | 'wait' | 'press' | 'other';
+// docs/api_spec.md §5: which types a recipe can use depends on its method's kind.
+export type StepType =
+  | 'bloom' | 'pour' | 'swirl' | 'stir' | 'wait' | 'press' // pour over / immersion
+  | 'preinfusion' | 'soak' | 'pressure' | 'flow' // espresso
+  | 'other';
+// How the timer moves on: auto (after the duration), auto_log (plus a "Log it"
+// button), tap (waits for Next), first_drop (espresso: waits for First drop).
+export type StepAdvance = 'auto' | 'auto_log' | 'tap' | 'first_drop';
+export type FlowUnit = 'g_s' | 'ml_s';
 
-export interface RecipeStep {
-  id: string;
-  stepOrder: number;
+// docs/api_spec.md §6: when things actually happened.
+export type MarkKind = 'first_drop' | 'step_end';
+export interface Mark {
+  kind: MarkKind;
+  stepOrder: number | null; // step_end only: which step (1-based)
+  atSec: number; // seconds from the start, 0.1 s
+}
+
+// Steps run back to back; each starts when the previous one actually ended.
+export interface StepFields {
   stepType: StepType;
   label: string | null;
-  startSec: number;
-  endSec: number;
+  durationSec: number | null; // null: last step = until you finish; tap/first_drop = no guide
+  advance: StepAdvance;
   targetWaterGrams: number | null; // cumulative "pour to" weight (water steps)
+  targetTempC: number | null;
+  pressureBar: number | null; // espresso; an end value makes a ramp
+  pressureEndBar: number | null;
+  flowRate: number | null; // in the recipe's flowUnit
+  flowEndRate: number | null;
+}
+export interface RecipeStep extends StepFields {
+  id: string;
+  stepOrder: number;
 }
 
 export interface RecipeGrindSetting {
@@ -86,12 +142,16 @@ export interface Recipe {
   name: string;
   method: BrewMethod;
   targetDoseGrams: number;
-  targetWaterGrams: number;
-  expectedYieldGrams: number | null;
-  expectedFinishMinSec: number | null; // target finish window (both or neither)
+  targetWaterGrams: number | null; // null for espresso
+  expectedYieldGrams: number | null; // estimate; for espresso the target shot weight (always set)
+  expectedFinishMinSec: number | null; // target finish (shot time) window (both or neither)
   expectedFinishMaxSec: number | null;
+  firstDropMinSec: number | null; // espresso only (both or neither)
+  firstDropMaxSec: number | null;
+  flowUnit: FlowUnit;
   targetTempC: number | null;
   showOnPublicMenu: boolean;
+  defaultGrinderId: string | null; // preselected when brewing this recipe
   grindSettings: RecipeGrindSetting[];
   steps: RecipeStep[];
 }
@@ -115,9 +175,10 @@ export interface BrewLog {
   beanId: string;
   recipeId: string | null;
   grinderId: string | null;
+  machineId: string | null; // espresso only
   timestamp: string;
   actualDoseGrams: number;
-  actualWaterGrams: number;
+  actualWaterGrams: number | null; // null for espresso
   actualYieldGrams: number | null; // measured beverage weight
   actualTempC: number | null;
   actualGrindSetting: string | null;
@@ -125,8 +186,10 @@ export interface BrewLog {
   rating: number | null;
   tastingNotes: string | null;
   bean: { id: string; roasterName: string; beanName: string };
-  recipe: { id: string; name: string; expectedYieldGrams: number | null } | null;
+  recipe: { id: string; name: string; expectedYieldGrams: number | null; methodKind: MethodKind } | null;
   grinder: { id: string; name: string } | null;
+  machine: { id: string; name: string } | null;
+  marks: Mark[]; // earliest first; espresso only
   brewer: { id: string; email: string } | null;
 }
 

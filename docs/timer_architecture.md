@@ -55,22 +55,28 @@ export default defineConfig({
 });
 ```
 
-## 3. Timer State Mechanics (`PourOverTimer.vue`)
+## 3. Timer State Mechanics (`BrewTimer.vue`, every recipe)
 *   **Delta-Timestamp Calculation:** Never increment a counter inside `setInterval`. Store `startTime = Date.now() - elapsedMs` and compute `elapsedMs = Date.now() - startTime` inside a `requestAnimationFrame` loop.
 *   **Screen Wake Lock:** Request `navigator.wakeLock.request('screen')` when the brew starts and release it when finished or unmounted.
-*   **Clock-driven steps** (supersedes the reference component's manual "Next Step" button): recipe steps have a `stepType`, optional `label`, `startSec` and `endSec` (`docs/api_spec.md` §5). The timer derives everything from the elapsed time; nothing advances on taps:
-    *   **Current step** = the step whose window contains the elapsed time (`startSec ≤ t < endSec`). Show its type/label and, for water steps, "Pour to {targetWaterGrams} g (+{amount} g)" plus "until m:ss".
-    *   **Between steps** (a gap): show **Wait** with a countdown to the next step's start and a preview of it ("Pour to 250 g at 1:30, in 0:12").
-    *   **After the last step:** show "Drawdown / finishing".
-    *   **Target finish window** (recipe's `expectedFinishMinSec`–`expectedFinishMaxSec`, if set), shown throughout: "Target 2:45–3:15 · in 0:40" before the window, "· in the window" inside it, "· 0:12 over" after it.
-    *   **Finish & Save** is available from the start, since a brew can end earlier or later than planned. It emits the elapsed seconds.
-    *   A recipe with no steps works as a plain stopwatch.
-    *   **Scaled batches:** brew setup can scale the recipe (dose, water or yield; `docs/roadmap.md` phase 1). The timer receives the scaled steps: pour targets × (batch water / recipe water), rounded to whole grams; step times unchanged. The header shows the batch dose.
-    *   Instant steps (`startSec === endSec`, e.g. a quick swirl) show for about two seconds, so they aren't missed.
-*   **Layout** (supersedes the reference component's order), top to bottom: **Cancel brew** (in `BrewView`) → recipe header → clock with the target-finish note → **Start Brew / Finish & Save** → **Previous** → **Current** → **Up next**. Keeping the button under the clock means all three step cards stay on screen on a phone (390×844) without scrolling.
-    *   **Previous** and **Up next** are always shown as one-line cards; "None" when there is no such step. During a wait, Up next is the step being waited for.
-    *   **Current** has the same structure in every phase (step, wait, finishing) and a fixed minimum height, so the layout doesn't jump: a label line, a title, two values (left/right) and a progress bar. Step: "Pour to" / "Until", on a warm brand-tint background; wait: "Next step" (muted, since it repeats Up next) / "Starts at", on plain white; finishing: "Last step ended" / "Target finish".
-    *   **Progress bar:** a step runs from its start to its end (or the ~2 s display of an instant step); a wait runs from the previous step's end to the next step's start; finishing runs to the end of the target window, or stays full if there is none.
+*   **Steps run back to back** (supersedes the reference component's manual "Next Step" button and the earlier fixed start/end times). Recipe steps have a `durationSec` and an `advance` mode (`docs/api_spec.md` §5); each step starts when the previous one actually ended:
+    *   `auto`: ends `durationSec` after it started. An instant step (0 s) is shown for about two seconds without delaying the next one.
+    *   `auto_log`: the same, with a **Log it** button that records a `step_end` mark (the real moment, e.g. when you actually poured) without changing the schedule.
+    *   `tap`: ends when **Next** is tapped (recorded as a `step_end` mark). Its duration is a guide: once passed, the card says "Tap Next when ready".
+    *   `first_drop` (espresso): ends when **First drop** is tapped. A first drop tapped before this step starts ends it as soon as it starts.
+    *   A last step with no duration runs until **Finish & Save**; after a timed last step the card shows "All steps done".
+    *   The schedule is a pure function, `brewSchedule(steps, t, marks)` in `lib/steps.ts`, unit-tested.
+*   **Cards:** **Previous** → **Current** → **Up next**, the same structure for every step so the layout doesn't jump. Current shows a label line ("Step 2 of 4 · Pour · 93 °C"), a big line, a small line and a progress bar:
+    *   Big, left: the instruction ("Pour to 150 g (+100)", "9 bar", "9 → 6 bar", "4 → 2 g/s", "Pump off"), or the step's name when it has none. The name goes on the small line under it.
+    *   Big, right: a countdown ("0:20", small "left"; for a tap step's guide "left (guide)", then "Tap Next"), or "At first drop" / "Until done".
+    *   Previous / Up next are one line each with the instruction in bold ("Pour · **Pour to 210 g (+150)** · 0:30 · at 1:23").
+    *   Progress runs from the step's start to its planned end (the guide for tap steps, the first-drop window's end for first-drop steps).
+    *   Steps you're doing get the warm brand-tint background; waiting steps (`wait`, `soak`) are plain white.
+    *   If the chosen machine can't control what a step asks for (pressure/flow `none`), the card adds "Your machine can't set pressure", and the step still runs on time.
+*   **Espresso** adds a **First drop** button under Finish & Save while running (whether or not a step waits for it). After the tap it shows the time and "early / in the window / late" against the recipe's window, with a way to re-record. With no steps the shot timer is just the clock and this button.
+*   **Target finish window** (recipe's `expectedFinishMinSec`–`expectedFinishMaxSec`, if set) under the clock: "Target 2:45–3:15 · in 0:40" before the window, "· in the window" inside it, "· 0:12 over" after it. Espresso headers show "18 g → 36 g".
+*   **Finish & Save** is available from the start. It emits the elapsed seconds and the marks; the log form has a **First drop** field (espresso), filled from the tap or typed in afterwards, and blank = not recorded.
+*   **Scaled batches:** brew setup can scale the recipe (dose, water or yield; `docs/roadmap.md` phase 1). The timer receives the scaled steps: pour targets × (batch water / recipe water), rounded to whole grams; durations unchanged. The header shows the batch dose.
+*   **Layout:** **Cancel brew** (in `BrewView`) → recipe header → clock with the target-finish note → **Start / Finish & Save** (→ **First drop** for espresso) → Previous → Current → Up next. Everything stays on screen on a phone (390×844) without scrolling.
 
 ### Reference Component Implementation (`frontend/src/components/PourOverTimer.vue`)
 

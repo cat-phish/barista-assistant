@@ -16,19 +16,41 @@ upcoming work is in `roadmap.md`.
   roast" stays meaningful for frozen coffee.
 
 ## Equipment
-- **Brew methods:** per-workspace list (V60, Espresso, …).
-- **Grinders:** per workspace. Grinders that have been used are retired
-  rather than deleted, so history keeps their names.
+One **Equipment** section with three tabs:
+- **Grinders:** per workspace, with optional details: stepped/stepless,
+  setting range and step size, burr type and size, hand/electric. The range
+  and step let the AI talk in clicks. Grinders that have been used are
+  retired rather than deleted, so history keeps their names.
+- **Machines:** espresso machines with what they can do: pre-infusion (none
+  / automatic / manual), flow control and pressure control (none / manual /
+  programmable). Picked on espresso brews only (the last one used, or the
+  only one, is preselected); retired like grinders.
+- **Methods:** brew methods (V60, Espresso, …) with a kind: pour over,
+  immersion or espresso. The kind decides the recipe fields. Rename, change
+  kind (not while recipes use it), delete (not while recipes use it), add.
 
 ## Recipes
 - Dose, water (live coffee:water ratio), temperature, target finish window.
 - **Expected yield** fills in automatically from a light-roast estimate
   (grounds keep ≈ 2 g of water per g of coffee). Typing your own number
   keeps it; "Use estimate" switches back.
-- **Timed steps:** bloom, pour, swirl, stir, wait, press, other; each with a
-  start/end time and, for pours, a cumulative "pour to" weight. Steps can be
-  dragged to reorder (re-timed to fit) and inserted between others.
-- **Grind starting points** per grinder.
+- **Steps** run one after another, each with a time and how it moves on:
+  **automatically**, **automatically with a "Log it" button** (to record when
+  you really did it), or **when you tap Next** (the time is a guide; e.g. a
+  bloom that waits for the kettle to reach temperature). Pour-over types:
+  bloom, pour, swirl, stir, wait, press, other, with a "pour to" weight and
+  an optional temperature ("pour at 93 °C"). Each row shows when it's planned
+  to start; drag to reorder, or insert between steps. The last step can run
+  until you finish.
+- **Grind starting points** per grinder, and an optional **default grinder**
+  that's selected for you when you brew the recipe (otherwise the last
+  grinder you used).
+- **Espresso recipes:** dose and target shot weight (ratio 1:2 style), target
+  shot time and first-drop windows, temperature, and a **shot profile**: steps
+  of pre-infusion, soak (pump off), pressure (bar) or flow (g/s or ml/s, set
+  per recipe), each held or ramped ("9 → 6 bar", "4 → 2 g/s"), which can also
+  end **at first drop**. E.g. 9 bar until first drop → soak 10 s → flow 4 → 2
+  g/s until done; or pre-infuse 3 bar 10 s → soak 10 s → 9 bar.
 
 ## Brewing
 - **Setup:** pick bean, recipe and grinder. The grind pre-fills from your
@@ -40,14 +62,23 @@ upcoming work is in `roadmap.md`.
   scale with the water; step times stay the same. A much bigger or smaller
   dose than the recipe suggests a coarser or finer grind. "Reset to recipe"
   undoes it all.
+- **Espresso shots:** the same setup shows dose, ratio and shot weight
+  instead; typing any one updates the others, plus the machine.
+- **Timer** (pour over and espresso): Previous / Current / Up next cards; the
+  current one shows the instruction ("Pour to 150 g (+100)", "9 → 6 bar",
+  "Pump off"), the temperature and how it ends, with **Next** or **Log it**
+  buttons for steps that need them. Each step starts when the previous one
+  really ended. Espresso adds a big **First drop** button (judged against the
+  recipe's window), and notes when your machine can't set the pressure or
+  flow a step asks for. With no steps it's just the clock (+ First drop).
+  The real times (taps, logs, first drop) are saved with the brew, shown in
+  the journal and sent to the AI. The log asks for the shot weight, shot
+  time and an optional **first drop** you can type in if you didn't tap.
 - **Yield estimate:** water − retention × dose. Retention comes from your
   measured brews of this bean with this recipe (median), else the recipe's
   expected yield adjusted for the bean's roast, else a roast-level default.
   Fluid ounces assume brewed coffee weighs about 1 g per ml.
-- **Timer:** clock-driven (no tapping to advance). Shows Previous / Current /
-  Up next, with a progress bar for steps and waits; steps and waits have
-  different backgrounds. Finish & Save is available throughout. Keeps the
-  screen awake.
+- **Finish & Save** is available throughout; the screen stays awake.
 - **Log:** dose, water, measured yield, temperature, grind, time, rating and
   tasting notes; can also be logged without the timer.
 
@@ -57,7 +88,8 @@ upcoming work is in `roadmap.md`.
 - **AI analysis:** after a brew, ask for a suggestion; a background worker
   asks the LLM for grind and temperature changes with reasoning, shown next
   time you brew that bean. It sees the bean's roast level and age, the
-  recipe, and your previous brews of that bean.
+  recipe, your previous brews of that bean, the grinder's details and, for
+  espresso, the machine's capabilities and the shot timer's taps.
 
 ## Public menu
 - An optional public page per workspace listing beans and recipes marked as

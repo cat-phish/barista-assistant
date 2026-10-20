@@ -75,3 +75,11 @@ export function localDateInput(now: Date = new Date()): string {
 export function formatWhen(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
+
+// "15 g : 250 g (1:16.7)"; espresso has no water, so dose → shot weight:
+// "18 g → 36 g (1:2)".
+export function formatDoseLine(dose: number, water: number | null, out: number | null): string {
+  if (water !== null) return `${formatGrams(dose)} g : ${formatGrams(water)} g (${formatRatio(dose, water)})`;
+  if (out !== null) return `${formatGrams(dose)} g → ${formatGrams(out)} g (${formatRatio(dose, out)})`;
+  return `${formatGrams(dose)} g`;
+}

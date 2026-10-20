@@ -10,8 +10,11 @@ export const SYSTEM_PROMPT =
   "You are an expert specialty coffee roaster and barista. Analyze the provided " +
   "extraction log and historical brews for this coffee bean, including roast " +
   "level, roast age, dose, yield, total brew time, rating, and tasting notes. Suggest " +
-  "concrete parameter adjustments for the next brew. Respond strictly matching " +
-  "the provided JSON schema.";
+  "concrete parameter adjustments for the next brew. For espresso, judge flow " +
+  "from the first drop time, shot time and ratio against the recipe's " +
+  "windows, and consider the machine's capabilities (pre-infusion, flow and " +
+  "pressure control) and the grinder's step size when explaining the change. " +
+  "Respond strictly matching the provided JSON schema.";
 
 export const BREW_ANALYSIS_JSON_SCHEMA = {
   type: "object",

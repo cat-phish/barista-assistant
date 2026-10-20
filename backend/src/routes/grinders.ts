@@ -6,11 +6,11 @@ import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, parseQuery, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
-import { brewLogs, grinders, type Grinder } from "@barista/shared/schema";
-import { optionalText, updateSchema } from "../validation.js";
+import { BURR_TYPES, brewLogs, GRINDER_ADJUSTMENTS, GRINDER_POWER, grinders, type Grinder } from "@barista/shared/schema";
+import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
 // docs/api_spec.md §3b
-export type GrinderSummary = Pick<Grinder, "id" | "name" | "notes" | "retiredAt">;
+export type GrinderSummary = Omit<Grinder, "workspaceId" | "createdAt">;
 
 export interface LastSettingResponse {
   lastSetting: { grindSetting: string; timestamp: Date; brewLogId: string } | null;
@@ -23,15 +23,51 @@ interface GrinderParams extends WorkspaceParams {
   grinderId: string;
 }
 
+const settingSchema = decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMax: true }).nullable().optional();
 const grinderFields = {
   name: z.string().trim().min(1).max(100),
   notes: optionalText(255),
+  adjustment: z.enum(GRINDER_ADJUSTMENTS).nullable().optional(),
+  settingMin: settingSchema,
+  settingMax: settingSchema,
+  stepSize: decimalSchema({ min: 0, max: 1000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
+  burrType: z.enum(BURR_TYPES).nullable().optional(),
+  burrSizeMm: z.number().int().min(10).max(200).nullable().optional(),
+  power: z.enum(GRINDER_POWER).nullable().optional(),
 };
-const createSchema = z.object(grinderFields);
-const updateGrinderSchema = updateSchema({ ...grinderFields, retired: z.boolean() });
+
+// The dial range is a pair: both ends (min < max), or null on either clears both.
+function rangeIssue(body: { settingMin?: number | null; settingMax?: number | null }, ctx: z.RefinementCtx): void {
+  const { settingMin: min, settingMax: max } = body;
+  if (min === undefined && max === undefined) return;
+  if (min === null || max === null) return;
+  if (min === undefined || max === undefined) {
+    ctx.addIssue({ code: "custom", path: [min === undefined ? "settingMin" : "settingMax"], message: "send both ends of the range" });
+  } else if (min >= max) {
+    ctx.addIssue({ code: "custom", path: ["settingMax"], message: "must be greater than settingMin" });
+  }
+}
+function clearRangeTogether<T extends { settingMin?: number | null; settingMax?: number | null }>(body: T): T {
+  return body.settingMin === null || body.settingMax === null ? { ...body, settingMin: null, settingMax: null } : body;
+}
+
+const createSchema = z.object(grinderFields).superRefine(rangeIssue).transform(clearRangeTogether);
+const updateGrinderSchema = updateSchema({ ...grinderFields, retired: z.boolean() }).superRefine(rangeIssue).transform(clearRangeTogether);
 const lastSettingQuery = z.object({ recipeId: z.uuid() });
 
-const summary = { id: grinders.id, name: grinders.name, notes: grinders.notes, retiredAt: grinders.retiredAt };
+const summary = {
+  id: grinders.id,
+  name: grinders.name,
+  notes: grinders.notes,
+  adjustment: grinders.adjustment,
+  settingMin: grinders.settingMin,
+  settingMax: grinders.settingMax,
+  stepSize: grinders.stepSize,
+  burrType: grinders.burrType,
+  burrSizeMm: grinders.burrSizeMm,
+  power: grinders.power,
+  retiredAt: grinders.retiredAt,
+};
 
 function inWorkspace(p: GrinderParams) {
   return and(eq(grinders.id, p.grinderId), eq(grinders.workspaceId, p.workspaceId));
@@ -60,7 +96,7 @@ grindersRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<{ g
   if (!body) return;
   const id = randomUUID();
   try {
-    await db.insert(grinders).values({ id, workspaceId, name: body.name, notes: body.notes ?? null });
+    await db.insert(grinders).values({ id, workspaceId, ...body });
   } catch (err) {
     if (isDuplicateEntryError(err)) {
       sendError(res, 409, "A grinder with that name already exists");

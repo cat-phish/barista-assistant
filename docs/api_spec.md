@@ -203,36 +203,49 @@ Removes a member. Owners can remove anyone. Any member can remove themselves
 ## 3. Brew Methods
 
 Recipes must select a method from their workspace's list; methods are not
-free text.
+free text. Each method has a **kind**, one of `METHOD_KINDS`:
+
+| `kind` | Examples | Recipe fields (§5) |
+|---|---|---|
+| `pour_over` | V60, Kalita, Chemex | dose + water, estimated yield, steps with pours |
+| `immersion` | AeroPress, French press | same as `pour_over` for now |
+| `espresso` | Espresso | dose + target yield (no water), shot time and first-drop windows |
+
+New workspaces get V60 (`pour_over`), Espresso (`espresso`), Aeropress
+(`immersion`) and Latte (`espresso`, until drinks replace it).
 
 ### `GET /api/workspaces/:workspaceId/brew-methods`
 
 - **Auth Required:** `true` (any member)
 - **Success (`200 OK`):**
   ```json
-  { "brewMethods": [ { "id": "uuid", "name": "V60" } ] }
+  { "brewMethods": [ { "id": "uuid", "name": "V60", "kind": "pour_over" } ] }
   ```
   Sorted by `name`.
 
 ### `POST /api/workspaces/:workspaceId/brew-methods`
 
 - **Auth Required:** `true` (role `owner` or `barista`)
-- **Body:** `{ "name": "Chemex" }` (trimmed, 1–100 chars)
-- **Success (`201 Created`):** `{ "brewMethod": { "id": "uuid", "name": "Chemex" } }`
+- **Body:** `{ "name": "Chemex", "kind": "pour_over" }` (`name` trimmed,
+  1–100 chars; `kind` optional, default `pour_over`)
+- **Success (`201 Created`):** `{ "brewMethod": { "id": "uuid", "name": "Chemex", "kind": "pour_over" } }`
 - **Errors:** `400` invalid body; `403` viewer; `409` a method with that name
   already exists in this workspace (case-insensitive).
 
 ### `PATCH /api/workspaces/:workspaceId/brew-methods/:methodId`
 
-Renames a brew method. Recipes reference it by ID, so they show the new name
-immediately (including on the public menu).
+Renames a brew method or changes its kind. Recipes reference it by ID, so
+they show the new name immediately (including on the public menu).
 
 - **Auth Required:** `true` (role `owner` or `barista`)
-- **Body:** `{ "name": "Hario V60" }` (trimmed, 1–100 chars)
-- **Success (`200 OK`):** `{ "brewMethod": { "id": "uuid", "name": "Hario V60" } }`
-- **Errors:** `400` invalid body; `403` viewer; `404` method not in this
-  workspace; `409` another method in this workspace already has that name
-  (case-insensitive). Changing only the case, e.g. `v60` to `V60`, is allowed.
+- **Body:** `{ "name": "Hario V60" }` and/or `{ "kind": "pour_over" }`
+  (at least one; same rules as `POST`)
+- **Success (`200 OK`):** `{ "brewMethod": { "id": "uuid", "name": "Hario V60", "kind": "pour_over" } }`
+- **Errors:** `400` invalid or empty body; `403` viewer; `404` method not in
+  this workspace; `409` another method in this workspace already has that name
+  (case-insensitive), or the kind would change while recipes use the method
+  (recipe fields differ by kind), with body `{ "error": "...", "recipeCount": 2 }`.
+  Changing only the case, e.g. `v60` to `V60`, is allowed.
 
 ### `DELETE /api/workspaces/:workspaceId/brew-methods/:methodId`
 
@@ -255,7 +268,37 @@ Each workspace keeps its own grinders. Brew logs record which grinder was used
 grinder. Recipes are grinder-neutral.
 
 **Grinder object:**
-`{ "id": "uuid", "name": "Comandante C40", "notes": "stepped, 0–40 clicks" | null, "retiredAt": null | "2026-10-18T…" }`
+
+```json
+{
+  "id": "uuid",
+  "name": "Comandante C40",
+  "notes": "Red Clix",
+  "adjustment": "stepped",
+  "settingMin": 0,
+  "settingMax": 40,
+  "stepSize": 1,
+  "burrType": "conical",
+  "burrSizeMm": 39,
+  "power": "manual",
+  "retiredAt": null
+}
+```
+
+Everything after `name` is optional (`null` when unknown):
+
+| Field | Values |
+|---|---|
+| `notes` | text, ≤ 255 chars, blank becomes `null` |
+| `adjustment` | `stepped` (clicks/detents) or `stepless` (`GRINDER_ADJUSTMENTS`) |
+| `settingMin`, `settingMax` | the dial's range, numbers 0–9999 with ≤ 2 decimals; both or neither, min < max |
+| `stepSize` | one step/click on the dial, > 0, < 1000, ≤ 2 decimals |
+| `burrType` | `conical` or `flat` (`BURR_TYPES`) |
+| `burrSizeMm` | integer 10–200 |
+| `power` | `manual` or `electric` (`GRINDER_POWER`) |
+
+The range and step size are sent to the AI analysis so its reasoning can talk
+in steps ("2 clicks finer"); the rest is reference.
 
 A **retired** grinder (`retiredAt` set) is hidden from pickers for new brews,
 but past brews keep showing it, and it can be restored. A grinder that brews
@@ -270,8 +313,8 @@ were logged with can't be deleted (retire it instead); an unused one can.
 ### `POST /api/workspaces/:workspaceId/grinders`
 
 - **Auth Required:** `true` (role `owner` or `barista`)
-- **Body:** `{ "name": "Comandante C40", "notes": "stepped" }` (`name` trimmed,
-  1–100 chars; `notes` optional, ≤ 255, blank becomes `null`)
+- **Body:** `{ "name": "Comandante C40", ...details }` (`name` trimmed,
+  1–100 chars; the details from the table above, all optional and nullable)
 - **Success (`201 Created`):** `{ "grinder": { ...grinder } }`
 - **Errors:** `400` invalid body; `403` viewer; `409` a grinder with that name
   already exists in this workspace (case-insensitive).
@@ -279,9 +322,10 @@ were logged with can't be deleted (retire it instead); an unused one can.
 ### `PATCH /api/workspaces/:workspaceId/grinders/:grinderId`
 
 - **Auth Required:** `true` (role `owner` or `barista`)
-- **Body:** any non-empty subset of `{ "name", "notes", "retired": true | false }`.
-  `retired: true` sets `retiredAt` to now (unchanged if already retired);
-  `false` restores it.
+- **Body:** any non-empty subset of the `POST` fields plus
+  `"retired": true | false`. `retired: true` sets `retiredAt` to now
+  (unchanged if already retired); `false` restores it. The range is a pair:
+  send both ends, or `null` for either to clear both.
 - **Success (`200 OK`):** `{ "grinder": { ...grinder } }`
 - **Errors:** `400`; `403` viewer; `404` not in this workspace; `409` name taken.
 
@@ -306,6 +350,70 @@ recipe. The brew flow uses it to pre-fill the grind when both are chosen.
   skipped), or `null` if there's none.
 - **Errors:** `400` missing/invalid `recipeId`; `404` grinder not in this
   workspace.
+
+---
+
+## 3c. Espresso Machines
+
+Each workspace keeps its own machines. Only espresso brews record one (§6).
+Capabilities describe who controls each part of the shot, so the shot timer
+can treat a recipe's pre-infusion right on any machine (docs/roadmap.md
+phase 2c) and the AI knows what can be adjusted.
+
+**Machine object:**
+
+```json
+{
+  "id": "uuid",
+  "name": "Linea Mini",
+  "notes": null,
+  "preinfusion": "manual",
+  "flowControl": "manual",
+  "pressureControl": "none",
+  "retiredAt": null
+}
+```
+
+| Field | Values (default `none`) |
+|---|---|
+| `preinfusion` | `none`, `automatic` (the machine does it), `manual` (paddle, lever or button) — `PREINFUSION_MODES` |
+| `flowControl`, `pressureControl` | `none`, `manual` (paddle, lever, needle valve), `programmable` (profiles) — `PROFILE_CONTROLS` |
+
+Retiring and deleting work like grinders (§3b): retired machines leave the
+pickers but past brews keep showing them; a machine brews were logged with
+can't be deleted.
+
+### `GET /api/workspaces/:workspaceId/machines`
+
+- **Auth Required:** `true` (any member)
+- **Success (`200 OK`):** `{ "machines": [ { ...machine } ] }`: active first,
+  then retired; each sorted by `name`.
+
+### `POST /api/workspaces/:workspaceId/machines`
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:** `{ "name": "Linea Mini", "notes": null, "preinfusion": "manual", "flowControl": "manual", "pressureControl": "none" }`
+  (`name` trimmed, 1–100 chars; the rest optional: `notes` ≤ 255, blank
+  becomes `null`; capabilities default to `none`)
+- **Success (`201 Created`):** `{ "machine": { ...machine } }`
+- **Errors:** `400`; `403` viewer; `409` a machine with that name already
+  exists in this workspace (case-insensitive).
+
+### `PATCH /api/workspaces/:workspaceId/machines/:machineId`
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:** any non-empty subset of the `POST` fields plus `"retired": true | false`
+  (as for grinders).
+- **Success (`200 OK`):** `{ "machine": { ...machine } }`
+- **Errors:** `400`; `403` viewer; `404` not in this workspace; `409` name taken.
+
+### `DELETE /api/workspaces/:workspaceId/machines/:machineId`
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Success (`204 No Content`)**
+- **Errors:** `403` viewer; `404` not in this workspace; `409` brews were
+  logged with it, with body `{ "error": "...", "brewLogCount": 12 }`. Retire
+  it instead.
 
 ---
 
@@ -425,27 +533,64 @@ A recipe describes how to brew: `targetDoseGrams` of coffee and
 the beverage yield, an optional **target finish window** for the total brew
 time, and an optional water temperature.
 
+**By method kind** (§3), checked against the recipe as it is after the
+request (so a `PATCH` that changes `methodId` must also send the fields the
+new kind needs):
+
+| | `pour_over` / `immersion` | `espresso` |
+|---|---|---|
+| `targetWaterGrams` | required | must be absent/`null` |
+| `expectedYieldGrams` | optional estimate | **required**: target shot weight; ratio is dose:yield (18 g → 36 g = 1:2) |
+| finish window | total brew time | total shot time |
+| `firstDropMinSec`/`MaxSec` | must be absent/`null` | optional window (pair, ±3 s default) |
+| step types | `bloom` `pour` `swirl` `stir` `wait` `press` `other` | `preinfusion` `soak` `pressure` `flow` `other` (`ESPRESSO_STEP_TYPES`) |
+| step `advance` | `auto`, `auto_log`, `tap` | also `first_drop` (at most one step) |
+| `flowUnit` | ignored (default `g_s`) | `g_s` or `ml_s` for flow steps |
+
 Recipes are grinder-neutral: instead of one grind setting they carry
 **approximate starting points per grinder** (`grindSettings`). The brew flow
 uses one only when there's no actual setting from your last brew with that
-grinder and recipe (§3b `last-setting`).
+grinder and recipe (§3b `last-setting`). A recipe can name a
+**`defaultGrinderId`**: the grinder the brew flow preselects for it (instead
+of the last grinder used), if that grinder isn't retired.
 
-**Steps** are what the timer runs (`docs/timer_architecture.md` §3). Each has a
-`stepType`, an optional `label` (e.g. "Second bloom"), and a start and end time
-in seconds from the start of the brew. Gaps between steps are waiting time.
-Water steps (`bloom`, `pour`) carry `targetWaterGrams`: the cumulative scale
-weight to **pour to** by the step's end (clients show the per-step amount, the
-difference from the previous water step, next to it).
+**Steps** are what the timer runs (`docs/timer_architecture.md` §3). They run
+**back to back**: each starts when the previous one actually ended, so a step
+you end with a tap (a bloom that waits for the kettle) moves everything after
+it. Each step has a `stepType`, an optional `label` (e.g. "Second bloom"), a
+`durationSec`, how it moves on (`advance`), and instruction values shown on its
+card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
 
-| `stepType` | Meaning | `targetWaterGrams` |
+| `advance` | The timer… | `durationSec` |
 |---|---|---|
-| `bloom` | Pour to wet the grounds and let them degas (repeatable for double blooms) | required |
-| `pour` | Pour | required |
-| `swirl` | Swirl the brewer | must be absent/`null` |
-| `stir` | Stir the slurry | must be absent/`null` |
-| `wait` | Wait / drawdown | must be absent/`null` |
-| `press` | Press / plunge (AeroPress, French press) | must be absent/`null` |
-| `other` | Anything else; give it a `label` | optional |
+| `auto` | moves on when the duration is up | required (0 = instant action, shown ~2 s); `null` only on the last step = until you finish |
+| `auto_log` | the same, plus a **Log it** button to record when you really did it | required |
+| `tap` | waits for **Next** | optional guide ("tap when ready" once it's passed) |
+| `first_drop` | espresso: ends when **First drop** is tapped | optional guide |
+
+| `stepType` | Meaning | Values |
+|---|---|---|
+| `bloom` | Pour to wet the grounds and let them degas (repeatable for double blooms) | `targetWaterGrams` required |
+| `pour` | Pour | `targetWaterGrams` required |
+| `swirl` / `stir` | Swirl the brewer / stir the slurry | – |
+| `wait` | Wait / drawdown | – |
+| `press` | Press / plunge (AeroPress, French press) | – |
+| `preinfusion` | Espresso: low-pressure / low-flow fill | pressure **or** flow, optional |
+| `soak` | Espresso: pump off | – |
+| `pressure` | Espresso: hold or ramp pressure | `pressureBar` required, `pressureEndBar` optional (ramp) |
+| `flow` | Espresso: hold or ramp flow | `flowRate` required, `flowEndRate` optional (ramp) |
+| `other` | Anything else; give it a `label` | pour-over: `targetWaterGrams` optional; espresso: pressure or flow optional |
+
+- `targetWaterGrams`: the cumulative scale weight to **pour to** by the step's
+  end (> 0, < 10000, max 2 decimals; never decreasing across steps). Clients
+  show the per-step amount next to it.
+- `targetTempC` (any step, optional, 0–100, 1 decimal): e.g. bloom at 85 °C,
+  pour at 93 °C.
+- `pressureBar`/`pressureEndBar` (0–20 bar, 1 decimal) and
+  `flowRate`/`flowEndRate` (0–20 in the recipe's `flowUnit`, 1 decimal): an end
+  value needs a start value and makes a ramp ("9 → 6 bar"). They're
+  instructions; the timer doesn't measure them. Any value not listed for a
+  type must be absent/`null`.
 
 **Recipe object** (every endpoint below returns this shape):
 
@@ -454,23 +599,38 @@ difference from the previous water step, next to it).
   "id": "uuid",
   "workspaceId": "uuid",
   "name": "House V60",
-  "method": { "id": "uuid", "name": "V60" },
+  "method": { "id": "uuid", "name": "V60", "kind": "pour_over" },
   "targetDoseGrams": 15,
   "targetWaterGrams": 250,
   "expectedYieldGrams": 220,
   "expectedFinishMinSec": 165,
   "expectedFinishMaxSec": 195,
+  "firstDropMinSec": null,
+  "firstDropMaxSec": null,
+  "flowUnit": "g_s",
   "targetTempC": 94,
   "showOnPublicMenu": true,
+  "defaultGrinderId": "uuid",
   "grindSettings": [
     { "grinderId": "uuid", "grinderName": "Comandante C40", "setting": "20" }
   ],
   "steps": [
-    { "id": "uuid", "stepOrder": 1, "stepType": "bloom", "label": null, "startSec": 0, "endSec": 10, "targetWaterGrams": 45 },
-    { "id": "uuid", "stepOrder": 2, "stepType": "swirl", "label": null, "startSec": 10, "endSec": 15, "targetWaterGrams": null },
-    { "id": "uuid", "stepOrder": 3, "stepType": "pour", "label": "Main pour", "startSec": 45, "endSec": 90, "targetWaterGrams": 250 }
+    { "id": "uuid", "stepOrder": 1, "stepType": "bloom", "label": null, "durationSec": 45, "advance": "tap", "targetWaterGrams": 45, "targetTempC": 85, "pressureBar": null, "pressureEndBar": null, "flowRate": null, "flowEndRate": null },
+    { "id": "uuid", "stepOrder": 2, "stepType": "pour", "label": "Main pour", "durationSec": 45, "advance": "auto", "targetWaterGrams": 250, "targetTempC": 93, "pressureBar": null, "pressureEndBar": null, "flowRate": null, "flowEndRate": null },
+    { "id": "uuid", "stepOrder": 3, "stepType": "wait", "label": "Drawdown", "durationSec": null, "advance": "auto", "targetWaterGrams": null, "targetTempC": null, "pressureBar": null, "pressureEndBar": null, "flowRate": null, "flowEndRate": null }
   ]
 }
+```
+
+An espresso profile (pressure until first drop, pump off for 10 s, then flow
+down to 2 g/s until the shot is done):
+
+```json
+"steps": [
+  { "stepType": "pressure", "pressureBar": 9, "advance": "first_drop", "durationSec": null },
+  { "stepType": "soak", "advance": "auto", "durationSec": 10 },
+  { "stepType": "flow", "flowRate": 4, "flowEndRate": 2, "advance": "auto", "durationSec": null }
+]
 ```
 
 `grindSettings` are sorted by grinder name and include retired grinders.
@@ -500,34 +660,38 @@ Creates a recipe, its grind starting points and its steps in one transaction.
     "showOnPublicMenu": true,
     "grindSettings": [{ "grinderId": "uuid", "setting": "20" }],
     "steps": [
-      { "stepType": "bloom", "startSec": 0, "endSec": 10, "targetWaterGrams": 45 },
-      { "stepType": "swirl", "startSec": 10, "endSec": 15 },
-      { "stepType": "pour", "label": "Main pour", "startSec": 45, "endSec": 90, "targetWaterGrams": 250 }
+      { "stepType": "bloom", "durationSec": 45, "advance": "tap", "targetWaterGrams": 45, "targetTempC": 85 },
+      { "stepType": "pour", "label": "Main pour", "durationSec": 45, "targetWaterGrams": 250, "targetTempC": 93 }
     ]
   }
   ```
   - Required: `name`, `methodId` (a brew method in **this** workspace),
-    `targetDoseGrams` (> 0, < 1000, max 2 decimals), `targetWaterGrams`
-    (> 0, < 10000, max 2 decimals).
-  - Optional, nullable: `expectedYieldGrams` (same rules as water),
-    `targetTempC` (0–100, max 1 decimal). `showOnPublicMenu` defaults to
-    `true`.
+    `targetDoseGrams` (> 0, < 1000, max 2 decimals), and by kind (table
+    above) `targetWaterGrams` or `expectedYieldGrams` (> 0, < 10000, max 2
+    decimals).
+  - Optional, nullable: `expectedYieldGrams` for pour-over/immersion (same
+    rules as water), `targetTempC` (0–100, max 1 decimal). `showOnPublicMenu`
+    defaults to `true`.
+  - First-drop window (espresso only): `firstDropMinSec`/`firstDropMaxSec`,
+    same pair rules as the finish window below but with a **±3 s** default.
   - Target finish window: `expectedFinishMinSec` and `expectedFinishMaxSec`
     (integers 0–86400, optional, nullable, min ≤ max). If only one is given,
     the other defaults to it **±15 s**: min 165 → max 180; max 195 → min 180
     (never below 0). So a stored window always has both ends, or neither.
   - `grindSettings` (default `[]`): each `grinderId` must be a grinder in this
     workspace (retired allowed), at most once; `setting` trimmed, 1–100 chars.
+  - `defaultGrinderId` (optional, nullable): a grinder in this workspace
+    (retired allowed). Deleting the grinder sets it back to `null`.
+  - `flowUnit` (optional, default `g_s`): `g_s` or `ml_s`.
   - `steps` (default `[]`, max 20), in order (`stepOrder` = array position):
-    - `stepType` from the table above; `label` optional, ≤ 255 chars, blank
-      becomes `null`.
-    - `startSec` and `endSec` are integers 0–86400 with `startSec ≤ endSec`
-      (equal is fine for an instant action), and steps don't overlap: each
-      starts at or after the previous one's `endSec`.
-    - `targetWaterGrams` as in the table (> 0, < 10000, max 2 decimals). Across
-      the steps that have one, it never decreases.
+    - `stepType` allowed for the method's kind (tables above); `label`
+      optional, ≤ 255 chars, blank becomes `null`.
+    - `advance` (default `auto`) and `durationSec` (integer 0–86400, or
+      `null`) as in the advance table. Only the last step may be open-ended.
+    - The values allowed for the type (other values must be absent/`null`).
   - Not enforced (clients warn instead): the last pour reaching
-    `targetWaterGrams`, and the finish window ending after the last step.
+    `targetWaterGrams`, and the finish window ending after the planned last
+    step.
 - **Success (`201 Created`):** `{ "recipe": { ...recipe } }`
 - **Errors:** `400` invalid body, or `methodId`/`grinderId` not in this
   workspace; `403` viewer.
@@ -537,8 +701,9 @@ Creates a recipe, its grind starting points and its steps in one transaction.
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Body:** any non-empty subset of the `POST` fields, with the same rules.
   Unknown fields are rejected. The optional fields can be set to `null`.
-  The finish window is treated as a pair: sending only one end applies the
-  ±15 s default to the other; setting one end to `null` clears both.
+  The finish and first-drop windows are each treated as a pair: sending only
+  one end applies the default spread to the other; setting one end to `null`
+  clears both. The kind rules apply to the recipe as it is after the change.
   `steps` and `grindSettings`, if present, each **replace** their whole list
   (`[]` clears it); if absent, they're unchanged.
 - **Success (`200 OK`):** `{ "recipe": { ...recipe } }`
@@ -587,17 +752,23 @@ created it and can't be changed.
   "rating": 3,
   "tastingNotes": "Sour, thin body",
   "bean": { "id": "uuid", "roasterName": "Onyx Coffee Lab", "beanName": "Southern Weather" },
-  "recipe": { "id": "uuid", "name": "House V60", "expectedYieldGrams": 220 },
+  "recipe": { "id": "uuid", "name": "House V60", "expectedYieldGrams": 220, "methodKind": "pour_over" },
   "grinder": { "id": "uuid", "name": "Comandante C40" },
+  "machine": null,
+  "marks": [],
   "brewer": { "id": "uuid", "email": "barista@example.com" }
 }
 ```
 
 `recipe` is `null` when `recipeId` is `null` (no recipe used, or the recipe was
 deleted later); its `expectedYieldGrams` is the recipe's current estimate (or
-`null`), for comparing with the measured `actualYieldGrams`. `grinder` is
+target, for espresso), for comparing with the measured `actualYieldGrams`, and
+`methodKind` is its method's kind. `grinder` is
 `null` when no grinder was recorded; a retired
-grinder still appears here. `userId` and `brewer` are `null` when the brewer deleted their
+grinder still appears here. `machine` (`{ "id", "name" }`, retired ones
+included) is set only for espresso brews that recorded one. `marks` lists
+the timer's marks (`{ "kind", "stepOrder", "atSec" }`, `stepOrder` `null`
+except for `step_end`), earliest first. `userId` and `brewer` are `null` when the brewer deleted their
 account. Such logs can only be edited or deleted by owners.
 
 ### `GET /api/workspaces/:workspaceId/brew-logs`
@@ -630,13 +801,28 @@ account. Such logs can only be edited or deleted by owners.
     "actualYieldGrams": 225,
     "actualTempC": 93,
     "grinderId": "uuid",
+    "machineId": null,
     "actualGrindSetting": "18 clicks",
     "actualTimeSec": 150,
     "rating": 3,
     "tastingNotes": "Sour, thin body"
   }
   ```
-  - Required: `beanId`, `actualDoseGrams`, `actualWaterGrams`, `actualTimeSec`.
+  - Required: `beanId`, `actualDoseGrams`, `actualTimeSec`, and
+    `actualWaterGrams`, except for **espresso**: when `recipeId` is an
+    espresso recipe, `actualWaterGrams` must be absent/`null` and
+    `actualYieldGrams` (the shot weight) is required.
+  - `marks` (optional, default `[]`): when things actually happened, recorded
+    by the timer: `[{ "kind": "first_drop", "atSec": 7.4 }, { "kind":
+    "step_end", "stepOrder": 1, "atSec": 52 }]`. `kind` is one of
+    `MARK_KINDS`; `atSec` is 0–`actualTimeSec` with at most 1 decimal.
+    - `first_drop`: espresso brews only, at most one, no `stepOrder`. It can
+      also be typed into the log form after the shot.
+    - `step_end`: the real end of a step that waited for a tap or was logged
+      (`stepOrder` 1–50, at most one per step); needs a `recipeId`.
+  - `machineId` (optional, nullable; a machine in this workspace, retired
+    accepted) only for espresso brews: with any other recipe, or none, it
+    must be absent/`null`.
   - `beanId`, plus `recipeId` and `grinderId` (both optional, nullable), must belong
     to **this** workspace. A retired grinder is accepted (e.g. when logging an
     old brew afterwards); clients just don't offer it for new brews.
@@ -662,7 +848,13 @@ account. Such logs can only be edited or deleted by owners.
 
 - **Auth Required:** `true` (owner, or the barista who created it)
 - **Body:** any non-empty subset of the `POST` fields, with the same rules.
-  Unknown fields are rejected.
+  Unknown fields are rejected. `marks`, if present, replaces the whole list
+  (`[]` clears it). The espresso rule is checked against the log
+  (and the machine rule) are checked against the log as it is after the
+  change, but only when the request sends `recipeId`, `actualWaterGrams`,
+  `actualYieldGrams`, `machineId` or `marks` (marks must also fit within
+  `actualTimeSec`) (so editing the notes of an old log
+  whose recipe later moved to another method still works).
 - **Success (`200 OK`):** `{ "brewLog": { ...brewLog } }`
 - **Errors:** `400` invalid or empty body, or `beanId`/`recipeId` not in this
   workspace; `403` viewer, or a barista editing someone else's log; `404` log
@@ -715,6 +907,7 @@ filters for workspaces where `isPublicMenuEnabled = true` and items where
     ]
   }
   ```
+  `targetWaterGrams` is `null` for espresso recipes.
 - **Error Responses:**
   - `404 Not Found`: Workspace slug does not exist or `isPublicMenuEnabled` is
     `false`. Slugs are matched exactly: `/menu/Jordans-Coffee-Bar` is a `404`,
@@ -824,13 +1017,23 @@ queue:
    - The prompt includes the bean's **effective** roast age in days at brew
      time (`roastAgeDays`, excluding days frozen; see §4) and
      `daysFrozenBeforeBrew`, when the bean has a `roastDate`.
-   - Each brew includes `grinderName` (or `null`), so the LLM knows which
-     grinder a grind setting refers to and doesn't compare settings across
-     different grinders.
-   - Each brew includes `actualWaterGrams`, the measured `actualYieldGrams`
-     (or `null`) and `brewRatio` (water ÷ dose). The recipe includes its
-     water, expected yield, finish window (`expectedFinishMinSec`/`MaxSec`),
-     and its steps with type, label, start/end and pour-to targets.
+   - Each brew includes its `grinder` (or `null`): name plus whatever details
+     are recorded (adjustment, setting range, step size, burr type/size,
+     power), so the LLM knows which grinder a grind setting refers to, doesn't
+     compare settings across different grinders, and can talk in steps.
+   - Espresso brews include their `machine` (or `null`): name and
+     capabilities (pre-infusion, flow and pressure control).
+   - Each brew includes its `marks` (`{ kind, stepOrder, atSec }`): the first
+     drop for espresso, and the real end of steps that waited for a tap or
+     were logged, so the LLM sees e.g. that the bloom ran 52 s, not 45.
+   - Each brew includes its recipe's `methodKind` (or `null` without a
+     recipe), `actualWaterGrams` (`null` for espresso), the measured
+     `actualYieldGrams` (or `null`) and `brewRatio`: water ÷ dose, or for
+     espresso yield ÷ dose. The recipe includes its method kind, water,
+     expected yield (the target for espresso), finish window
+     (`expectedFinishMinSec`/`MaxSec`), first-drop window (espresso), flow
+     unit, and its steps with type, label, duration, how each moves on, and
+     their values (pour-to, temperature, pressure, flow).
 2. It calls the LLM API using **Structured Outputs** (strict JSON schema mode).
 
 **System Prompt:**
@@ -838,8 +1041,11 @@ queue:
 > "You are an expert specialty coffee roaster and barista. Analyze the provided
 > extraction log and historical brews for this coffee bean, including roast
 > level, roast age, dose, yield, total brew time, rating, and tasting notes. Suggest
-> concrete parameter adjustments for the next brew. Respond strictly matching
-> the provided JSON schema."
+> concrete parameter adjustments for the next brew. For espresso, judge flow
+> from the first drop time, shot time and ratio against the recipe's
+> windows, and consider the machine's capabilities (pre-infusion, flow and
+> pressure control) and the grinder's step size when explaining the change.
+> Respond strictly matching the provided JSON schema."
 
 **Strict JSON Schema** (sent as-is; no `$schema` key, which strict mode does
 not need):

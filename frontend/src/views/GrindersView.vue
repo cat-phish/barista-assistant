@@ -1,12 +1,15 @@
 <script setup lang="ts">
-// Grinder management (docs/api_spec.md §3b). Retire keeps history; delete only
-// works for grinders no brew used.
+// Grinder management (docs/api_spec.md §3b), one tab of Equipment. Retire
+// keeps history; delete only works for grinders no brew used.
 import { computed, onMounted, ref } from 'vue';
 import { ApiError, errorMessage } from '../api/client';
 import { grindersApi } from '../api/grinders';
 import type { Grinder } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
+import EquipmentTabs from '../components/EquipmentTabs.vue';
+import GrinderFields from '../components/GrinderFields.vue';
+import { grinderForm, grinderSummary, parseGrinderForm } from '../lib/equipment';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
@@ -34,19 +37,23 @@ function replace(updated: Grinder): void {
 }
 
 // Add
-const newName = ref('');
-const newNotes = ref('');
+const newForm = ref(grinderForm());
+const newParsed = computed(() => parseGrinderForm(newForm.value));
+const addSubmitted = ref(false);
 const adding = ref(false);
 const addError = ref('');
 async function add(): Promise<void> {
+  addSubmitted.value = true;
   const ws = workspaces.current?.id;
-  if (!ws || !newName.value.trim()) return;
+  const values = newParsed.value.values;
+  if (!ws || !values) return;
   adding.value = true;
   addError.value = '';
   try {
-    await grindersApi.create(ws, newName.value.trim(), newNotes.value.trim() || null);
-    newName.value = '';
-    newNotes.value = '';
+    const { name, ...details } = values;
+    await grindersApi.create(ws, name, details);
+    newForm.value = grinderForm();
+    addSubmitted.value = false;
     await load();
   } catch (err) {
     addError.value = err instanceof ApiError && err.status === 409 ? 'A grinder with that name already exists.' : errorMessage(err);
@@ -57,23 +64,23 @@ async function add(): Promise<void> {
 
 // Edit (one at a time, inline)
 const editingId = ref<string | null>(null);
-const editName = ref('');
-const editNotes = ref('');
+const editForm = ref(grinderForm());
+const editParsed = computed(() => parseGrinderForm(editForm.value));
 const editError = ref('');
 const busyId = ref<string | null>(null);
 function startEdit(g: Grinder): void {
   editingId.value = g.id;
-  editName.value = g.name;
-  editNotes.value = g.notes ?? '';
+  editForm.value = grinderForm(g);
   editError.value = '';
 }
 async function saveEdit(g: Grinder): Promise<void> {
   const ws = workspaces.current?.id;
-  if (!ws || !editName.value.trim()) return;
+  const values = editParsed.value.values;
+  if (!ws || !values) return;
   busyId.value = g.id;
   editError.value = '';
   try {
-    replace((await grindersApi.update(ws, g.id, { name: editName.value.trim(), notes: editNotes.value.trim() || null })).grinder);
+    replace((await grindersApi.update(ws, g.id, values)).grinder);
     editingId.value = null;
   } catch (err) {
     editError.value = err instanceof ApiError && err.status === 409 ? 'A grinder with that name already exists.' : errorMessage(err);
@@ -135,8 +142,9 @@ async function retireInstead(): Promise<void> {
   <AppHeader />
   <main class="page">
     <div class="page-header">
-      <h1>Grinders</h1>
+      <h1>Equipment</h1>
     </div>
+    <EquipmentTabs />
     <p class="muted intro">Brews record which grinder you used, so grind settings stay meaningful.</p>
 
     <p v-if="loading" class="muted" aria-live="polite">Loading grinders…</p>
@@ -148,25 +156,19 @@ async function retireInstead(): Promise<void> {
       <ul v-if="active.length" class="list">
         <li v-for="g in active" :key="g.id" class="card grinder">
           <template v-if="editingId === g.id">
-            <form class="stack" @submit.prevent="saveEdit(g)">
-              <div class="field">
-                <label :for="`edit-name-${g.id}`">Name</label>
-                <input :id="`edit-name-${g.id}`" v-model="editName" maxlength="100" />
-              </div>
-              <div class="field">
-                <label :for="`edit-notes-${g.id}`">Notes <span class="muted">(optional)</span></label>
-                <input :id="`edit-notes-${g.id}`" v-model="editNotes" maxlength="255" />
-              </div>
+            <form class="stack" novalidate @submit.prevent="saveEdit(g)">
+              <GrinderFields v-model="editForm" :id-prefix="`edit-${g.id}`" :errors="editParsed.errors" :show-errors="true" />
               <p v-if="editError" class="form-error" role="alert">{{ editError }}</p>
               <div class="buttons">
                 <button class="btn btn-secondary" type="button" @click="editingId = null">Cancel</button>
-                <button class="btn btn-primary" type="submit" :disabled="busyId === g.id || !editName.trim()">Save</button>
+                <button class="btn btn-primary" type="submit" :disabled="busyId === g.id || !editParsed.values">Save</button>
               </div>
             </form>
           </template>
           <template v-else>
             <div>
               <h2>{{ g.name }}</h2>
+              <p v-if="grinderSummary(g)" class="muted">{{ grinderSummary(g) }}</p>
               <p v-if="g.notes" class="muted">{{ g.notes }}</p>
             </div>
             <div v-if="workspaces.canEdit" class="actions">
@@ -194,18 +196,12 @@ async function retireInstead(): Promise<void> {
         </ul>
       </section>
 
-      <form v-if="workspaces.canEdit" class="card stack" @submit.prevent="add">
+      <form v-if="workspaces.canEdit" class="card stack" novalidate @submit.prevent="add">
         <h2>Add a grinder</h2>
-        <div class="field">
-          <label for="new-name">Name</label>
-          <input id="new-name" v-model="newName" maxlength="100" placeholder="e.g. Comandante C40" />
-        </div>
-        <div class="field">
-          <label for="new-notes">Notes <span class="muted">(optional)</span></label>
-          <input id="new-notes" v-model="newNotes" maxlength="255" placeholder="e.g. stepped, 0–40 clicks" />
-        </div>
+        <p class="muted small">Only the name is needed; the rest helps the AI and is easy to add later.</p>
+        <GrinderFields v-model="newForm" id-prefix="new" :errors="newParsed.errors" :show-errors="addSubmitted" />
         <p v-if="addError" class="form-error" role="alert">{{ addError }}</p>
-        <button class="btn btn-primary" type="submit" :disabled="adding || !newName.trim()">{{ adding ? 'Adding…' : 'Add grinder' }}</button>
+        <button class="btn btn-primary" type="submit" :disabled="adding">{{ adding ? 'Adding…' : 'Add grinder' }}</button>
       </form>
     </template>
   </main>

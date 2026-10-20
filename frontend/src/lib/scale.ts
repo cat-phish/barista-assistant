@@ -118,6 +118,33 @@ export function scaleBatch(
   return { dose, water, yield: yieldGrams, yieldOz: round1(yieldGrams / GRAMS_PER_FL_OZ), ratio: r, factor: water / w0 };
 }
 
+// Espresso: dose and target shot weight at a ratio (shot ÷ dose, the "2" in
+// 1:2), from either one. No water or retention: the shot weight is measured.
+export interface Shot {
+  dose: number; // 0.1 g
+  yield: number; // 0.1 g
+  ratio: number;
+}
+
+export function scaleShot(
+  recipe: { targetDoseGrams: number; expectedYieldGrams: number },
+  lead: { field: 'dose' | 'yield'; value: number },
+  ratio?: number,
+): Shot | null {
+  const { targetDoseGrams: d0, expectedYieldGrams: y0 } = recipe;
+  const recipeRatio = y0 / d0;
+  const r = ratio ?? recipeRatio;
+  if (!(lead.value > 0) || !(r > 0) || d0 <= 0 || y0 <= 0) return null;
+  // The recipe as written keeps its exact numbers.
+  const sameRatio = Math.abs(r - recipeRatio) < 1e-9;
+  if (lead.field === 'dose') {
+    const unscaled = sameRatio && Math.abs(lead.value - d0) < 1e-9;
+    return { dose: lead.value, yield: unscaled ? y0 : round1(lead.value * r), ratio: r };
+  }
+  const unscaled = sameRatio && Math.abs(lead.value - y0) < 1e-9;
+  return { dose: unscaled ? d0 : round1(lead.value / r), yield: lead.value, ratio: r };
+}
+
 // Pour targets follow the water; step times stay the same.
 export function scaleSteps(steps: RecipeStep[], factor: number): RecipeStep[] {
   if (Math.abs(factor - 1) < 1e-9) return steps;

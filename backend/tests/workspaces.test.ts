@@ -51,7 +51,7 @@ describe("deleting a workspace", () => {
       methodId: v60,
       targetDoseGrams: 15,
       targetWaterGrams: 250,
-      steps: [{ stepType: "bloom", startSec: 0, endSec: 45, targetWaterGrams: 50 }],
+      steps: [{ stepType: "bloom", durationSec: 45, targetWaterGrams: 50 }],
     });
     expect(recipe.status).toBe(201);
     await newBrewLog(owner, ws.id, bean, { recipeId: recipe.body.recipe.id });

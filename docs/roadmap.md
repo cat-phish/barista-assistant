@@ -35,6 +35,15 @@ plan and the decisions behind it.
 
 ## Phase 2: Method kinds, espresso, machines, marks
 
+Built in steps on `feature-espresso`: **2a** method kinds + espresso recipes
+and logs (built); **2b** machines + equipment screens (built); **2c** shot
+timer + marks + AI (built); **2d** step engine (built): steps run back to
+back for every recipe, each moving on automatically, with a "Log it" button,
+on a tap, or (espresso) at first drop, with optional temperature, pressure
+and flow (ramps as instructions). This brought phase 4 (profiles) forward:
+the shot profile *is* the step list. Pour-over gaps were migrated to Wait
+steps.
+
 - Methods get a `kind`: `pour_over`, `immersion`, `espresso`. The kind picks
   the recipe fields, step types and timer behaviour.
 - Espresso: ratio is dose : yield out (no water in); first-drop window and
@@ -57,6 +66,9 @@ plan and the decisions behind it.
   electric. Machines: pre-infusion, flow control and pressure control kept
   separate. Only espresso brews show the machine picker; used machines are
   retired, not deleted.
+- 2b also added an Equipment section (Grinders / Machines / Methods tabs),
+  including a methods screen to rename, change kind and delete. Grinder
+  details and machine capabilities already reach the AI analysis.
 - Brew logs get **marks**: tapped events with the second they happened, from
   a fixed list (`first_drop`, `preinfusion_end`, later `flow_change`…). First
   drop is a tap for everyone. Stored in their own table. The AI analysis
@@ -77,7 +89,7 @@ plan and the decisions behind it.
   plain drink for each public recipe. The "Latte" default method is retired
   (removed where unused).
 
-## Phase 4: Flow and pressure profiles
+## Phase 4: Flow and pressure profiles (done in 2d)
 
-- Optional target pressure (bar) and flow (ml/s) on steps, shown by the timer.
-  Works for manual control (as cues) and programmable machines (as reference).
+- Pressure (bar) and flow (g/s or ml/s per recipe) on espresso steps, held or
+  ramped, shown by the timer as instructions.

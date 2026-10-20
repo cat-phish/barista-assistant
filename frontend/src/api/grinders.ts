@@ -1,13 +1,13 @@
 import { api } from './client';
-import type { Grinder } from './types';
+import type { Grinder, GrinderDetails } from './types';
 
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/grinders`;
 
 export const grindersApi = {
   list: (workspaceId: string) => api.get<{ grinders: Grinder[] }>(base(workspaceId)),
-  create: (workspaceId: string, name: string, notes: string | null = null) =>
-    api.post<{ grinder: Grinder }>(base(workspaceId), { name, notes }),
-  update: (workspaceId: string, id: string, input: { name?: string; notes?: string | null; retired?: boolean }) =>
+  create: (workspaceId: string, name: string, details: Partial<GrinderDetails> = {}) =>
+    api.post<{ grinder: Grinder }>(base(workspaceId), { name, ...details }),
+  update: (workspaceId: string, id: string, input: Partial<GrinderDetails> & { name?: string; retired?: boolean }) =>
     api.patch<{ grinder: Grinder }>(`${base(workspaceId)}/${id}`, input),
   // 409 + brewLogCount when brews used it: retire instead (§3b).
   remove: (workspaceId: string, id: string) => api.delete(`${base(workspaceId)}/${id}`),
