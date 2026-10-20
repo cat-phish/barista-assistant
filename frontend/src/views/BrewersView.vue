@@ -1,43 +1,75 @@
 <script setup lang="ts">
-// Espresso machine management (docs/api_spec.md §3c), one tab of Equipment.
-// Works like grinders: retire keeps history; delete only for unused machines.
+// Brewers (docs/api_spec.md §3), one tab of Equipment: whatever makes the
+// coffee, from a V60 to an espresso machine. Works like grinders: retire keeps
+// history; delete only for brewers no recipe, drink or brew uses.
 import { computed, onMounted, ref } from 'vue';
+import { brewersApi, type BrewerInput } from '../api/brewers';
 import { ApiError, errorMessage } from '../api/client';
-import { machinesApi } from '../api/machines';
-import type { Machine } from '../api/types';
+import { drinkCategoriesApi } from '../api/drinkCategories';
+import type { Brewer, DrinkCategory } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
+import BrewerFields, { type BrewerForm } from '../components/BrewerFields.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import EquipmentTabs from '../components/EquipmentTabs.vue';
-import MachineFields, { type MachineForm } from '../components/MachineFields.vue';
-import { machineSummary } from '../lib/equipment';
+import { machineSummary, METHOD_KINDS } from '../lib/equipment';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
-const machines = ref<Machine[]>([]);
+const brewers = ref<Brewer[]>([]);
+const categories = ref<DrinkCategory[]>([]);
 const loading = ref(true);
 const error = ref('');
-const active = computed(() => machines.value.filter((m) => !m.retiredAt));
-const retired = computed(() => machines.value.filter((m) => m.retiredAt));
+const active = computed(() => brewers.value.filter((m) => !m.retiredAt));
+const retired = computed(() => brewers.value.filter((m) => m.retiredAt));
+const categoryName = (id: string | null) => categories.value.find((c) => c.id === id)?.name ?? null;
 
-function machineForm(m?: Machine): MachineForm {
+function brewerForm(m?: Brewer): BrewerForm {
   return {
     name: m?.name ?? '',
+    kind: m?.kind ?? 'pour_over',
     notes: m?.notes ?? '',
     preinfusion: m?.preinfusion ?? 'none',
     flowControl: m?.flowControl ?? 'none',
     pressureControl: m?.pressureControl ?? 'none',
+    showOnPublicMenu: m?.showOnPublicMenu ?? false,
+    menuName: m?.menuName ?? '',
+    description: m?.description ?? '',
+    categoryId: m?.categoryId ?? '',
   };
 }
-function input(f: MachineForm) {
-  return { ...f, name: f.name.trim(), notes: f.notes.trim() || null };
+function input(f: BrewerForm): BrewerInput & { name: string } {
+  const espresso = f.kind === 'espresso';
+  return {
+    name: f.name.trim(),
+    kind: f.kind,
+    notes: f.notes.trim() || null,
+    // Capabilities only mean something for espresso.
+    preinfusion: espresso ? f.preinfusion : 'none',
+    flowControl: espresso ? f.flowControl : 'none',
+    pressureControl: espresso ? f.pressureControl : 'none',
+    showOnPublicMenu: f.showOnPublicMenu,
+    menuName: f.menuName.trim() || null,
+    description: f.description.trim() || null,
+    categoryId: f.categoryId || null,
+  };
 }
-const duplicate = (err: unknown) => (err instanceof ApiError && err.status === 409 ? 'A machine with that name already exists.' : errorMessage(err));
+// 409s: a taken name, or recipes that pin the kind.
+function conflict(err: unknown): string {
+  if (!(err instanceof ApiError) || err.status !== 409) return errorMessage(err);
+  const count = err.body?.recipeCount;
+  if (typeof count === 'number') {
+    return `${count} recipe${count === 1 ? ' uses' : 's use'} this brewer, so its kind can't change: their fields depend on it. Add a new brewer instead.`;
+  }
+  return 'A brewer with that name already exists.';
+}
 
 async function load(): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    machines.value = (await machinesApi.list(ws)).machines;
+    const [b, c] = await Promise.all([brewersApi.list(ws), drinkCategoriesApi.list(ws)]);
+    brewers.value = b.brewers;
+    categories.value = c.categories;
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -46,12 +78,12 @@ async function load(): Promise<void> {
 }
 onMounted(load);
 
-function replace(updated: Machine): void {
-  machines.value = machines.value.map((m) => (m.id === updated.id ? updated : m));
+function replace(updated: Brewer): void {
+  brewers.value = brewers.value.map((m) => (m.id === updated.id ? updated : m));
 }
 
 // Add
-const newForm = ref(machineForm());
+const newForm = ref(brewerForm());
 const addSubmitted = ref(false);
 const adding = ref(false);
 const addError = ref('');
@@ -62,12 +94,12 @@ async function add(): Promise<void> {
   adding.value = true;
   addError.value = '';
   try {
-    await machinesApi.create(ws, input(newForm.value));
-    newForm.value = machineForm();
+    await brewersApi.create(ws, input(newForm.value));
+    newForm.value = brewerForm();
     addSubmitted.value = false;
     await load();
   } catch (err) {
-    addError.value = duplicate(err);
+    addError.value = conflict(err);
   } finally {
     adding.value = false;
   }
@@ -75,36 +107,36 @@ async function add(): Promise<void> {
 
 // Edit (one at a time, inline)
 const editingId = ref<string | null>(null);
-const editForm = ref(machineForm());
+const editForm = ref(brewerForm());
 const editError = ref('');
 const busyId = ref<string | null>(null);
-function startEdit(m: Machine): void {
+function startEdit(m: Brewer): void {
   editingId.value = m.id;
-  editForm.value = machineForm(m);
+  editForm.value = brewerForm(m);
   editError.value = '';
 }
-async function saveEdit(m: Machine): Promise<void> {
+async function saveEdit(m: Brewer): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws || !editForm.value.name.trim()) return;
   busyId.value = m.id;
   editError.value = '';
   try {
-    replace((await machinesApi.update(ws, m.id, input(editForm.value))).machine);
+    replace((await brewersApi.update(ws, m.id, input(editForm.value))).brewer);
     editingId.value = null;
   } catch (err) {
-    editError.value = duplicate(err);
+    editError.value = conflict(err);
   } finally {
     busyId.value = null;
   }
 }
 
-async function setRetired(m: Machine, value: boolean): Promise<void> {
+async function setRetired(m: Brewer, value: boolean): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   busyId.value = m.id;
   error.value = '';
   try {
-    replace((await machinesApi.update(ws, m.id, { retired: value })).machine);
+    replace((await brewersApi.update(ws, m.id, { retired: value })).brewer);
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -113,11 +145,11 @@ async function setRetired(m: Machine, value: boolean): Promise<void> {
 }
 
 // Delete: confirm; if brews used it, the server says how many and we offer Retire.
-const pending = ref<Machine | null>(null);
+const pending = ref<Brewer | null>(null);
 const usedCount = ref<number | null>(null);
 const deleting = ref(false);
 const dialogError = ref('');
-function askDelete(m: Machine): void {
+function askDelete(m: Brewer): void {
   pending.value = m;
   usedCount.value = null;
   dialogError.value = '';
@@ -129,13 +161,15 @@ async function confirmDelete(): Promise<void> {
   deleting.value = true;
   dialogError.value = '';
   try {
-    await machinesApi.remove(ws, m.id);
+    await brewersApi.remove(ws, m.id);
     pending.value = null;
     await load();
   } catch (err) {
-    const count = err instanceof ApiError && err.status === 409 ? err.body?.brewLogCount : undefined;
-    if (typeof count === 'number') usedCount.value = count;
-    else dialogError.value = errorMessage(err);
+    // Recipes and drinks must move first; brew history means retire instead.
+    const body = err instanceof ApiError && err.status === 409 ? err.body : null;
+    const uses = Number(body?.recipeCount ?? 0) + Number(body?.drinkCount ?? 0);
+    if (body && uses === 0 && typeof body.brewLogCount === 'number') usedCount.value = body.brewLogCount;
+    else dialogError.value = body ? `${body.recipeCount} recipe(s) and ${body.drinkCount} drink(s) use ${m.name}. Move them to another brewer or delete them first.` : errorMessage(err);
   } finally {
     deleting.value = false;
   }
@@ -154,18 +188,18 @@ async function retireInstead(): Promise<void> {
       <h1>Equipment</h1>
     </div>
     <EquipmentTabs />
-    <p class="muted intro">Espresso brews record the machine, and the shot timer follows what it can do.</p>
+    <p class="muted intro">Recipes and drinks are made with a brewer; its kind decides the recipe fields, and an espresso machine's controls shape the shot timer.</p>
 
-    <p v-if="loading" class="muted" aria-live="polite">Loading machines…</p>
+    <p v-if="loading" class="muted" aria-live="polite">Loading brewers…</p>
     <p v-else-if="error" class="form-error" role="alert">{{ error }}</p>
 
     <template v-if="!loading">
-      <div v-if="machines.length === 0" class="card empty"><p>No machines yet.</p></div>
+      <div v-if="brewers.length === 0" class="card empty"><p>No brewers yet.</p></div>
 
       <ul v-if="active.length" class="list">
         <li v-for="m in active" :key="m.id" class="card item">
           <form v-if="editingId === m.id" class="stack" novalidate @submit.prevent="saveEdit(m)">
-            <MachineFields v-model="editForm" :id-prefix="`edit-${m.id}`" :show-errors="true" />
+            <BrewerFields v-model="editForm" :id-prefix="`edit-${m.id}`" :show-errors="true" :categories="categories" />
             <p v-if="editError" class="form-error" role="alert">{{ editError }}</p>
             <div class="buttons">
               <button class="btn btn-secondary" type="button" @click="editingId = null">Cancel</button>
@@ -173,9 +207,14 @@ async function retireInstead(): Promise<void> {
             </div>
           </form>
           <template v-else>
-            <div>
-              <h2>{{ m.name }}</h2>
-              <p class="muted">{{ machineSummary(m) }}</p>
+            <div class="stack-tight">
+              <div class="head">
+                <h2>{{ m.name }}</h2>
+                <span class="badge">{{ METHOD_KINDS[m.kind].label }}</span>
+                <span v-if="categoryName(m.categoryId)" class="badge">{{ categoryName(m.categoryId) }}</span>
+                <span v-if="m.showOnPublicMenu" class="badge muted-badge">On menu{{ m.menuName ? ` as ${m.menuName}` : '' }}</span>
+              </div>
+              <p v-if="m.kind === 'espresso'" class="muted">{{ machineSummary(m) }}</p>
               <p v-if="m.notes" class="muted">{{ m.notes }}</p>
             </div>
             <div v-if="workspaces.canEdit" class="actions">
@@ -192,9 +231,9 @@ async function retireInstead(): Promise<void> {
         <p class="muted small">Hidden when brewing; past brews still show them.</p>
         <ul class="list">
           <li v-for="m in retired" :key="m.id" class="card item retired">
-            <div>
+            <div class="head">
               <h2>{{ m.name }}</h2>
-              <p class="muted">{{ machineSummary(m) }}</p>
+              <span class="badge">{{ METHOD_KINDS[m.kind].label }}</span>
             </div>
             <div v-if="workspaces.canEdit" class="actions">
               <button class="btn-link" type="button" :disabled="busyId === m.id" @click="setRetired(m, false)">Restore</button>
@@ -204,18 +243,18 @@ async function retireInstead(): Promise<void> {
       </section>
 
       <form v-if="workspaces.canEdit" class="card stack" novalidate @submit.prevent="add">
-        <h2>Add a machine</h2>
-        <MachineFields v-model="newForm" id-prefix="new" :show-errors="addSubmitted" />
+        <h2>Add a brewer</h2>
+        <BrewerFields v-model="newForm" id-prefix="new" :show-errors="addSubmitted" :categories="categories" />
         <p v-if="addError" class="form-error" role="alert">{{ addError }}</p>
-        <button class="btn btn-primary" type="submit" :disabled="adding">{{ adding ? 'Adding…' : 'Add machine' }}</button>
+        <button class="btn btn-primary" type="submit" :disabled="adding">{{ adding ? 'Adding…' : 'Add brewer' }}</button>
       </form>
     </template>
   </main>
 
-  <ConfirmDialog :open="pending !== null" :title="usedCount === null ? 'Delete this machine?' : 'This machine has brew history'" @cancel="pending = null">
+  <ConfirmDialog :open="pending !== null" :title="usedCount === null ? 'Delete this brewer?' : 'This brewer has brew history'" @cancel="pending = null">
     <p v-if="usedCount === null">{{ pending?.name }} will be removed.</p>
     <p v-else>
-      {{ usedCount }} shot{{ usedCount === 1 ? ' was' : 's were' }} pulled on {{ pending?.name }}, so it can't be deleted.
+      {{ usedCount }} brew{{ usedCount === 1 ? ' was' : 's were' }} made with {{ pending?.name }}, so it can't be deleted.
       Retire it instead: it's hidden when brewing, and past brews keep showing it.
     </p>
     <p v-if="dialogError" class="form-error" role="alert">{{ dialogError }}</p>
@@ -257,6 +296,17 @@ p {
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
+}
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.stack-tight {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
 }
 .item.retired {
   opacity: 0.75;

@@ -1,0 +1,1 @@
+ALTER TABLE `drink_components` DROP COLUMN `amount`;

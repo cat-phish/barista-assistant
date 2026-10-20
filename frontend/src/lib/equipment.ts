@@ -1,5 +1,5 @@
-// Labels and one-line summaries for equipment (docs/api_spec.md §3, §3b, §3c).
-import type { BurrType, Grinder, GrinderAdjustment, GrinderDetails, GrinderPower, Machine, MethodKind, Preinfusion, ProfileControl } from '../api/types';
+// Labels and one-line summaries for equipment (docs/api_spec.md §3, §3b).
+import type { Brewer, BurrType, Grinder, GrinderAdjustment, GrinderDetails, GrinderPower, MachineCapabilities, MethodKind, Preinfusion, ProfileControl } from '../api/types';
 import { formatGrams, parseDecimal } from './format';
 
 export const METHOD_KINDS: Record<MethodKind, { label: string; hint: string }> = {
@@ -36,7 +36,7 @@ export function grinderSummary(g: Grinder): string {
 }
 
 // "Pre-infusion: manual · Flow: manual" (capabilities that aren't "none").
-export function machineSummary(m: Machine): string {
+export function machineSummary(m: MachineCapabilities): string {
   const parts = [
     m.preinfusion !== 'none' ? `Pre-infusion: ${PREINFUSION_MODES[m.preinfusion].label.toLowerCase()}` : '',
     m.flowControl !== 'none' ? `Flow: ${PROFILE_CONTROLS[m.flowControl].label.toLowerCase()}` : '',
@@ -104,4 +104,11 @@ export function parseGrinderForm(f: GrinderForm): { errors: GrinderFormErrors; v
       power: f.power || null,
     },
   };
+}
+
+// The brewer a duplicated recipe starts on: another active brewer of the same
+// kind (e.g. a second espresso machine), else the original's.
+export function pickCopyBrewer(brewers: Brewer[], original: Pick<Brewer, 'id' | 'kind'>): string {
+  const other = brewers.find((b) => !b.retiredAt && b.kind === original.kind && b.id !== original.id);
+  return other?.id ?? original.id;
 }

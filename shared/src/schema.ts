@@ -9,6 +9,7 @@ import {
   text,
   unique,
   date,
+  type AnyMySqlColumn,
 } from "drizzle-orm/mysql-core";
 
 // 1. Users
@@ -83,40 +84,6 @@ export const beanFreezes = mysqlTable("bean_freezes", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// 5. Brew Methods (Per-Workspace Selectable List)
-// Seeded with DEFAULT_BREW_METHODS when a workspace is created. Members with
-// role 'owner' or 'barista' may add more. Recipes select from this list.
-// `kind` (one of METHOD_KINDS) decides which recipe fields apply and how the
-// timer behaves (docs/api_spec.md §3, §5). Latte is an espresso method until
-// drinks replace it (docs/roadmap.md phase 3).
-export const METHOD_KINDS = ["pour_over", "immersion", "espresso"] as const;
-export type MethodKind = (typeof METHOD_KINDS)[number];
-export const DEFAULT_BREW_METHODS = [
-  { name: "V60", kind: "pour_over" },
-  { name: "Espresso", kind: "espresso" },
-  { name: "Aeropress", kind: "immersion" },
-  { name: "Latte", kind: "espresso" },
-] as const satisfies ReadonlyArray<{ name: string; kind: MethodKind }>;
-
-export const brewMethods = mysqlTable(
-  "brew_methods",
-  {
-    id: varchar("id", { length: 36 }).primaryKey(),
-    workspaceId: varchar("workspace_id", { length: 36 })
-      .notNull()
-      .references(() => workspaces.id, { onDelete: "cascade" }),
-    name: varchar("name", { length: 100 }).notNull(),
-    kind: varchar("kind", { length: 20 }).$type<MethodKind>().default("pour_over").notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-  },
-  (table) => ({
-    workspaceNameUnique: unique("brew_methods_workspace_name_unique").on(
-      table.workspaceId,
-      table.name
-    ),
-  })
-);
-
 export const GRINDER_ADJUSTMENTS = ["stepped", "stepless"] as const;
 export const BURR_TYPES = ["conical", "flat"] as const;
 export const GRINDER_POWER = ["manual", "electric"] as const;
@@ -128,6 +95,51 @@ export type BurrType = (typeof BURR_TYPES)[number];
 export type GrinderPower = (typeof GRINDER_POWER)[number];
 export type Preinfusion = (typeof PREINFUSION_MODES)[number];
 export type ProfileControl = (typeof PROFILE_CONTROLS)[number];
+
+// 5. Brewers (Per-Workspace Equipment That Makes the Coffee)
+// A V60, Chemex, AeroPress or an espresso machine. Seeded with DEFAULT_BREWERS
+// when a workspace is created; owners and baristas may add more. Recipes and
+// drinks belong to a brewer. `kind` (one of METHOD_KINDS) decides which recipe
+// fields apply and how the timer behaves (docs/api_spec.md §3, §5). Espresso
+// brewers also record what the barista controls (pre-infusion, flow,
+// pressure); the shot timer and the AI use it. Milk drinks like a latte are
+// drinks built on a brewer (7d). A brewer can appear on the public menu as the
+// plain brew, under menuName if set ("Espresso" for a Linea Mini). Retired
+// like grinders once brews used it.
+export const METHOD_KINDS = ["pour_over", "immersion", "espresso"] as const;
+export type MethodKind = (typeof METHOD_KINDS)[number];
+export const DEFAULT_BREWERS = [
+  { name: "V60", kind: "pour_over" },
+  { name: "Espresso", kind: "espresso" },
+  { name: "Aeropress", kind: "immersion" },
+] as const satisfies ReadonlyArray<{ name: string; kind: MethodKind }>;
+
+export const brewers = mysqlTable(
+  "brewers",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(), // e.g. "V60", "Linea Mini"
+    kind: varchar("kind", { length: 20 }).$type<MethodKind>().default("pour_over").notNull(),
+    notes: varchar("notes", { length: 255 }),
+    // Espresso only (other kinds keep "none").
+    preinfusion: varchar("preinfusion", { length: 20 }).$type<Preinfusion>().default("none").notNull(),
+    flowControl: varchar("flow_control", { length: 20 }).$type<ProfileControl>().default("none").notNull(),
+    pressureControl: varchar("pressure_control", { length: 20 }).$type<ProfileControl>().default("none").notNull(),
+    // Menu: the plain brew, with a category (also its brew-setup group).
+    menuName: varchar("menu_name", { length: 100 }), // null = name
+    description: varchar("description", { length: 500 }),
+    categoryId: varchar("category_id", { length: 36 }).references(() => drinkCategories.id, { onDelete: "set null" }),
+    showOnPublicMenu: boolean("show_on_public_menu").default(false).notNull(),
+    retiredAt: timestamp("retired_at"), // null = active
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("brewers_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
 
 // 5b. Grinders (Per-Workspace Equipment)
 // Brew logs record which grinder was used, since a grind setting ("20") only
@@ -160,30 +172,6 @@ export const grinders = mysqlTable(
   })
 );
 
-// 5c. Espresso Machines (Per-Workspace Equipment)
-// Chosen on espresso brews only. Capabilities decide how the shot timer
-// treats pre-infusion and (later) flow/pressure profiles; a recipe works on
-// any machine. Retired like grinders once brews used them.
-export const machines = mysqlTable(
-  "machines",
-  {
-    id: varchar("id", { length: 36 }).primaryKey(),
-    workspaceId: varchar("workspace_id", { length: 36 })
-      .notNull()
-      .references(() => workspaces.id, { onDelete: "cascade" }),
-    name: varchar("name", { length: 100 }).notNull(), // e.g. "Linea Mini"
-    notes: varchar("notes", { length: 255 }),
-    preinfusion: varchar("preinfusion", { length: 20 }).$type<Preinfusion>().default("none").notNull(),
-    flowControl: varchar("flow_control", { length: 20 }).$type<ProfileControl>().default("none").notNull(),
-    pressureControl: varchar("pressure_control", { length: 20 }).$type<ProfileControl>().default("none").notNull(),
-    retiredAt: timestamp("retired_at"), // null = active
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-  },
-  (table) => ({
-    workspaceNameUnique: unique("machines_workspace_name_unique").on(table.workspaceId, table.name),
-  })
-);
-
 // 6. Recipe Templates (Target Parameters)
 export const recipes = mysqlTable("recipes", {
   id: varchar("id", { length: 36 }).primaryKey(),
@@ -191,13 +179,13 @@ export const recipes = mysqlTable("recipes", {
     .notNull()
     .references(() => workspaces.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 255 }).notNull(),
-  // The API refuses (409) to delete a brew method that recipes still use.
-  // The FK cascades rather than restricts so that deleting a workspace (which
-  // cascades to both brew_methods and recipes) isn't blocked by this FK.
-  // The API must also reject a methodId from a different workspace.
-  methodId: varchar("method_id", { length: 36 })
+  // The API refuses (409) to delete a brewer that recipes still use. The FK
+  // cascades rather than restricts so that deleting a workspace (which
+  // cascades to both brewers and recipes) isn't blocked by this FK. The API
+  // must also reject a brewerId from a different workspace.
+  brewerId: varchar("brewer_id", { length: 36 })
     .notNull()
-    .references(() => brewMethods.id, { onDelete: "cascade" }),
+    .references(() => brewers.id, { onDelete: "cascade" }),
   targetDoseGrams: decimal("target_dose_grams", { precision: 5, scale: 2, mode: "number" }).notNull(),
   // Water poured in total; the coffee:water ratio is dose:water. Required for
   // pour-over and immersion methods, null for espresso (enforced by the API).
@@ -217,7 +205,7 @@ export const recipes = mysqlTable("recipes", {
   // Unit for espresso flow steps: g/s (a scale) or ml/s (a machine's flow meter).
   flowUnit: varchar("flow_unit", { length: 10 }).$type<FlowUnit>().default("g_s").notNull(),
   targetTempC: decimal("target_temp_c", { precision: 4, scale: 1, mode: "number" }),
-  showOnPublicMenu: boolean("show_on_public_menu").default(true).notNull(),
+  // Recipes reach the public menu through their method or drinks (7d).
   // Grind is per grinder: see recipeGrindSettings. The default grinder is
   // preselected when brewing this recipe (else the last one used); deleting
   // the grinder clears it.
@@ -290,6 +278,105 @@ export const recipeSteps = mysqlTable("recipe_steps", {
   flowEndRate: decimal("flow_end_rate", { precision: 4, scale: 1, mode: "number" }),
 });
 
+// 7b. Ingredients (Reusable Preps)
+// What goes into a drink besides the coffee: orange-infused cold foam,
+// steamed oat milk, vanilla syrup, ice. Instructions are free text for now.
+// The API refuses (409) to delete an ingredient that drinks use.
+export const INGREDIENT_TYPES = ["milk", "foam", "syrup", "ice", "water", "other"] as const;
+export type IngredientType = (typeof INGREDIENT_TYPES)[number];
+export const ingredients = mysqlTable(
+  "ingredients",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(), // e.g. "Orange cold foam"
+    ingredientType: varchar("ingredient_type", { length: 20 }).$type<IngredientType>().default("other").notNull(),
+    instructions: text("instructions"), // how to make it, e.g. infuse overnight
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("ingredients_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+
+// 7c. Drink Categories (Ordered Menu Sections)
+// Group drinks and plain brew methods on the menu and in the brew picker,
+// e.g. "Espresso milk drinks", "Specialty drinks". Deleting one leaves its
+// drinks and methods uncategorised.
+export const drinkCategories = mysqlTable(
+  "drink_categories",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(),
+    position: int("position").notNull(), // 1, 2, 3...
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("drink_categories_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+
+// Serving sizes for drinks and brews (fl_oz = US fluid ounces).
+export const SERVING_UNITS = ["fl_oz", "ml"] as const;
+export type ServingUnit = (typeof SERVING_UNITS)[number];
+
+// 7d. Drinks (What's Served; the Public Menu)
+// A drink is built on one brewer: any recipe of that brewer can make it
+// (the default is preselected), finished with ingredients: "Oat Latte"
+// (espresso machine + steamed oat milk), "The Atlas" (V60 + orange cold foam).
+// A drink can be a variant of another (Vanilla Latte of Latte), like a
+// cocktail riff: an independent copy that remembers its parent. Deleting a
+// drink moves its variants up to its parent (the API; set null is a backstop).
+export const drinks = mysqlTable("drinks", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  workspaceId: varchar("workspace_id", { length: 36 })
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: varchar("description", { length: 500 }),
+  // Cascade so workspace deletion works; the API refuses (409) deleting a
+  // brewer that drinks use.
+  brewerId: varchar("brewer_id", { length: 36 })
+    .notNull()
+    .references(() => brewers.id, { onDelete: "cascade" }),
+  categoryId: varchar("category_id", { length: 36 }).references(() => drinkCategories.id, { onDelete: "set null" }),
+  parentDrinkId: varchar("parent_drink_id", { length: 36 }).references((): AnyMySqlColumn => drinks.id, {
+    onDelete: "set null",
+  }),
+  // A recipe of brewerId (enforced by the API), or null.
+  defaultRecipeId: varchar("default_recipe_id", { length: 36 }).references(() => recipes.id, { onDelete: "set null" }),
+  // Default size, e.g. 8 fl oz: brewing scales the ingredient amounts (and a
+  // filter method's batch) from it. Both or neither (the API); null = no scaling.
+  servingSize: decimal("serving_size", { precision: 6, scale: 1, mode: "number" }),
+  servingUnit: varchar("serving_unit", { length: 10 }).$type<ServingUnit>(), // SERVING_UNITS
+  showOnPublicMenu: boolean("show_on_public_menu").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// A drink's ingredients, in order, with an amount for the drink's default size
+// and a note. The unit is free text: "fl oz", "ml" and "g" are built in,
+// others ("pump", "tsp") are typed. A value scales with the size; a unit alone
+// ("to taste") doesn't.
+export const drinkIngredients = mysqlTable("drink_ingredients", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  drinkId: varchar("drink_id", { length: 36 })
+    .notNull()
+    .references(() => drinks.id, { onDelete: "cascade" }),
+  // Cascade so workspace deletion works; the API is what refuses deleting a used ingredient.
+  ingredientId: varchar("ingredient_id", { length: 36 })
+    .notNull()
+    .references(() => ingredients.id, { onDelete: "cascade" }),
+  position: int("position").notNull(), // 1, 2, 3...
+  amountValue: decimal("amount_value", { precision: 8, scale: 2, mode: "number" }), // e.g. 2
+  amountUnit: varchar("amount_unit", { length: 20 }), // e.g. "pump"
+  note: varchar("note", { length: 255 }), // e.g. "spooned on top"
+});
+
 // 8. Brew Logs (Actual Execution & Tasting Notes)
 export const brewLogs = mysqlTable("brew_logs", {
   id: varchar("id", { length: 36 }).primaryKey(),
@@ -310,8 +397,17 @@ export const brewLogs = mysqlTable("brew_logs", {
   grinderId: varchar("grinder_id", { length: 36 }).references(() => grinders.id, {
     onDelete: "set null",
   }),
-  // Espresso brews only (docs/api_spec.md §6). Retired, not deleted, like grinders.
-  machineId: varchar("machine_id", { length: 36 }).references(() => machines.id, {
+  // The drink this brew was for (optional; docs/api_spec.md §6). Null for a
+  // plain brew of the method.
+  drinkId: varchar("drink_id", { length: 36 }).references(() => drinks.id, { onDelete: "set null" }),
+  // The size made, if the drink was scaled from its default (docs/api_spec.md
+  // §6). Both or neither, and only with a drink.
+  servingSize: decimal("serving_size", { precision: 6, scale: 1, mode: "number" }),
+  servingUnit: varchar("serving_unit", { length: 10 }).$type<ServingUnit>(), // SERVING_UNITS
+  // The brewer used: the recipe's, set by the API (docs/api_spec.md §6), and
+  // kept if the recipe later changes or is deleted. Brewers in use are
+  // retired, not deleted; set null as a backstop.
+  brewerId: varchar("brewer_id", { length: 36 }).references(() => brewers.id, {
     onDelete: "set null",
   }),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
@@ -366,14 +462,12 @@ export type WorkspaceMember = typeof workspaceMembers.$inferSelect;
 export type NewWorkspaceMember = typeof workspaceMembers.$inferInsert;
 export type Bean = typeof beans.$inferSelect;
 export type NewBean = typeof beans.$inferInsert;
-export type BrewMethod = typeof brewMethods.$inferSelect;
-export type NewBrewMethod = typeof brewMethods.$inferInsert;
+export type Brewer = typeof brewers.$inferSelect;
+export type NewBrewer = typeof brewers.$inferInsert;
 export type BeanFreeze = typeof beanFreezes.$inferSelect;
 export type NewBeanFreeze = typeof beanFreezes.$inferInsert;
 export type Grinder = typeof grinders.$inferSelect;
 export type NewGrinder = typeof grinders.$inferInsert;
-export type Machine = typeof machines.$inferSelect;
-export type NewMachine = typeof machines.$inferInsert;
 export type RecipeGrindSetting = typeof recipeGrindSettings.$inferSelect;
 export type RecipeStepType = (typeof RECIPE_STEP_TYPES)[number];
 export type Recipe = typeof recipes.$inferSelect;
@@ -381,6 +475,9 @@ export type NewRecipe = typeof recipes.$inferInsert;
 export type RecipeStep = typeof recipeSteps.$inferSelect;
 export type NewRecipeStep = typeof recipeSteps.$inferInsert;
 export type BrewLog = typeof brewLogs.$inferSelect;
+export type Ingredient = typeof ingredients.$inferSelect;
+export type Drink = typeof drinks.$inferSelect;
+export type DrinkCategory = typeof drinkCategories.$inferSelect;
 export type BrewLogMark = typeof brewLogMarks.$inferSelect;
 export type NewBrewLog = typeof brewLogs.$inferInsert;
 export type LlmAnalysis = typeof llmAnalyses.$inferSelect;

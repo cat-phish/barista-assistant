@@ -71,7 +71,7 @@ export default defineConfig({
     *   Previous / Up next are one line each with the instruction in bold ("Pour · **Pour to 210 g (+150)** · 0:30 · at 1:23").
     *   Progress runs from the step's start to its planned end (the guide for tap steps, the first-drop window's end for first-drop steps).
     *   Steps you're doing get the warm brand-tint background; waiting steps (`wait`, `soak`) are plain white.
-    *   If the chosen machine can't control what a step asks for (pressure/flow `none`), the card adds "Your machine can't set pressure", and the step still runs on time.
+    *   If the espresso brewer (the recipe's) can't control what a step asks for (pressure/flow `none`), the card adds "Your machine can't set pressure", and the step still runs on time.
 *   **Espresso** adds a **First drop** button under Finish & Save while running (whether or not a step waits for it). After the tap it shows the time and "early / in the window / late" against the recipe's window, with a way to re-record. With no steps the shot timer is just the clock and this button.
 *   **Target finish window** (recipe's `expectedFinishMinSec`–`expectedFinishMaxSec`, if set) under the clock: "Target 2:45–3:15 · in 0:40" before the window, "· in the window" inside it, "· 0:12 over" after it. Espresso headers show "18 g → 36 g".
 *   **Finish & Save** is available from the start. It emits the elapsed seconds and the marks; the log form has a **First drop** field (espresso), filled from the tap or typed in afterwards, and blank = not recorded.

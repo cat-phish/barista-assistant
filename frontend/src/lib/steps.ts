@@ -1,7 +1,7 @@
 // Recipe steps: the types, editor validation (mirrors the API, docs/api_spec.md
 // §5), what each step's card says, and the timer's schedule. Steps run back to
 // back: each starts when the previous one actually ended. Tested in steps.test.ts.
-import type { FlowUnit, Machine, Mark, MethodKind, StepAdvance, StepFields, StepType } from '../api/types';
+import type { FlowUnit, MachineCapabilities, Mark, MethodKind, StepAdvance, StepFields, StepType } from '../api/types';
 import { formatGrams, formatTime, parseDecimal, parseTime, type Parsed } from './format';
 
 type Rule = 'required' | 'optional' | 'none';
@@ -71,7 +71,7 @@ export function stepInstruction(step: StepFields, amount: number | null, flowUni
 }
 
 // What the chosen machine can't do for this step (the step still runs on time).
-export function machineNote(step: StepFields, machine: Pick<Machine, 'preinfusion' | 'flowControl' | 'pressureControl'> | null): string | null {
+export function machineNote(step: StepFields, machine: MachineCapabilities | null): string | null {
   if (!machine) return null;
   if (step.pressureBar !== null && machine.pressureControl === 'none') return "Your machine can't set pressure";
   if (step.flowRate !== null && machine.flowControl === 'none') return "Your machine can't set flow";

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, count, desc, eq, inArray, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireMembership, WRITE_ROLES, type Role } from "../auth/membership.js";
@@ -10,11 +11,12 @@ import {
   beans,
   brewLogMarks,
   brewLogs,
-  brewMethods,
+  brewers,
+  drinks,
   grinders,
   llmAnalyses,
-  machines,
   recipes,
+  SERVING_UNITS,
   users,
   type Bean,
   type BrewLog,
@@ -37,10 +39,12 @@ export interface BrewLogDetails extends BrewLog {
   bean: Pick<Bean, "id" | "roasterName" | "beanName">;
   recipe: (Pick<Recipe, "id" | "name" | "expectedYieldGrams"> & { methodKind: MethodKind }) | null;
   grinder: { id: string; name: string } | null; // retired grinders included
-  machine: { id: string; name: string } | null; // espresso only; retired included
+  // The brewer it was made with (the recipe's at the time); retired included.
+  brewer: { id: string; name: string; kind: MethodKind } | null;
+  drink: { id: string; name: string } | null; // the drink it was for
   marks: Mark[]; // when things actually happened, earliest first
   // Null when the brewer deleted their account (the log is kept).
-  brewer: { id: string; email: string } | null;
+  brewedBy: { id: string; email: string } | null;
 }
 
 export interface BrewLogListResponse {
@@ -70,8 +74,11 @@ const brewLogFields = {
   beanId: z.uuid(),
   recipeId: z.uuid().nullable().optional(),
   grinderId: z.uuid().nullable().optional(),
-  // Espresso brews only (espressoError).
-  machineId: z.uuid().nullable().optional(),
+  // The drink it was for; with a recipe, one of the drink's method (drinkError).
+  drinkId: z.uuid().nullable().optional(),
+  // The size made, for a drink scaled from its default (sizeError).
+  servingSize: decimalSchema({ min: 0, max: 2000, scale: 1, exclusiveMin: true }).nullable().optional(),
+  servingUnit: z.enum(SERVING_UNITS).nullable().optional(),
   timestamp: z.iso
     .datetime({ offset: true })
     .transform((s) => new Date(s))
@@ -104,7 +111,9 @@ const brewLogFields = {
     .optional(),
 };
 
-const createBrewLogSchema = z.object(brewLogFields);
+// Strict, like PATCH: the brewer comes from the recipe, so e.g. an old
+// client's machineId is refused rather than silently dropped.
+const createBrewLogSchema = z.object(brewLogFields).strict();
 const updateBrewLogSchema = updateSchema(brewLogFields);
 
 const listQuerySchema = z.object({
@@ -116,15 +125,13 @@ const listQuerySchema = z.object({
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-// Espresso brews record the shot weight instead of water, and may record a
-// machine (docs/api_spec.md §6). kind is the method kind of the log's recipe,
-// or null without a recipe.
+// Espresso brews record the shot weight instead of water (docs/api_spec.md
+// §6). kind is the kind of the log's recipe's brewer, or null without a recipe.
 function espressoError(
   kind: MethodKind | null,
   log: {
     actualWaterGrams: number | null;
     actualYieldGrams: number | null;
-    machineId: string | null;
     actualTimeSec: number;
     marks: ReadonlyArray<{ kind: MarkKind; atSec: number }>;
   }
@@ -136,29 +143,57 @@ function espressoError(
     if (log.actualYieldGrams === null) return "actualYieldGrams: is required for an espresso brew (the shot weight)";
     return null;
   }
-  if (log.machineId !== null) return "machineId: only espresso brews record a machine";
   if (log.marks.some((m) => m.kind === "first_drop")) return "marks: only espresso brews record a first drop";
   return log.actualWaterGrams === null ? "actualWaterGrams: is required" : null;
 }
 
-async function recipeKind(tx: Tx, recipeId: string): Promise<MethodKind | null> {
-  const [row] = await tx
-    .select({ kind: brewMethods.kind })
-    .from(recipes)
-    .innerJoin(brewMethods, eq(recipes.methodId, brewMethods.id))
-    .where(eq(recipes.id, recipeId));
-  return row?.kind ?? null;
+// A size is both its number and unit, and only for a drink (docs/api_spec.md §6).
+function sizeError(log: { drinkId?: string | null; servingSize?: number | null; servingUnit?: string | null }): string | null {
+  const hasSize = (log.servingSize ?? null) !== null;
+  if (hasSize !== ((log.servingUnit ?? null) !== null)) return "servingSize: servingSize and servingUnit go together";
+  if (hasSize && !log.drinkId) return "servingSize: only for a brew made for a drink";
+  return null;
 }
 
-// Lock the referenced bean/recipe rows, like recipes do with brew methods: a
+// A brew for a drink uses a recipe of the drink's brewer (docs/api_spec.md §6).
+async function drinkError(tx: Tx, drinkId: string | null, recipeId: string | null): Promise<string | null> {
+  if (!drinkId || !recipeId) return null;
+  const [allowed] = await tx
+    .select({ id: recipes.id })
+    .from(recipes)
+    .innerJoin(drinks, eq(drinks.brewerId, recipes.brewerId))
+    .where(and(eq(drinks.id, drinkId), eq(recipes.id, recipeId)));
+  return allowed ? null : "recipeId: not a recipe of the drink's brewer";
+}
+
+// The recipe's brewer and its kind: a log records the brewer it was made with.
+async function recipeBrewer(tx: Tx, recipeId: string | null | undefined): Promise<{ brewerId: string; kind: MethodKind } | null> {
+  if (!recipeId) return null;
+  const [row] = await tx
+    .select({ brewerId: brewers.id, kind: brewers.kind })
+    .from(recipes)
+    .innerJoin(brewers, eq(recipes.brewerId, brewers.id))
+    .where(eq(recipes.id, recipeId));
+  return row ?? null;
+}
+
+// Lock the referenced bean/recipe rows, like recipes do with brewers: a
 // concurrent bean or recipe DELETE either finishes first (we see no row -> 400)
 // or waits for this insert. Without the bean lock, a log could also slip in after
 // a bean DELETE counted logs and get cascade-deleted without confirmation.
 async function referencesInWorkspace(
   tx: Tx,
   workspaceId: string,
-  refs: { beanId?: string; recipeId?: string | null; grinderId?: string | null; machineId?: string | null }
+  refs: { beanId?: string; recipeId?: string | null; grinderId?: string | null; drinkId?: string | null }
 ): Promise<string | null> {
+  if (refs.drinkId) {
+    const [drink] = await tx
+      .select({ id: drinks.id })
+      .from(drinks)
+      .where(and(eq(drinks.id, refs.drinkId), eq(drinks.workspaceId, workspaceId)))
+      .for("update");
+    if (!drink) return "drinkId: not a drink in this workspace";
+  }
   if (refs.beanId) {
     const [bean] = await tx
       .select({ id: beans.id })
@@ -184,17 +219,11 @@ async function referencesInWorkspace(
       .for("update");
     if (!grinder) return "grinderId: not a grinder in this workspace";
   }
-  if (refs.machineId) {
-    // Retired machines are accepted, like grinders.
-    const [machine] = await tx
-      .select({ id: machines.id })
-      .from(machines)
-      .where(and(eq(machines.id, refs.machineId), eq(machines.workspaceId, workspaceId)))
-      .for("update");
-    if (!machine) return "machineId: not a machine in this workspace";
-  }
   return null;
 }
+
+// The log's own brewer, joined apart from the recipe's (which gives its kind).
+const logBrewers = alias(brewers, "log_brewer");
 
 export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0): Promise<BrewLogDetails[]> {
   const rows = await db
@@ -205,7 +234,10 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       beanId: brewLogs.beanId,
       recipeId: brewLogs.recipeId,
       grinderId: brewLogs.grinderId,
-      machineId: brewLogs.machineId,
+      brewerId: brewLogs.brewerId,
+      drinkId: brewLogs.drinkId,
+      servingSize: brewLogs.servingSize,
+      servingUnit: brewLogs.servingUnit,
       timestamp: brewLogs.timestamp,
       actualDoseGrams: brewLogs.actualDoseGrams,
       actualWaterGrams: brewLogs.actualWaterGrams,
@@ -218,17 +250,19 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       bean: { id: beans.id, roasterName: beans.roasterName, beanName: beans.beanName },
       recipe: { id: recipes.id, name: recipes.name, expectedYieldGrams: recipes.expectedYieldGrams },
       // Separate column: a nested object spanning two left joins isn't nulled as a whole.
-      recipeMethodKind: brewMethods.kind,
+      recipeMethodKind: brewers.kind,
       grinder: { id: grinders.id, name: grinders.name },
-      machine: { id: machines.id, name: machines.name },
-      brewer: { id: users.id, email: users.email },
+      brewer: { id: logBrewers.id, name: logBrewers.name, kind: logBrewers.kind },
+      drink: { id: drinks.id, name: drinks.name },
+      brewedBy: { id: users.id, email: users.email },
     })
     .from(brewLogs)
     .innerJoin(beans, eq(brewLogs.beanId, beans.id))
     .leftJoin(recipes, eq(brewLogs.recipeId, recipes.id))
-    .leftJoin(brewMethods, eq(recipes.methodId, brewMethods.id))
+    .leftJoin(brewers, eq(recipes.brewerId, brewers.id))
     .leftJoin(grinders, eq(brewLogs.grinderId, grinders.id))
-    .leftJoin(machines, eq(brewLogs.machineId, machines.id))
+    .leftJoin(logBrewers, eq(brewLogs.brewerId, logBrewers.id))
+    .leftJoin(drinks, eq(brewLogs.drinkId, drinks.id))
     // Left join: logs of deleted accounts (userId null) must still be listed.
     .leftJoin(users, eq(brewLogs.userId, users.id))
     .where(where)
@@ -334,16 +368,17 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Bre
     const error = await referencesInWorkspace(tx, workspaceId, body);
     if (error) return error;
     const { marks = [], ...fields } = body;
-    const kind = fields.recipeId ? await recipeKind(tx, fields.recipeId) : null;
-    const wrongForKind = espressoError(kind, {
+    const brewer = await recipeBrewer(tx, fields.recipeId);
+    const wrongForKind = espressoError(brewer?.kind ?? null, {
       actualWaterGrams: fields.actualWaterGrams ?? null,
       actualYieldGrams: fields.actualYieldGrams ?? null,
-      machineId: fields.machineId ?? null,
       actualTimeSec: fields.actualTimeSec,
       marks,
     });
     if (wrongForKind) return wrongForKind;
-    await tx.insert(brewLogs).values({ id, workspaceId, userId, ...fields });
+    const wrongForDrink = (await drinkError(tx, fields.drinkId ?? null, fields.recipeId ?? null)) ?? sizeError(fields);
+    if (wrongForDrink) return wrongForDrink;
+    await tx.insert(brewLogs).values({ id, workspaceId, userId, ...fields, brewerId: brewer?.brewerId ?? null });
     await insertMarks(tx, id, marks);
     return null;
   });
@@ -378,7 +413,9 @@ brewLogsRouter.patch(
           recipeId: brewLogs.recipeId,
           actualWaterGrams: brewLogs.actualWaterGrams,
           actualYieldGrams: brewLogs.actualYieldGrams,
-          machineId: brewLogs.machineId,
+          drinkId: brewLogs.drinkId,
+          servingSize: brewLogs.servingSize,
+          servingUnit: brewLogs.servingUnit,
           actualTimeSec: brewLogs.actualTimeSec,
         })
         .from(brewLogs)
@@ -391,16 +428,17 @@ brewLogsRouter.patch(
       if (error) return { status: "bad_ref", error } as const;
 
       // Only when the change touches it, so old logs whose recipe later moved
-      // to another method can still be edited (docs/api_spec.md §6).
+      // to another brewer can still be edited (docs/api_spec.md §6).
       const { marks, ...fields } = body;
-      const touched = ["recipeId", "actualWaterGrams", "actualYieldGrams", "machineId", "marks", "actualTimeSec"];
+      // A new recipe brings its brewer; the old brewer stays otherwise.
+      const brewerUpdate = "recipeId" in body ? { brewerId: (await recipeBrewer(tx, fields.recipeId))?.brewerId ?? null } : {};
+      const touched = ["recipeId", "actualWaterGrams", "actualYieldGrams", "marks", "actualTimeSec"];
       if (touched.some((key) => key in body)) {
         const after = { ...log, ...fields };
-        const kind = after.recipeId ? await recipeKind(tx, after.recipeId) : null;
+        const kind = (await recipeBrewer(tx, after.recipeId))?.kind ?? null;
         const wrongForKind = espressoError(kind, {
           actualWaterGrams: after.actualWaterGrams ?? null,
           actualYieldGrams: after.actualYieldGrams ?? null,
-          machineId: after.machineId ?? null,
           actualTimeSec: after.actualTimeSec,
           marks:
             marks ??
@@ -409,7 +447,16 @@ brewLogsRouter.patch(
         if (wrongForKind) return { status: "bad_ref", error: wrongForKind } as const;
       }
 
-      if (Object.keys(fields).length > 0) await tx.update(brewLogs).set(fields).where(eq(brewLogs.id, brewLogId));
+      if ("drinkId" in body || "recipeId" in body) {
+        const after = { ...log, ...fields };
+        const wrongForDrink = await drinkError(tx, after.drinkId ?? null, after.recipeId ?? null);
+        if (wrongForDrink) return { status: "bad_ref", error: wrongForDrink } as const;
+      }
+      if ("drinkId" in body || "servingSize" in body || "servingUnit" in body) {
+        const wrongSize = sizeError({ ...log, ...fields });
+        if (wrongSize) return { status: "bad_ref", error: wrongSize } as const;
+      }
+      if (Object.keys(fields).length > 0) await tx.update(brewLogs).set({ ...fields, ...brewerUpdate }).where(eq(brewLogs.id, brewLogId));
       // A sent list replaces the old one entirely.
       if (marks) {
         await tx.delete(brewLogMarks).where(eq(brewLogMarks.brewLogId, brewLogId));

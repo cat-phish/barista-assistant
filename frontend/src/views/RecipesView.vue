@@ -5,6 +5,7 @@ import { recipesApi } from '../api/recipes';
 import type { Recipe } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
+import MenuTabs from '../components/MenuTabs.vue';
 import { formatDoseLine, formatGrams, formatTime } from '../lib/format';
 import { formatFinishWindow, plannedStarts, stepTitle } from '../lib/steps';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -67,6 +68,7 @@ async function confirmDelete(): Promise<void> {
       <h1>Recipes</h1>
       <RouterLink v-if="workspaces.canEdit" class="btn btn-primary" :to="{ name: 'recipe-new' }">Add recipe</RouterLink>
     </div>
+    <MenuTabs />
 
     <p v-if="loading" class="muted" aria-live="polite">Loading recipes…</p>
     <p v-else-if="error" class="form-error" role="alert">{{ error }}</p>
@@ -80,15 +82,14 @@ async function confirmDelete(): Promise<void> {
         <div class="head">
           <div>
             <h2>{{ recipe.name }}</h2>
-            <span class="badge">{{ recipe.method.name }}</span>
+            <span class="badge">{{ recipe.brewer.name }}</span>
           </div>
-          <span v-if="!recipe.showOnPublicMenu" class="badge muted-badge">Hidden from menu</span>
         </div>
         <p class="facts">
           <span>{{ formatDoseLine(recipe.targetDoseGrams, recipe.targetWaterGrams, recipe.expectedYieldGrams) }}</span>
           <span v-if="recipe.expectedYieldGrams !== null && recipe.targetWaterGrams !== null">≈{{ formatGrams(recipe.expectedYieldGrams) }} g yield</span>
           <span v-if="formatFinishWindow(recipe.firstDropMinSec, recipe.firstDropMaxSec)">first drop {{ formatFinishWindow(recipe.firstDropMinSec, recipe.firstDropMaxSec) }}</span>
-          <span v-if="formatFinishWindow(recipe.expectedFinishMinSec, recipe.expectedFinishMaxSec)">{{ recipe.method.kind === 'espresso' ? 'shot' : 'finish' }} {{ formatFinishWindow(recipe.expectedFinishMinSec, recipe.expectedFinishMaxSec) }}</span>
+          <span v-if="formatFinishWindow(recipe.expectedFinishMinSec, recipe.expectedFinishMaxSec)">{{ recipe.brewer.kind === 'espresso' ? 'shot' : 'finish' }} {{ formatFinishWindow(recipe.expectedFinishMinSec, recipe.expectedFinishMaxSec) }}</span>
           <span v-if="recipe.targetTempC !== null">{{ recipe.targetTempC }} °C</span>
         </p>
         <p v-if="recipe.grindSettings.length" class="grind muted">
@@ -96,6 +97,7 @@ async function confirmDelete(): Promise<void> {
         </p>
         <p v-if="stepsSummary(recipe)" class="steps-summary">{{ stepsSummary(recipe) }}</p>
         <div v-if="workspaces.canEdit" class="actions">
+          <RouterLink class="btn-link" :to="{ name: 'recipe-new', query: { from: recipe.id } }">Duplicate</RouterLink>
           <RouterLink class="btn-link" :to="{ name: 'recipe-edit', params: { id: recipe.id } }">Edit</RouterLink>
           <button class="btn-link danger" type="button" @click="pending = recipe; dialogError = ''">Delete</button>
         </div>

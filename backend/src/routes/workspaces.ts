@@ -7,8 +7,8 @@ import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, parseQuery, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import {
-  brewMethods,
-  DEFAULT_BREW_METHODS,
+  brewers,
+  DEFAULT_BREWERS,
   workspaceMembers,
   workspaces,
   type Workspace,
@@ -43,8 +43,8 @@ workspacesRouter.post("/", async (req: Request, res: Response<WorkspaceResponse>
     workspace = await db.transaction(async (tx) => {
       await tx.insert(workspaces).values({ id: workspaceId, name: body.name, slug: body.slug });
       await tx.insert(workspaceMembers).values({ userId, workspaceId, role: "owner" });
-      await tx.insert(brewMethods).values(
-        DEFAULT_BREW_METHODS.map(({ name, kind }) => ({ id: randomUUID(), workspaceId, name, kind }))
+      await tx.insert(brewers).values(
+        DEFAULT_BREWERS.map(({ name, kind }) => ({ id: randomUUID(), workspaceId, name, kind }))
       );
       const [created] = await tx.select().from(workspaces).where(eq(workspaces.id, workspaceId));
       return created;
@@ -106,7 +106,7 @@ workspacesRouter.patch(
 
 const deleteWorkspaceQuery = z.object({ confirm: z.string().optional() });
 
-// Cascades to members, brew methods, beans, recipes, brew logs and analyses.
+// Cascades to members, brewers, beans, recipes, brew logs and analyses.
 // ?confirm must be the slug as typed by the owner (docs/api_spec.md §2).
 workspacesRouter.delete("/:workspaceId", async (req: Request<{ workspaceId: string }>, res: Response) => {
   const { workspaceId } = req.params;

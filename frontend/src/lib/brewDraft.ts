@@ -11,7 +11,6 @@ export interface BrewDraft {
   yieldGrams: string; // measured beverage weight: optional, but the shot weight (required) for espresso
   temp: string;
   grinderId: string; // '' = none
-  machineId: string; // '' = none; espresso only
   firstDrop: string; // espresso: seconds, e.g. "7.4" ('' = not recorded); from the timer's tap or typed
   grind: string;
   time: string; // m:ss
@@ -23,7 +22,7 @@ export type BrewValues = Omit<BrewLogInput, 'beanId' | 'recipeId'>;
 export type BrewDraftErrors = Partial<Record<'dose' | 'water' | 'yieldGrams' | 'temp' | 'time' | 'firstDrop', string>>;
 
 export function emptyDraft(): BrewDraft {
-  return { dose: '', water: '', yieldGrams: '', temp: '', grinderId: '', machineId: '', firstDrop: '', grind: '', time: '', rating: null, notes: '' };
+  return { dose: '', water: '', yieldGrams: '', temp: '', grinderId: '', firstDrop: '', grind: '', time: '', rating: null, notes: '' };
 }
 
 export function draftFromLog(log: BrewLog): BrewDraft {
@@ -33,7 +32,6 @@ export function draftFromLog(log: BrewLog): BrewDraft {
     yieldGrams: log.actualYieldGrams === null ? '' : formatGrams(log.actualYieldGrams),
     temp: log.actualTempC === null ? '' : String(log.actualTempC),
     grinderId: log.grinderId ?? '',
-    machineId: log.machineId ?? '',
     firstDrop: firstDropOf(log.marks),
     grind: log.actualGrindSetting ?? '',
     time: formatTime(log.actualTimeSec),
@@ -89,7 +87,6 @@ export function parseBrewDraft(
       actualYieldGrams: yieldGrams?.ok ? yieldGrams.value : null,
       actualTempC: temp?.ok ? temp.value : null,
       grinderId: d.grinderId || null,
-      machineId: espresso ? d.machineId || null : null, // only espresso brews record a machine
       actualGrindSetting: d.grind.trim() || null,
       actualTimeSec: time.value,
       rating: d.rating,

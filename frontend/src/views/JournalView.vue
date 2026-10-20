@@ -8,6 +8,7 @@ import type { Bean, BrewLog } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import RatingStars from '../components/RatingStars.vue';
 import { formatDoseLine, formatGrams, formatTime, formatWhen } from '../lib/format';
+import { formatSize } from '../lib/servings';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const PAGE_SIZE = 20;
@@ -91,7 +92,7 @@ watch(beanFilter, () => load(true));
               <RatingStars :rating="log.rating" />
             </div>
             <strong>{{ log.bean.roasterName }} {{ log.bean.beanName }}</strong>
-            <span v-if="log.recipe" class="muted">{{ log.recipe.name }}</span>
+            <span v-if="log.drink || log.recipe" class="muted">{{ [log.drink?.name, log.servingSize !== null && log.servingUnit ? formatSize({ size: log.servingSize, unit: log.servingUnit }) : null, log.recipe?.name].filter(Boolean).join(' · ') }}</span>
             <span class="facts">
               <span>{{ formatDoseLine(log.actualDoseGrams, log.actualWaterGrams, log.actualYieldGrams) }}</span>
               <span v-if="log.actualYieldGrams !== null && log.actualWaterGrams !== null">→ {{ formatGrams(log.actualYieldGrams) }} g yield</span>

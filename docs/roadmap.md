@@ -9,11 +9,11 @@ plan and the decisions behind it.
 
 | Concept | What it is | Examples |
 |---|---|---|
-| **Method** | How coffee is extracted. Named by the user, with a fixed `kind`. | V60, AeroPress, Espresso |
-| **Recipe** | One way to extract with a method. | "V60 Standard", "1:2 espresso, 8 s pre-infusion" |
-| **Component** | A reusable prep with its own instructions. | orange-infused cold foam, steamed oat milk, vanilla syrup |
-| **Drink** | What is served and shown on the public menu: recipes plus components. | "V60", "Oat Latte", "The Atlas" (V60 + orange cold foam) |
-| **Machine** | Equipment, like grinders, with capabilities. | Linea Mini, Gaggia Classic |
+| **Brewer** | What makes the coffee, with a `kind` (the method); espresso brewers have capabilities. | V60, AeroPress, Linea Mini |
+| **Recipe** | One way to brew with a brewer. | "V60 Standard", "1:2 espresso, 8 s pre-infusion" |
+| **Ingredient** | A reusable prep with its own instructions. | orange-infused cold foam, steamed oat milk, vanilla syrup |
+| **Drink** | What is served and shown on the public menu: a brewer (any of its recipes) plus ingredients. Can be a variant of another drink. | "Oat Latte", "Vanilla Latte" (variant of Latte), "The Atlas" (V60 + orange cold foam) |
+| **Drink category** | An ordered section for drinks and brewers: the first choice when brewing, and the menu's sections. | "Pour Over", "Espresso milk drinks" |
 
 ## Phase 1: Scaling + bean roast level (built)
 
@@ -76,18 +76,46 @@ steps.
   format is unchanged for now.
 - **Later:** dose / yield suggestions for espresso from the AI.
 
-## Phase 3: Drinks + components
+## Phase 3: Drinks + ingredients (built)
 
-- A drink has a default recipe and any number of allowed recipes (several
-  V60 recipes can make "V60" or "The Atlas"); the recipe can be changed at
-  brew time.
-- Components are reusable preps (type: milk, foam, syrup, ice, water, other)
-  with free-text instructions to start. A drink lists components with an
+Built on `feature-drinks`: ingredients and drinks (Recipes / Drinks /
+Ingredients tabs), the drink picker when brewing, drinks on brew logs and in
+the AI context, the public menu listing drinks, Latte retired.
+
+- A drink has a default recipe; the recipe can be changed at brew time.
+- Ingredients are reusable preps (type: milk, foam, syrup, ice, water, other)
+  with free-text instructions to start. A drink lists ingredients with an
   amount and a note ("40 g, spooned on top").
 - Brew logs record the recipe brewed and, optionally, the drink.
 - The public menu shows drinks instead of recipes. The migration creates a
   plain drink for each public recipe. The "Latte" default method is retired
   (removed where unused).
+
+**Restructured (migrations 0015/0016):** drinks felt disparate (a drink could
+mix recipes of any method, categories were free text), so:
+
+- A drink is built on one method; any recipe of that method can make it,
+  with an optional default. The per-drink recipe list is gone.
+- Variants work like Bar Assistant's parent cocktails: an independent copy
+  linked to its parent, at any depth, with no live inheritance.
+- Categories are a managed, ordered list (`drink_categories`).
+- Plain drinks ("V60") became the method's own menu entry (show on menu,
+  description, category).
+- Brew setup is Method → Drink → Recipe.
+
+**Sizes (migrations 0017/0018):** drinks have an optional default size and
+ingredient amounts are a number + unit (free-text amounts were parsed, the
+rest moved to the note), so brewing can scale a drink; brew logs record the
+size made.
+
+**Ingredients and brewers (migrations 0019–0021):** "components" are now
+"ingredients" everywhere. Brew methods and espresso machines merged into
+**brewers** (a V60 and a Linea Mini are both brewers; the kind is the method).
+Recipes and drinks belong to a brewer, and brew logs record the recipe's
+brewer. Where a workspace had one machine and one espresso method, the
+machine took over the method's recipes, drinks and menu entry (shown as
+"Espresso"). Brew setup is now Category → Brewer or drink → Recipe.
+Trade-off: a second espresso machine needs its own recipes.
 
 ## Phase 4: Flow and pressure profiles (done in 2d)
 

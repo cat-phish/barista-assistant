@@ -7,7 +7,7 @@ import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import {
-  brewMethods,
+  brewers,
   ESPRESSO_STEP_TYPES,
   FLOW_UNITS,
   grinders,
@@ -17,7 +17,7 @@ import {
   recipes,
   recipeSteps,
   WATER_STEP_TYPES,
-  type BrewMethod,
+  type Brewer,
   type MethodKind,
   type Recipe,
   type RecipeStep,
@@ -25,8 +25,8 @@ import {
 import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
 // docs/api_spec.md §5
-export interface RecipeDetails extends Omit<Recipe, "methodId"> {
-  method: Pick<BrewMethod, "id" | "name" | "kind">;
+export interface RecipeDetails extends Omit<Recipe, "brewerId"> {
+  brewer: Pick<Brewer, "id" | "name" | "kind">;
   grindSettings: Array<{ grinderId: string; grinderName: string; setting: string }>;
   steps: Array<Omit<RecipeStep, "recipeId">>;
 }
@@ -120,7 +120,7 @@ const grindSettingsSchema = z
 
 const recipeFields = {
   name: z.string().trim().min(1).max(255),
-  methodId: z.uuid(),
+  brewerId: z.uuid(),
   targetDoseGrams: decimalSchema({ min: 0, max: 1000, scale: 2, exclusiveMin: true, exclusiveMax: true }),
   // Required or forbidden depending on the method's kind (kindError).
   targetWaterGrams: waterGrams.nullable().optional(),
@@ -131,7 +131,6 @@ const recipeFields = {
   firstDropMaxSec: seconds.nullable().optional(),
   flowUnit: z.enum(FLOW_UNITS),
   targetTempC: decimalSchema({ min: 0, max: 100, scale: 1 }).nullable().optional(),
-  showOnPublicMenu: z.boolean(),
   // Preselected when brewing this recipe (docs/api_spec.md §5).
   defaultGrinderId: z.uuid().nullable().optional(),
   grindSettings: grindSettingsSchema,
@@ -140,7 +139,6 @@ const recipeFields = {
 
 const createRecipeSchema = z.object({
   ...recipeFields,
-  showOnPublicMenu: recipeFields.showOnPublicMenu.default(true),
   flowUnit: recipeFields.flowUnit.default("g_s"),
   grindSettings: recipeFields.grindSettings.default([]),
   steps: recipeFields.steps.default([]),
@@ -241,11 +239,11 @@ function kindError(kind: MethodKind, r: KindCheck): string | null {
 // DELETE (or kind change) either finishes first or waits for us and then sees
 // this recipe (-> 409). Without it the insert hit an FK error -> 500.
 // Returns the method's kind, or null if it isn't in this workspace.
-async function methodKindInWorkspace(tx: Tx, methodId: string, workspaceId: string): Promise<MethodKind | null> {
+async function methodKindInWorkspace(tx: Tx, brewerId: string, workspaceId: string): Promise<MethodKind | null> {
   const [method] = await tx
-    .select({ kind: brewMethods.kind })
-    .from(brewMethods)
-    .where(and(eq(brewMethods.id, methodId), eq(brewMethods.workspaceId, workspaceId)))
+    .select({ kind: brewers.kind })
+    .from(brewers)
+    .where(and(eq(brewers.id, brewerId), eq(brewers.workspaceId, workspaceId)))
     .for("update");
   return method?.kind ?? null;
 }
@@ -297,7 +295,7 @@ async function loadRecipes(workspaceId: string, recipeId?: string): Promise<Reci
       id: recipes.id,
       workspaceId: recipes.workspaceId,
       name: recipes.name,
-      method: { id: brewMethods.id, name: brewMethods.name, kind: brewMethods.kind },
+      brewer: { id: brewers.id, name: brewers.name, kind: brewers.kind },
       targetDoseGrams: recipes.targetDoseGrams,
       targetWaterGrams: recipes.targetWaterGrams,
       expectedYieldGrams: recipes.expectedYieldGrams,
@@ -307,11 +305,10 @@ async function loadRecipes(workspaceId: string, recipeId?: string): Promise<Reci
       firstDropMaxSec: recipes.firstDropMaxSec,
       flowUnit: recipes.flowUnit,
       targetTempC: recipes.targetTempC,
-      showOnPublicMenu: recipes.showOnPublicMenu,
       defaultGrinderId: recipes.defaultGrinderId,
     })
     .from(recipes)
-    .innerJoin(brewMethods, eq(recipes.methodId, brewMethods.id))
+    .innerJoin(brewers, eq(recipes.brewerId, brewers.id))
     .where(and(...conditions))
     .orderBy(asc(recipes.name));
 
@@ -372,8 +369,8 @@ recipesRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Reci
   const recipeId = randomUUID();
 
   const error = await db.transaction(async (tx) => {
-    const kind = await methodKindInWorkspace(tx, body.methodId, workspaceId);
-    if (!kind) return "methodId: not a brew method in this workspace";
+    const kind = await methodKindInWorkspace(tx, body.brewerId, workspaceId);
+    if (!kind) return "brewerId: not a brewer in this workspace";
     const wrongForKind = kindError(kind, {
       targetWaterGrams: recipeFields.targetWaterGrams ?? null,
       expectedYieldGrams: recipeFields.expectedYieldGrams ?? null,
@@ -423,7 +420,7 @@ recipesRouter.patch("/:recipeId", async (req: Request<RecipeParams>, res: Respon
   const outcome = await db.transaction(async (tx) => {
     const [existing] = await tx
       .select({
-        methodId: recipes.methodId,
+        brewerId: recipes.brewerId,
         targetWaterGrams: recipes.targetWaterGrams,
         expectedYieldGrams: recipes.expectedYieldGrams,
         firstDropMinSec: recipes.firstDropMinSec,
@@ -433,8 +430,8 @@ recipesRouter.patch("/:recipeId", async (req: Request<RecipeParams>, res: Respon
       .for("update");
     if (!existing) return { status: 404, error: "Recipe not found" } as const;
 
-    const kind = await methodKindInWorkspace(tx, recipeFields.methodId ?? existing.methodId, workspaceId);
-    if (!kind) return { status: 400, error: "methodId: not a brew method in this workspace" } as const;
+    const kind = await methodKindInWorkspace(tx, recipeFields.brewerId ?? existing.brewerId, workspaceId);
+    if (!kind) return { status: 400, error: "brewerId: not a brewer in this workspace" } as const;
     // Kind rules apply to the recipe as it will be after this change (fields
     // not sent keep their current values).
     const after = { ...existing, ...recipeFields };
