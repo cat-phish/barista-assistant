@@ -92,6 +92,20 @@
       "when": 1792464127501,
       "tag": "0012_recipe_default_grinder",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1792464968623,
+      "tag": "0013_drinks",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1792465861756,
+      "tag": "0014_drink_category",
+      "breakpoints": true
     }
   ]
 }

@@ -12,7 +12,10 @@ import type { Bean, Recipe } from '../api/types';
 import AnalysisCard from '../components/AnalysisCard.vue';
 import { grindersApi } from '../api/grinders';
 import { machinesApi } from '../api/machines';
-import type { Grinder, Machine, Mark } from '../api/types';
+import { drinksApi } from '../api/drinks';
+import { componentLine } from '../lib/drinks';
+import { decodeWhat, drinkChoices, encodeDrinks, encodeMethod, recipeChoices as recipesFor, validWhat, whatOptions } from '../lib/brewChoice';
+import type { Drink, Grinder, Machine, Mark } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import BrewFields from '../components/BrewFields.vue';
 import BrewTimer from '../components/BrewTimer.vue';
@@ -39,6 +42,29 @@ const machines = ref<Machine[]>([]);
 // Setup
 const beanId = ref('');
 const recipeId = ref('');
+// "What are you making?" (lib/brewChoice.ts): a brew method (only its
+// recipes), a drink category (its drinks, then the drink's recipes, default
+// preselected; docs/api_spec.md §5c), or anything.
+const drinks = ref<Drink[]>([]);
+const drinkId = ref('');
+const drink = computed(() => drinks.value.find((d) => d.id === drinkId.value) ?? null);
+const what = ref('any');
+const whatChoice = computed(() => decodeWhat(what.value));
+const whatList = computed(() => whatOptions(recipes.value, drinks.value));
+const drinkList = computed(() => drinkChoices(whatChoice.value, drinks.value));
+const recipeChoices = computed(() => recipesFor(whatChoice.value, recipes.value, drink.value));
+watch(what, (value) => {
+  remember('brewWhat', value);
+  const w = decodeWhat(value);
+  if (w.kind !== 'drinks') drinkId.value = ''; // a method has no drink; "anything" starts without one
+  if (w.kind === 'drinks' && !drinkList.value.some((d) => d.id === drinkId.value)) drinkId.value = drinkList.value[0]?.id ?? '';
+  // Keep the recipe if it still fits; a method always has one picked.
+  if (!recipeChoices.value.some((r) => r.id === recipeId.value)) recipeId.value = w.kind === 'method' ? (recipeChoices.value[0]?.id ?? '') : '';
+});
+watch(drink, (d) => {
+  if (!d || d.recipes.some((x) => x.id === recipeId.value)) return;
+  recipeId.value = d.defaultRecipeId ?? d.recipes[0]?.id ?? '';
+});
 const bean = computed(() => beans.value.find((b) => b.id === beanId.value) ?? null);
 const recipe = computed(() => recipes.value.find((r) => r.id === recipeId.value) ?? null);
 const suggestion = ref<StartingParameters | null>(null);
@@ -69,7 +95,14 @@ onMounted(async () => {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [b, r, g, m] = await Promise.all([beansApi.list(ws), recipesApi.list(ws), grindersApi.list(ws), machinesApi.list(ws)]);
+    const [b, r, g, m, d] = await Promise.all([
+      beansApi.list(ws),
+      recipesApi.list(ws),
+      grindersApi.list(ws),
+      machinesApi.list(ws),
+      drinksApi.list(ws),
+    ]);
+    drinks.value = d.drinks.filter((x) => x.recipes.length > 0); // a drink needs a recipe to brew
     beans.value = b.beans;
     recipes.value = r.recipes;
     grinders.value = g.grinders;
@@ -81,6 +114,7 @@ onMounted(async () => {
     const savedMachine = recall('machineId');
     const machine = activeMachines.value.find((x) => x.id === savedMachine) ?? (activeMachines.value.length === 1 ? activeMachines.value[0] : undefined);
     if (machine) draft.machineId = machine.id;
+    what.value = validWhat(recall('brewWhat'), whatList.value); // the last choice, if it still exists
   } catch (err) {
     loadError.value = errorMessage(err);
   } finally {
@@ -218,15 +252,16 @@ const grinder = computed(() => grinders.value.find((x) => x.id === draft.grinder
 // Espresso brews also record a machine (picked like the grinder, no inline add).
 const activeMachines = computed(() => machines.value.filter((x) => !x.retiredAt));
 // The last grinder / machine used, remembered per workspace.
-const savedKey = (what: 'grinderId' | 'machineId') => `brewlog.${what}.${workspaces.current?.id ?? ''}`;
-function recall(what: 'grinderId' | 'machineId'): string | null {
+type Remembered = 'grinderId' | 'machineId' | 'brewWhat';
+const savedKey = (what: Remembered) => `brewlog.${what}.${workspaces.current?.id ?? ''}`;
+function recall(what: Remembered): string | null {
   try {
     return localStorage.getItem(savedKey(what));
   } catch {
     return null;
   }
 }
-function remember(what: 'grinderId' | 'machineId', id: string): void {
+function remember(what: Remembered, id: string): void {
   try {
     if (id) localStorage.setItem(savedKey(what), id);
   } catch {
@@ -387,6 +422,7 @@ async function save(): Promise<void> {
     const { brewLog } = await brewLogsApi.create(ws, {
       beanId: bean.value.id,
       recipeId: recipe.value?.id ?? null,
+      drinkId: drink.value?.id ?? null,
       ...values,
       // The steps' real times, plus the first drop from the log's field. A time
       // typed shorter than a tap drops that tap.
@@ -453,11 +489,36 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           </select>
         </div>
         <div class="field">
-          <label for="recipe">Recipe <span class="muted">(optional)</span></label>
-          <select id="recipe" v-model="recipeId">
-            <option value="">No recipe</option>
-            <option v-for="r in recipes" :key="r.id" :value="r.id">{{ r.name }} ({{ r.method.name }})</option>
+          <label for="what">What are you making?</label>
+          <select id="what" v-model="what">
+            <option value="any">Anything (all recipes)</option>
+            <optgroup v-if="whatList.methods.length" label="Brew methods">
+              <option v-for="m in whatList.methods" :key="m.id" :value="encodeMethod(m.id)">{{ m.name }}</option>
+            </optgroup>
+            <optgroup v-if="whatList.categories.length" label="Drinks">
+              <option v-for="c in whatList.categories" :key="c ?? ''" :value="encodeDrinks(c)">{{ c ?? 'Other drinks' }}</option>
+            </optgroup>
           </select>
+        </div>
+        <div v-if="whatChoice.kind === 'drinks' || (whatChoice.kind === 'any' && drinkList.length)" class="field">
+          <label for="drink">Drink <span v-if="whatChoice.kind === 'any'" class="muted">(optional)</span></label>
+          <select id="drink" v-model="drinkId">
+            <option v-if="whatChoice.kind === 'any'" value="">None: just a recipe</option>
+            <option v-for="d in drinkList" :key="d.id" :value="d.id">{{ d.name }}</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="recipe">Recipe <span class="muted">{{ drink ? `(${drink.name}'s)` : whatChoice.kind === 'any' ? '(optional)' : '' }}</span></label>
+          <select id="recipe" v-model="recipeId">
+            <option v-if="whatChoice.kind === 'any' && !drink" value="">No recipe</option>
+            <option v-for="r in recipeChoices" :key="r.id" :value="r.id">{{ r.name }}<template v-if="whatChoice.kind !== 'method'"> ({{ r.method.name }})</template></option>
+          </select>
+        </div>
+        <div v-if="drink && drink.components.length" class="finish-with" aria-label="Finish with">
+          <span class="batch-label">Finish with</span>
+          <ul>
+            <li v-for="c in drink.components" :key="c.componentId">{{ componentLine(c) }}</li>
+          </ul>
         </div>
         <div class="field">
           <label for="grinder">
@@ -629,7 +690,10 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
     <!-- 3. Log -->
     <form v-else-if="stage === 'log'" class="stack" novalidate @submit.prevent="save">
       <h1>How was it?</h1>
-      <p class="muted">{{ beanLabel }}<template v-if="recipe"> · {{ recipe.name }}</template></p>
+      <p class="muted">
+        {{ beanLabel }}<template v-if="drink"> · {{ drink.name }}</template><template v-if="recipe"> · {{ recipe.name }}</template>
+      </p>
+      <p v-if="drink && drink.components.length" class="note small">Finish with {{ drink.components.map(componentLine).join(', ') }}</p>
       <section class="card">
         <p v-if="stepMarksLine" class="muted small marks-line">{{ stepMarksLine }}</p>
         <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="expectedYield" :espresso="espresso" :machines="machines" />
@@ -705,6 +769,10 @@ p {
 .batch-reset {
   align-self: flex-start;
   margin: calc(-1 * var(--space-2)) 0 0 calc(-1 * var(--space-2));
+}
+.finish-with ul {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
 }
 .batch-label {
   font-weight: 600;

@@ -24,7 +24,7 @@ const workspaces = useWorkspaceStore();
       </RouterLink>
       <RouterLink class="card shortcut" :to="{ name: 'recipes' }">
         <strong>Recipes</strong>
-        <span class="muted">Doses, ratios and recipe steps</span>
+        <span class="muted">Recipes, drinks and the components that finish them</span>
       </RouterLink>
       <RouterLink class="card shortcut" :to="{ name: 'grinders' }">
         <strong>Equipment</strong>

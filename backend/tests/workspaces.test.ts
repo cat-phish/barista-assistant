@@ -8,7 +8,7 @@ describe("workspaces", () => {
     const list = await owner.agent.get("/api/workspaces");
     expect(list.body.workspaces).toMatchObject([{ id: ws.id, role: "owner", isPublicMenuEnabled: false }]);
     const methods = await owner.agent.get(`/api/workspaces/${ws.id}/brew-methods`);
-    expect(methods.body.brewMethods.map((m: { name: string }) => m.name)).toEqual(["Aeropress", "Espresso", "Latte", "V60"]);
+    expect(methods.body.brewMethods.map((m: { name: string }) => m.name)).toEqual(["Aeropress", "Espresso", "V60"]);
   });
 
   it("rejects duplicate and malformed slugs", async () => {

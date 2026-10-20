@@ -31,8 +31,8 @@ describe("brew methods", () => {
     const res = await owner.agent.delete(`/api/workspaces/${ws.id}/brew-methods/${v60}`);
     expect(res.status).toBe(409);
     expect(res.body.recipeCount).toBe(1);
-    const latte = await methodId(owner, ws.id, "Latte");
-    expect((await owner.agent.delete(`/api/workspaces/${ws.id}/brew-methods/${latte}`)).status).toBe(204);
+    const aeropress = await methodId(owner, ws.id, "Aeropress");
+    expect((await owner.agent.delete(`/api/workspaces/${ws.id}/brew-methods/${aeropress}`)).status).toBe(204);
   });
 });
 
@@ -180,15 +180,22 @@ describe("public menu", () => {
     const menu = `/api/public/menu/${ws.slug}`;
     await newBean(owner, ws.id, { beanName: "Shown" });
     await newBean(owner, ws.id, { beanName: "Hidden", showOnPublicMenu: false });
-    await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name: "Public", methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250 });
-    await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name: "Secret", methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250, showOnPublicMenu: false });
+    const recipe = (await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name: "House V60", methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250 })).body.recipe.id;
+    const foamId = (await owner.agent.post(`/api/workspaces/${ws.id}/components`).send({ name: "Orange cold foam", componentType: "foam" })).body.component.id;
+    const drinks = `/api/workspaces/${ws.id}/drinks`;
+    await owner.agent.post(drinks).send({ name: "The Atlas", description: "V60 with orange cold foam", recipeIds: [recipe], components: [{ componentId: foamId, amount: "40 g" }] });
+    await owner.agent.post(drinks).send({ name: "Secret", recipeIds: [recipe], showOnPublicMenu: false });
 
     expect((await request(app).get(menu)).status).toBe(404); // not enabled yet
     await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ isPublicMenuEnabled: true });
     const res = await request(app).get(menu);
     expect(res.status).toBe(200);
     expect(res.body.beans.map((b: { beanName: string }) => b.beanName)).toEqual(["Shown"]);
-    expect(res.body.recipes).toEqual([{ id: expect.any(String), name: "Public", method: "V60", targetDoseGrams: 15, targetWaterGrams: 250 }]);
+    // Drinks, not recipes: names of methods and components only, no recipe details.
+    expect(res.body.drinks).toEqual([
+      { id: expect.any(String), name: "The Atlas", description: "V60 with orange cold foam", category: null, methods: ["V60"], components: ["Orange cold foam"] },
+    ]);
+    expect(res.body.recipes).toBeUndefined();
     expect((await request(app).get(menu.toUpperCase().replace("/API/PUBLIC/MENU/", "/api/public/menu/"))).status).toBe(404);
   });
 });

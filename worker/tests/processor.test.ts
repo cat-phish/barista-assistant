@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { beanFreezes, beans, brewLogMarks, brewLogs, brewMethods, grinders, llmAnalyses, machines, recipeGrindSettings, recipes, recipeSteps, users, workspaces } from "@barista/shared/schema";
+import { beanFreezes, beans, brewLogMarks, brewLogs, brewMethods, components, drinkComponents, drinks, grinders, llmAnalyses, machines, recipeGrindSettings, recipes, recipeSteps, users, workspaces } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BrewContext } from "../src/context.js";
@@ -95,9 +95,36 @@ describe("processBrewAnalysis", () => {
     const context = llm.mock.calls[0]![0] as BrewContext;
     expect(context.brew).toMatchObject({ methodKind: "espresso", actualWaterGrams: null, actualYieldGrams: 40, brewRatio: 2.22 });
     expect(context.brew.machine).toEqual({ name: "Linea Mini", preinfusion: "manual", flowControl: "manual", pressureControl: "none" });
+    expect(context.drink).toBeNull();
     expect(context.brew.marks).toEqual([{ kind: "step_end", stepOrder: 1, atSec: 6 }, { kind: "first_drop", stepOrder: null, atSec: 7.4 }]);
     expect(context.previousBrews[0]?.marks).toEqual([]);
     expect(context.recipe).toMatchObject({ methodKind: "espresso", targetWaterGrams: null, expectedYieldGrams: 36, firstDropMinSec: 6, firstDropMaxSec: 9, flowUnit: "g_s" });
+  });
+
+  it("includes the drink a brew was for, with its components in order", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    const drinkId = randomUUID();
+    const milk = randomUUID();
+    const syrup = randomUUID();
+    await db.insert(drinks).values({ id: drinkId, workspaceId, name: "Vanilla Oat Latte" });
+    await db.insert(components).values([
+      { id: milk, workspaceId, name: "Steamed oat milk", componentType: "milk" },
+      { id: syrup, workspaceId, name: "Vanilla", componentType: "syrup" },
+    ]);
+    await db.insert(drinkComponents).values([
+      { id: randomUUID(), drinkId, componentId: syrup, position: 1, amount: "1 pump" },
+      { id: randomUUID(), drinkId, componentId: milk, position: 2, amount: "180 g", note: "microfoam" },
+    ]);
+    await db.update(brewLogs).set({ drinkId }).where(eq(brewLogs.id, logIds.day8!));
+    await processBrewAnalysis({ brewLogId: logIds.day8! });
+    const context = llm.mock.calls[0]![0] as BrewContext;
+    expect(context.drink).toEqual({
+      name: "Vanilla Oat Latte",
+      components: [
+        { name: "Vanilla", componentType: "syrup", amount: "1 pump", note: null },
+        { name: "Steamed oat milk", componentType: "milk", amount: "180 g", note: "microfoam" },
+      ],
+    });
   });
 
   it("uses the effective roast age at each brew's date, excluding days frozen", async () => {

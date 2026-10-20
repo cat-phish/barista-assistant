@@ -1,14 +1,18 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { db } from "../db.js";
 import { sendError } from "../http.js";
 import {
   beans,
   brewMethods,
+  components,
+  drinkComponents,
+  drinkRecipes,
+  drinks,
   recipes,
   workspaces,
   type Bean,
-  type Recipe,
+  type Drink,
   type Workspace,
 } from "@barista/shared/schema";
 import { SLUG_PATTERN } from "../validation.js";
@@ -18,9 +22,8 @@ export interface PublicMenuResponse {
   beans: Array<
     Pick<Bean, "id" | "roasterName" | "beanName" | "process" | "roastDate" | "inventoryWeightGrams">
   >;
-  recipes: Array<
-    Pick<Recipe, "id" | "name" | "targetDoseGrams" | "targetWaterGrams"> & { method: string }
-  >;
+  // docs/api_spec.md §7: drinks, with their methods and components by name.
+  drinks: Array<Pick<Drink, "id" | "name" | "description" | "category"> & { methods: string[]; components: string[] }>;
 }
 
 // Mounted at /api/public/menu. Unauthenticated: only expose explicitly public data.
@@ -46,7 +49,7 @@ publicMenuRouter.get(
       return;
     }
 
-    const [menuBeans, menuRecipes] = await Promise.all([
+    const [menuBeans, menuDrinks] = await Promise.all([
       db
         .select({
           id: beans.id,
@@ -60,23 +63,40 @@ publicMenuRouter.get(
         .where(and(eq(beans.workspaceId, workspace.id), eq(beans.showOnPublicMenu, true)))
         .orderBy(asc(beans.roasterName), asc(beans.beanName)),
       db
-        .select({
-          id: recipes.id,
-          name: recipes.name,
-          method: brewMethods.name,
-          targetDoseGrams: recipes.targetDoseGrams,
-          targetWaterGrams: recipes.targetWaterGrams,
-        })
-        .from(recipes)
-        .innerJoin(brewMethods, eq(recipes.methodId, brewMethods.id))
-        .where(and(eq(recipes.workspaceId, workspace.id), eq(recipes.showOnPublicMenu, true)))
-        .orderBy(asc(recipes.name)),
+        .select({ id: drinks.id, name: drinks.name, description: drinks.description, category: drinks.category })
+        .from(drinks)
+        .where(and(eq(drinks.workspaceId, workspace.id), eq(drinks.showOnPublicMenu, true)))
+        // By category (uncategorised last), then name: menu sections.
+        .orderBy(sql`${drinks.category} IS NULL`, asc(drinks.category), asc(drinks.name)),
     ]);
+
+    const ids = menuDrinks.map((d) => d.id);
+    const [methodRows, componentRows] = ids.length
+      ? await Promise.all([
+          db
+            .selectDistinct({ drinkId: drinkRecipes.drinkId, name: brewMethods.name })
+            .from(drinkRecipes)
+            .innerJoin(recipes, eq(drinkRecipes.recipeId, recipes.id))
+            .innerJoin(brewMethods, eq(recipes.methodId, brewMethods.id))
+            .where(inArray(drinkRecipes.drinkId, ids))
+            .orderBy(asc(brewMethods.name)),
+          db
+            .select({ drinkId: drinkComponents.drinkId, name: components.name })
+            .from(drinkComponents)
+            .innerJoin(components, eq(drinkComponents.componentId, components.id))
+            .where(inArray(drinkComponents.drinkId, ids))
+            .orderBy(asc(drinkComponents.position)),
+        ])
+      : [[], []];
 
     res.json({
       workspace: { name: workspace.name, slug: workspace.slug },
       beans: menuBeans,
-      recipes: menuRecipes,
+      drinks: menuDrinks.map((d) => ({
+        ...d,
+        methods: methodRows.filter((m) => m.drinkId === d.id).map((m) => m.name),
+        components: componentRows.filter((c) => c.drinkId === d.id).map((c) => c.name),
+      })),
     });
   }
 );

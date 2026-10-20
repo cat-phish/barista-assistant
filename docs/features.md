@@ -52,7 +52,26 @@ One **Equipment** section with three tabs:
   end **at first drop**. E.g. 9 bar until first drop → soak 10 s → flow 4 → 2
   g/s until done; or pre-infuse 3 bar 10 s → soak 10 s → 9 bar.
 
+## Drinks & components
+One **Recipes** section with three tabs: Recipes, Drinks, Components.
+- **Components:** reusable preps that finish a drink: milk, foam, syrup,
+  ice, water, other, each with free-text instructions (e.g. orange-infused
+  cold foam: steep peel in cream overnight). A component a drink uses can't
+  be deleted.
+- **Drinks:** what you serve. A drink can be made with any of its recipes
+  (one is the default) and finished with components in order, each with an
+  amount and a note ("Orange cold foam · 40 g · spooned on top"). A plain
+  "V60" is a drink with one recipe and nothing added. Drinks have an optional
+  **category** ("Espresso milk drinks", "Specialty drinks"; free text with
+  suggestions) that groups them in the list, when brewing and on the menu.
+
 ## Brewing
+- **What are you making?** First pick a **brew method** (V60, Espresso…:
+  then only its recipes), a **drink category** (then its drinks, then the
+  drink's recipes with the default selected), or **anything** (all recipes,
+  an optional drink, or no recipe). The last choice is remembered. A drink's
+  components show as **Finish with**, on setup and on the log, and the brew
+  is saved with the drink.
 - **Setup:** pick bean, recipe and grinder. The grind pre-fills from your
   last brew of that recipe on that grinder, else the AI suggestion, else the
   recipe's starting point.
@@ -89,11 +108,14 @@ One **Equipment** section with three tabs:
   asks the LLM for grind and temperature changes with reasoning, shown next
   time you brew that bean. It sees the bean's roast level and age, the
   recipe, your previous brews of that bean, the grinder's details and, for
-  espresso, the machine's capabilities and the shot timer's taps.
+  espresso, the machine's capabilities and the shot timer's taps, and the
+  drink it was for (so milk in the tasting notes isn't blamed on the coffee).
 
 ## Public menu
-- An optional public page per workspace listing beans and recipes marked as
-  shown. (Moving to drinks: see `roadmap.md` phase 3.)
+- An optional public page per workspace listing beans and **drinks** marked
+  as shown (name, description, category, brew methods, components; no recipe
+  details), drinks ordered by category for menu sections.
+  Recipes that were on the menu became plain drinks.
 
 ## App
 - Installable PWA, works on phones, offline-cached public menu.
@@ -101,3 +123,6 @@ One **Equipment** section with three tabs:
 ## Ideas noted for later
 - **User settings:** the roast level recipes assume (light today) and units
   (g / fl oz shown together today).
+- **Components:** batch prep and stock tracking (e.g. how much cold foam is
+  left), and structured ingredients instead of free text.
+- **Public menu page:** a frontend for the menu (only the API exists).

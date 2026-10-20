@@ -76,7 +76,11 @@ steps.
   format is unchanged for now.
 - **Later:** dose / yield suggestions for espresso from the AI.
 
-## Phase 3: Drinks + components
+## Phase 3: Drinks + components (built)
+
+Built on `feature-drinks`: components and drinks (Recipes / Drinks /
+Components tabs), the drink picker when brewing, drinks on brew logs and in
+the AI context, the public menu listing drinks, Latte retired.
 
 - A drink has a default recipe and any number of allowed recipes (several
   V60 recipes can make "V60" or "The Atlas"); the recipe can be changed at

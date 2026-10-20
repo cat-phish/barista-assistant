@@ -6,6 +6,7 @@ export interface BrewLogInput {
   recipeId: string | null;
   grinderId: string | null;
   machineId: string | null; // espresso only
+  drinkId?: string | null; // the drink it was for
   marks?: Mark[]; // espresso only; PATCH replaces the list
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso

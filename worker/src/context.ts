@@ -2,6 +2,9 @@ import {
   beanFreezes,
   beans,
   brewLogMarks,
+  components,
+  drinkComponents,
+  drinks,
   brewLogs,
   brewMethods,
   grinders,
@@ -55,6 +58,12 @@ export interface BrewSummary {
   tastingNotes: string | null;
 }
 
+// The drink a brew was made for: tasting notes may describe the whole drink.
+export interface DrinkInfo {
+  name: string;
+  components: Array<{ name: string; componentType: string; amount: string | null; note: string | null }>;
+}
+
 export interface BrewContext {
   // roastLevel: one of ROAST_LEVELS (light … dark), or null if unknown.
   bean: { roasterName: string; beanName: string; process: string | null; roastLevel: string | null; roastDate: string | null };
@@ -92,6 +101,7 @@ export interface BrewContext {
     }>;
   } | null;
   brew: BrewSummary;
+  drink: DrinkInfo | null; // the target brew's drink, if any
   previousBrews: BrewSummary[];
   ratingScale: "1-5";
 }
@@ -137,6 +147,18 @@ function summarize(
     rating: brew.rating,
     tastingNotes: brew.tastingNotes,
   };
+}
+
+async function loadDrink(drinkId: string): Promise<DrinkInfo | null> {
+  const [drink] = await db.select({ name: drinks.name }).from(drinks).where(eq(drinks.id, drinkId)).limit(1);
+  if (!drink) return null;
+  const parts = await db
+    .select({ name: components.name, componentType: components.componentType, amount: drinkComponents.amount, note: drinkComponents.note })
+    .from(drinkComponents)
+    .innerJoin(components, eq(drinkComponents.componentId, components.id))
+    .where(eq(drinkComponents.drinkId, drinkId))
+    .orderBy(asc(drinkComponents.position));
+  return { name: drink.name, components: parts };
 }
 
 async function marksFor(brewLogIds: string[]): Promise<Map<string, BrewSummary["marks"]>> {
@@ -217,6 +239,7 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
     },
     recipe,
     brew: summarize(brew, bean.roastDate, freezes, marks),
+    drink: brew.drinkId ? await loadDrink(brew.drinkId) : null,
     previousBrews: previousRows.map((p) => summarize(p, bean.roastDate, freezes, marks)),
     ratingScale: "1-5",
   };

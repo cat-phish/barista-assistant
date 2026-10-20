@@ -148,7 +148,9 @@ function markLabel(m: Mark): string {
       <div class="page-header">
         <div>
           <h1>{{ log.bean.roasterName }} {{ log.bean.beanName }}</h1>
-          <p class="muted">{{ formatWhen(log.timestamp) }}<template v-if="log.recipe"> · {{ log.recipe.name }}</template></p>
+          <p class="muted">
+            {{ formatWhen(log.timestamp) }}<template v-if="log.drink"> · {{ log.drink.name }}</template><template v-if="log.recipe"> · {{ log.recipe.name }}</template>
+          </p>
         </div>
       </div>
 

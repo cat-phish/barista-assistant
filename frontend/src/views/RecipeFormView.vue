@@ -60,7 +60,6 @@ const firstDropFrom = ref(''); // espresso only
 const firstDropTo = ref('');
 const flowUnit = ref<FlowUnit>('g_s'); // espresso flow steps
 const temp = ref('');
-const showOnPublicMenu = ref(true);
 const defaultGrinderId = ref(''); // '' = none: brewing uses the last grinder
 const grindRows = ref<Array<{ grinderId: string; setting: string }>>([]);
 const steps = ref<StepDraft[]>([]);
@@ -203,7 +202,6 @@ onMounted(async () => {
     firstDropFrom.value = recipe.firstDropMinSec === null ? '' : formatTime(recipe.firstDropMinSec);
     firstDropTo.value = recipe.firstDropMaxSec === null ? '' : formatTime(recipe.firstDropMaxSec);
     temp.value = recipe.targetTempC === null ? '' : String(recipe.targetTempC);
-    showOnPublicMenu.value = recipe.showOnPublicMenu;
     defaultGrinderId.value = recipe.defaultGrinderId ?? '';
     grindRows.value = recipe.grindSettings.map((g) => ({ grinderId: g.grinderId, setting: g.setting }));
     flowUnit.value = recipe.flowUnit;
@@ -356,7 +354,6 @@ async function save(): Promise<void> {
     firstDropMinSec: p.firstDrop.ok ? (p.firstDrop.value?.min ?? null) : null,
     firstDropMaxSec: p.firstDrop.ok ? (p.firstDrop.value?.max ?? null) : null,
     targetTempC: p.temp?.ok ? p.temp.value : null,
-    showOnPublicMenu: showOnPublicMenu.value,
     defaultGrinderId: defaultGrinderId.value || null,
     grindSettings: grindRows.value.map((r) => ({ grinderId: r.grinderId, setting: r.setting.trim() })),
     flowUnit: flowUnit.value,
@@ -486,10 +483,6 @@ async function save(): Promise<void> {
           <span v-if="fieldErrors.firstDrop && (submitted || (firstDropFrom.trim() && firstDropTo.trim()))" class="field-error">{{ fieldErrors.firstDrop }}</span>
           <span v-else-if="firstDropHint" class="hint">{{ firstDropHint }}</span>
         </fieldset>
-        <label class="checkbox">
-          <input v-model="showOnPublicMenu" type="checkbox" />
-          Show on the public menu
-        </label>
       </section>
 
       <section class="card stack">

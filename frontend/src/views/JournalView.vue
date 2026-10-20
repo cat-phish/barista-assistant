@@ -91,7 +91,7 @@ watch(beanFilter, () => load(true));
               <RatingStars :rating="log.rating" />
             </div>
             <strong>{{ log.bean.roasterName }} {{ log.bean.beanName }}</strong>
-            <span v-if="log.recipe" class="muted">{{ log.recipe.name }}</span>
+            <span v-if="log.drink || log.recipe" class="muted">{{ [log.drink?.name, log.recipe?.name].filter(Boolean).join(' · ') }}</span>
             <span class="facts">
               <span>{{ formatDoseLine(log.actualDoseGrams, log.actualWaterGrams, log.actualYieldGrams) }}</span>
               <span v-if="log.actualYieldGrams !== null && log.actualWaterGrams !== null">→ {{ formatGrams(log.actualYieldGrams) }} g yield</span>

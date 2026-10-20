@@ -11,6 +11,8 @@ import {
   brewLogMarks,
   brewLogs,
   brewMethods,
+  drinkRecipes,
+  drinks,
   grinders,
   llmAnalyses,
   machines,
@@ -38,6 +40,7 @@ export interface BrewLogDetails extends BrewLog {
   recipe: (Pick<Recipe, "id" | "name" | "expectedYieldGrams"> & { methodKind: MethodKind }) | null;
   grinder: { id: string; name: string } | null; // retired grinders included
   machine: { id: string; name: string } | null; // espresso only; retired included
+  drink: { id: string; name: string } | null; // the drink it was for
   marks: Mark[]; // when things actually happened, earliest first
   // Null when the brewer deleted their account (the log is kept).
   brewer: { id: string; email: string } | null;
@@ -72,6 +75,8 @@ const brewLogFields = {
   grinderId: z.uuid().nullable().optional(),
   // Espresso brews only (espressoError).
   machineId: z.uuid().nullable().optional(),
+  // The drink it was for; with a recipe, one of the drink's (drinkError).
+  drinkId: z.uuid().nullable().optional(),
   timestamp: z.iso
     .datetime({ offset: true })
     .transform((s) => new Date(s))
@@ -141,6 +146,16 @@ function espressoError(
   return log.actualWaterGrams === null ? "actualWaterGrams: is required" : null;
 }
 
+// A brew for a drink uses one of the drink's recipes (docs/api_spec.md §6).
+async function drinkError(tx: Tx, drinkId: string | null, recipeId: string | null): Promise<string | null> {
+  if (!drinkId || !recipeId) return null;
+  const [allowed] = await tx
+    .select({ recipeId: drinkRecipes.recipeId })
+    .from(drinkRecipes)
+    .where(and(eq(drinkRecipes.drinkId, drinkId), eq(drinkRecipes.recipeId, recipeId)));
+  return allowed ? null : "recipeId: not one of the drink's recipes";
+}
+
 async function recipeKind(tx: Tx, recipeId: string): Promise<MethodKind | null> {
   const [row] = await tx
     .select({ kind: brewMethods.kind })
@@ -157,8 +172,16 @@ async function recipeKind(tx: Tx, recipeId: string): Promise<MethodKind | null> 
 async function referencesInWorkspace(
   tx: Tx,
   workspaceId: string,
-  refs: { beanId?: string; recipeId?: string | null; grinderId?: string | null; machineId?: string | null }
+  refs: { beanId?: string; recipeId?: string | null; grinderId?: string | null; machineId?: string | null; drinkId?: string | null }
 ): Promise<string | null> {
+  if (refs.drinkId) {
+    const [drink] = await tx
+      .select({ id: drinks.id })
+      .from(drinks)
+      .where(and(eq(drinks.id, refs.drinkId), eq(drinks.workspaceId, workspaceId)))
+      .for("update");
+    if (!drink) return "drinkId: not a drink in this workspace";
+  }
   if (refs.beanId) {
     const [bean] = await tx
       .select({ id: beans.id })
@@ -206,6 +229,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       recipeId: brewLogs.recipeId,
       grinderId: brewLogs.grinderId,
       machineId: brewLogs.machineId,
+      drinkId: brewLogs.drinkId,
       timestamp: brewLogs.timestamp,
       actualDoseGrams: brewLogs.actualDoseGrams,
       actualWaterGrams: brewLogs.actualWaterGrams,
@@ -221,6 +245,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       recipeMethodKind: brewMethods.kind,
       grinder: { id: grinders.id, name: grinders.name },
       machine: { id: machines.id, name: machines.name },
+      drink: { id: drinks.id, name: drinks.name },
       brewer: { id: users.id, email: users.email },
     })
     .from(brewLogs)
@@ -229,6 +254,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
     .leftJoin(brewMethods, eq(recipes.methodId, brewMethods.id))
     .leftJoin(grinders, eq(brewLogs.grinderId, grinders.id))
     .leftJoin(machines, eq(brewLogs.machineId, machines.id))
+    .leftJoin(drinks, eq(brewLogs.drinkId, drinks.id))
     // Left join: logs of deleted accounts (userId null) must still be listed.
     .leftJoin(users, eq(brewLogs.userId, users.id))
     .where(where)
@@ -343,6 +369,8 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Bre
       marks,
     });
     if (wrongForKind) return wrongForKind;
+    const wrongForDrink = await drinkError(tx, fields.drinkId ?? null, fields.recipeId ?? null);
+    if (wrongForDrink) return wrongForDrink;
     await tx.insert(brewLogs).values({ id, workspaceId, userId, ...fields });
     await insertMarks(tx, id, marks);
     return null;
@@ -379,6 +407,7 @@ brewLogsRouter.patch(
           actualWaterGrams: brewLogs.actualWaterGrams,
           actualYieldGrams: brewLogs.actualYieldGrams,
           machineId: brewLogs.machineId,
+          drinkId: brewLogs.drinkId,
           actualTimeSec: brewLogs.actualTimeSec,
         })
         .from(brewLogs)
@@ -409,6 +438,11 @@ brewLogsRouter.patch(
         if (wrongForKind) return { status: "bad_ref", error: wrongForKind } as const;
       }
 
+      if ("drinkId" in body || "recipeId" in body) {
+        const after = { ...log, ...fields };
+        const wrongForDrink = await drinkError(tx, after.drinkId ?? null, after.recipeId ?? null);
+        if (wrongForDrink) return { status: "bad_ref", error: wrongForDrink } as const;
+      }
       if (Object.keys(fields).length > 0) await tx.update(brewLogs).set(fields).where(eq(brewLogs.id, brewLogId));
       // A sent list replaces the old one entirely.
       if (marks) {

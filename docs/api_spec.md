@@ -211,8 +211,9 @@ free text. Each method has a **kind**, one of `METHOD_KINDS`:
 | `immersion` | AeroPress, French press | same as `pour_over` for now |
 | `espresso` | Espresso | dose + target yield (no water), shot time and first-drop windows |
 
-New workspaces get V60 (`pour_over`), Espresso (`espresso`), Aeropress
-(`immersion`) and Latte (`espresso`, until drinks replace it).
+New workspaces get V60 (`pour_over`), Espresso (`espresso`) and Aeropress
+(`immersion`). Milk drinks like a latte are drinks (§5c): an espresso recipe
+plus components.
 
 ### `GET /api/workspaces/:workspaceId/brew-methods`
 
@@ -609,7 +610,6 @@ card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
   "firstDropMaxSec": null,
   "flowUnit": "g_s",
   "targetTempC": 94,
-  "showOnPublicMenu": true,
   "defaultGrinderId": "uuid",
   "grindSettings": [
     { "grinderId": "uuid", "grinderName": "Comandante C40", "setting": "20" }
@@ -657,7 +657,6 @@ Creates a recipe, its grind starting points and its steps in one transaction.
     "expectedFinishMinSec": 165,
     "expectedFinishMaxSec": 195,
     "targetTempC": 94,
-    "showOnPublicMenu": true,
     "grindSettings": [{ "grinderId": "uuid", "setting": "20" }],
     "steps": [
       { "stepType": "bloom", "durationSec": 45, "advance": "tap", "targetWaterGrams": 45, "targetTempC": 85 },
@@ -670,8 +669,8 @@ Creates a recipe, its grind starting points and its steps in one transaction.
     above) `targetWaterGrams` or `expectedYieldGrams` (> 0, < 10000, max 2
     decimals).
   - Optional, nullable: `expectedYieldGrams` for pour-over/immersion (same
-    rules as water), `targetTempC` (0–100, max 1 decimal). `showOnPublicMenu`
-    defaults to `true`.
+    rules as water), `targetTempC` (0–100, max 1 decimal). Recipes reach the
+    public menu through drinks (§5c).
   - First-drop window (espresso only): `firstDropMinSec`/`firstDropMaxSec`,
     same pair rules as the finish window below but with a **±3 s** default.
   - Target finish window: `expectedFinishMinSec` and `expectedFinishMaxSec`
@@ -721,6 +720,139 @@ Deletes the recipe and its steps. Brew logs that used it are kept, with
 
 ---
 
+## 5b. Components
+
+Reusable preps that finish a drink: orange-infused cold foam, steamed oat
+milk, vanilla syrup, ice. Per workspace.
+
+**Component object:**
+`{ "id": "uuid", "name": "Orange cold foam", "componentType": "foam", "instructions": "Infuse cream with orange peel overnight…", "drinkCount": 2 }`
+
+- `componentType`: one of `COMPONENT_TYPES` (`milk`, `foam`, `syrup`, `ice`,
+  `water`, `other`; default `other`).
+- `instructions`: free text, optional, ≤ 5000 chars, blank becomes `null`.
+- `drinkCount`: how many drinks use it (read-only).
+
+### `GET /api/workspaces/:workspaceId/components`
+
+- **Auth Required:** `true` (any member)
+- **Success (`200 OK`):** `{ "components": [ { ...component } ] }`, sorted by `name`.
+
+### `POST /api/workspaces/:workspaceId/components`
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:** `{ "name": "Orange cold foam", "componentType": "foam", "instructions": "…" }`
+  (`name` trimmed, 1–100 chars, unique per workspace, case-insensitive)
+- **Success (`201 Created`):** `{ "component": { ...component } }`
+- **Errors:** `400`; `403` viewer; `409` name taken.
+
+### `PATCH /api/workspaces/:workspaceId/components/:componentId`
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:** any non-empty subset of the `POST` fields.
+- **Success (`200 OK`):** `{ "component": { ...component } }`
+- **Errors:** `400`; `403` viewer; `404` not in this workspace; `409` name taken.
+
+### `DELETE /api/workspaces/:workspaceId/components/:componentId`
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Success (`204 No Content`)**
+- **Errors:** `403` viewer; `404` not in this workspace; `409` drinks use it,
+  with body `{ "error": "...", "drinkCount": 2 }`. Remove it from those drinks first.
+
+---
+
+## 5c. Drinks
+
+What's served, and what the public menu (§7) lists. A drink is brewed with
+**one of its recipes** (any number; one is the **default**, preselected when
+brewing) and finished with **components**. "V60" is a drink with one recipe
+and no components; "Oat Latte" is any espresso recipe plus steamed oat milk;
+"The Atlas" is a V60 recipe plus orange cold foam.
+
+**Drink object:**
+
+```json
+{
+  "id": "uuid",
+  "name": "The Atlas",
+  "description": "V60 with orange-infused cold foam",
+  "category": "Specialty drinks",
+  "showOnPublicMenu": true,
+  "defaultRecipeId": "uuid",
+  "recipes": [
+    { "id": "uuid", "name": "V60 Standard", "method": { "id": "uuid", "name": "V60", "kind": "pour_over" } }
+  ],
+  "components": [
+    { "componentId": "uuid", "name": "Orange cold foam", "componentType": "foam", "amount": "40 g", "note": "spooned on top" }
+  ]
+}
+```
+
+`recipes` are sorted by name; `components` are in their order.
+`defaultRecipeId` is always one of `recipes` (or `null` when the drink has
+none left, e.g. after its recipes were deleted: deleting a recipe removes it
+from drinks).
+
+### `GET /api/workspaces/:workspaceId/drinks`
+
+- **Auth Required:** `true` (any member)
+- **Success (`200 OK`):** `{ "drinks": [ { ...drink } ] }`, sorted by `name`.
+
+### `GET /api/workspaces/:workspaceId/drinks/categories`
+
+- **Auth Required:** `true` (any member)
+- **Success (`200 OK`):** `{ "categories": ["Espresso milk drinks", "Specialty drinks"] }`:
+  the distinct categories in use, sorted (for suggestions).
+
+### `POST /api/workspaces/:workspaceId/drinks`
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:**
+  ```json
+  {
+    "name": "The Atlas",
+    "description": "V60 with orange-infused cold foam",
+    "category": "Specialty drinks",
+    "showOnPublicMenu": true,
+    "recipeIds": ["uuid", "uuid"],
+    "defaultRecipeId": "uuid",
+    "components": [{ "componentId": "uuid", "amount": "40 g", "note": "spooned on top" }]
+  }
+  ```
+  - `name` trimmed, 1–255 chars; `description` optional, ≤ 500, blank
+    becomes `null`; `category` optional, ≤ 100, trimmed, blank becomes `null`
+    (free text; groups drinks when brewing and on the menu);
+    `showOnPublicMenu` defaults to `true`.
+  - `recipeIds`: 1–20 distinct recipes in **this** workspace.
+    `defaultRecipeId` must be one of them (default: the first).
+  - `components` (default `[]`, max 20, in order): each `componentId` a
+    component in this workspace (at most once); `amount` ≤ 50 chars and
+    `note` ≤ 255 chars, both optional, blank becomes `null`.
+- **Success (`201 Created`):** `{ "drink": { ...drink } }`
+- **Errors:** `400` invalid body, or a recipe/component not in this
+  workspace; `403` viewer.
+
+### `PATCH /api/workspaces/:workspaceId/drinks/:drinkId`
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:** any non-empty subset of the `POST` fields. `recipeIds` and
+  `components`, if present, replace their lists. The default must be one of
+  the drink's recipes after the change (if `recipeIds` changes and drops the
+  current default, send a new `defaultRecipeId` or the first one is used).
+- **Success (`200 OK`):** `{ "drink": { ...drink } }`
+- **Errors:** as `POST`, plus `404` not in this workspace.
+
+### `DELETE /api/workspaces/:workspaceId/drinks/:drinkId`
+
+Brew logs made for it are kept, with `drinkId` set to `null`.
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Success (`204 No Content`)**
+- **Errors:** `403` viewer; `404` not in this workspace.
+
+---
+
 ## 6. Brew Logs
 
 A brew log records one actual brew: what was used, what happened, and how it
@@ -755,6 +887,7 @@ created it and can't be changed.
   "recipe": { "id": "uuid", "name": "House V60", "expectedYieldGrams": 220, "methodKind": "pour_over" },
   "grinder": { "id": "uuid", "name": "Comandante C40" },
   "machine": null,
+  "drink": { "id": "uuid", "name": "The Atlas" },
   "marks": [],
   "brewer": { "id": "uuid", "email": "barista@example.com" }
 }
@@ -766,7 +899,8 @@ target, for espresso), for comparing with the measured `actualYieldGrams`, and
 `methodKind` is its method's kind. `grinder` is
 `null` when no grinder was recorded; a retired
 grinder still appears here. `machine` (`{ "id", "name" }`, retired ones
-included) is set only for espresso brews that recorded one. `marks` lists
+included) is set only for espresso brews that recorded one. `drink`
+(`{ "id", "name" }`) is the drink it was for, or `null`. `marks` lists
 the timer's marks (`{ "kind", "stepOrder", "atSec" }`, `stepOrder` `null`
 except for `step_end`), earliest first. `userId` and `brewer` are `null` when the brewer deleted their
 account. Such logs can only be edited or deleted by owners.
@@ -802,6 +936,7 @@ account. Such logs can only be edited or deleted by owners.
     "actualTempC": 93,
     "grinderId": "uuid",
     "machineId": null,
+    "drinkId": "uuid",
     "actualGrindSetting": "18 clicks",
     "actualTimeSec": 150,
     "rating": 3,
@@ -820,6 +955,8 @@ account. Such logs can only be edited or deleted by owners.
       also be typed into the log form after the shot.
     - `step_end`: the real end of a step that waited for a tap or was logged
       (`stepOrder` 1–50, at most one per step); needs a `recipeId`.
+  - `drinkId` (optional, nullable): the drink this brew was for, in this
+    workspace. With a `recipeId`, the recipe must be one of the drink's.
   - `machineId` (optional, nullable; a machine in this workspace, retired
     accepted) only for espresso brews: with any other recipe, or none, it
     must be absent/`null`.
@@ -875,7 +1012,7 @@ Deletes the log and its `llm_analyses` (cascade).
 
 Retrieves the read-only menu for a workspace. Unauthenticated, but strictly
 filters for workspaces where `isPublicMenuEnabled = true` and items where
-`showOnPublicMenu = true`. `method` is the name of the recipe's brew method.
+`showOnPublicMenu = true`. The menu lists **drinks** (§5c) and beans.
 
 - **URL:** `GET /api/public/menu/:slug`
 - **Auth Required:** `false`
@@ -896,18 +1033,22 @@ filters for workspaces where `isPublicMenuEnabled = true` and items where
         "inventoryWeightGrams": 250
       }
     ],
-    "recipes": [
+    "drinks": [
       {
         "id": "uuid",
-        "name": "House V60",
-        "method": "V60",
-        "targetDoseGrams": 15,
-        "targetWaterGrams": 250
+        "name": "The Atlas",
+        "description": "V60 with orange-infused cold foam",
+        "category": "Specialty drinks",
+        "methods": ["V60"],
+        "components": ["Orange cold foam"]
       }
     ]
   }
   ```
-  `targetWaterGrams` is `null` for espresso recipes.
+  Drinks are sorted by category (uncategorised last), then name, so clients
+  can show them in sections. `methods` are the brew methods of the drink's
+  recipes (distinct, sorted); `components` are the components' names in the
+  drink's order. Recipe details (doses, steps) aren't published.
 - **Error Responses:**
   - `404 Not Found`: Workspace slug does not exist or `isPublicMenuEnabled` is
     `false`. Slugs are matched exactly: `/menu/Jordans-Coffee-Bar` is a `404`,
@@ -1021,6 +1162,9 @@ queue:
      are recorded (adjustment, setting range, step size, burr type/size,
      power), so the LLM knows which grinder a grind setting refers to, doesn't
      compare settings across different grinders, and can talk in steps.
+   - The brew includes its `drink` (or `null`): name and components (name,
+     type, amount, note), since tasting notes may describe the whole drink
+     (e.g. with milk) rather than the coffee alone.
    - Espresso brews include their `machine` (or `null`): name and
      capabilities (pre-infusion, flow and pressure control).
    - Each brew includes its `marks` (`{ kind, stepOrder, atSec }`): the first
@@ -1041,7 +1185,9 @@ queue:
 > "You are an expert specialty coffee roaster and barista. Analyze the provided
 > extraction log and historical brews for this coffee bean, including roast
 > level, roast age, dose, yield, total brew time, rating, and tasting notes. Suggest
-> concrete parameter adjustments for the next brew. For espresso, judge flow
+> concrete parameter adjustments for the next brew. If the brew was served as
+> a drink with milk or other components, its tasting notes may describe the
+> whole drink; judge the coffee's extraction. For espresso, judge flow
 > from the first drop time, shot time and ratio against the recipe's
 > windows, and consider the machine's capabilities (pre-infusion, flow and
 > pressure control) and the grinder's step size when explaining the change.

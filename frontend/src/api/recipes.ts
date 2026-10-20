@@ -13,7 +13,6 @@ export interface RecipeInput {
   firstDropMinSec: number | null; // espresso only
   firstDropMaxSec: number | null;
   targetTempC: number | null;
-  showOnPublicMenu: boolean;
   defaultGrinderId: string | null;
   grindSettings: Array<{ grinderId: string; setting: string }>;
   flowUnit: FlowUnit;

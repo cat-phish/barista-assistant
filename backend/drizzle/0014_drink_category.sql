@@ -1,0 +1,1 @@
+ALTER TABLE `drinks` ADD `category` varchar(100);

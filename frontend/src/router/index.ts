@@ -32,6 +32,11 @@ export const router = createRouter({
     { path: '/beans/:id/edit', name: 'bean-edit', component: () => import('../views/BeanFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresEditor: true } },
     { path: '/recipes', name: 'recipes', component: () => import('../views/RecipesView.vue'), meta: { requiresWorkspace: true } },
     { path: '/recipes/new', name: 'recipe-new', component: () => import('../views/RecipeFormView.vue'), meta: { requiresWorkspace: true, requiresEditor: true } },
+    // Drinks and components share the Recipes section (components/MenuTabs.vue).
+    { path: '/drinks', name: 'drinks', component: () => import('../views/DrinksView.vue'), meta: { requiresWorkspace: true } },
+    { path: '/drinks/new', name: 'drink-new', component: () => import('../views/DrinkFormView.vue'), meta: { requiresWorkspace: true, requiresEditor: true } },
+    { path: '/drinks/:id/edit', name: 'drink-edit', component: () => import('../views/DrinkFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresEditor: true } },
+    { path: '/components', name: 'components', component: () => import('../views/ComponentsView.vue'), meta: { requiresWorkspace: true } },
     { path: '/recipes/:id/edit', name: 'recipe-edit', component: () => import('../views/RecipeFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresEditor: true } },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],

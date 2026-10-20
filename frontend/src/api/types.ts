@@ -150,7 +150,6 @@ export interface Recipe {
   firstDropMaxSec: number | null;
   flowUnit: FlowUnit;
   targetTempC: number | null;
-  showOnPublicMenu: boolean;
   defaultGrinderId: string | null; // preselected when brewing this recipe
   grindSettings: RecipeGrindSetting[];
   steps: RecipeStep[];
@@ -176,6 +175,7 @@ export interface BrewLog {
   recipeId: string | null;
   grinderId: string | null;
   machineId: string | null; // espresso only
+  drinkId: string | null; // the drink it was for
   timestamp: string;
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso
@@ -189,6 +189,7 @@ export interface BrewLog {
   recipe: { id: string; name: string; expectedYieldGrams: number | null; methodKind: MethodKind } | null;
   grinder: { id: string; name: string } | null;
   machine: { id: string; name: string } | null;
+  drink: { id: string; name: string } | null;
   marks: Mark[]; // earliest first; espresso only
   brewer: { id: string; email: string } | null;
 }
@@ -198,4 +199,26 @@ export interface Suggestions {
   latestAnalysis: LlmAnalysis | null;
   analyzedBrew: BrewLog | null;
   recentBrews: BrewLog[];
+}
+
+// docs/api_spec.md §5b: reusable preps that finish a drink.
+export type ComponentType = 'milk' | 'foam' | 'syrup' | 'ice' | 'water' | 'other';
+export interface Component {
+  id: string;
+  name: string;
+  componentType: ComponentType;
+  instructions: string | null;
+  drinkCount: number; // drinks that use it
+}
+
+// docs/api_spec.md §5c: what's served; the public menu lists these.
+export interface Drink {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string | null; // groups drinks, e.g. "Espresso milk drinks"; null = other drinks
+  showOnPublicMenu: boolean;
+  defaultRecipeId: string | null; // one of recipes (null if none are left)
+  recipes: Array<{ id: string; name: string; method: BrewMethod }>;
+  components: Array<{ componentId: string; name: string; componentType: ComponentType; amount: string | null; note: string | null }>;
 }

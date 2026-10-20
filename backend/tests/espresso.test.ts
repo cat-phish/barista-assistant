@@ -24,7 +24,7 @@ describe("method kinds", () => {
     const kinds = Object.fromEntries(
       (await owner.agent.get(base)).body.brewMethods.map((m: { name: string; kind: string }) => [m.name, m.kind])
     );
-    expect(kinds).toEqual({ Aeropress: "immersion", Espresso: "espresso", Latte: "espresso", V60: "pour_over" });
+    expect(kinds).toEqual({ Aeropress: "immersion", Espresso: "espresso", V60: "pour_over" });
     expect((await owner.agent.post(base).send({ name: "Chemex" })).body.brewMethod.kind).toBe("pour_over");
     expect((await owner.agent.post(base).send({ name: "Lever", kind: "espresso" })).body.brewMethod).toMatchObject({ kind: "espresso" });
     expect((await owner.agent.post(base).send({ name: "Siphon", kind: "vacuum" })).status).toBe(400);

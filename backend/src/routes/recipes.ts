@@ -131,7 +131,6 @@ const recipeFields = {
   firstDropMaxSec: seconds.nullable().optional(),
   flowUnit: z.enum(FLOW_UNITS),
   targetTempC: decimalSchema({ min: 0, max: 100, scale: 1 }).nullable().optional(),
-  showOnPublicMenu: z.boolean(),
   // Preselected when brewing this recipe (docs/api_spec.md §5).
   defaultGrinderId: z.uuid().nullable().optional(),
   grindSettings: grindSettingsSchema,
@@ -140,7 +139,6 @@ const recipeFields = {
 
 const createRecipeSchema = z.object({
   ...recipeFields,
-  showOnPublicMenu: recipeFields.showOnPublicMenu.default(true),
   flowUnit: recipeFields.flowUnit.default("g_s"),
   grindSettings: recipeFields.grindSettings.default([]),
   steps: recipeFields.steps.default([]),
@@ -307,7 +305,6 @@ async function loadRecipes(workspaceId: string, recipeId?: string): Promise<Reci
       firstDropMaxSec: recipes.firstDropMaxSec,
       flowUnit: recipes.flowUnit,
       targetTempC: recipes.targetTempC,
-      showOnPublicMenu: recipes.showOnPublicMenu,
       defaultGrinderId: recipes.defaultGrinderId,
     })
     .from(recipes)
