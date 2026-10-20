@@ -23,11 +23,11 @@ export interface NestedDrink {
   depth: number; // 0 = top level, 1 = a variant, 2 = a variant's variant...
 }
 
-// Depth-first: each drink followed by its variants, by name at every level.
-// A drink whose parent isn't in the list counts as top level.
-export function nestDrinks(drinks: Drink[]): NestedDrink[] {
+// Depth-first: each drink followed by its variants, by name at every level
+// (Z–A when descending). A drink whose parent isn't in the list counts as top level.
+export function nestDrinks(drinks: Drink[], descending = false): NestedDrink[] {
   const ids = new Set(drinks.map((d) => d.id));
-  const byName = [...drinks].sort((a, b) => a.name.localeCompare(b.name));
+  const byName = [...drinks].sort((a, b) => (descending ? -1 : 1) * a.name.localeCompare(b.name));
   const children = new Map<string | null, Drink[]>();
   for (const d of byName) {
     const parent = d.parent && ids.has(d.parent.id) ? d.parent.id : null;

@@ -23,7 +23,7 @@ import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
 // docs/api_spec.md §5c
 export interface DrinkDetails
-  extends Pick<Drink, "id" | "name" | "description" | "showOnPublicMenu" | "defaultRecipeId" | "servingSize" | "servingUnit"> {
+  extends Pick<Drink, "id" | "name" | "description" | "showOnPublicMenu" | "defaultRecipeId" | "servingSize" | "servingUnit" | "createdAt"> {
   brewer: { id: string; name: string; kind: MethodKind };
   category: { id: string; name: string } | null;
   parent: { id: string; name: string } | null;
@@ -156,6 +156,7 @@ export async function loadDrinks(where: SQL | undefined): Promise<DrinkDetails[]
       name: drinks.name,
       description: drinks.description,
       showOnPublicMenu: drinks.showOnPublicMenu,
+      createdAt: drinks.createdAt,
       defaultRecipeId: drinks.defaultRecipeId,
       servingSize: drinks.servingSize,
       servingUnit: drinks.servingUnit,

@@ -21,14 +21,18 @@ export const router = createRouter({
     { path: '/brew', name: 'brew', component: () => import('../views/BrewView.vue'), meta: { requiresWorkspace: true } },
     { path: '/journal', name: 'journal', component: () => import('../views/JournalView.vue'), meta: { requiresWorkspace: true } },
     { path: '/journal/:id', name: 'journal-entry', component: () => import('../views/JournalEntryView.vue'), props: true, meta: { requiresWorkspace: true } },
-    // Equipment: three tabs (components/EquipmentTabs.vue). /grinders is the old address.
-    { path: '/equipment', redirect: '/equipment/brewers' },
-    { path: '/grinders', redirect: '/equipment/grinders' },
-    { path: '/equipment/grinders', name: 'grinders', component: () => import('../views/GrindersView.vue'), meta: { requiresWorkspace: true } },
-    { path: '/equipment/brewers', name: 'brewers', component: () => import('../views/BrewersView.vue'), meta: { requiresWorkspace: true } },
-    // Brew methods and espresso machines merged into brewers.
-    { path: '/equipment/machines', redirect: '/equipment/brewers' },
-    { path: '/equipment/methods', redirect: '/equipment/brewers' },
+    // Bar setup: three tabs (components/SetupTabs.vue).
+    { path: '/setup', redirect: '/setup/brewers' },
+    { path: '/setup/brewers', name: 'brewers', component: () => import('../views/BrewersView.vue'), meta: { requiresWorkspace: true } },
+    { path: '/setup/grinders', name: 'grinders', component: () => import('../views/GrindersView.vue'), meta: { requiresWorkspace: true } },
+    { path: '/setup/categories', name: 'categories', component: () => import('../views/CategoriesView.vue'), meta: { requiresWorkspace: true } },
+    // Old addresses: Equipment became Bar setup; methods and machines became brewers.
+    { path: '/equipment', redirect: '/setup/brewers' },
+    { path: '/grinders', redirect: '/setup/grinders' },
+    { path: '/equipment/grinders', redirect: '/setup/grinders' },
+    { path: '/equipment/brewers', redirect: '/setup/brewers' },
+    { path: '/equipment/machines', redirect: '/setup/brewers' },
+    { path: '/equipment/methods', redirect: '/setup/brewers' },
     { path: '/beans', name: 'beans', component: () => import('../views/BeansView.vue'), meta: { requiresWorkspace: true } },
     { path: '/beans/new', name: 'bean-new', component: () => import('../views/BeanFormView.vue'), meta: { requiresWorkspace: true, requiresEditor: true } },
     { path: '/beans/:id/edit', name: 'bean-edit', component: () => import('../views/BeanFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresEditor: true } },

@@ -8,7 +8,7 @@ const special: DrinkCategory = { id: 'special', name: 'Specialty drinks', positi
 
 function drink(id: string, name: string, parent: Drink | null = null, category: DrinkCategory | null = milk): Drink {
   return {
-    id, name, description: null, brewer, showOnPublicMenu: true, defaultRecipeId: null, servingSize: null, servingUnit: null, variants: [], ingredients: [],
+    id, name, description: null, brewer, showOnPublicMenu: true, defaultRecipeId: null, servingSize: null, servingUnit: null, createdAt: '2026-10-20T00:00:00.000Z', variants: [], ingredients: [],
     category: category && { id: category.id, name: category.name },
     parent: parent && { id: parent.id, name: parent.name },
   };
@@ -35,6 +35,10 @@ describe('drink summaries', () => {
 describe('nesting variants', () => {
   it('puts variants under their parent, by name at each level', () => {
     expect(names(nestDrinks([iced, vanilla, latte, cortado]))).toEqual(['Cortado', 'Latte', '-Vanilla Latte', '--Iced Vanilla Latte']);
+  });
+
+  it('can nest Z–A, variants still under their parent', () => {
+    expect(names(nestDrinks([iced, vanilla, latte, cortado], true))).toEqual(['Latte', '-Vanilla Latte', '--Iced Vanilla Latte', 'Cortado']);
   });
 
   it('treats a drink whose parent is missing as top level', () => {

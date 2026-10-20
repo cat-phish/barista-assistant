@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Grinder management (docs/api_spec.md §3b), one tab of Equipment. Retire
+// Grinder management (docs/api_spec.md §3b), one tab of Bar setup. Retire
 // keeps history; delete only works for grinders no brew used.
 import { computed, onMounted, ref } from 'vue';
 import { ApiError, errorMessage } from '../api/client';
@@ -7,7 +7,7 @@ import { grindersApi } from '../api/grinders';
 import type { Grinder } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
-import EquipmentTabs from '../components/EquipmentTabs.vue';
+import SetupTabs from '../components/SetupTabs.vue';
 import GrinderFields from '../components/GrinderFields.vue';
 import { grinderForm, grinderSummary, parseGrinderForm } from '../lib/equipment';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -142,9 +142,9 @@ async function retireInstead(): Promise<void> {
   <AppHeader />
   <main class="page">
     <div class="page-header">
-      <h1>Equipment</h1>
+      <h1>Bar setup</h1>
     </div>
-    <EquipmentTabs />
+    <SetupTabs />
     <p class="muted intro">Brews record which grinder you used, so grind settings stay meaningful.</p>
 
     <p v-if="loading" class="muted" aria-live="polite">Loading grinders…</p>

@@ -561,7 +561,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <p class="muted small">
             <RouterLink v-if="workspaces.canEdit" :to="{ name: 'drink-new', query: { category: chosenCategory.id } }">Add a drink</RouterLink
             ><template v-else>Add a drink</template> to it (a V60 or espresso drink with ingredients, say), or put a brewer in it under
-            <RouterLink :to="{ name: 'brewers' }">Equipment → Brewers</RouterLink>.
+            <RouterLink :to="{ name: 'brewers' }">Bar setup → Brewers</RouterLink>.
           </p>
         </div>
         <div v-else-if="decodeCategory(what)" class="field">

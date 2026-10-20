@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Tabs across a section's screens (Equipment; Recipes / Drinks / Components).
+// Tabs across a section's screens (Bar setup; Recipes / Drinks / Ingredients).
 import type { RouteLocationRaw } from 'vue-router';
 
 defineProps<{ label: string; tabs: Array<{ to: RouteLocationRaw; text: string }> }>();

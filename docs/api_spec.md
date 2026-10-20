@@ -586,6 +586,7 @@ card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
   "flowUnit": "g_s",
   "targetTempC": 94,
   "defaultGrinderId": "uuid",
+  "createdAt": "2026-10-19T08:00:00.000Z",
   "grindSettings": [
     { "grinderId": "uuid", "grinderName": "Comandante C40", "setting": "20" }
   ],
@@ -596,6 +597,10 @@ card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
   ]
 }
 ```
+
+`createdAt` is when the recipe was added (read-only; recipes that existed
+before it was tracked date from their first brew). A duplicate is a new
+recipe with its own date.
 
 An espresso profile (pressure until first drop, pump off for 10 s, then flow
 down to 2 g/s until the shot is done):
@@ -767,6 +772,7 @@ brewer may differ from its parent's.
   "defaultRecipeId": "uuid",
   "servingSize": 8,
   "servingUnit": "fl_oz",
+  "createdAt": "2026-10-20T15:30:00.000Z",
   "ingredients": [
     { "ingredientId": "uuid", "name": "Steamed milk", "ingredientType": "milk", "amountValue": 6, "amountUnit": "fl oz", "note": null },
     { "ingredientId": "uuid", "name": "Vanilla syrup", "ingredientType": "syrup", "amountValue": 2, "amountUnit": "pump", "note": "in the milk" }
@@ -774,6 +780,7 @@ brewer may differ from its parent's.
 }
 ```
 
+`createdAt` is when the drink was added (read-only; lists sort by it).
 `servingSize` + `servingUnit` (`SERVING_UNITS`: `fl_oz`, `ml`) are the
 drink's default size, or both `null`. Ingredient amounts are for that size;
 clients scale them when a brew is made bigger or smaller (and, for a filter

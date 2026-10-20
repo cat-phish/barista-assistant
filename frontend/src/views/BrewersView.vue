@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Brewers (docs/api_spec.md §3), one tab of Equipment: whatever makes the
+// Brewers (docs/api_spec.md §3), one tab of Bar setup: whatever makes the
 // coffee, from a V60 to an espresso machine. Works like grinders: retire keeps
 // history; delete only for brewers no recipe, drink or brew uses.
 import { computed, onMounted, ref } from 'vue';
@@ -10,7 +10,7 @@ import type { Brewer, DrinkCategory } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import BrewerFields, { type BrewerForm } from '../components/BrewerFields.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
-import EquipmentTabs from '../components/EquipmentTabs.vue';
+import SetupTabs from '../components/SetupTabs.vue';
 import { machineSummary, METHOD_KINDS } from '../lib/equipment';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -185,9 +185,9 @@ async function retireInstead(): Promise<void> {
   <AppHeader />
   <main class="page">
     <div class="page-header">
-      <h1>Equipment</h1>
+      <h1>Bar setup</h1>
     </div>
-    <EquipmentTabs />
+    <SetupTabs />
     <p class="muted intro">Recipes and drinks are made with a brewer; its kind decides the recipe fields, and an espresso machine's controls shape the shot timer.</p>
 
     <p v-if="loading" class="muted" aria-live="polite">Loading brewers…</p>

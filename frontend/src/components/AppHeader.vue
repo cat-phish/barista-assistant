@@ -42,7 +42,7 @@ async function logout(): Promise<void> {
     <RouterLink :to="{ name: 'journal' }" active-class="active">Journal</RouterLink>
     <RouterLink :to="{ name: 'beans' }" active-class="active">Beans</RouterLink>
     <RouterLink :to="{ name: 'recipes' }" :class="{ active: ['/recipes', '/drinks', '/ingredients'].some((p) => route.path.startsWith(p)) }">Recipes</RouterLink>
-    <RouterLink :to="{ name: 'grinders' }" :class="{ active: route.path.startsWith('/equipment') }">Equipment</RouterLink>
+    <RouterLink :to="{ name: 'brewers' }" :class="{ active: route.path.startsWith('/setup') }">Bar setup</RouterLink>
   </nav>
 </template>
 

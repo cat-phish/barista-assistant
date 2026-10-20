@@ -15,8 +15,8 @@ upcoming work is in `roadmap.md`.
 - **Freezing:** freeze/thaw periods pause the bean's roast age, so "days off
   roast" stays meaningful for frozen coffee.
 
-## Equipment
-One **Equipment** section with three tabs:
+## Bar setup
+One **Bar setup** section with three tabs: Brewers, Grinders, Categories.
 - **Grinders:** per workspace, with optional details: stepped/stepless,
   setting range and step size, burr type and size, hand/electric. The range
   and step let the AI talk in clicks. Grinders that have been used are
@@ -32,6 +32,11 @@ One **Equipment** section with three tabs:
   deleting is refused while recipes or drinks use it.
 
 ## Recipes
+- **List:** a table (Name, Brewer, Dose, Added), filtered by brewer and sorted
+  by name or date added, from the headers or the Sort menu (phones use the
+  menu); tap a row for windows, grind, steps and actions. The filter and sort
+  are remembered. Recipes from before dates were tracked date from their
+  first brew.
 - A recipe belongs to one brewer. **Duplicate** copies one (steps and grind
   starting points included) to adapt it, e.g. for a second espresso machine,
   which is preselected when there is one.
@@ -70,7 +75,7 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   then suggested next time) and a note ("Orange cold foam · 40 g · spooned on
   top"). An optional **default size** (fl oz or ml) is what the amounts are
   for. A plain "V60" isn't a
-  drink: it's the brewer itself, which can go on the menu (Equipment →
+  drink: it's the brewer itself, which can go on the menu (Bar setup →
   Brewers: show on menu, menu name, description, category).
 - **Variants:** like cocktail riffs, a drink can be a variant of another
   (Vanilla Latte of Latte, Iced Vanilla Latte of Vanilla Latte). **Make a
@@ -78,9 +83,13 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   changes to either don't carry over. The list shows variants under their
   parent; deleting a drink moves its variants up a level.
 - **Categories:** a managed, ordered list ("Espresso milk drinks", "Specialty
-  drinks") on the Drinks page: add, rename, reorder, delete (its drinks and
-  brewers become uncategorised). They're the first choice when brewing, and
-  group drinks in the list and on the menu.
+  drinks") under Bar setup → Categories: add, rename, reorder, delete (its
+  drinks and brewers become uncategorised). They're the first choice when
+  brewing, filter the drinks list, and are the menu's sections.
+- **Drinks list:** a table (Name, Category, Brewer, Added), filtered by
+  category and sorted by name (variants stay under their parent) or date
+  added, from the headers or the Sort menu; tap a row for its recipe,
+  ingredients, size and actions. The filter and sort are remembered.
 
 ## Brewing
 - **Category → Brewer or drink → Recipe:** pick a **category** (Pour Over,

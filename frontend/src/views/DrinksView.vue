@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// Drinks (docs/api_spec.md §5c, §5d): what's served. Each is built on a brew
-// method; variants (Vanilla Latte of Latte) sit under their parent, and
-// drinks are grouped by the managed categories.
-import { computed, onMounted, ref } from 'vue';
+// Drinks (docs/api_spec.md §5c) as a table: filter by category, sort by name
+// (variants stay under their parent) or date added (a flat list); a row
+// expands to its details. Categories are managed under Bar setup.
+import { computed, onMounted, ref, watch } from 'vue';
 import { errorMessage } from '../api/client';
 import { drinkCategoriesApi } from '../api/drinkCategories';
 import { drinksApi } from '../api/drinks';
@@ -10,9 +10,11 @@ import { recipesApi } from '../api/recipes';
 import type { Drink, DrinkCategory, Recipe } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
-import DrinkCategoriesPanel from '../components/DrinkCategoriesPanel.vue';
+import ListControls from '../components/ListControls.vue';
 import MenuTabs from '../components/MenuTabs.vue';
-import { ingredientLine, drinkSections } from '../lib/drinks';
+import { ingredientLine, nestDrinks, type NestedDrink } from '../lib/drinks';
+import { formatAdded } from '../lib/format';
+import { ariaSort, isSortKey, recallView, rememberView, sortItems, sortsByName, toggleHeader, type SortKey } from '../lib/listSort';
 import { defaultSize, formatSize } from '../lib/servings';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -22,6 +24,15 @@ const categories = ref<DrinkCategory[]>([]);
 const recipes = ref<Recipe[]>([]);
 const loading = ref(true);
 const error = ref('');
+
+// View choices, remembered per workspace.
+const viewKey = (what: string) => `drinks.${what}.${workspaces.current?.id ?? ''}`;
+const ALL = 'all';
+const NONE = 'none'; // uncategorised
+const categoryFilter = ref(ALL);
+const sort = ref<SortKey>('name_asc');
+watch(categoryFilter, (v) => rememberView(viewKey('category'), v));
+watch(sort, (v) => rememberView(viewKey('sort'), v));
 
 async function load(): Promise<void> {
   const ws = workspaces.current?.id;
@@ -37,10 +48,37 @@ async function load(): Promise<void> {
     loading.value = false;
   }
 }
-onMounted(load);
+onMounted(async () => {
+  const savedSort = recallView(viewKey('sort'));
+  if (isSortKey(savedSort)) sort.value = savedSort;
+  await load();
+  const savedCategory = recallView(viewKey('category'));
+  if (savedCategory && categoryOptions.value.some((o) => o.value === savedCategory)) categoryFilter.value = savedCategory;
+});
 
-const sections = computed(() => drinkSections(drinks.value, categories.value));
+const categoryOptions = computed(() => [
+  { value: ALL, label: 'All categories' },
+  ...[...categories.value].sort((a, b) => a.position - b.position).map((c) => ({ value: c.id, label: c.name })),
+  ...(drinks.value.some((d) => !d.category) ? [{ value: NONE, label: 'Uncategorised' }] : []),
+]);
+const filterName = computed(() => categoryOptions.value.find((o) => o.value === categoryFilter.value)?.label ?? '');
+// By name: variants nested under their parent. By date: flat.
+const shown = computed<NestedDrink[]>(() => {
+  const f = categoryFilter.value;
+  const list = f === ALL ? drinks.value : drinks.value.filter((d) => (d.category?.id ?? NONE) === f);
+  if (sortsByName(sort.value)) return nestDrinks(list, sort.value === 'name_desc');
+  return sortItems(list, sort.value).map((drink) => ({ drink, depth: 0 }));
+});
+const nested = computed(() => sortsByName(sort.value));
 const recipeName = (id: string | null) => recipes.value.find((r) => r.id === id)?.name ?? null;
+const sortState = (column: 'name' | 'added') => {
+  const state = ariaSort(sort.value, column);
+  return state === 'none' ? 'click to sort' : `sorted ${state}, click to reverse`;
+};
+
+// One row open at a time.
+const openId = ref<string | null>(null);
+const toggle = (id: string) => (openId.value = openId.value === id ? null : id);
 
 const pending = ref<Drink | null>(null);
 const busy = ref(false);
@@ -73,7 +111,7 @@ async function confirmDelete(): Promise<void> {
     <MenuTabs />
     <p class="muted intro">
       A drink is built on a brewer, brewed with any of its recipes and finished with ingredients. Plain brews like "V60" are the brewers
-      themselves: put them on the menu under Equipment → Brewers.
+      themselves; categories and brewers live under <RouterLink :to="{ name: 'categories' }">Bar setup</RouterLink>.
     </p>
 
     <p v-if="loading" class="muted" aria-live="polite">Loading drinks…</p>
@@ -84,36 +122,54 @@ async function confirmDelete(): Promise<void> {
       <p v-if="workspaces.canEdit">Start with a classic like "Latte" (Espresso + steamed milk), then make variants of it.</p>
     </div>
 
-    <section v-for="s in sections" v-else :key="s.category?.id ?? ''" class="stack section">
-      <h2 v-if="s.category || sections.length > 1" class="section-title">{{ s.category?.name ?? 'Other drinks' }}</h2>
-      <ul class="list">
-        <li v-for="{ drink: d, depth } in s.drinks" :key="d.id" class="card drink" :class="{ variant: depth > 0 }" :style="{ '--depth': depth }">
-          <div class="head">
-            <h2>{{ d.name }}</h2>
-            <span class="badge">{{ d.brewer.name }}</span>
-            <span v-if="defaultSize(d)" class="badge">{{ formatSize(defaultSize(d)!) }}</span>
-            <span v-if="!d.showOnPublicMenu" class="badge muted-badge">Hidden from menu</span>
+    <template v-else>
+      <ListControls v-model:filter="categoryFilter" v-model:sort="sort" id-prefix="drinks" filter-label="Category" :filter-options="categoryOptions" />
+      <p v-if="shown.length === 0" class="card empty">No drinks in {{ filterName }} yet.</p>
+      <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.2fr) 5.5rem">
+        <div class="data-row data-head">
+          <button class="data-th" type="button" :aria-label="`Name, ${sortState('name')}`" @click="sort = toggleHeader(sort, 'name')">
+            Name <span aria-hidden="true">{{ sort === 'name_asc' ? '▲' : sort === 'name_desc' ? '▼' : '' }}</span>
+          </button>
+          <span class="data-th">Category</span>
+          <span class="data-th">Brewer</span>
+          <button class="data-th end" type="button" :aria-label="`Date added, ${sortState('added')}`" @click="sort = toggleHeader(sort, 'added')">
+            Added <span aria-hidden="true">{{ sort === 'added_asc' ? '▲' : sort === 'added_desc' ? '▼' : '' }}</span>
+          </button>
+        </div>
+        <div v-for="{ drink: d, depth } in shown" :key="d.id" class="data-item" :class="{ open: openId === d.id }">
+          <button class="data-row" type="button" :aria-expanded="openId === d.id" @click="toggle(d.id)">
+            <span class="data-td primary" :style="{ paddingLeft: nested ? `calc(${depth} * var(--space-4))` : undefined }">
+              <template v-if="nested && depth">↳ </template>{{ d.name }}
+              <span v-if="!nested && d.parent" class="variant-of">variant of {{ d.parent.name }}</span>
+            </span>
+            <span class="data-td">{{ d.category?.name ?? 'Uncategorised' }}</span>
+            <span class="data-td">{{ d.brewer.name }}</span>
+            <span class="data-td end">{{ formatAdded(d.createdAt) }}</span>
+          </button>
+          <div v-if="openId === d.id" class="data-details">
+            <div class="badges">
+              <span v-if="defaultSize(d)" class="badge">{{ formatSize(defaultSize(d)!) }}</span>
+              <span v-if="!d.showOnPublicMenu" class="badge muted-badge">Hidden from menu</span>
+              <span v-if="nested && d.parent" class="muted small">Variant of {{ d.parent.name }}</span>
+            </div>
+            <p v-if="d.description" class="muted">{{ d.description }}</p>
+            <p class="facts">
+              <span class="label">Recipe</span>
+              {{ recipeName(d.defaultRecipeId) ?? `Any ${d.brewer.name} recipe` }}
+            </p>
+            <p class="facts">
+              <span class="label">Finish with</span>
+              {{ d.ingredients.length ? d.ingredients.map((c) => ingredientLine(c)).join(' · ') : 'Nothing: just the coffee' }}
+            </p>
+            <div v-if="workspaces.canEdit" class="data-actions">
+              <RouterLink class="btn-link" :to="{ name: 'drink-new', query: { from: d.id } }">Make a variant</RouterLink>
+              <RouterLink class="btn-link" :to="{ name: 'drink-edit', params: { id: d.id } }">Edit</RouterLink>
+              <button class="btn-link danger" type="button" @click="pending = d; dialogError = ''">Delete</button>
+            </div>
           </div>
-          <p v-if="d.parent" class="muted small">Variant of {{ d.parent.name }}</p>
-          <p v-if="d.description" class="muted">{{ d.description }}</p>
-          <p class="facts">
-            <span class="label">Recipe</span>
-            {{ recipeName(d.defaultRecipeId) ?? `Any ${d.brewer.name} recipe` }}
-          </p>
-          <p class="facts">
-            <span class="label">Finish with</span>
-            {{ d.ingredients.length ? d.ingredients.map((c) => ingredientLine(c)).join(' · ') : 'Nothing: just the coffee' }}
-          </p>
-          <div v-if="workspaces.canEdit" class="actions">
-            <RouterLink class="btn-link" :to="{ name: 'drink-new', query: { from: d.id } }">Make a variant</RouterLink>
-            <RouterLink class="btn-link" :to="{ name: 'drink-edit', params: { id: d.id } }">Edit</RouterLink>
-            <button class="btn-link danger" type="button" @click="pending = d; dialogError = ''">Delete</button>
-          </div>
-        </li>
-      </ul>
-    </section>
-
-    <DrinkCategoriesPanel v-if="!loading && !error" :categories="categories" @changed="load" />
+        </div>
+      </div>
+    </template>
   </main>
 
   <ConfirmDialog :open="pending !== null" title="Delete this drink?" @cancel="pending = null">
@@ -130,41 +186,29 @@ async function confirmDelete(): Promise<void> {
 </template>
 
 <style scoped>
-h2 {
-  font-size: 1.15rem;
-  margin: 0;
-}
 p {
   margin: 0;
 }
 .intro {
   margin-top: calc(-1 * var(--space-2));
 }
-.section-title {
+.small {
   font-size: 0.85rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+}
+.variant-of {
+  margin-left: var(--space-1);
+  font-size: 0.8rem;
+  font-weight: 400;
   color: var(--text-muted);
 }
-.list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.badges {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.drink {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-}
-.head {
-  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  flex-wrap: wrap;
+}
+.badges:empty {
+  display: none;
 }
 .label {
   font-size: 0.75rem;
@@ -173,17 +217,8 @@ p {
   text-transform: uppercase;
   margin-right: var(--space-1);
 }
-.small {
-  font-size: 0.85rem;
-}
-.variant {
-  margin-left: calc(var(--depth) * var(--space-4));
-  border-left: 3px solid var(--border);
-}
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  margin: 0 calc(-1 * var(--space-2)) calc(-1 * var(--space-2));
+.muted-badge {
+  background: var(--bg);
+  color: var(--text-muted);
 }
 </style>

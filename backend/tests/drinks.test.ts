@@ -81,6 +81,7 @@ describe("drinks", () => {
       defaultRecipeId: v60b,
       servingSize: null,
       servingUnit: null,
+      createdAt: expect.any(String),
       ingredients: [
         { ingredientId: syrup, name: "Vanilla", ingredientType: "syrup", amountValue: 1, amountUnit: "pump", note: null },
         { ingredientId: foam, name: "Orange cold foam", ingredientType: "foam", amountValue: 40, amountUnit: "g", note: "spooned on top" },

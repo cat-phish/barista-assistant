@@ -210,6 +210,7 @@ export const recipes = mysqlTable("recipes", {
   // preselected when brewing this recipe (else the last one used); deleting
   // the grinder clears it.
   defaultGrinderId: varchar("default_grinder_id", { length: 36 }).references(() => grinders.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(), // "date added" in lists
 });
 
 // 6b. Recipe Grind Starting Points (One Per Grinder)

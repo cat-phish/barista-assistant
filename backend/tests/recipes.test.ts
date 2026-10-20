@@ -27,6 +27,18 @@ describe("recipe fields", () => {
   });
 });
 
+describe("date added", () => {
+  it("is set on create, returned in the list, and can't be sent", async () => {
+    const { owner, base, recipe } = await setup();
+    const before = Date.now() - 2000;
+    const made = (await owner.agent.post(base).send(recipe)).body.recipe;
+    expect(new Date(made.createdAt).getTime()).toBeGreaterThanOrEqual(before);
+    const listed = (await owner.agent.get(base)).body.recipes[0];
+    expect(listed.createdAt).toBe(made.createdAt);
+    expect((await owner.agent.patch(`${base}/${made.id}`).send({ createdAt: "2020-01-01T00:00:00.000Z" })).status).toBe(400);
+  });
+});
+
 describe("target finish window", () => {
   it("one end alone defaults the other to ±15 s (never below 0); both must be in order", async () => {
     const { owner, base, recipe } = await setup();

@@ -42,7 +42,7 @@ const recipe = (id: string, b: Brewer) => ({ id, name: id, brewer: ref(b) }) as 
 const recipes = [recipe('v60-std', v60), recipe('chemex-std', chemex), recipe('shot', delonghi), recipe('ristretto', delonghi), recipe('ap-std', aeropress), recipe('old-shot', oldMachine)];
 
 const drink = (id: string, b: Brewer, category: DrinkCategory | null, defaultRecipeId: string | null, parent: Drink | null = null): Drink => ({
-  id, name: id, description: null, brewer: ref(b), defaultRecipeId, showOnPublicMenu: true, servingSize: null, servingUnit: null,
+  id, name: id, description: null, brewer: ref(b), defaultRecipeId, showOnPublicMenu: true, servingSize: null, servingUnit: null, createdAt: '2026-10-20T00:00:00.000Z',
   variants: [], ingredients: [], category: category && { id: category.id, name: category.name }, parent: parent && { id: parent.id, name: parent.name },
 });
 const latte = drink('Latte', delonghi, milk, 'ristretto');

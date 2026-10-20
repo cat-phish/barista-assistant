@@ -157,6 +157,7 @@ export interface Recipe {
   flowUnit: FlowUnit;
   targetTempC: number | null;
   defaultGrinderId: string | null; // preselected when brewing this recipe
+  createdAt: string; // date added (ISO)
   grindSettings: RecipeGrindSetting[];
   steps: RecipeStep[];
 }
@@ -252,5 +253,6 @@ export interface Drink {
   defaultRecipeId: string | null; // a recipe of the method, or null
   servingSize: number | null; // default size; both or neither
   servingUnit: ServingUnit | null;
+  createdAt: string; // date added (ISO)
   ingredients: DrinkIngredient[];
 }

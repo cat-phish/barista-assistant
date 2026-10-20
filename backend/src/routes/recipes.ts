@@ -306,6 +306,7 @@ async function loadRecipes(workspaceId: string, recipeId?: string): Promise<Reci
       flowUnit: recipes.flowUnit,
       targetTempC: recipes.targetTempC,
       defaultGrinderId: recipes.defaultGrinderId,
+      createdAt: recipes.createdAt,
     })
     .from(recipes)
     .innerJoin(brewers, eq(recipes.brewerId, brewers.id))
