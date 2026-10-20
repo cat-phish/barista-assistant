@@ -1,0 +1,1 @@
+ALTER TABLE `beans` ADD `roast_level` varchar(20);

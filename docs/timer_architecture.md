@@ -65,6 +65,7 @@ export default defineConfig({
     *   **Target finish window** (recipe's `expectedFinishMinSec`–`expectedFinishMaxSec`, if set), shown throughout: "Target 2:45–3:15 · in 0:40" before the window, "· in the window" inside it, "· 0:12 over" after it.
     *   **Finish & Save** is available from the start, since a brew can end earlier or later than planned. It emits the elapsed seconds.
     *   A recipe with no steps works as a plain stopwatch.
+    *   **Scaled batches:** brew setup can scale the recipe (dose, water or yield; `docs/roadmap.md` phase 1). The timer receives the scaled steps: pour targets × (batch water / recipe water), rounded to whole grams; step times unchanged. The header shows the batch dose.
     *   Instant steps (`startSec === endSec`, e.g. a quick swirl) show for about two seconds, so they aren't missed.
 *   **Layout** (supersedes the reference component's order), top to bottom: **Cancel brew** (in `BrewView`) → recipe header → clock with the target-finish note → **Start Brew / Finish & Save** → **Previous** → **Current** → **Up next**. Keeping the button under the clock means all three step cards stay on screen on a phone (390×844) without scrolling.
     *   **Previous** and **Up next** are always shown as one-line cards; "None" when there is no such step. During a wait, Up next is the step being waited for.

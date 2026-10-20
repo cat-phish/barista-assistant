@@ -6,7 +6,7 @@ import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
-import { beanFreezes, beans, brewLogs, type Bean, type BeanFreeze } from "@barista/shared/schema";
+import { beanFreezes, beans, brewLogs, ROAST_LEVELS, type Bean, type BeanFreeze } from "@barista/shared/schema";
 import { optionalText, updateSchema } from "../validation.js";
 
 export type FreezePeriod = Pick<BeanFreeze, "id" | "frozenOn" | "thawedOn">;
@@ -30,6 +30,7 @@ const beanFields = {
   roasterName: z.string().trim().min(1).max(255),
   beanName: z.string().trim().min(1).max(255),
   process: optionalText(100),
+  roastLevel: z.enum(ROAST_LEVELS).nullable().optional(),
   roastDate: z
     .union([z.iso.date(), z.iso.datetime()])
     .nullable()

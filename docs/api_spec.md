@@ -342,14 +342,16 @@ is no age.
     "roasterName": "Onyx Coffee Lab",
     "beanName": "Southern Weather",
     "process": "Washed",
+    "roastLevel": "light",
     "roastDate": "2026-10-01",
     "inventoryWeightGrams": 250,
     "showOnPublicMenu": true
   }
   ```
   `roasterName` and `beanName` are required (trimmed, 1–255 chars).
-  `process` (≤100 chars) and `roastDate` (ISO date or datetime) are optional
-  and nullable. `inventoryWeightGrams` is an integer ≥ 0 (default `0`).
+  `process` (≤100 chars), `roastLevel` (one of `ROAST_LEVELS`: `light`,
+  `medium_light`, `medium`, `medium_dark`, `dark`) and `roastDate` (ISO date
+  or datetime) are optional and nullable. `inventoryWeightGrams` is an integer ≥ 0 (default `0`).
   `showOnPublicMenu` defaults to `true`.
 - **Success (`201 Created`):** `{ "bean": { ...bean } }`
 - **Errors:** `400` invalid body; `403` viewer.
@@ -358,7 +360,8 @@ is no age.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Body:** any non-empty subset of the `POST` fields, with the same rules.
-  Unknown fields are rejected. `process` and `roastDate` can be set to `null`.
+  Unknown fields are rejected. `process`, `roastLevel` and `roastDate` can be
+  set to `null`.
 - **Success (`200 OK`):** `{ "bean": { ...bean } }`
 - **Errors:** `400` invalid or empty body; `403` viewer; `404` bean not in this
   workspace.
@@ -816,6 +819,8 @@ queue:
    ("previous" = `timestamp` earlier than the target's, newest first).
    - If the brew log no longer exists (deleted after queueing), the job
      completes without calling the LLM.
+   - The bean includes its `roastLevel` (or `null` if unknown), which
+     matters for temperature advice.
    - The prompt includes the bean's **effective** roast age in days at brew
      time (`roastAgeDays`, excluding days frozen; see §4) and
      `daysFrozenBeforeBrew`, when the bean has a `roastDate`.
@@ -832,7 +837,7 @@ queue:
 
 > "You are an expert specialty coffee roaster and barista. Analyze the provided
 > extraction log and historical brews for this coffee bean, including roast
-> age, dose, yield, total brew time, rating, and tasting notes. Suggest
+> level, roast age, dose, yield, total brew time, rating, and tasting notes. Suggest
 > concrete parameter adjustments for the next brew. Respond strictly matching
 > the provided JSON schema."
 

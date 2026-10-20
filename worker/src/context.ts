@@ -37,7 +37,8 @@ export interface BrewSummary {
 }
 
 export interface BrewContext {
-  bean: { roasterName: string; beanName: string; process: string | null; roastDate: string | null };
+  // roastLevel: one of ROAST_LEVELS (light … dark), or null if unknown.
+  bean: { roasterName: string; beanName: string; process: string | null; roastLevel: string | null; roastDate: string | null };
   recipe: {
     name: string;
     method: string;
@@ -121,6 +122,7 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
       roasterName: bean.roasterName,
       beanName: bean.beanName,
       process: bean.process,
+      roastLevel: bean.roastLevel,
       roastDate: bean.roastDate ? bean.roastDate.toISOString().slice(0, 10) : null,
     },
     recipe,

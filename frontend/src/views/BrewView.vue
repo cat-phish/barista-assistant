@@ -20,6 +20,7 @@ import { emptyDraft, parseBrewDraft } from '../lib/brewDraft';
 import { formatDay, formatGrams, formatRatio, formatTime } from '../lib/format';
 import { chooseGrind, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
 import { useWorkspaceStore } from '../stores/workspace';
+import { brewRetention, ROAST_LEVELS, scaleBatch, scaleSteps, type MeasuredBrew, type ScaleField } from '../lib/scale';
 
 type Stage = 'setup' | 'timing' | 'log' | 'saved';
 
@@ -68,7 +69,89 @@ watch(recipe, (r) => {
   draft.water = r ? formatGrams(r.targetWaterGrams) : '';
   draft.yieldGrams = ''; // measured after brewing
   draft.temp = r?.targetTempC != null ? String(r.targetTempC) : '';
+  resetBatch();
   if (suggestion.value) applySuggestion(suggestion.value);
+});
+
+// Batch size: type a dose, water or yield (g or fl oz) and the others follow
+// (docs/features.md). The ratio defaults to the recipe's and can be changed;
+// whatever was typed last is held. Pour targets scale with the water.
+const lead = ref<{ field: ScaleField; text: string }>({ field: 'dose', text: '' });
+const ratioText = ref<string | null>(null); // null = the recipe's ratio
+function resetBatch(): void {
+  lead.value = { field: 'dose', text: recipe.value ? formatGrams(recipe.value.targetDoseGrams) : '' };
+  ratioText.value = null;
+}
+function setLead(field: ScaleField, event: Event): void {
+  lead.value = { field, text: (event.target as HTMLInputElement).value };
+}
+function setRatio(event: Event): void {
+  ratioText.value = (event.target as HTMLInputElement).value;
+}
+// A positive decimal, allowing a trailing "." while typing.
+function amount(text: string): number {
+  const t = text.trim().replace(',', '.');
+  return t && /^(\d+\.?\d*|\.\d+)$/.test(t) ? Number(t) : Number.NaN;
+}
+
+// Your measured yields for this bean + recipe give the best retention figure.
+const measured = ref<MeasuredBrew[]>([]);
+let measuredRequest = 0;
+async function loadMeasured(): Promise<void> {
+  const ws = workspaces.current?.id;
+  const request = ++measuredRequest; // ignore answers to superseded choices
+  let list: MeasuredBrew[] = [];
+  if (ws && beanId.value && recipeId.value) {
+    try {
+      const { brewLogs } = await brewLogsApi.list(ws, { beanId: beanId.value, limit: 50 });
+      list = brewLogs.filter((l) => l.recipe?.id === recipeId.value && l.actualYieldGrams !== null).slice(0, 10);
+    } catch {
+      list = []; // the estimate falls back to roast level
+    }
+  }
+  if (request === measuredRequest) measured.value = list;
+}
+watch([beanId, recipeId], () => void loadMeasured());
+
+const retention = computed(() => brewRetention({ roastLevel: bean.value?.roastLevel ?? null, recipe: recipe.value, measured: measured.value }));
+const batch = computed(() => {
+  if (!recipe.value) return null;
+  const ratio = ratioText.value === null ? undefined : amount(ratioText.value);
+  return scaleBatch(recipe.value, { field: lead.value.field, value: amount(lead.value.text) }, retention.value.retention, ratio);
+});
+watch(batch, (b) => {
+  if (!b) return;
+  draft.dose = formatGrams(b.dose);
+  draft.water = formatGrams(b.water);
+});
+function batchText(field: ScaleField): string {
+  if (lead.value.field === field) return lead.value.text;
+  return batch.value ? formatGrams(batch.value[field]) : '';
+}
+const ratioShown = computed(() => {
+  if (ratioText.value !== null) return ratioText.value;
+  const r = recipe.value;
+  return r ? String(Math.round((r.targetWaterGrams / r.targetDoseGrams) * 10) / 10) : '';
+});
+const scaled = computed(() => {
+  const b = batch.value;
+  const r = recipe.value;
+  return !!b && !!r && (Math.abs(b.factor - 1) > 1e-9 || Math.abs(b.dose - r.targetDoseGrams) > 1e-9);
+});
+const retentionNote = computed(() => {
+  const s = retention.value.source;
+  if (s.kind === 'measured') return `from ${s.count === 1 ? 'your measured brew' : `${s.count} of your measured brews`} of this bean with this recipe`;
+  const roast = bean.value?.roastLevel
+    ? `a ${ROAST_LEVELS[s.roastLevel].label.toLowerCase()} roast`
+    : "a light roast (set the bean's roast level for a closer estimate)";
+  return s.kind === 'recipe' ? `from the recipe's expected yield, adjusted for ${roast}` : `for ${roast}`;
+});
+// A deeper or shallower bed (more or less coffee) drains at a different speed.
+const grindNote = computed(() => {
+  const f = batch.value && recipe.value ? batch.value.dose / recipe.value.targetDoseGrams : 1;
+  if (f >= 1.25) return 'Bigger batch than the recipe: a slightly coarser grind helps keep the brew time on target.';
+  if (f <= 0.8) return 'Smaller batch than the recipe: a slightly finer grind helps keep the brew time on target.';
+  return null;
 });
 
 // Grinders: pick from active ones, add inline, remember the last one per workspace.
@@ -175,8 +258,8 @@ function applySuggestion(p: StartingParameters): void {
   void refreshGrind(); // the suggestion may now supply the grind
 }
 
-const timerSteps = computed(() => recipe.value?.steps ?? []);
-const timerDose = computed(() => parsed.value.values?.actualDoseGrams ?? recipe.value?.targetDoseGrams ?? 0);
+const timerSteps = computed(() => scaleSteps(recipe.value?.steps ?? [], batch.value?.factor ?? 1));
+const timerDose = computed(() => batch.value?.dose ?? recipe.value?.targetDoseGrams ?? 0);
 
 // An unfinished "add a new grinder" counts as no grinder once setup is done.
 function leaveSetup(next: Stage): void {
@@ -297,6 +380,43 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <template v-if="recipe.targetTempC !== null"> · {{ recipe.targetTempC }} °C</template>
           <template v-if="recipe.steps.length"> · {{ recipe.steps.length }} steps</template>
         </p>
+        <div v-if="recipe" class="batch" role="group" aria-labelledby="batch-label">
+          <span id="batch-label" class="batch-label">Batch size</span>
+          <div class="batch-row">
+            <div class="field">
+              <label for="batch-dose">Dose (g)</label>
+              <input id="batch-dose" inputmode="decimal" :value="batchText('dose')" @input="setLead('dose', $event)" />
+            </div>
+            <div class="field">
+              <label for="batch-water">Water (g)</label>
+              <input id="batch-water" inputmode="decimal" :value="batchText('water')" @input="setLead('water', $event)" />
+            </div>
+            <div class="field">
+              <label for="batch-ratio">Ratio</label>
+              <div class="ratio-input">
+                <span aria-hidden="true">1 :</span>
+                <input id="batch-ratio" inputmode="decimal" :value="ratioShown" aria-label="Water per gram of coffee" @input="setRatio" />
+              </div>
+            </div>
+          </div>
+          <div class="batch-row two">
+            <div class="field">
+              <label for="batch-yield">Yield ≈ (g)</label>
+              <input id="batch-yield" inputmode="decimal" :value="batchText('yield')" @input="setLead('yield', $event)" />
+            </div>
+            <div class="field">
+              <label for="batch-yield-oz">Yield ≈ (fl oz)</label>
+              <input id="batch-yield-oz" inputmode="decimal" :value="batchText('yieldOz')" @input="setLead('yieldOz', $event)" />
+            </div>
+          </div>
+          <p v-if="!batch" class="field-error">Enter positive amounts (the ratio must leave some coffee in the cup).</p>
+          <p v-else class="muted small">
+            Yield estimated {{ retentionNote }}.
+            <template v-if="scaled">Pours scale ×{{ Math.round(batch.factor * 100) / 100 }} with the water; step times stay the same.</template>
+          </p>
+          <button v-if="scaled" class="btn-link small batch-reset" type="button" @click="resetBatch">Reset to recipe</button>
+          <p v-if="grindNote" class="note small">{{ grindNote }}</p>
+        </div>
       </section>
 
       <section v-if="bean" class="card stack">
@@ -345,10 +465,10 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       </section>
 
       <div class="stack">
-        <button class="btn btn-primary btn-block" type="button" :disabled="!bean" @click="leaveSetup('timing')">
+        <button class="btn btn-primary btn-block" type="button" :disabled="!bean || (!!recipe && !batch)" @click="leaveSetup('timing')">
           {{ timerSteps.length ? 'Start timer' : 'Start stopwatch' }}
         </button>
-        <button class="btn btn-secondary btn-block" type="button" :disabled="!bean" @click="logWithoutTimer">
+        <button class="btn btn-secondary btn-block" type="button" :disabled="!bean || (!!recipe && !batch)" @click="logWithoutTimer">
           Log a brew without the timer
         </button>
       </div>
@@ -373,7 +493,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       <h1>How was it?</h1>
       <p class="muted">{{ beanLabel }}<template v-if="recipe"> · {{ recipe.name }}</template></p>
       <section class="card">
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="recipe?.expectedYieldGrams ?? null" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="batch?.yield ?? recipe?.expectedYieldGrams ?? null" />
       </section>
       <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
       <button class="btn btn-primary btn-block" type="submit" :disabled="saving">{{ saving ? 'Saving…' : 'Save brew' }}</button>
@@ -434,6 +554,42 @@ p {
 }
 .small {
   font-size: 0.85rem;
+}
+.batch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.batch p {
+  margin: 0;
+}
+.batch-reset {
+  align-self: flex-start;
+  margin: calc(-1 * var(--space-2)) 0 0 calc(-1 * var(--space-2));
+}
+.batch-label {
+  font-weight: 600;
+}
+.batch-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+.batch-row.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.batch-row input {
+  width: 100%;
+  min-width: 0;
+}
+.ratio-input {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.ratio-input span {
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 .cancel {
   align-self: flex-start;

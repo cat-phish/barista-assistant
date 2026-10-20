@@ -8,6 +8,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { formatDay, localDateInput, toDateInput } from '../lib/format';
 import { effectiveRoastAge } from '../lib/roastAge';
 import { useWorkspaceStore } from '../stores/workspace';
+import { ROAST_LEVELS } from '../lib/scale';
 
 const workspaces = useWorkspaceStore();
 const beans = ref<Bean[]>([]);
@@ -171,7 +172,7 @@ async function confirmFreeze(): Promise<void> {
         <div class="head">
           <div>
             <h2>{{ bean.beanName }}</h2>
-            <p class="muted">{{ bean.roasterName }}<template v-if="bean.process"> · {{ bean.process }}</template></p>
+            <p class="muted">{{ bean.roasterName }}<template v-if="bean.process"> · {{ bean.process }}</template><template v-if="bean.roastLevel"> · {{ ROAST_LEVELS[bean.roastLevel].label }} roast</template></p>
           </div>
           <div class="badges">
             <span v-if="openFreeze(bean)" class="badge frozen">Frozen</span>

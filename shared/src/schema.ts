@@ -49,6 +49,8 @@ export const workspaceMembers = mysqlTable(
 );
 
 // 4. Beans & Inventory
+export const ROAST_LEVELS = ["light", "medium_light", "medium", "medium_dark", "dark"] as const;
+
 export const beans = mysqlTable("beans", {
   id: varchar("id", { length: 36 }).primaryKey(),
   workspaceId: varchar("workspace_id", { length: 36 })
@@ -57,6 +59,9 @@ export const beans = mysqlTable("beans", {
   roasterName: varchar("roaster_name", { length: 255 }).notNull(),
   beanName: varchar("bean_name", { length: 255 }).notNull(),
   process: varchar("process", { length: 100 }), // Washed, Natural, Honey, etc.
+  // One of ROAST_LEVELS, or null if unknown. Used to estimate beverage yield
+  // when scaling a recipe (unknown is treated as light).
+  roastLevel: varchar("roast_level", { length: 20 }),
   roastDate: timestamp("roast_date"),
   inventoryWeightGrams: int("inventory_weight_grams").default(0).notNull(),
   showOnPublicMenu: boolean("show_on_public_menu").default(true).notNull(),
