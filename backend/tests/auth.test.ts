@@ -109,7 +109,7 @@ describe("delete account", () => {
     const log = await owner.agent.get(`/api/workspaces/${ws.id}/brew-logs/${logId}`);
     expect(log.status).toBe(200);
     expect(log.body.brewLog.userId).toBeNull();
-    expect(log.body.brewLog.brewer).toBeNull();
+    expect(log.body.brewLog.brewedBy).toBeNull();
     expect(log.body.brewLog.tastingNotes).toBe("by the leaver");
     const list = await owner.agent.get(`/api/workspaces/${ws.id}/brew-logs`);
     expect(list.body.total).toBe(1); // still listed (left join)

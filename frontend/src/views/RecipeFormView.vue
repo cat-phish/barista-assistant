@@ -2,15 +2,16 @@
 // Recipe editor (docs/api_spec.md §5): dose + water (live ratio), optional
 // expected yield / finish time / temperature, per-grinder grind starting
 // points, and typed steps that run back to back (each with a time and how it
-// moves on). Espresso methods instead take dose + target shot weight (ratio
+// moves on). Espresso brewers instead take dose + target shot weight (ratio
 // dose:yield), a shot-time and first-drop window, and a shot profile
 // (pre-infusion / soak / pressure / flow steps).
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ApiError, errorMessage } from '../api/client';
 import { grindersApi } from '../api/grinders';
-import { brewMethodsApi, recipesApi, type RecipeInput } from '../api/recipes';
-import type { BrewMethod, FlowUnit, Grinder, MethodKind } from '../api/types';
+import { brewersApi } from '../api/brewers';
+import { recipesApi, type RecipeInput } from '../api/recipes';
+import type { Brewer, FlowUnit, Grinder, MethodKind } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import { formatGrams, formatRatio, formatTime, parseDecimal, parseTime } from '../lib/format';
 import { VueDraggable } from 'vue-draggable-plus';
@@ -45,10 +46,12 @@ const workspaces = useWorkspaceStore();
 const router = useRouter();
 const editing = computed(() => props.id !== undefined);
 
-const methods = ref<BrewMethod[]>([]);
+const methods = ref<Brewer[]>([]);
+// Active brewers, plus the recipe's own even if it's since been retired.
+const brewerOptions = computed(() => methods.value.filter((m) => !m.retiredAt || m.id === brewerId.value));
 const grinders = ref<Grinder[]>([]);
 const name = ref('');
-const methodId = ref('');
+const brewerId = ref('');
 const dose = ref('');
 const water = ref('');
 const expectedYield = ref('');
@@ -64,7 +67,7 @@ const defaultGrinderId = ref(''); // '' = none: brewing uses the last grinder
 const grindRows = ref<Array<{ grinderId: string; setting: string }>>([]);
 const steps = ref<StepDraft[]>([]);
 
-// Inline "add a new brew method" (methods are a per-workspace list, §3).
+// Inline "add a brewer" (brewers are per-workspace equipment, §3).
 const newMethodName = ref('');
 const newMethodKind = ref<MethodKind>('pour_over');
 const addingMethod = ref(false);
@@ -76,8 +79,8 @@ const saving = ref(false);
 const error = ref('');
 const submitted = ref(false);
 
-// The chosen method's kind decides the fields (docs/api_spec.md §5).
-const kind = computed<MethodKind | null>(() => methods.value.find((m) => m.id === methodId.value)?.kind ?? null);
+// The chosen brewer's kind decides the fields (docs/api_spec.md §5).
+const kind = computed<MethodKind | null>(() => methods.value.find((m) => m.id === brewerId.value)?.kind ?? null);
 const espresso = computed(() => kind.value === 'espresso');
 
 const grams = { scale: 2, min: 0, max: 10000, exclusiveMin: true, exclusiveMax: true } as const;
@@ -119,7 +122,7 @@ const fieldErrors = computed(() => {
   const p = parsed.value;
   return {
     name: name.value.trim() ? '' : 'Required',
-    method: methodId.value && methodId.value !== NEW_METHOD ? '' : 'Choose a brew method',
+    brewer: brewerId.value && brewerId.value !== NEW_METHOD ? '' : 'Choose a brewer',
     dose: p.dose.ok ? '' : p.dose.error,
     water: p.water.ok ? '' : p.water.error,
     expectedYield: p.expectedYield && !p.expectedYield.ok ? p.expectedYield.error : '',
@@ -178,11 +181,11 @@ onMounted(async () => {
   if (!ws) return;
   try {
     const [methodList, grinderList, recipeList] = await Promise.all([
-      brewMethodsApi.list(ws),
+      brewersApi.list(ws),
       grindersApi.list(ws),
       editing.value ? recipesApi.list(ws) : Promise.resolve(null),
     ]);
-    methods.value = methodList.brewMethods;
+    methods.value = methodList.brewers;
     grinders.value = grinderList.grinders;
     if (!editing.value) return;
     const recipe = recipeList?.recipes.find((r) => r.id === props.id);
@@ -191,7 +194,7 @@ onMounted(async () => {
       return;
     }
     name.value = recipe.name;
-    methodId.value = recipe.method.id;
+    brewerId.value = recipe.brewer.id;
     dose.value = formatGrams(recipe.targetDoseGrams);
     water.value = recipe.targetWaterGrams === null ? '' : formatGrams(recipe.targetWaterGrams);
     expectedYield.value = recipe.expectedYieldGrams === null ? '' : formatGrams(recipe.expectedYieldGrams);
@@ -214,7 +217,7 @@ onMounted(async () => {
 });
 
 async function onMethodChange(): Promise<void> {
-  if (methodId.value !== NEW_METHOD) return;
+  if (brewerId.value !== NEW_METHOD) return;
   methodError.value = '';
   await nextTick();
   newMethodInput.value?.focus();
@@ -227,13 +230,13 @@ async function addMethod(): Promise<void> {
   addingMethod.value = true;
   methodError.value = '';
   try {
-    const { brewMethod } = await brewMethodsApi.create(ws, trimmed, newMethodKind.value);
-    methods.value = [...methods.value, brewMethod].sort((a, b) => a.name.localeCompare(b.name));
-    methodId.value = brewMethod.id;
+    const { brewer } = await brewersApi.create(ws, { name: trimmed, kind: newMethodKind.value });
+    methods.value = [...methods.value, brewer].sort((a, b) => a.name.localeCompare(b.name));
+    brewerId.value = brewer.id;
     newMethodName.value = '';
   } catch (err) {
     methodError.value =
-      err instanceof ApiError && err.status === 409 ? 'That method already exists. Pick it from the list.' : errorMessage(err);
+      err instanceof ApiError && err.status === 409 ? 'That brewer already exists. Pick it from the list.' : errorMessage(err);
   } finally {
     addingMethod.value = false;
   }
@@ -345,7 +348,7 @@ async function save(): Promise<void> {
   if (!valid.value || !ws || !p.dose.ok || !p.water.ok) return;
   const input: RecipeInput = {
     name: name.value.trim(),
-    methodId: methodId.value,
+    brewerId: brewerId.value,
     targetDoseGrams: p.dose.value,
     targetWaterGrams: p.water.value,
     expectedYieldGrams: p.expectedYield?.ok ? p.expectedYield.value : null,
@@ -390,17 +393,17 @@ async function save(): Promise<void> {
         </div>
 
         <div class="field">
-          <label for="method">Brew method</label>
-          <select id="method" v-model="methodId" :aria-invalid="submitted && !!fieldErrors.method" @change="onMethodChange">
+          <label for="method">Brewer</label>
+          <select id="method" v-model="brewerId" :aria-invalid="submitted && !!fieldErrors.brewer" @change="onMethodChange">
             <option value="" disabled>Choose…</option>
-            <option v-for="m in methods" :key="m.id" :value="m.id">{{ m.name }}</option>
-            <option :value="NEW_METHOD">+ Add a new method…</option>
+            <option v-for="m in brewerOptions" :key="m.id" :value="m.id">{{ m.name }}{{ m.retiredAt ? ' (retired)' : '' }}</option>
+            <option :value="NEW_METHOD">+ Add a brewer…</option>
           </select>
-          <span v-if="submitted && fieldErrors.method" class="field-error">{{ fieldErrors.method }}</span>
+          <span v-if="submitted && fieldErrors.brewer" class="field-error">{{ fieldErrors.brewer }}</span>
         </div>
-        <div v-if="methodId === NEW_METHOD" class="inline-add">
+        <div v-if="brewerId === NEW_METHOD" class="inline-add">
           <div class="field grow">
-            <label for="new-method">New method name</label>
+            <label for="new-method">New brewer name</label>
             <input id="new-method" ref="newMethodInput" v-model="newMethodName" maxlength="100" placeholder="e.g. Chemex" @keydown.enter.prevent="addMethod" />
           </div>
           <div class="field">

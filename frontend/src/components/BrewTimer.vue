@@ -8,7 +8,7 @@
 //  - Previous / Current / Up next cards with the same structure for every
 //    step, so the layout doesn't jump. No steps = plain stopwatch.
 import { computed, onUnmounted, ref } from 'vue';
-import type { FlowUnit, Machine, Mark, StepFields } from '../api/types';
+import type { FlowUnit, MachineCapabilities, Mark, StepFields } from '../api/types';
 import { formatTime } from '../lib/format';
 import { firstDropVerdict, formatMark, withMark } from '../lib/marks';
 import {
@@ -31,7 +31,7 @@ const props = defineProps<{
   expectedFinishMinSec: number | null;
   expectedFinishMaxSec: number | null;
   firstDropWindow: { min: number; max: number } | null;
-  machine: Pick<Machine, 'preinfusion' | 'flowControl' | 'pressureControl'> | null;
+  machine: MachineCapabilities | null; // the espresso brewer's controls
 }>();
 
 const emit = defineEmits<{

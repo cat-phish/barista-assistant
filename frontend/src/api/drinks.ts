@@ -5,14 +5,14 @@ import type { Drink, ServingUnit } from './types';
 export interface DrinkInput {
   name: string;
   description: string | null;
-  methodId: string;
+  brewerId: string;
   categoryId: string | null;
   parentDrinkId: string | null; // a variant of this drink
   showOnPublicMenu: boolean;
-  defaultRecipeId: string | null; // a recipe of methodId
+  defaultRecipeId: string | null; // a recipe of brewerId
   servingSize: number | null; // with servingUnit: both or neither
   servingUnit: ServingUnit | null;
-  components: Array<{ componentId: string; amountValue: number | null; amountUnit: string | null; note: string | null }>;
+  ingredients: Array<{ ingredientId: string; amountValue: number | null; amountUnit: string | null; note: string | null }>;
 }
 
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/drinks`;

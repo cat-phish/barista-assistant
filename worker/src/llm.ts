@@ -11,7 +11,7 @@ export const SYSTEM_PROMPT =
   "extraction log and historical brews for this coffee bean, including roast " +
   "level, roast age, dose, yield, total brew time, rating, and tasting notes. Suggest " +
   "concrete parameter adjustments for the next brew. If the brew was served as " +
-  "a drink with milk or other components, its tasting notes may describe the " +
+  "a drink with milk or other ingredients, its tasting notes may describe the " +
   "whole drink; judge the coffee's extraction. For espresso, judge flow " +
   "from the first drop time, shot time and ratio against the recipe's " +
   "windows, and consider the machine's capabilities (pre-infusion, flow and " +

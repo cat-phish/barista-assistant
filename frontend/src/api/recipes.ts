@@ -1,10 +1,10 @@
 import { api } from './client';
-import type { BrewMethod, FlowUnit, MethodKind, Recipe, StepFields } from './types';
+import type { FlowUnit, Recipe, StepFields } from './types';
 
 // Request body for create/update (docs/api_spec.md §5).
 export interface RecipeInput {
   name: string;
-  methodId: string;
+  brewerId: string;
   targetDoseGrams: number;
   targetWaterGrams: number | null; // null for espresso
   expectedYieldGrams: number | null; // required for espresso
@@ -29,18 +29,3 @@ export const recipesApi = {
   remove: (workspaceId: string, id: string) => api.delete(`${base(workspaceId)}/${id}`),
 };
 
-export const brewMethodsApi = {
-  list: (workspaceId: string) =>
-    api.get<{ brewMethods: BrewMethod[] }>(`/api/workspaces/${workspaceId}/brew-methods`),
-  create: (workspaceId: string, name: string, kind: MethodKind) =>
-    api.post<{ brewMethod: BrewMethod }>(`/api/workspaces/${workspaceId}/brew-methods`, { name, kind }),
-  // 409 when the kind would change while recipes use it, or the name is taken (§3).
-  update: (
-    workspaceId: string,
-    id: string,
-    input: Partial<Pick<BrewMethod, 'name' | 'kind' | 'description' | 'categoryId' | 'showOnPublicMenu'>>,
-  ) =>
-    api.patch<{ brewMethod: BrewMethod }>(`/api/workspaces/${workspaceId}/brew-methods/${id}`, input),
-  // 409 + recipeCount, drinkCount while recipes or drinks use it.
-  remove: (workspaceId: string, id: string) => api.delete(`/api/workspaces/${workspaceId}/brew-methods/${id}`),
-};

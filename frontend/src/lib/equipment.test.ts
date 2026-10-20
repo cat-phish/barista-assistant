@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Grinder, Machine } from '../api/types';
+import type { Grinder, MachineCapabilities } from '../api/types';
 import { grinderForm, grinderSummary, machineSummary, parseGrinderForm } from './equipment';
 
 const c40: Grinder = {
@@ -28,7 +28,7 @@ describe('summaries', () => {
   it('describe what is recorded', () => {
     expect(grinderSummary(c40)).toBe('Stepped · 0–40, 1 per step · Conical 39 mm · Hand grinder');
     expect(grinderSummary({ ...c40, adjustment: null, settingMin: null, settingMax: null, stepSize: null, burrType: null, burrSizeMm: null, power: null })).toBe('');
-    const m: Machine = { id: 'm', name: 'LM', notes: null, preinfusion: 'manual', flowControl: 'manual', pressureControl: 'none', retiredAt: null };
+    const m: MachineCapabilities = { preinfusion: 'manual', flowControl: 'manual', pressureControl: 'none' };
     expect(machineSummary(m)).toBe('Pre-infusion: manual · Flow: manual');
     expect(machineSummary({ ...m, preinfusion: 'none', flowControl: 'none' })).toBe('No pre-infusion, flow or pressure control');
   });

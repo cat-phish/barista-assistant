@@ -21,13 +21,15 @@ One **Equipment** section with three tabs:
   setting range and step size, burr type and size, hand/electric. The range
   and step let the AI talk in clicks. Grinders that have been used are
   retired rather than deleted, so history keeps their names.
-- **Machines:** espresso machines with what they can do: pre-infusion (none
-  / automatic / manual), flow control and pressure control (none / manual /
-  programmable). Picked on espresso brews only (the last one used, or the
-  only one, is preselected); retired like grinders.
-- **Methods:** brew methods (V60, Espresso, …) with a kind: pour over,
-  immersion or espresso. The kind decides the recipe fields. Rename, change
-  kind (not while recipes use it), delete (not while recipes use it), add.
+- **Brewers:** whatever makes the coffee (V60, Chemex, AeroPress, an
+  espresso machine), with a kind: pour over, immersion or espresso. The kind
+  decides the recipe fields (it can't change while recipes use the brewer).
+  Espresso brewers also record what they can do: pre-infusion (none /
+  automatic / manual), flow control and pressure control (none / manual /
+  programmable). A brewer has an optional category (where it's listed when
+  brewing) and can go on the menu as the plain brew, under a menu name
+  ("Espresso" for the machine). Retired like grinders once brews used it;
+  deleting is refused while recipes or drinks use it.
 
 ## Recipes
 - Dose, water (live coffee:water ratio), temperature, target finish window.
@@ -52,21 +54,21 @@ One **Equipment** section with three tabs:
   end **at first drop**. E.g. 9 bar until first drop → soak 10 s → flow 4 → 2
   g/s until done; or pre-infuse 3 bar 10 s → soak 10 s → 9 bar.
 
-## Drinks & components
-One **Recipes** section with three tabs: Recipes, Drinks, Components.
-- **Components:** reusable preps that finish a drink: milk, foam, syrup,
+## Drinks & ingredients
+One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
+- **Ingredients:** reusable preps that finish a drink: milk, foam, syrup,
   ice, water, other, each with free-text instructions (e.g. orange-infused
-  cold foam: steep peel in cream overnight). A component a drink uses can't
+  cold foam: steep peel in cream overnight). An ingredient a drink uses can't
   be deleted.
-- **Drinks:** what you serve. A drink is built on one **brew method** and
-  can be made with any recipe of that method (an optional default is
-  preselected), finished with components in order, each with an amount (a
+- **Drinks:** what you serve. A drink is built on one **brewer** and
+  can be made with any recipe of that brewer (an optional default is
+  preselected), finished with ingredients in order, each with an amount (a
   number and a unit: fl oz, ml, g, or any typed unit like "pump", which is
   then suggested next time) and a note ("Orange cold foam · 40 g · spooned on
   top"). An optional **default size** (fl oz or ml) is what the amounts are
   for. A plain "V60" isn't a
-  drink: it's the method itself, which can go on the menu (Equipment →
-  Methods: show on menu, description, category).
+  drink: it's the brewer itself, which can go on the menu (Equipment →
+  Brewers: show on menu, menu name, description, category).
 - **Variants:** like cocktail riffs, a drink can be a variant of another
   (Vanilla Latte of Latte, Iced Vanilla Latte of Vanilla Latte). **Make a
   variant** copies the drink into a new, independent one linked to it; later
@@ -74,20 +76,22 @@ One **Recipes** section with three tabs: Recipes, Drinks, Components.
   parent; deleting a drink moves its variants up a level.
 - **Categories:** a managed, ordered list ("Espresso milk drinks", "Specialty
   drinks") on the Drinks page: add, rename, reorder, delete (its drinks and
-  methods become uncategorised). They group drinks in the list, when brewing
-  and on the menu.
+  brewers become uncategorised). They're the first choice when brewing, and
+  group drinks in the list and on the menu.
 
 ## Brewing
-- **Method → Drink → Recipe:** pick a **brew method** (V60, Espresso…; the
-  last one is remembered), then **Just V60** or one of its drinks (grouped by
-  category, variants under their parent), then one of the method's recipes,
-  with the drink's default selected. A drink with a default size gets a
-  **Size** field: 12 fl oz on an 8 fl oz latte scales every component ×1.5
+- **Category → Brewer or drink → Recipe:** pick a **category** (Pour Over,
+  Espresso, Espresso Milk Drinks…, then Other for uncategorised ones), then
+  one of its **brewers** (V60, Chemex) or **drinks** (variants under their
+  parent; "On Delonghi" shows the drink's brewer), then one of that brewer's
+  recipes, with the drink's default selected. The last choices are
+  remembered. A drink with a default size gets a
+  **Size** field: 12 fl oz on an 8 fl oz latte scales every ingredient ×1.5
   (rounded to whole ml/g, 0.1 fl oz, or half pumps/spoons). On a filter
-  method the coffee batch scales too; an espresso shot stays as the recipe
+  brewer the coffee batch scales too; an espresso shot stays as the recipe
   says. The size made is saved on the log and shown in the journal, and the
-  AI sees the scaled amounts. **Other (no recipe)** logs a brew
-  without one. A drink's components show as **Finish with**, on setup and on
+  AI sees the scaled amounts. **Something else (no recipe)** logs a brew
+  without one. A drink's ingredients show as **Finish with**, on setup and on
   the log, and the brew is saved with the drink.
 - **Setup:** pick bean, recipe and grinder. The grind pre-fills from your
   last brew of that recipe on that grinder, else the AI suggestion, else the
@@ -99,7 +103,8 @@ One **Recipes** section with three tabs: Recipes, Drinks, Components.
   dose than the recipe suggests a coarser or finer grind. "Reset to recipe"
   undoes it all.
 - **Espresso shots:** the same setup shows dose, ratio and shot weight
-  instead; typing any one updates the others, plus the machine.
+  instead; typing any one updates the others. The brew records its recipe's
+  brewer, so the espresso machine comes with the recipe.
 - **Timer** (pour over and espresso): Previous / Current / Up next cards; the
   current one shows the instruction ("Pour to 150 g (+100)", "9 → 6 bar",
   "Pump off"), the temperature and how it ends, with **Next** or **Log it**
@@ -129,11 +134,10 @@ One **Recipes** section with three tabs: Recipes, Drinks, Components.
   drink it was for (so milk in the tasting notes isn't blamed on the coffee).
 
 ## Public menu
-- An optional public page per workspace listing beans, plus plain **brew
-  methods** and **drinks** marked as shown, in sections by category order
-  (name, description, method, the parent it's a variant of, components; no
-  recipe details). Plain drinks like "V60" became menu entries of their
-  method.
+- An optional public page per workspace listing beans, plus plain
+  **brewers** (under their menu name) and **drinks** marked as shown, in
+  sections by category order (name, description, brewer, the parent it's a
+  variant of, ingredients; no recipe details).
 
 ## App
 - Installable PWA, works on phones, offline-cached public menu.
@@ -141,6 +145,6 @@ One **Recipes** section with three tabs: Recipes, Drinks, Components.
 ## Ideas noted for later
 - **User settings:** the roast level recipes assume (light today) and units
   (g / fl oz shown together today).
-- **Components:** batch prep and stock tracking (e.g. how much cold foam is
+- **Ingredients:** batch prep and stock tracking (e.g. how much cold foam is
   left), and structured ingredients instead of free text.
 - **Public menu page:** a frontend for the menu (only the API exists).

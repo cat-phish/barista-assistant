@@ -1,9 +1,9 @@
-// Drinks and components (docs/api_spec.md §5b–§5d): labels, summaries, and
+// Drinks and ingredients (docs/api_spec.md §5b–§5d): labels, summaries, and
 // arranging drinks into category sections with variants under their parent.
-import type { ComponentType, Drink, DrinkCategory, DrinkComponent } from '../api/types';
+import type { IngredientType, Drink, DrinkCategory, DrinkIngredient } from '../api/types';
 import { formatAmount } from './servings';
 
-export const COMPONENT_TYPES: Record<ComponentType, string> = {
+export const INGREDIENT_TYPES: Record<IngredientType, string> = {
   milk: 'Milk',
   foam: 'Foam',
   syrup: 'Syrup',
@@ -14,7 +14,7 @@ export const COMPONENT_TYPES: Record<ComponentType, string> = {
 
 // "Orange cold foam · 40 g · spooned on top", with the amount scaled by
 // `factor` for a bigger or smaller drink (lib/servings.ts).
-export function componentLine(c: DrinkComponent, factor = 1): string {
+export function ingredientLine(c: DrinkIngredient, factor = 1): string {
   return [c.name, formatAmount(c.amountValue, c.amountUnit, factor), c.note].filter(Boolean).join(' · ');
 }
 

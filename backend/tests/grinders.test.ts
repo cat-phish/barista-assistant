@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMember, methodId, newBean, newUser, newWorkspace, type TestUser } from "./helpers.js";
+import { addMember, brewerId, newBean, newUser, newWorkspace, type TestUser } from "./helpers.js";
 
 async function setup() {
   const owner = await newUser();
@@ -97,9 +97,9 @@ describe("brew logs with grinders", () => {
     const bean = await newBean(owner, ws.id);
     const c40 = await grinder("C40");
     const ode = await grinder("Ode");
-    const v60 = await methodId(owner, ws.id, "V60");
+    const v60 = await brewerId(owner, ws.id, "V60");
     const mk = async (name: string) =>
-      (await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name, methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250 })).body.recipe.id as string;
+      (await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name, brewerId: v60, targetDoseGrams: 15, targetWaterGrams: 250 })).body.recipe.id as string;
     const house = await mk("House");
     const iced = await mk("Iced");
     const at = (d: string) => `2026-10-${d}T08:00:00Z`;
@@ -121,10 +121,10 @@ describe("recipe default grinder", () => {
   it("is optional, must be in the workspace, and clears when the grinder is deleted", async () => {
     const owner = await newUser("owner");
     const ws = await newWorkspace(owner);
-    const v60 = await methodId(owner, ws.id, "V60");
+    const v60 = await brewerId(owner, ws.id, "V60");
     const grinder = (await owner.agent.post(`/api/workspaces/${ws.id}/grinders`).send({ name: "C40" })).body.grinder.id as string;
     const base = `/api/workspaces/${ws.id}/recipes`;
-    const recipe = { name: "R", methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250 };
+    const recipe = { name: "R", brewerId: v60, targetDoseGrams: 15, targetWaterGrams: 250 };
 
     expect((await owner.agent.post(base).send(recipe)).body.recipe.defaultGrinderId).toBeNull();
     const created = await owner.agent.post(base).send({ ...recipe, defaultGrinderId: grinder });

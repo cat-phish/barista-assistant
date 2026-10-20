@@ -12,7 +12,7 @@ import AppHeader from '../components/AppHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import DrinkCategoriesPanel from '../components/DrinkCategoriesPanel.vue';
 import MenuTabs from '../components/MenuTabs.vue';
-import { componentLine, drinkSections } from '../lib/drinks';
+import { ingredientLine, drinkSections } from '../lib/drinks';
 import { defaultSize, formatSize } from '../lib/servings';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -72,8 +72,8 @@ async function confirmDelete(): Promise<void> {
     </div>
     <MenuTabs />
     <p class="muted intro">
-      A drink is built on a brew method, brewed with any of its recipes and finished with components. Plain brews like "V60" are the methods
-      themselves: put them on the menu under Equipment → Methods.
+      A drink is built on a brewer, brewed with any of its recipes and finished with ingredients. Plain brews like "V60" are the brewers
+      themselves: put them on the menu under Equipment → Brewers.
     </p>
 
     <p v-if="loading" class="muted" aria-live="polite">Loading drinks…</p>
@@ -90,7 +90,7 @@ async function confirmDelete(): Promise<void> {
         <li v-for="{ drink: d, depth } in s.drinks" :key="d.id" class="card drink" :class="{ variant: depth > 0 }" :style="{ '--depth': depth }">
           <div class="head">
             <h2>{{ d.name }}</h2>
-            <span class="badge">{{ d.method.name }}</span>
+            <span class="badge">{{ d.brewer.name }}</span>
             <span v-if="defaultSize(d)" class="badge">{{ formatSize(defaultSize(d)!) }}</span>
             <span v-if="!d.showOnPublicMenu" class="badge muted-badge">Hidden from menu</span>
           </div>
@@ -98,11 +98,11 @@ async function confirmDelete(): Promise<void> {
           <p v-if="d.description" class="muted">{{ d.description }}</p>
           <p class="facts">
             <span class="label">Recipe</span>
-            {{ recipeName(d.defaultRecipeId) ?? `Any ${d.method.name} recipe` }}
+            {{ recipeName(d.defaultRecipeId) ?? `Any ${d.brewer.name} recipe` }}
           </p>
           <p class="facts">
             <span class="label">Finish with</span>
-            {{ d.components.length ? d.components.map((c) => componentLine(c)).join(' · ') : 'Nothing: just the coffee' }}
+            {{ d.ingredients.length ? d.ingredients.map((c) => ingredientLine(c)).join(' · ') : 'Nothing: just the coffee' }}
           </p>
           <div v-if="workspaces.canEdit" class="actions">
             <RouterLink class="btn-link" :to="{ name: 'drink-new', query: { from: d.id } }">Make a variant</RouterLink>

@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { methodId, newBean, newBrewLog, newUser, newWorkspace } from "./helpers.js";
+import { brewerId, newBean, newBrewLog, newUser, newWorkspace } from "./helpers.js";
 
 async function setup() {
   const owner = await newUser();
   const ws = await newWorkspace(owner);
   const base = `/api/workspaces/${ws.id}/recipes`;
-  const v60 = await methodId(owner, ws.id, "V60");
-  const recipe = { name: "House V60", methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250 };
+  const v60 = await brewerId(owner, ws.id, "V60");
+  const recipe = { name: "House V60", brewerId: v60, targetDoseGrams: 15, targetWaterGrams: 250 };
   const grinder = async (name: string) =>
     (await owner.agent.post(`/api/workspaces/${ws.id}/grinders`).send({ name })).body.grinder.id as string;
   return { owner, ws, base, recipe, grinder };

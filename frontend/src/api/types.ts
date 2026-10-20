@@ -29,17 +29,23 @@ export interface ErrorBody {
 // docs/schema.md METHOD_KINDS: decides the recipe fields and timer (docs/api_spec.md §3).
 export type MethodKind = 'pour_over' | 'immersion' | 'espresso';
 
-export interface BrewMethod {
+// docs/api_spec.md §3: what makes the coffee (V60, AeroPress, an espresso
+// machine). Capabilities apply to espresso brewers only ("none" otherwise).
+export interface Brewer extends MachineCapabilities {
   id: string;
   name: string;
   kind: MethodKind;
-  // Menu fields: the plain brew ("V60") on the public menu (§3, §7).
+  notes: string | null;
+  // Menu fields: the plain brew ("V60") on the public menu (§3, §7), and the
+  // category that groups it there and when brewing.
+  menuName: string | null; // shown instead of name, e.g. "Espresso"
   description: string | null;
   categoryId: string | null;
   showOnPublicMenu: boolean;
+  retiredAt: string | null; // set = retired (hidden from pickers, kept in history)
 }
-// How recipes and drinks refer to their method.
-export type MethodRef = Pick<BrewMethod, 'id' | 'name' | 'kind'>;
+// How recipes, drinks and brew logs refer to their brewer.
+export type BrewerRef = Pick<Brewer, 'id' | 'name' | 'kind'>;
 
 // docs/api_spec.md §3b
 // docs/api_spec.md §3b: details are optional (null when unknown).
@@ -62,19 +68,13 @@ export interface Grinder extends GrinderDetails {
   retiredAt: string | null; // set = retired (hidden from pickers, kept in history)
 }
 
-// docs/api_spec.md §3c
+// docs/api_spec.md §3: espresso brewers' capabilities.
 export type Preinfusion = 'none' | 'automatic' | 'manual';
 export type ProfileControl = 'none' | 'manual' | 'programmable';
 export interface MachineCapabilities {
   preinfusion: Preinfusion;
   flowControl: ProfileControl;
   pressureControl: ProfileControl;
-}
-export interface Machine extends MachineCapabilities {
-  id: string;
-  name: string;
-  notes: string | null;
-  retiredAt: string | null;
 }
 
 // docs/schema.md ROAST_LEVELS
@@ -146,7 +146,7 @@ export interface Recipe {
   id: string;
   workspaceId: string;
   name: string;
-  method: MethodRef;
+  brewer: BrewerRef;
   targetDoseGrams: number;
   targetWaterGrams: number | null; // null for espresso
   expectedYieldGrams: number | null; // estimate; for espresso the target shot weight (always set)
@@ -180,7 +180,7 @@ export interface BrewLog {
   beanId: string;
   recipeId: string | null;
   grinderId: string | null;
-  machineId: string | null; // espresso only
+  brewerId: string | null; // the recipe's brewer at brew time (set by the API)
   drinkId: string | null; // the drink it was for
   servingSize: number | null; // the size made, when the drink was scaled
   servingUnit: ServingUnit | null;
@@ -196,10 +196,10 @@ export interface BrewLog {
   bean: { id: string; roasterName: string; beanName: string };
   recipe: { id: string; name: string; expectedYieldGrams: number | null; methodKind: MethodKind } | null;
   grinder: { id: string; name: string } | null;
-  machine: { id: string; name: string } | null;
+  brewer: BrewerRef | null; // retired ones included
   drink: { id: string; name: string } | null;
   marks: Mark[]; // earliest first; espresso only
-  brewer: { id: string; email: string } | null;
+  brewedBy: { id: string; email: string } | null;
 }
 
 // docs/api_spec.md §8
@@ -210,41 +210,41 @@ export interface Suggestions {
 }
 
 // docs/api_spec.md §5b: reusable preps that finish a drink.
-export type ComponentType = 'milk' | 'foam' | 'syrup' | 'ice' | 'water' | 'other';
-export interface Component {
+export type IngredientType = 'milk' | 'foam' | 'syrup' | 'ice' | 'water' | 'other';
+export interface Ingredient {
   id: string;
   name: string;
-  componentType: ComponentType;
+  ingredientType: IngredientType;
   instructions: string | null;
   drinkCount: number; // drinks that use it
 }
 
 // docs/api_spec.md §5c: a drink's default size, and the size a brew was made at.
 export type ServingUnit = 'fl_oz' | 'ml';
-export interface DrinkComponent {
-  componentId: string;
+export interface DrinkIngredient {
+  ingredientId: string;
   name: string;
-  componentType: ComponentType;
+  ingredientType: IngredientType;
   amountValue: number | null; // for the drink's default size
   amountUnit: string | null; // 'fl oz', 'ml', 'g' or free text ('pump')
   note: string | null;
 }
 
-// docs/api_spec.md §5d: ordered menu sections for drinks and methods.
+// docs/api_spec.md §5d: ordered sections for drinks and brewers (menu and brew setup).
 export interface DrinkCategory {
   id: string;
   name: string;
   position: number;
 }
 
-// docs/api_spec.md §5c: what's served. Built on one brew method; any recipe
+// docs/api_spec.md §5c: what's served. Built on one brewer; any recipe
 // of that method can make it. A variant is an independent copy that
 // remembers its parent (Vanilla Latte of Latte).
 export interface Drink {
   id: string;
   name: string;
   description: string | null;
-  method: MethodRef;
+  brewer: BrewerRef;
   category: { id: string; name: string } | null;
   parent: { id: string; name: string } | null;
   variants: Array<{ id: string; name: string }>; // direct variants, by name
@@ -252,5 +252,5 @@ export interface Drink {
   defaultRecipeId: string | null; // a recipe of the method, or null
   servingSize: number | null; // default size; both or neither
   servingUnit: ServingUnit | null;
-  components: DrinkComponent[];
+  ingredients: DrinkIngredient[];
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { methodId, newBean, newUser, newWorkspace, type TestUser } from "./helpers.js";
+import { brewerId, newBean, newUser, newWorkspace, type TestUser } from "./helpers.js";
 
-// Components (§5b), drinks (§5c), drink categories (§5d), drinks on brew logs
+// Ingredients (§5b), drinks (§5c), drink categories (§5d), drinks on brew logs
 // (§6) and the menu sections (§7).
 
 interface Setup {
@@ -19,53 +19,53 @@ async function setup(): Promise<Setup> {
   const owner = await newUser("owner");
   const ws = await newWorkspace(owner);
   const base = `/api/workspaces/${ws.id}`;
-  const [v60, espresso] = [await methodId(owner, ws.id, "V60"), await methodId(owner, ws.id, "Espresso")];
+  const [v60, espresso] = [await brewerId(owner, ws.id, "V60"), await brewerId(owner, ws.id, "Espresso")];
   const recipe = async (body: Record<string, unknown>) => (await owner.agent.post(`${base}/recipes`).send(body)).body.recipe.id as string;
-  const v60a = await recipe({ name: "V60 A", methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250 });
-  const v60b = await recipe({ name: "V60 B", methodId: v60, targetDoseGrams: 20, targetWaterGrams: 320 });
-  const shot = await recipe({ name: "Classic", methodId: espresso, targetDoseGrams: 18, expectedYieldGrams: 36 });
+  const v60a = await recipe({ name: "V60 A", brewerId: v60, targetDoseGrams: 15, targetWaterGrams: 250 });
+  const v60b = await recipe({ name: "V60 B", brewerId: v60, targetDoseGrams: 20, targetWaterGrams: 320 });
+  const shot = await recipe({ name: "Classic", brewerId: espresso, targetDoseGrams: 18, expectedYieldGrams: 36 });
   return { owner, ws, base, v60, espresso, v60a, v60b, shot };
 }
 
-describe("components", () => {
+describe("ingredients", () => {
   it("CRUD with types and instructions; names unique; used ones can't be deleted", async () => {
     const { owner, base, v60 } = await setup();
-    const created = await owner.agent.post(`${base}/components`).send({ name: "Orange cold foam", componentType: "foam", instructions: " Infuse cream with orange peel overnight. " });
+    const created = await owner.agent.post(`${base}/ingredients`).send({ name: "Orange cold foam", ingredientType: "foam", instructions: " Infuse cream with orange peel overnight. " });
     expect(created.status).toBe(201);
-    expect(created.body.component).toEqual({
+    expect(created.body.ingredient).toEqual({
       id: expect.any(String),
       name: "Orange cold foam",
-      componentType: "foam",
+      ingredientType: "foam",
       instructions: "Infuse cream with orange peel overnight.",
       drinkCount: 0,
     });
-    const id = created.body.component.id as string;
-    expect((await owner.agent.post(`${base}/components`).send({ name: "Ice" })).body.component.componentType).toBe("other");
-    expect((await owner.agent.post(`${base}/components`).send({ name: "orange cold foam" })).status).toBe(409);
-    expect((await owner.agent.post(`${base}/components`).send({ name: "X", componentType: "sprinkles" })).status).toBe(400);
-    expect((await owner.agent.patch(`${base}/components/${id}`).send({ instructions: null })).body.component.instructions).toBeNull();
+    const id = created.body.ingredient.id as string;
+    expect((await owner.agent.post(`${base}/ingredients`).send({ name: "Ice" })).body.ingredient.ingredientType).toBe("other");
+    expect((await owner.agent.post(`${base}/ingredients`).send({ name: "orange cold foam" })).status).toBe(409);
+    expect((await owner.agent.post(`${base}/ingredients`).send({ name: "X", ingredientType: "sprinkles" })).status).toBe(400);
+    expect((await owner.agent.patch(`${base}/ingredients/${id}`).send({ instructions: null })).body.ingredient.instructions).toBeNull();
 
-    await owner.agent.post(`${base}/drinks`).send({ name: "The Atlas", methodId: v60, components: [{ componentId: id }] });
-    expect((await owner.agent.get(`${base}/components`)).body.components.find((c: { id: string }) => c.id === id).drinkCount).toBe(1);
-    const refused = await owner.agent.delete(`${base}/components/${id}`);
+    await owner.agent.post(`${base}/drinks`).send({ name: "The Atlas", brewerId: v60, ingredients: [{ ingredientId: id }] });
+    expect((await owner.agent.get(`${base}/ingredients`)).body.ingredients.find((c: { id: string }) => c.id === id).drinkCount).toBe(1);
+    const refused = await owner.agent.delete(`${base}/ingredients/${id}`);
     expect(refused.status).toBe(409);
     expect(refused.body.drinkCount).toBe(1);
   });
 });
 
 describe("drinks", () => {
-  it("are built on a method with an optional default recipe and components in order", async () => {
+  it("are built on a brewer with an optional default recipe and ingredients in order", async () => {
     const { owner, base, v60, v60b } = await setup();
-    const foam = (await owner.agent.post(`${base}/components`).send({ name: "Orange cold foam", componentType: "foam" })).body.component.id;
-    const syrup = (await owner.agent.post(`${base}/components`).send({ name: "Vanilla", componentType: "syrup" })).body.component.id;
+    const foam = (await owner.agent.post(`${base}/ingredients`).send({ name: "Orange cold foam", ingredientType: "foam" })).body.ingredient.id;
+    const syrup = (await owner.agent.post(`${base}/ingredients`).send({ name: "Vanilla", ingredientType: "syrup" })).body.ingredient.id;
     const res = await owner.agent.post(`${base}/drinks`).send({
       name: "The Atlas",
       description: "V60 with orange cold foam",
-      methodId: v60,
+      brewerId: v60,
       defaultRecipeId: v60b,
-      components: [
-        { componentId: syrup, amountValue: 1, amountUnit: " pump " },
-        { componentId: foam, amountValue: 40, amountUnit: "g", note: "spooned on top" },
+      ingredients: [
+        { ingredientId: syrup, amountValue: 1, amountUnit: " pump " },
+        { ingredientId: foam, amountValue: 40, amountUnit: "g", note: "spooned on top" },
       ],
     });
     expect(res.status).toBe(201);
@@ -73,7 +73,7 @@ describe("drinks", () => {
       id: expect.any(String),
       name: "The Atlas",
       description: "V60 with orange cold foam",
-      method: { id: v60, name: "V60", kind: "pour_over" },
+      brewer: { id: v60, name: "V60", kind: "pour_over" },
       category: null,
       parent: null,
       variants: [],
@@ -81,78 +81,78 @@ describe("drinks", () => {
       defaultRecipeId: v60b,
       servingSize: null,
       servingUnit: null,
-      components: [
-        { componentId: syrup, name: "Vanilla", componentType: "syrup", amountValue: 1, amountUnit: "pump", note: null },
-        { componentId: foam, name: "Orange cold foam", componentType: "foam", amountValue: 40, amountUnit: "g", note: "spooned on top" },
+      ingredients: [
+        { ingredientId: syrup, name: "Vanilla", ingredientType: "syrup", amountValue: 1, amountUnit: "pump", note: null },
+        { ingredientId: foam, name: "Orange cold foam", ingredientType: "foam", amountValue: 40, amountUnit: "g", note: "spooned on top" },
       ],
     });
-    expect((await owner.agent.post(`${base}/drinks`).send({ name: "No default", methodId: v60 })).body.drink.defaultRecipeId).toBeNull();
+    expect((await owner.agent.post(`${base}/drinks`).send({ name: "No default", brewerId: v60 })).body.drink.defaultRecipeId).toBeNull();
   });
 
-  it("validates the method, the default recipe's method, the category, the parent and components", async () => {
+  it("validates the brewer, the default recipe's brewer, the category, the parent and ingredients", async () => {
     const { owner, base, v60, v60a, shot } = await setup();
     const other = await setup();
     const post = async (body: Record<string, unknown>) => (await owner.agent.post(`${base}/drinks`).send({ name: "D", ...body })).body.error as string;
-    expect(await post({})).toMatch(/methodId/);
-    expect(await post({ methodId: other.v60 })).toMatch(/not a brew method in this workspace/);
-    expect(await post({ methodId: v60, defaultRecipeId: shot })).toMatch(/recipe of the drink's method/); // espresso recipe for a V60 drink
-    expect(await post({ methodId: v60, defaultRecipeId: other.v60a })).toMatch(/recipe of the drink's method/);
+    expect(await post({})).toMatch(/brewerId/);
+    expect(await post({ brewerId: other.v60 })).toMatch(/not a brewer in this workspace/);
+    expect(await post({ brewerId: v60, defaultRecipeId: shot })).toMatch(/recipe of the drink's brewer/); // espresso recipe for a V60 drink
+    expect(await post({ brewerId: v60, defaultRecipeId: other.v60a })).toMatch(/recipe of the drink's brewer/);
     const foreignCategory = (await other.owner.agent.post(`${other.base}/drink-categories`).send({ name: "C" })).body.category.id;
-    expect(await post({ methodId: v60, categoryId: foreignCategory })).toMatch(/not a category in this workspace/);
-    const foreignDrink = (await other.owner.agent.post(`${other.base}/drinks`).send({ name: "X", methodId: other.v60 })).body.drink.id;
-    expect(await post({ methodId: v60, parentDrinkId: foreignDrink })).toMatch(/not a drink in this workspace/);
-    const foreign = (await other.owner.agent.post(`${other.base}/components`).send({ name: "Ice" })).body.component.id;
-    expect(await post({ methodId: v60, defaultRecipeId: v60a, components: [{ componentId: foreign }] })).toMatch(/not a component in this workspace/);
+    expect(await post({ brewerId: v60, categoryId: foreignCategory })).toMatch(/not a category in this workspace/);
+    const foreignDrink = (await other.owner.agent.post(`${other.base}/drinks`).send({ name: "X", brewerId: other.v60 })).body.drink.id;
+    expect(await post({ brewerId: v60, parentDrinkId: foreignDrink })).toMatch(/not a drink in this workspace/);
+    const foreign = (await other.owner.agent.post(`${other.base}/ingredients`).send({ name: "Ice" })).body.ingredient.id;
+    expect(await post({ brewerId: v60, defaultRecipeId: v60a, ingredients: [{ ingredientId: foreign }] })).toMatch(/not an ingredient in this workspace/);
   });
 
-  it("PATCH: changing the method clears a default of the old method", async () => {
+  it("PATCH: changing the brewer clears a default of the old brewer", async () => {
     const { owner, base, v60, espresso, v60a, v60b, shot } = await setup();
-    const id = (await owner.agent.post(`${base}/drinks`).send({ name: "D", methodId: v60, defaultRecipeId: v60a })).body.drink.id;
+    const id = (await owner.agent.post(`${base}/drinks`).send({ name: "D", brewerId: v60, defaultRecipeId: v60a })).body.drink.id;
     const url = `${base}/drinks/${id}`;
     expect((await owner.agent.patch(url).send({ defaultRecipeId: v60b })).body.drink.defaultRecipeId).toBe(v60b);
     expect((await owner.agent.patch(url).send({ defaultRecipeId: shot })).status).toBe(400);
-    const moved = (await owner.agent.patch(url).send({ methodId: espresso })).body.drink;
-    expect(moved).toMatchObject({ method: { id: espresso, kind: "espresso" }, defaultRecipeId: null });
-    expect((await owner.agent.patch(url).send({ methodId: v60, defaultRecipeId: v60a })).body.drink.defaultRecipeId).toBe(v60a);
+    const moved = (await owner.agent.patch(url).send({ brewerId: espresso })).body.drink;
+    expect(moved).toMatchObject({ brewer: { id: espresso, kind: "espresso" }, defaultRecipeId: null });
+    expect((await owner.agent.patch(url).send({ brewerId: v60, defaultRecipeId: v60a })).body.drink.defaultRecipeId).toBe(v60a);
     expect((await owner.agent.patch(url).send({ showOnPublicMenu: false, description: "" })).body.drink).toMatchObject({ showOnPublicMenu: false, description: null });
   });
 
   it("deleting a recipe clears it as a default", async () => {
     const { owner, base, v60, v60a } = await setup();
-    const id = (await owner.agent.post(`${base}/drinks`).send({ name: "D", methodId: v60, defaultRecipeId: v60a })).body.drink.id;
+    const id = (await owner.agent.post(`${base}/drinks`).send({ name: "D", brewerId: v60, defaultRecipeId: v60a })).body.drink.id;
     await owner.agent.delete(`${base}/recipes/${v60a}`);
     const drink = (await owner.agent.get(`${base}/drinks`)).body.drinks.find((d: { id: string }) => d.id === id);
     expect(drink.defaultRecipeId).toBeNull();
   });
 
-  it("a brew method used by drinks can't be deleted", async () => {
+  it("a brewer used by drinks can't be deleted", async () => {
     const { owner, base } = await setup();
-    const chemex = (await owner.agent.post(`${base}/brew-methods`).send({ name: "Chemex" })).body.brewMethod.id;
-    await owner.agent.post(`${base}/drinks`).send({ name: "Chemex tonic", methodId: chemex });
-    const refused = await owner.agent.delete(`${base}/brew-methods/${chemex}`);
+    const chemex = (await owner.agent.post(`${base}/brewers`).send({ name: "Chemex" })).body.brewer.id;
+    await owner.agent.post(`${base}/drinks`).send({ name: "Chemex tonic", brewerId: chemex });
+    const refused = await owner.agent.delete(`${base}/brewers/${chemex}`);
     expect(refused.status).toBe(409);
     expect(refused.body).toMatchObject({ recipeCount: 0, drinkCount: 1 });
   });
 });
 
 describe("drink sizes", () => {
-  it("a default size is a number and unit together; component amounts are a value and free unit", async () => {
+  it("a default size is a number and unit together; ingredient amounts are a value and free unit", async () => {
     const { owner, base, espresso } = await setup();
-    const syrup = (await owner.agent.post(`${base}/components`).send({ name: "Vanilla", componentType: "syrup" })).body.component.id;
-    const post = (body: Record<string, unknown>) => owner.agent.post(`${base}/drinks`).send({ name: "Latte", methodId: espresso, ...body });
-    const ok = await post({ servingSize: 8, servingUnit: "fl_oz", components: [{ componentId: syrup, amountValue: 2.5, amountUnit: "pump" }] });
+    const syrup = (await owner.agent.post(`${base}/ingredients`).send({ name: "Vanilla", ingredientType: "syrup" })).body.ingredient.id;
+    const post = (body: Record<string, unknown>) => owner.agent.post(`${base}/drinks`).send({ name: "Latte", brewerId: espresso, ...body });
+    const ok = await post({ servingSize: 8, servingUnit: "fl_oz", ingredients: [{ ingredientId: syrup, amountValue: 2.5, amountUnit: "pump" }] });
     expect(ok.status).toBe(201);
-    expect(ok.body.drink).toMatchObject({ servingSize: 8, servingUnit: "fl_oz", components: [{ amountValue: 2.5, amountUnit: "pump" }] });
+    expect(ok.body.drink).toMatchObject({ servingSize: 8, servingUnit: "fl_oz", ingredients: [{ amountValue: 2.5, amountUnit: "pump" }] });
 
     expect((await post({ servingSize: 8 })).body.error).toMatch(/go together/);
     expect((await post({ servingUnit: "ml" })).body.error).toMatch(/go together/);
     expect((await post({ servingSize: 8, servingUnit: "cups" })).status).toBe(400);
     expect((await post({ servingSize: 0, servingUnit: "ml" })).status).toBe(400);
     expect((await post({ servingSize: 8.25, servingUnit: "fl_oz" })).status).toBe(400); // one decimal
-    expect((await post({ components: [{ componentId: syrup, amountValue: -1 }] })).status).toBe(400);
-    expect((await post({ components: [{ componentId: syrup, amount: "2 pumps" }] })).status).toBe(400); // the old field
-    const toTaste = await post({ components: [{ componentId: syrup, amountUnit: "to taste" }] });
-    expect(toTaste.body.drink.components[0]).toMatchObject({ amountValue: null, amountUnit: "to taste" });
+    expect((await post({ ingredients: [{ ingredientId: syrup, amountValue: -1 }] })).status).toBe(400);
+    expect((await post({ ingredients: [{ ingredientId: syrup, amount: "2 pumps" }] })).status).toBe(400); // the old field
+    const toTaste = await post({ ingredients: [{ ingredientId: syrup, amountUnit: "to taste" }] });
+    expect(toTaste.body.drink.ingredients[0]).toMatchObject({ amountValue: null, amountUnit: "to taste" });
 
     const url = `${base}/drinks/${ok.body.drink.id}`;
     expect((await owner.agent.patch(url).send({ servingSize: null })).body.error).toMatch(/go together/);
@@ -163,7 +163,7 @@ describe("drink sizes", () => {
   it("a brew log records the size made, only with a drink", async () => {
     const { owner, ws, base, espresso, shot } = await setup();
     const bean = await newBean(owner, ws.id);
-    const latte = (await owner.agent.post(`${base}/drinks`).send({ name: "Latte", methodId: espresso, servingSize: 8, servingUnit: "fl_oz" })).body.drink.id;
+    const latte = (await owner.agent.post(`${base}/drinks`).send({ name: "Latte", brewerId: espresso, servingSize: 8, servingUnit: "fl_oz" })).body.drink.id;
     const log = { beanId: bean, recipeId: shot, actualDoseGrams: 18, actualYieldGrams: 36, actualTimeSec: 28 };
     const made = await owner.agent.post(`${base}/brew-logs`).send({ ...log, drinkId: latte, servingSize: 12, servingUnit: "fl_oz" });
     expect(made.status).toBe(201);
@@ -182,7 +182,7 @@ describe("drink variants", () => {
   it("link to a parent at any depth, list their variants, and can't form loops", async () => {
     const { owner, base, espresso, shot } = await setup();
     const post = async (name: string, parentDrinkId?: string) =>
-      (await owner.agent.post(`${base}/drinks`).send({ name, methodId: espresso, defaultRecipeId: shot, parentDrinkId })).body.drink;
+      (await owner.agent.post(`${base}/drinks`).send({ name, brewerId: espresso, defaultRecipeId: shot, parentDrinkId })).body.drink;
     const latte = await post("Latte");
     const vanilla = await post("Vanilla Latte", latte.id);
     const iced = await post("Iced Vanilla Latte", vanilla.id);
@@ -201,7 +201,7 @@ describe("drink variants", () => {
 
   it("deleting a drink moves its variants up to its parent", async () => {
     const { owner, base, espresso } = await setup();
-    const post = async (name: string, parentDrinkId?: string) => (await owner.agent.post(`${base}/drinks`).send({ name, methodId: espresso, parentDrinkId })).body.drink.id as string;
+    const post = async (name: string, parentDrinkId?: string) => (await owner.agent.post(`${base}/drinks`).send({ name, brewerId: espresso, parentDrinkId })).body.drink.id as string;
     const latte = await post("Latte");
     const vanilla = await post("Vanilla Latte", latte);
     const iced = await post("Iced Vanilla Latte", vanilla);
@@ -239,69 +239,69 @@ describe("drink categories", () => {
       ["Espresso milk drinks", 2],
     ]);
 
-    const drink = (await owner.agent.post(`${base}/drinks`).send({ name: "Latte", methodId: espresso, categoryId: milk.id })).body.drink;
+    const drink = (await owner.agent.post(`${base}/drinks`).send({ name: "Latte", brewerId: espresso, categoryId: milk.id })).body.drink;
     expect(drink.category).toEqual({ id: milk.id, name: "Espresso milk drinks" });
-    await owner.agent.patch(`${base}/brew-methods/${v60}`).send({ categoryId: milk.id });
+    await owner.agent.patch(`${base}/brewers/${v60}`).send({ categoryId: milk.id });
     expect((await owner.agent.delete(`${url}/${milk.id}`)).status).toBe(204);
     expect((await owner.agent.get(`${base}/drinks`)).body.drinks[0].category).toBeNull();
-    const methods = (await owner.agent.get(`${base}/brew-methods`)).body.brewMethods as Array<{ id: string; categoryId: string | null }>;
+    const methods = (await owner.agent.get(`${base}/brewers`)).body.brewers as Array<{ id: string; categoryId: string | null }>;
     expect(methods.find((m) => m.id === v60)?.categoryId).toBeNull();
     expect((await owner.agent.delete(`${url}/${milk.id}`)).status).toBe(404);
   });
 });
 
 describe("menu sections", () => {
-  it("group plain methods and drinks by category order, uncategorised last", async () => {
+  it("group plain brewers and drinks by category order, uncategorised last", async () => {
     const { owner, ws, base, v60, espresso } = await setup();
     const category = async (name: string) => (await owner.agent.post(`${base}/drink-categories`).send({ name })).body.category.id as string;
     const brewed = await category("Brewed coffee");
     const milk = await category("Espresso milk drinks");
     await category("Empty");
-    const ice = (await owner.agent.post(`${base}/components`).send({ name: "Ice", componentType: "ice" })).body.component.id;
+    const ice = (await owner.agent.post(`${base}/ingredients`).send({ name: "Ice", ingredientType: "ice" })).body.ingredient.id;
 
-    expect((await owner.agent.patch(`${base}/brew-methods/${v60}`).send({ showOnPublicMenu: true, categoryId: brewed, description: "Single origin" })).status).toBe(200);
+    expect((await owner.agent.patch(`${base}/brewers/${v60}`).send({ showOnPublicMenu: true, categoryId: brewed, description: "Single origin" })).status).toBe(200);
     const drink = (body: Record<string, unknown>) => owner.agent.post(`${base}/drinks`).send(body).then((r) => r.body.drink.id as string);
-    const latte = await drink({ name: "Latte", methodId: espresso, categoryId: milk });
-    await drink({ name: "Iced Latte", methodId: espresso, categoryId: milk, parentDrinkId: latte, components: [{ componentId: ice }] });
-    const secret = await drink({ name: "Secret", methodId: espresso, showOnPublicMenu: false });
-    await drink({ name: "Secret riff", methodId: espresso, parentDrinkId: secret });
-    await drink({ name: "Atlas", methodId: v60, categoryId: brewed });
+    const latte = await drink({ name: "Latte", brewerId: espresso, categoryId: milk });
+    await drink({ name: "Iced Latte", brewerId: espresso, categoryId: milk, parentDrinkId: latte, ingredients: [{ ingredientId: ice }] });
+    const secret = await drink({ name: "Secret", brewerId: espresso, showOnPublicMenu: false });
+    await drink({ name: "Secret riff", brewerId: espresso, parentDrinkId: secret });
+    await drink({ name: "Atlas", brewerId: v60, categoryId: brewed });
 
     await owner.agent.patch(base).send({ isPublicMenuEnabled: true });
     const menu = (await owner.agent.get(`/api/public/menu/${ws.slug}`)).body;
     expect(menu.drinks).toBeUndefined();
-    const item = (kind: string, name: string, method: string, extra: Record<string, unknown> = {}) => ({
+    const item = (kind: string, name: string, brewer: string, extra: Record<string, unknown> = {}) => ({
       kind,
       id: expect.any(String),
       name,
       description: null,
-      method,
+      brewer,
       variantOf: null,
-      components: [],
+      ingredients: [],
       ...extra,
     });
     expect(menu.sections).toEqual([
-      { category: "Brewed coffee", items: [item("method", "V60", "V60", { description: "Single origin" }), item("drink", "Atlas", "V60")] },
-      { category: "Espresso milk drinks", items: [item("drink", "Iced Latte", "Espresso", { variantOf: "Latte", components: ["Ice"] }), item("drink", "Latte", "Espresso")] },
+      { category: "Brewed coffee", items: [item("brewer", "V60", "V60", { description: "Single origin" }), item("drink", "Atlas", "V60")] },
+      { category: "Espresso milk drinks", items: [item("drink", "Iced Latte", "Espresso", { variantOf: "Latte", ingredients: ["Ice"] }), item("drink", "Latte", "Espresso")] },
       { category: null, items: [item("drink", "Secret riff", "Espresso")] }, // hidden parent isn't named
     ]);
   });
 });
 
 describe("drinks on brew logs", () => {
-  it("a brew for a drink uses a recipe of its method; deleting the drink keeps the log", async () => {
+  it("a brew for a drink uses a recipe of its brewer; deleting the drink keeps the log", async () => {
     const { owner, ws, base, v60, v60a, v60b, shot } = await setup();
     const bean = await newBean(owner, ws.id);
-    const drink = (await owner.agent.post(`${base}/drinks`).send({ name: "The Atlas", methodId: v60, defaultRecipeId: v60a })).body.drink.id as string;
+    const drink = (await owner.agent.post(`${base}/drinks`).send({ name: "The Atlas", brewerId: v60, defaultRecipeId: v60a })).body.drink.id as string;
     const log = { beanId: bean, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150 };
 
     const ok = await owner.agent.post(`${base}/brew-logs`).send({ ...log, recipeId: v60a, drinkId: drink });
     expect(ok.status).toBe(201);
     expect(ok.body.brewLog).toMatchObject({ drinkId: drink, drink: { id: drink, name: "The Atlas" } });
-    // Any recipe of the method works, not just the default.
+    // Any recipe of the brewer works, not just the default.
     expect((await owner.agent.post(`${base}/brew-logs`).send({ ...log, recipeId: v60b, drinkId: drink })).status).toBe(201);
     const shotLog = { beanId: bean, actualDoseGrams: 18, actualYieldGrams: 36, actualTimeSec: 28 };
-    expect((await owner.agent.post(`${base}/brew-logs`).send({ ...shotLog, recipeId: shot, drinkId: drink })).body.error).toMatch(/drink's brew method/);
+    expect((await owner.agent.post(`${base}/brew-logs`).send({ ...shotLog, recipeId: shot, drinkId: drink })).body.error).toMatch(/drink's brewer/);
     expect((await owner.agent.patch(`${base}/brew-logs/${ok.body.brewLog.id}`).send({ recipeId: shot, actualWaterGrams: null, actualYieldGrams: 36 })).status).toBe(400);
     expect((await owner.agent.post(`${base}/brew-logs`).send(log)).body.brewLog.drink).toBeNull();
 

@@ -8,7 +8,7 @@ import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { drinkCategories, type DrinkCategory } from "@barista/shared/schema";
 
-// docs/api_spec.md §5d: ordered menu sections for drinks and methods.
+// docs/api_spec.md §5d: ordered menu sections for drinks and brewers.
 export type CategorySummary = Pick<DrinkCategory, "id" | "name" | "position">;
 
 interface WorkspaceParams {
@@ -123,7 +123,7 @@ drinkCategoriesRouter.patch("/:categoryId", async (req: Request<CategoryParams>,
   res.json({ category });
 });
 
-// Its drinks and methods become uncategorised (FK set null).
+// Its drinks and brewers become uncategorised (FK set null).
 drinkCategoriesRouter.delete("/:categoryId", async (req: Request<CategoryParams>, res: Response) => {
   if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId, WRITE_ROLES))) return;
   const [result] = await db.delete(drinkCategories).where(inWorkspace(req.params));

@@ -82,14 +82,14 @@ async function confirmDelete(): Promise<void> {
         <div class="head">
           <div>
             <h2>{{ recipe.name }}</h2>
-            <span class="badge">{{ recipe.method.name }}</span>
+            <span class="badge">{{ recipe.brewer.name }}</span>
           </div>
         </div>
         <p class="facts">
           <span>{{ formatDoseLine(recipe.targetDoseGrams, recipe.targetWaterGrams, recipe.expectedYieldGrams) }}</span>
           <span v-if="recipe.expectedYieldGrams !== null && recipe.targetWaterGrams !== null">≈{{ formatGrams(recipe.expectedYieldGrams) }} g yield</span>
           <span v-if="formatFinishWindow(recipe.firstDropMinSec, recipe.firstDropMaxSec)">first drop {{ formatFinishWindow(recipe.firstDropMinSec, recipe.firstDropMaxSec) }}</span>
-          <span v-if="formatFinishWindow(recipe.expectedFinishMinSec, recipe.expectedFinishMaxSec)">{{ recipe.method.kind === 'espresso' ? 'shot' : 'finish' }} {{ formatFinishWindow(recipe.expectedFinishMinSec, recipe.expectedFinishMaxSec) }}</span>
+          <span v-if="formatFinishWindow(recipe.expectedFinishMinSec, recipe.expectedFinishMaxSec)">{{ recipe.brewer.kind === 'espresso' ? 'shot' : 'finish' }} {{ formatFinishWindow(recipe.expectedFinishMinSec, recipe.expectedFinishMaxSec) }}</span>
           <span v-if="recipe.targetTempC !== null">{{ recipe.targetTempC }} °C</span>
         </p>
         <p v-if="recipe.grindSettings.length" class="grind muted">

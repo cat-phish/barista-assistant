@@ -1,11 +1,10 @@
 <script setup lang="ts">
-// Tabs across the Equipment screens (grinders, machines, brew methods).
+// Tabs across the Equipment screens (brewers, grinders).
 import SectionTabs from './SectionTabs.vue';
 
 const tabs = [
+  { to: { name: 'brewers' }, text: 'Brewers' },
   { to: { name: 'grinders' }, text: 'Grinders' },
-  { to: { name: 'machines' }, text: 'Machines' },
-  { to: { name: 'brew-methods' }, text: 'Methods' },
 ];
 </script>
 

@@ -38,9 +38,9 @@ export async function addMember(owner: TestUser, workspaceId: string, user: Test
   expect(res.status).toBe(201);
 }
 
-export async function methodId(user: TestUser, workspaceId: string, name: string): Promise<string> {
-  const res = await user.agent.get(`/api/workspaces/${workspaceId}/brew-methods`);
-  const method = (res.body.brewMethods as Array<{ id: string; name: string }>).find((m) => m.name === name);
+export async function brewerId(user: TestUser, workspaceId: string, name: string): Promise<string> {
+  const res = await user.agent.get(`/api/workspaces/${workspaceId}/brewers`);
+  const method = (res.body.brewers as Array<{ id: string; name: string }>).find((m) => m.name === name);
   if (!method) throw new Error(`No brew method ${name}`);
   return method.id;
 }

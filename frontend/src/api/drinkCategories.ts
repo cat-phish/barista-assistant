@@ -11,6 +11,6 @@ export const drinkCategoriesApi = {
   rename: (workspaceId: string, id: string, name: string) => api.patch<{ category: DrinkCategory }>(`${base(workspaceId)}/${id}`, { name }),
   // Every category of the workspace, in the new order.
   reorder: (workspaceId: string, categoryIds: string[]) => api.put<{ categories: DrinkCategory[] }>(`${base(workspaceId)}/order`, { categoryIds }),
-  // Its drinks and methods become uncategorised.
+  // Its drinks and brewers become uncategorised.
   remove: (workspaceId: string, id: string) => api.delete(`${base(workspaceId)}/${id}`),
 };

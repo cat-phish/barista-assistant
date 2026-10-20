@@ -1,4 +1,4 @@
-// Drink sizes (docs/api_spec.md §5c): a drink's component amounts are for its
+// Drink sizes (docs/api_spec.md §5c): a drink's ingredient amounts are for its
 // default size; brewing a different size scales them (and a filter method's
 // batch) by the ratio of the two sizes.
 import type { Drink, ServingUnit } from '../api/types';
@@ -6,7 +6,7 @@ import { formatGrams } from './format';
 import { GRAMS_PER_FL_OZ } from './scale';
 
 export const SERVING_UNITS: Record<ServingUnit, string> = { fl_oz: 'fl oz', ml: 'ml' };
-// Offered first for component amounts; anything else is typed and remembered.
+// Offered first for ingredient amounts; anything else is typed and remembered.
 export const BUILT_IN_UNITS = ['fl oz', 'ml', 'g'] as const;
 
 export interface Size {
@@ -62,7 +62,7 @@ export function knownUnits(drinks: Drink[]): string[] {
   const seen = new Set<string>(BUILT_IN_UNITS.map((u) => u.toLowerCase()));
   const extra: string[] = [];
   for (const d of drinks) {
-    for (const c of d.components) {
+    for (const c of d.ingredients) {
       const u = c.amountUnit?.trim();
       if (u && !seen.has(u.toLowerCase())) {
         seen.add(u.toLowerCase());

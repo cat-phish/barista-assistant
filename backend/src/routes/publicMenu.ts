@@ -1,13 +1,13 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { db } from "../db.js";
 import { sendError } from "../http.js";
 import {
   beans,
-  brewMethods,
-  components,
+  brewers,
+  ingredients,
   drinkCategories,
-  drinkComponents,
+  drinkIngredients,
   drinks,
   workspaces,
   type Bean,
@@ -20,18 +20,18 @@ export interface PublicMenuResponse {
   beans: Array<
     Pick<Bean, "id" | "roasterName" | "beanName" | "process" | "roastDate" | "inventoryWeightGrams">
   >;
-  // docs/api_spec.md §7: plain methods and drinks, in category sections.
+  // docs/api_spec.md §7: plain brews and drinks, in category sections.
   sections: MenuSection[];
 }
 
 export interface MenuItem {
-  kind: "method" | "drink";
+  kind: "brewer" | "drink";
   id: string;
   name: string;
   description: string | null;
-  method: string;
+  brewer: string; // the brewer's menu name, e.g. "Espresso" for an espresso machine
   variantOf: string | null;
-  components: string[];
+  ingredients: string[];
 }
 export interface MenuSection {
   category: string | null;
@@ -61,7 +61,9 @@ publicMenuRouter.get(
       return;
     }
 
-    const [menuBeans, categories, menuMethods, menuDrinks] = await Promise.all([
+    // A brewer shows under its menu name ("Espresso", not the machine's model).
+    const menuName = sql<string>`COALESCE(${brewers.menuName}, ${brewers.name})`;
+    const [menuBeans, categories, menuBrewers, menuDrinks] = await Promise.all([
       db
         .select({
           id: beans.id,
@@ -80,10 +82,10 @@ publicMenuRouter.get(
         .where(eq(drinkCategories.workspaceId, workspace.id))
         .orderBy(asc(drinkCategories.position), asc(drinkCategories.name)),
       db
-        .select({ id: brewMethods.id, name: brewMethods.name, description: brewMethods.description, categoryId: brewMethods.categoryId })
-        .from(brewMethods)
-        .where(and(eq(brewMethods.workspaceId, workspace.id), eq(brewMethods.showOnPublicMenu, true)))
-        .orderBy(asc(brewMethods.name)),
+        .select({ id: brewers.id, name: menuName, description: brewers.description, categoryId: brewers.categoryId })
+        .from(brewers)
+        .where(and(eq(brewers.workspaceId, workspace.id), eq(brewers.showOnPublicMenu, true), isNull(brewers.retiredAt)))
+        .orderBy(asc(menuName)),
       db
         .select({
           id: drinks.id,
@@ -91,33 +93,33 @@ publicMenuRouter.get(
           description: drinks.description,
           categoryId: drinks.categoryId,
           parentDrinkId: drinks.parentDrinkId,
-          method: brewMethods.name,
+          brewer: menuName,
         })
         .from(drinks)
-        .innerJoin(brewMethods, eq(drinks.methodId, brewMethods.id))
+        .innerJoin(brewers, eq(drinks.brewerId, brewers.id))
         .where(and(eq(drinks.workspaceId, workspace.id), eq(drinks.showOnPublicMenu, true)))
         .orderBy(asc(drinks.name)),
     ]);
 
     const ids = menuDrinks.map((d) => d.id);
-    const componentRows = ids.length
+    const ingredientRows = ids.length
       ? await db
-          .select({ drinkId: drinkComponents.drinkId, name: components.name })
-          .from(drinkComponents)
-          .innerJoin(components, eq(drinkComponents.componentId, components.id))
-          .where(inArray(drinkComponents.drinkId, ids))
-          .orderBy(asc(drinkComponents.position))
+          .select({ drinkId: drinkIngredients.drinkId, name: ingredients.name })
+          .from(drinkIngredients)
+          .innerJoin(ingredients, eq(drinkIngredients.ingredientId, ingredients.id))
+          .where(inArray(drinkIngredients.drinkId, ids))
+          .orderBy(asc(drinkIngredients.position))
       : [];
 
     // Only name a parent that's on the menu too, so hidden drinks stay hidden.
     const shownNames = new Map(menuDrinks.map((d) => [d.id, d.name]));
     const items: Array<MenuItem & { categoryId: string | null }> = [
-      ...menuMethods.map((m) => ({ ...m, kind: "method" as const, method: m.name, variantOf: null, components: [] })),
+      ...menuBrewers.map((b) => ({ ...b, kind: "brewer" as const, brewer: b.name, variantOf: null, ingredients: [] })),
       ...menuDrinks.map(({ parentDrinkId, ...d }) => ({
         ...d,
         kind: "drink" as const,
         variantOf: (parentDrinkId && shownNames.get(parentDrinkId)) ?? null,
-        components: componentRows.filter((c) => c.drinkId === d.id).map((c) => c.name),
+        ingredients: ingredientRows.filter((c) => c.drinkId === d.id).map((c) => c.name),
       })),
     ];
     const sections: MenuSection[] = [...categories, { id: null, name: null }]

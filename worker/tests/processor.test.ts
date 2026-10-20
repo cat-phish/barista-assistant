@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { beanFreezes, beans, brewLogMarks, brewLogs, brewMethods, components, drinkComponents, drinks, grinders, llmAnalyses, machines, recipeGrindSettings, recipes, recipeSteps, users, workspaces } from "@barista/shared/schema";
+import { beanFreezes, beans, brewLogMarks, brewLogs, brewers, ingredients, drinkIngredients, drinks, grinders, llmAnalyses, recipeGrindSettings, recipes, recipeSteps, users, workspaces } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BrewContext } from "../src/context.js";
@@ -26,13 +26,13 @@ beforeEach(async () => {
   workspaceId = randomUUID();
   userId = randomUUID();
   beanId = randomUUID();
-  const methodId = randomUUID();
+  const brewerId = randomUUID();
   const recipeId = randomUUID();
   await db.insert(users).values({ id: userId, email: "b@example.com", passwordHash: "x" });
   await db.insert(workspaces).values({ id: workspaceId, name: "W", slug: "w" });
-  await db.insert(brewMethods).values({ id: methodId, workspaceId, name: "V60" });
+  await db.insert(brewers).values({ id: brewerId, workspaceId, name: "V60" });
   await db.insert(beans).values({ id: beanId, workspaceId, roasterName: "Onyx", beanName: "Guji", roastLevel: "light", roastDate: new Date("2026-10-01T00:00:00Z") });
-  await db.insert(recipes).values({ id: recipeId, workspaceId, name: "House V60", methodId, targetDoseGrams: 15, targetWaterGrams: 250, expectedYieldGrams: 220, expectedFinishMinSec: 165, expectedFinishMaxSec: 195, targetTempC: 94 });
+  await db.insert(recipes).values({ id: recipeId, workspaceId, name: "House V60", brewerId, targetDoseGrams: 15, targetWaterGrams: 250, expectedYieldGrams: 220, expectedFinishMinSec: 165, expectedFinishMaxSec: 195, targetTempC: 94 });
   await db.insert(recipeSteps).values([
     { id: randomUUID(), recipeId, stepOrder: 1, stepType: "bloom", durationSec: 45, advance: "tap", targetWaterGrams: 50, targetTempC: 85 },
     { id: randomUUID(), recipeId, stepOrder: 2, stepType: "swirl", label: "Gentle swirl", durationSec: 0 },
@@ -59,7 +59,7 @@ describe("processBrewAnalysis", () => {
     expect(context.brew).toMatchObject({ tastingNotes: "day 8", roastAgeDays: 7, daysFrozenBeforeBrew: 0, brewRatio: 16.67, recipeName: "House V60", methodKind: "pour_over", actualWaterGrams: 250, actualYieldGrams: 221.5 });
     expect(context.previousBrews[0]).toMatchObject({ recipeName: null, methodKind: null });
     expect(context.recipe).toMatchObject({
-      name: "House V60", method: "V60", methodKind: "pour_over", firstDropMinSec: null, targetWaterGrams: 250, expectedYieldGrams: 220, expectedFinishMinSec: 165, expectedFinishMaxSec: 195, grindStartingPoints: [],
+      name: "House V60", brewer: "V60", methodKind: "pour_over", firstDropMinSec: null, targetWaterGrams: 250, expectedYieldGrams: 220, expectedFinishMinSec: 165, expectedFinishMaxSec: 195, grindStartingPoints: [],
       steps: [
         { stepType: "bloom", label: null, durationSec: 45, advance: "tap", targetWaterGrams: 50, targetTempC: 85, pressureBar: null },
         { stepType: "swirl", label: "Gentle swirl", durationSec: 0, advance: "auto", targetWaterGrams: null },
@@ -78,14 +78,12 @@ describe("processBrewAnalysis", () => {
 
   it("espresso brews: no water, ratio from the shot weight, first-drop window from the recipe", async () => {
     llm.mockResolvedValue(ANALYSIS);
-    const methodId = randomUUID();
+    const brewerId = randomUUID();
     const recipeId = randomUUID();
     const id = randomUUID();
-    await db.insert(brewMethods).values({ id: methodId, workspaceId, name: "Espresso", kind: "espresso" });
-    await db.insert(recipes).values({ id: recipeId, workspaceId, name: "Classic", methodId, targetDoseGrams: 18, expectedYieldGrams: 36, expectedFinishMinSec: 25, expectedFinishMaxSec: 32, firstDropMinSec: 6, firstDropMaxSec: 9 });
-    const machineId = randomUUID();
-    await db.insert(machines).values({ id: machineId, workspaceId, name: "Linea Mini", preinfusion: "manual", flowControl: "manual" });
-    await db.insert(brewLogs).values({ id, workspaceId, userId, beanId, recipeId, machineId, timestamp: new Date("2026-10-09T09:00:00Z"), actualDoseGrams: 18, actualYieldGrams: 40, actualTimeSec: 27 });
+    await db.insert(brewers).values({ id: brewerId, workspaceId, name: "Linea Mini", kind: "espresso", preinfusion: "manual", flowControl: "manual" });
+    await db.insert(recipes).values({ id: recipeId, workspaceId, name: "Classic", brewerId, targetDoseGrams: 18, expectedYieldGrams: 36, expectedFinishMinSec: 25, expectedFinishMaxSec: 32, firstDropMinSec: 6, firstDropMaxSec: 9 });
+    await db.insert(brewLogs).values({ id, workspaceId, userId, beanId, recipeId, brewerId, timestamp: new Date("2026-10-09T09:00:00Z"), actualDoseGrams: 18, actualYieldGrams: 40, actualTimeSec: 27 });
     await db.insert(brewLogMarks).values([
       { id: randomUUID(), brewLogId: id, kind: "first_drop", atSec: 7.4 },
       { id: randomUUID(), brewLogId: id, kind: "step_end", stepOrder: 1, atSec: 6 },
@@ -101,20 +99,20 @@ describe("processBrewAnalysis", () => {
     expect(context.recipe).toMatchObject({ methodKind: "espresso", targetWaterGrams: null, expectedYieldGrams: 36, firstDropMinSec: 6, firstDropMaxSec: 9, flowUnit: "g_s" });
   });
 
-  it("includes the drink a brew was for, with its components in order", async () => {
+  it("includes the drink a brew was for, with its ingredients in order", async () => {
     llm.mockResolvedValue(ANALYSIS);
     const drinkId = randomUUID();
     const milk = randomUUID();
     const syrup = randomUUID();
-    const [method] = await db.select({ id: brewMethods.id }).from(brewMethods).where(eq(brewMethods.workspaceId, workspaceId));
-    await db.insert(drinks).values({ id: drinkId, workspaceId, name: "Vanilla Oat Latte", methodId: method!.id });
-    await db.insert(components).values([
-      { id: milk, workspaceId, name: "Steamed oat milk", componentType: "milk" },
-      { id: syrup, workspaceId, name: "Vanilla", componentType: "syrup" },
+    const [brewer] = await db.select({ id: brewers.id }).from(brewers).where(eq(brewers.workspaceId, workspaceId));
+    await db.insert(drinks).values({ id: drinkId, workspaceId, name: "Vanilla Oat Latte", brewerId: brewer!.id });
+    await db.insert(ingredients).values([
+      { id: milk, workspaceId, name: "Steamed oat milk", ingredientType: "milk" },
+      { id: syrup, workspaceId, name: "Vanilla", ingredientType: "syrup" },
     ]);
-    await db.insert(drinkComponents).values([
-      { id: randomUUID(), drinkId, componentId: syrup, position: 1, amountValue: 1, amountUnit: "pump" },
-      { id: randomUUID(), drinkId, componentId: milk, position: 2, amountValue: 180, amountUnit: "g", note: "microfoam" },
+    await db.insert(drinkIngredients).values([
+      { id: randomUUID(), drinkId, ingredientId: syrup, position: 1, amountValue: 1, amountUnit: "pump" },
+      { id: randomUUID(), drinkId, ingredientId: milk, position: 2, amountValue: 180, amountUnit: "g", note: "microfoam" },
     ]);
     await db.update(brewLogs).set({ drinkId }).where(eq(brewLogs.id, logIds.day8!));
     await processBrewAnalysis({ brewLogId: logIds.day8! });
@@ -122,9 +120,9 @@ describe("processBrewAnalysis", () => {
     expect(context.drink).toEqual({
       name: "Vanilla Oat Latte",
       servingSize: null,
-      components: [
-        { name: "Vanilla", componentType: "syrup", amount: "1 pump", note: null },
-        { name: "Steamed oat milk", componentType: "milk", amount: "180 g", note: "microfoam" },
+      ingredients: [
+        { name: "Vanilla", ingredientType: "syrup", amount: "1 pump", note: null },
+        { name: "Steamed oat milk", ingredientType: "milk", amount: "180 g", note: "microfoam" },
       ],
     });
   });
@@ -133,17 +131,17 @@ describe("processBrewAnalysis", () => {
     llm.mockResolvedValue(ANALYSIS);
     const drinkId = randomUUID();
     const syrup = randomUUID();
-    const [method] = await db.select({ id: brewMethods.id }).from(brewMethods).where(eq(brewMethods.workspaceId, workspaceId));
-    await db.insert(drinks).values({ id: drinkId, workspaceId, name: "Vanilla Latte", methodId: method!.id, servingSize: 8, servingUnit: "fl_oz" });
-    await db.insert(components).values({ id: syrup, workspaceId, name: "Vanilla", componentType: "syrup" });
-    await db.insert(drinkComponents).values({ id: randomUUID(), drinkId, componentId: syrup, position: 1, amountValue: 2, amountUnit: "pump" });
+    const [brewer] = await db.select({ id: brewers.id }).from(brewers).where(eq(brewers.workspaceId, workspaceId));
+    await db.insert(drinks).values({ id: drinkId, workspaceId, name: "Vanilla Latte", brewerId: brewer!.id, servingSize: 8, servingUnit: "fl_oz" });
+    await db.insert(ingredients).values({ id: syrup, workspaceId, name: "Vanilla", ingredientType: "syrup" });
+    await db.insert(drinkIngredients).values({ id: randomUUID(), drinkId, ingredientId: syrup, position: 1, amountValue: 2, amountUnit: "pump" });
     await db.update(brewLogs).set({ drinkId, servingSize: 12, servingUnit: "fl_oz" }).where(eq(brewLogs.id, logIds.day8!));
     await processBrewAnalysis({ brewLogId: logIds.day8! });
     const context = llm.mock.calls[0]![0] as BrewContext;
     expect(context.drink).toEqual({
       name: "Vanilla Latte",
       servingSize: "12 fl oz",
-      components: [{ name: "Vanilla", componentType: "syrup", amount: "3 pump", note: null }],
+      ingredients: [{ name: "Vanilla", ingredientType: "syrup", amount: "3 pump", note: null }],
     });
   });
 

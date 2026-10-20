@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMember, methodId, newBean, newBrewLog, newUser, newWorkspace } from "./helpers.js";
+import { addMember, brewerId, newBean, newBrewLog, newUser, newWorkspace } from "./helpers.js";
 
 describe("workspaces", () => {
   it("creating one makes the caller owner and seeds the default brew methods", async () => {
@@ -7,8 +7,8 @@ describe("workspaces", () => {
     const ws = await newWorkspace(owner);
     const list = await owner.agent.get("/api/workspaces");
     expect(list.body.workspaces).toMatchObject([{ id: ws.id, role: "owner", isPublicMenuEnabled: false }]);
-    const methods = await owner.agent.get(`/api/workspaces/${ws.id}/brew-methods`);
-    expect(methods.body.brewMethods.map((m: { name: string }) => m.name)).toEqual(["Aeropress", "Espresso", "V60"]);
+    const methods = await owner.agent.get(`/api/workspaces/${ws.id}/brewers`);
+    expect(methods.body.brewers.map((m: { name: string }) => m.name)).toEqual(["Aeropress", "Espresso", "V60"]);
   });
 
   it("rejects duplicate and malformed slugs", async () => {
@@ -45,10 +45,10 @@ describe("deleting a workspace", () => {
     const owner = await newUser();
     const ws = await newWorkspace(owner, "doomed");
     const bean = await newBean(owner, ws.id);
-    const v60 = await methodId(owner, ws.id, "V60"); // resolve before starting the next request
+    const v60 = await brewerId(owner, ws.id, "V60"); // resolve before starting the next request
     const recipe = await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({
       name: "House V60",
-      methodId: v60,
+      brewerId: v60,
       targetDoseGrams: 15,
       targetWaterGrams: 250,
       steps: [{ stepType: "bloom", durationSec: 45, targetWaterGrams: 50 }],

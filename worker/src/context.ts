@@ -2,20 +2,19 @@ import {
   beanFreezes,
   beans,
   brewLogMarks,
-  components,
-  drinkComponents,
+  ingredients,
+  drinkIngredients,
   drinks,
   brewLogs,
-  brewMethods,
+  brewers,
   grinders,
-  machines,
   recipeGrindSettings,
   recipes,
   recipeSteps,
   type Bean,
   type BrewLog,
   type Grinder,
-  type Machine,
+  type Brewer,
   type FlowUnit,
   type MarkKind,
   type MethodKind,
@@ -23,6 +22,7 @@ import {
   type StepAdvance,
 } from "@barista/shared/schema";
 import { and, asc, desc, eq, inArray, lt, ne } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { db } from "./db.js";
 import { effectiveRoastAge, type FreezePeriodLike } from "./roastAge.js";
 
@@ -31,8 +31,8 @@ const PREVIOUS_BREW_COUNT = 5;
 // The grinder a grind setting refers to, with whatever details are recorded
 // (range and step size let the LLM talk in clicks). docs/api_spec.md §9.
 export type GrinderInfo = Pick<Grinder, "name" | "adjustment" | "settingMin" | "settingMax" | "stepSize" | "burrType" | "burrSizeMm" | "power">;
-// Espresso brews: what the machine lets the barista control.
-export type MachineInfo = Pick<Machine, "name" | "preinfusion" | "flowControl" | "pressureControl">;
+// Espresso brews: what the machine (the log's brewer) lets the barista control.
+export type MachineInfo = Pick<Brewer, "name" | "preinfusion" | "flowControl" | "pressureControl">;
 
 // What the LLM sees about one brew (docs/api_spec.md §9).
 export interface BrewSummary {
@@ -64,7 +64,7 @@ export interface BrewSummary {
 export interface DrinkInfo {
   name: string;
   servingSize: string | null;
-  components: Array<{ name: string; componentType: string; amount: string | null; note: string | null }>;
+  ingredients: Array<{ name: string; ingredientType: string; amount: string | null; note: string | null }>;
 }
 
 type Size = { size: number | null; unit: ServingUnit | null };
@@ -72,7 +72,7 @@ const ML_PER_FL_OZ = 29.5735;
 const toMl = (s: Size) => (s.size === null || s.unit === null ? null : s.unit === "fl_oz" ? s.size * ML_PER_FL_OZ : s.size);
 const sizeLabel = (s: Size) => (s.size === null || s.unit === null ? null : `${s.size} ${s.unit === "fl_oz" ? "fl oz" : "ml"}`);
 
-// Scale a component amount from the drink's default size to the size made.
+// Scale an ingredient amount from the drink's default size to the size made.
 export function scaledAmount(value: number | null, unit: string | null, factor: number): string | null {
   if (value === null) return unit;
   const n = Math.round(value * factor * 100) / 100;
@@ -84,7 +84,7 @@ export interface BrewContext {
   bean: { roasterName: string; beanName: string; process: string | null; roastLevel: string | null; roastDate: string | null };
   recipe: {
     name: string;
-    method: string;
+    brewer: string; // e.g. "V60", "Linea Mini"
     methodKind: MethodKind;
     targetDoseGrams: number;
     targetWaterGrams: number | null; // null for espresso
@@ -173,23 +173,23 @@ async function loadDrink(drinkId: string, made: Size): Promise<DrinkInfo | null>
   if (!drink) return null;
   const parts = await db
     .select({
-      name: components.name,
-      componentType: components.componentType,
-      amountValue: drinkComponents.amountValue,
-      amountUnit: drinkComponents.amountUnit,
-      note: drinkComponents.note,
+      name: ingredients.name,
+      ingredientType: ingredients.ingredientType,
+      amountValue: drinkIngredients.amountValue,
+      amountUnit: drinkIngredients.amountUnit,
+      note: drinkIngredients.note,
     })
-    .from(drinkComponents)
-    .innerJoin(components, eq(drinkComponents.componentId, components.id))
-    .where(eq(drinkComponents.drinkId, drinkId))
-    .orderBy(asc(drinkComponents.position));
+    .from(drinkIngredients)
+    .innerJoin(ingredients, eq(drinkIngredients.ingredientId, ingredients.id))
+    .where(eq(drinkIngredients.drinkId, drinkId))
+    .orderBy(asc(drinkIngredients.position));
   // Amounts are for the drink's default size; scale them to the size made.
   const [madeMl, defaultMl] = [toMl(made), toMl(drink)];
   const factor = madeMl && defaultMl ? madeMl / defaultMl : 1;
   return {
     name: drink.name,
     servingSize: sizeLabel(made) ?? sizeLabel(drink),
-    components: parts.map(({ amountValue, amountUnit, ...c }) => ({ ...c, amount: scaledAmount(amountValue, amountUnit, factor) })),
+    ingredients: parts.map(({ amountValue, amountUnit, ...c }) => ({ ...c, amount: scaledAmount(amountValue, amountUnit, factor) })),
   };
 }
 
@@ -208,12 +208,14 @@ function withJoins({ brew, ...joins }: { brew: BrewLog } & BrewJoins): BrewRow {
   return { ...brew, ...joins };
 }
 
+const machineBrewers = alias(brewers, "machine_brewer");
+
 function selectBrews() {
   return db
     .select({
       brew: brewLogs,
       recipeName: recipes.name,
-      methodKind: brewMethods.kind,
+      methodKind: brewers.kind,
       grinder: {
         name: grinders.name,
         adjustment: grinders.adjustment,
@@ -225,17 +227,18 @@ function selectBrews() {
         power: grinders.power,
       },
       machine: {
-        name: machines.name,
-        preinfusion: machines.preinfusion,
-        flowControl: machines.flowControl,
-        pressureControl: machines.pressureControl,
+        name: machineBrewers.name,
+        preinfusion: machineBrewers.preinfusion,
+        flowControl: machineBrewers.flowControl,
+        pressureControl: machineBrewers.pressureControl,
       },
     })
     .from(brewLogs)
     .leftJoin(recipes, eq(brewLogs.recipeId, recipes.id))
-    .leftJoin(brewMethods, eq(recipes.methodId, brewMethods.id))
+    .leftJoin(brewers, eq(recipes.brewerId, brewers.id))
     .leftJoin(grinders, eq(brewLogs.grinderId, grinders.id))
-    .leftJoin(machines, eq(brewLogs.machineId, machines.id));
+    // The brewer the log was made with, as a machine only when it's espresso.
+    .leftJoin(machineBrewers, and(eq(brewLogs.brewerId, machineBrewers.id), eq(machineBrewers.kind, "espresso")));
 }
 
 // Returns null if the brew log was deleted after the job was queued.
@@ -281,8 +284,8 @@ async function loadRecipe(recipeId: string): Promise<BrewContext["recipe"]> {
   const [row] = await db
     .select({
       name: recipes.name,
-      method: brewMethods.name,
-      methodKind: brewMethods.kind,
+      brewer: brewers.name,
+      methodKind: brewers.kind,
       targetDoseGrams: recipes.targetDoseGrams,
       targetWaterGrams: recipes.targetWaterGrams,
       expectedYieldGrams: recipes.expectedYieldGrams,
@@ -294,7 +297,7 @@ async function loadRecipe(recipeId: string): Promise<BrewContext["recipe"]> {
       targetTempC: recipes.targetTempC,
     })
     .from(recipes)
-    .innerJoin(brewMethods, eq(recipes.methodId, brewMethods.id))
+    .innerJoin(brewers, eq(recipes.brewerId, brewers.id))
     .where(eq(recipes.id, recipeId))
     .limit(1);
   if (!row) return null;

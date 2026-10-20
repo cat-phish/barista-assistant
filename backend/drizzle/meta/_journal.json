@@ -134,6 +134,27 @@
       "when": 1792516208091,
       "tag": "0018_drop_component_amount",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1792527274679,
+      "tag": "0019_ingredients",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "5",
+      "when": 1792527423902,
+      "tag": "0020_brewers",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "5",
+      "when": 1792527454546,
+      "tag": "0021_drop_methods_machines",
+      "breakpoints": true
     }
   ]
 }

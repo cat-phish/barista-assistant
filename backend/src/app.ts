@@ -9,10 +9,9 @@ import { analyzeRouter } from "./routes/analyze.js";
 import { authRouter } from "./routes/auth.js";
 import { beansRouter } from "./routes/beans.js";
 import { brewLogsRouter } from "./routes/brewLogs.js";
-import { brewMethodsRouter } from "./routes/brewMethods.js";
+import { brewersRouter } from "./routes/brewers.js";
 import { grindersRouter } from "./routes/grinders.js";
-import { machinesRouter } from "./routes/machines.js";
-import { componentsRouter } from "./routes/components.js";
+import { ingredientsRouter } from "./routes/ingredients.js";
 import { drinkCategoriesRouter } from "./routes/drinkCategories.js";
 import { drinksRouter } from "./routes/drinks.js";
 import { membersRouter } from "./routes/members.js";
@@ -45,10 +44,9 @@ app.get("/health", async (_req: Request, res: Response<HealthResponse>) => {
 
 app.use("/api/auth", authRouter);
 app.use("/api/public/menu", publicMenuRouter);
-app.use("/api/workspaces/:workspaceId/brew-methods", brewMethodsRouter);
+app.use("/api/workspaces/:workspaceId/brewers", brewersRouter);
 app.use("/api/workspaces/:workspaceId/grinders", grindersRouter);
-app.use("/api/workspaces/:workspaceId/machines", machinesRouter);
-app.use("/api/workspaces/:workspaceId/components", componentsRouter);
+app.use("/api/workspaces/:workspaceId/ingredients", ingredientsRouter);
 app.use("/api/workspaces/:workspaceId/drink-categories", drinkCategoriesRouter);
 app.use("/api/workspaces/:workspaceId/drinks", drinksRouter);
 app.use("/api/workspaces/:workspaceId/members", membersRouter);

@@ -3,36 +3,36 @@ import request from "supertest";
 import { brewAnalysisJobId } from "@barista/shared/jobs";
 import { app } from "../src/app.js";
 import { brewAnalysisQueue } from "../src/queue.js";
-import { addMember, methodId, newBean, newBrewLog, newUser, newWorkspace, type TestUser } from "./helpers.js";
+import { addMember, brewerId, newBean, newBrewLog, newUser, newWorkspace, type TestUser } from "./helpers.js";
 
 async function setup(): Promise<{ owner: TestUser; ws: { id: string; slug: string }; v60: string }> {
   const owner = await newUser("owner");
   const ws = await newWorkspace(owner);
-  return { owner, ws, v60: await methodId(owner, ws.id, "V60") };
+  return { owner, ws, v60: await brewerId(owner, ws.id, "V60") };
 }
 
-describe("brew methods", () => {
+describe("brewers", () => {
   it("rename: case-only allowed, duplicates refused, recipes follow the new name", async () => {
     const { owner, ws, v60 } = await setup();
-    const base = `/api/workspaces/${ws.id}/brew-methods`;
-    const recipe = await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name: "R", methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250 });
+    const base = `/api/workspaces/${ws.id}/brewers`;
+    const recipe = await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name: "R", brewerId: v60, targetDoseGrams: 15, targetWaterGrams: 250 });
 
     expect((await owner.agent.patch(`${base}/${v60}`).send({ name: "v60" })).status).toBe(200);
     expect((await owner.agent.patch(`${base}/${v60}`).send({ name: "espresso" })).status).toBe(409);
-    expect((await owner.agent.patch(`${base}/${v60}`).send({ name: "  Hario V60 " })).body.brewMethod.name).toBe("Hario V60");
+    expect((await owner.agent.patch(`${base}/${v60}`).send({ name: "  Hario V60 " })).body.brewer.name).toBe("Hario V60");
 
     const recipes = await owner.agent.get(`/api/workspaces/${ws.id}/recipes`);
-    expect(recipes.body.recipes[0]).toMatchObject({ id: recipe.body.recipe.id, method: { id: v60, name: "Hario V60" } });
+    expect(recipes.body.recipes[0]).toMatchObject({ id: recipe.body.recipe.id, brewer: { id: v60, name: "Hario V60" } });
   });
 
-  it("delete is refused while recipes use the method", async () => {
+  it("delete is refused while recipes use the brewer", async () => {
     const { owner, ws, v60 } = await setup();
-    await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name: "R", methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250 });
-    const res = await owner.agent.delete(`/api/workspaces/${ws.id}/brew-methods/${v60}`);
+    await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name: "R", brewerId: v60, targetDoseGrams: 15, targetWaterGrams: 250 });
+    const res = await owner.agent.delete(`/api/workspaces/${ws.id}/brewers/${v60}`);
     expect(res.status).toBe(409);
     expect(res.body.recipeCount).toBe(1);
-    const aeropress = await methodId(owner, ws.id, "Aeropress");
-    expect((await owner.agent.delete(`/api/workspaces/${ws.id}/brew-methods/${aeropress}`)).status).toBe(204);
+    const aeropress = await brewerId(owner, ws.id, "Aeropress");
+    expect((await owner.agent.delete(`/api/workspaces/${ws.id}/brewers/${aeropress}`)).status).toBe(204);
   });
 });
 
@@ -40,24 +40,24 @@ describe("beans and recipes", () => {
   it("decimals are JSON numbers; too many decimal places are rejected, not rounded", async () => {
     const { owner, ws, v60 } = await setup();
     const base = `/api/workspaces/${ws.id}/recipes`;
-    const ok = await owner.agent.post(base).send({ name: "R", methodId: v60, targetDoseGrams: 18.5, targetWaterGrams: 250, targetTempC: 93.5 });
+    const ok = await owner.agent.post(base).send({ name: "R", brewerId: v60, targetDoseGrams: 18.5, targetWaterGrams: 250, targetTempC: 93.5 });
     expect(ok.body.recipe).toMatchObject({ targetDoseGrams: 18.5, targetWaterGrams: 250, targetTempC: 93.5 });
-    expect((await owner.agent.post(base).send({ name: "R", methodId: v60, targetDoseGrams: 15.123, targetWaterGrams: 250 })).status).toBe(400);
-    expect((await owner.agent.post(base).send({ name: "R", methodId: v60, targetDoseGrams: "15", targetWaterGrams: 250 })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ name: "R", brewerId: v60, targetDoseGrams: 15.123, targetWaterGrams: 250 })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ name: "R", brewerId: v60, targetDoseGrams: "15", targetWaterGrams: 250 })).status).toBe(400);
   });
 
-  it("recipe steps are validated, and a method from another workspace is refused", async () => {
+  it("recipe steps are validated, and a brewer from another workspace is refused", async () => {
     const { owner, ws, v60 } = await setup();
     const other = await newUser();
     const otherWs = await newWorkspace(other);
-    const foreign = await methodId(other, otherWs.id, "V60");
+    const foreign = await brewerId(other, otherWs.id, "V60");
     const base = `/api/workspaces/${ws.id}/recipes`;
     const steps = [
       { stepType: "bloom", durationSec: 45, targetWaterGrams: 50 },
       { stepType: "pour", durationSec: 30, targetWaterGrams: 40 }, // pour-to goes down
     ];
-    expect((await owner.agent.post(base).send({ name: "R", methodId: v60, targetDoseGrams: 15, targetWaterGrams: 250, steps })).status).toBe(400);
-    expect((await owner.agent.post(base).send({ name: "R", methodId: foreign, targetDoseGrams: 15, targetWaterGrams: 250 })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ name: "R", brewerId: v60, targetDoseGrams: 15, targetWaterGrams: 250, steps })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ name: "R", brewerId: foreign, targetDoseGrams: 15, targetWaterGrams: 250 })).status).toBe(400);
   });
 
   it("PATCH changes only the fields sent", async () => {
@@ -180,23 +180,23 @@ describe("public menu", () => {
     const menu = `/api/public/menu/${ws.slug}`;
     await newBean(owner, ws.id, { beanName: "Shown" });
     await newBean(owner, ws.id, { beanName: "Hidden", showOnPublicMenu: false });
-    const foamId = (await owner.agent.post(`/api/workspaces/${ws.id}/components`).send({ name: "Orange cold foam", componentType: "foam" })).body.component.id;
+    const foamId = (await owner.agent.post(`/api/workspaces/${ws.id}/ingredients`).send({ name: "Orange cold foam", ingredientType: "foam" })).body.ingredient.id;
     const drinks = `/api/workspaces/${ws.id}/drinks`;
-    await owner.agent.post(drinks).send({ name: "The Atlas", description: "V60 with orange cold foam", methodId: v60, components: [{ componentId: foamId, amountValue: 40, amountUnit: "g" }] });
-    await owner.agent.post(drinks).send({ name: "Secret", methodId: v60, showOnPublicMenu: false });
+    await owner.agent.post(drinks).send({ name: "The Atlas", description: "V60 with orange cold foam", brewerId: v60, ingredients: [{ ingredientId: foamId, amountValue: 40, amountUnit: "g" }] });
+    await owner.agent.post(drinks).send({ name: "Secret", brewerId: v60, showOnPublicMenu: false });
 
     expect((await request(app).get(menu)).status).toBe(404); // not enabled yet
     await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ isPublicMenuEnabled: true });
     const res = await request(app).get(menu);
     expect(res.status).toBe(200);
     expect(res.body.beans.map((b: { beanName: string }) => b.beanName)).toEqual(["Shown"]);
-    // Names of methods and components only, no recipe details. Methods are
+    // Names of brewers and ingredients only, no recipe details. Brewers are
     // off the menu until marked.
     expect(res.body.sections).toEqual([
       {
         category: null,
         items: [
-          { kind: "drink", id: expect.any(String), name: "The Atlas", description: "V60 with orange cold foam", method: "V60", variantOf: null, components: ["Orange cold foam"] },
+          { kind: "drink", id: expect.any(String), name: "The Atlas", description: "V60 with orange cold foam", brewer: "V60", variantOf: null, ingredients: ["Orange cold foam"] },
         ],
       },
     ]);

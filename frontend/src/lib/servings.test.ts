@@ -50,7 +50,7 @@ describe('scaling amounts', () => {
 describe('unit suggestions', () => {
   it('offers the built-in units, then the others in use, deduplicated', () => {
     const drink = (units: Array<string | null>) =>
-      ({ components: units.map((u) => ({ amountUnit: u })) }) as unknown as Drink;
+      ({ ingredients: units.map((u) => ({ amountUnit: u })) }) as unknown as Drink;
     expect(knownUnits([drink(['pump', 'G', null]), drink(['Pump', 'tsp ', 'fl oz'])])).toEqual(['fl oz', 'ml', 'g', 'pump', 'tsp']);
   });
 });
