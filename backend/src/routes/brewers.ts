@@ -9,7 +9,6 @@ import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import {
   brewers,
   brewLogs,
-  BREWER_STYLES,
   drinkCategories,
   METHOD_KINDS,
   PREINFUSION_MODES,
@@ -43,7 +42,6 @@ interface BrewerParams extends WorkspaceParams {
 const brewerFields = {
   name: z.string().trim().min(1).max(100),
   kind: z.enum(METHOD_KINDS), // the brew method: filter or espresso
-  style: z.enum(BREWER_STYLES).nullable().optional(), // filter only, descriptive
   notes: optionalText(255),
   preinfusion: z.enum(PREINFUSION_MODES),
   flowControl: z.enum(PROFILE_CONTROLS),
@@ -69,7 +67,6 @@ const summary = {
   id: brewers.id,
   name: brewers.name,
   kind: brewers.kind,
-  style: brewers.style,
   notes: brewers.notes,
   preinfusion: brewers.preinfusion,
   flowControl: brewers.flowControl,
@@ -141,8 +138,7 @@ brewersRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Brew
   try {
     const ok = await db.transaction(async (tx) => {
       if (!(await categoryInWorkspace(tx, body.categoryId, workspaceId))) return false;
-      // Style describes filter brewers only.
-      await tx.insert(brewers).values({ id, workspaceId, ...body, style: body.kind === "espresso" ? null : (body.style ?? null) });
+      await tx.insert(brewers).values({ id, workspaceId, ...body });
       return true;
     });
     if (!ok) {
@@ -180,7 +176,6 @@ brewersRouter.patch("/:brewerId", async (req: Request<BrewerParams>, res: Respon
         if (recipeCount > 0) return { status: "in_use", recipeCount } as const;
       }
       if (!(await categoryInWorkspace(tx, fields.categoryId, workspaceId))) return { status: "bad_category" } as const;
-      if ((fields.kind ?? brewer.kind) === "espresso") fields.style = null; // style describes filter brewers only
       await tx
         .update(brewers)
         .set({

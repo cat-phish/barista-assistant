@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Brewer, Grinder, MachineCapabilities } from '../api/types';
-import { adjustmentLabel, burrLabel, grinderForm, grinderSummary, machineSummary, parseGrinderForm, pickCopyBrewer, powerLabel } from './equipment';
+import { adjustmentLabel, burrLabel, grinderForm, grinderSummary, machineSummary, parseGrinderForm, pickCopyBrewer, powerLabel, RECIPE_STYLES, STYLES_BY_KIND } from './equipment';
 
 const c40: Grinder = {
   id: 'g', name: 'C40', notes: null, adjustment: 'stepped', settingMin: 0, settingMax: 40, stepSize: 1,
@@ -53,5 +53,13 @@ describe('grinder table cells', () => {
     expect(burrLabel({ ...bare, burrSizeMm: 64 })).toBe('Burrs 64 mm');
     expect(adjustmentLabel({ ...bare, adjustment: 'stepless' })).toBe('Stepless');
     expect(powerLabel({ ...bare, power: 'electric' })).toBe('Electric');
+  });
+});
+
+describe('recipe styles', () => {
+  it('each brew method offers its own styles, all labelled', () => {
+    expect(STYLES_BY_KIND.filter).toEqual(['pour_over', 'immersion', 'hybrid', 'cold_brew', 'other']);
+    expect(STYLES_BY_KIND.espresso).toEqual(['standard', 'soup', 'other']);
+    for (const st of [...STYLES_BY_KIND.filter, ...STYLES_BY_KIND.espresso]) expect(RECIPE_STYLES[st]).toBeTruthy();
   });
 });

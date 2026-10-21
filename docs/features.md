@@ -29,13 +29,14 @@ Adding and editing a brewer, grinder or ingredient happen on their own page
   and step let the AI talk in clicks. Grinders that have been used are
   retired rather than deleted, so history keeps their names.
 - **Brewers:** whatever makes the coffee (V60, French press, AeroPress, OXO
-  Rapid Brewer, an espresso machine). Three separate ideas describe one:
+  Rapid Brewer, an espresso machine). Two separate ideas describe one:
   - **Brew method**, Filter or Espresso: decides the recipe fields, steps
     and timer, and which drinks the brewer can make. It can't change while
     recipes use the brewer.
-  - **Style** (filter brewers, optional): Pour over, Immersion, Hybrid,
-    Other. Descriptive only (lists, the AI).
   - **Category**: your own grouping for the brew page and the menu.
+  How a cup is brewed (pour over, immersion, a soup shot) is the recipe's
+  **style**, since one brewer can do several; a brewer's row lists its
+  recipes' styles.
   Espresso brewers also record what they can do: pre-infusion (none /
   automatic / manual), flow control and pressure control (none / manual /
   programmable). A brewer has an optional category (where it's listed when
@@ -44,8 +45,12 @@ Adding and editing a brewer, grinder or ingredient happen on their own page
   deleting is refused while recipes use it.
 
 ## Recipes
-- **List:** a table (Name, Brewer, Dose, Added), filtered by brewer and sorted
-  by name or date added, from the headers or the Sort menu (phones use the
+- **Style** (optional): how the recipe brews, from its brewer's method:
+  Pour over, Immersion, Hybrid, Cold brew or Other for filter; Standard,
+  Soup or Other for espresso. Descriptive (lists, the brew page, the AI, which judges
+  a soup shot as a soup shot); moving a recipe to the other method clears it.
+- **List:** a table (Name, Brewer, Style, Dose, Added), filtered by brewer and
+  sorted by name, style or date added, from the headers or the Sort menu (phones use the
   menu); tap a row for windows, grind, steps and actions. The filter and sort
   are remembered. Recipes from before dates were tracked date from their
   first brew.
@@ -191,9 +196,6 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
 ## App
 - Installable PWA, works on phones, offline-cached public menu.
 
-## Ideas noted for later
-- **User settings:** the roast level recipes assume (light today) and units
-  (g / fl oz shown together today).
-- **Ingredients:** batch prep and stock tracking (e.g. how much cold foam is
-  left), and structured ingredients instead of free text.
-- **Public menu page:** a frontend for the menu (only the API exists).
+## Planned
+Features and ideas not built yet (Settings, editable styles, units, ingredient
+stock, the public menu page and more) live in [`backlog.md`](backlog.md).

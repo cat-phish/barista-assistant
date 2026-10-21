@@ -11,7 +11,7 @@ import { ApiError, errorMessage } from '../api/client';
 import { grindersApi } from '../api/grinders';
 import { brewersApi } from '../api/brewers';
 import { recipesApi, type RecipeInput } from '../api/recipes';
-import type { Brewer, FlowUnit, Grinder, MethodKind, Recipe } from '../api/types';
+import type { Brewer, FlowUnit, Grinder, MethodKind, Recipe, RecipeStyle } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import { formatGrams, formatRatio, formatTime, parseDecimal, parseTime } from '../lib/format';
 import { VueDraggable } from 'vue-draggable-plus';
@@ -37,7 +37,7 @@ import {
 } from '../lib/steps';
 import { useWorkspaceStore } from '../stores/workspace';
 import { estimateYield, RECIPE_ROAST_LEVEL, ROAST_LEVELS } from '../lib/scale';
-import { METHOD_KINDS, pickCopyBrewer } from '../lib/equipment';
+import { METHOD_KINDS, pickCopyBrewer, RECIPE_STYLES, STYLES_BY_KIND } from '../lib/equipment';
 
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 const NEW_METHOD = '__new__';
@@ -63,6 +63,7 @@ const finishTo = ref('');
 const firstDropFrom = ref(''); // espresso only
 const firstDropTo = ref('');
 const flowUnit = ref<FlowUnit>('g_s'); // espresso flow steps
+const style = ref<RecipeStyle | ''>(''); // how the cup is brewed; '' = not set
 const temp = ref('');
 const defaultGrinderId = ref(''); // '' = none: brewing uses the last grinder
 const grindRows = ref<Array<{ grinderId: string; setting: string }>>([]);
@@ -83,6 +84,11 @@ const submitted = ref(false);
 // The chosen brewer's kind decides the fields (docs/api_spec.md §5).
 const kind = computed<MethodKind | null>(() => methods.value.find((m) => m.id === brewerId.value)?.kind ?? null);
 const espresso = computed(() => kind.value === 'espresso');
+// Styles fit the brewer's method; a style that no longer fits is cleared.
+const styleChoices = computed(() => (kind.value ? STYLES_BY_KIND[kind.value] : []));
+watch(kind, () => {
+  if (style.value && !styleChoices.value.includes(style.value)) style.value = '';
+});
 
 const grams = { scale: 2, min: 0, max: 10000, exclusiveMin: true, exclusiveMax: true } as const;
 const parsed = computed(() => ({
@@ -196,6 +202,7 @@ function fill(recipe: Recipe): void {
   defaultGrinderId.value = recipe.defaultGrinderId ?? '';
   grindRows.value = recipe.grindSettings.map((g) => ({ grinderId: g.grinderId, setting: g.setting }));
   flowUnit.value = recipe.flowUnit;
+  style.value = recipe.style ?? '';
   steps.value = recipe.steps.map((s) => stepDraft(newStepKey(), s));
 }
 
@@ -382,6 +389,7 @@ async function save(): Promise<void> {
     defaultGrinderId: defaultGrinderId.value || null,
     grindSettings: grindRows.value.map((r) => ({ grinderId: r.grinderId, setting: r.setting.trim() })),
     flowUnit: flowUnit.value,
+    style: style.value || null,
     steps: stepsParsed.value.steps,
   };
   saving.value = true;
@@ -423,6 +431,14 @@ async function save(): Promise<void> {
           </select>
           <span v-if="copyOf" class="hint">A copy of {{ copyOf }}. Pick the brewer for the copy; the original stays as it is.</span>
           <span v-if="submitted && fieldErrors.brewer" class="field-error">{{ fieldErrors.brewer }}</span>
+        </div>
+        <div v-if="styleChoices.length" class="field">
+          <label for="style">Style <span class="muted">(optional)</span></label>
+          <select id="style" v-model="style">
+            <option value="">Not set</option>
+            <option v-for="st in styleChoices" :key="st" :value="st">{{ RECIPE_STYLES[st] }}</option>
+          </select>
+          <span class="hint">How this recipe brews ({{ kind === 'espresso' ? 'a standard shot or a soup shot' : 'pour over, immersion, cold brew…' }}), for your lists and the AI.</span>
         </div>
         <div v-if="brewerId === NEW_METHOD" class="inline-add">
           <div class="field grow">

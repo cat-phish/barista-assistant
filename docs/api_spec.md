@@ -204,7 +204,8 @@ Removes a member. Owners can remove anyone. Any member can remove themselves
 
 What makes the coffee: a V60, a French press, an AeroPress, an OXO Rapid
 Brewer, an espresso machine. Recipes (§5) belong to a brewer from their
-workspace's list. Three separate ideas describe a brewer:
+workspace's list. Two separate ideas describe a brewer (how a cup is brewed,
+pour over or a soup shot, is the recipe's `style`, §5):
 
 - **Brew method** (`kind`, one of `METHOD_KINDS`): fixed, and it changes how
   the app works. It decides the recipe fields, steps and timer, and which
@@ -215,15 +216,11 @@ workspace's list. Three separate ideas describe a brewer:
   | `filter` | V60, Chemex, French press, AeroPress, OXO Rapid Brewer | dose + water, estimated yield, steps with pours |
   | `espresso` | Linea Mini, Gaggia Classic | dose + target yield (no water), shot time and first-drop windows |
 
-- **Style** (`style`, one of `BREWER_STYLES`: `pour_over`, `immersion`,
-  `hybrid`, `other`; optional): how a filter brewer brews. Descriptive only:
-  shown, sortable, and sent to the AI, but it changes nothing. Always `null`
-  for espresso.
 - **Category** (`categoryId`, §5d): your own grouping for the brew page and
   the menu, e.g. "Pour Over/Immersion".
 
-New workspaces get V60 (`filter`, pour over), Espresso (`espresso`) and
-Aeropress (`filter`, immersion). Milk drinks like a latte are drinks (§5c):
+New workspaces get V60 (`filter`), Espresso (`espresso`) and Aeropress
+(`filter`). Milk drinks like a latte are drinks (§5c):
 they need espresso, so any espresso brewer can make them; The Atlas needs
 filter coffee, so any filter brewer (a V60, a French press, an OXO) can.
 
@@ -251,7 +248,6 @@ past brews keep showing them. `createdAt` (read-only) is when the brewer was add
   "id": "uuid",
   "name": "Linea Mini",
   "kind": "espresso",
-  "style": null,
   "notes": "18 g VST basket",
   "preinfusion": "manual",
   "flowControl": "manual",
@@ -274,9 +270,8 @@ past brews keep showing them. `createdAt` (read-only) is when the brewer was add
 ### `POST /api/workspaces/:workspaceId/brewers`
 
 - **Auth Required:** `true` (role `owner` or `barista`)
-- **Body:** `{ "name": "Chemex", "kind": "filter", "style": "pour_over" }`
-  (`name` trimmed, 1–100 chars; `kind` optional, default `filter`; `style`
-  optional, nullable, and stored as `null` for espresso). Optional: `notes`
+- **Body:** `{ "name": "Chemex", "kind": "filter" }` (`name` trimmed,
+  1–100 chars; `kind` optional, default `filter`). Optional: `notes`
   (≤ 255), the capabilities (default `none`), `menuName` (≤ 100),
   `description` (≤ 500), `categoryId` (a drink category in this workspace,
   or `null`), `showOnPublicMenu` (default `false`). Blank text becomes `null`.
@@ -601,6 +596,7 @@ card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
   "firstDropMinSec": null,
   "firstDropMaxSec": null,
   "flowUnit": "g_s",
+  "style": "pour_over",
   "targetTempC": 94,
   "defaultGrinderId": "uuid",
   "createdAt": "2026-10-19T08:00:00.000Z",
@@ -665,6 +661,12 @@ Creates a recipe, its grind starting points and its steps in one transaction.
     `targetDoseGrams` (> 0, < 1000, max 2 decimals), and by kind (table
     above) `targetWaterGrams` or `expectedYieldGrams` (> 0, < 10000, max 2
     decimals).
+  - `style` (optional, nullable): how the cup is brewed, one of its brewer's
+    method's styles: `pour_over`, `immersion`, `hybrid`, `cold_brew` or
+    `other` for filter; `standard`, `soup` or `other` for espresso (`400` otherwise).
+    Descriptive (lists, the AI); it changes no fields or timer behaviour. On
+    `PATCH`, moving the recipe to a brewer of the other method clears a style
+    that no longer fits, unless a fitting one is sent.
   - Optional, nullable: `expectedYieldGrams` for filter recipes (same
     rules as water), `targetTempC` (0–100, max 1 decimal). Recipes reach the
     public menu through drinks (§5c).
@@ -1295,8 +1297,9 @@ queue:
      recipe), `actualWaterGrams` (`null` for espresso), the measured
      `actualYieldGrams` (or `null`) and `brewRatio`: water ÷ dose, or for
      espresso yield ÷ dose. `methodKind` is `filter` or `espresso`. The
-     recipe includes its brewer, the brewer's style (`brewerStyle`: pour
-     over, immersion, hybrid… or `null`), kind, water,
+     recipe includes its brewer, its `style` (pour over, immersion, hybrid,
+     cold brew, standard, soup… or `null`; every brew also carries `recipeStyle`, so
+     soup shots aren't compared with standard ones), kind, water,
      expected yield (the target for espresso), finish window
      (`expectedFinishMinSec`/`MaxSec`), first-drop window (espresso), flow
      unit, and its steps with type, label, duration, how each moves on, and
@@ -1313,7 +1316,9 @@ queue:
 > describe the finished drink. Milk and syrup mask acidity and bitterness and
 > add sweetness, so treat drink notes as weaker evidence of extraction than
 > straight notes, and compare a brew mainly with earlier brews served the same
-> way (each brew's drink says how). For espresso, judge flow
+> way (each brew's drink says how). Judge a brew against its recipe's style:
+> a soup shot is a long, high-ratio espresso on purpose, a cold brew steeps
+> cold for hours, and an immersion brew isn't a pour over. For espresso, judge flow
 > from the first drop time, shot time and ratio against the recipe's
 > windows, and consider the machine's capabilities (pre-infusion, flow and
 > pressure control) and the grinder's step size when explaining the change.

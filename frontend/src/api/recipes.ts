@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { FlowUnit, Recipe, StepFields } from './types';
+import type { FlowUnit, Recipe, RecipeStyle, StepFields } from './types';
 
 // Request body for create/update (docs/api_spec.md §5).
 export interface RecipeInput {
@@ -16,6 +16,7 @@ export interface RecipeInput {
   defaultGrinderId: string | null;
   grindSettings: Array<{ grinderId: string; setting: string }>;
   flowUnit: FlowUnit;
+  style: RecipeStyle | null;
   steps: StepFields[];
 }
 

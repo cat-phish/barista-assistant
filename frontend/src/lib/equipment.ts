@@ -1,6 +1,6 @@
 // Labels and one-line summaries for equipment (docs/api_spec.md §3, §3b).
 import type { BrewerInput } from '../api/brewers';
-import type { Brewer, BrewerStyle, BurrType, Grinder, GrinderAdjustment, GrinderDetails, GrinderPower, MachineCapabilities, MethodKind, Preinfusion, ProfileControl } from '../api/types';
+import type { Brewer, BurrType, Grinder, GrinderAdjustment, GrinderDetails, GrinderPower, MachineCapabilities, MethodKind, Preinfusion, ProfileControl, RecipeStyle } from '../api/types';
 import { formatGrams, parseDecimal } from './format';
 
 // The brew method (docs/api_spec.md §3): decides recipe fields, steps, the
@@ -9,13 +9,23 @@ export const METHOD_KINDS: Record<MethodKind, { label: string; hint: string }> =
   filter: { label: 'Filter', hint: 'Dose and water: pour over, immersion, hybrid (V60, French press, AeroPress, OXO Rapid Brewer)' },
   espresso: { label: 'Espresso', hint: 'Dose and shot weight instead of water, with the shot timer' },
 };
-// How a filter brewer brews: descriptive only (lists, the AI).
-export const BREWER_STYLES: Record<BrewerStyle, string> = {
+// How a recipe brews, by its brewer's method (docs/api_spec.md §5):
+// descriptive only (lists, the AI).
+export const RECIPE_STYLES: Record<RecipeStyle, string> = {
   pour_over: 'Pour over',
   immersion: 'Immersion',
   hybrid: 'Hybrid',
+  cold_brew: 'Cold brew',
+  standard: 'Standard',
+  soup: 'Soup',
   other: 'Other',
 };
+export const STYLES_BY_KIND: Record<MethodKind, RecipeStyle[]> = {
+  filter: ['pour_over', 'immersion', 'hybrid', 'cold_brew', 'other'],
+  espresso: ['standard', 'soup', 'other'],
+};
+// Every style in display order, for sorting.
+export const STYLE_ORDER = Object.keys(RECIPE_STYLES) as RecipeStyle[];
 
 export const GRINDER_ADJUSTMENTS: Record<GrinderAdjustment, string> = { stepped: 'Stepped (clicks)', stepless: 'Stepless' };
 export const BURR_TYPES: Record<BurrType, string> = { conical: 'Conical', flat: 'Flat' };
@@ -142,7 +152,6 @@ export function adjustmentLabel(g: Grinder): string | null {
 export interface BrewerForm extends MachineCapabilities {
   name: string;
   kind: MethodKind;
-  style: BrewerStyle | ''; // '' = not set
   notes: string;
   showOnPublicMenu: boolean;
   menuName: string;
@@ -154,7 +163,6 @@ export function brewerForm(m?: Brewer): BrewerForm {
   return {
     name: m?.name ?? '',
     kind: m?.kind ?? 'filter',
-    style: m?.style ?? '',
     notes: m?.notes ?? '',
     preinfusion: m?.preinfusion ?? 'none',
     flowControl: m?.flowControl ?? 'none',
@@ -170,7 +178,6 @@ export function brewerInput(f: BrewerForm): BrewerInput & { name: string } {
   return {
     name: f.name.trim(),
     kind: f.kind,
-    style: espresso ? null : f.style || null, // filter only
     notes: f.notes.trim() || null,
     // Capabilities only mean something for espresso.
     preinfusion: espresso ? f.preinfusion : 'none',

@@ -17,7 +17,7 @@ import {
   type Brewer,
   type FlowUnit,
   type MarkKind,
-  type BrewerStyle,
+  type RecipeStyle,
   type MethodKind,
   type ServingUnit,
   type StepAdvance,
@@ -42,6 +42,9 @@ export interface BrewSummary {
   roastAgeDays: number | null;
   daysFrozenBeforeBrew: number | null;
   recipeName: string | null;
+  // How the recipe brews: pour_over, immersion, hybrid (filter); standard,
+  // soup (espresso); other. Compare brews of the same style.
+  recipeStyle: RecipeStyle | null;
   // The recipe's brew method (filter / espresso), null without a recipe.
   methodKind: MethodKind | null;
   // The grind setting only means something for this grinder (docs/api_spec.md §9).
@@ -93,7 +96,7 @@ export interface BrewContext {
   recipe: {
     name: string;
     brewer: string; // e.g. "V60", "Linea Mini"
-    brewerStyle: BrewerStyle | null; // how a filter brewer brews: pour_over, immersion, hybrid…
+    style: RecipeStyle | null; // how it brews: pour_over, immersion, hybrid; standard, soup; other
     methodKind: MethodKind;
     targetDoseGrams: number;
     targetWaterGrams: number | null; // null for espresso
@@ -132,6 +135,7 @@ export interface BrewContext {
 
 interface BrewJoins {
   recipeName: string | null;
+  recipeStyle: RecipeStyle | null;
   methodKind: MethodKind | null;
   grinder: GrinderInfo | null;
   machine: MachineInfo | null;
@@ -158,6 +162,7 @@ function summarize(
     roastAgeDays: age?.ageDays ?? null,
     daysFrozenBeforeBrew: age?.daysFrozen ?? null,
     recipeName: brew.recipeName,
+    recipeStyle: brew.recipeStyle,
     methodKind: brew.methodKind,
     grinder: brew.grinder,
     machine: brew.machine,
@@ -245,6 +250,7 @@ function selectBrews() {
     .select({
       brew: brewLogs,
       recipeName: recipes.name,
+      recipeStyle: recipes.style,
       methodKind: brewers.kind,
       grinder: {
         name: grinders.name,
@@ -318,7 +324,7 @@ async function loadRecipe(recipeId: string): Promise<BrewContext["recipe"]> {
     .select({
       name: recipes.name,
       brewer: brewers.name,
-      brewerStyle: brewers.style,
+      style: recipes.style,
       methodKind: brewers.kind,
       targetDoseGrams: recipes.targetDoseGrams,
       targetWaterGrams: recipes.targetWaterGrams,

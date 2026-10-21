@@ -34,7 +34,7 @@ import {
   validItem,
 } from '../lib/brewChoice';
 import type { Brewer, Drink, DrinkCategory, Grinder, Mark, MethodKind, ServingUnit } from '../api/types';
-import { METHOD_KINDS } from '../lib/equipment';
+import { METHOD_KINDS, RECIPE_STYLES } from '../lib/equipment';
 import { convertSize, defaultSize, formatSize, SERVING_UNITS, sizeFactor, type Size } from '../lib/servings';
 import AppHeader from '../components/AppHeader.vue';
 import BrewFields from '../components/BrewFields.vue';
@@ -645,7 +645,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         <div v-else-if="brewerId" class="field">
           <label for="recipe">Recipe</label>
           <select id="recipe" v-model="recipeId">
-            <option v-for="r in recipeChoices" :key="r.id" :value="r.id">{{ r.name }}<template v-if="r.id === drink?.defaultRecipeId"> (default)</template></option>
+            <option v-for="r in recipeChoices" :key="r.id" :value="r.id">{{ r.name }}<template v-if="r.style && r.style !== 'standard'"> ({{ RECIPE_STYLES[r.style].toLowerCase() }})</template><template v-if="r.id === drink?.defaultRecipeId"> (default)</template></option>
           </select>
         </div>
         <div v-if="baseSize" class="batch" role="group" aria-labelledby="size-label">

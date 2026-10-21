@@ -190,6 +190,20 @@
       "when": 1792565769297,
       "tag": "0026_filter_espresso",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "5",
+      "when": 1792567530429,
+      "tag": "0027_recipe_style",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "5",
+      "when": 1792567541714,
+      "tag": "0028_drop_brewer_style",
+      "breakpoints": true
     }
   ]
 }

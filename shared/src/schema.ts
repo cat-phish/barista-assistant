@@ -103,21 +103,26 @@ export type ProfileControl = (typeof PROFILE_CONTROLS)[number];
 // - `kind`, the brew method (METHOD_KINDS: filter or espresso), decides which
 //   recipe fields apply, the steps and the timer (docs/api_spec.md §3, §5),
 //   and which drinks the brewer can make (a drink needs a method, 7d).
-// - `style` (BREWER_STYLES) says how a filter brewer brews: pour over,
-//   immersion, hybrid. Descriptive only (lists, the AI); null for espresso.
+// How a cup is brewed (pour over, immersion, soup shot…) is the recipe's
+// `style`, not the brewer's: one brewer can do several.
 // Espresso brewers also record what the barista controls (pre-infusion, flow,
 // pressure); the shot timer and the AI use it. A brewer can appear on the
 // public menu as the plain brew, under menuName if set ("Espresso" for a Linea
 // Mini). Retired like grinders once brews used it.
 export const METHOD_KINDS = ["filter", "espresso"] as const;
 export type MethodKind = (typeof METHOD_KINDS)[number];
-export const BREWER_STYLES = ["pour_over", "immersion", "hybrid", "other"] as const;
-export type BrewerStyle = (typeof BREWER_STYLES)[number];
+// A recipe's style, by its brewer's method: how the cup is brewed. Descriptive
+// (lists, the AI); it changes no fields or timer behaviour.
+export const FILTER_STYLES = ["pour_over", "immersion", "hybrid", "cold_brew", "other"] as const;
+export const ESPRESSO_STYLES = ["standard", "soup", "other"] as const;
+export const RECIPE_STYLES = ["pour_over", "immersion", "hybrid", "cold_brew", "standard", "soup", "other"] as const;
+export type RecipeStyle = (typeof RECIPE_STYLES)[number];
+export const STYLES_BY_KIND: Record<MethodKind, readonly RecipeStyle[]> = { filter: FILTER_STYLES, espresso: ESPRESSO_STYLES };
 export const DEFAULT_BREWERS = [
-  { name: "V60", kind: "filter", style: "pour_over" },
-  { name: "Espresso", kind: "espresso", style: null },
-  { name: "Aeropress", kind: "filter", style: "immersion" },
-] as const satisfies ReadonlyArray<{ name: string; kind: MethodKind; style: BrewerStyle | null }>;
+  { name: "V60", kind: "filter" },
+  { name: "Espresso", kind: "espresso" },
+  { name: "Aeropress", kind: "filter" },
+] as const satisfies ReadonlyArray<{ name: string; kind: MethodKind }>;
 
 export const brewers = mysqlTable(
   "brewers",
@@ -128,7 +133,6 @@ export const brewers = mysqlTable(
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 100 }).notNull(), // e.g. "V60", "Linea Mini"
     kind: varchar("kind", { length: 20 }).$type<MethodKind>().default("filter").notNull(), // the brew method
-    style: varchar("style", { length: 20 }).$type<BrewerStyle>(), // filter only; descriptive
     notes: varchar("notes", { length: 255 }),
     // Espresso only (other kinds keep "none").
     preinfusion: varchar("preinfusion", { length: 20 }).$type<Preinfusion>().default("none").notNull(),
@@ -211,6 +215,8 @@ export const recipes = mysqlTable("recipes", {
   // Unit for espresso flow steps: g/s (a scale) or ml/s (a machine's flow meter).
   flowUnit: varchar("flow_unit", { length: 10 }).$type<FlowUnit>().default("g_s").notNull(),
   targetTempC: decimal("target_temp_c", { precision: 4, scale: 1, mode: "number" }),
+  // How the cup is brewed: one of STYLES_BY_KIND[brewer's kind] (the API), or null.
+  style: varchar("style", { length: 20 }).$type<RecipeStyle>(),
   // Recipes reach the public menu through their method or drinks (7d).
   // Grind is per grinder: see recipeGrindSettings. The default grinder is
   // preselected when brewing this recipe (else the last one used); deleting

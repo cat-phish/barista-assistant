@@ -1,9 +1,9 @@
 <script setup lang="ts">
-// A brewer's fields (docs/api_spec.md §3): name and brew method (with a style
-// for filter brewers); for espresso, what
+// A brewer's fields (docs/api_spec.md §3): name and brew method; for
+// espresso, what
 // the machine lets you control; notes; and the menu settings for the plain brew.
 import type { DrinkCategory } from '../api/types';
-import { BREWER_STYLES, METHOD_KINDS, PREINFUSION_MODES, PROFILE_CONTROLS, type BrewerForm } from '../lib/equipment';
+import { METHOD_KINDS, PREINFUSION_MODES, PROFILE_CONTROLS, type BrewerForm } from '../lib/equipment';
 
 const form = defineModel<BrewerForm>({ required: true });
 defineProps<{ idPrefix: string; showErrors: boolean; categories: DrinkCategory[] }>();
@@ -25,14 +25,6 @@ defineProps<{ idPrefix: string; showErrors: boolean; categories: DrinkCategory[]
       </div>
     </div>
     <p class="muted small">{{ METHOD_KINDS[form.kind].hint }}. It decides the recipe fields, the timer, and which drinks it can make.</p>
-    <div v-if="form.kind === 'filter'" class="field">
-      <label :for="`${idPrefix}-style`">Style <span class="muted">(optional)</span></label>
-      <select :id="`${idPrefix}-style`" v-model="form.style">
-        <option value="">Not set</option>
-        <option v-for="(label, key) in BREWER_STYLES" :key="key" :value="key">{{ label }}</option>
-      </select>
-      <span class="hint">How it brews, for your lists and the AI. It doesn't change anything else.</span>
-    </div>
     <template v-if="form.kind === 'espresso'">
       <div class="field">
         <label :for="`${idPrefix}-preinfusion`">Pre-infusion</label>

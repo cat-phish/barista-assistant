@@ -27,7 +27,7 @@ const special = cat('c-sp', 'Specialty Drinks', 4);
 const categories = [special, milk, pourOver, espressoCat];
 
 const brewer = (id: string, name: string, kind: MethodKind, categoryId: string | null, retiredAt: string | null = null): Brewer => ({
-  id, name, kind, style: null, categoryId, retiredAt, notes: null, menuName: null, description: null, showOnPublicMenu: false,
+  id, name, kind, categoryId, retiredAt, notes: null, menuName: null, description: null, showOnPublicMenu: false,
   preinfusion: 'none', flowControl: 'none', pressureControl: 'none', createdAt: '2026-10-20T00:00:00.000Z',
 });
 const v60 = brewer('v60', 'V60', 'filter', pourOver.id);

@@ -6,14 +6,15 @@
 // recipe or brew uses.
 import { computed, onMounted, ref, watch } from 'vue';
 import { brewersApi } from '../api/brewers';
+import { recipesApi } from '../api/recipes';
 import { ApiError, errorMessage } from '../api/client';
 import { drinkCategoriesApi } from '../api/drinkCategories';
-import type { Brewer, BrewerStyle, DrinkCategory } from '../api/types';
+import type { Brewer, DrinkCategory, Recipe } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import SetupTabs from '../components/SetupTabs.vue';
 import ListControls from '../components/ListControls.vue';
-import { BREWER_STYLES, machineSummary, METHOD_KINDS } from '../lib/equipment';
+import { machineSummary, METHOD_KINDS, RECIPE_STYLES, STYLE_ORDER } from '../lib/equipment';
 import { formatAdded } from '../lib/format';
 import {
   addedColumn,
@@ -37,6 +38,14 @@ const categories = ref<DrinkCategory[]>([]);
 const loading = ref(true);
 const error = ref('');
 const categoryName = (id: string | null) => categories.value.find((c) => c.id === id)?.name ?? null;
+const recipes = ref<Recipe[]>([]);
+// "2 recipes: pour over, immersion": how this brewer is used (styles live on recipes).
+function recipeSummary(brewerId: string): string {
+  const mine = recipes.value.filter((r) => r.brewer.id === brewerId);
+  if (mine.length === 0) return 'No recipes yet';
+  const styles = STYLE_ORDER.filter((st) => mine.some((r) => r.style === st)).map((st) => RECIPE_STYLES[st].toLowerCase());
+  return `${mine.length} recipe${mine.length === 1 ? '' : 's'}${styles.length ? `: ${styles.join(', ')}` : ''}`;
+}
 
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `brewers.${what}.${workspaces.current?.id ?? ''}`;
@@ -46,7 +55,6 @@ const KINDS = Object.keys(METHOD_KINDS) as Array<keyof typeof METHOD_KINDS>;
 const columns: SortColumns<Brewer> = {
   name: nameColumn(),
   kind: enumColumn('Method', KINDS, (b) => b.kind),
-  style: enumColumn('Style', Object.keys(BREWER_STYLES) as BrewerStyle[], (b) => b.style),
   category: { label: 'Category', value: (b) => categoryName(b.categoryId) },
   added: addedColumn(),
 };
@@ -74,9 +82,10 @@ async function load(): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [b, c] = await Promise.all([brewersApi.list(ws), drinkCategoriesApi.list(ws)]);
+    const [b, c, r] = await Promise.all([brewersApi.list(ws), drinkCategoriesApi.list(ws), recipesApi.list(ws)]);
     brewers.value = b.brewers;
     categories.value = c.categories;
+    recipes.value = r.recipes;
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -166,9 +175,9 @@ async function retireInstead(): Promise<void> {
         <ListControls v-model:filter="filter" v-model:sort="sort" :sort-options="sortChoices" id-prefix="brewers" filter-label="Brew method" :filter-options="filterOptions" />
         <p v-if="filter === RETIRED" class="muted small">Retired brewers are hidden when brewing; past brews still show them.</p>
         <p v-if="shown.length === 0" class="card empty">No {{ filter === ALL ? 'brewers' : `${filterName.toLowerCase()} brewers` }} yet.</p>
-        <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr) 5.5rem">
+        <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.3fr) 5.5rem">
           <div class="data-row data-head">
-            <button v-for="c in ['name', 'kind', 'style', 'category']" :key="c" class="data-th" type="button" :aria-label="sortLabel(sort, c, columns[c]!.label)" @click="sort = toggleHeader(sort, c, columns)">
+            <button v-for="c in ['name', 'kind', 'category']" :key="c" class="data-th" type="button" :aria-label="sortLabel(sort, c, columns[c]!.label)" @click="sort = toggleHeader(sort, c, columns)">
               {{ columns[c]!.label }} <span aria-hidden="true">{{ sortArrow(sort, c) }}</span>
             </button>
             <button class="data-th end" type="button" :aria-label="sortLabel(sort, 'added', 'Date added')" @click="sort = toggleHeader(sort, 'added', columns)">
@@ -179,13 +188,13 @@ async function retireInstead(): Promise<void> {
             <button class="data-row" type="button" :aria-expanded="openId === m.id" @click="toggle(m.id)">
               <span class="data-td primary">{{ m.name }}</span>
               <span class="data-td">{{ METHOD_KINDS[m.kind].label }}</span>
-              <span class="data-td">{{ m.style ? BREWER_STYLES[m.style] : '–' }}</span>
               <span class="data-td">{{ categoryName(m.categoryId) ?? '–' }}</span>
               <span class="data-td end">{{ formatAdded(m.createdAt) }}</span>
             </button>
             <div v-if="openId === m.id" class="data-details">
               <p v-if="m.kind === 'espresso'" class="muted">{{ machineSummary(m) }}</p>
               <p v-if="m.notes" class="muted">{{ m.notes }}</p>
+              <p class="muted">{{ recipeSummary(m.id) }}</p>
               <p class="muted">{{ m.showOnPublicMenu ? `On the menu${m.menuName ? ` as ${m.menuName}` : ''}` : 'Not on the menu' }}</p>
               <div v-if="workspaces.canEdit" class="data-actions">
                 <template v-if="m.retiredAt">

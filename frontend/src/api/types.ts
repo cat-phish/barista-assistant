@@ -28,9 +28,9 @@ export interface ErrorBody {
 
 // docs/schema.md METHOD_KINDS: decides the recipe fields and timer (docs/api_spec.md §3).
 // The brew method: decides recipe fields, steps, the timer, and which drinks a
-// brewer can make. Style says how a filter brewer brews (descriptive only).
+// brewer can make. A recipe's style says how the cup is brewed (descriptive).
 export type MethodKind = 'filter' | 'espresso';
-export type BrewerStyle = 'pour_over' | 'immersion' | 'hybrid' | 'other';
+export type RecipeStyle = 'pour_over' | 'immersion' | 'hybrid' | 'cold_brew' | 'standard' | 'soup' | 'other';
 
 // docs/api_spec.md §3: what makes the coffee (V60, AeroPress, an espresso
 // machine). Capabilities apply to espresso brewers only ("none" otherwise).
@@ -38,7 +38,6 @@ export interface Brewer extends MachineCapabilities {
   id: string;
   name: string;
   kind: MethodKind; // the brew method
-  style: BrewerStyle | null; // filter only
   notes: string | null;
   // Menu fields: the plain brew ("V60") on the public menu (§3, §7), and the
   // category that groups it there and when brewing.
@@ -161,6 +160,7 @@ export interface Recipe {
   firstDropMinSec: number | null; // espresso only (both or neither)
   firstDropMaxSec: number | null;
   flowUnit: FlowUnit;
+  style: RecipeStyle | null; // one of STYLES_BY_KIND[brewer.kind] (lib/equipment.ts)
   targetTempC: number | null;
   defaultGrinderId: string | null; // preselected when brewing this recipe
   createdAt: string; // date added (ISO)

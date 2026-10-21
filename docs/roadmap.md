@@ -3,7 +3,8 @@
 Design agreed on 2026-10-19. Each phase is its own feature branch off `dev`.
 The detailed contracts live in `schema.md`, `api_spec.md` and
 `timer_architecture.md` once a phase is built; this file keeps the overall
-plan and the decisions behind it.
+plan and the decisions behind it. Planned work that isn't built yet lives in
+[`backlog.md`](backlog.md).
 
 ## Model
 
@@ -74,7 +75,8 @@ steps.
   drop is a tap for everyone. Stored in their own table. The AI analysis
   receives the method kind, marks and machine capabilities; its response
   format is unchanged for now.
-- **Later:** dose / yield suggestions for espresso from the AI.
+- **Later:** dose / yield suggestions for espresso from the AI (backlog
+  item 6).
 
 ## Phase 3: Drinks + ingredients (built)
 
@@ -134,6 +136,11 @@ V60, a French press, an AeroPress or an OXO Rapid Brewer). The brew method is
 now **Filter** or **Espresso**; how a filter brewer brews is a descriptive
 **style**. Brewers without recipes now show on the brew page with a prompt to
 add one, instead of silently hiding (which made categories look empty).
+
+**Style on recipes (migrations 0027/0028):** style moved from brewers to
+recipes, and espresso got styles too (standard, soup, other): one brewer brews
+several ways (an AeroPress inverted or bypass, a soup shot on the same
+machine). Recipes took their brewer's style; espresso recipes became standard.
 
 ## Phase 4: Flow and pressure profiles (done in 2d)
 

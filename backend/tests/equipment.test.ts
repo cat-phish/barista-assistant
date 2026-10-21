@@ -40,7 +40,6 @@ describe("brewers", () => {
       id: expect.any(String),
       name: "Gaggia Classic",
       kind: "espresso",
-      style: null,
       notes: null,
       preinfusion: "none",
       flowControl: "none",

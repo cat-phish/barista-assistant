@@ -15,7 +15,10 @@ export const SYSTEM_PROMPT =
   "describe the finished drink. Milk and syrup mask acidity and bitterness and " +
   "add sweetness, so treat drink notes as weaker evidence of extraction than " +
   "straight notes, and compare a brew mainly with earlier brews served the " +
-  "same way (each brew's drink says how). For espresso, judge flow " +
+  "same way (each brew's drink says how). Judge a brew against its recipe's " +
+  "style: a soup shot is a long, high-ratio espresso on purpose, a cold brew " +
+  "steeps cold for hours, and an immersion brew isn't a pour over. For " +
+  "espresso, judge flow " +
   "from the first drop time, shot time and ratio against the recipe's " +
   "windows, and consider the machine's capabilities (pre-infusion, flow and " +
   "pressure control) and the grinder's step size when explaining the change. " +

@@ -10,8 +10,9 @@ import AppHeader from '../components/AppHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import ListControls from '../components/ListControls.vue';
 import MenuTabs from '../components/MenuTabs.vue';
+import { RECIPE_STYLES, STYLE_ORDER } from '../lib/equipment';
 import { formatAdded, formatDoseLine, formatGrams, formatTime } from '../lib/format';
-import { addedColumn, isSortKey, nameColumn, recallView, rememberView, sortArrow, sortBy, sortLabel, sortOptions, toggleHeader, type SortColumns } from '../lib/listSort';
+import { addedColumn, enumColumn, isSortKey, nameColumn, recallView, rememberView, sortArrow, sortBy, sortLabel, sortOptions, toggleHeader, type SortColumns } from '../lib/listSort';
 import { formatFinishWindow, plannedStarts, stepTitle } from '../lib/steps';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -27,7 +28,11 @@ const dialogError = ref('');
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `recipes.${what}.${workspaces.current?.id ?? ''}`;
 const ALL = 'all';
-const columns: SortColumns<Recipe> = { name: nameColumn(), added: addedColumn() };
+const columns: SortColumns<Recipe> = {
+  name: nameColumn(),
+  style: enumColumn('Style', STYLE_ORDER, (r) => r.style),
+  added: addedColumn(),
+};
 const sortChoices = sortOptions(columns);
 const brewerFilter = ref(ALL);
 const sort = ref('added_desc');
@@ -128,12 +133,15 @@ async function confirmDelete(): Promise<void> {
     <template v-else>
       <ListControls v-model:filter="brewerFilter" v-model:sort="sort" :sort-options="sortChoices" id-prefix="recipes" filter-label="Brewer" :filter-options="brewerOptions" />
       <p v-if="shown.length === 0" class="card empty">No recipes for {{ filterName }} yet.</p>
-      <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1.2fr) 5.5rem">
+      <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1.1fr) minmax(0, 0.9fr) minmax(0, 1.2fr) 5.5rem">
         <div class="data-row data-head">
           <button class="data-th" type="button" :aria-label="sortLabel(sort, 'name', 'Name')" @click="sort = toggleHeader(sort, 'name', columns)">
             Name <span aria-hidden="true">{{ sortArrow(sort, 'name') }}</span>
           </button>
           <span class="data-th">Brewer</span>
+          <button class="data-th" type="button" :aria-label="sortLabel(sort, 'style', 'Style')" @click="sort = toggleHeader(sort, 'style', columns)">
+            Style <span aria-hidden="true">{{ sortArrow(sort, 'style') }}</span>
+          </button>
           <span class="data-th">Dose</span>
           <button class="data-th end" type="button" :aria-label="sortLabel(sort, 'added', 'Date added')" @click="sort = toggleHeader(sort, 'added', columns)">
             Added <span aria-hidden="true">{{ sortArrow(sort, 'added') }}</span>
@@ -143,6 +151,7 @@ async function confirmDelete(): Promise<void> {
           <button class="data-row" type="button" :aria-expanded="openId === recipe.id" @click="toggle(recipe.id)">
             <span class="data-td primary">{{ recipe.name }}</span>
             <span class="data-td">{{ recipe.brewer.name }}</span>
+            <span class="data-td">{{ recipe.style ? RECIPE_STYLES[recipe.style] : '–' }}</span>
             <span class="data-td">{{ formatDoseLine(recipe.targetDoseGrams, recipe.targetWaterGrams, recipe.expectedYieldGrams) }}</span>
             <span class="data-td end">{{ formatAdded(recipe.createdAt) }}</span>
           </button>

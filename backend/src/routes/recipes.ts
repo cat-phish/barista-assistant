@@ -12,7 +12,9 @@ import {
   FLOW_UNITS,
   grinders,
   RECIPE_STEP_TYPES,
+  RECIPE_STYLES,
   STEP_ADVANCE,
+  STYLES_BY_KIND,
   recipeGrindSettings,
   recipes,
   recipeSteps,
@@ -21,6 +23,7 @@ import {
   type MethodKind,
   type Recipe,
   type RecipeStep,
+  type RecipeStyle,
 } from "@barista/shared/schema";
 import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
@@ -131,6 +134,8 @@ const recipeFields = {
   firstDropMaxSec: seconds.nullable().optional(),
   flowUnit: z.enum(FLOW_UNITS),
   targetTempC: decimalSchema({ min: 0, max: 100, scale: 1 }).nullable().optional(),
+  // How the cup is brewed; must be one of the brewer's method's (styleError).
+  style: z.enum(RECIPE_STYLES).nullable().optional(),
   // Preselected when brewing this recipe (docs/api_spec.md §5).
   defaultGrinderId: z.uuid().nullable().optional(),
   grindSettings: grindSettingsSchema,
@@ -200,6 +205,12 @@ function windows(body: {
     ...(finish ? { expectedFinishMinSec: finish.min, expectedFinishMaxSec: finish.max } : {}),
     ...(drop ? { firstDropMinSec: drop.min, firstDropMaxSec: drop.max } : {}),
   };
+}
+
+// A recipe's style must be one of its brewer's method's (docs/api_spec.md §5):
+// pour over, immersion… for filter; standard, soup… for espresso.
+function styleError(kind: MethodKind, style: RecipeStyle | null | undefined): string | null {
+  return style && !STYLES_BY_KIND[kind].includes(style) ? `style: not a style for ${kind} recipes` : null;
 }
 
 // What a recipe must look like for its method's kind (docs/api_spec.md §5),
@@ -304,6 +315,7 @@ async function loadRecipes(workspaceId: string, recipeId?: string): Promise<Reci
       firstDropMinSec: recipes.firstDropMinSec,
       firstDropMaxSec: recipes.firstDropMaxSec,
       flowUnit: recipes.flowUnit,
+      style: recipes.style,
       targetTempC: recipes.targetTempC,
       defaultGrinderId: recipes.defaultGrinderId,
       createdAt: recipes.createdAt,
@@ -379,6 +391,8 @@ recipesRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Reci
       steps,
     });
     if (wrongForKind) return wrongForKind;
+    const wrongStyle = styleError(kind, recipeFields.style);
+    if (wrongStyle) return wrongStyle;
     if (!(await grindersInWorkspace(tx, grindSettings.map((g) => g.grinderId), workspaceId))) {
       return "grindSettings: grinderId not a grinder in this workspace";
     }
@@ -425,6 +439,7 @@ recipesRouter.patch("/:recipeId", async (req: Request<RecipeParams>, res: Respon
         targetWaterGrams: recipes.targetWaterGrams,
         expectedYieldGrams: recipes.expectedYieldGrams,
         firstDropMinSec: recipes.firstDropMinSec,
+        style: recipes.style,
       })
       .from(recipes)
       .where(and(eq(recipes.id, recipeId), eq(recipes.workspaceId, workspaceId)))
@@ -454,6 +469,11 @@ recipesRouter.patch("/:recipeId", async (req: Request<RecipeParams>, res: Respon
           .where(eq(recipeSteps.recipeId, recipeId))),
     });
     if (wrongForKind) return { status: 400, error: wrongForKind } as const;
+    // A sent style must fit; moving to a brewer of the other method clears a
+    // style that no longer does.
+    const wrongStyle = styleError(kind, recipeFields.style);
+    if (wrongStyle) return { status: 400, error: wrongStyle } as const;
+    const styleUpdate = recipeFields.style === undefined && styleError(kind, existing.style) ? { style: null } : {};
     if (grindSettings && !(await grindersInWorkspace(tx, grindSettings.map((g) => g.grinderId), workspaceId))) {
       return { status: 400, error: "grindSettings: grinderId not a grinder in this workspace" } as const;
     }
@@ -462,7 +482,7 @@ recipesRouter.patch("/:recipeId", async (req: Request<RecipeParams>, res: Respon
     }
 
     if (Object.keys(recipeFields).length > 0) {
-      await tx.update(recipes).set(recipeFields).where(eq(recipes.id, recipeId));
+      await tx.update(recipes).set({ ...recipeFields, ...styleUpdate }).where(eq(recipes.id, recipeId));
     }
     // Provided lists replace the old ones entirely.
     if (grindSettings) {
