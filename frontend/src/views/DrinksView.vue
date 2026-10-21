@@ -142,7 +142,7 @@ async function confirmDelete(): Promise<void> {
         <div v-for="{ drink: d, depth } in shown" :key="d.id" class="data-item" :class="{ open: openId === d.id }">
           <button class="data-row" type="button" :aria-expanded="openId === d.id" @click="toggle(d.id)">
             <span class="data-td primary" :style="{ paddingLeft: nested ? `calc(${depth} * var(--space-4))` : undefined }">
-              <template v-if="nested && depth">↳ </template>{{ d.name }}
+              {{ d.name }}
               <span v-if="!nested && d.parent" class="variant-of">variant of {{ d.parent.name }}</span>
             </span>
             <span class="data-td">{{ d.category?.name ?? 'Uncategorised' }}</span>

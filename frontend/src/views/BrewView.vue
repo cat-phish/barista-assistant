@@ -622,10 +622,10 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <select id="item" v-model="item">
             <option v-for="k in items.plains" :key="k" :value="encodePlain(k)">{{ k === 'filter' ? 'Just filter coffee' : 'Just espresso' }}</option>
             <optgroup v-if="items.plains.length && items.drinks.length" label="Drinks">
-              <option v-for="d in items.drinks" :key="d.drink.id" :value="encodeDrink(d.drink.id)">{{ '\u2003'.repeat(d.depth) }}{{ d.depth ? '↳ ' : '' }}{{ drinkLabel(d.drink) }}</option>
+              <option v-for="d in items.drinks" :key="d.drink.id" :value="encodeDrink(d.drink.id)">{{ '\u2003'.repeat(d.depth) }}{{ drinkLabel(d.drink) }}</option>
             </optgroup>
             <template v-else>
-              <option v-for="d in items.drinks" :key="d.drink.id" :value="encodeDrink(d.drink.id)">{{ '\u2003'.repeat(d.depth) }}{{ d.depth ? '↳ ' : '' }}{{ drinkLabel(d.drink) }}</option>
+              <option v-for="d in items.drinks" :key="d.drink.id" :value="encodeDrink(d.drink.id)">{{ '\u2003'.repeat(d.depth) }}{{ drinkLabel(d.drink) }}</option>
             </template>
           </select>
         </div>
