@@ -8,7 +8,7 @@ import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import { config } from "./config.js";
 
-// Producer side of the brew-analysis queue (docs/api_spec.md §9).
+// Producer side of the brew-analysis queue (docs/api/llm-contract.md §9).
 const connection = new Redis(config.redis.url, {
   maxRetriesPerRequest: 1,
   ...(config.redis.password ? { password: config.redis.password } : {}),

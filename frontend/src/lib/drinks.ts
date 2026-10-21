@@ -1,4 +1,4 @@
-// Drinks and ingredients (docs/api_spec.md §5b–§5d): labels, summaries, and
+// Drinks and ingredients (docs/api/README.md §5b–§5d): labels, summaries, and
 // arranging drinks into category sections with variants under their parent.
 import type { IngredientType, Drink, DrinkCategory, DrinkIngredient } from '../api/types';
 import { formatAmount } from './servings';

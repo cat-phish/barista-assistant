@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Recipes (docs/api_spec.md §5) as a table: filter by brewer, sort by name or
+// Recipes (docs/api/recipes.md §5) as a table: filter by brewer, sort by name or
 // date added (headers or the dropdown); a row expands to its details.
 import { computed, onMounted, ref, watch } from 'vue';
 import { brewersApi } from '../api/brewers';

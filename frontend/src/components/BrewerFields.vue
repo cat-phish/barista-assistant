@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// A brewer's fields (docs/api_spec.md §3): name and brew method; for
+// A brewer's fields (docs/api/brewers.md §3): name and brew method; for
 // espresso, what
 // the machine lets you control; notes; and the menu settings for the plain brew.
 import type { DrinkCategory } from '../api/types';

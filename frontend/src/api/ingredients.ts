@@ -1,7 +1,7 @@
 import { api } from './client';
 import type { Ingredient, IngredientType } from './types';
 
-// docs/api_spec.md §5b
+// docs/api/ingredients.md §5b
 export interface IngredientInput {
   name: string;
   ingredientType: IngredientType;

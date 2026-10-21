@@ -1,7 +1,7 @@
 import { api } from './client';
 import type { Bean, RoastLevel } from './types';
 
-// Request body for create/update (docs/api_spec.md §4).
+// Request body for create/update (docs/api/beans.md §4).
 export interface BeanInput {
   roasterName: string;
   beanName: string;

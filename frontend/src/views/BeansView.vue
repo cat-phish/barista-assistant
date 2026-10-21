@@ -15,7 +15,7 @@ const beans = ref<Bean[]>([]);
 const loading = ref(true);
 const error = ref('');
 
-// Delete flow (docs/api_spec.md §4 frontend requirement): confirm, try the
+// Delete flow (docs/api/beans.md §4 frontend requirement): confirm, try the
 // plain DELETE, and only if the server reports brew logs, ask again with the count.
 const pending = ref<Bean | null>(null);
 const brewLogCount = ref<number | null>(null);
@@ -98,7 +98,7 @@ function openFreeze(bean: Bean) {
   return last && last.thawedOn === null ? last : null;
 }
 
-// "9 days off roast", or while frozen "age paused at 9 days" (docs/api_spec.md §4).
+// "9 days off roast", or while frozen "age paused at 9 days" (docs/api/beans.md §4).
 function ageLabel(bean: Bean): string | null {
   if (!bean.roastDate) return null;
   const { ageDays, daysFrozen } = effectiveRoastAge(bean.roastDate, bean.freezePeriods, localDateInput());

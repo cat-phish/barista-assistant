@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Drinks (docs/api_spec.md §5c) as a table: filter by category, sort by name
+// Drinks (docs/api/drinks.md §5c) as a table: filter by category, sort by name
 // (variants stay under their parent) or date added (a flat list); a row
 // expands to its details. Categories are managed under Bar setup.
 import { computed, onMounted, ref, watch } from 'vue';

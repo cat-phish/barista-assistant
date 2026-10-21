@@ -58,7 +58,7 @@ export default defineConfig({
 ## 3. Timer State Mechanics (`BrewTimer.vue`, every recipe)
 *   **Delta-Timestamp Calculation:** Never increment a counter inside `setInterval`. Store `startTime = Date.now() - elapsedMs` and compute `elapsedMs = Date.now() - startTime` inside a `requestAnimationFrame` loop.
 *   **Screen Wake Lock:** Request `navigator.wakeLock.request('screen')` when the brew starts and release it when finished or unmounted.
-*   **Steps run back to back** (supersedes the reference component's manual "Next Step" button and the earlier fixed start/end times). Recipe steps have a `durationSec` and an `advance` mode (`docs/api_spec.md` §5); each step starts when the previous one actually ended:
+*   **Steps run back to back** (supersedes the reference component's manual "Next Step" button and the earlier fixed start/end times). Recipe steps have a `durationSec` and an `advance` mode (`docs/api/README.md` §5); each step starts when the previous one actually ended:
     *   `auto`: ends `durationSec` after it started. An instant step (0 s) is shown for about two seconds without delaying the next one.
     *   `auto_log`: the same, with a **Log it** button that records a `step_end` mark (the real moment, e.g. when you actually poured) without changing the schedule.
     *   `tap`: ends when **Next** is tapped (recorded as a `step_end` mark). Its duration is a guide: once passed, the card says "Tap Next when ready".

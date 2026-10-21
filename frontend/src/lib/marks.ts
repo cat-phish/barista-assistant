@@ -1,4 +1,4 @@
-// Timer marks (docs/api_spec.md §6): first drop, and the real end of steps that
+// Timer marks (docs/api/brew-logs.md §6): first drop, and the real end of steps that
 // wait for a tap or have a "Log it" button.
 import type { Mark } from '../api/types';
 import { parseDecimal, type Parsed } from './format';

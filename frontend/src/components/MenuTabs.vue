@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Tabs across recipes, the drinks made from them, and the ingredients that
-// finish drinks (docs/api_spec.md §5, §5b, §5c).
+// finish drinks (docs/api/README.md §5, §5b, §5c).
 import SectionTabs from './SectionTabs.vue';
 
 const tabs = [

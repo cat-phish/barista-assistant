@@ -11,7 +11,7 @@ import { optionalText, updateSchema } from "../validation.js";
 
 export type FreezePeriod = Pick<BeanFreeze, "id" | "frozenOn" | "thawedOn">;
 
-// Every bean the API returns carries its freeze history (docs/api_spec.md §4).
+// Every bean the API returns carries its freeze history (docs/api/beans.md §4).
 export type BeanWithFreezes = Bean & { freezePeriods: FreezePeriod[] };
 
 export interface BeanListResponse {
@@ -164,7 +164,7 @@ beansRouter.delete("/:beanId", async (req: Request<BeanParams>, res: Response) =
   res.status(204).end();
 });
 
-// Freeze/thaw (docs/api_spec.md §4). Both lock the bean row, so concurrent
+// Freeze/thaw (docs/api/beans.md §4). Both lock the bean row, so concurrent
 // requests can't open two periods or thaw twice.
 async function changeFreezeState(req: Request<BeanParams>, res: Response<BeanResponse>, action: "freeze" | "thaw"): Promise<void> {
   if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId, WRITE_ROLES))) return;

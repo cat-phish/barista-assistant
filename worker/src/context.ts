@@ -30,12 +30,12 @@ import { effectiveRoastAge, type FreezePeriodLike } from "./roastAge.js";
 const PREVIOUS_BREW_COUNT = 5;
 
 // The grinder a grind setting refers to, with whatever details are recorded
-// (range and step size let the LLM talk in clicks). docs/api_spec.md §9.
+// (range and step size let the LLM talk in clicks). docs/api/llm-contract.md §9.
 export type GrinderInfo = Pick<Grinder, "name" | "adjustment" | "settingMin" | "settingMax" | "stepSize" | "burrType" | "burrSizeMm" | "power">;
 // Espresso brews: what the machine (the log's brewer) lets the barista control.
 export type MachineInfo = Pick<Brewer, "name" | "preinfusion" | "flowControl" | "pressureControl">;
 
-// What the LLM sees about one brew (docs/api_spec.md §9).
+// What the LLM sees about one brew (docs/api/llm-contract.md §9).
 export interface BrewSummary {
   timestamp: string;
   // Effective age on the brew's date: days since roasting minus days frozen.
@@ -47,7 +47,7 @@ export interface BrewSummary {
   recipeStyle: RecipeStyle | null;
   // The recipe's brew method (filter / espresso), null without a recipe.
   methodKind: MethodKind | null;
-  // The grind setting only means something for this grinder (docs/api_spec.md §9).
+  // The grind setting only means something for this grinder (docs/api/llm-contract.md §9).
   grinder: GrinderInfo | null;
   machine: MachineInfo | null; // espresso only
   // Shot timer taps, earliest first (espresso): first drop, end of manual pre-infusion.

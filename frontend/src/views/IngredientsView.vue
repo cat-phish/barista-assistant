@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Ingredients (docs/api_spec.md §5b): reusable preps that finish drinks, as a
+// Ingredients (docs/api/ingredients.md §5b): reusable preps that finish drinks, as a
 // table like Recipes: filter by type (or the unused ones), sort by name, type,
 // how many drinks use it, or date added; a row expands to its instructions,
 // the drinks it's in and the units they measure it in. Adding and editing

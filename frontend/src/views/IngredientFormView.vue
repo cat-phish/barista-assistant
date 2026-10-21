@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Ingredient editor (docs/api_spec.md §5b), a page of its own like recipes:
+// Ingredient editor (docs/api/ingredients.md §5b), a page of its own like recipes:
 // add an ingredient, or edit one (route param).
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';

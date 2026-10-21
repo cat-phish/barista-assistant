@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 1–5 rating (docs/api_spec.md §6) as a radio group; tap the chosen value again to clear.
+// 1–5 rating (docs/api/brew-logs.md §6) as a radio group; tap the chosen value again to clear.
 const model = defineModel<number | null>({ required: true });
 // name: the radio group, unique per form (a drink brew has two ratings).
 withDefaults(defineProps<{ name?: string; label?: string }>(), { name: 'rating', label: 'Rating' });

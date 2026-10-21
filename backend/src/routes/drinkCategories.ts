@@ -8,7 +8,7 @@ import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { drinkCategories, type DrinkCategory } from "@barista/shared/schema";
 
-// docs/api_spec.md §5d: ordered menu sections for drinks and brewers.
+// docs/api/drink-categories.md §5d: ordered menu sections for drinks and brewers.
 export type CategorySummary = Pick<DrinkCategory, "id" | "name" | "position">;
 
 interface WorkspaceParams {

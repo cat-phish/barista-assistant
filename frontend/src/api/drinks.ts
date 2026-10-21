@@ -1,7 +1,7 @@
 import { api } from './client';
 import type { Drink, MethodKind, ServingUnit } from './types';
 
-// docs/api_spec.md §5c
+// docs/api/drinks.md §5c
 export interface DrinkInput {
   name: string;
   description: string | null;

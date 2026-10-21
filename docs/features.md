@@ -1,7 +1,7 @@
 # Features
 
 What the app does, briefly, kept up to date as features land. The contracts
-are in `schema.md`, `api_spec.md` and `timer_architecture.md`; the plan for
+are in `schema.md`, `api/` (index in `api/README.md`) and `timer_architecture.md`; the plan for
 upcoming work is in `roadmap.md`.
 
 ## Accounts & workspaces

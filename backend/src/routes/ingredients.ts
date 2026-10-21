@@ -9,7 +9,7 @@ import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { INGREDIENT_TYPES, ingredients, drinkIngredients, type Ingredient } from "@barista/shared/schema";
 import { optionalText, updateSchema } from "../validation.js";
 
-// docs/api_spec.md §5b: reusable preps that finish a drink.
+// docs/api/ingredients.md §5b: reusable preps that finish a drink.
 export type IngredientSummary = Pick<Ingredient, "id" | "name" | "ingredientType" | "instructions" | "createdAt"> & { drinkCount: number };
 
 interface WorkspaceParams {

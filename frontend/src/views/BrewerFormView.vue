@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Brewer editor (docs/api_spec.md §3), a page of its own like recipes: add a
+// Brewer editor (docs/api/brewers.md §3), a page of its own like recipes: add a
 // brewer, or edit one (route param).
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';

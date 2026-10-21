@@ -6,7 +6,7 @@ import AuthCard from '../components/AuthCard.vue';
 import { safeRedirect } from '../router';
 import { useAuthStore } from '../stores/auth';
 
-const MIN_PASSWORD = 8; // docs/api_spec.md §1
+const MIN_PASSWORD = 8; // docs/api/auth.md §1
 
 const auth = useAuthStore();
 const route = useRoute();

@@ -18,7 +18,7 @@ import {
 } from "@barista/shared/schema";
 import { optionalText, updateSchema } from "../validation.js";
 
-// docs/api_spec.md §3: what makes the coffee (V60, AeroPress, an espresso
+// docs/api/brewers.md §3: what makes the coffee (V60, AeroPress, an espresso
 // machine). Espresso brewers record their capabilities; the menu fields put
 // the plain brew on the public menu. Retired like grinders (§3b) once brews
 // used one.
@@ -157,7 +157,7 @@ brewersRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Brew
 // Recipes and brews reference brewers by ID, so a rename shows up everywhere
 // at once. Case-only renames ("v60" -> "V60") are allowed: the unique index
 // only compares against other rows. The kind can't change while recipes use
-// the brewer, since recipe fields differ by kind (docs/api_spec.md §3).
+// the brewer, since recipe fields differ by kind (docs/api/brewers.md §3).
 brewersRouter.patch("/:brewerId", async (req: Request<BrewerParams>, res: Response<BrewerResponse>) => {
   const { workspaceId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;

@@ -29,7 +29,7 @@ import {
 } from "@barista/shared/schema";
 import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
-// docs/api_spec.md §6: first_drop (espresso), step_end (a step's real end).
+// docs/api/brew-logs.md §6: first_drop (espresso), step_end (a step's real end).
 export interface Mark {
   kind: MarkKind;
   stepOrder: number | null; // step_end only
@@ -89,7 +89,7 @@ const brewLogFields = {
   actualDoseGrams: decimalSchema({ min: 0, max: 1000, scale: 2, exclusiveMin: true, exclusiveMax: true }),
   // Required, except null for espresso (espressoError).
   actualWaterGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
-  // Measured beverage weight (optional, except for espresso; docs/api_spec.md §6).
+  // Measured beverage weight (optional, except for espresso; docs/api/brew-logs.md §6).
   actualYieldGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
   actualTempC: decimalSchema({ min: 0, max: 100, scale: 1 }).nullable().optional(),
   actualGrindSetting: optionalText(100),
@@ -131,7 +131,7 @@ const listQuerySchema = z.object({
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-// Espresso brews record the shot weight instead of water (docs/api_spec.md
+// Espresso brews record the shot weight instead of water (docs/api/README.md
 // §6). kind is the kind of the log's recipe's brewer, or null without a recipe.
 function espressoError(
   kind: MethodKind | null,
@@ -154,7 +154,7 @@ function espressoError(
 }
 
 // A size is both its number and unit; it and the drink's tasting are only for
-// a brew made for a drink (docs/api_spec.md §6).
+// a brew made for a drink (docs/api/brew-logs.md §6).
 function drinkOnlyError(log: {
   drinkId?: string | null;
   servingSize?: number | null;
@@ -172,7 +172,7 @@ function drinkOnlyError(log: {
 }
 
 // A brew for a drink uses a recipe on a brewer of the drink's kind, any one of
-// them (docs/api_spec.md §6).
+// them (docs/api/brew-logs.md §6).
 async function drinkError(tx: Tx, drinkId: string | null, recipeId: string | null): Promise<string | null> {
   if (!drinkId || !recipeId) return null;
   const [allowed] = await tx
@@ -229,7 +229,7 @@ async function referencesInWorkspace(
     if (!recipe) return "recipeId: not a recipe in this workspace";
   }
   if (refs.grinderId) {
-    // Retired grinders are accepted (docs/api_spec.md §6).
+    // Retired grinders are accepted (docs/api/brew-logs.md §6).
     const [grinder] = await tx
       .select({ id: grinders.id })
       .from(grinders)
@@ -453,7 +453,7 @@ brewLogsRouter.patch(
       if (error) return { status: "bad_ref", error } as const;
 
       // Only when the change touches it, so old logs whose recipe later moved
-      // to another brewer can still be edited (docs/api_spec.md §6).
+      // to another brewer can still be edited (docs/api/brew-logs.md §6).
       const { marks, ...fields } = body;
       // A new recipe brings its brewer; the old brewer stays otherwise.
       const brewerUpdate = "recipeId" in body ? { brewerId: (await recipeBrewer(tx, fields.recipeId))?.brewerId ?? null } : {};

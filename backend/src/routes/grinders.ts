@@ -9,7 +9,7 @@ import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { BURR_TYPES, brewLogs, GRINDER_ADJUSTMENTS, GRINDER_POWER, grinders, type Grinder } from "@barista/shared/schema";
 import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
-// docs/api_spec.md §3b
+// docs/api/grinders.md §3b
 export type GrinderSummary = Omit<Grinder, "workspaceId">;
 
 export interface LastSettingResponse {

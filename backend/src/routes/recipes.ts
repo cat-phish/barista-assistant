@@ -27,7 +27,7 @@ import {
 } from "@barista/shared/schema";
 import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
-// docs/api_spec.md §5
+// docs/api/recipes.md §5
 export interface RecipeDetails extends Omit<Recipe, "brewerId"> {
   brewer: Pick<Brewer, "id" | "name" | "kind">;
   grindSettings: Array<{ grinderId: string; grinderName: string; setting: string }>;
@@ -51,7 +51,7 @@ const seconds = z.number().int().min(0).max(MAX_SEC);
 const waterGrams = decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true });
 const isWaterType = (t: string) => (WATER_STEP_TYPES as readonly string[]).includes(t);
 const isEspressoType = (t: string) => (ESPRESSO_STEP_TYPES as readonly string[]).includes(t);
-// Pressure / flow values allowed per type (docs/api_spec.md §5); "required" = must have it.
+// Pressure / flow values allowed per type (docs/api/recipes.md §5); "required" = must have it.
 const PRESSURE: Partial<Record<string, "required" | "optional">> = { pressure: "required", preinfusion: "optional", other: "optional" };
 const FLOW: Partial<Record<string, "required" | "optional">> = { flow: "required", preinfusion: "optional", other: "optional" };
 const profileValue = decimalSchema({ min: 0, max: 20, scale: 1 }).nullable().optional();
@@ -136,7 +136,7 @@ const recipeFields = {
   targetTempC: decimalSchema({ min: 0, max: 100, scale: 1 }).nullable().optional(),
   // How the cup is brewed; must be one of the brewer's method's (styleError).
   style: z.enum(RECIPE_STYLES).nullable().optional(),
-  // Preselected when brewing this recipe (docs/api_spec.md §5).
+  // Preselected when brewing this recipe (docs/api/recipes.md §5).
   defaultGrinderId: z.uuid().nullable().optional(),
   grindSettings: grindSettingsSchema,
   steps: stepsSchema,
@@ -160,7 +160,7 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 const FINISH_DEFAULT_SPREAD_SEC = 15;
 const FIRST_DROP_DEFAULT_SPREAD_SEC = 3;
 
-// Time windows are pairs (docs/api_spec.md §5): one end alone gets the other
+// Time windows are pairs (docs/api/recipes.md §5): one end alone gets the other
 // at ±spread; null on either clears both; both must be in order. Returns
 // undefined when neither end was sent (leave unchanged).
 function timeWindow(
@@ -207,13 +207,13 @@ function windows(body: {
   };
 }
 
-// A recipe's style must be one of its brewer's method's (docs/api_spec.md §5):
+// A recipe's style must be one of its brewer's method's (docs/api/recipes.md §5):
 // pour over, immersion… for filter; standard, soup… for espresso.
 function styleError(kind: MethodKind, style: RecipeStyle | null | undefined): string | null {
   return style && !STYLES_BY_KIND[kind].includes(style) ? `style: not a style for ${kind} recipes` : null;
 }
 
-// What a recipe must look like for its method's kind (docs/api_spec.md §5),
+// What a recipe must look like for its method's kind (docs/api/recipes.md §5),
 // checked against the recipe as it is after the request.
 interface KindCheck {
   targetWaterGrams: number | null;

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // "Finish the drink" after a brew: the ingredients (scaled to the size made)
-// and the drink's instructions, line breaks kept (docs/api_spec.md §5c).
+// and the drink's instructions, line breaks kept (docs/api/drinks.md §5c).
 import type { Drink } from '../api/types';
 import { ingredientLine } from '../lib/drinks';
 
