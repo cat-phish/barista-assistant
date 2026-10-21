@@ -202,19 +202,27 @@ Removes a member. Owners can remove anyone. Any member can remove themselves
 
 ## 3. Brewers
 
-What makes the coffee: a V60, a Chemex, an AeroPress, an espresso machine.
-Recipes and drinks (§5, §5c) belong to a brewer from their workspace's list.
-Each brewer has a **kind**, one of `METHOD_KINDS`:
+What makes the coffee: a V60, a French press, an AeroPress, an OXO Rapid
+Brewer, an espresso machine. Recipes (§5) belong to a brewer from their
+workspace's list. Two separate ideas describe a brewer (how a cup is brewed,
+pour over or a soup shot, is the recipe's `style`, §5):
 
-| `kind` | Examples | Recipe fields (§5) |
-|---|---|---|
-| `pour_over` | V60, Kalita, Chemex | dose + water, estimated yield, steps with pours |
-| `immersion` | AeroPress, French press | same as `pour_over` for now |
-| `espresso` | Linea Mini, Gaggia Classic | dose + target yield (no water), shot time and first-drop windows |
+- **Brew method** (`kind`, one of `METHOD_KINDS`): fixed, and it changes how
+  the app works. It decides the recipe fields, steps and timer, and which
+  drinks the brewer can make (a drink needs a method, §5c).
 
-New workspaces get V60 (`pour_over`), Espresso (`espresso`) and Aeropress
-(`immersion`). Milk drinks like a latte are drinks (§5c): built on a brewer,
-brewed with one of its recipes, plus ingredients.
+  | `kind` | Examples | Recipe fields (§5) |
+  |---|---|---|
+  | `filter` | V60, Chemex, French press, AeroPress, OXO Rapid Brewer | dose + water, estimated yield, steps with pours |
+  | `espresso` | Linea Mini, Gaggia Classic | dose + target yield (no water), shot time and first-drop windows |
+
+- **Category** (`categoryId`, §5d): your own grouping for the brew page and
+  the menu, e.g. "Pour Over/Immersion".
+
+New workspaces get V60 (`filter`), Espresso (`espresso`) and Aeropress
+(`filter`). Milk drinks like a latte are drinks (§5c):
+they need espresso, so any espresso brewer can make them; The Atlas needs
+filter coffee, so any filter brewer (a V60, a French press, an OXO) can.
 
 **Espresso capabilities** describe who controls each part of the shot, so the
 shot timer notes what the machine can't do and the AI knows what can be
@@ -226,12 +234,12 @@ adjusted. Other kinds keep `none`.
 | `flowControl`, `pressureControl` | `none`, `manual` (paddle, lever, needle valve), `programmable` (profiles) — `PROFILE_CONTROLS` |
 
 **Category and menu:** a brewer's optional drink category (§5d) is where it's
-listed when brewing (Category → Brewer or drink → Recipe) and on the public
+listed when brewing (Category → Drink or plain brew → Brewer → Recipe) and on the public
 menu (§7), where it can appear as the plain brew under `menuName` (else its
 name), e.g. "Espresso" for a Linea Mini.
 
 Retiring works like grinders (§3b): retired brewers leave the pickers, and
-past brews keep showing them.
+past brews keep showing them. `createdAt` (read-only) is when the brewer was added.
 
 **Brewer object:**
 
@@ -248,7 +256,8 @@ past brews keep showing them.
   "description": null,
   "categoryId": "uuid",
   "showOnPublicMenu": true,
-  "retiredAt": null
+  "retiredAt": null,
+  "createdAt": "2026-10-18T09:00:00.000Z"
 }
 ```
 
@@ -261,8 +270,8 @@ past brews keep showing them.
 ### `POST /api/workspaces/:workspaceId/brewers`
 
 - **Auth Required:** `true` (role `owner` or `barista`)
-- **Body:** `{ "name": "Chemex", "kind": "pour_over" }` (`name` trimmed,
-  1–100 chars; `kind` optional, default `pour_over`). Optional: `notes`
+- **Body:** `{ "name": "Chemex", "kind": "filter" }` (`name` trimmed,
+  1–100 chars; `kind` optional, default `filter`). Optional: `notes`
   (≤ 255), the capabilities (default `none`), `menuName` (≤ 100),
   `description` (≤ 500), `categoryId` (a drink category in this workspace,
   or `null`), `showOnPublicMenu` (default `false`). Blank text becomes `null`.
@@ -273,7 +282,7 @@ past brews keep showing them.
 
 ### `PATCH /api/workspaces/:workspaceId/brewers/:brewerId`
 
-Recipes and drinks reference it by ID, so a rename shows up everywhere at once.
+Recipes and brew logs reference it by ID, so a rename shows up everywhere at once.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Body:** any non-empty subset of the `POST` fields (same rules), plus
@@ -288,16 +297,16 @@ Recipes and drinks reference it by ID, so a rename shows up everywhere at once.
 
 ### `DELETE /api/workspaces/:workspaceId/brewers/:brewerId`
 
-The database cascades a brewer's deletion to its recipes and drinks, so the
-API is what protects them, and brew history keeps a brewer once used.
+The database cascades a brewer's deletion to its recipes, so the API is what
+protects them, and brew history keeps a brewer once used. Drinks don't tie up
+a brewer (they need a kind, not a device).
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Success (`204 No Content`)**
-- **Errors:** `403` viewer; `404` not in this workspace; `409` recipes,
-  drinks or brew logs use it, with body
-  `{ "error": "...", "recipeCount": 2, "drinkCount": 1, "brewLogCount": 5 }`.
-  Move or delete the recipes and drinks first; with only brew logs left,
-  retire it instead.
+- **Errors:** `403` viewer; `404` not in this workspace; `409` recipes or
+  brew logs use it, with body
+  `{ "error": "...", "recipeCount": 2, "brewLogCount": 5 }`. Move or delete
+  the recipes first; with only brew logs left, retire it instead.
 
 ---
 
@@ -321,7 +330,8 @@ grinder. Recipes are grinder-neutral.
   "burrType": "conical",
   "burrSizeMm": 39,
   "power": "manual",
-  "retiredAt": null
+  "retiredAt": null,
+  "createdAt": "2026-10-18T09:00:00.000Z"
 }
 ```
 
@@ -339,6 +349,8 @@ Everything after `name` is optional (`null` when unknown):
 
 The range and step size are sent to the AI analysis so its reasoning can talk
 in steps ("2 clicks finer"); the rest is reference.
+
+`createdAt` (read-only) is when the grinder was added; lists sort by it.
 
 A **retired** grinder (`retiredAt` set) is hidden from pickers for new brews,
 but past brews keep showing it, and it can be restored. A grinder that brews
@@ -513,7 +525,7 @@ time, and an optional water temperature.
 request (so a `PATCH` that changes `brewerId` must also send the fields the
 new kind needs):
 
-| | `pour_over` / `immersion` | `espresso` |
+| | `filter` | `espresso` |
 |---|---|---|
 | `targetWaterGrams` | required | must be absent/`null` |
 | `expectedYieldGrams` | optional estimate | **required**: target shot weight; ratio is dose:yield (18 g → 36 g = 1:2) |
@@ -575,7 +587,7 @@ card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
   "id": "uuid",
   "workspaceId": "uuid",
   "name": "House V60",
-  "brewer": { "id": "uuid", "name": "V60", "kind": "pour_over" },
+  "brewer": { "id": "uuid", "name": "V60", "kind": "filter" },
   "targetDoseGrams": 15,
   "targetWaterGrams": 250,
   "expectedYieldGrams": 220,
@@ -584,8 +596,10 @@ card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
   "firstDropMinSec": null,
   "firstDropMaxSec": null,
   "flowUnit": "g_s",
+  "style": "pour_over",
   "targetTempC": 94,
   "defaultGrinderId": "uuid",
+  "createdAt": "2026-10-19T08:00:00.000Z",
   "grindSettings": [
     { "grinderId": "uuid", "grinderName": "Comandante C40", "setting": "20" }
   ],
@@ -596,6 +610,10 @@ card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
   ]
 }
 ```
+
+`createdAt` is when the recipe was added (read-only; recipes that existed
+before it was tracked date from their first brew). A duplicate is a new
+recipe with its own date.
 
 An espresso profile (pressure until first drop, pump off for 10 s, then flow
 down to 2 g/s until the shot is done):
@@ -643,7 +661,13 @@ Creates a recipe, its grind starting points and its steps in one transaction.
     `targetDoseGrams` (> 0, < 1000, max 2 decimals), and by kind (table
     above) `targetWaterGrams` or `expectedYieldGrams` (> 0, < 10000, max 2
     decimals).
-  - Optional, nullable: `expectedYieldGrams` for pour-over/immersion (same
+  - `style` (optional, nullable): how the cup is brewed, one of its brewer's
+    method's styles: `pour_over`, `immersion`, `hybrid`, `cold_brew` or
+    `other` for filter; `standard`, `soup` or `other` for espresso (`400` otherwise).
+    Descriptive (lists, the AI); it changes no fields or timer behaviour. On
+    `PATCH`, moving the recipe to a brewer of the other method clears a style
+    that no longer fits, unless a fitting one is sent.
+  - Optional, nullable: `expectedYieldGrams` for filter recipes (same
     rules as water), `targetTempC` (0–100, max 1 decimal). Recipes reach the
     public menu through drinks (§5c).
   - First-drop window (espresso only): `firstDropMinSec`/`firstDropMaxSec`,
@@ -701,12 +725,13 @@ Reusable preps that finish a drink: orange-infused cold foam, steamed oat
 milk, vanilla syrup, ice. Per workspace.
 
 **Ingredient object:**
-`{ "id": "uuid", "name": "Orange cold foam", "ingredientType": "foam", "instructions": "Infuse cream with orange peel overnight…", "drinkCount": 2 }`
+`{ "id": "uuid", "name": "Orange cold foam", "ingredientType": "foam", "instructions": "Infuse cream with orange peel overnight…", "drinkCount": 2, "createdAt": "2026-10-20T15:00:00.000Z" }`
 
 - `ingredientType`: one of `INGREDIENT_TYPES` (`milk`, `foam`, `syrup`, `ice`,
   `water`, `other`; default `other`).
 - `instructions`: free text, optional, ≤ 5000 chars, blank becomes `null`.
 - `drinkCount`: how many drinks use it (read-only).
+- `createdAt`: when it was added (read-only; lists sort by it).
 
 ### `GET /api/workspaces/:workspaceId/ingredients`
 
@@ -740,17 +765,19 @@ milk, vanilla syrup, ice. Per workspace.
 ## 5c. Drinks
 
 What's served, and what the public menu (§7) lists alongside plain brews. A
-drink is **built on one brewer** and can be brewed with **any recipe of that
-brewer** (the **default**, if set, is preselected when brewing), then
-finished with **ingredients**. "Latte" is an espresso machine plus steamed
-milk; "The Atlas" is V60 plus orange cold foam. The plain brew ("V60") isn't
+drink needs a **brew method** (`kind`: `filter` or `espresso`), not a
+particular device: **any brewer of that kind** can make it, with that
+brewer's recipes (the **default**, any recipe of the kind, is preselected
+when brewing), then it's finished with **ingredients**. "Latte" is espresso
+plus steamed milk, on any espresso machine; "The Atlas" is pour over plus
+orange cold foam, on a V60 or a Chemex. The plain brew ("V60") isn't
 a drink: it's the brewer itself (§3).
 
 A drink can be a **variant** of another drink (`parentDrinkId`), like a
 cocktail riff: Vanilla Latte is a variant of Latte, and Iced Vanilla Latte a
 variant of Vanilla Latte. A variant is a complete, independent drink (clients
 create one by copying the parent); nothing is inherited after that. Its
-brewer may differ from its parent's.
+kind may differ from its parent's.
 
 **Drink object:**
 
@@ -759,7 +786,7 @@ brewer may differ from its parent's.
   "id": "uuid",
   "name": "Vanilla Latte",
   "description": null,
-  "brewer": { "id": "uuid", "name": "Linea Mini", "kind": "espresso" },
+  "kind": "espresso",
   "category": { "id": "uuid", "name": "Espresso milk drinks" },
   "parent": { "id": "uuid", "name": "Latte" },
   "variants": [{ "id": "uuid", "name": "Iced Vanilla Latte" }],
@@ -767,6 +794,8 @@ brewer may differ from its parent's.
   "defaultRecipeId": "uuid",
   "servingSize": 8,
   "servingUnit": "fl_oz",
+  "instructions": "Add the syrup to the cup and pull the shot onto it.\nSteam the milk and pour.",
+  "createdAt": "2026-10-20T15:30:00.000Z",
   "ingredients": [
     { "ingredientId": "uuid", "name": "Steamed milk", "ingredientType": "milk", "amountValue": 6, "amountUnit": "fl oz", "note": null },
     { "ingredientId": "uuid", "name": "Vanilla syrup", "ingredientType": "syrup", "amountValue": 2, "amountUnit": "pump", "note": "in the milk" }
@@ -774,6 +803,7 @@ brewer may differ from its parent's.
 }
 ```
 
+`createdAt` is when the drink was added (read-only; lists sort by it).
 `servingSize` + `servingUnit` (`SERVING_UNITS`: `fl_oz`, `ml`) are the
 drink's default size, or both `null`. Ingredient amounts are for that size;
 clients scale them when a brew is made bigger or smaller (and, for a filter
@@ -781,7 +811,8 @@ brewer, the coffee batch too; an espresso shot stays as the recipe says).
 
 `category` and `parent` are `null` when not set; `variants` (direct children
 only) are sorted by name; `ingredients` are in their order. `defaultRecipeId`
-is a recipe of the drink's brewer, or `null` (none set, or it was deleted).
+is a recipe whose brewer is of the drink's kind, or `null` (none set, or it
+was deleted).
 
 ### `GET /api/workspaces/:workspaceId/drinks`
 
@@ -796,23 +827,26 @@ is a recipe of the drink's brewer, or `null` (none set, or it was deleted).
   {
     "name": "Vanilla Latte",
     "description": null,
-    "brewerId": "uuid",
+    "kind": "espresso",
     "categoryId": "uuid",
     "parentDrinkId": "uuid",
     "showOnPublicMenu": true,
     "defaultRecipeId": "uuid",
     "servingSize": 8,
     "servingUnit": "fl_oz",
+    "instructions": "Add the syrup to the cup and pull the shot onto it.\nSteam the milk and pour.",
     "ingredients": [{ "ingredientId": "uuid", "amountValue": 2, "amountUnit": "pump", "note": null }]
   }
   ```
   - `name` trimmed, 1–255 chars; `description` optional, ≤ 500, blank
     becomes `null`; `showOnPublicMenu` defaults to `true`.
-  - `brewerId` (required): a brewer in this workspace.
+  - `instructions` (optional, ≤ 5000, blank becomes `null`): how to make it,
+    free text shown after the brew. Not on the public menu.
+  - `kind` (required): one of `METHOD_KINDS`.
   - `categoryId` (optional, nullable): a drink category (§5d) in this workspace.
   - `parentDrinkId` (optional, nullable): another drink in this workspace.
-  - `defaultRecipeId` (optional, nullable): a recipe in this workspace whose
-    brewer is `brewerId`.
+  - `defaultRecipeId` (optional, nullable): a recipe in this workspace on a
+    brewer of that kind.
   - `servingSize` (> 0, ≤ 2000, 1 decimal) and `servingUnit` (`fl_oz` or
     `ml`): optional, nullable, both or neither.
   - `ingredients` (default `[]`, max 20, in order): each `ingredientId` a
@@ -822,15 +856,15 @@ is a recipe of the drink's brewer, or `null` (none set, or it was deleted).
     the units already used); `note` ≤ 255 chars, blank becomes `null`. A unit
     without a value ("to taste") doesn't scale.
 - **Success (`201 Created`):** `{ "drink": { ...drink } }`
-- **Errors:** `400` invalid body, a brewer/category/parent/recipe/ingredient
-  not in this workspace, or a default recipe of another brewer; `403` viewer.
+- **Errors:** `400` invalid body, a category/parent/recipe/ingredient not in
+  this workspace, or a default recipe of another kind; `403` viewer.
 
 ### `PATCH /api/workspaces/:workspaceId/drinks/:drinkId`
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Body:** any non-empty subset of the `POST` fields. `ingredients`, if
   present, replaces the list. Changing `brewerId` without sending a matching
-  `defaultRecipeId` clears a default of the old brewer.
+  `defaultRecipeId` clears a default of the old kind.
 - **Success (`200 OK`):** `{ "drink": { ...drink } }`
 - **Errors:** as `POST`, plus `400` when `parentDrinkId` is the drink itself
   or one of its variants (at any depth); `404` not in this workspace.
@@ -922,12 +956,14 @@ created it and can't be changed.
   "actualTimeSec": 150,
   "rating": 3,
   "tastingNotes": "Sour, thin body",
+  "drinkRating": null,
+  "drinkTastingNotes": null,
   "bean": { "id": "uuid", "roasterName": "Onyx Coffee Lab", "beanName": "Southern Weather" },
-  "recipe": { "id": "uuid", "name": "House V60", "expectedYieldGrams": 220, "methodKind": "pour_over" },
+  "recipe": { "id": "uuid", "name": "House V60", "expectedYieldGrams": 220, "methodKind": "filter" },
   "grinder": { "id": "uuid", "name": "Comandante C40" },
   "brewerId": "uuid",
-  "brewer": { "id": "uuid", "name": "V60", "kind": "pour_over" },
-  "drink": { "id": "uuid", "name": "The Atlas" },
+  "brewer": { "id": "uuid", "name": "V60", "kind": "filter" },
+  "drink": { "id": "uuid", "name": "The Atlas", "hasIngredients": true },
   "servingSize": null,
   "servingUnit": null,
   "marks": [],
@@ -944,7 +980,8 @@ grinder still appears here. `brewerId` / `brewer` (`{ "id", "name",
 "kind" }`, retired ones included) is the brewer it was made with: set by the
 API from the recipe, kept if the recipe later moves or is deleted, and `null`
 for a brew without a recipe. `drink`
-(`{ "id", "name" }`) is the drink it was for, or `null`. `marks` lists
+(`{ "id", "name", "hasIngredients" }`) is the drink it was for, or `null`;
+`hasIngredients` tells clients to show the shot and the drink tasting apart. `marks` lists
 the timer's marks (`{ "kind", "stepOrder", "atSec" }`, `stepOrder` `null`
 except for `step_end`), earliest first. `userId` and `brewedBy` are `null` when the brewer deleted their
 account. Such logs can only be edited or deleted by owners.
@@ -1000,8 +1037,8 @@ account. Such logs can only be edited or deleted by owners.
     - `step_end`: the real end of a step that waited for a tap or was logged
       (`stepOrder` 1–50, at most one per step); needs a `recipeId`.
   - `drinkId` (optional, nullable): the drink this brew was for, in this
-    workspace. With a `recipeId`, the recipe's brewer must be the drink's
-    brewer. A plain brew (just the V60) has no drink.
+    workspace. With a `recipeId`, the recipe's brewer must be of the drink's
+    kind (any such brewer). A plain brew (just the V60) has no drink.
   - `servingSize` / `servingUnit` (optional, nullable; same rules as on a
     drink, both or neither): the size made, when a drink was scaled from its
     default. Only with a `drinkId`; on `PATCH`, checked against the log after
@@ -1023,7 +1060,14 @@ account. Such logs can only be edited or deleted by owners.
     extraction yield), and clients show it against the recipe's expected yield.
   - `actualTimeSec`: integer 0–86400 (24 hours). `rating`: integer **1–5**,
     nullable. `actualGrindSetting` ≤ 100 chars, `tastingNotes` ≤ 5000 chars;
-    both nullable, and blank becomes `null`.
+    both nullable, and blank becomes `null`. `rating` and `tastingNotes` are
+    **the coffee tasted on its own**.
+  - `drinkRating` (1–5) and `drinkTastingNotes` (≤ 5000), both optional and
+    nullable: **the finished drink**, for a brew made for a drink (`400`
+    otherwise; on `PATCH`, checked against the log after the change, so
+    clearing the drink means clearing these too). Clients show both groups when
+    the drink has ingredients; for a milk drink the straight tasting is
+    optional (only if the shot was tasted on its own).
 - **Success (`201 Created`):** `{ "brewLog": { ...brewLog } }`
 - **Errors:** `400` invalid body, or `beanId`/`recipeId`/`grinderId` not in
   this workspace; `403` viewer.
@@ -1091,7 +1135,7 @@ filters for workspaces where `isPublicMenuEnabled = true` and items where
             "id": "uuid",
             "name": "Vanilla Latte",
             "description": null,
-            "brewer": "Espresso",
+            "method": "Espresso",
             "variantOf": "Latte",
             "ingredients": ["Steamed milk", "Vanilla syrup"]
           }
@@ -1105,7 +1149,7 @@ filters for workspaces where `isPublicMenuEnabled = true` and items where
             "id": "uuid",
             "name": "V60",
             "description": "Single-origin pour over",
-            "brewer": "V60",
+            "method": "Filter",
             "variantOf": null,
             "ingredients": []
           }
@@ -1117,8 +1161,8 @@ filters for workspaces where `isPublicMenuEnabled = true` and items where
   Sections follow the categories' `position`; uncategorised items come last
   (`category: null`), and empty sections are left out. In each section, plain
   brewers come first, then drinks, each sorted by name. A brewer shows under
-  its `menuName` if set, else its name; `brewer` is that menu name (for a
-  drink, its brewer's); `variantOf` the parent drink's name if that drink is also
+  its `menuName` if set, else its name; `method` is how the item is made
+  ("Filter", "Espresso"); `variantOf` the parent drink's name if that drink is also
   shown, else `null`; `ingredients` are the ingredients' names in the drink's
   order. Recipe details (doses, steps) aren't published.
 - **Error Responses:**
@@ -1237,8 +1281,13 @@ queue:
    - The brew includes its `drink` (or `null`): name, `servingSize` (the size
      made, else the drink's default, e.g. `"12 fl oz"`, or `null`) and
      ingredients (name, type, amount scaled to that size such as
-     `"3 pump"`, note), since tasting notes may describe the whole drink
-     (e.g. with milk) rather than the coffee alone.
+     `"3 pump"`, note). Instructions aren't sent: they're not about extraction.
+   - Every brew (the target and the previous ones) includes how it was served,
+     `drink` (`{ name, ingredientTypes }`, e.g. `["milk", "syrup"]`, or `null`
+     for the coffee on its own), and both tastings: `rating` / `tastingNotes`
+     for the coffee on its own, `drinkRating` / `drinkTastingNotes` for the
+     finished drink. So a latte's "sweet, caramel" isn't read as a straight
+     shot's.
    - Espresso brews include their `machine` (or `null`): the log's brewer's
      name and capabilities (pre-infusion, flow and pressure control).
    - Each brew includes its `marks` (`{ kind, stepOrder, atSec }`): the first
@@ -1247,7 +1296,10 @@ queue:
    - Each brew includes its recipe's `methodKind` (or `null` without a
      recipe), `actualWaterGrams` (`null` for espresso), the measured
      `actualYieldGrams` (or `null`) and `brewRatio`: water ÷ dose, or for
-     espresso yield ÷ dose. The recipe includes its brewer, kind, water,
+     espresso yield ÷ dose. `methodKind` is `filter` or `espresso`. The
+     recipe includes its brewer, its `style` (pour over, immersion, hybrid,
+     cold brew, standard, soup… or `null`; every brew also carries `recipeStyle`, so
+     soup shots aren't compared with standard ones), kind, water,
      expected yield (the target for espresso), finish window
      (`expectedFinishMinSec`/`MaxSec`), first-drop window (espresso), flow
      unit, and its steps with type, label, duration, how each moves on, and
@@ -1259,9 +1311,14 @@ queue:
 > "You are an expert specialty coffee roaster and barista. Analyze the provided
 > extraction log and historical brews for this coffee bean, including roast
 > level, roast age, dose, yield, total brew time, rating, and tasting notes. Suggest
-> concrete parameter adjustments for the next brew. If the brew was served as
-> a drink with milk or other ingredients, its tasting notes may describe the
-> whole drink; judge the coffee's extraction. For espresso, judge flow
+> concrete parameter adjustments for the next brew. rating and tastingNotes
+> describe the coffee tasted on its own; drinkRating and drinkTastingNotes
+> describe the finished drink. Milk and syrup mask acidity and bitterness and
+> add sweetness, so treat drink notes as weaker evidence of extraction than
+> straight notes, and compare a brew mainly with earlier brews served the same
+> way (each brew's drink says how). Judge a brew against its recipe's style:
+> a soup shot is a long, high-ratio espresso on purpose, a cold brew steeps
+> cold for hours, and an immersion brew isn't a pour over. For espresso, judge flow
 > from the first drop time, shot time and ratio against the recipe's
 > windows, and consider the machine's capabilities (pre-infusion, flow and
 > pressure control) and the grinder's step size when explaining the change.

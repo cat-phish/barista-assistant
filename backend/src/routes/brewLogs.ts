@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, count, desc, eq, inArray, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
@@ -12,6 +12,7 @@ import {
   brewLogMarks,
   brewLogs,
   brewers,
+  drinkIngredients,
   drinks,
   grinders,
   llmAnalyses,
@@ -41,7 +42,8 @@ export interface BrewLogDetails extends BrewLog {
   grinder: { id: string; name: string } | null; // retired grinders included
   // The brewer it was made with (the recipe's at the time); retired included.
   brewer: { id: string; name: string; kind: MethodKind } | null;
-  drink: { id: string; name: string } | null; // the drink it was for
+  // The drink it was for; hasIngredients = the shot and the drink are tasted apart.
+  drink: { id: string; name: string; hasIngredients: boolean } | null;
   marks: Mark[]; // when things actually happened, earliest first
   // Null when the brewer deleted their account (the log is kept).
   brewedBy: { id: string; email: string } | null;
@@ -92,8 +94,12 @@ const brewLogFields = {
   actualTempC: decimalSchema({ min: 0, max: 100, scale: 1 }).nullable().optional(),
   actualGrindSetting: optionalText(100),
   actualTimeSec: z.number().int().min(0).max(24 * 60 * 60),
+  // The coffee tasted on its own (for a milk drink, only if tasted straight).
   rating: z.number().int().min(1).max(5).nullable().optional(),
   tastingNotes: optionalText(5000),
+  // The finished drink: only for a brew made for a drink (drinkOnlyError).
+  drinkRating: z.number().int().min(1).max(5).nullable().optional(),
+  drinkTastingNotes: optionalText(5000),
   // Timer marks: one first_drop (espresso), one step_end per step.
   marks: z
     .array(
@@ -147,23 +153,35 @@ function espressoError(
   return log.actualWaterGrams === null ? "actualWaterGrams: is required" : null;
 }
 
-// A size is both its number and unit, and only for a drink (docs/api_spec.md §6).
-function sizeError(log: { drinkId?: string | null; servingSize?: number | null; servingUnit?: string | null }): string | null {
+// A size is both its number and unit; it and the drink's tasting are only for
+// a brew made for a drink (docs/api_spec.md §6).
+function drinkOnlyError(log: {
+  drinkId?: string | null;
+  servingSize?: number | null;
+  servingUnit?: string | null;
+  drinkRating?: number | null;
+  drinkTastingNotes?: string | null;
+}): string | null {
   const hasSize = (log.servingSize ?? null) !== null;
   if (hasSize !== ((log.servingUnit ?? null) !== null)) return "servingSize: servingSize and servingUnit go together";
   if (hasSize && !log.drinkId) return "servingSize: only for a brew made for a drink";
+  if (!log.drinkId && ((log.drinkRating ?? null) !== null || (log.drinkTastingNotes ?? null) !== null)) {
+    return "drinkRating: the drink's tasting is only for a brew made for a drink";
+  }
   return null;
 }
 
-// A brew for a drink uses a recipe of the drink's brewer (docs/api_spec.md §6).
+// A brew for a drink uses a recipe on a brewer of the drink's kind, any one of
+// them (docs/api_spec.md §6).
 async function drinkError(tx: Tx, drinkId: string | null, recipeId: string | null): Promise<string | null> {
   if (!drinkId || !recipeId) return null;
   const [allowed] = await tx
     .select({ id: recipes.id })
     .from(recipes)
-    .innerJoin(drinks, eq(drinks.brewerId, recipes.brewerId))
+    .innerJoin(brewers, eq(recipes.brewerId, brewers.id))
+    .innerJoin(drinks, eq(drinks.kind, brewers.kind))
     .where(and(eq(drinks.id, drinkId), eq(recipes.id, recipeId)));
-  return allowed ? null : "recipeId: not a recipe of the drink's brewer";
+  return allowed ? null : "recipeId: not a recipe of the drink's kind";
 }
 
 // The recipe's brewer and its kind: a log records the brewer it was made with.
@@ -247,6 +265,8 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       actualTimeSec: brewLogs.actualTimeSec,
       rating: brewLogs.rating,
       tastingNotes: brewLogs.tastingNotes,
+      drinkRating: brewLogs.drinkRating,
+      drinkTastingNotes: brewLogs.drinkTastingNotes,
       bean: { id: beans.id, roasterName: beans.roasterName, beanName: beans.beanName },
       recipe: { id: recipes.id, name: recipes.name, expectedYieldGrams: recipes.expectedYieldGrams },
       // Separate column: a nested object spanning two left joins isn't nulled as a whole.
@@ -254,6 +274,8 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       grinder: { id: grinders.id, name: grinders.name },
       brewer: { id: logBrewers.id, name: logBrewers.name, kind: logBrewers.kind },
       drink: { id: drinks.id, name: drinks.name },
+      // Separate column, like recipeMethodKind: whether the drink has ingredients.
+      drinkHasIngredients: sql<number>`EXISTS (SELECT 1 FROM ${drinkIngredients} di WHERE di.drink_id = ${brewLogs.drinkId})`,
       brewedBy: { id: users.id, email: users.email },
     })
     .from(brewLogs)
@@ -271,9 +293,10 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
     .offset(offset);
   const marks = await marksFor(rows.map((r) => r.id));
   // A recipe always has a method (inner FK), so its kind is set whenever recipe is.
-  return rows.map(({ recipeMethodKind, recipe, ...row }) => ({
+  return rows.map(({ recipeMethodKind, recipe, drink, drinkHasIngredients, ...row }) => ({
     ...row,
     recipe: recipe && recipeMethodKind ? { ...recipe, methodKind: recipeMethodKind } : null,
+    drink: drink ? { ...drink, hasIngredients: Number(drinkHasIngredients) === 1 } : null,
     marks: marks.get(row.id) ?? [],
   }));
 }
@@ -376,7 +399,7 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Bre
       marks,
     });
     if (wrongForKind) return wrongForKind;
-    const wrongForDrink = (await drinkError(tx, fields.drinkId ?? null, fields.recipeId ?? null)) ?? sizeError(fields);
+    const wrongForDrink = (await drinkError(tx, fields.drinkId ?? null, fields.recipeId ?? null)) ?? drinkOnlyError(fields);
     if (wrongForDrink) return wrongForDrink;
     await tx.insert(brewLogs).values({ id, workspaceId, userId, ...fields, brewerId: brewer?.brewerId ?? null });
     await insertMarks(tx, id, marks);
@@ -416,6 +439,8 @@ brewLogsRouter.patch(
           drinkId: brewLogs.drinkId,
           servingSize: brewLogs.servingSize,
           servingUnit: brewLogs.servingUnit,
+          drinkRating: brewLogs.drinkRating,
+          drinkTastingNotes: brewLogs.drinkTastingNotes,
           actualTimeSec: brewLogs.actualTimeSec,
         })
         .from(brewLogs)
@@ -452,8 +477,8 @@ brewLogsRouter.patch(
         const wrongForDrink = await drinkError(tx, after.drinkId ?? null, after.recipeId ?? null);
         if (wrongForDrink) return { status: "bad_ref", error: wrongForDrink } as const;
       }
-      if ("drinkId" in body || "servingSize" in body || "servingUnit" in body) {
-        const wrongSize = sizeError({ ...log, ...fields });
+      if (["drinkId", "servingSize", "servingUnit", "drinkRating", "drinkTastingNotes"].some((key) => key in body)) {
+        const wrongSize = drinkOnlyError({ ...log, ...fields });
         if (wrongSize) return { status: "bad_ref", error: wrongSize } as const;
       }
       if (Object.keys(fields).length > 0) await tx.update(brewLogs).set({ ...fields, ...brewerUpdate }).where(eq(brewLogs.id, brewLogId));

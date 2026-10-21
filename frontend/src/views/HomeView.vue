@@ -26,9 +26,9 @@ const workspaces = useWorkspaceStore();
         <strong>Recipes</strong>
         <span class="muted">Recipes, drinks and the ingredients that finish them</span>
       </RouterLink>
-      <RouterLink class="card shortcut" :to="{ name: 'grinders' }">
-        <strong>Equipment</strong>
-        <span class="muted">Brewers (V60, espresso machine…) and grinders</span>
+      <RouterLink class="card shortcut" :to="{ name: 'brewers' }">
+        <strong>Bar setup</strong>
+        <span class="muted">Brewers, grinders and the categories that organise brewing and the menu</span>
       </RouterLink>
     </nav>
   </main>

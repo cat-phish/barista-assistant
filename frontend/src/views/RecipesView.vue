@@ -1,35 +1,88 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+// Recipes (docs/api_spec.md §5) as a table: filter by brewer, sort by name or
+// date added (headers or the dropdown); a row expands to its details.
+import { computed, onMounted, ref, watch } from 'vue';
+import { brewersApi } from '../api/brewers';
 import { errorMessage } from '../api/client';
 import { recipesApi } from '../api/recipes';
-import type { Recipe } from '../api/types';
+import type { Brewer, Recipe } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
+import ListControls from '../components/ListControls.vue';
 import MenuTabs from '../components/MenuTabs.vue';
-import { formatDoseLine, formatGrams, formatTime } from '../lib/format';
+import { RECIPE_STYLES, STYLE_ORDER } from '../lib/equipment';
+import { formatAdded, formatDoseLine, formatGrams, formatTime } from '../lib/format';
+import { addedColumn, enumColumn, isSortKey, nameColumn, recallView, rememberView, sortArrow, sortBy, sortLabel, sortOptions, toggleHeader, type SortColumns } from '../lib/listSort';
 import { formatFinishWindow, plannedStarts, stepTitle } from '../lib/steps';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
 const recipes = ref<Recipe[]>([]);
+const brewers = ref<Brewer[]>([]);
 const loading = ref(true);
 const error = ref('');
 const pending = ref<Recipe | null>(null);
 const busy = ref(false);
 const dialogError = ref('');
 
+// View choices, remembered per workspace.
+const viewKey = (what: string) => `recipes.${what}.${workspaces.current?.id ?? ''}`;
+const ALL = 'all';
+const columns: SortColumns<Recipe> = {
+  name: nameColumn(),
+  style: enumColumn('Style', STYLE_ORDER, (r) => r.style),
+  added: addedColumn(),
+};
+const sortChoices = sortOptions(columns);
+const brewerFilter = ref(ALL);
+const sort = ref('added_desc');
+watch(brewerFilter, (v) => rememberView(viewKey('brewer'), v));
+watch(sort, (v) => rememberView(viewKey('sort'), v));
+
 async function load(): Promise<void> {
   const id = workspaces.current?.id;
   if (!id) return;
   try {
-    recipes.value = (await recipesApi.list(id)).recipes;
+    const [r, b] = await Promise.all([recipesApi.list(id), brewersApi.list(id)]);
+    recipes.value = r.recipes;
+    brewers.value = b.brewers;
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
     loading.value = false;
   }
 }
-onMounted(load);
+onMounted(async () => {
+  const savedSort = recallView(viewKey('sort'));
+  if (isSortKey(savedSort, columns)) sort.value = savedSort;
+  await load();
+  const savedBrewer = recallView(viewKey('brewer'));
+  if (savedBrewer && brewerOptions.value.some((o) => o.value === savedBrewer)) brewerFilter.value = savedBrewer;
+});
+
+// Brewers that have recipes, by name; retired ones marked.
+const brewerOptions = computed(() => {
+  const used = new Set(recipes.value.map((r) => r.brewer.id));
+  return [
+    { value: ALL, label: 'All brewers' },
+    ...brewers.value
+      .filter((b) => used.has(b.id))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((b) => ({ value: b.id, label: b.retiredAt ? `${b.name} (retired)` : b.name })),
+  ];
+});
+const filterName = computed(() => brewerOptions.value.find((o) => o.value === brewerFilter.value)?.label ?? '');
+const shown = computed(() =>
+  sortBy(
+    brewerFilter.value === ALL ? recipes.value : recipes.value.filter((r) => r.brewer.id === brewerFilter.value),
+    sort.value,
+    columns,
+  ),
+);
+
+// One row open at a time.
+const openId = ref<string | null>(null);
+const toggle = (id: string) => (openId.value = openId.value === id ? null : id);
 
 // "Bloom → Swirl → Main pour → Drawdown · ≈ 3:00": the planned end, when the
 // steps have one (≈ when a step waits for a tap or first drop).
@@ -77,32 +130,51 @@ async function confirmDelete(): Promise<void> {
       <p v-if="workspaces.canEdit">Add your go-to recipe, with its pours, to use the brew timer.</p>
     </div>
 
-    <ul v-else class="list">
-      <li v-for="recipe in recipes" :key="recipe.id" class="card recipe">
-        <div class="head">
-          <div>
-            <h2>{{ recipe.name }}</h2>
-            <span class="badge">{{ recipe.brewer.name }}</span>
+    <template v-else>
+      <ListControls v-model:filter="brewerFilter" v-model:sort="sort" :sort-options="sortChoices" id-prefix="recipes" filter-label="Brewer" :filter-options="brewerOptions" />
+      <p v-if="shown.length === 0" class="card empty">No recipes for {{ filterName }} yet.</p>
+      <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1.1fr) minmax(0, 0.9fr) minmax(0, 1.2fr) 5.5rem">
+        <div class="data-row data-head">
+          <button class="data-th" type="button" :aria-label="sortLabel(sort, 'name', 'Name')" @click="sort = toggleHeader(sort, 'name', columns)">
+            Name <span aria-hidden="true">{{ sortArrow(sort, 'name') }}</span>
+          </button>
+          <span class="data-th">Brewer</span>
+          <button class="data-th" type="button" :aria-label="sortLabel(sort, 'style', 'Style')" @click="sort = toggleHeader(sort, 'style', columns)">
+            Style <span aria-hidden="true">{{ sortArrow(sort, 'style') }}</span>
+          </button>
+          <span class="data-th">Dose</span>
+          <button class="data-th end" type="button" :aria-label="sortLabel(sort, 'added', 'Date added')" @click="sort = toggleHeader(sort, 'added', columns)">
+            Added <span aria-hidden="true">{{ sortArrow(sort, 'added') }}</span>
+          </button>
+        </div>
+        <div v-for="recipe in shown" :key="recipe.id" class="data-item" :class="{ open: openId === recipe.id }">
+          <button class="data-row" type="button" :aria-expanded="openId === recipe.id" @click="toggle(recipe.id)">
+            <span class="data-td primary">{{ recipe.name }}</span>
+            <span class="data-td">{{ recipe.brewer.name }}</span>
+            <span class="data-td">{{ recipe.style ? RECIPE_STYLES[recipe.style] : '–' }}</span>
+            <span class="data-td">{{ formatDoseLine(recipe.targetDoseGrams, recipe.targetWaterGrams, recipe.expectedYieldGrams) }}</span>
+            <span class="data-td end">{{ formatAdded(recipe.createdAt) }}</span>
+          </button>
+          <div v-if="openId === recipe.id" class="data-details">
+            <p class="facts">
+              <span v-if="recipe.expectedYieldGrams !== null && recipe.targetWaterGrams !== null">≈{{ formatGrams(recipe.expectedYieldGrams) }} g yield</span>
+              <span v-if="formatFinishWindow(recipe.firstDropMinSec, recipe.firstDropMaxSec)">first drop {{ formatFinishWindow(recipe.firstDropMinSec, recipe.firstDropMaxSec) }}</span>
+              <span v-if="formatFinishWindow(recipe.expectedFinishMinSec, recipe.expectedFinishMaxSec)">{{ recipe.brewer.kind === 'espresso' ? 'shot' : 'finish' }} {{ formatFinishWindow(recipe.expectedFinishMinSec, recipe.expectedFinishMaxSec) }}</span>
+              <span v-if="recipe.targetTempC !== null">{{ recipe.targetTempC }} °C</span>
+            </p>
+            <p v-if="recipe.grindSettings.length" class="muted small">
+              Grind ≈ {{ recipe.grindSettings.map((g) => `${g.setting} on ${g.grinderName}`).join(' · ') }}
+            </p>
+            <p v-if="stepsSummary(recipe)" class="small">{{ stepsSummary(recipe) }}</p>
+            <div v-if="workspaces.canEdit" class="data-actions">
+              <RouterLink class="btn-link" :to="{ name: 'recipe-new', query: { from: recipe.id } }">Duplicate</RouterLink>
+              <RouterLink class="btn-link" :to="{ name: 'recipe-edit', params: { id: recipe.id } }">Edit</RouterLink>
+              <button class="btn-link danger" type="button" @click="pending = recipe; dialogError = ''">Delete</button>
+            </div>
           </div>
         </div>
-        <p class="facts">
-          <span>{{ formatDoseLine(recipe.targetDoseGrams, recipe.targetWaterGrams, recipe.expectedYieldGrams) }}</span>
-          <span v-if="recipe.expectedYieldGrams !== null && recipe.targetWaterGrams !== null">≈{{ formatGrams(recipe.expectedYieldGrams) }} g yield</span>
-          <span v-if="formatFinishWindow(recipe.firstDropMinSec, recipe.firstDropMaxSec)">first drop {{ formatFinishWindow(recipe.firstDropMinSec, recipe.firstDropMaxSec) }}</span>
-          <span v-if="formatFinishWindow(recipe.expectedFinishMinSec, recipe.expectedFinishMaxSec)">{{ recipe.brewer.kind === 'espresso' ? 'shot' : 'finish' }} {{ formatFinishWindow(recipe.expectedFinishMinSec, recipe.expectedFinishMaxSec) }}</span>
-          <span v-if="recipe.targetTempC !== null">{{ recipe.targetTempC }} °C</span>
-        </p>
-        <p v-if="recipe.grindSettings.length" class="grind muted">
-          Grind ≈ {{ recipe.grindSettings.map((g) => `${g.setting} on ${g.grinderName}`).join(' · ') }}
-        </p>
-        <p v-if="stepsSummary(recipe)" class="steps-summary">{{ stepsSummary(recipe) }}</p>
-        <div v-if="workspaces.canEdit" class="actions">
-          <RouterLink class="btn-link" :to="{ name: 'recipe-new', query: { from: recipe.id } }">Duplicate</RouterLink>
-          <RouterLink class="btn-link" :to="{ name: 'recipe-edit', params: { id: recipe.id } }">Edit</RouterLink>
-          <button class="btn-link danger" type="button" @click="pending = recipe; dialogError = ''">Delete</button>
-        </div>
-      </li>
-    </ul>
+      </div>
+    </template>
   </main>
 
   <ConfirmDialog :open="pending !== null" title="Delete this recipe?" @cancel="pending = null">
@@ -118,55 +190,16 @@ async function confirmDelete(): Promise<void> {
 </template>
 
 <style scoped>
-.list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-.recipe {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-}
-.head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: var(--space-2);
-}
-.head > div {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-}
-h2 {
-  font-size: 1.1rem;
-}
 p {
   margin: 0;
+}
+.small {
+  font-size: 0.9rem;
 }
 .facts {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1) var(--space-3);
   font-size: 0.95rem;
-}
-.grind,
-.steps-summary {
-  font-size: 0.9rem;
-}
-.muted-badge {
-  background: var(--bg);
-  color: var(--text-muted);
-}
-.actions {
-  display: flex;
-  justify-content: flex-end;
-  margin: 0 calc(-1 * var(--space-2)) calc(-1 * var(--space-2));
 }
 </style>

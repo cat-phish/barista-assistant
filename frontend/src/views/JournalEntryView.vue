@@ -75,7 +75,9 @@ const editing = ref(false);
 const draft = reactive(emptyDraft());
 // The log's recipe kind decides water vs shot weight; a log without a recipe is a filter brew.
 const espresso = computed(() => log.value?.recipe?.methodKind === 'espresso');
-const parsed = computed(() => parseBrewDraft(draft, log.value?.recipe?.methodKind ?? null));
+// A drink with ingredients is tasted twice: the brew (if tried on its own) and the drink.
+const drinkTasting = computed(() => !!log.value?.drink?.hasIngredients);
+const parsed = computed(() => parseBrewDraft(draft, log.value?.recipe?.methodKind ?? null, drinkTasting.value));
 const submitted = ref(false);
 const saving = ref(false);
 const saveError = ref('');
@@ -162,12 +164,17 @@ function markLabel(m: Mark): string {
           <div><dt>Grind</dt><dd>{{ log.actualGrindSetting ?? '–' }}<template v-if="log.grinder"> · {{ log.grinder.name }}</template></dd></div>
           <div><dt>Brewer</dt><dd>{{ log.brewer?.name ?? '–' }}</dd></div>
           <div v-for="m in log.marks" :key="`${m.kind}-${m.stepOrder}`"><dt>{{ markLabel(m) }}</dt><dd>{{ formatMark(m.atSec) }}</dd></div>
-          <div><dt>Rating</dt><dd><RatingStars :rating="log.rating" /></dd></div>
+          <div><dt>{{ drinkTasting ? 'Brew rating' : 'Rating' }}</dt><dd><RatingStars :rating="log.rating" /></dd></div>
+          <div v-if="drinkTasting"><dt>Drink rating</dt><dd><RatingStars :rating="log.drinkRating" /></dd></div>
           <div><dt>Brewed by</dt><dd>{{ log.brewedBy?.email ?? 'Deleted user' }}</dd></div>
         </dl>
         <div v-if="log.tastingNotes" class="notes">
-          <h2>Tasting notes</h2>
+          <h2>{{ drinkTasting ? 'The brew, tasted on its own' : 'Tasting notes' }}</h2>
           <p>{{ log.tastingNotes }}</p>
+        </div>
+        <div v-if="drinkTasting && log.drinkTastingNotes" class="notes">
+          <h2>The drink</h2>
+          <p>{{ log.drinkTastingNotes }}</p>
         </div>
         <div v-if="canModify" class="actions">
           <button class="btn-link" type="button" @click="startEdit">Edit</button>
@@ -178,7 +185,7 @@ function markLabel(m: Mark): string {
       <!-- Edit -->
       <form v-else class="card stack" novalidate @submit.prevent="saveEdit">
         <h2>Edit brew</h2>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" :espresso="espresso" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" :espresso="espresso" :drink-tasting="drinkTasting" />
         <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
         <div class="buttons">
           <button class="btn btn-secondary" type="button" :disabled="saving" @click="editing = false">Cancel</button>

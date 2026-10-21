@@ -24,6 +24,8 @@
    - API routes, public menu & LLM worker jobs: read `docs/api_spec.md`.
    - PWA config, mobile viewport & pour-over timer UI: read
      `docs/timer_architecture.md`.
+   - Planned features and ideas: read `docs/backlog.md` when asked to review
+     or pick upcoming work, and update it when plans change.
 2. **Small Diffs:** Implement one feature or route at a time. Plan your steps
    before writing code and avoid massive multi-file refactors.
 3. **TypeScript Strict:** Use strict mode. Define proper interfaces for all API

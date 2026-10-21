@@ -14,15 +14,17 @@ export interface BrewDraft {
   firstDrop: string; // espresso: seconds, e.g. "7.4" ('' = not recorded); from the timer's tap or typed
   grind: string;
   time: string; // m:ss
-  rating: number | null;
+  rating: number | null; // the coffee tasted on its own
   notes: string;
+  drinkRating: number | null; // the finished drink (drinks with ingredients)
+  drinkNotes: string;
 }
 
 export type BrewValues = Omit<BrewLogInput, 'beanId' | 'recipeId'>;
 export type BrewDraftErrors = Partial<Record<'dose' | 'water' | 'yieldGrams' | 'temp' | 'time' | 'firstDrop', string>>;
 
 export function emptyDraft(): BrewDraft {
-  return { dose: '', water: '', yieldGrams: '', temp: '', grinderId: '', firstDrop: '', grind: '', time: '', rating: null, notes: '' };
+  return { dose: '', water: '', yieldGrams: '', temp: '', grinderId: '', firstDrop: '', grind: '', time: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
 }
 
 export function draftFromLog(log: BrewLog): BrewDraft {
@@ -37,6 +39,8 @@ export function draftFromLog(log: BrewLog): BrewDraft {
     time: formatTime(log.actualTimeSec),
     rating: log.rating,
     notes: log.tastingNotes ?? '',
+    drinkRating: log.drinkRating,
+    drinkNotes: log.drinkTastingNotes ?? '',
   };
 }
 
@@ -48,10 +52,12 @@ function firstDropOf(marks: readonly Mark[] | undefined): string {
 }
 
 // values: the API fields; firstDropSec: the first drop for the marks list
-// (espresso; null = not recorded).
+// (espresso; null = not recorded). drinkTasting: the brew's drink has
+// ingredients, so the drink's own rating and notes are sent (else null).
 export function parseBrewDraft(
   d: BrewDraft,
   kind: MethodKind | null = null,
+  drinkTasting = false,
 ): { errors: BrewDraftErrors; values: BrewValues | null; firstDropSec: number | null } {
   const espresso = kind === 'espresso';
   const dose = parseDecimal(d.dose, { scale: 2, min: 0, max: 1000, exclusiveMin: true, exclusiveMax: true });
@@ -91,6 +97,8 @@ export function parseBrewDraft(
       actualTimeSec: time.value,
       rating: d.rating,
       tastingNotes: d.notes.trim() || null,
+      drinkRating: drinkTasting ? d.drinkRating : null,
+      drinkTastingNotes: drinkTasting ? d.drinkNotes.trim() || null : null,
     },
   };
 }

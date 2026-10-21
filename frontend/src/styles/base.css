@@ -269,3 +269,122 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+/* List tables (Recipes, Drinks): rows that expand, columns from one grid.
+   Set the columns with --cols on .data-table. On phones a row is two lines:
+   the .primary cell and the .end cell, then the rest underneath. */
+.data-table {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.data-row {
+  display: grid;
+  grid-template-columns: var(--cols);
+  gap: var(--space-2);
+  align-items: center;
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.data-item {
+  border-top: 1px solid var(--border);
+}
+.data-item > .data-row {
+  cursor: pointer;
+}
+.data-item > .data-row:hover,
+.data-item.open > .data-row {
+  background: var(--brand-tint);
+}
+.data-head {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+.data-th {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+button.data-th {
+  cursor: pointer;
+  min-height: var(--tap);
+}
+.data-td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+.data-td.primary {
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 600;
+}
+.data-table .end {
+  text-align: right;
+  justify-self: end;
+}
+.data-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) var(--space-3);
+  background: var(--brand-tint);
+}
+.data-details p {
+  margin: 0;
+}
+.data-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin: 0 calc(-1 * var(--space-2)) calc(-1 * var(--space-2));
+}
+@media (max-width: 560px) {
+  .data-head {
+    display: none;
+  }
+  /* Line 1: name and date; line 2: the other cells, joined by "·". */
+  .data-item > .data-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 0;
+  }
+  .data-item > .data-row > .data-td {
+    order: 2;
+    flex: 0 1 auto;
+  }
+  .data-item > .data-row > .data-td.primary {
+    order: 0;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .data-item > .data-row > .data-td.end {
+    order: 1;
+    margin-left: var(--space-2);
+  }
+  .data-item > .data-row > .data-td:not(.primary):not(.end) ~ .data-td:not(.end)::before {
+    content: '·';
+    margin: 0 var(--space-1);
+  }
+  /* Force the middle cells onto their own line. */
+  .data-item > .data-row::after {
+    content: '';
+    order: 1;
+    flex-basis: 100%;
+  }
+}

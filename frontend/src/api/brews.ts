@@ -15,8 +15,10 @@ export interface BrewLogInput {
   actualTempC: number | null;
   actualGrindSetting: string | null;
   actualTimeSec: number;
-  rating: number | null;
+  rating: number | null; // the coffee tasted on its own
   tastingNotes: string | null;
+  drinkRating?: number | null; // the finished drink: only with a drinkId
+  drinkTastingNotes?: string | null;
 }
 
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/brew-logs`;

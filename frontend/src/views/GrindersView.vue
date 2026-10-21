@@ -1,23 +1,78 @@
 <script setup lang="ts">
-// Grinder management (docs/api_spec.md §3b), one tab of Equipment. Retire
-// keeps history; delete only works for grinders no brew used.
-import { computed, onMounted, ref } from 'vue';
+// Grinder management (docs/api_spec.md §3b), one tab of Bar setup, as a
+// table: filter by hand/electric (or Retired), sort by any column; a row
+// expands to its details and actions. Retire keeps history; delete only works
+// for grinders no brew used.
+import { computed, onMounted, ref, watch } from 'vue';
 import { ApiError, errorMessage } from '../api/client';
 import { grindersApi } from '../api/grinders';
 import type { Grinder } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
-import EquipmentTabs from '../components/EquipmentTabs.vue';
-import GrinderFields from '../components/GrinderFields.vue';
-import { grinderForm, grinderSummary, parseGrinderForm } from '../lib/equipment';
+import SetupTabs from '../components/SetupTabs.vue';
+import ListControls from '../components/ListControls.vue';
+import { adjustmentLabel, burrLabel, grinderSummary, powerLabel } from '../lib/equipment';
+import { formatAdded } from '../lib/format';
+import {
+  addedColumn,
+  enumColumn,
+  isSortKey,
+  nameColumn,
+  recallView,
+  rememberView,
+  sortArrow,
+  sortBy,
+  sortLabel,
+  sortOptions,
+  toggleHeader,
+  type SortColumns,
+} from '../lib/listSort';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
 const grinders = ref<Grinder[]>([]);
 const loading = ref(true);
 const error = ref('');
-const active = computed(() => grinders.value.filter((g) => !g.retiredAt));
-const retired = computed(() => grinders.value.filter((g) => g.retiredAt));
+
+// View choices, remembered per workspace.
+const viewKey = (what: string) => `grinders.${what}.${workspaces.current?.id ?? ''}`;
+const ALL = 'all';
+const RETIRED = 'retired';
+const NOT_SET = 'none';
+const columns: SortColumns<Grinder> = {
+  name: nameColumn(),
+  power: enumColumn('Power', ['manual', 'electric'] as const, (g) => g.power),
+  burrs: { label: 'Burrs', value: (g) => burrLabel(g) },
+  adjustment: enumColumn('Adjustment', ['stepped', 'stepless'] as const, (g) => g.adjustment),
+  added: addedColumn(),
+};
+const sortChoices = sortOptions(columns);
+const filter = ref(ALL);
+const sort = ref('name_asc');
+watch(filter, (v) => rememberView(viewKey('filter'), v));
+watch(sort, (v) => rememberView(viewKey('sort'), v));
+const filterOptions = computed(() => {
+  const active = grinders.value.filter((g) => !g.retiredAt);
+  return [
+    { value: ALL, label: 'All grinders' },
+    { value: 'manual', label: 'Hand grinders' },
+    { value: 'electric', label: 'Electric' },
+    ...(active.some((g) => g.power === null) ? [{ value: NOT_SET, label: 'Not set' }] : []),
+    ...(grinders.value.some((g) => g.retiredAt) ? [{ value: RETIRED, label: 'Retired' }] : []),
+  ];
+});
+const filterName = computed(() => filterOptions.value.find((o) => o.value === filter.value)?.label ?? '');
+const shown = computed(() => {
+  const f = filter.value;
+  const list =
+    f === RETIRED
+      ? grinders.value.filter((g) => g.retiredAt)
+      : grinders.value.filter((g) => !g.retiredAt && (f === ALL || (f === NOT_SET ? g.power === null : g.power === f)));
+  return sortBy(list, sort.value, columns);
+});
+// One row open at a time.
+const openId = ref<string | null>(null);
+const toggle = (id: string) => (openId.value = openId.value === id ? null : id);
 
 async function load(): Promise<void> {
   const ws = workspaces.current?.id;
@@ -30,65 +85,19 @@ async function load(): Promise<void> {
     loading.value = false;
   }
 }
-onMounted(load);
+onMounted(async () => {
+  const savedSort = recallView(viewKey('sort'));
+  if (isSortKey(savedSort, columns)) sort.value = savedSort;
+  await load();
+  const savedFilter = recallView(viewKey('filter'));
+  if (savedFilter && filterOptions.value.some((o) => o.value === savedFilter)) filter.value = savedFilter;
+});
 
 function replace(updated: Grinder): void {
   grinders.value = grinders.value.map((g) => (g.id === updated.id ? updated : g));
 }
 
-// Add
-const newForm = ref(grinderForm());
-const newParsed = computed(() => parseGrinderForm(newForm.value));
-const addSubmitted = ref(false);
-const adding = ref(false);
-const addError = ref('');
-async function add(): Promise<void> {
-  addSubmitted.value = true;
-  const ws = workspaces.current?.id;
-  const values = newParsed.value.values;
-  if (!ws || !values) return;
-  adding.value = true;
-  addError.value = '';
-  try {
-    const { name, ...details } = values;
-    await grindersApi.create(ws, name, details);
-    newForm.value = grinderForm();
-    addSubmitted.value = false;
-    await load();
-  } catch (err) {
-    addError.value = err instanceof ApiError && err.status === 409 ? 'A grinder with that name already exists.' : errorMessage(err);
-  } finally {
-    adding.value = false;
-  }
-}
-
-// Edit (one at a time, inline)
-const editingId = ref<string | null>(null);
-const editForm = ref(grinderForm());
-const editParsed = computed(() => parseGrinderForm(editForm.value));
-const editError = ref('');
 const busyId = ref<string | null>(null);
-function startEdit(g: Grinder): void {
-  editingId.value = g.id;
-  editForm.value = grinderForm(g);
-  editError.value = '';
-}
-async function saveEdit(g: Grinder): Promise<void> {
-  const ws = workspaces.current?.id;
-  const values = editParsed.value.values;
-  if (!ws || !values) return;
-  busyId.value = g.id;
-  editError.value = '';
-  try {
-    replace((await grindersApi.update(ws, g.id, values)).grinder);
-    editingId.value = null;
-  } catch (err) {
-    editError.value = err instanceof ApiError && err.status === 409 ? 'A grinder with that name already exists.' : errorMessage(err);
-  } finally {
-    busyId.value = null;
-  }
-}
-
 async function setRetired(g: Grinder, value: boolean): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
@@ -142,9 +151,10 @@ async function retireInstead(): Promise<void> {
   <AppHeader />
   <main class="page">
     <div class="page-header">
-      <h1>Equipment</h1>
+      <h1>Bar setup</h1>
+      <RouterLink v-if="workspaces.canEdit" class="btn btn-primary" :to="{ name: 'grinder-new' }">Add grinder</RouterLink>
     </div>
-    <EquipmentTabs />
+    <SetupTabs />
     <p class="muted intro">Brews record which grinder you used, so grind settings stay meaningful.</p>
 
     <p v-if="loading" class="muted" aria-live="polite">Loading grinders…</p>
@@ -152,57 +162,44 @@ async function retireInstead(): Promise<void> {
 
     <template v-if="!loading">
       <div v-if="grinders.length === 0" class="card empty"><p>No grinders yet.</p></div>
-
-      <ul v-if="active.length" class="list">
-        <li v-for="g in active" :key="g.id" class="card grinder">
-          <template v-if="editingId === g.id">
-            <form class="stack" novalidate @submit.prevent="saveEdit(g)">
-              <GrinderFields v-model="editForm" :id-prefix="`edit-${g.id}`" :errors="editParsed.errors" :show-errors="true" />
-              <p v-if="editError" class="form-error" role="alert">{{ editError }}</p>
-              <div class="buttons">
-                <button class="btn btn-secondary" type="button" @click="editingId = null">Cancel</button>
-                <button class="btn btn-primary" type="submit" :disabled="busyId === g.id || !editParsed.values">Save</button>
+      <template v-else>
+        <ListControls v-model:filter="filter" v-model:sort="sort" :sort-options="sortChoices" id-prefix="grinders" filter-label="Show" :filter-options="filterOptions" />
+        <p v-if="filter === RETIRED" class="muted small">Retired grinders are hidden when brewing; past brews still show them.</p>
+        <p v-if="shown.length === 0" class="card empty">No {{ filterName.toLowerCase() }} yet.</p>
+        <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 0.9fr) minmax(0, 1.2fr) minmax(0, 1.3fr) 5.5rem">
+          <div class="data-row data-head">
+            <button v-for="c in ['name', 'power', 'burrs', 'adjustment']" :key="c" class="data-th" type="button" :aria-label="sortLabel(sort, c, columns[c]!.label)" @click="sort = toggleHeader(sort, c, columns)">
+              {{ columns[c]!.label }} <span aria-hidden="true">{{ sortArrow(sort, c) }}</span>
+            </button>
+            <button class="data-th end" type="button" :aria-label="sortLabel(sort, 'added', 'Date added')" @click="sort = toggleHeader(sort, 'added', columns)">
+              Added <span aria-hidden="true">{{ sortArrow(sort, 'added') }}</span>
+            </button>
+          </div>
+          <div v-for="g in shown" :key="g.id" class="data-item" :class="{ open: openId === g.id }">
+            <button class="data-row" type="button" :aria-expanded="openId === g.id" @click="toggle(g.id)">
+              <span class="data-td primary">{{ g.name }}</span>
+              <span class="data-td">{{ powerLabel(g) ?? '–' }}</span>
+              <span class="data-td">{{ burrLabel(g) ?? '–' }}</span>
+              <span class="data-td">{{ adjustmentLabel(g) ?? '–' }}</span>
+              <span class="data-td end">{{ formatAdded(g.createdAt) }}</span>
+            </button>
+            <div v-if="openId === g.id" class="data-details">
+              <p class="muted">{{ grinderSummary(g) || 'No details yet: edit to add the range, burrs and power.' }}</p>
+              <p v-if="g.notes" class="muted">{{ g.notes }}</p>
+              <div v-if="workspaces.canEdit" class="data-actions">
+                <template v-if="g.retiredAt">
+                  <button class="btn-link" type="button" :disabled="busyId === g.id" @click="setRetired(g, false)">Restore</button>
+                </template>
+                <template v-else>
+                  <RouterLink class="btn-link" :to="{ name: 'grinder-edit', params: { id: g.id } }">Edit</RouterLink>
+                  <button class="btn-link" type="button" :disabled="busyId === g.id" @click="setRetired(g, true)">Retire</button>
+                </template>
+                <button class="btn-link danger" type="button" @click="askDelete(g)">Delete</button>
               </div>
-            </form>
-          </template>
-          <template v-else>
-            <div>
-              <h2>{{ g.name }}</h2>
-              <p v-if="grinderSummary(g)" class="muted">{{ grinderSummary(g) }}</p>
-              <p v-if="g.notes" class="muted">{{ g.notes }}</p>
             </div>
-            <div v-if="workspaces.canEdit" class="actions">
-              <button class="btn-link" type="button" @click="startEdit(g)">Edit</button>
-              <button class="btn-link" type="button" :disabled="busyId === g.id" @click="setRetired(g, true)">Retire</button>
-              <button class="btn-link danger" type="button" @click="askDelete(g)">Delete</button>
-            </div>
-          </template>
-        </li>
-      </ul>
-
-      <section v-if="retired.length" class="stack">
-        <h2 class="section-title">Retired</h2>
-        <p class="muted small">Hidden when brewing; past brews still show them.</p>
-        <ul class="list">
-          <li v-for="g in retired" :key="g.id" class="card grinder retired">
-            <div>
-              <h2>{{ g.name }}</h2>
-              <p v-if="g.notes" class="muted">{{ g.notes }}</p>
-            </div>
-            <div v-if="workspaces.canEdit" class="actions">
-              <button class="btn-link" type="button" :disabled="busyId === g.id" @click="setRetired(g, false)">Restore</button>
-            </div>
-          </li>
-        </ul>
-      </section>
-
-      <form v-if="workspaces.canEdit" class="card stack" novalidate @submit.prevent="add">
-        <h2>Add a grinder</h2>
-        <p class="muted small">Only the name is needed; the rest helps the AI and is easy to add later.</p>
-        <GrinderFields v-model="newForm" id-prefix="new" :errors="newParsed.errors" :show-errors="addSubmitted" />
-        <p v-if="addError" class="form-error" role="alert">{{ addError }}</p>
-        <button class="btn btn-primary" type="submit" :disabled="adding">{{ adding ? 'Adding…' : 'Add grinder' }}</button>
-      </form>
+          </div>
+        </div>
+      </template>
     </template>
   </main>
 
@@ -233,36 +230,5 @@ p {
 }
 .small {
   font-size: 0.85rem;
-}
-.section-title {
-  margin-top: var(--space-2);
-  color: var(--text-muted);
-}
-.list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.grinder {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-}
-.grinder.retired {
-  opacity: 0.75;
-}
-.actions {
-  display: flex;
-  justify-content: flex-end;
-  margin: 0 calc(-1 * var(--space-2)) calc(-1 * var(--space-2));
-}
-.buttons {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-2);
 }
 </style>

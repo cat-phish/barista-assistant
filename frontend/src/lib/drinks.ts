@@ -23,11 +23,11 @@ export interface NestedDrink {
   depth: number; // 0 = top level, 1 = a variant, 2 = a variant's variant...
 }
 
-// Depth-first: each drink followed by its variants, by name at every level.
-// A drink whose parent isn't in the list counts as top level.
-export function nestDrinks(drinks: Drink[]): NestedDrink[] {
+// Depth-first: each drink followed by its variants, by name at every level
+// (Z–A when descending). A drink whose parent isn't in the list counts as top level.
+export function nestDrinks(drinks: Drink[], descending = false): NestedDrink[] {
   const ids = new Set(drinks.map((d) => d.id));
-  const byName = [...drinks].sort((a, b) => a.name.localeCompare(b.name));
+  const byName = [...drinks].sort((a, b) => (descending ? -1 : 1) * a.name.localeCompare(b.name));
   const children = new Map<string | null, Drink[]>();
   for (const d of byName) {
     const parent = d.parent && ids.has(d.parent.id) ? d.parent.id : null;
@@ -75,6 +75,26 @@ export function selfAndDescendants(drinks: Drink[], id: string): Set<string> {
         out.add(d.id);
         grew = true;
       }
+    }
+  }
+  return out;
+}
+
+export interface IngredientUsage {
+  drinks: Array<{ id: string; name: string }>; // by name
+  units: string[]; // the units its amounts use ("pump", "fl oz"), deduplicated
+}
+
+// For each ingredient: the drinks it finishes and the units it's measured in.
+export function ingredientUsage(drinks: Drink[]): Map<string, IngredientUsage> {
+  const out = new Map<string, IngredientUsage>();
+  for (const d of [...drinks].sort((a, b) => a.name.localeCompare(b.name))) {
+    for (const i of d.ingredients) {
+      const u = out.get(i.ingredientId) ?? { drinks: [], units: [] };
+      if (!u.drinks.some((x) => x.id === d.id)) u.drinks.push({ id: d.id, name: d.name });
+      const unit = i.amountUnit?.trim();
+      if (unit && !u.units.some((x) => x.toLowerCase() === unit.toLowerCase())) u.units.push(unit);
+      out.set(i.ingredientId, u);
     }
   }
   return out;

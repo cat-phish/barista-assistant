@@ -1,18 +1,9 @@
 <script setup lang="ts">
-// A brewer's fields (docs/api_spec.md §3): name and kind; for espresso, what
+// A brewer's fields (docs/api_spec.md §3): name and brew method; for
+// espresso, what
 // the machine lets you control; notes; and the menu settings for the plain brew.
-import type { DrinkCategory, MachineCapabilities, MethodKind } from '../api/types';
-import { METHOD_KINDS, PREINFUSION_MODES, PROFILE_CONTROLS } from '../lib/equipment';
-
-export interface BrewerForm extends MachineCapabilities {
-  name: string;
-  kind: MethodKind;
-  notes: string;
-  showOnPublicMenu: boolean;
-  menuName: string;
-  description: string;
-  categoryId: string;
-}
+import type { DrinkCategory } from '../api/types';
+import { METHOD_KINDS, PREINFUSION_MODES, PROFILE_CONTROLS, type BrewerForm } from '../lib/equipment';
 
 const form = defineModel<BrewerForm>({ required: true });
 defineProps<{ idPrefix: string; showErrors: boolean; categories: DrinkCategory[] }>();
@@ -27,13 +18,13 @@ defineProps<{ idPrefix: string; showErrors: boolean; categories: DrinkCategory[]
         <span v-if="showErrors && !form.name.trim()" class="field-error">Required</span>
       </div>
       <div class="field">
-        <label :for="`${idPrefix}-kind`">Kind</label>
+        <label :for="`${idPrefix}-kind`">Brew method</label>
         <select :id="`${idPrefix}-kind`" v-model="form.kind">
           <option v-for="(k, key) in METHOD_KINDS" :key="key" :value="key">{{ k.label }}</option>
         </select>
       </div>
     </div>
-    <p class="muted small">{{ METHOD_KINDS[form.kind].hint }}</p>
+    <p class="muted small">{{ METHOD_KINDS[form.kind].hint }}. It decides the recipe fields, the timer, and which drinks it can make.</p>
     <template v-if="form.kind === 'espresso'">
       <div class="field">
         <label :for="`${idPrefix}-preinfusion`">Pre-infusion</label>
@@ -69,7 +60,7 @@ defineProps<{ idPrefix: string; showErrors: boolean; categories: DrinkCategory[]
         <option value="">None</option>
         <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
       </select>
-      <span class="hint">Where it's listed when you brew, and on the menu.</span>
+      <span class="hint">Your own grouping: where it's listed when you brew, and its section on the menu.</span>
     </div>
     <label class="checkbox">
       <input v-model="form.showOnPublicMenu" type="checkbox" />

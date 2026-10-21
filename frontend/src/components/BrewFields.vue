@@ -14,6 +14,7 @@ const props = defineProps<{
   grinders: Grinder[];
   expectedYieldGrams?: number | null; // the recipe's estimate (espresso: target), shown for comparison
   espresso?: boolean; // shot weight instead of water (docs/api_spec.md §6)
+  drinkTasting?: boolean; // the drink has ingredients: rate the brew and the drink apart
 }>();
 
 // Measured yield vs the recipe's estimate, e.g. "+6 g vs expected 220 g".
@@ -98,16 +99,50 @@ const grinderOptions = computed(() => props.grinders.filter((g) => !g.retiredAt 
         <input id="brew-grind" v-model="draft.grind" maxlength="100" />
       </div>
     </div>
-    <RatingInput v-model="draft.rating" />
-    <div class="field">
-      <label for="brew-notes">Tasting notes <span class="muted">(optional)</span></label>
-      <textarea id="brew-notes" v-model="draft.notes" rows="3" maxlength="5000" placeholder="e.g. Sour, thin, drained fast" />
-      <span class="hint">The AI suggestion uses these, so describe what you taste.</span>
-    </div>
+    <!-- A drink with ingredients is tasted twice: the brew on its own (if you
+         tried it) and the finished drink, which milk and syrup change. -->
+    <fieldset v-if="drinkTasting" class="tasting">
+      <legend>The brew <span class="muted">(optional, if you tasted it on its own)</span></legend>
+      <RatingInput v-model="draft.rating" name="brew-rating" label="Brew rating" />
+      <div class="field">
+        <label for="brew-notes">Brew notes</label>
+        <textarea id="brew-notes" v-model="draft.notes" rows="2" maxlength="5000" placeholder="e.g. Bright, a bit sharp" />
+      </div>
+    </fieldset>
+    <fieldset v-if="drinkTasting" class="tasting">
+      <legend>The drink</legend>
+      <RatingInput v-model="draft.drinkRating" name="drink-rating" label="Drink rating" />
+      <div class="field">
+        <label for="brew-drink-notes">Drink notes <span class="muted">(optional)</span></label>
+        <textarea id="brew-drink-notes" v-model="draft.drinkNotes" rows="3" maxlength="5000" placeholder="e.g. Sweet, caramel, good balance with the milk" />
+        <span class="hint">The AI reads the brew's own notes as the clearest sign of extraction; drink notes help, knowing milk softens sourness and bitterness.</span>
+      </div>
+    </fieldset>
+    <template v-else>
+      <RatingInput v-model="draft.rating" />
+      <div class="field">
+        <label for="brew-notes">Tasting notes <span class="muted">(optional)</span></label>
+        <textarea id="brew-notes" v-model="draft.notes" rows="3" maxlength="5000" placeholder="e.g. Sour, thin, drained fast" />
+        <span class="hint">The AI suggestion uses these, so describe what you taste.</span>
+      </div>
+    </template>
   </div>
 </template>
 
 <style scoped>
+.tasting {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.tasting > legend {
+  font-weight: 600;
+  padding: 0 var(--space-1);
+}
 textarea {
   width: 100%;
   min-width: 0;

@@ -27,14 +27,17 @@ export interface ErrorBody {
 }
 
 // docs/schema.md METHOD_KINDS: decides the recipe fields and timer (docs/api_spec.md §3).
-export type MethodKind = 'pour_over' | 'immersion' | 'espresso';
+// The brew method: decides recipe fields, steps, the timer, and which drinks a
+// brewer can make. A recipe's style says how the cup is brewed (descriptive).
+export type MethodKind = 'filter' | 'espresso';
+export type RecipeStyle = 'pour_over' | 'immersion' | 'hybrid' | 'cold_brew' | 'standard' | 'soup' | 'other';
 
 // docs/api_spec.md §3: what makes the coffee (V60, AeroPress, an espresso
 // machine). Capabilities apply to espresso brewers only ("none" otherwise).
 export interface Brewer extends MachineCapabilities {
   id: string;
   name: string;
-  kind: MethodKind;
+  kind: MethodKind; // the brew method
   notes: string | null;
   // Menu fields: the plain brew ("V60") on the public menu (§3, §7), and the
   // category that groups it there and when brewing.
@@ -43,6 +46,7 @@ export interface Brewer extends MachineCapabilities {
   categoryId: string | null;
   showOnPublicMenu: boolean;
   retiredAt: string | null; // set = retired (hidden from pickers, kept in history)
+  createdAt: string; // date added (ISO)
 }
 // How recipes, drinks and brew logs refer to their brewer.
 export type BrewerRef = Pick<Brewer, 'id' | 'name' | 'kind'>;
@@ -66,6 +70,7 @@ export interface Grinder extends GrinderDetails {
   id: string;
   name: string;
   retiredAt: string | null; // set = retired (hidden from pickers, kept in history)
+  createdAt: string; // date added (ISO)
 }
 
 // docs/api_spec.md §3: espresso brewers' capabilities.
@@ -102,7 +107,7 @@ export interface FreezePeriod {
 // docs/api_spec.md §5
 // docs/api_spec.md §5: which types a recipe can use depends on its method's kind.
 export type StepType =
-  | 'bloom' | 'pour' | 'swirl' | 'stir' | 'wait' | 'press' // pour over / immersion
+  | 'bloom' | 'pour' | 'swirl' | 'stir' | 'wait' | 'press' // filter
   | 'preinfusion' | 'soak' | 'pressure' | 'flow' // espresso
   | 'other';
 // How the timer moves on: auto (after the duration), auto_log (plus a "Log it"
@@ -155,8 +160,10 @@ export interface Recipe {
   firstDropMinSec: number | null; // espresso only (both or neither)
   firstDropMaxSec: number | null;
   flowUnit: FlowUnit;
+  style: RecipeStyle | null; // one of STYLES_BY_KIND[brewer.kind] (lib/equipment.ts)
   targetTempC: number | null;
   defaultGrinderId: string | null; // preselected when brewing this recipe
+  createdAt: string; // date added (ISO)
   grindSettings: RecipeGrindSetting[];
   steps: RecipeStep[];
 }
@@ -191,13 +198,15 @@ export interface BrewLog {
   actualTempC: number | null;
   actualGrindSetting: string | null;
   actualTimeSec: number;
-  rating: number | null;
+  rating: number | null; // the coffee tasted on its own
   tastingNotes: string | null;
+  drinkRating: number | null; // the finished drink (drink brews only)
+  drinkTastingNotes: string | null;
   bean: { id: string; roasterName: string; beanName: string };
   recipe: { id: string; name: string; expectedYieldGrams: number | null; methodKind: MethodKind } | null;
   grinder: { id: string; name: string } | null;
   brewer: BrewerRef | null; // retired ones included
-  drink: { id: string; name: string } | null;
+  drink: { id: string; name: string; hasIngredients: boolean } | null; // hasIngredients: shot and drink tasted apart
   marks: Mark[]; // earliest first; espresso only
   brewedBy: { id: string; email: string } | null;
 }
@@ -217,6 +226,7 @@ export interface Ingredient {
   ingredientType: IngredientType;
   instructions: string | null;
   drinkCount: number; // drinks that use it
+  createdAt: string; // date added (ISO)
 }
 
 // docs/api_spec.md §5c: a drink's default size, and the size a brew was made at.
@@ -237,14 +247,14 @@ export interface DrinkCategory {
   position: number;
 }
 
-// docs/api_spec.md §5c: what's served. Built on one brewer; any recipe
-// of that method can make it. A variant is an independent copy that
-// remembers its parent (Vanilla Latte of Latte).
+// docs/api_spec.md §5c: what's served. Needs a kind of coffee, not a device:
+// any brewer of that kind, with its recipes, can make it. A variant is an
+// independent copy that remembers its parent (Vanilla Latte of Latte).
 export interface Drink {
   id: string;
   name: string;
   description: string | null;
-  brewer: BrewerRef;
+  kind: MethodKind; // the kind of coffee it needs: any brewer of this kind can make it
   category: { id: string; name: string } | null;
   parent: { id: string; name: string } | null;
   variants: Array<{ id: string; name: string }>; // direct variants, by name
@@ -252,5 +262,7 @@ export interface Drink {
   defaultRecipeId: string | null; // a recipe of the method, or null
   servingSize: number | null; // default size; both or neither
   servingUnit: ServingUnit | null;
+  instructions: string | null; // how to make it, shown after the brew
+  createdAt: string; // date added (ISO)
   ingredients: DrinkIngredient[];
 }

@@ -2,7 +2,7 @@
 // The brew flow: set up (bean, recipe, AI starting point) -> timer -> log -> saved
 // (+ optional AI suggestion for next time). docs/api_spec.md §6/§8,
 // docs/timer_architecture.md.
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import { beansApi } from '../api/beans';
 import { brewLogsApi, suggestionsApi } from '../api/brews';
@@ -19,24 +19,29 @@ import {
   brewable,
   categoryOptions,
   decodeCategory,
+  brewerOptions,
   decodeItem,
-  drinkOptionLabel,
-  encodeBrewer,
   encodeCategory,
   encodeDrink,
+  encodePlain,
   itemOptions,
   itemValues,
   NO_RECIPE,
+  pickBrewer,
   pickRecipe,
   recipeOptions,
   validCategory,
   validItem,
 } from '../lib/brewChoice';
-import type { Brewer, Drink, DrinkCategory, Grinder, Mark, ServingUnit } from '../api/types';
+import type { Brewer, Drink, DrinkCategory, Grinder, Mark, MethodKind, ServingUnit } from '../api/types';
+import { METHOD_KINDS, RECIPE_STYLES } from '../lib/equipment';
 import { convertSize, defaultSize, formatSize, SERVING_UNITS, sizeFactor, type Size } from '../lib/servings';
 import AppHeader from '../components/AppHeader.vue';
 import BrewFields from '../components/BrewFields.vue';
 import BrewTimer from '../components/BrewTimer.vue';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
+import FinishDrinkCard from '../components/FinishDrinkCard.vue';
+import { useBrewSessionStore } from '../stores/brewSession';
 import { formatMark } from '../lib/marks';
 import { stepTitle } from '../lib/steps';
 import { useAnalysis } from '../composables/useAnalysis';
@@ -60,33 +65,45 @@ const brewers = ref<Brewer[]>([]);
 // Setup
 const beanId = ref('');
 const recipeId = ref('');
-// Category → Brewer or drink → Recipe (lib/brewChoice.ts): e.g. Pour Over →
-// V60, or Espresso Milk Drinks → Vanilla Latte; then one of the brewer's
-// recipes (a drink's default preselected; docs/api_spec.md §5c). Or no recipe.
+// Category → Drink → Brewer → Recipe (lib/brewChoice.ts): e.g. Specialty
+// Drinks → The Atlas → V60 or Chemex, or Pour Over → Just pour over → V60;
+// then one of the brewer's recipes (a drink's default preselected;
+// docs/api_spec.md §5c). Or no recipe.
 const drinks = ref<Drink[]>([]);
 const categories = ref<DrinkCategory[]>([]);
 const what = ref(NO_RECIPE); // the category
-const item = ref(''); // the brewer or drink
-const options = computed(() => brewable(brewers.value, recipes.value, drinks.value));
+const item = ref(''); // a drink, or a plain brew of a kind
+const brewerId = ref('');
+const options = computed(() => brewable(brewers.value, drinks.value));
 const categoryList = computed(() => categoryOptions(options.value, categories.value));
-const items = computed(() => {
-  const c = decodeCategory(what.value);
-  return c ? itemOptions(options.value, c.categoryId) : { brewers: [], drinks: [] };
-});
-const chosenCategory = computed(() => {
-  const c = decodeCategory(what.value);
-  return c ? (categoryList.value.find((x) => x.id === c.categoryId) ?? null) : null;
-});
+const categoryId = computed(() => decodeCategory(what.value)?.categoryId ?? null);
+const items = computed(() => (decodeCategory(what.value) ? itemOptions(options.value, categoryId.value) : { plains: [], drinks: [] }));
+const chosenCategory = computed(() => (decodeCategory(what.value) ? (categoryList.value.find((x) => x.id === categoryId.value) ?? null) : null));
 const chosen = computed(() => decodeItem(item.value));
-const drink = computed(() => (chosen.value?.kind === 'drink' ? (drinks.value.find((d) => d.id === chosen.value?.id) ?? null) : null));
-const brewerId = computed(() => (chosen.value?.kind === 'brewer' ? chosen.value.id : (drink.value?.brewer.id ?? null)));
-const recipeChoices = computed(() => recipeOptions(brewerId.value, recipes.value));
+const drink = computed(() => {
+  const c = chosen.value;
+  return c?.kind === 'drink' ? (drinks.value.find((d) => d.id === c.id) ?? null) : null;
+});
+// The kind of coffee being made: the plain brew's, or the drink's.
+const itemKind = computed<MethodKind | null>(() => (chosen.value?.kind === 'plain' ? chosen.value.method : (drink.value?.kind ?? null)));
+const brewerList = computed(() => brewerOptions(options.value, categoryId.value, chosen.value, drinks.value));
+const recipeChoices = computed(() => recipeOptions(brewerId.value || null, recipes.value));
+// Drinks name their kind when a category mixes them ("The Atlas · pour over").
+const mixedKinds = computed(() => new Set(items.value.drinks.map((d) => d.drink.kind)).size > 1);
+const drinkLabel = (d: Drink) => (mixedKinds.value ? `${d.name} · ${METHOD_KINDS[d.kind].label.toLowerCase()}` : d.name);
 watch(what, (value) => {
   remember('brewWhat', value);
   item.value = validItem(item.value || recall('brewItem'), itemValues(items.value)); // the last one, else the first
 });
 watch(item, (value) => {
   remember('brewItem', value);
+  const kind = itemKind.value;
+  brewerId.value = pickBrewer(brewerList.value, drink.value, recipes.value, kind ? recall(`brewBrewer.${kind}`) : null, brewerId.value);
+  recipeId.value = pickRecipe(recipeChoices.value, drink.value, recipeId.value);
+});
+watch(brewerId, (id) => {
+  const kind = itemKind.value;
+  if (id && kind) remember(`brewBrewer.${kind}`, id); // the last brewer used for this kind
   recipeId.value = pickRecipe(recipeChoices.value, drink.value, recipeId.value);
 });
 // Drink size (lib/servings.ts): starts at the drink's default; a bigger or
@@ -149,7 +166,9 @@ const shotRecipe = computed(() => {
 
 // Brew details: pre-filled from the recipe / suggestion, edited in the log form.
 const draft = reactive(emptyDraft());
-const parsed = computed(() => parseBrewDraft(draft, recipe.value?.brewer.kind ?? null));
+// A drink with ingredients is tasted twice: the brew (if tried on its own) and the drink.
+const drinkTasting = computed(() => !!drink.value?.ingredients.length);
+const parsed = computed(() => parseBrewDraft(draft, recipe.value?.brewer.kind ?? null, drinkTasting.value));
 
 onMounted(async () => {
   const ws = workspaces.current?.id;
@@ -266,7 +285,7 @@ watch(shot, (s) => {
 // Setup can continue once the batch (or shot) makes sense.
 const setupReady = computed(
   // An empty category has nothing to brew yet ("Something else" logs without a recipe).
-  () => !chosenCategory.value?.empty && (!baseSize.value || !!madeSize.value) && (!recipe.value || (espresso.value ? !!shot.value : !!batch.value)),
+  () => !chosenCategory.value?.empty && !(brewerId.value && !recipeChoices.value.length) && (!baseSize.value || !!madeSize.value) && (!recipe.value || (espresso.value ? !!shot.value : !!batch.value)),
 );
 function batchText(field: ScaleField): string {
   if (lead.value.field === field) return lead.value.text;
@@ -312,7 +331,7 @@ const NEW_GRINDER = '__new__';
 const activeGrinders = computed(() => grinders.value.filter((x) => !x.retiredAt));
 const grinder = computed(() => grinders.value.find((x) => x.id === draft.grinderId) ?? null);
 // The last grinder and brew choice, remembered per workspace.
-type Remembered = 'grinderId' | 'brewWhat' | 'brewItem';
+type Remembered = 'grinderId' | 'brewWhat' | 'brewItem' | `brewBrewer.${MethodKind}`;
 const savedKey = (what: Remembered) => `brewlog.${what}.${workspaces.current?.id ?? ''}`;
 function recall(what: Remembered): string | null {
   try {
@@ -462,8 +481,40 @@ function onTimerComplete(seconds: number, timerMarks: Mark[] = []): void {
   stage.value = 'log';
 }
 
-// Leaving mid-brew loses the timing.
-onBeforeRouteLeave(() => stage.value !== 'timing' || window.confirm('Leave the brew in progress? The timer will be lost.'));
+// Abandoning a brew in progress (the timer, or a log not saved yet) asks
+// first: leaving the page, reloading, or clicking Brew again in the header.
+const brewSession = useBrewSessionStore();
+const inProgress = computed(() => stage.value === 'timing' || stage.value === 'log');
+watch(inProgress, (v) => (brewSession.inProgress = v), { immediate: true });
+const abandonOpen = ref(false);
+let abandonAnswer: ((abandon: boolean) => void) | null = null;
+function askAbandon(): Promise<boolean> {
+  abandonAnswer?.(false); // a second ask replaces the first
+  abandonOpen.value = true;
+  return new Promise((resolve) => (abandonAnswer = resolve));
+}
+function answerAbandon(abandon: boolean): void {
+  abandonOpen.value = false;
+  abandonAnswer?.(abandon);
+  abandonAnswer = null;
+}
+onBeforeRouteLeave(() => (inProgress.value ? askAbandon() : true));
+watch(
+  () => brewSession.restartRequests,
+  async () => {
+    if (inProgress.value && (await askAbandon())) brewAgain();
+  },
+);
+function warnOnUnload(event: BeforeUnloadEvent): void {
+  if (!inProgress.value) return;
+  event.preventDefault();
+  event.returnValue = ''; // older browsers need it set
+}
+window.addEventListener('beforeunload', warnOnUnload);
+onUnmounted(() => {
+  window.removeEventListener('beforeunload', warnOnUnload);
+  brewSession.inProgress = false;
+});
 
 // Log form
 const saving = ref(false);
@@ -516,6 +567,8 @@ function brewAgain(): void {
   savedLogId.value = null;
   draft.rating = null;
   draft.notes = '';
+  draft.drinkRating = null;
+  draft.drinkNotes = '';
   submitted.value = false;
   suggestion.value = null;
   suggestionState.value = 'idle';
@@ -561,31 +614,38 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <p class="muted small">
             <RouterLink v-if="workspaces.canEdit" :to="{ name: 'drink-new', query: { category: chosenCategory.id } }">Add a drink</RouterLink
             ><template v-else>Add a drink</template> to it (a V60 or espresso drink with ingredients, say), or put a brewer in it under
-            <RouterLink :to="{ name: 'brewers' }">Equipment → Brewers</RouterLink>.
+            <RouterLink :to="{ name: 'brewers' }">Bar setup → Brewers</RouterLink>.
           </p>
         </div>
         <div v-else-if="decodeCategory(what)" class="field">
-          <label for="item">{{ items.drinks.length && !items.brewers.length ? 'Drink' : items.brewers.length && !items.drinks.length ? 'Brewer' : 'Brewer or drink' }}</label>
+          <label for="item">Drink</label>
           <select id="item" v-model="item">
-            <optgroup v-if="items.brewers.length && items.drinks.length" label="Brewers">
-              <option v-for="x in items.brewers" :key="x.id" :value="encodeBrewer(x.id)">{{ x.name }}</option>
+            <option v-for="k in items.plains" :key="k" :value="encodePlain(k)">{{ k === 'filter' ? 'Just filter coffee' : 'Just espresso' }}</option>
+            <optgroup v-if="items.plains.length && items.drinks.length" label="Drinks">
+              <option v-for="d in items.drinks" :key="d.drink.id" :value="encodeDrink(d.drink.id)">{{ '\u2003'.repeat(d.depth) }}{{ drinkLabel(d.drink) }}</option>
             </optgroup>
             <template v-else>
-              <option v-for="x in items.brewers" :key="x.id" :value="encodeBrewer(x.id)">{{ x.name }}</option>
-            </template>
-            <optgroup v-if="items.drinks.length && items.brewers.length" label="Drinks">
-              <option v-for="d in items.drinks" :key="d.drink.id" :value="encodeDrink(d.drink.id)">{{ '\u2003'.repeat(d.depth) }}{{ d.depth ? '↳ ' : '' }}{{ drinkOptionLabel(d.drink, items.drinks) }}</option>
-            </optgroup>
-            <template v-else>
-              <option v-for="d in items.drinks" :key="d.drink.id" :value="encodeDrink(d.drink.id)">{{ '\u2003'.repeat(d.depth) }}{{ d.depth ? '↳ ' : '' }}{{ drinkOptionLabel(d.drink, items.drinks) }}</option>
+              <option v-for="d in items.drinks" :key="d.drink.id" :value="encodeDrink(d.drink.id)">{{ '\u2003'.repeat(d.depth) }}{{ drinkLabel(d.drink) }}</option>
             </template>
           </select>
-          <span v-if="drink" class="hint">On {{ drink.brewer.name }}</span>
         </div>
-        <div v-if="brewerId" class="field">
+        <div v-if="chosen && brewerList.length" class="field">
+          <label for="brewer">Brewer</label>
+          <select id="brewer" v-model="brewerId">
+            <option v-for="b in brewerList" :key="b.id" :value="b.id">{{ b.name }}</option>
+          </select>
+        </div>
+        <div v-if="brewerId && !recipeChoices.length" class="card empty-category" role="status">
+          <p>No recipes for {{ brewerList.find((b) => b.id === brewerId)?.name }} yet.</p>
+          <p class="muted small">
+            <RouterLink v-if="workspaces.canEdit" :to="{ name: 'recipe-new', query: { brewer: brewerId } }">Add a recipe</RouterLink
+            ><template v-else>Ask an owner or barista to add a recipe</template> for it to brew with.
+          </p>
+        </div>
+        <div v-else-if="brewerId" class="field">
           <label for="recipe">Recipe</label>
           <select id="recipe" v-model="recipeId">
-            <option v-for="r in recipeChoices" :key="r.id" :value="r.id">{{ r.name }}<template v-if="r.id === drink?.defaultRecipeId"> (default)</template></option>
+            <option v-for="r in recipeChoices" :key="r.id" :value="r.id">{{ r.name }}<template v-if="r.style && r.style !== 'standard'"> ({{ RECIPE_STYLES[r.style].toLowerCase() }})</template><template v-if="r.id === drink?.defaultRecipeId"> (default)</template></option>
           </select>
         </div>
         <div v-if="baseSize" class="batch" role="group" aria-labelledby="size-label">
@@ -772,10 +832,10 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         {{ beanLabel }}<template v-if="drink"> · {{ drink.name }}</template><template v-if="madeSize"> · {{ formatSize(madeSize) }}</template
         ><template v-if="recipe"> · {{ recipe.name }}</template>
       </p>
-      <p v-if="drink && drink.ingredients.length" class="note small">Finish with {{ drink.ingredients.map((c) => ingredientLine(c, sizeScale)).join(', ') }}</p>
+      <FinishDrinkCard v-if="drink" :drink="drink" :factor="sizeScale" :size-label="madeSize ? formatSize(madeSize) : null" />
       <section class="card">
         <p v-if="stepMarksLine" class="muted small marks-line">{{ stepMarksLine }}</p>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="expectedYield" :espresso="espresso" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" />
       </section>
       <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
       <button class="btn btn-primary btn-block" type="submit" :disabled="saving">{{ saving ? 'Saving…' : 'Save brew' }}</button>
@@ -796,6 +856,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         </p>
         <AnalysisCard v-if="analysis" :analysis="analysis" />
       </section>
+      <FinishDrinkCard v-if="drink" :drink="drink" :factor="sizeScale" :size-label="madeSize ? formatSize(madeSize) : null" />
       <div class="stack">
         <button class="btn btn-secondary btn-block" type="button" @click="brewAgain">Brew again</button>
         <RouterLink v-if="savedLogId" class="btn btn-secondary btn-block" :to="{ name: 'journal-entry', params: { id: savedLogId } }">
@@ -804,6 +865,14 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       </div>
     </template>
   </main>
+
+  <ConfirmDialog :open="abandonOpen" title="Abandon this brew?" @cancel="answerAbandon(false)">
+    <p>The timer and anything you've entered for this brew will be lost.</p>
+    <template #actions>
+      <button class="btn btn-danger" type="button" @click="answerAbandon(true)">Abandon brew</button>
+      <button class="btn btn-secondary" type="button" @click="answerAbandon(false)">Keep brewing</button>
+    </template>
+  </ConfirmDialog>
 </template>
 
 <style scoped>

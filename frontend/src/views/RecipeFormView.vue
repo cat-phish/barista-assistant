@@ -11,7 +11,7 @@ import { ApiError, errorMessage } from '../api/client';
 import { grindersApi } from '../api/grinders';
 import { brewersApi } from '../api/brewers';
 import { recipesApi, type RecipeInput } from '../api/recipes';
-import type { Brewer, FlowUnit, Grinder, MethodKind, Recipe } from '../api/types';
+import type { Brewer, FlowUnit, Grinder, MethodKind, Recipe, RecipeStyle } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import { formatGrams, formatRatio, formatTime, parseDecimal, parseTime } from '../lib/format';
 import { VueDraggable } from 'vue-draggable-plus';
@@ -37,7 +37,7 @@ import {
 } from '../lib/steps';
 import { useWorkspaceStore } from '../stores/workspace';
 import { estimateYield, RECIPE_ROAST_LEVEL, ROAST_LEVELS } from '../lib/scale';
-import { METHOD_KINDS, pickCopyBrewer } from '../lib/equipment';
+import { METHOD_KINDS, pickCopyBrewer, RECIPE_STYLES, STYLES_BY_KIND } from '../lib/equipment';
 
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 const NEW_METHOD = '__new__';
@@ -63,6 +63,7 @@ const finishTo = ref('');
 const firstDropFrom = ref(''); // espresso only
 const firstDropTo = ref('');
 const flowUnit = ref<FlowUnit>('g_s'); // espresso flow steps
+const style = ref<RecipeStyle | ''>(''); // how the cup is brewed; '' = not set
 const temp = ref('');
 const defaultGrinderId = ref(''); // '' = none: brewing uses the last grinder
 const grindRows = ref<Array<{ grinderId: string; setting: string }>>([]);
@@ -70,7 +71,7 @@ const steps = ref<StepDraft[]>([]);
 
 // Inline "add a brewer" (brewers are per-workspace equipment, §3).
 const newMethodName = ref('');
-const newMethodKind = ref<MethodKind>('pour_over');
+const newMethodKind = ref<MethodKind>('filter');
 const addingMethod = ref(false);
 const methodError = ref('');
 const newMethodInput = ref<HTMLInputElement | null>(null);
@@ -83,6 +84,11 @@ const submitted = ref(false);
 // The chosen brewer's kind decides the fields (docs/api_spec.md §5).
 const kind = computed<MethodKind | null>(() => methods.value.find((m) => m.id === brewerId.value)?.kind ?? null);
 const espresso = computed(() => kind.value === 'espresso');
+// Styles fit the brewer's method; a style that no longer fits is cleared.
+const styleChoices = computed(() => (kind.value ? STYLES_BY_KIND[kind.value] : []));
+watch(kind, () => {
+  if (style.value && !styleChoices.value.includes(style.value)) style.value = '';
+});
 
 const grams = { scale: 2, min: 0, max: 10000, exclusiveMin: true, exclusiveMax: true } as const;
 const parsed = computed(() => ({
@@ -145,7 +151,7 @@ const ratio = computed(() => {
   const out = espresso.value ? (p.expectedYield?.ok ? p.expectedYield.value : null) : p.water.ok ? p.water.value : null;
   return out === null ? null : formatRatio(p.dose.value, out);
 });
-// Pour-over/immersion only: espresso's yield is a target, not an estimate.
+// Filter only: espresso's yield is a target, not an estimate.
 const yieldEstimate = computed(() =>
   !espresso.value && parsed.value.dose.ok && parsed.value.water.ok && parsed.value.water.value !== null
     ? estimateYield(parsed.value.dose.value, parsed.value.water.value, ROAST_LEVELS[RECIPE_ROAST_LEVEL].retention)
@@ -196,6 +202,7 @@ function fill(recipe: Recipe): void {
   defaultGrinderId.value = recipe.defaultGrinderId ?? '';
   grindRows.value = recipe.grindSettings.map((g) => ({ grinderId: g.grinderId, setting: g.setting }));
   flowUnit.value = recipe.flowUnit;
+  style.value = recipe.style ?? '';
   steps.value = recipe.steps.map((s) => stepDraft(newStepKey(), s));
 }
 
@@ -228,6 +235,9 @@ onMounted(async () => {
       brewerId.value = pickCopyBrewer(methods.value, from.brewer);
       copyOf.value = from.name;
     }
+    // From brew setup's "add a recipe" for a brewer that has none.
+    const brewer = methods.value.find((m) => m.id === route.query.brewer && !m.retiredAt);
+    if (!from && brewer) brewerId.value = brewer.id;
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -379,6 +389,7 @@ async function save(): Promise<void> {
     defaultGrinderId: defaultGrinderId.value || null,
     grindSettings: grindRows.value.map((r) => ({ grinderId: r.grinderId, setting: r.setting.trim() })),
     flowUnit: flowUnit.value,
+    style: style.value || null,
     steps: stepsParsed.value.steps,
   };
   saving.value = true;
@@ -421,13 +432,21 @@ async function save(): Promise<void> {
           <span v-if="copyOf" class="hint">A copy of {{ copyOf }}. Pick the brewer for the copy; the original stays as it is.</span>
           <span v-if="submitted && fieldErrors.brewer" class="field-error">{{ fieldErrors.brewer }}</span>
         </div>
+        <div v-if="styleChoices.length" class="field">
+          <label for="style">Style <span class="muted">(optional)</span></label>
+          <select id="style" v-model="style">
+            <option value="">Not set</option>
+            <option v-for="st in styleChoices" :key="st" :value="st">{{ RECIPE_STYLES[st] }}</option>
+          </select>
+          <span class="hint">How this recipe brews ({{ kind === 'espresso' ? 'a standard shot or a soup shot' : 'pour over, immersion, cold brew…' }}), for your lists and the AI.</span>
+        </div>
         <div v-if="brewerId === NEW_METHOD" class="inline-add">
           <div class="field grow">
             <label for="new-method">New brewer name</label>
             <input id="new-method" ref="newMethodInput" v-model="newMethodName" maxlength="100" placeholder="e.g. Chemex" @keydown.enter.prevent="addMethod" />
           </div>
           <div class="field">
-            <label for="new-method-kind">Kind</label>
+            <label for="new-method-kind">Brew method</label>
             <select id="new-method-kind" v-model="newMethodKind">
               <option v-for="(k, key) in METHOD_KINDS" :key="key" :value="key">{{ k.label }}</option>
             </select>
@@ -516,7 +535,7 @@ async function save(): Promise<void> {
           </p>
         </div>
         <p v-if="grinders.length === 0" class="muted small">
-          No grinders yet. <RouterLink :to="{ name: 'grinders' }">Add one</RouterLink> to save a starting point for it.
+          No grinders yet. <RouterLink :to="{ name: 'grinder-new' }">Add one</RouterLink> to save a starting point for it.
         </p>
         <div v-else class="field">
           <label for="default-grinder">Default grinder <span class="muted">(optional)</span></label>

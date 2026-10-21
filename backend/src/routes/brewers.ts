@@ -10,7 +10,6 @@ import {
   brewers,
   brewLogs,
   drinkCategories,
-  drinks,
   METHOD_KINDS,
   PREINFUSION_MODES,
   PROFILE_CONTROLS,
@@ -23,7 +22,7 @@ import { optionalText, updateSchema } from "../validation.js";
 // machine). Espresso brewers record their capabilities; the menu fields put
 // the plain brew on the public menu. Retired like grinders (§3b) once brews
 // used one.
-export type BrewerSummary = Omit<Brewer, "workspaceId" | "createdAt">;
+export type BrewerSummary = Omit<Brewer, "workspaceId">;
 
 export interface BrewerListResponse {
   brewers: BrewerSummary[];
@@ -42,7 +41,7 @@ interface BrewerParams extends WorkspaceParams {
 
 const brewerFields = {
   name: z.string().trim().min(1).max(100),
-  kind: z.enum(METHOD_KINDS),
+  kind: z.enum(METHOD_KINDS), // the brew method: filter or espresso
   notes: optionalText(255),
   preinfusion: z.enum(PREINFUSION_MODES),
   flowControl: z.enum(PROFILE_CONTROLS),
@@ -55,7 +54,7 @@ const brewerFields = {
 
 const createBrewerSchema = z.object({
   ...brewerFields,
-  kind: brewerFields.kind.default("pour_over"),
+  kind: brewerFields.kind.default("filter"),
   preinfusion: brewerFields.preinfusion.default("none"),
   flowControl: brewerFields.flowControl.default("none"),
   pressureControl: brewerFields.pressureControl.default("none"),
@@ -77,6 +76,7 @@ const summary = {
   categoryId: brewers.categoryId,
   showOnPublicMenu: brewers.showOnPublicMenu,
   retiredAt: brewers.retiredAt,
+  createdAt: brewers.createdAt,
 };
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -96,13 +96,13 @@ async function categoryInWorkspace(tx: Tx, categoryId: string | null | undefined
   return found.length === 1;
 }
 
-async function usage(tx: Tx, brewerId: string): Promise<{ recipeCount: number; drinkCount: number; brewLogCount: number }> {
-  const [[r], [d], [l]] = await Promise.all([
+// Recipes and brews use a brewer; drinks don't (they need a kind, not a device).
+async function usage(tx: Tx, brewerId: string): Promise<{ recipeCount: number; brewLogCount: number }> {
+  const [[r], [l]] = await Promise.all([
     tx.select({ n: count() }).from(recipes).where(eq(recipes.brewerId, brewerId)),
-    tx.select({ n: count() }).from(drinks).where(eq(drinks.brewerId, brewerId)),
     tx.select({ n: count() }).from(brewLogs).where(eq(brewLogs.brewerId, brewerId)),
   ]);
-  return { recipeCount: r?.n ?? 0, drinkCount: d?.n ?? 0, brewLogCount: l?.n ?? 0 };
+  return { recipeCount: r?.n ?? 0, brewLogCount: l?.n ?? 0 };
 }
 
 const BAD_CATEGORY = "categoryId: not a category in this workspace";
@@ -154,7 +154,7 @@ brewersRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Brew
   res.status(201).json({ brewer });
 });
 
-// Recipes and drinks reference brewers by ID, so a rename shows up everywhere
+// Recipes and brews reference brewers by ID, so a rename shows up everywhere
 // at once. Case-only renames ("v60" -> "V60") are allowed: the unique index
 // only compares against other rows. The kind can't change while recipes use
 // the brewer, since recipe fields differ by kind (docs/api_spec.md §3).
@@ -212,17 +212,17 @@ brewersRouter.patch("/:brewerId", async (req: Request<BrewerParams>, res: Respon
   res.json({ brewer });
 });
 
-// The FK cascades to recipes and drinks (so workspace deletion works), which
+// The FK cascades to recipes (so workspace deletion works), which
 // makes this check the only thing protecting them. Brewers that brews used
 // are retired instead, so history keeps them.
 brewersRouter.delete("/:brewerId", async (req: Request<BrewerParams>, res: Response) => {
   if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId, WRITE_ROLES))) return;
   const outcome = await db.transaction(async (tx) => {
-    // Locked so a recipe or drink can't start using it between the count and the delete.
+    // Locked so a recipe can't start using it between the count and the delete.
     const [brewer] = await tx.select({ id: brewers.id }).from(brewers).where(inWorkspace(req.params)).for("update");
     if (!brewer) return { status: "not_found" } as const;
     const counts = await usage(tx, brewer.id);
-    if (counts.recipeCount > 0 || counts.drinkCount > 0 || counts.brewLogCount > 0) return { status: "in_use", ...counts } as const;
+    if (counts.recipeCount > 0 || counts.brewLogCount > 0) return { status: "in_use", ...counts } as const;
     await tx.delete(brewers).where(eq(brewers.id, brewer.id));
     return { status: "deleted" } as const;
   });
@@ -232,12 +232,12 @@ brewersRouter.delete("/:brewerId", async (req: Request<BrewerParams>, res: Respo
     return;
   }
   if (outcome.status === "in_use") {
-    const { recipeCount, drinkCount, brewLogCount } = outcome;
+    const { recipeCount, brewLogCount } = outcome;
     const message =
-      recipeCount > 0 || drinkCount > 0
-        ? `${recipeCount} recipe(s) and ${drinkCount} drink(s) use this brewer. Change their brewer or delete them first.`
+      recipeCount > 0
+        ? `${recipeCount} recipe(s) use this brewer. Change their brewer or delete them first.`
         : `${brewLogCount} brew(s) were made with this brewer. Retire it instead.`;
-    sendError(res, 409, message, { recipeCount, drinkCount, brewLogCount });
+    sendError(res, 409, message, { recipeCount, brewLogCount });
     return;
   }
   res.status(204).end();

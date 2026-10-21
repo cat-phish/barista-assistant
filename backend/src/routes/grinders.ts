@@ -10,7 +10,7 @@ import { BURR_TYPES, brewLogs, GRINDER_ADJUSTMENTS, GRINDER_POWER, grinders, typ
 import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
 // docs/api_spec.md §3b
-export type GrinderSummary = Omit<Grinder, "workspaceId" | "createdAt">;
+export type GrinderSummary = Omit<Grinder, "workspaceId">;
 
 export interface LastSettingResponse {
   lastSetting: { grindSetting: string; timestamp: Date; brewLogId: string } | null;
@@ -67,6 +67,7 @@ const summary = {
   burrSizeMm: grinders.burrSizeMm,
   power: grinders.power,
   retiredAt: grinders.retiredAt,
+  createdAt: grinders.createdAt,
 };
 
 function inWorkspace(p: GrinderParams) {

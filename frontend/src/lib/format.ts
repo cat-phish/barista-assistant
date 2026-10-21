@@ -54,6 +54,13 @@ export function formatDay(date: string): string {
   return new Date(y ?? 0, (m ?? 1) - 1, d ?? 1).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+// An ISO timestamp as a list date: "Oct 21", or "Oct 21, 2025" outside this year.
+export function formatAdded(iso: string, now: Date = new Date()): string {
+  const d = new Date(iso);
+  const sameYear = d.getFullYear() === now.getFullYear();
+  return d.toLocaleDateString(undefined, sameYear ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 // 15 g in, 250 g out -> "1:16.7"
 export function formatRatio(dose: number, yieldGrams: number): string {
   if (dose <= 0) return '–';

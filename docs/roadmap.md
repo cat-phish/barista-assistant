@@ -3,7 +3,8 @@
 Design agreed on 2026-10-19. Each phase is its own feature branch off `dev`.
 The detailed contracts live in `schema.md`, `api_spec.md` and
 `timer_architecture.md` once a phase is built; this file keeps the overall
-plan and the decisions behind it.
+plan and the decisions behind it. Planned work that isn't built yet lives in
+[`backlog.md`](backlog.md).
 
 ## Model
 
@@ -74,7 +75,8 @@ steps.
   drop is a tap for everyone. Stored in their own table. The AI analysis
   receives the method kind, marks and machine capabilities; its response
   format is unchanged for now.
-- **Later:** dose / yield suggestions for espresso from the AI.
+- **Later:** dose / yield suggestions for espresso from the AI (backlog
+  item 6).
 
 ## Phase 3: Drinks + ingredients (built)
 
@@ -116,6 +118,29 @@ brewer. Where a workspace had one machine and one espresso method, the
 machine took over the method's recipes, drinks and menu entry (shown as
 "Espresso"). Brew setup is now Category → Brewer or drink → Recipe.
 Trade-off: a second espresso machine needs its own recipes.
+
+**Drink instructions and tasting (migration 0023):** drinks have free-text
+instructions, shown after the brew. Brews of a drink with ingredients record
+the shot (rating and notes, if tasted straight) and the finished drink
+separately; the AI context labels every brew with how it was served.
+
+**Drinks by type (migrations 0024/0025):** a drink needed one brewer, so The
+Atlas couldn't be made on a Chemex, and drink categories had no brewer choice
+while brewer categories did. Now a drink needs a **type** (the method kind) and
+any brewer of it can make it; brewing is always Category → Drink (or a plain
+brew) → Brewer → Recipe. Recipes still belong to one brewer.
+
+**Filter vs espresso (migration 0026):** pour over and immersion behaved the
+same, and as drink requirements they were too narrow (The Atlas works on a
+V60, a French press, an AeroPress or an OXO Rapid Brewer). The brew method is
+now **Filter** or **Espresso**; how a filter brewer brews is a descriptive
+**style**. Brewers without recipes now show on the brew page with a prompt to
+add one, instead of silently hiding (which made categories look empty).
+
+**Style on recipes (migrations 0027/0028):** style moved from brewers to
+recipes, and espresso got styles too (standard, soup, other): one brewer brews
+several ways (an AeroPress inverted or bypass, a soup shot on the same
+machine). Recipes took their brewer's style; espresso recipes became standard.
 
 ## Phase 4: Flow and pressure profiles (done in 2d)
 

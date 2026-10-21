@@ -32,7 +32,7 @@ beforeEach(async () => {
   await db.insert(workspaces).values({ id: workspaceId, name: "W", slug: "w" });
   await db.insert(brewers).values({ id: brewerId, workspaceId, name: "V60" });
   await db.insert(beans).values({ id: beanId, workspaceId, roasterName: "Onyx", beanName: "Guji", roastLevel: "light", roastDate: new Date("2026-10-01T00:00:00Z") });
-  await db.insert(recipes).values({ id: recipeId, workspaceId, name: "House V60", brewerId, targetDoseGrams: 15, targetWaterGrams: 250, expectedYieldGrams: 220, expectedFinishMinSec: 165, expectedFinishMaxSec: 195, targetTempC: 94 });
+  await db.insert(recipes).values({ id: recipeId, workspaceId, name: "House V60", brewerId, targetDoseGrams: 15, targetWaterGrams: 250, expectedYieldGrams: 220, expectedFinishMinSec: 165, expectedFinishMaxSec: 195, targetTempC: 94, style: "pour_over" });
   await db.insert(recipeSteps).values([
     { id: randomUUID(), recipeId, stepOrder: 1, stepType: "bloom", durationSec: 45, advance: "tap", targetWaterGrams: 50, targetTempC: 85 },
     { id: randomUUID(), recipeId, stepOrder: 2, stepType: "swirl", label: "Gentle swirl", durationSec: 0 },
@@ -56,10 +56,10 @@ describe("processBrewAnalysis", () => {
 
     expect(result.status).toBe("saved");
     const context = llm.mock.calls[0]![0] as BrewContext;
-    expect(context.brew).toMatchObject({ tastingNotes: "day 8", roastAgeDays: 7, daysFrozenBeforeBrew: 0, brewRatio: 16.67, recipeName: "House V60", methodKind: "pour_over", actualWaterGrams: 250, actualYieldGrams: 221.5 });
+    expect(context.brew).toMatchObject({ tastingNotes: "day 8", roastAgeDays: 7, daysFrozenBeforeBrew: 0, brewRatio: 16.67, recipeName: "House V60", recipeStyle: "pour_over", methodKind: "filter", actualWaterGrams: 250, actualYieldGrams: 221.5 });
     expect(context.previousBrews[0]).toMatchObject({ recipeName: null, methodKind: null });
     expect(context.recipe).toMatchObject({
-      name: "House V60", brewer: "V60", methodKind: "pour_over", firstDropMinSec: null, targetWaterGrams: 250, expectedYieldGrams: 220, expectedFinishMinSec: 165, expectedFinishMaxSec: 195, grindStartingPoints: [],
+      name: "House V60", brewer: "V60", style: "pour_over", methodKind: "filter", firstDropMinSec: null, targetWaterGrams: 250, expectedYieldGrams: 220, expectedFinishMinSec: 165, expectedFinishMaxSec: 195, grindStartingPoints: [],
       steps: [
         { stepType: "bloom", label: null, durationSec: 45, advance: "tap", targetWaterGrams: 50, targetTempC: 85, pressureBar: null },
         { stepType: "swirl", label: "Gentle swirl", durationSec: 0, advance: "auto", targetWaterGrams: null },
@@ -104,8 +104,7 @@ describe("processBrewAnalysis", () => {
     const drinkId = randomUUID();
     const milk = randomUUID();
     const syrup = randomUUID();
-    const [brewer] = await db.select({ id: brewers.id }).from(brewers).where(eq(brewers.workspaceId, workspaceId));
-    await db.insert(drinks).values({ id: drinkId, workspaceId, name: "Vanilla Oat Latte", brewerId: brewer!.id });
+    await db.insert(drinks).values({ id: drinkId, workspaceId, name: "Vanilla Oat Latte", kind: "espresso" });
     await db.insert(ingredients).values([
       { id: milk, workspaceId, name: "Steamed oat milk", ingredientType: "milk" },
       { id: syrup, workspaceId, name: "Vanilla", ingredientType: "syrup" },
@@ -131,8 +130,7 @@ describe("processBrewAnalysis", () => {
     llm.mockResolvedValue(ANALYSIS);
     const drinkId = randomUUID();
     const syrup = randomUUID();
-    const [brewer] = await db.select({ id: brewers.id }).from(brewers).where(eq(brewers.workspaceId, workspaceId));
-    await db.insert(drinks).values({ id: drinkId, workspaceId, name: "Vanilla Latte", brewerId: brewer!.id, servingSize: 8, servingUnit: "fl_oz" });
+    await db.insert(drinks).values({ id: drinkId, workspaceId, name: "Vanilla Latte", kind: "espresso", servingSize: 8, servingUnit: "fl_oz" });
     await db.insert(ingredients).values({ id: syrup, workspaceId, name: "Vanilla", ingredientType: "syrup" });
     await db.insert(drinkIngredients).values({ id: randomUUID(), drinkId, ingredientId: syrup, position: 1, amountValue: 2, amountUnit: "pump" });
     await db.update(brewLogs).set({ drinkId, servingSize: 12, servingUnit: "fl_oz" }).where(eq(brewLogs.id, logIds.day8!));
@@ -143,6 +141,38 @@ describe("processBrewAnalysis", () => {
       servingSize: "12 fl oz",
       ingredients: [{ name: "Vanilla", ingredientType: "syrup", amount: "3 pump", note: null }],
     });
+  });
+
+  it("labels each brew with how it was served, and keeps the shot and drink tasting apart", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    const drinkId = randomUUID();
+    const milk = randomUUID();
+    const syrup = randomUUID();
+    await db.insert(drinks).values({ id: drinkId, workspaceId, name: "Vanilla Latte", kind: "espresso" });
+    await db.insert(ingredients).values([
+      { id: milk, workspaceId, name: "Steamed milk", ingredientType: "milk" },
+      { id: syrup, workspaceId, name: "Vanilla", ingredientType: "syrup" },
+    ]);
+    await db.insert(drinkIngredients).values([
+      { id: randomUUID(), drinkId, ingredientId: syrup, position: 1 },
+      { id: randomUUID(), drinkId, ingredientId: milk, position: 2 },
+    ]);
+    await db.update(brewLogs).set({ drinkId, rating: null, tastingNotes: null, drinkRating: 5, drinkTastingNotes: "sweet, caramel" }).where(eq(brewLogs.id, logIds.day8!));
+    await db.update(brewLogs).set({ drinkId, drinkRating: 4, drinkTastingNotes: "milky" }).where(eq(brewLogs.id, logIds.day6!));
+    await processBrewAnalysis({ brewLogId: logIds.day8! });
+    const context = llm.mock.calls[0]![0] as BrewContext;
+    expect(context.brew).toMatchObject({
+      drink: { name: "Vanilla Latte", ingredientTypes: ["milk", "syrup"] },
+      rating: null,
+      tastingNotes: null,
+      drinkRating: 5,
+      drinkTastingNotes: "sweet, caramel",
+    });
+    const served = context.previousBrews.map((b) => [b.tastingNotes, b.drink?.name ?? null, b.drinkTastingNotes]);
+    expect(served.slice(0, 2)).toEqual([
+      ["day 7", null, null], // straight
+      ["day 6", "Vanilla Latte", "milky"], // in milk, with its own tasting
+    ]);
   });
 
   it("uses the effective roast age at each brew's date, excluding days frozen", async () => {

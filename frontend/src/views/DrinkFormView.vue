@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Drink editor (docs/api_spec.md §5c): name, description, the brewer it's
+// Drink editor (docs/api_spec.md §5c): name, description, the kind of coffee it's
 // built on (any of its recipes can make it; one can be the default), category,
 // what it's a variant of, the ingredients that finish it, and the menu switch.
 // /drinks/new?from=<id> starts a variant: a copy of that drink, linked to it;
@@ -10,11 +10,11 @@ import { ApiError, errorMessage } from '../api/client';
 import { ingredientsApi } from '../api/ingredients';
 import { drinkCategoriesApi } from '../api/drinkCategories';
 import { drinksApi, type DrinkInput } from '../api/drinks';
-import { brewersApi } from '../api/brewers';
 import { recipesApi } from '../api/recipes';
-import type { Brewer, Ingredient, Drink, DrinkCategory, Recipe, ServingUnit } from '../api/types';
+import type { Ingredient, Drink, DrinkCategory, MethodKind, Recipe, ServingUnit } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import { nestDrinks, selfAndDescendants } from '../lib/drinks';
+import { METHOD_KINDS } from '../lib/equipment';
 import { parseDecimal } from '../lib/format';
 import { knownUnits, SERVING_UNITS } from '../lib/servings';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -26,7 +26,6 @@ const router = useRouter();
 const editing = computed(() => props.id !== undefined);
 
 const NEW_CATEGORY = '__new';
-const methods = ref<Brewer[]>([]);
 const recipes = ref<Recipe[]>([]);
 const ingredients = ref<Ingredient[]>([]);
 const categories = ref<DrinkCategory[]>([]);
@@ -34,7 +33,7 @@ const drinks = ref<Drink[]>([]);
 const current = ref<Drink | null>(null); // the drink being edited
 const name = ref('');
 const description = ref('');
-const brewerId = ref('');
+const kind = ref<MethodKind | ''>('');
 const categoryId = ref('');
 const newCategory = ref('');
 const parentDrinkId = ref('');
@@ -43,6 +42,7 @@ const defaultRecipeId = ref('');
 // Default size: amounts below are for it, and brewing scales from it.
 const servingSize = ref('');
 const servingUnit = ref<ServingUnit>('fl_oz');
+const instructions = ref(''); // how to make it, shown after the brew
 const rows = ref<Array<{ ingredientId: string; amountValue: string; amountUnit: string; note: string }>>([]);
 // Unit suggestions: fl oz, ml, g, then whatever's been typed before.
 const units = computed(() => knownUnits(drinks.value));
@@ -56,10 +56,15 @@ const saving = ref(false);
 const error = ref('');
 const submitted = ref(false);
 
-// Only the brewer's recipes can make it.
-const methodRecipes = computed(() => recipes.value.filter((r) => r.brewer.id === brewerId.value));
-watch(brewerId, () => {
-  if (!methodRecipes.value.some((r) => r.id === defaultRecipeId.value)) defaultRecipeId.value = '';
+// Any recipe on a brewer of the drink's kind can make it, grouped by brewer.
+const kindRecipes = computed(() => recipes.value.filter((r) => r.brewer.kind === kind.value));
+const recipeGroups = computed(() => {
+  const groups = new Map<string, Recipe[]>();
+  for (const r of kindRecipes.value) groups.set(r.brewer.name, [...(groups.get(r.brewer.name) ?? []), r]);
+  return [...groups].sort(([a], [b]) => a.localeCompare(b)).map(([brewer, list]) => ({ brewer, list }));
+});
+watch(kind, () => {
+  if (!kindRecipes.value.some((r) => r.id === defaultRecipeId.value)) defaultRecipeId.value = '';
 });
 // Possible parents: any drink but this one and its own variants, nested.
 const parentOptions = computed(() => {
@@ -69,7 +74,7 @@ const parentOptions = computed(() => {
 
 const errors = computed(() => ({
   name: name.value.trim() ? '' : 'Required',
-  brewer: brewerId.value ? '' : 'Choose a brewer',
+  kind: kind.value ? '' : 'Choose the brew method it needs',
   category: categoryId.value === NEW_CATEGORY && !newCategory.value.trim() ? 'Name the new category' : '',
   size: parsedSize.value && !parsedSize.value.ok ? parsedSize.value.error : '',
   rows: rows.value.map((r, i) => {
@@ -80,19 +85,20 @@ const errors = computed(() => ({
   }),
 }));
 const valid = computed(
-  () => !errors.value.name && !errors.value.brewer && !errors.value.category && !errors.value.size && errors.value.rows.every((e) => !e),
+  () => !errors.value.name && !errors.value.kind && !errors.value.category && !errors.value.size && errors.value.rows.every((e) => !e),
 );
 
 function fill(drink: Drink): void {
   name.value = drink.name;
   description.value = drink.description ?? '';
-  brewerId.value = drink.brewer.id;
+  kind.value = drink.kind;
   categoryId.value = drink.category?.id ?? '';
   parentDrinkId.value = drink.parent?.id ?? '';
   showOnPublicMenu.value = drink.showOnPublicMenu;
   defaultRecipeId.value = drink.defaultRecipeId ?? '';
   servingSize.value = drink.servingSize === null ? '' : String(drink.servingSize);
   servingUnit.value = drink.servingUnit ?? 'fl_oz';
+  instructions.value = drink.instructions ?? '';
   rows.value = drink.ingredients.map((x) => ({
     ingredientId: x.ingredientId,
     amountValue: x.amountValue === null ? '' : String(x.amountValue),
@@ -122,14 +128,12 @@ onMounted(async () => {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [m, r, c, cats, d] = await Promise.all([
-      brewersApi.list(ws),
+    const [r, c, cats, d] = await Promise.all([
       recipesApi.list(ws),
       ingredientsApi.list(ws),
       drinkCategoriesApi.list(ws),
       drinksApi.list(ws),
     ]);
-    methods.value = m.brewers;
     recipes.value = r.recipes;
     ingredients.value = c.ingredients;
     categories.value = cats.categories;
@@ -181,13 +185,14 @@ async function save(): Promise<void> {
     const input: DrinkInput = {
       name: name.value.trim(),
       description: description.value.trim() || null,
-      brewerId: brewerId.value,
+      kind: kind.value as MethodKind, // checked by `valid`
       categoryId: await resolveCategory(ws),
       parentDrinkId: parentDrinkId.value || null,
       showOnPublicMenu: showOnPublicMenu.value,
       defaultRecipeId: defaultRecipeId.value || null,
       servingSize: parsedSize.value?.ok ? parsedSize.value.value : null,
       servingUnit: parsedSize.value?.ok ? servingUnit.value : null,
+      instructions: instructions.value.trim() || null,
       ingredients: rows.value.map((r, i) => {
         const amount = parsedAmounts.value[i];
         return {
@@ -269,22 +274,27 @@ async function save(): Promise<void> {
       <section class="card stack" aria-labelledby="brew-heading">
         <div>
           <h2 id="brew-heading">Brewed with</h2>
-          <p class="muted small">Any recipe of the brewer can make it; the default is picked for you when you brew.</p>
+          <p class="muted small">
+            Filter or espresso. When you brew it you pick any brewer of that method (for filter: a V60, French press, AeroPress or OXO),
+            then one of its recipes; the default is picked for you when it fits.
+          </p>
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="method">Brewer</label>
-            <select id="method" v-model="brewerId" :aria-invalid="submitted && !!errors.brewer">
+            <label for="kind">Brew method</label>
+            <select id="kind" v-model="kind" :aria-invalid="submitted && !!errors.kind">
               <option value="" disabled>Choose…</option>
-              <option v-for="m in methods.filter((x) => !x.retiredAt || x.id === brewerId)" :key="m.id" :value="m.id">{{ m.name }}{{ m.retiredAt ? ' (retired)' : '' }}</option>
+              <option v-for="(k, key) in METHOD_KINDS" :key="key" :value="key">{{ k.label }}</option>
             </select>
-            <span v-if="submitted && errors.brewer" class="field-error">{{ errors.brewer }}</span>
+            <span v-if="submitted && errors.kind" class="field-error">{{ errors.kind }}</span>
           </div>
           <div class="field">
             <label for="default-recipe">Default recipe <span class="muted">(optional)</span></label>
-            <select id="default-recipe" v-model="defaultRecipeId" :disabled="!methodRecipes.length">
-              <option value="">{{ methodRecipes.length ? 'None: the last one used' : 'No recipes for this brewer yet' }}</option>
-              <option v-for="r in methodRecipes" :key="r.id" :value="r.id">{{ r.name }}</option>
+            <select id="default-recipe" v-model="defaultRecipeId" :disabled="!kindRecipes.length">
+              <option value="">{{ kindRecipes.length ? 'None: the last one used' : kind ? 'No recipes for this method yet' : 'Choose a brew method first' }}</option>
+              <optgroup v-for="g in recipeGroups" :key="g.brewer" :label="g.brewer">
+                <option v-for="r in g.list" :key="r.id" :value="r.id">{{ r.name }}</option>
+              </optgroup>
             </select>
           </div>
         </div>
@@ -307,7 +317,7 @@ async function save(): Promise<void> {
           <p class="muted small">Ingredients, in order, with amounts for the default size. Leave this empty for just the coffee.</p>
         </div>
         <p v-if="ingredients.length === 0" class="muted small">
-          No ingredients yet. <RouterLink :to="{ name: 'ingredients' }">Add some</RouterLink> (milk, foam, syrup…) to use them here.
+          No ingredients yet. <RouterLink :to="{ name: 'ingredient-new' }">Add some</RouterLink> (milk, foam, syrup…) to use them here.
         </p>
         <datalist id="amount-units">
           <option v-for="u in units" :key="u" :value="u" />
@@ -345,6 +355,23 @@ async function save(): Promise<void> {
         <button v-if="ingredients.length" class="btn btn-secondary" type="button" :disabled="rows.length >= ingredients.length || rows.length >= 20" @click="addRow">
           Add ingredient
         </button>
+      </section>
+
+      <section class="card stack" aria-labelledby="instructions-heading">
+        <div>
+          <h2 id="instructions-heading">Instructions</h2>
+          <p class="muted small">How to make it, shown when the brew is done. Optional.</p>
+        </div>
+        <div class="field">
+          <label for="instructions" class="visually-hidden">Instructions</label>
+          <textarea
+            id="instructions"
+            v-model="instructions"
+            rows="5"
+            maxlength="5000"
+            placeholder="e.g. Add the syrup to the cup and pull the shot onto it. Steam the milk and pour."
+          />
+        </div>
       </section>
 
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
