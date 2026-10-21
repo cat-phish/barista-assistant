@@ -13,7 +13,7 @@ const props = defineProps<{
   showErrors: boolean;
   grinders: Grinder[];
   expectedYieldGrams?: number | null; // the recipe's estimate (espresso: target), shown for comparison
-  espresso?: boolean; // shot weight instead of water (docs/api_spec.md §6)
+  espresso?: boolean; // shot weight instead of water (docs/api/brew-logs.md §6)
   drinkTasting?: boolean; // the drink has ingredients: rate the brew and the drink apart
 }>();
 

@@ -1,4 +1,4 @@
-// Response shapes from docs/api_spec.md. Dates arrive as ISO strings;
+// Response shapes from docs/api/README.md. Dates arrive as ISO strings;
 // decimals as numbers (§0).
 
 export type Role = 'owner' | 'barista' | 'viewer';
@@ -26,13 +26,13 @@ export interface ErrorBody {
   [extra: string]: unknown;
 }
 
-// docs/schema.md METHOD_KINDS: decides the recipe fields and timer (docs/api_spec.md §3).
+// docs/schema.md METHOD_KINDS: decides the recipe fields and timer (docs/api/brewers.md §3).
 // The brew method: decides recipe fields, steps, the timer, and which drinks a
 // brewer can make. A recipe's style says how the cup is brewed (descriptive).
 export type MethodKind = 'filter' | 'espresso';
 export type RecipeStyle = 'pour_over' | 'immersion' | 'hybrid' | 'cold_brew' | 'standard' | 'soup' | 'other';
 
-// docs/api_spec.md §3: what makes the coffee (V60, AeroPress, an espresso
+// docs/api/brewers.md §3: what makes the coffee (V60, AeroPress, an espresso
 // machine). Capabilities apply to espresso brewers only ("none" otherwise).
 export interface Brewer extends MachineCapabilities {
   id: string;
@@ -51,8 +51,8 @@ export interface Brewer extends MachineCapabilities {
 // How recipes, drinks and brew logs refer to their brewer.
 export type BrewerRef = Pick<Brewer, 'id' | 'name' | 'kind'>;
 
-// docs/api_spec.md §3b
-// docs/api_spec.md §3b: details are optional (null when unknown).
+// docs/api/grinders.md §3b
+// docs/api/grinders.md §3b: details are optional (null when unknown).
 export type GrinderAdjustment = 'stepped' | 'stepless';
 export type BurrType = 'conical' | 'flat';
 export type GrinderPower = 'manual' | 'electric';
@@ -73,7 +73,7 @@ export interface Grinder extends GrinderDetails {
   createdAt: string; // date added (ISO)
 }
 
-// docs/api_spec.md §3: espresso brewers' capabilities.
+// docs/api/brewers.md §3: espresso brewers' capabilities.
 export type Preinfusion = 'none' | 'automatic' | 'manual';
 export type ProfileControl = 'none' | 'manual' | 'programmable';
 export interface MachineCapabilities {
@@ -104,8 +104,8 @@ export interface FreezePeriod {
   thawedOn: string | null;
 }
 
-// docs/api_spec.md §5
-// docs/api_spec.md §5: which types a recipe can use depends on its method's kind.
+// docs/api/recipes.md §5
+// docs/api/recipes.md §5: which types a recipe can use depends on its method's kind.
 export type StepType =
   | 'bloom' | 'pour' | 'swirl' | 'stir' | 'wait' | 'press' // filter
   | 'preinfusion' | 'soak' | 'pressure' | 'flow' // espresso
@@ -115,7 +115,7 @@ export type StepType =
 export type StepAdvance = 'auto' | 'auto_log' | 'tap' | 'first_drop';
 export type FlowUnit = 'g_s' | 'ml_s';
 
-// docs/api_spec.md §6: when things actually happened.
+// docs/api/brew-logs.md §6: when things actually happened.
 export type MarkKind = 'first_drop' | 'step_end';
 export interface Mark {
   kind: MarkKind;
@@ -179,7 +179,7 @@ export interface LlmAnalysis {
   createdAt: string;
 }
 
-// docs/api_spec.md §6
+// docs/api/brew-logs.md §6
 export interface BrewLog {
   id: string;
   workspaceId: string;
@@ -211,14 +211,14 @@ export interface BrewLog {
   brewedBy: { id: string; email: string } | null;
 }
 
-// docs/api_spec.md §8
+// docs/api/analysis.md §8
 export interface Suggestions {
   latestAnalysis: LlmAnalysis | null;
   analyzedBrew: BrewLog | null;
   recentBrews: BrewLog[];
 }
 
-// docs/api_spec.md §5b: reusable preps that finish a drink.
+// docs/api/ingredients.md §5b: reusable preps that finish a drink.
 export type IngredientType = 'milk' | 'foam' | 'syrup' | 'ice' | 'water' | 'other';
 export interface Ingredient {
   id: string;
@@ -229,7 +229,7 @@ export interface Ingredient {
   createdAt: string; // date added (ISO)
 }
 
-// docs/api_spec.md §5c: a drink's default size, and the size a brew was made at.
+// docs/api/drinks.md §5c: a drink's default size, and the size a brew was made at.
 export type ServingUnit = 'fl_oz' | 'ml';
 export interface DrinkIngredient {
   ingredientId: string;
@@ -240,14 +240,14 @@ export interface DrinkIngredient {
   note: string | null;
 }
 
-// docs/api_spec.md §5d: ordered sections for drinks and brewers (menu and brew setup).
+// docs/api/drink-categories.md §5d: ordered sections for drinks and brewers (menu and brew setup).
 export interface DrinkCategory {
   id: string;
   name: string;
   position: number;
 }
 
-// docs/api_spec.md §5c: what's served. Needs a kind of coffee, not a device:
+// docs/api/drinks.md §5c: what's served. Needs a kind of coffee, not a device:
 // any brewer of that kind, with its recipes, can make it. A variant is an
 // independent copy that remembers its parent (Vanilla Latte of Latte).
 export interface Drink {

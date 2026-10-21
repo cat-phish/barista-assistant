@@ -1,5 +1,5 @@
 // Requests an AI analysis for a brew log and polls until a new one appears
-// (docs/api_spec.md §8). "New" = a different analysis id than before the
+// (docs/api/analysis.md §8). "New" = a different analysis id than before the
 // request, which avoids comparing client and server clocks.
 import { onUnmounted, ref } from 'vue';
 import { analysisApi, brewLogsApi } from '../api/brews';

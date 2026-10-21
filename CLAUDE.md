@@ -21,7 +21,10 @@
    read the corresponding specification file. Do not deviate from defined
    schemas or contracts without asking:
    - Database models & migrations: read `docs/schema.md`.
-   - API routes, public menu & LLM worker jobs: read `docs/api_spec.md`.
+   - API routes, public menu & LLM worker jobs: read `docs/api/README.md`
+     (conventions + a § → file index), then only the section file(s) you
+     need, e.g. `docs/api/drinks.md` for §5c. Update those files when a
+     contract changes, and cite `docs/api/<file>.md §N` in code comments.
    - PWA config, mobile viewport & pour-over timer UI: read
      `docs/timer_architecture.md`.
    - Planned features and ideas: read `docs/backlog.md` when asked to review

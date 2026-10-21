@@ -7,7 +7,7 @@ import { analyzeWithLlm } from "./llm.js";
 
 export type JobResult = { status: "saved"; analysisId: string } | { status: "skipped"; reason: string };
 
-// One brew-analysis job. Throwing makes BullMQ retry (docs/api_spec.md §9).
+// One brew-analysis job. Throwing makes BullMQ retry (docs/api/llm-contract.md §9).
 export async function processBrewAnalysis({ brewLogId }: BrewAnalysisJobData): Promise<JobResult> {
 
   const context = await loadBrewContext(brewLogId);

@@ -1,0 +1,206 @@
+# 5. Recipes
+
+> Part of the API spec. Conventions, auth rules and the section index are in
+> [README.md](README.md); a bare `§N` refers to that index.
+
+A recipe describes how to brew: `targetDoseGrams` of coffee and
+`targetWaterGrams` of water (the **coffee:water ratio** is dose:water, e.g.
+15 g : 250 g = 1:16.7, calculated by clients), plus an optional estimate of
+the beverage yield, an optional **target finish window** for the total brew
+time, and an optional water temperature.
+
+**By brewer kind** (§3), checked against the recipe as it is after the
+request (so a `PATCH` that changes `brewerId` must also send the fields the
+new kind needs):
+
+| | `filter` | `espresso` |
+|---|---|---|
+| `targetWaterGrams` | required | must be absent/`null` |
+| `expectedYieldGrams` | optional estimate | **required**: target shot weight; ratio is dose:yield (18 g → 36 g = 1:2) |
+| finish window | total brew time | total shot time |
+| `firstDropMinSec`/`MaxSec` | must be absent/`null` | optional window (pair, ±3 s default) |
+| step types | `bloom` `pour` `swirl` `stir` `wait` `press` `other` | `preinfusion` `soak` `pressure` `flow` `other` (`ESPRESSO_STEP_TYPES`) |
+| step `advance` | `auto`, `auto_log`, `tap` | also `first_drop` (at most one step) |
+| `flowUnit` | ignored (default `g_s`) | `g_s` or `ml_s` for flow steps |
+
+Recipes are grinder-neutral: instead of one grind setting they carry
+**approximate starting points per grinder** (`grindSettings`). The brew flow
+uses one only when there's no actual setting from your last brew with that
+grinder and recipe (§3b `last-setting`). A recipe can name a
+**`defaultGrinderId`**: the grinder the brew flow preselects for it (instead
+of the last grinder used), if that grinder isn't retired.
+
+**Steps** are what the timer runs (`docs/timer_architecture.md` §3). They run
+**back to back**: each starts when the previous one actually ended, so a step
+you end with a tap (a bloom that waits for the kettle) moves everything after
+it. Each step has a `stepType`, an optional `label` (e.g. "Second bloom"), a
+`durationSec`, how it moves on (`advance`), and instruction values shown on its
+card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
+
+| `advance` | The timer… | `durationSec` |
+|---|---|---|
+| `auto` | moves on when the duration is up | required (0 = instant action, shown ~2 s); `null` only on the last step = until you finish |
+| `auto_log` | the same, plus a **Log it** button to record when you really did it | required |
+| `tap` | waits for **Next** | optional guide ("tap when ready" once it's passed) |
+| `first_drop` | espresso: ends when **First drop** is tapped | optional guide |
+
+| `stepType` | Meaning | Values |
+|---|---|---|
+| `bloom` | Pour to wet the grounds and let them degas (repeatable for double blooms) | `targetWaterGrams` required |
+| `pour` | Pour | `targetWaterGrams` required |
+| `swirl` / `stir` | Swirl the brewer / stir the slurry | – |
+| `wait` | Wait / drawdown | – |
+| `press` | Press / plunge (AeroPress, French press) | – |
+| `preinfusion` | Espresso: low-pressure / low-flow fill | pressure **or** flow, optional |
+| `soak` | Espresso: pump off | – |
+| `pressure` | Espresso: hold or ramp pressure | `pressureBar` required, `pressureEndBar` optional (ramp) |
+| `flow` | Espresso: hold or ramp flow | `flowRate` required, `flowEndRate` optional (ramp) |
+| `other` | Anything else; give it a `label` | pour-over: `targetWaterGrams` optional; espresso: pressure or flow optional |
+
+- `targetWaterGrams`: the cumulative scale weight to **pour to** by the step's
+  end (> 0, < 10000, max 2 decimals; never decreasing across steps). Clients
+  show the per-step amount next to it.
+- `targetTempC` (any step, optional, 0–100, 1 decimal): e.g. bloom at 85 °C,
+  pour at 93 °C.
+- `pressureBar`/`pressureEndBar` (0–20 bar, 1 decimal) and
+  `flowRate`/`flowEndRate` (0–20 in the recipe's `flowUnit`, 1 decimal): an end
+  value needs a start value and makes a ramp ("9 → 6 bar"). They're
+  instructions; the timer doesn't measure them. Any value not listed for a
+  type must be absent/`null`.
+
+**Recipe object** (every endpoint below returns this shape):
+
+```json
+{
+  "id": "uuid",
+  "workspaceId": "uuid",
+  "name": "House V60",
+  "brewer": { "id": "uuid", "name": "V60", "kind": "filter" },
+  "targetDoseGrams": 15,
+  "targetWaterGrams": 250,
+  "expectedYieldGrams": 220,
+  "expectedFinishMinSec": 165,
+  "expectedFinishMaxSec": 195,
+  "firstDropMinSec": null,
+  "firstDropMaxSec": null,
+  "flowUnit": "g_s",
+  "style": "pour_over",
+  "targetTempC": 94,
+  "defaultGrinderId": "uuid",
+  "createdAt": "2026-10-19T08:00:00.000Z",
+  "grindSettings": [
+    { "grinderId": "uuid", "grinderName": "Comandante C40", "setting": "20" }
+  ],
+  "steps": [
+    { "id": "uuid", "stepOrder": 1, "stepType": "bloom", "label": null, "durationSec": 45, "advance": "tap", "targetWaterGrams": 45, "targetTempC": 85, "pressureBar": null, "pressureEndBar": null, "flowRate": null, "flowEndRate": null },
+    { "id": "uuid", "stepOrder": 2, "stepType": "pour", "label": "Main pour", "durationSec": 45, "advance": "auto", "targetWaterGrams": 250, "targetTempC": 93, "pressureBar": null, "pressureEndBar": null, "flowRate": null, "flowEndRate": null },
+    { "id": "uuid", "stepOrder": 3, "stepType": "wait", "label": "Drawdown", "durationSec": null, "advance": "auto", "targetWaterGrams": null, "targetTempC": null, "pressureBar": null, "pressureEndBar": null, "flowRate": null, "flowEndRate": null }
+  ]
+}
+```
+
+`createdAt` is when the recipe was added (read-only; recipes that existed
+before it was tracked date from their first brew). A duplicate is a new
+recipe with its own date.
+
+An espresso profile (pressure until first drop, pump off for 10 s, then flow
+down to 2 g/s until the shot is done):
+
+```json
+"steps": [
+  { "stepType": "pressure", "pressureBar": 9, "advance": "first_drop", "durationSec": null },
+  { "stepType": "soak", "advance": "auto", "durationSec": 10 },
+  { "stepType": "flow", "flowRate": 4, "flowEndRate": 2, "advance": "auto", "durationSec": null }
+]
+```
+
+`grindSettings` are sorted by grinder name and include retired grinders.
+`steps` are in `stepOrder` and may be empty.
+
+## `GET /api/workspaces/:workspaceId/recipes`
+
+- **Auth Required:** `true` (any member)
+- **Success (`200 OK`):** `{ "recipes": [ { ...recipe } ] }`, sorted by `name`.
+
+## `POST /api/workspaces/:workspaceId/recipes`
+
+Creates a recipe, its grind starting points and its steps in one transaction.
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:**
+  ```json
+  {
+    "name": "House V60",
+    "brewerId": "uuid",
+    "targetDoseGrams": 15,
+    "targetWaterGrams": 250,
+    "expectedYieldGrams": 220,
+    "expectedFinishMinSec": 165,
+    "expectedFinishMaxSec": 195,
+    "targetTempC": 94,
+    "grindSettings": [{ "grinderId": "uuid", "setting": "20" }],
+    "steps": [
+      { "stepType": "bloom", "durationSec": 45, "advance": "tap", "targetWaterGrams": 45, "targetTempC": 85 },
+      { "stepType": "pour", "label": "Main pour", "durationSec": 45, "targetWaterGrams": 250, "targetTempC": 93 }
+    ]
+  }
+  ```
+  - Required: `name`, `brewerId` (a brewer in **this** workspace),
+    `targetDoseGrams` (> 0, < 1000, max 2 decimals), and by kind (table
+    above) `targetWaterGrams` or `expectedYieldGrams` (> 0, < 10000, max 2
+    decimals).
+  - `style` (optional, nullable): how the cup is brewed, one of its brewer's
+    method's styles: `pour_over`, `immersion`, `hybrid`, `cold_brew` or
+    `other` for filter; `standard`, `soup` or `other` for espresso (`400` otherwise).
+    Descriptive (lists, the AI); it changes no fields or timer behaviour. On
+    `PATCH`, moving the recipe to a brewer of the other method clears a style
+    that no longer fits, unless a fitting one is sent.
+  - Optional, nullable: `expectedYieldGrams` for filter recipes (same
+    rules as water), `targetTempC` (0–100, max 1 decimal). Recipes reach the
+    public menu through drinks (§5c).
+  - First-drop window (espresso only): `firstDropMinSec`/`firstDropMaxSec`,
+    same pair rules as the finish window below but with a **±3 s** default.
+  - Target finish window: `expectedFinishMinSec` and `expectedFinishMaxSec`
+    (integers 0–86400, optional, nullable, min ≤ max). If only one is given,
+    the other defaults to it **±15 s**: min 165 → max 180; max 195 → min 180
+    (never below 0). So a stored window always has both ends, or neither.
+  - `grindSettings` (default `[]`): each `grinderId` must be a grinder in this
+    workspace (retired allowed), at most once; `setting` trimmed, 1–100 chars.
+  - `defaultGrinderId` (optional, nullable): a grinder in this workspace
+    (retired allowed). Deleting the grinder sets it back to `null`.
+  - `flowUnit` (optional, default `g_s`): `g_s` or `ml_s`.
+  - `steps` (default `[]`, max 20), in order (`stepOrder` = array position):
+    - `stepType` allowed for the brewer's kind (tables above); `label`
+      optional, ≤ 255 chars, blank becomes `null`.
+    - `advance` (default `auto`) and `durationSec` (integer 0–86400, or
+      `null`) as in the advance table. Only the last step may be open-ended.
+    - The values allowed for the type (other values must be absent/`null`).
+  - Not enforced (clients warn instead): the last pour reaching
+    `targetWaterGrams`, and the finish window ending after the planned last
+    step.
+- **Success (`201 Created`):** `{ "recipe": { ...recipe } }`
+- **Errors:** `400` invalid body, or `brewerId`/`grinderId` not in this
+  workspace; `403` viewer.
+
+## `PATCH /api/workspaces/:workspaceId/recipes/:recipeId`
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:** any non-empty subset of the `POST` fields, with the same rules.
+  Unknown fields are rejected. The optional fields can be set to `null`.
+  The finish and first-drop windows are each treated as a pair: sending only
+  one end applies the default spread to the other; setting one end to `null`
+  clears both. The kind rules apply to the recipe as it is after the change.
+  `steps` and `grindSettings`, if present, each **replace** their whole list
+  (`[]` clears it); if absent, they're unchanged.
+- **Success (`200 OK`):** `{ "recipe": { ...recipe } }`
+- **Errors:** `400` invalid or empty body, or `brewerId`/`grinderId` not in
+  this workspace; `403` viewer; `404` recipe not in this workspace.
+
+## `DELETE /api/workspaces/:workspaceId/recipes/:recipeId`
+
+Deletes the recipe and its steps. Brew logs that used it are kept, with
+`recipeId` set to `null`.
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Success (`204 No Content`)**
+- **Errors:** `403` viewer; `404` recipe not in this workspace.

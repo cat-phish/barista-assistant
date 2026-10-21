@@ -111,7 +111,7 @@ export type ProfileControl = (typeof PROFILE_CONTROLS)[number];
 // Seeded with DEFAULT_BREWERS when a workspace is created; owners and baristas
 // may add more. Recipes belong to a brewer.
 // - `kind`, the brew method (METHOD_KINDS: filter or espresso), decides which
-//   recipe fields apply, the steps and the timer (docs/api_spec.md §3, §5),
+//   recipe fields apply, the steps and the timer (docs/api/README.md §3, §5),
 //   and which drinks the brewer can make (a drink needs a method, 7d).
 // How a cup is brewed (pour over, immersion, soup shot…) is the recipe's
 // `style`, not the brewer's: one brewer can do several.
@@ -175,7 +175,7 @@ export const grinders = mysqlTable(
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 100 }).notNull(), // e.g. "Comandante C40"
     notes: varchar("notes", { length: 255 }), // e.g. "stepped, 0-40 clicks"
-    // Optional details (docs/api_spec.md §3b). The range and step let the AI
+    // Optional details (docs/api/grinders.md §3b). The range and step let the AI
     // talk in clicks/steps; the rest is reference.
     adjustment: varchar("adjustment", { length: 20 }).$type<GrinderAdjustment>(), // GRINDER_ADJUSTMENTS
     settingMin: decimal("setting_min", { precision: 6, scale: 2, mode: "number" }), // with settingMax: both or neither
@@ -257,7 +257,7 @@ export const recipeGrindSettings = mysqlTable(
 
 // 7. Recipe Steps (The Brew's Schedule)
 // Steps run back to back: each starts when the previous one actually ended
-// (docs/api_spec.md §5, docs/timer_architecture.md §3). durationSec is the
+// (docs/api/README.md §5, docs/timer_architecture.md §3). durationSec is the
 // plan (or a guide, for steps you end with a tap); `advance` says how the
 // timer moves on. Waiting is a "wait" (pour over) or "soak" (espresso) step.
 // stepType is one of RECIPE_STEP_TYPES; which types a recipe may use depends
@@ -421,14 +421,14 @@ export const brewLogs = mysqlTable("brew_logs", {
   grinderId: varchar("grinder_id", { length: 36 }).references(() => grinders.id, {
     onDelete: "set null",
   }),
-  // The drink this brew was for (optional; docs/api_spec.md §6). Null for a
+  // The drink this brew was for (optional; docs/api/brew-logs.md §6). Null for a
   // plain brew of the method.
   drinkId: varchar("drink_id", { length: 36 }).references(() => drinks.id, { onDelete: "set null" }),
-  // The size made, if the drink was scaled from its default (docs/api_spec.md
+  // The size made, if the drink was scaled from its default (docs/api/README.md
   // §6). Both or neither, and only with a drink.
   servingSize: decimal("serving_size", { precision: 6, scale: 1, mode: "number" }),
   servingUnit: varchar("serving_unit", { length: 10 }).$type<ServingUnit>(), // SERVING_UNITS
-  // The brewer used: the recipe's, set by the API (docs/api_spec.md §6), and
+  // The brewer used: the recipe's, set by the API (docs/api/brew-logs.md §6), and
   // kept if the recipe later changes or is deleted. Brewers in use are
   // retired, not deleted; set null as a backstop.
   brewerId: varchar("brewer_id", { length: 36 }).references(() => brewers.id, {
@@ -448,14 +448,14 @@ export const brewLogs = mysqlTable("brew_logs", {
   // The coffee tasted on its own (for a milk drink, only if tasted straight).
   rating: int("rating"), // 1-5
   tastingNotes: text("tasting_notes"),
-  // The finished drink, for brews of a drink with ingredients (docs/api_spec.md
+  // The finished drink, for brews of a drink with ingredients (docs/api/README.md
   // §6). Milk and syrup change the taste, so the AI weighs these apart.
   drinkRating: int("drink_rating"), // 1-5
   drinkTastingNotes: text("drink_tasting_notes"),
 });
 
 // 8b. Brew Log Marks (Tapped Events During a Brew)
-// When things actually happened, recorded by the timer (docs/api_spec.md §6):
+// When things actually happened, recorded by the timer (docs/api/brew-logs.md §6):
 // the first drop (espresso), and the real end of steps that wait for a tap or
 // have a "log it" button (step_end, with that step's stepOrder).
 export const MARK_KINDS = ["first_drop", "step_end"] as const;

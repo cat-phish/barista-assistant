@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Recipe editor (docs/api_spec.md §5): dose + water (live ratio), optional
+// Recipe editor (docs/api/recipes.md §5): dose + water (live ratio), optional
 // expected yield / finish time / temperature, per-grinder grind starting
 // points, and typed steps that run back to back (each with a time and how it
 // moves on). Espresso brewers instead take dose + target shot weight (ratio
@@ -81,7 +81,7 @@ const saving = ref(false);
 const error = ref('');
 const submitted = ref(false);
 
-// The chosen brewer's kind decides the fields (docs/api_spec.md §5).
+// The chosen brewer's kind decides the fields (docs/api/recipes.md §5).
 const kind = computed<MethodKind | null>(() => methods.value.find((m) => m.id === brewerId.value)?.kind ?? null);
 const espresso = computed(() => kind.value === 'espresso');
 // Styles fit the brewer's method; a style that no longer fits is cleared.

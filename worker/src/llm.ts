@@ -5,7 +5,7 @@ import { z } from "zod";
 import { config } from "./config.js";
 import type { BrewContext } from "./context.js";
 
-// System prompt and JSON schema are fixed by docs/api_spec.md §9.
+// System prompt and JSON schema are fixed by docs/api/llm-contract.md §9.
 export const SYSTEM_PROMPT =
   "You are an expert specialty coffee roaster and barista. Analyze the provided " +
   "extraction log and historical brews for this coffee bean, including roast " +

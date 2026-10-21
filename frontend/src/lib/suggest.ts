@@ -1,5 +1,5 @@
 // Turns an AI analysis into starting parameters for the next brew
-// (docs/api_spec.md §8: deltas are relative to the *analyzed* brew).
+// (docs/api/analysis.md §8: deltas are relative to the *analyzed* brew).
 import type { GrindDelta, Recipe, Suggestions } from '../api/types';
 
 export const GRIND_LABELS: Record<GrindDelta, string> = {

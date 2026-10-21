@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Drink categories (docs/api_spec.md §5d), one tab of Bar setup: the first
+// Drink categories (docs/api/drink-categories.md §5d), one tab of Bar setup: the first
 // choice when brewing and the public menu's sections.
 import { onMounted, ref } from 'vue';
 import { errorMessage } from '../api/client';

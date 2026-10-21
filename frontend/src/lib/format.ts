@@ -2,7 +2,7 @@
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
 
-// "18.5" or "18,5" -> 18.5. Mirrors the API's decimal rules (docs/api_spec.md §5):
+// "18.5" or "18,5" -> 18.5. Mirrors the API's decimal rules (docs/api/recipes.md §5):
 // at most `scale` decimals, within (min, max) with exclusive bounds as flagged.
 export function parseDecimal(
   text: string,

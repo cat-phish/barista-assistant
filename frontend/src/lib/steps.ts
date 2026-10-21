@@ -1,4 +1,4 @@
-// Recipe steps: the types, editor validation (mirrors the API, docs/api_spec.md
+// Recipe steps: the types, editor validation (mirrors the API, docs/api/README.md
 // §5), what each step's card says, and the timer's schedule. Steps run back to
 // back: each starts when the previous one actually ended. Tested in steps.test.ts.
 import type { FlowUnit, MachineCapabilities, Mark, MethodKind, StepAdvance, StepFields, StepType } from '../api/types';
@@ -236,10 +236,10 @@ export function insertStepAfter(drafts: StepDraft[], afterIndex: number, key: st
 // ---- Target finish window ---------------------------------------------------
 
 export const FINISH_DEFAULT_SPREAD_SEC = 15; // same default as the API
-// Espresso first-drop window default spread (docs/api_spec.md §5).
+// Espresso first-drop window default spread (docs/api/recipes.md §5).
 export const FIRST_DROP_DEFAULT_SPREAD_SEC = 3;
 
-// "2:45" / "" -> window; one end alone gets the other ±spread (docs/api_spec.md §5).
+// "2:45" / "" -> window; one end alone gets the other ±spread (docs/api/recipes.md §5).
 export function parseFinishWindow(
   fromText: string,
   toText: string,

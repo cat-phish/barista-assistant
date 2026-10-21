@@ -1,4 +1,4 @@
-// Drink sizes (docs/api_spec.md §5c): a drink's ingredient amounts are for its
+// Drink sizes (docs/api/drinks.md §5c): a drink's ingredient amounts are for its
 // default size; brewing a different size scales them (and a filter method's
 // batch) by the ratio of the two sizes.
 import type { Drink, ServingUnit } from '../api/types';

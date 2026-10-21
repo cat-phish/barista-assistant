@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Grinder name + optional details (docs/api_spec.md §3b). Validate with
+// Grinder name + optional details (docs/api/grinders.md §3b). Validate with
 // parseGrinderForm (lib/equipment.ts) and pass its errors in.
 import { BURR_TYPES, GRINDER_ADJUSTMENTS, GRINDER_POWER, type GrinderForm, type GrinderFormErrors } from '../lib/equipment';
 

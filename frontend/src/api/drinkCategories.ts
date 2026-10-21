@@ -1,7 +1,7 @@
 import { api } from './client';
 import type { DrinkCategory } from './types';
 
-// docs/api_spec.md §5d
+// docs/api/drink-categories.md §5d
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/drink-categories`;
 
 export const drinkCategoriesApi = {

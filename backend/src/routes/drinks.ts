@@ -22,7 +22,7 @@ import {
 } from "@barista/shared/schema";
 import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
-// docs/api_spec.md §5c
+// docs/api/drinks.md §5c
 export interface DrinkDetails
   extends Pick<Drink, "id" | "name" | "description" | "showOnPublicMenu" | "defaultRecipeId" | "servingSize" | "servingUnit" | "instructions" | "createdAt"> {
   kind: MethodKind; // the kind of coffee it needs; any brewer of it can make it

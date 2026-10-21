@@ -1,7 +1,7 @@
 # Recipe Expansion Roadmap
 
 Design agreed on 2026-10-19. Each phase is its own feature branch off `dev`.
-The detailed contracts live in `schema.md`, `api_spec.md` and
+The detailed contracts live in `schema.md`, `api/` (index in `api/README.md`) and
 `timer_architecture.md` once a phase is built; this file keeps the overall
 plan and the decisions behind it. Planned work that isn't built yet lives in
 [`backlog.md`](backlog.md).

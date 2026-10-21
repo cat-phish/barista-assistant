@@ -1,7 +1,7 @@
 import { api } from './client';
 import type { Brewer } from './types';
 
-// docs/api_spec.md §3
+// docs/api/brewers.md §3
 export type BrewerInput = Partial<Omit<Brewer, 'id' | 'retiredAt'>>;
 
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/brewers`;

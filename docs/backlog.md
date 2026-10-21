@@ -118,7 +118,7 @@ done, it moves to `roadmap.md` with the decisions made along the way.
 - **Status:** idea
 - **Why:** the AI suggests grind and temperature changes; for espresso, dose
   and shot weight (ratio) are often the better lever.
-- **Approach:** extend the structured output (`docs/api_spec.md` §9) with
+- **Approach:** extend the structured output (`docs/api/README.md` §9) with
   optional dose and yield deltas for espresso brews, and show them with the
   suggestion. Prompt and schema change, plus UI.
 - **Size:** S–M

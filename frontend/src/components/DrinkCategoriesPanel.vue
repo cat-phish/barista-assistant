@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Drink categories (docs/api_spec.md §5d): the ordered menu sections. Add,
+// Drink categories (docs/api/drink-categories.md §5d): the ordered menu sections. Add,
 // rename, move up/down, delete (its drinks and brewers become uncategorised).
 import { ref } from 'vue';
 import { ApiError, errorMessage } from '../api/client';

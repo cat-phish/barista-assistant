@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { brewerId, newBean, newUser, newWorkspace, type TestUser } from "./helpers.js";
 
-// Method kinds and espresso recipes/logs (docs/api_spec.md §3, §5, §6).
+// Method kinds and espresso recipes/logs (docs/api/README.md §3, §5, §6).
 
 async function setup(): Promise<{ owner: TestUser; ws: { id: string; slug: string }; v60: string; espresso: string }> {
   const owner = await newUser("owner");
@@ -55,7 +55,7 @@ describe("method kinds", () => {
       createdAt: expect.any(String),
     });
     expect((await owner.agent.patch(`${base}/${v60}`).send({})).status).toBe(400);
-    // Menu fields (docs/api_spec.md §3): the plain brew on the public menu.
+    // Menu fields (docs/api/brewers.md §3): the plain brew on the public menu.
     const menu = await owner.agent.patch(`${base}/${v60}`).send({ showOnPublicMenu: true, description: " Fruity " });
     expect(menu.body.brewer).toMatchObject({ showOnPublicMenu: true, description: "Fruity" });
     const fake = "00000000-0000-4000-8000-000000000000";

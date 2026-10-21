@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // The brew flow: set up (bean, recipe, AI starting point) -> timer -> log -> saved
-// (+ optional AI suggestion for next time). docs/api_spec.md §6/§8,
+// (+ optional AI suggestion for next time). docs/api/README.md §6/§8,
 // docs/timer_architecture.md.
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
@@ -68,7 +68,7 @@ const recipeId = ref('');
 // Category → Drink → Brewer → Recipe (lib/brewChoice.ts): e.g. Specialty
 // Drinks → The Atlas → V60 or Chemex, or Pour Over → Just pour over → V60;
 // then one of the brewer's recipes (a drink's default preselected;
-// docs/api_spec.md §5c). Or no recipe.
+// docs/api/drinks.md §5c). Or no recipe.
 const drinks = ref<Drink[]>([]);
 const categories = ref<DrinkCategory[]>([]);
 const what = ref(NO_RECIPE); // the category
@@ -147,7 +147,7 @@ const recipe = computed(() => recipes.value.find((r) => r.id === recipeId.value)
 const suggestion = ref<StartingParameters | null>(null);
 const suggestionState = ref<'idle' | 'loading' | 'none' | 'error'>('idle');
 
-// Espresso recipes record dose → shot weight instead of water (docs/api_spec.md §6).
+// Espresso recipes record dose → shot weight instead of water (docs/api/brew-logs.md §6).
 const espresso = computed(() => recipe.value?.brewer.kind === 'espresso');
 // The recipe as a filter recipe (it has water), for batch scaling.
 const filterRecipe = computed(() => {

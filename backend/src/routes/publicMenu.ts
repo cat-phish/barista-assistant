@@ -21,7 +21,7 @@ export interface PublicMenuResponse {
   beans: Array<
     Pick<Bean, "id" | "roasterName" | "beanName" | "process" | "roastDate" | "inventoryWeightGrams">
   >;
-  // docs/api_spec.md §7: plain brews and drinks, in category sections.
+  // docs/api/public-menu.md §7: plain brews and drinks, in category sections.
   sections: MenuSection[];
 }
 

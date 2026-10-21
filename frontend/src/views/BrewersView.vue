@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Brewers (docs/api_spec.md §3), one tab of Bar setup: whatever makes the
+// Brewers (docs/api/brewers.md §3), one tab of Bar setup: whatever makes the
 // coffee, from a V60 to an espresso machine. A table: filter by type (or
 // Retired), sort by any column; a row expands to its details and actions.
 // Works like grinders: retire keeps history; delete only for brewers no

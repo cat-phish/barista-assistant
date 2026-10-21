@@ -1,5 +1,5 @@
 // Editable brew details (log form and journal edit), validated with the same
-// rules as the API (docs/api_spec.md §6). Unit-tested in brewDraft.test.ts.
+// rules as the API (docs/api/brew-logs.md §6). Unit-tested in brewDraft.test.ts.
 import type { BrewLogInput } from '../api/brews';
 import type { BrewLog, Mark, MethodKind } from '../api/types';
 import { formatGrams, formatTime, parseDecimal, parseTime } from './format';

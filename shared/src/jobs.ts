@@ -1,5 +1,5 @@
 // BullMQ contract between the backend (producer) and the worker (consumer).
-// See docs/api_spec.md §9.
+// See docs/api/llm-contract.md §9.
 
 export const BREW_ANALYSIS_QUEUE = "brew-analysis";
 export const BREW_ANALYSIS_JOB = "analyze";

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Grinder management (docs/api_spec.md §3b), one tab of Bar setup, as a
+// Grinder management (docs/api/grinders.md §3b), one tab of Bar setup, as a
 // table: filter by hand/electric (or Retired), sort by any column; a row
 // expands to its details and actions. Retire keeps history; delete only works
 // for grinders no brew used.

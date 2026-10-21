@@ -1,15 +1,15 @@
-// Labels and one-line summaries for equipment (docs/api_spec.md §3, §3b).
+// Labels and one-line summaries for equipment (docs/api/README.md §3, §3b).
 import type { BrewerInput } from '../api/brewers';
 import type { Brewer, BurrType, Grinder, GrinderAdjustment, GrinderDetails, GrinderPower, MachineCapabilities, MethodKind, Preinfusion, ProfileControl, RecipeStyle } from '../api/types';
 import { formatGrams, parseDecimal } from './format';
 
-// The brew method (docs/api_spec.md §3): decides recipe fields, steps, the
+// The brew method (docs/api/brewers.md §3): decides recipe fields, steps, the
 // timer, and which drinks a brewer can make.
 export const METHOD_KINDS: Record<MethodKind, { label: string; hint: string }> = {
   filter: { label: 'Filter', hint: 'Dose and water: pour over, immersion, hybrid (V60, French press, AeroPress, OXO Rapid Brewer)' },
   espresso: { label: 'Espresso', hint: 'Dose and shot weight instead of water, with the shot timer' },
 };
-// How a recipe brews, by its brewer's method (docs/api_spec.md §5):
+// How a recipe brews, by its brewer's method (docs/api/recipes.md §5):
 // descriptive only (lists, the AI).
 export const RECIPE_STYLES: Record<RecipeStyle, string> = {
   pour_over: 'Pour over',
@@ -147,7 +147,7 @@ export function adjustmentLabel(g: Grinder): string | null {
   return g.settingMin !== null && g.settingMax !== null ? `${kind} · ${formatGrams(g.settingMin)}–${formatGrams(g.settingMax)}` : kind;
 }
 
-// Brewer add/edit form (docs/api_spec.md §3): text inputs; capabilities only
+// Brewer add/edit form (docs/api/brewers.md §3): text inputs; capabilities only
 // count for espresso brewers.
 export interface BrewerForm extends MachineCapabilities {
   name: string;

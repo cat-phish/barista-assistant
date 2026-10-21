@@ -107,7 +107,7 @@ workspacesRouter.patch(
 const deleteWorkspaceQuery = z.object({ confirm: z.string().optional() });
 
 // Cascades to members, brewers, beans, recipes, brew logs and analyses.
-// ?confirm must be the slug as typed by the owner (docs/api_spec.md §2).
+// ?confirm must be the slug as typed by the owner (docs/api/workspaces.md §2).
 workspacesRouter.delete("/:workspaceId", async (req: Request<{ workspaceId: string }>, res: Response) => {
   const { workspaceId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId, ["owner"]))) return;

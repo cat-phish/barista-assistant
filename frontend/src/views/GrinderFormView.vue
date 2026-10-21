@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Grinder editor (docs/api_spec.md §3b), a page of its own like recipes: add
+// Grinder editor (docs/api/grinders.md §3b), a page of its own like recipes: add
 // a grinder, or edit one (route param). Only the name is required.
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';

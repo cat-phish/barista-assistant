@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Drink editor (docs/api_spec.md §5c): name, description, the kind of coffee it's
+// Drink editor (docs/api/drinks.md §5c): name, description, the kind of coffee it's
 // built on (any of its recipes can make it; one can be the default), category,
 // what it's a variant of, the ingredients that finish it, and the menu switch.
 // /drinks/new?from=<id> starts a variant: a copy of that drink, linked to it;
