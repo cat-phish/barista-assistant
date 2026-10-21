@@ -1,15 +1,17 @@
 <script setup lang="ts">
 // 1–5 rating (docs/api_spec.md §6) as a radio group; tap the chosen value again to clear.
 const model = defineModel<number | null>({ required: true });
+// name: the radio group, unique per form (a drink brew has two ratings).
+withDefaults(defineProps<{ name?: string; label?: string }>(), { name: 'rating', label: 'Rating' });
 const LABELS = ['', 'Bad', 'Meh', 'OK', 'Good', 'Great'];
 </script>
 
 <template>
   <fieldset class="rating">
-    <legend>Rating <span class="muted">(optional)</span></legend>
+    <legend>{{ label }} <span class="muted">(optional)</span></legend>
     <div class="options">
       <label v-for="n in 5" :key="n" :class="{ chosen: model !== null && n <= model }" :title="LABELS[n]">
-        <input type="radio" name="rating" :value="n" :checked="model === n" @click="model = model === n ? null : n" />
+        <input type="radio" :name="name" :value="n" :checked="model === n" @click="model = model === n ? null : n" />
         <span aria-hidden="true">★</span>
         <span class="visually-hidden">{{ n }} – {{ LABELS[n] }}</span>
       </label>

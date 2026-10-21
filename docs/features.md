@@ -17,19 +17,31 @@ upcoming work is in `roadmap.md`.
 
 ## Bar setup
 One **Bar setup** section with three tabs: Brewers, Grinders, Categories.
+Brewers and Grinders are tables like Recipes: filter brewers by type (pour
+over, immersion, espresso) and grinders by hand or electric, with **Retired**
+as its own filter option (where Restore is); sort by any column (name, type,
+category; power, burrs, adjustment; date added), unset values last; tap a row
+to see details and edit, retire or delete it. Filter and sort are remembered.
+Adding and editing a brewer, grinder or ingredient happen on their own page
+(the **Add** button sits at the top of each list, like Recipes and Drinks).
 - **Grinders:** per workspace, with optional details: stepped/stepless,
   setting range and step size, burr type and size, hand/electric. The range
   and step let the AI talk in clicks. Grinders that have been used are
   retired rather than deleted, so history keeps their names.
-- **Brewers:** whatever makes the coffee (V60, Chemex, AeroPress, an
-  espresso machine), with a kind: pour over, immersion or espresso. The kind
-  decides the recipe fields (it can't change while recipes use the brewer).
+- **Brewers:** whatever makes the coffee (V60, French press, AeroPress, OXO
+  Rapid Brewer, an espresso machine). Three separate ideas describe one:
+  - **Brew method**, Filter or Espresso: decides the recipe fields, steps
+    and timer, and which drinks the brewer can make. It can't change while
+    recipes use the brewer.
+  - **Style** (filter brewers, optional): Pour over, Immersion, Hybrid,
+    Other. Descriptive only (lists, the AI).
+  - **Category**: your own grouping for the brew page and the menu.
   Espresso brewers also record what they can do: pre-infusion (none /
   automatic / manual), flow control and pressure control (none / manual /
   programmable). A brewer has an optional category (where it's listed when
   brewing) and can go on the menu as the plain brew, under a menu name
   ("Espresso" for the machine). Retired like grinders once brews used it;
-  deleting is refused while recipes or drinks use it.
+  deleting is refused while recipes use it.
 
 ## Recipes
 - **List:** a table (Name, Brewer, Dose, Added), filtered by brewer and sorted
@@ -67,14 +79,19 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
 - **Ingredients:** reusable preps that finish a drink: milk, foam, syrup,
   ice, water, other, each with free-text instructions (e.g. orange-infused
   cold foam: steep peel in cream overnight). An ingredient a drink uses can't
-  be deleted.
-- **Drinks:** what you serve. A drink is built on one **brewer** and
-  can be made with any recipe of that brewer (an optional default is
-  preselected), finished with ingredients in order, each with an amount (a
+  be deleted. The list is a table (Name, Type, Used in, Added), filtered by
+  type or "Not in any drink", sorted by any column (most-used first, say);
+  tap a row for its instructions, the drinks it's in (links) and the units
+  they measure it in. Filter and sort are remembered.
+- **Drinks:** what you serve. A drink needs a **brew method**, Filter or
+  Espresso, not a particular device: any brewer of that method can make it
+  (The Atlas on a V60, French press, AeroPress or OXO; a latte on any espresso
+  machine), with that brewer's recipes (an optional default recipe is
+  preselected when it fits), finished with ingredients in order, each with an amount (a
   number and a unit: fl oz, ml, g, or any typed unit like "pump", which is
   then suggested next time) and a note ("Orange cold foam · 40 g · spooned on
   top"). An optional **default size** (fl oz or ml) is what the amounts are
-  for. A plain "V60" isn't a
+  for. Optional free-text **instructions** say how to make it. A plain "V60" isn't a
   drink: it's the brewer itself, which can go on the menu (Bar setup →
   Brewers: show on menu, menu name, description, category).
 - **Variants:** like cocktail riffs, a drink can be a variant of another
@@ -92,22 +109,32 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   ingredients, size and actions. The filter and sort are remembered.
 
 ## Brewing
-- **Category → Brewer or drink → Recipe:** pick a **category** (Pour Over,
-  Espresso, Espresso Milk Drinks…, then Other for uncategorised ones), then
-  one of its **brewers** (V60, Chemex) or **drinks** (variants under their
-  parent; "On Delonghi" shows the drink's brewer), then one of that brewer's
-  recipes, with the drink's default selected. The last choices are
+- **Category → Drink → Brewer → Recipe**, the same for everything: pick a
+  **category** (Pour Over, Espresso, Specialty Drinks…, then Other for
+  uncategorised ones); then a **drink** (variants under their parent) or
+  **Just filter coffee / Just espresso** for a plain brew of the category's
+  brewers; then a **brewer**: any of the drink's brew method, or the
+  category's own for a plain brew, with the default recipe's brewer, else the
+  last one used for that method, preselected; then one of that brewer's
+  **recipes**. A brewer with no recipes yet is still offered, with "No recipes
+  yet: Add a recipe" (opening the recipe form for it). The last choices are
   remembered. Every category is listed: an empty one says so and links to
-  adding a drink in it. A category can mix brewers (Specialty Drinks: The
-  Atlas on the V60, Orange Truffle on the espresso machine); the drink list
-  then names each drink's brewer. A drink with a default size gets a
+  adding a drink in it. A category can mix methods (Specialty Drinks: The
+  Atlas is filter, Orange Truffle espresso); the drink list then names each
+  drink's method. A drink with a default size gets a
   **Size** field: 12 fl oz on an 8 fl oz latte scales every ingredient ×1.5
   (rounded to whole ml/g, 0.1 fl oz, or half pumps/spoons). On a filter
   brewer the coffee batch scales too; an espresso shot stays as the recipe
   says. The size made is saved on the log and shown in the journal, and the
   AI sees the scaled amounts. **Something else (no recipe)** logs a brew
-  without one. A drink's ingredients show as **Finish with**, on setup and on
-  the log, and the brew is saved with the drink.
+  without one. A drink's ingredients show as **Finish with** on setup; once
+  the brew is done, a **Finish the drink** card shows them (scaled) with the
+  drink's **instructions** ("Add the syrup to the cup…"), on the log screen
+  and after saving. The brew is saved with the drink.
+- **Tasting a drink:** for a drink with ingredients the log has two parts:
+  **The brew** (optional rating and notes, if you tasted it on its own: the
+  shot, or the V60 cup) and **The drink** (rating and notes). Brews served on
+  their own keep one rating and notes.
 - **Setup:** pick bean, recipe and grinder. The grind pre-fills from your
   last brew of that recipe on that grinder, else the AI suggestion, else the
   recipe's starting point.
@@ -120,6 +147,9 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
 - **Espresso shots:** the same setup shows dose, ratio and shot weight
   instead; typing any one updates the others. The brew records its recipe's
   brewer, so the espresso machine comes with the recipe.
+- **Abandoning a brew:** during the timer or before the log is saved,
+  leaving the page, reloading, or tapping **Brew** again asks "Abandon this
+  brew?" first; abandoning goes back to setup with your choices kept.
 - **Timer** (pour over and espresso): Previous / Current / Up next cards; the
   current one shows the instruction ("Pour to 150 g (+100)", "9 → 6 bar",
   "Pump off"), the temperature and how it ends, with **Next** or **Log it**
@@ -145,8 +175,12 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   asks the LLM for grind and temperature changes with reasoning, shown next
   time you brew that bean. It sees the bean's roast level and age, the
   recipe, your previous brews of that bean, the grinder's details and, for
-  espresso, the machine's capabilities and the shot timer's taps, and the
-  drink it was for (so milk in the tasting notes isn't blamed on the coffee).
+  espresso, the machine's capabilities and the shot timer's taps. Every brew
+  says how it was served (straight, or the drink and its ingredient types),
+  with the brew and drink tastings apart. The AI treats the brew's own notes
+  (tasted on its own) as the clearest sign of extraction and drink notes as weaker evidence (milk and
+  syrup soften sourness and bitterness), and compares a brew mainly with
+  earlier brews served the same way.
 
 ## Public menu
 - An optional public page per workspace listing beans, plus plain

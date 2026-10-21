@@ -1,11 +1,12 @@
-// Brew setup picks Category → Brewer or drink → Recipe (docs/features.md):
-// a category ("Pour Over", "Espresso Milk Drinks"), then one of its brewers
-// (V60, an espresso machine) or drinks (variants under their parent), then one
-// of that brewer's recipes, with the drink's default preselected. "none" logs
-// a brew without a recipe. Choices are strings so they fit a <select> and
-// localStorage: category "cat:<id>" ("cat:" = uncategorised) | "none";
-// item "brewer:<id>" | "drink:<id>".
-import type { Brewer, Drink, DrinkCategory, Recipe } from '../api/types';
+// Brew setup is always Category → Drink → Brewer → Recipe (docs/features.md):
+// a category ("Pour Over", "Specialty Drinks"); then one of its drinks, or
+// "Just <kind>" for a plain brew of the category's brewers; then a brewer of
+// that kind (any for a drink, the category's own for a plain brew); then one
+// of that brewer's recipes, with the drink's default preselected when it fits.
+// "none" logs a brew without a recipe. Choices are strings so they fit a
+// <select> and localStorage: category "cat:<id>" ("cat:" = uncategorised) |
+// "none"; item "plain:<kind>" | "drink:<id>".
+import type { Brewer, Drink, DrinkCategory, MethodKind, Recipe } from '../api/types';
 import { nestDrinks, type NestedDrink } from './drinks';
 
 export const NO_RECIPE = 'none';
@@ -13,25 +14,25 @@ export const encodeCategory = (id: string | null) => `cat:${id ?? ''}`;
 export function decodeCategory(value: string): { categoryId: string | null } | null {
   return value.startsWith('cat:') ? { categoryId: value.slice('cat:'.length) || null } : null;
 }
-export const encodeBrewer = (id: string) => `brewer:${id}`;
+export const encodePlain = (kind: MethodKind) => `plain:${kind}`;
 export const encodeDrink = (id: string) => `drink:${id}`;
-export type BrewItem = { kind: 'brewer'; id: string } | { kind: 'drink'; id: string };
+export type BrewItem = { kind: 'plain'; method: MethodKind } | { kind: 'drink'; id: string };
 export function decodeItem(value: string): BrewItem | null {
-  if (value.startsWith('brewer:')) return { kind: 'brewer', id: value.slice('brewer:'.length) };
+  if (value.startsWith('plain:')) return { kind: 'plain', method: value.slice('plain:'.length) as MethodKind };
   if (value.startsWith('drink:')) return { kind: 'drink', id: value.slice('drink:'.length) };
   return null;
 }
 
-// What can be brewed: active brewers with recipes, and drinks on them.
+// What can be brewed: active brewers (with or without recipes yet: brew setup
+// offers to add one), and drinks whose brew method one of them has.
 export interface Brewable {
   brewers: Brewer[];
   drinks: Drink[];
 }
-export function brewable(brewers: Brewer[], recipes: Recipe[], drinks: Drink[]): Brewable {
-  const withRecipes = new Set(recipes.map((r) => r.brewer.id));
-  const usable = brewers.filter((b) => !b.retiredAt && withRecipes.has(b.id));
-  const ids = new Set(usable.map((b) => b.id));
-  return { brewers: usable, drinks: drinks.filter((d) => ids.has(d.brewer.id)) };
+export function brewable(brewers: Brewer[], drinks: Drink[]): Brewable {
+  const usable = brewers.filter((b) => !b.retiredAt);
+  const kinds = new Set(usable.map((b) => b.kind));
+  return { brewers: usable, drinks: drinks.filter((d) => kinds.has(d.kind)) };
 }
 
 // Every category in its order (empty ones flagged, so setup can suggest
@@ -45,24 +46,45 @@ export function categoryOptions(b: Brewable, categories: DrinkCategory[]): Array
   ];
 }
 
-// A category's brewers (by name) and drinks (variants nested).
-export function itemOptions(b: Brewable, categoryId: string | null): { brewers: Brewer[]; drinks: NestedDrink[] } {
+const KIND_ORDER: MethodKind[] = ['filter', 'espresso'];
+
+// A category's plain brews (one per kind among its brewers, in kind order)
+// and its drinks (variants nested).
+export function itemOptions(b: Brewable, categoryId: string | null): { plains: MethodKind[]; drinks: NestedDrink[] } {
+  const kinds = new Set(b.brewers.filter((x) => x.categoryId === categoryId).map((x) => x.kind));
   return {
-    brewers: b.brewers.filter((x) => x.categoryId === categoryId).sort((x, y) => x.name.localeCompare(y.name)),
+    plains: KIND_ORDER.filter((k) => kinds.has(k)),
     drinks: nestDrinks(b.drinks.filter((d) => (d.category?.id ?? null) === categoryId)),
   };
 }
 
-// All item values of a category, in display order (brewers, then drinks).
+// All item values of a category, in display order (plain brews, then drinks).
 export function itemValues(items: ReturnType<typeof itemOptions>): string[] {
-  return [...items.brewers.map((x) => encodeBrewer(x.id)), ...items.drinks.map((d) => encodeDrink(d.drink.id))];
+  return [...items.plains.map(encodePlain), ...items.drinks.map((d) => encodeDrink(d.drink.id))];
 }
 
-// A drink's option: its brewer is named when the category mixes brewers
-// ("The Atlas · V60" next to "Orange Truffle · Delonghi").
-export function drinkOptionLabel(d: Drink, drinks: NestedDrink[]): string {
-  const mixed = new Set(drinks.map((x) => x.drink.brewer.id)).size > 1;
-  return mixed ? `${d.name} · ${d.brewer.name}` : d.name;
+// The brewers that can make the item, by name: for a drink, every usable
+// brewer of its kind; for a plain brew, the category's own of that kind.
+export function brewerOptions(b: Brewable, categoryId: string | null, item: BrewItem | null, drinks: Drink[]): Brewer[] {
+  let list: Brewer[] = [];
+  if (item?.kind === 'plain') list = b.brewers.filter((x) => x.kind === item.method && x.categoryId === categoryId);
+  if (item?.kind === 'drink') {
+    const kind = drinks.find((d) => d.id === item.id)?.kind;
+    list = b.brewers.filter((x) => x.kind === kind);
+  }
+  return [...list].sort((x, y) => x.name.localeCompare(y.name));
+}
+
+// The brewer to select: the drink's default recipe's brewer if offered, else
+// the last one used for this kind, else the current one if it fits, else the
+// first.
+export function pickBrewer(options: Brewer[], drink: Drink | null, recipes: Recipe[], remembered: string | null, current: string): string {
+  const offered = (id: string | null | undefined): id is string => !!id && options.some((b) => b.id === id);
+  const fromDefault = recipes.find((r) => r.id === drink?.defaultRecipeId)?.brewer.id;
+  if (offered(fromDefault)) return fromDefault;
+  if (offered(remembered)) return remembered;
+  if (offered(current)) return current;
+  return options[0]?.id ?? '';
 }
 
 export function recipeOptions(brewerId: string | null, recipes: Recipe[]): Recipe[] {

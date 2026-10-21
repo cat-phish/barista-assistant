@@ -1,40 +1,102 @@
-// Sorting and remembering list views (Recipes, Drinks): by date added or by
-// name, each way. The column headers and the sort dropdown share one key.
-export type SortKey = 'added_desc' | 'added_asc' | 'name_asc' | 'name_desc';
-export const SORT_LABELS: Record<SortKey, string> = {
-  added_desc: 'Newest first',
-  added_asc: 'Oldest first',
-  name_asc: 'Name A–Z',
-  name_desc: 'Name Z–A',
-};
-export const isSortKey = (v: unknown): v is SortKey => typeof v === 'string' && v in SORT_LABELS;
+// Sorting and remembering list views (Recipes, Drinks, Brewers, Grinders).
+// A sort is a column and a direction, written "<column>_<asc|desc>" so it fits
+// a <select> and localStorage. The column headers and the Sort dropdown share
+// one key.
+export type SortDir = 'asc' | 'desc';
+export type SortKey<C extends string = string> = `${C}_${SortDir}`;
 
-export function sortItems<T extends { name: string; createdAt: string }>(items: readonly T[], key: SortKey): T[] {
+// A sortable column: how to read its value (null = not set, always last) and
+// how its directions read in the dropdown.
+export interface SortColumn<T> {
+  label: string; // "Name", "Type"
+  value: (item: T) => string | number | null;
+  asc?: string; // dropdown wording, default "<label> A–Z"
+  desc?: string;
+  firstDir?: SortDir; // a header's first click (dates: newest first)
+}
+export type SortColumns<T, C extends string = string> = Record<C, SortColumn<T>>;
+
+interface Named {
+  name: string;
+}
+interface Dated extends Named {
+  createdAt: string;
+}
+
+export const nameColumn = <T extends Named>(): SortColumn<T> => ({ label: 'Name', value: (x) => x.name, asc: 'Name A–Z', desc: 'Name Z–A' });
+export const addedColumn = <T extends Dated>(): SortColumn<T> => ({
+  label: 'Added',
+  value: (x) => x.createdAt,
+  asc: 'Oldest first',
+  desc: 'Newest first',
+  firstDir: 'desc',
+});
+// A column of a fixed set of values, sorted in that order (not alphabetically):
+// filter → espresso.
+export function enumColumn<T, V extends string>(label: string, order: readonly V[], value: (item: T) => V | null): SortColumn<T> {
+  return { label, value: (x) => { const v = value(x); return v === null ? null : order.indexOf(v); } };
+}
+
+export function parseSortKey(key: string): { column: string; dir: SortDir } | null {
+  const m = /^(.+)_(asc|desc)$/.exec(key);
+  return m ? { column: m[1]!, dir: m[2] as SortDir } : null;
+}
+
+export function sortBy<T extends Named>(items: readonly T[], key: string, columns: SortColumns<T>): T[] {
+  const parsed = parseSortKey(key);
+  const column = parsed ? columns[parsed.column] : undefined;
   const byName = (a: T, b: T) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-  const byAdded = (a: T, b: T) => a.createdAt.localeCompare(b.createdAt) || byName(a, b);
-  const compare = {
-    added_desc: (a: T, b: T) => byAdded(b, a),
-    added_asc: byAdded,
-    name_asc: byName,
-    name_desc: (a: T, b: T) => byName(b, a),
-  }[key];
-  return [...items].sort(compare);
+  if (!parsed || !column) return [...items].sort(byName);
+  const sign = parsed.dir === 'asc' ? 1 : -1;
+  return [...items].sort((a, b) => {
+    const va = column.value(a);
+    const vb = column.value(b);
+    if (va === null || vb === null) return va === vb ? byName(a, b) : va === null ? 1 : -1; // not set: last either way
+    const c = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb), undefined, { sensitivity: 'base' });
+    return sign * c || byName(a, b);
+  });
 }
 
-export const sortsByName = (key: SortKey) => key === 'name_asc' || key === 'name_desc';
-
-// Clicking a column header: the first click sorts it (names A–Z, dates newest
-// first), clicking again flips it.
-export function toggleHeader(current: SortKey, column: 'name' | 'added'): SortKey {
-  if (column === 'name') return current === 'name_asc' ? 'name_desc' : 'name_asc';
-  return current === 'added_desc' ? 'added_asc' : 'added_desc';
+// The dropdown's entries, e.g. "Name A–Z", "Type Z–A", "Newest first".
+export function sortOptions<T>(columns: SortColumns<T>): Array<{ value: string; label: string }> {
+  return Object.entries(columns).flatMap(([id, c]) => {
+    const dirs: SortDir[] = c.firstDir === 'desc' ? ['desc', 'asc'] : ['asc', 'desc'];
+    return dirs.map((d) => ({ value: `${id}_${d}`, label: (d === 'asc' ? c.asc : c.desc) ?? `${c.label} ${d === 'asc' ? 'A–Z' : 'Z–A'}` }));
+  });
 }
 
-// aria-sort for a column header.
-export function ariaSort(current: SortKey, column: 'name' | 'added'): 'ascending' | 'descending' | 'none' {
-  if (!current.startsWith(column)) return 'none';
-  return current.endsWith('asc') ? 'ascending' : 'descending';
+export function isSortKey<T>(value: unknown, columns: SortColumns<T>): value is string {
+  if (typeof value !== 'string') return false;
+  const parsed = parseSortKey(value);
+  return !!parsed && parsed.column in columns;
 }
+
+// Clicking a column header: the first click sorts it (A–Z, or newest first
+// for dates), clicking again flips it.
+export function toggleHeader<T>(current: string, column: string, columns: SortColumns<T>): string {
+  const parsed = parseSortKey(current);
+  const first = columns[column]?.firstDir ?? 'asc';
+  if (parsed?.column !== column) return `${column}_${first}`;
+  return `${column}_${parsed.dir === 'asc' ? 'desc' : 'asc'}`;
+}
+
+export function ariaSort(current: string, column: string): 'ascending' | 'descending' | 'none' {
+  const parsed = parseSortKey(current);
+  if (parsed?.column !== column) return 'none';
+  return parsed.dir === 'asc' ? 'ascending' : 'descending';
+}
+// The ▲ / ▼ shown next to a sorted header.
+export function sortArrow(current: string, column: string): string {
+  const state = ariaSort(current, column);
+  return state === 'ascending' ? '▲' : state === 'descending' ? '▼' : '';
+}
+// A header button's label: "Name, sorted ascending, click to reverse".
+export function sortLabel(current: string, column: string, label: string): string {
+  const state = ariaSort(current, column);
+  return `${label}, ${state === 'none' ? 'click to sort' : `sorted ${state}, click to reverse`}`;
+}
+
+export const sortsByName = (key: string) => parseSortKey(key)?.column === 'name';
 
 // A per-workspace view preference in localStorage (filter, sort). Storage can
 // be unavailable (private mode): then it just isn't remembered.

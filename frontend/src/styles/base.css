@@ -358,20 +358,33 @@ button.data-th {
   .data-head {
     display: none;
   }
+  /* Line 1: name and date; line 2: the other cells, joined by "·". */
   .data-item > .data-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    row-gap: 2px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 0;
   }
   .data-item > .data-row > .data-td {
-    grid-column: 1 / -1;
     order: 2;
+    flex: 0 1 auto;
   }
   .data-item > .data-row > .data-td.primary {
-    grid-column: 1;
     order: 0;
+    flex: 1 1 0;
+    min-width: 0;
   }
   .data-item > .data-row > .data-td.end {
-    grid-column: 2;
     order: 1;
+    margin-left: var(--space-2);
+  }
+  .data-item > .data-row > .data-td:not(.primary):not(.end) ~ .data-td:not(.end)::before {
+    content: '·';
+    margin: 0 var(--space-1);
+  }
+  /* Force the middle cells onto their own line. */
+  .data-item > .data-row::after {
+    content: '';
+    order: 1;
+    flex-basis: 100%;
   }
 }

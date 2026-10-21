@@ -18,14 +18,18 @@ const shot = (brewerId: string, extra: Record<string, unknown> = {}) => ({
 });
 
 describe("method kinds", () => {
-  it("new workspaces seed kinds; new methods default to pour over", async () => {
+  it("new workspaces seed brew methods and styles; new brewers default to filter", async () => {
     const { owner, ws } = await setup();
     const base = `/api/workspaces/${ws.id}/brewers`;
     const kinds = Object.fromEntries(
-      (await owner.agent.get(base)).body.brewers.map((m: { name: string; kind: string }) => [m.name, m.kind])
+      (await owner.agent.get(base)).body.brewers.map((m: { name: string; kind: string; style: string | null }) => [m.name, [m.kind, m.style]])
     );
-    expect(kinds).toEqual({ Aeropress: "immersion", Espresso: "espresso", V60: "pour_over" });
-    expect((await owner.agent.post(base).send({ name: "Chemex" })).body.brewer.kind).toBe("pour_over");
+    expect(kinds).toEqual({ Aeropress: ["filter", "immersion"], Espresso: ["espresso", null], V60: ["filter", "pour_over"] });
+    expect((await owner.agent.post(base).send({ name: "Chemex" })).body.brewer).toMatchObject({ kind: "filter", style: null });
+    expect((await owner.agent.post(base).send({ name: "OXO Rapid Brewer", style: "immersion" })).body.brewer).toMatchObject({ kind: "filter", style: "immersion" });
+    expect((await owner.agent.post(base).send({ name: "Siphon", style: "vacuum" })).status).toBe(400);
+    // Style describes filter brewers only.
+    expect((await owner.agent.post(base).send({ name: "Gaggia", kind: "espresso", style: "pour_over" })).body.brewer.style).toBeNull();
     expect((await owner.agent.post(base).send({ name: "Lever", kind: "espresso" })).body.brewer).toMatchObject({ kind: "espresso" });
     expect((await owner.agent.post(base).send({ name: "Siphon", kind: "vacuum" })).status).toBe(400);
   });
@@ -33,17 +37,19 @@ describe("method kinds", () => {
   it("kind can't change while recipes use the method; renames keep the kind", async () => {
     const { owner, ws, v60 } = await setup();
     const base = `/api/workspaces/${ws.id}/brewers`;
-    expect((await owner.agent.patch(`${base}/${v60}`).send({ kind: "immersion" })).body.brewer).toMatchObject({ name: "V60", kind: "immersion" });
-    expect((await owner.agent.patch(`${base}/${v60}`).send({ kind: "pour_over" })).status).toBe(200);
+    // The style is descriptive: it can change any time, recipes or not.
+    expect((await owner.agent.patch(`${base}/${v60}`).send({ style: "hybrid" })).body.brewer).toMatchObject({ name: "V60", kind: "filter", style: "hybrid" });
     await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name: "R", brewerId: v60, targetDoseGrams: 15, targetWaterGrams: 250 });
 
     const refused = await owner.agent.patch(`${base}/${v60}`).send({ kind: "espresso" });
     expect(refused.status).toBe(409);
     expect(refused.body.recipeCount).toBe(1);
-    expect((await owner.agent.patch(`${base}/${v60}`).send({ kind: "pour_over", name: "Hario V60" })).body.brewer).toEqual({
+    expect((await owner.agent.patch(`${base}/${v60}`).send({ style: "pour_over" })).status).toBe(200); // with recipes too
+    expect((await owner.agent.patch(`${base}/${v60}`).send({ kind: "filter", name: "Hario V60" })).body.brewer).toEqual({
       id: v60,
       name: "Hario V60",
-      kind: "pour_over",
+      kind: "filter",
+      style: "pour_over",
       notes: null,
       preinfusion: "none",
       flowControl: "none",
@@ -53,6 +59,7 @@ describe("method kinds", () => {
       categoryId: null,
       showOnPublicMenu: false,
       retiredAt: null,
+      createdAt: expect.any(String),
     });
     expect((await owner.agent.patch(`${base}/${v60}`).send({})).status).toBe(400);
     // Menu fields (docs/api_spec.md §3): the plain brew on the public menu.

@@ -1,11 +1,20 @@
 // Labels and one-line summaries for equipment (docs/api_spec.md §3, §3b).
-import type { Brewer, BurrType, Grinder, GrinderAdjustment, GrinderDetails, GrinderPower, MachineCapabilities, MethodKind, Preinfusion, ProfileControl } from '../api/types';
+import type { BrewerInput } from '../api/brewers';
+import type { Brewer, BrewerStyle, BurrType, Grinder, GrinderAdjustment, GrinderDetails, GrinderPower, MachineCapabilities, MethodKind, Preinfusion, ProfileControl } from '../api/types';
 import { formatGrams, parseDecimal } from './format';
 
+// The brew method (docs/api_spec.md §3): decides recipe fields, steps, the
+// timer, and which drinks a brewer can make.
 export const METHOD_KINDS: Record<MethodKind, { label: string; hint: string }> = {
-  pour_over: { label: 'Pour over', hint: 'Water poured over the bed: V60, Kalita, Chemex' },
-  immersion: { label: 'Immersion', hint: 'Steeped, then pressed or drained: AeroPress, French press' },
-  espresso: { label: 'Espresso', hint: 'Dose and shot weight instead of water' },
+  filter: { label: 'Filter', hint: 'Dose and water: pour over, immersion, hybrid (V60, French press, AeroPress, OXO Rapid Brewer)' },
+  espresso: { label: 'Espresso', hint: 'Dose and shot weight instead of water, with the shot timer' },
+};
+// How a filter brewer brews: descriptive only (lists, the AI).
+export const BREWER_STYLES: Record<BrewerStyle, string> = {
+  pour_over: 'Pour over',
+  immersion: 'Immersion',
+  hybrid: 'Hybrid',
+  other: 'Other',
 };
 
 export const GRINDER_ADJUSTMENTS: Record<GrinderAdjustment, string> = { stepped: 'Stepped (clicks)', stepless: 'Stepless' };
@@ -111,4 +120,65 @@ export function parseGrinderForm(f: GrinderForm): { errors: GrinderFormErrors; v
 export function pickCopyBrewer(brewers: Brewer[], original: Pick<Brewer, 'id' | 'kind'>): string {
   const other = brewers.find((b) => !b.retiredAt && b.kind === original.kind && b.id !== original.id);
   return other?.id ?? original.id;
+}
+
+// Grinder table cells (null when not set): "Hand" / "Electric",
+// "Conical 39 mm", "Stepped · 0–40".
+export function powerLabel(g: Grinder): string | null {
+  return g.power === null ? null : g.power === 'manual' ? 'Hand' : 'Electric';
+}
+export function burrLabel(g: Grinder): string | null {
+  if (!g.burrType && g.burrSizeMm === null) return null;
+  return [g.burrType ? BURR_TYPES[g.burrType] : 'Burrs', g.burrSizeMm !== null ? `${g.burrSizeMm} mm` : ''].filter(Boolean).join(' ');
+}
+export function adjustmentLabel(g: Grinder): string | null {
+  if (!g.adjustment) return null;
+  const kind = g.adjustment === 'stepped' ? 'Stepped' : 'Stepless';
+  return g.settingMin !== null && g.settingMax !== null ? `${kind} · ${formatGrams(g.settingMin)}–${formatGrams(g.settingMax)}` : kind;
+}
+
+// Brewer add/edit form (docs/api_spec.md §3): text inputs; capabilities only
+// count for espresso brewers.
+export interface BrewerForm extends MachineCapabilities {
+  name: string;
+  kind: MethodKind;
+  style: BrewerStyle | ''; // '' = not set
+  notes: string;
+  showOnPublicMenu: boolean;
+  menuName: string;
+  description: string;
+  categoryId: string;
+}
+
+export function brewerForm(m?: Brewer): BrewerForm {
+  return {
+    name: m?.name ?? '',
+    kind: m?.kind ?? 'filter',
+    style: m?.style ?? '',
+    notes: m?.notes ?? '',
+    preinfusion: m?.preinfusion ?? 'none',
+    flowControl: m?.flowControl ?? 'none',
+    pressureControl: m?.pressureControl ?? 'none',
+    showOnPublicMenu: m?.showOnPublicMenu ?? false,
+    menuName: m?.menuName ?? '',
+    description: m?.description ?? '',
+    categoryId: m?.categoryId ?? '',
+  };
+}
+export function brewerInput(f: BrewerForm): BrewerInput & { name: string } {
+  const espresso = f.kind === 'espresso';
+  return {
+    name: f.name.trim(),
+    kind: f.kind,
+    style: espresso ? null : f.style || null, // filter only
+    notes: f.notes.trim() || null,
+    // Capabilities only mean something for espresso.
+    preinfusion: espresso ? f.preinfusion : 'none',
+    flowControl: espresso ? f.flowControl : 'none',
+    pressureControl: espresso ? f.pressureControl : 'none',
+    showOnPublicMenu: f.showOnPublicMenu,
+    menuName: f.menuName.trim() || null,
+    description: f.description.trim() || null,
+    categoryId: f.categoryId || null,
+  };
 }

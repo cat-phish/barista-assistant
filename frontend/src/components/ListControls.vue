@@ -1,10 +1,10 @@
 <script setup lang="ts">
-// The filter and sort selects above a list table (Recipes, Drinks).
-import { SORT_LABELS, type SortKey } from '../lib/listSort';
-
+// The filter and sort selects above a list table (Recipes, Drinks, Brewers,
+// Grinders). Sort options come from lib/listSort.ts sortOptions.
+type Option = { value: string; label: string };
 const filter = defineModel<string>('filter', { required: true });
-const sort = defineModel<SortKey>('sort', { required: true });
-defineProps<{ idPrefix: string; filterLabel: string; filterOptions: Array<{ value: string; label: string }> }>();
+const sort = defineModel<string>('sort', { required: true });
+defineProps<{ idPrefix: string; filterLabel: string; filterOptions: Option[]; sortOptions: Option[] }>();
 </script>
 
 <template>
@@ -18,7 +18,7 @@ defineProps<{ idPrefix: string; filterLabel: string; filterOptions: Array<{ valu
     <div class="field">
       <label :for="`${idPrefix}-sort`">Sort</label>
       <select :id="`${idPrefix}-sort`" v-model="sort">
-        <option v-for="(label, key) in SORT_LABELS" :key="key" :value="key">{{ label }}</option>
+        <option v-for="o in sortOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
       </select>
     </div>
   </div>

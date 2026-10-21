@@ -4,12 +4,17 @@ import { draftFromLog, emptyDraft, parseBrewDraft } from './brewDraft';
 
 describe('parseBrewDraft', () => {
   it('parses a complete draft, trimming text and blanking empty optionals', () => {
-    const draft = { dose: '18,5', water: '250', yieldGrams: '', temp: '', grinderId: '', firstDrop: '', grind: '  ', time: '0:28', rating: 4, notes: ' Bright ' };
+    const draft = { dose: '18,5', water: '250', yieldGrams: '', temp: '', grinderId: '', firstDrop: '', grind: '  ', time: '0:28', rating: 4, notes: ' Bright ', drinkRating: 5, drinkNotes: ' Sweet ' };
     expect(parseBrewDraft(draft)).toEqual({
       errors: {},
       firstDropSec: null,
-      values: { actualDoseGrams: 18.5, actualWaterGrams: 250, actualYieldGrams: null, actualTempC: null, grinderId: null, actualGrindSetting: null, actualTimeSec: 28, rating: 4, tastingNotes: 'Bright' },
+      values: { actualDoseGrams: 18.5, actualWaterGrams: 250, actualYieldGrams: null, actualTempC: null, grinderId: null, actualGrindSetting: null, actualTimeSec: 28, rating: 4, tastingNotes: 'Bright', drinkRating: null, drinkTastingNotes: null },
     });
+  });
+  it("sends the drink's own rating and notes only for a drink with ingredients", () => {
+    const draft = { ...emptyDraft(), dose: '18', water: '250', time: '0:28', rating: null, drinkRating: 4, drinkNotes: ' caramel ' };
+    expect(parseBrewDraft(draft, 'filter', true).values).toMatchObject({ rating: null, drinkRating: 4, drinkTastingNotes: 'caramel' });
+    expect(parseBrewDraft(draft, 'filter', false).values).toMatchObject({ drinkRating: null, drinkTastingNotes: null });
   });
   it('reports every invalid field and returns no values', () => {
     const { errors, values } = parseBrewDraft({ ...emptyDraft(), temp: '120', yieldGrams: 'lots' });
@@ -34,19 +39,19 @@ describe('parseBrewDraft for espresso', () => {
     expect(parseBrewDraft({ ...done, firstDrop: '' }, 'espresso').firstDropSec).toBeNull();
     expect(parseBrewDraft({ ...done, firstDrop: '30' }, 'espresso').errors.firstDrop).toMatch(/end of the shot/);
     expect(parseBrewDraft({ ...done, firstDrop: 'soon' }, 'espresso').values).toBeNull();
-    expect(parseBrewDraft({ ...done, firstDrop: '7.4', water: '250' }, 'pour_over').firstDropSec).toBeNull();
+    expect(parseBrewDraft({ ...done, firstDrop: '7.4', water: '250' }, 'filter').firstDropSec).toBeNull();
   });
   it('other kinds still need water', () => {
-    expect(parseBrewDraft({ ...shot, water: '' }, 'pour_over').errors).toHaveProperty('water');
+    expect(parseBrewDraft({ ...shot, water: '' }, 'filter').errors).toHaveProperty('water');
     expect(parseBrewDraft({ ...shot, water: '' }, null).errors).toHaveProperty('water');
   });
 });
 
 describe('draftFromLog', () => {
   it('round-trips a stored brew log', () => {
-    const log = { actualDoseGrams: 15, actualWaterGrams: 250.5, actualYieldGrams: null, actualTempC: 93.5, grinderId: 'g1', actualGrindSetting: '20 clicks', actualTimeSec: 150, rating: null, tastingNotes: null } as BrewLog;
+    const log = { actualDoseGrams: 15, actualWaterGrams: 250.5, actualYieldGrams: null, actualTempC: 93.5, grinderId: 'g1', actualGrindSetting: '20 clicks', actualTimeSec: 150, rating: null, tastingNotes: null, drinkRating: 3, drinkTastingNotes: 'milky' } as BrewLog;
     const draft = draftFromLog(log);
-    expect(draft).toEqual({ dose: '15', water: '250.5', yieldGrams: '', temp: '93.5', grinderId: 'g1', firstDrop: '', grind: '20 clicks', time: '2:30', rating: null, notes: '' });
+    expect(draft).toEqual({ dose: '15', water: '250.5', yieldGrams: '', temp: '93.5', grinderId: 'g1', firstDrop: '', grind: '20 clicks', time: '2:30', rating: null, notes: '', drinkRating: 3, drinkNotes: 'milky' });
     expect(parseBrewDraft(draft).values).toMatchObject({ actualDoseGrams: 15, actualWaterGrams: 250.5, actualYieldGrams: null, actualTempC: 93.5, grinderId: 'g1', actualTimeSec: 150 });
   });
 });

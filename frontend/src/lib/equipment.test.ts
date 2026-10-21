@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { Brewer, Grinder, MachineCapabilities } from '../api/types';
-import { grinderForm, grinderSummary, machineSummary, parseGrinderForm, pickCopyBrewer } from './equipment';
+import { adjustmentLabel, burrLabel, grinderForm, grinderSummary, machineSummary, parseGrinderForm, pickCopyBrewer, powerLabel } from './equipment';
 
 const c40: Grinder = {
   id: 'g', name: 'C40', notes: null, adjustment: 'stepped', settingMin: 0, settingMax: 40, stepSize: 1,
-  burrType: 'conical', burrSizeMm: 39, power: 'manual', retiredAt: null,
+  burrType: 'conical', burrSizeMm: 39, power: 'manual', retiredAt: null, createdAt: '2026-10-20T00:00:00.000Z',
 };
 
 describe('grinder form', () => {
   it('round-trips a grinder and blanks become null', () => {
-    const { id: _id, retiredAt: _retired, ...fields } = c40;
+    const { id: _id, retiredAt: _retired, createdAt: _added, ...fields } = c40;
     expect(parseGrinderForm(grinderForm(c40)).values).toEqual(fields);
     expect(parseGrinderForm({ ...grinderForm(), name: ' Niche ' }).values).toMatchObject({ name: 'Niche', adjustment: null, settingMin: null, burrSizeMm: null });
   });
@@ -39,8 +39,19 @@ describe('duplicating a recipe', () => {
     ({ id, kind, retiredAt }) as Brewer;
   it('starts on another active brewer of the same kind, else the original', () => {
     const original = { id: 'dl', kind: 'espresso' } as const;
-    expect(pickCopyBrewer([brewer('dl', 'espresso'), brewer('v60', 'pour_over'), brewer('lm', 'espresso')], original)).toBe('lm');
+    expect(pickCopyBrewer([brewer('dl', 'espresso'), brewer('v60', 'filter'), brewer('lm', 'espresso')], original)).toBe('lm');
     expect(pickCopyBrewer([brewer('dl', 'espresso'), brewer('old', 'espresso', '2026-01-01')], original)).toBe('dl');
     expect(pickCopyBrewer([], original)).toBe('dl');
+  });
+});
+
+describe('grinder table cells', () => {
+  it('shows power, burrs and adjustment, or null when not set', () => {
+    expect([powerLabel(c40), burrLabel(c40), adjustmentLabel(c40)]).toEqual(['Hand', 'Conical 39 mm', 'Stepped · 0–40']);
+    const bare: Grinder = { ...c40, adjustment: null, settingMin: null, settingMax: null, burrType: null, burrSizeMm: null, power: null };
+    expect([powerLabel(bare), burrLabel(bare), adjustmentLabel(bare)]).toEqual([null, null, null]);
+    expect(burrLabel({ ...bare, burrSizeMm: 64 })).toBe('Burrs 64 mm');
+    expect(adjustmentLabel({ ...bare, adjustment: 'stepless' })).toBe('Stepless');
+    expect(powerLabel({ ...bare, power: 'electric' })).toBe('Electric');
   });
 });

@@ -1,90 +1,101 @@
 <script setup lang="ts">
-// Ingredients (docs/api_spec.md §5b): reusable preps that finish drinks, with
-// free-text instructions. Deleting is refused while drinks use one.
-import { onMounted, ref } from 'vue';
+// Ingredients (docs/api_spec.md §5b): reusable preps that finish drinks, as a
+// table like Recipes: filter by type (or the unused ones), sort by name, type,
+// how many drinks use it, or date added; a row expands to its instructions,
+// the drinks it's in and the units they measure it in. Adding and editing
+// happen on their own page (IngredientFormView). Deleting is refused while
+// drinks use one.
+import { computed, onMounted, ref, watch } from 'vue';
 import { ApiError, errorMessage } from '../api/client';
-import { ingredientsApi, type IngredientInput } from '../api/ingredients';
-import type { Ingredient, IngredientType } from '../api/types';
+import { drinksApi } from '../api/drinks';
+import { ingredientsApi } from '../api/ingredients';
+import type { Drink, Ingredient, IngredientType } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
+import ListControls from '../components/ListControls.vue';
 import MenuTabs from '../components/MenuTabs.vue';
-import { INGREDIENT_TYPES } from '../lib/drinks';
+import { INGREDIENT_TYPES, ingredientUsage } from '../lib/drinks';
+import { formatAdded } from '../lib/format';
+import {
+  addedColumn,
+  enumColumn,
+  isSortKey,
+  nameColumn,
+  recallView,
+  rememberView,
+  sortArrow,
+  sortBy,
+  sortLabel,
+  sortOptions,
+  toggleHeader,
+  type SortColumns,
+} from '../lib/listSort';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
 const list = ref<Ingredient[]>([]);
+const drinks = ref<Drink[]>([]);
 const loading = ref(true);
 const error = ref('');
-
-interface Form {
-  name: string;
-  ingredientType: IngredientType;
-  instructions: string;
-}
-const emptyForm = (c?: Ingredient): Form => ({ name: c?.name ?? '', ingredientType: c?.ingredientType ?? 'other', instructions: c?.instructions ?? '' });
-const input = (f: Form): IngredientInput => ({ name: f.name.trim(), ingredientType: f.ingredientType, instructions: f.instructions.trim() || null });
-const conflict = (err: unknown) => (err instanceof ApiError && err.status === 409 ? 'An ingredient with that name already exists.' : errorMessage(err));
 
 async function load(): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    list.value = (await ingredientsApi.list(ws)).ingredients;
+    const [i, d] = await Promise.all([ingredientsApi.list(ws), drinksApi.list(ws)]);
+    list.value = i.ingredients;
+    drinks.value = d.drinks;
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
     loading.value = false;
   }
 }
-onMounted(load);
 
-// Add
-const newForm = ref(emptyForm());
-const adding = ref(false);
-const addError = ref('');
-async function add(): Promise<void> {
-  const ws = workspaces.current?.id;
-  if (!ws || !newForm.value.name.trim()) return;
-  adding.value = true;
-  addError.value = '';
-  try {
-    await ingredientsApi.create(ws, input(newForm.value));
-    newForm.value = emptyForm();
-    await load();
-  } catch (err) {
-    addError.value = conflict(err);
-  } finally {
-    adding.value = false;
-  }
-}
+// View choices, remembered per workspace.
+const viewKey = (what: string) => `ingredients.${what}.${workspaces.current?.id ?? ''}`;
+const ALL = 'all';
+const UNUSED = 'unused';
+const TYPES = Object.keys(INGREDIENT_TYPES) as IngredientType[];
+const columns: SortColumns<Ingredient> = {
+  name: nameColumn(),
+  type: enumColumn('Type', TYPES, (i) => i.ingredientType),
+  used: { label: 'Used in', value: (i) => i.drinkCount, asc: 'Least used first', desc: 'Most used first', firstDir: 'desc' },
+  added: addedColumn(),
+};
+const sortChoices = sortOptions(columns);
+const filter = ref(ALL);
+const sort = ref('name_asc');
+watch(filter, (v) => rememberView(viewKey('filter'), v));
+watch(sort, (v) => rememberView(viewKey('sort'), v));
+onMounted(async () => {
+  const savedSort = recallView(viewKey('sort'));
+  if (isSortKey(savedSort, columns)) sort.value = savedSort;
+  await load();
+  const savedFilter = recallView(viewKey('filter'));
+  if (savedFilter && filterOptions.value.some((o) => o.value === savedFilter)) filter.value = savedFilter;
+});
 
-// Edit (one at a time, inline)
-const editingId = ref<string | null>(null);
-const editForm = ref(emptyForm());
-const editError = ref('');
-const busy = ref(false);
-function startEdit(c: Ingredient): void {
-  editingId.value = c.id;
-  editForm.value = emptyForm(c);
-  editError.value = '';
-}
-async function saveEdit(c: Ingredient): Promise<void> {
-  const ws = workspaces.current?.id;
-  if (!ws || !editForm.value.name.trim()) return;
-  busy.value = true;
-  editError.value = '';
-  try {
-    const { ingredient } = await ingredientsApi.update(ws, c.id, input(editForm.value));
-    list.value = list.value.map((x) => (x.id === c.id ? ingredient : x)).sort((a, b) => a.name.localeCompare(b.name));
-    editingId.value = null;
-  } catch (err) {
-    editError.value = conflict(err);
-  } finally {
-    busy.value = false;
-  }
-}
+// Types that have ingredients, in their order; then the unused ones.
+const filterOptions = computed(() => [
+  { value: ALL, label: 'All ingredients' },
+  ...TYPES.filter((t) => list.value.some((i) => i.ingredientType === t)).map((t) => ({ value: t, label: INGREDIENT_TYPES[t] })),
+  ...(list.value.some((i) => i.drinkCount === 0) ? [{ value: UNUSED, label: 'Not in any drink' }] : []),
+]);
+const shown = computed(() => {
+  const f = filter.value;
+  const kept = f === ALL ? list.value : f === UNUSED ? list.value.filter((i) => i.drinkCount === 0) : list.value.filter((i) => i.ingredientType === f);
+  return sortBy(kept, sort.value, columns);
+});
+const usage = computed(() => ingredientUsage(drinks.value));
+const usedLabel = (n: number) => (n === 0 ? 'Not used' : `${n} drink${n === 1 ? '' : 's'}`);
+
+// One row open at a time.
+const openId = ref<string | null>(null);
+const toggle = (id: string) => (openId.value = openId.value === id ? null : id);
 
 // Delete
+const busy = ref(false);
 const pending = ref<Ingredient | null>(null);
 const dialogError = ref('');
 async function confirmDelete(): Promise<void> {
@@ -112,6 +123,7 @@ async function confirmDelete(): Promise<void> {
   <main class="page">
     <div class="page-header">
       <h1>Ingredients</h1>
+      <RouterLink v-if="workspaces.canEdit" class="btn btn-primary" :to="{ name: 'ingredient-new' }">Add ingredient</RouterLink>
     </div>
     <MenuTabs />
     <p class="muted intro">What finishes a drink besides the coffee: milk, foam, syrup, ice…</p>
@@ -119,69 +131,47 @@ async function confirmDelete(): Promise<void> {
     <p v-if="loading" class="muted" aria-live="polite">Loading ingredients…</p>
     <p v-else-if="error" class="form-error" role="alert">{{ error }}</p>
 
-    <template v-if="!loading">
+    <template v-else>
       <div v-if="list.length === 0" class="card empty"><p>No ingredients yet.</p></div>
-      <ul v-else class="list">
-        <li v-for="c in list" :key="c.id" class="card item">
-          <form v-if="editingId === c.id" class="stack" novalidate @submit.prevent="saveEdit(c)">
-            <div class="form-row">
-              <div class="field">
-                <label :for="`edit-name-${c.id}`">Name</label>
-                <input :id="`edit-name-${c.id}`" v-model="editForm.name" maxlength="100" />
-              </div>
-              <div class="field">
-                <label :for="`edit-type-${c.id}`">Type</label>
-                <select :id="`edit-type-${c.id}`" v-model="editForm.ingredientType">
-                  <option v-for="(label, key) in INGREDIENT_TYPES" :key="key" :value="key">{{ label }}</option>
-                </select>
-              </div>
-            </div>
-            <div class="field">
-              <label :for="`edit-instructions-${c.id}`">Instructions <span class="muted">(optional)</span></label>
-              <textarea :id="`edit-instructions-${c.id}`" v-model="editForm.instructions" rows="4" maxlength="5000" />
-            </div>
-            <p v-if="editError" class="form-error" role="alert">{{ editError }}</p>
-            <div class="buttons">
-              <button class="btn btn-secondary" type="button" @click="editingId = null">Cancel</button>
-              <button class="btn btn-primary" type="submit" :disabled="busy || !editForm.name.trim()">Save</button>
-            </div>
-          </form>
-          <template v-else>
-            <div class="head">
-              <h2>{{ c.name }}</h2>
-              <span class="badge">{{ INGREDIENT_TYPES[c.ingredientType] }}</span>
-            </div>
-            <p v-if="c.instructions" class="instructions">{{ c.instructions }}</p>
-            <p class="muted small">{{ c.drinkCount === 0 ? 'Not in any drink yet' : `In ${c.drinkCount} drink${c.drinkCount === 1 ? '' : 's'}` }}</p>
-            <div v-if="workspaces.canEdit" class="actions">
-              <button class="btn-link" type="button" @click="startEdit(c)">Edit</button>
-              <button class="btn-link danger" type="button" @click="pending = c; dialogError = ''">Delete</button>
-            </div>
-          </template>
-        </li>
-      </ul>
-
-      <form v-if="workspaces.canEdit" class="card stack" novalidate @submit.prevent="add">
-        <h2>Add an ingredient</h2>
-        <div class="form-row">
-          <div class="field">
-            <label for="new-name">Name</label>
-            <input id="new-name" v-model="newForm.name" maxlength="100" placeholder="e.g. Orange cold foam" />
+      <template v-else>
+        <ListControls v-model:filter="filter" v-model:sort="sort" :sort-options="sortChoices" id-prefix="ingredients" filter-label="Show" :filter-options="filterOptions" />
+        <p v-if="shown.length === 0" class="card empty">Nothing here yet.</p>
+        <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) 5.5rem">
+          <div class="data-row data-head">
+            <button v-for="c in ['name', 'type', 'used']" :key="c" class="data-th" type="button" :aria-label="sortLabel(sort, c, columns[c]!.label)" @click="sort = toggleHeader(sort, c, columns)">
+              {{ columns[c]!.label }} <span aria-hidden="true">{{ sortArrow(sort, c) }}</span>
+            </button>
+            <button class="data-th end" type="button" :aria-label="sortLabel(sort, 'added', 'Date added')" @click="sort = toggleHeader(sort, 'added', columns)">
+              Added <span aria-hidden="true">{{ sortArrow(sort, 'added') }}</span>
+            </button>
           </div>
-          <div class="field">
-            <label for="new-type">Type</label>
-            <select id="new-type" v-model="newForm.ingredientType">
-              <option v-for="(label, key) in INGREDIENT_TYPES" :key="key" :value="key">{{ label }}</option>
-            </select>
+          <div v-for="c in shown" :key="c.id" class="data-item" :class="{ open: openId === c.id }">
+            <button class="data-row" type="button" :aria-expanded="openId === c.id" @click="toggle(c.id)">
+              <span class="data-td primary">{{ c.name }}</span>
+              <span class="data-td">{{ INGREDIENT_TYPES[c.ingredientType] }}</span>
+              <span class="data-td">{{ usedLabel(c.drinkCount) }}</span>
+              <span class="data-td end">{{ formatAdded(c.createdAt) }}</span>
+            </button>
+            <div v-if="openId === c.id" class="data-details">
+              <p v-if="c.instructions" class="instructions">{{ c.instructions }}</p>
+              <p v-else class="muted">No instructions yet.</p>
+              <p v-if="usage.get(c.id)?.drinks.length" class="small">
+                <span class="label">Used in</span>
+                <template v-for="(d, i) in usage.get(c.id)!.drinks" :key="d.id"
+                  ><template v-if="i">, </template><RouterLink :to="{ name: 'drink-edit', params: { id: d.id } }">{{ d.name }}</RouterLink></template
+                >
+              </p>
+              <p v-if="usage.get(c.id)?.units.length" class="small muted">
+                <span class="label">Measured in</span> {{ usage.get(c.id)!.units.join(', ') }}
+              </p>
+              <div v-if="workspaces.canEdit" class="data-actions">
+                <RouterLink class="btn-link" :to="{ name: 'ingredient-edit', params: { id: c.id } }">Edit</RouterLink>
+                <button class="btn-link danger" type="button" @click="pending = c; dialogError = ''">Delete</button>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="field">
-          <label for="new-instructions">Instructions <span class="muted">(optional)</span></label>
-          <textarea id="new-instructions" v-model="newForm.instructions" rows="4" maxlength="5000" placeholder="e.g. Steep orange peel in cream overnight, then froth cold." />
-        </div>
-        <p v-if="addError" class="form-error" role="alert">{{ addError }}</p>
-        <button class="btn btn-primary" type="submit" :disabled="adding || !newForm.name.trim()">{{ adding ? 'Adding…' : 'Add ingredient' }}</button>
-      </form>
+      </template>
     </template>
   </main>
 
@@ -196,10 +186,6 @@ async function confirmDelete(): Promise<void> {
 </template>
 
 <style scoped>
-h2 {
-  font-size: 1.1rem;
-  margin: 0;
-}
 p {
   margin: 0;
 }
@@ -207,49 +193,16 @@ p {
   margin-top: calc(-1 * var(--space-2));
 }
 .small {
-  font-size: 0.85rem;
-}
-.list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.item {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-}
-.head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
+  font-size: 0.9rem;
 }
 .instructions {
   white-space: pre-line;
 }
-.actions {
-  display: flex;
-  justify-content: flex-end;
-  margin: 0 calc(-1 * var(--space-2)) calc(-1 * var(--space-2));
-}
-.buttons {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-2);
-}
-textarea {
-  width: 100%;
-  min-width: 0;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font: inherit;
-  font-size: max(1rem, 16px);
-  resize: vertical;
+.label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-right: var(--space-1);
 }
 </style>

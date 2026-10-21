@@ -70,7 +70,7 @@ const steps = ref<StepDraft[]>([]);
 
 // Inline "add a brewer" (brewers are per-workspace equipment, §3).
 const newMethodName = ref('');
-const newMethodKind = ref<MethodKind>('pour_over');
+const newMethodKind = ref<MethodKind>('filter');
 const addingMethod = ref(false);
 const methodError = ref('');
 const newMethodInput = ref<HTMLInputElement | null>(null);
@@ -145,7 +145,7 @@ const ratio = computed(() => {
   const out = espresso.value ? (p.expectedYield?.ok ? p.expectedYield.value : null) : p.water.ok ? p.water.value : null;
   return out === null ? null : formatRatio(p.dose.value, out);
 });
-// Pour-over/immersion only: espresso's yield is a target, not an estimate.
+// Filter only: espresso's yield is a target, not an estimate.
 const yieldEstimate = computed(() =>
   !espresso.value && parsed.value.dose.ok && parsed.value.water.ok && parsed.value.water.value !== null
     ? estimateYield(parsed.value.dose.value, parsed.value.water.value, ROAST_LEVELS[RECIPE_ROAST_LEVEL].retention)
@@ -228,6 +228,9 @@ onMounted(async () => {
       brewerId.value = pickCopyBrewer(methods.value, from.brewer);
       copyOf.value = from.name;
     }
+    // From brew setup's "add a recipe" for a brewer that has none.
+    const brewer = methods.value.find((m) => m.id === route.query.brewer && !m.retiredAt);
+    if (!from && brewer) brewerId.value = brewer.id;
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -427,7 +430,7 @@ async function save(): Promise<void> {
             <input id="new-method" ref="newMethodInput" v-model="newMethodName" maxlength="100" placeholder="e.g. Chemex" @keydown.enter.prevent="addMethod" />
           </div>
           <div class="field">
-            <label for="new-method-kind">Kind</label>
+            <label for="new-method-kind">Brew method</label>
             <select id="new-method-kind" v-model="newMethodKind">
               <option v-for="(k, key) in METHOD_KINDS" :key="key" :value="key">{{ k.label }}</option>
             </select>
@@ -516,7 +519,7 @@ async function save(): Promise<void> {
           </p>
         </div>
         <p v-if="grinders.length === 0" class="muted small">
-          No grinders yet. <RouterLink :to="{ name: 'grinders' }">Add one</RouterLink> to save a starting point for it.
+          No grinders yet. <RouterLink :to="{ name: 'grinder-new' }">Add one</RouterLink> to save a starting point for it.
         </p>
         <div v-else class="field">
           <label for="default-grinder">Default grinder <span class="muted">(optional)</span></label>

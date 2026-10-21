@@ -107,22 +107,27 @@ export type Preinfusion = (typeof PREINFUSION_MODES)[number];
 export type ProfileControl = (typeof PROFILE_CONTROLS)[number];
 
 // 5. Brewers (Per-Workspace Equipment That Makes the Coffee)
-// A V60, Chemex, AeroPress or an espresso machine. Seeded with DEFAULT_BREWERS
-// when a workspace is created; owners and baristas may add more. Recipes and
-// drinks belong to a brewer. `kind` (one of METHOD_KINDS) decides which recipe
-// fields apply and how the timer behaves (docs/api_spec.md §3, §5). Espresso
-// brewers also record what the barista controls (pre-infusion, flow,
-// pressure); the shot timer and the AI use it. Milk drinks like a latte are
-// drinks built on a brewer (7d). A brewer can appear on the public menu as the
-// plain brew, under menuName if set ("Espresso" for a Linea Mini). Retired
-// like grinders once brews used it.
-export const METHOD_KINDS = ["pour_over", "immersion", "espresso"] as const;
+// A V60, French press, AeroPress, OXO Rapid Brewer or an espresso machine.
+// Seeded with DEFAULT_BREWERS when a workspace is created; owners and baristas
+// may add more. Recipes belong to a brewer.
+// - `kind`, the brew method (METHOD_KINDS: filter or espresso), decides which
+//   recipe fields apply, the steps and the timer (docs/api_spec.md §3, §5),
+//   and which drinks the brewer can make (a drink needs a method, 7d).
+// - `style` (BREWER_STYLES) says how a filter brewer brews: pour over,
+//   immersion, hybrid. Descriptive only (lists, the AI); null for espresso.
+// Espresso brewers also record what the barista controls (pre-infusion, flow,
+// pressure); the shot timer and the AI use it. A brewer can appear on the
+// public menu as the plain brew, under menuName if set ("Espresso" for a Linea
+// Mini). Retired like grinders once brews used it.
+export const METHOD_KINDS = ["filter", "espresso"] as const;
 export type MethodKind = (typeof METHOD_KINDS)[number];
+export const BREWER_STYLES = ["pour_over", "immersion", "hybrid", "other"] as const;
+export type BrewerStyle = (typeof BREWER_STYLES)[number];
 export const DEFAULT_BREWERS = [
-  { name: "V60", kind: "pour_over" },
-  { name: "Espresso", kind: "espresso" },
-  { name: "Aeropress", kind: "immersion" },
-] as const satisfies ReadonlyArray<{ name: string; kind: MethodKind }>;
+  { name: "V60", kind: "filter", style: "pour_over" },
+  { name: "Espresso", kind: "espresso", style: null },
+  { name: "Aeropress", kind: "filter", style: "immersion" },
+] as const satisfies ReadonlyArray<{ name: string; kind: MethodKind; style: BrewerStyle | null }>;
 
 export const brewers = mysqlTable(
   "brewers",
@@ -132,7 +137,8 @@ export const brewers = mysqlTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 100 }).notNull(), // e.g. "V60", "Linea Mini"
-    kind: varchar("kind", { length: 20 }).$type<MethodKind>().default("pour_over").notNull(),
+    kind: varchar("kind", { length: 20 }).$type<MethodKind>().default("filter").notNull(), // the brew method
+    style: varchar("style", { length: 20 }).$type<BrewerStyle>(), // filter only; descriptive
     notes: varchar("notes", { length: 255 }),
     // Espresso only (other kinds keep "none").
     preinfusion: varchar("preinfusion", { length: 20 }).$type<Preinfusion>().default("none").notNull(),
@@ -198,9 +204,9 @@ export const recipes = mysqlTable("recipes", {
     .references(() => brewers.id, { onDelete: "cascade" }),
   targetDoseGrams: decimal("target_dose_grams", { precision: 5, scale: 2, mode: "number" }).notNull(),
   // Water poured in total; the coffee:water ratio is dose:water. Required for
-  // pour-over and immersion methods, null for espresso (enforced by the API).
+  // filter recipes, null for espresso (enforced by the API).
   targetWaterGrams: decimal("target_water_grams", { precision: 6, scale: 2, mode: "number" }),
-  // Pour-over/immersion: rough estimate of beverage weight (water minus what
+  // Filter: rough estimate of beverage weight (water minus what
   // the grounds retain). Espresso: the target shot weight (required by the
   // API); the ratio is dose:yield.
   expectedYieldGrams: decimal("expected_yield_grams", { precision: 6, scale: 2, mode: "number" }),
@@ -252,7 +258,7 @@ export const recipeGrindSettings = mysqlTable(
 // on its method's kind. The values (water, temperature, pressure, flow) are
 // instructions shown on the step's card.
 export const RECIPE_STEP_TYPES = [
-  "bloom", "pour", "swirl", "stir", "wait", "press", // pour over / immersion
+  "bloom", "pour", "swirl", "stir", "wait", "press", // filter
   "preinfusion", "soak", "pressure", "flow", // espresso
   "other", // any
 ] as const;
@@ -278,7 +284,7 @@ export const recipeSteps = mysqlTable("recipe_steps", {
   durationSec: int("duration_sec"),
   advance: varchar("advance", { length: 20 }).$type<StepAdvance>().default("auto").notNull(),
   // Cumulative scale weight to pour to by the step's end; only for water step
-  // types (and optional for 'other' on pour-over/immersion recipes).
+  // types (and optional for 'other' on filter recipes).
   targetWaterGrams: decimal("target_water_grams", { precision: 6, scale: 2, mode: "number" }),
   targetTempC: decimal("target_temp_c", { precision: 4, scale: 1, mode: "number" }), // e.g. bloom at 85, pour at 93
   // Espresso: target pressure (bar) or flow (recipes.flowUnit); an end value
@@ -337,9 +343,11 @@ export const SERVING_UNITS = ["fl_oz", "ml"] as const;
 export type ServingUnit = (typeof SERVING_UNITS)[number];
 
 // 7d. Drinks (What's Served; the Public Menu)
-// A drink is built on one brewer: any recipe of that brewer can make it
-// (the default is preselected), finished with ingredients: "Oat Latte"
-// (espresso machine + steamed oat milk), "The Atlas" (V60 + orange cold foam).
+// A drink needs a kind of coffee (METHOD_KINDS), not a particular device: any
+// active brewer of that kind can make it, with that brewer's recipes (the
+// default, a recipe of the kind, is preselected), finished with ingredients:
+// "Oat Latte" (espresso + steamed oat milk), "The Atlas" (pour over + orange
+// cold foam).
 // A drink can be a variant of another (Vanilla Latte of Latte), like a
 // cocktail riff: an independent copy that remembers its parent. Deleting a
 // drink moves its variants up to its parent (the API; set null is a backstop).
@@ -350,21 +358,20 @@ export const drinks = mysqlTable("drinks", {
     .references(() => workspaces.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 255 }).notNull(),
   description: varchar("description", { length: 500 }),
-  // Cascade so workspace deletion works; the API refuses (409) deleting a
-  // brewer that drinks use.
-  brewerId: varchar("brewer_id", { length: 36 })
-    .notNull()
-    .references(() => brewers.id, { onDelete: "cascade" }),
+  kind: varchar("kind", { length: 20 }).$type<MethodKind>().notNull(), // METHOD_KINDS
   categoryId: varchar("category_id", { length: 36 }).references(() => drinkCategories.id, { onDelete: "set null" }),
   parentDrinkId: varchar("parent_drink_id", { length: 36 }).references((): AnyMySqlColumn => drinks.id, {
     onDelete: "set null",
   }),
-  // A recipe of brewerId (enforced by the API), or null.
+  // A recipe whose brewer is of this kind (enforced by the API), or null.
   defaultRecipeId: varchar("default_recipe_id", { length: 36 }).references(() => recipes.id, { onDelete: "set null" }),
   // Default size, e.g. 8 fl oz: brewing scales the ingredient amounts (and a
   // filter method's batch) from it. Both or neither (the API); null = no scaling.
   servingSize: decimal("serving_size", { precision: 6, scale: 1, mode: "number" }),
   servingUnit: varchar("serving_unit", { length: 10 }).$type<ServingUnit>(), // SERVING_UNITS
+  // How to make it, shown after the brew: "Add the syrup to the cup, pull the
+  // shot onto it, steam the milk and pour." Free text.
+  instructions: text("instructions"),
   showOnPublicMenu: boolean("show_on_public_menu").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -432,8 +439,13 @@ export const brewLogs = mysqlTable("brew_logs", {
   actualTempC: decimal("actual_temp_c", { precision: 4, scale: 1, mode: "number" }),
   actualGrindSetting: varchar("actual_grind_setting", { length: 100 }),
   actualTimeSec: int("actual_time_sec").notNull(),
-  rating: int("rating"), // 1-5 or 1-100 scale
+  // The coffee tasted on its own (for a milk drink, only if tasted straight).
+  rating: int("rating"), // 1-5
   tastingNotes: text("tasting_notes"),
+  // The finished drink, for brews of a drink with ingredients (docs/api_spec.md
+  // §6). Milk and syrup change the taste, so the AI weighs these apart.
+  drinkRating: int("drink_rating"), // 1-5
+  drinkTastingNotes: text("drink_tasting_notes"),
 });
 
 // 8b. Brew Log Marks (Tapped Events During a Brew)

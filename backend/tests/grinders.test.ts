@@ -24,6 +24,7 @@ describe("grinders", () => {
     const c40 = await grinder("Comandante C40");
     const res = await owner.agent.post(base).send({ name: "  Timemore C3 ", notes: "  stepped " });
     expect(res.body.grinder).toMatchObject({ name: "Timemore C3", notes: "stepped", retiredAt: null });
+    expect(typeof res.body.grinder.createdAt).toBe("string"); // date added, for sorting lists
     expect((await owner.agent.post(base).send({ name: "comandante c40" })).status).toBe(409);
 
     await owner.agent.patch(`${base}/${c40}`).send({ retired: true });

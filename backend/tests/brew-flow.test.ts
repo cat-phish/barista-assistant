@@ -182,8 +182,8 @@ describe("public menu", () => {
     await newBean(owner, ws.id, { beanName: "Hidden", showOnPublicMenu: false });
     const foamId = (await owner.agent.post(`/api/workspaces/${ws.id}/ingredients`).send({ name: "Orange cold foam", ingredientType: "foam" })).body.ingredient.id;
     const drinks = `/api/workspaces/${ws.id}/drinks`;
-    await owner.agent.post(drinks).send({ name: "The Atlas", description: "V60 with orange cold foam", brewerId: v60, ingredients: [{ ingredientId: foamId, amountValue: 40, amountUnit: "g" }] });
-    await owner.agent.post(drinks).send({ name: "Secret", brewerId: v60, showOnPublicMenu: false });
+    await owner.agent.post(drinks).send({ name: "The Atlas", description: "V60 with orange cold foam", kind: "filter", ingredients: [{ ingredientId: foamId, amountValue: 40, amountUnit: "g" }] });
+    await owner.agent.post(drinks).send({ name: "Secret", kind: "filter", showOnPublicMenu: false });
 
     expect((await request(app).get(menu)).status).toBe(404); // not enabled yet
     await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ isPublicMenuEnabled: true });
@@ -196,7 +196,7 @@ describe("public menu", () => {
       {
         category: null,
         items: [
-          { kind: "drink", id: expect.any(String), name: "The Atlas", description: "V60 with orange cold foam", brewer: "V60", variantOf: null, ingredients: ["Orange cold foam"] },
+          { kind: "drink", id: expect.any(String), name: "The Atlas", description: "V60 with orange cold foam", method: "Filter", variantOf: null, ingredients: ["Orange cold foam"] },
         ],
       },
     ]);

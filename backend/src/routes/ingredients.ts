@@ -10,7 +10,7 @@ import { INGREDIENT_TYPES, ingredients, drinkIngredients, type Ingredient } from
 import { optionalText, updateSchema } from "../validation.js";
 
 // docs/api_spec.md §5b: reusable preps that finish a drink.
-export type IngredientSummary = Pick<Ingredient, "id" | "name" | "ingredientType" | "instructions"> & { drinkCount: number };
+export type IngredientSummary = Pick<Ingredient, "id" | "name" | "ingredientType" | "instructions" | "createdAt"> & { drinkCount: number };
 
 interface WorkspaceParams {
   workspaceId: string;
@@ -38,6 +38,7 @@ async function loadIngredients(where: SQL | undefined): Promise<IngredientSummar
       name: ingredients.name,
       ingredientType: ingredients.ingredientType,
       instructions: ingredients.instructions,
+      createdAt: ingredients.createdAt,
       drinkCount: count(drinkIngredients.id),
     })
     .from(ingredients)

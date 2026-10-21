@@ -117,6 +117,24 @@ machine took over the method's recipes, drinks and menu entry (shown as
 "Espresso"). Brew setup is now Category → Brewer or drink → Recipe.
 Trade-off: a second espresso machine needs its own recipes.
 
+**Drink instructions and tasting (migration 0023):** drinks have free-text
+instructions, shown after the brew. Brews of a drink with ingredients record
+the shot (rating and notes, if tasted straight) and the finished drink
+separately; the AI context labels every brew with how it was served.
+
+**Drinks by type (migrations 0024/0025):** a drink needed one brewer, so The
+Atlas couldn't be made on a Chemex, and drink categories had no brewer choice
+while brewer categories did. Now a drink needs a **type** (the method kind) and
+any brewer of it can make it; brewing is always Category → Drink (or a plain
+brew) → Brewer → Recipe. Recipes still belong to one brewer.
+
+**Filter vs espresso (migration 0026):** pour over and immersion behaved the
+same, and as drink requirements they were too narrow (The Atlas works on a
+V60, a French press, an AeroPress or an OXO Rapid Brewer). The brew method is
+now **Filter** or **Espresso**; how a filter brewer brews is a descriptive
+**style**. Brewers without recipes now show on the brew page with a prompt to
+add one, instead of silently hiding (which made categories look empty).
+
 ## Phase 4: Flow and pressure profiles (done in 2d)
 
 - Pressure (bar) and flow (g/s or ml/s per recipe) on espresso steps, held or

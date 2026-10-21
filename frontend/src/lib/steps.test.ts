@@ -27,7 +27,7 @@ const mark = (kind: Mark['kind'], atSec: number, stepOrder: number | null = null
 
 describe('step types per kind', () => {
   it('pour over and espresso get their own types, both get Other', () => {
-    expect(stepTypesFor('pour_over')).toEqual(['bloom', 'pour', 'swirl', 'stir', 'wait', 'press', 'other']);
+    expect(stepTypesFor('filter')).toEqual(['bloom', 'pour', 'swirl', 'stir', 'wait', 'press', 'other']);
     expect(stepTypesFor('espresso')).toEqual(['preinfusion', 'soak', 'pressure', 'flow', 'other']);
   });
 });
@@ -40,7 +40,7 @@ describe('parseSteps', () => {
         draft({ stepType: 'pour', durationSec: 30, targetWaterGrams: 250, targetTempC: 93 }),
         { ...draft({ stepType: 'wait', label: 'Drawdown' }), duration: '' }, // last: until you finish
       ],
-      'pour_over',
+      'filter',
     );
     expect(errors).toEqual({});
     expect(steps.map((s) => [s.stepType, s.durationSec, s.advance, s.targetWaterGrams, s.targetTempC, s.label])).toEqual([
@@ -52,14 +52,14 @@ describe('parseSteps', () => {
 
   it('flags the same problems as the API, on the right step', () => {
     const open = { ...draft({ stepType: 'wait' }), duration: '' };
-    expect(parseSteps([open, draft({ stepType: 'stir' })], 'pour_over').errors[0]).toMatch(/only the last step/);
-    expect(parseSteps([{ ...open, advance: 'auto_log' }], 'pour_over').errors[0]).toMatch(/how long/);
-    expect(parseSteps([draft({ stepType: 'pour', water: '' })], 'pour_over').errors[0]).toMatch(/weight to pour to/);
-    expect(parseSteps([draft({ water: '100' }), draft({ water: '50' })], 'pour_over').errors[1]).toMatch(/running total/);
-    expect(parseSteps([{ ...draft({ stepType: 'stir' }), duration: '1:7' }], 'pour_over').errors[0]).toMatch(/Time/);
-    expect(parseSteps([{ ...draft({ stepType: 'stir' }), advance: 'first_drop' }], 'pour_over').errors[0]).toMatch(/espresso/);
+    expect(parseSteps([open, draft({ stepType: 'stir' })], 'filter').errors[0]).toMatch(/only the last step/);
+    expect(parseSteps([{ ...open, advance: 'auto_log' }], 'filter').errors[0]).toMatch(/how long/);
+    expect(parseSteps([draft({ stepType: 'pour', water: '' })], 'filter').errors[0]).toMatch(/weight to pour to/);
+    expect(parseSteps([draft({ water: '100' }), draft({ water: '50' })], 'filter').errors[1]).toMatch(/running total/);
+    expect(parseSteps([{ ...draft({ stepType: 'stir' }), duration: '1:7' }], 'filter').errors[0]).toMatch(/Time/);
+    expect(parseSteps([{ ...draft({ stepType: 'stir' }), advance: 'first_drop' }], 'filter').errors[0]).toMatch(/espresso/);
     // A tap step's time is only a guide.
-    expect(parseSteps([{ ...draft({ stepType: 'stir', advance: 'tap' }), duration: '' }, draft({ stepType: 'stir' })], 'pour_over').errors).toEqual({});
+    expect(parseSteps([{ ...draft({ stepType: 'stir', advance: 'tap' }), duration: '' }, draft({ stepType: 'stir' })], 'filter').errors).toEqual({});
   });
 
   it('espresso: pressure/flow per type, ramps, one first-drop step; no water', () => {
@@ -178,11 +178,11 @@ describe('editing the list', () => {
   });
   it('inserts a 10 s pour to the running total, or a soak for espresso', () => {
     const drafts = [draft({ stepType: 'bloom', targetWaterGrams: 50 }), draft({ stepType: 'stir' }), draft({ stepType: 'pour', targetWaterGrams: 250 })];
-    const { steps, index } = insertStepAfter(drafts, 1, 'new', 'pour_over');
+    const { steps, index } = insertStepAfter(drafts, 1, 'new', 'filter');
     expect(index).toBe(2);
     expect(steps[2]).toMatchObject({ key: 'new', stepType: 'pour', duration: '0:10', water: '50' });
     expect(insertStepAfter(drafts, -1, 'first', 'espresso').steps[0]).toMatchObject({ stepType: 'soak', duration: '0:10' });
-    expect(insertStepAfter(drafts, 9, 'x', 'pour_over').index).toBe(-1);
+    expect(insertStepAfter(drafts, 9, 'x', 'filter').index).toBe(-1);
   });
 });
 

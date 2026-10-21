@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Drink, DrinkCategory } from '../api/types';
-import { ingredientLine, drinkSections, nestDrinks, selfAndDescendants } from './drinks';
+import { drinkSections, ingredientLine, ingredientUsage, nestDrinks, selfAndDescendants } from './drinks';
 
-const brewer = { id: 'm', name: 'Espresso', kind: 'espresso' } as const;
 const milk: DrinkCategory = { id: 'milk', name: 'Espresso milk drinks', position: 2 };
 const special: DrinkCategory = { id: 'special', name: 'Specialty drinks', position: 1 };
 
 function drink(id: string, name: string, parent: Drink | null = null, category: DrinkCategory | null = milk): Drink {
   return {
-    id, name, description: null, brewer, showOnPublicMenu: true, defaultRecipeId: null, servingSize: null, servingUnit: null, createdAt: '2026-10-20T00:00:00.000Z', variants: [], ingredients: [],
+    id, name, description: null, kind: 'espresso', showOnPublicMenu: true, defaultRecipeId: null, servingSize: null, servingUnit: null, instructions: null, createdAt: '2026-10-20T00:00:00.000Z', variants: [], ingredients: [],
     category: category && { id: category.id, name: category.name },
     parent: parent && { id: parent.id, name: parent.name },
   };
@@ -57,5 +56,22 @@ describe('nesting variants', () => {
   it('finds a drink and its variants at any depth', () => {
     expect([...selfAndDescendants(all, 'latte')].sort()).toEqual(['iced', 'latte', 'vanilla']);
     expect([...selfAndDescendants(all, 'iced')]).toEqual(['iced']);
+  });
+});
+
+describe('ingredient usage', () => {
+  it('lists the drinks each ingredient finishes, by name, and the units it uses', () => {
+    const line = (ingredientId: string, amountUnit: string | null) => ({
+      ingredientId, name: ingredientId, ingredientType: 'other' as const, amountValue: 1, amountUnit, note: null,
+    });
+    const usage = ingredientUsage([
+      { ...vanilla, ingredients: [line('milk', 'fl oz'), line('syrup', 'pump')] },
+      { ...latte, ingredients: [line('milk', 'Fl oz'), line('milk', 'ml')] },
+      { ...atlas, ingredients: [line('foam', null)] },
+    ]);
+    expect(usage.get('milk')).toEqual({ drinks: [{ id: 'latte', name: 'Latte' }, { id: 'vanilla', name: 'Vanilla Latte' }], units: ['Fl oz', 'ml'] }); // first spelling wins, alphabetical drinks first
+    expect(usage.get('syrup')?.drinks.map((d) => d.name)).toEqual(['Vanilla Latte']);
+    expect(usage.get('foam')).toEqual({ drinks: [{ id: 'atlas', name: 'The Atlas' }], units: [] });
+    expect(usage.get('ice')).toBeUndefined();
   });
 });

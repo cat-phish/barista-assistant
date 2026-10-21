@@ -1,17 +1,34 @@
 <script setup lang="ts">
 // Brewers (docs/api_spec.md §3), one tab of Bar setup: whatever makes the
-// coffee, from a V60 to an espresso machine. Works like grinders: retire keeps
-// history; delete only for brewers no recipe, drink or brew uses.
-import { computed, onMounted, ref } from 'vue';
-import { brewersApi, type BrewerInput } from '../api/brewers';
+// coffee, from a V60 to an espresso machine. A table: filter by type (or
+// Retired), sort by any column; a row expands to its details and actions.
+// Works like grinders: retire keeps history; delete only for brewers no
+// recipe or brew uses.
+import { computed, onMounted, ref, watch } from 'vue';
+import { brewersApi } from '../api/brewers';
 import { ApiError, errorMessage } from '../api/client';
 import { drinkCategoriesApi } from '../api/drinkCategories';
-import type { Brewer, DrinkCategory } from '../api/types';
+import type { Brewer, BrewerStyle, DrinkCategory } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
-import BrewerFields, { type BrewerForm } from '../components/BrewerFields.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import SetupTabs from '../components/SetupTabs.vue';
-import { machineSummary, METHOD_KINDS } from '../lib/equipment';
+import ListControls from '../components/ListControls.vue';
+import { BREWER_STYLES, machineSummary, METHOD_KINDS } from '../lib/equipment';
+import { formatAdded } from '../lib/format';
+import {
+  addedColumn,
+  enumColumn,
+  isSortKey,
+  nameColumn,
+  recallView,
+  rememberView,
+  sortArrow,
+  sortBy,
+  sortLabel,
+  sortOptions,
+  toggleHeader,
+  type SortColumns,
+} from '../lib/listSort';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
@@ -19,49 +36,39 @@ const brewers = ref<Brewer[]>([]);
 const categories = ref<DrinkCategory[]>([]);
 const loading = ref(true);
 const error = ref('');
-const active = computed(() => brewers.value.filter((m) => !m.retiredAt));
-const retired = computed(() => brewers.value.filter((m) => m.retiredAt));
 const categoryName = (id: string | null) => categories.value.find((c) => c.id === id)?.name ?? null;
 
-function brewerForm(m?: Brewer): BrewerForm {
-  return {
-    name: m?.name ?? '',
-    kind: m?.kind ?? 'pour_over',
-    notes: m?.notes ?? '',
-    preinfusion: m?.preinfusion ?? 'none',
-    flowControl: m?.flowControl ?? 'none',
-    pressureControl: m?.pressureControl ?? 'none',
-    showOnPublicMenu: m?.showOnPublicMenu ?? false,
-    menuName: m?.menuName ?? '',
-    description: m?.description ?? '',
-    categoryId: m?.categoryId ?? '',
-  };
-}
-function input(f: BrewerForm): BrewerInput & { name: string } {
-  const espresso = f.kind === 'espresso';
-  return {
-    name: f.name.trim(),
-    kind: f.kind,
-    notes: f.notes.trim() || null,
-    // Capabilities only mean something for espresso.
-    preinfusion: espresso ? f.preinfusion : 'none',
-    flowControl: espresso ? f.flowControl : 'none',
-    pressureControl: espresso ? f.pressureControl : 'none',
-    showOnPublicMenu: f.showOnPublicMenu,
-    menuName: f.menuName.trim() || null,
-    description: f.description.trim() || null,
-    categoryId: f.categoryId || null,
-  };
-}
-// 409s: a taken name, or recipes that pin the kind.
-function conflict(err: unknown): string {
-  if (!(err instanceof ApiError) || err.status !== 409) return errorMessage(err);
-  const count = err.body?.recipeCount;
-  if (typeof count === 'number') {
-    return `${count} recipe${count === 1 ? ' uses' : 's use'} this brewer, so its kind can't change: their fields depend on it. Add a new brewer instead.`;
-  }
-  return 'A brewer with that name already exists.';
-}
+// View choices, remembered per workspace.
+const viewKey = (what: string) => `brewers.${what}.${workspaces.current?.id ?? ''}`;
+const ALL = 'all';
+const RETIRED = 'retired';
+const KINDS = Object.keys(METHOD_KINDS) as Array<keyof typeof METHOD_KINDS>;
+const columns: SortColumns<Brewer> = {
+  name: nameColumn(),
+  kind: enumColumn('Method', KINDS, (b) => b.kind),
+  style: enumColumn('Style', Object.keys(BREWER_STYLES) as BrewerStyle[], (b) => b.style),
+  category: { label: 'Category', value: (b) => categoryName(b.categoryId) },
+  added: addedColumn(),
+};
+const sortChoices = sortOptions(columns);
+const filter = ref(ALL);
+const sort = ref('name_asc');
+watch(filter, (v) => rememberView(viewKey('filter'), v));
+watch(sort, (v) => rememberView(viewKey('sort'), v));
+const filterOptions = computed(() => [
+  { value: ALL, label: 'All brewers' },
+  ...KINDS.map((k) => ({ value: k, label: METHOD_KINDS[k].label })),
+  ...(brewers.value.some((b) => b.retiredAt) ? [{ value: RETIRED, label: 'Retired' }] : []),
+]);
+const filterName = computed(() => filterOptions.value.find((o) => o.value === filter.value)?.label ?? '');
+const shown = computed(() => {
+  const f = filter.value;
+  const list = f === RETIRED ? brewers.value.filter((b) => b.retiredAt) : brewers.value.filter((b) => !b.retiredAt && (f === ALL || b.kind === f));
+  return sortBy(list, sort.value, columns);
+});
+// One row open at a time.
+const openId = ref<string | null>(null);
+const toggle = (id: string) => (openId.value = openId.value === id ? null : id);
 
 async function load(): Promise<void> {
   const ws = workspaces.current?.id;
@@ -76,60 +83,19 @@ async function load(): Promise<void> {
     loading.value = false;
   }
 }
-onMounted(load);
+onMounted(async () => {
+  const savedSort = recallView(viewKey('sort'));
+  if (isSortKey(savedSort, columns)) sort.value = savedSort;
+  await load();
+  const savedFilter = recallView(viewKey('filter'));
+  if (savedFilter && filterOptions.value.some((o) => o.value === savedFilter)) filter.value = savedFilter;
+});
 
 function replace(updated: Brewer): void {
   brewers.value = brewers.value.map((m) => (m.id === updated.id ? updated : m));
 }
 
-// Add
-const newForm = ref(brewerForm());
-const addSubmitted = ref(false);
-const adding = ref(false);
-const addError = ref('');
-async function add(): Promise<void> {
-  addSubmitted.value = true;
-  const ws = workspaces.current?.id;
-  if (!ws || !newForm.value.name.trim()) return;
-  adding.value = true;
-  addError.value = '';
-  try {
-    await brewersApi.create(ws, input(newForm.value));
-    newForm.value = brewerForm();
-    addSubmitted.value = false;
-    await load();
-  } catch (err) {
-    addError.value = conflict(err);
-  } finally {
-    adding.value = false;
-  }
-}
-
-// Edit (one at a time, inline)
-const editingId = ref<string | null>(null);
-const editForm = ref(brewerForm());
-const editError = ref('');
 const busyId = ref<string | null>(null);
-function startEdit(m: Brewer): void {
-  editingId.value = m.id;
-  editForm.value = brewerForm(m);
-  editError.value = '';
-}
-async function saveEdit(m: Brewer): Promise<void> {
-  const ws = workspaces.current?.id;
-  if (!ws || !editForm.value.name.trim()) return;
-  busyId.value = m.id;
-  editError.value = '';
-  try {
-    replace((await brewersApi.update(ws, m.id, input(editForm.value))).brewer);
-    editingId.value = null;
-  } catch (err) {
-    editError.value = conflict(err);
-  } finally {
-    busyId.value = null;
-  }
-}
-
 async function setRetired(m: Brewer, value: boolean): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
@@ -165,11 +131,11 @@ async function confirmDelete(): Promise<void> {
     pending.value = null;
     await load();
   } catch (err) {
-    // Recipes and drinks must move first; brew history means retire instead.
+    // Recipes must move first; brew history means retire instead.
     const body = err instanceof ApiError && err.status === 409 ? err.body : null;
-    const uses = Number(body?.recipeCount ?? 0) + Number(body?.drinkCount ?? 0);
+    const uses = Number(body?.recipeCount ?? 0);
     if (body && uses === 0 && typeof body.brewLogCount === 'number') usedCount.value = body.brewLogCount;
-    else dialogError.value = body ? `${body.recipeCount} recipe(s) and ${body.drinkCount} drink(s) use ${m.name}. Move them to another brewer or delete them first.` : errorMessage(err);
+    else dialogError.value = body ? `${body.recipeCount} recipe(s) use ${m.name}. Move them to another brewer or delete them first.` : errorMessage(err);
   } finally {
     deleting.value = false;
   }
@@ -186,6 +152,7 @@ async function retireInstead(): Promise<void> {
   <main class="page">
     <div class="page-header">
       <h1>Bar setup</h1>
+      <RouterLink v-if="workspaces.canEdit" class="btn btn-primary" :to="{ name: 'brewer-new' }">Add brewer</RouterLink>
     </div>
     <SetupTabs />
     <p class="muted intro">Recipes and drinks are made with a brewer; its kind decides the recipe fields, and an espresso machine's controls shape the shot timer.</p>
@@ -195,59 +162,45 @@ async function retireInstead(): Promise<void> {
 
     <template v-if="!loading">
       <div v-if="brewers.length === 0" class="card empty"><p>No brewers yet.</p></div>
-
-      <ul v-if="active.length" class="list">
-        <li v-for="m in active" :key="m.id" class="card item">
-          <form v-if="editingId === m.id" class="stack" novalidate @submit.prevent="saveEdit(m)">
-            <BrewerFields v-model="editForm" :id-prefix="`edit-${m.id}`" :show-errors="true" :categories="categories" />
-            <p v-if="editError" class="form-error" role="alert">{{ editError }}</p>
-            <div class="buttons">
-              <button class="btn btn-secondary" type="button" @click="editingId = null">Cancel</button>
-              <button class="btn btn-primary" type="submit" :disabled="busyId === m.id || !editForm.name.trim()">Save</button>
-            </div>
-          </form>
-          <template v-else>
-            <div class="stack-tight">
-              <div class="head">
-                <h2>{{ m.name }}</h2>
-                <span class="badge">{{ METHOD_KINDS[m.kind].label }}</span>
-                <span v-if="categoryName(m.categoryId)" class="badge">{{ categoryName(m.categoryId) }}</span>
-                <span v-if="m.showOnPublicMenu" class="badge muted-badge">On menu{{ m.menuName ? ` as ${m.menuName}` : '' }}</span>
-              </div>
+      <template v-else>
+        <ListControls v-model:filter="filter" v-model:sort="sort" :sort-options="sortChoices" id-prefix="brewers" filter-label="Brew method" :filter-options="filterOptions" />
+        <p v-if="filter === RETIRED" class="muted small">Retired brewers are hidden when brewing; past brews still show them.</p>
+        <p v-if="shown.length === 0" class="card empty">No {{ filter === ALL ? 'brewers' : `${filterName.toLowerCase()} brewers` }} yet.</p>
+        <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr) 5.5rem">
+          <div class="data-row data-head">
+            <button v-for="c in ['name', 'kind', 'style', 'category']" :key="c" class="data-th" type="button" :aria-label="sortLabel(sort, c, columns[c]!.label)" @click="sort = toggleHeader(sort, c, columns)">
+              {{ columns[c]!.label }} <span aria-hidden="true">{{ sortArrow(sort, c) }}</span>
+            </button>
+            <button class="data-th end" type="button" :aria-label="sortLabel(sort, 'added', 'Date added')" @click="sort = toggleHeader(sort, 'added', columns)">
+              Added <span aria-hidden="true">{{ sortArrow(sort, 'added') }}</span>
+            </button>
+          </div>
+          <div v-for="m in shown" :key="m.id" class="data-item" :class="{ open: openId === m.id }">
+            <button class="data-row" type="button" :aria-expanded="openId === m.id" @click="toggle(m.id)">
+              <span class="data-td primary">{{ m.name }}</span>
+              <span class="data-td">{{ METHOD_KINDS[m.kind].label }}</span>
+              <span class="data-td">{{ m.style ? BREWER_STYLES[m.style] : '–' }}</span>
+              <span class="data-td">{{ categoryName(m.categoryId) ?? '–' }}</span>
+              <span class="data-td end">{{ formatAdded(m.createdAt) }}</span>
+            </button>
+            <div v-if="openId === m.id" class="data-details">
               <p v-if="m.kind === 'espresso'" class="muted">{{ machineSummary(m) }}</p>
               <p v-if="m.notes" class="muted">{{ m.notes }}</p>
+              <p class="muted">{{ m.showOnPublicMenu ? `On the menu${m.menuName ? ` as ${m.menuName}` : ''}` : 'Not on the menu' }}</p>
+              <div v-if="workspaces.canEdit" class="data-actions">
+                <template v-if="m.retiredAt">
+                  <button class="btn-link" type="button" :disabled="busyId === m.id" @click="setRetired(m, false)">Restore</button>
+                </template>
+                <template v-else>
+                  <RouterLink class="btn-link" :to="{ name: 'brewer-edit', params: { id: m.id } }">Edit</RouterLink>
+                  <button class="btn-link" type="button" :disabled="busyId === m.id" @click="setRetired(m, true)">Retire</button>
+                </template>
+                <button class="btn-link danger" type="button" @click="askDelete(m)">Delete</button>
+              </div>
             </div>
-            <div v-if="workspaces.canEdit" class="actions">
-              <button class="btn-link" type="button" @click="startEdit(m)">Edit</button>
-              <button class="btn-link" type="button" :disabled="busyId === m.id" @click="setRetired(m, true)">Retire</button>
-              <button class="btn-link danger" type="button" @click="askDelete(m)">Delete</button>
-            </div>
-          </template>
-        </li>
-      </ul>
-
-      <section v-if="retired.length" class="stack">
-        <h2 class="section-title">Retired</h2>
-        <p class="muted small">Hidden when brewing; past brews still show them.</p>
-        <ul class="list">
-          <li v-for="m in retired" :key="m.id" class="card item retired">
-            <div class="head">
-              <h2>{{ m.name }}</h2>
-              <span class="badge">{{ METHOD_KINDS[m.kind].label }}</span>
-            </div>
-            <div v-if="workspaces.canEdit" class="actions">
-              <button class="btn-link" type="button" :disabled="busyId === m.id" @click="setRetired(m, false)">Restore</button>
-            </div>
-          </li>
-        </ul>
-      </section>
-
-      <form v-if="workspaces.canEdit" class="card stack" novalidate @submit.prevent="add">
-        <h2>Add a brewer</h2>
-        <BrewerFields v-model="newForm" id-prefix="new" :show-errors="addSubmitted" :categories="categories" />
-        <p v-if="addError" class="form-error" role="alert">{{ addError }}</p>
-        <button class="btn btn-primary" type="submit" :disabled="adding">{{ adding ? 'Adding…' : 'Add brewer' }}</button>
-      </form>
+          </div>
+        </div>
+      </template>
     </template>
   </main>
 
@@ -278,47 +231,5 @@ p {
 }
 .small {
   font-size: 0.85rem;
-}
-.section-title {
-  margin-top: var(--space-2);
-  color: var(--text-muted);
-}
-.list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.item {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-}
-.head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-.stack-tight {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-.item.retired {
-  opacity: 0.75;
-}
-.actions {
-  display: flex;
-  justify-content: flex-end;
-  margin: 0 calc(-1 * var(--space-2)) calc(-1 * var(--space-2));
-}
-.buttons {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-2);
 }
 </style>

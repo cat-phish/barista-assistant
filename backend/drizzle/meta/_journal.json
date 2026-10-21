@@ -162,6 +162,34 @@
       "when": 1792531864538,
       "tag": "0022_recipe_created_at",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "5",
+      "when": 1792559654107,
+      "tag": "0023_drink_tasting",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "5",
+      "when": 1792563546396,
+      "tag": "0024_drink_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "5",
+      "when": 1792563554626,
+      "tag": "0025_drop_drink_brewer",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "5",
+      "when": 1792565769297,
+      "tag": "0026_filter_espresso",
+      "breakpoints": true
     }
   ]
 }

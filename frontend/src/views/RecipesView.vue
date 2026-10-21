@@ -11,7 +11,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import ListControls from '../components/ListControls.vue';
 import MenuTabs from '../components/MenuTabs.vue';
 import { formatAdded, formatDoseLine, formatGrams, formatTime } from '../lib/format';
-import { ariaSort, isSortKey, recallView, rememberView, sortItems, toggleHeader, type SortKey } from '../lib/listSort';
+import { addedColumn, isSortKey, nameColumn, recallView, rememberView, sortArrow, sortBy, sortLabel, sortOptions, toggleHeader, type SortColumns } from '../lib/listSort';
 import { formatFinishWindow, plannedStarts, stepTitle } from '../lib/steps';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -27,8 +27,10 @@ const dialogError = ref('');
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `recipes.${what}.${workspaces.current?.id ?? ''}`;
 const ALL = 'all';
+const columns: SortColumns<Recipe> = { name: nameColumn(), added: addedColumn() };
+const sortChoices = sortOptions(columns);
 const brewerFilter = ref(ALL);
-const sort = ref<SortKey>('added_desc');
+const sort = ref('added_desc');
 watch(brewerFilter, (v) => rememberView(viewKey('brewer'), v));
 watch(sort, (v) => rememberView(viewKey('sort'), v));
 
@@ -47,7 +49,7 @@ async function load(): Promise<void> {
 }
 onMounted(async () => {
   const savedSort = recallView(viewKey('sort'));
-  if (isSortKey(savedSort)) sort.value = savedSort;
+  if (isSortKey(savedSort, columns)) sort.value = savedSort;
   await load();
   const savedBrewer = recallView(viewKey('brewer'));
   if (savedBrewer && brewerOptions.value.some((o) => o.value === savedBrewer)) brewerFilter.value = savedBrewer;
@@ -66,17 +68,12 @@ const brewerOptions = computed(() => {
 });
 const filterName = computed(() => brewerOptions.value.find((o) => o.value === brewerFilter.value)?.label ?? '');
 const shown = computed(() =>
-  sortItems(
+  sortBy(
     brewerFilter.value === ALL ? recipes.value : recipes.value.filter((r) => r.brewer.id === brewerFilter.value),
     sort.value,
+    columns,
   ),
 );
-
-// For the sort headers' labels: "sorted ascending, click to reverse".
-const sortState = (column: 'name' | 'added') => {
-  const state = ariaSort(sort.value, column);
-  return state === 'none' ? 'click to sort' : `sorted ${state}, click to reverse`;
-};
 
 // One row open at a time.
 const openId = ref<string | null>(null);
@@ -129,17 +126,17 @@ async function confirmDelete(): Promise<void> {
     </div>
 
     <template v-else>
-      <ListControls v-model:filter="brewerFilter" v-model:sort="sort" id-prefix="recipes" filter-label="Brewer" :filter-options="brewerOptions" />
+      <ListControls v-model:filter="brewerFilter" v-model:sort="sort" :sort-options="sortChoices" id-prefix="recipes" filter-label="Brewer" :filter-options="brewerOptions" />
       <p v-if="shown.length === 0" class="card empty">No recipes for {{ filterName }} yet.</p>
       <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1.2fr) 5.5rem">
         <div class="data-row data-head">
-          <button class="data-th" type="button" :aria-label="`Name, ${sortState('name')}`" @click="sort = toggleHeader(sort, 'name')">
-            Name <span aria-hidden="true">{{ sort === 'name_asc' ? '▲' : sort === 'name_desc' ? '▼' : '' }}</span>
+          <button class="data-th" type="button" :aria-label="sortLabel(sort, 'name', 'Name')" @click="sort = toggleHeader(sort, 'name', columns)">
+            Name <span aria-hidden="true">{{ sortArrow(sort, 'name') }}</span>
           </button>
           <span class="data-th">Brewer</span>
           <span class="data-th">Dose</span>
-          <button class="data-th end" type="button" :aria-label="`Date added, ${sortState('added')}`" @click="sort = toggleHeader(sort, 'added')">
-            Added <span aria-hidden="true">{{ sort === 'added_asc' ? '▲' : sort === 'added_desc' ? '▼' : '' }}</span>
+          <button class="data-th end" type="button" :aria-label="sortLabel(sort, 'added', 'Date added')" @click="sort = toggleHeader(sort, 'added', columns)">
+            Added <span aria-hidden="true">{{ sortArrow(sort, 'added') }}</span>
           </button>
         </div>
         <div v-for="recipe in shown" :key="recipe.id" class="data-item" :class="{ open: openId === recipe.id }">

@@ -44,7 +44,7 @@ workspacesRouter.post("/", async (req: Request, res: Response<WorkspaceResponse>
       await tx.insert(workspaces).values({ id: workspaceId, name: body.name, slug: body.slug });
       await tx.insert(workspaceMembers).values({ userId, workspaceId, role: "owner" });
       await tx.insert(brewers).values(
-        DEFAULT_BREWERS.map(({ name, kind }) => ({ id: randomUUID(), workspaceId, name, kind }))
+        DEFAULT_BREWERS.map(({ name, kind, style }) => ({ id: randomUUID(), workspaceId, name, kind, style }))
       );
       const [created] = await tx.select().from(workspaces).where(eq(workspaces.id, workspaceId));
       return created;

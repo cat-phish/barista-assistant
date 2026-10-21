@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { useBrewSessionStore } from '../stores/brewSession';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const auth = useAuthStore();
@@ -19,6 +20,12 @@ async function logout(): Promise<void> {
     loggingOut.value = false;
     await router.replace({ name: 'login' });
   }
+}
+
+// Already brewing: clicking Brew offers to abandon the brew and start over.
+const brewSession = useBrewSessionStore();
+function onBrewClick(): void {
+  if (route.name === 'brew' && brewSession.inProgress) brewSession.requestRestart();
 }
 </script>
 
@@ -38,7 +45,7 @@ async function logout(): Promise<void> {
   </header>
   <nav v-if="workspaces.current" class="tabs" aria-label="Sections">
     <RouterLink :to="{ name: 'home' }" exact-active-class="active">Home</RouterLink>
-    <RouterLink :to="{ name: 'brew' }" active-class="active">Brew</RouterLink>
+    <RouterLink :to="{ name: 'brew' }" active-class="active" @click="onBrewClick">Brew</RouterLink>
     <RouterLink :to="{ name: 'journal' }" active-class="active">Journal</RouterLink>
     <RouterLink :to="{ name: 'beans' }" active-class="active">Beans</RouterLink>
     <RouterLink :to="{ name: 'recipes' }" :class="{ active: ['/recipes', '/drinks', '/ingredients'].some((p) => route.path.startsWith(p)) }">Recipes</RouterLink>

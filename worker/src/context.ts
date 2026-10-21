@@ -17,6 +17,7 @@ import {
   type Brewer,
   type FlowUnit,
   type MarkKind,
+  type BrewerStyle,
   type MethodKind,
   type ServingUnit,
   type StepAdvance,
@@ -41,7 +42,7 @@ export interface BrewSummary {
   roastAgeDays: number | null;
   daysFrozenBeforeBrew: number | null;
   recipeName: string | null;
-  // The recipe's method kind (pour_over / immersion / espresso), null without a recipe.
+  // The recipe's brew method (filter / espresso), null without a recipe.
   methodKind: MethodKind | null;
   // The grind setting only means something for this grinder (docs/api_spec.md §9).
   grinder: GrinderInfo | null;
@@ -55,8 +56,15 @@ export interface BrewSummary {
   actualTempC: number | null;
   actualGrindSetting: string | null;
   actualTimeSec: number;
+  // How it was served: a drink and its ingredient types (milk, syrup…), or
+  // null for the coffee on its own.
+  drink: { name: string; ingredientTypes: string[] } | null;
+  // The coffee tasted on its own (for a milk drink, only if tasted straight).
   rating: number | null;
   tastingNotes: string | null;
+  // The finished drink (milk and syrup mask acidity and bitterness).
+  drinkRating: number | null;
+  drinkTastingNotes: string | null;
 }
 
 // The drink a brew was made for: tasting notes may describe the whole drink.
@@ -85,6 +93,7 @@ export interface BrewContext {
   recipe: {
     name: string;
     brewer: string; // e.g. "V60", "Linea Mini"
+    brewerStyle: BrewerStyle | null; // how a filter brewer brews: pour_over, immersion, hybrid…
     methodKind: MethodKind;
     targetDoseGrams: number;
     targetWaterGrams: number | null; // null for espresso
@@ -138,7 +147,8 @@ function summarize(
   brew: BrewRow,
   roastDate: Date | null,
   freezes: readonly FreezePeriodLike[],
-  marks: ReadonlyMap<string, BrewSummary["marks"]>
+  marks: ReadonlyMap<string, BrewSummary["marks"]>,
+  servedAs: ReadonlyMap<string, NonNullable<BrewSummary["drink"]>>
 ): BrewSummary {
   const age = roastDate
     ? effectiveRoastAge(roastDate.toISOString(), freezes, brew.timestamp.toISOString().slice(0, 10))
@@ -159,9 +169,29 @@ function summarize(
     actualTempC: brew.actualTempC,
     actualGrindSetting: brew.actualGrindSetting,
     actualTimeSec: brew.actualTimeSec,
+    drink: brew.drinkId ? (servedAs.get(brew.drinkId) ?? null) : null,
     rating: brew.rating,
     tastingNotes: brew.tastingNotes,
+    drinkRating: brew.drinkRating,
+    drinkTastingNotes: brew.drinkTastingNotes,
   };
+}
+
+// Each drink's name and ingredient types, for labelling how brews were served.
+async function drinksServed(drinkIds: string[]): Promise<Map<string, NonNullable<BrewSummary["drink"]>>> {
+  const ids = [...new Set(drinkIds)];
+  if (ids.length === 0) return new Map();
+  const [names, types] = await Promise.all([
+    db.select({ id: drinks.id, name: drinks.name }).from(drinks).where(inArray(drinks.id, ids)),
+    db
+      .selectDistinct({ drinkId: drinkIngredients.drinkId, type: ingredients.ingredientType })
+      .from(drinkIngredients)
+      .innerJoin(ingredients, eq(drinkIngredients.ingredientId, ingredients.id))
+      .where(inArray(drinkIngredients.drinkId, ids)),
+  ]);
+  return new Map(
+    names.map((d) => [d.id, { name: d.name, ingredientTypes: types.filter((t) => t.drinkId === d.id).map((t) => t.type).sort() }])
+  );
 }
 
 async function loadDrink(drinkId: string, made: Size): Promise<DrinkInfo | null> {
@@ -262,7 +292,10 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
   ]);
 
   const previousRows = previous.map(withJoins);
-  const marks = await marksFor([brew.id, ...previousRows.map((p) => p.id)]);
+  const [marks, servedAs] = await Promise.all([
+    marksFor([brew.id, ...previousRows.map((p) => p.id)]),
+    drinksServed([brew, ...previousRows].flatMap((b) => (b.drinkId ? [b.drinkId] : []))),
+  ]);
 
   return {
     bean: {
@@ -273,9 +306,9 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
       roastDate: bean.roastDate ? bean.roastDate.toISOString().slice(0, 10) : null,
     },
     recipe,
-    brew: summarize(brew, bean.roastDate, freezes, marks),
+    brew: summarize(brew, bean.roastDate, freezes, marks, servedAs),
     drink: brew.drinkId ? await loadDrink(brew.drinkId, { size: brew.servingSize, unit: brew.servingUnit }) : null,
-    previousBrews: previousRows.map((p) => summarize(p, bean.roastDate, freezes, marks)),
+    previousBrews: previousRows.map((p) => summarize(p, bean.roastDate, freezes, marks, servedAs)),
     ratingScale: "1-5",
   };
 }
@@ -285,6 +318,7 @@ async function loadRecipe(recipeId: string): Promise<BrewContext["recipe"]> {
     .select({
       name: recipes.name,
       brewer: brewers.name,
+      brewerStyle: brewers.style,
       methodKind: brewers.kind,
       targetDoseGrams: recipes.targetDoseGrams,
       targetWaterGrams: recipes.targetWaterGrams,

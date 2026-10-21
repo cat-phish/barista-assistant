@@ -11,6 +11,7 @@ import {
   drinks,
   workspaces,
   type Bean,
+  type MethodKind,
   type Workspace,
 } from "@barista/shared/schema";
 import { SLUG_PATTERN } from "../validation.js";
@@ -24,12 +25,14 @@ export interface PublicMenuResponse {
   sections: MenuSection[];
 }
 
+const METHOD_LABELS: Record<MethodKind, string> = { filter: "Filter", espresso: "Espresso" };
+
 export interface MenuItem {
   kind: "brewer" | "drink";
   id: string;
   name: string;
   description: string | null;
-  brewer: string; // the brewer's menu name, e.g. "Espresso" for an espresso machine
+  method: string; // how it's made: "Pour over", "Immersion", "Espresso"
   variantOf: string | null;
   ingredients: string[];
 }
@@ -82,7 +85,7 @@ publicMenuRouter.get(
         .where(eq(drinkCategories.workspaceId, workspace.id))
         .orderBy(asc(drinkCategories.position), asc(drinkCategories.name)),
       db
-        .select({ id: brewers.id, name: menuName, description: brewers.description, categoryId: brewers.categoryId })
+        .select({ id: brewers.id, name: menuName, description: brewers.description, categoryId: brewers.categoryId, brewerKind: brewers.kind })
         .from(brewers)
         .where(and(eq(brewers.workspaceId, workspace.id), eq(brewers.showOnPublicMenu, true), isNull(brewers.retiredAt)))
         .orderBy(asc(menuName)),
@@ -93,10 +96,9 @@ publicMenuRouter.get(
           description: drinks.description,
           categoryId: drinks.categoryId,
           parentDrinkId: drinks.parentDrinkId,
-          brewer: menuName,
+          drinkKind: drinks.kind,
         })
         .from(drinks)
-        .innerJoin(brewers, eq(drinks.brewerId, brewers.id))
         .where(and(eq(drinks.workspaceId, workspace.id), eq(drinks.showOnPublicMenu, true)))
         .orderBy(asc(drinks.name)),
     ]);
@@ -114,10 +116,11 @@ publicMenuRouter.get(
     // Only name a parent that's on the menu too, so hidden drinks stay hidden.
     const shownNames = new Map(menuDrinks.map((d) => [d.id, d.name]));
     const items: Array<MenuItem & { categoryId: string | null }> = [
-      ...menuBrewers.map((b) => ({ ...b, kind: "brewer" as const, brewer: b.name, variantOf: null, ingredients: [] })),
-      ...menuDrinks.map(({ parentDrinkId, ...d }) => ({
+      ...menuBrewers.map(({ brewerKind, ...b }) => ({ ...b, kind: "brewer" as const, method: METHOD_LABELS[brewerKind], variantOf: null, ingredients: [] })),
+      ...menuDrinks.map(({ parentDrinkId, drinkKind, ...d }) => ({
         ...d,
         kind: "drink" as const,
+        method: METHOD_LABELS[drinkKind],
         variantOf: (parentDrinkId && shownNames.get(parentDrinkId)) ?? null,
         ingredients: ingredientRows.filter((c) => c.drinkId === d.id).map((c) => c.name),
       })),

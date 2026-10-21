@@ -40,6 +40,7 @@ describe("brewers", () => {
       id: expect.any(String),
       name: "Gaggia Classic",
       kind: "espresso",
+      style: null,
       notes: null,
       preinfusion: "none",
       flowControl: "none",
@@ -49,6 +50,7 @@ describe("brewers", () => {
       categoryId: null,
       showOnPublicMenu: false,
       retiredAt: null,
+      createdAt: expect.any(String),
     });
     const lm = await owner.agent.post(base).send({ name: "Linea Mini", kind: "espresso", preinfusion: "manual", flowControl: "manual", menuName: " Espresso " });
     expect(lm.body.brewer).toMatchObject({ preinfusion: "manual", flowControl: "manual", pressureControl: "none", menuName: "Espresso" });
@@ -77,12 +79,12 @@ describe("brewers on the menu", () => {
     const { owner, ws } = await setup();
     const base = `/api/workspaces/${ws.id}/brewers`;
     const lm = (await owner.agent.post(base).send({ name: "Linea Mini", kind: "espresso", menuName: "Espresso shot", showOnPublicMenu: true })).body.brewer.id;
-    await owner.agent.post(`/api/workspaces/${ws.id}/drinks`).send({ name: "Latte", brewerId: lm });
+    await owner.agent.post(`/api/workspaces/${ws.id}/drinks`).send({ name: "Latte", kind: "espresso" });
     await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ isPublicMenuEnabled: true });
     const menu = async () => (await owner.agent.get(`/api/public/menu/${ws.slug}`)).body.sections.flatMap((s: { items: unknown[] }) => s.items);
     expect(await menu()).toEqual([
-      expect.objectContaining({ kind: "brewer", name: "Espresso shot", brewer: "Espresso shot" }),
-      expect.objectContaining({ kind: "drink", name: "Latte", brewer: "Espresso shot" }),
+      expect.objectContaining({ kind: "brewer", name: "Espresso shot", method: "Espresso" }),
+      expect.objectContaining({ kind: "drink", name: "Latte", method: "Espresso" }),
     ]);
     await owner.agent.patch(`${base}/${lm}`).send({ retired: true });
     expect((await menu()).map((i: { name: string }) => i.name)).toEqual(["Latte"]);
@@ -116,7 +118,7 @@ describe("brewers on brew logs", () => {
 
     // Recipes block the delete first; once they're gone, the brew history does.
     const del = () => owner.agent.delete(`/api/workspaces/${ws.id}/brewers/${lm}`);
-    expect((await del()).body).toMatchObject({ recipeCount: 1, drinkCount: 0 });
+    expect((await del()).body).toMatchObject({ recipeCount: 1 });
     await owner.agent.delete(`${recipes}/${shot}`);
     const refused = await del();
     expect(refused.status).toBe(409);

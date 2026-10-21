@@ -79,3 +79,23 @@ export function selfAndDescendants(drinks: Drink[], id: string): Set<string> {
   }
   return out;
 }
+
+export interface IngredientUsage {
+  drinks: Array<{ id: string; name: string }>; // by name
+  units: string[]; // the units its amounts use ("pump", "fl oz"), deduplicated
+}
+
+// For each ingredient: the drinks it finishes and the units it's measured in.
+export function ingredientUsage(drinks: Drink[]): Map<string, IngredientUsage> {
+  const out = new Map<string, IngredientUsage>();
+  for (const d of [...drinks].sort((a, b) => a.name.localeCompare(b.name))) {
+    for (const i of d.ingredients) {
+      const u = out.get(i.ingredientId) ?? { drinks: [], units: [] };
+      if (!u.drinks.some((x) => x.id === d.id)) u.drinks.push({ id: d.id, name: d.name });
+      const unit = i.amountUnit?.trim();
+      if (unit && !u.units.some((x) => x.toLowerCase() === unit.toLowerCase())) u.units.push(unit);
+      out.set(i.ingredientId, u);
+    }
+  }
+  return out;
+}

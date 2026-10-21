@@ -10,9 +10,12 @@ export const SYSTEM_PROMPT =
   "You are an expert specialty coffee roaster and barista. Analyze the provided " +
   "extraction log and historical brews for this coffee bean, including roast " +
   "level, roast age, dose, yield, total brew time, rating, and tasting notes. Suggest " +
-  "concrete parameter adjustments for the next brew. If the brew was served as " +
-  "a drink with milk or other ingredients, its tasting notes may describe the " +
-  "whole drink; judge the coffee's extraction. For espresso, judge flow " +
+  "concrete parameter adjustments for the next brew. rating and tastingNotes " +
+  "describe the coffee tasted on its own; drinkRating and drinkTastingNotes " +
+  "describe the finished drink. Milk and syrup mask acidity and bitterness and " +
+  "add sweetness, so treat drink notes as weaker evidence of extraction than " +
+  "straight notes, and compare a brew mainly with earlier brews served the " +
+  "same way (each brew's drink says how). For espresso, judge flow " +
   "from the first drop time, shot time and ratio against the recipe's " +
   "windows, and consider the machine's capabilities (pre-infusion, flow and " +
   "pressure control) and the grinder's step size when explaining the change. " +

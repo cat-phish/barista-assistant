@@ -13,8 +13,9 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import ListControls from '../components/ListControls.vue';
 import MenuTabs from '../components/MenuTabs.vue';
 import { ingredientLine, nestDrinks, type NestedDrink } from '../lib/drinks';
+import { METHOD_KINDS } from '../lib/equipment';
 import { formatAdded } from '../lib/format';
-import { ariaSort, isSortKey, recallView, rememberView, sortItems, sortsByName, toggleHeader, type SortKey } from '../lib/listSort';
+import { addedColumn, isSortKey, nameColumn, recallView, rememberView, sortArrow, sortBy, sortLabel, sortOptions, sortsByName, toggleHeader, type SortColumns } from '../lib/listSort';
 import { defaultSize, formatSize } from '../lib/servings';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -28,9 +29,11 @@ const error = ref('');
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `drinks.${what}.${workspaces.current?.id ?? ''}`;
 const ALL = 'all';
+const columns: SortColumns<Drink> = { name: nameColumn(), added: addedColumn() };
+const sortChoices = sortOptions(columns);
 const NONE = 'none'; // uncategorised
 const categoryFilter = ref(ALL);
-const sort = ref<SortKey>('name_asc');
+const sort = ref('name_asc');
 watch(categoryFilter, (v) => rememberView(viewKey('category'), v));
 watch(sort, (v) => rememberView(viewKey('sort'), v));
 
@@ -50,7 +53,7 @@ async function load(): Promise<void> {
 }
 onMounted(async () => {
   const savedSort = recallView(viewKey('sort'));
-  if (isSortKey(savedSort)) sort.value = savedSort;
+  if (isSortKey(savedSort, columns)) sort.value = savedSort;
   await load();
   const savedCategory = recallView(viewKey('category'));
   if (savedCategory && categoryOptions.value.some((o) => o.value === savedCategory)) categoryFilter.value = savedCategory;
@@ -67,13 +70,13 @@ const shown = computed<NestedDrink[]>(() => {
   const f = categoryFilter.value;
   const list = f === ALL ? drinks.value : drinks.value.filter((d) => (d.category?.id ?? NONE) === f);
   if (sortsByName(sort.value)) return nestDrinks(list, sort.value === 'name_desc');
-  return sortItems(list, sort.value).map((drink) => ({ drink, depth: 0 }));
+  return sortBy(list, sort.value, columns).map((drink) => ({ drink, depth: 0 }));
 });
 const nested = computed(() => sortsByName(sort.value));
-const recipeName = (id: string | null) => recipes.value.find((r) => r.id === id)?.name ?? null;
-const sortState = (column: 'name' | 'added') => {
-  const state = ariaSort(sort.value, column);
-  return state === 'none' ? 'click to sort' : `sorted ${state}, click to reverse`;
+// The default recipe and its brewer: "V60 Standard (V60)".
+const recipeName = (id: string | null) => {
+  const r = recipes.value.find((x) => x.id === id);
+  return r ? `${r.name} (${r.brewer.name})` : null;
 };
 
 // One row open at a time.
@@ -123,17 +126,17 @@ async function confirmDelete(): Promise<void> {
     </div>
 
     <template v-else>
-      <ListControls v-model:filter="categoryFilter" v-model:sort="sort" id-prefix="drinks" filter-label="Category" :filter-options="categoryOptions" />
+      <ListControls v-model:filter="categoryFilter" v-model:sort="sort" :sort-options="sortChoices" id-prefix="drinks" filter-label="Category" :filter-options="categoryOptions" />
       <p v-if="shown.length === 0" class="card empty">No drinks in {{ filterName }} yet.</p>
       <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.2fr) 5.5rem">
         <div class="data-row data-head">
-          <button class="data-th" type="button" :aria-label="`Name, ${sortState('name')}`" @click="sort = toggleHeader(sort, 'name')">
-            Name <span aria-hidden="true">{{ sort === 'name_asc' ? '▲' : sort === 'name_desc' ? '▼' : '' }}</span>
+          <button class="data-th" type="button" :aria-label="sortLabel(sort, 'name', 'Name')" @click="sort = toggleHeader(sort, 'name', columns)">
+            Name <span aria-hidden="true">{{ sortArrow(sort, 'name') }}</span>
           </button>
           <span class="data-th">Category</span>
-          <span class="data-th">Brewer</span>
-          <button class="data-th end" type="button" :aria-label="`Date added, ${sortState('added')}`" @click="sort = toggleHeader(sort, 'added')">
-            Added <span aria-hidden="true">{{ sort === 'added_asc' ? '▲' : sort === 'added_desc' ? '▼' : '' }}</span>
+          <span class="data-th">Method</span>
+          <button class="data-th end" type="button" :aria-label="sortLabel(sort, 'added', 'Date added')" @click="sort = toggleHeader(sort, 'added', columns)">
+            Added <span aria-hidden="true">{{ sortArrow(sort, 'added') }}</span>
           </button>
         </div>
         <div v-for="{ drink: d, depth } in shown" :key="d.id" class="data-item" :class="{ open: openId === d.id }">
@@ -143,7 +146,7 @@ async function confirmDelete(): Promise<void> {
               <span v-if="!nested && d.parent" class="variant-of">variant of {{ d.parent.name }}</span>
             </span>
             <span class="data-td">{{ d.category?.name ?? 'Uncategorised' }}</span>
-            <span class="data-td">{{ d.brewer.name }}</span>
+            <span class="data-td">{{ METHOD_KINDS[d.kind].label }}</span>
             <span class="data-td end">{{ formatAdded(d.createdAt) }}</span>
           </button>
           <div v-if="openId === d.id" class="data-details">
@@ -155,12 +158,13 @@ async function confirmDelete(): Promise<void> {
             <p v-if="d.description" class="muted">{{ d.description }}</p>
             <p class="facts">
               <span class="label">Recipe</span>
-              {{ recipeName(d.defaultRecipeId) ?? `Any ${d.brewer.name} recipe` }}
+              {{ recipeName(d.defaultRecipeId) ?? `Any ${METHOD_KINDS[d.kind].label.toLowerCase()} recipe, on any ${METHOD_KINDS[d.kind].label.toLowerCase()} brewer` }}
             </p>
             <p class="facts">
               <span class="label">Finish with</span>
               {{ d.ingredients.length ? d.ingredients.map((c) => ingredientLine(c)).join(' · ') : 'Nothing: just the coffee' }}
             </p>
+            <p v-if="d.instructions" class="instructions"><span class="label">Instructions</span> {{ d.instructions }}</p>
             <div v-if="workspaces.canEdit" class="data-actions">
               <RouterLink class="btn-link" :to="{ name: 'drink-new', query: { from: d.id } }">Make a variant</RouterLink>
               <RouterLink class="btn-link" :to="{ name: 'drink-edit', params: { id: d.id } }">Edit</RouterLink>
@@ -194,6 +198,9 @@ p {
 }
 .small {
   font-size: 0.85rem;
+}
+.instructions {
+  white-space: pre-line;
 }
 .variant-of {
   margin-left: var(--space-1);

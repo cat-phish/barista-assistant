@@ -89,7 +89,7 @@ watch(beanFilter, () => load(true));
           <RouterLink class="card entry" :to="{ name: 'journal-entry', params: { id: log.id } }">
             <div class="head">
               <span class="when">{{ formatWhen(log.timestamp) }}</span>
-              <RatingStars :rating="log.rating" />
+              <RatingStars :rating="log.rating ?? log.drinkRating" />
             </div>
             <strong>{{ log.bean.roasterName }} {{ log.bean.beanName }}</strong>
             <span v-if="log.drink || log.recipe" class="muted">{{ [log.drink?.name, log.servingSize !== null && log.servingUnit ? formatSize({ size: log.servingSize, unit: log.servingUnit }) : null, log.recipe?.name].filter(Boolean).join(' · ') }}</span>
@@ -100,7 +100,7 @@ watch(beanFilter, () => load(true));
               <span v-if="log.actualTempC !== null">{{ log.actualTempC }} °C</span>
               <span v-if="log.actualGrindSetting || log.grinder">{{ [log.actualGrindSetting, log.grinder?.name].filter(Boolean).join(' · ') }}</span>
             </span>
-            <span v-if="log.tastingNotes" class="notes">{{ log.tastingNotes }}</span>
+            <span v-if="log.tastingNotes || log.drinkTastingNotes" class="notes">{{ log.tastingNotes ?? log.drinkTastingNotes }}</span>
           </RouterLink>
         </li>
       </ul>

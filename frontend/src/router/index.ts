@@ -24,7 +24,11 @@ export const router = createRouter({
     // Bar setup: three tabs (components/SetupTabs.vue).
     { path: '/setup', redirect: '/setup/brewers' },
     { path: '/setup/brewers', name: 'brewers', component: () => import('../views/BrewersView.vue'), meta: { requiresWorkspace: true } },
+    { path: '/setup/brewers/new', name: 'brewer-new', component: () => import('../views/BrewerFormView.vue'), meta: { requiresWorkspace: true, requiresEditor: true } },
+    { path: '/setup/brewers/:id/edit', name: 'brewer-edit', component: () => import('../views/BrewerFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresEditor: true } },
     { path: '/setup/grinders', name: 'grinders', component: () => import('../views/GrindersView.vue'), meta: { requiresWorkspace: true } },
+    { path: '/setup/grinders/new', name: 'grinder-new', component: () => import('../views/GrinderFormView.vue'), meta: { requiresWorkspace: true, requiresEditor: true } },
+    { path: '/setup/grinders/:id/edit', name: 'grinder-edit', component: () => import('../views/GrinderFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresEditor: true } },
     { path: '/setup/categories', name: 'categories', component: () => import('../views/CategoriesView.vue'), meta: { requiresWorkspace: true } },
     // Old addresses: Equipment became Bar setup; methods and machines became brewers.
     { path: '/equipment', redirect: '/setup/brewers' },
@@ -43,6 +47,8 @@ export const router = createRouter({
     { path: '/drinks/new', name: 'drink-new', component: () => import('../views/DrinkFormView.vue'), meta: { requiresWorkspace: true, requiresEditor: true } },
     { path: '/drinks/:id/edit', name: 'drink-edit', component: () => import('../views/DrinkFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresEditor: true } },
     { path: '/ingredients', name: 'ingredients', component: () => import('../views/IngredientsView.vue'), meta: { requiresWorkspace: true } },
+    { path: '/ingredients/new', name: 'ingredient-new', component: () => import('../views/IngredientFormView.vue'), meta: { requiresWorkspace: true, requiresEditor: true } },
+    { path: '/ingredients/:id/edit', name: 'ingredient-edit', component: () => import('../views/IngredientFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresEditor: true } },
     { path: '/recipes/:id/edit', name: 'recipe-edit', component: () => import('../views/RecipeFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresEditor: true } },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
