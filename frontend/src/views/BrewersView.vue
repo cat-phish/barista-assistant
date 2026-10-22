@@ -195,7 +195,6 @@ async function retireInstead(): Promise<void> {
               <p v-if="m.kind === 'espresso'" class="muted">{{ machineSummary(m) }}</p>
               <p v-if="m.notes" class="muted">{{ m.notes }}</p>
               <p class="muted">{{ recipeSummary(m.id) }}</p>
-              <p class="muted">{{ m.showOnPublicMenu ? `On the menu${m.menuName ? ` as ${m.menuName}` : ''}` : 'Not on the menu' }}</p>
               <div v-if="workspaces.canEdit" class="data-actions">
                 <template v-if="m.retiredAt">
                   <button class="btn-link" type="button" :disabled="busyId === m.id" @click="setRetired(m, false)">Restore</button>

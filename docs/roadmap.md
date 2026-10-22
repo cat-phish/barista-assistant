@@ -238,3 +238,28 @@ These were missing:
   travel, and bar members in other zones.
 - Not done, by choice: telling the AI whether a brew was made from frozen
   beans.
+
+## Categories rethink, part 1: the menu builder (built)
+
+One category list did three jobs: grouping brewers (which their method
+already does), the brew page's first question, and the public menu's
+sections. The menu was built automatically from categories and "show on
+menu" flags, so items couldn't be ordered, priced or placed on their own.
+Branch `menu-builder`, migration 0033 (`api/menu.md` §7b, §7).
+
+- **Its own sections and items:** a section has a name, an optional
+  description and an order. Its items are drinks, brewers (plain brews) and
+  one beans block, in order. Each item can have a menu-only name and
+  description, a price (in one menu currency) and "unavailable" (still
+  listed). Arranging is one `PUT /layout` with the whole menu. The UI uses
+  ↑/↓ like Categories, and moves an item to another section from its Edit
+  dialog.
+- **The migration seeded the builder from the old automatic menu:** a
+  section per category with something shown, then "Other", then "Coffee"
+  with the beans, using brewers' menu names as item names.
+- **Bar setup → Menu** is the new screen, with the public menu on/off switch
+  (owners) and the currency. Brewer and drink forms lost their "show on the
+  menu" controls. A bean's switch stays, as its place in the beans block.
+- **Next (part 2):** brewers grouped by method (Filter, Espresso and a new
+  Stovetop) instead of categories, drink categories for drinks only, and
+  dropping the old menu columns.

@@ -4,8 +4,9 @@
 > [README.md](README.md); a bare `§N` refers to that index.
 
 An ordered list per workspace that groups drinks and brewers: the first
-choice when brewing (Category → Brewer or drink → Recipe), and the public
-menu's sections ("Espresso milk drinks", "Specialty drinks").
+choice when brewing (Category → Brewer or drink → Recipe), e.g. "Espresso
+milk drinks", "Specialty drinks". The public menu has its own sections, set
+in the menu builder (§7b).
 
 **Category object:** `{ "id": "uuid", "name": "Specialty drinks", "position": 2 }`
 

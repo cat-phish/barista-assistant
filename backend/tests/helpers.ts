@@ -60,3 +60,31 @@ export async function newBrewLog(user: TestUser, workspaceId: string, beanId: st
   expect(res.status).toBe(201);
   return res.body.brewLog.id as string;
 }
+
+// Menu builder (docs/api/menu.md §7b): a section, returning its id.
+export async function menuSection(user: TestUser, workspaceId: string, name: string): Promise<string> {
+  const res = await user.agent.post(`/api/workspaces/${workspaceId}/menu/sections`).send({ name });
+  expect(res.status).toBe(201);
+  const section = (res.body.sections as Array<{ id: string; name: string }>).find((s) => s.name === name);
+  return section!.id;
+}
+
+export async function menuAdd(user: TestUser, workspaceId: string, sectionId: string, item: Record<string, unknown>): Promise<void> {
+  const res = await user.agent.post(`/api/workspaces/${workspaceId}/menu/sections/${sectionId}/items`).send(item);
+  expect(res.status).toBe(201);
+}
+
+// Turns the menu on with a "Coffee" section holding the beans block.
+export async function menuWithBeans(user: TestUser, workspaceId: string): Promise<void> {
+  await user.agent.patch(`/api/workspaces/${workspaceId}`).send({ isPublicMenuEnabled: true });
+  await menuAdd(user, workspaceId, await menuSection(user, workspaceId, "Coffee"), { itemType: "beans" });
+}
+
+// The beans listed on the public menu, wherever the beans block is.
+export async function publicMenuBeans(slug: string): Promise<Array<Record<string, unknown>>> {
+  const res = await request(app).get(`/api/public/menu/${slug}`);
+  if (res.status !== 200) return [];
+  return (res.body.sections as Array<{ items: Array<{ type: string; beans?: Array<Record<string, unknown>> }> }>).flatMap((s) =>
+    s.items.flatMap((i) => (i.type === "beans" ? (i.beans ?? []) : []))
+  );
+}

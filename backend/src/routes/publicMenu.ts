@@ -1,50 +1,46 @@
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { db } from "../db.js";
 import { sendError } from "../http.js";
-import {
-  beans,
-  brewers,
-  ingredients,
-  drinkCategories,
-  drinkIngredients,
-  drinks,
-  workspaces,
-  type Bean,
-  type MethodKind,
-  type Workspace,
-} from "@barista/shared/schema";
+import { beans, drinkIngredients, drinks, ingredients, workspaces, type Bean, type MethodKind, type Workspace } from "@barista/shared/schema";
 import { SLUG_PATTERN } from "../validation.js";
+import { loadMenu } from "./menu.js";
 
+// docs/api/public-menu.md §7: the menu as arranged in the builder (§7b).
+export type PublicBean = Pick<
+  Bean,
+  | "id" | "roasterName" | "beanName" | "process" | "roastDate" | "inventoryWeightGrams"
+  | "roastLevel" | "detailedRoastLevel" | "roastType" | "blendType" | "decaf"
+  | "flavorProfile" | "region" | "altitudeMasl" | "producer"
+>; // price, website, notes, rating, purchase date and supplier stay private
+
+export interface PublicMenuItem {
+  type: "drink" | "brewer";
+  id: string; // the drink or brewer
+  name: string;
+  description: string | null;
+  method: string; // how it's made: "Filter", "Espresso"
+  variantOf: string | null;
+  ingredients: string[];
+  price: number | null;
+  available: boolean;
+}
+export interface PublicBeansBlock {
+  type: "beans";
+  beans: PublicBean[];
+}
+export interface PublicMenuSection {
+  name: string;
+  description: string | null;
+  items: Array<PublicMenuItem | PublicBeansBlock>;
+}
 export interface PublicMenuResponse {
   workspace: Pick<Workspace, "name" | "slug">;
-  beans: Array<
-    Pick<
-      Bean,
-      | "id" | "roasterName" | "beanName" | "process" | "roastDate" | "inventoryWeightGrams"
-      | "roastLevel" | "detailedRoastLevel" | "roastType" | "blendType" | "decaf"
-      | "flavorProfile" | "region" | "altitudeMasl" | "producer"
-    >
-  >; // price, website, notes, rating, purchase date and supplier stay private (docs/api/public-menu.md §7)
-  // docs/api/public-menu.md §7: plain brews and drinks, in category sections.
-  sections: MenuSection[];
+  currency: string | null;
+  sections: PublicMenuSection[];
 }
 
 const METHOD_LABELS: Record<MethodKind, string> = { filter: "Filter", espresso: "Espresso" };
-
-export interface MenuItem {
-  kind: "brewer" | "drink";
-  id: string;
-  name: string;
-  description: string | null;
-  method: string; // how it's made: "Pour over", "Immersion", "Espresso"
-  variantOf: string | null;
-  ingredients: string[];
-}
-export interface MenuSection {
-  category: string | null;
-  items: MenuItem[];
-}
 
 // Mounted at /api/public/menu. Unauthenticated: only expose explicitly public data.
 export const publicMenuRouter = Router();
@@ -69,87 +65,80 @@ publicMenuRouter.get(
       return;
     }
 
-    // A brewer shows under its menu name ("Espresso", not the machine's model).
-    const menuName = sql<string>`COALESCE(${brewers.menuName}, ${brewers.name})`;
-    const [menuBeans, categories, menuBrewers, menuDrinks] = await Promise.all([
-      db
-        .select({
-          id: beans.id,
-          roasterName: beans.roasterName,
-          beanName: beans.beanName,
-          process: beans.process,
-          roastDate: beans.roastDate,
-          inventoryWeightGrams: beans.inventoryWeightGrams,
-          roastLevel: beans.roastLevel,
-          detailedRoastLevel: beans.detailedRoastLevel,
-          roastType: beans.roastType,
-          blendType: beans.blendType,
-          decaf: beans.decaf,
-          flavorProfile: beans.flavorProfile,
-          region: beans.region,
-          altitudeMasl: beans.altitudeMasl,
-          producer: beans.producer,
-        })
-        .from(beans)
-        .where(and(eq(beans.workspaceId, workspace.id), eq(beans.showOnPublicMenu, true), isNull(beans.archivedAt)))
-        .orderBy(asc(beans.roasterName), asc(beans.beanName)),
-      db
-        .select({ id: drinkCategories.id, name: drinkCategories.name })
-        .from(drinkCategories)
-        .where(eq(drinkCategories.workspaceId, workspace.id))
-        .orderBy(asc(drinkCategories.position), asc(drinkCategories.name)),
-      db
-        .select({ id: brewers.id, name: menuName, description: brewers.description, categoryId: brewers.categoryId, brewerKind: brewers.kind })
-        .from(brewers)
-        .where(and(eq(brewers.workspaceId, workspace.id), eq(brewers.showOnPublicMenu, true), isNull(brewers.retiredAt)))
-        .orderBy(asc(menuName)),
-      db
-        .select({
-          id: drinks.id,
-          name: drinks.name,
-          description: drinks.description,
-          categoryId: drinks.categoryId,
-          parentDrinkId: drinks.parentDrinkId,
-          drinkKind: drinks.kind,
-        })
-        .from(drinks)
-        .where(and(eq(drinks.workspaceId, workspace.id), eq(drinks.showOnPublicMenu, true)))
-        .orderBy(asc(drinks.name)),
+    const menu = await loadMenu(workspace.id);
+    const allItems = menu.sections.flatMap((s) => s.items);
+    const drinkIds = allItems.flatMap((i) => (i.drinkId ? [i.drinkId] : []));
+    const hasBeans = allItems.some((i) => i.itemType === "beans");
+
+    const [drinkRows, ingredientRows, menuBeans] = await Promise.all([
+      drinkIds.length
+        ? db.select({ id: drinks.id, parentDrinkId: drinks.parentDrinkId }).from(drinks).where(inArray(drinks.id, drinkIds))
+        : Promise.resolve([]),
+      drinkIds.length
+        ? db
+            .select({ drinkId: drinkIngredients.drinkId, name: ingredients.name })
+            .from(drinkIngredients)
+            .innerJoin(ingredients, eq(drinkIngredients.ingredientId, ingredients.id))
+            .where(inArray(drinkIngredients.drinkId, drinkIds))
+            .orderBy(asc(drinkIngredients.position))
+        : Promise.resolve([]),
+      hasBeans
+        ? db
+            .select({
+              id: beans.id,
+              roasterName: beans.roasterName,
+              beanName: beans.beanName,
+              process: beans.process,
+              roastDate: beans.roastDate,
+              inventoryWeightGrams: beans.inventoryWeightGrams,
+              roastLevel: beans.roastLevel,
+              detailedRoastLevel: beans.detailedRoastLevel,
+              roastType: beans.roastType,
+              blendType: beans.blendType,
+              decaf: beans.decaf,
+              flavorProfile: beans.flavorProfile,
+              region: beans.region,
+              altitudeMasl: beans.altitudeMasl,
+              producer: beans.producer,
+            })
+            .from(beans)
+            .where(and(eq(beans.workspaceId, workspace.id), eq(beans.showOnPublicMenu, true), isNull(beans.archivedAt)))
+            .orderBy(asc(beans.roasterName), asc(beans.beanName))
+        : Promise.resolve([]),
     ]);
 
-    const ids = menuDrinks.map((d) => d.id);
-    const ingredientRows = ids.length
-      ? await db
-          .select({ drinkId: drinkIngredients.drinkId, name: ingredients.name })
-          .from(drinkIngredients)
-          .innerJoin(ingredients, eq(drinkIngredients.ingredientId, ingredients.id))
-          .where(inArray(drinkIngredients.drinkId, ids))
-          .orderBy(asc(drinkIngredients.position))
-      : [];
+    // Name a parent drink only if it's on the menu too, so hidden drinks stay hidden.
+    const parentOf = new Map(drinkRows.map((d) => [d.id, d.parentDrinkId]));
+    const menuNameOf = new Map<string, string>();
+    for (const i of allItems) if (i.drinkId && i.source) menuNameOf.set(i.drinkId, i.name ?? i.source.name);
 
-    // Only name a parent that's on the menu too, so hidden drinks stay hidden.
-    const shownNames = new Map(menuDrinks.map((d) => [d.id, d.name]));
-    const items: Array<MenuItem & { categoryId: string | null }> = [
-      ...menuBrewers.map(({ brewerKind, ...b }) => ({ ...b, kind: "brewer" as const, method: METHOD_LABELS[brewerKind], variantOf: null, ingredients: [] })),
-      ...menuDrinks.map(({ parentDrinkId, drinkKind, ...d }) => ({
-        ...d,
-        kind: "drink" as const,
-        method: METHOD_LABELS[drinkKind],
-        variantOf: (parentDrinkId && shownNames.get(parentDrinkId)) ?? null,
-        ingredients: ingredientRows.filter((c) => c.drinkId === d.id).map((c) => c.name),
-      })),
-    ];
-    const sections: MenuSection[] = [...categories, { id: null, name: null }]
-      .map((c) => ({
-        category: c.name,
-        items: items.filter((i) => i.categoryId === c.id).map(({ categoryId: _category, ...item }) => item),
+    const sections: PublicMenuSection[] = menu.sections
+      .map((s) => ({
+        name: s.name,
+        description: s.description,
+        items: s.items.flatMap((i): Array<PublicMenuItem | PublicBeansBlock> => {
+          if (i.itemType === "beans") return menuBeans.length ? [{ type: "beans", beans: menuBeans }] : [];
+          // A retired brewer, or a source that's gone, is left off.
+          if (!i.source || i.source.retired) return [];
+          const id = (i.drinkId ?? i.brewerId)!;
+          const parent = i.drinkId ? parentOf.get(i.drinkId) : null;
+          return [
+            {
+              type: i.itemType,
+              id,
+              name: i.name ?? i.source.name,
+              description: i.description ?? i.source.description,
+              method: METHOD_LABELS[i.source.kind],
+              variantOf: (parent && menuNameOf.get(parent)) ?? null,
+              ingredients: i.drinkId ? ingredientRows.filter((r) => r.drinkId === i.drinkId).map((r) => r.name) : [],
+              price: i.price,
+              available: i.available,
+            },
+          ];
+        }),
       }))
       .filter((s) => s.items.length > 0);
 
-    res.json({
-      workspace: { name: workspace.name, slug: workspace.slug },
-      beans: menuBeans,
-      sections,
-    });
+    res.json({ workspace: { name: workspace.name, slug: workspace.slug }, currency: menu.currency, sections });
   }
 );

@@ -1,7 +1,5 @@
-import request from "supertest";
 import { describe, expect, it } from "vitest";
-import { app } from "../src/app.js";
-import { newBean, newUser, newWorkspace } from "./helpers.js";
+import { menuWithBeans, newBean, newUser, newWorkspace, publicMenuBeans } from "./helpers.js";
 
 async function setup() {
   const owner = await newUser();
@@ -51,8 +49,8 @@ describe("archiving beans (docs/api/beans.md §4)", () => {
 
   it("leaves the public menu while archived", async () => {
     const { owner, ws, bean } = await setup();
-    await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ isPublicMenuEnabled: true });
-    const menuBeans = async () => (await request(app).get(`/api/public/menu/${ws.slug}`)).body.beans as unknown[];
+    await menuWithBeans(owner, ws.id);
+    const menuBeans = () => publicMenuBeans(ws.slug);
     expect(await menuBeans()).toHaveLength(1);
     await owner.agent.patch(bean).send({ archived: true });
     expect(await menuBeans()).toHaveLength(0);

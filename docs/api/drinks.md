@@ -78,7 +78,8 @@ was deleted).
   }
   ```
   - `name` trimmed, 1–255 chars; `description` optional, ≤ 500, blank
-    becomes `null`; `showOnPublicMenu` defaults to `true`.
+    becomes `null`. `showOnPublicMenu` (default `true`) is no longer used:
+    the menu builder (§7b) decides what's on the menu; it will be removed.
   - `instructions` (optional, ≤ 5000, blank becomes `null`): how to make it,
     free text shown after the brew. Not on the public menu.
   - `kind` (required): one of `METHOD_KINDS`.

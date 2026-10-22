@@ -39,6 +39,9 @@ export const workspaces = mysqlTable("workspaces", {
   name: varchar("name", { length: 255 }).notNull(),
   slug: varchar("slug", { length: 255 }).unique().notNull(), // Powers /menu/:slug
   isPublicMenuEnabled: boolean("is_public_menu_enabled").default(false).notNull(),
+  // Currency of menu prices (ISO 4217, e.g. "USD"); needed once an item has a
+  // price (docs/api/menu.md §7b).
+  menuCurrency: varchar("menu_currency", { length: 3 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -383,10 +386,10 @@ export const ingredients = mysqlTable(
   })
 );
 
-// 7c. Drink Categories (Ordered Menu Sections)
-// Group drinks and plain brew methods on the menu and in the brew picker,
-// e.g. "Espresso milk drinks", "Specialty drinks". Deleting one leaves its
-// drinks and methods uncategorised.
+// 7c. Drink Categories (Ordered Groups on the Brew Page)
+// Group drinks and plain brew methods in the brew picker, e.g. "Espresso
+// milk drinks", "Specialty drinks". The public menu has its own sections
+// (7e). Deleting one leaves its drinks and methods uncategorised.
 export const drinkCategories = mysqlTable(
   "drink_categories",
   {
@@ -459,6 +462,56 @@ export const drinkIngredients = mysqlTable("drink_ingredients", {
   amountUnit: varchar("amount_unit", { length: 20 }), // e.g. "pump"
   note: varchar("note", { length: 255 }), // e.g. "spooned on top"
 });
+
+// 7e. Menu Builder (The Public Menu, Arranged by Hand)
+// docs/api/menu.md §7b. The menu is its own thing: sections you name and
+// order, holding items you place: a drink, a brewer (its plain brew), or the
+// beans block (the bar's active beans that are switched on for the menu).
+// Items can rename and describe their source for the menu, carry a price
+// and be marked unavailable. Deleting a drink or brewer removes its items.
+export const MENU_ITEM_TYPES = ["drink", "brewer", "beans"] as const;
+export type MenuItemType = (typeof MENU_ITEM_TYPES)[number];
+
+export const menuSections = mysqlTable(
+  "menu_sections",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(),
+    description: varchar("description", { length: 500 }),
+    position: int("position").notNull(), // 1, 2, 3...
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("menu_sections_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+
+export const menuItems = mysqlTable(
+  "menu_items",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    sectionId: varchar("section_id", { length: 36 })
+      .notNull()
+      .references(() => menuSections.id, { onDelete: "cascade" }),
+    position: int("position").notNull(), // 1, 2, 3... within the section
+    itemType: varchar("item_type", { length: 20 }).$type<MenuItemType>().notNull(), // MENU_ITEM_TYPES
+    // Exactly the one matching itemType (the API); neither for "beans".
+    drinkId: varchar("drink_id", { length: 36 }).references(() => drinks.id, { onDelete: "cascade" }),
+    brewerId: varchar("brewer_id", { length: 36 }).references(() => brewers.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }), // null = the source's name
+    description: varchar("description", { length: 500 }), // null = the source's
+    price: decimal("price", { precision: 8, scale: 2, mode: "number" }), // in workspaces.menuCurrency
+    available: boolean("available").default(true).notNull(), // false = shown as unavailable
+  },
+  (table) => ({
+    // A drink or brewer once per section (NULLs don't collide).
+    sectionDrinkUnique: unique("menu_items_section_drink_unique").on(table.sectionId, table.drinkId),
+    sectionBrewerUnique: unique("menu_items_section_brewer_unique").on(table.sectionId, table.brewerId),
+  })
+);
 
 // 8. Brew Logs (Actual Execution & Tasting Notes)
 export const brewLogs = mysqlTable("brew_logs", {

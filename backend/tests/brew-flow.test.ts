@@ -3,7 +3,7 @@ import request from "supertest";
 import { brewAnalysisJobId } from "@barista/shared/jobs";
 import { app } from "../src/app.js";
 import { brewAnalysisQueue } from "../src/queue.js";
-import { addMember, brewerId, newBean, newBrewLog, newUser, newWorkspace, type TestUser } from "./helpers.js";
+import { addMember, brewerId, menuAdd, menuSection, newBean, newBrewLog, newUser, newWorkspace, type TestUser } from "./helpers.js";
 
 async function setup(): Promise<{ owner: TestUser; ws: { id: string; slug: string }; v60: string }> {
   const owner = await newUser("owner");
@@ -188,28 +188,31 @@ describe("suggestions and analysis", () => {
 });
 
 describe("public menu", () => {
-  it("shows only items marked public, only when enabled, only at the exact slug", async () => {
-    const { owner, ws, v60 } = await setup();
+  it("shows the builder's menu, only when enabled, only at the exact slug", async () => {
+    const { owner, ws } = await setup();
     const menu = `/api/public/menu/${ws.slug}`;
     await newBean(owner, ws.id, { beanName: "Shown" });
     await newBean(owner, ws.id, { beanName: "Hidden", showOnPublicMenu: false });
     const foamId = (await owner.agent.post(`/api/workspaces/${ws.id}/ingredients`).send({ name: "Orange cold foam", ingredientType: "foam" })).body.ingredient.id;
     const drinks = `/api/workspaces/${ws.id}/drinks`;
-    await owner.agent.post(drinks).send({ name: "The Atlas", description: "V60 with orange cold foam", kind: "filter", ingredients: [{ ingredientId: foamId, amountValue: 40, amountUnit: "g" }] });
-    await owner.agent.post(drinks).send({ name: "Secret", kind: "filter", showOnPublicMenu: false });
+    const atlas = (await owner.agent.post(drinks).send({ name: "The Atlas", description: "V60 with orange cold foam", kind: "filter", ingredients: [{ ingredientId: foamId, amountValue: 40, amountUnit: "g" }] })).body.drink.id;
+    await owner.agent.post(drinks).send({ name: "Not placed", kind: "filter" });
+    const specialty = await menuSection(owner, ws.id, "Specialty");
+    await menuAdd(owner, ws.id, specialty, { itemType: "drink", drinkId: atlas });
+    await menuAdd(owner, ws.id, specialty, { itemType: "beans" });
 
     expect((await request(app).get(menu)).status).toBe(404); // not enabled yet
     await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ isPublicMenuEnabled: true });
     const res = await request(app).get(menu);
     expect(res.status).toBe(200);
-    expect(res.body.beans.map((b: { beanName: string }) => b.beanName)).toEqual(["Shown"]);
-    // Names of brewers and ingredients only, no recipe details. Brewers are
-    // off the menu until marked.
+    // Only placed items; names of ingredients only, no recipe details.
     expect(res.body.sections).toEqual([
       {
-        category: null,
+        name: "Specialty",
+        description: null,
         items: [
-          { kind: "drink", id: expect.any(String), name: "The Atlas", description: "V60 with orange cold foam", method: "Filter", variantOf: null, ingredients: ["Orange cold foam"] },
+          { type: "drink", id: atlas, name: "The Atlas", description: "V60 with orange cold foam", method: "Filter", variantOf: null, ingredients: ["Orange cold foam"], price: null, available: true },
+          { type: "beans", beans: [expect.objectContaining({ beanName: "Shown" })] },
         ],
       },
     ]);

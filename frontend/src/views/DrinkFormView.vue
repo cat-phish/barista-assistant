@@ -37,7 +37,6 @@ const kind = ref<MethodKind | ''>('');
 const categoryId = ref('');
 const newCategory = ref('');
 const parentDrinkId = ref('');
-const showOnPublicMenu = ref(true);
 const defaultRecipeId = ref('');
 // Default size: amounts below are for it, and brewing scales from it.
 const servingSize = ref('');
@@ -94,7 +93,6 @@ function fill(drink: Drink): void {
   kind.value = drink.kind;
   categoryId.value = drink.category?.id ?? '';
   parentDrinkId.value = drink.parent?.id ?? '';
-  showOnPublicMenu.value = drink.showOnPublicMenu;
   defaultRecipeId.value = drink.defaultRecipeId ?? '';
   servingSize.value = drink.servingSize === null ? '' : String(drink.servingSize);
   servingUnit.value = drink.servingUnit ?? 'fl_oz';
@@ -188,7 +186,6 @@ async function save(): Promise<void> {
       kind: kind.value as MethodKind, // checked by `valid`
       categoryId: await resolveCategory(ws),
       parentDrinkId: parentDrinkId.value || null,
-      showOnPublicMenu: showOnPublicMenu.value,
       defaultRecipeId: defaultRecipeId.value || null,
       servingSize: parsedSize.value?.ok ? parsedSize.value.value : null,
       servingUnit: parsedSize.value?.ok ? servingUnit.value : null,
@@ -230,7 +227,7 @@ async function save(): Promise<void> {
           <span v-if="submitted && errors.name" class="field-error">{{ errors.name }}</span>
         </div>
         <div class="field">
-          <label for="description">Description <span class="muted">(optional, shown on the menu)</span></label>
+          <label for="description">Description <span class="muted">(optional; the menu uses it unless you change it there)</span></label>
           <input id="description" v-model="description" maxlength="500" placeholder="e.g. Espresso, steamed milk and house vanilla" />
         </div>
         <div class="field">
@@ -265,10 +262,6 @@ async function save(): Promise<void> {
             ><template v-if="i">, </template><RouterLink :to="{ name: 'drink-edit', params: { id: v.id } }">{{ v.name }}</RouterLink></template
           >
         </p>
-        <label class="checkbox">
-          <input v-model="showOnPublicMenu" type="checkbox" />
-          Show on the public menu
-        </label>
       </section>
 
       <section class="card stack" aria-labelledby="brew-heading">

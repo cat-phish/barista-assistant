@@ -271,43 +271,6 @@ describe("drink categories", () => {
   });
 });
 
-describe("menu sections", () => {
-  it("group plain brewers and drinks by category order, uncategorised last", async () => {
-    const { owner, ws, base, v60, espresso } = await setup();
-    const category = async (name: string) => (await owner.agent.post(`${base}/drink-categories`).send({ name })).body.category.id as string;
-    const brewed = await category("Brewed coffee");
-    const milk = await category("Espresso milk drinks");
-    await category("Empty");
-    const ice = (await owner.agent.post(`${base}/ingredients`).send({ name: "Ice", ingredientType: "ice" })).body.ingredient.id;
-
-    expect((await owner.agent.patch(`${base}/brewers/${v60}`).send({ showOnPublicMenu: true, categoryId: brewed, description: "Single origin" })).status).toBe(200);
-    const drink = (body: Record<string, unknown>) => owner.agent.post(`${base}/drinks`).send(body).then((r) => r.body.drink.id as string);
-    const latte = await drink({ name: "Latte", kind: "espresso", categoryId: milk });
-    await drink({ name: "Iced Latte", kind: "espresso", categoryId: milk, parentDrinkId: latte, ingredients: [{ ingredientId: ice }] });
-    const secret = await drink({ name: "Secret", kind: "espresso", showOnPublicMenu: false });
-    await drink({ name: "Secret riff", kind: "espresso", parentDrinkId: secret });
-    await drink({ name: "Atlas", kind: "filter", categoryId: brewed });
-
-    await owner.agent.patch(base).send({ isPublicMenuEnabled: true });
-    const menu = (await owner.agent.get(`/api/public/menu/${ws.slug}`)).body;
-    expect(menu.drinks).toBeUndefined();
-    const item = (kind: string, name: string, method: string, extra: Record<string, unknown> = {}) => ({
-      kind,
-      id: expect.any(String),
-      name,
-      description: null,
-      method,
-      variantOf: null,
-      ingredients: [],
-      ...extra,
-    });
-    expect(menu.sections).toEqual([
-      { category: "Brewed coffee", items: [item("brewer", "V60", "Filter", { description: "Single origin" }), item("drink", "Atlas", "Filter")] },
-      { category: "Espresso milk drinks", items: [item("drink", "Iced Latte", "Espresso", { variantOf: "Latte", ingredients: ["Ice"] }), item("drink", "Latte", "Espresso")] },
-      { category: null, items: [item("drink", "Secret riff", "Espresso")] }, // hidden parent isn't named
-    ]);
-  });
-});
 
 describe("drinks on brew logs", () => {
   it("a brew for a drink uses a recipe of its brewer; deleting the drink keeps the log", async () => {

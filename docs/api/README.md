@@ -20,6 +20,7 @@ means drinks, wherever you see it (code comments use
 | §5d | [drink-categories.md](drink-categories.md) | Drink Categories |
 | §6 | [brew-logs.md](brew-logs.md) | Brew Logs |
 | §7 | [public-menu.md](public-menu.md) | Public Menu Endpoint |
+| §7b | [menu.md](menu.md) | Menu Builder (sections and items for §7) |
 | §8 | [analysis.md](analysis.md) | LLM Brew Analysis / Parameter Suggestions |
 | §9 | [llm-contract.md](llm-contract.md) | Worker -> LLM Structured Output Contract |
 

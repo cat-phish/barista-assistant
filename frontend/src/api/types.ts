@@ -16,6 +16,32 @@ export interface Workspace {
   createdAt: string;
 }
 
+// docs/api/menu.md §7b: the menu builder.
+export type MenuItemType = 'drink' | 'brewer' | 'beans';
+export interface MenuItem {
+  id: string;
+  itemType: MenuItemType;
+  drinkId: string | null;
+  brewerId: string | null;
+  name: string | null; // override; null = the source's
+  description: string | null;
+  price: number | null; // in Menu.currency
+  available: boolean;
+  // What it shows by default; null for the beans block. retired: left off the public menu.
+  source: { name: string; description: string | null; kind: MethodKind; retired: boolean } | null;
+}
+export interface MenuSection {
+  id: string;
+  name: string;
+  description: string | null;
+  position: number;
+  items: MenuItem[];
+}
+export interface Menu {
+  currency: string | null;
+  sections: MenuSection[];
+}
+
 export interface WorkspaceWithRole extends Workspace {
   role: Role;
 }

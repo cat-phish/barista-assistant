@@ -35,9 +35,11 @@ adjusted. Other kinds keep `none`.
 | `flowControl`, `pressureControl` | `none`, `manual` (paddle, lever, needle valve), `programmable` (profiles) — `PROFILE_CONTROLS` |
 
 **Category and menu:** a brewer's optional drink category (§5d) is where it's
-listed when brewing (Category → Drink or plain brew → Brewer → Recipe) and on the public
-menu (§7), where it can appear as the plain brew under `menuName` (else its
-name), e.g. "Espresso" for a Linea Mini.
+listed when brewing (Category → Drink or plain brew → Brewer → Recipe). The
+public menu shows a brewer's plain brew only where the menu builder (§7b)
+places it, under the item's name (e.g. "Espresso" for a Linea Mini).
+`menuName`, `description` and `showOnPublicMenu` are no longer used by the
+menu (migration 0033 copied them into menu items) and will be removed.
 
 Retiring works like grinders (§3b): retired brewers leave the pickers, and
 past brews keep showing them. `createdAt` (read-only) is when the brewer was added.

@@ -1,7 +1,5 @@
-import request from "supertest";
 import { describe, expect, it } from "vitest";
-import { app } from "../src/app.js";
-import { newBean, newUser, newWorkspace } from "./helpers.js";
+import { menuWithBeans, newBean, newUser, newWorkspace, publicMenuBeans } from "./helpers.js";
 
 const DETAILS = {
   roastType: "espresso",
@@ -184,8 +182,8 @@ describe("bean details (docs/api/beans.md §4)", () => {
   it("publishes roast, blend and origin details on the public menu, but nothing private", async () => {
     const { owner, ws } = await setup();
     await newBean(owner, ws.id, DETAILS);
-    await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ isPublicMenuEnabled: true });
-    const [bean] = (await request(app).get(`/api/public/menu/${ws.slug}`)).body.beans;
+    await menuWithBeans(owner, ws.id);
+    const [bean] = await publicMenuBeans(ws.slug);
     expect(bean).toMatchObject({
       roastType: "espresso",
       detailedRoastLevel: "full_city_plus",
