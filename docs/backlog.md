@@ -23,13 +23,13 @@ on: 1" always means the same item. When an item is done or added, renumber
 and fix the references.
 
 **Contents**
-- A. Settings & configuration: 1–5
-- B. Beans: 6–7
-- C. Brewing & logging: 8–11
-- D. AI suggestions: 12–13
-- E. Insights: 14
-- F. Bar & menu: 15–16
-- G. Home roasting: 17
+- A. Settings & configuration: 1–6
+- B. Beans: 7–8
+- C. Brewing & logging: 9–13
+- D. AI suggestions: 14–15
+- E. Insights: 16
+- F. Bar & menu: 17–18
+- G. Home roasting: 19
 
 ---
 
@@ -45,11 +45,11 @@ Where the app's choices live, and what you can switch on, off or take out.
   one obvious home.
 - **Approach:**
   - A **Settings** item in the header nav, with tabs. Start with **Styles**
-    (item 2), **Units & defaults** (item 3) and **Workspace** (name, slug,
+    (item 2), **Units & defaults** (items 3 and 4) and **Workspace** (name, slug,
     public menu switch, members), the last moving from the workspace screen.
-    Later tabs: **Lists** (styles and processes, item 2), **Fields** (item 4),
-    **Data** (backup, restore, export, item 5), **Repeat brews** (item 10)
-    and **Notifications** (item 11).
+    Later tabs: **Lists** (styles and processes, item 2), **Fields** (item 5),
+    **Data** (backup, restore, export, item 6), **Repeat brews** (item 11)
+    and **Notifications** (item 12).
   - Two scopes:
     - **workspace settings**, shared by the bar and editable by owners: a
       `workspace_settings` table, or columns on `workspaces`;
@@ -118,18 +118,41 @@ Where the app's choices live, and what you can switch on, off or take out.
 - **Depends on:** 1.
 - **Open questions:** temperature in °F as well?
 
-### 4. Field visibility for brews and beans
+### 4. Roast level scale for beans
 
 - **Status:** idea
-- **Why:** items 6 and 8 add many optional fields (the bean form alone now
-  has about fifteen). Not every bar uses a
+- **Why:** the bean form asks for the traditional roast name (Cinnamon,
+  City, Full City+ … French) and shows the 5-step level (light … dark) it
+  implies. Many bags only say "medium" or "light", and some bars never think
+  in City/Full City terms.
+- **Approach:**
+  - A workspace setting under Settings → **Units & defaults**: roast level
+    as **roast names** (today's form) or **light to dark** (the 5-step
+    level only).
+  - With light to dark, the form shows the 5-step level as an editable
+    select and hides the roast name. The API already accepts `roastLevel`
+    alone while a bean has no detailed level (`docs/api/beans.md` §4).
+  - Lists show whichever the bean has: the roast name if set, else the
+    5-step level.
+- **Size:** S
+- **Depends on:** 1.
+- **Open questions:**
+  - With light to dark chosen, what happens to a bean that already has a
+    roast name: keep it read-only, or let a new 5-step choice clear it?
+  - Per workspace, or per person?
+
+### 5. Field visibility for brews and beans
+
+- **Status:** idea
+- **Why:** item 9 adds many optional brew fields, and the bean form already
+  has about fifteen (roadmap phase 5). Not every bar uses a
   refractometer or tracks price, and a long form slows down logging a brew.
   Each bar should show only the fields it uses.
 - **Approach:**
   - Settings → **Fields**: one list for the brew form and one for the bean
     form, with a switch for each optional field:
     - **brew:** grind speed, TDS, water profile, prep tools, temperature…
-      (item 8);
+      (item 9);
     - **bean:** process, producer, region, altitude, flavor profile, origin
       (blend type), decaf, roasted for, roast date, roast level, bag price
       and bag weight, purchase date, green bean supplier, website, rating,
@@ -141,13 +164,13 @@ Where the app's choices live, and what you can switch on, off or take out.
   - The frontend has one field registry (key, label, form, required) that
     the forms and the Settings tab both read.
 - **Size:** M
-- **Depends on:** 1. Most useful once 6 and 8 add fields.
+- **Depends on:** 1. Even more useful once 9 adds brew fields.
 - **Open questions:**
   - Per workspace (the bar's standard form) or per person?
   - Should hidden fields be left out of the AI prompt as well, or does the AI
     use whatever is recorded?
 
-### 5. Backup, restore and export
+### 6. Backup, restore and export
 
 - **Status:** idea
 - **Why:** the journal is months of brews and dialing-in. There's no way to
@@ -179,44 +202,6 @@ Where the app's choices live, and what you can switch on, off or take out.
 
 What's recorded about each coffee.
 
-### 6. More bean details
-
-- **Status:** in progress (branch `bean-details`). Decided:
-  - the price is per bag, on the bean, with a 3-letter currency code;
-  - the detailed roast level ("Roast Level" in the form, Cinnamon … French)
-    is the one you pick, and the API derives the 5-step `roastLevel` from it.
-    The form shows the 5-step level read-only. Older beans keep a 5-step
-    level set on its own until a detailed one is picked;
-  - process is a fixed list of keys (`BEAN_PROCESSES`), editable later via
-    item 2;
-  - round 2 added flavor profile, producer, region, altitude (metres; feet
-    via item 3), purchase date, green bean supplier and a 1–5 bean rating.
-    The public menu shows flavor profile and origin; the AI gets flavor
-    profile, region and altitude.
-- **Why:** a bean is a roaster, name, process, roast level, roast date and
-  stock today. What it's roasted for, whether it's a blend, decaf, its price
-  and where to buy it again all affect how it's brewed and whether to
-  reorder.
-- **Approach:**
-  - New optional columns on `beans`:
-    - **Roast type:** filter / espresso / omni / unknown (a const list, like
-      `ROAST_LEVELS`).
-    - **Detailed roast level:** cinnamon, light (new England), city, city+,
-      full city, full city+, vienna, french, italian.
-    - **Blend type:** single origin / blend / other.
-    - **Decaf:** a flag.
-    - **Website** (URL), **price** (amount + currency, with the bag weight
-      so a price per gram can be worked out), and **notes**.
-  - Every new field can be hidden through item 4.
-  - The AI prompt gets roast type, decaf and blend type (item 12).
-- **Size:** M
-- **Depends on:** 4 (to hide the fields), though it can ship first.
-- **Open questions:**
-  - Does the detailed roast level replace `roastLevel` or sit beside it?
-    The yield estimate and the AI use the 5-step `ROAST_LEVELS`. Suggestion:
-    keep both, and have each detailed level set the 5-step one.
-  - Is price per bag, or per purchase (a bean bought again)?
-
 ### 7. Bean photos
 
 - **Status:** idea
@@ -229,14 +214,33 @@ What's recorded about each coffee.
     EXIF, resizes it (full size and a thumbnail) and stores it.
   - The bean list shows the cover thumbnail; the bean page has a gallery.
     On a phone the camera opens directly (`capture` on the file input).
-  - Photos can be hidden through item 4.
+  - Photos can be hidden through item 5.
 - **Size:** M–L (storage is new to the stack).
-- **Depends on:** nothing; 5 should include photos once both exist.
+- **Depends on:** nothing; 6 should include photos once both exist.
 - **Open questions:**
   - Storage: a Docker volume on local disk, or S3-compatible storage
     (MinIO)?
   - Size limits, and does the PWA cache the photos for offline use?
   - Could a label photo fill in the bean form (AI reading the label)?
+
+### 8. Prompt to rate a bean
+
+- **Status:** idea
+- **Why:** beans have a 1–5 rating, but it's easy to forget once the bag is
+  finished, and an unrated bean says nothing about whether to buy it again.
+- **Approach:**
+  - When a bean has no rating, ask for one at a natural moment: after a few
+    brews of it, or when its stock runs low or reaches 0.
+  - The prompt is a small card (on the home screen, the bean list, or
+    after logging a brew) with the stars and "Not now"; "Not now" waits until
+    the next trigger.
+  - The bean list can filter for unrated beans.
+- **Size:** S
+- **Depends on:** nothing; item 12's notifications could deliver it later.
+- **Open questions:**
+  - Which triggers: a number of brews, low stock, empty stock, or days
+    since roasting?
+  - Should it also suggest a rating from the brews' average?
 
 ---
 
@@ -244,7 +248,7 @@ What's recorded about each coffee.
 
 Recording a brew: what's measured, and how fast it is to log.
 
-### 8. More brew parameters
+### 9. More brew parameters
 
 - **Status:** idea
 - **Why:** dose, water, yield, temperature, grind and time leave out things
@@ -264,17 +268,17 @@ Recording a brew: what's measured, and how fast it is to log.
       yield from TDS, yield and dose: `EY = TDS × beverage weight / dose`.
       For immersion, beverage weight is estimated from water and retained
       liquid. EY is shown, not stored.
-  - Every new field can be hidden through item 4.
-  - The AI prompt gets them (item 12); TDS and EY are the most useful.
+  - Every new field can be hidden through item 5.
+  - The AI prompt gets them (item 14); TDS and EY are the most useful.
 - **Size:** L. Can be split: TDS and EY first, then water and tools, then
   weights and RPM.
-- **Depends on:** 4 (so the form doesn't get crowded).
+- **Depends on:** 5 (so the form doesn't get crowded).
 - **Open questions:**
   - Are tools and water profiles reusable lists (with minerals for water) or
     free text?
   - Should a recipe set default tools and water?
 
-### 9. Repeat a brew
+### 10. Repeat a brew
 
 - **Status:** idea
 - **Why:** dialing in usually means "same as last time, one click finer".
@@ -291,19 +295,19 @@ Recording a brew: what's measured, and how fast it is to log.
 - **Open questions:** should it start the timer straight away for recipes
   with steps?
 
-### 10. Choose what a repeat keeps
+### 11. Choose what a repeat keeps
 
 - **Status:** idea
 - **Why:** what to carry over differs by bar: some always change the grind,
   others want the tasting notes as a reminder.
 - **Approach:** Settings → **Repeat brews**: a switch for each field "Brew
-  again" copies, with item 9's choices as the default. Uses item 4's field
+  again" copies, with item 10's choices as the default. Uses item 5's field
   registry.
 - **Size:** S
-- **Depends on:** 1, 9.
+- **Depends on:** 1, 10.
 - **Open questions:** per person or per workspace?
 
-### 11. Rate later, with reminders
+### 12. Rate later, with reminders
 
 - **Status:** idea
 - **Why:** coffee often gets rated a while after it's made (once it cools,
@@ -317,7 +321,8 @@ Recording a brew: what's measured, and how fast it is to log.
   - Delivered with **ntfy.sh** (or a self-hosted ntfy server): each user sets
     a server and topic under Settings → **Notifications**. The message links
     to the brew's rating screen. Web Push could come later.
-  - The same notification code serves item 17's resting reminders.
+  - The same notification code serves item 13's steep timers and item 19's
+    resting reminders.
 - **Size:** M
 - **Depends on:** 1.
 - **Open questions:**
@@ -327,13 +332,40 @@ Recording a brew: what's measured, and how fast it is to log.
   - The rating link opens in the PWA. What happens if the user isn't signed
     in?
 
+### 13. Cold brew refinements
+
+- **Status:** idea
+- **Why:** cold brew is a recipe style (`cold_brew`), but it's brewed like a
+  quick filter: a timer in seconds, water by weight, no dilution. A real cold
+  brew steeps for 12–24 hours, is usually a concentrate, and is diluted to
+  serve.
+- **Approach:**
+  - Cold brew recipes:
+    - steep time in hours;
+    - steep temperature (fridge or room);
+    - concentrate ratio, and a serving dilution (e.g. 1:1 with water or
+      milk);
+    - filtering steps.
+  - Brewing a cold brew starts a batch: the start time is logged, and the
+    brew is finished and rated later, when the steep ends. Item 12's
+    notifications send the "steep done" reminder.
+  - The log records the batch size and the dilution served, so the AI
+    (item 14) judges strength correctly.
+- **Size:** M
+- **Depends on:** 12 for the reminder; the rest can go first.
+- **Open questions:**
+  - Should a cold brew batch be stock, like item 17's ingredient batches,
+    with servings taken from it?
+  - Are there other long brews to cover the same way (e.g. Kyoto-style cold
+    drip)?
+
 ---
 
 ## D. AI suggestions
 
 What the analysis worker sends to the LLM and what comes back.
 
-### 12. Review and refine AI input and output
+### 14. Review and refine AI input and output
 
 - **Status:** idea
 - **Why:** the prompt and structured output (`docs/api/llm-contract.md` §9)
@@ -347,14 +379,15 @@ What the analysis worker sends to the LLM and what comes back.
     suggestions give one clear next step, and how confidence and reasons are
     shown.
   - Build a small set of real brews to compare prompt versions against.
-  - Add the new fields from items 6 and 8 once they exist.
+  - Add item 9's brew fields once they exist. The bean details from
+    roadmap phase 5 are already sent; check they help.
 - **Size:** M
-- **Depends on:** nothing; repeat after 6 and 8.
+- **Depends on:** nothing; repeat after 9.
 - **Open questions:**
   - Should users be able to rate a suggestion (useful / not), to measure it?
   - Which model and cost per analysis is acceptable?
 
-### 13. Espresso dose and yield suggestions from the AI
+### 15. Espresso dose and yield suggestions from the AI
 
 - **Status:** idea
 - **Why:** the AI suggests grind and temperature changes; for espresso, dose
@@ -363,7 +396,7 @@ What the analysis worker sends to the LLM and what comes back.
   optional dose and yield deltas for espresso brews, and show them with the
   suggestion. Prompt and schema change, plus UI.
 - **Size:** S–M
-- **Depends on:** nothing. Fits with 12.
+- **Depends on:** nothing. Fits with 14.
 - **Open questions:** should it also suggest pre-infusion and profile changes
   for machines that support them?
 
@@ -371,7 +404,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## E. Insights
 
-### 14. Statistics and graphs
+### 16. Statistics and graphs
 
 - **Status:** idea
 - **Why:** the brew history is a list. Trends (is this bean getting better
@@ -383,12 +416,12 @@ What the analysis worker sends to the LLM and what comes back.
     - brews per day or week;
     - average rating by bean, recipe, grinder and brewer;
     - rating against roast age, grind setting or ratio (scatter);
-    - EY against TDS, with the target box (once 8 records TDS);
+    - EY against TDS, with the target box (once 9 records TDS);
     - coffee used and stock left per bean.
   - The backend adds aggregate endpoints under `/api/workspaces/:id/stats`
     instead of sending every log to the client.
 - **Size:** M–L
-- **Depends on:** nothing; the TDS chart needs 8.
+- **Depends on:** nothing; the TDS chart needs 9.
 - **Open questions:**
   - Charting library (Chart.js, ECharts, or plain SVG)?
   - The whole workspace, or each person's brews by default?
@@ -397,7 +430,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## F. Bar & menu
 
-### 15. Ingredient prep and stock
+### 17. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -412,7 +445,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** how precise does stock need to be (exact grams, or
   "about half left")?
 
-### 16. Public menu page
+### 18. Public menu page
 
 - **Status:** idea
 - **Why:** the public menu API exists (sections by category, brewers and
@@ -428,7 +461,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## G. Home roasting
 
-### 17. Roasting: green stock, roast logs, resting
+### 19. Roasting: green stock, roast logs, resting
 
 - **Status:** idea
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
@@ -441,15 +474,15 @@ What the analysis worker sends to the LLM and what comes back.
     out (weight loss %), drop temperature, development time, profile notes,
     and an optional curve file or link (e.g. from Artisan).
   - **Resting stock:** each roast creates a `bean` (roaster = "home", the
-    roast date, the detailed roast level from item 6) marked as resting until
+    roast date, the detailed roast level from roadmap phase 5) marked as resting until
     a set day, then ready.
   - **Reminders** when a roast has finished resting or green stock is low,
-    through item 11's notifications.
+    through item 12's notifications.
   - Ratings for brews of a roasted bean link back to its roast, so roasts can
     be compared.
 - **Size:** L (several branches: green stock and roast log, then resting and
   reminders, then roast comparison).
-- **Depends on:** 11 (reminders), 6 (detailed roast level); 7 for photos.
+- **Depends on:** 12 (reminders); 7 for photos.
 - **Open questions:**
   - Its own section, or a part of Beans?
   - Import roast curves (Artisan `.alog`), or only link to them?
