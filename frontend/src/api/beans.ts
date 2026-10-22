@@ -1,12 +1,12 @@
 import { api } from './client';
-import type { Bean, BlendType, DetailedRoastLevel, RoastLevel, RoastType } from './types';
+import type { Bean, BeanProcess, BlendType, DetailedRoastLevel, RoastType } from './types';
 
-// Request body for create/update (docs/api/beans.md §4).
+// Request body for create/update (docs/api/beans.md §4). roastLevel isn't
+// sent: the API derives it from detailedRoastLevel.
 export interface BeanInput {
   roasterName: string;
   beanName: string;
-  process: string | null;
-  roastLevel: RoastLevel | null;
+  process: BeanProcess | null;
   roastDate: string | null; // YYYY-MM-DD
   inventoryWeightGrams: number;
   showOnPublicMenu: boolean;
@@ -19,6 +19,13 @@ export interface BeanInput {
   priceCurrency: string | null;
   bagWeightGrams: number | null;
   notes: string | null;
+  flavorProfile: string | null;
+  region: string | null;
+  altitudeMasl: number | null;
+  producer: string | null;
+  purchaseDate: string | null;
+  greenSupplier: string | null;
+  rating: number | null;
 }
 
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/beans`;

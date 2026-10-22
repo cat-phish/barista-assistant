@@ -23,8 +23,9 @@ export interface PublicMenuResponse {
       Bean,
       | "id" | "roasterName" | "beanName" | "process" | "roastDate" | "inventoryWeightGrams"
       | "roastLevel" | "detailedRoastLevel" | "roastType" | "blendType" | "decaf"
+      | "flavorProfile" | "region" | "altitudeMasl" | "producer"
     >
-  >; // price, website and notes stay private (docs/api/public-menu.md §7)
+  >; // price, website, notes, rating, purchase date and supplier stay private (docs/api/public-menu.md §7)
   // docs/api/public-menu.md §7: plain brews and drinks, in category sections.
   sections: MenuSection[];
 }
@@ -84,6 +85,10 @@ publicMenuRouter.get(
           roastType: beans.roastType,
           blendType: beans.blendType,
           decaf: beans.decaf,
+          flavorProfile: beans.flavorProfile,
+          region: beans.region,
+          altitudeMasl: beans.altitudeMasl,
+          producer: beans.producer,
         })
         .from(beans)
         .where(and(eq(beans.workspaceId, workspace.id), eq(beans.showOnPublicMenu, true)))

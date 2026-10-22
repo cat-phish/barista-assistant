@@ -31,8 +31,9 @@ queue:
      completes without calling the LLM.
    - The bean includes its `roastLevel` (or `null` if unknown), which
      matters for temperature advice, and its `detailedRoastLevel`,
-     `roastType`, `blendType` (each `null` if unknown) and `decaf` (§4).
-     Price, website and notes aren't sent.
+     `roastType`, `blendType` (each `null` if unknown) and `decaf` (§4), plus
+     `flavorProfile`, `region` and `altitudeMasl`. Price, website, notes,
+     rating, producer, purchase date and green supplier aren't sent.
    - The prompt includes the bean's **effective** roast age in days at brew
      time (`roastAgeDays`, excluding days frozen; see §4) and
      `daysFrozenBeforeBrew`, when the bean has a `roastDate`.
@@ -84,7 +85,9 @@ queue:
 > roastType says what the roaster roasted it for: an espresso roast brewed as
 > filter (or the reverse) may need a different approach rather than small
 > corrections. Decaf and blends often extract differently from single origins.
-> For espresso, judge flow
+> The flavorProfile is the roaster's description of the cup to aim for, and a
+> higher altitudeMasl usually means denser beans that take a finer grind or
+> hotter water. For espresso, judge flow
 > from the first drop time, shot time and ratio against the recipe's
 > windows, and consider the machine's capabilities (pre-infusion, flow and
 > pressure control) and the grinder's step size when explaining the change.

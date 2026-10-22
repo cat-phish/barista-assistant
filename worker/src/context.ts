@@ -12,6 +12,7 @@ import {
   recipes,
   recipeSteps,
   type Bean,
+  type BeanProcess,
   type BlendType,
   type DetailedRoastLevel,
   type RoastType,
@@ -100,13 +101,16 @@ export interface BrewContext {
   bean: {
     roasterName: string;
     beanName: string;
-    process: string | null;
+    process: BeanProcess | null;
     roastLevel: string | null;
     detailedRoastLevel: DetailedRoastLevel | null;
     roastType: RoastType | null;
     blendType: BlendType | null;
     decaf: boolean;
     roastDate: string | null;
+    flavorProfile: string | null; // the roaster's tasting notes: the cup to aim for
+    region: string | null;
+    altitudeMasl: number | null;
   };
   recipe: {
     name: string;
@@ -329,6 +333,9 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
       blendType: bean.blendType,
       decaf: bean.decaf,
       roastDate: bean.roastDate ? bean.roastDate.toISOString().slice(0, 10) : null,
+      flavorProfile: bean.flavorProfile,
+      region: bean.region,
+      altitudeMasl: bean.altitudeMasl,
     },
     recipe,
     brew: summarize(brew, bean.roastDate, freezes, marks, servedAs),

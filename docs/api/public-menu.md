@@ -22,14 +22,18 @@ filters for workspaces where `isPublicMenuEnabled = true` and items where
         "id": "uuid",
         "roasterName": "Onyx Coffee Lab",
         "beanName": "Southern Weather",
-        "process": "Washed",
+        "process": "washed",
         "roastDate": "2026-10-01T00:00:00.000Z",
         "inventoryWeightGrams": 250,
         "roastLevel": "light",
         "detailedRoastLevel": "city",
         "roastType": "filter",
         "blendType": "single_origin",
-        "decaf": false
+        "decaf": false,
+        "flavorProfile": "Milk chocolate, plum, cane sugar",
+        "region": "Huila",
+        "altitudeMasl": 1950,
+        "producer": "Finca El Paraíso"
       }
     ],
     "sections": [
@@ -71,8 +75,10 @@ filters for workspaces where `isPublicMenuEnabled = true` and items where
   ("Filter", "Espresso"); `variantOf` the parent drink's name if that drink is also
   shown, else `null`; `ingredients` are the ingredients' names in the drink's
   order. Recipe details (doses, steps) aren't published.
-  Beans carry their roast and blend details (§4, each may be `null`) and
-  `decaf`; a bean's price, bag weight, website and notes aren't published.
+  Beans carry their roast and blend details, flavor profile and origin
+  (region, altitude, producer; §4, each may be `null`) and `decaf`. A bean's
+  price, bag weight, purchase date, green supplier, website, rating and notes
+  aren't published.
 - **Error Responses:**
   - `404 Not Found`: Workspace slug does not exist or `isPublicMenuEnabled` is
     `false`. Slugs are matched exactly: `/menu/Jordans-Coffee-Bar` is a `404`,

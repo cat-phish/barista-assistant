@@ -9,7 +9,8 @@ import { formatDay, localDateInput, toDateInput } from '../lib/format';
 import { effectiveRoastAge } from '../lib/roastAge';
 import { useWorkspaceStore } from '../stores/workspace';
 import { ROAST_LEVELS } from '../lib/scale';
-import { DETAILED_ROAST_LEVELS, formatPrice, formatPricePerGram, pricePerGram, ROAST_TYPES } from '../lib/beans';
+import { BEAN_PROCESSES, DETAILED_ROAST_LEVELS, formatAltitude, formatPrice, formatPricePerGram, pricePerGram, ROAST_TYPES } from '../lib/beans';
+import RatingStars from '../components/RatingStars.vue';
 
 const workspaces = useWorkspaceStore();
 const beans = ref<Bean[]>([]);
@@ -106,6 +107,12 @@ function roastLabel(bean: Bean): string | null {
   return bean.roastLevel ? ROAST_LEVELS[bean.roastLevel].label : null;
 }
 
+// "Finca El Paraíso · Huila · 1,950 m"
+function originLabel(bean: Bean): string | null {
+  const parts = [bean.producer, bean.region, bean.altitudeMasl === null ? null : formatAltitude(bean.altitudeMasl)];
+  return parts.filter((p) => p).join(' · ') || null;
+}
+
 // "21.50 USD · 0.063 USD/g", or just the price without a bag weight.
 function priceLabel(bean: Bean): string | null {
   if (bean.priceAmount === null || bean.priceCurrency === null) return null;
@@ -186,7 +193,8 @@ async function confirmFreeze(): Promise<void> {
         <div class="head">
           <div>
             <h2>{{ bean.beanName }}</h2>
-            <p class="muted">{{ bean.roasterName }}<template v-if="bean.process"> · {{ bean.process }}</template><template v-if="roastLabel(bean)"> · {{ roastLabel(bean) }} roast</template></p>
+            <p v-if="bean.flavorProfile" class="flavor">{{ bean.flavorProfile }}</p>
+            <p class="muted">{{ bean.roasterName }}<template v-if="bean.process"> · {{ BEAN_PROCESSES[bean.process].label }}</template><template v-if="roastLabel(bean)"> · {{ roastLabel(bean) }} roast</template></p>
           </div>
           <div class="badges">
             <span v-if="openFreeze(bean)" class="badge frozen">Frozen</span>
@@ -198,6 +206,8 @@ async function confirmFreeze(): Promise<void> {
         </div>
         <p class="facts">
           <span>{{ bean.inventoryWeightGrams }} g left</span>
+          <span v-if="originLabel(bean)">{{ originLabel(bean) }}</span>
+          <RatingStars v-if="bean.rating !== null" :rating="bean.rating" />
           <span v-if="ageLabel(bean)">{{ ageLabel(bean) }}</span>
           <span v-if="openFreeze(bean)" class="frozen-since">Frozen since {{ formatDay(openFreeze(bean)!.frozenOn) }}</span>
           <span v-if="priceLabel(bean)">{{ priceLabel(bean) }}</span>
@@ -308,6 +318,10 @@ p {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1) var(--space-3);
+  font-size: 0.95rem;
+}
+.flavor {
+  font-style: italic;
   font-size: 0.95rem;
 }
 .notes {

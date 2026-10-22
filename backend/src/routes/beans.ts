@@ -8,14 +8,18 @@ import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import {
   beanFreezes,
+  BEAN_PROCESSES,
   beans,
   BLEND_TYPES,
   brewLogs,
   DETAILED_ROAST_LEVELS,
+  DETAILED_ROAST_TO_LEVEL,
   ROAST_LEVELS,
   ROAST_TYPES,
   type Bean,
   type BeanFreeze,
+  type DetailedRoastLevel,
+  type RoastLevel,
 } from "@barista/shared/schema";
 import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
@@ -39,7 +43,7 @@ interface WorkspaceParams {
 const beanFields = {
   roasterName: z.string().trim().min(1).max(255),
   beanName: z.string().trim().min(1).max(255),
-  process: optionalText(100),
+  process: z.enum(BEAN_PROCESSES).nullable().optional(),
   roastLevel: z.enum(ROAST_LEVELS).nullable().optional(),
   roastDate: z
     .union([z.iso.date(), z.iso.datetime()])
@@ -71,6 +75,18 @@ const beanFields = {
     .optional(),
   bagWeightGrams: z.number().int().min(1).max(100_000).nullable().optional(),
   notes: optionalText(2000),
+  flavorProfile: optionalText(500),
+  region: optionalText(255),
+  altitudeMasl: z.number().int().min(0).max(9000).nullable().optional(),
+  producer: optionalText(255),
+  // Allows a day ahead for time zones, like freeze dates.
+  purchaseDate: z.iso
+    .date()
+    .refine((d) => d <= serverToday(1), "can't be in the future")
+    .nullable()
+    .optional(),
+  greenSupplier: optionalText(255),
+  rating: z.number().int().min(1).max(5).nullable().optional(),
 };
 
 function isHttpUrl(s: string): boolean {
@@ -95,6 +111,28 @@ const priceMismatch = (amount: number | null | undefined, currency: string | nul
   (amount ?? null) === null !== ((currency ?? null) === null);
 
 const updateBeanSchema = updateSchema(beanFields);
+
+// roastLevel follows detailedRoastLevel (docs/api/beans.md §4): a detailed
+// level sets it, clearing a stored detailed level clears it, and it can only
+// be set on its own while the bean has no detailed level. Returns the roastLevel to
+// store (undefined = unchanged), or an error.
+function resolveRoastLevel(
+  body: { detailedRoastLevel?: DetailedRoastLevel | null; roastLevel?: RoastLevel | null },
+  storedDetailed: DetailedRoastLevel | null,
+): { roastLevel: RoastLevel | null | undefined } | { error: string } {
+  const detailed = body.detailedRoastLevel === undefined ? storedDetailed : body.detailedRoastLevel;
+  if (detailed === null) {
+    // Clearing a stored detailed level clears the level it set, unless one is
+    // sent. A null for a bean that never had one leaves roastLevel alone.
+    if (body.detailedRoastLevel === null && storedDetailed !== null) return { roastLevel: body.roastLevel ?? null };
+    return { roastLevel: body.roastLevel };
+  }
+  const derived = DETAILED_ROAST_TO_LEVEL[detailed];
+  if (body.roastLevel !== undefined && body.roastLevel !== derived) {
+    return { error: `roastLevel: set by detailedRoastLevel (${detailed} is ${derived})` };
+  }
+  return { roastLevel: body.detailedRoastLevel === undefined ? body.roastLevel : derived };
+}
 
 interface BeanParams extends WorkspaceParams {
   beanId: string;
@@ -147,9 +185,14 @@ beansRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<BeanRe
     sendError(res, 400, PRICE_ERROR);
     return;
   }
+  const roast = resolveRoastLevel(body, null);
+  if ("error" in roast) {
+    sendError(res, 400, roast.error);
+    return;
+  }
 
   const id = randomUUID();
-  await db.insert(beans).values({ id, workspaceId, ...body });
+  await db.insert(beans).values({ id, workspaceId, ...body, roastLevel: roast.roastLevel ?? null });
   const [bean] = await loadBeans(eq(beans.id, id));
   if (!bean) {
     throw new Error(`Bean ${id} missing after insert`);
@@ -163,27 +206,29 @@ beansRouter.patch("/:beanId", async (req: Request<BeanParams>, res: Response<Bea
   const body = parseBody(updateBeanSchema, req, res);
   if (!body) return;
 
-  // The price rule is checked against the stored row with the change applied,
-  // so the row is locked until the update is written.
+  // The price and roast rules are checked against the stored row with the
+  // change applied, so the row is locked until the update is written.
   const outcome = await db.transaction(async (tx) => {
     // Scoped to the workspace, so a bean ID from another workspace is not found.
     const [existing] = await tx
-      .select({ priceAmount: beans.priceAmount, priceCurrency: beans.priceCurrency })
+      .select({ priceAmount: beans.priceAmount, priceCurrency: beans.priceCurrency, detailedRoastLevel: beans.detailedRoastLevel })
       .from(beans)
       .where(beanInWorkspace(req.params))
       .for("update");
-    if (!existing) return "not_found" as const;
+    if (!existing) return { status: "not_found" } as const;
     const amount = body.priceAmount === undefined ? existing.priceAmount : body.priceAmount;
     const currency = body.priceCurrency === undefined ? existing.priceCurrency : body.priceCurrency;
-    if (priceMismatch(amount, currency)) return "price_mismatch" as const;
-    await tx.update(beans).set(body).where(beanInWorkspace(req.params));
-    return "updated" as const;
+    if (priceMismatch(amount, currency)) return { status: "invalid", error: PRICE_ERROR } as const;
+    const roast = resolveRoastLevel(body, existing.detailedRoastLevel);
+    if ("error" in roast) return { status: "invalid", error: roast.error } as const;
+    await tx.update(beans).set({ ...body, roastLevel: roast.roastLevel }).where(beanInWorkspace(req.params));
+    return { status: "updated" } as const;
   });
-  if (outcome === "price_mismatch") {
-    sendError(res, 400, PRICE_ERROR);
+  if (outcome.status === "invalid") {
+    sendError(res, 400, outcome.error);
     return;
   }
-  const [bean] = outcome === "updated" ? await loadBeans(beanInWorkspace(req.params)) : [];
+  const [bean] = outcome.status === "updated" ? await loadBeans(beanInWorkspace(req.params)) : [];
   if (!bean) {
     sendError(res, 404, "Bean not found");
     return;

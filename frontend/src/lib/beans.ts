@@ -1,5 +1,5 @@
 // Labels and helpers for a bean's optional details (docs/api/beans.md §4).
-import type { Bean, BlendType, DetailedRoastLevel, RoastLevel, RoastType } from '../api/types';
+import type { Bean, BeanProcess, BlendType, DetailedRoastLevel, RoastLevel, RoastType } from '../api/types';
 
 export const ROAST_TYPES: Record<RoastType, { label: string }> = {
   filter: { label: 'Filter' },
@@ -30,6 +30,25 @@ export const BLEND_TYPES: Record<BlendType, { label: string }> = {
   blend: { label: 'Blend' },
   other: { label: 'Other' },
 };
+
+// docs/schema.md BEAN_PROCESSES; editable per workspace later (backlog item 2).
+export const BEAN_PROCESSES: Record<BeanProcess, { label: string }> = {
+  washed: { label: 'Washed' },
+  natural: { label: 'Natural' },
+  wet_hulled: { label: 'Wet-Hulled' },
+  honey: { label: 'Honey' },
+  mechanically_washed: { label: 'Mechanically Washed' },
+  anaerobic: { label: 'Anaerobic Fermentation' },
+  carbonic_maceration: { label: 'Carbonic Maceration' },
+  co_fermentation: { label: 'Co-Fermentation' },
+  thermal_shock: { label: 'Thermal Shock' },
+  lactic: { label: 'Lactic Fermentation' },
+};
+
+// "1,950 m". Stored in metres; a feet option is backlog item 3.
+export function formatAltitude(masl: number): string {
+  return `${masl.toLocaleString('en-US')} m`;
+}
 
 // Price of one gram, or null without a price and bag weight.
 export function pricePerGram(bean: Pick<Bean, 'priceAmount' | 'priceCurrency' | 'bagWeightGrams'>): { amount: number; currency: string } | null {

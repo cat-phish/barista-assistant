@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DETAILED_ROAST_LEVELS, formatPricePerGram, pricePerGram } from './beans';
+import { BEAN_PROCESSES, DETAILED_ROAST_LEVELS, formatAltitude, formatPricePerGram, pricePerGram } from './beans';
 import { ROAST_LEVELS } from './scale';
 
 describe('detailed roast levels', () => {
@@ -8,6 +8,19 @@ describe('detailed roast levels', () => {
     const steps = Object.values(DETAILED_ROAST_LEVELS).map((d) => order.indexOf(d.roastLevel));
     expect(steps.every((s) => s >= 0)).toBe(true);
     expect(steps).toEqual([...steps].sort((a, b) => a - b));
+  });
+});
+
+describe('processes', () => {
+  it('has the ten built-in processes, each labelled', () => {
+    expect(Object.keys(BEAN_PROCESSES)).toHaveLength(10);
+    expect(Object.values(BEAN_PROCESSES).every((p) => p.label.length > 0)).toBe(true);
+  });
+});
+
+describe('formatAltitude', () => {
+  it('groups thousands', () => {
+    expect(formatAltitude(1950)).toBe('1,950 m');
   });
 });
 

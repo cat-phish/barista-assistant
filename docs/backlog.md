@@ -47,8 +47,9 @@ Where the app's choices live, and what you can switch on, off or take out.
   - A **Settings** item in the header nav, with tabs. Start with **Styles**
     (item 2), **Units & defaults** (item 3) and **Workspace** (name, slug,
     public menu switch, members), the last moving from the workspace screen.
-    Later tabs: **Fields** (item 4), **Data** (backup, restore, export, item
-    5), **Repeat brews** (item 10) and **Notifications** (item 11).
+    Later tabs: **Lists** (styles and processes, item 2), **Fields** (item 4),
+    **Data** (backup, restore, export, item 5), **Repeat brews** (item 10)
+    and **Notifications** (item 11).
   - Two scopes:
     - **workspace settings**, shared by the bar and editable by owners: a
       `workspace_settings` table, or columns on `workspaces`;
@@ -62,12 +63,16 @@ Where the app's choices live, and what you can switch on, off or take out.
   - Should drink categories move here from Bar setup → Categories?
   - Which settings are per workspace and which per person?
 
-### 2. Editable style lists
+### 2. Editable style and process lists
 
 - **Status:** idea
 - **Why:** recipe styles are a fixed list (filter: pour over, immersion,
   hybrid, cold brew, other; espresso: standard, soup, other). Bars will want
-  their own, e.g. "Inverted", "Bypass", "Turbo shot".
+  their own, e.g. "Inverted", "Bypass", "Turbo shot". Bean processes are
+  fixed too (`BEAN_PROCESSES`: washed, natural, wet-hulled, honey,
+  mechanically washed, anaerobic, carbonic maceration, co-fermentation,
+  thermal shock, lactic), and new ones keep appearing (e.g. "Yeast
+  inoculated", "Double fermentation").
 - **Approach:**
   - A `recipe_styles` table per workspace: `id`, `workspaceId`, `kind`
     (filter/espresso, fixed), `name`, `position`, `hidden`, and `builtin` (the
@@ -82,6 +87,12 @@ Where the app's choices live, and what you can switch on, off or take out.
     like Categories.
   - The AI gets the style's name, plus the built-in key when there is one,
     so it still knows that a soup shot is long on purpose.
+  - **Processes** work the same way: a `bean_processes` table per workspace
+    (`name`, `position`, `hidden`, `builtin` key), seeded from
+    `BEAN_PROCESSES`. `beans.process` (a key today) becomes
+    `beans.processId`, mapped by a migration. Settings → **Lists** →
+    Processes (add, rename, reorder, hide). The AI and public menu get the
+    name.
 - **Size:** M
 - **Depends on:** 1 (Settings, for where it's managed).
 - **Open questions:**
@@ -93,12 +104,14 @@ Where the app's choices live, and what you can switch on, off or take out.
 
 - **Status:** idea
 - **Why:** the expected-yield estimate assumes a light roast unless the bean
-  says otherwise, and weights and volumes show g and fl oz together. Both
-  should be choices.
+  says otherwise, weights and volumes show g and fl oz together, and bean
+  altitude only shows in metres. These should be choices.
 - **Approach:**
   - **Workspace defaults:** the assumed roast level for estimates.
   - **Personal preferences:** volume unit (fl oz / ml) and whether to show
-    both.
+    both; altitude unit (m / ft). Altitude is always stored in metres
+    (`beans.altitudeMasl`); the form and lists convert to and from feet
+    (1 m = 3.28084 ft) when feet are chosen.
   - The existing estimate code (`lib/scale.ts`) and size display
     (`lib/servings.ts`) read these instead of constants.
 - **Size:** S–M
@@ -108,14 +121,19 @@ Where the app's choices live, and what you can switch on, off or take out.
 ### 4. Field visibility for brews and beans
 
 - **Status:** idea
-- **Why:** items 6 and 8 add many optional fields. Not every bar uses a
+- **Why:** items 6 and 8 add many optional fields (the bean form alone now
+  has about fifteen). Not every bar uses a
   refractometer or tracks price, and a long form slows down logging a brew.
   Each bar should show only the fields it uses.
 - **Approach:**
   - Settings → **Fields**: one list for the brew form and one for the bean
-    form, with a switch for each optional field (grind speed, TDS, water
-    profile, prep tools, temperature…; roast type, blend, decaf, website,
-    price, notes, photos…).
+    form, with a switch for each optional field:
+    - **brew:** grind speed, TDS, water profile, prep tools, temperature…
+      (item 8);
+    - **bean:** process, producer, region, altitude, flavor profile, origin
+      (blend type), decaf, roasted for, roast date, roast level, bag price
+      and bag weight, purchase date, green bean supplier, website, rating,
+      notes, and photos once item 7 exists.
   - Required fields (bean, dose, time, and water or shot weight by method)
     can't be switched off.
   - Stored as a list of hidden field keys. Hiding a field only hides it in
@@ -163,9 +181,18 @@ What's recorded about each coffee.
 
 ### 6. More bean details
 
-- **Status:** in progress (branch `bean-details`). Decided: the detailed
-  roast level sits beside `roastLevel` and fills it in the form; the price is
-  per bag, on the bean, with a 3-letter currency code.
+- **Status:** in progress (branch `bean-details`). Decided:
+  - the price is per bag, on the bean, with a 3-letter currency code;
+  - the detailed roast level ("Roast Level" in the form, Cinnamon … French)
+    is the one you pick, and the API derives the 5-step `roastLevel` from it.
+    The form shows the 5-step level read-only. Older beans keep a 5-step
+    level set on its own until a detailed one is picked;
+  - process is a fixed list of keys (`BEAN_PROCESSES`), editable later via
+    item 2;
+  - round 2 added flavor profile, producer, region, altitude (metres; feet
+    via item 3), purchase date, green bean supplier and a 1–5 bean rating.
+    The public menu shows flavor profile and origin; the AI gets flavor
+    profile, region and altitude.
 - **Why:** a bean is a roaster, name, process, roast level, roast date and
   stock today. What it's roasted for, whether it's a blend, decaf, its price
   and where to buy it again all affect how it's brewed and whether to

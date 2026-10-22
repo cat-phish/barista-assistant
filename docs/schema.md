@@ -89,6 +89,13 @@ export const DETAILED_ROAST_TO_LEVEL: Record<DetailedRoastLevel, RoastLevel> = {
 };
 export const BLEND_TYPES = ["single_origin", "blend", "other"] as const;
 export type BlendType = (typeof BLEND_TYPES)[number];
+// How the coffee was processed (docs/api/beans.md §4). A fixed list for now;
+// docs/backlog.md item 2 makes it editable per workspace.
+export const BEAN_PROCESSES = [
+  "washed", "natural", "wet_hulled", "honey", "mechanically_washed", "anaerobic",
+  "carbonic_maceration", "co_fermentation", "thermal_shock", "lactic",
+] as const;
+export type BeanProcess = (typeof BEAN_PROCESSES)[number];
 
 export const beans = mysqlTable("beans", {
   id: varchar("id", { length: 36 }).primaryKey(),
@@ -97,9 +104,10 @@ export const beans = mysqlTable("beans", {
     .references(() => workspaces.id, { onDelete: "cascade" }),
   roasterName: varchar("roaster_name", { length: 255 }).notNull(),
   beanName: varchar("bean_name", { length: 255 }).notNull(),
-  process: varchar("process", { length: 100 }), // Washed, Natural, Honey, etc.
+  process: varchar("process", { length: 100 }).$type<BeanProcess>(), // BEAN_PROCESSES, or null
   // One of ROAST_LEVELS, or null if unknown. Used to estimate beverage yield
-  // when scaling a recipe (unknown is treated as light).
+  // when scaling a recipe (unknown is treated as light). Derived by the API
+  // from detailedRoastLevel when that is set (docs/api/beans.md §4).
   roastLevel: varchar("roast_level", { length: 20 }),
   roastDate: timestamp("roast_date"),
   inventoryWeightGrams: int("inventory_weight_grams").default(0).notNull(),
@@ -116,6 +124,13 @@ export const beans = mysqlTable("beans", {
   priceCurrency: varchar("price_currency", { length: 3 }),
   bagWeightGrams: int("bag_weight_grams"),
   notes: text("notes"),
+  flavorProfile: varchar("flavor_profile", { length: 500 }), // the roaster's tasting notes
+  region: varchar("region", { length: 255 }),
+  altitudeMasl: int("altitude_masl"), // metres above sea level
+  producer: varchar("producer", { length: 255 }),
+  purchaseDate: date("purchase_date", { mode: "string" }), // YYYY-MM-DD
+  greenSupplier: varchar("green_supplier", { length: 255 }), // who sold the green coffee
+  rating: int("rating"), // 1-5, the bean overall
 });
 
 // 4b. Bean Freeze Periods (Effective Roast Age)
