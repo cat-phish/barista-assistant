@@ -3,10 +3,12 @@
 > Part of the API spec. Conventions, auth rules and the section index are in
 > [README.md](README.md); a bare `§N` refers to that index.
 
-An ordered list per workspace that groups drinks and brewers: the first
-choice when brewing (Category → Brewer or drink → Recipe), e.g. "Espresso
-milk drinks", "Specialty drinks". The public menu has its own sections, set
-in the menu builder (§7b).
+An ordered list per workspace that groups **drinks** (brewers are grouped by
+their method, §3): e.g. "Espresso milk drinks", "Specialty drinks". When
+brewing, "What are you making?" lists the methods, then these categories in
+order (Category → Drink → Brewer → Recipe), then "Other drinks" for
+uncategorised ones. The public menu has its own sections, set in the menu
+builder (§7b).
 
 **Category object:** `{ "id": "uuid", "name": "Specialty drinks", "position": 2 }`
 
@@ -40,7 +42,7 @@ in the menu builder (§7b).
 
 ## `DELETE /api/workspaces/:workspaceId/drink-categories/:categoryId`
 
-Drinks and brewers in it become uncategorised.
+Its drinks become uncategorised.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Success (`204 No Content`)**

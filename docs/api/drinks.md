@@ -4,7 +4,8 @@
 > [README.md](README.md); a bare `§N` refers to that index.
 
 What's served, and what the public menu (§7) lists alongside plain brews. A
-drink needs a **brew method** (`kind`: `filter` or `espresso`), not a
+drink needs a **brew method** (`kind`, one of `METHOD_KINDS`: `filter`,
+`espresso`, `stovetop` or `other`), not a
 particular device: **any brewer of that kind** can make it, with that
 brewer's recipes (the **default**, any recipe of the kind, is preselected
 when brewing), then it's finished with **ingredients**. "Latte" is espresso
@@ -29,7 +30,6 @@ kind may differ from its parent's.
   "category": { "id": "uuid", "name": "Espresso milk drinks" },
   "parent": { "id": "uuid", "name": "Latte" },
   "variants": [{ "id": "uuid", "name": "Iced Vanilla Latte" }],
-  "showOnPublicMenu": true,
   "defaultRecipeId": "uuid",
   "servingSize": 8,
   "servingUnit": "fl_oz",
@@ -69,7 +69,6 @@ was deleted).
     "kind": "espresso",
     "categoryId": "uuid",
     "parentDrinkId": "uuid",
-    "showOnPublicMenu": true,
     "defaultRecipeId": "uuid",
     "servingSize": 8,
     "servingUnit": "fl_oz",
@@ -78,8 +77,9 @@ was deleted).
   }
   ```
   - `name` trimmed, 1–255 chars; `description` optional, ≤ 500, blank
-    becomes `null`. `showOnPublicMenu` (default `true`) is no longer used:
-    the menu builder (§7b) decides what's on the menu; it will be removed.
+    becomes `null`; the menu shows it unless the menu builder (§7b) gives the
+    item its own. What's on the menu is set in the builder. Unknown fields
+    are rejected, including the removed `showOnPublicMenu`.
   - `instructions` (optional, ≤ 5000, blank becomes `null`): how to make it,
     free text shown after the brew. Not on the public menu.
   - `kind` (required): one of `METHOD_KINDS`.

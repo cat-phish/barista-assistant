@@ -23,14 +23,14 @@ on: 1" always means the same item. When an item is done or added, renumber
 and fix the references.
 
 **Contents**
-- A. Settings & configuration: 1–6
-- B. Beans: 7
-- C. Brewing & logging: 8–12
-- D. AI suggestions: 13–14
-- E. Insights: 15
-- F. Bar & menu: 16–17
-- G. Home roasting: 18
-- H. Accounts: 19
+- A. Settings & configuration: 1–7
+- B. Beans: 8
+- C. Brewing & logging: 9–13
+- D. AI suggestions: 14–15
+- E. Insights: 16
+- F. Bar & menu: 17–18
+- G. Home roasting: 19
+- H. Accounts: 20
 
 ---
 
@@ -48,9 +48,9 @@ Where the app's choices live, and what you can switch on, off or take out.
   - A **Settings** item in the header nav, with tabs. Start with **Styles**
     (item 2), **Units & defaults** (items 3 and 4) and **Workspace** (name, slug,
     public menu switch, members), the last moving from the workspace screen.
-    Later tabs: **Lists** (styles and processes, item 2), **Fields** (item 5),
-    **Data** (backup, restore, export, item 6), **Repeat brews** (item 10)
-    and **Notifications** (item 11).
+    Later tabs: **Lists** (styles, processes and methods, item 2; maybe drink categories, item 7), **Fields** (item 5),
+    **Data** (backup, restore, export, item 6), **Repeat brews** (item 11)
+    and **Notifications** (item 12).
   - Two scopes:
     - **workspace settings**, shared by the bar and editable by owners: a
       `workspace_settings` table, or columns on `workspaces`;
@@ -63,7 +63,7 @@ Where the app's choices live, and what you can switch on, off or take out.
 - **Open questions:**
   - Which settings are per workspace and which per person?
 
-### 2. Editable style and process lists
+### 2. Editable style, process and brewer method lists
 
 - **Status:** idea
 - **Why:** recipe styles are a fixed list (filter: pour over, immersion,
@@ -87,6 +87,14 @@ Where the app's choices live, and what you can switch on, off or take out.
     like Categories.
   - The AI gets the style's name, plus the built-in key when there is one,
     so it still knows that a soup shot is long on purpose.
+  - **Brewer methods:** the built-ins are Filter, Espresso, Stovetop and
+    Other (`METHOD_KINDS`). A custom method ("Siphon", "Turkish") is based
+    on a built-in behaviour, filter-like or espresso-like, which decides the
+    recipe fields, the steps and the timer. A `brewer_methods` table per
+    workspace (`name`, `position`, `hidden`, `behaviour`, `builtin` key);
+    brewers and drinks point at it instead of the fixed `kind`. Brewers are
+    grouped by method on the brew page, so these names are what "What are
+    you making?" lists first. Settings → **Lists** → Methods.
   - **Processes** work the same way: a `bean_processes` table per workspace
     (`name`, `position`, `hidden`, `builtin` key), seeded from
     `BEAN_PROCESSES`. `beans.process` (a key today) becomes
@@ -144,7 +152,7 @@ Where the app's choices live, and what you can switch on, off or take out.
 ### 5. Field visibility for brews and beans
 
 - **Status:** idea
-- **Why:** item 8 adds many optional brew fields, and the bean form already
+- **Why:** item 9 adds many optional brew fields, and the bean form already
   has about fifteen (roadmap phase 5). Not every bar uses a
   refractometer or tracks price, and a long form slows down logging a brew.
   Each bar should show only the fields it uses.
@@ -152,11 +160,11 @@ Where the app's choices live, and what you can switch on, off or take out.
   - Settings → **Fields**: one list for the brew form and one for the bean
     form, with a switch for each optional field:
     - **brew:** grind speed, TDS, water profile, prep tools, temperature…
-      (item 8);
+      (item 9);
     - **bean:** process, producer, region, altitude, flavor profile, origin
       (blend type), decaf, roasted for, roast date, roast level, bag price
       and bag weight, purchase date, green bean supplier, website, rating,
-      notes, and photos once item 7 exists.
+      notes, and photos once item 8 exists.
   - Required fields (bean, dose, time, and water or shot weight by method)
     can't be switched off.
   - Stored as a list of hidden field keys. Hiding a field only hides it in
@@ -164,7 +172,7 @@ Where the app's choices live, and what you can switch on, off or take out.
   - The frontend has one field registry (key, label, form, required) that
     the forms and the Settings tab both read.
 - **Size:** M
-- **Depends on:** 1. Even more useful once 8 adds brew fields.
+- **Depends on:** 1. Even more useful once 9 adds brew fields.
 - **Open questions:**
   - Per workspace (the bar's standard form) or per person?
   - Should hidden fields be left out of the AI prompt as well, or does the AI
@@ -188,7 +196,7 @@ Where the app's choices live, and what you can switch on, off or take out.
   - Done by the backend in one transaction; a large export could become a
     worker job.
 - **Size:** M–L (export S, backup M, restore M).
-- **Depends on:** 1. Backups should include photos once 7 is built.
+- **Depends on:** 1. Backups should include photos once 8 is built.
 - **Open questions:**
   - Only owners, or all members?
   - Restore into an existing workspace (merge), or only into an empty one?
@@ -196,13 +204,33 @@ Where the app's choices live, and what you can switch on, off or take out.
   - Should there also be scheduled server-side backups (a `mysqldump` cron),
     or is that up to whoever runs the server?
 
+### 7. Where drink categories live
+
+- **Status:** idea
+- **Why:** drink categories now only group drinks (brewers are grouped by
+  method, the public menu has its own sections). They're managed under Bar
+  setup → Categories, next to brewers and grinders, which no longer use
+  them.
+- **Approach:**
+  - Decide their home: a **Drinks** tab (next to Recipes, Drinks and
+    Ingredients), or Settings → **Lists** with styles, processes and methods
+    (item 2).
+  - Keep what they do now: the drink groups under "What are you making?",
+    after the methods, in their order.
+- **Size:** S
+- **Depends on:** 1 if they move to Settings.
+- **Open questions:**
+  - Should a drink be in more than one category?
+  - Should the menu builder offer "add a whole category" as a shortcut?
+  - Should a category also order the drinks inside it on the brew page?
+
 ---
 
 ## B. Beans
 
 What's recorded about each coffee.
 
-### 7. Bean photos
+### 8. Bean photos
 
 - **Status:** idea
 - **Why:** a photo of the bag or label is the quickest way to recognize a
@@ -229,7 +257,7 @@ What's recorded about each coffee.
 
 Recording a brew: what's measured, and how fast it is to log.
 
-### 8. More brew parameters
+### 9. More brew parameters
 
 - **Status:** idea
 - **Why:** dose, water, yield, temperature, grind and time leave out things
@@ -250,7 +278,7 @@ Recording a brew: what's measured, and how fast it is to log.
       For immersion, beverage weight is estimated from water and retained
       liquid. EY is shown, not stored.
   - Every new field can be hidden through item 5.
-  - The AI prompt gets them (item 13); TDS and EY are the most useful.
+  - The AI prompt gets them (item 14); TDS and EY are the most useful.
 - **Size:** L. Can be split: TDS and EY first, then water and tools, then
   weights and RPM.
 - **Depends on:** 5 (so the form doesn't get crowded).
@@ -259,7 +287,7 @@ Recording a brew: what's measured, and how fast it is to log.
     free text?
   - Should a recipe set default tools and water?
 
-### 9. Repeat a brew
+### 10. Repeat a brew
 
 - **Status:** idea
 - **Why:** dialing in usually means "same as last time, one click finer".
@@ -276,19 +304,19 @@ Recording a brew: what's measured, and how fast it is to log.
 - **Open questions:** should it start the timer straight away for recipes
   with steps?
 
-### 10. Choose what a repeat keeps
+### 11. Choose what a repeat keeps
 
 - **Status:** idea
 - **Why:** what to carry over differs by bar: some always change the grind,
   others want the tasting notes as a reminder.
 - **Approach:** Settings → **Repeat brews**: a switch for each field "Brew
-  again" copies, with item 9's choices as the default. Uses item 5's field
+  again" copies, with item 10's choices as the default. Uses item 5's field
   registry.
 - **Size:** S
-- **Depends on:** 1, 9.
+- **Depends on:** 1, 10.
 - **Open questions:** per person or per workspace?
 
-### 11. Rate later, with reminders
+### 12. Rate later, with reminders
 
 - **Status:** idea
 - **Why:** coffee often gets rated a while after it's made (once it cools,
@@ -302,7 +330,7 @@ Recording a brew: what's measured, and how fast it is to log.
   - Delivered with **ntfy.sh** (or a self-hosted ntfy server): each user sets
     a server and topic under Settings → **Notifications**. The message links
     to the brew's rating screen. Web Push could come later.
-  - The same notification code serves item 12's steep timers and item 18's
+  - The same notification code serves item 13's steep timers and item 19's
     resting reminders.
 - **Size:** M
 - **Depends on:** 1.
@@ -313,7 +341,7 @@ Recording a brew: what's measured, and how fast it is to log.
   - The rating link opens in the PWA. What happens if the user isn't signed
     in?
 
-### 12. Cold brew refinements
+### 13. Cold brew refinements
 
 - **Status:** idea
 - **Why:** cold brew is a recipe style (`cold_brew`), but it's brewed like a
@@ -328,14 +356,14 @@ Recording a brew: what's measured, and how fast it is to log.
       milk);
     - filtering steps.
   - Brewing a cold brew starts a batch: the start time is logged, and the
-    brew is finished and rated later, when the steep ends. Item 11's
+    brew is finished and rated later, when the steep ends. Item 12's
     notifications send the "steep done" reminder.
   - The log records the batch size and the dilution served, so the AI
-    (item 13) judges strength correctly.
+    (item 14) judges strength correctly.
 - **Size:** M
-- **Depends on:** 11 for the reminder; the rest can go first.
+- **Depends on:** 12 for the reminder; the rest can go first.
 - **Open questions:**
-  - Should a cold brew batch be stock, like item 16's ingredient batches,
+  - Should a cold brew batch be stock, like item 17's ingredient batches,
     with servings taken from it?
   - Are there other long brews to cover the same way (e.g. Kyoto-style cold
     drip)?
@@ -346,7 +374,7 @@ Recording a brew: what's measured, and how fast it is to log.
 
 What the analysis worker sends to the LLM and what comes back.
 
-### 13. Review and refine AI input and output
+### 14. Review and refine AI input and output
 
 - **Status:** idea
 - **Why:** the prompt and structured output (`docs/api/llm-contract.md` §9)
@@ -360,15 +388,15 @@ What the analysis worker sends to the LLM and what comes back.
     suggestions give one clear next step, and how confidence and reasons are
     shown.
   - Build a small set of real brews to compare prompt versions against.
-  - Add item 8's brew fields once they exist. The bean details from
+  - Add item 9's brew fields once they exist. The bean details from
     roadmap phase 5 are already sent; check they help.
 - **Size:** M
-- **Depends on:** nothing; repeat after 8.
+- **Depends on:** nothing; repeat after 9.
 - **Open questions:**
   - Should users be able to rate a suggestion (useful / not), to measure it?
   - Which model and cost per analysis is acceptable?
 
-### 14. Espresso dose and yield suggestions from the AI
+### 15. Espresso dose and yield suggestions from the AI
 
 - **Status:** idea
 - **Why:** the AI suggests grind and temperature changes; for espresso, dose
@@ -377,7 +405,7 @@ What the analysis worker sends to the LLM and what comes back.
   optional dose and yield deltas for espresso brews, and show them with the
   suggestion. Prompt and schema change, plus UI.
 - **Size:** S–M
-- **Depends on:** nothing. Fits with 13.
+- **Depends on:** nothing. Fits with 14.
 - **Open questions:** should it also suggest pre-infusion and profile changes
   for machines that support them?
 
@@ -385,7 +413,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## E. Insights
 
-### 15. Statistics and graphs
+### 16. Statistics and graphs
 
 - **Status:** idea
 - **Why:** the brew history is a list. Trends (is this bean getting better
@@ -397,12 +425,12 @@ What the analysis worker sends to the LLM and what comes back.
     - brews per day or week;
     - average rating by bean, recipe, grinder and brewer;
     - rating against roast age, grind setting or ratio (scatter);
-    - EY against TDS, with the target box (once 8 records TDS);
+    - EY against TDS, with the target box (once 9 records TDS);
     - coffee used and stock left per bean.
   - The backend adds aggregate endpoints under `/api/workspaces/:id/stats`
     instead of sending every log to the client.
 - **Size:** M–L
-- **Depends on:** nothing; the TDS chart needs 8.
+- **Depends on:** nothing; the TDS chart needs 9.
 - **Open questions:**
   - Charting library (Chart.js, ECharts, or plain SVG)?
   - The whole workspace, or each person's brews by default?
@@ -411,7 +439,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## F. Bar & menu
 
-### 16. Ingredient prep and stock
+### 17. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -426,7 +454,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** how precise does stock need to be (exact grams, or
   "about half left")?
 
-### 17. Public menu page
+### 18. Public menu page
 
 - **Status:** idea
 - **Why:** the public menu API exists, arranged in the menu builder
@@ -444,7 +472,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## G. Home roasting
 
-### 18. Roasting: green stock, roast logs, resting
+### 19. Roasting: green stock, roast logs, resting
 
 - **Status:** idea
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
@@ -460,12 +488,12 @@ What the analysis worker sends to the LLM and what comes back.
     roast date, the detailed roast level from roadmap phase 5) marked as resting until
     a set day, then ready.
   - **Reminders** when a roast has finished resting or green stock is low,
-    through item 11's notifications.
+    through item 12's notifications.
   - Ratings for brews of a roasted bean link back to its roast, so roasts can
     be compared.
 - **Size:** L (several branches: green stock and roast log, then resting and
   reminders, then roast comparison).
-- **Depends on:** 11 (reminders); 7 for photos.
+- **Depends on:** 12 (reminders); 7 for photos.
 - **Open questions:**
   - Its own section, or a part of Beans?
   - Import roast curves (Artisan `.alog`), or only link to them?
@@ -475,7 +503,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## H. Accounts
 
-### 19. Account management and password reset
+### 20. Account management and password reset
 
 - **Status:** idea
 - **Why:** a forgotten password can only be fixed by editing the database by

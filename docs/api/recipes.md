@@ -151,7 +151,9 @@ Creates a recipe, its grind starting points and its steps in one transaction.
     decimals).
   - `style` (optional, nullable): how the cup is brewed, one of its brewer's
     method's styles: `pour_over`, `immersion`, `hybrid`, `cold_brew` or
-    `other` for filter; `standard`, `soup` or `other` for espresso (`400` otherwise).
+    `other` for filter; `standard`, `soup` or `other` for espresso; `moka`,
+    `ibrik` or `other` for stovetop; `other` for other (`400` otherwise).
+    Stovetop and other recipes otherwise follow filter's rules (dose + water).
     Descriptive (lists, the AI); it changes no fields or timer behaviour. On
     `PATCH`, moving the recipe to a brewer of the other method clears a style
     that no longer fits, unless a fitting one is sent.

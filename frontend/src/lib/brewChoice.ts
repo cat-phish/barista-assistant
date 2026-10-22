@@ -1,18 +1,26 @@
-// Brew setup is always Category → Drink → Brewer → Recipe (docs/features.md):
-// a category ("Pour Over", "Specialty Drinks"); then one of its drinks, or
-// "Just <kind>" for a plain brew of the category's brewers; then a brewer of
-// that kind (any for a drink, the category's own for a plain brew); then one
-// of that brewer's recipes, with the drink's default preselected when it fits.
-// "none" logs a brew without a recipe. Choices are strings so they fit a
-// <select> and localStorage: category "cat:<id>" ("cat:" = uncategorised) |
-// "none"; item "plain:<kind>" | "drink:<id>".
+// Brew setup (docs/api/drink-categories.md §5d, brewers.md §3): "What are you
+// making?" is a brew method (Filter, Espresso…) or a drink category. A method
+// goes straight to its brewers, then a recipe (a plain brew); a category asks
+// for one of its drinks, then a brewer of the drink's method (any), then a
+// recipe, with the drink's default preselected when it fits. "none" logs a
+// brew without a recipe. Choices are strings so they fit a <select> and
+// localStorage: what "method:<kind>" | "cat:<id>" ("cat:" = uncategorised
+// drinks) | "none"; item "plain:<kind>" | "drink:<id>".
 import type { Brewer, Drink, DrinkCategory, MethodKind, Recipe } from '../api/types';
+import { METHOD_KINDS, METHOD_ORDER } from './equipment';
 import { nestDrinks, type NestedDrink } from './drinks';
 
 export const NO_RECIPE = 'none';
+export const encodeMethod = (kind: MethodKind) => `method:${kind}`;
 export const encodeCategory = (id: string | null) => `cat:${id ?? ''}`;
-export function decodeCategory(value: string): { categoryId: string | null } | null {
-  return value.startsWith('cat:') ? { categoryId: value.slice('cat:'.length) || null } : null;
+export type WhatChoice = { kind: 'method'; method: MethodKind } | { kind: 'category'; categoryId: string | null };
+export function decodeWhat(value: string): WhatChoice | null {
+  if (value.startsWith('method:')) {
+    const method = value.slice('method:'.length) as MethodKind;
+    return method in METHOD_KINDS ? { kind: 'method', method } : null;
+  }
+  if (value.startsWith('cat:')) return { kind: 'category', categoryId: value.slice('cat:'.length) || null };
+  return null;
 }
 export const encodePlain = (kind: MethodKind) => `plain:${kind}`;
 export const encodeDrink = (id: string) => `drink:${id}`;
@@ -35,43 +43,43 @@ export function brewable(brewers: Brewer[], drinks: Drink[]): Brewable {
   return { brewers: usable, drinks: drinks.filter((d) => kinds.has(d.kind)) };
 }
 
-// Every category in its order (empty ones flagged, so setup can suggest
-// adding a drink), then "Other" when there are uncategorised brewers or drinks.
-export function categoryOptions(b: Brewable, categories: DrinkCategory[]): Array<{ id: string | null; name: string; empty: boolean }> {
-  const used = new Set<string | null>([...b.brewers.map((x) => x.categoryId), ...b.drinks.map((d) => d.category?.id ?? null)]);
+export interface WhatOption {
+  value: string; // encodeMethod / encodeCategory
+  name: string;
+  categoryId: string | null; // for a category; null for a method or "Other drinks"
+  empty: boolean; // a category with nothing to brew yet (setup suggests adding a drink)
+}
+// The methods that have active brewers (in method order), then every drink
+// category in its order, then "Other drinks" when some drinks have none.
+export function whatOptions(b: Brewable, categories: DrinkCategory[]): WhatOption[] {
+  const methods = METHOD_ORDER.filter((k) => b.brewers.some((x) => x.kind === k));
+  const used = new Set<string | null>(b.drinks.map((d) => d.category?.id ?? null));
   const ordered = [...categories].sort((x, y) => x.position - y.position);
   return [
-    ...ordered.map((c) => ({ id: c.id, name: c.name, empty: !used.has(c.id) })),
-    ...(used.has(null) ? [{ id: null, name: 'Other', empty: false }] : []),
+    ...methods.map((k) => ({ value: encodeMethod(k), name: METHOD_KINDS[k].label, categoryId: null, empty: false })),
+    ...ordered.map((c) => ({ value: encodeCategory(c.id), name: c.name, categoryId: c.id, empty: !used.has(c.id) })),
+    ...(used.has(null) ? [{ value: encodeCategory(null), name: 'Other drinks', categoryId: null, empty: false }] : []),
   ];
 }
 
-const KIND_ORDER: MethodKind[] = ['filter', 'espresso'];
-
-// A category's plain brews (one per kind among its brewers, in kind order)
-// and its drinks (variants nested).
-export function itemOptions(b: Brewable, categoryId: string | null): { plains: MethodKind[]; drinks: NestedDrink[] } {
-  const kinds = new Set(b.brewers.filter((x) => x.categoryId === categoryId).map((x) => x.kind));
-  return {
-    plains: KIND_ORDER.filter((k) => kinds.has(k)),
-    drinks: nestDrinks(b.drinks.filter((d) => (d.category?.id ?? null) === categoryId)),
-  };
+// The items to pick from: a method is its plain brew (no question to ask); a
+// category is its drinks, variants nested.
+export function itemOptions(b: Brewable, what: WhatChoice | null): { plains: MethodKind[]; drinks: NestedDrink[] } {
+  if (!what) return { plains: [], drinks: [] };
+  if (what.kind === 'method') return { plains: [what.method], drinks: [] };
+  return { plains: [], drinks: nestDrinks(b.drinks.filter((d) => (d.category?.id ?? null) === what.categoryId)) };
 }
 
-// All item values of a category, in display order (plain brews, then drinks).
+// All item values, in display order (plain brews, then drinks).
 export function itemValues(items: ReturnType<typeof itemOptions>): string[] {
   return [...items.plains.map(encodePlain), ...items.drinks.map((d) => encodeDrink(d.drink.id))];
 }
 
-// The brewers that can make the item, by name: for a drink, every usable
-// brewer of its kind; for a plain brew, the category's own of that kind.
-export function brewerOptions(b: Brewable, categoryId: string | null, item: BrewItem | null, drinks: Drink[]): Brewer[] {
-  let list: Brewer[] = [];
-  if (item?.kind === 'plain') list = b.brewers.filter((x) => x.kind === item.method && x.categoryId === categoryId);
-  if (item?.kind === 'drink') {
-    const kind = drinks.find((d) => d.id === item.id)?.kind;
-    list = b.brewers.filter((x) => x.kind === kind);
-  }
+// The brewers that can make the item, by name: every usable brewer of the
+// plain brew's method, or of the drink's.
+export function brewerOptions(b: Brewable, item: BrewItem | null, drinks: Drink[]): Brewer[] {
+  const kind = item?.kind === 'plain' ? item.method : item?.kind === 'drink' ? drinks.find((d) => d.id === item.id)?.kind : undefined;
+  const list = kind ? b.brewers.filter((x) => x.kind === kind) : [];
   return [...list].sort((x, y) => x.name.localeCompare(y.name));
 }
 
@@ -100,12 +108,12 @@ export function pickRecipe(choices: Recipe[], drink: Drink | null, current: stri
   return choices[0]?.id ?? '';
 }
 
-// A valid choice to restore (e.g. the last one), else the first option.
-export function validCategory(value: string | null, options: Array<{ id: string | null }>): string {
+// A valid choice to restore (e.g. the last one), else the first option. An
+// old or deleted category (or a method with no brewers now) falls back.
+export function validWhat(value: string | null, options: WhatOption[]): string {
   if (value === NO_RECIPE) return value;
-  const decoded = value ? decodeCategory(value) : null;
-  if (decoded && options.some((o) => o.id === decoded.categoryId)) return value!;
-  return options[0] ? encodeCategory(options[0].id) : NO_RECIPE;
+  if (value && options.some((o) => o.value === value)) return value;
+  return options[0]?.value ?? NO_RECIPE;
 }
 export function validItem(value: string | null, values: string[]): string {
   return value && values.includes(value) ? value : (values[0] ?? '');

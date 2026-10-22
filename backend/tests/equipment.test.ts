@@ -44,15 +44,11 @@ describe("brewers", () => {
       preinfusion: "none",
       flowControl: "none",
       pressureControl: "none",
-      menuName: null,
-      description: null,
-      categoryId: null,
-      showOnPublicMenu: false,
       retiredAt: null,
       createdAt: expect.any(String),
     });
-    const lm = await owner.agent.post(base).send({ name: "Linea Mini", kind: "espresso", preinfusion: "manual", flowControl: "manual", menuName: " Espresso " });
-    expect(lm.body.brewer).toMatchObject({ preinfusion: "manual", flowControl: "manual", pressureControl: "none", menuName: "Espresso" });
+    const lm = await owner.agent.post(base).send({ name: "Linea Mini", kind: "espresso", preinfusion: "manual", flowControl: "manual" });
+    expect(lm.body.brewer).toMatchObject({ preinfusion: "manual", flowControl: "manual", pressureControl: "none" });
     expect((await owner.agent.post(base).send({ name: "X", preinfusion: "sometimes" })).status).toBe(400);
     expect((await owner.agent.post(base).send({ name: "linea mini" })).status).toBe(409);
 

@@ -9,7 +9,6 @@ import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import {
   brewers,
   brewLogs,
-  drinkCategories,
   METHOD_KINDS,
   PREINFUSION_MODES,
   PROFILE_CONTROLS,
@@ -41,15 +40,11 @@ interface BrewerParams extends WorkspaceParams {
 
 const brewerFields = {
   name: z.string().trim().min(1).max(100),
-  kind: z.enum(METHOD_KINDS), // the brew method: filter or espresso
+  kind: z.enum(METHOD_KINDS), // the brew method, also how brewers are grouped
   notes: optionalText(255),
   preinfusion: z.enum(PREINFUSION_MODES),
   flowControl: z.enum(PROFILE_CONTROLS),
   pressureControl: z.enum(PROFILE_CONTROLS),
-  menuName: optionalText(100),
-  description: optionalText(500),
-  categoryId: z.uuid().nullable().optional(),
-  showOnPublicMenu: z.boolean(),
 };
 
 const createBrewerSchema = z.object({
@@ -58,8 +53,10 @@ const createBrewerSchema = z.object({
   preinfusion: brewerFields.preinfusion.default("none"),
   flowControl: brewerFields.flowControl.default("none"),
   pressureControl: brewerFields.pressureControl.default("none"),
-  showOnPublicMenu: brewerFields.showOnPublicMenu.default(false),
-});
+})
+  // Brewers have no category or menu fields any more (the menu builder, §7b):
+  // an old client sending them gets a 400 rather than a silent drop.
+  .strict();
 
 const updateBrewerSchema = updateSchema({ ...brewerFields, retired: z.boolean() });
 
@@ -71,10 +68,6 @@ const summary = {
   preinfusion: brewers.preinfusion,
   flowControl: brewers.flowControl,
   pressureControl: brewers.pressureControl,
-  menuName: brewers.menuName,
-  description: brewers.description,
-  categoryId: brewers.categoryId,
-  showOnPublicMenu: brewers.showOnPublicMenu,
   retiredAt: brewers.retiredAt,
   createdAt: brewers.createdAt,
 };
@@ -83,17 +76,6 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 function inWorkspace(p: BrewerParams): SQL | undefined {
   return and(eq(brewers.id, p.brewerId), eq(brewers.workspaceId, p.workspaceId));
-}
-
-// Locked so a concurrent delete either finishes first (-> 400) or waits.
-async function categoryInWorkspace(tx: Tx, categoryId: string | null | undefined, workspaceId: string): Promise<boolean> {
-  if (!categoryId) return true;
-  const found = await tx
-    .select({ id: drinkCategories.id })
-    .from(drinkCategories)
-    .where(and(eq(drinkCategories.id, categoryId), eq(drinkCategories.workspaceId, workspaceId)))
-    .for("update");
-  return found.length === 1;
 }
 
 // Recipes and brews use a brewer; drinks don't (they need a kind, not a device).
@@ -105,7 +87,6 @@ async function usage(tx: Tx, brewerId: string): Promise<{ recipeCount: number; b
   return { recipeCount: r?.n ?? 0, brewLogCount: l?.n ?? 0 };
 }
 
-const BAD_CATEGORY = "categoryId: not a category in this workspace";
 const duplicate = (res: Response, err: unknown): boolean => {
   if (!isDuplicateEntryError(err)) return false;
   // The unique index's collation is case-insensitive, so "v60" collides with "V60".
@@ -136,15 +117,7 @@ brewersRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Brew
   if (!body) return;
   const id = randomUUID();
   try {
-    const ok = await db.transaction(async (tx) => {
-      if (!(await categoryInWorkspace(tx, body.categoryId, workspaceId))) return false;
-      await tx.insert(brewers).values({ id, workspaceId, ...body });
-      return true;
-    });
-    if (!ok) {
-      sendError(res, 400, BAD_CATEGORY);
-      return;
-    }
+    await db.insert(brewers).values({ id, workspaceId, ...body });
   } catch (err) {
     if (duplicate(res, err)) return;
     throw err;
@@ -165,7 +138,7 @@ brewersRouter.patch("/:brewerId", async (req: Request<BrewerParams>, res: Respon
   if (!body) return;
   const { retired, ...fields } = body;
 
-  let outcome: { status: "not_found" } | { status: "bad_category" } | { status: "in_use"; recipeCount: number } | { status: "updated" };
+  let outcome: { status: "not_found" } | { status: "in_use"; recipeCount: number } | { status: "updated" };
   try {
     outcome = await db.transaction(async (tx) => {
       // Locked so a recipe can't start using it between the count and the update.
@@ -175,7 +148,6 @@ brewersRouter.patch("/:brewerId", async (req: Request<BrewerParams>, res: Respon
         const { recipeCount } = await usage(tx, brewer.id);
         if (recipeCount > 0) return { status: "in_use", recipeCount } as const;
       }
-      if (!(await categoryInWorkspace(tx, fields.categoryId, workspaceId))) return { status: "bad_category" } as const;
       await tx
         .update(brewers)
         .set({
@@ -194,10 +166,6 @@ brewersRouter.patch("/:brewerId", async (req: Request<BrewerParams>, res: Respon
 
   if (outcome.status === "not_found") {
     sendError(res, 404, "Brewer not found");
-    return;
-  }
-  if (outcome.status === "bad_category") {
-    sendError(res, 400, BAD_CATEGORY);
     return;
   }
   if (outcome.status === "in_use") {

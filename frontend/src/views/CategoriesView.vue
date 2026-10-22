@@ -36,7 +36,7 @@ onMounted(load);
       <h1>Bar setup</h1>
     </div>
     <SetupTabs />
-    <p class="muted intro">Put brewers and drinks in categories on their own pages; here you name the categories and set their order.</p>
+    <p class="muted intro">Drink categories group your drinks when you brew, after the brew methods (brewers are grouped by method). Put drinks in them on the Drinks page; here you name them and set their order.</p>
     <p v-if="loading" class="muted" aria-live="polite">Loading categories…</p>
     <p v-else-if="error" class="form-error" role="alert">{{ error }}</p>
     <DrinkCategoriesPanel v-else :categories="categories" @changed="load" />

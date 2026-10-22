@@ -55,22 +55,17 @@ export interface ErrorBody {
 // docs/schema.md METHOD_KINDS: decides the recipe fields and timer (docs/api/brewers.md §3).
 // The brew method: decides recipe fields, steps, the timer, and which drinks a
 // brewer can make. A recipe's style says how the cup is brewed (descriptive).
-export type MethodKind = 'filter' | 'espresso';
-export type RecipeStyle = 'pour_over' | 'immersion' | 'hybrid' | 'cold_brew' | 'standard' | 'soup' | 'other';
+// Brewers are grouped by method (no category); categories are for drinks.
+export type MethodKind = 'filter' | 'espresso' | 'stovetop' | 'other';
+export type RecipeStyle = 'pour_over' | 'immersion' | 'hybrid' | 'cold_brew' | 'standard' | 'soup' | 'moka' | 'ibrik' | 'other';
 
 // docs/api/brewers.md §3: what makes the coffee (V60, AeroPress, an espresso
 // machine). Capabilities apply to espresso brewers only ("none" otherwise).
 export interface Brewer extends MachineCapabilities {
   id: string;
   name: string;
-  kind: MethodKind; // the brew method
+  kind: MethodKind; // the brew method, also how brewers are grouped (no category)
   notes: string | null;
-  // Menu fields: the plain brew ("V60") on the public menu (§3, §7), and the
-  // category that groups it there and when brewing.
-  menuName: string | null; // shown instead of name, e.g. "Espresso"
-  description: string | null;
-  categoryId: string | null;
-  showOnPublicMenu: boolean;
   retiredAt: string | null; // set = retired (hidden from pickers, kept in history)
   createdAt: string; // date added (ISO)
 }
@@ -314,7 +309,6 @@ export interface Drink {
   category: { id: string; name: string } | null;
   parent: { id: string; name: string } | null;
   variants: Array<{ id: string; name: string }>; // direct variants, by name
-  showOnPublicMenu: boolean;
   defaultRecipeId: string | null; // a recipe of the method, or null
   servingSize: number | null; // default size; both or neither
   servingUnit: ServingUnit | null;

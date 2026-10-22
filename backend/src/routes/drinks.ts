@@ -24,7 +24,7 @@ import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
 // docs/api/drinks.md §5c
 export interface DrinkDetails
-  extends Pick<Drink, "id" | "name" | "description" | "showOnPublicMenu" | "defaultRecipeId" | "servingSize" | "servingUnit" | "instructions" | "createdAt"> {
+  extends Pick<Drink, "id" | "name" | "description" | "defaultRecipeId" | "servingSize" | "servingUnit" | "instructions" | "createdAt"> {
   kind: MethodKind; // the kind of coffee it needs; any brewer of it can make it
   category: { id: string; name: string } | null;
   parent: { id: string; name: string } | null;
@@ -54,7 +54,6 @@ const drinkFields = {
   kind: z.enum(METHOD_KINDS),
   categoryId: z.uuid().nullable().optional(),
   parentDrinkId: z.uuid().nullable().optional(),
-  showOnPublicMenu: z.boolean(),
   defaultRecipeId: z.uuid().nullable().optional(),
   // Both or neither (checked below).
   servingSize: decimalSchema({ min: 0, max: 2000, scale: 1, exclusiveMin: true }).nullable().optional(),
@@ -74,11 +73,14 @@ const drinkFields = {
     .max(20)
     .refine((list) => distinct(list.map((c) => c.ingredientId)), "each ingredient at most once"),
 };
-const createSchema = z.object({
-  ...drinkFields,
-  showOnPublicMenu: drinkFields.showOnPublicMenu.default(true),
-  ingredients: drinkFields.ingredients.default([]),
-});
+// Strict: showOnPublicMenu is gone (the menu builder places drinks, §7b), so
+// an old client sending it gets a 400 rather than a silent drop.
+const createSchema = z
+  .object({
+    ...drinkFields,
+    ingredients: drinkFields.ingredients.default([]),
+  })
+  .strict();
 const updateDrinkSchema = updateSchema(drinkFields);
 
 // A size needs both its number and unit, or neither.
@@ -158,7 +160,6 @@ export async function loadDrinks(where: SQL | undefined): Promise<DrinkDetails[]
       id: drinks.id,
       name: drinks.name,
       description: drinks.description,
-      showOnPublicMenu: drinks.showOnPublicMenu,
       createdAt: drinks.createdAt,
       defaultRecipeId: drinks.defaultRecipeId,
       servingSize: drinks.servingSize,

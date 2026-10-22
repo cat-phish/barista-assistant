@@ -8,8 +8,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { brewersApi } from '../api/brewers';
 import { recipesApi } from '../api/recipes';
 import { ApiError, errorMessage } from '../api/client';
-import { drinkCategoriesApi } from '../api/drinkCategories';
-import type { Brewer, DrinkCategory, Recipe } from '../api/types';
+import type { Brewer, Recipe } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import SetupTabs from '../components/SetupTabs.vue';
@@ -34,11 +33,10 @@ import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
 const brewers = ref<Brewer[]>([]);
-const categories = ref<DrinkCategory[]>([]);
 const loading = ref(true);
 const error = ref('');
-const categoryName = (id: string | null) => categories.value.find((c) => c.id === id)?.name ?? null;
 const recipes = ref<Recipe[]>([]);
+const recipeCount = (brewerId: string) => recipes.value.filter((r) => r.brewer.id === brewerId).length;
 // "2 recipes: pour over, immersion": how this brewer is used (styles live on recipes).
 function recipeSummary(brewerId: string): string {
   const mine = recipes.value.filter((r) => r.brewer.id === brewerId);
@@ -55,7 +53,7 @@ const KINDS = Object.keys(METHOD_KINDS) as Array<keyof typeof METHOD_KINDS>;
 const columns: SortColumns<Brewer> = {
   name: nameColumn(),
   kind: enumColumn('Method', KINDS, (b) => b.kind),
-  category: { label: 'Category', value: (b) => categoryName(b.categoryId) },
+  recipes: { label: 'Recipes', value: (b) => recipeCount(b.id), asc: 'Fewest first', desc: 'Most first', firstDir: 'desc' },
   added: addedColumn(),
 };
 const sortChoices = sortColumnOptions(columns);
@@ -82,9 +80,8 @@ async function load(): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [b, c, r] = await Promise.all([brewersApi.list(ws), drinkCategoriesApi.list(ws), recipesApi.list(ws)]);
+    const [b, r] = await Promise.all([brewersApi.list(ws), recipesApi.list(ws)]);
     brewers.value = b.brewers;
-    categories.value = c.categories;
     recipes.value = r.recipes;
   } catch (err) {
     error.value = errorMessage(err);
@@ -177,7 +174,7 @@ async function retireInstead(): Promise<void> {
         <p v-if="shown.length === 0" class="card empty">No {{ filter === ALL ? 'brewers' : `${filterName.toLowerCase()} brewers` }} yet.</p>
         <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.3fr) 5.5rem">
           <div class="data-row data-head">
-            <button v-for="c in ['name', 'kind', 'category']" :key="c" class="data-th" type="button" :aria-label="sortLabel(sort, c, columns[c]!.label)" @click="sort = toggleHeader(sort, c, columns)">
+            <button v-for="c in ['name', 'kind', 'recipes']" :key="c" class="data-th" type="button" :aria-label="sortLabel(sort, c, columns[c]!.label)" @click="sort = toggleHeader(sort, c, columns)">
               {{ columns[c]!.label }} <span aria-hidden="true">{{ sortArrow(sort, c) }}</span>
             </button>
             <button class="data-th end" type="button" :aria-label="sortLabel(sort, 'added', 'Date added')" @click="sort = toggleHeader(sort, 'added', columns)">
@@ -188,7 +185,7 @@ async function retireInstead(): Promise<void> {
             <button class="data-row" type="button" :aria-expanded="openId === m.id" @click="toggle(m.id)">
               <span class="data-td primary">{{ m.name }}</span>
               <span class="data-td">{{ METHOD_KINDS[m.kind].label }}</span>
-              <span class="data-td">{{ categoryName(m.categoryId) ?? '–' }}</span>
+              <span class="data-td">{{ recipeCount(m.id) }}</span>
               <span class="data-td end">{{ formatAdded(m.createdAt) }}</span>
             </button>
             <div v-if="openId === m.id" class="data-details">

@@ -201,6 +201,22 @@ describe("processBrewAnalysis", () => {
     expect(byDay["day 7"]).toEqual([4, 2]); // after thawing: resumed
   });
 
+  it("names a stovetop brew's method and style", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    const moka = randomUUID();
+    const mokaRecipe = randomUUID();
+    await db.insert(brewers).values({ id: moka, workspaceId, name: "Bialetti", kind: "stovetop" });
+    await db.insert(recipes).values({ id: mokaRecipe, workspaceId, name: "3-cup moka", brewerId: moka, targetDoseGrams: 15, targetWaterGrams: 150, style: "moka" });
+    const id = randomUUID();
+    await db.insert(brewLogs).values({
+      id, workspaceId, userId, beanId, recipeId: mokaRecipe, brewerId: moka, timestamp: new Date("2026-10-08T09:00:00Z"),
+      actualDoseGrams: 15, actualWaterGrams: 150, actualTimeSec: 240,
+    });
+    await processBrewAnalysis({ brewLogId: id });
+    const context = llm.mock.calls[0]![0] as BrewContext;
+    expect(context.brew).toMatchObject({ methodKind: "stovetop", recipeStyle: "moka" });
+  });
+
   it("dates each brew by the logging device's UTC offset", async () => {
     llm.mockResolvedValue(ANALYSIS);
     // Oct 9, 03:00 UTC is still Oct 8 in the evening at UTC-7: one day younger.

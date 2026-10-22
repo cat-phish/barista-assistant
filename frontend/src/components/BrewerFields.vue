@@ -1,12 +1,11 @@
 <script setup lang="ts">
-// A brewer's fields (docs/api/brewers.md §3): name and brew method; for
-// espresso, what
-// the machine lets you control; notes; and the menu settings for the plain brew.
-import type { DrinkCategory } from '../api/types';
+// A brewer's fields (docs/api/brewers.md §3): name and brew method (which also
+// groups it when brewing); for espresso, what the machine lets you control;
+// notes. How it shows on the public menu is set in Bar setup → Menu.
 import { METHOD_KINDS, PREINFUSION_MODES, PROFILE_CONTROLS, type BrewerForm } from '../lib/equipment';
 
 const form = defineModel<BrewerForm>({ required: true });
-defineProps<{ idPrefix: string; showErrors: boolean; categories: DrinkCategory[] }>();
+defineProps<{ idPrefix: string; showErrors: boolean }>();
 </script>
 
 <template>
@@ -24,7 +23,7 @@ defineProps<{ idPrefix: string; showErrors: boolean; categories: DrinkCategory[]
         </select>
       </div>
     </div>
-    <p class="muted small">{{ METHOD_KINDS[form.kind].hint }}. It decides the recipe fields, the timer, and which drinks it can make.</p>
+    <p class="muted small">{{ METHOD_KINDS[form.kind].hint }}. It groups the brewer when you brew, and decides the recipe fields, the timer, and which drinks it can make.</p>
     <template v-if="form.kind === 'espresso'">
       <div class="field">
         <label :for="`${idPrefix}-preinfusion`">Pre-infusion</label>
@@ -53,14 +52,6 @@ defineProps<{ idPrefix: string; showErrors: boolean; categories: DrinkCategory[]
     <div class="field">
       <label :for="`${idPrefix}-notes`">Notes <span class="muted">(optional)</span></label>
       <input :id="`${idPrefix}-notes`" v-model="form.notes" maxlength="255" :placeholder="form.kind === 'espresso' ? 'e.g. 18 g VST basket' : 'e.g. 02 size, white ceramic'" />
-    </div>
-    <div class="field">
-      <label :for="`${idPrefix}-category`">Category <span class="muted">(optional)</span></label>
-      <select :id="`${idPrefix}-category`" v-model="form.categoryId">
-        <option value="">None</option>
-        <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
-      </select>
-      <span class="hint">Your own grouping: where it's listed when you brew. The public menu is arranged in Bar setup → Menu.</span>
     </div>
   </div>
 </template>

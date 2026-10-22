@@ -40,7 +40,7 @@ export interface PublicMenuResponse {
   sections: PublicMenuSection[];
 }
 
-const METHOD_LABELS: Record<MethodKind, string> = { filter: "Filter", espresso: "Espresso" };
+const METHOD_LABELS: Record<MethodKind, string> = { filter: "Filter", espresso: "Espresso", stovetop: "Stovetop", other: "Other" };
 
 // Mounted at /api/public/menu. Unauthenticated: only expose explicitly public data.
 export const publicMenuRouter = Router();
