@@ -8,7 +8,7 @@ const LABELS = ['', 'Bad', 'Meh', 'OK', 'Good', 'Great'];
 
 <template>
   <fieldset class="rating">
-    <legend>{{ label }} <span class="muted">(optional)</span></legend>
+    <legend>{{ label }}</legend>
     <div class="options">
       <label v-for="n in 5" :key="n" :class="{ chosen: model !== null && n <= model }" :title="LABELS[n]">
         <input type="radio" :name="name" :value="n" :checked="model === n" @click="model = model === n ? null : n" />

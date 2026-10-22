@@ -541,16 +541,16 @@ async function confirmFreeze(): Promise<void> {
     <form id="freeze-edit-form" class="stack" @submit.prevent="saveFreezeEdit('save')">
       <p class="muted small">Fix a date you got wrong; the roast age is worked out again everywhere, including for the AI.</p>
       <div class="field">
-        <label for="edit-frozen-on">Frozen on</label>
-        <input id="edit-frozen-on" v-model="editFrozenOn" type="date" :min="editMin || undefined" :max="localDateInput()" required />
+        <label for="edit-frozen-on">Frozen on<span class="req" aria-hidden="true">*</span></label>
+        <input id="edit-frozen-on" aria-required="true" v-model="editFrozenOn" type="date" :min="editMin || undefined" :max="localDateInput()" required />
       </div>
       <label class="checkbox">
         <input v-model="editStillFrozen" type="checkbox" />
         Still frozen
       </label>
       <div v-if="!editStillFrozen" class="field">
-        <label for="edit-thawed-on">Thawed on</label>
-        <input id="edit-thawed-on" v-model="editThawedOn" type="date" :min="editFrozenOn || undefined" :max="localDateInput()" required />
+        <label for="edit-thawed-on">Thawed on<span class="req" aria-hidden="true">*</span></label>
+        <input id="edit-thawed-on" aria-required="true" v-model="editThawedOn" type="date" :min="editFrozenOn || undefined" :max="localDateInput()" required />
       </div>
       <p v-if="editProblem" class="field-error">{{ editProblem }}</p>
       <p v-if="confirmRemove" class="form-error" role="alert">Delete this freeze? Its days will count toward the roast age again.</p>
@@ -606,8 +606,8 @@ async function confirmFreeze(): Promise<void> {
       </p>
       <p v-else>Its roast age starts counting again from where it paused.</p>
       <div class="field">
-        <label for="freeze-date">{{ freezeAction === 'freeze' ? 'Frozen on' : 'Thawed on' }}</label>
-        <input id="freeze-date" v-model="freezeDate" type="date" :min="freezeMin || undefined" :max="localDateInput()" required />
+        <label for="freeze-date">{{ freezeAction === 'freeze' ? 'Frozen on' : 'Thawed on' }}<span class="req" aria-hidden="true">*</span></label>
+        <input id="freeze-date" aria-required="true" v-model="freezeDate" type="date" :min="freezeMin || undefined" :max="localDateInput()" required />
       </div>
       <p v-if="freezeError" class="form-error" role="alert">{{ freezeError }}</p>
     </form>

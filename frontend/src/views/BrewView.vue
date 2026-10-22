@@ -597,15 +597,15 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       <h1>New brew</h1>
       <section class="card stack">
         <div class="field">
-          <label for="bean">Bean</label>
-          <select id="bean" v-model="beanId">
+          <label for="bean">Bean<span class="req" aria-hidden="true">*</span></label>
+          <select id="bean" aria-required="true" v-model="beanId">
             <option value="" disabled>Choose a bean…</option>
             <option v-for="b in beans" :key="b.id" :value="b.id">{{ b.roasterName }} – {{ b.beanName }}</option>
           </select>
         </div>
         <div class="field">
-          <label for="what">What are you making?</label>
-          <select id="what" v-model="what">
+          <label for="what">What are you making?<span class="req" aria-hidden="true">*</span></label>
+          <select id="what" aria-required="true" v-model="what">
             <option v-for="c in whatList" :key="c.value" :value="c.value">{{ c.name }}</option>
             <option :value="NO_RECIPE">Something else (no recipe)</option>
           </select>
@@ -618,14 +618,14 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           </p>
         </div>
         <div v-else-if="chosenCategory" class="field">
-          <label for="item">Drink</label>
-          <select id="item" v-model="item">
+          <label for="item">Drink<span class="req" aria-hidden="true">*</span></label>
+          <select id="item" aria-required="true" v-model="item">
             <option v-for="d in items.drinks" :key="d.drink.id" :value="encodeDrink(d.drink.id)">{{ '\u2003'.repeat(d.depth) }}{{ drinkLabel(d.drink) }}</option>
           </select>
         </div>
         <div v-if="chosen && brewerList.length" class="field">
-          <label for="brewer">Brewer</label>
-          <select id="brewer" v-model="brewerId">
+          <label for="brewer">Brewer<span class="req" aria-hidden="true">*</span></label>
+          <select id="brewer" aria-required="true" v-model="brewerId">
             <option v-for="b in brewerList" :key="b.id" :value="b.id">{{ b.name }}</option>
           </select>
         </div>
@@ -637,8 +637,8 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           </p>
         </div>
         <div v-else-if="brewerId" class="field">
-          <label for="recipe">Recipe</label>
-          <select id="recipe" v-model="recipeId">
+          <label for="recipe">Recipe<span class="req" aria-hidden="true">*</span></label>
+          <select id="recipe" aria-required="true" v-model="recipeId">
             <option v-for="r in recipeChoices" :key="r.id" :value="r.id">{{ r.name }}<template v-if="r.style && r.style !== 'standard'"> ({{ RECIPE_STYLES[r.style].toLowerCase() }})</template><template v-if="r.id === drink?.defaultRecipeId"> (default)</template></option>
           </select>
         </div>
@@ -664,7 +664,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         </div>
         <div class="field">
           <label for="grinder">
-            Grinder <span class="muted">(optional)</span>
+            Grinder
             <RouterLink class="manage" :to="{ name: 'grinders' }">Manage</RouterLink>
           </label>
           <select id="grinder" v-model="draft.grinderId" @change="onGrinderChange">
@@ -675,8 +675,8 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         </div>
         <div v-if="draft.grinderId === NEW_GRINDER" class="new-grinder">
           <div class="field grow">
-            <label for="new-grinder">New grinder name</label>
-            <input id="new-grinder" ref="newGrinderInput" v-model="newGrinderName" maxlength="100" placeholder="e.g. Comandante C40" @keydown.enter.prevent="addGrinder" />
+            <label for="new-grinder">New grinder name<span class="req" aria-hidden="true">*</span></label>
+            <input id="new-grinder" aria-required="true" ref="newGrinderInput" v-model="newGrinderName" maxlength="100" placeholder="e.g. Comandante C40" @keydown.enter.prevent="addGrinder" />
           </div>
           <button class="btn btn-secondary" type="button" :disabled="addingGrinder || !newGrinderName.trim()" @click="addGrinder">Add</button>
           <span v-if="grinderError" class="field-error full">{{ grinderError }}</span>

@@ -74,19 +74,19 @@ async function save(): Promise<void> {
       <section class="card stack">
         <div class="form-row">
           <div class="field">
-            <label for="ingredient-name">Name</label>
-            <input id="ingredient-name" v-model="name" maxlength="100" placeholder="e.g. Orange cold foam" :aria-invalid="submitted && !name.trim()" />
+            <label for="ingredient-name">Name<span class="req" aria-hidden="true">*</span></label>
+            <input id="ingredient-name" aria-required="true" v-model="name" maxlength="100" placeholder="e.g. Orange cold foam" :aria-invalid="submitted && !name.trim()" />
             <span v-if="submitted && !name.trim()" class="field-error">Required</span>
           </div>
           <div class="field">
-            <label for="ingredient-type">Type</label>
-            <select id="ingredient-type" v-model="ingredientType">
+            <label for="ingredient-type">Type<span class="req" aria-hidden="true">*</span></label>
+            <select id="ingredient-type" aria-required="true" v-model="ingredientType">
               <option v-for="(label, key) in INGREDIENT_TYPES" :key="key" :value="key">{{ label }}</option>
             </select>
           </div>
         </div>
         <div class="field">
-          <label for="ingredient-instructions">Instructions <span class="muted">(optional)</span></label>
+          <label for="ingredient-instructions">Instructions</label>
           <textarea
             id="ingredient-instructions"
             v-model="instructions"

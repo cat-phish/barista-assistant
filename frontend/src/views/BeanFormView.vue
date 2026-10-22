@@ -239,25 +239,25 @@ async function save(): Promise<void> {
     <form v-else class="stack" novalidate @submit.prevent="save">
       <section class="card stack">
         <div class="field">
-          <label for="roaster">Roaster</label>
-          <input id="roaster" v-model="roasterName" maxlength="255" placeholder="e.g. Onyx Coffee Lab" :aria-invalid="submitted && !!fieldErrors.roasterName" />
+          <label for="roaster">Roaster<span class="req" aria-hidden="true">*</span></label>
+          <input id="roaster" aria-required="true" v-model="roasterName" maxlength="255" placeholder="e.g. Onyx Coffee Lab" :aria-invalid="submitted && !!fieldErrors.roasterName" />
           <span v-if="submitted && fieldErrors.roasterName" class="field-error">{{ fieldErrors.roasterName }}</span>
         </div>
         <div class="field">
-          <label for="bean">Coffee</label>
-          <input id="bean" v-model="beanName" maxlength="255" placeholder="e.g. Ethiopia Guji" :aria-invalid="submitted && !!fieldErrors.beanName" />
+          <label for="bean">Coffee<span class="req" aria-hidden="true">*</span></label>
+          <input id="bean" aria-required="true" v-model="beanName" maxlength="255" placeholder="e.g. Ethiopia Guji" :aria-invalid="submitted && !!fieldErrors.beanName" />
           <span v-if="submitted && fieldErrors.beanName" class="field-error">{{ fieldErrors.beanName }}</span>
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="process">Process <span class="muted">(optional)</span></label>
+            <label for="process">Process</label>
             <select id="process" v-model="process">
               <option value="">Not sure</option>
               <option v-for="(p, key) in BEAN_PROCESSES" :key="key" :value="key">{{ p.label }}</option>
             </select>
           </div>
           <div class="field">
-            <label for="blend-type">Origin <span class="muted">(optional)</span></label>
+            <label for="blend-type">Origin</label>
             <select id="blend-type" v-model="blendType">
               <option value="">Not sure</option>
               <option v-for="(b, key) in BLEND_TYPES" :key="key" :value="key">{{ b.label }}</option>
@@ -266,21 +266,21 @@ async function save(): Promise<void> {
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="producer">Producer <span class="muted">(optional)</span></label>
+            <label for="producer">Producer</label>
             <input id="producer" v-model="producer" maxlength="255" placeholder="e.g. Finca El Paraíso" />
           </div>
           <div class="field">
-            <label for="region">Region <span class="muted">(optional)</span></label>
+            <label for="region">Region</label>
             <input id="region" v-model="region" maxlength="255" placeholder="e.g. Huila" />
           </div>
         </div>
         <div class="field altitude">
-          <label for="altitude">Altitude (m) <span class="muted">(optional)</span></label>
+          <label for="altitude">Altitude (m)</label>
           <input id="altitude" v-model="altitude" inputmode="numeric" placeholder="e.g. 1950" :aria-invalid="submitted && !!fieldErrors.altitude" />
           <span v-if="submitted && fieldErrors.altitude" class="field-error">{{ fieldErrors.altitude }}</span>
         </div>
         <div class="field">
-          <label for="flavor-profile">Flavor profile <span class="muted">(optional)</span></label>
+          <label for="flavor-profile">Flavor profile</label>
           <textarea id="flavor-profile" v-model="flavorProfile" rows="2" maxlength="500" placeholder="e.g. Milk chocolate, plum, cane sugar" />
         </div>
         <label class="checkbox">
@@ -293,20 +293,20 @@ async function save(): Promise<void> {
         <h2>Roast</h2>
         <div class="form-row">
           <div class="field">
-            <label for="roast-type">Roasted for <span class="muted">(optional)</span></label>
+            <label for="roast-type">Roasted for</label>
             <select id="roast-type" v-model="roastType">
               <option value="">Not sure</option>
               <option v-for="(r, key) in ROAST_TYPES" :key="key" :value="key">{{ r.label }}</option>
             </select>
           </div>
           <div class="field">
-            <label for="roast-date">Roast date <span class="muted">(optional)</span></label>
+            <label for="roast-date">Roast date</label>
             <input id="roast-date" v-model="roastDate" type="date" :max="today" />
           </div>
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="detailed-roast">Roast Level <span class="muted">(optional)</span></label>
+            <label for="detailed-roast">Roast Level</label>
             <select id="detailed-roast" v-model="detailedRoastLevel">
               <option value="">Not sure</option>
               <option v-for="(d, key) in DETAILED_ROAST_LEVELS" :key="key" :value="key">{{ d.label }}</option>
@@ -325,22 +325,23 @@ async function save(): Promise<void> {
       <section class="card stack">
         <h2>Stock and buying</h2>
         <div class="field">
-          <label for="inventory">In stock (grams)</label>
-          <input id="inventory" v-model="inventory" inputmode="numeric" :aria-invalid="submitted && !!fieldErrors.inventory" />
+          <label for="inventory">In stock (grams)<span class="req" aria-hidden="true">*</span></label>
+          <input id="inventory" aria-required="true" v-model="inventory" inputmode="numeric" :aria-invalid="submitted && !!fieldErrors.inventory" />
           <span v-if="submitted && fieldErrors.inventory" class="field-error">{{ fieldErrors.inventory }}</span>
         </div>
         <div class="price-row">
           <div class="field">
-            <label for="price">Bag price <span class="muted">(optional)</span></label>
+            <label for="price">Bag price</label>
             <input id="price" v-model="price" inputmode="decimal" placeholder="e.g. 21.50" :aria-invalid="submitted && !!fieldErrors.price" />
             <span v-if="submitted && fieldErrors.price" class="field-error">{{ fieldErrors.price }}</span>
           </div>
           <div class="field">
-            <label for="currency">Currency</label>
+            <label for="currency">Currency<span v-if="price.trim()" class="req" aria-hidden="true">*</span></label>
             <input
               id="currency"
               v-model="currency"
               class="currency"
+              :aria-required="!!price.trim()"
               maxlength="3"
               autocapitalize="characters"
               placeholder="USD"
@@ -357,17 +358,17 @@ async function save(): Promise<void> {
         <p v-if="perGram" class="muted small" aria-live="polite">≈ {{ perGram }}</p>
         <div class="form-row">
           <div class="field">
-            <label for="purchase-date">Purchase date <span class="muted">(optional)</span></label>
+            <label for="purchase-date">Purchase date</label>
             <input id="purchase-date" v-model="purchaseDate" type="date" :max="today" :aria-invalid="submitted && !!fieldErrors.purchaseDate" />
             <span v-if="submitted && fieldErrors.purchaseDate" class="field-error">{{ fieldErrors.purchaseDate }}</span>
           </div>
           <div class="field">
-            <label for="green-supplier">Green bean supplier <span class="muted">(optional)</span></label>
+            <label for="green-supplier">Green bean supplier</label>
             <input id="green-supplier" v-model="greenSupplier" maxlength="255" />
           </div>
         </div>
         <div class="field">
-          <label for="website">Website <span class="muted">(optional)</span></label>
+          <label for="website">Website</label>
           <input id="website" v-model="website" type="url" inputmode="url" maxlength="500" placeholder="https://" :aria-invalid="submitted && !!fieldErrors.website" />
           <span v-if="submitted && fieldErrors.website" class="field-error">{{ fieldErrors.website }}</span>
         </div>
@@ -380,7 +381,7 @@ async function save(): Promise<void> {
       <section class="card stack">
         <RatingInput v-model="rating" name="bean-rating" label="Rating" />
         <div class="field">
-          <label for="notes">Notes <span class="muted">(optional)</span></label>
+          <label for="notes">Notes</label>
           <textarea id="notes" v-model="notes" rows="4" maxlength="2000" placeholder="e.g. Roaster suggests 1:16. Best after 10 days." />
         </div>
       </section>
