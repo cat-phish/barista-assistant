@@ -30,6 +30,7 @@ and fix the references.
 - E. Insights: 15
 - F. Bar & menu: 16–17
 - G. Home roasting: 18
+- H. Accounts: 19
 
 ---
 
@@ -468,3 +469,45 @@ What the analysis worker sends to the LLM and what comes back.
   - Its own section, or a part of Beans?
   - Import roast curves (Artisan `.alog`), or only link to them?
   - Rest time per roast, or a default by roast type (filter vs. espresso)?
+
+---
+
+## H. Accounts
+
+### 19. Account management and password reset
+
+- **Status:** idea
+- **Why:** a forgotten password can only be fixed by editing the database by
+  hand. The API can already change a password and delete an account
+  (`docs/api/auth.md` §1), but no screen uses either, and there's no way to
+  change your email or see who's logged in.
+- **Approach:**
+  - An **Account** screen (from the header menu, or a tab of Settings,
+    item 1) for what the API already supports:
+    - **change password**: current password plus the new one twice; other
+      sessions are logged out;
+    - **delete account**: re-enter the password, with a warning about the
+      workspaces you own.
+  - **Change email**, confirmed with the current password.
+  - **Log out everywhere**: bump `session_version`, as a password change
+    already does.
+  - **Forgotten password**, without email to start, since it's self-hosted:
+    - a **reset script** for whoever runs the server, e.g.
+      `npm run reset-password -w backend -- someone@example.com`. It prints a
+      one-time password, saves its hash with `hashPassword`, and logs out
+      every session;
+    - a **reset link from a workspace owner**: in Members, "Reset password"
+      creates a one-time link that expires (e.g. after 1 hour) for the
+      owner to send; opening it sets a new password;
+    - **email reset** ("Forgot password?" on the login screen) once SMTP
+      settings exist, with the same one-time token.
+  - Reset tokens are stored hashed, used once, expire, and go through the
+    login rate limit.
+- **Size:** M (Account screen and script S; owner reset links M; email M).
+- **Depends on:** nothing. Fits under Settings (1) if that comes first.
+- **Open questions:**
+  - Should owners be able to reset another member's password, or only
+    create a link the member uses themselves?
+  - Email (SMTP) at all, or are the script and owner links enough for a
+    home server?
+  - Must new passwords meet rules beyond 8 characters?
