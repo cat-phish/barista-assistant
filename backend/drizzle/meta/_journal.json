@@ -218,6 +218,13 @@
       "when": 1792641804901,
       "tag": "0030_bean_origin_details",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "5",
+      "when": 1792643466595,
+      "tag": "0031_bean_archive",
+      "breakpoints": true
     }
   ]
 }

@@ -91,7 +91,7 @@ publicMenuRouter.get(
           producer: beans.producer,
         })
         .from(beans)
-        .where(and(eq(beans.workspaceId, workspace.id), eq(beans.showOnPublicMenu, true)))
+        .where(and(eq(beans.workspaceId, workspace.id), eq(beans.showOnPublicMenu, true), isNull(beans.archivedAt)))
         .orderBy(asc(beans.roasterName), asc(beans.beanName)),
       db
         .select({ id: drinkCategories.id, name: drinkCategories.name })

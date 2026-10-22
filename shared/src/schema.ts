@@ -121,6 +121,10 @@ export const beans = mysqlTable("beans", {
   purchaseDate: date("purchase_date", { mode: "string" }), // YYYY-MM-DD
   greenSupplier: varchar("green_supplier", { length: 255 }), // who sold the green coffee
   rating: int("rating"), // 1-5, the bean overall
+  // Archived beans (docs/api/beans.md §4) leave the brew picker and the public
+  // menu; past brews keep them. null = active.
+  archivedAt: timestamp("archived_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(), // "date added"
 });
 
 // 4b. Bean Freeze Periods (Effective Roast Age)

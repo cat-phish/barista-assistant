@@ -75,7 +75,7 @@ filters for workspaces where `isPublicMenuEnabled = true` and items where
   ("Filter", "Espresso"); `variantOf` the parent drink's name if that drink is also
   shown, else `null`; `ingredients` are the ingredients' names in the drink's
   order. Recipe details (doses, steps) aren't published.
-  Beans carry their roast and blend details, flavor profile and origin
+  Archived beans (§4) aren't listed. Beans carry their roast and blend details, flavor profile and origin
   (region, altitude, producer; §4, each may be `null`) and `decaf`. A bean's
   price, bag weight, purchase date, green supplier, website, rating and notes
   aren't published.

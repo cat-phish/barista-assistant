@@ -18,6 +18,12 @@
   A bean is frozen when its last period has `thawedOn: null`. Every endpoint
   that returns a bean includes `freezePeriods`.
 
+  The list includes archived beans: `archivedAt` is when the bean was
+  archived, or `null` while it's active. `createdAt` is when it was added
+  (beans from before migration 0031 have that migration's time). Clients
+  show active and archived beans apart, and leave archived ones out of the
+  brew picker; past brews and the AI keep them.
+
 **Effective roast age** (days), computed by clients and the worker, as of
 calendar date `D`:
 `(D − roastDate) − Σ days frozen between roastDate and D`, where a period
@@ -106,6 +112,12 @@ is no age.
 - **Body:** any non-empty subset of the `POST` fields, with the same rules.
   Unknown fields are rejected. `process`, `roastLevel`, `roastDate` and every
   optional detail except `decaf` can be set to `null`.
+
+  Also `"archived": true | false`, like a grinder's `retired` (§3b). `true`
+  sets `archivedAt` to now (unchanged if already archived); `false` restores
+  the bean. It can go with other fields, e.g.
+  `{ "archived": true, "rating": 4 }` when a bean is rated as it's archived.
+  Archived beans leave the public menu (§7).
 - **Success (`200 OK`):** `{ "bean": { ...bean } }`
 - **Errors:** `400` invalid or empty body; `403` viewer; `404` bean not in this
   workspace.
