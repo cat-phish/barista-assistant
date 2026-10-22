@@ -61,7 +61,6 @@ Where the app's choices live, and what you can switch on, off or take out.
 - **Size:** M (the shell and Workspace tab), growing as tabs are added.
 - **Depends on:** nothing.
 - **Open questions:**
-  - Should drink categories move here from Bar setup → Categories?
   - Which settings are per workspace and which per person?
 
 ### 2. Editable style and process lists
@@ -430,11 +429,13 @@ What the analysis worker sends to the LLM and what comes back.
 ### 17. Public menu page
 
 - **Status:** idea
-- **Why:** the public menu API exists (sections by category, brewers and
-  drinks, beans) but nothing shows it.
+- **Why:** the public menu API exists, arranged in the menu builder
+  (`docs/api/menu.md` §7b: sections, items, prices, availability, the beans
+  block), but nothing shows it to guests.
 - **Approach:** a public, read-only page at `/menu/:slug` that works offline
   (the PWA cache is already planned in `timer_architecture.md`). It shows the
-  sections, then beans.
+  builder's sections in order, with prices in the menu's currency,
+  unavailable items marked, and the beans block wherever it's placed.
 - **Size:** M
 - **Depends on:** nothing.
 - **Open questions:** styling and branding per workspace?

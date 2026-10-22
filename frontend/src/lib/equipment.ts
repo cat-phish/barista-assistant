@@ -153,9 +153,6 @@ export interface BrewerForm extends MachineCapabilities {
   name: string;
   kind: MethodKind;
   notes: string;
-  showOnPublicMenu: boolean;
-  menuName: string;
-  description: string;
   categoryId: string;
 }
 
@@ -167,9 +164,6 @@ export function brewerForm(m?: Brewer): BrewerForm {
     preinfusion: m?.preinfusion ?? 'none',
     flowControl: m?.flowControl ?? 'none',
     pressureControl: m?.pressureControl ?? 'none',
-    showOnPublicMenu: m?.showOnPublicMenu ?? false,
-    menuName: m?.menuName ?? '',
-    description: m?.description ?? '',
     categoryId: m?.categoryId ?? '',
   };
 }
@@ -183,9 +177,7 @@ export function brewerInput(f: BrewerForm): BrewerInput & { name: string } {
     preinfusion: espresso ? f.preinfusion : 'none',
     flowControl: espresso ? f.flowControl : 'none',
     pressureControl: espresso ? f.pressureControl : 'none',
-    showOnPublicMenu: f.showOnPublicMenu,
-    menuName: f.menuName.trim() || null,
-    description: f.description.trim() || null,
+    // How it shows on the public menu is set in the menu builder (§7b).
     categoryId: f.categoryId || null,
   };
 }

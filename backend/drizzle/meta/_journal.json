@@ -232,6 +232,13 @@
       "when": 1792647508566,
       "tag": "0032_brew_utc_offset",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "5",
+      "when": 1792649425979,
+      "tag": "0033_menu_builder",
+      "breakpoints": true
     }
   ]
 }

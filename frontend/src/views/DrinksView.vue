@@ -152,7 +152,6 @@ async function confirmDelete(): Promise<void> {
           <div v-if="openId === d.id" class="data-details">
             <div class="badges">
               <span v-if="defaultSize(d)" class="badge">{{ formatSize(defaultSize(d)!) }}</span>
-              <span v-if="!d.showOnPublicMenu" class="badge muted-badge">Hidden from menu</span>
               <span v-if="nested && d.parent" class="muted small">Variant of {{ d.parent.name }}</span>
             </div>
             <p v-if="d.description" class="muted">{{ d.description }}</p>

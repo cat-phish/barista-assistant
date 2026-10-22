@@ -8,7 +8,6 @@ export interface DrinkInput {
   kind: MethodKind;
   categoryId: string | null;
   parentDrinkId: string | null; // a variant of this drink
-  showOnPublicMenu: boolean;
   defaultRecipeId: string | null; // a recipe on a brewer of this kind
   servingSize: number | null; // with servingUnit: both or neither
   servingUnit: ServingUnit | null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { brewerId, newBean, newUser, newWorkspace, type TestUser } from "./helpers.js";
+import { brewerId, menuAdd, menuSection, newBean, newUser, newWorkspace, type TestUser } from "./helpers.js";
 
 // Grinder details (§3b), brewers (§3) and brewers on brew logs (§6).
 
@@ -74,16 +74,19 @@ describe("brewers", () => {
 });
 
 describe("brewers on the menu", () => {
-  it("show under their menu name, and not once retired", async () => {
+  it("show under the item's name, and not once retired", async () => {
     const { owner, ws } = await setup();
     const base = `/api/workspaces/${ws.id}/brewers`;
-    const lm = (await owner.agent.post(base).send({ name: "Linea Mini", kind: "espresso", menuName: "Espresso shot", showOnPublicMenu: true })).body.brewer.id;
-    await owner.agent.post(`/api/workspaces/${ws.id}/drinks`).send({ name: "Latte", kind: "espresso" });
+    const lm = (await owner.agent.post(base).send({ name: "Linea Mini", kind: "espresso" })).body.brewer.id;
+    const latte = (await owner.agent.post(`/api/workspaces/${ws.id}/drinks`).send({ name: "Latte", kind: "espresso" })).body.drink.id;
+    const section = await menuSection(owner, ws.id, "Espresso");
+    await menuAdd(owner, ws.id, section, { itemType: "brewer", brewerId: lm, name: "Espresso shot" });
+    await menuAdd(owner, ws.id, section, { itemType: "drink", drinkId: latte });
     await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ isPublicMenuEnabled: true });
     const menu = async () => (await owner.agent.get(`/api/public/menu/${ws.slug}`)).body.sections.flatMap((s: { items: unknown[] }) => s.items);
     expect(await menu()).toEqual([
-      expect.objectContaining({ kind: "brewer", name: "Espresso shot", method: "Espresso" }),
-      expect.objectContaining({ kind: "drink", name: "Latte", method: "Espresso" }),
+      expect.objectContaining({ type: "brewer", name: "Espresso shot", method: "Espresso" }),
+      expect.objectContaining({ type: "drink", name: "Latte", method: "Espresso" }),
     ]);
     await owner.agent.patch(`${base}/${lm}`).send({ retired: true });
     expect((await menu()).map((i: { name: string }) => i.name)).toEqual(["Latte"]);

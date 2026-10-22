@@ -60,21 +60,7 @@ defineProps<{ idPrefix: string; showErrors: boolean; categories: DrinkCategory[]
         <option value="">None</option>
         <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
       </select>
-      <span class="hint">Your own grouping: where it's listed when you brew, and its section on the menu.</span>
-    </div>
-    <label class="checkbox">
-      <input v-model="form.showOnPublicMenu" type="checkbox" />
-      Show on the public menu as a plain brew
-    </label>
-    <div v-if="form.showOnPublicMenu" class="form-row">
-      <div class="field">
-        <label :for="`${idPrefix}-menu-name`">Menu name <span class="muted">(optional)</span></label>
-        <input :id="`${idPrefix}-menu-name`" v-model="form.menuName" maxlength="100" :placeholder="form.kind === 'espresso' ? 'e.g. Espresso' : form.name || 'e.g. Pour over'" />
-      </div>
-      <div class="field">
-        <label :for="`${idPrefix}-description`">Menu description <span class="muted">(optional)</span></label>
-        <input :id="`${idPrefix}-description`" v-model="form.description" maxlength="500" placeholder="e.g. Today's single origin" />
-      </div>
+      <span class="hint">Your own grouping: where it's listed when you brew. The public menu is arranged in Bar setup → Menu.</span>
     </div>
   </div>
 </template>
