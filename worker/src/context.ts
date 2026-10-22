@@ -12,6 +12,10 @@ import {
   recipes,
   recipeSteps,
   type Bean,
+  type BeanProcess,
+  type BlendType,
+  type DetailedRoastLevel,
+  type RoastType,
   type BrewLog,
   type Grinder,
   type Brewer,
@@ -92,7 +96,22 @@ export function scaledAmount(value: number | null, unit: string | null, factor: 
 
 export interface BrewContext {
   // roastLevel: one of ROAST_LEVELS (light … dark), or null if unknown.
-  bean: { roasterName: string; beanName: string; process: string | null; roastLevel: string | null; roastDate: string | null };
+  // detailedRoastLevel (cinnamon … french), roastType (filter, espresso,
+  // omni) and blendType (single_origin, blend, other): null if unknown.
+  bean: {
+    roasterName: string;
+    beanName: string;
+    process: BeanProcess | null;
+    roastLevel: string | null;
+    detailedRoastLevel: DetailedRoastLevel | null;
+    roastType: RoastType | null;
+    blendType: BlendType | null;
+    decaf: boolean;
+    roastDate: string | null;
+    flavorProfile: string | null; // the roaster's tasting notes: the cup to aim for
+    region: string | null;
+    altitudeMasl: number | null;
+  };
   recipe: {
     name: string;
     brewer: string; // e.g. "V60", "Linea Mini"
@@ -309,7 +328,14 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
       beanName: bean.beanName,
       process: bean.process,
       roastLevel: bean.roastLevel,
+      detailedRoastLevel: bean.detailedRoastLevel,
+      roastType: bean.roastType,
+      blendType: bean.blendType,
+      decaf: bean.decaf,
       roastDate: bean.roastDate ? bean.roastDate.toISOString().slice(0, 10) : null,
+      flavorProfile: bean.flavorProfile,
+      region: bean.region,
+      altitudeMasl: bean.altitudeMasl,
     },
     recipe,
     brew: summarize(brew, bean.roastDate, freezes, marks, servedAs),

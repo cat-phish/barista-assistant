@@ -19,8 +19,13 @@ import { SLUG_PATTERN } from "../validation.js";
 export interface PublicMenuResponse {
   workspace: Pick<Workspace, "name" | "slug">;
   beans: Array<
-    Pick<Bean, "id" | "roasterName" | "beanName" | "process" | "roastDate" | "inventoryWeightGrams">
-  >;
+    Pick<
+      Bean,
+      | "id" | "roasterName" | "beanName" | "process" | "roastDate" | "inventoryWeightGrams"
+      | "roastLevel" | "detailedRoastLevel" | "roastType" | "blendType" | "decaf"
+      | "flavorProfile" | "region" | "altitudeMasl" | "producer"
+    >
+  >; // price, website, notes, rating, purchase date and supplier stay private (docs/api/public-menu.md §7)
   // docs/api/public-menu.md §7: plain brews and drinks, in category sections.
   sections: MenuSection[];
 }
@@ -75,6 +80,15 @@ publicMenuRouter.get(
           process: beans.process,
           roastDate: beans.roastDate,
           inventoryWeightGrams: beans.inventoryWeightGrams,
+          roastLevel: beans.roastLevel,
+          detailedRoastLevel: beans.detailedRoastLevel,
+          roastType: beans.roastType,
+          blendType: beans.blendType,
+          decaf: beans.decaf,
+          flavorProfile: beans.flavorProfile,
+          region: beans.region,
+          altitudeMasl: beans.altitudeMasl,
+          producer: beans.producer,
         })
         .from(beans)
         .where(and(eq(beans.workspaceId, workspace.id), eq(beans.showOnPublicMenu, true)))

@@ -146,3 +146,37 @@ machine). Recipes took their brewer's style; espresso recipes became standard.
 
 - Pressure (bar) and flow (g/s or ml/s per recipe) on espresso steps, held or
   ramped, shown by the timer as instructions.
+
+## Phase 5: Bean details (built)
+
+Backlog item 6, built on `bean-details` (migrations 0029/0030). A bean was a
+roaster, name, process, roast level, roast date and stock; what it's roasted
+for, its origin, price and where to buy it again all affect how it's brewed
+and whether to reorder. Contract: `api/beans.md` §4.
+
+- **New optional fields:**
+  - roasted for (filter / espresso / omni) and blend type
+  - decaf
+  - flavor profile
+  - producer, region and altitude (metres)
+  - a per-bag price (amount + ISO currency, both or neither) and bag weight
+  - purchase date and green bean supplier
+  - website (http(s) only), a 1–5 rating, and notes
+- **Process** became a fixed list of keys (`BEAN_PROCESSES`: washed …
+  lactic fermentation). Free text was mapped to keys; anything else was
+  cleared. Making it editable is backlog item 2.
+- **Roast level:** the form asks for the traditional roast name (Cinnamon …
+  French, called "Roast Level") and shows the 5-step level it implies
+  read-only. The API derives `roastLevel` from `detailedRoastLevel` with
+  `DETAILED_ROAST_TO_LEVEL`, so the yield estimate is unchanged. Beans from
+  before keep a 5-step level set on its own until a name is picked.
+  Choosing which scale to use is backlog item 4.
+- **Price per gram** is calculated for display, not stored. A bean bought
+  again is edited, not a new purchase record (no purchase history yet).
+- **Public menu** gets the roast, blend and origin details, decaf and the
+  flavor profile. Price, purchase date, supplier, website, rating and notes
+  stay private.
+- **AI** gets roast type, roast name, blend, decaf, flavor profile, region
+  and altitude, with a line in the system prompt on how to use them.
+- Altitude in feet is backlog item 3. Hiding the fields a bar doesn't use is
+  item 5.

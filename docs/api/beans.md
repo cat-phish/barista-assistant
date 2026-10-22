@@ -33,27 +33,79 @@ is no age.
   {
     "roasterName": "Onyx Coffee Lab",
     "beanName": "Southern Weather",
-    "process": "Washed",
-    "roastLevel": "light",
+    "process": "washed",
     "roastDate": "2026-10-01",
     "inventoryWeightGrams": 250,
-    "showOnPublicMenu": true
+    "showOnPublicMenu": true,
+    "roastType": "filter",
+    "detailedRoastLevel": "city",
+    "blendType": "single_origin",
+    "decaf": false,
+    "website": "https://onyxcoffeelab.com/products/southern-weather",
+    "priceAmount": 21.5,
+    "priceCurrency": "USD",
+    "bagWeightGrams": 283,
+    "notes": "Sweet and round. Roaster suggests 1:16.",
+    "flavorProfile": "Milk chocolate, plum, cane sugar",
+    "region": "Huila",
+    "altitudeMasl": 1950,
+    "producer": "Finca El Paraíso",
+    "purchaseDate": "2026-10-05",
+    "greenSupplier": "Covoya",
+    "rating": 4
   }
   ```
   `roasterName` and `beanName` are required (trimmed, 1–255 chars).
-  `process` (≤100 chars), `roastLevel` (one of `ROAST_LEVELS`: `light`,
-  `medium_light`, `medium`, `medium_dark`, `dark`) and `roastDate` (ISO date
-  or datetime) are optional and nullable. `inventoryWeightGrams` is an integer ≥ 0 (default `0`).
+  `process` (one of `BEAN_PROCESSES`: `washed`, `natural`, `wet_hulled`,
+  `honey`, `mechanically_washed`, `anaerobic`, `carbonic_maceration`,
+  `co_fermentation`, `thermal_shock`, `lactic`), `roastLevel` (one of
+  `ROAST_LEVELS`: `light`, `medium_light`, `medium`, `medium_dark`, `dark`;
+  see `detailedRoastLevel` below) and `roastDate` (ISO date or datetime) are
+  optional and nullable. `inventoryWeightGrams` is an integer ≥ 0 (default `0`).
   `showOnPublicMenu` defaults to `true`.
+
+  Optional details, all nullable except `decaf`:
+  - `roastType`: what it was roasted for, one of `ROAST_TYPES` (`filter`,
+    `espresso`, `omni`); `null` = unknown.
+  - `detailedRoastLevel`: one of `DETAILED_ROAST_LEVELS`, lightest to
+    darkest: `cinnamon`, `american`, `new_england`, `half_city`,
+    `modern_light`, `city`, `city_plus`, `full_city`, `full_city_plus`,
+    `italian`, `vienna`, `french`. Each implies a `roastLevel`
+    (`DETAILED_ROAST_TO_LEVEL` in `docs/schema.md`), which the API sets:
+    - a detailed level sets `roastLevel` from the mapping; a `roastLevel`
+      sent with it that doesn't match is a `400`;
+    - clearing a stored `detailedRoastLevel` (sending `null`) clears
+      `roastLevel` too, unless the same body sends one; a `null` for a bean
+      that has no detailed level leaves `roastLevel` as it is;
+    - `roastLevel` can be set on its own only while the bean has no
+      detailed level (older beans and clients).
+  - `blendType`: one of `BLEND_TYPES` (`single_origin`, `blend`, `other`).
+  - `decaf`: boolean, default `false`.
+  - `website`: an `http` or `https` URL, ≤500 chars (blank becomes `null`).
+  - `priceAmount` (> 0, ≤2 decimals) and `priceCurrency` (ISO 4217 code,
+    3 letters, uppercased): the price of one bag, both or neither. On `PATCH`
+    the rule applies to the bean after the change.
+  - `bagWeightGrams`: integer 1–100000. With a price, clients show a price
+    per gram; it isn't stored.
+  - `notes`: free text, ≤2000 chars.
+  - `flavorProfile`: the roaster's tasting notes, free text, ≤500 chars.
+  - `region` and `producer`: free text, ≤255 chars each.
+  - `altitudeMasl`: integer 0–9000, metres above sea level. Clients may
+    show it in feet (docs/backlog.md item 3); it's always stored in metres.
+  - `purchaseDate`: `YYYY-MM-DD`, at most one day after the server's date.
+  - `greenSupplier`: who sold the green coffee, free text, ≤255 chars.
+  - `rating`: the bean overall, integer 1–5.
 - **Success (`201 Created`):** `{ "bean": { ...bean } }`
-- **Errors:** `400` invalid body; `403` viewer.
+- **Errors:** `400` invalid body, a price without its currency (or the
+  reverse), or a `roastLevel` that contradicts the detailed level; `403`
+  viewer.
 
 ## `PATCH /api/workspaces/:workspaceId/beans/:beanId`
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Body:** any non-empty subset of the `POST` fields, with the same rules.
-  Unknown fields are rejected. `process`, `roastLevel` and `roastDate` can be
-  set to `null`.
+  Unknown fields are rejected. `process`, `roastLevel`, `roastDate` and every
+  optional detail except `decaf` can be set to `null`.
 - **Success (`200 OK`):** `{ "bean": { ...bean } }`
 - **Errors:** `400` invalid or empty body; `403` viewer; `404` bean not in this
   workspace.

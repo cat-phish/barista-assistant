@@ -204,6 +204,20 @@
       "when": 1792567541714,
       "tag": "0028_drop_brewer_style",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "5",
+      "when": 1792640289119,
+      "tag": "0029_bean_details",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "5",
+      "when": 1792641804901,
+      "tag": "0030_bean_origin_details",
+      "breakpoints": true
     }
   ]
 }

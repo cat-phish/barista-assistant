@@ -84,17 +84,43 @@ export interface MachineCapabilities {
 
 // docs/schema.md ROAST_LEVELS
 export type RoastLevel = 'light' | 'medium_light' | 'medium' | 'medium_dark' | 'dark';
+// docs/schema.md ROAST_TYPES, DETAILED_ROAST_LEVELS, BLEND_TYPES
+export type RoastType = 'filter' | 'espresso' | 'omni';
+export type DetailedRoastLevel =
+  | 'cinnamon' | 'american' | 'new_england' | 'half_city' | 'modern_light' | 'city'
+  | 'city_plus' | 'full_city' | 'full_city_plus' | 'italian' | 'vienna' | 'french';
+export type BlendType = 'single_origin' | 'blend' | 'other';
+// docs/schema.md BEAN_PROCESSES
+export type BeanProcess =
+  | 'washed' | 'natural' | 'wet_hulled' | 'honey' | 'mechanically_washed' | 'anaerobic'
+  | 'carbonic_maceration' | 'co_fermentation' | 'thermal_shock' | 'lactic';
 
 export interface Bean {
   id: string;
   workspaceId: string;
   roasterName: string;
   beanName: string;
-  process: string | null;
-  roastLevel: RoastLevel | null;
+  process: BeanProcess | null;
+  roastLevel: RoastLevel | null; // set by the API from detailedRoastLevel when known
   roastDate: string | null; // ISO datetime at midnight UTC
   inventoryWeightGrams: number;
   showOnPublicMenu: boolean;
+  roastType: RoastType | null;
+  detailedRoastLevel: DetailedRoastLevel | null;
+  blendType: BlendType | null;
+  decaf: boolean;
+  website: string | null; // http(s)
+  priceAmount: number | null; // one bag, with priceCurrency (both or neither)
+  priceCurrency: string | null; // ISO 4217, e.g. "USD"
+  bagWeightGrams: number | null;
+  notes: string | null;
+  flavorProfile: string | null;
+  region: string | null;
+  altitudeMasl: number | null; // metres
+  producer: string | null;
+  purchaseDate: string | null; // YYYY-MM-DD
+  greenSupplier: string | null;
+  rating: number | null; // 1-5
   freezePeriods: FreezePeriod[]; // oldest first; last with thawedOn null = frozen now
 }
 

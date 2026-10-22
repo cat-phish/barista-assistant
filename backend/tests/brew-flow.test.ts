@@ -62,9 +62,9 @@ describe("beans and recipes", () => {
 
   it("PATCH changes only the fields sent", async () => {
     const { owner, ws } = await setup();
-    const bean = await newBean(owner, ws.id, { process: "Washed", roastDate: "2026-10-01", inventoryWeightGrams: 250 });
+    const bean = await newBean(owner, ws.id, { process: "washed", roastDate: "2026-10-01", inventoryWeightGrams: 250 });
     const res = await owner.agent.patch(`/api/workspaces/${ws.id}/beans/${bean}`).send({ beanName: "Renamed" });
-    expect(res.body.bean).toMatchObject({ beanName: "Renamed", process: "Washed", inventoryWeightGrams: 250, roastDate: "2026-10-01T00:00:00.000Z" });
+    expect(res.body.bean).toMatchObject({ beanName: "Renamed", process: "washed", inventoryWeightGrams: 250, roastDate: "2026-10-01T00:00:00.000Z" });
   });
 
   it("roast level is optional, limited to ROAST_LEVELS, and can be cleared", async () => {
