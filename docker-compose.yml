@@ -10,10 +10,15 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+    # Local only by default. To open the app to your LAN (e.g. to test on a
+    # phone at http://<this machine's IP>:5173), set FRONTEND_BIND=0.0.0.0 in
+    # .env. Only this port needs to face the LAN: /api goes through Vite's
+    # proxy to the backend over the Docker network.
     ports:
-      - "127.0.0.1:5173:5173"
+      - "${FRONTEND_BIND:-127.0.0.1}:5173:5173"
     environment:
-      - VITE_API_URL=http://localhost:3000
+      - API_PROXY_TARGET=http://backend:3000
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-}
     depends_on:
       - backend
 
@@ -30,6 +35,9 @@ services:
       - REDIS_PASSWORD_FILE=/run/secrets/redis_password
       - JWT_SECRET_FILE=/run/secrets/jwt_secret
       - CORS_ORIGIN=http://localhost:5173
+      # Requests arrive through the frontend's dev proxy: trust it for the
+      # client IP, so the login rate limit is per device.
+      - TRUST_PROXY=1
       # The image defaults to production, which marks the session cookie
       # Secure (HTTPS only). This stack serves plain http://localhost.
       - NODE_ENV=development
