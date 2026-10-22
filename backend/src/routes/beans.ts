@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, count, desc, eq, inArray, isNull, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
@@ -110,7 +110,8 @@ const PRICE_ERROR = "priceAmount: priceAmount and priceCurrency go together";
 const priceMismatch = (amount: number | null | undefined, currency: string | null | undefined) =>
   (amount ?? null) === null !== ((currency ?? null) === null);
 
-const updateBeanSchema = updateSchema(beanFields);
+// archived: true archives the bean (keeping the first date), false restores it.
+const updateBeanSchema = updateSchema({ ...beanFields, archived: z.boolean() });
 
 // roastLevel follows detailedRoastLevel (docs/api/beans.md §4): a detailed
 // level sets it, clearing a stored detailed level clears it, and it can only
@@ -221,7 +222,16 @@ beansRouter.patch("/:beanId", async (req: Request<BeanParams>, res: Response<Bea
     if (priceMismatch(amount, currency)) return { status: "invalid", error: PRICE_ERROR } as const;
     const roast = resolveRoastLevel(body, existing.detailedRoastLevel);
     if ("error" in roast) return { status: "invalid", error: roast.error } as const;
-    await tx.update(beans).set({ ...body, roastLevel: roast.roastLevel }).where(beanInWorkspace(req.params));
+    const { archived, ...fields } = body;
+    await tx
+      .update(beans)
+      .set({
+        ...fields,
+        roastLevel: roast.roastLevel,
+        ...(archived === true ? { archivedAt: sql`COALESCE(${beans.archivedAt}, NOW())` } : {}),
+        ...(archived === false ? { archivedAt: null } : {}),
+      })
+      .where(beanInWorkspace(req.params));
     return { status: "updated" } as const;
   });
   if (outcome.status === "invalid") {

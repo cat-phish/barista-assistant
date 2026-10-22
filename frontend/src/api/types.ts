@@ -121,6 +121,8 @@ export interface Bean {
   purchaseDate: string | null; // YYYY-MM-DD
   greenSupplier: string | null;
   rating: number | null; // 1-5
+  archivedAt: string | null; // null = active
+  createdAt: string;
   freezePeriods: FreezePeriod[]; // oldest first; last with thawedOn null = frozen now
 }
 

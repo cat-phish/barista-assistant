@@ -184,7 +184,7 @@ onMounted(async () => {
     ]);
     drinks.value = d.drinks;
     categories.value = c.categories;
-    beans.value = b.beans;
+    beans.value = b.beans.filter((x) => !x.archivedAt); // archived beans can't be brewed (§4)
     recipes.value = r.recipes;
     grinders.value = g.grinders;
     brewers.value = m.brewers;
@@ -585,7 +585,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
     <p v-else-if="loadError" class="form-error" role="alert">{{ loadError }}</p>
 
     <div v-else-if="beans.length === 0" class="card empty">
-      <p>Add a bean first, then come back to brew.</p>
+      <p>Add a bean (or unarchive one) first, then come back to brew.</p>
       <RouterLink v-if="workspaces.canEdit" class="btn btn-primary" :to="{ name: 'bean-new' }">Add bean</RouterLink>
     </div>
 

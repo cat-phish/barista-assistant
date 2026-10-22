@@ -15,7 +15,7 @@ import MenuTabs from '../components/MenuTabs.vue';
 import { ingredientLine, nestDrinks, type NestedDrink } from '../lib/drinks';
 import { METHOD_KINDS } from '../lib/equipment';
 import { formatAdded } from '../lib/format';
-import { addedColumn, isSortKey, nameColumn, recallView, rememberView, sortArrow, sortBy, sortLabel, sortOptions, sortsByName, toggleHeader, type SortColumns } from '../lib/listSort';
+import { addedColumn, isSortKey, nameColumn, recallView, rememberView, sortArrow, sortBy, sortLabel, sortColumnOptions, sortsByName, toggleHeader, type SortColumns } from '../lib/listSort';
 import { defaultSize, formatSize } from '../lib/servings';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -30,7 +30,7 @@ const error = ref('');
 const viewKey = (what: string) => `drinks.${what}.${workspaces.current?.id ?? ''}`;
 const ALL = 'all';
 const columns: SortColumns<Drink> = { name: nameColumn(), added: addedColumn() };
-const sortChoices = sortOptions(columns);
+const sortChoices = sortColumnOptions(columns);
 const NONE = 'none'; // uncategorised
 const categoryFilter = ref(ALL);
 const sort = ref('name_asc');
@@ -126,7 +126,7 @@ async function confirmDelete(): Promise<void> {
     </div>
 
     <template v-else>
-      <ListControls v-model:filter="categoryFilter" v-model:sort="sort" :sort-options="sortChoices" id-prefix="drinks" filter-label="Category" :filter-options="categoryOptions" />
+      <ListControls v-model:filter="categoryFilter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="drinks" filter-label="Category" :filter-options="categoryOptions" />
       <p v-if="shown.length === 0" class="card empty">No drinks in {{ filterName }} yet.</p>
       <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.2fr) 5.5rem">
         <div class="data-row data-head">

@@ -38,6 +38,7 @@ export const router = createRouter({
     { path: '/equipment/machines', redirect: '/setup/brewers' },
     { path: '/equipment/methods', redirect: '/setup/brewers' },
     { path: '/beans', name: 'beans', component: () => import('../views/BeansView.vue'), meta: { requiresWorkspace: true } },
+    { path: '/beans/archived', name: 'beans-archived', component: () => import('../views/BeansView.vue'), props: { archived: true }, meta: { requiresWorkspace: true } },
     { path: '/beans/new', name: 'bean-new', component: () => import('../views/BeanFormView.vue'), meta: { requiresWorkspace: true, requiresEditor: true } },
     { path: '/beans/:id/edit', name: 'bean-edit', component: () => import('../views/BeanFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresEditor: true } },
     { path: '/recipes', name: 'recipes', component: () => import('../views/RecipesView.vue'), meta: { requiresWorkspace: true } },

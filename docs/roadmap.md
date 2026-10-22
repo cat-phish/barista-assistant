@@ -180,3 +180,37 @@ and whether to reorder. Contract: `api/beans.md` §4.
   and altitude, with a line in the system prompt on how to use them.
 - Altitude in feet is backlog item 3. Hiding the fields a bar doesn't use is
   item 5.
+
+## Phase 6: Bean archive and rating prompt (built)
+
+Backlog item 8, built on `bean-archive` (migration 0031). Finished beans
+stayed in one unsortable list forever, and an unrated bean says nothing about
+whether to buy it again. Contract: `api/beans.md` §4.
+
+- **Archive:** beans have `archivedAt` (null = active), set through PATCH
+  `archived: true/false`, like a grinder's `retired`. Archived beans leave
+  the brew picker and the public menu; past brews, the journal and the AI
+  keep them. A bean with brew history offers **Archive instead** of delete.
+- **Date added:** beans got `createdAt`. Beans from before 0031 have the
+  migration's time.
+- **List:** Active | Archived tabs and a table like Recipes, with a filter
+  (in stock, out of stock, frozen, decaf). It sorts by name, roaster, date
+  added, purchase date, frozen state, roast (lightness on the 12-step scale),
+  process, rating, roast date, roast age (frozen days excluded), stock, or
+  caffeinated/decaf. Sort and filter are remembered per tab. On wide screens
+  the table shows ten columns, each a sortable header: coffee, a ❄ for
+  frozen, roaster, roast, process, age, caf/decaf, stock, added and rating.
+  Phones show coffee, roaster, roast, stock and rating.
+- **Duplicate** (like recipes): a new bag of the same coffee. The copy keeps
+  the coffee's details (roaster, name, origin, roast, price, website,
+  notes) and clears the roast and purchase dates and the rating; stock
+  starts at the bag weight. A copy of an older bean with only a 5-step roast
+  level keeps it.
+- **Sort controls (every list):** Beans, Recipes, Drinks, Ingredients,
+  Brewers and Grinders have **Sort by** and **Order** dropdowns, replacing
+  the single combined Sort dropdown. Order is worded for the column, e.g.
+  "Descending (newest first)".
+- **Rating prompt:** item 8 first planned to ask after a few brews or when
+  stock runs low. Instead the prompt comes when a bean is archived: an
+  unrated bean asks for a rating first (or **Skip rating**), and the Archived
+  tab lists unrated beans with **Rate** until they're rated.

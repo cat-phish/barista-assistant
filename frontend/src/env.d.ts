@@ -1,7 +1,8 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  // Backend origin, e.g. http://localhost:3000 (docker-compose.yml sets it).
+  // Backend on another origin, e.g. http://localhost:3000. Unset = same
+  // origin (/api through the dev proxy or a reverse proxy).
   readonly VITE_API_URL?: string;
 }
 

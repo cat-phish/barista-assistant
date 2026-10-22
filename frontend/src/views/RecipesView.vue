@@ -12,7 +12,7 @@ import ListControls from '../components/ListControls.vue';
 import MenuTabs from '../components/MenuTabs.vue';
 import { RECIPE_STYLES, STYLE_ORDER } from '../lib/equipment';
 import { formatAdded, formatDoseLine, formatGrams, formatTime } from '../lib/format';
-import { addedColumn, enumColumn, isSortKey, nameColumn, recallView, rememberView, sortArrow, sortBy, sortLabel, sortOptions, toggleHeader, type SortColumns } from '../lib/listSort';
+import { addedColumn, enumColumn, isSortKey, nameColumn, recallView, rememberView, sortArrow, sortBy, sortLabel, sortColumnOptions, toggleHeader, type SortColumns } from '../lib/listSort';
 import { formatFinishWindow, plannedStarts, stepTitle } from '../lib/steps';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -33,7 +33,7 @@ const columns: SortColumns<Recipe> = {
   style: enumColumn('Style', STYLE_ORDER, (r) => r.style),
   added: addedColumn(),
 };
-const sortChoices = sortOptions(columns);
+const sortChoices = sortColumnOptions(columns);
 const brewerFilter = ref(ALL);
 const sort = ref('added_desc');
 watch(brewerFilter, (v) => rememberView(viewKey('brewer'), v));
@@ -131,7 +131,7 @@ async function confirmDelete(): Promise<void> {
     </div>
 
     <template v-else>
-      <ListControls v-model:filter="brewerFilter" v-model:sort="sort" :sort-options="sortChoices" id-prefix="recipes" filter-label="Brewer" :filter-options="brewerOptions" />
+      <ListControls v-model:filter="brewerFilter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="recipes" filter-label="Brewer" :filter-options="brewerOptions" />
       <p v-if="shown.length === 0" class="card empty">No recipes for {{ filterName }} yet.</p>
       <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1.1fr) minmax(0, 0.9fr) minmax(0, 1.2fr) 5.5rem">
         <div class="data-row data-head">

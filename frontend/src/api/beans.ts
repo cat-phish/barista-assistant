@@ -1,12 +1,14 @@
 import { api } from './client';
-import type { Bean, BeanProcess, BlendType, DetailedRoastLevel, RoastType } from './types';
+import type { Bean, BeanProcess, BlendType, DetailedRoastLevel, RoastLevel, RoastType } from './types';
 
-// Request body for create/update (docs/api/beans.md §4). roastLevel isn't
-// sent: the API derives it from detailedRoastLevel.
+// Request body for create/update (docs/api/beans.md §4). roastLevel is
+// normally left out: the API derives it from detailedRoastLevel. Only a copy
+// of an older bean with a 5-step level and no roast name sends it.
 export interface BeanInput {
   roasterName: string;
   beanName: string;
   process: BeanProcess | null;
+  roastLevel?: RoastLevel | null;
   roastDate: string | null; // YYYY-MM-DD
   inventoryWeightGrams: number;
   showOnPublicMenu: boolean;
@@ -33,7 +35,8 @@ const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/beans`;
 export const beansApi = {
   list: (workspaceId: string) => api.get<{ beans: Bean[] }>(base(workspaceId)),
   create: (workspaceId: string, input: BeanInput) => api.post<{ bean: Bean }>(base(workspaceId), input),
-  update: (workspaceId: string, id: string, input: Partial<BeanInput>) =>
+  // archived: true archives (keeping the first date), false restores (§4).
+  update: (workspaceId: string, id: string, input: Partial<BeanInput> & { archived?: boolean }) =>
     api.patch<{ bean: Bean }>(`${base(workspaceId)}/${id}`, input),
   // date: the user's local YYYY-MM-DD (§4).
   freeze: (workspaceId: string, id: string, date: string) =>

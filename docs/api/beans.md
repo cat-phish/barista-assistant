@@ -18,6 +18,12 @@
   A bean is frozen when its last period has `thawedOn: null`. Every endpoint
   that returns a bean includes `freezePeriods`.
 
+  The list includes archived beans: `archivedAt` is when the bean was
+  archived, or `null` while it's active. `createdAt` is when it was added
+  (beans from before migration 0031 have that migration's time). Clients
+  show active and archived beans apart, and leave archived ones out of the
+  brew picker; past brews and the AI keep them.
+
 **Effective roast age** (days), computed by clients and the worker, as of
 calendar date `D`:
 `(D − roastDate) − Σ days frozen between roastDate and D`, where a period
@@ -106,6 +112,17 @@ is no age.
 - **Body:** any non-empty subset of the `POST` fields, with the same rules.
   Unknown fields are rejected. `process`, `roastLevel`, `roastDate` and every
   optional detail except `decaf` can be set to `null`.
+
+  Also `"archived": true | false`, like a grinder's `retired` (§3b). `true`
+  sets `archivedAt` to now (unchanged if already archived); `false` restores
+  the bean. It can go with other fields, e.g.
+  `{ "archived": true, "rating": 4 }` when a bean is rated as it's archived.
+  Archived beans leave the public menu (§7).
+
+  > **Frontend (rating prompt):** archiving a bean with no `rating` first asks
+  > for one (stars, **Rate and archive** or **Skip rating**). Archived beans
+  > that are still unrated are listed on the Archived tab with a **Rate**
+  > button until they're rated.
 - **Success (`200 OK`):** `{ "bean": { ...bean } }`
 - **Errors:** `400` invalid or empty body; `403` viewer; `404` bean not in this
   workspace.
@@ -127,10 +144,10 @@ The schema cascades a bean's deletion to its `brew_logs` and their
 > **Frontend requirement (confirm before deleting brew history):** call
 > `DELETE` without the query first. On `409`, show a confirmation dialog using
 > `brewLogCount`, e.g. *"Deleting this bean will also permanently delete its
-> 12 brew logs and their AI suggestions. Consider hiding it from the menu or
-> setting its inventory to 0 instead."*, with actions **Cancel**, **Hide
-> instead** (`PATCH` `showOnPublicMenu: false`) and **Delete everything**
-> (retry with `?deleteBrewLogs=true`). Never send `deleteBrewLogs=true`
+> 12 brew logs and their AI suggestions. Consider archiving it instead."*,
+> with actions **Cancel**, **Archive instead** (`PATCH` `archived: true`; for
+> a bean that's already archived, **Hide instead**, `showOnPublicMenu: false`)
+> and **Delete everything** (retry with `?deleteBrewLogs=true`). Never send `deleteBrewLogs=true`
 > without the user confirming that dialog.
 
 ## `POST /api/workspaces/:workspaceId/beans/:beanId/freeze`
