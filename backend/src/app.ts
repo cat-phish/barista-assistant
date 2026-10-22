@@ -27,6 +27,7 @@ interface HealthResponse {
 
 // The Express app without a listening server, so tests can drive it directly.
 export const app = express();
+app.set("trust proxy", config.trustProxy);
 
 app.use(cors({ origin: config.corsOrigin, credentials: true }));
 app.use(express.json());

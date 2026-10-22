@@ -4,6 +4,17 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // PWA settings follow docs/timer_architecture.md §2.
 export default defineConfig({
+  server: {
+    // The app calls /api on its own origin; the dev server forwards it, so it
+    // works from any address (localhost, the LAN IP from a phone) without CORS.
+    // xfwd passes the client IP on (the backend trusts one proxy, TRUST_PROXY).
+    proxy: {
+      '/api': { target: process.env.API_PROXY_TARGET ?? 'http://localhost:3000', xfwd: true },
+    },
+    // IPs and localhost always work; a hostname (e.g. barista.lan) must be
+    // listed: ALLOWED_HOSTS=barista.lan,other.lan
+    allowedHosts: process.env.ALLOWED_HOSTS ? process.env.ALLOWED_HOSTS.split(',').map((h) => h.trim()) : [],
+  },
   plugins: [
     vue(),
     VitePWA({

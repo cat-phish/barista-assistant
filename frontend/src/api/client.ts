@@ -1,6 +1,9 @@
 import type { ErrorBody } from './types';
 
-const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
+// Same origin by default: the Vite dev server (or a reverse proxy) forwards
+// /api to the backend, so the app works from any address, e.g. a phone on the
+// LAN. VITE_API_URL points at a backend on another origin instead.
+const API_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '');
 
 export class ApiError extends Error {
   readonly status: number; // 0 = the server couldn't be reached
