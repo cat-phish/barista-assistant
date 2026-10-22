@@ -28,9 +28,9 @@ and fix the references.
 - C. Brewing & logging: 9–13
 - D. AI suggestions: 14–15
 - E. Insights: 16
-- F. Bar & menu: 17–18
-- G. Home roasting: 19
-- H. Accounts: 20
+- F. Bar & menu: 17–19
+- G. Home roasting: 20
+- H. Accounts: 21
 
 ---
 
@@ -330,7 +330,7 @@ Recording a brew: what's measured, and how fast it is to log.
   - Delivered with **ntfy.sh** (or a self-hosted ntfy server): each user sets
     a server and topic under Settings → **Notifications**. The message links
     to the brew's rating screen. Web Push could come later.
-  - The same notification code serves item 13's steep timers and item 19's
+  - The same notification code serves item 13's steep timers and item 20's
     resting reminders.
 - **Size:** M
 - **Depends on:** 1.
@@ -468,11 +468,39 @@ What the analysis worker sends to the LLM and what comes back.
 - **Depends on:** nothing.
 - **Open questions:** styling and branding per workspace?
 
+### 19. Refine the menu builder
+
+- **Status:** idea
+- **Why:** the first version of Bar setup → Menu works but doesn't read
+  naturally. "+ Add to Coffee" opens a dialog that starts on "A drink", even
+  for a section that's meant for the beans; moving and arranging items takes
+  several taps; and there's no way to see what guests will see (the guest
+  page is item 18).
+- **Approach:**
+  - **Adding:** a dialog (or inline picker) that starts from what makes sense
+    for the section, shows drinks, plain brews and the beans block side by
+    side with what's already on the menu marked, and lets several items be
+    added at once.
+  - **Section kinds**, maybe: a "Coffee" section that is the beans block,
+    versus drink sections, so a beans section doesn't offer drinks.
+  - **Arranging:** drag and drop (on top of ↑/↓), including between
+    sections; the API's `PUT /layout` already takes the whole arrangement.
+  - **Preview:** show the menu as guests will see it, next to the editor, so
+    the builder and item 18's page stay in step.
+  - **Wording:** say plainly what each item shows (its own name and
+    description, or the menu's), and where prices and "unavailable" appear.
+- **Size:** M
+- **Depends on:** nothing; fits with 18 (the guest page).
+- **Open questions:**
+  - Section kinds (beans vs drinks), or keep every section mixed?
+  - Should a section be able to show all of a drink category automatically?
+  - Prices per size, once drinks have more than one size?
+
 ---
 
 ## G. Home roasting
 
-### 19. Roasting: green stock, roast logs, resting
+### 20. Roasting: green stock, roast logs, resting
 
 - **Status:** idea
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
@@ -503,7 +531,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## H. Accounts
 
-### 20. Account management and password reset
+### 21. Account management and password reset
 
 - **Status:** idea
 - **Why:** a forgotten password can only be fixed by editing the database by
