@@ -9,6 +9,7 @@ import { formatDay, localDateInput, toDateInput } from '../lib/format';
 import { effectiveRoastAge } from '../lib/roastAge';
 import { useWorkspaceStore } from '../stores/workspace';
 import { ROAST_LEVELS } from '../lib/scale';
+import { DETAILED_ROAST_LEVELS, formatPrice, formatPricePerGram, pricePerGram, ROAST_TYPES } from '../lib/beans';
 
 const workspaces = useWorkspaceStore();
 const beans = ref<Bean[]>([]);
@@ -99,6 +100,19 @@ function openFreeze(bean: Bean) {
 }
 
 // "9 days off roast", or while frozen "age paused at 9 days" (docs/api/beans.md §4).
+// The roast name when known ("City+"), else the 5-step level.
+function roastLabel(bean: Bean): string | null {
+  if (bean.detailedRoastLevel) return DETAILED_ROAST_LEVELS[bean.detailedRoastLevel].label;
+  return bean.roastLevel ? ROAST_LEVELS[bean.roastLevel].label : null;
+}
+
+// "21.50 USD · 0.063 USD/g", or just the price without a bag weight.
+function priceLabel(bean: Bean): string | null {
+  if (bean.priceAmount === null || bean.priceCurrency === null) return null;
+  const perGram = pricePerGram(bean);
+  return formatPrice(bean.priceAmount, bean.priceCurrency) + (perGram ? ` · ${formatPricePerGram(perGram)}` : '');
+}
+
 function ageLabel(bean: Bean): string | null {
   if (!bean.roastDate) return null;
   const { ageDays, daysFrozen } = effectiveRoastAge(bean.roastDate, bean.freezePeriods, localDateInput());
@@ -172,10 +186,13 @@ async function confirmFreeze(): Promise<void> {
         <div class="head">
           <div>
             <h2>{{ bean.beanName }}</h2>
-            <p class="muted">{{ bean.roasterName }}<template v-if="bean.process"> · {{ bean.process }}</template><template v-if="bean.roastLevel"> · {{ ROAST_LEVELS[bean.roastLevel].label }} roast</template></p>
+            <p class="muted">{{ bean.roasterName }}<template v-if="bean.process"> · {{ bean.process }}</template><template v-if="roastLabel(bean)"> · {{ roastLabel(bean) }} roast</template></p>
           </div>
           <div class="badges">
             <span v-if="openFreeze(bean)" class="badge frozen">Frozen</span>
+            <span v-if="bean.decaf" class="badge">Decaf</span>
+            <span v-if="bean.roastType" class="badge">{{ ROAST_TYPES[bean.roastType].label }} roast</span>
+            <span v-if="bean.blendType === 'blend'" class="badge">Blend</span>
             <span v-if="!bean.showOnPublicMenu" class="badge">Hidden from menu</span>
           </div>
         </div>
@@ -183,7 +200,10 @@ async function confirmFreeze(): Promise<void> {
           <span>{{ bean.inventoryWeightGrams }} g left</span>
           <span v-if="ageLabel(bean)">{{ ageLabel(bean) }}</span>
           <span v-if="openFreeze(bean)" class="frozen-since">Frozen since {{ formatDay(openFreeze(bean)!.frozenOn) }}</span>
+          <span v-if="priceLabel(bean)">{{ priceLabel(bean) }}</span>
+          <a v-if="bean.website" :href="bean.website" target="_blank" rel="noopener noreferrer">Website</a>
         </p>
+        <p v-if="bean.notes" class="notes muted">{{ bean.notes }}</p>
         <div v-if="workspaces.canEdit" class="actions">
           <button class="btn-link" type="button" @click="askFreeze(bean)">{{ openFreeze(bean) ? 'Thaw' : 'Freeze' }}</button>
           <RouterLink class="btn-link" :to="{ name: 'bean-edit', params: { id: bean.id } }">Edit</RouterLink>
@@ -289,6 +309,10 @@ p {
   flex-wrap: wrap;
   gap: var(--space-1) var(--space-3);
   font-size: 0.95rem;
+}
+.notes {
+  font-size: 0.9rem;
+  white-space: pre-line;
 }
 .actions {
   display: flex;

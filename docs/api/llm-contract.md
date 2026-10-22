@@ -30,7 +30,9 @@ queue:
    - If the brew log no longer exists (deleted after queueing), the job
      completes without calling the LLM.
    - The bean includes its `roastLevel` (or `null` if unknown), which
-     matters for temperature advice.
+     matters for temperature advice, and its `detailedRoastLevel`,
+     `roastType`, `blendType` (each `null` if unknown) and `decaf` (§4).
+     Price, website and notes aren't sent.
    - The prompt includes the bean's **effective** roast age in days at brew
      time (`roastAgeDays`, excluding days frozen; see §4) and
      `daysFrozenBeforeBrew`, when the bean has a `roastDate`.
@@ -78,7 +80,11 @@ queue:
 > straight notes, and compare a brew mainly with earlier brews served the same
 > way (each brew's drink says how). Judge a brew against its recipe's style:
 > a soup shot is a long, high-ratio espresso on purpose, a cold brew steeps
-> cold for hours, and an immersion brew isn't a pour over. For espresso, judge flow
+> cold for hours, and an immersion brew isn't a pour over. The bean's
+> roastType says what the roaster roasted it for: an espresso roast brewed as
+> filter (or the reverse) may need a different approach rather than small
+> corrections. Decaf and blends often extract differently from single origins.
+> For espresso, judge flow
 > from the first drop time, shot time and ratio against the recipe's
 > windows, and consider the machine's capabilities (pre-infusion, flow and
 > pressure control) and the grinder's step size when explaining the change.

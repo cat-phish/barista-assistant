@@ -6,8 +6,18 @@ import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
-import { beanFreezes, beans, brewLogs, ROAST_LEVELS, type Bean, type BeanFreeze } from "@barista/shared/schema";
-import { optionalText, updateSchema } from "../validation.js";
+import {
+  beanFreezes,
+  beans,
+  BLEND_TYPES,
+  brewLogs,
+  DETAILED_ROAST_LEVELS,
+  ROAST_LEVELS,
+  ROAST_TYPES,
+  type Bean,
+  type BeanFreeze,
+} from "@barista/shared/schema";
+import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
 export type FreezePeriod = Pick<BeanFreeze, "id" | "frozenOn" | "thawedOn">;
 
@@ -38,13 +48,51 @@ const beanFields = {
     .optional(),
   inventoryWeightGrams: z.number().int().min(0).max(1_000_000),
   showOnPublicMenu: z.boolean(),
+  roastType: z.enum(ROAST_TYPES).nullable().optional(),
+  detailedRoastLevel: z.enum(DETAILED_ROAST_LEVELS).nullable().optional(),
+  blendType: z.enum(BLEND_TYPES).nullable().optional(),
+  decaf: z.boolean(),
+  // Shown as a link, so only http(s): no javascript: or data: URLs.
+  website: z
+    .string()
+    .trim()
+    .max(500)
+    .nullable()
+    .transform((s) => (s ? s : null))
+    .refine((s) => s === null || isHttpUrl(s), "must be an http or https URL")
+    .optional(),
+  priceAmount: decimalSchema({ min: 0, max: 1_000_000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
+  priceCurrency: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{3}$/, "must be a 3-letter currency code, e.g. USD")
+    .nullable()
+    .optional(),
+  bagWeightGrams: z.number().int().min(1).max(100_000).nullable().optional(),
+  notes: optionalText(2000),
 };
+
+function isHttpUrl(s: string): boolean {
+  try {
+    const { protocol } = new URL(s);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 const createBeanSchema = z.object({
   ...beanFields,
   inventoryWeightGrams: beanFields.inventoryWeightGrams.default(0),
   showOnPublicMenu: beanFields.showOnPublicMenu.default(true),
+  decaf: beanFields.decaf.default(false),
 });
+
+// A price needs its amount and currency, or neither.
+const PRICE_ERROR = "priceAmount: priceAmount and priceCurrency go together";
+const priceMismatch = (amount: number | null | undefined, currency: string | null | undefined) =>
+  (amount ?? null) === null !== ((currency ?? null) === null);
 
 const updateBeanSchema = updateSchema(beanFields);
 
@@ -95,6 +143,10 @@ beansRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<BeanRe
 
   const body = parseBody(createBeanSchema, req, res);
   if (!body) return;
+  if (priceMismatch(body.priceAmount, body.priceCurrency)) {
+    sendError(res, 400, PRICE_ERROR);
+    return;
+  }
 
   const id = randomUUID();
   await db.insert(beans).values({ id, workspaceId, ...body });
@@ -111,9 +163,27 @@ beansRouter.patch("/:beanId", async (req: Request<BeanParams>, res: Response<Bea
   const body = parseBody(updateBeanSchema, req, res);
   if (!body) return;
 
-  // Scoped to the workspace, so a bean ID from another workspace updates nothing and 404s below.
-  await db.update(beans).set(body).where(beanInWorkspace(req.params));
-  const [bean] = await loadBeans(beanInWorkspace(req.params));
+  // The price rule is checked against the stored row with the change applied,
+  // so the row is locked until the update is written.
+  const outcome = await db.transaction(async (tx) => {
+    // Scoped to the workspace, so a bean ID from another workspace is not found.
+    const [existing] = await tx
+      .select({ priceAmount: beans.priceAmount, priceCurrency: beans.priceCurrency })
+      .from(beans)
+      .where(beanInWorkspace(req.params))
+      .for("update");
+    if (!existing) return "not_found" as const;
+    const amount = body.priceAmount === undefined ? existing.priceAmount : body.priceAmount;
+    const currency = body.priceCurrency === undefined ? existing.priceCurrency : body.priceCurrency;
+    if (priceMismatch(amount, currency)) return "price_mismatch" as const;
+    await tx.update(beans).set(body).where(beanInWorkspace(req.params));
+    return "updated" as const;
+  });
+  if (outcome === "price_mismatch") {
+    sendError(res, 400, PRICE_ERROR);
+    return;
+  }
+  const [bean] = outcome === "updated" ? await loadBeans(beanInWorkspace(req.params)) : [];
   if (!bean) {
     sendError(res, 404, "Bean not found");
     return;

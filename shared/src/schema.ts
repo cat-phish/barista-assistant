@@ -51,6 +51,34 @@ export const workspaceMembers = mysqlTable(
 
 // 4. Beans & Inventory
 export const ROAST_LEVELS = ["light", "medium_light", "medium", "medium_dark", "dark"] as const;
+export type RoastLevel = (typeof ROAST_LEVELS)[number];
+// What the roaster roasted it for (docs/api/beans.md §4).
+export const ROAST_TYPES = ["filter", "espresso", "omni"] as const;
+export type RoastType = (typeof ROAST_TYPES)[number];
+// The traditional roast names, lightest to darkest. Each one implies a 5-step
+// ROAST_LEVEL (DETAILED_ROAST_TO_LEVEL); the form fills roastLevel from it,
+// but the two are stored apart so roastLevel can still be set by hand.
+export const DETAILED_ROAST_LEVELS = [
+  "cinnamon", "american", "new_england", "half_city", "modern_light", "city",
+  "city_plus", "full_city", "full_city_plus", "italian", "vienna", "french",
+] as const;
+export type DetailedRoastLevel = (typeof DETAILED_ROAST_LEVELS)[number];
+export const DETAILED_ROAST_TO_LEVEL: Record<DetailedRoastLevel, RoastLevel> = {
+  cinnamon: "light",
+  american: "light",
+  new_england: "light",
+  half_city: "light",
+  modern_light: "medium_light",
+  city: "medium_light",
+  city_plus: "medium",
+  full_city: "medium",
+  full_city_plus: "medium_dark",
+  italian: "dark",
+  vienna: "dark",
+  french: "dark",
+};
+export const BLEND_TYPES = ["single_origin", "blend", "other"] as const;
+export type BlendType = (typeof BLEND_TYPES)[number];
 
 export const beans = mysqlTable("beans", {
   id: varchar("id", { length: 36 }).primaryKey(),
@@ -66,6 +94,18 @@ export const beans = mysqlTable("beans", {
   roastDate: timestamp("roast_date"),
   inventoryWeightGrams: int("inventory_weight_grams").default(0).notNull(),
   showOnPublicMenu: boolean("show_on_public_menu").default(true).notNull(),
+  // Optional details (docs/api/beans.md §4). null = unknown.
+  roastType: varchar("roast_type", { length: 20 }).$type<RoastType>(), // ROAST_TYPES
+  detailedRoastLevel: varchar("detailed_roast_level", { length: 20 }).$type<DetailedRoastLevel>(), // DETAILED_ROAST_LEVELS
+  blendType: varchar("blend_type", { length: 20 }).$type<BlendType>(), // BLEND_TYPES
+  decaf: boolean("decaf").default(false).notNull(),
+  website: varchar("website", { length: 500 }), // http(s) URL, to buy it again
+  // Price of one bag: amount and ISO 4217 currency, both or neither (the API).
+  // With bagWeightGrams, clients work out a price per gram.
+  priceAmount: decimal("price_amount", { precision: 8, scale: 2, mode: "number" }),
+  priceCurrency: varchar("price_currency", { length: 3 }),
+  bagWeightGrams: int("bag_weight_grams"),
+  notes: text("notes"),
 });
 
 // 4b. Bean Freeze Periods (Effective Roast Age)

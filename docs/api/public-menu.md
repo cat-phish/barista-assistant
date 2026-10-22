@@ -24,7 +24,12 @@ filters for workspaces where `isPublicMenuEnabled = true` and items where
         "beanName": "Southern Weather",
         "process": "Washed",
         "roastDate": "2026-10-01T00:00:00.000Z",
-        "inventoryWeightGrams": 250
+        "inventoryWeightGrams": 250,
+        "roastLevel": "light",
+        "detailedRoastLevel": "city",
+        "roastType": "filter",
+        "blendType": "single_origin",
+        "decaf": false
       }
     ],
     "sections": [
@@ -66,6 +71,8 @@ filters for workspaces where `isPublicMenuEnabled = true` and items where
   ("Filter", "Espresso"); `variantOf` the parent drink's name if that drink is also
   shown, else `null`; `ingredients` are the ingredients' names in the drink's
   order. Recipe details (doses, steps) aren't published.
+  Beans carry their roast and blend details (§4, each may be `null`) and
+  `decaf`; a bean's price, bag weight, website and notes aren't published.
 - **Error Responses:**
   - `404 Not Found`: Workspace slug does not exist or `isPublicMenuEnabled` is
     `false`. Slugs are matched exactly: `/menu/Jordans-Coffee-Bar` is a `404`,

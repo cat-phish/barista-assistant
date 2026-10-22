@@ -163,7 +163,9 @@ What's recorded about each coffee.
 
 ### 6. More bean details
 
-- **Status:** idea
+- **Status:** in progress (branch `bean-details`). Decided: the detailed
+  roast level sits beside `roastLevel` and fills it in the form; the price is
+  per bag, on the bean, with a 3-letter currency code.
 - **Why:** a bean is a roaster, name, process, roast level, roast date and
   stock today. What it's roasted for, whether it's a blend, decaf, its price
   and where to buy it again all affect how it's brewed and whether to

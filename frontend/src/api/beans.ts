@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { Bean, RoastLevel } from './types';
+import type { Bean, BlendType, DetailedRoastLevel, RoastLevel, RoastType } from './types';
 
 // Request body for create/update (docs/api/beans.md §4).
 export interface BeanInput {
@@ -10,6 +10,15 @@ export interface BeanInput {
   roastDate: string | null; // YYYY-MM-DD
   inventoryWeightGrams: number;
   showOnPublicMenu: boolean;
+  roastType: RoastType | null;
+  detailedRoastLevel: DetailedRoastLevel | null;
+  blendType: BlendType | null;
+  decaf: boolean;
+  website: string | null;
+  priceAmount: number | null;
+  priceCurrency: string | null;
+  bagWeightGrams: number | null;
+  notes: string | null;
 }
 
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/beans`;
