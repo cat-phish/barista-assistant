@@ -222,16 +222,16 @@ async function save(): Promise<void> {
     <form v-else class="stack" novalidate @submit.prevent="save">
       <section class="card stack">
         <div class="field">
-          <label for="name">Name</label>
-          <input id="name" v-model="name" maxlength="255" placeholder="e.g. Vanilla Latte" :aria-invalid="submitted && !!errors.name" />
+          <label for="name">Name<span class="req" aria-hidden="true">*</span></label>
+          <input id="name" aria-required="true" v-model="name" maxlength="255" placeholder="e.g. Vanilla Latte" :aria-invalid="submitted && !!errors.name" />
           <span v-if="submitted && errors.name" class="field-error">{{ errors.name }}</span>
         </div>
         <div class="field">
-          <label for="description">Description <span class="muted">(optional; the menu uses it unless you change it there)</span></label>
+          <label for="description">Description <span class="muted">(the menu uses it unless you change it there)</span></label>
           <input id="description" v-model="description" maxlength="500" placeholder="e.g. Espresso, steamed milk and house vanilla" />
         </div>
         <div class="field">
-          <label for="category">Category <span class="muted">(optional)</span></label>
+          <label for="category">Category</label>
           <select id="category" v-model="categoryId">
             <option value="">None</option>
             <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
@@ -249,7 +249,7 @@ async function save(): Promise<void> {
           <span class="hint">Groups drinks on the menu and when you brew. Order categories on the Drinks page.</span>
         </div>
         <div class="field">
-          <label for="parent">Variant of <span class="muted">(optional)</span></label>
+          <label for="parent">Variant of</label>
           <select id="parent" v-model="parentDrinkId">
             <option value="">Nothing: an original</option>
             <option v-for="o in parentOptions" :key="o.drink.id" :value="o.drink.id">{{ '\u2003'.repeat(o.depth) }}{{ o.drink.name }}</option>
@@ -274,15 +274,15 @@ async function save(): Promise<void> {
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="kind">Brew method</label>
-            <select id="kind" v-model="kind" :aria-invalid="submitted && !!errors.kind">
+            <label for="kind">Brew method<span class="req" aria-hidden="true">*</span></label>
+            <select id="kind" aria-required="true" v-model="kind" :aria-invalid="submitted && !!errors.kind">
               <option value="" disabled>Choose…</option>
               <option v-for="(k, key) in METHOD_KINDS" :key="key" :value="key">{{ k.label }}</option>
             </select>
             <span v-if="submitted && errors.kind" class="field-error">{{ errors.kind }}</span>
           </div>
           <div class="field">
-            <label for="default-recipe">Default recipe <span class="muted">(optional)</span></label>
+            <label for="default-recipe">Default recipe</label>
             <select id="default-recipe" v-model="defaultRecipeId" :disabled="!kindRecipes.length">
               <option value="">{{ kindRecipes.length ? 'None: the last one used' : kind ? 'No recipes for this method yet' : 'Choose a brew method first' }}</option>
               <optgroup v-for="g in recipeGroups" :key="g.brewer" :label="g.brewer">
@@ -292,7 +292,7 @@ async function save(): Promise<void> {
           </div>
         </div>
         <div class="field">
-          <label for="size">Default size <span class="muted">(optional)</span></label>
+          <label for="size">Default size</label>
           <div class="size">
             <input id="size" v-model="servingSize" inputmode="decimal" placeholder="e.g. 8" :aria-invalid="submitted && !!errors.size" />
             <select v-model="servingUnit" aria-label="Size unit">
@@ -319,21 +319,21 @@ async function save(): Promise<void> {
           <li v-for="(row, i) in rows" :key="i" class="row">
             <div class="row-fields">
               <div class="field full">
-                <label :for="`ingredient-${i}`">Ingredient</label>
-                <select :id="`ingredient-${i}`" v-model="row.ingredientId">
+                <label :for="`ingredient-${i}`">Ingredient<span class="req" aria-hidden="true">*</span></label>
+                <select :id="`ingredient-${i}`" aria-required="true" v-model="row.ingredientId">
                   <option value="" disabled>Choose…</option>
                   <option v-for="c in ingredientOptions(i)" :key="c.id" :value="c.id">{{ c.name }}</option>
                 </select>
               </div>
               <div class="field">
-                <label :for="`amount-${i}`">Amount <span class="muted">(opt.)</span></label>
+                <label :for="`amount-${i}`">Amount</label>
                 <div class="amount">
                   <input :id="`amount-${i}`" v-model="row.amountValue" inputmode="decimal" placeholder="e.g. 2" />
                   <input v-model="row.amountUnit" list="amount-units" maxlength="20" placeholder="unit" :aria-label="`Unit for ingredient ${i + 1}`" />
                 </div>
               </div>
               <div class="field">
-                <label :for="`note-${i}`">Note <span class="muted">(opt.)</span></label>
+                <label :for="`note-${i}`">Note</label>
                 <input :id="`note-${i}`" v-model="row.note" maxlength="255" placeholder="e.g. on top" />
               </div>
               <span v-if="submitted && errors.rows[i]" class="field-error full">{{ errors.rows[i] }}</span>

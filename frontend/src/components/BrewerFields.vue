@@ -12,13 +12,13 @@ defineProps<{ idPrefix: string; showErrors: boolean }>();
   <div class="stack">
     <div class="form-row">
       <div class="field">
-        <label :for="`${idPrefix}-name`">Name</label>
-        <input :id="`${idPrefix}-name`" v-model="form.name" maxlength="100" placeholder="e.g. V60, Linea Mini" :aria-invalid="showErrors && !form.name.trim()" />
+        <label :for="`${idPrefix}-name`">Name<span class="req" aria-hidden="true">*</span></label>
+        <input :id="`${idPrefix}-name`" aria-required="true" v-model="form.name" maxlength="100" placeholder="e.g. V60, Linea Mini" :aria-invalid="showErrors && !form.name.trim()" />
         <span v-if="showErrors && !form.name.trim()" class="field-error">Required</span>
       </div>
       <div class="field">
-        <label :for="`${idPrefix}-kind`">Brew method</label>
-        <select :id="`${idPrefix}-kind`" v-model="form.kind">
+        <label :for="`${idPrefix}-kind`">Brew method<span class="req" aria-hidden="true">*</span></label>
+        <select :id="`${idPrefix}-kind`" aria-required="true" v-model="form.kind">
           <option v-for="(k, key) in METHOD_KINDS" :key="key" :value="key">{{ k.label }}</option>
         </select>
       </div>
@@ -50,7 +50,7 @@ defineProps<{ idPrefix: string; showErrors: boolean }>();
       </div>
     </template>
     <div class="field">
-      <label :for="`${idPrefix}-notes`">Notes <span class="muted">(optional)</span></label>
+      <label :for="`${idPrefix}-notes`">Notes</label>
       <input :id="`${idPrefix}-notes`" v-model="form.notes" maxlength="255" :placeholder="form.kind === 'espresso' ? 'e.g. 18 g VST basket' : 'e.g. 02 size, white ceramic'" />
     </div>
   </div>

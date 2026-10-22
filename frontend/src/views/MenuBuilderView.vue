@@ -312,8 +312,8 @@ async function deleteItem(): Promise<void> {
 
       <form v-if="workspaces.canEdit" class="card add-section" @submit.prevent="addSection">
         <div class="field">
-          <label for="new-section">New section</label>
-          <input id="new-section" v-model="newSectionName" maxlength="100" placeholder="e.g. Espresso drinks" />
+          <label for="new-section">New section<span class="req" aria-hidden="true">*</span></label>
+          <input id="new-section" aria-required="true" v-model="newSectionName" maxlength="100" placeholder="e.g. Espresso drinks" />
         </div>
         <button class="btn btn-primary" type="submit" :disabled="busy || !newSectionName.trim()">Add section</button>
       </form>
@@ -323,16 +323,16 @@ async function deleteItem(): Promise<void> {
   <ConfirmDialog :open="addTarget !== null" :title="`Add to ${addTarget?.name ?? ''}`" @cancel="addTarget = null">
     <form id="menu-add-form" class="stack" @submit.prevent="confirmAdd">
       <div class="field">
-        <label for="add-type">What</label>
-        <select id="add-type" v-model="addType" @change="addSourceId = ''">
+        <label for="add-type">What<span class="req" aria-hidden="true">*</span></label>
+        <select id="add-type" aria-required="true" v-model="addType" @change="addSourceId = ''">
           <option value="drink">A drink</option>
           <option value="brewer">A plain brew (a brewer)</option>
           <option value="beans" :disabled="hasBeansBlock">Your beans{{ hasBeansBlock ? ' (already on the menu)' : '' }}</option>
         </select>
       </div>
       <div v-if="addType !== 'beans'" class="field">
-        <label for="add-source">{{ addType === 'drink' ? 'Drink' : 'Brewer' }}</label>
-        <select id="add-source" v-model="addSourceId" required>
+        <label for="add-source">{{ addType === 'drink' ? 'Drink' : 'Brewer' }}<span class="req" aria-hidden="true">*</span></label>
+        <select id="add-source" aria-required="true" v-model="addSourceId" required>
           <option value="" disabled>Choose…</option>
           <option v-for="c in addChoices" :key="c.id" :value="c.id">{{ c.label }}</option>
         </select>
@@ -351,16 +351,16 @@ async function deleteItem(): Promise<void> {
     <form id="menu-item-form" class="stack" @submit.prevent="saveItem">
       <template v-if="itemTarget?.itemType !== 'beans'">
         <div class="field">
-          <label for="item-name">Name on the menu <span class="muted">(optional)</span></label>
+          <label for="item-name">Name on the menu</label>
           <input id="item-name" v-model="itemName" maxlength="255" :placeholder="itemTarget?.source?.name ?? ''" />
           <span class="hint">Leave empty to use its own name.</span>
         </div>
         <div class="field">
-          <label for="item-description">Description <span class="muted">(optional)</span></label>
+          <label for="item-description">Description</label>
           <input id="item-description" v-model="itemDescription" maxlength="500" :placeholder="itemTarget?.source?.description ?? 'e.g. Double shot, steamed oat milk'" />
         </div>
         <div class="field">
-          <label for="item-price">Price <span class="muted">(optional{{ menu.currency ? `, ${menu.currency}` : '' }})</span></label>
+          <label for="item-price">Price <span v-if="menu.currency" class="muted">({{ menu.currency }})</span></label>
           <input id="item-price" v-model="itemPrice" inputmode="decimal" placeholder="e.g. 5.50" />
         </div>
         <label class="checkbox">
@@ -369,8 +369,8 @@ async function deleteItem(): Promise<void> {
         </label>
       </template>
       <div class="field">
-        <label for="item-section">Section</label>
-        <select id="item-section" v-model="itemSection">
+        <label for="item-section">Section<span class="req" aria-hidden="true">*</span></label>
+        <select id="item-section" aria-required="true" v-model="itemSection">
           <option v-for="s in menu.sections" :key="s.id" :value="s.id">{{ s.name }}</option>
         </select>
       </div>
@@ -394,11 +394,11 @@ async function deleteItem(): Promise<void> {
   <ConfirmDialog :open="sectionTarget !== null" title="Edit section" @cancel="sectionTarget = null">
     <form id="menu-section-form" class="stack" @submit.prevent="saveSection">
       <div class="field">
-        <label for="section-name">Name</label>
-        <input id="section-name" v-model="sectionName" maxlength="100" required />
+        <label for="section-name">Name<span class="req" aria-hidden="true">*</span></label>
+        <input id="section-name" aria-required="true" v-model="sectionName" maxlength="100" required />
       </div>
       <div class="field">
-        <label for="section-description">Description <span class="muted">(optional)</span></label>
+        <label for="section-description">Description</label>
         <input id="section-description" v-model="sectionDescription" maxlength="500" placeholder="e.g. Made with our house espresso" />
       </div>
       <p v-if="confirmSectionDelete" class="form-error" role="alert">

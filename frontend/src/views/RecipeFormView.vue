@@ -314,9 +314,13 @@ function startsText(i: number): string {
   return at ? `Starts ${at.exact ? 'at' : '≈'} ${formatTime(at.at)}` : `Starts after step ${i}`;
 }
 // The time field means a length, or only a guide for steps that wait.
-function timeLabel(step: StepDraft, i: number): string {
-  if (step.advance === 'tap' || step.advance === 'first_drop') return 'About (opt.)';
-  return step.advance === 'auto' && i === steps.value.length - 1 ? 'Time (opt.)' : 'Time';
+function timeLabel(step: StepDraft): string {
+  return step.advance === 'tap' || step.advance === 'first_drop' ? 'About' : 'Time';
+}
+// A step's time is needed unless it's a guide (tap, first drop) or the last
+// auto step ("until done").
+function timeRequired(step: StepDraft, i: number): boolean {
+  return !(step.advance === 'tap' || step.advance === 'first_drop' || (step.advance === 'auto' && i === steps.value.length - 1));
 }
 
 // "+ Add step here" between steps (nothing needs re-timing: steps run back to back).
@@ -417,14 +421,14 @@ async function save(): Promise<void> {
     <form v-else class="stack" novalidate @submit.prevent="save">
       <section class="card stack">
         <div class="field">
-          <label for="name">Name</label>
-          <input id="name" v-model="name" maxlength="255" placeholder="e.g. House V60" :aria-invalid="submitted && !!fieldErrors.name" />
+          <label for="name">Name<span class="req" aria-hidden="true">*</span></label>
+          <input id="name" aria-required="true" v-model="name" maxlength="255" placeholder="e.g. House V60" :aria-invalid="submitted && !!fieldErrors.name" />
           <span v-if="submitted && fieldErrors.name" class="field-error">{{ fieldErrors.name }}</span>
         </div>
 
         <div class="field">
-          <label for="method">Brewer</label>
-          <select id="method" v-model="brewerId" :aria-invalid="submitted && !!fieldErrors.brewer" @change="onMethodChange">
+          <label for="method">Brewer<span class="req" aria-hidden="true">*</span></label>
+          <select id="method" aria-required="true" v-model="brewerId" :aria-invalid="submitted && !!fieldErrors.brewer" @change="onMethodChange">
             <option value="" disabled>Choose…</option>
             <option v-for="m in brewerOptions" :key="m.id" :value="m.id">{{ m.name }}{{ m.retiredAt ? ' (retired)' : '' }}</option>
             <option :value="NEW_METHOD">+ Add a brewer…</option>
@@ -433,7 +437,7 @@ async function save(): Promise<void> {
           <span v-if="submitted && fieldErrors.brewer" class="field-error">{{ fieldErrors.brewer }}</span>
         </div>
         <div v-if="styleChoices.length" class="field">
-          <label for="style">Style <span class="muted">(optional)</span></label>
+          <label for="style">Style</label>
           <select id="style" v-model="style">
             <option value="">Not set</option>
             <option v-for="st in styleChoices" :key="st" :value="st">{{ RECIPE_STYLES[st] }}</option>
@@ -442,12 +446,12 @@ async function save(): Promise<void> {
         </div>
         <div v-if="brewerId === NEW_METHOD" class="inline-add">
           <div class="field grow">
-            <label for="new-method">New brewer name</label>
-            <input id="new-method" ref="newMethodInput" v-model="newMethodName" maxlength="100" placeholder="e.g. Chemex" @keydown.enter.prevent="addMethod" />
+            <label for="new-method">New brewer name<span class="req" aria-hidden="true">*</span></label>
+            <input id="new-method" aria-required="true" ref="newMethodInput" v-model="newMethodName" maxlength="100" placeholder="e.g. Chemex" @keydown.enter.prevent="addMethod" />
           </div>
           <div class="field">
-            <label for="new-method-kind">Brew method</label>
-            <select id="new-method-kind" v-model="newMethodKind">
+            <label for="new-method-kind">Brew method<span class="req" aria-hidden="true">*</span></label>
+            <select id="new-method-kind" aria-required="true" v-model="newMethodKind">
               <option v-for="(k, key) in METHOD_KINDS" :key="key" :value="key">{{ k.label }}</option>
             </select>
           </div>
@@ -457,18 +461,18 @@ async function save(): Promise<void> {
 
         <div class="form-row">
           <div class="field">
-            <label for="dose">Dose (g)</label>
-            <input id="dose" v-model="dose" inputmode="decimal" placeholder="15" :aria-invalid="submitted && !!fieldErrors.dose" />
+            <label for="dose">Dose (g)<span class="req" aria-hidden="true">*</span></label>
+            <input id="dose" aria-required="true" v-model="dose" inputmode="decimal" placeholder="15" :aria-invalid="submitted && !!fieldErrors.dose" />
             <span v-if="submitted && fieldErrors.dose" class="field-error">{{ fieldErrors.dose }}</span>
           </div>
           <div v-if="espresso" class="field">
-            <label for="expected-yield">Shot weight (g)</label>
-            <input id="expected-yield" v-model="expectedYield" inputmode="decimal" placeholder="36" :aria-invalid="submitted && !!fieldErrors.expectedYield" @input="yieldCustom = true" />
+            <label for="expected-yield">Shot weight (g)<span class="req" aria-hidden="true">*</span></label>
+            <input id="expected-yield" aria-required="true" v-model="expectedYield" inputmode="decimal" placeholder="36" :aria-invalid="submitted && !!fieldErrors.expectedYield" @input="yieldCustom = true" />
             <span v-if="submitted && fieldErrors.expectedYield" class="field-error">{{ fieldErrors.expectedYield }}</span>
           </div>
           <div v-else class="field">
-            <label for="water">Water (g)</label>
-            <input id="water" v-model="water" inputmode="decimal" placeholder="250" :aria-invalid="submitted && !!fieldErrors.water" />
+            <label for="water">Water (g)<span class="req" aria-hidden="true">*</span></label>
+            <input id="water" aria-required="true" v-model="water" inputmode="decimal" placeholder="250" :aria-invalid="submitted && !!fieldErrors.water" />
             <span v-if="submitted && fieldErrors.water" class="field-error">{{ fieldErrors.water }}</span>
           </div>
         </div>
@@ -487,13 +491,13 @@ async function save(): Promise<void> {
             </button>
           </div>
           <div class="field">
-            <label for="temp">Water temp (°C) <span class="muted">(optional)</span></label>
+            <label for="temp">Water temp (°C)</label>
             <input id="temp" v-model="temp" inputmode="decimal" placeholder="94" :aria-invalid="submitted && !!fieldErrors.temp" />
             <span v-if="submitted && fieldErrors.temp" class="field-error">{{ fieldErrors.temp }}</span>
           </div>
         </div>
         <fieldset class="finish">
-          <legend>{{ espresso ? 'Target shot time' : 'Target finish' }} <span class="muted">(optional)</span></legend>
+          <legend>{{ espresso ? 'Target shot time' : 'Target finish' }}</legend>
           <div class="finish-row">
             <div class="field">
               <label for="finish-from">From</label>
@@ -510,7 +514,7 @@ async function save(): Promise<void> {
           <span v-else-if="finishHint" class="hint">{{ finishHint }}</span>
         </fieldset>
         <fieldset v-if="espresso" class="finish">
-          <legend>First drop <span class="muted">(optional)</span></legend>
+          <legend>First drop</legend>
           <div class="finish-row">
             <div class="field">
               <label for="drop-from">From</label>
@@ -538,7 +542,7 @@ async function save(): Promise<void> {
           No grinders yet. <RouterLink :to="{ name: 'grinder-new' }">Add one</RouterLink> to save a starting point for it.
         </p>
         <div v-else class="field">
-          <label for="default-grinder">Default grinder <span class="muted">(optional)</span></label>
+          <label for="default-grinder">Default grinder</label>
           <select id="default-grinder" v-model="defaultGrinderId">
             <option value="">None: use the last grinder</option>
             <option v-for="g in grinders.filter((x) => !x.retiredAt || x.id === defaultGrinderId)" :key="g.id" :value="g.id">
@@ -611,15 +615,15 @@ async function save(): Promise<void> {
             </div>
             <div class="step-fields">
               <div class="field full">
-                <label :for="`step-type-${i}`">Type</label>
-                <select :id="`step-type-${i}`" v-model="step.stepType">
+                <label :for="`step-type-${i}`">Type<span class="req" aria-hidden="true">*</span></label>
+                <select :id="`step-type-${i}`" aria-required="true" v-model="step.stepType">
                   <option v-for="t in stepTypesFor(kind)" :key="t" :value="t">{{ STEP_TYPES[t].label }}</option>
                   <option v-if="!stepTypesFor(kind).includes(step.stepType)" :value="step.stepType" disabled>{{ STEP_TYPES[step.stepType].label }}</option>
                 </select>
               </div>
               <div class="field">
-                <label :for="`step-time-${i}`">{{ timeLabel(step, i) }}</label>
-                <input :id="`step-time-${i}`" v-model="step.duration" inputmode="numeric" :placeholder="step.advance === 'auto' && i === steps.length - 1 ? 'until done' : 'm:ss'" />
+                <label :for="`step-time-${i}`">{{ timeLabel(step) }}<span v-if="timeRequired(step, i)" class="req" aria-hidden="true">*</span></label>
+                <input :id="`step-time-${i}`" :aria-required="timeRequired(step, i)" v-model="step.duration" inputmode="numeric" :placeholder="step.advance === 'auto' && i === steps.length - 1 ? 'until done' : 'm:ss'" />
               </div>
               <div class="field">
                 <label :for="`step-advance-${i}`">Moves on</label>
@@ -630,39 +634,39 @@ async function save(): Promise<void> {
               <p class="step-when muted full">{{ startsText(i) }} · {{ ADVANCE[step.advance].hint }}</p>
               <div v-if="stepRules(step.stepType, kind).water !== 'none'" class="field">
                 <label :for="`step-water-${i}`">
-                  Pour to (g)<span v-if="stepRules(step.stepType, kind).water === 'optional'" class="muted"> (opt.)</span>
+                  Pour to (g)<span v-if="stepRules(step.stepType, kind).water === 'required'" class="req" aria-hidden="true">*</span>
                 </label>
                 <div class="pour-row">
-                  <input :id="`step-water-${i}`" v-model="step.water" inputmode="decimal" />
+                  <input :id="`step-water-${i}`" :aria-required="stepRules(step.stepType, kind).water === 'required'" v-model="step.water" inputmode="decimal" />
                   <span v-if="amounts[i] != null" class="amount" :aria-label="`adds ${amounts[i]} grams`">+{{ formatGrams(amounts[i]!) }} g</span>
                 </div>
               </div>
               <template v-if="stepRules(step.stepType, kind).pressure !== 'none'">
                 <div class="field">
-                  <label :for="`step-pressure-${i}`">Pressure (bar)<span v-if="stepRules(step.stepType, kind).pressure === 'optional'" class="muted"> (opt.)</span></label>
-                  <input :id="`step-pressure-${i}`" v-model="step.pressure" inputmode="decimal" placeholder="e.g. 9" />
+                  <label :for="`step-pressure-${i}`">Pressure (bar)<span v-if="stepRules(step.stepType, kind).pressure === 'required'" class="req" aria-hidden="true">*</span></label>
+                  <input :id="`step-pressure-${i}`" :aria-required="stepRules(step.stepType, kind).pressure === 'required'" v-model="step.pressure" inputmode="decimal" placeholder="e.g. 9" />
                 </div>
                 <div class="field">
-                  <label :for="`step-pressure-end-${i}`">Ramp to <span class="muted">(opt.)</span></label>
+                  <label :for="`step-pressure-end-${i}`">Ramp to</label>
                   <input :id="`step-pressure-end-${i}`" v-model="step.pressureEnd" inputmode="decimal" placeholder="e.g. 6" />
                 </div>
               </template>
               <template v-if="stepRules(step.stepType, kind).flow !== 'none'">
                 <div class="field">
-                  <label :for="`step-flow-${i}`">Flow ({{ FLOW_UNITS[flowUnit] }})<span v-if="stepRules(step.stepType, kind).flow === 'optional'" class="muted"> (opt.)</span></label>
-                  <input :id="`step-flow-${i}`" v-model="step.flow" inputmode="decimal" placeholder="e.g. 4" />
+                  <label :for="`step-flow-${i}`">Flow ({{ FLOW_UNITS[flowUnit] }})<span v-if="stepRules(step.stepType, kind).flow === 'required'" class="req" aria-hidden="true">*</span></label>
+                  <input :id="`step-flow-${i}`" :aria-required="stepRules(step.stepType, kind).flow === 'required'" v-model="step.flow" inputmode="decimal" placeholder="e.g. 4" />
                 </div>
                 <div class="field">
-                  <label :for="`step-flow-end-${i}`">Ramp to <span class="muted">(opt.)</span></label>
+                  <label :for="`step-flow-end-${i}`">Ramp to</label>
                   <input :id="`step-flow-end-${i}`" v-model="step.flowEnd" inputmode="decimal" placeholder="e.g. 2" />
                 </div>
               </template>
               <div class="field">
-                <label :for="`step-label-${i}`">Label <span class="muted">(opt.)</span></label>
+                <label :for="`step-label-${i}`">Label</label>
                 <input :id="`step-label-${i}`" v-model="step.label" maxlength="255" :placeholder="STEP_TYPES[step.stepType].label" />
               </div>
               <div class="field">
-                <label :for="`step-temp-${i}`">Temp (°C) <span class="muted">(opt.)</span></label>
+                <label :for="`step-temp-${i}`">Temp (°C)</label>
                 <input :id="`step-temp-${i}`" v-model="step.temp" inputmode="decimal" placeholder="e.g. 93" />
               </div>
               <span v-if="stepsParsed.errors[i]" class="field-error full">{{ stepsParsed.errors[i] }}</span>

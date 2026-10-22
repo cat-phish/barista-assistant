@@ -10,8 +10,8 @@ defineProps<{ idPrefix: string; errors: GrinderFormErrors; showErrors: boolean }
 <template>
   <div class="stack">
     <div class="field">
-      <label :for="`${idPrefix}-name`">Name</label>
-      <input :id="`${idPrefix}-name`" v-model="form.name" maxlength="100" placeholder="e.g. Comandante C40" :aria-invalid="showErrors && !!errors.name" />
+      <label :for="`${idPrefix}-name`">Name<span class="req" aria-hidden="true">*</span></label>
+      <input :id="`${idPrefix}-name`" aria-required="true" v-model="form.name" maxlength="100" placeholder="e.g. Comandante C40" :aria-invalid="showErrors && !!errors.name" />
       <span v-if="showErrors && errors.name" class="field-error">{{ errors.name }}</span>
     </div>
     <div class="form-row">
@@ -31,7 +31,7 @@ defineProps<{ idPrefix: string; errors: GrinderFormErrors; showErrors: boolean }
       </div>
     </div>
     <fieldset class="range">
-      <legend>Setting range <span class="muted">(optional)</span></legend>
+      <legend>Setting range</legend>
       <div class="range-row">
         <div class="field">
           <label :for="`${idPrefix}-min`">From</label>
@@ -64,7 +64,7 @@ defineProps<{ idPrefix: string; errors: GrinderFormErrors; showErrors: boolean }
       </div>
     </div>
     <div class="field">
-      <label :for="`${idPrefix}-notes`">Notes <span class="muted">(optional)</span></label>
+      <label :for="`${idPrefix}-notes`">Notes</label>
       <input :id="`${idPrefix}-notes`" v-model="form.notes" maxlength="255" placeholder="e.g. Red Clix fitted" />
     </div>
   </div>

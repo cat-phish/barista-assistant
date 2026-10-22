@@ -259,6 +259,14 @@ a {
   font-size: 0.85rem;
   color: var(--danger);
 }
+/* Required fields get a red asterisk after the label (the field itself has
+   aria-required, so screen readers say "required" instead). Optional fields
+   carry no note. */
+.req {
+  margin-left: 0.15em;
+  color: var(--danger);
+  font-weight: 700;
+}
 .form-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

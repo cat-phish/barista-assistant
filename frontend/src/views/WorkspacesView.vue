@@ -100,13 +100,13 @@ async function create(): Promise<void> {
       <h2>Create a workspace</h2>
       <form class="stack" novalidate @submit.prevent="create">
         <div class="field">
-          <label for="ws-name">Name</label>
-          <input id="ws-name" v-model="name" type="text" maxlength="255" placeholder="e.g. Jordan's Coffee Bar" required />
+          <label for="ws-name">Name<span class="req" aria-hidden="true">*</span></label>
+          <input id="ws-name" aria-required="true" v-model="name" type="text" maxlength="255" placeholder="e.g. Jordan's Coffee Bar" required />
         </div>
         <div class="field">
-          <label for="ws-slug">Web address</label>
+          <label for="ws-slug">Web address<span class="req" aria-hidden="true">*</span></label>
           <input
-            id="ws-slug"
+            id="ws-slug" aria-required="true"
             v-model.trim="slug"
             type="text"
             inputmode="url"
