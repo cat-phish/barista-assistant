@@ -23,7 +23,7 @@ interface Dated extends Named {
   createdAt: string;
 }
 
-export const nameColumn = <T extends Named>(): SortColumn<T> => ({ label: 'Name', value: (x) => x.name, asc: 'Name A–Z', desc: 'Name Z–A' });
+export const nameColumn = <T extends Named>(): SortColumn<T> => ({ label: 'Name', value: (x) => x.name, asc: 'A–Z', desc: 'Z–A' });
 export const addedColumn = <T extends Dated>(): SortColumn<T> => ({
   label: 'Added',
   value: (x) => x.createdAt,
@@ -62,12 +62,23 @@ export function sortBy<T>(items: readonly T[], key: string, columns: SortColumns
   });
 }
 
-// The dropdown's entries, e.g. "Name A–Z", "Type Z–A", "Newest first".
-export function sortOptions<T>(columns: SortColumns<T>): Array<{ value: string; label: string }> {
-  return Object.entries(columns).flatMap(([id, c]) => {
-    const dirs: SortDir[] = c.firstDir === 'desc' ? ['desc', 'asc'] : ['asc', 'desc'];
-    return dirs.map((d) => ({ value: `${id}_${d}`, label: (d === 'asc' ? c.asc : c.desc) ?? `${c.label} ${d === 'asc' ? 'A–Z' : 'Z–A'}` }));
-  });
+// The Sort by and Order dropdowns (ListControls): one entry per column, with
+// its directions worded for that column, e.g. "Ascending (oldest first)".
+export interface SortColumnOption {
+  value: string;
+  label: string;
+  asc: string;
+  desc: string;
+}
+// "Oldest first" -> "oldest first"; "A–Z" stays.
+const lower = (s: string) => (/^[A-Z][a-z]/.test(s) ? s.charAt(0).toLowerCase() + s.slice(1) : s);
+export function sortColumnOptions<T>(columns: SortColumns<T>): SortColumnOption[] {
+  return Object.entries(columns).map(([id, c]) => ({
+    value: id,
+    label: c.label,
+    asc: `Ascending (${c.asc ? lower(c.asc) : 'A–Z'})`,
+    desc: `Descending (${c.desc ? lower(c.desc) : 'Z–A'})`,
+  }));
 }
 
 export function isSortKey<T>(value: unknown, columns: SortColumns<T>): value is string {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Bean } from '../api/types';
 import { BEAN_PROCESSES, BEAN_SORT_COLUMNS, DETAILED_ROAST_LEVELS, formatAltitude, formatPricePerGram, freezeState, pricePerGram } from './beans';
-import { sortBy, sortOptions } from './listSort';
+import { sortBy, sortColumnOptions } from './listSort';
 import { ROAST_LEVELS } from './scale';
 
 describe('detailed roast levels', () => {
@@ -106,7 +106,21 @@ describe('bean sorting', () => {
     expect(order(beans, 'process_asc')).toEqual(['C', 'A', 'B']); // Anaerobic Fermentation, Natural, Washed
   });
 
-  it('offers every column in the Sort dropdown', () => {
-    expect(sortOptions(BEAN_SORT_COLUMNS)).toHaveLength(22);
+  it('sorts by effective roast age, freshest first', () => {
+    const beans = [
+      bean({ beanName: 'Old', roastDate: '2026-09-01T00:00:00.000Z' }),
+      bean({ beanName: 'No date' }),
+      // Roasted earlier, but frozen most of the time since: younger in effect.
+      bean({ beanName: 'Frozen long', roastDate: '2026-08-01T00:00:00.000Z', freezePeriods: [{ id: '1', frozenOn: '2026-08-02', thawedOn: '2026-10-15' }] }),
+    ];
+    expect(order(beans, 'age_asc')).toEqual(['Frozen long', 'Old', 'No date']);
+  });
+
+  it('offers every column in the Sort by dropdown', () => {
+    expect(sortColumnOptions(BEAN_SORT_COLUMNS).map((c) => c.value)).toEqual([
+      'name', 'roaster', 'added', 'purchased', 'roastDate', 'age', 'roast', 'process', 'frozen', 'decaf', 'rating', 'stock',
+    ]);
+    expect(sortColumnOptions(BEAN_SORT_COLUMNS).find((c) => c.value === 'name')).toMatchObject({ asc: 'Ascending (A–Z)' });
+    expect(sortColumnOptions(BEAN_SORT_COLUMNS).find((c) => c.value === 'roast')).toMatchObject({ asc: 'Ascending (lightest first)', desc: 'Descending (darkest first)' });
   });
 });

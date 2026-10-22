@@ -25,10 +25,12 @@ import {
   formatPricePerGram,
   isBeanFilter,
   pricePerGram,
+  roastAgeDays,
   type BeanFilter,
+  type BeanSortColumn,
 } from '../lib/beans';
 import { formatAdded, formatDay, localDateInput, toDateInput } from '../lib/format';
-import { isSortKey, recallView, rememberView, sortArrow, sortBy, sortLabel, sortOptions, toggleHeader } from '../lib/listSort';
+import { isSortKey, recallView, rememberView, sortArrow, sortBy, sortLabel, sortColumnOptions, toggleHeader } from '../lib/listSort';
 import { effectiveRoastAge } from '../lib/roastAge';
 import { ROAST_LEVELS } from '../lib/scale';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -48,7 +50,7 @@ const archivedCount = computed(() => beans.value.filter((b) => b.archivedAt !== 
 // old list (by roaster).
 const viewKey = (what: string) => `beans.${tab.value}.${what}.${workspaces.current?.id ?? ''}`;
 const DEFAULT_SORT = 'roaster_asc';
-const sortChoices = sortOptions(BEAN_SORT_COLUMNS);
+const sortChoices = sortColumnOptions(BEAN_SORT_COLUMNS);
 const filterOptions = Object.entries(BEAN_FILTERS).map(([value, f]) => ({ value, label: f.label }));
 const filter = ref<BeanFilter>('all');
 const sort = ref(DEFAULT_SORT);
@@ -226,8 +228,29 @@ function roastLabel(bean: Bean): string | null {
   return bean.roastLevel ? ROAST_LEVELS[bean.roastLevel].label : null;
 }
 
-// "Onyx · Natural"
-const sourceLabel = (bean: Bean) => [bean.roasterName, bean.process ? BEAN_PROCESSES[bean.process].label : null].filter((p) => p).join(' · ');
+// Table columns, each a sort column (BEAN_SORT_COLUMNS). On phones the
+// headers hide and the wide-only cells drop out (the frozen mark moves next
+// to the name); the Sort by dropdown still has every column.
+const HEADERS: Array<{ id: BeanSortColumn; text: string; title?: string; class?: string }> = [
+  { id: 'name', text: 'Coffee' },
+  { id: 'frozen', text: '❄', title: 'Frozen', class: 'center' },
+  { id: 'roaster', text: 'Roaster' },
+  { id: 'roast', text: 'Roast' },
+  { id: 'process', text: 'Process' },
+  { id: 'age', text: 'Age', title: 'Days off roast (not counting frozen days)' },
+  { id: 'decaf', text: 'Caf', title: 'Caffeinated / decaf' },
+  { id: 'stock', text: 'Stock' },
+  { id: 'added', text: 'Added' },
+  { id: 'rating', text: 'Rating', class: 'end' },
+];
+const TABLE_COLS =
+  'minmax(0, 1.6fr) 1.5rem minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.1fr) 3.25rem 3.5rem 4rem 4.5rem 5.5rem';
+
+// "12 d" off roast, frozen days excluded; "–" without a roast date.
+function ageCell(bean: Bean): string {
+  const days = roastAgeDays(bean);
+  return days === null ? '–' : `${days} d`;
+}
 
 // "Finca El Paraíso · Huila · 1,950 m"
 function originLabel(bean: Bean): string | null {
@@ -298,7 +321,7 @@ async function confirmFreeze(): Promise<void> {
 
 <template>
   <AppHeader />
-  <main class="page">
+  <main class="page wide">
     <div class="page-header">
       <h1>Beans</h1>
       <RouterLink v-if="workspaces.canEdit" class="btn btn-primary" :to="{ name: 'bean-new' }">Add bean</RouterLink>
@@ -331,32 +354,39 @@ async function confirmFreeze(): Promise<void> {
           </ul>
         </section>
 
-        <ListControls v-model:filter="filter" v-model:sort="sort" :sort-options="sortChoices" :id-prefix="`beans-${tab}`" filter-label="Show" :filter-options="filterOptions" />
+        <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" :id-prefix="`beans-${tab}`" filter-label="Show" :filter-options="filterOptions" />
         <p v-if="rowError" class="form-error" role="alert">{{ rowError }}</p>
         <p v-if="shown.length === 0" class="card empty">No {{ filterName }} {{ archived ? 'archived ' : '' }}beans.</p>
-        <div v-else class="data-table" style="--cols: minmax(0, 2.2fr) minmax(0, 1.1fr) minmax(0, 0.8fr) 5.5rem">
+        <div v-else class="data-table" :style="{ '--cols': TABLE_COLS }">
           <div class="data-row data-head">
-            <button class="data-th" type="button" :aria-label="sortLabel(sort, 'name', 'Coffee')" @click="sort = toggleHeader(sort, 'name', BEAN_SORT_COLUMNS)">
-              Coffee <span aria-hidden="true">{{ sortArrow(sort, 'name') }}</span>
-            </button>
-            <button class="data-th" type="button" :aria-label="sortLabel(sort, 'roast', 'Roast')" @click="sort = toggleHeader(sort, 'roast', BEAN_SORT_COLUMNS)">
-              Roast <span aria-hidden="true">{{ sortArrow(sort, 'roast') }}</span>
-            </button>
-            <button class="data-th" type="button" :aria-label="sortLabel(sort, 'stock', 'Stock')" @click="sort = toggleHeader(sort, 'stock', BEAN_SORT_COLUMNS)">
-              Stock <span aria-hidden="true">{{ sortArrow(sort, 'stock') }}</span>
-            </button>
-            <button class="data-th end" type="button" :aria-label="sortLabel(sort, 'rating', 'Rating')" @click="sort = toggleHeader(sort, 'rating', BEAN_SORT_COLUMNS)">
-              Rating <span aria-hidden="true">{{ sortArrow(sort, 'rating') }}</span>
+            <button
+              v-for="h in HEADERS"
+              :key="h.id"
+              class="data-th"
+              :class="h.class"
+              type="button"
+              :title="h.title"
+              :aria-label="sortLabel(sort, h.id, h.title ?? h.text)"
+              @click="sort = toggleHeader(sort, h.id, BEAN_SORT_COLUMNS)"
+            >
+              {{ h.text }} <span aria-hidden="true">{{ sortArrow(sort, h.id) }}</span>
             </button>
           </div>
           <div v-for="bean in shown" :key="bean.id" class="data-item" :class="{ open: openId === bean.id }">
             <button class="data-row" type="button" :aria-expanded="openId === bean.id" @click="toggle(bean.id)">
               <span class="data-td primary">
-                {{ bean.beanName }}
-                <span class="sub muted">{{ sourceLabel(bean) }}</span>
+                {{ bean.beanName }}<span v-if="openFreeze(bean)" class="frozen-mark phone-only" aria-label="frozen"> ❄</span>
               </span>
+              <span class="data-td wide-only center">
+                <span v-if="openFreeze(bean)" class="frozen-mark" title="Frozen" aria-label="Frozen">❄</span>
+              </span>
+              <span class="data-td first-on-phone">{{ bean.roasterName }}</span>
               <span class="data-td">{{ roastLabel(bean) ?? '–' }}</span>
-              <span class="data-td">{{ bean.inventoryWeightGrams }} g<span v-if="openFreeze(bean)" class="frozen-mark"> · frozen</span></span>
+              <span class="data-td wide-only">{{ bean.process ? BEAN_PROCESSES[bean.process].label : '–' }}</span>
+              <span class="data-td wide-only">{{ ageCell(bean) }}</span>
+              <span class="data-td wide-only" :title="bean.decaf ? 'Decaf' : 'Caffeinated'">{{ bean.decaf ? 'Decaf' : 'Caf' }}</span>
+              <span class="data-td">{{ bean.inventoryWeightGrams }} g</span>
+              <span class="data-td wide-only">{{ formatAdded(bean.createdAt) }}</span>
               <span class="data-td end">
                 <RatingStars v-if="bean.rating !== null" :rating="bean.rating" />
                 <span v-else class="muted">{{ archived ? 'Unrated' : '–' }}</span>
@@ -484,10 +514,27 @@ p {
 .small {
   font-size: 0.9rem;
 }
-.sub {
-  display: block;
-  font-size: 0.85rem;
-  font-weight: 400;
+/* Ten columns need more than the usual 640px page. */
+.page.wide {
+  max-width: 1080px;
+}
+.center {
+  text-align: center;
+}
+.phone-only {
+  display: none;
+}
+@media (max-width: 560px) {
+  .wide-only {
+    display: none;
+  }
+  .phone-only {
+    display: inline;
+  }
+  /* The hidden frozen cell comes first, so the roaster would get the "·". */
+  .first-on-phone::before {
+    content: none !important;
+  }
 }
 .frozen-mark,
 .frozen-since {

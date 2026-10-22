@@ -196,8 +196,15 @@ whether to buy it again. Contract: `api/beans.md` §4.
 - **List:** Active | Archived tabs and a table like Recipes, with a filter
   (in stock, out of stock, frozen, decaf). It sorts by name, roaster, date
   added, purchase date, frozen state, roast (lightness on the 12-step scale),
-  process, rating, roast date, stock, or caffeinated/decaf. Sort and filter
-  are remembered per tab.
+  process, rating, roast date, roast age (frozen days excluded), stock, or
+  caffeinated/decaf. Sort and filter are remembered per tab. On wide screens
+  the table shows ten columns, each a sortable header: coffee, a ❄ for
+  frozen, roaster, roast, process, age, caf/decaf, stock, added and rating.
+  Phones show coffee, roaster, roast, stock and rating.
+- **Sort controls (every list):** Beans, Recipes, Drinks, Ingredients,
+  Brewers and Grinders have **Sort by** and **Order** dropdowns, replacing
+  the single combined Sort dropdown. Order is worded for the column, e.g.
+  "Descending (newest first)".
 - **Rating prompt:** item 8 first planned to ask after a few brews or when
   stock runs low. Instead the prompt comes when a bean is archived: an
   unrated bean asks for a rating first (or **Skip rating**), and the Archived

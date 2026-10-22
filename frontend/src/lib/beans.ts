@@ -1,6 +1,8 @@
 // Labels and helpers for a bean's optional details (docs/api/beans.md §4).
 import type { Bean, BeanProcess, BlendType, DetailedRoastLevel, RoastLevel, RoastType } from '../api/types';
+import { localDateInput } from './format';
 import { enumColumn, type SortColumns } from './listSort';
+import { effectiveRoastAge } from './roastAge';
 
 export const ROAST_TYPES: Record<RoastType, { label: string }> = {
   filter: { label: 'Filter' },
@@ -103,23 +105,30 @@ export function roastRank(bean: Pick<Bean, 'detailedRoastLevel' | 'roastLevel'>)
   return DETAILED_ORDER.findIndex((d) => DETAILED_ROAST_LEVELS[d].roastLevel === level);
 }
 
-// Every way the bean list sorts (headers and the Sort dropdown; lib/listSort.ts).
-// Unset values sort last either way.
+// Effective roast age in days today (frozen days don't count), or null
+// without a roast date.
+export function roastAgeDays(bean: Pick<Bean, 'roastDate' | 'freezePeriods'>, today: string = localDateInput()): number | null {
+  return bean.roastDate ? effectiveRoastAge(bean.roastDate, bean.freezePeriods, today).ageDays : null;
+}
+
+// Every way the bean list sorts (headers and the Sort by dropdown;
+// lib/listSort.ts), in the dropdown's order. Unset values sort last either way.
 export type BeanSortColumn =
-  | 'name' | 'roaster' | 'added' | 'purchased' | 'frozen' | 'roast'
-  | 'process' | 'rating' | 'roastDate' | 'stock' | 'decaf';
+  | 'name' | 'roaster' | 'added' | 'purchased' | 'roastDate' | 'age' | 'roast'
+  | 'process' | 'frozen' | 'decaf' | 'rating' | 'stock';
 export const BEAN_SORT_COLUMNS: SortColumns<Bean, BeanSortColumn> = {
-  name: { label: 'Name', value: (b) => b.beanName, asc: 'Name A–Z', desc: 'Name Z–A' },
-  roaster: { label: 'Roaster', value: (b) => b.roasterName, asc: 'Roaster A–Z', desc: 'Roaster Z–A' },
-  added: { label: 'Added', value: (b) => b.createdAt, asc: 'Oldest added', desc: 'Newest added', firstDir: 'desc' },
-  purchased: { label: 'Purchased', value: (b) => b.purchaseDate, asc: 'Oldest purchase', desc: 'Newest purchase', firstDir: 'desc' },
+  name: { label: 'Name', value: (b) => b.beanName, asc: 'A–Z', desc: 'Z–A' },
+  roaster: { label: 'Roaster', value: (b) => b.roasterName, asc: 'A–Z', desc: 'Z–A' },
+  added: { label: 'Date added', value: (b) => b.createdAt, asc: 'Oldest first', desc: 'Newest first', firstDir: 'desc' },
+  purchased: { label: 'Date purchased', value: (b) => b.purchaseDate, asc: 'Oldest first', desc: 'Newest first', firstDir: 'desc' },
+  roastDate: { label: 'Roast date', value: (b) => b.roastDate, asc: 'Oldest first', desc: 'Newest first', firstDir: 'desc' },
+  age: { label: 'Age', value: (b) => roastAgeDays(b), asc: 'Freshest first', desc: 'Oldest first' },
+  roast: { label: 'Roast level', value: roastRank, asc: 'Lightest first', desc: 'Darkest first' },
+  process: { label: 'Process', value: (b) => (b.process ? BEAN_PROCESSES[b.process].label : null), asc: 'A–Z', desc: 'Z–A' },
   frozen: { ...enumColumn<Bean, FreezeState>('Frozen', FREEZE_STATES, freezeState), asc: 'Frozen first', desc: 'Never frozen first' },
-  roast: { label: 'Roast', value: roastRank, asc: 'Lightest roast first', desc: 'Darkest roast first' },
-  process: { label: 'Process', value: (b) => (b.process ? BEAN_PROCESSES[b.process].label : null), asc: 'Process A–Z', desc: 'Process Z–A' },
-  rating: { label: 'Rating', value: (b) => b.rating, asc: 'Lowest rated', desc: 'Highest rated', firstDir: 'desc' },
-  roastDate: { label: 'Roast date', value: (b) => b.roastDate, asc: 'Oldest roast', desc: 'Newest roast', firstDir: 'desc' },
-  stock: { label: 'Stock', value: (b) => b.inventoryWeightGrams, asc: 'Least in stock', desc: 'Most in stock', firstDir: 'desc' },
-  decaf: { label: 'Decaf', value: (b) => (b.decaf ? 1 : 0), asc: 'Caffeinated first', desc: 'Decaf first' },
+  decaf: { label: 'Caffeinated / decaf', value: (b) => (b.decaf ? 1 : 0), asc: 'Caffeinated first', desc: 'Decaf first' },
+  rating: { label: 'Rating', value: (b) => b.rating, asc: 'Lowest first', desc: 'Highest first', firstDir: 'desc' },
+  stock: { label: 'In stock', value: (b) => b.inventoryWeightGrams, asc: 'Least first', desc: 'Most first', firstDir: 'desc' },
 };
 
 // The list's Filter dropdown.

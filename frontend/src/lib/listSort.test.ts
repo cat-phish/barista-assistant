@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatAdded } from './format';
-import { addedColumn, ariaSort, enumColumn, isSortKey, nameColumn, sortArrow, sortBy, sortOptions, sortsByName, toggleHeader, type SortColumns } from './listSort';
+import { addedColumn, ariaSort, enumColumn, isSortKey, nameColumn, sortArrow, sortBy, sortColumnOptions, sortsByName, toggleHeader, type SortColumns } from './listSort';
 
 interface Item {
   name: string;
@@ -43,16 +43,12 @@ describe('list sorting', () => {
     expect(names('price_asc')).toEqual(['Atlas', 'b latte', 'cortado', 'Drip']);
   });
 
-  it('builds the dropdown, dates newest first', () => {
-    expect(sortOptions(columns).map((o) => `${o.value}=${o.label}`)).toEqual([
-      'name_asc=Name A–Z',
-      'name_desc=Name Z–A',
-      'kind_asc=Type A–Z',
-      'kind_desc=Type Z–A',
-      'burr_asc=Burrs A–Z',
-      'burr_desc=Burrs Z–A',
-      'added_desc=Newest first',
-      'added_asc=Oldest first',
+  it('builds the Sort by and Order dropdowns, with each direction worded for its column', () => {
+    expect(sortColumnOptions(columns).map((o) => `${o.value}=${o.label}: ${o.asc} / ${o.desc}`)).toEqual([
+      'name=Name: Ascending (A–Z) / Descending (Z–A)',
+      'kind=Type: Ascending (A–Z) / Descending (Z–A)',
+      'burr=Burrs: Ascending (A–Z) / Descending (Z–A)',
+      'added=Added: Ascending (oldest first) / Descending (newest first)',
     ]);
   });
 

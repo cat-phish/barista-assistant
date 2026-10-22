@@ -26,7 +26,7 @@ import {
   sortArrow,
   sortBy,
   sortLabel,
-  sortOptions,
+  sortColumnOptions,
   toggleHeader,
   type SortColumns,
 } from '../lib/listSort';
@@ -58,7 +58,7 @@ const columns: SortColumns<Brewer> = {
   category: { label: 'Category', value: (b) => categoryName(b.categoryId) },
   added: addedColumn(),
 };
-const sortChoices = sortOptions(columns);
+const sortChoices = sortColumnOptions(columns);
 const filter = ref(ALL);
 const sort = ref('name_asc');
 watch(filter, (v) => rememberView(viewKey('filter'), v));
@@ -172,7 +172,7 @@ async function retireInstead(): Promise<void> {
     <template v-if="!loading">
       <div v-if="brewers.length === 0" class="card empty"><p>No brewers yet.</p></div>
       <template v-else>
-        <ListControls v-model:filter="filter" v-model:sort="sort" :sort-options="sortChoices" id-prefix="brewers" filter-label="Brew method" :filter-options="filterOptions" />
+        <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="brewers" filter-label="Brew method" :filter-options="filterOptions" />
         <p v-if="filter === RETIRED" class="muted small">Retired brewers are hidden when brewing; past brews still show them.</p>
         <p v-if="shown.length === 0" class="card empty">No {{ filter === ALL ? 'brewers' : `${filterName.toLowerCase()} brewers` }} yet.</p>
         <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.3fr) 5.5rem">

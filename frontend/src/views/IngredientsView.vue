@@ -26,7 +26,7 @@ import {
   sortArrow,
   sortBy,
   sortLabel,
-  sortOptions,
+  sortColumnOptions,
   toggleHeader,
   type SortColumns,
 } from '../lib/listSort';
@@ -63,7 +63,7 @@ const columns: SortColumns<Ingredient> = {
   used: { label: 'Used in', value: (i) => i.drinkCount, asc: 'Least used first', desc: 'Most used first', firstDir: 'desc' },
   added: addedColumn(),
 };
-const sortChoices = sortOptions(columns);
+const sortChoices = sortColumnOptions(columns);
 const filter = ref(ALL);
 const sort = ref('name_asc');
 watch(filter, (v) => rememberView(viewKey('filter'), v));
@@ -134,7 +134,7 @@ async function confirmDelete(): Promise<void> {
     <template v-else>
       <div v-if="list.length === 0" class="card empty"><p>No ingredients yet.</p></div>
       <template v-else>
-        <ListControls v-model:filter="filter" v-model:sort="sort" :sort-options="sortChoices" id-prefix="ingredients" filter-label="Show" :filter-options="filterOptions" />
+        <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="ingredients" filter-label="Show" :filter-options="filterOptions" />
         <p v-if="shown.length === 0" class="card empty">Nothing here yet.</p>
         <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) 5.5rem">
           <div class="data-row data-head">
