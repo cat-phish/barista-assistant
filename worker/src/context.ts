@@ -29,6 +29,8 @@ import {
 import { and, asc, desc, eq, inArray, lt, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { db } from "./db.js";
+import { config } from "./config.js";
+import { localBrewDate } from "./localDate.js";
 import { effectiveRoastAge, type FreezePeriodLike } from "./roastAge.js";
 
 const PREVIOUS_BREW_COUNT = 5;
@@ -174,7 +176,7 @@ function summarize(
   servedAs: ReadonlyMap<string, NonNullable<BrewSummary["drink"]>>
 ): BrewSummary {
   const age = roastDate
-    ? effectiveRoastAge(roastDate.toISOString(), freezes, brew.timestamp.toISOString().slice(0, 10))
+    ? effectiveRoastAge(roastDate.toISOString(), freezes, localBrewDate(brew.timestamp, brew.utcOffsetMinutes, config.brewTimezone))
     : null;
   return {
     timestamp: brew.timestamp.toISOString(),

@@ -43,6 +43,10 @@ export const beansApi = {
     api.post<{ bean: Bean }>(`${base(workspaceId)}/${id}/freeze`, { date }),
   thaw: (workspaceId: string, id: string, date: string) =>
     api.post<{ bean: Bean }>(`${base(workspaceId)}/${id}/thaw`, { date }),
+  // Correct the latest freeze period: its dates, or thawedOn null to un-thaw (§4).
+  editLatestFreeze: (workspaceId: string, id: string, input: { frozenOn?: string; thawedOn?: string | null }) =>
+    api.patch<{ bean: Bean }>(`${base(workspaceId)}/${id}/freezes/latest`, input),
+  removeLatestFreeze: (workspaceId: string, id: string) => api.delete<{ bean: Bean }>(`${base(workspaceId)}/${id}/freezes/latest`),
   // Without deleteBrewLogs, a bean with brew logs answers 409 + brewLogCount.
   remove: (workspaceId: string, id: string, deleteBrewLogs = false) =>
     api.delete(`${base(workspaceId)}/${id}${deleteBrewLogs ? '?deleteBrewLogs=true' : ''}`),

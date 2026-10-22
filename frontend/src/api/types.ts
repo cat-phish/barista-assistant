@@ -123,7 +123,8 @@ export interface Bean {
   rating: number | null; // 1-5
   archivedAt: string | null; // null = active
   createdAt: string;
-  freezePeriods: FreezePeriod[]; // oldest first; last with thawedOn null = frozen now
+  freezePeriods: FreezePeriod[]; // oldest first; one with thawedOn null = frozen now
+  frozen: boolean; // a period is open (from the API, worked out from freezePeriods)
 }
 
 export interface FreezePeriod {
@@ -220,6 +221,7 @@ export interface BrewLog {
   servingSize: number | null; // the size made, when the drink was scaled
   servingUnit: ServingUnit | null;
   timestamp: string;
+  utcOffsetMinutes: number | null; // the logging device's, minutes (-420 = PDT)
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso
   actualYieldGrams: number | null; // measured beverage weight

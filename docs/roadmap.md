@@ -214,3 +214,27 @@ whether to buy it again. Contract: `api/beans.md` §4.
   stock runs low. Instead the prompt comes when a bean is archived: an
   unrated bean asks for a rating first (or **Skip rating**), and the Archived
   tab lists unrated beans with **Rate** until they're rated.
+
+## Freeze corrections and local brew dates (built)
+
+From a review of freezing (branch `freeze-edits`, migration 0032). The
+freeze, thaw and refreeze cycle and the age calculation were already right.
+These were missing:
+
+- **The latest freeze period can be corrected:** change its dates, un-thaw
+  it ("Still frozen"), or delete it, with the same date rules as freeze and
+  thaw (`api/beans.md` §4). Brew logs don't store an age; every analysis
+  works it out from the current history, so a correction applies to past
+  brews automatically. AI suggestions already written stay as they are
+  until re-analyzed.
+- **`frozen` on every bean,** worked out from the periods by the API, not
+  stored. The list, the ❄ column and the Frozen filter read it, not the
+  order of the periods.
+- **Local brew dates:** the worker counted age to the brew's UTC date, while
+  roast and freeze dates are local, so evening brews (west of UTC) could be
+  a day off. Brews now record the device's `utcOffsetMinutes`. Older brews
+  use the `BREW_TIMEZONE` zone from `.env` (else UTC). It's recorded per
+  brew, not set server-wide, so it stays right across daylight saving,
+  travel, and bar members in other zones.
+- Not done, by choice: telling the AI whether a brew was made from frozen
+  beans.

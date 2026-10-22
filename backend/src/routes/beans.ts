@@ -26,7 +26,9 @@ import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 export type FreezePeriod = Pick<BeanFreeze, "id" | "frozenOn" | "thawedOn">;
 
 // Every bean the API returns carries its freeze history (docs/api/beans.md §4).
-export type BeanWithFreezes = Bean & { freezePeriods: FreezePeriod[] };
+// frozen: whether a period is still open (frozen now), worked out from the
+// history so the two can't disagree.
+export type BeanWithFreezes = Bean & { freezePeriods: FreezePeriod[]; frozen: boolean };
 
 export interface BeanListResponse {
   beans: BeanWithFreezes[];
@@ -158,7 +160,10 @@ async function loadBeans(where: SQL | undefined): Promise<BeanWithFreezes[]> {
   for (const { beanId, ...period } of periods) {
     byBean.set(beanId, [...(byBean.get(beanId) ?? []), period]);
   }
-  return rows.map((bean) => ({ ...bean, freezePeriods: byBean.get(bean.id) ?? [] }));
+  return rows.map((bean) => {
+    const freezePeriods = byBean.get(bean.id) ?? [];
+    return { ...bean, freezePeriods, frozen: freezePeriods.some((p) => p.thawedOn === null) };
+  });
 }
 
 function beanInWorkspace(params: BeanParams) {
@@ -351,3 +356,92 @@ async function changeFreezeState(req: Request<BeanParams>, res: Response<BeanRes
 
 beansRouter.post("/:beanId/freeze", (req: Request<BeanParams>, res: Response<BeanResponse>) => changeFreezeState(req, res, "freeze"));
 beansRouter.post("/:beanId/thaw", (req: Request<BeanParams>, res: Response<BeanResponse>) => changeFreezeState(req, res, "thaw"));
+
+// Correcting the latest freeze period (docs/api/beans.md §4): its dates, an
+// un-thaw (thawedOn: null) or deleting it. Periods never overlap, so the
+// latest is the open one, else the one thawed last; only it can change, so the
+// rules only need the period before it.
+const editFreezeSchema = z
+  .object({ frozenOn: z.iso.date().optional(), thawedOn: z.iso.date().nullable().optional() })
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, "Provide frozenOn or thawedOn");
+
+type FreezeRow = { id: string; frozenOn: string; thawedOn: string | null };
+// Latest first: the open period, then by thaw date, then freeze date.
+function byLatest(a: FreezeRow, b: FreezeRow): number {
+  if (a.thawedOn === null || b.thawedOn === null) return a.thawedOn === b.thawedOn ? 0 : a.thawedOn === null ? -1 : 1;
+  return b.thawedOn.localeCompare(a.thawedOn) || b.frozenOn.localeCompare(a.frozenOn);
+}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+async function lockedPeriods(tx: Tx, params: BeanParams) {
+  const [bean] = await tx
+    .select({ id: beans.id, roastDate: beans.roastDate })
+    .from(beans)
+    .where(beanInWorkspace(params))
+    .for("update");
+  if (!bean) return null;
+  const periods = await tx
+    .select({ id: beanFreezes.id, frozenOn: beanFreezes.frozenOn, thawedOn: beanFreezes.thawedOn })
+    .from(beanFreezes)
+    .where(eq(beanFreezes.beanId, bean.id));
+  const [latest, previous] = [...periods].sort(byLatest);
+  return { bean, latest, previous };
+}
+
+async function sendBean(req: Request<BeanParams>, res: Response<BeanResponse>): Promise<void> {
+  const [bean] = await loadBeans(beanInWorkspace(req.params));
+  if (!bean) {
+    sendError(res, 404, "Bean not found");
+    return;
+  }
+  res.json({ bean });
+}
+
+beansRouter.patch("/:beanId/freezes/latest", async (req: Request<BeanParams>, res: Response<BeanResponse>) => {
+  if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId, WRITE_ROLES))) return;
+  const body = parseBody(editFreezeSchema, req, res);
+  if (!body) return;
+
+  const outcome = await db.transaction(async (tx) => {
+    const found = await lockedPeriods(tx, req.params);
+    if (!found) return { status: 404, error: "Bean not found" } as const;
+    const { bean, latest, previous } = found;
+    if (!latest) return { status: 404, error: "This bean has never been frozen" } as const;
+
+    const frozenOn = body.frozenOn ?? latest.frozenOn;
+    const thawedOn = body.thawedOn === undefined ? latest.thawedOn : body.thawedOn;
+    const latestAllowed = serverToday(1);
+    const roastDay = bean.roastDate?.toISOString().slice(0, 10);
+    const bad = (error: string) => ({ status: 400, error }) as const;
+    if (frozenOn > latestAllowed) return bad("frozenOn: can't be in the future");
+    if (roastDay && frozenOn < roastDay) return bad(`frozenOn: can't be before the roast date (${roastDay})`);
+    if (previous?.thawedOn && frozenOn < previous.thawedOn) return bad(`frozenOn: can't be before the previous thaw (${previous.thawedOn})`);
+    if (thawedOn !== null && thawedOn > latestAllowed) return bad("thawedOn: can't be in the future");
+    if (thawedOn !== null && thawedOn < frozenOn) return bad(`thawedOn: can't be before it was frozen (${frozenOn})`);
+
+    await tx.update(beanFreezes).set({ frozenOn, thawedOn }).where(eq(beanFreezes.id, latest.id));
+    return { status: 200 } as const;
+  });
+  if (outcome.status !== 200) {
+    sendError(res, outcome.status, outcome.error);
+    return;
+  }
+  await sendBean(req, res);
+});
+
+beansRouter.delete("/:beanId/freezes/latest", async (req: Request<BeanParams>, res: Response<BeanResponse>) => {
+  if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId, WRITE_ROLES))) return;
+  const outcome = await db.transaction(async (tx) => {
+    const found = await lockedPeriods(tx, req.params);
+    if (!found) return { status: 404, error: "Bean not found" } as const;
+    if (!found.latest) return { status: 404, error: "This bean has never been frozen" } as const;
+    await tx.delete(beanFreezes).where(eq(beanFreezes.id, found.latest.id));
+    return { status: 200 } as const;
+  });
+  if (outcome.status !== 200) {
+    sendError(res, outcome.status, outcome.error);
+    return;
+  }
+  await sendBean(req, res);
+});

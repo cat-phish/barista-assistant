@@ -89,11 +89,26 @@ export function rememberCurrency(code: string): void {
 // Freeze state: frozen now, thawed (frozen before), or never frozen.
 export type FreezeState = 'frozen' | 'thawed' | 'never';
 export const FREEZE_STATES = ['frozen', 'thawed', 'never'] as const satisfies readonly FreezeState[];
-export function freezeState(bean: Pick<Bean, 'freezePeriods'>): FreezeState {
-  const last = bean.freezePeriods[bean.freezePeriods.length - 1];
-  if (!last) return 'never';
-  return last.thawedOn === null ? 'frozen' : 'thawed';
+export function freezeState(bean: Pick<Bean, 'frozen' | 'freezePeriods'>): FreezeState {
+  if (bean.frozen) return 'frozen';
+  return bean.freezePeriods.length ? 'thawed' : 'never';
 }
+
+// Freeze periods, latest first, the way the API picks the one that can be
+// edited (docs/api/beans.md §4): the open one, else by thaw then freeze date.
+type Period = Bean['freezePeriods'][number];
+export function periodsLatestFirst(periods: readonly Period[]): Period[] {
+  return [...periods].sort((a, b) => {
+    if (a.thawedOn === null || b.thawedOn === null) return a.thawedOn === b.thawedOn ? 0 : a.thawedOn === null ? -1 : 1;
+    return b.thawedOn.localeCompare(a.thawedOn) || b.frozenOn.localeCompare(a.frozenOn);
+  });
+}
+// The latest thaw date, or '' if never thawed.
+export function latestThaw(periods: readonly Period[]): string {
+  return periods.reduce((max, p) => (p.thawedOn && p.thawedOn > max ? p.thawedOn : max), '');
+}
+// Whole days between two YYYY-MM-DD dates.
+export const daysBetween = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
 
 // Lightness on the 12-step scale: the roast name's position, else the first
 // name that implies the bean's 5-step level. null = unknown.

@@ -3,7 +3,7 @@ import type { BrewLog, Recipe, Suggestions } from '../api/types';
 import { chooseGrind, startingParameters, suggestionFitsGrinder } from './suggest';
 
 const brew = (over: Partial<BrewLog>): BrewLog => ({
-  id: 'b1', workspaceId: 'w', userId: 'u', beanId: 'bean', recipeId: null, timestamp: '2026-10-18T08:00:00.000Z',
+  id: 'b1', workspaceId: 'w', userId: 'u', beanId: 'bean', recipeId: null, timestamp: '2026-10-18T08:00:00.000Z', utcOffsetMinutes: null,
   actualDoseGrams: 15, actualWaterGrams: 250, actualYieldGrams: null, actualTempC: 93, actualGrindSetting: '22 clicks', actualTimeSec: 125,
   rating: 2, tastingNotes: null, drinkRating: null, drinkTastingNotes: null, bean: { id: 'bean', roasterName: 'R', beanName: 'B' }, recipe: null, brewedBy: null,
   grinderId: 'c40', grinder: { id: 'c40', name: 'Comandante C40' }, brewerId: null, brewer: null, drinkId: null, drink: null, servingSize: null, servingUnit: null, marks: [], ...over,

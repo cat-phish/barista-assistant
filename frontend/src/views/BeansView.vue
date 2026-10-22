@@ -24,6 +24,9 @@ import {
   formatPrice,
   formatPricePerGram,
   isBeanFilter,
+  daysBetween,
+  latestThaw,
+  periodsLatestFirst,
   pricePerGram,
   roastAgeDays,
   type BeanFilter,
@@ -217,9 +220,9 @@ async function saveRating(withRating: boolean): Promise<void> {
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const beanTitle = (b: Bean) => `${b.roasterName} ${b.beanName}`;
 
+// The open period, if frozen now (bean.frozen says whether there is one).
 function openFreeze(bean: Bean) {
-  const last = bean.freezePeriods[bean.freezePeriods.length - 1];
-  return last && last.thawedOn === null ? last : null;
+  return bean.frozen ? (bean.freezePeriods.find((p) => p.thawedOn === null) ?? null) : null;
 }
 
 // The roast name when known ("City+"), else the 5-step level.
@@ -287,10 +290,78 @@ const freezeMin = computed(() => {
   if (!bean) return '';
   const open = openFreeze(bean);
   if (open) return open.frozenOn;
-  const lastThaw = bean.freezePeriods[bean.freezePeriods.length - 1]?.thawedOn ?? '';
+  const lastThaw = latestThaw(bean.freezePeriods);
   const roast = toDateInput(bean.roastDate);
   return lastThaw > roast ? lastThaw : roast;
 });
+
+// Freeze history, oldest first as the API sends it: "Oct 3 – Oct 10 · 7 days".
+function periodLabel(p: Bean['freezePeriods'][number]): string {
+  const end = p.thawedOn ?? localDateInput();
+  const days = daysBetween(p.frozenOn, end);
+  return `${formatDay(p.frozenOn)} – ${p.thawedOn ? formatDay(p.thawedOn) : 'now'} · ${plural(days, 'day')}`;
+}
+const latestPeriodId = (bean: Bean) => periodsLatestFirst(bean.freezePeriods)[0]?.id ?? null;
+
+// Correcting the latest period (docs/api/beans.md §4): its dates, un-thaw
+// ("Still frozen"), or delete it. Same limits as the API.
+const editTarget = ref<Bean | null>(null);
+const editFrozenOn = ref('');
+const editThawedOn = ref('');
+const editStillFrozen = ref(false);
+const confirmRemove = ref(false);
+const editError = ref('');
+const editing = ref(false);
+const editMin = computed(() => {
+  const bean = editTarget.value;
+  if (!bean) return '';
+  const previousThaw = periodsLatestFirst(bean.freezePeriods)[1]?.thawedOn ?? '';
+  const roast = toDateInput(bean.roastDate);
+  return previousThaw > roast ? previousThaw : roast;
+});
+const editProblem = computed(() => {
+  const today = localDateInput();
+  if (!editFrozenOn.value) return 'Pick the day it was frozen.';
+  if (editMin.value && editFrozenOn.value < editMin.value) return `It can't be frozen before ${formatDay(editMin.value)}.`;
+  if (editFrozenOn.value > today) return "It can't be frozen in the future.";
+  if (editStillFrozen.value) return '';
+  if (!editThawedOn.value) return 'Pick the day it was thawed, or tick Still frozen.';
+  if (editThawedOn.value < editFrozenOn.value) return "It can't be thawed before it was frozen.";
+  if (editThawedOn.value > today) return "It can't be thawed in the future.";
+  return '';
+});
+
+function askEditFreeze(bean: Bean): void {
+  const latest = periodsLatestFirst(bean.freezePeriods)[0];
+  if (!latest) return;
+  editTarget.value = bean;
+  editFrozenOn.value = latest.frozenOn;
+  editThawedOn.value = latest.thawedOn ?? '';
+  editStillFrozen.value = latest.thawedOn === null;
+  confirmRemove.value = false;
+  editError.value = '';
+}
+
+async function saveFreezeEdit(action: 'save' | 'remove'): Promise<void> {
+  const ws = workspaces.current?.id;
+  const bean = editTarget.value;
+  if (!ws || !bean) return;
+  if (action === 'save' && editProblem.value) return;
+  editing.value = true;
+  editError.value = '';
+  try {
+    const { bean: updated } =
+      action === 'remove'
+        ? await beansApi.removeLatestFreeze(ws, bean.id)
+        : await beansApi.editLatestFreeze(ws, bean.id, { frozenOn: editFrozenOn.value, thawedOn: editStillFrozen.value ? null : editThawedOn.value });
+    replace(updated);
+    editTarget.value = null;
+  } catch (err) {
+    editError.value = errorMessage(err);
+  } finally {
+    editing.value = false;
+  }
+}
 
 function askFreeze(bean: Bean): void {
   freezeTarget.value = bean;
@@ -408,6 +479,15 @@ async function confirmFreeze(): Promise<void> {
                 <span v-if="priceLabel(bean)">{{ priceLabel(bean) }}</span>
                 <a v-if="bean.website" :href="bean.website" target="_blank" rel="noopener noreferrer">Website</a>
               </p>
+              <div v-if="bean.freezePeriods.length" class="freezes">
+                <span class="muted small">Freeze history</span>
+                <ul>
+                  <li v-for="p in bean.freezePeriods" :key="p.id">
+                    <span :class="{ 'frozen-since': p.thawedOn === null }">{{ periodLabel(p) }}</span>
+                    <button v-if="workspaces.canEdit && p.id === latestPeriodId(bean)" class="btn-link" type="button" @click="askEditFreeze(bean)">Edit</button>
+                  </li>
+                </ul>
+              </div>
               <p class="facts muted small">
                 <span>Added {{ formatAdded(bean.createdAt) }}</span>
                 <span v-if="bean.purchaseDate">Purchased {{ formatDay(bean.purchaseDate) }}</span>
@@ -454,6 +534,38 @@ async function confirmFreeze(): Promise<void> {
       </template>
       <button v-else class="btn btn-primary" type="button" :disabled="rating || rateValue === null" @click="saveRating(true)">Save rating</button>
       <button class="btn btn-secondary" type="button" :disabled="rating" @click="rateTarget = null">Cancel</button>
+    </template>
+  </ConfirmDialog>
+
+  <ConfirmDialog :open="editTarget !== null" title="Edit the latest freeze" @cancel="editTarget = null">
+    <form id="freeze-edit-form" class="stack" @submit.prevent="saveFreezeEdit('save')">
+      <p class="muted small">Fix a date you got wrong; the roast age is worked out again everywhere, including for the AI.</p>
+      <div class="field">
+        <label for="edit-frozen-on">Frozen on</label>
+        <input id="edit-frozen-on" v-model="editFrozenOn" type="date" :min="editMin || undefined" :max="localDateInput()" required />
+      </div>
+      <label class="checkbox">
+        <input v-model="editStillFrozen" type="checkbox" />
+        Still frozen
+      </label>
+      <div v-if="!editStillFrozen" class="field">
+        <label for="edit-thawed-on">Thawed on</label>
+        <input id="edit-thawed-on" v-model="editThawedOn" type="date" :min="editFrozenOn || undefined" :max="localDateInput()" required />
+      </div>
+      <p v-if="editProblem" class="field-error">{{ editProblem }}</p>
+      <p v-if="confirmRemove" class="form-error" role="alert">Delete this freeze? Its days will count toward the roast age again.</p>
+      <p v-if="editError" class="form-error" role="alert">{{ editError }}</p>
+    </form>
+    <template #actions>
+      <template v-if="confirmRemove">
+        <button class="btn btn-danger" type="button" :disabled="editing" @click="saveFreezeEdit('remove')">Delete freeze</button>
+        <button class="btn btn-secondary" type="button" :disabled="editing" @click="confirmRemove = false">Keep it</button>
+      </template>
+      <template v-else>
+        <button class="btn btn-primary" type="submit" form="freeze-edit-form" :disabled="editing || !!editProblem">Save</button>
+        <button class="btn btn-danger" type="button" :disabled="editing" @click="confirmRemove = true">Delete this freeze</button>
+        <button class="btn btn-secondary" type="button" :disabled="editing" @click="editTarget = null">Cancel</button>
+      </template>
     </template>
   </ConfirmDialog>
 
@@ -552,6 +664,17 @@ p {
 .badge.frozen {
   background: var(--frozen-tint);
   color: var(--frozen);
+}
+.freezes ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.freezes li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.9rem;
 }
 .flavor {
   font-style: italic;

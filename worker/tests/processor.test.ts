@@ -201,6 +201,19 @@ describe("processBrewAnalysis", () => {
     expect(byDay["day 7"]).toEqual([4, 2]); // after thawing: resumed
   });
 
+  it("dates each brew by the logging device's UTC offset", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    // Oct 9, 03:00 UTC is still Oct 8 in the evening at UTC-7: one day younger.
+    const id = randomUUID();
+    await db.insert(brewLogs).values({
+      id, workspaceId, userId, beanId, timestamp: new Date("2026-10-09T03:00:00Z"), utcOffsetMinutes: -420,
+      actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150,
+    });
+    await processBrewAnalysis({ brewLogId: id });
+    const context = llm.mock.calls[0]![0] as BrewContext;
+    expect(context.brew.roastAgeDays).toBe(7); // Oct 1 -> Oct 8 (UTC would say 8)
+  });
+
   it("tells the LLM which grinder each brew used, with its details (retired grinders included)", async () => {
     llm.mockResolvedValue(ANALYSIS);
     const c40 = randomUUID();

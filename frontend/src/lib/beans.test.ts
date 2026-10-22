@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Bean } from '../api/types';
-import { BEAN_PROCESSES, BEAN_SORT_COLUMNS, DETAILED_ROAST_LEVELS, formatAltitude, formatPricePerGram, freezeState, pricePerGram } from './beans';
+import { BEAN_PROCESSES, BEAN_SORT_COLUMNS, DETAILED_ROAST_LEVELS, formatAltitude, formatPricePerGram, freezeState, latestThaw, periodsLatestFirst, pricePerGram } from './beans';
 import { sortBy, sortColumnOptions } from './listSort';
 import { ROAST_LEVELS } from './scale';
 
@@ -68,6 +68,7 @@ const bean = (over: Partial<Bean>): Bean => ({
   archivedAt: null,
   createdAt: '2026-10-01T00:00:00.000Z',
   freezePeriods: [],
+  frozen: false,
   ...over,
 });
 const order = (beans: Bean[], key: string) => sortBy(beans, key, BEAN_SORT_COLUMNS, (b) => b.beanName).map((b) => b.beanName);
@@ -88,10 +89,19 @@ describe('bean sorting', () => {
     const beans = [
       bean({ beanName: 'Never' }),
       bean({ beanName: 'Thawed', freezePeriods: [{ id: '1', frozenOn: '2026-10-02', thawedOn: '2026-10-05' }] }),
-      bean({ beanName: 'Frozen', freezePeriods: [{ id: '2', frozenOn: '2026-10-02', thawedOn: null }] }),
+      bean({ beanName: 'Frozen', frozen: true, freezePeriods: [{ id: '2', frozenOn: '2026-10-02', thawedOn: null }] }),
     ];
     expect(order(beans, 'frozen_asc')).toEqual(['Frozen', 'Thawed', 'Never']);
     expect(freezeState(beans[0]!)).toBe('never');
+  });
+
+  it('follows the frozen flag, not the order of the periods', () => {
+    // A refreeze on the same date: the open period may come back first.
+    const periods = [
+      { id: 'b', frozenOn: '2026-10-05', thawedOn: null },
+      { id: 'a', frozenOn: '2026-10-05', thawedOn: '2026-10-05' },
+    ];
+    expect(freezeState(bean({ frozen: true, freezePeriods: periods }))).toBe('frozen');
   });
 
   it('sorts by rating, stock, decaf and process, breaking ties by name', () => {
@@ -122,5 +132,18 @@ describe('bean sorting', () => {
     ]);
     expect(sortColumnOptions(BEAN_SORT_COLUMNS).find((c) => c.value === 'name')).toMatchObject({ asc: 'Ascending (A–Z)' });
     expect(sortColumnOptions(BEAN_SORT_COLUMNS).find((c) => c.value === 'roast')).toMatchObject({ asc: 'Ascending (lightest first)', desc: 'Descending (darkest first)' });
+  });
+});
+
+describe('freeze periods', () => {
+  it('puts the open period first, then by thaw date, like the API', () => {
+    const periods = [
+      { id: 'old', frozenOn: '2026-10-01', thawedOn: '2026-10-03' },
+      { id: 'open', frozenOn: '2026-10-08', thawedOn: null },
+      { id: 'mid', frozenOn: '2026-10-04', thawedOn: '2026-10-06' },
+    ];
+    expect(periodsLatestFirst(periods).map((p) => p.id)).toEqual(['open', 'mid', 'old']);
+    expect(latestThaw(periods)).toBe('2026-10-06');
+    expect(latestThaw([])).toBe('');
   });
 });

@@ -1,0 +1,1 @@
+ALTER TABLE `brew_logs` ADD `utc_offset_minutes` int;

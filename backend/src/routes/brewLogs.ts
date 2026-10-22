@@ -86,6 +86,9 @@ const brewLogFields = {
     .transform((s) => new Date(s))
     .refine((d) => d.getTime() <= Date.now() + FUTURE_SKEW_MS, "can't be more than 5 minutes in the future")
     .optional(),
+  // The logging device's UTC offset (minutes, -420 = PDT): the worker's local
+  // brew date for roast age (docs/api/brew-logs.md §6). UTC-12 to UTC+14.
+  utcOffsetMinutes: z.number().int().min(-720).max(840).nullable().optional(),
   actualDoseGrams: decimalSchema({ min: 0, max: 1000, scale: 2, exclusiveMin: true, exclusiveMax: true }),
   // Required, except null for espresso (espressoError).
   actualWaterGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
@@ -257,6 +260,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       servingSize: brewLogs.servingSize,
       servingUnit: brewLogs.servingUnit,
       timestamp: brewLogs.timestamp,
+      utcOffsetMinutes: brewLogs.utcOffsetMinutes,
       actualDoseGrams: brewLogs.actualDoseGrams,
       actualWaterGrams: brewLogs.actualWaterGrams,
       actualYieldGrams: brewLogs.actualYieldGrams,
