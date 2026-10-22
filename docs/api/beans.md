@@ -15,8 +15,10 @@
     { "id": "uuid", "frozenOn": "2026-10-15", "thawedOn": null }
   ]
   ```
-  A bean is frozen when its last period has `thawedOn: null`. Every endpoint
-  that returns a bean includes `freezePeriods`.
+  Every endpoint that returns a bean includes `freezePeriods` and `frozen`
+  (boolean): `true` while a period is open (`thawedOn: null`). `frozen` is
+  worked out from the periods, not stored, so the two always agree; clients
+  read it instead of looking at the order of the periods.
 
   The list includes archived beans: `archivedAt` is when the bean was
   archived, or `null` while it's active. `createdAt` is when it was added
@@ -175,3 +177,30 @@ Ends the open freeze period.
 - **Success (`200 OK`):** `{ "bean": { ...bean } }`
 - **Errors:** `400` invalid date or rule broken; `403` viewer; `404` bean not
   in this workspace; `409` not frozen.
+
+## `PATCH /api/workspaces/:workspaceId/beans/:beanId/freezes/latest`
+
+Corrects the latest freeze period: the open one, else the one thawed last
+(periods never overlap). Ages everywhere, including the AI's, are worked out
+from the periods, so a correction applies to past brews too.
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:** `{ "frozenOn"?: "2026-10-03", "thawedOn"?: "2026-10-10" | null }`
+  (at least one). `thawedOn: null` un-thaws: the bean is frozen again from
+  the same period.
+- **Rules:** `frozenOn` can't be before the roast date or the previous
+  period's `thawedOn`; `thawedOn` can't be before `frozenOn`; neither can be
+  more than one day after the server's current date.
+- **Success (`200 OK`):** `{ "bean": { ...bean } }`
+- **Errors:** `400` invalid body or rule broken; `403` viewer; `404` bean not
+  in this workspace, or it has no freeze periods.
+
+## `DELETE /api/workspaces/:workspaceId/beans/:beanId/freezes/latest`
+
+Deletes the latest freeze period (e.g. a freeze recorded by mistake); its
+days count toward the roast age again. The period before it, if any, becomes
+the latest.
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Success (`200 OK`):** `{ "bean": { ...bean } }`
+- **Errors:** `403` viewer; `404` bean not in this workspace, or no periods.

@@ -536,6 +536,8 @@ async function save(): Promise<void> {
       drinkId: drink.value?.id ?? null,
       servingSize: drink.value ? (madeSize.value?.size ?? null) : null,
       servingUnit: drink.value ? (madeSize.value?.unit ?? null) : null,
+      // So the AI dates the brew by this device's calendar day, like freeze dates.
+      utcOffsetMinutes: -new Date().getTimezoneOffset(),
       ...values,
       // The steps' real times, plus the first drop from the log's field. A time
       // typed shorter than a tap drops that tap.

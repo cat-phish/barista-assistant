@@ -9,6 +9,7 @@ export interface BrewLogInput {
   servingSize?: number | null; // the size made; with servingUnit, only with a drink
   servingUnit?: ServingUnit | null;
   marks?: Mark[]; // espresso only; PATCH replaces the list
+  utcOffsetMinutes?: number | null; // this device's offset, for the local brew date (§6)
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso
   actualYieldGrams: number | null;

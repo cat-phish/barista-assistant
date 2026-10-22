@@ -62,6 +62,8 @@ services:
       - REDIS_PASSWORD_FILE=/run/secrets/redis_password
       - OPENAI_API_KEY_FILE=/run/secrets/openai_api_key
       - OPENAI_MODEL=${OPENAI_MODEL}
+      # Zone for brews logged without a UTC offset (older ones); empty = UTC.
+      - BREW_TIMEZONE=${BREW_TIMEZONE:-}
     secrets:
       - db_password
       - redis_password

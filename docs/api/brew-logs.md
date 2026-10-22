@@ -126,6 +126,11 @@ account. Such logs can only be edited or deleted by owners.
   - `timestamp` is optional (default: now). Backdating is allowed so a brew
     can be logged afterwards, but it can't be more than 5 minutes in the
     future (allowing for clock skew).
+  - `utcOffsetMinutes` (optional, nullable): the logging device's offset
+    from UTC in minutes, from −720 to 840 (e.g. `-420` for PDT). The worker
+    uses it to get the brew's local calendar date, which roast age is
+    counted to (§9), since roast and freeze dates are local dates. Clients
+    send `-new Date().getTimezoneOffset()`. Returned on every brew log.
   - Grams and °C follow the recipe rules in §5 (`actualDoseGrams` 0–1000,
     `actualWaterGrams` 0–10000, both > 0, max 2 decimals; `actualTempC` 0–100,
     max 1 decimal, nullable).

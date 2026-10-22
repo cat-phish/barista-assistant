@@ -101,6 +101,19 @@ describe("brew logs", () => {
     expect((await owner.agent.post(base).send({ ...brew, timestamp: "2026-10-01T08:00:00-07:00" })).body.brewLog.timestamp).toBe("2026-10-01T15:00:00.000Z");
   });
 
+  it("records the device's UTC offset for the local brew date", async () => {
+    const { owner, ws } = await setup();
+    const bean = await newBean(owner, ws.id);
+    const base = `/api/workspaces/${ws.id}/brew-logs`;
+    const brew = { beanId: bean, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150 };
+    const created = await owner.agent.post(base).send({ ...brew, utcOffsetMinutes: -420 });
+    expect(created.body.brewLog.utcOffsetMinutes).toBe(-420);
+    expect((await owner.agent.post(base).send(brew)).body.brewLog.utcOffsetMinutes).toBeNull();
+    for (const utcOffsetMinutes of [841, -721, 1.5, "60"]) {
+      expect((await owner.agent.post(base).send({ ...brew, utcOffsetMinutes })).status, String(utcOffsetMinutes)).toBe(400);
+    }
+  });
+
   it("lists newest first with filters and paging", async () => {
     const { owner, ws } = await setup();
     const a = await newBean(owner, ws.id);
