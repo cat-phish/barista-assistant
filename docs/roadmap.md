@@ -263,3 +263,29 @@ Branch `menu-builder`, migration 0033 (`api/menu.md` §7b, §7).
 - **Next (part 2):** brewers grouped by method (Filter, Espresso and a new
   Stovetop) instead of categories, drink categories for drinks only, and
   dropping the old menu columns.
+
+## Categories rethink, part 2: brewers have methods, drinks have categories (built)
+
+Branch `brewer-methods`, migration 0034. Brewers could still pick a drink
+category: that's how a V60 appeared under "Filter" when brewing, and a brewer
+could even be put in "Specialty Drinks". The method already said that, and the
+brew page then repeated it again with "Just filter coffee".
+
+- **Brewers have a method only:** Filter, Espresso, and the new **Stovetop**
+  (moka pot, ibrik; styles `moka`, `ibrik`, `other`) and **Other** (style
+  `other`). Stovetop and Other use filter's recipe rules and timer. They lost
+  `categoryId` and the old menu fields (`menuName`, `description`,
+  `showOnPublicMenu`; the menu builder holds those since part 1). Drinks lost
+  `showOnPublicMenu`. Brewer and drink create/update are strict, so old
+  clients sending these get a 400.
+- **Categories are for drinks only.** The migration deleted categories that
+  no drink used (yours: Filter and Espresso) and renumbered the rest.
+- **The brew page:** "What are you making?" lists the methods that have active
+  brewers, then the drink categories in order, then "Other drinks", then
+  "Something else". A method goes to Brewer, then Recipe (no "Just filter").
+  A category goes to Drink, then Brewer, then Recipe, as before.
+- **The Brewers list** shows a Recipes count where Category was.
+- **The AI** is told how to read stovetop and other brews.
+- **Backlog:** item 2 now includes editable brewer methods (custom ones based
+  on filter or espresso behaviour). New item 7 asks where drink categories
+  should live.

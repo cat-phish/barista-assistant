@@ -78,7 +78,6 @@ describe("drinks", () => {
       category: null,
       parent: null,
       variants: [],
-      showOnPublicMenu: true,
       defaultRecipeId: v60b,
       servingSize: null,
       servingUnit: null,
@@ -118,7 +117,10 @@ describe("drinks", () => {
     expect(moved).toMatchObject({ kind: "espresso", defaultRecipeId: null });
     expect((await owner.agent.patch(url).send({ defaultRecipeId: shot })).body.drink.defaultRecipeId).toBe(shot);
     expect((await owner.agent.patch(url).send({ kind: "filter", defaultRecipeId: v60a })).body.drink.defaultRecipeId).toBe(v60a);
-    expect((await owner.agent.patch(url).send({ showOnPublicMenu: false, description: "" })).body.drink).toMatchObject({ showOnPublicMenu: false, description: null });
+    expect((await owner.agent.patch(url).send({ description: "" })).body.drink).toMatchObject({ description: null });
+    // The menu builder places drinks now (§7b): the old flag is refused.
+    expect((await owner.agent.patch(url).send({ showOnPublicMenu: false })).status).toBe(400);
+    expect((await owner.agent.post(`${base}/drinks`).send({ name: "Old client", kind: "filter", showOnPublicMenu: true })).status).toBe(400);
   });
 
   it("deleting a recipe clears it as a default", async () => {
@@ -262,11 +264,8 @@ describe("drink categories", () => {
 
     const drink = (await owner.agent.post(`${base}/drinks`).send({ name: "Latte", kind: "espresso", categoryId: milk.id })).body.drink;
     expect(drink.category).toEqual({ id: milk.id, name: "Espresso milk drinks" });
-    await owner.agent.patch(`${base}/brewers/${v60}`).send({ categoryId: milk.id });
     expect((await owner.agent.delete(`${url}/${milk.id}`)).status).toBe(204);
     expect((await owner.agent.get(`${base}/drinks`)).body.drinks[0].category).toBeNull();
-    const methods = (await owner.agent.get(`${base}/brewers`)).body.brewers as Array<{ id: string; categoryId: string | null }>;
-    expect(methods.find((m) => m.id === v60)?.categoryId).toBeNull();
     expect((await owner.agent.delete(`${url}/${milk.id}`)).status).toBe(404);
   });
 });

@@ -26,9 +26,36 @@ describe("method kinds", () => {
     );
     expect(kinds).toEqual({ Aeropress: "filter", Espresso: "espresso", V60: "filter" });
     expect((await owner.agent.post(base).send({ name: "Chemex" })).body.brewer.kind).toBe("filter");
-    expect((await owner.agent.post(base).send({ name: "OXO", style: "immersion" })).status).toBe(201); // style lives on recipes now: ignored
+    expect((await owner.agent.post(base).send({ name: "OXO", style: "immersion" })).status).toBe(400); // style lives on recipes
     expect((await owner.agent.post(base).send({ name: "Lever", kind: "espresso" })).body.brewer).toMatchObject({ kind: "espresso" });
-    expect((await owner.agent.post(base).send({ name: "Siphon", kind: "vacuum" })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ name: "Bialetti", kind: "stovetop" })).body.brewer).toMatchObject({ kind: "stovetop" });
+    expect((await owner.agent.post(base).send({ name: "Siphon", kind: "other" })).body.brewer).toMatchObject({ kind: "other" });
+    expect((await owner.agent.post(base).send({ name: "Mystery", kind: "vacuum" })).status).toBe(400);
+  });
+
+  it("stovetop and other recipes follow filter's rules, with their own styles", async () => {
+    const { owner, ws } = await setup();
+    const brewer = async (name: string, kind: string) =>
+      (await owner.agent.post(`/api/workspaces/${ws.id}/brewers`).send({ name, kind })).body.brewer.id as string;
+    const moka = await brewer("Bialetti", "stovetop");
+    const siphon = await brewer("Hario siphon", "other");
+    const recipes = `/api/workspaces/${ws.id}/recipes`;
+    const recipe = (brewerId: string, extra: Record<string, unknown>) =>
+      owner.agent.post(recipes).send({ name: `R ${Math.random()}`, brewerId, targetDoseGrams: 15, ...extra });
+    // Dose + water, like filter.
+    expect((await recipe(moka, { style: "moka" })).status).toBe(400); // needs water
+    const created = await recipe(moka, { targetWaterGrams: 150, style: "moka" });
+    expect(created.status).toBe(201);
+    expect(created.body.recipe).toMatchObject({ style: "moka", brewer: { kind: "stovetop" } });
+    expect((await recipe(moka, { targetWaterGrams: 150, style: "ibrik" })).status).toBe(201);
+    expect((await recipe(moka, { targetWaterGrams: 150, style: "soup" })).status).toBe(400); // an espresso style
+    expect((await recipe(moka, { targetWaterGrams: 150, style: "pour_over" })).status).toBe(400); // a filter style
+    expect((await recipe(siphon, { targetWaterGrams: 300, style: "other" })).status).toBe(201);
+    expect((await recipe(siphon, { targetWaterGrams: 300, style: "moka" })).status).toBe(400);
+    // Drinks can need either method.
+    const drinks = `/api/workspaces/${ws.id}/drinks`;
+    expect((await owner.agent.post(drinks).send({ name: "Moka latte", kind: "stovetop" })).body.drink.kind).toBe("stovetop");
+    expect((await owner.agent.post(drinks).send({ name: "Siphon special", kind: "other" })).body.drink.kind).toBe("other");
   });
 
   it("kind can't change while recipes use the method; renames keep the kind", async () => {
@@ -47,20 +74,16 @@ describe("method kinds", () => {
       preinfusion: "none",
       flowControl: "none",
       pressureControl: "none",
-      menuName: null,
-      description: null,
-      categoryId: null,
-      showOnPublicMenu: false,
       retiredAt: null,
       createdAt: expect.any(String),
     });
     expect((await owner.agent.patch(`${base}/${v60}`).send({})).status).toBe(400);
-    // Menu fields (docs/api/brewers.md §3): the plain brew on the public menu.
-    const menu = await owner.agent.patch(`${base}/${v60}`).send({ showOnPublicMenu: true, description: " Fruity " });
-    expect(menu.body.brewer).toMatchObject({ showOnPublicMenu: true, description: "Fruity" });
-    const fake = "00000000-0000-4000-8000-000000000000";
-    expect((await owner.agent.patch(`${base}/${v60}`).send({ categoryId: fake })).body.error).toMatch(/not a category/);
-    expect((await owner.agent.post(base).send({ name: "Chemex", categoryId: fake })).status).toBe(400);
+    // Brewers have no category or menu fields (grouped by method; the menu
+    // builder places them, §7b): old clients sending them get a 400.
+    for (const field of [{ categoryId: null }, { menuName: "Espresso" }, { description: "Fruity" }, { showOnPublicMenu: true }]) {
+      expect((await owner.agent.patch(`${base}/${v60}`).send(field)).status, JSON.stringify(field)).toBe(400);
+      expect((await owner.agent.post(base).send({ name: "Chemex", ...field })).status, JSON.stringify(field)).toBe(400);
+    }
   });
 });
 

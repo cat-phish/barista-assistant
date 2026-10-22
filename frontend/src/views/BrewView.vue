@@ -17,21 +17,19 @@ import { drinkCategoriesApi } from '../api/drinkCategories';
 import { ingredientLine } from '../lib/drinks';
 import {
   brewable,
-  categoryOptions,
-  decodeCategory,
   brewerOptions,
   decodeItem,
-  encodeCategory,
+  decodeWhat,
   encodeDrink,
-  encodePlain,
   itemOptions,
   itemValues,
   NO_RECIPE,
   pickBrewer,
   pickRecipe,
   recipeOptions,
-  validCategory,
   validItem,
+  validWhat,
+  whatOptions,
 } from '../lib/brewChoice';
 import type { Brewer, Drink, DrinkCategory, Grinder, Mark, MethodKind, ServingUnit } from '../api/types';
 import { METHOD_KINDS, RECIPE_STYLES } from '../lib/equipment';
@@ -71,14 +69,15 @@ const recipeId = ref('');
 // docs/api/drinks.md §5c). Or no recipe.
 const drinks = ref<Drink[]>([]);
 const categories = ref<DrinkCategory[]>([]);
-const what = ref(NO_RECIPE); // the category
-const item = ref(''); // a drink, or a plain brew of a kind
+const what = ref(NO_RECIPE); // a brew method or a drink category
+const item = ref(''); // a drink, or the method's plain brew (set by itself)
 const brewerId = ref('');
 const options = computed(() => brewable(brewers.value, drinks.value));
-const categoryList = computed(() => categoryOptions(options.value, categories.value));
-const categoryId = computed(() => decodeCategory(what.value)?.categoryId ?? null);
-const items = computed(() => (decodeCategory(what.value) ? itemOptions(options.value, categoryId.value) : { plains: [], drinks: [] }));
-const chosenCategory = computed(() => (decodeCategory(what.value) ? (categoryList.value.find((x) => x.id === categoryId.value) ?? null) : null));
+const whatList = computed(() => whatOptions(options.value, categories.value));
+const whatChoice = computed(() => decodeWhat(what.value));
+const items = computed(() => itemOptions(options.value, whatChoice.value));
+// The chosen drink category (null for a method or "Something else").
+const chosenCategory = computed(() => (whatChoice.value?.kind === 'category' ? (whatList.value.find((x) => x.value === what.value) ?? null) : null));
 const chosen = computed(() => decodeItem(item.value));
 const drink = computed(() => {
   const c = chosen.value;
@@ -86,7 +85,7 @@ const drink = computed(() => {
 });
 // The kind of coffee being made: the plain brew's, or the drink's.
 const itemKind = computed<MethodKind | null>(() => (chosen.value?.kind === 'plain' ? chosen.value.method : (drink.value?.kind ?? null)));
-const brewerList = computed(() => brewerOptions(options.value, categoryId.value, chosen.value, drinks.value));
+const brewerList = computed(() => brewerOptions(options.value, chosen.value, drinks.value));
 const recipeChoices = computed(() => recipeOptions(brewerId.value || null, recipes.value));
 // Drinks name their kind when a category mixes them ("The Atlas · pour over").
 const mixedKinds = computed(() => new Set(items.value.drinks.map((d) => d.drink.kind)).size > 1);
@@ -191,7 +190,7 @@ onMounted(async () => {
     if (beans.value.length === 1) beanId.value = beans.value[0]?.id ?? '';
     const saved = recall('grinderId');
     if (saved && activeGrinders.value.some((x) => x.id === saved)) draft.grinderId = saved;
-    what.value = validCategory(recall('brewWhat'), categoryList.value); // the last category, if it still has something
+    what.value = validWhat(recall('brewWhat'), whatList.value); // the last choice, if it's still offered
   } catch (err) {
     loadError.value = errorMessage(err);
   } finally {
@@ -607,28 +606,21 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         <div class="field">
           <label for="what">What are you making?</label>
           <select id="what" v-model="what">
-            <option v-for="c in categoryList" :key="c.id ?? ''" :value="encodeCategory(c.id)">{{ c.name }}</option>
+            <option v-for="c in whatList" :key="c.value" :value="c.value">{{ c.name }}</option>
             <option :value="NO_RECIPE">Something else (no recipe)</option>
           </select>
         </div>
         <div v-if="chosenCategory?.empty" class="card empty-category" role="status">
           <p>Nothing in {{ chosenCategory.name }} yet.</p>
           <p class="muted small">
-            <RouterLink v-if="workspaces.canEdit" :to="{ name: 'drink-new', query: { category: chosenCategory.id } }">Add a drink</RouterLink
-            ><template v-else>Add a drink</template> to it (a V60 or espresso drink with ingredients, say), or put a brewer in it under
-            <RouterLink :to="{ name: 'brewers' }">Bar setup → Brewers</RouterLink>.
+            <RouterLink v-if="workspaces.canEdit" :to="{ name: 'drink-new', query: { category: chosenCategory.categoryId ?? undefined } }">Add a drink</RouterLink
+            ><template v-else>Add a drink</template> to it (a V60 or espresso drink with ingredients, say). For a plain brew, pick its method above.
           </p>
         </div>
-        <div v-else-if="decodeCategory(what)" class="field">
+        <div v-else-if="chosenCategory" class="field">
           <label for="item">Drink</label>
           <select id="item" v-model="item">
-            <option v-for="k in items.plains" :key="k" :value="encodePlain(k)">{{ k === 'filter' ? 'Just filter coffee' : 'Just espresso' }}</option>
-            <optgroup v-if="items.plains.length && items.drinks.length" label="Drinks">
-              <option v-for="d in items.drinks" :key="d.drink.id" :value="encodeDrink(d.drink.id)">{{ '\u2003'.repeat(d.depth) }}{{ drinkLabel(d.drink) }}</option>
-            </optgroup>
-            <template v-else>
-              <option v-for="d in items.drinks" :key="d.drink.id" :value="encodeDrink(d.drink.id)">{{ '\u2003'.repeat(d.depth) }}{{ drinkLabel(d.drink) }}</option>
-            </template>
+            <option v-for="d in items.drinks" :key="d.drink.id" :value="encodeDrink(d.drink.id)">{{ '\u2003'.repeat(d.depth) }}{{ drinkLabel(d.drink) }}</option>
           </select>
         </div>
         <div v-if="chosen && brewerList.length" class="field">

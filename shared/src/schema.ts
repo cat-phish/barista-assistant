@@ -162,24 +162,32 @@ export type ProfileControl = (typeof PROFILE_CONTROLS)[number];
 // A V60, French press, AeroPress, OXO Rapid Brewer or an espresso machine.
 // Seeded with DEFAULT_BREWERS when a workspace is created; owners and baristas
 // may add more. Recipes belong to a brewer.
-// - `kind`, the brew method (METHOD_KINDS: filter or espresso), decides which
-//   recipe fields apply, the steps and the timer (docs/api/README.md §3, §5),
-//   and which drinks the brewer can make (a drink needs a method, 7d).
-// How a cup is brewed (pour over, immersion, soup shot…) is the recipe's
+// - `kind`, the brew method (METHOD_KINDS), is how brewers are grouped (they
+//   have no category) and decides which recipe fields apply, the steps and
+//   the timer (docs/api/README.md §3, §5), and which drinks the brewer can make
+//   (a drink needs a method, 7d). Espresso has its own fields; filter,
+//   stovetop (moka pot, ibrik) and other all use filter's (dose + water).
+// How a cup is brewed (pour over, immersion, soup shot, moka…) is the recipe's
 // `style`, not the brewer's: one brewer can do several.
 // Espresso brewers also record what the barista controls (pre-infusion, flow,
-// pressure); the shot timer and the AI use it. A brewer can appear on the
-// public menu as the plain brew, under menuName if set ("Espresso" for a Linea
-// Mini). Retired like grinders once brews used it.
-export const METHOD_KINDS = ["filter", "espresso"] as const;
+// pressure); the shot timer and the AI use it. The public menu places brewers
+// through the menu builder (7e). Retired like grinders once brews used it.
+export const METHOD_KINDS = ["filter", "espresso", "stovetop", "other"] as const;
 export type MethodKind = (typeof METHOD_KINDS)[number];
 // A recipe's style, by its brewer's method: how the cup is brewed. Descriptive
 // (lists, the AI); it changes no fields or timer behaviour.
 export const FILTER_STYLES = ["pour_over", "immersion", "hybrid", "cold_brew", "other"] as const;
 export const ESPRESSO_STYLES = ["standard", "soup", "other"] as const;
-export const RECIPE_STYLES = ["pour_over", "immersion", "hybrid", "cold_brew", "standard", "soup", "other"] as const;
+export const STOVETOP_STYLES = ["moka", "ibrik", "other"] as const;
+export const OTHER_STYLES = ["other"] as const;
+export const RECIPE_STYLES = ["pour_over", "immersion", "hybrid", "cold_brew", "standard", "soup", "moka", "ibrik", "other"] as const;
 export type RecipeStyle = (typeof RECIPE_STYLES)[number];
-export const STYLES_BY_KIND: Record<MethodKind, readonly RecipeStyle[]> = { filter: FILTER_STYLES, espresso: ESPRESSO_STYLES };
+export const STYLES_BY_KIND: Record<MethodKind, readonly RecipeStyle[]> = {
+  filter: FILTER_STYLES,
+  espresso: ESPRESSO_STYLES,
+  stovetop: STOVETOP_STYLES,
+  other: OTHER_STYLES,
+};
 export const DEFAULT_BREWERS = [
   { name: "V60", kind: "filter" },
   { name: "Espresso", kind: "espresso" },
@@ -200,11 +208,6 @@ export const brewers = mysqlTable(
     preinfusion: varchar("preinfusion", { length: 20 }).$type<Preinfusion>().default("none").notNull(),
     flowControl: varchar("flow_control", { length: 20 }).$type<ProfileControl>().default("none").notNull(),
     pressureControl: varchar("pressure_control", { length: 20 }).$type<ProfileControl>().default("none").notNull(),
-    // Menu: the plain brew, with a category (also its brew-setup group).
-    menuName: varchar("menu_name", { length: 100 }), // null = name
-    description: varchar("description", { length: 500 }),
-    categoryId: varchar("category_id", { length: 36 }).references(() => drinkCategories.id, { onDelete: "set null" }),
-    showOnPublicMenu: boolean("show_on_public_menu").default(false).notNull(),
     retiredAt: timestamp("retired_at"), // null = active
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
@@ -279,7 +282,7 @@ export const recipes = mysqlTable("recipes", {
   targetTempC: decimal("target_temp_c", { precision: 4, scale: 1, mode: "number" }),
   // How the cup is brewed: one of STYLES_BY_KIND[brewer's kind] (the API), or null.
   style: varchar("style", { length: 20 }).$type<RecipeStyle>(),
-  // Recipes reach the public menu through their method or drinks (7d).
+  // Recipes aren't on the public menu; drinks and brewers are (7e).
   // Grind is per grinder: see recipeGrindSettings. The default grinder is
   // preselected when brewing this recipe (else the last one used); deleting
   // the grinder clears it.
@@ -377,9 +380,10 @@ export const ingredients = mysqlTable(
 );
 
 // 7c. Drink Categories (Ordered Groups on the Brew Page)
-// Group drinks and plain brew methods in the brew picker, e.g. "Espresso
-// milk drinks", "Specialty drinks". The public menu has its own sections
-// (7e). Deleting one leaves its drinks and methods uncategorised.
+// Group drinks in the brew picker, after the brew methods: e.g. "Espresso
+// milk drinks", "Specialty drinks". For drinks only; brewers are grouped by
+// method. The public menu has its own sections (7e). Deleting one leaves its
+// drinks uncategorised.
 export const drinkCategories = mysqlTable(
   "drink_categories",
   {
@@ -400,7 +404,7 @@ export const drinkCategories = mysqlTable(
 export const SERVING_UNITS = ["fl_oz", "ml"] as const;
 export type ServingUnit = (typeof SERVING_UNITS)[number];
 
-// 7d. Drinks (What's Served; the Public Menu)
+// 7d. Drinks (What's Served; the Menu Builder Places Them, 7e)
 // A drink needs a kind of coffee (METHOD_KINDS), not a particular device: any
 // active brewer of that kind can make it, with that brewer's recipes (the
 // default, a recipe of the kind, is preselected), finished with ingredients:
@@ -430,7 +434,6 @@ export const drinks = mysqlTable("drinks", {
   // How to make it, shown after the brew: "Add the syrup to the cup, pull the
   // shot onto it, steam the milk and pour." Free text.
   instructions: text("instructions"),
-  showOnPublicMenu: boolean("show_on_public_menu").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

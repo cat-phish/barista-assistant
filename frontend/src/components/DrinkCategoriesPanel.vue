@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Drink categories (docs/api/drink-categories.md §5d): the brew page's groups. Add,
-// rename, move up/down, delete (its drinks and brewers become uncategorised).
+// rename, move up/down, delete (its drinks become uncategorised).
 import { ref } from 'vue';
 import { ApiError, errorMessage } from '../api/client';
 import { drinkCategoriesApi } from '../api/drinkCategories';
@@ -69,7 +69,7 @@ async function confirmDelete(): Promise<void> {
 <template>
   <section class="card stack" aria-labelledby="categories-title">
     <h2 id="categories-title">Categories</h2>
-    <p class="muted small">What you pick first when you brew, in this order. The public menu has its own sections, in the Menu tab. Drinks and brewers can each be in one, and a category can mix brewers: Specialty Drinks might hold a V60 drink and an espresso drink.</p>
+    <p class="muted small">Listed under "What are you making?" after the brew methods, in this order. A drink can be in one, and a category can mix methods: Specialty Drinks might hold a V60 drink and an espresso drink. The public menu has its own sections, in the Menu tab.</p>
     <ol v-if="categories.length" class="categories">
       <li v-for="(c, i) in categories" :key="c.id">
         <form v-if="editingId === c.id" class="row" novalidate @submit.prevent="saveEdit(c)">
@@ -99,7 +99,7 @@ async function confirmDelete(): Promise<void> {
   </section>
 
   <ConfirmDialog :open="pending !== null" title="Delete this category?" @cancel="pending = null">
-    <p>{{ pending?.name }} will be removed. Its drinks and brewers stay, uncategorised.</p>
+    <p>{{ pending?.name }} will be removed. Its drinks stay, uncategorised.</p>
     <template #actions>
       <button class="btn btn-danger" type="button" :disabled="busy" @click="confirmDelete">Delete</button>
       <button class="btn btn-secondary" type="button" :disabled="busy" @click="pending = null">Cancel</button>

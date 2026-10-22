@@ -4,21 +4,23 @@
 > [README.md](README.md); a bare `§N` refers to that index.
 
 What makes the coffee: a V60, a French press, an AeroPress, an OXO Rapid
-Brewer, an espresso machine. Recipes (§5) belong to a brewer from their
-workspace's list. Two separate ideas describe a brewer (how a cup is brewed,
-pour over or a soup shot, is the recipe's `style`, §5):
+Brewer, an espresso machine, a moka pot. Recipes (§5) belong to a brewer from
+their workspace's list. How a cup is brewed (pour over, a soup shot, moka) is
+the recipe's `style` (§5).
 
-- **Brew method** (`kind`, one of `METHOD_KINDS`): fixed, and it changes how
-  the app works. It decides the recipe fields, steps and timer, and which
+- **Brew method** (`kind`, one of `METHOD_KINDS`): how brewers are grouped
+  (brewers have no category; categories are for drinks, §5d), and it changes
+  how the app works. It decides the recipe fields, steps and timer, and which
   drinks the brewer can make (a drink needs a method, §5c).
 
   | `kind` | Examples | Recipe fields (§5) |
   |---|---|---|
   | `filter` | V60, Chemex, French press, AeroPress, OXO Rapid Brewer | dose + water, estimated yield, steps with pours |
   | `espresso` | Linea Mini, Gaggia Classic | dose + target yield (no water), shot time and first-drop windows |
+  | `stovetop` | Moka pot, ibrik | as filter |
+  | `other` | Siphon, anything else | as filter |
 
-- **Category** (`categoryId`, §5d): your own grouping for the brew page and
-  the menu, e.g. "Pour Over/Immersion".
+  Making the list editable (custom methods based on these) is backlog item 2.
 
 New workspaces get V60 (`filter`), Espresso (`espresso`) and Aeropress
 (`filter`). Milk drinks like a latte are drinks (§5c):
@@ -34,12 +36,11 @@ adjusted. Other kinds keep `none`.
 | `preinfusion` | `none`, `automatic` (the machine does it), `manual` (paddle, lever or button) — `PREINFUSION_MODES` |
 | `flowControl`, `pressureControl` | `none`, `manual` (paddle, lever, needle valve), `programmable` (profiles) — `PROFILE_CONTROLS` |
 
-**Category and menu:** a brewer's optional drink category (§5d) is where it's
-listed when brewing (Category → Drink or plain brew → Brewer → Recipe). The
-public menu shows a brewer's plain brew only where the menu builder (§7b)
-places it, under the item's name (e.g. "Espresso" for a Linea Mini).
-`menuName`, `description` and `showOnPublicMenu` are no longer used by the
-menu (migration 0033 copied them into menu items) and will be removed.
+**Brewing and the menu:** when brewing, "What are you making?" lists the
+methods that have active brewers; picking one asks for the brewer, then its
+recipe. The public menu shows a brewer's plain brew only where the menu
+builder (§7b) places it, under the item's name (e.g. "Espresso" for a Linea
+Mini).
 
 Retiring works like grinders (§3b): retired brewers leave the pickers, and
 past brews keep showing them. `createdAt` (read-only) is when the brewer was added.
@@ -55,10 +56,6 @@ past brews keep showing them. `createdAt` (read-only) is when the brewer was add
   "preinfusion": "manual",
   "flowControl": "manual",
   "pressureControl": "none",
-  "menuName": "Espresso",
-  "description": null,
-  "categoryId": "uuid",
-  "showOnPublicMenu": true,
   "retiredAt": null,
   "createdAt": "2026-10-18T09:00:00.000Z"
 }
@@ -75,11 +72,11 @@ past brews keep showing them. `createdAt` (read-only) is when the brewer was add
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Body:** `{ "name": "Chemex", "kind": "filter" }` (`name` trimmed,
   1–100 chars; `kind` optional, default `filter`). Optional: `notes`
-  (≤ 255), the capabilities (default `none`), `menuName` (≤ 100),
-  `description` (≤ 500), `categoryId` (a drink category in this workspace,
-  or `null`), `showOnPublicMenu` (default `false`). Blank text becomes `null`.
+  (≤ 255) and the capabilities (default `none`). Blank text becomes `null`.
+  Unknown fields are rejected, including the removed `categoryId`,
+  `menuName`, `description` and `showOnPublicMenu`.
 - **Success (`201 Created`):** `{ "brewer": { ...brewer } }`
-- **Errors:** `400` invalid body or a category not in this workspace; `403`
+- **Errors:** `400` invalid body; `403`
   viewer; `409` a brewer with that name already exists in this workspace
   (case-insensitive).
 
@@ -92,8 +89,7 @@ Recipes and brew logs reference it by ID, so a rename shows up everywhere at onc
   `retired` (`true` retires it, keeping the first retirement date; `false`
   restores it).
 - **Success (`200 OK`):** `{ "brewer": { ...brewer } }`
-- **Errors:** `400` invalid or empty body, or a category not in this
-  workspace; `403` viewer; `404` not in this workspace; `409` another brewer
+- **Errors:** `400` invalid or empty body; `403` viewer; `404` not in this workspace; `409` another brewer
   already has that name (case-insensitive; changing only the case is
   allowed), or the kind would change while recipes use it (recipe fields
   differ by kind), with body `{ "error": "...", "recipeCount": 2 }`.

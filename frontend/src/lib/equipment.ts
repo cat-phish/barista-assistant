@@ -3,12 +3,16 @@ import type { BrewerInput } from '../api/brewers';
 import type { Brewer, BurrType, Grinder, GrinderAdjustment, GrinderDetails, GrinderPower, MachineCapabilities, MethodKind, Preinfusion, ProfileControl, RecipeStyle } from '../api/types';
 import { formatGrams, parseDecimal } from './format';
 
-// The brew method (docs/api/brewers.md §3): decides recipe fields, steps, the
-// timer, and which drinks a brewer can make.
+// The brew method (docs/api/brewers.md §3): how brewers are grouped, and it
+// decides recipe fields, steps, the timer, and which drinks a brewer can make.
+// In display order (the brew page lists methods this way).
 export const METHOD_KINDS: Record<MethodKind, { label: string; hint: string }> = {
-  filter: { label: 'Filter', hint: 'Dose and water: pour over, immersion, hybrid (V60, French press, AeroPress, OXO Rapid Brewer)' },
+  filter: { label: 'Filter', hint: 'Dose and water: pour over, immersion, hybrid, cold brew (V60, French press, AeroPress, OXO Rapid Brewer)' },
   espresso: { label: 'Espresso', hint: 'Dose and shot weight instead of water, with the shot timer' },
+  stovetop: { label: 'Stovetop', hint: 'Dose and water, on the stove: moka pot, ibrik' },
+  other: { label: 'Other', hint: 'Dose and water, for anything else (a siphon, say)' },
 };
+export const METHOD_ORDER = Object.keys(METHOD_KINDS) as MethodKind[];
 // How a recipe brews, by its brewer's method (docs/api/recipes.md §5):
 // descriptive only (lists, the AI).
 export const RECIPE_STYLES: Record<RecipeStyle, string> = {
@@ -18,11 +22,15 @@ export const RECIPE_STYLES: Record<RecipeStyle, string> = {
   cold_brew: 'Cold brew',
   standard: 'Standard',
   soup: 'Soup',
+  moka: 'Moka',
+  ibrik: 'Ibrik',
   other: 'Other',
 };
 export const STYLES_BY_KIND: Record<MethodKind, RecipeStyle[]> = {
   filter: ['pour_over', 'immersion', 'hybrid', 'cold_brew', 'other'],
   espresso: ['standard', 'soup', 'other'],
+  stovetop: ['moka', 'ibrik', 'other'],
+  other: ['other'],
 };
 // Every style in display order, for sorting.
 export const STYLE_ORDER = Object.keys(RECIPE_STYLES) as RecipeStyle[];
@@ -153,7 +161,6 @@ export interface BrewerForm extends MachineCapabilities {
   name: string;
   kind: MethodKind;
   notes: string;
-  categoryId: string;
 }
 
 export function brewerForm(m?: Brewer): BrewerForm {
@@ -164,7 +171,6 @@ export function brewerForm(m?: Brewer): BrewerForm {
     preinfusion: m?.preinfusion ?? 'none',
     flowControl: m?.flowControl ?? 'none',
     pressureControl: m?.pressureControl ?? 'none',
-    categoryId: m?.categoryId ?? '',
   };
 }
 export function brewerInput(f: BrewerForm): BrewerInput & { name: string } {
@@ -177,7 +183,5 @@ export function brewerInput(f: BrewerForm): BrewerInput & { name: string } {
     preinfusion: espresso ? f.preinfusion : 'none',
     flowControl: espresso ? f.flowControl : 'none',
     pressureControl: espresso ? f.pressureControl : 'none',
-    // How it shows on the public menu is set in the menu builder (§7b).
-    categoryId: f.categoryId || null,
   };
 }

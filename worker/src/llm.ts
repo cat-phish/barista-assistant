@@ -17,7 +17,10 @@ export const SYSTEM_PROMPT =
   "straight notes, and compare a brew mainly with earlier brews served the " +
   "same way (each brew's drink says how). Judge a brew against its recipe's " +
   "style: a soup shot is a long, high-ratio espresso on purpose, a cold brew " +
-  "steeps cold for hours, and an immersion brew isn't a pour over. The " +
+  "steeps cold for hours, and an immersion brew isn't a pour over. A " +
+  "stovetop brew (moka pot, ibrik) is a strong, short brew judged on its own " +
+  "terms, not as espresso; an 'other' method is described by its style and " +
+  "the notes. The " +
   "bean's roastType says what the roaster roasted it for: an espresso roast " +
   "brewed as filter (or the reverse) may need a different approach rather " +
   "than small corrections. Decaf and blends often extract differently from " +

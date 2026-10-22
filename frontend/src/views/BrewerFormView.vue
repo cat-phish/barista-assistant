@@ -5,8 +5,6 @@ import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { brewersApi } from '../api/brewers';
 import { ApiError, errorMessage } from '../api/client';
-import { drinkCategoriesApi } from '../api/drinkCategories';
-import type { DrinkCategory } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import BrewerFields from '../components/BrewerFields.vue';
 import { brewerForm, brewerInput } from '../lib/equipment';
@@ -18,7 +16,6 @@ const router = useRouter();
 const editing = computed(() => props.id !== undefined);
 
 const form = ref(brewerForm());
-const categories = ref<DrinkCategory[]>([]);
 const loading = ref(true);
 const saving = ref(false);
 const submitted = ref(false);
@@ -38,8 +35,7 @@ onMounted(async () => {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [c, b] = await Promise.all([drinkCategoriesApi.list(ws), editing.value ? brewersApi.list(ws) : Promise.resolve(null)]);
-    categories.value = c.categories;
+    const b = editing.value ? await brewersApi.list(ws) : null;
     if (editing.value) {
       const brewer = b?.brewers.find((x) => x.id === props.id);
       if (!brewer) {
@@ -82,7 +78,7 @@ async function save(): Promise<void> {
     <p v-if="loading" class="muted" aria-live="polite">Loading…</p>
     <form v-else class="stack" novalidate @submit.prevent="save">
       <section class="card stack">
-        <BrewerFields v-model="form" id-prefix="brewer" :show-errors="submitted" :categories="categories" />
+        <BrewerFields v-model="form" id-prefix="brewer" :show-errors="submitted" />
       </section>
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
       <div class="buttons">
