@@ -424,6 +424,7 @@ async function confirmFreeze(): Promise<void> {
                   <button class="btn-link" type="button" @click="askFreeze(bean)">{{ openFreeze(bean) ? 'Thaw' : 'Freeze' }}</button>
                   <button class="btn-link" type="button" :disabled="busyId === bean.id" @click="askArchive(bean)">Archive</button>
                 </template>
+                <RouterLink class="btn-link" :to="{ name: 'bean-new', query: { from: bean.id } }">Duplicate</RouterLink>
                 <RouterLink class="btn-link" :to="{ name: 'bean-edit', params: { id: bean.id } }">Edit</RouterLink>
                 <button class="btn-link danger" type="button" @click="askDelete(bean)">Delete</button>
               </div>

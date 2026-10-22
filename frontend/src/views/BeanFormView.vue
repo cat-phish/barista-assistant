@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { beansApi, type BeanInput } from '../api/beans';
 import { errorMessage } from '../api/client';
 import AppHeader from '../components/AppHeader.vue';
 import RatingInput from '../components/RatingInput.vue';
 import { localDateInput, parseDecimal, toDateInput } from '../lib/format';
 import { useWorkspaceStore } from '../stores/workspace';
-import type { BeanProcess, BlendType, DetailedRoastLevel, RoastLevel, RoastType } from '../api/types';
+import type { Bean, BeanProcess, BlendType, DetailedRoastLevel, RoastLevel, RoastType } from '../api/types';
 import { ROAST_LEVELS } from '../lib/scale';
 import {
   BEAN_PROCESSES,
@@ -23,8 +23,13 @@ import {
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 
 const workspaces = useWorkspaceStore();
+const route = useRoute();
 const router = useRouter();
 const editing = computed(() => props.id !== undefined);
+// Duplicate (?from=<bean id>): a new bag of the same coffee. The original's
+// name, for the heading.
+const copyFrom = typeof route.query.from === 'string' && !editing.value ? route.query.from : null;
+const copyOf = ref<string | null>(null);
 
 const roasterName = ref('');
 const beanName = ref('');
@@ -54,7 +59,7 @@ const notes = ref('');
 const savedRoastLevel = ref<RoastLevel | null>(null);
 const savedDetailed = ref<DetailedRoastLevel | null>(null);
 
-const loading = ref(editing.value);
+const loading = ref(editing.value || copyFrom !== null);
 const saving = ref(false);
 const error = ref('');
 const submitted = ref(false); // show field errors only after a save attempt
@@ -109,39 +114,64 @@ const perGram = computed(() => {
   return p ? formatPricePerGram(p) : null;
 });
 
+function fill(bean: Bean): void {
+  roasterName.value = bean.roasterName;
+  beanName.value = bean.beanName;
+  process.value = bean.process ?? '';
+  producer.value = bean.producer ?? '';
+  region.value = bean.region ?? '';
+  altitude.value = bean.altitudeMasl === null ? '' : String(bean.altitudeMasl);
+  flavorProfile.value = bean.flavorProfile ?? '';
+  blendType.value = bean.blendType ?? '';
+  decaf.value = bean.decaf;
+  roastType.value = bean.roastType ?? '';
+  roastDate.value = toDateInput(bean.roastDate);
+  detailedRoastLevel.value = bean.detailedRoastLevel ?? '';
+  savedDetailed.value = bean.detailedRoastLevel;
+  savedRoastLevel.value = bean.roastLevel;
+  inventory.value = String(bean.inventoryWeightGrams);
+  price.value = bean.priceAmount === null ? '' : bean.priceAmount.toFixed(2);
+  currency.value = bean.priceCurrency ?? '';
+  bagWeight.value = bean.bagWeightGrams === null ? '' : String(bean.bagWeightGrams);
+  purchaseDate.value = bean.purchaseDate ?? '';
+  greenSupplier.value = bean.greenSupplier ?? '';
+  website.value = bean.website ?? '';
+  showOnPublicMenu.value = bean.showOnPublicMenu;
+  rating.value = bean.rating;
+  notes.value = bean.notes ?? '';
+}
+
+// A copy keeps the coffee and drops what belongs to one bag: roast and
+// purchase dates and the rating. Stock starts at the bag weight, if known.
+function fillCopy(bean: Bean): void {
+  fill(bean);
+  roastDate.value = '';
+  purchaseDate.value = '';
+  rating.value = null;
+  inventory.value = bean.bagWeightGrams === null ? '0' : String(bean.bagWeightGrams);
+  // Nothing is stored for the copy yet: an older bean's 5-step level (no
+  // roast name) is sent explicitly, else the API derives it from the name.
+  savedDetailed.value = null;
+  savedRoastLevel.value = bean.detailedRoastLevel ? null : bean.roastLevel;
+  copyOf.value = `${bean.roasterName} ${bean.beanName}`;
+}
+
 onMounted(async () => {
-  if (!editing.value) return;
+  if (!editing.value && !copyFrom) return;
   const ws = workspaces.current?.id;
   try {
-    const bean = ws ? (await beansApi.list(ws)).beans.find((b) => b.id === props.id) : undefined;
+    const list = ws ? (await beansApi.list(ws)).beans : [];
+    if (copyFrom) {
+      const from = list.find((b) => b.id === copyFrom);
+      if (from) fillCopy(from);
+      return; // gone: start a blank bean
+    }
+    const bean = list.find((b) => b.id === props.id);
     if (!bean) {
       error.value = 'This bean no longer exists.';
       return;
     }
-    roasterName.value = bean.roasterName;
-    beanName.value = bean.beanName;
-    process.value = bean.process ?? '';
-    producer.value = bean.producer ?? '';
-    region.value = bean.region ?? '';
-    altitude.value = bean.altitudeMasl === null ? '' : String(bean.altitudeMasl);
-    flavorProfile.value = bean.flavorProfile ?? '';
-    blendType.value = bean.blendType ?? '';
-    decaf.value = bean.decaf;
-    roastType.value = bean.roastType ?? '';
-    roastDate.value = toDateInput(bean.roastDate);
-    detailedRoastLevel.value = bean.detailedRoastLevel ?? '';
-    savedDetailed.value = bean.detailedRoastLevel;
-    savedRoastLevel.value = bean.roastLevel;
-    inventory.value = String(bean.inventoryWeightGrams);
-    price.value = bean.priceAmount === null ? '' : bean.priceAmount.toFixed(2);
-    currency.value = bean.priceCurrency ?? '';
-    bagWeight.value = bean.bagWeightGrams === null ? '' : String(bean.bagWeightGrams);
-    purchaseDate.value = bean.purchaseDate ?? '';
-    greenSupplier.value = bean.greenSupplier ?? '';
-    website.value = bean.website ?? '';
-    showOnPublicMenu.value = bean.showOnPublicMenu;
-    rating.value = bean.rating;
-    notes.value = bean.notes ?? '';
+    fill(bean);
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -177,6 +207,8 @@ async function save(): Promise<void> {
     showOnPublicMenu: showOnPublicMenu.value,
     rating: rating.value,
     notes: notes.value.trim() || null,
+    // Only a copy of a bean with a 5-step level and no roast name.
+    ...(!editing.value && !detailedRoastLevel.value && savedRoastLevel.value ? { roastLevel: savedRoastLevel.value } : {}),
   };
   saving.value = true;
   error.value = '';
@@ -197,8 +229,11 @@ async function save(): Promise<void> {
   <AppHeader />
   <main class="page">
     <div class="page-header">
-      <h1>{{ editing ? 'Edit bean' : 'Add bean' }}</h1>
+      <h1>{{ editing ? 'Edit bean' : copyOf ? 'Duplicate bean' : 'Add bean' }}</h1>
     </div>
+    <p v-if="copyOf && !loading" class="muted small">
+      A copy of {{ copyOf }}, for a new bag: set its roast date and stock. The original stays as it is.
+    </p>
     <p v-if="loading" class="muted" aria-live="polite">Loading…</p>
 
     <form v-else class="stack" novalidate @submit.prevent="save">

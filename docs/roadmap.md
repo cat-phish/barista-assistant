@@ -201,6 +201,11 @@ whether to buy it again. Contract: `api/beans.md` §4.
   the table shows ten columns, each a sortable header: coffee, a ❄ for
   frozen, roaster, roast, process, age, caf/decaf, stock, added and rating.
   Phones show coffee, roaster, roast, stock and rating.
+- **Duplicate** (like recipes): a new bag of the same coffee. The copy keeps
+  the coffee's details (roaster, name, origin, roast, price, website,
+  notes) and clears the roast and purchase dates and the rating; stock
+  starts at the bag weight. A copy of an older bean with only a 5-step roast
+  level keeps it.
 - **Sort controls (every list):** Beans, Recipes, Drinks, Ingredients,
   Brewers and Grinders have **Sort by** and **Order** dropdowns, replacing
   the single combined Sort dropdown. Order is worded for the column, e.g.
