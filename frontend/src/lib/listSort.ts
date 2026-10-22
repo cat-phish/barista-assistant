@@ -1,4 +1,4 @@
-// Sorting and remembering list views (Recipes, Drinks, Brewers, Grinders).
+// Sorting and remembering list views (Recipes, Drinks, Brewers, Grinders, Beans).
 // A sort is a column and a direction, written "<column>_<asc|desc>" so it fits
 // a <select> and localStorage. The column headers and the Sort dropdown share
 // one key.
@@ -42,10 +42,15 @@ export function parseSortKey(key: string): { column: string; dir: SortDir } | nu
   return m ? { column: m[1]!, dir: m[2] as SortDir } : null;
 }
 
-export function sortBy<T extends Named>(items: readonly T[], key: string, columns: SortColumns<T>): T[] {
+// Ties (and unknown keys) fall back to the name: item.name, or nameOf for
+// items named otherwise (a bean's beanName).
+export function sortBy<T extends Named>(items: readonly T[], key: string, columns: SortColumns<T>): T[];
+export function sortBy<T>(items: readonly T[], key: string, columns: SortColumns<T>, nameOf: (item: T) => string): T[];
+export function sortBy<T>(items: readonly T[], key: string, columns: SortColumns<T>, nameOf?: (item: T) => string): T[] {
   const parsed = parseSortKey(key);
   const column = parsed ? columns[parsed.column] : undefined;
-  const byName = (a: T, b: T) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  const name = nameOf ?? ((x: T) => (x as unknown as Named).name);
+  const byName = (a: T, b: T) => name(a).localeCompare(name(b), undefined, { sensitivity: 'base' });
   if (!parsed || !column) return [...items].sort(byName);
   const sign = parsed.dir === 'asc' ? 1 : -1;
   return [...items].sort((a, b) => {

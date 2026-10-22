@@ -33,7 +33,8 @@ const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/beans`;
 export const beansApi = {
   list: (workspaceId: string) => api.get<{ beans: Bean[] }>(base(workspaceId)),
   create: (workspaceId: string, input: BeanInput) => api.post<{ bean: Bean }>(base(workspaceId), input),
-  update: (workspaceId: string, id: string, input: Partial<BeanInput>) =>
+  // archived: true archives (keeping the first date), false restores (§4).
+  update: (workspaceId: string, id: string, input: Partial<BeanInput> & { archived?: boolean }) =>
     api.patch<{ bean: Bean }>(`${base(workspaceId)}/${id}`, input),
   // date: the user's local YYYY-MM-DD (§4).
   freeze: (workspaceId: string, id: string, date: string) =>
