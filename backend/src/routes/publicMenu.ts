@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { db } from "../db.js";
 import { sendError } from "../http.js";
-import { BEAN_MENU_FIELDS, beans, drinkIngredients, drinks, ingredients, workspaces, type Bean, type BeanMenuField, type MethodKind, type Workspace } from "@barista/shared/schema";
+import { BEAN_MENU_FIELDS, beans, DEFAULT_WORKSPACE_SETTINGS, drinkIngredients, drinks, ingredients, withDefaults, workspaces, type Bean, type BeanMenuField, type MethodKind, type Workspace } from "@barista/shared/schema";
 import { SLUG_PATTERN } from "../validation.js";
 import { loadMenu } from "./menu.js";
 
@@ -77,7 +77,7 @@ publicMenuRouter.get(
     }
 
     const [workspace] = await db
-      .select({ id: workspaces.id, name: workspaces.name, slug: workspaces.slug })
+      .select({ id: workspaces.id, name: workspaces.name, slug: workspaces.slug, settings: workspaces.settings })
       .from(workspaces)
       .where(and(eq(workspaces.slug, req.params.slug), eq(workspaces.isPublicMenuEnabled, true)))
       .limit(1);
@@ -94,7 +94,10 @@ publicMenuRouter.get(
 
 // The menu as guests see it (§7): also the builder's preview (§7b), which
 // members can see while the public menu is off.
-export async function buildPublicMenu(workspace: { id: string; name: string; slug: string }): Promise<PublicMenuResponse> {
+// A workspace that records roasts light to dark (settings.roastScale "levels")
+// shows only the 5-step level: roast names it recorded earlier are left out.
+export async function buildPublicMenu(workspace: Pick<Workspace, "id" | "name" | "slug" | "settings">): Promise<PublicMenuResponse> {
+  const levelsOnly = withDefaults(DEFAULT_WORKSPACE_SETTINGS, workspace.settings).roastScale === "levels";
   const menu = await loadMenu(workspace.id);
   const allItems = menu.sections.flatMap((s) => s.items);
   const drinkIds = allItems.flatMap((i) => (i.drinkId ? [i.drinkId] : []));
@@ -150,7 +153,7 @@ export async function buildPublicMenu(workspace: { id: string; name: string; slu
       items: s.items.flatMap((i): Array<PublicMenuItem | PublicBeansBlock> => {
         if (i.itemType === "beans") {
           const fields = i.beanFields ?? [...BEAN_MENU_FIELDS];
-          return menuBeans.length ? [{ type: "beans", fields, beans: menuBeans.map((b) => publicBean(b, fields)) }] : [];
+          return menuBeans.length ? [{ type: "beans", fields, beans: menuBeans.map((b) => publicBean(levelsOnly ? { ...b, detailedRoastLevel: null } : b, fields)) }] : [];
         }
         // An archived brewer, or a source that's gone, is left off.
         if (!i.source || i.source.archived) return [];

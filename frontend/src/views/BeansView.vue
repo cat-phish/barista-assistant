@@ -18,7 +18,6 @@ import {
   BEAN_PROCESSES,
   BEAN_SORT_COLUMNS,
   BLEND_TYPES,
-  DETAILED_ROAST_LEVELS,
   ROAST_TYPES,
   formatAltitude,
   formatPrice,
@@ -29,20 +28,20 @@ import {
   periodsLatestFirst,
   pricePerGram,
   roastAgeDays,
+  roastLabel,
   type BeanFilter,
   type BeanSortColumn,
 } from '../lib/beans';
 import { formatAdded, formatDay, localDateInput, toDateInput } from '../lib/format';
 import { isSortKey, recallView, rememberView, sortArrow, sortBy, sortLabel, sortColumnOptions, toggleHeader } from '../lib/listSort';
 import { effectiveRoastAge } from '../lib/roastAge';
-import { ROAST_LEVELS } from '../lib/scale';
 import { usePreferences } from '../composables/usePreferences';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const props = defineProps<{ archived?: boolean }>(); // the Archived tab (route prop)
 
 const workspaces = useWorkspaceStore();
-const { altitudeUnit } = usePreferences();
+const { altitudeUnit, roastScale } = usePreferences();
 const beans = ref<Bean[]>([]);
 const loading = ref(true);
 const error = ref('');
@@ -229,11 +228,6 @@ function openFreeze(bean: Bean) {
   return bean.frozen ? (bean.freezePeriods.find((p) => p.thawedOn === null) ?? null) : null;
 }
 
-// The roast name when known ("City+"), else the 5-step level.
-function roastLabel(bean: Bean): string | null {
-  if (bean.detailedRoastLevel) return DETAILED_ROAST_LEVELS[bean.detailedRoastLevel].label;
-  return bean.roastLevel ? ROAST_LEVELS[bean.roastLevel].label : null;
-}
 
 // Table columns, each a sort column (BEAN_SORT_COLUMNS). On phones the
 // headers hide and the wide-only cells drop out (the frozen mark moves next
@@ -456,7 +450,7 @@ async function confirmFreeze(): Promise<void> {
                 <span v-if="openFreeze(bean)" class="frozen-mark" title="Frozen" aria-label="Frozen">❄</span>
               </span>
               <span class="data-td first-on-phone">{{ bean.roasterName }}</span>
-              <span class="data-td">{{ roastLabel(bean) ?? '–' }}</span>
+              <span class="data-td">{{ roastLabel(bean, roastScale) ?? '–' }}</span>
               <span class="data-td wide-only">{{ bean.process ? BEAN_PROCESSES[bean.process].label : '–' }}</span>
               <span class="data-td wide-only">{{ ageCell(bean) }}</span>
               <span class="data-td wide-only" :title="bean.decaf ? 'Decaf' : 'Caffeinated'">{{ bean.decaf ? 'Decaf' : 'Caf' }}</span>

@@ -568,3 +568,23 @@ temperatures in °C, whoever was looking.
   (+1 °C shows as +2 °F). The AI prompt stays in Celsius.
 - **Feet:** the bean form and bean list; the guest menu always shows metres.
 - **New drinks** start with your volume unit as their size unit.
+
+## Roast level scale (built)
+
+Backlog item 2 (finished and removed from the backlog, which was
+renumbered), branch `roast-level-scale`, no migration (a new key in
+`workspaces.settings`). The bean form only offered roast names (Cinnamon,
+City, Full City+ … French), and many bags just say "medium".
+
+- **Settings → Defaults → How beans record their roast** (owners): **roast
+  names** (as before) or **light to dark**. Per workspace, so everyone
+  records beans the same way.
+- **Light to dark** in the bean form: one "Roast level" select (light …
+  dark, or not sure). A bean that already has a roast name shows its level,
+  with "Recorded as City+. Choosing another level replaces it." Leaving it
+  keeps the name; another level sends `detailedRoastLevel: null` with the
+  new `roastLevel` in the same save. A copy keeps the name the same way.
+- **Lists and the guest menu** show only the 5-step level in light-to-dark
+  mode (`roastLabel(bean, scale)` in `lib/beans.ts`); the public menu and
+  preview send `detailedRoastLevel: null`. Names stay stored, so switching
+  back to roast names shows them again.

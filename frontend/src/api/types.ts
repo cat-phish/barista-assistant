@@ -22,8 +22,10 @@ export interface User {
 }
 
 // Per workspace, owners edit (docs/api/workspaces.md §2 settings).
+export type RoastScale = 'names' | 'levels';
 export interface WorkspaceSettings {
   recipeRoastLevel: RoastLevel; // the roast recipes are written for
+  roastScale: RoastScale; // beans record roast names (Cinnamon … French) or light to dark only
 }
 
 // docs/api/workspaces.md §2 Members

@@ -19,7 +19,7 @@ brewers (`DEFAULT_BREWERS` in `docs/schema.md`) in one transaction.
       "name": "Jordan's Coffee Bar",
       "slug": "jordans-coffee-bar",
       "isPublicMenuEnabled": false,
-      "settings": { "recipeRoastLevel": "light" },
+      "settings": { "recipeRoastLevel": "light", "roastScale": "names" },
       "createdAt": "2026-10-18T00:00:00.000Z"
     }
   }
@@ -58,6 +58,13 @@ Every workspace in a response carries `settings`, defaults filled in
   workspace's recipes are written for. The recipe form's yield estimate
   uses it, a bean's roast adjusts a recipe's expected yield relative to it,
   and beans with no roast level are assumed to be it.
+- `roastScale` (`names` | `levels`, default `names`): how beans record their
+  roast. `names`: the roast name (`detailedRoastLevel`, Cinnamon … French),
+  which sets the 5-step level. `levels`: the 5-step `roastLevel` only
+  (`docs/api/beans.md` §4 already accepts it alone with a `null` name).
+  Names recorded earlier stay stored but aren't shown: the bean list shows
+  the level, and the public menu and preview send `detailedRoastLevel: null`
+  (`docs/api/public-menu.md` §7).
 
 ### `PATCH /api/workspaces/:workspaceId/settings`
 

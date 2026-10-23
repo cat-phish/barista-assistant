@@ -43,12 +43,18 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
 };
 
 // Per workspace, owners edit (docs/api/workspaces.md §2 settings).
+export const ROAST_SCALES = ["names", "levels"] as const;
+export type RoastScale = (typeof ROAST_SCALES)[number];
 export interface WorkspaceSettings {
   // The roast recipes are written for: the recipe form's yield estimate, the
   // baseline when a bean's roast adjusts it, and beans with no roast level.
   recipeRoastLevel: RoastLevel;
+  // How beans record their roast: "names" (Cinnamon … French, which imply
+  // the 5-step level) or "levels" (light … dark only; roast names already
+  // recorded are kept but not shown).
+  roastScale: RoastScale;
 }
-export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: "light" };
+export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: "light", roastScale: "names" };
 
 export function withDefaults<T extends object>(defaults: T, stored: Partial<T> | null): T {
   return { ...defaults, ...(stored ?? {}) };

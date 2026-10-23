@@ -1,5 +1,6 @@
 // Labels and helpers for a bean's optional details (docs/api/beans.md §4).
-import type { Bean, BeanProcess, BlendType, DetailedRoastLevel, RoastLevel, RoastType } from '../api/types';
+import type { Bean, BeanProcess, BlendType, DetailedRoastLevel, RoastLevel, RoastScale, RoastType } from '../api/types';
+import { ROAST_LEVELS } from './scale';
 import { localDateInput } from './format';
 import { enumColumn, type SortColumns } from './listSort';
 import { effectiveRoastAge } from './roastAge';
@@ -107,6 +108,13 @@ export function latestThaw(periods: readonly Period[]): string {
 }
 // Whole days between two YYYY-MM-DD dates.
 export const daysBetween = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
+
+// How a list shows a bean's roast: the name when the workspace records roast
+// names and the bean has one ("City+"), else the 5-step level ("Medium").
+export function roastLabel(bean: Pick<Bean, 'detailedRoastLevel' | 'roastLevel'>, scale: RoastScale): string | null {
+  if (scale === 'names' && bean.detailedRoastLevel) return DETAILED_ROAST_LEVELS[bean.detailedRoastLevel].label;
+  return bean.roastLevel ? ROAST_LEVELS[bean.roastLevel].label : null;
+}
 
 // Lightness on the 12-step scale: the roast name's position, else the first
 // name that implies the bean's 5-step level. null = unknown.

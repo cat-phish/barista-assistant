@@ -95,7 +95,8 @@ Retrieves the read-only menu for a workspace, as arranged in the menu builder
     `roasterName` and `beanName`, plus only the details in `fields` (chosen
     in the builder, §7b; all of them by default): `origin` is `originArea`,
     `country` and `region`; `roastLevel` is `roastLevel` and
-    `detailedRoastLevel`; the others are the bean field of the same name
+    `detailedRoastLevel` (always `null` while the workspace records roasts
+    light to dark, `settings.roastScale` "levels", §2); the others are the bean field of the same name
     (`altitude` = `altitudeMasl`). A field that isn't chosen is left out of
     each bean, not sent as `null`. A bean's stock, price, bag weight, purchase
     date, green supplier, website, rating and notes are never published; nor

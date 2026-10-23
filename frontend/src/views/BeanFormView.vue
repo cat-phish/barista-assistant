@@ -26,7 +26,7 @@ import {
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 
 const workspaces = useWorkspaceStore();
-const { altitudeUnit } = usePreferences();
+const { altitudeUnit, roastScale } = usePreferences();
 const route = useRoute();
 const router = useRouter();
 const editing = computed(() => props.id !== undefined);
@@ -71,6 +71,15 @@ watch(country, (c) => {
 // until a detailed one is picked.
 const savedRoastLevel = ref<RoastLevel | null>(null);
 const savedDetailed = ref<DetailedRoastLevel | null>(null);
+
+// Light to dark (the workspace's roastScale is "levels"): the 5-step level is
+// chosen directly. A roast name the bean (or the bean copied) already has is
+// kept while its level stays chosen; picking another level replaces it.
+const level = ref<RoastLevel | ''>('');
+const sourceDetailed = ref<DetailedRoastLevel | null>(null);
+const keptName = computed(() =>
+  sourceDetailed.value && level.value === DETAILED_ROAST_LEVELS[sourceDetailed.value].roastLevel ? sourceDetailed.value : null,
+);
 
 const loading = ref(editing.value || copyFrom !== null);
 const saving = ref(false);
@@ -144,6 +153,8 @@ function fill(bean: Bean): void {
   detailedRoastLevel.value = bean.detailedRoastLevel ?? '';
   savedDetailed.value = bean.detailedRoastLevel;
   savedRoastLevel.value = bean.roastLevel;
+  level.value = bean.roastLevel ?? '';
+  sourceDetailed.value = bean.detailedRoastLevel;
   inventory.value = String(bean.inventoryWeightGrams);
   price.value = bean.priceAmount === null ? '' : bean.priceAmount.toFixed(2);
   currency.value = bean.priceCurrency ?? '';
@@ -199,6 +210,18 @@ async function save(): Promise<void> {
   const ws = workspaces.current?.id;
   if (!valid.value || !ws || !inventoryParsed.value.ok) return;
   const priceAmount = priceParsed.value?.ok ? priceParsed.value.value : null;
+  // docs/api/beans.md §4: a roast name sets the 5-step level; without one,
+  // roastLevel is sent on its own (a null name first clears a stored one).
+  const roast: Pick<BeanInput, 'detailedRoastLevel' | 'roastLevel'> =
+    roastScale.value === 'levels'
+      ? keptName.value
+        ? { detailedRoastLevel: keptName.value }
+        : { detailedRoastLevel: null, roastLevel: level.value || null }
+      : {
+          detailedRoastLevel: detailedRoastLevel.value || null,
+          // Only a copy of a bean with a 5-step level and no roast name.
+          ...(!editing.value && !detailedRoastLevel.value && savedRoastLevel.value ? { roastLevel: savedRoastLevel.value } : {}),
+        };
   const input: BeanInput = {
     roasterName: roasterName.value.trim(),
     beanName: beanName.value.trim(),
@@ -213,7 +236,7 @@ async function save(): Promise<void> {
     decaf: decaf.value,
     roastType: roastType.value || null,
     roastDate: roastDate.value || null,
-    detailedRoastLevel: detailedRoastLevel.value || null,
+    ...roast,
     inventoryWeightGrams: inventoryParsed.value.value,
     priceAmount,
     priceCurrency: priceAmount === null ? null : currencyCode.value,
@@ -224,8 +247,6 @@ async function save(): Promise<void> {
     showOnPublicMenu: showOnPublicMenu.value,
     rating: rating.value,
     notes: notes.value.trim() || null,
-    // Only a copy of a bean with a 5-step level and no roast name.
-    ...(!editing.value && !detailedRoastLevel.value && savedRoastLevel.value ? { roastLevel: savedRoastLevel.value } : {}),
   };
   saving.value = true;
   error.value = '';
@@ -337,7 +358,16 @@ async function save(): Promise<void> {
             <input id="roast-date" v-model="roastDate" type="date" :max="today" />
           </div>
         </div>
-        <div class="form-row">
+        <div v-if="roastScale === 'levels'" class="field">
+          <label for="roast-level">Roast level</label>
+          <select id="roast-level" v-model="level" aria-describedby="roast-level-note">
+            <option value="">Not sure</option>
+            <option v-for="(r, key) in ROAST_LEVELS" :key="key" :value="key">{{ r.label }}</option>
+          </select>
+          <span v-if="keptName" id="roast-level-note" class="hint">Recorded as {{ DETAILED_ROAST_LEVELS[keptName].label }}. Choosing another level replaces it.</span>
+          <span v-else-if="sourceDetailed" id="roast-level-note" class="hint">Saving replaces the roast name {{ DETAILED_ROAST_LEVELS[sourceDetailed].label }}.</span>
+        </div>
+        <div v-else class="form-row">
           <div class="field">
             <label for="detailed-roast">Roast Level</label>
             <select id="detailed-roast" v-model="detailedRoastLevel">

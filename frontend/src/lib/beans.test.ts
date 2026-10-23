@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Bean } from '../api/types';
-import { BEAN_PROCESSES, BEAN_SORT_COLUMNS, DETAILED_ROAST_LEVELS, formatAltitude, formatPricePerGram, freezeState, latestThaw, periodsLatestFirst, pricePerGram } from './beans';
+import { BEAN_PROCESSES, BEAN_SORT_COLUMNS, DETAILED_ROAST_LEVELS, formatAltitude, roastLabel, formatPricePerGram, freezeState, latestThaw, periodsLatestFirst, pricePerGram } from './beans';
 import { sortBy, sortColumnOptions } from './listSort';
 import { ROAST_LEVELS } from './scale';
 
@@ -147,5 +147,15 @@ describe('freeze periods', () => {
     expect(periodsLatestFirst(periods).map((p) => p.id)).toEqual(['open', 'mid', 'old']);
     expect(latestThaw(periods)).toBe('2026-10-06');
     expect(latestThaw([])).toBe('');
+  });
+});
+
+describe('roastLabel', () => {
+  it('shows the roast name only when the workspace records names', () => {
+    const named = { detailedRoastLevel: 'city_plus' as const, roastLevel: 'medium' as const };
+    expect(roastLabel(named, 'names')).toBe('City+');
+    expect(roastLabel(named, 'levels')).toBe('Medium');
+    expect(roastLabel({ detailedRoastLevel: null, roastLevel: 'dark' }, 'names')).toBe('Dark');
+    expect(roastLabel({ detailedRoastLevel: null, roastLevel: null }, 'levels')).toBeNull();
   });
 });

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ALTITUDE_UNITS, ROAST_LEVELS, TEMPERATURE_UNITS, VOLUME_UNITS } from "@barista/shared/schema";
+import { ALTITUDE_UNITS, ROAST_LEVELS, ROAST_SCALES, TEMPERATURE_UNITS, VOLUME_UNITS } from "@barista/shared/schema";
 import { ROLES } from "./auth/membership.js";
 
 export const roleSchema = z.enum(ROLES);
@@ -11,7 +11,7 @@ export const SLUG_PATTERN = /^[a-z0-9-]{3,64}$/;
 // Settings PATCH bodies (docs/api/workspaces.md §2, auth.md §1): any non-empty
 // subset of the keys; unknown keys are refused so a typo isn't silently kept.
 export const workspaceSettingsSchema = z
-  .object({ recipeRoastLevel: z.enum(ROAST_LEVELS) })
+  .object({ recipeRoastLevel: z.enum(ROAST_LEVELS), roastScale: z.enum(ROAST_SCALES) })
   .partial()
   .strict()
   .refine((body) => Object.keys(body).length > 0, "Provide at least one setting");
