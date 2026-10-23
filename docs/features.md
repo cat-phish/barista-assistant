@@ -8,6 +8,10 @@ upcoming work is in `roadmap.md`.
 - **Accounts:** email + password; the session is an httpOnly cookie.
 - **Workspaces:** shared spaces (e.g. a household or café) with roles: owner,
   barista (can log and edit), viewer (read-only).
+- **Field visibility:** Settings → Fields lets owners hide the optional brew,
+  bean and recipe fields the bar doesn't use, for everyone. Hidden fields
+  keep what's recorded (shown again when editing something that has a value)
+  and still reach the AI.
 
 ## Beans
 - Roaster, coffee name, process, **roast level** (light → dark, optional),
