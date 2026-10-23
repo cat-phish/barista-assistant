@@ -112,6 +112,37 @@ describe("members and roles", () => {
     expect((await viewer.agent.delete(`/api/workspaces/${ws.id}/members/${viewer.id}`)).status).toBe(204);
     expect((await viewer.agent.get(`/api/workspaces/${ws.id}/beans`)).status).toBe(404);
   });
+
+  // What Settings → Members does (docs/api/workspaces.md §2 Members).
+  it("lists members by email for any member; owners add, change roles and remove", async () => {
+    const owner = await newUser("zed");
+    const barista = await newUser("amy");
+    const ws = await newWorkspace(owner);
+    const base = `/api/workspaces/${ws.id}/members`;
+
+    const added = await owner.agent.post(base).send({ email: barista.email, role: "barista" });
+    expect(added.status).toBe(201);
+    expect(added.body.member).toEqual({ userId: barista.id, email: barista.email, role: "barista" });
+    expect((await owner.agent.post(base).send({ email: barista.email, role: "viewer" })).status).toBe(409);
+    expect((await owner.agent.post(base).send({ email: "nobody-here@example.com", role: "viewer" })).status).toBe(404);
+
+    const list = await barista.agent.get(base);
+    expect(list.body.members.map((m: { email: string }) => m.email)).toEqual([barista.email, owner.email]);
+
+    const changed = await owner.agent.patch(`${base}/${barista.id}`).send({ role: "viewer" });
+    expect(changed.body.member).toEqual({ userId: barista.id, email: barista.email, role: "viewer" });
+    expect((await owner.agent.delete(`${base}/${barista.id}`)).status).toBe(204);
+    expect((await owner.agent.get(base)).body.members).toHaveLength(1);
+  });
+
+  it("an owner can leave once another owner exists", async () => {
+    const owner = await newUser();
+    const second = await newUser();
+    const ws = await newWorkspace(owner);
+    await addMember(owner, ws.id, second, "owner");
+    expect((await owner.agent.delete(`/api/workspaces/${ws.id}/members/${owner.id}`)).status).toBe(204);
+    expect((await second.agent.delete(`/api/workspaces/${ws.id}/members/${second.id}`)).status).toBe(409);
+  });
 });
 
 describe("permissions", () => {

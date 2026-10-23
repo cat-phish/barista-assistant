@@ -480,3 +480,28 @@ missing (no way to rename the web address or delete a workspace).
   moved to `lib/slug.ts`, shared with creating a workspace.
 - **Settings storage** is decided but not built: JSON columns on
   `workspaces` and `users`, added with the first real setting (item 3).
+
+## Settings: Members tab (built)
+
+Backlog item 1, branch `settings-members`. The members API (§2 Members) had
+no screen: adding a barista meant calling the API by hand.
+
+- **Settings → Members** lists everyone by email, with "You" on your own
+  row. Owners change roles with a select, remove members, and add someone by
+  email and role. The person must have registered first (no email
+  delivery); "No account with that email" says so. Everyone else sees the
+  roles as read-only labels.
+- A short legend says what owner, barista and viewer can do
+  (`lib/roles.ts`, shared with the workspace list).
+- **Demoting yourself** asks first; **removing** someone and **leaving**
+  confirm too. Leaving takes you to your other workspace, or the workspace
+  list. The last owner can't demote themselves or leave: the API's `409`
+  shows as "Make someone else an owner first".
+- No API change; tests now cover the list order, adding (including `404`
+  and `409`), changing a role, removing, and a second owner leaving.
+- **"I understand" confirmations** (new `CLAUDE.md` rule 6: major actions
+  that can't be undone or affect other things get the checkbox, asked
+  first): leaving and deleting a workspace, removing a member, demoting
+  yourself, changing the web address (now a dialog instead of an inline
+  warning), deleting a bean with its history, and deleting a drink
+  category. Leave is a red button.

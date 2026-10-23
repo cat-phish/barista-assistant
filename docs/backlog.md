@@ -40,8 +40,8 @@ Where the app's choices live, and what you can switch on, off or take out.
 
 ### 1. Settings section
 
-- **Status:** in progress. Branch 1 (`settings-shell`: the shell and the
-  Workspace tab) is done (roadmap); Members, then Account, are next.
+- **Status:** in progress. The shell, the Workspace tab and the Members
+  tab are done (roadmap); Account is next.
 - **Why:** configuration is hard-coded (recipe styles, the roast level
   recipes assume, display units) or scattered. A Settings section gives these
   one obvious home.

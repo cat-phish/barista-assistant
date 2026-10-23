@@ -8,6 +8,13 @@ export interface User {
   email: string;
 }
 
+// docs/api/workspaces.md §2 Members
+export interface Member {
+  userId: string;
+  email: string;
+  role: Role;
+}
+
 export interface Workspace {
   id: string;
   name: string;

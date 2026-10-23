@@ -60,6 +60,11 @@ async function move(index: number, by: -1 | 1): Promise<void> {
 }
 
 const pending = ref<DrinkCategory | null>(null);
+const understood = ref(false); // its drinks lose their category: "I understand" (CLAUDE.md rule 6)
+function askDelete(c: DrinkCategory): void {
+  understood.value = false;
+  pending.value = c;
+}
 async function confirmDelete(): Promise<void> {
   const c = pending.value;
   if (c && (await run((ws) => drinkCategoriesApi.remove(ws, c.id)))) pending.value = null;
@@ -84,7 +89,7 @@ async function confirmDelete(): Promise<void> {
             <button class="btn-link" type="button" :disabled="busy || i === 0" :aria-label="`Move ${c.name} up`" @click="move(i, -1)">↑</button>
             <button class="btn-link" type="button" :disabled="busy || i === categories.length - 1" :aria-label="`Move ${c.name} down`" @click="move(i, 1)">↓</button>
             <button class="btn-link" type="button" @click="startEdit(c)">Rename</button>
-            <button class="btn-link danger" type="button" @click="pending = c">Delete</button>
+            <button class="btn-link danger" type="button" @click="askDelete(c)">Delete</button>
           </template>
         </div>
       </li>
@@ -100,8 +105,12 @@ async function confirmDelete(): Promise<void> {
 
   <ConfirmDialog :open="pending !== null" title="Delete this category?" @cancel="pending = null">
     <p>{{ pending?.name }} will be removed. Its drinks stay, uncategorised.</p>
+    <label class="checkbox">
+      <input v-model="understood" type="checkbox" />
+      I understand
+    </label>
     <template #actions>
-      <button class="btn btn-danger" type="button" :disabled="busy" @click="confirmDelete">Delete</button>
+      <button class="btn btn-danger" type="button" :disabled="busy || !understood" @click="confirmDelete">Delete</button>
       <button class="btn btn-secondary" type="button" :disabled="busy" @click="pending = null">Cancel</button>
     </template>
   </ConfirmDialog>
