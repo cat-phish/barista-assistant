@@ -72,27 +72,31 @@ describe("grind starting points", () => {
     const { owner, base, recipe, grinder } = await setup();
     const ode = await grinder("Ode");
     const c40 = await grinder("Comandante C40");
-    const res = await owner.agent.post(base).send({ ...recipe, grindSettings: [{ grinderId: ode, setting: " 4.2 " }, { grinderId: c40, setting: "20" }] });
+    const res = await owner.agent.post(base).send({ ...recipe, grindSettings: [{ grinderId: ode, setting: 4.2 }, { grinderId: c40, setting: 20 }] });
     expect(res.body.recipe.grindSettings).toEqual([
-      { grinderId: c40, grinderName: "Comandante C40", setting: "20" },
-      { grinderId: ode, grinderName: "Ode", setting: "4.2" },
+      { grinderId: c40, grinderName: "Comandante C40", setting: 20 },
+      { grinderId: ode, grinderName: "Ode", setting: 4.2 },
     ]);
-    const replaced = await owner.agent.patch(`${base}/${res.body.recipe.id}`).send({ grindSettings: [{ grinderId: ode, setting: "5" }] });
-    expect(replaced.body.recipe.grindSettings).toEqual([{ grinderId: ode, grinderName: "Ode", setting: "5" }]);
+    const replaced = await owner.agent.patch(`${base}/${res.body.recipe.id}`).send({ grindSettings: [{ grinderId: ode, setting: 5 }] });
+    expect(replaced.body.recipe.grindSettings).toEqual([{ grinderId: ode, grinderName: "Ode", setting: 5 }]);
     const untouched = await owner.agent.patch(`${base}/${res.body.recipe.id}`).send({ name: "Renamed" });
-    expect(untouched.body.recipe.grindSettings).toHaveLength(1);
+    expect(untouched.body.recipe.grindSettings).toHaveLength(1);    // A number on the dial (docs/api/recipes.md §5): no text, at most 2 decimals.
+    for (const setting of ["20", "18 clicks", 20.125, -1, 10000]) {
+      const bad = await owner.agent.post(base).send({ ...recipe, grindSettings: [{ grinderId: ode, setting }] });
+      expect(bad.status, String(setting)).toBe(400);
+    }
   });
 
   it("refuses duplicates and other workspaces' grinders; survives archiving, goes with grinder deletion", async () => {
     const { owner, ws, base, recipe, grinder } = await setup();
     const c40 = await grinder("C40");
-    expect((await owner.agent.post(base).send({ ...recipe, grindSettings: [{ grinderId: c40, setting: "20" }, { grinderId: c40, setting: "21" }] })).body.error).toMatch(/more than once/);
+    expect((await owner.agent.post(base).send({ ...recipe, grindSettings: [{ grinderId: c40, setting: 20 }, { grinderId: c40, setting: 21 }] })).body.error).toMatch(/more than once/);
     const other = await newUser();
     const otherWs = await newWorkspace(other);
     const foreign = (await other.agent.post(`/api/workspaces/${otherWs.id}/grinders`).send({ name: "Theirs" })).body.grinder.id;
-    expect((await owner.agent.post(base).send({ ...recipe, grindSettings: [{ grinderId: foreign, setting: "1" }] })).body.error).toMatch(/grinderId/);
+    expect((await owner.agent.post(base).send({ ...recipe, grindSettings: [{ grinderId: foreign, setting: 1 }] })).body.error).toMatch(/grinderId/);
 
-    const id = (await owner.agent.post(base).send({ ...recipe, grindSettings: [{ grinderId: c40, setting: "20" }] })).body.recipe.id;
+    const id = (await owner.agent.post(base).send({ ...recipe, grindSettings: [{ grinderId: c40, setting: 20 }] })).body.recipe.id;
     await owner.agent.patch(`/api/workspaces/${ws.id}/grinders/${c40}`).send({ archived: true });
     expect((await owner.agent.get(base)).body.recipes.find((r: { id: string }) => r.id === id).grindSettings).toHaveLength(1);
     await owner.agent.delete(`/api/workspaces/${ws.id}/grinders/${c40}`); // unused by brews, so deletable

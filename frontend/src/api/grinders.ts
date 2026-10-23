@@ -16,7 +16,7 @@ export const grindersApi = {
   remove: (workspaceId: string, id: string) => api.delete(`${base(workspaceId)}/${id}`),
   // Newest grind setting used with this grinder and recipe, or null.
   lastSetting: (workspaceId: string, id: string, recipeId: string) =>
-    api.get<{ lastSetting: { grindSetting: string; grindRpm: number | null; timestamp: string; brewLogId: string } | null }>(
+    api.get<{ lastSetting: { grindSetting: number; grindRpm: number | null; timestamp: string; brewLogId: string } | null }>(
       `${base(workspaceId)}/${id}/last-setting?recipeId=${encodeURIComponent(recipeId)}`,
     ),
 };

@@ -47,6 +47,10 @@ export function decimalSchema(opts: {
     .refine((n) => Number(n.toFixed(scale)) === n, `must have at most ${scale} decimal places`);
 }
 
+// A grind setting: the number on the grinder's dial, like its settingMin/Max
+// (docs/api/grinders.md §3b).
+export const grindSettingSchema = decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMax: true });
+
 // Optional, nullable trimmed string; blank becomes null so "" isn't stored.
 // The transform sits inside .optional() on a non-optional schema, so an absent
 // key stays undefined (left untouched by an update) instead of becoming null.

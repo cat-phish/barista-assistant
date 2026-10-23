@@ -17,7 +17,7 @@ export interface BrewLogInput {
   actualYieldGrams: number | null;
   tdsPercent: number | null; // %
   actualTempC: number | null;
-  actualGrindSetting: string | null;
+  actualGrindSetting: number | null; // the dial number
   grindRpm?: number | null; // only with a variable-speed grinder
   beanWeightInGrams?: number | null; // beans weighed before grinding
   groundWeightOutGrams?: number | null; // grounds out: no more than in

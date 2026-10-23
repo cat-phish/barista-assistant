@@ -241,13 +241,13 @@ describe("processBrewAnalysis", () => {
     llm.mockResolvedValue(ANALYSIS);
     const c40 = randomUUID();
     await db.insert(grinders).values({ id: c40, workspaceId, name: "Comandante C40", adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, archivedAt: new Date() });
-    await db.update(brewLogs).set({ grinderId: c40, actualGrindSetting: "20" }).where(eq(brewLogs.id, logIds.day8!));
-    await db.update(brewLogs).set({ grinderId: c40, actualGrindSetting: "22" }).where(eq(brewLogs.id, logIds.day6!));
+    await db.update(brewLogs).set({ grinderId: c40, actualGrindSetting: 20 }).where(eq(brewLogs.id, logIds.day8!));
+    await db.update(brewLogs).set({ grinderId: c40, actualGrindSetting: 22 }).where(eq(brewLogs.id, logIds.day6!));
     const recipeId = (await db.select({ id: recipes.id }).from(recipes))[0]!.id;
-    await db.insert(recipeGrindSettings).values({ id: randomUUID(), recipeId, grinderId: c40, setting: "21" });
+    await db.insert(recipeGrindSettings).values({ id: randomUUID(), recipeId, grinderId: c40, setting: 21 });
     await processBrewAnalysis({ brewLogId: logIds.day8! });
     const context = llm.mock.calls[0]![0] as BrewContext;
-    expect(context.brew).toMatchObject({ actualGrindSetting: "20", machine: null });
+    expect(context.brew).toMatchObject({ actualGrindSetting: 20, machine: null });
     expect(context.brew.grinder).toEqual({
       name: "Comandante C40", adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, burrType: null, burrSizeMm: null, power: null,
       variableSpeed: false, rpmMin: null, rpmMax: null,
@@ -255,7 +255,7 @@ describe("processBrewAnalysis", () => {
     expect(context.brew.grindRpm).toBeNull();
     const byDay = Object.fromEntries(context.previousBrews.map((b) => [b.tastingNotes, b.grinder?.name ?? null]));
     expect(byDay).toMatchObject({ "day 6": "Comandante C40", "day 7": null });
-    expect(context.recipe?.grindStartingPoints).toEqual([{ grinderName: "Comandante C40", setting: "21" }]);
+    expect(context.recipe?.grindStartingPoints).toEqual([{ grinderName: "Comandante C40", setting: 21 }]);
   });
 
   it("tells the LLM a variable-speed grinder's range and each brew's RPM", async () => {

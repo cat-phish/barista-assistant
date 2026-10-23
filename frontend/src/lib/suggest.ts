@@ -1,6 +1,7 @@
 // Turns an AI analysis into starting parameters for the next brew
 // (docs/api/analysis.md §8: deltas are relative to the *analyzed* brew).
 import type { GrindDelta, Recipe, Suggestions } from '../api/types';
+import { formatGrind } from './format';
 
 export const GRIND_LABELS: Record<GrindDelta, string> = {
   much_finer: 'Grind much finer',
@@ -13,7 +14,7 @@ export const GRIND_LABELS: Record<GrindDelta, string> = {
 export interface StartingParameters {
   tempC: number | null; // analyzed brew's temp (or the recipe's) + suggested change
   tempDeltaC: number; // the suggested change (show with formatTempChange)
-  grindBase: string | null; // the grind it was analyzed at; direction in grindAdvice
+  grindBase: number | null; // the grind it was analyzed at; direction in grindAdvice
   grinder: { id: string; name: string } | null; // grinder of the analyzed brew
   grindAdvice: string;
   reasoning: string;
@@ -55,16 +56,17 @@ export type GrindSource = 'last' | 'suggestion' | 'recipe' | 'none';
 //   2. else the analyzed brew's setting, if that was on this grinder,
 //   3. else the recipe's approximate starting point for this grinder,
 //   4. else nothing.
+// value is the text for the grind box.
 export function chooseGrind(opts: {
-  lastSetting: string | null;
+  lastSetting: number | null;
   suggestion: StartingParameters | null;
   grinderId: string;
   recipe?: Pick<Recipe, 'grindSettings'> | null;
 }): { value: string; source: GrindSource } {
-  if (opts.lastSetting) return { value: opts.lastSetting, source: 'last' };
+  if (opts.lastSetting !== null) return { value: formatGrind(opts.lastSetting), source: 'last' };
   const s = opts.suggestion;
-  if (s?.grindBase && suggestionFitsGrinder(s, opts.grinderId)) return { value: s.grindBase, source: 'suggestion' };
+  if (s && s.grindBase !== null && suggestionFitsGrinder(s, opts.grinderId)) return { value: formatGrind(s.grindBase), source: 'suggestion' };
   const start = opts.grinderId ? opts.recipe?.grindSettings.find((g) => g.grinderId === opts.grinderId) : undefined;
-  if (start) return { value: start.setting, source: 'recipe' };
+  if (start) return { value: formatGrind(start.setting), source: 'recipe' };
   return { value: '', source: 'none' };
 }

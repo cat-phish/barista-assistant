@@ -743,3 +743,21 @@ the grinder weights and speed (part 4 above).
 - **Timer layout:** the step cards come first, then the buttons, then the
   clock, and the step text is larger (instruction 1.8rem, countdown 2rem,
   side cards and the small line about 1.05rem).
+
+## Numeric grind settings (built)
+
+Branch `numeric-grind`, migration 0054. Grind settings were free text, so
+phones showed a full keyboard and "18 clicks" or "20" could both be stored.
+Now they're the number on the grinder's dial, like its setting range.
+
+- `brew_logs.actual_grind_setting` and `recipe_grind_settings.setting` are
+  `decimal(6,2)` (0 ≤ x < 10000, at most 2 decimals; shared
+  `grindSettingSchema`). The migration converted the existing values, which
+  were all numbers already. Text gets a `400`. `last-setting`, the
+  suggestion's base grind and the AI context are numbers too.
+- Every grind box (brew setup, the log and journal forms, the recipe's
+  starting points) opens a number pad (`inputmode="decimal"`) and says when
+  it isn't a number; settings show without trailing zeros ("20", "4.25").
+- A setting of 0 counts as a setting (the pre-fill used to skip blanks).
+- Multi-ring grinders ("2.1.0") are a backlog idea (item 9).
+

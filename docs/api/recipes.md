@@ -90,7 +90,7 @@ card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
   "archivedAt": null,
   "createdAt": "2026-10-19T08:00:00.000Z",
   "grindSettings": [
-    { "grinderId": "uuid", "grinderName": "Comandante C40", "setting": "20" }
+    { "grinderId": "uuid", "grinderName": "Comandante C40", "setting": 20 }
   ],
   "steps": [
     { "id": "uuid", "stepOrder": 1, "stepType": "bloom", "label": null, "durationSec": 45, "advance": "tap", "targetWaterGrams": 45, "targetTempC": 85, "pressureBar": null, "pressureEndBar": null, "flowRate": null, "flowEndRate": null },
@@ -139,7 +139,7 @@ Creates a recipe, its grind starting points and its steps in one transaction.
     "expectedFinishMinSec": 165,
     "expectedFinishMaxSec": 195,
     "targetTempC": 94,
-    "grindSettings": [{ "grinderId": "uuid", "setting": "20" }],
+    "grindSettings": [{ "grinderId": "uuid", "setting": 20 }],
     "steps": [
       { "stepType": "bloom", "durationSec": 45, "advance": "tap", "targetWaterGrams": 45, "targetTempC": 85 },
       { "stepType": "pour", "label": "Main pour", "durationSec": 45, "targetWaterGrams": 250, "targetTempC": 93 }
@@ -168,7 +168,9 @@ Creates a recipe, its grind starting points and its steps in one transaction.
     the other defaults to it **±15 s**: min 165 → max 180; max 195 → min 180
     (never below 0). So a stored window always has both ends, or neither.
   - `grindSettings` (default `[]`): each `grinderId` must be a grinder in this
-    workspace (archived allowed), at most once; `setting` trimmed, 1–100 chars.
+    workspace (archived allowed), at most once; `setting` is the number on
+    the grinder's dial, 0 ≤ x < 10000 with at most 2 decimals (like the
+    grinder's `settingMin`, §3b). Text such as `"18 clicks"` is a `400`.
   - `defaultGrinderId` (optional, nullable): a grinder in this workspace
     (archived allowed). Deleting the grinder sets it back to `null`.
   - `flowUnit` (optional, default `g_s`): `g_s` or `ml_s`.

@@ -78,8 +78,12 @@ describe("brew logs with grinders", () => {
     const { owner, ws, base, grinder } = await setup();
     const bean = await newBean(owner, ws.id);
     const c40 = await grinder("Comandante C40");
-    const created = await brew(owner, ws.id, { beanId: bean, grinderId: c40, actualGrindSetting: "20" });
-    expect(created.body.brewLog).toMatchObject({ grinderId: c40, grinder: { id: c40, name: "Comandante C40" } });
+    const created = await brew(owner, ws.id, { beanId: bean, grinderId: c40, actualGrindSetting: 20.5 });
+    expect(created.body.brewLog).toMatchObject({ grinderId: c40, actualGrindSetting: 20.5, grinder: { id: c40, name: "Comandante C40" } });
+    // The grind setting is a number on the dial (docs/api/brew-logs.md §6).
+    for (const actualGrindSetting of ["20", "18 clicks", 20.125, -1]) {
+      expect((await brew(owner, ws.id, { beanId: bean, grinderId: c40, actualGrindSetting })).status, String(actualGrindSetting)).toBe(400);
+    }
 
     await owner.agent.patch(`${base}/${c40}`).send({ archived: true });
     const shown = await owner.agent.get(`/api/workspaces/${ws.id}/brew-logs/${created.body.brewLog.id}`);
@@ -108,15 +112,15 @@ describe("brew logs with grinders", () => {
     const house = await mk("House");
     const iced = await mk("Iced");
     const at = (d: string) => `2026-10-${d}T08:00:00Z`;
-    await brew(owner, ws.id, { beanId: bean, recipeId: house, grinderId: c40, actualGrindSetting: "22", timestamp: at("10") });
-    await brew(owner, ws.id, { beanId: bean, recipeId: house, grinderId: c40, actualGrindSetting: "20", timestamp: at("12") });
+    await brew(owner, ws.id, { beanId: bean, recipeId: house, grinderId: c40, actualGrindSetting: 22, timestamp: at("10") });
+    await brew(owner, ws.id, { beanId: bean, recipeId: house, grinderId: c40, actualGrindSetting: 20, timestamp: at("12") });
     await brew(owner, ws.id, { beanId: bean, recipeId: house, grinderId: c40, timestamp: at("14") }); // no setting: skipped
-    await brew(owner, ws.id, { beanId: bean, recipeId: house, grinderId: ode, actualGrindSetting: "4.2", timestamp: at("15") }); // other grinder
-    await brew(owner, ws.id, { beanId: bean, recipeId: iced, grinderId: c40, actualGrindSetting: "16", timestamp: at("16") }); // other recipe
+    await brew(owner, ws.id, { beanId: bean, recipeId: house, grinderId: ode, actualGrindSetting: 4.2, timestamp: at("15") }); // other grinder
+    await brew(owner, ws.id, { beanId: bean, recipeId: iced, grinderId: c40, actualGrindSetting: 16, timestamp: at("16") }); // other recipe
 
     const last = await owner.agent.get(`${base}/${c40}/last-setting?recipeId=${house}`);
-    expect(last.body.lastSetting).toMatchObject({ grindSetting: "20", timestamp: "2026-10-12T08:00:00.000Z" });
-    expect((await owner.agent.get(`${base}/${ode}/last-setting?recipeId=${house}`)).body.lastSetting.grindSetting).toBe("4.2");
+    expect(last.body.lastSetting).toMatchObject({ grindSetting: 20, timestamp: "2026-10-12T08:00:00.000Z" });
+    expect((await owner.agent.get(`${base}/${ode}/last-setting?recipeId=${house}`)).body.lastSetting.grindSetting).toBe(4.2);
     expect((await owner.agent.get(`${base}/${ode}/last-setting?recipeId=${iced}`)).body.lastSetting).toBeNull();
     expect((await owner.agent.get(`${base}/${c40}/last-setting`)).status).toBe(400);
   });

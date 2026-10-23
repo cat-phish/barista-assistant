@@ -29,7 +29,7 @@ created it and can't be changed.
   "actualTempC": 93,
   "grinderId": "uuid",
   "waterProfileId": "uuid",
-  "actualGrindSetting": "18 clicks",
+  "actualGrindSetting": 18,
   "grindRpm": null,
   "beanWeightInGrams": 15.2,
   "groundWeightOutGrams": 15,
@@ -104,7 +104,7 @@ account. Such logs can only be edited or deleted by owners.
     "grinderId": "uuid",
     "waterProfileId": "uuid",
     "drinkId": "uuid",
-    "actualGrindSetting": "18 clicks",
+    "actualGrindSetting": 18,
     "actualTimeSec": 150,
     "rating": 3,
     "tastingNotes": "Sour, thin body"
@@ -180,8 +180,10 @@ account. Such logs can only be edited or deleted by owners.
     is coffee left in the grinder, not the water the spent grounds keep
     (which the yield estimate uses, §5).
   - `actualTimeSec`: integer 0–86400 (24 hours). `rating`: integer **1–5**,
-    nullable. `actualGrindSetting` ≤ 100 chars, `tastingNotes` ≤ 5000 chars;
-    both nullable, and blank becomes `null`. `rating` and `tastingNotes` are
+    nullable. `actualGrindSetting` (nullable): the number on the grinder's
+    dial, 0 ≤ x < 10000 with at most 2 decimals, as in `grindSettings` (§5);
+    text is a `400`. `tastingNotes` ≤ 5000 chars, nullable, and blank
+    becomes `null`. `rating` and `tastingNotes` are
     **the coffee tasted on its own**.
   - `drinkRating` (1–5) and `drinkTastingNotes` (≤ 5000), both optional and
     nullable: **the finished drink**, for a brew made for a drink (`400`

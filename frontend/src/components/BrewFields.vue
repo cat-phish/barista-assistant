@@ -177,7 +177,8 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
       </div>
       <div class="field">
         <label for="brew-grind">Grind setting</label>
-        <input id="brew-grind" v-model="draft.grind" maxlength="100" />
+        <input id="brew-grind" v-model="draft.grind" inputmode="decimal" placeholder="e.g. 20" :aria-invalid="showErrors && !!errors.grind" />
+        <span v-if="showErrors && errors.grind" class="field-error">{{ errors.grind }}</span>
       </div>
       <div v-if="speedGrinder" class="field">
         <label for="brew-rpm">Speed (RPM)</label>

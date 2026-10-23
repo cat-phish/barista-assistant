@@ -25,12 +25,12 @@ and fix the references.
 **Contents**
 - A. Settings & configuration: 1–4
 - B. Beans: 5
-- C. Brewing & logging: 6–8
-- D. AI suggestions: 9–11
-- E. Insights: 12
-- F. Bar & menu: 13–14
-- G. Home roasting: 15
-- H. Accounts: 16
+- C. Brewing & logging: 6–9
+- D. AI suggestions: 10–12
+- E. Insights: 13
+- F. Bar & menu: 14–15
+- G. Home roasting: 16
+- H. Accounts: 17
 
 ---
 
@@ -192,7 +192,7 @@ Recording a brew: what's measured, and how fast it is to log.
   - Delivered with **ntfy.sh** (or a self-hosted ntfy server): each user sets
     a server and topic under Settings → **Notifications**. The message links
     to the brew's rating screen. Web Push could come later.
-  - The same notification code serves item 8's steep timers and item 15's
+  - The same notification code serves item 8's steep timers and item 16's
     resting reminders.
 - **Size:** M
 - **Depends on:** nothing.
@@ -221,14 +221,33 @@ Recording a brew: what's measured, and how fast it is to log.
     brew is finished and rated later, when the steep ends. Item 7's
     notifications send the "steep done" reminder.
   - The log records the batch size and the dilution served, so the AI
-    (item 9) judges strength correctly.
+    (item 10) judges strength correctly.
 - **Size:** M
 - **Depends on:** 7 for the reminder; the rest can go first.
 - **Open questions:**
-  - Should a cold brew batch be stock, like item 13's ingredient batches,
+  - Should a cold brew batch be stock, like item 14's ingredient batches,
     with servings taken from it?
   - Are there other long brews to cover the same way (e.g. Kyoto-style cold
     drip)?
+
+### 9. Grind settings for multi-ring grinders
+
+- **Status:** idea
+- **Why:** grind settings are numbers on the grinder's dial now (roadmap:
+  numeric grind settings), which suits most grinders. Some grinders count in
+  rings instead: a 1Zpresso says "2.1.0" (rotation, number, click), which
+  isn't a decimal.
+- **Approach:**
+  - A grinder gets a display format, e.g. plain number or rotation.number.click,
+    with the clicks per number and numbers per rotation.
+  - The stored setting stays one number (total clicks), so ranges, steps,
+    last-setting and the AI keep working; the forms and journal show and
+    take it in the grinder's format.
+- **Size:** S–M
+- **Depends on:** nothing.
+- **Open questions:**
+  - Which grinders need it (1Zpresso, Kingrinder, Timemore with a dial)?
+  - Should the AI see the total clicks, the formatted text, or both?
 
 ---
 
@@ -236,7 +255,7 @@ Recording a brew: what's measured, and how fast it is to log.
 
 What the analysis worker sends to the LLM and what comes back.
 
-### 9. Review and refine AI input and output
+### 10. Review and refine AI input and output
 
 - **Status:** idea
 - **Why:** the prompt and structured output (`docs/api/llm-contract.md` §9)
@@ -259,7 +278,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should users be able to rate a suggestion (useful / not), to measure it?
   - Which model and cost per analysis is acceptable?
 
-### 10. Espresso dose and yield suggestions from the AI
+### 11. Espresso dose and yield suggestions from the AI
 
 - **Status:** idea
 - **Why:** the AI suggests grind and temperature changes; for espresso, dose
@@ -268,11 +287,11 @@ What the analysis worker sends to the LLM and what comes back.
   optional dose and yield deltas for espresso brews, and show them with the
   suggestion. Prompt and schema change, plus UI.
 - **Size:** S–M
-- **Depends on:** nothing. Fits with 9.
+- **Depends on:** nothing. Fits with 10.
 - **Open questions:** should it also suggest pre-infusion and profile changes
   for machines that support them?
 
-### 11. Choose what the AI sees
+### 12. Choose what the AI sees
 
 - **Status:** idea
 - **Why:** every recorded brew, bean and recipe detail goes to the AI, and
@@ -286,7 +305,7 @@ What the analysis worker sends to the LLM and what comes back.
   equipment. All on by default. The worker leaves out what's switched off,
   and the prompt doesn't mention it.
 - **Size:** M
-- **Depends on:** nothing. Fits with 9 (the audit says what's worth sending) and
+- **Depends on:** nothing. Fits with 10 (the audit says what's worth sending) and
   1 (the same field keys).
 - **Open questions:**
   - Per workspace, or per person?
@@ -297,7 +316,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## E. Insights
 
-### 12. Statistics and graphs
+### 13. Statistics and graphs
 
 - **Status:** idea
 - **Why:** the brew history is a list. Trends (is this bean getting better
@@ -323,7 +342,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## F. Bar & menu
 
-### 13. Ingredient prep and stock
+### 14. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -338,7 +357,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** how precise does stock need to be (exact grams, or
   "about half left")?
 
-### 14. Public menu: branding and sizes
+### 15. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
@@ -356,7 +375,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## G. Home roasting
 
-### 15. Roasting: green stock, roast logs, resting
+### 16. Roasting: green stock, roast logs, resting
 
 - **Status:** idea
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
@@ -387,7 +406,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## H. Accounts
 
-### 16. Account management and password reset
+### 17. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.

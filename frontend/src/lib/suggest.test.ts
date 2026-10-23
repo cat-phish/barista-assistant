@@ -4,11 +4,11 @@ import { chooseGrind, startingParameters, suggestionFitsGrinder } from './sugges
 
 const brew = (over: Partial<BrewLog>): BrewLog => ({
   id: 'b1', workspaceId: 'w', userId: 'u', beanId: 'bean', recipeId: null, timestamp: '2026-10-18T08:00:00.000Z', utcOffsetMinutes: null,
-  actualDoseGrams: 15, actualWaterGrams: 250, actualYieldGrams: null, tdsPercent: null, actualTempC: 93, actualGrindSetting: '22 clicks', grindRpm: null, beanWeightInGrams: null, groundWeightOutGrams: null, actualTimeSec: 125,
+  actualDoseGrams: 15, actualWaterGrams: 250, actualYieldGrams: null, tdsPercent: null, actualTempC: 93, actualGrindSetting: 22, grindRpm: null, beanWeightInGrams: null, groundWeightOutGrams: null, actualTimeSec: 125,
   rating: 2, tastingNotes: null, drinkRating: null, drinkTastingNotes: null, bean: { id: 'bean', roasterName: 'R', beanName: 'B' }, recipe: null, brewedBy: null,
   grinderId: 'c40', grinder: { id: 'c40', name: 'Comandante C40' }, waterProfileId: null, waterProfile: null, brewerId: null, brewer: null, drinkId: null, drink: null, servingSize: null, servingUnit: null, marks: [], tools: [], ...over,
 });
-const recipe = { targetTempC: 94, grindSettings: [{ grinderId: 'c40', grinderName: 'Comandante C40', setting: '19' }] } as unknown as Recipe;
+const recipe = { targetTempC: 94, grindSettings: [{ grinderId: 'c40', grinderName: 'Comandante C40', setting: 19 }] } as unknown as Recipe;
 const suggestions = (over: Partial<Suggestions> = {}): Suggestions => ({
   latestAnalysis: { id: 'a', brewLogId: 'b1', reasoning: 'Under-extracted.', suggestedGrindDelta: 'finer', suggestedTempDelta: 1, createdAt: '' },
   analyzedBrew: brew({}),
@@ -19,7 +19,7 @@ const suggestions = (over: Partial<Suggestions> = {}): Suggestions => ({
 describe('startingParameters', () => {
   it('applies the temp change to the analyzed brew and keeps its grind as the base', () => {
     expect(startingParameters(suggestions(), recipe)).toMatchObject({
-      tempC: 94, grindBase: '22 clicks', grindAdvice: 'Grind finer', tempDeltaC: 1, reasoning: 'Under-extracted.',
+      tempC: 94, grindBase: 22, grindAdvice: 'Grind finer', tempDeltaC: 1, reasoning: 'Under-extracted.',
       basedOn: { isLatestBrew: true },
     });
   });
@@ -43,12 +43,12 @@ describe('startingParameters', () => {
 });
 
 describe('chooseGrind', () => {
-  const params = startingParameters(suggestions(), recipe)!; // analyzed on c40 at "22 clicks"
+  const params = startingParameters(suggestions(), recipe)!; // analyzed on c40 at 22
   it('prefers the last setting for this grinder + recipe', () => {
-    expect(chooseGrind({ lastSetting: '20', suggestion: params, grinderId: 'c40' })).toEqual({ value: '20', source: 'last' });
+    expect(chooseGrind({ lastSetting: 20, suggestion: params, grinderId: 'c40' })).toEqual({ value: '20', source: 'last' });
   });
   it("falls back to the suggestion's base only on the same grinder", () => {
-    expect(chooseGrind({ lastSetting: null, suggestion: params, grinderId: 'c40' })).toEqual({ value: '22 clicks', source: 'suggestion' });
+    expect(chooseGrind({ lastSetting: null, suggestion: params, grinderId: 'c40' })).toEqual({ value: '22', source: 'suggestion' });
     expect(chooseGrind({ lastSetting: null, suggestion: params, grinderId: 'ode' })).toEqual({ value: '', source: 'none' });
     expect(chooseGrind({ lastSetting: null, suggestion: params, grinderId: '' })).toEqual({ value: '', source: 'none' });
   });
@@ -62,8 +62,12 @@ describe('chooseGrind', () => {
     expect(chooseGrind({ lastSetting: null, suggestion: null, grinderId: 'ode', recipe })).toEqual({ value: '', source: 'none' });
     expect(chooseGrind({ lastSetting: null, suggestion: null, grinderId: '', recipe })).toEqual({ value: '', source: 'none' });
   });
+  it('a setting of 0 still counts, and decimals keep their digits', () => {
+    expect(chooseGrind({ lastSetting: 0, suggestion: params, grinderId: 'c40' })).toEqual({ value: '0', source: 'last' });
+    expect(chooseGrind({ lastSetting: 4.25, suggestion: null, grinderId: 'c40' }).value).toBe('4.25');
+  });
   it('a real setting beats the recipe starting point', () => {
-    expect(chooseGrind({ lastSetting: '21', suggestion: null, grinderId: 'c40', recipe })).toEqual({ value: '21', source: 'last' });
+    expect(chooseGrind({ lastSetting: 21, suggestion: null, grinderId: 'c40', recipe })).toEqual({ value: '21', source: 'last' });
     expect(chooseGrind({ lastSetting: null, suggestion: params, grinderId: 'c40', recipe }).source).toBe('suggestion');
   });
 });

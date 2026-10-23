@@ -14,7 +14,7 @@ import { recipesApi, type RecipeInput } from '../api/recipes';
 import type { Brewer, FlowUnit, Grinder, MethodKind, Recipe, RecipeStyleItem } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import DeleteSection from '../components/DeleteSection.vue';
-import { formatGrams, formatRatio, formatTime, parseDecimal, parseTime } from '../lib/format';
+import { formatGrams, formatGrind, formatRatio, formatTime, GRIND_SETTING, parseDecimal, parseTime } from '../lib/format';
 import { VueDraggable } from 'vue-draggable-plus';
 import {
   ADVANCE,
@@ -131,6 +131,8 @@ const grindErrors = computed(() =>
   grindRows.value.map((row, i) => {
     if (!row.grinderId) return 'Choose a grinder';
     if (!row.setting.trim()) return 'Enter a setting';
+    const setting = parseDecimal(row.setting, GRIND_SETTING);
+    if (!setting.ok) return setting.error;
     if (grindRows.value.findIndex((r) => r.grinderId === row.grinderId) !== i) return 'This grinder is already listed';
     return '';
   }),
@@ -211,7 +213,7 @@ function fill(recipe: Recipe): void {
   firstDropTo.value = recipe.firstDropMaxSec === null ? '' : formatTime(recipe.firstDropMaxSec);
   temp.value = tempText(recipe.targetTempC, temperatureUnit.value);
   defaultGrinderId.value = recipe.defaultGrinderId ?? '';
-  grindRows.value = recipe.grindSettings.map((g) => ({ grinderId: g.grinderId, setting: g.setting }));
+  grindRows.value = recipe.grindSettings.map((g) => ({ grinderId: g.grinderId, setting: formatGrind(g.setting) }));
   flowUnit.value = recipe.flowUnit;
   style.value = recipe.style?.id ?? '';
   steps.value = recipe.steps.map((s) => stepDraft(newStepKey(), s, temperatureUnit.value));
@@ -405,7 +407,11 @@ async function save(): Promise<void> {
     firstDropMaxSec: p.firstDrop.ok ? (p.firstDrop.value?.max ?? null) : null,
     targetTempC: p.temp?.ok ? p.temp.value : null,
     defaultGrinderId: defaultGrinderId.value || null,
-    grindSettings: grindRows.value.map((r) => ({ grinderId: r.grinderId, setting: r.setting.trim() })),
+    // grindErrors has checked every row parses.
+    grindSettings: grindRows.value.map((r) => {
+      const setting = parseDecimal(r.setting, GRIND_SETTING);
+      return { grinderId: r.grinderId, setting: setting.ok ? setting.value : 0 };
+    }),
     flowUnit: flowUnit.value,
     styleId: style.value || null,
     steps: stepsParsed.value.steps,
@@ -576,7 +582,7 @@ async function save(): Promise<void> {
             </div>
             <div class="field">
               <label :for="`grind-setting-${i}`" class="visually-hidden">Starting setting for grinder {{ i + 1 }}</label>
-              <input :id="`grind-setting-${i}`" v-model="row.setting" maxlength="100" placeholder="≈ setting" />
+              <input :id="`grind-setting-${i}`" v-model="row.setting" inputmode="decimal" placeholder="≈ setting" />
             </div>
             <button class="btn-link danger" type="button" :aria-label="`Remove starting point ${i + 1}`" @click="grindRows.splice(i, 1)">✕</button>
             <span v-if="submitted && grindErrors[i]" class="field-error full">{{ grindErrors[i] }}</span>

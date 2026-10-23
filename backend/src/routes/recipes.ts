@@ -28,7 +28,7 @@ import {
   type RecipeStyle,
 } from "@barista/shared/schema";
 import { archiveUpdate } from "../archive.js";
-import { decimalSchema, optionalText, updateSchema } from "../validation.js";
+import { decimalSchema, grindSettingSchema, optionalText, updateSchema } from "../validation.js";
 
 // docs/api/recipes.md §5
 // style: the workspace's style (docs/api/recipe-styles.md §5e); brewsLike is
@@ -37,7 +37,7 @@ export type RecipeStyleSummary = { id: string; name: string; brewsLike: RecipeSt
 export interface RecipeDetails extends Omit<Recipe, "brewerId" | "styleId"> {
   brewer: Pick<Brewer, "id" | "name" | "kind">;
   style: RecipeStyleSummary | null;
-  grindSettings: Array<{ grinderId: string; grinderName: string; setting: string }>;
+  grindSettings: Array<{ grinderId: string; grinderName: string; setting: number }>;
   steps: Array<Omit<RecipeStep, "recipeId">>;
 }
 
@@ -118,7 +118,7 @@ const stepsSchema = z
   });
 
 const grindSettingsSchema = z
-  .array(z.object({ grinderId: z.uuid(), setting: z.string().trim().min(1).max(100) }))
+  .array(z.object({ grinderId: z.uuid(), setting: grindSettingSchema }))
   .max(50)
   .superRefine((list, ctx) => {
     const seen = new Set<string>();
