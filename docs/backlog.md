@@ -28,9 +28,9 @@ and fix the references.
 - C. Brewing & logging: 4–7
 - D. AI suggestions: 8–10
 - E. Insights: 11
-- F. Bar & menu: 12–13
-- G. Home roasting: 14
-- H. Accounts: 15
+- F. Bar & menu: 12–14
+- G. Home roasting: 15
+- H. Accounts: 16
 
 ---
 
@@ -170,7 +170,7 @@ Recording a brew: what's measured, and how fast it is to log.
   - Delivered with **ntfy.sh** (or a self-hosted ntfy server): each user sets
     a server and topic under Settings → **Notifications**. The message links
     to the brew's rating screen. Web Push could come later.
-  - The same notification code serves item 6's steep timers and item 14's
+  - The same notification code serves item 6's steep timers and item 15's
     resting reminders.
 - **Size:** M
 - **Depends on:** nothing.
@@ -356,11 +356,26 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
+### 14. Drink categories: what else they could do
+
+- **Status:** idea
+- **Why:** categories now live on the Drinks page and only group drinks when
+  brewing (roadmap: drink categories move to the Drinks page). Two ideas
+  from that item weren't built.
+- **Approach:** decide the open questions first; each is small.
+- **Size:** S
+- **Depends on:** nothing.
+- **Open questions:**
+  - Should the menu builder offer "add a whole category" as a shortcut,
+    adding every drink in it to a menu section?
+  - Should a category also order the drinks inside it on the brew page
+    (today they're sorted by name)?
+
 ---
 
 ## G. Home roasting
 
-### 14. Roasting: green stock, roast logs, resting
+### 15. Roasting: green stock, roast logs, resting
 
 - **Status:** idea
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
@@ -391,7 +406,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## H. Accounts
 
-### 15. Account management and password reset
+### 16. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
