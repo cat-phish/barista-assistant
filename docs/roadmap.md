@@ -429,3 +429,26 @@ arranging took many taps, and there was no way to see the guests' view.
   renders it and is ready for the guest page (item 19).
 - Sections stay mixed (no beans-only kind). Per-size prices moved to item 19's
   open questions.
+
+## Public menu page (built)
+
+Backlog item 19, branch `public-menu-page`, migration 0041. The public menu
+API existed, arranged in the builder, but nothing showed it to guests.
+
+- **The guest page** is `/menu/:slug`: no login, no app header, the bar's
+  name and its sections as the builder arranges them, readable on a phone in
+  light and dark. The router skips the session check for it (`meta.public`).
+  "This menu isn't available" when it's off or unknown.
+- **Offline:** the service worker serves the page shell for `/menu/*` and
+  the last menu it fetched (NetworkFirst, already configured); the page says
+  "Offline: showing the last saved menu".
+- **Bean details are chosen in the builder:** the beans block's Edit dialog
+  has "Show for each bean" (flavour notes, origin, producer, altitude,
+  process, roast level, roast date as "roasted 5 days ago", and decaf / blend
+  / roasted-for badges). Stored as `menu_items.bean_fields` (null = all).
+  The public response now sends only those, and never stock levels.
+- **Sharing:** with the public menu on, the Menu tab shows the page's link
+  (Copy, Open) and a QR code to download and print.
+- `MenuPreview.vue` renders both the builder's preview and the guest page.
+- **Backlog:** item 19 is now "Public menu: branding and sizes" (accent
+  colour, tagline, logo; per-size prices).

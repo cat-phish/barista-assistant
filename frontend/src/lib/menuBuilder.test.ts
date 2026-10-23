@@ -12,7 +12,7 @@ const drink = (id: string, category: DrinkCategory | null, over: Partial<Drink> 
 });
 const brewer = (id: string, kind: Brewer['kind'], archivedAt: string | null = null) => ({ id, name: id, kind, archivedAt }) as Brewer;
 const item = (id: string, over: Partial<MenuItem>): MenuItem => ({
-  id, itemType: 'drink', drinkId: null, brewerId: null, name: null, description: null, price: null, available: true, source: null, ...over,
+  id, itemType: 'drink', drinkId: null, brewerId: null, name: null, description: null, price: null, available: true, source: null, beanFields: null, ...over,
 });
 
 const latte = drink('Latte', milk);

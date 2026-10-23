@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { Menu, MenuItemType, PublicMenu } from './types';
+import type { BeanMenuField, Menu, MenuItemType, PublicMenu } from './types';
 
 // docs/api/menu.md §7b: the menu builder. Every write returns the whole menu.
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/menu`;
@@ -9,12 +9,15 @@ export interface MenuItemInput {
   description?: string | null;
   price?: number | null; // needs the menu's currency
   available?: boolean;
+  beanFields?: BeanMenuField[] | null; // the beans block only; null = all
 }
 
 export type NewMenuItem = MenuItemInput & { itemType: MenuItemType; drinkId?: string; brewerId?: string };
 
 export const menuApi = {
   get: (workspaceId: string) => api.get<Menu>(base(workspaceId)),
+  // The guest page (docs/api/public-menu.md §7): no login; 404 when off or unknown.
+  publicMenu: (slug: string) => api.get<PublicMenu>(`/api/public/menu/${encodeURIComponent(slug)}`),
   // As guests would see it (the public menu's shape), even while it's off.
   preview: (workspaceId: string) => api.get<PublicMenu>(`${base(workspaceId)}/preview`),
   setCurrency: (workspaceId: string, currency: string | null) => api.patch<Menu>(base(workspaceId), { currency }),

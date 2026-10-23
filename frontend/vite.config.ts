@@ -36,6 +36,10 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        // App routes (the guest menu at /menu/:slug too) load the cached shell
+        // offline; API addresses opened directly are never answered with it.
+        navigateFallback: 'index.html',
+        navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
             urlPattern: /\/api\/public\/menu\/.*/i,

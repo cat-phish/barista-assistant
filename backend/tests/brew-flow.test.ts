@@ -213,7 +213,7 @@ describe("public menu", () => {
         description: null,
         items: [
           { type: "drink", id: atlas, name: "The Atlas", description: "V60 with orange cold foam", method: "Filter", variantOf: null, ingredients: ["Orange cold foam"], price: null, available: true },
-          { type: "beans", beans: [expect.objectContaining({ beanName: "Shown" })] },
+          { type: "beans", fields: expect.any(Array), beans: [expect.objectContaining({ beanName: "Shown" })] },
         ],
       },
     ]);

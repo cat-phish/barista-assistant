@@ -288,6 +288,13 @@
       "when": 1792727209280,
       "tag": "0040_archive_recipes_drinks_ingredients",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "5",
+      "when": 1792730191979,
+      "tag": "0041_menu_bean_fields",
+      "breakpoints": true
     }
   ]
 }

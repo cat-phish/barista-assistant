@@ -2,17 +2,38 @@ import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { db } from "../db.js";
 import { sendError } from "../http.js";
-import { beans, drinkIngredients, drinks, ingredients, workspaces, type Bean, type MethodKind, type Workspace } from "@barista/shared/schema";
+import { BEAN_MENU_FIELDS, beans, drinkIngredients, drinks, ingredients, workspaces, type Bean, type BeanMenuField, type MethodKind, type Workspace } from "@barista/shared/schema";
 import { SLUG_PATTERN } from "../validation.js";
 import { loadMenu } from "./menu.js";
 
 // docs/api/public-menu.md §7: the menu as arranged in the builder (§7b).
-export type PublicBean = Pick<
+// A bean always has its roaster and name; the rest only when the beans block
+// shows that field (BEAN_MENU_FIELDS, chosen in the builder). Stock, price,
+// website, notes, rating, purchase date and supplier stay private.
+type BeanDetails = Pick<
   Bean,
-  | "id" | "roasterName" | "beanName" | "process" | "roastDate" | "inventoryWeightGrams"
-  | "roastLevel" | "detailedRoastLevel" | "roastType" | "blendType" | "decaf"
+  | "process" | "roastDate" | "roastLevel" | "detailedRoastLevel" | "roastType" | "blendType" | "decaf"
   | "flavorProfile" | "originArea" | "country" | "region" | "altitudeMasl" | "producer"
->; // price, website, notes, rating, purchase date and supplier stay private
+>;
+export type PublicBean = Pick<Bean, "id" | "roasterName" | "beanName"> & Partial<BeanDetails>;
+// The bean columns each menu field shows.
+const FIELD_COLUMNS: Record<BeanMenuField, ReadonlyArray<keyof BeanDetails>> = {
+  flavorProfile: ["flavorProfile"],
+  origin: ["originArea", "country", "region"],
+  producer: ["producer"],
+  altitude: ["altitudeMasl"],
+  process: ["process"],
+  roastLevel: ["roastLevel", "detailedRoastLevel"],
+  roastDate: ["roastDate"],
+  decaf: ["decaf"],
+  blendType: ["blendType"],
+  roastType: ["roastType"],
+};
+function publicBean(bean: PublicBean & BeanDetails, fields: readonly BeanMenuField[]): PublicBean {
+  const out: PublicBean = { id: bean.id, roasterName: bean.roasterName, beanName: bean.beanName };
+  for (const f of fields) for (const key of FIELD_COLUMNS[f]) Object.assign(out, { [key]: bean[key] });
+  return out;
+}
 
 export interface PublicMenuItem {
   type: "drink" | "brewer";
@@ -27,6 +48,7 @@ export interface PublicMenuItem {
 }
 export interface PublicBeansBlock {
   type: "beans";
+  fields: BeanMenuField[]; // what each bean shows besides its roaster and name
   beans: PublicBean[];
 }
 export interface PublicMenuSection {
@@ -97,7 +119,6 @@ export async function buildPublicMenu(workspace: { id: string; name: string; slu
             beanName: beans.beanName,
             process: beans.process,
             roastDate: beans.roastDate,
-            inventoryWeightGrams: beans.inventoryWeightGrams,
             roastLevel: beans.roastLevel,
             detailedRoastLevel: beans.detailedRoastLevel,
             roastType: beans.roastType,
@@ -126,7 +147,10 @@ export async function buildPublicMenu(workspace: { id: string; name: string; slu
       name: s.name,
       description: s.description,
       items: s.items.flatMap((i): Array<PublicMenuItem | PublicBeansBlock> => {
-        if (i.itemType === "beans") return menuBeans.length ? [{ type: "beans", beans: menuBeans }] : [];
+        if (i.itemType === "beans") {
+          const fields = i.beanFields ?? [...BEAN_MENU_FIELDS];
+          return menuBeans.length ? [{ type: "beans", fields, beans: menuBeans.map((b) => publicBean(b, fields)) }] : [];
+        }
         // An archived brewer, or a source that's gone, is left off.
         if (!i.source || i.source.archived) return [];
         const id = (i.drinkId ?? i.brewerId)!;

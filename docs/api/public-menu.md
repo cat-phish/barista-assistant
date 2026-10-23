@@ -50,6 +50,7 @@ Retrieves the read-only menu for a workspace, as arranged in the menu builder
         "items": [
           {
             "type": "beans",
+            "fields": ["flavorProfile", "origin", "producer", "altitude", "process", "roastLevel", "roastDate", "decaf", "blendType", "roastType"],
             "beans": [
               {
                 "id": "uuid",
@@ -57,7 +58,6 @@ Retrieves the read-only menu for a workspace, as arranged in the menu builder
                 "beanName": "Southern Weather",
                 "process": "washed",
                 "roastDate": "2026-10-01T00:00:00.000Z",
-                "inventoryWeightGrams": 250,
                 "roastLevel": "light",
                 "detailedRoastLevel": "city",
                 "roastType": "filter",
@@ -88,10 +88,15 @@ Retrieves the read-only menu for a workspace, as arranged in the menu builder
     listed, for the page to mark.
   - Archived brewers, and items whose drink or brewer is gone, are left out.
   - The beans block lists active (not archived, §4) beans with
-    `showOnPublicMenu`, by roaster then name, with their roast, blend and
-    origin details and `decaf`. A bean's price, bag weight, purchase date,
-    green supplier, website, rating and notes aren't published; nor are
-    recipe details (doses, steps).
+    `showOnPublicMenu`, by roaster then name. Each has its `id`,
+    `roasterName` and `beanName`, plus only the details in `fields` (chosen
+    in the builder, §7b; all of them by default): `origin` is `originArea`,
+    `country` and `region`; `roastLevel` is `roastLevel` and
+    `detailedRoastLevel`; the others are the bean field of the same name
+    (`altitude` = `altitudeMasl`). A field that isn't chosen is left out of
+    each bean, not sent as `null`. A bean's stock, price, bag weight, purchase
+    date, green supplier, website, rating and notes are never published; nor
+    are recipe details (doses, steps).
 - **Error Responses:**
   - `404 Not Found`: Workspace slug does not exist or `isPublicMenuEnabled` is
     `false`. Slugs are matched exactly: `/menu/Jordans-Coffee-Bar` is a `404`,
