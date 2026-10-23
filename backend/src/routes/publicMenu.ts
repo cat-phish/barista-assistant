@@ -120,8 +120,8 @@ publicMenuRouter.get(
         description: s.description,
         items: s.items.flatMap((i): Array<PublicMenuItem | PublicBeansBlock> => {
           if (i.itemType === "beans") return menuBeans.length ? [{ type: "beans", beans: menuBeans }] : [];
-          // A retired brewer, or a source that's gone, is left off.
-          if (!i.source || i.source.retired) return [];
+          // An archived brewer, or a source that's gone, is left off.
+          if (!i.source || i.source.archived) return [];
           const id = (i.drinkId ?? i.brewerId)!;
           const parent = i.drinkId ? parentOf.get(i.drinkId) : null;
           return [

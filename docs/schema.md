@@ -190,7 +190,7 @@ export type ProfileControl = (typeof PROFILE_CONTROLS)[number];
 // `style`, not the brewer's: one brewer can do several.
 // Espresso brewers also record what the barista controls (pre-infusion, flow,
 // pressure); the shot timer and the AI use it. The public menu places brewers
-// through the menu builder (7e). Retired like grinders once brews used it.
+// through the menu builder (7e). Archived like grinders once brews used it.
 export const METHOD_KINDS = ["filter", "espresso", "stovetop", "other"] as const;
 export type MethodKind = (typeof METHOD_KINDS)[number];
 // A recipe's style, by its brewer's method: how the cup is brewed. Descriptive
@@ -227,7 +227,7 @@ export const brewers = mysqlTable(
     preinfusion: varchar("preinfusion", { length: 20 }).$type<Preinfusion>().default("none").notNull(),
     flowControl: varchar("flow_control", { length: 20 }).$type<ProfileControl>().default("none").notNull(),
     pressureControl: varchar("pressure_control", { length: 20 }).$type<ProfileControl>().default("none").notNull(),
-    retiredAt: timestamp("retired_at"), // null = active
+    archivedAt: timestamp("archived_at"), // null = active
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
@@ -238,7 +238,7 @@ export const brewers = mysqlTable(
 // 5b. Grinders (Per-Workspace Equipment)
 // Brew logs record which grinder was used, since a grind setting ("20") only
 // means something for a specific grinder. Recipes stay grinder-neutral.
-// A grinder used by brew logs is retired (retiredAt set) rather than deleted:
+// A grinder used by brew logs is archived (archivedAt set) rather than deleted:
 // it leaves the pickers but history keeps its name. Unused ones can be deleted.
 export const grinders = mysqlTable(
   "grinders",
@@ -258,7 +258,7 @@ export const grinders = mysqlTable(
     burrType: varchar("burr_type", { length: 20 }).$type<BurrType>(), // BURR_TYPES
     burrSizeMm: int("burr_size_mm"),
     power: varchar("power", { length: 20 }).$type<GrinderPower>(), // GRINDER_POWER
-    retiredAt: timestamp("retired_at"), // null = active
+    archivedAt: timestamp("archived_at"), // null = active
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
@@ -270,7 +270,7 @@ export const grinders = mysqlTable(
 // The water a brew was made with (docs/api/water-profiles.md §3c). Every
 // figure is optional, in mg/L (ppm); GH and KH are expressed as CaCO3. At most
 // one profile is the default (the API keeps it so), which new brews start on.
-// Retired like grinders once brews use them.
+// Archived like grinders once brews use them.
 export const waterProfiles = mysqlTable(
   "water_profiles",
   {
@@ -292,7 +292,7 @@ export const waterProfiles = mysqlTable(
     chloridePpm: decimal("chloride_ppm", { precision: 7, scale: 2, mode: "number" }),
     sulfatePpm: decimal("sulfate_ppm", { precision: 7, scale: 2, mode: "number" }),
     ph: decimal("ph", { precision: 3, scale: 1, mode: "number" }),
-    retiredAt: timestamp("retired_at"), // null = active
+    archivedAt: timestamp("archived_at"), // null = active
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
@@ -304,7 +304,7 @@ export const waterProfiles = mysqlTable(
 // What a brew's prep used: WDT, a puck screen, a rinsed paper filter…
 // (docs/api/prep-tools.md §3d). methodKind limits a tool to one method's
 // brews (null = every method); position is the order of the brew checklist.
-// Seeded with DEFAULT_PREP_TOOLS when a workspace is created. Retired like
+// Seeded with DEFAULT_PREP_TOOLS when a workspace is created. Archived like
 // grinders once brews use them.
 export const DEFAULT_PREP_TOOLS = [
   { name: "WDT", methodKind: "espresso" },
@@ -330,7 +330,7 @@ export const prepTools = mysqlTable(
     name: varchar("name", { length: 100 }).notNull(),
     methodKind: varchar("method_kind", { length: 20 }).$type<MethodKind>(), // METHOD_KINDS, or null = all
     position: int("position").notNull(), // 1, 2, 3...
-    retiredAt: timestamp("retired_at"), // null = active
+    archivedAt: timestamp("archived_at"), // null = active
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
@@ -613,12 +613,12 @@ export const brewLogs = mysqlTable("brew_logs", {
     onDelete: "set null",
   }),
   // Which grinder actualGrindSetting refers to. Optional. Grinders in use are
-  // retired, not deleted, so this normally survives; set null as a backstop.
+  // archived, not deleted, so this normally survives; set null as a backstop.
   grinderId: varchar("grinder_id", { length: 36 }).references(() => grinders.id, {
     onDelete: "set null",
   }),
   // The water used (optional; docs/api/brew-logs.md §6). Profiles in use are
-  // retired, not deleted; set null as a backstop.
+  // archived, not deleted; set null as a backstop.
   waterProfileId: varchar("water_profile_id", { length: 36 }).references(() => waterProfiles.id, {
     onDelete: "set null",
   }),
@@ -631,7 +631,7 @@ export const brewLogs = mysqlTable("brew_logs", {
   servingUnit: varchar("serving_unit", { length: 10 }).$type<ServingUnit>(), // SERVING_UNITS
   // The brewer used: the recipe's, set by the API (docs/api/brew-logs.md §6), and
   // kept if the recipe later changes or is deleted. Brewers in use are
-  // retired, not deleted; set null as a backstop.
+  // archived, not deleted; set null as a backstop.
   brewerId: varchar("brewer_id", { length: 36 }).references(() => brewers.id, {
     onDelete: "set null",
   }),
@@ -681,7 +681,7 @@ export const brewLogMarks = mysqlTable("brew_log_marks", {
 
 // 8c. Brew Log Tools (The Prep Tools a Brew Used)
 // Replaced as a whole when a log is edited (docs/api/brew-logs.md §6). Tools
-// in use are retired, not deleted; cascade is a backstop.
+// in use are archived, not deleted; cascade is a backstop.
 export const brewLogTools = mysqlTable(
   "brew_log_tools",
   {

@@ -233,10 +233,10 @@ describe("processBrewAnalysis", () => {
     expect(context.brew.roastAgeDays).toBe(7); // Oct 1 -> Oct 8 (UTC would say 8)
   });
 
-  it("tells the LLM which grinder each brew used, with its details (retired grinders included)", async () => {
+  it("tells the LLM which grinder each brew used, with its details (archived grinders included)", async () => {
     llm.mockResolvedValue(ANALYSIS);
     const c40 = randomUUID();
-    await db.insert(grinders).values({ id: c40, workspaceId, name: "Comandante C40", adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, retiredAt: new Date() });
+    await db.insert(grinders).values({ id: c40, workspaceId, name: "Comandante C40", adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, archivedAt: new Date() });
     await db.update(brewLogs).set({ grinderId: c40, actualGrindSetting: "20" }).where(eq(brewLogs.id, logIds.day8!));
     await db.update(brewLogs).set({ grinderId: c40, actualGrindSetting: "22" }).where(eq(brewLogs.id, logIds.day6!));
     const recipeId = (await db.select({ id: recipes.id }).from(recipes))[0]!.id;
@@ -253,7 +253,7 @@ describe("processBrewAnalysis", () => {
   it("tells the LLM the water each brew used, with its figures", async () => {
     llm.mockResolvedValue(ANALYSIS);
     const tww = randomUUID();
-    await db.insert(waterProfiles).values({ id: tww, workspaceId, name: "Third Wave Water", generalHardnessPpm: 102, alkalinityPpm: 0, calciumPpm: 30, retiredAt: new Date() });
+    await db.insert(waterProfiles).values({ id: tww, workspaceId, name: "Third Wave Water", generalHardnessPpm: 102, alkalinityPpm: 0, calciumPpm: 30, archivedAt: new Date() });
     await db.update(brewLogs).set({ waterProfileId: tww }).where(eq(brewLogs.id, logIds.day8!));
     await processBrewAnalysis({ brewLogId: logIds.day8! });
     const context = llm.mock.calls[0]![0] as BrewContext;
@@ -269,7 +269,7 @@ describe("processBrewAnalysis", () => {
     const [rdt, wdt] = [randomUUID(), randomUUID()];
     await db.insert(prepTools).values([
       { id: rdt, workspaceId, name: "RDT", methodKind: null, position: 2 },
-      { id: wdt, workspaceId, name: "WDT", methodKind: "espresso", position: 1, retiredAt: new Date() },
+      { id: wdt, workspaceId, name: "WDT", methodKind: "espresso", position: 1, archivedAt: new Date() },
     ]);
     await db.insert(brewLogTools).values([
       { brewLogId: logIds.day8!, toolId: rdt },

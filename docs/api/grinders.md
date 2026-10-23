@@ -21,7 +21,7 @@ grinder. Recipes are grinder-neutral.
   "burrType": "conical",
   "burrSizeMm": 39,
   "power": "manual",
-  "retiredAt": null,
+  "archivedAt": null,
   "createdAt": "2026-10-18T09:00:00.000Z"
 }
 ```
@@ -43,15 +43,15 @@ in steps ("2 clicks finer"); the rest is reference.
 
 `createdAt` (read-only) is when the grinder was added; lists sort by it.
 
-A **retired** grinder (`retiredAt` set) is hidden from pickers for new brews,
+A **archived** grinder (`archivedAt` set) is hidden from pickers for new brews,
 but past brews keep showing it, and it can be restored. A grinder that brews
-were logged with can't be deleted (retire it instead); an unused one can.
+were logged with can't be deleted (archive it instead); an unused one can.
 
 ## `GET /api/workspaces/:workspaceId/grinders`
 
 - **Auth Required:** `true` (any member)
 - **Success (`200 OK`):** `{ "grinders": [ { ...grinder } ] }`: active ones
-  first, then retired; each sorted by `name`.
+  first, then archived; each sorted by `name`.
 
 ## `POST /api/workspaces/:workspaceId/grinders`
 
@@ -66,8 +66,8 @@ were logged with can't be deleted (retire it instead); an unused one can.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Body:** any non-empty subset of the `POST` fields plus
-  `"retired": true | false`. `retired: true` sets `retiredAt` to now
-  (unchanged if already retired); `false` restores it. The range is a pair:
+  `"archived": true | false`. `archived: true` sets `archivedAt` to now
+  (unchanged if already archived); `false` restores it. The range is a pair:
   send both ends, or `null` for either to clear both.
 - **Success (`200 OK`):** `{ "grinder": { ...grinder } }`
 - **Errors:** `400`; `403` viewer; `404` not in this workspace; `409` name taken.
@@ -77,7 +77,7 @@ were logged with can't be deleted (retire it instead); an unused one can.
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Success (`204 No Content`)**
 - **Errors:** `403` viewer; `404` not in this workspace; `409` brews were
-  logged with it, with body `{ "error": "...", "brewLogCount": 12 }`. Retire
+  logged with it, with body `{ "error": "...", "brewLogCount": 12 }`. Archive
   it instead.
 
 ## `GET /api/workspaces/:workspaceId/grinders/:grinderId/last-setting?recipeId=<id>`

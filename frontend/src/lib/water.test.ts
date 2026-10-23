@@ -3,7 +3,7 @@ import type { WaterProfile } from '../api/types';
 import { defaultWaterProfileId, parseWaterForm, waterForm, waterSummary } from './water';
 
 const profile = (over: Partial<WaterProfile> = {}): WaterProfile => ({
-  id: 'w1', name: 'TWW', notes: null, isDefault: false, retiredAt: null, createdAt: '2026-10-22T00:00:00.000Z',
+  id: 'w1', name: 'TWW', notes: null, isDefault: false, archivedAt: null, createdAt: '2026-10-22T00:00:00.000Z',
   tdsPpm: 150, generalHardnessPpm: 102, alkalinityPpm: 0, calciumPpm: null, magnesiumPpm: null, sodiumPpm: null,
   potassiumPpm: null, bicarbonatePpm: null, chloridePpm: null, sulfatePpm: null, ph: 7.2, ...over,
 });
@@ -29,7 +29,7 @@ describe('water labels and defaults', () => {
 
   it('starts new brews on the active default, else none', () => {
     expect(defaultWaterProfileId([profile(), profile({ id: 'w2', isDefault: true })])).toBe('w2');
-    expect(defaultWaterProfileId([profile({ isDefault: true, retiredAt: '2026-10-22T00:00:00.000Z' })])).toBe('');
+    expect(defaultWaterProfileId([profile({ isDefault: true, archivedAt: '2026-10-22T00:00:00.000Z' })])).toBe('');
     expect(defaultWaterProfileId([])).toBe('');
   });
 });

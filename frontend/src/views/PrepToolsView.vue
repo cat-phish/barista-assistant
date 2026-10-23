@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Prep tools (docs/api/prep-tools.md §3d), one tab of Bar setup: the brew
 // form's Prep checklist, in this order. Add, edit (name and method), move
-// up/down, retire (keeps history) or delete (only tools no brew used).
+// up/down, archive (keeps history) or delete (only tools no brew used).
 import { computed, onMounted, ref } from 'vue';
 import { ApiError, errorMessage } from '../api/client';
 import { prepToolsApi } from '../api/prepTools';
@@ -17,17 +17,17 @@ const workspaces = useWorkspaceStore();
 const tools = ref<PrepTool[]>([]);
 const loading = ref(true);
 const error = ref('');
-const showRetired = ref(false);
+const showArchived = ref(false);
 
-const retiredCount = computed(() => tools.value.filter((t) => t.retiredAt).length);
-const shown = computed(() => tools.value.filter((t) => !t.retiredAt || showRetired.value));
+const archivedCount = computed(() => tools.value.filter((t) => t.archivedAt).length);
+const shown = computed(() => tools.value.filter((t) => !t.archivedAt || showArchived.value));
 
 async function load(): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
     tools.value = (await prepToolsApi.list(ws)).tools;
-    if (retiredCount.value === 0) showRetired.value = false;
+    if (archivedCount.value === 0) showArchived.value = false;
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -78,7 +78,7 @@ async function saveEdit(t: PrepTool): Promise<void> {
   if (name && (await run((ws) => prepToolsApi.update(ws, t.id, { name, methodKind: editMethod.value || null })))) editingId.value = null;
 }
 
-// Swap with the neighbour on screen; the API takes the whole list (retired too).
+// Swap with the neighbour on screen; the API takes the whole list (archived too).
 async function move(t: PrepTool, by: -1 | 1): Promise<void> {
   const neighbour = shown.value[shown.value.indexOf(t) + by];
   if (!neighbour) return;
@@ -89,9 +89,9 @@ async function move(t: PrepTool, by: -1 | 1): Promise<void> {
   await run((ws) => prepToolsApi.reorder(ws, ids));
 }
 
-const setRetired = (t: PrepTool, retired: boolean) => run((ws) => prepToolsApi.update(ws, t.id, { retired }));
+const setArchived = (t: PrepTool, archived: boolean) => run((ws) => prepToolsApi.update(ws, t.id, { archived }));
 
-// Delete: confirm; if brews used it, the server says how many and we offer Retire.
+// Delete: confirm; if brews used it, the server says how many and we offer Archive.
 const pending = ref<PrepTool | null>(null);
 const usedCount = ref<number | null>(null);
 const dialogError = ref('');
@@ -118,10 +118,10 @@ async function confirmDelete(): Promise<void> {
     busy.value = false;
   }
 }
-async function retireInstead(): Promise<void> {
+async function archiveInstead(): Promise<void> {
   const t = pending.value;
   pending.value = null;
-  if (t) await setRetired(t, true);
+  if (t) await setArchived(t, true);
 }
 </script>
 
@@ -139,9 +139,9 @@ async function retireInstead(): Promise<void> {
       <section class="card stack" aria-labelledby="tools-title">
         <div class="head">
           <h2 id="tools-title">Tools</h2>
-          <label v-if="retiredCount > 0" class="checkbox">
-            <input v-model="showRetired" type="checkbox" />
-            Show retired ({{ retiredCount }})
+          <label v-if="archivedCount > 0" class="checkbox">
+            <input v-model="showArchived" type="checkbox" />
+            Show archived ({{ archivedCount }})
           </label>
         </div>
         <ol v-if="shown.length" class="tools">
@@ -158,17 +158,17 @@ async function retireInstead(): Promise<void> {
               <button class="btn-link" type="button" @click="editingId = null">Cancel</button>
             </form>
             <div v-else class="row">
-              <span class="name" :class="{ muted: t.retiredAt }">{{ t.name }}<template v-if="t.retiredAt"> (retired)</template></span>
+              <span class="name" :class="{ muted: t.archivedAt }">{{ t.name }}<template v-if="t.archivedAt"> (archived)</template></span>
               <span class="badge">{{ methodLabel(t.methodKind) }}</span>
               <template v-if="workspaces.canEdit">
                 <button class="btn-link" type="button" :disabled="busy || i === 0" :aria-label="`Move ${t.name} up`" @click="move(t, -1)">↑</button>
                 <button class="btn-link" type="button" :disabled="busy || i === shown.length - 1" :aria-label="`Move ${t.name} down`" @click="move(t, 1)">↓</button>
-                <template v-if="t.retiredAt">
-                  <button class="btn-link" type="button" :disabled="busy" @click="setRetired(t, false)">Restore</button>
+                <template v-if="t.archivedAt">
+                  <button class="btn-link" type="button" :disabled="busy" @click="setArchived(t, false)">Restore</button>
                 </template>
                 <template v-else>
                   <button class="btn-link" type="button" @click="startEdit(t)">Edit</button>
-                  <button class="btn-link" type="button" :disabled="busy" @click="setRetired(t, true)">Retire</button>
+                  <button class="btn-link" type="button" :disabled="busy" @click="setArchived(t, true)">Archive</button>
                 </template>
                 <button class="btn-link danger" type="button" @click="askDelete(t)">Delete</button>
               </template>
@@ -195,12 +195,12 @@ async function retireInstead(): Promise<void> {
     <p v-if="usedCount === null">{{ pending?.name }} will be removed.</p>
     <p v-else>
       {{ usedCount }} brew{{ usedCount === 1 ? '' : 's' }} used {{ pending?.name }}, so it can't be deleted.
-      Retire it instead: it leaves the checklist, and past brews keep showing it.
+      Archive it instead: it leaves the checklist, and past brews keep showing it.
     </p>
     <p v-if="dialogError" class="form-error" role="alert">{{ dialogError }}</p>
     <template #actions>
       <button v-if="usedCount === null" class="btn btn-danger" type="button" :disabled="busy" @click="confirmDelete">Delete</button>
-      <button v-else class="btn btn-primary" type="button" @click="retireInstead">Retire instead</button>
+      <button v-else class="btn btn-primary" type="button" @click="archiveInstead">Archive instead</button>
       <button class="btn btn-secondary" type="button" :disabled="busy" @click="pending = null">Cancel</button>
     </template>
   </ConfirmDialog>

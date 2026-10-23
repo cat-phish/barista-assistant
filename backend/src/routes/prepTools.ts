@@ -24,7 +24,7 @@ const toolFields = {
   methodKind: z.enum(METHOD_KINDS).nullable().optional(), // null = every method
 };
 const createSchema = z.object(toolFields).strict();
-const updateToolSchema = updateSchema({ ...toolFields, retired: z.boolean() });
+const updateToolSchema = updateSchema({ ...toolFields, archived: z.boolean() });
 const orderSchema = z
   .object({ toolIds: z.array(z.uuid()).max(200).refine((ids) => new Set(ids).size === ids.length, "each tool once") })
   .strict();
@@ -34,7 +34,7 @@ const summary = {
   name: prepTools.name,
   methodKind: prepTools.methodKind,
   position: prepTools.position,
-  retiredAt: prepTools.retiredAt,
+  archivedAt: prepTools.archivedAt,
   createdAt: prepTools.createdAt,
 };
 
@@ -60,7 +60,7 @@ const duplicate = (res: Response, err: unknown): boolean => {
 export const prepToolsRouter = Router({ mergeParams: true });
 prepToolsRouter.use(requireAuth);
 
-// In checklist order, retired ones included (flagged by retiredAt).
+// In checklist order, archived ones included (flagged by archivedAt).
 prepToolsRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<{ tools: PrepToolSummary[] }>) => {
   const { workspaceId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId))) return;
@@ -93,7 +93,7 @@ prepToolsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<{ 
   res.status(201).json({ tool });
 });
 
-// Every tool of the workspace (retired ones too), once each, in the new order.
+// Every tool of the workspace (archived ones too), once each, in the new order.
 prepToolsRouter.put("/order", async (req: Request<WorkspaceParams>, res: Response<{ tools: PrepToolSummary[] }>) => {
   const { workspaceId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
@@ -119,15 +119,15 @@ prepToolsRouter.patch("/:toolId", async (req: Request<ToolParams>, res: Response
   if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId, WRITE_ROLES))) return;
   const body = parseBody(updateToolSchema, req, res);
   if (!body) return;
-  const { retired, ...fields } = body;
+  const { archived, ...fields } = body;
   try {
     await db
       .update(prepTools)
       .set({
         ...fields,
-        // Keep the original retirement date if it's already retired.
-        ...(retired === true ? { retiredAt: sql`COALESCE(${prepTools.retiredAt}, NOW())` } : {}),
-        ...(retired === false ? { retiredAt: null } : {}),
+        // Keep the original archive date if it's already archived.
+        ...(archived === true ? { archivedAt: sql`COALESCE(${prepTools.archivedAt}, NOW())` } : {}),
+        ...(archived === false ? { archivedAt: null } : {}),
       })
       .where(inWorkspace(req.params));
   } catch (err) {
@@ -142,7 +142,7 @@ prepToolsRouter.patch("/:toolId", async (req: Request<ToolParams>, res: Response
   res.json({ tool });
 });
 
-// Only unused tools can be deleted; used ones are retired so history keeps them.
+// Only unused tools can be deleted; used ones are archived so history keeps them.
 prepToolsRouter.delete("/:toolId", async (req: Request<ToolParams>, res: Response) => {
   if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId, WRITE_ROLES))) return;
   const outcome = await db.transaction(async (tx) => {
@@ -161,7 +161,7 @@ prepToolsRouter.delete("/:toolId", async (req: Request<ToolParams>, res: Respons
     return;
   }
   if (outcome.status === "in_use") {
-    sendError(res, 409, `${outcome.brewLogCount} brew(s) used this tool. Retire it instead.`, { brewLogCount: outcome.brewLogCount });
+    sendError(res, 409, `${outcome.brewLogCount} brew(s) used this tool. Archive it instead.`, { brewLogCount: outcome.brewLogCount });
     return;
   }
   res.status(204).end();

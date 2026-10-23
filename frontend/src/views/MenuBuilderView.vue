@@ -37,7 +37,7 @@ async function load(): Promise<void> {
     const [m, d, b] = await Promise.all([menuApi.get(ws), drinksApi.list(ws), brewersApi.list(ws)]);
     menu.value = m;
     drinks.value = [...d.drinks].sort((x, y) => x.name.localeCompare(y.name));
-    brewers.value = b.brewers.filter((x) => !x.retiredAt);
+    brewers.value = b.brewers.filter((x) => !x.archivedAt);
     currency.value = m.currency ?? '';
   } catch (err) {
     error.value = errorMessage(err);
@@ -290,7 +290,7 @@ async function deleteItem(): Promise<void> {
               <span class="item-name">{{ itemTitle(i) }}</span>
               <span class="muted small">{{ itemSource(i) }}</span>
               <span v-if="i.description" class="muted small">{{ i.description }}</span>
-              <span v-if="i.source?.retired" class="field-error">This brewer is retired, so it's left off the public menu.</span>
+              <span v-if="i.source?.archived" class="field-error">This brewer is archived, so it's left off the public menu.</span>
             </div>
             <span v-if="i.price !== null" class="price">{{ formatPrice(i.price) }}</span>
             <label v-if="workspaces.canEdit && i.itemType !== 'beans'" class="checkbox small">

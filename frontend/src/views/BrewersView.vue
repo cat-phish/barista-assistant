@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // Brewers (docs/api/brewers.md §3), one tab of Bar setup: whatever makes the
 // coffee, from a V60 to an espresso machine. A table: filter by type (or
-// Retired), sort by any column; a row expands to its details and actions.
-// Works like grinders: retire keeps history; delete only for brewers no
+// Archived), sort by any column; a row expands to its details and actions.
+// Works like grinders: archive keeps history; delete only for brewers no
 // recipe or brew uses.
 import { computed, onMounted, ref, watch } from 'vue';
 import { brewersApi } from '../api/brewers';
@@ -57,8 +57,8 @@ const columns: SortColumns<Brewer> = {
 };
 const sortChoices = sortColumnOptions(columns);
 const filter = ref(ALL);
-const showRetired = ref(false);
-const retiredCount = computed(() => brewers.value.filter((b) => b.retiredAt).length);
+const showArchived = ref(false);
+const archivedCount = computed(() => brewers.value.filter((b) => b.archivedAt).length);
 const sort = ref('name_asc');
 watch(filter, (v) => rememberView(viewKey('filter'), v));
 watch(sort, (v) => rememberView(viewKey('sort'), v));
@@ -69,7 +69,7 @@ const filterOptions = computed(() => [
 const filterName = computed(() => filterOptions.value.find((o) => o.value === filter.value)?.label ?? '');
 const shown = computed(() => {
   const f = filter.value;
-  const list = brewers.value.filter((b) => (!b.retiredAt || showRetired.value) && (f === ALL || b.kind === f));
+  const list = brewers.value.filter((b) => (!b.archivedAt || showArchived.value) && (f === ALL || b.kind === f));
   return sortBy(list, sort.value, columns);
 });
 // One row open at a time.
@@ -83,7 +83,7 @@ async function load(): Promise<void> {
     const [b, r] = await Promise.all([brewersApi.list(ws), recipesApi.list(ws)]);
     brewers.value = b.brewers;
     recipes.value = r.recipes;
-    if (retiredCount.value === 0) showRetired.value = false;
+    if (archivedCount.value === 0) showArchived.value = false;
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -103,13 +103,13 @@ function replace(updated: Brewer): void {
 }
 
 const busyId = ref<string | null>(null);
-async function setRetired(m: Brewer, value: boolean): Promise<void> {
+async function setArchived(m: Brewer, value: boolean): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   busyId.value = m.id;
   error.value = '';
   try {
-    replace((await brewersApi.update(ws, m.id, { retired: value })).brewer);
+    replace((await brewersApi.update(ws, m.id, { archived: value })).brewer);
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -117,7 +117,7 @@ async function setRetired(m: Brewer, value: boolean): Promise<void> {
   }
 }
 
-// Delete: confirm; if brews used it, the server says how many and we offer Retire.
+// Delete: confirm; if brews used it, the server says how many and we offer Archive.
 const pending = ref<Brewer | null>(null);
 const usedCount = ref<number | null>(null);
 const deleting = ref(false);
@@ -138,7 +138,7 @@ async function confirmDelete(): Promise<void> {
     pending.value = null;
     await load();
   } catch (err) {
-    // Recipes must move first; brew history means retire instead.
+    // Recipes must move first; brew history means archive instead.
     const body = err instanceof ApiError && err.status === 409 ? err.body : null;
     const uses = Number(body?.recipeCount ?? 0);
     if (body && uses === 0 && typeof body.brewLogCount === 'number') usedCount.value = body.brewLogCount;
@@ -147,10 +147,10 @@ async function confirmDelete(): Promise<void> {
     deleting.value = false;
   }
 }
-async function retireInstead(): Promise<void> {
+async function archiveInstead(): Promise<void> {
   const m = pending.value;
   pending.value = null;
-  if (m) await setRetired(m, true);
+  if (m) await setArchived(m, true);
 }
 </script>
 
@@ -170,8 +170,8 @@ async function retireInstead(): Promise<void> {
     <template v-if="!loading">
       <div v-if="brewers.length === 0" class="card empty"><p>No brewers yet.</p></div>
       <template v-else>
-        <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="brewers" filter-label="Brew method" :filter-options="filterOptions" v-model:show-retired="showRetired" :retired-count="retiredCount" />
-        <p v-if="showRetired" class="muted small">Retired brewers are hidden when brewing; past brews still show them.</p>
+        <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="brewers" filter-label="Brew method" :filter-options="filterOptions" v-model:show-archived="showArchived" :archived-count="archivedCount" />
+        <p v-if="showArchived" class="muted small">Archived brewers are hidden when brewing; past brews still show them.</p>
         <p v-if="shown.length === 0" class="card empty">No {{ filter === ALL ? 'brewers' : `${filterName.toLowerCase()} brewers` }} yet.</p>
         <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.3fr) 5.5rem">
           <div class="data-row data-head">
@@ -184,7 +184,7 @@ async function retireInstead(): Promise<void> {
           </div>
           <div v-for="m in shown" :key="m.id" class="data-item" :class="{ open: openId === m.id }">
             <button class="data-row" type="button" :aria-expanded="openId === m.id" @click="toggle(m.id)">
-              <span class="data-td primary">{{ m.name }}<span v-if="m.retiredAt" class="muted"> (retired)</span></span>
+              <span class="data-td primary">{{ m.name }}<span v-if="m.archivedAt" class="muted"> (archived)</span></span>
               <span class="data-td">{{ METHOD_KINDS[m.kind].label }}</span>
               <span class="data-td">{{ recipeCount(m.id) }}</span>
               <span class="data-td end">{{ formatAdded(m.createdAt) }}</span>
@@ -194,12 +194,12 @@ async function retireInstead(): Promise<void> {
               <p v-if="m.notes" class="muted">{{ m.notes }}</p>
               <p class="muted">{{ recipeSummary(m.id) }}</p>
               <div v-if="workspaces.canEdit" class="data-actions">
-                <template v-if="m.retiredAt">
-                  <button class="btn-link" type="button" :disabled="busyId === m.id" @click="setRetired(m, false)">Restore</button>
+                <template v-if="m.archivedAt">
+                  <button class="btn-link" type="button" :disabled="busyId === m.id" @click="setArchived(m, false)">Restore</button>
                 </template>
                 <template v-else>
                   <RouterLink class="btn-link" :to="{ name: 'brewer-edit', params: { id: m.id } }">Edit</RouterLink>
-                  <button class="btn-link" type="button" :disabled="busyId === m.id" @click="setRetired(m, true)">Retire</button>
+                  <button class="btn-link" type="button" :disabled="busyId === m.id" @click="setArchived(m, true)">Archive</button>
                 </template>
                 <button class="btn-link danger" type="button" @click="askDelete(m)">Delete</button>
               </div>
@@ -214,12 +214,12 @@ async function retireInstead(): Promise<void> {
     <p v-if="usedCount === null">{{ pending?.name }} will be removed.</p>
     <p v-else>
       {{ usedCount }} brew{{ usedCount === 1 ? ' was' : 's were' }} made with {{ pending?.name }}, so it can't be deleted.
-      Retire it instead: it's hidden when brewing, and past brews keep showing it.
+      Archive it instead: it's hidden when brewing, and past brews keep showing it.
     </p>
     <p v-if="dialogError" class="form-error" role="alert">{{ dialogError }}</p>
     <template #actions>
       <button v-if="usedCount === null" class="btn btn-danger" type="button" :disabled="deleting" @click="confirmDelete">Delete</button>
-      <button v-else class="btn btn-primary" type="button" @click="retireInstead">Retire instead</button>
+      <button v-else class="btn btn-primary" type="button" @click="archiveInstead">Archive instead</button>
       <button class="btn btn-secondary" type="button" :disabled="deleting" @click="pending = null">Cancel</button>
     </template>
   </ConfirmDialog>

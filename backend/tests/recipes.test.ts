@@ -83,7 +83,7 @@ describe("grind starting points", () => {
     expect(untouched.body.recipe.grindSettings).toHaveLength(1);
   });
 
-  it("refuses duplicates and other workspaces' grinders; survives retirement, goes with grinder deletion", async () => {
+  it("refuses duplicates and other workspaces' grinders; survives archiving, goes with grinder deletion", async () => {
     const { owner, ws, base, recipe, grinder } = await setup();
     const c40 = await grinder("C40");
     expect((await owner.agent.post(base).send({ ...recipe, grindSettings: [{ grinderId: c40, setting: "20" }, { grinderId: c40, setting: "21" }] })).body.error).toMatch(/more than once/);
@@ -93,7 +93,7 @@ describe("grind starting points", () => {
     expect((await owner.agent.post(base).send({ ...recipe, grindSettings: [{ grinderId: foreign, setting: "1" }] })).body.error).toMatch(/grinderId/);
 
     const id = (await owner.agent.post(base).send({ ...recipe, grindSettings: [{ grinderId: c40, setting: "20" }] })).body.recipe.id;
-    await owner.agent.patch(`/api/workspaces/${ws.id}/grinders/${c40}`).send({ retired: true });
+    await owner.agent.patch(`/api/workspaces/${ws.id}/grinders/${c40}`).send({ archived: true });
     expect((await owner.agent.get(base)).body.recipes.find((r: { id: string }) => r.id === id).grindSettings).toHaveLength(1);
     await owner.agent.delete(`/api/workspaces/${ws.id}/grinders/${c40}`); // unused by brews, so deletable
     expect((await owner.agent.get(base)).body.recipes.find((r: { id: string }) => r.id === id).grindSettings).toEqual([]);

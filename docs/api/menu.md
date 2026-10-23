@@ -18,7 +18,7 @@ An item can rename and describe its source for the menu (`name`,
 `currency`), and be marked unavailable (`available: false`: still listed,
 shown as unavailable). Each drink or brewer can be in a section once (it may
 be in several sections). Deleting a drink or brewer removes its items; a
-retired brewer stays in the builder (flagged) but is left off the public
+archived brewer stays in the builder (flagged) but is left off the public
 menu.
 
 All routes are under `/api/workspaces/:workspaceId/menu`. Any member can
@@ -46,7 +46,7 @@ off is the workspace's `isPublicMenuEnabled` (§2, owners only).
           "description": null,
           "price": 5.5,
           "available": true,
-          "source": { "name": "Latte", "description": "Double shot, steamed milk", "kind": "espresso", "retired": false }
+          "source": { "name": "Latte", "description": "Double shot, steamed milk", "kind": "espresso", "archived": false }
         },
         {
           "id": "uuid", "itemType": "beans", "drinkId": null, "brewerId": null,

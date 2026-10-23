@@ -74,7 +74,7 @@ describe("method kinds", () => {
       preinfusion: "none",
       flowControl: "none",
       pressureControl: "none",
-      retiredAt: null,
+      archivedAt: null,
       createdAt: expect.any(String),
     });
     expect((await owner.agent.patch(`${base}/${v60}`).send({})).status).toBe(400);

@@ -23,11 +23,11 @@ describe("grinders", () => {
     const { owner, base, grinder } = await setup();
     const c40 = await grinder("Comandante C40");
     const res = await owner.agent.post(base).send({ name: "  Timemore C3 ", notes: "  stepped " });
-    expect(res.body.grinder).toMatchObject({ name: "Timemore C3", notes: "stepped", retiredAt: null });
+    expect(res.body.grinder).toMatchObject({ name: "Timemore C3", notes: "stepped", archivedAt: null });
     expect(typeof res.body.grinder.createdAt).toBe("string"); // date added, for sorting lists
     expect((await owner.agent.post(base).send({ name: "comandante c40" })).status).toBe(409);
 
-    await owner.agent.patch(`${base}/${c40}`).send({ retired: true });
+    await owner.agent.patch(`${base}/${c40}`).send({ archived: true });
     const list = await owner.agent.get(base);
     expect(list.body.grinders.map((g: { name: string }) => g.name)).toEqual(["Timemore C3", "Comandante C40"]);
 
@@ -35,14 +35,14 @@ describe("grinders", () => {
     expect(renamed.body.grinder).toMatchObject({ name: "C40 MK4", notes: null });
   });
 
-  it("retire keeps the first retirement date; restore clears it", async () => {
+  it("archive keeps the first archive date; restore clears it", async () => {
     const { owner, base, grinder } = await setup();
     const id = await grinder("Ode");
-    const first = (await owner.agent.patch(`${base}/${id}`).send({ retired: true })).body.grinder.retiredAt;
+    const first = (await owner.agent.patch(`${base}/${id}`).send({ archived: true })).body.grinder.archivedAt;
     expect(first).toEqual(expect.any(String));
     await new Promise((r) => setTimeout(r, 1100));
-    expect((await owner.agent.patch(`${base}/${id}`).send({ retired: true })).body.grinder.retiredAt).toBe(first);
-    expect((await owner.agent.patch(`${base}/${id}`).send({ retired: false })).body.grinder.retiredAt).toBeNull();
+    expect((await owner.agent.patch(`${base}/${id}`).send({ archived: true })).body.grinder.archivedAt).toBe(first);
+    expect((await owner.agent.patch(`${base}/${id}`).send({ archived: false })).body.grinder.archivedAt).toBeNull();
   });
 
   it("delete: allowed when unused, refused (409 + count) once brews used it", async () => {
@@ -64,20 +64,20 @@ describe("grinders", () => {
     await addMember(owner, ws.id, viewer, "viewer");
     expect((await viewer.agent.get(base)).status).toBe(200);
     expect((await viewer.agent.post(base).send({ name: "x" })).status).toBe(403);
-    expect((await viewer.agent.patch(`${base}/${id}`).send({ retired: true })).status).toBe(403);
+    expect((await viewer.agent.patch(`${base}/${id}`).send({ archived: true })).status).toBe(403);
     expect((await outsider.agent.get(base)).status).toBe(404);
   });
 });
 
 describe("brew logs with grinders", () => {
-  it("record the grinder (retired ones included) and refuse another workspace's", async () => {
+  it("record the grinder (archived ones included) and refuse another workspace's", async () => {
     const { owner, ws, base, grinder } = await setup();
     const bean = await newBean(owner, ws.id);
     const c40 = await grinder("Comandante C40");
     const created = await brew(owner, ws.id, { beanId: bean, grinderId: c40, actualGrindSetting: "20" });
     expect(created.body.brewLog).toMatchObject({ grinderId: c40, grinder: { id: c40, name: "Comandante C40" } });
 
-    await owner.agent.patch(`${base}/${c40}`).send({ retired: true });
+    await owner.agent.patch(`${base}/${c40}`).send({ archived: true });
     const shown = await owner.agent.get(`/api/workspaces/${ws.id}/brew-logs/${created.body.brewLog.id}`);
     expect(shown.body.brewLog.grinder).toEqual({ id: c40, name: "Comandante C40" }); // history keeps it
     expect((await brew(owner, ws.id, { beanId: bean, grinderId: c40 })).status).toBe(201); // backdated logging allowed

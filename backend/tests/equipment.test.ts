@@ -15,7 +15,7 @@ describe("grinder details", () => {
     const details = { adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, burrType: "conical", burrSizeMm: 39, power: "manual" };
     const created = await owner.agent.post(base).send({ name: "C40", ...details });
     expect(created.status).toBe(201);
-    expect(created.body.grinder).toMatchObject({ name: "C40", notes: null, ...details, retiredAt: null });
+    expect(created.body.grinder).toMatchObject({ name: "C40", notes: null, ...details, archivedAt: null });
     expect((await owner.agent.post(base).send({ name: "Plain" })).body.grinder).toMatchObject({ adjustment: null, settingMin: null, power: null });
 
     expect((await owner.agent.post(base).send({ name: "A", adjustment: "dial" })).status).toBe(400);
@@ -32,7 +32,7 @@ describe("grinder details", () => {
 });
 
 describe("brewers", () => {
-  it("espresso capabilities default to none and are limited to the known values; retire like grinders", async () => {
+  it("espresso capabilities default to none and are limited to the known values; archive like grinders", async () => {
     const { owner, ws } = await setup();
     const base = `/api/workspaces/${ws.id}/brewers`;
     const plain = await owner.agent.post(base).send({ name: "Gaggia Classic", kind: "espresso" });
@@ -44,7 +44,7 @@ describe("brewers", () => {
       preinfusion: "none",
       flowControl: "none",
       pressureControl: "none",
-      retiredAt: null,
+      archivedAt: null,
       createdAt: expect.any(String),
     });
     const lm = await owner.agent.post(base).send({ name: "Linea Mini", kind: "espresso", preinfusion: "manual", flowControl: "manual" });
@@ -54,10 +54,10 @@ describe("brewers", () => {
 
     const url = `${base}/${lm.body.brewer.id}`;
     expect((await owner.agent.patch(url).send({ pressureControl: "programmable" })).body.brewer.pressureControl).toBe("programmable");
-    expect((await owner.agent.patch(url).send({ retired: true })).body.brewer.retiredAt).not.toBeNull();
+    expect((await owner.agent.patch(url).send({ archived: true })).body.brewer.archivedAt).not.toBeNull();
     const list = await owner.agent.get(base);
-    expect(list.body.brewers.map((m: { name: string }) => m.name).at(-1)).toBe("Linea Mini"); // retired last
-    expect((await owner.agent.patch(url).send({ retired: false })).body.brewer.retiredAt).toBeNull();
+    expect(list.body.brewers.map((m: { name: string }) => m.name).at(-1)).toBe("Linea Mini"); // archived last
+    expect((await owner.agent.patch(url).send({ archived: false })).body.brewer.archivedAt).toBeNull();
   });
 
   it("viewers can't change brewers", async () => {
@@ -70,7 +70,7 @@ describe("brewers", () => {
 });
 
 describe("brewers on the menu", () => {
-  it("show under the item's name, and not once retired", async () => {
+  it("show under the item's name, and not once archived", async () => {
     const { owner, ws } = await setup();
     const base = `/api/workspaces/${ws.id}/brewers`;
     const lm = (await owner.agent.post(base).send({ name: "Linea Mini", kind: "espresso" })).body.brewer.id;
@@ -84,13 +84,13 @@ describe("brewers on the menu", () => {
       expect.objectContaining({ type: "brewer", name: "Espresso shot", method: "Espresso" }),
       expect.objectContaining({ type: "drink", name: "Latte", method: "Espresso" }),
     ]);
-    await owner.agent.patch(`${base}/${lm}`).send({ retired: true });
+    await owner.agent.patch(`${base}/${lm}`).send({ archived: true });
     expect((await menu()).map((i: { name: string }) => i.name)).toEqual(["Latte"]);
   });
 });
 
 describe("brewers on brew logs", () => {
-  it("a log records its recipe's brewer; brewers brews used can only be retired", async () => {
+  it("a log records its recipe's brewer; brewers brews used can only be archived", async () => {
     const { owner, ws } = await setup();
     const bean = await newBean(owner, ws.id);
     const lm = (await owner.agent.post(`/api/workspaces/${ws.id}/brewers`).send({ name: "Linea Mini", kind: "espresso" })).body.brewer.id as string;
@@ -121,7 +121,7 @@ describe("brewers on brew logs", () => {
     const refused = await del();
     expect(refused.status).toBe(409);
     expect(refused.body).toMatchObject({ recipeCount: 0, brewLogCount: 1 });
-    expect(refused.body.error).toMatch(/Retire it instead/);
+    expect(refused.body.error).toMatch(/Archive it instead/);
     expect((await owner.agent.get(url)).body.brewLog.brewer).toMatchObject({ name: "Linea Mini" }); // kept after the recipe went
     const unused = (await owner.agent.post(`/api/workspaces/${ws.id}/brewers`).send({ name: "Chemex" })).body.brewer.id;
     expect((await owner.agent.delete(`/api/workspaces/${ws.id}/brewers/${unused}`)).status).toBe(204);

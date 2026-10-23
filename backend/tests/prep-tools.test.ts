@@ -7,7 +7,7 @@ interface Tool {
   name: string;
   methodKind: string | null;
   position: number;
-  retiredAt: string | null;
+  archivedAt: string | null;
 }
 
 async function setup() {
@@ -31,7 +31,7 @@ describe("prep tools (docs/api/prep-tools.md §3d)", () => {
     const { owner, base, list } = await setup();
     const created = await owner.agent.post(base).send({ name: " Melodrip ", methodKind: "filter" });
     expect(created.status).toBe(201);
-    expect(created.body.tool).toMatchObject({ name: "Melodrip", methodKind: "filter", position: DEFAULT_PREP_TOOLS.length + 1, retiredAt: null });
+    expect(created.body.tool).toMatchObject({ name: "Melodrip", methodKind: "filter", position: DEFAULT_PREP_TOOLS.length + 1, archivedAt: null });
     const any = await owner.agent.post(base).send({ name: "Scale" });
     expect(any.body.tool.methodKind).toBeNull();
 
@@ -60,12 +60,12 @@ describe("prep tools (docs/api/prep-tools.md §3d)", () => {
     expect((await owner.agent.put(`${base}/order`).send({ toolIds: [...reversed.slice(1), foreign] })).status).toBe(400);
   });
 
-  it("retire keeps the tool listed and flagged; restore clears it; delete only when unused", async () => {
+  it("archive keeps the tool listed and flagged; restore clears it; delete only when unused", async () => {
     const { owner, ws, base, byName } = await setup();
     const shaker = await byName("Shaker");
-    const retired = await owner.agent.patch(`${base}/${shaker}`).send({ retired: true });
-    expect(retired.body.tool.retiredAt).toEqual(expect.any(String));
-    expect((await owner.agent.patch(`${base}/${shaker}`).send({ retired: false })).body.tool.retiredAt).toBeNull();
+    const archived = await owner.agent.patch(`${base}/${shaker}`).send({ archived: true });
+    expect(archived.body.tool.archivedAt).toEqual(expect.any(String));
+    expect((await owner.agent.patch(`${base}/${shaker}`).send({ archived: false })).body.tool.archivedAt).toBeNull();
 
     expect((await owner.agent.delete(`${base}/${await byName("Cloth filter")}`)).status).toBe(204);
     const wdt = await byName("WDT");
@@ -83,7 +83,7 @@ describe("prep tools (docs/api/prep-tools.md §3d)", () => {
     const rdt = await byName("RDT");
     expect((await viewer.agent.get(base)).status).toBe(200);
     expect((await viewer.agent.post(base).send({ name: "x" })).status).toBe(403);
-    expect((await viewer.agent.patch(`${base}/${rdt}`).send({ retired: true })).status).toBe(403);
+    expect((await viewer.agent.patch(`${base}/${rdt}`).send({ archived: true })).status).toBe(403);
     expect((await viewer.agent.put(`${base}/order`).send({ toolIds: [rdt] })).status).toBe(403);
     expect((await viewer.agent.delete(`${base}/${rdt}`)).status).toBe(403);
     expect((await outsider.agent.get(base)).status).toBe(404);
@@ -91,7 +91,7 @@ describe("prep tools (docs/api/prep-tools.md §3d)", () => {
 });
 
 describe("brew logs with prep tools", () => {
-  it("record tools in checklist order, replace them on PATCH, accept retired ones", async () => {
+  it("record tools in checklist order, replace them on PATCH, accept archived ones", async () => {
     const { owner, ws, base, byName } = await setup();
     const bean = await newBean(owner, ws.id);
     const logs = `/api/workspaces/${ws.id}/brew-logs`;
@@ -102,7 +102,7 @@ describe("brew logs with prep tools", () => {
     expect(log.tools.map((t: Tool) => t.name)).toEqual(["WDT", "RDT"]); // position order, not sent order
     expect(log.tools[0]).toEqual({ id: wdt, name: "WDT", methodKind: "espresso" });
 
-    await owner.agent.patch(`${base}/${screen}`).send({ retired: true });
+    await owner.agent.patch(`${base}/${screen}`).send({ archived: true });
     const replaced = await owner.agent.patch(`${logs}/${id}`).send({ toolIds: [screen] });
     expect(replaced.status).toBe(200);
     expect(replaced.body.brewLog.tools.map((t: Tool) => t.name)).toEqual(["Puck screen"]);

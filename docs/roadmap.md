@@ -362,3 +362,12 @@ and the filter used change the cup, and brews didn't record them. Contract:
   "Show retired (n)" checkbox above the list controls (only when there are
   some), as Tools does, instead of a "Retired" choice in the filter. Retired
   rows are marked "(retired)" and keep the current filter and sort.
+
+## "Retire" becomes "archive" (built)
+
+Branch `archive-rename`, migration 0039. Beans were archived while brewers,
+grinders, water profiles and prep tools were retired: two words for the same
+thing. Everything now says **archive**: the screens (Archive, Show archived),
+the API (`archivedAt`, PATCH `"archived": true | false`, like beans §4) and the
+database (`archived_at`; the migration renames the column, keeping values).
+Clients still sending `retired` get a 400.

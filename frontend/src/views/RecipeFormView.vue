@@ -48,8 +48,8 @@ const router = useRouter();
 const editing = computed(() => props.id !== undefined);
 
 const methods = ref<Brewer[]>([]);
-// Active brewers, plus the recipe's own even if it's since been retired.
-const brewerOptions = computed(() => methods.value.filter((m) => !m.retiredAt || m.id === brewerId.value));
+// Active brewers, plus the recipe's own even if it's since been archived.
+const brewerOptions = computed(() => methods.value.filter((m) => !m.archivedAt || m.id === brewerId.value));
 const grinders = ref<Grinder[]>([]);
 const name = ref('');
 const brewerId = ref('');
@@ -179,9 +179,9 @@ const warnings = computed(() =>
 function grinderOptions(rowIndex: number): Grinder[] {
   const used = new Set(grindRows.value.filter((_, i) => i !== rowIndex).map((r) => r.grinderId));
   const current = grindRows.value[rowIndex]?.grinderId;
-  return grinders.value.filter((g) => (!g.retiredAt || g.id === current) && !used.has(g.id));
+  return grinders.value.filter((g) => (!g.archivedAt || g.id === current) && !used.has(g.id));
 }
-const canAddGrindRow = computed(() => grinders.value.some((g) => !g.retiredAt && !grindRows.value.some((r) => r.grinderId === g.id)));
+const canAddGrindRow = computed(() => grinders.value.some((g) => !g.archivedAt && !grindRows.value.some((r) => r.grinderId === g.id)));
 
 // Duplicating: the original's name, for the heading.
 const copyOf = ref<string | null>(null);
@@ -236,7 +236,7 @@ onMounted(async () => {
       copyOf.value = from.name;
     }
     // From brew setup's "add a recipe" for a brewer that has none.
-    const brewer = methods.value.find((m) => m.id === route.query.brewer && !m.retiredAt);
+    const brewer = methods.value.find((m) => m.id === route.query.brewer && !m.archivedAt);
     if (!from && brewer) brewerId.value = brewer.id;
   } catch (err) {
     error.value = errorMessage(err);
@@ -272,7 +272,7 @@ async function addMethod(): Promise<void> {
 }
 
 function addGrindRow(): void {
-  const next = grinders.value.find((g) => !g.retiredAt && !grindRows.value.some((r) => r.grinderId === g.id));
+  const next = grinders.value.find((g) => !g.archivedAt && !grindRows.value.some((r) => r.grinderId === g.id));
   grindRows.value.push({ grinderId: next?.id ?? '', setting: '' });
 }
 
@@ -430,7 +430,7 @@ async function save(): Promise<void> {
           <label for="method">Brewer<span class="req" aria-hidden="true">*</span></label>
           <select id="method" aria-required="true" v-model="brewerId" :aria-invalid="submitted && !!fieldErrors.brewer" @change="onMethodChange">
             <option value="" disabled>Choose…</option>
-            <option v-for="m in brewerOptions" :key="m.id" :value="m.id">{{ m.name }}{{ m.retiredAt ? ' (retired)' : '' }}</option>
+            <option v-for="m in brewerOptions" :key="m.id" :value="m.id">{{ m.name }}{{ m.archivedAt ? ' (archived)' : '' }}</option>
             <option :value="NEW_METHOD">+ Add a brewer…</option>
           </select>
           <span v-if="copyOf" class="hint">A copy of {{ copyOf }}. Pick the brewer for the copy; the original stays as it is.</span>
@@ -545,8 +545,8 @@ async function save(): Promise<void> {
           <label for="default-grinder">Default grinder</label>
           <select id="default-grinder" v-model="defaultGrinderId">
             <option value="">None: use the last grinder</option>
-            <option v-for="g in grinders.filter((x) => !x.retiredAt || x.id === defaultGrinderId)" :key="g.id" :value="g.id">
-              {{ g.name }}{{ g.retiredAt ? ' (retired)' : '' }}
+            <option v-for="g in grinders.filter((x) => !x.archivedAt || x.id === defaultGrinderId)" :key="g.id" :value="g.id">
+              {{ g.name }}{{ g.archivedAt ? ' (archived)' : '' }}
             </option>
           </select>
           <span class="hint">Selected for you when you brew this recipe.</span>
@@ -557,7 +557,7 @@ async function save(): Promise<void> {
               <label :for="`grind-grinder-${i}`" class="visually-hidden">Grinder {{ i + 1 }}</label>
               <select :id="`grind-grinder-${i}`" v-model="row.grinderId">
                 <option value="" disabled>Grinder…</option>
-                <option v-for="g in grinderOptions(i)" :key="g.id" :value="g.id">{{ g.name }}{{ g.retiredAt ? ' (retired)' : '' }}</option>
+                <option v-for="g in grinderOptions(i)" :key="g.id" :value="g.id">{{ g.name }}{{ g.archivedAt ? ' (archived)' : '' }}</option>
               </select>
             </div>
             <div class="field">

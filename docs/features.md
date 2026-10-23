@@ -18,16 +18,16 @@ upcoming work is in `roadmap.md`.
 ## Bar setup
 One **Bar setup** section with three tabs: Brewers, Grinders, Categories.
 Brewers and Grinders are tables like Recipes: filter brewers by type (pour
-over, immersion, espresso) and grinders by hand or electric, with **Retired**
+over, immersion, espresso) and grinders by hand or electric, with **Archived**
 as its own filter option (where Restore is); sort by any column (name, type,
 category; power, burrs, adjustment; date added), unset values last; tap a row
-to see details and edit, retire or delete it. Filter and sort are remembered.
+to see details and edit, archive or delete it. Filter and sort are remembered.
 Adding and editing a brewer, grinder or ingredient happen on their own page
 (the **Add** button sits at the top of each list, like Recipes and Drinks).
 - **Grinders:** per workspace, with optional details: stepped/stepless,
   setting range and step size, burr type and size, hand/electric. The range
   and step let the AI talk in clicks. Grinders that have been used are
-  retired rather than deleted, so history keeps their names.
+  archived rather than deleted, so history keeps their names.
 - **Brewers:** whatever makes the coffee (V60, French press, AeroPress, OXO
   Rapid Brewer, an espresso machine). Two separate ideas describe one:
   - **Brew method**, Filter or Espresso: decides the recipe fields, steps
@@ -41,7 +41,7 @@ Adding and editing a brewer, grinder or ingredient happen on their own page
   automatic / manual), flow control and pressure control (none / manual /
   programmable). A brewer has an optional category (where it's listed when
   brewing) and can go on the menu as the plain brew, under a menu name
-  ("Espresso" for the machine). Retired like grinders once brews used it;
+  ("Espresso" for the machine). Archived like grinders once brews used it;
   deleting is refused while recipes use it.
 
 ## Recipes

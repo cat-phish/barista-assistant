@@ -260,7 +260,7 @@ async function methodKindInWorkspace(tx: Tx, brewerId: string, workspaceId: stri
 }
 
 // Same idea for grind starting points: every grinder must be in this workspace
-// (retired ones allowed), locked so a concurrent grinder delete can't race us.
+// (archived ones allowed), locked so a concurrent grinder delete can't race us.
 async function grindersInWorkspace(tx: Tx, grinderIds: string[], workspaceId: string): Promise<boolean> {
   if (grinderIds.length === 0) return true;
   const found = await tx

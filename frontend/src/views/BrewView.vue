@@ -337,7 +337,7 @@ const grindNote = computed(() => {
 
 // Grinders: pick from active ones, add inline, remember the last one per workspace.
 const NEW_GRINDER = '__new__';
-const activeGrinders = computed(() => grinders.value.filter((x) => !x.retiredAt));
+const activeGrinders = computed(() => grinders.value.filter((x) => !x.archivedAt));
 const grinder = computed(() => grinders.value.find((x) => x.id === draft.grinderId) ?? null);
 // The last grinder and brew choice, remembered per workspace.
 type Remembered = 'grinderId' | 'brewWhat' | 'brewItem' | `brewBrewer.${MethodKind}`;

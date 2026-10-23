@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Grinder management (docs/api/grinders.md §3b), one tab of Bar setup, as a
-// table: filter by hand/electric (or Retired), sort by any column; a row
-// expands to its details and actions. Retire keeps history; delete only works
+// table: filter by hand/electric (or Archived), sort by any column; a row
+// expands to its details and actions. Archive keeps history; delete only works
 // for grinders no brew used.
 import { computed, onMounted, ref, watch } from 'vue';
 import { ApiError, errorMessage } from '../api/client';
@@ -47,13 +47,13 @@ const columns: SortColumns<Grinder> = {
 };
 const sortChoices = sortColumnOptions(columns);
 const filter = ref(ALL);
-const showRetired = ref(false);
-const retiredCount = computed(() => grinders.value.filter((g) => g.retiredAt).length);
+const showArchived = ref(false);
+const archivedCount = computed(() => grinders.value.filter((g) => g.archivedAt).length);
 const sort = ref('name_asc');
 watch(filter, (v) => rememberView(viewKey('filter'), v));
 watch(sort, (v) => rememberView(viewKey('sort'), v));
 const filterOptions = computed(() => {
-  const active = grinders.value.filter((g) => !g.retiredAt);
+  const active = grinders.value.filter((g) => !g.archivedAt);
   return [
     { value: ALL, label: 'All grinders' },
     { value: 'manual', label: 'Hand grinders' },
@@ -65,7 +65,7 @@ const filterName = computed(() => filterOptions.value.find((o) => o.value === fi
 const shown = computed(() => {
   const f = filter.value;
   const list = grinders.value.filter(
-    (g) => (!g.retiredAt || showRetired.value) && (f === ALL || (f === NOT_SET ? g.power === null : g.power === f)),
+    (g) => (!g.archivedAt || showArchived.value) && (f === ALL || (f === NOT_SET ? g.power === null : g.power === f)),
   );
   return sortBy(list, sort.value, columns);
 });
@@ -78,7 +78,7 @@ async function load(): Promise<void> {
   if (!ws) return;
   try {
     grinders.value = (await grindersApi.list(ws)).grinders;
-    if (retiredCount.value === 0) showRetired.value = false;
+    if (archivedCount.value === 0) showArchived.value = false;
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -98,13 +98,13 @@ function replace(updated: Grinder): void {
 }
 
 const busyId = ref<string | null>(null);
-async function setRetired(g: Grinder, value: boolean): Promise<void> {
+async function setArchived(g: Grinder, value: boolean): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   busyId.value = g.id;
   error.value = '';
   try {
-    replace((await grindersApi.update(ws, g.id, { retired: value })).grinder);
+    replace((await grindersApi.update(ws, g.id, { archived: value })).grinder);
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -112,7 +112,7 @@ async function setRetired(g: Grinder, value: boolean): Promise<void> {
   }
 }
 
-// Delete: confirm; if brews used it, the server says how many and we offer Retire.
+// Delete: confirm; if brews used it, the server says how many and we offer Archive.
 const pending = ref<Grinder | null>(null);
 const usedCount = ref<number | null>(null);
 const deleting = ref(false);
@@ -140,10 +140,10 @@ async function confirmDelete(): Promise<void> {
     deleting.value = false;
   }
 }
-async function retireInstead(): Promise<void> {
+async function archiveInstead(): Promise<void> {
   const g = pending.value;
   pending.value = null;
-  if (g) await setRetired(g, true);
+  if (g) await setArchived(g, true);
 }
 </script>
 
@@ -163,8 +163,8 @@ async function retireInstead(): Promise<void> {
     <template v-if="!loading">
       <div v-if="grinders.length === 0" class="card empty"><p>No grinders yet.</p></div>
       <template v-else>
-        <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="grinders" filter-label="Show" :filter-options="filterOptions" v-model:show-retired="showRetired" :retired-count="retiredCount" />
-        <p v-if="showRetired" class="muted small">Retired grinders are hidden when brewing; past brews still show them.</p>
+        <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="grinders" filter-label="Show" :filter-options="filterOptions" v-model:show-archived="showArchived" :archived-count="archivedCount" />
+        <p v-if="showArchived" class="muted small">Archived grinders are hidden when brewing; past brews still show them.</p>
         <p v-if="shown.length === 0" class="card empty">No {{ filterName.toLowerCase() }} yet.</p>
         <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 0.9fr) minmax(0, 1.2fr) minmax(0, 1.3fr) 5.5rem">
           <div class="data-row data-head">
@@ -177,7 +177,7 @@ async function retireInstead(): Promise<void> {
           </div>
           <div v-for="g in shown" :key="g.id" class="data-item" :class="{ open: openId === g.id }">
             <button class="data-row" type="button" :aria-expanded="openId === g.id" @click="toggle(g.id)">
-              <span class="data-td primary">{{ g.name }}<span v-if="g.retiredAt" class="muted"> (retired)</span></span>
+              <span class="data-td primary">{{ g.name }}<span v-if="g.archivedAt" class="muted"> (archived)</span></span>
               <span class="data-td">{{ powerLabel(g) ?? '–' }}</span>
               <span class="data-td">{{ burrLabel(g) ?? '–' }}</span>
               <span class="data-td">{{ adjustmentLabel(g) ?? '–' }}</span>
@@ -187,12 +187,12 @@ async function retireInstead(): Promise<void> {
               <p class="muted">{{ grinderSummary(g) || 'No details yet: edit to add the range, burrs and power.' }}</p>
               <p v-if="g.notes" class="muted">{{ g.notes }}</p>
               <div v-if="workspaces.canEdit" class="data-actions">
-                <template v-if="g.retiredAt">
-                  <button class="btn-link" type="button" :disabled="busyId === g.id" @click="setRetired(g, false)">Restore</button>
+                <template v-if="g.archivedAt">
+                  <button class="btn-link" type="button" :disabled="busyId === g.id" @click="setArchived(g, false)">Restore</button>
                 </template>
                 <template v-else>
                   <RouterLink class="btn-link" :to="{ name: 'grinder-edit', params: { id: g.id } }">Edit</RouterLink>
-                  <button class="btn-link" type="button" :disabled="busyId === g.id" @click="setRetired(g, true)">Retire</button>
+                  <button class="btn-link" type="button" :disabled="busyId === g.id" @click="setArchived(g, true)">Archive</button>
                 </template>
                 <button class="btn-link danger" type="button" @click="askDelete(g)">Delete</button>
               </div>
@@ -207,12 +207,12 @@ async function retireInstead(): Promise<void> {
     <p v-if="usedCount === null">{{ pending?.name }} will be removed.</p>
     <p v-else>
       {{ usedCount }} brew{{ usedCount === 1 ? ' was' : 's were' }} made with {{ pending?.name }}, so it can't be deleted.
-      Retire it instead: it's hidden when brewing, and past brews keep showing it.
+      Archive it instead: it's hidden when brewing, and past brews keep showing it.
     </p>
     <p v-if="dialogError" class="form-error" role="alert">{{ dialogError }}</p>
     <template #actions>
       <button v-if="usedCount === null" class="btn btn-danger" type="button" :disabled="deleting" @click="confirmDelete">Delete</button>
-      <button v-else class="btn btn-primary" type="button" @click="retireInstead">Retire instead</button>
+      <button v-else class="btn btn-primary" type="button" @click="archiveInstead">Archive instead</button>
       <button class="btn btn-secondary" type="button" :disabled="deleting" @click="pending = null">Cancel</button>
     </template>
   </ConfirmDialog>

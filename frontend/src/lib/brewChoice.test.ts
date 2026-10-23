@@ -26,8 +26,8 @@ const milk = cat('c-milk', 'Espresso Milk Drinks', 1);
 const special = cat('c-sp', 'Specialty Drinks', 2);
 const categories = [special, milk];
 
-const brewer = (id: string, name: string, kind: MethodKind, retiredAt: string | null = null): Brewer => ({
-  id, name, kind, retiredAt, notes: null,
+const brewer = (id: string, name: string, kind: MethodKind, archivedAt: string | null = null): Brewer => ({
+  id, name, kind, archivedAt, notes: null,
   preinfusion: 'none', flowControl: 'none', pressureControl: 'none', createdAt: '2026-10-20T00:00:00.000Z',
 });
 const v60 = brewer('v60', 'V60', 'filter');
@@ -35,7 +35,7 @@ const chemex = brewer('chemex', 'Chemex', 'filter');
 const aeropress = brewer('ap', 'Aeropress', 'filter');
 const delonghi = brewer('dl', 'Delonghi', 'espresso');
 const linea = brewer('lm', 'Linea Mini', 'espresso');
-const oldMoka = brewer('old-moka', 'Old moka pot', 'stovetop', '2026-01-01T00:00:00.000Z'); // retired: no Stovetop
+const oldMoka = brewer('old-moka', 'Old moka pot', 'stovetop', '2026-01-01T00:00:00.000Z'); // archived: no Stovetop
 const clever = brewer('clever', 'Clever', 'filter'); // no recipes yet
 const brewers = [v60, chemex, aeropress, delonghi, linea, oldMoka, clever];
 
@@ -61,7 +61,7 @@ const names = (bs: Brewer[]) => bs.map((b) => b.name);
 
 describe('brew setup: method or drink category → (drink) → brewer → recipe', () => {
   it('offers every active brewer, recipes or not; drinks need a brewer of their method', () => {
-    expect(options.brewers.map((b) => b.id).sort()).toEqual(['ap', 'chemex', 'clever', 'dl', 'lm', 'v60']); // not the retired one
+    expect(options.brewers.map((b) => b.id).sort()).toEqual(['ap', 'chemex', 'clever', 'dl', 'lm', 'v60']); // not the archived one
     expect(options.drinks.map((d) => d.id)).not.toContain('Moka latte');
   });
 

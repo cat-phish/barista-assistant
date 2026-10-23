@@ -38,7 +38,7 @@ export interface Brewable {
   drinks: Drink[];
 }
 export function brewable(brewers: Brewer[], drinks: Drink[]): Brewable {
-  const usable = brewers.filter((b) => !b.retiredAt);
+  const usable = brewers.filter((b) => !b.archivedAt);
   const kinds = new Set(usable.map((b) => b.kind));
   return { brewers: usable, drinks: drinks.filter((d) => kinds.has(d.kind)) };
 }

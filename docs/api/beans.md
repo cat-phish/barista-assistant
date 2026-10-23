@@ -124,7 +124,7 @@ is no age.
   Unknown fields are rejected. `process`, `roastLevel`, `roastDate` and every
   optional detail except `decaf` can be set to `null`.
 
-  Also `"archived": true | false`, like a grinder's `retired` (§3b). `true`
+  Also `"archived": true | false`, like a grinder's `archived` (§3b). `true`
   sets `archivedAt` to now (unchanged if already archived); `false` restores
   the bean. It can go with other fields, e.g.
   `{ "archived": true, "rating": 4 }` when a bean is rated as it's archived.

@@ -23,7 +23,7 @@ describe("water profiles (docs/api/water-profiles.md §3c)", () => {
     };
     const res = await owner.agent.post(base).send({ name: " Third Wave Water ", notes: " ", ...figures });
     expect(res.status).toBe(201);
-    expect(res.body.waterProfile).toMatchObject({ name: "Third Wave Water", notes: null, isDefault: false, retiredAt: null, ...figures });
+    expect(res.body.waterProfile).toMatchObject({ name: "Third Wave Water", notes: null, isDefault: false, archivedAt: null, ...figures });
     expect((await owner.agent.post(base).send({ name: "third wave water" })).status).toBe(409);
 
     const bare = (await owner.agent.post(base).send({ name: "Tap" })).body.waterProfile;
@@ -48,15 +48,15 @@ describe("water profiles (docs/api/water-profiles.md §3c)", () => {
     expect((await list()).some((p) => p.isDefault)).toBe(false);
   });
 
-  it("retiring the default clears it; a retired profile can't be the default until restored", async () => {
+  it("archiving the default clears it; an archived profile can't be the default until restored", async () => {
     const { owner, base, profile } = await setup();
     const id = await profile("Tap", { isDefault: true });
-    const retired = (await owner.agent.patch(`${base}/${id}`).send({ retired: true })).body.waterProfile;
-    expect(retired).toMatchObject({ isDefault: false, retiredAt: expect.any(String) });
+    const archived = (await owner.agent.patch(`${base}/${id}`).send({ archived: true })).body.waterProfile;
+    expect(archived).toMatchObject({ isDefault: false, archivedAt: expect.any(String) });
     expect((await owner.agent.patch(`${base}/${id}`).send({ isDefault: true })).status).toBe(400);
-    expect((await owner.agent.patch(`${base}/${id}`).send({ retired: true, isDefault: true })).status).toBe(400);
-    const restored = await owner.agent.patch(`${base}/${id}`).send({ retired: false, isDefault: true });
-    expect(restored.body.waterProfile).toMatchObject({ isDefault: true, retiredAt: null });
+    expect((await owner.agent.patch(`${base}/${id}`).send({ archived: true, isDefault: true })).status).toBe(400);
+    const restored = await owner.agent.patch(`${base}/${id}`).send({ archived: false, isDefault: true });
+    expect(restored.body.waterProfile).toMatchObject({ isDefault: true, archivedAt: null });
   });
 
   it("delete: allowed when unused, refused (409 + count) once brews used it", async () => {
@@ -84,7 +84,7 @@ describe("water profiles (docs/api/water-profiles.md §3c)", () => {
 });
 
 describe("brew logs with water profiles", () => {
-  it("record the water (retired ones included), clear it, and refuse another workspace's", async () => {
+  it("record the water (archived ones included), clear it, and refuse another workspace's", async () => {
     const { owner, ws, base, profile } = await setup();
     const bean = await newBean(owner, ws.id);
     const tap = await profile("Tap");
@@ -92,9 +92,9 @@ describe("brew logs with water profiles", () => {
     const id = await newBrewLog(owner, ws.id, bean, { waterProfileId: tap });
     expect((await owner.agent.get(`${logs}/${id}`)).body.brewLog).toMatchObject({ waterProfileId: tap, waterProfile: { id: tap, name: "Tap" } });
 
-    await owner.agent.patch(`${base}/${tap}`).send({ retired: true });
+    await owner.agent.patch(`${base}/${tap}`).send({ archived: true });
     expect((await owner.agent.get(logs)).body.brewLogs[0].waterProfile).toEqual({ id: tap, name: "Tap" });
-    await newBrewLog(owner, ws.id, bean, { waterProfileId: tap }); // retired is still accepted
+    await newBrewLog(owner, ws.id, bean, { waterProfileId: tap }); // archived is still accepted
 
     const cleared = await owner.agent.patch(`${logs}/${id}`).send({ waterProfileId: null });
     expect(cleared.body.brewLog).toMatchObject({ waterProfileId: null, waterProfile: null });

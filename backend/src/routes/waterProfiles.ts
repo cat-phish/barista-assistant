@@ -39,9 +39,9 @@ const profileFields = {
 };
 
 const createSchema = z.object({ ...profileFields, isDefault: profileFields.isDefault.optional() });
-const updateProfileSchema = updateSchema({ ...profileFields, retired: z.boolean() }).refine(
-  (b) => !(b.isDefault === true && b.retired === true),
-  "A retired profile can't be the default"
+const updateProfileSchema = updateSchema({ ...profileFields, archived: z.boolean() }).refine(
+  (b) => !(b.isDefault === true && b.archived === true),
+  "An archived profile can't be the default"
 );
 
 const summary = {
@@ -60,7 +60,7 @@ const summary = {
   chloridePpm: waterProfiles.chloridePpm,
   sulfatePpm: waterProfiles.sulfatePpm,
   ph: waterProfiles.ph,
-  retiredAt: waterProfiles.retiredAt,
+  archivedAt: waterProfiles.archivedAt,
   createdAt: waterProfiles.createdAt,
 };
 
@@ -91,8 +91,8 @@ waterProfilesRouter.get("/", async (req: Request<WorkspaceParams>, res: Response
     .select(summary)
     .from(waterProfiles)
     .where(eq(waterProfiles.workspaceId, workspaceId))
-    // Active first, then retired; each by name.
-    .orderBy(sql`${waterProfiles.retiredAt} IS NOT NULL`, asc(waterProfiles.name));
+    // Active first, then archived; each by name.
+    .orderBy(sql`${waterProfiles.archivedAt} IS NOT NULL`, asc(waterProfiles.name));
   res.json({ waterProfiles: rows });
 });
 
@@ -124,23 +124,23 @@ waterProfilesRouter.patch("/:waterProfileId", async (req: Request<WaterProfilePa
   if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
   const body = parseBody(updateProfileSchema, req, res);
   if (!body) return;
-  const { retired, ...fields } = body;
+  const { archived, ...fields } = body;
 
-  let outcome: "ok" | "not_found" | "retired_default";
+  let outcome: "ok" | "not_found" | "archived_default";
   try {
     outcome = await db.transaction(async (tx) => {
-      const [current] = await tx.select({ retiredAt: waterProfiles.retiredAt }).from(waterProfiles).where(inWorkspace(req.params)).for("update");
+      const [current] = await tx.select({ archivedAt: waterProfiles.archivedAt }).from(waterProfiles).where(inWorkspace(req.params)).for("update");
       if (!current) return "not_found";
-      // Still retired after this change (and not being restored): can't be the default.
-      if (fields.isDefault === true && current.retiredAt !== null && retired !== false) return "retired_default";
+      // Still archived after this change (and not being restored): can't be the default.
+      if (fields.isDefault === true && current.archivedAt !== null && archived !== false) return "archived_default";
       await tx
         .update(waterProfiles)
         .set({
           ...fields,
-          // Keep the original retirement date if it's already retired; a
-          // retired profile stops being the default.
-          ...(retired === true ? { retiredAt: sql`COALESCE(${waterProfiles.retiredAt}, NOW())`, isDefault: false } : {}),
-          ...(retired === false ? { retiredAt: null } : {}),
+          // Keep the original archive date if it's already archived; a
+          // archived profile stops being the default.
+          ...(archived === true ? { archivedAt: sql`COALESCE(${waterProfiles.archivedAt}, NOW())`, isDefault: false } : {}),
+          ...(archived === false ? { archivedAt: null } : {}),
         })
         .where(inWorkspace(req.params));
       if (fields.isDefault === true) await clearOtherDefaults(tx, workspaceId, req.params.waterProfileId);
@@ -157,8 +157,8 @@ waterProfilesRouter.patch("/:waterProfileId", async (req: Request<WaterProfilePa
     sendError(res, 404, "Water profile not found");
     return;
   }
-  if (outcome === "retired_default") {
-    sendError(res, 400, "A retired profile can't be the default. Restore it first.");
+  if (outcome === "archived_default") {
+    sendError(res, 400, "An archived profile can't be the default. Restore it first.");
     return;
   }
   const [waterProfile] = await db.select(summary).from(waterProfiles).where(inWorkspace(req.params));
@@ -166,7 +166,7 @@ waterProfilesRouter.patch("/:waterProfileId", async (req: Request<WaterProfilePa
   res.json({ waterProfile });
 });
 
-// Only unused profiles can be deleted; used ones are retired so history keeps them.
+// Only unused profiles can be deleted; used ones are archived so history keeps them.
 waterProfilesRouter.delete("/:waterProfileId", async (req: Request<WaterProfileParams>, res: Response) => {
   if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId, WRITE_ROLES))) return;
   const outcome = await db.transaction(async (tx) => {
@@ -186,7 +186,7 @@ waterProfilesRouter.delete("/:waterProfileId", async (req: Request<WaterProfileP
     return;
   }
   if (outcome.status === "in_use") {
-    sendError(res, 409, `${outcome.brewLogCount} brew(s) were made with this water. Retire it instead.`, {
+    sendError(res, 409, `${outcome.brewLogCount} brew(s) were made with this water. Archive it instead.`, {
       brewLogCount: outcome.brewLogCount,
     });
     return;

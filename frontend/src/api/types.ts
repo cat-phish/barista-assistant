@@ -27,8 +27,8 @@ export interface MenuItem {
   description: string | null;
   price: number | null; // in Menu.currency
   available: boolean;
-  // What it shows by default; null for the beans block. retired: left off the public menu.
-  source: { name: string; description: string | null; kind: MethodKind; retired: boolean } | null;
+  // What it shows by default; null for the beans block. archived: left off the public menu.
+  source: { name: string; description: string | null; kind: MethodKind; archived: boolean } | null;
 }
 export interface MenuSection {
   id: string;
@@ -66,7 +66,7 @@ export interface Brewer extends MachineCapabilities {
   name: string;
   kind: MethodKind; // the brew method, also how brewers are grouped (no category)
   notes: string | null;
-  retiredAt: string | null; // set = retired (hidden from pickers, kept in history)
+  archivedAt: string | null; // set = archived (hidden from pickers, kept in history)
   createdAt: string; // date added (ISO)
 }
 // How recipes, drinks and brew logs refer to their brewer.
@@ -90,7 +90,7 @@ export interface GrinderDetails {
 export interface Grinder extends GrinderDetails {
   id: string;
   name: string;
-  retiredAt: string | null; // set = retired (hidden from pickers, kept in history)
+  archivedAt: string | null; // set = archived (hidden from pickers, kept in history)
   createdAt: string; // date added (ISO)
 }
 
@@ -108,7 +108,7 @@ export type WaterProfileDetails = Record<WaterFigure, number | null> & {
 export interface WaterProfile extends WaterProfileDetails {
   id: string;
   name: string;
-  retiredAt: string | null; // set = retired (hidden from pickers, kept in history)
+  archivedAt: string | null; // set = archived (hidden from pickers, kept in history)
   createdAt: string;
 }
 
@@ -118,7 +118,7 @@ export interface PrepTool {
   name: string;
   methodKind: MethodKind | null;
   position: number;
-  retiredAt: string | null; // set = retired (off the checklist, kept in history)
+  archivedAt: string | null; // set = archived (off the checklist, kept in history)
   createdAt: string;
 }
 export type PrepToolRef = Pick<PrepTool, 'id' | 'name' | 'methodKind'>;
@@ -291,8 +291,8 @@ export interface BrewLog {
   bean: { id: string; roasterName: string; beanName: string };
   recipe: { id: string; name: string; expectedYieldGrams: number | null; style: RecipeStyle | null; methodKind: MethodKind } | null;
   grinder: { id: string; name: string } | null;
-  waterProfile: { id: string; name: string } | null; // retired ones included
-  brewer: BrewerRef | null; // retired ones included
+  waterProfile: { id: string; name: string } | null; // archived ones included
+  brewer: BrewerRef | null; // archived ones included
   drink: { id: string; name: string; hasIngredients: boolean } | null; // hasIngredients: shot and drink tasted apart
   marks: Mark[]; // earliest first; espresso only
   tools: PrepToolRef[]; // prep tools used, in checklist order (§3d)
