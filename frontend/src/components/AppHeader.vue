@@ -22,10 +22,11 @@ async function logout(): Promise<void> {
   }
 }
 
-// Already brewing: clicking Brew offers to abandon the brew and start over.
+// Already on the brew screen: clicking Brew starts a new brew (after a saved
+// one), or offers to abandon the one in progress.
 const brewSession = useBrewSessionStore();
 function onBrewClick(): void {
-  if (route.name === 'brew' && brewSession.inProgress) brewSession.requestRestart();
+  if (route.name === 'brew') brewSession.requestRestart();
 }
 </script>
 

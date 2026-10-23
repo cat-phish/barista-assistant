@@ -103,10 +103,12 @@ export function recentByMade(logs: BrewLog[], brewers: Brewer[], n = 3): BrewLog
   return out;
 }
 
-// "The Atlas" / "V60" / "No recipe", "Guji · Batch 3", "Oct 21".
-export function repeatLabel(log: BrewLog, now: Date = new Date()): { made: string; bean: string; when: string } {
+// "The Atlas" / "V60" / "No recipe", its recipe ("House V60", or null),
+// "Guji · Batch 3", "Oct 21".
+export function repeatLabel(log: BrewLog, now: Date = new Date()): { made: string; recipe: string | null; bean: string; when: string } {
   return {
     made: log.drink?.name ?? log.brewer?.name ?? 'No recipe',
+    recipe: log.recipe?.name ?? null,
     bean: `${log.bean.beanName}${batchSuffix(log.bean)}`,
     when: formatAdded(log.timestamp, now),
   };

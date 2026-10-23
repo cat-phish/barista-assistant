@@ -166,7 +166,8 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   brewer, so the espresso machine comes with the recipe.
 - **Repeat a brew:** setup can be filled from an earlier brew: quick
   buttons for the latest brew of each of the last 3 things you made (a drink,
-  or a plain brew of a method), **Pick a brew…** for any other, and **Brew
+  or a plain brew of a method; each shows its recipe, bean and date),
+  **Pick a brew…** for any other, and **Brew
   again** on every journal entry. It fills the bean (the newest bag of the
   same coffee if that one is archived), what you're making, brewer, recipe,
   drink size, dose and water (espresso: the dose, at the recipe's ratio),
@@ -175,7 +176,8 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   since is skipped and named. The timer starts when you press Start.
 - **Abandoning a brew:** during the timer or before the log is saved,
   leaving the page, reloading, or tapping **Brew** again asks "Abandon this
-  brew?" first; abandoning goes back to setup with your choices kept.
+  brew?" first; abandoning goes back to setup with your choices kept. After
+  a brew is saved, tapping **Brew** goes straight back to setup.
 - **Timer** (pour over and espresso): Previous / Current / Up next cards on
   top, then the buttons, then the clock; the
   current one shows the instruction ("Pour to 150 g (+100)", "9 → 6 bar",
