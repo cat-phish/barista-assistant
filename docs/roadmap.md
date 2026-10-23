@@ -723,3 +723,23 @@ Contract: `api/grinders.md` §3b, `api/brew-logs.md` §6.
 - **The AI** gets the grinder's speed details, each brew's `grindRpm`, both
   weights and `grinderRetentionGrams`. It's told RPM is part of the grind, so
   it should compare settings at similar speeds.
+
+## Brew setup and timer fixes from first use (built)
+
+Branch `brew-setup-tweaks`, no migration. Small things noticed after using
+the grinder weights and speed (part 4 above).
+
+- **Batch linking:** typing the dose keeps the water and changes the
+  ratio, and typing the water keeps the dose (before, each moved the other
+  at a fixed ratio). The ratio still moves the water, a yield sets both, and
+  the yield estimate follows every change. Espresso: the dose and the ratio
+  move the shot weight, and the shot weight changes the ratio. The worked-out
+  ratio is held exactly and shown to 0.1 (`linkRatio`, `lib/scale.ts`).
+- **Grinder weights and speed on setup:** they're measured before the timer,
+  so setup asks for beans in, grounds out and (variable-speed grinders) the
+  RPM. The log form keeps them, already filled in. **Grounds out fill the
+  dose:** on setup as a typed dose (so the ratio changes), and in the log and
+  journal forms directly.
+- **Timer layout:** the step cards come first, then the buttons, then the
+  clock, and the step text is larger (instruction 1.8rem, countdown 2rem,
+  side cards and the small line about 1.05rem).

@@ -162,7 +162,8 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
 - **Abandoning a brew:** during the timer or before the log is saved,
   leaving the page, reloading, or tapping **Brew** again asks "Abandon this
   brew?" first; abandoning goes back to setup with your choices kept.
-- **Timer** (pour over and espresso): Previous / Current / Up next cards; the
+- **Timer** (pour over and espresso): Previous / Current / Up next cards on
+  top, then the buttons, then the clock; the
   current one shows the instruction ("Pour to 150 g (+100)", "9 → 6 bar",
   "Pump off"), the temperature and how it ends, with **Next** or **Log it**
   buttons for steps that need them. Each step starts when the previous one
