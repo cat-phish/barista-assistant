@@ -905,3 +905,28 @@ is closed. Contract: `api/notifications.md` §1b, `api/brew-logs.md` §6.
     worker, so a self-hosted ntfy or Gotify on the same machine can be
     reached.
 
+## Choose what a repeat keeps (built)
+
+Backlog item "Choose what a repeat keeps", branch `repeat-keeps`, no
+migration (a preference). What to carry over differs: some always change
+the grind, others want last time's notes in front of them.
+
+- **Settings → Repeat brews**, per person (under "You"): a box for each thing
+  a repeat can copy. On by default: drink size, dose and water,
+  temperature, grinder, grind and RPM, and water profile (what repeating
+  did before). Off by default: the prep checklist (ticks the tools that brew
+  used), beans in / grounds out, and the tasting notes, which are shown as
+  a "Last time" card on the log form, not copied.
+  "Back to the defaults" resets the list.
+- Stored as `preferences.repeatKeeps`, the list of what's on
+  (`REPEAT_KEEPS`). The bean and what → brewer → recipe always come along,
+  and results and ratings never do.
+- **What's left out** starts as for a new brew:
+  - the drink's default size, the recipe's batch and temperature;
+  - the grinder setup already had, with the usual grind pre-fill;
+  - the default water.
+
+  Notes about archived things are only shown for what would have been
+  copied.
+- Decided: per person, not per workspace.
+

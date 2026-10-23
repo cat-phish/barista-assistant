@@ -625,11 +625,11 @@ const savedLogId = ref<string | null>(null);
 // there, and greyed out while no service is on to deliver the reminder.
 const auth = useAuthStore();
 const notifyChannels = ref<NotificationChannel[]>([]);
-const reminderPrefs = computed(() => auth.user?.preferences ?? DEFAULT_PREFERENCES);
-const deliverable = computed(() => canRemind(reminderPrefs.value, notifyChannels.value));
+const userPrefs = computed(() => auth.user?.preferences ?? DEFAULT_PREFERENCES);
+const deliverable = computed(() => canRemind(userPrefs.value, notifyChannels.value));
 const rateLater = ref(false);
 watch(stage, (s) => {
-  if (s === 'log') rateLater.value = reminderPrefs.value.rateLaterDefault;
+  if (s === 'log') rateLater.value = userPrefs.value.rateLaterDefault;
 });
 const reminder = ref<'queued' | 'off' | 'unavailable' | null>(null); // for the brew just saved
 notificationsApi
@@ -709,6 +709,10 @@ const quickRepeats = computed(() => recentByMade(recentLogs.value, brewers.value
 const pickerOpen = ref(false);
 const repeatFrom = ref<{ log: BrewLog; missing: string[] } | null>(null);
 const repeatError = ref('');
+// The repeated brew's notes, shown on the log form when you keep them as a reminder.
+const repeatNotes = computed(
+  () => !!repeatFrom.value && userPrefs.value.repeatKeeps.includes('notes') && !!(repeatFrom.value.log.tastingNotes || repeatFrom.value.log.drinkTastingNotes),
+)
 async function loadRecent(): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
@@ -732,7 +736,12 @@ async function applyRepeat(log: BrewLog): Promise<void> {
     grinders: grinders.value,
     waterProfiles: waterProfiles.value,
   });
-  repeatFrom.value = { log, missing: plan.missing };
+  // Only mention what's gone if it would have been copied.
+  const kept = new Set(userPrefs.value.repeatKeeps);
+  const missing = plan.missing.filter(
+    (m) => !(m.startsWith('The grinder') && !kept.has('grinder') && !kept.has('grind')) && !(m.startsWith('The water') && !kept.has('waterProfile')),
+  );
+  repeatFrom.value = { log, missing };
   repeatGrind.value =
     plan.grinderId && log.actualGrindSetting !== null
       ? { grinderId: plan.grinderId, recipeId: plan.recipeId, grind: formatGrind(log.actualGrindSetting), rpm: log.grindRpm === null ? '' : String(log.grindRpm) }
@@ -747,13 +756,18 @@ async function applyRepeat(log: BrewLog): Promise<void> {
   if (plan.recipeId) recipeId.value = plan.recipeId;
   await nextTick();
   if (repeatGrind.value) repeatGrind.value.recipeId = recipeId.value; // another recipe if the brew's is gone
-  if (log.servingSize !== null && log.servingUnit && baseSize.value) {
+  // What else it copies is yours to choose (Settings → Repeat brews,
+  // repeatKeeps); what's left out is set as for a new brew.
+  if (kept.has('size') && log.servingSize !== null && log.servingUnit && baseSize.value) {
     sizeText.value = formatGrams(log.servingSize);
     sizeUnit.value = log.servingUnit;
-  }
+  } else resetSize();
   // Filter: the brew's dose and water (so the ratio is the one it had);
   // espresso: its dose, with the shot weight at the recipe's ratio.
-  if (filterRecipe.value && log.actualWaterGrams !== null) {
+  if (!kept.has('doseWater')) {
+    resetBatch();
+    sizeToBatch();
+  } else if (filterRecipe.value && log.actualWaterGrams !== null) {
     const r = log.actualWaterGrams / log.actualDoseGrams;
     lead.value = { field: 'dose', text: formatGrams(log.actualDoseGrams) };
     ratio.value = { text: formatRatio(r), value: r };
@@ -764,13 +778,15 @@ async function applyRepeat(log: BrewLog): Promise<void> {
     draft.dose = formatGrams(log.actualDoseGrams);
     draft.water = log.actualWaterGrams === null ? '' : formatGrams(log.actualWaterGrams);
   }
-  draft.temp = tempText(log.actualTempC, temperatureUnit.value);
-  draft.grinderId = plan.grinderId;
-  if (plan.waterProfileId) draft.waterProfileId = plan.waterProfileId;
-  // Measured each time: left for this brew.
-  draft.toolIds = [];
-  draft.beanIn = '';
-  draft.groundOut = '';
+  draft.temp = tempText(kept.has('temp') ? log.actualTempC : (recipe.value?.targetTempC ?? null), temperatureUnit.value);
+  if (kept.has('grinder')) draft.grinderId = plan.grinderId; // else the one setup already has
+  // The grind follows only on the brew's own grinder (repeatGrind checks it).
+  if (!kept.has('grind')) repeatGrind.value = null;
+  draft.waterProfileId = kept.has('waterProfile') && plan.waterProfileId ? plan.waterProfileId : defaultWaterProfileId(waterProfiles.value);
+  const activeTools = new Set(prepTools.value.filter((t) => !t.archivedAt).map((t) => t.id));
+  draft.toolIds = kept.has('prepTools') ? log.tools.map((t) => t.id).filter((id) => activeTools.has(id)) : [];
+  draft.beanIn = kept.has('grinderWeights') && log.beanWeightInGrams !== null ? formatGrams(log.beanWeightInGrams) : '';
+  draft.groundOut = kept.has('grinderWeights') && log.groundWeightOutGrams !== null ? formatGrams(log.groundWeightOutGrams) : '';
   await nextTick();
   void refreshGrind(); // applies repeatGrind (also when the grinder didn't change)
 }
@@ -1061,15 +1077,21 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         ><template v-if="recipe"> · {{ recipe.name }}</template>
       </p>
       <FinishDrinkCard v-if="drink" :drink="drink" :factor="sizeScale" :size-label="madeSize ? formatSize(madeSize) : null" />
+      <!-- Settings → Repeat brews: the repeated brew's notes, as a reminder (not copied). -->
+      <section v-if="repeatNotes" class="card notes-reminder">
+        <h2>Last time ({{ repeatLabel(repeatFrom!.log).when }})</h2>
+        <p v-if="repeatFrom!.log.tastingNotes">{{ repeatFrom!.log.tastingNotes }}</p>
+        <p v-if="repeatFrom!.log.drinkTastingNotes"><span class="muted">The drink:</span> {{ repeatFrom!.log.drinkTastingNotes }}</p>
+      </section>
       <section class="card">
         <p v-if="stepMarksLine" class="muted small marks-line">{{ stepMarksLine }}</p>
         <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :prep-tools="prepTools" :method-kind="recipe?.brewer.kind ?? null" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="recipe?.style?.brewsLike ?? null" />
       </section>
       <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
-      <div v-if="reminderPrefs.rateReminders" class="rate-later">
+      <div v-if="userPrefs.rateReminders" class="rate-later">
         <label class="checkbox" :class="{ off: !deliverable }">
           <input v-model="rateLater" type="checkbox" :disabled="!deliverable" />
-          Rate later: remind me in {{ formatDelay(reminderPrefs.rateReminderMinutes) }}
+          Rate later: remind me in {{ formatDelay(userPrefs.rateReminderMinutes) }}
         </label>
         <p v-if="!deliverable" class="muted small">
           No notification service is on yet: <RouterLink :to="{ name: 'settings-notifications' }">set one up</RouterLink>.
@@ -1086,7 +1108,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         <!-- Rate later: the AI waits for the rating, offered with it on the entry. -->
         <template v-if="reminder">
           <p v-if="reminder === 'queued'" class="muted">
-            We'll remind you to rate it in {{ formatDelay(reminderPrefs.rateReminderMinutes) }}. The AI suggestion comes with the rating.
+            We'll remind you to rate it in {{ formatDelay(userPrefs.rateReminderMinutes) }}. The AI suggestion comes with the rating.
           </p>
           <p v-else class="form-error" role="alert">
             The reminder couldn't be set{{ reminder === 'off' ? ': no notification service is on (Settings → Notifications)' : '' }}. Rate it from the journal when you're ready.
@@ -1125,6 +1147,14 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
 </template>
 
 <style scoped>
+.notes-reminder h2 {
+  font-size: 1rem;
+  margin: 0 0 var(--space-1);
+}
+.notes-reminder p {
+  margin: 0;
+  white-space: pre-line;
+}
 .rate-later {
   display: flex;
   flex-direction: column;

@@ -29,6 +29,7 @@ export const VOLUME_UNITS = ["fl_oz", "ml"] as const;
 export const ALTITUDE_UNITS = ["m", "ft"] as const;
 export const TEMPERATURE_UNITS = ["c", "f"] as const;
 export const THEMES = ["system", "light", "dark"] as const;
+export const REPEAT_KEEPS = ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "prepTools", "grinderWeights", "notes"] as const; // what a repeat copies
 export interface UserPreferences {
   volumeUnit: (typeof VOLUME_UNITS)[number];
   showBothVolumes: boolean;
@@ -38,8 +39,9 @@ export interface UserPreferences {
   rateReminders: boolean; // rate-later reminders (docs/api/notifications.md §1b)
   rateReminderMinutes: number; // 5–240
   rateLaterDefault: boolean; // the log form's Rate later box starts ticked
+  repeatKeeps: (typeof REPEAT_KEEPS)[number][]; // default: size … waterProfile
 }
-export const DEFAULT_PREFERENCES: UserPreferences = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false };
+export const DEFAULT_PREFERENCES: UserPreferences = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["size", "doseWater", "temp", "grinder", "grind", "waterProfile"] };
 export const ROAST_SCALES = ["names", "levels"] as const; // roast names (Cinnamon … French) or light to dark only
 export interface WorkspaceSettings {
   recipeRoastLevel: RoastLevel; // the roast recipes are written for

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Bean, BrewLog, Brewer, Drink, Grinder, Recipe, WaterProfile } from '../api/types';
-import { madeKey, recentByMade, repeatLabel, repeatPlan, type RepeatSources } from './repeatBrew';
+import { DEFAULT_PREFERENCES } from '../composables/usePreferences';
+import { madeKey, recentByMade, REPEAT_OPTIONS, repeatLabel, repeatPlan, type RepeatSources } from './repeatBrew';
 
 const log = (over: Partial<BrewLog> = {}): BrewLog =>
   ({
@@ -75,5 +76,13 @@ describe('quick repeats', () => {
     expect(repeatLabel(log(), new Date('2026-10-23T12:00:00Z'))).toMatchObject({ made: 'V60', recipe: 'House V60', bean: 'Guji · Batch 3' });
     expect(repeatLabel(log({ recipeId: null, recipe: null })).recipe).toBeNull();
     expect(repeatLabel(log({ drink: { id: 'latte', name: 'Latte', hasIngredients: true } })).made).toBe('Latte');
+  });
+});
+
+describe('what a repeat keeps', () => {
+  it('offers each option once, and the defaults are among them', () => {
+    const keys = REPEAT_OPTIONS.map((o) => o.key);
+    expect(new Set(keys).size).toBe(keys.length);
+    for (const k of DEFAULT_PREFERENCES.repeatKeeps) expect(keys).toContain(k);
   });
 });

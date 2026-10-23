@@ -177,6 +177,9 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   temperature, grinder, grind and RPM, and the water. Prep tools, grinder
   weights, results, ratings and notes start blank, and anything archived
   since is skipped and named. The timer starts when you press Start.
+  **Settings → Repeat brews** (per person) chooses what's copied: each of
+  those, plus the prep checklist, beans in / grounds out, and the earlier
+  tasting notes shown as a reminder on the log form.
 - **Rate later:** the log form has a **Rate later** box. Tick it and save
   without a rating, and a reminder ("How was it? Rate your brew") arrives
   after your delay (15 min by default), unless you've rated it by then.

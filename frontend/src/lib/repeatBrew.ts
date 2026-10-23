@@ -2,10 +2,25 @@
 // earlier brew log. This works out the setup choices; BrewView applies them
 // and fills dose, water, size, temperature and grind from the log itself.
 // What's no longer available (archived or deleted) is skipped and named.
-import type { Bean, BrewLog, Brewer, Drink, Grinder, Recipe, WaterProfile } from '../api/types';
+import type { Bean, BrewLog, Brewer, Drink, Grinder, Recipe, RepeatKeep, WaterProfile } from '../api/types';
 import { batchSuffix } from './beans';
 import { encodeCategory, encodeDrink, encodeMethod, encodePlain, methodKey, NO_RECIPE } from './brewChoice';
 import { formatAdded } from './format';
+
+// What a repeat can copy besides the bean and what → brewer → recipe, which
+// it always takes (Settings → Repeat brews, docs/api/auth.md §1 repeatKeeps).
+// The defaults are the backend's (DEFAULT_PREFERENCES).
+export const REPEAT_OPTIONS: Array<{ key: RepeatKeep; label: string; hint?: string }> = [
+  { key: 'size', label: 'Drink size', hint: 'Off: the drink’s default size' },
+  { key: 'doseWater', label: 'Dose and water', hint: 'Off: the recipe’s. Espresso keeps the recipe’s ratio either way' },
+  { key: 'temp', label: 'Water temperature', hint: 'Off: the recipe’s' },
+  { key: 'grinder', label: 'Grinder', hint: 'Off: your last grinder, or the recipe’s default' },
+  { key: 'grind', label: 'Grind setting and speed', hint: 'On the same grinder. Off: your last setting with it, as usual' },
+  { key: 'waterProfile', label: 'Water profile', hint: 'Off: your default water' },
+  { key: 'prepTools', label: 'Prep checklist', hint: 'Ticks the tools that brew used' },
+  { key: 'grinderWeights', label: 'Beans in / grounds out' },
+  { key: 'notes', label: 'Tasting notes, as a reminder', hint: 'Shown on the log form, not copied into the new brew' },
+];
 
 export interface RepeatPlan {
   beanId: string; // '' = pick one (see missing)
