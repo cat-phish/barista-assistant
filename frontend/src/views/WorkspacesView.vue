@@ -4,9 +4,9 @@ import { useRouter } from 'vue-router';
 import { ApiError, errorMessage } from '../api/client';
 import type { Role } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
+import { SLUG_PATTERN, slugify } from '../lib/slug';
 import { useWorkspaceStore } from '../stores/workspace';
 
-const SLUG_PATTERN = /^[a-z0-9-]{3,64}$/; // same rule as the API (§2)
 const ROLE_LABELS: Record<Role, string> = { owner: 'Owner', barista: 'Barista', viewer: 'Viewer' };
 
 const workspaces = useWorkspaceStore();
@@ -19,18 +19,6 @@ const slug = ref('');
 const slugEdited = ref(false);
 const creating = ref(false);
 const createError = ref('');
-
-// "Jordan's Café" -> "jordans-cafe"
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/['’]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 64);
-}
 
 watch(name, (value) => {
   if (!slugEdited.value) slug.value = slugify(value);

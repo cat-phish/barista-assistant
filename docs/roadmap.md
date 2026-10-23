@@ -456,3 +456,27 @@ API existed, arranged in the builder, but nothing showed it to guests.
   the workspace name) and returned as `title` by the menu and public menu.
 - **Backlog:** item 19 is now "Public menu: branding and sizes" (accent
   colour, tagline, logo; per-size prices).
+
+## Settings: shell and Workspace tab (built)
+
+Backlog item 1, branch `settings-shell`. Workspace configuration was spread
+out (the public menu's switch, title and currency on Bar setup → Menu) or
+missing (no way to rename the web address or delete a workspace).
+
+- **Settings** is a ⚙ link in the top header (icon only on phones), so the
+  six nav tabs still fit 320px. `/settings/*` screens share
+  `SettingsLayout.vue`: a grouped nav (`SettingsNav.vue`, after Bar
+  Assistant's personal / bar groups) beside the tab from 750px wide; on a
+  phone `/settings` is the list and each tab has "‹ Settings".
+- **Settings → Workspace:** name and web address (owners; others see them
+  read-only), with a warning that the old `/menu/<slug>` and printed QR
+  codes stop working; the public menu's switch, link, QR code, title and
+  currency (moved from the menu builder, same permissions); and deleting
+  the workspace by typing its slug.
+- **API:** `PATCH /api/workspaces/:id` accepts `slug` (`409` if taken). No
+  redirect from the old address.
+- The menu builder keeps arranging only, with a line saying whether the
+  public menu is on and linking to Settings. `slugify` and `SLUG_PATTERN`
+  moved to `lib/slug.ts`, shared with creating a workspace.
+- **Settings storage** is decided but not built: JSON columns on
+  `workspaces` and `users`, added with the first real setting (item 3).
