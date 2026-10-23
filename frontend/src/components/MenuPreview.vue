@@ -1,24 +1,17 @@
 <script setup lang="ts">
 // The menu as guests see it (docs/api/public-menu.md §7): the builder's
-// Preview, written to be reused by the guest page (backlog item 19).
-import type { PublicBean, PublicMenu } from '../api/types';
-import { BEAN_PROCESSES } from '../lib/beans';
-import { ROAST_LEVELS } from '../lib/scale';
+// Preview and the guest page (views/PublicMenuView.vue).
+import type { PublicMenu } from '../api/types';
+import { beanLines } from '../lib/publicMenu';
 
 defineProps<{ menu: PublicMenu }>();
 
 const price = (n: number, currency: string | null) => `${n.toFixed(2)}${currency ? ` ${currency}` : ''}`;
-// "Washed · Light · Colombia, Huila" and "Peach, black tea".
-function beanFacts(b: PublicBean): string {
-  return [b.process ? BEAN_PROCESSES[b.process].label : null, b.roastLevel ? ROAST_LEVELS[b.roastLevel].label : null, [b.country, b.region].filter(Boolean).join(', ') || null, b.decaf ? 'Decaf' : null]
-    .filter(Boolean)
-    .join(' · ');
-}
 </script>
 
 <template>
   <div class="menu-preview">
-    <h2 class="bar">{{ menu.workspace.name }}</h2>
+    <h2 class="bar">{{ menu.title }}</h2>
     <p v-if="menu.sections.length === 0" class="muted">Nothing on the menu yet: sections show once they have something in them.</p>
     <section v-for="s in menu.sections" :key="s.name" class="section">
       <h3>{{ s.name }}</h3>
@@ -27,9 +20,17 @@ function beanFacts(b: PublicBean): string {
         <template v-for="(item, i) in s.items" :key="item.type === 'beans' ? `beans-${i}` : item.id">
           <li v-if="item.type === 'beans'" class="beans">
             <div v-for="b in item.beans" :key="b.id" class="bean">
-              <strong>{{ b.roasterName }} {{ b.beanName }}</strong>
-              <span v-if="beanFacts(b)" class="muted small">{{ beanFacts(b) }}</span>
-              <span v-if="b.flavorProfile" class="small">{{ b.flavorProfile }}</span>
+              <div class="line">
+                <strong class="name">{{ b.beanName }} <span class="roaster muted">· {{ b.roasterName }}</span></strong>
+              </div>
+              <template v-for="lines in [beanLines(b, item.fields)]" :key="b.id">
+                <div v-if="lines.badges.length" class="badges">
+                  <span v-for="badge in lines.badges" :key="badge" class="badge">{{ badge }}</span>
+                </div>
+                <span v-if="lines.flavor" class="small flavor">{{ lines.flavor }}</span>
+                <span v-if="lines.origin" class="muted small">{{ lines.origin }}</span>
+                <span v-if="lines.roast" class="muted small">{{ lines.roast }}</span>
+              </template>
             </div>
             <p v-if="item.beans.length === 0" class="muted small">No beans to show right now.</p>
           </li>
@@ -61,15 +62,23 @@ h3,
 p {
   margin: 0;
 }
+/* The title, then the sections, then the items, each a step smaller; the
+   title and section headings in the brand brown. */
 .bar {
-  font-size: 1.3rem;
+  font-size: 2rem;
+  line-height: 1.2;
   text-align: center;
+  color: var(--brand);
 }
 h3 {
-  font-size: 1.05rem;
-  border-bottom: 1px solid var(--border);
+  font-size: 1.35rem;
+  color: var(--brand);
+  border-bottom: 2px solid var(--brand);
   padding-bottom: var(--space-1);
-  margin-bottom: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+.name {
+  font-size: 1rem;
 }
 .items {
   list-style: none;
@@ -99,6 +108,18 @@ h3 {
 }
 .price {
   font-variant-numeric: tabular-nums;
+}
+.roaster {
+  font-weight: 400;
+}
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 2px 0;
+}
+.flavor {
+  font-style: italic;
 }
 .unavailable .name {
   text-decoration: line-through;

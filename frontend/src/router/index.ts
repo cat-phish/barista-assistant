@@ -4,6 +4,7 @@ import { useWorkspaceStore } from '../stores/workspace';
 
 declare module 'vue-router' {
   interface RouteMeta {
+    public?: boolean; // the guest menu page: no login, no session check (works offline)
     requiresAuth?: boolean;
     requiresWorkspace?: boolean; // implies requiresAuth
     guestOnly?: boolean; // login/register: logged-in users go home
@@ -15,6 +16,7 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', name: 'home', component: () => import('../views/HomeView.vue'), meta: { requiresAuth: true, requiresWorkspace: true } },
+    { path: '/menu/:slug', name: 'public-menu', component: () => import('../views/PublicMenuView.vue'), props: true, meta: { public: true } },
     { path: '/login', name: 'login', component: () => import('../views/LoginView.vue'), meta: { guestOnly: true } },
     { path: '/register', name: 'register', component: () => import('../views/RegisterView.vue'), meta: { guestOnly: true } },
     { path: '/workspaces', name: 'workspaces', component: () => import('../views/WorkspacesView.vue'), meta: { requiresAuth: true } },
@@ -68,6 +70,7 @@ export function safeRedirect(value: unknown): string {
 }
 
 router.beforeEach(async (to): Promise<RouteLocationRaw | true> => {
+  if (to.meta.public) return true;
   const auth = useAuthStore();
   if (!auth.checked) await auth.fetchMe();
 

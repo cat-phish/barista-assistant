@@ -29,6 +29,7 @@ off is the workspace's `isPublicMenuEnabled` (§2, owners only).
 
 ```json
 {
+  "title": "The Brew Bar",
   "currency": "USD",
   "sections": [
     {
@@ -46,11 +47,13 @@ off is the workspace's `isPublicMenuEnabled` (§2, owners only).
           "description": null,
           "price": 5.5,
           "available": true,
-          "source": { "name": "Latte", "description": "Double shot, steamed milk", "kind": "espresso", "archived": false }
+          "source": { "name": "Latte", "description": "Double shot, steamed milk", "kind": "espresso", "archived": false },
+          "beanFields": null
         },
         {
           "id": "uuid", "itemType": "beans", "drinkId": null, "brewerId": null,
-          "name": null, "description": null, "price": null, "available": true, "source": null
+          "name": null, "description": null, "price": null, "available": true, "source": null,
+          "beanFields": ["flavorProfile", "origin", "process", "roastDate"]
         }
       ]
     }
@@ -60,6 +63,12 @@ off is the workspace's `isPublicMenuEnabled` (§2, owners only).
 
 `source` is what the item shows by default: a drink's name and description,
 or a brewer's name (brewers have no menu description; set one on the item).
+
+`beanFields` (the beans block only; `null` on other items) is what guests see
+about each bean besides its roaster and name: a list of `BEAN_MENU_FIELDS`
+(`flavorProfile`, `origin`, `producer`, `altitude`, `process`, `roastLevel`,
+`roastDate`, `decaf`, `blendType`, `roastType`), each once; `null` = all of
+them. The public menu (§7) sends only those.
 
 ## `GET /`
 
@@ -75,9 +84,12 @@ The builder's Preview shows it.
 
 ## `PATCH /`
 
-- **Body:** `{ "currency": "usd" | null }`: an ISO 4217 code (uppercased).
-- **Errors:** `400` invalid, or `null` while items still have prices; `403`
-  viewer.
+- **Body:** any non-empty subset of `{ "currency": "usd" | null, "title":
+  "The Brew Bar" | null }`. `currency` is an ISO 4217 code (uppercased).
+  `title` is the public menu's heading, ≤ 255 chars; blank or `null` uses the
+  workspace name.
+- **Errors:** `400` invalid, or a `null` currency while items still have
+  prices; `403` viewer.
 
 ## `POST /sections`
 
@@ -113,7 +125,8 @@ order. Items can move between sections this way.
   `drinkId` (and no `brewerId`), a brewer item `brewerId`, the beans block
   neither. `name` ≤ 255 and `description` ≤ 500 (blank = `null`); `price`
   0–999999.99, at most 2 decimals, and only once the menu has a `currency`;
-  `available` defaults to `true`. It goes last in the section.
+  `available` defaults to `true`. `beanFields` (optional, nullable) is only
+  for the beans block. It goes last in the section.
 
   Or several at once: `{ "items": [ { ...item }, ... ] }` (1–100), each with
   the same rules. They go last, in the order sent, and it's **all or
@@ -126,7 +139,8 @@ order. Items can move between sections this way.
 ## `PATCH /items/:itemId`
 
 - **Body:** any non-empty subset of `{ "name", "description", "price",
-  "available" }`, same rules. To move an item, use `PUT /layout`.
+  "available", "beanFields" }`, same rules (`beanFields` on a drink or brewer
+  item is a `400`). To move an item, use `PUT /layout`.
 - **Errors:** `400`; `403`; `404`.
 
 ## `DELETE /items/:itemId`

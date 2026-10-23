@@ -30,7 +30,7 @@ async function setup() {
 describe("menu builder (docs/api/menu.md §7b)", () => {
   it("starts empty, and adds sections last", async () => {
     const { owner, ws, base, get } = await setup();
-    expect(await get()).toEqual({ currency: null, sections: [] });
+    expect(await get()).toEqual({ title: null, currency: null, sections: [] });
     await menuSection(owner, ws.id, "Espresso");
     const res = await owner.agent.post(`${base}/sections`).send({ name: "Pour over", description: "Brewed to order" });
     expect(res.status).toBe(201);
@@ -199,7 +199,7 @@ describe("public menu from the builder (docs/api/public-menu.md §7)", () => {
       { type: "drink", name: "House latte", price: 5, available: false },
       { type: "drink", name: "Secret riff", variantOf: null }, // a parent off the menu isn't named
     ]);
-    expect(menu.sections[1].items).toEqual([{ type: "beans", beans: [expect.objectContaining({ beanName: "Guji" })] }]);
+    expect(menu.sections[1].items).toEqual([{ type: "beans", fields: expect.any(Array), beans: [expect.objectContaining({ beanName: "Guji" })] }]);
   });
 });
 
@@ -252,5 +252,68 @@ describe("menu preview (docs/api/menu.md §7b)", () => {
     await addMember(owner, ws.id, viewer, "viewer");
     expect((await viewer.agent.get(`${base}/preview`)).status).toBe(200);
     expect((await (await newUser()).agent.get(`${base}/preview`)).status).toBe(404);
+  });
+});
+
+describe("what the beans block shows (docs/api/menu.md §7b)", () => {
+  it("shows every field by default, only the chosen ones once set, and never stock", async () => {
+    const { owner, ws, base, get } = await setup();
+    const section = await menuSection(owner, ws.id, "Coffee");
+    await newBean(owner, ws.id, { beanName: "Guji", process: "washed", country: "Ethiopia", region: "Guji", flavorProfile: "Peach", producer: "Shantawene", inventoryWeightGrams: 250 });
+    await menuAdd(owner, ws.id, section, { itemType: "beans" });
+    await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ isPublicMenuEnabled: true });
+    const block = async () => (await request(app).get(`/api/public/menu/${ws.slug}`)).body.sections[0].items[0];
+
+    const all = await block();
+    expect(all.fields).toHaveLength(10);
+    expect(all.beans[0]).toMatchObject({ beanName: "Guji", process: "washed", country: "Ethiopia", producer: "Shantawene", flavorProfile: "Peach" });
+    expect(all.beans[0]).not.toHaveProperty("inventoryWeightGrams");
+
+    const beansItem = (await get()).sections[0]!.items[0]! as Item & { beanFields: string[] | null };
+    expect(beansItem.beanFields).toBeNull();
+    const res = await owner.agent.patch(`${base}/items/${beansItem.id}`).send({ beanFields: ["origin", "flavorProfile"] });
+    expect(res.body.sections[0].items[0].beanFields).toEqual(["origin", "flavorProfile"]);
+    const chosen = await block();
+    expect(chosen.fields).toEqual(["origin", "flavorProfile"]);
+    expect(Object.keys(chosen.beans[0]).sort()).toEqual(["beanName", "country", "flavorProfile", "id", "originArea", "region", "roasterName"]);
+
+    await owner.agent.patch(`${base}/items/${beansItem.id}`).send({ beanFields: [] });
+    expect(Object.keys((await block()).beans[0]).sort()).toEqual(["beanName", "id", "roasterName"]);
+    await owner.agent.patch(`${base}/items/${beansItem.id}`).send({ beanFields: null });
+    expect((await block()).fields).toHaveLength(10);
+  });
+
+  it("is only for the beans block, with known fields once each", async () => {
+    const { owner, ws, base, drink, get } = await setup();
+    const section = await menuSection(owner, ws.id, "Coffee");
+    await menuAdd(owner, ws.id, section, { itemType: "drink", drinkId: await drink("Latte") });
+    const latte = (await get()).sections[0]!.items[0]!;
+    expect((await owner.agent.patch(`${base}/items/${latte.id}`).send({ beanFields: ["origin"] })).status).toBe(400);
+    expect((await owner.agent.post(`${base}/sections/${section}/items`).send({ itemType: "beans", beanFields: ["price"] })).status).toBe(400);
+    expect((await owner.agent.post(`${base}/sections/${section}/items`).send({ itemType: "beans", beanFields: ["origin", "origin"] })).status).toBe(400);
+    const created = await owner.agent.post(`${base}/sections/${section}/items`).send({ itemType: "beans", beanFields: ["decaf"] });
+    expect(created.body.sections[0].items[1].beanFields).toEqual(["decaf"]);
+  });
+});
+
+describe("menu title (docs/api/menu.md §7b)", () => {
+  it("defaults to the workspace name; set, blank and cleared from the menu settings", async () => {
+    const { owner, ws, base } = await setup();
+    await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ isPublicMenuEnabled: true });
+    const publicTitle = async () => (await request(app).get(`/api/public/menu/${ws.slug}`)).body.title;
+    const name = (await owner.agent.get(`${base}/preview`)).body.workspace.name;
+    expect(await publicTitle()).toBe(name);
+
+    const set = await owner.agent.patch(base).send({ title: "  The Brew Bar  " });
+    expect(set.body).toMatchObject({ title: "The Brew Bar", currency: null });
+    expect(await publicTitle()).toBe("The Brew Bar");
+    expect((await owner.agent.get(`${base}/preview`)).body.title).toBe("The Brew Bar");
+
+    await owner.agent.patch(base).send({ currency: "usd" }); // the title stays
+    expect((await owner.agent.get(base)).body).toMatchObject({ title: "The Brew Bar", currency: "USD" });
+    expect((await owner.agent.patch(base).send({ title: "" })).body.title).toBeNull();
+    expect(await publicTitle()).toBe(name);
+    expect((await owner.agent.patch(base).send({ title: "x".repeat(256) })).status).toBe(400);
+    expect((await owner.agent.patch(base).send({})).status).toBe(400);
   });
 });

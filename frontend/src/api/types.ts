@@ -29,7 +29,11 @@ export interface MenuItem {
   available: boolean;
   // What it shows by default; null for the beans block. archived: left off the public menu.
   source: { name: string; description: string | null; kind: MethodKind; archived: boolean } | null;
+  beanFields: BeanMenuField[] | null; // the beans block: what guests see per bean; null = all
 }
+// docs/api/menu.md §7b BEAN_MENU_FIELDS: what the beans block can show per bean.
+export type BeanMenuField =
+  | 'flavorProfile' | 'origin' | 'producer' | 'altitude' | 'process' | 'roastLevel' | 'roastDate' | 'decaf' | 'blendType' | 'roastType';
 export interface MenuSection {
   id: string;
   name: string;
@@ -38,17 +42,21 @@ export interface MenuSection {
   items: MenuItem[];
 }
 export interface Menu {
+  title: string | null; // the public menu's title; null = the workspace name
   currency: string | null;
   sections: MenuSection[];
 }
 
 // docs/api/public-menu.md §7: the menu as guests see it (also the builder's preview).
-export type PublicBean = Pick<
-  Bean,
-  | 'id' | 'roasterName' | 'beanName' | 'process' | 'roastDate' | 'inventoryWeightGrams' | 'roastLevel'
-  | 'detailedRoastLevel' | 'roastType' | 'blendType' | 'decaf' | 'flavorProfile' | 'originArea' | 'country'
-  | 'region' | 'altitudeMasl' | 'producer'
->;
+// A bean has its roaster and name, plus only the details its block shows.
+export type PublicBean = Pick<Bean, 'id' | 'roasterName' | 'beanName'> &
+  Partial<
+    Pick<
+      Bean,
+      | 'process' | 'roastDate' | 'roastLevel' | 'detailedRoastLevel' | 'roastType' | 'blendType' | 'decaf'
+      | 'flavorProfile' | 'originArea' | 'country' | 'region' | 'altitudeMasl' | 'producer'
+    >
+  >;
 export interface PublicMenuItem {
   type: 'drink' | 'brewer';
   id: string;
@@ -62,9 +70,11 @@ export interface PublicMenuItem {
 }
 export interface PublicBeansBlock {
   type: 'beans';
+  fields: BeanMenuField[];
   beans: PublicBean[];
 }
 export interface PublicMenu {
+  title: string; // the menu's title, else the workspace name
   workspace: { name: string; slug: string };
   currency: string | null;
   sections: Array<{ name: string; description: string | null; items: Array<PublicMenuItem | PublicBeansBlock> }>;

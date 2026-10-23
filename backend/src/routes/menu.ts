@@ -8,12 +8,14 @@ import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { buildPublicMenu, type PublicMenuResponse } from "./publicMenu.js";
 import {
+  BEAN_MENU_FIELDS,
   brewers,
   drinks,
   MENU_ITEM_TYPES,
   menuItems,
   menuSections,
   workspaces,
+  type BeanMenuField,
   type MenuItemType,
   type MethodKind,
 } from "@barista/shared/schema";
@@ -39,6 +41,7 @@ export interface MenuItemView {
   price: number | null;
   available: boolean;
   source: MenuItemSource | null; // null for the beans block
+  beanFields: BeanMenuField[] | null; // the beans block: what guests see per bean; null = all
 }
 export interface MenuSectionView {
   id: string;
@@ -48,6 +51,7 @@ export interface MenuSectionView {
   items: MenuItemView[];
 }
 export interface MenuResponse {
+  title: string | null; // the public menu's title; null = the workspace name
   currency: string | null;
   sections: MenuSectionView[];
 }
@@ -71,13 +75,20 @@ const currencySchema = z
   .toUpperCase()
   .regex(/^[A-Z]{3}$/, "must be a 3-letter currency code, e.g. USD")
   .nullable();
-const settingsSchema = z.object({ currency: currencySchema }).strict();
+// Menu settings: the prices' currency and the menu's title (blank = the workspace name).
+const settingsSchema = updateSchema({ currency: currencySchema, title: optionalText(255) });
 
 const sectionFields = { name: z.string().trim().min(1).max(100), description: optionalText(500) };
 const createSectionSchema = z.object(sectionFields).strict();
 const updateSectionSchema = updateSchema(sectionFields);
 
+const beanFieldsSchema = z
+  .array(z.enum(BEAN_MENU_FIELDS))
+  .refine((list) => new Set(list).size === list.length, "each field once")
+  .nullable()
+  .optional();
 const itemFields = {
+  beanFields: beanFieldsSchema, // the beans block only (checked below)
   name: optionalText(255),
   description: optionalText(500),
   price: decimalSchema({ min: 0, max: 1_000_000, scale: 2, exclusiveMax: true }).nullable().optional(),
@@ -89,7 +100,8 @@ const createItemSchema = z
   .refine(
     (b) => (b.itemType === "drink" ? !!b.drinkId && !b.brewerId : b.itemType === "brewer" ? !!b.brewerId && !b.drinkId : !b.drinkId && !b.brewerId),
     "a drink item needs drinkId, a brewer item brewerId, and the beans block neither"
-  );
+  )
+  .refine((b) => b.itemType === "beans" || b.beanFields == null, "beanFields: only for the beans block");
 // One item, or several at once (the add picker): { items: [...] }, all or nothing.
 const addItemsSchema = z.union([
   z.object({ items: z.array(createItemSchema).min(1).max(100) }).strict(),
@@ -109,7 +121,10 @@ const layoutSchema = z
 const PRICE_NEEDS_CURRENCY = "price: set the menu's currency first";
 
 export async function loadMenu(workspaceId: string, conn: Db = db): Promise<MenuResponse> {
-  const [ws] = await conn.select({ currency: workspaces.menuCurrency }).from(workspaces).where(eq(workspaces.id, workspaceId));
+  const [ws] = await conn
+    .select({ currency: workspaces.menuCurrency, title: workspaces.menuTitle })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId));
   const sections = await conn
     .select({ id: menuSections.id, name: menuSections.name, description: menuSections.description, position: menuSections.position })
     .from(menuSections)
@@ -127,6 +142,7 @@ export async function loadMenu(workspaceId: string, conn: Db = db): Promise<Menu
           description: menuItems.description,
           price: menuItems.price,
           available: menuItems.available,
+          beanFields: menuItems.beanFields,
           drinkName: drinks.name,
           drinkDescription: drinks.description,
           drinkKind: drinks.kind,
@@ -141,6 +157,7 @@ export async function loadMenu(workspaceId: string, conn: Db = db): Promise<Menu
         .orderBy(asc(menuItems.position))
     : [];
   return {
+    title: ws?.title ?? null,
     currency: ws?.currency ?? null,
     sections: sections.map((s) => ({
       ...s,
@@ -148,6 +165,7 @@ export async function loadMenu(workspaceId: string, conn: Db = db): Promise<Menu
         .filter((i) => i.sectionId === s.id)
         .map(({ sectionId: _s, drinkName, drinkDescription, drinkKind, brewerName, brewerKind, brewerArchivedAt, ...item }) => ({
           ...item,
+          beanFields: item.itemType === "beans" ? (item.beanFields ?? null) : null,
           source:
             item.itemType === "drink" && drinkName !== null && drinkKind !== null
               ? { name: drinkName, description: drinkDescription, kind: drinkKind, archived: false }
@@ -174,7 +192,7 @@ async function sectionInWorkspace(conn: Db, sectionId: string, workspaceId: stri
 // The item, if it's in this workspace's menu.
 async function itemInWorkspace(conn: Db, itemId: string, workspaceId: string) {
   const [row] = await conn
-    .select({ id: menuItems.id, price: menuItems.price })
+    .select({ id: menuItems.id, price: menuItems.price, itemType: menuItems.itemType })
     .from(menuItems)
     .innerJoin(menuSections, eq(menuSections.id, menuItems.sectionId))
     .where(and(eq(menuItems.id, itemId), eq(menuSections.workspaceId, workspaceId)));
@@ -226,7 +244,13 @@ menuRouter.patch("/", async (req: Request<WorkspaceParams>, res: Response<MenuRe
       return;
     }
   }
-  await db.update(workspaces).set({ menuCurrency: body.currency }).where(eq(workspaces.id, workspaceId));
+  await db
+    .update(workspaces)
+    .set({
+      ...(body.currency !== undefined ? { menuCurrency: body.currency } : {}),
+      ...(body.title !== undefined ? { menuTitle: body.title } : {}),
+    })
+    .where(eq(workspaces.id, workspaceId));
   await sendMenu(res, workspaceId);
 });
 
@@ -393,6 +417,7 @@ async function addItem(tx: Db, workspaceId: string, sectionId: string, body: New
       description: body.description ?? null,
       price: body.price ?? null,
       available: body.available ?? true,
+      beanFields: body.beanFields ?? null,
     });
   } catch (err) {
     if (isDuplicateEntryError(err)) throw new AddRefused(409, "That's already in this section");
@@ -435,8 +460,13 @@ menuRouter.patch("/items/:itemId", async (req: Request<ItemParams>, res: Respons
   if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
   const body = parseBody(updateItemSchema, req, res);
   if (!body) return;
-  if (!(await itemInWorkspace(db, itemId, workspaceId))) {
+  const item = await itemInWorkspace(db, itemId, workspaceId);
+  if (!item) {
     sendError(res, 404, "Menu item not found");
+    return;
+  }
+  if (body.beanFields !== undefined && item.itemType !== "beans") {
+    sendError(res, 400, "beanFields: only for the beans block");
     return;
   }
   if (body.price != null && !(await currencyOf(db, workspaceId))) {

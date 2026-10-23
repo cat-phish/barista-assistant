@@ -12,7 +12,7 @@ const drink = (id: string, category: DrinkCategory | null, over: Partial<Drink> 
 });
 const brewer = (id: string, kind: Brewer['kind'], archivedAt: string | null = null) => ({ id, name: id, kind, archivedAt }) as Brewer;
 const item = (id: string, over: Partial<MenuItem>): MenuItem => ({
-  id, itemType: 'drink', drinkId: null, brewerId: null, name: null, description: null, price: null, available: true, source: null, ...over,
+  id, itemType: 'drink', drinkId: null, brewerId: null, name: null, description: null, price: null, available: true, source: null, beanFields: null, ...over,
 });
 
 const latte = drink('Latte', milk);
@@ -22,6 +22,7 @@ const old = drink('Old', special, { archivedAt: '2026-10-22T00:00:00.000Z' });
 const drinks = [vanilla, tonic, latte, old];
 const brewers = [brewer('V60', 'filter'), brewer('Linea', 'espresso'), brewer('Moka', 'stovetop', '2026-10-22T00:00:00.000Z')];
 const menu: Menu = {
+  title: null,
   currency: null,
   sections: [
     { id: 's1', name: 'Espresso', description: null, position: 1, items: [item('i1', { drinkId: 'Latte' }), item('i2', { itemType: 'brewer', brewerId: 'Linea' })] },
@@ -54,7 +55,7 @@ describe('addOptions', () => {
       { itemType: 'drink', drinkId: 'Tonic' },
       { itemType: 'brewer', brewerId: 'V60' },
     ]);
-    const empty = addOptions({ currency: null, sections: [{ ...menu.sections[0]!, items: [] }] }, 's1', [], [], []);
+    const empty = addOptions({ title: null, currency: null, sections: [{ ...menu.sections[0]!, items: [] }] }, 's1', [], [], []);
     expect(addRequest(empty, new Set(), true)).toEqual([{ itemType: 'beans' }]);
   });
 });

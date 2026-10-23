@@ -12,7 +12,7 @@ import { errorMessage } from '../api/client';
 import { drinkCategoriesApi } from '../api/drinkCategories';
 import { drinksApi } from '../api/drinks';
 import { menuApi, type NewMenuItem } from '../api/menu';
-import type { Brewer, Drink, DrinkCategory, Menu, MenuItem, MenuSection, PublicMenu } from '../api/types';
+import type { BeanMenuField, Brewer, Drink, DrinkCategory, Menu, MenuItem, MenuSection, PublicMenu } from '../api/types';
 import { workspacesApi } from '../api/workspaces';
 import AppHeader from '../components/AppHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
@@ -22,10 +22,12 @@ import SetupTabs from '../components/SetupTabs.vue';
 import { parseDecimal } from '../lib/format';
 import { recallView, rememberView } from '../lib/listSort';
 import { duplicateSection, showsAs } from '../lib/menuBuilder';
+import { BEAN_MENU_FIELDS } from '../lib/publicMenu';
+import QRCode from 'qrcode';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
-const menu = ref<Menu>({ currency: null, sections: [] });
+const menu = ref<Menu>({ title: null, currency: null, sections: [] });
 const drinks = ref<Drink[]>([]);
 const categories = ref<DrinkCategory[]>([]);
 const preview = ref<PublicMenu | null>(null);
@@ -47,6 +49,7 @@ async function load(): Promise<void> {
     drinks.value = [...d.drinks].sort((x, y) => x.name.localeCompare(y.name));
     brewers.value = b.brewers.filter((x) => !x.archivedAt);
     currency.value = m.currency ?? '';
+    title.value = m.title ?? '';
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -132,11 +135,36 @@ async function togglePublic(): Promise<void> {
     busy.value = false;
   }
 }
+// The guest page's address, to copy, open or print as a QR code.
+const pageUrl = computed(() => `${window.location.origin}/menu/${workspaces.current?.slug ?? ''}`);
+const qr = ref('');
+watch(
+  [pageUrl, publicOn],
+  async ([url, on]) => {
+    qr.value = on ? await QRCode.toDataURL(url, { margin: 1, width: 480 }) : '';
+  },
+  { immediate: true },
+);
+const copied = ref(false);
+async function copyLink(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(pageUrl.value);
+    copied.value = true;
+    setTimeout(() => (copied.value = false), 2000);
+  } catch {
+    error.value = "Couldn't copy: select the address and copy it instead.";
+  }
+}
+
 const currency = ref('');
 const currencyCode = computed(() => currency.value.trim().toUpperCase());
 const currencyValid = computed(() => currencyCode.value === '' || /^[A-Z]{3}$/.test(currencyCode.value));
 const currencyChanged = computed(() => currencyCode.value !== (menu.value.currency ?? ''));
 const saveCurrency = () => run((ws) => menuApi.setCurrency(ws, currencyCode.value || null));
+// The menu's title; blank shows the workspace name.
+const title = ref('');
+const titleChanged = computed(() => title.value.trim() !== (menu.value.title ?? ''));
+const saveTitle = () => run((ws) => menuApi.setTitle(ws, title.value.trim() || null));
 
 // --- Order (one layout for the whole menu) ---
 const layoutOf = (sections: MenuSection[]) => sections.map((s) => ({ id: s.id, itemIds: s.items.map((i) => i.id) }));
@@ -228,6 +256,9 @@ const itemDescription = ref('');
 const itemPrice = ref('');
 const itemSection = ref('');
 const itemAvailable = ref(true);
+// The beans block: which details guests see per bean (null on the API = all).
+const ALL_BEAN_FIELDS = Object.keys(BEAN_MENU_FIELDS) as BeanMenuField[];
+const itemBeanFields = ref<BeanMenuField[]>([]);
 const itemError = ref('');
 const confirmItemDelete = ref(false);
 const sectionOf = (item: MenuItem) => menu.value.sections.find((s) => s.items.some((i) => i.id === item.id)) ?? null;
@@ -250,6 +281,7 @@ function editItem(i: MenuItem): void {
   itemPrice.value = i.price === null ? '' : i.price.toFixed(2);
   itemSection.value = sectionOf(i)?.id ?? '';
   itemAvailable.value = i.available;
+  itemBeanFields.value = i.beanFields ?? [...ALL_BEAN_FIELDS];
   itemError.value = '';
   confirmItemDelete.value = false;
 }
@@ -258,10 +290,13 @@ async function saveItem(): Promise<void> {
   if (!i || itemProblem.value) return;
   const onError = (m: string) => (itemError.value = m);
   const price = priceParsed.value?.ok ? priceParsed.value.value : null;
-  const saved = await run(
-    (ws) => menuApi.updateItem(ws, i.id, { name: itemName.value.trim() || null, description: itemDescription.value.trim() || null, price, available: itemAvailable.value }),
-    onError,
-  );
+  // In the checklist's order; every field ticked is stored as null (= all, including any added later).
+  const beanFields = ALL_BEAN_FIELDS.filter((f) => itemBeanFields.value.includes(f));
+  const input =
+    i.itemType === 'beans'
+      ? { beanFields: beanFields.length === ALL_BEAN_FIELDS.length ? null : beanFields }
+      : { name: itemName.value.trim() || null, description: itemDescription.value.trim() || null, price, available: itemAvailable.value };
+  const saved = await run((ws) => menuApi.updateItem(ws, i.id, input), onError);
   if (!saved) return;
   // Moved: to the end of the chosen section.
   const from = sectionOf(i);
@@ -297,11 +332,34 @@ async function deleteItem(): Promise<void> {
         <div class="setting">
           <p>
             <strong>{{ publicOn ? 'On' : 'Off' }}</strong>
-            <span class="muted"> · {{ publicOn ? `Published at /api/public/menu/${workspaces.current?.slug}. Preview shows what guests see.` : 'Only your bar can see this menu. Preview shows what guests would see.' }}</span>
+            <span class="muted"> · {{ publicOn ? 'Guests can see it at the link below. Preview shows what they see.' : 'Only your bar can see this menu. Preview shows what guests would see.' }}</span>
           </p>
           <button v-if="isOwner" class="btn btn-secondary" type="button" :disabled="busy" @click="togglePublic">{{ publicOn ? 'Turn off' : 'Turn on' }}</button>
         </div>
+        <div v-if="publicOn" class="share">
+          <div class="share-link">
+            <label for="menu-link">Guest page</label>
+            <div class="link-row">
+              <input id="menu-link" :value="pageUrl" readonly @focus="($event.target as HTMLInputElement).select()" />
+              <button class="btn btn-secondary" type="button" @click="copyLink">{{ copied ? 'Copied' : 'Copy' }}</button>
+              <a class="btn btn-secondary" :href="pageUrl" target="_blank" rel="noopener">Open</a>
+            </div>
+            <span class="muted small">Print the QR code for the counter: it opens this page, and works offline once a guest has visited.</span>
+          </div>
+          <figure v-if="qr" class="qr">
+            <img :src="qr" :alt="`QR code for ${pageUrl}`" width="160" height="160" />
+            <a class="btn-link" :href="qr" :download="`${workspaces.current?.slug ?? 'menu'}-menu-qr.png`">Download QR (PNG)</a>
+          </figure>
+        </div>
         <p v-if="!isOwner" class="muted small">Only owners can turn the public menu on or off.</p>
+        <form v-if="workspaces.canEdit" class="title-row" @submit.prevent="saveTitle">
+          <div class="field">
+            <label for="menu-title">Menu title</label>
+            <input id="menu-title" v-model="title" maxlength="255" :placeholder="workspaces.current?.name ?? ''" />
+            <span class="hint">The heading guests see. Leave empty to use your bar's name.</span>
+          </div>
+          <button class="btn btn-secondary" type="submit" :disabled="busy || !titleChanged">Save</button>
+        </form>
         <form v-if="workspaces.canEdit" class="currency-row" @submit.prevent="saveCurrency">
           <div class="field">
             <label for="menu-currency">Currency for prices</label>
@@ -429,6 +487,14 @@ async function deleteItem(): Promise<void> {
           Available (unavailable items stay on the menu, marked as such)
         </label>
       </template>
+      <fieldset v-else class="bean-fields">
+        <legend>Show for each bean</legend>
+        <p class="muted small">The roaster and bean name always show. Beans only appear if "Show on the public menu" is on for them.</p>
+        <label v-for="(label, key) in BEAN_MENU_FIELDS" :key="key" class="checkbox">
+          <input v-model="itemBeanFields" type="checkbox" :value="key" />
+          {{ label }}
+        </label>
+      </fieldset>
       <div class="field">
         <label for="item-section">Section<span class="req" aria-hidden="true">*</span></label>
         <select id="item-section" aria-required="true" v-model="itemSection">
@@ -502,13 +568,21 @@ h2 {
   align-items: flex-start;
 }
 .currency-row,
+.title-row,
 .add-section {
   display: flex;
   align-items: flex-end;
   gap: var(--space-2);
 }
-.add-section .field {
+.add-section .field,
+.title-row .field {
   flex: 1;
+}
+.title-row {
+  align-items: flex-start;
+}
+.title-row .btn {
+  margin-top: 1.6rem; /* line up with the input, below its label */
 }
 .currency {
   max-width: 6rem;
@@ -559,6 +633,54 @@ h2 {
 }
 .items.empty {
   min-height: var(--tap); /* somewhere to drop into */
+}
+.share {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.share-link {
+  flex: 1 1 18rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.share-link label {
+  font-weight: 600;
+}
+.link-row {
+  display: flex;
+  gap: var(--space-2);
+}
+.link-row input {
+  flex: 1;
+  min-width: 0;
+}
+.qr {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+.qr img {
+  background: #fff; /* scannable in dark mode too */
+  border-radius: var(--radius-md, 6px);
+}
+.bean-fields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.bean-fields legend {
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: var(--space-1);
 }
 .drag-handle {
   width: var(--tap);

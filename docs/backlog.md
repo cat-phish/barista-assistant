@@ -470,23 +470,19 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** how precise does stock need to be (exact grams, or
   "about half left")?
 
-### 19. Public menu page
+### 19. Public menu: branding and sizes
 
 - **Status:** idea
-- **Why:** the public menu API exists, arranged in the menu builder
-  (`docs/api/menu.md` §7b: sections, items, prices, availability, the beans
-  block), but nothing shows it to guests.
-- **Approach:** a public, read-only page at `/menu/:slug` that works offline
-  (the PWA cache is already planned in `timer_architecture.md`). It shows the
-  builder's sections in order, with prices in the menu's currency,
-  unavailable items marked, and the beans block wherever it's placed. Reuse
-  `MenuPreview.vue`, which the builder's Preview already renders from the
-  same data (§7b `GET /preview`).
-- **Size:** M (less now that the preview component exists)
-- **Depends on:** nothing.
-- **Open questions:**
-  - Styling and branding per workspace?
-  - Prices per size, once drinks have more than one size?
+- **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
+  every bar, and a drink has one price even when it's made in several sizes.
+- **Approach:**
+  - **Branding:** per-workspace accent colour, a tagline under the name, and
+    maybe a logo (uploads are new to the stack, like item 9's photos).
+  - **Sizes:** prices per serving size once drinks have more than one size.
+- **Size:** S–M (branding without a logo is S).
+- **Depends on:** nothing; a logo fits with 9.
+- **Open questions:** should the guest page offer "install" as its own app,
+  separate from the journal?
 
 ---
 

@@ -6,6 +6,7 @@ import {
   decimal,
   boolean,
   primaryKey,
+  customType,
   text,
   unique,
   date,
@@ -32,6 +33,8 @@ export const workspaces = mysqlTable("workspaces", {
   // Currency of menu prices (ISO 4217, e.g. "USD"); needed once an item has a
   // price (docs/api/menu.md §7b).
   menuCurrency: varchar("menu_currency", { length: 3 }),
+  // The public menu's title (docs/api/menu.md §7b); null = the workspace name.
+  menuTitle: varchar("menu_title", { length: 255 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -552,8 +555,24 @@ export const drinkIngredients = mysqlTable("drink_ingredients", {
 // beans block (the bar's active beans that are switched on for the menu).
 // Items can rename and describe their source for the menu, carry a price
 // and be marked unavailable. Deleting a drink or brewer removes its items.
+// A JSON column read back as a value: MariaDB stores JSON as text, so the
+// driver returns a string that drizzle's json() would leave unparsed.
+const jsonValue = <T>(name: string) =>
+  customType<{ data: T; driverData: string }>({
+    dataType: () => "json",
+    toDriver: (value) => JSON.stringify(value),
+    fromDriver: (value) => (typeof value === "string" ? (JSON.parse(value) as T) : (value as T)),
+  })(name);
+
 export const MENU_ITEM_TYPES = ["drink", "brewer", "beans"] as const;
 export type MenuItemType = (typeof MENU_ITEM_TYPES)[number];
+// What the beans block shows guests about each bean, besides the roaster and
+// name (docs/api/menu.md §7b). origin = area, country and region; roastLevel =
+// the 5-step level and the detailed one.
+export const BEAN_MENU_FIELDS = [
+  "flavorProfile", "origin", "producer", "altitude", "process", "roastLevel", "roastDate", "decaf", "blendType", "roastType",
+] as const;
+export type BeanMenuField = (typeof BEAN_MENU_FIELDS)[number];
 
 export const menuSections = mysqlTable(
   "menu_sections",
@@ -588,6 +607,8 @@ export const menuItems = mysqlTable(
     description: varchar("description", { length: 500 }), // null = the source's
     price: decimal("price", { precision: 8, scale: 2, mode: "number" }), // in workspaces.menuCurrency
     available: boolean("available").default(true).notNull(), // false = shown as unavailable
+    // The beans block only: which BEAN_MENU_FIELDS guests see; null = all.
+    beanFields: jsonValue<BeanMenuField[]>("bean_fields"),
   },
   (table) => ({
     // A drink or brewer once per section (NULLs don't collide).
