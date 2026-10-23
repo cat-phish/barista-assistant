@@ -146,8 +146,8 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
 - **Setup:** pick bean, recipe and grinder. The grind pre-fills from your
   last brew of that recipe on that grinder, else the AI suggestion, else the
   recipe's starting point.
-- **Batch scaling:** type any one of dose, water, yield (g) or yield (US
-  fl oz) and the rest follow. The **ratio** (the 15 in 1:15) starts at the
+- **Batch scaling:** type any one of dose, water or the approximate yield
+  (in fl oz, ml or both, by your preference) and the rest follow. The **ratio** (the 15 in 1:15) starts at the
   recipe's and can be changed; whatever you typed last is held. Pour targets
   scale with the water; step times stay the same. A much bigger or smaller
   dose than the recipe suggests a coarser or finer grind. "Reset to recipe"

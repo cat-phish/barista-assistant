@@ -51,10 +51,13 @@ import { formatDay, formatDoseLine, formatGrams, formatTime } from '../lib/forma
 import { chooseGrind, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
 import { useWorkspaceStore } from '../stores/workspace';
 import { brewRetention, ROAST_LEVELS, scaleBatch, scaleShot, scaleSteps, type MeasuredBrew, type ScaleField } from '../lib/scale';
+import { formatTemp, formatTempChange, tempText, TEMPERATURE_LABELS, VOLUME_LABELS, volumeUnits } from '../lib/units';
+import { usePreferences } from '../composables/usePreferences';
 
 type Stage = 'setup' | 'timing' | 'log' | 'saved';
 
 const workspaces = useWorkspaceStore();
+const { prefs, temperatureUnit, recipeRoastLevel } = usePreferences();
 const stage = ref<Stage>('setup');
 const loading = ref(true);
 const loadError = ref('');
@@ -172,7 +175,7 @@ const shotRecipe = computed(() => {
 const draft = reactive(emptyDraft());
 // A drink with ingredients is tasted twice: the brew (if tried on its own) and the drink.
 const drinkTasting = computed(() => !!drink.value?.ingredients.length);
-const parsed = computed(() => parseBrewDraft(draft, recipe.value?.brewer.kind ?? null, drinkTasting.value));
+const parsed = computed(() => parseBrewDraft(draft, recipe.value?.brewer.kind ?? null, drinkTasting.value, temperatureUnit.value));
 
 onMounted(async () => {
   const ws = workspaces.current?.id;
@@ -214,7 +217,7 @@ watch(recipe, (r) => {
   draft.dose = r ? formatGrams(r.targetDoseGrams) : '';
   draft.water = r?.targetWaterGrams != null ? formatGrams(r.targetWaterGrams) : '';
   draft.yieldGrams = ''; // measured after brewing
-  draft.temp = r?.targetTempC != null ? String(r.targetTempC) : '';
+  draft.temp = tempText(r?.targetTempC, temperatureUnit.value);
   resetBatch();
   sizeToBatch(); // a resized drink keeps its size with the new recipe
   // The recipe's default grinder, if it's still in use; else keep the current
@@ -272,7 +275,7 @@ async function loadMeasured(): Promise<void> {
 }
 watch([beanId, recipeId], () => void loadMeasured());
 
-const retention = computed(() => brewRetention({ roastLevel: bean.value?.roastLevel ?? null, recipe: filterRecipe.value, measured: measured.value }));
+const retention = computed(() => brewRetention({ roastLevel: bean.value?.roastLevel ?? null, recipeRoastLevel: recipeRoastLevel.value, recipe: filterRecipe.value, measured: measured.value }));
 const customRatio = computed(() => (ratioText.value === null ? undefined : amount(ratioText.value)));
 const batch = computed(() => {
   if (!filterRecipe.value) return null;
@@ -295,6 +298,10 @@ watch(shot, (s) => {
 const setupReady = computed(
   // An empty category has nothing to brew yet ("Something else" logs without a recipe).
   () => !chosenCategory.value?.empty && !(brewerId.value && !recipeChoices.value.length) && (!baseSize.value || !!madeSize.value) && (!recipe.value || (espresso.value ? !!shot.value : !!batch.value)),
+);
+// The yield estimate in the person's volume unit(s) (fl oz, ml or both).
+const yieldFields = computed(() =>
+  volumeUnits(prefs.value.volumeUnit, prefs.value.showBothVolumes).map((u) => ({ field: (u === 'ml' ? 'yieldMl' : 'yieldOz') as ScaleField, label: VOLUME_LABELS[u] })),
 );
 function batchText(field: ScaleField): string {
   if (lead.value.field === field) return lead.value.text;
@@ -437,7 +444,7 @@ async function suggest(): Promise<void> {
 }
 
 function applySuggestion(p: StartingParameters): void {
-  if (p.tempC !== null) draft.temp = String(p.tempC);
+  if (p.tempC !== null) draft.temp = tempText(p.tempC, temperatureUnit.value);
   void refreshGrind(); // the suggestion may now supply the grind
 }
 
@@ -693,7 +700,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         </div>
         <p v-if="recipe" class="muted recipe-summary">
           {{ formatDoseLine(recipe.targetDoseGrams, recipe.targetWaterGrams, recipe.expectedYieldGrams) }}
-          <template v-if="recipe.targetTempC !== null"> · {{ recipe.targetTempC }} °C</template>
+          <template v-if="recipe.targetTempC !== null"> · {{ formatTemp(recipe.targetTempC, temperatureUnit) }}</template>
           <template v-if="recipe.steps.length"> · {{ recipe.steps.length }} step{{ recipe.steps.length === 1 ? '' : 's' }}</template>
         </p>
         <div v-if="shotRecipe" class="batch" role="group" aria-labelledby="shot-label">
@@ -737,14 +744,10 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
               </div>
             </div>
           </div>
-          <div class="batch-row two">
-            <div class="field">
-              <label for="batch-yield">Yield ≈ (g)</label>
-              <input id="batch-yield" inputmode="decimal" :value="batchText('yield')" @input="setLead('yield', $event)" />
-            </div>
-            <div class="field">
-              <label for="batch-yield-oz">Yield ≈ (fl oz)</label>
-              <input id="batch-yield-oz" inputmode="decimal" :value="batchText('yieldOz')" @input="setLead('yieldOz', $event)" />
+          <div class="batch-row" :class="{ two: yieldFields.length === 2 }">
+            <div v-for="f in yieldFields" :key="f.field" class="field">
+              <label :for="`batch-${f.field}`">Yield ≈ ({{ f.label }})</label>
+              <input :id="`batch-${f.field}`" inputmode="decimal" :value="batchText(f.field)" @input="setLead(f.field, $event)" />
             </div>
           </div>
           <p v-if="!batch" class="field-error">Enter positive amounts (the ratio must leave some coffee in the cup).</p>
@@ -774,7 +777,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             <li>
               <strong>{{ suggestion.grindAdvice }}</strong><template v-if="suggestion.grindBase"> than {{ suggestion.grindBase }}</template><template v-if="suggestion.grinder"> ({{ suggestion.grinder.name }})</template>
             </li>
-            <li><strong>{{ suggestion.tempAdvice }}</strong><template v-if="suggestion.tempC !== null"> → {{ suggestion.tempC }} °C</template></li>
+            <li><strong>{{ formatTempChange(suggestion.tempDeltaC, temperatureUnit) }}</strong><template v-if="suggestion.tempC !== null"> → {{ formatTemp(suggestion.tempC, temperatureUnit) }}</template></li>
           </ul>
           <p v-if="suggestionGrinderMismatch" class="note small">
             That brew was on {{ suggestion.grinder?.name ?? 'no recorded grinder' }}, so its grind setting isn't copied. Adjust for {{ grinder?.name ?? 'your grinder' }}.
@@ -785,8 +788,8 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         </template>
         <div class="form-row">
           <div class="field">
-            <label for="setup-temp">Water temp (°C)</label>
-            <input id="setup-temp" v-model="draft.temp" inputmode="decimal" placeholder="e.g. 94" />
+            <label for="setup-temp">Water temp ({{ TEMPERATURE_LABELS[temperatureUnit] }})</label>
+            <input id="setup-temp" v-model="draft.temp" inputmode="decimal" :placeholder="temperatureUnit === 'f' ? 'e.g. 201' : 'e.g. 94'" />
           </div>
           <div class="field">
             <label for="setup-grind">Grind setting</label>

@@ -18,6 +18,8 @@ import { draftFromLog, emptyDraft, parseBrewDraft } from '../lib/brewDraft';
 import { extractionYield } from '../lib/extraction';
 import { formatDoseLine, formatGrams, formatTime, formatWhen } from '../lib/format';
 import { formatSize } from '../lib/servings';
+import { formatTemp } from '../lib/units';
+import { usePreferences } from '../composables/usePreferences';
 import { canModifyBrewLog } from '../lib/permissions';
 import { useAuthStore } from '../stores/auth';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -27,6 +29,7 @@ const props = defineProps<{ id: string }>();
 
 const workspaces = useWorkspaceStore();
 const auth = useAuthStore();
+const { temperatureUnit } = usePreferences();
 const router = useRouter();
 
 const log = ref<BrewLog | null>(null);
@@ -102,14 +105,14 @@ const draft = reactive(emptyDraft());
 const espresso = computed(() => log.value?.recipe?.methodKind === 'espresso');
 // A drink with ingredients is tasted twice: the brew (if tried on its own) and the drink.
 const drinkTasting = computed(() => !!log.value?.drink?.hasIngredients);
-const parsed = computed(() => parseBrewDraft(draft, log.value?.recipe?.methodKind ?? null, drinkTasting.value));
+const parsed = computed(() => parseBrewDraft(draft, log.value?.recipe?.methodKind ?? null, drinkTasting.value, temperatureUnit.value));
 const submitted = ref(false);
 const saving = ref(false);
 const saveError = ref('');
 
 function startEdit(): void {
   if (!log.value) return;
-  Object.assign(draft, draftFromLog(log.value));
+  Object.assign(draft, draftFromLog(log.value, temperatureUnit.value));
   submitted.value = false;
   saveError.value = '';
   editing.value = true;
@@ -186,7 +189,7 @@ function markLabel(m: Mark): string {
           <div><dt>{{ espresso ? 'Shot weight' : 'Yield' }}</dt><dd>{{ yieldText(log) }}</dd></div>
           <div v-if="log.tdsPercent !== null"><dt>TDS</dt><dd>{{ tdsText(log) }}</dd></div>
           <div><dt>Time</dt><dd>{{ formatTime(log.actualTimeSec) }}</dd></div>
-          <div><dt>Water</dt><dd>{{ log.actualTempC !== null ? `${log.actualTempC} °C` : '–' }}</dd></div>
+          <div><dt>Water</dt><dd>{{ log.actualTempC !== null ? formatTemp(log.actualTempC, temperatureUnit) : '–' }}</dd></div>
           <div><dt>Grind</dt><dd>{{ log.actualGrindSetting ?? '–' }}<template v-if="log.grinder"> · {{ log.grinder.name }}</template></dd></div>
           <div><dt>Brewer</dt><dd>{{ log.brewer?.name ?? '–' }}</dd></div>
           <div v-if="log.waterProfile"><dt>Water profile</dt><dd>{{ log.waterProfile.name }}</dd></div>

@@ -14,9 +14,6 @@ export const ROAST_LEVELS: Record<RoastLevel, { label: string; retention: number
   dark: { label: 'Dark', retention: 2.3 },
 };
 
-// Recipes are written without a bean, so their yield estimate assumes this.
-// TODO(user settings): make it a per-user setting.
-export const RECIPE_ROAST_LEVEL: RoastLevel = 'light';
 
 // Retention outside this range is a typo or an unmeasured drip, not data.
 const PLAUSIBLE = { min: 1, max: 3.5 };
@@ -51,8 +48,11 @@ export interface MeasuredBrew {
 }
 
 // Best retention estimate for brewing this bean with this recipe.
+// recipeRoastLevel: the roast the workspace's recipes are written for (its
+// "Defaults" setting); also assumed for a bean with no roast level.
 export function brewRetention(input: {
   roastLevel: RoastLevel | null;
+  recipeRoastLevel: RoastLevel;
   recipe: { targetDoseGrams: number; targetWaterGrams: number; expectedYieldGrams: number | null } | null;
   measured: MeasuredBrew[];
 }): { retention: number; source: RetentionSource } {
@@ -61,18 +61,20 @@ export function brewRetention(input: {
     .filter((r): r is number => r !== null);
   if (measured.length) return { retention: median(measured), source: { kind: 'measured', count: measured.length } };
 
-  const roastLevel = input.roastLevel ?? 'light';
+  const roastLevel = input.roastLevel ?? input.recipeRoastLevel;
   const roast = ROAST_LEVELS[roastLevel].retention;
   const r = input.recipe;
   const recipeRetention = r && r.expectedYieldGrams !== null ? retentionOf(r.targetDoseGrams, r.targetWaterGrams, r.expectedYieldGrams) : null;
   if (recipeRetention !== null) {
-    // The recipe's yield is for a RECIPE_ROAST_LEVEL bean; shift it by the roast difference.
-    return { retention: recipeRetention * (roast / ROAST_LEVELS[RECIPE_ROAST_LEVEL].retention), source: { kind: 'recipe', roastLevel } };
+    // The recipe's yield is for a recipeRoastLevel bean; shift it by the roast difference.
+    return { retention: recipeRetention * (roast / ROAST_LEVELS[input.recipeRoastLevel].retention), source: { kind: 'recipe', roastLevel } };
   }
   return { retention: roast, source: { kind: 'roast', roastLevel } };
 }
 
-export type ScaleField = 'dose' | 'water' | 'yield' | 'yieldOz';
+// yield (g) is espresso's shot weight; a filter batch's yield is typed as a
+// volume (yieldOz / yieldMl, by preference).
+export type ScaleField = 'dose' | 'water' | 'yield' | 'yieldOz' | 'yieldMl';
 
 // US fluid ounce. Brewed coffee is close enough to 1 g/ml for a mug-fill estimate.
 export const GRAMS_PER_FL_OZ = 29.5735;
@@ -82,6 +84,7 @@ export interface Batch {
   water: number; // whole grams once scaled
   yield: number; // estimate, whole grams
   yieldOz: number; // estimate, 0.1 US fl oz
+  yieldMl: number; // estimate, whole ml
   ratio: number; // water / dose (the "15" in 1:15)
   factor: number; // water / recipe water: what pour targets are multiplied by
 }
@@ -106,7 +109,7 @@ export function scaleBatch(
   else if (lead.field === 'water') exactWater = lead.value;
   else {
     if (keep <= 0) return null;
-    const yieldGrams = lead.field === 'yield' ? lead.value : lead.value * GRAMS_PER_FL_OZ;
+    const yieldGrams = lead.field === 'yieldOz' ? lead.value * GRAMS_PER_FL_OZ : lead.value; // g ≈ ml
     exactWater = yieldGrams / keep;
   }
   // The recipe as written: keep its exact numbers (no rounding surprises).
@@ -115,7 +118,7 @@ export function scaleBatch(
   const dose = unscaled ? d0 : lead.field === 'dose' ? lead.value : round1(exactWater / r);
   if (water <= 0 || dose <= 0) return null;
   const yieldGrams = estimateYield(dose, water, retention);
-  return { dose, water, yield: yieldGrams, yieldOz: round1(yieldGrams / GRAMS_PER_FL_OZ), ratio: r, factor: water / w0 };
+  return { dose, water, yield: yieldGrams, yieldOz: round1(yieldGrams / GRAMS_PER_FL_OZ), yieldMl: yieldGrams, ratio: r, factor: water / w0 };
 }
 
 // Espresso: dose and target shot weight at a ratio (shot ÷ dose, the "2" in

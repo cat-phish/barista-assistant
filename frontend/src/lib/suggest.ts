@@ -12,10 +12,10 @@ export const GRIND_LABELS: Record<GrindDelta, string> = {
 
 export interface StartingParameters {
   tempC: number | null; // analyzed brew's temp (or the recipe's) + suggested change
+  tempDeltaC: number; // the suggested change (show with formatTempChange)
   grindBase: string | null; // the grind it was analyzed at; direction in grindAdvice
   grinder: { id: string; name: string } | null; // grinder of the analyzed brew
   grindAdvice: string;
-  tempAdvice: string;
   reasoning: string;
   basedOn: { timestamp: string; isLatestBrew: boolean };
 }
@@ -28,7 +28,6 @@ export function startingParameters(s: Suggestions, recipe: Recipe | null): Start
   const baseTemp = brew.actualTempC ?? recipe?.targetTempC ?? null;
   const delta = analysis.suggestedTempDelta;
   const tempC = baseTemp === null ? null : Math.min(100, Math.max(0, Math.round((baseTemp + delta) * 10) / 10));
-  const sign = delta > 0 ? '+' : delta < 0 ? '−' : '±';
 
   return {
     tempC,
@@ -37,7 +36,7 @@ export function startingParameters(s: Suggestions, recipe: Recipe | null): Start
     grindBase: brew.actualGrindSetting,
     grinder: brew.grinder,
     grindAdvice: GRIND_LABELS[analysis.suggestedGrindDelta],
-    tempAdvice: delta === 0 ? 'Keep the temperature' : `${sign}${Math.abs(delta)} °C`,
+    tempDeltaC: delta,
     reasoning: analysis.reasoning,
     basedOn: { timestamp: brew.timestamp, isLatestBrew: s.recentBrews[0]?.id === brew.id },
   };

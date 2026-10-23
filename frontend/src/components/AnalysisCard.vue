@@ -2,12 +2,12 @@
 import { computed } from 'vue';
 import type { LlmAnalysis } from '../api/types';
 import { GRIND_LABELS } from '../lib/suggest';
+import { formatTempChange } from '../lib/units';
+import { usePreferences } from '../composables/usePreferences';
 
 const props = defineProps<{ analysis: LlmAnalysis }>();
-const tempLabel = computed(() => {
-  const d = props.analysis.suggestedTempDelta;
-  return d === 0 ? 'Keep the temperature' : `${d > 0 ? '+' : '−'}${Math.abs(d)} °C`;
-});
+const { temperatureUnit } = usePreferences();
+const tempLabel = computed(() => formatTempChange(props.analysis.suggestedTempDelta, temperatureUnit.value));
 </script>
 
 <template>

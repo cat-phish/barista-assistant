@@ -19,6 +19,7 @@ brewers (`DEFAULT_BREWERS` in `docs/schema.md`) in one transaction.
       "name": "Jordan's Coffee Bar",
       "slug": "jordans-coffee-bar",
       "isPublicMenuEnabled": false,
+      "settings": { "recipeRoastLevel": "light" },
       "createdAt": "2026-10-18T00:00:00.000Z"
     }
   }
@@ -47,6 +48,24 @@ the public menu on or off. Used by Settings → Workspace.
 > Changing the slug moves the public menu: `/menu/<old-slug>` returns `404`
 > from then on (no redirect), so printed QR codes stop working. The frontend
 > warns before saving.
+
+## Settings
+
+Every workspace in a response carries `settings`, defaults filled in
+(roadmap: Units and defaults):
+
+- `recipeRoastLevel` (`light` … `dark`, default `light`): the roast the
+  workspace's recipes are written for. The recipe form's yield estimate
+  uses it, a bean's roast adjusts a recipe's expected yield relative to it,
+  and beans with no roast level are assumed to be it.
+
+### `PATCH /api/workspaces/:workspaceId/settings`
+
+- **Auth Required:** `true` (role `owner`)
+- **Body:** any non-empty subset of the settings; unknown keys are `400`.
+  Merged into what's stored.
+- **Success (`200 OK`):** `{ "settings": { ...all of them } }`
+- **Errors:** `400` invalid, empty or unknown keys; `403` not an owner.
 
 ## `DELETE /api/workspaces/:workspaceId?confirm=<slug>`
 

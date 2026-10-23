@@ -37,13 +37,16 @@ import {
   type StepDraft,
 } from '../lib/steps';
 import { useWorkspaceStore } from '../stores/workspace';
-import { estimateYield, RECIPE_ROAST_LEVEL, ROAST_LEVELS } from '../lib/scale';
+import { estimateYield, ROAST_LEVELS } from '../lib/scale';
+import { parseTemp, tempText, TEMPERATURE_LABELS } from '../lib/units';
+import { usePreferences } from '../composables/usePreferences';
 import { METHOD_KINDS, pickCopyBrewer, RECIPE_STYLES, STYLES_BY_KIND } from '../lib/equipment';
 
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 const NEW_METHOD = '__new__';
 
 const workspaces = useWorkspaceStore();
+const { temperatureUnit, recipeRoastLevel } = usePreferences();
 // As saved, for the Delete section (editing only).
 const saved = ref<{ name: string; archived: boolean } | null>(null);
 const deleteUsage = () => recipesApi.usage(workspaces.current?.id ?? '', props.id ?? '');
@@ -106,9 +109,9 @@ const parsed = computed(() => ({
       : null,
   finish: parseFinishWindow(finishFrom.value, finishTo.value),
   firstDrop: espresso.value ? parseFinishWindow(firstDropFrom.value, firstDropTo.value, FIRST_DROP_DEFAULT_SPREAD_SEC) : ({ ok: true, value: null } as const),
-  temp: temp.value.trim() ? parseDecimal(temp.value, { scale: 1, min: 0, max: 100 }) : null,
+  temp: temp.value.trim() ? parseTemp(temp.value, temperatureUnit.value) : null,
 }));
-const stepsParsed = computed(() => parseSteps(steps.value, kind.value));
+const stepsParsed = computed(() => parseSteps(steps.value, kind.value, temperatureUnit.value));
 // "+X g" next to each pour-to, from whatever has been typed so far (even if
 // another field in that row still has an error).
 const amounts = computed(() =>
@@ -159,7 +162,7 @@ const ratio = computed(() => {
 // Filter only: espresso's yield is a target, not an estimate.
 const yieldEstimate = computed(() =>
   !espresso.value && parsed.value.dose.ok && parsed.value.water.ok && parsed.value.water.value !== null
-    ? estimateYield(parsed.value.dose.value, parsed.value.water.value, ROAST_LEVELS[RECIPE_ROAST_LEVEL].retention)
+    ? estimateYield(parsed.value.dose.value, parsed.value.water.value, ROAST_LEVELS[recipeRoastLevel.value].retention)
     : null,
 );
 const expectedYieldValue = computed(() => (parsed.value.expectedYield?.ok ? parsed.value.expectedYield.value : null));
@@ -203,12 +206,12 @@ function fill(recipe: Recipe): void {
   finishTo.value = recipe.expectedFinishMaxSec === null ? '' : formatTime(recipe.expectedFinishMaxSec);
   firstDropFrom.value = recipe.firstDropMinSec === null ? '' : formatTime(recipe.firstDropMinSec);
   firstDropTo.value = recipe.firstDropMaxSec === null ? '' : formatTime(recipe.firstDropMaxSec);
-  temp.value = recipe.targetTempC === null ? '' : String(recipe.targetTempC);
+  temp.value = tempText(recipe.targetTempC, temperatureUnit.value);
   defaultGrinderId.value = recipe.defaultGrinderId ?? '';
   grindRows.value = recipe.grindSettings.map((g) => ({ grinderId: g.grinderId, setting: g.setting }));
   flowUnit.value = recipe.flowUnit;
   style.value = recipe.style ?? '';
-  steps.value = recipe.steps.map((s) => stepDraft(newStepKey(), s));
+  steps.value = recipe.steps.map((s) => stepDraft(newStepKey(), s, temperatureUnit.value));
 }
 
 onMounted(async () => {
@@ -491,14 +494,14 @@ async function save(): Promise<void> {
             <label for="expected-yield">Expected yield (g)</label>
             <input id="expected-yield" v-model="expectedYield" inputmode="decimal" placeholder="e.g. 220" :aria-invalid="submitted && !!fieldErrors.expectedYield" @input="yieldCustom = true" />
             <span v-if="submitted && fieldErrors.expectedYield" class="field-error">{{ fieldErrors.expectedYield }}</span>
-            <span v-else-if="!yieldCustom && yieldEstimate !== null" class="muted small">Estimated for a {{ ROAST_LEVELS[RECIPE_ROAST_LEVEL].label.toLowerCase() }} roast</span>
+            <span v-else-if="!yieldCustom && yieldEstimate !== null" class="muted small">Estimated for a {{ ROAST_LEVELS[recipeRoastLevel].label.toLowerCase() }} roast</span>
             <button v-else-if="yieldCustom && yieldEstimate !== null && expectedYieldValue !== yieldEstimate" class="btn-link small yield-reset" type="button" @click="yieldCustom = false">
               Use estimate ({{ formatGrams(yieldEstimate) }} g)
             </button>
           </div>
           <div class="field">
-            <label for="temp">Water temp (°C)</label>
-            <input id="temp" v-model="temp" inputmode="decimal" placeholder="94" :aria-invalid="submitted && !!fieldErrors.temp" />
+            <label for="temp">Water temp ({{ TEMPERATURE_LABELS[temperatureUnit] }})</label>
+            <input id="temp" v-model="temp" inputmode="decimal" :placeholder="temperatureUnit === 'f' ? '201' : '94'" :aria-invalid="submitted && !!fieldErrors.temp" />
             <span v-if="submitted && fieldErrors.temp" class="field-error">{{ fieldErrors.temp }}</span>
           </div>
         </div>
@@ -672,8 +675,8 @@ async function save(): Promise<void> {
                 <input :id="`step-label-${i}`" v-model="step.label" maxlength="255" :placeholder="STEP_TYPES[step.stepType].label" />
               </div>
               <div class="field">
-                <label :for="`step-temp-${i}`">Temp (°C)</label>
-                <input :id="`step-temp-${i}`" v-model="step.temp" inputmode="decimal" placeholder="e.g. 93" />
+                <label :for="`step-temp-${i}`">Temp ({{ TEMPERATURE_LABELS[temperatureUnit] }})</label>
+                <input :id="`step-temp-${i}`" v-model="step.temp" inputmode="decimal" :placeholder="temperatureUnit === 'f' ? 'e.g. 199' : 'e.g. 93'" />
               </div>
               <span v-if="stepsParsed.errors[i]" class="field-error full">{{ stepsParsed.errors[i] }}</span>
             </div>

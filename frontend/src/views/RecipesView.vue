@@ -14,9 +14,12 @@ import { RECIPE_STYLES, STYLE_ORDER } from '../lib/equipment';
 import { formatAdded, formatDoseLine, formatGrams, formatTime } from '../lib/format';
 import { addedColumn, enumColumn, isSortKey, nameColumn, recallView, rememberView, sortArrow, sortBy, sortLabel, sortColumnOptions, toggleHeader, type SortColumns } from '../lib/listSort';
 import { formatFinishWindow, plannedStarts, stepTitle } from '../lib/steps';
+import { formatTemp } from '../lib/units';
+import { usePreferences } from '../composables/usePreferences';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
+const { temperatureUnit } = usePreferences();
 const recipes = ref<Recipe[]>([]);
 const brewers = ref<Brewer[]>([]);
 const loading = ref(true);
@@ -162,7 +165,7 @@ async function setArchived(r: Recipe, archived: boolean): Promise<void> {
               <span v-if="recipe.expectedYieldGrams !== null && recipe.targetWaterGrams !== null">≈{{ formatGrams(recipe.expectedYieldGrams) }} g yield</span>
               <span v-if="formatFinishWindow(recipe.firstDropMinSec, recipe.firstDropMaxSec)">first drop {{ formatFinishWindow(recipe.firstDropMinSec, recipe.firstDropMaxSec) }}</span>
               <span v-if="formatFinishWindow(recipe.expectedFinishMinSec, recipe.expectedFinishMaxSec)">{{ recipe.brewer.kind === 'espresso' ? 'shot' : 'finish' }} {{ formatFinishWindow(recipe.expectedFinishMinSec, recipe.expectedFinishMaxSec) }}</span>
-              <span v-if="recipe.targetTempC !== null">{{ recipe.targetTempC }} °C</span>
+              <span v-if="recipe.targetTempC !== null">{{ formatTemp(recipe.targetTempC, temperatureUnit) }}</span>
             </p>
             <p v-if="recipe.grindSettings.length" class="muted small">
               Grind ≈ {{ recipe.grindSettings.map((g) => `${g.setting} on ${g.grinderName}`).join(' · ') }}

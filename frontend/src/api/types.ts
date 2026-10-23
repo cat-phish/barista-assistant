@@ -3,9 +3,27 @@
 
 export type Role = 'owner' | 'barista' | 'viewer';
 
+// Display preferences, per person (docs/api/auth.md §1). Storage is always
+// grams, °C and metres; these only change what's shown and typed.
+export type VolumeUnit = 'fl_oz' | 'ml';
+export type AltitudeUnit = 'm' | 'ft';
+export type TemperatureUnit = 'c' | 'f';
+export interface UserPreferences {
+  volumeUnit: VolumeUnit;
+  showBothVolumes: boolean;
+  altitudeUnit: AltitudeUnit;
+  temperatureUnit: TemperatureUnit;
+}
+
 export interface User {
   id: string;
   email: string;
+  preferences: UserPreferences;
+}
+
+// Per workspace, owners edit (docs/api/workspaces.md §2 settings).
+export interface WorkspaceSettings {
+  recipeRoastLevel: RoastLevel; // the roast recipes are written for
 }
 
 // docs/api/workspaces.md §2 Members
@@ -20,6 +38,7 @@ export interface Workspace {
   name: string;
   slug: string;
   isPublicMenuEnabled: boolean;
+  settings: WorkspaceSettings; // defaults filled in
   createdAt: string;
 }
 

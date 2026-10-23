@@ -9,11 +9,14 @@ import AppHeader from '../components/AppHeader.vue';
 import RatingStars from '../components/RatingStars.vue';
 import { formatDoseLine, formatGrams, formatTime, formatWhen } from '../lib/format';
 import { formatSize } from '../lib/servings';
+import { formatTemp } from '../lib/units';
+import { usePreferences } from '../composables/usePreferences';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const PAGE_SIZE = 20;
 
 const workspaces = useWorkspaceStore();
+const { temperatureUnit } = usePreferences();
 const route = useRoute();
 const router = useRouter();
 
@@ -98,7 +101,7 @@ watch(beanFilter, () => load(true));
               <span v-if="log.actualYieldGrams !== null && log.actualWaterGrams !== null">→ {{ formatGrams(log.actualYieldGrams) }} g yield</span>
               <span v-if="log.tdsPercent !== null">{{ log.tdsPercent }}% TDS</span>
               <span>{{ formatTime(log.actualTimeSec) }}</span>
-              <span v-if="log.actualTempC !== null">{{ log.actualTempC }} °C</span>
+              <span v-if="log.actualTempC !== null">{{ formatTemp(log.actualTempC, temperatureUnit) }}</span>
               <span v-if="log.actualGrindSetting || log.grinder">{{ [log.actualGrindSetting, log.grinder?.name].filter(Boolean).join(' · ') }}</span>
             </span>
             <span v-if="log.tastingNotes || log.drinkTastingNotes" class="notes">{{ log.tastingNotes ?? log.drinkTastingNotes }}</span>

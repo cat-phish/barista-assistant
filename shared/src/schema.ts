@@ -13,6 +13,47 @@ import {
   type AnyMySqlColumn,
 } from "drizzle-orm/mysql-core";
 
+// A JSON column read back as a value: MariaDB stores JSON as text, so the
+// driver returns a string that drizzle's json() would leave unparsed.
+const jsonValue = <T>(name: string) =>
+  customType<{ data: T; driverData: string }>({
+    dataType: () => "json",
+    toDriver: (value) => JSON.stringify(value),
+    fromDriver: (value) => (typeof value === "string" ? (JSON.parse(value) as T) : (value as T)),
+  })(name);
+
+// Settings (docs/schema.md "Settings"): stored as JSON, null or missing keys =
+// the defaults. Validated by the backend; read through withDefaults().
+export const VOLUME_UNITS = ["fl_oz", "ml"] as const;
+export const ALTITUDE_UNITS = ["m", "ft"] as const;
+export const TEMPERATURE_UNITS = ["c", "f"] as const;
+
+// Per person (docs/api/auth.md §1 preferences).
+export interface UserPreferences {
+  volumeUnit: (typeof VOLUME_UNITS)[number]; // yield estimates, new drinks' size
+  showBothVolumes: boolean; // also show the other volume unit
+  altitudeUnit: (typeof ALTITUDE_UNITS)[number]; // stored in metres regardless
+  temperatureUnit: (typeof TEMPERATURE_UNITS)[number]; // stored in °C regardless
+}
+export const DEFAULT_PREFERENCES: UserPreferences = {
+  volumeUnit: "fl_oz",
+  showBothVolumes: false,
+  altitudeUnit: "m",
+  temperatureUnit: "c",
+};
+
+// Per workspace, owners edit (docs/api/workspaces.md §2 settings).
+export interface WorkspaceSettings {
+  // The roast recipes are written for: the recipe form's yield estimate, the
+  // baseline when a bean's roast adjusts it, and beans with no roast level.
+  recipeRoastLevel: RoastLevel;
+}
+export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: "light" };
+
+export function withDefaults<T extends object>(defaults: T, stored: Partial<T> | null): T {
+  return { ...defaults, ...(stored ?? {}) };
+}
+
 // 1. Users
 export const users = mysqlTable("users", {
   id: varchar("id", { length: 36 }).primaryKey(),
@@ -21,6 +62,7 @@ export const users = mysqlTable("users", {
   // Embedded in session tokens; bumping it (e.g. on password change) makes
   // every older session invalid.
   sessionVersion: int("session_version").default(0).notNull(),
+  preferences: jsonValue<Partial<UserPreferences>>("preferences"), // null = all defaults
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -35,6 +77,7 @@ export const workspaces = mysqlTable("workspaces", {
   menuCurrency: varchar("menu_currency", { length: 3 }),
   // The public menu's title (docs/api/menu.md §7b); null = the workspace name.
   menuTitle: varchar("menu_title", { length: 255 }),
+  settings: jsonValue<Partial<WorkspaceSettings>>("settings"), // null = all defaults
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -555,15 +598,6 @@ export const drinkIngredients = mysqlTable("drink_ingredients", {
 // beans block (the bar's active beans that are switched on for the menu).
 // Items can rename and describe their source for the menu, carry a price
 // and be marked unavailable. Deleting a drink or brewer removes its items.
-// A JSON column read back as a value: MariaDB stores JSON as text, so the
-// driver returns a string that drizzle's json() would leave unparsed.
-const jsonValue = <T>(name: string) =>
-  customType<{ data: T; driverData: string }>({
-    dataType: () => "json",
-    toDriver: (value) => JSON.stringify(value),
-    fromDriver: (value) => (typeof value === "string" ? (JSON.parse(value) as T) : (value as T)),
-  })(name);
-
 export const MENU_ITEM_TYPES = ["drink", "brewer", "beans"] as const;
 export type MenuItemType = (typeof MENU_ITEM_TYPES)[number];
 // What the beans block shows guests about each bean, besides the roaster and

@@ -29,7 +29,7 @@ below is `403`, so a typo doesn't look like a logout.
 - **Auth Required:** `false`
 - **Body:** `{ "email": "a@b.com", "password": "min 8 chars" }`
 - **Success (`201 Created`):** sets the `session` cookie and returns
-  `{ "user": { "id": "uuid", "email": "a@b.com" } }`
+  `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... } } }`
 - **Errors:** `400` invalid body; `409` email already registered.
 
 ## `POST /api/auth/login`
@@ -37,7 +37,7 @@ below is `403`, so a typo doesn't look like a logout.
 - **Auth Required:** `false`
 - **Body:** `{ "email": "a@b.com", "password": "..." }`
 - **Success (`200 OK`):** sets the `session` cookie and returns
-  `{ "user": { "id": "uuid", "email": "a@b.com" } }`
+  `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... } } }`
 - **Errors:** `400` invalid body; `401` wrong email or password. The message is
   the same for both so it doesn't reveal which emails are registered.
 - **Rate limit:** 10 failed attempts per IP per 15 minutes; successful logins
@@ -53,7 +53,31 @@ below is `403`, so a typo doesn't look like a logout.
 ## `GET /api/auth/me`
 
 - **Auth Required:** `true`
-- **Success (`200 OK`):** `{ "user": { "id": "uuid", "email": "a@b.com" } }`
+- **Success (`200 OK`):** `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... } } }`
+
+## Preferences
+
+Every `user` in a response carries `preferences`: the person's display
+units, with defaults filled in. Storage is always grams, °C and metres;
+clients convert what they show and what's typed (roadmap: Units and defaults).
+
+```json
+{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c" }
+```
+
+- `volumeUnit`: `fl_oz` | `ml`: the brew page's yield estimate, and a new
+  drink's default size unit.
+- `showBothVolumes`: also show the other volume unit.
+- `altitudeUnit`: `m` | `ft`.
+- `temperatureUnit`: `c` | `f`.
+
+### `PATCH /api/auth/me/preferences`
+
+- **Auth Required:** `true`
+- **Body:** any non-empty subset of the keys above; unknown keys are `400`.
+  Merged into what's stored.
+- **Success (`200 OK`):** `{ "preferences": { ...all four } }`
+- **Errors:** `400` invalid, empty or unknown keys.
 
 ## `POST /api/auth/password`
 
