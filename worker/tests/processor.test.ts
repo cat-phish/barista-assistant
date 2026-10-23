@@ -248,10 +248,36 @@ describe("processBrewAnalysis", () => {
     await processBrewAnalysis({ brewLogId: logIds.day8! });
     const context = llm.mock.calls[0]![0] as BrewContext;
     expect(context.brew).toMatchObject({ actualGrindSetting: "20", machine: null });
-    expect(context.brew.grinder).toEqual({ name: "Comandante C40", adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, burrType: null, burrSizeMm: null, power: null });
+    expect(context.brew.grinder).toEqual({
+      name: "Comandante C40", adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, burrType: null, burrSizeMm: null, power: null,
+      variableSpeed: false, rpmMin: null, rpmMax: null,
+    });
+    expect(context.brew.grindRpm).toBeNull();
     const byDay = Object.fromEntries(context.previousBrews.map((b) => [b.tastingNotes, b.grinder?.name ?? null]));
     expect(byDay).toMatchObject({ "day 6": "Comandante C40", "day 7": null });
     expect(context.recipe?.grindStartingPoints).toEqual([{ grinderName: "Comandante C40", setting: "21" }]);
+  });
+
+  it("tells the LLM a variable-speed grinder's range and each brew's RPM", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    const ek = randomUUID();
+    await db.insert(grinders).values({ id: ek, workspaceId, name: "EK43", variableSpeed: true, rpmMin: 300, rpmMax: 1500 });
+    await db.update(brewLogs).set({ grinderId: ek, grindRpm: 900 }).where(eq(brewLogs.id, logIds.day8!));
+    await db.update(brewLogs).set({ grinderId: ek, grindRpm: 1200 }).where(eq(brewLogs.id, logIds.day6!));
+    await processBrewAnalysis({ brewLogId: logIds.day8! });
+    const context = llm.mock.calls[0]![0] as BrewContext;
+    expect(context.brew.grinder).toMatchObject({ name: "EK43", variableSpeed: true, rpmMin: 300, rpmMax: 1500 });
+    expect(context.brew.grindRpm).toBe(900);
+    expect(context.previousBrews.find((b) => b.tastingNotes === "day 6")?.grindRpm).toBe(1200);
+  });
+
+  it("tells the LLM the weights in and out of the grinder, and the retention", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    await db.update(brewLogs).set({ beanWeightInGrams: 18.2, groundWeightOutGrams: 17.9 }).where(eq(brewLogs.id, logIds.day8!));
+    await processBrewAnalysis({ brewLogId: logIds.day8! });
+    const context = llm.mock.calls[0]![0] as BrewContext;
+    expect(context.brew).toMatchObject({ beanWeightInGrams: 18.2, groundWeightOutGrams: 17.9, grinderRetentionGrams: 0.3 });
+    expect(context.previousBrews.every((b) => b.grinderRetentionGrams === null)).toBe(true);
   });
 
   it("tells the LLM the water each brew used, with its figures", async () => {

@@ -336,6 +336,11 @@ export const grinders = mysqlTable(
     burrType: varchar("burr_type", { length: 20 }).$type<BurrType>(), // BURR_TYPES
     burrSizeMm: int("burr_size_mm"),
     power: varchar("power", { length: 20 }).$type<GrinderPower>(), // GRINDER_POWER
+    // Variable-speed grinders: brews record the speed (grindRpm). The RPM
+    // range is optional, both or neither, and only with variableSpeed.
+    variableSpeed: boolean("variable_speed").default(false).notNull(),
+    rpmMin: int("rpm_min"),
+    rpmMax: int("rpm_max"),
     archivedAt: timestamp("archived_at"), // null = active
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
@@ -782,6 +787,13 @@ export const brewLogs = mysqlTable("brew_logs", {
   tdsPercent: decimal("tds_percent", { precision: 4, scale: 2, mode: "number" }),
   actualTempC: decimal("actual_temp_c", { precision: 4, scale: 1, mode: "number" }),
   actualGrindSetting: varchar("actual_grind_setting", { length: 100 }),
+  // Grinder speed, only for a variable-speed grinder (docs/api/brew-logs.md §6).
+  grindRpm: int("grind_rpm"),
+  // Grinder retention (docs/api/brew-logs.md §6): the beans weighed before
+  // grinding and the grounds that came out. actualDoseGrams stays the dose
+  // that went into the brew; retention (in − out) is worked out, not stored.
+  beanWeightInGrams: decimal("bean_weight_in_grams", { precision: 5, scale: 2, mode: "number" }),
+  groundWeightOutGrams: decimal("ground_weight_out_grams", { precision: 5, scale: 2, mode: "number" }),
   actualTimeSec: int("actual_time_sec").notNull(),
   // The coffee tasted on its own (for a milk drink, only if tasted straight).
   rating: int("rating"), // 1-5

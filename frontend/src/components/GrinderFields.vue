@@ -63,6 +63,27 @@ defineProps<{ idPrefix: string; errors: GrinderFormErrors; showErrors: boolean }
         <span v-if="showErrors && errors.burrSizeMm" class="field-error">{{ errors.burrSizeMm }}</span>
       </div>
     </div>
+    <fieldset class="range">
+      <legend>Speed</legend>
+      <label class="checkbox">
+        <input :id="`${idPrefix}-variable-speed`" v-model="form.variableSpeed" type="checkbox" />
+        Variable speed (brews record the RPM)
+      </label>
+      <template v-if="form.variableSpeed">
+        <div class="range-row">
+          <div class="field">
+            <label :for="`${idPrefix}-rpm-min`">From (RPM)</label>
+            <input :id="`${idPrefix}-rpm-min`" v-model="form.rpmMin" inputmode="numeric" placeholder="e.g. 300" :aria-invalid="showErrors && !!errors.rpm" />
+          </div>
+          <div class="field">
+            <label :for="`${idPrefix}-rpm-max`">To (RPM)</label>
+            <input :id="`${idPrefix}-rpm-max`" v-model="form.rpmMax" inputmode="numeric" placeholder="e.g. 1500" :aria-invalid="showErrors && !!errors.rpm" />
+          </div>
+        </div>
+        <span v-if="showErrors && errors.rpm" class="field-error">{{ errors.rpm }}</span>
+        <span v-else class="hint">Optional: the speeds the grinder can run at.</span>
+      </template>
+    </fieldset>
     <div class="field">
       <label :for="`${idPrefix}-notes`">Notes</label>
       <input :id="`${idPrefix}-notes`" v-model="form.notes" maxlength="255" placeholder="e.g. Red Clix fitted" />

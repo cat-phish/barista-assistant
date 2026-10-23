@@ -42,8 +42,12 @@ import { effectiveRoastAge, type FreezePeriodLike } from "./roastAge.js";
 const PREVIOUS_BREW_COUNT = 5;
 
 // The grinder a grind setting refers to, with whatever details are recorded
-// (range and step size let the LLM talk in clicks). docs/api/llm-contract.md §9.
-export type GrinderInfo = Pick<Grinder, "name" | "adjustment" | "settingMin" | "settingMax" | "stepSize" | "burrType" | "burrSizeMm" | "power">;
+// (range and step size let the LLM talk in clicks; speed is for variable-speed
+// grinders). docs/api/llm-contract.md §9.
+export type GrinderInfo = Pick<
+  Grinder,
+  "name" | "adjustment" | "settingMin" | "settingMax" | "stepSize" | "burrType" | "burrSizeMm" | "power" | "variableSpeed" | "rpmMin" | "rpmMax"
+>;
 // The water a brew was made with: its name and whatever figures are recorded
 // (mg/L; GH and KH as CaCO3). docs/api/water-profiles.md §3c.
 export type WaterInfo = Pick<
@@ -82,6 +86,12 @@ export interface BrewSummary {
   extractionYieldPercent: number | null; // from TDS (docs/api/brew-logs.md §6)
   actualTempC: number | null;
   actualGrindSetting: string | null;
+  grindRpm: number | null; // grinder speed, variable-speed grinders only
+  // Beans weighed before grinding and grounds out; retention = in − out
+  // (docs/api/brew-logs.md §6). actualDoseGrams is what went into the brew.
+  beanWeightInGrams: number | null;
+  groundWeightOutGrams: number | null;
+  grinderRetentionGrams: number | null;
   actualTimeSec: number;
   // How it was served: a drink and its ingredient types (milk, syrup…), or
   // null for the coffee on its own.
@@ -209,6 +219,12 @@ export function extractionYield(brew: BrewLog, style: StyleInfo | null): number 
   return beverage === null ? null : Math.round(((brew.tdsPercent * beverage) / brew.actualDoseGrams) * 10) / 10;
 }
 
+// Coffee left in the grinder, g: beans in − grounds out (both weighed).
+export function grinderRetention(brew: Pick<BrewLog, "beanWeightInGrams" | "groundWeightOutGrams">): number | null {
+  const { beanWeightInGrams: into, groundWeightOutGrams: out } = brew;
+  return into === null || out === null ? null : Math.round((into - out) * 100) / 100;
+}
+
 function summarize(
   brew: BrewRow,
   roastDate: Date | null,
@@ -240,6 +256,10 @@ function summarize(
     extractionYieldPercent: extractionYield(brew, brew.recipeStyle),
     actualTempC: brew.actualTempC,
     actualGrindSetting: brew.actualGrindSetting,
+    grindRpm: brew.grindRpm,
+    beanWeightInGrams: brew.beanWeightInGrams,
+    groundWeightOutGrams: brew.groundWeightOutGrams,
+    grinderRetentionGrams: grinderRetention(brew),
     actualTimeSec: brew.actualTimeSec,
     drink: brew.drinkId ? (servedAs.get(brew.drinkId) ?? null) : null,
     rating: brew.rating,
@@ -341,6 +361,9 @@ function selectBrews() {
         burrType: grinders.burrType,
         burrSizeMm: grinders.burrSizeMm,
         power: grinders.power,
+        variableSpeed: grinders.variableSpeed,
+        rpmMin: grinders.rpmMin,
+        rpmMax: grinders.rpmMax,
       },
       water: {
         name: waterProfiles.name,

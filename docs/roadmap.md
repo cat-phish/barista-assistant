@@ -696,3 +696,30 @@ an ibrik setup had to hide under "Other".
   brewer list shows and filters by method; "What are you making?" lists the
   workspace's methods that have brewers, so Siphon is its own choice with
   its own brewers; the menu builder groups plain brews by method.
+
+## More brew parameters, part 4: grind speed and grinder weights (built)
+
+Backlog item 6, the last part (the item is now closed), branch
+`brew-weights-rpm`, migrations 0052 and 0053. Variable-speed grinders and
+grinder retention both change the cup, and brews didn't record them.
+Contract: `api/grinders.md` §3b, `api/brew-logs.md` §6.
+
+- **Grinders** get a **Variable speed** switch and an optional RPM range
+  (50–5000, both or neither, only when variable speed). Switching it off
+  clears the range.
+- **Brews** record `grindRpm`, but only with a variable-speed grinder, and
+  within its range when the RPM is sent, so an old brew stays editable
+  after the range changes. Moving a brew to a grinder without speed control
+  means clearing the RPM. The brew form shows **Speed (RPM)** only for those
+  grinders, and pre-fills it with the last setting for that grinder and
+  recipe (`last-setting` now returns `grindRpm`).
+- **Beans in / grounds out:** two optional weights on a brew; out can't be
+  more than in. `actualDoseGrams` stays the dose that went into the brew.
+  **Grinder retention** (in − out) is worked out, not stored, like
+  extraction yield. It's named "grinder retention" everywhere so it isn't
+  confused with the water the spent grounds keep (`lib/scale.ts`). The form
+  shows "Grinder retention 0.3 g (1.6%)" as you type; the journal shows
+  "18.2 g in → 17.9 g out · 0.3 g retained (1.6%)".
+- **The AI** gets the grinder's speed details, each brew's `grindRpm`, both
+  weights and `grinderRetentionGrams`. It's told RPM is part of the grind, so
+  it should compare settings at similar speeds.

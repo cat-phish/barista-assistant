@@ -4,7 +4,7 @@ import { adjustmentLabel, burrLabel, grinderForm, grinderSummary, machineSummary
 
 const c40: Grinder = {
   id: 'g', name: 'C40', notes: null, adjustment: 'stepped', settingMin: 0, settingMax: 40, stepSize: 1,
-  burrType: 'conical', burrSizeMm: 39, power: 'manual', archivedAt: null, createdAt: '2026-10-20T00:00:00.000Z',
+  burrType: 'conical', burrSizeMm: 39, power: 'manual', variableSpeed: false, rpmMin: null, rpmMax: null, archivedAt: null, createdAt: '2026-10-20T00:00:00.000Z',
 };
 
 describe('grinder form', () => {
@@ -22,11 +22,25 @@ describe('grinder form', () => {
     expect(parseGrinderForm({ ...base, burrSizeMm: '38.5' }).errors.burrSizeMm).toBeTruthy();
     expect(parseGrinderForm({ ...base, name: ' ' }).errors.name).toBe('Required');
   });
+
+  it('a speed range only for a variable-speed grinder, a whole-number pair in order', () => {
+    const base = { ...grinderForm(), name: 'EK43', variableSpeed: true };
+    expect(parseGrinderForm({ ...base, rpmMin: '300', rpmMax: '1500' }).values).toMatchObject({ variableSpeed: true, rpmMin: 300, rpmMax: 1500 });
+    expect(parseGrinderForm({ ...base, rpmMin: '300' }).errors.rpm).toMatch(/both ends/);
+    expect(parseGrinderForm({ ...base, rpmMin: '900', rpmMax: '600' }).errors.rpm).toMatch(/more than/);
+    expect(parseGrinderForm({ ...base, rpmMin: '300.5', rpmMax: '600' }).errors.rpm).toBeTruthy();
+    // Switched off, a leftover range is dropped.
+    expect(parseGrinderForm({ ...base, variableSpeed: false, rpmMin: '300', rpmMax: '1500' }).values).toMatchObject({ variableSpeed: false, rpmMin: null, rpmMax: null });
+    const ek: Grinder = { ...c40, variableSpeed: true, rpmMin: 300, rpmMax: 1500 };
+    expect(grinderForm(ek)).toMatchObject({ variableSpeed: true, rpmMin: '300', rpmMax: '1500' });
+  });
 });
 
 describe('summaries', () => {
   it('describe what is recorded', () => {
     expect(grinderSummary(c40)).toBe('Stepped · 0–40, 1 per step · Conical 39 mm · Hand grinder');
+    expect(grinderSummary({ ...c40, power: 'electric', variableSpeed: true, rpmMin: 300, rpmMax: 1500 })).toMatch(/Variable speed 300–1500 RPM$/);
+    expect(grinderSummary({ ...c40, variableSpeed: true })).toMatch(/· Variable speed$/);
     expect(grinderSummary({ ...c40, adjustment: null, settingMin: null, settingMax: null, stepSize: null, burrType: null, burrSizeMm: null, power: null })).toBe('');
     const m: MachineCapabilities = { preinfusion: 'manual', flowControl: 'manual', pressureControl: 'none' };
     expect(machineSummary(m)).toBe('Pre-infusion: manual · Flow: manual');

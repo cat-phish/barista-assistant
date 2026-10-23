@@ -21,6 +21,9 @@ grinder. Recipes are grinder-neutral.
   "burrType": "conical",
   "burrSizeMm": 39,
   "power": "manual",
+  "variableSpeed": false,
+  "rpmMin": null,
+  "rpmMax": null,
   "archivedAt": null,
   "createdAt": "2026-10-18T09:00:00.000Z"
 }
@@ -37,9 +40,12 @@ Everything after `name` is optional (`null` when unknown):
 | `burrType` | `conical` or `flat` (`BURR_TYPES`) |
 | `burrSizeMm` | integer 10–200 |
 | `power` | `manual` or `electric` (`GRINDER_POWER`) |
+| `variableSpeed` | boolean, default `false` (never `null`): the motor's speed can be set, so brews record it (`grindRpm`, §6) |
+| `rpmMin`, `rpmMax` | the speed range, integers 50–5000; both or neither, min < max, and only when `variableSpeed` is `true` |
 
 The range and step size are sent to the AI analysis so its reasoning can talk
-in steps ("2 clicks finer"); the rest is reference.
+in steps ("2 clicks finer"), and the speed range so it can suggest a speed;
+the rest is reference.
 
 `createdAt` (read-only) is when the grinder was added; lists sort by it.
 
@@ -68,7 +74,10 @@ the brews made with it (see `DELETE` below).
 - **Body:** any non-empty subset of the `POST` fields plus
   `"archived": true | false`. `archived: true` sets `archivedAt` to now
   (unchanged if already archived); `false` restores it. The range is a pair:
-  send both ends, or `null` for either to clear both.
+  send both ends, or `null` for either to clear both; the RPM range works
+  the same way. Setting `variableSpeed: false` clears the RPM range, and a
+  range sent alone needs the grinder to already be variable speed (`400`
+  otherwise). Brews keep the RPM they recorded.
 - **Success (`200 OK`):** `{ "grinder": { ...grinder } }`
 - **Errors:** `400`; `403` viewer; `404` not in this workspace; `409` name taken.
 
@@ -98,7 +107,8 @@ recipe. The brew flow uses it to pre-fill the grind when both are chosen.
 - **Auth Required:** `true` (any member)
 - **Query:** `recipeId` (required).
 - **Success (`200 OK`):**
-  `{ "lastSetting": { "grindSetting": "20", "timestamp": "…", "brewLogId": "uuid" } | null }`.
+  `{ "lastSetting": { "grindSetting": "20", "grindRpm": 900, "timestamp": "…", "brewLogId": "uuid" } | null }`
+  (`grindRpm` is that brew's speed, or `null`).
   It's the newest such brew that has a grind setting (brews without one are
   skipped), or `null` if there's none.
 - **Errors:** `400` missing/invalid `recipeId`; `404` grinder not in this
