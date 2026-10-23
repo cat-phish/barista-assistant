@@ -505,3 +505,23 @@ no screen: adding a barista meant calling the API by hand.
   yourself, changing the web address (now a dialog instead of an inline
   warning), deleting a bean with its history, and deleting a drink
   category. Leave is a red button.
+
+## Settings: Account tab (built)
+
+Backlog item 1 (now finished and removed from the backlog, which was
+renumbered), branch `settings-account`. The API could change a password and
+delete an account (`docs/api/auth.md` §1), but no screen used either.
+
+- **Settings → Account**, under **You**: your email; **change password**
+  (current, new twice, at least 8 characters; other devices are logged out,
+  this one stays); **delete account** (re-enter the password and tick "I
+  understand"). While you're the only owner of a workspace, deleting is
+  refused and the dialog lists those workspaces, each linking to its Members
+  tab.
+- The ⚙ Settings link now shows whenever you're logged in, also before you
+  have a workspace; `/settings` then opens Account.
+- No API change (the auth tests already covered both calls).
+- **Backlog:** item 1 (Settings) is done; the old item 21 is now item 20
+  with only change email, log out everywhere and password reset left. The
+  settings-storage decision moved to item 2 (Units and defaults), the first
+  real setting.

@@ -20,7 +20,7 @@ the recipe's `style` (§5).
   | `stovetop` | Moka pot, ibrik | as filter |
   | `other` | Siphon, anything else | as filter |
 
-  Making the list editable (custom methods based on these) is backlog item 2.
+  Making the list editable (custom methods based on these) is backlog item 1.
 
 New workspaces get V60 (`filter`), Espresso (`espresso`) and Aeropress
 (`filter`). Milk drinks like a latte are drinks (§5c):

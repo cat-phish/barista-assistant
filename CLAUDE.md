@@ -56,8 +56,8 @@
    by: deleting anything something else uses (`DeleteDialog.vue`), deleting
    a bean with its brew history, deleting a drink category, changing the
    workspace's web address, deleting or leaving a workspace, removing a
-   member, and demoting yourself from owner. Deliberately without it:
-   deleting a brew log, deleting a menu section, abandoning a brew, and
-   deleting things nothing uses. When building or changing
-   an action that seems to qualify, **ask the user before adding the
-   checkbox** to it; don't add it unasked.
+   member, demoting yourself from owner, and deleting your account.
+   Deliberately without it: deleting a brew log, deleting a menu section,
+   abandoning a brew, and deleting things nothing uses. When building or
+   changing an action that seems to qualify, **ask the user before adding
+   the checkbox** to it; don't add it unasked.

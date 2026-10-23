@@ -1,10 +1,17 @@
 <script setup lang="ts">
 // The Settings screens: the grouped nav beside the tab on wide screens. On a
 // phone, /settings is just the nav (`index`), and each tab has a back link.
+import { onMounted } from 'vue';
+import { useWorkspaceStore } from '../stores/workspace';
 import AppHeader from './AppHeader.vue';
 import SettingsNav from './SettingsNav.vue';
 
 defineProps<{ title?: string; index?: boolean }>();
+
+// Account needs no workspace, so its route doesn't load them; the nav's
+// workspace group still should show when there is one.
+const workspaces = useWorkspaceStore();
+onMounted(() => workspaces.ensureLoaded().catch(() => undefined));
 </script>
 
 <template>

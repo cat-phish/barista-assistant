@@ -8,6 +8,8 @@ const workspaces = useWorkspaceStore();
 
 <template>
   <nav class="settings-nav" aria-label="Settings">
+    <h2>You</h2>
+    <RouterLink :to="{ name: 'settings-account' }" active-class="active">Account</RouterLink>
     <template v-if="workspaces.current">
       <h2 :title="workspaces.current.name">{{ workspaces.current.name }}</h2>
       <RouterLink :to="{ name: 'settings-workspace' }" active-class="active">Workspace</RouterLink>
