@@ -313,3 +313,27 @@ from taste.
 - **Backlog:** "Choose what a repeat keeps" moved to Settings (now item 8).
   More brew parameters no longer waits for field visibility; field visibility
   (5) now comes after it.
+
+## More brew parameters, part 2: water profiles (built)
+
+Backlog item 10, branch `water-profiles`, migration 0037. The water changes
+extraction as much as the grind, and nothing recorded it. Contract:
+`api/water-profiles.md` §3c.
+
+- **Bar setup → Water:** a per-workspace list, like grinders. Each profile
+  has a name, notes and optional figures in mg/L: TDS, GH and KH (as CaCO3),
+  calcium, magnesium, sodium, potassium, bicarbonate, chloride, sulfate, and
+  pH. Used profiles are retired, not deleted.
+- **A default:** a "Default for new brews" dropdown above the Water list
+  picks one profile (or None); setting it clears the old one, and retiring it
+  clears it. New brews start on it. The profile form doesn't edit it.
+- **The list** filters (All water / Retired) and sorts by name, TDS, GH, KH or
+  date added, like Brewers and Grinders; the choice is remembered.
+- **Brews** record `waterProfileId` (returned with `waterProfile`). The brew
+  form has a Water profile dropdown, "None (no water profiles set up)" when
+  the list is empty; the journal shows it.
+- **The AI** gets each brew's water and its figures, with a line on how
+  hardness and alkalinity change extraction.
+- **Backlog:** new item 16, choose what the AI sees (Settings → AI); items
+  after it moved up one. Prep tools (part 3) start unticked, and item 8's
+  repeat settings decide whether a repeat keeps them.

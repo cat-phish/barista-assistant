@@ -94,6 +94,24 @@ export interface Grinder extends GrinderDetails {
   createdAt: string; // date added (ISO)
 }
 
+// docs/api/water-profiles.md §3c: every figure in mg/L (ppm), GH and KH as CaCO3.
+export const WATER_FIGURES = [
+  'tdsPpm', 'generalHardnessPpm', 'alkalinityPpm', 'calciumPpm', 'magnesiumPpm', 'sodiumPpm',
+  'potassiumPpm', 'bicarbonatePpm', 'chloridePpm', 'sulfatePpm',
+] as const;
+export type WaterFigure = (typeof WATER_FIGURES)[number];
+export type WaterProfileDetails = Record<WaterFigure, number | null> & {
+  notes: string | null;
+  ph: number | null;
+  isDefault: boolean; // at most one per workspace; new brews start on it
+};
+export interface WaterProfile extends WaterProfileDetails {
+  id: string;
+  name: string;
+  retiredAt: string | null; // set = retired (hidden from pickers, kept in history)
+  createdAt: string;
+}
+
 // docs/api/brewers.md §3: espresso brewers' capabilities.
 export type Preinfusion = 'none' | 'automatic' | 'manual';
 export type ProfileControl = 'none' | 'manual' | 'programmable';
@@ -241,6 +259,7 @@ export interface BrewLog {
   beanId: string;
   recipeId: string | null;
   grinderId: string | null;
+  waterProfileId: string | null; // the water used (§3c)
   brewerId: string | null; // the recipe's brewer at brew time (set by the API)
   drinkId: string | null; // the drink it was for
   servingSize: number | null; // the size made, when the drink was scaled
@@ -261,6 +280,7 @@ export interface BrewLog {
   bean: { id: string; roasterName: string; beanName: string };
   recipe: { id: string; name: string; expectedYieldGrams: number | null; style: RecipeStyle | null; methodKind: MethodKind } | null;
   grinder: { id: string; name: string } | null;
+  waterProfile: { id: string; name: string } | null; // retired ones included
   brewer: BrewerRef | null; // retired ones included
   drink: { id: string; name: string; hasIngredients: boolean } | null; // hasIngredients: shot and drink tasted apart
   marks: Mark[]; // earliest first; espresso only

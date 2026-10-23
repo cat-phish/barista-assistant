@@ -253,7 +253,7 @@ async function deleteItem(): Promise<void> {
         <div class="setting">
           <p>
             <strong>{{ publicOn ? 'On' : 'Off' }}</strong>
-            <span class="muted"> · {{ publicOn ? `Published at /api/public/menu/${workspaces.current?.slug}. The guest page to show it isn't built yet (backlog item 18).` : 'Only your bar can see this menu.' }}</span>
+            <span class="muted"> · {{ publicOn ? `Published at /api/public/menu/${workspaces.current?.slug}. The guest page to show it isn't built yet (backlog item 19).` : 'Only your bar can see this menu.' }}</span>
           </p>
           <button v-if="isOwner" class="btn btn-secondary" type="button" :disabled="busy" @click="togglePublic">{{ publicOn ? 'Turn off' : 'Turn on' }}</button>
         </div>

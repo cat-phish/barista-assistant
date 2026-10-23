@@ -11,6 +11,7 @@ import {
   recipeGrindSettings,
   recipes,
   recipeSteps,
+  waterProfiles,
   type Bean,
   type BeanProcess,
   type BlendType,
@@ -26,6 +27,7 @@ import {
   type MethodKind,
   type ServingUnit,
   type StepAdvance,
+  type WaterProfile,
 } from "@barista/shared/schema";
 import { and, asc, desc, eq, inArray, lt, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
@@ -39,6 +41,13 @@ const PREVIOUS_BREW_COUNT = 5;
 // The grinder a grind setting refers to, with whatever details are recorded
 // (range and step size let the LLM talk in clicks). docs/api/llm-contract.md §9.
 export type GrinderInfo = Pick<Grinder, "name" | "adjustment" | "settingMin" | "settingMax" | "stepSize" | "burrType" | "burrSizeMm" | "power">;
+// The water a brew was made with: its name and whatever figures are recorded
+// (mg/L; GH and KH as CaCO3). docs/api/water-profiles.md §3c.
+export type WaterInfo = Pick<
+  WaterProfile,
+  | "name" | "tdsPpm" | "generalHardnessPpm" | "alkalinityPpm" | "calciumPpm" | "magnesiumPpm"
+  | "sodiumPpm" | "potassiumPpm" | "bicarbonatePpm" | "chloridePpm" | "sulfatePpm" | "ph"
+>;
 // Espresso brews: what the machine (the log's brewer) lets the barista control.
 export type MachineInfo = Pick<Brewer, "name" | "preinfusion" | "flowControl" | "pressureControl">;
 
@@ -56,6 +65,7 @@ export interface BrewSummary {
   methodKind: MethodKind | null;
   // The grind setting only means something for this grinder (docs/api/llm-contract.md §9).
   grinder: GrinderInfo | null;
+  water: WaterInfo | null; // the water profile used, if recorded
   machine: MachineInfo | null; // espresso only
   // Shot timer taps, earliest first (espresso): first drop, end of manual pre-infusion.
   marks: Array<{ kind: MarkKind; stepOrder: number | null; atSec: number }>;
@@ -164,6 +174,7 @@ interface BrewJoins {
   recipeStyle: RecipeStyle | null;
   methodKind: MethodKind | null;
   grinder: GrinderInfo | null;
+  water: WaterInfo | null;
   machine: MachineInfo | null;
 }
 type BrewRow = BrewLog & BrewJoins;
@@ -202,6 +213,7 @@ function summarize(
     recipeStyle: brew.recipeStyle,
     methodKind: brew.methodKind,
     grinder: brew.grinder,
+    water: brew.water,
     machine: brew.machine,
     marks: marks.get(brew.id) ?? [],
     actualDoseGrams: brew.actualDoseGrams,
@@ -301,6 +313,20 @@ function selectBrews() {
         burrSizeMm: grinders.burrSizeMm,
         power: grinders.power,
       },
+      water: {
+        name: waterProfiles.name,
+        tdsPpm: waterProfiles.tdsPpm,
+        generalHardnessPpm: waterProfiles.generalHardnessPpm,
+        alkalinityPpm: waterProfiles.alkalinityPpm,
+        calciumPpm: waterProfiles.calciumPpm,
+        magnesiumPpm: waterProfiles.magnesiumPpm,
+        sodiumPpm: waterProfiles.sodiumPpm,
+        potassiumPpm: waterProfiles.potassiumPpm,
+        bicarbonatePpm: waterProfiles.bicarbonatePpm,
+        chloridePpm: waterProfiles.chloridePpm,
+        sulfatePpm: waterProfiles.sulfatePpm,
+        ph: waterProfiles.ph,
+      },
       machine: {
         name: machineBrewers.name,
         preinfusion: machineBrewers.preinfusion,
@@ -312,6 +338,7 @@ function selectBrews() {
     .leftJoin(recipes, eq(brewLogs.recipeId, recipes.id))
     .leftJoin(brewers, eq(recipes.brewerId, brewers.id))
     .leftJoin(grinders, eq(brewLogs.grinderId, grinders.id))
+    .leftJoin(waterProfiles, eq(brewLogs.waterProfileId, waterProfiles.id))
     // The brewer the log was made with, as a machine only when it's espresso.
     .leftJoin(machineBrewers, and(eq(brewLogs.brewerId, machineBrewers.id), eq(machineBrewers.kind, "espresso")));
 }

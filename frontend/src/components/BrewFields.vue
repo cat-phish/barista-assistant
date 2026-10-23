@@ -2,7 +2,7 @@
 // Brew detail inputs shared by the brew flow's log form and journal editing.
 // Validate with parseBrewDraft (lib/brewDraft.ts); pass its errors in.
 import { computed, ref, watch } from 'vue';
-import type { Grinder, RecipeStyle } from '../api/types';
+import type { Grinder, RecipeStyle, WaterProfile } from '../api/types';
 import type { BrewDraft, BrewDraftErrors } from '../lib/brewDraft';
 import { brixToTds, extractionYield, usesWater } from '../lib/extraction';
 import { formatGrams } from '../lib/format';
@@ -13,6 +13,7 @@ const props = defineProps<{
   errors: BrewDraftErrors;
   showErrors: boolean;
   grinders: Grinder[];
+  waterProfiles?: WaterProfile[]; // the workspace's (docs/api/water-profiles.md §3c)
   expectedYieldGrams?: number | null; // the recipe's estimate (espresso: target), shown for comparison
   espresso?: boolean; // shot weight instead of water (docs/api/brew-logs.md §6)
   drinkTasting?: boolean; // the drink has ingredients: rate the brew and the drink apart
@@ -71,6 +72,8 @@ watch(
 
 // Active grinders, plus the brew's own even if it's since been retired.
 const grinderOptions = computed(() => props.grinders.filter((g) => !g.retiredAt || g.id === draft.value.grinderId));
+// Likewise for water; with none set up, the only choice says so.
+const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w.retiredAt || w.id === draft.value.waterProfileId));
 </script>
 
 <template>
@@ -153,6 +156,13 @@ const grinderOptions = computed(() => props.grinders.filter((g) => !g.retiredAt 
         <label for="brew-grind">Grind setting</label>
         <input id="brew-grind" v-model="draft.grind" maxlength="100" />
       </div>
+    </div>
+    <div class="field">
+      <label for="brew-water-profile">Water profile</label>
+      <select id="brew-water-profile" v-model="draft.waterProfileId">
+        <option value="">{{ waterOptions.length ? 'None recorded' : 'None (no water profiles set up)' }}</option>
+        <option v-for="w in waterOptions" :key="w.id" :value="w.id">{{ w.name }}{{ w.retiredAt ? ' (retired)' : '' }}</option>
+      </select>
     </div>
     <!-- A drink with ingredients is tasted twice: the brew on its own (if you
          tried it) and the finished drink, which milk and syrup change. -->

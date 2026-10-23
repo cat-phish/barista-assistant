@@ -28,6 +28,7 @@ created it and can't be changed.
   "tdsPercent": 1.38,
   "actualTempC": 93,
   "grinderId": "uuid",
+  "waterProfileId": "uuid",
   "actualGrindSetting": "18 clicks",
   "actualTimeSec": 150,
   "rating": 3,
@@ -37,6 +38,7 @@ created it and can't be changed.
   "bean": { "id": "uuid", "roasterName": "Onyx Coffee Lab", "beanName": "Southern Weather" },
   "recipe": { "id": "uuid", "name": "House V60", "expectedYieldGrams": 220, "style": "pour_over", "methodKind": "filter" },
   "grinder": { "id": "uuid", "name": "Comandante C40" },
+  "waterProfile": { "id": "uuid", "name": "Third Wave Water (classic)" },
   "brewerId": "uuid",
   "brewer": { "id": "uuid", "name": "V60", "kind": "filter" },
   "drink": { "id": "uuid", "name": "The Atlas", "hasIngredients": true },
@@ -53,7 +55,8 @@ target, for espresso), for comparing with the measured `actualYieldGrams`,
 `style` is its style (or `null`), which decides how extraction yield is worked
 out, and `methodKind` is its brewer's kind. `grinder` is
 `null` when no grinder was recorded; a retired
-grinder still appears here. `brewerId` / `brewer` (`{ "id", "name",
+grinder still appears here. `waterProfile` (`{ "id", "name" }`, §3c) is the
+water used, or `null`; retired ones still appear. `brewerId` / `brewer` (`{ "id", "name",
 "kind" }`, retired ones included) is the brewer it was made with: set by the
 API from the recipe, kept if the recipe later moves or is deleted, and `null`
 for a brew without a recipe. `drink`
@@ -93,7 +96,7 @@ account. Such logs can only be edited or deleted by owners.
     "actualYieldGrams": 225,
     "actualTempC": 93,
     "grinderId": "uuid",
-    "machineId": null,
+    "waterProfileId": "uuid",
     "drinkId": "uuid",
     "actualGrindSetting": "18 clicks",
     "actualTimeSec": 150,
@@ -122,9 +125,11 @@ account. Such logs can only be edited or deleted by owners.
     the change when any of the three is sent.
   - There is no brewer field: the log takes its recipe's brewer. Unknown
     fields (e.g. the old `machineId`) are rejected.
-  - `beanId`, plus `recipeId` and `grinderId` (both optional, nullable), must belong
-    to **this** workspace. A retired grinder is accepted (e.g. when logging an
-    old brew afterwards); clients just don't offer it for new brews.
+  - `beanId`, plus `recipeId`, `grinderId` and `waterProfileId` (all
+    optional, nullable), must belong to **this** workspace. A retired grinder
+    or water profile is accepted (e.g. when logging an old brew afterwards);
+    clients just don't offer them for new brews, and start on the default
+    water profile (§3c) if there is one.
   - `timestamp` is optional (default: now). Backdating is allowed so a brew
     can be logged afterwards, but it can't be more than 5 minutes in the
     future (allowing for clock skew).
@@ -160,8 +165,8 @@ account. Such logs can only be edited or deleted by owners.
     the drink has ingredients; for a milk drink the straight tasting is
     optional (only if the shot was tasted on its own).
 - **Success (`201 Created`):** `{ "brewLog": { ...brewLog } }`
-- **Errors:** `400` invalid body, or `beanId`/`recipeId`/`grinderId` not in
-  this workspace; `403` viewer.
+- **Errors:** `400` invalid body, or `beanId`/`recipeId`/`grinderId`/
+  `waterProfileId` not in this workspace; `403` viewer.
 - Logging a brew does **not** change the bean's `inventoryWeightGrams`.
 
 ## `PATCH /api/workspaces/:workspaceId/brew-logs/:brewLogId`

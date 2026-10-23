@@ -15,6 +15,7 @@ import {
   drinkIngredients,
   drinks,
   grinders,
+  waterProfiles,
   llmAnalyses,
   recipes,
   SERVING_UNITS,
@@ -40,6 +41,7 @@ export interface BrewLogDetails extends BrewLog {
   bean: Pick<Bean, "id" | "roasterName" | "beanName">;
   recipe: (Pick<Recipe, "id" | "name" | "expectedYieldGrams" | "style"> & { methodKind: MethodKind }) | null;
   grinder: { id: string; name: string } | null; // retired grinders included
+  waterProfile: { id: string; name: string } | null; // retired profiles included
   // The brewer it was made with (the recipe's at the time); retired included.
   brewer: { id: string; name: string; kind: MethodKind } | null;
   // The drink it was for; hasIngredients = the shot and the drink are tasted apart.
@@ -76,6 +78,7 @@ const brewLogFields = {
   beanId: z.uuid(),
   recipeId: z.uuid().nullable().optional(),
   grinderId: z.uuid().nullable().optional(),
+  waterProfileId: z.uuid().nullable().optional(),
   // The drink it was for; with a recipe, one of the drink's method (drinkError).
   drinkId: z.uuid().nullable().optional(),
   // The size made, for a drink scaled from its default (sizeError).
@@ -207,7 +210,7 @@ async function recipeBrewer(tx: Tx, recipeId: string | null | undefined): Promis
 async function referencesInWorkspace(
   tx: Tx,
   workspaceId: string,
-  refs: { beanId?: string; recipeId?: string | null; grinderId?: string | null; drinkId?: string | null }
+  refs: { beanId?: string; recipeId?: string | null; grinderId?: string | null; waterProfileId?: string | null; drinkId?: string | null }
 ): Promise<string | null> {
   if (refs.drinkId) {
     const [drink] = await tx
@@ -242,6 +245,15 @@ async function referencesInWorkspace(
       .for("update");
     if (!grinder) return "grinderId: not a grinder in this workspace";
   }
+  if (refs.waterProfileId) {
+    // Retired profiles are accepted, like grinders.
+    const [profile] = await tx
+      .select({ id: waterProfiles.id })
+      .from(waterProfiles)
+      .where(and(eq(waterProfiles.id, refs.waterProfileId), eq(waterProfiles.workspaceId, workspaceId)))
+      .for("update");
+    if (!profile) return "waterProfileId: not a water profile in this workspace";
+  }
   return null;
 }
 
@@ -257,6 +269,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       beanId: brewLogs.beanId,
       recipeId: brewLogs.recipeId,
       grinderId: brewLogs.grinderId,
+      waterProfileId: brewLogs.waterProfileId,
       brewerId: brewLogs.brewerId,
       drinkId: brewLogs.drinkId,
       servingSize: brewLogs.servingSize,
@@ -279,6 +292,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       // Separate column: a nested object spanning two left joins isn't nulled as a whole.
       recipeMethodKind: brewers.kind,
       grinder: { id: grinders.id, name: grinders.name },
+      waterProfile: { id: waterProfiles.id, name: waterProfiles.name },
       brewer: { id: logBrewers.id, name: logBrewers.name, kind: logBrewers.kind },
       drink: { id: drinks.id, name: drinks.name },
       // Separate column, like recipeMethodKind: whether the drink has ingredients.
@@ -290,6 +304,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
     .leftJoin(recipes, eq(brewLogs.recipeId, recipes.id))
     .leftJoin(brewers, eq(recipes.brewerId, brewers.id))
     .leftJoin(grinders, eq(brewLogs.grinderId, grinders.id))
+    .leftJoin(waterProfiles, eq(brewLogs.waterProfileId, waterProfiles.id))
     .leftJoin(logBrewers, eq(brewLogs.brewerId, logBrewers.id))
     .leftJoin(drinks, eq(brewLogs.drinkId, drinks.id))
     // Left join: logs of deleted accounts (userId null) must still be listed.

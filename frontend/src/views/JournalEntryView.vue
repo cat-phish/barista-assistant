@@ -6,7 +6,8 @@ import { ApiError, errorMessage } from '../api/client';
 import type { BrewLog, LlmAnalysis, Mark } from '../api/types';
 import AnalysisCard from '../components/AnalysisCard.vue';
 import { grindersApi } from '../api/grinders';
-import type { Grinder } from '../api/types';
+import type { Grinder, WaterProfile } from '../api/types';
+import { waterProfilesApi } from '../api/waterProfiles';
 import AppHeader from '../components/AppHeader.vue';
 import BrewFields from '../components/BrewFields.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
@@ -30,6 +31,7 @@ const router = useRouter();
 const log = ref<BrewLog | null>(null);
 const storedAnalysis = ref<LlmAnalysis | null>(null);
 const grinders = ref<Grinder[]>([]);
+const waterProfiles = ref<WaterProfile[]>([]);
 const loading = ref(true);
 const loadError = ref('');
 
@@ -63,8 +65,9 @@ async function load(): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [{ brewLog }, g] = await Promise.all([brewLogsApi.get(ws, props.id), grindersApi.list(ws)]);
+    const [{ brewLog }, g, w] = await Promise.all([brewLogsApi.get(ws, props.id), grindersApi.list(ws), waterProfilesApi.list(ws)]);
     grinders.value = g.grinders;
+    waterProfiles.value = w.waterProfiles;
     const { latestAnalysis, ...rest } = brewLog;
     log.value = rest;
     storedAnalysis.value = latestAnalysis;
@@ -178,6 +181,7 @@ function markLabel(m: Mark): string {
           <div><dt>Water</dt><dd>{{ log.actualTempC !== null ? `${log.actualTempC} °C` : '–' }}</dd></div>
           <div><dt>Grind</dt><dd>{{ log.actualGrindSetting ?? '–' }}<template v-if="log.grinder"> · {{ log.grinder.name }}</template></dd></div>
           <div><dt>Brewer</dt><dd>{{ log.brewer?.name ?? '–' }}</dd></div>
+          <div v-if="log.waterProfile"><dt>Water profile</dt><dd>{{ log.waterProfile.name }}</dd></div>
           <div v-for="m in log.marks" :key="`${m.kind}-${m.stepOrder}`"><dt>{{ markLabel(m) }}</dt><dd>{{ formatMark(m.atSec) }}</dd></div>
           <div><dt>{{ drinkTasting ? 'Brew rating' : 'Rating' }}</dt><dd><RatingStars :rating="log.rating" /></dd></div>
           <div v-if="drinkTasting"><dt>Drink rating</dt><dd><RatingStars :rating="log.drinkRating" /></dd></div>
@@ -200,7 +204,7 @@ function markLabel(m: Mark): string {
       <!-- Edit -->
       <form v-else class="card stack" novalidate @submit.prevent="saveEdit">
         <h2>Edit brew</h2>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="log.recipe?.style ?? null" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="log.recipe?.style ?? null" />
         <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
         <div class="buttons">
           <button class="btn btn-secondary" type="button" :disabled="saving" @click="editing = false">Cancel</button>

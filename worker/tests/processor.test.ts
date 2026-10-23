@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { beanFreezes, beans, brewLogMarks, brewLogs, brewers, ingredients, drinkIngredients, drinks, grinders, llmAnalyses, recipeGrindSettings, recipes, recipeSteps, users, workspaces } from "@barista/shared/schema";
+import { beanFreezes, beans, brewLogMarks, brewLogs, brewers, ingredients, drinkIngredients, drinks, grinders, llmAnalyses, recipeGrindSettings, recipes, recipeSteps, users, waterProfiles, workspaces } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { extractionYield, type BrewContext } from "../src/context.js";
@@ -248,6 +248,20 @@ describe("processBrewAnalysis", () => {
     const byDay = Object.fromEntries(context.previousBrews.map((b) => [b.tastingNotes, b.grinder?.name ?? null]));
     expect(byDay).toMatchObject({ "day 6": "Comandante C40", "day 7": null });
     expect(context.recipe?.grindStartingPoints).toEqual([{ grinderName: "Comandante C40", setting: "21" }]);
+  });
+
+  it("tells the LLM the water each brew used, with its figures", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    const tww = randomUUID();
+    await db.insert(waterProfiles).values({ id: tww, workspaceId, name: "Third Wave Water", generalHardnessPpm: 102, alkalinityPpm: 0, calciumPpm: 30, retiredAt: new Date() });
+    await db.update(brewLogs).set({ waterProfileId: tww }).where(eq(brewLogs.id, logIds.day8!));
+    await processBrewAnalysis({ brewLogId: logIds.day8! });
+    const context = llm.mock.calls[0]![0] as BrewContext;
+    expect(context.brew.water).toEqual({
+      name: "Third Wave Water", tdsPpm: null, generalHardnessPpm: 102, alkalinityPpm: 0, calciumPpm: 30, magnesiumPpm: null,
+      sodiumPpm: null, potassiumPpm: null, bicarbonatePpm: null, chloridePpm: null, sulfatePpm: null, ph: null,
+    });
+    expect(context.previousBrews[0]?.water).toBeNull();
   });
 
   it("skips a brew log that was deleted after the job was queued, without calling the LLM", async () => {

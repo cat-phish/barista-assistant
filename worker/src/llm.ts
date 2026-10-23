@@ -33,7 +33,10 @@ export const SYSTEM_PROMPT =
   "extractionYieldPercent to judge strength and extraction rather than " +
   "guessing from taste alone: filter usually lands around 1.15-1.45% TDS and " +
   "espresso 8-12%, both often 18-22% extraction, but the taste and the " +
-  "roaster's intent come first. For " +
+  "roaster's intent come first. A brew's water (mg/L, GH and KH as CaCO3) " +
+  "matters too: harder water with more magnesium and calcium tends to " +
+  "extract more, while high alkalinity (KH) buffers acidity and can flatten " +
+  "the cup; only the figures given are known. For " +
   "espresso, judge flow " +
   "from the first drop time, shot time and ratio against the recipe's " +
   "windows, and consider the machine's capabilities (pre-infusion, flow and " +
