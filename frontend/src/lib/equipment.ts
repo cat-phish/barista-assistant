@@ -21,6 +21,8 @@ export const RECIPE_STYLES: Record<RecipeStyle, string> = {
   immersion: 'Immersion',
   hybrid: 'Hybrid',
   cold_brew: 'Cold brew',
+  rapid_cold: 'Rapid cold brew',
+  kyoto_drip: 'Kyoto drip',
   standard: 'Standard',
   soup: 'Soup',
   moka: 'Moka',
@@ -28,7 +30,7 @@ export const RECIPE_STYLES: Record<RecipeStyle, string> = {
   other: 'Other',
 };
 export const STYLES_BY_KIND: Record<MethodKind, RecipeStyle[]> = {
-  filter: ['pour_over', 'immersion', 'hybrid', 'cold_brew', 'other'],
+  filter: ['pour_over', 'immersion', 'hybrid', 'cold_brew', 'rapid_cold', 'kyoto_drip', 'other'],
   espresso: ['standard', 'soup', 'other'],
   stovetop: ['moka', 'ibrik', 'other'],
   other: ['other'],

@@ -400,6 +400,13 @@
       "when": 1792786912060,
       "tag": "0056_notification_channels",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "5",
+      "when": 1792792483392,
+      "tag": "0057_cold_styles",
+      "breakpoints": true
     }
   ]
 }

@@ -72,7 +72,7 @@ describe('grinder table cells', () => {
 
 describe('recipe styles', () => {
   it('each brew method offers its own styles, all labelled', () => {
-    expect(STYLES_BY_KIND.filter).toEqual(['pour_over', 'immersion', 'hybrid', 'cold_brew', 'other']);
+    expect(STYLES_BY_KIND.filter).toEqual(['pour_over', 'immersion', 'hybrid', 'cold_brew', 'rapid_cold', 'kyoto_drip', 'other']);
     expect(STYLES_BY_KIND.espresso).toEqual(['standard', 'soup', 'other']);
     for (const st of [...STYLES_BY_KIND.filter, ...STYLES_BY_KIND.espresso]) expect(RECIPE_STYLES[st]).toBeTruthy();
   });

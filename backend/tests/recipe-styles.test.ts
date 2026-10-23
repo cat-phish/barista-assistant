@@ -16,7 +16,7 @@ describe("recipe styles", () => {
     const { list } = await setup();
     const styles = await list();
     expect(styles.map((s) => `${s.kind}:${s.builtin}`)).toEqual([
-      "filter:pour_over", "filter:immersion", "filter:hybrid", "filter:cold_brew", "filter:other",
+      "filter:pour_over", "filter:immersion", "filter:hybrid", "filter:cold_brew", "filter:rapid_cold", "filter:kyoto_drip", "filter:other",
       "espresso:standard", "espresso:soup", "espresso:other",
       "stovetop:moka", "stovetop:ibrik", "stovetop:other",
       "other:other",
@@ -28,7 +28,7 @@ describe("recipe styles", () => {
     const { owner, base, list } = await setup();
     const res = await owner.agent.post(base).send({ kind: "filter", name: "Inverted", brewsLike: "immersion" });
     expect(res.status).toBe(201);
-    expect(res.body.style).toMatchObject({ kind: "filter", name: "Inverted", position: 6, builtin: null, brewsLike: "immersion" });
+    expect(res.body.style).toMatchObject({ kind: "filter", name: "Inverted", position: 8, builtin: null, brewsLike: "immersion" });
     expect((await owner.agent.post(base).send({ kind: "filter", name: "Turbo", brewsLike: "soup" })).body.error).toMatch(/brewsLike/);
     expect((await owner.agent.post(base).send({ kind: "filter", name: "inverted", brewsLike: "immersion" })).status).toBe(409);
     // The same name is fine for another method.
