@@ -26,7 +26,10 @@ export const SYSTEM_PROMPT =
   "than small corrections. Decaf and blends often extract differently from " +
   "single origins. The flavorProfile is the roaster's description of the cup " +
   "to aim for, and a higher altitudeMasl usually means denser beans that take " +
-  "a finer grind or hotter water. For " +
+  "a finer grind or hotter water. The origin (originArea, country, region) " +
+  "hints at the bean's typical character, e.g. many East African coffees are " +
+  "dense and bright while Brazilian ones are often lower grown and softer; " +
+  "treat it as context, not a rule. For " +
   "espresso, judge flow " +
   "from the first drop time, shot time and ratio against the recipe's " +
   "windows, and consider the machine's capabilities (pre-infusion, flow and " +

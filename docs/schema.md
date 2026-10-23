@@ -92,6 +92,13 @@ export const DETAILED_ROAST_TO_LEVEL: Record<DetailedRoastLevel, RoastLevel> = {
 };
 export const BLEND_TYPES = ["single_origin", "blend", "other"] as const;
 export type BlendType = (typeof BLEND_TYPES)[number];
+// Where the coffee was grown, as the coffee trade groups origins
+// (docs/api/beans.md §4). central_america includes Mexico and the Caribbean;
+// arabia is Yemen; pacific is PNG, Hawaii and Australia.
+export const ORIGIN_AREAS = [
+  "africa", "arabia", "central_america", "south_america", "asia", "pacific",
+] as const;
+export type OriginArea = (typeof ORIGIN_AREAS)[number];
 // How the coffee was processed (docs/api/beans.md §4). A fixed list for now;
 // docs/backlog.md item 2 makes it editable per workspace.
 export const BEAN_PROCESSES = [
@@ -128,7 +135,9 @@ export const beans = mysqlTable("beans", {
   bagWeightGrams: int("bag_weight_grams"),
   notes: text("notes"),
   flavorProfile: varchar("flavor_profile", { length: 500 }), // the roaster's tasting notes
-  region: varchar("region", { length: 255 }),
+  originArea: varchar("origin_area", { length: 20 }).$type<OriginArea>(), // ORIGIN_AREAS
+  country: varchar("country", { length: 100 }), // free text; a blend may list several
+  region: varchar("region", { length: 255 }), // the growing area within the country, e.g. Yirgacheffe
   altitudeMasl: int("altitude_masl"), // metres above sea level
   producer: varchar("producer", { length: 255 }),
   purchaseDate: date("purchase_date", { mode: "string" }), // YYYY-MM-DD

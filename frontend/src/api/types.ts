@@ -111,6 +111,8 @@ export type DetailedRoastLevel =
   | 'cinnamon' | 'american' | 'new_england' | 'half_city' | 'modern_light' | 'city'
   | 'city_plus' | 'full_city' | 'full_city_plus' | 'italian' | 'vienna' | 'french';
 export type BlendType = 'single_origin' | 'blend' | 'other';
+// docs/schema.md ORIGIN_AREAS
+export type OriginArea = 'africa' | 'arabia' | 'central_america' | 'south_america' | 'asia' | 'pacific';
 // docs/schema.md BEAN_PROCESSES
 export type BeanProcess =
   | 'washed' | 'natural' | 'wet_hulled' | 'honey' | 'mechanically_washed' | 'anaerobic'
@@ -136,7 +138,9 @@ export interface Bean {
   bagWeightGrams: number | null;
   notes: string | null;
   flavorProfile: string | null;
-  region: string | null;
+  originArea: OriginArea | null;
+  country: string | null;
+  region: string | null; // within the country, e.g. Yirgacheffe
   altitudeMasl: number | null; // metres
   producer: string | null;
   purchaseDate: string | null; // YYYY-MM-DD

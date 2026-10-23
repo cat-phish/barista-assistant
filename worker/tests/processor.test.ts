@@ -31,7 +31,7 @@ beforeEach(async () => {
   await db.insert(users).values({ id: userId, email: "b@example.com", passwordHash: "x" });
   await db.insert(workspaces).values({ id: workspaceId, name: "W", slug: "w" });
   await db.insert(brewers).values({ id: brewerId, workspaceId, name: "V60" });
-  await db.insert(beans).values({ id: beanId, workspaceId, roasterName: "Onyx", beanName: "Guji", roastLevel: "light", detailedRoastLevel: "city", roastType: "filter", blendType: "single_origin", flavorProfile: "Peach, black tea", region: "Guji", altitudeMasl: 2100, roastDate: new Date("2026-10-01T00:00:00Z") });
+  await db.insert(beans).values({ id: beanId, workspaceId, roasterName: "Onyx", beanName: "Guji", roastLevel: "light", detailedRoastLevel: "city", roastType: "filter", blendType: "single_origin", flavorProfile: "Peach, black tea", originArea: "africa", country: "Ethiopia", region: "Guji", altitudeMasl: 2100, roastDate: new Date("2026-10-01T00:00:00Z") });
   await db.insert(recipes).values({ id: recipeId, workspaceId, name: "House V60", brewerId, targetDoseGrams: 15, targetWaterGrams: 250, expectedYieldGrams: 220, expectedFinishMinSec: 165, expectedFinishMaxSec: 195, targetTempC: 94, style: "pour_over" });
   await db.insert(recipeSteps).values([
     { id: randomUUID(), recipeId, stepOrder: 1, stepType: "bloom", durationSec: 45, advance: "tap", targetWaterGrams: 50, targetTempC: 85 },
@@ -77,6 +77,8 @@ describe("processBrewAnalysis", () => {
       decaf: false,
       roastDate: "2026-10-01",
       flavorProfile: "Peach, black tea",
+      originArea: "africa",
+      country: "Ethiopia",
       region: "Guji",
       altitudeMasl: 2100,
     });
