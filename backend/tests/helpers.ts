@@ -96,3 +96,12 @@ export async function processId(user: TestUser, workspaceId: string, builtin: st
   if (!row) throw new Error(`No built-in process ${builtin}`);
   return row.id;
 }
+
+// The id of one of the workspace's built-in recipe styles for a method, e.g.
+// ("filter", "pour_over") (docs/api/recipe-styles.md §5e).
+export async function styleId(user: TestUser, workspaceId: string, kind: string, builtin: string): Promise<string> {
+  const res = await user.agent.get(`/api/workspaces/${workspaceId}/recipe-styles`);
+  const row = (res.body.styles as Array<{ id: string; kind: string; builtin: string | null }>).find((s) => s.kind === kind && s.builtin === builtin);
+  if (!row) throw new Error(`No built-in ${kind} style ${builtin}`);
+  return row.id;
+}

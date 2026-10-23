@@ -35,7 +35,7 @@ import {
   whatOptions,
 } from '../lib/brewChoice';
 import type { Brewer, Drink, DrinkCategory, Grinder, Mark, MethodKind, PrepTool, ServingUnit, WaterProfile } from '../api/types';
-import { METHOD_KINDS, RECIPE_STYLES } from '../lib/equipment';
+import { METHOD_KINDS } from '../lib/equipment';
 import { convertSize, defaultSize, formatSize, SERVING_UNITS, sizeFactor, type Size } from '../lib/servings';
 import AppHeader from '../components/AppHeader.vue';
 import BrewFields from '../components/BrewFields.vue';
@@ -656,7 +656,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         <div v-else-if="brewerId" class="field">
           <label for="recipe">Recipe<span class="req" aria-hidden="true">*</span></label>
           <select id="recipe" aria-required="true" v-model="recipeId">
-            <option v-for="r in recipeChoices" :key="r.id" :value="r.id">{{ r.name }}<template v-if="r.style && r.style !== 'standard'"> ({{ RECIPE_STYLES[r.style].toLowerCase() }})</template><template v-if="r.id === drink?.defaultRecipeId"> (default)</template></option>
+            <option v-for="r in recipeChoices" :key="r.id" :value="r.id">{{ r.name }}<template v-if="r.style && !(r.style.brewsLike === 'standard' && r.style.name === 'Standard')"> ({{ r.style.name.toLowerCase() }})</template><template v-if="r.id === drink?.defaultRecipeId"> (default)</template></option>
           </select>
         </div>
         <div v-if="baseSize" class="batch" role="group" aria-labelledby="size-label">
@@ -842,7 +842,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       <FinishDrinkCard v-if="drink" :drink="drink" :factor="sizeScale" :size-label="madeSize ? formatSize(madeSize) : null" />
       <section class="card">
         <p v-if="stepMarksLine" class="muted small marks-line">{{ stepMarksLine }}</p>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :prep-tools="prepTools" :method-kind="recipe?.brewer.kind ?? null" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="recipe?.style ?? null" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :prep-tools="prepTools" :method-kind="recipe?.brewer.kind ?? null" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="recipe?.style?.brewsLike ?? null" />
       </section>
       <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
       <button class="btn btn-primary btn-block" type="submit" :disabled="saving">{{ saving ? 'Saving…' : 'Save brew' }}</button>

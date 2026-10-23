@@ -1,3 +1,4 @@
+import type { RecipeStyleSummary } from "./recipes.js";
 import { randomUUID } from "node:crypto";
 import { and, asc, count, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
@@ -29,6 +30,7 @@ import {
   type MarkKind,
   type MethodKind,
   type Recipe,
+  recipeStyles,
 } from "@barista/shared/schema";
 import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
@@ -41,7 +43,8 @@ export interface Mark {
 
 export interface BrewLogDetails extends BrewLog {
   bean: Pick<Bean, "id" | "roasterName" | "beanName">;
-  recipe: (Pick<Recipe, "id" | "name" | "expectedYieldGrams" | "style"> & { methodKind: MethodKind }) | null;
+  // style: the recipe's (docs/api/recipe-styles.md §5e), for how extraction yield is worked out.
+  recipe: (Pick<Recipe, "id" | "name" | "expectedYieldGrams"> & { methodKind: MethodKind; style: RecipeStyleSummary | null }) | null;
   grinder: { id: string; name: string } | null; // archived grinders included
   waterProfile: { id: string; name: string } | null; // archived profiles included
   // The brewer it was made with (the recipe's at the time); archived included.
@@ -313,9 +316,12 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       drinkRating: brewLogs.drinkRating,
       drinkTastingNotes: brewLogs.drinkTastingNotes,
       bean: { id: beans.id, roasterName: beans.roasterName, beanName: beans.beanName },
-      recipe: { id: recipes.id, name: recipes.name, expectedYieldGrams: recipes.expectedYieldGrams, style: recipes.style },
-      // Separate column: a nested object spanning two left joins isn't nulled as a whole.
+      recipe: { id: recipes.id, name: recipes.name, expectedYieldGrams: recipes.expectedYieldGrams },
+      // Separate columns: a nested object spanning two left joins isn't nulled as a whole.
       recipeMethodKind: brewers.kind,
+      styleId: recipeStyles.id,
+      styleName: recipeStyles.name,
+      styleBrewsLike: recipeStyles.brewsLike,
       grinder: { id: grinders.id, name: grinders.name },
       waterProfile: { id: waterProfiles.id, name: waterProfiles.name },
       brewer: { id: logBrewers.id, name: logBrewers.name, kind: logBrewers.kind },
@@ -328,6 +334,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
     .innerJoin(beans, eq(brewLogs.beanId, beans.id))
     .leftJoin(recipes, eq(brewLogs.recipeId, recipes.id))
     .leftJoin(brewers, eq(recipes.brewerId, brewers.id))
+    .leftJoin(recipeStyles, eq(recipes.styleId, recipeStyles.id))
     .leftJoin(grinders, eq(brewLogs.grinderId, grinders.id))
     .leftJoin(waterProfiles, eq(brewLogs.waterProfileId, waterProfiles.id))
     .leftJoin(logBrewers, eq(brewLogs.brewerId, logBrewers.id))
@@ -340,9 +347,12 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
     .offset(offset);
   const [marks, tools] = await Promise.all([marksFor(rows.map((r) => r.id)), toolsFor(rows.map((r) => r.id))]);
   // A recipe always has a method (inner FK), so its kind is set whenever recipe is.
-  return rows.map(({ recipeMethodKind, recipe, drink, drinkHasIngredients, ...row }) => ({
+  return rows.map(({ recipeMethodKind, styleId, styleName, styleBrewsLike, recipe, drink, drinkHasIngredients, ...row }) => ({
     ...row,
-    recipe: recipe && recipeMethodKind ? { ...recipe, methodKind: recipeMethodKind } : null,
+    recipe:
+      recipe && recipeMethodKind
+        ? { ...recipe, methodKind: recipeMethodKind, style: styleId && styleName && styleBrewsLike ? { id: styleId, name: styleName, brewsLike: styleBrewsLike } : null }
+        : null,
     drink: drink ? { ...drink, hasIngredients: Number(drinkHasIngredients) === 1 } : null,
     marks: marks.get(row.id) ?? [],
     tools: tools.get(row.id) ?? [],

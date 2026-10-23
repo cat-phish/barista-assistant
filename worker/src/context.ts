@@ -11,6 +11,7 @@ import {
   grinders,
   recipeGrindSettings,
   recipes,
+  recipeStyles,
   recipeSteps,
   waterProfiles,
   prepTools,
@@ -60,9 +61,8 @@ export interface BrewSummary {
   roastAgeDays: number | null;
   daysFrozenBeforeBrew: number | null;
   recipeName: string | null;
-  // How the recipe brews: pour_over, immersion, hybrid (filter); standard,
-  // soup (espresso); other. Compare brews of the same style.
-  recipeStyle: RecipeStyle | null;
+  // How the recipe brews (StyleInfo). Compare brews of the same style.
+  recipeStyle: StyleInfo | null;
   // The recipe's brew method (filter / espresso), null without a recipe.
   methodKind: MethodKind | null;
   // The grind setting only means something for this grinder (docs/api/llm-contract.md §9).
@@ -137,7 +137,7 @@ export interface BrewContext {
   recipe: {
     name: string;
     brewer: string; // e.g. "V60", "Linea Mini"
-    style: RecipeStyle | null; // how it brews: pour_over, immersion, hybrid; standard, soup; other
+    style: StyleInfo | null; // how it brews
     methodKind: MethodKind;
     targetDoseGrams: number;
     targetWaterGrams: number | null; // null for espresso
@@ -174,9 +174,18 @@ export interface BrewContext {
   ratingScale: "1-5";
 }
 
+// A recipe's style (docs/api/recipe-styles.md §5e): the workspace's name for
+// it, and the built-in it brews like (pour_over, immersion, hybrid,
+// cold_brew; standard, soup; moka, ibrik; other). A custom style such as
+// "Inverted" brews like immersion: judge it as that.
+export interface StyleInfo {
+  name: string;
+  brewsLike: RecipeStyle;
+}
+
 interface BrewJoins {
   recipeName: string | null;
-  recipeStyle: RecipeStyle | null;
+  recipeStyle: StyleInfo | null;
   methodKind: MethodKind | null;
   grinder: GrinderInfo | null;
   water: WaterInfo | null;
@@ -194,9 +203,9 @@ function ratio(brew: BrewLog): number | null {
 const IMMERSION_STYLES: readonly (RecipeStyle | null)[] = ["immersion", "cold_brew", "ibrik"];
 
 // Extraction yield, % (docs/api/brew-logs.md §6): TDS × beverage ÷ dose.
-export function extractionYield(brew: BrewLog, style: RecipeStyle | null): number | null {
+export function extractionYield(brew: BrewLog, style: StyleInfo | null): number | null {
   if (brew.tdsPercent === null) return null;
-  const beverage = IMMERSION_STYLES.includes(style) ? brew.actualWaterGrams : brew.actualYieldGrams;
+  const beverage = IMMERSION_STYLES.includes(style?.brewsLike ?? null) ? brew.actualWaterGrams : brew.actualYieldGrams;
   return beverage === null ? null : Math.round(((brew.tdsPercent * beverage) / brew.actualDoseGrams) * 10) / 10;
 }
 
@@ -321,7 +330,7 @@ function selectBrews() {
     .select({
       brew: brewLogs,
       recipeName: recipes.name,
-      recipeStyle: recipes.style,
+      recipeStyle: { name: recipeStyles.name, brewsLike: recipeStyles.brewsLike },
       methodKind: brewers.kind,
       grinder: {
         name: grinders.name,
@@ -356,6 +365,7 @@ function selectBrews() {
     })
     .from(brewLogs)
     .leftJoin(recipes, eq(brewLogs.recipeId, recipes.id))
+    .leftJoin(recipeStyles, eq(recipes.styleId, recipeStyles.id))
     .leftJoin(brewers, eq(recipes.brewerId, brewers.id))
     .leftJoin(grinders, eq(brewLogs.grinderId, grinders.id))
     .leftJoin(waterProfiles, eq(brewLogs.waterProfileId, waterProfiles.id))
@@ -424,7 +434,7 @@ async function loadRecipe(recipeId: string): Promise<BrewContext["recipe"]> {
     .select({
       name: recipes.name,
       brewer: brewers.name,
-      style: recipes.style,
+      style: { name: recipeStyles.name, brewsLike: recipeStyles.brewsLike },
       methodKind: brewers.kind,
       targetDoseGrams: recipes.targetDoseGrams,
       targetWaterGrams: recipes.targetWaterGrams,
@@ -438,6 +448,7 @@ async function loadRecipe(recipeId: string): Promise<BrewContext["recipe"]> {
     })
     .from(recipes)
     .innerJoin(brewers, eq(recipes.brewerId, brewers.id))
+    .leftJoin(recipeStyles, eq(recipes.styleId, recipeStyles.id))
     .where(eq(recipes.id, recipeId))
     .limit(1);
   if (!row) return null;

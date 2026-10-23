@@ -84,7 +84,7 @@ card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
   "firstDropMinSec": null,
   "firstDropMaxSec": null,
   "flowUnit": "g_s",
-  "style": "pour_over",
+  "style": { "id": "uuid", "name": "Pour over", "brewsLike": "pour_over" },
   "targetTempC": 94,
   "defaultGrinderId": "uuid",
   "archivedAt": null,
@@ -150,14 +150,14 @@ Creates a recipe, its grind starting points and its steps in one transaction.
     `targetDoseGrams` (> 0, < 1000, max 2 decimals), and by kind (table
     above) `targetWaterGrams` or `expectedYieldGrams` (> 0, < 10000, max 2
     decimals).
-  - `style` (optional, nullable): how the cup is brewed, one of its brewer's
-    method's styles: `pour_over`, `immersion`, `hybrid`, `cold_brew` or
-    `other` for filter; `standard`, `soup` or `other` for espresso; `moka`,
-    `ibrik` or `other` for stovetop; `other` for other (`400` otherwise).
-    Stovetop and other recipes otherwise follow filter's rules (dose + water).
-    Descriptive (lists, the AI); it changes no fields or timer behaviour. On
-    `PATCH`, moving the recipe to a brewer of the other method clears a style
-    that no longer fits, unless a fitting one is sent.
+  - `styleId` (optional, nullable): how the cup is brewed, one of the
+    workspace's styles for its brewer's method (§5e; hidden ones included).
+    `400` for another workspace's style or another method's. Responses carry
+    it as `style: { id, name, brewsLike }` or `null`. It changes no fields or
+    timer behaviour; extraction yield and the AI go by `brewsLike`. Stovetop
+    and other recipes follow filter's rules (dose + water). On `PATCH`,
+    moving the recipe to a brewer of another method clears a style that no
+    longer fits, unless a fitting one is sent.
   - Optional, nullable: `expectedYieldGrams` for filter recipes (same
     rules as water), `targetTempC` (0–100, max 1 decimal). Recipes reach the
     public menu through drinks (§5c).

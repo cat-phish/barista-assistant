@@ -125,7 +125,22 @@ export interface ErrorBody {
 // brewer can make. A recipe's style says how the cup is brewed (descriptive).
 // Brewers are grouped by method (no category); categories are for drinks.
 export type MethodKind = 'filter' | 'espresso' | 'stovetop' | 'other';
+// The built-in style keys (docs/schema.md STYLES_BY_KIND).
 export type RecipeStyle = 'pour_over' | 'immersion' | 'hybrid' | 'cold_brew' | 'standard' | 'soup' | 'moka' | 'ibrik' | 'other';
+// docs/api/recipe-styles.md §5e: the workspace's styles, a list per method.
+// brewsLike: the built-in it brews like (itself for a built-in), which
+// extraction yield and the AI go by.
+export interface RecipeStyleItem {
+  id: string;
+  kind: MethodKind;
+  name: string;
+  position: number;
+  hidden: boolean;
+  builtin: RecipeStyle | null; // null = added by the workspace
+  brewsLike: RecipeStyle;
+}
+// A recipe's style, as recipes and brew logs carry it.
+export type StyleRef = Pick<RecipeStyleItem, 'id' | 'name' | 'brewsLike'>;
 
 // docs/api/brewers.md §3: what makes the coffee (V60, AeroPress, an espresso
 // machine). Capabilities apply to espresso brewers only ("none" otherwise).
@@ -319,7 +334,7 @@ export interface Recipe {
   firstDropMinSec: number | null; // espresso only (both or neither)
   firstDropMaxSec: number | null;
   flowUnit: FlowUnit;
-  style: RecipeStyle | null; // one of STYLES_BY_KIND[brewer.kind] (lib/equipment.ts)
+  style: StyleRef | null; // one of the workspace's styles for brewer.kind
   targetTempC: number | null;
   defaultGrinderId: string | null; // preselected when brewing this recipe
   archivedAt: string | null; // set = archived: off the brew page and drink forms (§5)
@@ -366,7 +381,7 @@ export interface BrewLog {
   drinkRating: number | null; // the finished drink (drink brews only)
   drinkTastingNotes: string | null;
   bean: { id: string; roasterName: string; beanName: string };
-  recipe: { id: string; name: string; expectedYieldGrams: number | null; style: RecipeStyle | null; methodKind: MethodKind } | null;
+  recipe: { id: string; name: string; expectedYieldGrams: number | null; style: StyleRef | null; methodKind: MethodKind } | null;
   grinder: { id: string; name: string } | null;
   waterProfile: { id: string; name: string } | null; // archived ones included
   brewer: BrewerRef | null; // archived ones included

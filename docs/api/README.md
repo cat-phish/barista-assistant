@@ -21,6 +21,7 @@ means drinks, wherever you see it (code comments use
 | §5b | [ingredients.md](ingredients.md) | Ingredients |
 | §5c | [drinks.md](drinks.md) | Drinks |
 | §5d | [drink-categories.md](drink-categories.md) | Drink Categories |
+| §5e | [recipe-styles.md](recipe-styles.md) | Recipe Styles |
 | §6 | [brew-logs.md](brew-logs.md) | Brew Logs |
 | §7 | [public-menu.md](public-menu.md) | Public Menu Endpoint |
 | §7b | [menu.md](menu.md) | Menu Builder (sections and items for §7) |

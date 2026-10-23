@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { brewerId, newBean, newBrewLog, newUser, newWorkspace } from "./helpers.js";
+import { brewerId, newBean, newBrewLog, newUser, newWorkspace, styleId } from "./helpers.js";
 
 async function setup() {
   const owner = await newUser();
@@ -169,10 +169,11 @@ describe("brew logs: water vs measured yield", () => {
   it("brew logs carry the recipe's expected yield for comparison", async () => {
     const { owner, ws, base: recipesBase, recipe } = await setup();
     const bean = await newBean(owner, ws.id);
-    const r = (await owner.agent.post(recipesBase).send({ ...recipe, style: "pour_over", expectedYieldGrams: 220 })).body.recipe.id;
+    const pourOver = await styleId(owner, ws.id, "filter", "pour_over");
+    const r = (await owner.agent.post(recipesBase).send({ ...recipe, styleId: pourOver, expectedYieldGrams: 220 })).body.recipe.id;
     const id = await newBrewLog(owner, ws.id, bean, { recipeId: r, actualYieldGrams: 226 });
     const log = (await owner.agent.get(`/api/workspaces/${ws.id}/brew-logs/${id}`)).body.brewLog;
-    expect(log.recipe).toEqual({ id: r, name: "House V60", expectedYieldGrams: 220, style: "pour_over", methodKind: "filter" });
+    expect(log.recipe).toEqual({ id: r, name: "House V60", expectedYieldGrams: 220, style: { id: pourOver, name: "Pour over", brewsLike: "pour_over" }, methodKind: "filter" });
     expect(log.actualYieldGrams).toBe(226);
   });
 

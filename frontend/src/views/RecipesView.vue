@@ -10,9 +10,8 @@ import type { Brewer, Recipe } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ListControls from '../components/ListControls.vue';
 import MenuTabs from '../components/MenuTabs.vue';
-import { RECIPE_STYLES, STYLE_ORDER } from '../lib/equipment';
 import { formatAdded, formatDoseLine, formatGrams, formatTime } from '../lib/format';
-import { addedColumn, enumColumn, isSortKey, nameColumn, recallView, rememberView, sortArrow, sortBy, sortLabel, sortColumnOptions, toggleHeader, type SortColumns } from '../lib/listSort';
+import { addedColumn, isSortKey, nameColumn, recallView, rememberView, sortArrow, sortBy, sortLabel, sortColumnOptions, toggleHeader, type SortColumns } from '../lib/listSort';
 import { formatFinishWindow, plannedStarts, stepTitle } from '../lib/steps';
 import { formatTemp } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
@@ -30,7 +29,7 @@ const viewKey = (what: string) => `recipes.${what}.${workspaces.current?.id ?? '
 const ALL = 'all';
 const columns: SortColumns<Recipe> = {
   name: nameColumn(),
-  style: enumColumn('Style', STYLE_ORDER, (r) => r.style),
+  style: { label: 'Style', value: (r) => r.style?.name ?? null, asc: 'A–Z', desc: 'Z–A' },
   added: addedColumn(),
 };
 const sortChoices = sortColumnOptions(columns);
@@ -156,7 +155,7 @@ async function setArchived(r: Recipe, archived: boolean): Promise<void> {
           <button class="data-row" type="button" :aria-expanded="openId === recipe.id" @click="toggle(recipe.id)">
             <span class="data-td primary">{{ recipe.name }}<span v-if="recipe.archivedAt" class="muted"> (archived)</span></span>
             <span class="data-td">{{ recipe.brewer.name }}</span>
-            <span class="data-td">{{ recipe.style ? RECIPE_STYLES[recipe.style] : '–' }}</span>
+            <span class="data-td">{{ recipe.style?.name ?? '–' }}</span>
             <span class="data-td">{{ formatDoseLine(recipe.targetDoseGrams, recipe.targetWaterGrams, recipe.expectedYieldGrams) }}</span>
             <span class="data-td end">{{ formatAdded(recipe.createdAt) }}</span>
           </button>

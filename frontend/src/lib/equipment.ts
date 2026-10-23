@@ -13,8 +13,9 @@ export const METHOD_KINDS: Record<MethodKind, { label: string; hint: string }> =
   other: { label: 'Other', hint: 'Dose and water, for anything else (a siphon, say)' },
 };
 export const METHOD_ORDER = Object.keys(METHOD_KINDS) as MethodKind[];
-// How a recipe brews, by its brewer's method (docs/api/recipes.md §5):
-// descriptive only (lists, the AI).
+// The built-in recipe styles' names, and which ones each method has: what a
+// custom style can "brew like" (docs/api/recipe-styles.md §5e). The
+// workspace's own list (renamed, hidden, custom) comes from the API.
 export const RECIPE_STYLES: Record<RecipeStyle, string> = {
   pour_over: 'Pour over',
   immersion: 'Immersion',
@@ -32,8 +33,6 @@ export const STYLES_BY_KIND: Record<MethodKind, RecipeStyle[]> = {
   stovetop: ['moka', 'ibrik', 'other'],
   other: ['other'],
 };
-// Every style in display order, for sorting.
-export const STYLE_ORDER = Object.keys(RECIPE_STYLES) as RecipeStyle[];
 
 export const GRINDER_ADJUSTMENTS: Record<GrinderAdjustment, string> = { stepped: 'Stepped (clicks)', stepless: 'Stepless' };
 export const BURR_TYPES: Record<BurrType, string> = { conical: 'Conical', flat: 'Flat' };

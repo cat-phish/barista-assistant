@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { beanFreezes, beans, brewLogMarks, brewLogs, brewers, ingredients, drinkIngredients, drinks, grinders, llmAnalyses, recipeGrindSettings, recipes, recipeSteps, users, waterProfiles, workspaces, prepTools, brewLogTools } from "@barista/shared/schema";
+import { beanFreezes, beans, brewLogMarks, brewLogs, brewers, ingredients, drinkIngredients, drinks, grinders, llmAnalyses, recipeGrindSettings, recipes, recipeSteps, users, waterProfiles, workspaces, prepTools, brewLogTools, recipeStyles } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { extractionYield, type BrewContext } from "../src/context.js";
@@ -28,11 +28,13 @@ beforeEach(async () => {
   beanId = randomUUID();
   const brewerId = randomUUID();
   const recipeId = randomUUID();
+  const pourOver = randomUUID();
   await db.insert(users).values({ id: userId, email: "b@example.com", passwordHash: "x" });
   await db.insert(workspaces).values({ id: workspaceId, name: "W", slug: "w" });
   await db.insert(brewers).values({ id: brewerId, workspaceId, name: "V60" });
+  await db.insert(recipeStyles).values({ id: pourOver, workspaceId, kind: "filter", name: "Pour over", position: 1, builtin: "pour_over", brewsLike: "pour_over" });
   await db.insert(beans).values({ id: beanId, workspaceId, roasterName: "Onyx", beanName: "Guji", roastLevel: "light", detailedRoastLevel: "city", roastType: "filter", blendType: "single_origin", flavorProfile: "Peach, black tea", originArea: "africa", country: "Ethiopia", region: "Guji", altitudeMasl: 2100, roastDate: new Date("2026-10-01T00:00:00Z") });
-  await db.insert(recipes).values({ id: recipeId, workspaceId, name: "House V60", brewerId, targetDoseGrams: 15, targetWaterGrams: 250, expectedYieldGrams: 220, expectedFinishMinSec: 165, expectedFinishMaxSec: 195, targetTempC: 94, style: "pour_over" });
+  await db.insert(recipes).values({ id: recipeId, workspaceId, name: "House V60", brewerId, targetDoseGrams: 15, targetWaterGrams: 250, expectedYieldGrams: 220, expectedFinishMinSec: 165, expectedFinishMaxSec: 195, targetTempC: 94, styleId: pourOver });
   await db.insert(recipeSteps).values([
     { id: randomUUID(), recipeId, stepOrder: 1, stepType: "bloom", durationSec: 45, advance: "tap", targetWaterGrams: 50, targetTempC: 85 },
     { id: randomUUID(), recipeId, stepOrder: 2, stepType: "swirl", label: "Gentle swirl", durationSec: 0 },
@@ -56,11 +58,11 @@ describe("processBrewAnalysis", () => {
 
     expect(result.status).toBe("saved");
     const context = llm.mock.calls[0]![0] as BrewContext;
-    expect(context.brew).toMatchObject({ tastingNotes: "day 8", roastAgeDays: 7, daysFrozenBeforeBrew: 0, brewRatio: 16.67, recipeName: "House V60", recipeStyle: "pour_over", methodKind: "filter", actualWaterGrams: 250, actualYieldGrams: 221.5, tdsPercent: 1.38, extractionYieldPercent: 20.4 });
+    expect(context.brew).toMatchObject({ tastingNotes: "day 8", roastAgeDays: 7, daysFrozenBeforeBrew: 0, brewRatio: 16.67, recipeName: "House V60", recipeStyle: { name: "Pour over", brewsLike: "pour_over" }, methodKind: "filter", actualWaterGrams: 250, actualYieldGrams: 221.5, tdsPercent: 1.38, extractionYieldPercent: 20.4 });
     // No yield measured and no recipe: the TDS goes through, extraction can't be worked out.
     expect(context.previousBrews[0]).toMatchObject({ recipeName: null, methodKind: null, tdsPercent: 1.3, extractionYieldPercent: null });
     expect(context.recipe).toMatchObject({
-      name: "House V60", brewer: "V60", style: "pour_over", methodKind: "filter", firstDropMinSec: null, targetWaterGrams: 250, expectedYieldGrams: 220, expectedFinishMinSec: 165, expectedFinishMaxSec: 195, grindStartingPoints: [],
+      name: "House V60", brewer: "V60", style: { name: "Pour over", brewsLike: "pour_over" }, methodKind: "filter", firstDropMinSec: null, targetWaterGrams: 250, expectedYieldGrams: 220, expectedFinishMinSec: 165, expectedFinishMaxSec: 195, grindStartingPoints: [],
       steps: [
         { stepType: "bloom", label: null, durationSec: 45, advance: "tap", targetWaterGrams: 50, targetTempC: 85, pressureBar: null },
         { stepType: "swirl", label: "Gentle swirl", durationSec: 0, advance: "auto", targetWaterGrams: null },
@@ -208,8 +210,10 @@ describe("processBrewAnalysis", () => {
     llm.mockResolvedValue(ANALYSIS);
     const moka = randomUUID();
     const mokaRecipe = randomUUID();
+    const mokaStyle = randomUUID();
     await db.insert(brewers).values({ id: moka, workspaceId, name: "Bialetti", kind: "stovetop" });
-    await db.insert(recipes).values({ id: mokaRecipe, workspaceId, name: "3-cup moka", brewerId: moka, targetDoseGrams: 15, targetWaterGrams: 150, style: "moka" });
+    await db.insert(recipeStyles).values({ id: mokaStyle, workspaceId, kind: "stovetop", name: "Moka", position: 1, builtin: "moka", brewsLike: "moka" });
+    await db.insert(recipes).values({ id: mokaRecipe, workspaceId, name: "3-cup moka", brewerId: moka, targetDoseGrams: 15, targetWaterGrams: 150, styleId: mokaStyle });
     const id = randomUUID();
     await db.insert(brewLogs).values({
       id, workspaceId, userId, beanId, recipeId: mokaRecipe, brewerId: moka, timestamp: new Date("2026-10-08T09:00:00Z"),
@@ -217,7 +221,7 @@ describe("processBrewAnalysis", () => {
     });
     await processBrewAnalysis({ brewLogId: id });
     const context = llm.mock.calls[0]![0] as BrewContext;
-    expect(context.brew).toMatchObject({ methodKind: "stovetop", recipeStyle: "moka" });
+    expect(context.brew).toMatchObject({ methodKind: "stovetop", recipeStyle: { name: "Moka", brewsLike: "moka" } });
   });
 
   it("dates each brew by the logging device's UTC offset", async () => {
@@ -312,13 +316,17 @@ describe("processBrewAnalysis", () => {
 
 describe("extractionYield (docs/api/brew-logs.md §6)", () => {
   const log = { tdsPercent: 1.38, actualDoseGrams: 15, actualWaterGrams: 250, actualYieldGrams: 220 } as Parameters<typeof extractionYield>[0];
+  const style = (brewsLike: "pour_over" | "immersion" | "cold_brew", name = "Style") => ({ name, brewsLike });
   it("uses the yield for percolation and the water for immersion styles", () => {
-    expect(extractionYield(log, "pour_over")).toBe(20.2);
+    expect(extractionYield(log, style("pour_over"))).toBe(20.2);
     expect(extractionYield(log, null)).toBe(20.2);
-    expect(extractionYield(log, "immersion")).toBe(23);
-    expect(extractionYield(log, "cold_brew")).toBe(23);
+    expect(extractionYield(log, style("immersion"))).toBe(23);
+    expect(extractionYield(log, style("cold_brew"))).toBe(23);
+  });
+  it("goes by what a custom style brews like, not its name", () => {
+    expect(extractionYield(log, style("immersion", "Inverted"))).toBe(23);
   });
   it("is null without a TDS reading", () => {
-    expect(extractionYield({ ...log, tdsPercent: null }, "pour_over")).toBeNull();
+    expect(extractionYield({ ...log, tdsPercent: null }, style("pour_over"))).toBeNull();
   });
 });

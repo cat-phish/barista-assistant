@@ -19,5 +19,6 @@ describe('usageWarnings', () => {
     expect(usageWarnings('drink', { variantCount: 2 })).toEqual(['Its 2 variants are kept and move up a level.']);
     expect(usageWarnings('tool', { brewLogCount: 3 })).toEqual(['3 brews will no longer list this tool.']);
     expect(usageWarnings('process', { beanCount: 2 })).toEqual(['2 beans will lose their process.']);
+    expect(usageWarnings('style', { recipeCount: 1 })).toEqual(['1 recipe will lose their style.']);
   });
 });

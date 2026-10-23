@@ -11,7 +11,7 @@ import { ApiError, errorMessage } from '../api/client';
 import { grindersApi } from '../api/grinders';
 import { brewersApi } from '../api/brewers';
 import { recipesApi, type RecipeInput } from '../api/recipes';
-import type { Brewer, FlowUnit, Grinder, MethodKind, Recipe, RecipeStyle } from '../api/types';
+import type { Brewer, FlowUnit, Grinder, MethodKind, Recipe, RecipeStyleItem } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import DeleteSection from '../components/DeleteSection.vue';
 import { formatGrams, formatRatio, formatTime, parseDecimal, parseTime } from '../lib/format';
@@ -40,7 +40,8 @@ import { useWorkspaceStore } from '../stores/workspace';
 import { estimateYield, ROAST_LEVELS } from '../lib/scale';
 import { parseTemp, tempText, TEMPERATURE_LABELS } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
-import { METHOD_KINDS, pickCopyBrewer, RECIPE_STYLES, STYLES_BY_KIND } from '../lib/equipment';
+import { METHOD_KINDS, pickCopyBrewer } from '../lib/equipment';
+import { recipeStylesApi } from '../api/recipeStyles';
 
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 const NEW_METHOD = '__new__';
@@ -71,7 +72,8 @@ const finishTo = ref('');
 const firstDropFrom = ref(''); // espresso only
 const firstDropTo = ref('');
 const flowUnit = ref<FlowUnit>('g_s'); // espresso flow steps
-const style = ref<RecipeStyle | ''>(''); // how the cup is brewed; '' = not set
+const style = ref(''); // a styleId: how the cup is brewed; '' = not set
+const styles = ref<RecipeStyleItem[]>([]); // docs/api/recipe-styles.md §5e
 const temp = ref('');
 const defaultGrinderId = ref(''); // '' = none: brewing uses the last grinder
 const grindRows = ref<Array<{ grinderId: string; setting: string }>>([]);
@@ -92,10 +94,11 @@ const submitted = ref(false);
 // The chosen brewer's kind decides the fields (docs/api/recipes.md §5).
 const kind = computed<MethodKind | null>(() => methods.value.find((m) => m.id === brewerId.value)?.kind ?? null);
 const espresso = computed(() => kind.value === 'espresso');
-// Styles fit the brewer's method; a style that no longer fits is cleared.
-const styleChoices = computed(() => (kind.value ? STYLES_BY_KIND[kind.value] : []));
+// The workspace's styles for the brewer's method: the visible ones, plus the
+// recipe's own if it's hidden. A style that no longer fits is cleared.
+const styleChoices = computed(() => styles.value.filter((s) => s.kind === kind.value && (!s.hidden || s.id === style.value)));
 watch(kind, () => {
-  if (style.value && !styleChoices.value.includes(style.value)) style.value = '';
+  if (style.value && styles.value.length && !styleChoices.value.some((s) => s.id === style.value)) style.value = '';
 });
 
 const grams = { scale: 2, min: 0, max: 10000, exclusiveMin: true, exclusiveMax: true } as const;
@@ -210,7 +213,7 @@ function fill(recipe: Recipe): void {
   defaultGrinderId.value = recipe.defaultGrinderId ?? '';
   grindRows.value = recipe.grindSettings.map((g) => ({ grinderId: g.grinderId, setting: g.setting }));
   flowUnit.value = recipe.flowUnit;
-  style.value = recipe.style ?? '';
+  style.value = recipe.style?.id ?? '';
   steps.value = recipe.steps.map((s) => stepDraft(newStepKey(), s, temperatureUnit.value));
 }
 
@@ -218,11 +221,13 @@ onMounted(async () => {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [methodList, grinderList, recipeList] = await Promise.all([
+    const [methodList, grinderList, recipeList, styleList] = await Promise.all([
       brewersApi.list(ws),
       grindersApi.list(ws),
       editing.value || route.query.from ? recipesApi.list(ws) : Promise.resolve(null),
+      recipeStylesApi.list(ws),
     ]);
+    styles.value = styleList.styles;
     methods.value = methodList.brewers;
     grinders.value = grinderList.grinders;
     if (editing.value) {
@@ -402,7 +407,7 @@ async function save(): Promise<void> {
     defaultGrinderId: defaultGrinderId.value || null,
     grindSettings: grindRows.value.map((r) => ({ grinderId: r.grinderId, setting: r.setting.trim() })),
     flowUnit: flowUnit.value,
-    style: style.value || null,
+    styleId: style.value || null,
     steps: stepsParsed.value.steps,
   };
   saving.value = true;
@@ -449,7 +454,7 @@ async function save(): Promise<void> {
           <label for="style">Style</label>
           <select id="style" v-model="style">
             <option value="">Not set</option>
-            <option v-for="st in styleChoices" :key="st" :value="st">{{ RECIPE_STYLES[st] }}</option>
+            <option v-for="st in styleChoices" :key="st.id" :value="st.id">{{ st.name }}</option>
           </select>
           <span class="hint">How this recipe brews ({{ kind === 'espresso' ? 'a standard shot or a soup shot' : 'pour over, immersion, cold brew…' }}), for your lists and the AI.</span>
         </div>

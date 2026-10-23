@@ -40,8 +40,8 @@ Where the app's choices live, and what you can switch on, off or take out.
 
 ### 1. Editable style, process and brewer method lists
 
-- **Status:** in progress. Processes are done (roadmap); recipe styles,
-  then brewer methods, are next, each its own branch.
+- **Status:** in progress. Processes and recipe styles are done
+  (roadmap); brewer methods are next.
 - **Agreed:** built-ins can be renamed and hidden but not deleted (they
   keep their built-in key); deleting a custom entry is allowed and clears it
   from what used it, after the usage warning and "I understand"; custom

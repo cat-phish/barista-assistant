@@ -636,3 +636,33 @@ appearing.
 - **Bean form** offers the visible processes, plus the bean's own if it's
   hidden; the bean list shows and sorts by the workspace's names
   (`beanSortColumns(processName)`).
+
+## Editable recipe styles (built)
+
+Backlog item 1, part 2 of 3 (methods follow), branch `editable-styles`,
+migrations 0047–0049. Recipe styles were a fixed list per method; bars
+want their own ("Inverted", "Bypass", "Turbo shot").
+
+- **Data:** a `recipe_styles` table per workspace, a list per brewer method
+  (kind, name, position, hidden, `builtin` key, `brewsLike`), seeded with
+  the built-ins of each method (new workspaces too). `recipes.style` (a
+  key) became `recipes.styleId`: 0047 adds the table and column, 0048
+  seeds every workspace and maps each recipe's key to the row for its
+  brewer's method, 0049 drops the old column.
+- **Brews like:** a custom style picks which of its method's built-ins it
+  brews like. Extraction yield (journal, brew form, worker) and the AI go by
+  it, so an "Inverted" style that brews like immersion is worked out from
+  the water. Built-ins always brew like themselves.
+- **API** (`docs/api/recipe-styles.md` §5e): list, add (with `brewsLike`),
+  rename/hide/change brews-like, reorder per method, usage, delete (custom
+  only). Recipes take `styleId` (the workspace's, for the brewer's method)
+  and return `style: { id, name, brewsLike }`; brew logs' recipe too. The
+  AI context gets `{ name, brewsLike }` and the prompt explains custom
+  names.
+- **Settings → Lists → Recipe styles:** method tabs (Filter, Espresso,
+  Stovetop, Other) over the same `EditableList`, which gained an optional
+  per-entry choice ("Brews like": a select when adding, and on each custom
+  row).
+- **Recipe form** offers the method's visible styles (plus the recipe's own
+  if hidden); the recipes list sorts styles by name; brewers summarise their
+  recipes' style names; the brew page's recipe picker shows the style name.
