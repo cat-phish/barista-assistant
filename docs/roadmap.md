@@ -759,7 +759,8 @@ Now they're the number on the grinder's dial, like its setting range.
   starting points) opens a number pad (`inputmode="decimal"`) and says when
   it isn't a number; settings show without trailing zeros ("20", "4.25").
 - A setting of 0 counts as a setting (the pre-fill used to skip blanks).
-- Multi-ring grinders ("2.1.0") are a backlog idea (item 9).
+- Multi-ring grinders ("2.1.0") are a backlog idea ("Grind settings for
+  multi-ring grinders").
 
 ## Bean batch numbers (built)
 
@@ -777,4 +778,34 @@ identical everywhere.
   leaves other formats blank.
 - The AI gets it, told that the brews it sees are all of that one batch.
   Not on the public menu.
+
+## Field visibility (built)
+
+Backlog item 1, branch `field-visibility`, no migration (it's a workspace
+setting). The brew, bean and recipe forms had grown long, and not every bar
+uses a refractometer, tracks price or sets step temperatures. Contract:
+`api/workspaces.md` §2, "Field visibility".
+
+- **Settings → Fields:** a "show" checkbox for each optional field, grouped as
+  Brews, Beans and Recipes. Owners change them for the whole workspace
+  (`settings.hiddenFields`, a list of keys like `brew.tds`); others see them
+  read-only.
+- **One registry,** `frontend/src/lib/fields.ts`, lists the optional fields
+  (key, form, label). Required fields aren't in it, nor a brew's rating and
+  tasting notes, which the AI works from. The API checks keys by shape
+  (`brew|bean|recipe.name`), so the list lives only in the frontend.
+- **Forms** wrap each optional field in `show(key)` (`useFieldVisibility`):
+  brew setup, the log and journal forms (`BrewFields`), the bean form and the
+  recipe form. Paired fields go together (Brix + TDS, price + currency,
+  growing area + country). Espresso's First drop button on the timer stays,
+  since first-drop steps need it; only the log box hides.
+- **Nothing recorded disappears:** values are kept and sent back as they
+  were, history views are unchanged, and a hidden field that has a value
+  when a form opens stays shown (`reveal`, judged on opening, so the box
+  doesn't vanish when you clear it). A filter recipe's expected yield, when
+  hidden, is still estimated.
+- **The AI is unchanged:** it gets whatever is recorded; choosing what it
+  sees stays a separate backlog item.
+- **Rule** (spec and `CLAUDE.md`): every new optional brew, bean or recipe
+  field gets a registry entry and a `show()` in its form.
 

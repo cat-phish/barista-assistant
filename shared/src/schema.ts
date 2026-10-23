@@ -56,8 +56,12 @@ export interface WorkspaceSettings {
   // the 5-step level) or "levels" (light … dark only; roast names already
   // recorded are kept but not shown).
   roastScale: RoastScale;
+  // Optional form fields the workspace hides (docs/api/workspaces.md §2,
+  // "Field visibility"): keys like "brew.tds" from the frontend's registry
+  // (frontend/src/lib/fields.ts). Values stay stored, and the AI still gets them.
+  hiddenFields: string[];
 }
-export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: "light", roastScale: "names" };
+export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: "light", roastScale: "names", hiddenFields: [] };
 
 export function withDefaults<T extends object>(defaults: T, stored: Partial<T> | null): T {
   return { ...defaults, ...(stored ?? {}) };

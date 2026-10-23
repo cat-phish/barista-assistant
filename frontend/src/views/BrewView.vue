@@ -50,6 +50,7 @@ import { stepTitle } from '../lib/steps';
 import { useAnalysis } from '../composables/useAnalysis';
 import { emptyDraft, parseBrewDraft } from '../lib/brewDraft';
 import { grinderRetentionText } from '../lib/grinderRetention';
+import { useFieldVisibility } from '../composables/useFieldVisibility';
 import { batchSuffix, beanLabel as pickerLabel } from '../lib/beans';
 import { formatDay, formatDoseLine, formatGrams, formatGrind, formatTime } from '../lib/format';
 import { chooseGrind, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
@@ -282,6 +283,9 @@ function setGroundOut(event: Event): void {
   if (filterRecipe.value || shotRecipe.value) setLeadText('dose', text);
   else draft.dose = text;
 }
+// Optional setup fields the workspace hides (Settings → Fields). Setup is
+// always a new brew, so nothing recorded needs revealing.
+const { show } = useFieldVisibility();
 // Shown while typing, except mid-number ("2.").
 const setupGrindError = computed(() => (draft.grind.trim().endsWith('.') ? '' : (parsed.value.errors.grind ?? '')));
 const setupRetention = computed(() => grinderRetentionText(num(draft.beanIn), num(draft.groundOut)));
@@ -723,7 +727,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             <li v-for="c in drink.ingredients" :key="c.ingredientId">{{ ingredientLine(c, sizeScale) }}</li>
           </ul>
         </div>
-        <div class="field">
+        <div v-if="show('brew.grinder')" class="field">
           <label for="grinder">
             Grinder
             <RouterLink class="manage" :to="{ name: 'grinders' }">Manage</RouterLink>
@@ -830,29 +834,31 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             Based on your brew from {{ formatDay(suggestion.basedOn.timestamp) }}<template v-if="!suggestion.basedOn.isLatestBrew"> (you've brewed since then)</template>.
           </p>
         </template>
-        <div class="form-row">
-          <div class="field">
+        <div v-if="show('brew.temp') || show('brew.grind')" class="form-row">
+          <div v-if="show('brew.temp')" class="field">
             <label for="setup-temp">Water temp ({{ TEMPERATURE_LABELS[temperatureUnit] }})</label>
             <input id="setup-temp" v-model="draft.temp" inputmode="decimal" :placeholder="temperatureUnit === 'f' ? 'e.g. 201' : 'e.g. 94'" />
           </div>
-          <div class="field">
+          <div v-if="show('brew.grind')" class="field">
             <label for="setup-grind">Grind setting</label>
             <input id="setup-grind" v-model="draft.grind" inputmode="decimal" :placeholder="grindPlaceholder" :aria-invalid="!!setupGrindError" @input="grindSource = 'none'" />
             <span v-if="setupGrindError" class="field-error">{{ setupGrindError }}</span>
           </div>
         </div>
-        <p v-if="grindSource === 'last' && lastSetting" class="muted small grind-hint">
-          Last time with {{ grinder?.name }} on {{ recipe?.name }}: {{ formatGrind(lastSetting.grindSetting) }} ({{ formatDay(lastSetting.timestamp) }})
-        </p>
-        <p v-else-if="grindSource === 'suggestion'" class="muted small grind-hint">Grind from the analyzed brew; adjust as suggested.</p>
-        <p v-else-if="grindSource === 'recipe'" class="muted small grind-hint">
-          The recipe's approximate starting point for {{ grinder?.name }}. Adjust to taste; next time your own setting is used.
-        </p>
-        <div v-if="grinder?.variableSpeed" class="field">
+        <template v-if="show('brew.grind')">
+          <p v-if="grindSource === 'last' && lastSetting" class="muted small grind-hint">
+            Last time with {{ grinder?.name }} on {{ recipe?.name }}: {{ formatGrind(lastSetting.grindSetting) }} ({{ formatDay(lastSetting.timestamp) }})
+          </p>
+          <p v-else-if="grindSource === 'suggestion'" class="muted small grind-hint">Grind from the analyzed brew; adjust as suggested.</p>
+          <p v-else-if="grindSource === 'recipe'" class="muted small grind-hint">
+            The recipe's approximate starting point for {{ grinder?.name }}. Adjust to taste; next time your own setting is used.
+          </p>
+        </template>
+        <div v-if="grinder?.variableSpeed && show('brew.rpm')" class="field">
           <label for="setup-rpm">Speed (RPM)</label>
           <input id="setup-rpm" v-model="draft.rpm" inputmode="numeric" :placeholder="grinder.rpmMin != null && grinder.rpmMax != null ? `${grinder.rpmMin}–${grinder.rpmMax}` : 'e.g. 900'" />
         </div>
-        <div class="form-row">
+        <div v-if="show('brew.grinderWeights')" class="form-row">
           <div class="field">
             <label for="setup-bean-in">Beans in (g)</label>
             <input id="setup-bean-in" v-model="draft.beanIn" inputmode="decimal" placeholder="Before grinding" />

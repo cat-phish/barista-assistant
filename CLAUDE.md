@@ -48,7 +48,11 @@
      rules in `.gitleaks.toml`; `npm install` enables it). Never bypass it
      with `--no-verify`. If it flags something, remove the secret; for a
      genuine false positive, ask before adding an allowlist entry.
-6. **Confirming major actions:** an action that can't be undone, or that
+6. **Hideable fields:** every new optional field on the brew, bean or recipe
+   forms gets an entry in the field registry (`frontend/src/lib/fields.ts`)
+   and a `show('<key>')` in its form, so a workspace can hide it under
+   Settings → Fields (`docs/api/workspaces.md` §2, "Field visibility").
+7. **Confirming major actions:** an action that can't be undone, or that
    affects other things or other people (deleting something others use,
    deleting a workspace, leaving one, …), confirms in a dialog with a red
    action button and an **"I understand"** checkbox that must be ticked
