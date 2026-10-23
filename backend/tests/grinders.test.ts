@@ -147,3 +147,55 @@ describe("recipe default grinder", () => {
     expect((await owner.agent.get(base)).body.recipes.find((r: { id: string }) => r.id === created.body.recipe.id).defaultGrinderId).toBeNull();
   });
 });
+
+describe("grind speed", () => {
+  it("grinders: variableSpeed with an optional RPM range, a pair, only when variable speed (docs/api/grinders.md §3b)", async () => {
+    const { owner, base } = await setup();
+    const created = await owner.agent.post(base).send({ name: "EK43", variableSpeed: true, rpmMin: 300, rpmMax: 1500 });
+    expect(created.status).toBe(201);
+    expect(created.body.grinder).toMatchObject({ variableSpeed: true, rpmMin: 300, rpmMax: 1500 });
+    expect((await owner.agent.post(base).send({ name: "Plain" })).body.grinder).toMatchObject({ variableSpeed: false, rpmMin: null, rpmMax: null });
+
+    expect((await owner.agent.post(base).send({ name: "A", variableSpeed: true, rpmMin: 300 })).status).toBe(400); // one end
+    expect((await owner.agent.post(base).send({ name: "B", variableSpeed: true, rpmMin: 900, rpmMax: 600 })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ name: "C", variableSpeed: true, rpmMin: 10, rpmMax: 600 })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ name: "D", rpmMin: 300, rpmMax: 600 })).status).toBe(400); // not variable speed
+
+    const url = `${base}/${created.body.grinder.id}`;
+    expect((await owner.agent.patch(url).send({ rpmMin: 400, rpmMax: 1200 })).body.grinder).toMatchObject({ rpmMin: 400, rpmMax: 1200 });
+    expect((await owner.agent.patch(url).send({ rpmMax: null })).body.grinder).toMatchObject({ variableSpeed: true, rpmMin: null, rpmMax: null });
+    await owner.agent.patch(url).send({ rpmMin: 400, rpmMax: 1200 });
+    // Switching it off clears the range; a range alone then needs it back on.
+    expect((await owner.agent.patch(url).send({ variableSpeed: false })).body.grinder).toMatchObject({ variableSpeed: false, rpmMin: null, rpmMax: null });
+    expect((await owner.agent.patch(url).send({ rpmMin: 400, rpmMax: 1200 })).status).toBe(400);
+    expect((await owner.agent.patch(url).send({ variableSpeed: false, rpmMin: 400, rpmMax: 1200 })).status).toBe(400);
+  });
+
+  it("brews: grindRpm only with a variable-speed grinder, within its range when sent (docs/api/brew-logs.md §6)", async () => {
+    const { owner, ws, base } = await setup();
+    const bean = await newBean(owner, ws.id);
+    const ek = (await owner.agent.post(base).send({ name: "EK43", variableSpeed: true, rpmMin: 300, rpmMax: 1500 })).body.grinder.id as string;
+    const free = (await owner.agent.post(base).send({ name: "DF64V", variableSpeed: true })).body.grinder.id as string;
+    const fixed = (await owner.agent.post(base).send({ name: "C40" })).body.grinder.id as string;
+
+    const created = await brew(owner, ws.id, { beanId: bean, grinderId: ek, grindRpm: 900 });
+    expect(created.status).toBe(201);
+    expect(created.body.brewLog.grindRpm).toBe(900);
+    expect((await brew(owner, ws.id, { beanId: bean, grinderId: free, grindRpm: 2000 })).status).toBe(201); // no range: any 50–5000
+    expect((await brew(owner, ws.id, { beanId: bean, grinderId: fixed })).body.brewLog.grindRpm).toBeNull();
+
+    expect((await brew(owner, ws.id, { beanId: bean, grinderId: ek, grindRpm: 1600 })).status).toBe(400); // outside the range
+    expect((await brew(owner, ws.id, { beanId: bean, grinderId: fixed, grindRpm: 900 })).status).toBe(400);
+    expect((await brew(owner, ws.id, { beanId: bean, grindRpm: 900 })).status).toBe(400); // no grinder
+    expect((await brew(owner, ws.id, { beanId: bean, grinderId: free, grindRpm: 900.5 })).status).toBe(400);
+
+    const url = `/api/workspaces/${ws.id}/brew-logs/${created.body.brewLog.id}`;
+    // A narrower range later doesn't block editing the notes, only a new RPM.
+    await owner.agent.patch(`${base}/${ek}`).send({ rpmMin: 1000, rpmMax: 1500 });
+    expect((await owner.agent.patch(url).send({ tastingNotes: "sweet" })).status).toBe(200);
+    expect((await owner.agent.patch(url).send({ grindRpm: 800 })).status).toBe(400);
+    // Moving to a grinder without speed control needs the RPM cleared too.
+    expect((await owner.agent.patch(url).send({ grinderId: fixed })).status).toBe(400);
+    expect((await owner.agent.patch(url).send({ grinderId: fixed, grindRpm: null })).body.brewLog).toMatchObject({ grinderId: fixed, grindRpm: null });
+  });
+});

@@ -178,7 +178,9 @@ const shotRecipe = computed(() => {
 const draft = reactive(emptyDraft());
 // A drink with ingredients is tasted twice: the brew (if tried on its own) and the drink.
 const drinkTasting = computed(() => !!drink.value?.ingredients.length);
-const parsed = computed(() => parseBrewDraft(draft, recipe.value?.brewer.kind ?? null, drinkTasting.value, temperatureUnit.value));
+const parsed = computed(() =>
+  parseBrewDraft(draft, recipe.value?.brewer.kind ?? null, drinkTasting.value, temperatureUnit.value, grinders.value.find((g) => g.id === draft.grinderId) ?? null),
+);
 
 onMounted(async () => {
   const ws = workspaces.current?.id;
@@ -400,14 +402,14 @@ async function addGrinder(): Promise<void> {
 
 // Grind pre-fill: last setting for this grinder + recipe, else the suggestion's
 // (same grinder only), else empty. Re-run whenever recipe or grinder changes.
-const lastSetting = ref<{ grindSetting: string; timestamp: string } | null>(null);
+const lastSetting = ref<{ grindSetting: string; grindRpm: number | null; timestamp: string } | null>(null);
 const grindSource = ref<GrindSource>('none');
 let grindRequest = 0;
 async function refreshGrind(): Promise<void> {
   const ws = workspaces.current?.id;
   const request = ++grindRequest; // ignore answers to superseded choices
   const grinderId = draft.grinderId === NEW_GRINDER ? '' : draft.grinderId;
-  let last: { grindSetting: string; timestamp: string } | null = null;
+  let last: { grindSetting: string; grindRpm: number | null; timestamp: string } | null = null;
   if (ws && grinderId && recipeId.value) {
     try {
       last = (await grindersApi.lastSetting(ws, grinderId, recipeId.value)).lastSetting;
@@ -420,6 +422,8 @@ async function refreshGrind(): Promise<void> {
   const choice = chooseGrind({ lastSetting: last?.grindSetting ?? null, suggestion: suggestion.value, grinderId, recipe: recipe.value });
   draft.grind = choice.value;
   grindSource.value = choice.source;
+  // The speed goes with the last setting it was used at (variable-speed grinders).
+  draft.rpm = choice.source === 'last' && last?.grindRpm != null ? String(last.grindRpm) : '';
 }
 watch([recipeId, () => draft.grinderId], () => {
   if (draft.grinderId !== NEW_GRINDER) void refreshGrind();

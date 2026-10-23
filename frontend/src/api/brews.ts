@@ -18,6 +18,7 @@ export interface BrewLogInput {
   tdsPercent: number | null; // %
   actualTempC: number | null;
   actualGrindSetting: string | null;
+  grindRpm?: number | null; // only with a variable-speed grinder
   actualTimeSec: number;
   rating: number | null; // the coffee tasted on its own
   tastingNotes: string | null;

@@ -180,6 +180,9 @@ export interface GrinderDetails {
   burrType: BurrType | null;
   burrSizeMm: number | null;
   power: GrinderPower | null;
+  variableSpeed: boolean; // brews record grindRpm
+  rpmMin: number | null; // speed range: both or neither, only when variableSpeed
+  rpmMax: number | null;
 }
 export interface Grinder extends GrinderDetails {
   id: string;
@@ -386,6 +389,7 @@ export interface BrewLog {
   tdsPercent: number | null; // refractometer reading; extraction yield is worked out (lib/extraction.ts)
   actualTempC: number | null;
   actualGrindSetting: string | null;
+  grindRpm: number | null; // grinder speed, variable-speed grinders only
   actualTimeSec: number;
   rating: number | null; // the coffee tasted on its own
   tastingNotes: string | null;

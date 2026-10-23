@@ -42,8 +42,10 @@ queue:
      `utcOffsetMinutes` (§6), else in the `BREW_TIMEZONE` zone, else UTC.
    - Each brew includes its `grinder` (or `null`): name plus whatever details
      are recorded (adjustment, setting range, step size, burr type/size,
-     power), so the LLM knows which grinder a grind setting refers to, doesn't
-     compare settings across different grinders, and can talk in steps.
+     power, variable speed and its RPM range), so the LLM knows which grinder
+     a grind setting refers to, doesn't compare settings across different
+     grinders, and can talk in steps. Each brew also has `grindRpm` (or
+     `null`): the speed on a variable-speed grinder, part of the grind.
    - Each brew includes its `water` (or `null`): the water profile's name and
      its figures (`tdsPpm`, `generalHardnessPpm`, `alkalinityPpm`, each
      mineral in mg/L, `ph`; `null` where not recorded; §3c), so the LLM can

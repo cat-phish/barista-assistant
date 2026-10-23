@@ -58,6 +58,7 @@ export function grinderSummary(g: Grinder): string {
   } else if (g.stepSize !== null) parts.push(`${formatGrams(g.stepSize)} per step`);
   if (g.burrType || g.burrSizeMm !== null) parts.push([g.burrType ? BURR_TYPES[g.burrType] : 'Burrs', g.burrSizeMm !== null ? `${g.burrSizeMm} mm` : ''].filter(Boolean).join(' '));
   if (g.power) parts.push(GRINDER_POWER[g.power]);
+  if (g.variableSpeed) parts.push(g.rpmMin !== null && g.rpmMax !== null ? `Variable speed ${g.rpmMin}–${g.rpmMax} RPM` : 'Variable speed');
   return parts.join(' · ');
 }
 
@@ -82,8 +83,11 @@ export interface GrinderForm {
   burrType: BurrType | '';
   burrSizeMm: string;
   power: GrinderPower | '';
+  variableSpeed: boolean;
+  rpmMin: string;
+  rpmMax: string;
 }
-export type GrinderFormErrors = Partial<Record<'name' | 'range' | 'stepSize' | 'burrSizeMm', string>>;
+export type GrinderFormErrors = Partial<Record<'name' | 'range' | 'stepSize' | 'burrSizeMm' | 'rpm', string>>;
 
 export function grinderForm(g?: Grinder): GrinderForm {
   const num = (n: number | null | undefined) => (n == null ? '' : formatGrams(n));
@@ -97,6 +101,9 @@ export function grinderForm(g?: Grinder): GrinderForm {
     burrType: g?.burrType ?? '',
     burrSizeMm: g?.burrSizeMm == null ? '' : String(g.burrSizeMm),
     power: g?.power ?? '',
+    variableSpeed: g?.variableSpeed ?? false,
+    rpmMin: g?.rpmMin == null ? '' : String(g.rpmMin),
+    rpmMax: g?.rpmMax == null ? '' : String(g.rpmMax),
   };
 }
 
@@ -115,6 +122,14 @@ export function parseGrinderForm(f: GrinderForm): { errors: GrinderFormErrors; v
   else if (min?.ok && max?.ok && min.value >= max.value) errors.range = '"To" must be more than "from"';
   if (step && !step.ok) errors.stepSize = step.error;
   if (burr && !burr.ok) errors.burrSizeMm = burr.error;
+  // The speed range only counts for a variable-speed grinder.
+  const rpm = { scale: 0, min: 50, max: 5000 };
+  const rpmMin = f.variableSpeed ? optional(f.rpmMin, rpm) : null;
+  const rpmMax = f.variableSpeed ? optional(f.rpmMax, rpm) : null;
+  if (rpmMin && !rpmMin.ok) errors.rpm = `From: ${rpmMin.error}`;
+  else if (rpmMax && !rpmMax.ok) errors.rpm = `To: ${rpmMax.error}`;
+  else if (!rpmMin !== !rpmMax) errors.rpm = 'Enter both ends of the range, or neither';
+  else if (rpmMin?.ok && rpmMax?.ok && rpmMin.value >= rpmMax.value) errors.rpm = '"To" must be more than "from"';
   if (Object.keys(errors).length) return { errors, values: null };
   return {
     errors,
@@ -128,6 +143,9 @@ export function parseGrinderForm(f: GrinderForm): { errors: GrinderFormErrors; v
       burrType: f.burrType || null,
       burrSizeMm: burr?.ok ? burr.value : null,
       power: f.power || null,
+      variableSpeed: f.variableSpeed,
+      rpmMin: rpmMin?.ok ? rpmMin.value : null,
+      rpmMax: rpmMax?.ok ? rpmMax.value : null,
     },
   };
 }

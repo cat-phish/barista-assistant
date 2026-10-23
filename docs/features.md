@@ -28,8 +28,9 @@ would be unlinked or removed and asks for "I understand" first.
 Adding and editing a brewer, grinder or ingredient happen on their own page
 (the **Add** button sits at the top of each list, like Recipes and Drinks).
 - **Grinders:** per workspace, with optional details: stepped/stepless,
-  setting range and step size, burr type and size, hand/electric. The range
-  and step let the AI talk in clicks. Archive a grinder you've stopped using
+  setting range and step size, burr type and size, hand/electric, and
+  variable speed with an RPM range. The range and step let the AI talk in
+  clicks; brews on a variable-speed grinder record the RPM too. Archive a grinder you've stopped using
   to keep its name in history; deleting it unlinks its brews.
 - **Brewers:** whatever makes the coffee (V60, French press, AeroPress, OXO
   Rapid Brewer, an espresso machine). Two separate ideas describe one:

@@ -107,6 +107,8 @@ const brewLogFields = {
   tdsPercent: decimalSchema({ min: 0, max: 30, scale: 2, exclusiveMin: true }).nullable().optional(),
   actualTempC: decimalSchema({ min: 0, max: 100, scale: 1 }).nullable().optional(),
   actualGrindSetting: optionalText(100),
+  // Grinder speed: only with a variable-speed grinder (rpmError).
+  grindRpm: z.number().int().min(50).max(5000).nullable().optional(),
   actualTimeSec: z.number().int().min(0).max(24 * 60 * 60),
   // The coffee tasted on its own (for a milk drink, only if tasted straight).
   rating: z.number().int().min(1).max(5).nullable().optional(),
@@ -187,6 +189,23 @@ function drinkOnlyError(log: {
   if (hasSize && !log.drinkId) return "servingSize: only for a brew made for a drink";
   if (!log.drinkId && ((log.drinkRating ?? null) !== null || (log.drinkTastingNotes ?? null) !== null)) {
     return "drinkRating: the drink's tasting is only for a brew made for a drink";
+  }
+  return null;
+}
+
+// RPM is for a variable-speed grinder, within its range when it has one
+// (docs/api/brew-logs.md §6). The range is only checked when the RPM is sent,
+// so editing an old brew still works after the range changes.
+async function rpmError(tx: Tx, grinderId: string | null, grindRpm: number | null, checkRange: boolean): Promise<string | null> {
+  if (grindRpm === null) return null;
+  if (!grinderId) return "grindRpm: needs a variable-speed grinder";
+  const [grinder] = await tx
+    .select({ variableSpeed: grinders.variableSpeed, rpmMin: grinders.rpmMin, rpmMax: grinders.rpmMax })
+    .from(grinders)
+    .where(eq(grinders.id, grinderId));
+  if (!grinder?.variableSpeed) return "grindRpm: needs a variable-speed grinder";
+  if (checkRange && grinder.rpmMin !== null && grinder.rpmMax !== null && (grindRpm < grinder.rpmMin || grindRpm > grinder.rpmMax)) {
+    return `grindRpm: must be within the grinder's range (${grinder.rpmMin}–${grinder.rpmMax})`;
   }
   return null;
 }
@@ -310,6 +329,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       tdsPercent: brewLogs.tdsPercent,
       actualTempC: brewLogs.actualTempC,
       actualGrindSetting: brewLogs.actualGrindSetting,
+      grindRpm: brewLogs.grindRpm,
       actualTimeSec: brewLogs.actualTimeSec,
       rating: brewLogs.rating,
       tastingNotes: brewLogs.tastingNotes,
@@ -477,6 +497,8 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Bre
     if (wrongForKind) return wrongForKind;
     const wrongForDrink = (await drinkError(tx, fields.drinkId ?? null, fields.recipeId ?? null)) ?? drinkOnlyError(fields);
     if (wrongForDrink) return wrongForDrink;
+    const wrongRpm = await rpmError(tx, fields.grinderId ?? null, fields.grindRpm ?? null, true);
+    if (wrongRpm) return wrongRpm;
     await tx.insert(brewLogs).values({ id, workspaceId, userId, ...fields, brewerId: brewer?.brewerId ?? null });
     await insertMarks(tx, id, marks);
     await insertTools(tx, id, toolIds);
@@ -511,6 +533,8 @@ brewLogsRouter.patch(
         .select({
           userId: brewLogs.userId,
           recipeId: brewLogs.recipeId,
+          grinderId: brewLogs.grinderId,
+          grindRpm: brewLogs.grindRpm,
           actualWaterGrams: brewLogs.actualWaterGrams,
           actualYieldGrams: brewLogs.actualYieldGrams,
           drinkId: brewLogs.drinkId,
@@ -557,6 +581,13 @@ brewLogsRouter.patch(
       if (["drinkId", "servingSize", "servingUnit", "drinkRating", "drinkTastingNotes"].some((key) => key in body)) {
         const wrongSize = drinkOnlyError({ ...log, ...fields });
         if (wrongSize) return { status: "bad_ref", error: wrongSize } as const;
+      }
+      // Checked against the log after the change, so a new grinder that isn't
+      // variable speed means clearing the RPM too.
+      if ("grindRpm" in body || "grinderId" in body) {
+        const after = { ...log, ...fields };
+        const wrongRpm = await rpmError(tx, after.grinderId ?? null, after.grindRpm ?? null, "grindRpm" in body);
+        if (wrongRpm) return { status: "bad_ref", error: wrongRpm } as const;
       }
       if (Object.keys(fields).length > 0) await tx.update(brewLogs).set({ ...fields, ...brewerUpdate }).where(eq(brewLogs.id, brewLogId));
       // A sent list replaces the old one entirely.

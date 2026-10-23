@@ -30,6 +30,7 @@ created it and can't be changed.
   "grinderId": "uuid",
   "waterProfileId": "uuid",
   "actualGrindSetting": "18 clicks",
+  "grindRpm": null,
   "actualTimeSec": 150,
   "rating": 3,
   "tastingNotes": "Sour, thin body",
@@ -161,6 +162,13 @@ account. Such logs can only be edited or deleted by owners.
     there's no extraction yield. Clients may also take a °Brix reading and
     convert it, `TDS = (0.0036 × Bx + 0.7897) × Bx − 0.0071` (as
     Beanconqueror does), rounded to 2 decimals; only `tdsPercent` is stored.
+  - `grindRpm` (optional, nullable): the grinder's speed, an integer 50–5000,
+    only with a `grinderId` whose grinder has `variableSpeed` (§3b), and
+    within its `rpmMin`–`rpmMax` when it has a range. The range is checked
+    only when `grindRpm` is sent, so an old brew stays editable after the
+    range changes. On `PATCH` the grinder is checked against the log after
+    the change, so moving a brew to a grinder without speed control means
+    sending `grindRpm: null` too.
   - `actualTimeSec`: integer 0–86400 (24 hours). `rating`: integer **1–5**,
     nullable. `actualGrindSetting` ≤ 100 chars, `tastingNotes` ≤ 5000 chars;
     both nullable, and blank becomes `null`. `rating` and `tastingNotes` are

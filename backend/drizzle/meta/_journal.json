@@ -365,6 +365,13 @@
       "when": 1792742982200,
       "tag": "0051_seed_brewer_methods",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "5",
+      "when": 1792777317120,
+      "tag": "0052_grinder_rpm",
+      "breakpoints": true
     }
   ]
 }

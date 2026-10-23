@@ -105,7 +105,9 @@ const draft = reactive(emptyDraft());
 const espresso = computed(() => log.value?.recipe?.methodKind === 'espresso');
 // A drink with ingredients is tasted twice: the brew (if tried on its own) and the drink.
 const drinkTasting = computed(() => !!log.value?.drink?.hasIngredients);
-const parsed = computed(() => parseBrewDraft(draft, log.value?.recipe?.methodKind ?? null, drinkTasting.value, temperatureUnit.value));
+const parsed = computed(() =>
+  parseBrewDraft(draft, log.value?.recipe?.methodKind ?? null, drinkTasting.value, temperatureUnit.value, grinders.value.find((g) => g.id === draft.grinderId) ?? null),
+);
 const submitted = ref(false);
 const saving = ref(false);
 const saveError = ref('');
@@ -190,7 +192,7 @@ function markLabel(m: Mark): string {
           <div v-if="log.tdsPercent !== null"><dt>TDS</dt><dd>{{ tdsText(log) }}</dd></div>
           <div><dt>Time</dt><dd>{{ formatTime(log.actualTimeSec) }}</dd></div>
           <div><dt>Water</dt><dd>{{ log.actualTempC !== null ? formatTemp(log.actualTempC, temperatureUnit) : '–' }}</dd></div>
-          <div><dt>Grind</dt><dd>{{ log.actualGrindSetting ?? '–' }}<template v-if="log.grinder"> · {{ log.grinder.name }}</template></dd></div>
+          <div><dt>Grind</dt><dd>{{ log.actualGrindSetting ?? '–' }}<template v-if="log.grindRpm !== null"> at {{ log.grindRpm }} RPM</template><template v-if="log.grinder"> · {{ log.grinder.name }}</template></dd></div>
           <div><dt>Brewer</dt><dd>{{ log.brewer?.name ?? '–' }}</dd></div>
           <div v-if="log.waterProfile"><dt>Water profile</dt><dd>{{ log.waterProfile.name }}</dd></div>
           <div v-if="log.tools.length"><dt>Prep</dt><dd>{{ log.tools.map((t) => t.name).join(' · ') }}</dd></div>

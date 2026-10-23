@@ -78,6 +78,12 @@ watch(
 
 // Active grinders, plus the brew's own even if it's since been archived.
 const grinderOptions = computed(() => props.grinders.filter((g) => !g.archivedAt || g.id === draft.value.grinderId));
+// The speed is asked for only on a variable-speed grinder (docs/api/grinders.md §3b).
+const speedGrinder = computed(() => props.grinders.find((g) => g.id === draft.value.grinderId && g.variableSpeed) ?? null);
+const rpmPlaceholder = computed(() => {
+  const g = speedGrinder.value;
+  return g?.rpmMin != null && g.rpmMax != null ? `${g.rpmMin}–${g.rpmMax}` : 'e.g. 900';
+});
 // The prep checklist: the method's tools and the all-method ones (lib/prepTools.ts).
 const toolOptions = computed(() => toolsFor(props.prepTools ?? [], props.methodKind ?? null, draft.value.toolIds));
 // Likewise for water; with none set up, the only choice says so.
@@ -163,6 +169,11 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
       <div class="field">
         <label for="brew-grind">Grind setting</label>
         <input id="brew-grind" v-model="draft.grind" maxlength="100" />
+      </div>
+      <div v-if="speedGrinder" class="field">
+        <label for="brew-rpm">Speed (RPM)</label>
+        <input id="brew-rpm" v-model="draft.rpm" inputmode="numeric" :placeholder="rpmPlaceholder" :aria-invalid="showErrors && !!errors.rpm" />
+        <span v-if="showErrors && errors.rpm" class="field-error">{{ errors.rpm }}</span>
       </div>
     </div>
     <div class="field">

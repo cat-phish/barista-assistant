@@ -14,7 +14,7 @@ import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 export type GrinderSummary = Omit<Grinder, "workspaceId">;
 
 export interface LastSettingResponse {
-  lastSetting: { grindSetting: string; timestamp: Date; brewLogId: string } | null;
+  lastSetting: { grindSetting: string; grindRpm: number | null; timestamp: Date; brewLogId: string } | null;
 }
 
 interface WorkspaceParams {
@@ -24,6 +24,7 @@ interface GrinderParams extends WorkspaceParams {
   grinderId: string;
 }
 
+const rpmSchema = z.number().int().min(50).max(5000).nullable().optional();
 const settingSchema = decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMax: true }).nullable().optional();
 const grinderFields = {
   name: z.string().trim().min(1).max(100),
@@ -35,24 +36,43 @@ const grinderFields = {
   burrType: z.enum(BURR_TYPES).nullable().optional(),
   burrSizeMm: z.number().int().min(10).max(200).nullable().optional(),
   power: z.enum(GRINDER_POWER).nullable().optional(),
+  variableSpeed: z.boolean().optional(),
+  rpmMin: rpmSchema,
+  rpmMax: rpmSchema,
 };
 
-// The dial range is a pair: both ends (min < max), or null on either clears both.
-function rangeIssue(body: { settingMin?: number | null; settingMax?: number | null }, ctx: z.RefinementCtx): void {
-  const { settingMin: min, settingMax: max } = body;
+type RangeBody = { settingMin?: number | null; settingMax?: number | null; rpmMin?: number | null; rpmMax?: number | null; variableSpeed?: boolean };
+
+// A range is a pair: both ends (min < max), or null on either clears both.
+function pairIssue(min: number | null | undefined, max: number | null | undefined, keys: [string, string], ctx: z.RefinementCtx): void {
   if (min === undefined && max === undefined) return;
   if (min === null || max === null) return;
   if (min === undefined || max === undefined) {
-    ctx.addIssue({ code: "custom", path: [min === undefined ? "settingMin" : "settingMax"], message: "send both ends of the range" });
+    ctx.addIssue({ code: "custom", path: [min === undefined ? keys[0] : keys[1]], message: "send both ends of the range" });
   } else if (min >= max) {
-    ctx.addIssue({ code: "custom", path: ["settingMax"], message: "must be greater than settingMin" });
+    ctx.addIssue({ code: "custom", path: [keys[1]], message: `must be greater than ${keys[0]}` });
   }
 }
-function clearRangeTogether<T extends { settingMin?: number | null; settingMax?: number | null }>(body: T): T {
-  return body.settingMin === null || body.settingMax === null ? { ...body, settingMin: null, settingMax: null } : body;
+function rangeIssue(body: RangeBody, ctx: z.RefinementCtx): void {
+  pairIssue(body.settingMin, body.settingMax, ["settingMin", "settingMax"], ctx);
+  pairIssue(body.rpmMin, body.rpmMax, ["rpmMin", "rpmMax"], ctx);
+  if (body.variableSpeed === false && (body.rpmMin ?? null) !== null) {
+    ctx.addIssue({ code: "custom", path: ["rpmMin"], message: "an RPM range is only for a variable-speed grinder" });
+  }
+}
+// Clearing either end clears both; a grinder that isn't variable speed has no RPM range.
+function clearRangeTogether<T extends RangeBody>(body: T): T {
+  const out = { ...body };
+  if (out.settingMin === null || out.settingMax === null) Object.assign(out, { settingMin: null, settingMax: null });
+  if (out.rpmMin === null || out.rpmMax === null || out.variableSpeed === false) Object.assign(out, { rpmMin: null, rpmMax: null });
+  return out;
 }
 
-const createSchema = z.object(grinderFields).superRefine(rangeIssue).transform(clearRangeTogether);
+const createSchema = z
+  .object(grinderFields)
+  .superRefine(rangeIssue)
+  .refine((b) => (b.rpmMin ?? null) === null || b.variableSpeed === true, { path: ["rpmMin"], message: "an RPM range is only for a variable-speed grinder" })
+  .transform(clearRangeTogether);
 const updateGrinderSchema = updateSchema({ ...grinderFields, archived: z.boolean() }).superRefine(rangeIssue).transform(clearRangeTogether);
 const lastSettingQuery = z.object({ recipeId: z.uuid() });
 
@@ -67,6 +87,9 @@ const summary = {
   burrType: grinders.burrType,
   burrSizeMm: grinders.burrSizeMm,
   power: grinders.power,
+  variableSpeed: grinders.variableSpeed,
+  rpmMin: grinders.rpmMin,
+  rpmMax: grinders.rpmMax,
   archivedAt: grinders.archivedAt,
   createdAt: grinders.createdAt,
 };
@@ -117,6 +140,15 @@ grindersRouter.patch("/:grinderId", async (req: Request<GrinderParams>, res: Res
   const body = parseBody(updateGrinderSchema, req, res);
   if (!body) return;
   const { archived, ...fields } = body;
+
+  // An RPM range on its own needs the grinder to already be variable speed.
+  if ((fields.rpmMin ?? null) !== null && fields.variableSpeed === undefined) {
+    const [current] = await db.select({ variableSpeed: grinders.variableSpeed }).from(grinders).where(inWorkspace(req.params));
+    if (current && !current.variableSpeed) {
+      sendError(res, 400, "rpmMin: an RPM range is only for a variable-speed grinder");
+      return;
+    }
+  }
 
   try {
     await db
@@ -169,7 +201,7 @@ grindersRouter.get(
       return;
     }
     const [last] = await db
-      .select({ grindSetting: brewLogs.actualGrindSetting, timestamp: brewLogs.timestamp, brewLogId: brewLogs.id })
+      .select({ grindSetting: brewLogs.actualGrindSetting, grindRpm: brewLogs.grindRpm, timestamp: brewLogs.timestamp, brewLogId: brewLogs.id })
       .from(brewLogs)
       .where(
         and(

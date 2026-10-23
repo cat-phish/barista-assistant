@@ -40,7 +40,10 @@ export const SYSTEM_PROMPT =
   "the cup; only the figures given are known. prepTools lists the prep used " +
   "(WDT, puck screen, filter type…); an empty list means none was recorded, " +
   "not that none was used, so only compare tools between brews that list " +
-  "them. For " +
+  "them. On a variable-speed grinder, grindRpm is part of the grind: a " +
+  "higher speed usually grinds a little finer with more fines, a lower one " +
+  "gives a clearer, more even cup; compare grind settings only at similar " +
+  "speeds, and you may suggest a speed change. For " +
   "espresso, judge flow " +
   "from the first drop time, shot time and ratio against the recipe's " +
   "windows, and consider the machine's capabilities (pre-infusion, flow and " +
