@@ -35,10 +35,12 @@ export interface UserPreferences {
   temperatureUnit: (typeof TEMPERATURE_UNITS)[number];
 }
 export const DEFAULT_PREFERENCES: UserPreferences = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c" };
+export const ROAST_SCALES = ["names", "levels"] as const; // roast names (Cinnamon … French) or light to dark only
 export interface WorkspaceSettings {
   recipeRoastLevel: RoastLevel; // the roast recipes are written for
+  roastScale: (typeof ROAST_SCALES)[number]; // how beans record their roast (docs/api/workspaces.md §2)
 }
-export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: "light" };
+export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: "light", roastScale: "names" };
 export function withDefaults<T extends object>(defaults: T, stored: Partial<T> | null): T;
 
 // 1. Users

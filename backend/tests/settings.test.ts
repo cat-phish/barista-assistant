@@ -1,14 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { addMember, newUser, newWorkspace } from "./helpers.js";
+import request from "supertest";
+import { app } from "../src/app.js";
+import { addMember, menuAdd, menuSection, newBean, newUser, newWorkspace } from "./helpers.js";
 
 // Units and defaults (docs/api/workspaces.md §2 settings, docs/api/auth.md §1 preferences).
 describe("workspace settings", () => {
   it("come with every workspace, defaults filled in", async () => {
     const owner = await newUser();
     const created = await owner.agent.post("/api/workspaces").send({ name: "Bar", slug: "settings-bar" });
-    expect(created.body.workspace.settings).toEqual({ recipeRoastLevel: "light" });
+    expect(created.body.workspace.settings).toEqual({ recipeRoastLevel: "light", roastScale: "names" });
     const list = await owner.agent.get("/api/workspaces");
-    expect(list.body.workspaces[0].settings).toEqual({ recipeRoastLevel: "light" });
+    expect(list.body.workspaces[0].settings).toEqual({ recipeRoastLevel: "light", roastScale: "names" });
   });
 
   it("owners change them; others get 403; bad values 400", async () => {
@@ -25,9 +27,34 @@ describe("workspace settings", () => {
 
     const ok = await owner.agent.patch(path).send({ recipeRoastLevel: "medium" });
     expect(ok.status).toBe(200);
-    expect(ok.body.settings).toEqual({ recipeRoastLevel: "medium" });
+    expect(ok.body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "names" });
+    expect((await owner.agent.patch(path).send({ roastScale: "levels" })).body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "levels" });
+    expect((await owner.agent.patch(path).send({ roastScale: "agtron" })).status).toBe(400);
     const list = await barista.agent.get("/api/workspaces");
     expect(list.body.workspaces[0].settings.recipeRoastLevel).toBe("medium");
+  });
+});
+
+describe("roast scale", () => {
+  it("light to dark: the public menu and preview leave roast names out, the bean keeps it", async () => {
+    const owner = await newUser();
+    const ws = await newWorkspace(owner);
+    const W = `/api/workspaces/${ws.id}`;
+    const bean = await newBean(owner, ws.id, { beanName: "Guji", detailedRoastLevel: "city_plus" });
+    await menuAdd(owner, ws.id, await menuSection(owner, ws.id, "Coffee"), { itemType: "beans" });
+    await owner.agent.patch(W).send({ isPublicMenuEnabled: true });
+    const guestBean = async () => (await request(app).get(`/api/public/menu/${ws.slug}`)).body.sections[0].items[0].beans[0];
+
+    expect(await guestBean()).toMatchObject({ roastLevel: "medium", detailedRoastLevel: "city_plus" });
+    await owner.agent.patch(`${W}/settings`).send({ roastScale: "levels" });
+    expect(await guestBean()).toMatchObject({ roastLevel: "medium", detailedRoastLevel: null });
+    expect((await owner.agent.get(`${W}/menu/preview`)).body.sections[0].items[0].beans[0].detailedRoastLevel).toBeNull();
+    const stored = (await owner.agent.get(`${W}/beans`)).body.beans.find((b: { id: string }) => b.id === bean);
+    expect(stored.detailedRoastLevel).toBe("city_plus"); // kept, only hidden
+
+    // Picking a different level in the form replaces the name (one PATCH).
+    const changed = await owner.agent.patch(`${W}/beans/${bean}`).send({ detailedRoastLevel: null, roastLevel: "dark" });
+    expect(changed.body.bean).toMatchObject({ detailedRoastLevel: null, roastLevel: "dark" });
   });
 });
 

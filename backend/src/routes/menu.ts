@@ -218,7 +218,10 @@ menuRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<MenuResp
 menuRouter.get("/preview", async (req: Request<WorkspaceParams>, res: Response<PublicMenuResponse>) => {
   const { workspaceId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId))) return;
-  const [workspace] = await db.select({ id: workspaces.id, name: workspaces.name, slug: workspaces.slug }).from(workspaces).where(eq(workspaces.id, workspaceId));
+  const [workspace] = await db
+    .select({ id: workspaces.id, name: workspaces.name, slug: workspaces.slug, settings: workspaces.settings })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId));
   if (!workspace) {
     sendError(res, 404, "Workspace not found");
     return;

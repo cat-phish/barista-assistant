@@ -1,9 +1,10 @@
 import { api } from './client';
 import type { Bean, BeanProcess, BlendType, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from './types';
 
-// Request body for create/update (docs/api/beans.md §4). roastLevel is
-// normally left out: the API derives it from detailedRoastLevel. Only a copy
-// of an older bean with a 5-step level and no roast name sends it.
+// Request body for create/update (docs/api/beans.md §4). With roast names,
+// roastLevel is left out: the API derives it from detailedRoastLevel (only a
+// copy of a bean with a 5-step level and no name sends it). Light to dark
+// (settings.roastScale "levels") sends roastLevel with a null name.
 export interface BeanInput {
   roasterName: string;
   beanName: string;
@@ -13,7 +14,7 @@ export interface BeanInput {
   inventoryWeightGrams: number;
   showOnPublicMenu: boolean;
   roastType: RoastType | null;
-  detailedRoastLevel: DetailedRoastLevel | null;
+  detailedRoastLevel?: DetailedRoastLevel | null;
   blendType: BlendType | null;
   decaf: boolean;
   website: string | null;

@@ -6,7 +6,7 @@ import { useWorkspaceStore } from '../stores/workspace';
 // The defaults match the API's (DEFAULT_PREFERENCES / DEFAULT_WORKSPACE_SETTINGS
 // in @barista/shared), for the moment before /me or the workspace has loaded.
 export const DEFAULT_PREFERENCES: UserPreferences = { volumeUnit: 'fl_oz', showBothVolumes: false, altitudeUnit: 'm', temperatureUnit: 'c' };
-export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: 'light' };
+export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: 'light', roastScale: 'names' };
 
 // The signed-in person's display units and the current workspace's settings.
 export function usePreferences() {
@@ -20,5 +20,6 @@ export function usePreferences() {
     temperatureUnit: computed(() => prefs.value.temperatureUnit),
     altitudeUnit: computed(() => prefs.value.altitudeUnit),
     recipeRoastLevel: computed(() => settings.value.recipeRoastLevel),
+    roastScale: computed(() => settings.value.roastScale),
   };
 }
