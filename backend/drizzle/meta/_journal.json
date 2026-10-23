@@ -414,6 +414,13 @@
       "when": 1792794140669,
       "tag": "0058_brew_steeping",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "5",
+      "when": 1792795811941,
+      "tag": "0059_brew_window",
+      "breakpoints": true
     }
   ]
 }

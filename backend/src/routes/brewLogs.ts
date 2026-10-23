@@ -47,8 +47,7 @@ export interface Mark {
 export interface BrewLogDetails extends BrewLog {
   bean: Pick<Bean, "id" | "roasterName" | "beanName" | "batchNumber">;
   // style: the recipe's (docs/api/recipe-styles.md §5e), for how extraction yield is worked out.
-  // steepMin/MaxHours: a cold brew's window, for "ready from" while it steeps.
-  recipe: (Pick<Recipe, "id" | "name" | "expectedYieldGrams" | "steepMinHours" | "steepMaxHours"> & { methodKind: MethodKind; style: RecipeStyleSummary | null }) | null;
+  recipe: (Pick<Recipe, "id" | "name" | "expectedYieldGrams"> & { methodKind: MethodKind; style: RecipeStyleSummary | null }) | null;
   grinder: { id: string; name: string } | null; // archived grinders included
   waterProfile: { id: string; name: string } | null; // archived profiles included
   // The brewer it was made with (the recipe's at the time); archived included.
@@ -163,10 +162,32 @@ const brewLogFields = {
     .optional(),
 };
 
+// The window the brew aims for (docs/api/brew-logs.md §6): the recipe's, or
+// changed for this brew. Set when it's created and not edited after, so the
+// steep reminder queued then stays right. Each pair is both or neither.
+const windowFields = {
+  steepMinHours: decimalSchema({ min: 0.5, max: 72, scale: 1 }).nullable().optional(),
+  steepMaxHours: decimalSchema({ min: 0.5, max: 72, scale: 1 }).nullable().optional(),
+  expectedFinishMinSec: z.number().int().min(0).max(24 * 60 * 60).nullable().optional(),
+  expectedFinishMaxSec: z.number().int().min(0).max(24 * 60 * 60).nullable().optional(),
+};
+type WindowBody = { [K in keyof typeof windowFields]?: number | null };
+function windowPairIssue(body: WindowBody, ctx: z.RefinementCtx): void {
+  for (const [min, max] of [
+    ["steepMinHours", "steepMaxHours"],
+    ["expectedFinishMinSec", "expectedFinishMaxSec"],
+  ] as const) {
+    const lo = body[min] ?? null;
+    const hi = body[max] ?? null;
+    if ((lo === null) !== (hi === null)) ctx.addIssue({ code: "custom", path: [lo === null ? min : max], message: `send both ${min} and ${max}, or neither` });
+    else if (lo !== null && hi !== null && lo > hi) ctx.addIssue({ code: "custom", path: [max], message: `must not be less than ${min}` });
+  }
+}
+
 // Strict, like PATCH: the brewer comes from the recipe, so e.g. an old
 // client's machineId is refused rather than silently dropped.
 // remindToRate: create only, not stored (docs/api/notifications.md §1b).
-const createBrewLogSchema = z.object({ ...brewLogFields, remindToRate: z.boolean().optional() }).strict();
+const createBrewLogSchema = z.object({ ...brewLogFields, ...windowFields, remindToRate: z.boolean().optional() }).strict().superRefine(windowPairIssue);
 const updateBrewLogSchema = updateSchema(brewLogFields);
 
 const listQuerySchema = z.object({
@@ -271,6 +292,12 @@ async function recipeBrewer(tx: Tx, recipeId: string | null | undefined): Promis
 // concurrent bean or recipe DELETE either finishes first (we see no row -> 400)
 // or waits for this insert. Without the bean lock, a log could also slip in after
 // a bean DELETE counted logs and get cascade-deleted without confirmation.
+async function recipeSteepWindow(tx: Tx, recipeId: string | null | undefined): Promise<{ steepMinHours?: number; steepMaxHours?: number }> {
+  if (!recipeId) return {};
+  const [r] = await tx.select({ min: recipes.steepMinHours, max: recipes.steepMaxHours }).from(recipes).where(eq(recipes.id, recipeId));
+  return r && r.min !== null && r.max !== null ? { steepMinHours: r.min, steepMaxHours: r.max } : {};
+}
+
 async function referencesInWorkspace(
   tx: Tx,
   workspaceId: string,
@@ -370,12 +397,16 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       steepTemp: brewLogs.steepTemp,
       dilutionRatio: brewLogs.dilutionRatio,
       dilutedWith: brewLogs.dilutedWith,
+      steepMinHours: brewLogs.steepMinHours,
+      steepMaxHours: brewLogs.steepMaxHours,
+      expectedFinishMinSec: brewLogs.expectedFinishMinSec,
+      expectedFinishMaxSec: brewLogs.expectedFinishMaxSec,
       rating: brewLogs.rating,
       tastingNotes: brewLogs.tastingNotes,
       drinkRating: brewLogs.drinkRating,
       drinkTastingNotes: brewLogs.drinkTastingNotes,
       bean: { id: beans.id, roasterName: beans.roasterName, beanName: beans.beanName, batchNumber: beans.batchNumber },
-      recipe: { id: recipes.id, name: recipes.name, expectedYieldGrams: recipes.expectedYieldGrams, steepMinHours: recipes.steepMinHours, steepMaxHours: recipes.steepMaxHours },
+      recipe: { id: recipes.id, name: recipes.name, expectedYieldGrams: recipes.expectedYieldGrams },
       // Separate columns: a nested object spanning two left joins isn't nulled as a whole.
       recipeMethodKind: brewers.kind,
       styleId: recipeStyles.id,
@@ -540,7 +571,9 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Cre
     if (wrongRpm) return wrongRpm;
     const wrongWeights = weightsError(fields);
     if (wrongWeights) return wrongWeights;
-    await tx.insert(brewLogs).values({ id, workspaceId, userId, ...fields, brewerId: brewer?.brewerId ?? null });
+    // A steep started without a window takes its recipe's (older clients).
+    const steepWindow = fields.steeping && fields.steepMinHours === undefined && fields.steepMaxHours === undefined ? await recipeSteepWindow(tx, fields.recipeId) : {};
+    await tx.insert(brewLogs).values({ id, workspaceId, userId, ...fields, ...steepWindow, brewerId: brewer?.brewerId ?? null });
     await insertMarks(tx, id, marks);
     await insertTools(tx, id, toolIds);
     return null;
@@ -556,7 +589,7 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Cre
     throw new Error(`Brew log ${id} missing after insert`);
   }
   const reminder = body.remindToRate ? await remindToRate(userId, id) : undefined;
-  const steepReminder = body.steeping ? await remindWhenSteeped(userId, id, body.recipeId ?? null, brewLog.timestamp) : undefined;
+  const steepReminder = body.steeping ? await remindWhenSteeped(userId, id, brewLog.steepMinHours, brewLog.timestamp) : undefined;
   res.status(201).json({ brewLog, ...(reminder ? { reminder } : {}), ...(steepReminder ? { steepReminder } : {}) });
 });
 

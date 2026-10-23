@@ -5,7 +5,7 @@ import { computed, ref, watch } from 'vue';
 import type { Grinder, MethodKind, PrepTool, RecipeStyle, WaterProfile } from '../api/types';
 import type { BrewDraft, BrewDraftErrors } from '../lib/brewDraft';
 import { brixToTds, extractionYield, usesWater } from '../lib/extraction';
-import { DILUTION_WITH, isColdStyle, isLongStyle, STEEP_TEMPS } from '../lib/coldBrew';
+import { DILUTION_WITH, isColdStyle, STEEP_TEMPS } from '../lib/coldBrew';
 import { formatGrams } from '../lib/format';
 import { grinderRetentionText } from '../lib/grinderRetention';
 import { toolsFor } from '../lib/prepTools';
@@ -31,8 +31,7 @@ reveal({
   'brew.steepTemp': draft.value.steepTemp,
   'brew.dilution': draft.value.dilution,
 });
-// Cold styles (lib/coldBrew.ts): where a long one steeped, and how it was served.
-const longStyle = computed(() => isLongStyle(props.recipeStyle));
+// Cold styles (lib/coldBrew.ts): fridge or room, and how it was served.
 const coldStyle = computed(() => isColdStyle(props.recipeStyle));
 const { temperatureUnit } = usePreferences();
 const props = defineProps<{
@@ -220,8 +219,8 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
         <span v-else-if="retentionHint" class="hint">{{ retentionHint }}</span>
       </div>
     </div>
-    <div v-if="(longStyle && show('brew.steepTemp')) || (coldStyle && show('brew.dilution'))" class="form-row">
-      <div v-if="longStyle && show('brew.steepTemp')" class="field">
+    <div v-if="coldStyle && (show('brew.steepTemp') || show('brew.dilution'))" class="form-row">
+      <div v-if="show('brew.steepTemp')" class="field">
         <label for="brew-steep-temp">Steeped in</label>
         <select id="brew-steep-temp" v-model="draft.steepTemp">
           <option value="">Not recorded</option>

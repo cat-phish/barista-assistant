@@ -34,6 +34,14 @@ created it and can't be changed.
   "beanWeightInGrams": 15.2,
   "groundWeightOutGrams": 15,
   "actualTimeSec": 150,
+  "steeping": false,
+  "steepTemp": null,
+  "dilutionRatio": null,
+  "dilutedWith": null,
+  "steepMinHours": null,
+  "steepMaxHours": null,
+  "expectedFinishMinSec": null,
+  "expectedFinishMaxSec": null,
   "rating": 3,
   "tastingNotes": "Sour, thin body",
   "drinkRating": null,
@@ -194,8 +202,16 @@ account. Such logs can only be edited or deleted by owners.
       decimal) and `dilutedWith` (`water` | `milk` | `ice` | `other`), all
       nullable: where it steeped and how it was served (1 :
       `dilutionRatio`).
-    - The log's `recipe` also has `steepMinHours` / `steepMaxHours` (null
-      unless set), for "ready from" while it steeps.
+    - **The brew's window**, `POST` only (not changed by `PATCH`, `400`),
+      so the steep reminder queued at the start stays right:
+      `steepMinHours` / `steepMaxHours` (0.5–72, 1 decimal) for a long
+      brew, `expectedFinishMinSec` / `expectedFinishMaxSec` (0–86400 s)
+      for rapid cold. Each pair is both or neither (`null` both for no
+      window), min ≤ max. Clients start from the recipe's and let it be
+      changed before the brew starts. Left out, a steeping brew takes its
+      recipe's steep window; the finish window stays `null`. The steep
+      reminder and "ready from" use the brew's `steepMinHours`. Brews from
+      before migration 0059 got their recipe's steep window then.
   - `actualTimeSec`: integer 0–604800 (7 days, for long steeps). `rating`: integer **1–5**,
     nullable. `actualGrindSetting` (nullable): the number on the grinder's
     dial, 0 ≤ x < 10000 with at most 2 decimals, as in `grindSettings` (§5);

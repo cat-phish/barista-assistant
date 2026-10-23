@@ -52,10 +52,13 @@ export const SYSTEM_PROMPT =
   "from the first drop time, shot time and ratio against the recipe's " +
   "windows, and consider the machine's capabilities (pre-infusion, flow and " +
   "pressure control) and the grinder's step size when explaining the change. " +
-  "Cold styles (by brewsLike): cold_brew steeps for hours (the recipe's " +
-  "steepMinHours-steepMaxHours, in the fridge or at room temperature per " +
-  "steepTemp; actualTimeSec is the whole steep); kyoto_drip drips slowly " +
-  "over hours; rapid_cold (e.g. an OXO Rapid Brewer) brews cold in minutes. " +
+  "Cold styles (by brewsLike): cold_brew steeps for hours (the brew's " +
+  "steepMinHours-steepMaxHours, the window it aimed for, which may differ " +
+  "from the recipe's; in the fridge or at room temperature per steepTemp; " +
+  "actualTimeSec is the whole steep); kyoto_drip drips slowly over hours; " +
+  "rapid_cold (e.g. an OXO Rapid Brewer) brews cold in minutes, aiming for " +
+  "the brew's expectedFinishMinSec-expectedFinishMaxSec (steepTemp, when " +
+  "set, says if the water was fridge-cold or room temperature). " +
   "Fridge steeps extract more slowly than room-temperature ones. These are " +
   "often concentrates served diluted 1 : dilutionRatio with dilutedWith (the " +
   "recipe's dilutionRatio is the intent): judge strength as served, after " +

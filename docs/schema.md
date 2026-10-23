@@ -29,7 +29,7 @@ export const VOLUME_UNITS = ["fl_oz", "ml"] as const;
 export const ALTITUDE_UNITS = ["m", "ft"] as const;
 export const TEMPERATURE_UNITS = ["c", "f"] as const;
 export const THEMES = ["system", "light", "dark"] as const;
-export const REPEAT_KEEPS = ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "prepTools", "grinderWeights", "notes"] as const; // what a repeat copies
+export const REPEAT_KEEPS = ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "prepTools", "grinderWeights", "notes"] as const; // what a repeat copies
 export interface UserPreferences {
   volumeUnit: (typeof VOLUME_UNITS)[number];
   showBothVolumes: boolean;
@@ -41,7 +41,7 @@ export interface UserPreferences {
   rateLaterDefault: boolean; // the log form's Rate later box starts ticked
   repeatKeeps: (typeof REPEAT_KEEPS)[number][]; // default: size … waterProfile
 }
-export const DEFAULT_PREFERENCES: UserPreferences = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["size", "doseWater", "temp", "grinder", "grind", "waterProfile"] };
+export const DEFAULT_PREFERENCES: UserPreferences = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"] };
 export const ROAST_SCALES = ["names", "levels"] as const; // roast names (Cinnamon … French) or light to dark only
 export interface WorkspaceSettings {
   recipeRoastLevel: RoastLevel; // the roast recipes are written for
@@ -844,6 +844,14 @@ export const brewLogs = mysqlTable("brew_logs", {
   steepTemp: varchar("steep_temp", { length: 10 }).$type<SteepTemp>(), // STEEP_TEMPS
   dilutionRatio: decimal("dilution_ratio", { precision: 3, scale: 1, mode: "number" }),
   dilutedWith: varchar("diluted_with", { length: 10 }).$type<DilutionWith>(), // DILUTION_WITH
+  // The window this brew aimed for, set when it starts (the recipe's, or
+  // changed for this brew; docs/api/brew-logs.md §6). Each pair is both or
+  // neither: a long style's steep in hours (the ready reminder comes at its
+  // min), rapid cold's finish in seconds (the timer's target).
+  steepMinHours: decimal("steep_min_hours", { precision: 4, scale: 1, mode: "number" }),
+  steepMaxHours: decimal("steep_max_hours", { precision: 4, scale: 1, mode: "number" }),
+  expectedFinishMinSec: int("expected_finish_min_sec"),
+  expectedFinishMaxSec: int("expected_finish_max_sec"),
   // The coffee tasted on its own (for a milk drink, only if tasted straight).
   rating: int("rating"), // 1-5
   tastingNotes: text("tasting_notes"),

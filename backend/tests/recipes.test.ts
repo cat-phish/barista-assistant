@@ -177,7 +177,7 @@ describe("brew logs: water vs measured yield", () => {
     const r = (await owner.agent.post(recipesBase).send({ ...recipe, styleId: pourOver, expectedYieldGrams: 220 })).body.recipe.id;
     const id = await newBrewLog(owner, ws.id, bean, { recipeId: r, actualYieldGrams: 226 });
     const log = (await owner.agent.get(`/api/workspaces/${ws.id}/brew-logs/${id}`)).body.brewLog;
-    expect(log.recipe).toEqual({ id: r, name: "House V60", expectedYieldGrams: 220, steepMinHours: null, steepMaxHours: null, style: { id: pourOver, name: "Pour over", brewsLike: "pour_over" }, methodKind: "filter" });
+    expect(log.recipe).toEqual({ id: r, name: "House V60", expectedYieldGrams: 220, style: { id: pourOver, name: "Pour over", brewsLike: "pour_over" }, methodKind: "filter" });
     expect(log.actualYieldGrams).toBe(226);
   });
 

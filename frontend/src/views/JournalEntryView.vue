@@ -20,6 +20,7 @@ import { extractionYield } from '../lib/extraction';
 import { grinderRetention } from '../lib/grinderRetention';
 import { batchSuffix } from '../lib/beans';
 import { formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen, MAX_BREW_SEC } from '../lib/format';
+import { formatFinishWindow } from '../lib/steps';
 import { dilutionText, STEEP_TEMPS, steepWindowText } from '../lib/coldBrew';
 import { formatSize } from '../lib/servings';
 import { formatTemp } from '../lib/units';
@@ -123,8 +124,9 @@ const submitted = ref(false);
 const saving = ref(false);
 const saveError = ref('');
 
-// The recipe's steep window, for a steeping brew ("12–18 h").
-const steepWindow = computed(() => steepWindowText(log.value?.recipe?.steepMinHours ?? null, log.value?.recipe?.steepMaxHours ?? null));
+// The windows the brew aimed for, set when it started ("12–18 h", "10:00–12:00").
+const steepWindow = computed(() => steepWindowText(log.value?.steepMinHours ?? null, log.value?.steepMaxHours ?? null));
+const finishWindow = computed(() => formatFinishWindow(log.value?.expectedFinishMinSec ?? null, log.value?.expectedFinishMaxSec ?? null));
 // A long cold brew still steeping is finished through the edit form: the
 // steep time so far is filled in, and saving marks it finished.
 const finishing = ref(false);
@@ -285,7 +287,7 @@ function markLabel(m: Mark): string {
           <div v-if="log.tdsPercent !== null"><dt>TDS</dt><dd>{{ tdsText(log) }}</dd></div>
           <div v-if="log.steepTemp"><dt>Steeped in</dt><dd>{{ STEEP_TEMPS[log.steepTemp] }}</dd></div>
           <div v-if="log.dilutionRatio !== null"><dt>Served</dt><dd>Diluted {{ dilutionText(log.dilutionRatio, log.dilutedWith) }}</dd></div>
-          <div><dt>Time</dt><dd>{{ formatTime(log.actualTimeSec) }}</dd></div>
+          <div><dt>Time</dt><dd>{{ formatTime(log.actualTimeSec) }}<template v-if="steepWindow && !log.steeping"> (steep for {{ steepWindow }})</template><template v-else-if="finishWindow"> (target {{ finishWindow }})</template></dd></div>
           <div><dt>Water</dt><dd>{{ log.actualTempC !== null ? formatTemp(log.actualTempC, temperatureUnit) : '–' }}</dd></div>
           <div><dt>Grind</dt><dd>{{ log.actualGrindSetting !== null ? formatGrind(log.actualGrindSetting) : '–' }}<template v-if="log.grindRpm !== null"> at {{ log.grindRpm }} RPM</template><template v-if="log.grinder"> · {{ log.grinder.name }}</template></dd></div>
           <div v-if="log.beanWeightInGrams !== null || log.groundWeightOutGrams !== null"><dt>Grinder weights</dt><dd>{{ grinderWeightsText(log) }}</dd></div>

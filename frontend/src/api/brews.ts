@@ -34,6 +34,12 @@ export interface BrewLogInput {
   steepTemp?: SteepTemp | null;
   dilutionRatio?: number | null; // served 1 : dilutionRatio
   dilutedWith?: DilutionWith | null;
+  // POST only: the window it aims for, both ends or neither (left out, a
+  // steep takes its recipe's).
+  steepMinHours?: number | null;
+  steepMaxHours?: number | null;
+  expectedFinishMinSec?: number | null;
+  expectedFinishMaxSec?: number | null;
 }
 
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/brew-logs`;

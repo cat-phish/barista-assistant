@@ -21,7 +21,7 @@ export interface UserPreferences {
   repeatKeeps: RepeatKeep[]; // what a repeat copies (lib/repeatBrew.ts REPEAT_OPTIONS)
   steepReminders: boolean; // remind when a cold brew's steep window opens
 }
-export type RepeatKeep = 'size' | 'doseWater' | 'temp' | 'grinder' | 'grind' | 'waterProfile' | 'dilution' | 'prepTools' | 'grinderWeights' | 'notes';
+export type RepeatKeep = 'size' | 'doseWater' | 'temp' | 'grinder' | 'grind' | 'waterProfile' | 'dilution' | 'window' | 'prepTools' | 'grinderWeights' | 'notes';
 
 // docs/api/notifications.md §1b: a person's own reminder channels.
 export type NotificationKind = 'ntfy' | 'gotify' | 'pushover' | 'discord' | 'telegram' | 'slack' | 'webhook';
@@ -423,14 +423,19 @@ export interface BrewLog {
   steepTemp: SteepTemp | null; // where a long cold brew steeped
   dilutionRatio: number | null; // served 1 : dilutionRatio
   dilutedWith: DilutionWith | null;
+  // The window it aimed for, set at the start (docs/api/brew-logs.md §6):
+  // a long style's steep in hours, rapid cold's finish in seconds.
+  steepMinHours: number | null;
+  steepMaxHours: number | null;
+  expectedFinishMinSec: number | null;
+  expectedFinishMaxSec: number | null;
   actualTimeSec: number;
   rating: number | null; // the coffee tasted on its own
   tastingNotes: string | null;
   drinkRating: number | null; // the finished drink (drink brews only)
   drinkTastingNotes: string | null;
   bean: { id: string; roasterName: string; beanName: string; batchNumber: string | null };
-  // steepMin/MaxHours: a cold brew recipe's window (null otherwise).
-  recipe: { id: string; name: string; expectedYieldGrams: number | null; steepMinHours: number | null; steepMaxHours: number | null; style: StyleRef | null; methodKind: MethodKind } | null;
+  recipe: { id: string; name: string; expectedYieldGrams: number | null; style: StyleRef | null; methodKind: MethodKind } | null;
   grinder: { id: string; name: string } | null;
   waterProfile: { id: string; name: string } | null; // archived ones included
   brewer: BrewerRef | null; // archived ones included

@@ -190,5 +190,60 @@ describe("cold brew: steeping, finishing and the steep reminder (docs/api/brew-l
     await noWindow.me.agent.put(`${BASE}/ntfy`).send({ config: { topic: "coffee" } });
     expect((await noWindow.me.agent.post(noWindow.url).send({ ...start, beanId: noWindow.beanId, recipeId: noWindow.recipeId })).body).not.toHaveProperty("steepReminder");
   });
+
+  it("keeps the brew's own window: the recipe's by default, or changed before it starts", async () => {
+    const { me, ws, beanId, recipeId, url } = await coldBrewSetup({ steepMinHours: 12, steepMaxHours: 18 });
+    await me.agent.put(`${BASE}/ntfy`).send({ config: { topic: "coffee" } });
+    const start = { beanId, recipeId, actualDoseGrams: 100, actualWaterGrams: 800, actualTimeSec: 0, steeping: true };
+
+    // Left out: the recipe's, kept on the brew when the recipe changes later.
+    const byDefault = await me.agent.post(url).send(start);
+    expect(byDefault.body.brewLog).toMatchObject({ steepMinHours: 12, steepMaxHours: 18, expectedFinishMinSec: null, expectedFinishMaxSec: null });
+    await me.agent.patch(`/api/workspaces/${ws.id}/recipes/${recipeId}`).send({ steepMinHours: 20, steepMaxHours: 24 });
+    expect((await me.agent.get(`${url}/${byDefault.body.brewLog.id}`)).body.brewLog).toMatchObject({ steepMinHours: 12, steepMaxHours: 18 });
+
+    // Changed for this brew: the reminder comes at its own start.
+    const changed = await me.agent.post(url).send({ ...start, steepMinHours: 2.5, steepMaxHours: 4 });
+    expect(changed.status).toBe(201);
+    expect(changed.body.brewLog).toMatchObject({ steepMinHours: 2.5, steepMaxHours: 4 });
+    const job = await reminderQueue.getJob(steepReminderJobId(changed.body.brewLog.id));
+    expect(job?.opts.delay).toBeGreaterThan(2.5 * 3600_000 - 60_000);
+    expect(job?.opts.delay).toBeLessThanOrEqual(2.5 * 3600_000);
+
+    // Cleared: no window, no reminder.
+    const cleared = await me.agent.post(url).send({ ...start, steepMinHours: null, steepMaxHours: null });
+    expect(cleared.body.brewLog).toMatchObject({ steepMinHours: null, steepMaxHours: null });
+    expect(cleared.body).not.toHaveProperty("steepReminder");
+
+    // Both ends or neither, in order, within 0.5–72 h; set at the start only.
+    expect((await me.agent.post(url).send({ ...start, steepMinHours: 12 })).status).toBe(400);
+    expect((await me.agent.post(url).send({ ...start, steepMinHours: 18, steepMaxHours: 12 })).status).toBe(400);
+    expect((await me.agent.post(url).send({ ...start, steepMinHours: 0.2, steepMaxHours: 1 })).status).toBe(400);
+    expect((await me.agent.patch(`${url}/${changed.body.brewLog.id}`).send({ steepMinHours: 3, steepMaxHours: 5 })).status).toBe(400);
+  });
+
+  it("stores a rapid cold brew's finish window", async () => {
+    const { me, ws, beanId, url } = await coldBrewSetup(null);
+    const brewers = (await me.agent.get(`/api/workspaces/${ws.id}/brewers`)).body.brewers as Array<{ id: string; kind: string }>;
+    const styles = (await me.agent.get(`/api/workspaces/${ws.id}/recipe-styles`)).body.styles as Array<{ id: string; builtin: string | null }>;
+    const rapid = (
+      await me.agent.post(`/api/workspaces/${ws.id}/recipes`).send({
+        name: "OXO",
+        brewerId: brewers.find((b) => b.kind === "filter")!.id,
+        targetDoseGrams: 50,
+        targetWaterGrams: 400,
+        styleId: styles.find((s) => s.builtin === "rapid_cold")!.id,
+        expectedFinishMinSec: 600,
+        expectedFinishMaxSec: 720,
+      })
+    ).body.recipe;
+    const brew = { beanId, recipeId: rapid.id, actualDoseGrams: 50, actualWaterGrams: 400, actualTimeSec: 800 };
+    const saved = await me.agent.post(url).send({ ...brew, expectedFinishMinSec: 780, expectedFinishMaxSec: 840 });
+    expect(saved.status).toBe(201);
+    expect(saved.body.brewLog).toMatchObject({ expectedFinishMinSec: 780, expectedFinishMaxSec: 840, steepMinHours: null });
+    // Not copied when left out: only a steep falls back to the recipe's.
+    expect((await me.agent.post(url).send(brew)).body.brewLog).toMatchObject({ expectedFinishMinSec: null, expectedFinishMaxSec: null });
+    expect((await me.agent.post(url).send({ ...brew, expectedFinishMaxSec: 840 })).status).toBe(400);
+  });
 });
 

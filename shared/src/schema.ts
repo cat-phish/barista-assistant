@@ -30,7 +30,7 @@ export const TEMPERATURE_UNITS = ["c", "f"] as const;
 export const THEMES = ["system", "light", "dark"] as const; // system = follow the device
 // What "Brew again" / a repeat copies from the earlier brew, besides the bean
 // and what → brewer → recipe, which a repeat always takes (docs/api/auth.md §1).
-export const REPEAT_KEEPS = ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "prepTools", "grinderWeights", "notes"] as const;
+export const REPEAT_KEEPS = ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "prepTools", "grinderWeights", "notes"] as const;
 export type RepeatKeep = (typeof REPEAT_KEEPS)[number];
 
 // Per person (docs/api/auth.md §1 preferences).
@@ -58,7 +58,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   rateReminders: true,
   rateReminderMinutes: 15,
   rateLaterDefault: false,
-  repeatKeeps: ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution"],
+  repeatKeeps: ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"],
   steepReminders: true,
 };
 
@@ -925,6 +925,14 @@ export const brewLogs = mysqlTable("brew_logs", {
   steepTemp: varchar("steep_temp", { length: 10 }).$type<SteepTemp>(), // STEEP_TEMPS
   dilutionRatio: decimal("dilution_ratio", { precision: 3, scale: 1, mode: "number" }),
   dilutedWith: varchar("diluted_with", { length: 10 }).$type<DilutionWith>(), // DILUTION_WITH
+  // The window this brew aimed for, set when it starts (the recipe's, or
+  // changed for this brew; docs/api/brew-logs.md §6). Each pair is both or
+  // neither: a long style's steep in hours (the ready reminder comes at its
+  // min), rapid cold's finish in seconds (the timer's target).
+  steepMinHours: decimal("steep_min_hours", { precision: 4, scale: 1, mode: "number" }),
+  steepMaxHours: decimal("steep_max_hours", { precision: 4, scale: 1, mode: "number" }),
+  expectedFinishMinSec: int("expected_finish_min_sec"),
+  expectedFinishMaxSec: int("expected_finish_max_sec"),
   // The coffee tasted on its own (for a milk drink, only if tasted straight).
   rating: int("rating"), // 1-5
   tastingNotes: text("tasting_notes"),

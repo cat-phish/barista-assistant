@@ -110,6 +110,13 @@ export interface BrewSummary {
   steepTemp: SteepTemp | null;
   dilutionRatio: number | null;
   dilutedWith: DilutionWith | null;
+  // The window this brew aimed for (the recipe's, or changed for this brew;
+  // docs/api/brew-logs.md §6): a long style's steep in hours, rapid cold's
+  // finish in seconds. Each pair is both or neither.
+  steepMinHours: number | null;
+  steepMaxHours: number | null;
+  expectedFinishMinSec: number | null;
+  expectedFinishMaxSec: number | null;
 }
 
 // The drink a brew was made for: tasting notes may describe the whole drink.
@@ -286,6 +293,10 @@ function summarize(
     steepTemp: brew.steepTemp,
     dilutionRatio: brew.dilutionRatio,
     dilutedWith: brew.dilutedWith,
+    steepMinHours: brew.steepMinHours,
+    steepMaxHours: brew.steepMaxHours,
+    expectedFinishMinSec: brew.expectedFinishMinSec,
+    expectedFinishMaxSec: brew.expectedFinishMaxSec,
   };
 }
 

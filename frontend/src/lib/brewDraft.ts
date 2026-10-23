@@ -20,7 +20,7 @@ export interface BrewDraft {
   rpm: string; // grinder speed ('' = not recorded); only sent for a variable-speed grinder
   beanIn: string; // g weighed before grinding ('' = not weighed)
   groundOut: string; // g out of the grinder ('' = not weighed)
-  steepTemp: SteepTemp | ''; // long cold brews: fridge or room ('' = not recorded)
+  steepTemp: SteepTemp | ''; // cold styles: fridge or room ('' = not recorded)
   dilution: string; // cold styles: served 1 : this ('' = neat / not recorded)
   dilutedWith: DilutionWith | '';
   time: string; // m:ss
