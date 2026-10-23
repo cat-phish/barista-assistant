@@ -1,13 +1,16 @@
 <script setup lang="ts">
 // Settings → Lists: the workspace's editable lists (roadmap, editable lists): brewer
-// methods, bean processes and recipe styles (a list per method behaviour).
+// methods, bean processes, recipe styles (a list per method behaviour) and
+// brew problems.
 import { computed, onMounted, ref } from 'vue';
 import { beanProcessesApi } from '../api/beanProcesses';
 import { errorMessage } from '../api/client';
 import { recipeStylesApi } from '../api/recipeStyles';
 import { brewerMethodsApi } from '../api/brewerMethods';
-import type { BeanProcess, BrewerMethod, MethodKind, RecipeStyle, RecipeStyleItem } from '../api/types';
+import { brewProblemsApi } from '../api/brewProblems';
+import type { BeanProcess, BrewerMethod, BrewProblem, MethodKind, RecipeStyle, RecipeStyleItem } from '../api/types';
 import { METHOD_KINDS, METHOD_ORDER, RECIPE_STYLES, STYLES_BY_KIND } from '../lib/equipment';
+import { methodLabel } from '../lib/prepTools';
 import EditableList, { type ListApi } from '../components/EditableList.vue';
 import SettingsLayout from '../components/SettingsLayout.vue';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -16,6 +19,7 @@ const workspaces = useWorkspaceStore();
 const processes = ref<BeanProcess[]>([]);
 const styles = ref<RecipeStyleItem[]>([]);
 const methods = ref<BrewerMethod[]>([]);
+const problems = ref<BrewProblem[]>([]);
 const loading = ref(true);
 const error = ref('');
 
@@ -23,8 +27,9 @@ async function load(): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [p, s, m] = await Promise.all([beanProcessesApi.list(ws), recipeStylesApi.list(ws), brewerMethodsApi.list(ws)]);
+    const [p, s, m, bp] = await Promise.all([beanProcessesApi.list(ws), recipeStylesApi.list(ws), brewerMethodsApi.list(ws), brewProblemsApi.list(ws)]);
     methods.value = m.methods;
+    problems.value = bp.problems;
     processes.value = p.processes;
     styles.value = s.styles;
     error.value = '';
@@ -56,6 +61,29 @@ const methodApi: ListApi = {
   usage: brewerMethodsApi.usage,
   remove: brewerMethodsApi.remove,
 };
+
+// Brew problems (docs/api/brew-problems.md §6b): what went wrong while
+// brewing, for one method or all. Like prep tools they're archived, not
+// hidden: archived ones leave the checklist, brews that had them keep them.
+const ALL_METHODS = 'all';
+const problemEntries = computed(() =>
+  problems.value.map((p) => ({ id: p.id, name: p.name, hidden: !!p.archivedAt, builtin: null, choice: p.methodKind ?? ALL_METHODS })),
+);
+const problemMethodChoices = [{ value: ALL_METHODS, label: methodLabel(null) }, ...METHOD_ORDER.map((k) => ({ value: k, label: methodLabel(k) }))];
+const asMethod = (choice: string): MethodKind | null => (choice === ALL_METHODS ? null : (choice as MethodKind));
+const problemApi: ListApi = {
+  create: (ws, name, choice) => brewProblemsApi.create(ws, { name, methodKind: asMethod(choice ?? ALL_METHODS) }),
+  update: (ws, id, { name, hidden, choice }) =>
+    brewProblemsApi.update(ws, id, {
+      ...(name !== undefined ? { name } : {}),
+      ...(hidden !== undefined ? { archived: hidden } : {}),
+      ...(choice !== undefined ? { methodKind: asMethod(choice) } : {}),
+    }),
+  reorder: brewProblemsApi.reorder,
+  usage: brewProblemsApi.usage,
+  remove: brewProblemsApi.remove,
+};
+const archiveWords = { hide: 'Archive', show: 'Restore', hidden: 'Archived' };
 
 // Recipe styles, one method at a time. A custom style brews like one of its
 // method's built-ins (docs/api/recipe-styles.md §5e).
@@ -146,6 +174,28 @@ const styleApi = computed<ListApi>(() => {
         hidden-hint="Hidden styles aren't offered for new recipes; recipes that already have one keep it."
         :choices="brewsLikeChoices"
         choice-label="Brews like"
+        @changed="load"
+      />
+    </section>
+
+    <section class="card stack" aria-labelledby="list-problems">
+      <h2 id="list-problems">Brew problems</h2>
+      <p class="muted small">
+        What can go wrong while brewing, offered as a checklist when you log a brew (for its method, plus the ones for all methods). The AI reads
+        them as the clearest clues for the next brew.
+      </p>
+      <p v-if="loading" class="muted" aria-live="polite">Loading…</p>
+      <EditableList
+        v-else-if="!error"
+        :entries="problemEntries"
+        :api="problemApi"
+        kind="problem"
+        noun="problem"
+        placeholder="e.g. Paper taste"
+        hidden-hint="Archived problems leave the checklist; brews that had them keep them."
+        :choices="problemMethodChoices"
+        choice-label="For"
+        :words="archiveWords"
         @changed="load"
       />
     </section>

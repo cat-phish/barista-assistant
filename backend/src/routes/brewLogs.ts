@@ -19,6 +19,8 @@ import {
   waterProfiles,
   prepTools,
   brewLogTools,
+  brewProblems,
+  brewLogProblems,
   llmAnalyses,
   recipes,
   SERVING_UNITS,
@@ -56,6 +58,7 @@ export interface BrewLogDetails extends BrewLog {
   drink: { id: string; name: string; hasIngredients: boolean } | null;
   marks: Mark[]; // when things actually happened, earliest first
   tools: Array<{ id: string; name: string; methodKind: MethodKind | null }>; // prep tools used, in checklist order
+  problems: Array<{ id: string; name: string; methodKind: MethodKind | null }>; // what went wrong, in checklist order
   // Null when the brewer deleted their account (the log is kept).
   brewedBy: { id: string; email: string } | null;
 }
@@ -159,6 +162,12 @@ const brewLogFields = {
     .array(z.uuid())
     .max(100)
     .refine((ids) => new Set(ids).size === ids.length, "each tool once")
+    .optional(),
+  // What went wrong (docs/api/brew-problems.md §6b); PATCH replaces the list.
+  problemIds: z
+    .array(z.uuid())
+    .max(100)
+    .refine((ids) => new Set(ids).size === ids.length, "each problem once")
     .optional(),
 };
 
@@ -308,6 +317,7 @@ async function referencesInWorkspace(
     waterProfileId?: string | null;
     drinkId?: string | null;
     toolIds?: string[];
+    problemIds?: string[];
   }
 ): Promise<string | null> {
   if (refs.drinkId) {
@@ -351,6 +361,15 @@ async function referencesInWorkspace(
       .where(and(inArray(prepTools.id, refs.toolIds), eq(prepTools.workspaceId, workspaceId)))
       .for("update");
     if (found.length !== refs.toolIds.length) return "toolIds: not all tools in this workspace";
+  }
+  if (refs.problemIds && refs.problemIds.length > 0) {
+    // Archived problems are accepted, like tools; a problem's method isn't checked.
+    const found = await tx
+      .select({ id: brewProblems.id })
+      .from(brewProblems)
+      .where(and(inArray(brewProblems.id, refs.problemIds), eq(brewProblems.workspaceId, workspaceId)))
+      .for("update");
+    if (found.length !== refs.problemIds.length) return "problemIds: not all problems in this workspace";
   }
   if (refs.waterProfileId) {
     // Archived profiles are accepted, like grinders.
@@ -435,7 +454,8 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
     .orderBy(desc(brewLogs.timestamp), desc(brewLogs.id))
     .limit(limit)
     .offset(offset);
-  const [marks, tools] = await Promise.all([marksFor(rows.map((r) => r.id)), toolsFor(rows.map((r) => r.id))]);
+  const ids = rows.map((r) => r.id);
+  const [marks, tools, problems] = await Promise.all([marksFor(ids), toolsFor(ids), problemsFor(ids)]);
   // A recipe always has a method (inner FK), so its kind is set whenever recipe is.
   return rows.map(({ recipeMethodKind, styleId, styleName, styleBrewsLike, recipe, drink, drinkHasIngredients, ...row }) => ({
     ...row,
@@ -446,6 +466,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
     drink: drink ? { ...drink, hasIngredients: Number(drinkHasIngredients) === 1 } : null,
     marks: marks.get(row.id) ?? [],
     tools: tools.get(row.id) ?? [],
+    problems: problems.get(row.id) ?? [],
   }));
 }
 
@@ -465,6 +486,24 @@ async function toolsFor(brewLogIds: string[]): Promise<Map<string, BrewLogDetail
 async function insertTools(tx: Tx, brewLogId: string, toolIds: readonly string[]): Promise<void> {
   if (toolIds.length === 0) return;
   await tx.insert(brewLogTools).values(toolIds.map((toolId) => ({ brewLogId, toolId })));
+}
+
+async function problemsFor(brewLogIds: string[]): Promise<Map<string, BrewLogDetails["problems"]>> {
+  const byLog = new Map<string, BrewLogDetails["problems"]>();
+  if (brewLogIds.length === 0) return byLog;
+  const rows = await db
+    .select({ brewLogId: brewLogProblems.brewLogId, id: brewProblems.id, name: brewProblems.name, methodKind: brewProblems.methodKind })
+    .from(brewLogProblems)
+    .innerJoin(brewProblems, eq(brewLogProblems.problemId, brewProblems.id))
+    .where(inArray(brewLogProblems.brewLogId, brewLogIds))
+    .orderBy(asc(brewProblems.position), asc(brewProblems.name));
+  for (const { brewLogId, ...problem } of rows) byLog.set(brewLogId, [...(byLog.get(brewLogId) ?? []), problem]);
+  return byLog;
+}
+
+async function insertProblems(tx: Tx, brewLogId: string, problemIds: readonly string[]): Promise<void> {
+  if (problemIds.length === 0) return;
+  await tx.insert(brewLogProblems).values(problemIds.map((problemId) => ({ brewLogId, problemId })));
 }
 
 async function marksFor(brewLogIds: string[]): Promise<Map<string, BrewLogDetails["marks"]>> {
@@ -556,7 +595,7 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Cre
   const refError = await db.transaction(async (tx) => {
     const error = await referencesInWorkspace(tx, workspaceId, body);
     if (error) return error;
-    const { marks = [], toolIds = [], remindToRate: _remind, ...fields } = body;
+    const { marks = [], toolIds = [], problemIds = [], remindToRate: _remind, ...fields } = body;
     const brewer = await recipeBrewer(tx, fields.recipeId);
     const wrongForKind = espressoError(brewer?.kind ?? null, {
       actualWaterGrams: fields.actualWaterGrams ?? null,
@@ -576,6 +615,7 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Cre
     await tx.insert(brewLogs).values({ id, workspaceId, userId, ...fields, ...steepWindow, brewerId: brewer?.brewerId ?? null });
     await insertMarks(tx, id, marks);
     await insertTools(tx, id, toolIds);
+    await insertProblems(tx, id, problemIds);
     return null;
   });
 
@@ -633,7 +673,7 @@ brewLogsRouter.patch(
 
       // Only when the change touches it, so old logs whose recipe later moved
       // to another brewer can still be edited (docs/api/brew-logs.md §6).
-      const { marks, toolIds, ...fields } = body;
+      const { marks, toolIds, problemIds, ...fields } = body;
       // A new recipe brings its brewer; the old brewer stays otherwise.
       const brewerUpdate = "recipeId" in body ? { brewerId: (await recipeBrewer(tx, fields.recipeId))?.brewerId ?? null } : {};
       const touched = ["recipeId", "actualWaterGrams", "actualYieldGrams", "marks", "actualTimeSec"];
@@ -680,6 +720,10 @@ brewLogsRouter.patch(
       if (toolIds) {
         await tx.delete(brewLogTools).where(eq(brewLogTools.brewLogId, brewLogId));
         await insertTools(tx, brewLogId, toolIds);
+      }
+      if (problemIds) {
+        await tx.delete(brewLogProblems).where(eq(brewLogProblems.brewLogId, brewLogId));
+        await insertProblems(tx, brewLogId, problemIds);
       }
       return { status: "updated" } as const;
     });

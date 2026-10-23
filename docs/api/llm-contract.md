@@ -73,6 +73,12 @@ queue:
    - Each brew includes `prepTools`: the names of the prep tools used (§3d),
      in checklist order. `[]` means none were recorded (older brews, or none
      ticked), not necessarily that none were used.
+   - Each brew includes `problems`: the names of what went wrong while
+     brewing (§6b), in list order. `[]` means none were recorded, not that
+     nothing went wrong. The prompt treats them as the clearest clues for
+     the next brew (a stalled bed or choked shot points coarser, channeling
+     to prep, a mistake like an untared scale to repeating rather than
+     adjusting).
    - The brew includes its `drink` (or `null`): name, `servingSize` (the size
      made, else the drink's default, e.g. `"12 fl oz"`, or `null`) and
      ingredients (name, type, amount scaled to that size such as

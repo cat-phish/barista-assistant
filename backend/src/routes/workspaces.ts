@@ -17,6 +17,8 @@ import {
   type WorkspaceSettings,
   DEFAULT_PREP_TOOLS,
   prepTools,
+  DEFAULT_BREW_PROBLEMS,
+  brewProblems,
   workspaceMembers,
   workspaces,
   type Workspace,
@@ -75,6 +77,9 @@ workspacesRouter.post("/", async (req: Request, res: Response<WorkspaceResponse>
       );
       await tx.insert(prepTools).values(
         DEFAULT_PREP_TOOLS.map(({ name, methodKind }, i) => ({ id: randomUUID(), workspaceId, name, methodKind, position: i + 1 }))
+      );
+      await tx.insert(brewProblems).values(
+        DEFAULT_BREW_PROBLEMS.map(({ name, methodKind }, i) => ({ id: randomUUID(), workspaceId, name, methodKind, position: i + 1 }))
       );
       await tx.insert(beanProcesses).values(defaultProcessRows(workspaceId));
       await tx.insert(recipeStyles).values(defaultStyleRows(workspaceId));

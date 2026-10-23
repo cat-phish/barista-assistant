@@ -229,6 +229,12 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
 - **Finish & Save** is available throughout; the screen stays awake.
 - **Log:** dose, water, measured yield, temperature, grind, time, rating and
   tasting notes; can also be logged without the timer.
+- **Problems:** a checklist on the log form and journal edit of what went
+  wrong while brewing (slow drawdown, channeling, a gushing shot, an untared
+  scale…), for the recipe's method plus the all-method ones. The list is
+  editable in Settings → Lists → Brew problems (add, rename, reorder, set
+  the method, archive or delete). The journal shows them, the AI reads them
+  as the clearest clues, and Repeat brews never copies them.
 
 ## Journal & AI
 - **Journal:** every brew, newest first, filterable by bean; entries can be

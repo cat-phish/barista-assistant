@@ -57,6 +57,7 @@ created it and can't be changed.
   "servingUnit": null,
   "marks": [],
   "tools": [{ "id": "uuid", "name": "Rinsed paper filter", "methodKind": "filter" }],
+  "problems": [{ "id": "uuid", "name": "Slow drawdown / stalled bed", "methodKind": "filter" }],
   "brewedBy": { "id": "uuid", "email": "barista@example.com" }
 }
 ```
@@ -77,7 +78,9 @@ for a brew without a recipe. `drink`
 the timer's marks (`{ "kind", "stepOrder", "atSec" }`, `stepOrder` `null`
 except for `step_end`), earliest first. `tools` lists the prep tools used
 (§3d, `{ "id", "name", "methodKind" }`, archived ones included) in checklist
-order; `[]` when none were recorded. `userId` and `brewedBy` are `null` when the brewer deleted their
+order; `[]` when none were recorded. `problems` lists what went wrong
+(§6b, same shape, archived ones included) in list order; `[]` when none
+were recorded. `userId` and `brewedBy` are `null` when the brewer deleted their
 account. Such logs can only be edited or deleted by owners.
 
 ## `GET /api/workspaces/:workspaceId/brew-logs`
@@ -143,6 +146,9 @@ account. Such logs can only be edited or deleted by owners.
     workspace (archived ones accepted). A tool's `methodKind` isn't checked
     against the recipe; it only decides where the checklist shows it. On
     `PATCH` the list replaces the old one; `[]` clears it.
+  - `problemIds` (optional): what went wrong (§6b), with the same rules as
+    `toolIds`: each once, all from this workspace (archived accepted), the
+    method not checked, replaced on `PATCH`.
   - `beanId`, plus `recipeId`, `grinderId` and `waterProfileId` (all
     optional, nullable), must belong to **this** workspace. An archived grinder
     or water profile is accepted (e.g. when logging an old brew afterwards);
@@ -232,7 +238,7 @@ account. Such logs can only be edited or deleted by owners.
 - **Success (`201 Created`):** `{ "brewLog": { ...brewLog } }` (plus
   `reminder` when `remindToRate` was sent)
 - **Errors:** `400` invalid body, or `beanId`/`recipeId`/`grinderId`/
-  `waterProfileId`/`toolIds` not in this workspace; `403` viewer.
+  `waterProfileId`/`toolIds`/`problemIds` not in this workspace; `403` viewer.
 - Logging a brew does **not** change the bean's `inventoryWeightGrams`.
 
 ## `PATCH /api/workspaces/:workspaceId/brew-logs/:brewLogId`

@@ -8,7 +8,9 @@ export const methodLabel = (kind: MethodKind | null): string => (kind ? METHOD_K
 // The checklist for a brew, in the tools' order: active tools for its method
 // (kind null = no recipe: every method) and for all methods, plus any the brew
 // already has, even if since archived or moved to another method.
-export function toolsFor(tools: readonly PrepTool[], kind: MethodKind | null, selected: readonly string[]): PrepTool[] {
+// Brew problems (docs/api/brew-problems.md §6b) are offered the same way.
+type Checklisted = Pick<PrepTool, 'id' | 'methodKind' | 'archivedAt'>;
+export function toolsFor<T extends Checklisted>(tools: readonly T[], kind: MethodKind | null, selected: readonly string[]): T[] {
   return tools.filter(
     (t) => selected.includes(t.id) || (!t.archivedAt && (kind === null || t.methodKind === null || t.methodKind === kind)),
   );

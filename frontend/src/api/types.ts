@@ -246,6 +246,18 @@ export interface PrepTool {
 }
 export type PrepToolRef = Pick<PrepTool, 'id' | 'name' | 'methodKind'>;
 
+// docs/api/brew-problems.md §6b: what went wrong while brewing, a checklist
+// like prep tools (ordered; methodKind null = every method).
+export interface BrewProblem {
+  id: string;
+  name: string;
+  methodKind: MethodKind | null;
+  position: number;
+  archivedAt: string | null; // set = archived (off the checklist, kept in history)
+  createdAt: string;
+}
+export type BrewProblemRef = Pick<BrewProblem, 'id' | 'name' | 'methodKind'>;
+
 // docs/api/brewers.md §3: espresso brewers' capabilities.
 export type Preinfusion = 'none' | 'automatic' | 'manual';
 export type ProfileControl = 'none' | 'manual' | 'programmable';
@@ -442,6 +454,7 @@ export interface BrewLog {
   drink: { id: string; name: string; hasIngredients: boolean } | null; // hasIngredients: shot and drink tasted apart
   marks: Mark[]; // earliest first; espresso only
   tools: PrepToolRef[]; // prep tools used, in checklist order (§3d)
+  problems: BrewProblemRef[]; // what went wrong, in list order (§6b)
   brewedBy: { id: string; email: string } | null;
 }
 

@@ -528,6 +528,55 @@ export const prepTools = mysqlTable(
   })
 );
 
+// 5g. Brew problems (docs/api/brew-problems.md §6b): what went wrong while
+// brewing, a per-workspace checklist like prep tools. methodKind limits one
+// to a method's brews (null = every method); position is the checklist
+// order. Seeded with DEFAULT_BREW_PROBLEMS when a workspace is created;
+// archived (kept on old brews) or deleted in Settings → Lists.
+export const DEFAULT_BREW_PROBLEMS = [
+  { name: "Slow drawdown / stalled bed", methodKind: "filter" },
+  { name: "Fast drawdown", methodKind: "filter" },
+  { name: "Uneven or cratered bed", methodKind: "filter" },
+  { name: "Grounds high on the walls", methodKind: "filter" },
+  { name: "Channeling (holes in the bed)", methodKind: "filter" },
+  { name: "Filter clogged or collapsed", methodKind: "filter" },
+  { name: "Poured too fast or uneven", methodKind: "filter" },
+  { name: "Missed a pour target", methodKind: "filter" },
+  { name: "Water too hot or cold (kettle off)", methodKind: "filter" },
+  { name: "Immersion: grounds didn't sink, crust didn't break", methodKind: "filter" },
+  { name: "Channeling / spurting", methodKind: "espresso" },
+  { name: "Shot ran fast (gushed)", methodKind: "espresso" },
+  { name: "Shot choked or dripped slowly", methodKind: "espresso" },
+  { name: "Uneven extraction (one spout first, blonding early)", methodKind: "espresso" },
+  { name: "Puck wet or soupy", methodKind: "espresso" },
+  { name: "Puck cracked or stuck to the screen", methodKind: "espresso" },
+  { name: "Grinder clumping", methodKind: "espresso" },
+  { name: "Dose spilled or uneven tamp", methodKind: "espresso" },
+  { name: "Machine temperature not settled", methodKind: "espresso" },
+  { name: "Stale or old beans", methodKind: null },
+  { name: "Grind setting changed by mistake", methodKind: null },
+  { name: "Scale not tared", methodKind: null },
+  { name: "Distracted / timer missed", methodKind: null },
+] as const satisfies ReadonlyArray<{ name: string; methodKind: MethodKind | null }>;
+
+export const brewProblems = mysqlTable(
+  "brew_problems",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(),
+    methodKind: varchar("method_kind", { length: 20 }).$type<MethodKind>(), // METHOD_KINDS, or null = all
+    position: int("position").notNull(), // 1, 2, 3...
+    archivedAt: timestamp("archived_at"), // null = active
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("brew_problems_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+
 // 5e. Recipe styles (docs/api/recipe-styles.md §5e): each workspace's list of
 // how a recipe brews, per brewer method, seeded with the built-ins below. A
 // style "brews like" a built-in (brewsLike): itself for a built-in, the one
@@ -976,6 +1025,24 @@ export const brewLogTools = mysqlTable(
   })
 );
 
+// 8d. Brew Log Problems (What Went Wrong in a Brew)
+// Replaced as a whole when a log is edited (docs/api/brew-logs.md §6).
+// Deleting a problem unlinks it from brews (cascade); archiving keeps it.
+export const brewLogProblems = mysqlTable(
+  "brew_log_problems",
+  {
+    brewLogId: varchar("brew_log_id", { length: 36 })
+      .notNull()
+      .references(() => brewLogs.id, { onDelete: "cascade" }),
+    problemId: varchar("problem_id", { length: 36 })
+      .notNull()
+      .references(() => brewProblems.id, { onDelete: "cascade" }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.brewLogId, table.problemId] }),
+  })
+);
+
 // 9. LLM Analyses (AI Parameter Suggestions)
 export const llmAnalyses = mysqlTable("llm_analyses", {
   id: varchar("id", { length: 36 }).primaryKey(),
@@ -1006,6 +1073,7 @@ export type Grinder = typeof grinders.$inferSelect;
 export type NewGrinder = typeof grinders.$inferInsert;
 export type WaterProfile = typeof waterProfiles.$inferSelect;
 export type PrepTool = typeof prepTools.$inferSelect;
+export type BrewProblem = typeof brewProblems.$inferSelect;
 export type RecipeGrindSetting = typeof recipeGrindSettings.$inferSelect;
 export type RecipeStepType = (typeof RECIPE_STEP_TYPES)[number];
 export type Recipe = typeof recipes.$inferSelect;

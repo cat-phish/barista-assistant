@@ -15,6 +15,7 @@ export interface BrewDraft {
   grinderId: string; // '' = none
   waterProfileId: string; // '' = none recorded
   toolIds: string[]; // prep tools ticked (§3d); unticked to start
+  problemIds: string[]; // what went wrong (§6b); unticked to start
   firstDrop: string; // espresso: seconds, e.g. "7.4" ('' = not recorded); from the timer's tap or typed
   grind: string;
   rpm: string; // grinder speed ('' = not recorded); only sent for a variable-speed grinder
@@ -37,7 +38,7 @@ export type BrewDraftErrors = Partial<Record<'dose' | 'water' | 'yieldGrams' | '
 export type RpmGrinder = Pick<Grinder, 'variableSpeed' | 'rpmMin' | 'rpmMax'> | null;
 
 export function emptyDraft(): BrewDraft {
-  return { dose: '', water: '', yieldGrams: '', tds: '', temp: '', grinderId: '', waterProfileId: '', toolIds: [], firstDrop: '', grind: '', rpm: '', beanIn: '', groundOut: '', steepTemp: '', dilution: '', dilutedWith: '', time: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
+  return { dose: '', water: '', yieldGrams: '', tds: '', temp: '', grinderId: '', waterProfileId: '', toolIds: [], problemIds: [], firstDrop: '', grind: '', rpm: '', beanIn: '', groundOut: '', steepTemp: '', dilution: '', dilutedWith: '', time: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
 }
 
 // temp is text in the person's unit (°C stored); see lib/units.ts.
@@ -51,6 +52,7 @@ export function draftFromLog(log: BrewLog, tempUnit: TemperatureUnit = 'c'): Bre
     grinderId: log.grinderId ?? '',
     waterProfileId: log.waterProfileId ?? '',
     toolIds: log.tools.map((t) => t.id),
+    problemIds: log.problems.map((p) => p.id),
     firstDrop: firstDropOf(log.marks),
     grind: log.actualGrindSetting === null ? '' : formatGrind(log.actualGrindSetting),
     rpm: log.grindRpm === null ? '' : String(log.grindRpm),
@@ -139,6 +141,7 @@ export function parseBrewDraft(
       grinderId: d.grinderId || null,
       waterProfileId: d.waterProfileId || null,
       toolIds: [...d.toolIds],
+      problemIds: [...d.problemIds],
       actualGrindSetting: grind?.ok ? grind.value : null,
       grindRpm: rpm?.ok ? rpm.value : null,
       beanWeightInGrams: beanIn?.ok ? beanIn.value : null,

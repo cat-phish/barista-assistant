@@ -2,7 +2,7 @@
 // Brew detail inputs shared by the brew flow's log form and journal editing.
 // Validate with parseBrewDraft (lib/brewDraft.ts); pass its errors in.
 import { computed, ref, watch } from 'vue';
-import type { Grinder, MethodKind, PrepTool, RecipeStyle, WaterProfile } from '../api/types';
+import type { BrewProblem, Grinder, MethodKind, PrepTool, RecipeStyle, WaterProfile } from '../api/types';
 import type { BrewDraft, BrewDraftErrors } from '../lib/brewDraft';
 import { brixToTds, extractionYield, usesWater } from '../lib/extraction';
 import { DILUTION_WITH, isColdStyle, STEEP_TEMPS } from '../lib/coldBrew';
@@ -27,6 +27,7 @@ reveal({
   'brew.grinderWeights': draft.value.beanIn || draft.value.groundOut,
   'brew.waterProfile': draft.value.waterProfileId,
   'brew.prepTools': draft.value.toolIds,
+  'brew.problems': draft.value.problemIds,
   'brew.firstDrop': draft.value.firstDrop,
   'brew.steepTemp': draft.value.steepTemp,
   'brew.dilution': draft.value.dilution,
@@ -40,6 +41,7 @@ const props = defineProps<{
   grinders: Grinder[];
   waterProfiles?: WaterProfile[]; // the workspace's (docs/api/water-profiles.md §3c)
   prepTools?: PrepTool[]; // the workspace's, in order (docs/api/prep-tools.md §3d)
+  problems?: BrewProblem[]; // the workspace's, in order (docs/api/brew-problems.md §6b)
   methodKind?: MethodKind | null; // the recipe's; null = no recipe (every tool shows)
   expectedYieldGrams?: number | null; // the recipe's estimate (espresso: target), shown for comparison
   espresso?: boolean; // shot weight instead of water (docs/api/brew-logs.md §6)
@@ -115,6 +117,8 @@ const rpmPlaceholder = computed(() => {
 });
 // The prep checklist: the method's tools and the all-method ones (lib/prepTools.ts).
 const toolOptions = computed(() => toolsFor(props.prepTools ?? [], props.methodKind ?? null, draft.value.toolIds));
+// What went wrong, offered the same way (Settings → Lists → Brew problems).
+const problemOptions = computed(() => toolsFor(props.problems ?? [], props.methodKind ?? null, draft.value.problemIds));
 // Likewise for water; with none set up, the only choice says so.
 const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w.archivedAt || w.id === draft.value.waterProfileId));
 </script>
@@ -252,6 +256,15 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
         <label v-for="t in toolOptions" :key="t.id" class="checkbox">
           <input v-model="draft.toolIds" type="checkbox" :value="t.id" />
           {{ t.name }}{{ t.archivedAt ? ' (archived)' : '' }}
+        </label>
+      </div>
+    </fieldset>
+    <fieldset v-if="problemOptions.length && show('brew.problems')" class="prep">
+      <legend>Problems <span class="muted">(anything that went wrong)</span></legend>
+      <div class="prep-list">
+        <label v-for="p in problemOptions" :key="p.id" class="checkbox">
+          <input v-model="draft.problemIds" type="checkbox" :value="p.id" />
+          {{ p.name }}{{ p.archivedAt ? ' (archived)' : '' }}
         </label>
       </div>
     </fieldset>

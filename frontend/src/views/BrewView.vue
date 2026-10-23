@@ -15,6 +15,7 @@ import { recentByMade, repeatLabel, repeatPlan } from '../lib/repeatBrew';
 import { grindersApi } from '../api/grinders';
 import { waterProfilesApi } from '../api/waterProfiles';
 import { prepToolsApi } from '../api/prepTools';
+import { brewProblemsApi } from '../api/brewProblems';
 import { defaultWaterProfileId } from '../lib/water';
 import { brewerMethodsApi } from '../api/brewerMethods';
 import { brewersApi } from '../api/brewers';
@@ -38,7 +39,7 @@ import {
   whatOptions,
   methodKind,
 } from '../lib/brewChoice';
-import type { Brewer, Drink, DrinkCategory, Grinder, Mark, MethodKind, NotificationChannel, PrepTool, ServingUnit, WaterProfile } from '../api/types';
+import type { Brewer, BrewProblem, Drink, DrinkCategory, Grinder, Mark, MethodKind, NotificationChannel, PrepTool, ServingUnit, WaterProfile } from '../api/types';
 import { METHOD_KINDS } from '../lib/equipment';
 import { convertSize, defaultSize, formatSize, SERVING_UNITS, sizeFactor, type Size } from '../lib/servings';
 import AppHeader from '../components/AppHeader.vue';
@@ -82,6 +83,7 @@ const recipes = ref<Recipe[]>([]);
 const grinders = ref<Grinder[]>([]);
 const waterProfiles = ref<WaterProfile[]>([]);
 const prepTools = ref<PrepTool[]>([]);
+const problems = ref<BrewProblem[]>([]);
 const brewers = ref<Brewer[]>([]);
 
 // Setup
@@ -200,7 +202,7 @@ onMounted(async () => {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [b, r, g, m, d, c, w, t, bm] = await Promise.all([
+    const [b, r, g, m, d, c, w, t, bm, bp] = await Promise.all([
       beansApi.list(ws),
       recipesApi.list(ws),
       grindersApi.list(ws),
@@ -210,7 +212,9 @@ onMounted(async () => {
       waterProfilesApi.list(ws),
       prepToolsApi.list(ws),
       brewerMethodsApi.list(ws).catch(() => ({ methods: [] })), // brewers then group by kind
+      brewProblemsApi.list(ws).catch(() => ({ problems: [] })), // without it, no problems checklist
     ]);
+    problems.value = bp.problems;
     methods.value = bm.methods;
     drinks.value = d.drinks;
     categories.value = c.categories;
@@ -794,6 +798,7 @@ function brewAgain(): void {
   steepStarted.value = null;
   draft.rating = null;
   draft.notes = '';
+  draft.problemIds = [];
   draft.drinkRating = null;
   draft.drinkNotes = '';
   submitted.value = false;
@@ -906,6 +911,7 @@ async function applyRepeat(log: BrewLog): Promise<void> {
   }
   const activeTools = new Set(prepTools.value.filter((t) => !t.archivedAt).map((t) => t.id));
   draft.toolIds = kept.has('prepTools') ? log.tools.map((t) => t.id).filter((id) => activeTools.has(id)) : [];
+  draft.problemIds = []; // what went wrong is noted for each brew
   draft.beanIn = kept.has('grinderWeights') && log.beanWeightInGrams !== null ? formatGrams(log.beanWeightInGrams) : '';
   draft.groundOut = kept.has('grinderWeights') && log.groundWeightOutGrams !== null ? formatGrams(log.groundWeightOutGrams) : '';
   await nextTick();
@@ -1287,7 +1293,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       </section>
       <section class="card">
         <p v-if="stepMarksLine" class="muted small marks-line">{{ stepMarksLine }}</p>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :prep-tools="prepTools" :method-kind="recipe?.brewer.kind ?? null" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="recipe?.style?.brewsLike ?? null" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :prep-tools="prepTools" :problems="problems" :method-kind="recipe?.brewer.kind ?? null" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="recipe?.style?.brewsLike ?? null" />
       </section>
       <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
       <div v-if="userPrefs.rateReminders" class="rate-later">
