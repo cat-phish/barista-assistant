@@ -16,6 +16,7 @@ import RatingStars from '../components/RatingStars.vue';
 import { useAnalysis } from '../composables/useAnalysis';
 import { draftFromLog, emptyDraft, parseBrewDraft } from '../lib/brewDraft';
 import { extractionYield } from '../lib/extraction';
+import { grinderRetention } from '../lib/grinderRetention';
 import { formatDoseLine, formatGrams, formatTime, formatWhen } from '../lib/format';
 import { formatSize } from '../lib/servings';
 import { formatTemp } from '../lib/units';
@@ -53,6 +54,13 @@ function tdsText(l: BrewLog): string {
     style: l.recipe?.style?.brewsLike ?? null, // custom styles count as what they brew like
   });
   return ey === null ? `${l.tdsPercent}%` : `${l.tdsPercent}% · ${ey}% extraction`;
+}
+
+// "18.2 g in → 17.9 g out · 0.3 g retained (1.6%)", or whichever was weighed.
+function grinderWeightsText(l: BrewLog): string {
+  const parts = [l.beanWeightInGrams !== null ? `${formatGrams(l.beanWeightInGrams)} g in` : '', l.groundWeightOutGrams !== null ? `${formatGrams(l.groundWeightOutGrams)} g out` : ''];
+  const r = grinderRetention(l.beanWeightInGrams, l.groundWeightOutGrams);
+  return parts.filter(Boolean).join(' → ') + (r ? ` · ${r.grams} g retained (${r.percent}%)` : '');
 }
 
 function yieldText(l: BrewLog): string {
@@ -193,6 +201,7 @@ function markLabel(m: Mark): string {
           <div><dt>Time</dt><dd>{{ formatTime(log.actualTimeSec) }}</dd></div>
           <div><dt>Water</dt><dd>{{ log.actualTempC !== null ? formatTemp(log.actualTempC, temperatureUnit) : '–' }}</dd></div>
           <div><dt>Grind</dt><dd>{{ log.actualGrindSetting ?? '–' }}<template v-if="log.grindRpm !== null"> at {{ log.grindRpm }} RPM</template><template v-if="log.grinder"> · {{ log.grinder.name }}</template></dd></div>
+          <div v-if="log.beanWeightInGrams !== null || log.groundWeightOutGrams !== null"><dt>Grinder weights</dt><dd>{{ grinderWeightsText(log) }}</dd></div>
           <div><dt>Brewer</dt><dd>{{ log.brewer?.name ?? '–' }}</dd></div>
           <div v-if="log.waterProfile"><dt>Water profile</dt><dd>{{ log.waterProfile.name }}</dd></div>
           <div v-if="log.tools.length"><dt>Prep</dt><dd>{{ log.tools.map((t) => t.name).join(' · ') }}</dd></div>

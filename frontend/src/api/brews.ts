@@ -19,6 +19,8 @@ export interface BrewLogInput {
   actualTempC: number | null;
   actualGrindSetting: string | null;
   grindRpm?: number | null; // only with a variable-speed grinder
+  beanWeightInGrams?: number | null; // beans weighed before grinding
+  groundWeightOutGrams?: number | null; // grounds out: no more than in
   actualTimeSec: number;
   rating: number | null; // the coffee tasted on its own
   tastingNotes: string | null;

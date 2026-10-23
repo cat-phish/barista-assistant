@@ -271,6 +271,15 @@ describe("processBrewAnalysis", () => {
     expect(context.previousBrews.find((b) => b.tastingNotes === "day 6")?.grindRpm).toBe(1200);
   });
 
+  it("tells the LLM the weights in and out of the grinder, and the retention", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    await db.update(brewLogs).set({ beanWeightInGrams: 18.2, groundWeightOutGrams: 17.9 }).where(eq(brewLogs.id, logIds.day8!));
+    await processBrewAnalysis({ brewLogId: logIds.day8! });
+    const context = llm.mock.calls[0]![0] as BrewContext;
+    expect(context.brew).toMatchObject({ beanWeightInGrams: 18.2, groundWeightOutGrams: 17.9, grinderRetentionGrams: 0.3 });
+    expect(context.previousBrews.every((b) => b.grinderRetentionGrams === null)).toBe(true);
+  });
+
   it("tells the LLM the water each brew used, with its figures", async () => {
     llm.mockResolvedValue(ANALYSIS);
     const tww = randomUUID();

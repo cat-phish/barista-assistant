@@ -789,6 +789,11 @@ export const brewLogs = mysqlTable("brew_logs", {
   actualGrindSetting: varchar("actual_grind_setting", { length: 100 }),
   // Grinder speed, only for a variable-speed grinder (docs/api/brew-logs.md §6).
   grindRpm: int("grind_rpm"),
+  // Grinder retention (docs/api/brew-logs.md §6): the beans weighed before
+  // grinding and the grounds that came out. actualDoseGrams stays the dose
+  // that went into the brew; retention (in − out) is worked out, not stored.
+  beanWeightInGrams: decimal("bean_weight_in_grams", { precision: 5, scale: 2, mode: "number" }),
+  groundWeightOutGrams: decimal("ground_weight_out_grams", { precision: 5, scale: 2, mode: "number" }),
   actualTimeSec: int("actual_time_sec").notNull(),
   // The coffee tasted on its own (for a milk drink, only if tasted straight).
   rating: int("rating"), // 1-5

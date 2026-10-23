@@ -6,6 +6,7 @@ import type { Grinder, MethodKind, PrepTool, RecipeStyle, WaterProfile } from '.
 import type { BrewDraft, BrewDraftErrors } from '../lib/brewDraft';
 import { brixToTds, extractionYield, usesWater } from '../lib/extraction';
 import { formatGrams } from '../lib/format';
+import { grinderRetentionText } from '../lib/grinderRetention';
 import { toolsFor } from '../lib/prepTools';
 import { TEMPERATURE_LABELS } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
@@ -78,6 +79,8 @@ watch(
 
 // Active grinders, plus the brew's own even if it's since been archived.
 const grinderOptions = computed(() => props.grinders.filter((g) => !g.archivedAt || g.id === draft.value.grinderId));
+// Weighing the beans before and after grinding shows what the grinder kept.
+const retentionHint = computed(() => grinderRetentionText(num(draft.value.beanIn), num(draft.value.groundOut)));
 // The speed is asked for only on a variable-speed grinder (docs/api/grinders.md §3b).
 const speedGrinder = computed(() => props.grinders.find((g) => g.id === draft.value.grinderId && g.variableSpeed) ?? null);
 const rpmPlaceholder = computed(() => {
@@ -174,6 +177,19 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
         <label for="brew-rpm">Speed (RPM)</label>
         <input id="brew-rpm" v-model="draft.rpm" inputmode="numeric" :placeholder="rpmPlaceholder" :aria-invalid="showErrors && !!errors.rpm" />
         <span v-if="showErrors && errors.rpm" class="field-error">{{ errors.rpm }}</span>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="field">
+        <label for="brew-bean-in">Beans in (g)</label>
+        <input id="brew-bean-in" v-model="draft.beanIn" inputmode="decimal" placeholder="Before grinding" :aria-invalid="showErrors && !!errors.beanIn" />
+        <span v-if="showErrors && errors.beanIn" class="field-error">{{ errors.beanIn }}</span>
+      </div>
+      <div class="field">
+        <label for="brew-ground-out">Grounds out (g)</label>
+        <input id="brew-ground-out" v-model="draft.groundOut" inputmode="decimal" placeholder="After grinding" :aria-invalid="showErrors && !!errors.groundOut" />
+        <span v-if="showErrors && errors.groundOut" class="field-error">{{ errors.groundOut }}</span>
+        <span v-else-if="retentionHint" class="hint">{{ retentionHint }}</span>
       </div>
     </div>
     <div class="field">

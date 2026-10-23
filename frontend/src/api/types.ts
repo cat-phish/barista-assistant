@@ -390,6 +390,8 @@ export interface BrewLog {
   actualTempC: number | null;
   actualGrindSetting: string | null;
   grindRpm: number | null; // grinder speed, variable-speed grinders only
+  beanWeightInGrams: number | null; // weighed before grinding; retention = in − out (lib/grinderRetention.ts)
+  groundWeightOutGrams: number | null; // what came out of the grinder
   actualTimeSec: number;
   rating: number | null; // the coffee tasted on its own
   tastingNotes: string | null;

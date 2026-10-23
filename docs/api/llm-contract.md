@@ -45,7 +45,9 @@ queue:
      power, variable speed and its RPM range), so the LLM knows which grinder
      a grind setting refers to, doesn't compare settings across different
      grinders, and can talk in steps. Each brew also has `grindRpm` (or
-     `null`): the speed on a variable-speed grinder, part of the grind.
+     `null`): the speed on a variable-speed grinder, part of the grind, and
+     `beanWeightInGrams`, `groundWeightOutGrams` and
+     `grinderRetentionGrams` (in − out, or `null` unless both were weighed).
    - Each brew includes its `water` (or `null`): the water profile's name and
      its figures (`tdsPpm`, `generalHardnessPpm`, `alkalinityPpm`, each
      mineral in mg/L, `ph`; `null` where not recorded; §3c), so the LLM can

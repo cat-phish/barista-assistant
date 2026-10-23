@@ -18,6 +18,8 @@ export interface BrewDraft {
   firstDrop: string; // espresso: seconds, e.g. "7.4" ('' = not recorded); from the timer's tap or typed
   grind: string;
   rpm: string; // grinder speed ('' = not recorded); only sent for a variable-speed grinder
+  beanIn: string; // g weighed before grinding ('' = not weighed)
+  groundOut: string; // g out of the grinder ('' = not weighed)
   time: string; // m:ss
   rating: number | null; // the coffee tasted on its own
   notes: string;
@@ -26,13 +28,13 @@ export interface BrewDraft {
 }
 
 export type BrewValues = Omit<BrewLogInput, 'beanId' | 'recipeId'>;
-export type BrewDraftErrors = Partial<Record<'dose' | 'water' | 'yieldGrams' | 'tds' | 'temp' | 'time' | 'firstDrop' | 'rpm', string>>;
+export type BrewDraftErrors = Partial<Record<'dose' | 'water' | 'yieldGrams' | 'tds' | 'temp' | 'time' | 'firstDrop' | 'rpm' | 'beanIn' | 'groundOut', string>>;
 
 // What the RPM is checked against: the brew's grinder (null = none chosen).
 export type RpmGrinder = Pick<Grinder, 'variableSpeed' | 'rpmMin' | 'rpmMax'> | null;
 
 export function emptyDraft(): BrewDraft {
-  return { dose: '', water: '', yieldGrams: '', tds: '', temp: '', grinderId: '', waterProfileId: '', toolIds: [], firstDrop: '', grind: '', rpm: '', time: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
+  return { dose: '', water: '', yieldGrams: '', tds: '', temp: '', grinderId: '', waterProfileId: '', toolIds: [], firstDrop: '', grind: '', rpm: '', beanIn: '', groundOut: '', time: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
 }
 
 // temp is text in the person's unit (°C stored); see lib/units.ts.
@@ -49,6 +51,8 @@ export function draftFromLog(log: BrewLog, tempUnit: TemperatureUnit = 'c'): Bre
     firstDrop: firstDropOf(log.marks),
     grind: log.actualGrindSetting ?? '',
     rpm: log.grindRpm === null ? '' : String(log.grindRpm),
+    beanIn: log.beanWeightInGrams === null ? '' : formatGrams(log.beanWeightInGrams),
+    groundOut: log.groundWeightOutGrams === null ? '' : formatGrams(log.groundWeightOutGrams),
     time: formatTime(log.actualTimeSec),
     rating: log.rating,
     notes: log.tastingNotes ?? '',
@@ -88,6 +92,9 @@ export function parseBrewDraft(
   const temp = d.temp.trim() ? parseTemp(d.temp, tempUnit) : null;
   const time = parseTime(d.time);
   const firstDrop = espresso ? parseMark(d.firstDrop) : null;
+  const weight = { scale: 2, min: 0, max: 1000, exclusiveMin: true, exclusiveMax: true };
+  const beanIn = d.beanIn.trim() ? parseDecimal(d.beanIn, weight) : null;
+  const groundOut = d.groundOut.trim() ? parseDecimal(d.groundOut, weight) : null;
   const rpm = grinder?.variableSpeed && d.rpm.trim() ? parseDecimal(d.rpm, { scale: 0, min: 50, max: 5000 }) : null;
 
   const errors: BrewDraftErrors = {};
@@ -99,11 +106,14 @@ export function parseBrewDraft(
   if (!time.ok) errors.time = time.error;
   if (firstDrop && !firstDrop.ok) errors.firstDrop = firstDrop.error;
   else if (firstDrop?.ok && time.ok && firstDrop.value > time.value) errors.firstDrop = 'After the end of the shot';
+  if (beanIn && !beanIn.ok) errors.beanIn = beanIn.error;
+  if (groundOut && !groundOut.ok) errors.groundOut = groundOut.error;
+  else if (groundOut?.ok && beanIn?.ok && groundOut.value > beanIn.value) errors.groundOut = 'More than the beans weighed in';
   if (rpm && !rpm.ok) errors.rpm = rpm.error;
   else if (rpm?.ok && grinder?.rpmMin != null && grinder.rpmMax != null && (rpm.value < grinder.rpmMin || rpm.value > grinder.rpmMax)) {
     errors.rpm = `Outside the grinder's range (${grinder.rpmMin}–${grinder.rpmMax})`;
   }
-  if (Object.keys(errors).length > 0 || !dose.ok || !water.ok || (yieldGrams && !yieldGrams.ok) || !time.ok || (tds && !tds.ok) || (temp && !temp.ok) || (rpm && !rpm.ok)) {
+  if (Object.keys(errors).length > 0 || !dose.ok || !water.ok || (yieldGrams && !yieldGrams.ok) || !time.ok || (tds && !tds.ok) || (temp && !temp.ok) || (rpm && !rpm.ok) || (beanIn && !beanIn.ok) || (groundOut && !groundOut.ok)) {
     return { errors, values: null, firstDropSec: null };
   }
 
@@ -121,6 +131,8 @@ export function parseBrewDraft(
       toolIds: [...d.toolIds],
       actualGrindSetting: d.grind.trim() || null,
       grindRpm: rpm?.ok ? rpm.value : null,
+      beanWeightInGrams: beanIn?.ok ? beanIn.value : null,
+      groundWeightOutGrams: groundOut?.ok ? groundOut.value : null,
       actualTimeSec: time.value,
       rating: d.rating,
       tastingNotes: d.notes.trim() || null,

@@ -191,4 +191,27 @@ describe("brew logs: water vs measured yield", () => {
       expect(res.status, String(tdsPercent)).toBe(400);
     }
   });
+
+  it("bean weight in and ground coffee out are optional; out can't be more than in (docs/api/brew-logs.md §6)", async () => {
+    const { owner, ws } = await setup();
+    const bean = await newBean(owner, ws.id);
+    const base = `/api/workspaces/${ws.id}/brew-logs`;
+    const id = await newBrewLog(owner, ws.id, bean, { beanWeightInGrams: 18.2, groundWeightOutGrams: 17.95 });
+    expect((await owner.agent.get(`${base}/${id}`)).body.brewLog).toMatchObject({ beanWeightInGrams: 18.2, groundWeightOutGrams: 17.95, actualDoseGrams: 15 });
+    expect((await owner.agent.get(base)).body.brewLogs[0]).toMatchObject({ beanWeightInGrams: 18.2 });
+    await newBrewLog(owner, ws.id, bean, { beanWeightInGrams: 18 }); // one alone is fine (newBrewLog expects 201)
+    await newBrewLog(owner, ws.id, bean, { groundWeightOutGrams: 18 });
+
+    const post = (fields: Record<string, unknown>) =>
+      owner.agent.post(base).send({ beanId: bean, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150, ...fields });
+    expect((await post({ beanWeightInGrams: 18, groundWeightOutGrams: 18.1 })).status).toBe(400);
+    for (const beanWeightInGrams of [0, -1, 1000, 18.005, "18"]) {
+      expect((await post({ beanWeightInGrams })).status, String(beanWeightInGrams)).toBe(400);
+    }
+
+    // PATCH checks the pair after the change.
+    expect((await owner.agent.patch(`${base}/${id}`).send({ beanWeightInGrams: 17.9 })).status).toBe(400);
+    expect((await owner.agent.patch(`${base}/${id}`).send({ groundWeightOutGrams: 18 })).body.brewLog).toMatchObject({ beanWeightInGrams: 18.2, groundWeightOutGrams: 18 });
+    expect((await owner.agent.patch(`${base}/${id}`).send({ beanWeightInGrams: null })).body.brewLog).toMatchObject({ beanWeightInGrams: null, groundWeightOutGrams: 18 });
+  });
 });

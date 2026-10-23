@@ -87,6 +87,11 @@ export interface BrewSummary {
   actualTempC: number | null;
   actualGrindSetting: string | null;
   grindRpm: number | null; // grinder speed, variable-speed grinders only
+  // Beans weighed before grinding and grounds out; retention = in − out
+  // (docs/api/brew-logs.md §6). actualDoseGrams is what went into the brew.
+  beanWeightInGrams: number | null;
+  groundWeightOutGrams: number | null;
+  grinderRetentionGrams: number | null;
   actualTimeSec: number;
   // How it was served: a drink and its ingredient types (milk, syrup…), or
   // null for the coffee on its own.
@@ -214,6 +219,12 @@ export function extractionYield(brew: BrewLog, style: StyleInfo | null): number 
   return beverage === null ? null : Math.round(((brew.tdsPercent * beverage) / brew.actualDoseGrams) * 10) / 10;
 }
 
+// Coffee left in the grinder, g: beans in − grounds out (both weighed).
+export function grinderRetention(brew: Pick<BrewLog, "beanWeightInGrams" | "groundWeightOutGrams">): number | null {
+  const { beanWeightInGrams: into, groundWeightOutGrams: out } = brew;
+  return into === null || out === null ? null : Math.round((into - out) * 100) / 100;
+}
+
 function summarize(
   brew: BrewRow,
   roastDate: Date | null,
@@ -246,6 +257,9 @@ function summarize(
     actualTempC: brew.actualTempC,
     actualGrindSetting: brew.actualGrindSetting,
     grindRpm: brew.grindRpm,
+    beanWeightInGrams: brew.beanWeightInGrams,
+    groundWeightOutGrams: brew.groundWeightOutGrams,
+    grinderRetentionGrams: grinderRetention(brew),
     actualTimeSec: brew.actualTimeSec,
     drink: brew.drinkId ? (servedAs.get(brew.drinkId) ?? null) : null,
     rating: brew.rating,

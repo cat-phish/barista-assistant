@@ -109,6 +109,9 @@ const brewLogFields = {
   actualGrindSetting: optionalText(100),
   // Grinder speed: only with a variable-speed grinder (rpmError).
   grindRpm: z.number().int().min(50).max(5000).nullable().optional(),
+  // Beans weighed in and grounds out, for grinder retention (weightsError).
+  beanWeightInGrams: decimalSchema({ min: 0, max: 1000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
+  groundWeightOutGrams: decimalSchema({ min: 0, max: 1000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
   actualTimeSec: z.number().int().min(0).max(24 * 60 * 60),
   // The coffee tasted on its own (for a milk drink, only if tasted straight).
   rating: z.number().int().min(1).max(5).nullable().optional(),
@@ -208,6 +211,14 @@ async function rpmError(tx: Tx, grinderId: string | null, grindRpm: number | nul
     return `grindRpm: must be within the grinder's range (${grinder.rpmMin}–${grinder.rpmMax})`;
   }
   return null;
+}
+
+// What comes out of the grinder can't weigh more than what went in
+// (docs/api/brew-logs.md §6).
+function weightsError(log: { beanWeightInGrams?: number | null; groundWeightOutGrams?: number | null }): string | null {
+  const into = log.beanWeightInGrams ?? null;
+  const out = log.groundWeightOutGrams ?? null;
+  return into !== null && out !== null && out > into ? "groundWeightOutGrams: can't be more than beanWeightInGrams" : null;
 }
 
 // A brew for a drink uses a recipe on a brewer of the drink's kind, any one of
@@ -330,6 +341,8 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       actualTempC: brewLogs.actualTempC,
       actualGrindSetting: brewLogs.actualGrindSetting,
       grindRpm: brewLogs.grindRpm,
+      beanWeightInGrams: brewLogs.beanWeightInGrams,
+      groundWeightOutGrams: brewLogs.groundWeightOutGrams,
       actualTimeSec: brewLogs.actualTimeSec,
       rating: brewLogs.rating,
       tastingNotes: brewLogs.tastingNotes,
@@ -499,6 +512,8 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Bre
     if (wrongForDrink) return wrongForDrink;
     const wrongRpm = await rpmError(tx, fields.grinderId ?? null, fields.grindRpm ?? null, true);
     if (wrongRpm) return wrongRpm;
+    const wrongWeights = weightsError(fields);
+    if (wrongWeights) return wrongWeights;
     await tx.insert(brewLogs).values({ id, workspaceId, userId, ...fields, brewerId: brewer?.brewerId ?? null });
     await insertMarks(tx, id, marks);
     await insertTools(tx, id, toolIds);
@@ -535,6 +550,8 @@ brewLogsRouter.patch(
           recipeId: brewLogs.recipeId,
           grinderId: brewLogs.grinderId,
           grindRpm: brewLogs.grindRpm,
+          beanWeightInGrams: brewLogs.beanWeightInGrams,
+          groundWeightOutGrams: brewLogs.groundWeightOutGrams,
           actualWaterGrams: brewLogs.actualWaterGrams,
           actualYieldGrams: brewLogs.actualYieldGrams,
           drinkId: brewLogs.drinkId,
@@ -588,6 +605,10 @@ brewLogsRouter.patch(
         const after = { ...log, ...fields };
         const wrongRpm = await rpmError(tx, after.grinderId ?? null, after.grindRpm ?? null, "grindRpm" in body);
         if (wrongRpm) return { status: "bad_ref", error: wrongRpm } as const;
+      }
+      if ("beanWeightInGrams" in body || "groundWeightOutGrams" in body) {
+        const wrongWeights = weightsError({ ...log, ...fields });
+        if (wrongWeights) return { status: "bad_ref", error: wrongWeights } as const;
       }
       if (Object.keys(fields).length > 0) await tx.update(brewLogs).set({ ...fields, ...brewerUpdate }).where(eq(brewLogs.id, brewLogId));
       // A sent list replaces the old one entirely.
