@@ -12,6 +12,8 @@ import {
   recipes,
   recipeSteps,
   waterProfiles,
+  prepTools,
+  brewLogTools,
   type Bean,
   type BeanProcess,
   type BlendType,
@@ -69,6 +71,9 @@ export interface BrewSummary {
   machine: MachineInfo | null; // espresso only
   // Shot timer taps, earliest first (espresso): first drop, end of manual pre-infusion.
   marks: Array<{ kind: MarkKind; stepOrder: number | null; atSec: number }>;
+  // Prep tools used, in checklist order (docs/api/prep-tools.md §3d). Empty
+  // means none were recorded, not that none were used.
+  prepTools: string[];
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso
   actualYieldGrams: number | null; // measured beverage weight (shot weight for espresso)
@@ -200,6 +205,7 @@ function summarize(
   roastDate: Date | null,
   freezes: readonly FreezePeriodLike[],
   marks: ReadonlyMap<string, BrewSummary["marks"]>,
+  tools: ReadonlyMap<string, string[]>,
   servedAs: ReadonlyMap<string, NonNullable<BrewSummary["drink"]>>
 ): BrewSummary {
   const age = roastDate
@@ -216,6 +222,7 @@ function summarize(
     water: brew.water,
     machine: brew.machine,
     marks: marks.get(brew.id) ?? [],
+    prepTools: tools.get(brew.id) ?? [],
     actualDoseGrams: brew.actualDoseGrams,
     actualWaterGrams: brew.actualWaterGrams,
     actualYieldGrams: brew.actualYieldGrams,
@@ -287,6 +294,19 @@ async function marksFor(brewLogIds: string[]): Promise<Map<string, BrewSummary["
     .orderBy(asc(brewLogMarks.atSec));
   const byLog = new Map<string, BrewSummary["marks"]>();
   for (const { brewLogId, ...mark } of rows) byLog.set(brewLogId, [...(byLog.get(brewLogId) ?? []), mark]);
+  return byLog;
+}
+
+// Each brew's prep tool names, in checklist order.
+async function toolsFor(brewLogIds: string[]): Promise<Map<string, string[]>> {
+  const rows = await db
+    .select({ brewLogId: brewLogTools.brewLogId, name: prepTools.name })
+    .from(brewLogTools)
+    .innerJoin(prepTools, eq(brewLogTools.toolId, prepTools.id))
+    .where(inArray(brewLogTools.brewLogId, brewLogIds))
+    .orderBy(asc(prepTools.position), asc(prepTools.name));
+  const byLog = new Map<string, string[]>();
+  for (const { brewLogId, name } of rows) byLog.set(brewLogId, [...(byLog.get(brewLogId) ?? []), name]);
   return byLog;
 }
 
@@ -364,8 +384,10 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
   ]);
 
   const previousRows = previous.map(withJoins);
-  const [marks, servedAs] = await Promise.all([
-    marksFor([brew.id, ...previousRows.map((p) => p.id)]),
+  const brewIds = [brew.id, ...previousRows.map((p) => p.id)];
+  const [marks, tools, servedAs] = await Promise.all([
+    marksFor(brewIds),
+    toolsFor(brewIds),
     drinksServed([brew, ...previousRows].flatMap((b) => (b.drinkId ? [b.drinkId] : []))),
   ]);
 
@@ -387,9 +409,9 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
       altitudeMasl: bean.altitudeMasl,
     },
     recipe,
-    brew: summarize(brew, bean.roastDate, freezes, marks, servedAs),
+    brew: summarize(brew, bean.roastDate, freezes, marks, tools, servedAs),
     drink: brew.drinkId ? await loadDrink(brew.drinkId, { size: brew.servingSize, unit: brew.servingUnit }) : null,
-    previousBrews: previousRows.map((p) => summarize(p, bean.roastDate, freezes, marks, servedAs)),
+    previousBrews: previousRows.map((p) => summarize(p, bean.roastDate, freezes, marks, tools, servedAs)),
     ratingScale: "1-5",
   };
 }

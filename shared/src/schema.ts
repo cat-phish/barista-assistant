@@ -290,6 +290,44 @@ export const waterProfiles = mysqlTable(
   })
 );
 
+// 5d. Prep Tools (Per-Workspace, Ordered)
+// What a brew's prep used: WDT, a puck screen, a rinsed paper filter…
+// (docs/api/prep-tools.md §3d). methodKind limits a tool to one method's
+// brews (null = every method); position is the order of the brew checklist.
+// Seeded with DEFAULT_PREP_TOOLS when a workspace is created. Retired like
+// grinders once brews use them.
+export const DEFAULT_PREP_TOOLS = [
+  { name: "WDT", methodKind: "espresso" },
+  { name: "Puck screen", methodKind: "espresso" },
+  { name: "Distributor", methodKind: "espresso" },
+  { name: "Shaker", methodKind: "espresso" },
+  { name: "Bottom paper filter", methodKind: "espresso" },
+  { name: "Top paper filter", methodKind: "espresso" },
+  { name: "Rinsed paper filter", methodKind: "filter" },
+  { name: "Metal filter", methodKind: "filter" },
+  { name: "Cloth filter", methodKind: "filter" },
+  { name: "RDT", methodKind: null },
+  { name: "Sifted fines", methodKind: null },
+] as const satisfies ReadonlyArray<{ name: string; methodKind: MethodKind | null }>;
+
+export const prepTools = mysqlTable(
+  "prep_tools",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(),
+    methodKind: varchar("method_kind", { length: 20 }).$type<MethodKind>(), // METHOD_KINDS, or null = all
+    position: int("position").notNull(), // 1, 2, 3...
+    retiredAt: timestamp("retired_at"), // null = active
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("prep_tools_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+
 // 6. Recipe Templates (Target Parameters)
 export const recipes = mysqlTable("recipes", {
   id: varchar("id", { length: 36 }).primaryKey(),
@@ -631,6 +669,24 @@ export const brewLogMarks = mysqlTable("brew_log_marks", {
   atSec: decimal("at_sec", { precision: 6, scale: 1, mode: "number" }).notNull(), // seconds from the start, 0.1 s
 });
 
+// 8c. Brew Log Tools (The Prep Tools a Brew Used)
+// Replaced as a whole when a log is edited (docs/api/brew-logs.md §6). Tools
+// in use are retired, not deleted; cascade is a backstop.
+export const brewLogTools = mysqlTable(
+  "brew_log_tools",
+  {
+    brewLogId: varchar("brew_log_id", { length: 36 })
+      .notNull()
+      .references(() => brewLogs.id, { onDelete: "cascade" }),
+    toolId: varchar("tool_id", { length: 36 })
+      .notNull()
+      .references(() => prepTools.id, { onDelete: "cascade" }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.brewLogId, table.toolId] }),
+  })
+);
+
 // 9. LLM Analyses (AI Parameter Suggestions)
 export const llmAnalyses = mysqlTable("llm_analyses", {
   id: varchar("id", { length: 36 }).primaryKey(),
@@ -659,6 +715,7 @@ export type NewBeanFreeze = typeof beanFreezes.$inferInsert;
 export type Grinder = typeof grinders.$inferSelect;
 export type NewGrinder = typeof grinders.$inferInsert;
 export type WaterProfile = typeof waterProfiles.$inferSelect;
+export type PrepTool = typeof prepTools.$inferSelect;
 export type RecipeGrindSetting = typeof recipeGrindSettings.$inferSelect;
 export type RecipeStepType = (typeof RECIPE_STEP_TYPES)[number];
 export type Recipe = typeof recipes.$inferSelect;

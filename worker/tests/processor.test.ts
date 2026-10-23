@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { beanFreezes, beans, brewLogMarks, brewLogs, brewers, ingredients, drinkIngredients, drinks, grinders, llmAnalyses, recipeGrindSettings, recipes, recipeSteps, users, waterProfiles, workspaces } from "@barista/shared/schema";
+import { beanFreezes, beans, brewLogMarks, brewLogs, brewers, ingredients, drinkIngredients, drinks, grinders, llmAnalyses, recipeGrindSettings, recipes, recipeSteps, users, waterProfiles, workspaces, prepTools, brewLogTools } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { extractionYield, type BrewContext } from "../src/context.js";
@@ -262,6 +262,23 @@ describe("processBrewAnalysis", () => {
       sodiumPpm: null, potassiumPpm: null, bicarbonatePpm: null, chloridePpm: null, sulfatePpm: null, ph: null,
     });
     expect(context.previousBrews[0]?.water).toBeNull();
+  });
+
+  it("tells the LLM the prep tools each brew used, in checklist order", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    const [rdt, wdt] = [randomUUID(), randomUUID()];
+    await db.insert(prepTools).values([
+      { id: rdt, workspaceId, name: "RDT", methodKind: null, position: 2 },
+      { id: wdt, workspaceId, name: "WDT", methodKind: "espresso", position: 1, retiredAt: new Date() },
+    ]);
+    await db.insert(brewLogTools).values([
+      { brewLogId: logIds.day8!, toolId: rdt },
+      { brewLogId: logIds.day8!, toolId: wdt },
+    ]);
+    await processBrewAnalysis({ brewLogId: logIds.day8! });
+    const context = llm.mock.calls[0]![0] as BrewContext;
+    expect(context.brew.prepTools).toEqual(["WDT", "RDT"]);
+    expect(context.previousBrews[0]?.prepTools).toEqual([]);
   });
 
   it("skips a brew log that was deleted after the job was queued, without calling the LLM", async () => {

@@ -273,8 +273,8 @@ Recording a brew: what's measured, and how fast it is to log.
 
 ### 10. More brew parameters
 
-- **Status:** in progress. TDS and extraction yield (part 1) and water
-  profiles (part 2) are done (roadmap); prep tools, then weights and RPM, are
+- **Status:** in progress. TDS and extraction yield (part 1), water profiles
+  (part 2) and prep tools (part 3) are done (roadmap); weights and RPM are
   next.
 - **Why:** dose, water, yield, temperature, grind and time leave out things
   that change the cup: retention, grinder speed, the tools used, the water,
@@ -286,17 +286,12 @@ Recording a brew: what's measured, and how fast it is to log.
       went into the brew.
     - **Grind speed** (RPM), for grinders with variable speed (a grinder
       flag says whether to ask).
-    - **Prep tools** (part 3): an editable list under Bar setup → **Tools**,
-      each for one method or all, seeded with common ones (WDT, puck screen,
-      RDT, distributor, rinsed paper…). The brew form shows the method's
-      tools as checkboxes, unticked (item 8 decides whether a repeat keeps
-      them). The AI gets the tools used.
   - Every new field can be hidden through item 5.
   - The AI prompt gets them (item 14), as it does TDS and EY.
-- **Size:** L, split into parts: TDS and EY (done), water profiles (done),
-  prep tools, then weights and RPM.
+- **Size:** L, split into parts: TDS and EY, water profiles, prep tools (all
+  done), then weights and RPM.
 - **Depends on:** nothing. Item 5 (hiding fields) comes after.
-- **Open questions:** none for part 3; weights and RPM still to plan.
+- **Open questions:** weights and RPM still to plan.
 
 ### 11. Repeat a brew
 

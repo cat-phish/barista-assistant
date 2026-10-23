@@ -45,6 +45,7 @@ created it and can't be changed.
   "servingSize": null,
   "servingUnit": null,
   "marks": [],
+  "tools": [{ "id": "uuid", "name": "Rinsed paper filter", "methodKind": "filter" }],
   "brewedBy": { "id": "uuid", "email": "barista@example.com" }
 }
 ```
@@ -63,7 +64,9 @@ for a brew without a recipe. `drink`
 (`{ "id", "name", "hasIngredients" }`) is the drink it was for, or `null`;
 `hasIngredients` tells clients to show the shot and the drink tasting apart. `marks` lists
 the timer's marks (`{ "kind", "stepOrder", "atSec" }`, `stepOrder` `null`
-except for `step_end`), earliest first. `userId` and `brewedBy` are `null` when the brewer deleted their
+except for `step_end`), earliest first. `tools` lists the prep tools used
+(§3d, `{ "id", "name", "methodKind" }`, retired ones included) in checklist
+order; `[]` when none were recorded. `userId` and `brewedBy` are `null` when the brewer deleted their
 account. Such logs can only be edited or deleted by owners.
 
 ## `GET /api/workspaces/:workspaceId/brew-logs`
@@ -125,6 +128,10 @@ account. Such logs can only be edited or deleted by owners.
     the change when any of the three is sent.
   - There is no brewer field: the log takes its recipe's brewer. Unknown
     fields (e.g. the old `machineId`) are rejected.
+  - `toolIds` (optional): the prep tools used (§3d), each once, all from this
+    workspace (retired ones accepted). A tool's `methodKind` isn't checked
+    against the recipe; it only decides where the checklist shows it. On
+    `PATCH` the list replaces the old one; `[]` clears it.
   - `beanId`, plus `recipeId`, `grinderId` and `waterProfileId` (all
     optional, nullable), must belong to **this** workspace. A retired grinder
     or water profile is accepted (e.g. when logging an old brew afterwards);
@@ -166,7 +173,7 @@ account. Such logs can only be edited or deleted by owners.
     optional (only if the shot was tasted on its own).
 - **Success (`201 Created`):** `{ "brewLog": { ...brewLog } }`
 - **Errors:** `400` invalid body, or `beanId`/`recipeId`/`grinderId`/
-  `waterProfileId` not in this workspace; `403` viewer.
+  `waterProfileId`/`toolIds` not in this workspace; `403` viewer.
 - Logging a brew does **not** change the bean's `inventoryWeightGrams`.
 
 ## `PATCH /api/workspaces/:workspaceId/brew-logs/:brewLogId`

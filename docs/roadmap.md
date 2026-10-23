@@ -337,3 +337,24 @@ extraction as much as the grind, and nothing recorded it. Contract:
 - **Backlog:** new item 16, choose what the AI sees (Settings → AI); items
   after it moved up one. Prep tools (part 3) start unticked, and item 8's
   repeat settings decide whether a repeat keeps them.
+
+## More brew parameters, part 3: prep tools (built)
+
+Backlog item 10, branch `prep-tools`, migration 0038. WDT, puck screens, RDT
+and the filter used change the cup, and brews didn't record them. Contract:
+`api/prep-tools.md` §3d.
+
+- **Bar setup → Tools:** an ordered list (↑/↓, like drink categories) of
+  tools, each for one method or all methods. Edit the name and method in
+  place, add at the bottom; used tools are retired, not deleted.
+- **Seeded:** every workspace (new ones on create, existing ones by the
+  migration) starts with WDT, Puck screen, Distributor, Shaker, Bottom and
+  Top paper filter (espresso), Rinsed paper, Metal and Cloth filter
+  (filter), RDT and Sifted fines (all methods).
+- **The brew form** has a Prep checklist, unticked to start, of the recipe's
+  method's tools and the all-method ones (every tool without a recipe). A
+  brew keeps showing its own tools even after they're retired or moved.
+- **Brew logs** take `toolIds` (PATCH replaces them) and return `tools` in
+  checklist order; the journal shows "Prep: WDT · Puck screen".
+- **The AI** gets each brew's `prepTools` names, and is told an empty list
+  means nothing was recorded, not that nothing was used.

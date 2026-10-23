@@ -2,10 +2,11 @@
 // Brew detail inputs shared by the brew flow's log form and journal editing.
 // Validate with parseBrewDraft (lib/brewDraft.ts); pass its errors in.
 import { computed, ref, watch } from 'vue';
-import type { Grinder, RecipeStyle, WaterProfile } from '../api/types';
+import type { Grinder, MethodKind, PrepTool, RecipeStyle, WaterProfile } from '../api/types';
 import type { BrewDraft, BrewDraftErrors } from '../lib/brewDraft';
 import { brixToTds, extractionYield, usesWater } from '../lib/extraction';
 import { formatGrams } from '../lib/format';
+import { toolsFor } from '../lib/prepTools';
 import RatingInput from './RatingInput.vue';
 
 const draft = defineModel<BrewDraft>({ required: true });
@@ -14,6 +15,8 @@ const props = defineProps<{
   showErrors: boolean;
   grinders: Grinder[];
   waterProfiles?: WaterProfile[]; // the workspace's (docs/api/water-profiles.md §3c)
+  prepTools?: PrepTool[]; // the workspace's, in order (docs/api/prep-tools.md §3d)
+  methodKind?: MethodKind | null; // the recipe's; null = no recipe (every tool shows)
   expectedYieldGrams?: number | null; // the recipe's estimate (espresso: target), shown for comparison
   espresso?: boolean; // shot weight instead of water (docs/api/brew-logs.md §6)
   drinkTasting?: boolean; // the drink has ingredients: rate the brew and the drink apart
@@ -72,6 +75,8 @@ watch(
 
 // Active grinders, plus the brew's own even if it's since been retired.
 const grinderOptions = computed(() => props.grinders.filter((g) => !g.retiredAt || g.id === draft.value.grinderId));
+// The prep checklist: the method's tools and the all-method ones (lib/prepTools.ts).
+const toolOptions = computed(() => toolsFor(props.prepTools ?? [], props.methodKind ?? null, draft.value.toolIds));
 // Likewise for water; with none set up, the only choice says so.
 const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w.retiredAt || w.id === draft.value.waterProfileId));
 </script>
@@ -164,6 +169,15 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
         <option v-for="w in waterOptions" :key="w.id" :value="w.id">{{ w.name }}{{ w.retiredAt ? ' (retired)' : '' }}</option>
       </select>
     </div>
+    <fieldset v-if="toolOptions.length" class="prep">
+      <legend>Prep</legend>
+      <div class="prep-list">
+        <label v-for="t in toolOptions" :key="t.id" class="checkbox">
+          <input v-model="draft.toolIds" type="checkbox" :value="t.id" />
+          {{ t.name }}{{ t.retiredAt ? ' (retired)' : '' }}
+        </label>
+      </div>
+    </fieldset>
     <!-- A drink with ingredients is tasted twice: the brew on its own (if you
          tried it) and the finished drink, which milk and syrup change. -->
     <fieldset v-if="drinkTasting" class="tasting">
@@ -217,5 +231,21 @@ textarea {
   font: inherit;
   font-size: max(1rem, 16px);
   resize: vertical;
+}
+.prep {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.prep legend {
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: var(--space-1);
+}
+.prep-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
 }
 </style>
