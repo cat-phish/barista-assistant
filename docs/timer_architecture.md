@@ -65,6 +65,7 @@ export default defineConfig({
     *   `first_drop` (espresso): ends when **First drop** is tapped. A first drop tapped before this step starts ends it as soon as it starts.
     *   A last step with no duration runs until **Finish & Save**; after a timed last step the card shows "All steps done".
     *   The schedule is a pure function, `brewSchedule(steps, t, marks)` in `lib/steps.ts`, unit-tested.
+*   **Layout, top to bottom:** header, the step cards, the buttons (Start / Finish & Save / First drop), then the clock. Steps come first because they say what to do; before the start there are no cards, so it's the buttons and the clock.
 *   **Cards:** **Previous** → **Current** → **Up next**, the same structure for every step so the layout doesn't jump. Current shows a label line ("Step 2 of 4 · Pour · 93 °C"), a big line, a small line and a progress bar:
     *   Big, left: the instruction ("Pour to 150 g (+100)", "9 bar", "9 → 6 bar", "4 → 2 g/s", "Pump off"), or the step's name when it has none. The name goes on the small line under it.
     *   Big, right: a countdown ("0:20", small "left"; for a tap step's guide "left (guide)", then "Tap Next"), or "At first drop" / "Until done".

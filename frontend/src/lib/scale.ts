@@ -121,6 +121,20 @@ export function scaleBatch(
   return { dose, water, yield: yieldGrams, yieldOz: round1(yieldGrams / GRAMS_PER_FL_OZ), yieldMl: yieldGrams, ratio: r, factor: water / w0 };
 }
 
+// Typing the dose or the water (or an espresso shot weight) keeps the other
+// amount where it is and changes the ratio instead (water or shot ÷ dose).
+// keep is the amount held: the water when the dose is typed, else the dose.
+// Null when there's nothing valid to hold yet.
+export function linkRatio(field: 'dose' | 'water' | 'yield', typed: number, keep: number | null): number | null {
+  if (!(typed > 0) || keep === null || !(keep > 0)) return null;
+  return field === 'dose' ? keep / typed : typed / keep;
+}
+
+// The ratio box's text for a worked-out ratio: 0.1, trailing zeros dropped.
+export function ratioText(ratio: number): string {
+  return String(Math.round(ratio * 10) / 10);
+}
+
 // Espresso: dose and target shot weight at a ratio (shot ÷ dose, the "2" in
 // 1:2), from either one. No water or retention: the shot weight is measured.
 export interface Shot {

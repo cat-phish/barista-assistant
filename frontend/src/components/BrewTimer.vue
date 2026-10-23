@@ -164,25 +164,6 @@ onUnmounted(() => {
       <p class="subtitle">{{ subtitle }}</p>
     </header>
 
-    <div class="clock-display" role="timer" aria-live="off">
-      <span class="time">{{ formattedTime }}</span>
-      <p v-if="finishNote" class="finish-note" :class="{ late: finishLate }">{{ finishNote }}</p>
-    </div>
-
-    <!-- Right under the clock, so the step cards below stay on screen. -->
-    <div class="controls">
-      <button v-if="!isRunning && elapsedMs === 0" @click="startTimer" class="btn primary">{{ espresso ? 'Start shot' : 'Start brew' }}</button>
-      <button v-else-if="isRunning" @click="finishBrew" class="btn success">Finish & Save</button>
-      <template v-if="espresso">
-        <button v-if="isRunning && firstDropAt === null" class="btn tap drop" type="button" @click="record('first_drop')">First drop</button>
-        <p v-else-if="firstDropText" class="drop-line" aria-live="polite">
-          {{ firstDropText }}
-          <button v-if="isRunning" class="btn-link small" type="button" @click="record('first_drop')">Re-record</button>
-        </p>
-        <p v-else-if="firstDropTarget" class="drop-line muted">First drop target {{ firstDropTarget }}</p>
-      </template>
-    </div>
-
     <template v-if="phase.kind !== 'idle'">
       <div class="step-card side" aria-label="Previous step">
         <span class="label">Previous</span>
@@ -243,6 +224,24 @@ onUnmounted(() => {
         </span>
       </div>
     </template>
+    <!-- Steps first (they say what to do), then the buttons, then the clock. -->
+    <div class="controls">
+      <button v-if="!isRunning && elapsedMs === 0" @click="startTimer" class="btn primary">{{ espresso ? 'Start shot' : 'Start brew' }}</button>
+      <button v-else-if="isRunning" @click="finishBrew" class="btn success">Finish & Save</button>
+      <template v-if="espresso">
+        <button v-if="isRunning && firstDropAt === null" class="btn tap drop" type="button" @click="record('first_drop')">First drop</button>
+        <p v-else-if="firstDropText" class="drop-line" aria-live="polite">
+          {{ firstDropText }}
+          <button v-if="isRunning" class="btn-link small" type="button" @click="record('first_drop')">Re-record</button>
+        </p>
+        <p v-else-if="firstDropTarget" class="drop-line muted">First drop target {{ firstDropTarget }}</p>
+      </template>
+    </div>
+
+    <div class="clock-display" role="timer" aria-live="off">
+      <span class="time">{{ formattedTime }}</span>
+      <p v-if="finishNote" class="finish-note" :class="{ late: finishLate }">{{ finishNote }}</p>
+    </div>
   </div>
 </template>
 
@@ -348,7 +347,7 @@ onUnmounted(() => {
 }
 .step-card h3 {
   margin: 0;
-  font-size: 1.3rem;
+  font-size: 1.5rem;
 }
 /* Current step: something to do = warm tint; waiting (wait, soak) = white. */
 .current {
@@ -372,7 +371,7 @@ onUnmounted(() => {
   border-left-color: var(--success);
 }
 .side {
-  font-size: 0.9rem;
+  font-size: 1.05rem;
   flex-direction: row;
   align-items: baseline;
   gap: 0.5rem;
@@ -395,21 +394,21 @@ onUnmounted(() => {
   gap: 1rem;
 }
 .main-row h3 {
-  font-size: 1.45rem;
+  font-size: 1.8rem;
   line-height: 1.2;
 }
 .count {
-  font-size: 1.6rem;
+  font-size: 2rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .count.text {
-  font-size: 1.1rem;
+  font-size: 1.25rem;
 }
 .sub-row {
   color: var(--text-muted);
-  font-size: 0.9rem;
+  font-size: 1.05rem;
   margin-bottom: 0.4rem;
 }
 .current.due .count {
@@ -426,7 +425,7 @@ onUnmounted(() => {
   margin: 0.4rem 0 0.4rem;
 }
 .label {
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   color: var(--text-muted);
   text-transform: uppercase;
 }
