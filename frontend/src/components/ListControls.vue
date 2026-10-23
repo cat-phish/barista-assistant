@@ -2,14 +2,18 @@
 // The filter, Sort by and Order selects above a list table (Beans, Recipes,
 // Drinks, Ingredients, Brewers, Grinders). The sort stays one key,
 // "<column>_<asc|desc>" (lib/listSort.ts), shared with the column headers;
-// columns come from sortColumnOptions.
+// columns come from sortColumnOptions. Lists with retired items (Brewers,
+// Grinders, Water) pass retiredCount and get a "Show retired" checkbox,
+// shown only while there are some.
 import { computed } from 'vue';
 import { parseSortKey, type SortColumnOption, type SortDir } from '../lib/listSort';
 
 type Option = { value: string; label: string };
-const filter = defineModel<string>('filter', { required: true });
+const filter = defineModel<string>('filter', { default: '' });
 const sort = defineModel<string>('sort', { required: true });
-const props = defineProps<{ idPrefix: string; filterLabel: string; filterOptions: Option[]; sortColumns: SortColumnOption[] }>();
+const showRetired = defineModel<boolean>('showRetired', { default: false });
+// No filterOptions (Water): just Sort by and Order.
+const props = defineProps<{ idPrefix: string; filterLabel?: string; filterOptions?: Option[]; sortColumns: SortColumnOption[]; retiredCount?: number }>();
 
 const parsed = computed(() => parseSortKey(sort.value));
 // Changing the column keeps the chosen order.
@@ -25,8 +29,9 @@ const current = computed(() => props.sortColumns.find((c) => c.value === column.
 </script>
 
 <template>
-  <div class="controls">
-    <div class="field">
+  <div class="list-controls">
+  <div class="controls" :class="{ 'no-filter': !filterOptions?.length }">
+    <div v-if="filterOptions?.length" class="field">
       <label :for="`${idPrefix}-filter`">{{ filterLabel }}</label>
       <select :id="`${idPrefix}-filter`" v-model="filter">
         <option v-for="o in filterOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
@@ -46,20 +51,36 @@ const current = computed(() => props.sortColumns.find((c) => c.value === column.
       </select>
     </div>
   </div>
+  <label v-if="retiredCount" class="checkbox retired">
+    <input v-model="showRetired" type="checkbox" />
+    Show retired ({{ retiredCount }})
+  </label>
+  </div>
 </template>
 
 <style scoped>
+.list-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.retired {
+  align-self: flex-end;
+}
 .controls {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--space-2);
+}
+.controls.no-filter {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 /* Phones: the filter on its own row, Sort by and Order side by side. */
 @media (max-width: 480px) {
   .controls {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
-  .controls > :first-child {
+  .controls:not(.no-filter) > :first-child {
     grid-column: 1 / -1;
   }
 }

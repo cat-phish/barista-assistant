@@ -48,7 +48,6 @@ function recipeSummary(brewerId: string): string {
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `brewers.${what}.${workspaces.current?.id ?? ''}`;
 const ALL = 'all';
-const RETIRED = 'retired';
 const KINDS = Object.keys(METHOD_KINDS) as Array<keyof typeof METHOD_KINDS>;
 const columns: SortColumns<Brewer> = {
   name: nameColumn(),
@@ -58,18 +57,19 @@ const columns: SortColumns<Brewer> = {
 };
 const sortChoices = sortColumnOptions(columns);
 const filter = ref(ALL);
+const showRetired = ref(false);
+const retiredCount = computed(() => brewers.value.filter((b) => b.retiredAt).length);
 const sort = ref('name_asc');
 watch(filter, (v) => rememberView(viewKey('filter'), v));
 watch(sort, (v) => rememberView(viewKey('sort'), v));
 const filterOptions = computed(() => [
   { value: ALL, label: 'All brewers' },
   ...KINDS.map((k) => ({ value: k, label: METHOD_KINDS[k].label })),
-  ...(brewers.value.some((b) => b.retiredAt) ? [{ value: RETIRED, label: 'Retired' }] : []),
 ]);
 const filterName = computed(() => filterOptions.value.find((o) => o.value === filter.value)?.label ?? '');
 const shown = computed(() => {
   const f = filter.value;
-  const list = f === RETIRED ? brewers.value.filter((b) => b.retiredAt) : brewers.value.filter((b) => !b.retiredAt && (f === ALL || b.kind === f));
+  const list = brewers.value.filter((b) => (!b.retiredAt || showRetired.value) && (f === ALL || b.kind === f));
   return sortBy(list, sort.value, columns);
 });
 // One row open at a time.
@@ -83,6 +83,7 @@ async function load(): Promise<void> {
     const [b, r] = await Promise.all([brewersApi.list(ws), recipesApi.list(ws)]);
     brewers.value = b.brewers;
     recipes.value = r.recipes;
+    if (retiredCount.value === 0) showRetired.value = false;
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -169,8 +170,8 @@ async function retireInstead(): Promise<void> {
     <template v-if="!loading">
       <div v-if="brewers.length === 0" class="card empty"><p>No brewers yet.</p></div>
       <template v-else>
-        <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="brewers" filter-label="Brew method" :filter-options="filterOptions" />
-        <p v-if="filter === RETIRED" class="muted small">Retired brewers are hidden when brewing; past brews still show them.</p>
+        <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="brewers" filter-label="Brew method" :filter-options="filterOptions" v-model:show-retired="showRetired" :retired-count="retiredCount" />
+        <p v-if="showRetired" class="muted small">Retired brewers are hidden when brewing; past brews still show them.</p>
         <p v-if="shown.length === 0" class="card empty">No {{ filter === ALL ? 'brewers' : `${filterName.toLowerCase()} brewers` }} yet.</p>
         <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.3fr) 5.5rem">
           <div class="data-row data-head">
@@ -183,7 +184,7 @@ async function retireInstead(): Promise<void> {
           </div>
           <div v-for="m in shown" :key="m.id" class="data-item" :class="{ open: openId === m.id }">
             <button class="data-row" type="button" :aria-expanded="openId === m.id" @click="toggle(m.id)">
-              <span class="data-td primary">{{ m.name }}</span>
+              <span class="data-td primary">{{ m.name }}<span v-if="m.retiredAt" class="muted"> (retired)</span></span>
               <span class="data-td">{{ METHOD_KINDS[m.kind].label }}</span>
               <span class="data-td">{{ recipeCount(m.id) }}</span>
               <span class="data-td end">{{ formatAdded(m.createdAt) }}</span>

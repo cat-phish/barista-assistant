@@ -327,8 +327,8 @@ extraction as much as the grind, and nothing recorded it. Contract:
 - **A default:** a "Default for new brews" dropdown above the Water list
   picks one profile (or None); setting it clears the old one, and retiring it
   clears it. New brews start on it. The profile form doesn't edit it.
-- **The list** filters (All water / Retired) and sorts by name, TDS, GH, KH or
-  date added, like Brewers and Grinders; the choice is remembered.
+- **The list** sorts by name, TDS, GH, KH or date added, like Brewers and
+  Grinders; the choice is remembered.
 - **Brews** record `waterProfileId` (returned with `waterProfile`). The brew
   form has a Water profile dropdown, "None (no water profiles set up)" when
   the list is empty; the journal shows it.
@@ -358,3 +358,7 @@ and the filter used change the cup, and brews didn't record them. Contract:
   checklist order; the journal shows "Prep: WDT · Puck screen".
 - **The AI** gets each brew's `prepTools` names, and is told an empty list
   means nothing was recorded, not that nothing was used.
+- **Show retired:** Brewers, Grinders and Water now show retired items with a
+  "Show retired (n)" checkbox under the list controls (only when there are
+  some), as Tools does, instead of a "Retired" choice in the filter. Retired
+  rows are marked "(retired)" and keep the current filter and sort.
