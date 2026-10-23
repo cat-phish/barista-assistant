@@ -36,7 +36,7 @@ created it and can't be changed.
   "drinkRating": null,
   "drinkTastingNotes": null,
   "bean": { "id": "uuid", "roasterName": "Onyx Coffee Lab", "beanName": "Southern Weather" },
-  "recipe": { "id": "uuid", "name": "House V60", "expectedYieldGrams": 220, "style": "pour_over", "methodKind": "filter" },
+  "recipe": { "id": "uuid", "name": "House V60", "expectedYieldGrams": 220, "style": { "id": "uuid", "name": "Pour over", "brewsLike": "pour_over" }, "methodKind": "filter" },
   "grinder": { "id": "uuid", "name": "Comandante C40" },
   "waterProfile": { "id": "uuid", "name": "Third Wave Water (classic)" },
   "brewerId": "uuid",
@@ -53,8 +53,8 @@ created it and can't be changed.
 `recipe` is `null` when `recipeId` is `null` (no recipe used, or the recipe was
 deleted later); its `expectedYieldGrams` is the recipe's current estimate (or
 target, for espresso), for comparing with the measured `actualYieldGrams`,
-`style` is its style (or `null`), which decides how extraction yield is worked
-out, and `methodKind` is its brewer's kind. `grinder` is
+`style` is its style (`{ id, name, brewsLike }`, §5e, or `null`), whose
+`brewsLike` decides how extraction yield is worked out, and `methodKind` is its brewer's kind. `grinder` is
 `null` when no grinder was recorded; an archived
 grinder still appears here. `waterProfile` (`{ "id", "name" }`, §3c) is the
 water used, or `null`; archived ones still appear. `brewerId` / `brewer` (`{ "id", "name",
@@ -155,8 +155,8 @@ account. Such logs can only be edited or deleted by owners.
   - `tdsPercent` (optional, nullable): a refractometer reading in %, > 0 and
     ≤ 30, max 2 decimals. **Extraction yield** isn't stored; clients and the
     worker (§9) work it out as `tdsPercent × beverage / actualDoseGrams`,
-    rounded to 0.1 %. The beverage is `actualWaterGrams` for the `immersion`,
-    `cold_brew` and `ibrik` styles (the liquid left in the grounds is as
+    rounded to 0.1 %. The beverage is `actualWaterGrams` for styles that brew
+    like `immersion`, `cold_brew` or `ibrik` (custom ones by their `brewsLike`, §5e) (the liquid left in the grounds is as
     strong as the cup), else the measured `actualYieldGrams`; with no yield
     there's no extraction yield. Clients may also take a °Brix reading and
     convert it, `TDS = (0.0036 × Bx + 0.7897) × Bx − 0.0071` (as

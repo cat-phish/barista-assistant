@@ -5,6 +5,7 @@ import { sendError } from "./http.js";
 import { authedUserId } from "./middleware/requireAuth.js";
 import {
   beanProcesses,
+  recipeStyles,
   beans,
   brewers,
   brewLogs,
@@ -95,7 +96,12 @@ export async function beanProcessUsage(id: string): Promise<Counts> {
   return { beanCount: await countWhere(beans, eq(beans.processId, id)) };
 }
 
-const tables = { brewers, grinders, waterProfiles, prepTools, recipes, drinks, ingredients, beanProcesses } as const;
+// Recipes lose the style (FK set null).
+export async function recipeStyleUsage(id: string): Promise<Counts> {
+  return { recipeCount: await countWhere(recipes, eq(recipes.styleId, id)) };
+}
+
+const tables = { brewers, grinders, waterProfiles, prepTools, recipes, drinks, ingredients, beanProcesses, recipeStyles } as const;
 
 // GET /:<param>/usage on a resource router: the counts above, for any member.
 export function addUsageRoute(

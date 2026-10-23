@@ -19,6 +19,7 @@ import {
   recipeGrindSettings,
   recipes,
   recipeSteps,
+  recipeStyles,
   WATER_STEP_TYPES,
   type Brewer,
   type MethodKind,
@@ -30,8 +31,12 @@ import { archiveUpdate } from "../archive.js";
 import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
 // docs/api/recipes.md §5
-export interface RecipeDetails extends Omit<Recipe, "brewerId"> {
+// style: the workspace's style (docs/api/recipe-styles.md §5e); brewsLike is
+// the built-in it brews like, which extraction yield and the AI go by.
+export type RecipeStyleSummary = { id: string; name: string; brewsLike: RecipeStyle };
+export interface RecipeDetails extends Omit<Recipe, "brewerId" | "styleId"> {
   brewer: Pick<Brewer, "id" | "name" | "kind">;
+  style: RecipeStyleSummary | null;
   grindSettings: Array<{ grinderId: string; grinderName: string; setting: string }>;
   steps: Array<Omit<RecipeStep, "recipeId">>;
 }
@@ -136,8 +141,9 @@ const recipeFields = {
   firstDropMaxSec: seconds.nullable().optional(),
   flowUnit: z.enum(FLOW_UNITS),
   targetTempC: decimalSchema({ min: 0, max: 100, scale: 1 }).nullable().optional(),
-  // How the cup is brewed; must be one of the brewer's method's (styleError).
-  style: z.enum(RECIPE_STYLES).nullable().optional(),
+  // How the cup is brewed: one of the workspace's styles for the brewer's
+  // method (styleError, docs/api/recipe-styles.md §5e).
+  styleId: z.uuid().nullable().optional(),
   // Preselected when brewing this recipe (docs/api/recipes.md §5).
   defaultGrinderId: z.uuid().nullable().optional(),
   grindSettings: grindSettingsSchema,
@@ -209,10 +215,21 @@ function windows(body: {
   };
 }
 
-// A recipe's style must be one of its brewer's method's (docs/api/recipes.md §5):
-// pour over, immersion… for filter; standard, soup… for espresso.
-function styleError(kind: MethodKind, style: RecipeStyle | null | undefined): string | null {
-  return style && !STYLES_BY_KIND[kind].includes(style) ? `style: not a style for ${kind} recipes` : null;
+// A recipe's style must be one of the workspace's styles for its brewer's
+// method (docs/api/recipe-styles.md §5e): pour over, immersion… for filter.
+async function styleKind(tx: Tx, styleId: string, workspaceId: string): Promise<MethodKind | null> {
+  const [row] = await tx
+    .select({ kind: recipeStyles.kind })
+    .from(recipeStyles)
+    .where(and(eq(recipeStyles.id, styleId), eq(recipeStyles.workspaceId, workspaceId)))
+    .limit(1);
+  return row?.kind ?? null;
+}
+async function styleError(tx: Tx, styleId: string | null | undefined, kind: MethodKind, workspaceId: string): Promise<string | null> {
+  if (!styleId) return null;
+  const of = await styleKind(tx, styleId, workspaceId);
+  if (!of) return "styleId: not a style of this workspace";
+  return of === kind ? null : `styleId: not a style for ${kind} recipes`;
 }
 
 // What a recipe must look like for its method's kind (docs/api/recipes.md §5),
@@ -317,7 +334,7 @@ async function loadRecipes(workspaceId: string, recipeId?: string): Promise<Reci
       firstDropMinSec: recipes.firstDropMinSec,
       firstDropMaxSec: recipes.firstDropMaxSec,
       flowUnit: recipes.flowUnit,
-      style: recipes.style,
+      style: { id: recipeStyles.id, name: recipeStyles.name, brewsLike: recipeStyles.brewsLike },
       targetTempC: recipes.targetTempC,
       defaultGrinderId: recipes.defaultGrinderId,
       archivedAt: recipes.archivedAt,
@@ -325,6 +342,7 @@ async function loadRecipes(workspaceId: string, recipeId?: string): Promise<Reci
     })
     .from(recipes)
     .innerJoin(brewers, eq(recipes.brewerId, brewers.id))
+    .leftJoin(recipeStyles, eq(recipes.styleId, recipeStyles.id))
     .where(and(...conditions))
     .orderBy(asc(recipes.name));
 
@@ -395,7 +413,7 @@ recipesRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Reci
       steps,
     });
     if (wrongForKind) return wrongForKind;
-    const wrongStyle = styleError(kind, recipeFields.style);
+    const wrongStyle = await styleError(tx, recipeFields.styleId, kind, workspaceId);
     if (wrongStyle) return wrongStyle;
     if (!(await grindersInWorkspace(tx, grindSettings.map((g) => g.grinderId), workspaceId))) {
       return "grindSettings: grinderId not a grinder in this workspace";
@@ -456,7 +474,7 @@ recipesRouter.patch("/:recipeId", async (req: Request<RecipeParams>, res: Respon
         targetWaterGrams: recipes.targetWaterGrams,
         expectedYieldGrams: recipes.expectedYieldGrams,
         firstDropMinSec: recipes.firstDropMinSec,
-        style: recipes.style,
+        styleId: recipes.styleId,
       })
       .from(recipes)
       .where(and(eq(recipes.id, recipeId), eq(recipes.workspaceId, workspaceId)))
@@ -488,9 +506,10 @@ recipesRouter.patch("/:recipeId", async (req: Request<RecipeParams>, res: Respon
     if (wrongForKind) return { status: 400, error: wrongForKind } as const;
     // A sent style must fit; moving to a brewer of the other method clears a
     // style that no longer does.
-    const wrongStyle = styleError(kind, recipeFields.style);
+    const wrongStyle = await styleError(tx, recipeFields.styleId, kind, workspaceId);
     if (wrongStyle) return { status: 400, error: wrongStyle } as const;
-    const styleUpdate = recipeFields.style === undefined && styleError(kind, existing.style) ? { style: null } : {};
+    const keptStyleWrong = recipeFields.styleId === undefined && (await styleError(tx, existing.styleId, kind, workspaceId));
+    const styleUpdate = keptStyleWrong ? { styleId: null } : {};
     if (grindSettings && !(await grindersInWorkspace(tx, grindSettings.map((g) => g.grinderId), workspaceId))) {
       return { status: 400, error: "grindSettings: grinderId not a grinder in this workspace" } as const;
     }

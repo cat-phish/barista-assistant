@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { brewerId, newBean, newUser, newWorkspace, type TestUser } from "./helpers.js";
+import { brewerId, newBean, newUser, newWorkspace, type TestUser, styleId } from "./helpers.js";
 
 // Method kinds and espresso recipes/logs (docs/api/README.md §3, §5, §6).
 
@@ -42,16 +42,24 @@ describe("method kinds", () => {
     const recipes = `/api/workspaces/${ws.id}/recipes`;
     const recipe = (brewerId: string, extra: Record<string, unknown>) =>
       owner.agent.post(recipes).send({ name: `R ${Math.random()}`, brewerId, targetDoseGrams: 15, ...extra });
+    const style = (kind: string, key: string) => styleId(owner, ws.id, kind, key);
+    const ids = {
+      espresso_soup: await style("espresso", "soup"),
+      filter_pour_over: await style("filter", "pour_over"),
+      other_other: await style("other", "other"),
+      stovetop_ibrik: await style("stovetop", "ibrik"),
+      stovetop_moka: await style("stovetop", "moka"),
+    };
     // Dose + water, like filter.
-    expect((await recipe(moka, { style: "moka" })).status).toBe(400); // needs water
-    const created = await recipe(moka, { targetWaterGrams: 150, style: "moka" });
+    expect((await recipe(moka, { styleId: await style("stovetop", "moka") })).status).toBe(400); // needs water
+    const created = await recipe(moka, { targetWaterGrams: 150, styleId: await style("stovetop", "moka") });
     expect(created.status).toBe(201);
-    expect(created.body.recipe).toMatchObject({ style: "moka", brewer: { kind: "stovetop" } });
-    expect((await recipe(moka, { targetWaterGrams: 150, style: "ibrik" })).status).toBe(201);
-    expect((await recipe(moka, { targetWaterGrams: 150, style: "soup" })).status).toBe(400); // an espresso style
-    expect((await recipe(moka, { targetWaterGrams: 150, style: "pour_over" })).status).toBe(400); // a filter style
-    expect((await recipe(siphon, { targetWaterGrams: 300, style: "other" })).status).toBe(201);
-    expect((await recipe(siphon, { targetWaterGrams: 300, style: "moka" })).status).toBe(400);
+    expect(created.body.recipe).toMatchObject({ style: { name: "Moka", brewsLike: "moka" }, brewer: { kind: "stovetop" } });
+    expect((await recipe(moka, { targetWaterGrams: 150, styleId: await style("stovetop", "ibrik") })).status).toBe(201);
+    expect((await recipe(moka, { targetWaterGrams: 150, styleId: await style("espresso", "soup") })).status).toBe(400); // an espresso style
+    expect((await recipe(moka, { targetWaterGrams: 150, styleId: await style("filter", "pour_over") })).status).toBe(400); // a filter style
+    expect((await recipe(siphon, { targetWaterGrams: 300, styleId: await style("other", "other") })).status).toBe(201);
+    expect((await recipe(siphon, { targetWaterGrams: 300, styleId: await style("stovetop", "moka") })).status).toBe(400);
     // Drinks can need either method.
     const drinks = `/api/workspaces/${ws.id}/drinks`;
     expect((await owner.agent.post(drinks).send({ name: "Moka latte", kind: "stovetop" })).body.drink.kind).toBe("stovetop");
@@ -263,23 +271,32 @@ describe("recipe styles", () => {
     const { owner, ws, v60, espresso } = await setup();
     const base = `/api/workspaces/${ws.id}/recipes`;
     const filter = { name: "F", brewerId: v60, targetDoseGrams: 15, targetWaterGrams: 250 };
-    const made = await owner.agent.post(base).send({ ...filter, style: "immersion" }); // a V60 Switch-style recipe
-    expect(made.body.recipe.style).toBe("immersion");
-    expect((await owner.agent.post(base).send({ ...filter, style: "soup" })).body.error).toMatch(/not a style for filter recipes/);
-    expect((await owner.agent.post(base).send({ ...filter, style: "vacuum" })).status).toBe(400);
-    expect((await owner.agent.post(base).send({ ...filter, name: "Cold brew", style: "cold_brew" })).body.recipe.style).toBe("cold_brew");
+    const style = (kind: string, key: string) => styleId(owner, ws.id, kind, key);
+    const ids = {
+      espresso_soup: await style("espresso", "soup"),
+      espresso_standard: await style("espresso", "standard"),
+      filter_cold_brew: await style("filter", "cold_brew"),
+      filter_immersion: await style("filter", "immersion"),
+      filter_pour_over: await style("filter", "pour_over"),
+    };
+    const made = await owner.agent.post(base).send({ ...filter, styleId: ids.filter_immersion }); // a V60 Switch-style recipe
+    expect(made.body.recipe.style).toMatchObject({ name: "Immersion", brewsLike: "immersion" });
+    expect((await owner.agent.post(base).send({ ...filter, styleId: ids.espresso_soup })).body.error).toMatch(/not a style for filter recipes/);
+    expect((await owner.agent.post(base).send({ ...filter, styleId: "vacuum" })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ ...filter, styleId: crypto.randomUUID() })).body.error).toMatch(/not a style of this workspace/);
+    expect((await owner.agent.post(base).send({ ...filter, name: "Cold brew", styleId: ids.filter_cold_brew })).body.recipe.style.brewsLike).toBe("cold_brew");
     expect((await owner.agent.post(base).send(filter)).body.recipe.style).toBeNull();
 
-    const soup = await owner.agent.post(base).send(shot(espresso, { name: "Soup shot", style: "soup", expectedYieldGrams: 90 }));
-    expect(soup.body.recipe).toMatchObject({ style: "soup", brewer: { kind: "espresso" } });
-    expect((await owner.agent.post(base).send(shot(espresso, { style: "pour_over" }))).status).toBe(400);
-    expect((await owner.agent.post(base).send(shot(espresso, { style: "cold_brew" }))).status).toBe(400);
+    const soup = await owner.agent.post(base).send(shot(espresso, { name: "Soup shot", styleId: ids.espresso_soup, expectedYieldGrams: 90 }));
+    expect(soup.body.recipe).toMatchObject({ style: { name: "Soup", brewsLike: "soup" }, brewer: { kind: "espresso" } });
+    expect((await owner.agent.post(base).send(shot(espresso, { styleId: ids.filter_pour_over }))).status).toBe(400);
+    expect((await owner.agent.post(base).send(shot(espresso, { styleId: ids.filter_cold_brew }))).status).toBe(400);
 
     // Moving the filter recipe to the espresso machine drops "immersion".
     const url = `${base}/${made.body.recipe.id}`;
     const moved = await owner.agent.patch(url).send({ brewerId: espresso, targetWaterGrams: null, expectedYieldGrams: 36, steps: [] });
     expect(moved.body.recipe).toMatchObject({ style: null, brewer: { kind: "espresso" } });
-    expect((await owner.agent.patch(url).send({ style: "standard" })).body.recipe.style).toBe("standard");
-    expect((await owner.agent.patch(url).send({ style: null })).body.recipe.style).toBeNull();
+    expect((await owner.agent.patch(url).send({ styleId: ids.espresso_standard })).body.recipe.style.name).toBe("Standard");
+    expect((await owner.agent.patch(url).send({ styleId: null })).body.recipe.style).toBeNull();
   });
 });

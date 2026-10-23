@@ -330,6 +330,27 @@
       "when": 1792741297747,
       "tag": "0046_drop_bean_process_key",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "5",
+      "when": 1792742091615,
+      "tag": "0047_recipe_styles",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "5",
+      "when": 1792742102420,
+      "tag": "0048_seed_recipe_styles",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "5",
+      "when": 1792742109001,
+      "tag": "0049_drop_recipe_style_key",
+      "breakpoints": true
     }
   ]
 }

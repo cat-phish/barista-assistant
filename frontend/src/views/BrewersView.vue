@@ -12,7 +12,7 @@ import type { Brewer, Recipe } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import SetupTabs from '../components/SetupTabs.vue';
 import ListControls from '../components/ListControls.vue';
-import { machineSummary, METHOD_KINDS, RECIPE_STYLES, STYLE_ORDER } from '../lib/equipment';
+import { machineSummary, METHOD_KINDS } from '../lib/equipment';
 import { formatAdded } from '../lib/format';
 import {
   addedColumn,
@@ -40,7 +40,7 @@ const recipeCount = (brewerId: string) => recipes.value.filter((r) => r.brewer.i
 function recipeSummary(brewerId: string): string {
   const mine = recipes.value.filter((r) => r.brewer.id === brewerId);
   if (mine.length === 0) return 'No recipes yet';
-  const styles = STYLE_ORDER.filter((st) => mine.some((r) => r.style === st)).map((st) => RECIPE_STYLES[st].toLowerCase());
+  const styles = [...new Set(mine.flatMap((r) => (r.style ? [r.style.name.toLowerCase()] : [])))];
   return `${mine.length} recipe${mine.length === 1 ? '' : 's'}${styles.length ? `: ${styles.join(', ')}` : ''}`;
 }
 

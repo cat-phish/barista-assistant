@@ -50,7 +50,7 @@ function tdsText(l: BrewLog): string {
     doseGrams: l.actualDoseGrams,
     yieldGrams: l.actualYieldGrams,
     waterGrams: l.actualWaterGrams,
-    style: l.recipe?.style ?? null,
+    style: l.recipe?.style?.brewsLike ?? null, // custom styles count as what they brew like
   });
   return ey === null ? `${l.tdsPercent}%` : `${l.tdsPercent}% · ${ey}% extraction`;
 }
@@ -216,7 +216,7 @@ function markLabel(m: Mark): string {
       <!-- Edit -->
       <form v-else class="card stack" novalidate @submit.prevent="saveEdit">
         <h2>Edit brew</h2>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :prep-tools="prepTools" :method-kind="log.recipe?.methodKind ?? null" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="log.recipe?.style ?? null" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :prep-tools="prepTools" :method-kind="log.recipe?.methodKind ?? null" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="log.recipe?.style?.brewsLike ?? null" />
         <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
         <div class="buttons">
           <button class="btn btn-secondary" type="button" :disabled="saving" @click="editing = false">Cancel</button>

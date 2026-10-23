@@ -16,7 +16,8 @@ export const SYSTEM_PROMPT =
   "add sweetness, so treat drink notes as weaker evidence of extraction than " +
   "straight notes, and compare a brew mainly with earlier brews served the " +
   "same way (each brew's drink says how). Judge a brew against its recipe's " +
-  "style: a soup shot is a long, high-ratio espresso on purpose, a cold brew " +
+  "style (its name is the bar's own; brewsLike says how it brews, so a " +
+  "custom 'Inverted' style that brews like immersion is an immersion brew): a soup shot is a long, high-ratio espresso on purpose, a cold brew " +
   "steeps cold for hours, and an immersion brew isn't a pour over. A " +
   "stovetop brew (moka pot, ibrik) is a strong, short brew judged on its own " +
   "terms, not as espresso; an 'other' method is described by its style and " +

@@ -395,6 +395,28 @@ export const prepTools = mysqlTable(
   })
 );
 
+// 5e. Recipe styles (docs/api/recipe-styles.md §5e): each workspace's list per
+// brewer method, seeded from STYLES_BY_KIND with STYLE_NAMES. brewsLike is the
+// built-in a style brews like (itself for a built-in); extraction yield and
+// the AI go by it.
+export const STYLE_NAMES = { pour_over: "Pour over", immersion: "Immersion", hybrid: "Hybrid", cold_brew: "Cold brew",
+  standard: "Standard", soup: "Soup", moka: "Moka", ibrik: "Ibrik", other: "Other" };
+export const recipeStyles = mysqlTable(
+  "recipe_styles",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 }).notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    kind: varchar("kind", { length: 20 }).$type<MethodKind>().notNull(),
+    name: varchar("name", { length: 100 }).notNull(), // unique per workspace and method
+    position: int("position").notNull(), // within its method
+    hidden: boolean("hidden").default(false).notNull(),
+    builtin: varchar("builtin", { length: 20 }).$type<RecipeStyle>(), // null for custom ones
+    brewsLike: varchar("brews_like", { length: 20 }).$type<RecipeStyle>().notNull(), // one of STYLES_BY_KIND[kind]
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({ uniqueName: unique("recipe_styles_workspace_kind_name").on(table.workspaceId, table.kind, table.name) })
+);
+
 // 6. Recipe Templates (Target Parameters)
 export const recipes = mysqlTable("recipes", {
   id: varchar("id", { length: 36 }).primaryKey(),
@@ -428,8 +450,10 @@ export const recipes = mysqlTable("recipes", {
   // Unit for espresso flow steps: g/s (a scale) or ml/s (a machine's flow meter).
   flowUnit: varchar("flow_unit", { length: 10 }).$type<FlowUnit>().default("g_s").notNull(),
   targetTempC: decimal("target_temp_c", { precision: 4, scale: 1, mode: "number" }),
-  // How the cup is brewed: one of STYLES_BY_KIND[brewer's kind] (the API), or null.
-  style: varchar("style", { length: 20 }).$type<RecipeStyle>(),
+  // How the cup is brewed: one of the workspace's styles for the brewer's
+  // method (docs/api/recipe-styles.md §5e); null = not set. Migrations
+  // 0047–0049 replaced the old key column.
+  styleId: varchar("style_id", { length: 36 }).references((): AnyMySqlColumn => recipeStyles.id, { onDelete: "set null" }),
   // Recipes aren't on the public menu; drinks and brewers are (7e).
   // Grind is per grinder: see recipeGrindSettings. The default grinder is
   // preselected when brewing this recipe (else the last one used); deleting

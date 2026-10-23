@@ -73,9 +73,10 @@ queue:
      espresso yield ÷ dose. It also includes `tdsPercent` (or `null`) and
      `extractionYieldPercent`, worked out as in §6 (`null` without TDS, or
      without a yield where one is needed). `methodKind` is `filter` or `espresso`. The
-     recipe includes its brewer, its `style` (pour over, immersion, hybrid,
-     cold brew, standard, soup… or `null`; every brew also carries `recipeStyle`, so
-     soup shots aren't compared with standard ones), kind, water,
+     recipe includes its brewer, its `style` (`{ name, brewsLike }` or `null`:
+     the bar's name for it, and the built-in it brews like, pour over,
+     immersion, hybrid, cold brew, standard, soup…, §5e; every brew also
+     carries `recipeStyle`, so soup shots aren't compared with standard ones), kind, water,
      expected yield (the target for espresso), finish window
      (`expectedFinishMinSec`/`MaxSec`), first-drop window (espresso), flow
      unit, and its steps with type, label, duration, how each moves on, and
@@ -92,8 +93,9 @@ queue:
 > describe the finished drink. Milk and syrup mask acidity and bitterness and
 > add sweetness, so treat drink notes as weaker evidence of extraction than
 > straight notes, and compare a brew mainly with earlier brews served the same
-> way (each brew's drink says how). Judge a brew against its recipe's style:
-> a soup shot is a long, high-ratio espresso on purpose, a cold brew steeps
+> way (each brew's drink says how). Judge a brew against its recipe's style
+> (its name is the bar's own; brewsLike says how it brews, so a custom
+> 'Inverted' style that brews like immersion is an immersion brew): a soup shot is a long, high-ratio espresso on purpose, a cold brew steeps
 > cold for hours, and an immersion brew isn't a pour over. A stovetop brew
 > (moka pot, ibrik) is a strong, short brew judged on its own terms, not as
 > espresso; an 'other' method is described by its style and the notes. The bean's
