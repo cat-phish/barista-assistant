@@ -72,7 +72,8 @@ describe('quick repeats', () => {
     expect(recentByMade(logs, brewers).map((l) => l.id)).toEqual(['a', 'b', 'd']);
   });
   it('labels a brew by what it made, its bean and day', () => {
-    expect(repeatLabel(log(), new Date('2026-10-23T12:00:00Z'))).toMatchObject({ made: 'V60', bean: 'Guji · Batch 3' });
+    expect(repeatLabel(log(), new Date('2026-10-23T12:00:00Z'))).toMatchObject({ made: 'V60', recipe: 'House V60', bean: 'Guji · Batch 3' });
+    expect(repeatLabel(log({ recipeId: null, recipe: null })).recipe).toBeNull();
     expect(repeatLabel(log({ drink: { id: 'latte', name: 'Latte', hasIngredients: true } })).made).toBe('Latte');
   });
 });

@@ -574,6 +574,7 @@ function onTimerComplete(seconds: number, timerMarks: Mark[] = []): void {
 
 // Abandoning a brew in progress (the timer, or a log not saved yet) asks
 // first: leaving the page, reloading, or clicking Brew again in the header.
+// After a save, clicking Brew goes straight back to setup.
 const brewSession = useBrewSessionStore();
 const inProgress = computed(() => stage.value === 'timing' || stage.value === 'log');
 watch(inProgress, (v) => (brewSession.inProgress = v), { immediate: true });
@@ -593,7 +594,9 @@ onBeforeRouteLeave(() => (inProgress.value ? askAbandon() : true));
 watch(
   () => brewSession.restartRequests,
   async () => {
-    if (inProgress.value && (await askAbandon())) brewAgain();
+    if (inProgress.value) {
+      if (await askAbandon()) brewAgain();
+    } else if (stage.value === 'saved') brewAgain();
   },
 );
 function warnOnUnload(event: BeforeUnloadEvent): void {
@@ -771,6 +774,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         <div class="repeat-row">
           <button v-for="l in quickRepeats" :key="l.id" class="btn btn-secondary repeat-btn" type="button" @click="applyRepeat(l)">
             <strong>{{ repeatLabel(l).made }}</strong>
+            <span v-if="repeatLabel(l).recipe" class="small recipe">{{ repeatLabel(l).recipe }}</span>
             <span class="muted small">{{ repeatLabel(l).bean }} · {{ repeatLabel(l).when }}</span>
           </button>
           <button class="btn-link repeat-pick" type="button" @click="pickerOpen = true">Pick a brew…</button>
