@@ -6,6 +6,9 @@ upcoming work is in `roadmap.md`.
 
 ## Accounts & workspaces
 - **Accounts:** email + password; the session is an httpOnly cookie.
+- **Notifications:** each person sets up where their reminders go (Settings
+  → Notifications): ntfy, Gotify, Pushover, Discord, Telegram, Slack or any
+  webhook, each with its own on/off and a **Send test**.
 - **Workspaces:** shared spaces (e.g. a household or café) with roles: owner,
   barista (can log and edit), viewer (read-only).
 - **Field visibility:** Settings → Fields lets owners hide the optional brew,
@@ -174,6 +177,12 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   temperature, grinder, grind and RPM, and the water. Prep tools, grinder
   weights, results, ratings and notes start blank, and anything archived
   since is skipped and named. The timer starts when you press Start.
+- **Rate later:** with a notification service on, the log form has **Save,
+  rate later**: the brew saves unrated and a reminder ("How was it? Rate
+  your brew") arrives after your delay (15 min by default), unless you've
+  rated it by then. Its link opens the brew, where any unrated brew has a
+  quick **Rate this brew** card; the AI suggestion is offered once it's
+  rated. Turning reminders off (or having no service on) hides the button.
 - **Abandoning a brew:** during the timer or before the log is saved,
   leaving the page, reloading, or tapping **Brew** again asks "Abandon this
   brew?" first; abandoning goes back to setup with your choices kept. After

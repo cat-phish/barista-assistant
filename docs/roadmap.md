@@ -860,3 +860,39 @@ finer", but every brew started from the recipe.
   An archived brewer, recipe, drink, grinder or water profile is skipped.
   Setup says what was skipped under the buttons.
 
+## Rate later, with reminders (built)
+
+Backlog item "Rate later, with reminders", branch `rate-later`, migration
+0056. Coffee is often rated a while after it's made, by which time the app
+is closed. Contract: `api/notifications.md` §1b, `api/brew-logs.md` §6.
+
+- **Notification channels** (per person, Settings → Notifications): ntfy,
+  Gotify, Pushover, Discord, Telegram, Slack and a generic webhook. Each has
+  its own on/off and **Send test**. Credentials come back masked
+  ("••••1234"), and saving the mask keeps them. Stored in
+  `notification_channels` (one per kind per person). Sending is plain JSON
+  `POST`s in `@barista/shared/notify`, used by the backend (test) and the
+  worker (reminders).
+- **Rate reminders** (preferences): `rateReminders`, on by default, and one
+  delay per person (`rateReminderMinutes`, 15). The switch is greyed out
+  until a service is set up and on. When it's off, or nothing can deliver,
+  the log form has no Rate later button.
+- **Save, rate later** sends `remindToRate` with the new brew (unless a
+  rating was entered after all). The backend queues a delayed BullMQ job
+  (`reminders` queue). The saved screen says when the reminder will come,
+  or why it couldn't be set, and leaves the AI suggestion for after the
+  rating.
+- **The reminder:** the worker skips it if the brew was rated or deleted, or
+  reminders were turned off. Otherwise it sends "How was it? Rate your
+  brew" ("V60 · Onyx Guji · 8:42") to each enabled channel, with a link to
+  the entry (`APP_URL`, default `http://localhost:5173`). One failing
+  channel doesn't stop the others.
+- **Quick rating:** any brew without a rating shows a **Rate this brew**
+  card on its journal entry: stars and notes, and the drink's for drinks
+  with ingredients. Once rated it offers the AI suggestion, which waits
+  until then. There's no separate list of brews waiting for a rating.
+- **Server-side requests:** members can make the server `POST` to a URL
+  they choose (their ntfy, Gotify or webhook), so it's http(s) only, without
+  following redirects and reporting only the status. LAN addresses are
+  allowed, since self-hosted services live there.
+

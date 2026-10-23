@@ -12,6 +12,7 @@ import { prepToolsApi } from '../api/prepTools';
 import AppHeader from '../components/AppHeader.vue';
 import BrewFields from '../components/BrewFields.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
+import RatingInput from '../components/RatingInput.vue';
 import RatingStars from '../components/RatingStars.vue';
 import { useAnalysis } from '../composables/useAnalysis';
 import { draftFromLog, emptyDraft, parseBrewDraft } from '../lib/brewDraft';
@@ -153,6 +154,35 @@ async function saveEdit(): Promise<void> {
   }
 }
 
+// Quick rating (docs/api/notifications.md §1b): a brew saved without a rating
+// (e.g. "Save, rate later", whose reminder links here) is rated in place.
+// The AI suggestion waits for it, then is offered.
+const unrated = computed(() => !!log.value && log.value.rating === null && log.value.drinkRating === null);
+const quick = reactive({ rating: null as number | null, notes: '', drinkRating: null as number | null, drinkNotes: '' });
+const rating = ref(false);
+const rateError = ref('');
+const justRated = ref(false);
+async function saveRating(): Promise<void> {
+  const ws = workspaces.current?.id;
+  if (!ws || !log.value) return;
+  rating.value = true;
+  rateError.value = '';
+  try {
+    log.value = (
+      await brewLogsApi.update(ws, log.value.id, {
+        rating: quick.rating,
+        tastingNotes: quick.notes.trim() || log.value.tastingNotes,
+        ...(drinkTasting.value ? { drinkRating: quick.drinkRating, drinkTastingNotes: quick.drinkNotes.trim() || log.value.drinkTastingNotes } : {}),
+      })
+    ).brewLog;
+    justRated.value = true;
+  } catch (err) {
+    rateError.value = errorMessage(err);
+  } finally {
+    rating.value = false;
+  }
+}
+
 // Delete
 const confirmingDelete = ref(false);
 const deleting = ref(false);
@@ -192,6 +222,42 @@ function markLabel(m: Mark): string {
           </p>
         </div>
       </div>
+
+      <!-- Quick rating for a brew saved without one -->
+      <form v-if="!editing && unrated && canModify" class="card stack quick-rate" novalidate @submit.prevent="saveRating">
+        <h2>Rate this brew</h2>
+        <fieldset v-if="drinkTasting" class="tasting">
+          <legend>The brew <span class="muted">(if you tasted it on its own)</span></legend>
+          <RatingInput v-model="quick.rating" name="quick-rating" label="Brew rating" />
+          <div class="field">
+            <label for="quick-notes">Brew notes</label>
+            <textarea id="quick-notes" v-model="quick.notes" rows="2" maxlength="5000" />
+          </div>
+        </fieldset>
+        <template v-else>
+          <RatingInput v-model="quick.rating" name="quick-rating" label="Rating" />
+          <div class="field">
+            <label for="quick-notes">Tasting notes</label>
+            <textarea id="quick-notes" v-model="quick.notes" rows="3" maxlength="5000" placeholder="e.g. Sweet, round, a bit flat at the end" />
+          </div>
+        </template>
+        <fieldset v-if="drinkTasting" class="tasting">
+          <legend>The drink</legend>
+          <RatingInput v-model="quick.drinkRating" name="quick-drink-rating" label="Drink rating" />
+          <div class="field">
+            <label for="quick-drink-notes">Drink notes</label>
+            <textarea id="quick-drink-notes" v-model="quick.drinkNotes" rows="2" maxlength="5000" />
+          </div>
+        </fieldset>
+        <p v-if="rateError" class="form-error" role="alert">{{ rateError }}</p>
+        <button class="btn btn-primary" type="submit" :disabled="rating || (quick.rating === null && quick.drinkRating === null)">
+          {{ rating ? 'Saving…' : 'Save rating' }}
+        </button>
+      </form>
+      <section v-else-if="justRated && !analysis && workspaces.canEdit" class="card stack">
+        <p>Rated, thanks. Want an AI suggestion for next time?</p>
+        <button v-if="aiState !== 'waiting'" class="btn btn-primary" type="button" @click="analyze(); justRated = false">Get AI suggestion</button>
+      </section>
 
       <!-- Details -->
       <section v-if="!editing" class="card stack">
@@ -247,8 +313,9 @@ function markLabel(m: Mark): string {
         <p v-if="aiState === 'waiting'" class="muted" aria-live="polite">Analyzing this brew… this usually takes a few seconds.</p>
         <p v-if="aiState === 'slow'" class="muted" aria-live="polite">Still working on it. Check back in a minute.</p>
         <p v-if="aiState === 'error'" class="form-error" role="alert">{{ aiError }}</p>
+        <p v-if="unrated && !analysis" class="muted small">Rate the brew first: the suggestion works from how it tasted.</p>
         <button
-          v-if="workspaces.canEdit && aiState !== 'waiting'"
+          v-if="workspaces.canEdit && aiState !== 'waiting' && !unrated"
           class="btn btn-secondary"
           type="button"
           @click="analyze"
@@ -270,6 +337,19 @@ function markLabel(m: Mark): string {
 </template>
 
 <style scoped>
+.quick-rate h2 {
+  font-size: 1.15rem;
+  margin: 0;
+}
+.quick-rate .tasting {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
 h1 {
   font-size: 1.4rem;
 }

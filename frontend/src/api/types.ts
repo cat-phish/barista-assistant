@@ -15,6 +15,17 @@ export interface UserPreferences {
   altitudeUnit: AltitudeUnit;
   temperatureUnit: TemperatureUnit;
   theme: Theme;
+  rateReminders: boolean; // offer Rate later and send its reminders (docs/api/notifications.md §1b)
+  rateReminderMinutes: number; // 5–240
+}
+
+// docs/api/notifications.md §1b: a person's own reminder channels.
+export type NotificationKind = 'ntfy' | 'gotify' | 'pushover' | 'discord' | 'telegram' | 'slack' | 'webhook';
+export interface NotificationChannel {
+  kind: NotificationKind;
+  enabled: boolean;
+  config: Record<string, string | null>; // credentials come back masked ("••••1234")
+  createdAt: string;
 }
 
 export interface User {
