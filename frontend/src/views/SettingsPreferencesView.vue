@@ -4,7 +4,8 @@
 // °C and metres; these only change what you see and type.
 import { ref } from 'vue';
 import { errorMessage } from '../api/client';
-import type { UserPreferences } from '../api/types';
+import type { Theme, UserPreferences } from '../api/types';
+import { applyTheme } from '../lib/theme';
 import SettingsLayout from '../components/SettingsLayout.vue';
 import { usePreferences } from '../composables/usePreferences';
 import { useAuthStore } from '../stores/auth';
@@ -42,12 +43,37 @@ const choices = {
     { value: 'm', label: 'Metres' },
     { value: 'ft', label: 'Feet' },
   ],
+  theme: [
+    { value: 'system', label: 'System' },
+    { value: 'light', label: 'Light' },
+    { value: 'dark', label: 'Dark' },
+  ],
 } as const;
+
+// The look changes at once (main.ts watches the saved preference); if saving
+// fails, it goes back.
+async function setTheme(theme: Theme): Promise<void> {
+  const before = prefs.value.theme;
+  applyTheme(theme);
+  await set({ theme });
+  if (error.value) applyTheme(before);
+}
 </script>
 
 <template>
   <SettingsLayout title="Preferences">
-    <p class="muted">Just for you: how amounts are shown and typed. Everyone in your workspaces keeps their own.</p>
+    <p class="muted">Just for you: the look of the app and how amounts are shown and typed. Everyone in your workspaces keeps their own.</p>
+
+    <section class="card stack" aria-labelledby="pref-theme">
+      <h2 id="pref-theme">Theme</h2>
+      <div class="segmented" role="radiogroup" aria-labelledby="pref-theme">
+        <label v-for="c in choices.theme" :key="c.value" :class="{ on: prefs.theme === c.value }">
+          <input type="radio" name="theme" :value="c.value" :checked="prefs.theme === c.value" :disabled="saving" @change="setTheme(c.value)" />
+          {{ c.label }}
+        </label>
+      </div>
+      <p class="muted small">System follows your phone or computer's light or dark setting.</p>
+    </section>
 
     <section class="card stack" aria-labelledby="pref-volume">
       <h2 id="pref-volume">Volume</h2>

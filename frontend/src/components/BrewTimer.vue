@@ -271,7 +271,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.25rem;
   padding: 1rem;
-  background: #f5f5f5;
+  background: var(--bg);
   border-radius: 12px;
   border: 1px solid var(--border);
 }
@@ -280,7 +280,7 @@ onUnmounted(() => {
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
   font-weight: bold;
-  color: #3e2723;
+  color: var(--brand);
 }
 .finish-note {
   margin: 0;
@@ -310,12 +310,12 @@ onUnmounted(() => {
   min-height: var(--tap);
 }
 .btn.primary {
-  background: #3e2723;
-  color: white;
+  background: var(--brand);
+  color: var(--on-brand);
 }
 .btn.success {
-  background: #2e7d32;
-  color: white;
+  background: var(--success);
+  color: var(--on-success);
 }
 /* Big, easy targets for a thumb while watching the cup. Two classes, so it
    beats ".controls > button" (which removes borders). */
@@ -326,7 +326,7 @@ onUnmounted(() => {
 }
 .btn.tap.due {
   background: var(--brand);
-  color: white;
+  color: var(--on-brand);
 }
 .drop-line {
   margin: 0;
@@ -340,8 +340,8 @@ onUnmounted(() => {
 .step-card {
   padding: 0.75rem 1rem;
   border-radius: 8px;
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--surface);
+  border: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
@@ -354,13 +354,13 @@ onUnmounted(() => {
 .current {
   min-height: 9.25rem;
   background: var(--brand-tint);
-  border-color: #d7ccc8;
+  border-color: var(--brand-line);
   border-left: 4px solid var(--brand);
 }
 .current.waiting {
   background: var(--surface);
-  border-color: #e0e0e0;
-  border-left-color: #bcaaa4;
+  border-color: var(--border);
+  border-left-color: var(--brand-edge);
 }
 .current.due h3,
 .current.due .right {
@@ -368,8 +368,8 @@ onUnmounted(() => {
 }
 .current.phase-done {
   background: var(--surface);
-  border-color: #e0e0e0;
-  border-left-color: #2e7d32;
+  border-color: var(--border);
+  border-left-color: var(--success);
 }
 .side {
   font-size: 0.9rem;
@@ -427,7 +427,7 @@ onUnmounted(() => {
 }
 .label {
   font-size: 0.75rem;
-  color: #757575;
+  color: var(--text-muted);
   text-transform: uppercase;
 }
 .value {
@@ -452,7 +452,7 @@ onUnmounted(() => {
   height: 6px;
   border-radius: 3px;
   overflow: hidden;
-  background: #d7ccc8;
+  background: var(--brand-line);
 }
 .progress span {
   display: block;
@@ -460,7 +460,7 @@ onUnmounted(() => {
   background: var(--brand);
 }
 .waiting .progress span {
-  background: #a1887f;
+  background: var(--brand-soft);
 }
 .small {
   font-size: 0.85rem;

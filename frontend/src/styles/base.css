@@ -3,6 +3,10 @@
   --brand: #3e2723; /* theme_color, timer accents */
   --brand-hover: #5d4037;
   --brand-tint: #efebe9;
+  --brand-line: #d7ccc8; /* borders and tracks on the tint */
+  --brand-edge: #bcaaa4;
+  --brand-soft: #a1887f;
+  --on-brand: #ffffff; /* text on a solid --brand background */
   --bg: #f5f5f5; /* background_color */
   --surface: #ffffff;
   --border: #e0e0e0;
@@ -10,10 +14,16 @@
   --text-muted: #757575;
   --danger: #c62828;
   --danger-tint: #ffebee;
+  --danger-solid: #c62828; /* red buttons (white text) */
+  --danger-solid-hover: #b71c1c;
   --success: #2e7d32;
+  --on-success: #ffffff;
+  --warning: #8d6e00;
+  --warning-tint: #fff8e1;
   --frozen: #1565c0;
   --frozen-tint: #e3f2fd;
   --focus: #8d6e63;
+  color-scheme: light;
 
   --radius: 8px;
   --radius-lg: 12px;
@@ -29,6 +39,64 @@
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Dark: the person's Theme preference (data-theme on <html>, lib/theme.ts),
+   or the device's when it's "system" (no data-theme). Same tokens, so screens
+   follow without their own dark styles. */
+:root[data-theme='dark'] {
+  --brand: #d7b8a3; /* light tan: text, links, borders on dark */
+  --brand-hover: #e6cdbb;
+  --brand-tint: #2e2522;
+  --brand-line: #4e3f3a;
+  --brand-edge: #6d5a52;
+  --brand-soft: #8d7a72;
+  --on-brand: #1c1412;
+  --bg: #121212;
+  --surface: #1e1e1e;
+  --border: #3a3a3a;
+  --text: #ececec;
+  --text-muted: #a8a8a8;
+  --danger: #ef5350;
+  --danger-tint: #3b1d1d;
+  --danger-solid: #c62828;
+  --danger-solid-hover: #d32f2f;
+  --success: #66bb6a;
+  --on-success: #0f1f10;
+  --warning: #ffd54f;
+  --warning-tint: #332b12;
+  --frozen: #64b5f6;
+  --frozen-tint: #172a3a;
+  --focus: #bcaaa4;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --brand: #d7b8a3; /* light tan: text, links, borders on dark */
+    --brand-hover: #e6cdbb;
+    --brand-tint: #2e2522;
+    --brand-line: #4e3f3a;
+    --brand-edge: #6d5a52;
+    --brand-soft: #8d7a72;
+    --on-brand: #1c1412;
+    --bg: #121212;
+    --surface: #1e1e1e;
+    --border: #3a3a3a;
+    --text: #ececec;
+    --text-muted: #a8a8a8;
+    --danger: #ef5350;
+    --danger-tint: #3b1d1d;
+    --danger-solid: #c62828;
+    --danger-solid-hover: #d32f2f;
+    --success: #66bb6a;
+    --on-success: #0f1f10;
+    --warning: #ffd54f;
+    --warning-tint: #332b12;
+    --frozen: #64b5f6;
+    --frozen-tint: #172a3a;
+    --focus: #bcaaa4;
+    color-scheme: dark;
+  }
 }
 
 *,
@@ -89,7 +157,7 @@ a {
 }
 .btn-primary {
   background: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
 }
 .btn-primary:hover:not(:disabled) {
   background: var(--brand-hover);
@@ -211,11 +279,11 @@ a {
   white-space: nowrap;
 }
 .btn-danger {
-  background: var(--danger);
+  background: var(--danger-solid);
   color: #fff;
 }
 .btn-danger:hover:not(:disabled) {
-  background: #b71c1c;
+  background: var(--danger-solid-hover);
 }
 .btn-link {
   background: none;

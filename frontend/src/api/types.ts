@@ -8,11 +8,13 @@ export type Role = 'owner' | 'barista' | 'viewer';
 export type VolumeUnit = 'fl_oz' | 'ml';
 export type AltitudeUnit = 'm' | 'ft';
 export type TemperatureUnit = 'c' | 'f';
+export type Theme = 'system' | 'light' | 'dark';
 export interface UserPreferences {
   volumeUnit: VolumeUnit;
   showBothVolumes: boolean;
   altitudeUnit: AltitudeUnit;
   temperatureUnit: TemperatureUnit;
+  theme: Theme;
 }
 
 export interface User {
