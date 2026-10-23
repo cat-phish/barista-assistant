@@ -243,6 +243,12 @@ Recording a brew: what's measured, and how fast it is to log.
   - The stored setting stays one number (total clicks), so ranges, steps,
     last-setting and the AI keep working; the forms and journal show and
     take it in the grinder's format.
+  - The number pad stays: the grind boxes are text inputs with
+    `inputmode="decimal"`, which picks the keyboard but doesn't limit what's
+    typed, so "2.1.0" goes in. For a ring-format grinder the parser reads it
+    (or "2,1,0", since comma-decimal phones show "," on the pad) as total
+    clicks; other grinders keep the plain-number parse. Don't switch to
+    `type="number"`, which refuses a second dot.
 - **Size:** S–M
 - **Depends on:** nothing.
 - **Open questions:**
