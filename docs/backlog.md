@@ -31,6 +31,7 @@ and fix the references.
 - F. Bar & menu: 12–14
 - G. Home roasting: 15
 - H. Accounts: 16
+- I. Deployment & the app: 17
 
 ---
 
@@ -482,3 +483,51 @@ What the analysis worker sends to the LLM and what comes back.
   - Email (SMTP) at all, or are the script and owner links enough for a
     home server?
   - Must new passwords meet rules beyond 8 characters?
+
+---
+
+## I. Deployment & the app
+
+How the app is served and installed.
+
+### 17. Serve the app as an installable PWA
+
+- **Status:** idea
+- **Why:** the PWA is configured (`vite-plugin-pwa`, `frontend/vite.config.ts`)
+  but never served. The frontend container runs the Vite **dev server**,
+  which doesn't generate the service worker or manifest (only `vite build`
+  does). It's also reached over plain HTTP on a LAN IP, and browsers only
+  allow service workers and installs over HTTPS (or `localhost`). So
+  phones get a browser shortcut, not an app, and nothing works offline.
+  Links, like the rate-later reminder's, open in the browser.
+- **Approach:**
+  - **Production frontend image:** `vite build`, served by Caddy (or nginx),
+    which also proxies `/api` to the backend as Vite's dev proxy does now
+    (`xfwd`, so `TRUST_PROXY` keeps working). The dev server stays for
+    development, e.g. a compose profile or override file.
+  - **HTTPS on the LAN.** Options, simplest first:
+    - Caddy's internal CA (each device trusts its root once);
+    - a real domain with a DNS-challenge certificate;
+    - a Tailscale certificate (`*.ts.net`).
+    `APP_URL` and `CORS_ORIGIN` then use the https address.
+  - **Manifest:**
+    - name Barista-Assistant (now "Coffee Brew Journal" / "BrewLog"), and
+      a description of what it does now;
+    - `id`, `start_url` and `scope` set explicitly;
+    - `handle_links: "preferred"` and `launch_handler` (`navigate-existing`),
+      so links into the app (reminders) open the installed app on Android.
+      iOS always opens links in Safari, whatever the manifest says.
+  - Check the service worker's update flow (`registerType: 'autoUpdate'`)
+    doesn't reload mid-brew. The timer page could hold the update until the
+    brew is saved.
+  - Update `docs/timer_architecture.md` §2 and the README's run
+    instructions.
+- **Size:** M
+- **Depends on:** nothing.
+- **Open questions:**
+  - Which HTTPS route fits: internal CA, own domain, or Tailscale?
+  - Keep the dev server as the default `docker compose up`, or make
+    production the default and dev an override?
+  - Later: **Web Push** from the installed app, as one more notification
+    channel next to ntfy and the others (roadmap: rate later)?
+
