@@ -38,7 +38,7 @@ created it and can't be changed.
   "tastingNotes": "Sour, thin body",
   "drinkRating": null,
   "drinkTastingNotes": null,
-  "bean": { "id": "uuid", "roasterName": "Onyx Coffee Lab", "beanName": "Southern Weather" },
+  "bean": { "id": "uuid", "roasterName": "Onyx Coffee Lab", "beanName": "Southern Weather", "batchNumber": null },
   "recipe": { "id": "uuid", "name": "House V60", "expectedYieldGrams": 220, "style": { "id": "uuid", "name": "Pour over", "brewsLike": "pour_over" }, "methodKind": "filter" },
   "grinder": { "id": "uuid", "name": "Comandante C40" },
   "waterProfile": { "id": "uuid", "name": "Third Wave Water (classic)" },

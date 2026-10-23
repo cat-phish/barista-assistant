@@ -21,6 +21,7 @@ const DETAILS = {
   producer: "Finca El Paraíso",
   purchaseDate: "2026-10-05",
   greenSupplier: "Covoya",
+  batchNumber: "R-12",
   rating: 4,
 };
 
@@ -67,6 +68,7 @@ describe("bean details (docs/api/beans.md §4)", () => {
       producer: null,
       purchaseDate: null,
       greenSupplier: null,
+      batchNumber: null,
       rating: null,
     });
   });
@@ -117,6 +119,7 @@ describe("bean details (docs/api/beans.md §4)", () => {
     const post = (fields: Record<string, unknown>) => owner.agent.post(beansUrl).send({ roasterName: "Onyx", beanName: "Bad", ...fields });
     for (const fields of [
       { roastType: "cold" },
+      { batchNumber: "x".repeat(51) },
       { detailedRoastLevel: "medium" },
       { blendType: "mix" },
       { decaf: "yes" },
@@ -210,8 +213,17 @@ describe("bean details (docs/api/beans.md §4)", () => {
       altitudeMasl: 1950,
       producer: "Finca El Paraíso",
     });
-    for (const key of ["website", "priceAmount", "priceCurrency", "bagWeightGrams", "notes", "rating", "purchaseDate", "greenSupplier"]) {
+    for (const key of ["website", "priceAmount", "priceCurrency", "bagWeightGrams", "notes", "rating", "purchaseDate", "greenSupplier", "batchNumber"]) {
       expect(bean).not.toHaveProperty(key);
     }
+  });
+
+  it("batch no.: trimmed, blank clears it, and brew logs show it with the bean", async () => {
+    const { owner, ws, beansUrl } = await setup();
+    const id = await newBean(owner, ws.id, { batchNumber: " 3 " });
+    expect((await owner.agent.get(beansUrl)).body.beans[0].batchNumber).toBe("3");
+    const log = (await owner.agent.post(`/api/workspaces/${ws.id}/brew-logs`).send({ beanId: id, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150 })).body.brewLog;
+    expect(log.bean).toMatchObject({ id, batchNumber: "3" });
+    expect((await owner.agent.patch(`${beansUrl}/${id}`).send({ batchNumber: "" })).body.bean.batchNumber).toBeNull();
   });
 });

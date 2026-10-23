@@ -1,0 +1,1 @@
+ALTER TABLE `beans` ADD `batch_number` varchar(50);

@@ -131,6 +131,7 @@ export interface BrewContext {
   bean: {
     roasterName: string;
     beanName: string;
+    batchNumber: string | null; // a home-roast batch: one roast of this bean
     process: string | null; // the workspace's name for it (docs/api/bean-processes.md §4b)
     roastLevel: string | null;
     detailedRoastLevel: DetailedRoastLevel | null;
@@ -431,6 +432,7 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
     bean: {
       roasterName: bean.roasterName,
       beanName: bean.beanName,
+      batchNumber: bean.batchNumber,
       process: processRow?.name ?? null,
       roastLevel: bean.roastLevel,
       detailedRoastLevel: bean.detailedRoastLevel,

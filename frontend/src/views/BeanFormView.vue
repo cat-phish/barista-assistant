@@ -19,6 +19,7 @@ import {
   ROAST_TYPES,
   formatPricePerGram,
   lastCurrency,
+  nextBatch,
   pricePerGram,
   rememberCurrency,
 } from '../lib/beans';
@@ -59,6 +60,7 @@ const currency = ref(editing.value ? '' : lastCurrency());
 const bagWeight = ref('');
 const purchaseDate = ref('');
 const greenSupplier = ref('');
+const batchNumber = ref('');
 const website = ref('');
 const showOnPublicMenu = ref(true);
 const rating = ref<number | null>(null);
@@ -165,6 +167,7 @@ function fill(bean: Bean): void {
   bagWeight.value = bean.bagWeightGrams === null ? '' : String(bean.bagWeightGrams);
   purchaseDate.value = bean.purchaseDate ?? '';
   greenSupplier.value = bean.greenSupplier ?? '';
+  batchNumber.value = bean.batchNumber ?? '';
   website.value = bean.website ?? '';
   showOnPublicMenu.value = bean.showOnPublicMenu;
   rating.value = bean.rating;
@@ -172,9 +175,11 @@ function fill(bean: Bean): void {
 }
 
 // A copy keeps the coffee and drops what belongs to one bag: roast and
-// purchase dates and the rating. Stock starts at the bag weight, if known.
+// purchase dates and the rating. Stock starts at the bag weight, if known,
+// and a numbered batch moves on to the next one.
 function fillCopy(bean: Bean): void {
   fill(bean);
+  batchNumber.value = nextBatch(bean.batchNumber);
   roastDate.value = '';
   purchaseDate.value = '';
   rating.value = null;
@@ -253,6 +258,7 @@ async function save(): Promise<void> {
     bagWeightGrams: bagParsed.value?.ok ? bagParsed.value.value : null,
     purchaseDate: purchaseDate.value || null,
     greenSupplier: greenSupplier.value.trim() || null,
+    batchNumber: batchNumber.value.trim() || null,
     website: websiteTrimmed.value || null,
     showOnPublicMenu: showOnPublicMenu.value,
     rating: rating.value,
@@ -367,6 +373,10 @@ async function save(): Promise<void> {
             <label for="roast-date">Roast date</label>
             <input id="roast-date" v-model="roastDate" type="date" :max="today" />
           </div>
+        </div>
+        <div class="field">
+          <label for="batch-number">Batch no.</label>
+          <input id="batch-number" v-model="batchNumber" maxlength="50" placeholder="e.g. 3, for home roasts" />
         </div>
         <div v-if="roastScale === 'levels'" class="field">
           <label for="roast-level">Roast level</label>

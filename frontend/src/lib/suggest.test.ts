@@ -5,7 +5,7 @@ import { chooseGrind, startingParameters, suggestionFitsGrinder } from './sugges
 const brew = (over: Partial<BrewLog>): BrewLog => ({
   id: 'b1', workspaceId: 'w', userId: 'u', beanId: 'bean', recipeId: null, timestamp: '2026-10-18T08:00:00.000Z', utcOffsetMinutes: null,
   actualDoseGrams: 15, actualWaterGrams: 250, actualYieldGrams: null, tdsPercent: null, actualTempC: 93, actualGrindSetting: 22, grindRpm: null, beanWeightInGrams: null, groundWeightOutGrams: null, actualTimeSec: 125,
-  rating: 2, tastingNotes: null, drinkRating: null, drinkTastingNotes: null, bean: { id: 'bean', roasterName: 'R', beanName: 'B' }, recipe: null, brewedBy: null,
+  rating: 2, tastingNotes: null, drinkRating: null, drinkTastingNotes: null, bean: { id: 'bean', roasterName: 'R', beanName: 'B', batchNumber: null }, recipe: null, brewedBy: null,
   grinderId: 'c40', grinder: { id: 'c40', name: 'Comandante C40' }, waterProfileId: null, waterProfile: null, brewerId: null, brewer: null, drinkId: null, drink: null, servingSize: null, servingUnit: null, marks: [], tools: [], ...over,
 });
 const recipe = { targetTempC: 94, grindSettings: [{ grinderId: 'c40', grinderName: 'Comandante C40', setting: 19 }] } as unknown as Recipe;

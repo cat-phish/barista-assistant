@@ -50,6 +50,7 @@ import { stepTitle } from '../lib/steps';
 import { useAnalysis } from '../composables/useAnalysis';
 import { emptyDraft, parseBrewDraft } from '../lib/brewDraft';
 import { grinderRetentionText } from '../lib/grinderRetention';
+import { batchSuffix, beanLabel as pickerLabel } from '../lib/beans';
 import { formatDay, formatDoseLine, formatGrams, formatGrind, formatTime } from '../lib/format';
 import { chooseGrind, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -636,7 +637,7 @@ function brewAgain(): void {
   void refreshGrind(); // the brew just saved is now the "last setting"
 }
 
-const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean.value.beanName}` : ''));
+const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean.value.beanName}${batchSuffix(bean.value)}` : ''));
 </script>
 
 <template>
@@ -660,7 +661,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <label for="bean">Bean<span class="req" aria-hidden="true">*</span></label>
           <select id="bean" aria-required="true" v-model="beanId">
             <option value="" disabled>Choose a bean…</option>
-            <option v-for="b in beans" :key="b.id" :value="b.id">{{ b.roasterName }} – {{ b.beanName }}</option>
+            <option v-for="b in beans" :key="b.id" :value="b.id">{{ pickerLabel(b) }}</option>
           </select>
         </div>
         <div class="field">
