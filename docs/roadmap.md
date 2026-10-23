@@ -826,3 +826,37 @@ setup next to brewers and grinders.
   making?", after the methods, in their order. A drink stays in one
   category.
 
+## Repeat a brew (built)
+
+Backlog item "Repeat a brew", branch `repeat-brew`, frontend only (brew logs
+already return everything). Dialing in is "same as last time, one click
+finer", but every brew started from the recipe.
+
+- **Where:** **Brew again** on every journal entry (the list and the entry
+  page) opens `/brew?repeat=<id>`. Brew setup shows a "Repeat a brew" row
+  with quick buttons for the latest brew of each of the last 3 things made
+  (a drink, or a plain brew of a method, so a Latte and a straight shot
+  differ; from the last 30 brews). **Pick a brew…** opens a dialog of
+  earlier brews, briefer than the journal, filterable by bean, 30 at a
+  time. Viewers don't get them.
+- **What it fills** (`lib/repeatBrew.ts` `repeatPlan`, then `applyRepeat`):
+  - bean;
+  - what → drink/plain → brewer → recipe;
+  - drink size;
+  - dose and water (filter: the brew's own, so its ratio; espresso: its
+    dose at the recipe's ratio);
+  - temperature;
+  - grinder, grind and RPM;
+  - water profile.
+  Each choice is set after the previous one's watcher has run, so a drink's
+  default brewer or recipe doesn't win over the brew's. The repeated grind
+  is kept while its grinder and recipe stay chosen (`grindSource
+  'repeat'`).
+- **Left blank:** prep tools (the "Choose what a repeat keeps" item can
+  change that), beans in / grounds out, results, ratings and notes. The
+  timer isn't started.
+- **Gone since:** an archived bean is replaced by the newest active bag of
+  the same coffee (roaster and name, e.g. the next batch), or left to pick.
+  An archived brewer, recipe, drink, grinder or water profile is skipped.
+  Setup says what was skipped under the buttons.
+

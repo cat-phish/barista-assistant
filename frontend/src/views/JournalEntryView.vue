@@ -219,9 +219,12 @@ function markLabel(m: Mark): string {
           <h2>The drink</h2>
           <p>{{ log.drinkTastingNotes }}</p>
         </div>
-        <div v-if="canModify" class="actions">
-          <button class="btn-link" type="button" @click="startEdit">Edit</button>
-          <button class="btn-link danger" type="button" @click="confirmingDelete = true">Delete</button>
+        <div v-if="workspaces.canEdit" class="actions">
+          <RouterLink class="btn-link" :to="{ name: 'brew', query: { repeat: log.id } }">Brew again</RouterLink>
+          <template v-if="canModify">
+            <button class="btn-link" type="button" @click="startEdit">Edit</button>
+            <button class="btn-link danger" type="button" @click="confirmingDelete = true">Delete</button>
+          </template>
         </div>
       </section>
 
