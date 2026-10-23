@@ -255,9 +255,9 @@ function ageCell(bean: Bean): string {
   return days === null ? '–' : `${days} d`;
 }
 
-// "Finca El Paraíso · Huila · 1,950 m"
+// "Colombia · Huila · Finca El Paraíso · 1,950 m"
 function originLabel(bean: Bean): string | null {
-  const parts = [bean.producer, bean.region, bean.altitudeMasl === null ? null : formatAltitude(bean.altitudeMasl)];
+  const parts = [bean.country, bean.region, bean.producer, bean.altitudeMasl === null ? null : formatAltitude(bean.altitudeMasl)];
   return parts.filter((p) => p).join(' · ') || null;
 }
 

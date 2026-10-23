@@ -55,6 +55,8 @@ is no age.
     "bagWeightGrams": 283,
     "notes": "Sweet and round. Roaster suggests 1:16.",
     "flavorProfile": "Milk chocolate, plum, cane sugar",
+    "originArea": "south_america",
+    "country": "Colombia",
     "region": "Huila",
     "altitudeMasl": 1950,
     "producer": "Finca El Paraíso",
@@ -97,7 +99,14 @@ is no age.
     per gram; it isn't stored.
   - `notes`: free text, ≤2000 chars.
   - `flavorProfile`: the roaster's tasting notes, free text, ≤500 chars.
-  - `region` and `producer`: free text, ≤255 chars each.
+  - `originArea`: where it was grown, one of `ORIGIN_AREAS` (`africa`,
+    `arabia`, `central_america`, `south_america`, `asia`, `pacific`).
+    `central_america` includes Mexico and the Caribbean.
+  - `country`: free text, ≤100 chars; a blend may list several. Clients
+    may suggest countries and fill in `originArea` from them; the API
+    doesn't check that the two agree.
+  - `region` (the growing area within the country, e.g. `Yirgacheffe`) and
+    `producer` (farm, co-op or washing station): free text, ≤255 chars each.
   - `altitudeMasl`: integer 0–9000, metres above sea level. Clients may
     show it in feet (docs/backlog.md item 3); it's always stored in metres.
   - `purchaseDate`: `YYYY-MM-DD`, at most one day after the server's date.

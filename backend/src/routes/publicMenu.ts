@@ -11,7 +11,7 @@ export type PublicBean = Pick<
   Bean,
   | "id" | "roasterName" | "beanName" | "process" | "roastDate" | "inventoryWeightGrams"
   | "roastLevel" | "detailedRoastLevel" | "roastType" | "blendType" | "decaf"
-  | "flavorProfile" | "region" | "altitudeMasl" | "producer"
+  | "flavorProfile" | "originArea" | "country" | "region" | "altitudeMasl" | "producer"
 >; // price, website, notes, rating, purchase date and supplier stay private
 
 export interface PublicMenuItem {
@@ -97,6 +97,8 @@ publicMenuRouter.get(
               blendType: beans.blendType,
               decaf: beans.decaf,
               flavorProfile: beans.flavorProfile,
+              originArea: beans.originArea,
+              country: beans.country,
               region: beans.region,
               altitudeMasl: beans.altitudeMasl,
               producer: beans.producer,

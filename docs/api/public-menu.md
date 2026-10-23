@@ -63,6 +63,8 @@ Retrieves the read-only menu for a workspace, as arranged in the menu builder
                 "blendType": "single_origin",
                 "decaf": false,
                 "flavorProfile": "Milk chocolate, plum, cane sugar",
+                "originArea": "south_america",
+                "country": "Colombia",
                 "region": "Huila",
                 "altitudeMasl": 1950,
                 "producer": "Finca El Paraíso"

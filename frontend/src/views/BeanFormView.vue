@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { beansApi, type BeanInput } from '../api/beans';
 import { errorMessage } from '../api/client';
@@ -7,7 +7,8 @@ import AppHeader from '../components/AppHeader.vue';
 import RatingInput from '../components/RatingInput.vue';
 import { localDateInput, parseDecimal, toDateInput } from '../lib/format';
 import { useWorkspaceStore } from '../stores/workspace';
-import type { Bean, BeanProcess, BlendType, DetailedRoastLevel, RoastLevel, RoastType } from '../api/types';
+import type { Bean, BeanProcess, BlendType, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from '../api/types';
+import { COUNTRY_AREAS, ORIGIN_AREAS, areaForCountry } from '../lib/origins';
 import { ROAST_LEVELS } from '../lib/scale';
 import {
   BEAN_PROCESSES,
@@ -34,8 +35,10 @@ const copyOf = ref<string | null>(null);
 const roasterName = ref('');
 const beanName = ref('');
 const process = ref<BeanProcess | ''>('');
-const producer = ref('');
+const originArea = ref<OriginArea | ''>('');
+const country = ref('');
 const region = ref('');
+const producer = ref('');
 const altitude = ref('');
 const flavorProfile = ref('');
 const blendType = ref<BlendType | ''>('');
@@ -53,6 +56,13 @@ const website = ref('');
 const showOnPublicMenu = ref(true);
 const rating = ref<number | null>(null);
 const notes = ref('');
+
+const countries = Object.keys(COUNTRY_AREAS);
+// A known country fills in its growing area, unless one is already chosen.
+watch(country, (c) => {
+  const area = areaForCountry(c);
+  if (area && !originArea.value) originArea.value = area;
+});
 
 // As saved, for beans from before detailed levels: their 5-step level shows
 // until a detailed one is picked.
@@ -118,8 +128,10 @@ function fill(bean: Bean): void {
   roasterName.value = bean.roasterName;
   beanName.value = bean.beanName;
   process.value = bean.process ?? '';
-  producer.value = bean.producer ?? '';
+  originArea.value = bean.originArea ?? '';
+  country.value = bean.country ?? '';
   region.value = bean.region ?? '';
+  producer.value = bean.producer ?? '';
   altitude.value = bean.altitudeMasl === null ? '' : String(bean.altitudeMasl);
   flavorProfile.value = bean.flavorProfile ?? '';
   blendType.value = bean.blendType ?? '';
@@ -188,8 +200,10 @@ async function save(): Promise<void> {
     roasterName: roasterName.value.trim(),
     beanName: beanName.value.trim(),
     process: process.value || null,
-    producer: producer.value.trim() || null,
+    originArea: originArea.value || null,
+    country: country.value.trim() || null,
     region: region.value.trim() || null,
+    producer: producer.value.trim() || null,
     altitudeMasl: altitudeParsed.value?.ok ? altitudeParsed.value.value : null,
     flavorProfile: flavorProfile.value.trim() || null,
     blendType: blendType.value || null,
@@ -257,7 +271,7 @@ async function save(): Promise<void> {
             </select>
           </div>
           <div class="field">
-            <label for="blend-type">Origin</label>
+            <label for="blend-type">Type</label>
             <select id="blend-type" v-model="blendType">
               <option value="">Not sure</option>
               <option v-for="(b, key) in BLEND_TYPES" :key="key" :value="key">{{ b.label }}</option>
@@ -266,12 +280,28 @@ async function save(): Promise<void> {
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="producer">Producer</label>
-            <input id="producer" v-model="producer" maxlength="255" placeholder="e.g. Finca El Paraíso" />
+            <label for="origin-area">Growing area</label>
+            <select id="origin-area" v-model="originArea">
+              <option value="">Not sure</option>
+              <option v-for="(a, key) in ORIGIN_AREAS" :key="key" :value="key">{{ a.label }}</option>
+            </select>
           </div>
           <div class="field">
+            <label for="country">Country</label>
+            <input id="country" v-model="country" maxlength="100" list="country-suggestions" placeholder="e.g. Ethiopia" />
+            <datalist id="country-suggestions">
+              <option v-for="c in countries" :key="c" :value="c" />
+            </datalist>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
             <label for="region">Region</label>
-            <input id="region" v-model="region" maxlength="255" placeholder="e.g. Huila" />
+            <input id="region" v-model="region" maxlength="255" placeholder="e.g. Yirgacheffe" />
+          </div>
+          <div class="field">
+            <label for="producer">Producer</label>
+            <input id="producer" v-model="producer" maxlength="255" placeholder="e.g. a farm, co-op or washing station" />
           </div>
         </div>
         <div class="field altitude">

@@ -15,6 +15,7 @@ import {
   type BeanProcess,
   type BlendType,
   type DetailedRoastLevel,
+  type OriginArea,
   type RoastType,
   type BrewLog,
   type Grinder,
@@ -111,6 +112,8 @@ export interface BrewContext {
     decaf: boolean;
     roastDate: string | null;
     flavorProfile: string | null; // the roaster's tasting notes: the cup to aim for
+    originArea: OriginArea | null;
+    country: string | null;
     region: string | null;
     altitudeMasl: number | null;
   };
@@ -336,6 +339,8 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
       decaf: bean.decaf,
       roastDate: bean.roastDate ? bean.roastDate.toISOString().slice(0, 10) : null,
       flavorProfile: bean.flavorProfile,
+      originArea: bean.originArea,
+      country: bean.country,
       region: bean.region,
       altitudeMasl: bean.altitudeMasl,
     },

@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { Bean, BeanProcess, BlendType, DetailedRoastLevel, RoastLevel, RoastType } from './types';
+import type { Bean, BeanProcess, BlendType, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from './types';
 
 // Request body for create/update (docs/api/beans.md §4). roastLevel is
 // normally left out: the API derives it from detailedRoastLevel. Only a copy
@@ -22,6 +22,8 @@ export interface BeanInput {
   bagWeightGrams: number | null;
   notes: string | null;
   flavorProfile: string | null;
+  originArea: OriginArea | null;
+  country: string | null;
   region: string | null;
   altitudeMasl: number | null;
   producer: string | null;
