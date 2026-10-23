@@ -25,12 +25,12 @@ and fix the references.
 **Contents**
 - A. Settings & configuration: 1–2
 - B. Beans: 3
-- C. Brewing & logging: 4–5
-- D. AI suggestions: 6–9
-- E. Insights: 10
-- F. Bar & menu: 11–13
-- G. Home roasting: 14
-- H. Accounts: 15
+- C. Brewing & logging: 4–6
+- D. AI suggestions: 7–10
+- E. Insights: 11
+- F. Bar & menu: 12–14
+- G. Home roasting: 15
+- H. Accounts: 16
 
 ---
 
@@ -158,11 +158,11 @@ Recording a brew: what's measured, and how fast it is to log.
     channels (Settings → Notifications, roadmap: rate later) send the "steep
     done" reminder, as another kind of job.
   - The log records the batch size and the dilution served, so the AI
-    (item 6) judges strength correctly.
+    (item 7) judges strength correctly.
 - **Size:** M
 - **Depends on:** nothing: the notification channels are built.
 - **Open questions:**
-  - Should a cold brew batch be stock, like item 11's ingredient batches,
+  - Should a cold brew batch be stock, like item 12's ingredient batches,
     with servings taken from it?
   - Are there other long brews to cover the same way (e.g. Kyoto-style cold
     drip)?
@@ -192,13 +192,66 @@ Recording a brew: what's measured, and how fast it is to log.
   - Which grinders need it (1Zpresso, Kingrinder, Timemore with a dial)?
   - Should the AI see the total clicks, the formatted text, or both?
 
+### 6. Brew problems
+
+- **Status:** idea
+- **Why:** tasting notes say how the cup tasted, but not what went wrong
+  while brewing ("the drawdown stalled", "the shot channeled"). Those are
+  the clearest clues for the next brew. As free text they're easy to forget
+  and hard for the AI (or a chart) to count.
+- **Approach:**
+  - A **Problems** checklist on the brew log form (and journal edit),
+    like the prep checklist: tick what happened, all unticked to start.
+  - The problems come from an editable list per workspace (Settings →
+    Lists, like processes and styles), each for one method or all
+    methods. Seeded with:
+    - **Filter (pour over, immersion):**
+      - slow drawdown / stalled bed;
+      - fast drawdown;
+      - uneven or cratered bed;
+      - grounds high on the walls;
+      - channeling (holes in the bed);
+      - filter clogged or collapsed;
+      - poured too fast or uneven;
+      - missed a pour target;
+      - water too hot or cold (kettle off);
+      - immersion: grounds didn't sink, crust didn't break.
+    - **Espresso:**
+      - channeling / spurting;
+      - shot ran fast (gushed);
+      - shot choked or dripped slowly;
+      - uneven extraction (one spout first, blonding early);
+      - puck wet or soupy;
+      - puck cracked or stuck to the screen;
+      - grinder clumping;
+      - dose spilled or uneven tamp;
+      - machine temperature not settled.
+    - **All methods:** stale or old beans, grind setting changed by
+      mistake, scale not tared, distracted / timer missed.
+  - Brews record the problem ids (like prep tools, `brew_log_problems`);
+    the journal shows them ("Problems: slow drawdown · channeling").
+  - The AI gets each brew's problems by name, and is told an empty list
+    means none were recorded.
+  - **Field visibility:** "Problems" gets a field registry entry
+    (`brew.problems`, `lib/fields.ts`), so Settings → Fields → Brews can
+    turn the whole checklist off, as the rule in `CLAUDE.md` requires.
+- **Size:** M (a list like prep tools, the brew form, the journal, the AI).
+- **Depends on:** nothing.
+- **Open questions:**
+  - Can a problem be switched off on its own (hidden from the checklist
+    but kept on old brews), or only archived like prep tools?
+  - Should statistics (item 11) chart problems over time, e.g. how often
+    a bean channels?
+  - Add a free-text "other problem" line, or leave that to the tasting
+    notes?
+
 ---
 
 ## D. AI suggestions
 
 What the analysis worker sends to the LLM and what comes back.
 
-### 6. Review and refine AI input and output
+### 7. Review and refine AI input and output
 
 - **Status:** idea
 - **Why:** the prompt and structured output (`docs/api/llm-contract.md` §9)
@@ -225,7 +278,7 @@ What the analysis worker sends to the LLM and what comes back.
     redeploy), or both (Docker sets the key and what's allowed, the app picks
     from that)?
 
-### 7. Espresso dose and yield suggestions from the AI
+### 8. Espresso dose and yield suggestions from the AI
 
 - **Status:** idea
 - **Why:** the AI suggests grind and temperature changes; for espresso, dose
@@ -234,11 +287,11 @@ What the analysis worker sends to the LLM and what comes back.
   optional dose and yield deltas for espresso brews, and show them with the
   suggestion. Prompt and schema change, plus UI.
 - **Size:** S–M
-- **Depends on:** nothing. Fits with 6.
+- **Depends on:** nothing. Fits with 7.
 - **Open questions:** should it also suggest pre-infusion and profile changes
   for machines that support them?
 
-### 8. Choose what the AI sees
+### 9. Choose what the AI sees
 
 - **Status:** idea
 - **Why:** every recorded brew, bean and recipe detail goes to the AI, and
@@ -255,7 +308,7 @@ What the analysis worker sends to the LLM and what comes back.
     saved with Rate later and not rated yet) go to the AI at all, as the
     brew analysed or as history.
 - **Size:** M
-- **Depends on:** nothing. Fits with 6 (the audit says what's worth sending).
+- **Depends on:** nothing. Fits with 7 (the audit says what's worth sending).
   Can reuse the field registry's keys (`lib/fields.ts`, roadmap: field
   visibility).
 - **Open questions:**
@@ -263,7 +316,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Decided with field visibility: hiding a form field doesn't change what
     the AI gets, so the two stay separate switches.
 
-### 9. Build bar items from plain text (AI)
+### 10. Build bar items from plain text (AI)
 
 - **Status:** idea
 - **Why:** recipes, drinks and other bar items often come as text: a
@@ -294,7 +347,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## E. Insights
 
-### 10. Statistics and graphs
+### 11. Statistics and graphs
 
 - **Status:** idea
 - **Why:** the brew history is a list. Trends (is this bean getting better
@@ -320,7 +373,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## F. Bar & menu
 
-### 11. Ingredient prep and stock
+### 12. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -335,7 +388,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** how precise does stock need to be (exact grams, or
   "about half left")?
 
-### 12. Public menu: branding and sizes
+### 13. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
@@ -349,7 +402,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
-### 13. Drink categories: what else they could do
+### 14. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -368,7 +421,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## G. Home roasting
 
-### 14. Roasting: green stock, roast logs, resting
+### 15. Roasting: green stock, roast logs, resting
 
 - **Status:** idea
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
@@ -399,7 +452,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## H. Accounts
 
-### 15. Account management and password reset
+### 16. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
