@@ -3,6 +3,7 @@
 // and fills dose, water, size, temperature and grind from the log itself.
 // What's no longer available (archived or deleted) is skipped and named.
 import type { Bean, BrewLog, Brewer, Drink, Grinder, Recipe, RepeatKeep, WaterProfile } from '../api/types';
+import type { FieldKey } from './fields';
 import { batchSuffix } from './beans';
 import { encodeCategory, encodeDrink, encodeMethod, encodePlain, methodKey, NO_RECIPE } from './brewChoice';
 import { formatAdded } from './format';
@@ -21,6 +22,25 @@ export const REPEAT_OPTIONS: Array<{ key: RepeatKeep; label: string; hint?: stri
   { key: 'grinderWeights', label: 'Beans in / grounds out' },
   { key: 'notes', label: 'Tasting notes, as a reminder', hint: 'Shown on the log form, not copied into the new brew' },
 ];
+
+// Parity with the brew form (docs/api/auth.md §1 repeatKeeps): every optional
+// brew field in the field registry (lib/fields.ts) says what a repeat does
+// with it. Either the REPEAT_OPTIONS key that copies it, or 'result' for
+// what's measured or tasted each time and never copied. Typed over every
+// brew.* key, so a new brew field doesn't build until it's decided here.
+type BrewFieldKey = Extract<FieldKey, `brew.${string}`>;
+export const REPEAT_FOR_FIELD: Record<BrewFieldKey, RepeatKeep | 'result'> = {
+  'brew.yield': 'result',
+  'brew.tds': 'result',
+  'brew.temp': 'temp',
+  'brew.grinder': 'grinder',
+  'brew.grind': 'grind',
+  'brew.rpm': 'grind',
+  'brew.grinderWeights': 'grinderWeights',
+  'brew.waterProfile': 'waterProfile',
+  'brew.prepTools': 'prepTools',
+  'brew.firstDrop': 'result',
+};
 
 export interface RepeatPlan {
   beanId: string; // '' = pick one (see missing)

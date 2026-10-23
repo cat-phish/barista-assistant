@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Bean, BrewLog, Brewer, Drink, Grinder, Recipe, WaterProfile } from '../api/types';
 import { DEFAULT_PREFERENCES } from '../composables/usePreferences';
-import { madeKey, recentByMade, REPEAT_OPTIONS, repeatLabel, repeatPlan, type RepeatSources } from './repeatBrew';
+import { FIELDS } from './fields';
+import { madeKey, recentByMade, REPEAT_FOR_FIELD, REPEAT_OPTIONS, repeatLabel, repeatPlan, type RepeatSources } from './repeatBrew';
 
 const log = (over: Partial<BrewLog> = {}): BrewLog =>
   ({
@@ -84,5 +85,13 @@ describe('what a repeat keeps', () => {
     const keys = REPEAT_OPTIONS.map((o) => o.key);
     expect(new Set(keys).size).toBe(keys.length);
     for (const k of DEFAULT_PREFERENCES.repeatKeeps) expect(keys).toContain(k);
+  });
+  it('keeps parity with the brew fields: each says what a repeat does with it', () => {
+    const keys = new Set<string>(REPEAT_OPTIONS.map((o) => o.key));
+    const brewFields = FIELDS.filter((f) => f.form === 'brew').map((f) => f.key);
+    expect(Object.keys(REPEAT_FOR_FIELD).sort()).toEqual([...brewFields].sort());
+    for (const [field, repeat] of Object.entries(REPEAT_FOR_FIELD) as Array<[string, string]>) {
+      expect(repeat === 'result' || keys.has(repeat), field).toBe(true);
+    }
   });
 });
