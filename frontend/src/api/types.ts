@@ -18,7 +18,9 @@ export interface UserPreferences {
   rateReminders: boolean; // offer Rate later and send its reminders (docs/api/notifications.md §1b)
   rateReminderMinutes: number; // 5–240
   rateLaterDefault: boolean; // the log form's Rate later box starts ticked
+  repeatKeeps: RepeatKeep[]; // what a repeat copies (lib/repeatBrew.ts REPEAT_OPTIONS)
 }
+export type RepeatKeep = 'size' | 'doseWater' | 'temp' | 'grinder' | 'grind' | 'waterProfile' | 'prepTools' | 'grinderWeights' | 'notes';
 
 // docs/api/notifications.md §1b: a person's own reminder channels.
 export type NotificationKind = 'ntfy' | 'gotify' | 'pushover' | 'discord' | 'telegram' | 'slack' | 'webhook';

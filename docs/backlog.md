@@ -23,15 +23,15 @@ on: 1" always means the same item. When an item is done or added, renumber
 and fix the references.
 
 **Contents**
-- A. Settings & configuration: 1–2
-- B. Beans: 3
-- C. Brewing & logging: 4–6
-- D. AI suggestions: 7–10
-- E. Insights: 11
-- F. Bar & menu: 12–14
-- G. Home roasting: 15
-- H. Accounts: 16
-- I. Deployment & the app: 17
+- A. Settings & configuration: 1
+- B. Beans: 2
+- C. Brewing & logging: 3–5
+- D. AI suggestions: 6–9
+- E. Insights: 10
+- F. Bar & menu: 11–13
+- G. Home roasting: 14
+- H. Accounts: 15
+- I. Deployment & the app: 16
 
 ---
 
@@ -76,7 +76,7 @@ Where the app's choices live, and what you can switch on, off or take out.
     worker job.
 - **Size:** L (export S, backup M, restore M, list import/export M). A
   sensible order: list export → list import → backup → restore.
-- **Depends on:** nothing. Backups should include photos once 3 is built.
+- **Depends on:** nothing. Backups should include photos once 2 is built.
 - **Open questions:**
   - Only owners, or all members?
   - Restore into an existing workspace (merge), or only into an empty one?
@@ -92,28 +92,13 @@ Where the app's choices live, and what you can switch on, off or take out.
   - Should there also be scheduled server-side backups (a `mysqldump` cron),
     or is that up to whoever runs the server?
 
-### 2. Choose what a repeat keeps
-
-- **Status:** idea
-- **Why:** what to carry over differs by bar: some always change the grind,
-  others want the tasting notes as a reminder.
-- **Approach:** Settings → **Repeat brews**: a switch for each field "Brew
-  again" copies, with today's choices as the default (roadmap: repeat a
-  brew). Prep tools are one
-  of the switches: off, a repeat leaves them unticked; on, it ticks the ones
-  the brew used. Uses the field registry (`lib/fields.ts`, roadmap: field
-  visibility).
-- **Size:** S
-- **Depends on:** nothing: repeating is built.
-- **Open questions:** per person or per workspace?
-
 ---
 
 ## B. Beans
 
 What's recorded about each coffee.
 
-### 3. Bean photos
+### 2. Bean photos
 
 - **Status:** idea
 - **Why:** a photo of the bag or label is the quickest way to recognize a
@@ -140,7 +125,7 @@ What's recorded about each coffee.
 
 Recording a brew: what's measured, and how fast it is to log.
 
-### 4. Cold brew refinements
+### 3. Cold brew refinements
 
 - **Status:** idea
 - **Why:** cold brew is a recipe style (`cold_brew`), but it's brewed like a
@@ -159,16 +144,16 @@ Recording a brew: what's measured, and how fast it is to log.
     channels (Settings → Notifications, roadmap: rate later) send the "steep
     done" reminder, as another kind of job.
   - The log records the batch size and the dilution served, so the AI
-    (item 7) judges strength correctly.
+    (item 6) judges strength correctly.
 - **Size:** M
 - **Depends on:** nothing: the notification channels are built.
 - **Open questions:**
-  - Should a cold brew batch be stock, like item 12's ingredient batches,
+  - Should a cold brew batch be stock, like item 11's ingredient batches,
     with servings taken from it?
   - Are there other long brews to cover the same way (e.g. Kyoto-style cold
     drip)?
 
-### 5. Grind settings for multi-ring grinders
+### 4. Grind settings for multi-ring grinders
 
 - **Status:** idea
 - **Why:** grind settings are numbers on the grinder's dial now (roadmap:
@@ -193,7 +178,7 @@ Recording a brew: what's measured, and how fast it is to log.
   - Which grinders need it (1Zpresso, Kingrinder, Timemore with a dial)?
   - Should the AI see the total clicks, the formatted text, or both?
 
-### 6. Brew problems
+### 5. Brew problems
 
 - **Status:** idea
 - **Why:** tasting notes say how the cup tasted, but not what went wrong
@@ -241,7 +226,7 @@ Recording a brew: what's measured, and how fast it is to log.
 - **Open questions:**
   - Can a problem be switched off on its own (hidden from the checklist
     but kept on old brews), or only archived like prep tools?
-  - Should statistics (item 11) chart problems over time, e.g. how often
+  - Should statistics (item 10) chart problems over time, e.g. how often
     a bean channels?
   - Add a free-text "other problem" line, or leave that to the tasting
     notes?
@@ -252,7 +237,7 @@ Recording a brew: what's measured, and how fast it is to log.
 
 What the analysis worker sends to the LLM and what comes back.
 
-### 7. Review and refine AI input and output
+### 6. Review and refine AI input and output
 
 - **Status:** idea
 - **Why:** the prompt and structured output (`docs/api/llm-contract.md` §9)
@@ -279,7 +264,7 @@ What the analysis worker sends to the LLM and what comes back.
     redeploy), or both (Docker sets the key and what's allowed, the app picks
     from that)?
 
-### 8. Espresso dose and yield suggestions from the AI
+### 7. Espresso dose and yield suggestions from the AI
 
 - **Status:** idea
 - **Why:** the AI suggests grind and temperature changes; for espresso, dose
@@ -288,11 +273,11 @@ What the analysis worker sends to the LLM and what comes back.
   optional dose and yield deltas for espresso brews, and show them with the
   suggestion. Prompt and schema change, plus UI.
 - **Size:** S–M
-- **Depends on:** nothing. Fits with 7.
+- **Depends on:** nothing. Fits with 6.
 - **Open questions:** should it also suggest pre-infusion and profile changes
   for machines that support them?
 
-### 9. Choose what the AI sees
+### 8. Choose what the AI sees
 
 - **Status:** idea
 - **Why:** every recorded brew, bean and recipe detail goes to the AI, and
@@ -309,7 +294,7 @@ What the analysis worker sends to the LLM and what comes back.
     saved with Rate later and not rated yet) go to the AI at all, as the
     brew analysed or as history.
 - **Size:** M
-- **Depends on:** nothing. Fits with 7 (the audit says what's worth sending).
+- **Depends on:** nothing. Fits with 6 (the audit says what's worth sending).
   Can reuse the field registry's keys (`lib/fields.ts`, roadmap: field
   visibility).
 - **Open questions:**
@@ -317,7 +302,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Decided with field visibility: hiding a form field doesn't change what
     the AI gets, so the two stay separate switches.
 
-### 10. Build bar items from plain text (AI)
+### 9. Build bar items from plain text (AI)
 
 - **Status:** idea
 - **Why:** recipes, drinks and other bar items often come as text: a
@@ -348,7 +333,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## E. Insights
 
-### 11. Statistics and graphs
+### 10. Statistics and graphs
 
 - **Status:** idea
 - **Why:** the brew history is a list. Trends (is this bean getting better
@@ -374,7 +359,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## F. Bar & menu
 
-### 12. Ingredient prep and stock
+### 11. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -389,21 +374,21 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** how precise does stock need to be (exact grams, or
   "about half left")?
 
-### 13. Public menu: branding and sizes
+### 12. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
   every bar, and a drink has one price even when it's made in several sizes.
 - **Approach:**
   - **Branding:** per-workspace accent colour, a tagline under the name, and
-    maybe a logo (uploads are new to the stack, like item 3's photos).
+    maybe a logo (uploads are new to the stack, like item 2's photos).
   - **Sizes:** prices per serving size once drinks have more than one size.
 - **Size:** S–M (branding without a logo is S).
-- **Depends on:** nothing; a logo fits with 3.
+- **Depends on:** nothing; a logo fits with 2.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
-### 14. Drink categories: what else they could do
+### 13. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -422,7 +407,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## G. Home roasting
 
-### 15. Roasting: green stock, roast logs, resting
+### 14. Roasting: green stock, roast logs, resting
 
 - **Status:** idea
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
@@ -443,7 +428,7 @@ What the analysis worker sends to the LLM and what comes back.
     be compared.
 - **Size:** L (several branches: green stock and roast log, then resting and
   reminders, then roast comparison).
-- **Depends on:** 3 for photos.
+- **Depends on:** 2 for photos.
 - **Open questions:**
   - Its own section, or a part of Beans?
   - Import roast curves (Artisan `.alog`), or only link to them?
@@ -453,7 +438,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## H. Accounts
 
-### 16. Account management and password reset
+### 15. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -490,7 +475,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 How the app is served and installed.
 
-### 17. Serve the app as an installable PWA
+### 16. Serve the app as an installable PWA
 
 - **Status:** idea
 - **Why:** the PWA is configured (`vite-plugin-pwa`, `frontend/vite.config.ts`)

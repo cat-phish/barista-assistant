@@ -28,6 +28,10 @@ export const VOLUME_UNITS = ["fl_oz", "ml"] as const;
 export const ALTITUDE_UNITS = ["m", "ft"] as const;
 export const TEMPERATURE_UNITS = ["c", "f"] as const;
 export const THEMES = ["system", "light", "dark"] as const; // system = follow the device
+// What "Brew again" / a repeat copies from the earlier brew, besides the bean
+// and what → brewer → recipe, which a repeat always takes (docs/api/auth.md §1).
+export const REPEAT_KEEPS = ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "prepTools", "grinderWeights", "notes"] as const;
+export type RepeatKeep = (typeof REPEAT_KEEPS)[number];
 
 // Per person (docs/api/auth.md §1 preferences).
 export interface UserPreferences {
@@ -42,6 +46,7 @@ export interface UserPreferences {
   rateReminders: boolean;
   rateReminderMinutes: number; // 5–240
   rateLaterDefault: boolean; // the log form's Rate later box starts ticked
+  repeatKeeps: RepeatKeep[]; // what a repeat copies (notes: shown as a reminder, not copied)
 }
 export const DEFAULT_PREFERENCES: UserPreferences = {
   volumeUnit: "fl_oz",
@@ -52,6 +57,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   rateReminders: true,
   rateReminderMinutes: 15,
   rateLaterDefault: false,
+  repeatKeeps: ["size", "doseWater", "temp", "grinder", "grind", "waterProfile"],
 };
 
 // Per workspace, owners edit (docs/api/workspaces.md §2 settings).

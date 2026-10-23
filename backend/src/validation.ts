@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ALTITUDE_UNITS, ROAST_LEVELS, ROAST_SCALES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
+import { ALTITUDE_UNITS, REPEAT_KEEPS, ROAST_LEVELS, ROAST_SCALES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
 import { ROLES } from "./auth/membership.js";
 
 export const roleSchema = z.enum(ROLES);
@@ -35,6 +35,10 @@ export const preferencesSchema = z
     rateReminders: z.boolean(),
     rateReminderMinutes: z.number().int().min(5).max(240),
     rateLaterDefault: z.boolean(),
+    // The whole list (what's on); each once.
+    repeatKeeps: z
+      .array(z.enum(REPEAT_KEEPS))
+      .refine((keys) => new Set(keys).size === keys.length, "each once"),
   })
   .partial()
   .strict()

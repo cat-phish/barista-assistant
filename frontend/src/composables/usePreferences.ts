@@ -14,6 +14,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   rateReminders: true,
   rateReminderMinutes: 15,
   rateLaterDefault: false,
+  repeatKeeps: ['size', 'doseWater', 'temp', 'grinder', 'grind', 'waterProfile'],
 };
 export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: 'light', roastScale: 'names', hiddenFields: [] };
 

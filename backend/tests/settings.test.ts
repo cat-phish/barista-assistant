@@ -72,7 +72,7 @@ describe("roast scale", () => {
 });
 
 describe("preferences", () => {
-  const defaults = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false };
+  const defaults = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["size", "doseWater", "temp", "grinder", "grind", "waterProfile"] };
 
   it("come back on register and /me, defaults filled in", async () => {
     const user = await newUser();
@@ -90,7 +90,7 @@ describe("preferences", () => {
 
     expect((await a.agent.patch(path).send({ temperatureUnit: "f" })).body.preferences).toEqual({ ...defaults, temperatureUnit: "f" });
     const both = await a.agent.patch(path).send({ altitudeUnit: "ft", volumeUnit: "ml", showBothVolumes: true });
-    expect(both.body.preferences).toEqual({ volumeUnit: "ml", showBothVolumes: true, altitudeUnit: "ft", temperatureUnit: "f", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false });
+    expect(both.body.preferences).toEqual({ volumeUnit: "ml", showBothVolumes: true, altitudeUnit: "ft", temperatureUnit: "f", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["size", "doseWater", "temp", "grinder", "grind", "waterProfile"] });
     expect((await a.agent.patch(path).send({ theme: "dark" })).body.preferences.theme).toBe("dark");
     expect((await a.agent.patch(path).send({ theme: "sepia" })).status).toBe(400);
 
@@ -102,5 +102,16 @@ describe("preferences", () => {
   it("need a session", async () => {
     const { anonymous } = await import("./helpers.js");
     expect((await anonymous().patch("/api/auth/me/preferences").send({ temperatureUnit: "f" })).status).toBe(401);
+  });
+
+  it("repeatKeeps: what a repeat copies, each once, from the known list (docs/api/auth.md §1)", async () => {
+    const me = await newUser();
+    const path = "/api/auth/me/preferences";
+    const ok = await me.agent.patch(path).send({ repeatKeeps: ["grind", "prepTools", "notes"] });
+    expect(ok.body.preferences.repeatKeeps).toEqual(["grind", "prepTools", "notes"]);
+    expect((await me.agent.patch(path).send({ repeatKeeps: [] })).body.preferences.repeatKeeps).toEqual([]);
+    for (const repeatKeeps of [["rating"], ["grind", "grind"], "grind"]) {
+      expect((await me.agent.patch(path).send({ repeatKeeps })).status, JSON.stringify(repeatKeeps)).toBe(400);
+    }
   });
 });

@@ -62,7 +62,7 @@ units, with defaults filled in. Storage is always grams, °C and metres;
 clients convert what they show and what's typed (roadmap: Units and defaults).
 
 ```json
-{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false }
+{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["size", "doseWater", "temp", "grinder", "grind", "waterProfile"] }
 ```
 
 - `volumeUnit`: `fl_oz` | `ml`: the brew page's yield estimate, and a new
@@ -76,6 +76,20 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
 - `rateReminders` (default `true`), `rateReminderMinutes` (5–240, default
   `15`) and `rateLaterDefault` (default `false`): rate-later reminders, see
   §1b.
+- `repeatKeeps`: what repeating a brew copies (Settings → Repeat brews), a
+  list of `REPEAT_KEEPS`, each once:
+  - `size`: the drink size;
+  - `doseWater`: dose and water;
+  - `temp`;
+  - `grinder`;
+  - `grind`: the setting and RPM, on the same grinder;
+  - `waterProfile`;
+  - `prepTools`: ticks the tools that brew used;
+  - `grinderWeights`;
+  - `notes`: shown on the log form as a reminder, not copied.
+
+  Default: the first six. A `PATCH` sends the whole list. The bean and what
+  → brewer → recipe always come along; results and ratings never do.
 
 ### `PATCH /api/auth/me/preferences`
 
