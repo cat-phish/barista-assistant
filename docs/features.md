@@ -20,7 +20,7 @@ upcoming work is in `roadmap.md`.
   roast" stays meaningful for frozen coffee.
 
 ## Bar setup
-One **Bar setup** section with three tabs: Brewers, Grinders, Categories.
+One **Bar setup** section with tabs: Brewers, Grinders, Water, Tools and Menu.
 Brewers and Grinders are tables like Recipes: filter brewers by type (pour
 over, immersion, espresso) and grinders by hand or electric, with a **Show
 archived** checkbox when there are archived ones (where Restore is); sort by
@@ -113,9 +113,10 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   changes to either don't carry over. The list shows variants under their
   parent; deleting a drink moves its variants up a level.
 - **Categories:** a managed, ordered list ("Espresso milk drinks", "Specialty
-  drinks") under Bar setup → Categories: add, rename, reorder, delete (its
-  drinks and brewers become uncategorised). They're the first choice when
-  brewing, filter the drinks list, and are the menu's sections.
+  drinks") at the bottom of the **Drinks** page, below the list: add, rename,
+  reorder, delete (its drinks become uncategorised). They group drinks under
+  "What are you making?" when brewing, after the brew methods, and filter
+  the drinks list. The public menu has its own sections.
 - **Drinks list:** a table (Name, Category, Brewer, Added), filtered by
   category and sorted by name (variants stay under their parent) or date
   added, from the headers or the Sort menu; tap a row for its recipe,

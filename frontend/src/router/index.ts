@@ -35,7 +35,8 @@ export const router = createRouter({
     { path: '/setup/water/new', name: 'water-profile-new', component: () => import('../views/WaterProfileFormView.vue'), meta: { requiresWorkspace: true, requiresEditor: true } },
     { path: '/setup/water/:id/edit', name: 'water-profile-edit', component: () => import('../views/WaterProfileFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresEditor: true } },
     { path: '/setup/tools', name: 'prep-tools', component: () => import('../views/PrepToolsView.vue'), meta: { requiresWorkspace: true } },
-    { path: '/setup/categories', name: 'categories', component: () => import('../views/CategoriesView.vue'), meta: { requiresWorkspace: true } },
+    // Categories moved to the Drinks page; old links and bookmarks still land there.
+    { path: '/setup/categories', name: 'categories', redirect: { name: 'drinks', hash: '#categories' } },
     { path: '/setup/menu', name: 'menu-builder', component: () => import('../views/MenuBuilderView.vue'), meta: { requiresWorkspace: true } },
     // Old addresses: Equipment became Bar setup; methods and machines became brewers.
     { path: '/equipment', redirect: '/setup/brewers' },
