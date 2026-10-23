@@ -30,6 +30,10 @@ const current = computed(() => props.sortColumns.find((c) => c.value === column.
 
 <template>
   <div class="list-controls">
+  <label v-if="retiredCount" class="checkbox retired">
+    <input v-model="showRetired" type="checkbox" />
+    Show retired ({{ retiredCount }})
+  </label>
   <div class="controls" :class="{ 'no-filter': !filterOptions?.length }">
     <div v-if="filterOptions?.length" class="field">
       <label :for="`${idPrefix}-filter`">{{ filterLabel }}</label>
@@ -51,10 +55,6 @@ const current = computed(() => props.sortColumns.find((c) => c.value === column.
       </select>
     </div>
   </div>
-  <label v-if="retiredCount" class="checkbox retired">
-    <input v-model="showRetired" type="checkbox" />
-    Show retired ({{ retiredCount }})
-  </label>
   </div>
 </template>
 

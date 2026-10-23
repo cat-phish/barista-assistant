@@ -359,6 +359,6 @@ and the filter used change the cup, and brews didn't record them. Contract:
 - **The AI** gets each brew's `prepTools` names, and is told an empty list
   means nothing was recorded, not that nothing was used.
 - **Show retired:** Brewers, Grinders and Water now show retired items with a
-  "Show retired (n)" checkbox under the list controls (only when there are
+  "Show retired (n)" checkbox above the list controls (only when there are
   some), as Tools does, instead of a "Retired" choice in the filter. Retired
   rows are marked "(retired)" and keep the current filter and sort.
