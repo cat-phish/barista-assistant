@@ -337,12 +337,23 @@ export const METHOD_KINDS = ["filter", "espresso", "stovetop", "other"] as const
 export type MethodKind = (typeof METHOD_KINDS)[number];
 // A recipe's style, by its brewer's method: how the cup is brewed. Descriptive
 // (lists, the AI); it changes no fields or timer behaviour.
-export const FILTER_STYLES = ["pour_over", "immersion", "hybrid", "cold_brew", "other"] as const;
+export const FILTER_STYLES = ["pour_over", "immersion", "hybrid", "cold_brew", "rapid_cold", "kyoto_drip", "other"] as const;
 export const ESPRESSO_STYLES = ["standard", "soup", "other"] as const;
 export const STOVETOP_STYLES = ["moka", "ibrik", "other"] as const;
 export const OTHER_STYLES = ["other"] as const;
-export const RECIPE_STYLES = ["pour_over", "immersion", "hybrid", "cold_brew", "standard", "soup", "moka", "ibrik", "other"] as const;
+export const RECIPE_STYLES = ["pour_over", "immersion", "hybrid", "cold_brew", "rapid_cold", "kyoto_drip", "standard", "soup", "moka", "ibrik", "other"] as const;
 export type RecipeStyle = (typeof RECIPE_STYLES)[number];
+// Cold styles (docs/api/recipe-styles.md §5e), by what a style brews like:
+// long ones steep or drip for hours (Start steep, then Finish later; no
+// timer), rapid cold runs the timer in minutes. All three can be served
+// diluted. Kyoto drip is percolation; cold brew and rapid cold (an OXO Rapid
+// Brewer) are immersion for extraction yield.
+export const LONG_STYLES: readonly RecipeStyle[] = ["cold_brew", "kyoto_drip"];
+export const COLD_STYLES: readonly RecipeStyle[] = ["cold_brew", "kyoto_drip", "rapid_cold"];
+export const STEEP_TEMPS = ["fridge", "room"] as const;
+export type SteepTemp = (typeof STEEP_TEMPS)[number];
+export const DILUTION_WITH = ["water", "milk", "ice", "other"] as const;
+export type DilutionWith = (typeof DILUTION_WITH)[number];
 export const STYLES_BY_KIND: Record<MethodKind, readonly RecipeStyle[]> = {
   filter: FILTER_STYLES,
   espresso: ESPRESSO_STYLES,
@@ -525,6 +536,8 @@ export const STYLE_NAMES: Record<RecipeStyle, string> = {
   immersion: "Immersion",
   hybrid: "Hybrid",
   cold_brew: "Cold brew",
+  rapid_cold: "Rapid cold brew",
+  kyoto_drip: "Kyoto drip",
   standard: "Standard",
   soup: "Soup",
   moka: "Moka",
@@ -585,6 +598,14 @@ export const recipes = mysqlTable("recipes", {
   // Unit for espresso flow steps: g/s (a scale) or ml/s (a machine's flow meter).
   flowUnit: varchar("flow_unit", { length: 10 }).$type<FlowUnit>().default("g_s").notNull(),
   targetTempC: decimal("target_temp_c", { precision: 4, scale: 1, mode: "number" }),
+  // Cold styles (docs/api/recipes.md §5): the steep window in hours (both or
+  // neither, long styles), fridge or room, and how the concentrate is served:
+  // 1 : dilutionRatio with dilutionWith (e.g. 1 : 1 water).
+  steepMinHours: decimal("steep_min_hours", { precision: 4, scale: 1, mode: "number" }),
+  steepMaxHours: decimal("steep_max_hours", { precision: 4, scale: 1, mode: "number" }),
+  steepTemp: varchar("steep_temp", { length: 10 }).$type<SteepTemp>(), // STEEP_TEMPS
+  dilutionRatio: decimal("dilution_ratio", { precision: 3, scale: 1, mode: "number" }),
+  dilutionWith: varchar("dilution_with", { length: 10 }).$type<DilutionWith>(), // DILUTION_WITH
   // How the cup is brewed: one of the workspace's styles for the brewer's
   // method (docs/api/recipe-styles.md §5e); null = not set.
   styleId: varchar("style_id", { length: 36 }).references((): AnyMySqlColumn => recipeStyles.id, { onDelete: "set null" }),

@@ -219,3 +219,36 @@ describe("brew logs: water vs measured yield", () => {
     expect((await owner.agent.patch(`${base}/${id}`).send({ beanWeightInGrams: null })).body.brewLog).toMatchObject({ beanWeightInGrams: null, groundWeightOutGrams: 18 });
   });
 });
+
+describe("cold styles (docs/api/recipes.md §5)", () => {
+  it("steep window in hours (a pair), fridge or room, and the serving dilution", async () => {
+    const owner = await newUser();
+    const ws = await newWorkspace(owner);
+    const base = `/api/workspaces/${ws.id}/recipes`;
+    const brewer = await brewerId(owner, ws.id, "V60");
+    const cold = await styleId(owner, ws.id, "filter", "cold_brew");
+    const recipe = { name: "Fridge cold brew", brewerId: brewer, targetDoseGrams: 100, targetWaterGrams: 800, styleId: cold };
+    const made = await owner.agent.post(base).send({ ...recipe, steepMinHours: 12, steepMaxHours: 18, steepTemp: "fridge", dilutionRatio: 1, dilutionWith: "water" });
+    expect(made.status).toBe(201);
+    expect(made.body.recipe).toMatchObject({ steepMinHours: 12, steepMaxHours: 18, steepTemp: "fridge", dilutionRatio: 1, dilutionWith: "water" });
+    const url = `${base}/${made.body.recipe.id}`;
+    expect((await owner.agent.patch(url).send({ steepMaxHours: 20 })).status).toBe(400); // one end alone
+    expect((await owner.agent.patch(url).send({ steepMinHours: 10, steepMaxHours: 16.5 })).body.recipe).toMatchObject({ steepMinHours: 10, steepMaxHours: 16.5 });
+    expect((await owner.agent.patch(url).send({ steepMinHours: null })).body.recipe).toMatchObject({ steepMinHours: null, steepMaxHours: null });
+    for (const bad of [
+      { steepMinHours: 18, steepMaxHours: 12 },
+      { steepMinHours: 0.2, steepMaxHours: 12 },
+      { steepMinHours: 12, steepMaxHours: 80 },
+      { steepTemp: "freezer" },
+      { dilutionRatio: 0 },
+      { dilutionRatio: 1.25 },
+      { dilutionWith: "juice" },
+    ]) {
+      expect((await owner.agent.post(base).send({ ...recipe, name: "x", ...bad })).status, JSON.stringify(bad)).toBe(400);
+    }
+    // A new workspace has the new built-ins.
+    expect((await owner.agent.get(`/api/workspaces/${ws.id}/recipe-styles`)).body.styles.map((s: { builtin: string | null }) => s.builtin)).toEqual(
+      expect.arrayContaining(["rapid_cold", "kyoto_drip"]),
+    );
+  });
+});

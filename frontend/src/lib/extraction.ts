@@ -4,7 +4,7 @@ import type { RecipeStyle } from '../api/types';
 
 // The grounds sit in the water: the liquid they keep is as strong as the cup,
 // so the beverage is the water, not the measured yield.
-const IMMERSION_STYLES: readonly (RecipeStyle | null)[] = ['immersion', 'cold_brew', 'ibrik'];
+const IMMERSION_STYLES: readonly (RecipeStyle | null)[] = ['immersion', 'cold_brew', 'rapid_cold', 'ibrik'];
 
 export function usesWater(style: RecipeStyle | null): boolean {
   return IMMERSION_STYLES.includes(style);

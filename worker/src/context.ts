@@ -211,7 +211,7 @@ function ratio(brew: BrewLog): number | null {
 
 // Styles where the grounds sit in the water: the liquid they keep is as strong
 // as the cup, so extraction is worked out from the water, not the yield.
-const IMMERSION_STYLES: readonly (RecipeStyle | null)[] = ["immersion", "cold_brew", "ibrik"];
+const IMMERSION_STYLES: readonly (RecipeStyle | null)[] = ["immersion", "cold_brew", "rapid_cold", "ibrik"];
 
 // Extraction yield, % (docs/api/brew-logs.md §6): TDS × beverage ÷ dose.
 export function extractionYield(brew: BrewLog, style: StyleInfo | null): number | null {

@@ -10,7 +10,9 @@ import { addUsageRoute, recipeUsage } from "../usage.js";
 import {
   brewers,
   ESPRESSO_STEP_TYPES,
+  DILUTION_WITH,
   FLOW_UNITS,
+  STEEP_TEMPS,
   grinders,
   RECIPE_STEP_TYPES,
   RECIPE_STYLES,
@@ -128,6 +130,23 @@ const grindSettingsSchema = z
     });
   });
 
+const steepHours = decimalSchema({ min: 0.5, max: 72, scale: 1 }).nullable().optional();
+
+// The steep window is a pair: both ends (min ≤ max), or null on either clears both.
+type SteepBody = { steepMinHours?: number | null; steepMaxHours?: number | null };
+function steepPairIssue(body: SteepBody, ctx: z.RefinementCtx): void {
+  const { steepMinHours: min, steepMaxHours: max } = body;
+  if ((min === undefined && max === undefined) || min === null || max === null) return;
+  if (min === undefined || max === undefined) {
+    ctx.addIssue({ code: "custom", path: [min === undefined ? "steepMinHours" : "steepMaxHours"], message: "send both ends of the steep window" });
+  } else if (min > max) {
+    ctx.addIssue({ code: "custom", path: ["steepMaxHours"], message: "must not be less than steepMinHours" });
+  }
+}
+function clearSteepTogether<T extends SteepBody>(body: T): T {
+  return body.steepMinHours === null || body.steepMaxHours === null ? { ...body, steepMinHours: null, steepMaxHours: null } : body;
+}
+
 const recipeFields = {
   name: z.string().trim().min(1).max(255),
   brewerId: z.uuid(),
@@ -141,6 +160,13 @@ const recipeFields = {
   firstDropMaxSec: seconds.nullable().optional(),
   flowUnit: z.enum(FLOW_UNITS),
   targetTempC: decimalSchema({ min: 0, max: 100, scale: 1 }).nullable().optional(),
+  // Cold styles (docs/api/recipes.md §5): the steep window in hours (a pair,
+  // steepPairIssue), fridge or room, and the serving dilution.
+  steepMinHours: steepHours,
+  steepMaxHours: steepHours,
+  steepTemp: z.enum(STEEP_TEMPS).nullable().optional(),
+  dilutionRatio: decimalSchema({ min: 0, max: 10, scale: 1, exclusiveMin: true }).nullable().optional(),
+  dilutionWith: z.enum(DILUTION_WITH).nullable().optional(),
   // How the cup is brewed: one of the workspace's styles for the brewer's
   // method (styleError, docs/api/recipe-styles.md §5e).
   styleId: z.uuid().nullable().optional(),
@@ -150,14 +176,17 @@ const recipeFields = {
   steps: stepsSchema,
 };
 
-const createRecipeSchema = z.object({
-  ...recipeFields,
-  flowUnit: recipeFields.flowUnit.default("g_s"),
-  grindSettings: recipeFields.grindSettings.default([]),
-  steps: recipeFields.steps.default([]),
-});
+const createRecipeSchema = z
+  .object({
+    ...recipeFields,
+    flowUnit: recipeFields.flowUnit.default("g_s"),
+    grindSettings: recipeFields.grindSettings.default([]),
+    steps: recipeFields.steps.default([]),
+  })
+  .superRefine(steepPairIssue)
+  .transform(clearSteepTogether);
 
-const updateRecipeSchema = updateSchema({ ...recipeFields, archived: z.boolean() });
+const updateRecipeSchema = updateSchema({ ...recipeFields, archived: z.boolean() }).superRefine(steepPairIssue).transform(clearSteepTogether);
 
 interface RecipeParams extends WorkspaceParams {
   recipeId: string;
@@ -336,6 +365,11 @@ async function loadRecipes(workspaceId: string, recipeId?: string): Promise<Reci
       flowUnit: recipes.flowUnit,
       style: { id: recipeStyles.id, name: recipeStyles.name, brewsLike: recipeStyles.brewsLike },
       targetTempC: recipes.targetTempC,
+      steepMinHours: recipes.steepMinHours,
+      steepMaxHours: recipes.steepMaxHours,
+      steepTemp: recipes.steepTemp,
+      dilutionRatio: recipes.dilutionRatio,
+      dilutionWith: recipes.dilutionWith,
       defaultGrinderId: recipes.defaultGrinderId,
       archivedAt: recipes.archivedAt,
       createdAt: recipes.createdAt,

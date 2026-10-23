@@ -11,10 +11,11 @@ import { ApiError, errorMessage } from '../api/client';
 import { grindersApi } from '../api/grinders';
 import { brewersApi } from '../api/brewers';
 import { recipesApi, type RecipeInput } from '../api/recipes';
-import type { Brewer, FlowUnit, Grinder, MethodKind, Recipe, RecipeStyleItem } from '../api/types';
+import type { Brewer, DilutionWith, FlowUnit, Grinder, MethodKind, Recipe, RecipeStyleItem, SteepTemp } from '../api/types';
+import { DILUTION_WITH, isColdStyle, isLongStyle, STEEP_TEMPS } from '../lib/coldBrew';
 import AppHeader from '../components/AppHeader.vue';
 import DeleteSection from '../components/DeleteSection.vue';
-import { formatGrams, formatGrind, formatRatio, formatTime, GRIND_SETTING, parseDecimal, parseTime } from '../lib/format';
+import { formatGrams, formatGrind, formatRatio, formatTime, GRIND_SETTING, parseDecimal, parseTime, type Parsed } from '../lib/format';
 import { VueDraggable } from 'vue-draggable-plus';
 import {
   ADVANCE,
@@ -76,6 +77,12 @@ const flowUnit = ref<FlowUnit>('g_s'); // espresso flow steps
 const style = ref(''); // a styleId: how the cup is brewed; '' = not set
 const styles = ref<RecipeStyleItem[]>([]); // docs/api/recipe-styles.md §5e
 const temp = ref('');
+// Cold styles (lib/coldBrew.ts): steep window in hours, fridge or room, dilution.
+const steepFrom = ref('');
+const steepTo = ref('');
+const steepTemp = ref<SteepTemp | ''>('');
+const dilutionRatio = ref('');
+const dilutionWith = ref<DilutionWith | ''>('');
 const defaultGrinderId = ref(''); // '' = none: brewing uses the last grinder
 const grindRows = ref<Array<{ grinderId: string; setting: string }>>([]);
 const steps = ref<StepDraft[]>([]);
@@ -101,8 +108,14 @@ const styleChoices = computed(() => styles.value.filter((s) => s.kind === kind.v
 watch(kind, () => {
   if (style.value && styles.value.length && !styleChoices.value.some((s) => s.id === style.value)) style.value = '';
 });
+// What the chosen style brews like: long styles (cold brew, Kyoto drip) steep
+// for hours with steps as a checklist; every cold style can be served diluted.
+const brewsLike = computed(() => styles.value.find((s) => s.id === style.value)?.brewsLike ?? null);
+const longStyle = computed(() => isLongStyle(brewsLike.value));
+const coldStyle = computed(() => isColdStyle(brewsLike.value));
 
 const grams = { scale: 2, min: 0, max: 10000, exclusiveMin: true, exclusiveMax: true } as const;
+const STEEP_HOURS = { scale: 1, min: 0.5, max: 72 } as const;
 const parsed = computed(() => ({
   dose: parseDecimal(dose.value, { scale: 2, min: 0, max: 1000, exclusiveMin: true, exclusiveMax: true }),
   water: espresso.value ? ({ ok: true, value: null } as const) : parseDecimal(water.value, grams),
@@ -114,8 +127,14 @@ const parsed = computed(() => ({
   finish: parseFinishWindow(finishFrom.value, finishTo.value),
   firstDrop: espresso.value ? parseFinishWindow(firstDropFrom.value, firstDropTo.value, FIRST_DROP_DEFAULT_SPREAD_SEC) : ({ ok: true, value: null } as const),
   temp: temp.value.trim() ? parseTemp(temp.value, temperatureUnit.value) : null,
+  steepMin: steepFrom.value.trim() ? parseDecimal(steepFrom.value, STEEP_HOURS) : null,
+  steepMax: steepTo.value.trim() ? parseDecimal(steepTo.value, STEEP_HOURS) : null,
+  dilution: dilutionRatio.value.trim() ? parseDecimal(dilutionRatio.value, { scale: 1, min: 0, max: 10, exclusiveMin: true }) : null,
 }));
-const stepsParsed = computed(() => parseSteps(steps.value, kind.value, temperatureUnit.value));
+// A long style's steps are a checklist: no times, each waits for you.
+const stepsParsed = computed(() =>
+  parseSteps(longStyle.value ? steps.value.map((d) => ({ ...d, advance: 'tap' as const, duration: '' })) : steps.value, kind.value, temperatureUnit.value),
+);
 // "+X g" next to each pour-to, from whatever has been typed so far (even if
 // another field in that row still has an error).
 const amounts = computed(() =>
@@ -150,8 +169,18 @@ const fieldErrors = computed(() => {
     finish: p.finish.ok ? '' : p.finish.error,
     firstDrop: p.firstDrop.ok ? '' : p.firstDrop.error,
     temp: p.temp && !p.temp.ok ? p.temp.error : '',
+    steep: steepError(p.steepMin, p.steepMax),
+    dilution: p.dilution && !p.dilution.ok ? p.dilution.error : '',
   };
 });
+function steepError(min: Parsed<number> | null, max: Parsed<number> | null): string {
+  if (!longStyle.value) return '';
+  if (min && !min.ok) return `From: ${min.error}`;
+  if (max && !max.ok) return `To: ${max.error}`;
+  if (!min !== !max) return 'Enter both ends, or neither';
+  if (min?.ok && max?.ok && min.value > max.value) return '"To" must not be less than "from"';
+  return '';
+}
 const valid = computed(
   () =>
     Object.values(fieldErrors.value).every((e) => !e) &&
@@ -222,6 +251,11 @@ function fill(recipe: Recipe): void {
   grindRows.value = recipe.grindSettings.map((g) => ({ grinderId: g.grinderId, setting: formatGrind(g.setting) }));
   flowUnit.value = recipe.flowUnit;
   style.value = recipe.style?.id ?? '';
+  steepFrom.value = recipe.steepMinHours === null ? '' : String(recipe.steepMinHours);
+  steepTo.value = recipe.steepMaxHours === null ? '' : String(recipe.steepMaxHours);
+  steepTemp.value = recipe.steepTemp ?? '';
+  dilutionRatio.value = recipe.dilutionRatio === null ? '' : String(recipe.dilutionRatio);
+  dilutionWith.value = recipe.dilutionWith ?? '';
   steps.value = recipe.steps.map((s) => stepDraft(newStepKey(), s, temperatureUnit.value));
   reveal({
     'recipe.style': recipe.style,
@@ -233,6 +267,9 @@ function fill(recipe: Recipe): void {
     'recipe.grindSettings': recipe.grindSettings,
     'recipe.flowUnit': recipe.flowUnit !== 'g_s',
     'recipe.stepTemp': recipe.steps.some((s) => s.targetTempC !== null),
+    'recipe.steepWindow': recipe.steepMinHours,
+    'recipe.steepTemp': recipe.steepTemp,
+    'recipe.dilution': recipe.dilutionRatio,
   });
 }
 
@@ -422,7 +459,13 @@ async function save(): Promise<void> {
     expectedFinishMaxSec: p.finish.ok ? (p.finish.value?.max ?? null) : null,
     firstDropMinSec: p.firstDrop.ok ? (p.firstDrop.value?.min ?? null) : null,
     firstDropMaxSec: p.firstDrop.ok ? (p.firstDrop.value?.max ?? null) : null,
-    targetTempC: p.temp?.ok ? p.temp.value : null,
+    // A long steep has no water temperature or finish in minutes, but a window in hours.
+    ...(longStyle.value ? { targetTempC: null, expectedFinishMinSec: null, expectedFinishMaxSec: null } : { targetTempC: p.temp?.ok ? p.temp.value : null }),
+    steepMinHours: longStyle.value && p.steepMin?.ok ? p.steepMin.value : null,
+    steepMaxHours: longStyle.value && p.steepMax?.ok ? p.steepMax.value : null,
+    steepTemp: longStyle.value ? steepTemp.value || null : null,
+    dilutionRatio: coldStyle.value && p.dilution?.ok ? p.dilution.value : null,
+    dilutionWith: coldStyle.value && p.dilution?.ok ? dilutionWith.value || null : null,
     defaultGrinderId: defaultGrinderId.value || null,
     // grindErrors has checked every row parses.
     grindSettings: grindRows.value.map((r) => {
@@ -517,7 +560,7 @@ async function save(): Promise<void> {
           {{ espresso ? 'Coffee : shot' : 'Coffee : water' }} <strong>{{ ratio ?? '–' }}</strong>
         </p>
 
-        <div v-if="(!espresso && show('recipe.expectedYield')) || show('recipe.temp')" class="form-row">
+        <div v-if="(!espresso && show('recipe.expectedYield')) || (show('recipe.temp') && !longStyle)" class="form-row">
           <div v-if="!espresso && show('recipe.expectedYield')" class="field">
             <label for="expected-yield">Expected yield (g)</label>
             <input id="expected-yield" v-model="expectedYield" inputmode="decimal" placeholder="e.g. 220" :aria-invalid="submitted && !!fieldErrors.expectedYield" @input="yieldCustom = true" />
@@ -527,13 +570,55 @@ async function save(): Promise<void> {
               Use estimate ({{ formatGrams(yieldEstimate) }} g)
             </button>
           </div>
-          <div v-if="show('recipe.temp')" class="field">
+          <div v-if="show('recipe.temp') && !longStyle" class="field">
             <label for="temp">Water temp ({{ TEMPERATURE_LABELS[temperatureUnit] }})</label>
             <input id="temp" v-model="temp" inputmode="decimal" :placeholder="temperatureUnit === 'f' ? '201' : '94'" :aria-invalid="submitted && !!fieldErrors.temp" />
             <span v-if="submitted && fieldErrors.temp" class="field-error">{{ fieldErrors.temp }}</span>
           </div>
         </div>
-        <fieldset v-if="show('recipe.finishWindow')" class="finish">
+        <!-- Long cold styles steep for hours (lib/coldBrew.ts): a window in hours and fridge or room. -->
+        <fieldset v-if="longStyle && show('recipe.steepWindow')" class="finish">
+          <legend>Steep for</legend>
+          <div class="finish-row">
+            <div class="field">
+              <label for="steep-from">From (h)</label>
+              <input id="steep-from" v-model="steepFrom" inputmode="decimal" placeholder="12" :aria-invalid="submitted && !!fieldErrors.steep" />
+            </div>
+            <span class="dash" aria-hidden="true">–</span>
+            <div class="field">
+              <label for="steep-to">To (h)</label>
+              <input id="steep-to" v-model="steepTo" inputmode="decimal" placeholder="18" :aria-invalid="submitted && !!fieldErrors.steep" />
+            </div>
+          </div>
+          <span v-if="fieldErrors.steep && (submitted || (steepFrom.trim() && steepTo.trim()))" class="field-error">{{ fieldErrors.steep }}</span>
+          <span v-else class="hint">You get a reminder when it opens (Settings → Notifications).</span>
+        </fieldset>
+        <div v-if="longStyle && show('recipe.steepTemp')" class="field">
+          <label for="steep-temp">Steep in</label>
+          <select id="steep-temp" v-model="steepTemp">
+            <option value="">Not set</option>
+            <option v-for="(label, key) in STEEP_TEMPS" :key="key" :value="key">{{ label }}</option>
+          </select>
+        </div>
+        <fieldset v-if="coldStyle && show('recipe.dilution')" class="finish">
+          <legend>Serve diluted</legend>
+          <div class="finish-row">
+            <div class="field">
+              <label for="dilution-ratio">1 :</label>
+              <input id="dilution-ratio" v-model="dilutionRatio" inputmode="decimal" placeholder="1" :aria-invalid="submitted && !!fieldErrors.dilution" />
+            </div>
+            <div class="field">
+              <label for="dilution-with">with</label>
+              <select id="dilution-with" v-model="dilutionWith">
+                <option value="">Not set</option>
+                <option v-for="(label, key) in DILUTION_WITH" :key="key" :value="key">{{ label }}</option>
+              </select>
+            </div>
+          </div>
+          <span v-if="fieldErrors.dilution" class="field-error">{{ fieldErrors.dilution }}</span>
+          <span v-else class="hint">Parts added per part of concentrate, e.g. 1 for half and half. Leave empty if it's served as it is.</span>
+        </fieldset>
+        <fieldset v-if="show('recipe.finishWindow') && !longStyle" class="finish">
           <legend>{{ espresso ? 'Target shot time' : 'Target finish' }}</legend>
           <div class="finish-row">
             <div class="field">
@@ -611,7 +696,8 @@ async function save(): Promise<void> {
       <section class="card stack">
         <div class="steps-head">
           <h2>{{ espresso ? 'Shot profile' : 'Recipe steps' }}</h2>
-          <span class="muted small">
+          <span v-if="longStyle" class="muted small">A checklist for starting and finishing the steep (no timer): stir, cover, filter twice…</span>
+          <span v-else class="muted small">
             Steps run one after another. Each moves on by itself after its time, or waits for your tap{{ espresso ? ' or the first drop' : '' }}.
           </span>
         </div>
@@ -658,17 +744,17 @@ async function save(): Promise<void> {
                   <option v-if="!stepTypesFor(kind).includes(step.stepType)" :value="step.stepType" disabled>{{ STEP_TYPES[step.stepType].label }}</option>
                 </select>
               </div>
-              <div class="field">
+              <div v-if="!longStyle" class="field">
                 <label :for="`step-time-${i}`">{{ timeLabel(step) }}<span v-if="timeRequired(step, i)" class="req" aria-hidden="true">*</span></label>
                 <input :id="`step-time-${i}`" :aria-required="timeRequired(step, i)" v-model="step.duration" inputmode="numeric" :placeholder="step.advance === 'auto' && i === steps.length - 1 ? 'until done' : 'm:ss'" />
               </div>
-              <div class="field">
+              <div v-if="!longStyle" class="field">
                 <label :for="`step-advance-${i}`">Moves on</label>
                 <select :id="`step-advance-${i}`" v-model="step.advance">
                   <option v-for="a in advancesFor(kind)" :key="a" :value="a">{{ ADVANCE[a].label }}</option>
                 </select>
               </div>
-              <p class="step-when muted full">{{ startsText(i) }} · {{ ADVANCE[step.advance].hint }}</p>
+              <p v-if="!longStyle" class="step-when muted full">{{ startsText(i) }} · {{ ADVANCE[step.advance].hint }}</p>
               <div v-if="stepRules(step.stepType, kind).water !== 'none'" class="field">
                 <label :for="`step-water-${i}`">
                   Pour to (g)<span v-if="stepRules(step.stepType, kind).water === 'required'" class="req" aria-hidden="true">*</span>

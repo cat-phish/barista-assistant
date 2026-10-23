@@ -141,7 +141,17 @@ export interface ErrorBody {
 // Brewers are grouped by method (no category); categories are for drinks.
 export type MethodKind = 'filter' | 'espresso' | 'stovetop' | 'other';
 // The built-in style keys (docs/schema.md STYLES_BY_KIND).
-export type RecipeStyle = 'pour_over' | 'immersion' | 'hybrid' | 'cold_brew' | 'standard' | 'soup' | 'moka' | 'ibrik' | 'other';
+export type RecipeStyle = 'pour_over' | 'immersion' | 'hybrid' | 'cold_brew' | 'rapid_cold' | 'kyoto_drip' | 'standard' | 'soup' | 'moka' | 'ibrik' | 'other';
+// Cold styles (docs/api/recipes.md §5): fridge or room steep, and what the concentrate is served with.
+export type SteepTemp = 'fridge' | 'room';
+export type DilutionWith = 'water' | 'milk' | 'ice' | 'other';
+export interface ColdFields {
+  steepMinHours: number | null; // the steep window (long styles), both or neither
+  steepMaxHours: number | null;
+  steepTemp: SteepTemp | null;
+  dilutionRatio: number | null; // served 1 : dilutionRatio
+  dilutionWith: DilutionWith | null;
+}
 // docs/api/recipe-styles.md §5e: the workspace's styles, a list per method.
 // brewsLike: the built-in it brews like (itself for a built-in), which
 // extraction yield and the AI go by.
@@ -351,7 +361,7 @@ export interface RecipeGrindSetting {
   setting: number; // approximate starting point on that grinder's dial
 }
 
-export interface Recipe {
+export interface Recipe extends ColdFields {
   id: string;
   workspaceId: string;
   name: string;

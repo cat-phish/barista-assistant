@@ -1,9 +1,9 @@
 import { api } from './client';
 import type { Usage } from '../lib/deleting';
-import type { FlowUnit, Recipe, StepFields } from './types';
+import type { ColdFields, FlowUnit, Recipe, StepFields } from './types';
 
 // Request body for create/update (docs/api/recipes.md §5).
-export interface RecipeInput {
+export interface RecipeInput extends ColdFields {
   name: string;
   brewerId: string;
   targetDoseGrams: number;
