@@ -566,9 +566,14 @@ h2 {
   gap: var(--space-3);
   align-items: start;
 }
-.preview {
+/* Side by side: the preview stays in view and scrolls on its own, so a long
+   menu doesn't drift against the editor (sticky alone lagged behind it). */
+.workspace.both .preview {
   position: sticky;
   top: var(--space-3);
+  max-height: calc(100vh - 2 * var(--space-3));
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .preview-note {
   margin-bottom: var(--space-3);
@@ -579,8 +584,10 @@ h2 {
     display: flex;
     flex-direction: column;
   }
-  .preview {
+  .workspace.both .preview {
     position: static;
+    max-height: none;
+    overflow-y: visible;
   }
 }
 </style>
