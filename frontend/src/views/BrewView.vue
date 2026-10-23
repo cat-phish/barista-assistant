@@ -49,6 +49,7 @@ import { formatMark } from '../lib/marks';
 import { stepTitle } from '../lib/steps';
 import { useAnalysis } from '../composables/useAnalysis';
 import { emptyDraft, parseBrewDraft } from '../lib/brewDraft';
+import { grinderRetentionText } from '../lib/grinderRetention';
 import { formatDay, formatDoseLine, formatGrams, formatTime } from '../lib/format';
 import { chooseGrind, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -270,6 +271,17 @@ const num = (text: string): number | null => {
   const n = amount(text);
   return Number.isFinite(n) ? n : null;
 };
+// Weighed before the timer: the grounds out are the dose, so they fill it in
+// (as a typed dose: the water stays and the ratio changes). Without a
+// recipe there's no batch, so the dose is set directly.
+function setGroundOut(event: Event): void {
+  const text = (event.target as HTMLInputElement).value;
+  draft.groundOut = text;
+  if (num(text) === null) return;
+  if (filterRecipe.value || shotRecipe.value) setLeadText('dose', text);
+  else draft.dose = text;
+}
+const setupRetention = computed(() => grinderRetentionText(num(draft.beanIn), num(draft.groundOut)));
 // A positive decimal, allowing a trailing "." while typing.
 function amount(text: string): number {
   const t = text.trim().replace(',', '.');
@@ -832,6 +844,21 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         <p v-else-if="grindSource === 'recipe'" class="muted small grind-hint">
           The recipe's approximate starting point for {{ grinder?.name }}. Adjust to taste; next time your own setting is used.
         </p>
+        <div v-if="grinder?.variableSpeed" class="field">
+          <label for="setup-rpm">Speed (RPM)</label>
+          <input id="setup-rpm" v-model="draft.rpm" inputmode="numeric" :placeholder="grinder.rpmMin != null && grinder.rpmMax != null ? `${grinder.rpmMin}–${grinder.rpmMax}` : 'e.g. 900'" />
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="setup-bean-in">Beans in (g)</label>
+            <input id="setup-bean-in" v-model="draft.beanIn" inputmode="decimal" placeholder="Before grinding" />
+          </div>
+          <div class="field">
+            <label for="setup-ground-out">Grounds out (g)</label>
+            <input id="setup-ground-out" :value="draft.groundOut" inputmode="decimal" placeholder="Sets the dose" @input="setGroundOut" />
+            <span v-if="setupRetention" class="hint">{{ setupRetention }}</span>
+          </div>
+        </div>
       </section>
 
       <div class="stack">

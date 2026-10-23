@@ -79,6 +79,12 @@ watch(
 
 // Active grinders, plus the brew's own even if it's since been archived.
 const grinderOptions = computed(() => props.grinders.filter((g) => !g.archivedAt || g.id === draft.value.grinderId));
+// Grounds out are what goes into the brew, so they fill in the dose.
+function setGroundOut(event: Event): void {
+  const text = (event.target as HTMLInputElement).value;
+  draft.value.groundOut = text;
+  if (num(text) !== null) draft.value.dose = text;
+}
 // Weighing the beans before and after grinding shows what the grinder kept.
 const retentionHint = computed(() => grinderRetentionText(num(draft.value.beanIn), num(draft.value.groundOut)));
 // The speed is asked for only on a variable-speed grinder (docs/api/grinders.md §3b).
@@ -187,7 +193,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
       </div>
       <div class="field">
         <label for="brew-ground-out">Grounds out (g)</label>
-        <input id="brew-ground-out" v-model="draft.groundOut" inputmode="decimal" placeholder="After grinding" :aria-invalid="showErrors && !!errors.groundOut" />
+        <input id="brew-ground-out" :value="draft.groundOut" inputmode="decimal" placeholder="Sets the dose" @input="setGroundOut" :aria-invalid="showErrors && !!errors.groundOut" />
         <span v-if="showErrors && errors.groundOut" class="field-error">{{ errors.groundOut }}</span>
         <span v-else-if="retentionHint" class="hint">{{ retentionHint }}</span>
       </div>
