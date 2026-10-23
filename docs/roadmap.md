@@ -525,3 +525,12 @@ delete an account (`docs/api/auth.md` §1), but no screen used either.
   with only change email, log out everywhere and password reset left. The
   settings-storage decision moved to item 2 (Units and defaults), the first
   real setting.
+
+## Section tabs on small phones (fix)
+
+Branch `section-tabs-mobile`. Bar setup's six tabs (Brewers … Menu) were
+squeezed into one row, and on a 320–375px phone their labels ran into each
+other. `SectionTabs.vue` now keeps one row from 601px wide; narrower, a bar
+with more than four tabs wraps into two even rows (3 + 3), with a little
+less padding. Recipes / Drinks / Ingredients and Active / Archived stay on
+one row.
