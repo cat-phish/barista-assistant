@@ -59,7 +59,7 @@ describe("roast scale", () => {
 });
 
 describe("preferences", () => {
-  const defaults = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c" };
+  const defaults = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system" };
 
   it("come back on register and /me, defaults filled in", async () => {
     const user = await newUser();
@@ -77,7 +77,9 @@ describe("preferences", () => {
 
     expect((await a.agent.patch(path).send({ temperatureUnit: "f" })).body.preferences).toEqual({ ...defaults, temperatureUnit: "f" });
     const both = await a.agent.patch(path).send({ altitudeUnit: "ft", volumeUnit: "ml", showBothVolumes: true });
-    expect(both.body.preferences).toEqual({ volumeUnit: "ml", showBothVolumes: true, altitudeUnit: "ft", temperatureUnit: "f" });
+    expect(both.body.preferences).toEqual({ volumeUnit: "ml", showBothVolumes: true, altitudeUnit: "ft", temperatureUnit: "f", theme: "system" });
+    expect((await a.agent.patch(path).send({ theme: "dark" })).body.preferences.theme).toBe("dark");
+    expect((await a.agent.patch(path).send({ theme: "sepia" })).status).toBe(400);
 
     const login = await a.agent.post("/api/auth/login").send({ email: a.email, password: a.password });
     expect(login.body.user.preferences.altitudeUnit).toBe("ft");

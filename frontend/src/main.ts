@@ -1,7 +1,8 @@
 import { createPinia } from 'pinia';
-import { createApp } from 'vue';
+import { createApp, watch } from 'vue';
 import App from './App.vue';
 import { setUnauthorizedHandler } from './api/client';
+import { applyTheme } from './lib/theme';
 import { router } from './router';
 import { useAuthStore } from './stores/auth';
 import { useWorkspaceStore } from './stores/workspace';
@@ -21,5 +22,15 @@ setUnauthorizedHandler(() => {
     void router.replace({ name: 'login', query: { redirect: route.fullPath } });
   }
 });
+
+// The signed-in person's Theme preference (logged out, the device's last
+// choice stays, applied by index.html).
+watch(
+  () => useAuthStore().user?.preferences.theme,
+  (theme) => {
+    if (theme) applyTheme(theme);
+  },
+  { immediate: true },
+);
 
 app.mount('#app');

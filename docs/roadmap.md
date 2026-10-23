@@ -588,3 +588,26 @@ City, Full City+ … French), and many bags just say "medium".
   mode (`roastLabel(bean, scale)` in `lib/beans.ts`); the public menu and
   preview send `detailedRoastLevel: null`. Names stay stored, so switching
   back to roast names shows them again.
+
+## Dark mode (built)
+
+Branch `dark-mode`, no migration (a new key in `users.preferences`). The
+app only had a light palette; a browser's forced dark mode was darkening it.
+
+- **Settings → Preferences → Theme:** System (default, follows the device),
+  Light or Dark. Per person, so it follows the account; also kept per
+  device (`localStorage` `brewlog.theme`) and applied by a snippet in
+  `index.html` before the app loads, so there's no light flash.
+  `lib/theme.ts` sets `data-theme` on `<html>`; `main.ts` applies the saved
+  preference.
+- **One palette:** `base.css` gives every colour token a dark value, for
+  `[data-theme="dark"]` and for `prefers-color-scheme: dark` unless Light is
+  chosen. New tokens for what was hard-coded: `--on-brand` (text on brown
+  buttons, dark in dark mode since the brand turns light tan),
+  `--brand-line` / `--brand-edge` / `--brand-soft`, `--danger-solid`,
+  `--on-success`, `--warning` / `--warning-tint`. The timer and recipe form
+  use them instead of fixed colours.
+- **The guest menu** follows the guest's own device (no preference to read).
+  QR codes stay on white so they scan.
+- `<meta name="color-scheme" content="light dark">`; the phone's status bar
+  colour follows the theme.

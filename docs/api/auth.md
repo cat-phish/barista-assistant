@@ -62,7 +62,7 @@ units, with defaults filled in. Storage is always grams, °C and metres;
 clients convert what they show and what's typed (roadmap: Units and defaults).
 
 ```json
-{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c" }
+{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system" }
 ```
 
 - `volumeUnit`: `fl_oz` | `ml`: the brew page's yield estimate, and a new
@@ -70,6 +70,9 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
 - `showBothVolumes`: also show the other volume unit.
 - `altitudeUnit`: `m` | `ft`.
 - `temperatureUnit`: `c` | `f`.
+- `theme`: `system` | `light` | `dark`. `system` follows the device's
+  setting; the client also remembers the choice per device so it applies
+  before the app loads.
 
 ### `PATCH /api/auth/me/preferences`
 

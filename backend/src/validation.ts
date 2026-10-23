@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ALTITUDE_UNITS, ROAST_LEVELS, ROAST_SCALES, TEMPERATURE_UNITS, VOLUME_UNITS } from "@barista/shared/schema";
+import { ALTITUDE_UNITS, ROAST_LEVELS, ROAST_SCALES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
 import { ROLES } from "./auth/membership.js";
 
 export const roleSchema = z.enum(ROLES);
@@ -22,6 +22,7 @@ export const preferencesSchema = z
     showBothVolumes: z.boolean(),
     altitudeUnit: z.enum(ALTITUDE_UNITS),
     temperatureUnit: z.enum(TEMPERATURE_UNITS),
+    theme: z.enum(THEMES),
   })
   .partial()
   .strict()

@@ -27,6 +27,7 @@ const jsonValue = <T>(name: string) =>
 export const VOLUME_UNITS = ["fl_oz", "ml"] as const;
 export const ALTITUDE_UNITS = ["m", "ft"] as const;
 export const TEMPERATURE_UNITS = ["c", "f"] as const;
+export const THEMES = ["system", "light", "dark"] as const; // system = follow the device
 
 // Per person (docs/api/auth.md §1 preferences).
 export interface UserPreferences {
@@ -34,12 +35,14 @@ export interface UserPreferences {
   showBothVolumes: boolean; // also show the other volume unit
   altitudeUnit: (typeof ALTITUDE_UNITS)[number]; // stored in metres regardless
   temperatureUnit: (typeof TEMPERATURE_UNITS)[number]; // stored in °C regardless
+  theme: (typeof THEMES)[number];
 }
 export const DEFAULT_PREFERENCES: UserPreferences = {
   volumeUnit: "fl_oz",
   showBothVolumes: false,
   altitudeUnit: "m",
   temperatureUnit: "c",
+  theme: "system",
 };
 
 // Per workspace, owners edit (docs/api/workspaces.md §2 settings).

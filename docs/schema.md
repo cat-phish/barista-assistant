@@ -28,13 +28,15 @@ import {
 export const VOLUME_UNITS = ["fl_oz", "ml"] as const;
 export const ALTITUDE_UNITS = ["m", "ft"] as const;
 export const TEMPERATURE_UNITS = ["c", "f"] as const;
+export const THEMES = ["system", "light", "dark"] as const;
 export interface UserPreferences {
   volumeUnit: (typeof VOLUME_UNITS)[number];
   showBothVolumes: boolean;
   altitudeUnit: (typeof ALTITUDE_UNITS)[number];
   temperatureUnit: (typeof TEMPERATURE_UNITS)[number];
+  theme: (typeof THEMES)[number]; // system = follow the device
 }
-export const DEFAULT_PREFERENCES: UserPreferences = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c" };
+export const DEFAULT_PREFERENCES: UserPreferences = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system" };
 export const ROAST_SCALES = ["names", "levels"] as const; // roast names (Cinnamon … French) or light to dark only
 export interface WorkspaceSettings {
   recipeRoastLevel: RoastLevel; // the roast recipes are written for

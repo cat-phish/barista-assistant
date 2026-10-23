@@ -899,7 +899,7 @@ p {
   height: 1.75rem;
   border-radius: 50%;
   background: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
   font-size: 0.85rem;
   font-weight: 700;
 }
@@ -933,8 +933,8 @@ p {
   margin: 0;
   padding: var(--space-2) var(--space-3) var(--space-2) var(--space-5);
   border-radius: var(--radius);
-  background: #fff8e1;
-  color: #8d6e00;
+  background: var(--warning-tint);
+  color: var(--warning);
   font-size: 0.95rem;
 }
 .buttons {
