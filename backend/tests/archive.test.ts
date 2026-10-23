@@ -58,3 +58,24 @@ describe("archiving recipes, drinks and ingredients", () => {
     await newBrewLog(s.owner, s.ws.id, await newBean(s.owner, s.ws.id), { recipeId: s.recipe, drinkId: s.drink });
   });
 });
+
+describe("usage before deleting (docs/api/README.md, Deleting)", () => {
+  it("recipes count brews and drink defaults; drinks count brews, variants and menu items", async () => {
+    const s = await setup();
+    await newBrewLog(s.owner, s.ws.id, await newBean(s.owner, s.ws.id), { recipeId: s.recipe, drinkId: s.drink });
+    const variant = await s.owner.agent.post(`${s.base}/drinks`).send({ name: "Atlas iced", kind: "filter", parentDrinkId: s.drink });
+    expect(variant.status).toBe(201);
+    expect((await s.owner.agent.get(`${s.base}/recipes/${s.recipe}/usage`)).body).toEqual({ brewLogCount: 1, drinkCount: 1 });
+    expect((await s.owner.agent.get(`${s.base}/drinks/${s.drink}/usage`)).body).toEqual({ brewLogCount: 1, variantCount: 1, menuItemCount: 0 });
+  });
+
+  it("viewers can read usage; outsiders and unknown ids get 404", async () => {
+    const s = await setup();
+    const viewer = await newUser();
+    await addMember(s.owner, s.ws.id, viewer, "viewer");
+    expect((await viewer.agent.get(`${s.base}/ingredients/${s.ingredient}/usage`)).body).toEqual({ drinkCount: 1 });
+    const outsider = await newUser();
+    expect((await outsider.agent.get(`${s.base}/ingredients/${s.ingredient}/usage`)).status).toBe(404);
+    expect((await s.owner.agent.get(`${s.base}/ingredients/${crypto.randomUUID()}/usage`)).status).toBe(404);
+  });
+});

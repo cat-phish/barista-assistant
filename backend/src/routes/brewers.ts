@@ -6,6 +6,7 @@ import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
+import { addUsageRoute, brewerUsage } from "../usage.js";
 import {
   brewers,
   brewLogs,
@@ -97,6 +98,7 @@ const duplicate = (res: Response, err: unknown): boolean => {
 // Mounted at /api/workspaces/:workspaceId/brewers
 export const brewersRouter = Router({ mergeParams: true });
 brewersRouter.use(requireAuth);
+addUsageRoute(brewersRouter, "brewerId", "brewers", brewerUsage, "Brewer not found");
 
 brewersRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<BrewerListResponse>) => {
   const { workspaceId } = req.params;
@@ -180,32 +182,13 @@ brewersRouter.patch("/:brewerId", async (req: Request<BrewerParams>, res: Respon
   res.json({ brewer });
 });
 
-// The FK cascades to recipes (so workspace deletion works), which
-// makes this check the only thing protecting them. Brewers that brews used
-// are archived instead, so history keeps them.
+// Deleting unlinks what used it; GET /usage says what, for the warning
+// (docs/api/README.md, "Deleting"). Its recipes go with it (the FK cascades); brews keep their record, with the brewer and recipe unlinked; menu items that show it go.
 brewersRouter.delete("/:brewerId", async (req: Request<BrewerParams>, res: Response) => {
   if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId, WRITE_ROLES))) return;
-  const outcome = await db.transaction(async (tx) => {
-    // Locked so a recipe can't start using it between the count and the delete.
-    const [brewer] = await tx.select({ id: brewers.id }).from(brewers).where(inWorkspace(req.params)).for("update");
-    if (!brewer) return { status: "not_found" } as const;
-    const counts = await usage(tx, brewer.id);
-    if (counts.recipeCount > 0 || counts.brewLogCount > 0) return { status: "in_use", ...counts } as const;
-    await tx.delete(brewers).where(eq(brewers.id, brewer.id));
-    return { status: "deleted" } as const;
-  });
-
-  if (outcome.status === "not_found") {
+  const [result] = await db.delete(brewers).where(inWorkspace(req.params));
+  if (result.affectedRows === 0) {
     sendError(res, 404, "Brewer not found");
-    return;
-  }
-  if (outcome.status === "in_use") {
-    const { recipeCount, brewLogCount } = outcome;
-    const message =
-      recipeCount > 0
-        ? `${recipeCount} recipe(s) use this brewer. Change their brewer or delete them first.`
-        : `${brewLogCount} brew(s) were made with this brewer. Archive it instead.`;
-    sendError(res, 409, message, { recipeCount, brewLogCount });
     return;
   }
   res.status(204).end();

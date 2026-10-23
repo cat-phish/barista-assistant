@@ -1,4 +1,5 @@
 import { api } from './client';
+import type { Usage } from '../lib/deleting';
 import type { WaterProfile, WaterProfileDetails } from './types';
 
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/water-profiles`;
@@ -11,6 +12,8 @@ export const waterProfilesApi = {
   // isDefault: true makes it the only default; archived: true also clears it.
   update: (workspaceId: string, id: string, input: Partial<WaterProfileDetails> & { name?: string; archived?: boolean }) =>
     api.patch<{ waterProfile: WaterProfile }>(`${base(workspaceId)}/${id}`, input),
-  // 409 + brewLogCount when brews used it: archive instead.
+  // What a delete would unlink or remove (README, "Archiving and deleting").
+  usage: (workspaceId: string, id: string) => api.get<Usage>(`${base(workspaceId)}/${id}/usage`),
+  // Unlinks what used it; show usage() in a warning first.
   remove: (workspaceId: string, id: string) => api.delete(`${base(workspaceId)}/${id}`),
 };

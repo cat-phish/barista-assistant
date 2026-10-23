@@ -8,7 +8,6 @@ import { errorMessage } from '../api/client';
 import { recipesApi } from '../api/recipes';
 import type { Brewer, Recipe } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
-import ConfirmDialog from '../components/ConfirmDialog.vue';
 import ListControls from '../components/ListControls.vue';
 import MenuTabs from '../components/MenuTabs.vue';
 import { RECIPE_STYLES, STYLE_ORDER } from '../lib/equipment';
@@ -22,9 +21,6 @@ const recipes = ref<Recipe[]>([]);
 const brewers = ref<Brewer[]>([]);
 const loading = ref(true);
 const error = ref('');
-const pending = ref<Recipe | null>(null);
-const busy = ref(false);
-const dialogError = ref('');
 
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `recipes.${what}.${workspaces.current?.id ?? ''}`;
@@ -117,22 +113,6 @@ async function setArchived(r: Recipe, archived: boolean): Promise<void> {
   }
 }
 
-async function confirmDelete(): Promise<void> {
-  const ws = workspaces.current?.id;
-  if (!ws || !pending.value) return;
-  busy.value = true;
-  dialogError.value = '';
-  try {
-    await recipesApi.remove(ws, pending.value.id);
-    pending.value = null;
-    await load();
-  } catch (err) {
-    dialogError.value = errorMessage(err);
-  } finally {
-    busy.value = false;
-  }
-}
-
 </script>
 
 <template>
@@ -193,24 +173,12 @@ async function confirmDelete(): Promise<void> {
               <RouterLink class="btn-link" :to="{ name: 'recipe-edit', params: { id: recipe.id } }">Edit</RouterLink>
               <button v-if="recipe.archivedAt" class="btn-link" type="button" :disabled="busyId === recipe.id" @click="setArchived(recipe, false)">Restore</button>
               <button v-else class="btn-link" type="button" :disabled="busyId === recipe.id" @click="setArchived(recipe, true)">Archive</button>
-              <button class="btn-link danger" type="button" @click="pending = recipe; dialogError = ''">Delete</button>
             </div>
           </div>
         </div>
       </div>
     </template>
   </main>
-
-  <ConfirmDialog :open="pending !== null" title="Delete this recipe?" @cancel="pending = null">
-    <p>
-      "{{ pending?.name }}" and its steps will be removed. Brews already logged with it are kept.
-    </p>
-    <p v-if="dialogError" class="form-error" role="alert">{{ dialogError }}</p>
-    <template #actions>
-      <button class="btn btn-danger" type="button" :disabled="busy" @click="confirmDelete">Delete recipe</button>
-      <button class="btn btn-secondary" type="button" :disabled="busy" @click="pending = null">Cancel</button>
-    </template>
-  </ConfirmDialog>
 </template>
 
 <style scoped>

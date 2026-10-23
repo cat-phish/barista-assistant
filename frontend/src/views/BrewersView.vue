@@ -7,10 +7,9 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { brewersApi } from '../api/brewers';
 import { recipesApi } from '../api/recipes';
-import { ApiError, errorMessage } from '../api/client';
+import { errorMessage } from '../api/client';
 import type { Brewer, Recipe } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
-import ConfirmDialog from '../components/ConfirmDialog.vue';
 import SetupTabs from '../components/SetupTabs.vue';
 import ListControls from '../components/ListControls.vue';
 import { machineSummary, METHOD_KINDS, RECIPE_STYLES, STYLE_ORDER } from '../lib/equipment';
@@ -117,41 +116,6 @@ async function setArchived(m: Brewer, value: boolean): Promise<void> {
   }
 }
 
-// Delete: confirm; if brews used it, the server says how many and we offer Archive.
-const pending = ref<Brewer | null>(null);
-const usedCount = ref<number | null>(null);
-const deleting = ref(false);
-const dialogError = ref('');
-function askDelete(m: Brewer): void {
-  pending.value = m;
-  usedCount.value = null;
-  dialogError.value = '';
-}
-async function confirmDelete(): Promise<void> {
-  const ws = workspaces.current?.id;
-  const m = pending.value;
-  if (!ws || !m) return;
-  deleting.value = true;
-  dialogError.value = '';
-  try {
-    await brewersApi.remove(ws, m.id);
-    pending.value = null;
-    await load();
-  } catch (err) {
-    // Recipes must move first; brew history means archive instead.
-    const body = err instanceof ApiError && err.status === 409 ? err.body : null;
-    const uses = Number(body?.recipeCount ?? 0);
-    if (body && uses === 0 && typeof body.brewLogCount === 'number') usedCount.value = body.brewLogCount;
-    else dialogError.value = body ? `${body.recipeCount} recipe(s) use ${m.name}. Move them to another brewer or delete them first.` : errorMessage(err);
-  } finally {
-    deleting.value = false;
-  }
-}
-async function archiveInstead(): Promise<void> {
-  const m = pending.value;
-  pending.value = null;
-  if (m) await setArchived(m, true);
-}
 </script>
 
 <template>
@@ -194,14 +158,13 @@ async function archiveInstead(): Promise<void> {
               <p v-if="m.notes" class="muted">{{ m.notes }}</p>
               <p class="muted">{{ recipeSummary(m.id) }}</p>
               <div v-if="workspaces.canEdit" class="data-actions">
+                <RouterLink class="btn-link" :to="{ name: 'brewer-edit', params: { id: m.id } }">Edit</RouterLink>
                 <template v-if="m.archivedAt">
                   <button class="btn-link" type="button" :disabled="busyId === m.id" @click="setArchived(m, false)">Restore</button>
                 </template>
                 <template v-else>
-                  <RouterLink class="btn-link" :to="{ name: 'brewer-edit', params: { id: m.id } }">Edit</RouterLink>
                   <button class="btn-link" type="button" :disabled="busyId === m.id" @click="setArchived(m, true)">Archive</button>
                 </template>
-                <button class="btn-link danger" type="button" @click="askDelete(m)">Delete</button>
               </div>
             </div>
           </div>
@@ -209,20 +172,6 @@ async function archiveInstead(): Promise<void> {
       </template>
     </template>
   </main>
-
-  <ConfirmDialog :open="pending !== null" :title="usedCount === null ? 'Delete this brewer?' : 'This brewer has brew history'" @cancel="pending = null">
-    <p v-if="usedCount === null">{{ pending?.name }} will be removed.</p>
-    <p v-else>
-      {{ usedCount }} brew{{ usedCount === 1 ? ' was' : 's were' }} made with {{ pending?.name }}, so it can't be deleted.
-      Archive it instead: it's hidden when brewing, and past brews keep showing it.
-    </p>
-    <p v-if="dialogError" class="form-error" role="alert">{{ dialogError }}</p>
-    <template #actions>
-      <button v-if="usedCount === null" class="btn btn-danger" type="button" :disabled="deleting" @click="confirmDelete">Delete</button>
-      <button v-else class="btn btn-primary" type="button" @click="archiveInstead">Archive instead</button>
-      <button class="btn btn-secondary" type="button" :disabled="deleting" @click="pending = null">Cancel</button>
-    </template>
-  </ConfirmDialog>
 </template>
 
 <style scoped>

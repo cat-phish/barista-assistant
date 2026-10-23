@@ -1,4 +1,5 @@
 import { api } from './client';
+import type { Usage } from '../lib/deleting';
 import type { MethodKind, PrepTool } from './types';
 
 // docs/api/prep-tools.md §3d
@@ -14,6 +15,8 @@ export const prepToolsApi = {
     api.patch<{ tool: PrepTool }>(`${base(workspaceId)}/${id}`, input),
   // Every tool of the workspace (archived too), in the new order.
   reorder: (workspaceId: string, toolIds: string[]) => api.put<{ tools: PrepTool[] }>(`${base(workspaceId)}/order`, { toolIds }),
-  // 409 + brewLogCount when brews used it: archive instead.
+  // What a delete would unlink or remove (README, "Archiving and deleting").
+  usage: (workspaceId: string, id: string) => api.get<Usage>(`${base(workspaceId)}/${id}/usage`),
+  // Unlinks what used it; show usage() in a warning first.
   remove: (workspaceId: string, id: string) => api.delete(`${base(workspaceId)}/${id}`),
 };

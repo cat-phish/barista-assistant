@@ -18,16 +18,19 @@ upcoming work is in `roadmap.md`.
 ## Bar setup
 One **Bar setup** section with three tabs: Brewers, Grinders, Categories.
 Brewers and Grinders are tables like Recipes: filter brewers by type (pour
-over, immersion, espresso) and grinders by hand or electric, with **Archived**
-as its own filter option (where Restore is); sort by any column (name, type,
-category; power, burrs, adjustment; date added), unset values last; tap a row
-to see details and edit, archive or delete it. Filter and sort are remembered.
+over, immersion, espresso) and grinders by hand or electric, with a **Show
+archived** checkbox when there are archived ones (where Restore is); sort by
+any column (name, type, category; power, burrs, adjustment; date added), unset
+values last; tap a row to see details and edit or archive it. Filter and sort
+are remembered. **Delete** is on the edit page (for brewers, grinders, water,
+recipes, drinks and ingredients; in the edit row for tools): it says what
+would be unlinked or removed and asks for "I understand" first.
 Adding and editing a brewer, grinder or ingredient happen on their own page
 (the **Add** button sits at the top of each list, like Recipes and Drinks).
 - **Grinders:** per workspace, with optional details: stepped/stepless,
   setting range and step size, burr type and size, hand/electric. The range
-  and step let the AI talk in clicks. Grinders that have been used are
-  archived rather than deleted, so history keeps their names.
+  and step let the AI talk in clicks. Archive a grinder you've stopped using
+  to keep its name in history; deleting it unlinks its brews.
 - **Brewers:** whatever makes the coffee (V60, French press, AeroPress, OXO
   Rapid Brewer, an espresso machine). Two separate ideas describe one:
   - **Brew method**, Filter or Espresso: decides the recipe fields, steps
@@ -83,8 +86,8 @@ Adding and editing a brewer, grinder or ingredient happen on their own page
 One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
 - **Ingredients:** reusable preps that finish a drink: milk, foam, syrup,
   ice, water, other, each with free-text instructions (e.g. orange-infused
-  cold foam: steep peel in cream overnight). An ingredient a drink uses can't
-  be deleted. The list is a table (Name, Type, Used in, Added), filtered by
+  cold foam: steep peel in cream overnight). Archived ingredients can't be
+  added to drinks; deleting one takes it out of its drinks. The list is a table (Name, Type, Used in, Added), filtered by
   type or "Not in any drink", sorted by any column (most-used first, say);
   tap a row for its instructions, the drinks it's in (links) and the units
   they measure it in. Filter and sort are remembered.

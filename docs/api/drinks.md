@@ -114,10 +114,19 @@ was deleted).
 - **Errors:** as `POST`, plus `400` when `parentDrinkId` is the drink itself
   or one of its variants (at any depth); `404` not in this workspace.
 
+## `GET /api/workspaces/:workspaceId/drinks/:drinkId/usage`
+
+What deleting it would take with it (see README, "Deleting").
+
+- **Auth Required:** `true` (any member)
+- **Success (`200 OK`):** `{ "brewLogCount": 4, "variantCount": 2, "menuItemCount": 1 }`: brews made for it, its direct variants, and the menu items that show it.
+- **Errors:** `404` not in this workspace.
+
 ## `DELETE /api/workspaces/:workspaceId/drinks/:drinkId`
 
 Its variants move up to its own parent (or become top-level drinks). Brew
-logs made for it are kept, with `drinkId` set to `null`.
+logs made for it are kept, with `drinkId` set to `null`; menu items that show
+it are removed. Clients warn first, from `/usage`.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Success (`204 No Content`)**

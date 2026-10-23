@@ -13,6 +13,7 @@ import { drinksApi, type DrinkInput } from '../api/drinks';
 import { recipesApi } from '../api/recipes';
 import type { Ingredient, Drink, DrinkCategory, MethodKind, Recipe, ServingUnit } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
+import DeleteSection from '../components/DeleteSection.vue';
 import { nestDrinks, selfAndDescendants } from '../lib/drinks';
 import { METHOD_KINDS } from '../lib/equipment';
 import { parseDecimal } from '../lib/format';
@@ -21,6 +22,10 @@ import { useWorkspaceStore } from '../stores/workspace';
 
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 const workspaces = useWorkspaceStore();
+// As saved, for the Delete section (editing only).
+const saved = ref<{ name: string; archived: boolean } | null>(null);
+const deleteUsage = () => drinksApi.usage(workspaces.current?.id ?? '', props.id ?? '');
+const deleteIt = () => drinksApi.remove(workspaces.current?.id ?? '', props.id ?? '');
 const route = useRoute();
 const router = useRouter();
 const editing = computed(() => props.id !== undefined);
@@ -150,6 +155,7 @@ onMounted(async () => {
         error.value = 'This drink no longer exists.';
         return;
       }
+      saved.value = { name: drink.name, archived: !!drink.archivedAt };
       current.value = drink;
       fill(drink);
       return;
@@ -382,6 +388,15 @@ async function save(): Promise<void> {
         <button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? 'Saving…' : 'Save drink' }}</button>
       </div>
     </form>
+    <DeleteSection
+      v-if="props.id && saved && workspaces.canEdit"
+      kind="drink"
+      :name="saved.name"
+      :archived="saved.archived"
+      :load="deleteUsage"
+      :remove="deleteIt"
+      :back="{ name: 'drinks' }"
+    />
   </main>
 </template>
 

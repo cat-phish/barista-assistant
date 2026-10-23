@@ -114,16 +114,11 @@ describe("brewers on brew logs", () => {
     expect(moved.body.brewLog).toMatchObject({ brewerId: v60, brewer: { name: "V60" } });
     await owner.agent.patch(url).send({ recipeId: shot, actualWaterGrams: null, actualYieldGrams: 36 });
 
-    // Recipes block the delete first; once they're gone, the brew history does.
-    const del = () => owner.agent.delete(`/api/workspaces/${ws.id}/brewers/${lm}`);
-    expect((await del()).body).toMatchObject({ recipeCount: 1 });
-    await owner.agent.delete(`${recipes}/${shot}`);
-    const refused = await del();
-    expect(refused.status).toBe(409);
-    expect(refused.body).toMatchObject({ recipeCount: 0, brewLogCount: 1 });
-    expect(refused.body.error).toMatch(/Archive it instead/);
-    expect((await owner.agent.get(url)).body.brewLog.brewer).toMatchObject({ name: "Linea Mini" }); // kept after the recipe went
-    const unused = (await owner.agent.post(`/api/workspaces/${ws.id}/brewers`).send({ name: "Chemex" })).body.brewer.id;
-    expect((await owner.agent.delete(`/api/workspaces/${ws.id}/brewers/${unused}`)).status).toBe(204);
+    // Deleting the brewer takes its recipe; the brew stays, unlinked from both.
+    const brewer = `/api/workspaces/${ws.id}/brewers/${lm}`;
+    expect((await owner.agent.get(`${brewer}/usage`)).body).toMatchObject({ recipeCount: 1, brewLogCount: 1 });
+    expect((await owner.agent.delete(brewer)).status).toBe(204);
+    expect((await owner.agent.get(`${recipes}/${shot}`)).status).toBe(404);
+    expect((await owner.agent.get(url)).body.brewLog).toMatchObject({ brewerId: null, brewer: null, recipeId: null, recipe: null });
   });
 });

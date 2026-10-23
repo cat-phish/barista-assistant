@@ -25,14 +25,15 @@ describe("brewers", () => {
     expect(recipes.body.recipes[0]).toMatchObject({ id: recipe.body.recipe.id, brewer: { id: v60, name: "Hario V60" } });
   });
 
-  it("delete is refused while recipes use the brewer", async () => {
+  it("usage counts the recipes a delete takes with it; the delete removes them", async () => {
     const { owner, ws, v60 } = await setup();
-    await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name: "R", brewerId: v60, targetDoseGrams: 15, targetWaterGrams: 250 });
-    const res = await owner.agent.delete(`/api/workspaces/${ws.id}/brewers/${v60}`);
-    expect(res.status).toBe(409);
-    expect(res.body.recipeCount).toBe(1);
-    const aeropress = await brewerId(owner, ws.id, "Aeropress");
-    expect((await owner.agent.delete(`/api/workspaces/${ws.id}/brewers/${aeropress}`)).status).toBe(204);
+    const recipes = `/api/workspaces/${ws.id}/recipes`;
+    await owner.agent.post(recipes).send({ name: "R", brewerId: v60, targetDoseGrams: 15, targetWaterGrams: 250 });
+    const url = `/api/workspaces/${ws.id}/brewers/${v60}`;
+    expect((await owner.agent.get(`${url}/usage`)).body).toEqual({ recipeCount: 1, brewLogCount: 0, menuItemCount: 0 });
+    expect((await owner.agent.delete(url)).status).toBe(204);
+    expect((await owner.agent.get(recipes)).body.recipes).toEqual([]);
+    expect((await owner.agent.get(`${url}/usage`)).status).toBe(404);
   });
 });
 

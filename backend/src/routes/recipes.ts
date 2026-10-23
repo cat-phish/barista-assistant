@@ -6,6 +6,7 @@ import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
+import { addUsageRoute, recipeUsage } from "../usage.js";
 import {
   brewers,
   ESPRESSO_STEP_TYPES,
@@ -359,6 +360,7 @@ async function loadRecipes(workspaceId: string, recipeId?: string): Promise<Reci
 // Mounted at /api/workspaces/:workspaceId/recipes
 export const recipesRouter = Router({ mergeParams: true });
 recipesRouter.use(requireAuth);
+addUsageRoute(recipesRouter, "recipeId", "recipes", recipeUsage, "Recipe not found");
 
 recipesRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<RecipeListResponse>) => {
   const { workspaceId } = req.params;

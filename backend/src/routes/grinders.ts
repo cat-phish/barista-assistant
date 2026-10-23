@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, count, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, parseQuery, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
+import { addUsageRoute, grinderUsage } from "../usage.js";
 import { BURR_TYPES, brewLogs, GRINDER_ADJUSTMENTS, GRINDER_POWER, grinders, type Grinder } from "@barista/shared/schema";
 import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
@@ -77,6 +78,7 @@ function inWorkspace(p: GrinderParams) {
 // Mounted at /api/workspaces/:workspaceId/grinders
 export const grindersRouter = Router({ mergeParams: true });
 grindersRouter.use(requireAuth);
+addUsageRoute(grindersRouter, "grinderId", "grinders", grinderUsage, "Grinder not found");
 
 grindersRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<{ grinders: GrinderSummary[] }>) => {
   const { workspaceId } = req.params;
@@ -141,29 +143,13 @@ grindersRouter.patch("/:grinderId", async (req: Request<GrinderParams>, res: Res
   res.json({ grinder });
 });
 
-// Only unused grinders can be deleted; used ones are archived so history keeps them.
+// Deleting unlinks what used it; GET /usage says what, for the warning
+// (docs/api/README.md, "Deleting"). Brews keep their record with the grinder unlinked; recipes lose their grind setting for it.
 grindersRouter.delete("/:grinderId", async (req: Request<GrinderParams>, res: Response) => {
   if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId, WRITE_ROLES))) return;
-  const outcome = await db.transaction(async (tx) => {
-    const [grinder] = await tx.select({ id: grinders.id }).from(grinders).where(inWorkspace(req.params)).for("update");
-    if (!grinder) return { status: "not_found" } as const;
-    const [{ brewLogCount } = { brewLogCount: 0 }] = await tx
-      .select({ brewLogCount: count() })
-      .from(brewLogs)
-      .where(eq(brewLogs.grinderId, grinder.id));
-    if (brewLogCount > 0) return { status: "in_use", brewLogCount } as const;
-    await tx.delete(grinders).where(eq(grinders.id, grinder.id));
-    return { status: "deleted" } as const;
-  });
-
-  if (outcome.status === "not_found") {
+  const [result] = await db.delete(grinders).where(inWorkspace(req.params));
+  if (result.affectedRows === 0) {
     sendError(res, 404, "Grinder not found");
-    return;
-  }
-  if (outcome.status === "in_use") {
-    sendError(res, 409, `${outcome.brewLogCount} brew(s) were made with this grinder. Archive it instead.`, {
-      brewLogCount: outcome.brewLogCount,
-    });
     return;
   }
   res.status(204).end();

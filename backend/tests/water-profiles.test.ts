@@ -59,14 +59,13 @@ describe("water profiles (docs/api/water-profiles.md §3c)", () => {
     expect(restored.body.waterProfile).toMatchObject({ isDefault: true, archivedAt: null });
   });
 
-  it("delete: allowed when unused, refused (409 + count) once brews used it", async () => {
+  it("usage counts brews; delete unlinks them", async () => {
     const { owner, ws, base, profile } = await setup();
-    expect((await owner.agent.delete(`${base}/${await profile("Unused")}`)).status).toBe(204);
     const used = await profile("Used");
-    await newBrewLog(owner, ws.id, await newBean(owner, ws.id), { waterProfileId: used });
-    const res = await owner.agent.delete(`${base}/${used}`);
-    expect(res.status).toBe(409);
-    expect(res.body.brewLogCount).toBe(1);
+    const log = await newBrewLog(owner, ws.id, await newBean(owner, ws.id), { waterProfileId: used });
+    expect((await owner.agent.get(`${base}/${used}/usage`)).body).toEqual({ brewLogCount: 1 });
+    expect((await owner.agent.delete(`${base}/${used}`)).status).toBe(204);
+    expect((await owner.agent.get(`/api/workspaces/${ws.id}/brew-logs/${log}`)).body.brewLog).toMatchObject({ waterProfileId: null, waterProfile: null });
   });
 
   it("viewers read only; outsiders get 404", async () => {

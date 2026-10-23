@@ -43,9 +43,9 @@ in steps ("2 clicks finer"); the rest is reference.
 
 `createdAt` (read-only) is when the grinder was added; lists sort by it.
 
-A **archived** grinder (`archivedAt` set) is hidden from pickers for new brews,
-but past brews keep showing it, and it can be restored. A grinder that brews
-were logged with can't be deleted (archive it instead); an unused one can.
+An **archived** grinder (`archivedAt` set) is hidden from pickers for new brews,
+but past brews keep showing it, and it can be restored. Deleting one unlinks
+the brews made with it (see `DELETE` below).
 
 ## `GET /api/workspaces/:workspaceId/grinders`
 
@@ -72,13 +72,23 @@ were logged with can't be deleted (archive it instead); an unused one can.
 - **Success (`200 OK`):** `{ "grinder": { ...grinder } }`
 - **Errors:** `400`; `403` viewer; `404` not in this workspace; `409` name taken.
 
+## `GET /api/workspaces/:workspaceId/grinders/:grinderId/usage`
+
+What deleting it would take with it (see README, "Deleting").
+
+- **Auth Required:** `true` (any member)
+- **Success (`200 OK`):** `{ "brewLogCount": 12, "recipeCount": 2 }`: brews made with it, and recipes with a grind setting for it or it as their default grinder.
+- **Errors:** `404` not in this workspace.
+
 ## `DELETE /api/workspaces/:workspaceId/grinders/:grinderId`
+
+Brews made with it are kept, with `grinderId` set to `null` (their grind
+setting text stays); recipes lose their grind setting for it, and it as their
+default grinder. Clients warn first, from `/usage`.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Success (`204 No Content`)**
-- **Errors:** `403` viewer; `404` not in this workspace; `409` brews were
-  logged with it, with body `{ "error": "...", "brewLogCount": 12 }`. Archive
-  it instead.
+- **Errors:** `403` viewer; `404` not in this workspace.
 
 ## `GET /api/workspaces/:workspaceId/grinders/:grinderId/last-setting?recipeId=<id>`
 

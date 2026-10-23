@@ -60,7 +60,7 @@ describe("prep tools (docs/api/prep-tools.md §3d)", () => {
     expect((await owner.agent.put(`${base}/order`).send({ toolIds: [...reversed.slice(1), foreign] })).status).toBe(400);
   });
 
-  it("archive keeps the tool listed and flagged; restore clears it; delete only when unused", async () => {
+  it("archive keeps the tool listed and flagged; restore clears it; delete unlinks brews", async () => {
     const { owner, ws, base, byName } = await setup();
     const shaker = await byName("Shaker");
     const archived = await owner.agent.patch(`${base}/${shaker}`).send({ archived: true });
@@ -69,10 +69,10 @@ describe("prep tools (docs/api/prep-tools.md §3d)", () => {
 
     expect((await owner.agent.delete(`${base}/${await byName("Cloth filter")}`)).status).toBe(204);
     const wdt = await byName("WDT");
-    await newBrewLog(owner, ws.id, await newBean(owner, ws.id), { toolIds: [wdt] });
-    const res = await owner.agent.delete(`${base}/${wdt}`);
-    expect(res.status).toBe(409);
-    expect(res.body.brewLogCount).toBe(1);
+    const log = await newBrewLog(owner, ws.id, await newBean(owner, ws.id), { toolIds: [wdt] });
+    expect((await owner.agent.get(`${base}/${wdt}/usage`)).body).toEqual({ brewLogCount: 1 });
+    expect((await owner.agent.delete(`${base}/${wdt}`)).status).toBe(204);
+    expect((await owner.agent.get(`/api/workspaces/${ws.id}/brew-logs/${log}`)).body.brewLog.tools).toEqual([]);
   });
 
   it("viewers read only; outsiders get 404", async () => {
