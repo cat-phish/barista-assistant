@@ -62,7 +62,7 @@ units, with defaults filled in. Storage is always grams, °C and metres;
 clients convert what they show and what's typed (roadmap: Units and defaults).
 
 ```json
-{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system" }
+{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15 }
 ```
 
 - `volumeUnit`: `fl_oz` | `ml`: the brew page's yield estimate, and a new
@@ -73,13 +73,15 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
 - `theme`: `system` | `light` | `dark`. `system` follows the device's
   setting; the client also remembers the choice per device so it applies
   before the app loads.
+- `rateReminders` (default `true`) and `rateReminderMinutes` (5–240,
+  default `15`): rate-later reminders, see §1b.
 
 ### `PATCH /api/auth/me/preferences`
 
 - **Auth Required:** `true`
 - **Body:** any non-empty subset of the keys above; unknown keys are `400`.
   Merged into what's stored.
-- **Success (`200 OK`):** `{ "preferences": { ...all four } }`
+- **Success (`200 OK`):** `{ "preferences": { ...all of them } }`
 - **Errors:** `400` invalid, empty or unknown keys.
 
 ## `POST /api/auth/password`

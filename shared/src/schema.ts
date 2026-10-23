@@ -36,6 +36,11 @@ export interface UserPreferences {
   altitudeUnit: (typeof ALTITUDE_UNITS)[number]; // stored in metres regardless
   temperatureUnit: (typeof TEMPERATURE_UNITS)[number]; // stored in °C regardless
   theme: (typeof THEMES)[number];
+  // Rate later (docs/api/notifications.md §1b): remind to rate a brew saved
+  // without a rating, after this many minutes, through the person's enabled
+  // notification channels.
+  rateReminders: boolean;
+  rateReminderMinutes: number; // 5–240
 }
 export const DEFAULT_PREFERENCES: UserPreferences = {
   volumeUnit: "fl_oz",
@@ -43,6 +48,8 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   altitudeUnit: "m",
   temperatureUnit: "c",
   theme: "system",
+  rateReminders: true,
+  rateReminderMinutes: 15,
 };
 
 // Per workspace, owners edit (docs/api/workspaces.md §2 settings).
@@ -67,6 +74,31 @@ export function withDefaults<T extends object>(defaults: T, stored: Partial<T> |
   return { ...defaults, ...(stored ?? {}) };
 }
 
+// Notification channels (docs/api/notifications.md §1b): where a person's
+// reminders go. One of each kind per person; each can be switched off.
+export const NOTIFICATION_KINDS = ["ntfy", "gotify", "pushover", "discord", "telegram", "slack", "webhook"] as const;
+export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
+export interface NotificationConfigs {
+  ntfy: { server: string; topic: string; token: string | null }; // server: https://ntfy.sh or self-hosted
+  gotify: { server: string; appToken: string };
+  pushover: { userKey: string; appToken: string };
+  discord: { url: string }; // a channel webhook
+  telegram: { botToken: string; chatId: string };
+  slack: { url: string }; // an incoming webhook
+  webhook: { url: string }; // any URL: POSTed { title, message, url } as JSON
+}
+export type NotificationConfig = NotificationConfigs[NotificationKind];
+// Fields that are credentials: the API sends them back masked.
+export const SECRET_FIELDS: { [K in NotificationKind]: ReadonlyArray<keyof NotificationConfigs[K]> } = {
+  ntfy: ["token"],
+  gotify: ["appToken"],
+  pushover: ["userKey", "appToken"],
+  discord: ["url"],
+  telegram: ["botToken"],
+  slack: ["url"],
+  webhook: ["url"],
+};
+
 // 1. Users
 export const users = mysqlTable("users", {
   id: varchar("id", { length: 36 }).primaryKey(),
@@ -78,6 +110,24 @@ export const users = mysqlTable("users", {
   preferences: jsonValue<Partial<UserPreferences>>("preferences"), // null = all defaults
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// 1b. Notification channels (per person; see NOTIFICATION_KINDS above)
+export const notificationChannels = mysqlTable(
+  "notification_channels",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: varchar("kind", { length: 20 }).$type<NotificationKind>().notNull(),
+    enabled: boolean("enabled").default(true).notNull(),
+    config: jsonValue<NotificationConfig>("config").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userKindUnique: unique("notification_channels_user_kind_unique").on(table.userId, table.kind),
+  })
+);
 
 // 2. Workspaces (Coffee Bars)
 export const workspaces = mysqlTable("workspaces", {
@@ -893,6 +943,7 @@ export const llmAnalyses = mysqlTable("llm_analyses", {
 
 // Inferred row types for API payloads
 export type User = typeof users.$inferSelect;
+export type NotificationChannel = typeof notificationChannels.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Workspace = typeof workspaces.$inferSelect;
 export type NewWorkspace = typeof workspaces.$inferInsert;

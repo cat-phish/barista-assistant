@@ -2,7 +2,11 @@ import {
   BREW_ANALYSIS_JOB,
   BREW_ANALYSIS_QUEUE,
   brewAnalysisJobId,
+  RATE_REMINDER_JOB,
+  rateReminderJobId,
+  REMINDER_QUEUE,
   type BrewAnalysisJobData,
+  type RateReminderJobData,
 } from "@barista/shared/jobs";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
@@ -21,6 +25,14 @@ let lastError = "";
 brewAnalysisQueue.on("error", (err: Error) => {
   if (err.message !== lastError) console.error("Brew analysis queue error:", err.message);
   lastError = err.message;
+});
+
+// Delayed rate-later reminders (docs/api/notifications.md §1b).
+export const reminderQueue = new Queue<RateReminderJobData>(REMINDER_QUEUE, { connection });
+let lastReminderError = "";
+reminderQueue.on("error", (err: Error) => {
+  if (err.message !== lastReminderError) console.error("Reminder queue error:", err.message);
+  lastReminderError = err.message;
 });
 
 export class QueueUnavailableError extends Error {}
@@ -61,7 +73,30 @@ export async function enqueueBrewAnalysis(brewLogId: string): Promise<string> {
   }
 }
 
+// Same timeout as the analysis; the caller treats failure as "no reminder".
+export async function enqueueRateReminder(data: RateReminderJobData, delayMs: number): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new QueueUnavailableError("Timed out reaching Redis")), ENQUEUE_TIMEOUT_MS);
+  });
+  try {
+    await Promise.race([
+      reminderQueue.add(RATE_REMINDER_JOB, data, {
+        jobId: rateReminderJobId(data.brewLogId),
+        delay: delayMs,
+        attempts: 3,
+        backoff: { type: "exponential", delay: 30_000 },
+        removeOnComplete: true,
+        removeOnFail: true,
+      }),
+      timeout,
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function closeQueue(): Promise<void> {
-  await brewAnalysisQueue.close();
+  await Promise.all([brewAnalysisQueue.close(), reminderQueue.close()]);
   connection.disconnect();
 }

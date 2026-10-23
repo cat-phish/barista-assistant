@@ -10,6 +10,7 @@ means drinks, wherever you see it (code comments use
 | § | File | Covers |
 | --- | --- | --- |
 | §1 | [auth.md](auth.md) | Authentication (JWT in httpOnly Cookie) |
+| §1b | [notifications.md](notifications.md) | Notification channels and rate-later reminders |
 | §2 | [workspaces.md](workspaces.md) | Workspaces |
 | §3 | [brewers.md](brewers.md) | Brewers |
 | §3b | [grinders.md](grinders.md) | Grinders |

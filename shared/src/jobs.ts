@@ -16,3 +16,18 @@ export function brewAnalysisJobId(brewLogId: string): string {
 
 export const GRIND_DELTAS = ["much_finer", "finer", "no_change", "coarser", "much_coarser"] as const;
 export type GrindDelta = (typeof GRIND_DELTAS)[number];
+
+// Rate-later reminders (docs/api/notifications.md §1b): a delayed job per
+// brew saved with "Rate later". The worker skips it if the brew has been
+// rated (or deleted) by then, or the person turned reminders off.
+export const REMINDER_QUEUE = "reminders";
+export const RATE_REMINDER_JOB = "rate-brew";
+
+export interface RateReminderJobData {
+  brewLogId: string;
+  userId: string;
+}
+
+export function rateReminderJobId(brewLogId: string): string {
+  return `rate-${brewLogId}`;
+}
