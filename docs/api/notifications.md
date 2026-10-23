@@ -78,7 +78,7 @@ Sets up or changes the caller's channel of that kind (one per kind).
 
 ## `POST /api/auth/me/notifications/:kind/test`
 
-Sends "Test from Barista" through the saved channel, enabled or not.
+Sends "Test from Barista-Assistant" through the saved channel, enabled or not.
 
 - **Auth Required:** `true`
 - **Success (`204 No Content`)**: the service accepted it.

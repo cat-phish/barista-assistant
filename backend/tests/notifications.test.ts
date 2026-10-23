@@ -42,7 +42,7 @@ describe("notification channels", () => {
     let sent: unknown = null;
     vi.stubGlobal("fetch", vi.fn(async (_url: string, init: RequestInit) => ((sent = JSON.parse(String(init.body))), new Response(null, { status: 200 }))));
     expect((await me.agent.post(`${BASE}/pushover/test`)).status).toBe(204);
-    expect(sent).toMatchObject({ user: "fake-user-key-0001", token: "fake-app-token-0002", title: "Test from Barista" });
+    expect(sent).toMatchObject({ user: "fake-user-key-0001", token: "fake-app-token-0002", title: "Test from Barista-Assistant" });
   });
 
   it("validates each service's settings", async () => {
@@ -92,7 +92,7 @@ describe("what each service is sent", () => {
     await me.agent.post(`${BASE}/telegram/test`);
     expect(calls[0]?.url).toBe("https://ntfy.example");
     expect(calls[0]?.init.headers).toMatchObject({ Authorization: "Bearer fake-token" });
-    expect(JSON.parse(String(calls[0]?.init.body))).toMatchObject({ topic: "beans", title: "Test from Barista" });
+    expect(JSON.parse(String(calls[0]?.init.body))).toMatchObject({ topic: "beans", title: "Test from Barista-Assistant" });
     expect(calls[0]?.init.redirect).toBe("manual");
     expect(calls[1]?.url).toBe("https://api.telegram.org/bot123:ABC/sendMessage");
     expect(JSON.parse(String(calls[1]?.init.body))).toMatchObject({ chat_id: "42" });

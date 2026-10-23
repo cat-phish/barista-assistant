@@ -146,7 +146,7 @@ notificationsRouter.post("/:kind/test", async (req: Request<KindParams>, res: Re
   }
   try {
     await sendNotification(kind, row.config as NotificationConfigs[typeof kind], {
-      title: "Test from Barista",
+      title: "Test from Barista-Assistant",
       message: "Rate-later reminders will arrive like this.",
       url: null,
     });
