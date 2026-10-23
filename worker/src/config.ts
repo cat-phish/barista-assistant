@@ -12,4 +12,7 @@ export const config = {
   concurrency: Number(process.env.WORKER_CONCURRENCY ?? 2),
   // Zone for brews logged without a UTC offset (older ones); null = UTC.
   brewTimezone: parseTimeZone(process.env.BREW_TIMEZONE),
+  // Where the app is opened, for links in reminders (no trailing slash);
+  // unset = reminders without a link.
+  appUrl: process.env.APP_URL ? process.env.APP_URL.replace(/\/+$/, "") : null,
 } as const;

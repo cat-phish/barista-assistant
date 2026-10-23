@@ -32,6 +32,8 @@ export const preferencesSchema = z
     altitudeUnit: z.enum(ALTITUDE_UNITS),
     temperatureUnit: z.enum(TEMPERATURE_UNITS),
     theme: z.enum(THEMES),
+    rateReminders: z.boolean(),
+    rateReminderMinutes: z.number().int().min(5).max(240),
   })
   .partial()
   .strict()

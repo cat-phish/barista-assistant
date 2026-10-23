@@ -26,12 +26,15 @@ export interface BrewLogInput {
   tastingNotes: string | null;
   drinkRating?: number | null; // the finished drink: only with a drinkId
   drinkTastingNotes?: string | null;
+  remindToRate?: boolean; // POST only: Rate later (docs/api/notifications.md §1b)
 }
 
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/brew-logs`;
 
 export const brewLogsApi = {
-  create: (workspaceId: string, input: BrewLogInput) => api.post<{ brewLog: BrewLog }>(base(workspaceId), input),
+  // reminder: only when remindToRate was sent (queued, off or unavailable).
+  create: (workspaceId: string, input: BrewLogInput) =>
+    api.post<{ brewLog: BrewLog; reminder?: 'queued' | 'off' | 'unavailable' }>(base(workspaceId), input),
   get: (workspaceId: string, id: string) =>
     api.get<{ brewLog: BrewLog & { latestAnalysis: LlmAnalysis | null } }>(`${base(workspaceId)}/${id}`),
   list: (workspaceId: string, query: { beanId?: string; limit?: number; offset?: number } = {}) => {

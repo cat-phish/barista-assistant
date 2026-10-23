@@ -35,14 +35,17 @@ export interface UserPreferences {
   altitudeUnit: (typeof ALTITUDE_UNITS)[number];
   temperatureUnit: (typeof TEMPERATURE_UNITS)[number];
   theme: (typeof THEMES)[number]; // system = follow the device
+  rateReminders: boolean; // rate-later reminders (docs/api/notifications.md §1b)
+  rateReminderMinutes: number; // 5–240
 }
-export const DEFAULT_PREFERENCES: UserPreferences = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system" };
+export const DEFAULT_PREFERENCES: UserPreferences = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15 };
 export const ROAST_SCALES = ["names", "levels"] as const; // roast names (Cinnamon … French) or light to dark only
 export interface WorkspaceSettings {
   recipeRoastLevel: RoastLevel; // the roast recipes are written for
   roastScale: (typeof ROAST_SCALES)[number]; // how beans record their roast (docs/api/workspaces.md §2)
+  hiddenFields: string[]; // optional form fields hidden (docs/api/workspaces.md §2, "Field visibility")
 }
-export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: "light", roastScale: "names" };
+export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: "light", roastScale: "names", hiddenFields: [] };
 export function withDefaults<T extends object>(defaults: T, stored: Partial<T> | null): T;
 
 // 1. Users
@@ -58,6 +61,23 @@ export const users = mysqlTable("users", {
   preferences: jsonValue<Partial<UserPreferences>>("preferences"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// 1b. Notification channels (docs/api/notifications.md §1b): where a
+// person's reminders go, one per kind, each switchable. config is the kind's
+// settings (NotificationConfigs); SECRET_FIELDS are masked by the API.
+export const NOTIFICATION_KINDS = ["ntfy", "gotify", "pushover", "discord", "telegram", "slack", "webhook"] as const;
+export const notificationChannels = mysqlTable(
+  "notification_channels",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+    kind: varchar("kind", { length: 20 }).$type<NotificationKind>().notNull(),
+    enabled: boolean("enabled").default(true).notNull(),
+    config: jsonValue<NotificationConfig>("config").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({ userKindUnique: unique("notification_channels_user_kind_unique").on(table.userId, table.kind) })
+);
 
 // 2. Workspaces (Coffee Bars)
 export const workspaces = mysqlTable("workspaces", {

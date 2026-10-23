@@ -191,7 +191,13 @@ account. Such logs can only be edited or deleted by owners.
     clearing the drink means clearing these too). Clients show both groups when
     the drink has ingredients; for a milk drink the straight tasting is
     optional (only if the shot was tasted on its own).
-- **Success (`201 Created`):** `{ "brewLog": { ...brewLog } }`
+  - `remindToRate` (optional boolean, `POST` only, not stored): **Rate
+    later**. Queues a reminder to rate this brew after the caller's delay
+    (§1b), if they have reminders on and an enabled channel. The reply then
+    adds `reminder`: `"queued"`, `"off"` or `"unavailable"`. The brew is
+    saved either way.
+- **Success (`201 Created`):** `{ "brewLog": { ...brewLog } }` (plus
+  `reminder` when `remindToRate` was sent)
 - **Errors:** `400` invalid body, or `beanId`/`recipeId`/`grinderId`/
   `waterProfileId`/`toolIds` not in this workspace; `403` viewer.
 - Logging a brew does **not** change the bean's `inventoryWeightGrams`.

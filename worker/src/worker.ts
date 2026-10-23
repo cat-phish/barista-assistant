@@ -1,10 +1,11 @@
 import "dotenv/config";
-import { BREW_ANALYSIS_QUEUE, type BrewAnalysisJobData } from "@barista/shared/jobs";
+import { BREW_ANALYSIS_QUEUE, REMINDER_QUEUE, type BrewAnalysisJobData, type RateReminderJobData } from "@barista/shared/jobs";
 import { UnrecoverableError, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 import { config } from "./config.js";
 import { pool } from "./db.js";
 import { processBrewAnalysis, type JobResult } from "./processor.js";
+import { processRateReminder, type ReminderResult } from "./reminders.js";
 
 // BullMQ workers need maxRetriesPerRequest: null (blocking commands).
 const connection = new Redis(config.redis.url, {
@@ -35,10 +36,23 @@ worker.on("failed", (job, err) => {
 });
 worker.on("error", (err) => console.error("Worker error:", err.message));
 
+// Rate-later reminders (docs/api/notifications.md §1b): delayed jobs, sent once due.
+const reminders = new Worker<RateReminderJobData, ReminderResult>(REMINDER_QUEUE, (job: Job<RateReminderJobData>) => processRateReminder(job.data), {
+  connection,
+  concurrency: config.concurrency,
+});
+reminders.on("completed", (job, result) => {
+  const detail = result.status === "sent" ? `sent to ${result.channels}${result.failed.length ? `, failed: ${result.failed.join("; ")}` : ""}` : `skipped (${result.reason})`;
+  console.log(`Reminder ${job.id}: ${detail}`);
+});
+reminders.on("failed", (job, err) => console.error(`Reminder ${job?.id ?? "?"} failed: ${err.message}`));
+reminders.on("error", (err) => console.error("Reminder worker error:", err.message));
+
 async function shutdown(signal: string): Promise<void> {
   console.log(`${signal} received, finishing active jobs`);
   // close() waits for running jobs to finish before resolving.
-  const results = await Promise.allSettled([worker.close(), pool.end()]);
+  const results = await Promise.allSettled([worker.close(), reminders.close()]);
+  results.push(...(await Promise.allSettled([pool.end()])));
   for (const r of results) {
     if (r.status === "rejected") console.error("Error during shutdown:", r.reason);
   }

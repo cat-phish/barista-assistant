@@ -38,7 +38,7 @@ import {
   whatOptions,
   methodKind,
 } from '../lib/brewChoice';
-import type { Brewer, Drink, DrinkCategory, Grinder, Mark, MethodKind, PrepTool, ServingUnit, WaterProfile } from '../api/types';
+import type { Brewer, Drink, DrinkCategory, Grinder, Mark, MethodKind, NotificationChannel, PrepTool, ServingUnit, WaterProfile } from '../api/types';
 import { METHOD_KINDS } from '../lib/equipment';
 import { convertSize, defaultSize, formatSize, SERVING_UNITS, sizeFactor, type Size } from '../lib/servings';
 import AppHeader from '../components/AppHeader.vue';
@@ -51,6 +51,10 @@ import { formatMark } from '../lib/marks';
 import { stepTitle } from '../lib/steps';
 import { useAnalysis } from '../composables/useAnalysis';
 import { emptyDraft, parseBrewDraft } from '../lib/brewDraft';
+import { notificationsApi } from '../api/notifications';
+import { canRemind, formatDelay } from '../lib/notifications';
+import { useAuthStore } from '../stores/auth';
+import { DEFAULT_PREFERENCES } from '../composables/usePreferences';
 import { grinderRetentionText } from '../lib/grinderRetention';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
 import { batchSuffix, beanLabel as pickerLabel } from '../lib/beans';
@@ -616,15 +620,28 @@ const saveError = ref('');
 const submitted = ref(false);
 const savedLogId = ref<string | null>(null);
 
-async function save(): Promise<void> {
+// Rate later (docs/api/notifications.md §1b): offered when you have reminders
+// on and a service to send them through (Settings → Notifications).
+const auth = useAuthStore();
+const notifyChannels = ref<NotificationChannel[]>([]);
+const remindable = computed(() => canRemind(auth.user?.preferences ?? DEFAULT_PREFERENCES, notifyChannels.value));
+const reminder = ref<'queued' | 'off' | 'unavailable' | null>(null); // for the brew just saved
+notificationsApi
+  .list()
+  .then((r) => (notifyChannels.value = r.channels))
+  .catch(() => (notifyChannels.value = [])); // without it, brews just save without Rate later
+
+async function save(rateLater = false): Promise<void> {
   submitted.value = true;
   const ws = workspaces.current?.id;
   const values = parsed.value.values;
   if (!ws || !bean.value || !values) return;
+  // Already rated after all: a normal save (no reminder, and the AI is offered).
+  const remind = rateLater && values.rating === null && (values.drinkRating ?? null) === null;
   saving.value = true;
   saveError.value = '';
   try {
-    const { brewLog } = await brewLogsApi.create(ws, {
+    const { brewLog, reminder: outcome } = await brewLogsApi.create(ws, {
       beanId: bean.value.id,
       recipeId: recipe.value?.id ?? null,
       drinkId: drink.value?.id ?? null,
@@ -633,6 +650,7 @@ async function save(): Promise<void> {
       // So the AI dates the brew by this device's calendar day, like freeze dates.
       utcOffsetMinutes: -new Date().getTimezoneOffset(),
       ...values,
+      ...(remind ? { remindToRate: true } : {}),
       // The steps' real times, plus the first drop from the log's field. A time
       // typed shorter than a tap drops that tap.
       marks: [
@@ -642,6 +660,7 @@ async function save(): Promise<void> {
     });
     if (values.grinderId) remember('grinderId', values.grinderId);
     savedLogId.value = brewLog.id;
+    reminder.value = remind ? (outcome ?? 'unavailable') : null;
     stage.value = 'saved';
   } catch (err) {
     saveError.value = errorMessage(err);
@@ -661,6 +680,7 @@ function brewAgain(): void {
   resetAi();
   stage.value = 'setup';
   savedLogId.value = null;
+  reminder.value = null;
   draft.rating = null;
   draft.notes = '';
   draft.drinkRating = null;
@@ -1028,7 +1048,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
     </template>
 
     <!-- 3. Log -->
-    <form v-else-if="stage === 'log'" class="stack" novalidate @submit.prevent="save">
+    <form v-else-if="stage === 'log'" class="stack" novalidate @submit.prevent="save()">
       <h1>How was it?</h1>
       <p class="muted">
         {{ beanLabel }}<template v-if="drink"> · {{ drink.name }}</template><template v-if="madeSize"> · {{ formatSize(madeSize) }}</template
@@ -1041,22 +1061,39 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       </section>
       <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
       <button class="btn btn-primary btn-block" type="submit" :disabled="saving">{{ saving ? 'Saving…' : 'Save brew' }}</button>
+      <button v-if="remindable" class="btn btn-secondary btn-block" type="button" :disabled="saving" @click="save(true)">
+        Save, rate later
+      </button>
+      <p v-if="remindable" class="muted small rate-later-hint">
+        Leave the rating for now: you'll get a reminder in {{ formatDelay(auth.user?.preferences.rateReminderMinutes ?? 15) }}.
+      </p>
     </form>
 
     <!-- 4. Saved -->
     <template v-else>
       <section class="card stack saved">
         <h1>Brew saved ✓</h1>
-        <p class="muted">Want a suggestion for your next brew of {{ beanLabel }}?</p>
-        <button v-if="aiState === 'idle' || aiState === 'error'" class="btn btn-primary" type="button" @click="requestAnalysis">
-          Get AI suggestion
-        </button>
-        <p v-if="aiState === 'error'" class="form-error" role="alert">{{ aiError }}</p>
-        <p v-if="aiState === 'waiting'" class="muted" aria-live="polite">Analyzing your brew… this usually takes a few seconds.</p>
-        <p v-if="aiState === 'slow'" class="muted" aria-live="polite">
-          Still working on it. It'll show up in the journal, and next time you tap “Suggest parameters” for this bean.
-        </p>
-        <AnalysisCard v-if="analysis" :analysis="analysis" />
+        <!-- Rate later: the AI waits for the rating, offered with it on the entry. -->
+        <template v-if="reminder">
+          <p v-if="reminder === 'queued'" class="muted">
+            We'll remind you to rate it in {{ formatDelay(auth.user?.preferences.rateReminderMinutes ?? 15) }}. The AI suggestion comes with the rating.
+          </p>
+          <p v-else class="form-error" role="alert">
+            The reminder couldn't be set{{ reminder === 'off' ? ': no notification service is on (Settings → Notifications)' : '' }}. Rate it from the journal when you're ready.
+          </p>
+        </template>
+        <template v-else>
+          <p class="muted">Want a suggestion for your next brew of {{ beanLabel }}?</p>
+          <button v-if="aiState === 'idle' || aiState === 'error'" class="btn btn-primary" type="button" @click="requestAnalysis">
+            Get AI suggestion
+          </button>
+          <p v-if="aiState === 'error'" class="form-error" role="alert">{{ aiError }}</p>
+          <p v-if="aiState === 'waiting'" class="muted" aria-live="polite">Analyzing your brew… this usually takes a few seconds.</p>
+          <p v-if="aiState === 'slow'" class="muted" aria-live="polite">
+            Still working on it. It'll show up in the journal, and next time you tap “Suggest parameters” for this bean.
+          </p>
+          <AnalysisCard v-if="analysis" :analysis="analysis" />
+        </template>
       </section>
       <FinishDrinkCard v-if="drink" :drink="drink" :factor="sizeScale" :size-label="madeSize ? formatSize(madeSize) : null" />
       <div class="stack">
@@ -1078,6 +1115,10 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
 </template>
 
 <style scoped>
+.rate-later-hint {
+  margin: 0;
+  text-align: center;
+}
 .repeat {
   display: flex;
   flex-direction: column;

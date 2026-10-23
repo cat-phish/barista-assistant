@@ -33,6 +33,7 @@ import {
   recipeStyles,
 } from "@barista/shared/schema";
 import { decimalSchema, grindSettingSchema, optionalText, updateSchema } from "../validation.js";
+import { remindToRate, type ReminderOutcome } from "../reminders.js";
 
 // docs/api/brew-logs.md §6: first_drop (espresso), step_end (a step's real end).
 export interface Mark {
@@ -64,6 +65,13 @@ export interface BrewLogListResponse {
 
 export interface BrewLogResponse {
   brewLog: BrewLogDetails;
+}
+
+// POST's reply also says what happened to a requested rate-later reminder
+// (docs/api/brew-logs.md §6): queued, off (no enabled channel, or reminders
+// switched off) or unavailable (the queue couldn't be reached).
+export interface CreatedBrewLogResponse extends BrewLogResponse {
+  reminder?: ReminderOutcome;
 }
 
 export interface BrewLogWithAnalysisResponse {
@@ -145,7 +153,8 @@ const brewLogFields = {
 
 // Strict, like PATCH: the brewer comes from the recipe, so e.g. an old
 // client's machineId is refused rather than silently dropped.
-const createBrewLogSchema = z.object(brewLogFields).strict();
+// remindToRate: create only, not stored (docs/api/notifications.md §1b).
+const createBrewLogSchema = z.object({ ...brewLogFields, remindToRate: z.boolean().optional() }).strict();
 const updateBrewLogSchema = updateSchema(brewLogFields);
 
 const listQuerySchema = z.object({
@@ -488,7 +497,7 @@ brewLogsRouter.get(
   }
 );
 
-brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<BrewLogResponse>) => {
+brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<CreatedBrewLogResponse>) => {
   const { workspaceId } = req.params;
   const userId = authedUserId(req);
   if (!(await requireMembership(res, userId, workspaceId, WRITE_ROLES))) return;
@@ -500,7 +509,7 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Bre
   const refError = await db.transaction(async (tx) => {
     const error = await referencesInWorkspace(tx, workspaceId, body);
     if (error) return error;
-    const { marks = [], toolIds = [], ...fields } = body;
+    const { marks = [], toolIds = [], remindToRate: _remind, ...fields } = body;
     const brewer = await recipeBrewer(tx, fields.recipeId);
     const wrongForKind = espressoError(brewer?.kind ?? null, {
       actualWaterGrams: fields.actualWaterGrams ?? null,
@@ -530,7 +539,8 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Bre
   if (!brewLog) {
     throw new Error(`Brew log ${id} missing after insert`);
   }
-  res.status(201).json({ brewLog });
+  const reminder = body.remindToRate ? await remindToRate(userId, id) : undefined;
+  res.status(201).json({ brewLog, ...(reminder ? { reminder } : {}) });
 });
 
 brewLogsRouter.patch(
