@@ -90,7 +90,9 @@ the workspace sees the same forms.
   `reveal`), so nothing recorded is invisible while editing.
 - **Every new optional field on the brew, bean or recipe forms must get an
   entry in `lib/fields.ts`** and be wrapped in `show('<key>')` in its form,
-  so it can be hidden like the rest.
+  so it can be hidden like the rest. A brew field also decides what a
+  repeat does with it (`REPEAT_FOR_FIELD`, `docs/api/auth.md` §1
+  repeatKeeps).
 
 ### `PATCH /api/workspaces/:workspaceId/settings`
 

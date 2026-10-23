@@ -48,10 +48,16 @@
      rules in `.gitleaks.toml`; `npm install` enables it). Never bypass it
      with `--no-verify`. If it flags something, remove the secret; for a
      genuine false positive, ask before adding an allowlist entry.
-6. **Hideable fields:** every new optional field on the brew, bean or recipe
-   forms gets an entry in the field registry (`frontend/src/lib/fields.ts`)
-   and a `show('<key>')` in its form, so a workspace can hide it under
-   Settings → Fields (`docs/api/workspaces.md` §2, "Field visibility").
+6. **Hideable and repeatable fields:** every new optional field on the
+   brew, bean or recipe forms gets an entry in the field registry
+   (`frontend/src/lib/fields.ts`) and a `show('<key>')` in its form, so a
+   workspace can hide it under Settings → Fields (`docs/api/workspaces.md`
+   §2, "Field visibility"). A new **brew** field also needs an entry in
+   `REPEAT_FOR_FIELD` (`frontend/src/lib/repeatBrew.ts`): either the Repeat
+   brews option that copies it (add one to `REPEAT_KEEPS` and
+   `REPEAT_OPTIONS`, and apply it in `applyRepeat`), or `'result'` if it's
+   measured each time and never copied (`docs/api/auth.md` §1
+   repeatKeeps). The type and a test fail until it's there.
 7. **Confirming major actions:** an action that can't be undone, or that
    affects other things or other people (deleting something others use,
    deleting a workspace, leaving one, …), confirms in a dialog with a red

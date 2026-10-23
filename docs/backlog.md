@@ -26,12 +26,12 @@ and fix the references.
 - A. Settings & configuration: 1
 - B. Beans: 2
 - C. Brewing & logging: 3–5
-- D. AI suggestions: 6–9
-- E. Insights: 10
-- F. Bar & menu: 11–13
-- G. Home roasting: 14
-- H. Accounts: 15
-- I. Deployment & the app: 16
+- D. AI suggestions: 6–10
+- E. Insights: 11
+- F. Bar & menu: 12–14
+- G. Home roasting: 15
+- H. Accounts: 16
+- I. Deployment & the app: 17
 
 ---
 
@@ -148,7 +148,7 @@ Recording a brew: what's measured, and how fast it is to log.
 - **Size:** M
 - **Depends on:** nothing: the notification channels are built.
 - **Open questions:**
-  - Should a cold brew batch be stock, like item 11's ingredient batches,
+  - Should a cold brew batch be stock, like item 12's ingredient batches,
     with servings taken from it?
   - Are there other long brews to cover the same way (e.g. Kyoto-style cold
     drip)?
@@ -226,7 +226,7 @@ Recording a brew: what's measured, and how fast it is to log.
 - **Open questions:**
   - Can a problem be switched off on its own (hidden from the checklist
     but kept on old brews), or only archived like prep tools?
-  - Should statistics (item 10) chart problems over time, e.g. how often
+  - Should statistics (item 11) chart problems over time, e.g. how often
     a bean channels?
   - Add a free-text "other problem" line, or leave that to the tasting
     notes?
@@ -329,11 +329,53 @@ What the analysis worker sends to the LLM and what comes back.
   - Units and step types the text describes loosely ("pour to about 100 ml,
     wait 30 s"): how sure must the AI be before filling a field?
 
+### 10. Rework the analysis workflow, with auto-analyze
+
+- **Status:** idea
+- **Why:** an AI suggestion only happens when someone taps "Get AI
+  suggestion" on the saved screen or "Analyze this brew" in the journal.
+  It's easy to forget, so many brews never get one. The flow has also grown
+  a piece at a time (saved screen, journal entry, "Suggest parameters" on
+  setup, rate later waiting for the rating) and hasn't been looked at as a
+  whole.
+- **Approach:**
+  - **Review the flow end to end:**
+    - where a suggestion is asked for, shown and used (saved screen,
+      journal, brew setup);
+    - what "analyze again" means;
+    - whether older analyses stay visible;
+    - how it fits with rate later and quick rating.
+  - **Auto-analyze** setting: analyze every brew automatically, off by
+    default, **after a wait** (e.g. 5–30 min) so a brew deleted or fixed
+    right after saving isn't analyzed, or analyzed with typos.
+    - Saving queues a **delayed** analysis job (`delay`, same job id per
+      brew as today, so a manual request in the meantime reuses it).
+    - Editing the brew before it runs pushes the job back or lets it pick
+      up the edit. It loads the brew when it runs, so edits are included.
+    - **Deleted before it runs:** the worker already completes without
+      calling the LLM when the brew log is gone (`docs/api/llm-contract.md`
+      §9). Also remove the delayed job when a brew is deleted, test both
+      paths, and keep it out of the failure logs.
+    - **Rate later:** an unrated brew waits for its rating, or runs once the
+      reminder has passed (ties in with item 8's switch for unrated brews).
+    - Failures (LLM down, quota) retry as today and show on the journal
+      entry with a way to try again, rather than failing silently.
+  - Show "Analysis queued for 9:15" on the saved screen and journal entry
+    while it waits.
+- **Size:** M
+- **Depends on:** nothing. Fits with 6 (reviewing input and output) and 8
+  (what the AI sees, unrated brews).
+- **Open questions:**
+  - Per workspace or per person? Auto-analysis costs API calls the
+    workspace pays for.
+  - How long a wait by default, and can it be skipped ("analyze now")?
+  - A daily cap or cost limit on automatic analyses?
+
 ---
 
 ## E. Insights
 
-### 10. Statistics and graphs
+### 11. Statistics and graphs
 
 - **Status:** idea
 - **Why:** the brew history is a list. Trends (is this bean getting better
@@ -359,7 +401,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## F. Bar & menu
 
-### 11. Ingredient prep and stock
+### 12. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -374,7 +416,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** how precise does stock need to be (exact grams, or
   "about half left")?
 
-### 12. Public menu: branding and sizes
+### 13. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
@@ -388,7 +430,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
-### 13. Drink categories: what else they could do
+### 14. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -407,7 +449,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## G. Home roasting
 
-### 14. Roasting: green stock, roast logs, resting
+### 15. Roasting: green stock, roast logs, resting
 
 - **Status:** idea
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
@@ -438,7 +480,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## H. Accounts
 
-### 15. Account management and password reset
+### 16. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -475,7 +517,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 How the app is served and installed.
 
-### 16. Serve the app as an installable PWA
+### 17. Serve the app as an installable PWA
 
 - **Status:** idea
 - **Why:** the PWA is configured (`vite-plugin-pwa`, `frontend/vite.config.ts`)

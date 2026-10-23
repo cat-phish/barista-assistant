@@ -91,6 +91,19 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
   Default: the first six. A `PATCH` sends the whole list. The bean and what
   → brewer → recipe always come along; results and ratings never do.
 
+  **Parity rule:** the options follow the brew form. Every brew parameter
+  (each `brew.*` field in the field registry, `frontend/src/lib/fields.ts`)
+  is listed in `REPEAT_FOR_FIELD` (`frontend/src/lib/repeatBrew.ts`):
+  - either with the `repeatKeeps` option that copies it;
+  - or as `'result'`, measured each time and never copied (yield, TDS,
+    first drop).
+
+  A new brew parameter gets one or the other when it's added. A new option
+  goes into `REPEAT_KEEPS` (shared schema and validation), `REPEAT_OPTIONS`
+  and `applyRepeat`, and into the default only if repeating should copy it
+  out of the box. The TypeScript type and `repeatBrew.test.ts` fail until
+  it's done.
+
 ### `PATCH /api/auth/me/preferences`
 
 - **Auth Required:** `true`
