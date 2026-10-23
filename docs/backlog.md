@@ -125,33 +125,32 @@ What's recorded about each coffee.
 
 Recording a brew: what's measured, and how fast it is to log.
 
-### 3. Cold brew refinements
+### 3. Iced and flash-chilled styles
 
-- **Status:** idea
-- **Why:** cold brew is a recipe style (`cold_brew`), but it's brewed like a
-  quick filter: a timer in seconds, water by weight, no dilution. A real cold
-  brew steeps for 12–24 hours, is usually a concentrate, and is diluted to
-  serve.
-- **Approach:**
-  - Cold brew recipes:
-    - steep time in hours;
-    - steep temperature (fridge or room);
-    - concentrate ratio, and a serving dilution (e.g. 1:1 with water or
-      milk);
-    - filtering steps.
-  - Brewing a cold brew starts a batch: the start time is logged, and the
-    brew is finished and rated later, when the steep ends. The notification
-    channels (Settings → Notifications, roadmap: rate later) send the "steep
-    done" reminder, as another kind of job.
-  - The log records the batch size and the dilution served, so the AI
-    (item 6) judges strength correctly.
+- **Status:** idea, needs workshopping.
+- **Why:** cold brew is built (roadmap: cold brew refinements), but iced
+  coffee is often brewed hot and chilled on the spot: **Japanese iced**
+  (pour over brewed straight onto ice), or a hot concentrate diluted with
+  ice. The ice is part of the recipe's water, which the ratio, the yield
+  estimate and extraction yield don't account for today.
+- **Approach (to workshop):**
+  - Styles that brew like pour over (or immersion), plus an **ice** amount:
+    "250 g total: 150 g hot water + 100 g ice".
+  - The ratio shown as coffee : total liquid, with the hot water and the ice
+    apart. Pour targets count the hot water only.
+  - The brewed yield is measured after the ice melts (or estimated), and
+    extraction yield uses the hot water and the coffee in it, not the
+    melted ice.
+  - "Diluted with ice" from the cold styles' dilution may cover hot
+    concentrates served over ice; decide whether that's one feature or two.
+  - The AI is told the brew was flash-chilled: brighter, more aromatic than
+    cold brew, and judged as served.
 - **Size:** M
-- **Depends on:** nothing: the notification channels are built.
+- **Depends on:** nothing.
 - **Open questions:**
-  - Should a cold brew batch be stock, like item 12's ingredient batches,
-    with servings taken from it?
-  - Are there other long brews to cover the same way (e.g. Kyoto-style cold
-    drip)?
+  - Is ice an ingredient of the recipe (grams), or a recipe field?
+  - Which styles: Japanese iced, flash brew, "hot bloom, cold finish"?
+  - How is the yield weighed when part of it is ice that hasn't melted?
 
 ### 4. Grind settings for multi-ring grinders
 
@@ -413,8 +412,10 @@ What the analysis worker sends to the LLM and what comes back.
     text.
 - **Size:** L
 - **Depends on:** nothing.
-- **Open questions:** how precise does stock need to be (exact grams, or
-  "about half left")?
+- **Open questions:**
+  - How precise does stock need to be (exact grams, or "about half left")?
+  - Should a finished cold brew batch (roadmap: cold brew refinements) be
+    stock the same way, with each glass served taken from it and rated?
 
 ### 13. Public menu: branding and sizes
 

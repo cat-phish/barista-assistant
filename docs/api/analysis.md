@@ -21,8 +21,9 @@ brew.
   ```
 - **Errors:** `404` brew log not found or not in a workspace the caller
   belongs to (same message, and the same single query, for both, so neither
-  body nor timing reveals whether the log exists); `403` viewer; `503` the
-  queue (Redis) is unavailable.
+  body nor timing reveals whether the log exists); `403` viewer; `409` the
+  brew is a cold brew still steeping (§6: finish it first); `503` the queue
+  (Redis) is unavailable.
 - **Duplicates:** while a log's analysis is waiting or running, another
   request returns `202` with the **same** `jobId` and queues nothing new. Once
   that job finishes (or finally fails), the log can be analyzed again, and each

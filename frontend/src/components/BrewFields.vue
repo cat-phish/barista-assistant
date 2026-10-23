@@ -5,6 +5,7 @@ import { computed, ref, watch } from 'vue';
 import type { Grinder, MethodKind, PrepTool, RecipeStyle, WaterProfile } from '../api/types';
 import type { BrewDraft, BrewDraftErrors } from '../lib/brewDraft';
 import { brixToTds, extractionYield, usesWater } from '../lib/extraction';
+import { DILUTION_WITH, isColdStyle, isLongStyle, STEEP_TEMPS } from '../lib/coldBrew';
 import { formatGrams } from '../lib/format';
 import { grinderRetentionText } from '../lib/grinderRetention';
 import { toolsFor } from '../lib/prepTools';
@@ -27,7 +28,12 @@ reveal({
   'brew.waterProfile': draft.value.waterProfileId,
   'brew.prepTools': draft.value.toolIds,
   'brew.firstDrop': draft.value.firstDrop,
+  'brew.steepTemp': draft.value.steepTemp,
+  'brew.dilution': draft.value.dilution,
 });
+// Cold styles (lib/coldBrew.ts): where a long one steeped, and how it was served.
+const longStyle = computed(() => isLongStyle(props.recipeStyle));
+const coldStyle = computed(() => isColdStyle(props.recipeStyle));
 const { temperatureUnit } = usePreferences();
 const props = defineProps<{
   errors: BrewDraftErrors;
@@ -214,6 +220,26 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
         <span v-else-if="retentionHint" class="hint">{{ retentionHint }}</span>
       </div>
     </div>
+    <div v-if="(longStyle && show('brew.steepTemp')) || (coldStyle && show('brew.dilution'))" class="form-row">
+      <div v-if="longStyle && show('brew.steepTemp')" class="field">
+        <label for="brew-steep-temp">Steeped in</label>
+        <select id="brew-steep-temp" v-model="draft.steepTemp">
+          <option value="">Not recorded</option>
+          <option v-for="(label, key) in STEEP_TEMPS" :key="key" :value="key">{{ label }}</option>
+        </select>
+      </div>
+      <div v-if="coldStyle && show('brew.dilution')" class="field">
+        <label for="brew-dilution">Served diluted 1 :</label>
+        <div class="dilution">
+          <input id="brew-dilution" v-model="draft.dilution" inputmode="decimal" placeholder="neat" :aria-invalid="showErrors && !!errors.dilution" />
+          <select v-model="draft.dilutedWith" aria-label="Diluted with">
+            <option value="">with…</option>
+            <option v-for="(label, key) in DILUTION_WITH" :key="key" :value="key">{{ label }}</option>
+          </select>
+        </div>
+        <span v-if="showErrors && errors.dilution" class="field-error">{{ errors.dilution }}</span>
+      </div>
+    </div>
     <div v-if="show('brew.waterProfile')" class="field">
       <label for="brew-water-profile">Water profile</label>
       <select id="brew-water-profile" v-model="draft.waterProfileId">
@@ -261,6 +287,14 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
 </template>
 
 <style scoped>
+.dilution {
+  display: flex;
+  gap: var(--space-2);
+}
+.dilution input {
+  width: 5rem;
+  min-width: 0;
+}
 .tasting {
   display: flex;
   flex-direction: column;

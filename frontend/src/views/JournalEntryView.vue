@@ -19,7 +19,8 @@ import { draftFromLog, emptyDraft, parseBrewDraft } from '../lib/brewDraft';
 import { extractionYield } from '../lib/extraction';
 import { grinderRetention } from '../lib/grinderRetention';
 import { batchSuffix } from '../lib/beans';
-import { formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen } from '../lib/format';
+import { formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen, MAX_BREW_SEC } from '../lib/format';
+import { dilutionText, STEEP_TEMPS, steepWindowText } from '../lib/coldBrew';
 import { formatSize } from '../lib/servings';
 import { formatTemp } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
@@ -122,8 +123,20 @@ const submitted = ref(false);
 const saving = ref(false);
 const saveError = ref('');
 
+// The recipe's steep window, for a steeping brew ("12–18 h").
+const steepWindow = computed(() => steepWindowText(log.value?.recipe?.steepMinHours ?? null, log.value?.recipe?.steepMaxHours ?? null));
+// A long cold brew still steeping is finished through the edit form: the
+// steep time so far is filled in, and saving marks it finished.
+const finishing = ref(false);
+function startFinish(): void {
+  if (!log.value) return;
+  startEdit();
+  draft.time = formatTime(Math.min(MAX_BREW_SEC, Math.max(0, Math.round((Date.now() - new Date(log.value.timestamp).getTime()) / 1000))));
+  finishing.value = true;
+}
 function startEdit(): void {
   if (!log.value) return;
+  finishing.value = false;
   Object.assign(draft, draftFromLog(log.value, temperatureUnit.value));
   submitted.value = false;
   saveError.value = '';
@@ -145,8 +158,9 @@ async function saveEdit(): Promise<void> {
           ...(parsed.value.firstDropSec !== null ? [{ kind: 'first_drop' as const, stepOrder: null, atSec: parsed.value.firstDropSec }] : []),
         ]
       : undefined;
-    log.value = (await brewLogsApi.update(ws, log.value.id, { ...values, ...(marks ? { marks } : {}) })).brewLog;
+    log.value = (await brewLogsApi.update(ws, log.value.id, { ...values, ...(marks ? { marks } : {}), ...(finishing.value ? { steeping: false } : {}) })).brewLog;
     editing.value = false;
+    finishing.value = false;
   } catch (err) {
     saveError.value = errorMessage(err);
   } finally {
@@ -157,7 +171,7 @@ async function saveEdit(): Promise<void> {
 // Quick rating (docs/api/notifications.md §1b): a brew saved without a rating
 // (e.g. "Save, rate later", whose reminder links here) is rated in place.
 // The AI suggestion waits for it, then is offered.
-const unrated = computed(() => !!log.value && log.value.rating === null && log.value.drinkRating === null);
+const unrated = computed(() => !!log.value && !log.value.steeping && log.value.rating === null && log.value.drinkRating === null);
 const quick = reactive({ rating: null as number | null, notes: '', drinkRating: null as number | null, drinkNotes: '' });
 const rating = ref(false);
 const rateError = ref('');
@@ -220,6 +234,10 @@ function markLabel(m: Mark): string {
           <p class="muted">
             {{ formatWhen(log.timestamp) }}<template v-if="log.drink"> · {{ log.drink.name }}</template><template v-if="log.servingSize !== null && log.servingUnit"> · {{ formatSize({ size: log.servingSize, unit: log.servingUnit }) }}</template><template v-if="log.recipe"> · {{ log.recipe.name }}</template>
           </p>
+          <p v-if="log.steeping" class="steeping-note">
+            Steeping since {{ formatWhen(log.timestamp) }}<template v-if="log.steepTemp"> ({{ STEEP_TEMPS[log.steepTemp].toLowerCase() }})</template>.
+            <template v-if="steepWindow"> Steep for {{ steepWindow }}.</template> Tap Finish when it's done.
+          </p>
         </div>
       </div>
 
@@ -265,6 +283,8 @@ function markLabel(m: Mark): string {
           <div><dt>{{ espresso ? 'Dose → shot' : 'Dose : water' }}</dt><dd>{{ formatDoseLine(log.actualDoseGrams, log.actualWaterGrams, log.actualYieldGrams) }}</dd></div>
           <div><dt>{{ espresso ? 'Shot weight' : 'Yield' }}</dt><dd>{{ yieldText(log) }}</dd></div>
           <div v-if="log.tdsPercent !== null"><dt>TDS</dt><dd>{{ tdsText(log) }}</dd></div>
+          <div v-if="log.steepTemp"><dt>Steeped in</dt><dd>{{ STEEP_TEMPS[log.steepTemp] }}</dd></div>
+          <div v-if="log.dilutionRatio !== null"><dt>Served</dt><dd>Diluted {{ dilutionText(log.dilutionRatio, log.dilutedWith) }}</dd></div>
           <div><dt>Time</dt><dd>{{ formatTime(log.actualTimeSec) }}</dd></div>
           <div><dt>Water</dt><dd>{{ log.actualTempC !== null ? formatTemp(log.actualTempC, temperatureUnit) : '–' }}</dd></div>
           <div><dt>Grind</dt><dd>{{ log.actualGrindSetting !== null ? formatGrind(log.actualGrindSetting) : '–' }}<template v-if="log.grindRpm !== null"> at {{ log.grindRpm }} RPM</template><template v-if="log.grinder"> · {{ log.grinder.name }}</template></dd></div>
@@ -286,6 +306,7 @@ function markLabel(m: Mark): string {
           <p>{{ log.drinkTastingNotes }}</p>
         </div>
         <div v-if="workspaces.canEdit" class="actions">
+          <button v-if="log.steeping && canModify" class="btn btn-primary" type="button" @click="startFinish">Finish</button>
           <RouterLink class="btn-link" :to="{ name: 'brew', query: { repeat: log.id } }">Brew again</RouterLink>
           <template v-if="canModify">
             <button class="btn-link" type="button" @click="startEdit">Edit</button>
@@ -301,7 +322,7 @@ function markLabel(m: Mark): string {
         <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
         <div class="buttons">
           <button class="btn btn-secondary" type="button" :disabled="saving" @click="editing = false">Cancel</button>
-          <button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? 'Saving…' : 'Save changes' }}</button>
+          <button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? 'Saving…' : finishing ? 'Finish brew' : 'Save changes' }}</button>
         </div>
       </form>
 
@@ -313,9 +334,10 @@ function markLabel(m: Mark): string {
         <p v-if="aiState === 'waiting'" class="muted" aria-live="polite">Analyzing this brew… this usually takes a few seconds.</p>
         <p v-if="aiState === 'slow'" class="muted" aria-live="polite">Still working on it. Check back in a minute.</p>
         <p v-if="aiState === 'error'" class="form-error" role="alert">{{ aiError }}</p>
-        <p v-if="unrated && !analysis" class="muted small">Rate the brew first: the suggestion works from how it tasted.</p>
+        <p v-if="log.steeping" class="muted small">Still steeping: finish it first.</p>
+        <p v-else-if="unrated && !analysis" class="muted small">Rate the brew first: the suggestion works from how it tasted.</p>
         <button
-          v-if="workspaces.canEdit && aiState !== 'waiting' && !unrated"
+          v-if="workspaces.canEdit && aiState !== 'waiting' && !unrated && !log.steeping"
           class="btn btn-secondary"
           type="button"
           @click="analyze"
@@ -337,6 +359,10 @@ function markLabel(m: Mark): string {
 </template>
 
 <style scoped>
+.steeping-note {
+  margin: var(--space-1) 0 0;
+  color: var(--brand);
+}
 .quick-rate h2 {
   font-size: 1.15rem;
   margin: 0;

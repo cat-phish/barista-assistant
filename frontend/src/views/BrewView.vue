@@ -51,6 +51,8 @@ import { formatMark } from '../lib/marks';
 import { stepTitle } from '../lib/steps';
 import { useAnalysis } from '../composables/useAnalysis';
 import { emptyDraft, parseBrewDraft } from '../lib/brewDraft';
+import { isLongStyle, STEEP_TEMPS, steepWindowText } from '../lib/coldBrew';
+import type { Reminder } from '../api/brews';
 import { notificationsApi } from '../api/notifications';
 import { canRemind, formatDelay } from '../lib/notifications';
 import { useAuthStore } from '../stores/auth';
@@ -58,14 +60,15 @@ import { DEFAULT_PREFERENCES } from '../composables/usePreferences';
 import { grinderRetentionText } from '../lib/grinderRetention';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
 import { batchSuffix, beanLabel as pickerLabel } from '../lib/beans';
-import { formatDay, formatDoseLine, formatGrams, formatGrind, formatTime } from '../lib/format';
+import { formatDay, formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen } from '../lib/format';
 import { chooseGrind, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
 import { useWorkspaceStore } from '../stores/workspace';
 import { brewRetention, linkRatio, ratioText as formatRatio, ROAST_LEVELS, scaleBatch, scaleShot, scaleSteps, type MeasuredBrew, type ScaleField } from '../lib/scale';
 import { formatTemp, formatTempChange, tempText, TEMPERATURE_LABELS, VOLUME_LABELS, volumeUnits } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 
-type Stage = 'setup' | 'timing' | 'log' | 'saved';
+// 'steep': starting a long cold brew (a checklist, then it's saved steeping).
+type Stage = 'setup' | 'timing' | 'log' | 'steep' | 'saved';
 
 const workspaces = useWorkspaceStore();
 const route = useRoute();
@@ -249,6 +252,10 @@ watch(recipe, (r) => {
   draft.water = r?.targetWaterGrams != null ? formatGrams(r.targetWaterGrams) : '';
   draft.yieldGrams = ''; // measured after brewing
   draft.temp = tempText(r?.targetTempC, temperatureUnit.value);
+  // Cold styles: where it steeps and how it's served, as the recipe says.
+  draft.steepTemp = r?.steepTemp ?? '';
+  draft.dilution = r?.dilutionRatio != null ? String(r.dilutionRatio) : '';
+  draft.dilutedWith = r?.dilutionWith ?? '';
   resetBatch();
   sizeToBatch(); // a resized drink keeps its size with the new recipe
   // The recipe's default grinder, if it's still in use; else keep the current
@@ -563,6 +570,48 @@ function leaveSetup(next: Stage): void {
   marks.value = [];
   stage.value = next;
 }
+// Long cold styles (lib/coldBrew.ts) have no timer: Start steep saves the brew
+// as steeping, to finish from the journal when it's done.
+const longStyle = computed(() => isLongStyle(recipe.value?.style?.brewsLike));
+const steepWindow = computed(() => steepWindowText(recipe.value?.steepMinHours ?? null, recipe.value?.steepMaxHours ?? null));
+const steepStarted = ref<{ at: string; reminder: Reminder | null } | null>(null); // the steep just started
+// "Sat, Oct 25, 8:00 AM", when the steep window opens.
+const readyFrom = computed(() => {
+  const s = steepStarted.value;
+  const h = recipe.value?.steepMinHours;
+  return s && h != null ? formatWhen(new Date(new Date(s.at).getTime() + h * 3_600_000).toISOString()) : '';
+});
+async function startSteep(): Promise<void> {
+  submitted.value = true;
+  const ws = workspaces.current?.id;
+  // Nothing's measured yet: time 0, no results or rating.
+  const start = { ...draft, time: '0', yieldGrams: '', tds: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
+  const values = parseBrewDraft(start, recipe.value?.brewer.kind ?? null, false, temperatureUnit.value, grinders.value.find((g) => g.id === draft.grinderId) ?? null).values;
+  if (!ws || !bean.value || !values) return;
+  saving.value = true;
+  saveError.value = '';
+  try {
+    const { brewLog, steepReminder } = await brewLogsApi.create(ws, {
+      beanId: bean.value.id,
+      recipeId: recipe.value?.id ?? null,
+      drinkId: drink.value?.id ?? null,
+      servingSize: drink.value ? (madeSize.value?.size ?? null) : null,
+      servingUnit: drink.value ? (madeSize.value?.unit ?? null) : null,
+      utcOffsetMinutes: -new Date().getTimezoneOffset(),
+      ...values,
+      steeping: true,
+    });
+    if (values.grinderId) remember('grinderId', values.grinderId);
+    savedLogId.value = brewLog.id;
+    steepStarted.value = { at: brewLog.timestamp, reminder: steepReminder ?? null };
+    stage.value = 'saved';
+  } catch (err) {
+    saveError.value = errorMessage(err);
+  } finally {
+    saving.value = false;
+  }
+}
+
 function logWithoutTimer(): void {
   draft.time = '';
   leaveSetup('log');
@@ -580,7 +629,7 @@ function onTimerComplete(seconds: number, timerMarks: Mark[] = []): void {
 // first: leaving the page, reloading, or clicking Brew again in the header.
 // After a save, clicking Brew goes straight back to setup.
 const brewSession = useBrewSessionStore();
-const inProgress = computed(() => stage.value === 'timing' || stage.value === 'log');
+const inProgress = computed(() => stage.value === 'timing' || stage.value === 'log' || stage.value === 'steep');
 watch(inProgress, (v) => (brewSession.inProgress = v), { immediate: true });
 const abandonOpen = ref(false);
 let abandonAnswer: ((abandon: boolean) => void) | null = null;
@@ -687,6 +736,7 @@ function brewAgain(): void {
   stage.value = 'setup';
   savedLogId.value = null;
   reminder.value = null;
+  steepStarted.value = null;
   draft.rating = null;
   draft.notes = '';
   draft.drinkRating = null;
@@ -783,6 +833,13 @@ async function applyRepeat(log: BrewLog): Promise<void> {
   // The grind follows only on the brew's own grinder (repeatGrind checks it).
   if (!kept.has('grind')) repeatGrind.value = null;
   draft.waterProfileId = kept.has('waterProfile') && plan.waterProfileId ? plan.waterProfileId : defaultWaterProfileId(waterProfiles.value);
+  // Cold styles: where it steeped goes with the temperature; the dilution
+  // has its own switch. Otherwise the recipe's (set when the recipe was chosen).
+  if (kept.has('temp') && log.steepTemp) draft.steepTemp = log.steepTemp;
+  if (kept.has('dilution') && log.dilutionRatio !== null) {
+    draft.dilution = String(log.dilutionRatio);
+    draft.dilutedWith = log.dilutedWith ?? '';
+  }
   const activeTools = new Set(prepTools.value.filter((t) => !t.archivedAt).map((t) => t.id));
   draft.toolIds = kept.has('prepTools') ? log.tools.map((t) => t.id).filter((id) => activeTools.has(id)) : [];
   draft.beanIn = kept.has('grinderWeights') && log.beanWeightInGrams !== null ? formatGrams(log.beanWeightInGrams) : '';
@@ -1043,12 +1100,20 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       </section>
 
       <div class="stack">
-        <button class="btn btn-primary btn-block" type="button" :disabled="!bean || !setupReady" @click="leaveSetup('timing')">
-          {{ espresso ? 'Start shot timer' : timerSteps.length ? 'Start timer' : 'Start stopwatch' }}
-        </button>
-        <button class="btn btn-secondary btn-block" type="button" :disabled="!bean || !setupReady" @click="logWithoutTimer">
-          Log a brew without the timer
-        </button>
+        <template v-if="longStyle">
+          <button class="btn btn-primary btn-block" type="button" :disabled="!bean || !setupReady" @click="leaveSetup('steep')">Start steep</button>
+          <button class="btn btn-secondary btn-block" type="button" :disabled="!bean || !setupReady" @click="logWithoutTimer">
+            Log a finished one
+          </button>
+        </template>
+        <template v-else>
+          <button class="btn btn-primary btn-block" type="button" :disabled="!bean || !setupReady" @click="leaveSetup('timing')">
+            {{ espresso ? 'Start shot timer' : timerSteps.length ? 'Start timer' : 'Start stopwatch' }}
+          </button>
+          <button class="btn btn-secondary btn-block" type="button" :disabled="!bean || !setupReady" @click="logWithoutTimer">
+            Log a brew without the timer
+          </button>
+        </template>
       </div>
     </template>
 
@@ -1068,6 +1133,36 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         @complete="onTimerComplete"
       />
     </template>
+
+    <!-- 2b. Start a long cold brew: the recipe's steps as a checklist, then it's saved steeping. -->
+    <section v-else-if="stage === 'steep'" class="stack">
+      <button class="btn-link cancel" type="button" @click="stage = 'setup'">← Back to setup</button>
+      <h1>Start the steep</h1>
+      <p class="muted">
+        {{ beanLabel }}<template v-if="recipe"> · {{ recipe.name }}</template> · {{ draft.dose }} g : {{ draft.water }} g<template v-if="draft.grind"> · grind {{ draft.grind }}</template>
+      </p>
+      <section v-if="timerSteps.length" class="card stack">
+        <h2>Steps</h2>
+        <label v-for="(st, i) in timerSteps" :key="i" class="checkbox">
+          <input type="checkbox" />
+          {{ stepTitle(st) }}<template v-if="st.targetWaterGrams !== null"> · to {{ formatGrams(st.targetWaterGrams) }} g</template>
+        </label>
+      </section>
+      <section class="card stack">
+        <div v-if="show('brew.steepTemp')" class="field">
+          <label for="steep-temp">Steeping in</label>
+          <select id="steep-temp" v-model="draft.steepTemp">
+            <option value="">Not recorded</option>
+            <option v-for="(label, key) in STEEP_TEMPS" :key="key" :value="key">{{ label }}</option>
+          </select>
+        </div>
+        <p class="muted small">
+          <template v-if="steepWindow">Steep for {{ steepWindow }}. </template>It's saved as steeping now; finish it from the journal when it's done, and rate it then.
+        </p>
+      </section>
+      <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
+      <button class="btn btn-primary btn-block" type="button" :disabled="saving" @click="startSteep">{{ saving ? 'Saving…' : 'Start steeping' }}</button>
+    </section>
 
     <!-- 3. Log -->
     <form v-else-if="stage === 'log'" class="stack" novalidate @submit.prevent="save()">
@@ -1104,9 +1199,18 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
     <!-- 4. Saved -->
     <template v-else>
       <section class="card stack saved">
-        <h1>Brew saved ✓</h1>
+        <h1>{{ steepStarted ? 'Steeping ✓' : 'Brew saved ✓' }}</h1>
+        <!-- A long cold brew: finished and rated later, from the journal. -->
+        <template v-if="steepStarted">
+          <p v-if="readyFrom" class="muted">Ready from {{ readyFrom }} ({{ steepWindow }}).</p>
+          <p v-if="steepStarted.reminder === 'queued'" class="muted">We'll remind you when it's ready to filter.</p>
+          <p v-else-if="steepStarted.reminder" class="muted small">
+            No reminder{{ steepStarted.reminder === 'off' ? ': steep reminders or every notification service are off (Settings → Notifications)' : ": it couldn't be set" }}.
+          </p>
+          <p class="muted">When it's done, open it in the journal and tap Finish to add the steep time, yield and how it tasted.</p>
+        </template>
         <!-- Rate later: the AI waits for the rating, offered with it on the entry. -->
-        <template v-if="reminder">
+        <template v-else-if="reminder">
           <p v-if="reminder === 'queued'" class="muted">
             We'll remind you to rate it in {{ formatDelay(userPrefs.rateReminderMinutes) }}. The AI suggestion comes with the rating.
           </p>

@@ -15,6 +15,9 @@ export async function processBrewAnalysis({ brewLogId }: BrewAnalysisJobData): P
     // Deleted after queueing: nothing to analyze, and retrying won't change that.
     return { status: "skipped", reason: "brew log no longer exists" };
   }
+  // A cold brew still steeping has nothing to judge (the API refuses to queue
+  // one; this covers a job queued just before it was started over).
+  if (context.brew.steeping) return { status: "skipped", reason: "still steeping" };
 
   const analysis = await analyzeWithLlm(context);
 

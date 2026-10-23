@@ -30,7 +30,7 @@ export const TEMPERATURE_UNITS = ["c", "f"] as const;
 export const THEMES = ["system", "light", "dark"] as const; // system = follow the device
 // What "Brew again" / a repeat copies from the earlier brew, besides the bean
 // and what → brewer → recipe, which a repeat always takes (docs/api/auth.md §1).
-export const REPEAT_KEEPS = ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "prepTools", "grinderWeights", "notes"] as const;
+export const REPEAT_KEEPS = ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "prepTools", "grinderWeights", "notes"] as const;
 export type RepeatKeep = (typeof REPEAT_KEEPS)[number];
 
 // Per person (docs/api/auth.md §1 preferences).
@@ -47,6 +47,7 @@ export interface UserPreferences {
   rateReminderMinutes: number; // 5–240
   rateLaterDefault: boolean; // the log form's Rate later box starts ticked
   repeatKeeps: RepeatKeep[]; // what a repeat copies (notes: shown as a reminder, not copied)
+  steepReminders: boolean; // remind when a cold brew's steep window opens (docs/api/notifications.md §1b)
 }
 export const DEFAULT_PREFERENCES: UserPreferences = {
   volumeUnit: "fl_oz",
@@ -57,7 +58,8 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   rateReminders: true,
   rateReminderMinutes: 15,
   rateLaterDefault: false,
-  repeatKeeps: ["size", "doseWater", "temp", "grinder", "grind", "waterProfile"],
+  repeatKeeps: ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution"],
+  steepReminders: true,
 };
 
 // Per workspace, owners edit (docs/api/workspaces.md §2 settings).
@@ -915,6 +917,14 @@ export const brewLogs = mysqlTable("brew_logs", {
   beanWeightInGrams: decimal("bean_weight_in_grams", { precision: 5, scale: 2, mode: "number" }),
   groundWeightOutGrams: decimal("ground_weight_out_grams", { precision: 5, scale: 2, mode: "number" }),
   actualTimeSec: int("actual_time_sec").notNull(),
+  // Cold styles (docs/api/brew-logs.md §6): a long brew (cold brew, Kyoto
+  // drip) is saved when it starts, steeping = true, and finished later
+  // (steeping false, with its time, yield and rating). steepTemp is where it
+  // steeped; the dilution is what it was served with (1 : dilutionRatio).
+  steeping: boolean("steeping").default(false).notNull(),
+  steepTemp: varchar("steep_temp", { length: 10 }).$type<SteepTemp>(), // STEEP_TEMPS
+  dilutionRatio: decimal("dilution_ratio", { precision: 3, scale: 1, mode: "number" }),
+  dilutedWith: varchar("diluted_with", { length: 10 }).$type<DilutionWith>(), // DILUTION_WITH
   // The coffee tasted on its own (for a milk drink, only if tasted straight).
   rating: int("rating"), // 1-5
   tastingNotes: text("tasting_notes"),

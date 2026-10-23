@@ -39,6 +39,7 @@ export const preferencesSchema = z
     repeatKeeps: z
       .array(z.enum(REPEAT_KEEPS))
       .refine((keys) => new Set(keys).size === keys.length, "each once"),
+    steepReminders: z.boolean(),
   })
   .partial()
   .strict()

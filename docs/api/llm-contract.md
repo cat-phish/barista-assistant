@@ -50,6 +50,18 @@ queue:
      `null`): the speed on a variable-speed grinder, part of the grind, and
      `beanWeightInGrams`, `groundWeightOutGrams` and
      `grinderRetentionGrams` (in − out, or `null` unless both were weighed).
+   - **Cold styles** (§5e):
+     - each brew has `steeping`, `steepTemp`, `dilutionRatio` and
+       `dilutedWith`; the recipe has `steepMinHours`, `steepMaxHours`,
+       `steepTemp`, `dilutionRatio` and `dilutionWith`;
+     - brews still steeping are left out of the history, and a steeping brew
+       isn't analyzed (the job is skipped);
+     - the prompt explains:
+       - long cold brew (hours, fridge or room) vs Kyoto drip (slow drip) vs
+         rapid cold (minutes);
+       - judging strength as served, after dilution;
+       - concentrate TDS (~2.5–5 %) vs the diluted cup (~1.2–1.6 %);
+       - steep time and grind as the levers for long brews.
    - Each brew includes its `water` (or `null`): the water profile's name and
      its figures (`tdsPpm`, `generalHardnessPpm`, `alkalinityPpm`, each
      mineral in mg/L, `ph`; `null` where not recorded; §3c), so the LLM can

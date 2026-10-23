@@ -22,6 +22,8 @@ import {
   llmAnalyses,
   recipes,
   SERVING_UNITS,
+  STEEP_TEMPS,
+  DILUTION_WITH,
   users,
   type Bean,
   type BrewLog,
@@ -33,7 +35,7 @@ import {
   recipeStyles,
 } from "@barista/shared/schema";
 import { decimalSchema, grindSettingSchema, optionalText, updateSchema } from "../validation.js";
-import { remindToRate, type ReminderOutcome } from "../reminders.js";
+import { remindToRate, remindWhenSteeped, type ReminderOutcome } from "../reminders.js";
 
 // docs/api/brew-logs.md §6: first_drop (espresso), step_end (a step's real end).
 export interface Mark {
@@ -45,7 +47,8 @@ export interface Mark {
 export interface BrewLogDetails extends BrewLog {
   bean: Pick<Bean, "id" | "roasterName" | "beanName" | "batchNumber">;
   // style: the recipe's (docs/api/recipe-styles.md §5e), for how extraction yield is worked out.
-  recipe: (Pick<Recipe, "id" | "name" | "expectedYieldGrams"> & { methodKind: MethodKind; style: RecipeStyleSummary | null }) | null;
+  // steepMin/MaxHours: a cold brew's window, for "ready from" while it steeps.
+  recipe: (Pick<Recipe, "id" | "name" | "expectedYieldGrams" | "steepMinHours" | "steepMaxHours"> & { methodKind: MethodKind; style: RecipeStyleSummary | null }) | null;
   grinder: { id: string; name: string } | null; // archived grinders included
   waterProfile: { id: string; name: string } | null; // archived profiles included
   // The brewer it was made with (the recipe's at the time); archived included.
@@ -72,6 +75,8 @@ export interface BrewLogResponse {
 // switched off) or unavailable (the queue couldn't be reached).
 export interface CreatedBrewLogResponse extends BrewLogResponse {
   reminder?: ReminderOutcome;
+  // A steeping cold brew with a steep window: the "ready" reminder (§1b).
+  steepReminder?: ReminderOutcome;
 }
 
 export interface BrewLogWithAnalysisResponse {
@@ -87,6 +92,7 @@ interface BrewLogParams extends WorkspaceParams {
 }
 
 const FUTURE_SKEW_MS = 5 * 60 * 1000;
+const MAX_TIME_SEC = 7 * 24 * 60 * 60;
 
 const brewLogFields = {
   beanId: z.uuid(),
@@ -121,7 +127,13 @@ const brewLogFields = {
   // Beans weighed in and grounds out, for grinder retention (weightsError).
   beanWeightInGrams: decimalSchema({ min: 0, max: 1000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
   groundWeightOutGrams: decimalSchema({ min: 0, max: 1000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
-  actualTimeSec: z.number().int().min(0).max(24 * 60 * 60),
+  // Up to 7 days: a long cold brew's steep (docs/api/brew-logs.md §6).
+  actualTimeSec: z.number().int().min(0).max(MAX_TIME_SEC),
+  // Cold styles: started and not finished yet; where it steeped; how it was served.
+  steeping: z.boolean().optional(),
+  steepTemp: z.enum(STEEP_TEMPS).nullable().optional(),
+  dilutionRatio: decimalSchema({ min: 0, max: 10, scale: 1, exclusiveMin: true }).nullable().optional(),
+  dilutedWith: z.enum(DILUTION_WITH).nullable().optional(),
   // The coffee tasted on its own (for a milk drink, only if tasted straight).
   rating: z.number().int().min(1).max(5).nullable().optional(),
   tastingNotes: optionalText(5000),
@@ -135,7 +147,7 @@ const brewLogFields = {
         .object({
           kind: z.enum(MARK_KINDS),
           stepOrder: z.number().int().min(1).max(50).nullable().optional(),
-          atSec: decimalSchema({ min: 0, max: 24 * 60 * 60, scale: 1 }),
+          atSec: decimalSchema({ min: 0, max: MAX_TIME_SEC, scale: 1 }),
         })
         .strict()
         .refine((m) => (m.kind === "step_end") === (m.stepOrder != null), "stepOrder is required for step_end and only for it")
@@ -354,12 +366,16 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       beanWeightInGrams: brewLogs.beanWeightInGrams,
       groundWeightOutGrams: brewLogs.groundWeightOutGrams,
       actualTimeSec: brewLogs.actualTimeSec,
+      steeping: brewLogs.steeping,
+      steepTemp: brewLogs.steepTemp,
+      dilutionRatio: brewLogs.dilutionRatio,
+      dilutedWith: brewLogs.dilutedWith,
       rating: brewLogs.rating,
       tastingNotes: brewLogs.tastingNotes,
       drinkRating: brewLogs.drinkRating,
       drinkTastingNotes: brewLogs.drinkTastingNotes,
       bean: { id: beans.id, roasterName: beans.roasterName, beanName: beans.beanName, batchNumber: beans.batchNumber },
-      recipe: { id: recipes.id, name: recipes.name, expectedYieldGrams: recipes.expectedYieldGrams },
+      recipe: { id: recipes.id, name: recipes.name, expectedYieldGrams: recipes.expectedYieldGrams, steepMinHours: recipes.steepMinHours, steepMaxHours: recipes.steepMaxHours },
       // Separate columns: a nested object spanning two left joins isn't nulled as a whole.
       recipeMethodKind: brewers.kind,
       styleId: recipeStyles.id,
@@ -540,7 +556,8 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Cre
     throw new Error(`Brew log ${id} missing after insert`);
   }
   const reminder = body.remindToRate ? await remindToRate(userId, id) : undefined;
-  res.status(201).json({ brewLog, ...(reminder ? { reminder } : {}) });
+  const steepReminder = body.steeping ? await remindWhenSteeped(userId, id, body.recipeId ?? null, brewLog.timestamp) : undefined;
+  res.status(201).json({ brewLog, ...(reminder ? { reminder } : {}), ...(steepReminder ? { steepReminder } : {}) });
 });
 
 brewLogsRouter.patch(

@@ -90,7 +90,7 @@ const DELAYS = [5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240];
 const delays = computed(() => [...new Set([...DELAYS, prefs.value.rateReminderMinutes])].sort((a, b) => a - b));
 const prefSaving = ref(false);
 const prefError = ref('');
-async function setPref(changes: Partial<Pick<UserPreferences, 'rateReminders' | 'rateReminderMinutes' | 'rateLaterDefault'>>): Promise<void> {
+async function setPref(changes: Partial<Pick<UserPreferences, 'rateReminders' | 'rateReminderMinutes' | 'rateLaterDefault' | 'steepReminders'>>): Promise<void> {
   prefSaving.value = true;
   prefError.value = '';
   try {
@@ -126,6 +126,15 @@ async function setPref(changes: Partial<Pick<UserPreferences, 'rateReminders' | 
       <p v-if="!prefs.rateReminders" class="muted small">Off: the brew page doesn't show Rate later.</p>
       <p v-else-if="!anyEnabled" class="muted small">No service is set up and on yet, so the brew page shows Rate later greyed out. Set one up below.</p>
       <p v-if="prefError" class="form-error" role="alert">{{ prefError }}</p>
+    </section>
+
+    <section class="card stack" aria-labelledby="steep-reminders">
+      <h2 id="steep-reminders">Cold brew</h2>
+      <label class="checkbox">
+        <input type="checkbox" :checked="prefs.steepReminders" :disabled="prefSaving" @change="setPref({ steepReminders: ($event.target as HTMLInputElement).checked })" />
+        Remind me when a cold brew is ready to filter
+      </label>
+      <p class="muted small">Sent when its recipe's steep time opens (e.g. after 12 h of a 12–18 h steep), unless you've finished it already.</p>
     </section>
 
     <p v-if="loading" class="muted" aria-live="polite">Loading…</p>

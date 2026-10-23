@@ -281,6 +281,21 @@ describe("processBrewAnalysis", () => {
     expect(context.previousBrews.every((b) => b.grinderRetentionGrams === null)).toBe(true);
   });
 
+  it("cold brews: leaves a steeping brew out of the history, and doesn't analyze one", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    await db.update(brewLogs).set({ steeping: true }).where(eq(brewLogs.id, logIds.day7!));
+    await db.update(brewLogs).set({ steepTemp: "fridge", dilutionRatio: 1, dilutedWith: "milk" }).where(eq(brewLogs.id, logIds.day8!));
+    await processBrewAnalysis({ brewLogId: logIds.day8! });
+    const context = llm.mock.calls[0]![0] as BrewContext;
+    expect(context.previousBrews.map((b) => b.tastingNotes)).not.toContain("day 7");
+    expect(context.brew).toMatchObject({ steeping: false, steepTemp: "fridge", dilutionRatio: 1, dilutedWith: "milk" });
+    expect(context.recipe).toMatchObject({ steepMinHours: null, dilutionRatio: null });
+
+    llm.mockClear();
+    expect(await processBrewAnalysis({ brewLogId: logIds.day7! })).toEqual({ status: "skipped", reason: "still steeping" });
+    expect(llm).not.toHaveBeenCalled();
+  });
+
   it("tells the LLM the water each brew used, with its figures", async () => {
     llm.mockResolvedValue(ANALYSIS);
     const tww = randomUUID();
