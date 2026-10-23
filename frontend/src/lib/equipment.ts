@@ -158,13 +158,15 @@ export function adjustmentLabel(g: Grinder): string | null {
 // count for espresso brewers.
 export interface BrewerForm extends MachineCapabilities {
   name: string;
-  kind: MethodKind;
+  methodId: string; // the workspace's method (docs/api/brewer-methods.md §3e); '' = by kind
+  kind: MethodKind; // follows the method's behaviour (BrewerFields keeps it in step)
   notes: string;
 }
 
 export function brewerForm(m?: Brewer): BrewerForm {
   return {
     name: m?.name ?? '',
+    methodId: m?.methodId ?? '',
     kind: m?.kind ?? 'filter',
     notes: m?.notes ?? '',
     preinfusion: m?.preinfusion ?? 'none',
@@ -176,7 +178,8 @@ export function brewerInput(f: BrewerForm): BrewerInput & { name: string } {
   const espresso = f.kind === 'espresso';
   return {
     name: f.name.trim(),
-    kind: f.kind,
+    // The method decides the kind on the server; without one, the kind's built-in method.
+    ...(f.methodId ? { methodId: f.methodId } : { kind: f.kind }),
     notes: f.notes.trim() || null,
     // Capabilities only mean something for espresso.
     preinfusion: espresso ? f.preinfusion : 'none',

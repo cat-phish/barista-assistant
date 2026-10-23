@@ -2,7 +2,7 @@
 // (docs/api/README.md, "Archiving and deleting"). Unit-tested in deleting.test.ts.
 
 export type Usage = Record<string, number>;
-export type DeletableKind = 'brewer' | 'grinder' | 'water' | 'tool' | 'recipe' | 'drink' | 'ingredient' | 'process' | 'style';
+export type DeletableKind = 'brewer' | 'grinder' | 'water' | 'tool' | 'recipe' | 'drink' | 'ingredient' | 'process' | 'style' | 'method';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const be = (n: number) => (n === 1 ? 'is' : 'are');
@@ -32,6 +32,7 @@ const WARNINGS: Record<DeletableKind, Record<string, (n: number) => string>> = {
   ingredient: { drinkCount: (n) => `It will be removed from ${plural(n, 'drink')}.` },
   process: { beanCount: (n) => `${plural(n, 'bean')} will lose their process.` },
   style: { recipeCount: (n) => `${plural(n, 'recipe')} will lose their style.` },
+  method: { brewerCount: (n) => `${plural(n, 'brewer')} will move to the built-in method it works like. Their recipes and brews don't change.` },
 };
 
 export function usageWarnings(kind: DeletableKind, usage: Usage): string[] {

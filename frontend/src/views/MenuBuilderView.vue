@@ -7,12 +7,13 @@
 // several at once. Preview shows the menu as guests see it (§7).
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
+import { brewerMethodsApi } from '../api/brewerMethods';
 import { brewersApi } from '../api/brewers';
 import { errorMessage } from '../api/client';
 import { drinkCategoriesApi } from '../api/drinkCategories';
 import { drinksApi } from '../api/drinks';
 import { menuApi, type NewMenuItem } from '../api/menu';
-import type { BeanMenuField, Brewer, Drink, DrinkCategory, Menu, MenuItem, MenuSection, PublicMenu } from '../api/types';
+import type { BeanMenuField, Brewer, Drink, DrinkCategory, Menu, MenuItem, MenuSection, PublicMenu, BrewerMethod } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import MenuAddDialog from '../components/MenuAddDialog.vue';
@@ -30,6 +31,7 @@ const drinks = ref<Drink[]>([]);
 const categories = ref<DrinkCategory[]>([]);
 const preview = ref<PublicMenu | null>(null);
 const brewers = ref<Brewer[]>([]);
+const methods = ref<BrewerMethod[]>([]); // groups plain brews in the add picker
 const loading = ref(true);
 const error = ref('');
 const busy = ref(false);
@@ -40,7 +42,14 @@ async function load(): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [m, d, b, c] = await Promise.all([menuApi.get(ws), drinksApi.list(ws), brewersApi.list(ws), drinkCategoriesApi.list(ws)]);
+    const [m, d, b, c, bm] = await Promise.all([
+      menuApi.get(ws),
+      drinksApi.list(ws),
+      brewersApi.list(ws),
+      drinkCategoriesApi.list(ws),
+      brewerMethodsApi.list(ws).catch(() => ({ methods: [] })),
+    ]);
+    methods.value = bm.methods;
     menu.value = m;
     categories.value = c.categories;
     drinks.value = [...d.drinks].sort((x, y) => x.name.localeCompare(y.name));
@@ -371,6 +380,7 @@ async function deleteItem(): Promise<void> {
     :drinks="drinks"
     :categories="categories"
     :brewers="brewers"
+    :methods="methods"
     :busy="busy"
     :error="addError"
     @cancel="addTarget = null"

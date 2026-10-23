@@ -10,7 +10,7 @@ const drink = (id: string, category: DrinkCategory | null, over: Partial<Drink> 
   archivedAt: null, createdAt: '2026-10-20T00:00:00.000Z', variants: [], ingredients: [],
   category: category && { id: category.id, name: category.name }, parent: null, ...over,
 });
-const brewer = (id: string, kind: Brewer['kind'], archivedAt: string | null = null) => ({ id, name: id, kind, archivedAt }) as Brewer;
+const brewer = (id: string, kind: Brewer['kind'], archivedAt: string | null = null, methodId: string | null = null) => ({ id, name: id, kind, archivedAt, methodId }) as Brewer;
 const item = (id: string, over: Partial<MenuItem>): MenuItem => ({
   id, itemType: 'drink', drinkId: null, brewerId: null, name: null, description: null, price: null, available: true, source: null, beanFields: null, ...over,
 });
@@ -48,6 +48,18 @@ describe('addOptions', () => {
     expect(o.brewers.map((g) => [g.name, g.options.map((x) => x.name)])).toEqual([['Filter', ['V60']], ['Espresso', ['Linea']]]);
   });
 
+  it("groups plain brews under the workspace's methods, custom ones too", () => {
+    const methods = [
+      { id: 'm-f', name: 'Filter', position: 1, hidden: false, builtin: 'filter' as const, behaviour: 'filter' as const },
+      { id: 'm-s', name: 'Siphon', position: 2, hidden: false, builtin: null, behaviour: 'filter' as const },
+    ];
+    const withSiphon = [brewer('V60', 'filter', null, 'm-f'), brewer('TCA', 'filter', null, 'm-s')];
+    const groups = addOptions(menu, 's1', drinks, [milk, special], withSiphon, methods).brewers;
+    expect(groups.map((g) => [g.name, g.options.map((x) => x.name)])).toEqual([['Filter', ['V60']], ['Siphon', ['TCA']]]);
+    const source = { name: 'TCA', description: null, kind: 'filter' as const, method: 'Siphon', archived: false };
+    expect(showsAs(item('s', { itemType: 'brewer', source }))).toBe('Siphon, plain brew · shows its own name, no description');
+  });
+
   it('builds the batch in picker order, skipping what is already here and a beans block placed elsewhere', () => {
     const picked = new Set(['Linea', 'V60', 'Tonic', 'Vanilla Latte', 'Latte']);
     expect(addRequest(o, picked, true)).toEqual([
@@ -72,7 +84,7 @@ describe('canMoveTo', () => {
 
 describe('showsAs', () => {
   it('says what an item shows on the menu', () => {
-    const source = { name: 'Latte', description: 'Double shot', kind: 'espresso' as const, archived: false };
+    const source = { name: 'Latte', description: 'Double shot', kind: 'espresso' as const, method: 'Espresso', archived: false };
     expect(showsAs(item('a', { source }))).toBe('Espresso drink · shows its own name, its own description');
     expect(showsAs(item('b', { source, name: 'House latte', description: 'Oat milk' }))).toBe(
       'Espresso drink · shows as “House latte” (its own name: Latte), its menu description',

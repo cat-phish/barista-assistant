@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Brewer, Drink, DrinkCategory, MethodKind, Recipe } from '../api/types';
+import type { Brewer, BrewerMethod, Drink, DrinkCategory, MethodKind, Recipe } from '../api/types';
 import {
   brewable,
   brewerOptions,
@@ -11,6 +11,7 @@ import {
   encodePlain,
   itemOptions,
   itemValues,
+  methodKind,
   NO_RECIPE,
   pickBrewer,
   pickRecipe,
@@ -26,8 +27,9 @@ const milk = cat('c-milk', 'Espresso Milk Drinks', 1);
 const special = cat('c-sp', 'Specialty Drinks', 2);
 const categories = [special, milk];
 
-const brewer = (id: string, name: string, kind: MethodKind, archivedAt: string | null = null): Brewer => ({
-  id, name, kind, archivedAt, notes: null,
+// No methodId: grouped under their kind, as before custom methods.
+const brewer = (id: string, name: string, kind: MethodKind, archivedAt: string | null = null, methodId: string | null = null): Brewer => ({
+  id, name, kind, methodId, archivedAt, notes: null,
   preinfusion: 'none', flowControl: 'none', pressureControl: 'none', createdAt: '2026-10-20T00:00:00.000Z',
 });
 const v60 = brewer('v60', 'V60', 'filter');
@@ -141,9 +143,27 @@ describe('brew setup: method or drink category → (drink) → brewer → recipe
     expect(validItem(null, [])).toBe('');
   });
 
+  it("groups brewers under the workspace's methods: a custom one is its own choice, with its own brewers", () => {
+    const method = (id: string, name: string, position: number, behaviour: MethodKind): BrewerMethod => ({ id, name, position, hidden: false, builtin: null, behaviour });
+    const methods = [method('m-filter', 'Filter', 1, 'filter'), method('m-espresso', 'Espresso', 2, 'espresso'), method('m-siphon', 'Siphon', 5, 'filter')];
+    const withSiphon = brewable(
+      [brewer('v60', 'V60', 'filter', null, 'm-filter'), brewer('tca', 'Hario TCA', 'filter', null, 'm-siphon'), brewer('dl', 'Delonghi', 'espresso', null, 'm-espresso')],
+      drinks,
+    );
+    expect(whatOptions(withSiphon, [], methods).map((o) => [o.value, o.name])).toEqual([
+      ['method:m-filter', 'Filter'], ['method:m-espresso', 'Espresso'], ['method:m-siphon', 'Siphon'], ['cat:', 'Other drinks'],
+    ]);
+    expect(names(brewerOptions(withSiphon, { kind: 'plain', method: 'm-siphon' }, drinks))).toEqual(['Hario TCA']);
+    expect(names(brewerOptions(withSiphon, { kind: 'plain', method: 'm-filter' }, drinks))).toEqual(['V60']);
+    // A filter drink can be made on any filter-like brewer, Siphon ones too.
+    expect(names(brewerOptions(withSiphon, { kind: 'drink', id: 'The Atlas' }, drinks))).toEqual(['Hario TCA', 'V60']);
+    expect(methodKind(withSiphon, 'm-siphon')).toBe('filter');
+  });
+
   it('encodes and decodes choices', () => {
     expect(decodeWhat('method:stovetop')).toEqual({ kind: 'method', method: 'stovetop' });
-    expect(decodeWhat('method:vacuum')).toBeNull();
+    expect(decodeWhat('method:m-siphon')).toEqual({ kind: 'method', method: 'm-siphon' }); // a method id
+    expect(decodeWhat('method:')).toBeNull();
     expect(decodeWhat('cat:c-sp')).toEqual({ kind: 'category', categoryId: 'c-sp' });
     expect(decodeWhat('cat:')).toEqual({ kind: 'category', categoryId: null });
     expect(decodeWhat(NO_RECIPE)).toBeNull();

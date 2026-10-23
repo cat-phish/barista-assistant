@@ -5,10 +5,11 @@
 // Works like grinders: archive keeps history; delete only for brewers no
 // recipe or brew uses.
 import { computed, onMounted, ref, watch } from 'vue';
+import { brewerMethodsApi } from '../api/brewerMethods';
 import { brewersApi } from '../api/brewers';
 import { recipesApi } from '../api/recipes';
 import { errorMessage } from '../api/client';
-import type { Brewer, Recipe } from '../api/types';
+import type { Brewer, Recipe, BrewerMethod } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import SetupTabs from '../components/SetupTabs.vue';
 import ListControls from '../components/ListControls.vue';
@@ -16,7 +17,6 @@ import { machineSummary, METHOD_KINDS } from '../lib/equipment';
 import { formatAdded } from '../lib/format';
 import {
   addedColumn,
-  enumColumn,
   isSortKey,
   nameColumn,
   recallView,
@@ -32,6 +32,9 @@ import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
 const brewers = ref<Brewer[]>([]);
+const methods = ref<BrewerMethod[]>([]); // names and order (docs/api/brewer-methods.md §3e)
+const methodKey = (b: Brewer) => b.methodId ?? b.kind;
+const methodName = (b: Brewer) => methods.value.find((m) => m.id === b.methodId)?.name ?? METHOD_KINDS[b.kind].label;
 const loading = ref(true);
 const error = ref('');
 const recipes = ref<Recipe[]>([]);
@@ -47,10 +50,18 @@ function recipeSummary(brewerId: string): string {
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `brewers.${what}.${workspaces.current?.id ?? ''}`;
 const ALL = 'all';
-const KINDS = Object.keys(METHOD_KINDS) as Array<keyof typeof METHOD_KINDS>;
 const columns: SortColumns<Brewer> = {
   name: nameColumn(),
-  kind: enumColumn('Method', KINDS, (b) => b.kind),
+  // By the workspace's method order; brewers without one after, by kind.
+  kind: {
+    label: 'Method',
+    value: (b) => {
+      const i = methods.value.findIndex((m) => m.id === b.methodId);
+      return i >= 0 ? i : methods.value.length + Object.keys(METHOD_KINDS).indexOf(b.kind);
+    },
+    asc: 'In list order',
+    desc: 'Reversed',
+  },
   recipes: { label: 'Recipes', value: (b) => recipeCount(b.id), asc: 'Fewest first', desc: 'Most first', firstDir: 'desc' },
   added: addedColumn(),
 };
@@ -61,14 +72,18 @@ const archivedCount = computed(() => brewers.value.filter((b) => b.archivedAt).l
 const sort = ref('name_asc');
 watch(filter, (v) => rememberView(viewKey('filter'), v));
 watch(sort, (v) => rememberView(viewKey('sort'), v));
-const filterOptions = computed(() => [
-  { value: ALL, label: 'All brewers' },
-  ...KINDS.map((k) => ({ value: k, label: METHOD_KINDS[k].label })),
-]);
+// The methods that have brewers, in the workspace's order.
+const filterOptions = computed(() => {
+  const seen = new Map<string, string>();
+  for (const b of [...brewers.value].sort((x, y) => (columns.kind!.value(x) as number) - (columns.kind!.value(y) as number))) {
+    if (!seen.has(methodKey(b))) seen.set(methodKey(b), methodName(b));
+  }
+  return [{ value: ALL, label: 'All brewers' }, ...[...seen].map(([value, label]) => ({ value, label }))];
+});
 const filterName = computed(() => filterOptions.value.find((o) => o.value === filter.value)?.label ?? '');
 const shown = computed(() => {
   const f = filter.value;
-  const list = brewers.value.filter((b) => (!b.archivedAt || showArchived.value) && (f === ALL || b.kind === f));
+  const list = brewers.value.filter((b) => (!b.archivedAt || showArchived.value) && (f === ALL || methodKey(b) === f));
   return sortBy(list, sort.value, columns);
 });
 // One row open at a time.
@@ -79,7 +94,8 @@ async function load(): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [b, r] = await Promise.all([brewersApi.list(ws), recipesApi.list(ws)]);
+    const [b, r, bm] = await Promise.all([brewersApi.list(ws), recipesApi.list(ws), brewerMethodsApi.list(ws).catch(() => ({ methods: [] }))]);
+    methods.value = bm.methods;
     brewers.value = b.brewers;
     recipes.value = r.recipes;
     if (archivedCount.value === 0) showArchived.value = false;
@@ -149,7 +165,7 @@ async function setArchived(m: Brewer, value: boolean): Promise<void> {
           <div v-for="m in shown" :key="m.id" class="data-item" :class="{ open: openId === m.id }">
             <button class="data-row" type="button" :aria-expanded="openId === m.id" @click="toggle(m.id)">
               <span class="data-td primary">{{ m.name }}<span v-if="m.archivedAt" class="muted"> (archived)</span></span>
-              <span class="data-td">{{ METHOD_KINDS[m.kind].label }}</span>
+              <span class="data-td">{{ methodName(m) }}</span>
               <span class="data-td">{{ recipeCount(m.id) }}</span>
               <span class="data-td end">{{ formatAdded(m.createdAt) }}</span>
             </button>

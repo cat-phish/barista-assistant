@@ -18,6 +18,8 @@ import {
   type BeanMenuField,
   type MenuItemType,
   type MethodKind,
+  brewerMethods,
+  METHOD_NAMES,
 } from "@barista/shared/schema";
 import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
@@ -30,6 +32,7 @@ export interface MenuItemSource {
   description: string | null;
   kind: MethodKind;
   archived: boolean; // an archived brewer is left off the public menu
+  method: string; // how it's made: a brewer's method name ("Siphon"), or a drink's ("Filter")
 }
 export interface MenuItemView {
   id: string;
@@ -148,11 +151,13 @@ export async function loadMenu(workspaceId: string, conn: Db = db): Promise<Menu
           drinkKind: drinks.kind,
           brewerName: brewers.name,
           brewerKind: brewers.kind,
+          brewerMethod: brewerMethods.name,
           brewerArchivedAt: brewers.archivedAt,
         })
         .from(menuItems)
         .leftJoin(drinks, eq(drinks.id, menuItems.drinkId))
         .leftJoin(brewers, eq(brewers.id, menuItems.brewerId))
+        .leftJoin(brewerMethods, eq(brewerMethods.id, brewers.methodId))
         .where(inArray(menuItems.sectionId, sections.map((s) => s.id)))
         .orderBy(asc(menuItems.position))
     : [];
@@ -163,14 +168,14 @@ export async function loadMenu(workspaceId: string, conn: Db = db): Promise<Menu
       ...s,
       items: items
         .filter((i) => i.sectionId === s.id)
-        .map(({ sectionId: _s, drinkName, drinkDescription, drinkKind, brewerName, brewerKind, brewerArchivedAt, ...item }) => ({
+        .map(({ sectionId: _s, drinkName, drinkDescription, drinkKind, brewerName, brewerKind, brewerMethod, brewerArchivedAt, ...item }) => ({
           ...item,
           beanFields: item.itemType === "beans" ? (item.beanFields ?? null) : null,
           source:
             item.itemType === "drink" && drinkName !== null && drinkKind !== null
-              ? { name: drinkName, description: drinkDescription, kind: drinkKind, archived: false }
+              ? { name: drinkName, description: drinkDescription, kind: drinkKind, method: METHOD_NAMES[drinkKind], archived: false }
               : item.itemType === "brewer" && brewerName !== null && brewerKind !== null
-                ? { name: brewerName, description: null, kind: brewerKind, archived: brewerArchivedAt !== null }
+                ? { name: brewerName, description: null, kind: brewerKind, method: brewerMethod ?? METHOD_NAMES[brewerKind], archived: brewerArchivedAt !== null }
                 : null,
         })),
     })),

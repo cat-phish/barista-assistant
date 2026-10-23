@@ -5,6 +5,7 @@ import { sendError } from "./http.js";
 import { authedUserId } from "./middleware/requireAuth.js";
 import {
   beanProcesses,
+  brewerMethods,
   recipeStyles,
   beans,
   brewers,
@@ -101,7 +102,12 @@ export async function recipeStyleUsage(id: string): Promise<Counts> {
   return { recipeCount: await countWhere(recipes, eq(recipes.styleId, id)) };
 }
 
-const tables = { brewers, grinders, waterProfiles, prepTools, recipes, drinks, ingredients, beanProcesses, recipeStyles } as const;
+// Its brewers move to the built-in method of the same behaviour.
+export async function brewerMethodUsage(id: string): Promise<Counts> {
+  return { brewerCount: await countWhere(brewers, eq(brewers.methodId, id)) };
+}
+
+const tables = { brewers, grinders, waterProfiles, prepTools, recipes, drinks, ingredients, beanProcesses, recipeStyles, brewerMethods } as const;
 
 // GET /:<param>/usage on a resource router: the counts above, for any member.
 export function addUsageRoute(

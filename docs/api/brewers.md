@@ -8,9 +8,10 @@ Brewer, an espresso machine, a moka pot. Recipes (§5) belong to a brewer from
 their workspace's list. How a cup is brewed (pour over, a soup shot, moka) is
 the recipe's `style` (§5).
 
-- **Brew method** (`kind`, one of `METHOD_KINDS`): how brewers are grouped
-  (brewers have no category; categories are for drinks, §5d), and it changes
-  how the app works. It decides the recipe fields, steps and timer, and which
+- **Brew method** (`methodId`): one of the workspace's methods (§3e), how
+  brewers are grouped (brewers have no category; categories are for drinks,
+  §5d). Its behaviour is the brewer's **`kind`** (one of `METHOD_KINDS`),
+  which changes how the app works. It decides the recipe fields, steps and timer, and which
   drinks the brewer can make (a drink needs a method, §5c).
 
   | `kind` | Examples | Recipe fields (§5) |
@@ -20,7 +21,7 @@ the recipe's `style` (§5).
   | `stovetop` | Moka pot, ibrik | as filter |
   | `other` | Siphon, anything else | as filter |
 
-  Making the list editable (custom methods based on these) is backlog item 1.
+  A custom method (Siphon, Turkish…) behaves like one of these (§3e).
 
 New workspaces get V60 (`filter`), Espresso (`espresso`) and Aeropress
 (`filter`). Milk drinks like a latte are drinks (§5c):
@@ -70,8 +71,11 @@ past brews keep showing them. `createdAt` (read-only) is when the brewer was add
 ## `POST /api/workspaces/:workspaceId/brewers`
 
 - **Auth Required:** `true` (role `owner` or `barista`)
-- **Body:** `{ "name": "Chemex", "kind": "filter" }` (`name` trimmed,
-  1–100 chars; `kind` optional, default `filter`). Optional: `notes`
+- **Body:** `{ "name": "Chemex", "methodId": "uuid" }` (`name` trimmed,
+  1–100 chars). `methodId`: one of the workspace's methods (§3e); the
+  brewer's `kind` is its behaviour. Older clients may send `kind` instead
+  (that kind's built-in method; default `filter`); a `kind` sent with a
+  `methodId` must match its behaviour (`400`). Optional: `notes`
   (≤ 255) and the capabilities (default `none`). Blank text becomes `null`.
   Unknown fields are rejected, including the removed `categoryId`,
   `menuName`, `description` and `showOnPublicMenu`.

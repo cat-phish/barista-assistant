@@ -351,6 +351,20 @@
       "when": 1792742109001,
       "tag": "0049_drop_recipe_style_key",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "5",
+      "when": 1792742981568,
+      "tag": "0050_brewer_methods",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "5",
+      "when": 1792742982200,
+      "tag": "0051_seed_brewer_methods",
+      "breakpoints": true
     }
   ]
 }

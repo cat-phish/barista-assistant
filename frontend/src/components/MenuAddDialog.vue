@@ -4,7 +4,7 @@
 // side; what's on the menu already is marked. Adds the ticked ones in one go.
 import { computed, ref, watch } from 'vue';
 import type { NewMenuItem } from '../api/menu';
-import type { Brewer, Drink, DrinkCategory, Menu, MenuSection } from '../api/types';
+import type { Brewer, Drink, DrinkCategory, Menu, MenuSection, BrewerMethod } from '../api/types';
 import { addOptions, addRequest, type AddGroup, type AddOption } from '../lib/menuBuilder';
 import ConfirmDialog from './ConfirmDialog.vue';
 
@@ -14,6 +14,7 @@ const props = defineProps<{
   drinks: Drink[];
   categories: DrinkCategory[];
   brewers: Brewer[];
+  methods: BrewerMethod[]; // the workspace's, to group plain brews
   busy: boolean;
   error: string;
 }>();
@@ -30,7 +31,7 @@ watch(
 );
 
 const options = computed(() =>
-  props.section ? addOptions(props.menu, props.section.id, props.drinks, props.categories, props.brewers) : null,
+  props.section ? addOptions(props.menu, props.section.id, props.drinks, props.categories, props.brewers, props.methods) : null,
 );
 const request = computed(() => (options.value ? addRequest(options.value, picked.value, beans.value) : []));
 

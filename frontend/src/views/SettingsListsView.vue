@@ -1,11 +1,12 @@
 <script setup lang="ts">
-// Settings → Lists: the workspace's editable lists (backlog item 1): bean
-// processes and recipe styles (a list per brewer method); brewer methods next.
+// Settings → Lists: the workspace's editable lists (roadmap, editable lists): brewer
+// methods, bean processes and recipe styles (a list per method behaviour).
 import { computed, onMounted, ref } from 'vue';
 import { beanProcessesApi } from '../api/beanProcesses';
 import { errorMessage } from '../api/client';
 import { recipeStylesApi } from '../api/recipeStyles';
-import type { BeanProcess, MethodKind, RecipeStyle, RecipeStyleItem } from '../api/types';
+import { brewerMethodsApi } from '../api/brewerMethods';
+import type { BeanProcess, BrewerMethod, MethodKind, RecipeStyle, RecipeStyleItem } from '../api/types';
 import { METHOD_KINDS, METHOD_ORDER, RECIPE_STYLES, STYLES_BY_KIND } from '../lib/equipment';
 import EditableList, { type ListApi } from '../components/EditableList.vue';
 import SettingsLayout from '../components/SettingsLayout.vue';
@@ -14,6 +15,7 @@ import { useWorkspaceStore } from '../stores/workspace';
 const workspaces = useWorkspaceStore();
 const processes = ref<BeanProcess[]>([]);
 const styles = ref<RecipeStyleItem[]>([]);
+const methods = ref<BrewerMethod[]>([]);
 const loading = ref(true);
 const error = ref('');
 
@@ -21,7 +23,8 @@ async function load(): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [p, s] = await Promise.all([beanProcessesApi.list(ws), recipeStylesApi.list(ws)]);
+    const [p, s, m] = await Promise.all([beanProcessesApi.list(ws), recipeStylesApi.list(ws), brewerMethodsApi.list(ws)]);
+    methods.value = m.methods;
     processes.value = p.processes;
     styles.value = s.styles;
     error.value = '';
@@ -39,6 +42,19 @@ const processApi: ListApi = {
   reorder: beanProcessesApi.reorder,
   usage: beanProcessesApi.usage,
   remove: beanProcessesApi.remove,
+};
+
+// Brewer methods (docs/api/brewer-methods.md §3e): a custom one works like
+// a built-in, which decides its brewers' fields and timer. Changing that is
+// refused (409) once recipes use its brewers.
+const methodEntries = computed(() => methods.value.map((m) => ({ ...m, choice: m.behaviour })));
+const behaviourChoices = METHOD_ORDER.map((k) => ({ value: k, label: METHOD_KINDS[k].label }));
+const methodApi: ListApi = {
+  create: (ws, name, choice) => brewerMethodsApi.create(ws, name, (choice ?? 'filter') as MethodKind),
+  update: (ws, id, { choice, ...rest }) => brewerMethodsApi.update(ws, id, { ...rest, ...(choice ? { behaviour: choice as MethodKind } : {}) }),
+  reorder: brewerMethodsApi.reorder,
+  usage: brewerMethodsApi.usage,
+  remove: brewerMethodsApi.remove,
 };
 
 // Recipe styles, one method at a time. A custom style brews like one of its
@@ -61,6 +77,27 @@ const styleApi = computed<ListApi>(() => {
 <template>
   <SettingsLayout title="Lists">
     <p class="muted">The choices offered in forms, for everyone in {{ workspaces.current?.name }}.</p>
+    <section class="card stack" aria-labelledby="list-methods">
+      <h2 id="list-methods">Brewer methods</h2>
+      <p class="muted small">
+        How brewers are grouped, and what "What are you making?" lists first when you brew. A method you add works like a built-in one (a Siphon
+        works like filter), which decides its brewers' recipe fields, timer, recipe styles and drinks.
+      </p>
+      <p v-if="loading" class="muted" aria-live="polite">Loading…</p>
+      <EditableList
+        v-else-if="!error"
+        :entries="methodEntries"
+        :api="methodApi"
+        kind="method"
+        noun="method"
+        placeholder="e.g. Siphon"
+        hidden-hint="Hidden methods aren't offered for new brewers; brewers already in one stay there."
+        :choices="behaviourChoices"
+        choice-label="Works like"
+        @changed="load"
+      />
+    </section>
+
     <section class="card stack" aria-labelledby="list-processes">
       <h2 id="list-processes">Bean processes</h2>
       <p class="muted small">How the coffee was processed, offered in the bean form in this order.</p>
