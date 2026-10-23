@@ -25,7 +25,7 @@ const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/recipes`;
 export const recipesApi = {
   list: (workspaceId: string) => api.get<{ recipes: Recipe[] }>(base(workspaceId)),
   create: (workspaceId: string, input: RecipeInput) => api.post<{ recipe: Recipe }>(base(workspaceId), input),
-  update: (workspaceId: string, id: string, input: Partial<RecipeInput>) =>
+  update: (workspaceId: string, id: string, input: Partial<RecipeInput> & { archived?: boolean }) =>
     api.patch<{ recipe: Recipe }>(`${base(workspaceId)}/${id}`, input),
   remove: (workspaceId: string, id: string) => api.delete(`${base(workspaceId)}/${id}`),
 };

@@ -38,6 +38,10 @@ const categoryId = ref('');
 const newCategory = ref('');
 const parentDrinkId = ref('');
 const defaultRecipeId = ref('');
+// As saved: an archived default recipe or ingredient stays offered for this
+// drink, but archived ones aren't offered otherwise (docs/api/drinks.md §5c).
+const savedDefaultRecipeId = ref<string | null>(null);
+const savedIngredientIds = ref(new Set<string>());
 // Default size: amounts below are for it, and brewing scales from it.
 const servingSize = ref('');
 const servingUnit = ref<ServingUnit>('fl_oz');
@@ -56,7 +60,9 @@ const error = ref('');
 const submitted = ref(false);
 
 // Any recipe on a brewer of the drink's kind can make it, grouped by brewer.
-const kindRecipes = computed(() => recipes.value.filter((r) => r.brewer.kind === kind.value));
+const kindRecipes = computed(() =>
+  recipes.value.filter((r) => r.brewer.kind === kind.value && (!r.archivedAt || r.id === savedDefaultRecipeId.value)),
+);
 const recipeGroups = computed(() => {
   const groups = new Map<string, Recipe[]>();
   for (const r of kindRecipes.value) groups.set(r.brewer.name, [...(groups.get(r.brewer.name) ?? []), r]);
@@ -94,6 +100,8 @@ function fill(drink: Drink): void {
   categoryId.value = drink.category?.id ?? '';
   parentDrinkId.value = drink.parent?.id ?? '';
   defaultRecipeId.value = drink.defaultRecipeId ?? '';
+  savedDefaultRecipeId.value = drink.defaultRecipeId;
+  savedIngredientIds.value = new Set(drink.ingredients.map((i) => i.ingredientId));
   servingSize.value = drink.servingSize === null ? '' : String(drink.servingSize);
   servingUnit.value = drink.servingUnit ?? 'fl_oz';
   instructions.value = drink.instructions ?? '';
@@ -108,7 +116,7 @@ function fill(drink: Drink): void {
 // Ingredients not already used by another row (plus this row's own).
 function ingredientOptions(index: number): Ingredient[] {
   const used = new Set(rows.value.filter((_, i) => i !== index).map((r) => r.ingredientId));
-  return ingredients.value.filter((c) => !used.has(c.id));
+  return ingredients.value.filter((c) => !used.has(c.id) && (!c.archivedAt || savedIngredientIds.value.has(c.id)));
 }
 function addRow(): void {
   const next = ingredientOptions(-1)[0];
@@ -286,7 +294,7 @@ async function save(): Promise<void> {
             <select id="default-recipe" v-model="defaultRecipeId" :disabled="!kindRecipes.length">
               <option value="">{{ kindRecipes.length ? 'None: the last one used' : kind ? 'No recipes for this method yet' : 'Choose a brew method first' }}</option>
               <optgroup v-for="g in recipeGroups" :key="g.brewer" :label="g.brewer">
-                <option v-for="r in g.list" :key="r.id" :value="r.id">{{ r.name }}</option>
+                <option v-for="r in g.list" :key="r.id" :value="r.id">{{ r.name }}{{ r.archivedAt ? ' (archived)' : '' }}</option>
               </optgroup>
             </select>
           </div>
@@ -322,7 +330,7 @@ async function save(): Promise<void> {
                 <label :for="`ingredient-${i}`">Ingredient<span class="req" aria-hidden="true">*</span></label>
                 <select :id="`ingredient-${i}`" aria-required="true" v-model="row.ingredientId">
                   <option value="" disabled>Choose…</option>
-                  <option v-for="c in ingredientOptions(i)" :key="c.id" :value="c.id">{{ c.name }}</option>
+                  <option v-for="c in ingredientOptions(i)" :key="c.id" :value="c.id">{{ c.name }}{{ c.archivedAt ? ' (archived)' : '' }}</option>
                 </select>
               </div>
               <div class="field">

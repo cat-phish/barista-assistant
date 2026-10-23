@@ -87,6 +87,7 @@ card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
   "style": "pour_over",
   "targetTempC": 94,
   "defaultGrinderId": "uuid",
+  "archivedAt": null,
   "createdAt": "2026-10-19T08:00:00.000Z",
   "grindSettings": [
     { "grinderId": "uuid", "grinderName": "Comandante C40", "setting": "20" }
@@ -194,6 +195,11 @@ Creates a recipe, its grind starting points and its steps in one transaction.
   clears both. The kind rules apply to the recipe as it is after the change.
   `steps` and `grindSettings`, if present, each **replace** their whole list
   (`[]` clears it); if absent, they're unchanged.
+  Also `"archived": true | false`, like a bean's (§4): `true` sets
+  `archivedAt` (unchanged if already archived), `false` restores the recipe.
+  Sent alone, the recipe rules aren't re-checked. Clients leave archived
+  recipes off the brew page and the drink form's default-recipe picker; brews
+  and drinks that already use one keep it.
 - **Success (`200 OK`):** `{ "recipe": { ...recipe } }`
 - **Errors:** `400` invalid or empty body, or `brewerId`/`grinderId` not in
   this workspace; `403` viewer; `404` recipe not in this workspace.

@@ -20,11 +20,12 @@ import {
   type Drink,
   type MethodKind,
 } from "@barista/shared/schema";
+import { archiveUpdate } from "../archive.js";
 import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
 // docs/api/drinks.md §5c
 export interface DrinkDetails
-  extends Pick<Drink, "id" | "name" | "description" | "defaultRecipeId" | "servingSize" | "servingUnit" | "instructions" | "createdAt"> {
+  extends Pick<Drink, "id" | "name" | "description" | "defaultRecipeId" | "servingSize" | "servingUnit" | "instructions" | "archivedAt" | "createdAt"> {
   kind: MethodKind; // the kind of coffee it needs; any brewer of it can make it
   category: { id: string; name: string } | null;
   parent: { id: string; name: string } | null;
@@ -81,7 +82,7 @@ const createSchema = z
     ingredients: drinkFields.ingredients.default([]),
   })
   .strict();
-const updateDrinkSchema = updateSchema(drinkFields);
+const updateDrinkSchema = updateSchema({ ...drinkFields, archived: z.boolean() });
 
 // A size needs both its number and unit, or neither.
 const SIZE_ERROR = "servingSize: servingSize and servingUnit go together";
@@ -160,6 +161,7 @@ export async function loadDrinks(where: SQL | undefined): Promise<DrinkDetails[]
       id: drinks.id,
       name: drinks.name,
       description: drinks.description,
+      archivedAt: drinks.archivedAt,
       createdAt: drinks.createdAt,
       defaultRecipeId: drinks.defaultRecipeId,
       servingSize: drinks.servingSize,
@@ -254,7 +256,7 @@ drinksRouter.patch("/:drinkId", async (req: Request<DrinkParams>, res: Response<
   if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
   const body = parseBody(updateDrinkSchema, req, res);
   if (!body) return;
-  const { ingredients: list, ...fields } = body;
+  const { ingredients: list, archived, ...fields } = body;
 
   const outcome = await db.transaction(async (tx) => {
     const [existing] = await tx
@@ -284,7 +286,7 @@ drinksRouter.patch("/:drinkId", async (req: Request<DrinkParams>, res: Response<
     if (list && !(await ingredientsInWorkspace(tx, list.map((c) => c.ingredientId), workspaceId))) {
       return bad("ingredients: ingredientId not an ingredient in this workspace");
     }
-    await tx.update(drinks).set({ ...fields, defaultRecipeId }).where(eq(drinks.id, drinkId));
+    await tx.update(drinks).set({ ...fields, defaultRecipeId, ...archiveUpdate(drinks.archivedAt, archived) }).where(eq(drinks.id, drinkId));
     if (list) await replaceIngredients(tx, drinkId, list);
     return { status: 200 } as const;
   });

@@ -45,6 +45,7 @@ async function load(): Promise<void> {
     const [i, d] = await Promise.all([ingredientsApi.list(ws), drinksApi.list(ws)]);
     list.value = i.ingredients;
     drinks.value = d.drinks;
+    if (archivedCount.value === 0) showArchived.value = false;
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -65,6 +66,8 @@ const columns: SortColumns<Ingredient> = {
 };
 const sortChoices = sortColumnOptions(columns);
 const filter = ref(ALL);
+const showArchived = ref(false);
+const archivedCount = computed(() => list.value.filter((i) => i.archivedAt).length);
 const sort = ref('name_asc');
 watch(filter, (v) => rememberView(viewKey('filter'), v));
 watch(sort, (v) => rememberView(viewKey('sort'), v));
@@ -84,7 +87,9 @@ const filterOptions = computed(() => [
 ]);
 const shown = computed(() => {
   const f = filter.value;
-  const kept = f === ALL ? list.value : f === UNUSED ? list.value.filter((i) => i.drinkCount === 0) : list.value.filter((i) => i.ingredientType === f);
+  const kept = list.value.filter(
+    (i) => (!i.archivedAt || showArchived.value) && (f === ALL || (f === UNUSED ? i.drinkCount === 0 : i.ingredientType === f)),
+  );
   return sortBy(kept, sort.value, columns);
 });
 const usage = computed(() => ingredientUsage(drinks.value));
@@ -93,6 +98,23 @@ const usedLabel = (n: number) => (n === 0 ? 'Not used' : `${n} drink${n === 1 ? 
 // One row open at a time.
 const openId = ref<string | null>(null);
 const toggle = (id: string) => (openId.value = openId.value === id ? null : id);
+
+const busyId = ref<string | null>(null);
+async function setArchived(c: Ingredient, archived: boolean): Promise<void> {
+  const ws = workspaces.current?.id;
+  if (!ws) return;
+  busyId.value = c.id;
+  error.value = '';
+  try {
+    const { ingredient } = await ingredientsApi.update(ws, c.id, { archived });
+    list.value = list.value.map((x) => (x.id === ingredient.id ? ingredient : x));
+    if (archivedCount.value === 0) showArchived.value = false;
+  } catch (err) {
+    error.value = errorMessage(err);
+  } finally {
+    busyId.value = null;
+  }
+}
 
 // Delete
 const busy = ref(false);
@@ -134,7 +156,8 @@ async function confirmDelete(): Promise<void> {
     <template v-else>
       <div v-if="list.length === 0" class="card empty"><p>No ingredients yet.</p></div>
       <template v-else>
-        <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="ingredients" filter-label="Show" :filter-options="filterOptions" />
+        <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="ingredients" filter-label="Show" :filter-options="filterOptions" v-model:show-archived="showArchived" :archived-count="archivedCount" />
+        <p v-if="showArchived" class="muted small">Archived ingredients can't be added to drinks; drinks that have them keep them.</p>
         <p v-if="shown.length === 0" class="card empty">Nothing here yet.</p>
         <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) 5.5rem">
           <div class="data-row data-head">
@@ -147,7 +170,7 @@ async function confirmDelete(): Promise<void> {
           </div>
           <div v-for="c in shown" :key="c.id" class="data-item" :class="{ open: openId === c.id }">
             <button class="data-row" type="button" :aria-expanded="openId === c.id" @click="toggle(c.id)">
-              <span class="data-td primary">{{ c.name }}</span>
+              <span class="data-td primary">{{ c.name }}<span v-if="c.archivedAt" class="muted"> (archived)</span></span>
               <span class="data-td">{{ INGREDIENT_TYPES[c.ingredientType] }}</span>
               <span class="data-td">{{ usedLabel(c.drinkCount) }}</span>
               <span class="data-td end">{{ formatAdded(c.createdAt) }}</span>
@@ -166,6 +189,8 @@ async function confirmDelete(): Promise<void> {
               </p>
               <div v-if="workspaces.canEdit" class="data-actions">
                 <RouterLink class="btn-link" :to="{ name: 'ingredient-edit', params: { id: c.id } }">Edit</RouterLink>
+                <button v-if="c.archivedAt" class="btn-link" type="button" :disabled="busyId === c.id" @click="setArchived(c, false)">Restore</button>
+                <button v-else class="btn-link" type="button" :disabled="busyId === c.id" @click="setArchived(c, true)">Archive</button>
                 <button class="btn-link danger" type="button" @click="pending = c; dialogError = ''">Delete</button>
               </div>
             </div>

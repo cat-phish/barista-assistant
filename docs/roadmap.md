@@ -371,3 +371,17 @@ thing. Everything now says **archive**: the screens (Archive, Show archived),
 the API (`archivedAt`, PATCH `"archived": true | false`, like beans §4) and the
 database (`archived_at`; the migration renames the column, keeping values).
 Clients still sending `retired` get a 400.
+
+## Archive recipes, drinks and ingredients (built)
+
+Branch `archive-more`, migration 0040. Old recipes, seasonal drinks and
+ingredients you stopped making cluttered the brew page and drink forms, and
+deleting them lost history.
+
+- Recipes, drinks and ingredients have `archivedAt` and take PATCH
+  `"archived"`, like beans and equipment (archive-only PATCHes skip the recipe
+  rules). Their lists get Archive / Restore and the "Show archived" checkbox.
+- **Archived recipes and drinks** leave the brew page (a drink's archived
+  default recipe no longer picks the brewer or recipe). **Archived recipes
+  and ingredients** leave the drink form's pickers, unless that drink already
+  uses them. Past brews, drinks and the public menu keep them.

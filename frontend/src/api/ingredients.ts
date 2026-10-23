@@ -13,7 +13,7 @@ const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/ingredient
 export const ingredientsApi = {
   list: (workspaceId: string) => api.get<{ ingredients: Ingredient[] }>(base(workspaceId)),
   create: (workspaceId: string, input: IngredientInput) => api.post<{ ingredient: Ingredient }>(base(workspaceId), input),
-  update: (workspaceId: string, id: string, input: Partial<IngredientInput>) =>
+  update: (workspaceId: string, id: string, input: Partial<IngredientInput> & { archived?: boolean }) =>
     api.patch<{ ingredient: Ingredient }>(`${base(workspaceId)}/${id}`, input),
   // 409 + drinkCount while drinks use it.
   remove: (workspaceId: string, id: string) => api.delete(`${base(workspaceId)}/${id}`),

@@ -7,7 +7,7 @@ const special: DrinkCategory = { id: 'special', name: 'Specialty drinks', positi
 
 function drink(id: string, name: string, parent: Drink | null = null, category: DrinkCategory | null = milk): Drink {
   return {
-    id, name, description: null, kind: 'espresso', defaultRecipeId: null, servingSize: null, servingUnit: null, instructions: null, createdAt: '2026-10-20T00:00:00.000Z', variants: [], ingredients: [],
+    id, name, description: null, kind: 'espresso', defaultRecipeId: null, servingSize: null, servingUnit: null, instructions: null, archivedAt: null, createdAt: '2026-10-20T00:00:00.000Z', variants: [], ingredients: [],
     category: category && { id: category.id, name: category.name },
     parent: parent && { id: parent.id, name: parent.name },
   };

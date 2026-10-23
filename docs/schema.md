@@ -378,6 +378,9 @@ export const recipes = mysqlTable("recipes", {
   // preselected when brewing this recipe (else the last one used); deleting
   // the grinder clears it.
   defaultGrinderId: varchar("default_grinder_id", { length: 36 }).references(() => grinders.id, { onDelete: "set null" }),
+  // Archived recipes leave the brew page and drink forms; past brews and drinks
+  // that already use them keep them (docs/api/recipes.md §5). null = active.
+  archivedAt: timestamp("archived_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(), // "date added" in lists
 });
 
@@ -463,6 +466,9 @@ export const ingredients = mysqlTable(
     name: varchar("name", { length: 100 }).notNull(), // e.g. "Orange cold foam"
     ingredientType: varchar("ingredient_type", { length: 20 }).$type<IngredientType>().default("other").notNull(),
     instructions: text("instructions"), // how to make it, e.g. infuse overnight
+    // Archived ingredients can't be added to drinks; drinks that have them keep
+    // them (docs/api/ingredients.md §5b). null = active.
+    archivedAt: timestamp("archived_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
@@ -525,6 +531,9 @@ export const drinks = mysqlTable("drinks", {
   // How to make it, shown after the brew: "Add the syrup to the cup, pull the
   // shot onto it, steam the milk and pour." Free text.
   instructions: text("instructions"),
+  // Archived drinks leave the brew page; past brews and the public menu keep
+  // them (docs/api/drinks.md §5c). null = active.
+  archivedAt: timestamp("archived_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

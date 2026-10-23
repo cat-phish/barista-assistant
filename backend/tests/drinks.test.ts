@@ -38,6 +38,7 @@ describe("ingredients", () => {
       ingredientType: "foam",
       instructions: "Infuse cream with orange peel overnight.",
       drinkCount: 0,
+      archivedAt: null,
       createdAt: expect.any(String),
     });
     const id = created.body.ingredient.id as string;
@@ -81,6 +82,7 @@ describe("drinks", () => {
       defaultRecipeId: v60b,
       servingSize: null,
       servingUnit: null,
+      archivedAt: null,
       createdAt: expect.any(String),
       instructions: null,
       ingredients: [

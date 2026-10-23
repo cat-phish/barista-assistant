@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Drinks (docs/api/drinks.md §5c) as a table: filter by category, sort by name
 // (variants stay under their parent) or date added (a flat list); a row
-// expands to its details. Categories are managed under Bar setup.
+// expands to its details. Show archived adds archived drinks, which leave the
+// brew page. Categories are managed under Bar setup.
 import { computed, onMounted, ref, watch } from 'vue';
 import { errorMessage } from '../api/client';
 import { drinkCategoriesApi } from '../api/drinkCategories';
@@ -33,6 +34,8 @@ const columns: SortColumns<Drink> = { name: nameColumn(), added: addedColumn() }
 const sortChoices = sortColumnOptions(columns);
 const NONE = 'none'; // uncategorised
 const categoryFilter = ref(ALL);
+const showArchived = ref(false);
+const archivedCount = computed(() => drinks.value.filter((d) => d.archivedAt).length);
 const sort = ref('name_asc');
 watch(categoryFilter, (v) => rememberView(viewKey('category'), v));
 watch(sort, (v) => rememberView(viewKey('sort'), v));
@@ -44,6 +47,7 @@ async function load(): Promise<void> {
     const [d, c, r] = await Promise.all([drinksApi.list(ws), drinkCategoriesApi.list(ws), recipesApi.list(ws)]);
     drinks.value = d.drinks;
     categories.value = c.categories;
+    if (archivedCount.value === 0) showArchived.value = false;
     recipes.value = r.recipes;
   } catch (err) {
     error.value = errorMessage(err);
@@ -68,7 +72,7 @@ const filterName = computed(() => categoryOptions.value.find((o) => o.value === 
 // By name: variants nested under their parent. By date: flat.
 const shown = computed<NestedDrink[]>(() => {
   const f = categoryFilter.value;
-  const list = f === ALL ? drinks.value : drinks.value.filter((d) => (d.category?.id ?? NONE) === f);
+  const list = drinks.value.filter((d) => (!d.archivedAt || showArchived.value) && (f === ALL || (d.category?.id ?? NONE) === f));
   if (sortsByName(sort.value)) return nestDrinks(list, sort.value === 'name_desc');
   return sortBy(list, sort.value, columns).map((drink) => ({ drink, depth: 0 }));
 });
@@ -82,6 +86,23 @@ const recipeName = (id: string | null) => {
 // One row open at a time.
 const openId = ref<string | null>(null);
 const toggle = (id: string) => (openId.value = openId.value === id ? null : id);
+
+const busyId = ref<string | null>(null);
+async function setArchived(d: Drink, archived: boolean): Promise<void> {
+  const ws = workspaces.current?.id;
+  if (!ws) return;
+  busyId.value = d.id;
+  error.value = '';
+  try {
+    const { drink } = await drinksApi.update(ws, d.id, { archived });
+    drinks.value = drinks.value.map((x) => (x.id === drink.id ? drink : x));
+    if (archivedCount.value === 0) showArchived.value = false;
+  } catch (err) {
+    error.value = errorMessage(err);
+  } finally {
+    busyId.value = null;
+  }
+}
 
 const pending = ref<Drink | null>(null);
 const busy = ref(false);
@@ -126,7 +147,8 @@ async function confirmDelete(): Promise<void> {
     </div>
 
     <template v-else>
-      <ListControls v-model:filter="categoryFilter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="drinks" filter-label="Category" :filter-options="categoryOptions" />
+      <ListControls v-model:filter="categoryFilter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="drinks" filter-label="Category" :filter-options="categoryOptions" v-model:show-archived="showArchived" :archived-count="archivedCount" />
+      <p v-if="showArchived" class="muted small">Archived drinks are hidden when brewing; past brews still show them, and so does the public menu if it has them.</p>
       <p v-if="shown.length === 0" class="card empty">No drinks in {{ filterName }} yet.</p>
       <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.2fr) 5.5rem">
         <div class="data-row data-head">
@@ -142,7 +164,7 @@ async function confirmDelete(): Promise<void> {
         <div v-for="{ drink: d, depth } in shown" :key="d.id" class="data-item" :class="{ open: openId === d.id }">
           <button class="data-row" type="button" :aria-expanded="openId === d.id" @click="toggle(d.id)">
             <span class="data-td primary" :style="{ paddingLeft: nested ? `calc(${depth} * var(--space-4))` : undefined }">
-              {{ d.name }}
+              {{ d.name }}<span v-if="d.archivedAt" class="muted"> (archived)</span>
               <span v-if="!nested && d.parent" class="variant-of">variant of {{ d.parent.name }}</span>
             </span>
             <span class="data-td">{{ d.category?.name ?? 'Uncategorised' }}</span>
@@ -167,6 +189,8 @@ async function confirmDelete(): Promise<void> {
             <div v-if="workspaces.canEdit" class="data-actions">
               <RouterLink class="btn-link" :to="{ name: 'drink-new', query: { from: d.id } }">Make a variant</RouterLink>
               <RouterLink class="btn-link" :to="{ name: 'drink-edit', params: { id: d.id } }">Edit</RouterLink>
+              <button v-if="d.archivedAt" class="btn-link" type="button" :disabled="busyId === d.id" @click="setArchived(d, false)">Restore</button>
+              <button v-else class="btn-link" type="button" :disabled="busyId === d.id" @click="setArchived(d, true)">Archive</button>
               <button class="btn-link danger" type="button" @click="pending = d; dialogError = ''">Delete</button>
             </div>
           </div>
