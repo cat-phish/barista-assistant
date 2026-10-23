@@ -25,6 +25,7 @@ created it and can't be changed.
   "actualDoseGrams": 15,
   "actualWaterGrams": 250,
   "actualYieldGrams": 225,
+  "tdsPercent": 1.38,
   "actualTempC": 93,
   "grinderId": "uuid",
   "actualGrindSetting": "18 clicks",
@@ -34,7 +35,7 @@ created it and can't be changed.
   "drinkRating": null,
   "drinkTastingNotes": null,
   "bean": { "id": "uuid", "roasterName": "Onyx Coffee Lab", "beanName": "Southern Weather" },
-  "recipe": { "id": "uuid", "name": "House V60", "expectedYieldGrams": 220, "methodKind": "filter" },
+  "recipe": { "id": "uuid", "name": "House V60", "expectedYieldGrams": 220, "style": "pour_over", "methodKind": "filter" },
   "grinder": { "id": "uuid", "name": "Comandante C40" },
   "brewerId": "uuid",
   "brewer": { "id": "uuid", "name": "V60", "kind": "filter" },
@@ -48,8 +49,9 @@ created it and can't be changed.
 
 `recipe` is `null` when `recipeId` is `null` (no recipe used, or the recipe was
 deleted later); its `expectedYieldGrams` is the recipe's current estimate (or
-target, for espresso), for comparing with the measured `actualYieldGrams`, and
-`methodKind` is its brewer's kind. `grinder` is
+target, for espresso), for comparing with the measured `actualYieldGrams`,
+`style` is its style (or `null`), which decides how extraction yield is worked
+out, and `methodKind` is its brewer's kind. `grinder` is
 `null` when no grinder was recorded; a retired
 grinder still appears here. `brewerId` / `brewer` (`{ "id", "name",
 "kind" }`, retired ones included) is the brewer it was made with: set by the
@@ -136,8 +138,17 @@ account. Such logs can only be edited or deleted by owners.
     max 1 decimal, nullable).
   - `actualYieldGrams` is the **measured** beverage weight: optional,
     nullable, same rules as water. Unlike the recipe's rough
-    `expectedYieldGrams`, it's a measurement (with a TDS reading it will give
-    extraction yield), and clients show it against the recipe's expected yield.
+    `expectedYieldGrams`, it's a measurement, and clients show it against the
+    recipe's expected yield.
+  - `tdsPercent` (optional, nullable): a refractometer reading in %, > 0 and
+    ≤ 30, max 2 decimals. **Extraction yield** isn't stored; clients and the
+    worker (§9) work it out as `tdsPercent × beverage / actualDoseGrams`,
+    rounded to 0.1 %. The beverage is `actualWaterGrams` for the `immersion`,
+    `cold_brew` and `ibrik` styles (the liquid left in the grounds is as
+    strong as the cup), else the measured `actualYieldGrams`; with no yield
+    there's no extraction yield. Clients may also take a °Brix reading and
+    convert it, `TDS = (0.0036 × Bx + 0.7897) × Bx − 0.0071` (as
+    Beanconqueror does), rounded to 2 decimals; only `tdsPercent` is stored.
   - `actualTimeSec`: integer 0–86400 (24 hours). `rating`: integer **1–5**,
     nullable. `actualGrindSetting` ≤ 100 chars, `tastingNotes` ≤ 5000 chars;
     both nullable, and blank becomes `null`. `rating` and `tastingNotes` are

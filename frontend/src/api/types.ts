@@ -250,6 +250,7 @@ export interface BrewLog {
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso
   actualYieldGrams: number | null; // measured beverage weight
+  tdsPercent: number | null; // refractometer reading; extraction yield is worked out (lib/extraction.ts)
   actualTempC: number | null;
   actualGrindSetting: string | null;
   actualTimeSec: number;
@@ -258,7 +259,7 @@ export interface BrewLog {
   drinkRating: number | null; // the finished drink (drink brews only)
   drinkTastingNotes: string | null;
   bean: { id: string; roasterName: string; beanName: string };
-  recipe: { id: string; name: string; expectedYieldGrams: number | null; methodKind: MethodKind } | null;
+  recipe: { id: string; name: string; expectedYieldGrams: number | null; style: RecipeStyle | null; methodKind: MethodKind } | null;
   grinder: { id: string; name: string } | null;
   brewer: BrewerRef | null; // retired ones included
   drink: { id: string; name: string; hasIngredients: boolean } | null; // hasIngredients: shot and drink tasted apart

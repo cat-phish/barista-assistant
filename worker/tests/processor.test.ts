@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { beanFreezes, beans, brewLogMarks, brewLogs, brewers, ingredients, drinkIngredients, drinks, grinders, llmAnalyses, recipeGrindSettings, recipes, recipeSteps, users, workspaces } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { BrewContext } from "../src/context.js";
+import { extractionYield, type BrewContext } from "../src/context.js";
 import { db } from "../src/db.js";
 import { analyzeWithLlm } from "../src/llm.js";
 import { processBrewAnalysis } from "../src/processor.js";
@@ -44,7 +44,7 @@ beforeEach(async () => {
     await db.insert(brewLogs).values({
       id, workspaceId, userId, beanId, recipeId: day === 8 ? recipeId : null,
       timestamp: new Date(`2026-10-0${day}T08:00:00Z`),
-      actualDoseGrams: 15, actualWaterGrams: 250, actualYieldGrams: day === 8 ? 221.5 : null, actualTimeSec: 140 + day, rating: 3, tastingNotes: `day ${day}`,
+      actualDoseGrams: 15, actualWaterGrams: 250, actualYieldGrams: day === 8 ? 221.5 : null, tdsPercent: day === 8 ? 1.38 : day === 7 ? 1.3 : null, actualTimeSec: 140 + day, rating: 3, tastingNotes: `day ${day}`,
     });
   }
 });
@@ -56,8 +56,9 @@ describe("processBrewAnalysis", () => {
 
     expect(result.status).toBe("saved");
     const context = llm.mock.calls[0]![0] as BrewContext;
-    expect(context.brew).toMatchObject({ tastingNotes: "day 8", roastAgeDays: 7, daysFrozenBeforeBrew: 0, brewRatio: 16.67, recipeName: "House V60", recipeStyle: "pour_over", methodKind: "filter", actualWaterGrams: 250, actualYieldGrams: 221.5 });
-    expect(context.previousBrews[0]).toMatchObject({ recipeName: null, methodKind: null });
+    expect(context.brew).toMatchObject({ tastingNotes: "day 8", roastAgeDays: 7, daysFrozenBeforeBrew: 0, brewRatio: 16.67, recipeName: "House V60", recipeStyle: "pour_over", methodKind: "filter", actualWaterGrams: 250, actualYieldGrams: 221.5, tdsPercent: 1.38, extractionYieldPercent: 20.4 });
+    // No yield measured and no recipe: the TDS goes through, extraction can't be worked out.
+    expect(context.previousBrews[0]).toMatchObject({ recipeName: null, methodKind: null, tdsPercent: 1.3, extractionYieldPercent: null });
     expect(context.recipe).toMatchObject({
       name: "House V60", brewer: "V60", style: "pour_over", methodKind: "filter", firstDropMinSec: null, targetWaterGrams: 250, expectedYieldGrams: 220, expectedFinishMinSec: 165, expectedFinishMaxSec: 195, grindStartingPoints: [],
       steps: [
@@ -98,7 +99,7 @@ describe("processBrewAnalysis", () => {
     const id = randomUUID();
     await db.insert(brewers).values({ id: brewerId, workspaceId, name: "Linea Mini", kind: "espresso", preinfusion: "manual", flowControl: "manual" });
     await db.insert(recipes).values({ id: recipeId, workspaceId, name: "Classic", brewerId, targetDoseGrams: 18, expectedYieldGrams: 36, expectedFinishMinSec: 25, expectedFinishMaxSec: 32, firstDropMinSec: 6, firstDropMaxSec: 9 });
-    await db.insert(brewLogs).values({ id, workspaceId, userId, beanId, recipeId, brewerId, timestamp: new Date("2026-10-09T09:00:00Z"), actualDoseGrams: 18, actualYieldGrams: 40, actualTimeSec: 27 });
+    await db.insert(brewLogs).values({ id, workspaceId, userId, beanId, recipeId, brewerId, timestamp: new Date("2026-10-09T09:00:00Z"), actualDoseGrams: 18, actualYieldGrams: 40, tdsPercent: 9.5, actualTimeSec: 27 });
     await db.insert(brewLogMarks).values([
       { id: randomUUID(), brewLogId: id, kind: "first_drop", atSec: 7.4 },
       { id: randomUUID(), brewLogId: id, kind: "step_end", stepOrder: 1, atSec: 6 },
@@ -106,7 +107,7 @@ describe("processBrewAnalysis", () => {
 
     await processBrewAnalysis({ brewLogId: id });
     const context = llm.mock.calls[0]![0] as BrewContext;
-    expect(context.brew).toMatchObject({ methodKind: "espresso", actualWaterGrams: null, actualYieldGrams: 40, brewRatio: 2.22 });
+    expect(context.brew).toMatchObject({ methodKind: "espresso", actualWaterGrams: null, actualYieldGrams: 40, brewRatio: 2.22, tdsPercent: 9.5, extractionYieldPercent: 21.1 });
     expect(context.brew.machine).toEqual({ name: "Linea Mini", preinfusion: "manual", flowControl: "manual", pressureControl: "none" });
     expect(context.drink).toBeNull();
     expect(context.brew.marks).toEqual([{ kind: "step_end", stepOrder: 1, atSec: 6 }, { kind: "first_drop", stepOrder: null, atSec: 7.4 }]);
@@ -275,5 +276,18 @@ describe("processBrewAnalysis", () => {
     llm.mockResolvedValue(ANALYSIS);
     await db.delete(users).where(eq(users.id, userId)); // brew_logs.user_id -> NULL
     expect((await processBrewAnalysis({ brewLogId: logIds.day5! })).status).toBe("saved");
+  });
+});
+
+describe("extractionYield (docs/api/brew-logs.md §6)", () => {
+  const log = { tdsPercent: 1.38, actualDoseGrams: 15, actualWaterGrams: 250, actualYieldGrams: 220 } as Parameters<typeof extractionYield>[0];
+  it("uses the yield for percolation and the water for immersion styles", () => {
+    expect(extractionYield(log, "pour_over")).toBe(20.2);
+    expect(extractionYield(log, null)).toBe(20.2);
+    expect(extractionYield(log, "immersion")).toBe(23);
+    expect(extractionYield(log, "cold_brew")).toBe(23);
+  });
+  it("is null without a TDS reading", () => {
+    expect(extractionYield({ ...log, tdsPercent: null }, "pour_over")).toBeNull();
   });
 });

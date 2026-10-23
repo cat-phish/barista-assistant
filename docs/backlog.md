@@ -23,9 +23,9 @@ on: 1" always means the same item. When an item is done or added, renumber
 and fix the references.
 
 **Contents**
-- A. Settings & configuration: 1–7
-- B. Beans: 8
-- C. Brewing & logging: 9–13
+- A. Settings & configuration: 1–8
+- B. Beans: 9
+- C. Brewing & logging: 10–13
 - D. AI suggestions: 14–15
 - E. Insights: 16
 - F. Bar & menu: 17–19
@@ -49,7 +49,7 @@ Where the app's choices live, and what you can switch on, off or take out.
     (item 2), **Units & defaults** (items 3 and 4) and **Workspace** (name, slug,
     public menu switch, members), the last moving from the workspace screen.
     Later tabs: **Lists** (styles, processes and methods, item 2; maybe drink categories, item 7), **Fields** (item 5),
-    **Data** (backup, restore, export, item 6), **Repeat brews** (item 11)
+    **Data** (backup, restore, export, item 6), **Repeat brews** (item 8)
     and **Notifications** (item 12).
   - Two scopes:
     - **workspace settings**, shared by the bar and editable by owners: a
@@ -152,7 +152,7 @@ Where the app's choices live, and what you can switch on, off or take out.
 ### 5. Field visibility for brews and beans
 
 - **Status:** idea
-- **Why:** item 9 adds many optional brew fields, and the bean form already
+- **Why:** item 10 adds many optional brew fields, and the bean form already
   has about fifteen (roadmap phase 5). Not every bar uses a
   refractometer or tracks price, and a long form slows down logging a brew.
   Each bar should show only the fields it uses.
@@ -160,11 +160,11 @@ Where the app's choices live, and what you can switch on, off or take out.
   - Settings → **Fields**: one list for the brew form and one for the bean
     form, with a switch for each optional field:
     - **brew:** grind speed, TDS, water profile, prep tools, temperature…
-      (item 9);
+      (item 10);
     - **bean:** process, producer, region, altitude, flavor profile, origin
       (blend type), decaf, roasted for, roast date, roast level, bag price
       and bag weight, purchase date, green bean supplier, website, rating,
-      notes, and photos once item 8 exists.
+      notes, and photos once item 9 exists.
   - Required fields (bean, dose, time, and water or shot weight by method)
     can't be switched off.
   - Stored as a list of hidden field keys. Hiding a field only hides it in
@@ -172,7 +172,8 @@ Where the app's choices live, and what you can switch on, off or take out.
   - The frontend has one field registry (key, label, form, required) that
     the forms and the Settings tab both read.
 - **Size:** M
-- **Depends on:** 1. Even more useful once 9 adds brew fields.
+- **Depends on:** 1, and 10: add the brew fields first, then decide
+  what can be hidden.
 - **Open questions:**
   - Per workspace (the bar's standard form) or per person?
   - Should hidden fields be left out of the AI prompt as well, or does the AI
@@ -196,7 +197,7 @@ Where the app's choices live, and what you can switch on, off or take out.
   - Done by the backend in one transaction; a large export could become a
     worker job.
 - **Size:** M–L (export S, backup M, restore M).
-- **Depends on:** 1. Backups should include photos once 8 is built.
+- **Depends on:** 1. Backups should include photos once 9 is built.
 - **Open questions:**
   - Only owners, or all members?
   - Restore into an existing workspace (merge), or only into an empty one?
@@ -224,13 +225,25 @@ Where the app's choices live, and what you can switch on, off or take out.
   - Should the menu builder offer "add a whole category" as a shortcut?
   - Should a category also order the drinks inside it on the brew page?
 
+### 8. Choose what a repeat keeps
+
+- **Status:** idea
+- **Why:** what to carry over differs by bar: some always change the grind,
+  others want the tasting notes as a reminder.
+- **Approach:** Settings → **Repeat brews**: a switch for each field "Brew
+  again" copies, with item 11's choices as the default. Uses item 5's field
+  registry.
+- **Size:** S
+- **Depends on:** 1, 11.
+- **Open questions:** per person or per workspace?
+
 ---
 
 ## B. Beans
 
 What's recorded about each coffee.
 
-### 8. Bean photos
+### 9. Bean photos
 
 - **Status:** idea
 - **Why:** a photo of the bag or label is the quickest way to recognize a
@@ -257,9 +270,11 @@ What's recorded about each coffee.
 
 Recording a brew: what's measured, and how fast it is to log.
 
-### 9. More brew parameters
+### 10. More brew parameters
 
-- **Status:** idea
+- **Status:** in progress. TDS and extraction yield are done (roadmap:
+  "More brew parameters, part 1"); water and tools, then weights and RPM, are
+  next.
 - **Why:** dose, water, yield, temperature, grind and time leave out things
   that change the cup: retention, grinder speed, the tools used, the water,
   and the extraction actually measured.
@@ -273,21 +288,17 @@ Recording a brew: what's measured, and how fast it is to log.
     - **Prep tools:** filter paper, WDT, puck screen, shaker, RDT…
     - **Water profile:** a named recipe (e.g. "Third Wave Water", "Lotus
       light", tap), probably a per-workspace list like grinders.
-    - **TDS** (%), with a **refractometer** button that works out extraction
-      yield from TDS, yield and dose: `EY = TDS × beverage weight / dose`.
-      For immersion, beverage weight is estimated from water and retained
-      liquid. EY is shown, not stored.
   - Every new field can be hidden through item 5.
-  - The AI prompt gets them (item 14); TDS and EY are the most useful.
-- **Size:** L. Can be split: TDS and EY first, then water and tools, then
-  weights and RPM.
-- **Depends on:** 5 (so the form doesn't get crowded).
+  - The AI prompt gets them (item 14), as it does TDS and EY.
+- **Size:** L, split into parts: TDS and EY (done), then water and tools,
+  then weights and RPM.
+- **Depends on:** nothing. Item 5 (hiding fields) comes after.
 - **Open questions:**
   - Are tools and water profiles reusable lists (with minerals for water) or
     free text?
   - Should a recipe set default tools and water?
 
-### 10. Repeat a brew
+### 11. Repeat a brew
 
 - **Status:** idea
 - **Why:** dialing in usually means "same as last time, one click finer".
@@ -303,18 +314,6 @@ Recording a brew: what's measured, and how fast it is to log.
 - **Depends on:** nothing.
 - **Open questions:** should it start the timer straight away for recipes
   with steps?
-
-### 11. Choose what a repeat keeps
-
-- **Status:** idea
-- **Why:** what to carry over differs by bar: some always change the grind,
-  others want the tasting notes as a reminder.
-- **Approach:** Settings → **Repeat brews**: a switch for each field "Brew
-  again" copies, with item 10's choices as the default. Uses item 5's field
-  registry.
-- **Size:** S
-- **Depends on:** 1, 10.
-- **Open questions:** per person or per workspace?
 
 ### 12. Rate later, with reminders
 
@@ -388,10 +387,10 @@ What the analysis worker sends to the LLM and what comes back.
     suggestions give one clear next step, and how confidence and reasons are
     shown.
   - Build a small set of real brews to compare prompt versions against.
-  - Add item 9's brew fields once they exist. The bean details from
+  - Add item 10's brew fields once they exist. The bean details from
     roadmap phase 5 are already sent; check they help.
 - **Size:** M
-- **Depends on:** nothing; repeat after 9.
+- **Depends on:** nothing; repeat after 10.
 - **Open questions:**
   - Should users be able to rate a suggestion (useful / not), to measure it?
   - Which model and cost per analysis is acceptable?
@@ -425,12 +424,12 @@ What the analysis worker sends to the LLM and what comes back.
     - brews per day or week;
     - average rating by bean, recipe, grinder and brewer;
     - rating against roast age, grind setting or ratio (scatter);
-    - EY against TDS, with the target box (once 9 records TDS);
+    - EY against TDS, with the target box (once 10 records TDS);
     - coffee used and stock left per bean.
   - The backend adds aggregate endpoints under `/api/workspaces/:id/stats`
     instead of sending every log to the client.
 - **Size:** M–L
-- **Depends on:** nothing; the TDS chart needs 9.
+- **Depends on:** nothing; the TDS chart needs 10.
 - **Open questions:**
   - Charting library (Chart.js, ECharts, or plain SVG)?
   - The whole workspace, or each person's brews by default?
@@ -521,7 +520,7 @@ What the analysis worker sends to the LLM and what comes back.
     be compared.
 - **Size:** L (several branches: green stock and roast log, then resting and
   reminders, then roast comparison).
-- **Depends on:** 12 (reminders); 7 for photos.
+- **Depends on:** 12 (reminders); 9 for photos.
 - **Open questions:**
   - Its own section, or a part of Beans?
   - Import roast curves (Artisan `.alog`), or only link to them?

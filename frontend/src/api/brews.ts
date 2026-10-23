@@ -13,6 +13,7 @@ export interface BrewLogInput {
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso
   actualYieldGrams: number | null;
+  tdsPercent: number | null; // %
   actualTempC: number | null;
   actualGrindSetting: string | null;
   actualTimeSec: number;

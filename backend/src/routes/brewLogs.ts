@@ -38,7 +38,7 @@ export interface Mark {
 
 export interface BrewLogDetails extends BrewLog {
   bean: Pick<Bean, "id" | "roasterName" | "beanName">;
-  recipe: (Pick<Recipe, "id" | "name" | "expectedYieldGrams"> & { methodKind: MethodKind }) | null;
+  recipe: (Pick<Recipe, "id" | "name" | "expectedYieldGrams" | "style"> & { methodKind: MethodKind }) | null;
   grinder: { id: string; name: string } | null; // retired grinders included
   // The brewer it was made with (the recipe's at the time); retired included.
   brewer: { id: string; name: string; kind: MethodKind } | null;
@@ -94,6 +94,8 @@ const brewLogFields = {
   actualWaterGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
   // Measured beverage weight (optional, except for espresso; docs/api/brew-logs.md §6).
   actualYieldGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
+  // Refractometer reading, % (docs/api/brew-logs.md §6). Espresso runs to ~12%.
+  tdsPercent: decimalSchema({ min: 0, max: 30, scale: 2, exclusiveMin: true }).nullable().optional(),
   actualTempC: decimalSchema({ min: 0, max: 100, scale: 1 }).nullable().optional(),
   actualGrindSetting: optionalText(100),
   actualTimeSec: z.number().int().min(0).max(24 * 60 * 60),
@@ -264,6 +266,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       actualDoseGrams: brewLogs.actualDoseGrams,
       actualWaterGrams: brewLogs.actualWaterGrams,
       actualYieldGrams: brewLogs.actualYieldGrams,
+      tdsPercent: brewLogs.tdsPercent,
       actualTempC: brewLogs.actualTempC,
       actualGrindSetting: brewLogs.actualGrindSetting,
       actualTimeSec: brewLogs.actualTimeSec,
@@ -272,7 +275,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       drinkRating: brewLogs.drinkRating,
       drinkTastingNotes: brewLogs.drinkTastingNotes,
       bean: { id: beans.id, roasterName: beans.roasterName, beanName: beans.beanName },
-      recipe: { id: recipes.id, name: recipes.name, expectedYieldGrams: recipes.expectedYieldGrams },
+      recipe: { id: recipes.id, name: recipes.name, expectedYieldGrams: recipes.expectedYieldGrams, style: recipes.style },
       // Separate column: a nested object spanning two left joins isn't nulled as a whole.
       recipeMethodKind: brewers.kind,
       grinder: { id: grinders.id, name: grinders.name },

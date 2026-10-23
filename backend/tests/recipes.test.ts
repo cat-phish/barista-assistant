@@ -169,10 +169,25 @@ describe("brew logs: water vs measured yield", () => {
   it("brew logs carry the recipe's expected yield for comparison", async () => {
     const { owner, ws, base: recipesBase, recipe } = await setup();
     const bean = await newBean(owner, ws.id);
-    const r = (await owner.agent.post(recipesBase).send({ ...recipe, expectedYieldGrams: 220 })).body.recipe.id;
+    const r = (await owner.agent.post(recipesBase).send({ ...recipe, style: "pour_over", expectedYieldGrams: 220 })).body.recipe.id;
     const id = await newBrewLog(owner, ws.id, bean, { recipeId: r, actualYieldGrams: 226 });
     const log = (await owner.agent.get(`/api/workspaces/${ws.id}/brew-logs/${id}`)).body.brewLog;
-    expect(log.recipe).toEqual({ id: r, name: "House V60", expectedYieldGrams: 220, methodKind: "filter" });
+    expect(log.recipe).toEqual({ id: r, name: "House V60", expectedYieldGrams: 220, style: "pour_over", methodKind: "filter" });
     expect(log.actualYieldGrams).toBe(226);
+  });
+
+  it("TDS is optional: > 0, at most 30, two decimals; PATCH clears it (docs/api/brew-logs.md §6)", async () => {
+    const { owner, ws } = await setup();
+    const bean = await newBean(owner, ws.id);
+    const base = `/api/workspaces/${ws.id}/brew-logs`;
+    const id = await newBrewLog(owner, ws.id, bean, { actualYieldGrams: 220, tdsPercent: 1.38 });
+    expect((await owner.agent.get(`${base}/${id}`)).body.brewLog.tdsPercent).toBe(1.38);
+    expect((await owner.agent.get(base)).body.brewLogs[0].tdsPercent).toBe(1.38);
+    expect((await owner.agent.patch(`${base}/${id}`).send({ tdsPercent: 9.75 })).body.brewLog.tdsPercent).toBe(9.75);
+    expect((await owner.agent.patch(`${base}/${id}`).send({ tdsPercent: null })).body.brewLog.tdsPercent).toBeNull();
+    for (const tdsPercent of [0, -1, 30.01, 1.385, "1.38"]) {
+      const res = await owner.agent.post(base).send({ beanId: bean, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150, tdsPercent });
+      expect(res.status, String(tdsPercent)).toBe(400);
+    }
   });
 });

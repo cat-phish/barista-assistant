@@ -9,6 +9,7 @@ export interface BrewDraft {
   dose: string;
   water: string; // unused for espresso
   yieldGrams: string; // measured beverage weight: optional, but the shot weight (required) for espresso
+  tds: string; // % ('' = not measured)
   temp: string;
   grinderId: string; // '' = none
   firstDrop: string; // espresso: seconds, e.g. "7.4" ('' = not recorded); from the timer's tap or typed
@@ -21,10 +22,10 @@ export interface BrewDraft {
 }
 
 export type BrewValues = Omit<BrewLogInput, 'beanId' | 'recipeId'>;
-export type BrewDraftErrors = Partial<Record<'dose' | 'water' | 'yieldGrams' | 'temp' | 'time' | 'firstDrop', string>>;
+export type BrewDraftErrors = Partial<Record<'dose' | 'water' | 'yieldGrams' | 'tds' | 'temp' | 'time' | 'firstDrop', string>>;
 
 export function emptyDraft(): BrewDraft {
-  return { dose: '', water: '', yieldGrams: '', temp: '', grinderId: '', firstDrop: '', grind: '', time: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
+  return { dose: '', water: '', yieldGrams: '', tds: '', temp: '', grinderId: '', firstDrop: '', grind: '', time: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
 }
 
 export function draftFromLog(log: BrewLog): BrewDraft {
@@ -32,6 +33,7 @@ export function draftFromLog(log: BrewLog): BrewDraft {
     dose: formatGrams(log.actualDoseGrams),
     water: log.actualWaterGrams === null ? '' : formatGrams(log.actualWaterGrams),
     yieldGrams: log.actualYieldGrams === null ? '' : formatGrams(log.actualYieldGrams),
+    tds: log.tdsPercent === null ? '' : String(log.tdsPercent),
     temp: log.actualTempC === null ? '' : String(log.actualTempC),
     grinderId: log.grinderId ?? '',
     firstDrop: firstDropOf(log.marks),
@@ -68,6 +70,7 @@ export function parseBrewDraft(
     : espresso
       ? ({ ok: false, error: 'Enter the shot weight' } as const)
       : null;
+  const tds = d.tds.trim() ? parseDecimal(d.tds, { scale: 2, min: 0, max: 30, exclusiveMin: true }) : null;
   const temp = d.temp.trim() ? parseDecimal(d.temp, { scale: 1, min: 0, max: 100 }) : null;
   const time = parseTime(d.time);
   const firstDrop = espresso ? parseMark(d.firstDrop) : null;
@@ -76,11 +79,12 @@ export function parseBrewDraft(
   if (!dose.ok) errors.dose = dose.error;
   if (!water.ok) errors.water = water.error;
   if (yieldGrams && !yieldGrams.ok) errors.yieldGrams = yieldGrams.error;
+  if (tds && !tds.ok) errors.tds = tds.error;
   if (temp && !temp.ok) errors.temp = temp.error;
   if (!time.ok) errors.time = time.error;
   if (firstDrop && !firstDrop.ok) errors.firstDrop = firstDrop.error;
   else if (firstDrop?.ok && time.ok && firstDrop.value > time.value) errors.firstDrop = 'After the end of the shot';
-  if (Object.keys(errors).length > 0 || !dose.ok || !water.ok || (yieldGrams && !yieldGrams.ok) || !time.ok || (temp && !temp.ok)) {
+  if (Object.keys(errors).length > 0 || !dose.ok || !water.ok || (yieldGrams && !yieldGrams.ok) || !time.ok || (tds && !tds.ok) || (temp && !temp.ok)) {
     return { errors, values: null, firstDropSec: null };
   }
 
@@ -91,6 +95,7 @@ export function parseBrewDraft(
       actualDoseGrams: dose.value,
       actualWaterGrams: water.value,
       actualYieldGrams: yieldGrams?.ok ? yieldGrams.value : null,
+      tdsPercent: tds?.ok ? tds.value : null,
       actualTempC: temp?.ok ? temp.value : null,
       grinderId: d.grinderId || null,
       actualGrindSetting: d.grind.trim() || null,
