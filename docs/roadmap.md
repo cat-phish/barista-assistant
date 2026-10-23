@@ -611,3 +611,28 @@ app only had a light palette; a browser's forced dark mode was darkening it.
   QR codes stay on white so they scan.
 - `<meta name="color-scheme" content="light dark">`; the phone's status bar
   colour follows the theme.
+
+## Editable bean processes (built)
+
+Backlog item 1, part 1 of 3 (styles and methods follow), branch
+`editable-processes`, migrations 0044–0046. Bean processes were a fixed
+list of ten keys; new ones (yeast inoculated, double fermentation) keep
+appearing.
+
+- **Data:** a `bean_processes` table per workspace (name, position,
+  hidden, `builtin` key), seeded with the ten built-ins (new workspaces too).
+  `beans.process` (a key) became `beans.processId` (FK, set null on delete):
+  0044 adds the table and column, 0045 seeds every workspace and maps each
+  bean's key to its row, 0046 drops the old column.
+- **API** (`docs/api/bean-processes.md` §4b): list, add, rename/hide,
+  reorder, usage, delete (custom only; built-ins `409`). Beans take and
+  return `processId` and must use their own workspace's processes. The
+  public menu and the AI context get the process's name.
+- **Settings → Lists** (owners and baristas edit): `EditableList.vue`, a
+  reusable list editor (add, rename, ↑/↓, hide/show, delete) that styles
+  and methods will reuse. Deleting goes through `DeleteDialog` ("N beans
+  will lose their process", with "I understand" when anything uses it, and
+  "hide it instead" as the suggestion).
+- **Bean form** offers the visible processes, plus the bean's own if it's
+  hidden; the bean list shows and sorts by the workspace's names
+  (`beanSortColumns(processName)`).

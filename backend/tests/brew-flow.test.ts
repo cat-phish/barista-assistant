@@ -3,7 +3,7 @@ import request from "supertest";
 import { brewAnalysisJobId } from "@barista/shared/jobs";
 import { app } from "../src/app.js";
 import { brewAnalysisQueue } from "../src/queue.js";
-import { addMember, brewerId, menuAdd, menuSection, newBean, newBrewLog, newUser, newWorkspace, type TestUser } from "./helpers.js";
+import { addMember, brewerId, menuAdd, menuSection, newBean, newBrewLog, newUser, newWorkspace, type TestUser, processId } from "./helpers.js";
 
 async function setup(): Promise<{ owner: TestUser; ws: { id: string; slug: string }; v60: string }> {
   const owner = await newUser("owner");
@@ -63,9 +63,10 @@ describe("beans and recipes", () => {
 
   it("PATCH changes only the fields sent", async () => {
     const { owner, ws } = await setup();
-    const bean = await newBean(owner, ws.id, { process: "washed", roastDate: "2026-10-01", inventoryWeightGrams: 250 });
+    const washed = await processId(owner, ws.id, "washed");
+    const bean = await newBean(owner, ws.id, { processId: washed, roastDate: "2026-10-01", inventoryWeightGrams: 250 });
     const res = await owner.agent.patch(`/api/workspaces/${ws.id}/beans/${bean}`).send({ beanName: "Renamed" });
-    expect(res.body.bean).toMatchObject({ beanName: "Renamed", process: "washed", inventoryWeightGrams: 250, roastDate: "2026-10-01T00:00:00.000Z" });
+    expect(res.body.bean).toMatchObject({ beanName: "Renamed", processId: washed, inventoryWeightGrams: 250, roastDate: "2026-10-01T00:00:00.000Z" });
   });
 
   it("roast level is optional, limited to ROAST_LEVELS, and can be cleared", async () => {

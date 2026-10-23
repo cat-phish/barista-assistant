@@ -4,9 +4,10 @@
 // row expands to its details and actions. Archiving an unrated bean asks for a
 // rating, and unrated archived beans keep asking until rated.
 import { computed, onMounted, ref, watch } from 'vue';
+import { beanProcessesApi } from '../api/beanProcesses';
 import { beansApi } from '../api/beans';
 import { ApiError, errorMessage } from '../api/client';
-import type { Bean } from '../api/types';
+import type { Bean, BeanProcess } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import BeanTabs from '../components/BeanTabs.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
@@ -15,8 +16,7 @@ import RatingInput from '../components/RatingInput.vue';
 import RatingStars from '../components/RatingStars.vue';
 import {
   BEAN_FILTERS,
-  BEAN_PROCESSES,
-  BEAN_SORT_COLUMNS,
+  beanSortColumns,
   BLEND_TYPES,
   ROAST_TYPES,
   formatAltitude,
@@ -43,6 +43,7 @@ const props = defineProps<{ archived?: boolean }>(); // the Archived tab (route 
 const workspaces = useWorkspaceStore();
 const { altitudeUnit, roastScale } = usePreferences();
 const beans = ref<Bean[]>([]);
+const processes = ref<BeanProcess[]>([]); // the workspace's list, for names
 const loading = ref(true);
 const error = ref('');
 
@@ -54,14 +55,16 @@ const archivedCount = computed(() => beans.value.filter((b) => b.archivedAt !== 
 // old list (by roaster).
 const viewKey = (what: string) => `beans.${tab.value}.${what}.${workspaces.current?.id ?? ''}`;
 const DEFAULT_SORT = 'roaster_asc';
-const sortChoices = sortColumnOptions(BEAN_SORT_COLUMNS);
+const processName = (id: string | null) => (id ? (processes.value.find((p) => p.id === id)?.name ?? null) : null);
+const BEAN_SORT_COLUMNS = computed(() => beanSortColumns(processName));
+const sortChoices = sortColumnOptions(beanSortColumns());
 const filterOptions = Object.entries(BEAN_FILTERS).map(([value, f]) => ({ value, label: f.label }));
 const filter = ref<BeanFilter>('all');
 const sort = ref(DEFAULT_SORT);
 // The view is reused across tabs, so restore that tab's choices when it changes.
 function restoreView(): void {
   const savedSort = recallView(viewKey('sort'));
-  sort.value = isSortKey(savedSort, BEAN_SORT_COLUMNS) ? savedSort : DEFAULT_SORT;
+  sort.value = isSortKey(savedSort, BEAN_SORT_COLUMNS.value) ? savedSort : DEFAULT_SORT;
   const savedFilter = recallView(viewKey('filter'));
   filter.value = isBeanFilter(savedFilter) ? savedFilter : 'all';
   openId.value = null;
@@ -71,14 +74,16 @@ watch(sort, (v) => rememberView(viewKey('sort'), v));
 watch(filter, (v) => rememberView(viewKey('filter'), v));
 
 const filterName = computed(() => BEAN_FILTERS[filter.value].label.toLowerCase());
-const shown = computed(() => sortBy(inTab.value.filter(BEAN_FILTERS[filter.value].test), sort.value, BEAN_SORT_COLUMNS, (b) => b.beanName));
+const shown = computed(() => sortBy(inTab.value.filter(BEAN_FILTERS[filter.value].test), sort.value, BEAN_SORT_COLUMNS.value, (b) => b.beanName));
 const unrated = computed(() => (props.archived ? inTab.value.filter((b) => b.rating === null) : []));
 
 async function load(): Promise<void> {
   const id = workspaces.current?.id;
   if (!id) return;
   try {
-    beans.value = (await beansApi.list(id)).beans;
+    const [b, p] = await Promise.all([beansApi.list(id), beanProcessesApi.list(id)]);
+    beans.value = b.beans;
+    processes.value = p.processes;
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -451,7 +456,7 @@ async function confirmFreeze(): Promise<void> {
               </span>
               <span class="data-td first-on-phone">{{ bean.roasterName }}</span>
               <span class="data-td">{{ roastLabel(bean, roastScale) ?? '–' }}</span>
-              <span class="data-td wide-only">{{ bean.process ? BEAN_PROCESSES[bean.process].label : '–' }}</span>
+              <span class="data-td wide-only">{{ processName(bean.processId) ?? '–' }}</span>
               <span class="data-td wide-only">{{ ageCell(bean) }}</span>
               <span class="data-td wide-only" :title="bean.decaf ? 'Decaf' : 'Caffeinated'">{{ bean.decaf ? 'Decaf' : 'Caf' }}</span>
               <span class="data-td">{{ bean.inventoryWeightGrams }} g</span>

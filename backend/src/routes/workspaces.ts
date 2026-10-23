@@ -7,6 +7,7 @@ import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, parseQuery, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import {
+  beanProcesses,
   brewers,
   DEFAULT_BREWERS,
   DEFAULT_WORKSPACE_SETTINGS,
@@ -19,6 +20,7 @@ import {
   type Workspace,
 } from "@barista/shared/schema";
 import { SLUG_PATTERN, workspaceSettingsSchema } from "../validation.js";
+import { defaultProcessRows } from "./beanProcesses.js";
 
 // A workspace as the API returns it: settings with the defaults filled in.
 export type WorkspaceView = Omit<Workspace, "settings"> & { settings: WorkspaceSettings };
@@ -67,6 +69,7 @@ workspacesRouter.post("/", async (req: Request, res: Response<WorkspaceResponse>
       await tx.insert(prepTools).values(
         DEFAULT_PREP_TOOLS.map(({ name, methodKind }, i) => ({ id: randomUUID(), workspaceId, name, methodKind, position: i + 1 }))
       );
+      await tx.insert(beanProcesses).values(defaultProcessRows(workspaceId));
       const [created] = await tx.select().from(workspaces).where(eq(workspaces.id, workspaceId));
       return created;
     });

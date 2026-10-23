@@ -40,7 +40,15 @@ Where the app's choices live, and what you can switch on, off or take out.
 
 ### 1. Editable style, process and brewer method lists
 
-- **Status:** idea
+- **Status:** in progress. Processes are done (roadmap); recipe styles,
+  then brewer methods, are next, each its own branch.
+- **Agreed:** built-ins can be renamed and hidden but not deleted (they
+  keep their built-in key); deleting a custom entry is allowed and clears it
+  from what used it, after the usage warning and "I understand"; custom
+  brewer methods are named groups on a built-in behaviour (filter-like,
+  espresso-like…): fields, timer, drinks, tools and the AI keep working off
+  the behaviour, and drinks still say "filter" or "espresso". Everything
+  lives under Settings → Lists, built on `EditableList.vue`.
 - **Why:** recipe styles are a fixed list (filter: pour over, immersion,
   hybrid, cold brew, other; espresso: standard, soup, other). Bars will want
   their own, e.g. "Inverted", "Bypass", "Turbo shot". Bean processes are
@@ -78,10 +86,7 @@ Where the app's choices live, and what you can switch on, off or take out.
     name.
 - **Size:** M
 - **Depends on:** nothing (Settings, where it's managed, is built).
-- **Open questions:**
-  - Can built-ins be renamed, or only hidden?
-  - What happens to recipes when their style is deleted: refuse, or clear
-    the style?
+- **Open questions:** none left for styles and processes.
 
 ### 2. Field visibility for brews and beans
 

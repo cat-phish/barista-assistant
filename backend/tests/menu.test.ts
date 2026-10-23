@@ -1,7 +1,7 @@
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { app } from "../src/app.js";
-import { addMember, brewerId, menuAdd, menuSection, newBean, newUser, newWorkspace } from "./helpers.js";
+import { addMember, brewerId, menuAdd, menuSection, newBean, newUser, newWorkspace, processId } from "./helpers.js";
 
 interface Item {
   id: string;
@@ -259,14 +259,14 @@ describe("what the beans block shows (docs/api/menu.md §7b)", () => {
   it("shows every field by default, only the chosen ones once set, and never stock", async () => {
     const { owner, ws, base, get } = await setup();
     const section = await menuSection(owner, ws.id, "Coffee");
-    await newBean(owner, ws.id, { beanName: "Guji", process: "washed", country: "Ethiopia", region: "Guji", flavorProfile: "Peach", producer: "Shantawene", inventoryWeightGrams: 250 });
+    await newBean(owner, ws.id, { beanName: "Guji", processId: await processId(owner, ws.id, "washed"), country: "Ethiopia", region: "Guji", flavorProfile: "Peach", producer: "Shantawene", inventoryWeightGrams: 250 });
     await menuAdd(owner, ws.id, section, { itemType: "beans" });
     await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ isPublicMenuEnabled: true });
     const block = async () => (await request(app).get(`/api/public/menu/${ws.slug}`)).body.sections[0].items[0];
 
     const all = await block();
     expect(all.fields).toHaveLength(10);
-    expect(all.beans[0]).toMatchObject({ beanName: "Guji", process: "washed", country: "Ethiopia", producer: "Shantawene", flavorProfile: "Peach" });
+    expect(all.beans[0]).toMatchObject({ beanName: "Guji", process: "Washed", country: "Ethiopia", producer: "Shantawene", flavorProfile: "Peach" });
     expect(all.beans[0]).not.toHaveProperty("inventoryWeightGrams");
 
     const beansItem = (await get()).sections[0]!.items[0]! as Item & { beanFields: string[] | null };

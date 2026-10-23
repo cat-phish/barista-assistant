@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { beanProcessesApi } from '../api/beanProcesses';
 import { beansApi, type BeanInput } from '../api/beans';
 import { errorMessage } from '../api/client';
 import AppHeader from '../components/AppHeader.vue';
@@ -13,7 +14,6 @@ import type { Bean, BeanProcess, BlendType, DetailedRoastLevel, OriginArea, Roas
 import { COUNTRY_AREAS, ORIGIN_AREAS, areaForCountry } from '../lib/origins';
 import { ROAST_LEVELS } from '../lib/scale';
 import {
-  BEAN_PROCESSES,
   BLEND_TYPES,
   DETAILED_ROAST_LEVELS,
   ROAST_TYPES,
@@ -37,7 +37,11 @@ const copyOf = ref<string | null>(null);
 
 const roasterName = ref('');
 const beanName = ref('');
-const process = ref<BeanProcess | ''>('');
+const process = ref(''); // a processId, '' = not sure
+// The workspace's processes (docs/api/bean-processes.md §4b): the visible ones,
+// plus the bean's own if it's hidden, so editing doesn't drop it.
+const processes = ref<BeanProcess[]>([]);
+const processChoices = computed(() => processes.value.filter((p) => !p.hidden || p.id === process.value));
 const originArea = ref<OriginArea | ''>('');
 const country = ref('');
 const region = ref('');
@@ -139,7 +143,7 @@ const perGram = computed(() => {
 function fill(bean: Bean): void {
   roasterName.value = bean.roasterName;
   beanName.value = bean.beanName;
-  process.value = bean.process ?? '';
+  process.value = bean.processId ?? '';
   originArea.value = bean.originArea ?? '';
   country.value = bean.country ?? '';
   region.value = bean.region ?? '';
@@ -183,8 +187,14 @@ function fillCopy(bean: Bean): void {
 }
 
 onMounted(async () => {
-  if (!editing.value && !copyFrom) return;
   const ws = workspaces.current?.id;
+  if (ws) {
+    beanProcessesApi
+      .list(ws)
+      .then((r) => (processes.value = r.processes))
+      .catch(() => (processes.value = [])); // the select just offers "Not sure"
+  }
+  if (!editing.value && !copyFrom) return;
   try {
     const list = ws ? (await beansApi.list(ws)).beans : [];
     if (copyFrom) {
@@ -225,7 +235,7 @@ async function save(): Promise<void> {
   const input: BeanInput = {
     roasterName: roasterName.value.trim(),
     beanName: beanName.value.trim(),
-    process: process.value || null,
+    processId: process.value || null,
     originArea: originArea.value || null,
     country: country.value.trim() || null,
     region: region.value.trim() || null,
@@ -291,7 +301,7 @@ async function save(): Promise<void> {
             <label for="process">Process</label>
             <select id="process" v-model="process">
               <option value="">Not sure</option>
-              <option v-for="(p, key) in BEAN_PROCESSES" :key="key" :value="key">{{ p.label }}</option>
+              <option v-for="p in processChoices" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
           </div>
           <div class="field">

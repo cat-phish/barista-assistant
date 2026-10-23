@@ -309,6 +309,27 @@
       "when": 1792736726526,
       "tag": "0043_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "5",
+      "when": 1792741278329,
+      "tag": "0044_bean_processes",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "5",
+      "when": 1792741285901,
+      "tag": "0045_seed_bean_processes",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "5",
+      "when": 1792741297747,
+      "tag": "0046_drop_bean_process_key",
+      "breakpoints": true
     }
   ]
 }

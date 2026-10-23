@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Bean } from '../api/types';
-import { BEAN_PROCESSES, BEAN_SORT_COLUMNS, DETAILED_ROAST_LEVELS, formatAltitude, roastLabel, formatPricePerGram, freezeState, latestThaw, periodsLatestFirst, pricePerGram } from './beans';
+import { beanSortColumns, DETAILED_ROAST_LEVELS, formatAltitude, roastLabel, formatPricePerGram, freezeState, latestThaw, periodsLatestFirst, pricePerGram } from './beans';
 import { sortBy, sortColumnOptions } from './listSort';
 import { ROAST_LEVELS } from './scale';
 
@@ -13,12 +13,6 @@ describe('detailed roast levels', () => {
   });
 });
 
-describe('processes', () => {
-  it('has the ten built-in processes, each labelled', () => {
-    expect(Object.keys(BEAN_PROCESSES)).toHaveLength(10);
-    expect(Object.values(BEAN_PROCESSES).every((p) => p.label.length > 0)).toBe(true);
-  });
-});
 
 describe('formatAltitude', () => {
   it('groups thousands', () => {
@@ -44,7 +38,7 @@ const bean = (over: Partial<Bean>): Bean => ({
   workspaceId: 'w',
   roasterName: 'Onyx',
   beanName: 'Bean',
-  process: null,
+  processId: null,
   roastLevel: null,
   roastDate: null,
   inventoryWeightGrams: 0,
@@ -73,6 +67,9 @@ const bean = (over: Partial<Bean>): Bean => ({
   frozen: false,
   ...over,
 });
+// The workspace's process names, by id (editable, so the list passes them in).
+const PROCESS_NAMES: Record<string, string> = { p1: 'Washed', p2: 'Natural', p3: 'Anaerobic Fermentation' };
+const BEAN_SORT_COLUMNS = beanSortColumns((id) => PROCESS_NAMES[id] ?? null);
 const order = (beans: Bean[], key: string) => sortBy(beans, key, BEAN_SORT_COLUMNS, (b) => b.beanName).map((b) => b.beanName);
 
 describe('bean sorting', () => {
@@ -108,9 +105,9 @@ describe('bean sorting', () => {
 
   it('sorts by rating, stock, decaf and process, breaking ties by name', () => {
     const beans = [
-      bean({ beanName: 'B', rating: 3, inventoryWeightGrams: 100, decaf: true, process: 'washed' }),
-      bean({ beanName: 'A', rating: 5, inventoryWeightGrams: 100, process: 'natural' }),
-      bean({ beanName: 'C', inventoryWeightGrams: 0, process: 'anaerobic' }),
+      bean({ beanName: 'B', rating: 3, inventoryWeightGrams: 100, decaf: true, processId: 'p1' }),
+      bean({ beanName: 'A', rating: 5, inventoryWeightGrams: 100, processId: 'p2' }),
+      bean({ beanName: 'C', inventoryWeightGrams: 0, processId: 'p3' }),
     ];
     expect(order(beans, 'rating_desc')).toEqual(['A', 'B', 'C']);
     expect(order(beans, 'stock_desc')).toEqual(['A', 'B', 'C']);

@@ -81,9 +81,9 @@ export interface Menu {
 // A bean has its roaster and name, plus only the details its block shows.
 export type PublicBean = Pick<Bean, 'id' | 'roasterName' | 'beanName'> &
   Partial<
-    Pick<
+    { process: string | null } & Pick< // process: the process's name
       Bean,
-      | 'process' | 'roastDate' | 'roastLevel' | 'detailedRoastLevel' | 'roastType' | 'blendType' | 'decaf'
+      | 'roastDate' | 'roastLevel' | 'detailedRoastLevel' | 'roastType' | 'blendType' | 'decaf'
       | 'flavorProfile' | 'originArea' | 'country' | 'region' | 'altitudeMasl' | 'producer'
     >
   >;
@@ -210,17 +210,25 @@ export type DetailedRoastLevel =
 export type BlendType = 'single_origin' | 'blend' | 'other';
 // docs/schema.md ORIGIN_AREAS
 export type OriginArea = 'africa' | 'arabia' | 'central_america' | 'south_america' | 'asia' | 'pacific';
-// docs/schema.md BEAN_PROCESSES
-export type BeanProcess =
+// docs/schema.md BEAN_PROCESSES: the built-in keys
+export type BeanProcessKey =
   | 'washed' | 'natural' | 'wet_hulled' | 'honey' | 'mechanically_washed' | 'anaerobic'
   | 'carbonic_maceration' | 'co_fermentation' | 'thermal_shock' | 'lactic';
+// docs/api/bean-processes.md §4b: the workspace's editable list.
+export interface BeanProcess {
+  id: string;
+  name: string;
+  position: number;
+  hidden: boolean; // left out of the bean form's choices
+  builtin: BeanProcessKey | null; // null = added by the workspace
+}
 
 export interface Bean {
   id: string;
   workspaceId: string;
   roasterName: string;
   beanName: string;
-  process: BeanProcess | null;
+  processId: string | null; // one of the workspace's processes
   roastLevel: RoastLevel | null; // set by the API from detailedRoastLevel when known
   roastDate: string | null; // ISO datetime at midnight UTC
   inventoryWeightGrams: number;

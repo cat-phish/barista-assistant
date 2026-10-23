@@ -1,5 +1,5 @@
 // Labels and helpers for a bean's optional details (docs/api/beans.md §4).
-import type { Bean, BeanProcess, BlendType, DetailedRoastLevel, RoastLevel, RoastScale, RoastType } from '../api/types';
+import type { Bean, BlendType, DetailedRoastLevel, RoastLevel, RoastScale, RoastType } from '../api/types';
 import { ROAST_LEVELS } from './scale';
 import { localDateInput } from './format';
 import { enumColumn, type SortColumns } from './listSort';
@@ -35,19 +35,6 @@ export const BLEND_TYPES: Record<BlendType, { label: string }> = {
   other: { label: 'Other' },
 };
 
-// docs/schema.md BEAN_PROCESSES; editable per workspace later (backlog item 1).
-export const BEAN_PROCESSES: Record<BeanProcess, { label: string }> = {
-  washed: { label: 'Washed' },
-  natural: { label: 'Natural' },
-  wet_hulled: { label: 'Wet-Hulled' },
-  honey: { label: 'Honey' },
-  mechanically_washed: { label: 'Mechanically Washed' },
-  anaerobic: { label: 'Anaerobic Fermentation' },
-  carbonic_maceration: { label: 'Carbonic Maceration' },
-  co_fermentation: { label: 'Co-Fermentation' },
-  thermal_shock: { label: 'Thermal Shock' },
-  lactic: { label: 'Lactic Fermentation' },
-};
 
 // "1,950 m" or "6,398 ft" (stored in metres; feet are a preference).
 export { formatAltitude } from './units';
@@ -137,7 +124,9 @@ export function roastAgeDays(bean: Pick<Bean, 'roastDate' | 'freezePeriods'>, to
 export type BeanSortColumn =
   | 'name' | 'roaster' | 'added' | 'purchased' | 'roastDate' | 'age' | 'roast'
   | 'process' | 'frozen' | 'decaf' | 'rating' | 'stock';
-export const BEAN_SORT_COLUMNS: SortColumns<Bean, BeanSortColumn> = {
+// processName: the workspace's name for a processId (they're editable,
+// docs/api/bean-processes.md §4b); labels don't depend on it.
+export const beanSortColumns = (processName: (id: string) => string | null = () => null): SortColumns<Bean, BeanSortColumn> => ({
   name: { label: 'Name', value: (b) => b.beanName, asc: 'A–Z', desc: 'Z–A' },
   roaster: { label: 'Roaster', value: (b) => b.roasterName, asc: 'A–Z', desc: 'Z–A' },
   added: { label: 'Date added', value: (b) => b.createdAt, asc: 'Oldest first', desc: 'Newest first', firstDir: 'desc' },
@@ -145,12 +134,12 @@ export const BEAN_SORT_COLUMNS: SortColumns<Bean, BeanSortColumn> = {
   roastDate: { label: 'Roast date', value: (b) => b.roastDate, asc: 'Oldest first', desc: 'Newest first', firstDir: 'desc' },
   age: { label: 'Age', value: (b) => roastAgeDays(b), asc: 'Freshest first', desc: 'Oldest first' },
   roast: { label: 'Roast level', value: roastRank, asc: 'Lightest first', desc: 'Darkest first' },
-  process: { label: 'Process', value: (b) => (b.process ? BEAN_PROCESSES[b.process].label : null), asc: 'A–Z', desc: 'Z–A' },
+  process: { label: 'Process', value: (b) => (b.processId ? processName(b.processId) : null), asc: 'A–Z', desc: 'Z–A' },
   frozen: { ...enumColumn<Bean, FreezeState>('Frozen', FREEZE_STATES, freezeState), asc: 'Frozen first', desc: 'Never frozen first' },
   decaf: { label: 'Caffeinated / decaf', value: (b) => (b.decaf ? 1 : 0), asc: 'Caffeinated first', desc: 'Decaf first' },
   rating: { label: 'Rating', value: (b) => b.rating, asc: 'Lowest first', desc: 'Highest first', firstDir: 'desc' },
   stock: { label: 'In stock', value: (b) => b.inventoryWeightGrams, asc: 'Least first', desc: 'Most first', firstDir: 'desc' },
-};
+});
 
 // The list's Filter dropdown.
 export type BeanFilter = 'all' | 'in_stock' | 'out_of_stock' | 'frozen' | 'decaf';

@@ -8,7 +8,7 @@ import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import {
   beanFreezes,
-  BEAN_PROCESSES,
+  beanProcesses,
   beans,
   BLEND_TYPES,
   brewLogs,
@@ -46,7 +46,7 @@ interface WorkspaceParams {
 const beanFields = {
   roasterName: z.string().trim().min(1).max(255),
   beanName: z.string().trim().min(1).max(255),
-  process: z.enum(BEAN_PROCESSES).nullable().optional(),
+  processId: z.uuid().nullable().optional(), // one of the workspace's processes (§4b)
   roastLevel: z.enum(ROAST_LEVELS).nullable().optional(),
   roastDate: z
     .union([z.iso.date(), z.iso.datetime()])
@@ -184,6 +184,19 @@ beansRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<BeanLis
   res.json({ beans: await loadBeans(eq(beans.workspaceId, workspaceId)) });
 });
 
+const PROCESS_ERROR = "processId: not a process of this workspace";
+// processId must be one of the workspace's own processes (hidden ones too,
+// so a bean keeps its process when edited); null or absent is fine.
+async function processInWorkspace(processId: string | null | undefined, workspaceId: string): Promise<boolean> {
+  if (!processId) return true;
+  const [row] = await db
+    .select({ id: beanProcesses.id })
+    .from(beanProcesses)
+    .where(and(eq(beanProcesses.id, processId), eq(beanProcesses.workspaceId, workspaceId)))
+    .limit(1);
+  return !!row;
+}
+
 beansRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<BeanResponse>) => {
   const { workspaceId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
@@ -197,6 +210,10 @@ beansRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<BeanRe
   const roast = resolveRoastLevel(body, null);
   if ("error" in roast) {
     sendError(res, 400, roast.error);
+    return;
+  }
+  if (!(await processInWorkspace(body.processId, workspaceId))) {
+    sendError(res, 400, PROCESS_ERROR);
     return;
   }
 
@@ -230,6 +247,7 @@ beansRouter.patch("/:beanId", async (req: Request<BeanParams>, res: Response<Bea
     if (priceMismatch(amount, currency)) return { status: "invalid", error: PRICE_ERROR } as const;
     const roast = resolveRoastLevel(body, existing.detailedRoastLevel);
     if ("error" in roast) return { status: "invalid", error: roast.error } as const;
+    if (!(await processInWorkspace(body.processId, req.params.workspaceId))) return { status: "invalid", error: PROCESS_ERROR } as const;
     const { archived, ...fields } = body;
     await tx
       .update(beans)

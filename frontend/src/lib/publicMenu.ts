@@ -2,7 +2,7 @@
 // details its beans block includes (BEAN_MENU_FIELDS). Unit-tested in
 // publicMenu.test.ts.
 import type { BeanMenuField, PublicBean } from '../api/types';
-import { BEAN_PROCESSES, BLEND_TYPES, DETAILED_ROAST_LEVELS, ROAST_TYPES, formatAltitude } from './beans';
+import { BLEND_TYPES, DETAILED_ROAST_LEVELS, ROAST_TYPES, formatAltitude } from './beans';
 import { ORIGIN_AREAS } from './origins';
 import { ROAST_LEVELS } from './scale';
 
@@ -54,7 +54,7 @@ export function beanLines(b: PublicBean, fields: readonly BeanMenuField[], now: 
         ? `${ROAST_LEVELS[b.roastLevel].label} roast`
         : null
     : null;
-  const roast = [has('process') && b.process ? BEAN_PROCESSES[b.process].label : null, level, has('roastDate') && b.roastDate ? roastedAgo(b.roastDate, now) : null]
+  const roast = [has('process') && b.process ? b.process : null, level, has('roastDate') && b.roastDate ? roastedAgo(b.roastDate, now) : null]
     .filter((x): x is string => !!x)
     .join(' · ');
 
