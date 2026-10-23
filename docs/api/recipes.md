@@ -204,10 +204,19 @@ Creates a recipe, its grind starting points and its steps in one transaction.
 - **Errors:** `400` invalid or empty body, or `brewerId`/`grinderId` not in
   this workspace; `403` viewer; `404` recipe not in this workspace.
 
+## `GET /api/workspaces/:workspaceId/recipes/:recipeId/usage`
+
+What deleting it would take with it (see README, "Deleting").
+
+- **Auth Required:** `true` (any member)
+- **Success (`200 OK`):** `{ "brewLogCount": 12, "drinkCount": 1 }`: brews made with it, and drinks with it as their default recipe.
+- **Errors:** `404` not in this workspace.
+
 ## `DELETE /api/workspaces/:workspaceId/recipes/:recipeId`
 
 Deletes the recipe and its steps. Brew logs that used it are kept, with
-`recipeId` set to `null`.
+`recipeId` set to `null`; drinks lose it as their default. Clients warn
+first, from `/usage`.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Success (`204 No Content`)**

@@ -6,6 +6,7 @@ import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
+import { addUsageRoute, ingredientUsage } from "../usage.js";
 import { INGREDIENT_TYPES, ingredients, drinkIngredients, type Ingredient } from "@barista/shared/schema";
 import { archiveUpdate } from "../archive.js";
 import { optionalText, updateSchema } from "../validation.js";
@@ -60,6 +61,7 @@ const duplicate = (res: Response, err: unknown): boolean => {
 // Mounted at /api/workspaces/:workspaceId/ingredients
 export const ingredientsRouter = Router({ mergeParams: true });
 ingredientsRouter.use(requireAuth);
+addUsageRoute(ingredientsRouter, "ingredientId", "ingredients", ingredientUsage, "Ingredient not found");
 
 ingredientsRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<{ ingredients: IngredientSummary[] }>) => {
   const { workspaceId } = req.params;
@@ -103,26 +105,13 @@ ingredientsRouter.patch("/:ingredientId", async (req: Request<IngredientParams>,
   res.json({ ingredient });
 });
 
-// The FK cascades (so workspace deletion works); this check protects drinks.
+// Deleting unlinks what used it; GET /usage says what, for the warning
+// (docs/api/README.md, "Deleting"). The drinks that use it lose it (the FK cascades).
 ingredientsRouter.delete("/:ingredientId", async (req: Request<IngredientParams>, res: Response) => {
   if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId, WRITE_ROLES))) return;
-  const outcome = await db.transaction(async (tx) => {
-    const [ingredient] = await tx.select({ id: ingredients.id }).from(ingredients).where(inWorkspace(req.params)).for("update");
-    if (!ingredient) return { status: "not_found" } as const;
-    const [{ drinkCount } = { drinkCount: 0 }] = await tx
-      .select({ drinkCount: count() })
-      .from(drinkIngredients)
-      .where(eq(drinkIngredients.ingredientId, ingredient.id));
-    if (drinkCount > 0) return { status: "in_use", drinkCount } as const;
-    await tx.delete(ingredients).where(eq(ingredients.id, ingredient.id));
-    return { status: "deleted" } as const;
-  });
-  if (outcome.status === "not_found") {
+  const [result] = await db.delete(ingredients).where(inWorkspace(req.params));
+  if (result.affectedRows === 0) {
     sendError(res, 404, "Ingredient not found");
-    return;
-  }
-  if (outcome.status === "in_use") {
-    sendError(res, 409, `${outcome.drinkCount} drink(s) use this ingredient. Remove it from them first.`, { drinkCount: outcome.drinkCount });
     return;
   }
   res.status(204).end();

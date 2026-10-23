@@ -7,6 +7,7 @@ import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
+import { addUsageRoute, drinkUsage } from "../usage.js";
 import {
   brewers,
   ingredients,
@@ -213,6 +214,7 @@ export async function loadDrinks(where: SQL | undefined): Promise<DrinkDetails[]
 // Mounted at /api/workspaces/:workspaceId/drinks
 export const drinksRouter = Router({ mergeParams: true });
 drinksRouter.use(requireAuth);
+addUsageRoute(drinksRouter, "drinkId", "drinks", drinkUsage, "Drink not found");
 
 drinksRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<{ drinks: DrinkDetails[] }>) => {
   const { workspaceId } = req.params;

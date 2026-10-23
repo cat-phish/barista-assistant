@@ -6,12 +6,11 @@
 // happen on their own page (IngredientFormView). Deleting is refused while
 // drinks use one.
 import { computed, onMounted, ref, watch } from 'vue';
-import { ApiError, errorMessage } from '../api/client';
+import { errorMessage } from '../api/client';
 import { drinksApi } from '../api/drinks';
 import { ingredientsApi } from '../api/ingredients';
 import type { Drink, Ingredient, IngredientType } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
-import ConfirmDialog from '../components/ConfirmDialog.vue';
 import ListControls from '../components/ListControls.vue';
 import MenuTabs from '../components/MenuTabs.vue';
 import { INGREDIENT_TYPES, ingredientUsage } from '../lib/drinks';
@@ -116,28 +115,6 @@ async function setArchived(c: Ingredient, archived: boolean): Promise<void> {
   }
 }
 
-// Delete
-const busy = ref(false);
-const pending = ref<Ingredient | null>(null);
-const dialogError = ref('');
-async function confirmDelete(): Promise<void> {
-  const ws = workspaces.current?.id;
-  const c = pending.value;
-  if (!ws || !c) return;
-  busy.value = true;
-  dialogError.value = '';
-  try {
-    await ingredientsApi.remove(ws, c.id);
-    pending.value = null;
-    await load();
-  } catch (err) {
-    const count = err instanceof ApiError && err.status === 409 ? err.body?.drinkCount : undefined;
-    dialogError.value =
-      typeof count === 'number' ? `${count} drink${count === 1 ? ' uses' : 's use'} it. Remove it from ${count === 1 ? 'that drink' : 'those drinks'} first.` : errorMessage(err);
-  } finally {
-    busy.value = false;
-  }
-}
 </script>
 
 <template>
@@ -191,7 +168,6 @@ async function confirmDelete(): Promise<void> {
                 <RouterLink class="btn-link" :to="{ name: 'ingredient-edit', params: { id: c.id } }">Edit</RouterLink>
                 <button v-if="c.archivedAt" class="btn-link" type="button" :disabled="busyId === c.id" @click="setArchived(c, false)">Restore</button>
                 <button v-else class="btn-link" type="button" :disabled="busyId === c.id" @click="setArchived(c, true)">Archive</button>
-                <button class="btn-link danger" type="button" @click="pending = c; dialogError = ''">Delete</button>
               </div>
             </div>
           </div>
@@ -199,15 +175,6 @@ async function confirmDelete(): Promise<void> {
       </template>
     </template>
   </main>
-
-  <ConfirmDialog :open="pending !== null" title="Delete this ingredient?" @cancel="pending = null">
-    <p>{{ pending?.name }} will be removed.</p>
-    <p v-if="dialogError" class="form-error" role="alert">{{ dialogError }}</p>
-    <template #actions>
-      <button class="btn btn-danger" type="button" :disabled="busy" @click="confirmDelete">Delete</button>
-      <button class="btn btn-secondary" type="button" :disabled="busy" @click="pending = null">Cancel</button>
-    </template>
-  </ConfirmDialog>
 </template>
 
 <style scoped>

@@ -6,12 +6,17 @@ import { useRouter } from 'vue-router';
 import { brewersApi } from '../api/brewers';
 import { ApiError, errorMessage } from '../api/client';
 import AppHeader from '../components/AppHeader.vue';
+import DeleteSection from '../components/DeleteSection.vue';
 import BrewerFields from '../components/BrewerFields.vue';
 import { brewerForm, brewerInput } from '../lib/equipment';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 const workspaces = useWorkspaceStore();
+// As saved, for the Delete section (editing only).
+const saved = ref<{ name: string; archived: boolean } | null>(null);
+const deleteUsage = () => brewersApi.usage(workspaces.current?.id ?? '', props.id ?? '');
+const deleteIt = () => brewersApi.remove(workspaces.current?.id ?? '', props.id ?? '');
 const router = useRouter();
 const editing = computed(() => props.id !== undefined);
 
@@ -42,6 +47,7 @@ onMounted(async () => {
         error.value = 'This brewer no longer exists.';
         return;
       }
+      saved.value = { name: brewer.name, archived: !!brewer.archivedAt };
       form.value = brewerForm(brewer);
     }
   } catch (err) {
@@ -86,6 +92,15 @@ async function save(): Promise<void> {
         <button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? 'Saving…' : editing ? 'Save brewer' : 'Add brewer' }}</button>
       </div>
     </form>
+    <DeleteSection
+      v-if="props.id && saved && workspaces.canEdit"
+      kind="brewer"
+      :name="saved.name"
+      :archived="saved.archived"
+      :load="deleteUsage"
+      :remove="deleteIt"
+      :back="{ name: 'brewers' }"
+    />
   </main>
 </template>
 

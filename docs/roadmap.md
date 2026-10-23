@@ -385,3 +385,22 @@ deleting them lost history.
   default recipe no longer picks the brewer or recipe). **Archived recipes
   and ingredients** leave the drink form's pickers, unless that drink already
   uses them. Past brews, drinks and the public menu keep them.
+
+## Delete from the edit page, with a warning (built)
+
+Branch `delete-in-edit`, no migration. Deleting used to be refused for
+anything with history ("archive it instead"), and lived in each list row.
+
+- **Delete never refuses now**, for brewers, grinders, water profiles, prep
+  tools, recipes, drinks and ingredients. What used the item is unlinked:
+  brews lose the brewer, grinder, water, tool, recipe or drink; recipes lose
+  a grinder's starting point; drinks lose a default recipe or an ingredient;
+  variants move up; menu items that show it go. A brewer's recipes are
+  deleted with it.
+- **`GET …/:id/usage`** on each returns the counts a delete would affect
+  (docs/api/README.md, "Archiving and deleting").
+- **The edit page** has a Delete card at the bottom (tools: in the edit
+  row). Its dialog lists what would change ("Its 2 recipes will be deleted
+  too", "5 brews will lose their grinder…"), suggests archiving, and needs
+  "I understand" ticked before Delete works. Nothing used: just a confirm.
+  The list rows no longer have Delete, and archived rows now have Edit too.

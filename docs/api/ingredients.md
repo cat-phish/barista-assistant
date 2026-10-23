@@ -38,9 +38,19 @@ milk, vanilla syrup, ice. Per workspace.
 - **Success (`200 OK`):** `{ "ingredient": { ...ingredient } }`
 - **Errors:** `400`; `403` viewer; `404` not in this workspace; `409` name taken.
 
+## `GET /api/workspaces/:workspaceId/ingredients/:ingredientId/usage`
+
+What deleting it would take with it (see README, "Deleting").
+
+- **Auth Required:** `true` (any member)
+- **Success (`200 OK`):** `{ "drinkCount": 2 }`: the drinks that use it.
+- **Errors:** `404` not in this workspace.
+
 ## `DELETE /api/workspaces/:workspaceId/ingredients/:ingredientId`
+
+The drinks that use it are kept, without it. Clients warn first, from
+`/usage`.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Success (`204 No Content`)**
-- **Errors:** `403` viewer; `404` not in this workspace; `409` drinks use it,
-  with body `{ "error": "...", "drinkCount": 2 }`. Remove it from those drinks first.
+- **Errors:** `403` viewer; `404` not in this workspace.

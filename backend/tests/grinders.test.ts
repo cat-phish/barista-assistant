@@ -45,15 +45,19 @@ describe("grinders", () => {
     expect((await owner.agent.patch(`${base}/${id}`).send({ archived: false })).body.grinder.archivedAt).toBeNull();
   });
 
-  it("delete: allowed when unused, refused (409 + count) once brews used it", async () => {
+  it("usage counts brews and recipes; delete unlinks them", async () => {
     const { owner, ws, base, grinder } = await setup();
-    expect((await owner.agent.delete(`${base}/${await grinder("Unused")}`)).status).toBe(204);
+    const unused = await grinder("Unused");
+    expect((await owner.agent.get(`${base}/${unused}/usage`)).body).toEqual({ brewLogCount: 0, recipeCount: 0 });
+    expect((await owner.agent.delete(`${base}/${unused}`)).status).toBe(204);
     const used = await grinder("Used");
     const bean = await newBean(owner, ws.id);
-    expect((await brew(owner, ws.id, { beanId: bean, grinderId: used })).status).toBe(201);
-    const res = await owner.agent.delete(`${base}/${used}`);
-    expect(res.status).toBe(409);
-    expect(res.body.brewLogCount).toBe(1);
+    const logged = await brew(owner, ws.id, { beanId: bean, grinderId: used });
+    expect((await owner.agent.get(`${base}/${used}/usage`)).body.brewLogCount).toBe(1);
+    expect((await owner.agent.delete(`${base}/${used}`)).status).toBe(204);
+    const log = (await owner.agent.get(`/api/workspaces/${ws.id}/brew-logs/${logged.body.brewLog.id}`)).body.brewLog;
+    expect(log).toMatchObject({ grinderId: null, grinder: null });
+    expect((await owner.agent.get(`${base}/${used}/usage`)).status).toBe(404);
   });
 
   it("viewers read only; outsiders get 404", async () => {

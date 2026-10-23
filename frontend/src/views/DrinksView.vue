@@ -10,7 +10,6 @@ import { drinksApi } from '../api/drinks';
 import { recipesApi } from '../api/recipes';
 import type { Drink, DrinkCategory, Recipe } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
-import ConfirmDialog from '../components/ConfirmDialog.vue';
 import ListControls from '../components/ListControls.vue';
 import MenuTabs from '../components/MenuTabs.vue';
 import { ingredientLine, nestDrinks, type NestedDrink } from '../lib/drinks';
@@ -104,25 +103,6 @@ async function setArchived(d: Drink, archived: boolean): Promise<void> {
   }
 }
 
-const pending = ref<Drink | null>(null);
-const busy = ref(false);
-const dialogError = ref('');
-const pendingName = computed(() => pending.value?.name ?? '');
-async function confirmDelete(): Promise<void> {
-  const ws = workspaces.current?.id;
-  if (!ws || !pending.value) return;
-  busy.value = true;
-  dialogError.value = '';
-  try {
-    await drinksApi.remove(ws, pending.value.id);
-    pending.value = null;
-    await load();
-  } catch (err) {
-    dialogError.value = errorMessage(err);
-  } finally {
-    busy.value = false;
-  }
-}
 </script>
 
 <template>
@@ -191,25 +171,12 @@ async function confirmDelete(): Promise<void> {
               <RouterLink class="btn-link" :to="{ name: 'drink-edit', params: { id: d.id } }">Edit</RouterLink>
               <button v-if="d.archivedAt" class="btn-link" type="button" :disabled="busyId === d.id" @click="setArchived(d, false)">Restore</button>
               <button v-else class="btn-link" type="button" :disabled="busyId === d.id" @click="setArchived(d, true)">Archive</button>
-              <button class="btn-link danger" type="button" @click="pending = d; dialogError = ''">Delete</button>
             </div>
           </div>
         </div>
       </div>
     </template>
   </main>
-
-  <ConfirmDialog :open="pending !== null" title="Delete this drink?" @cancel="pending = null">
-    <p>
-      {{ pendingName }} will be removed. Brews made for it are kept.
-      <template v-if="pending?.variants.length">Its variants move up to {{ pending.parent ? pending.parent.name : 'the top level' }}.</template>
-    </p>
-    <p v-if="dialogError" class="form-error" role="alert">{{ dialogError }}</p>
-    <template #actions>
-      <button class="btn btn-danger" type="button" :disabled="busy" @click="confirmDelete">Delete</button>
-      <button class="btn btn-secondary" type="button" :disabled="busy" @click="pending = null">Cancel</button>
-    </template>
-  </ConfirmDialog>
 </template>
 
 <style scoped>

@@ -13,6 +13,7 @@ import { brewersApi } from '../api/brewers';
 import { recipesApi, type RecipeInput } from '../api/recipes';
 import type { Brewer, FlowUnit, Grinder, MethodKind, Recipe, RecipeStyle } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
+import DeleteSection from '../components/DeleteSection.vue';
 import { formatGrams, formatRatio, formatTime, parseDecimal, parseTime } from '../lib/format';
 import { VueDraggable } from 'vue-draggable-plus';
 import {
@@ -43,6 +44,10 @@ const props = defineProps<{ id?: string }>(); // set when editing (route param)
 const NEW_METHOD = '__new__';
 
 const workspaces = useWorkspaceStore();
+// As saved, for the Delete section (editing only).
+const saved = ref<{ name: string; archived: boolean } | null>(null);
+const deleteUsage = () => recipesApi.usage(workspaces.current?.id ?? '', props.id ?? '');
+const deleteIt = () => recipesApi.remove(workspaces.current?.id ?? '', props.id ?? '');
 const route = useRoute();
 const router = useRouter();
 const editing = computed(() => props.id !== undefined);
@@ -223,6 +228,7 @@ onMounted(async () => {
         error.value = 'This recipe no longer exists.';
         return;
       }
+      saved.value = { name: recipe.name, archived: !!recipe.archivedAt };
       fill(recipe);
       return;
     }
@@ -698,6 +704,15 @@ async function save(): Promise<void> {
         <button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? 'Saving…' : 'Save recipe' }}</button>
       </div>
     </form>
+    <DeleteSection
+      v-if="props.id && saved && workspaces.canEdit"
+      kind="recipe"
+      :name="saved.name"
+      :archived="saved.archived"
+      :load="deleteUsage"
+      :remove="deleteIt"
+      :back="{ name: 'recipes' }"
+    />
   </main>
 </template>
 

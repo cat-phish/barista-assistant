@@ -28,7 +28,7 @@ async function setup(): Promise<Setup> {
 }
 
 describe("ingredients", () => {
-  it("CRUD with types and instructions; names unique; used ones can't be deleted", async () => {
+  it("CRUD with types and instructions; names unique; deleting a used one takes it out of its drinks", async () => {
     const { owner, base, v60 } = await setup();
     const created = await owner.agent.post(`${base}/ingredients`).send({ name: "Orange cold foam", ingredientType: "foam", instructions: " Infuse cream with orange peel overnight. " });
     expect(created.status).toBe(201);
@@ -49,9 +49,11 @@ describe("ingredients", () => {
 
     await owner.agent.post(`${base}/drinks`).send({ name: "The Atlas", kind: "filter", ingredients: [{ ingredientId: id }] });
     expect((await owner.agent.get(`${base}/ingredients`)).body.ingredients.find((c: { id: string }) => c.id === id).drinkCount).toBe(1);
-    const refused = await owner.agent.delete(`${base}/ingredients/${id}`);
-    expect(refused.status).toBe(409);
-    expect(refused.body.drinkCount).toBe(1);
+    // Deleting it takes it out of the drink, which stays.
+    expect((await owner.agent.get(`${base}/ingredients/${id}/usage`)).body).toEqual({ drinkCount: 1 });
+    expect((await owner.agent.delete(`${base}/ingredients/${id}`)).status).toBe(204);
+    const atlas = (await owner.agent.get(`${base}/drinks`)).body.drinks.find((d: { name: string }) => d.name === "The Atlas");
+    expect(atlas.ingredients).toEqual([]);
   });
 });
 

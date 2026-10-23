@@ -26,9 +26,9 @@ Puck screen, Distributor, Shaker, Bottom paper filter and Top paper filter
 and Sifted fines (every method). Migration 0038 gave existing workspaces the
 same list.
 
-A **archived** tool (`archivedAt` set) leaves the checklist for new brews, but
-past brews keep showing it, and it can be restored. A tool that brews used
-can't be deleted (archive it instead); an unused one can.
+An **archived** tool (`archivedAt` set) leaves the checklist for new brews, but
+past brews keep showing it, and it can be restored. Deleting one takes it off
+the brews that used it (see `DELETE` below).
 
 ## `GET /api/workspaces/:workspaceId/prep-tools`
 
@@ -61,9 +61,19 @@ can't be deleted (archive it instead); an unused one can.
 - **Success (`200 OK`):** `{ "tools": [ { ...tool } ] }`
 - **Errors:** `400` not exactly the workspace's tools; `403` viewer.
 
+## `GET /api/workspaces/:workspaceId/prep-tools/:toolId/usage`
+
+What deleting it would take with it (see README, "Deleting").
+
+- **Auth Required:** `true` (any member)
+- **Success (`200 OK`):** `{ "brewLogCount": 3 }`: brews that used it.
+- **Errors:** `404` not in this workspace.
+
 ## `DELETE /api/workspaces/:workspaceId/prep-tools/:toolId`
+
+Brews that used it are kept, without it in their `tools`. Clients warn first,
+from `/usage`.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Success (`204 No Content`)**
-- **Errors:** `403` viewer; `404` not in this workspace; `409` brews used it,
-  with body `{ "error": "...", "brewLogCount": 3 }`. Archive it instead.
+- **Errors:** `403` viewer; `404` not in this workspace.

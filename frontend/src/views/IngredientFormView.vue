@@ -7,11 +7,16 @@ import { ApiError, errorMessage } from '../api/client';
 import { ingredientsApi } from '../api/ingredients';
 import type { IngredientType } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
+import DeleteSection from '../components/DeleteSection.vue';
 import { INGREDIENT_TYPES } from '../lib/drinks';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 const workspaces = useWorkspaceStore();
+// As saved, for the Delete section (editing only).
+const saved = ref<{ name: string; archived: boolean } | null>(null);
+const deleteUsage = () => ingredientsApi.usage(workspaces.current?.id ?? '', props.id ?? '');
+const deleteIt = () => ingredientsApi.remove(workspaces.current?.id ?? '', props.id ?? '');
 const router = useRouter();
 const editing = computed(() => props.id !== undefined);
 
@@ -33,6 +38,7 @@ onMounted(async () => {
         error.value = 'This ingredient no longer exists.';
         return;
       }
+      saved.value = { name: ingredient.name, archived: !!ingredient.archivedAt };
       name.value = ingredient.name;
       ingredientType.value = ingredient.ingredientType;
       instructions.value = ingredient.instructions ?? '';
@@ -102,6 +108,15 @@ async function save(): Promise<void> {
         <button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? 'Saving…' : editing ? 'Save ingredient' : 'Add ingredient' }}</button>
       </div>
     </form>
+    <DeleteSection
+      v-if="props.id && saved && workspaces.canEdit"
+      kind="ingredient"
+      :name="saved.name"
+      :archived="saved.archived"
+      :load="deleteUsage"
+      :remove="deleteIt"
+      :back="{ name: 'ingredients' }"
+    />
   </main>
 </template>
 

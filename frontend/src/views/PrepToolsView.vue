@@ -1,13 +1,13 @@
 <script setup lang="ts">
 // Prep tools (docs/api/prep-tools.md §3d), one tab of Bar setup: the brew
 // form's Prep checklist, in this order. Add, edit (name and method), move
-// up/down, archive (keeps history) or delete (only tools no brew used).
+// up/down, archive (keeps history) or delete (from the edit row, with a warning).
 import { computed, onMounted, ref } from 'vue';
 import { ApiError, errorMessage } from '../api/client';
 import { prepToolsApi } from '../api/prepTools';
 import type { MethodKind, PrepTool } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
-import ConfirmDialog from '../components/ConfirmDialog.vue';
+import DeleteDialog from '../components/DeleteDialog.vue';
 import SetupTabs from '../components/SetupTabs.vue';
 import { METHOD_KINDS, METHOD_ORDER } from '../lib/equipment';
 import { methodLabel } from '../lib/prepTools';
@@ -91,37 +91,14 @@ async function move(t: PrepTool, by: -1 | 1): Promise<void> {
 
 const setArchived = (t: PrepTool, archived: boolean) => run((ws) => prepToolsApi.update(ws, t.id, { archived }));
 
-// Delete: confirm; if brews used it, the server says how many and we offer Archive.
-const pending = ref<PrepTool | null>(null);
-const usedCount = ref<number | null>(null);
-const dialogError = ref('');
-function askDelete(t: PrepTool): void {
-  pending.value = t;
-  usedCount.value = null;
-  dialogError.value = '';
-}
-async function confirmDelete(): Promise<void> {
-  const ws = workspaces.current?.id;
-  const t = pending.value;
-  if (!ws || !t) return;
-  busy.value = true;
-  dialogError.value = '';
-  try {
-    await prepToolsApi.remove(ws, t.id);
-    pending.value = null;
-    await load();
-  } catch (err) {
-    const count = err instanceof ApiError && err.status === 409 ? err.body?.brewLogCount : undefined;
-    if (typeof count === 'number') usedCount.value = count;
-    else dialogError.value = errorMessage(err);
-  } finally {
-    busy.value = false;
-  }
-}
-async function archiveInstead(): Promise<void> {
-  const t = pending.value;
-  pending.value = null;
-  if (t) await setArchived(t, true);
+// Delete, from a tool's edit row: DeleteDialog says what it unlinks first.
+const deleting = ref<PrepTool | null>(null);
+const deleteUsage = () => prepToolsApi.usage(workspaces.current?.id ?? '', deleting.value?.id ?? '');
+const deleteIt = () => prepToolsApi.remove(workspaces.current?.id ?? '', deleting.value?.id ?? '');
+async function deleted(): Promise<void> {
+  deleting.value = null;
+  editingId.value = null;
+  await load();
 }
 </script>
 
@@ -156,6 +133,7 @@ async function archiveInstead(): Promise<void> {
               </select>
               <button class="btn-link" type="submit" :disabled="busy || !editName.trim()">Save</button>
               <button class="btn-link" type="button" @click="editingId = null">Cancel</button>
+              <button class="btn-link danger" type="button" @click="deleting = t">Delete</button>
             </form>
             <div v-else class="row">
               <span class="name" :class="{ muted: t.archivedAt }">{{ t.name }}<template v-if="t.archivedAt"> (archived)</template></span>
@@ -163,14 +141,13 @@ async function archiveInstead(): Promise<void> {
               <template v-if="workspaces.canEdit">
                 <button class="btn-link" type="button" :disabled="busy || i === 0" :aria-label="`Move ${t.name} up`" @click="move(t, -1)">↑</button>
                 <button class="btn-link" type="button" :disabled="busy || i === shown.length - 1" :aria-label="`Move ${t.name} down`" @click="move(t, 1)">↓</button>
+                <button class="btn-link" type="button" @click="startEdit(t)">Edit</button>
                 <template v-if="t.archivedAt">
                   <button class="btn-link" type="button" :disabled="busy" @click="setArchived(t, false)">Restore</button>
                 </template>
                 <template v-else>
-                  <button class="btn-link" type="button" @click="startEdit(t)">Edit</button>
                   <button class="btn-link" type="button" :disabled="busy" @click="setArchived(t, true)">Archive</button>
                 </template>
-                <button class="btn-link danger" type="button" @click="askDelete(t)">Delete</button>
               </template>
             </div>
           </li>
@@ -191,19 +168,16 @@ async function archiveInstead(): Promise<void> {
     </template>
   </main>
 
-  <ConfirmDialog :open="pending !== null" :title="usedCount === null ? 'Delete this tool?' : 'This tool has brew history'" @cancel="pending = null">
-    <p v-if="usedCount === null">{{ pending?.name }} will be removed.</p>
-    <p v-else>
-      {{ usedCount }} brew{{ usedCount === 1 ? '' : 's' }} used {{ pending?.name }}, so it can't be deleted.
-      Archive it instead: it leaves the checklist, and past brews keep showing it.
-    </p>
-    <p v-if="dialogError" class="form-error" role="alert">{{ dialogError }}</p>
-    <template #actions>
-      <button v-if="usedCount === null" class="btn btn-danger" type="button" :disabled="busy" @click="confirmDelete">Delete</button>
-      <button v-else class="btn btn-primary" type="button" @click="archiveInstead">Archive instead</button>
-      <button class="btn btn-secondary" type="button" :disabled="busy" @click="pending = null">Cancel</button>
-    </template>
-  </ConfirmDialog>
+  <DeleteDialog
+    :open="deleting !== null"
+    kind="tool"
+    :name="deleting?.name ?? ''"
+    :archived="!!deleting?.archivedAt"
+    :load="deleteUsage"
+    :remove="deleteIt"
+    @cancel="deleting = null"
+    @deleted="deleted"
+  />
 </template>
 
 <style scoped>

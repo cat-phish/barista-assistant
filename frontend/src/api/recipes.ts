@@ -1,4 +1,5 @@
 import { api } from './client';
+import type { Usage } from '../lib/deleting';
 import type { FlowUnit, Recipe, RecipeStyle, StepFields } from './types';
 
 // Request body for create/update (docs/api/recipes.md §5).
@@ -27,6 +28,9 @@ export const recipesApi = {
   create: (workspaceId: string, input: RecipeInput) => api.post<{ recipe: Recipe }>(base(workspaceId), input),
   update: (workspaceId: string, id: string, input: Partial<RecipeInput> & { archived?: boolean }) =>
     api.patch<{ recipe: Recipe }>(`${base(workspaceId)}/${id}`, input),
+  // What a delete would unlink or remove (README, "Archiving and deleting").
+  usage: (workspaceId: string, id: string) => api.get<Usage>(`${base(workspaceId)}/${id}/usage`),
+  // Unlinks what used it; show usage() in a warning first.
   remove: (workspaceId: string, id: string) => api.delete(`${base(workspaceId)}/${id}`),
 };
 

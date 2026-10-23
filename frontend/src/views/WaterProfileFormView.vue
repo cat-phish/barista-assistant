@@ -7,11 +7,16 @@ import { ApiError, errorMessage } from '../api/client';
 import { WATER_FIGURES } from '../api/types';
 import { waterProfilesApi } from '../api/waterProfiles';
 import AppHeader from '../components/AppHeader.vue';
+import DeleteSection from '../components/DeleteSection.vue';
 import { parseWaterForm, WATER_FIGURE_LABELS, waterForm } from '../lib/water';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 const workspaces = useWorkspaceStore();
+// As saved, for the Delete section (editing only).
+const saved = ref<{ name: string; archived: boolean } | null>(null);
+const deleteUsage = () => waterProfilesApi.usage(workspaces.current?.id ?? '', props.id ?? '');
+const deleteIt = () => waterProfilesApi.remove(workspaces.current?.id ?? '', props.id ?? '');
 const router = useRouter();
 const editing = computed(() => props.id !== undefined);
 
@@ -36,6 +41,7 @@ onMounted(async () => {
         error.value = 'This water profile no longer exists.';
         return;
       }
+      saved.value = { name: profile.name, archived: !!profile.archivedAt };
       form.value = waterForm(profile);
     }
   } catch (err) {
@@ -116,6 +122,15 @@ async function save(): Promise<void> {
         <button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? 'Saving…' : editing ? 'Save water profile' : 'Add water profile' }}</button>
       </div>
     </form>
+    <DeleteSection
+      v-if="props.id && saved && workspaces.canEdit"
+      kind="water"
+      :name="saved.name"
+      :archived="saved.archived"
+      :load="deleteUsage"
+      :remove="deleteIt"
+      :back="{ name: 'water-profiles' }"
+    />
   </main>
 </template>
 

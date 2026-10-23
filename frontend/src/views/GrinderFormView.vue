@@ -6,12 +6,17 @@ import { useRouter } from 'vue-router';
 import { ApiError, errorMessage } from '../api/client';
 import { grindersApi } from '../api/grinders';
 import AppHeader from '../components/AppHeader.vue';
+import DeleteSection from '../components/DeleteSection.vue';
 import GrinderFields from '../components/GrinderFields.vue';
 import { grinderForm, parseGrinderForm } from '../lib/equipment';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 const workspaces = useWorkspaceStore();
+// As saved, for the Delete section (editing only).
+const saved = ref<{ name: string; archived: boolean } | null>(null);
+const deleteUsage = () => grindersApi.usage(workspaces.current?.id ?? '', props.id ?? '');
+const deleteIt = () => grindersApi.remove(workspaces.current?.id ?? '', props.id ?? '');
 const router = useRouter();
 const editing = computed(() => props.id !== undefined);
 
@@ -32,6 +37,7 @@ onMounted(async () => {
         error.value = 'This grinder no longer exists.';
         return;
       }
+      saved.value = { name: grinder.name, archived: !!grinder.archivedAt };
       form.value = grinderForm(grinder);
     }
   } catch (err) {
@@ -82,6 +88,15 @@ async function save(): Promise<void> {
         <button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? 'Saving…' : editing ? 'Save grinder' : 'Add grinder' }}</button>
       </div>
     </form>
+    <DeleteSection
+      v-if="props.id && saved && workspaces.canEdit"
+      kind="grinder"
+      :name="saved.name"
+      :archived="saved.archived"
+      :load="deleteUsage"
+      :remove="deleteIt"
+      :back="{ name: 'grinders' }"
+    />
   </main>
 </template>
 

@@ -5,11 +5,10 @@
 // the one profile new brews start on. Archive keeps history; delete only works
 // for profiles no brew used.
 import { computed, onMounted, ref, watch } from 'vue';
-import { ApiError, errorMessage } from '../api/client';
+import { errorMessage } from '../api/client';
 import type { WaterProfile } from '../api/types';
 import { waterProfilesApi } from '../api/waterProfiles';
 import AppHeader from '../components/AppHeader.vue';
-import ConfirmDialog from '../components/ConfirmDialog.vue';
 import ListControls from '../components/ListControls.vue';
 import SetupTabs from '../components/SetupTabs.vue';
 import { formatAdded } from '../lib/format';
@@ -116,39 +115,6 @@ async function change(p: WaterProfile, input: { archived: boolean }): Promise<vo
   }
 }
 
-// Delete: confirm; if brews used it, the server says how many and we offer Archive.
-const pending = ref<WaterProfile | null>(null);
-const usedCount = ref<number | null>(null);
-const deleting = ref(false);
-const dialogError = ref('');
-function askDelete(p: WaterProfile): void {
-  pending.value = p;
-  usedCount.value = null;
-  dialogError.value = '';
-}
-async function confirmDelete(): Promise<void> {
-  const ws = workspaces.current?.id;
-  const p = pending.value;
-  if (!ws || !p) return;
-  deleting.value = true;
-  dialogError.value = '';
-  try {
-    await waterProfilesApi.remove(ws, p.id);
-    pending.value = null;
-    await load();
-  } catch (err) {
-    const count = err instanceof ApiError && err.status === 409 ? err.body?.brewLogCount : undefined;
-    if (typeof count === 'number') usedCount.value = count;
-    else dialogError.value = errorMessage(err);
-  } finally {
-    deleting.value = false;
-  }
-}
-async function archiveInstead(): Promise<void> {
-  const p = pending.value;
-  pending.value = null;
-  if (p) await change(p, { archived: true });
-}
 </script>
 
 <template>
@@ -204,14 +170,13 @@ async function archiveInstead(): Promise<void> {
               <p class="muted">{{ waterSummary(p) ? `${waterSummary(p)} (mg/L)` : 'No figures yet: edit to add TDS, hardness and minerals.' }}</p>
               <p v-if="p.notes" class="muted">{{ p.notes }}</p>
               <div v-if="workspaces.canEdit" class="data-actions">
+                <RouterLink class="btn-link" :to="{ name: 'water-profile-edit', params: { id: p.id } }">Edit</RouterLink>
                 <template v-if="p.archivedAt">
                   <button class="btn-link" type="button" :disabled="busyId === p.id" @click="change(p, { archived: false })">Restore</button>
                 </template>
                 <template v-else>
-                  <RouterLink class="btn-link" :to="{ name: 'water-profile-edit', params: { id: p.id } }">Edit</RouterLink>
                   <button class="btn-link" type="button" :disabled="busyId === p.id" @click="change(p, { archived: true })">Archive</button>
                 </template>
-                <button class="btn-link danger" type="button" @click="askDelete(p)">Delete</button>
               </div>
             </div>
           </div>
@@ -219,20 +184,6 @@ async function archiveInstead(): Promise<void> {
       </template>
     </template>
   </main>
-
-  <ConfirmDialog :open="pending !== null" :title="usedCount === null ? 'Delete this water profile?' : 'This water has brew history'" @cancel="pending = null">
-    <p v-if="usedCount === null">{{ pending?.name }} will be removed.</p>
-    <p v-else>
-      {{ usedCount }} brew{{ usedCount === 1 ? ' was' : 's were' }} made with {{ pending?.name }}, so it can't be deleted.
-      Archive it instead: it's hidden when brewing, and past brews keep showing it.
-    </p>
-    <p v-if="dialogError" class="form-error" role="alert">{{ dialogError }}</p>
-    <template #actions>
-      <button v-if="usedCount === null" class="btn btn-danger" type="button" :disabled="deleting" @click="confirmDelete">Delete</button>
-      <button v-else class="btn btn-primary" type="button" @click="archiveInstead">Archive instead</button>
-      <button class="btn btn-secondary" type="button" :disabled="deleting" @click="pending = null">Cancel</button>
-    </template>
-  </ConfirmDialog>
 </template>
 
 <style scoped>

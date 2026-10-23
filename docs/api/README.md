@@ -46,3 +46,12 @@ and `public-menu.md` if brews or the menu show it.
   column holds instead of rounding it.
 - Error responses may include extra fields alongside `error` where noted
   (e.g. `brewLogCount`).
+- **Archiving and deleting.** Beans, brewers, grinders, water profiles,
+  prep tools, recipes, drinks and ingredients can be **archived** (PATCH
+  `"archived": true | false`, `archivedAt` in responses): they leave the
+  pickers for new brews and drinks, and history keeps them. **Deleting**
+  never refuses because something uses the item: what used it is unlinked
+  (or, for a brewer, its recipes are deleted too). Each of these (except
+  beans, §4) has `GET …/:id/usage` with the counts a delete would affect,
+  and clients show them in a warning with an "I understand" checkbox before
+  deleting.

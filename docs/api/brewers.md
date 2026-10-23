@@ -94,15 +94,22 @@ Recipes and brew logs reference it by ID, so a rename shows up everywhere at onc
   allowed), or the kind would change while recipes use it (recipe fields
   differ by kind), with body `{ "error": "...", "recipeCount": 2 }`.
 
+## `GET /api/workspaces/:workspaceId/brewers/:brewerId/usage`
+
+What deleting it would take with it (see README, "Deleting").
+
+- **Auth Required:** `true` (any member)
+- **Success (`200 OK`):** `{ "recipeCount": 2, "brewLogCount": 5, "menuItemCount": 1 }`: its recipes (deleted with it), the brews made with it or with those recipes (unlinked from both), and the menu items that show it (removed).
+- **Errors:** `404` not in this workspace.
+
 ## `DELETE /api/workspaces/:workspaceId/brewers/:brewerId`
 
-The database cascades a brewer's deletion to its recipes, so the API is what
-protects them, and brew history keeps a brewer once used. Drinks don't tie up
-a brewer (they need a kind, not a device).
+Deletes the brewer **and its recipes** (with their steps and grind starting
+points). Brews made with it or with those recipes are kept, with `brewerId`
+and `recipeId` set to `null`; drinks lose those recipes as their default;
+menu items that show the brewer are removed. Clients warn first, from
+`/usage`. Drinks don't tie up a brewer (they need a kind, not a device).
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Success (`204 No Content`)**
-- **Errors:** `403` viewer; `404` not in this workspace; `409` recipes or
-  brew logs use it, with body
-  `{ "error": "...", "recipeCount": 2, "brewLogCount": 5 }`. Move or delete
-  the recipes first; with only brew logs left, archive it instead.
+- **Errors:** `403` viewer; `404` not in this workspace.

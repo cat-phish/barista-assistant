@@ -4,11 +4,10 @@
 // expands to its details and actions. Archive keeps history; delete only works
 // for grinders no brew used.
 import { computed, onMounted, ref, watch } from 'vue';
-import { ApiError, errorMessage } from '../api/client';
+import { errorMessage } from '../api/client';
 import { grindersApi } from '../api/grinders';
 import type { Grinder } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
-import ConfirmDialog from '../components/ConfirmDialog.vue';
 import SetupTabs from '../components/SetupTabs.vue';
 import ListControls from '../components/ListControls.vue';
 import { adjustmentLabel, burrLabel, grinderSummary, powerLabel } from '../lib/equipment';
@@ -112,39 +111,6 @@ async function setArchived(g: Grinder, value: boolean): Promise<void> {
   }
 }
 
-// Delete: confirm; if brews used it, the server says how many and we offer Archive.
-const pending = ref<Grinder | null>(null);
-const usedCount = ref<number | null>(null);
-const deleting = ref(false);
-const dialogError = ref('');
-function askDelete(g: Grinder): void {
-  pending.value = g;
-  usedCount.value = null;
-  dialogError.value = '';
-}
-async function confirmDelete(): Promise<void> {
-  const ws = workspaces.current?.id;
-  const g = pending.value;
-  if (!ws || !g) return;
-  deleting.value = true;
-  dialogError.value = '';
-  try {
-    await grindersApi.remove(ws, g.id);
-    pending.value = null;
-    await load();
-  } catch (err) {
-    const count = err instanceof ApiError && err.status === 409 ? err.body?.brewLogCount : undefined;
-    if (typeof count === 'number') usedCount.value = count;
-    else dialogError.value = errorMessage(err);
-  } finally {
-    deleting.value = false;
-  }
-}
-async function archiveInstead(): Promise<void> {
-  const g = pending.value;
-  pending.value = null;
-  if (g) await setArchived(g, true);
-}
 </script>
 
 <template>
@@ -187,14 +153,13 @@ async function archiveInstead(): Promise<void> {
               <p class="muted">{{ grinderSummary(g) || 'No details yet: edit to add the range, burrs and power.' }}</p>
               <p v-if="g.notes" class="muted">{{ g.notes }}</p>
               <div v-if="workspaces.canEdit" class="data-actions">
+                <RouterLink class="btn-link" :to="{ name: 'grinder-edit', params: { id: g.id } }">Edit</RouterLink>
                 <template v-if="g.archivedAt">
                   <button class="btn-link" type="button" :disabled="busyId === g.id" @click="setArchived(g, false)">Restore</button>
                 </template>
                 <template v-else>
-                  <RouterLink class="btn-link" :to="{ name: 'grinder-edit', params: { id: g.id } }">Edit</RouterLink>
                   <button class="btn-link" type="button" :disabled="busyId === g.id" @click="setArchived(g, true)">Archive</button>
                 </template>
-                <button class="btn-link danger" type="button" @click="askDelete(g)">Delete</button>
               </div>
             </div>
           </div>
@@ -202,20 +167,6 @@ async function archiveInstead(): Promise<void> {
       </template>
     </template>
   </main>
-
-  <ConfirmDialog :open="pending !== null" :title="usedCount === null ? 'Delete this grinder?' : 'This grinder has brew history'" @cancel="pending = null">
-    <p v-if="usedCount === null">{{ pending?.name }} will be removed.</p>
-    <p v-else>
-      {{ usedCount }} brew{{ usedCount === 1 ? ' was' : 's were' }} made with {{ pending?.name }}, so it can't be deleted.
-      Archive it instead: it's hidden when brewing, and past brews keep showing it.
-    </p>
-    <p v-if="dialogError" class="form-error" role="alert">{{ dialogError }}</p>
-    <template #actions>
-      <button v-if="usedCount === null" class="btn btn-danger" type="button" :disabled="deleting" @click="confirmDelete">Delete</button>
-      <button v-else class="btn btn-primary" type="button" @click="archiveInstead">Archive instead</button>
-      <button class="btn btn-secondary" type="button" :disabled="deleting" @click="pending = null">Cancel</button>
-    </template>
-  </ConfirmDialog>
 </template>
 
 <style scoped>

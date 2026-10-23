@@ -45,11 +45,10 @@ Everything after `name` is optional (`null` when unknown):
 
 Every mg/L figure is a number ≥ 0 and < 10000 with ≤ 2 decimals.
 
-A **archived** profile (`archivedAt` set) is hidden from pickers for new brews,
+An **archived** profile (`archivedAt` set) is hidden from pickers for new brews,
 but past brews keep showing it, and it can be restored. Archiving the default
-clears `isDefault`, and an archived profile can't be made the default. A profile
-that brews were logged with can't be deleted (archive it instead); an unused
-one can.
+clears `isDefault`, and an archived profile can't be made the default.
+Deleting one unlinks the brews made with it (see `DELETE` below).
 
 ## `GET /api/workspaces/:workspaceId/water-profiles`
 
@@ -78,10 +77,19 @@ one can.
   (or would stay) archived; `403` viewer; `404` not in this workspace; `409`
   name taken.
 
+## `GET /api/workspaces/:workspaceId/water-profiles/:waterProfileId/usage`
+
+What deleting it would take with it (see README, "Deleting").
+
+- **Auth Required:** `true` (any member)
+- **Success (`200 OK`):** `{ "brewLogCount": 12 }`: brews made with it.
+- **Errors:** `404` not in this workspace.
+
 ## `DELETE /api/workspaces/:workspaceId/water-profiles/:waterProfileId`
+
+Brews made with it are kept, with `waterProfileId` set to `null`. Clients
+warn first, from `/usage`.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Success (`204 No Content`)**
-- **Errors:** `403` viewer; `404` not in this workspace; `409` brews were
-  logged with it, with body `{ "error": "...", "brewLogCount": 12 }`. Archive
-  it instead.
+- **Errors:** `403` viewer; `404` not in this workspace.

@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, count, eq, ne, sql } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
-import { brewLogs, waterProfiles, type WaterProfile } from "@barista/shared/schema";
+import { addUsageRoute, waterProfileUsage } from "../usage.js";
+import { waterProfiles, type WaterProfile } from "@barista/shared/schema";
 import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
 // docs/api/water-profiles.md §3c
@@ -83,6 +84,7 @@ const DUPLICATE = "A water profile with that name already exists";
 // Mounted at /api/workspaces/:workspaceId/water-profiles
 export const waterProfilesRouter = Router({ mergeParams: true });
 waterProfilesRouter.use(requireAuth);
+addUsageRoute(waterProfilesRouter, "waterProfileId", "waterProfiles", waterProfileUsage, "Water profile not found");
 
 waterProfilesRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<{ waterProfiles: WaterProfileSummary[] }>) => {
   const { workspaceId } = req.params;
@@ -166,29 +168,13 @@ waterProfilesRouter.patch("/:waterProfileId", async (req: Request<WaterProfilePa
   res.json({ waterProfile });
 });
 
-// Only unused profiles can be deleted; used ones are archived so history keeps them.
+// Deleting unlinks what used it; GET /usage says what, for the warning
+// (docs/api/README.md, "Deleting"). Brews keep their record with the water unlinked.
 waterProfilesRouter.delete("/:waterProfileId", async (req: Request<WaterProfileParams>, res: Response) => {
   if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId, WRITE_ROLES))) return;
-  const outcome = await db.transaction(async (tx) => {
-    const [profile] = await tx.select({ id: waterProfiles.id }).from(waterProfiles).where(inWorkspace(req.params)).for("update");
-    if (!profile) return { status: "not_found" } as const;
-    const [{ brewLogCount } = { brewLogCount: 0 }] = await tx
-      .select({ brewLogCount: count() })
-      .from(brewLogs)
-      .where(eq(brewLogs.waterProfileId, profile.id));
-    if (brewLogCount > 0) return { status: "in_use", brewLogCount } as const;
-    await tx.delete(waterProfiles).where(eq(waterProfiles.id, profile.id));
-    return { status: "deleted" } as const;
-  });
-
-  if (outcome.status === "not_found") {
+  const [result] = await db.delete(waterProfiles).where(inWorkspace(req.params));
+  if (result.affectedRows === 0) {
     sendError(res, 404, "Water profile not found");
-    return;
-  }
-  if (outcome.status === "in_use") {
-    sendError(res, 409, `${outcome.brewLogCount} brew(s) were made with this water. Archive it instead.`, {
-      brewLogCount: outcome.brewLogCount,
-    });
     return;
   }
   res.status(204).end();
