@@ -37,8 +37,9 @@ export interface UserPreferences {
   theme: (typeof THEMES)[number]; // system = follow the device
   rateReminders: boolean; // rate-later reminders (docs/api/notifications.md §1b)
   rateReminderMinutes: number; // 5–240
+  rateLaterDefault: boolean; // the log form's Rate later box starts ticked
 }
-export const DEFAULT_PREFERENCES: UserPreferences = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15 };
+export const DEFAULT_PREFERENCES: UserPreferences = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false };
 export const ROAST_SCALES = ["names", "levels"] as const; // roast names (Cinnamon … French) or light to dark only
 export interface WorkspaceSettings {
   recipeRoastLevel: RoastLevel; // the roast recipes are written for

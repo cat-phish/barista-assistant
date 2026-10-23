@@ -177,12 +177,14 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   temperature, grinder, grind and RPM, and the water. Prep tools, grinder
   weights, results, ratings and notes start blank, and anything archived
   since is skipped and named. The timer starts when you press Start.
-- **Rate later:** with a notification service on, the log form has **Save,
-  rate later**: the brew saves unrated and a reminder ("How was it? Rate
-  your brew") arrives after your delay (15 min by default), unless you've
-  rated it by then. Its link opens the brew, where any unrated brew has a
-  quick **Rate this brew** card; the AI suggestion is offered once it's
-  rated. Turning reminders off (or having no service on) hides the button.
+- **Rate later:** the log form has a **Rate later** box. Tick it and save
+  without a rating, and a reminder ("How was it? Rate your brew") arrives
+  after your delay (15 min by default), unless you've rated it by then.
+  - Its link opens the brew, where any unrated brew has a quick **Rate this
+    brew** card; the AI suggestion is offered once it's rated.
+  - Settings → Notifications sets the delay and whether the box starts
+    ticked. Turning reminders off hides the box; with no service on it's
+    greyed out.
 - **Abandoning a brew:** during the timer or before the log is saved,
   leaving the page, reloading, or tapping **Brew** again asks "Abandon this
   brew?" first; abandoning goes back to setup with your choices kept. After

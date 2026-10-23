@@ -895,4 +895,13 @@ is closed. Contract: `api/notifications.md` §1b, `api/brew-logs.md` §6.
   they choose (their ntfy, Gotify or webhook), so it's http(s) only, without
   following redirects and reporting only the status. LAN addresses are
   allowed, since self-hosted services live there.
+- **Follow-up (branch `rate-later-tweaks`):**
+  - Rate later is a **box** on the log form instead of a second button.
+  - The settings switch and the delay can always be changed. With
+    reminders on but no service on, the box shows greyed out with a link to
+    set one up.
+  - A new `rateLaterDefault` preference sets whether the box starts ticked.
+  - `docker-compose.yml` maps `host.docker.internal` into the backend and
+    worker, so a self-hosted ntfy or Gotify on the same machine can be
+    reached.
 

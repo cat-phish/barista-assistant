@@ -62,7 +62,7 @@ units, with defaults filled in. Storage is always grams, °C and metres;
 clients convert what they show and what's typed (roadmap: Units and defaults).
 
 ```json
-{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15 }
+{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false }
 ```
 
 - `volumeUnit`: `fl_oz` | `ml`: the brew page's yield estimate, and a new
@@ -73,8 +73,9 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
 - `theme`: `system` | `light` | `dark`. `system` follows the device's
   setting; the client also remembers the choice per device so it applies
   before the app loads.
-- `rateReminders` (default `true`) and `rateReminderMinutes` (5–240,
-  default `15`): rate-later reminders, see §1b.
+- `rateReminders` (default `true`), `rateReminderMinutes` (5–240, default
+  `15`) and `rateLaterDefault` (default `false`): rate-later reminders, see
+  §1b.
 
 ### `PATCH /api/auth/me/preferences`
 

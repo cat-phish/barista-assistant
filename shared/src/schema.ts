@@ -41,6 +41,7 @@ export interface UserPreferences {
   // notification channels.
   rateReminders: boolean;
   rateReminderMinutes: number; // 5–240
+  rateLaterDefault: boolean; // the log form's Rate later box starts ticked
 }
 export const DEFAULT_PREFERENCES: UserPreferences = {
   volumeUnit: "fl_oz",
@@ -50,6 +51,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   theme: "system",
   rateReminders: true,
   rateReminderMinutes: 15,
+  rateLaterDefault: false,
 };
 
 // Per workspace, owners edit (docs/api/workspaces.md §2 settings).

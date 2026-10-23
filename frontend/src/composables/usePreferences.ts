@@ -13,6 +13,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   theme: 'system',
   rateReminders: true,
   rateReminderMinutes: 15,
+  rateLaterDefault: false,
 };
 export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: 'light', roastScale: 'names', hiddenFields: [] };
 

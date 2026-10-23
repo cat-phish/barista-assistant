@@ -26,6 +26,11 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+    # Lets notification services on this machine (a local ntfy or Gotify) be
+    # reached as http://host.docker.internal:<port>: inside the container,
+    # localhost is the container itself.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:3000:3000"
     environment:
@@ -55,6 +60,11 @@ services:
     build:
       context: .
       dockerfile: worker/Dockerfile
+    # Lets notification services on this machine (a local ntfy or Gotify) be
+    # reached as http://host.docker.internal:<port>: inside the container,
+    # localhost is the container itself.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - DATABASE_URL=mysql://barista@db:3306/coffee_journal
       - DATABASE_PASSWORD_FILE=/run/secrets/db_password

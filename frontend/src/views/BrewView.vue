@@ -620,24 +620,30 @@ const saveError = ref('');
 const submitted = ref(false);
 const savedLogId = ref<string | null>(null);
 
-// Rate later (docs/api/notifications.md §1b): offered when you have reminders
-// on and a service to send them through (Settings → Notifications).
+// Rate later (docs/api/notifications.md §1b): a box on the log form when
+// reminders are on (Settings → Notifications), ticked to start or not as set
+// there, and greyed out while no service is on to deliver the reminder.
 const auth = useAuthStore();
 const notifyChannels = ref<NotificationChannel[]>([]);
-const remindable = computed(() => canRemind(auth.user?.preferences ?? DEFAULT_PREFERENCES, notifyChannels.value));
+const reminderPrefs = computed(() => auth.user?.preferences ?? DEFAULT_PREFERENCES);
+const deliverable = computed(() => canRemind(reminderPrefs.value, notifyChannels.value));
+const rateLater = ref(false);
+watch(stage, (s) => {
+  if (s === 'log') rateLater.value = reminderPrefs.value.rateLaterDefault;
+});
 const reminder = ref<'queued' | 'off' | 'unavailable' | null>(null); // for the brew just saved
 notificationsApi
   .list()
   .then((r) => (notifyChannels.value = r.channels))
   .catch(() => (notifyChannels.value = [])); // without it, brews just save without Rate later
 
-async function save(rateLater = false): Promise<void> {
+async function save(): Promise<void> {
   submitted.value = true;
   const ws = workspaces.current?.id;
   const values = parsed.value.values;
   if (!ws || !bean.value || !values) return;
   // Already rated after all: a normal save (no reminder, and the AI is offered).
-  const remind = rateLater && values.rating === null && (values.drinkRating ?? null) === null;
+  const remind = rateLater.value && deliverable.value && values.rating === null && (values.drinkRating ?? null) === null;
   saving.value = true;
   saveError.value = '';
   try {
@@ -1060,13 +1066,17 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :prep-tools="prepTools" :method-kind="recipe?.brewer.kind ?? null" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="recipe?.style?.brewsLike ?? null" />
       </section>
       <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
+      <div v-if="reminderPrefs.rateReminders" class="rate-later">
+        <label class="checkbox" :class="{ off: !deliverable }">
+          <input v-model="rateLater" type="checkbox" :disabled="!deliverable" />
+          Rate later: remind me in {{ formatDelay(reminderPrefs.rateReminderMinutes) }}
+        </label>
+        <p v-if="!deliverable" class="muted small">
+          No notification service is on yet: <RouterLink :to="{ name: 'settings-notifications' }">set one up</RouterLink>.
+        </p>
+        <p v-else-if="rateLater" class="muted small">Leave the rating for now. If you rate it before saving, no reminder is sent.</p>
+      </div>
       <button class="btn btn-primary btn-block" type="submit" :disabled="saving">{{ saving ? 'Saving…' : 'Save brew' }}</button>
-      <button v-if="remindable" class="btn btn-secondary btn-block" type="button" :disabled="saving" @click="save(true)">
-        Save, rate later
-      </button>
-      <p v-if="remindable" class="muted small rate-later-hint">
-        Leave the rating for now: you'll get a reminder in {{ formatDelay(auth.user?.preferences.rateReminderMinutes ?? 15) }}.
-      </p>
     </form>
 
     <!-- 4. Saved -->
@@ -1076,7 +1086,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         <!-- Rate later: the AI waits for the rating, offered with it on the entry. -->
         <template v-if="reminder">
           <p v-if="reminder === 'queued'" class="muted">
-            We'll remind you to rate it in {{ formatDelay(auth.user?.preferences.rateReminderMinutes ?? 15) }}. The AI suggestion comes with the rating.
+            We'll remind you to rate it in {{ formatDelay(reminderPrefs.rateReminderMinutes) }}. The AI suggestion comes with the rating.
           </p>
           <p v-else class="form-error" role="alert">
             The reminder couldn't be set{{ reminder === 'off' ? ': no notification service is on (Settings → Notifications)' : '' }}. Rate it from the journal when you're ready.
@@ -1115,9 +1125,16 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
 </template>
 
 <style scoped>
-.rate-later-hint {
+.rate-later {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.rate-later p {
   margin: 0;
-  text-align: center;
+}
+.rate-later .checkbox.off {
+  color: var(--text-muted);
 }
 .repeat {
   display: flex;
