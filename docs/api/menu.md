@@ -65,6 +65,14 @@ or a brewer's name (brewers have no menu description; set one on the item).
 
 - **Errors:** `404` not a member.
 
+## `GET /preview`
+
+The menu as guests would see it: exactly the public menu's shape (§7), built
+the same way, but for any member and whether or not the public menu is on.
+The builder's Preview shows it.
+
+- **Errors:** `404` not a member.
+
 ## `PATCH /`
 
 - **Body:** `{ "currency": "usd" | null }`: an ISO 4217 code (uppercased).
@@ -106,9 +114,14 @@ order. Items can move between sections this way.
   neither. `name` ≤ 255 and `description` ≤ 500 (blank = `null`); `price`
   0–999999.99, at most 2 decimals, and only once the menu has a `currency`;
   `available` defaults to `true`. It goes last in the section.
+
+  Or several at once: `{ "items": [ { ...item }, ... ] }` (1–100), each with
+  the same rules. They go last, in the order sent, and it's **all or
+  nothing**: if any is refused, none are added.
 - **Errors:** `400` invalid body, a drink or brewer not in this workspace, or
   a price without a currency; `403`; `404` section not in this menu; `409`
-  already in this section, or the menu already has the beans block.
+  already in this section (or sent twice), or the menu already has the beans
+  block.
 
 ## `PATCH /items/:itemId`
 

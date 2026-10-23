@@ -404,3 +404,28 @@ anything with history ("archive it instead"), and lived in each list row.
   too", "5 brews will lose their grinder…"), suggests archiving, and needs
   "I understand" ticked before Delete works. Nothing used: just a confirm.
   The list rows no longer have Delete, and archived rows now have Edit too.
+
+## Refine the menu builder (built)
+
+Backlog item 20, branch `menu-builder-refine`, no migration. The builder
+worked but didn't read naturally: adding started on "A drink" one at a time,
+arranging took many taps, and there was no way to see the guests' view.
+
+- **Add picker:** drinks grouped by drink category (with **Select all**, a
+  one-off "whole category"), plain brews by method and the beans block, side
+  by side. What's already in the section is ticked and fixed; things in other
+  sections say where. Archived drinks and brewers aren't offered. "Add N"
+  sends one request: `POST /sections/:id/items` takes `{ items: [...] }`, all
+  or nothing.
+- **Drag and drop:** a ⠿ handle on every section and item (works on touch),
+  items between sections too; one `PUT /layout` per drop. A drop that would
+  put the same drink twice in a section is put back. ↑/↓ stay.
+- **Wording:** each item says what it shows ("shows as “House latte” (its own
+  name: Latte), its own description"), the price shows next to it, and
+  Available explains that unavailable items stay on the menu, struck through.
+- **Preview:** Edit / Preview / Side by side (side by side from 1100px wide),
+  remembered per workspace. `GET /menu/preview` returns the public menu's
+  shape for any member, even with the public menu off; `MenuPreview.vue`
+  renders it and is ready for the guest page (item 19).
+- Sections stay mixed (no beans-only kind). Per-size prices moved to item 19's
+  open questions.

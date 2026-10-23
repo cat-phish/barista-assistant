@@ -42,6 +42,34 @@ export interface Menu {
   sections: MenuSection[];
 }
 
+// docs/api/public-menu.md §7: the menu as guests see it (also the builder's preview).
+export type PublicBean = Pick<
+  Bean,
+  | 'id' | 'roasterName' | 'beanName' | 'process' | 'roastDate' | 'inventoryWeightGrams' | 'roastLevel'
+  | 'detailedRoastLevel' | 'roastType' | 'blendType' | 'decaf' | 'flavorProfile' | 'originArea' | 'country'
+  | 'region' | 'altitudeMasl' | 'producer'
+>;
+export interface PublicMenuItem {
+  type: 'drink' | 'brewer';
+  id: string;
+  name: string;
+  description: string | null;
+  method: string; // "Espresso", "Filter"
+  variantOf: string | null; // the parent's menu name, when it's on the menu too
+  ingredients: string[];
+  price: number | null;
+  available: boolean;
+}
+export interface PublicBeansBlock {
+  type: 'beans';
+  beans: PublicBean[];
+}
+export interface PublicMenu {
+  workspace: { name: string; slug: string };
+  currency: string | null;
+  sections: Array<{ name: string; description: string | null; items: Array<PublicMenuItem | PublicBeansBlock> }>;
+}
+
 export interface WorkspaceWithRole extends Workspace {
   role: Role;
 }
