@@ -9,7 +9,7 @@ interface Item {
   name: string | null;
   price: number | null;
   available: boolean;
-  source: { name: string; retired: boolean } | null;
+  source: { name: string; archived: boolean } | null;
 }
 interface Section {
   id: string;
@@ -49,7 +49,7 @@ describe("menu builder (docs/api/menu.md §7b)", () => {
     const [s] = (await get()).sections;
     expect(s!.items).toMatchObject([
       { itemType: "drink", name: null, source: { name: "Latte", description: "Double shot, steamed milk", kind: "espresso" } },
-      { itemType: "brewer", name: "Espresso shot", source: { name: "Espresso", retired: false } },
+      { itemType: "brewer", name: "Espresso shot", source: { name: "Espresso", archived: false } },
       { itemType: "beans", source: null },
     ]);
 

@@ -60,5 +60,5 @@ export function waterSummary(p: WaterProfile): string {
 
 // The profile a new brew starts on: the workspace's default, if it's active.
 export function defaultWaterProfileId(profiles: readonly WaterProfile[]): string {
-  return profiles.find((p) => p.isDefault && !p.retiredAt)?.id ?? '';
+  return profiles.find((p) => p.isDefault && !p.archivedAt)?.id ?? '';
 }

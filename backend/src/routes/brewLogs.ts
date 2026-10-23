@@ -42,9 +42,9 @@ export interface Mark {
 export interface BrewLogDetails extends BrewLog {
   bean: Pick<Bean, "id" | "roasterName" | "beanName">;
   recipe: (Pick<Recipe, "id" | "name" | "expectedYieldGrams" | "style"> & { methodKind: MethodKind }) | null;
-  grinder: { id: string; name: string } | null; // retired grinders included
-  waterProfile: { id: string; name: string } | null; // retired profiles included
-  // The brewer it was made with (the recipe's at the time); retired included.
+  grinder: { id: string; name: string } | null; // archived grinders included
+  waterProfile: { id: string; name: string } | null; // archived profiles included
+  // The brewer it was made with (the recipe's at the time); archived included.
   brewer: { id: string; name: string; kind: MethodKind } | null;
   // The drink it was for; hasIngredients = the shot and the drink are tasted apart.
   drink: { id: string; name: string; hasIngredients: boolean } | null;
@@ -253,7 +253,7 @@ async function referencesInWorkspace(
     if (!recipe) return "recipeId: not a recipe in this workspace";
   }
   if (refs.grinderId) {
-    // Retired grinders are accepted (docs/api/brew-logs.md §6).
+    // Archived grinders are accepted (docs/api/brew-logs.md §6).
     const [grinder] = await tx
       .select({ id: grinders.id })
       .from(grinders)
@@ -262,7 +262,7 @@ async function referencesInWorkspace(
     if (!grinder) return "grinderId: not a grinder in this workspace";
   }
   if (refs.toolIds && refs.toolIds.length > 0) {
-    // Retired tools are accepted, like grinders; a tool's method isn't checked.
+    // Archived tools are accepted, like grinders; a tool's method isn't checked.
     const found = await tx
       .select({ id: prepTools.id })
       .from(prepTools)
@@ -271,7 +271,7 @@ async function referencesInWorkspace(
     if (found.length !== refs.toolIds.length) return "toolIds: not all tools in this workspace";
   }
   if (refs.waterProfileId) {
-    // Retired profiles are accepted, like grinders.
+    // Archived profiles are accepted, like grinders.
     const [profile] = await tx
       .select({ id: waterProfiles.id })
       .from(waterProfiles)

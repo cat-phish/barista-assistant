@@ -28,7 +28,7 @@ Recipes are grinder-neutral: instead of one grind setting they carry
 uses one only when there's no actual setting from your last brew with that
 grinder and recipe (§3b `last-setting`). A recipe can name a
 **`defaultGrinderId`**: the grinder the brew flow preselects for it (instead
-of the last grinder used), if that grinder isn't retired.
+of the last grinder used), if that grinder isn't archived.
 
 **Steps** are what the timer runs (`docs/timer_architecture.md` §3). They run
 **back to back**: each starts when the previous one actually ended, so a step
@@ -114,7 +114,7 @@ down to 2 g/s until the shot is done):
 ]
 ```
 
-`grindSettings` are sorted by grinder name and include retired grinders.
+`grindSettings` are sorted by grinder name and include archived grinders.
 `steps` are in `stepOrder` and may be empty.
 
 ## `GET /api/workspaces/:workspaceId/recipes`
@@ -167,9 +167,9 @@ Creates a recipe, its grind starting points and its steps in one transaction.
     the other defaults to it **±15 s**: min 165 → max 180; max 195 → min 180
     (never below 0). So a stored window always has both ends, or neither.
   - `grindSettings` (default `[]`): each `grinderId` must be a grinder in this
-    workspace (retired allowed), at most once; `setting` trimmed, 1–100 chars.
+    workspace (archived allowed), at most once; `setting` trimmed, 1–100 chars.
   - `defaultGrinderId` (optional, nullable): a grinder in this workspace
-    (retired allowed). Deleting the grinder sets it back to `null`.
+    (archived allowed). Deleting the grinder sets it back to `null`.
   - `flowUnit` (optional, default `g_s`): `g_s` or `ml_s`.
   - `steps` (default `[]`, max 20), in order (`stepOrder` = array position):
     - `stepType` allowed for the brewer's kind (tables above); `label`

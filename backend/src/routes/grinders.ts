@@ -52,7 +52,7 @@ function clearRangeTogether<T extends { settingMin?: number | null; settingMax?:
 }
 
 const createSchema = z.object(grinderFields).superRefine(rangeIssue).transform(clearRangeTogether);
-const updateGrinderSchema = updateSchema({ ...grinderFields, retired: z.boolean() }).superRefine(rangeIssue).transform(clearRangeTogether);
+const updateGrinderSchema = updateSchema({ ...grinderFields, archived: z.boolean() }).superRefine(rangeIssue).transform(clearRangeTogether);
 const lastSettingQuery = z.object({ recipeId: z.uuid() });
 
 const summary = {
@@ -66,7 +66,7 @@ const summary = {
   burrType: grinders.burrType,
   burrSizeMm: grinders.burrSizeMm,
   power: grinders.power,
-  retiredAt: grinders.retiredAt,
+  archivedAt: grinders.archivedAt,
   createdAt: grinders.createdAt,
 };
 
@@ -85,8 +85,8 @@ grindersRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<{ gr
     .select(summary)
     .from(grinders)
     .where(eq(grinders.workspaceId, workspaceId))
-    // Active first, then retired; each by name.
-    .orderBy(sql`${grinders.retiredAt} IS NOT NULL`, asc(grinders.name));
+    // Active first, then archived; each by name.
+    .orderBy(sql`${grinders.archivedAt} IS NOT NULL`, asc(grinders.name));
   res.json({ grinders: rows });
 });
 
@@ -114,16 +114,16 @@ grindersRouter.patch("/:grinderId", async (req: Request<GrinderParams>, res: Res
   if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId, WRITE_ROLES))) return;
   const body = parseBody(updateGrinderSchema, req, res);
   if (!body) return;
-  const { retired, ...fields } = body;
+  const { archived, ...fields } = body;
 
   try {
     await db
       .update(grinders)
       .set({
         ...fields,
-        // Keep the original retirement date if it's already retired.
-        ...(retired === true ? { retiredAt: sql`COALESCE(${grinders.retiredAt}, NOW())` } : {}),
-        ...(retired === false ? { retiredAt: null } : {}),
+        // Keep the original archive date if it's already archived.
+        ...(archived === true ? { archivedAt: sql`COALESCE(${grinders.archivedAt}, NOW())` } : {}),
+        ...(archived === false ? { archivedAt: null } : {}),
       })
       .where(inWorkspace(req.params));
   } catch (err) {
@@ -141,7 +141,7 @@ grindersRouter.patch("/:grinderId", async (req: Request<GrinderParams>, res: Res
   res.json({ grinder });
 });
 
-// Only unused grinders can be deleted; used ones are retired so history keeps them.
+// Only unused grinders can be deleted; used ones are archived so history keeps them.
 grindersRouter.delete("/:grinderId", async (req: Request<GrinderParams>, res: Response) => {
   if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId, WRITE_ROLES))) return;
   const outcome = await db.transaction(async (tx) => {
@@ -161,7 +161,7 @@ grindersRouter.delete("/:grinderId", async (req: Request<GrinderParams>, res: Re
     return;
   }
   if (outcome.status === "in_use") {
-    sendError(res, 409, `${outcome.brewLogCount} brew(s) were made with this grinder. Retire it instead.`, {
+    sendError(res, 409, `${outcome.brewLogCount} brew(s) were made with this grinder. Archive it instead.`, {
       brewLogCount: outcome.brewLogCount,
     });
     return;

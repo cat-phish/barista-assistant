@@ -26,7 +26,7 @@ logs record which one was used (§6), and the AI analysis gets its figures
   "chloridePpm": null,
   "sulfatePpm": null,
   "ph": null,
-  "retiredAt": null,
+  "archivedAt": null,
   "createdAt": "2026-10-22T09:00:00.000Z"
 }
 ```
@@ -45,17 +45,17 @@ Everything after `name` is optional (`null` when unknown):
 
 Every mg/L figure is a number ≥ 0 and < 10000 with ≤ 2 decimals.
 
-A **retired** profile (`retiredAt` set) is hidden from pickers for new brews,
-but past brews keep showing it, and it can be restored. Retiring the default
-clears `isDefault`, and a retired profile can't be made the default. A profile
-that brews were logged with can't be deleted (retire it instead); an unused
+A **archived** profile (`archivedAt` set) is hidden from pickers for new brews,
+but past brews keep showing it, and it can be restored. Archiving the default
+clears `isDefault`, and an archived profile can't be made the default. A profile
+that brews were logged with can't be deleted (archive it instead); an unused
 one can.
 
 ## `GET /api/workspaces/:workspaceId/water-profiles`
 
 - **Auth Required:** `true` (any member)
 - **Success (`200 OK`):** `{ "waterProfiles": [ { ...waterProfile } ] }`:
-  active ones first, then retired; each sorted by `name`.
+  active ones first, then archived; each sorted by `name`.
 
 ## `POST /api/workspaces/:workspaceId/water-profiles`
 
@@ -70,12 +70,12 @@ one can.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Body:** any non-empty subset of the `POST` fields plus
-  `"retired": true | false`. `retired: true` sets `retiredAt` to now
-  (unchanged if already retired) and clears `isDefault`; `false` restores it.
+  `"archived": true | false`. `archived: true` sets `archivedAt` to now
+  (unchanged if already archived) and clears `isDefault`; `false` restores it.
   `"isDefault": true` makes it the workspace's only default.
 - **Success (`200 OK`):** `{ "waterProfile": { ...waterProfile } }`
 - **Errors:** `400` invalid body, or `isDefault: true` for a profile that is
-  (or would stay) retired; `403` viewer; `404` not in this workspace; `409`
+  (or would stay) archived; `403` viewer; `404` not in this workspace; `409`
   name taken.
 
 ## `DELETE /api/workspaces/:workspaceId/water-profiles/:waterProfileId`
@@ -83,5 +83,5 @@ one can.
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Success (`204 No Content`)**
 - **Errors:** `403` viewer; `404` not in this workspace; `409` brews were
-  logged with it, with body `{ "error": "...", "brewLogCount": 12 }`. Retire
+  logged with it, with body `{ "error": "...", "brewLogCount": 12 }`. Archive
   it instead.

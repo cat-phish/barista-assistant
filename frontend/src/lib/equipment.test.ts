@@ -4,12 +4,12 @@ import { adjustmentLabel, burrLabel, grinderForm, grinderSummary, machineSummary
 
 const c40: Grinder = {
   id: 'g', name: 'C40', notes: null, adjustment: 'stepped', settingMin: 0, settingMax: 40, stepSize: 1,
-  burrType: 'conical', burrSizeMm: 39, power: 'manual', retiredAt: null, createdAt: '2026-10-20T00:00:00.000Z',
+  burrType: 'conical', burrSizeMm: 39, power: 'manual', archivedAt: null, createdAt: '2026-10-20T00:00:00.000Z',
 };
 
 describe('grinder form', () => {
   it('round-trips a grinder and blanks become null', () => {
-    const { id: _id, retiredAt: _retired, createdAt: _added, ...fields } = c40;
+    const { id: _id, archivedAt: _archived, createdAt: _added, ...fields } = c40;
     expect(parseGrinderForm(grinderForm(c40)).values).toEqual(fields);
     expect(parseGrinderForm({ ...grinderForm(), name: ' Niche ' }).values).toMatchObject({ name: 'Niche', adjustment: null, settingMin: null, burrSizeMm: null });
   });
@@ -35,8 +35,8 @@ describe('summaries', () => {
 });
 
 describe('duplicating a recipe', () => {
-  const brewer = (id: string, kind: Brewer['kind'], retiredAt: string | null = null) =>
-    ({ id, kind, retiredAt }) as Brewer;
+  const brewer = (id: string, kind: Brewer['kind'], archivedAt: string | null = null) =>
+    ({ id, kind, archivedAt }) as Brewer;
   it('starts on another active brewer of the same kind, else the original', () => {
     const original = { id: 'dl', kind: 'espresso' } as const;
     expect(pickCopyBrewer([brewer('dl', 'espresso'), brewer('v60', 'filter'), brewer('lm', 'espresso')], original)).toBe('lm');

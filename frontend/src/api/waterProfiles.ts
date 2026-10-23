@@ -8,9 +8,9 @@ export const waterProfilesApi = {
   list: (workspaceId: string) => api.get<{ waterProfiles: WaterProfile[] }>(base(workspaceId)),
   create: (workspaceId: string, input: Partial<WaterProfileDetails> & { name: string }) =>
     api.post<{ waterProfile: WaterProfile }>(base(workspaceId), input),
-  // isDefault: true makes it the only default; retired: true also clears it.
-  update: (workspaceId: string, id: string, input: Partial<WaterProfileDetails> & { name?: string; retired?: boolean }) =>
+  // isDefault: true makes it the only default; archived: true also clears it.
+  update: (workspaceId: string, id: string, input: Partial<WaterProfileDetails> & { name?: string; archived?: boolean }) =>
     api.patch<{ waterProfile: WaterProfile }>(`${base(workspaceId)}/${id}`, input),
-  // 409 + brewLogCount when brews used it: retire instead.
+  // 409 + brewLogCount when brews used it: archive instead.
   remove: (workspaceId: string, id: string) => api.delete(`${base(workspaceId)}/${id}`),
 };

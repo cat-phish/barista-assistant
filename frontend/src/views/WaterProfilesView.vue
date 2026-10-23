@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // Water profiles (docs/api/water-profiles.md §3c), one tab of Bar setup, like
-// grinders: sort by any column, Show retired; a row expands to its
+// grinders: sort by any column, Show archived; a row expands to its
 // figures and actions. The "Default for new brews" picker above the list sets
-// the one profile new brews start on. Retire keeps history; delete only works
+// the one profile new brews start on. Archive keeps history; delete only works
 // for profiles no brew used.
 import { computed, onMounted, ref, watch } from 'vue';
 import { ApiError, errorMessage } from '../api/client';
@@ -48,13 +48,13 @@ const columns: SortColumns<WaterProfile> = {
   added: addedColumn(),
 };
 const sortChoices = sortColumnOptions(columns);
-const showRetired = ref(false);
+const showArchived = ref(false);
 const sort = ref('name_asc');
 watch(sort, (v) => rememberView(viewKey('sort'), v));
 
-const active = computed(() => profiles.value.filter((p) => !p.retiredAt));
-const retiredCount = computed(() => profiles.value.length - active.value.length);
-const shown = computed(() => sortBy(showRetired.value ? profiles.value : active.value, sort.value, columns));
+const active = computed(() => profiles.value.filter((p) => !p.archivedAt));
+const archivedCount = computed(() => profiles.value.length - active.value.length);
+const shown = computed(() => sortBy(showArchived.value ? profiles.value : active.value, sort.value, columns));
 const figure = (n: number | null) => (n === null ? '–' : String(n));
 
 // One row open at a time.
@@ -66,7 +66,7 @@ async function load(): Promise<void> {
   if (!ws) return;
   try {
     profiles.value = (await waterProfilesApi.list(ws)).waterProfiles;
-    if (retiredCount.value === 0) showRetired.value = false;
+    if (archivedCount.value === 0) showArchived.value = false;
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -101,7 +101,7 @@ async function setDefault(id: string): Promise<void> {
   }
 }
 
-async function change(p: WaterProfile, input: { retired: boolean }): Promise<void> {
+async function change(p: WaterProfile, input: { archived: boolean }): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   busyId.value = p.id;
@@ -116,7 +116,7 @@ async function change(p: WaterProfile, input: { retired: boolean }): Promise<voi
   }
 }
 
-// Delete: confirm; if brews used it, the server says how many and we offer Retire.
+// Delete: confirm; if brews used it, the server says how many and we offer Archive.
 const pending = ref<WaterProfile | null>(null);
 const usedCount = ref<number | null>(null);
 const deleting = ref(false);
@@ -144,10 +144,10 @@ async function confirmDelete(): Promise<void> {
     deleting.value = false;
   }
 }
-async function retireInstead(): Promise<void> {
+async function archiveInstead(): Promise<void> {
   const p = pending.value;
   pending.value = null;
-  if (p) await change(p, { retired: true });
+  if (p) await change(p, { archived: true });
 }
 </script>
 
@@ -180,8 +180,8 @@ async function retireInstead(): Promise<void> {
             <span class="hint">The brew form starts on this water; you can still pick another for each brew.</span>
           </div>
         </div>
-        <ListControls v-model:sort="sort" :sort-columns="sortChoices" id-prefix="water" v-model:show-retired="showRetired" :retired-count="retiredCount" />
-        <p v-if="showRetired" class="muted small">Retired water is hidden when brewing; past brews still show it.</p>
+        <ListControls v-model:sort="sort" :sort-columns="sortChoices" id-prefix="water" v-model:show-archived="showArchived" :archived-count="archivedCount" />
+        <p v-if="showArchived" class="muted small">Archived water is hidden when brewing; past brews still show it.</p>
         <p v-if="shown.length === 0" class="card empty">No active water profiles.</p>
         <div v-else class="data-table" style="--cols: minmax(0, 2fr) repeat(3, minmax(0, 0.7fr)) 5.5rem">
           <div class="data-row data-head">
@@ -194,7 +194,7 @@ async function retireInstead(): Promise<void> {
           </div>
           <div v-for="p in shown" :key="p.id" class="data-item" :class="{ open: openId === p.id }">
             <button class="data-row" type="button" :aria-expanded="openId === p.id" @click="toggle(p.id)">
-              <span class="data-td primary">{{ p.name }}<span v-if="p.retiredAt" class="muted"> (retired)</span> <span v-if="p.isDefault" class="badge">Default</span></span>
+              <span class="data-td primary">{{ p.name }}<span v-if="p.archivedAt" class="muted"> (archived)</span> <span v-if="p.isDefault" class="badge">Default</span></span>
               <span class="data-td">{{ figure(p.tdsPpm) }}</span>
               <span class="data-td">{{ figure(p.generalHardnessPpm) }}</span>
               <span class="data-td">{{ figure(p.alkalinityPpm) }}</span>
@@ -204,12 +204,12 @@ async function retireInstead(): Promise<void> {
               <p class="muted">{{ waterSummary(p) ? `${waterSummary(p)} (mg/L)` : 'No figures yet: edit to add TDS, hardness and minerals.' }}</p>
               <p v-if="p.notes" class="muted">{{ p.notes }}</p>
               <div v-if="workspaces.canEdit" class="data-actions">
-                <template v-if="p.retiredAt">
-                  <button class="btn-link" type="button" :disabled="busyId === p.id" @click="change(p, { retired: false })">Restore</button>
+                <template v-if="p.archivedAt">
+                  <button class="btn-link" type="button" :disabled="busyId === p.id" @click="change(p, { archived: false })">Restore</button>
                 </template>
                 <template v-else>
                   <RouterLink class="btn-link" :to="{ name: 'water-profile-edit', params: { id: p.id } }">Edit</RouterLink>
-                  <button class="btn-link" type="button" :disabled="busyId === p.id" @click="change(p, { retired: true })">Retire</button>
+                  <button class="btn-link" type="button" :disabled="busyId === p.id" @click="change(p, { archived: true })">Archive</button>
                 </template>
                 <button class="btn-link danger" type="button" @click="askDelete(p)">Delete</button>
               </div>
@@ -224,12 +224,12 @@ async function retireInstead(): Promise<void> {
     <p v-if="usedCount === null">{{ pending?.name }} will be removed.</p>
     <p v-else>
       {{ usedCount }} brew{{ usedCount === 1 ? ' was' : 's were' }} made with {{ pending?.name }}, so it can't be deleted.
-      Retire it instead: it's hidden when brewing, and past brews keep showing it.
+      Archive it instead: it's hidden when brewing, and past brews keep showing it.
     </p>
     <p v-if="dialogError" class="form-error" role="alert">{{ dialogError }}</p>
     <template #actions>
       <button v-if="usedCount === null" class="btn btn-danger" type="button" :disabled="deleting" @click="confirmDelete">Delete</button>
-      <button v-else class="btn btn-primary" type="button" @click="retireInstead">Retire instead</button>
+      <button v-else class="btn btn-primary" type="button" @click="archiveInstead">Archive instead</button>
       <button class="btn btn-secondary" type="button" :disabled="deleting" @click="pending = null">Cancel</button>
     </template>
   </ConfirmDialog>

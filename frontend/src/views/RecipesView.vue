@@ -60,7 +60,7 @@ onMounted(async () => {
   if (savedBrewer && brewerOptions.value.some((o) => o.value === savedBrewer)) brewerFilter.value = savedBrewer;
 });
 
-// Brewers that have recipes, by name; retired ones marked.
+// Brewers that have recipes, by name; archived ones marked.
 const brewerOptions = computed(() => {
   const used = new Set(recipes.value.map((r) => r.brewer.id));
   return [
@@ -68,7 +68,7 @@ const brewerOptions = computed(() => {
     ...brewers.value
       .filter((b) => used.has(b.id))
       .sort((a, b) => a.name.localeCompare(b.name))
-      .map((b) => ({ value: b.id, label: b.retiredAt ? `${b.name} (retired)` : b.name })),
+      .map((b) => ({ value: b.id, label: b.archivedAt ? `${b.name} (archived)` : b.name })),
   ];
 });
 const filterName = computed(() => brewerOptions.value.find((o) => o.value === brewerFilter.value)?.label ?? '');

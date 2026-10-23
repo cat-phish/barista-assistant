@@ -55,17 +55,17 @@ deleted later); its `expectedYieldGrams` is the recipe's current estimate (or
 target, for espresso), for comparing with the measured `actualYieldGrams`,
 `style` is its style (or `null`), which decides how extraction yield is worked
 out, and `methodKind` is its brewer's kind. `grinder` is
-`null` when no grinder was recorded; a retired
+`null` when no grinder was recorded; an archived
 grinder still appears here. `waterProfile` (`{ "id", "name" }`, §3c) is the
-water used, or `null`; retired ones still appear. `brewerId` / `brewer` (`{ "id", "name",
-"kind" }`, retired ones included) is the brewer it was made with: set by the
+water used, or `null`; archived ones still appear. `brewerId` / `brewer` (`{ "id", "name",
+"kind" }`, archived ones included) is the brewer it was made with: set by the
 API from the recipe, kept if the recipe later moves or is deleted, and `null`
 for a brew without a recipe. `drink`
 (`{ "id", "name", "hasIngredients" }`) is the drink it was for, or `null`;
 `hasIngredients` tells clients to show the shot and the drink tasting apart. `marks` lists
 the timer's marks (`{ "kind", "stepOrder", "atSec" }`, `stepOrder` `null`
 except for `step_end`), earliest first. `tools` lists the prep tools used
-(§3d, `{ "id", "name", "methodKind" }`, retired ones included) in checklist
+(§3d, `{ "id", "name", "methodKind" }`, archived ones included) in checklist
 order; `[]` when none were recorded. `userId` and `brewedBy` are `null` when the brewer deleted their
 account. Such logs can only be edited or deleted by owners.
 
@@ -129,11 +129,11 @@ account. Such logs can only be edited or deleted by owners.
   - There is no brewer field: the log takes its recipe's brewer. Unknown
     fields (e.g. the old `machineId`) are rejected.
   - `toolIds` (optional): the prep tools used (§3d), each once, all from this
-    workspace (retired ones accepted). A tool's `methodKind` isn't checked
+    workspace (archived ones accepted). A tool's `methodKind` isn't checked
     against the recipe; it only decides where the checklist shows it. On
     `PATCH` the list replaces the old one; `[]` clears it.
   - `beanId`, plus `recipeId`, `grinderId` and `waterProfileId` (all
-    optional, nullable), must belong to **this** workspace. A retired grinder
+    optional, nullable), must belong to **this** workspace. An archived grinder
     or water profile is accepted (e.g. when logging an old brew afterwards);
     clients just don't offer them for new brews, and start on the default
     water profile (§3c) if there is one.

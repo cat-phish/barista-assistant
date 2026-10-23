@@ -85,7 +85,7 @@ Retrieves the read-only menu for a workspace, as arranged in the menu builder
     `ingredients` are ingredient names in the drink's order. `price` is in the
     menu's `currency` (`null` = no price); `available: false` items are still
     listed, for the page to mark.
-  - Retired brewers, and items whose drink or brewer is gone, are left out.
+  - Archived brewers, and items whose drink or brewer is gone, are left out.
   - The beans block lists active (not archived, §4) beans with
     `showOnPublicMenu`, by roaster then name, with their roast, blend and
     origin details and `decaf`. A bean's price, bag weight, purchase date,

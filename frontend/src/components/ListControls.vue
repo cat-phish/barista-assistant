@@ -2,8 +2,8 @@
 // The filter, Sort by and Order selects above a list table (Beans, Recipes,
 // Drinks, Ingredients, Brewers, Grinders). The sort stays one key,
 // "<column>_<asc|desc>" (lib/listSort.ts), shared with the column headers;
-// columns come from sortColumnOptions. Lists with retired items (Brewers,
-// Grinders, Water) pass retiredCount and get a "Show retired" checkbox,
+// columns come from sortColumnOptions. Lists with archived items (Brewers,
+// Grinders, Water) pass archivedCount and get a "Show archived" checkbox,
 // shown only while there are some.
 import { computed } from 'vue';
 import { parseSortKey, type SortColumnOption, type SortDir } from '../lib/listSort';
@@ -11,9 +11,9 @@ import { parseSortKey, type SortColumnOption, type SortDir } from '../lib/listSo
 type Option = { value: string; label: string };
 const filter = defineModel<string>('filter', { default: '' });
 const sort = defineModel<string>('sort', { required: true });
-const showRetired = defineModel<boolean>('showRetired', { default: false });
+const showArchived = defineModel<boolean>('showArchived', { default: false });
 // No filterOptions (Water): just Sort by and Order.
-const props = defineProps<{ idPrefix: string; filterLabel?: string; filterOptions?: Option[]; sortColumns: SortColumnOption[]; retiredCount?: number }>();
+const props = defineProps<{ idPrefix: string; filterLabel?: string; filterOptions?: Option[]; sortColumns: SortColumnOption[]; archivedCount?: number }>();
 
 const parsed = computed(() => parseSortKey(sort.value));
 // Changing the column keeps the chosen order.
@@ -30,9 +30,9 @@ const current = computed(() => props.sortColumns.find((c) => c.value === column.
 
 <template>
   <div class="list-controls">
-  <label v-if="retiredCount" class="checkbox retired">
-    <input v-model="showRetired" type="checkbox" />
-    Show retired ({{ retiredCount }})
+  <label v-if="archivedCount" class="checkbox archived">
+    <input v-model="showArchived" type="checkbox" />
+    Show archived ({{ archivedCount }})
   </label>
   <div class="controls" :class="{ 'no-filter': !filterOptions?.length }">
     <div v-if="filterOptions?.length" class="field">
@@ -64,7 +64,7 @@ const current = computed(() => props.sortColumns.find((c) => c.value === column.
   flex-direction: column;
   gap: var(--space-2);
 }
-.retired {
+.archived {
   align-self: flex-end;
 }
 .controls {

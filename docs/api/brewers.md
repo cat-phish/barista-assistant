@@ -42,7 +42,7 @@ recipe. The public menu shows a brewer's plain brew only where the menu
 builder (§7b) places it, under the item's name (e.g. "Espresso" for a Linea
 Mini).
 
-Retiring works like grinders (§3b): retired brewers leave the pickers, and
+Archiving works like grinders (§3b): archived brewers leave the pickers, and
 past brews keep showing them. `createdAt` (read-only) is when the brewer was added.
 
 **Brewer object:**
@@ -56,7 +56,7 @@ past brews keep showing them. `createdAt` (read-only) is when the brewer was add
   "preinfusion": "manual",
   "flowControl": "manual",
   "pressureControl": "none",
-  "retiredAt": null,
+  "archivedAt": null,
   "createdAt": "2026-10-18T09:00:00.000Z"
 }
 ```
@@ -65,7 +65,7 @@ past brews keep showing them. `createdAt` (read-only) is when the brewer was add
 
 - **Auth Required:** `true` (any member)
 - **Success (`200 OK`):** `{ "brewers": [ { ...brewer } ] }`: active first,
-  then retired, each by `name`.
+  then archived, each by `name`.
 
 ## `POST /api/workspaces/:workspaceId/brewers`
 
@@ -86,7 +86,7 @@ Recipes and brew logs reference it by ID, so a rename shows up everywhere at onc
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Body:** any non-empty subset of the `POST` fields (same rules), plus
-  `retired` (`true` retires it, keeping the first retirement date; `false`
+  `archived` (`true` archives it, keeping the first archive date; `false`
   restores it).
 - **Success (`200 OK`):** `{ "brewer": { ...brewer } }`
 - **Errors:** `400` invalid or empty body; `403` viewer; `404` not in this workspace; `409` another brewer
@@ -105,4 +105,4 @@ a brewer (they need a kind, not a device).
 - **Errors:** `403` viewer; `404` not in this workspace; `409` recipes or
   brew logs use it, with body
   `{ "error": "...", "recipeCount": 2, "brewLogCount": 5 }`. Move or delete
-  the recipes first; with only brew logs left, retire it instead.
+  the recipes first; with only brew logs left, archive it instead.

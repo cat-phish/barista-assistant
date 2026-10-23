@@ -21,12 +21,12 @@ import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 // docs/api/menu.md §7b: the menu builder. Sections and items arranged by hand;
 // the public menu (§7) renders them.
 
-// An item's source, for the builder to show (and flag when it's retired).
+// An item's source, for the builder to show (and flag when it's archived).
 export interface MenuItemSource {
   name: string;
   description: string | null;
   kind: MethodKind;
-  retired: boolean; // a retired brewer is left off the public menu
+  archived: boolean; // an archived brewer is left off the public menu
 }
 export interface MenuItemView {
   id: string;
@@ -125,7 +125,7 @@ export async function loadMenu(workspaceId: string, conn: Db = db): Promise<Menu
           drinkKind: drinks.kind,
           brewerName: brewers.name,
           brewerKind: brewers.kind,
-          brewerRetiredAt: brewers.retiredAt,
+          brewerArchivedAt: brewers.archivedAt,
         })
         .from(menuItems)
         .leftJoin(drinks, eq(drinks.id, menuItems.drinkId))
@@ -139,13 +139,13 @@ export async function loadMenu(workspaceId: string, conn: Db = db): Promise<Menu
       ...s,
       items: items
         .filter((i) => i.sectionId === s.id)
-        .map(({ sectionId: _s, drinkName, drinkDescription, drinkKind, brewerName, brewerKind, brewerRetiredAt, ...item }) => ({
+        .map(({ sectionId: _s, drinkName, drinkDescription, drinkKind, brewerName, brewerKind, brewerArchivedAt, ...item }) => ({
           ...item,
           source:
             item.itemType === "drink" && drinkName !== null && drinkKind !== null
-              ? { name: drinkName, description: drinkDescription, kind: drinkKind, retired: false }
+              ? { name: drinkName, description: drinkDescription, kind: drinkKind, archived: false }
               : item.itemType === "brewer" && brewerName !== null && brewerKind !== null
-                ? { name: brewerName, description: null, kind: brewerKind, retired: brewerRetiredAt !== null }
+                ? { name: brewerName, description: null, kind: brewerKind, archived: brewerArchivedAt !== null }
                 : null,
         })),
     })),

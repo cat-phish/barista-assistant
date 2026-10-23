@@ -73,12 +73,12 @@ watch(
   },
 );
 
-// Active grinders, plus the brew's own even if it's since been retired.
-const grinderOptions = computed(() => props.grinders.filter((g) => !g.retiredAt || g.id === draft.value.grinderId));
+// Active grinders, plus the brew's own even if it's since been archived.
+const grinderOptions = computed(() => props.grinders.filter((g) => !g.archivedAt || g.id === draft.value.grinderId));
 // The prep checklist: the method's tools and the all-method ones (lib/prepTools.ts).
 const toolOptions = computed(() => toolsFor(props.prepTools ?? [], props.methodKind ?? null, draft.value.toolIds));
 // Likewise for water; with none set up, the only choice says so.
-const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w.retiredAt || w.id === draft.value.waterProfileId));
+const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w.archivedAt || w.id === draft.value.waterProfileId));
 </script>
 
 <template>
@@ -154,7 +154,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
         <label for="brew-grinder">Grinder</label>
         <select id="brew-grinder" v-model="draft.grinderId">
           <option value="">None recorded</option>
-          <option v-for="g in grinderOptions" :key="g.id" :value="g.id">{{ g.name }}{{ g.retiredAt ? ' (retired)' : '' }}</option>
+          <option v-for="g in grinderOptions" :key="g.id" :value="g.id">{{ g.name }}{{ g.archivedAt ? ' (archived)' : '' }}</option>
         </select>
       </div>
       <div class="field">
@@ -166,7 +166,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
       <label for="brew-water-profile">Water profile</label>
       <select id="brew-water-profile" v-model="draft.waterProfileId">
         <option value="">{{ waterOptions.length ? 'None recorded' : 'None (no water profiles set up)' }}</option>
-        <option v-for="w in waterOptions" :key="w.id" :value="w.id">{{ w.name }}{{ w.retiredAt ? ' (retired)' : '' }}</option>
+        <option v-for="w in waterOptions" :key="w.id" :value="w.id">{{ w.name }}{{ w.archivedAt ? ' (archived)' : '' }}</option>
       </select>
     </div>
     <fieldset v-if="toolOptions.length" class="prep">
@@ -174,7 +174,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
       <div class="prep-list">
         <label v-for="t in toolOptions" :key="t.id" class="checkbox">
           <input v-model="draft.toolIds" type="checkbox" :value="t.id" />
-          {{ t.name }}{{ t.retiredAt ? ' (retired)' : '' }}
+          {{ t.name }}{{ t.archivedAt ? ' (archived)' : '' }}
         </label>
       </div>
     </fieldset>

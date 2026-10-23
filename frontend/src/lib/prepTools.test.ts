@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { PrepTool } from '../api/types';
 import { methodLabel, toolsFor } from './prepTools';
 
-const tool = (id: string, methodKind: PrepTool['methodKind'], retired = false): PrepTool => ({
-  id, name: id, methodKind, position: 0, retiredAt: retired ? '2026-10-22T00:00:00.000Z' : null, createdAt: '2026-10-22T00:00:00.000Z',
+const tool = (id: string, methodKind: PrepTool['methodKind'], archived = false): PrepTool => ({
+  id, name: id, methodKind, position: 0, archivedAt: archived ? '2026-10-22T00:00:00.000Z' : null, createdAt: '2026-10-22T00:00:00.000Z',
 });
 const tools = [tool('wdt', 'espresso'), tool('paper', 'filter'), tool('rdt', null), tool('old', 'espresso', true)];
 const ids = (list: PrepTool[]) => list.map((t) => t.id);
@@ -19,7 +19,7 @@ describe('toolsFor', () => {
     expect(ids(toolsFor(tools, null, []))).toEqual(['wdt', 'paper', 'rdt']);
   });
 
-  it("keeps the brew's own tools, retired or for another method", () => {
+  it("keeps the brew's own tools, archived or for another method", () => {
     expect(ids(toolsFor(tools, 'filter', ['old', 'wdt']))).toEqual(['wdt', 'paper', 'rdt', 'old']);
   });
 });

@@ -12,7 +12,7 @@ all-method ones.
 **Tool object:**
 
 ```json
-{ "id": "uuid", "name": "Puck screen", "methodKind": "espresso", "position": 2, "retiredAt": null, "createdAt": "…" }
+{ "id": "uuid", "name": "Puck screen", "methodKind": "espresso", "position": 2, "archivedAt": null, "createdAt": "…" }
 ```
 
 - `name`: trimmed, 1–100 chars, unique per workspace (case-insensitive).
@@ -26,15 +26,15 @@ Puck screen, Distributor, Shaker, Bottom paper filter and Top paper filter
 and Sifted fines (every method). Migration 0038 gave existing workspaces the
 same list.
 
-A **retired** tool (`retiredAt` set) leaves the checklist for new brews, but
+A **archived** tool (`archivedAt` set) leaves the checklist for new brews, but
 past brews keep showing it, and it can be restored. A tool that brews used
-can't be deleted (retire it instead); an unused one can.
+can't be deleted (archive it instead); an unused one can.
 
 ## `GET /api/workspaces/:workspaceId/prep-tools`
 
 - **Auth Required:** `true` (any member)
 - **Success (`200 OK`):** `{ "tools": [ { ...tool } ] }` by `position`,
-  retired ones included.
+  archived ones included.
 
 ## `POST /api/workspaces/:workspaceId/prep-tools`
 
@@ -48,8 +48,8 @@ can't be deleted (retire it instead); an unused one can.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Body:** any non-empty subset of `name`, `methodKind`, and
-  `"retired": true | false` (`true` sets `retiredAt`, unchanged if already
-  retired; `false` restores it).
+  `"archived": true | false` (`true` sets `archivedAt`, unchanged if already
+  archived; `false` restores it).
 - **Success (`200 OK`):** `{ "tool": { ...tool } }`
 - **Errors:** `400`; `403` viewer; `404` not in this workspace; `409` name taken.
 
@@ -57,7 +57,7 @@ can't be deleted (retire it instead); an unused one can.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Body:** `{ "toolIds": ["uuid", "uuid"] }`: every tool of the workspace,
-  retired ones included, exactly once, in the new order.
+  archived ones included, exactly once, in the new order.
 - **Success (`200 OK`):** `{ "tools": [ { ...tool } ] }`
 - **Errors:** `400` not exactly the workspace's tools; `403` viewer.
 
@@ -66,4 +66,4 @@ can't be deleted (retire it instead); an unused one can.
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Success (`204 No Content`)**
 - **Errors:** `403` viewer; `404` not in this workspace; `409` brews used it,
-  with body `{ "error": "...", "brewLogCount": 3 }`. Retire it instead.
+  with body `{ "error": "...", "brewLogCount": 3 }`. Archive it instead.

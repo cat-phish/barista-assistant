@@ -19,7 +19,7 @@ import { optionalText, updateSchema } from "../validation.js";
 
 // docs/api/brewers.md §3: what makes the coffee (V60, AeroPress, an espresso
 // machine). Espresso brewers record their capabilities; the menu fields put
-// the plain brew on the public menu. Retired like grinders (§3b) once brews
+// the plain brew on the public menu. Archived like grinders (§3b) once brews
 // used one.
 export type BrewerSummary = Omit<Brewer, "workspaceId">;
 
@@ -58,7 +58,7 @@ const createBrewerSchema = z.object({
   // an old client sending them gets a 400 rather than a silent drop.
   .strict();
 
-const updateBrewerSchema = updateSchema({ ...brewerFields, retired: z.boolean() });
+const updateBrewerSchema = updateSchema({ ...brewerFields, archived: z.boolean() });
 
 const summary = {
   id: brewers.id,
@@ -68,7 +68,7 @@ const summary = {
   preinfusion: brewers.preinfusion,
   flowControl: brewers.flowControl,
   pressureControl: brewers.pressureControl,
-  retiredAt: brewers.retiredAt,
+  archivedAt: brewers.archivedAt,
   createdAt: brewers.createdAt,
 };
 
@@ -105,8 +105,8 @@ brewersRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<Brewe
     .select(summary)
     .from(brewers)
     .where(eq(brewers.workspaceId, workspaceId))
-    // Active first, then retired; each by name.
-    .orderBy(sql`${brewers.retiredAt} IS NOT NULL`, asc(brewers.name));
+    // Active first, then archived; each by name.
+    .orderBy(sql`${brewers.archivedAt} IS NOT NULL`, asc(brewers.name));
   res.json({ brewers: rows });
 });
 
@@ -136,7 +136,7 @@ brewersRouter.patch("/:brewerId", async (req: Request<BrewerParams>, res: Respon
   if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
   const body = parseBody(updateBrewerSchema, req, res);
   if (!body) return;
-  const { retired, ...fields } = body;
+  const { archived, ...fields } = body;
 
   let outcome: { status: "not_found" } | { status: "in_use"; recipeCount: number } | { status: "updated" };
   try {
@@ -152,9 +152,9 @@ brewersRouter.patch("/:brewerId", async (req: Request<BrewerParams>, res: Respon
         .update(brewers)
         .set({
           ...fields,
-          // Keep the original retirement date if it's already retired.
-          ...(retired === true ? { retiredAt: sql`COALESCE(${brewers.retiredAt}, NOW())` } : {}),
-          ...(retired === false ? { retiredAt: null } : {}),
+          // Keep the original archive date if it's already archived.
+          ...(archived === true ? { archivedAt: sql`COALESCE(${brewers.archivedAt}, NOW())` } : {}),
+          ...(archived === false ? { archivedAt: null } : {}),
         })
         .where(eq(brewers.id, brewer.id));
       return { status: "updated" } as const;
@@ -182,7 +182,7 @@ brewersRouter.patch("/:brewerId", async (req: Request<BrewerParams>, res: Respon
 
 // The FK cascades to recipes (so workspace deletion works), which
 // makes this check the only thing protecting them. Brewers that brews used
-// are retired instead, so history keeps them.
+// are archived instead, so history keeps them.
 brewersRouter.delete("/:brewerId", async (req: Request<BrewerParams>, res: Response) => {
   if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId, WRITE_ROLES))) return;
   const outcome = await db.transaction(async (tx) => {
@@ -204,7 +204,7 @@ brewersRouter.delete("/:brewerId", async (req: Request<BrewerParams>, res: Respo
     const message =
       recipeCount > 0
         ? `${recipeCount} recipe(s) use this brewer. Change their brewer or delete them first.`
-        : `${brewLogCount} brew(s) were made with this brewer. Retire it instead.`;
+        : `${brewLogCount} brew(s) were made with this brewer. Archive it instead.`;
     sendError(res, 409, message, { recipeCount, brewLogCount });
     return;
   }
