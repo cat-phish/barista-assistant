@@ -32,7 +32,7 @@ import {
   type Recipe,
   recipeStyles,
 } from "@barista/shared/schema";
-import { decimalSchema, optionalText, updateSchema } from "../validation.js";
+import { decimalSchema, grindSettingSchema, optionalText, updateSchema } from "../validation.js";
 
 // docs/api/brew-logs.md §6: first_drop (espresso), step_end (a step's real end).
 export interface Mark {
@@ -106,7 +106,8 @@ const brewLogFields = {
   // Refractometer reading, % (docs/api/brew-logs.md §6). Espresso runs to ~12%.
   tdsPercent: decimalSchema({ min: 0, max: 30, scale: 2, exclusiveMin: true }).nullable().optional(),
   actualTempC: decimalSchema({ min: 0, max: 100, scale: 1 }).nullable().optional(),
-  actualGrindSetting: optionalText(100),
+  // The number on the grinder's dial (docs/api/brew-logs.md §6).
+  actualGrindSetting: grindSettingSchema.nullable().optional(),
   // Grinder speed: only with a variable-speed grinder (rpmError).
   grindRpm: z.number().int().min(50).max(5000).nullable().optional(),
   // Beans weighed in and grounds out, for grinder retention (weightsError).

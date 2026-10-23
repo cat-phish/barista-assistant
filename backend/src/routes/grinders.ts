@@ -8,13 +8,13 @@ import { isDuplicateEntryError, parseBody, parseQuery, sendError } from "../http
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { addUsageRoute, grinderUsage } from "../usage.js";
 import { BURR_TYPES, brewLogs, GRINDER_ADJUSTMENTS, GRINDER_POWER, grinders, type Grinder } from "@barista/shared/schema";
-import { decimalSchema, optionalText, updateSchema } from "../validation.js";
+import { decimalSchema, grindSettingSchema, optionalText, updateSchema } from "../validation.js";
 
 // docs/api/grinders.md §3b
 export type GrinderSummary = Omit<Grinder, "workspaceId">;
 
 export interface LastSettingResponse {
-  lastSetting: { grindSetting: string; grindRpm: number | null; timestamp: Date; brewLogId: string } | null;
+  lastSetting: { grindSetting: number; grindRpm: number | null; timestamp: Date; brewLogId: string } | null;
 }
 
 interface WorkspaceParams {
@@ -25,7 +25,7 @@ interface GrinderParams extends WorkspaceParams {
 }
 
 const rpmSchema = z.number().int().min(50).max(5000).nullable().optional();
-const settingSchema = decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMax: true }).nullable().optional();
+const settingSchema = grindSettingSchema.nullable().optional();
 const grinderFields = {
   name: z.string().trim().min(1).max(100),
   notes: optionalText(255),
@@ -214,6 +214,6 @@ grindersRouter.get(
       .orderBy(desc(brewLogs.timestamp), desc(brewLogs.id))
       .limit(1);
 
-    res.json({ lastSetting: last?.grindSetting ? { ...last, grindSetting: last.grindSetting } : null });
+    res.json({ lastSetting: last && last.grindSetting !== null ? { ...last, grindSetting: last.grindSetting } : null });
   }
 );

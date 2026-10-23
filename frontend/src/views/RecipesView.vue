@@ -10,7 +10,7 @@ import type { Brewer, Recipe } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ListControls from '../components/ListControls.vue';
 import MenuTabs from '../components/MenuTabs.vue';
-import { formatAdded, formatDoseLine, formatGrams, formatTime } from '../lib/format';
+import { formatAdded, formatDoseLine, formatGrams, formatGrind, formatTime } from '../lib/format';
 import { addedColumn, isSortKey, nameColumn, recallView, rememberView, sortArrow, sortBy, sortLabel, sortColumnOptions, toggleHeader, type SortColumns } from '../lib/listSort';
 import { formatFinishWindow, plannedStarts, stepTitle } from '../lib/steps';
 import { formatTemp } from '../lib/units';
@@ -167,7 +167,7 @@ async function setArchived(r: Recipe, archived: boolean): Promise<void> {
               <span v-if="recipe.targetTempC !== null">{{ formatTemp(recipe.targetTempC, temperatureUnit) }}</span>
             </p>
             <p v-if="recipe.grindSettings.length" class="muted small">
-              Grind ≈ {{ recipe.grindSettings.map((g) => `${g.setting} on ${g.grinderName}`).join(' · ') }}
+              Grind ≈ {{ recipe.grindSettings.map((g) => `${formatGrind(g.setting)} on ${g.grinderName}`).join(' · ') }}
             </p>
             <p v-if="stepsSummary(recipe)" class="small">{{ stepsSummary(recipe) }}</p>
             <div v-if="workspaces.canEdit" class="data-actions">

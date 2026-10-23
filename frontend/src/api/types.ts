@@ -332,7 +332,7 @@ export interface RecipeStep extends StepFields {
 export interface RecipeGrindSetting {
   grinderId: string;
   grinderName: string;
-  setting: string; // approximate starting point for that grinder
+  setting: number; // approximate starting point on that grinder's dial
 }
 
 export interface Recipe {
@@ -388,7 +388,7 @@ export interface BrewLog {
   actualYieldGrams: number | null; // measured beverage weight
   tdsPercent: number | null; // refractometer reading; extraction yield is worked out (lib/extraction.ts)
   actualTempC: number | null;
-  actualGrindSetting: string | null;
+  actualGrindSetting: number | null; // the number on the grinder's dial
   grindRpm: number | null; // grinder speed, variable-speed grinders only
   beanWeightInGrams: number | null; // weighed before grinding; retention = in − out (lib/grinderRetention.ts)
   groundWeightOutGrams: number | null; // what came out of the grinder

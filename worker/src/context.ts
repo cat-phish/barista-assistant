@@ -85,7 +85,7 @@ export interface BrewSummary {
   tdsPercent: number | null; // refractometer reading
   extractionYieldPercent: number | null; // from TDS (docs/api/brew-logs.md §6)
   actualTempC: number | null;
-  actualGrindSetting: string | null;
+  actualGrindSetting: number | null; // the number on the grinder's dial
   grindRpm: number | null; // grinder speed, variable-speed grinders only
   // Beans weighed before grinding and grounds out; retention = in − out
   // (docs/api/brew-logs.md §6). actualDoseGrams is what went into the brew.
@@ -160,7 +160,7 @@ export interface BrewContext {
     firstDropMaxSec: number | null;
     targetTempC: number | null;
     // Approximate starting points, per grinder (the brew's grinder is in grinderName).
-    grindStartingPoints: Array<{ grinderName: string; setting: string }>;
+    grindStartingPoints: Array<{ grinderName: string; setting: number }>;
     flowUnit: FlowUnit; // for flow steps: g/s or ml/s
     // Back to back: each starts when the previous one actually ended
     // (step_end marks say when, for tap/logged steps).

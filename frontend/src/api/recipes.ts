@@ -15,7 +15,7 @@ export interface RecipeInput {
   firstDropMaxSec: number | null;
   targetTempC: number | null;
   defaultGrinderId: string | null;
-  grindSettings: Array<{ grinderId: string; setting: string }>;
+  grindSettings: Array<{ grinderId: string; setting: number }>;
   flowUnit: FlowUnit;
   styleId: string | null; // docs/api/recipe-styles.md §5e
   steps: StepFields[];

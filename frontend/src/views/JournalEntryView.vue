@@ -17,7 +17,7 @@ import { useAnalysis } from '../composables/useAnalysis';
 import { draftFromLog, emptyDraft, parseBrewDraft } from '../lib/brewDraft';
 import { extractionYield } from '../lib/extraction';
 import { grinderRetention } from '../lib/grinderRetention';
-import { formatDoseLine, formatGrams, formatTime, formatWhen } from '../lib/format';
+import { formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen } from '../lib/format';
 import { formatSize } from '../lib/servings';
 import { formatTemp } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
@@ -200,7 +200,7 @@ function markLabel(m: Mark): string {
           <div v-if="log.tdsPercent !== null"><dt>TDS</dt><dd>{{ tdsText(log) }}</dd></div>
           <div><dt>Time</dt><dd>{{ formatTime(log.actualTimeSec) }}</dd></div>
           <div><dt>Water</dt><dd>{{ log.actualTempC !== null ? formatTemp(log.actualTempC, temperatureUnit) : '–' }}</dd></div>
-          <div><dt>Grind</dt><dd>{{ log.actualGrindSetting ?? '–' }}<template v-if="log.grindRpm !== null"> at {{ log.grindRpm }} RPM</template><template v-if="log.grinder"> · {{ log.grinder.name }}</template></dd></div>
+          <div><dt>Grind</dt><dd>{{ log.actualGrindSetting !== null ? formatGrind(log.actualGrindSetting) : '–' }}<template v-if="log.grindRpm !== null"> at {{ log.grindRpm }} RPM</template><template v-if="log.grinder"> · {{ log.grinder.name }}</template></dd></div>
           <div v-if="log.beanWeightInGrams !== null || log.groundWeightOutGrams !== null"><dt>Grinder weights</dt><dd>{{ grinderWeightsText(log) }}</dd></div>
           <div><dt>Brewer</dt><dd>{{ log.brewer?.name ?? '–' }}</dd></div>
           <div v-if="log.waterProfile"><dt>Water profile</dt><dd>{{ log.waterProfile.name }}</dd></div>

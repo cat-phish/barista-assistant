@@ -2,7 +2,7 @@
 // rules as the API (docs/api/brew-logs.md §6). Unit-tested in brewDraft.test.ts.
 import type { BrewLogInput } from '../api/brews';
 import type { BrewLog, Grinder, Mark, MethodKind, TemperatureUnit } from '../api/types';
-import { formatGrams, formatTime, parseDecimal, parseTime } from './format';
+import { formatGrams, formatGrind, formatTime, GRIND_SETTING, parseDecimal, parseTime } from './format';
 import { parseMark } from './marks';
 import { parseTemp, tempText } from './units';
 
@@ -28,7 +28,7 @@ export interface BrewDraft {
 }
 
 export type BrewValues = Omit<BrewLogInput, 'beanId' | 'recipeId'>;
-export type BrewDraftErrors = Partial<Record<'dose' | 'water' | 'yieldGrams' | 'tds' | 'temp' | 'time' | 'firstDrop' | 'rpm' | 'beanIn' | 'groundOut', string>>;
+export type BrewDraftErrors = Partial<Record<'dose' | 'water' | 'yieldGrams' | 'tds' | 'temp' | 'time' | 'firstDrop' | 'rpm' | 'beanIn' | 'groundOut' | 'grind', string>>;
 
 // What the RPM is checked against: the brew's grinder (null = none chosen).
 export type RpmGrinder = Pick<Grinder, 'variableSpeed' | 'rpmMin' | 'rpmMax'> | null;
@@ -49,7 +49,7 @@ export function draftFromLog(log: BrewLog, tempUnit: TemperatureUnit = 'c'): Bre
     waterProfileId: log.waterProfileId ?? '',
     toolIds: log.tools.map((t) => t.id),
     firstDrop: firstDropOf(log.marks),
-    grind: log.actualGrindSetting ?? '',
+    grind: log.actualGrindSetting === null ? '' : formatGrind(log.actualGrindSetting),
     rpm: log.grindRpm === null ? '' : String(log.grindRpm),
     beanIn: log.beanWeightInGrams === null ? '' : formatGrams(log.beanWeightInGrams),
     groundOut: log.groundWeightOutGrams === null ? '' : formatGrams(log.groundWeightOutGrams),
@@ -92,6 +92,7 @@ export function parseBrewDraft(
   const temp = d.temp.trim() ? parseTemp(d.temp, tempUnit) : null;
   const time = parseTime(d.time);
   const firstDrop = espresso ? parseMark(d.firstDrop) : null;
+  const grind = d.grind.trim() ? parseDecimal(d.grind, GRIND_SETTING) : null;
   const weight = { scale: 2, min: 0, max: 1000, exclusiveMin: true, exclusiveMax: true };
   const beanIn = d.beanIn.trim() ? parseDecimal(d.beanIn, weight) : null;
   const groundOut = d.groundOut.trim() ? parseDecimal(d.groundOut, weight) : null;
@@ -106,6 +107,7 @@ export function parseBrewDraft(
   if (!time.ok) errors.time = time.error;
   if (firstDrop && !firstDrop.ok) errors.firstDrop = firstDrop.error;
   else if (firstDrop?.ok && time.ok && firstDrop.value > time.value) errors.firstDrop = 'After the end of the shot';
+  if (grind && !grind.ok) errors.grind = grind.error;
   if (beanIn && !beanIn.ok) errors.beanIn = beanIn.error;
   if (groundOut && !groundOut.ok) errors.groundOut = groundOut.error;
   else if (groundOut?.ok && beanIn?.ok && groundOut.value > beanIn.value) errors.groundOut = 'More than the beans weighed in';
@@ -113,7 +115,7 @@ export function parseBrewDraft(
   else if (rpm?.ok && grinder?.rpmMin != null && grinder.rpmMax != null && (rpm.value < grinder.rpmMin || rpm.value > grinder.rpmMax)) {
     errors.rpm = `Outside the grinder's range (${grinder.rpmMin}–${grinder.rpmMax})`;
   }
-  if (Object.keys(errors).length > 0 || !dose.ok || !water.ok || (yieldGrams && !yieldGrams.ok) || !time.ok || (tds && !tds.ok) || (temp && !temp.ok) || (rpm && !rpm.ok) || (beanIn && !beanIn.ok) || (groundOut && !groundOut.ok)) {
+  if (Object.keys(errors).length > 0 || !dose.ok || !water.ok || (yieldGrams && !yieldGrams.ok) || !time.ok || (tds && !tds.ok) || (temp && !temp.ok) || (rpm && !rpm.ok) || (beanIn && !beanIn.ok) || (groundOut && !groundOut.ok) || (grind && !grind.ok)) {
     return { errors, values: null, firstDropSec: null };
   }
 
@@ -129,7 +131,7 @@ export function parseBrewDraft(
       grinderId: d.grinderId || null,
       waterProfileId: d.waterProfileId || null,
       toolIds: [...d.toolIds],
-      actualGrindSetting: d.grind.trim() || null,
+      actualGrindSetting: grind?.ok ? grind.value : null,
       grindRpm: rpm?.ok ? rpm.value : null,
       beanWeightInGrams: beanIn?.ok ? beanIn.value : null,
       groundWeightOutGrams: groundOut?.ok ? groundOut.value : null,

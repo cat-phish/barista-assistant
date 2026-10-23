@@ -72,6 +72,14 @@ export function formatGrams(value: number): string {
   return `${Number(value.toFixed(2))}`;
 }
 
+// A grind setting, the number on the grinder's dial: "20", "4.25".
+export function formatGrind(value: number): string {
+  return formatGrams(value);
+}
+
+// The grind setting rules (docs/api/brew-logs.md §6), for parseDecimal.
+export const GRIND_SETTING = { scale: 2, min: 0, max: 10000, exclusiveMax: true } as const;
+
 // Today's date in the user's timezone, as YYYY-MM-DD (for <input type="date">).
 export function localDateInput(now: Date = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, '0');

@@ -7,7 +7,7 @@ import { errorMessage } from '../api/client';
 import type { Bean, BrewLog } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import RatingStars from '../components/RatingStars.vue';
-import { formatDoseLine, formatGrams, formatTime, formatWhen } from '../lib/format';
+import { formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen } from '../lib/format';
 import { formatSize } from '../lib/servings';
 import { formatTemp } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
@@ -102,7 +102,7 @@ watch(beanFilter, () => load(true));
               <span v-if="log.tdsPercent !== null">{{ log.tdsPercent }}% TDS</span>
               <span>{{ formatTime(log.actualTimeSec) }}</span>
               <span v-if="log.actualTempC !== null">{{ formatTemp(log.actualTempC, temperatureUnit) }}</span>
-              <span v-if="log.actualGrindSetting || log.grinder">{{ [log.actualGrindSetting, log.grindRpm !== null ? `${log.grindRpm} RPM` : null, log.grinder?.name].filter(Boolean).join(' · ') }}</span>
+              <span v-if="log.actualGrindSetting !== null || log.grinder">{{ [log.actualGrindSetting !== null ? formatGrind(log.actualGrindSetting) : null, log.grindRpm !== null ? `${log.grindRpm} RPM` : null, log.grinder?.name].filter(Boolean).join(' · ') }}</span>
             </span>
             <span v-if="log.tastingNotes || log.drinkTastingNotes" class="notes">{{ log.tastingNotes ?? log.drinkTastingNotes }}</span>
           </RouterLink>

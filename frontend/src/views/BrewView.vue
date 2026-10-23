@@ -50,7 +50,7 @@ import { stepTitle } from '../lib/steps';
 import { useAnalysis } from '../composables/useAnalysis';
 import { emptyDraft, parseBrewDraft } from '../lib/brewDraft';
 import { grinderRetentionText } from '../lib/grinderRetention';
-import { formatDay, formatDoseLine, formatGrams, formatTime } from '../lib/format';
+import { formatDay, formatDoseLine, formatGrams, formatGrind, formatTime } from '../lib/format';
 import { chooseGrind, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
 import { useWorkspaceStore } from '../stores/workspace';
 import { brewRetention, linkRatio, ratioText as formatRatio, ROAST_LEVELS, scaleBatch, scaleShot, scaleSteps, type MeasuredBrew, type ScaleField } from '../lib/scale';
@@ -281,6 +281,8 @@ function setGroundOut(event: Event): void {
   if (filterRecipe.value || shotRecipe.value) setLeadText('dose', text);
   else draft.dose = text;
 }
+// Shown while typing, except mid-number ("2.").
+const setupGrindError = computed(() => (draft.grind.trim().endsWith('.') ? '' : (parsed.value.errors.grind ?? '')));
 const setupRetention = computed(() => grinderRetentionText(num(draft.beanIn), num(draft.groundOut)));
 // A positive decimal, allowing a trailing "." while typing.
 function amount(text: string): number {
@@ -434,14 +436,14 @@ async function addGrinder(): Promise<void> {
 
 // Grind pre-fill: last setting for this grinder + recipe, else the suggestion's
 // (same grinder only), else empty. Re-run whenever recipe or grinder changes.
-const lastSetting = ref<{ grindSetting: string; grindRpm: number | null; timestamp: string } | null>(null);
+const lastSetting = ref<{ grindSetting: number; grindRpm: number | null; timestamp: string } | null>(null);
 const grindSource = ref<GrindSource>('none');
 let grindRequest = 0;
 async function refreshGrind(): Promise<void> {
   const ws = workspaces.current?.id;
   const request = ++grindRequest; // ignore answers to superseded choices
   const grinderId = draft.grinderId === NEW_GRINDER ? '' : draft.grinderId;
-  let last: { grindSetting: string; grindRpm: number | null; timestamp: string } | null = null;
+  let last: { grindSetting: number; grindRpm: number | null; timestamp: string } | null = null;
   if (ws && grinderId && recipeId.value) {
     try {
       last = (await grindersApi.lastSetting(ws, grinderId, recipeId.value)).lastSetting;
@@ -834,11 +836,12 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           </div>
           <div class="field">
             <label for="setup-grind">Grind setting</label>
-            <input id="setup-grind" v-model="draft.grind" maxlength="100" :placeholder="grindPlaceholder" @input="grindSource = 'none'" />
+            <input id="setup-grind" v-model="draft.grind" inputmode="decimal" :placeholder="grindPlaceholder" :aria-invalid="!!setupGrindError" @input="grindSource = 'none'" />
+            <span v-if="setupGrindError" class="field-error">{{ setupGrindError }}</span>
           </div>
         </div>
         <p v-if="grindSource === 'last' && lastSetting" class="muted small grind-hint">
-          Last time with {{ grinder?.name }} on {{ recipe?.name }}: {{ lastSetting.grindSetting }} ({{ formatDay(lastSetting.timestamp) }})
+          Last time with {{ grinder?.name }} on {{ recipe?.name }}: {{ formatGrind(lastSetting.grindSetting) }} ({{ formatDay(lastSetting.timestamp) }})
         </p>
         <p v-else-if="grindSource === 'suggestion'" class="muted small grind-hint">Grind from the analyzed brew; adjust as suggested.</p>
         <p v-else-if="grindSource === 'recipe'" class="muted small grind-hint">

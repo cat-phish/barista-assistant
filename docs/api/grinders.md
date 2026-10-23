@@ -107,7 +107,7 @@ recipe. The brew flow uses it to pre-fill the grind when both are chosen.
 - **Auth Required:** `true` (any member)
 - **Query:** `recipeId` (required).
 - **Success (`200 OK`):**
-  `{ "lastSetting": { "grindSetting": "20", "grindRpm": 900, "timestamp": "…", "brewLogId": "uuid" } | null }`
+  `{ "lastSetting": { "grindSetting": 20, "grindRpm": 900, "timestamp": "…", "brewLogId": "uuid" } | null }`
   (`grindRpm` is that brew's speed, or `null`).
   It's the newest such brew that has a grind setting (brews without one are
   skipped), or `null` if there's none.

@@ -547,7 +547,7 @@ export const recipeGrindSettings = mysqlTable(
     grinderId: varchar("grinder_id", { length: 36 })
       .notNull()
       .references(() => grinders.id, { onDelete: "cascade" }),
-    setting: varchar("setting", { length: 100 }).notNull(), // e.g. "20"
+    setting: decimal("setting", { precision: 6, scale: 2, mode: "number" }).notNull(), // e.g. 20, on the grinder's dial
   },
   (table) => ({
     recipeGrinderUnique: unique("recipe_grind_settings_recipe_grinder_unique").on(table.recipeId, table.grinderId),
@@ -820,7 +820,7 @@ export const brewLogs = mysqlTable("brew_logs", {
   // (docs/api/brew-logs.md §6).
   tdsPercent: decimal("tds_percent", { precision: 4, scale: 2, mode: "number" }),
   actualTempC: decimal("actual_temp_c", { precision: 4, scale: 1, mode: "number" }),
-  actualGrindSetting: varchar("actual_grind_setting", { length: 100 }),
+  actualGrindSetting: decimal("actual_grind_setting", { precision: 6, scale: 2, mode: "number" }), // the dial number, like settingMin
   // Grinder speed, only for a variable-speed grinder (docs/api/brew-logs.md §6).
   grindRpm: int("grind_rpm"),
   // Grinder retention (docs/api/brew-logs.md §6): the beans weighed before
