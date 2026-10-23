@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractionYield } from './extraction';
+import { brixToTds, extractionYield } from './extraction';
 
 const brew = { tdsPercent: 1.38, doseGrams: 15, yieldGrams: 220, waterGrams: 250 };
 
@@ -23,5 +23,18 @@ describe('extractionYield', () => {
     expect(extractionYield({ ...brew, yieldGrams: null, style: 'pour_over' })).toBeNull();
     expect(extractionYield({ ...brew, waterGrams: null, style: 'immersion' })).toBeNull();
     expect(extractionYield({ ...brew, doseGrams: 0, style: 'pour_over' })).toBeNull();
+  });
+});
+
+describe('brixToTds', () => {
+  it('converts along the curve, to 2 decimals', () => {
+    expect(brixToTds(1.6)).toBe(1.27); // filter
+    expect(brixToTds(2)).toBe(1.59);
+    expect(brixToTds(11)).toBe(9.12); // espresso
+  });
+
+  it('never goes below 0', () => {
+    expect(brixToTds(0)).toBe(0);
+    expect(brixToTds(0.005)).toBe(0);
   });
 });

@@ -146,7 +146,9 @@ account. Such logs can only be edited or deleted by owners.
     rounded to 0.1 %. The beverage is `actualWaterGrams` for the `immersion`,
     `cold_brew` and `ibrik` styles (the liquid left in the grounds is as
     strong as the cup), else the measured `actualYieldGrams`; with no yield
-    there's no extraction yield.
+    there's no extraction yield. Clients may also take a °Brix reading and
+    convert it, `TDS = (0.0036 × Bx + 0.7897) × Bx − 0.0071` (as
+    Beanconqueror does), rounded to 2 decimals; only `tdsPercent` is stored.
   - `actualTimeSec`: integer 0–86400 (24 hours). `rating`: integer **1–5**,
     nullable. `actualGrindSetting` ≤ 100 chars, `tastingNotes` ≤ 5000 chars;
     both nullable, and blank becomes `null`. `rating` and `tastingNotes` are

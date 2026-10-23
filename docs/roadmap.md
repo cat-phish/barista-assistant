@@ -305,6 +305,9 @@ from taste.
   backlog first said to estimate it from retention). Brew logs now return the
   recipe's `style` so clients can tell which applies. The form shows it live,
   or says what's missing; the journal shows "1.38% · 20.2% extraction".
+- **Brix:** a Brix (°Bx) box next to TDS fills it in as you type, using
+  Beanconqueror's curve `(0.0036 × Bx + 0.7897) × Bx − 0.0071`. Only TDS is
+  saved; typing a TDS by hand clears the Brix box.
 - **The AI** gets `tdsPercent` and `extractionYieldPercent` for every brew,
   with typical filter and espresso ranges, and is told taste comes first.
 - **Backlog:** "Choose what a repeat keeps" moved to Settings (now item 8).

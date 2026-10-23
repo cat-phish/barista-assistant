@@ -1,10 +1,10 @@
 <script setup lang="ts">
 // Brew detail inputs shared by the brew flow's log form and journal editing.
 // Validate with parseBrewDraft (lib/brewDraft.ts); pass its errors in.
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { Grinder, RecipeStyle } from '../api/types';
 import type { BrewDraft, BrewDraftErrors } from '../lib/brewDraft';
-import { extractionYield, usesWater } from '../lib/extraction';
+import { brixToTds, extractionYield, usesWater } from '../lib/extraction';
 import { formatGrams } from '../lib/format';
 import RatingInput from './RatingInput.vue';
 
@@ -51,6 +51,24 @@ const extractionHint = computed(() => {
   return usesWater(style) ? 'Enter the water to see extraction' : `Weigh the ${props.espresso ? 'shot' : 'brewed coffee'} to see extraction`;
 });
 
+// A Brix reading fills in TDS as it's typed. Only TDS is saved, so Brix starts
+// empty; typing a TDS that no longer matches it clears it.
+const brix = ref('');
+const brixAsTds = (s: string): string | null => {
+  const n = num(s);
+  return n === null ? null : String(brixToTds(n));
+};
+watch(brix, (b) => {
+  const tds = brixAsTds(b);
+  if (tds !== null) draft.value.tds = tds;
+});
+watch(
+  () => draft.value.tds,
+  (tds) => {
+    if (brix.value && brixAsTds(brix.value) !== tds) brix.value = '';
+  },
+);
+
 // Active grinders, plus the brew's own even if it's since been retired.
 const grinderOptions = computed(() => props.grinders.filter((g) => !g.retiredAt || g.id === draft.value.grinderId));
 </script>
@@ -81,18 +99,23 @@ const grinderOptions = computed(() => props.grinders.filter((g) => !g.retiredAt 
         <span v-if="showErrors && errors.water" class="field-error">{{ errors.water }}</span>
       </div>
     </div>
+    <div v-if="!espresso" class="field">
+      <label for="brew-yield">Yield (g) <span class="muted">(weigh the brewed coffee)</span></label>
+      <input
+        id="brew-yield"
+        v-model="draft.yieldGrams"
+        inputmode="decimal"
+        :placeholder="expectedYieldGrams != null ? `Expected ~${formatGrams(expectedYieldGrams)}` : ''"
+        :aria-invalid="showErrors && !!errors.yieldGrams"
+      />
+      <span v-if="showErrors && errors.yieldGrams" class="field-error">{{ errors.yieldGrams }}</span>
+      <span v-else-if="yieldComparison" class="hint">{{ yieldComparison }}</span>
+    </div>
     <div class="form-row">
-      <div v-if="!espresso" class="field">
-        <label for="brew-yield">Yield (g) <span class="muted">(weigh the brewed coffee)</span></label>
-        <input
-          id="brew-yield"
-          v-model="draft.yieldGrams"
-          inputmode="decimal"
-          :placeholder="expectedYieldGrams != null ? `Expected ~${formatGrams(expectedYieldGrams)}` : ''"
-          :aria-invalid="showErrors && !!errors.yieldGrams"
-        />
-        <span v-if="showErrors && errors.yieldGrams" class="field-error">{{ errors.yieldGrams }}</span>
-        <span v-else-if="yieldComparison" class="hint">{{ yieldComparison }}</span>
+      <div class="field">
+        <label for="brew-brix">Brix (°Bx)</label>
+        <input id="brew-brix" v-model="brix" inputmode="decimal" :placeholder="espresso ? 'e.g. 11' : 'e.g. 1.6'" />
+        <span class="hint">Fills in TDS</span>
       </div>
       <div class="field">
         <label for="brew-tds">TDS (%)</label>

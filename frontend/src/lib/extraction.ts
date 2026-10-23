@@ -23,3 +23,11 @@ export function extractionYield(input: {
   const beverage = usesWater(style) ? input.waterGrams : input.yieldGrams;
   return beverage === null ? null : Math.round(((tdsPercent * beverage) / doseGrams) * 10) / 10;
 }
+
+// TDS % from a °Brix reading, for refractometers that read Brix. Coffee isn't
+// sugar water, so it's a curve rather than a flat ×0.85; the same one
+// Beanconqueror uses (brew-brix-calculator). Rounded to 2 decimals, never < 0.
+export function brixToTds(brix: number): number {
+  const tds = (0.0036 * brix + 0.7897) * brix - 0.0071;
+  return Math.max(0, Math.round(tds * 100) / 100);
+}
