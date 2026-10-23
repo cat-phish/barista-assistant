@@ -45,7 +45,7 @@ const recipes = [recipe('v60-std', v60), recipe('chemex-std', chemex), recipe('s
 
 const drink = (id: string, kind: MethodKind, category: DrinkCategory | null, defaultRecipeId: string | null, parent: Drink | null = null): Drink => ({
   id, name: id, description: null, kind, defaultRecipeId, servingSize: null, servingUnit: null, instructions: null,
-  createdAt: '2026-10-20T00:00:00.000Z', variants: [], ingredients: [],
+  createdAt: '2026-10-20T00:00:00.000Z', archivedAt: null, variants: [], ingredients: [],
   category: category && { id: category.id, name: category.name }, parent: parent && { id: parent.id, name: parent.name },
 });
 const latte = drink('Latte', 'espresso', milk, 'ristretto');
@@ -114,6 +114,17 @@ describe('brew setup: method or drink category → (drink) → brewer → recipe
     expect(pickRecipe(choices, vanilla, 'shot')).toBe('shot');
     expect(recipeOptions(null, recipes)).toEqual([]);
     expect(recipeOptions('clever', recipes)).toEqual([]); // setup shows "No recipes yet: Add one"
+  });
+
+  it('leaves archived drinks and recipes out; a drink keeps its archived default only on paper', () => {
+    const old = { ...truffle, archivedAt: '2026-10-22T00:00:00.000Z' };
+    expect(brewable(brewers, [...drinks.filter((d) => d !== truffle), old]).drinks.map((d) => d.id)).not.toContain('Orange Truffle');
+    const archived = recipes.map((r) => (r.id === 'ristretto' ? { ...r, archivedAt: '2026-10-22T00:00:00.000Z' } : r));
+    const choices = recipeOptions('dl', archived);
+    expect(choices.map((r) => r.id)).toEqual(['shot']);
+    expect(pickRecipe(choices, latte, '')).toBe('shot'); // Latte's default is archived: the first instead
+    const espressos = brewerOptions(options, { kind: 'drink', id: 'Latte' }, drinks);
+    expect(pickBrewer(espressos, latte, archived, 'lm', '')).toBe('lm'); // the archived default doesn't pick the brewer
   });
 
   it('restores the last choices if they are still offered, else the first', () => {

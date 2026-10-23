@@ -34,6 +34,7 @@ kind may differ from its parent's.
   "servingSize": 8,
   "servingUnit": "fl_oz",
   "instructions": "Add the syrup to the cup and pull the shot onto it.\nSteam the milk and pour.",
+  "archivedAt": null,
   "createdAt": "2026-10-20T15:30:00.000Z",
   "ingredients": [
     { "ingredientId": "uuid", "name": "Steamed milk", "ingredientType": "milk", "amountValue": 6, "amountUnit": "fl oz", "note": null },
@@ -105,6 +106,10 @@ was deleted).
 - **Body:** any non-empty subset of the `POST` fields. `ingredients`, if
   present, replaces the list. Changing `brewerId` without sending a matching
   `defaultRecipeId` clears a default of the old kind.
+  Also `"archived": true | false`, like a bean's (§4): `true` sets
+  `archivedAt` (unchanged if already archived), `false` restores the drink.
+  Clients leave archived drinks off the brew page; past brews keep them, and
+  the public menu (§7) still shows one the menu builder places.
 - **Success (`200 OK`):** `{ "drink": { ...drink } }`
 - **Errors:** as `POST`, plus `400` when `parentDrinkId` is the drink itself
   or one of its variants (at any depth); `404` not in this workspace.

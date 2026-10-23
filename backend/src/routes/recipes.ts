@@ -25,6 +25,7 @@ import {
   type RecipeStep,
   type RecipeStyle,
 } from "@barista/shared/schema";
+import { archiveUpdate } from "../archive.js";
 import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
 // docs/api/recipes.md §5
@@ -149,7 +150,7 @@ const createRecipeSchema = z.object({
   steps: recipeFields.steps.default([]),
 });
 
-const updateRecipeSchema = updateSchema(recipeFields);
+const updateRecipeSchema = updateSchema({ ...recipeFields, archived: z.boolean() });
 
 interface RecipeParams extends WorkspaceParams {
   recipeId: string;
@@ -318,6 +319,7 @@ async function loadRecipes(workspaceId: string, recipeId?: string): Promise<Reci
       style: recipes.style,
       targetTempC: recipes.targetTempC,
       defaultGrinderId: recipes.defaultGrinderId,
+      archivedAt: recipes.archivedAt,
       createdAt: recipes.createdAt,
     })
     .from(recipes)
@@ -421,8 +423,21 @@ recipesRouter.patch("/:recipeId", async (req: Request<RecipeParams>, res: Respon
   const { workspaceId, recipeId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
 
-  const body = parseBody(updateRecipeSchema, req, res);
-  if (!body) return;
+  const parsed = parseBody(updateRecipeSchema, req, res);
+  if (!parsed) return;
+  const { archived, ...body } = parsed;
+
+  // Archiving alone changes nothing the recipe rules check (docs/api/recipes.md §5).
+  if (Object.keys(body).length === 0) {
+    await db.update(recipes).set(archiveUpdate(recipes.archivedAt, archived)).where(and(eq(recipes.id, recipeId), eq(recipes.workspaceId, workspaceId)));
+    const [recipe] = await loadRecipes(workspaceId, recipeId);
+    if (!recipe) {
+      sendError(res, 404, "Recipe not found");
+      return;
+    }
+    res.json({ recipe });
+    return;
+  }
 
   const { steps, grindSettings, expectedFinishMinSec, expectedFinishMaxSec, firstDropMinSec, firstDropMaxSec, ...rest } = body;
   const window = windows(body);
@@ -481,8 +496,9 @@ recipesRouter.patch("/:recipeId", async (req: Request<RecipeParams>, res: Respon
       return { status: 400, error: "defaultGrinderId: not a grinder in this workspace" } as const;
     }
 
-    if (Object.keys(recipeFields).length > 0) {
-      await tx.update(recipes).set({ ...recipeFields, ...styleUpdate }).where(eq(recipes.id, recipeId));
+    const archive = archiveUpdate(recipes.archivedAt, archived);
+    if (Object.keys(recipeFields).length > 0 || Object.keys(archive).length > 0) {
+      await tx.update(recipes).set({ ...recipeFields, ...styleUpdate, ...archive }).where(eq(recipes.id, recipeId));
     }
     // Provided lists replace the old ones entirely.
     if (grindSettings) {

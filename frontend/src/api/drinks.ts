@@ -20,6 +20,6 @@ const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/drinks`;
 export const drinksApi = {
   list: (workspaceId: string) => api.get<{ drinks: Drink[] }>(base(workspaceId)),
   create: (workspaceId: string, input: DrinkInput) => api.post<{ drink: Drink }>(base(workspaceId), input),
-  update: (workspaceId: string, id: string, input: Partial<DrinkInput>) => api.patch<{ drink: Drink }>(`${base(workspaceId)}/${id}`, input),
+  update: (workspaceId: string, id: string, input: Partial<DrinkInput> & { archived?: boolean }) => api.patch<{ drink: Drink }>(`${base(workspaceId)}/${id}`, input),
   remove: (workspaceId: string, id: string) => api.delete(`${base(workspaceId)}/${id}`),
 };

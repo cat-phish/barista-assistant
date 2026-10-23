@@ -37,10 +37,12 @@ export interface Brewable {
   brewers: Brewer[];
   drinks: Drink[];
 }
+// Archived brewers and drinks aren't offered (variants of an archived drink
+// move up a level).
 export function brewable(brewers: Brewer[], drinks: Drink[]): Brewable {
   const usable = brewers.filter((b) => !b.archivedAt);
   const kinds = new Set(usable.map((b) => b.kind));
-  return { brewers: usable, drinks: drinks.filter((d) => kinds.has(d.kind)) };
+  return { brewers: usable, drinks: drinks.filter((d) => !d.archivedAt && kinds.has(d.kind)) };
 }
 
 export interface WhatOption {
@@ -88,15 +90,16 @@ export function brewerOptions(b: Brewable, item: BrewItem | null, drinks: Drink[
 // first.
 export function pickBrewer(options: Brewer[], drink: Drink | null, recipes: Recipe[], remembered: string | null, current: string): string {
   const offered = (id: string | null | undefined): id is string => !!id && options.some((b) => b.id === id);
-  const fromDefault = recipes.find((r) => r.id === drink?.defaultRecipeId)?.brewer.id;
+  const fromDefault = recipes.find((r) => r.id === drink?.defaultRecipeId && !r.archivedAt)?.brewer.id;
   if (offered(fromDefault)) return fromDefault;
   if (offered(remembered)) return remembered;
   if (offered(current)) return current;
   return options[0]?.id ?? '';
 }
 
+// The brewer's recipes, archived ones left out (docs/api/recipes.md §5).
 export function recipeOptions(brewerId: string | null, recipes: Recipe[]): Recipe[] {
-  return brewerId ? recipes.filter((r) => r.brewer.id === brewerId) : [];
+  return brewerId ? recipes.filter((r) => r.brewer.id === brewerId && !r.archivedAt) : [];
 }
 
 // The recipe to select: the drink's default, else the current one if it

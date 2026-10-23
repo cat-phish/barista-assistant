@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Recipes (docs/api/recipes.md §5) as a table: filter by brewer, sort by name or
-// date added (headers or the dropdown); a row expands to its details.
+// date added (headers or the dropdown), Show archived; a row expands to its
+// details. Archived recipes leave the brew page and drink forms.
 import { computed, onMounted, ref, watch } from 'vue';
 import { brewersApi } from '../api/brewers';
 import { errorMessage } from '../api/client';
@@ -35,6 +36,8 @@ const columns: SortColumns<Recipe> = {
 };
 const sortChoices = sortColumnOptions(columns);
 const brewerFilter = ref(ALL);
+const showArchived = ref(false);
+const archivedCount = computed(() => recipes.value.filter((r) => r.archivedAt).length);
 const sort = ref('added_desc');
 watch(brewerFilter, (v) => rememberView(viewKey('brewer'), v));
 watch(sort, (v) => rememberView(viewKey('sort'), v));
@@ -46,6 +49,7 @@ async function load(): Promise<void> {
     const [r, b] = await Promise.all([recipesApi.list(id), brewersApi.list(id)]);
     recipes.value = r.recipes;
     brewers.value = b.brewers;
+    if (archivedCount.value === 0) showArchived.value = false;
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -74,7 +78,7 @@ const brewerOptions = computed(() => {
 const filterName = computed(() => brewerOptions.value.find((o) => o.value === brewerFilter.value)?.label ?? '');
 const shown = computed(() =>
   sortBy(
-    brewerFilter.value === ALL ? recipes.value : recipes.value.filter((r) => r.brewer.id === brewerFilter.value),
+    recipes.value.filter((r) => (!r.archivedAt || showArchived.value) && (brewerFilter.value === ALL || r.brewer.id === brewerFilter.value)),
     sort.value,
     columns,
   ),
@@ -94,6 +98,23 @@ function stepsSummary(recipe: Recipe): string | null {
   const end = lastStart && last.durationSec !== null ? lastStart.at + last.durationSec : null;
   const titles = recipe.steps.map(stepTitle).join(' → ');
   return end === null ? titles : `${titles} · ${lastStart?.exact ? 'ends' : 'ends ≈'} ${formatTime(end)}`;
+}
+
+const busyId = ref<string | null>(null);
+async function setArchived(r: Recipe, archived: boolean): Promise<void> {
+  const ws = workspaces.current?.id;
+  if (!ws) return;
+  busyId.value = r.id;
+  error.value = '';
+  try {
+    const { recipe } = await recipesApi.update(ws, r.id, { archived });
+    recipes.value = recipes.value.map((x) => (x.id === recipe.id ? recipe : x));
+    if (archivedCount.value === 0) showArchived.value = false;
+  } catch (err) {
+    error.value = errorMessage(err);
+  } finally {
+    busyId.value = null;
+  }
 }
 
 async function confirmDelete(): Promise<void> {
@@ -131,7 +152,8 @@ async function confirmDelete(): Promise<void> {
     </div>
 
     <template v-else>
-      <ListControls v-model:filter="brewerFilter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="recipes" filter-label="Brewer" :filter-options="brewerOptions" />
+      <ListControls v-model:filter="brewerFilter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="recipes" filter-label="Brewer" :filter-options="brewerOptions" v-model:show-archived="showArchived" :archived-count="archivedCount" />
+      <p v-if="showArchived" class="muted small">Archived recipes are hidden when brewing and in drink forms; past brews still show them.</p>
       <p v-if="shown.length === 0" class="card empty">No recipes for {{ filterName }} yet.</p>
       <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1.1fr) minmax(0, 0.9fr) minmax(0, 1.2fr) 5.5rem">
         <div class="data-row data-head">
@@ -149,7 +171,7 @@ async function confirmDelete(): Promise<void> {
         </div>
         <div v-for="recipe in shown" :key="recipe.id" class="data-item" :class="{ open: openId === recipe.id }">
           <button class="data-row" type="button" :aria-expanded="openId === recipe.id" @click="toggle(recipe.id)">
-            <span class="data-td primary">{{ recipe.name }}</span>
+            <span class="data-td primary">{{ recipe.name }}<span v-if="recipe.archivedAt" class="muted"> (archived)</span></span>
             <span class="data-td">{{ recipe.brewer.name }}</span>
             <span class="data-td">{{ recipe.style ? RECIPE_STYLES[recipe.style] : '–' }}</span>
             <span class="data-td">{{ formatDoseLine(recipe.targetDoseGrams, recipe.targetWaterGrams, recipe.expectedYieldGrams) }}</span>
@@ -169,6 +191,8 @@ async function confirmDelete(): Promise<void> {
             <div v-if="workspaces.canEdit" class="data-actions">
               <RouterLink class="btn-link" :to="{ name: 'recipe-new', query: { from: recipe.id } }">Duplicate</RouterLink>
               <RouterLink class="btn-link" :to="{ name: 'recipe-edit', params: { id: recipe.id } }">Edit</RouterLink>
+              <button v-if="recipe.archivedAt" class="btn-link" type="button" :disabled="busyId === recipe.id" @click="setArchived(recipe, false)">Restore</button>
+              <button v-else class="btn-link" type="button" :disabled="busyId === recipe.id" @click="setArchived(recipe, true)">Archive</button>
               <button class="btn-link danger" type="button" @click="pending = recipe; dialogError = ''">Delete</button>
             </div>
           </div>

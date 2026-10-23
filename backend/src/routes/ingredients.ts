@@ -7,10 +7,11 @@ import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { INGREDIENT_TYPES, ingredients, drinkIngredients, type Ingredient } from "@barista/shared/schema";
+import { archiveUpdate } from "../archive.js";
 import { optionalText, updateSchema } from "../validation.js";
 
 // docs/api/ingredients.md §5b: reusable preps that finish a drink.
-export type IngredientSummary = Pick<Ingredient, "id" | "name" | "ingredientType" | "instructions" | "createdAt"> & { drinkCount: number };
+export type IngredientSummary = Pick<Ingredient, "id" | "name" | "ingredientType" | "instructions" | "archivedAt" | "createdAt"> & { drinkCount: number };
 
 interface WorkspaceParams {
   workspaceId: string;
@@ -25,7 +26,7 @@ const ingredientFields = {
   instructions: optionalText(5000),
 };
 const createSchema = z.object({ ...ingredientFields, ingredientType: ingredientFields.ingredientType.default("other") });
-const updateIngredientSchema = updateSchema(ingredientFields);
+const updateIngredientSchema = updateSchema({ ...ingredientFields, archived: z.boolean() });
 
 function inWorkspace(p: IngredientParams) {
   return and(eq(ingredients.id, p.ingredientId), eq(ingredients.workspaceId, p.workspaceId));
@@ -38,6 +39,7 @@ async function loadIngredients(where: SQL | undefined): Promise<IngredientSummar
       name: ingredients.name,
       ingredientType: ingredients.ingredientType,
       instructions: ingredients.instructions,
+      archivedAt: ingredients.archivedAt,
       createdAt: ingredients.createdAt,
       drinkCount: count(drinkIngredients.id),
     })
@@ -86,8 +88,9 @@ ingredientsRouter.patch("/:ingredientId", async (req: Request<IngredientParams>,
   if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId, WRITE_ROLES))) return;
   const body = parseBody(updateIngredientSchema, req, res);
   if (!body) return;
+  const { archived, ...fields } = body;
   try {
-    await db.update(ingredients).set(body).where(inWorkspace(req.params));
+    await db.update(ingredients).set({ ...fields, ...archiveUpdate(ingredients.archivedAt, archived) }).where(inWorkspace(req.params));
   } catch (err) {
     if (duplicate(res, err)) return;
     throw err;

@@ -246,6 +246,7 @@ export interface Recipe {
   style: RecipeStyle | null; // one of STYLES_BY_KIND[brewer.kind] (lib/equipment.ts)
   targetTempC: number | null;
   defaultGrinderId: string | null; // preselected when brewing this recipe
+  archivedAt: string | null; // set = archived: off the brew page and drink forms (§5)
   createdAt: string; // date added (ISO)
   grindSettings: RecipeGrindSetting[];
   steps: RecipeStep[];
@@ -314,6 +315,7 @@ export interface Ingredient {
   ingredientType: IngredientType;
   instructions: string | null;
   drinkCount: number; // drinks that use it
+  archivedAt: string | null; // set = archived: not offered for new drinks (§5b)
   createdAt: string; // date added (ISO)
 }
 
@@ -350,6 +352,7 @@ export interface Drink {
   servingSize: number | null; // default size; both or neither
   servingUnit: ServingUnit | null;
   instructions: string | null; // how to make it, shown after the brew
+  archivedAt: string | null; // set = archived: off the brew page (§5c)
   createdAt: string; // date added (ISO)
   ingredients: DrinkIngredient[];
 }
