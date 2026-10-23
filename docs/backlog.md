@@ -68,28 +68,55 @@ Where the app's choices live, and what you can switch on, off or take out.
   - Should hidden fields be left out of the AI prompt as well, or does the AI
     use whatever is recorded?
 
-### 2. Backup, restore and export
+### 2. Backup, restore, import and export
 
 - **Status:** idea
 - **Why:** the journal is months of brews and dialing-in. There's no way to
   keep a copy, move it to another server, or look at it in a spreadsheet.
+  Setting up a second workspace (or sharing a recipe or bean list with
+  another bar) means typing everything again.
 - **Approach:**
   - Settings → **Data**.
   - **Backup:** download a versioned JSON file of the workspace (beans and
-    freezes, grinders, brewers, recipes, drinks, ingredients, brew logs, AI
-    analyses).
+    freezes, grinders, brewers, water profiles, prep tools, recipes, drinks,
+    ingredients, brew logs, AI analyses).
   - **Restore:** upload a backup into a new, empty workspace, with every ID
     remapped. The file's schema version is checked and older versions are
     upgraded.
   - **Export:** CSV of brew logs and beans for spreadsheets, with names
     resolved (bean, recipe, grinder) instead of IDs.
+  - **Import and export by list (JSON):** beans, journal entries (brew
+    logs), recipes, drinks, ingredients, brewers, grinders, water profiles
+    and prep tools, each on its own. Each list page (or Settings → Data)
+    gets an **Export** of all or the selected items, and an **Import** that
+    adds them to the current workspace.
+    - Same versioned format as the backup, one section per list, so a
+      backup file can also be imported a list at a time.
+    - References go by name, not ID (a recipe's brewer and grinders, a
+      drink's recipe and ingredients, a brew's bean, recipe, grinder, water
+      and tools). On import, a name that exists is matched; a missing one is
+      either brought along from the file or reported.
+    - Before anything is saved, a preview shows what will be added, matched
+      or skipped (e.g. a bean or grinder whose name already exists), then
+      the import runs in one transaction.
+    - Workspace lists (methods, processes, styles) match by name too, and
+      unknown ones are created, like custom methods.
   - Done by the backend in one transaction; a large export could become a
     worker job.
-- **Size:** M–L (export S, backup M, restore M).
+- **Size:** L (export S, backup M, restore M, list import/export M). A
+  sensible order: list export → list import → backup → restore.
 - **Depends on:** nothing. Backups should include photos once 5 is built.
 - **Open questions:**
   - Only owners, or all members?
   - Restore into an existing workspace (merge), or only into an empty one?
+    List import already merges, so a full restore could be "import
+    everything".
+  - Duplicates on import: skip, rename ("House V60 (2)") or update the
+    existing item? Maybe a choice in the preview.
+  - Journal entries: bring their AI analyses and timer marks along, or only
+    the brew itself?
+  - Does exporting a recipe or drink include what it needs (its brewer,
+    grinders, ingredients) by default?
   - Photos in the backup: a zip, or JSON only, with photos left out?
   - Should there also be scheduled server-side backups (a `mysqldump` cron),
     or is that up to whoever runs the server?
