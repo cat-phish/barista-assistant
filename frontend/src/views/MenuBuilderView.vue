@@ -27,7 +27,7 @@ import QRCode from 'qrcode';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
-const menu = ref<Menu>({ currency: null, sections: [] });
+const menu = ref<Menu>({ title: null, currency: null, sections: [] });
 const drinks = ref<Drink[]>([]);
 const categories = ref<DrinkCategory[]>([]);
 const preview = ref<PublicMenu | null>(null);
@@ -49,6 +49,7 @@ async function load(): Promise<void> {
     drinks.value = [...d.drinks].sort((x, y) => x.name.localeCompare(y.name));
     brewers.value = b.brewers.filter((x) => !x.archivedAt);
     currency.value = m.currency ?? '';
+    title.value = m.title ?? '';
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -160,6 +161,10 @@ const currencyCode = computed(() => currency.value.trim().toUpperCase());
 const currencyValid = computed(() => currencyCode.value === '' || /^[A-Z]{3}$/.test(currencyCode.value));
 const currencyChanged = computed(() => currencyCode.value !== (menu.value.currency ?? ''));
 const saveCurrency = () => run((ws) => menuApi.setCurrency(ws, currencyCode.value || null));
+// The menu's title; blank shows the workspace name.
+const title = ref('');
+const titleChanged = computed(() => title.value.trim() !== (menu.value.title ?? ''));
+const saveTitle = () => run((ws) => menuApi.setTitle(ws, title.value.trim() || null));
 
 // --- Order (one layout for the whole menu) ---
 const layoutOf = (sections: MenuSection[]) => sections.map((s) => ({ id: s.id, itemIds: s.items.map((i) => i.id) }));
@@ -347,6 +352,14 @@ async function deleteItem(): Promise<void> {
           </figure>
         </div>
         <p v-if="!isOwner" class="muted small">Only owners can turn the public menu on or off.</p>
+        <form v-if="workspaces.canEdit" class="title-row" @submit.prevent="saveTitle">
+          <div class="field">
+            <label for="menu-title">Menu title</label>
+            <input id="menu-title" v-model="title" maxlength="255" :placeholder="workspaces.current?.name ?? ''" />
+            <span class="hint">The heading guests see. Leave empty to use your bar's name.</span>
+          </div>
+          <button class="btn btn-secondary" type="submit" :disabled="busy || !titleChanged">Save</button>
+        </form>
         <form v-if="workspaces.canEdit" class="currency-row" @submit.prevent="saveCurrency">
           <div class="field">
             <label for="menu-currency">Currency for prices</label>
@@ -555,13 +568,21 @@ h2 {
   align-items: flex-start;
 }
 .currency-row,
+.title-row,
 .add-section {
   display: flex;
   align-items: flex-end;
   gap: var(--space-2);
 }
-.add-section .field {
+.add-section .field,
+.title-row .field {
   flex: 1;
+}
+.title-row {
+  align-items: flex-start;
+}
+.title-row .btn {
+  margin-top: 1.6rem; /* line up with the input, below its label */
 }
 .currency {
   max-width: 6rem;

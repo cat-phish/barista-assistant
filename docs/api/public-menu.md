@@ -13,6 +13,7 @@ Retrieves the read-only menu for a workspace, as arranged in the menu builder
 - **Success Response (`200 OK`):**
   ```json
   {
+    "title": "Jordan's Coffee Bar",
     "workspace": { "name": "Jordan's Coffee Bar", "slug": "jordans-coffee-bar" },
     "currency": "USD",
     "sections": [
@@ -77,6 +78,8 @@ Retrieves the read-only menu for a workspace, as arranged in the menu builder
     ]
   }
   ```
+  - `title` is the menu's title from the builder (§7b), else the workspace
+    name.
   - Sections and items follow the builder's order. Sections with nothing to
     show are left out.
   - An item's `name` and `description` are the builder's overrides, else the

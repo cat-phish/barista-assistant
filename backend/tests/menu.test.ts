@@ -30,7 +30,7 @@ async function setup() {
 describe("menu builder (docs/api/menu.md §7b)", () => {
   it("starts empty, and adds sections last", async () => {
     const { owner, ws, base, get } = await setup();
-    expect(await get()).toEqual({ currency: null, sections: [] });
+    expect(await get()).toEqual({ title: null, currency: null, sections: [] });
     await menuSection(owner, ws.id, "Espresso");
     const res = await owner.agent.post(`${base}/sections`).send({ name: "Pour over", description: "Brewed to order" });
     expect(res.status).toBe(201);
@@ -293,5 +293,27 @@ describe("what the beans block shows (docs/api/menu.md §7b)", () => {
     expect((await owner.agent.post(`${base}/sections/${section}/items`).send({ itemType: "beans", beanFields: ["origin", "origin"] })).status).toBe(400);
     const created = await owner.agent.post(`${base}/sections/${section}/items`).send({ itemType: "beans", beanFields: ["decaf"] });
     expect(created.body.sections[0].items[1].beanFields).toEqual(["decaf"]);
+  });
+});
+
+describe("menu title (docs/api/menu.md §7b)", () => {
+  it("defaults to the workspace name; set, blank and cleared from the menu settings", async () => {
+    const { owner, ws, base } = await setup();
+    await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ isPublicMenuEnabled: true });
+    const publicTitle = async () => (await request(app).get(`/api/public/menu/${ws.slug}`)).body.title;
+    const name = (await owner.agent.get(`${base}/preview`)).body.workspace.name;
+    expect(await publicTitle()).toBe(name);
+
+    const set = await owner.agent.patch(base).send({ title: "  The Brew Bar  " });
+    expect(set.body).toMatchObject({ title: "The Brew Bar", currency: null });
+    expect(await publicTitle()).toBe("The Brew Bar");
+    expect((await owner.agent.get(`${base}/preview`)).body.title).toBe("The Brew Bar");
+
+    await owner.agent.patch(base).send({ currency: "usd" }); // the title stays
+    expect((await owner.agent.get(base)).body).toMatchObject({ title: "The Brew Bar", currency: "USD" });
+    expect((await owner.agent.patch(base).send({ title: "" })).body.title).toBeNull();
+    expect(await publicTitle()).toBe(name);
+    expect((await owner.agent.patch(base).send({ title: "x".repeat(256) })).status).toBe(400);
+    expect((await owner.agent.patch(base).send({})).status).toBe(400);
   });
 });

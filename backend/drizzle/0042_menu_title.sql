@@ -1,0 +1,1 @@
+ALTER TABLE `workspaces` ADD `menu_title` varchar(255);

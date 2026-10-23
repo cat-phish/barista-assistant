@@ -450,5 +450,9 @@ API existed, arranged in the builder, but nothing showed it to guests.
 - **Sharing:** with the public menu on, the Menu tab shows the page's link
   (Copy, Open) and a QR code to download and print.
 - `MenuPreview.vue` renders both the builder's preview and the guest page.
+- **Look and title:** the menu title is largest and brown, section headings
+  are larger than the items, brown, with a brown rule under them. The title
+  is set in the Menu tab ("Menu title"; migration 0042, `menu_title`, blank =
+  the workspace name) and returned as `title` by the menu and public menu.
 - **Backlog:** item 19 is now "Public menu: branding and sizes" (accent
   colour, tagline, logo; per-size prices).

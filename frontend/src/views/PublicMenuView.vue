@@ -19,7 +19,7 @@ onMounted(async () => {
   window.addEventListener('offline', setOnline);
   try {
     menu.value = await menuApi.publicMenu(props.slug);
-    document.title = menu.value.workspace.name;
+    document.title = menu.value.title;
   } catch (err) {
     // 404: unknown, or the bar turned it off. 0: no network and nothing cached.
     problem.value = err instanceof ApiError && err.status === 404 ? 'missing' : err instanceof ApiError && err.status === 0 ? 'offline' : 'error';

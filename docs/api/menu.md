@@ -29,6 +29,7 @@ off is the workspace's `isPublicMenuEnabled` (§2, owners only).
 
 ```json
 {
+  "title": "The Brew Bar",
   "currency": "USD",
   "sections": [
     {
@@ -83,9 +84,12 @@ The builder's Preview shows it.
 
 ## `PATCH /`
 
-- **Body:** `{ "currency": "usd" | null }`: an ISO 4217 code (uppercased).
-- **Errors:** `400` invalid, or `null` while items still have prices; `403`
-  viewer.
+- **Body:** any non-empty subset of `{ "currency": "usd" | null, "title":
+  "The Brew Bar" | null }`. `currency` is an ISO 4217 code (uppercased).
+  `title` is the public menu's heading, ≤ 255 chars; blank or `null` uses the
+  workspace name.
+- **Errors:** `400` invalid, or a `null` currency while items still have
+  prices; `403` viewer.
 
 ## `POST /sections`
 

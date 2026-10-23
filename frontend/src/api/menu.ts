@@ -21,6 +21,8 @@ export const menuApi = {
   // As guests would see it (the public menu's shape), even while it's off.
   preview: (workspaceId: string) => api.get<PublicMenu>(`${base(workspaceId)}/preview`),
   setCurrency: (workspaceId: string, currency: string | null) => api.patch<Menu>(base(workspaceId), { currency }),
+  // The public menu's heading; null/'' = the workspace name.
+  setTitle: (workspaceId: string, title: string | null) => api.patch<Menu>(base(workspaceId), { title }),
   addSection: (workspaceId: string, name: string, description: string | null = null) =>
     api.post<Menu>(`${base(workspaceId)}/sections`, { name, description }),
   updateSection: (workspaceId: string, id: string, input: { name?: string; description?: string | null }) =>

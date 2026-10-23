@@ -51,6 +51,7 @@ export interface MenuSectionView {
   items: MenuItemView[];
 }
 export interface MenuResponse {
+  title: string | null; // the public menu's title; null = the workspace name
   currency: string | null;
   sections: MenuSectionView[];
 }
@@ -74,7 +75,8 @@ const currencySchema = z
   .toUpperCase()
   .regex(/^[A-Z]{3}$/, "must be a 3-letter currency code, e.g. USD")
   .nullable();
-const settingsSchema = z.object({ currency: currencySchema }).strict();
+// Menu settings: the prices' currency and the menu's title (blank = the workspace name).
+const settingsSchema = updateSchema({ currency: currencySchema, title: optionalText(255) });
 
 const sectionFields = { name: z.string().trim().min(1).max(100), description: optionalText(500) };
 const createSectionSchema = z.object(sectionFields).strict();
@@ -119,7 +121,10 @@ const layoutSchema = z
 const PRICE_NEEDS_CURRENCY = "price: set the menu's currency first";
 
 export async function loadMenu(workspaceId: string, conn: Db = db): Promise<MenuResponse> {
-  const [ws] = await conn.select({ currency: workspaces.menuCurrency }).from(workspaces).where(eq(workspaces.id, workspaceId));
+  const [ws] = await conn
+    .select({ currency: workspaces.menuCurrency, title: workspaces.menuTitle })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId));
   const sections = await conn
     .select({ id: menuSections.id, name: menuSections.name, description: menuSections.description, position: menuSections.position })
     .from(menuSections)
@@ -152,6 +157,7 @@ export async function loadMenu(workspaceId: string, conn: Db = db): Promise<Menu
         .orderBy(asc(menuItems.position))
     : [];
   return {
+    title: ws?.title ?? null,
     currency: ws?.currency ?? null,
     sections: sections.map((s) => ({
       ...s,
@@ -238,7 +244,13 @@ menuRouter.patch("/", async (req: Request<WorkspaceParams>, res: Response<MenuRe
       return;
     }
   }
-  await db.update(workspaces).set({ menuCurrency: body.currency }).where(eq(workspaces.id, workspaceId));
+  await db
+    .update(workspaces)
+    .set({
+      ...(body.currency !== undefined ? { menuCurrency: body.currency } : {}),
+      ...(body.title !== undefined ? { menuTitle: body.title } : {}),
+    })
+    .where(eq(workspaces.id, workspaceId));
   await sendMenu(res, workspaceId);
 });
 

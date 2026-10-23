@@ -33,6 +33,8 @@ export const workspaces = mysqlTable("workspaces", {
   // Currency of menu prices (ISO 4217, e.g. "USD"); needed once an item has a
   // price (docs/api/menu.md §7b).
   menuCurrency: varchar("menu_currency", { length: 3 }),
+  // The public menu's title (docs/api/menu.md §7b); null = the workspace name.
+  menuTitle: varchar("menu_title", { length: 255 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

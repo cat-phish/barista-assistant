@@ -57,6 +57,7 @@ export interface PublicMenuSection {
   items: Array<PublicMenuItem | PublicBeansBlock>;
 }
 export interface PublicMenuResponse {
+  title: string; // the menu's title, else the workspace name
   workspace: Pick<Workspace, "name" | "slug">;
   currency: string | null;
   sections: PublicMenuSection[];
@@ -172,5 +173,5 @@ export async function buildPublicMenu(workspace: { id: string; name: string; slu
     }))
     .filter((s) => s.items.length > 0);
 
-  return { workspace: { name: workspace.name, slug: workspace.slug }, currency: menu.currency, sections };
+  return { title: menu.title ?? workspace.name, workspace: { name: workspace.name, slug: workspace.slug }, currency: menu.currency, sections };
 }

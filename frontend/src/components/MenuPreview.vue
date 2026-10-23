@@ -11,7 +11,7 @@ const price = (n: number, currency: string | null) => `${n.toFixed(2)}${currency
 
 <template>
   <div class="menu-preview">
-    <h2 class="bar">{{ menu.workspace.name }}</h2>
+    <h2 class="bar">{{ menu.title }}</h2>
     <p v-if="menu.sections.length === 0" class="muted">Nothing on the menu yet: sections show once they have something in them.</p>
     <section v-for="s in menu.sections" :key="s.name" class="section">
       <h3>{{ s.name }}</h3>
@@ -62,15 +62,23 @@ h3,
 p {
   margin: 0;
 }
+/* The title, then the sections, then the items, each a step smaller; the
+   title and section headings in the brand brown. */
 .bar {
-  font-size: 1.3rem;
+  font-size: 2rem;
+  line-height: 1.2;
   text-align: center;
+  color: var(--brand);
 }
 h3 {
-  font-size: 1.05rem;
-  border-bottom: 1px solid var(--border);
+  font-size: 1.35rem;
+  color: var(--brand);
+  border-bottom: 2px solid var(--brand);
   padding-bottom: var(--space-1);
-  margin-bottom: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+.name {
+  font-size: 1rem;
 }
 .items {
   list-style: none;

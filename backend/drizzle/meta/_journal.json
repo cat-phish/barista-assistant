@@ -295,6 +295,13 @@
       "when": 1792730191979,
       "tag": "0041_menu_bean_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "5",
+      "when": 1792730913639,
+      "tag": "0042_menu_title",
+      "breakpoints": true
     }
   ]
 }

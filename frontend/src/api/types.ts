@@ -42,6 +42,7 @@ export interface MenuSection {
   items: MenuItem[];
 }
 export interface Menu {
+  title: string | null; // the public menu's title; null = the workspace name
   currency: string | null;
   sections: MenuSection[];
 }
@@ -73,6 +74,7 @@ export interface PublicBeansBlock {
   beans: PublicBean[];
 }
 export interface PublicMenu {
+  title: string; // the menu's title, else the workspace name
   workspace: { name: string; slug: string };
   currency: string | null;
   sections: Array<{ name: string; description: string | null; items: Array<PublicMenuItem | PublicBeansBlock> }>;
