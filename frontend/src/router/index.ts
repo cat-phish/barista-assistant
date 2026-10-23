@@ -29,6 +29,9 @@ export const router = createRouter({
     { path: '/setup/grinders', name: 'grinders', component: () => import('../views/GrindersView.vue'), meta: { requiresWorkspace: true } },
     { path: '/setup/grinders/new', name: 'grinder-new', component: () => import('../views/GrinderFormView.vue'), meta: { requiresWorkspace: true, requiresEditor: true } },
     { path: '/setup/grinders/:id/edit', name: 'grinder-edit', component: () => import('../views/GrinderFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresEditor: true } },
+    { path: '/setup/water', name: 'water-profiles', component: () => import('../views/WaterProfilesView.vue'), meta: { requiresWorkspace: true } },
+    { path: '/setup/water/new', name: 'water-profile-new', component: () => import('../views/WaterProfileFormView.vue'), meta: { requiresWorkspace: true, requiresEditor: true } },
+    { path: '/setup/water/:id/edit', name: 'water-profile-edit', component: () => import('../views/WaterProfileFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresEditor: true } },
     { path: '/setup/categories', name: 'categories', component: () => import('../views/CategoriesView.vue'), meta: { requiresWorkspace: true } },
     { path: '/setup/menu', name: 'menu-builder', component: () => import('../views/MenuBuilderView.vue'), meta: { requiresWorkspace: true } },
     // Old addresses: Equipment became Bar setup; methods and machines became brewers.

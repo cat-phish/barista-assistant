@@ -266,6 +266,40 @@ export const grinders = mysqlTable(
   })
 );
 
+// 5c. Water Profiles (Per-Workspace Brew Water)
+// The water a brew was made with (docs/api/water-profiles.md §3c). Every
+// figure is optional, in mg/L (ppm); GH and KH are expressed as CaCO3. At most
+// one profile is the default (the API keeps it so), which new brews start on.
+// Retired like grinders once brews use them.
+export const waterProfiles = mysqlTable(
+  "water_profiles",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(), // e.g. "Third Wave Water"
+    notes: varchar("notes", { length: 255 }),
+    isDefault: boolean("is_default").default(false).notNull(),
+    tdsPpm: decimal("tds_ppm", { precision: 7, scale: 2, mode: "number" }),
+    generalHardnessPpm: decimal("general_hardness_ppm", { precision: 7, scale: 2, mode: "number" }), // GH as CaCO3
+    alkalinityPpm: decimal("alkalinity_ppm", { precision: 7, scale: 2, mode: "number" }), // KH as CaCO3
+    calciumPpm: decimal("calcium_ppm", { precision: 7, scale: 2, mode: "number" }),
+    magnesiumPpm: decimal("magnesium_ppm", { precision: 7, scale: 2, mode: "number" }),
+    sodiumPpm: decimal("sodium_ppm", { precision: 7, scale: 2, mode: "number" }),
+    potassiumPpm: decimal("potassium_ppm", { precision: 7, scale: 2, mode: "number" }),
+    bicarbonatePpm: decimal("bicarbonate_ppm", { precision: 7, scale: 2, mode: "number" }),
+    chloridePpm: decimal("chloride_ppm", { precision: 7, scale: 2, mode: "number" }),
+    sulfatePpm: decimal("sulfate_ppm", { precision: 7, scale: 2, mode: "number" }),
+    ph: decimal("ph", { precision: 3, scale: 1, mode: "number" }),
+    retiredAt: timestamp("retired_at"), // null = active
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("water_profiles_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+
 // 6. Recipe Templates (Target Parameters)
 export const recipes = mysqlTable("recipes", {
   id: varchar("id", { length: 36 }).primaryKey(),
@@ -543,6 +577,11 @@ export const brewLogs = mysqlTable("brew_logs", {
   // Which grinder actualGrindSetting refers to. Optional. Grinders in use are
   // retired, not deleted, so this normally survives; set null as a backstop.
   grinderId: varchar("grinder_id", { length: 36 }).references(() => grinders.id, {
+    onDelete: "set null",
+  }),
+  // The water used (optional; docs/api/brew-logs.md §6). Profiles in use are
+  // retired, not deleted; set null as a backstop.
+  waterProfileId: varchar("water_profile_id", { length: 36 }).references(() => waterProfiles.id, {
     onDelete: "set null",
   }),
   // The drink this brew was for (optional; docs/api/brew-logs.md §6). Null for a

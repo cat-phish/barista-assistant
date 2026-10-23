@@ -273,8 +273,8 @@ Recording a brew: what's measured, and how fast it is to log.
 
 ### 10. More brew parameters
 
-- **Status:** in progress. TDS and extraction yield are done (roadmap:
-  "More brew parameters, part 1"); water and tools, then weights and RPM, are
+- **Status:** in progress. TDS and extraction yield (part 1) and water
+  profiles (part 2) are done (roadmap); prep tools, then weights and RPM, are
   next.
 - **Why:** dose, water, yield, temperature, grind and time leave out things
   that change the cup: retention, grinder speed, the tools used, the water,
@@ -286,11 +286,6 @@ Recording a brew: what's measured, and how fast it is to log.
       went into the brew.
     - **Grind speed** (RPM), for grinders with variable speed (a grinder
       flag says whether to ask).
-    - **Water profile** (part 2): a per-workspace list under Bar setup →
-      **Water**, like grinders. Each has a name and optional TDS, GH, KH,
-      minerals (Ca, Mg, Na, K, bicarbonate, chloride, sulfate) and pH. One can
-      be the default, which the brew form starts on; with none set up it
-      shows "None (no water profiles set up)". The AI gets the profile.
     - **Prep tools** (part 3): an editable list under Bar setup → **Tools**,
       each for one method or all, seeded with common ones (WDT, puck screen,
       RDT, distributor, rinsed paper…). The brew form shows the method's
@@ -298,11 +293,10 @@ Recording a brew: what's measured, and how fast it is to log.
       them). The AI gets the tools used.
   - Every new field can be hidden through item 5.
   - The AI prompt gets them (item 14), as it does TDS and EY.
-- **Size:** L, split into parts: TDS and EY (done), water profiles, prep
-  tools, then weights and RPM.
+- **Size:** L, split into parts: TDS and EY (done), water profiles (done),
+  prep tools, then weights and RPM.
 - **Depends on:** nothing. Item 5 (hiding fields) comes after.
-- **Open questions:** none for parts 2 and 3; weights and RPM still to
-  plan.
+- **Open questions:** none for part 3; weights and RPM still to plan.
 
 ### 11. Repeat a brew
 

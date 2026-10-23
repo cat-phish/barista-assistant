@@ -5,6 +5,7 @@ export interface BrewLogInput {
   beanId: string;
   recipeId: string | null;
   grinderId: string | null;
+  waterProfileId?: string | null; // the water used (§3c)
   drinkId?: string | null; // the drink it was for
   servingSize?: number | null; // the size made; with servingUnit, only with a drink
   servingUnit?: ServingUnit | null;

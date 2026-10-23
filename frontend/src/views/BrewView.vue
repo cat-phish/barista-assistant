@@ -11,6 +11,8 @@ import { recipesApi } from '../api/recipes';
 import type { Bean, Recipe } from '../api/types';
 import AnalysisCard from '../components/AnalysisCard.vue';
 import { grindersApi } from '../api/grinders';
+import { waterProfilesApi } from '../api/waterProfiles';
+import { defaultWaterProfileId } from '../lib/water';
 import { brewersApi } from '../api/brewers';
 import { drinksApi } from '../api/drinks';
 import { drinkCategoriesApi } from '../api/drinkCategories';
@@ -31,7 +33,7 @@ import {
   validWhat,
   whatOptions,
 } from '../lib/brewChoice';
-import type { Brewer, Drink, DrinkCategory, Grinder, Mark, MethodKind, ServingUnit } from '../api/types';
+import type { Brewer, Drink, DrinkCategory, Grinder, Mark, MethodKind, ServingUnit, WaterProfile } from '../api/types';
 import { METHOD_KINDS, RECIPE_STYLES } from '../lib/equipment';
 import { convertSize, defaultSize, formatSize, SERVING_UNITS, sizeFactor, type Size } from '../lib/servings';
 import AppHeader from '../components/AppHeader.vue';
@@ -58,6 +60,7 @@ const loadError = ref('');
 const beans = ref<Bean[]>([]);
 const recipes = ref<Recipe[]>([]);
 const grinders = ref<Grinder[]>([]);
+const waterProfiles = ref<WaterProfile[]>([]);
 const brewers = ref<Brewer[]>([]);
 
 // Setup
@@ -173,19 +176,22 @@ onMounted(async () => {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [b, r, g, m, d, c] = await Promise.all([
+    const [b, r, g, m, d, c, w] = await Promise.all([
       beansApi.list(ws),
       recipesApi.list(ws),
       grindersApi.list(ws),
       brewersApi.list(ws),
       drinksApi.list(ws),
       drinkCategoriesApi.list(ws),
+      waterProfilesApi.list(ws),
     ]);
     drinks.value = d.drinks;
     categories.value = c.categories;
     beans.value = b.beans.filter((x) => !x.archivedAt); // archived beans can't be brewed (§4)
     recipes.value = r.recipes;
     grinders.value = g.grinders;
+    waterProfiles.value = w.waterProfiles;
+    draft.waterProfileId = defaultWaterProfileId(w.waterProfiles); // new brews start on the default (§3c)
     brewers.value = m.brewers;
     if (beans.value.length === 1) beanId.value = beans.value[0]?.id ?? '';
     const saved = recall('grinderId');
@@ -829,7 +835,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       <FinishDrinkCard v-if="drink" :drink="drink" :factor="sizeScale" :size-label="madeSize ? formatSize(madeSize) : null" />
       <section class="card">
         <p v-if="stepMarksLine" class="muted small marks-line">{{ stepMarksLine }}</p>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="recipe?.style ?? null" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="recipe?.style ?? null" />
       </section>
       <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
       <button class="btn btn-primary btn-block" type="submit" :disabled="saving">{{ saving ? 'Saving…' : 'Save brew' }}</button>
