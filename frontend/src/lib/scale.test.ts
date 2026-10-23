@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RecipeStep } from '../api/types';
-import { brewRetention, estimateYield, GRAMS_PER_FL_OZ, retentionOf, scaleBatch, scaleShot, scaleSteps } from './scale';
+import { brewRetention, estimateYield, GRAMS_PER_FL_OZ, linkRatio, ratioText, retentionOf, scaleBatch, scaleShot, scaleSteps } from './scale';
 
 const recipe = { targetDoseGrams: 15, targetWaterGrams: 250, expectedYieldGrams: null };
 
@@ -128,5 +128,29 @@ describe('scaleShot', () => {
   it('refuses values that cannot make a shot', () => {
     expect(scaleShot(classic, { field: 'dose', value: 0 })).toBeNull();
     expect(scaleShot(classic, { field: 'dose', value: 18 }, Number.NaN)).toBeNull();
+  });
+});
+
+describe('linkRatio', () => {
+  it('typing the dose keeps the water and changes the ratio', () => {
+    const r = linkRatio('dose', 18, 250)!;
+    expect(ratioText(r)).toBe('13.9');
+    expect(scaleBatch(recipe, { field: 'dose', value: 18 }, 2, r)).toMatchObject({ dose: 18, water: 250, yield: 214, factor: 1 });
+  });
+  it('typing the water keeps the dose and changes the ratio', () => {
+    const r = linkRatio('water', 300, 15)!;
+    expect(ratioText(r)).toBe('20');
+    const b = scaleBatch(recipe, { field: 'water', value: 300 }, 2, r)!;
+    expect(b).toMatchObject({ dose: 15, water: 300, yield: 270 });
+    expect(b.factor).toBeCloseTo(1.2); // pours follow the water
+  });
+  it('an espresso shot weight keeps the dose and changes the ratio', () => {
+    const r = linkRatio('yield', 40, 18)!;
+    expect(scaleShot({ targetDoseGrams: 18, expectedYieldGrams: 36 }, { field: 'yield', value: 40 }, r)).toEqual({ dose: 18, yield: 40, ratio: r });
+  });
+  it('holds nothing without a valid amount on both sides', () => {
+    expect(linkRatio('dose', Number.NaN, 250)).toBeNull();
+    expect(linkRatio('dose', 18, null)).toBeNull();
+    expect(linkRatio('water', 0, 15)).toBeNull();
   });
 });

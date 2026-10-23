@@ -147,14 +147,17 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
 - **Setup:** pick bean, recipe and grinder. The grind pre-fills from your
   last brew of that recipe on that grinder, else the AI suggestion, else the
   recipe's starting point.
-- **Batch scaling:** type any one of dose, water or the approximate yield
-  (in fl oz, ml or both, by your preference) and the rest follow. The **ratio** (the 15 in 1:15) starts at the
-  recipe's and can be changed; whatever you typed last is held. Pour targets
-  scale with the water; step times stay the same. A much bigger or smaller
+- **Batch scaling:** the **ratio** (the 15 in 1:15) starts at the recipe's.
+  Typing the dose or the water keeps the other and changes the ratio;
+  typing the ratio changes the water; typing the approximate yield (in fl
+  oz, ml or both, by your preference) sets dose and water at the ratio.
+  Each change updates the yield estimate, and whatever you typed last is
+  held. Pour targets scale with the water; step times stay the same. A much bigger or smaller
   dose than the recipe suggests a coarser or finer grind. "Reset to recipe"
   undoes it all.
 - **Espresso shots:** the same setup shows dose, ratio and shot weight
-  instead; typing any one updates the others. The brew records its recipe's
+  instead. The dose and the ratio move the shot weight; typing the shot
+  weight keeps the dose and changes the ratio. The brew records its recipe's
   brewer, so the espresso machine comes with the recipe.
 - **Abandoning a brew:** during the timer or before the log is saved,
   leaving the page, reloading, or tapping **Brew** again asks "Abandon this

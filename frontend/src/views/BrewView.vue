@@ -52,7 +52,7 @@ import { emptyDraft, parseBrewDraft } from '../lib/brewDraft';
 import { formatDay, formatDoseLine, formatGrams, formatTime } from '../lib/format';
 import { chooseGrind, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
 import { useWorkspaceStore } from '../stores/workspace';
-import { brewRetention, ROAST_LEVELS, scaleBatch, scaleShot, scaleSteps, type MeasuredBrew, type ScaleField } from '../lib/scale';
+import { brewRetention, linkRatio, ratioText as formatRatio, ROAST_LEVELS, scaleBatch, scaleShot, scaleSteps, type MeasuredBrew, type ScaleField } from '../lib/scale';
 import { formatTemp, formatTempChange, tempText, TEMPERATURE_LABELS, VOLUME_LABELS, volumeUnits } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 
@@ -234,22 +234,42 @@ watch(recipe, (r) => {
   if (suggestion.value) applySuggestion(suggestion.value);
 });
 
-// Batch size: type a dose, water or yield (g or fl oz) and the others follow
-// (docs/features.md). The ratio defaults to the recipe's and can be changed;
-// whatever was typed last is held. Pour targets scale with the water.
-// Espresso uses the same inputs for dose, ratio (1:2) and shot weight.
+// Batch size (docs/features.md): the ratio defaults to the recipe's.
+// - Filter: typing the dose or the water keeps the other and changes the
+//   ratio; typing the ratio changes the water (the dose stays); a yield
+//   (g or fl oz) sets both at the ratio.
+// - Espresso: the dose moves the shot weight at the ratio; the shot weight
+//   changes the ratio (the dose stays); the ratio moves the shot weight.
+// Whatever was typed last is held. Pour targets scale with the water.
 const lead = ref<{ field: ScaleField; text: string }>({ field: 'dose', text: '' });
-const ratioText = ref<string | null>(null); // null = the recipe's ratio
+// null = the recipe's ratio. value is exact; text is what the box shows.
+const ratio = ref<{ text: string; value: number } | null>(null);
 function resetBatch(): void {
   lead.value = { field: 'dose', text: recipe.value ? formatGrams(recipe.value.targetDoseGrams) : '' };
-  ratioText.value = null;
+  ratio.value = null;
 }
 function setLead(field: ScaleField, event: Event): void {
-  lead.value = { field, text: (event.target as HTMLInputElement).value };
+  setLeadText(field, (event.target as HTMLInputElement).value);
+}
+function setLeadText(field: ScaleField, text: string): void {
+  // The amount held is the last valid one (draft follows the batch/shot).
+  const linked =
+    !espresso.value && (field === 'dose' || field === 'water')
+      ? linkRatio(field, amount(text), field === 'dose' ? num(draft.water) : num(draft.dose))
+      : espresso.value && field === 'yield'
+        ? linkRatio('yield', amount(text), num(draft.dose))
+        : null;
+  if (linked !== null) ratio.value = { text: formatRatio(linked), value: linked };
+  lead.value = { field, text };
 }
 function setRatio(event: Event): void {
-  ratioText.value = (event.target as HTMLInputElement).value;
+  const text = (event.target as HTMLInputElement).value;
+  ratio.value = { text, value: amount(text) };
 }
+const num = (text: string): number | null => {
+  const n = amount(text);
+  return Number.isFinite(n) ? n : null;
+};
 // A positive decimal, allowing a trailing "." while typing.
 function amount(text: string): number {
   const t = text.trim().replace(',', '.');
@@ -283,7 +303,7 @@ async function loadMeasured(): Promise<void> {
 watch([beanId, recipeId], () => void loadMeasured());
 
 const retention = computed(() => brewRetention({ roastLevel: bean.value?.roastLevel ?? null, recipeRoastLevel: recipeRoastLevel.value, recipe: filterRecipe.value, measured: measured.value }));
-const customRatio = computed(() => (ratioText.value === null ? undefined : amount(ratioText.value)));
+const customRatio = computed(() => ratio.value?.value);
 const batch = computed(() => {
   if (!filterRecipe.value) return null;
   return scaleBatch(filterRecipe.value, { field: lead.value.field, value: amount(lead.value.text) }, retention.value.retention, customRatio.value);
@@ -316,7 +336,7 @@ function batchText(field: ScaleField): string {
   return batch.value ? formatGrams(batch.value[field]) : '';
 }
 const ratioShown = computed(() => {
-  if (ratioText.value !== null) return ratioText.value;
+  if (ratio.value !== null) return ratio.value.text;
   const r = filterRecipe.value ?? shotRecipe.value;
   if (!r) return '';
   const out = 'targetWaterGrams' in r ? r.targetWaterGrams : r.expectedYieldGrams;
