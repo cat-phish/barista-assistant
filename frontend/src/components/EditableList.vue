@@ -51,7 +51,10 @@ async function run(action: (ws: string) => Promise<unknown>): Promise<boolean> {
     emit('changed');
     return true;
   } catch (err) {
-    error.value = err instanceof ApiError && err.status === 409 ? `There's already a ${props.noun} with that name.` : errorMessage(err);
+    // A 409 is a taken name, unless the server explains (e.g. recipes use a
+    // method's brewers, so its behaviour can't change).
+    const taken = err instanceof ApiError && err.status === 409 && err.body?.recipeCount === undefined;
+    error.value = taken ? `There's already a ${props.noun} with that name.` : errorMessage(err);
     return false;
   } finally {
     busy.value = false;
@@ -66,7 +69,11 @@ async function add(): Promise<void> {
   if (name && (await run((ws) => props.api.create(ws, name, choice)))) newName.value = '';
 }
 const choiceText = (value: string | undefined) => props.choices?.find((c) => c.value === value)?.label.toLowerCase() ?? '';
-const setChoice = (e: ListEntry, choice: string) => run((ws) => props.api.update(ws, e.id, { choice }));
+// A refused change redraws the row's select, so it shows what's saved again.
+const revision = ref(0);
+async function setChoice(e: ListEntry, choice: string): Promise<void> {
+  if (!(await run((ws) => props.api.update(ws, e.id, { choice })))) revision.value += 1;
+}
 
 const editingId = ref<string | null>(null);
 const editName = ref('');
@@ -117,7 +124,7 @@ function deleted(): void {
           <span v-else-if="choices && !workspaces.canEdit" class="muted small">{{ choiceLabel?.toLowerCase() }} {{ choiceText(e.choice) }}</span>
           <label v-else-if="choices" class="choice muted small">
             {{ choiceLabel?.toLowerCase() }}
-            <select :value="e.choice" :disabled="busy" :aria-label="`${choiceLabel} for ${e.name}`" @change="setChoice(e, ($event.target as HTMLSelectElement).value)">
+            <select :key="`${e.id}-${revision}`" :value="e.choice" :disabled="busy" :aria-label="`${choiceLabel} for ${e.name}`" @change="setChoice(e, ($event.target as HTMLSelectElement).value)">
               <option v-for="c in choices" :key="c.value" :value="c.value">{{ c.label }}</option>
             </select>
           </label>

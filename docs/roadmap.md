@@ -666,3 +666,33 @@ want their own ("Inverted", "Bypass", "Turbo shot").
 - **Recipe form** offers the method's visible styles (plus the recipe's own
   if hidden); the recipes list sorts styles by name; brewers summarise their
   recipes' style names; the brew page's recipe picker shows the style name.
+
+## Custom brewer methods (built)
+
+Backlog item 1, part 3 of 3 (finished: item 1 is removed from the backlog,
+which was renumbered), branch `custom-methods`, migrations 0050–0051. The
+brew methods were fixed (Filter, Espresso, Stovetop, Other), so a siphon or
+an ibrik setup had to hide under "Other".
+
+- **Named groups on a behaviour** (agreed when planning item 1): a
+  `brewer_methods` table per workspace (name, position, hidden, `builtin`,
+  `behaviour`), seeded with the four built-ins; brewers gained `methodId`
+  (0050 adds both, 0051 seeds and puts every brewer under its kind's
+  built-in). A brewer's `kind` stays and is always its method's behaviour,
+  so recipe fields, the timer, styles, drinks, prep tools and the AI are
+  unchanged. Drinks still need a kind, so a filter drink can be made on a
+  Siphon brewer.
+- **API** (`docs/api/brewer-methods.md` §3e): list, add (with behaviour),
+  rename/hide, change a custom method's behaviour (its brewers' kind
+  follows; `409` while recipes use them), reorder, usage, delete (custom
+  only: its brewers move to the built-in of the same behaviour). Brewers
+  take `methodId` (older clients' `kind` alone means that kind's built-in).
+  Menu item sources and the public menu say how a plain brew is made by its
+  method name.
+- **Settings → Lists → Brewer methods** with "Works like" on each custom
+  method; the list editor shows the server's reason when a change is
+  refused and puts the select back.
+- **Brewer form** picks a method ("Siphon works like filter: …"); the
+  brewer list shows and filters by method; "What are you making?" lists the
+  workspace's methods that have brewers, so Siphon is its own choice with
+  its own brewers; the menu builder groups plain brews by method.

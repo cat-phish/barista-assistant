@@ -47,7 +47,7 @@ off is the workspace's `isPublicMenuEnabled` (§2, owners only).
           "description": null,
           "price": 5.5,
           "available": true,
-          "source": { "name": "Latte", "description": "Double shot, steamed milk", "kind": "espresso", "archived": false },
+          "source": { "name": "Latte", "description": "Double shot, steamed milk", "kind": "espresso", "method": "Espresso", "archived": false },
           "beanFields": null
         },
         {
@@ -61,7 +61,8 @@ off is the workspace's `isPublicMenuEnabled` (§2, owners only).
 }
 ```
 
-`source` is what the item shows by default: a drink's name and description,
+`source` is what the item shows by default (`method`: how it's made, the
+brewer's method name for a plain brew, §3e, or the drink's kind): a drink's name and description,
 or a brewer's name (brewers have no menu description; set one on the item).
 
 `beanFields` (the beans block only; `null` on other items) is what guests see

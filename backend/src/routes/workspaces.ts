@@ -8,6 +8,7 @@ import { isDuplicateEntryError, parseBody, parseQuery, sendError } from "../http
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import {
   beanProcesses,
+  brewerMethods,
   brewers,
   recipeStyles,
   DEFAULT_BREWERS,
@@ -23,6 +24,7 @@ import {
 import { SLUG_PATTERN, workspaceSettingsSchema } from "../validation.js";
 import { defaultProcessRows } from "./beanProcesses.js";
 import { defaultStyleRows } from "./recipeStyles.js";
+import { defaultMethodRows } from "./brewerMethods.js";
 
 // A workspace as the API returns it: settings with the defaults filled in.
 export type WorkspaceView = Omit<Workspace, "settings"> & { settings: WorkspaceSettings };
@@ -65,8 +67,11 @@ workspacesRouter.post("/", async (req: Request, res: Response<WorkspaceResponse>
     workspace = await db.transaction(async (tx) => {
       await tx.insert(workspaces).values({ id: workspaceId, name: body.name, slug: body.slug });
       await tx.insert(workspaceMembers).values({ userId, workspaceId, role: "owner" });
+      const methods = defaultMethodRows(workspaceId);
+      await tx.insert(brewerMethods).values(methods);
+      const methodOf = (kind: string) => methods.find((m) => m.builtin === kind)?.id ?? null;
       await tx.insert(brewers).values(
-        DEFAULT_BREWERS.map(({ name, kind }) => ({ id: randomUUID(), workspaceId, name, kind }))
+        DEFAULT_BREWERS.map(({ name, kind }) => ({ id: randomUUID(), workspaceId, name, kind, methodId: methodOf(kind) }))
       );
       await tx.insert(prepTools).values(
         DEFAULT_PREP_TOOLS.map(({ name, methodKind }, i) => ({ id: randomUUID(), workspaceId, name, methodKind, position: i + 1 }))

@@ -290,6 +290,33 @@ export const DEFAULT_BREWERS = [
   { name: "Aeropress", kind: "filter" },
 ] as const satisfies ReadonlyArray<{ name: string; kind: MethodKind }>;
 
+// 5f. Brewer methods (docs/api/brewer-methods.md §3e): how the workspace
+// groups its brewers, seeded with the built-in methods. A method behaves like
+// one of METHOD_KINDS (behaviour): itself for a built-in, the one chosen for a
+// custom method ("Siphon" behaves like filter). A brewer's kind is always its
+// method's behaviour, so recipe fields, the timer, styles, drinks, tools and
+// the AI keep working off the kind; the method only names and groups.
+export const METHOD_NAMES: Record<MethodKind, string> = { filter: "Filter", espresso: "Espresso", stovetop: "Stovetop", other: "Other" };
+export const brewerMethods = mysqlTable(
+  "brewer_methods",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(), // unique per workspace, case-insensitive
+    position: int("position").notNull(),
+    hidden: boolean("hidden").default(false).notNull(), // left out of the brewer form's choices
+    builtin: varchar("builtin", { length: 20 }).$type<MethodKind>(), // the seeded kind, or null for custom ones
+    behaviour: varchar("behaviour", { length: 20 }).$type<MethodKind>().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    uniqueName: unique("brewer_methods_workspace_name").on(table.workspaceId, table.name),
+  })
+);
+export type BrewerMethodRow = typeof brewerMethods.$inferSelect;
+
 export const brewers = mysqlTable(
   "brewers",
   {
@@ -298,7 +325,10 @@ export const brewers = mysqlTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 100 }).notNull(), // e.g. "V60", "Linea Mini"
-    kind: varchar("kind", { length: 20 }).$type<MethodKind>().default("filter").notNull(), // the brew method
+    kind: varchar("kind", { length: 20 }).$type<MethodKind>().default("filter").notNull(), // its method's behaviour
+    // The workspace's method it's grouped under (§3e). Deleting a custom method
+    // moves its brewers to the built-in of the same behaviour first.
+    methodId: varchar("method_id", { length: 36 }).references((): AnyMySqlColumn => brewerMethods.id, { onDelete: "set null" }),
     notes: varchar("notes", { length: 255 }),
     // Espresso only (other kinds keep "none").
     preinfusion: varchar("preinfusion", { length: 20 }).$type<Preinfusion>().default("none").notNull(),

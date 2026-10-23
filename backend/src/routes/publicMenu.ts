@@ -64,8 +64,6 @@ export interface PublicMenuResponse {
   sections: PublicMenuSection[];
 }
 
-const METHOD_LABELS: Record<MethodKind, string> = { filter: "Filter", espresso: "Espresso", stovetop: "Stovetop", other: "Other" };
-
 // Mounted at /api/public/menu. Unauthenticated: only expose explicitly public data.
 export const publicMenuRouter = Router();
 
@@ -167,7 +165,7 @@ export async function buildPublicMenu(workspace: Pick<Workspace, "id" | "name" |
             id,
             name: i.name ?? i.source.name,
             description: i.description ?? i.source.description,
-            method: METHOD_LABELS[i.source.kind],
+            method: i.source.method,
             variantOf: (parent && menuNameOf.get(parent)) ?? null,
             ingredients: i.drinkId ? ingredientRows.filter((r) => r.drinkId === i.drinkId).map((r) => r.name) : [],
             price: i.price,

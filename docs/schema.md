@@ -234,6 +234,25 @@ export type GrinderPower = (typeof GRINDER_POWER)[number];
 export type Preinfusion = (typeof PREINFUSION_MODES)[number];
 export type ProfileControl = (typeof PROFILE_CONTROLS)[number];
 
+// 5f. Brewer methods (docs/api/brewer-methods.md §3e): how the workspace groups
+// its brewers, seeded with METHOD_NAMES. behaviour is one of METHOD_KINDS
+// (itself for a built-in); a brewer's kind is always its method's behaviour.
+export const METHOD_NAMES = { filter: "Filter", espresso: "Espresso", stovetop: "Stovetop", other: "Other" };
+export const brewerMethods = mysqlTable(
+  "brewer_methods",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 }).notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(), // unique per workspace
+    position: int("position").notNull(),
+    hidden: boolean("hidden").default(false).notNull(),
+    builtin: varchar("builtin", { length: 20 }).$type<MethodKind>(), // null for custom ones
+    behaviour: varchar("behaviour", { length: 20 }).$type<MethodKind>().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({ uniqueName: unique("brewer_methods_workspace_name").on(table.workspaceId, table.name) })
+);
+
 // 5. Brewers (Per-Workspace Equipment That Makes the Coffee)
 // A V60, French press, AeroPress, OXO Rapid Brewer or an espresso machine.
 // Seeded with DEFAULT_BREWERS when a workspace is created; owners and baristas
@@ -279,6 +298,8 @@ export const brewers = mysqlTable(
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 100 }).notNull(), // e.g. "V60", "Linea Mini"
     kind: varchar("kind", { length: 20 }).$type<MethodKind>().default("filter").notNull(), // the brew method
+    // The workspace method it's grouped under (§3e); kind = its behaviour.
+    methodId: varchar("method_id", { length: 36 }).references((): AnyMySqlColumn => brewerMethods.id, { onDelete: "set null" }),
     notes: varchar("notes", { length: 255 }),
     // Espresso only (other kinds keep "none").
     preinfusion: varchar("preinfusion", { length: 20 }).$type<Preinfusion>().default("none").notNull(),

@@ -58,7 +58,7 @@ export interface MenuItem {
   price: number | null; // in Menu.currency
   available: boolean;
   // What it shows by default; null for the beans block. archived: left off the public menu.
-  source: { name: string; description: string | null; kind: MethodKind; archived: boolean } | null;
+  source: { name: string; description: string | null; kind: MethodKind; method: string; archived: boolean } | null; // method: how it's made (a brewer's method name)
   beanFields: BeanMenuField[] | null; // the beans block: what guests see per bean; null = all
 }
 // docs/api/menu.md §7b BEAN_MENU_FIELDS: what the beans block can show per bean.
@@ -147,10 +147,21 @@ export type StyleRef = Pick<RecipeStyleItem, 'id' | 'name' | 'brewsLike'>;
 export interface Brewer extends MachineCapabilities {
   id: string;
   name: string;
-  kind: MethodKind; // the brew method, also how brewers are grouped (no category)
+  kind: MethodKind; // its method's behaviour: recipe fields, timer, drinks, tools
+  methodId: string | null; // the workspace's method it's grouped under (docs/api/brewer-methods.md §3e)
   notes: string | null;
   archivedAt: string | null; // set = archived (hidden from pickers, kept in history)
   createdAt: string; // date added (ISO)
+}
+// docs/api/brewer-methods.md §3e: how the workspace groups its brewers. A
+// custom method behaves like a built-in one (behaviour = the brewers' kind).
+export interface BrewerMethod {
+  id: string;
+  name: string;
+  position: number;
+  hidden: boolean; // left out of the brewer form's choices
+  builtin: MethodKind | null; // null = added by the workspace
+  behaviour: MethodKind;
 }
 // How recipes, drinks and brew logs refer to their brewer.
 export type BrewerRef = Pick<Brewer, 'id' | 'name' | 'kind'>;

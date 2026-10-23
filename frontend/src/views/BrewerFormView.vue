@@ -3,7 +3,9 @@
 // brewer, or edit one (route param).
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { brewerMethodsApi } from '../api/brewerMethods';
 import { brewersApi } from '../api/brewers';
+import type { BrewerMethod } from '../api/types';
 import { ApiError, errorMessage } from '../api/client';
 import AppHeader from '../components/AppHeader.vue';
 import DeleteSection from '../components/DeleteSection.vue';
@@ -21,6 +23,7 @@ const router = useRouter();
 const editing = computed(() => props.id !== undefined);
 
 const form = ref(brewerForm());
+const methods = ref<BrewerMethod[]>([]); // the workspace's (docs/api/brewer-methods.md §3e)
 const loading = ref(true);
 const saving = ref(false);
 const submitted = ref(false);
@@ -40,7 +43,10 @@ onMounted(async () => {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const b = editing.value ? await brewersApi.list(ws) : null;
+    const [b, bm] = await Promise.all([
+      editing.value ? brewersApi.list(ws) : Promise.resolve(null),
+      brewerMethodsApi.list(ws).catch(() => ({ methods: [] })), // the form falls back to the kinds
+    ]);
     if (editing.value) {
       const brewer = b?.brewers.find((x) => x.id === props.id);
       if (!brewer) {
@@ -50,6 +56,7 @@ onMounted(async () => {
       saved.value = { name: brewer.name, archived: !!brewer.archivedAt };
       form.value = brewerForm(brewer);
     }
+    methods.value = bm.methods;
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -84,7 +91,7 @@ async function save(): Promise<void> {
     <p v-if="loading" class="muted" aria-live="polite">Loading…</p>
     <form v-else class="stack" novalidate @submit.prevent="save">
       <section class="card stack">
-        <BrewerFields v-model="form" id-prefix="brewer" :show-errors="submitted" />
+        <BrewerFields v-model="form" id-prefix="brewer" :show-errors="submitted" :methods="methods" />
       </section>
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
       <div class="buttons">

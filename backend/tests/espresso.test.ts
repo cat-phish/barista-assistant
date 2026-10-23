@@ -78,6 +78,7 @@ describe("method kinds", () => {
       id: v60,
       name: "Hario V60",
       kind: "filter",
+      methodId: expect.any(String),
       notes: null,
       preinfusion: "none",
       flowControl: "none",

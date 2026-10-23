@@ -1,7 +1,7 @@
 // The menu builder's add picker and drag rules (docs/api/menu.md §7b).
 // Unit-tested in menuBuilder.test.ts.
 import type { NewMenuItem } from '../api/menu';
-import type { Brewer, Drink, DrinkCategory, Menu, MenuItem, MethodKind } from '../api/types';
+import type { Brewer, Drink, DrinkCategory, Menu, MenuItem, MethodKind, BrewerMethod } from '../api/types';
 import { nestDrinks } from './drinks';
 import { METHOD_KINDS, METHOD_ORDER } from './equipment';
 
@@ -27,7 +27,7 @@ const sourceOf = (i: MenuItem) => i.drinkId ?? i.brewerId;
 
 // What can be added to a section: active drinks and brewers, grouped, with
 // what's already on the menu marked.
-export function addOptions(menu: Menu, sectionId: string, drinks: Drink[], categories: DrinkCategory[], brewers: Brewer[]): AddOptions {
+export function addOptions(menu: Menu, sectionId: string, drinks: Drink[], categories: DrinkCategory[], brewers: Brewer[], methods: BrewerMethod[] = []): AddOptions {
   const where = new Map<string, string[]>(); // source id -> section names
   for (const s of menu.sections) for (const i of s.items) {
     const id = sourceOf(i);
@@ -51,15 +51,22 @@ export function addOptions(menu: Menu, sectionId: string, drinks: Drink[], categ
     drinkGroup('other', 'Other drinks', active.filter((d) => !d.category)),
   ].filter((g) => g.options.length > 0);
 
+  // Plain brews by the workspace's methods in order (docs/api/brewer-methods.md
+  // §3e); a brewer without one goes under its kind's name.
   const usable = brewers.filter((b) => !b.archivedAt);
-  const brewerGroups = METHOD_ORDER.map((kind: MethodKind) => ({
-    key: kind,
-    name: METHOD_KINDS[kind].label,
-    options: usable
-      .filter((b) => b.kind === kind)
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map((b) => option(b.id, b.name)),
-  })).filter((g) => g.options.length > 0);
+  const groups = [
+    ...[...methods].sort((x, y) => x.position - y.position).map((m) => ({ key: m.id, name: m.name })),
+    ...METHOD_ORDER.map((kind: MethodKind) => ({ key: kind as string, name: METHOD_KINDS[kind].label })),
+  ];
+  const brewerGroups = groups
+    .map((g) => ({
+      ...g,
+      options: usable
+        .filter((b) => (b.methodId ?? b.kind) === g.key)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((b) => option(b.id, b.name)),
+    }))
+    .filter((g) => g.options.length > 0);
 
   const beansIn = menu.sections.find((s) => s.items.some((i) => i.itemType === 'beans'));
   return {
@@ -94,7 +101,7 @@ export function canMoveTo(menu: Menu, itemId: string, sectionId: string): boolea
 export function showsAs(i: MenuItem): string {
   if (i.itemType === 'beans') return 'Lists your active beans that have "Show on the public menu" on';
   if (!i.source) return 'Its drink or brewer is gone';
-  const what = i.itemType === 'drink' ? `${METHOD_KINDS[i.source.kind].label} drink` : `${METHOD_KINDS[i.source.kind].label}, plain brew`;
+  const what = i.itemType === 'drink' ? `${i.source.method} drink` : `${i.source.method}, plain brew`;
   const name = i.name && i.name !== i.source.name ? `shows as “${i.name}” (its own name: ${i.source.name})` : 'shows its own name';
   const description = i.description ? 'its menu description' : i.source.description ? 'its own description' : 'no description';
   return `${what} · ${name}, ${description}`;

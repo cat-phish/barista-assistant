@@ -8,12 +8,13 @@ import { beansApi } from '../api/beans';
 import { brewLogsApi, suggestionsApi } from '../api/brews';
 import { ApiError, errorMessage } from '../api/client';
 import { recipesApi } from '../api/recipes';
-import type { Bean, Recipe } from '../api/types';
+import type { Bean, Recipe, BrewerMethod } from '../api/types';
 import AnalysisCard from '../components/AnalysisCard.vue';
 import { grindersApi } from '../api/grinders';
 import { waterProfilesApi } from '../api/waterProfiles';
 import { prepToolsApi } from '../api/prepTools';
 import { defaultWaterProfileId } from '../lib/water';
+import { brewerMethodsApi } from '../api/brewerMethods';
 import { brewersApi } from '../api/brewers';
 import { drinksApi } from '../api/drinks';
 import { drinkCategoriesApi } from '../api/drinkCategories';
@@ -33,6 +34,7 @@ import {
   validItem,
   validWhat,
   whatOptions,
+  methodKind,
 } from '../lib/brewChoice';
 import type { Brewer, Drink, DrinkCategory, Grinder, Mark, MethodKind, PrepTool, ServingUnit, WaterProfile } from '../api/types';
 import { METHOD_KINDS } from '../lib/equipment';
@@ -77,11 +79,12 @@ const recipeId = ref('');
 // docs/api/drinks.md §5c). Or no recipe.
 const drinks = ref<Drink[]>([]);
 const categories = ref<DrinkCategory[]>([]);
+const methods = ref<BrewerMethod[]>([]); // names and order for "What are you making?"
 const what = ref(NO_RECIPE); // a brew method or a drink category
 const item = ref(''); // a drink, or the method's plain brew (set by itself)
 const brewerId = ref('');
 const options = computed(() => brewable(brewers.value, drinks.value));
-const whatList = computed(() => whatOptions(options.value, categories.value));
+const whatList = computed(() => whatOptions(options.value, categories.value, methods.value));
 const whatChoice = computed(() => decodeWhat(what.value));
 const items = computed(() => itemOptions(options.value, whatChoice.value));
 // The chosen drink category (null for a method or "Something else").
@@ -92,7 +95,7 @@ const drink = computed(() => {
   return c?.kind === 'drink' ? (drinks.value.find((d) => d.id === c.id) ?? null) : null;
 });
 // The kind of coffee being made: the plain brew's, or the drink's.
-const itemKind = computed<MethodKind | null>(() => (chosen.value?.kind === 'plain' ? chosen.value.method : (drink.value?.kind ?? null)));
+const itemKind = computed<MethodKind | null>(() => (chosen.value?.kind === 'plain' ? methodKind(options.value, chosen.value.method) : (drink.value?.kind ?? null)));
 const brewerList = computed(() => brewerOptions(options.value, chosen.value, drinks.value));
 const recipeChoices = computed(() => recipeOptions(brewerId.value || null, recipes.value));
 // Drinks name their kind when a category mixes them ("The Atlas · pour over").
@@ -181,7 +184,7 @@ onMounted(async () => {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [b, r, g, m, d, c, w, t] = await Promise.all([
+    const [b, r, g, m, d, c, w, t, bm] = await Promise.all([
       beansApi.list(ws),
       recipesApi.list(ws),
       grindersApi.list(ws),
@@ -190,7 +193,9 @@ onMounted(async () => {
       drinkCategoriesApi.list(ws),
       waterProfilesApi.list(ws),
       prepToolsApi.list(ws),
+      brewerMethodsApi.list(ws).catch(() => ({ methods: [] })), // brewers then group by kind
     ]);
+    methods.value = bm.methods;
     drinks.value = d.drinks;
     categories.value = c.categories;
     beans.value = b.beans.filter((x) => !x.archivedAt); // archived beans can't be brewed (§4)
