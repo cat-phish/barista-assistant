@@ -12,7 +12,7 @@ describe('water profile form', () => {
   it('round-trips a profile; blank figures are null', () => {
     const { values, errors } = parseWaterForm(waterForm(profile({ notes: 'per gallon' })));
     expect(errors).toEqual({});
-    expect(values).toMatchObject({ name: 'TWW', notes: 'per gallon', tdsPpm: 150, alkalinityPpm: 0, calciumPpm: null, ph: 7.2, isDefault: false });
+    expect(values).toMatchObject({ name: 'TWW', notes: 'per gallon', tdsPpm: 150, alkalinityPpm: 0, calciumPpm: null, ph: 7.2 });
   });
 
   it('needs a name and checks every figure', () => {

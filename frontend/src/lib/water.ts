@@ -17,17 +17,18 @@ export const WATER_FIGURE_LABELS: Record<WaterFigure, { label: string; short: st
   sulfatePpm: { label: 'Sulfate (SO₄)', short: 'SO₄' },
 };
 
-export type WaterForm = Record<WaterFigure, string> & { name: string; notes: string; ph: string; isDefault: boolean };
+// The default isn't edited here: the Water tab picks it (WaterProfilesView).
+export type WaterForm = Record<WaterFigure, string> & { name: string; notes: string; ph: string };
 export type WaterFormErrors = Partial<Record<WaterFigure | 'name' | 'ph', string>>;
 
 const text = (n: number | null | undefined) => (n == null ? '' : String(n));
 
 export function waterForm(p?: WaterProfile): WaterForm {
   const figures = Object.fromEntries(WATER_FIGURES.map((k) => [k, text(p?.[k])])) as Record<WaterFigure, string>;
-  return { ...figures, name: p?.name ?? '', notes: p?.notes ?? '', ph: text(p?.ph), isDefault: p?.isDefault ?? false };
+  return { ...figures, name: p?.name ?? '', notes: p?.notes ?? '', ph: text(p?.ph) };
 }
 
-export function parseWaterForm(f: WaterForm): { errors: WaterFormErrors; values: (WaterProfileDetails & { name: string }) | null } {
+export function parseWaterForm(f: WaterForm): { errors: WaterFormErrors; values: (Omit<WaterProfileDetails, 'isDefault'> & { name: string }) | null } {
   const errors: WaterFormErrors = {};
   if (!f.name.trim()) errors.name = 'Required';
   const figures = {} as Record<WaterFigure, number | null>;
@@ -46,7 +47,7 @@ export function parseWaterForm(f: WaterForm): { errors: WaterFormErrors; values:
   if (Object.keys(errors).length) return { errors, values: null };
   return {
     errors,
-    values: { ...figures, name: f.name.trim(), notes: f.notes.trim() || null, ph: ph?.ok ? ph.value : null, isDefault: f.isDefault },
+    values: { ...figures, name: f.name.trim(), notes: f.notes.trim() || null, ph: ph?.ok ? ph.value : null },
   };
 }
 

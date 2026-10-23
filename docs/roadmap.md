@@ -324,9 +324,11 @@ extraction as much as the grind, and nothing recorded it. Contract:
   has a name, notes and optional figures in mg/L: TDS, GH and KH (as CaCO3),
   calcium, magnesium, sodium, potassium, bicarbonate, chloride, sulfate, and
   pH. Used profiles are retired, not deleted.
-- **A default:** one profile can be the default (Make default in the list, or
-  the checkbox on the form); setting it clears the old one, and retiring it
-  clears it. New brews start on it.
+- **A default:** a "Default for new brews" dropdown above the Water list
+  picks one profile (or None); setting it clears the old one, and retiring it
+  clears it. New brews start on it. The profile form doesn't edit it.
+- **The list** filters (All water / Retired) and sorts by name, TDS, GH, KH or
+  date added, like Brewers and Grinders; the choice is remembered.
 - **Brews** record `waterProfileId` (returned with `waterProfile`). The brew
   form has a Water profile dropdown, "None (no water profiles set up)" when
   the list is empty; the journal shows it.

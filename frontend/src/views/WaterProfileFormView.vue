@@ -21,7 +21,6 @@ const loading = ref(true);
 const saving = ref(false);
 const submitted = ref(false);
 const error = ref('');
-const retired = ref(false); // a retired profile can't be the default
 
 // GH and KH (the usual way water is described) first, then each mineral.
 const headline = WATER_FIGURES.slice(0, 3);
@@ -38,7 +37,6 @@ onMounted(async () => {
         return;
       }
       form.value = waterForm(profile);
-      retired.value = profile.retiredAt !== null;
     }
   } catch (err) {
     error.value = errorMessage(err);
@@ -55,7 +53,7 @@ async function save(): Promise<void> {
   saving.value = true;
   error.value = '';
   try {
-    if (props.id) await waterProfilesApi.update(ws, props.id, retired.value ? { ...values, isDefault: false } : values);
+    if (props.id) await waterProfilesApi.update(ws, props.id, values);
     else await waterProfilesApi.create(ws, values);
     await router.push({ name: 'water-profiles' });
   } catch (err) {
@@ -80,11 +78,6 @@ async function save(): Promise<void> {
           <input id="water-name" aria-required="true" v-model="form.name" maxlength="100" placeholder="e.g. Third Wave Water" :aria-invalid="submitted && !!parsed.errors.name" />
           <span v-if="submitted && parsed.errors.name" class="field-error">{{ parsed.errors.name }}</span>
         </div>
-        <label class="checkbox">
-          <input v-model="form.isDefault" type="checkbox" :disabled="retired" />
-          Default for new brews
-        </label>
-        <p v-if="retired" class="muted small">Restore this profile to make it the default.</p>
         <div class="field">
           <label for="water-notes">Notes</label>
           <input id="water-notes" v-model="form.notes" maxlength="255" placeholder="e.g. 1 sachet per gallon of distilled" />
