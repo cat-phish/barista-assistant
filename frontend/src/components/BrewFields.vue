@@ -10,9 +10,24 @@ import { grinderRetentionText } from '../lib/grinderRetention';
 import { toolsFor } from '../lib/prepTools';
 import { TEMPERATURE_LABELS } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
+import { useFieldVisibility } from '../composables/useFieldVisibility';
 import RatingInput from './RatingInput.vue';
 
 const draft = defineModel<BrewDraft>({ required: true });
+// Hidden fields (Settings → Fields) that this brew already records stay shown.
+const { show, reveal } = useFieldVisibility();
+reveal({
+  'brew.yield': draft.value.yieldGrams,
+  'brew.tds': draft.value.tds,
+  'brew.temp': draft.value.temp,
+  'brew.grinder': draft.value.grinderId,
+  'brew.grind': draft.value.grind,
+  'brew.rpm': draft.value.rpm,
+  'brew.grinderWeights': draft.value.beanIn || draft.value.groundOut,
+  'brew.waterProfile': draft.value.waterProfileId,
+  'brew.prepTools': draft.value.toolIds,
+  'brew.firstDrop': draft.value.firstDrop,
+});
 const { temperatureUnit } = usePreferences();
 const props = defineProps<{
   errors: BrewDraftErrors;
@@ -125,7 +140,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
         <span v-if="showErrors && errors.water" class="field-error">{{ errors.water }}</span>
       </div>
     </div>
-    <div v-if="!espresso" class="field">
+    <div v-if="!espresso && show('brew.yield')" class="field">
       <label for="brew-yield">Yield (g) <span class="muted">(weigh the brewed coffee)</span></label>
       <input
         id="brew-yield"
@@ -137,7 +152,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
       <span v-if="showErrors && errors.yieldGrams" class="field-error">{{ errors.yieldGrams }}</span>
       <span v-else-if="yieldComparison" class="hint">{{ yieldComparison }}</span>
     </div>
-    <div class="form-row">
+    <div v-if="show('brew.tds')" class="form-row">
       <div class="field">
         <label for="brew-brix">Brix (°Bx)</label>
         <input id="brew-brix" v-model="brix" inputmode="decimal" :placeholder="espresso ? 'e.g. 11' : 'e.g. 1.6'" />
@@ -156,37 +171,37 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
         <input id="brew-time" aria-required="true" v-model="draft.time" inputmode="numeric" placeholder="m:ss" :aria-invalid="showErrors && !!errors.time" />
         <span v-if="showErrors && errors.time" class="field-error">{{ errors.time }}</span>
       </div>
-      <div v-if="espresso" class="field">
+      <div v-if="espresso && show('brew.firstDrop')" class="field">
         <label for="brew-first-drop">First drop (s)</label>
         <input id="brew-first-drop" v-model="draft.firstDrop" inputmode="decimal" placeholder="e.g. 7.4" :aria-invalid="showErrors && !!errors.firstDrop" />
         <span v-if="showErrors && errors.firstDrop" class="field-error">{{ errors.firstDrop }}</span>
       </div>
-      <div class="field">
+      <div v-if="show('brew.temp')" class="field">
         <label for="brew-temp">Water temp ({{ TEMPERATURE_LABELS[temperatureUnit] }})</label>
         <input id="brew-temp" v-model="draft.temp" inputmode="decimal" :aria-invalid="showErrors && !!errors.temp" />
         <span v-if="showErrors && errors.temp" class="field-error">{{ errors.temp }}</span>
       </div>
     </div>
-    <div class="form-row">
-      <div class="field">
+    <div v-if="show('brew.grinder') || show('brew.grind') || (speedGrinder && show('brew.rpm'))" class="form-row">
+      <div v-if="show('brew.grinder')" class="field">
         <label for="brew-grinder">Grinder</label>
         <select id="brew-grinder" v-model="draft.grinderId">
           <option value="">None recorded</option>
           <option v-for="g in grinderOptions" :key="g.id" :value="g.id">{{ g.name }}{{ g.archivedAt ? ' (archived)' : '' }}</option>
         </select>
       </div>
-      <div class="field">
+      <div v-if="show('brew.grind')" class="field">
         <label for="brew-grind">Grind setting</label>
         <input id="brew-grind" v-model="draft.grind" inputmode="decimal" placeholder="e.g. 20" :aria-invalid="showErrors && !!errors.grind" />
         <span v-if="showErrors && errors.grind" class="field-error">{{ errors.grind }}</span>
       </div>
-      <div v-if="speedGrinder" class="field">
+      <div v-if="speedGrinder && show('brew.rpm')" class="field">
         <label for="brew-rpm">Speed (RPM)</label>
         <input id="brew-rpm" v-model="draft.rpm" inputmode="numeric" :placeholder="rpmPlaceholder" :aria-invalid="showErrors && !!errors.rpm" />
         <span v-if="showErrors && errors.rpm" class="field-error">{{ errors.rpm }}</span>
       </div>
     </div>
-    <div class="form-row">
+    <div v-if="show('brew.grinderWeights')" class="form-row">
       <div class="field">
         <label for="brew-bean-in">Beans in (g)</label>
         <input id="brew-bean-in" v-model="draft.beanIn" inputmode="decimal" placeholder="Before grinding" :aria-invalid="showErrors && !!errors.beanIn" />
@@ -199,14 +214,14 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
         <span v-else-if="retentionHint" class="hint">{{ retentionHint }}</span>
       </div>
     </div>
-    <div class="field">
+    <div v-if="show('brew.waterProfile')" class="field">
       <label for="brew-water-profile">Water profile</label>
       <select id="brew-water-profile" v-model="draft.waterProfileId">
         <option value="">{{ waterOptions.length ? 'None recorded' : 'None (no water profiles set up)' }}</option>
         <option v-for="w in waterOptions" :key="w.id" :value="w.id">{{ w.name }}{{ w.archivedAt ? ' (archived)' : '' }}</option>
       </select>
     </div>
-    <fieldset v-if="toolOptions.length" class="prep">
+    <fieldset v-if="toolOptions.length && show('brew.prepTools')" class="prep">
       <legend>Prep</legend>
       <div class="prep-list">
         <label v-for="t in toolOptions" :key="t.id" class="checkbox">

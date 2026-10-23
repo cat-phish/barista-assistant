@@ -11,7 +11,16 @@ export const SLUG_PATTERN = /^[a-z0-9-]{3,64}$/;
 // Settings PATCH bodies (docs/api/workspaces.md §2, auth.md §1): any non-empty
 // subset of the keys; unknown keys are refused so a typo isn't silently kept.
 export const workspaceSettingsSchema = z
-  .object({ recipeRoastLevel: z.enum(ROAST_LEVELS), roastScale: z.enum(ROAST_SCALES) })
+  .object({
+    recipeRoastLevel: z.enum(ROAST_LEVELS),
+    roastScale: z.enum(ROAST_SCALES),
+    // Field keys are checked by shape, not a list: the registry lives in the
+    // frontend (lib/fields.ts), and an unknown key simply hides nothing.
+    hiddenFields: z
+      .array(z.string().regex(/^(brew|bean|recipe)\.[a-zA-Z]+$/, "a field key like brew.tds"))
+      .max(100)
+      .refine((keys) => new Set(keys).size === keys.length, "each field once"),
+  })
   .partial()
   .strict()
   .refine((body) => Object.keys(body).length > 0, "Provide at least one setting");

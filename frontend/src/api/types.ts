@@ -28,6 +28,7 @@ export type RoastScale = 'names' | 'levels';
 export interface WorkspaceSettings {
   recipeRoastLevel: RoastLevel; // the roast recipes are written for
   roastScale: RoastScale; // beans record roast names (Cinnamon … French) or light to dark only
+  hiddenFields: string[]; // optional form fields hidden for everyone (lib/fields.ts keys)
 }
 
 // docs/api/workspaces.md §2 Members

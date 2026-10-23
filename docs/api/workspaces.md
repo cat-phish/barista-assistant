@@ -65,6 +65,32 @@ Every workspace in a response carries `settings`, defaults filled in
   Names recorded earlier stay stored but aren't shown: the bean list shows
   the level, and the public menu and preview send `detailedRoastLevel: null`
   (`docs/api/public-menu.md` §7).
+- `hiddenFields` (array of field keys, default `[]`): the optional form
+  fields the workspace hides (see **Field visibility** below). Each key is
+  `brew.…`, `bean.…` or `recipe.…` (`^(brew|bean|recipe)\.[a-zA-Z]+$`),
+  each at most once, at most 100. A `PATCH` sends the whole list. Keys are
+  checked by shape, not against a list, so a key the frontend doesn't
+  know just hides nothing.
+
+### Field visibility
+
+Settings → **Fields** lets owners hide the optional fields of the brew
+(setup and log), bean and recipe forms that the bar doesn't use. Everyone in
+the workspace sees the same forms.
+
+- The fields are listed once, in the frontend's registry
+  `frontend/src/lib/fields.ts` (`FIELDS`: key, form, label). The forms
+  and the Settings page both read it. Required fields aren't in it, so they
+  can't be hidden, and neither are a brew's rating and tasting notes, which
+  the AI analysis works from.
+- Hiding only changes the forms. Recorded values stay stored and are sent
+  back unchanged, history views still show them, and the AI still gets them
+  (choosing what the AI sees is a backlog item, "Choose what the AI sees"). A hidden field still shows when a
+  form opens on a record that has a value in it (`useFieldVisibility`'s
+  `reveal`), so nothing recorded is invisible while editing.
+- **Every new optional field on the brew, bean or recipe forms must get an
+  entry in `lib/fields.ts`** and be wrapped in `show('<key>')` in its form,
+  so it can be hidden like the rest.
 
 ### `PATCH /api/workspaces/:workspaceId/settings`
 

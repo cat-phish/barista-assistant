@@ -10,6 +10,7 @@ import { localDateInput, parseDecimal, toDateInput } from '../lib/format';
 import { ALTITUDE_LABELS, altitudeText, parseAltitude } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import { useWorkspaceStore } from '../stores/workspace';
+import { useFieldVisibility } from '../composables/useFieldVisibility';
 import type { Bean, BeanProcess, BlendType, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from '../api/types';
 import { COUNTRY_AREAS, ORIGIN_AREAS, areaForCountry } from '../lib/origins';
 import { ROAST_LEVELS } from '../lib/scale';
@@ -142,7 +143,32 @@ const perGram = computed(() => {
   return p ? formatPricePerGram(p) : null;
 });
 
+// Optional fields the workspace hides (Settings → Fields); ones this bean
+// already records stay shown.
+const { show, reveal } = useFieldVisibility();
+
 function fill(bean: Bean): void {
+  reveal({
+    'bean.process': bean.processId,
+    'bean.blendType': bean.blendType,
+    'bean.origin': bean.originArea ?? bean.country,
+    'bean.region': bean.region,
+    'bean.producer': bean.producer,
+    'bean.altitude': bean.altitudeMasl,
+    'bean.flavorProfile': bean.flavorProfile,
+    'bean.decaf': bean.decaf,
+    'bean.roastType': bean.roastType,
+    'bean.roastDate': bean.roastDate,
+    'bean.roastLevel': bean.detailedRoastLevel ?? bean.roastLevel,
+    'bean.batchNumber': bean.batchNumber,
+    'bean.price': bean.priceAmount,
+    'bean.bagWeight': bean.bagWeightGrams,
+    'bean.purchaseDate': bean.purchaseDate,
+    'bean.greenSupplier': bean.greenSupplier,
+    'bean.website': bean.website,
+    'bean.rating': bean.rating,
+    'bean.notes': bean.notes,
+  });
   roasterName.value = bean.roasterName;
   beanName.value = bean.beanName;
   process.value = bean.processId ?? '';
@@ -302,15 +328,15 @@ async function save(): Promise<void> {
           <input id="bean" aria-required="true" v-model="beanName" maxlength="255" placeholder="e.g. Ethiopia Guji" :aria-invalid="submitted && !!fieldErrors.beanName" />
           <span v-if="submitted && fieldErrors.beanName" class="field-error">{{ fieldErrors.beanName }}</span>
         </div>
-        <div class="form-row">
-          <div class="field">
+        <div v-if="show('bean.process') || show('bean.blendType')" class="form-row">
+          <div v-if="show('bean.process')" class="field">
             <label for="process">Process</label>
             <select id="process" v-model="process">
               <option value="">Not sure</option>
               <option v-for="p in processChoices" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
           </div>
-          <div class="field">
+          <div v-if="show('bean.blendType')" class="field">
             <label for="blend-type">Type</label>
             <select id="blend-type" v-model="blendType">
               <option value="">Not sure</option>
@@ -318,7 +344,7 @@ async function save(): Promise<void> {
             </select>
           </div>
         </div>
-        <div class="form-row">
+        <div v-if="show('bean.origin')" class="form-row">
           <div class="field">
             <label for="origin-area">Growing area</label>
             <select id="origin-area" v-model="originArea">
@@ -334,26 +360,26 @@ async function save(): Promise<void> {
             </datalist>
           </div>
         </div>
-        <div class="form-row">
-          <div class="field">
+        <div v-if="show('bean.region') || show('bean.producer')" class="form-row">
+          <div v-if="show('bean.region')" class="field">
             <label for="region">Region</label>
             <input id="region" v-model="region" maxlength="255" placeholder="e.g. Yirgacheffe" />
           </div>
-          <div class="field">
+          <div v-if="show('bean.producer')" class="field">
             <label for="producer">Producer</label>
             <input id="producer" v-model="producer" maxlength="255" placeholder="e.g. a farm, co-op or washing station" />
           </div>
         </div>
-        <div class="field altitude">
+        <div v-if="show('bean.altitude')" class="field altitude">
           <label for="altitude">Altitude ({{ ALTITUDE_LABELS[altitudeUnit] }})</label>
           <input id="altitude" v-model="altitude" inputmode="numeric" :placeholder="altitudeUnit === 'ft' ? 'e.g. 6400' : 'e.g. 1950'" :aria-invalid="submitted && !!fieldErrors.altitude" />
           <span v-if="submitted && fieldErrors.altitude" class="field-error">{{ fieldErrors.altitude }}</span>
         </div>
-        <div class="field">
+        <div v-if="show('bean.flavorProfile')" class="field">
           <label for="flavor-profile">Flavor profile</label>
           <textarea id="flavor-profile" v-model="flavorProfile" rows="2" maxlength="500" placeholder="e.g. Milk chocolate, plum, cane sugar" />
         </div>
-        <label class="checkbox">
+        <label v-if="show('bean.decaf')" class="checkbox">
           <input v-model="decaf" type="checkbox" />
           Decaf
         </label>
@@ -361,48 +387,50 @@ async function save(): Promise<void> {
 
       <section class="card stack">
         <h2>Roast</h2>
-        <div class="form-row">
-          <div class="field">
+        <div v-if="show('bean.roastType') || show('bean.roastDate')" class="form-row">
+          <div v-if="show('bean.roastType')" class="field">
             <label for="roast-type">Roasted for</label>
             <select id="roast-type" v-model="roastType">
               <option value="">Not sure</option>
               <option v-for="(r, key) in ROAST_TYPES" :key="key" :value="key">{{ r.label }}</option>
             </select>
           </div>
-          <div class="field">
+          <div v-if="show('bean.roastDate')" class="field">
             <label for="roast-date">Roast date</label>
             <input id="roast-date" v-model="roastDate" type="date" :max="today" />
           </div>
         </div>
-        <div class="field">
+        <div v-if="show('bean.batchNumber')" class="field">
           <label for="batch-number">Batch no.</label>
           <input id="batch-number" v-model="batchNumber" maxlength="50" placeholder="e.g. 3, for home roasts" />
         </div>
-        <div v-if="roastScale === 'levels'" class="field">
-          <label for="roast-level">Roast level</label>
-          <select id="roast-level" v-model="level" aria-describedby="roast-level-note">
-            <option value="">Not sure</option>
-            <option v-for="(r, key) in ROAST_LEVELS" :key="key" :value="key">{{ r.label }}</option>
-          </select>
-          <span v-if="keptName" id="roast-level-note" class="hint">Recorded as {{ DETAILED_ROAST_LEVELS[keptName].label }}. Choosing another level replaces it.</span>
-          <span v-else-if="sourceDetailed" id="roast-level-note" class="hint">Saving replaces the roast name {{ DETAILED_ROAST_LEVELS[sourceDetailed].label }}.</span>
-        </div>
-        <div v-else class="form-row">
-          <div class="field">
-            <label for="detailed-roast">Roast Level</label>
-            <select id="detailed-roast" v-model="detailedRoastLevel">
+        <template v-if="show('bean.roastLevel')">
+          <div v-if="roastScale === 'levels'" class="field">
+            <label for="roast-level">Roast level</label>
+            <select id="roast-level" v-model="level" aria-describedby="roast-level-note">
               <option value="">Not sure</option>
-              <option v-for="(d, key) in DETAILED_ROAST_LEVELS" :key="key" :value="key">{{ d.label }}</option>
+              <option v-for="(r, key) in ROAST_LEVELS" :key="key" :value="key">{{ r.label }}</option>
             </select>
+            <span v-if="keptName" id="roast-level-note" class="hint">Recorded as {{ DETAILED_ROAST_LEVELS[keptName].label }}. Choosing another level replaces it.</span>
+            <span v-else-if="sourceDetailed" id="roast-level-note" class="hint">Saving replaces the roast name {{ DETAILED_ROAST_LEVELS[sourceDetailed].label }}.</span>
           </div>
-          <div class="field">
-            <span id="implied-roast-label" class="label">Light to dark</span>
-            <output class="readonly" for="detailed-roast" aria-labelledby="implied-roast-label" aria-live="polite">
-              {{ impliedRoastLevel ? ROAST_LEVELS[impliedRoastLevel].label : '—' }}
-            </output>
+          <div v-else class="form-row">
+            <div class="field">
+              <label for="detailed-roast">Roast Level</label>
+              <select id="detailed-roast" v-model="detailedRoastLevel">
+                <option value="">Not sure</option>
+                <option v-for="(d, key) in DETAILED_ROAST_LEVELS" :key="key" :value="key">{{ d.label }}</option>
+              </select>
+            </div>
+            <div class="field">
+              <span id="implied-roast-label" class="label">Light to dark</span>
+              <output class="readonly" for="detailed-roast" aria-labelledby="implied-roast-label" aria-live="polite">
+                {{ impliedRoastLevel ? ROAST_LEVELS[impliedRoastLevel].label : '—' }}
+              </output>
+            </div>
           </div>
-        </div>
-        <p class="muted small">The roast helps estimate how much coffee ends up in the cup when you scale a recipe.</p>
+          <p class="muted small">The roast helps estimate how much coffee ends up in the cup when you scale a recipe.</p>
+        </template>
       </section>
 
       <section class="card stack">
@@ -412,45 +440,47 @@ async function save(): Promise<void> {
           <input id="inventory" aria-required="true" v-model="inventory" inputmode="numeric" :aria-invalid="submitted && !!fieldErrors.inventory" />
           <span v-if="submitted && fieldErrors.inventory" class="field-error">{{ fieldErrors.inventory }}</span>
         </div>
-        <div class="price-row">
-          <div class="field">
-            <label for="price">Bag price</label>
-            <input id="price" v-model="price" inputmode="decimal" placeholder="e.g. 21.50" :aria-invalid="submitted && !!fieldErrors.price" />
-            <span v-if="submitted && fieldErrors.price" class="field-error">{{ fieldErrors.price }}</span>
-          </div>
-          <div class="field">
-            <label for="currency">Currency<span v-if="price.trim()" class="req" aria-hidden="true">*</span></label>
-            <input
-              id="currency"
-              v-model="currency"
-              class="currency"
-              :aria-required="!!price.trim()"
-              maxlength="3"
-              autocapitalize="characters"
-              placeholder="USD"
-              :aria-invalid="submitted && !!fieldErrors.currency"
-            />
-            <span v-if="submitted && fieldErrors.currency" class="field-error">{{ fieldErrors.currency }}</span>
-          </div>
-          <div class="field">
+        <div v-if="show('bean.price') || show('bean.bagWeight')" class="price-row">
+          <template v-if="show('bean.price')">
+            <div class="field">
+              <label for="price">Bag price</label>
+              <input id="price" v-model="price" inputmode="decimal" placeholder="e.g. 21.50" :aria-invalid="submitted && !!fieldErrors.price" />
+              <span v-if="submitted && fieldErrors.price" class="field-error">{{ fieldErrors.price }}</span>
+            </div>
+            <div class="field">
+              <label for="currency">Currency<span v-if="price.trim()" class="req" aria-hidden="true">*</span></label>
+              <input
+                id="currency"
+                v-model="currency"
+                class="currency"
+                :aria-required="!!price.trim()"
+                maxlength="3"
+                autocapitalize="characters"
+                placeholder="USD"
+                :aria-invalid="submitted && !!fieldErrors.currency"
+              />
+              <span v-if="submitted && fieldErrors.currency" class="field-error">{{ fieldErrors.currency }}</span>
+            </div>
+          </template>
+          <div v-if="show('bean.bagWeight')" class="field">
             <label for="bag-weight">Bag Weight (g)</label>
             <input id="bag-weight" v-model="bagWeight" inputmode="numeric" placeholder="e.g. 340" :aria-invalid="submitted && !!fieldErrors.bagWeight" />
             <span v-if="submitted && fieldErrors.bagWeight" class="field-error">{{ fieldErrors.bagWeight }}</span>
           </div>
         </div>
         <p v-if="perGram" class="muted small" aria-live="polite">≈ {{ perGram }}</p>
-        <div class="form-row">
-          <div class="field">
+        <div v-if="show('bean.purchaseDate') || show('bean.greenSupplier')" class="form-row">
+          <div v-if="show('bean.purchaseDate')" class="field">
             <label for="purchase-date">Purchase date</label>
             <input id="purchase-date" v-model="purchaseDate" type="date" :max="today" :aria-invalid="submitted && !!fieldErrors.purchaseDate" />
             <span v-if="submitted && fieldErrors.purchaseDate" class="field-error">{{ fieldErrors.purchaseDate }}</span>
           </div>
-          <div class="field">
+          <div v-if="show('bean.greenSupplier')" class="field">
             <label for="green-supplier">Green bean supplier</label>
             <input id="green-supplier" v-model="greenSupplier" maxlength="255" />
           </div>
         </div>
-        <div class="field">
+        <div v-if="show('bean.website')" class="field">
           <label for="website">Website</label>
           <input id="website" v-model="website" type="url" inputmode="url" maxlength="500" placeholder="https://" :aria-invalid="submitted && !!fieldErrors.website" />
           <span v-if="submitted && fieldErrors.website" class="field-error">{{ fieldErrors.website }}</span>
@@ -461,9 +491,9 @@ async function save(): Promise<void> {
         </label>
       </section>
 
-      <section class="card stack">
-        <RatingInput v-model="rating" name="bean-rating" label="Rating" />
-        <div class="field">
+      <section v-if="show('bean.rating') || show('bean.notes')" class="card stack">
+        <RatingInput v-if="show('bean.rating')" v-model="rating" name="bean-rating" label="Rating" />
+        <div v-if="show('bean.notes')" class="field">
           <label for="notes">Notes</label>
           <textarea id="notes" v-model="notes" rows="4" maxlength="2000" placeholder="e.g. Roaster suggests 1:16. Best after 10 days." />
         </div>

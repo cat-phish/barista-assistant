@@ -40,6 +40,7 @@ import { useWorkspaceStore } from '../stores/workspace';
 import { estimateYield, ROAST_LEVELS } from '../lib/scale';
 import { parseTemp, tempText, TEMPERATURE_LABELS } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
+import { useFieldVisibility } from '../composables/useFieldVisibility';
 import { METHOD_KINDS, pickCopyBrewer } from '../lib/equipment';
 import { recipeStylesApi } from '../api/recipeStyles';
 
@@ -199,6 +200,11 @@ const canAddGrindRow = computed(() => grinders.value.some((g) => !g.archivedAt &
 // Duplicating: the original's name, for the heading.
 const copyOf = ref<string | null>(null);
 
+// Optional fields the workspace hides (Settings → Fields); ones this recipe
+// already sets stay shown. A filter recipe's expected yield is estimated
+// when hidden, so only one typed by hand reveals it.
+const { show, reveal } = useFieldVisibility();
+
 function fill(recipe: Recipe): void {
   name.value = recipe.name;
   brewerId.value = recipe.brewer.id;
@@ -217,6 +223,17 @@ function fill(recipe: Recipe): void {
   flowUnit.value = recipe.flowUnit;
   style.value = recipe.style?.id ?? '';
   steps.value = recipe.steps.map((s) => stepDraft(newStepKey(), s, temperatureUnit.value));
+  reveal({
+    'recipe.style': recipe.style,
+    'recipe.expectedYield': recipe.targetWaterGrams !== null && yieldCustom.value,
+    'recipe.temp': recipe.targetTempC,
+    'recipe.finishWindow': recipe.expectedFinishMinSec,
+    'recipe.firstDropWindow': recipe.firstDropMinSec,
+    'recipe.defaultGrinder': recipe.defaultGrinderId,
+    'recipe.grindSettings': recipe.grindSettings,
+    'recipe.flowUnit': recipe.flowUnit !== 'g_s',
+    'recipe.stepTemp': recipe.steps.some((s) => s.targetTempC !== null),
+  });
 }
 
 onMounted(async () => {
@@ -456,7 +473,7 @@ async function save(): Promise<void> {
           <span v-if="copyOf" class="hint">A copy of {{ copyOf }}. Pick the brewer for the copy; the original stays as it is.</span>
           <span v-if="submitted && fieldErrors.brewer" class="field-error">{{ fieldErrors.brewer }}</span>
         </div>
-        <div v-if="styleChoices.length" class="field">
+        <div v-if="styleChoices.length && show('recipe.style')" class="field">
           <label for="style">Style</label>
           <select id="style" v-model="style">
             <option value="">Not set</option>
@@ -500,8 +517,8 @@ async function save(): Promise<void> {
           {{ espresso ? 'Coffee : shot' : 'Coffee : water' }} <strong>{{ ratio ?? '–' }}</strong>
         </p>
 
-        <div class="form-row">
-          <div v-if="!espresso" class="field">
+        <div v-if="(!espresso && show('recipe.expectedYield')) || show('recipe.temp')" class="form-row">
+          <div v-if="!espresso && show('recipe.expectedYield')" class="field">
             <label for="expected-yield">Expected yield (g)</label>
             <input id="expected-yield" v-model="expectedYield" inputmode="decimal" placeholder="e.g. 220" :aria-invalid="submitted && !!fieldErrors.expectedYield" @input="yieldCustom = true" />
             <span v-if="submitted && fieldErrors.expectedYield" class="field-error">{{ fieldErrors.expectedYield }}</span>
@@ -510,13 +527,13 @@ async function save(): Promise<void> {
               Use estimate ({{ formatGrams(yieldEstimate) }} g)
             </button>
           </div>
-          <div class="field">
+          <div v-if="show('recipe.temp')" class="field">
             <label for="temp">Water temp ({{ TEMPERATURE_LABELS[temperatureUnit] }})</label>
             <input id="temp" v-model="temp" inputmode="decimal" :placeholder="temperatureUnit === 'f' ? '201' : '94'" :aria-invalid="submitted && !!fieldErrors.temp" />
             <span v-if="submitted && fieldErrors.temp" class="field-error">{{ fieldErrors.temp }}</span>
           </div>
         </div>
-        <fieldset class="finish">
+        <fieldset v-if="show('recipe.finishWindow')" class="finish">
           <legend>{{ espresso ? 'Target shot time' : 'Target finish' }}</legend>
           <div class="finish-row">
             <div class="field">
@@ -533,7 +550,7 @@ async function save(): Promise<void> {
           <span v-if="fieldErrors.finish && (submitted || (finishFrom.trim() && finishTo.trim()))" class="field-error">{{ fieldErrors.finish }}</span>
           <span v-else-if="finishHint" class="hint">{{ finishHint }}</span>
         </fieldset>
-        <fieldset v-if="espresso" class="finish">
+        <fieldset v-if="espresso && show('recipe.firstDropWindow')" class="finish">
           <legend>First drop</legend>
           <div class="finish-row">
             <div class="field">
@@ -551,17 +568,17 @@ async function save(): Promise<void> {
         </fieldset>
       </section>
 
-      <section class="card stack">
+      <section v-if="show('recipe.defaultGrinder') || show('recipe.grindSettings')" class="card stack">
         <div>
-          <h2>Grind starting points</h2>
-          <p class="muted small">
+          <h2>{{ show('recipe.grindSettings') ? 'Grind starting points' : 'Grinder' }}</h2>
+          <p v-if="show('recipe.grindSettings')" class="muted small">
             An approximate setting to start from on each grinder. When brewing, your last actual setting with that grinder and recipe takes priority.
           </p>
         </div>
         <p v-if="grinders.length === 0" class="muted small">
           No grinders yet. <RouterLink :to="{ name: 'grinder-new' }">Add one</RouterLink> to save a starting point for it.
         </p>
-        <div v-else class="field">
+        <div v-else-if="show('recipe.defaultGrinder')" class="field">
           <label for="default-grinder">Default grinder</label>
           <select id="default-grinder" v-model="defaultGrinderId">
             <option value="">None: use the last grinder</option>
@@ -571,7 +588,7 @@ async function save(): Promise<void> {
           </select>
           <span class="hint">Selected for you when you brew this recipe.</span>
         </div>
-        <ul v-if="grindRows.length" class="grind-rows">
+        <ul v-if="grindRows.length && show('recipe.grindSettings')" class="grind-rows">
           <li v-for="(row, i) in grindRows" :key="i" class="grind-row">
             <div class="field">
               <label :for="`grind-grinder-${i}`" class="visually-hidden">Grinder {{ i + 1 }}</label>
@@ -588,7 +605,7 @@ async function save(): Promise<void> {
             <span v-if="submitted && grindErrors[i]" class="field-error full">{{ grindErrors[i] }}</span>
           </li>
         </ul>
-        <button v-if="grinders.length" class="btn btn-secondary" type="button" :disabled="!canAddGrindRow" @click="addGrindRow">Add starting point</button>
+        <button v-if="grinders.length && show('recipe.grindSettings')" class="btn btn-secondary" type="button" :disabled="!canAddGrindRow" @click="addGrindRow">Add starting point</button>
       </section>
 
       <section class="card stack">
@@ -598,7 +615,7 @@ async function save(): Promise<void> {
             Steps run one after another. Each moves on by itself after its time, or waits for your tap{{ espresso ? ' or the first drop' : '' }}.
           </span>
         </div>
-        <div v-if="espresso" class="field flow-unit">
+        <div v-if="espresso && show('recipe.flowUnit')" class="field flow-unit">
           <label for="flow-unit">Flow unit</label>
           <select id="flow-unit" v-model="flowUnit">
             <option value="g_s">g/s (scale)</option>
@@ -685,7 +702,7 @@ async function save(): Promise<void> {
                 <label :for="`step-label-${i}`">Label</label>
                 <input :id="`step-label-${i}`" v-model="step.label" maxlength="255" :placeholder="STEP_TYPES[step.stepType].label" />
               </div>
-              <div class="field">
+              <div v-if="show('recipe.stepTemp')" class="field">
                 <label :for="`step-temp-${i}`">Temp ({{ TEMPERATURE_LABELS[temperatureUnit] }})</label>
                 <input :id="`step-temp-${i}`" v-model="step.temp" inputmode="decimal" :placeholder="temperatureUnit === 'f' ? 'e.g. 199' : 'e.g. 93'" />
               </div>

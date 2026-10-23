@@ -8,9 +8,9 @@ describe("workspace settings", () => {
   it("come with every workspace, defaults filled in", async () => {
     const owner = await newUser();
     const created = await owner.agent.post("/api/workspaces").send({ name: "Bar", slug: "settings-bar" });
-    expect(created.body.workspace.settings).toEqual({ recipeRoastLevel: "light", roastScale: "names" });
+    expect(created.body.workspace.settings).toEqual({ recipeRoastLevel: "light", roastScale: "names", hiddenFields: [] });
     const list = await owner.agent.get("/api/workspaces");
-    expect(list.body.workspaces[0].settings).toEqual({ recipeRoastLevel: "light", roastScale: "names" });
+    expect(list.body.workspaces[0].settings).toEqual({ recipeRoastLevel: "light", roastScale: "names", hiddenFields: [] });
   });
 
   it("owners change them; others get 403; bad values 400", async () => {
@@ -27,11 +27,24 @@ describe("workspace settings", () => {
 
     const ok = await owner.agent.patch(path).send({ recipeRoastLevel: "medium" });
     expect(ok.status).toBe(200);
-    expect(ok.body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "names" });
-    expect((await owner.agent.patch(path).send({ roastScale: "levels" })).body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "levels" });
+    expect(ok.body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "names", hiddenFields: [] });
+    expect((await owner.agent.patch(path).send({ roastScale: "levels" })).body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "levels", hiddenFields: [] });
     expect((await owner.agent.patch(path).send({ roastScale: "agtron" })).status).toBe(400);
     const list = await barista.agent.get("/api/workspaces");
     expect(list.body.workspaces[0].settings.recipeRoastLevel).toBe("medium");
+  });
+
+  it("hiddenFields: field keys, each once; replaced as a whole (docs/api/workspaces.md §2)", async () => {
+    const owner = await newUser();
+    const ws = await newWorkspace(owner);
+    const path = `/api/workspaces/${ws.id}/settings`;
+    const ok = await owner.agent.patch(path).send({ hiddenFields: ["brew.tds", "bean.website", "recipe.flowUnit"] });
+    expect(ok.body.settings).toMatchObject({ roastScale: "names", hiddenFields: ["brew.tds", "bean.website", "recipe.flowUnit"] });
+    expect((await owner.agent.patch(path).send({ hiddenFields: ["brew.tds"] })).body.settings.hiddenFields).toEqual(["brew.tds"]);
+    for (const hiddenFields of [["tds"], ["menu.price"], ["brew.tds", "brew.tds"], "brew.tds", [3], Array.from({ length: 101 }, (_, i) => `brew.f${"x".repeat(i)}`)]) {
+      expect((await owner.agent.patch(path).send({ hiddenFields })).status, JSON.stringify(hiddenFields).slice(0, 40)).toBe(400);
+    }
+    expect((await owner.agent.get("/api/workspaces")).body.workspaces[0].settings.hiddenFields).toEqual(["brew.tds"]);
   });
 });
 
