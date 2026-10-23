@@ -13,7 +13,6 @@ import { drinkCategoriesApi } from '../api/drinkCategories';
 import { drinksApi } from '../api/drinks';
 import { menuApi, type NewMenuItem } from '../api/menu';
 import type { BeanMenuField, Brewer, Drink, DrinkCategory, Menu, MenuItem, MenuSection, PublicMenu } from '../api/types';
-import { workspacesApi } from '../api/workspaces';
 import AppHeader from '../components/AppHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import MenuAddDialog from '../components/MenuAddDialog.vue';
@@ -23,7 +22,6 @@ import { parseDecimal } from '../lib/format';
 import { recallView, rememberView } from '../lib/listSort';
 import { duplicateSection, showsAs } from '../lib/menuBuilder';
 import { BEAN_MENU_FIELDS } from '../lib/publicMenu';
-import QRCode from 'qrcode';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
@@ -36,7 +34,6 @@ const loading = ref(true);
 const error = ref('');
 const busy = ref(false);
 
-const isOwner = computed(() => workspaces.current?.role === 'owner');
 const publicOn = computed(() => workspaces.current?.isPublicMenuEnabled ?? false);
 
 async function load(): Promise<void> {
@@ -48,8 +45,6 @@ async function load(): Promise<void> {
     categories.value = c.categories;
     drinks.value = [...d.drinks].sort((x, y) => x.name.localeCompare(y.name));
     brewers.value = b.brewers.filter((x) => !x.archivedAt);
-    currency.value = m.currency ?? '';
-    title.value = m.title ?? '';
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -119,52 +114,6 @@ async function run(action: (ws: string) => Promise<Menu>, onError: (message: str
     busy.value = false;
   }
 }
-
-// --- Settings: public menu on/off (owners), currency ---
-async function togglePublic(): Promise<void> {
-  const ws = workspaces.current?.id;
-  if (!ws) return;
-  busy.value = true;
-  error.value = '';
-  try {
-    await workspacesApi.update(ws, { isPublicMenuEnabled: !publicOn.value });
-    await workspaces.load();
-  } catch (err) {
-    error.value = errorMessage(err);
-  } finally {
-    busy.value = false;
-  }
-}
-// The guest page's address, to copy, open or print as a QR code.
-const pageUrl = computed(() => `${window.location.origin}/menu/${workspaces.current?.slug ?? ''}`);
-const qr = ref('');
-watch(
-  [pageUrl, publicOn],
-  async ([url, on]) => {
-    qr.value = on ? await QRCode.toDataURL(url, { margin: 1, width: 480 }) : '';
-  },
-  { immediate: true },
-);
-const copied = ref(false);
-async function copyLink(): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(pageUrl.value);
-    copied.value = true;
-    setTimeout(() => (copied.value = false), 2000);
-  } catch {
-    error.value = "Couldn't copy: select the address and copy it instead.";
-  }
-}
-
-const currency = ref('');
-const currencyCode = computed(() => currency.value.trim().toUpperCase());
-const currencyValid = computed(() => currencyCode.value === '' || /^[A-Z]{3}$/.test(currencyCode.value));
-const currencyChanged = computed(() => currencyCode.value !== (menu.value.currency ?? ''));
-const saveCurrency = () => run((ws) => menuApi.setCurrency(ws, currencyCode.value || null));
-// The menu's title; blank shows the workspace name.
-const title = ref('');
-const titleChanged = computed(() => title.value.trim() !== (menu.value.title ?? ''));
-const saveTitle = () => run((ws) => menuApi.setTitle(ws, title.value.trim() || null));
 
 // --- Order (one layout for the whole menu) ---
 const layoutOf = (sections: MenuSection[]) => sections.map((s) => ({ id: s.id, itemIds: s.items.map((i) => i.id) }));
@@ -265,7 +214,7 @@ const sectionOf = (item: MenuItem) => menu.value.sections.find((s) => s.items.so
 const priceParsed = computed(() => (itemPrice.value.trim() ? parseDecimal(itemPrice.value, { scale: 2, min: 0, max: 1_000_000, exclusiveMax: true }) : null));
 const itemProblem = computed(() => {
   if (priceParsed.value && !priceParsed.value.ok) return priceParsed.value.error;
-  if (priceParsed.value && !menu.value.currency) return 'Set the menu currency above before adding prices.';
+  if (priceParsed.value && !menu.value.currency) return 'Set the menu currency in Settings → Workspace before adding prices.';
   const target = menu.value.sections.find((s) => s.id === itemSection.value);
   const item = itemTarget.value;
   if (item && target && target.id !== sectionOf(item)?.id) {
@@ -327,48 +276,10 @@ async function deleteItem(): Promise<void> {
     <p v-else-if="error" class="form-error" role="alert">{{ error }}</p>
 
     <template v-if="!loading">
-      <section class="card stack" aria-labelledby="menu-settings">
-        <h2 id="menu-settings">Public menu</h2>
-        <div class="setting">
-          <p>
-            <strong>{{ publicOn ? 'On' : 'Off' }}</strong>
-            <span class="muted"> · {{ publicOn ? 'Guests can see it at the link below. Preview shows what they see.' : 'Only your bar can see this menu. Preview shows what guests would see.' }}</span>
-          </p>
-          <button v-if="isOwner" class="btn btn-secondary" type="button" :disabled="busy" @click="togglePublic">{{ publicOn ? 'Turn off' : 'Turn on' }}</button>
-        </div>
-        <div v-if="publicOn" class="share">
-          <div class="share-link">
-            <label for="menu-link">Guest page</label>
-            <div class="link-row">
-              <input id="menu-link" :value="pageUrl" readonly @focus="($event.target as HTMLInputElement).select()" />
-              <button class="btn btn-secondary" type="button" @click="copyLink">{{ copied ? 'Copied' : 'Copy' }}</button>
-              <a class="btn btn-secondary" :href="pageUrl" target="_blank" rel="noopener">Open</a>
-            </div>
-            <span class="muted small">Print the QR code for the counter: it opens this page, and works offline once a guest has visited.</span>
-          </div>
-          <figure v-if="qr" class="qr">
-            <img :src="qr" :alt="`QR code for ${pageUrl}`" width="160" height="160" />
-            <a class="btn-link" :href="qr" :download="`${workspaces.current?.slug ?? 'menu'}-menu-qr.png`">Download QR (PNG)</a>
-          </figure>
-        </div>
-        <p v-if="!isOwner" class="muted small">Only owners can turn the public menu on or off.</p>
-        <form v-if="workspaces.canEdit" class="title-row" @submit.prevent="saveTitle">
-          <div class="field">
-            <label for="menu-title">Menu title</label>
-            <input id="menu-title" v-model="title" maxlength="255" :placeholder="workspaces.current?.name ?? ''" />
-            <span class="hint">The heading guests see. Leave empty to use your bar's name.</span>
-          </div>
-          <button class="btn btn-secondary" type="submit" :disabled="busy || !titleChanged">Save</button>
-        </form>
-        <form v-if="workspaces.canEdit" class="currency-row" @submit.prevent="saveCurrency">
-          <div class="field">
-            <label for="menu-currency">Currency for prices</label>
-            <input id="menu-currency" v-model="currency" maxlength="3" class="currency" placeholder="USD" autocapitalize="characters" :aria-invalid="!currencyValid" />
-          </div>
-          <button class="btn btn-secondary" type="submit" :disabled="busy || !currencyValid || !currencyChanged">Save</button>
-        </form>
-        <p v-if="!currencyValid" class="field-error">Use a 3-letter code, e.g. USD.</p>
-      </section>
+      <p class="muted small status">
+        Public menu is <strong>{{ publicOn ? 'on' : 'off' }}</strong>. Its switch, link, QR code, title and currency are in
+        <RouterLink :to="{ name: 'settings-workspace' }">Settings → Workspace</RouterLink>.
+      </p>
 
       <div class="view-toggle" role="group" aria-label="Show">
         <button v-for="v in (['edit', 'preview', 'both'] as const)" :key="v" type="button" class="btn" :class="view === v ? 'btn-primary' : 'btn-secondary'" :aria-pressed="view === v" @click="view = v">
@@ -557,7 +468,6 @@ h2 {
 .small {
   font-size: 0.85rem;
 }
-.setting,
 .section-head {
   display: flex;
   justify-content: space-between;
@@ -567,26 +477,13 @@ h2 {
 .section-head {
   align-items: flex-start;
 }
-.currency-row,
-.title-row,
 .add-section {
   display: flex;
   align-items: flex-end;
   gap: var(--space-2);
 }
-.add-section .field,
-.title-row .field {
+.add-section .field {
   flex: 1;
-}
-.title-row {
-  align-items: flex-start;
-}
-.title-row .btn {
-  margin-top: 1.6rem; /* line up with the input, below its label */
-}
-.currency {
-  max-width: 6rem;
-  text-transform: uppercase;
 }
 .row-actions {
   display: flex;
@@ -633,41 +530,6 @@ h2 {
 }
 .items.empty {
   min-height: var(--tap); /* somewhere to drop into */
-}
-.share {
-  display: flex;
-  gap: var(--space-3);
-  align-items: flex-start;
-  flex-wrap: wrap;
-}
-.share-link {
-  flex: 1 1 18rem;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
-}
-.share-link label {
-  font-weight: 600;
-}
-.link-row {
-  display: flex;
-  gap: var(--space-2);
-}
-.link-row input {
-  flex: 1;
-  min-width: 0;
-}
-.qr {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-1);
-}
-.qr img {
-  background: #fff; /* scannable in dark mode too */
-  border-radius: var(--radius-md, 6px);
 }
 .bean-fields {
   border: 0;

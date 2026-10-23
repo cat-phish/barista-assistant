@@ -25,9 +25,11 @@ export interface WorkspaceListResponse {
   workspaces: Array<Workspace & { role: Role }>;
 }
 
+const slugSchema = z.string().regex(SLUG_PATTERN, "must be 3-64 lowercase letters, digits or hyphens");
+
 const createWorkspaceSchema = z.object({
   name: z.string().trim().min(1).max(255),
-  slug: z.string().regex(SLUG_PATTERN, "must be 3-64 lowercase letters, digits or hyphens"),
+  slug: slugSchema,
 });
 
 export const workspacesRouter = Router();
@@ -84,6 +86,8 @@ workspacesRouter.get("/", async (req: Request, res: Response<WorkspaceListRespon
 const updateWorkspaceSchema = z
   .object({
     name: z.string().trim().min(1).max(255).optional(),
+    // Changing it moves the public menu: the old /menu/:slug stops working (§2).
+    slug: slugSchema.optional(),
     isPublicMenuEnabled: z.boolean().optional(),
   })
   .strict()
@@ -98,7 +102,15 @@ workspacesRouter.patch(
     const body = parseBody(updateWorkspaceSchema, req, res);
     if (!body) return;
 
-    await db.update(workspaces).set(body).where(eq(workspaces.id, workspaceId));
+    try {
+      await db.update(workspaces).set(body).where(eq(workspaces.id, workspaceId));
+    } catch (err) {
+      if (isDuplicateEntryError(err)) {
+        sendError(res, 409, "Slug already taken");
+        return;
+      }
+      throw err;
+    }
     const [workspace] = await db.select().from(workspaces).where(eq(workspaces.id, workspaceId));
     if (!workspace) {
       // Deleted between the membership check and now

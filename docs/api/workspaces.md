@@ -33,13 +33,20 @@ brewers (`DEFAULT_BREWERS` in `docs/schema.md`) in one transaction.
 
 ## `PATCH /api/workspaces/:workspaceId`
 
-Updates workspace settings, including turning the public menu on or off.
+Updates workspace settings: the name, the web address (slug), and turning
+the public menu on or off. Used by Settings → Workspace.
 
 - **Auth Required:** `true` (role `owner`)
 - **Body:** any non-empty subset of
-  `{ "name": "New Name", "isPublicMenuEnabled": true }`
+  `{ "name": "New Name", "slug": "new-name", "isPublicMenuEnabled": true }`
+  (slug: same rule as `POST`)
 - **Success (`200 OK`):** `{ "workspace": { ...workspace } }`
-- **Errors:** `400` invalid or empty body; `403` not an owner.
+- **Errors:** `400` invalid or empty body; `403` not an owner; `409` slug
+  already taken.
+
+> Changing the slug moves the public menu: `/menu/<old-slug>` returns `404`
+> from then on (no redirect), so printed QR codes stop working. The frontend
+> warns before saving.
 
 ## `DELETE /api/workspaces/:workspaceId?confirm=<slug>`
 

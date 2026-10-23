@@ -87,7 +87,8 @@ The builder's Preview shows it.
 - **Body:** any non-empty subset of `{ "currency": "usd" | null, "title":
   "The Brew Bar" | null }`. `currency` is an ISO 4217 code (uppercased).
   `title` is the public menu's heading, ≤ 255 chars; blank or `null` uses the
-  workspace name.
+  workspace name. Both are set in Settings → Workspace, with the public
+  menu's on/off switch (§2).
 - **Errors:** `400` invalid, or a `null` currency while items still have
   prices; `403` viewer.
 

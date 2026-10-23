@@ -1,4 +1,6 @@
+import request from "supertest";
 import { describe, expect, it } from "vitest";
+import { app } from "../src/app.js";
 import { addMember, brewerId, newBean, newBrewLog, newUser, newWorkspace } from "./helpers.js";
 
 describe("workspaces", () => {
@@ -26,6 +28,32 @@ describe("workspaces", () => {
     expect((await barista.agent.patch(`/api/workspaces/${ws.id}`).send({ isPublicMenuEnabled: true })).status).toBe(403);
     const ok = await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ isPublicMenuEnabled: true });
     expect(ok.body.workspace.isPublicMenuEnabled).toBe(true);
+  });
+});
+
+describe("changing the web address (slug)", () => {
+  it("moves the public menu to the new address", async () => {
+    const owner = await newUser();
+    const ws = await newWorkspace(owner, "old-address");
+    await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ isPublicMenuEnabled: true });
+    const res = await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ slug: "new-address" });
+    expect(res.status).toBe(200);
+    expect(res.body.workspace.slug).toBe("new-address");
+    expect((await request(app).get("/api/public/menu/new-address")).status).toBe(200);
+    expect((await request(app).get("/api/public/menu/old-address")).status).toBe(404);
+  });
+
+  it("rejects taken and malformed slugs, and non-owners", async () => {
+    const owner = await newUser();
+    const barista = await newUser();
+    await newWorkspace(owner, "someone-else");
+    const ws = await newWorkspace(owner, "mine-to-move");
+    await addMember(owner, ws.id, barista, "barista");
+    expect((await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ slug: "someone-else" })).status).toBe(409);
+    expect((await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ slug: "No Spaces" })).status).toBe(400);
+    expect((await barista.agent.patch(`/api/workspaces/${ws.id}`).send({ slug: "barista-move" })).status).toBe(403);
+    // Saving the current slug unchanged is fine.
+    expect((await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ slug: "mine-to-move" })).status).toBe(200);
   });
 });
 

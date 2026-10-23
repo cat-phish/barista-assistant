@@ -40,7 +40,8 @@ Where the app's choices live, and what you can switch on, off or take out.
 
 ### 1. Settings section
 
-- **Status:** idea
+- **Status:** in progress. Branch 1 (`settings-shell`: the shell and the
+  Workspace tab) is done (roadmap); Members, then Account, are next.
 - **Why:** configuration is hard-coded (recipe styles, the roast level
   recipes assume, display units) or scattered. A Settings section gives these
   one obvious home.
@@ -60,6 +61,21 @@ Where the app's choices live, and what you can switch on, off or take out.
     and `/api/auth/me/preferences`.
 - **Size:** M (the shell and Workspace tab), growing as tabs are added.
 - **Depends on:** nothing.
+- **Agreed (planning, inspired by Bar Assistant's settings):**
+  - A ⚙ **Settings** link in the top header, not a seventh nav tab. The
+    tabs are grouped: **You** (Account) and the workspace's name
+    (Workspace, Members, then later tabs). A sidebar from 750px wide; on a
+    phone `/settings` is the list and each tab has a back link.
+  - **Workspace** holds the name, web address (slug, now editable), the
+    public menu's switch, link, QR code, title and currency (moved from Bar
+    setup → Menu), and deleting the workspace.
+  - **Members** uses the existing members API; **Account** adds change
+    password and delete account (the screen part of item 21).
+  - **Storage, when the first real setting arrives (item 3):** a
+    zod-validated JSON `settings` column on `workspaces` and `preferences`
+    on `users`, typed with defaults in `@barista/shared`, behind
+    `GET/PATCH /api/workspaces/:id/settings` and
+    `GET/PATCH /api/auth/me/preferences`. Nothing is stored yet.
 - **Open questions:**
   - Which settings are per workspace and which per person?
 
