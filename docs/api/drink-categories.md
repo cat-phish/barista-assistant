@@ -8,7 +8,8 @@ their method, §3): e.g. "Espresso milk drinks", "Specialty drinks". When
 brewing, "What are you making?" lists the methods, then these categories in
 order (Category → Drink → Brewer → Recipe), then "Other drinks" for
 uncategorised ones. The public menu has its own sections, set in the menu
-builder (§7b).
+builder (§7b). Clients edit them at the bottom of the Drinks page (the old
+`/setup/categories` address redirects there).
 
 **Category object:** `{ "id": "uuid", "name": "Specialty drinks", "position": 2 }`
 

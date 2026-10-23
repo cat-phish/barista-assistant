@@ -2,14 +2,16 @@
 // Drinks (docs/api/drinks.md §5c) as a table: filter by category, sort by name
 // (variants stay under their parent) or date added (a flat list); a row
 // expands to its details. Show archived adds archived drinks, which leave the
-// brew page. Categories are managed under Bar setup.
-import { computed, onMounted, ref, watch } from 'vue';
+// brew page. The categories that group drinks are edited below the list.
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { errorMessage } from '../api/client';
 import { drinkCategoriesApi } from '../api/drinkCategories';
 import { drinksApi } from '../api/drinks';
 import { recipesApi } from '../api/recipes';
 import type { Drink, DrinkCategory, Recipe } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
+import DrinkCategoriesPanel from '../components/DrinkCategoriesPanel.vue';
 import ListControls from '../components/ListControls.vue';
 import MenuTabs from '../components/MenuTabs.vue';
 import { ingredientLine, nestDrinks, type NestedDrink } from '../lib/drinks';
@@ -20,6 +22,7 @@ import { defaultSize, formatSize } from '../lib/servings';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
+const route = useRoute();
 const drinks = ref<Drink[]>([]);
 const categories = ref<DrinkCategory[]>([]);
 const recipes = ref<Recipe[]>([]);
@@ -58,6 +61,11 @@ onMounted(async () => {
   const savedSort = recallView(viewKey('sort'));
   if (isSortKey(savedSort, columns)) sort.value = savedSort;
   await load();
+  // The old Bar setup → Categories address lands here (router redirect).
+  if (route.hash === '#categories') {
+    await nextTick();
+    document.getElementById('categories')?.scrollIntoView();
+  }
   const savedCategory = recallView(viewKey('category'));
   if (savedCategory && categoryOptions.value.some((o) => o.value === savedCategory)) categoryFilter.value = savedCategory;
 });
@@ -115,7 +123,7 @@ async function setArchived(d: Drink, archived: boolean): Promise<void> {
     <MenuTabs />
     <p class="muted intro">
       A drink is built on a brewer, brewed with any of its recipes and finished with ingredients. Plain brews like "V60" are the brewers
-      themselves; categories and brewers live under <RouterLink :to="{ name: 'categories' }">Bar setup</RouterLink>.
+      themselves (<RouterLink :to="{ name: 'brewers' }">Bar setup</RouterLink>). <a href="#categories">Categories</a>, below the list, group drinks when you brew.
     </p>
 
     <p v-if="loading" class="muted" aria-live="polite">Loading drinks…</p>
@@ -176,10 +184,29 @@ async function setArchived(d: Drink, archived: boolean): Promise<void> {
         </div>
       </div>
     </template>
+
+    <!-- Categories group drinks on the brew page, after the brew methods, in this order (docs/api/drink-categories.md §5d). -->
+    <div v-if="!loading && !error" id="categories" class="categories">
+      <DrinkCategoriesPanel :categories="categories" @changed="load" />
+      <p class="muted small">
+        Drinks are grouped by these under "What are you making?" when brewing, after the brew methods. Choose a drink's category when you edit
+        it; deleting a category leaves its drinks uncategorised.
+      </p>
+    </div>
   </main>
 </template>
 
 <style scoped>
+.categories {
+  margin-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  scroll-margin-top: var(--space-4);
+}
+.categories p {
+  margin: 0;
+}
 p {
   margin: 0;
 }

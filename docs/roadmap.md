@@ -809,3 +809,20 @@ uses a refractometer, tracks price or sets step temperatures. Contract:
 - **Rule** (spec and `CLAUDE.md`): every new optional brew, bean or recipe
   field gets a registry entry and a `show()` in its form.
 
+## Drink categories move to the Drinks page (built)
+
+Backlog item "Where drink categories live", branch `drink-categories-home`,
+frontend only. Categories only group drinks now (brewers are grouped by
+method, the public menu has its own sections), but they were edited under Bar
+setup next to brewers and grinders.
+
+- The categories editor (`DrinkCategoriesPanel`: add, rename, ↑/↓, delete)
+  is at the bottom of the **Drinks** page, below the list, with a link to it
+  in the page's intro. Changing one reloads the list, so renamed categories
+  show at once. Shown while there are no drinks yet too.
+- Bar setup loses its Categories tab; `/setup/categories` redirects to
+  `/drinks#categories`, which scrolls to the editor.
+- What categories do is unchanged: the drink groups under "What are you
+  making?", after the methods, in their order. A drink stays in one
+  category.
+
