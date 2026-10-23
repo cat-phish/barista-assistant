@@ -107,8 +107,9 @@ is no age.
     doesn't check that the two agree.
   - `region` (the growing area within the country, e.g. `Yirgacheffe`) and
     `producer` (farm, co-op or washing station): free text, ≤255 chars each.
-  - `altitudeMasl`: integer 0–9000, metres above sea level. Clients may
-    show it in feet (docs/backlog.md item 2); it's always stored in metres.
+  - `altitudeMasl`: integer 0–9000, metres above sea level. Clients show it
+    in feet when the person prefers (docs/api/auth.md §1 preferences); it's
+    always stored in metres.
   - `purchaseDate`: `YYYY-MM-DD`, at most one day after the server's date.
   - `greenSupplier`: who sold the green coffee, free text, ≤255 chars.
   - `rating`: the bean overall, integer 1–5.

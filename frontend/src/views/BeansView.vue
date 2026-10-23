@@ -36,11 +36,13 @@ import { formatAdded, formatDay, localDateInput, toDateInput } from '../lib/form
 import { isSortKey, recallView, rememberView, sortArrow, sortBy, sortLabel, sortColumnOptions, toggleHeader } from '../lib/listSort';
 import { effectiveRoastAge } from '../lib/roastAge';
 import { ROAST_LEVELS } from '../lib/scale';
+import { usePreferences } from '../composables/usePreferences';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const props = defineProps<{ archived?: boolean }>(); // the Archived tab (route prop)
 
 const workspaces = useWorkspaceStore();
+const { altitudeUnit } = usePreferences();
 const beans = ref<Bean[]>([]);
 const loading = ref(true);
 const error = ref('');
@@ -259,7 +261,7 @@ function ageCell(bean: Bean): string {
 
 // "Colombia · Huila · Finca El Paraíso · 1,950 m"
 function originLabel(bean: Bean): string | null {
-  const parts = [bean.country, bean.region, bean.producer, bean.altitudeMasl === null ? null : formatAltitude(bean.altitudeMasl)];
+  const parts = [bean.country, bean.region, bean.producer, bean.altitudeMasl === null ? null : formatAltitude(bean.altitudeMasl, altitudeUnit.value)];
   return parts.filter((p) => p).join(' · ') || null;
 }
 

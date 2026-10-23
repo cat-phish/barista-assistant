@@ -48,10 +48,8 @@ export const BEAN_PROCESSES: Record<BeanProcess, { label: string }> = {
   lactic: { label: 'Lactic Fermentation' },
 };
 
-// "1,950 m". Stored in metres; a feet option is backlog item 2.
-export function formatAltitude(masl: number): string {
-  return `${masl.toLocaleString('en-US')} m`;
-}
+// "1,950 m" or "6,398 ft" (stored in metres; feet are a preference).
+export { formatAltitude } from './units';
 
 // Price of one gram, or null without a price and bag weight.
 export function pricePerGram(bean: Pick<Bean, 'priceAmount' | 'priceCurrency' | 'bagWeightGrams'>): { amount: number; currency: string } | null {

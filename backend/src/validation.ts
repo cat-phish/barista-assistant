@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ALTITUDE_UNITS, ROAST_LEVELS, TEMPERATURE_UNITS, VOLUME_UNITS } from "@barista/shared/schema";
 import { ROLES } from "./auth/membership.js";
 
 export const roleSchema = z.enum(ROLES);
@@ -6,6 +7,25 @@ export const roleSchema = z.enum(ROLES);
 // Stored slugs always match this, so a param that doesn't can't be a real slug.
 // Checking it also stops the case-insensitive collation matching "TEST-BAR" to "test-bar".
 export const SLUG_PATTERN = /^[a-z0-9-]{3,64}$/;
+
+// Settings PATCH bodies (docs/api/workspaces.md §2, auth.md §1): any non-empty
+// subset of the keys; unknown keys are refused so a typo isn't silently kept.
+export const workspaceSettingsSchema = z
+  .object({ recipeRoastLevel: z.enum(ROAST_LEVELS) })
+  .partial()
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, "Provide at least one setting");
+
+export const preferencesSchema = z
+  .object({
+    volumeUnit: z.enum(VOLUME_UNITS),
+    showBothVolumes: z.boolean(),
+    altitudeUnit: z.enum(ALTITUDE_UNITS),
+    temperatureUnit: z.enum(TEMPERATURE_UNITS),
+  })
+  .partial()
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, "Provide at least one preference");
 
 export const emailSchema =z.string().trim().toLowerCase().pipe(z.email().max(255));
 

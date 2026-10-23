@@ -24,17 +24,26 @@ describe('yield and retention', () => {
       { actualDoseGrams: 15, actualWaterGrams: 250, actualYieldGrams: null },
       { actualDoseGrams: 15, actualWaterGrams: 250, actualYieldGrams: 250 }, // implausible
     ];
-    const m = brewRetention({ roastLevel: 'dark', recipe, measured });
+    const m = brewRetention({ roastLevel: 'dark', recipeRoastLevel: 'light', recipe, measured });
     expect(m.source).toEqual({ kind: 'measured', count: 3 });
     expect(m.retention).toBeCloseTo(2.1);
 
     // Recipe says 15 g -> 250 g gives 223 g (1.8 g/g for a light roast); dark keeps 2.3/2.0 more.
-    const r = brewRetention({ roastLevel: 'dark', recipe: { ...recipe, expectedYieldGrams: 223 }, measured: [] });
+    const r = brewRetention({ roastLevel: 'dark', recipeRoastLevel: 'light', recipe: { ...recipe, expectedYieldGrams: 223 }, measured: [] });
     expect(r.source).toEqual({ kind: 'recipe', roastLevel: 'dark' });
     expect(r.retention).toBeCloseTo(1.8 * 1.15);
 
-    expect(brewRetention({ roastLevel: null, recipe, measured: [] })).toEqual({ retention: 2, source: { kind: 'roast', roastLevel: 'light' } });
-    expect(brewRetention({ roastLevel: 'medium', recipe: null, measured: [] }).retention).toBe(2.1);
+    expect(brewRetention({ roastLevel: null, recipeRoastLevel: 'light', recipe, measured: [] })).toEqual({ retention: 2, source: { kind: 'roast', roastLevel: 'light' } });
+    expect(brewRetention({ roastLevel: 'medium', recipeRoastLevel: 'light', recipe: null, measured: [] }).retention).toBe(2.1);
+  });
+
+  it("uses the workspace's recipe roast as the baseline and for beans with no roast level", () => {
+    // No roast on the bean: the recipe roast is assumed.
+    expect(brewRetention({ roastLevel: null, recipeRoastLevel: 'medium', recipe: null, measured: [] })).toEqual({ retention: 2.1, source: { kind: 'roast', roastLevel: 'medium' } });
+    // A recipe written for medium (2.1), brewed with a medium bean: its own figure, unshifted.
+    const r = { targetDoseGrams: 15, targetWaterGrams: 250, expectedYieldGrams: 218.5 }; // retention 2.1
+    expect(brewRetention({ roastLevel: 'medium', recipeRoastLevel: 'medium', recipe: r, measured: [] }).retention).toBeCloseTo(2.1);
+    expect(brewRetention({ roastLevel: 'dark', recipeRoastLevel: 'medium', recipe: r, measured: [] }).retention).toBeCloseTo(2.3);
   });
 });
 
@@ -72,6 +81,9 @@ describe('scaleBatch', () => {
     expect(mug.water).toBe(Math.round((12 * GRAMS_PER_FL_OZ) / 0.88));
     expect(Math.abs(mug.yieldOz - 12)).toBeLessThanOrEqual(0.1);
     expect(scaleBatch(recipe, { field: 'dose', value: 15 }, 2)!.yieldOz).toBe(7.4); // 220 g
+    expect(scaleBatch(recipe, { field: 'dose', value: 15 }, 2)!.yieldMl).toBe(220);
+    const ml = scaleBatch(recipe, { field: 'yieldMl', value: 350 }, 2)!;
+    expect(Math.abs(ml.yieldMl - 350)).toBeLessThanOrEqual(1);
   });
 
   it('rounds dose to 0.1 g and water to whole grams', () => {

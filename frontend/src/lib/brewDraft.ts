@@ -1,9 +1,10 @@
 // Editable brew details (log form and journal edit), validated with the same
 // rules as the API (docs/api/brew-logs.md §6). Unit-tested in brewDraft.test.ts.
 import type { BrewLogInput } from '../api/brews';
-import type { BrewLog, Mark, MethodKind } from '../api/types';
+import type { BrewLog, Mark, MethodKind, TemperatureUnit } from '../api/types';
 import { formatGrams, formatTime, parseDecimal, parseTime } from './format';
 import { parseMark } from './marks';
+import { parseTemp, tempText } from './units';
 
 export interface BrewDraft {
   dose: string;
@@ -30,13 +31,14 @@ export function emptyDraft(): BrewDraft {
   return { dose: '', water: '', yieldGrams: '', tds: '', temp: '', grinderId: '', waterProfileId: '', toolIds: [], firstDrop: '', grind: '', time: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
 }
 
-export function draftFromLog(log: BrewLog): BrewDraft {
+// temp is text in the person's unit (°C stored); see lib/units.ts.
+export function draftFromLog(log: BrewLog, tempUnit: TemperatureUnit = 'c'): BrewDraft {
   return {
     dose: formatGrams(log.actualDoseGrams),
     water: log.actualWaterGrams === null ? '' : formatGrams(log.actualWaterGrams),
     yieldGrams: log.actualYieldGrams === null ? '' : formatGrams(log.actualYieldGrams),
     tds: log.tdsPercent === null ? '' : String(log.tdsPercent),
-    temp: log.actualTempC === null ? '' : String(log.actualTempC),
+    temp: tempText(log.actualTempC, tempUnit),
     grinderId: log.grinderId ?? '',
     waterProfileId: log.waterProfileId ?? '',
     toolIds: log.tools.map((t) => t.id),
@@ -64,6 +66,7 @@ export function parseBrewDraft(
   d: BrewDraft,
   kind: MethodKind | null = null,
   drinkTasting = false,
+  tempUnit: TemperatureUnit = 'c',
 ): { errors: BrewDraftErrors; values: BrewValues | null; firstDropSec: number | null } {
   const espresso = kind === 'espresso';
   const dose = parseDecimal(d.dose, { scale: 2, min: 0, max: 1000, exclusiveMin: true, exclusiveMax: true });
@@ -75,7 +78,7 @@ export function parseBrewDraft(
       ? ({ ok: false, error: 'Enter the shot weight' } as const)
       : null;
   const tds = d.tds.trim() ? parseDecimal(d.tds, { scale: 2, min: 0, max: 30, exclusiveMin: true }) : null;
-  const temp = d.temp.trim() ? parseDecimal(d.temp, { scale: 1, min: 0, max: 100 }) : null;
+  const temp = d.temp.trim() ? parseTemp(d.temp, tempUnit) : null;
   const time = parseTime(d.time);
   const firstDrop = espresso ? parseMark(d.firstDrop) : null;
 

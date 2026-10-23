@@ -6,6 +6,8 @@ import { errorMessage } from '../api/client';
 import AppHeader from '../components/AppHeader.vue';
 import RatingInput from '../components/RatingInput.vue';
 import { localDateInput, parseDecimal, toDateInput } from '../lib/format';
+import { ALTITUDE_LABELS, altitudeText, parseAltitude } from '../lib/units';
+import { usePreferences } from '../composables/usePreferences';
 import { useWorkspaceStore } from '../stores/workspace';
 import type { Bean, BeanProcess, BlendType, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from '../api/types';
 import { COUNTRY_AREAS, ORIGIN_AREAS, areaForCountry } from '../lib/origins';
@@ -24,6 +26,7 @@ import {
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 
 const workspaces = useWorkspaceStore();
+const { altitudeUnit } = usePreferences();
 const route = useRoute();
 const router = useRouter();
 const editing = computed(() => props.id !== undefined);
@@ -81,7 +84,7 @@ const impliedRoastLevel = computed<RoastLevel | null>(() => {
 });
 
 const inventoryParsed = computed(() => parseDecimal(inventory.value, { scale: 0, min: 0, max: 1_000_000 }));
-const altitudeParsed = computed(() => (altitude.value.trim() ? parseDecimal(altitude.value, { scale: 0, min: 0, max: 9000 }) : null));
+const altitudeParsed = computed(() => (altitude.value.trim() ? parseAltitude(altitude.value, altitudeUnit.value) : null));
 const priceParsed = computed(() =>
   price.value.trim() ? parseDecimal(price.value, { scale: 2, min: 0, max: 1_000_000, exclusiveMin: true, exclusiveMax: true }) : null,
 );
@@ -132,7 +135,7 @@ function fill(bean: Bean): void {
   country.value = bean.country ?? '';
   region.value = bean.region ?? '';
   producer.value = bean.producer ?? '';
-  altitude.value = bean.altitudeMasl === null ? '' : String(bean.altitudeMasl);
+  altitude.value = altitudeText(bean.altitudeMasl, altitudeUnit.value);
   flavorProfile.value = bean.flavorProfile ?? '';
   blendType.value = bean.blendType ?? '';
   decaf.value = bean.decaf;
@@ -305,8 +308,8 @@ async function save(): Promise<void> {
           </div>
         </div>
         <div class="field altitude">
-          <label for="altitude">Altitude (m)</label>
-          <input id="altitude" v-model="altitude" inputmode="numeric" placeholder="e.g. 1950" :aria-invalid="submitted && !!fieldErrors.altitude" />
+          <label for="altitude">Altitude ({{ ALTITUDE_LABELS[altitudeUnit] }})</label>
+          <input id="altitude" v-model="altitude" inputmode="numeric" :placeholder="altitudeUnit === 'ft' ? 'e.g. 6400' : 'e.g. 1950'" :aria-invalid="submitted && !!fieldErrors.altitude" />
           <span v-if="submitted && fieldErrors.altitude" class="field-error">{{ fieldErrors.altitude }}</span>
         </div>
         <div class="field">

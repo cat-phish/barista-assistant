@@ -1,8 +1,9 @@
 // Recipe steps: the types, editor validation (mirrors the API, docs/api/README.md
 // §5), what each step's card says, and the timer's schedule. Steps run back to
 // back: each starts when the previous one actually ended. Tested in steps.test.ts.
-import type { FlowUnit, MachineCapabilities, Mark, MethodKind, StepAdvance, StepFields, StepType } from '../api/types';
+import type { FlowUnit, MachineCapabilities, Mark, MethodKind, StepAdvance, StepFields, StepType, TemperatureUnit } from '../api/types';
 import { formatGrams, formatTime, parseDecimal, parseTime, type Parsed } from './format';
+import { parseTemp, tempText } from './units';
 
 type Rule = 'required' | 'optional' | 'none';
 interface StepTypeInfo {
@@ -113,14 +114,14 @@ export interface StepDraft {
   duration: string; // m:ss or seconds; '' = none (open-ended / no guide)
   advance: StepAdvance;
   water: string; // "pour to" grams
-  temp: string; // °C
+  temp: string; // in the person's temperature unit (°C stored)
   pressure: string; // bar
   pressureEnd: string;
   flow: string; // recipe's flow unit
   flowEnd: string;
 }
 
-export function stepDraft(key: string, s?: Partial<StepFields>): StepDraft {
+export function stepDraft(key: string, s?: Partial<StepFields>, tempUnit: TemperatureUnit = 'c'): StepDraft {
   const text = (n: number | null | undefined) => (n == null ? '' : formatGrams(n));
   return {
     key,
@@ -129,7 +130,7 @@ export function stepDraft(key: string, s?: Partial<StepFields>): StepDraft {
     duration: s?.durationSec == null ? '' : formatTime(s.durationSec),
     advance: s?.advance ?? 'auto',
     water: text(s?.targetWaterGrams),
-    temp: text(s?.targetTempC),
+    temp: tempText(s?.targetTempC, tempUnit),
     pressure: text(s?.pressureBar),
     pressureEnd: text(s?.pressureEndBar),
     flow: text(s?.flowRate),
@@ -137,7 +138,7 @@ export function stepDraft(key: string, s?: Partial<StepFields>): StepDraft {
   };
 }
 
-export function parseSteps(drafts: StepDraft[], kind: MethodKind | null): { steps: StepFields[]; errors: Record<number, string> } {
+export function parseSteps(drafts: StepDraft[], kind: MethodKind | null, tempUnit: TemperatureUnit = 'c'): { steps: StepFields[]; errors: Record<number, string> } {
   const steps: StepFields[] = [];
   const errors: Record<number, string> = {};
   let lastWater: number | null = null;
@@ -150,7 +151,7 @@ export function parseSteps(drafts: StepDraft[], kind: MethodKind | null): { step
     const last = i === drafts.length - 1;
     const duration = d.duration.trim() ? parseTime(d.duration) : null;
     const water = rules.water === 'none' ? null : optional(d.water, { scale: 2, min: 0, max: 10000, exclusiveMin: true, exclusiveMax: true });
-    const temp = optional(d.temp, { scale: 1, min: 0, max: 100 });
+    const temp = d.temp.trim() ? parseTemp(d.temp, tempUnit) : null;
     const pressure = rules.pressure === 'none' ? null : optional(d.pressure, profile);
     const pressureEnd = rules.pressure === 'none' ? null : optional(d.pressureEnd, profile);
     const flow = rules.flow === 'none' ? null : optional(d.flow, profile);

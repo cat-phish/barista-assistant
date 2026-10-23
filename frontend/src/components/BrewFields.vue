@@ -7,9 +7,12 @@ import type { BrewDraft, BrewDraftErrors } from '../lib/brewDraft';
 import { brixToTds, extractionYield, usesWater } from '../lib/extraction';
 import { formatGrams } from '../lib/format';
 import { toolsFor } from '../lib/prepTools';
+import { TEMPERATURE_LABELS } from '../lib/units';
+import { usePreferences } from '../composables/usePreferences';
 import RatingInput from './RatingInput.vue';
 
 const draft = defineModel<BrewDraft>({ required: true });
+const { temperatureUnit } = usePreferences();
 const props = defineProps<{
   errors: BrewDraftErrors;
   showErrors: boolean;
@@ -144,7 +147,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
         <span v-if="showErrors && errors.firstDrop" class="field-error">{{ errors.firstDrop }}</span>
       </div>
       <div class="field">
-        <label for="brew-temp">Water temp (°C)</label>
+        <label for="brew-temp">Water temp ({{ TEMPERATURE_LABELS[temperatureUnit] }})</label>
         <input id="brew-temp" v-model="draft.temp" inputmode="decimal" :aria-invalid="showErrors && !!errors.temp" />
         <span v-if="showErrors && errors.temp" class="field-error">{{ errors.temp }}</span>
       </div>

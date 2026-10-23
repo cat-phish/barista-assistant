@@ -534,3 +534,37 @@ other. `SectionTabs.vue` now keeps one row from 601px wide; narrower, a bar
 with more than four tabs wraps into two even rows (3 + 3), with a little
 less padding. Recipes / Drinks / Ingredients and Active / Archived stay on
 one row.
+
+## Units and defaults (built)
+
+Backlog item 2 (finished and removed from the backlog, which was
+renumbered), branch `units-and-defaults`, migration 0043. Estimates assumed
+a light roast, yields showed in g and fl oz, altitude in metres and
+temperatures in °C, whoever was looking.
+
+- **Settings storage** (the first real settings): JSON `users.preferences`
+  and `workspaces.settings`, null or missing keys = defaults
+  (`DEFAULT_PREFERENCES`, `DEFAULT_WORKSPACE_SETTINGS` in
+  `@barista/shared`). They ride along on responses the app already loads
+  (`user` from /me, login and register; every workspace), so there are no
+  GET endpoints, only `PATCH /api/auth/me/preferences` and
+  `PATCH /api/workspaces/:id/settings` (owners). Unknown keys are `400`.
+- **Settings → You → Preferences** (per person, saved on change): volume
+  (fl oz / ml, and "also show" the other), temperature (°C / °F), altitude
+  (metres / feet).
+- **Settings → <workspace> → Defaults** (owners edit): "Recipes are written
+  for a … roast". It replaces the hard-coded light roast: the recipe form's
+  estimate, the baseline when a bean's roast adjusts a recipe's yield, and
+  beans with no roast level.
+- **Storage never changes** (grams, °C to 0.1, whole metres); `lib/units.ts`
+  converts at the edges. Form text keeps 0.1 °F so saving an untouched
+  value gives back exactly what was stored (93.3 °C ↔ 199.9 °F); lists show
+  whole °F. Feet are whole and convert back to the same metre.
+- **Brew page:** the "Yield ≈ (g)" field is gone; the yield shows in your
+  volume unit(s), and typing either one drives the batch (`scaleBatch`
+  gained an ml lead). Espresso shot weight stays in grams.
+- **°F everywhere °C was:** recipe target and step temperatures, the brew
+  form and setup, journal, recipe list, timer, and AI suggestion changes
+  (+1 °C shows as +2 °F). The AI prompt stays in Celsius.
+- **Feet:** the bean form and bean list; the guest menu always shows metres.
+- **New drinks** start with your volume unit as their size unit.

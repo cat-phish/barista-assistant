@@ -23,6 +23,24 @@ import {
   type AnyMySqlColumn,
 } from "drizzle-orm/mysql-core";
 
+// Settings and preferences (stored as JSON; jsonValue is defined here, above
+// the tables that use it). Storage units never change: grams, °C, metres.
+export const VOLUME_UNITS = ["fl_oz", "ml"] as const;
+export const ALTITUDE_UNITS = ["m", "ft"] as const;
+export const TEMPERATURE_UNITS = ["c", "f"] as const;
+export interface UserPreferences {
+  volumeUnit: (typeof VOLUME_UNITS)[number];
+  showBothVolumes: boolean;
+  altitudeUnit: (typeof ALTITUDE_UNITS)[number];
+  temperatureUnit: (typeof TEMPERATURE_UNITS)[number];
+}
+export const DEFAULT_PREFERENCES: UserPreferences = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c" };
+export interface WorkspaceSettings {
+  recipeRoastLevel: RoastLevel; // the roast recipes are written for
+}
+export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: "light" };
+export function withDefaults<T extends object>(defaults: T, stored: Partial<T> | null): T;
+
 // 1. Users
 export const users = mysqlTable("users", {
   id: varchar("id", { length: 36 }).primaryKey(),
@@ -31,6 +49,9 @@ export const users = mysqlTable("users", {
   // Embedded in session tokens; bumping it (e.g. on password change) makes
   // every older session invalid.
   sessionVersion: int("session_version").default(0).notNull(),
+  // Display units (docs/api/auth.md §1): JSON, null or missing keys = the
+  // defaults (DEFAULT_PREFERENCES). Validated by the backend.
+  preferences: jsonValue<Partial<UserPreferences>>("preferences"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -45,6 +66,9 @@ export const workspaces = mysqlTable("workspaces", {
   menuCurrency: varchar("menu_currency", { length: 3 }),
   // The public menu's title (docs/api/menu.md §7b); null = the workspace name.
   menuTitle: varchar("menu_title", { length: 255 }),
+  // Workspace settings (docs/api/workspaces.md §2): JSON, null or missing
+  // keys = the defaults (DEFAULT_WORKSPACE_SETTINGS). Owners change them.
+  settings: jsonValue<Partial<WorkspaceSettings>>("settings"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

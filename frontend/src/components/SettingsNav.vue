@@ -10,10 +10,12 @@ const workspaces = useWorkspaceStore();
   <nav class="settings-nav" aria-label="Settings">
     <h2>You</h2>
     <RouterLink :to="{ name: 'settings-account' }" active-class="active">Account</RouterLink>
+    <RouterLink :to="{ name: 'settings-preferences' }" active-class="active">Preferences</RouterLink>
     <template v-if="workspaces.current">
       <h2 :title="workspaces.current.name">{{ workspaces.current.name }}</h2>
       <RouterLink :to="{ name: 'settings-workspace' }" active-class="active">Workspace</RouterLink>
       <RouterLink :to="{ name: 'settings-members' }" active-class="active">Members</RouterLink>
+      <RouterLink :to="{ name: 'settings-defaults' }" active-class="active">Defaults</RouterLink>
     </template>
   </nav>
 </template>

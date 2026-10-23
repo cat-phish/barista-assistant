@@ -18,10 +18,12 @@ import { nestDrinks, selfAndDescendants } from '../lib/drinks';
 import { METHOD_KINDS } from '../lib/equipment';
 import { parseDecimal } from '../lib/format';
 import { knownUnits, SERVING_UNITS } from '../lib/servings';
+import { usePreferences } from '../composables/usePreferences';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 const workspaces = useWorkspaceStore();
+const { prefs } = usePreferences();
 // As saved, for the Delete section (editing only).
 const saved = ref<{ name: string; archived: boolean } | null>(null);
 const deleteUsage = () => drinksApi.usage(workspaces.current?.id ?? '', props.id ?? '');
@@ -49,7 +51,7 @@ const savedDefaultRecipeId = ref<string | null>(null);
 const savedIngredientIds = ref(new Set<string>());
 // Default size: amounts below are for it, and brewing scales from it.
 const servingSize = ref('');
-const servingUnit = ref<ServingUnit>('fl_oz');
+const servingUnit = ref<ServingUnit>(prefs.value.volumeUnit); // a new drink starts in your volume unit
 const instructions = ref(''); // how to make it, shown after the brew
 const rows = ref<Array<{ ingredientId: string; amountValue: string; amountUnit: string; note: string }>>([]);
 // Unit suggestions: fl oz, ml, g, then whatever's been typed before.

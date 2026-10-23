@@ -10,6 +10,8 @@
 import { computed, onUnmounted, ref } from 'vue';
 import type { FlowUnit, MachineCapabilities, Mark, StepFields } from '../api/types';
 import { formatTime } from '../lib/format';
+import { formatTemp } from '../lib/units';
+import { usePreferences } from '../composables/usePreferences';
 import { firstDropVerdict, formatMark, withMark } from '../lib/marks';
 import {
   brewSchedule,
@@ -22,6 +24,7 @@ import {
   STEP_TYPES,
 } from '../lib/steps';
 
+const { temperatureUnit } = usePreferences();
 const props = defineProps<{
   recipeName: string;
   subtitle: string; // "Bean • 15 g dose", or "Bean • 18 g → 36 g"
@@ -199,7 +202,7 @@ onUnmounted(() => {
       >
         <template v-if="phase.kind === 'step'">
           <span class="label">
-            Step {{ phase.index + 1 }} of {{ steps.length }} · {{ STEP_TYPES[phase.step.stepType].label }}<template v-if="phase.step.targetTempC !== null"> · {{ phase.step.targetTempC }} °C</template>
+            Step {{ phase.index + 1 }} of {{ steps.length }} · {{ STEP_TYPES[phase.step.stepType].label }}<template v-if="phase.step.targetTempC !== null"> · {{ formatTemp(phase.step.targetTempC, temperatureUnit) }}</template>
           </span>
           <!-- What to do is the big line; the step's name is the small one under it. -->
           <div class="main-row">

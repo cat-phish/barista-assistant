@@ -9,20 +9,34 @@ import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import {
   brewers,
   DEFAULT_BREWERS,
+  DEFAULT_WORKSPACE_SETTINGS,
+  withDefaults,
+  type WorkspaceSettings,
   DEFAULT_PREP_TOOLS,
   prepTools,
   workspaceMembers,
   workspaces,
   type Workspace,
 } from "@barista/shared/schema";
-import { SLUG_PATTERN } from "../validation.js";
+import { SLUG_PATTERN, workspaceSettingsSchema } from "../validation.js";
+
+// A workspace as the API returns it: settings with the defaults filled in.
+export type WorkspaceView = Omit<Workspace, "settings"> & { settings: WorkspaceSettings };
 
 export interface WorkspaceResponse {
-  workspace: Workspace;
+  workspace: WorkspaceView;
 }
 
 export interface WorkspaceListResponse {
-  workspaces: Array<Workspace & { role: Role }>;
+  workspaces: Array<WorkspaceView & { role: Role }>;
+}
+
+export interface WorkspaceSettingsResponse {
+  settings: WorkspaceSettings;
+}
+
+function toView(workspace: Workspace): WorkspaceView {
+  return { ...workspace, settings: withDefaults(DEFAULT_WORKSPACE_SETTINGS, workspace.settings) };
 }
 
 const slugSchema = z.string().regex(SLUG_PATTERN, "must be 3-64 lowercase letters, digits or hyphens");
@@ -67,7 +81,7 @@ workspacesRouter.post("/", async (req: Request, res: Response<WorkspaceResponse>
   if (!workspace) {
     throw new Error(`Workspace ${workspaceId} missing after insert`);
   }
-  res.status(201).json({ workspace });
+  res.status(201).json({ workspace: toView(workspace) });
 });
 
 workspacesRouter.get("/", async (req: Request, res: Response<WorkspaceListResponse>) => {
@@ -79,7 +93,7 @@ workspacesRouter.get("/", async (req: Request, res: Response<WorkspaceListRespon
     .orderBy(workspaces.name);
 
   res.json({
-    workspaces: rows.flatMap(({ workspace, role }) => (isRole(role) ? [{ ...workspace, role }] : [])),
+    workspaces: rows.flatMap(({ workspace, role }) => (isRole(role) ? [{ ...toView(workspace), role }] : [])),
   });
 });
 
@@ -117,7 +131,33 @@ workspacesRouter.patch(
       sendError(res, 404, "Workspace not found");
       return;
     }
-    res.json({ workspace });
+    res.json({ workspace: toView(workspace) });
+  }
+);
+
+// Owners change the workspace's settings; the body's keys are merged into
+// what's stored (docs/api/workspaces.md §2).
+workspacesRouter.patch(
+  "/:workspaceId/settings",
+  async (req: Request<{ workspaceId: string }>, res: Response<WorkspaceSettingsResponse>) => {
+    const { workspaceId } = req.params;
+    if (!(await requireMembership(res, authedUserId(req), workspaceId, ["owner"]))) return;
+
+    const body = parseBody(workspaceSettingsSchema, req, res);
+    if (!body) return;
+
+    const settings = await db.transaction(async (tx) => {
+      const [row] = await tx.select({ settings: workspaces.settings }).from(workspaces).where(eq(workspaces.id, workspaceId)).for("update");
+      if (!row) return null;
+      const merged = { ...(row.settings ?? {}), ...body };
+      await tx.update(workspaces).set({ settings: merged }).where(eq(workspaces.id, workspaceId));
+      return merged;
+    });
+    if (!settings) {
+      sendError(res, 404, "Workspace not found");
+      return;
+    }
+    res.json({ settings: withDefaults(DEFAULT_WORKSPACE_SETTINGS, settings) });
   }
 );
 

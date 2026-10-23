@@ -302,6 +302,13 @@
       "when": 1792730913639,
       "tag": "0042_menu_title",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "5",
+      "when": 1792736726526,
+      "tag": "0043_settings",
+      "breakpoints": true
     }
   ]
 }

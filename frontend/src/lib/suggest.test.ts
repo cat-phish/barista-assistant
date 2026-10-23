@@ -19,7 +19,7 @@ const suggestions = (over: Partial<Suggestions> = {}): Suggestions => ({
 describe('startingParameters', () => {
   it('applies the temp change to the analyzed brew and keeps its grind as the base', () => {
     expect(startingParameters(suggestions(), recipe)).toMatchObject({
-      tempC: 94, grindBase: '22 clicks', grindAdvice: 'Grind finer', tempAdvice: '+1 °C', reasoning: 'Under-extracted.',
+      tempC: 94, grindBase: '22 clicks', grindAdvice: 'Grind finer', tempDeltaC: 1, reasoning: 'Under-extracted.',
       basedOn: { isLatestBrew: true },
     });
   });
@@ -31,7 +31,7 @@ describe('startingParameters', () => {
     const s = suggestions({ latestAnalysis: { ...suggestions().latestAnalysis!, suggestedTempDelta: 8.5 }, analyzedBrew: brew({ actualTempC: 96.2 }) });
     expect(startingParameters(s, null)?.tempC).toBe(100);
     const down = suggestions({ latestAnalysis: { ...suggestions().latestAnalysis!, suggestedTempDelta: -1.5 } });
-    expect(startingParameters(down, null)).toMatchObject({ tempC: 91.5, tempAdvice: '−1.5 °C' });
+    expect(startingParameters(down, null)).toMatchObject({ tempC: 91.5, tempDeltaC: -1.5 });
   });
   it('flags when newer brews exist than the analyzed one', () => {
     const s = suggestions({ recentBrews: [brew({ id: 'newer' }), brew({})] });

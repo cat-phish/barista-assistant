@@ -43,7 +43,7 @@ export function beanLines(b: PublicBean, fields: readonly BeanMenuField[], now: 
   ].filter((x): x is string => !!x);
 
   const place = has('origin') ? [b.country, b.region].filter(Boolean).join(', ') || (b.originArea ? ORIGIN_AREAS[b.originArea].label : '') : '';
-  const origin = [place || null, has('producer') ? b.producer : null, has('altitude') && b.altitudeMasl != null ? formatAltitude(b.altitudeMasl) : null]
+  const origin = [place || null, has('producer') ? b.producer : null, has('altitude') && b.altitudeMasl != null ? formatAltitude(b.altitudeMasl) : null] // guests have no preference: metres
     .filter((x): x is string => !!x)
     .join(' · ');
 
