@@ -37,7 +37,6 @@ const error = ref('');
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `grinders.${what}.${workspaces.current?.id ?? ''}`;
 const ALL = 'all';
-const RETIRED = 'retired';
 const NOT_SET = 'none';
 const columns: SortColumns<Grinder> = {
   name: nameColumn(),
@@ -48,6 +47,8 @@ const columns: SortColumns<Grinder> = {
 };
 const sortChoices = sortColumnOptions(columns);
 const filter = ref(ALL);
+const showRetired = ref(false);
+const retiredCount = computed(() => grinders.value.filter((g) => g.retiredAt).length);
 const sort = ref('name_asc');
 watch(filter, (v) => rememberView(viewKey('filter'), v));
 watch(sort, (v) => rememberView(viewKey('sort'), v));
@@ -58,16 +59,14 @@ const filterOptions = computed(() => {
     { value: 'manual', label: 'Hand grinders' },
     { value: 'electric', label: 'Electric' },
     ...(active.some((g) => g.power === null) ? [{ value: NOT_SET, label: 'Not set' }] : []),
-    ...(grinders.value.some((g) => g.retiredAt) ? [{ value: RETIRED, label: 'Retired' }] : []),
   ];
 });
 const filterName = computed(() => filterOptions.value.find((o) => o.value === filter.value)?.label ?? '');
 const shown = computed(() => {
   const f = filter.value;
-  const list =
-    f === RETIRED
-      ? grinders.value.filter((g) => g.retiredAt)
-      : grinders.value.filter((g) => !g.retiredAt && (f === ALL || (f === NOT_SET ? g.power === null : g.power === f)));
+  const list = grinders.value.filter(
+    (g) => (!g.retiredAt || showRetired.value) && (f === ALL || (f === NOT_SET ? g.power === null : g.power === f)),
+  );
   return sortBy(list, sort.value, columns);
 });
 // One row open at a time.
@@ -79,6 +78,7 @@ async function load(): Promise<void> {
   if (!ws) return;
   try {
     grinders.value = (await grindersApi.list(ws)).grinders;
+    if (retiredCount.value === 0) showRetired.value = false;
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -163,8 +163,8 @@ async function retireInstead(): Promise<void> {
     <template v-if="!loading">
       <div v-if="grinders.length === 0" class="card empty"><p>No grinders yet.</p></div>
       <template v-else>
-        <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="grinders" filter-label="Show" :filter-options="filterOptions" />
-        <p v-if="filter === RETIRED" class="muted small">Retired grinders are hidden when brewing; past brews still show them.</p>
+        <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="grinders" filter-label="Show" :filter-options="filterOptions" v-model:show-retired="showRetired" :retired-count="retiredCount" />
+        <p v-if="showRetired" class="muted small">Retired grinders are hidden when brewing; past brews still show them.</p>
         <p v-if="shown.length === 0" class="card empty">No {{ filterName.toLowerCase() }} yet.</p>
         <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 0.9fr) minmax(0, 1.2fr) minmax(0, 1.3fr) 5.5rem">
           <div class="data-row data-head">
@@ -177,7 +177,7 @@ async function retireInstead(): Promise<void> {
           </div>
           <div v-for="g in shown" :key="g.id" class="data-item" :class="{ open: openId === g.id }">
             <button class="data-row" type="button" :aria-expanded="openId === g.id" @click="toggle(g.id)">
-              <span class="data-td primary">{{ g.name }}</span>
+              <span class="data-td primary">{{ g.name }}<span v-if="g.retiredAt" class="muted"> (retired)</span></span>
               <span class="data-td">{{ powerLabel(g) ?? '–' }}</span>
               <span class="data-td">{{ burrLabel(g) ?? '–' }}</span>
               <span class="data-td">{{ adjustmentLabel(g) ?? '–' }}</span>

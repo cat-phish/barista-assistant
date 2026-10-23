@@ -16,6 +16,8 @@ import {
   drinks,
   grinders,
   waterProfiles,
+  prepTools,
+  brewLogTools,
   llmAnalyses,
   recipes,
   SERVING_UNITS,
@@ -47,6 +49,7 @@ export interface BrewLogDetails extends BrewLog {
   // The drink it was for; hasIngredients = the shot and the drink are tasted apart.
   drink: { id: string; name: string; hasIngredients: boolean } | null;
   marks: Mark[]; // when things actually happened, earliest first
+  tools: Array<{ id: string; name: string; methodKind: MethodKind | null }>; // prep tools used, in checklist order
   // Null when the brewer deleted their account (the log is kept).
   brewedBy: { id: string; email: string } | null;
 }
@@ -122,6 +125,12 @@ const brewLogFields = {
     )
     .max(51)
     .refine((list) => new Set(list.map((m) => `${m.kind}:${m.stepOrder ?? ""}`)).size === list.length, "at most one first_drop and one step_end per step")
+    .optional(),
+  // Prep tools used (docs/api/prep-tools.md §3d); PATCH replaces the list.
+  toolIds: z
+    .array(z.uuid())
+    .max(100)
+    .refine((ids) => new Set(ids).size === ids.length, "each tool once")
     .optional(),
 };
 
@@ -210,7 +219,14 @@ async function recipeBrewer(tx: Tx, recipeId: string | null | undefined): Promis
 async function referencesInWorkspace(
   tx: Tx,
   workspaceId: string,
-  refs: { beanId?: string; recipeId?: string | null; grinderId?: string | null; waterProfileId?: string | null; drinkId?: string | null }
+  refs: {
+    beanId?: string;
+    recipeId?: string | null;
+    grinderId?: string | null;
+    waterProfileId?: string | null;
+    drinkId?: string | null;
+    toolIds?: string[];
+  }
 ): Promise<string | null> {
   if (refs.drinkId) {
     const [drink] = await tx
@@ -244,6 +260,15 @@ async function referencesInWorkspace(
       .where(and(eq(grinders.id, refs.grinderId), eq(grinders.workspaceId, workspaceId)))
       .for("update");
     if (!grinder) return "grinderId: not a grinder in this workspace";
+  }
+  if (refs.toolIds && refs.toolIds.length > 0) {
+    // Retired tools are accepted, like grinders; a tool's method isn't checked.
+    const found = await tx
+      .select({ id: prepTools.id })
+      .from(prepTools)
+      .where(and(inArray(prepTools.id, refs.toolIds), eq(prepTools.workspaceId, workspaceId)))
+      .for("update");
+    if (found.length !== refs.toolIds.length) return "toolIds: not all tools in this workspace";
   }
   if (refs.waterProfileId) {
     // Retired profiles are accepted, like grinders.
@@ -313,14 +338,33 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
     .orderBy(desc(brewLogs.timestamp), desc(brewLogs.id))
     .limit(limit)
     .offset(offset);
-  const marks = await marksFor(rows.map((r) => r.id));
+  const [marks, tools] = await Promise.all([marksFor(rows.map((r) => r.id)), toolsFor(rows.map((r) => r.id))]);
   // A recipe always has a method (inner FK), so its kind is set whenever recipe is.
   return rows.map(({ recipeMethodKind, recipe, drink, drinkHasIngredients, ...row }) => ({
     ...row,
     recipe: recipe && recipeMethodKind ? { ...recipe, methodKind: recipeMethodKind } : null,
     drink: drink ? { ...drink, hasIngredients: Number(drinkHasIngredients) === 1 } : null,
     marks: marks.get(row.id) ?? [],
+    tools: tools.get(row.id) ?? [],
   }));
+}
+
+async function toolsFor(brewLogIds: string[]): Promise<Map<string, BrewLogDetails["tools"]>> {
+  const byLog = new Map<string, BrewLogDetails["tools"]>();
+  if (brewLogIds.length === 0) return byLog;
+  const rows = await db
+    .select({ brewLogId: brewLogTools.brewLogId, id: prepTools.id, name: prepTools.name, methodKind: prepTools.methodKind })
+    .from(brewLogTools)
+    .innerJoin(prepTools, eq(brewLogTools.toolId, prepTools.id))
+    .where(inArray(brewLogTools.brewLogId, brewLogIds))
+    .orderBy(asc(prepTools.position), asc(prepTools.name));
+  for (const { brewLogId, ...tool } of rows) byLog.set(brewLogId, [...(byLog.get(brewLogId) ?? []), tool]);
+  return byLog;
+}
+
+async function insertTools(tx: Tx, brewLogId: string, toolIds: readonly string[]): Promise<void> {
+  if (toolIds.length === 0) return;
+  await tx.insert(brewLogTools).values(toolIds.map((toolId) => ({ brewLogId, toolId })));
 }
 
 async function marksFor(brewLogIds: string[]): Promise<Map<string, BrewLogDetails["marks"]>> {
@@ -412,7 +456,7 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Bre
   const refError = await db.transaction(async (tx) => {
     const error = await referencesInWorkspace(tx, workspaceId, body);
     if (error) return error;
-    const { marks = [], ...fields } = body;
+    const { marks = [], toolIds = [], ...fields } = body;
     const brewer = await recipeBrewer(tx, fields.recipeId);
     const wrongForKind = espressoError(brewer?.kind ?? null, {
       actualWaterGrams: fields.actualWaterGrams ?? null,
@@ -425,6 +469,7 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Bre
     if (wrongForDrink) return wrongForDrink;
     await tx.insert(brewLogs).values({ id, workspaceId, userId, ...fields, brewerId: brewer?.brewerId ?? null });
     await insertMarks(tx, id, marks);
+    await insertTools(tx, id, toolIds);
     return null;
   });
 
@@ -476,7 +521,7 @@ brewLogsRouter.patch(
 
       // Only when the change touches it, so old logs whose recipe later moved
       // to another brewer can still be edited (docs/api/brew-logs.md §6).
-      const { marks, ...fields } = body;
+      const { marks, toolIds, ...fields } = body;
       // A new recipe brings its brewer; the old brewer stays otherwise.
       const brewerUpdate = "recipeId" in body ? { brewerId: (await recipeBrewer(tx, fields.recipeId))?.brewerId ?? null } : {};
       const touched = ["recipeId", "actualWaterGrams", "actualYieldGrams", "marks", "actualTimeSec"];
@@ -508,6 +553,10 @@ brewLogsRouter.patch(
       if (marks) {
         await tx.delete(brewLogMarks).where(eq(brewLogMarks.brewLogId, brewLogId));
         await insertMarks(tx, brewLogId, marks);
+      }
+      if (toolIds) {
+        await tx.delete(brewLogTools).where(eq(brewLogTools.brewLogId, brewLogId));
+        await insertTools(tx, brewLogId, toolIds);
       }
       return { status: "updated" } as const;
     });

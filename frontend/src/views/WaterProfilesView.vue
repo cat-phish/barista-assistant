@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Water profiles (docs/api/water-profiles.md §3c), one tab of Bar setup, like
-// grinders: filter (or Retired), sort by any column; a row expands to its
+// grinders: sort by any column, Show retired; a row expands to its
 // figures and actions. The "Default for new brews" picker above the list sets
 // the one profile new brews start on. Retire keeps history; delete only works
 // for profiles no brew used.
@@ -37,8 +37,6 @@ const error = ref('');
 
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `water.${what}.${workspaces.current?.id ?? ''}`;
-const ALL = 'all';
-const RETIRED = 'retired';
 const figureColumn = (label: string, value: (p: WaterProfile) => number | null): SortColumn<WaterProfile> => ({
   label, value, asc: 'Lowest first', desc: 'Highest first',
 });
@@ -50,19 +48,13 @@ const columns: SortColumns<WaterProfile> = {
   added: addedColumn(),
 };
 const sortChoices = sortColumnOptions(columns);
-const filter = ref(ALL);
+const showRetired = ref(false);
 const sort = ref('name_asc');
-watch(filter, (v) => rememberView(viewKey('filter'), v));
 watch(sort, (v) => rememberView(viewKey('sort'), v));
 
 const active = computed(() => profiles.value.filter((p) => !p.retiredAt));
-const filterOptions = computed(() => [
-  { value: ALL, label: 'All water' },
-  ...(profiles.value.some((p) => p.retiredAt) ? [{ value: RETIRED, label: 'Retired' }] : []),
-]);
-const shown = computed(() =>
-  sortBy(filter.value === RETIRED ? profiles.value.filter((p) => p.retiredAt) : active.value, sort.value, columns),
-);
+const retiredCount = computed(() => profiles.value.length - active.value.length);
+const shown = computed(() => sortBy(showRetired.value ? profiles.value : active.value, sort.value, columns));
 const figure = (n: number | null) => (n === null ? '–' : String(n));
 
 // One row open at a time.
@@ -74,7 +66,7 @@ async function load(): Promise<void> {
   if (!ws) return;
   try {
     profiles.value = (await waterProfilesApi.list(ws)).waterProfiles;
-    if (!filterOptions.value.some((o) => o.value === filter.value)) filter.value = ALL;
+    if (retiredCount.value === 0) showRetired.value = false;
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -85,8 +77,6 @@ onMounted(async () => {
   const savedSort = recallView(viewKey('sort'));
   if (isSortKey(savedSort, columns)) sort.value = savedSort;
   await load();
-  const savedFilter = recallView(viewKey('filter'));
-  if (savedFilter && filterOptions.value.some((o) => o.value === savedFilter)) filter.value = savedFilter;
 });
 
 const busyId = ref<string | null>(null);
@@ -190,8 +180,8 @@ async function retireInstead(): Promise<void> {
             <span class="hint">The brew form starts on this water; you can still pick another for each brew.</span>
           </div>
         </div>
-        <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="water" filter-label="Show" :filter-options="filterOptions" />
-        <p v-if="filter === RETIRED" class="muted small">Retired water is hidden when brewing; past brews still show it.</p>
+        <ListControls v-model:sort="sort" :sort-columns="sortChoices" id-prefix="water" v-model:show-retired="showRetired" :retired-count="retiredCount" />
+        <p v-if="showRetired" class="muted small">Retired water is hidden when brewing; past brews still show it.</p>
         <p v-if="shown.length === 0" class="card empty">No active water profiles.</p>
         <div v-else class="data-table" style="--cols: minmax(0, 2fr) repeat(3, minmax(0, 0.7fr)) 5.5rem">
           <div class="data-row data-head">
@@ -204,7 +194,7 @@ async function retireInstead(): Promise<void> {
           </div>
           <div v-for="p in shown" :key="p.id" class="data-item" :class="{ open: openId === p.id }">
             <button class="data-row" type="button" :aria-expanded="openId === p.id" @click="toggle(p.id)">
-              <span class="data-td primary">{{ p.name }} <span v-if="p.isDefault" class="badge">Default</span></span>
+              <span class="data-td primary">{{ p.name }}<span v-if="p.retiredAt" class="muted"> (retired)</span> <span v-if="p.isDefault" class="badge">Default</span></span>
               <span class="data-td">{{ figure(p.tdsPpm) }}</span>
               <span class="data-td">{{ figure(p.generalHardnessPpm) }}</span>
               <span class="data-td">{{ figure(p.alkalinityPpm) }}</span>

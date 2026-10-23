@@ -49,6 +49,9 @@ queue:
      mineral in mg/L, `ph`; `null` where not recorded; §3c), so the LLM can
      allow for hard or soft water and doesn't compare brews across waters as
      if they were the same.
+   - Each brew includes `prepTools`: the names of the prep tools used (§3d),
+     in checklist order. `[]` means none were recorded (older brews, or none
+     ticked), not necessarily that none were used.
    - The brew includes its `drink` (or `null`): name, `servingSize` (the size
      made, else the drink's default, e.g. `"12 fl oz"`, or `null`) and
      ingredients (name, type, amount scaled to that size such as

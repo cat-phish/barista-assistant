@@ -9,6 +9,8 @@ import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import {
   brewers,
   DEFAULT_BREWERS,
+  DEFAULT_PREP_TOOLS,
+  prepTools,
   workspaceMembers,
   workspaces,
   type Workspace,
@@ -45,6 +47,9 @@ workspacesRouter.post("/", async (req: Request, res: Response<WorkspaceResponse>
       await tx.insert(workspaceMembers).values({ userId, workspaceId, role: "owner" });
       await tx.insert(brewers).values(
         DEFAULT_BREWERS.map(({ name, kind }) => ({ id: randomUUID(), workspaceId, name, kind }))
+      );
+      await tx.insert(prepTools).values(
+        DEFAULT_PREP_TOOLS.map(({ name, methodKind }, i) => ({ id: randomUUID(), workspaceId, name, methodKind, position: i + 1 }))
       );
       const [created] = await tx.select().from(workspaces).where(eq(workspaces.id, workspaceId));
       return created;

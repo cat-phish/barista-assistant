@@ -112,6 +112,17 @@ export interface WaterProfile extends WaterProfileDetails {
   createdAt: string;
 }
 
+// docs/api/prep-tools.md §3d: ordered; methodKind null = every method.
+export interface PrepTool {
+  id: string;
+  name: string;
+  methodKind: MethodKind | null;
+  position: number;
+  retiredAt: string | null; // set = retired (off the checklist, kept in history)
+  createdAt: string;
+}
+export type PrepToolRef = Pick<PrepTool, 'id' | 'name' | 'methodKind'>;
+
 // docs/api/brewers.md §3: espresso brewers' capabilities.
 export type Preinfusion = 'none' | 'automatic' | 'manual';
 export type ProfileControl = 'none' | 'manual' | 'programmable';
@@ -284,6 +295,7 @@ export interface BrewLog {
   brewer: BrewerRef | null; // retired ones included
   drink: { id: string; name: string; hasIngredients: boolean } | null; // hasIngredients: shot and drink tasted apart
   marks: Mark[]; // earliest first; espresso only
+  tools: PrepToolRef[]; // prep tools used, in checklist order (§3d)
   brewedBy: { id: string; email: string } | null;
 }
 

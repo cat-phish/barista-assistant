@@ -1,0 +1,19 @@
+import { api } from './client';
+import type { MethodKind, PrepTool } from './types';
+
+// docs/api/prep-tools.md §3d
+const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/prep-tools`;
+
+export const prepToolsApi = {
+  // In checklist order, retired ones included.
+  list: (workspaceId: string) => api.get<{ tools: PrepTool[] }>(base(workspaceId)),
+  // New ones go last; 409 when the name is taken.
+  create: (workspaceId: string, input: { name: string; methodKind: MethodKind | null }) =>
+    api.post<{ tool: PrepTool }>(base(workspaceId), input),
+  update: (workspaceId: string, id: string, input: { name?: string; methodKind?: MethodKind | null; retired?: boolean }) =>
+    api.patch<{ tool: PrepTool }>(`${base(workspaceId)}/${id}`, input),
+  // Every tool of the workspace (retired too), in the new order.
+  reorder: (workspaceId: string, toolIds: string[]) => api.put<{ tools: PrepTool[] }>(`${base(workspaceId)}/order`, { toolIds }),
+  // 409 + brewLogCount when brews used it: retire instead.
+  remove: (workspaceId: string, id: string) => api.delete(`${base(workspaceId)}/${id}`),
+};

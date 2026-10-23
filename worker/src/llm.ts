@@ -36,7 +36,10 @@ export const SYSTEM_PROMPT =
   "roaster's intent come first. A brew's water (mg/L, GH and KH as CaCO3) " +
   "matters too: harder water with more magnesium and calcium tends to " +
   "extract more, while high alkalinity (KH) buffers acidity and can flatten " +
-  "the cup; only the figures given are known. For " +
+  "the cup; only the figures given are known. prepTools lists the prep used " +
+  "(WDT, puck screen, filter type…); an empty list means none was recorded, " +
+  "not that none was used, so only compare tools between brews that list " +
+  "them. For " +
   "espresso, judge flow " +
   "from the first drop time, shot time and ratio against the recipe's " +
   "windows, and consider the machine's capabilities (pre-infusion, flow and " +

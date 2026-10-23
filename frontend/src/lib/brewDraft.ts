@@ -13,6 +13,7 @@ export interface BrewDraft {
   temp: string;
   grinderId: string; // '' = none
   waterProfileId: string; // '' = none recorded
+  toolIds: string[]; // prep tools ticked (§3d); unticked to start
   firstDrop: string; // espresso: seconds, e.g. "7.4" ('' = not recorded); from the timer's tap or typed
   grind: string;
   time: string; // m:ss
@@ -26,7 +27,7 @@ export type BrewValues = Omit<BrewLogInput, 'beanId' | 'recipeId'>;
 export type BrewDraftErrors = Partial<Record<'dose' | 'water' | 'yieldGrams' | 'tds' | 'temp' | 'time' | 'firstDrop', string>>;
 
 export function emptyDraft(): BrewDraft {
-  return { dose: '', water: '', yieldGrams: '', tds: '', temp: '', grinderId: '', waterProfileId: '', firstDrop: '', grind: '', time: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
+  return { dose: '', water: '', yieldGrams: '', tds: '', temp: '', grinderId: '', waterProfileId: '', toolIds: [], firstDrop: '', grind: '', time: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
 }
 
 export function draftFromLog(log: BrewLog): BrewDraft {
@@ -38,6 +39,7 @@ export function draftFromLog(log: BrewLog): BrewDraft {
     temp: log.actualTempC === null ? '' : String(log.actualTempC),
     grinderId: log.grinderId ?? '',
     waterProfileId: log.waterProfileId ?? '',
+    toolIds: log.tools.map((t) => t.id),
     firstDrop: firstDropOf(log.marks),
     grind: log.actualGrindSetting ?? '',
     time: formatTime(log.actualTimeSec),
@@ -101,6 +103,7 @@ export function parseBrewDraft(
       actualTempC: temp?.ok ? temp.value : null,
       grinderId: d.grinderId || null,
       waterProfileId: d.waterProfileId || null,
+      toolIds: [...d.toolIds],
       actualGrindSetting: d.grind.trim() || null,
       actualTimeSec: time.value,
       rating: d.rating,

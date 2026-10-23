@@ -14,6 +14,7 @@ means drinks, wherever you see it (code comments use
 | §3 | [brewers.md](brewers.md) | Brewers |
 | §3b | [grinders.md](grinders.md) | Grinders |
 | §3c | [water-profiles.md](water-profiles.md) | Water Profiles |
+| §3d | [prep-tools.md](prep-tools.md) | Prep Tools |
 | §4 | [beans.md](beans.md) | Beans |
 | §5 | [recipes.md](recipes.md) | Recipes |
 | §5b | [ingredients.md](ingredients.md) | Ingredients |
