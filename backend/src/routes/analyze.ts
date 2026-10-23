@@ -2,6 +2,9 @@ import { Router, type Request, type Response } from "express";
 import { requireResourceMembership, WRITE_ROLES } from "../auth/membership.js";
 import { sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
+import { eq } from "drizzle-orm";
+import { brewLogs } from "@barista/shared/schema";
+import { db } from "../db.js";
 import { enqueueBrewAnalysis, QueueUnavailableError } from "../queue.js";
 
 export interface AnalyzeResponse {
@@ -19,6 +22,13 @@ analyzeRouter.post(
   async (req: Request<{ brewLogId: string }>, res: Response<AnalyzeResponse>) => {
     const { brewLogId } = req.params;
     if (!(await requireResourceMembership(res, authedUserId(req), "brewLog", brewLogId, WRITE_ROLES))) {
+      return;
+    }
+
+    // A cold brew still steeping has nothing to judge yet (docs/api/analysis.md §8).
+    const [log] = await db.select({ steeping: brewLogs.steeping }).from(brewLogs).where(eq(brewLogs.id, brewLogId));
+    if (log?.steeping) {
+      sendError(res, 409, "This brew is still steeping: finish it first");
       return;
     }
 

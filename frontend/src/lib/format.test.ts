@@ -25,9 +25,14 @@ describe('time', () => {
     expect(formatTime(5)).toBe('0:05');
     expect(parseTime('2:30')).toEqual({ ok: true, value: 150 });
     expect(parseTime('45')).toEqual({ ok: true, value: 45 });
+    // Long cold brews: hours, up to 7 days.
+    expect(formatTime(57600)).toBe('16:00:00');
+    expect(formatTime(3725)).toBe('1:02:05');
+    expect(parseTime('16:00:00')).toEqual({ ok: true, value: 57600 });
+    expect(parseTime('169:00:00').ok).toBe(false);
     expect(parseTime('2:75').ok).toBe(false);
     expect(parseTime('abc').ok).toBe(false);
-    expect(parseTime('1441:00').ok).toBe(false);
+    expect(parseTime('604801').ok).toBe(false); // over 7 days
   });
 });
 

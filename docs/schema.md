@@ -836,6 +836,14 @@ export const brewLogs = mysqlTable("brew_logs", {
   beanWeightInGrams: decimal("bean_weight_in_grams", { precision: 5, scale: 2, mode: "number" }),
   groundWeightOutGrams: decimal("ground_weight_out_grams", { precision: 5, scale: 2, mode: "number" }),
   actualTimeSec: int("actual_time_sec").notNull(),
+  // Cold styles (docs/api/brew-logs.md §6): a long brew (cold brew, Kyoto
+  // drip) is saved when it starts, steeping = true, and finished later
+  // (steeping false, with its time, yield and rating). steepTemp is where it
+  // steeped; the dilution is what it was served with (1 : dilutionRatio).
+  steeping: boolean("steeping").default(false).notNull(),
+  steepTemp: varchar("steep_temp", { length: 10 }).$type<SteepTemp>(), // STEEP_TEMPS
+  dilutionRatio: decimal("dilution_ratio", { precision: 3, scale: 1, mode: "number" }),
+  dilutedWith: varchar("diluted_with", { length: 10 }).$type<DilutionWith>(), // DILUTION_WITH
   // The coffee tasted on its own (for a milk drink, only if tasted straight).
   rating: int("rating"), // 1-5
   tastingNotes: text("tasting_notes"),

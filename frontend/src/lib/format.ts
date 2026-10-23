@@ -25,21 +25,28 @@ export function parseDecimal(
 }
 
 // 150 -> "2:30"
+// "2:30", and from an hour on "16:00:00" (a long cold brew's steep).
 export function formatTime(totalSeconds: number): string {
-  const m = Math.floor(totalSeconds / 60);
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
   const s = totalSeconds % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
+  const ss = String(s).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${Math.floor(totalSeconds / 60)}:${ss}`;
 }
 
-// "2:30" -> 150, "45" -> 45 (plain seconds), "0:05" -> 5. Max 24 h, as the API.
+// "2:30" -> 150, "45" -> 45 (plain seconds), "0:05" -> 5, "16:00:00" -> 57600.
+// Max 7 days, as the API (long cold brews).
+export const MAX_BREW_SEC = 7 * 24 * 60 * 60;
 export function parseTime(text: string): Parsed<number> {
   const t = text.trim();
   let seconds: number;
+  const hmmss = /^(\d{1,3}):([0-5]\d):([0-5]\d)$/.exec(t);
   const mmss = /^(\d{1,4}):([0-5]\d)$/.exec(t);
-  if (mmss) seconds = Number(mmss[1]) * 60 + Number(mmss[2]);
-  else if (/^\d{1,5}$/.test(t)) seconds = Number(t);
-  else return { ok: false, error: 'Use m:ss, e.g. 1:30' };
-  if (seconds > 24 * 60 * 60) return { ok: false, error: 'At most 24 hours' };
+  if (hmmss) seconds = Number(hmmss[1]) * 3600 + Number(hmmss[2]) * 60 + Number(hmmss[3]);
+  else if (mmss) seconds = Number(mmss[1]) * 60 + Number(mmss[2]);
+  else if (/^\d{1,6}$/.test(t)) seconds = Number(t);
+  else return { ok: false, error: 'Use m:ss, e.g. 1:30 (or h:mm:ss)' };
+  if (seconds > MAX_BREW_SEC) return { ok: false, error: 'At most 7 days' };
   return { ok: true, value: seconds };
 }
 

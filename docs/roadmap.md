@@ -930,3 +930,41 @@ the grind, others want last time's notes in front of them.
   copied.
 - Decided: per person, not per workspace.
 
+## Cold brew refinements (built)
+
+Backlog item "Cold brew refinements", branches `cold-styles` and
+`cold-brew-steeping`, migrations 0057 and 0058. Cold brew was a style label:
+a seconds timer, saved at once, no dilution, at most 24 h. Contract:
+`api/recipe-styles.md` §5e, `api/recipes.md` §5, `api/brew-logs.md` §6,
+`api/notifications.md` §1b.
+
+- **Styles:** new built-in filter styles **Rapid cold brew** (`rapid_cold`,
+  OXO-style, timed, immersion for extraction yield) and **Kyoto drip**
+  (`kyoto_drip`, long, percolation). They're seeded after each workspace's
+  last filter style. `LONG_STYLES` (cold brew, Kyoto drip) and `COLD_STYLES`
+  (+ rapid cold) decide the flow, by `brewsLike`, so custom styles follow.
+- **Recipes:** steep window in hours (a pair), fridge or room, and a serving
+  dilution (1 : n with water, milk, ice…). Long styles hide the water
+  temperature and finish window, and their steps are a checklist with no
+  times.
+- **Brewing a long style:** **Start steep** (steps checklist and fridge/room)
+  saves the brew with `steeping: true`. The saved screen says when it's
+  ready and whether a reminder is set.
+  - The journal marks it **Steeping**. **Finish** opens the edit form with
+    the time so far filled in (`h:mm:ss`; brew times now go up to 7 days),
+    and saving clears `steeping`.
+  - Quick rating and the AI wait until then; analyze is a `409` while
+    steeping.
+- **Dilution served** and **steeped in** are on the brew form for cold
+  styles (field registry `brew.dilution`, `brew.steepTemp`). Repeat brews
+  gets a `dilution` option (on by default), and `steepTemp` goes with the
+  temperature.
+- **Steep reminder:** `steepReminders` (default on) queues `steep-done` for
+  the start of the window. The worker skips it once the brew is finished.
+- **The AI** gets the cold fields, leaves steeping brews out of the history,
+  and is told how the three styles differ, to judge strength after dilution
+  and expect a concentrate's higher TDS.
+- **Not built:** a cold brew batch as stock with servings taken from it
+  (kept as an idea under "Ingredient prep and stock"), and iced /
+  flash-chilled styles (their own backlog item).
+

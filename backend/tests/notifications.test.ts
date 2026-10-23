@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { rateReminderJobId } from "@barista/shared/jobs";
+import { rateReminderJobId, steepReminderJobId } from "@barista/shared/jobs";
 import { reminderQueue } from "../src/queue.js";
 import { anonymous, newBean, newUser, newWorkspace } from "./helpers.js";
 
@@ -138,3 +138,57 @@ describe("rate later (docs/api/brew-logs.md §6)", () => {
     expect((await me.agent.patch("/api/auth/me/preferences").send({ rateLaterDefault: true })).body.preferences.rateLaterDefault).toBe(true);
   });
 });
+
+describe("cold brew: steeping, finishing and the steep reminder (docs/api/brew-logs.md §6)", () => {
+  async function coldBrewSetup(steepWindow: { steepMinHours: number; steepMaxHours: number } | null) {
+    const me = await newUser();
+    const ws = await newWorkspace(me);
+    const beanId = await newBean(me, ws.id);
+    const brewers = (await me.agent.get(`/api/workspaces/${ws.id}/brewers`)).body.brewers as Array<{ id: string; kind: string }>;
+    const filter = brewers.find((b) => b.kind === "filter")!.id;
+    const styles = (await me.agent.get(`/api/workspaces/${ws.id}/recipe-styles`)).body.styles as Array<{ id: string; builtin: string | null }>;
+    const cold = styles.find((s) => s.builtin === "cold_brew")!.id;
+    const recipe = (
+      await me.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name: "Fridge", brewerId: filter, targetDoseGrams: 100, targetWaterGrams: 800, styleId: cold, ...(steepWindow ?? {}) })
+    ).body.recipe;
+    return { me, ws, beanId, recipeId: recipe.id as string, url: `/api/workspaces/${ws.id}/brew-logs` };
+  }
+
+  it("starts steeping, can't be analyzed until finished, then finishes with its time and dilution", async () => {
+    const { me, beanId, recipeId, url } = await coldBrewSetup({ steepMinHours: 12, steepMaxHours: 18 });
+    const started = await me.agent.post(url).send({ beanId, recipeId, actualDoseGrams: 100, actualWaterGrams: 800, actualTimeSec: 0, steeping: true, steepTemp: "fridge" });
+    expect(started.status).toBe(201);
+    expect(started.body.brewLog).toMatchObject({ steeping: true, steepTemp: "fridge", actualTimeSec: 0, rating: null });
+    expect(started.body.steepReminder).toBe("off"); // no channel
+    const id = started.body.brewLog.id as string;
+    expect((await me.agent.post(`/api/brew-logs/${id}/analyze`)).status).toBe(409);
+
+    const finished = await me.agent.patch(`${url}/${id}`).send({ steeping: false, actualTimeSec: 16 * 3600, actualYieldGrams: 600, tdsPercent: 4.1, dilutionRatio: 1, dilutedWith: "water", rating: 4 });
+    expect(finished.status).toBe(200);
+    expect(finished.body.brewLog).toMatchObject({ steeping: false, actualTimeSec: 57600, dilutionRatio: 1, dilutedWith: "water", rating: 4 });
+    // Up to 7 days, no longer.
+    expect((await me.agent.patch(`${url}/${id}`).send({ actualTimeSec: 7 * 24 * 3600 + 1 })).status).toBe(400);
+    expect((await me.agent.patch(`${url}/${id}`).send({ dilutedWith: "juice" })).status).toBe(400);
+  });
+
+  it("queues the steep reminder for the start of the window, only with a window, steep reminders on and a channel", async () => {
+    const { me, beanId, recipeId, url } = await coldBrewSetup({ steepMinHours: 12, steepMaxHours: 18 });
+    await me.agent.put(`${BASE}/ntfy`).send({ config: { topic: "coffee" } });
+    const start = { beanId, recipeId, actualDoseGrams: 100, actualWaterGrams: 800, actualTimeSec: 0, steeping: true };
+    const queued = await me.agent.post(url).send(start);
+    expect(queued.body.steepReminder).toBe("queued");
+    const job = await reminderQueue.getJob(steepReminderJobId(queued.body.brewLog.id));
+    expect(job?.name).toBe("steep-done");
+    expect(job?.opts.delay).toBeGreaterThan(12 * 3600_000 - 60_000);
+    expect(job?.opts.delay).toBeLessThanOrEqual(12 * 3600_000);
+
+    await me.agent.patch("/api/auth/me/preferences").send({ steepReminders: false });
+    expect((await me.agent.post(url).send(start)).body.steepReminder).toBe("off");
+    expect((await me.agent.post(url).send({ ...start, steeping: false, actualTimeSec: 60 })).body).not.toHaveProperty("steepReminder");
+
+    const noWindow = await coldBrewSetup(null);
+    await noWindow.me.agent.put(`${BASE}/ntfy`).send({ config: { topic: "coffee" } });
+    expect((await noWindow.me.agent.post(noWindow.url).send({ ...start, beanId: noWindow.beanId, recipeId: noWindow.recipeId })).body).not.toHaveProperty("steepReminder");
+  });
+});
+

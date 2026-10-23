@@ -93,7 +93,8 @@ watch(beanFilter, () => load(true));
           <RouterLink class="card entry" :class="{ repeatable: workspaces.canEdit }" :to="{ name: 'journal-entry', params: { id: log.id } }">
             <div class="head">
               <span class="when">{{ formatWhen(log.timestamp) }}</span>
-              <RatingStars :rating="log.rating ?? log.drinkRating" />
+              <span v-if="log.steeping" class="badge steeping">Steeping</span>
+              <RatingStars v-else :rating="log.rating ?? log.drinkRating" />
             </div>
             <strong>{{ log.bean.roasterName }} {{ log.bean.beanName }}{{ batchSuffix(log.bean) }}</strong>
             <span v-if="log.drink || log.recipe" class="muted">{{ [log.drink?.name, log.servingSize !== null && log.servingUnit ? formatSize({ size: log.servingSize, unit: log.servingUnit }) : null, log.recipe?.name].filter(Boolean).join(' · ') }}</span>
@@ -119,6 +120,13 @@ watch(beanFilter, () => load(true));
 </template>
 
 <style scoped>
+.badge.steeping {
+  font-size: 0.8rem;
+  padding: 1px var(--space-2);
+  border-radius: 999px;
+  border: 1px solid var(--brand);
+  color: var(--brand);
+}
 .count {
   margin: 0;
   font-size: 0.9rem;

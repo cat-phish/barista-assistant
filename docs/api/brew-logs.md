@@ -179,7 +179,24 @@ account. Such logs can only be edited or deleted by owners.
     in − out. `actualDoseGrams` stays the dose that went into the brew. This
     is coffee left in the grinder, not the water the spent grounds keep
     (which the yield estimate uses, §5).
-  - `actualTimeSec`: integer 0–86400 (24 hours). `rating`: integer **1–5**,
+  - **Cold styles** (§5e):
+    - `steeping` (boolean, default `false`): a long cold brew (cold brew,
+      Kyoto drip) is saved when it starts, with `steeping: true`.
+      `timestamp` is the start, `actualTimeSec` is usually `0`, and there's
+      no rating yet. It's **finished** with a `PATCH` sending
+      `steeping: false` plus its steep time, yield, TDS, dilution and
+      rating.
+    - A steeping brew can't be analyzed (§8 `409`), and the AI leaves it
+      out of other brews' history (§9). `POST` with `steeping: true` also
+      queues the **steep reminder** when the recipe has a window (§1b). The
+      reply adds `steepReminder`: `queued`, `off` or `unavailable`.
+    - `steepTemp` (`fridge` | `room`), `dilutionRatio` (> 0, ≤ 10, 1
+      decimal) and `dilutedWith` (`water` | `milk` | `ice` | `other`), all
+      nullable: where it steeped and how it was served (1 :
+      `dilutionRatio`).
+    - The log's `recipe` also has `steepMinHours` / `steepMaxHours` (null
+      unless set), for "ready from" while it steeps.
+  - `actualTimeSec`: integer 0–604800 (7 days, for long steeps). `rating`: integer **1–5**,
     nullable. `actualGrindSetting` (nullable): the number on the grinder's
     dial, 0 ≤ x < 10000 with at most 2 decimals, as in `grindSettings` (§5);
     text is a `400`. `tastingNotes` ≤ 5000 chars, nullable, and blank

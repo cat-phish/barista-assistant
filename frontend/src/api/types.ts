@@ -19,8 +19,9 @@ export interface UserPreferences {
   rateReminderMinutes: number; // 5–240
   rateLaterDefault: boolean; // the log form's Rate later box starts ticked
   repeatKeeps: RepeatKeep[]; // what a repeat copies (lib/repeatBrew.ts REPEAT_OPTIONS)
+  steepReminders: boolean; // remind when a cold brew's steep window opens
 }
-export type RepeatKeep = 'size' | 'doseWater' | 'temp' | 'grinder' | 'grind' | 'waterProfile' | 'prepTools' | 'grinderWeights' | 'notes';
+export type RepeatKeep = 'size' | 'doseWater' | 'temp' | 'grinder' | 'grind' | 'waterProfile' | 'dilution' | 'prepTools' | 'grinderWeights' | 'notes';
 
 // docs/api/notifications.md §1b: a person's own reminder channels.
 export type NotificationKind = 'ntfy' | 'gotify' | 'pushover' | 'discord' | 'telegram' | 'slack' | 'webhook';
@@ -418,13 +419,18 @@ export interface BrewLog {
   grindRpm: number | null; // grinder speed, variable-speed grinders only
   beanWeightInGrams: number | null; // weighed before grinding; retention = in − out (lib/grinderRetention.ts)
   groundWeightOutGrams: number | null; // what came out of the grinder
+  steeping: boolean; // a long cold brew started, not finished yet (docs/api/brew-logs.md §6)
+  steepTemp: SteepTemp | null; // where a long cold brew steeped
+  dilutionRatio: number | null; // served 1 : dilutionRatio
+  dilutedWith: DilutionWith | null;
   actualTimeSec: number;
   rating: number | null; // the coffee tasted on its own
   tastingNotes: string | null;
   drinkRating: number | null; // the finished drink (drink brews only)
   drinkTastingNotes: string | null;
   bean: { id: string; roasterName: string; beanName: string; batchNumber: string | null };
-  recipe: { id: string; name: string; expectedYieldGrams: number | null; style: StyleRef | null; methodKind: MethodKind } | null;
+  // steepMin/MaxHours: a cold brew recipe's window (null otherwise).
+  recipe: { id: string; name: string; expectedYieldGrams: number | null; steepMinHours: number | null; steepMaxHours: number | null; style: StyleRef | null; methodKind: MethodKind } | null;
   grinder: { id: string; name: string } | null;
   waterProfile: { id: string; name: string } | null; // archived ones included
   brewer: BrewerRef | null; // archived ones included

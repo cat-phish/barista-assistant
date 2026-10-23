@@ -76,6 +76,8 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
 - `rateReminders` (default `true`), `rateReminderMinutes` (5–240, default
   `15`) and `rateLaterDefault` (default `false`): rate-later reminders, see
   §1b.
+- `steepReminders` (default `true`): remind when a cold brew's steep window
+  opens (§1b).
 - `repeatKeeps`: what repeating a brew copies (Settings → Repeat brews), a
   list of `REPEAT_KEEPS`, each once:
   - `size`: the drink size;
@@ -84,11 +86,13 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
   - `grinder`;
   - `grind`: the setting and RPM, on the same grinder;
   - `waterProfile`;
+  - `dilution`: the dilution served (cold styles); a long brew's `steepTemp`
+    goes with `temp`;
   - `prepTools`: ticks the tools that brew used;
   - `grinderWeights`;
   - `notes`: shown on the log form as a reminder, not copied.
 
-  Default: the first six. A `PATCH` sends the whole list. The bean and what
+  Default: the first seven. A `PATCH` sends the whole list. The bean and what
   → brewer → recipe always come along; results and ratings never do.
 
   **Parity rule:** the options follow the brew form. Every brew parameter

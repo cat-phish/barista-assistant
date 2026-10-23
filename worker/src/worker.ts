@@ -1,11 +1,11 @@
 import "dotenv/config";
-import { BREW_ANALYSIS_QUEUE, REMINDER_QUEUE, type BrewAnalysisJobData, type RateReminderJobData } from "@barista/shared/jobs";
+import { BREW_ANALYSIS_QUEUE, REMINDER_QUEUE, STEEP_REMINDER_JOB, type BrewAnalysisJobData, type RateReminderJobData, type SteepReminderJobData } from "@barista/shared/jobs";
 import { UnrecoverableError, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 import { config } from "./config.js";
 import { pool } from "./db.js";
 import { processBrewAnalysis, type JobResult } from "./processor.js";
-import { processRateReminder, type ReminderResult } from "./reminders.js";
+import { processRateReminder, processSteepReminder, type ReminderResult } from "./reminders.js";
 
 // BullMQ workers need maxRetriesPerRequest: null (blocking commands).
 const connection = new Redis(config.redis.url, {
@@ -36,8 +36,10 @@ worker.on("failed", (job, err) => {
 });
 worker.on("error", (err) => console.error("Worker error:", err.message));
 
-// Rate-later reminders (docs/api/notifications.md §1b): delayed jobs, sent once due.
-const reminders = new Worker<RateReminderJobData, ReminderResult>(REMINDER_QUEUE, (job: Job<RateReminderJobData>) => processRateReminder(job.data), {
+// Reminders (docs/api/notifications.md §1b): delayed jobs, sent once due.
+// The job name says which: rate later, or a cold brew's steep done.
+type ReminderJob = Job<RateReminderJobData | SteepReminderJobData>;
+const reminders = new Worker<RateReminderJobData | SteepReminderJobData, ReminderResult>(REMINDER_QUEUE, (job: ReminderJob) => (job.name === STEEP_REMINDER_JOB ? processSteepReminder(job.data) : processRateReminder(job.data)), {
   connection,
   concurrency: config.concurrency,
 });

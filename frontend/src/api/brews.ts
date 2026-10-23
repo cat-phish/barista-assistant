@@ -1,5 +1,8 @@
 import { api } from './client';
-import type { BrewLog, LlmAnalysis, Mark, ServingUnit, Suggestions } from './types';
+import type { BrewLog, DilutionWith, LlmAnalysis, Mark, ServingUnit, SteepTemp, Suggestions } from './types';
+
+// What happened to a reminder asked for when saving (docs/api/notifications.md §1b).
+export type Reminder = 'queued' | 'off' | 'unavailable';
 
 export interface BrewLogInput {
   beanId: string;
@@ -27,6 +30,10 @@ export interface BrewLogInput {
   drinkRating?: number | null; // the finished drink: only with a drinkId
   drinkTastingNotes?: string | null;
   remindToRate?: boolean; // POST only: Rate later (docs/api/notifications.md §1b)
+  steeping?: boolean; // a long cold brew: true when started, false to finish it
+  steepTemp?: SteepTemp | null;
+  dilutionRatio?: number | null; // served 1 : dilutionRatio
+  dilutedWith?: DilutionWith | null;
 }
 
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/brew-logs`;
@@ -34,7 +41,7 @@ const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/brew-logs`
 export const brewLogsApi = {
   // reminder: only when remindToRate was sent (queued, off or unavailable).
   create: (workspaceId: string, input: BrewLogInput) =>
-    api.post<{ brewLog: BrewLog; reminder?: 'queued' | 'off' | 'unavailable' }>(base(workspaceId), input),
+    api.post<{ brewLog: BrewLog; reminder?: Reminder; steepReminder?: Reminder }>(base(workspaceId), input),
   get: (workspaceId: string, id: string) =>
     api.get<{ brewLog: BrewLog & { latestAnalysis: LlmAnalysis | null } }>(`${base(workspaceId)}/${id}`),
   list: (workspaceId: string, query: { beanId?: string; limit?: number; offset?: number } = {}) => {

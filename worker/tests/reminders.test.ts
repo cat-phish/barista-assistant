@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { config } from "../src/config.js";
 import { db } from "../src/db.js";
-import { processRateReminder } from "../src/reminders.js";
+import { processRateReminder, processSteepReminder } from "../src/reminders.js";
 
 // docs/api/notifications.md §1b: real database, fake sending.
 let userId: string;
@@ -64,3 +64,16 @@ describe("processRateReminder", () => {
     await expect(processRateReminder({ brewLogId, userId }, none)).rejects.toThrow(/Every channel failed/);
   });
 });
+
+describe("processSteepReminder", () => {
+  it("says a steeping cold brew is ready; skips one already finished, or with steep reminders off", async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    expect(await processSteepReminder({ brewLogId, userId }, send)).toEqual({ status: "skipped", reason: "already finished" });
+    await db.update(brewLogs).set({ steeping: true }).where(eq(brewLogs.id, brewLogId));
+    expect(await processSteepReminder({ brewLogId, userId }, send)).toMatchObject({ status: "sent", channels: 2 });
+    expect(send.mock.calls[0]![2]).toMatchObject({ title: "Your cold brew is ready to filter", message: "V60 · Onyx Guji · started 8:42" });
+    await db.update(users).set({ preferences: { steepReminders: false } }).where(eq(users.id, userId));
+    expect(await processSteepReminder({ brewLogId, userId }, send)).toEqual({ status: "skipped", reason: "steep reminders off" });
+  });
+});
+

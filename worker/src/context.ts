@@ -31,6 +31,8 @@ import {
   type ServingUnit,
   type StepAdvance,
   type WaterProfile,
+  type SteepTemp,
+  type DilutionWith,
 } from "@barista/shared/schema";
 import { and, asc, desc, eq, inArray, lt, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
@@ -87,6 +89,7 @@ export interface BrewSummary {
   actualTempC: number | null;
   actualGrindSetting: number | null; // the number on the grinder's dial
   grindRpm: number | null; // grinder speed, variable-speed grinders only
+  steeping: boolean; // a long cold brew started and not finished: no result yet
   // Beans weighed before grinding and grounds out; retention = in − out
   // (docs/api/brew-logs.md §6). actualDoseGrams is what went into the brew.
   beanWeightInGrams: number | null;
@@ -102,6 +105,11 @@ export interface BrewSummary {
   // The finished drink (milk and syrup mask acidity and bitterness).
   drinkRating: number | null;
   drinkTastingNotes: string | null;
+  // Cold styles: where a long brew steeped (fridge / room), and the dilution
+  // it was served with (1 : dilutionRatio, with dilutedWith); null if neat.
+  steepTemp: SteepTemp | null;
+  dilutionRatio: number | null;
+  dilutedWith: DilutionWith | null;
 }
 
 // The drink a brew was made for: tasting notes may describe the whole drink.
@@ -160,6 +168,13 @@ export interface BrewContext {
     firstDropMinSec: number | null;
     firstDropMaxSec: number | null;
     targetTempC: number | null;
+    // Cold styles (docs/api/recipes.md §5): the steep window in hours, fridge
+    // or room, and the serving dilution the recipe intends.
+    steepMinHours: number | null;
+    steepMaxHours: number | null;
+    steepTemp: SteepTemp | null;
+    dilutionRatio: number | null;
+    dilutionWith: DilutionWith | null;
     // Approximate starting points, per grinder (the brew's grinder is in grinderName).
     grindStartingPoints: Array<{ grinderName: string; setting: number }>;
     flowUnit: FlowUnit; // for flow steps: g/s or ml/s
@@ -258,6 +273,7 @@ function summarize(
     actualTempC: brew.actualTempC,
     actualGrindSetting: brew.actualGrindSetting,
     grindRpm: brew.grindRpm,
+    steeping: brew.steeping,
     beanWeightInGrams: brew.beanWeightInGrams,
     groundWeightOutGrams: brew.groundWeightOutGrams,
     grinderRetentionGrams: grinderRetention(brew),
@@ -267,6 +283,9 @@ function summarize(
     tastingNotes: brew.tastingNotes,
     drinkRating: brew.drinkRating,
     drinkTastingNotes: brew.drinkTastingNotes,
+    steepTemp: brew.steepTemp,
+    dilutionRatio: brew.dilutionRatio,
+    dilutedWith: brew.dilutedWith,
   };
 }
 
@@ -413,7 +432,8 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
   const [previous, recipe, freezes] = await Promise.all([
     // "Previous" = earlier than the analyzed brew, newest first.
     selectBrews()
-      .where(and(eq(brewLogs.beanId, brew.beanId), lt(brewLogs.timestamp, brew.timestamp), ne(brewLogs.id, brew.id)))
+      // A cold brew still steeping has no result yet.
+      .where(and(eq(brewLogs.beanId, brew.beanId), lt(brewLogs.timestamp, brew.timestamp), ne(brewLogs.id, brew.id), eq(brewLogs.steeping, false)))
       .orderBy(desc(brewLogs.timestamp), desc(brewLogs.id))
       .limit(PREVIOUS_BREW_COUNT),
     brew.recipeId ? loadRecipe(brew.recipeId) : Promise.resolve(null),
@@ -470,6 +490,11 @@ async function loadRecipe(recipeId: string): Promise<BrewContext["recipe"]> {
       firstDropMaxSec: recipes.firstDropMaxSec,
       flowUnit: recipes.flowUnit,
       targetTempC: recipes.targetTempC,
+      steepMinHours: recipes.steepMinHours,
+      steepMaxHours: recipes.steepMaxHours,
+      steepTemp: recipes.steepTemp,
+      dilutionRatio: recipes.dilutionRatio,
+      dilutionWith: recipes.dilutionWith,
     })
     .from(recipes)
     .innerJoin(brewers, eq(recipes.brewerId, brewers.id))

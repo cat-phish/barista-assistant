@@ -31,3 +31,17 @@ export interface RateReminderJobData {
 export function rateReminderJobId(brewLogId: string): string {
   return `rate-${brewLogId}`;
 }
+
+// Steep reminders (docs/api/notifications.md §1b): when a cold brew started
+// with a steep window reaches its shortest time, on the same queue. Skipped if
+// it's been finished or deleted by then.
+export const STEEP_REMINDER_JOB = "steep-done";
+
+export interface SteepReminderJobData {
+  brewLogId: string;
+  userId: string;
+}
+
+export function steepReminderJobId(brewLogId: string): string {
+  return `steep-${brewLogId}`;
+}

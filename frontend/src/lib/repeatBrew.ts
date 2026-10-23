@@ -18,6 +18,7 @@ export const REPEAT_OPTIONS: Array<{ key: RepeatKeep; label: string; hint?: stri
   { key: 'grinder', label: 'Grinder', hint: 'Off: your last grinder, or the recipe’s default' },
   { key: 'grind', label: 'Grind setting and speed', hint: 'On the same grinder. Off: your last setting with it, as usual' },
   { key: 'waterProfile', label: 'Water profile', hint: 'Off: your default water' },
+  { key: 'dilution', label: 'Dilution served (cold styles)', hint: 'Off: the recipe’s' },
   { key: 'prepTools', label: 'Prep checklist', hint: 'Ticks the tools that brew used' },
   { key: 'grinderWeights', label: 'Beans in / grounds out' },
   { key: 'notes', label: 'Tasting notes, as a reminder', hint: 'Shown on the log form, not copied into the new brew' },
@@ -40,6 +41,8 @@ export const REPEAT_FOR_FIELD: Record<BrewFieldKey, RepeatKeep | 'result'> = {
   'brew.waterProfile': 'waterProfile',
   'brew.prepTools': 'prepTools',
   'brew.firstDrop': 'result',
+  'brew.steepTemp': 'temp', // where it steeps goes with the temperature
+  'brew.dilution': 'dilution',
 };
 
 export interface RepeatPlan {

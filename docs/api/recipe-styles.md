@@ -9,7 +9,7 @@ Lists). Every workspace starts with the built-ins (`STYLES_BY_KIND` and
 
 | Method | Built-in styles |
 |---|---|
-| `filter` | Pour over, Immersion, Hybrid, Cold brew, Other |
+| `filter` | Pour over, Immersion, Hybrid, Cold brew, Rapid cold brew, Kyoto drip, Other |
 | `espresso` | Standard, Soup, Other |
 | `stovetop` | Moka, Ibrik, Other |
 | `other` | Other |
@@ -22,6 +22,19 @@ brewer's method.
   built-ins, e.g. "Inverted" brews like `immersion`, "Turbo shot" like
   `standard`. Extraction yield (§6) and the AI (§9) go by `brewsLike`, so a
   custom style is worked out and judged as what it is.
+- **Cold styles** change more than the label, by what they brew like
+  (`LONG_STYLES`, `COLD_STYLES`):
+
+  | Brews like | Brewed | Extraction yield from | Recipe adds (§5) |
+  |---|---|---|---|
+  | `cold_brew` | **long**: Start steep, Finish later (no timer) | the water (immersion) | steep window in hours, fridge/room, dilution |
+  | `kyoto_drip` | **long**: as cold brew | the measured yield (percolation) | as cold brew |
+  | `rapid_cold` | the normal timer, in minutes (e.g. an OXO Rapid Brewer) | the water (immersion) | dilution |
+
+  A long style's recipe steps are a checklist (`advance: tap`, no times).
+  Rapid cold brew and Kyoto drip were added in migration 0057, after each
+  workspace's last filter style. A workspace that already had a style of
+  that name kept its own.
 - **Built-ins** keep their `builtin` key and always brew like themselves.
   They can be renamed and hidden, not deleted.
 - **Hidden** styles are left out of the recipe form's choices; recipes that

@@ -55,7 +55,13 @@ export default defineConfig({
 });
 ```
 
-## 3. Timer State Mechanics (`BrewTimer.vue`, every recipe)
+## 3. Timer State Mechanics (`BrewTimer.vue`, every recipe but long cold brews)
+
+> **Long cold brews** (styles that brew like cold brew or Kyoto drip,
+> `lib/coldBrew.ts`) don't use the timer. Setup's **Start steep** shows the
+> recipe's steps as a checklist and saves the brew as steeping; it's
+> finished later from the journal (docs/api/brew-logs.md §6). Rapid cold brew
+> uses the timer as below.
 *   **Delta-Timestamp Calculation:** Never increment a counter inside `setInterval`. Store `startTime = Date.now() - elapsedMs` and compute `elapsedMs = Date.now() - startTime` inside a `requestAnimationFrame` loop.
 *   **Screen Wake Lock:** Request `navigator.wakeLock.request('screen')` when the brew starts and release it when finished or unmounted.
 *   **Steps run back to back** (supersedes the reference component's manual "Next Step" button and the earlier fixed start/end times). Recipe steps have a `durationSec` and an `advance` mode (`docs/api/README.md` §5); each step starts when the previous one actually ended:

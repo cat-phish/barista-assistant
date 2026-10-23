@@ -5,8 +5,11 @@ import {
   RATE_REMINDER_JOB,
   rateReminderJobId,
   REMINDER_QUEUE,
+  STEEP_REMINDER_JOB,
+  steepReminderJobId,
   type BrewAnalysisJobData,
   type RateReminderJobData,
+  type SteepReminderJobData,
 } from "@barista/shared/jobs";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
@@ -28,7 +31,8 @@ brewAnalysisQueue.on("error", (err: Error) => {
 });
 
 // Delayed rate-later reminders (docs/api/notifications.md §1b).
-export const reminderQueue = new Queue<RateReminderJobData>(REMINDER_QUEUE, { connection });
+// Both kinds of reminder share the queue; the job name says which.
+export const reminderQueue = new Queue<RateReminderJobData | SteepReminderJobData>(REMINDER_QUEUE, { connection });
 let lastReminderError = "";
 reminderQueue.on("error", (err: Error) => {
   if (err.message !== lastReminderError) console.error("Reminder queue error:", err.message);
@@ -74,15 +78,22 @@ export async function enqueueBrewAnalysis(brewLogId: string): Promise<string> {
 }
 
 // Same timeout as the analysis; the caller treats failure as "no reminder".
-export async function enqueueRateReminder(data: RateReminderJobData, delayMs: number): Promise<void> {
+export function enqueueRateReminder(data: RateReminderJobData, delayMs: number): Promise<void> {
+  return enqueueReminder(RATE_REMINDER_JOB, rateReminderJobId(data.brewLogId), data, delayMs);
+}
+export function enqueueSteepReminder(data: SteepReminderJobData, delayMs: number): Promise<void> {
+  return enqueueReminder(STEEP_REMINDER_JOB, steepReminderJobId(data.brewLogId), data, delayMs);
+}
+
+async function enqueueReminder(name: string, jobId: string, data: RateReminderJobData | SteepReminderJobData, delayMs: number): Promise<void> {
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new QueueUnavailableError("Timed out reaching Redis")), ENQUEUE_TIMEOUT_MS);
   });
   try {
     await Promise.race([
-      reminderQueue.add(RATE_REMINDER_JOB, data, {
-        jobId: rateReminderJobId(data.brewLogId),
+      reminderQueue.add(name, data, {
+        jobId,
         delay: delayMs,
         attempts: 3,
         backoff: { type: "exponential", delay: 30_000 },

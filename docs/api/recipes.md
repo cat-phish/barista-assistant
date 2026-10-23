@@ -174,6 +174,16 @@ Creates a recipe, its grind starting points and its steps in one transaction.
   - `defaultGrinderId` (optional, nullable): a grinder in this workspace
     (archived allowed). Deleting the grinder sets it back to `null`.
   - `flowUnit` (optional, default `g_s`): `g_s` or `ml_s`.
+  - **Cold styles** (§5e), all optional and nullable, accepted on any recipe;
+    clients show them for cold styles and the AI reads them for those:
+    - `steepMinHours` / `steepMaxHours`: the steep window of a long style
+      (cold brew, Kyoto drip), 0.5–72 h, 1 decimal, a pair (both ends, min ≤
+      max; `null` on either clears both). The steep reminder (§1b) comes at
+      `steepMinHours`.
+    - `steepTemp`: `fridge` or `room` (`STEEP_TEMPS`).
+    - `dilutionRatio` (> 0, ≤ 10, 1 decimal) and `dilutionWith` (`water`,
+      `milk`, `ice`, `other`): served 1 : `dilutionRatio`, e.g. `1` = half
+      concentrate, half water.
   - `steps` (default `[]`, max 20), in order (`stepOrder` = array position):
     - `stepType` allowed for the brewer's kind (tables above); `label`
       optional, ≤ 255 chars, blank becomes `null`.

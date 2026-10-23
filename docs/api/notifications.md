@@ -87,6 +87,22 @@ Sends "Test from Barista-Assistant" through the saved channel, enabled or not.
   401 Unauthorized"`, `"The service couldn't reach it (…)"` or `"no answer
   within 10 s"`.
 
+## Steep reminders
+
+- **Preference:** `steepReminders` (boolean, default `true`).
+- **Queuing:** `POST /brew-logs` with `steeping: true` (a long cold brew,
+  §6) whose recipe has `steepMinHours` queues a delayed job on the same
+  queue (job `steep-done`, id `steep-<brewLogId>`, data `{ brewLogId,
+  userId }`). It's due `steepMinHours` after the brew's `timestamp`. It's
+  only queued with `steepReminders` on and an enabled channel. The reply's
+  `steepReminder` is `queued`, `off` or `unavailable`, and is left out
+  when the recipe has no window.
+- **Sending:** skipped if the brew was deleted or finished (`steeping:
+  false`), or steep reminders were turned off. Otherwise:
+  - title "Your cold brew is ready to filter";
+  - message "Cold brew · Onyx Guji · started 20:15";
+  - a link to the entry, where **Finish** completes it.
+
 ## Rate-later reminders
 
 - **Preferences** (§1, `PATCH /api/auth/me/preferences`):

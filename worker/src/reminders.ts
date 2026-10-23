@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
-import type { RateReminderJobData } from "@barista/shared/jobs";
-import { sendNotification } from "@barista/shared/notify";
+import type { RateReminderJobData, SteepReminderJobData } from "@barista/shared/jobs";
+import { sendNotification, type NotificationMessage } from "@barista/shared/notify";
 import {
   beans,
   brewers,
@@ -29,11 +29,13 @@ function brewTime(timestamp: Date, utcOffsetMinutes: number | null): string {
   return timestamp.toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit", timeZone: config.brewTimezone ?? "UTC" }).replace(/^0/, "");
 }
 
-export async function processRateReminder({ brewLogId, userId }: RateReminderJobData, send: Send = sendNotification): Promise<ReminderResult> {
+// The brew a reminder is about, with what's needed for its message.
+async function loadBrew(brewLogId: string) {
   const [brew] = await db
     .select({
       rating: brewLogs.rating,
       drinkRating: brewLogs.drinkRating,
+      steeping: brewLogs.steeping,
       timestamp: brewLogs.timestamp,
       utcOffsetMinutes: brewLogs.utcOffsetMinutes,
       beanName: beans.beanName,
@@ -46,30 +48,68 @@ export async function processRateReminder({ brewLogId, userId }: RateReminderJob
     .leftJoin(brewers, eq(brewLogs.brewerId, brewers.id))
     .leftJoin(drinks, eq(brewLogs.drinkId, drinks.id))
     .where(eq(brewLogs.id, brewLogId));
-  if (!brew) return { status: "skipped", reason: "brew deleted" };
-  if (brew.rating !== null || brew.drinkRating !== null) return { status: "skipped", reason: "already rated" };
+  return brew ?? null;
+}
 
+async function preferencesOf(userId: string) {
   const [user] = await db.select({ preferences: users.preferences }).from(users).where(eq(users.id, userId));
-  if (!user) return { status: "skipped", reason: "user deleted" };
-  if (!withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null).rateReminders) return { status: "skipped", reason: "reminders off" };
+  return user ? withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null) : null;
+}
 
+// Sends to each enabled channel; one failing doesn't stop the others, and
+// every one failing throws, so BullMQ retries.
+async function deliver(userId: string, message: NotificationMessage, send: Send): Promise<ReminderResult> {
   const channels = await db
     .select({ kind: notificationChannels.kind, config: notificationChannels.config })
     .from(notificationChannels)
     .where(and(eq(notificationChannels.userId, userId), eq(notificationChannels.enabled, true)));
   if (channels.length === 0) return { status: "skipped", reason: "no enabled channel" };
-
-  const made = brew.drinkName ?? brew.brewerName ?? "Your brew";
-  const message = {
-    title: "How was it? Rate your brew",
-    message: `${made} · ${brew.roasterName} ${brew.beanName} · ${brewTime(brew.timestamp, brew.utcOffsetMinutes)}`,
-    url: config.appUrl ? `${config.appUrl}/journal/${brewLogId}` : null,
-  };
-  // One channel failing doesn't stop the others.
   const results = await Promise.allSettled(
     channels.map((c) => send(c.kind, c.config as NotificationConfigs[NotificationKind], message))
   );
   const failed = results.flatMap((r, i) => (r.status === "rejected" ? [`${channels[i]?.kind}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`] : []));
-  if (failed.length === channels.length) throw new Error(`Every channel failed (${failed.join("; ")})`); // retried by BullMQ
+  if (failed.length === channels.length) throw new Error(`Every channel failed (${failed.join("; ")})`);
   return { status: "sent", channels: channels.length - failed.length, failed };
+}
+
+const entryUrl = (brewLogId: string) => (config.appUrl ? `${config.appUrl}/journal/${brewLogId}` : null);
+
+export async function processRateReminder({ brewLogId, userId }: RateReminderJobData, send: Send = sendNotification): Promise<ReminderResult> {
+  const brew = await loadBrew(brewLogId);
+  if (!brew) return { status: "skipped", reason: "brew deleted" };
+  if (brew.rating !== null || brew.drinkRating !== null) return { status: "skipped", reason: "already rated" };
+  const prefs = await preferencesOf(userId);
+  if (!prefs) return { status: "skipped", reason: "user deleted" };
+  if (!prefs.rateReminders) return { status: "skipped", reason: "reminders off" };
+  const made = brew.drinkName ?? brew.brewerName ?? "Your brew";
+  return deliver(
+    userId,
+    {
+      title: "How was it? Rate your brew",
+      message: `${made} · ${brew.roasterName} ${brew.beanName} · ${brewTime(brew.timestamp, brew.utcOffsetMinutes)}`,
+      url: entryUrl(brewLogId),
+    },
+    send
+  );
+}
+
+// A cold brew's steep window has opened: time to filter it (and then finish
+// it in the journal). Skipped once it's finished or deleted.
+export async function processSteepReminder({ brewLogId, userId }: SteepReminderJobData, send: Send = sendNotification): Promise<ReminderResult> {
+  const brew = await loadBrew(brewLogId);
+  if (!brew) return { status: "skipped", reason: "brew deleted" };
+  if (!brew.steeping) return { status: "skipped", reason: "already finished" };
+  const prefs = await preferencesOf(userId);
+  if (!prefs) return { status: "skipped", reason: "user deleted" };
+  if (!prefs.steepReminders) return { status: "skipped", reason: "steep reminders off" };
+  const made = brew.drinkName ?? brew.brewerName ?? "Cold brew";
+  return deliver(
+    userId,
+    {
+      title: "Your cold brew is ready to filter",
+      message: `${made} · ${brew.roasterName} ${brew.beanName} · started ${brewTime(brew.timestamp, brew.utcOffsetMinutes)}`,
+      url: entryUrl(brewLogId),
+    },
+    send
+  );
 }

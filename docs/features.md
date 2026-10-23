@@ -192,6 +192,17 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   leaving the page, reloading, or tapping **Brew** again asks "Abandon this
   brew?" first; abandoning goes back to setup with your choices kept. After
   a brew is saved, tapping **Brew** goes straight back to setup.
+- **Cold brew:** three cold styles.
+  - **Cold brew** and **Kyoto drip** steep or drip for hours. Their
+    recipes set a steep window (e.g. 12–18 h), fridge or room, and how it's
+    served (e.g. 1 : 1 with water); steps are a checklist.
+  - **Start steep** saves the brew as steeping, and the journal shows
+    "Steeping since …". A reminder comes when the window opens (Settings →
+    Notifications → Cold brew). **Finish** on the entry adds the steep
+    time, yield, TDS, dilution served and the rating.
+  - **Rapid cold brew** (e.g. an OXO Rapid Brewer) uses the normal timer.
+  - All three ask for the dilution served. The AI judges them as served,
+    and knows a concentrate's TDS runs high.
 - **Timer** (pour over and espresso): Previous / Current / Up next cards on
   top, then the buttons, then the clock; the
   current one shows the instruction ("Pour to 150 g (+100)", "9 → 6 bar",

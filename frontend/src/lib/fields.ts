@@ -27,6 +27,8 @@ export const FIELDS = [
   brew('grinderWeights', 'Beans in / grounds out', 'Grinder retention'),
   brew('waterProfile', 'Water profile'),
   brew('prepTools', 'Prep checklist'),
+  brew('steepTemp', 'Steep in fridge or room (cold brew, Kyoto drip)'),
+  brew('dilution', 'Dilution served (cold styles)'),
   brew('firstDrop', 'First drop (espresso)', 'The box in the log; the timer keeps its button, which first-drop steps need'),
 
   bean('process', 'Process'),
