@@ -14,6 +14,7 @@ const props = defineProps<{
   load: () => Promise<Usage>;
   remove: () => Promise<unknown>;
   archived?: boolean; // already archived: don't suggest archiving
+  alternative?: string; // what to suggest instead of deleting (default: archive it)
 }>();
 const emit = defineEmits<{ cancel: []; deleted: [] }>();
 
@@ -63,7 +64,7 @@ async function confirm(): Promise<void> {
         <ul class="warnings">
           <li v-for="w in warnings" :key="w">{{ w }}</li>
         </ul>
-        <p v-if="!archived" class="muted small">To keep it in your history instead, archive it.</p>
+        <p v-if="!archived" class="muted small">{{ alternative ?? 'To keep it in your history instead, archive it.' }}</p>
         <label class="checkbox">
           <input v-model="understood" type="checkbox" />
           I understand

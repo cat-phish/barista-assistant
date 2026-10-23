@@ -130,13 +130,37 @@ export const ORIGIN_AREAS = [
   "africa", "arabia", "central_america", "south_america", "asia", "pacific",
 ] as const;
 export type OriginArea = (typeof ORIGIN_AREAS)[number];
-// How the coffee was processed (docs/api/beans.md §4). A fixed list for now;
-// docs/backlog.md item 2 makes it editable per workspace.
+// How the coffee was processed (docs/api/bean-processes.md §4b): an editable
+// list per workspace, seeded with these built-ins. A built-in keeps its key
+// (`builtin`) when renamed, so the AI still knows what it is.
 export const BEAN_PROCESSES = [
   "washed", "natural", "wet_hulled", "honey", "mechanically_washed", "anaerobic",
   "carbonic_maceration", "co_fermentation", "thermal_shock", "lactic",
 ] as const;
 export type BeanProcess = (typeof BEAN_PROCESSES)[number];
+export const DEFAULT_BEAN_PROCESSES = [
+  { builtin: "washed", name: "Washed" }, { builtin: "natural", name: "Natural" },
+  { builtin: "wet_hulled", name: "Wet-Hulled" }, { builtin: "honey", name: "Honey" },
+  { builtin: "mechanically_washed", name: "Mechanically Washed" },
+  { builtin: "anaerobic", name: "Anaerobic Fermentation" },
+  { builtin: "carbonic_maceration", name: "Carbonic Maceration" },
+  { builtin: "co_fermentation", name: "Co-Fermentation" },
+  { builtin: "thermal_shock", name: "Thermal Shock" }, { builtin: "lactic", name: "Lactic Fermentation" },
+];
+
+export const beanProcesses = mysqlTable(
+  "bean_processes",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 }).notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(), // unique per workspace, case-insensitive
+    position: int("position").notNull(),
+    hidden: boolean("hidden").default(false).notNull(), // left out of the bean form's choices
+    builtin: varchar("builtin", { length: 30 }).$type<BeanProcess>(), // the seeded key, or null for custom ones
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({ uniqueName: unique("bean_processes_workspace_name").on(table.workspaceId, table.name) })
+);
 
 export const beans = mysqlTable("beans", {
   id: varchar("id", { length: 36 }).primaryKey(),
@@ -145,7 +169,9 @@ export const beans = mysqlTable("beans", {
     .references(() => workspaces.id, { onDelete: "cascade" }),
   roasterName: varchar("roaster_name", { length: 255 }).notNull(),
   beanName: varchar("bean_name", { length: 255 }).notNull(),
-  process: varchar("process", { length: 100 }).$type<BeanProcess>(), // BEAN_PROCESSES, or null
+  // One of the workspace's processes (§4b); null = not sure. Deleting a
+  // custom process clears it. Migrations 0044–0046 replaced the old key column.
+  processId: varchar("process_id", { length: 36 }).references((): AnyMySqlColumn => beanProcesses.id, { onDelete: "set null" }),
   // One of ROAST_LEVELS, or null if unknown. Used to estimate beverage yield
   // when scaling a recipe (unknown is treated as light). Derived by the API
   // from detailedRoastLevel when that is set (docs/api/beans.md §4).

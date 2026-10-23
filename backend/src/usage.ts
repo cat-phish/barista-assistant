@@ -4,6 +4,8 @@ import { requireMembership } from "./auth/membership.js";
 import { sendError } from "./http.js";
 import { authedUserId } from "./middleware/requireAuth.js";
 import {
+  beanProcesses,
+  beans,
   brewers,
   brewLogs,
   brewLogTools,
@@ -88,7 +90,12 @@ export async function ingredientUsage(id: string): Promise<Counts> {
   return { drinkCount: await countWhere(drinkIngredients, eq(drinkIngredients.ingredientId, id)) };
 }
 
-const tables = { brewers, grinders, waterProfiles, prepTools, recipes, drinks, ingredients } as const;
+// Beans lose the process (FK set null).
+export async function beanProcessUsage(id: string): Promise<Counts> {
+  return { beanCount: await countWhere(beans, eq(beans.processId, id)) };
+}
+
+const tables = { brewers, grinders, waterProfiles, prepTools, recipes, drinks, ingredients, beanProcesses } as const;
 
 // GET /:<param>/usage on a resource router: the counts above, for any member.
 export function addUsageRoute(

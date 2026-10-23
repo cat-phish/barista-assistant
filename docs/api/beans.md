@@ -41,7 +41,7 @@ is no age.
   {
     "roasterName": "Onyx Coffee Lab",
     "beanName": "Southern Weather",
-    "process": "washed",
+    "processId": "uuid",
     "roastDate": "2026-10-01",
     "inventoryWeightGrams": 250,
     "showOnPublicMenu": true,
@@ -66,9 +66,8 @@ is no age.
   }
   ```
   `roasterName` and `beanName` are required (trimmed, 1–255 chars).
-  `process` (one of `BEAN_PROCESSES`: `washed`, `natural`, `wet_hulled`,
-  `honey`, `mechanically_washed`, `anaerobic`, `carbonic_maceration`,
-  `co_fermentation`, `thermal_shock`, `lactic`), `roastLevel` (one of
+  `processId` (one of the workspace's processes, §4b, hidden ones included;
+  `400` for any other id), `roastLevel` (one of
   `ROAST_LEVELS`: `light`, `medium_light`, `medium`, `medium_dark`, `dark`;
   see `detailedRoastLevel` below) and `roastDate` (ISO date or datetime) are
   optional and nullable. `inventoryWeightGrams` is an integer ≥ 0 (default `0`).
@@ -122,7 +121,7 @@ is no age.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Body:** any non-empty subset of the `POST` fields, with the same rules.
-  Unknown fields are rejected. `process`, `roastLevel`, `roastDate` and every
+  Unknown fields are rejected. `processId`, `roastLevel`, `roastDate` and every
   optional detail except `decaf` can be set to `null`.
 
   Also `"archived": true | false`, like a grinder's `archived` (§3b). `true`

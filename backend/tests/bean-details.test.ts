@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { menuWithBeans, newBean, newUser, newWorkspace, publicMenuBeans } from "./helpers.js";
+import { randomUUID } from "node:crypto";
+import { menuWithBeans, newBean, newUser, newWorkspace, processId, publicMenuBeans } from "./helpers.js";
 
 const DETAILS = {
   roastType: "espresso",
@@ -12,7 +13,6 @@ const DETAILS = {
   priceCurrency: "usd",
   bagWeightGrams: 340,
   notes: "Roaster suggests 1:2 in 28 s.",
-  process: "carbonic_maceration",
   flavorProfile: "Dark chocolate, cherry",
   originArea: "south_america",
   country: "Colombia",
@@ -28,15 +28,16 @@ async function setup() {
   const owner = await newUser();
   const ws = await newWorkspace(owner);
   const beansUrl = `/api/workspaces/${ws.id}/beans`;
-  return { owner, ws, beansUrl };
+  const carbonic = await processId(owner, ws.id, "carbonic_maceration");
+  return { owner, ws, beansUrl, details: { ...DETAILS, processId: carbonic } };
 }
 
 describe("bean details (docs/api/beans.md §4)", () => {
   it("stores every detail and returns it on create and list", async () => {
-    const { owner, beansUrl } = await setup();
-    const created = await owner.agent.post(beansUrl).send({ roasterName: "Onyx", beanName: "House", ...DETAILS });
+    const { owner, beansUrl, details } = await setup();
+    const created = await owner.agent.post(beansUrl).send({ roasterName: "Onyx", beanName: "House", ...details });
     expect(created.status).toBe(201);
-    const expected = { ...DETAILS, priceCurrency: "USD" }; // uppercased
+    const expected = { ...details, priceCurrency: "USD" }; // uppercased
     expect(created.body.bean).toMatchObject(expected);
 
     const list = await owner.agent.get(beansUrl);
@@ -57,7 +58,7 @@ describe("bean details (docs/api/beans.md §4)", () => {
       priceCurrency: null,
       bagWeightGrams: null,
       notes: null,
-      process: null,
+      processId: null,
       flavorProfile: null,
       originArea: null,
       country: null,
@@ -71,8 +72,8 @@ describe("bean details (docs/api/beans.md §4)", () => {
   });
 
   it("clears details with null on PATCH, and blank text becomes null", async () => {
-    const { owner, ws, beansUrl } = await setup();
-    const id = await newBean(owner, ws.id, DETAILS);
+    const { owner, ws, beansUrl, details } = await setup();
+    const id = await newBean(owner, ws.id, details);
     const res = await owner.agent.patch(`${beansUrl}/${id}`).send({
       roastType: null,
       detailedRoastLevel: null,
@@ -83,7 +84,7 @@ describe("bean details (docs/api/beans.md §4)", () => {
       priceCurrency: null,
       bagWeightGrams: null,
       notes: "",
-      process: null,
+      processId: null,
       flavorProfile: " ",
       originArea: null,
       country: "",
@@ -99,7 +100,7 @@ describe("bean details (docs/api/beans.md §4)", () => {
       priceAmount: null,
       notes: null,
       decaf: false,
-      process: null,
+      processId: null,
       flavorProfile: null,
       originArea: null,
       country: null,
@@ -128,8 +129,8 @@ describe("bean details (docs/api/beans.md §4)", () => {
       { bagWeightGrams: 0 },
       { bagWeightGrams: 250.5 },
       { notes: "x".repeat(2001) },
-      { process: "Washed" },
-      { process: "semi-washed" },
+      { processId: "washed" },
+      { processId: randomUUID() }, // not one of this workspace's
       { originArea: "Africa" },
       { originArea: "europe" },
       { country: "x".repeat(101) },
@@ -191,8 +192,8 @@ describe("bean details (docs/api/beans.md §4)", () => {
   });
 
   it("publishes roast, blend and origin details on the public menu, but nothing private", async () => {
-    const { owner, ws } = await setup();
-    await newBean(owner, ws.id, DETAILS);
+    const { owner, ws, details } = await setup();
+    await newBean(owner, ws.id, details);
     await menuWithBeans(owner, ws.id);
     const [bean] = await publicMenuBeans(ws.slug);
     expect(bean).toMatchObject({
@@ -201,7 +202,7 @@ describe("bean details (docs/api/beans.md §4)", () => {
       roastLevel: "medium_dark",
       blendType: "blend",
       decaf: true,
-      process: "carbonic_maceration",
+      process: "Carbonic Maceration", // the name, not an id
       flavorProfile: "Dark chocolate, cherry",
       originArea: "south_america",
       country: "Colombia",

@@ -5,7 +5,7 @@ import { BEAN_MENU_FIELDS, beanLines, roastedAgo } from './publicMenu';
 const all = Object.keys(BEAN_MENU_FIELDS) as BeanMenuField[];
 const now = new Date(2026, 9, 22); // Oct 22, local
 const bean: PublicBean = {
-  id: 'b', roasterName: 'Onyx', beanName: 'Southern Weather', process: 'washed', roastDate: '2026-10-17T00:00:00.000Z',
+  id: 'b', roasterName: 'Onyx', beanName: 'Southern Weather', process: 'Washed', roastDate: '2026-10-17T00:00:00.000Z',
   roastLevel: 'medium', detailedRoastLevel: 'city_plus', roastType: 'espresso', blendType: 'single_origin', decaf: true,
   flavorProfile: 'Milk chocolate, plum', originArea: 'south_america', country: 'Colombia', region: 'Huila', altitudeMasl: 1950, producer: 'Finca El Paraíso',
 };

@@ -88,3 +88,11 @@ export async function publicMenuBeans(slug: string): Promise<Array<Record<string
     s.items.flatMap((i) => (i.type === "beans" ? (i.beans ?? []) : []))
   );
 }
+
+// The id of one of the workspace's built-in processes, e.g. "washed" (§4b).
+export async function processId(user: TestUser, workspaceId: string, builtin: string): Promise<string> {
+  const res = await user.agent.get(`/api/workspaces/${workspaceId}/bean-processes`);
+  const row = (res.body.processes as Array<{ id: string; builtin: string | null }>).find((p) => p.builtin === builtin);
+  if (!row) throw new Error(`No built-in process ${builtin}`);
+  return row.id;
+}

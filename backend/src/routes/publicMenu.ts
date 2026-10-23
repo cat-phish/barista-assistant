@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { db } from "../db.js";
 import { sendError } from "../http.js";
-import { BEAN_MENU_FIELDS, beans, DEFAULT_WORKSPACE_SETTINGS, drinkIngredients, drinks, ingredients, withDefaults, workspaces, type Bean, type BeanMenuField, type MethodKind, type Workspace } from "@barista/shared/schema";
+import { BEAN_MENU_FIELDS, beanProcesses, beans, DEFAULT_WORKSPACE_SETTINGS, drinkIngredients, drinks, ingredients, withDefaults, workspaces, type Bean, type BeanMenuField, type MethodKind, type Workspace } from "@barista/shared/schema";
 import { SLUG_PATTERN } from "../validation.js";
 import { loadMenu } from "./menu.js";
 
@@ -10,9 +10,10 @@ import { loadMenu } from "./menu.js";
 // A bean always has its roaster and name; the rest only when the beans block
 // shows that field (BEAN_MENU_FIELDS, chosen in the builder). Stock, price,
 // website, notes, rating, purchase date and supplier stay private.
-type BeanDetails = Pick<
+// process: the process's name (docs/api/bean-processes.md §4b).
+type BeanDetails = { process: string | null } & Pick<
   Bean,
-  | "process" | "roastDate" | "roastLevel" | "detailedRoastLevel" | "roastType" | "blendType" | "decaf"
+  | "roastDate" | "roastLevel" | "detailedRoastLevel" | "roastType" | "blendType" | "decaf"
   | "flavorProfile" | "originArea" | "country" | "region" | "altitudeMasl" | "producer"
 >;
 export type PublicBean = Pick<Bean, "id" | "roasterName" | "beanName"> & Partial<BeanDetails>;
@@ -121,7 +122,7 @@ export async function buildPublicMenu(workspace: Pick<Workspace, "id" | "name" |
             id: beans.id,
             roasterName: beans.roasterName,
             beanName: beans.beanName,
-            process: beans.process,
+            process: beanProcesses.name,
             roastDate: beans.roastDate,
             roastLevel: beans.roastLevel,
             detailedRoastLevel: beans.detailedRoastLevel,
@@ -136,6 +137,7 @@ export async function buildPublicMenu(workspace: Pick<Workspace, "id" | "name" |
             producer: beans.producer,
           })
           .from(beans)
+          .leftJoin(beanProcesses, eq(beans.processId, beanProcesses.id))
           .where(and(eq(beans.workspaceId, workspace.id), eq(beans.showOnPublicMenu, true), isNull(beans.archivedAt)))
           .orderBy(asc(beans.roasterName), asc(beans.beanName))
       : Promise.resolve([]),

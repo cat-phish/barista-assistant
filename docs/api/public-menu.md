@@ -57,7 +57,7 @@ Retrieves the read-only menu for a workspace, as arranged in the menu builder
                 "id": "uuid",
                 "roasterName": "Onyx Coffee Lab",
                 "beanName": "Southern Weather",
-                "process": "washed",
+                "process": "Washed",
                 "roastDate": "2026-10-01T00:00:00.000Z",
                 "roastLevel": "light",
                 "detailedRoastLevel": "city",
@@ -94,7 +94,7 @@ Retrieves the read-only menu for a workspace, as arranged in the menu builder
     `showOnPublicMenu`, by roaster then name. Each has its `id`,
     `roasterName` and `beanName`, plus only the details in `fields` (chosen
     in the builder, §7b; all of them by default): `origin` is `originArea`,
-    `country` and `region`; `roastLevel` is `roastLevel` and
+    `country` and `region`; `process` is the process's name (§4b); `roastLevel` is `roastLevel` and
     `detailedRoastLevel` (always `null` while the workspace records roasts
     light to dark, `settings.roastScale` "levels", §2); the others are the bean field of the same name
     (`altitude` = `altitudeMasl`). A field that isn't chosen is left out of

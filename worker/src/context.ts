@@ -1,4 +1,5 @@
 import {
+  beanProcesses,
   beanFreezes,
   beans,
   brewLogMarks,
@@ -15,7 +16,6 @@ import {
   prepTools,
   brewLogTools,
   type Bean,
-  type BeanProcess,
   type BlendType,
   type DetailedRoastLevel,
   type OriginArea,
@@ -121,7 +121,7 @@ export interface BrewContext {
   bean: {
     roasterName: string;
     beanName: string;
-    process: BeanProcess | null;
+    process: string | null; // the workspace's name for it (docs/api/bean-processes.md §4b)
     roastLevel: string | null;
     detailedRoastLevel: DetailedRoastLevel | null;
     roastType: RoastType | null;
@@ -372,6 +372,9 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
   const [beanRow] = await db.select().from(beans).where(eq(beans.id, brew.beanId)).limit(1);
   if (!beanRow) return null; // Bean deletion cascades, so this means the log is going too.
   const bean: Bean = beanRow;
+  const [processRow] = bean.processId
+    ? await db.select({ name: beanProcesses.name }).from(beanProcesses).where(eq(beanProcesses.id, bean.processId)).limit(1)
+    : [];
 
   const [previous, recipe, freezes] = await Promise.all([
     // "Previous" = earlier than the analyzed brew, newest first.
@@ -395,7 +398,7 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
     bean: {
       roasterName: bean.roasterName,
       beanName: bean.beanName,
-      process: bean.process,
+      process: processRow?.name ?? null,
       roastLevel: bean.roastLevel,
       detailedRoastLevel: bean.detailedRoastLevel,
       roastType: bean.roastType,

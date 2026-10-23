@@ -16,6 +16,7 @@ means drinks, wherever you see it (code comments use
 | §3c | [water-profiles.md](water-profiles.md) | Water Profiles |
 | §3d | [prep-tools.md](prep-tools.md) | Prep Tools |
 | §4 | [beans.md](beans.md) | Beans |
+| §4b | [bean-processes.md](bean-processes.md) | Bean Processes |
 | §5 | [recipes.md](recipes.md) | Recipes |
 | §5b | [ingredients.md](ingredients.md) | Ingredients |
 | §5c | [drinks.md](drinks.md) | Drinks |
