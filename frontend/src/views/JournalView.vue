@@ -89,8 +89,8 @@ watch(beanFilter, () => load(true));
     <template v-else>
       <p class="muted count">{{ total }} brew{{ total === 1 ? '' : 's' }}</p>
       <ul class="list">
-        <li v-for="log in logs" :key="log.id">
-          <RouterLink class="card entry" :to="{ name: 'journal-entry', params: { id: log.id } }">
+        <li v-for="log in logs" :key="log.id" class="item">
+          <RouterLink class="card entry" :class="{ repeatable: workspaces.canEdit }" :to="{ name: 'journal-entry', params: { id: log.id } }">
             <div class="head">
               <span class="when">{{ formatWhen(log.timestamp) }}</span>
               <RatingStars :rating="log.rating ?? log.drinkRating" />
@@ -107,6 +107,8 @@ watch(beanFilter, () => load(true));
             </span>
             <span v-if="log.tastingNotes || log.drinkTastingNotes" class="notes">{{ log.tastingNotes ?? log.drinkTastingNotes }}</span>
           </RouterLink>
+          <!-- Beside the card link, not inside it: links can't nest. -->
+          <RouterLink v-if="workspaces.canEdit" class="btn-link small brew-again" :to="{ name: 'brew', query: { repeat: log.id } }">Brew again</RouterLink>
         </li>
       </ul>
       <button v-if="logs.length < total" class="btn btn-secondary" type="button" :disabled="loadingMore" @click="load(false)">
@@ -128,6 +130,17 @@ watch(beanFilter, () => load(true));
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+.item {
+  position: relative;
+}
+.entry.repeatable {
+  padding-bottom: calc(var(--space-3) + 1.75rem);
+}
+.brew-again {
+  position: absolute;
+  right: var(--space-4);
+  bottom: var(--space-2);
 }
 .entry {
   display: flex;

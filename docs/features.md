@@ -164,6 +164,15 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   instead. The dose and the ratio move the shot weight; typing the shot
   weight keeps the dose and changes the ratio. The brew records its recipe's
   brewer, so the espresso machine comes with the recipe.
+- **Repeat a brew:** setup can be filled from an earlier brew: quick
+  buttons for the latest brew of each of the last 3 things you made (a drink,
+  or a plain brew of a method), **Pick a brew…** for any other, and **Brew
+  again** on every journal entry. It fills the bean (the newest bag of the
+  same coffee if that one is archived), what you're making, brewer, recipe,
+  drink size, dose and water (espresso: the dose, at the recipe's ratio),
+  temperature, grinder, grind and RPM, and the water. Prep tools, grinder
+  weights, results, ratings and notes start blank, and anything archived
+  since is skipped and named. The timer starts when you press Start.
 - **Abandoning a brew:** during the timer or before the log is saved,
   leaving the page, reloading, or tapping **Brew** again asks "Abandon this
   brew?" first; abandoning goes back to setup with your choices kept.

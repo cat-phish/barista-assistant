@@ -3,13 +3,15 @@
 // (+ optional AI suggestion for next time). docs/api/README.md §6/§8,
 // docs/timer_architecture.md.
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
-import { onBeforeRouteLeave } from 'vue-router';
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { beansApi } from '../api/beans';
 import { brewLogsApi, suggestionsApi } from '../api/brews';
 import { ApiError, errorMessage } from '../api/client';
 import { recipesApi } from '../api/recipes';
-import type { Bean, Recipe, BrewerMethod } from '../api/types';
+import type { Bean, BrewLog, Recipe, BrewerMethod } from '../api/types';
 import AnalysisCard from '../components/AnalysisCard.vue';
+import RepeatBrewPicker from '../components/RepeatBrewPicker.vue';
+import { recentByMade, repeatLabel, repeatPlan } from '../lib/repeatBrew';
 import { grindersApi } from '../api/grinders';
 import { waterProfilesApi } from '../api/waterProfiles';
 import { prepToolsApi } from '../api/prepTools';
@@ -62,6 +64,8 @@ import { usePreferences } from '../composables/usePreferences';
 type Stage = 'setup' | 'timing' | 'log' | 'saved';
 
 const workspaces = useWorkspaceStore();
+const route = useRoute();
+const router = useRouter();
 const { prefs, temperatureUnit, recipeRoastLevel } = usePreferences();
 const stage = ref<Stage>('setup');
 const loading = ref(true);
@@ -218,6 +222,19 @@ onMounted(async () => {
     loadError.value = errorMessage(err);
   } finally {
     loading.value = false;
+  }
+  void loadRecent();
+  // "Brew again" from the journal: /brew?repeat=<id>, filled once the
+  // remembered choices above have settled. The query is dropped after.
+  const repeatId = typeof route.query.repeat === 'string' ? route.query.repeat : null;
+  if (repeatId && !loadError.value) {
+    await nextTick();
+    try {
+      await applyRepeat((await brewLogsApi.get(ws, repeatId)).brewLog);
+    } catch (err) {
+      repeatError.value = `Couldn't load that brew to repeat: ${errorMessage(err)}`;
+    }
+    void router.replace({ name: 'brew' });
   }
 });
 
@@ -442,6 +459,8 @@ async function addGrinder(): Promise<void> {
 // Grind pre-fill: last setting for this grinder + recipe, else the suggestion's
 // (same grinder only), else empty. Re-run whenever recipe or grinder changes.
 const lastSetting = ref<{ grindSetting: number; grindRpm: number | null; timestamp: string } | null>(null);
+// The grind of the brew being repeated, with the grinder and recipe it goes with.
+const repeatGrind = ref<{ grinderId: string; recipeId: string; grind: string; rpm: string } | null>(null);
 const grindSource = ref<GrindSource>('none');
 let grindRequest = 0;
 async function refreshGrind(): Promise<void> {
@@ -458,6 +477,14 @@ async function refreshGrind(): Promise<void> {
   }
   if (request !== grindRequest) return;
   lastSetting.value = last;
+  // A repeat keeps its brew's grind while its grinder and recipe are chosen.
+  const kept = repeatGrind.value;
+  if (kept && kept.grinderId === grinderId && kept.recipeId === recipeId.value) {
+    draft.grind = kept.grind;
+    draft.rpm = kept.rpm;
+    grindSource.value = 'repeat';
+    return;
+  }
   const choice = chooseGrind({ lastSetting: last?.grindSetting ?? null, suggestion: suggestion.value, grinderId, recipe: recipe.value });
   draft.grind = choice.value;
   grindSource.value = choice.source;
@@ -638,7 +665,85 @@ function brewAgain(): void {
   submitted.value = false;
   suggestion.value = null;
   suggestionState.value = 'idle';
+  repeatFrom.value = null;
+  repeatGrind.value = null;
+  void loadRecent(); // the brew just saved is now the latest
   void refreshGrind(); // the brew just saved is now the "last setting"
+}
+
+// Repeat a brew (lib/repeatBrew.ts): quick buttons for the latest brew of
+// each of the last 3 things made, "Pick a brew…" for any other, and
+// /brew?repeat=<id> from the journal. Setup is filled from the brew; the
+// timer starts as usual.
+const recentLogs = ref<BrewLog[]>([]);
+const quickRepeats = computed(() => recentByMade(recentLogs.value, brewers.value));
+const pickerOpen = ref(false);
+const repeatFrom = ref<{ log: BrewLog; missing: string[] } | null>(null);
+const repeatError = ref('');
+async function loadRecent(): Promise<void> {
+  const ws = workspaces.current?.id;
+  if (!ws) return;
+  try {
+    recentLogs.value = (await brewLogsApi.list(ws, { limit: 30 })).brewLogs;
+  } catch {
+    recentLogs.value = []; // the buttons are a shortcut; the picker still loads
+  }
+}
+// Each choice is set once the previous one's watcher has run (a drink picks
+// its default brewer and recipe, a recipe resets the batch), so the brew's
+// own choices win. Then its amounts, after the recipe has set its own.
+async function applyRepeat(log: BrewLog): Promise<void> {
+  pickerOpen.value = false;
+  repeatError.value = '';
+  const plan = repeatPlan(log, {
+    beans: beans.value,
+    brewers: brewers.value,
+    drinks: drinks.value,
+    recipes: recipes.value,
+    grinders: grinders.value,
+    waterProfiles: waterProfiles.value,
+  });
+  repeatFrom.value = { log, missing: plan.missing };
+  repeatGrind.value =
+    plan.grinderId && log.actualGrindSetting !== null
+      ? { grinderId: plan.grinderId, recipeId: plan.recipeId, grind: formatGrind(log.actualGrindSetting), rpm: log.grindRpm === null ? '' : String(log.grindRpm) }
+      : null;
+  if (plan.beanId) beanId.value = plan.beanId;
+  what.value = plan.what;
+  await nextTick();
+  if (plan.item) item.value = plan.item;
+  await nextTick();
+  if (plan.brewerId) brewerId.value = plan.brewerId;
+  await nextTick();
+  if (plan.recipeId) recipeId.value = plan.recipeId;
+  await nextTick();
+  if (repeatGrind.value) repeatGrind.value.recipeId = recipeId.value; // another recipe if the brew's is gone
+  if (log.servingSize !== null && log.servingUnit && baseSize.value) {
+    sizeText.value = formatGrams(log.servingSize);
+    sizeUnit.value = log.servingUnit;
+  }
+  // Filter: the brew's dose and water (so the ratio is the one it had);
+  // espresso: its dose, with the shot weight at the recipe's ratio.
+  if (filterRecipe.value && log.actualWaterGrams !== null) {
+    const r = log.actualWaterGrams / log.actualDoseGrams;
+    lead.value = { field: 'dose', text: formatGrams(log.actualDoseGrams) };
+    ratio.value = { text: formatRatio(r), value: r };
+  } else if (shotRecipe.value) {
+    lead.value = { field: 'dose', text: formatGrams(log.actualDoseGrams) };
+    ratio.value = null;
+  } else {
+    draft.dose = formatGrams(log.actualDoseGrams);
+    draft.water = log.actualWaterGrams === null ? '' : formatGrams(log.actualWaterGrams);
+  }
+  draft.temp = tempText(log.actualTempC, temperatureUnit.value);
+  draft.grinderId = plan.grinderId;
+  if (plan.waterProfileId) draft.waterProfileId = plan.waterProfileId;
+  // Measured each time: left for this brew.
+  draft.toolIds = [];
+  draft.beanIn = '';
+  draft.groundOut = '';
+  await nextTick();
+  void refreshGrind(); // applies repeatGrind (also when the grinder didn't change)
 }
 
 const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean.value.beanName}${batchSuffix(bean.value)}` : ''));
@@ -660,6 +765,23 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
     <!-- 1. Setup -->
     <template v-else-if="stage === 'setup'">
       <h1>New brew</h1>
+      <!-- Repeat a brew: fills setup from an earlier one (lib/repeatBrew.ts). -->
+      <section v-if="recentLogs.length" class="repeat" aria-labelledby="repeat-label">
+        <span id="repeat-label" class="batch-label">Repeat a brew</span>
+        <div class="repeat-row">
+          <button v-for="l in quickRepeats" :key="l.id" class="btn btn-secondary repeat-btn" type="button" @click="applyRepeat(l)">
+            <strong>{{ repeatLabel(l).made }}</strong>
+            <span class="muted small">{{ repeatLabel(l).bean }} · {{ repeatLabel(l).when }}</span>
+          </button>
+          <button class="btn-link repeat-pick" type="button" @click="pickerOpen = true">Pick a brew…</button>
+        </div>
+        <p v-if="repeatFrom" class="muted small" aria-live="polite">
+          Filled from your {{ repeatLabel(repeatFrom.log).made }} brew of {{ repeatLabel(repeatFrom.log).when }}.
+          <template v-for="m in repeatFrom.missing" :key="m"> {{ m }}</template>
+        </p>
+      </section>
+      <p v-if="repeatError" class="form-error" role="alert">{{ repeatError }}</p>
+      <RepeatBrewPicker :open="pickerOpen" :beans="beans" @close="pickerOpen = false" @pick="applyRepeat" />
       <section class="card stack">
         <div class="field">
           <label for="bean">Bean<span class="req" aria-hidden="true">*</span></label>
@@ -850,6 +972,9 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             Last time with {{ grinder?.name }} on {{ recipe?.name }}: {{ formatGrind(lastSetting.grindSetting) }} ({{ formatDay(lastSetting.timestamp) }})
           </p>
           <p v-else-if="grindSource === 'suggestion'" class="muted small grind-hint">Grind from the analyzed brew; adjust as suggested.</p>
+          <p v-else-if="grindSource === 'repeat' && repeatFrom" class="muted small grind-hint">
+            From the brew you're repeating ({{ repeatLabel(repeatFrom.log).when }}). Adjust as you dial in.
+          </p>
           <p v-else-if="grindSource === 'recipe'" class="muted small grind-hint">
             The recipe's approximate starting point for {{ grinder?.name }}. Adjust to taste; next time your own setting is used.
           </p>
@@ -949,6 +1074,39 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
 </template>
 
 <style scoped>
+.repeat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.repeat p {
+  margin: 0;
+}
+.repeat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: stretch;
+}
+.repeat-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  text-align: left;
+  flex: 1 1 9rem;
+  min-width: 0;
+}
+.repeat-btn .small {
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.repeat-pick {
+  align-self: center;
+}
 h1 {
   font-size: 1.5rem;
 }
