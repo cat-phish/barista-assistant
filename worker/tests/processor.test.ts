@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { beanFreezes, beans, brewLogMarks, brewLogs, brewers, ingredients, drinkIngredients, drinks, grinders, llmAnalyses, recipeGrindSettings, recipes, recipeSteps, users, waterProfiles, workspaces, prepTools, brewLogTools, recipeStyles } from "@barista/shared/schema";
+import { beanFreezes, beans, brewLogMarks, brewLogs, brewers, ingredients, drinkIngredients, drinks, grinders, llmAnalyses, recipeGrindSettings, recipes, recipeSteps, users, waterProfiles, workspaces, prepTools, brewLogTools, brewProblems, brewLogProblems, recipeStyles } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { extractionYield, type BrewContext } from "../src/context.js";
@@ -325,6 +325,25 @@ describe("processBrewAnalysis", () => {
     const context = llm.mock.calls[0]![0] as BrewContext;
     expect(context.brew.prepTools).toEqual(["WDT", "RDT"]);
     expect(context.previousBrews[0]?.prepTools).toEqual([]);
+  });
+
+  it("tells the LLM what went wrong in each brew, in list order", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    const [slow, tared] = [randomUUID(), randomUUID()];
+    await db.insert(brewProblems).values([
+      { id: tared, workspaceId, name: "Scale not tared", methodKind: null, position: 2 },
+      { id: slow, workspaceId, name: "Slow drawdown", methodKind: "filter", position: 1, archivedAt: new Date() },
+    ]);
+    await db.insert(brewLogProblems).values([
+      { brewLogId: logIds.day8!, problemId: tared },
+      { brewLogId: logIds.day8!, problemId: slow },
+      { brewLogId: logIds.day7!, problemId: tared },
+    ]);
+    await processBrewAnalysis({ brewLogId: logIds.day8! });
+    const context = llm.mock.calls[0]![0] as BrewContext;
+    expect(context.brew.problems).toEqual(["Slow drawdown", "Scale not tared"]);
+    expect(context.previousBrews.map((b) => b.problems)).toContainEqual(["Scale not tared"]);
+    expect(context.previousBrews.some((b) => b.problems.length === 0)).toBe(true);
   });
 
   it("skips a brew log that was deleted after the job was queued, without calling the LLM", async () => {

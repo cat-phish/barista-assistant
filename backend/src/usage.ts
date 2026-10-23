@@ -10,7 +10,9 @@ import {
   beans,
   brewers,
   brewLogs,
+  brewLogProblems,
   brewLogTools,
+  brewProblems,
   drinkIngredients,
   drinks,
   grinders,
@@ -67,6 +69,11 @@ export async function prepToolUsage(id: string): Promise<Counts> {
   return { brewLogCount: await countWhere(brewLogTools, eq(brewLogTools.toolId, id)) };
 }
 
+// Brews that recorded it lose it (FK cascade on brew_log_problems).
+export async function brewProblemUsage(id: string): Promise<Counts> {
+  return { brewLogCount: await countWhere(brewLogProblems, eq(brewLogProblems.problemId, id)) };
+}
+
 // Brews lose the recipe; drinks with it as their default lose the default.
 export async function recipeUsage(id: string): Promise<Counts> {
   const [brewLogCount, drinkCount] = await Promise.all([
@@ -107,7 +114,7 @@ export async function brewerMethodUsage(id: string): Promise<Counts> {
   return { brewerCount: await countWhere(brewers, eq(brewers.methodId, id)) };
 }
 
-const tables = { brewers, grinders, waterProfiles, prepTools, recipes, drinks, ingredients, beanProcesses, recipeStyles, brewerMethods } as const;
+const tables = { brewers, grinders, waterProfiles, prepTools, brewProblems, recipes, drinks, ingredients, beanProcesses, recipeStyles, brewerMethods } as const;
 
 // GET /:<param>/usage on a resource router: the counts above, for any member.
 export function addUsageRoute(

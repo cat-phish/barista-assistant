@@ -41,7 +41,12 @@ export const SYSTEM_PROMPT =
   "the cup; only the figures given are known. prepTools lists the prep used " +
   "(WDT, puck screen, filter type…); an empty list means none was recorded, " +
   "not that none was used, so only compare tools between brews that list " +
-  "them. On a variable-speed grinder, grindRpm is part of the grind: a " +
+  "them. problems lists what went wrong while brewing (stalled drawdown, " +
+  "channeling, a gushing shot…): these are the clearest clues for the next " +
+  "brew, so explain the change from them first (e.g. a stalled bed or a " +
+  "choked shot points coarser, channeling to prep and distribution, a " +
+  "mistake like an untared scale to repeating rather than adjusting). An " +
+  "empty list means none were recorded, not that nothing went wrong. On a variable-speed grinder, grindRpm is part of the grind: a " +
   "higher speed usually grinds a little finer with more fines, a lower one " +
   "gives a clearer, more even cup; compare grind settings only at similar " +
   "speeds, and you may suggest a speed change. grinderRetentionGrams is " +

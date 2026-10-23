@@ -968,3 +968,46 @@ a seconds timer, saved at once, no dilution, at most 24 h. Contract:
   (kept as an idea under "Ingredient prep and stock"), and iced /
   flash-chilled styles (their own backlog item).
 
+## Brew windows (built)
+
+Branch `brew-window`, migration 0059. A cold brew's window was the recipe's
+alone, so a longer or shorter steep for one batch couldn't be planned.
+Contract: `api/brew-logs.md` §6, `api/notifications.md` §1b.
+
+- **On setup**, before starting: cold brew and Kyoto drip show the steep
+  window in hours, rapid cold the target finish (m:ss), both filled from the
+  recipe with a "Use it" link back. Fridge or room temperature moved to
+  setup too, for all three cold styles.
+- **The brew keeps it** (`steepMinHours`/`steepMaxHours`,
+  `expectedFinishMinSec`/`expectedFinishMaxSec`, set on `POST` only, both
+  ends or neither). The steep reminder, "Ready from", the journal and the AI
+  use the brew's window; a steep sent without one takes the recipe's.
+  Existing brews were backfilled from their recipes.
+- Field registry `brew.window` and a Repeat brews option `window` (on by
+  default).
+- **Not built:** changing the window after the brew starts (the reminder
+  would need re-queuing).
+
+## Brew problems (built)
+
+Backlog item "Brew problems", branch `brew-problems`, migration 0060.
+Tasting notes said how a cup tasted, not what went wrong while brewing, and
+free text couldn't be counted. Contract: `api/brew-problems.md` §6b,
+`api/brew-logs.md` §6, `api/llm-contract.md` §9.
+
+- **The list:** `brew_problems`, per workspace, ordered, each for one method
+  or all, seeded with 23 defaults (filter, espresso, all methods) for new
+  and existing workspaces. Edited in **Settings → Lists → Brew problems**
+  (add, rename, reorder, method, archive, delete); `EditableList` got
+  configurable wording so it says Archive / Restore here.
+- **Decided:** archived like prep tools rather than hidden like the other
+  lists (they leave the checklist, old brews keep them); any problem can be
+  deleted, with the usual warning; no free-text "other" line (add one to the
+  list instead).
+- **Brews:** a Problems checklist on the log form and journal edit, filtered
+  like the prep checklist (`toolsFor`), stored in `brew_log_problems`
+  (`problemIds`, replaced on `PATCH`), shown on the journal entry. Field
+  registry `brew.problems`; Repeat brews never copies them (`'result'`).
+- **The AI** gets each brew's problems by name and is told they're the
+  clearest clues, and that an empty list means none were recorded.
+- **Not built:** charting problems over time (added to Statistics).

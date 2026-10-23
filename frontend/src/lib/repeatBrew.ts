@@ -41,6 +41,7 @@ export const REPEAT_FOR_FIELD: Record<BrewFieldKey, RepeatKeep | 'result'> = {
   'brew.grinderWeights': 'grinderWeights',
   'brew.waterProfile': 'waterProfile',
   'brew.prepTools': 'prepTools',
+  'brew.problems': 'result', // what went wrong is noted each brew, never copied
   'brew.firstDrop': 'result',
   'brew.steepTemp': 'temp', // where it steeps goes with the temperature
   'brew.dilution': 'dilution',

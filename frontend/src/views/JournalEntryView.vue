@@ -6,9 +6,10 @@ import { ApiError, errorMessage } from '../api/client';
 import type { BrewLog, LlmAnalysis, Mark } from '../api/types';
 import AnalysisCard from '../components/AnalysisCard.vue';
 import { grindersApi } from '../api/grinders';
-import type { Grinder, PrepTool, WaterProfile } from '../api/types';
+import type { BrewProblem, Grinder, PrepTool, WaterProfile } from '../api/types';
 import { waterProfilesApi } from '../api/waterProfiles';
 import { prepToolsApi } from '../api/prepTools';
+import { brewProblemsApi } from '../api/brewProblems';
 import AppHeader from '../components/AppHeader.vue';
 import BrewFields from '../components/BrewFields.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
@@ -42,6 +43,7 @@ const storedAnalysis = ref<LlmAnalysis | null>(null);
 const grinders = ref<Grinder[]>([]);
 const waterProfiles = ref<WaterProfile[]>([]);
 const prepTools = ref<PrepTool[]>([]);
+const problems = ref<BrewProblem[]>([]);
 const loading = ref(true);
 const loadError = ref('');
 
@@ -82,13 +84,15 @@ async function load(): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [{ brewLog }, g, w, t] = await Promise.all([
+    const [{ brewLog }, g, w, t, bp] = await Promise.all([
       brewLogsApi.get(ws, props.id),
       grindersApi.list(ws),
       waterProfilesApi.list(ws),
       prepToolsApi.list(ws),
+      brewProblemsApi.list(ws).catch(() => ({ problems: [] })),
     ]);
     prepTools.value = t.tools;
+    problems.value = bp.problems;
     grinders.value = g.grinders;
     waterProfiles.value = w.waterProfiles;
     const { latestAnalysis, ...rest } = brewLog;
@@ -294,6 +298,7 @@ function markLabel(m: Mark): string {
           <div><dt>Brewer</dt><dd>{{ log.brewer?.name ?? '–' }}</dd></div>
           <div v-if="log.waterProfile"><dt>Water profile</dt><dd>{{ log.waterProfile.name }}</dd></div>
           <div v-if="log.tools.length"><dt>Prep</dt><dd>{{ log.tools.map((t) => t.name).join(' · ') }}</dd></div>
+          <div v-if="log.problems.length"><dt>Problems</dt><dd>{{ log.problems.map((p) => p.name).join(' · ') }}</dd></div>
           <div v-for="m in log.marks" :key="`${m.kind}-${m.stepOrder}`"><dt>{{ markLabel(m) }}</dt><dd>{{ formatMark(m.atSec) }}</dd></div>
           <div><dt>{{ drinkTasting ? 'Brew rating' : 'Rating' }}</dt><dd><RatingStars :rating="log.rating" /></dd></div>
           <div v-if="drinkTasting"><dt>Drink rating</dt><dd><RatingStars :rating="log.drinkRating" /></dd></div>
@@ -320,7 +325,7 @@ function markLabel(m: Mark): string {
       <!-- Edit -->
       <form v-else class="card stack" novalidate @submit.prevent="saveEdit">
         <h2>Edit brew</h2>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :prep-tools="prepTools" :method-kind="log.recipe?.methodKind ?? null" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="log.recipe?.style?.brewsLike ?? null" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :prep-tools="prepTools" :problems="problems" :method-kind="log.recipe?.methodKind ?? null" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="log.recipe?.style?.brewsLike ?? null" />
         <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
         <div class="buttons">
           <button class="btn btn-secondary" type="button" :disabled="saving" @click="editing = false">Cancel</button>

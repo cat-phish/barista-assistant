@@ -5,7 +5,7 @@
 // like"): asked when adding, shown and changeable on the row. Built-ins (builtin set) can be renamed and hidden but not deleted.
 // Deleting goes through DeleteDialog, so what uses it is listed first and an
 // "I understand" is needed when anything does (CLAUDE.md rule 6).
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { ApiError, errorMessage } from '../api/client';
 import type { DeletableKind, Usage } from '../lib/deleting';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -35,7 +35,10 @@ const props = defineProps<{
   hiddenHint: string; // what hiding does
   choices?: Array<{ value: string; label: string }>; // offered for custom entries
   choiceLabel?: string; // "Brews like"
+  // What switching an entry off is called: hide (lists) or archive (brew problems).
+  words?: { hide: string; show: string; hidden: string };
 }>();
+const words = computed(() => props.words ?? { hide: 'Hide', show: 'Show', hidden: 'Hidden' });
 const emit = defineEmits<{ changed: [] }>();
 const workspaces = useWorkspaceStore();
 
@@ -119,7 +122,7 @@ function deleted(): void {
       <div v-else class="row">
         <span class="name">
           {{ e.name }}
-          <span v-if="e.hidden" class="badge">Hidden</span>
+          <span v-if="e.hidden" class="badge">{{ words.hidden }}</span>
           <span v-if="e.builtin" class="muted small">built-in</span>
           <span v-else-if="choices && !workspaces.canEdit" class="muted small">{{ choiceLabel?.toLowerCase() }} {{ choiceText(e.choice) }}</span>
           <label v-else-if="choices" class="choice muted small">
@@ -134,7 +137,7 @@ function deleted(): void {
             <button class="btn-link" type="button" :disabled="busy || i === 0" :aria-label="`Move ${e.name} up`" @click="move(i, -1)">↑</button>
             <button class="btn-link" type="button" :disabled="busy || i === entries.length - 1" :aria-label="`Move ${e.name} down`" @click="move(i, 1)">↓</button>
             <button class="btn-link" type="button" @click="startEdit(e)">Rename</button>
-            <button class="btn-link" type="button" :disabled="busy" @click="toggleHidden(e)">{{ e.hidden ? 'Show' : 'Hide' }}</button>
+            <button class="btn-link" type="button" :disabled="busy" @click="toggleHidden(e)">{{ e.hidden ? words.show : words.hide }}</button>
             <button v-if="!e.builtin" class="btn-link danger" type="button" @click="deleting = e">Delete</button>
           </span>
         </template>
@@ -161,7 +164,7 @@ function deleted(): void {
     :name="deleting?.name ?? ''"
     :load="loadUsage"
     :remove="remove"
-    :alternative="`To keep it on those, hide it instead: it leaves the choices but stays where it's used.`"
+    :alternative="`To keep it on those, ${words.hide.toLowerCase()} it instead: it leaves the choices but stays where it's used.`"
     @cancel="deleting = null"
     @deleted="deleted"
   />
