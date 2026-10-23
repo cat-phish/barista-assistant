@@ -4,6 +4,7 @@
 // OXO Rapid Brewer) runs the timer in minutes. All of them can be served
 // diluted. The backend has the same lists (LONG_STYLES, COLD_STYLES).
 import type { DilutionWith, RecipeStyle, SteepTemp } from '../api/types';
+import { parseDecimal, type Parsed } from './format';
 
 const LONG: readonly RecipeStyle[] = ['cold_brew', 'kyoto_drip'];
 const COLD: readonly RecipeStyle[] = ['cold_brew', 'kyoto_drip', 'rapid_cold'];
@@ -20,6 +21,21 @@ export function steepWindowText(min: number | null, max: number | null): string 
   const h = (n: number) => `${Number(n.toFixed(1))}`;
   return min === max ? `${h(min)} h` : `${h(min)}–${h(max)} h`;
 }
+
+// The steep window typed in hours, as the recipe form and the API take it
+// (docs/api/recipes.md §5): both ends or neither, 0.5–72 h, one decimal.
+const STEEP_HOURS = { scale: 1, min: 0.5, max: 72 } as const;
+export function parseSteepWindow(fromText: string, toText: string): Parsed<{ min: number; max: number } | null> {
+  const from = fromText.trim() ? parseDecimal(fromText, STEEP_HOURS) : null;
+  const to = toText.trim() ? parseDecimal(toText, STEEP_HOURS) : null;
+  if (from && !from.ok) return { ok: false, error: `From: ${from.error}` };
+  if (to && !to.ok) return { ok: false, error: `To: ${to.error}` };
+  if (!from && !to) return { ok: true, value: null };
+  if (!from?.ok || !to?.ok) return { ok: false, error: 'Enter both ends, or neither' };
+  if (from.value > to.value) return { ok: false, error: '"To" must not be less than "from"' };
+  return { ok: true, value: { min: from.value, max: to.value } };
+}
+export const hoursText = (h: number | null): string => (h === null ? '' : String(Number(h.toFixed(1))));
 
 // "1 : 1 with water", or '' without a dilution.
 export function dilutionText(ratio: number | null, withWhat: DilutionWith | null): string {

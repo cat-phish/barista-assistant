@@ -197,10 +197,18 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
     recipes set a steep window (e.g. 12–18 h), fridge or room, and how it's
     served (e.g. 1 : 1 with water); steps are a checklist.
   - **Start steep** saves the brew as steeping, and the journal shows
-    "Steeping since …". A reminder comes when the window opens (Settings →
-    Notifications → Cold brew). **Finish** on the entry adds the steep
-    time, yield, TDS, dilution served and the rating.
+    "Steeping since …". Before it starts, the steep window can be changed
+    for this brew (the recipe's to begin with); the brew keeps it. A
+    reminder comes when the brew's window opens (Settings → Notifications →
+    Cold brew). **Finish** on the entry adds the steep time, yield, TDS,
+    dilution served and the rating.
   - **Rapid cold brew** (e.g. an OXO Rapid Brewer) uses the normal timer.
+    Its target finish can be changed on setup for this brew, and the brew
+    keeps it.
+  - Both windows are a brew field (Settings → Fields) and a Repeat brews
+    option.
+  - All three ask on setup whether it's steeping in the fridge or at room
+    temperature (the recipe's, for cold brew and Kyoto drip).
   - All three ask for the dilution served. The AI judges them as served,
     and knows a concentrate's TDS runs high.
 - **Timer** (pour over and espresso): Previous / Current / Up next cards on

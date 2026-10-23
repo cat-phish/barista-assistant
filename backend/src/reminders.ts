@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { DEFAULT_PREFERENCES, notificationChannels, recipes, users, withDefaults } from "@barista/shared/schema";
+import { DEFAULT_PREFERENCES, notificationChannels, users, withDefaults } from "@barista/shared/schema";
 import { db } from "./db.js";
 import { enqueueRateReminder, enqueueSteepReminder } from "./queue.js";
 
@@ -41,14 +41,12 @@ export async function remindToRate(userId: string, brewLogId: string): Promise<R
 // reached, counted from when it started (docs/api/notifications.md §1b). Off
 // without a window, with steep reminders switched off, or with no enabled
 // channel.
-export async function remindWhenSteeped(userId: string, brewLogId: string, recipeId: string | null, startedAt: Date): Promise<ReminderOutcome | undefined> {
-  if (!recipeId) return undefined;
-  const [recipe] = await db.select({ steepMinHours: recipes.steepMinHours }).from(recipes).where(eq(recipes.id, recipeId));
-  if (!recipe || recipe.steepMinHours === null) return undefined; // no window, nothing to remind about
+export async function remindWhenSteeped(userId: string, brewLogId: string, steepMinHours: number | null, startedAt: Date): Promise<ReminderOutcome | undefined> {
+  if (steepMinHours === null) return undefined; // no window, nothing to remind about
   const [user] = await db.select({ preferences: users.preferences }).from(users).where(eq(users.id, userId));
   if (!user || !withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null).steepReminders) return "off";
   if (!(await hasEnabledChannel(userId))) return "off";
-  const delayMs = Math.max(0, startedAt.getTime() + recipe.steepMinHours * 3_600_000 - Date.now());
+  const delayMs = Math.max(0, startedAt.getTime() + steepMinHours * 3_600_000 - Date.now());
   try {
     await enqueueSteepReminder({ brewLogId, userId }, delayMs);
     return "queued";

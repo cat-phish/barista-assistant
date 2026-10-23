@@ -91,12 +91,13 @@ Sends "Test from Barista-Assistant" through the saved channel, enabled or not.
 
 - **Preference:** `steepReminders` (boolean, default `true`).
 - **Queuing:** `POST /brew-logs` with `steeping: true` (a long cold brew,
-  §6) whose recipe has `steepMinHours` queues a delayed job on the same
-  queue (job `steep-done`, id `steep-<brewLogId>`, data `{ brewLogId,
-  userId }`). It's due `steepMinHours` after the brew's `timestamp`. It's
-  only queued with `steepReminders` on and an enabled channel. The reply's
+  §6) that has a steep window (its own `steepMinHours`, the recipe's
+  unless changed for the brew) queues a delayed job on the same queue (job
+  `steep-done`, id `steep-<brewLogId>`, data `{ brewLogId, userId }`).
+  It's due `steepMinHours` after the brew's `timestamp`. It's only queued
+  with `steepReminders` on and an enabled channel. The reply's
   `steepReminder` is `queued`, `off` or `unavailable`, and is left out
-  when the recipe has no window.
+  when the brew has no window.
 - **Sending:** skipped if the brew was deleted or finished (`steeping:
   false`), or steep reminders were turned off. Otherwise:
   - title "Your cold brew is ready to filter";

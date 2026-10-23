@@ -51,9 +51,12 @@ queue:
      `beanWeightInGrams`, `groundWeightOutGrams` and
      `grinderRetentionGrams` (in − out, or `null` unless both were weighed).
    - **Cold styles** (§5e):
-     - each brew has `steeping`, `steepTemp`, `dilutionRatio` and
-       `dilutedWith`; the recipe has `steepMinHours`, `steepMaxHours`,
-       `steepTemp`, `dilutionRatio` and `dilutionWith`;
+     - each brew has `steeping`, `steepTemp`, `dilutionRatio`,
+       `dilutedWith`, and the window it aimed for (`steepMinHours` /
+       `steepMaxHours`, `expectedFinishMinSec` / `expectedFinishMaxSec`,
+       brew-logs.md §6), which may differ from the recipe's; the recipe has
+       `steepMinHours`, `steepMaxHours`, `steepTemp`, `dilutionRatio` and
+       `dilutionWith`;
      - brews still steeping are left out of the history, and a steeping brew
        isn't analyzed (the job is skipped);
      - the prompt explains:

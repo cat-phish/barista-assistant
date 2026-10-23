@@ -284,11 +284,11 @@ describe("processBrewAnalysis", () => {
   it("cold brews: leaves a steeping brew out of the history, and doesn't analyze one", async () => {
     llm.mockResolvedValue(ANALYSIS);
     await db.update(brewLogs).set({ steeping: true }).where(eq(brewLogs.id, logIds.day7!));
-    await db.update(brewLogs).set({ steepTemp: "fridge", dilutionRatio: 1, dilutedWith: "milk" }).where(eq(brewLogs.id, logIds.day8!));
+    await db.update(brewLogs).set({ steepTemp: "fridge", dilutionRatio: 1, dilutedWith: "milk", steepMinHours: 14, steepMaxHours: 20 }).where(eq(brewLogs.id, logIds.day8!));
     await processBrewAnalysis({ brewLogId: logIds.day8! });
     const context = llm.mock.calls[0]![0] as BrewContext;
     expect(context.previousBrews.map((b) => b.tastingNotes)).not.toContain("day 7");
-    expect(context.brew).toMatchObject({ steeping: false, steepTemp: "fridge", dilutionRatio: 1, dilutedWith: "milk" });
+    expect(context.brew).toMatchObject({ steeping: false, steepTemp: "fridge", dilutionRatio: 1, dilutedWith: "milk", steepMinHours: 14, steepMaxHours: 20, expectedFinishMinSec: null });
     expect(context.recipe).toMatchObject({ steepMinHours: null, dilutionRatio: null });
 
     llm.mockClear();

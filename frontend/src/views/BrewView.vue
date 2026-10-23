@@ -48,11 +48,11 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import FinishDrinkCard from '../components/FinishDrinkCard.vue';
 import { useBrewSessionStore } from '../stores/brewSession';
 import { formatMark } from '../lib/marks';
-import { stepTitle } from '../lib/steps';
+import { formatFinishWindow, parseFinishWindow, stepTitle } from '../lib/steps';
 import { useAnalysis } from '../composables/useAnalysis';
 import { emptyDraft, parseBrewDraft } from '../lib/brewDraft';
-import { isLongStyle, STEEP_TEMPS, steepWindowText } from '../lib/coldBrew';
-import type { Reminder } from '../api/brews';
+import { hoursText, isColdStyle, isLongStyle, parseSteepWindow, STEEP_TEMPS, steepWindowText } from '../lib/coldBrew';
+import type { BrewLogInput, Reminder } from '../api/brews';
 import { notificationsApi } from '../api/notifications';
 import { canRemind, formatDelay } from '../lib/notifications';
 import { useAuthStore } from '../stores/auth';
@@ -256,6 +256,7 @@ watch(recipe, (r) => {
   draft.steepTemp = r?.steepTemp ?? '';
   draft.dilution = r?.dilutionRatio != null ? String(r.dilutionRatio) : '';
   draft.dilutedWith = r?.dilutionWith ?? '';
+  resetWindow(r);
   resetBatch();
   sizeToBatch(); // a resized drink keeps its size with the new recipe
   // The recipe's default grinder, if it's still in use; else keep the current
@@ -371,7 +372,13 @@ watch(shot, (s) => {
 // Setup can continue once the batch (or shot) makes sense.
 const setupReady = computed(
   // An empty category has nothing to brew yet ("Something else" logs without a recipe).
-  () => !chosenCategory.value?.empty && !(brewerId.value && !recipeChoices.value.length) && (!baseSize.value || !!madeSize.value) && (!recipe.value || (espresso.value ? !!shot.value : !!batch.value)),
+  () =>
+    !chosenCategory.value?.empty &&
+    !(brewerId.value && !recipeChoices.value.length) &&
+    (!baseSize.value || !!madeSize.value) &&
+    (!recipe.value || (espresso.value ? !!shot.value : !!batch.value)) &&
+    !(rapidCold.value && windowError.value.finish) &&
+    !(longStyle.value && windowError.value.steep),
 );
 // The yield estimate in the person's volume unit(s) (fl oz, ml or both).
 const yieldFields = computed(() =>
@@ -573,16 +580,57 @@ function leaveSetup(next: Stage): void {
 // Long cold styles (lib/coldBrew.ts) have no timer: Start steep saves the brew
 // as steeping, to finish from the journal when it's done.
 const longStyle = computed(() => isLongStyle(recipe.value?.style?.brewsLike));
-const steepWindow = computed(() => steepWindowText(recipe.value?.steepMinHours ?? null, recipe.value?.steepMaxHours ?? null));
-const steepStarted = ref<{ at: string; reminder: Reminder | null } | null>(null); // the steep just started
+const coldStyle = computed(() => isColdStyle(recipe.value?.style?.brewsLike));
+const steepStarted = ref<{ at: string; reminder: Reminder | null; minHours: number | null; window: string } | null>(null); // the steep just started
 // "Sat, Oct 25, 8:00 AM", when the steep window opens.
 const readyFrom = computed(() => {
   const s = steepStarted.value;
-  const h = recipe.value?.steepMinHours;
-  return s && h != null ? formatWhen(new Date(new Date(s.at).getTime() + h * 3_600_000).toISOString()) : '';
+  return s && s.minHours !== null ? formatWhen(new Date(new Date(s.at).getTime() + s.minHours * 3_600_000).toISOString()) : '';
 });
+
+// The window this brew aims for (docs/api/brew-logs.md §6): the recipe's,
+// which can be changed before it starts, and is saved with the brew. Long
+// styles steep for hours (the ready reminder comes at its start); rapid cold
+// runs the timer in minutes. Both are set on setup.
+const rapidCold = computed(() => recipe.value?.style?.brewsLike === 'rapid_cold');
+const windowText = reactive({ steepFrom: '', steepTo: '', finishFrom: '', finishTo: '' });
+function resetWindow(r: Recipe | null = recipe.value): void {
+  windowText.steepFrom = hoursText(r?.steepMinHours ?? null);
+  windowText.steepTo = hoursText(r?.steepMaxHours ?? null);
+  windowText.finishFrom = r?.expectedFinishMinSec != null ? formatTime(r.expectedFinishMinSec) : '';
+  windowText.finishTo = r?.expectedFinishMaxSec != null ? formatTime(r.expectedFinishMaxSec) : '';
+}
+const steepParsed = computed(() => parseSteepWindow(windowText.steepFrom, windowText.steepTo));
+const finishParsed = computed(() => parseFinishWindow(windowText.finishFrom, windowText.finishTo));
+const windowError = computed(() => ({ steep: steepParsed.value.ok ? '' : steepParsed.value.error, finish: finishParsed.value.ok ? '' : finishParsed.value.error }));
+const steepRange = computed(() => (steepParsed.value.ok ? steepParsed.value.value : null));
+const finishRange = computed(() => (finishParsed.value.ok ? finishParsed.value.value : null));
+const steepWindow = computed(() => steepWindowText(steepRange.value?.min ?? null, steepRange.value?.max ?? null));
+// "The recipe's: 12–18 h", while it's been changed.
+const recipeSteepNote = computed(() => {
+  const r = recipe.value;
+  const changed = (steepRange.value?.min ?? null) !== (r?.steepMinHours ?? null) || (steepRange.value?.max ?? null) !== (r?.steepMaxHours ?? null);
+  return changed ? steepWindowText(r?.steepMinHours ?? null, r?.steepMaxHours ?? null) || 'none' : '';
+});
+const recipeFinishNote = computed(() => {
+  const r = recipe.value;
+  const changed = (finishRange.value?.min ?? null) !== (r?.expectedFinishMinSec ?? null) || (finishRange.value?.max ?? null) !== (r?.expectedFinishMaxSec ?? null);
+  return changed ? (formatFinishWindow(r?.expectedFinishMinSec ?? null, r?.expectedFinishMaxSec ?? null) ?? 'none') : '';
+});
+// The timer's target: rapid cold's own, else the recipe's.
+const timerFinish = computed(() =>
+  rapidCold.value ? (finishRange.value ?? { min: null, max: null }) : { min: recipe.value?.expectedFinishMinSec ?? null, max: recipe.value?.expectedFinishMaxSec ?? null },
+);
+// What's saved with the brew; other styles leave it out.
+function windowValues(): Pick<BrewLogInput, 'steepMinHours' | 'steepMaxHours' | 'expectedFinishMinSec' | 'expectedFinishMaxSec'> {
+  if (longStyle.value) return { steepMinHours: steepRange.value?.min ?? null, steepMaxHours: steepRange.value?.max ?? null };
+  if (rapidCold.value) return { expectedFinishMinSec: finishRange.value?.min ?? null, expectedFinishMaxSec: finishRange.value?.max ?? null };
+  return {};
+}
+
 async function startSteep(): Promise<void> {
   submitted.value = true;
+  if (windowError.value.steep) return;
   const ws = workspaces.current?.id;
   // Nothing's measured yet: time 0, no results or rating.
   const start = { ...draft, time: '0', yieldGrams: '', tds: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
@@ -599,11 +647,17 @@ async function startSteep(): Promise<void> {
       servingUnit: drink.value ? (madeSize.value?.unit ?? null) : null,
       utcOffsetMinutes: -new Date().getTimezoneOffset(),
       ...values,
+      ...windowValues(),
       steeping: true,
     });
     if (values.grinderId) remember('grinderId', values.grinderId);
     savedLogId.value = brewLog.id;
-    steepStarted.value = { at: brewLog.timestamp, reminder: steepReminder ?? null };
+    steepStarted.value = {
+      at: brewLog.timestamp,
+      reminder: steepReminder ?? null,
+      minHours: brewLog.steepMinHours,
+      window: steepWindowText(brewLog.steepMinHours, brewLog.steepMaxHours),
+    };
     stage.value = 'saved';
   } catch (err) {
     saveError.value = errorMessage(err);
@@ -705,6 +759,7 @@ async function save(): Promise<void> {
       // So the AI dates the brew by this device's calendar day, like freeze dates.
       utcOffsetMinutes: -new Date().getTimezoneOffset(),
       ...values,
+      ...windowValues(),
       ...(remind ? { remindToRate: true } : {}),
       // The steps' real times, plus the first drop from the log's field. A time
       // typed shorter than a tap drops that tap.
@@ -839,6 +894,15 @@ async function applyRepeat(log: BrewLog): Promise<void> {
   if (kept.has('dilution') && log.dilutionRatio !== null) {
     draft.dilution = String(log.dilutionRatio);
     draft.dilutedWith = log.dilutedWith ?? '';
+  }
+  // The steep or finish window it aimed for; else the recipe's.
+  if (kept.has('window') && longStyle.value && log.steepMinHours !== null && log.steepMaxHours !== null) {
+    windowText.steepFrom = hoursText(log.steepMinHours);
+    windowText.steepTo = hoursText(log.steepMaxHours);
+  }
+  if (kept.has('window') && rapidCold.value && log.expectedFinishMinSec !== null && log.expectedFinishMaxSec !== null) {
+    windowText.finishFrom = formatTime(log.expectedFinishMinSec);
+    windowText.finishTo = formatTime(log.expectedFinishMaxSec);
   }
   const activeTools = new Set(prepTools.value.filter((t) => !t.archivedAt).map((t) => t.id));
   draft.toolIds = kept.has('prepTools') ? log.tools.map((t) => t.id).filter((id) => activeTools.has(id)) : [];
@@ -1097,6 +1161,55 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             <span v-if="setupRetention" class="hint">{{ setupRetention }}</span>
           </div>
         </div>
+        <!-- Cold styles: fridge or room, the recipe's to start with. -->
+        <div v-if="coldStyle && show('brew.steepTemp')" class="field">
+          <label for="steep-temp">Steeping in</label>
+          <select id="steep-temp" v-model="draft.steepTemp">
+            <option value="">Not recorded</option>
+            <option v-for="(label, key) in STEEP_TEMPS" :key="key" :value="key">{{ label }}</option>
+          </select>
+        </div>
+        <!-- Long cold styles: the steep window for this brew, the recipe's to start with (the reminder comes at its start). -->
+        <fieldset v-if="longStyle && show('brew.window')" class="window">
+          <legend>Steep for</legend>
+          <div class="window-row">
+            <div class="field">
+              <label for="steep-from">From (h)</label>
+              <input id="steep-from" v-model="windowText.steepFrom" inputmode="decimal" placeholder="12" :aria-invalid="!!windowError.steep" />
+            </div>
+            <span class="dash" aria-hidden="true">–</span>
+            <div class="field">
+              <label for="steep-to">To (h)</label>
+              <input id="steep-to" v-model="windowText.steepTo" inputmode="decimal" placeholder="18" :aria-invalid="!!windowError.steep" />
+            </div>
+          </div>
+          <span v-if="windowError.steep" class="field-error">{{ windowError.steep }}</span>
+          <span v-else-if="recipeSteepNote" class="hint">
+            For this brew. The recipe's: {{ recipeSteepNote }}.
+            <button class="btn-link small" type="button" @click="resetWindow()">Use it</button>
+          </span>
+          <span v-else-if="steepWindow" class="hint">You get a reminder when it opens (Settings → Notifications).</span>
+        </fieldset>
+        <!-- Rapid cold: the timer's target for this brew, the recipe's to start with. -->
+        <fieldset v-if="rapidCold && show('brew.window')" class="window">
+          <legend>Target finish</legend>
+          <div class="window-row">
+            <div class="field">
+              <label for="finish-from">From</label>
+              <input id="finish-from" v-model="windowText.finishFrom" inputmode="numeric" placeholder="m:ss" :aria-invalid="!!windowError.finish" />
+            </div>
+            <span class="dash" aria-hidden="true">–</span>
+            <div class="field">
+              <label for="finish-to">To</label>
+              <input id="finish-to" v-model="windowText.finishTo" inputmode="numeric" placeholder="m:ss" :aria-invalid="!!windowError.finish" />
+            </div>
+          </div>
+          <span v-if="windowError.finish" class="field-error">{{ windowError.finish }}</span>
+          <span v-else-if="recipeFinishNote" class="hint">
+            For this brew. The recipe's: {{ recipeFinishNote }}.
+            <button class="btn-link small" type="button" @click="resetWindow()">Use it</button>
+          </span>
+        </fieldset>
       </section>
 
       <div class="stack">
@@ -1126,8 +1239,8 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         :steps="timerSteps"
         :espresso="espresso"
         :flow-unit="recipe?.flowUnit ?? 'g_s'"
-        :expected-finish-min-sec="recipe?.expectedFinishMinSec ?? null"
-        :expected-finish-max-sec="recipe?.expectedFinishMaxSec ?? null"
+        :expected-finish-min-sec="timerFinish.min"
+        :expected-finish-max-sec="timerFinish.max"
         :first-drop-window="firstDropWindow"
         :machine="machine"
         @complete="onTimerComplete"
@@ -1149,15 +1262,9 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         </label>
       </section>
       <section class="card stack">
-        <div v-if="show('brew.steepTemp')" class="field">
-          <label for="steep-temp">Steeping in</label>
-          <select id="steep-temp" v-model="draft.steepTemp">
-            <option value="">Not recorded</option>
-            <option v-for="(label, key) in STEEP_TEMPS" :key="key" :value="key">{{ label }}</option>
-          </select>
-        </div>
         <p class="muted small">
-          <template v-if="steepWindow">Steep for {{ steepWindow }}. </template>It's saved as steeping now; finish it from the journal when it's done, and rate it then.
+          <template v-if="draft.steepTemp">{{ draft.steepTemp === 'fridge' ? 'In the fridge' : 'At room temperature' }}. </template>
+          <template v-if="steepWindow">Steep for {{ steepWindow }}<template v-if="recipeSteepNote"> (changed for this brew)</template>. </template>It's saved as steeping now; finish it from the journal when it's done, and rate it then.
         </p>
       </section>
       <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
@@ -1202,7 +1309,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         <h1>{{ steepStarted ? 'Steeping ✓' : 'Brew saved ✓' }}</h1>
         <!-- A long cold brew: finished and rated later, from the journal. -->
         <template v-if="steepStarted">
-          <p v-if="readyFrom" class="muted">Ready from {{ readyFrom }} ({{ steepWindow }}).</p>
+          <p v-if="readyFrom" class="muted">Ready from {{ readyFrom }} ({{ steepStarted.window }}).</p>
           <p v-if="steepStarted.reminder === 'queued'" class="muted">We'll remind you when it's ready to filter.</p>
           <p v-else-if="steepStarted.reminder" class="muted small">
             No reminder{{ steepStarted.reminder === 'off' ? ': steep reminders or every notification service are off (Settings → Notifications)' : ": it couldn't be set" }}.
@@ -1423,6 +1530,30 @@ p {
   background: var(--brand-tint);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius);
+}
+.window {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.window legend {
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0;
+  margin-bottom: var(--space-1);
+}
+.window-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: var(--space-2);
+}
+.window .dash {
+  padding-bottom: 0.6rem;
+  color: var(--text-muted);
 }
 .grind-hint {
   margin-top: calc(-1 * var(--space-2));
