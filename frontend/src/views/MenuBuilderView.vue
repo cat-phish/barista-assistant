@@ -5,7 +5,7 @@
 // marked unavailable for the menu. Sections and items move by dragging their
 // ⠿ handle (items between sections too) or with ↑/↓; the add picker adds
 // several at once. Preview shows the menu as guests see it (§7).
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 import { brewersApi } from '../api/brewers';
 import { errorMessage } from '../api/client';
@@ -75,6 +75,30 @@ async function loadPreview(): Promise<void> {
 }
 // Every change reloads the preview, while it's showing.
 watch([menu, showPreview], () => void loadPreview());
+
+// Side by side: both columns scroll with the page, tops level, until the
+// shorter one's end comes into view; then it stays put (sticky) while the
+// other keeps scrolling. Its sticky top is the window height minus its own
+// height (or the gap, if it fits), so it stops with its bottom on screen.
+const editorEl = ref<HTMLElement | null>(null);
+const previewEl = ref<HTMLElement | null>(null);
+const GAP = 16;
+function setStickyTops(): void {
+  for (const el of [editorEl.value, previewEl.value]) {
+    if (el) el.style.setProperty('--stick-top', `${Math.min(GAP, window.innerHeight - el.offsetHeight - GAP)}px`);
+  }
+}
+const resized = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(setStickyTops);
+watch([editorEl, previewEl], ([editor, pane], [oldEditor, oldPane]) => {
+  for (const el of [oldEditor, oldPane]) if (el) resized?.unobserve(el);
+  for (const el of [editor, pane]) if (el) resized?.observe(el);
+  setStickyTops();
+});
+onMounted(() => window.addEventListener('resize', setStickyTops));
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', setStickyTops);
+  resized?.disconnect();
+});
 
 // Every write returns the whole menu.
 async function run(action: (ws: string) => Promise<Menu>, onError: (message: string) => void = (m) => (error.value = m)): Promise<boolean> {
@@ -296,7 +320,7 @@ async function deleteItem(): Promise<void> {
       <span class="visually-hidden" aria-live="polite">{{ announcement }}</span>
 
       <div class="workspace" :class="view">
-      <div v-if="view !== 'preview'" class="editor stack">
+      <div v-if="view !== 'preview'" ref="editorEl" class="editor stack">
       <p v-if="menu.sections.length === 0" class="card empty">No sections yet. Add one below, then put drinks and brews in it.</p>
 
       <VueDraggable v-model="arranged" class="stack" handle=".section-handle" :animation="150" ghost-class="drag-ghost" :disabled="!workspaces.canEdit || busy" @end="dropped">
@@ -363,7 +387,7 @@ async function deleteItem(): Promise<void> {
       </form>
       </div>
 
-      <aside v-if="showPreview" class="card preview" aria-label="Preview">
+      <aside v-if="showPreview" ref="previewEl" class="card preview" aria-label="Preview">
         <p v-if="!publicOn" class="muted small preview-note">This is what guests would see; the public menu is off.</p>
         <MenuPreview v-if="preview" :menu="preview" />
         <p v-else class="muted" aria-live="polite">Loading the preview…</p>
@@ -566,14 +590,13 @@ h2 {
   gap: var(--space-3);
   align-items: start;
 }
-/* Side by side: the preview stays in view and scrolls on its own, so a long
-   menu doesn't drift against the editor (sticky alone lagged behind it). */
-.workspace.both .preview {
+/* Side by side: each column sticks once its end is on screen (--stick-top is
+   set from its height in the script), so the shorter one stops there while
+   the longer keeps scrolling. */
+.workspace.both > .editor,
+.workspace.both > .preview {
   position: sticky;
-  top: var(--space-3);
-  max-height: calc(100vh - 2 * var(--space-3));
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  top: var(--stick-top, var(--space-3));
 }
 .preview-note {
   margin-bottom: var(--space-3);
@@ -584,10 +607,9 @@ h2 {
     display: flex;
     flex-direction: column;
   }
-  .workspace.both .preview {
+  .workspace.both > .editor,
+  .workspace.both > .preview {
     position: static;
-    max-height: none;
-    overflow-y: visible;
   }
 }
 </style>
