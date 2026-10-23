@@ -36,6 +36,22 @@ export const BLEND_TYPES: Record<BlendType, { label: string }> = {
 };
 
 
+// " · Batch 3" after a bean's name, or '' without a batch no.
+export function batchSuffix(b: Pick<Bean, 'batchNumber'>): string {
+  return b.batchNumber ? ` · Batch ${b.batchNumber}` : '';
+}
+
+// "Onyx – Southern Weather · Batch 3", for bean pickers.
+export function beanLabel(b: Pick<Bean, 'roasterName' | 'beanName' | 'batchNumber'>): string {
+  return `${b.roasterName} – ${b.beanName}${batchSuffix(b)}`;
+}
+
+// A copied bean is usually the next roast: "3" → "4". Anything that isn't a
+// whole number ("R-12") starts blank.
+export function nextBatch(batch: string | null): string {
+  return batch && /^\d+$/.test(batch.trim()) ? String(Number(batch.trim()) + 1) : '';
+}
+
 // "1,950 m" or "6,398 ft" (stored in metres; feet are a preference).
 export { formatAltitude } from './units';
 

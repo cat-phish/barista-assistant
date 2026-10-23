@@ -29,6 +29,7 @@ import {
   pricePerGram,
   roastAgeDays,
   roastLabel,
+  batchSuffix,
   type BeanFilter,
   type BeanSortColumn,
 } from '../lib/beans';
@@ -226,7 +227,7 @@ async function saveRating(withRating: boolean): Promise<void> {
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
-const beanTitle = (b: Bean) => `${b.roasterName} ${b.beanName}`;
+const beanTitle = (b: Bean) => `${b.roasterName} ${b.beanName}${batchSuffix(b)}`;
 
 // The open period, if frozen now (bean.frozen says whether there is one).
 function openFreeze(bean: Bean) {
@@ -449,7 +450,7 @@ async function confirmFreeze(): Promise<void> {
           <div v-for="bean in shown" :key="bean.id" class="data-item" :class="{ open: openId === bean.id }">
             <button class="data-row" type="button" :aria-expanded="openId === bean.id" @click="toggle(bean.id)">
               <span class="data-td primary">
-                {{ bean.beanName }}<span v-if="openFreeze(bean)" class="frozen-mark phone-only" aria-label="frozen"> ❄</span>
+                {{ bean.beanName }}{{ batchSuffix(bean) }}<span v-if="openFreeze(bean)" class="frozen-mark phone-only" aria-label="frozen"> ❄</span>
               </span>
               <span class="data-td wide-only center">
                 <span v-if="openFreeze(bean)" class="frozen-mark" title="Frozen" aria-label="Frozen">❄</span>

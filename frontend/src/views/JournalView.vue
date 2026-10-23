@@ -7,6 +7,7 @@ import { errorMessage } from '../api/client';
 import type { Bean, BrewLog } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import RatingStars from '../components/RatingStars.vue';
+import { batchSuffix, beanLabel } from '../lib/beans';
 import { formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen } from '../lib/format';
 import { formatSize } from '../lib/servings';
 import { formatTemp } from '../lib/units';
@@ -75,7 +76,7 @@ watch(beanFilter, () => load(true));
       <label for="filter">Bean</label>
       <select id="filter" v-model="beanFilter">
         <option value="">All beans</option>
-        <option v-for="b in beans" :key="b.id" :value="b.id">{{ b.roasterName }} – {{ b.beanName }}</option>
+        <option v-for="b in beans" :key="b.id" :value="b.id">{{ beanLabel(b) }}</option>
       </select>
     </div>
 
@@ -94,7 +95,7 @@ watch(beanFilter, () => load(true));
               <span class="when">{{ formatWhen(log.timestamp) }}</span>
               <RatingStars :rating="log.rating ?? log.drinkRating" />
             </div>
-            <strong>{{ log.bean.roasterName }} {{ log.bean.beanName }}</strong>
+            <strong>{{ log.bean.roasterName }} {{ log.bean.beanName }}{{ batchSuffix(log.bean) }}</strong>
             <span v-if="log.drink || log.recipe" class="muted">{{ [log.drink?.name, log.servingSize !== null && log.servingUnit ? formatSize({ size: log.servingSize, unit: log.servingUnit }) : null, log.recipe?.name].filter(Boolean).join(' · ') }}</span>
             <span class="facts">
               <span>{{ formatDoseLine(log.actualDoseGrams, log.actualWaterGrams, log.actualYieldGrams) }}</span>

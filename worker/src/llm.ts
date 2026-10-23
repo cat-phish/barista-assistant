@@ -21,8 +21,9 @@ export const SYSTEM_PROMPT =
   "steeps cold for hours, and an immersion brew isn't a pour over. A " +
   "stovetop brew (moka pot, ibrik) is a strong, short brew judged on its own " +
   "terms, not as espresso; an 'other' method is described by its style and " +
-  "the notes. The " +
-  "bean's roastType says what the roaster roasted it for: an espresso roast " +
+  "the notes. A batchNumber marks one home-roast batch: the brews given are " +
+  "all of that batch, and another batch of the same coffee is a different " +
+  "roast. The bean's roastType says what the roaster roasted it for: an espresso roast " +
   "brewed as filter (or the reverse) may need a different approach rather " +
   "than small corrections. Decaf and blends often extract differently from " +
   "single origins. The flavorProfile is the roaster's description of the cup " +

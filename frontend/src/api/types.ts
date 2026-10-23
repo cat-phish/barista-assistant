@@ -279,6 +279,7 @@ export interface Bean {
   producer: string | null;
   purchaseDate: string | null; // YYYY-MM-DD
   greenSupplier: string | null;
+  batchNumber: string | null; // which home-roast batch ("3", "R-12")
   rating: number | null; // 1-5
   archivedAt: string | null; // null = active
   createdAt: string;
@@ -397,7 +398,7 @@ export interface BrewLog {
   tastingNotes: string | null;
   drinkRating: number | null; // the finished drink (drink brews only)
   drinkTastingNotes: string | null;
-  bean: { id: string; roasterName: string; beanName: string };
+  bean: { id: string; roasterName: string; beanName: string; batchNumber: string | null };
   recipe: { id: string; name: string; expectedYieldGrams: number | null; style: StyleRef | null; methodKind: MethodKind } | null;
   grinder: { id: string; name: string } | null;
   waterProfile: { id: string; name: string } | null; // archived ones included

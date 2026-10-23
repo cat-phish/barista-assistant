@@ -72,6 +72,7 @@ describe("processBrewAnalysis", () => {
     expect(context.bean).toEqual({
       roasterName: "Onyx",
       beanName: "Guji",
+      batchNumber: null,
       process: null,
       roastLevel: "light",
       detailedRoastLevel: "city",

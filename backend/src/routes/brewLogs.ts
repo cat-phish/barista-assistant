@@ -42,7 +42,7 @@ export interface Mark {
 }
 
 export interface BrewLogDetails extends BrewLog {
-  bean: Pick<Bean, "id" | "roasterName" | "beanName">;
+  bean: Pick<Bean, "id" | "roasterName" | "beanName" | "batchNumber">;
   // style: the recipe's (docs/api/recipe-styles.md §5e), for how extraction yield is worked out.
   recipe: (Pick<Recipe, "id" | "name" | "expectedYieldGrams"> & { methodKind: MethodKind; style: RecipeStyleSummary | null }) | null;
   grinder: { id: string; name: string } | null; // archived grinders included
@@ -349,7 +349,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       tastingNotes: brewLogs.tastingNotes,
       drinkRating: brewLogs.drinkRating,
       drinkTastingNotes: brewLogs.drinkTastingNotes,
-      bean: { id: beans.id, roasterName: beans.roasterName, beanName: beans.beanName },
+      bean: { id: beans.id, roasterName: beans.roasterName, beanName: beans.beanName, batchNumber: beans.batchNumber },
       recipe: { id: recipes.id, name: recipes.name, expectedYieldGrams: recipes.expectedYieldGrams },
       // Separate columns: a nested object spanning two left joins isn't nulled as a whole.
       recipeMethodKind: brewers.kind,

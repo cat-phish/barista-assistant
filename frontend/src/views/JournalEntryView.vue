@@ -17,6 +17,7 @@ import { useAnalysis } from '../composables/useAnalysis';
 import { draftFromLog, emptyDraft, parseBrewDraft } from '../lib/brewDraft';
 import { extractionYield } from '../lib/extraction';
 import { grinderRetention } from '../lib/grinderRetention';
+import { batchSuffix } from '../lib/beans';
 import { formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen } from '../lib/format';
 import { formatSize } from '../lib/servings';
 import { formatTemp } from '../lib/units';
@@ -185,7 +186,7 @@ function markLabel(m: Mark): string {
     <template v-else-if="log">
       <div class="page-header">
         <div>
-          <h1>{{ log.bean.roasterName }} {{ log.bean.beanName }}</h1>
+          <h1>{{ log.bean.roasterName }} {{ log.bean.beanName }}{{ batchSuffix(log.bean) }}</h1>
           <p class="muted">
             {{ formatWhen(log.timestamp) }}<template v-if="log.drink"> · {{ log.drink.name }}</template><template v-if="log.servingSize !== null && log.servingUnit"> · {{ formatSize({ size: log.servingSize, unit: log.servingUnit }) }}</template><template v-if="log.recipe"> · {{ log.recipe.name }}</template>
           </p>

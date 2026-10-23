@@ -91,6 +91,8 @@ const beanFields = {
     .nullable()
     .optional(),
   greenSupplier: optionalText(255),
+  // Which roast of this bean, for home roasters (docs/api/beans.md §4).
+  batchNumber: optionalText(50),
   rating: z.number().int().min(1).max(5).nullable().optional(),
 };
 

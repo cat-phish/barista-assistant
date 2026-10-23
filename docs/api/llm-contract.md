@@ -32,7 +32,9 @@ queue:
    - The bean includes its `roastLevel` (or `null` if unknown), which
      matters for temperature advice, and its `detailedRoastLevel`,
      `roastType`, `blendType` (each `null` if unknown) and `decaf` (§4), plus
-     `flavorProfile`, `originArea`, `country`, `region` and `altitudeMasl`.
+     `flavorProfile`, `originArea`, `country`, `region`, `altitudeMasl` and
+     `batchNumber` (a home-roast batch; the brews sent are all of that
+     batch, since previous brews are of the same bean record).
      Price, website, notes, rating, producer, purchase date and green
      supplier aren't sent.
    - The prompt includes the bean's **effective** roast age in days at brew

@@ -62,6 +62,7 @@ is no age.
     "producer": "Finca El Paraíso",
     "purchaseDate": "2026-10-05",
     "greenSupplier": "Covoya",
+    "batchNumber": "3",
     "rating": 4
   }
   ```
@@ -111,6 +112,10 @@ is no age.
     always stored in metres.
   - `purchaseDate`: `YYYY-MM-DD`, at most one day after the server's date.
   - `greenSupplier`: who sold the green coffee, free text, ≤255 chars.
+  - `batchNumber`: which roast of this coffee, free text, ≤50 chars (`"3"`,
+    `"R-12"`). Home roasters roast a little at a time and log each batch as
+    its own bean. Clients show it after the bean's name ("· Batch 3"), and
+    copying a bean suggests the next whole number. Not on the public menu.
   - `rating`: the bean overall, integer 1–5.
 - **Success (`201 Created`):** `{ "bean": { ...bean } }`
 - **Errors:** `400` invalid body, a price without its currency (or the

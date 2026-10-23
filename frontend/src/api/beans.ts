@@ -30,6 +30,7 @@ export interface BeanInput {
   producer: string | null;
   purchaseDate: string | null;
   greenSupplier: string | null;
+  batchNumber: string | null;
   rating: number | null;
 }
 

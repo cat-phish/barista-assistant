@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Bean } from '../api/types';
-import { beanSortColumns, DETAILED_ROAST_LEVELS, formatAltitude, roastLabel, formatPricePerGram, freezeState, latestThaw, periodsLatestFirst, pricePerGram } from './beans';
+import { batchSuffix, beanLabel, beanSortColumns, DETAILED_ROAST_LEVELS, nextBatch, formatAltitude, roastLabel, formatPricePerGram, freezeState, latestThaw, periodsLatestFirst, pricePerGram } from './beans';
 import { sortBy, sortColumnOptions } from './listSort';
 import { ROAST_LEVELS } from './scale';
 
@@ -60,6 +60,7 @@ const bean = (over: Partial<Bean>): Bean => ({
   producer: null,
   purchaseDate: null,
   greenSupplier: null,
+  batchNumber: null,
   rating: null,
   archivedAt: null,
   createdAt: '2026-10-01T00:00:00.000Z',
@@ -154,5 +155,20 @@ describe('roastLabel', () => {
     expect(roastLabel(named, 'levels')).toBe('Medium');
     expect(roastLabel({ detailedRoastLevel: null, roastLevel: 'dark' }, 'names')).toBe('Dark');
     expect(roastLabel({ detailedRoastLevel: null, roastLevel: null }, 'levels')).toBeNull();
+  });
+});
+
+describe('batch no.', () => {
+  const b = { roasterName: 'Home', beanName: 'Ethiopia Guji', batchNumber: '3' };
+  it('labels the bean with its batch, or without one', () => {
+    expect(beanLabel(b)).toBe('Home – Ethiopia Guji · Batch 3');
+    expect(beanLabel({ ...b, batchNumber: null })).toBe('Home – Ethiopia Guji');
+    expect(batchSuffix({ batchNumber: 'R-12' })).toBe(' · Batch R-12');
+  });
+  it('a copy moves a whole-number batch on, else starts blank', () => {
+    expect(nextBatch('3')).toBe('4');
+    expect(nextBatch(' 09 ')).toBe('10');
+    expect(nextBatch('R-12')).toBe('');
+    expect(nextBatch(null)).toBe('');
   });
 });

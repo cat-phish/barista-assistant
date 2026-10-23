@@ -761,3 +761,20 @@ Now they're the number on the grinder's dial, like its setting range.
 - A setting of 0 counts as a setting (the pre-fill used to skip blanks).
 - Multi-ring grinders ("2.1.0") are a backlog idea (item 9).
 
+## Bean batch numbers (built)
+
+Branch `bean-batch`, migration 0055. Home roasters roast a little of the same
+coffee at a time and log each batch as its own bean, which then looked
+identical everywhere.
+
+- Beans get an optional **Batch no.** (`batchNumber`, free text ≤ 50: "3",
+  "R-12"), next to the roast date in the bean form.
+- It shows after the name everywhere a bean is picked or titled ("Onyx –
+  Guji · Batch 3": the brew and journal pickers, the bean list, journal
+  headings); brew logs' `bean` carries it. `beanLabel` / `batchSuffix` in
+  `lib/beans.ts`.
+- **Copy bean** suggests the next batch for a whole number ("3" → "4"), and
+  leaves other formats blank.
+- The AI gets it, told that the brews it sees are all of that one batch.
+  Not on the public menu.
+
