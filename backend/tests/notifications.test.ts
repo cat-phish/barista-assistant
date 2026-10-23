@@ -130,9 +130,11 @@ describe("rate later (docs/api/brew-logs.md §6)", () => {
 
   it("validates the reminder preferences", async () => {
     const me = await newUser();
-    expect((await me.agent.get("/api/auth/me")).body.user.preferences).toMatchObject({ rateReminders: true, rateReminderMinutes: 15 });
+    expect((await me.agent.get("/api/auth/me")).body.user.preferences).toMatchObject({ rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false });
     for (const rateReminderMinutes of [4, 241, 10.5]) {
       expect((await me.agent.patch("/api/auth/me/preferences").send({ rateReminderMinutes })).status).toBe(400);
     }
+    expect((await me.agent.patch("/api/auth/me/preferences").send({ rateLaterDefault: "yes" })).status).toBe(400);
+    expect((await me.agent.patch("/api/auth/me/preferences").send({ rateLaterDefault: true })).body.preferences.rateLaterDefault).toBe(true);
   });
 });

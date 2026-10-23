@@ -17,6 +17,7 @@ export interface UserPreferences {
   theme: Theme;
   rateReminders: boolean; // offer Rate later and send its reminders (docs/api/notifications.md §1b)
   rateReminderMinutes: number; // 5–240
+  rateLaterDefault: boolean; // the log form's Rate later box starts ticked
 }
 
 // docs/api/notifications.md §1b: a person's own reminder channels.

@@ -34,6 +34,7 @@ export const preferencesSchema = z
     theme: z.enum(THEMES),
     rateReminders: z.boolean(),
     rateReminderMinutes: z.number().int().min(5).max(240),
+    rateLaterDefault: z.boolean(),
   })
   .partial()
   .strict()

@@ -32,7 +32,11 @@ followed. Only the service's status is reported back, never its response.
 **Server-side requests:** the server sends to addresses a member sets up
 (their own ntfy, Gotify or webhook URL). They must be `http`/`https`, but
 LAN addresses are allowed, since self-hosted ntfy and Gotify usually run on
-the LAN. Whoever runs the server should know that any member can make it
+the LAN. In Docker the requests come from the backend (test) and worker
+(reminders) containers, where `localhost` is the container itself: a
+service on the same machine is reached as `http://host.docker.internal:<port>`
+(`docker-compose.yml` maps it to the host), one elsewhere on the LAN by its
+address. Whoever runs the server should know that any member can make it
 `POST` to a URL of their choosing.
 
 **Masked secrets:** credentials (`SECRET_FIELDS`: ntfy `token`, Gotify
@@ -88,7 +92,9 @@ Sends "Test from Barista" through the saved channel, enabled or not.
 - **Preferences** (§1, `PATCH /api/auth/me/preferences`):
   - `rateReminders` (boolean, default `true`): whether Rate later is
     offered and reminders sent;
-  - `rateReminderMinutes` (integer 5–240, default `15`): the delay.
+  - `rateReminderMinutes` (integer 5–240, default `15`): the delay;
+  - `rateLaterDefault` (boolean, default `false`): whether the Rate later
+    box starts ticked.
 - **Queuing:** `POST /brew-logs` with `"remindToRate": true` (§6) queues a
   delayed BullMQ job (`REMINDER_QUEUE`, job `rate-brew`, id
   `rate-<brewLogId>`, data `{ brewLogId, userId }`), but only when the
@@ -110,6 +116,9 @@ Sends "Test from Barista" through the saved channel, enabled or not.
       rating. Without `APP_URL` there's no link.
   - One channel failing doesn't stop the others. If every channel fails,
     the job is retried (3 attempts, backing off from 30 s).
-- **Clients** offer **Save, rate later** only when the person has
-  `rateReminders` on and an enabled channel. They don't offer the AI
-  analysis until the brew is rated.
+- **Clients:** the brew log form shows a **Rate later** box when
+  `rateReminders` is on (hidden when it's off).
+  - It starts ticked or not per `rateLaterDefault`.
+  - It's greyed out while the person has no enabled channel.
+  - Saving with it ticked and no rating sends `remindToRate`.
+  - Clients don't offer the AI analysis until the brew is rated.

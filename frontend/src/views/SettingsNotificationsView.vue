@@ -6,7 +6,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { errorMessage } from '../api/client';
 import { notificationsApi } from '../api/notifications';
-import type { NotificationChannel, NotificationKind } from '../api/types';
+import type { NotificationChannel, NotificationKind, UserPreferences } from '../api/types';
 import SettingsLayout from '../components/SettingsLayout.vue';
 import { usePreferences } from '../composables/usePreferences';
 import { configFromForm, formatDelay, formValues, SERVICES, type Service } from '../lib/notifications';
@@ -18,7 +18,7 @@ const channels = ref<NotificationChannel[]>([]);
 const loading = ref(true);
 const loadError = ref('');
 const saved = (kind: NotificationKind) => channels.value.find((c) => c.kind === kind);
-const anyEnabled = computed(() => channels.value.some((c) => c.enabled));
+const anyEnabled = computed(() => channels.value.some((c) => c.enabled)); // reminders can be delivered
 
 // Per service: open or not, the form, its Enabled box, and what happened.
 const open = ref<NotificationKind | null>(null);
@@ -90,7 +90,7 @@ const DELAYS = [5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240];
 const delays = computed(() => [...new Set([...DELAYS, prefs.value.rateReminderMinutes])].sort((a, b) => a - b));
 const prefSaving = ref(false);
 const prefError = ref('');
-async function setPref(changes: { rateReminders?: boolean; rateReminderMinutes?: number }): Promise<void> {
+async function setPref(changes: Partial<Pick<UserPreferences, 'rateReminders' | 'rateReminderMinutes' | 'rateLaterDefault'>>): Promise<void> {
   prefSaving.value = true;
   prefError.value = '';
   try {
@@ -109,18 +109,22 @@ async function setPref(changes: { rateReminders?: boolean; rateReminderMinutes?:
 
     <section class="card stack" aria-labelledby="rate-reminders">
       <h2 id="rate-reminders">Rate later</h2>
-      <label class="checkbox" :class="{ off: !anyEnabled }">
-        <input type="checkbox" :checked="prefs.rateReminders" :disabled="!anyEnabled || prefSaving" @change="setPref({ rateReminders: ($event.target as HTMLInputElement).checked })" />
-        Remind me to rate brews I save with "Save, rate later"
+      <label class="checkbox">
+        <input type="checkbox" :checked="prefs.rateReminders" :disabled="prefSaving" @change="setPref({ rateReminders: ($event.target as HTMLInputElement).checked })" />
+        Offer "Rate later" when saving a brew, and remind me to rate it
       </label>
       <div class="field delay">
         <label for="reminder-delay">Remind me after</label>
-        <select id="reminder-delay" :value="prefs.rateReminderMinutes" :disabled="!anyEnabled || !prefs.rateReminders || prefSaving" @change="setPref({ rateReminderMinutes: Number(($event.target as HTMLSelectElement).value) })">
+        <select id="reminder-delay" :value="prefs.rateReminderMinutes" :disabled="prefSaving" @change="setPref({ rateReminderMinutes: Number(($event.target as HTMLSelectElement).value) })">
           <option v-for="m in delays" :key="m" :value="m">{{ formatDelay(m) }}</option>
         </select>
       </div>
-      <p v-if="!anyEnabled" class="muted small">Set up and enable a service below to use it. Until then, brews save as usual without the Rate later button.</p>
-      <p v-else-if="!prefs.rateReminders" class="muted small">Off: the brew page won't offer Rate later.</p>
+      <label class="checkbox">
+        <input type="checkbox" :checked="prefs.rateLaterDefault" :disabled="prefSaving" @change="setPref({ rateLaterDefault: ($event.target as HTMLInputElement).checked })" />
+        Start with "Rate later" ticked
+      </label>
+      <p v-if="!prefs.rateReminders" class="muted small">Off: the brew page doesn't show Rate later.</p>
+      <p v-else-if="!anyEnabled" class="muted small">No service is set up and on yet, so the brew page shows Rate later greyed out. Set one up below.</p>
       <p v-if="prefError" class="form-error" role="alert">{{ prefError }}</p>
     </section>
 
@@ -168,9 +172,6 @@ h2 {
 }
 p {
   margin: 0;
-}
-.checkbox.off {
-  color: var(--text-muted);
 }
 .delay select {
   max-width: 12rem;
