@@ -567,9 +567,13 @@ export const brewLogs = mysqlTable("brew_logs", {
   // Required unless the log's recipe is an espresso recipe, where it's null.
   actualWaterGrams: decimal("actual_water_grams", { precision: 6, scale: 2, mode: "number" }),
   // Measured beverage weight. Optional, except for espresso (the shot
-  // weight). With a TDS reading this gives extraction yield later; compared
-  // against the recipe's expected yield.
+  // weight). Compared against the recipe's expected yield; with tdsPercent it
+  // gives extraction yield.
   actualYieldGrams: decimal("actual_yield_grams", { precision: 6, scale: 2, mode: "number" }),
+  // Refractometer reading, %. With the yield (or the water, for immersion) and
+  // the dose it gives extraction yield, which is worked out, not stored
+  // (docs/api/brew-logs.md §6).
+  tdsPercent: decimal("tds_percent", { precision: 4, scale: 2, mode: "number" }),
   actualTempC: decimal("actual_temp_c", { precision: 4, scale: 1, mode: "number" }),
   actualGrindSetting: varchar("actual_grind_setting", { length: 100 }),
   actualTimeSec: int("actual_time_sec").notNull(),

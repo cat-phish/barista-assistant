@@ -63,6 +63,8 @@ export interface BrewSummary {
   actualWaterGrams: number | null; // null for espresso
   actualYieldGrams: number | null; // measured beverage weight (shot weight for espresso)
   brewRatio: number | null; // water / dose; for espresso yield / dose
+  tdsPercent: number | null; // refractometer reading
+  extractionYieldPercent: number | null; // from TDS (docs/api/brew-logs.md §6)
   actualTempC: number | null;
   actualGrindSetting: string | null;
   actualTimeSec: number;
@@ -171,6 +173,17 @@ function ratio(brew: BrewLog): number | null {
   return out === null ? null : Math.round((out / brew.actualDoseGrams) * 100) / 100;
 }
 
+// Styles where the grounds sit in the water: the liquid they keep is as strong
+// as the cup, so extraction is worked out from the water, not the yield.
+const IMMERSION_STYLES: readonly (RecipeStyle | null)[] = ["immersion", "cold_brew", "ibrik"];
+
+// Extraction yield, % (docs/api/brew-logs.md §6): TDS × beverage ÷ dose.
+export function extractionYield(brew: BrewLog, style: RecipeStyle | null): number | null {
+  if (brew.tdsPercent === null) return null;
+  const beverage = IMMERSION_STYLES.includes(style) ? brew.actualWaterGrams : brew.actualYieldGrams;
+  return beverage === null ? null : Math.round(((brew.tdsPercent * beverage) / brew.actualDoseGrams) * 10) / 10;
+}
+
 function summarize(
   brew: BrewRow,
   roastDate: Date | null,
@@ -195,6 +208,8 @@ function summarize(
     actualWaterGrams: brew.actualWaterGrams,
     actualYieldGrams: brew.actualYieldGrams,
     brewRatio: ratio(brew),
+    tdsPercent: brew.tdsPercent,
+    extractionYieldPercent: extractionYield(brew, brew.recipeStyle),
     actualTempC: brew.actualTempC,
     actualGrindSetting: brew.actualGrindSetting,
     actualTimeSec: brew.actualTimeSec,

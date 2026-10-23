@@ -2,8 +2,9 @@
 // Brew detail inputs shared by the brew flow's log form and journal editing.
 // Validate with parseBrewDraft (lib/brewDraft.ts); pass its errors in.
 import { computed } from 'vue';
-import type { Grinder } from '../api/types';
+import type { Grinder, RecipeStyle } from '../api/types';
 import type { BrewDraft, BrewDraftErrors } from '../lib/brewDraft';
+import { extractionYield, usesWater } from '../lib/extraction';
 import { formatGrams } from '../lib/format';
 import RatingInput from './RatingInput.vue';
 
@@ -15,6 +16,7 @@ const props = defineProps<{
   expectedYieldGrams?: number | null; // the recipe's estimate (espresso: target), shown for comparison
   espresso?: boolean; // shot weight instead of water (docs/api/brew-logs.md §6)
   drinkTasting?: boolean; // the drink has ingredients: rate the brew and the drink apart
+  recipeStyle?: RecipeStyle | null; // decides how extraction yield is worked out
 }>();
 
 // Measured yield vs the recipe's estimate, e.g. "+6 g vs expected 220 g".
@@ -25,6 +27,28 @@ const yieldComparison = computed(() => {
   if (expected == null || !draft.value.yieldGrams.trim() || !Number.isFinite(measured) || measured <= 0) return '';
   const diff = Math.round((measured - expected) * 10) / 10;
   return `${diff > 0 ? '+' : diff < 0 ? '−' : '±'}${Math.abs(diff)} g vs ${expectedWord.value} ${formatGrams(expected)} g`;
+});
+
+// Extraction yield from the TDS as typed, e.g. "Extraction ≈ 20.2%", or a hint
+// when the yield it needs is missing.
+const num = (s: string): number | null => {
+  const n = Number(s.replace(',', '.'));
+  return s.trim() && Number.isFinite(n) && n > 0 ? n : null;
+};
+const extractionHint = computed(() => {
+  const tds = num(draft.value.tds);
+  if (tds === null) return '';
+  const style = props.recipeStyle ?? null;
+  const ey = extractionYield({
+    tdsPercent: tds,
+    doseGrams: num(draft.value.dose) ?? 0,
+    yieldGrams: num(draft.value.yieldGrams),
+    waterGrams: props.espresso ? null : num(draft.value.water),
+    style,
+  });
+  if (ey !== null) return `Extraction ≈ ${ey}%`;
+  if (!num(draft.value.dose)) return '';
+  return usesWater(style) ? 'Enter the water to see extraction' : `Weigh the ${props.espresso ? 'shot' : 'brewed coffee'} to see extraction`;
 });
 
 // Active grinders, plus the brew's own even if it's since been retired.
@@ -57,17 +81,25 @@ const grinderOptions = computed(() => props.grinders.filter((g) => !g.retiredAt 
         <span v-if="showErrors && errors.water" class="field-error">{{ errors.water }}</span>
       </div>
     </div>
-    <div v-if="!espresso" class="field">
-      <label for="brew-yield">Yield (g) <span class="muted">(weigh the brewed coffee)</span></label>
-      <input
-        id="brew-yield"
-        v-model="draft.yieldGrams"
-        inputmode="decimal"
-        :placeholder="expectedYieldGrams != null ? `Expected ~${formatGrams(expectedYieldGrams)}` : ''"
-        :aria-invalid="showErrors && !!errors.yieldGrams"
-      />
-      <span v-if="showErrors && errors.yieldGrams" class="field-error">{{ errors.yieldGrams }}</span>
-      <span v-else-if="yieldComparison" class="hint">{{ yieldComparison }}</span>
+    <div class="form-row">
+      <div v-if="!espresso" class="field">
+        <label for="brew-yield">Yield (g) <span class="muted">(weigh the brewed coffee)</span></label>
+        <input
+          id="brew-yield"
+          v-model="draft.yieldGrams"
+          inputmode="decimal"
+          :placeholder="expectedYieldGrams != null ? `Expected ~${formatGrams(expectedYieldGrams)}` : ''"
+          :aria-invalid="showErrors && !!errors.yieldGrams"
+        />
+        <span v-if="showErrors && errors.yieldGrams" class="field-error">{{ errors.yieldGrams }}</span>
+        <span v-else-if="yieldComparison" class="hint">{{ yieldComparison }}</span>
+      </div>
+      <div class="field">
+        <label for="brew-tds">TDS (%)</label>
+        <input id="brew-tds" v-model="draft.tds" inputmode="decimal" :placeholder="espresso ? 'e.g. 9.5' : 'e.g. 1.38'" :aria-invalid="showErrors && !!errors.tds" />
+        <span v-if="showErrors && errors.tds" class="field-error">{{ errors.tds }}</span>
+        <span v-else-if="extractionHint" class="hint">{{ extractionHint }}</span>
+      </div>
     </div>
     <div class="form-row">
       <div class="field">

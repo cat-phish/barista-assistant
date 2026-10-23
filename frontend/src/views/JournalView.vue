@@ -96,6 +96,7 @@ watch(beanFilter, () => load(true));
             <span class="facts">
               <span>{{ formatDoseLine(log.actualDoseGrams, log.actualWaterGrams, log.actualYieldGrams) }}</span>
               <span v-if="log.actualYieldGrams !== null && log.actualWaterGrams !== null">→ {{ formatGrams(log.actualYieldGrams) }} g yield</span>
+              <span v-if="log.tdsPercent !== null">{{ log.tdsPercent }}% TDS</span>
               <span>{{ formatTime(log.actualTimeSec) }}</span>
               <span v-if="log.actualTempC !== null">{{ log.actualTempC }} °C</span>
               <span v-if="log.actualGrindSetting || log.grinder">{{ [log.actualGrindSetting, log.grinder?.name].filter(Boolean).join(' · ') }}</span>

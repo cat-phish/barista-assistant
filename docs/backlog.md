@@ -272,7 +272,9 @@ Recording a brew: what's measured, and how fast it is to log.
 
 ### 10. More brew parameters
 
-- **Status:** idea
+- **Status:** in progress. TDS and extraction yield are done (roadmap:
+  "More brew parameters, part 1"); water and tools, then weights and RPM, are
+  next.
 - **Why:** dose, water, yield, temperature, grind and time leave out things
   that change the cup: retention, grinder speed, the tools used, the water,
   and the extraction actually measured.
@@ -286,14 +288,10 @@ Recording a brew: what's measured, and how fast it is to log.
     - **Prep tools:** filter paper, WDT, puck screen, shaker, RDT…
     - **Water profile:** a named recipe (e.g. "Third Wave Water", "Lotus
       light", tap), probably a per-workspace list like grinders.
-    - **TDS** (%), with a **refractometer** button that works out extraction
-      yield from TDS, yield and dose: `EY = TDS × beverage weight / dose`.
-      For immersion the brew water is used instead: the liquid left in the
-      grounds is as strong as the cup. EY is shown, not stored.
   - Every new field can be hidden through item 5.
-  - The AI prompt gets them (item 14); TDS and EY are the most useful.
-- **Size:** L. Can be split: TDS and EY first, then water and tools, then
-  weights and RPM.
+  - The AI prompt gets them (item 14), as it does TDS and EY.
+- **Size:** L, split into parts: TDS and EY (done), then water and tools,
+  then weights and RPM.
 - **Depends on:** nothing. Item 5 (hiding fields) comes after.
 - **Open questions:**
   - Are tools and water profiles reusable lists (with minerals for water) or

@@ -1,0 +1,1 @@
+ALTER TABLE `brew_logs` ADD `tds_percent` decimal(4,2);

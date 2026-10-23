@@ -29,7 +29,11 @@ export const SYSTEM_PROMPT =
   "a finer grind or hotter water. The origin (originArea, country, region) " +
   "hints at the bean's typical character, e.g. many East African coffees are " +
   "dense and bright while Brazilian ones are often lower grown and softer; " +
-  "treat it as context, not a rule. For " +
+  "treat it as context, not a rule. When tdsPercent is given, use it and " +
+  "extractionYieldPercent to judge strength and extraction rather than " +
+  "guessing from taste alone: filter usually lands around 1.15-1.45% TDS and " +
+  "espresso 8-12%, both often 18-22% extraction, but the taste and the " +
+  "roaster's intent come first. For " +
   "espresso, judge flow " +
   "from the first drop time, shot time and ratio against the recipe's " +
   "windows, and consider the machine's capabilities (pre-infusion, flow and " +

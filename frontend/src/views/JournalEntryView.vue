@@ -13,6 +13,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import RatingStars from '../components/RatingStars.vue';
 import { useAnalysis } from '../composables/useAnalysis';
 import { draftFromLog, emptyDraft, parseBrewDraft } from '../lib/brewDraft';
+import { extractionYield } from '../lib/extraction';
 import { formatDoseLine, formatGrams, formatTime, formatWhen } from '../lib/format';
 import { formatSize } from '../lib/servings';
 import { canModifyBrewLog } from '../lib/permissions';
@@ -34,6 +35,19 @@ const loadError = ref('');
 
 // "226 g (+6 vs ~220 expected)", or the expectation alone if not measured.
 // Espresso compares the shot weight with the recipe's target.
+// "1.38% · 20.2% extraction", or just the TDS when extraction can't be worked out.
+function tdsText(l: BrewLog): string {
+  if (l.tdsPercent === null) return '–';
+  const ey = extractionYield({
+    tdsPercent: l.tdsPercent,
+    doseGrams: l.actualDoseGrams,
+    yieldGrams: l.actualYieldGrams,
+    waterGrams: l.actualWaterGrams,
+    style: l.recipe?.style ?? null,
+  });
+  return ey === null ? `${l.tdsPercent}%` : `${l.tdsPercent}% · ${ey}% extraction`;
+}
+
 function yieldText(l: BrewLog): string {
   const expected = l.recipe?.expectedYieldGrams ?? null;
   const vs = l.recipe?.methodKind === 'espresso' ? (e: number) => `${formatGrams(e)} g target` : (e: number) => `~${formatGrams(e)} expected`;
@@ -159,6 +173,7 @@ function markLabel(m: Mark): string {
         <dl class="details">
           <div><dt>{{ espresso ? 'Dose → shot' : 'Dose : water' }}</dt><dd>{{ formatDoseLine(log.actualDoseGrams, log.actualWaterGrams, log.actualYieldGrams) }}</dd></div>
           <div><dt>{{ espresso ? 'Shot weight' : 'Yield' }}</dt><dd>{{ yieldText(log) }}</dd></div>
+          <div v-if="log.tdsPercent !== null"><dt>TDS</dt><dd>{{ tdsText(log) }}</dd></div>
           <div><dt>Time</dt><dd>{{ formatTime(log.actualTimeSec) }}</dd></div>
           <div><dt>Water</dt><dd>{{ log.actualTempC !== null ? `${log.actualTempC} °C` : '–' }}</dd></div>
           <div><dt>Grind</dt><dd>{{ log.actualGrindSetting ?? '–' }}<template v-if="log.grinder"> · {{ log.grinder.name }}</template></dd></div>
@@ -185,7 +200,7 @@ function markLabel(m: Mark): string {
       <!-- Edit -->
       <form v-else class="card stack" novalidate @submit.prevent="saveEdit">
         <h2>Edit brew</h2>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" :espresso="espresso" :drink-tasting="drinkTasting" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="log.recipe?.style ?? null" />
         <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
         <div class="buttons">
           <button class="btn btn-secondary" type="button" :disabled="saving" @click="editing = false">Cancel</button>

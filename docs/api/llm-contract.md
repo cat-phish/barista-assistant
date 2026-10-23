@@ -62,7 +62,9 @@ queue:
    - Each brew includes its recipe's `methodKind` (or `null` without a
      recipe), `actualWaterGrams` (`null` for espresso), the measured
      `actualYieldGrams` (or `null`) and `brewRatio`: water ÷ dose, or for
-     espresso yield ÷ dose. `methodKind` is `filter` or `espresso`. The
+     espresso yield ÷ dose. It also includes `tdsPercent` (or `null`) and
+     `extractionYieldPercent`, worked out as in §6 (`null` without TDS, or
+     without a yield where one is needed). `methodKind` is `filter` or `espresso`. The
      recipe includes its brewer, its `style` (pour over, immersion, hybrid,
      cold brew, standard, soup… or `null`; every brew also carries `recipeStyle`, so
      soup shots aren't compared with standard ones), kind, water,

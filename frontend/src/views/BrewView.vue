@@ -829,7 +829,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       <FinishDrinkCard v-if="drink" :drink="drink" :factor="sizeScale" :size-label="madeSize ? formatSize(madeSize) : null" />
       <section class="card">
         <p v-if="stepMarksLine" class="muted small marks-line">{{ stepMarksLine }}</p>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="recipe?.style ?? null" />
       </section>
       <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
       <button class="btn btn-primary btn-block" type="submit" :disabled="saving">{{ saving ? 'Saving…' : 'Save brew' }}</button>
