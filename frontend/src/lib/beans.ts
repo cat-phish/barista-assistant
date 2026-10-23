@@ -34,7 +34,7 @@ export const BLEND_TYPES: Record<BlendType, { label: string }> = {
   other: { label: 'Other' },
 };
 
-// docs/schema.md BEAN_PROCESSES; editable per workspace later (backlog item 2).
+// docs/schema.md BEAN_PROCESSES; editable per workspace later (backlog item 1).
 export const BEAN_PROCESSES: Record<BeanProcess, { label: string }> = {
   washed: { label: 'Washed' },
   natural: { label: 'Natural' },
@@ -48,7 +48,7 @@ export const BEAN_PROCESSES: Record<BeanProcess, { label: string }> = {
   lactic: { label: 'Lactic Fermentation' },
 };
 
-// "1,950 m". Stored in metres; a feet option is backlog item 3.
+// "1,950 m". Stored in metres; a feet option is backlog item 2.
 export function formatAltitude(masl: number): string {
   return `${masl.toLocaleString('en-US')} m`;
 }

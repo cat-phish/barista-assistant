@@ -4,13 +4,15 @@
 import { onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import SettingsLayout from '../components/SettingsLayout.vue';
+import { useWorkspaceStore } from '../stores/workspace';
 
 const router = useRouter();
+const workspaces = useWorkspaceStore();
 
-onMounted(() => {
-  if (window.matchMedia('(min-width: 750px)').matches) {
-    void router.replace({ name: 'settings-workspace' });
-  }
+onMounted(async () => {
+  if (!window.matchMedia('(min-width: 750px)').matches) return;
+  await workspaces.ensureLoaded().catch(() => undefined);
+  await router.replace({ name: workspaces.current ? 'settings-workspace' : 'settings-account' });
 });
 </script>
 
