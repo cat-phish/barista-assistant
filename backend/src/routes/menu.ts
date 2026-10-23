@@ -6,6 +6,7 @@ import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
+import { buildPublicMenu, type PublicMenuResponse } from "./publicMenu.js";
 import {
   brewers,
   drinks,
@@ -89,6 +90,12 @@ const createItemSchema = z
     (b) => (b.itemType === "drink" ? !!b.drinkId && !b.brewerId : b.itemType === "brewer" ? !!b.brewerId && !b.drinkId : !b.drinkId && !b.brewerId),
     "a drink item needs drinkId, a brewer item brewerId, and the beans block neither"
   );
+// One item, or several at once (the add picker): { items: [...] }, all or nothing.
+const addItemsSchema = z.union([
+  z.object({ items: z.array(createItemSchema).min(1).max(100) }).strict(),
+  createItemSchema,
+]);
+type NewItem = z.infer<typeof createItemSchema>;
 const updateItemSchema = updateSchema(itemFields);
 
 const layoutSchema = z
@@ -187,6 +194,18 @@ menuRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<MenuResp
   const { workspaceId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId))) return;
   await sendMenu(res, workspaceId);
+});
+
+// The menu as guests would see it (§7's shape), even while the public menu is off.
+menuRouter.get("/preview", async (req: Request<WorkspaceParams>, res: Response<PublicMenuResponse>) => {
+  const { workspaceId } = req.params;
+  if (!(await requireMembership(res, authedUserId(req), workspaceId))) return;
+  const [workspace] = await db.select({ id: workspaces.id, name: workspaces.name, slug: workspaces.slug }).from(workspaces).where(eq(workspaces.id, workspaceId));
+  if (!workspace) {
+    sendError(res, 404, "Workspace not found");
+    return;
+  }
+  res.json(await buildPublicMenu(workspace));
 });
 
 // Menu settings: the currency of its prices.
@@ -335,63 +354,78 @@ menuRouter.put("/layout", async (req: Request<WorkspaceParams>, res: Response<Me
   await sendMenu(res, workspaceId);
 });
 
-// New items go last in their section.
+// A refused item in an add: thrown so the transaction rolls back every item.
+class AddRefused extends Error {
+  constructor(readonly status: 400 | 404 | 409, message: string) {
+    super(message);
+  }
+}
+
+// Checks one new item and inserts it at `position`.
+async function addItem(tx: Db, workspaceId: string, sectionId: string, body: NewItem, position: number, hasCurrency: boolean): Promise<void> {
+  if (body.price != null && !hasCurrency) throw new AddRefused(400, PRICE_NEEDS_CURRENCY);
+  if (body.drinkId) {
+    const [d] = await tx.select({ id: drinks.id }).from(drinks).where(and(eq(drinks.id, body.drinkId), eq(drinks.workspaceId, workspaceId)));
+    if (!d) throw new AddRefused(400, "drinkId: not a drink in this workspace");
+  }
+  if (body.brewerId) {
+    const [b] = await tx.select({ id: brewers.id }).from(brewers).where(and(eq(brewers.id, body.brewerId), eq(brewers.workspaceId, workspaceId)));
+    if (!b) throw new AddRefused(400, "brewerId: not a brewer in this workspace");
+  }
+  if (body.itemType === "beans") {
+    const [existing] = await tx
+      .select({ id: menuItems.id })
+      .from(menuItems)
+      .innerJoin(menuSections, eq(menuSections.id, menuItems.sectionId))
+      .where(and(eq(menuSections.workspaceId, workspaceId), eq(menuItems.itemType, "beans")))
+      .limit(1);
+    if (existing) throw new AddRefused(409, "The menu already has the beans block; move it instead");
+  }
+  try {
+    await tx.insert(menuItems).values({
+      id: randomUUID(),
+      sectionId,
+      position,
+      itemType: body.itemType,
+      drinkId: body.drinkId ?? null,
+      brewerId: body.brewerId ?? null,
+      name: body.name ?? null,
+      description: body.description ?? null,
+      price: body.price ?? null,
+      available: body.available ?? true,
+    });
+  } catch (err) {
+    if (isDuplicateEntryError(err)) throw new AddRefused(409, "That's already in this section");
+    throw err;
+  }
+}
+
+// New items go last in their section, in the order sent.
 menuRouter.post("/sections/:sectionId/items", async (req: Request<SectionParams>, res: Response<MenuResponse>) => {
   const { workspaceId, sectionId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
-  const body = parseBody(createItemSchema, req, res);
+  const body = parseBody(addItemsSchema, req, res);
   if (!body) return;
+  const list = "items" in body ? body.items : [body];
 
-  const outcome = await db.transaction(async (tx) => {
-    const [section] = await tx
-      .select({ id: menuSections.id })
-      .from(menuSections)
-      .where(and(eq(menuSections.id, sectionId), eq(menuSections.workspaceId, workspaceId)))
-      .for("update");
-    if (!section) return { status: 404, error: "Section not found" } as const;
-    if (body.price != null && !(await currencyOf(tx, workspaceId))) return { status: 400, error: PRICE_NEEDS_CURRENCY } as const;
-
-    if (body.drinkId) {
-      const [d] = await tx.select({ id: drinks.id }).from(drinks).where(and(eq(drinks.id, body.drinkId), eq(drinks.workspaceId, workspaceId)));
-      if (!d) return { status: 400, error: "drinkId: not a drink in this workspace" } as const;
+  try {
+    await db.transaction(async (tx) => {
+      const [section] = await tx
+        .select({ id: menuSections.id })
+        .from(menuSections)
+        .where(and(eq(menuSections.id, sectionId), eq(menuSections.workspaceId, workspaceId)))
+        .for("update");
+      if (!section) throw new AddRefused(404, "Section not found");
+      const hasCurrency = !!(await currencyOf(tx, workspaceId));
+      const [{ last } = { last: 0 }] = await tx.select({ last: max(menuItems.position) }).from(menuItems).where(eq(menuItems.sectionId, sectionId));
+      for (const [i, item] of list.entries()) await addItem(tx, workspaceId, sectionId, item, (last ?? 0) + 1 + i, hasCurrency);
+    });
+  } catch (err) {
+    if (err instanceof AddRefused) {
+      sendError(res, err.status, err.message);
+      return;
     }
-    if (body.brewerId) {
-      const [b] = await tx.select({ id: brewers.id }).from(brewers).where(and(eq(brewers.id, body.brewerId), eq(brewers.workspaceId, workspaceId)));
-      if (!b) return { status: 400, error: "brewerId: not a brewer in this workspace" } as const;
-    }
-    if (body.itemType === "beans") {
-      const [existing] = await tx
-        .select({ id: menuItems.id })
-        .from(menuItems)
-        .innerJoin(menuSections, eq(menuSections.id, menuItems.sectionId))
-        .where(and(eq(menuSections.workspaceId, workspaceId), eq(menuItems.itemType, "beans")))
-        .limit(1);
-      if (existing) return { status: 409, error: "The menu already has the beans block; move it instead" } as const;
-    }
-
-    const [{ last } = { last: 0 }] = await tx.select({ last: max(menuItems.position) }).from(menuItems).where(eq(menuItems.sectionId, sectionId));
-    try {
-      await tx.insert(menuItems).values({
-        id: randomUUID(),
-        sectionId,
-        position: (last ?? 0) + 1,
-        itemType: body.itemType,
-        drinkId: body.drinkId ?? null,
-        brewerId: body.brewerId ?? null,
-        name: body.name ?? null,
-        description: body.description ?? null,
-        price: body.price ?? null,
-        available: body.available ?? true,
-      });
-    } catch (err) {
-      if (isDuplicateEntryError(err)) return { status: 409, error: "That's already in this section" } as const;
-      throw err;
-    }
-    return { status: 201 } as const;
-  });
-  if (outcome.status !== 201) {
-    sendError(res, outcome.status, outcome.error);
-    return;
+    throw err;
   }
   await sendMenu(res, workspaceId, 201);
 });

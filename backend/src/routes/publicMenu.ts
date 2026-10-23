@@ -65,82 +65,88 @@ publicMenuRouter.get(
       return;
     }
 
-    const menu = await loadMenu(workspace.id);
-    const allItems = menu.sections.flatMap((s) => s.items);
-    const drinkIds = allItems.flatMap((i) => (i.drinkId ? [i.drinkId] : []));
-    const hasBeans = allItems.some((i) => i.itemType === "beans");
-
-    const [drinkRows, ingredientRows, menuBeans] = await Promise.all([
-      drinkIds.length
-        ? db.select({ id: drinks.id, parentDrinkId: drinks.parentDrinkId }).from(drinks).where(inArray(drinks.id, drinkIds))
-        : Promise.resolve([]),
-      drinkIds.length
-        ? db
-            .select({ drinkId: drinkIngredients.drinkId, name: ingredients.name })
-            .from(drinkIngredients)
-            .innerJoin(ingredients, eq(drinkIngredients.ingredientId, ingredients.id))
-            .where(inArray(drinkIngredients.drinkId, drinkIds))
-            .orderBy(asc(drinkIngredients.position))
-        : Promise.resolve([]),
-      hasBeans
-        ? db
-            .select({
-              id: beans.id,
-              roasterName: beans.roasterName,
-              beanName: beans.beanName,
-              process: beans.process,
-              roastDate: beans.roastDate,
-              inventoryWeightGrams: beans.inventoryWeightGrams,
-              roastLevel: beans.roastLevel,
-              detailedRoastLevel: beans.detailedRoastLevel,
-              roastType: beans.roastType,
-              blendType: beans.blendType,
-              decaf: beans.decaf,
-              flavorProfile: beans.flavorProfile,
-              originArea: beans.originArea,
-              country: beans.country,
-              region: beans.region,
-              altitudeMasl: beans.altitudeMasl,
-              producer: beans.producer,
-            })
-            .from(beans)
-            .where(and(eq(beans.workspaceId, workspace.id), eq(beans.showOnPublicMenu, true), isNull(beans.archivedAt)))
-            .orderBy(asc(beans.roasterName), asc(beans.beanName))
-        : Promise.resolve([]),
-    ]);
-
-    // Name a parent drink only if it's on the menu too, so hidden drinks stay hidden.
-    const parentOf = new Map(drinkRows.map((d) => [d.id, d.parentDrinkId]));
-    const menuNameOf = new Map<string, string>();
-    for (const i of allItems) if (i.drinkId && i.source) menuNameOf.set(i.drinkId, i.name ?? i.source.name);
-
-    const sections: PublicMenuSection[] = menu.sections
-      .map((s) => ({
-        name: s.name,
-        description: s.description,
-        items: s.items.flatMap((i): Array<PublicMenuItem | PublicBeansBlock> => {
-          if (i.itemType === "beans") return menuBeans.length ? [{ type: "beans", beans: menuBeans }] : [];
-          // An archived brewer, or a source that's gone, is left off.
-          if (!i.source || i.source.archived) return [];
-          const id = (i.drinkId ?? i.brewerId)!;
-          const parent = i.drinkId ? parentOf.get(i.drinkId) : null;
-          return [
-            {
-              type: i.itemType,
-              id,
-              name: i.name ?? i.source.name,
-              description: i.description ?? i.source.description,
-              method: METHOD_LABELS[i.source.kind],
-              variantOf: (parent && menuNameOf.get(parent)) ?? null,
-              ingredients: i.drinkId ? ingredientRows.filter((r) => r.drinkId === i.drinkId).map((r) => r.name) : [],
-              price: i.price,
-              available: i.available,
-            },
-          ];
-        }),
-      }))
-      .filter((s) => s.items.length > 0);
-
-    res.json({ workspace: { name: workspace.name, slug: workspace.slug }, currency: menu.currency, sections });
+    res.json(await buildPublicMenu(workspace));
   }
 );
+
+// The menu as guests see it (§7): also the builder's preview (§7b), which
+// members can see while the public menu is off.
+export async function buildPublicMenu(workspace: { id: string; name: string; slug: string }): Promise<PublicMenuResponse> {
+  const menu = await loadMenu(workspace.id);
+  const allItems = menu.sections.flatMap((s) => s.items);
+  const drinkIds = allItems.flatMap((i) => (i.drinkId ? [i.drinkId] : []));
+  const hasBeans = allItems.some((i) => i.itemType === "beans");
+
+  const [drinkRows, ingredientRows, menuBeans] = await Promise.all([
+    drinkIds.length
+      ? db.select({ id: drinks.id, parentDrinkId: drinks.parentDrinkId }).from(drinks).where(inArray(drinks.id, drinkIds))
+      : Promise.resolve([]),
+    drinkIds.length
+      ? db
+          .select({ drinkId: drinkIngredients.drinkId, name: ingredients.name })
+          .from(drinkIngredients)
+          .innerJoin(ingredients, eq(drinkIngredients.ingredientId, ingredients.id))
+          .where(inArray(drinkIngredients.drinkId, drinkIds))
+          .orderBy(asc(drinkIngredients.position))
+      : Promise.resolve([]),
+    hasBeans
+      ? db
+          .select({
+            id: beans.id,
+            roasterName: beans.roasterName,
+            beanName: beans.beanName,
+            process: beans.process,
+            roastDate: beans.roastDate,
+            inventoryWeightGrams: beans.inventoryWeightGrams,
+            roastLevel: beans.roastLevel,
+            detailedRoastLevel: beans.detailedRoastLevel,
+            roastType: beans.roastType,
+            blendType: beans.blendType,
+            decaf: beans.decaf,
+            flavorProfile: beans.flavorProfile,
+            originArea: beans.originArea,
+            country: beans.country,
+            region: beans.region,
+            altitudeMasl: beans.altitudeMasl,
+            producer: beans.producer,
+          })
+          .from(beans)
+          .where(and(eq(beans.workspaceId, workspace.id), eq(beans.showOnPublicMenu, true), isNull(beans.archivedAt)))
+          .orderBy(asc(beans.roasterName), asc(beans.beanName))
+      : Promise.resolve([]),
+  ]);
+
+  // Name a parent drink only if it's on the menu too, so hidden drinks stay hidden.
+  const parentOf = new Map(drinkRows.map((d) => [d.id, d.parentDrinkId]));
+  const menuNameOf = new Map<string, string>();
+  for (const i of allItems) if (i.drinkId && i.source) menuNameOf.set(i.drinkId, i.name ?? i.source.name);
+
+  const sections: PublicMenuSection[] = menu.sections
+    .map((s) => ({
+      name: s.name,
+      description: s.description,
+      items: s.items.flatMap((i): Array<PublicMenuItem | PublicBeansBlock> => {
+        if (i.itemType === "beans") return menuBeans.length ? [{ type: "beans", beans: menuBeans }] : [];
+        // An archived brewer, or a source that's gone, is left off.
+        if (!i.source || i.source.archived) return [];
+        const id = (i.drinkId ?? i.brewerId)!;
+        const parent = i.drinkId ? parentOf.get(i.drinkId) : null;
+        return [
+          {
+            type: i.itemType,
+            id,
+            name: i.name ?? i.source.name,
+            description: i.description ?? i.source.description,
+            method: METHOD_LABELS[i.source.kind],
+            variantOf: (parent && menuNameOf.get(parent)) ?? null,
+            ingredients: i.drinkId ? ingredientRows.filter((r) => r.drinkId === i.drinkId).map((r) => r.name) : [],
+            price: i.price,
+            available: i.available,
+          },
+        ];
+      }),
+    }))
+    .filter((s) => s.items.length > 0);
+
+  return { workspace: { name: workspace.name, slug: workspace.slug }, currency: menu.currency, sections };
+}

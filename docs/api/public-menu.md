@@ -5,7 +5,8 @@
 
 Retrieves the read-only menu for a workspace, as arranged in the menu builder
 (§7b). Unauthenticated, and only for workspaces where
-`isPublicMenuEnabled = true`.
+`isPublicMenuEnabled = true`. Members can see the same response while it's off from
+`GET /api/workspaces/:id/menu/preview` (§7b).
 
 - **URL:** `GET /api/public/menu/:slug`
 - **Auth Required:** `false`

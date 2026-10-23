@@ -202,3 +202,55 @@ describe("public menu from the builder (docs/api/public-menu.md §7)", () => {
     expect(menu.sections[1].items).toEqual([{ type: "beans", beans: [expect.objectContaining({ beanName: "Guji" })] }]);
   });
 });
+
+describe("adding several items at once (docs/api/menu.md §7b)", () => {
+  it("adds them last, in the order sent", async () => {
+    const { owner, ws, base, drink } = await setup();
+    const section = await menuSection(owner, ws.id, "Espresso");
+    const [latte, mocha] = [await drink("Latte"), await drink("Mocha")];
+    await menuAdd(owner, ws.id, section, { itemType: "drink", drinkId: latte });
+    const espresso = await brewerId(owner, ws.id, "Espresso");
+    const res = await owner.agent.post(`${base}/sections/${section}/items`).send({
+      items: [{ itemType: "drink", drinkId: mocha }, { itemType: "brewer", brewerId: espresso, price: null }, { itemType: "beans" }],
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.sections[0].items.map((i: Item) => i.itemType)).toEqual(["drink", "drink", "brewer", "beans"]);
+    expect(res.body.sections[0].items.map((i: Item) => i.source?.name ?? null)).toEqual(["Latte", "Mocha", "Espresso", null]);
+  });
+
+  it("is all or nothing: one refused item adds none", async () => {
+    const { owner, ws, base, drink, get } = await setup();
+    const section = await menuSection(owner, ws.id, "Espresso");
+    const [latte, mocha] = [await drink("Latte"), await drink("Mocha")];
+    await menuAdd(owner, ws.id, section, { itemType: "drink", drinkId: latte });
+    const other = await setup();
+    const theirs = await other.drink("Theirs");
+    const add = (items: unknown[]) => owner.agent.post(`${base}/sections/${section}/items`).send({ items });
+    expect((await add([{ itemType: "drink", drinkId: mocha }, { itemType: "drink", drinkId: latte }])).status).toBe(409); // already there
+    expect((await add([{ itemType: "drink", drinkId: mocha }, { itemType: "drink", drinkId: mocha }])).status).toBe(409); // twice
+    expect((await add([{ itemType: "drink", drinkId: mocha }, { itemType: "drink", drinkId: theirs }])).status).toBe(400);
+    expect((await add([{ itemType: "drink", drinkId: mocha }, { itemType: "brewer", brewerId: await brewerId(owner, ws.id, "V60"), price: 4 }])).status).toBe(400); // no currency
+    expect((await add([])).status).toBe(400);
+    expect((await get()).sections[0]!.items).toHaveLength(1);
+  });
+});
+
+describe("menu preview (docs/api/menu.md §7b)", () => {
+  it("matches the public menu, works while it's off, and only for members", async () => {
+    const { owner, ws, base, drink } = await setup();
+    const section = await menuSection(owner, ws.id, "Espresso");
+    await menuAdd(owner, ws.id, section, { itemType: "drink", drinkId: await drink("Latte"), name: "House latte" });
+    const preview = await owner.agent.get(`${base}/preview`);
+    expect(preview.status).toBe(200);
+    expect(preview.body.sections[0].items[0]).toMatchObject({ type: "drink", name: "House latte" });
+    expect((await request(app).get(`/api/public/menu/${ws.slug}`)).status).toBe(404); // the public menu is off
+
+    await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ isPublicMenuEnabled: true });
+    expect((await request(app).get(`/api/public/menu/${ws.slug}`)).body).toEqual((await owner.agent.get(`${base}/preview`)).body);
+
+    const viewer = await newUser();
+    await addMember(owner, ws.id, viewer, "viewer");
+    expect((await viewer.agent.get(`${base}/preview`)).status).toBe(200);
+    expect((await (await newUser()).agent.get(`${base}/preview`)).status).toBe(404);
+  });
+});
