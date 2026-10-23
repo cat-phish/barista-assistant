@@ -26,11 +26,11 @@ and fix the references.
 - A. Settings & configuration: 1–2
 - B. Beans: 3
 - C. Brewing & logging: 4–6
-- D. AI suggestions: 7–9
-- E. Insights: 10
-- F. Bar & menu: 11–13
-- G. Home roasting: 14
-- H. Accounts: 15
+- D. AI suggestions: 7–10
+- E. Insights: 11
+- F. Bar & menu: 12–14
+- G. Home roasting: 15
+- H. Accounts: 16
 
 ---
 
@@ -153,7 +153,7 @@ Recording a brew: what's measured, and how fast it is to log.
   - Delivered with **ntfy.sh** (or a self-hosted ntfy server): each user sets
     a server and topic under Settings → **Notifications**. The message links
     to the brew's rating screen. Web Push could come later.
-  - The same notification code serves item 5's steep timers and item 14's
+  - The same notification code serves item 5's steep timers and item 15's
     resting reminders.
 - **Size:** M
 - **Depends on:** nothing.
@@ -186,7 +186,7 @@ Recording a brew: what's measured, and how fast it is to log.
 - **Size:** M
 - **Depends on:** 4 for the reminder; the rest can go first.
 - **Open questions:**
-  - Should a cold brew batch be stock, like item 11's ingredient batches,
+  - Should a cold brew batch be stock, like item 12's ingredient batches,
     with servings taken from it?
   - Are there other long brews to cover the same way (e.g. Kyoto-style cold
     drip)?
@@ -244,6 +244,10 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:**
   - Should users be able to rate a suggestion (useful / not), to measure it?
   - Which model and cost per analysis is acceptable?
+  - Where is the model configured: in Docker (`OPENAI_MODEL`, today), in the
+    app (Settings → AI, so a bar can switch models or providers without a
+    redeploy), or both (Docker sets the key and what's allowed, the app picks
+    from that)?
 
 ### 8. Espresso dose and yield suggestions from the AI
 
@@ -271,6 +275,9 @@ What the analysis worker sends to the LLM and what comes back.
   mineral), bean (origin, altitude, process, flavor profile…), recipe and
   equipment. All on by default. The worker leaves out what's switched off,
   and the prompt doesn't mention it.
+  - **Unrated brews:** a switch for whether brews without a rating (e.g.
+    saved with Rate later and not rated yet) go to the AI at all, as the
+    brew analysed or as history.
 - **Size:** M
 - **Depends on:** nothing. Fits with 7 (the audit says what's worth sending).
   Can reuse the field registry's keys (`lib/fields.ts`, roadmap: field
@@ -280,11 +287,38 @@ What the analysis worker sends to the LLM and what comes back.
   - Decided with field visibility: hiding a form field doesn't change what
     the AI gets, so the two stay separate switches.
 
+### 10. Build bar items from plain text (AI)
+
+- **Status:** idea
+- **Why:** recipes, drinks and other bar items often come as text: a
+  roaster's brew guide, a recipe from a video description, a drink from a
+  café menu, notes in a messages app. Retyping them into the Add pages is
+  slow.
+- **Approach:**
+  - Paste text (or later a photo of it) on an **Import from text** page and
+    say what it is (recipe, drink, ingredient, brewer, bean…), or let the AI
+    tell.
+  - A worker job (BullMQ, like the analysis) asks the LLM, with Structured
+    Outputs, to turn it into the **import JSON format** from item 1, filling
+    only what the text says.
+  - The result opens the import preview, or the matching **Add** page
+    prefilled, with what was filled marked. The user edits, then adds it
+    as usual; nothing is saved without that step.
+  - Names that match existing items (a brewer, an ingredient) are linked,
+    as in item 1's import.
+- **Size:** M
+- **Depends on:** 1 (the import format and preview).
+- **Open questions:**
+  - One item per paste, or several (a guide with three recipes)?
+  - Should it take a URL and fetch the page, or only pasted text?
+  - Units and step types the text describes loosely ("pour to about 100 ml,
+    wait 30 s"): how sure must the AI be before filling a field?
+
 ---
 
 ## E. Insights
 
-### 10. Statistics and graphs
+### 11. Statistics and graphs
 
 - **Status:** idea
 - **Why:** the brew history is a list. Trends (is this bean getting better
@@ -310,7 +344,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## F. Bar & menu
 
-### 11. Ingredient prep and stock
+### 12. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -325,7 +359,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** how precise does stock need to be (exact grams, or
   "about half left")?
 
-### 12. Public menu: branding and sizes
+### 13. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
@@ -339,7 +373,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
-### 13. Drink categories: what else they could do
+### 14. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -358,7 +392,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## G. Home roasting
 
-### 14. Roasting: green stock, roast logs, resting
+### 15. Roasting: green stock, roast logs, resting
 
 - **Status:** idea
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
@@ -389,7 +423,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## H. Accounts
 
-### 15. Account management and password reset
+### 16. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
