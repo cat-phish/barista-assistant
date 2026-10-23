@@ -11,6 +11,7 @@ const workspaces = useWorkspaceStore();
     <template v-if="workspaces.current">
       <h2 :title="workspaces.current.name">{{ workspaces.current.name }}</h2>
       <RouterLink :to="{ name: 'settings-workspace' }" active-class="active">Workspace</RouterLink>
+      <RouterLink :to="{ name: 'settings-members' }" active-class="active">Members</RouterLink>
     </template>
   </nav>
 </template>

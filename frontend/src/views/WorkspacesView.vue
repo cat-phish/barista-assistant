@@ -2,12 +2,10 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ApiError, errorMessage } from '../api/client';
-import type { Role } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
+import { ROLE_LABELS } from '../lib/roles';
 import { SLUG_PATTERN, slugify } from '../lib/slug';
 import { useWorkspaceStore } from '../stores/workspace';
-
-const ROLE_LABELS: Record<Role, string> = { owner: 'Owner', barista: 'Barista', viewer: 'Viewer' };
 
 const workspaces = useWorkspaceStore();
 const router = useRouter();

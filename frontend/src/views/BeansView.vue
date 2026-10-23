@@ -101,10 +101,12 @@ const pending = ref<Bean | null>(null);
 const brewLogCount = ref<number | null>(null);
 const busy = ref(false);
 const dialogError = ref('');
+const understood = ref(false); // deleting the history needs "I understand" (CLAUDE.md rule 6)
 
 function askDelete(bean: Bean): void {
   pending.value = bean;
   brewLogCount.value = null;
+  understood.value = false;
   dialogError.value = '';
 }
 function closeDialog(): void {
@@ -582,6 +584,10 @@ async function confirmFreeze(): Promise<void> {
       <strong>{{ brewLogCount }} brew log{{ brewLogCount === 1 ? '' : 's' }}</strong> and their AI suggestions.
       {{ pending?.archivedAt ? 'Consider hiding it from the menu instead.' : 'Consider archiving it instead: it leaves the brew picker and the menu, and its brews stay.' }}
     </p>
+    <label v-if="brewLogCount !== null" class="checkbox">
+      <input v-model="understood" type="checkbox" />
+      I understand
+    </label>
     <p v-if="dialogError" class="form-error" role="alert">{{ dialogError }}</p>
     <template #actions>
       <template v-if="brewLogCount === null">
@@ -589,7 +595,7 @@ async function confirmFreeze(): Promise<void> {
       </template>
       <template v-else>
         <button class="btn btn-primary" type="button" :disabled="busy" @click="keepInstead">{{ pending?.archivedAt ? 'Hide from menu instead' : 'Archive instead' }}</button>
-        <button class="btn btn-danger" type="button" :disabled="busy" @click="deleteEverything">Delete bean and history</button>
+        <button class="btn btn-danger" type="button" :disabled="busy || !understood" @click="deleteEverything">Delete bean and history</button>
       </template>
       <button class="btn btn-secondary" type="button" :disabled="busy" @click="closeDialog">Cancel</button>
     </template>

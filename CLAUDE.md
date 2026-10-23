@@ -48,3 +48,16 @@
      rules in `.gitleaks.toml`; `npm install` enables it). Never bypass it
      with `--no-verify`. If it flags something, remove the secret; for a
      genuine false positive, ask before adding an allowlist entry.
+6. **Confirming major actions:** an action that can't be undone, or that
+   affects other things or other people (deleting something others use,
+   deleting a workspace, leaving one, …), confirms in a dialog with a red
+   action button and an **"I understand"** checkbox that must be ticked
+   before the button works (the pattern in `DeleteDialog.vue`). Used today
+   by: deleting anything something else uses (`DeleteDialog.vue`), deleting
+   a bean with its brew history, deleting a drink category, changing the
+   workspace's web address, deleting or leaving a workspace, removing a
+   member, and demoting yourself from owner. Deliberately without it:
+   deleting a brew log, deleting a menu section, abandoning a brew, and
+   deleting things nothing uses. When building or changing
+   an action that seems to qualify, **ask the user before adding the
+   checkbox** to it; don't add it unasked.

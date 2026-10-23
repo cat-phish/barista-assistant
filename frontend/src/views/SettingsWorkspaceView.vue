@@ -30,8 +30,23 @@ const slugChanged = computed(() => slug.value !== workspaces.current?.slug);
 const detailsChanged = computed(() => name.value.trim() !== workspaces.current?.name || slugChanged.value);
 const canSaveDetails = computed(() => detailsChanged.value && name.value.trim().length > 0 && !slugInvalid.value && !savingDetails.value);
 
+// A new web address breaks the old link and printed QR codes, so it's
+// confirmed with "I understand" first (CLAUDE.md rule 6).
+const confirmingSlug = ref(false);
+const slugUnderstood = ref(false);
+function submitDetails(): void {
+  if (!canSaveDetails.value) return;
+  if (slugChanged.value) {
+    slugUnderstood.value = false;
+    confirmingSlug.value = true;
+  } else {
+    void saveDetails();
+  }
+}
+
 async function saveDetails(): Promise<void> {
   const ws = workspaces.current;
+  confirmingSlug.value = false;
   if (!ws || !canSaveDetails.value) return;
   savingDetails.value = true;
   detailsError.value = '';
@@ -134,10 +149,12 @@ const saveCurrency = () => saveMenu((ws) => menuApi.setCurrency(ws, currencyCode
 // --- Delete (owners): type the web address to confirm (§2) ---
 const deleting = ref(false);
 const confirmText = ref('');
+const understood = ref(false);
 const deleteBusy = ref(false);
 const deleteError = ref('');
 function openDelete(): void {
   confirmText.value = '';
+  understood.value = false;
   deleteError.value = '';
   deleting.value = true;
 }
@@ -164,7 +181,7 @@ async function deleteWorkspace(): Promise<void> {
   <SettingsLayout title="Workspace">
     <section class="card stack" aria-labelledby="ws-details">
       <h2 id="ws-details">Name and web address</h2>
-      <form v-if="isOwner" class="stack" novalidate @submit.prevent="saveDetails">
+      <form v-if="isOwner" class="stack" novalidate @submit.prevent="submitDetails">
         <div class="field">
           <label for="ws-name">Name<span class="req" aria-hidden="true">*</span></label>
           <input id="ws-name" v-model="name" aria-required="true" type="text" maxlength="255" required @input="detailsSaved = false" />
@@ -188,9 +205,6 @@ async function deleteWorkspace(): Promise<void> {
             3–64 lowercase letters, digits or hyphens. Your public menu is at /menu/{{ slug || '…' }}
           </span>
         </div>
-        <p v-if="slugChanged && !slugInvalid" class="warning" role="note">
-          The old address, /menu/{{ workspaces.current?.slug }}, will stop working, and so will QR codes you've printed for it.
-        </p>
         <p v-if="detailsError" class="form-error" role="alert">{{ detailsError }}</p>
         <div class="actions">
           <button class="btn btn-primary" type="submit" :disabled="!canSaveDetails">{{ savingDetails ? 'Saving…' : 'Save' }}</button>
@@ -260,6 +274,21 @@ async function deleteWorkspace(): Promise<void> {
     </section>
   </SettingsLayout>
 
+  <ConfirmDialog :open="confirmingSlug" title="Change the web address?" @cancel="confirmingSlug = false">
+    <p>
+      The public menu moves to <strong>/menu/{{ slug }}</strong>. The old address, /menu/{{ workspaces.current?.slug }}, stops working,
+      and so do QR codes you've printed and links you've shared.
+    </p>
+    <label class="checkbox">
+      <input v-model="slugUnderstood" type="checkbox" />
+      I understand
+    </label>
+    <template #actions>
+      <button class="btn btn-danger" type="button" :disabled="savingDetails || !slugUnderstood" @click="saveDetails">Change address</button>
+      <button class="btn btn-secondary" type="button" @click="confirmingSlug = false">Cancel</button>
+    </template>
+  </ConfirmDialog>
+
   <ConfirmDialog :open="deleting" :title="`Delete ${workspaces.current?.name ?? 'workspace'}?`" @cancel="deleting = false">
     <form id="delete-ws" class="stack" @submit.prevent="deleteWorkspace">
       <p>This can't be undone. Every bean, recipe, brew and member of this workspace is deleted.</p>
@@ -267,10 +296,14 @@ async function deleteWorkspace(): Promise<void> {
         <label for="confirm-slug">Type <strong>{{ workspaces.current?.slug }}</strong> to confirm</label>
         <input id="confirm-slug" v-model="confirmText" autocapitalize="none" autocomplete="off" spellcheck="false" />
       </div>
+      <label class="checkbox">
+        <input v-model="understood" type="checkbox" />
+        I understand
+      </label>
       <p v-if="deleteError" class="form-error" role="alert">{{ deleteError }}</p>
     </form>
     <template #actions>
-      <button class="btn btn-danger" type="submit" form="delete-ws" :disabled="deleteBusy || confirmText !== workspaces.current?.slug">
+      <button class="btn btn-danger" type="submit" form="delete-ws" :disabled="deleteBusy || !understood || confirmText !== workspaces.current?.slug">
         {{ deleteBusy ? 'Deleting…' : 'Delete workspace' }}
       </button>
       <button class="btn btn-secondary" type="button" @click="deleting = false">Cancel</button>
@@ -286,12 +319,6 @@ p {
   margin: 0;
 }
 .hint.invalid {
-  color: var(--danger);
-}
-.warning {
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius);
-  background: var(--danger-tint);
   color: var(--danger);
 }
 .actions {
