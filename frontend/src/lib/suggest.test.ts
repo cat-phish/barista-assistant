@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BrewLog, Recipe, Suggestions } from '../api/types';
-import { chooseGrind, startingParameters, suggestionFitsGrinder } from './suggest';
+import { chooseGrind, rpmAdvice, startingParameters, suggestionFitsGrinder } from './suggest';
 
 const brew = (over: Partial<BrewLog>): BrewLog => ({
   id: 'b1', workspaceId: 'w', userId: 'u', beanId: 'bean', recipeId: null, timestamp: '2026-10-18T08:00:00.000Z', utcOffsetMinutes: null,
@@ -39,6 +39,19 @@ describe('startingParameters', () => {
   });
   it('returns null without an analysis', () => {
     expect(startingParameters(suggestions({ latestAnalysis: null, analyzedBrew: null }), recipe)).toBeNull();
+  });
+  it('passes on the next step, confidence and speed change', () => {
+    const s = suggestions({ latestAnalysis: { ...suggestions().latestAnalysis!, nextStep: 'Grind 2 clicks finer.', confidence: 'medium', suggestedRpmDelta: -100 } });
+    expect(startingParameters(s, null)).toMatchObject({ nextStep: 'Grind 2 clicks finer.', confidence: 'medium', rpmDelta: -100 });
+  });
+});
+
+describe('rpmAdvice', () => {
+  it('words a speed change, and nothing for none', () => {
+    expect(rpmAdvice(150)).toBe('Raise the grinder speed by 150 RPM');
+    expect(rpmAdvice(-50)).toBe('Lower the grinder speed by 50 RPM');
+    expect(rpmAdvice(0)).toBeNull();
+    expect(rpmAdvice(null)).toBeNull();
   });
 });
 

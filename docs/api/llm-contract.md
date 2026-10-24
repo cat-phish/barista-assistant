@@ -99,7 +99,8 @@ queue:
      `actualYieldGrams` (or `null`) and `brewRatio`: water ÷ dose, or for
      espresso yield ÷ dose. It also includes `tdsPercent` (or `null`) and
      `extractionYieldPercent`, worked out as in §6 (`null` without TDS, or
-     without a yield where one is needed). `methodKind` is `filter` or `espresso`. The
+     without a yield where one is needed). `methodKind` is `filter`,
+     `espresso`, `stovetop` or `other` (the brewer's kind, §3b). The
      recipe includes its brewer, its `style` (`{ name, brewsLike }` or `null`:
      the bar's name for it, and the built-in it brews like, pour over,
      immersion, hybrid, cold brew, standard, soup…, §5e; every brew also
@@ -108,37 +109,54 @@ queue:
      (`expectedFinishMinSec`/`MaxSec`), first-drop window (espresso), flow
      unit, and its steps with type, label, duration, how each moves on, and
      their values (pour-to, temperature, pressure, flow).
-2. It calls the LLM API using **Structured Outputs** (strict JSON schema mode).
+2. It turns that context into the **input** actually sent
+   (`toLlmInput`, `worker/src/prompt.ts`), smaller than the context above:
+   - **Empty values are dropped:** `null`, `""`, `[]` and `{}` keys are left
+     out, so a missing key means "not recorded" (the prompt says so).
+     `decaf` is only sent when true.
+   - **Equipment once:** each brew names its `grinder` and `water`; their
+     details are in `equipment: { grinders: { <name>: details }, waters:
+     { <name>: figures } }`, each listed once.
+   - **History:** each of `previousBrews` has `sameRecipe` (true when it used
+     the brew's recipe), the fairest comparison.
+   - The recipe's `flowUnit` is only sent when it isn't `g_s` (the default).
+   - Shape: `{ ratingScale, bean, recipe, brew, drink, previousBrews,
+     equipment }`.
+3. It builds the **system prompt from sections** (`PROMPT_SECTIONS` in
+   `worker/src/prompt.ts`), each included only when the input has what it's
+   about, so a plain filter brew gets a short prompt. In order:
 
-**System Prompt:**
+   | Section | Included when | What it says |
+   | --- | --- | --- |
+   | `core` | always | expert barista; judge the brew against its recipe and the earlier brews (`sameRecipe` fairest); missing = not recorded; equipment by name; change one or two levers |
+   | `output` | always | what `reasoning`, `nextStep`, `confidence` and `suggestedRpmDelta` should hold |
+   | `drink` | a drink or drink tasting is sent | drink notes are weaker evidence; compare like with like |
+   | `style` | a recipe style is sent | judge against `brewsLike` (soup shot, immersion…) |
+   | `stovetop` | a `stovetop` or `other` method | judged on its own terms |
+   | `batch` | the bean has `batchNumber` | brews are all of that batch |
+   | `roastType` | the bean has `roastType` | espresso roast as filter may need a different approach |
+   | `decafBlend` | decaf or blend | extracts differently |
+   | `flavorProfile` | the bean has one | the cup to aim for |
+   | `altitude` | `altitudeMasl` | denser beans |
+   | `origin` | origin area, country or region | context, not a rule |
+   | `tds` | a brew has `tdsPercent` | judge strength and extraction from TDS and EY |
+   | `water` | a water with figures | hardness and alkalinity effects |
+   | `prepTools` | a brew lists prep tools | compare only brews that list them |
+   | `problems` | a brew lists problems | the clearest clues, explained first |
+   | `rpm` | a brew has `grindRpm` | speed is part of the grind |
+   | `retention` | a brew has `grinderRetentionGrams` | retention and stale grounds |
+   | `espresso` | an `espresso` method | flow, windows, machine, step size |
+   | `cold` | a style brews like `cold_brew`, `kyoto_drip` or `rapid_cold` | steep windows, dilution, concentrate TDS, levers |
+   | `end` | always | respond strictly matching the schema |
 
-> "You are an expert specialty coffee roaster and barista. Analyze the provided
-> extraction log and historical brews for this coffee bean, including roast
-> level, roast age, dose, yield, total brew time, rating, and tasting notes. Suggest
-> concrete parameter adjustments for the next brew. rating and tastingNotes
-> describe the coffee tasted on its own; drinkRating and drinkTastingNotes
-> describe the finished drink. Milk and syrup mask acidity and bitterness and
-> add sweetness, so treat drink notes as weaker evidence of extraction than
-> straight notes, and compare a brew mainly with earlier brews served the same
-> way (each brew's drink says how). Judge a brew against its recipe's style
-> (its name is the bar's own; brewsLike says how it brews, so a custom
-> 'Inverted' style that brews like immersion is an immersion brew): a soup shot is a long, high-ratio espresso on purpose, a cold brew steeps
-> cold for hours, and an immersion brew isn't a pour over. A stovetop brew
-> (moka pot, ibrik) is a strong, short brew judged on its own terms, not as
-> espresso; an 'other' method is described by its style and the notes. The bean's
-> roastType says what the roaster roasted it for: an espresso roast brewed as
-> filter (or the reverse) may need a different approach rather than small
-> corrections. Decaf and blends often extract differently from single origins.
-> The flavorProfile is the roaster's description of the cup to aim for, and a
-> higher altitudeMasl usually means denser beans that take a finer grind or
-> hotter water. For espresso, judge flow
-> from the first drop time, shot time and ratio against the recipe's
-> windows, and consider the machine's capabilities (pre-infusion, flow and
-> pressure control) and the grinder's step size when explaining the change.
-> Respond strictly matching the provided JSON schema."
+   Tests check which sections appear for given inputs and snapshot the
+   assembled prompt for a fixed brew (`worker/tests/llm.test.ts`), so a
+   wording change shows up in review.
+4. It calls the LLM API using **Structured Outputs** (strict JSON schema
+   mode): the system prompt, then the input as JSON.
 
-**Strict JSON Schema** (sent as-is; no `$schema` key, which strict mode does
-not need):
+**Strict JSON Schema** (`BREW_ANALYSIS_JSON_SCHEMA` in `worker/src/llm.ts`,
+sent as-is; no `$schema` key, which strict mode does not need):
 
 ```json
 {
@@ -148,6 +166,15 @@ not need):
       "type": "string",
       "description": "A concise 1-2 sentence diagnosis of extraction quality and why adjustments are needed."
     },
+    "nextStep": {
+      "type": "string",
+      "description": "The one concrete thing to do on the next brew, in plain words (at most 140 characters)."
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["low", "medium", "high"],
+      "description": "How sure the suggestion is: low with vague notes, no comparable brew, or measurements that look wrong."
+    },
     "suggestedGrindDelta": {
       "type": "string",
       "enum": ["much_finer", "finer", "no_change", "coarser", "much_coarser"]
@@ -155,17 +182,29 @@ not need):
     "suggestedTempDelta": {
       "type": "number",
       "description": "Suggested change in Celsius (e.g., -1.5, 0, 2.0)."
+    },
+    "suggestedRpmDelta": {
+      "type": ["integer", "null"],
+      "description": "Change in grinder speed (RPM) for a variable-speed grinder; null otherwise or to keep the speed."
     }
   },
-  "required": ["reasoning", "suggestedGrindDelta", "suggestedTempDelta"],
+  "required": ["reasoning", "nextStep", "confidence", "suggestedGrindDelta", "suggestedTempDelta", "suggestedRpmDelta"],
   "additionalProperties": false
 }
 ```
 
-3. Once parsed, the worker inserts the result into the `llm_analyses` table.
+5. Once parsed, the worker inserts the result into the `llm_analyses` table,
+   with the `model` (`OPENAI_MODEL`) and `promptVersion` (`PROMPT_VERSION`
+   in `worker/src/prompt.ts`, bumped whenever the input, prompt or schema
+   changes) that made it, so analyses can be compared (`npm run eval -w
+   worker`).
    - The response is validated again after parsing (strict mode should
      guarantee the shape, but the worker doesn't rely on it).
    - `suggestedTempDelta` is rounded to 1 decimal (the column is
-     `DECIMAL(3,1)`) and must be between −10 and +10 °C. Anything outside that
-     is treated as a bad response: the attempt fails and BullMQ retries it.
+     `DECIMAL(3,1)`) and must be between −10 and +10 °C. `nextStep` is at
+     most 200 characters (the column), `suggestedRpmDelta` an integer within
+     ±1000. Anything outside that is treated as a bad response: the attempt
+     fails and BullMQ retries it.
+   - `suggestedRpmDelta` is set to `null` unless the brew's grinder is
+     variable-speed.
    - A refusal, an empty response, or invalid JSON also fails the attempt.

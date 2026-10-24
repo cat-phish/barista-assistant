@@ -7,19 +7,14 @@ import { computed, ref, watch } from 'vue';
 import { analysisApi } from '../api/brews';
 import { errorMessage } from '../api/client';
 import type { LlmAnalysis } from '../api/types';
-import { GRIND_LABELS } from '../lib/suggest';
+import { CONFIDENCE_LABELS, GRIND_LABELS, rpmAdvice } from '../lib/suggest';
 import { formatTempChange } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 
 const props = defineProps<{ analysis: LlmAnalysis; canRate?: boolean }>();
 const { temperatureUnit } = usePreferences();
 const tempLabel = computed(() => formatTempChange(props.analysis.suggestedTempDelta, temperatureUnit.value));
-const rpmLabel = computed(() => {
-  const d = props.analysis.suggestedRpmDelta;
-  if (!d) return null;
-  return `${d > 0 ? 'Raise' : 'Lower'} the grinder speed by ${Math.abs(d)} RPM`;
-});
-const CONFIDENCE = { low: 'Low confidence', medium: 'Medium confidence', high: 'High confidence' } as const;
+const rpmLabel = computed(() => rpmAdvice(props.analysis.suggestedRpmDelta));
 
 const helpful = ref<boolean | null>(props.analysis.helpful);
 watch(
@@ -47,7 +42,7 @@ async function rate(value: boolean): Promise<void> {
   <div class="analysis" aria-live="polite">
     <p v-if="analysis.nextStep" class="next">
       <strong>Next time:</strong> {{ analysis.nextStep }}
-      <span v-if="analysis.confidence" class="badge" :class="`conf-${analysis.confidence}`">{{ CONFIDENCE[analysis.confidence] }}</span>
+      <span v-if="analysis.confidence" class="badge" :class="`conf-${analysis.confidence}`">{{ CONFIDENCE_LABELS[analysis.confidence] }}</span>
     </p>
     <p class="reasoning">“{{ analysis.reasoning }}”</p>
     <ul>

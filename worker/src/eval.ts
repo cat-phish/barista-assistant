@@ -47,8 +47,8 @@ interface RunResult {
   at: string;
   results: Array<{
     brewLogId: string;
-    contextChars: number;
-    context: unknown;
+    contextChars: number; // the input sent, in characters
+    context: unknown; // the input sent
     output: unknown;
     usage: { promptTokens: number; completionTokens: number } | null;
     error: string | null;
@@ -94,10 +94,13 @@ async function snapshot(limit: number): Promise<void> {
 async function run(label: string, yes: boolean): Promise<void> {
   const { loadBrewContext } = await import("./context.js");
   const { requestAnalysis, PROMPT_VERSION } = await import("./llm.js");
+  const { toLlmInput } = await import("./prompt.js");
   const { config } = await import("./config.js");
   const brews = readJson<Picked[]>("brews.json");
   const contexts = await Promise.all(brews.map((b) => loadBrewContext(b.brewLogId)));
-  const chars = contexts.reduce((n, c) => n + (c ? JSON.stringify(c).length : 0), 0);
+  // What's actually sent: the compact input (prompt.ts), not the full context.
+  const inputs = contexts.map((c) => (c ? toLlmInput(c) : null));
+  const chars = inputs.reduce((n, c) => n + (c ? JSON.stringify(c).length : 0), 0);
   console.log(`${brews.length} brews, prompt ${PROMPT_VERSION}, model ${config.openaiModel}: about ${Math.round(chars / 4).toLocaleString()} context tokens plus the prompt each time.`);
   if (!yes) {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -114,10 +117,10 @@ async function run(label: string, yes: boolean): Promise<void> {
     }
     try {
       const { analysis, usage } = await requestAnalysis(context);
-      out.results.push({ brewLogId: b.brewLogId, contextChars: JSON.stringify(context).length, context, output: analysis, usage, error: null });
+      out.results.push({ brewLogId: b.brewLogId, contextChars: JSON.stringify(inputs[i]).length, context: inputs[i], output: analysis, usage, error: null });
       process.stdout.write(".");
     } catch (err) {
-      out.results.push({ brewLogId: b.brewLogId, contextChars: JSON.stringify(context).length, context, output: null, usage: null, error: err instanceof Error ? err.message : String(err) });
+      out.results.push({ brewLogId: b.brewLogId, contextChars: JSON.stringify(inputs[i]).length, context: inputs[i], output: null, usage: null, error: err instanceof Error ? err.message : String(err) });
       process.stdout.write("x");
     }
   }

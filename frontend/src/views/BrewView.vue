@@ -62,7 +62,7 @@ import { grinderRetentionText } from '../lib/grinderRetention';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
 import { batchSuffix, beanLabel as pickerLabel } from '../lib/beans';
 import { formatDay, formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen } from '../lib/format';
-import { chooseGrind, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
+import { CONFIDENCE_LABELS, chooseGrind, rpmAdvice, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
 import { useWorkspaceStore } from '../stores/workspace';
 import { brewRetention, linkRatio, ratioText as formatRatio, ROAST_LEVELS, scaleBatch, scaleShot, scaleSteps, type MeasuredBrew, type ScaleField } from '../lib/scale';
 import { formatTemp, formatTempChange, tempText, TEMPERATURE_LABELS, VOLUME_LABELS, volumeUnits } from '../lib/units';
@@ -1115,12 +1115,17 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         </p>
         <p v-else-if="suggestionState === 'error'" class="form-error">Couldn't load suggestions. Try again.</p>
         <template v-else-if="suggestion">
+          <p v-if="suggestion.nextStep" class="next">
+            <strong>Next time:</strong> {{ suggestion.nextStep }}
+            <span v-if="suggestion.confidence" class="badge" :class="`conf-${suggestion.confidence}`">{{ CONFIDENCE_LABELS[suggestion.confidence] }}</span>
+          </p>
           <p class="reasoning">“{{ suggestion.reasoning }}”</p>
           <ul class="advice">
             <li>
               <strong>{{ suggestion.grindAdvice }}</strong><template v-if="suggestion.grindBase"> than {{ suggestion.grindBase }}</template><template v-if="suggestion.grinder"> ({{ suggestion.grinder.name }})</template>
             </li>
             <li><strong>{{ formatTempChange(suggestion.tempDeltaC, temperatureUnit) }}</strong><template v-if="suggestion.tempC !== null"> → {{ formatTemp(suggestion.tempC, temperatureUnit) }}</template></li>
+            <li v-if="rpmAdvice(suggestion.rpmDelta)"><strong>{{ rpmAdvice(suggestion.rpmDelta) }}</strong></li>
           </ul>
           <p v-if="suggestionGrinderMismatch" class="note small">
             That brew was on {{ suggestion.grinder?.name ?? 'no recorded grinder' }}, so its grind setting isn't copied. Adjust for {{ grinder?.name ?? 'your grinder' }}.
@@ -1435,6 +1440,16 @@ p {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+}
+.next {
+  margin: 0;
+}
+.next .badge {
+  margin-left: var(--space-1);
+  white-space: nowrap;
+}
+.conf-low {
+  opacity: 0.75;
 }
 .reasoning {
   font-style: italic;
