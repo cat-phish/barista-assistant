@@ -10,7 +10,7 @@ import type { WaterProfile } from '../api/types';
 import { waterProfilesApi } from '../api/waterProfiles';
 import AppHeader from '../components/AppHeader.vue';
 import ListControls from '../components/ListControls.vue';
-import ExportBar from '../components/ExportBar.vue';
+import ListDataBar from '../components/ListDataBar.vue';
 import { useSelection } from '../composables/useSelection';
 import SetupTabs from '../components/SetupTabs.vue';
 import { formatAdded } from '../lib/format';
@@ -151,7 +151,7 @@ const selection = useSelection();
           </div>
         </div>
         <ListControls v-model:sort="sort" :sort-columns="sortChoices" id-prefix="water" v-model:show-archived="showArchived" :archived-count="archivedCount" />
-        <ExportBar list="water_profiles" noun="water profiles" :selection="selection" :visible-ids="shown.map((x) => x.id)" />
+        <ListDataBar list="water_profiles" noun="water profiles" :selection="selection" :visible-ids="shown.map((x) => x.id)" @imported="load()" />
         <p v-if="showArchived" class="muted small">Archived water is hidden when brewing; past brews still show it.</p>
         <p v-if="shown.length === 0" class="card empty">No active water profiles.</p>
         <div v-else class="data-table" style="--cols: minmax(0, 2fr) repeat(3, minmax(0, 0.7fr)) 5.5rem">

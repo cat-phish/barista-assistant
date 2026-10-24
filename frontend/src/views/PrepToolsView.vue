@@ -11,7 +11,7 @@ import DeleteDialog from '../components/DeleteDialog.vue';
 import SetupTabs from '../components/SetupTabs.vue';
 import { METHOD_KINDS, METHOD_ORDER } from '../lib/equipment';
 import { methodLabel } from '../lib/prepTools';
-import ExportBar from '../components/ExportBar.vue';
+import ListDataBar from '../components/ListDataBar.vue';
 import { useSelection } from '../composables/useSelection';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -125,7 +125,7 @@ const selection = useSelection();
             Show archived ({{ archivedCount }})
           </label>
         </div>
-        <ExportBar list="prep_tools" noun="tools" :selection="selection" :visible-ids="shown.map((t) => t.id)" />
+        <ListDataBar list="prep_tools" noun="tools" :selection="selection" :visible-ids="shown.map((t) => t.id)" @imported="load()" />
         <ol v-if="shown.length" class="tools">
           <li v-for="(t, i) in shown" :key="t.id">
             <form v-if="editingId === t.id" class="row" novalidate @submit.prevent="saveEdit(t)">

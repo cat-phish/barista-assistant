@@ -92,7 +92,8 @@ async function downloadCsv(list: 'brew_logs' | 'beans'): Promise<void> {
       <h2 id="data-export">Export lists</h2>
       <p class="muted small">
         Some lists as a file, to share with another bar or bring into another workspace. What their items need comes along: a recipe's brewer and
-        grinders, a drink's recipe and ingredients, a brew's bean. List pages can export just the items you pick.
+        grinders, a drink's recipe and ingredients, a brew's bean. Each list page can also export the items you pick ("Select to export…")
+        and import into that list ("Import…").
       </p>
       <template v-if="isOwner">
         <div class="list-grid">
@@ -126,8 +127,8 @@ async function downloadCsv(list: 'brew_logs' | 'beans'): Promise<void> {
     <section class="card stack" aria-labelledby="data-import">
       <h2 id="data-import">Import into {{ workspaces.current?.name }}</h2>
       <p class="muted small">
-        Lists from an export (or a backup) are added here. Anything already here with the same name is used instead of a second one, unless you
-        choose to add copies; the preview shows which.
+        Lists from an export (or a backup) are added here, several at once. Anything already here with the same name is used instead of a
+        second one, unless you choose to add copies; the preview shows which.
       </p>
       <ImportLists v-if="isOwner" />
       <p v-else class="muted small">Only owners can import.</p>

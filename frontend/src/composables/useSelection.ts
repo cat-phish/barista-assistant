@@ -1,5 +1,5 @@
 // A list page's select mode, for exporting some of its items
-// (components/ExportBar.vue). Reactive, so templates read it directly.
+// (components/ListDataBar.vue). Reactive, so templates read it directly.
 import { reactive } from 'vue';
 
 export interface Selection {

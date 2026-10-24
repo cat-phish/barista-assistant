@@ -6,7 +6,7 @@ import { brewLogsApi } from '../api/brews';
 import { errorMessage } from '../api/client';
 import type { Bean, BrewLog } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
-import ExportBar from '../components/ExportBar.vue';
+import ListDataBar from '../components/ListDataBar.vue';
 import RatingStars from '../components/RatingStars.vue';
 import { useSelection } from '../composables/useSelection';
 import { batchSuffix, beanLabel } from '../lib/beans';
@@ -107,7 +107,7 @@ const cardProps = (id: string) =>
 
     <template v-else>
       <p class="muted count">{{ total }} brew{{ total === 1 ? '' : 's' }}</p>
-      <ExportBar list="brew_logs" noun="brews" csv="brew_logs" :selection="selection" :visible-ids="logs.map((l) => l.id)" />
+      <ListDataBar list="brew_logs" noun="brews" :selection="selection" :visible-ids="logs.map((l) => l.id)" @imported="load(true)" />
       <ul class="list">
         <li v-for="log in logs" :key="log.id" class="item">
           <component

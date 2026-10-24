@@ -7,6 +7,9 @@ export interface BackupFile {
   exportedAt: string;
   workspace: { name: string; slug: string };
   tables: Record<string, unknown[]>;
+  // An export (By list): which lists it was made for.
+  scope?: 'lists';
+  lists?: ListName[];
 }
 
 // What can be exported and imported on its own (docs/api/backup.md §2b, "By list").

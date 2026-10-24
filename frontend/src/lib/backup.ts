@@ -1,6 +1,6 @@
 // Reading a backup file before restoring it (docs/api/backup.md §2b), and
 // saving one. Unit-tested in backup.test.ts.
-import type { BackupFile, ListName } from '../api/backup';
+import { LISTS, type BackupFile, type ListName } from '../api/backup';
 
 // What the preview counts, by the file's table names.
 const COUNTED: Array<[table: string, one: string, many: string]> = [
@@ -29,6 +29,21 @@ export function readBackup(text: string): ReadBackup {
     return { ok: false, error: "That file isn't a Barista backup." };
   }
   return { ok: true, file: file as BackupFile };
+}
+
+// The lists a file can import (docs/api/backup.md §2b, "By list"): an export
+// says which it was made for; a backup has every list it has rows of.
+export function fileLists(file: BackupFile): ListName[] {
+  if (file.scope === 'lists' && file.lists) return LISTS.filter((l) => file.lists!.includes(l));
+  return LISTS.filter((l) => (file.tables[l]?.length ?? 0) > 0);
+}
+
+// Why a list page's Import… can't use this file, or null when it can.
+export function missingListError(file: BackupFile, list: ListName): string | null {
+  const has = fileLists(file);
+  if (has.includes(list)) return null;
+  const others = has.map((l) => LIST_LABELS[l].toLowerCase()).join(', ');
+  return `This file has no ${LIST_LABELS[list].toLowerCase()}${others ? ` (it has ${others}); import it from Settings → Data` : ''}.`;
 }
 
 // "12 brews · 3 beans · 2 recipes", leaving out what the file has none of.

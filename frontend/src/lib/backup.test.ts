@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BackupFile } from '../api/backup';
-import { backupFileName, backupSummary, detailsText, exportFileName, readBackup, tableLabel } from './backup';
+import { backupFileName, backupSummary, detailsText, exportFileName, fileLists, missingListError, readBackup, tableLabel } from './backup';
 
 const file: BackupFile = {
   format: 'barista-backup',
@@ -25,5 +25,17 @@ describe('backup files', () => {
   it('names tables and the rows that come along', () => {
     expect([tableLabel('brew_logs'), tableLabel('recipe_styles'), tableLabel('something_new')]).toEqual(['Journal (brews)', 'Recipe styles', 'something new']);
     expect(detailsText({ recipe_steps: 4, recipe_grind_settings: 2 })).toBe('4 recipe steps · 2 grind starting points');
+  });
+
+  it('knows which lists a file can import: an export says, a backup has the ones with rows', () => {
+    expect(fileLists(file)).toEqual(['beans', 'grinders', 'brew_logs']);
+    const recipes: BackupFile = { ...file, scope: 'lists', lists: ['drinks', 'recipes'], tables: { recipes: [{}], brewers: [{}], drinks: [{}] } };
+    expect(fileLists(recipes)).toEqual(['recipes', 'drinks']); // brewers only came along
+  });
+
+  it("explains a file a list page can't import", () => {
+    expect(missingListError(file, 'beans')).toBeNull();
+    expect(missingListError(file, 'recipes')).toBe('This file has no recipes (it has beans, grinders, journal (brews)); import it from Settings → Data.');
+    expect(missingListError({ ...file, tables: {} }, 'drinks')).toBe('This file has no drinks.');
   });
 });
