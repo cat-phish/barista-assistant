@@ -12,6 +12,7 @@ import type { BeanProcess, BrewerMethod, BrewProblem, MethodKind, RecipeStyle, R
 import { METHOD_KINDS, METHOD_ORDER, RECIPE_STYLES, STYLES_BY_KIND } from '../lib/equipment';
 import { methodLabel } from '../lib/prepTools';
 import EditableList, { type ListApi } from '../components/EditableList.vue';
+import ExportBar from '../components/ExportBar.vue';
 import SettingsLayout from '../components/SettingsLayout.vue';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -179,7 +180,10 @@ const styleApi = computed<ListApi>(() => {
     </section>
 
     <section class="card stack" aria-labelledby="list-problems">
-      <h2 id="list-problems">Brew problems</h2>
+      <div class="card-head">
+        <h2 id="list-problems">Brew problems</h2>
+        <ExportBar list="brew_problems" noun="brew problems" />
+      </div>
       <p class="muted small">
         What can go wrong while brewing, offered as a checklist when you log a brew (for its method, plus the ones for all methods). The AI reads
         them as the clearest clues for the next brew.
@@ -209,6 +213,13 @@ h2 {
 }
 p {
   margin: 0;
+}
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 .methods {
   display: flex;

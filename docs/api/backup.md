@@ -46,7 +46,8 @@ app offers both on Settings → Data, and restore also on the workspaces page
 
 **Adding a table** to the schema means deciding: back it up (add it to
 `BACKUP_TABLES` in insert order, any enum column to `ENUMS`, any JSON
-column to `JSON_SCHEMAS`) or leave it out (`NOT_BACKED_UP`). A test fails
+column to `JSON_SCHEMAS`, and for a top-level table a key in `MATCH_KEYS`,
+"By list" below) or leave it out (`NOT_BACKED_UP`). A test fails
 until one is done, and another checks each table only points at tables
 above it.
 
@@ -80,3 +81,73 @@ above it.
   first"`; `409` `"Slug already taken"`, or the file repeats a name a
   workspace keeps unique (two grinders called "C40"); `413` larger than 50
   MB. Nothing is created on an error.
+
+## By list
+
+An **export** is a backup file holding only some lists (or some of their
+items) and everything they need; an **import** brings a file's lists into
+the **current** workspace. A whole backup can be imported a list at a time
+too. The app offers export on each list page (all, or "Select to export…")
+and on Settings → Data, which also has the import. Code:
+`backend/src/listImport.ts`.
+
+- **Lists:** `beans`, `recipes`, `drinks`, `ingredients`, `brewers`,
+  `grinders`, `water_profiles`, `prep_tools`, `brew_problems`, `brew_logs`
+  (the journal).
+- **The file** is the backup format above plus `"scope": "lists"` and
+  `"lists": [...]`. Besides the chosen rows it holds their child rows
+  (steps, grind starting points, freezes, a drink's ingredients, a brew's
+  marks, prep and problem ticks, AI analyses) and, repeatedly, every row
+  they point at: a recipe's brewer, style and grinders, the brewer's method,
+  a drink's recipe and ingredients, a brew's bean, recipe, grinder, water,
+  drink, tools and problems. Nothing else (no menu, no other lists).
+- **Matching** (`MATCH_KEYS`): a row is "already here" when the workspace
+  has one with the same key, and the import uses that one instead:
+  - by name (case-insensitive) for brewers, grinders, water profiles, prep
+    tools, brew problems, ingredients, drink categories and menu sections;
+  - brewer methods and bean processes by built-in key or name; recipe
+    styles by method and built-in key or name;
+  - beans by roaster, name and batch; recipes by name and brewer; drinks by
+    name and kind;
+  - brews by time, bean and dose, so a journal imported twice isn't
+    doubled.
+  A child row comes with its parent when that's added, and is left out when
+  the parent is already here.
+- **Duplicates:** `"existing"` (default) uses what's here; `"copy"` adds the
+  chosen lists' items again, renamed `"House V60 (2)"`. What they need is
+  still reused, and brews are never copied.
+- Added rows get new IDs, the importer as their brewer, and keep archive
+  dates and "date added"; an added water profile is never the default.
+
+### `POST /api/workspaces/:workspaceId/export`
+
+- **Auth Required:** `true` (role `owner`)
+- **Body:** `{ "lists": ["recipes", "drinks"], "ids": { "recipes": ["uuid"] } }`
+  (`ids` optional: only those items of a list).
+- **Success (`200 OK`):** the file, as an attachment
+  `<slug>-<lists>-YYYY-MM-DD.json`.
+- **Errors:** `400` unknown list; `403` not an owner.
+
+### `POST /api/workspaces/:workspaceId/import/preview` and `.../import`
+
+- **Auth Required:** `true` (role `owner`)
+- **Body** (up to 50 MB): `{ "file": { ...export or backup }, "lists":
+  ["recipes"], "duplicates": "existing" | "copy" }`. `lists` defaults to
+  the file's `lists`, or for a backup every list it has rows of.
+- **Success (`200 OK`):** both answer the same summary; the preview writes
+  nothing, the import writes it in one transaction:
+
+  ```json
+  {
+    "lists": ["recipes"],
+    "tables": [
+      { "table": "grinders", "added": ["Ode"], "matched": [{ "name": "C40", "existing": "c40" }] },
+      { "table": "recipes", "added": ["House V60"], "matched": [] }
+    ],
+    "details": { "recipe_steps": 1, "recipe_grind_settings": 2 }
+  }
+  ```
+
+- **Errors:** `400` a bad file (as for restore) or a list the file doesn't
+  have; `403` not an owner; `409` the file repeats a name a workspace keeps
+  unique. Nothing is written on an error.

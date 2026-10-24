@@ -11,6 +11,8 @@ import DeleteDialog from '../components/DeleteDialog.vue';
 import SetupTabs from '../components/SetupTabs.vue';
 import { METHOD_KINDS, METHOD_ORDER } from '../lib/equipment';
 import { methodLabel } from '../lib/prepTools';
+import ExportBar from '../components/ExportBar.vue';
+import { useSelection } from '../composables/useSelection';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
@@ -100,6 +102,8 @@ async function deleted(): Promise<void> {
   editingId.value = null;
   await load();
 }
+// Select mode for exporting some tools (components/ExportBar.vue).
+const selection = useSelection();
 </script>
 
 <template>
@@ -121,6 +125,7 @@ async function deleted(): Promise<void> {
             Show archived ({{ archivedCount }})
           </label>
         </div>
+        <ExportBar list="prep_tools" noun="tools" :selection="selection" :visible-ids="shown.map((t) => t.id)" />
         <ol v-if="shown.length" class="tools">
           <li v-for="(t, i) in shown" :key="t.id">
             <form v-if="editingId === t.id" class="row" novalidate @submit.prevent="saveEdit(t)">
@@ -136,6 +141,7 @@ async function deleted(): Promise<void> {
               <button class="btn-link danger" type="button" @click="deleting = t">Delete</button>
             </form>
             <div v-else class="row">
+              <input v-if="selection.selecting" type="checkbox" :checked="selection.has(t.id)" :aria-label="`Select ${t.name}`" @change="selection.toggle(t.id)" />
               <span class="name" :class="{ muted: t.archivedAt }">{{ t.name }}<template v-if="t.archivedAt"> (archived)</template></span>
               <span class="badge">{{ methodLabel(t.methodKind) }}</span>
               <template v-if="workspaces.canEdit">

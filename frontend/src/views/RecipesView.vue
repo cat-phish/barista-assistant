@@ -9,6 +9,8 @@ import { recipesApi } from '../api/recipes';
 import type { Brewer, Recipe } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ListControls from '../components/ListControls.vue';
+import ExportBar from '../components/ExportBar.vue';
+import { useSelection } from '../composables/useSelection';
 import MenuTabs from '../components/MenuTabs.vue';
 import { formatAdded, formatDoseLine, formatGrams, formatGrind, formatTime } from '../lib/format';
 import { addedColumn, isSortKey, nameColumn, recallView, rememberView, sortArrow, sortBy, sortLabel, sortColumnOptions, toggleHeader, type SortColumns } from '../lib/listSort';
@@ -115,6 +117,8 @@ async function setArchived(r: Recipe, archived: boolean): Promise<void> {
   }
 }
 
+// Select mode for exporting some items (components/ExportBar.vue).
+const selection = useSelection();
 </script>
 
 <template>
@@ -135,6 +139,7 @@ async function setArchived(r: Recipe, archived: boolean): Promise<void> {
 
     <template v-else>
       <ListControls v-model:filter="brewerFilter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="recipes" filter-label="Brewer" :filter-options="brewerOptions" v-model:show-archived="showArchived" :archived-count="archivedCount" />
+      <ExportBar list="recipes" noun="recipes" :selection="selection" :visible-ids="shown.map((x) => x.id)" />
       <p v-if="showArchived" class="muted small">Archived recipes are hidden when brewing and in drink forms; past brews still show them.</p>
       <p v-if="shown.length === 0" class="card empty">No recipes for {{ filterName }} yet.</p>
       <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1.1fr) minmax(0, 0.9fr) minmax(0, 1.2fr) 5.5rem">
@@ -152,8 +157,8 @@ async function setArchived(r: Recipe, archived: boolean): Promise<void> {
           </button>
         </div>
         <div v-for="recipe in shown" :key="recipe.id" class="data-item" :class="{ open: openId === recipe.id }">
-          <button class="data-row" type="button" :aria-expanded="openId === recipe.id" @click="toggle(recipe.id)">
-            <span class="data-td primary">{{ recipe.name }}<span v-if="recipe.archivedAt" class="muted"> (archived)</span></span>
+          <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === recipe.id" :aria-pressed="selection.selecting ? selection.has(recipe.id) : undefined" @click="selection.selecting ? selection.toggle(recipe.id) : toggle(recipe.id)">
+            <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(recipe.id) ? '☑' : '☐' }}</span>{{ recipe.name }}<span v-if="recipe.archivedAt" class="muted"> (archived)</span></span>
             <span class="data-td">{{ recipe.brewer.name }}</span>
             <span class="data-td">{{ recipe.style?.name ?? '–' }}</span>
             <span class="data-td">{{ formatDoseLine(recipe.targetDoseGrams, recipe.targetWaterGrams, recipe.expectedYieldGrams) }}</span>

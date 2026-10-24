@@ -12,6 +12,8 @@ import AppHeader from '../components/AppHeader.vue';
 import BeanTabs from '../components/BeanTabs.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import ListControls from '../components/ListControls.vue';
+import ExportBar from '../components/ExportBar.vue';
+import { useSelection } from '../composables/useSelection';
 import RatingInput from '../components/RatingInput.vue';
 import RatingStars from '../components/RatingStars.vue';
 import {
@@ -392,6 +394,8 @@ async function confirmFreeze(): Promise<void> {
     freezing.value = false;
   }
 }
+// Select mode for exporting some items (components/ExportBar.vue).
+const selection = useSelection();
 </script>
 
 <template>
@@ -430,6 +434,8 @@ async function confirmFreeze(): Promise<void> {
         </section>
 
         <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" :id-prefix="`beans-${tab}`" filter-label="Show" :filter-options="filterOptions" />
+
+        <ExportBar list="beans" noun="beans" :selection="selection" :visible-ids="shown.map((x) => x.id)" />
         <p v-if="rowError" class="form-error" role="alert">{{ rowError }}</p>
         <p v-if="shown.length === 0" class="card empty">No {{ filterName }} {{ archived ? 'archived ' : '' }}beans.</p>
         <div v-else class="data-table" :style="{ '--cols': TABLE_COLS }">
@@ -448,8 +454,8 @@ async function confirmFreeze(): Promise<void> {
             </button>
           </div>
           <div v-for="bean in shown" :key="bean.id" class="data-item" :class="{ open: openId === bean.id }">
-            <button class="data-row" type="button" :aria-expanded="openId === bean.id" @click="toggle(bean.id)">
-              <span class="data-td primary">
+            <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === bean.id" :aria-pressed="selection.selecting ? selection.has(bean.id) : undefined" @click="selection.selecting ? selection.toggle(bean.id) : toggle(bean.id)">
+              <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(bean.id) ? '☑' : '☐' }}</span>
                 {{ bean.beanName }}{{ batchSuffix(bean) }}<span v-if="openFreeze(bean)" class="frozen-mark phone-only" aria-label="frozen"> ❄</span>
               </span>
               <span class="data-td wide-only center">

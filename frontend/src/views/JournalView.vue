@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { beansApi } from '../api/beans';
 import { brewLogsApi } from '../api/brews';
 import { errorMessage } from '../api/client';
 import type { Bean, BrewLog } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
+import ExportBar from '../components/ExportBar.vue';
 import RatingStars from '../components/RatingStars.vue';
+import { useSelection } from '../composables/useSelection';
 import { batchSuffix, beanLabel } from '../lib/beans';
 import { formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen } from '../lib/format';
 import { formatSize } from '../lib/servings';
@@ -62,6 +64,13 @@ onMounted(async () => {
   await load(true);
 });
 watch(beanFilter, () => load(true));
+// Select mode for exporting some brews (components/ExportBar.vue): a card
+// is then a button that ticks it, not a link.
+const selection = useSelection();
+const cardProps = (id: string) =>
+  selection.selecting
+    ? { type: 'button', 'aria-pressed': selection.has(id), onClick: () => selection.toggle(id) }
+    : { to: { name: 'journal-entry', params: { id } } };
 </script>
 
 <template>
@@ -88,11 +97,17 @@ watch(beanFilter, () => load(true));
 
     <template v-else>
       <p class="muted count">{{ total }} brew{{ total === 1 ? '' : 's' }}</p>
+      <ExportBar list="brew_logs" noun="brews" :selection="selection" :visible-ids="logs.map((l) => l.id)" />
       <ul class="list">
         <li v-for="log in logs" :key="log.id" class="item">
-          <RouterLink class="card entry" :class="{ repeatable: workspaces.canEdit }" :to="{ name: 'journal-entry', params: { id: log.id } }">
+          <component
+            :is="selection.selecting ? 'button' : RouterLink"
+            class="card entry"
+            :class="{ repeatable: workspaces.canEdit && !selection.selecting, picked: selection.has(log.id) }"
+            v-bind="cardProps(log.id)"
+          >
             <div class="head">
-              <span class="when">{{ formatWhen(log.timestamp) }}</span>
+              <span class="when"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(log.id) ? '☑' : '☐' }}</span>{{ formatWhen(log.timestamp) }}</span>
               <span v-if="log.steeping" class="badge steeping">Steeping</span>
               <RatingStars v-else :rating="log.rating ?? log.drinkRating" />
             </div>
@@ -107,9 +122,9 @@ watch(beanFilter, () => load(true));
               <span v-if="log.actualGrindSetting !== null || log.grinder">{{ [log.actualGrindSetting !== null ? formatGrind(log.actualGrindSetting) : null, log.grindRpm !== null ? `${log.grindRpm} RPM` : null, log.grinder?.name].filter(Boolean).join(' · ') }}</span>
             </span>
             <span v-if="log.tastingNotes || log.drinkTastingNotes" class="notes">{{ log.tastingNotes ?? log.drinkTastingNotes }}</span>
-          </RouterLink>
+          </component>
           <!-- Beside the card link, not inside it: links can't nest. -->
-          <RouterLink v-if="workspaces.canEdit" class="btn-link small brew-again" :to="{ name: 'brew', query: { repeat: log.id } }">Brew again</RouterLink>
+          <RouterLink v-if="workspaces.canEdit && !selection.selecting" class="btn-link small brew-again" :to="{ name: 'brew', query: { repeat: log.id } }">Brew again</RouterLink>
         </li>
       </ul>
       <button v-if="logs.length < total" class="btn btn-secondary" type="button" :disabled="loadingMore" @click="load(false)">
@@ -158,8 +173,16 @@ watch(beanFilter, () => load(true));
   color: var(--text);
   text-decoration: none;
 }
-.entry:hover {
+.entry:hover,
+.entry.picked {
   border-color: var(--brand);
+}
+/* A card in select mode is a button. */
+button.entry {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 .head {
   display: flex;

@@ -14,7 +14,7 @@ import { brewersRouter } from "./routes/brewers.js";
 import { grindersRouter } from "./routes/grinders.js";
 import { waterProfilesRouter } from "./routes/waterProfiles.js";
 import { prepToolsRouter } from "./routes/prepTools.js";
-import { backupRouter, RESTORE_PATH } from "./routes/backup.js";
+import { backupRouter, LARGE_BODY_PATH } from "./routes/backup.js";
 import { brewProblemsRouter } from "./routes/brewProblems.js";
 import { ingredientsRouter } from "./routes/ingredients.js";
 import { drinkCategoriesRouter } from "./routes/drinkCategories.js";
@@ -39,11 +39,11 @@ export const app = express();
 app.set("trust proxy", config.trustProxy);
 
 app.use(cors({ origin: config.corsOrigin, credentials: true }));
-// A restore uploads a whole workspace (docs/api/backup.md §2b); everything
-// else keeps the default 100 kB limit.
+// A restore or import uploads a backup file (docs/api/backup.md §2b);
+// everything else keeps the default 100 kB limit.
 const jsonBody = express.json();
 const restoreBody = express.json({ limit: "50mb" });
-app.use((req, res, next) => (req.path === RESTORE_PATH ? restoreBody : jsonBody)(req, res, next));
+app.use((req, res, next) => (LARGE_BODY_PATH.test(req.path) ? restoreBody : jsonBody)(req, res, next));
 app.use(cookieParser());
 
 app.get("/health", async (_req: Request, res: Response<HealthResponse>) => {

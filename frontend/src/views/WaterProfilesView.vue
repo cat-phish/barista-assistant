@@ -10,6 +10,8 @@ import type { WaterProfile } from '../api/types';
 import { waterProfilesApi } from '../api/waterProfiles';
 import AppHeader from '../components/AppHeader.vue';
 import ListControls from '../components/ListControls.vue';
+import ExportBar from '../components/ExportBar.vue';
+import { useSelection } from '../composables/useSelection';
 import SetupTabs from '../components/SetupTabs.vue';
 import { formatAdded } from '../lib/format';
 import {
@@ -115,6 +117,8 @@ async function change(p: WaterProfile, input: { archived: boolean }): Promise<vo
   }
 }
 
+// Select mode for exporting some items (components/ExportBar.vue).
+const selection = useSelection();
 </script>
 
 <template>
@@ -147,6 +151,7 @@ async function change(p: WaterProfile, input: { archived: boolean }): Promise<vo
           </div>
         </div>
         <ListControls v-model:sort="sort" :sort-columns="sortChoices" id-prefix="water" v-model:show-archived="showArchived" :archived-count="archivedCount" />
+        <ExportBar list="water_profiles" noun="water profiles" :selection="selection" :visible-ids="shown.map((x) => x.id)" />
         <p v-if="showArchived" class="muted small">Archived water is hidden when brewing; past brews still show it.</p>
         <p v-if="shown.length === 0" class="card empty">No active water profiles.</p>
         <div v-else class="data-table" style="--cols: minmax(0, 2fr) repeat(3, minmax(0, 0.7fr)) 5.5rem">
@@ -159,8 +164,8 @@ async function change(p: WaterProfile, input: { archived: boolean }): Promise<vo
             </button>
           </div>
           <div v-for="p in shown" :key="p.id" class="data-item" :class="{ open: openId === p.id }">
-            <button class="data-row" type="button" :aria-expanded="openId === p.id" @click="toggle(p.id)">
-              <span class="data-td primary">{{ p.name }}<span v-if="p.archivedAt" class="muted"> (archived)</span> <span v-if="p.isDefault" class="badge">Default</span></span>
+            <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === p.id" :aria-pressed="selection.selecting ? selection.has(p.id) : undefined" @click="selection.selecting ? selection.toggle(p.id) : toggle(p.id)">
+              <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(p.id) ? '☑' : '☐' }}</span>{{ p.name }}<span v-if="p.archivedAt" class="muted"> (archived)</span> <span v-if="p.isDefault" class="badge">Default</span></span>
               <span class="data-td">{{ figure(p.tdsPpm) }}</span>
               <span class="data-td">{{ figure(p.generalHardnessPpm) }}</span>
               <span class="data-td">{{ figure(p.alkalinityPpm) }}</span>

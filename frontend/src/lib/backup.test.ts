@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BackupFile } from '../api/backup';
-import { backupFileName, backupSummary, readBackup } from './backup';
+import { backupFileName, backupSummary, detailsText, exportFileName, readBackup, tableLabel } from './backup';
 
 const file: BackupFile = {
   format: 'barista-backup',
@@ -20,5 +20,10 @@ describe('backup files', () => {
   it('sums up what it holds and names the download', () => {
     expect(backupSummary(file)).toBe('2 brews · 1 bean · 1 grinder');
     expect(backupFileName(file)).toBe('home-bar-backup-2026-10-23.json');
+    expect(exportFileName(file, ['recipes', 'water_profiles'])).toBe('home-bar-recipes-water-profiles-2026-10-23.json');
+  });
+  it('names tables and the rows that come along', () => {
+    expect([tableLabel('brew_logs'), tableLabel('recipe_styles'), tableLabel('something_new')]).toEqual(['Journal (brews)', 'Recipe styles', 'something new']);
+    expect(detailsText({ recipe_steps: 4, recipe_grind_settings: 2 })).toBe('4 recipe steps · 2 grind starting points');
   });
 });
