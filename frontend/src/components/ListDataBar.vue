@@ -8,9 +8,11 @@ import { computed, ref, watch } from 'vue';
 import { backupApi, type ListName } from '../api/backup';
 import { errorMessage } from '../api/client';
 import type { Selection } from '../composables/useSelection';
-import { exportFileName, LIST_LABELS, saveJson } from '../lib/backup';
+import { COMES_ALONG, exportFileName, LIST_LABELS, saveJson } from '../lib/backup';
 import { useWorkspaceStore } from '../stores/workspace';
 import ImportLists from './ImportLists.vue';
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 const props = defineProps<{
   list: ListName;
@@ -76,9 +78,9 @@ function openImport(): void {
     <dialog ref="dialog" class="import-dialog" :aria-label="`Import ${LIST_LABELS[list].toLowerCase()}`" @cancel.prevent="importing = false">
       <h2>Import {{ LIST_LABELS[list].toLowerCase() }}</h2>
       <p class="muted small">
-        From an export or a backup file. What they need comes along (a recipe's brewer and grinders, a drink's ingredients…), and anything
-        already here with the same name is used instead of a second one, unless you choose to add copies. To import several lists at once, use
-        Settings → Data.
+        From an export or a backup file.<template v-if="COMES_ALONG[list]"> {{ capitalize(COMES_ALONG[list]!) }} comes along too.</template>
+        Anything already here with the same name is used instead of a second one, unless you choose to add copies. To import several lists at
+        once, use Settings → Data.
       </p>
       <ImportLists v-if="importing" :key="importKey" :only="list" @imported="emit('imported')" />
       <div class="actions">

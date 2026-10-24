@@ -117,6 +117,21 @@ describe("import by list", () => {
     expect(names((await other.agent.get(`${tbase}/recipes`)).body.recipes)).toEqual(["House V60", "House V60 (2)"]);
   });
 
+  it("a bean copied back into its own workspace gets its bean name numbered, its process reused", async () => {
+    const owner = await newUser();
+    const ws = await newWorkspace(owner);
+    const base = `/api/workspaces/${ws.id}`;
+    const bean = await newBean(owner, ws.id, { roasterName: "Test Roaster", beanName: "Test Bean" });
+    const file = await exportOf(owner, base, { lists: ["beans"], ids: { beans: [bean] } });
+    const preview = await owner.agent.post(`${base}/import/preview`).send({ file, lists: ["beans"] });
+    expect(preview.body.tables.find((t: { table: string }) => t.table === "beans")).toEqual({ table: "beans", added: [], matched: [{ name: "Test Roaster Test Bean", existing: "Test Roaster Test Bean" }] });
+    const copy = await owner.agent.post(`${base}/import`).send({ file, lists: ["beans"], duplicates: "copy" });
+    expect(copy.body.tables.find((t: { table: string }) => t.table === "beans").added).toEqual(["Test Roaster Test Bean (2)"]);
+    await owner.agent.post(`${base}/import`).send({ file, lists: ["beans"], duplicates: "copy" });
+    const beans = (await owner.agent.get(`${base}/beans`)).body.beans as Array<{ roasterName: string; beanName: string }>;
+    expect(beans.map((b) => `${b.roasterName} | ${b.beanName}`).sort()).toEqual(["Test Roaster | Test Bean", "Test Roaster | Test Bean (2)", "Test Roaster | Test Bean (3)"]);
+  });
+
   it("never adds the same brew twice, and gives imported brews to the importer", async () => {
     const { owner, base } = await source();
     const file = await exportOf(owner, base, { lists: ["brew_logs"] });

@@ -36,6 +36,11 @@ export const MATCH_KEYS: Record<string, (row: BackupRow) => string[]> = {
   brew_logs: (r) => [`${new Date(r.timestamp as string | Date).toISOString()}|${r.beanId}|${Number(r.actualDoseGrams)}`],
 };
 
+// The column a copy's "(2)" goes on: its name, or for a bean its bean name
+// (the roaster stays). Brews have none and are never copied.
+const NAME_COLUMN: Record<string, string> = { beans: "beanName" };
+const nameColumn = (table: string) => NAME_COLUMN[table] ?? "name";
+
 // How a row is named in a summary.
 export function rowLabel(table: string, r: BackupRow): string {
   if (table === "beans") return [r.roasterName, r.beanName, r.batchNumber ? `(batch ${r.batchNumber})` : ""].filter(Boolean).join(" ");
@@ -145,7 +150,7 @@ async function plan(conn: typeof db | Tx, workspaceId: string, userId: string, f
     if (t.scope === "workspace") {
       for (const row of (await conn.select().from(t.table).where(eq(t.columns.workspaceId!, workspaceId))) as BackupRow[]) {
         for (const k of keyFn!(row)) existing.set(k, row);
-        if ("name" in t.columns) names.add(lower(row.name));
+        if (nameColumn(t.name) in t.columns) names.add(lower(row[nameColumn(t.name)]));
       }
     }
 
@@ -187,11 +192,12 @@ async function plan(conn: typeof db | Tx, workspaceId: string, userId: string, f
       out.id = id;
       out.workspaceId = workspaceId;
       for (const key of t.userColumns) out[key] = userId;
-      // A copy gets a name of its own: "House V60 (2)".
-      if (copy && "name" in t.columns && typeof out.name === "string") {
-        const base = out.name;
-        for (let n = 2; names.has(lower(out.name)); n++) out.name = `${base} (${n})`;
-        names.add(lower(out.name));
+      // A copy gets a name of its own: "House V60 (2)", a bean "Guji (2)".
+      const col = nameColumn(t.name);
+      if (copy && col in t.columns && typeof out[col] === "string") {
+        const base = out[col];
+        for (let n = 2; names.has(lower(out[col])); n++) out[col] = `${base} (${n})`;
+        names.add(lower(out[col]));
       }
       // One default water at most: the workspace's stays.
       if (t.name === "water_profiles") out.isDefault = false;

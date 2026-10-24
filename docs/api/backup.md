@@ -156,7 +156,8 @@ too. Where the app offers them: "Where it is" above. Code:
   A child row comes with its parent when that's added, and is left out when
   the parent is already here.
 - **Duplicates:** `"existing"` (default) uses what's here; `"copy"` adds the
-  chosen lists' items again, renamed `"House V60 (2)"`. What they need is
+  chosen lists' items again, renamed `"House V60 (2)"` (a bean's bean name
+  gets the number, the roaster stays: `"Test Bean (2)"`). What they need is
   still reused, and brews are never copied.
 - Added rows get new IDs, the importer as their brewer, and keep archive
   dates and "date added"; an added water profile is never the default.

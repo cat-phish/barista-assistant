@@ -7,7 +7,7 @@
 import { computed, ref } from 'vue';
 import { backupApi, type BackupFile, type Duplicates, type ImportSummary, type ListName } from '../api/backup';
 import { errorMessage } from '../api/client';
-import { detailsText, LIST_LABELS, missingListError, readBackup, tableLabel } from '../lib/backup';
+import { copyExample, detailsText, LIST_LABELS, missingListError, readBackup, tableLabel } from '../lib/backup';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const props = defineProps<{ only?: ListName }>();
@@ -137,7 +137,7 @@ const addedCount = (s: ImportSummary) => s.tables.reduce((n, t) => n + t.added.l
         </label>
         <label class="checkbox">
           <input type="radio" name="duplicates" :checked="duplicates === 'copy'" @change="setDuplicates('copy')" />
-          Add as a copy ("House V60 (2)")
+          Add as a copy ("{{ copyExample(file, lists) }}")
         </label>
         <span class="hint">Brews already in the journal are never added twice.</span>
       </fieldset>
