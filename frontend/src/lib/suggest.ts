@@ -19,6 +19,22 @@ export function rpmAdvice(delta: number | null): string | null {
   return `${delta > 0 ? 'Raise' : 'Lower'} the grinder speed by ${Math.abs(delta)} RPM`;
 }
 
+// A suggested change in grams as advice: "Dose +0.5 g", or null for none.
+export function gramsAdvice(label: string, delta: number | null): string | null {
+  if (!delta) return null;
+  return `${label} ${delta > 0 ? '+' : '−'}${Math.abs(delta)} g`;
+}
+
+// Espresso: the analyzed shot's dose and weight with the suggested changes.
+export interface ShotChange {
+  doseG: number;
+  yieldG: number | null; // null when the analyzed shot wasn't weighed
+  doseDeltaG: number | null;
+  yieldDeltaG: number | null;
+}
+
+const grams = (n: number) => Math.max(0.1, Math.round(n * 10) / 10);
+
 export interface StartingParameters {
   tempC: number | null; // analyzed brew's temp (or the recipe's) + suggested change
   tempDeltaC: number; // the suggested change (show with formatTempChange)
@@ -29,6 +45,7 @@ export interface StartingParameters {
   nextStep: string | null; // newer analyses: the one thing to do next
   confidence: 'low' | 'medium' | 'high' | null;
   rpmDelta: number | null; // variable-speed grinders only
+  shot: ShotChange | null; // espresso, when the dose or shot weight should change
   basedOn: { timestamp: string; isLatestBrew: boolean };
 }
 
@@ -40,6 +57,17 @@ export function startingParameters(s: Suggestions, recipe: Recipe | null): Start
   const baseTemp = brew.actualTempC ?? recipe?.targetTempC ?? null;
   const delta = analysis.suggestedTempDelta;
   const tempC = baseTemp === null ? null : Math.min(100, Math.max(0, Math.round((baseTemp + delta) * 10) / 10));
+  const doseDeltaG = analysis.suggestedDoseDelta;
+  const yieldDeltaG = analysis.suggestedYieldDelta;
+  const shot: ShotChange | null =
+    doseDeltaG || yieldDeltaG
+      ? {
+          doseG: grams(brew.actualDoseGrams + (doseDeltaG ?? 0)),
+          yieldG: brew.actualYieldGrams === null ? null : grams(brew.actualYieldGrams + (yieldDeltaG ?? 0)),
+          doseDeltaG,
+          yieldDeltaG,
+        }
+      : null;
 
   return {
     tempC,
@@ -53,6 +81,7 @@ export function startingParameters(s: Suggestions, recipe: Recipe | null): Start
     nextStep: analysis.nextStep,
     confidence: analysis.confidence,
     rpmDelta: analysis.suggestedRpmDelta,
+    shot,
     basedOn: { timestamp: brew.timestamp, isLatestBrew: s.recentBrews[0]?.id === brew.id },
   };
 }

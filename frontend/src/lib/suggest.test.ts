@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BrewLog, Recipe, Suggestions } from '../api/types';
-import { chooseGrind, rpmAdvice, startingParameters, suggestionFitsGrinder } from './suggest';
+import { chooseGrind, gramsAdvice, rpmAdvice, startingParameters, suggestionFitsGrinder } from './suggest';
 
 const brew = (over: Partial<BrewLog>): BrewLog => ({
   id: 'b1', workspaceId: 'w', userId: 'u', beanId: 'bean', recipeId: null, timestamp: '2026-10-18T08:00:00.000Z', utcOffsetMinutes: null,
@@ -10,7 +10,7 @@ const brew = (over: Partial<BrewLog>): BrewLog => ({
 });
 const recipe = { targetTempC: 94, grindSettings: [{ grinderId: 'c40', grinderName: 'Comandante C40', setting: 19 }] } as unknown as Recipe;
 const suggestions = (over: Partial<Suggestions> = {}): Suggestions => ({
-  latestAnalysis: { id: 'a', brewLogId: 'b1', reasoning: 'Under-extracted.', suggestedGrindDelta: 'finer', suggestedTempDelta: 1, nextStep: null, confidence: null, suggestedRpmDelta: null, model: null, promptVersion: null, helpful: null, ratedAt: null, createdAt: '' },
+  latestAnalysis: { id: 'a', brewLogId: 'b1', reasoning: 'Under-extracted.', suggestedGrindDelta: 'finer', suggestedTempDelta: 1, nextStep: null, confidence: null, suggestedRpmDelta: null, suggestedDoseDelta: null, suggestedYieldDelta: null, model: null, promptVersion: null, helpful: null, ratedAt: null, createdAt: '' },
   analyzedBrew: brew({}),
   recentBrews: [brew({})],
   ...over,
@@ -43,6 +43,30 @@ describe('startingParameters', () => {
   it('passes on the next step, confidence and speed change', () => {
     const s = suggestions({ latestAnalysis: { ...suggestions().latestAnalysis!, nextStep: 'Grind 2 clicks finer.', confidence: 'medium', suggestedRpmDelta: -100 } });
     expect(startingParameters(s, null)).toMatchObject({ nextStep: 'Grind 2 clicks finer.', confidence: 'medium', rpmDelta: -100 });
+  });
+});
+
+describe('espresso dose and shot weight', () => {
+  const espresso = (doseDelta: number | null, yieldDelta: number | null, shot: Partial<BrewLog> = {}) =>
+    startingParameters(
+      suggestions({
+        latestAnalysis: { ...suggestions().latestAnalysis!, suggestedDoseDelta: doseDelta, suggestedYieldDelta: yieldDelta },
+        analyzedBrew: brew({ actualDoseGrams: 18, actualWaterGrams: null, actualYieldGrams: 36, ...shot }),
+      }),
+      null,
+    );
+  it('applies the changes to the analyzed shot', () => {
+    expect(espresso(0.5, 4)?.shot).toEqual({ doseG: 18.5, yieldG: 40, doseDeltaG: 0.5, yieldDeltaG: 4 });
+    expect(espresso(null, -3)?.shot).toEqual({ doseG: 18, yieldG: 33, doseDeltaG: null, yieldDeltaG: -3 });
+  });
+  it('has no shot change without one, and no weight when the shot was never weighed', () => {
+    expect(espresso(null, null)?.shot).toBeNull();
+    expect(espresso(1, 4, { actualYieldGrams: null })?.shot).toEqual({ doseG: 19, yieldG: null, doseDeltaG: 1, yieldDeltaG: 4 });
+  });
+  it('words a change in grams', () => {
+    expect(gramsAdvice('Dose', 0.5)).toBe('Dose +0.5 g');
+    expect(gramsAdvice('Shot weight', -3)).toBe('Shot weight −3 g');
+    expect(gramsAdvice('Dose', null)).toBeNull();
   });
 });
 

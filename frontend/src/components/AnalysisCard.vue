@@ -2,12 +2,12 @@
 // An AI suggestion (docs/api/llm-contract.md §9): the next step first, then
 // the diagnosis and the changes, and "Was this useful?" for who can analyze
 // the brew (docs/api/analysis.md §8). Older analyses have no next step,
-// confidence or RPM change and show what they have.
+// confidence, RPM, dose or shot weight change and show what they have.
 import { computed, ref, watch } from 'vue';
 import { analysisApi } from '../api/brews';
 import { errorMessage } from '../api/client';
 import type { LlmAnalysis } from '../api/types';
-import { CONFIDENCE_LABELS, GRIND_LABELS, rpmAdvice } from '../lib/suggest';
+import { CONFIDENCE_LABELS, GRIND_LABELS, gramsAdvice, rpmAdvice } from '../lib/suggest';
 import { formatTempChange } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 
@@ -49,6 +49,8 @@ async function rate(value: boolean): Promise<void> {
       <li><strong>{{ GRIND_LABELS[analysis.suggestedGrindDelta] }}</strong></li>
       <li><strong>{{ tempLabel }}</strong></li>
       <li v-if="rpmLabel"><strong>{{ rpmLabel }}</strong></li>
+      <li v-if="gramsAdvice('Dose', analysis.suggestedDoseDelta)"><strong>{{ gramsAdvice('Dose', analysis.suggestedDoseDelta) }}</strong></li>
+      <li v-if="gramsAdvice('Shot weight', analysis.suggestedYieldDelta)"><strong>{{ gramsAdvice('Shot weight', analysis.suggestedYieldDelta) }}</strong></li>
     </ul>
     <div v-if="canRate" class="feedback" role="group" aria-label="Was this suggestion useful?">
       <span class="muted small">Was this useful?</span>

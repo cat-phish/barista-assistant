@@ -456,6 +456,13 @@
       "when": 1792815220616,
       "tag": "0064_auto_analyze",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "5",
+      "when": 1792822988627,
+      "tag": "0065_espresso_dose_yield",
+      "breakpoints": true
     }
   ]
 }

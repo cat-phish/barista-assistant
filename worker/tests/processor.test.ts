@@ -13,7 +13,7 @@ vi.mock("../src/llm.js", async (importOriginal) => ({
   analyzeWithLlm: vi.fn(),
 }));
 const llm = vi.mocked(analyzeWithLlm);
-const ANALYSIS = { reasoning: "Under-extracted: grind finer.", nextStep: "Grind a step finer.", confidence: "medium" as const, suggestedGrindDelta: "finer" as const, suggestedTempDelta: 1, suggestedRpmDelta: null };
+const ANALYSIS = { reasoning: "Under-extracted: grind finer.", nextStep: "Grind a step finer.", confidence: "medium" as const, suggestedGrindDelta: "finer" as const, suggestedTempDelta: 1, suggestedRpmDelta: null, suggestedDoseDelta: null, suggestedYieldDelta: null };
 
 let beanId: string;
 let workspaceId: string;

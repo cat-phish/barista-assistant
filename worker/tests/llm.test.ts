@@ -1,15 +1,19 @@
 import { describe, expect, it } from "vitest";
 import type { AiDetail } from "@barista/shared/aiDetails";
 import type { BrewContext, BrewSummary } from "../src/context.js";
-import { buildCompletionRequest, parseAnalysisMessage } from "../src/llm.js";
+import { buildCompletionRequest, onlyWhatApplies, parseAnalysisMessage } from "../src/llm.js";
 import { buildSystemPrompt, compact, promptSections, toLlmInput } from "../src/prompt.js";
 
 const reply = (body: unknown) => ({ content: JSON.stringify(body), refusal: null });
-const valid = { reasoning: "Under-extracted.", nextStep: "Grind 2 clicks finer.", confidence: "medium", suggestedGrindDelta: "finer", suggestedTempDelta: 1, suggestedRpmDelta: null };
+const valid = { reasoning: "Under-extracted.", nextStep: "Grind 2 clicks finer.", confidence: "medium", suggestedGrindDelta: "finer", suggestedTempDelta: 1, suggestedRpmDelta: null, suggestedDoseDelta: null, suggestedYieldDelta: null };
 
 describe("parseAnalysisMessage", () => {
   it("accepts a valid reply", () => {
     expect(parseAnalysisMessage(reply(valid))).toEqual(valid);
+  });
+
+  it("rounds dose and shot weight changes to 0.1 g", () => {
+    expect(parseAnalysisMessage(reply({ ...valid, suggestedDoseDelta: 0.54, suggestedYieldDelta: 3.96 }))).toMatchObject({ suggestedDoseDelta: 0.5, suggestedYieldDelta: 4 });
   });
 
   it("rounds the temperature change to the column's 1 decimal", () => {
@@ -25,6 +29,9 @@ describe("parseAnalysisMessage", () => {
     ["unknown confidence", reply({ ...valid, confidence: "certain" }), /confidence/],
     ["a fractional RPM change", reply({ ...valid, suggestedRpmDelta: 12.5 }), /suggestedRpmDelta/],
     ["a huge RPM change", reply({ ...valid, suggestedRpmDelta: 5000 }), /suggestedRpmDelta/],
+    ["a dose change over 5 g", reply({ ...valid, suggestedDoseDelta: 6 }), /suggestedDoseDelta/],
+    ["a shot weight change over 30 g", reply({ ...valid, suggestedYieldDelta: -31 }), /suggestedYieldDelta/],
+    ["a missing dose change", reply({ ...valid, suggestedDoseDelta: undefined }), /suggestedDoseDelta/],
     ["missing field", reply({ reasoning: "x", suggestedGrindDelta: "finer" }), /suggestedTempDelta/],
     ["refusal", { content: null, refusal: "I can't help" }, /refused/],
     ["empty reply", { content: "", refusal: null }, /empty/],
@@ -110,6 +117,20 @@ const context = (over: { brew?: Partial<BrewSummary>; previous?: Array<Partial<B
 });
 const without = (...keys: AiDetail[]) => new Set<AiDetail>(keys);
 
+describe("onlyWhatApplies: changes that don't fit the brew are dropped", () => {
+  const said = parseAnalysisMessage(reply({ ...valid, suggestedRpmDelta: 100, suggestedDoseDelta: 0.5, suggestedYieldDelta: 4 }));
+  it("keeps dose and shot weight changes for espresso only", () => {
+    const shot = onlyWhatApplies(said, context({ brew: { methodKind: "espresso", recipeStyle: { name: "Standard", brewsLike: "standard" } } }), new Set());
+    expect(shot).toMatchObject({ suggestedDoseDelta: 0.5, suggestedYieldDelta: 4 });
+    expect(onlyWhatApplies(said, context(), new Set())).toMatchObject({ suggestedDoseDelta: null, suggestedYieldDelta: null });
+  });
+  it("treats a change of 0 as none, and the RPM as before", () => {
+    const zero = parseAnalysisMessage(reply({ ...valid, suggestedDoseDelta: 0, suggestedYieldDelta: 0.02 }));
+    expect(onlyWhatApplies(zero, context({ brew: { methodKind: "espresso" } }), new Set())).toMatchObject({ suggestedDoseDelta: null, suggestedYieldDelta: null });
+    expect(onlyWhatApplies(said, context(), new Set()).suggestedRpmDelta).toBeNull(); // the C40 isn't variable speed
+  });
+});
+
 describe("what the AI is sent (docs/api/llm-contract.md §9)", () => {
   it("leaves out what wasn't recorded, and names each grinder and water once", () => {
     const input = toLlmInput(context());
@@ -163,7 +184,7 @@ describe("what the AI is sent (docs/api/llm-contract.md §9)", () => {
     expect(schema).not.toHaveProperty("$schema");
     expect(schema).toMatchObject({
       additionalProperties: false,
-      required: ["reasoning", "nextStep", "confidence", "suggestedGrindDelta", "suggestedTempDelta", "suggestedRpmDelta"],
+      required: ["reasoning", "nextStep", "confidence", "suggestedGrindDelta", "suggestedTempDelta", "suggestedRpmDelta", "suggestedDoseDelta", "suggestedYieldDelta"],
       properties: {
         suggestedGrindDelta: { enum: ["much_finer", "finer", "no_change", "coarser", "much_coarser"] },
         confidence: { enum: ["low", "medium", "high"] },

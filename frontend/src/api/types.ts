@@ -417,6 +417,8 @@ export interface LlmAnalysis {
   nextStep: string | null; // one concrete instruction for the next brew
   confidence: 'low' | 'medium' | 'high' | null;
   suggestedRpmDelta: number | null; // variable-speed grinders only
+  suggestedDoseDelta: number | null; // espresso only: grams
+  suggestedYieldDelta: number | null; // espresso only: shot weight, grams
   model: string | null;
   promptVersion: string | null;
   helpful: boolean | null; // 👍 / 👎 (docs/api/analysis.md §8)

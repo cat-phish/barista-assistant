@@ -41,12 +41,30 @@ export const BREW_ANALYSIS_JSON_SCHEMA = {
       type: ["integer", "null"],
       description: "Change in grinder speed (RPM) for a variable-speed grinder; null otherwise or to keep the speed.",
     },
+    suggestedDoseDelta: {
+      type: ["number", "null"],
+      description: "Espresso only: change in dose in grams (e.g., 0.5, -1); null for other brews or to keep the dose.",
+    },
+    suggestedYieldDelta: {
+      type: ["number", "null"],
+      description: "Espresso only: change in shot weight (beverage out) in grams (e.g., 4, -3); null for other brews or to keep it.",
+    },
   },
-  required: ["reasoning", "nextStep", "confidence", "suggestedGrindDelta", "suggestedTempDelta", "suggestedRpmDelta"],
+  required: ["reasoning", "nextStep", "confidence", "suggestedGrindDelta", "suggestedTempDelta", "suggestedRpmDelta", "suggestedDoseDelta", "suggestedYieldDelta"],
   additionalProperties: false,
 } as const;
 
 const MAX_TEMP_DELTA_C = 10;
+const MAX_DOSE_DELTA_G = 5;
+const MAX_YIELD_DELTA_G = 30;
+
+// Grams to the column's 1 decimal, within ±max (outside fails the attempt).
+const gramsDelta = (max: number) =>
+  z
+    .number()
+    .transform((n) => Math.round(n * 10) / 10)
+    .refine((n) => Math.abs(n) <= max, `must be within ±${max} g`)
+    .nullable();
 
 // Strict mode should guarantee the shape; validate anyway (§9). Temp delta is
 // rounded to the column's 1 decimal; out-of-range values fail the attempt.
@@ -56,6 +74,8 @@ const analysisSchema = z.object({
   nextStep: z.string().trim().min(1).max(200), // the column's size; asked for 140
   confidence: z.enum(ANALYSIS_CONFIDENCE),
   suggestedRpmDelta: z.number().int().min(-MAX_RPM_DELTA).max(MAX_RPM_DELTA).nullable(),
+  suggestedDoseDelta: gramsDelta(MAX_DOSE_DELTA_G),
+  suggestedYieldDelta: gramsDelta(MAX_YIELD_DELTA_G),
   suggestedGrindDelta: z.enum(GRIND_DELTAS),
   suggestedTempDelta: z
     .number()
@@ -128,8 +148,21 @@ export async function requestAnalysis(context: BrewContext, hidden: ReadonlySet<
     throw err; // 429 / 5xx / network: let BullMQ retry with backoff
   }
   const usage = completion.usage ? { promptTokens: completion.usage.prompt_tokens, completionTokens: completion.usage.completion_tokens } : null;
-  const analysis = parseAnalysisMessage(completion.choices[0]?.message);
+  return { analysis: onlyWhatApplies(parseAnalysisMessage(completion.choices[0]?.message), context, hidden), usage };
+}
+
+// Drops the changes that don't apply to this brew (§9), whatever the model said.
+export function onlyWhatApplies(analysis: BrewAnalysis, context: BrewContext, hidden: ReadonlySet<AiDetail>): BrewAnalysis {
+  const out = { ...analysis };
   // A speed change only means something on a variable-speed grinder whose speed the AI may see.
-  if (!context.brew.grinder?.variableSpeed || hidden.has("rpm")) analysis.suggestedRpmDelta = null;
-  return { analysis, usage };
+  if (!context.brew.grinder?.variableSpeed || hidden.has("rpm")) out.suggestedRpmDelta = null;
+  // Dose and shot weight are espresso's levers; a filter brew's ratio comes from its recipe.
+  if (context.brew.methodKind !== "espresso") {
+    out.suggestedDoseDelta = null;
+    out.suggestedYieldDelta = null;
+  }
+  // A change of nothing is no change.
+  if (out.suggestedDoseDelta === 0) out.suggestedDoseDelta = null;
+  if (out.suggestedYieldDelta === 0) out.suggestedYieldDelta = null;
+  return out;
 }
