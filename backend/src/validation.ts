@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ALTITUDE_UNITS, REPEAT_KEEPS, ROAST_LEVELS, ROAST_SCALES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
+import { AI_DETAILS } from "@barista/shared/aiDetails";
 import { ROLES } from "./auth/membership.js";
 
 export const roleSchema = z.enum(ROLES);
@@ -20,6 +21,10 @@ export const workspaceSettingsObject = z
       .array(z.string().regex(/^(brew|bean|recipe)\.[a-zA-Z]+$/, "a field key like brew.tds"))
       .max(100)
       .refine((keys) => new Set(keys).size === keys.length, "each field once"),
+    // What the AI doesn't get (docs/api/llm-contract.md §9); the whole list.
+    aiHidden: z
+      .array(z.enum(AI_DETAILS))
+      .refine((keys) => new Set(keys).size === keys.length, "each detail once"),
   })
   .partial()
   .strict();

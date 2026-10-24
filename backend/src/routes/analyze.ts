@@ -4,7 +4,7 @@ import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { brewLogs, llmAnalyses } from "@barista/shared/schema";
+import { brewLogs, DEFAULT_WORKSPACE_SETTINGS, llmAnalyses, withDefaults, workspaces } from "@barista/shared/schema";
 import { db } from "../db.js";
 import { enqueueBrewAnalysis, QueueUnavailableError } from "../queue.js";
 
@@ -27,9 +27,19 @@ analyzeRouter.post(
     }
 
     // A cold brew still steeping has nothing to judge yet (docs/api/analysis.md §8).
-    const [log] = await db.select({ steeping: brewLogs.steeping }).from(brewLogs).where(eq(brewLogs.id, brewLogId));
+    const [log] = await db
+      .select({ steeping: brewLogs.steeping, rating: brewLogs.rating, drinkRating: brewLogs.drinkRating, settings: workspaces.settings })
+      .from(brewLogs)
+      .innerJoin(workspaces, eq(brewLogs.workspaceId, workspaces.id))
+      .where(eq(brewLogs.id, brewLogId));
     if (log?.steeping) {
       sendError(res, 409, "This brew is still steeping: finish it first");
+      return;
+    }
+    // The workspace can keep unrated brews from the AI (Settings → AI, llm-contract.md §9).
+    const unrated = log && log.rating === null && log.drinkRating === null;
+    if (unrated && withDefaults(DEFAULT_WORKSPACE_SETTINGS, log.settings).aiHidden.includes("analyzeUnrated")) {
+      sendError(res, 409, "Rate this brew first: this workspace only analyzes rated brews");
       return;
     }
 

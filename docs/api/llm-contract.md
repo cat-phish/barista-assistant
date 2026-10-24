@@ -208,3 +208,46 @@ sent as-is; no `$schema` key, which strict mode does not need):
    - `suggestedRpmDelta` is set to `null` unless the brew's grinder is
      variable-speed.
    - A refusal, an empty response, or invalid JSON also fails the attempt.
+
+## What the AI sees
+
+A workspace's `aiHidden` setting (`docs/api/workspaces.md` §2, Settings →
+**AI**, owners) lists details the worker leaves out of the input (step 2),
+and the prompt sections about them drop out with them (step 3). Keys
+(`AI_DETAILS`, `@barista/shared/aiDetails`):
+
+- **The brew:** `tds` (`tdsPercent`, `extractionYieldPercent`), `temp` (the
+  brew's, the recipe's and each step's temperature), `marks`, `prepTools`,
+  `problems`, `grinderWeights` (beans in, grounds out, retention), `rpm`
+  (`grindRpm` and the grinders' speed range; no `suggestedRpmDelta` either),
+  `drink` (the drink, its ingredients, `drinkRating` /
+  `drinkTastingNotes`), `water` (the water's name and figures),
+  `waterMinerals` (the figures only; the name is still sent).
+- **The bean:** `origin` (`originArea`, `country`, `region`), `altitude`,
+  `process`, `flavorProfile`, `roastType`, `roastLevel` (with
+  `detailedRoastLevel`), `decafBlend` (`decaf`, `blendType`),
+  `batchNumber`.
+- **Recipe and equipment:** `recipeSteps`, `grindStartingPoints`,
+  `grinderDetails` (everything but the grinder's name), `machine`.
+- **History:** `unratedHistory` leaves earlier brews without a rating out
+  of `previousBrews`; `analyzeUnrated` stops unrated brews being analyzed:
+  `POST /analyze` is a `409` (§8), and a job already queued is skipped.
+
+Always sent: the bean and roaster names, roast date and age, dose, water,
+yield, time, grind setting, ratio, rating and tasting notes, and the
+recipe's targets.
+
+## Evaluating changes
+
+`npm run eval -w worker` (run on the host from the repo root; it reads the
+root `.env`, only reads the database, and writes to the git-ignored
+`eval/`):
+
+- `snapshot [--limit 12]` picks recent rated brews;
+- `run --label <name> [--yes]` sends each through the input and prompt as
+  the code has them now (real API calls; it shows the token estimate and
+  asks first), saving the outputs and token counts;
+- `compare <a> <b>` writes a side-by-side report of two runs.
+
+Run it before and after changing the input, prompt or schema, and bump
+`PROMPT_VERSION`.

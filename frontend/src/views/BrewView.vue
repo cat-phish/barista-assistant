@@ -74,7 +74,7 @@ type Stage = 'setup' | 'timing' | 'log' | 'steep' | 'saved';
 const workspaces = useWorkspaceStore();
 const route = useRoute();
 const router = useRouter();
-const { prefs, temperatureUnit, recipeRoastLevel } = usePreferences();
+const { prefs, temperatureUnit, recipeRoastLevel, aiHidden } = usePreferences();
 const stage = ref<Stage>('setup');
 const loading = ref(true);
 const loadError = ref('');
@@ -726,6 +726,9 @@ const saving = ref(false);
 const saveError = ref('');
 const submitted = ref(false);
 const savedLogId = ref<string | null>(null);
+const savedUnrated = ref(false);
+// Settings → AI can keep unrated brews from the AI (the API refuses them).
+const aiNeedsRating = computed(() => savedUnrated.value && aiHidden.value.includes('analyzeUnrated'));
 
 // Rate later (docs/api/notifications.md §1b): a box on the log form when
 // reminders are on (Settings → Notifications), ticked to start or not as set
@@ -774,6 +777,7 @@ async function save(): Promise<void> {
     });
     if (values.grinderId) remember('grinderId', values.grinderId);
     savedLogId.value = brewLog.id;
+    savedUnrated.value = values.rating === null && (values.drinkRating ?? null) === null;
     reminder.value = remind ? (outcome ?? 'unavailable') : null;
     stage.value = 'saved';
   } catch (err) {
@@ -1336,6 +1340,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             The reminder couldn't be set{{ reminder === 'off' ? ': no notification service is on (Settings → Notifications)' : '' }}. Rate it from the journal when you're ready.
           </p>
         </template>
+        <p v-else-if="aiNeedsRating" class="muted">Rate it in the journal to get an AI suggestion: this workspace only analyzes rated brews.</p>
         <template v-else>
           <p class="muted">Want a suggestion for your next brew of {{ beanLabel }}?</p>
           <button v-if="aiState === 'idle' || aiState === 'error'" class="btn btn-primary" type="button" @click="requestAnalysis">

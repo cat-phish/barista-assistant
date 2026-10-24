@@ -17,7 +17,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   repeatKeeps: ['size', 'doseWater', 'temp', 'grinder', 'grind', 'waterProfile', 'dilution', 'window'],
   steepReminders: true,
 };
-export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: 'light', roastScale: 'names', hiddenFields: [] };
+export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: 'light', roastScale: 'names', hiddenFields: [], aiHidden: [] };
 
 // The signed-in person's display units and the current workspace's settings.
 export function usePreferences() {
@@ -34,5 +34,6 @@ export function usePreferences() {
     roastScale: computed(() => settings.value.roastScale),
     // Older stored settings may lack it until the API fills in defaults.
     hiddenFields: computed(() => settings.value.hiddenFields ?? []),
+    aiHidden: computed(() => settings.value.aiHidden ?? []),
   };
 }

@@ -168,6 +168,22 @@ describe("suggestions and analysis", () => {
     expect(await brewAnalysisQueue.getWaitingCount()).toBe(1);
   });
 
+  it("a workspace that keeps unrated brews from the AI refuses to analyze one (llm-contract.md §9)", async () => {
+    const { owner, ws } = await setup();
+    const bean = await newBean(owner, ws.id);
+    const unrated = await newBrewLog(owner, ws.id, bean);
+    const rated = await newBrewLog(owner, ws.id, bean, { rating: 4 });
+    await owner.agent.patch(`/api/workspaces/${ws.id}/settings`).send({ aiHidden: ["analyzeUnrated"] });
+
+    const refused = await owner.agent.post(`/api/brew-logs/${unrated}/analyze`);
+    expect(refused.status).toBe(409);
+    expect(refused.body.error).toMatch(/Rate this brew first/);
+    expect((await owner.agent.post(`/api/brew-logs/${rated}/analyze`)).status).toBe(202);
+
+    await owner.agent.patch(`/api/workspaces/${ws.id}/settings`).send({ aiHidden: [] });
+    expect((await owner.agent.post(`/api/brew-logs/${unrated}/analyze`)).status).toBe(202);
+  });
+
   it("suggestions can be rated useful or not, by who can analyze the brew (docs/api/analysis.md §8)", async () => {
     const { owner, ws } = await setup();
     const viewer = await newUser();
