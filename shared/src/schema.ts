@@ -1080,8 +1080,22 @@ export const llmAnalyses = mysqlTable("llm_analyses", {
   reasoning: text("reasoning").notNull(),
   suggestedGrindDelta: varchar("suggested_grind_delta", { length: 50 }).notNull(), // 'much_finer' | 'finer' | 'no_change' | 'coarser' | 'much_coarser'
   suggestedTempDelta: decimal("suggested_temp_delta", { precision: 3, scale: 1, mode: "number" }).notNull(),
+  // One concrete instruction for the next brew, how sure the model is, and an
+  // RPM change for variable-speed grinders (docs/api/llm-contract.md §9).
+  // Null on analyses made before they existed.
+  nextStep: varchar("next_step", { length: 200 }),
+  confidence: varchar("confidence", { length: 10 }).$type<AnalysisConfidence>(), // ANALYSIS_CONFIDENCE
+  suggestedRpmDelta: int("suggested_rpm_delta"),
+  // What made it: the model and the prompt version (worker/src/prompt.ts).
+  model: varchar("model", { length: 100 }),
+  promptVersion: varchar("prompt_version", { length: 30 }),
+  // Was it useful? Set by the brew's people (docs/api/analysis.md §8).
+  helpful: boolean("helpful"),
+  ratedAt: timestamp("rated_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+export const ANALYSIS_CONFIDENCE = ["low", "medium", "high"] as const;
+export type AnalysisConfidence = (typeof ANALYSIS_CONFIDENCE)[number];
 
 // Inferred row types for API payloads
 export type User = typeof users.$inferSelect;

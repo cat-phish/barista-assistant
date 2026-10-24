@@ -73,4 +73,7 @@ export const analysisApi = {
   // Queues an LLM analysis (202). Repeat requests while queued reuse the job (§8).
   request: (brewLogId: string) =>
     api.post<{ status: 'queued'; jobId: string; message: string }>(`/api/brew-logs/${brewLogId}/analyze`),
+  // Was the suggestion useful? null takes the answer back (docs/api/analysis.md §8).
+  rateAnalysis: (brewLogId: string, analysisId: string, helpful: boolean | null) =>
+    api.put<{ helpful: boolean | null }>(`/api/brew-logs/${brewLogId}/analyses/${analysisId}/feedback`, { helpful }),
 };

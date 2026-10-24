@@ -3,7 +3,8 @@ import type { BrewAnalysisJobData } from "@barista/shared/jobs";
 import { llmAnalyses } from "@barista/shared/schema";
 import { loadBrewContext } from "./context.js";
 import { db } from "./db.js";
-import { analyzeWithLlm } from "./llm.js";
+import { config } from "./config.js";
+import { analyzeWithLlm, PROMPT_VERSION } from "./llm.js";
 
 export type JobResult = { status: "saved"; analysisId: string } | { status: "skipped"; reason: string };
 
@@ -23,7 +24,7 @@ export async function processBrewAnalysis({ brewLogId }: BrewAnalysisJobData): P
 
   const analysisId = randomUUID();
   try {
-    await db.insert(llmAnalyses).values({ id: analysisId, brewLogId, ...analysis });
+    await db.insert(llmAnalyses).values({ id: analysisId, brewLogId, ...analysis, model: config.openaiModel, promptVersion: PROMPT_VERSION });
   } catch (err) {
     // The log may have been deleted while the LLM call was running (FK violation).
     if ((await loadBrewContext(brewLogId)) === null) {

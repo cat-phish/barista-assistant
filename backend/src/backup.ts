@@ -9,6 +9,7 @@ import { eq, getTableColumns, inArray, type Column } from "drizzle-orm";
 import { getTableConfig, type MySqlTable } from "drizzle-orm/mysql-core";
 import { z } from "zod";
 import {
+  ANALYSIS_CONFIDENCE,
   BEAN_MENU_FIELDS,
   BEAN_PROCESSES,
   BLEND_TYPES,
@@ -141,6 +142,7 @@ const ENUMS: Record<string, readonly string[]> = {
   "brew_logs.dilutedWith": DILUTION_WITH,
   "brew_log_marks.kind": MARK_KINDS,
   "llm_analyses.suggestedGrindDelta": ["much_finer", "finer", "no_change", "coarser", "much_coarser"],
+  "llm_analyses.confidence": ANALYSIS_CONFIDENCE,
 };
 // JSON columns, checked by what the API accepts.
 const JSON_SCHEMAS: Record<string, z.ZodType> = {

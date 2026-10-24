@@ -6,6 +6,9 @@ import { config } from "./config.js";
 import type { BrewContext } from "./context.js";
 
 // System prompt and JSON schema are fixed by docs/api/llm-contract.md §9.
+// PROMPT_VERSION is stored with each analysis, so results can be compared
+// across prompt changes (npm run eval); bump it whenever either changes.
+export const PROMPT_VERSION = "2026-10-a";
 export const SYSTEM_PROMPT =
   "You are an expert specialty coffee roaster and barista. Analyze the provided " +
   "extraction log and historical brews for this coffee bean, including roast " +
@@ -148,6 +151,15 @@ export function parseAnalysisMessage(
 }
 
 export async function analyzeWithLlm(context: BrewContext): Promise<BrewAnalysis> {
+  return (await requestAnalysis(context)).analysis;
+}
+
+// The analysis plus what it cost, for the eval script (src/eval.ts).
+export interface AnalysisRun {
+  analysis: BrewAnalysis;
+  usage: { promptTokens: number; completionTokens: number } | null;
+}
+export async function requestAnalysis(context: BrewContext): Promise<AnalysisRun> {
   let completion: OpenAI.Chat.Completions.ChatCompletion;
   try {
     completion = await openai.chat.completions.create(buildCompletionRequest(context));
@@ -158,5 +170,6 @@ export async function analyzeWithLlm(context: BrewContext): Promise<BrewAnalysis
     }
     throw err; // 429 / 5xx / network: let BullMQ retry with backoff
   }
-  return parseAnalysisMessage(completion.choices[0]?.message);
+  const usage = completion.usage ? { promptTokens: completion.usage.prompt_tokens, completionTokens: completion.usage.completion_tokens } : null;
+  return { analysis: parseAnalysisMessage(completion.choices[0]?.message), usage };
 }

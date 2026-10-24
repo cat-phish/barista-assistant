@@ -405,6 +405,14 @@ export interface LlmAnalysis {
   reasoning: string;
   suggestedGrindDelta: GrindDelta;
   suggestedTempDelta: number;
+  // Newer analyses (docs/api/llm-contract.md §9); null on older ones.
+  nextStep: string | null; // one concrete instruction for the next brew
+  confidence: 'low' | 'medium' | 'high' | null;
+  suggestedRpmDelta: number | null; // variable-speed grinders only
+  model: string | null;
+  promptVersion: string | null;
+  helpful: boolean | null; // 👍 / 👎 (docs/api/analysis.md §8)
+  ratedAt: string | null;
   createdAt: string;
 }
 

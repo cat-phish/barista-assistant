@@ -10,7 +10,7 @@ const brew = (over: Partial<BrewLog>): BrewLog => ({
 });
 const recipe = { targetTempC: 94, grindSettings: [{ grinderId: 'c40', grinderName: 'Comandante C40', setting: 19 }] } as unknown as Recipe;
 const suggestions = (over: Partial<Suggestions> = {}): Suggestions => ({
-  latestAnalysis: { id: 'a', brewLogId: 'b1', reasoning: 'Under-extracted.', suggestedGrindDelta: 'finer', suggestedTempDelta: 1, createdAt: '' },
+  latestAnalysis: { id: 'a', brewLogId: 'b1', reasoning: 'Under-extracted.', suggestedGrindDelta: 'finer', suggestedTempDelta: 1, nextStep: null, confidence: null, suggestedRpmDelta: null, model: null, promptVersion: null, helpful: null, ratedAt: null, createdAt: '' },
   analyzedBrew: brew({}),
   recentBrews: [brew({})],
   ...over,

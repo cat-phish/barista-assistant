@@ -1341,7 +1341,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <p v-if="aiState === 'slow'" class="muted" aria-live="polite">
             Still working on it. It'll show up in the journal, and next time you tap “Suggest parameters” for this bean.
           </p>
-          <AnalysisCard v-if="analysis" :analysis="analysis" />
+          <AnalysisCard v-if="analysis" :analysis="analysis" :can-rate="workspaces.canEdit" />
         </template>
       </section>
       <FinishDrinkCard v-if="drink" :drink="drink" :factor="sizeScale" :size-label="madeSize ? formatSize(madeSize) : null" />
