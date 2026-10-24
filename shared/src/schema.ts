@@ -12,6 +12,7 @@ import {
   date,
   type AnyMySqlColumn,
 } from "drizzle-orm/mysql-core";
+import type { AiDetail } from "./aiDetails.js";
 
 // A JSON column read back as a value: MariaDB stores JSON as text, so the
 // driver returns a string that drizzle's json() would leave unparsed.
@@ -77,8 +78,12 @@ export interface WorkspaceSettings {
   // "Field visibility"): keys like "brew.tds" from the frontend's registry
   // (frontend/src/lib/fields.ts). Values stay stored, and the AI still gets them.
   hiddenFields: string[];
+  // Details kept from the AI (docs/api/llm-contract.md §9, "What the AI
+  // sees"): AI_DETAILS keys (aiDetails.ts). The worker leaves them out of the
+  // analysis input and its prompt; "analyzeUnrated" refuses unrated brews.
+  aiHidden: AiDetail[];
 }
-export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: "light", roastScale: "names", hiddenFields: [] };
+export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: "light", roastScale: "names", hiddenFields: [], aiHidden: [] };
 
 export function withDefaults<T extends object>(defaults: T, stored: Partial<T> | null): T {
   return { ...defaults, ...(stored ?? {}) };
@@ -1080,8 +1085,22 @@ export const llmAnalyses = mysqlTable("llm_analyses", {
   reasoning: text("reasoning").notNull(),
   suggestedGrindDelta: varchar("suggested_grind_delta", { length: 50 }).notNull(), // 'much_finer' | 'finer' | 'no_change' | 'coarser' | 'much_coarser'
   suggestedTempDelta: decimal("suggested_temp_delta", { precision: 3, scale: 1, mode: "number" }).notNull(),
+  // One concrete instruction for the next brew, how sure the model is, and an
+  // RPM change for variable-speed grinders (docs/api/llm-contract.md §9).
+  // Null on analyses made before they existed.
+  nextStep: varchar("next_step", { length: 200 }),
+  confidence: varchar("confidence", { length: 10 }).$type<AnalysisConfidence>(), // ANALYSIS_CONFIDENCE
+  suggestedRpmDelta: int("suggested_rpm_delta"),
+  // What made it: the model and the prompt version (worker/src/prompt.ts).
+  model: varchar("model", { length: 100 }),
+  promptVersion: varchar("prompt_version", { length: 30 }),
+  // Was it useful? Set by the brew's people (docs/api/analysis.md §8).
+  helpful: boolean("helpful"),
+  ratedAt: timestamp("rated_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+export const ANALYSIS_CONFIDENCE = ["low", "medium", "high"] as const;
+export type AnalysisConfidence = (typeof ANALYSIS_CONFIDENCE)[number];
 
 // Inferred row types for API payloads
 export type User = typeof users.$inferSelect;

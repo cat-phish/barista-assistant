@@ -168,6 +168,46 @@ describe("suggestions and analysis", () => {
     expect(await brewAnalysisQueue.getWaitingCount()).toBe(1);
   });
 
+  it("a workspace that keeps unrated brews from the AI refuses to analyze one (llm-contract.md §9)", async () => {
+    const { owner, ws } = await setup();
+    const bean = await newBean(owner, ws.id);
+    const unrated = await newBrewLog(owner, ws.id, bean);
+    const rated = await newBrewLog(owner, ws.id, bean, { rating: 4 });
+    await owner.agent.patch(`/api/workspaces/${ws.id}/settings`).send({ aiHidden: ["analyzeUnrated"] });
+
+    const refused = await owner.agent.post(`/api/brew-logs/${unrated}/analyze`);
+    expect(refused.status).toBe(409);
+    expect(refused.body.error).toMatch(/Rate this brew first/);
+    expect((await owner.agent.post(`/api/brew-logs/${rated}/analyze`)).status).toBe(202);
+
+    await owner.agent.patch(`/api/workspaces/${ws.id}/settings`).send({ aiHidden: [] });
+    expect((await owner.agent.post(`/api/brew-logs/${unrated}/analyze`)).status).toBe(202);
+  });
+
+  it("suggestions can be rated useful or not, by who can analyze the brew (docs/api/analysis.md §8)", async () => {
+    const { owner, ws } = await setup();
+    const viewer = await newUser();
+    await addMember(owner, ws.id, viewer, "viewer");
+    const bean = await newBean(owner, ws.id);
+    const log = await newBrewLog(owner, ws.id, bean);
+    const other = await newBrewLog(owner, ws.id, bean);
+    const { db } = await import("../src/db.js");
+    const { llmAnalyses } = await import("@barista/shared/schema");
+    const id = crypto.randomUUID();
+    await db.insert(llmAnalyses).values({ id, brewLogId: log, reasoning: "r", suggestedGrindDelta: "finer", suggestedTempDelta: 0, model: "m", promptVersion: "v" });
+    const url = `/api/brew-logs/${log}/analyses/${id}/feedback`;
+
+    expect((await owner.agent.put(url).send({ helpful: true })).body).toEqual({ helpful: true });
+    const stored = (await owner.agent.get(`/api/workspaces/${ws.id}/brew-logs/${log}`)).body.brewLog.latestAnalysis;
+    expect(stored).toMatchObject({ helpful: true, ratedAt: expect.any(String), model: "m", promptVersion: "v" });
+    expect((await owner.agent.put(url).send({ helpful: null })).status).toBe(200);
+    expect((await owner.agent.get(`/api/workspaces/${ws.id}/brew-logs/${log}`)).body.brewLog.latestAnalysis).toMatchObject({ helpful: null, ratedAt: null });
+
+    expect((await owner.agent.put(url).send({ helpful: "yes" })).status).toBe(400);
+    expect((await viewer.agent.put(url).send({ helpful: false })).status).toBe(403);
+    expect((await owner.agent.put(`/api/brew-logs/${other}/analyses/${id}/feedback`).send({ helpful: false })).status).toBe(404); // another brew's
+  });
+
   it("viewers can't analyze; outsiders can't tell whether a log or bean exists", async () => {
     const { owner, ws } = await setup();
     const viewer = await newUser();

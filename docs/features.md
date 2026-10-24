@@ -15,6 +15,12 @@ upcoming work is in `roadmap.md`.
   bean and recipe fields the bar doesn't use, for everyone. Hidden fields
   keep what's recorded (shown again when editing something that has a value)
   and still reach the AI.
+- **What the AI sees:** Settings → AI lets owners switch off details the
+  analysis sends (TDS, water, origin, recipe steps…, grouped by brew, bean,
+  recipe and history), for the whole workspace. Switched-off details are left
+  out of what's sent and the prompt stops mentioning them. Two history
+  switches: compare with unrated earlier brews, and analyze unrated brews at
+  all.
 - **Backup and restore:** Settings → Data. Owners download the whole
   workspace as one JSON file (lists, beans, equipment, recipes, drinks, the
   menu, and every brew with its marks, prep, problems and AI suggestions).

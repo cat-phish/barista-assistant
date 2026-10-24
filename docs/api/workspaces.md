@@ -71,6 +71,11 @@ Every workspace in a response carries `settings`, defaults filled in
   each at most once, at most 100. A `PATCH` sends the whole list. Keys are
   checked by shape, not against a list, so a key the frontend doesn't
   know just hides nothing.
+- `aiHidden` (array of AI detail keys, default `[]`): what the AI doesn't
+  get when it analyzes a brew, set under Settings → **AI**. Keys are
+  `AI_DETAILS` (`@barista/shared/aiDetails`), each at most once; an unknown
+  key is a `400`. A `PATCH` sends the whole list. What each key does is in
+  `docs/api/llm-contract.md` §9, "What the AI sees".
 
 ### Field visibility
 

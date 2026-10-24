@@ -3,3 +3,6 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Prompt evaluations on real brews (worker/src/eval.ts): real data.
+eval/

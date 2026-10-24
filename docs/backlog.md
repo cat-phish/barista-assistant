@@ -197,7 +197,13 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 6. Review and refine AI input and output
 
-- **Status:** idea
+- **Status:** in progress (branch `ai-review`). Built: model, prompt
+  version and 👍/👎 on each analysis; `npm run eval -w worker`; a compact
+  input, the prompt in sections, and `nextStep` / `confidence` /
+  `suggestedRpmDelta` in the output (prompt `2026-10-b`). Left: run the eval
+  (`after`) against the baseline and review it, then move 6 and 8 to the
+  roadmap with what it showed. Decided: users rate suggestions; the model
+  stays in Docker (`OPENAI_MODEL`).
 - **Why:** the prompt and structured output (`docs/api/llm-contract.md` §9)
   have grown a feature at a time. They haven't been checked as a whole for
   what the model needs, what it ignores, and whether the suggestions are
@@ -229,7 +235,11 @@ What the analysis worker sends to the LLM and what comes back.
   and shot weight (ratio) are often the better lever.
 - **Approach:** extend the structured output (`docs/api/README.md` §9) with
   optional dose and yield deltas for espresso brews, and show them with the
-  suggestion. Prompt and schema change, plus UI.
+  suggestion. Prompt and schema change, plus UI. Item 6 added `nextStep`,
+  `confidence` and a nullable `suggestedRpmDelta`: a dose or yield delta can
+  follow that pattern (nullable, nulled by the worker when it doesn't
+  apply), with an `espresso`-section line in `worker/src/prompt.ts` and a
+  `PROMPT_VERSION` bump.
 - **Size:** S–M
 - **Depends on:** nothing. Fits with 6.
 - **Open questions:** should it also suggest pre-infusion and profile changes
@@ -237,7 +247,9 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 8. Choose what the AI sees
 
-- **Status:** idea
+- **Status:** in progress (branch `ai-review`): built as Settings → AI, per
+  workspace (`aiHidden`, `docs/api/llm-contract.md` §9 "What the AI sees");
+  moves to the roadmap with 6.
 - **Why:** every recorded brew, bean and recipe detail goes to the AI, and
   the list keeps growing (TDS, water profiles, prep tools…). Some details
   don't help a given bar, cost tokens, or (like water minerals someone

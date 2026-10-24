@@ -13,7 +13,7 @@ vi.mock("../src/llm.js", async (importOriginal) => ({
   analyzeWithLlm: vi.fn(),
 }));
 const llm = vi.mocked(analyzeWithLlm);
-const ANALYSIS = { reasoning: "Under-extracted: grind finer.", suggestedGrindDelta: "finer" as const, suggestedTempDelta: 1 };
+const ANALYSIS = { reasoning: "Under-extracted: grind finer.", nextStep: "Grind a step finer.", confidence: "medium" as const, suggestedGrindDelta: "finer" as const, suggestedTempDelta: 1, suggestedRpmDelta: null };
 
 let beanId: string;
 let workspaceId: string;
@@ -344,6 +344,28 @@ describe("processBrewAnalysis", () => {
     expect(context.brew.problems).toEqual(["Slow drawdown", "Scale not tared"]);
     expect(context.previousBrews.map((b) => b.problems)).toContainEqual(["Scale not tared"]);
     expect(context.previousBrews.some((b) => b.problems.length === 0)).toBe(true);
+  });
+
+  it("passes on what the workspace keeps from the AI (Settings → AI)", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    await processBrewAnalysis({ brewLogId: logIds.day8! });
+    expect(llm.mock.calls[0]![1]).toEqual(new Set());
+
+    llm.mockClear();
+    await db.update(workspaces).set({ settings: { aiHidden: ["water", "origin"] } }).where(eq(workspaces.id, workspaceId));
+    await processBrewAnalysis({ brewLogId: logIds.day8! });
+    expect(llm.mock.calls[0]![1]).toEqual(new Set(["water", "origin"]));
+  });
+
+  it("skips an unrated brew when the workspace only analyzes rated ones", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    await db.update(workspaces).set({ settings: { aiHidden: ["analyzeUnrated"] } }).where(eq(workspaces.id, workspaceId));
+    await db.update(brewLogs).set({ rating: null }).where(eq(brewLogs.id, logIds.day8!));
+    expect(await processBrewAnalysis({ brewLogId: logIds.day8! })).toEqual({ status: "skipped", reason: "unrated brews aren't analyzed" });
+    expect(llm).not.toHaveBeenCalled();
+
+    await db.update(brewLogs).set({ drinkRating: 4 }).where(eq(brewLogs.id, logIds.day8!)); // a drink rating counts
+    expect((await processBrewAnalysis({ brewLogId: logIds.day8! })).status).toBe("saved");
   });
 
   it("skips a brew log that was deleted after the job was queued, without calling the LLM", async () => {

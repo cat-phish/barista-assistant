@@ -24,6 +24,10 @@
     "./brew": {
       "types": "./dist/brew.d.ts",
       "default": "./dist/brew.js"
+    },
+    "./aiDetails": {
+      "types": "./dist/aiDetails.d.ts",
+      "default": "./dist/aiDetails.js"
     }
   },
   "scripts": {

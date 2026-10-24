@@ -1,5 +1,6 @@
 // Response shapes from docs/api/README.md. Dates arrive as ISO strings;
 // decimals as numbers (§0).
+import type { AiDetail } from '../lib/aiDetails';
 
 export type Role = 'owner' | 'barista' | 'viewer';
 
@@ -45,6 +46,7 @@ export interface WorkspaceSettings {
   recipeRoastLevel: RoastLevel; // the roast recipes are written for
   roastScale: RoastScale; // beans record roast names (Cinnamon … French) or light to dark only
   hiddenFields: string[]; // optional form fields hidden for everyone (lib/fields.ts keys)
+  aiHidden: AiDetail[]; // what the AI doesn't get (lib/aiDetails.ts, llm-contract.md §9)
 }
 
 // docs/api/workspaces.md §2 Members
@@ -405,6 +407,14 @@ export interface LlmAnalysis {
   reasoning: string;
   suggestedGrindDelta: GrindDelta;
   suggestedTempDelta: number;
+  // Newer analyses (docs/api/llm-contract.md §9); null on older ones.
+  nextStep: string | null; // one concrete instruction for the next brew
+  confidence: 'low' | 'medium' | 'high' | null;
+  suggestedRpmDelta: number | null; // variable-speed grinders only
+  model: string | null;
+  promptVersion: string | null;
+  helpful: boolean | null; // 👍 / 👎 (docs/api/analysis.md §8)
+  ratedAt: string | null;
   createdAt: string;
 }
 

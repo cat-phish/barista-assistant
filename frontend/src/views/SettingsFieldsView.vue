@@ -43,7 +43,8 @@ async function toggle(key: string, form: FieldForm, shown: boolean): Promise<voi
   <SettingsLayout title="Fields">
     <p class="muted">
       The optional fields {{ workspaces.current?.name }}'s forms show. A hidden field keeps what's already recorded: it still shows when you edit
-      something that has a value in it, and the AI still gets it. Required fields are always shown.
+      something that has a value in it, and the AI still gets it (<RouterLink :to="{ name: 'settings-ai' }">Settings → AI</RouterLink> chooses what
+      it gets). Required fields are always shown.
     </p>
 
     <section v-for="form in FORMS" :key="form" class="card stack" :aria-labelledby="`fields-${form}`">

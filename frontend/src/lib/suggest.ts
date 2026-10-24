@@ -11,6 +11,14 @@ export const GRIND_LABELS: Record<GrindDelta, string> = {
   much_coarser: 'Grind much coarser',
 };
 
+export const CONFIDENCE_LABELS = { low: 'Low confidence', medium: 'Medium confidence', high: 'High confidence' } as const;
+
+// A suggested grinder speed change as advice, or null for none.
+export function rpmAdvice(delta: number | null): string | null {
+  if (!delta) return null;
+  return `${delta > 0 ? 'Raise' : 'Lower'} the grinder speed by ${Math.abs(delta)} RPM`;
+}
+
 export interface StartingParameters {
   tempC: number | null; // analyzed brew's temp (or the recipe's) + suggested change
   tempDeltaC: number; // the suggested change (show with formatTempChange)
@@ -18,6 +26,9 @@ export interface StartingParameters {
   grinder: { id: string; name: string } | null; // grinder of the analyzed brew
   grindAdvice: string;
   reasoning: string;
+  nextStep: string | null; // newer analyses: the one thing to do next
+  confidence: 'low' | 'medium' | 'high' | null;
+  rpmDelta: number | null; // variable-speed grinders only
   basedOn: { timestamp: string; isLatestBrew: boolean };
 }
 
@@ -39,6 +50,9 @@ export function startingParameters(s: Suggestions, recipe: Recipe | null): Start
     grindAdvice: GRIND_LABELS[analysis.suggestedGrindDelta],
     tempDeltaC: delta,
     reasoning: analysis.reasoning,
+    nextStep: analysis.nextStep,
+    confidence: analysis.confidence,
+    rpmDelta: analysis.suggestedRpmDelta,
     basedOn: { timestamp: brew.timestamp, isLatestBrew: s.recentBrews[0]?.id === brew.id },
   };
 }

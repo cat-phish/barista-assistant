@@ -1,77 +1,17 @@
+import type { AiDetail } from "@barista/shared/aiDetails";
 import { GRIND_DELTAS } from "@barista/shared/jobs";
+import { ANALYSIS_CONFIDENCE } from "@barista/shared/schema";
 import { UnrecoverableError } from "bullmq";
 import OpenAI from "openai";
 import { z } from "zod";
 import { config } from "./config.js";
 import type { BrewContext } from "./context.js";
+import { buildSystemPrompt, toLlmInput } from "./prompt.js";
 
-// System prompt and JSON schema are fixed by docs/api/llm-contract.md §9.
-export const SYSTEM_PROMPT =
-  "You are an expert specialty coffee roaster and barista. Analyze the provided " +
-  "extraction log and historical brews for this coffee bean, including roast " +
-  "level, roast age, dose, yield, total brew time, rating, and tasting notes. Suggest " +
-  "concrete parameter adjustments for the next brew. rating and tastingNotes " +
-  "describe the coffee tasted on its own; drinkRating and drinkTastingNotes " +
-  "describe the finished drink. Milk and syrup mask acidity and bitterness and " +
-  "add sweetness, so treat drink notes as weaker evidence of extraction than " +
-  "straight notes, and compare a brew mainly with earlier brews served the " +
-  "same way (each brew's drink says how). Judge a brew against its recipe's " +
-  "style (its name is the bar's own; brewsLike says how it brews, so a " +
-  "custom 'Inverted' style that brews like immersion is an immersion brew): a soup shot is a long, high-ratio espresso on purpose, a cold brew " +
-  "steeps cold for hours, and an immersion brew isn't a pour over. A " +
-  "stovetop brew (moka pot, ibrik) is a strong, short brew judged on its own " +
-  "terms, not as espresso; an 'other' method is described by its style and " +
-  "the notes. A batchNumber marks one home-roast batch: the brews given are " +
-  "all of that batch, and another batch of the same coffee is a different " +
-  "roast. The bean's roastType says what the roaster roasted it for: an espresso roast " +
-  "brewed as filter (or the reverse) may need a different approach rather " +
-  "than small corrections. Decaf and blends often extract differently from " +
-  "single origins. The flavorProfile is the roaster's description of the cup " +
-  "to aim for, and a higher altitudeMasl usually means denser beans that take " +
-  "a finer grind or hotter water. The origin (originArea, country, region) " +
-  "hints at the bean's typical character, e.g. many East African coffees are " +
-  "dense and bright while Brazilian ones are often lower grown and softer; " +
-  "treat it as context, not a rule. When tdsPercent is given, use it and " +
-  "extractionYieldPercent to judge strength and extraction rather than " +
-  "guessing from taste alone: filter usually lands around 1.15-1.45% TDS and " +
-  "espresso 8-12%, both often 18-22% extraction, but the taste and the " +
-  "roaster's intent come first. A brew's water (mg/L, GH and KH as CaCO3) " +
-  "matters too: harder water with more magnesium and calcium tends to " +
-  "extract more, while high alkalinity (KH) buffers acidity and can flatten " +
-  "the cup; only the figures given are known. prepTools lists the prep used " +
-  "(WDT, puck screen, filter type…); an empty list means none was recorded, " +
-  "not that none was used, so only compare tools between brews that list " +
-  "them. problems lists what went wrong while brewing (stalled drawdown, " +
-  "channeling, a gushing shot…): these are the clearest clues for the next " +
-  "brew, so explain the change from them first (e.g. a stalled bed or a " +
-  "choked shot points coarser, channeling to prep and distribution, a " +
-  "mistake like an untared scale to repeating rather than adjusting). An " +
-  "empty list means none were recorded, not that nothing went wrong. On a variable-speed grinder, grindRpm is part of the grind: a " +
-  "higher speed usually grinds a little finer with more fines, a lower one " +
-  "gives a clearer, more even cup; compare grind settings only at similar " +
-  "speeds, and you may suggest a speed change. grinderRetentionGrams is " +
-  "coffee left in the grinder (beans weighed in minus grounds out); " +
-  "actualDoseGrams is what went into the brew. High or changing retention " +
-  "can explain inconsistent brews and stale grounds mixing in. For " +
-  "espresso, judge flow " +
-  "from the first drop time, shot time and ratio against the recipe's " +
-  "windows, and consider the machine's capabilities (pre-infusion, flow and " +
-  "pressure control) and the grinder's step size when explaining the change. " +
-  "Cold styles (by brewsLike): cold_brew steeps for hours (the brew's " +
-  "steepMinHours-steepMaxHours, the window it aimed for, which may differ " +
-  "from the recipe's; in the fridge or at room temperature per steepTemp; " +
-  "actualTimeSec is the whole steep); kyoto_drip drips slowly over hours; " +
-  "rapid_cold (e.g. an OXO Rapid Brewer) brews cold in minutes, aiming for " +
-  "the brew's expectedFinishMinSec-expectedFinishMaxSec (steepTemp, when " +
-  "set, says if the water was fridge-cold or room temperature). " +
-  "Fridge steeps extract more slowly than room-temperature ones. These are " +
-  "often concentrates served diluted 1 : dilutionRatio with dilutedWith (the " +
-  "recipe's dilutionRatio is the intent): judge strength as served, after " +
-  "dilution. A concentrate's TDS is usually around 2.5-5% and the diluted " +
-  "cup around 1.2-1.6%, so a high TDS isn't over-extraction by itself. For " +
-  "long cold brews, steep time and grind are the main levers; temperature " +
-  "advice applies to rapid_cold only. " +
-  "Respond strictly matching the provided JSON schema.";
+// The input and system prompt are built in prompt.ts; the schema and its
+// checks are here (docs/api/llm-contract.md §9). PROMPT_VERSION (prompt.ts)
+// is stored with each analysis; bump it when any of them change.
+export { PROMPT_VERSION } from "./prompt.js";
 
 export const BREW_ANALYSIS_JSON_SCHEMA = {
   type: "object",
@@ -79,6 +19,15 @@ export const BREW_ANALYSIS_JSON_SCHEMA = {
     reasoning: {
       type: "string",
       description: "A concise 1-2 sentence diagnosis of extraction quality and why adjustments are needed.",
+    },
+    nextStep: {
+      type: "string",
+      description: "The one concrete thing to do on the next brew, in plain words (at most 140 characters).",
+    },
+    confidence: {
+      type: "string",
+      enum: [...ANALYSIS_CONFIDENCE],
+      description: "How sure the suggestion is: low with vague notes, no comparable brew, or measurements that look wrong.",
     },
     suggestedGrindDelta: {
       type: "string",
@@ -88,8 +37,12 @@ export const BREW_ANALYSIS_JSON_SCHEMA = {
       type: "number",
       description: "Suggested change in Celsius (e.g., -1.5, 0, 2.0).",
     },
+    suggestedRpmDelta: {
+      type: ["integer", "null"],
+      description: "Change in grinder speed (RPM) for a variable-speed grinder; null otherwise or to keep the speed.",
+    },
   },
-  required: ["reasoning", "suggestedGrindDelta", "suggestedTempDelta"],
+  required: ["reasoning", "nextStep", "confidence", "suggestedGrindDelta", "suggestedTempDelta", "suggestedRpmDelta"],
   additionalProperties: false,
 } as const;
 
@@ -97,8 +50,12 @@ const MAX_TEMP_DELTA_C = 10;
 
 // Strict mode should guarantee the shape; validate anyway (§9). Temp delta is
 // rounded to the column's 1 decimal; out-of-range values fail the attempt.
+const MAX_RPM_DELTA = 1000;
 const analysisSchema = z.object({
   reasoning: z.string().trim().min(1).max(2000),
+  nextStep: z.string().trim().min(1).max(200), // the column's size; asked for 140
+  confidence: z.enum(ANALYSIS_CONFIDENCE),
+  suggestedRpmDelta: z.number().int().min(-MAX_RPM_DELTA).max(MAX_RPM_DELTA).nullable(),
   suggestedGrindDelta: z.enum(GRIND_DELTAS),
   suggestedTempDelta: z
     .number()
@@ -110,13 +67,16 @@ export type BrewAnalysis = z.infer<typeof analysisSchema>;
 
 const openai = new OpenAI({ apiKey: config.openaiApiKey });
 
-// The exact request sent to OpenAI (pure, so tests can check it against §9).
-export function buildCompletionRequest(context: BrewContext): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
+// The exact request sent to OpenAI (pure, so tests can check it against §9):
+// the compact input, and the prompt sections it needs. `hidden` is what the
+// workspace keeps from the AI (Settings → AI).
+export function buildCompletionRequest(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set()): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
+  const input = toLlmInput(context, hidden);
   return {
     model: config.openaiModel,
     messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: JSON.stringify(context) },
+      { role: "system", content: buildSystemPrompt(input) },
+      { role: "user", content: JSON.stringify(input) },
     ],
     response_format: {
       type: "json_schema",
@@ -147,10 +107,19 @@ export function parseAnalysisMessage(
   return result.data;
 }
 
-export async function analyzeWithLlm(context: BrewContext): Promise<BrewAnalysis> {
+export async function analyzeWithLlm(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set()): Promise<BrewAnalysis> {
+  return (await requestAnalysis(context, hidden)).analysis;
+}
+
+// The analysis plus what it cost, for the eval script (src/eval.ts).
+export interface AnalysisRun {
+  analysis: BrewAnalysis;
+  usage: { promptTokens: number; completionTokens: number } | null;
+}
+export async function requestAnalysis(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set()): Promise<AnalysisRun> {
   let completion: OpenAI.Chat.Completions.ChatCompletion;
   try {
-    completion = await openai.chat.completions.create(buildCompletionRequest(context));
+    completion = await openai.chat.completions.create(buildCompletionRequest(context, hidden));
   } catch (err) {
     // Bad key, unknown model, malformed request: retrying won't help.
     if (err instanceof OpenAI.APIError && err.status !== undefined && [400, 401, 403, 404].includes(err.status)) {
@@ -158,5 +127,9 @@ export async function analyzeWithLlm(context: BrewContext): Promise<BrewAnalysis
     }
     throw err; // 429 / 5xx / network: let BullMQ retry with backoff
   }
-  return parseAnalysisMessage(completion.choices[0]?.message);
+  const usage = completion.usage ? { promptTokens: completion.usage.prompt_tokens, completionTokens: completion.usage.completion_tokens } : null;
+  const analysis = parseAnalysisMessage(completion.choices[0]?.message);
+  // A speed change only means something on a variable-speed grinder whose speed the AI may see.
+  if (!context.brew.grinder?.variableSpeed || hidden.has("rpm")) analysis.suggestedRpmDelta = null;
+  return { analysis, usage };
 }

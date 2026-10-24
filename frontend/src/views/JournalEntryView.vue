@@ -336,7 +336,7 @@ function markLabel(m: Mark): string {
       <!-- AI analysis -->
       <section class="card stack">
         <h2>AI suggestion</h2>
-        <AnalysisCard v-if="analysis" :analysis="analysis" />
+        <AnalysisCard v-if="analysis" :analysis="analysis" :can-rate="workspaces.canEdit" />
         <p v-else-if="aiState !== 'waiting'" class="muted">Not analyzed yet.</p>
         <p v-if="aiState === 'waiting'" class="muted" aria-live="polite">Analyzing this brew… this usually takes a few seconds.</p>
         <p v-if="aiState === 'slow'" class="muted" aria-live="polite">Still working on it. Check back in a minute.</p>

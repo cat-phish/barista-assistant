@@ -62,7 +62,7 @@ import { grinderRetentionText } from '../lib/grinderRetention';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
 import { batchSuffix, beanLabel as pickerLabel } from '../lib/beans';
 import { formatDay, formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen } from '../lib/format';
-import { chooseGrind, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
+import { CONFIDENCE_LABELS, chooseGrind, rpmAdvice, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
 import { useWorkspaceStore } from '../stores/workspace';
 import { brewRetention, linkRatio, ratioText as formatRatio, ROAST_LEVELS, scaleBatch, scaleShot, scaleSteps, type MeasuredBrew, type ScaleField } from '../lib/scale';
 import { formatTemp, formatTempChange, tempText, TEMPERATURE_LABELS, VOLUME_LABELS, volumeUnits } from '../lib/units';
@@ -74,7 +74,7 @@ type Stage = 'setup' | 'timing' | 'log' | 'steep' | 'saved';
 const workspaces = useWorkspaceStore();
 const route = useRoute();
 const router = useRouter();
-const { prefs, temperatureUnit, recipeRoastLevel } = usePreferences();
+const { prefs, temperatureUnit, recipeRoastLevel, aiHidden } = usePreferences();
 const stage = ref<Stage>('setup');
 const loading = ref(true);
 const loadError = ref('');
@@ -726,6 +726,9 @@ const saving = ref(false);
 const saveError = ref('');
 const submitted = ref(false);
 const savedLogId = ref<string | null>(null);
+const savedUnrated = ref(false);
+// Settings → AI can keep unrated brews from the AI (the API refuses them).
+const aiNeedsRating = computed(() => savedUnrated.value && aiHidden.value.includes('analyzeUnrated'));
 
 // Rate later (docs/api/notifications.md §1b): a box on the log form when
 // reminders are on (Settings → Notifications), ticked to start or not as set
@@ -774,6 +777,7 @@ async function save(): Promise<void> {
     });
     if (values.grinderId) remember('grinderId', values.grinderId);
     savedLogId.value = brewLog.id;
+    savedUnrated.value = values.rating === null && (values.drinkRating ?? null) === null;
     reminder.value = remind ? (outcome ?? 'unavailable') : null;
     stage.value = 'saved';
   } catch (err) {
@@ -1115,12 +1119,17 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         </p>
         <p v-else-if="suggestionState === 'error'" class="form-error">Couldn't load suggestions. Try again.</p>
         <template v-else-if="suggestion">
+          <p v-if="suggestion.nextStep" class="next">
+            <strong>Next time:</strong> {{ suggestion.nextStep }}
+            <span v-if="suggestion.confidence" class="badge" :class="`conf-${suggestion.confidence}`">{{ CONFIDENCE_LABELS[suggestion.confidence] }}</span>
+          </p>
           <p class="reasoning">“{{ suggestion.reasoning }}”</p>
           <ul class="advice">
             <li>
               <strong>{{ suggestion.grindAdvice }}</strong><template v-if="suggestion.grindBase"> than {{ suggestion.grindBase }}</template><template v-if="suggestion.grinder"> ({{ suggestion.grinder.name }})</template>
             </li>
             <li><strong>{{ formatTempChange(suggestion.tempDeltaC, temperatureUnit) }}</strong><template v-if="suggestion.tempC !== null"> → {{ formatTemp(suggestion.tempC, temperatureUnit) }}</template></li>
+            <li v-if="rpmAdvice(suggestion.rpmDelta)"><strong>{{ rpmAdvice(suggestion.rpmDelta) }}</strong></li>
           </ul>
           <p v-if="suggestionGrinderMismatch" class="note small">
             That brew was on {{ suggestion.grinder?.name ?? 'no recorded grinder' }}, so its grind setting isn't copied. Adjust for {{ grinder?.name ?? 'your grinder' }}.
@@ -1331,6 +1340,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             The reminder couldn't be set{{ reminder === 'off' ? ': no notification service is on (Settings → Notifications)' : '' }}. Rate it from the journal when you're ready.
           </p>
         </template>
+        <p v-else-if="aiNeedsRating" class="muted">Rate it in the journal to get an AI suggestion: this workspace only analyzes rated brews.</p>
         <template v-else>
           <p class="muted">Want a suggestion for your next brew of {{ beanLabel }}?</p>
           <button v-if="aiState === 'idle' || aiState === 'error'" class="btn btn-primary" type="button" @click="requestAnalysis">
@@ -1341,7 +1351,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <p v-if="aiState === 'slow'" class="muted" aria-live="polite">
             Still working on it. It'll show up in the journal, and next time you tap “Suggest parameters” for this bean.
           </p>
-          <AnalysisCard v-if="analysis" :analysis="analysis" />
+          <AnalysisCard v-if="analysis" :analysis="analysis" :can-rate="workspaces.canEdit" />
         </template>
       </section>
       <FinishDrinkCard v-if="drink" :drink="drink" :factor="sizeScale" :size-label="madeSize ? formatSize(madeSize) : null" />
@@ -1435,6 +1445,16 @@ p {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+}
+.next {
+  margin: 0;
+}
+.next .badge {
+  margin-left: var(--space-1);
+  white-space: nowrap;
+}
+.conf-low {
+  opacity: 0.75;
 }
 .reasoning {
   font-style: italic;
