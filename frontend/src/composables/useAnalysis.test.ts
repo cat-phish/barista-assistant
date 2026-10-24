@@ -9,7 +9,7 @@ vi.mock('../api/brews', () => ({
 const { useAnalysis } = await import('./useAnalysis');
 
 const analysis = (id: string): LlmAnalysis => ({
-  id, brewLogId: 'log', reasoning: id, suggestedGrindDelta: 'finer', suggestedTempDelta: 1, nextStep: null, confidence: null, suggestedRpmDelta: null, model: null, promptVersion: null, helpful: null, ratedAt: null, createdAt: '',
+  id, brewLogId: 'log', reasoning: id, suggestedGrindDelta: 'finer', suggestedTempDelta: 1, nextStep: null, confidence: null, suggestedRpmDelta: null, suggestedDoseDelta: null, suggestedYieldDelta: null, model: null, promptVersion: null, helpful: null, ratedAt: null, createdAt: '',
 });
 const respond = (latest: LlmAnalysis | null) => ({ brewLog: { latestAnalysis: latest } });
 

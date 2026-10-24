@@ -63,7 +63,7 @@ import { grinderRetentionText } from '../lib/grinderRetention';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
 import { batchSuffix, beanLabel as pickerLabel } from '../lib/beans';
 import { formatDay, formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen } from '../lib/format';
-import { CONFIDENCE_LABELS, chooseGrind, rpmAdvice, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
+import { CONFIDENCE_LABELS, chooseGrind, gramsAdvice, rpmAdvice, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
 import { useWorkspaceStore } from '../stores/workspace';
 import { brewRetention, linkRatio, ratioText as formatRatio, ROAST_LEVELS, scaleBatch, scaleShot, scaleSteps, type MeasuredBrew, type ScaleField } from '../lib/scale';
 import { formatTemp, formatTempChange, tempText, TEMPERATURE_LABELS, VOLUME_LABELS, volumeUnits } from '../lib/units';
@@ -543,6 +543,14 @@ async function suggest(): Promise<void> {
 
 function applySuggestion(p: StartingParameters): void {
   if (p.tempC !== null) draft.temp = tempText(p.tempC, temperatureUnit.value);
+  // Espresso: the suggested dose, and the ratio that gives the suggested shot weight.
+  if (p.shot && shotRecipe.value) {
+    setLeadText('dose', formatGrams(p.shot.doseG));
+    if (p.shot.yieldG !== null) {
+      const r = p.shot.yieldG / p.shot.doseG;
+      ratio.value = { text: formatRatio(r), value: r };
+    }
+  }
   void refreshGrind(); // the suggestion may now supply the grind
 }
 
@@ -1136,6 +1144,12 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             </li>
             <li><strong>{{ formatTempChange(suggestion.tempDeltaC, temperatureUnit) }}</strong><template v-if="suggestion.tempC !== null"> → {{ formatTemp(suggestion.tempC, temperatureUnit) }}</template></li>
             <li v-if="rpmAdvice(suggestion.rpmDelta)"><strong>{{ rpmAdvice(suggestion.rpmDelta) }}</strong></li>
+            <li v-if="suggestion.shot && gramsAdvice('Dose', suggestion.shot.doseDeltaG)">
+              <strong>{{ gramsAdvice('Dose', suggestion.shot.doseDeltaG) }}</strong> → {{ formatGrams(suggestion.shot.doseG) }} g
+            </li>
+            <li v-if="suggestion.shot && gramsAdvice('Shot weight', suggestion.shot.yieldDeltaG)">
+              <strong>{{ gramsAdvice('Shot weight', suggestion.shot.yieldDeltaG) }}</strong><template v-if="suggestion.shot.yieldG !== null"> → {{ formatGrams(suggestion.shot.yieldG) }} g</template>
+            </li>
           </ul>
           <p v-if="suggestionGrinderMismatch" class="note small">
             That brew was on {{ suggestion.grinder?.name ?? 'no recorded grinder' }}, so its grind setting isn't copied. Adjust for {{ grinder?.name ?? 'your grinder' }}.

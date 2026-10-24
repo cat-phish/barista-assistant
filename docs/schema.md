@@ -1001,6 +1001,10 @@ export const llmAnalyses = mysqlTable("llm_analyses", {
   nextStep: varchar("next_step", { length: 200 }),
   confidence: varchar("confidence", { length: 10 }).$type<AnalysisConfidence>(), // ANALYSIS_CONFIDENCE
   suggestedRpmDelta: int("suggested_rpm_delta"),
+  // Espresso only (docs/api/llm-contract.md §9): change the dose and the shot
+  // weight, in grams; null for other brews and older analyses.
+  suggestedDoseDelta: decimal("suggested_dose_delta", { precision: 3, scale: 1, mode: "number" }),
+  suggestedYieldDelta: decimal("suggested_yield_delta", { precision: 4, scale: 1, mode: "number" }),
   // What made it: the model and the prompt version (worker/src/prompt.ts).
   model: varchar("model", { length: 100 }),
   promptVersion: varchar("prompt_version", { length: 30 }),

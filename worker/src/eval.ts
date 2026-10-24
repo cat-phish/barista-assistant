@@ -139,7 +139,7 @@ function compare(a: string, b: string): void {
   const show = (o: unknown) => {
     if (!o || typeof o !== "object") return "–";
     const x = o as Record<string, unknown>;
-    return [x.nextStep ? `**Next:** ${x.nextStep}` : null, `grind ${x.suggestedGrindDelta}, temp ${x.suggestedTempDelta}`, x.suggestedRpmDelta ? `rpm ${x.suggestedRpmDelta}` : null, x.confidence ? `(${x.confidence})` : null, `“${x.reasoning}”`]
+    return [x.nextStep ? `**Next:** ${x.nextStep}` : null, `grind ${x.suggestedGrindDelta}, temp ${x.suggestedTempDelta}`, x.suggestedRpmDelta ? `rpm ${x.suggestedRpmDelta}` : null, x.suggestedDoseDelta ? `dose ${x.suggestedDoseDelta} g` : null, x.suggestedYieldDelta ? `shot weight ${x.suggestedYieldDelta} g` : null, x.confidence ? `(${x.confidence})` : null, `“${x.reasoning}”`]
       .filter(Boolean)
       .join("<br>");
   };

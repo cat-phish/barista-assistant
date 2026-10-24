@@ -26,12 +26,12 @@ and fix the references.
 - A. Settings & configuration: 1
 - B. Beans: 2
 - C. Brewing & logging: 3–5
-- D. AI suggestions: 6–7
-- E. Insights: 8
-- F. Bar & menu: 9–11
-- G. Home roasting: 12
-- H. Accounts: 13–14
-- I. Deployment & the app: 15
+- D. AI suggestions: 6
+- E. Insights: 7
+- F. Bar & menu: 8–10
+- G. Home roasting: 11
+- H. Accounts: 12–13
+- I. Deployment & the app: 14
 
 ---
 
@@ -195,24 +195,7 @@ Recording a brew: what's measured, and how fast it is to log.
 
 What the analysis worker sends to the LLM and what comes back.
 
-### 6. Espresso dose and yield suggestions from the AI
-
-- **Status:** idea
-- **Why:** the AI suggests grind and temperature changes; for espresso, dose
-  and shot weight (ratio) are often the better lever.
-- **Approach:** extend the structured output (`docs/api/README.md` §9) with
-  optional dose and yield deltas for espresso brews, and show them with the
-  suggestion. Prompt and schema change, plus UI. The AI review (roadmap) added `nextStep`,
-  `confidence` and a nullable `suggestedRpmDelta`: a dose or yield delta can
-  follow that pattern (nullable, nulled by the worker when it doesn't
-  apply), with an `espresso`-section line in `worker/src/prompt.ts` and a
-  `PROMPT_VERSION` bump.
-- **Size:** S–M
-- **Depends on:** nothing.
-- **Open questions:** should it also suggest pre-infusion and profile changes
-  for machines that support them?
-
-### 7. Build bar items from plain text (AI)
+### 6. Build bar items from plain text (AI)
 
 - **Status:** idea
 - **Why:** recipes, drinks and other bar items often come as text: a
@@ -244,7 +227,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## E. Insights
 
-### 8. Statistics and graphs
+### 7. Statistics and graphs
 
 - **Status:** idea
 - **Why:** the brew history is a list. Trends (is this bean getting better
@@ -273,7 +256,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## F. Bar & menu
 
-### 9. Ingredient prep and stock
+### 8. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -290,7 +273,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should a finished cold brew batch (roadmap: cold brew refinements) be
     stock the same way, with each glass served taken from it and rated?
 
-### 10. Public menu: branding and sizes
+### 9. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
@@ -304,7 +287,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
-### 11. Drink categories: what else they could do
+### 10. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -323,7 +306,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## G. Home roasting
 
-### 12. Roasting: green stock, roast logs, resting
+### 11. Roasting: green stock, roast logs, resting
 
 - **Status:** idea
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
@@ -354,7 +337,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## H. Accounts
 
-### 13. Account management and password reset
+### 12. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -385,13 +368,13 @@ What the analysis worker sends to the LLM and what comes back.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 14. Email verification
+### 13. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 13), inviting a member by email, or notifications by email.
+  (item 12), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -401,9 +384,9 @@ What the analysis worker sends to the LLM and what comes back.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 13).
+  - Shares the mail and token pieces with password reset (item 12).
 - **Size:** M (mail is new to the stack).
-- **Depends on:** nothing; pairs with 13.
+- **Depends on:** nothing; pairs with 12.
 - **Open questions:**
   - Block unverified accounts, or only remind them?
   - What happens to accounts that existed before verification (treat as
@@ -416,7 +399,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 How the app is served and installed.
 
-### 15. Serve the app as an installable PWA
+### 14. Serve the app as an installable PWA
 
 - **Status:** idea
 - **Why:** the PWA is configured (`vite-plugin-pwa`, `frontend/vite.config.ts`)

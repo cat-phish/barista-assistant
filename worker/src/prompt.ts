@@ -8,7 +8,7 @@ import type { BrewContext, BrewSummary, GrinderInfo, WaterInfo } from "./context
 // Stored with each analysis (llm_analyses.prompt_version), so results can be
 // compared across changes (npm run eval). Bump it whenever the input, the
 // prompt or the schema changes.
-export const PROMPT_VERSION = "2026-10-b";
+export const PROMPT_VERSION = "2026-10-c";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type LlmInput = { [key: string]: Json };
@@ -158,7 +158,8 @@ export const PROMPT_SECTIONS: PromptSection[] = [
       "plain words a barista can act on (e.g. 'Grind 2 clicks coarser and keep 93 °C'). confidence is low when the " +
       "notes are vague, there's no earlier brew to compare with, or the measurements look wrong; high only when the " +
       "taste and the numbers agree. suggestedRpmDelta is a change in grinder speed for a variable-speed grinder, " +
-      "null otherwise or when the speed should stay.",
+      "null otherwise or when the speed should stay. suggestedDoseDelta and suggestedYieldDelta are null except for " +
+      "espresso.",
   },
   {
     key: "drink",
@@ -272,7 +273,12 @@ export const PROMPT_SECTIONS: PromptSection[] = [
     text:
       "For espresso, judge flow from the first drop time, shot time and ratio against the recipe's windows, and " +
       "consider the machine's capabilities (pre-infusion, flow and pressure control) and the grinder's step size when " +
-      "explaining the change.",
+      "explaining the change. Dose and shot weight are levers too: suggestedDoseDelta changes the dose in grams " +
+      "(usually 0.5-1 g, within what the basket holds) and suggestedYieldDelta the shot weight in grams. A longer " +
+      "shot (more yield) extracts more and tastes lighter, a shorter one is stronger and heavier; a bigger dose " +
+      "slows the shot like a finer grind. Prefer one lever: when the grind is right but the cup is too strong, " +
+      "weak, sour or bitter, change the ratio rather than the grind, and keep the others null or 0. A pre-infusion " +
+      "or profile change, if the machine allows it, goes in nextStep.",
   },
   {
     key: "cold",

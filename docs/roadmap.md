@@ -1187,3 +1187,26 @@ left the page saying "still working". Contract: `api/analysis.md` §8
 - **Not built:** a history of earlier suggestions on the journal entry (it
   shows the newest), and pushing the job back when a brew is edited in the
   wait (not needed: the job reads the brew when it runs).
+
+## Espresso dose and shot weight suggestions (built)
+
+Backlog item "Espresso dose and yield suggestions from the AI", branch
+`espresso-dose-yield`, migration 0065, prompt `2026-10-c`. The AI only
+changed grind and temperature; for espresso the ratio is often the better
+lever. Contract: `api/llm-contract.md` §9.
+
+- **Output:** `suggestedDoseDelta` (grams, within ±5) and
+  `suggestedYieldDelta` (shot weight in grams, within ±30), both rounded to
+  0.1 g and nullable, stored on `llm_analyses`. The worker nulls them for
+  anything but espresso, and a 0 counts as none (`onlyWhatApplies`, which
+  also holds the RPM rule).
+- **Prompt:** the espresso section explains the levers (a longer shot
+  extracts more and tastes lighter, a bigger dose slows it like a finer
+  grind) and asks for one at a time: a ratio change rather than a grind
+  change when the grind is right but the cup is off.
+- **App:** the suggestion card lists "Dose +0.5 g" and "Shot weight +4 g";
+  the brew page's Starting point shows the new values ("→ 18.5 g") and
+  "Suggest parameters" sets the shot's dose and the ratio for the new
+  weight.
+- **Decided:** pre-infusion and profile changes aren't fields; the prompt
+  sends them to `nextStep` when the machine allows them.

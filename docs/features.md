@@ -278,7 +278,9 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   edited or deleted.
 - **AI analysis:** after a brew, ask for a suggestion; a background worker
   asks the LLM for grind and temperature changes with reasoning, shown next
-  time you brew that bean. It sees the bean's roast level and age, the
+  time you brew that bean, plus one next step and how confident it is. For
+  espresso it can also change the dose and the shot weight (the ratio), and
+  "Suggest parameters" sets the shot to them. It sees the bean's roast level and age, the
   recipe, your previous brews of that bean, the grinder's details and, for
   espresso, the machine's capabilities and the shot timer's taps. Every brew
   says how it was served (straight, or the drink and its ingredient types),

@@ -133,7 +133,7 @@ queue:
    | Section | Included when | What it says |
    | --- | --- | --- |
    | `core` | always | expert barista; judge the brew against its recipe and the earlier brews (`sameRecipe` fairest); missing = not recorded; equipment by name; change one or two levers |
-   | `output` | always | what `reasoning`, `nextStep`, `confidence` and `suggestedRpmDelta` should hold |
+   | `output` | always | what `reasoning`, `nextStep`, `confidence` and `suggestedRpmDelta` should hold; dose and shot weight null except for espresso |
    | `drink` | a drink or drink tasting is sent | drink notes are weaker evidence; compare like with like |
    | `style` | a recipe style is sent | judge against `brewsLike` (soup shot, immersion…) |
    | `stovetop` | a `stovetop` or `other` method | judged on its own terms |
@@ -149,7 +149,7 @@ queue:
    | `problems` | a brew lists problems | the clearest clues, explained first |
    | `rpm` | a brew has `grindRpm` | speed is part of the grind |
    | `retention` | a brew has `grinderRetentionGrams` | retention and stale grounds |
-   | `espresso` | an `espresso` method | flow, windows, machine, step size |
+   | `espresso` | an `espresso` method | flow, windows, machine, step size; dose and shot weight as levers, one at a time |
    | `cold` | a style brews like `cold_brew`, `kyoto_drip` or `rapid_cold` | steep windows, dilution, concentrate TDS, levers |
    | `end` | always | respond strictly matching the schema |
 
@@ -190,9 +190,17 @@ sent as-is; no `$schema` key, which strict mode does not need):
     "suggestedRpmDelta": {
       "type": ["integer", "null"],
       "description": "Change in grinder speed (RPM) for a variable-speed grinder; null otherwise or to keep the speed."
+    },
+    "suggestedDoseDelta": {
+      "type": ["number", "null"],
+      "description": "Espresso only: change in dose in grams (e.g., 0.5, -1); null for other brews or to keep the dose."
+    },
+    "suggestedYieldDelta": {
+      "type": ["number", "null"],
+      "description": "Espresso only: change in shot weight (beverage out) in grams (e.g., 4, -3); null for other brews or to keep it."
     }
   },
-  "required": ["reasoning", "nextStep", "confidence", "suggestedGrindDelta", "suggestedTempDelta", "suggestedRpmDelta"],
+  "required": ["reasoning", "nextStep", "confidence", "suggestedGrindDelta", "suggestedTempDelta", "suggestedRpmDelta", "suggestedDoseDelta", "suggestedYieldDelta"],
   "additionalProperties": false
 }
 ```
@@ -207,10 +215,19 @@ sent as-is; no `$schema` key, which strict mode does not need):
    - `suggestedTempDelta` is rounded to 1 decimal (the column is
      `DECIMAL(3,1)`) and must be between −10 and +10 °C. `nextStep` is at
      most 200 characters (the column), `suggestedRpmDelta` an integer within
-     ±1000. Anything outside that is treated as a bad response: the attempt
-     fails and BullMQ retries it.
-   - `suggestedRpmDelta` is set to `null` unless the brew's grinder is
-     variable-speed.
+     ±1000; `suggestedDoseDelta` (within ±5 g) and `suggestedYieldDelta`
+     (within ±30 g) are rounded to 0.1 g. Anything outside that is treated
+     as a bad response: the attempt fails and BullMQ retries it.
+   - What doesn't apply is set to `null` (`onlyWhatApplies` in
+     `worker/src/llm.ts`): `suggestedRpmDelta` unless the brew's grinder is
+     variable-speed (and its speed isn't kept from the AI);
+     `suggestedDoseDelta` and `suggestedYieldDelta` unless the brew is
+     espresso, and either when it's 0.
+   - The espresso section asks for one lever at a time: when the grind is
+     right but the cup is too strong, weak, sour or bitter, a ratio change
+     (dose or shot weight) rather than a grind change. Pre-infusion and
+     profile changes aren't fields; when the machine allows them they go in
+     `nextStep`.
    - A refusal, an empty response, or invalid JSON also fails the attempt.
 
 ## What the AI sees
