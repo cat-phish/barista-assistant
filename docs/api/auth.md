@@ -29,7 +29,8 @@ below is `403`, so a typo doesn't look like a logout.
 - **Auth Required:** `false`
 - **Body:** `{ "email": "a@b.com", "password": "min 8 chars" }`
 - **Success (`201 Created`):** sets the `session` cookie and returns
-  `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... } } }`
+  `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... }, "isAdmin": false } }`
+  (`isAdmin`: a server admin, from `ADMIN_EMAILS`; §10)
 - **Errors:** `400` invalid body; `409` email already registered.
 
 ## `POST /api/auth/login`
@@ -37,7 +38,7 @@ below is `403`, so a typo doesn't look like a logout.
 - **Auth Required:** `false`
 - **Body:** `{ "email": "a@b.com", "password": "..." }`
 - **Success (`200 OK`):** sets the `session` cookie and returns
-  `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... } } }`
+  `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... }, "isAdmin": false } }`
 - **Errors:** `400` invalid body; `401` wrong email or password. The message is
   the same for both so it doesn't reveal which emails are registered.
 - **Rate limit:** 10 failed attempts per IP per 15 minutes; successful logins
@@ -53,7 +54,7 @@ below is `403`, so a typo doesn't look like a logout.
 ## `GET /api/auth/me`
 
 - **Auth Required:** `true`
-- **Success (`200 OK`):** `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... } } }`
+- **Success (`200 OK`):** `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... }, "isAdmin": false } }`
 
 ## Preferences
 

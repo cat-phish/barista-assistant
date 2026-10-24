@@ -17,6 +17,8 @@ COPY worker/ worker/
 RUN npm run build -w worker
 
 FROM node:22-alpine
+# mariadb-dump, for scheduled server backups (docs/api/server.md §10).
+RUN apk add --no-cache mariadb-client
 ENV NODE_ENV=production
 WORKDIR /app
 COPY package.json package-lock.json ./

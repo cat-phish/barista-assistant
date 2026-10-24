@@ -1085,3 +1085,24 @@ Backlog item 1, part 3, branch `csv-export`; no migration. This finishes
   (CSV)" button in the Journal's and Beans' export bars.
 - **What's left of the old item:** photos in backups is a note on bean
   photos; scheduled server backups is its own backlog item.
+
+## Scheduled server backups (built)
+
+Backlog item "Scheduled server backups", branch `server-backups`, migration
+0061. Workspace backups were manual, and nothing covered accounts.
+Contract: `api/server.md` §10.
+
+- **Server admins:** `ADMIN_EMAILS` (env); the user object gains `isAdmin`,
+  and admins get Settings → Server → Backups. First server-wide setting:
+  a `server_settings` table (key → JSON), left out of workspace backups.
+- **Schedule:** off / daily / weekly at an hour in `BACKUP_TIMEZONE`, keep
+  1–90. A BullMQ job scheduler on a new `maintenance` queue, synced on save
+  and at backend start; "Back up now" queues a one-off.
+- **The dump:** the worker runs `mariadb-dump` (mariadb-client added to its
+  image) as the app's user, password via `MYSQL_PWD`, gzipped through a
+  `.partial` file into `./backups` (bind-mounted; read-only for the
+  backend, which lists and serves the files to admins), then prunes to the
+  newest N and records the status or error.
+- **Decided:** a whole-database dump set by admins (not per-workspace
+  scheduled JSON); restored with a documented command, not in the app.
+- **Not built:** an off-site copy, and notifying admins when a backup fails.

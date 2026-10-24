@@ -19,11 +19,13 @@ import {
   type Workspace,
 } from "@barista/shared/schema";
 import { emailSchema, preferencesSchema } from "../validation.js";
+import { isAdminEmail } from "../config.js";
 
 export interface PublicUser {
   id: string;
   email: string;
   preferences: UserPreferences; // defaults filled in
+  isAdmin: boolean; // a server admin (ADMIN_EMAILS; docs/api/server.md §10)
 }
 
 export interface PreferencesResponse {
@@ -59,7 +61,7 @@ export interface SoleOwnerConflict {
 }
 
 function toPublicUser(user: Pick<User, "id" | "email"> & { preferences?: User["preferences"] }): PublicUser {
-  return { id: user.id, email: user.email, preferences: withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null) };
+  return { id: user.id, email: user.email, preferences: withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null), isAdmin: isAdminEmail(user.email) };
 }
 
 // Per-IP brute-force protection, shared by every endpoint that checks a

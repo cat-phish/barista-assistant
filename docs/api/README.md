@@ -31,6 +31,7 @@ means drinks, wherever you see it (code comments use
 | §7b | [menu.md](menu.md) | Menu Builder (sections and items for §7) |
 | §8 | [analysis.md](analysis.md) | LLM Brew Analysis / Parameter Suggestions |
 | §9 | [llm-contract.md](llm-contract.md) | Worker -> LLM Structured Output Contract |
+| §10 | [server.md](server.md) | Server Administration (admins, scheduled database backups) |
 
 Read this file's conventions first, then only the section(s) the change
 touches. For example, a new drink field needs `drinks.md`, plus `brew-logs.md`

@@ -46,6 +46,13 @@ services:
       # The image defaults to production, which marks the session cookie
       # Secure (HTTPS only). This stack serves plain http://localhost.
       - NODE_ENV=development
+      # Server admins (Settings → Server): emails, comma separated.
+      - ADMIN_EMAILS=${ADMIN_EMAILS:-}
+      # The zone scheduled backups' hour is in (e.g. America/Los_Angeles).
+      - BACKUP_TIMEZONE=${BACKUP_TIMEZONE:-UTC}
+    # Lists and serves the dumps the worker writes (read-only here).
+    volumes:
+      - ./backups:/backups:ro
     secrets:
       - db_password
       - redis_password
@@ -76,6 +83,9 @@ services:
       - BREW_TIMEZONE=${BREW_TIMEZONE:-}
       # Where the app opens, for the link in rate-later reminders.
       - APP_URL=${APP_URL:-http://localhost:5173}
+    # Scheduled database dumps land in ./backups (docs/api/server.md §10).
+    volumes:
+      - ./backups:/backups
     secrets:
       - db_password
       - redis_password

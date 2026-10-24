@@ -121,6 +121,30 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// 1c. Server settings (docs/api/server.md §10): what server admins set for
+// the whole server, one row per key. "backups" holds BackupSettings;
+// "backups_status" what the worker last did (BackupStatus).
+export const BACKUP_FREQUENCIES = ["off", "daily", "weekly"] as const;
+export type BackupFrequency = (typeof BACKUP_FREQUENCIES)[number];
+export interface BackupSettings {
+  frequency: BackupFrequency;
+  hour: number; // 0-23, in BACKUP_TIMEZONE
+  weekday: number; // 0-6, Sunday first (weekly only)
+  keep: number; // 1-90: the newest dumps kept, older ones deleted
+}
+export const DEFAULT_BACKUP_SETTINGS: BackupSettings = { frequency: "off", hour: 3, weekday: 0, keep: 7 };
+export interface BackupStatus {
+  lastRunAt: string | null; // ISO
+  lastFile: string | null;
+  lastBytes: number | null;
+  lastError: string | null; // set when the last run failed
+}
+export const serverSettings = mysqlTable("server_settings", {
+  key: varchar("key", { length: 50 }).primaryKey(),
+  value: jsonValue<unknown>("value"),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
 // 1b. Notification channels (per person; see NOTIFICATION_KINDS above)
 export const notificationChannels = mysqlTable(
   "notification_channels",

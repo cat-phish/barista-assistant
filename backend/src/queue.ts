@@ -10,10 +10,16 @@ import {
   type BrewAnalysisJobData,
   type RateReminderJobData,
   type SteepReminderJobData,
+  backupCron,
+  DB_BACKUP_JOB,
+  DB_BACKUP_SCHEDULER,
+  MAINTENANCE_QUEUE,
+  type DbBackupJobData,
 } from "@barista/shared/jobs";
+import type { BackupSettings } from "@barista/shared/schema";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
-import { config } from "./config.js";
+import { backupTimezone, config } from "./config.js";
 
 // Producer side of the brew-analysis queue (docs/api/llm-contract.md §9).
 const connection = new Redis(config.redis.url, {
@@ -107,7 +113,42 @@ async function enqueueReminder(name: string, jobId: string, data: RateReminderJo
   }
 }
 
+// Scheduled server backups (docs/api/server.md §10): a job scheduler that
+// runs the database dump on the admins' schedule, and one-off runs.
+export const maintenanceQueue = new Queue<DbBackupJobData>(MAINTENANCE_QUEUE, { connection });
+let lastMaintenanceError = "";
+maintenanceQueue.on("error", (err: Error) => {
+  if (err.message !== lastMaintenanceError) console.error("Maintenance queue error:", err.message);
+  lastMaintenanceError = err.message;
+});
+
+const BACKUP_JOB_OPTS = { attempts: 2, backoff: { type: "exponential", delay: 60_000 }, removeOnComplete: true, removeOnFail: 20 } as const;
+
+// Makes the scheduler match the settings: created or moved, or removed when off.
+export async function syncBackupSchedule(settings: BackupSettings): Promise<void> {
+  const pattern = backupCron(settings);
+  if (!pattern) {
+    await maintenanceQueue.removeJobScheduler(DB_BACKUP_SCHEDULER);
+    return;
+  }
+  await maintenanceQueue.upsertJobScheduler(
+    DB_BACKUP_SCHEDULER,
+    { pattern, tz: backupTimezone() },
+    { name: DB_BACKUP_JOB, data: { reason: "schedule" }, opts: BACKUP_JOB_OPTS },
+  );
+}
+
+// When the next scheduled dump runs, or null when off.
+export async function nextBackupAt(): Promise<string | null> {
+  const scheduler = await maintenanceQueue.getJobScheduler(DB_BACKUP_SCHEDULER);
+  return scheduler?.next ? new Date(scheduler.next).toISOString() : null;
+}
+
+export async function enqueueBackupNow(): Promise<void> {
+  await maintenanceQueue.add(DB_BACKUP_JOB, { reason: "manual" }, BACKUP_JOB_OPTS);
+}
+
 export async function closeQueue(): Promise<void> {
-  await Promise.all([brewAnalysisQueue.close(), reminderQueue.close()]);
+  await Promise.all([brewAnalysisQueue.close(), reminderQueue.close(), maintenanceQueue.close()]);
   connection.disconnect();
 }

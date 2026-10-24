@@ -9,6 +9,7 @@ declare module 'vue-router' {
     requiresWorkspace?: boolean; // implies requiresAuth
     guestOnly?: boolean; // login/register: logged-in users go home
     requiresEditor?: boolean; // owner or barista in the current workspace (viewers are read-only)
+    requiresAdmin?: boolean; // a server admin (ADMIN_EMAILS); implies requiresAuth
   }
 }
 
@@ -56,6 +57,7 @@ export const router = createRouter({
     { path: '/settings/fields', name: 'settings-fields', component: () => import('../views/SettingsFieldsView.vue'), meta: { requiresWorkspace: true } },
     { path: '/settings/workspace', name: 'settings-workspace', component: () => import('../views/SettingsWorkspaceView.vue'), meta: { requiresWorkspace: true } },
     { path: '/settings/members', name: 'settings-members', component: () => import('../views/SettingsMembersView.vue'), meta: { requiresWorkspace: true } },
+    { path: '/settings/server', name: 'settings-server', component: () => import('../views/SettingsServerView.vue'), meta: { requiresAdmin: true } },
     { path: '/settings/data', name: 'settings-data', component: () => import('../views/SettingsDataView.vue'), meta: { requiresWorkspace: true } },
     { path: '/beans', name: 'beans', component: () => import('../views/BeansView.vue'), meta: { requiresWorkspace: true } },
     { path: '/beans/archived', name: 'beans-archived', component: () => import('../views/BeansView.vue'), props: { archived: true }, meta: { requiresWorkspace: true } },
@@ -88,9 +90,10 @@ router.beforeEach(async (to): Promise<RouteLocationRaw | true> => {
   if (!auth.checked) await auth.fetchMe();
 
   if (to.meta.guestOnly && auth.user) return safeRedirect(to.query.redirect);
-  if ((to.meta.requiresAuth || to.meta.requiresWorkspace) && !auth.user) {
+  if ((to.meta.requiresAuth || to.meta.requiresWorkspace || to.meta.requiresAdmin) && !auth.user) {
     return { name: 'login', query: to.fullPath === '/' ? {} : { redirect: to.fullPath } };
   }
+  if (to.meta.requiresAdmin && !auth.user?.isAdmin) return { name: 'settings-account' };
   if (to.meta.requiresWorkspace) {
     const workspaces = useWorkspaceStore();
     await workspaces.ensureLoaded();

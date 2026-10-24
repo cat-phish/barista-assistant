@@ -20,3 +20,22 @@ export const config = {
   isProduction: process.env.NODE_ENV === "production",
   jwtSecret,
 } as const;
+
+// Server admins (docs/api/server.md §10): the emails in ADMIN_EMAILS, comma
+// separated, any case. Read on each call, so tests can change it.
+export function isAdminEmail(email: string): boolean {
+  const admins = (process.env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  return admins.includes(email.trim().toLowerCase());
+}
+// Where scheduled database dumps are written (the worker) and listed from.
+export const backupDir = (): string => process.env.BACKUP_DIR ?? "/backups";
+// The zone the backup hour is in; an unknown zone falls back to UTC.
+export function backupTimezone(): string {
+  const tz = process.env.BACKUP_TIMEZONE?.trim() || "UTC";
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: tz });
+    return tz;
+  } catch {
+    return "UTC";
+  }
+}
