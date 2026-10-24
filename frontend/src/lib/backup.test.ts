@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BackupFile } from '../api/backup';
-import { backupFileName, backupSummary, detailsText, exportFileName, fileLists, missingListError, readBackup, tableLabel } from './backup';
+import { backupFileName, backupSummary, copyExample, detailsText, exportFileName, fileLists, missingListError, readBackup, tableLabel } from './backup';
 
 const file: BackupFile = {
   format: 'barista-backup',
@@ -31,6 +31,14 @@ describe('backup files', () => {
     expect(fileLists(file)).toEqual(['beans', 'grinders', 'brew_logs']);
     const recipes: BackupFile = { ...file, scope: 'lists', lists: ['drinks', 'recipes'], tables: { recipes: [{}], brewers: [{}], drinks: [{}] } };
     expect(fileLists(recipes)).toEqual(['recipes', 'drinks']); // brewers only came along
+  });
+
+  it('shows the copy name with an item from the file: a bean by its bean name, never a brew', () => {
+    const beans: BackupFile = { ...file, tables: { beans: [{ roasterName: 'Test Roaster', beanName: 'Test Bean' }], brew_logs: [{}] } };
+    expect(copyExample(beans, ['beans'])).toBe('Test Bean (2)');
+    expect(copyExample({ ...file, tables: { recipes: [{ name: 'House V60' }] } }, ['recipes'])).toBe('House V60 (2)');
+    expect(copyExample(beans, ['brew_logs'])).toBe('Name (2)');
+    expect(copyExample(beans, ['brew_logs', 'beans'])).toBe('Test Bean (2)');
   });
 
   it("explains a file a list page can't import", () => {

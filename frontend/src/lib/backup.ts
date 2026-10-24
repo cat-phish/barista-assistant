@@ -38,6 +38,33 @@ export function fileLists(file: BackupFile): ListName[] {
   return LISTS.filter((l) => (file.tables[l]?.length ?? 0) > 0);
 }
 
+// What a list's items bring along when imported, if anything
+// (docs/api/backup.md §2b, "What comes along").
+export const COMES_ALONG: Record<ListName, string | null> = {
+  beans: 'each bean’s process',
+  recipes: 'each recipe’s brewer and its method, style and grinders',
+  drinks: 'each drink’s category, recipe (with its brewer and grinders) and ingredients',
+  ingredients: null,
+  brewers: 'each brewer’s method',
+  grinders: null,
+  water_profiles: null,
+  prep_tools: null,
+  brew_problems: null,
+  brew_logs: 'each brew’s bean, recipe, grinder, water, drink, prep tools and problems',
+};
+
+// The "add as a copy" example, from the file's own items: "Test Bean (2)"
+// (a copy's bean name or name gets the number; brews are never copied).
+export function copyExample(file: BackupFile, lists: readonly ListName[]): string {
+  for (const list of lists) {
+    if (list === 'brew_logs') continue;
+    const first = file.tables[list]?.[0] as Record<string, unknown> | undefined;
+    const name = first?.[list === 'beans' ? 'beanName' : 'name'];
+    if (typeof name === 'string' && name) return `${name} (2)`;
+  }
+  return 'Name (2)';
+}
+
 // Why a list page's Import… can't use this file, or null when it can.
 export function missingListError(file: BackupFile, list: ListName): string | null {
   const has = fileLists(file);
