@@ -1,6 +1,6 @@
 // Reading a backup file before restoring it (docs/api/backup.md §2b), and
 // saving one. Unit-tested in backup.test.ts.
-import type { BackupFile } from '../api/backup';
+import type { BackupFile, ListName } from '../api/backup';
 
 // What the preview counts, by the file's table names.
 const COUNTED: Array<[table: string, one: string, many: string]> = [
@@ -40,6 +40,47 @@ export function backupSummary(file: BackupFile): string {
 }
 
 export const backupFileName = (file: BackupFile): string => `${file.workspace.slug}-backup-${file.exportedAt.slice(0, 10)}.json`;
+// "home-bar-recipes-drinks-2026-10-23.json"
+export const exportFileName = (file: BackupFile, lists: readonly ListName[]): string =>
+  `${file.workspace.slug}-${lists.map((l) => l.replace(/_/g, '-')).join('-')}-${file.exportedAt.slice(0, 10)}.json`;
+
+// The lists, and every table an import summary can mention, as people say them.
+export const LIST_LABELS: Record<ListName, string> = {
+  beans: 'Beans',
+  recipes: 'Recipes',
+  drinks: 'Drinks',
+  ingredients: 'Ingredients',
+  brewers: 'Brewers',
+  grinders: 'Grinders',
+  water_profiles: 'Water profiles',
+  prep_tools: 'Prep tools',
+  brew_problems: 'Brew problems',
+  brew_logs: 'Journal (brews)',
+};
+const TABLE_LABELS: Record<string, string> = {
+  ...LIST_LABELS,
+  brewer_methods: 'Brewer methods',
+  bean_processes: 'Bean processes',
+  recipe_styles: 'Recipe styles',
+  drink_categories: 'Drink categories',
+  menu_sections: 'Menu sections',
+  bean_freezes: 'freeze periods',
+  recipe_steps: 'recipe steps',
+  recipe_grind_settings: 'grind starting points',
+  drink_ingredients: 'drink ingredients',
+  menu_items: 'menu items',
+  brew_log_marks: 'timer marks',
+  brew_log_tools: 'prep ticks',
+  brew_log_problems: 'problem ticks',
+  llm_analyses: 'AI suggestions',
+};
+export const tableLabel = (table: string): string => TABLE_LABELS[table] ?? table.replace(/_/g, ' ');
+
+// "4 recipe steps · 2 grind starting points"
+export const detailsText = (details: Record<string, number>): string =>
+  Object.entries(details)
+    .map(([table, n]) => `${n} ${tableLabel(table)}`)
+    .join(' · ');
 
 // Hands the browser a file to save.
 export function saveJson(fileName: string, data: unknown): void {

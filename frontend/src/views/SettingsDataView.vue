@@ -2,11 +2,12 @@
 // Settings → Data (docs/api/backup.md §2b): download the workspace as a
 // backup file (owners), or restore one into a new workspace.
 import { computed, ref } from 'vue';
-import { backupApi } from '../api/backup';
+import { backupApi, LISTS, type ListName } from '../api/backup';
 import { errorMessage } from '../api/client';
+import ImportLists from '../components/ImportLists.vue';
 import RestoreBackup from '../components/RestoreBackup.vue';
 import SettingsLayout from '../components/SettingsLayout.vue';
-import { backupFileName, backupSummary, saveJson } from '../lib/backup';
+import { backupFileName, backupSummary, exportFileName, LIST_LABELS, saveJson } from '../lib/backup';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
@@ -30,6 +31,27 @@ async function download(): Promise<void> {
     downloading.value = false;
   }
 }
+
+// Export lists (docs/api/backup.md §2b, "By list"): every item of the
+// ticked lists, with what they need.
+const exportLists = ref<ListName[]>([]);
+const exporting = ref(false);
+const exportError = ref('');
+async function exportChosen(): Promise<void> {
+  const ws = workspaces.current?.id;
+  if (!ws || !exportLists.value.length) return;
+  exporting.value = true;
+  exportError.value = '';
+  try {
+    const lists = LISTS.filter((l) => exportLists.value.includes(l)); // in the usual order
+    const file = await backupApi.exportLists(ws, lists);
+    saveJson(exportFileName(file, lists), file);
+  } catch (err) {
+    exportError.value = errorMessage(err);
+  } finally {
+    exporting.value = false;
+  }
+}
 </script>
 
 <template>
@@ -48,6 +70,37 @@ async function download(): Promise<void> {
       <p v-else class="muted small">Only owners can download a backup: it holds everyone's brews.</p>
     </section>
 
+    <section class="card stack" aria-labelledby="data-export">
+      <h2 id="data-export">Export lists</h2>
+      <p class="muted small">
+        Some lists as a file, to share with another bar or bring into another workspace. What their items need comes along: a recipe's brewer and
+        grinders, a drink's recipe and ingredients, a brew's bean. List pages can export just the items you pick.
+      </p>
+      <template v-if="isOwner">
+        <div class="list-grid">
+          <label v-for="l in LISTS" :key="l" class="checkbox">
+            <input v-model="exportLists" type="checkbox" :value="l" />
+            {{ LIST_LABELS[l] }}
+          </label>
+        </div>
+        <button class="btn btn-primary" type="button" :disabled="exporting || !exportLists.length" @click="exportChosen">
+          {{ exporting ? 'Preparing…' : 'Download export' }}
+        </button>
+        <p v-if="exportError" class="form-error" role="alert">{{ exportError }}</p>
+      </template>
+      <p v-else class="muted small">Only owners can export.</p>
+    </section>
+
+    <section class="card stack" aria-labelledby="data-import">
+      <h2 id="data-import">Import into {{ workspaces.current?.name }}</h2>
+      <p class="muted small">
+        Lists from an export (or a backup) are added here. Anything already here with the same name is used instead of a second one, unless you
+        choose to add copies; the preview shows which.
+      </p>
+      <ImportLists v-if="isOwner" />
+      <p v-else class="muted small">Only owners can import.</p>
+    </section>
+
     <section class="card stack" aria-labelledby="data-restore">
       <h2 id="data-restore">Restore</h2>
       <p class="muted small">A backup always becomes a new workspace; {{ workspaces.current?.name }} isn't changed.</p>
@@ -62,5 +115,10 @@ h2 {
 }
 p {
   margin: 0;
+}
+.list-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: var(--space-1) var(--space-3);
 }
 </style>
