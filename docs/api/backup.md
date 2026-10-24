@@ -149,8 +149,10 @@ too. Where the app offers them: "Where it is" above. Code:
     tools, brew problems, ingredients, drink categories and menu sections;
   - brewer methods and bean processes by built-in key or name; recipe
     styles by method and built-in key or name;
-  - beans by roaster, name and batch; recipes by name and brewer; drinks by
-    name and kind;
+  - beans by roaster, name, batch and roast date (two bags of the same
+    coffee roasted on different days are two beans; a bean exported before
+    its roast date was set no longer matches once it has one); recipes by
+    name and brewer; drinks by name and kind;
   - brews by time, bean and dose, so a journal imported twice isn't
     doubled.
   A child row comes with its parent when that's added, and is left out when

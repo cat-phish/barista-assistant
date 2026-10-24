@@ -132,6 +132,40 @@ describe("import by list", () => {
     expect(beans.map((b) => `${b.roasterName} | ${b.beanName}`).sort()).toEqual(["Test Roaster | Test Bean", "Test Roaster | Test Bean (2)", "Test Roaster | Test Bean (3)"]);
   });
 
+  it("two bags of the same bean (different roast dates) stay two beans, each with its own brews", async () => {
+    const owner = await newUser();
+    const ws = await newWorkspace(owner);
+    const base = `/api/workspaces/${ws.id}`;
+    const early = await newBean(owner, ws.id, { roasterName: "R", beanName: "Test Bean", roastDate: "2026-10-01" });
+    const late = await newBean(owner, ws.id, { roasterName: "R", beanName: "Test Bean", roastDate: "2026-10-15" });
+    await newBrewLog(owner, ws.id, early, { rating: 3, timestamp: "2026-10-05T08:00:00Z" });
+    await newBrewLog(owner, ws.id, late, { rating: 5, timestamp: "2026-10-20T08:00:00Z" });
+    const file = await exportOf(owner, base, { lists: ["brew_logs"] });
+
+    const other = await newUser();
+    const target = await newWorkspace(other);
+    const tbase = `/api/workspaces/${target.id}`;
+    const preview = await other.agent.post(`${tbase}/import/preview`).send({ file });
+    expect(preview.body.tables.find((t: { table: string }) => t.table === "beans")).toEqual({
+      table: "beans",
+      added: expect.arrayContaining(["R Test Bean (roasted 2026-10-01)", "R Test Bean (roasted 2026-10-15)"]),
+      matched: [],
+    });
+    await other.agent.post(`${tbase}/import`).send({ file });
+    const beans = (await other.agent.get(`${tbase}/beans`)).body.beans as Array<{ id: string; roastDate: string }>;
+    expect(beans.map((b) => b.roastDate.slice(0, 10)).sort()).toEqual(["2026-10-01", "2026-10-15"]);
+    const logs = (await other.agent.get(`${tbase}/brew-logs`)).body.brewLogs as Array<{ beanId: string; rating: number }>;
+    const roastOf = (l: { beanId: string }) => beans.find((b) => b.id === l.beanId)!.roastDate.slice(0, 10);
+    expect(logs.map((l) => [l.rating, roastOf(l)]).sort()).toEqual([[3, "2026-10-01"], [5, "2026-10-15"]]);
+
+    // Back into the workspace that has both: each bag matches its own.
+    for (const [id, day] of [[early, "2026-10-01"], [late, "2026-10-15"]] as const) {
+      const one = await exportOf(owner, base, { lists: ["beans"], ids: { beans: [id] } });
+      const again = await owner.agent.post(`${base}/import/preview`).send({ file: one });
+      expect(again.body.tables.find((t: { table: string }) => t.table === "beans")).toEqual({ table: "beans", added: [], matched: [{ name: `R Test Bean (roasted ${day})`, existing: `R Test Bean (roasted ${day})` }] });
+    }
+  });
+
   it("never adds the same brew twice, and gives imported brews to the importer", async () => {
     const { owner, base } = await source();
     const file = await exportOf(owner, base, { lists: ["brew_logs"] });
