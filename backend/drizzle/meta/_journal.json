@@ -428,6 +428,20 @@
       "when": 1792797752679,
       "tag": "0060_brew_problems",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "5",
+      "when": 1792803504039,
+      "tag": "0061_server_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "5",
+      "when": 1792804465590,
+      "tag": "0062_user_admin",
+      "breakpoints": true
     }
   ]
 }

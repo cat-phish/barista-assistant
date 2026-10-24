@@ -56,6 +56,7 @@ import {
   recipes,
   recipeStyles,
   recipeSteps,
+  serverSettings,
   users,
   waterProfiles,
   workspaceMembers,
@@ -99,9 +100,10 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
   { table: brewLogProblems, scope: "brewLogId" },
   { table: llmAnalyses, scope: "brewLogId" },
 ];
-// Not in a backup: people and their memberships belong to the server, not
-// the workspace, and the workspace row is the file's own "workspace" block.
-export const NOT_BACKED_UP: readonly MySqlTable[] = [users, notificationChannels, workspaces, workspaceMembers];
+// Not in a backup: people, their memberships and the server's own settings
+// belong to the server, not the workspace, and the workspace row is the
+// file's own "workspace" block.
+export const NOT_BACKED_UP: readonly MySqlTable[] = [users, notificationChannels, workspaces, workspaceMembers, serverSettings];
 
 // Columns that only hold one of a list (varchar in the database).
 const ENUMS: Record<string, readonly string[]> = {

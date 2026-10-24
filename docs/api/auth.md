@@ -29,15 +29,25 @@ below is `403`, so a typo doesn't look like a logout.
 - **Auth Required:** `false`
 - **Body:** `{ "email": "a@b.com", "password": "min 8 chars" }`
 - **Success (`201 Created`):** sets the `session` cookie and returns
-  `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... } } }`
-- **Errors:** `400` invalid body; `409` email already registered.
+  `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... }, "isAdmin": false } }`
+  (`isAdmin`: a server admin, granted on the server; §10)
+- **Errors:** `400` invalid body; `403` registration is closed
+  (`ALLOW_REGISTRATION=false`); `409` email already registered.
+
+## `GET /api/auth/registration`
+
+- **Auth Required:** `false`
+- **Success (`200 OK`):** `{ "open": true }`: whether this server takes new
+  accounts. `ALLOW_REGISTRATION=false` closes it (e.g. a server open to the
+  internet; §10); existing accounts still log in. The app hides "Create an
+  account" when it's closed.
 
 ## `POST /api/auth/login`
 
 - **Auth Required:** `false`
 - **Body:** `{ "email": "a@b.com", "password": "..." }`
 - **Success (`200 OK`):** sets the `session` cookie and returns
-  `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... } } }`
+  `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... }, "isAdmin": false } }`
 - **Errors:** `400` invalid body; `401` wrong email or password. The message is
   the same for both so it doesn't reveal which emails are registered.
 - **Rate limit:** 10 failed attempts per IP per 15 minutes; successful logins
@@ -53,7 +63,7 @@ below is `403`, so a typo doesn't look like a logout.
 ## `GET /api/auth/me`
 
 - **Auth Required:** `true`
-- **Success (`200 OK`):** `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... } } }`
+- **Success (`200 OK`):** `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... }, "isAdmin": false } }`
 
 ## Preferences
 

@@ -19,11 +19,13 @@ import {
   type Workspace,
 } from "@barista/shared/schema";
 import { emailSchema, preferencesSchema } from "../validation.js";
+import { registrationOpen } from "../config.js";
 
 export interface PublicUser {
   id: string;
   email: string;
   preferences: UserPreferences; // defaults filled in
+  isAdmin: boolean; // a server admin, granted on the server (docs/api/server.md §10)
 }
 
 export interface PreferencesResponse {
@@ -58,15 +60,15 @@ export interface SoleOwnerConflict {
   workspaces: Array<Pick<Workspace, "id" | "name" | "slug">>;
 }
 
-function toPublicUser(user: Pick<User, "id" | "email"> & { preferences?: User["preferences"] }): PublicUser {
-  return { id: user.id, email: user.email, preferences: withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null) };
+function toPublicUser(user: Pick<User, "id" | "email"> & { preferences?: User["preferences"]; isAdmin?: boolean }): PublicUser {
+  return { id: user.id, email: user.email, preferences: withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null), isAdmin: user.isAdmin ?? false };
 }
 
 // Per-IP brute-force protection, shared by every endpoint that checks a
 // password (login, change password, delete account), so guesses across them
 // count together. In-memory store: fine for a single backend instance; move
 // to a Redis store if the backend is ever scaled out.
-const loginLimiter = rateLimit({
+export const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 10,
   skipSuccessfulRequests: true,
@@ -79,7 +81,17 @@ const loginLimiter = rateLimit({
 
 export const authRouter = Router();
 
+// Whether anyone can create an account here (ALLOW_REGISTRATION), so the
+// app can say so before the form is filled in.
+authRouter.get("/registration", (_req: Request, res: Response<{ open: boolean }>) => {
+  res.json({ open: registrationOpen() });
+});
+
 authRouter.post("/register", async (req: Request, res: Response<UserResponse>) => {
+  if (!registrationOpen()) {
+    sendError(res, 403, "Registration is closed on this server");
+    return;
+  }
   const body = parseBody(registerSchema, req, res);
   if (!body) return;
 
@@ -120,7 +132,7 @@ authRouter.post("/logout", (_req: Request, res: Response) => {
 
 authRouter.get("/me", requireAuth, async (req: Request, res: Response<UserResponse>) => {
   const [user] = await db
-    .select({ id: users.id, email: users.email, preferences: users.preferences })
+    .select({ id: users.id, email: users.email, preferences: users.preferences, isAdmin: users.isAdmin })
     .from(users)
     .where(eq(users.id, authedUserId(req)))
     .limit(1);

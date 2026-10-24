@@ -5,6 +5,8 @@ export const authApi = {
   me: () => api.get<{ user: User }>('/api/auth/me'),
   login: (email: string, password: string) => api.post<{ user: User }>('/api/auth/login', { email, password }),
   register: (email: string, password: string) => api.post<{ user: User }>('/api/auth/register', { email, password }),
+  // Whether this server takes new accounts (ALLOW_REGISTRATION, §1).
+  registration: () => api.get<{ open: boolean }>('/api/auth/registration'),
   logout: () => api.post<void>('/api/auth/logout'),
   // Any subset; the response is the whole set, defaults filled in.
   setPreferences: (changes: Partial<UserPreferences>) => api.patch<{ preferences: UserPreferences }>('/api/auth/me/preferences', changes),

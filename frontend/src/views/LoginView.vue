@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
+import { authApi } from '../api/auth';
 import { useRoute, useRouter } from 'vue-router';
 import { ApiError, errorMessage } from '../api/client';
 import AuthCard from '../components/AuthCard.vue';
@@ -8,6 +9,14 @@ import { useAuthStore } from '../stores/auth';
 
 const auth = useAuthStore();
 const route = useRoute();
+// "Create an account" only where sign-ups are open (ALLOW_REGISTRATION).
+const registrationOpen = ref(true);
+onMounted(() => {
+  authApi
+    .registration()
+    .then((r) => (registrationOpen.value = r.open))
+    .catch(() => undefined);
+});
 const router = useRouter();
 
 const email = ref('');
@@ -49,7 +58,7 @@ async function submit(): Promise<void> {
       </button>
     </form>
     <template #footer>
-      New here? <RouterLink :to="{ name: 'register', query: route.query }">Create an account</RouterLink>
+      <template v-if="registrationOpen">New here? <RouterLink :to="{ name: 'register', query: route.query }">Create an account</RouterLink></template>
     </template>
   </AuthCard>
 </template>

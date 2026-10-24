@@ -1,3 +1,5 @@
+import type { BackupSettings } from "./schema.js";
+
 // BullMQ contract between the backend (producer) and the worker (consumer).
 // See docs/api/llm-contract.md §9.
 
@@ -44,4 +46,29 @@ export interface SteepReminderJobData {
 
 export function steepReminderJobId(brewLogId: string): string {
   return `steep-${brewLogId}`;
+}
+
+// Scheduled server backups (docs/api/server.md §10): a BullMQ job scheduler
+// on the maintenance queue runs a whole-database dump on the admins' schedule.
+export const MAINTENANCE_QUEUE = "maintenance";
+export const DB_BACKUP_JOB = "db-backup";
+export const DB_BACKUP_SCHEDULER = "db-backup";
+
+export interface DbBackupJobData {
+  reason: "schedule" | "manual";
+}
+
+// The cron pattern for the settings ("0 3 * * *" daily at 3, "0 3 * * 0"
+// Sundays at 3), or null when backups are off.
+export function backupCron(settings: Pick<BackupSettings, "frequency" | "hour" | "weekday">): string | null {
+  if (settings.frequency === "off") return null;
+  return settings.frequency === "daily" ? `0 ${settings.hour} * * *` : `0 ${settings.hour} * * ${settings.weekday}`;
+}
+
+// Dump files: "barista-db-2026-10-24-0300Z.sql.gz" (UTC). Only names that
+// match are listed, served or pruned.
+export const DB_BACKUP_FILE = /^barista-db-\d{4}-\d{2}-\d{2}-\d{4}Z\.sql\.gz$/;
+export function dbBackupFileName(at: Date): string {
+  const iso = at.toISOString(); // 2026-10-24T03:00:00.000Z
+  return `barista-db-${iso.slice(0, 10)}-${iso.slice(11, 13)}${iso.slice(14, 16)}Z.sql.gz`;
 }

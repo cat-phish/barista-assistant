@@ -1,9 +1,11 @@
 <script setup lang="ts">
 // The Settings tabs, grouped like Bar Assistant's: what's yours, then what
 // belongs to the current workspace (headed by its name).
+import { useAuthStore } from '../stores/auth';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
+const auth = useAuthStore();
 </script>
 
 <template>
@@ -21,6 +23,10 @@ const workspaces = useWorkspaceStore();
       <RouterLink :to="{ name: 'settings-fields' }" active-class="active">Fields</RouterLink>
       <RouterLink :to="{ name: 'settings-lists' }" active-class="active">Lists</RouterLink>
       <RouterLink :to="{ name: 'settings-data' }" active-class="active">Data</RouterLink>
+    </template>
+    <template v-if="auth.user?.isAdmin">
+      <h2>Server</h2>
+      <RouterLink :to="{ name: 'settings-server' }" active-class="active">Backups</RouterLink>
     </template>
   </nav>
 </template>

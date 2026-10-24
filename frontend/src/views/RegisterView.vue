@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import { authApi } from '../api/auth';
 import { useRoute, useRouter } from 'vue-router';
 import { ApiError, errorMessage } from '../api/client';
 import AuthCard from '../components/AuthCard.vue';
@@ -17,6 +18,15 @@ const password = ref('');
 const confirm = ref('');
 const submitting = ref(false);
 const error = ref('');
+// A server can close sign-ups (ALLOW_REGISTRATION=false).
+const closed = ref(false);
+onMounted(async () => {
+  try {
+    closed.value = !(await authApi.registration()).open;
+  } catch {
+    // Unknown: show the form; the server still refuses if it's closed.
+  }
+});
 
 const tooShort = computed(() => password.value.length > 0 && password.value.length < MIN_PASSWORD);
 const mismatch = computed(() => confirm.value.length > 0 && confirm.value !== password.value);
@@ -45,7 +55,8 @@ async function submit(): Promise<void> {
 
 <template>
   <AuthCard title="Create an account">
-    <form class="form" novalidate @submit.prevent="submit">
+    <p v-if="closed" class="muted">This server isn't taking new accounts. Ask whoever runs it to create one for you.</p>
+    <form v-else class="form" novalidate @submit.prevent="submit">
       <div class="field">
         <label for="email">Email</label>
         <input id="email" v-model.trim="email" type="email" autocomplete="email" required />

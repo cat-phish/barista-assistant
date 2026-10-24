@@ -15,6 +15,7 @@ import { grindersRouter } from "./routes/grinders.js";
 import { waterProfilesRouter } from "./routes/waterProfiles.js";
 import { prepToolsRouter } from "./routes/prepTools.js";
 import { backupRouter, LARGE_BODY_PATH } from "./routes/backup.js";
+import { serverRouter } from "./routes/server.js";
 import { brewProblemsRouter } from "./routes/brewProblems.js";
 import { ingredientsRouter } from "./routes/ingredients.js";
 import { drinkCategoriesRouter } from "./routes/drinkCategories.js";
@@ -77,6 +78,7 @@ app.use("/api/workspaces/:workspaceId/recipes", recipesRouter);
 app.use("/api/workspaces/:workspaceId/brew-logs", brewLogsRouter);
 app.use("/api/beans", suggestionsRouter);
 app.use("/api/brew-logs", analyzeRouter);
+app.use("/api/server", serverRouter); // server admins (docs/api/server.md §10)
 app.use("/api/workspaces", backupRouter); // GET /:workspaceId/backup, POST /restore
 app.use("/api/workspaces", workspacesRouter);
 

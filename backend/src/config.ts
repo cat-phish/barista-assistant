@@ -20,3 +20,22 @@ export const config = {
   isProduction: process.env.NODE_ENV === "production",
   jwtSecret,
 } as const;
+
+// Switches read on each call, so tests can change them.
+// ALLOW_REGISTRATION=false closes sign-ups (docs/api/auth.md §1).
+export const registrationOpen = (): boolean => process.env.ALLOW_REGISTRATION?.trim().toLowerCase() !== "false";
+// BACKUP_DOWNLOADS=false keeps database dumps on the server: admins can't
+// download them through the app (docs/api/server.md §10).
+export const backupDownloadsEnabled = (): boolean => process.env.BACKUP_DOWNLOADS?.trim().toLowerCase() !== "false";
+// Where scheduled database dumps are written (the worker) and listed from.
+export const backupDir = (): string => process.env.BACKUP_DIR ?? "/backups";
+// The zone the backup hour is in; an unknown zone falls back to UTC.
+export function backupTimezone(): string {
+  const tz = process.env.BACKUP_TIMEZONE?.trim() || "UTC";
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: tz });
+    return tz;
+  } catch {
+    return "UTC";
+  }
+}

@@ -32,6 +32,12 @@ upcoming work is in `roadmap.md`.
 - **Spreadsheets (CSV):** the journal (one row per brew, names instead of
   IDs, with the worked-out ratio and extraction) or the beans, from
   Settings → Data or the Journal's and Beans' export bars. Owners only.
+- **Scheduled server backups:** server admins (granted on the server with
+  `npm run admin -- grant <email>`) get
+  Settings → Server → Backups: a dump of the whole database every day or
+  week at a chosen hour, keeping the newest N, in the `backups` folder;
+  Back up now, the list with downloads, the last result or error, and how
+  to restore one.
 
 ## Beans
 - Roaster, coffee name, process, **roast level** (light → dark, optional),

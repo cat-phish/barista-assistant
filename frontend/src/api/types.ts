@@ -36,6 +36,7 @@ export interface User {
   id: string;
   email: string;
   preferences: UserPreferences;
+  isAdmin: boolean; // a server admin: sees Settings → Server (docs/api/server.md §10)
 }
 
 // Per workspace, owners edit (docs/api/workspaces.md §2 settings).
