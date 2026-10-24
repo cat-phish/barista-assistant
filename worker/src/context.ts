@@ -1,3 +1,4 @@
+import { extractionYield as sharedExtractionYield } from "@barista/shared/brew";
 import {
   beanProcesses,
   beanFreezes,
@@ -236,15 +237,9 @@ function ratio(brew: BrewLog): number | null {
   return out === null ? null : Math.round((out / brew.actualDoseGrams) * 100) / 100;
 }
 
-// Styles where the grounds sit in the water: the liquid they keep is as strong
-// as the cup, so extraction is worked out from the water, not the yield.
-const IMMERSION_STYLES: readonly (RecipeStyle | null)[] = ["immersion", "cold_brew", "rapid_cold", "ibrik"];
-
-// Extraction yield, % (docs/api/brew-logs.md §6): TDS × beverage ÷ dose.
+// Extraction yield, % (docs/api/brew-logs.md §6), by the shared rule.
 export function extractionYield(brew: BrewLog, style: StyleInfo | null): number | null {
-  if (brew.tdsPercent === null) return null;
-  const beverage = IMMERSION_STYLES.includes(style?.brewsLike ?? null) ? brew.actualWaterGrams : brew.actualYieldGrams;
-  return beverage === null ? null : Math.round(((brew.tdsPercent * beverage) / brew.actualDoseGrams) * 10) / 10;
+  return sharedExtractionYield({ ...brew, brewsLike: style?.brewsLike ?? null });
 }
 
 // Coffee left in the grinder, g: beans in − grounds out (both weighed).

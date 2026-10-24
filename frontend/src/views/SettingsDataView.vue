@@ -7,7 +7,7 @@ import { errorMessage } from '../api/client';
 import ImportLists from '../components/ImportLists.vue';
 import RestoreBackup from '../components/RestoreBackup.vue';
 import SettingsLayout from '../components/SettingsLayout.vue';
-import { backupFileName, backupSummary, exportFileName, LIST_LABELS, saveJson } from '../lib/backup';
+import { backupFileName, backupSummary, exportFileName, LIST_LABELS, saveBlob, saveJson } from '../lib/backup';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
@@ -52,6 +52,24 @@ async function exportChosen(): Promise<void> {
     exporting.value = false;
   }
 }
+
+// For spreadsheets (docs/api/backup.md §2b, "CSV"): the journal or the beans.
+const csvBusy = ref<'brew_logs' | 'beans' | null>(null);
+const csvError = ref('');
+async function downloadCsv(list: 'brew_logs' | 'beans'): Promise<void> {
+  const ws = workspaces.current;
+  if (!ws) return;
+  csvBusy.value = list;
+  csvError.value = '';
+  try {
+    const name = list === 'beans' ? 'beans' : 'journal';
+    saveBlob(`${ws.slug}-${name}-${new Date().toISOString().slice(0, 10)}.csv`, await backupApi.csv(ws.id, list));
+  } catch (err) {
+    csvError.value = errorMessage(err);
+  } finally {
+    csvBusy.value = null;
+  }
+}
 </script>
 
 <template>
@@ -91,6 +109,20 @@ async function exportChosen(): Promise<void> {
       <p v-else class="muted small">Only owners can export.</p>
     </section>
 
+    <section class="card stack" aria-labelledby="data-csv">
+      <h2 id="data-csv">Spreadsheet (CSV)</h2>
+      <p class="muted small">
+        The journal (one row per brew: bean, recipe, grinder and water by name, dose, yield, TDS and extraction, time, prep, problems, ratings
+        and notes) or the beans, to open in Excel, Numbers or Google Sheets. For reading, not for importing back.
+      </p>
+      <div v-if="isOwner" class="csv-buttons">
+        <button class="btn btn-secondary" type="button" :disabled="!!csvBusy" @click="downloadCsv('brew_logs')">{{ csvBusy === 'brew_logs' ? 'Preparing…' : 'Journal CSV' }}</button>
+        <button class="btn btn-secondary" type="button" :disabled="!!csvBusy" @click="downloadCsv('beans')">{{ csvBusy === 'beans' ? 'Preparing…' : 'Beans CSV' }}</button>
+      </div>
+      <p v-else class="muted small">Only owners can download these.</p>
+      <p v-if="csvError" class="form-error" role="alert">{{ csvError }}</p>
+    </section>
+
     <section class="card stack" aria-labelledby="data-import">
       <h2 id="data-import">Import into {{ workspaces.current?.name }}</h2>
       <p class="muted small">
@@ -115,6 +147,11 @@ h2 {
 }
 p {
   margin: 0;
+}
+.csv-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 .list-grid {
   display: grid;

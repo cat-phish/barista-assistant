@@ -6,7 +6,7 @@ import { computed, ref } from 'vue';
 import { backupApi, type ListName } from '../api/backup';
 import { errorMessage } from '../api/client';
 import type { Selection } from '../composables/useSelection';
-import { exportFileName, saveJson } from '../lib/backup';
+import { exportFileName, saveBlob, saveJson } from '../lib/backup';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const props = defineProps<{
@@ -14,6 +14,7 @@ const props = defineProps<{
   selection?: Selection; // left out: whole list only (Settings → Lists)
   visibleIds?: string[]; // for "Select all shown"
   noun?: string; // "recipes"
+  csv?: 'brew_logs' | 'beans'; // also offer a spreadsheet (docs/api/backup.md §2b, "CSV")
 }>();
 const workspaces = useWorkspaceStore();
 const isOwner = computed(() => workspaces.current?.role === 'owner');
@@ -36,6 +37,19 @@ async function run(ids?: string[]): Promise<void> {
     busy.value = false;
   }
 }
+async function runCsv(): Promise<void> {
+  const ws = workspaces.current;
+  if (!ws || !props.csv) return;
+  busy.value = true;
+  error.value = '';
+  try {
+    saveBlob(`${ws.slug}-${props.csv === 'beans' ? 'beans' : 'journal'}-${new Date().toISOString().slice(0, 10)}.csv`, await backupApi.csv(ws.id, props.csv));
+  } catch (err) {
+    error.value = errorMessage(err);
+  } finally {
+    busy.value = false;
+  }
+}
 </script>
 
 <template>
@@ -43,6 +57,7 @@ async function run(ids?: string[]): Promise<void> {
     <template v-if="!selection?.selecting">
       <button class="btn-link" type="button" :disabled="busy" @click="run()">Export all</button>
       <button v-if="selection" class="btn-link" type="button" :disabled="busy" @click="selection.start()">Select to export…</button>
+      <button v-if="csv" class="btn-link" type="button" :disabled="busy" @click="runCsv">Spreadsheet (CSV)</button>
     </template>
     <template v-else>
       <span class="muted small" aria-live="polite">{{ count }} selected · tap rows to pick</span>

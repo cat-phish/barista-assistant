@@ -97,7 +97,7 @@ const cardProps = (id: string) =>
 
     <template v-else>
       <p class="muted count">{{ total }} brew{{ total === 1 ? '' : 's' }}</p>
-      <ExportBar list="brew_logs" noun="brews" :selection="selection" :visible-ids="logs.map((l) => l.id)" />
+      <ExportBar list="brew_logs" noun="brews" csv="brew_logs" :selection="selection" :visible-ids="logs.map((l) => l.id)" />
       <ul class="list">
         <li v-for="log in logs" :key="log.id" class="item">
           <component

@@ -151,3 +151,33 @@ and on Settings → Data, which also has the import. Code:
 - **Errors:** `400` a bad file (as for restore) or a list the file doesn't
   have; `403` not an owner; `409` the file repeats a name a workspace keeps
   unique. Nothing is written on an error.
+
+## CSV
+
+For spreadsheets: the journal or the beans, one row each, names instead of
+IDs. For reading only; moving data between workspaces is the JSON export.
+Offered on Settings → Data and in the Journal's and Beans' export bars.
+Code: `backend/src/csv.ts`.
+
+### `GET /api/workspaces/:workspaceId/csv/:list`
+
+- **Auth Required:** `true` (role `owner`)
+- **`list`:** `brew_logs` or `beans` (anything else is `404`).
+- **Success (`200 OK`):** `text/csv; charset=utf-8`, as an attachment
+  `<slug>-journal-YYYY-MM-DD.csv` or `<slug>-beans-…`. RFC 4180 with CRLF
+  line ends and a UTF-8 byte-order mark (so Excel reads accents); text a
+  spreadsheet would run as a formula (starting `=`, `+`, `-` or `@`) gets a
+  leading `'`. Yes/no columns are `yes` / `no`; empty means not recorded.
+  - **Journal**, newest first: date (the brewing device's local time) and
+    UTC, brewed by (email), roaster, bean, batch, recipe, style, brewer,
+    drink, size, grinder, grind setting, RPM, water profile, dose, water,
+    yield, ratio, TDS, extraction (worked out as in §6), water temperature,
+    time (seconds and m:ss), beans in / grounds out, steeping, steeped in,
+    steep window, target finish, dilution, prep and problems (`; `
+    between), rating, tasting notes, drink rating, drink notes.
+  - **Beans**, newest first: roaster, bean, batch, process, roast level,
+    detailed roast level, roast type, roast date, blend, decaf, origin,
+    country, region, altitude, producer, flavor profile, bag and stock
+    weight, price, currency, purchased, green supplier, website, rating,
+    notes, number of brews, archived date, date added.
+- **Errors:** `403` not an owner; `404` not a member or an unknown list.

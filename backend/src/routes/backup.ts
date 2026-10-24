@@ -6,6 +6,7 @@ import { requireMembership } from "../auth/membership.js";
 import { db } from "../db.js";
 import { buildBackup, checkBackup, restoreBackup, type BackupFile } from "../backup.js";
 import { buildExport, fileLists, LISTS, previewImport, runImport, type ExportFile, type ImportSummary } from "../listImport.js";
+import { beansCsv, brewLogsCsv, CSV_LISTS } from "../csv.js";
 import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { SLUG_PATTERN } from "../validation.js";
@@ -133,3 +134,25 @@ async function importRequest(req: Request<WorkspaceParams>, res: Response) {
   }
   return { workspaceId, userId, file: checked.file, lists, duplicates: body.duplicates };
 }
+
+// ---- CSV (docs/api/backup.md §2b, "CSV") --------------------------------------
+
+const csvParams = z.object({ list: z.enum(CSV_LISTS) });
+const CSV_NAMES = { brew_logs: "journal", beans: "beans" } as const;
+
+// The journal or the beans for a spreadsheet. Owners only, like a backup.
+backupRouter.get("/:workspaceId/csv/:list", async (req: Request<WorkspaceParams & { list: string }>, res: Response) => {
+  const { workspaceId } = req.params;
+  if (!(await requireMembership(res, authedUserId(req), workspaceId, ["owner"]))) return;
+  const parsed = csvParams.safeParse(req.params);
+  if (!parsed.success) {
+    sendError(res, 404, "Not found");
+    return;
+  }
+  const list = parsed.data.list;
+  const [ws] = await db.select({ slug: workspaces.slug }).from(workspaces).where(eq(workspaces.id, workspaceId));
+  const csv = list === "beans" ? await beansCsv(workspaceId) : await brewLogsCsv(workspaceId);
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${ws?.slug ?? "workspace"}-${CSV_NAMES[list]}-${new Date().toISOString().slice(0, 10)}.csv"`);
+  res.send(csv);
+});

@@ -59,8 +59,28 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return data as T;
 }
 
+// A file the server sends (e.g. a CSV), as a Blob; errors as for request().
+async function file(path: string): Promise<Blob> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, { credentials: 'include' });
+  } catch {
+    throw new ApiError(0, "Can't reach the server. Check your connection and try again.");
+  }
+  if (res.ok) return res.blob();
+  let data: unknown = null;
+  try {
+    data = await res.json();
+  } catch {
+    // Not JSON; handled below.
+  }
+  if (res.status === 401) onUnauthorized?.();
+  throw new ApiError(res.status, isErrorBody(data) ? data.error : `Request failed (${res.status})`, isErrorBody(data) ? data : null);
+}
+
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
+  file,
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
   patch: <T>(path: string, body: unknown) => request<T>('PATCH', path, body),
   put: <T>(path: string, body: unknown) => request<T>('PUT', path, body),
