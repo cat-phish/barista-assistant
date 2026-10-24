@@ -20,6 +20,10 @@
     "./notify": {
       "types": "./dist/notify.d.ts",
       "default": "./dist/notify.js"
+    },
+    "./brew": {
+      "types": "./dist/brew.d.ts",
+      "default": "./dist/brew.js"
     }
   },
   "scripts": {

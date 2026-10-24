@@ -84,7 +84,10 @@ export const detailsText = (details: Record<string, number>): string =>
 
 // Hands the browser a file to save.
 export function saveJson(fileName: string, data: unknown): void {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
+  saveBlob(fileName, new Blob([JSON.stringify(data)], { type: 'application/json' }));
+}
+export function saveBlob(fileName: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = fileName;

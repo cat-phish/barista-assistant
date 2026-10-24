@@ -29,6 +29,9 @@ upcoming work is in `roadmap.md`.
   a brew's bean). Settings → Data → Import previews what's new and what's
   already here by name, and either uses what's here or adds copies
   ("House V60 (2)"); the same brew is never imported twice. Owners only.
+- **Spreadsheets (CSV):** the journal (one row per brew, names instead of
+  IDs, with the worked-out ratio and extraction) or the beans, from
+  Settings → Data or the Journal's and Beans' export bars. Owners only.
 
 ## Beans
 - Roaster, coffee name, process, **roast level** (light → dark, optional),

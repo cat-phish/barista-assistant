@@ -33,6 +33,8 @@ export const backupApi = {
     api.post<BackupFile & { scope: 'lists'; lists: ListName[] }>(`/api/workspaces/${workspaceId}/export`, { lists, ...(ids ? { ids } : {}) }),
   previewImport: (workspaceId: string, file: BackupFile, duplicates: Duplicates, lists?: ListName[]) =>
     api.post<ImportSummary>(`/api/workspaces/${workspaceId}/import/preview`, { file, duplicates, ...(lists ? { lists } : {}) }),
+  // The journal or the beans for a spreadsheet (names, not IDs). Owners only.
+  csv: (workspaceId: string, list: 'brew_logs' | 'beans') => api.file(`/api/workspaces/${workspaceId}/csv/${list}`),
   importLists: (workspaceId: string, file: BackupFile, duplicates: Duplicates, lists: ListName[]) =>
     api.post<ImportSummary>(`/api/workspaces/${workspaceId}/import`, { file, duplicates, lists }),
 };

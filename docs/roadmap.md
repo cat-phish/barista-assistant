@@ -1066,3 +1066,22 @@ workspace, meant retyping them. Contract: `api/backup.md` §2b, "By list".
   selecting), and on Settings → Lists for brew problems; Settings → Data
   exports several lists and imports with a preview table.
 - **Not built yet:** CSV export (item 1 stays in the backlog for it).
+
+## CSV export (built)
+
+Backlog item 1, part 3, branch `csv-export`; no migration. This finishes
+"Backup, restore, import and export". Contract: `api/backup.md` §2b,
+"CSV".
+
+- `GET /:workspaceId/csv/brew_logs` and `/csv/beans` (owners): one row per
+  brew or bean, names instead of IDs, the brew's local time beside UTC,
+  ratio and extraction worked out, prep and problems joined with `; `,
+  beans with their process and brew count.
+- Spreadsheet-safe: RFC 4180, CRLF, a UTF-8 BOM for Excel, and a leading
+  `'` on text that would otherwise run as a formula.
+- The extraction rule moved to `@barista/shared/brew`, used by the CSV and
+  the worker (the frontend keeps its copy in `lib/extraction.ts`).
+- App: a Spreadsheet (CSV) card on Settings → Data, and a "Spreadsheet
+  (CSV)" button in the Journal's and Beans' export bars.
+- **What's left of the old item:** photos in backups is a note on bean
+  photos; scheduled server backups is its own backlog item.
