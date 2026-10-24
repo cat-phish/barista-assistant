@@ -9,7 +9,7 @@ import { recipesApi } from '../api/recipes';
 import type { Brewer, Recipe } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ListControls from '../components/ListControls.vue';
-import ExportBar from '../components/ExportBar.vue';
+import ListDataBar from '../components/ListDataBar.vue';
 import { useSelection } from '../composables/useSelection';
 import MenuTabs from '../components/MenuTabs.vue';
 import { formatAdded, formatDoseLine, formatGrams, formatGrind, formatTime } from '../lib/format';
@@ -139,7 +139,7 @@ const selection = useSelection();
 
     <template v-else>
       <ListControls v-model:filter="brewerFilter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="recipes" filter-label="Brewer" :filter-options="brewerOptions" v-model:show-archived="showArchived" :archived-count="archivedCount" />
-      <ExportBar list="recipes" noun="recipes" :selection="selection" :visible-ids="shown.map((x) => x.id)" />
+      <ListDataBar list="recipes" noun="recipes" :selection="selection" :visible-ids="shown.map((x) => x.id)" @imported="load()" />
       <p v-if="showArchived" class="muted small">Archived recipes are hidden when brewing and in drink forms; past brews still show them.</p>
       <p v-if="shown.length === 0" class="card empty">No recipes for {{ filterName }} yet.</p>
       <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1.1fr) minmax(0, 0.9fr) minmax(0, 1.2fr) 5.5rem">

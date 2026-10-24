@@ -13,7 +13,7 @@ import type { Brewer, Recipe, BrewerMethod } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import SetupTabs from '../components/SetupTabs.vue';
 import ListControls from '../components/ListControls.vue';
-import ExportBar from '../components/ExportBar.vue';
+import ListDataBar from '../components/ListDataBar.vue';
 import { useSelection } from '../composables/useSelection';
 import { machineSummary, METHOD_KINDS } from '../lib/equipment';
 import { formatAdded } from '../lib/format';
@@ -155,7 +155,7 @@ const selection = useSelection();
       <div v-if="brewers.length === 0" class="card empty"><p>No brewers yet.</p></div>
       <template v-else>
         <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="brewers" filter-label="Brew method" :filter-options="filterOptions" v-model:show-archived="showArchived" :archived-count="archivedCount" />
-        <ExportBar list="brewers" noun="brewers" :selection="selection" :visible-ids="shown.map((x) => x.id)" />
+        <ListDataBar list="brewers" noun="brewers" :selection="selection" :visible-ids="shown.map((x) => x.id)" @imported="load()" />
         <p v-if="showArchived" class="muted small">Archived brewers are hidden when brewing; past brews still show them.</p>
         <p v-if="shown.length === 0" class="card empty">No {{ filter === ALL ? 'brewers' : `${filterName.toLowerCase()} brewers` }} yet.</p>
         <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.3fr) 5.5rem">

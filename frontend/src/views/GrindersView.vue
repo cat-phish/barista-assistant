@@ -10,7 +10,7 @@ import type { Grinder } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import SetupTabs from '../components/SetupTabs.vue';
 import ListControls from '../components/ListControls.vue';
-import ExportBar from '../components/ExportBar.vue';
+import ListDataBar from '../components/ListDataBar.vue';
 import { useSelection } from '../composables/useSelection';
 import { adjustmentLabel, burrLabel, grinderSummary, powerLabel } from '../lib/equipment';
 import { formatAdded } from '../lib/format';
@@ -134,7 +134,7 @@ const selection = useSelection();
       <div v-if="grinders.length === 0" class="card empty"><p>No grinders yet.</p></div>
       <template v-else>
         <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="grinders" filter-label="Show" :filter-options="filterOptions" v-model:show-archived="showArchived" :archived-count="archivedCount" />
-        <ExportBar list="grinders" noun="grinders" :selection="selection" :visible-ids="shown.map((x) => x.id)" />
+        <ListDataBar list="grinders" noun="grinders" :selection="selection" :visible-ids="shown.map((x) => x.id)" @imported="load()" />
         <p v-if="showArchived" class="muted small">Archived grinders are hidden when brewing; past brews still show them.</p>
         <p v-if="shown.length === 0" class="card empty">No {{ filterName.toLowerCase() }} yet.</p>
         <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 0.9fr) minmax(0, 1.2fr) minmax(0, 1.3fr) 5.5rem">

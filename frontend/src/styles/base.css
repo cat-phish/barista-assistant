@@ -298,7 +298,7 @@ a {
   display: inline-flex;
   align-items: center;
 }
-/* A row's tick in a list page's select mode (components/ExportBar.vue). */
+/* A row's tick in a list page's select mode (components/ListDataBar.vue). */
 .tick {
   margin-right: var(--space-1);
   color: var(--brand);

@@ -12,7 +12,7 @@ import AppHeader from '../components/AppHeader.vue';
 import BeanTabs from '../components/BeanTabs.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import ListControls from '../components/ListControls.vue';
-import ExportBar from '../components/ExportBar.vue';
+import ListDataBar from '../components/ListDataBar.vue';
 import { useSelection } from '../composables/useSelection';
 import RatingInput from '../components/RatingInput.vue';
 import RatingStars from '../components/RatingStars.vue';
@@ -435,7 +435,7 @@ const selection = useSelection();
 
         <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" :id-prefix="`beans-${tab}`" filter-label="Show" :filter-options="filterOptions" />
 
-        <ExportBar list="beans" noun="beans" csv="beans" :selection="selection" :visible-ids="shown.map((x) => x.id)" />
+        <ListDataBar list="beans" noun="beans" :selection="selection" :visible-ids="shown.map((x) => x.id)" @imported="load()" />
         <p v-if="rowError" class="form-error" role="alert">{{ rowError }}</p>
         <p v-if="shown.length === 0" class="card empty">No {{ filterName }} {{ archived ? 'archived ' : '' }}beans.</p>
         <div v-else class="data-table" :style="{ '--cols': TABLE_COLS }">

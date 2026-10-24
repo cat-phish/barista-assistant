@@ -36,15 +36,16 @@ upcoming work is in `roadmap.md`.
   theirs, the public menu starts off, members are invited again.
 - **Export and import by list:** each list page (beans, recipes, drinks,
   ingredients, brewers, grinders, water, prep tools, the journal; brew
-  problems in Settings → Lists) exports all its items, or the ones picked in
-  "Select to export…"; Settings → Data exports several lists. What items
-  need comes along (a recipe's brewer and grinders, a drink's ingredients,
-  a brew's bean). Settings → Data → Import previews what's new and what's
+  problems in Settings → Lists) exports the items picked in "Select to
+  export…" and imports into that list with "Import…". Settings → Data
+  exports whole lists, several at once, and imports several at once. What
+  items need comes along (a recipe's brewer and grinders, a drink's
+  ingredients, a brew's bean). An import previews what's new and what's
   already here by name, and either uses what's here or adds copies
   ("House V60 (2)"); the same brew is never imported twice. Owners only.
 - **Spreadsheets (CSV):** the journal (one row per brew, names instead of
   IDs, with the worked-out ratio and extraction) or the beans, from
-  Settings → Data or the Journal's and Beans' export bars. Owners only.
+  Settings → Data. Owners only.
 - **Scheduled server backups:** server admins (granted on the server with
   `npm run admin -- grant <email>`) get
   Settings → Server → Backups: a dump of the whole database every day or

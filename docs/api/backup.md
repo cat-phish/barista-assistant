@@ -6,9 +6,38 @@
 A **backup** is a whole workspace as one JSON file: every list, bean,
 recipe, drink, the menu, and every brew with its marks, prep tools,
 problems and AI analyses. A **restore** turns a backup into a **new**
-workspace owned by the person restoring; nothing existing is changed. The
-app offers both on Settings → Data, and restore also on the workspaces page
-(a new server has no workspace yet). Code: `backend/src/backup.ts`.
+workspace owned by the person restoring; nothing existing is changed. An
+**export** is the same file format holding only some lists, and an
+**import** brings lists from an export or a backup into the current
+workspace ("By list"). A **CSV** is a spreadsheet of the journal or the
+beans, for reading only.
+
+## Where it is
+
+Everything here is for **owners** (restore: anyone signed in, who owns the
+new workspace).
+
+| What | In the app | Endpoint | Code |
+| --- | --- | --- | --- |
+| Back up the whole workspace | Settings → Data → Back up | `GET …/backup` | `backend/src/backup.ts` |
+| Restore a backup as a new workspace | Settings → Data → Restore; the workspaces page | `POST /api/workspaces/restore` | `backup.ts` |
+| Export whole lists (several at once) | Settings → Data → Export lists | `POST …/export` | `backend/src/listImport.ts` |
+| Export chosen items of one list | each list page: **Select to export…** | `POST …/export` with `ids` | `listImport.ts` |
+| Import lists (several at once) | Settings → Data → Import | `POST …/import/preview`, `…/import` | `listImport.ts` |
+| Import one list | each list page: **Import…** | the same, with `lists: [that list]` | `listImport.ts` |
+| Spreadsheet (CSV) | Settings → Data → Spreadsheet | `GET …/csv/:list` | `backend/src/csv.ts` |
+
+**List pages** (Journal, Beans, Recipes, Drinks, Ingredients, Brewers,
+Grinders, Water profiles, Prep tools, and brew problems on Settings →
+Lists) have one bar, `frontend/src/components/ListDataBar.vue`:
+"Select to export…" (the rows get ticks; "Export selected" downloads them
+with what they need) and "Import…" (a dialog with the import below,
+limited to that list; a file without it is refused with what it does have).
+Exporting a whole list, several lists, CSV and backups are only on
+Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
+`lib/backup.ts` (reading files, names, labels), `components/ImportLists.vue`
+(the import with its preview, used by both places),
+`components/RestoreBackup.vue`, `views/SettingsDataView.vue`.
 
 ## The file
 
@@ -89,8 +118,7 @@ above it.
 An **export** is a backup file holding only some lists (or some of their
 items) and everything they need; an **import** brings a file's lists into
 the **current** workspace. A whole backup can be imported a list at a time
-too. The app offers export on each list page (all, or "Select to export…")
-and on Settings → Data, which also has the import. Code:
+too. Where the app offers them: "Where it is" above. Code:
 `backend/src/listImport.ts`.
 
 - **Lists:** `beans`, `recipes`, `drinks`, `ingredients`, `brewers`,
@@ -102,7 +130,19 @@ and on Settings → Data, which also has the import. Code:
   marks, prep and problem ticks, AI analyses) and, repeatedly, every row
   they point at: a recipe's brewer, style and grinders, the brewer's method,
   a drink's recipe and ingredients, a brew's bean, recipe, grinder, water,
-  drink, tools and problems. Nothing else (no menu, no other lists).
+  drink, tools and problems. Nothing else (no menu, no other lists). It's
+  worked out from each table's references (`TABLE_INFO`), so a new
+  reference comes along by itself:
+
+  | List | Its own rows | Comes along (and what that needs in turn) |
+  | --- | --- | --- |
+  | `beans` | beans, bean freezes | bean process |
+  | `recipes` | recipes, steps, grind starting points | brewer (→ brewer method), recipe style, default grinder, the grinders of its starting points |
+  | `drinks` | drinks, drink ingredients | drink category, the drink it's a variant of, default recipe (→ as recipes), ingredients |
+  | `ingredients` | ingredients | – |
+  | `brewers` | brewers | brewer method |
+  | `grinders`, `water_profiles`, `prep_tools`, `brew_problems` | themselves | – |
+  | `brew_logs` | brews, their marks, prep and problem ticks, AI analyses | bean (→ as beans), recipe (→ as recipes), grinder, water profile, drink (→ as drinks), brewer, prep tools, brew problems |
 - **Matching** (`MATCH_KEYS`): a row is "already here" when the workspace
   has one with the same key, and the import uses that one instead:
   - by name (case-insensitive) for brewers, grinders, water profiles, prep
@@ -120,6 +160,14 @@ and on Settings → Data, which also has the import. Code:
   still reused, and brews are never copied.
 - Added rows get new IDs, the importer as their brewer, and keep archive
   dates and "date added"; an added water profile is never the default.
+
+**Adding a list** (a new top-level table people should export and import on
+its own): it must already be backed up (above, with its `MATCH_KEYS`
+entry). Then add its table name to `LISTS` in `backend/src/listImport.ts`
+and in `frontend/src/api/backup.ts`, its name to `LIST_LABELS`
+(`frontend/src/lib/backup.ts`), and on its list page a `ListDataBar` with
+`list`, `noun`, the page's `useSelection()` and `@imported` reloading the
+page. Update the "Where it is" and "What comes along" tables here.
 
 ### `POST /api/workspaces/:workspaceId/export`
 
@@ -158,8 +206,7 @@ and on Settings → Data, which also has the import. Code:
 
 For spreadsheets: the journal or the beans, one row each, names instead of
 IDs. For reading only; moving data between workspaces is the JSON export.
-Offered on Settings → Data and in the Journal's and Beans' export bars.
-Code: `backend/src/csv.ts`.
+Offered on Settings → Data only. Code: `backend/src/csv.ts`.
 
 ### `GET /api/workspaces/:workspaceId/csv/:list`
 

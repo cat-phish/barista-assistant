@@ -2,13 +2,18 @@
 // Import lists into the current workspace (docs/api/backup.md §2b, "By
 // list"): pick an export or backup file, see what would be added and what's
 // already here, choose lists and what to do with duplicates, import.
+// With `only` (a list page's Import…), just that list: no list choice, and a
+// file without it is refused.
 import { computed, ref } from 'vue';
 import { backupApi, type BackupFile, type Duplicates, type ImportSummary, type ListName } from '../api/backup';
 import { errorMessage } from '../api/client';
-import { detailsText, LIST_LABELS, readBackup, tableLabel } from '../lib/backup';
+import { detailsText, LIST_LABELS, missingListError, readBackup, tableLabel } from '../lib/backup';
 import { useWorkspaceStore } from '../stores/workspace';
 
+const props = defineProps<{ only?: ListName }>();
+const emit = defineEmits<{ (e: 'imported', summary: ImportSummary): void }>();
 const workspaces = useWorkspaceStore();
+const inputId = `import-file-${props.only ?? 'lists'}`;
 
 const file = ref<BackupFile | null>(null);
 const fileError = ref('');
@@ -32,6 +37,18 @@ async function pick(event: Event): Promise<void> {
   const read = readBackup(await chosen.text());
   if (!read.ok) {
     fileError.value = read.error;
+    return;
+  }
+  if (props.only) {
+    const missing = missingListError(read.file, props.only);
+    if (missing) {
+      fileError.value = missing;
+      return;
+    }
+    file.value = read.file;
+    offered.value = [props.only];
+    lists.value = [props.only];
+    await refresh([props.only]);
     return;
   }
   file.value = read.file;
@@ -78,6 +95,7 @@ async function runImport(): Promise<void> {
   error.value = '';
   try {
     done.value = await backupApi.importLists(ws, file.value, duplicates.value, lists.value);
+    emit('imported', done.value);
     preview.value = null;
   } catch (err) {
     error.value = `Couldn't import it: ${errorMessage(err)}`;
@@ -93,8 +111,8 @@ const addedCount = (s: ImportSummary) => s.tables.reduce((n, t) => n + t.added.l
 <template>
   <div class="stack">
     <div class="field">
-      <label for="import-file">Export or backup file</label>
-      <input id="import-file" type="file" accept="application/json,.json" @change="pick" />
+      <label :for="inputId">Export or backup file</label>
+      <input :id="inputId" type="file" accept="application/json,.json" @change="pick" />
       <span v-if="fileError" class="field-error" role="alert">{{ fileError }}</span>
     </div>
 
@@ -103,7 +121,7 @@ const addedCount = (s: ImportSummary) => s.tables.reduce((n, t) => n + t.added.l
     </p>
 
     <template v-else-if="file && offered.length">
-      <fieldset class="lists">
+      <fieldset v-if="!only" class="lists">
         <legend>Lists to import</legend>
         <label v-for="l in offered" :key="l" class="checkbox">
           <input type="checkbox" :checked="lists.includes(l)" :disabled="previewing || importing" @change="toggle(l, ($event.target as HTMLInputElement).checked)" />
