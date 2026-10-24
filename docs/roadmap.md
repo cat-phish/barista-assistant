@@ -1041,3 +1041,28 @@ had no copy and couldn't move to another server. Contract:
   the workspaces page for a new server with no workspace yet.
 - **Not built yet:** CSV export and import/export by list (item 1 stays in
   the backlog for them).
+
+## Export and import by list (built)
+
+Backlog item 1, part 2, branch `list-import`; no migration. Sharing a few
+recipes or beans with another bar, or bringing them into an existing
+workspace, meant retyping them. Contract: `api/backup.md` §2b, "By list".
+
+- **Same file as a backup**, with `scope: "lists"`: the chosen rows, their
+  child rows, and everything they point at, found by walking the schema's
+  references (`closure` in `listImport.ts`). Any backup can be imported a
+  list at a time.
+- **Import** plans the whole thing first (the preview is that plan, the
+  import writes it in one transaction). `MATCH_KEYS` says when a row is
+  "already here" (names, built-in keys, a bean's roaster + name + batch, a
+  recipe's name + brewer, a brew's time + bean + dose); matched rows are
+  reused, the rest added with new IDs.
+- **Decided:** duplicates are a choice in the preview (use the one here, or
+  add copies named "(2)"); copies are only of the chosen lists, never of
+  what they need, and never of brews; exports include what items need;
+  owners only.
+- **App:** an Export bar on every list page (Export all, or "Select to
+  export…": rows tick on tap; the journal's cards become buttons while
+  selecting), and on Settings → Lists for brew problems; Settings → Data
+  exports several lists and imports with a preview table.
+- **Not built yet:** CSV export (item 1 stays in the backlog for it).

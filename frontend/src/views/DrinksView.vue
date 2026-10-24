@@ -13,6 +13,8 @@ import type { Drink, DrinkCategory, Recipe } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import DrinkCategoriesPanel from '../components/DrinkCategoriesPanel.vue';
 import ListControls from '../components/ListControls.vue';
+import ExportBar from '../components/ExportBar.vue';
+import { useSelection } from '../composables/useSelection';
 import MenuTabs from '../components/MenuTabs.vue';
 import { ingredientLine, nestDrinks, type NestedDrink } from '../lib/drinks';
 import { METHOD_KINDS } from '../lib/equipment';
@@ -111,6 +113,8 @@ async function setArchived(d: Drink, archived: boolean): Promise<void> {
   }
 }
 
+// Select mode for exporting some items (components/ExportBar.vue).
+const selection = useSelection();
 </script>
 
 <template>
@@ -136,6 +140,7 @@ async function setArchived(d: Drink, archived: boolean): Promise<void> {
 
     <template v-else>
       <ListControls v-model:filter="categoryFilter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="drinks" filter-label="Category" :filter-options="categoryOptions" v-model:show-archived="showArchived" :archived-count="archivedCount" />
+      <ExportBar list="drinks" noun="drinks" :selection="selection" :visible-ids="shown.map((x) => x.drink.id)" />
       <p v-if="showArchived" class="muted small">Archived drinks are hidden when brewing; past brews still show them, and so does the public menu if it has them.</p>
       <p v-if="shown.length === 0" class="card empty">No drinks in {{ filterName }} yet.</p>
       <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.2fr) 5.5rem">
@@ -150,8 +155,8 @@ async function setArchived(d: Drink, archived: boolean): Promise<void> {
           </button>
         </div>
         <div v-for="{ drink: d, depth } in shown" :key="d.id" class="data-item" :class="{ open: openId === d.id }">
-          <button class="data-row" type="button" :aria-expanded="openId === d.id" @click="toggle(d.id)">
-            <span class="data-td primary" :style="{ paddingLeft: nested ? `calc(${depth} * var(--space-4))` : undefined }">
+          <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === d.id" :aria-pressed="selection.selecting ? selection.has(d.id) : undefined" @click="selection.selecting ? selection.toggle(d.id) : toggle(d.id)">
+            <span class="data-td primary" :style="{ paddingLeft: nested ? `calc(${depth} * var(--space-4))` : undefined }"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(d.id) ? '☑' : '☐' }}</span>
               {{ d.name }}<span v-if="d.archivedAt" class="muted"> (archived)</span>
               <span v-if="!nested && d.parent" class="variant-of">variant of {{ d.parent.name }}</span>
             </span>

@@ -12,6 +12,8 @@ import { ingredientsApi } from '../api/ingredients';
 import type { Drink, Ingredient, IngredientType } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ListControls from '../components/ListControls.vue';
+import ExportBar from '../components/ExportBar.vue';
+import { useSelection } from '../composables/useSelection';
 import MenuTabs from '../components/MenuTabs.vue';
 import { INGREDIENT_TYPES, ingredientUsage } from '../lib/drinks';
 import { formatAdded } from '../lib/format';
@@ -115,6 +117,8 @@ async function setArchived(c: Ingredient, archived: boolean): Promise<void> {
   }
 }
 
+// Select mode for exporting some items (components/ExportBar.vue).
+const selection = useSelection();
 </script>
 
 <template>
@@ -134,6 +138,7 @@ async function setArchived(c: Ingredient, archived: boolean): Promise<void> {
       <div v-if="list.length === 0" class="card empty"><p>No ingredients yet.</p></div>
       <template v-else>
         <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="ingredients" filter-label="Show" :filter-options="filterOptions" v-model:show-archived="showArchived" :archived-count="archivedCount" />
+        <ExportBar list="ingredients" noun="ingredients" :selection="selection" :visible-ids="shown.map((x) => x.id)" />
         <p v-if="showArchived" class="muted small">Archived ingredients can't be added to drinks; drinks that have them keep them.</p>
         <p v-if="shown.length === 0" class="card empty">Nothing here yet.</p>
         <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) 5.5rem">
@@ -146,8 +151,8 @@ async function setArchived(c: Ingredient, archived: boolean): Promise<void> {
             </button>
           </div>
           <div v-for="c in shown" :key="c.id" class="data-item" :class="{ open: openId === c.id }">
-            <button class="data-row" type="button" :aria-expanded="openId === c.id" @click="toggle(c.id)">
-              <span class="data-td primary">{{ c.name }}<span v-if="c.archivedAt" class="muted"> (archived)</span></span>
+            <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === c.id" :aria-pressed="selection.selecting ? selection.has(c.id) : undefined" @click="selection.selecting ? selection.toggle(c.id) : toggle(c.id)">
+              <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(c.id) ? '☑' : '☐' }}</span>{{ c.name }}<span v-if="c.archivedAt" class="muted"> (archived)</span></span>
               <span class="data-td">{{ INGREDIENT_TYPES[c.ingredientType] }}</span>
               <span class="data-td">{{ usedLabel(c.drinkCount) }}</span>
               <span class="data-td end">{{ formatAdded(c.createdAt) }}</span>

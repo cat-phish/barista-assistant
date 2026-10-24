@@ -10,6 +10,8 @@ import type { Grinder } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import SetupTabs from '../components/SetupTabs.vue';
 import ListControls from '../components/ListControls.vue';
+import ExportBar from '../components/ExportBar.vue';
+import { useSelection } from '../composables/useSelection';
 import { adjustmentLabel, burrLabel, grinderSummary, powerLabel } from '../lib/equipment';
 import { formatAdded } from '../lib/format';
 import {
@@ -111,6 +113,8 @@ async function setArchived(g: Grinder, value: boolean): Promise<void> {
   }
 }
 
+// Select mode for exporting some items (components/ExportBar.vue).
+const selection = useSelection();
 </script>
 
 <template>
@@ -130,6 +134,7 @@ async function setArchived(g: Grinder, value: boolean): Promise<void> {
       <div v-if="grinders.length === 0" class="card empty"><p>No grinders yet.</p></div>
       <template v-else>
         <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="grinders" filter-label="Show" :filter-options="filterOptions" v-model:show-archived="showArchived" :archived-count="archivedCount" />
+        <ExportBar list="grinders" noun="grinders" :selection="selection" :visible-ids="shown.map((x) => x.id)" />
         <p v-if="showArchived" class="muted small">Archived grinders are hidden when brewing; past brews still show them.</p>
         <p v-if="shown.length === 0" class="card empty">No {{ filterName.toLowerCase() }} yet.</p>
         <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 0.9fr) minmax(0, 1.2fr) minmax(0, 1.3fr) 5.5rem">
@@ -142,8 +147,8 @@ async function setArchived(g: Grinder, value: boolean): Promise<void> {
             </button>
           </div>
           <div v-for="g in shown" :key="g.id" class="data-item" :class="{ open: openId === g.id }">
-            <button class="data-row" type="button" :aria-expanded="openId === g.id" @click="toggle(g.id)">
-              <span class="data-td primary">{{ g.name }}<span v-if="g.archivedAt" class="muted"> (archived)</span></span>
+            <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === g.id" :aria-pressed="selection.selecting ? selection.has(g.id) : undefined" @click="selection.selecting ? selection.toggle(g.id) : toggle(g.id)">
+              <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(g.id) ? '☑' : '☐' }}</span>{{ g.name }}<span v-if="g.archivedAt" class="muted"> (archived)</span></span>
               <span class="data-td">{{ powerLabel(g) ?? '–' }}</span>
               <span class="data-td">{{ burrLabel(g) ?? '–' }}</span>
               <span class="data-td">{{ adjustmentLabel(g) ?? '–' }}</span>

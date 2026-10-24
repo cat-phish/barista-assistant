@@ -21,6 +21,14 @@ upcoming work is in `roadmap.md`.
   Anyone signed in can restore a backup, from Settings → Data or the
   workspaces page, as a **new** workspace they own: every brew becomes
   theirs, the public menu starts off, members are invited again.
+- **Export and import by list:** each list page (beans, recipes, drinks,
+  ingredients, brewers, grinders, water, prep tools, the journal; brew
+  problems in Settings → Lists) exports all its items, or the ones picked in
+  "Select to export…"; Settings → Data exports several lists. What items
+  need comes along (a recipe's brewer and grinders, a drink's ingredients,
+  a brew's bean). Settings → Data → Import previews what's new and what's
+  already here by name, and either uses what's here or adds copies
+  ("House V60 (2)"); the same brew is never imported twice. Owners only.
 
 ## Beans
 - Roaster, coffee name, process, **roast level** (light → dark, optional),
