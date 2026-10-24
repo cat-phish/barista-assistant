@@ -78,3 +78,12 @@
    needs a match key for imports (`MATCH_KEYS` in
    `backend/src/listImport.ts`). `backup.test.ts` and
    `list-import.test.ts` fail until it's decided.
+9. **What the AI sees stays in step:** a field added to or removed from
+   the analysis context (`worker/src/context.ts`) is either always sent or
+   switchable under Settings → AI, decided in the same change: classify it
+   in `worker/tests/aiDetails.test.ts` (its test typecheck fails until
+   then), drop a switchable one in `toLlmInput` when its key is hidden, and
+   update `docs/api/llm-contract.md` §9 "What the AI sees". A new key goes
+   in `AI_DETAILS` (`@barista/shared/aiDetails`) and
+   `frontend/src/lib/aiDetails.ts` with its label (a frontend test checks
+   they match). Ask the user which it should be when it isn't obvious.

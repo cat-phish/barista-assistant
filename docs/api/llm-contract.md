@@ -237,6 +237,23 @@ Always sent: the bean and roaster names, roast date and age, dose, water,
 yield, time, grind setting, ratio, rating and tasting notes, and the
 recipe's targets.
 
+**Keeping it in step:** every field the analysis context can send is
+either always sent or belongs to one of these keys, and this list says
+which. When a field is added to the context (`worker/src/context.ts`), or
+removed, decide which it is and update, in the same change:
+
+- `worker/tests/aiDetails.test.ts`: its `Record<keyof …>` maps classify
+  each context field as `"always"` or an `AI_DETAILS` key, so the test
+  typecheck fails until a new field is classified (or a removed one is
+  dropped), and the tests check each switch really drops its fields;
+- for a switchable field, `toLlmInput` (`worker/src/prompt.ts`) leaves it
+  out when its key is hidden, and its prompt section's `when` stops
+  matching;
+- a new key: `AI_DETAILS` (`@barista/shared/aiDetails`) and its label and
+  group in `frontend/src/lib/aiDetails.ts` (`aiDetails.test.ts` there
+  checks the two lists match);
+- this section: the key's line above, or the "Always sent" list.
+
 ## Evaluating changes
 
 `npm run eval -w worker` (run on the host from the repo root; it reads the
