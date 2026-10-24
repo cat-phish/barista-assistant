@@ -1152,3 +1152,38 @@ change) invited RPM advice it couldn't hold. Contract:
   gets.
 - **Not done yet:** the `after` eval run against the baseline, to compare
   the new prompt on real brews and adjust wording if it reads worse.
+
+## Auto-analyze and the analysis workflow (built)
+
+Backlog item "Rework the analysis workflow, with auto-analyze", branch
+`auto-analyze`, migration 0064. A suggestion only happened when someone
+tapped a button, so many brews never got one, and a failed analysis just
+left the page saying "still working". Contract: `api/analysis.md` §8
+"Auto-analyze", `api/brew-logs.md` §6.
+
+- **Settings → AI → Automatic analysis** (owners, per workspace): on/off,
+  a wait of 5 / 10 / 15 / 30 minutes (10 by default), and no limit or up to
+  N a day (1–500, counted over the last 24 hours).
+- **When it runs:** a rated brew is queued as a delayed job when saved; the
+  brew is read when the job runs, so edits in the wait are included, and
+  deleting the brew removes the job. An unrated or still-steeping brew
+  waits: the edit that first rates it (quick rate, Finish) queues it to run
+  now, unless it already has a suggestion. Never-rated brews cost nothing.
+- **Asking while it waits** promotes the waiting job (same job id) as an
+  asked-for analysis, so the cap doesn't apply. Saved analyses record
+  `llm_analyses.auto`; only those count toward the cap.
+- **State on the brew:** `analysis_requests` (one row per brew, not backed
+  up: queue state) holds when an automatic analysis is due and why the last
+  one failed or was skipped; brew logs carry `analyzed`, `analysisDueAt` and
+  `analysisError`.
+- **App:** Journal cards show "Not analyzed" (with the reason on hover) or
+  "AI at 9:15"; the entry says when it's due with Analyze now, shows a
+  failure with Try again, and picks the suggestion up when it lands; after
+  a quick rate it says the suggestion is on its way. The saved screen says
+  the same. Polling stops with the reason once every attempt has failed.
+- **Decided:** per workspace (it costs the workspace's API calls); unrated
+  brews wait for their rating instead of running after the reminder; an
+  optional daily cap rather than a cost limit.
+- **Not built:** a history of earlier suggestions on the journal entry (it
+  shows the newest), and pushing the job back when a brew is edited in the
+  wait (not needed: the job reads the brew when it runs).

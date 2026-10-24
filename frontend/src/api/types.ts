@@ -47,7 +47,13 @@ export interface WorkspaceSettings {
   roastScale: RoastScale; // beans record roast names (Cinnamon … French) or light to dark only
   hiddenFields: string[]; // optional form fields hidden for everyone (lib/fields.ts keys)
   aiHidden: AiDetail[]; // what the AI doesn't get (lib/aiDetails.ts, llm-contract.md §9)
+  // Auto-analyze (analysis.md §8): each rated brew this long after saving, at most cap a day.
+  autoAnalyze: boolean;
+  autoAnalyzeDelayMinutes: AutoAnalyzeDelay;
+  autoAnalyzeDailyCap: number | null; // null: no cap
 }
+export const AUTO_ANALYZE_DELAYS = [5, 10, 15, 30] as const;
+export type AutoAnalyzeDelay = (typeof AUTO_ANALYZE_DELAYS)[number];
 
 // docs/api/workspaces.md §2 Members
 export interface Member {
@@ -467,6 +473,11 @@ export interface BrewLog {
   tools: PrepToolRef[]; // prep tools used, in checklist order (§3d)
   problems: BrewProblemRef[]; // what went wrong, in list order (§6b)
   brewedBy: { id: string; email: string } | null;
+  // Its AI suggestion (§8): one exists; an automatic one is due then; why the
+  // last one failed or wasn't made.
+  analyzed: boolean;
+  analysisDueAt: string | null;
+  analysisError: string | null;
 }
 
 // docs/api/analysis.md §8

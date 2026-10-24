@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { brewLogsApi } from '../api/brews';
 import { ApiError, errorMessage } from '../api/client';
@@ -16,6 +16,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import RatingInput from '../components/RatingInput.vue';
 import RatingStars from '../components/RatingStars.vue';
 import { useAnalysis } from '../composables/useAnalysis';
+import { formatClock } from '../lib/analysisStatus';
 import { draftFromLog, emptyDraft, parseBrewDraft } from '../lib/brewDraft';
 import { extractionYield } from '../lib/extraction';
 import { grinderRetention } from '../lib/grinderRetention';
@@ -107,12 +108,27 @@ async function load(): Promise<void> {
 onMounted(load);
 
 // AI analysis: newest of the stored one and any just requested.
-const { analysis: freshAnalysis, state: aiState, error: aiError, request } = useAnalysis();
+const { analysis: freshAnalysis, state: aiState, error: aiError, request, awaitAuto } = useAnalysis();
 const analysis = computed(() => freshAnalysis.value ?? storedAnalysis.value);
 function analyze(): void {
   const ws = workspaces.current?.id;
   if (ws && log.value) void request(ws, log.value.id, analysis.value);
 }
+// An automatic analysis on its way (auto-analyze, docs/api/analysis.md §8),
+// e.g. queued by rating it here: show it when it lands.
+watch(
+  () => log.value?.analysisDueAt,
+  (due) => {
+    const ws = workspaces.current?.id;
+    if (ws && log.value && due && aiState.value !== 'waiting') awaitAuto(ws, log.value.id, analysis.value, due);
+  },
+  { immediate: true },
+);
+const aiButtonLabel = computed(() => {
+  if (aiState.value === 'queued') return 'Analyze now';
+  if (log.value?.analysisError && aiState.value === 'idle') return 'Try again';
+  return analysis.value ? 'Analyze again' : 'Analyze this brew';
+});
 
 // Edit
 const editing = ref(false);
@@ -279,8 +295,11 @@ function markLabel(m: Mark): string {
         </button>
       </form>
       <section v-else-if="justRated && !analysis && workspaces.canEdit" class="card stack">
-        <p>Rated, thanks. Want an AI suggestion for next time?</p>
-        <button v-if="aiState !== 'waiting'" class="btn btn-primary" type="button" @click="analyze(); justRated = false">Get AI suggestion</button>
+        <p v-if="log.analysisDueAt">Rated, thanks. Your AI suggestion for next time is on its way.</p>
+        <template v-else>
+          <p>Rated, thanks. Want an AI suggestion for next time?</p>
+          <button v-if="aiState !== 'waiting'" class="btn btn-primary" type="button" @click="analyze(); justRated = false">Get AI suggestion</button>
+        </template>
       </section>
 
       <!-- Details -->
@@ -337,7 +356,11 @@ function markLabel(m: Mark): string {
       <section class="card stack">
         <h2>AI suggestion</h2>
         <AnalysisCard v-if="analysis" :analysis="analysis" :can-rate="workspaces.canEdit" />
-        <p v-else-if="aiState !== 'waiting'" class="muted">Not analyzed yet.</p>
+        <p v-else-if="aiState !== 'waiting' && aiState !== 'queued'" class="muted">Not analyzed yet.</p>
+        <p v-if="aiState === 'queued' && log.analysisDueAt" class="muted" aria-live="polite">
+          An automatic suggestion is on its way at {{ formatClock(log.analysisDueAt) }}.
+        </p>
+        <p v-if="aiState === 'idle' && log.analysisError" class="form-error" role="alert">{{ log.analysisError }}</p>
         <p v-if="aiState === 'waiting'" class="muted" aria-live="polite">Analyzing this brew… this usually takes a few seconds.</p>
         <p v-if="aiState === 'slow'" class="muted" aria-live="polite">Still working on it. Check back in a minute.</p>
         <p v-if="aiState === 'error'" class="form-error" role="alert">{{ aiError }}</p>
@@ -349,7 +372,7 @@ function markLabel(m: Mark): string {
           type="button"
           @click="analyze"
         >
-          {{ analysis ? 'Analyze again' : 'Analyze this brew' }}
+          {{ aiButtonLabel }}
         </button>
       </section>
     </template>

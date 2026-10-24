@@ -10,6 +10,7 @@ import ExportBar from '../components/ExportBar.vue';
 import RatingStars from '../components/RatingStars.vue';
 import { useSelection } from '../composables/useSelection';
 import { batchSuffix, beanLabel } from '../lib/beans';
+import { analysisStatus, formatClock } from '../lib/analysisStatus';
 import { formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen } from '../lib/format';
 import { formatSize } from '../lib/servings';
 import { formatTemp } from '../lib/units';
@@ -17,6 +18,15 @@ import { usePreferences } from '../composables/usePreferences';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const PAGE_SIZE = 20;
+
+// The card's AI pill (docs/api/analysis.md §8): not analyzed yet, or when an
+// automatic analysis is due. Nothing once it has a suggestion.
+function aiBadge(log: BrewLog): { kind: 'due' | 'none'; label: string; title: string } | null {
+  const s = analysisStatus(log);
+  if (s.kind === 'due') return { kind: 'due', label: `AI at ${formatClock(s.at)}`, title: 'An automatic AI suggestion is on its way' };
+  if (s.kind === 'none') return { kind: 'none', label: 'Not analyzed', title: s.reason ?? 'No AI suggestion yet' };
+  return null;
+}
 
 const workspaces = useWorkspaceStore();
 const { temperatureUnit } = usePreferences();
@@ -109,7 +119,10 @@ const cardProps = (id: string) =>
             <div class="head">
               <span class="when"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(log.id) ? '☑' : '☐' }}</span>{{ formatWhen(log.timestamp) }}</span>
               <span v-if="log.steeping" class="badge steeping">Steeping</span>
-              <RatingStars v-else :rating="log.rating ?? log.drinkRating" />
+              <span v-else class="right">
+                <span v-if="aiBadge(log)" class="badge ai" :class="aiBadge(log)!.kind" :title="aiBadge(log)!.title">{{ aiBadge(log)!.label }}</span>
+                <RatingStars :rating="log.rating ?? log.drinkRating" />
+              </span>
             </div>
             <strong>{{ log.bean.roasterName }} {{ log.bean.beanName }}{{ batchSuffix(log.bean) }}</strong>
             <span v-if="log.drink || log.recipe" class="muted">{{ [log.drink?.name, log.servingSize !== null && log.servingUnit ? formatSize({ size: log.servingSize, unit: log.servingUnit }) : null, log.recipe?.name].filter(Boolean).join(' · ') }}</span>
@@ -141,6 +154,23 @@ const cardProps = (id: string) =>
   border-radius: 999px;
   border: 1px solid var(--brand);
   color: var(--brand);
+}
+.right {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.badge.ai {
+  padding: 1px var(--space-2);
+  font-weight: 500;
+}
+.badge.ai.none {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+}
+.badge.ai.due {
+  border: 1px solid var(--brand);
 }
 .count {
   margin: 0;

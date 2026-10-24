@@ -51,6 +51,7 @@ import { useBrewSessionStore } from '../stores/brewSession';
 import { formatMark } from '../lib/marks';
 import { formatFinishWindow, parseFinishWindow, stepTitle } from '../lib/steps';
 import { useAnalysis } from '../composables/useAnalysis';
+import { formatClock } from '../lib/analysisStatus';
 import { emptyDraft, parseBrewDraft } from '../lib/brewDraft';
 import { hoursText, isColdStyle, isLongStyle, parseSteepWindow, STEEP_TEMPS, steepWindowText } from '../lib/coldBrew';
 import type { BrewLogInput, Reminder } from '../api/brews';
@@ -727,6 +728,7 @@ const saveError = ref('');
 const submitted = ref(false);
 const savedLogId = ref<string | null>(null);
 const savedUnrated = ref(false);
+const savedDueAt = ref<string | null>(null); // an automatic analysis on its way
 // Settings → AI can keep unrated brews from the AI (the API refuses them).
 const aiNeedsRating = computed(() => savedUnrated.value && aiHidden.value.includes('analyzeUnrated'));
 
@@ -778,6 +780,9 @@ async function save(): Promise<void> {
     if (values.grinderId) remember('grinderId', values.grinderId);
     savedLogId.value = brewLog.id;
     savedUnrated.value = values.rating === null && (values.drinkRating ?? null) === null;
+    savedDueAt.value = brewLog.analysisDueAt;
+    // Auto-analyze queued it (docs/api/analysis.md §8): show it when it lands.
+    if (brewLog.analysisDueAt) awaitAi(ws, brewLog.id, null, brewLog.analysisDueAt);
     reminder.value = remind ? (outcome ?? 'unavailable') : null;
     stage.value = 'saved';
   } catch (err) {
@@ -788,7 +793,7 @@ async function save(): Promise<void> {
 }
 
 // AI suggestion for next time
-const { analysis, state: aiState, error: aiError, request: requestAi, reset: resetAi } = useAnalysis();
+const { analysis, state: aiState, error: aiError, request: requestAi, awaitAuto: awaitAi, reset: resetAi } = useAnalysis();
 function requestAnalysis(): void {
   const ws = workspaces.current?.id;
   if (ws && savedLogId.value) void requestAi(ws, savedLogId.value, null);
@@ -798,6 +803,7 @@ function brewAgain(): void {
   resetAi();
   stage.value = 'setup';
   savedLogId.value = null;
+  savedDueAt.value = null;
   reminder.value = null;
   steepStarted.value = null;
   draft.rating = null;
@@ -1342,9 +1348,12 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         </template>
         <p v-else-if="aiNeedsRating" class="muted">Rate it in the journal to get an AI suggestion: this workspace only analyzes rated brews.</p>
         <template v-else>
-          <p class="muted">Want a suggestion for your next brew of {{ beanLabel }}?</p>
-          <button v-if="aiState === 'idle' || aiState === 'error'" class="btn btn-primary" type="button" @click="requestAnalysis">
-            Get AI suggestion
+          <p v-if="aiState === 'queued' && savedDueAt" class="muted" aria-live="polite">
+            An AI suggestion for your next brew of {{ beanLabel }} is on its way at {{ formatClock(savedDueAt) }}. It'll show here and in the journal.
+          </p>
+          <p v-else-if="aiState !== 'waiting'" class="muted">Want a suggestion for your next brew of {{ beanLabel }}?</p>
+          <button v-if="aiState === 'idle' || aiState === 'error' || aiState === 'queued'" :class="['btn', aiState === 'queued' ? 'btn-secondary' : 'btn-primary']" type="button" @click="requestAnalysis">
+            {{ aiState === 'queued' ? 'Analyze now' : 'Get AI suggestion' }}
           </button>
           <p v-if="aiState === 'error'" class="form-error" role="alert">{{ aiError }}</p>
           <p v-if="aiState === 'waiting'" class="muted" aria-live="polite">Analyzing your brew… this usually takes a few seconds.</p>
