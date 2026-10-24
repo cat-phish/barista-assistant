@@ -5,14 +5,15 @@ import { z } from "zod";
 import { requireMembership } from "../auth/membership.js";
 import { db } from "../db.js";
 import { buildBackup, checkBackup, restoreBackup, type BackupFile } from "../backup.js";
+import { buildExport, fileLists, LISTS, previewImport, runImport, type ExportFile, type ImportSummary } from "../listImport.js";
 import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { SLUG_PATTERN } from "../validation.js";
 
 // docs/api/backup.md §2b. Mounted at /api/workspaces, before the workspaces
-// router. The restore body can be large: app.ts gives this path a bigger
-// JSON limit (RESTORE_PATH).
-export const RESTORE_PATH = "/api/workspaces/restore";
+// router. Restore and import bodies can be large: app.ts gives these paths
+// a bigger JSON limit (LARGE_BODY_PATH).
+export const LARGE_BODY_PATH = /^\/api\/workspaces\/(restore|[^/]+\/import(\/preview)?)$/;
 
 interface WorkspaceParams {
   workspaceId: string;
@@ -64,3 +65,71 @@ backupRouter.post("/restore", async (req: Request, res: Response<{ workspaceId: 
     sendError(res, 409, "The backup repeats a name that must be unique in a workspace (or the slug was just taken)");
   }
 });
+
+// ---- By list (docs/api/backup.md §2b, "By list") -----------------------------
+
+const listSchema = z.enum(LISTS);
+const exportSchema = z
+  .object({
+    lists: z.array(listSchema).min(1).refine((l) => new Set(l).size === l.length, "each list once"),
+    // Only these items of a list (from a list page's select mode).
+    ids: z.partialRecord(listSchema, z.array(z.uuid()).max(5000)).optional(),
+  })
+  .strict();
+const importSchema = z
+  .object({
+    file: z.unknown(),
+    lists: z.array(listSchema).min(1).optional(), // default: what the file offers
+    duplicates: z.enum(["existing", "copy"]).default("existing"),
+  })
+  .strict();
+
+// Lists, with everything their items need. Owners only, like a backup.
+backupRouter.post("/:workspaceId/export", async (req: Request<WorkspaceParams>, res: Response<ExportFile>) => {
+  const { workspaceId } = req.params;
+  if (!(await requireMembership(res, authedUserId(req), workspaceId, ["owner"]))) return;
+  const body = parseBody(exportSchema, req, res);
+  if (!body) return;
+  const file = await buildExport(workspaceId, body.lists, body.ids);
+  res.setHeader("Content-Disposition", `attachment; filename="${file.workspace.slug}-${body.lists.join("-")}-${file.exportedAt.slice(0, 10)}.json"`);
+  res.json(file);
+});
+
+// What an import would add and what it would match, without writing.
+backupRouter.post("/:workspaceId/import/preview", async (req: Request<WorkspaceParams>, res: Response<ImportSummary & { lists: string[] }>) => {
+  const parsed = await importRequest(req, res);
+  if (!parsed) return;
+  res.json({ ...(await previewImport(parsed.workspaceId, parsed.userId, parsed.file, parsed.lists, parsed.duplicates)), lists: parsed.lists });
+});
+
+backupRouter.post("/:workspaceId/import", async (req: Request<WorkspaceParams>, res: Response<ImportSummary & { lists: string[] }>) => {
+  const parsed = await importRequest(req, res);
+  if (!parsed) return;
+  try {
+    res.json({ ...(await runImport(parsed.workspaceId, parsed.userId, parsed.file, parsed.lists, parsed.duplicates)), lists: parsed.lists });
+  } catch (err) {
+    if (!isDuplicateEntryError(err)) throw err;
+    sendError(res, 409, "The file repeats a name that must be unique in a workspace");
+  }
+});
+
+async function importRequest(req: Request<WorkspaceParams>, res: Response) {
+  const { workspaceId } = req.params;
+  const userId = authedUserId(req);
+  if (!(await requireMembership(res, userId, workspaceId, ["owner"]))) return null;
+  const body = parseBody(importSchema, req, res);
+  if (!body) return null;
+  const checked = checkBackup(body.file);
+  if (!checked.ok) {
+    sendError(res, 400, checked.error);
+    return null;
+  }
+  const offered = fileLists(checked.file);
+  const lists = body.lists ?? offered;
+  const missing = lists.find((l) => !offered.includes(l));
+  if (missing) {
+    sendError(res, 400, `lists: the file has no ${missing}`);
+    return null;
+  }
+  return { workspaceId, userId, file: checked.file, lists, duplicates: body.duplicates };
+}
