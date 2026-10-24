@@ -26,12 +26,12 @@ and fix the references.
 - A. Settings & configuration: 1
 - B. Beans: 2
 - C. Brewing & logging: 3–5
-- D. AI suggestions: 6
-- E. Insights: 7
-- F. Bar & menu: 8–10
-- G. Home roasting: 11
-- H. Accounts: 12–13
-- I. Deployment & the app: 14
+- D. AI suggestions: 6–7
+- E. Insights: 8
+- F. Bar & menu: 9–11
+- G. Home roasting: 12
+- H. Accounts: 13–14
+- I. Deployment & the app: 15
 
 ---
 
@@ -223,11 +223,47 @@ What the analysis worker sends to the LLM and what comes back.
   - Units and step types the text describes loosely ("pour to about 100 ml,
     wait 30 s"): how sure must the AI be before filling a field?
 
+### 7. Review and test the espresso dose and shot weight suggestions
+
+- **Status:** planned
+- **Why:** dose and shot weight changes for espresso (roadmap: espresso dose
+  and shot weight suggestions, prompt `2026-10-c`) were built and unit
+  tested, but haven't been tried on real brews: nobody has checked that the
+  AI picks a sensible lever, or that the brew page applies it as expected.
+- **Approach:**
+  - **Eval on real shots:** `npm run eval -w worker -- snapshot`, then
+    `run --label after` and `compare baseline after`
+    (`docs/api/llm-contract.md` §9, "Evaluating changes"). Look at the
+    espresso brews: does it change the ratio when the grind is right but
+    the cup is off, and the grind when the shot ran fast or slow? Are the
+    sizes sensible (about 0.5–1 g dose, a few grams of shot weight)? Does
+    it ever suggest both, or a dose the basket can't hold? Filter brews
+    should never get dose or shot weight changes.
+  - **In the app:** analyze an espresso brew; check the suggestion card
+    ("Dose +0.5 g", "Shot weight +4 g") and the journal entry. On the brew
+    page, "Suggest parameters" for that bean: the Starting point shows the
+    new values, and the shot's dose, ratio and target weight are set to
+    them (a shot that wasn't weighed only gets the dose). Check a recipe
+    that differs from the analyzed brew's, and that "Reset to recipe" still
+    works.
+  - **Rate the results** 👍/👎 on a few shots, so later prompt changes can
+    be compared against them.
+  - Adjust the espresso section's wording in `worker/src/prompt.ts` if the
+    advice reads worse (bump `PROMPT_VERSION`), and note what was found in
+    the roadmap entry.
+- **Size:** S
+- **Depends on:** a few rated espresso brews to analyze.
+- **Open questions:**
+  - Should pre-infusion and profile changes become fields after all, if
+    `nextStep` keeps suggesting them?
+  - Should the brew page say when it changed the shot because of the
+    suggestion (like it does for the grind)?
+
 ---
 
 ## E. Insights
 
-### 7. Statistics and graphs
+### 8. Statistics and graphs
 
 - **Status:** idea
 - **Why:** the brew history is a list. Trends (is this bean getting better
@@ -256,7 +292,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## F. Bar & menu
 
-### 8. Ingredient prep and stock
+### 9. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -273,7 +309,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should a finished cold brew batch (roadmap: cold brew refinements) be
     stock the same way, with each glass served taken from it and rated?
 
-### 9. Public menu: branding and sizes
+### 10. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
@@ -287,7 +323,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
-### 10. Drink categories: what else they could do
+### 11. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -306,7 +342,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## G. Home roasting
 
-### 11. Roasting: green stock, roast logs, resting
+### 12. Roasting: green stock, roast logs, resting
 
 - **Status:** idea
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
@@ -337,7 +373,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## H. Accounts
 
-### 12. Account management and password reset
+### 13. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -368,13 +404,13 @@ What the analysis worker sends to the LLM and what comes back.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 13. Email verification
+### 14. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 12), inviting a member by email, or notifications by email.
+  (item 13), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -384,9 +420,9 @@ What the analysis worker sends to the LLM and what comes back.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 12).
+  - Shares the mail and token pieces with password reset (item 13).
 - **Size:** M (mail is new to the stack).
-- **Depends on:** nothing; pairs with 12.
+- **Depends on:** nothing; pairs with 13.
 - **Open questions:**
   - Block unverified accounts, or only remind them?
   - What happens to accounts that existed before verification (treat as
@@ -399,7 +435,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 How the app is served and installed.
 
-### 14. Serve the app as an installable PWA
+### 15. Serve the app as an installable PWA
 
 - **Status:** idea
 - **Why:** the PWA is configured (`vite-plugin-pwa`, `frontend/vite.config.ts`)
