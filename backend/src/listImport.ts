@@ -12,6 +12,9 @@ export const LISTS = ["beans", "recipes", "drinks", "ingredients", "brewers", "g
 export type ListName = (typeof LISTS)[number];
 
 const lower = (v: unknown) => String(v ?? "").trim().toLowerCase();
+// A bean's roast date as YYYY-MM-DD ("" when unknown): a Date from the
+// database, an ISO string from a file.
+const roastDay = (v: unknown) => (v ? new Date(v as string | Date).toISOString().slice(0, 10) : "");
 
 // How a row is recognised in another workspace, for each top-level table:
 // any shared key means "the same thing". References in a row are already in
@@ -28,7 +31,8 @@ export const MATCH_KEYS: Record<string, (row: BackupRow) => string[]> = {
   ingredients: (r) => [lower(r.name)],
   drink_categories: (r) => [lower(r.name)],
   brewers: (r) => [lower(r.name)],
-  beans: (r) => [`${lower(r.roasterName)}|${lower(r.beanName)}|${lower(r.batchNumber)}`],
+  // Two bags of the same coffee are two beans: the roast date tells them apart.
+  beans: (r) => [`${lower(r.roasterName)}|${lower(r.beanName)}|${lower(r.batchNumber)}|${roastDay(r.roastDate)}`],
   recipes: (r) => [`${lower(r.name)}|${r.brewerId}`],
   drinks: (r) => [`${lower(r.name)}|${r.kind}`],
   menu_sections: (r) => [lower(r.name)],
@@ -43,7 +47,10 @@ const nameColumn = (table: string) => NAME_COLUMN[table] ?? "name";
 
 // How a row is named in a summary.
 export function rowLabel(table: string, r: BackupRow): string {
-  if (table === "beans") return [r.roasterName, r.beanName, r.batchNumber ? `(batch ${r.batchNumber})` : ""].filter(Boolean).join(" ");
+  if (table === "beans") {
+    const extra = [r.batchNumber ? `batch ${r.batchNumber}` : "", r.roastDate ? `roasted ${roastDay(r.roastDate)}` : ""].filter(Boolean).join(", ");
+    return [r.roasterName, r.beanName, extra ? `(${extra})` : ""].filter(Boolean).join(" ");
+  }
   if (table === "brew_logs") return `Brew of ${new Date(r.timestamp as string | Date).toISOString().slice(0, 16).replace("T", " ")}`;
   return String(r.name ?? "");
 }
