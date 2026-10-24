@@ -1110,3 +1110,45 @@ Contract: `api/server.md` §10.
 - **Decided:** a whole-database dump set by admins (not per-workspace
   scheduled JSON); restored with a documented command, not in the app.
 - **Not built:** an off-site copy, and notifying admins when a backup fails.
+
+## AI review: input, output, and what the AI sees (built)
+
+Backlog items "Review and refine AI input and output" and "Choose what the
+AI sees", branch `ai-review`, migration 0063. The prompt and context had
+grown a feature at a time: the documented prompt was far behind the code,
+the test pinning it compared the prompt to itself, every context sent all
+its null keys and repeated grinder, water and recipe details on all six
+brews (~3k tokens), and the output (reasoning, grind direction, temp
+change) invited RPM advice it couldn't hold. Contract:
+`api/llm-contract.md` §9, `api/analysis.md` §8.
+
+- **Measure first:** each `llm_analyses` row records its `model` and
+  `prompt_version`, and 👍/👎 (`PUT …/analyses/:id/feedback`, on the
+  suggestion card). `npm run eval -w worker` snapshots recent rated brews,
+  runs them through the current input and prompt (real API calls, token
+  counts recorded) and writes a side-by-side comparison to the git-ignored
+  `eval/`.
+- **A smaller input** (`worker/src/prompt.ts`): empty values dropped (the
+  prompt says a missing key wasn't recorded), each grinder and water once
+  under `equipment`, earlier brews marked `sameRecipe`.
+- **The prompt in sections:** `core`, `output`, then `drink`, `style`,
+  `tds`, `water`, `problems`, `rpm`, `espresso`, `cold`… each only when the
+  input has what it's about. Tests check which sections appear and snapshot
+  the assembled prompt.
+- **Output:** `nextStep` (one concrete instruction), `confidence` (low /
+  medium / high) and `suggestedRpmDelta` (variable-speed grinders only),
+  shown as "Next time:" with a badge on the suggestion card and the brew
+  page's Starting point. Prompt version `2026-10-b`.
+- **Settings → AI** (owners; others view): a switch per detail, grouped by
+  brew, bean, recipe and equipment, and history, stored per workspace as
+  `aiHidden` (`AI_DETAILS` in `@barista/shared/aiDetails`). The worker
+  leaves switched-off details out of the input and their sections out of
+  the prompt. History switches: compare with unrated earlier brews, and
+  analyze unrated brews at all (off: `409`, and the brew page asks for a
+  rating first).
+- **Decided:** switches per workspace, not per person; users rate
+  suggestions to measure them; the model stays in Docker (`OPENAI_MODEL`);
+  hiding a form field (Settings → Fields) still doesn't change what the AI
+  gets.
+- **Not done yet:** the `after` eval run against the baseline, to compare
+  the new prompt on real brews and adjust wording if it reads worse.

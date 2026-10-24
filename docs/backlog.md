@@ -26,12 +26,12 @@ and fix the references.
 - A. Settings & configuration: 1
 - B. Beans: 2
 - C. Brewing & logging: 3–5
-- D. AI suggestions: 6–10
-- E. Insights: 11
-- F. Bar & menu: 12–14
-- G. Home roasting: 15
-- H. Accounts: 16–17
-- I. Deployment & the app: 18
+- D. AI suggestions: 6–8
+- E. Insights: 9
+- F. Bar & menu: 10–12
+- G. Home roasting: 13
+- H. Accounts: 14–15
+- I. Deployment & the app: 16
 
 ---
 
@@ -195,84 +195,24 @@ Recording a brew: what's measured, and how fast it is to log.
 
 What the analysis worker sends to the LLM and what comes back.
 
-### 6. Review and refine AI input and output
-
-- **Status:** in progress (branch `ai-review`). Built: model, prompt
-  version and 👍/👎 on each analysis; `npm run eval -w worker`; a compact
-  input, the prompt in sections, and `nextStep` / `confidence` /
-  `suggestedRpmDelta` in the output (prompt `2026-10-b`). Left: run the eval
-  (`after`) against the baseline and review it, then move 6 and 8 to the
-  roadmap with what it showed. Decided: users rate suggestions; the model
-  stays in Docker (`OPENAI_MODEL`).
-- **Why:** the prompt and structured output (`docs/api/llm-contract.md` §9)
-  have grown a feature at a time. They haven't been checked as a whole for
-  what the model needs, what it ignores, and whether the suggestions are
-  specific enough to act on.
-- **Approach:**
-  - Audit the input: which fields are sent, how they're worded, and how much
-    brew history is included (recent brews of the same bean and recipe).
-  - Audit the output: whether the schema's fields are used, whether
-    suggestions give one clear next step, and how confidence and reasons are
-    shown.
-  - Build a small set of real brews to compare prompt versions against.
-  - Check the newer brew fields help (TDS and EY, water, prep tools, grind
-    speed, grinder retention), as well as the bean details from roadmap
-    phase 5.
-- **Size:** M
-- **Depends on:** nothing.
-- **Open questions:**
-  - Should users be able to rate a suggestion (useful / not), to measure it?
-  - Which model and cost per analysis is acceptable?
-  - Where is the model configured: in Docker (`OPENAI_MODEL`, today), in the
-    app (Settings → AI, so a bar can switch models or providers without a
-    redeploy), or both (Docker sets the key and what's allowed, the app picks
-    from that)?
-
-### 7. Espresso dose and yield suggestions from the AI
+### 6. Espresso dose and yield suggestions from the AI
 
 - **Status:** idea
 - **Why:** the AI suggests grind and temperature changes; for espresso, dose
   and shot weight (ratio) are often the better lever.
 - **Approach:** extend the structured output (`docs/api/README.md` §9) with
   optional dose and yield deltas for espresso brews, and show them with the
-  suggestion. Prompt and schema change, plus UI. Item 6 added `nextStep`,
+  suggestion. Prompt and schema change, plus UI. The AI review (roadmap) added `nextStep`,
   `confidence` and a nullable `suggestedRpmDelta`: a dose or yield delta can
   follow that pattern (nullable, nulled by the worker when it doesn't
   apply), with an `espresso`-section line in `worker/src/prompt.ts` and a
   `PROMPT_VERSION` bump.
 - **Size:** S–M
-- **Depends on:** nothing. Fits with 6.
+- **Depends on:** nothing.
 - **Open questions:** should it also suggest pre-infusion and profile changes
   for machines that support them?
 
-### 8. Choose what the AI sees
-
-- **Status:** in progress (branch `ai-review`): built as Settings → AI, per
-  workspace (`aiHidden`, `docs/api/llm-contract.md` §9 "What the AI sees");
-  moves to the roadmap with 6.
-- **Why:** every recorded brew, bean and recipe detail goes to the AI, and
-  the list keeps growing (TDS, water profiles, prep tools…). Some details
-  don't help a given bar, cost tokens, or (like water minerals someone
-  guessed) mislead.
-- **Approach:** Settings → **AI**: a switch for each detail the analysis can
-  send, grouped as in `docs/api/llm-contract.md` §9: brew (TDS and
-  extraction, temperature, marks, prep tools…), water profile (name, each
-  mineral), bean (origin, altitude, process, flavor profile…), recipe and
-  equipment. All on by default. The worker leaves out what's switched off,
-  and the prompt doesn't mention it.
-  - **Unrated brews:** a switch for whether brews without a rating (e.g.
-    saved with Rate later and not rated yet) go to the AI at all, as the
-    brew analysed or as history.
-- **Size:** M
-- **Depends on:** nothing. Fits with 6 (the audit says what's worth sending).
-  Can reuse the field registry's keys (`lib/fields.ts`, roadmap: field
-  visibility).
-- **Open questions:**
-  - Per workspace, or per person?
-  - Decided with field visibility: hiding a form field doesn't change what
-    the AI gets, so the two stay separate switches.
-
-### 9. Build bar items from plain text (AI)
+### 7. Build bar items from plain text (AI)
 
 - **Status:** idea
 - **Why:** recipes, drinks and other bar items often come as text: a
@@ -300,7 +240,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Units and step types the text describes loosely ("pour to about 100 ml,
     wait 30 s"): how sure must the AI be before filling a field?
 
-### 10. Rework the analysis workflow, with auto-analyze
+### 8. Rework the analysis workflow, with auto-analyze
 
 - **Status:** idea
 - **Why:** an AI suggestion only happens when someone taps "Get AI
@@ -328,14 +268,14 @@ What the analysis worker sends to the LLM and what comes back.
       §9). Also remove the delayed job when a brew is deleted, test both
       paths, and keep it out of the failure logs.
     - **Rate later:** an unrated brew waits for its rating, or runs once the
-      reminder has passed (ties in with item 8's switch for unrated brews).
+      reminder has passed (ties in with Settings → AI's switch for unrated brews; roadmap: AI review).
     - Failures (LLM down, quota) retry as today and show on the journal
       entry with a way to try again, rather than failing silently.
   - Show "Analysis queued for 9:15" on the saved screen and journal entry
     while it waits.
 - **Size:** M
-- **Depends on:** nothing. Fits with 6 (reviewing input and output) and 8
-  (what the AI sees, unrated brews).
+- **Depends on:** nothing. Builds on the AI review (roadmap): `prompt_version`
+  and 👍/👎 to measure it, and the unrated-brews switch.
 - **Open questions:**
   - Per workspace or per person? Auto-analysis costs API calls the
     workspace pays for.
@@ -346,7 +286,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## E. Insights
 
-### 11. Statistics and graphs
+### 9. Statistics and graphs
 
 - **Status:** idea
 - **Why:** the brew history is a list. Trends (is this bean getting better
@@ -375,7 +315,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## F. Bar & menu
 
-### 12. Ingredient prep and stock
+### 10. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -392,7 +332,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should a finished cold brew batch (roadmap: cold brew refinements) be
     stock the same way, with each glass served taken from it and rated?
 
-### 13. Public menu: branding and sizes
+### 11. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
@@ -406,7 +346,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
-### 14. Drink categories: what else they could do
+### 12. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -425,7 +365,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## G. Home roasting
 
-### 15. Roasting: green stock, roast logs, resting
+### 13. Roasting: green stock, roast logs, resting
 
 - **Status:** idea
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
@@ -456,7 +396,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## H. Accounts
 
-### 16. Account management and password reset
+### 14. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -487,13 +427,13 @@ What the analysis worker sends to the LLM and what comes back.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 17. Email verification
+### 15. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 16), inviting a member by email, or notifications by email.
+  (item 14), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -503,9 +443,9 @@ What the analysis worker sends to the LLM and what comes back.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 16).
+  - Shares the mail and token pieces with password reset (item 14).
 - **Size:** M (mail is new to the stack).
-- **Depends on:** nothing; pairs with 16.
+- **Depends on:** nothing; pairs with 14.
 - **Open questions:**
   - Block unverified accounts, or only remind them?
   - What happens to accounts that existed before verification (treat as
@@ -518,7 +458,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 How the app is served and installed.
 
-### 18. Serve the app as an installable PWA
+### 16. Serve the app as an installable PWA
 
 - **Status:** idea
 - **Why:** the PWA is configured (`vite-plugin-pwa`, `frontend/vite.config.ts`)
