@@ -22,6 +22,7 @@ import {
   brewProblems,
   brewLogProblems,
   llmAnalyses,
+  analysisRequests,
   recipes,
   SERVING_UNITS,
   STEEP_TEMPS,
@@ -38,6 +39,8 @@ import {
 } from "@barista/shared/schema";
 import { decimalSchema, grindSettingSchema, optionalText, updateSchema } from "../validation.js";
 import { remindToRate, remindWhenSteeped, type ReminderOutcome } from "../reminders.js";
+import { autoAnalyzeOnEdited, autoAnalyzeOnSave } from "../autoAnalyze.js";
+import { cancelWaitingAnalysis } from "../queue.js";
 
 // docs/api/brew-logs.md §6: first_drop (espresso), step_end (a step's real end).
 export interface Mark {
@@ -61,6 +64,12 @@ export interface BrewLogDetails extends BrewLog {
   problems: Array<{ id: string; name: string; methodKind: MethodKind | null }>; // what went wrong, in checklist order
   // Null when the brewer deleted their account (the log is kept).
   brewedBy: { id: string; email: string } | null;
+  // Where its AI suggestion stands (docs/api/analysis.md §8): analyzed at
+  // least once; an automatic analysis due then; why the last one failed or
+  // was skipped.
+  analyzed: boolean;
+  analysisDueAt: Date | null;
+  analysisError: string | null;
 }
 
 export interface BrewLogListResponse {
@@ -438,6 +447,9 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       // Separate column, like recipeMethodKind: whether the drink has ingredients.
       drinkHasIngredients: sql<number>`EXISTS (SELECT 1 FROM ${drinkIngredients} di WHERE di.drink_id = ${brewLogs.drinkId})`,
       brewedBy: { id: users.id, email: users.email },
+      analyzedFlag: sql<number>`EXISTS (SELECT 1 FROM ${llmAnalyses} la WHERE la.brew_log_id = ${brewLogs.id})`,
+      analysisDueAt: analysisRequests.dueAt,
+      analysisError: analysisRequests.error,
     })
     .from(brewLogs)
     .innerJoin(beans, eq(brewLogs.beanId, beans.id))
@@ -450,6 +462,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
     .leftJoin(drinks, eq(brewLogs.drinkId, drinks.id))
     // Left join: logs of deleted accounts (userId null) must still be listed.
     .leftJoin(users, eq(brewLogs.userId, users.id))
+    .leftJoin(analysisRequests, eq(analysisRequests.brewLogId, brewLogs.id))
     .where(where)
     .orderBy(desc(brewLogs.timestamp), desc(brewLogs.id))
     .limit(limit)
@@ -457,8 +470,9 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
   const ids = rows.map((r) => r.id);
   const [marks, tools, problems] = await Promise.all([marksFor(ids), toolsFor(ids), problemsFor(ids)]);
   // A recipe always has a method (inner FK), so its kind is set whenever recipe is.
-  return rows.map(({ recipeMethodKind, styleId, styleName, styleBrewsLike, recipe, drink, drinkHasIngredients, ...row }) => ({
+  return rows.map(({ recipeMethodKind, styleId, styleName, styleBrewsLike, recipe, drink, drinkHasIngredients, analyzedFlag, ...row }) => ({
     ...row,
+    analyzed: Number(analyzedFlag) === 1,
     recipe:
       recipe && recipeMethodKind
         ? { ...recipe, methodKind: recipeMethodKind, style: styleId && styleName && styleBrewsLike ? { id: styleId, name: styleName, brewsLike: styleBrewsLike } : null }
@@ -624,6 +638,7 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Cre
     return;
   }
 
+  await autoAnalyzeOnSave({ id, workspaceId, rating: body.rating ?? null, drinkRating: body.drinkRating ?? null, steeping: body.steeping ?? false, analyzed: false });
   const [brewLog] = await loadBrewLogs(eq(brewLogs.id, id));
   if (!brewLog) {
     throw new Error(`Brew log ${id} missing after insert`);
@@ -661,6 +676,8 @@ brewLogsRouter.patch(
           drinkRating: brewLogs.drinkRating,
           drinkTastingNotes: brewLogs.drinkTastingNotes,
           actualTimeSec: brewLogs.actualTimeSec,
+          rating: brewLogs.rating,
+          steeping: brewLogs.steeping,
         })
         .from(brewLogs)
         .where(logInWorkspace(req.params))
@@ -725,7 +742,7 @@ brewLogsRouter.patch(
         await tx.delete(brewLogProblems).where(eq(brewLogProblems.brewLogId, brewLogId));
         await insertProblems(tx, brewLogId, problemIds);
       }
-      return { status: "updated" } as const;
+      return { status: "updated", before: { rating: log.rating, drinkRating: log.drinkRating, steeping: log.steeping } } as const;
     });
 
     if (outcome.status === "not_found") {
@@ -746,7 +763,9 @@ brewLogsRouter.patch(
       sendError(res, 404, "Brew log not found");
       return;
     }
-    res.json({ brewLog });
+    // First rated (or finished): auto-analyze picks it up now.
+    const dueAt = await autoAnalyzeOnEdited(outcome.before, brewLog);
+    res.json({ brewLog: dueAt ? { ...brewLog, analysisDueAt: dueAt, analysisError: null } : brewLog });
   }
 );
 
@@ -778,5 +797,6 @@ brewLogsRouter.delete("/:brewLogId", async (req: Request<BrewLogParams>, res: Re
     sendError(res, 403, "Baristas can only delete their own brew logs");
     return;
   }
+  await cancelWaitingAnalysis(brewLogId).catch(() => undefined); // best effort: the worker skips deleted brews
   res.status(204).end();
 });

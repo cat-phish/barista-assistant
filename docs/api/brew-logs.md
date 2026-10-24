@@ -58,7 +58,10 @@ created it and can't be changed.
   "marks": [],
   "tools": [{ "id": "uuid", "name": "Rinsed paper filter", "methodKind": "filter" }],
   "problems": [{ "id": "uuid", "name": "Slow drawdown / stalled bed", "methodKind": "filter" }],
-  "brewedBy": { "id": "uuid", "email": "barista@example.com" }
+  "brewedBy": { "id": "uuid", "email": "barista@example.com" },
+  "analyzed": false,
+  "analysisDueAt": "2026-10-23T09:15:00.000Z",
+  "analysisError": null
 }
 ```
 
@@ -81,7 +84,11 @@ except for `step_end`), earliest first. `tools` lists the prep tools used
 order; `[]` when none were recorded. `problems` lists what went wrong
 (§6b, same shape, archived ones included) in list order; `[]` when none
 were recorded. `userId` and `brewedBy` are `null` when the brewer deleted their
-account. Such logs can only be edited or deleted by owners.
+account. Such logs can only be edited or deleted by owners. `analyzed` says
+whether it has at least one AI suggestion; `analysisDueAt` is when an
+automatic analysis is due (auto-analyze, §8), else `null`; `analysisError`
+says why the last analysis failed or wasn't made (e.g. the daily cap), else
+`null`, cleared when it's asked for again.
 
 ## `GET /api/workspaces/:workspaceId/brew-logs`
 

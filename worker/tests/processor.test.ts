@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { beanFreezes, beans, brewLogMarks, brewLogs, brewers, ingredients, drinkIngredients, drinks, grinders, llmAnalyses, recipeGrindSettings, recipes, recipeSteps, users, waterProfiles, workspaces, prepTools, brewLogTools, brewProblems, brewLogProblems, recipeStyles } from "@barista/shared/schema";
+import { analysisRequests, beanFreezes, beans, brewLogMarks, brewLogs, brewers, ingredients, drinkIngredients, drinks, grinders, llmAnalyses, recipeGrindSettings, recipes, recipeSteps, users, waterProfiles, workspaces, prepTools, brewLogTools, brewProblems, brewLogProblems, recipeStyles } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { extractionYield, type BrewContext } from "../src/context.js";
 import { db } from "../src/db.js";
 import { analyzeWithLlm } from "../src/llm.js";
-import { processBrewAnalysis } from "../src/processor.js";
+import { CAP_REACHED, failureMessage, processBrewAnalysis, settleRequest } from "../src/processor.js";
 
 // Real database, fake LLM.
 vi.mock("../src/llm.js", async (importOriginal) => ({
@@ -366,6 +366,48 @@ describe("processBrewAnalysis", () => {
 
     await db.update(brewLogs).set({ drinkRating: 4 }).where(eq(brewLogs.id, logIds.day8!)); // a drink rating counts
     expect((await processBrewAnalysis({ brewLogId: logIds.day8! })).status).toBe("saved");
+  });
+
+  it("auto-analyze: marks the analysis auto and clears the due time; skips once switched off", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    await db.update(workspaces).set({ settings: { autoAnalyze: true } }).where(eq(workspaces.id, workspaceId));
+    await db.insert(analysisRequests).values({ brewLogId: logIds.day8!, dueAt: new Date() });
+    expect((await processBrewAnalysis({ brewLogId: logIds.day8!, auto: true })).status).toBe("saved");
+    expect((await db.select().from(llmAnalyses).where(eq(llmAnalyses.brewLogId, logIds.day8!)))[0]).toMatchObject({ auto: true });
+    expect(await db.select().from(analysisRequests)).toEqual([]);
+
+    // Asked for: not auto.
+    await processBrewAnalysis({ brewLogId: logIds.day7! });
+    expect((await db.select().from(llmAnalyses).where(eq(llmAnalyses.brewLogId, logIds.day7!)))[0]).toMatchObject({ auto: false });
+
+    llm.mockClear();
+    await db.update(workspaces).set({ settings: { autoAnalyze: false } }).where(eq(workspaces.id, workspaceId));
+    expect(await processBrewAnalysis({ brewLogId: logIds.day6!, auto: true })).toEqual({ status: "skipped", reason: "auto-analyze is off" });
+    expect(llm).not.toHaveBeenCalled();
+  });
+
+  it("auto-analyze: stops at the daily cap, says why; asked-for analyses aren't capped", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    await db.update(workspaces).set({ settings: { autoAnalyze: true, autoAnalyzeDailyCap: 1 } }).where(eq(workspaces.id, workspaceId));
+    expect((await processBrewAnalysis({ brewLogId: logIds.day8!, auto: true })).status).toBe("saved");
+    expect(await processBrewAnalysis({ brewLogId: logIds.day7!, auto: true })).toEqual({ status: "skipped", reason: "daily cap reached" });
+    expect(await db.select().from(analysisRequests)).toEqual([expect.objectContaining({ brewLogId: logIds.day7!, dueAt: null, error: CAP_REACHED })]);
+    expect((await processBrewAnalysis({ brewLogId: logIds.day7! })).status).toBe("saved");
+    expect(await db.select().from(analysisRequests)).toEqual([]);
+
+    // An auto analysis older than a day no longer counts.
+    await db.update(llmAnalyses).set({ createdAt: new Date(Date.now() - 25 * 3600_000) }).where(eq(llmAnalyses.brewLogId, logIds.day8!));
+    expect((await processBrewAnalysis({ brewLogId: logIds.day6!, auto: true })).status).toBe("saved");
+  });
+
+  it("records why the last attempt failed, for the journal (settleRequest)", async () => {
+    await settleRequest(logIds.day8!, failureMessage(false));
+    expect(await db.select().from(analysisRequests)).toEqual([expect.objectContaining({ error: "The AI service couldn't be reached" })]);
+    await settleRequest(logIds.day8!, failureMessage(true));
+    expect((await db.select().from(analysisRequests))[0]?.error).toBe("The AI service refused the request");
+    await settleRequest(randomUUID(), "x"); // a deleted brew: nothing to keep, no error
+    await settleRequest(logIds.day8!, null);
+    expect(await db.select().from(analysisRequests)).toEqual([]);
   });
 
   it("skips a brew log that was deleted after the job was queued, without calling the LLM", async () => {

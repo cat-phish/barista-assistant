@@ -58,6 +58,7 @@ import {
   recipeStyles,
   recipeSteps,
   serverSettings,
+  analysisRequests,
   users,
   waterProfiles,
   workspaceMembers,
@@ -103,8 +104,9 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
 ];
 // Not in a backup: people, their memberships and the server's own settings
 // belong to the server, not the workspace, and the workspace row is the
-// file's own "workspace" block.
-export const NOT_BACKED_UP: readonly MySqlTable[] = [users, notificationChannels, workspaces, workspaceMembers, serverSettings];
+// file's own "workspace" block. analysis_requests is queue state (when an
+// automatic analysis is due, why one failed), meaningless without the queue.
+export const NOT_BACKED_UP: readonly MySqlTable[] = [users, notificationChannels, workspaces, workspaceMembers, serverSettings, analysisRequests];
 
 // Columns that only hold one of a list (varchar in the database).
 const ENUMS: Record<string, readonly string[]> = {

@@ -51,36 +51,63 @@ export class QueueUnavailableError extends Error {}
 // request; give up after a few seconds so the API can answer 503.
 const ENQUEUE_TIMEOUT_MS = 3000;
 
-export async function enqueueBrewAnalysis(brewLogId: string): Promise<string> {
+// Runs a queue call, as QueueUnavailableError if Redis doesn't answer in time.
+async function withTimeout<T>(work: () => Promise<T>): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new QueueUnavailableError("Timed out reaching Redis")), ENQUEUE_TIMEOUT_MS);
   });
-
   try {
-    // Same jobId while waiting/active => BullMQ returns the existing job instead of adding one.
-    const job = await Promise.race([
-      brewAnalysisQueue.add(
-        BREW_ANALYSIS_JOB,
-        { brewLogId },
-        {
-          jobId: brewAnalysisJobId(brewLogId),
-          attempts: 3,
-          backoff: { type: "exponential", delay: 5000 },
-          removeOnComplete: true,
-          removeOnFail: true,
-        }
-      ),
-      timeout,
-    ]);
-    if (!job.id) throw new Error("BullMQ returned a job without an id");
-    return job.id;
+    return await Promise.race([work(), timeout]);
   } catch (err) {
     if (err instanceof QueueUnavailableError) throw err;
     throw new QueueUnavailableError(err instanceof Error ? err.message : String(err));
   } finally {
     clearTimeout(timer);
   }
+}
+
+// auto: queued by auto-analyze, after delayMs (docs/api/analysis.md §8).
+export interface AnalysisJobOptions {
+  auto?: boolean;
+  delayMs?: number;
+}
+
+export function enqueueBrewAnalysis(brewLogId: string, { auto = false, delayMs = 0 }: AnalysisJobOptions = {}): Promise<string> {
+  const jobId = brewAnalysisJobId(brewLogId);
+  return withTimeout(async () => {
+    if (!auto) {
+      // An automatic analysis still waiting: run it now, as asked for (so
+      // the daily cap doesn't apply). It may start meanwhile; then it's
+      // simply the job already running.
+      const waiting = await brewAnalysisQueue.getJob(jobId);
+      if (waiting && (await waiting.isDelayed())) {
+        await waiting.updateData({ brewLogId });
+        await waiting.promote().catch(() => undefined);
+        return jobId;
+      }
+    }
+    // Same jobId while waiting/active => BullMQ returns the existing job instead of adding one.
+    const job = await brewAnalysisQueue.add(BREW_ANALYSIS_JOB, auto ? { brewLogId, auto: true } : { brewLogId }, {
+      jobId,
+      delay: delayMs,
+      attempts: 3,
+      backoff: { type: "exponential", delay: 5000 },
+      removeOnComplete: true,
+      removeOnFail: true,
+    });
+    if (!job.id) throw new Error("BullMQ returned a job without an id");
+    return job.id;
+  });
+}
+
+// A deleted brew's automatic analysis that hasn't started (the worker skips
+// deleted brews anyway; this keeps the queue tidy).
+export function cancelWaitingAnalysis(brewLogId: string): Promise<void> {
+  return withTimeout(async () => {
+    const job = await brewAnalysisQueue.getJob(brewAnalysisJobId(brewLogId));
+    if (job && (await job.isDelayed())) await job.remove();
+  });
 }
 
 // Same timeout as the analysis; the caller treats failure as "no reminder".
@@ -92,25 +119,16 @@ export function enqueueSteepReminder(data: SteepReminderJobData, delayMs: number
 }
 
 async function enqueueReminder(name: string, jobId: string, data: RateReminderJobData | SteepReminderJobData, delayMs: number): Promise<void> {
-  let timer: NodeJS.Timeout | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new QueueUnavailableError("Timed out reaching Redis")), ENQUEUE_TIMEOUT_MS);
-  });
-  try {
-    await Promise.race([
-      reminderQueue.add(name, data, {
-        jobId,
-        delay: delayMs,
-        attempts: 3,
-        backoff: { type: "exponential", delay: 30_000 },
-        removeOnComplete: true,
-        removeOnFail: true,
-      }),
-      timeout,
-    ]);
-  } finally {
-    clearTimeout(timer);
-  }
+  await withTimeout(() =>
+    reminderQueue.add(name, data, {
+      jobId,
+      delay: delayMs,
+      attempts: 3,
+      backoff: { type: "exponential", delay: 30_000 },
+      removeOnComplete: true,
+      removeOnFail: true,
+    })
+  );
 }
 
 // Scheduled server backups (docs/api/server.md §10): a job scheduler that

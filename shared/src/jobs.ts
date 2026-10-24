@@ -8,6 +8,10 @@ export const BREW_ANALYSIS_JOB = "analyze";
 
 export interface BrewAnalysisJobData {
   brewLogId: string;
+  // Queued by auto-analyze, not asked for (docs/api/analysis.md §8): skipped
+  // if auto-analyze was turned off or the daily cap is reached, and the
+  // analysis is marked auto. Absent on older jobs (= asked for).
+  auto?: boolean;
 }
 
 // One job per brew log while it's waiting or running, so repeated clicks

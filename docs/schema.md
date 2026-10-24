@@ -995,6 +995,36 @@ export const llmAnalyses = mysqlTable("llm_analyses", {
   reasoning: text("reasoning").notNull(),
   suggestedGrindDelta: varchar("suggested_grind_delta", { length: 50 }).notNull(), // 'much_finer' | 'finer' | 'no_change' | 'coarser' | 'much_coarser'
   suggestedTempDelta: decimal("suggested_temp_delta", { precision: 3, scale: 1, mode: "number" }).notNull(),
+  // One concrete instruction for the next brew, how sure the model is, and an
+  // RPM change for variable-speed grinders (docs/api/llm-contract.md §9).
+  // Null on analyses made before they existed.
+  nextStep: varchar("next_step", { length: 200 }),
+  confidence: varchar("confidence", { length: 10 }).$type<AnalysisConfidence>(), // ANALYSIS_CONFIDENCE
+  suggestedRpmDelta: int("suggested_rpm_delta"),
+  // What made it: the model and the prompt version (worker/src/prompt.ts).
+  model: varchar("model", { length: 100 }),
+  promptVersion: varchar("prompt_version", { length: 30 }),
+  // Was it useful? Set by the brew's people (docs/api/analysis.md §8).
+  helpful: boolean("helpful"),
+  ratedAt: timestamp("rated_at"),
+  // Made by auto-analyze (docs/api/analysis.md §8), not asked for: these
+  // count toward the workspace's daily cap.
+  auto: boolean("auto").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const ANALYSIS_CONFIDENCE = ["low", "medium", "high"] as const;
+export type AnalysisConfidence = (typeof ANALYSIS_CONFIDENCE)[number];
+
+// Where a brew's analysis stands while it isn't saved yet
+// (docs/api/analysis.md §8): when an automatic one is due, or why the last
+// one failed or was skipped. Queue state, so not backed up. No row: nothing
+// pending, nothing failed.
+export const analysisRequests = mysqlTable("analysis_requests", {
+  brewLogId: varchar("brew_log_id", { length: 36 })
+    .primaryKey()
+    .references(() => brewLogs.id, { onDelete: "cascade" }),
+  dueAt: timestamp("due_at"), // an automatic analysis waiting until then
+  error: varchar("error", { length: 200 }), // shown with "Try again"
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 ```

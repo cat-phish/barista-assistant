@@ -21,6 +21,13 @@ upcoming work is in `roadmap.md`.
   out of what's sent and the prompt stops mentioning them. Two history
   switches: compare with unrated earlier brews, and analyze unrated brews at
   all.
+- **Auto-analyze:** also under Settings → AI, off by default. Each rated brew
+  gets an AI suggestion 5, 10, 15 or 30 minutes after it's saved (time to fix
+  a typo or delete a mistake); one saved to rate later gets it once it's
+  rated. Optionally capped at a number a day; asking for one yourself always
+  works. Journal cards mark brews not analyzed yet ("Not analyzed") and
+  ones on their way ("AI at 9:15"); a failed analysis says why, with Try
+  again.
 - **Backup and restore:** Settings → Data. Owners download the whole
   workspace as one JSON file (lists, beans, equipment, recipes, drinks, the
   menu, and every brew with its marks, prep, problems and AI suggestions).

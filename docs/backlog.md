@@ -26,12 +26,12 @@ and fix the references.
 - A. Settings & configuration: 1
 - B. Beans: 2
 - C. Brewing & logging: 3–5
-- D. AI suggestions: 6–8
-- E. Insights: 9
-- F. Bar & menu: 10–12
-- G. Home roasting: 13
-- H. Accounts: 14–15
-- I. Deployment & the app: 16
+- D. AI suggestions: 6–7
+- E. Insights: 8
+- F. Bar & menu: 9–11
+- G. Home roasting: 12
+- H. Accounts: 13–14
+- I. Deployment & the app: 15
 
 ---
 
@@ -240,53 +240,11 @@ What the analysis worker sends to the LLM and what comes back.
   - Units and step types the text describes loosely ("pour to about 100 ml,
     wait 30 s"): how sure must the AI be before filling a field?
 
-### 8. Rework the analysis workflow, with auto-analyze
-
-- **Status:** idea
-- **Why:** an AI suggestion only happens when someone taps "Get AI
-  suggestion" on the saved screen or "Analyze this brew" in the journal.
-  It's easy to forget, so many brews never get one. The flow has also grown
-  a piece at a time (saved screen, journal entry, "Suggest parameters" on
-  setup, rate later waiting for the rating) and hasn't been looked at as a
-  whole.
-- **Approach:**
-  - **Review the flow end to end:**
-    - where a suggestion is asked for, shown and used (saved screen,
-      journal, brew setup);
-    - what "analyze again" means;
-    - whether older analyses stay visible;
-    - how it fits with rate later and quick rating.
-  - **Auto-analyze** setting: analyze every brew automatically, off by
-    default, **after a wait** (e.g. 5–30 min) so a brew deleted or fixed
-    right after saving isn't analyzed, or analyzed with typos.
-    - Saving queues a **delayed** analysis job (`delay`, same job id per
-      brew as today, so a manual request in the meantime reuses it).
-    - Editing the brew before it runs pushes the job back or lets it pick
-      up the edit. It loads the brew when it runs, so edits are included.
-    - **Deleted before it runs:** the worker already completes without
-      calling the LLM when the brew log is gone (`docs/api/llm-contract.md`
-      §9). Also remove the delayed job when a brew is deleted, test both
-      paths, and keep it out of the failure logs.
-    - **Rate later:** an unrated brew waits for its rating, or runs once the
-      reminder has passed (ties in with Settings → AI's switch for unrated brews; roadmap: AI review).
-    - Failures (LLM down, quota) retry as today and show on the journal
-      entry with a way to try again, rather than failing silently.
-  - Show "Analysis queued for 9:15" on the saved screen and journal entry
-    while it waits.
-- **Size:** M
-- **Depends on:** nothing. Builds on the AI review (roadmap): `prompt_version`
-  and 👍/👎 to measure it, and the unrated-brews switch.
-- **Open questions:**
-  - Per workspace or per person? Auto-analysis costs API calls the
-    workspace pays for.
-  - How long a wait by default, and can it be skipped ("analyze now")?
-  - A daily cap or cost limit on automatic analyses?
-
 ---
 
 ## E. Insights
 
-### 9. Statistics and graphs
+### 8. Statistics and graphs
 
 - **Status:** idea
 - **Why:** the brew history is a list. Trends (is this bean getting better
@@ -315,7 +273,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## F. Bar & menu
 
-### 10. Ingredient prep and stock
+### 9. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -332,7 +290,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should a finished cold brew batch (roadmap: cold brew refinements) be
     stock the same way, with each glass served taken from it and rated?
 
-### 11. Public menu: branding and sizes
+### 10. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
@@ -346,7 +304,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
-### 12. Drink categories: what else they could do
+### 11. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -365,7 +323,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## G. Home roasting
 
-### 13. Roasting: green stock, roast logs, resting
+### 12. Roasting: green stock, roast logs, resting
 
 - **Status:** idea
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
@@ -396,7 +354,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## H. Accounts
 
-### 14. Account management and password reset
+### 13. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -427,13 +385,13 @@ What the analysis worker sends to the LLM and what comes back.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 15. Email verification
+### 14. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 14), inviting a member by email, or notifications by email.
+  (item 13), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -443,9 +401,9 @@ What the analysis worker sends to the LLM and what comes back.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 14).
+  - Shares the mail and token pieces with password reset (item 13).
 - **Size:** M (mail is new to the stack).
-- **Depends on:** nothing; pairs with 14.
+- **Depends on:** nothing; pairs with 13.
 - **Open questions:**
   - Block unverified accounts, or only remind them?
   - What happens to accounts that existed before verification (treat as
@@ -458,7 +416,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 How the app is served and installed.
 
-### 16. Serve the app as an installable PWA
+### 15. Serve the app as an installable PWA
 
 - **Status:** idea
 - **Why:** the PWA is configured (`vite-plugin-pwa`, `frontend/vite.config.ts`)

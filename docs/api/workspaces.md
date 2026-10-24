@@ -76,6 +76,10 @@ Every workspace in a response carries `settings`, defaults filled in
   `AI_DETAILS` (`@barista/shared/aiDetails`), each at most once; an unknown
   key is a `400`. A `PATCH` sends the whole list. What each key does is in
   `docs/api/llm-contract.md` §9, "What the AI sees".
+- `autoAnalyze` (boolean, default `false`), `autoAnalyzeDelayMinutes` (`5`,
+  `10`, `15` or `30`, default `10`), `autoAnalyzeDailyCap` (integer 1–500,
+  or `null` for no cap, default `null`): auto-analyze (`docs/api/analysis.md`
+  §8), set under Settings → **AI**.
 
 ### Field visibility
 

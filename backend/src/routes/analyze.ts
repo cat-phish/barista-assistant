@@ -4,7 +4,7 @@ import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { brewLogs, DEFAULT_WORKSPACE_SETTINGS, llmAnalyses, withDefaults, workspaces } from "@barista/shared/schema";
+import { analysisRequests, brewLogs, DEFAULT_WORKSPACE_SETTINGS, llmAnalyses, withDefaults, workspaces } from "@barista/shared/schema";
 import { db } from "../db.js";
 import { enqueueBrewAnalysis, QueueUnavailableError } from "../queue.js";
 
@@ -54,6 +54,8 @@ analyzeRouter.post(
       }
       throw err;
     }
+    // Asked for now: no longer waiting for an automatic one, and a past failure is being retried.
+    await db.delete(analysisRequests).where(eq(analysisRequests.brewLogId, brewLogId));
 
     res.status(202).json({ status: "queued", jobId, message: "Brew analysis queued." });
   }

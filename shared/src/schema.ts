@@ -82,8 +82,25 @@ export interface WorkspaceSettings {
   // sees"): AI_DETAILS keys (aiDetails.ts). The worker leaves them out of the
   // analysis input and its prompt; "analyzeUnrated" refuses unrated brews.
   aiHidden: AiDetail[];
+  // Auto-analyze (docs/api/analysis.md §8): analyze each rated brew this many
+  // minutes after it's saved (an unrated one once it's first rated), at most
+  // autoAnalyzeDailyCap a day (null: no cap). Manual requests aren't capped.
+  autoAnalyze: boolean;
+  autoAnalyzeDelayMinutes: AutoAnalyzeDelay;
+  autoAnalyzeDailyCap: number | null;
 }
-export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: "light", roastScale: "names", hiddenFields: [], aiHidden: [] };
+export const AUTO_ANALYZE_DELAYS = [5, 10, 15, 30] as const;
+export type AutoAnalyzeDelay = (typeof AUTO_ANALYZE_DELAYS)[number];
+export const MAX_AUTO_ANALYZE_DAILY_CAP = 500;
+export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
+  recipeRoastLevel: "light",
+  roastScale: "names",
+  hiddenFields: [],
+  aiHidden: [],
+  autoAnalyze: false,
+  autoAnalyzeDelayMinutes: 10,
+  autoAnalyzeDailyCap: null,
+};
 
 export function withDefaults<T extends object>(defaults: T, stored: Partial<T> | null): T {
   return { ...defaults, ...(stored ?? {}) };
@@ -1097,10 +1114,26 @@ export const llmAnalyses = mysqlTable("llm_analyses", {
   // Was it useful? Set by the brew's people (docs/api/analysis.md §8).
   helpful: boolean("helpful"),
   ratedAt: timestamp("rated_at"),
+  // Made by auto-analyze (docs/api/analysis.md §8), not asked for: these
+  // count toward the workspace's daily cap.
+  auto: boolean("auto").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 export const ANALYSIS_CONFIDENCE = ["low", "medium", "high"] as const;
 export type AnalysisConfidence = (typeof ANALYSIS_CONFIDENCE)[number];
+
+// Where a brew's analysis stands while it isn't saved yet
+// (docs/api/analysis.md §8): when an automatic one is due, or why the last
+// one failed or was skipped. Queue state, so not backed up. No row: nothing
+// pending, nothing failed.
+export const analysisRequests = mysqlTable("analysis_requests", {
+  brewLogId: varchar("brew_log_id", { length: 36 })
+    .primaryKey()
+    .references(() => brewLogs.id, { onDelete: "cascade" }),
+  dueAt: timestamp("due_at"), // an automatic analysis waiting until then
+  error: varchar("error", { length: 200 }), // shown with "Try again"
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
 
 // Inferred row types for API payloads
 export type User = typeof users.$inferSelect;

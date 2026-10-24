@@ -1,9 +1,12 @@
 <script setup lang="ts">
-// Settings → AI (docs/api/llm-contract.md §9, "What the AI sees"): which
-// details the AI gets when it analyzes a brew, for everyone in the
-// workspace. Owners change them; everyone else sees them.
-import { computed, ref } from 'vue';
+// Settings → AI, for everyone in the workspace; owners change it, everyone
+// else sees it:
+//  - automatic analysis (docs/api/analysis.md §8): on or off, how long
+//    after saving, and a daily cap;
+//  - which details the AI gets (docs/api/llm-contract.md §9, "What the AI sees").
+import { computed, ref, watch } from 'vue';
 import { errorMessage } from '../api/client';
+import { AUTO_ANALYZE_DELAYS, type AutoAnalyzeDelay, type WorkspaceSettings } from '../api/types';
 import { workspacesApi } from '../api/workspaces';
 import SettingsLayout from '../components/SettingsLayout.vue';
 import { usePreferences } from '../composables/usePreferences';
@@ -11,27 +14,36 @@ import { AI_GROUPS, aiDetailsFor, type AiDetail, type AiGroup } from '../lib/aiD
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
-const { aiHidden } = usePreferences();
+const { aiHidden, settings } = usePreferences();
 const isOwner = computed(() => workspaces.current?.role === 'owner');
 const saving = ref(false);
 const error = ref('');
-const activeGroup = ref<AiGroup | null>(null); // the section last changed
+type Section = AiGroup | 'auto';
+const activeSection = ref<Section | null>(null); // the section last changed
 const saved = ref(false);
 const GROUPS = Object.keys(AI_GROUPS) as AiGroup[];
 
-// Water figures only matter while the water itself is sent.
-const disabled = (key: AiDetail) => key === 'waterMinerals' && aiHidden.value.includes('water');
+// Older stored settings may lack them until the API fills in defaults.
+const autoOn = computed(() => settings.value.autoAnalyze ?? false);
+const delay = computed(() => settings.value.autoAnalyzeDelayMinutes ?? 10);
+const cap = computed(() => settings.value.autoAnalyzeDailyCap ?? null);
+const MAX_CAP = 500;
+const capDraft = ref('');
+watch(cap, (c) => (capDraft.value = String(c ?? 20)), { immediate: true });
+const capInvalid = computed(() => {
+  const n = Number(capDraft.value);
+  return !Number.isInteger(n) || n < 1 || n > MAX_CAP;
+});
 
-async function toggle(key: AiDetail, group: AiGroup, sent: boolean): Promise<void> {
+async function save(changes: Partial<WorkspaceSettings>, section: Section): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
-  const next = sent ? aiHidden.value.filter((k) => k !== key) : [...aiHidden.value, key];
   saving.value = true;
   error.value = '';
   saved.value = false;
-  activeGroup.value = group;
+  activeSection.value = section;
   try {
-    await workspacesApi.setSettings(ws, { aiHidden: next });
+    await workspacesApi.setSettings(ws, changes);
     await workspaces.load();
     saved.value = true;
   } catch (err) {
@@ -40,10 +52,77 @@ async function toggle(key: AiDetail, group: AiGroup, sent: boolean): Promise<voi
     saving.value = false;
   }
 }
+
+function setCapped(capped: boolean): void {
+  if (capped && capInvalid.value) capDraft.value = '20';
+  void save({ autoAnalyzeDailyCap: capped ? Number(capDraft.value) : null }, 'auto');
+}
+function saveCap(): void {
+  if (cap.value !== null && !capInvalid.value && Number(capDraft.value) !== cap.value) void save({ autoAnalyzeDailyCap: Number(capDraft.value) }, 'auto');
+}
+
+// Water figures only matter while the water itself is sent.
+const disabled = (key: AiDetail) => key === 'waterMinerals' && aiHidden.value.includes('water');
+
+function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
+  const next = sent ? aiHidden.value.filter((k) => k !== key) : [...aiHidden.value, key];
+  void save({ aiHidden: next }, group);
+}
 </script>
 
 <template>
   <SettingsLayout title="AI">
+    <section class="card stack" aria-labelledby="ai-auto">
+      <h2 id="ai-auto">Automatic analysis</h2>
+      <p class="muted">
+        Get an AI suggestion for every brew without asking. A rated brew is analyzed a little after it's saved, so a typo can still be fixed
+        or a mistake deleted first; one saved to rate later is analyzed once it's rated.
+      </p>
+      <fieldset class="auto" :disabled="!isOwner || saving">
+        <legend class="visually-hidden">Automatic analysis</legend>
+        <label class="checkbox">
+          <input type="checkbox" :checked="autoOn" @change="save({ autoAnalyze: ($event.target as HTMLInputElement).checked }, 'auto')" />
+          Analyze every brew automatically
+        </label>
+        <template v-if="autoOn">
+          <div class="field delay">
+            <label for="auto-delay">Wait after saving</label>
+            <select id="auto-delay" :value="delay" @change="save({ autoAnalyzeDelayMinutes: Number(($event.target as HTMLSelectElement).value) as AutoAnalyzeDelay }, 'auto')">
+              <option v-for="m in AUTO_ANALYZE_DELAYS" :key="m" :value="m">{{ m }} minutes</option>
+            </select>
+          </div>
+          <div class="caps" role="radiogroup" aria-label="Daily limit">
+            <label class="checkbox">
+              <input type="radio" name="auto-cap" :checked="cap === null" @change="setCapped(false)" />
+              No daily limit
+            </label>
+            <label class="checkbox cap-line">
+              <input type="radio" name="auto-cap" :checked="cap !== null" @change="setCapped(true)" />
+              Up to
+              <input
+                v-model="capDraft"
+                class="cap"
+                type="number"
+                inputmode="numeric"
+                min="1"
+                :max="MAX_CAP"
+                aria-label="Automatic analyses a day"
+                :aria-invalid="capInvalid"
+                :disabled="cap === null"
+                @change="saveCap"
+              />
+              a day
+            </label>
+            <p v-if="cap !== null && capInvalid" class="form-error small">A whole number from 1 to {{ MAX_CAP }}.</p>
+            <p class="muted small">Counts automatic analyses in the last 24 hours. Asking for one yourself always works and doesn't count.</p>
+          </div>
+        </template>
+      </fieldset>
+      <p v-if="error && activeSection === 'auto'" class="form-error" role="alert">{{ error }}</p>
+      <p v-if="saved && activeSection === 'auto'" class="muted small" aria-live="polite">Saved.</p>
+    </section>
+
+    <h2 class="what">What the AI sees</h2>
     <p class="muted">
       What the AI gets when it analyzes a brew in {{ workspaces.current?.name }}. Switching a detail off leaves it out of what's sent, and the AI
       won't base advice on it; what's recorded is kept. The bean and roaster names, roast date, dose, water and yield weights, time, grind setting,
@@ -67,8 +146,8 @@ async function toggle(key: AiDetail, group: AiGroup, sent: boolean): Promise<voi
           </span>
         </label>
       </fieldset>
-      <p v-if="error && activeGroup === group" class="form-error" role="alert">{{ error }}</p>
-      <p v-if="saved && activeGroup === group" class="muted small" aria-live="polite">Saved.</p>
+      <p v-if="error && activeSection === group" class="form-error" role="alert">{{ error }}</p>
+      <p v-if="saved && activeSection === group" class="muted small" aria-live="polite">Saved.</p>
     </section>
     <p v-if="!isOwner" class="muted small">Only owners can change these.</p>
   </SettingsLayout>
@@ -98,5 +177,31 @@ p {
 }
 .hint {
   font-weight: 400;
+}
+.auto {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.delay {
+  max-width: 14rem;
+}
+.caps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.cap-line {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.cap {
+  width: 5rem;
+}
+.what {
+  margin-top: var(--space-2);
 }
 </style>

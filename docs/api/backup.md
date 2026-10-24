@@ -40,6 +40,8 @@ app offers both on Settings → Data, and restore also on the workspaces page
 - **Not in a backup:** people, members, notification channels and
   preferences belong to the server, not the workspace. A brew says who made
   it as `brewedBy` (their email, or `null`) instead of `userId`.
+  `analysis_requests` (when an automatic analysis is due, why one failed,
+  §8) is queue state and isn't backed up either.
 - **`version`** goes up only when an older file can't be restored as is;
   the server upgrades older versions on restore and refuses newer ones.
   New optional columns don't change it (an older file just lacks them).

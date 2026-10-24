@@ -17,7 +17,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   repeatKeeps: ['size', 'doseWater', 'temp', 'grinder', 'grind', 'waterProfile', 'dilution', 'window'],
   steepReminders: true,
 };
-export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: 'light', roastScale: 'names', hiddenFields: [], aiHidden: [] };
+export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: 'light', roastScale: 'names', hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null };
 
 // The signed-in person's display units and the current workspace's settings.
 export function usePreferences() {
