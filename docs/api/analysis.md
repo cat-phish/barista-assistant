@@ -30,10 +30,44 @@ brew.
   request returns `202` with the **same** `jobId` and queues nothing new. Once
   that job finishes (or finally fails), the log can be analyzed again, and each
   run adds a new `llm_analyses` row.
+- **While an automatic analysis waits** (auto-analyze, below): the request
+  runs that job now instead of adding one (same `jobId`), as asked for, so
+  the daily cap doesn't apply. Asking also clears the brew's
+  `analysisDueAt` and `analysisError` (§6).
 - **Getting the result:** there is no job-status endpoint. The frontend polls
   `GET /api/workspaces/:workspaceId/brew-logs/:brewLogId` (§6) until
   `latestAnalysis` is newer than when it requested the analysis (by
   `createdAt`), or uses `GET /api/beans/:beanId/suggestions`.
+
+## Auto-analyze
+
+Owners switch it on under Settings → **AI** (`autoAnalyze`,
+`autoAnalyzeDelayMinutes`, `autoAnalyzeDailyCap`; `docs/api/workspaces.md`
+§2). Then:
+
+- **A rated brew** saved with `POST …/brew-logs` (§6) queues an analysis
+  `autoAnalyzeDelayMinutes` later: a delayed job, same `jobId` as above, data
+  `{ brewLogId, auto: true }`. The brew is read when the job runs, so edits
+  made meanwhile are included; deleting the brew removes the waiting job.
+- **An unrated brew** (Rate later, or no rating given) and a cold brew still
+  steeping queue nothing. The `PATCH` that gives it its first rating (quick
+  rate, edit) or finishes the steep with one queues it to run now, unless
+  it already has an analysis. Brews never rated cost nothing.
+- While it waits, the brew log's `analysisDueAt` (§6) says when; it's
+  cleared once the analysis is saved or skipped.
+- **When the job runs** it's skipped (no API call) if auto-analyze was
+  switched off meanwhile, or if the workspace has made
+  `autoAnalyzeDailyCap` automatic analyses in the last 24 hours; then
+  `analysisError` says "Not analyzed automatically: the workspace's daily
+  limit was reached". Analyses asked for are never capped and don't count.
+  Saved analyses record `auto: true`.
+- Queueing never fails the save: if Redis is unavailable the brew just
+  isn't analyzed automatically.
+
+**Failures:** when every attempt fails, the brew log's `analysisError`
+says so ("The AI service couldn't be reached", or "The AI service refused
+the request" for a rejected key or model); the worker's log has the
+details. Asking again (`POST …/analyze`) clears it.
 
 ## `GET /api/beans/:beanId/suggestions`
 

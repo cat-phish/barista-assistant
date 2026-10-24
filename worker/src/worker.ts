@@ -4,7 +4,7 @@ import { UnrecoverableError, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 import { config } from "./config.js";
 import { pool } from "./db.js";
-import { processBrewAnalysis, type JobResult } from "./processor.js";
+import { failureMessage, processBrewAnalysis, settleRequest, type JobResult } from "./processor.js";
 import { processRateReminder, processSteepReminder, type ReminderResult } from "./reminders.js";
 import { runDbBackup, type BackupResult } from "./dbBackup.js";
 
@@ -34,6 +34,8 @@ worker.on("failed", (job, err) => {
     ? `giving up after attempt ${job.attemptsMade}/${maxAttempts}`
     : `attempt ${job.attemptsMade}/${maxAttempts}, will retry`;
   console.error(`Job ${job.id} failed (${outcome}): ${err.message}`);
+  // Shown on the journal entry with "Try again" (docs/api/analysis.md §8).
+  if (final) void settleRequest(job.data.brewLogId, failureMessage(err instanceof UnrecoverableError)).catch(() => undefined);
 });
 worker.on("error", (err) => console.error("Worker error:", err.message));
 

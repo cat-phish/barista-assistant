@@ -5,12 +5,16 @@
 
 **Queue contract** (constants in `@barista/shared/jobs`):
 
-- Queue `brew-analysis`, job name `analyze`, data `{ "brewLogId": "uuid" }`.
+- Queue `brew-analysis`, job name `analyze`, data `{ "brewLogId": "uuid" }`,
+  plus `"auto": true` for one queued by auto-analyze (§8; delayed, skipped
+  when auto-analyze is off or the daily cap is reached).
 - Job ID `analyze-<brewLogId>`: this is what makes duplicate requests (§8)
   return the existing job.
 - The backend adds jobs with 3 attempts and exponential backoff starting at
   5 s. Completed and failed jobs are removed from Redis. The result lives in
-  `llm_analyses`, and failures are logged by the worker.
+  `llm_analyses`; failures are logged by the worker, and a final one is
+  recorded on the brew (`analysis_requests.error`, shown as the brew log's
+  `analysisError`, §6).
 
 **Configuration (worker env):** `DATABASE_URL` + `DATABASE_PASSWORD`,
 `REDIS_URL` + `REDIS_PASSWORD`, `OPENAI_API_KEY`, and `OPENAI_MODEL`

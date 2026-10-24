@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ALTITUDE_UNITS, REPEAT_KEEPS, ROAST_LEVELS, ROAST_SCALES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
+import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, MAX_AUTO_ANALYZE_DAILY_CAP, REPEAT_KEEPS, ROAST_LEVELS, ROAST_SCALES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
 import { AI_DETAILS } from "@barista/shared/aiDetails";
 import { ROLES } from "./auth/membership.js";
 
@@ -25,6 +25,10 @@ export const workspaceSettingsObject = z
     aiHidden: z
       .array(z.enum(AI_DETAILS))
       .refine((keys) => new Set(keys).size === keys.length, "each detail once"),
+    // Auto-analyze (docs/api/analysis.md §8).
+    autoAnalyze: z.boolean(),
+    autoAnalyzeDelayMinutes: z.literal(AUTO_ANALYZE_DELAYS),
+    autoAnalyzeDailyCap: z.number().int().min(1).max(MAX_AUTO_ANALYZE_DAILY_CAP).nullable(),
   })
   .partial()
   .strict();

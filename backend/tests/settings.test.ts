@@ -8,9 +8,9 @@ describe("workspace settings", () => {
   it("come with every workspace, defaults filled in", async () => {
     const owner = await newUser();
     const created = await owner.agent.post("/api/workspaces").send({ name: "Bar", slug: "settings-bar" });
-    expect(created.body.workspace.settings).toEqual({ recipeRoastLevel: "light", roastScale: "names", hiddenFields: [], aiHidden: [] });
+    expect(created.body.workspace.settings).toEqual({ recipeRoastLevel: "light", roastScale: "names", hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null });
     const list = await owner.agent.get("/api/workspaces");
-    expect(list.body.workspaces[0].settings).toEqual({ recipeRoastLevel: "light", roastScale: "names", hiddenFields: [], aiHidden: [] });
+    expect(list.body.workspaces[0].settings).toEqual({ recipeRoastLevel: "light", roastScale: "names", hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null });
   });
 
   it("owners change them; others get 403; bad values 400", async () => {
@@ -27,8 +27,8 @@ describe("workspace settings", () => {
 
     const ok = await owner.agent.patch(path).send({ recipeRoastLevel: "medium" });
     expect(ok.status).toBe(200);
-    expect(ok.body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "names", hiddenFields: [], aiHidden: [] });
-    expect((await owner.agent.patch(path).send({ roastScale: "levels" })).body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "levels", hiddenFields: [], aiHidden: [] });
+    expect(ok.body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "names", hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null });
+    expect((await owner.agent.patch(path).send({ roastScale: "levels" })).body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "levels", hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null });
     expect((await owner.agent.patch(path).send({ roastScale: "agtron" })).status).toBe(400);
     const list = await barista.agent.get("/api/workspaces");
     expect(list.body.workspaces[0].settings.recipeRoastLevel).toBe("medium");
@@ -45,6 +45,19 @@ describe("workspace settings", () => {
       expect((await owner.agent.patch(path).send({ hiddenFields })).status, JSON.stringify(hiddenFields).slice(0, 40)).toBe(400);
     }
     expect((await owner.agent.get("/api/workspaces")).body.workspaces[0].settings.hiddenFields).toEqual(["brew.tds"]);
+  });
+
+  it("auto-analyze: on/off, a wait of 5, 10, 15 or 30 minutes, no cap or 1-500 a day (docs/api/analysis.md §8)", async () => {
+    const owner = await newUser();
+    const ws = await newWorkspace(owner);
+    const path = `/api/workspaces/${ws.id}/settings`;
+    const ok = await owner.agent.patch(path).send({ autoAnalyze: true, autoAnalyzeDelayMinutes: 15, autoAnalyzeDailyCap: 20 });
+    expect(ok.status).toBe(200);
+    expect(ok.body.settings).toMatchObject({ autoAnalyze: true, autoAnalyzeDelayMinutes: 15, autoAnalyzeDailyCap: 20 });
+    expect((await owner.agent.patch(path).send({ autoAnalyzeDailyCap: null })).body.settings.autoAnalyzeDailyCap).toBeNull();
+    for (const bad of [{ autoAnalyze: "yes" }, { autoAnalyzeDelayMinutes: 7 }, { autoAnalyzeDelayMinutes: "10" }, { autoAnalyzeDailyCap: 0 }, { autoAnalyzeDailyCap: 501 }, { autoAnalyzeDailyCap: 2.5 }]) {
+      expect((await owner.agent.patch(path).send(bad)).status, JSON.stringify(bad)).toBe(400);
+    }
   });
 
   it("aiHidden: AI_DETAILS keys, each once; replaced as a whole (docs/api/llm-contract.md §9)", async () => {
