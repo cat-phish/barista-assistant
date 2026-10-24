@@ -499,7 +499,7 @@ no screen: adding a barista meant calling the API by hand.
   shows as "Make someone else an owner first".
 - No API change; tests now cover the list order, adding (including `404`
   and `409`), changing a role, removing, and a second owner leaving.
-- **"I understand" confirmations** (new `CLAUDE.md` rule 6: major actions
+- **"I understand" confirmations** (new `CLAUDE.md` rule 6, now 7: major actions
   that can't be undone or affect other things get the checkbox, asked
   first): leaving and deleting a workspace, removing a member, demoting
   yourself, changing the web address (now a dialog instead of an inline
@@ -1011,3 +1011,33 @@ free text couldn't be counted. Contract: `api/brew-problems.md` §6b,
 - **The AI** gets each brew's problems by name and is told they're the
   clearest clues, and that an empty list means none were recorded.
 - **Not built:** charting problems over time (added to Statistics).
+
+## Backup and restore (built)
+
+Backlog item 1, part 1, branch `backup-restore`; no migration. The journal
+had no copy and couldn't move to another server. Contract:
+`api/backup.md` §2b.
+
+- **The file:** `{ format, version, exportedAt, workspace, tables }`, every
+  workspace table's rows as stored with their IDs (only links inside the
+  file), `brewedBy` (email) instead of `userId`. People, members and
+  notification channels aren't in it.
+- **How it's built:** `BACKUP_TABLES` lists the tables in insert order and
+  how their rows are found; which column points where comes from the
+  schema's foreign keys (`getTableConfig`), and value checks from the
+  column types, plus small `ENUMS` and `JSON_SCHEMAS` maps for varchar
+  enums and JSON columns. Tests fail if a schema table is neither backed up
+  nor in `NOT_BACKED_UP` (new `CLAUDE.md` rule 8), or points at a table
+  below it.
+- **Restore:** checked whole before anything is written (first problem as
+  a 400 with its path), then one transaction: a new workspace without the
+  default lists, new IDs everywhere, the self-reference (a drink's parent)
+  filled in after, every brew the restorer's, the public menu off. Its own
+  50 MB JSON limit (everything else keeps 100 kB); 413 above it.
+- **Decided:** owners only for backup; restore only into a new workspace
+  (no merging); AI analyses and marks included; restored brews belong to
+  the person restoring.
+- **App:** Settings → Data (Download backup; Restore), and a Restore card on
+  the workspaces page for a new server with no workspace yet.
+- **Not built yet:** CSV export and import/export by list (item 1 stays in
+  the backlog for them).

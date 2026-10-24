@@ -41,7 +41,10 @@ Where the app's choices live, and what you can switch on, off or take out.
 
 ### 1. Backup, restore, import and export
 
-- **Status:** idea
+- **Status:** in progress. **Backup and restore are built** (branch
+  `backup-restore`, `docs/api/backup.md` §2b, roadmap "Backup and
+  restore"); CSV export and import/export by list remain, built on the same
+  file format.
 - **Why:** the journal is months of brews and dialing-in. There's no way to
   keep a copy, move it to another server, or look at it in a spreadsheet.
   Setting up a second workspace (or sharing a recipe or bean list with

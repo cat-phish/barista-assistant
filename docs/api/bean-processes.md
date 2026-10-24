@@ -69,4 +69,4 @@ Custom processes only. Its beans lose the process (`processId` becomes `null`).
   (hide it instead).
 
 > **Frontend requirement:** load the usage first; when beans use it, list
-> them and require "I understand" before deleting (CLAUDE.md rule 6).
+> them and require "I understand" before deleting (CLAUDE.md rule 7).

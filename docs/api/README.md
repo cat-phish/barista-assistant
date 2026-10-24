@@ -12,6 +12,7 @@ means drinks, wherever you see it (code comments use
 | §1 | [auth.md](auth.md) | Authentication (JWT in httpOnly Cookie) |
 | §1b | [notifications.md](notifications.md) | Notification channels and rate-later reminders |
 | §2 | [workspaces.md](workspaces.md) | Workspaces |
+| §2b | [backup.md](backup.md) | Backup and Restore (a workspace as one file) |
 | §3 | [brewers.md](brewers.md) | Brewers |
 | §3b | [grinders.md](grinders.md) | Grinders |
 | §3c | [water-profiles.md](water-profiles.md) | Water Profiles |

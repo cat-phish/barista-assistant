@@ -14,6 +14,7 @@ import { brewersRouter } from "./routes/brewers.js";
 import { grindersRouter } from "./routes/grinders.js";
 import { waterProfilesRouter } from "./routes/waterProfiles.js";
 import { prepToolsRouter } from "./routes/prepTools.js";
+import { backupRouter, RESTORE_PATH } from "./routes/backup.js";
 import { brewProblemsRouter } from "./routes/brewProblems.js";
 import { ingredientsRouter } from "./routes/ingredients.js";
 import { drinkCategoriesRouter } from "./routes/drinkCategories.js";
@@ -38,7 +39,11 @@ export const app = express();
 app.set("trust proxy", config.trustProxy);
 
 app.use(cors({ origin: config.corsOrigin, credentials: true }));
-app.use(express.json());
+// A restore uploads a whole workspace (docs/api/backup.md §2b); everything
+// else keeps the default 100 kB limit.
+const jsonBody = express.json();
+const restoreBody = express.json({ limit: "50mb" });
+app.use((req, res, next) => (req.path === RESTORE_PATH ? restoreBody : jsonBody)(req, res, next));
 app.use(cookieParser());
 
 app.get("/health", async (_req: Request, res: Response<HealthResponse>) => {
@@ -72,6 +77,7 @@ app.use("/api/workspaces/:workspaceId/recipes", recipesRouter);
 app.use("/api/workspaces/:workspaceId/brew-logs", brewLogsRouter);
 app.use("/api/beans", suggestionsRouter);
 app.use("/api/brew-logs", analyzeRouter);
+app.use("/api/workspaces", backupRouter); // GET /:workspaceId/backup, POST /restore
 app.use("/api/workspaces", workspacesRouter);
 
 app.use("/api", (_req: Request, res: Response) => {
@@ -82,6 +88,10 @@ app.use("/api", (_req: Request, res: Response) => {
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof SyntaxError && "body" in err) {
     sendError(res, 400, "Malformed JSON body");
+    return;
+  }
+  if (typeof err === "object" && err !== null && "type" in err && err.type === "entity.too.large") {
+    sendError(res, 413, "Request body too large");
     return;
   }
   console.error("Unhandled error:", err);

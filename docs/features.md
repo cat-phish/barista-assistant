@@ -15,6 +15,12 @@ upcoming work is in `roadmap.md`.
   bean and recipe fields the bar doesn't use, for everyone. Hidden fields
   keep what's recorded (shown again when editing something that has a value)
   and still reach the AI.
+- **Backup and restore:** Settings → Data. Owners download the whole
+  workspace as one JSON file (lists, beans, equipment, recipes, drinks, the
+  menu, and every brew with its marks, prep, problems and AI suggestions).
+  Anyone signed in can restore a backup, from Settings → Data or the
+  workspaces page, as a **new** workspace they own: every brew becomes
+  theirs, the public menu starts off, members are invited again.
 
 ## Beans
 - Roaster, coffee name, process, **roast level** (light → dark, optional),

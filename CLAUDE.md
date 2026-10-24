@@ -71,3 +71,8 @@
    abandoning a brew, and deleting things nothing uses. When building or
    changing an action that seems to qualify, **ask the user before adding
    the checkbox** to it; don't add it unasked.
+8. **Backups cover every table:** a new table in the schema goes into a
+   workspace backup (`BACKUP_TABLES` in `backend/src/backup.ts`, in insert
+   order, with its enum and JSON columns) or is left out on purpose
+   (`NOT_BACKED_UP`), per `docs/api/backup.md` §2b. `backup.test.ts` fails
+   until it's decided.

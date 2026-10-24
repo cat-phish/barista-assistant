@@ -98,4 +98,4 @@ Custom styles only. Its recipes lose the style (`styleId` becomes `null`).
   (hide it instead).
 
 > **Frontend requirement:** load the usage first; when recipes use it, list
-> them and require "I understand" before deleting (CLAUDE.md rule 6).
+> them and require "I understand" before deleting (CLAUDE.md rule 7).
