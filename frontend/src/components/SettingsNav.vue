@@ -20,6 +20,7 @@ const workspaces = useWorkspaceStore();
       <RouterLink :to="{ name: 'settings-defaults' }" active-class="active">Defaults</RouterLink>
       <RouterLink :to="{ name: 'settings-fields' }" active-class="active">Fields</RouterLink>
       <RouterLink :to="{ name: 'settings-lists' }" active-class="active">Lists</RouterLink>
+      <RouterLink :to="{ name: 'settings-data' }" active-class="active">Data</RouterLink>
     </template>
   </nav>
 </template>

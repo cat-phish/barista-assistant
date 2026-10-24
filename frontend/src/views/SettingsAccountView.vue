@@ -55,7 +55,7 @@ async function changePassword(): Promise<void> {
   }
 }
 
-// --- Delete account: re-enter the password and tick "I understand" (CLAUDE.md rule 6) ---
+// --- Delete account: re-enter the password and tick "I understand" (CLAUDE.md rule 7) ---
 interface OwnedWorkspace {
   id: string;
   name: string;

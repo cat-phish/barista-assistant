@@ -108,7 +108,7 @@ const pending = ref<Bean | null>(null);
 const brewLogCount = ref<number | null>(null);
 const busy = ref(false);
 const dialogError = ref('');
-const understood = ref(false); // deleting the history needs "I understand" (CLAUDE.md rule 6)
+const understood = ref(false); // deleting the history needs "I understand" (CLAUDE.md rule 7)
 
 function askDelete(bean: Bean): void {
   pending.value = bean;

@@ -80,4 +80,4 @@ behaviour; their recipes and brews don't change.
   (hide it instead).
 
 > **Frontend requirement:** load the usage first; when brewers use it, say
-> they'll move and require "I understand" before deleting (CLAUDE.md rule 6).
+> they'll move and require "I understand" before deleting (CLAUDE.md rule 7).

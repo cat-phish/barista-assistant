@@ -56,6 +56,7 @@ export const router = createRouter({
     { path: '/settings/fields', name: 'settings-fields', component: () => import('../views/SettingsFieldsView.vue'), meta: { requiresWorkspace: true } },
     { path: '/settings/workspace', name: 'settings-workspace', component: () => import('../views/SettingsWorkspaceView.vue'), meta: { requiresWorkspace: true } },
     { path: '/settings/members', name: 'settings-members', component: () => import('../views/SettingsMembersView.vue'), meta: { requiresWorkspace: true } },
+    { path: '/settings/data', name: 'settings-data', component: () => import('../views/SettingsDataView.vue'), meta: { requiresWorkspace: true } },
     { path: '/beans', name: 'beans', component: () => import('../views/BeansView.vue'), meta: { requiresWorkspace: true } },
     { path: '/beans/archived', name: 'beans-archived', component: () => import('../views/BeansView.vue'), props: { archived: true }, meta: { requiresWorkspace: true } },
     { path: '/beans/new', name: 'bean-new', component: () => import('../views/BeanFormView.vue'), meta: { requiresWorkspace: true, requiresEditor: true } },

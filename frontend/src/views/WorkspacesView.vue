@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ApiError, errorMessage } from '../api/client';
 import AppHeader from '../components/AppHeader.vue';
+import RestoreBackup from '../components/RestoreBackup.vue';
 import { ROLE_LABELS } from '../lib/roles';
 import { SLUG_PATTERN, slugify } from '../lib/slug';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -112,6 +113,13 @@ async function create(): Promise<void> {
           {{ creating ? 'Creating…' : 'Create workspace' }}
         </button>
       </form>
+    </section>
+
+    <!-- Moving to this server: a backup from Settings → Data elsewhere (docs/api/backup.md §2b). -->
+    <section v-if="!loading && !loadError" class="card stack">
+      <h2>Restore from a backup</h2>
+      <p class="muted small">A backup file from Settings → Data becomes a new workspace here.</p>
+      <RestoreBackup />
     </section>
   </main>
 </template>

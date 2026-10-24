@@ -91,7 +91,7 @@ async function setRole(member: Member, next: Role): Promise<void> {
 type Pending = { kind: 'demote'; member: Member; role: Role } | { kind: 'remove'; member: Member } | { kind: 'leave' };
 const pending = ref<Pending | null>(null);
 const pendingError = ref('');
-const understood = ref(false); // every one of these needs "I understand" (CLAUDE.md rule 6)
+const understood = ref(false); // every one of these needs "I understand" (CLAUDE.md rule 7)
 const dialogTitle = computed(() => {
   const p = pending.value;
   if (!p) return '';

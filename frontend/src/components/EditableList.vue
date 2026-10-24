@@ -4,7 +4,7 @@
 // entries. An optional choice goes with each custom entry (a style's "brews
 // like"): asked when adding, shown and changeable on the row. Built-ins (builtin set) can be renamed and hidden but not deleted.
 // Deleting goes through DeleteDialog, so what uses it is listed first and an
-// "I understand" is needed when anything does (CLAUDE.md rule 6).
+// "I understand" is needed when anything does (CLAUDE.md rule 7).
 import { computed, ref } from 'vue';
 import { ApiError, errorMessage } from '../api/client';
 import type { DeletableKind, Usage } from '../lib/deleting';

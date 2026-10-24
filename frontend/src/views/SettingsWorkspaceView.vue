@@ -31,7 +31,7 @@ const detailsChanged = computed(() => name.value.trim() !== workspaces.current?.
 const canSaveDetails = computed(() => detailsChanged.value && name.value.trim().length > 0 && !slugInvalid.value && !savingDetails.value);
 
 // A new web address breaks the old link and printed QR codes, so it's
-// confirmed with "I understand" first (CLAUDE.md rule 6).
+// confirmed with "I understand" first (CLAUDE.md rule 7).
 const confirmingSlug = ref(false);
 const slugUnderstood = ref(false);
 function submitDetails(): void {

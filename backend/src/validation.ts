@@ -10,7 +10,7 @@ export const SLUG_PATTERN = /^[a-z0-9-]{3,64}$/;
 
 // Settings PATCH bodies (docs/api/workspaces.md §2, auth.md §1): any non-empty
 // subset of the keys; unknown keys are refused so a typo isn't silently kept.
-export const workspaceSettingsSchema = z
+export const workspaceSettingsObject = z
   .object({
     recipeRoastLevel: z.enum(ROAST_LEVELS),
     roastScale: z.enum(ROAST_SCALES),
@@ -22,8 +22,10 @@ export const workspaceSettingsSchema = z
       .refine((keys) => new Set(keys).size === keys.length, "each field once"),
   })
   .partial()
-  .strict()
-  .refine((body) => Object.keys(body).length > 0, "Provide at least one setting");
+  .strict();
+// A backup (docs/api/backup.md §2b) takes workspaceSettingsObject as stored,
+// where {} is fine.
+export const workspaceSettingsSchema = workspaceSettingsObject.refine((body) => Object.keys(body).length > 0, "Provide at least one setting");
 
 export const preferencesSchema = z
   .object({

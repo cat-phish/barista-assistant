@@ -60,7 +60,7 @@ async function move(index: number, by: -1 | 1): Promise<void> {
 }
 
 const pending = ref<DrinkCategory | null>(null);
-const understood = ref(false); // its drinks lose their category: "I understand" (CLAUDE.md rule 6)
+const understood = ref(false); // its drinks lose their category: "I understand" (CLAUDE.md rule 7)
 function askDelete(c: DrinkCategory): void {
   understood.value = false;
   pending.value = c;
