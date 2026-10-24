@@ -30,8 +30,8 @@ and fix the references.
 - E. Insights: 11
 - F. Bar & menu: 12–14
 - G. Home roasting: 15
-- H. Accounts: 16
-- I. Deployment & the app: 17
+- H. Accounts: 16–17
+- I. Deployment & the app: 18
 
 ---
 
@@ -475,13 +475,38 @@ What the analysis worker sends to the LLM and what comes back.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
+### 17. Email verification
+
+- **Status:** idea
+- **Why:** anyone can register any address today, and nothing checks it's
+  theirs. That's why server admin is granted on the server rather than by
+  email, and it limits what an email can be trusted for: password reset
+  (item 16), inviting a member by email, or notifications by email.
+- **Approach:**
+  - On registering (and on any later email change), send a link with a
+    short-lived, single-use token; the account is marked verified when it's
+    opened. Unverified accounts can sign in but see a "check your email"
+    banner with a resend button.
+  - Outgoing mail through SMTP settings in `.env` (host, port, user,
+    password, from); without them, verification is off and the app says so.
+  - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
+    from workspaces until it's verified.
+  - Shares the mail and token pieces with password reset (item 16).
+- **Size:** M (mail is new to the stack).
+- **Depends on:** nothing; pairs with 16.
+- **Open questions:**
+  - Block unverified accounts, or only remind them?
+  - What happens to accounts that existed before verification (treat as
+    verified, or ask them once)?
+  - Rate limits on resending, and how long a link stays valid.
+
 ---
 
 ## I. Deployment & the app
 
 How the app is served and installed.
 
-### 17. Serve the app as an installable PWA
+### 18. Serve the app as an installable PWA
 
 - **Status:** idea
 - **Why:** the PWA is configured (`vite-plugin-pwa`, `frontend/vite.config.ts`)

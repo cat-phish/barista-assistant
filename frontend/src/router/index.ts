@@ -9,7 +9,7 @@ declare module 'vue-router' {
     requiresWorkspace?: boolean; // implies requiresAuth
     guestOnly?: boolean; // login/register: logged-in users go home
     requiresEditor?: boolean; // owner or barista in the current workspace (viewers are read-only)
-    requiresAdmin?: boolean; // a server admin (ADMIN_EMAILS); implies requiresAuth
+    requiresAdmin?: boolean; // a server admin (granted on the server); implies requiresAuth
   }
 }
 

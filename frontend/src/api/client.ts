@@ -60,10 +60,16 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 // A file the server sends (e.g. a CSV), as a Blob; errors as for request().
-async function file(path: string): Promise<Blob> {
+// With a body it's a POST (e.g. a password to confirm the download).
+async function file(path: string, body?: unknown): Promise<Blob> {
   let res: Response;
   try {
-    res = await fetch(`${API_URL}${path}`, { credentials: 'include' });
+    res = await fetch(
+      `${API_URL}${path}`,
+      body === undefined
+        ? { credentials: 'include' }
+        : { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+    );
   } catch {
     throw new ApiError(0, "Can't reach the server. Check your connection and try again.");
   }

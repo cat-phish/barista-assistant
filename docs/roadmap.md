@@ -1092,8 +1092,12 @@ Backlog item "Scheduled server backups", branch `server-backups`, migration
 0061. Workspace backups were manual, and nothing covered accounts.
 Contract: `api/server.md` §10.
 
-- **Server admins:** `ADMIN_EMAILS` (env); the user object gains `isAdmin`,
-  and admins get Settings → Server → Backups. First server-wide setting:
+- **Server admins:** a `users.is_admin` flag (migration 0062) granted only
+  from the server (`npm run admin -- grant <email>`); the user object gains
+  `isAdmin`, and admins get Settings → Server → Backups. A first draft used
+  an `ADMIN_EMAILS` list, dropped before merging: with open sign-ups and
+  unverified emails, anyone could register an admin address nobody had
+  claimed yet. First server-wide setting:
   a `server_settings` table (key → JSON), left out of workspace backups.
 - **Schedule:** off / daily / weekly at an hour in `BACKUP_TIMEZONE`, keep
   1–90. A BullMQ job scheduler on a new `maintenance` queue, synced on save

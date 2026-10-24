@@ -118,6 +118,10 @@ export const users = mysqlTable("users", {
   // every older session invalid.
   sessionVersion: int("session_version").default(0).notNull(),
   preferences: jsonValue<Partial<UserPreferences>>("preferences"), // null = all defaults
+  // A server admin (docs/api/server.md §10). Only granted on the server
+  // (`npm run admin -- grant <email>`), never through the API, so it can't
+  // be claimed by registering an address.
+  isAdmin: boolean("is_admin").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

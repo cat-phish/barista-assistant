@@ -4,10 +4,31 @@
 > [README.md](README.md); a bare `§N` refers to that index.
 
 What applies to the whole server rather than a workspace. Only **server
-admins** use it: the accounts whose emails are in `ADMIN_EMAILS` (comma
-separated, any case; empty = nobody). The user object (§1) says
-`"isAdmin": true` for them, and the app then shows Settings → Server.
-Everyone else gets `403` here.
+admins** use it. The user object (§1) says `"isAdmin": true` for them, and
+the app then shows Settings → Server. Everyone else gets `403` here.
+
+## Server admins
+
+Admin is a flag on the account (`users.is_admin`), granted **only on the
+server**, never through the API, so it can't be claimed by registering an
+address (emails aren't verified). The account must exist first:
+
+```sh
+docker compose exec backend npm run admin -- grant you@example.com
+docker compose exec backend npm run admin -- revoke you@example.com
+docker compose exec backend npm run admin -- list
+```
+
+(In development: `npx tsx src/cli/admin.ts grant …` in `backend/`.) It
+takes effect on the next request; nobody is an admin until one is granted.
+
+## On a server open to the internet
+
+- `ALLOW_REGISTRATION=false` closes sign-ups (§1): create the accounts
+  first, then close it. Existing accounts still log in.
+- `BACKUP_DOWNLOADS=false` keeps dumps on the server: admins see and run
+  backups but copy the files from `./backups` themselves.
+- Downloading a dump always asks for the admin's password again.
 
 ## Scheduled database backups
 
@@ -38,7 +59,7 @@ mounted at `/backups`), on the admins' schedule. Unlike a workspace backup
 
 - **Auth Required:** `true` (server admin)
 - **Success (`200 OK`):**
-  `{ "settings": {...}, "status": {...}, "timezone": "UTC", "nextRunAt": "ISO" | null, "files": [ { "name", "bytes", "createdAt" } ] }`,
+  `{ "settings": {...}, "status": {...}, "timezone": "UTC", "nextRunAt": "ISO" | null, "files": [ { "name", "bytes", "createdAt" } ], "downloadsEnabled": true }`,
   files newest first (only names the worker writes).
 
 ### `PUT /api/server/backups/settings`
@@ -54,11 +75,17 @@ mounted at `/backups`), on the admins' schedule. Unlike a workspace backup
 A dump now, outside the schedule. `202 { "queued": true }`; `503` if the
 queue can't be reached. The result shows in `status` when it's done.
 
-### `GET /api/server/backups/files/:name`
+### `POST /api/server/backups/files/:name`
 
-The dump as a download. `404` for a name that isn't a dump file (so no
-paths) or doesn't exist. It holds every account's data, including password
-hashes.
+The dump as a download, after the admin's password again (a stolen session
+alone isn't enough; rate-limited together with logins).
+
+- **Body:** `{ "password": "…" }`
+- **Errors:** `400` no password; `401` wrong password; `403` downloads are
+  turned off (`BACKUP_DOWNLOADS=false`); `404` a name that isn't a dump file
+  (so no paths) or doesn't exist; `429` too many tries.
+
+It holds every account's data, including password hashes.
 
 ## Restoring a dump
 

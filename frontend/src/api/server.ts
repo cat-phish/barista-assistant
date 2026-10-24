@@ -14,11 +14,13 @@ export interface ServerBackups {
   timezone: string;
   nextRunAt: string | null;
   files: Array<{ name: string; bytes: number; createdAt: string }>;
+  downloadsEnabled: boolean; // false: dumps stay on the server (BACKUP_DOWNLOADS)
 }
 
 export const serverApi = {
   backups: () => api.get<ServerBackups>('/api/server/backups'),
   saveBackupSettings: (settings: BackupSettings) => api.put<ServerBackups>('/api/server/backups/settings', settings),
   backUpNow: () => api.post<{ queued: true }>('/api/server/backups/run'),
-  backupFile: (name: string) => api.file(`/api/server/backups/files/${encodeURIComponent(name)}`),
+  // The admin's password again: a dump holds every account's data.
+  backupFile: (name: string, password: string) => api.file(`/api/server/backups/files/${encodeURIComponent(name)}`, { password }),
 };

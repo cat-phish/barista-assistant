@@ -21,12 +21,12 @@ export const config = {
   jwtSecret,
 } as const;
 
-// Server admins (docs/api/server.md §10): the emails in ADMIN_EMAILS, comma
-// separated, any case. Read on each call, so tests can change it.
-export function isAdminEmail(email: string): boolean {
-  const admins = (process.env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
-  return admins.includes(email.trim().toLowerCase());
-}
+// Switches read on each call, so tests can change them.
+// ALLOW_REGISTRATION=false closes sign-ups (docs/api/auth.md §1).
+export const registrationOpen = (): boolean => process.env.ALLOW_REGISTRATION?.trim().toLowerCase() !== "false";
+// BACKUP_DOWNLOADS=false keeps database dumps on the server: admins can't
+// download them through the app (docs/api/server.md §10).
+export const backupDownloadsEnabled = (): boolean => process.env.BACKUP_DOWNLOADS?.trim().toLowerCase() !== "false";
 // Where scheduled database dumps are written (the worker) and listed from.
 export const backupDir = (): string => process.env.BACKUP_DIR ?? "/backups";
 // The zone the backup hour is in; an unknown zone falls back to UTC.

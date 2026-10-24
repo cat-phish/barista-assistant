@@ -46,10 +46,12 @@ services:
       # The image defaults to production, which marks the session cookie
       # Secure (HTTPS only). This stack serves plain http://localhost.
       - NODE_ENV=development
-      # Server admins (Settings → Server): emails, comma separated.
-      - ADMIN_EMAILS=${ADMIN_EMAILS:-}
+      # false closes sign-ups (a public server); existing accounts still log in.
+      - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-true}
       # The zone scheduled backups' hour is in (e.g. America/Los_Angeles).
       - BACKUP_TIMEZONE=${BACKUP_TIMEZONE:-UTC}
+      # false keeps database dumps on the server (no downloads in the app).
+      - BACKUP_DOWNLOADS=${BACKUP_DOWNLOADS:-true}
     # Lists and serves the dumps the worker writes (read-only here).
     volumes:
       - ./backups:/backups:ro

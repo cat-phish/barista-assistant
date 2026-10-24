@@ -30,8 +30,17 @@ below is `403`, so a typo doesn't look like a logout.
 - **Body:** `{ "email": "a@b.com", "password": "min 8 chars" }`
 - **Success (`201 Created`):** sets the `session` cookie and returns
   `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... }, "isAdmin": false } }`
-  (`isAdmin`: a server admin, from `ADMIN_EMAILS`; §10)
-- **Errors:** `400` invalid body; `409` email already registered.
+  (`isAdmin`: a server admin, granted on the server; §10)
+- **Errors:** `400` invalid body; `403` registration is closed
+  (`ALLOW_REGISTRATION=false`); `409` email already registered.
+
+## `GET /api/auth/registration`
+
+- **Auth Required:** `false`
+- **Success (`200 OK`):** `{ "open": true }`: whether this server takes new
+  accounts. `ALLOW_REGISTRATION=false` closes it (e.g. a server open to the
+  internet; §10); existing accounts still log in. The app hides "Create an
+  account" when it's closed.
 
 ## `POST /api/auth/login`
 

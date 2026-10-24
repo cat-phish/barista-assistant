@@ -3,8 +3,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { backupCron, DB_BACKUP_JOB, DB_BACKUP_SCHEDULER, dbBackupFileName } from "@barista/shared/jobs";
+import { listAdmins, setAdmin } from "../src/adminAccess.js";
 import { maintenanceQueue } from "../src/queue.js";
-import { newUser, type TestUser } from "./helpers.js";
+import { anonymous, newUser, type TestUser } from "./helpers.js";
 
 const BASE = "/api/server/backups";
 let dir: string;
@@ -14,12 +15,13 @@ beforeEach(async () => {
   dir = await mkdtemp(path.join(tmpdir(), "barista-backups-"));
   process.env.BACKUP_DIR = dir;
   admin = await newUser();
-  process.env.ADMIN_EMAILS = ` other@example.com, ${admin.email.toUpperCase()} `;
+  expect(await setAdmin(` ${admin.email.toUpperCase()} `, true)).toBe(true);
 });
 afterEach(() => {
-  delete process.env.ADMIN_EMAILS;
   delete process.env.BACKUP_DIR;
   delete process.env.BACKUP_TIMEZONE;
+  delete process.env.BACKUP_DOWNLOADS;
+  delete process.env.ALLOW_REGISTRATION;
 });
 
 describe("server backups (docs/api/server.md §10)", () => {
@@ -73,17 +75,57 @@ describe("server backups (docs/api/server.md §10)", () => {
       [newer, 6],
       [older, 5],
     ]);
-    const download = await admin.agent.get(`${BASE}/files/${newer}`).buffer(true).parse((res, done) => {
-      let body = "";
-      res.on("data", (c: Buffer) => (body += c.toString()));
-      res.on("end", () => done(null, body));
-    });
+    const fetchFile = (name: string, password = admin.password) =>
+      admin.agent
+        .post(`${BASE}/files/${name}`)
+        .send({ password })
+        .buffer(true)
+        .parse((res, done) => {
+          let body = "";
+          res.on("data", (c: Buffer) => (body += c.toString()));
+          res.on("end", () => done(null, body));
+        });
+    const download = await fetchFile(newer);
     expect(download.status).toBe(200);
     expect(download.headers["content-disposition"]).toContain(newer);
     expect(download.body).toBe("newer!");
-    expect((await admin.agent.get(`${BASE}/files/notes.txt`)).status).toBe(404);
-    expect((await admin.agent.get(`${BASE}/files/..%2F..%2Fetc%2Fpasswd`)).status).toBe(404);
-    expect((await admin.agent.get(`${BASE}/files/${dbBackupFileName(new Date("2020-01-01T00:00:00Z"))}`)).status).toBe(404);
+    // The password again, every time: a session alone isn't enough.
+    expect((await fetchFile(newer, "not-my-password")).status).toBe(401);
+    expect((await admin.agent.post(`${BASE}/files/${newer}`).send({})).status).toBe(400);
+    expect((await fetchFile("notes.txt")).status).toBe(404);
+    expect((await fetchFile("..%2F..%2Fetc%2Fpasswd")).status).toBe(404);
+    expect((await fetchFile(dbBackupFileName(new Date("2020-01-01T00:00:00Z")))).status).toBe(404);
+    expect((await admin.agent.get(`${BASE}/files/${newer}`)).status).toBe(404); // no GET
+
+    // Turned off: they stay on the server.
+    process.env.BACKUP_DOWNLOADS = "false";
+    expect((await admin.agent.get(BASE)).body.downloadsEnabled).toBe(false);
+    expect((await fetchFile(newer)).status).toBe(403);
+  });
+});
+
+describe("who is a server admin (docs/api/server.md §10)", () => {
+  it("only the server grants it: not by registering, not through the API", async () => {
+    const someone = await newUser();
+    expect(await listAdmins()).toEqual([admin.email]);
+    expect((await someone.agent.patch("/api/auth/me/preferences").send({ isAdmin: true })).status).toBe(400);
+    expect((await someone.agent.get("/api/auth/me")).body.user.isAdmin).toBe(false);
+    expect(await setAdmin("nobody@example.com", true)).toBe(false); // the account must exist
+    expect(await setAdmin(admin.email, false)).toBe(true);
+    expect((await admin.agent.get(BASE)).status).toBe(403); // takes effect at once
+  });
+});
+
+describe("closing registration (docs/api/auth.md §1)", () => {
+  it("refuses new accounts but keeps signing in", async () => {
+    const guest = anonymous();
+    expect((await guest.get("/api/auth/registration")).body).toEqual({ open: true });
+    process.env.ALLOW_REGISTRATION = "false";
+    expect((await guest.get("/api/auth/registration")).body).toEqual({ open: false });
+    const refused = await guest.post("/api/auth/register").send({ email: "late@example.com", password: "long-enough-password" });
+    expect(refused.status).toBe(403);
+    expect(refused.body.error).toMatch(/closed/);
+    expect((await guest.post("/api/auth/login").send({ email: admin.email, password: admin.password })).status).toBe(200);
   });
 });
 
