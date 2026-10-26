@@ -18,7 +18,7 @@ export const REPEAT_OPTIONS: Array<{ key: RepeatKeep; label: string; hint?: stri
   { key: 'grinder', label: 'Grinder', hint: 'Off: your last grinder, or the recipe’s default' },
   { key: 'grind', label: 'Grind setting and speed', hint: 'On the same grinder. Off: your last setting with it, as usual' },
   { key: 'waterProfile', label: 'Water profile', hint: 'Off: your default water' },
-  { key: 'dilution', label: 'Dilution served (cold styles)', hint: 'Off: the recipe’s' },
+  { key: 'dilution', label: 'Dilution served (cold styles, concentrates)', hint: 'Off: the recipe’s' },
   { key: 'window', label: 'Steep or finish time (cold styles)', hint: 'Off: the recipe’s' },
   { key: 'prepTools', label: 'Prep checklist', hint: 'Ticks the tools that brew used' },
   { key: 'grinderWeights', label: 'Beans in / grounds out' },

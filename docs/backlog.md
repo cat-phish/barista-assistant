@@ -25,13 +25,13 @@ and fix the references.
 **Contents**
 - A. Settings & configuration: 1
 - B. Beans: 2
-- C. Brewing & logging: 3–6
-- D. AI suggestions: 7–8
-- E. Insights: 9
-- F. Bar & menu: 10–12
-- G. Home roasting: 13
-- H. Accounts: 14–15
-- I. Deployment & the app: 16
+- C. Brewing & logging: 3–4
+- D. AI suggestions: 5–6
+- E. Insights: 7
+- F. Bar & menu: 8–10
+- G. Home roasting: 11
+- H. Accounts: 12–13
+- I. Deployment & the app: 14
 
 ---
 
@@ -113,55 +113,7 @@ What's recorded about each coffee.
 
 Recording a brew: what's measured, and how fast it is to log.
 
-### 3. Flash chilled (brewed onto ice)
-
-- **Status:** in progress (branch `flash-chilled`).
-- **Why:** cold brew is built (roadmap: cold brew refinements), but iced
-  coffee is often brewed hot onto ice: **Japanese iced**, a pour over that
-  drips straight onto ice in the server. The ice is part of the recipe's
-  water, which the ratio and the yield estimate don't account for today.
-- **Approach (agreed):**
-  - An optional **ice** amount (g) on filter recipes and brews, not a new
-    style: "250 g: 150 g hot water + 100 g ice". Any style can have it, so
-    a V60 onto ice still brews like pour over.
-  - The ratio is coffee : (hot water + ice), with the two shown apart. Pour
-    targets count the hot water only; scaling a batch scales the ice too.
-  - The yield is the server weighed with the ice in it (the scale counts
-    the ice anyway), so there's no second yield field.
-  - **No TDS** for brews made onto ice: the reading isn't useful when part
-    of the ice may not have melted, so the TDS field is greyed out and the
-    API refuses one.
-  - The AI is told the brew was flash chilled: brighter and more aromatic
-    than cold brew, judged as served.
-- **Size:** M
-- **Depends on:** nothing.
-- **Decided:** ice is a recipe field (grams), not an ingredient or a style.
-  A hot concentrate poured over ice afterwards is item 4, not this one.
-
-### 4. Concentrate (brewed strong, then diluted)
-
-- **Status:** idea
-- **Why:** some iced coffee is a hot concentrate poured over ice or cut with
-  water afterwards (e.g. a hot OXO Rapid Brewer concentrate over ice). Unlike
-  flash chilled (item 3), the TDS is read on the concentrate before it's
-  diluted, so extraction yield still works.
-- **Approach:**
-  - The cold styles' dilution already fits: `dilutionRatio` and
-    `dilutionWith` (water, milk, **ice**, other) are accepted on any recipe
-    and brew; the forms only show them for cold styles. Show them for a
-    concentrate too.
-  - Probably a style ("Concentrate", brewing like pour over or immersion)
-    that shows the dilution fields, so extraction yield keeps going by
-    `brewsLike`.
-  - The AI is told TDS and yield are the concentrate's, and the cup is
-    judged as served, after the dilution.
-- **Size:** S–M
-- **Depends on:** nothing.
-- **Open questions:**
-  - A style, or a "served diluted" switch on any filter recipe?
-  - Is the name right ("Concentrate", "Brewed strong", "Over ice")?
-
-### 5. Grind settings for multi-ring grinders
+### 3. Grind settings for multi-ring grinders
 
 - **Status:** idea
 - **Why:** grind settings are numbers on the grinder's dial now (roadmap:
@@ -186,7 +138,7 @@ Recording a brew: what's measured, and how fast it is to log.
   - Which grinders need it (1Zpresso, Kingrinder, Timemore with a dial)?
   - Should the AI see the total clicks, the formatted text, or both?
 
-### 6. Change the brew window for any brew on the brew page
+### 4. Change the brew window for any brew on the brew page
 
 - **Status:** idea
 - **Why:** cold styles can now change their steep or finish window on
@@ -216,7 +168,7 @@ Recording a brew: what's measured, and how fast it is to log.
 
 What the analysis worker sends to the LLM and what comes back.
 
-### 7. Build bar items from plain text (AI)
+### 5. Build bar items from plain text (AI)
 
 - **Status:** idea
 - **Why:** recipes, drinks and other bar items often come as text: a
@@ -244,7 +196,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Units and step types the text describes loosely ("pour to about 100 ml,
     wait 30 s"): how sure must the AI be before filling a field?
 
-### 8. Review and test the espresso dose and shot weight suggestions
+### 6. Review and test the espresso dose and shot weight suggestions
 
 - **Status:** planned
 - **Why:** dose and shot weight changes for espresso (roadmap: espresso dose
@@ -284,7 +236,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## E. Insights
 
-### 9. Statistics and graphs
+### 7. Statistics and graphs
 
 - **Status:** idea
 - **Why:** the brew history is a list. Trends (is this bean getting better
@@ -313,7 +265,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## F. Bar & menu
 
-### 10. Ingredient prep and stock
+### 8. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -330,7 +282,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should a finished cold brew batch (roadmap: cold brew refinements) be
     stock the same way, with each glass served taken from it and rated?
 
-### 11. Public menu: branding and sizes
+### 9. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
@@ -344,7 +296,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
-### 12. Drink categories: what else they could do
+### 10. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -363,7 +315,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## G. Home roasting
 
-### 13. Roasting: green stock, roast logs, resting
+### 11. Roasting: green stock, roast logs, resting
 
 - **Status:** idea
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
@@ -394,7 +346,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## H. Accounts
 
-### 14. Account management and password reset
+### 12. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -425,13 +377,13 @@ What the analysis worker sends to the LLM and what comes back.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 15. Email verification
+### 13. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 14), inviting a member by email, or notifications by email.
+  (item 12), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -441,9 +393,9 @@ What the analysis worker sends to the LLM and what comes back.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 14).
+  - Shares the mail and token pieces with password reset (item 12).
 - **Size:** M (mail is new to the stack).
-- **Depends on:** nothing; pairs with 13.
+- **Depends on:** nothing; pairs with 12.
 - **Open questions:**
   - Block unverified accounts, or only remind them?
   - What happens to accounts that existed before verification (treat as
@@ -456,7 +408,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 How the app is served and installed.
 
-### 16. Serve the app as an installable PWA
+### 14. Serve the app as an installable PWA
 
 - **Status:** idea
 - **Why:** the PWA is configured (`vite-plugin-pwa`, `frontend/vite.config.ts`)

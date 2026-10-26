@@ -1210,3 +1210,55 @@ lever. Contract: `api/llm-contract.md` §9.
   weight.
 - **Decided:** pre-infusion and profile changes aren't fields; the prompt
   sends them to `nextStep` when the machine allows them.
+
+## Flash chilled (built)
+
+Backlog item "Flash chilled (brewed onto ice)", branch `flash-chilled`,
+migration 0066, prompt `2026-10-d`. Iced coffee brewed hot straight onto ice
+(Japanese iced) had nowhere to put the ice, so the ratio and the yield
+estimate were off. Contract: `api/recipes.md` §5, `api/brew-logs.md` §6.
+
+- **Data:** `recipes.target_ice_grams` and `brew_logs.actual_ice_grams`,
+  filter only. `targetWaterGrams` / `actualWaterGrams` stay the hot water.
+- **Ratio and yield:** the ratio is dose : (water + ice), shown as
+  "15 g : 250 g (150 g water + 100 g ice · 1:16.7)"; the yield is the server
+  weighed with the ice in, so the yield estimate and measured retention count
+  the ice. Pour targets count the hot water only. Scaling a batch keeps the
+  recipe's split of water and ice (or a repeated brew's, or one typed in the
+  log form).
+- **No TDS:** a brew with ice takes no TDS reading (the API refuses one) and
+  has no extraction yield; the form greys TDS and Brix out.
+- **App:** a "Flash chilled (brewed onto ice)" checkbox on the recipe form
+  (not for cold styles) that shows the Ice field in place of the dilution
+  (the checkbox is UI only: ticked means `targetIceGrams` is set), and the
+  Ice field on the brew form for recipes with ice (a hideable field; Repeat brews copies it with the dose and
+  water); CSV export has an Ice column.
+- **AI:** brews send `actualIceGrams` and recipes `targetIceGrams`; the
+  `flashChilled` prompt section says it's judged as served over ice.
+- **Decided:** ice is a recipe field in grams, not an ingredient or a style,
+  so a V60 onto ice still brews like pour over. A concentrate poured over
+  ice afterwards is a separate thing (next).
+
+## Concentrate (built)
+
+Backlog item "Concentrate (brewed strong, then diluted)", branch
+`concentrate`, no migration, prompt `2026-10-e`. A hot concentrate poured
+over ice (or cut with water) afterwards had no way to say so outside the
+cold styles, and unlike flash chilled its TDS is worth recording. Contract:
+`api/recipes.md` §5, `api/llm-contract.md` §9.
+
+- **No new data:** the cold styles' `dilutionRatio` / `dilutionWith` were
+  already accepted on any recipe and brew. Any filter recipe with a serving
+  dilution is a concentrate.
+- **App:** the recipe form offers "Serve diluted" on every filter recipe
+  that isn't flash chilled;
+  the brew form asks for the dilution when the recipe has one or the brew
+  already does, and labels the TDS "Concentrate TDS". Extraction yield works
+  as usual, by the style's `brewsLike`.
+- **AI:** a `concentrate` prompt section for brews that aren't a cold style
+  and have a dilution: TDS and EY are the concentrate's, strength is judged
+  as served (over ice, as an iced drink), and a well-extracted cup that's too
+  strong or weak wants a different dilution or ratio, not a grind change.
+- **Decided:** not a style (a style brews like only one built-in, so it
+  couldn't also say pour over or immersion) and not a switch (it would only
+  repeat "has a dilution").

@@ -30,7 +30,7 @@ export const FIELDS = [
   brew('prepTools', 'Prep checklist'),
   brew('problems', 'Problems checklist', 'What went wrong while brewing (Settings → Lists)'),
   brew('steepTemp', 'Steep in fridge or room (cold styles)'),
-  brew('dilution', 'Dilution served (cold styles)'),
+  brew('dilution', 'Dilution served (cold styles, concentrates)'),
   brew('window', 'Steep or finish time (cold styles)', 'Change the recipe’s for one brew, before it starts. Hidden: the recipe’s is used'),
   brew('firstDrop', 'First drop (espresso)', 'The box in the log; the timer keeps its button, which first-drop steps need'),
 
@@ -55,12 +55,12 @@ export const FIELDS = [
   bean('notes', 'Notes'),
 
   recipe('style', 'Style'),
-  recipe('ice', 'Ice (flash chilled)', 'Ice in the server the hot water is brewed onto; the ratio counts it'),
+  recipe('ice', 'Flash chilled and its ice', 'The checkbox, and the ice in the server the hot water is brewed onto; the ratio counts it'),
   recipe('expectedYield', 'Expected yield (filter)'),
   recipe('temp', 'Water temperature'),
   recipe('steepWindow', 'Steep time (cold brew, Kyoto drip)', 'In hours; sets when the ready reminder comes'),
   recipe('steepTemp', 'Steep in fridge or room (cold brew, Kyoto drip)'),
-  recipe('dilution', 'Serving dilution (cold styles)'),
+  recipe('dilution', 'Serving dilution (cold styles, concentrates)', 'A concentrate is any filter recipe served diluted, e.g. poured over ice'),
   recipe('finishWindow', 'Target finish / shot time'),
   recipe('firstDropWindow', 'First drop window (espresso)'),
   recipe('defaultGrinder', 'Default grinder'),

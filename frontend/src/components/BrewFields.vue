@@ -30,10 +30,25 @@ reveal({
   'brew.problems': draft.value.problemIds,
   'brew.firstDrop': draft.value.firstDrop,
   'brew.steepTemp': draft.value.steepTemp,
-  'brew.dilution': draft.value.dilution,
 });
 // Cold styles (lib/coldBrew.ts): fridge or room, and how it was served.
 const coldStyle = computed(() => isColdStyle(props.recipeStyle));
+// A concentrate (docs/api/recipes.md §5) is any other filter brew served
+// diluted, e.g. poured over ice: its dilution shows for a recipe with one, and
+// from the moment the brew has one (as hadIce below); its TDS is the
+// concentrate's, before diluting.
+const hadDilution = ref(false);
+watch(
+  () => draft.value.dilution,
+  (dilution) => {
+    if (!dilution.trim()) return;
+    hadDilution.value = true;
+    reveal({ 'brew.dilution': dilution });
+  },
+  { immediate: true },
+);
+const dilutionShown = computed(() => !props.espresso && (coldStyle.value || props.concentrate || hadDilution.value) && show('brew.dilution'));
+const concentrateNow = computed(() => !coldStyle.value && dilutionShown.value && draft.value.dilution.trim() !== '');
 const { temperatureUnit } = usePreferences();
 const props = defineProps<{
   errors: BrewDraftErrors;
@@ -48,6 +63,7 @@ const props = defineProps<{
   drinkTasting?: boolean; // the drink has ingredients: rate the brew and the drink apart
   recipeStyle?: RecipeStyle | null; // decides how extraction yield is worked out
   iced?: boolean; // the recipe is flash chilled (has ice), so the ice is asked for
+  concentrate?: boolean; // the recipe is served diluted, so the dilution is asked for
 }>();
 
 // Measured yield vs the recipe's estimate, e.g. "+6 g vs expected 220 g".
@@ -171,7 +187,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
         <label for="brew-ice">Ice (g)</label>
         <input id="brew-ice" v-model="draft.ice" inputmode="decimal" placeholder="none" :aria-invalid="showErrors && !!errors.ice" />
         <span v-if="showErrors && errors.ice" class="field-error">{{ errors.ice }}</span>
-        <span v-else class="hint">Brewed onto it. Poured over ice later? Leave empty to take its TDS</span>
+        <span v-else class="hint">Brewed onto it. Poured over ice afterwards? Leave empty: that’s a concentrate, set by the recipe’s dilution</span>
       </div>
     </div>
     <div v-if="!espresso && show('brew.yield')" class="field">
@@ -193,7 +209,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
         <span class="hint">{{ onIce ? 'Not taken when brewed onto ice' : 'Fills in TDS' }}</span>
       </div>
       <div class="field">
-        <label for="brew-tds">TDS (%)</label>
+        <label for="brew-tds">{{ concentrateNow ? 'Concentrate TDS (%)' : 'TDS (%)' }}</label>
         <input id="brew-tds" v-model="draft.tds" inputmode="decimal" :placeholder="espresso ? 'e.g. 9.5' : 'e.g. 1.38'" :disabled="onIce" :aria-invalid="showErrors && !!errors.tds" />
         <span v-if="onIce && draft.tds.trim()" class="hint">Not saved while there's ice</span>
         <span v-else-if="showErrors && errors.tds" class="field-error">{{ errors.tds }}</span>
@@ -249,15 +265,15 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
         <span v-else-if="retentionHint" class="hint">{{ retentionHint }}</span>
       </div>
     </div>
-    <div v-if="coldStyle && (show('brew.steepTemp') || show('brew.dilution'))" class="form-row">
-      <div v-if="show('brew.steepTemp')" class="field">
+    <div v-if="(coldStyle && show('brew.steepTemp')) || dilutionShown" class="form-row">
+      <div v-if="coldStyle && show('brew.steepTemp')" class="field">
         <label for="brew-steep-temp">Steeped in</label>
         <select id="brew-steep-temp" v-model="draft.steepTemp">
           <option value="">Not recorded</option>
           <option v-for="(label, key) in STEEP_TEMPS" :key="key" :value="key">{{ label }}</option>
         </select>
       </div>
-      <div v-if="coldStyle && show('brew.dilution')" class="field">
+      <div v-if="dilutionShown" class="field">
         <label for="brew-dilution">Served diluted 1 :</label>
         <div class="dilution">
           <input id="brew-dilution" v-model="draft.dilution" inputmode="decimal" placeholder="neat" :aria-invalid="showErrors && !!errors.dilution" />
@@ -267,6 +283,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
           </select>
         </div>
         <span v-if="showErrors && errors.dilution" class="field-error">{{ errors.dilution }}</span>
+        <span v-else-if="!coldStyle" class="hint">Brewed as a concentrate: parts added per part of it</span>
       </div>
     </div>
     <div v-if="show('brew.waterProfile')" class="field">

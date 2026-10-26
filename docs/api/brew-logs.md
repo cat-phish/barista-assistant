@@ -222,7 +222,9 @@ says why the last analysis failed or wasn't made (e.g. the daily cap), else
     - `steepTemp` (`fridge` | `room`), `dilutionRatio` (> 0, ≤ 10, 1
       decimal) and `dilutedWith` (`water` | `milk` | `ice` | `other`), all
       nullable: where it steeped and how it was served (1 :
-      `dilutionRatio`).
+      `dilutionRatio`). The dilution is accepted on any brew: clients ask
+      for it on cold styles and on a concentrate's brews (recipes.md §5),
+      whose `tdsPercent` is the concentrate's, before diluting.
     - **The brew's window**, `POST` only (not changed by `PATCH`, `400`),
       so the steep reminder queued at the start stays right:
       `steepMinHours` / `steepMaxHours` (0.5–72, 1 decimal) for a long

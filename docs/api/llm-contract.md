@@ -155,6 +155,7 @@ queue:
    | `retention` | a brew has `grinderRetentionGrams` | retention and stale grounds |
    | `espresso` | an `espresso` method | flow, windows, machine, step size; dose and shot weight as levers, one at a time |
    | `cold` | a style brews like `cold_brew`, `kyoto_drip` or `rapid_cold` | steep windows, dilution, concentrate TDS, levers |
+   | `concentrate` | a brew or the recipe that isn't a cold style has a `dilutionRatio` | TDS and EY are the concentrate's; judge strength as served, over ice as an iced drink; dilution or ratio before grind |
    | `end` | always | respond strictly matching the schema |
 
    Tests check which sections appear for given inputs and snapshot the
