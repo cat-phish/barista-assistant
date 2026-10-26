@@ -8,6 +8,7 @@ export interface RecipeInput extends ColdFields {
   brewerId: string;
   targetDoseGrams: number;
   targetWaterGrams: number | null; // null for espresso
+  targetIceGrams: number | null; // flash chilled: ice in the server; null for espresso
   expectedYieldGrams: number | null; // required for espresso
   expectedFinishMinSec: number | null;
   expectedFinishMaxSec: number | null;

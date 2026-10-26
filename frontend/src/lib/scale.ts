@@ -44,6 +44,7 @@ export type RetentionSource =
 export interface MeasuredBrew {
   actualDoseGrams: number;
   actualWaterGrams: number;
+  actualIceGrams: number | null; // flash chilled: weighed in the yield, so counted with the water
   actualYieldGrams: number | null;
 }
 
@@ -53,18 +54,18 @@ export interface MeasuredBrew {
 export function brewRetention(input: {
   roastLevel: RoastLevel | null;
   recipeRoastLevel: RoastLevel;
-  recipe: { targetDoseGrams: number; targetWaterGrams: number; expectedYieldGrams: number | null } | null;
+  recipe: { targetDoseGrams: number; targetWaterGrams: number; targetIceGrams: number | null; expectedYieldGrams: number | null } | null;
   measured: MeasuredBrew[];
 }): { retention: number; source: RetentionSource } {
   const measured = input.measured
-    .map((b) => (b.actualYieldGrams === null ? null : retentionOf(b.actualDoseGrams, b.actualWaterGrams, b.actualYieldGrams)))
+    .map((b) => (b.actualYieldGrams === null ? null : retentionOf(b.actualDoseGrams, ratioWater(b.actualWaterGrams, b.actualIceGrams), b.actualYieldGrams)))
     .filter((r): r is number => r !== null);
   if (measured.length) return { retention: median(measured), source: { kind: 'measured', count: measured.length } };
 
   const roastLevel = input.roastLevel ?? input.recipeRoastLevel;
   const roast = ROAST_LEVELS[roastLevel].retention;
   const r = input.recipe;
-  const recipeRetention = r && r.expectedYieldGrams !== null ? retentionOf(r.targetDoseGrams, r.targetWaterGrams, r.expectedYieldGrams) : null;
+  const recipeRetention = r && r.expectedYieldGrams !== null ? retentionOf(r.targetDoseGrams, ratioWater(r.targetWaterGrams, r.targetIceGrams), r.expectedYieldGrams) : null;
   if (recipeRetention !== null) {
     // The recipe's yield is for a recipeRoastLevel bean; shift it by the roast difference.
     return { retention: recipeRetention * (roast / ROAST_LEVELS[input.recipeRoastLevel].retention), source: { kind: 'recipe', roastLevel } };
@@ -81,44 +82,64 @@ export const GRAMS_PER_FL_OZ = 29.5735;
 
 export interface Batch {
   dose: number; // 0.1 g
-  water: number; // whole grams once scaled
-  yield: number; // estimate, whole grams
+  water: number; // whole grams once scaled; the hot water for flash chilled
+  ice: number | null; // flash chilled: ice in the server, whole grams (null without)
+  yield: number; // estimate, whole grams (weighed with the ice in)
   yieldOz: number; // estimate, 0.1 US fl oz
   yieldMl: number; // estimate, whole ml
-  ratio: number; // water / dose (the "15" in 1:15)
+  ratio: number; // (water + ice) / dose (the "15" in 1:15)
   factor: number; // water / recipe water: what pour targets are multiplied by
 }
 
-// Scale a recipe from one entered value. `ratio` (water per gram of coffee)
-// defaults to the recipe's own. Returns null if the values can't give a
+// The water a ratio counts: for flash chilled (docs/api/recipes.md §5) the
+// hot water plus the ice, to 0.01 g (as ratioWater in @barista/shared/brew).
+export function ratioWater(water: number, ice: number | null): number {
+  return Math.round((water + (ice ?? 0)) * 100) / 100;
+}
+
+// The hot water's share of what the ratio counts (water + ice); 1 without ice.
+export function waterShare(water: number, ice: number | null): number {
+  return water > 0 ? water / (water + (ice ?? 0)) : 1;
+}
+
+// Scale a recipe from one entered value. `ratio` (water + ice per gram of
+// coffee) defaults to the recipe's own; `share` (waterShare) to the recipe's
+// split between hot water and ice (docs/api/recipes.md §5), which the ice
+// keeps as the batch scales. Returns null if the values can't give a
 // sensible batch.
 export function scaleBatch(
-  recipe: { targetDoseGrams: number; targetWaterGrams: number },
+  recipe: { targetDoseGrams: number; targetWaterGrams: number; targetIceGrams: number | null },
   lead: { field: ScaleField; value: number },
   retention: number,
   ratio?: number,
+  share?: number,
 ): Batch | null {
   const { targetDoseGrams: d0, targetWaterGrams: w0 } = recipe;
-  const recipeRatio = w0 / d0;
+  const recipeShare = waterShare(w0, recipe.targetIceGrams);
+  const sh = share ?? recipeShare;
+  const l0 = w0 / recipeShare; // the recipe's water + ice
+  const recipeRatio = l0 / d0;
   const r = ratio ?? recipeRatio;
-  if (!(lead.value > 0) || !(r > 0) || d0 <= 0 || w0 <= 0) return null;
-  // Exact water for the lead value: yield = water − retention × water / ratio.
+  if (!(lead.value > 0) || !(r > 0) || d0 <= 0 || w0 <= 0 || !(sh > 0 && sh <= 1)) return null;
+  // Exact water + ice for the lead value: yield = liquid − retention × liquid / ratio.
   const keep = 1 - retention / r;
-  let exactWater: number;
-  if (lead.field === 'dose') exactWater = lead.value * r;
-  else if (lead.field === 'water') exactWater = lead.value;
+  let exactLiquid: number;
+  if (lead.field === 'dose') exactLiquid = lead.value * r;
+  else if (lead.field === 'water') exactLiquid = lead.value / sh;
   else {
     if (keep <= 0) return null;
     const yieldGrams = lead.field === 'yieldOz' ? lead.value * GRAMS_PER_FL_OZ : lead.value; // g ≈ ml
-    exactWater = yieldGrams / keep;
+    exactLiquid = yieldGrams / keep;
   }
   // The recipe as written: keep its exact numbers (no rounding surprises).
-  const unscaled = Math.abs(r - recipeRatio) < 1e-9 && Math.abs(exactWater / w0 - 1) < 1e-9;
-  const water = unscaled ? w0 : lead.field === 'water' ? lead.value : Math.round(exactWater);
-  const dose = unscaled ? d0 : lead.field === 'dose' ? lead.value : round1(exactWater / r);
+  const unscaled = Math.abs(r - recipeRatio) < 1e-9 && Math.abs(sh - recipeShare) < 1e-9 && Math.abs(exactLiquid / l0 - 1) < 1e-9;
+  const water = unscaled ? w0 : lead.field === 'water' ? lead.value : Math.round(exactLiquid * sh);
+  // The ice is what's left of the liquid, so water + ice add up to it.
+  const ice = sh === 1 ? null : unscaled ? recipe.targetIceGrams : Math.round(exactLiquid - water);
+  const dose = unscaled ? d0 : lead.field === 'dose' ? lead.value : round1(exactLiquid / r);
   if (water <= 0 || dose <= 0) return null;
-  const yieldGrams = estimateYield(dose, water, retention);
-  return { dose, water, yield: yieldGrams, yieldOz: round1(yieldGrams / GRAMS_PER_FL_OZ), yieldMl: yieldGrams, ratio: r, factor: water / w0 };
+  const yieldGrams = estimateYield(dose, ratioWater(water, ice), retention);
+  return { dose, water, ice, yield: yieldGrams, yieldOz: round1(yieldGrams / GRAMS_PER_FL_OZ), yieldMl: yieldGrams, ratio: r, factor: water / w0 };
 }
 
 // Typing the dose or the water (or an espresso shot weight) keeps the other

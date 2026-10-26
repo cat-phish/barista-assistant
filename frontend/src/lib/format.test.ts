@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatRatio, formatTime, localDateInput, parseDecimal, parseTime, toDateInput } from './format';
+import { formatDoseLine, formatRatio, formatTime, localDateInput, parseDecimal, parseTime, toDateInput } from './format';
 
 describe('parseDecimal', () => {
   const dose = { scale: 2, min: 0, max: 1000, exclusiveMin: true, exclusiveMax: true };
@@ -45,5 +45,10 @@ describe('dates and ratios', () => {
   it('formats brew ratios', () => {
     expect(formatRatio(15, 250)).toBe('1:16.7');
     expect(formatRatio(18, 36)).toBe('1:2');
+  });
+  it('formats dose lines, with the ice of a flash chilled brew counted in', () => {
+    expect(formatDoseLine(15, 250, 220, null)).toBe('15 g : 250 g (1:16.7)');
+    expect(formatDoseLine(15, 150, 225, 100)).toBe('15 g : 250 g (150 g water + 100 g ice · 1:16.7)');
+    expect(formatDoseLine(18, null, 36, null)).toBe('18 g → 36 g (1:2)');
   });
 });

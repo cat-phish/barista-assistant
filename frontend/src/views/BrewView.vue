@@ -65,7 +65,7 @@ import { batchSuffix, beanLabel as pickerLabel } from '../lib/beans';
 import { formatDay, formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen } from '../lib/format';
 import { CONFIDENCE_LABELS, chooseGrind, gramsAdvice, rpmAdvice, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
 import { useWorkspaceStore } from '../stores/workspace';
-import { brewRetention, linkRatio, ratioText as formatRatio, ROAST_LEVELS, scaleBatch, scaleShot, scaleSteps, type MeasuredBrew, type ScaleField } from '../lib/scale';
+import { brewRetention, linkRatio, ratioText as formatRatio, ratioWater, ROAST_LEVELS, scaleBatch, scaleShot, scaleSteps, waterShare, type MeasuredBrew, type ScaleField } from '../lib/scale';
 import { formatTemp, formatTempChange, tempText, TEMPERATURE_LABELS, VOLUME_LABELS, volumeUnits } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 
@@ -180,7 +180,7 @@ const espresso = computed(() => recipe.value?.brewer.kind === 'espresso');
 const filterRecipe = computed(() => {
   const r = recipe.value;
   return r && r.targetWaterGrams !== null
-    ? { targetDoseGrams: r.targetDoseGrams, targetWaterGrams: r.targetWaterGrams, expectedYieldGrams: r.expectedYieldGrams }
+    ? { targetDoseGrams: r.targetDoseGrams, targetWaterGrams: r.targetWaterGrams, targetIceGrams: r.targetIceGrams, expectedYieldGrams: r.expectedYieldGrams }
     : null;
 });
 // ...or as an espresso recipe (it has a target shot weight).
@@ -255,6 +255,7 @@ onMounted(async () => {
 watch(recipe, (r) => {
   draft.dose = r ? formatGrams(r.targetDoseGrams) : '';
   draft.water = r?.targetWaterGrams != null ? formatGrams(r.targetWaterGrams) : '';
+  draft.ice = r?.targetIceGrams != null ? formatGrams(r.targetIceGrams) : '';
   draft.yieldGrams = ''; // measured after brewing
   draft.temp = tempText(r?.targetTempC, temperatureUnit.value);
   // Cold styles: where it steeps and how it's served, as the recipe says.
@@ -278,22 +279,43 @@ watch(recipe, (r) => {
 // - Espresso: the dose moves the shot weight at the ratio; the shot weight
 //   changes the ratio (the dose stays); the ratio moves the shot weight.
 // Whatever was typed last is held. Pour targets scale with the water.
+// - Flash chilled (docs/api/recipes.md §5): the ratio counts the ice, which
+//   keeps its share of the water + ice as the batch scales.
 const lead = ref<{ field: ScaleField; text: string }>({ field: 'dose', text: '' });
 // null = the recipe's ratio. value is exact; text is what the box shows.
 const ratio = ref<{ text: string; value: number } | null>(null);
+// The hot water's share of water + ice (lib/scale.ts waterShare); null = the recipe's.
+const share = ref<number | null>(null);
 function resetBatch(): void {
   lead.value = { field: 'dose', text: recipe.value ? formatGrams(recipe.value.targetDoseGrams) : '' };
   ratio.value = null;
+  share.value = null;
 }
+const shareNow = computed(() => share.value ?? (filterRecipe.value ? waterShare(filterRecipe.value.targetWaterGrams, filterRecipe.value.targetIceGrams) : 1));
 function setLead(field: ScaleField, event: Event): void {
   setLeadText(field, (event.target as HTMLInputElement).value);
 }
+// Water or ice typed in the log form below (not by the batch): the batch
+// keeps that split from then on, so the typed ice isn't thrown away. Ice
+// emptied there means none this time.
+function adoptTypedSplit(): void {
+  const b = batch.value;
+  const water = num(draft.water);
+  const ice = num(draft.ice);
+  if (!b || water === null || !(water > 0)) return;
+  if (water !== b.water || ice !== b.ice) share.value = waterShare(water, ice);
+}
 function setLeadText(field: ScaleField, text: string): void {
   // The amount held is the last valid one (draft follows the batch/shot).
+  // Filter ratios are water + ice per gram: the ice follows the water.
+  if (!espresso.value) adoptTypedSplit();
+  const water = num(draft.water);
   const linked =
-    !espresso.value && (field === 'dose' || field === 'water')
-      ? linkRatio(field, amount(text), field === 'dose' ? num(draft.water) : num(draft.dose))
-      : espresso.value && field === 'yield'
+    !espresso.value && field === 'dose'
+      ? linkRatio('dose', amount(text), water === null ? null : ratioWater(water, num(draft.ice)))
+      : !espresso.value && field === 'water'
+        ? linkRatio('water', amount(text) / shareNow.value, num(draft.dose))
+        : espresso.value && field === 'yield'
         ? linkRatio('yield', amount(text), num(draft.dose))
         : null;
   if (linked !== null) ratio.value = { text: formatRatio(linked), value: linked };
@@ -301,6 +323,7 @@ function setLeadText(field: ScaleField, text: string): void {
 }
 function setRatio(event: Event): void {
   const text = (event.target as HTMLInputElement).value;
+  if (!espresso.value) adoptTypedSplit();
   ratio.value = { text, value: amount(text) };
 }
 const num = (text: string): number | null => {
@@ -343,7 +366,7 @@ async function loadMeasured(): Promise<void> {
         .filter((l) => l.recipe?.id === recipeId.value)
         .flatMap((l) =>
           l.actualWaterGrams !== null && l.actualYieldGrams !== null
-            ? [{ actualDoseGrams: l.actualDoseGrams, actualWaterGrams: l.actualWaterGrams, actualYieldGrams: l.actualYieldGrams }]
+            ? [{ actualDoseGrams: l.actualDoseGrams, actualWaterGrams: l.actualWaterGrams, actualIceGrams: l.actualIceGrams, actualYieldGrams: l.actualYieldGrams }]
             : [],
         )
         .slice(0, 10);
@@ -359,18 +382,25 @@ const retention = computed(() => brewRetention({ roastLevel: bean.value?.roastLe
 const customRatio = computed(() => ratio.value?.value);
 const batch = computed(() => {
   if (!filterRecipe.value) return null;
-  return scaleBatch(filterRecipe.value, { field: lead.value.field, value: amount(lead.value.text) }, retention.value.retention, customRatio.value);
+  return scaleBatch(filterRecipe.value, { field: lead.value.field, value: amount(lead.value.text) }, retention.value.retention, customRatio.value, share.value ?? undefined);
 });
 const shot = computed(() => {
   const field = lead.value.field;
   if (!shotRecipe.value || (field !== 'dose' && field !== 'yield')) return null;
   return scaleShot(shotRecipe.value, { field, value: amount(lead.value.text) }, customRatio.value);
 });
-watch(batch, (b) => {
-  if (!b) return;
-  draft.dose = formatGrams(b.dose);
-  draft.water = formatGrams(b.water);
-});
+// Only when the amounts change: a new yield estimate (the measured retention
+// loading) mustn't put back water or ice typed over in the log form.
+watch(
+  () => (batch.value ? `${batch.value.dose}|${batch.value.water}|${batch.value.ice}` : null),
+  () => {
+    const b = batch.value;
+    if (!b) return;
+    draft.dose = formatGrams(b.dose);
+    draft.water = formatGrams(b.water);
+    draft.ice = b.ice === null ? '' : formatGrams(b.ice);
+  },
+);
 watch(shot, (s) => {
   if (s) draft.dose = formatGrams(s.dose);
 });
@@ -398,7 +428,7 @@ const ratioShown = computed(() => {
   if (ratio.value !== null) return ratio.value.text;
   const r = filterRecipe.value ?? shotRecipe.value;
   if (!r) return '';
-  const out = 'targetWaterGrams' in r ? r.targetWaterGrams : r.expectedYieldGrams;
+  const out = 'targetWaterGrams' in r ? ratioWater(r.targetWaterGrams, r.targetIceGrams) : r.expectedYieldGrams;
   return String(Math.round((out / r.targetDoseGrams) * 10) / 10);
 });
 const scaled = computed(() => {
@@ -890,21 +920,23 @@ async function applyRepeat(log: BrewLog): Promise<void> {
     sizeText.value = formatGrams(log.servingSize);
     sizeUnit.value = log.servingUnit;
   } else resetSize();
-  // Filter: the brew's dose and water (so the ratio is the one it had);
-  // espresso: its dose, with the shot weight at the recipe's ratio.
+  // Filter: the brew's dose, water and ice (so the ratio and the ice are the
+  // ones it had); espresso: its dose, with the shot weight at the recipe's ratio.
   if (!kept.has('doseWater')) {
     resetBatch();
     sizeToBatch();
   } else if (filterRecipe.value && log.actualWaterGrams !== null) {
-    const r = log.actualWaterGrams / log.actualDoseGrams;
+    const r = ratioWater(log.actualWaterGrams, log.actualIceGrams) / log.actualDoseGrams;
     lead.value = { field: 'dose', text: formatGrams(log.actualDoseGrams) };
     ratio.value = { text: formatRatio(r), value: r };
+    share.value = waterShare(log.actualWaterGrams, log.actualIceGrams);
   } else if (shotRecipe.value) {
     lead.value = { field: 'dose', text: formatGrams(log.actualDoseGrams) };
     ratio.value = null;
   } else {
     draft.dose = formatGrams(log.actualDoseGrams);
     draft.water = log.actualWaterGrams === null ? '' : formatGrams(log.actualWaterGrams);
+    draft.ice = log.actualIceGrams === null ? '' : formatGrams(log.actualIceGrams);
   }
   draft.temp = tempText(kept.has('temp') ? log.actualTempC : (recipe.value?.targetTempC ?? null), temperatureUnit.value);
   if (kept.has('grinder')) draft.grinderId = plan.grinderId; // else the one setup already has
@@ -1060,7 +1092,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <span v-if="grinderError" class="field-error full">{{ grinderError }}</span>
         </div>
         <p v-if="recipe" class="muted recipe-summary">
-          {{ formatDoseLine(recipe.targetDoseGrams, recipe.targetWaterGrams, recipe.expectedYieldGrams) }}
+          {{ formatDoseLine(recipe.targetDoseGrams, recipe.targetWaterGrams, recipe.expectedYieldGrams, recipe.targetIceGrams) }}
           <template v-if="recipe.targetTempC !== null"> · {{ formatTemp(recipe.targetTempC, temperatureUnit) }}</template>
           <template v-if="recipe.steps.length"> · {{ recipe.steps.length }} step{{ recipe.steps.length === 1 ? '' : 's' }}</template>
         </p>
@@ -1094,14 +1126,14 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
               <input id="batch-dose" inputmode="decimal" :value="batchText('dose')" @input="setLead('dose', $event)" />
             </div>
             <div class="field">
-              <label for="batch-water">Water (g)</label>
+              <label for="batch-water">{{ batch?.ice != null ? 'Hot water (g)' : 'Water (g)' }}</label>
               <input id="batch-water" inputmode="decimal" :value="batchText('water')" @input="setLead('water', $event)" />
             </div>
             <div class="field">
               <label for="batch-ratio">Ratio</label>
               <div class="ratio-input">
                 <span aria-hidden="true">1 :</span>
-                <input id="batch-ratio" inputmode="decimal" :value="ratioShown" aria-label="Water per gram of coffee" @input="setRatio" />
+                <input id="batch-ratio" inputmode="decimal" :value="ratioShown" aria-label="Water (and ice) per gram of coffee" @input="setRatio" />
               </div>
             </div>
           </div>
@@ -1112,7 +1144,8 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             </div>
           </div>
           <p v-if="!batch" class="field-error">Enter positive amounts (the ratio must leave some coffee in the cup).</p>
-          <p v-else class="muted small">
+          <p v-if="batch?.ice" class="small">Brew onto <strong>{{ formatGrams(batch.ice) }} g of ice</strong> in the server: the ratio and the yield count it, the pours don't.</p>
+          <p v-if="batch" class="muted small">
             Yield estimated {{ retentionNote }}.
             <template v-if="scaled">Pours scale ×{{ Math.round(batch.factor * 100) / 100 }} with the water; step times stay the same.</template>
           </p>
@@ -1322,7 +1355,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       </section>
       <section class="card">
         <p v-if="stepMarksLine" class="muted small marks-line">{{ stepMarksLine }}</p>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :prep-tools="prepTools" :problems="problems" :method-kind="recipe?.brewer.kind ?? null" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="recipe?.style?.brewsLike ?? null" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :prep-tools="prepTools" :problems="problems" :method-kind="recipe?.brewer.kind ?? null" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="recipe?.style?.brewsLike ?? null" :iced="recipe?.targetIceGrams != null" />
       </section>
       <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
       <div v-if="userPrefs.rateReminders" class="rate-later">

@@ -225,6 +225,16 @@ describe("processBrewAnalysis", () => {
     expect(context.brew).toMatchObject({ methodKind: "stovetop", recipeStyle: { name: "Moka", brewsLike: "moka" } });
   });
 
+  it("counts a flash chilled brew's ice in its ratio (docs/api/llm-contract.md §9)", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    await db.update(recipes).set({ targetWaterGrams: 150, targetIceGrams: 100 }).where(eq(recipes.workspaceId, workspaceId));
+    await db.update(brewLogs).set({ actualWaterGrams: 150, actualIceGrams: 100, actualYieldGrams: 228, tdsPercent: null }).where(eq(brewLogs.id, logIds.day8!));
+    await processBrewAnalysis({ brewLogId: logIds.day8! });
+    const context = llm.mock.calls[0]![0] as BrewContext;
+    expect(context.brew).toMatchObject({ actualWaterGrams: 150, actualIceGrams: 100, actualYieldGrams: 228, brewRatio: 16.67, extractionYieldPercent: null });
+    expect(context.recipe).toMatchObject({ targetWaterGrams: 150, targetIceGrams: 100 });
+  });
+
   it("dates each brew by the logging device's UTC offset", async () => {
     llm.mockResolvedValue(ANALYSIS);
     // Oct 9, 03:00 UTC is still Oct 8 in the evening at UTC-7: one day younger.
@@ -440,13 +450,16 @@ describe("processBrewAnalysis", () => {
 });
 
 describe("extractionYield (docs/api/brew-logs.md §6)", () => {
-  const log = { tdsPercent: 1.38, actualDoseGrams: 15, actualWaterGrams: 250, actualYieldGrams: 220 } as Parameters<typeof extractionYield>[0];
+  const log = { tdsPercent: 1.38, actualDoseGrams: 15, actualWaterGrams: 250, actualIceGrams: null, actualYieldGrams: 220 } as Parameters<typeof extractionYield>[0];
   const style = (brewsLike: "pour_over" | "immersion" | "cold_brew", name = "Style") => ({ name, brewsLike });
   it("uses the yield for percolation and the water for immersion styles", () => {
     expect(extractionYield(log, style("pour_over"))).toBe(20.2);
     expect(extractionYield(log, null)).toBe(20.2);
     expect(extractionYield(log, style("immersion"))).toBe(23);
     expect(extractionYield(log, style("cold_brew"))).toBe(23);
+  });
+  it("is null for a brew made onto ice, which takes no TDS", () => {
+    expect(extractionYield({ ...log, actualWaterGrams: 150, actualIceGrams: 100 }, style("pour_over"))).toBeNull();
   });
   it("goes by what a custom style brews like, not its name", () => {
     expect(extractionYield(log, style("immersion", "Inverted"))).toBe(23);

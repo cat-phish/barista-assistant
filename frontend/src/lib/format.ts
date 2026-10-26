@@ -1,4 +1,5 @@
 // Pure parsing/formatting helpers shared by the forms. Unit-tested in format.test.ts.
+import { ratioWater } from './scale';
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -98,9 +99,14 @@ export function formatWhen(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
-// "15 g : 250 g (1:16.7)"; espresso has no water, so dose → shot weight:
-// "18 g → 36 g (1:2)".
-export function formatDoseLine(dose: number, water: number | null, out: number | null): string {
+// "15 g : 250 g (1:16.7)"; flash chilled counts the ice (docs/api/recipes.md
+// §5): "15 g : 250 g (150 g water + 100 g ice · 1:16.7)"; espresso has no
+// water, so dose → shot weight: "18 g → 36 g (1:2)".
+export function formatDoseLine(dose: number, water: number | null, out: number | null, ice: number | null): string {
+  if (water !== null && ice !== null) {
+    const total = ratioWater(water, ice);
+    return `${formatGrams(dose)} g : ${formatGrams(total)} g (${formatGrams(water)} g water + ${formatGrams(ice)} g ice · ${formatRatio(dose, total)})`;
+  }
   if (water !== null) return `${formatGrams(dose)} g : ${formatGrams(water)} g (${formatRatio(dose, water)})`;
   if (out !== null) return `${formatGrams(dose)} g → ${formatGrams(out)} g (${formatRatio(dose, out)})`;
   return `${formatGrams(dose)} g`;

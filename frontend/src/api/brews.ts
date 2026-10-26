@@ -18,6 +18,7 @@ export interface BrewLogInput {
   utcOffsetMinutes?: number | null; // this device's offset, for the local brew date (§6)
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso
+  actualIceGrams: number | null; // flash chilled: ice in the server (no TDS with it)
   actualYieldGrams: number | null;
   tdsPercent: number | null; // %
   actualTempC: number | null;

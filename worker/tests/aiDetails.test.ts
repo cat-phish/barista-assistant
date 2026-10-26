@@ -38,6 +38,7 @@ const BREW: Record<keyof BrewSummary, Sees> = {
   problems: "problems",
   actualDoseGrams: "always",
   actualWaterGrams: "always",
+  actualIceGrams: "always",
   actualYieldGrams: "always",
   brewRatio: "always",
   tdsPercent: "tds",
@@ -89,6 +90,7 @@ const RECIPE: Record<keyof Recipe, Sees> = {
   methodKind: "always",
   targetDoseGrams: "always",
   targetWaterGrams: "always",
+  targetIceGrams: "always",
   expectedYieldGrams: "always",
   expectedFinishMinSec: "always",
   expectedFinishMaxSec: "always",
@@ -163,7 +165,7 @@ const water: WaterInfo = { name: "TWW", tdsPpm: 120, generalHardnessPpm: 80, alk
 const brew: BrewSummary = {
   timestamp: "2026-10-20T08:00:00.000Z", roastAgeDays: 10, daysFrozenBeforeBrew: 2, recipeName: "House", recipeStyle: { name: "Cold brew", brewsLike: "cold_brew" }, methodKind: "filter",
   grinder, water, machine: { name: "Linea", preinfusion: "manual", flowControl: "manual", pressureControl: "none" }, marks: [{ kind: "first_drop", stepOrder: null, atSec: 7 }],
-  prepTools: ["WDT"], problems: ["Channeling"], actualDoseGrams: 60, actualWaterGrams: 500, actualYieldGrams: 420, brewRatio: 8.33, tdsPercent: 4.2, extractionYieldPercent: 19.5,
+  prepTools: ["WDT"], problems: ["Channeling"], actualDoseGrams: 60, actualWaterGrams: 500, actualIceGrams: 100, actualYieldGrams: 420, brewRatio: 8.33, tdsPercent: 4.2, extractionYieldPercent: 19.5,
   actualTempC: 20, actualGrindSetting: 12, grindRpm: 900, steeping: true, beanWeightInGrams: 60.3, groundWeightOutGrams: 60, grinderRetentionGrams: 0.3, actualTimeSec: 57600,
   drink: { name: "Iced latte", ingredientTypes: ["milk"] }, rating: 4, tastingNotes: "Chocolate", drinkRating: 5, drinkTastingNotes: "Sweet", steepTemp: "fridge", dilutionRatio: 1,
   dilutedWith: "milk", steepMinHours: 14, steepMaxHours: 20, expectedFinishMinSec: 100, expectedFinishMaxSec: 200,
@@ -171,7 +173,7 @@ const brew: BrewSummary = {
 const full: BrewContext = {
   bean: { roasterName: "Onyx", beanName: "Monarch", batchNumber: "7", process: "Washed", roastLevel: "light", detailedRoastLevel: "city", roastType: "filter", blendType: "blend", decaf: true, roastDate: "2026-10-10", flavorProfile: "Peach", originArea: "africa", country: "Ethiopia", region: "Guji", altitudeMasl: 2000 },
   recipe: {
-    name: "House", brewer: "Toddy", style: { name: "Cold brew", brewsLike: "cold_brew" }, methodKind: "filter", targetDoseGrams: 60, targetWaterGrams: 500, expectedYieldGrams: 420, expectedFinishMinSec: 100,
+    name: "House", brewer: "Toddy", style: { name: "Cold brew", brewsLike: "cold_brew" }, methodKind: "filter", targetDoseGrams: 60, targetWaterGrams: 500, targetIceGrams: 100, expectedYieldGrams: 420, expectedFinishMinSec: 100,
     expectedFinishMaxSec: 200, firstDropMinSec: 5, firstDropMaxSec: 9, targetTempC: 20, steepMinHours: 14, steepMaxHours: 20, steepTemp: "fridge", dilutionRatio: 1, dilutionWith: "milk",
     grindStartingPoints: [{ grinderName: "EK43", setting: 12 }], flowUnit: "ml_s",
     steps: [{ stepOrder: 1, stepType: "pour", label: "Fill", durationSec: 30, advance: "tap", targetWaterGrams: 500, targetTempC: 20, pressureBar: 9, pressureEndBar: 6, flowRate: 2, flowEndRate: 1 }],

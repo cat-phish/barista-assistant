@@ -9,6 +9,14 @@ A recipe describes how to brew: `targetDoseGrams` of coffee and
 the beverage yield, an optional **target finish window** for the total brew
 time, and an optional water temperature.
 
+**Flash chilled** (brewed onto ice, e.g. Japanese iced pour over): a filter
+recipe can add `targetIceGrams`, the ice in the server the hot water drips
+onto. The ratio then counts the ice, dose:(water + ice), shown as
+"15 g : 250 g (150 g water + 100 g ice · 1:16.7)"; `targetWaterGrams` is the
+hot water and the pour targets count it only. It works with any style (a V60
+onto ice still brews like `pour_over`). `expectedYieldGrams` includes the
+ice. Brews made onto ice take no TDS reading (§6).
+
 **By brewer kind** (§3), checked against the recipe as it is after the
 request (so a `PATCH` that changes `brewerId` must also send the fields the
 new kind needs):
@@ -16,6 +24,7 @@ new kind needs):
 | | `filter` | `espresso` |
 |---|---|---|
 | `targetWaterGrams` | required | must be absent/`null` |
+| `targetIceGrams` | optional (flash chilled) | must be absent/`null` |
 | `expectedYieldGrams` | optional estimate | **required**: target shot weight; ratio is dose:yield (18 g → 36 g = 1:2) |
 | finish window | total brew time | total shot time |
 | `firstDropMinSec`/`MaxSec` | must be absent/`null` | optional window (pair, ±3 s default) |
@@ -78,6 +87,7 @@ card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
   "brewer": { "id": "uuid", "name": "V60", "kind": "filter" },
   "targetDoseGrams": 15,
   "targetWaterGrams": 250,
+  "targetIceGrams": null,
   "expectedYieldGrams": 220,
   "expectedFinishMinSec": 165,
   "expectedFinishMaxSec": 195,
@@ -158,8 +168,8 @@ Creates a recipe, its grind starting points and its steps in one transaction.
     and other recipes follow filter's rules (dose + water). On `PATCH`,
     moving the recipe to a brewer of another method clears a style that no
     longer fits, unless a fitting one is sent.
-  - Optional, nullable: `expectedYieldGrams` for filter recipes (same
-    rules as water), `targetTempC` (0–100, max 1 decimal). Recipes reach the
+  - Optional, nullable: `expectedYieldGrams` and `targetIceGrams` for filter
+    recipes (same rules as water), `targetTempC` (0–100, max 1 decimal). Recipes reach the
     public menu through drinks (§5c).
   - First-drop window (espresso only): `firstDropMinSec`/`firstDropMaxSec`,
     same pair rules as the finish window below but with a **±3 s** default.

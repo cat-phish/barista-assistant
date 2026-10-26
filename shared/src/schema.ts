@@ -684,6 +684,10 @@ export const recipes = mysqlTable("recipes", {
   // Water poured in total; the coffee:water ratio is dose:water. Required for
   // filter recipes, null for espresso (enforced by the API).
   targetWaterGrams: decimal("target_water_grams", { precision: 6, scale: 2, mode: "number" }),
+  // Flash chilled: ice in the server the hot water is brewed onto (g). The
+  // ratio is dose:(water + ice); pour targets count the hot water only.
+  // Optional for filter recipes, null for espresso (enforced by the API).
+  targetIceGrams: decimal("target_ice_grams", { precision: 6, scale: 2, mode: "number" }),
   // Filter: rough estimate of beverage weight (water minus what
   // the grounds retain). Espresso: the target shot weight (required by the
   // API); the ratio is dose:yield.
@@ -998,6 +1002,9 @@ export const brewLogs = mysqlTable("brew_logs", {
   actualDoseGrams: decimal("actual_dose_grams", { precision: 5, scale: 2, mode: "number" }).notNull(),
   // Required unless the log's recipe is an espresso recipe, where it's null.
   actualWaterGrams: decimal("actual_water_grams", { precision: 6, scale: 2, mode: "number" }),
+  // Flash chilled: ice in the server (g), as on the recipe. A brew with ice
+  // takes no TDS reading (docs/api/brew-logs.md §6); null for espresso.
+  actualIceGrams: decimal("actual_ice_grams", { precision: 6, scale: 2, mode: "number" }),
   // Measured beverage weight. Optional, except for espresso (the shot
   // weight). Compared against the recipe's expected yield; with tdsPercent it
   // gives extraction yield.

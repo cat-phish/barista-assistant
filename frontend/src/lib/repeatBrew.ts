@@ -13,7 +13,7 @@ import { formatAdded } from './format';
 // The defaults are the backend's (DEFAULT_PREFERENCES).
 export const REPEAT_OPTIONS: Array<{ key: RepeatKeep; label: string; hint?: string }> = [
   { key: 'size', label: 'Drink size', hint: 'Off: the drink’s default size' },
-  { key: 'doseWater', label: 'Dose and water', hint: 'Off: the recipe’s. Espresso keeps the recipe’s ratio either way' },
+  { key: 'doseWater', label: 'Dose, water and ice', hint: 'Off: the recipe’s. Espresso keeps the recipe’s ratio either way' },
   { key: 'temp', label: 'Water temperature', hint: 'Off: the recipe’s' },
   { key: 'grinder', label: 'Grinder', hint: 'Off: your last grinder, or the recipe’s default' },
   { key: 'grind', label: 'Grind setting and speed', hint: 'On the same grinder. Off: your last setting with it, as usual' },
@@ -32,6 +32,7 @@ export const REPEAT_OPTIONS: Array<{ key: RepeatKeep; label: string; hint?: stri
 // brew.* key, so a new brew field doesn't build until it's decided here.
 type BrewFieldKey = Extract<FieldKey, `brew.${string}`>;
 export const REPEAT_FOR_FIELD: Record<BrewFieldKey, RepeatKeep | 'result'> = {
+  'brew.ice': 'doseWater', // goes with the water it was brewed with
   'brew.yield': 'result',
   'brew.tds': 'result',
   'brew.temp': 'temp',

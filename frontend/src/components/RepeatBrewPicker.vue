@@ -78,7 +78,7 @@ watch(beanFilter, () => void load(true));
           </span>
           <span class="muted small">{{ l.bean.roasterName }} {{ repeatLabel(l).bean }}<template v-if="l.recipe"> · {{ l.recipe.name }}</template></span>
           <span class="facts small">
-            <span>{{ formatDoseLine(l.actualDoseGrams, l.actualWaterGrams, l.actualYieldGrams) }}</span>
+            <span>{{ formatDoseLine(l.actualDoseGrams, l.actualWaterGrams, l.actualYieldGrams, l.actualIceGrams) }}</span>
             <span v-if="l.actualGrindSetting !== null">grind {{ formatGrind(l.actualGrindSetting) }}</span>
             <RatingStars :rating="l.rating ?? l.drinkRating" />
           </span>

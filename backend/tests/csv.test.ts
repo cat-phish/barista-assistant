@@ -82,6 +82,7 @@ describe("CSV export (docs/api/backup.md §2b, CSV)", () => {
       "Grind setting": "21",
       "Dose (g)": "15",
       "Water (g)": "250",
+      "Ice (g)": "",
       "Yield (g)": "220",
       Ratio: "16.7",
       "TDS (%)": "1.38",
@@ -94,6 +95,15 @@ describe("CSV export (docs/api/backup.md §2b, CSV)", () => {
       Rating: "4",
       "Tasting notes": "Sweet, a bit thin",
     });
+  });
+
+  it("counts the ice of a flash chilled brew in its ratio (docs/api/recipes.md §5)", async () => {
+    const owner = await newUser();
+    const ws = await newWorkspace(owner);
+    const bean = await newBean(owner, ws.id);
+    await newBrewLog(owner, ws.id, bean, { actualWaterGrams: 150, actualIceGrams: 100, actualYieldGrams: 228 });
+    const [row] = asObjects((await owner.agent.get(`/api/workspaces/${ws.id}/csv/brew_logs`)).text);
+    expect(row).toMatchObject({ "Water (g)": "150", "Ice (g)": "100", "Yield (g)": "228", Ratio: "16.7", "Extraction (%)": "" });
   });
 
   it("writes the beans with their process and how often they were brewed", async () => {
