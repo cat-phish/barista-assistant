@@ -248,6 +248,13 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
     temperature (the recipe's, for cold brew and Kyoto drip).
   - All three ask for the dilution served. The AI judges them as served,
     and knows a concentrate's TDS runs high.
+- **Iced, brewed hot:** two ways.
+  - **Flash chilled** (Japanese iced): ticking it on a filter recipe asks
+    for the ice in the server it's brewed onto, in place of the dilution. The ratio and yield count the ice, the pours
+    don't, and there's no TDS reading.
+  - **Concentrate**: any filter recipe can be served diluted (e.g. 1 : 0.7
+    over ice). Its brews ask for the dilution, the TDS is the concentrate's
+    and extraction yield works as usual; the AI judges the cup as served.
 - **Timer** (pour over and espresso): Previous / Current / Up next cards on
   top, then the buttons, then the clock; the
   current one shows the instruction ("Pour to 150 g (+100)", "9 → 6 bar",

@@ -66,7 +66,11 @@ const name = ref('');
 const brewerId = ref('');
 const dose = ref('');
 const water = ref('');
-const ice = ref(''); // flash chilled: ice in the server (docs/api/recipes.md §5)
+// Flash chilled (docs/api/recipes.md §5): ticked, the recipe brews onto ice
+// in the server and asks for it instead of a dilution; unticked, no ice is
+// saved (what was typed stays, in case it's ticked again).
+const flashChilled = ref(false);
+const ice = ref('');
 const expectedYield = ref('');
 // Expected yield follows a light-roast estimate until typed over.
 const yieldCustom = ref(false);
@@ -114,13 +118,18 @@ watch(kind, () => {
 const brewsLike = computed(() => styles.value.find((s) => s.id === style.value)?.brewsLike ?? null);
 const longStyle = computed(() => isLongStyle(brewsLike.value));
 const coldStyle = computed(() => isColdStyle(brewsLike.value));
+// Any filter recipe can be served diluted: a cold style, or a hot
+// concentrate (e.g. poured over ice, docs/api/recipes.md §5).
+const dilutable = computed(() => kind.value === 'filter');
+// Not for cold styles, which are served cold anyway (and diluted, if at all).
+const iced = computed(() => !espresso.value && !coldStyle.value && flashChilled.value);
 
 const grams = { scale: 2, min: 0, max: 10000, exclusiveMin: true, exclusiveMax: true } as const;
 const STEEP_HOURS = { scale: 1, min: 0.5, max: 72 } as const;
 const parsed = computed(() => ({
   dose: parseDecimal(dose.value, { scale: 2, min: 0, max: 1000, exclusiveMin: true, exclusiveMax: true }),
   water: espresso.value ? ({ ok: true, value: null } as const) : parseDecimal(water.value, grams),
-  ice: !espresso.value && ice.value.trim() ? parseDecimal(ice.value, grams) : null,
+  ice: !iced.value ? null : ice.value.trim() ? parseDecimal(ice.value, grams) : ({ ok: false, error: 'Enter the ice in the server' } as const),
   expectedYield: expectedYield.value.trim()
     ? parseDecimal(expectedYield.value, grams)
     : espresso.value
@@ -173,7 +182,7 @@ const fieldErrors = computed(() => {
     firstDrop: p.firstDrop.ok ? '' : p.firstDrop.error,
     temp: p.temp && !p.temp.ok ? p.temp.error : '',
     steep: steepError(p.steepMin, p.steepMax),
-    dilution: p.dilution && !p.dilution.ok ? p.dilution.error : '',
+    dilution: p.dilution && !p.dilution.ok && !iced.value ? p.dilution.error : '',
   };
 });
 function steepError(min: Parsed<number> | null, max: Parsed<number> | null): string {
@@ -245,6 +254,7 @@ function fill(recipe: Recipe): void {
   brewerId.value = recipe.brewer.id;
   dose.value = formatGrams(recipe.targetDoseGrams);
   water.value = recipe.targetWaterGrams === null ? '' : formatGrams(recipe.targetWaterGrams);
+  flashChilled.value = recipe.targetIceGrams !== null;
   ice.value = recipe.targetIceGrams === null ? '' : formatGrams(recipe.targetIceGrams);
   expectedYield.value = recipe.expectedYieldGrams === null ? '' : formatGrams(recipe.expectedYieldGrams);
   // A saved yield that isn't the estimate was typed by someone: keep it.
@@ -473,8 +483,8 @@ async function save(): Promise<void> {
     steepMinHours: longStyle.value && p.steepMin?.ok ? p.steepMin.value : null,
     steepMaxHours: longStyle.value && p.steepMax?.ok ? p.steepMax.value : null,
     steepTemp: longStyle.value ? steepTemp.value || null : null,
-    dilutionRatio: coldStyle.value && p.dilution?.ok ? p.dilution.value : null,
-    dilutionWith: coldStyle.value && p.dilution?.ok ? dilutionWith.value || null : null,
+    dilutionRatio: dilutable.value && !iced.value && p.dilution?.ok ? p.dilution.value : null,
+    dilutionWith: dilutable.value && !iced.value && p.dilution?.ok ? dilutionWith.value || null : null,
     defaultGrinderId: defaultGrinderId.value || null,
     // grindErrors has checked every row parses.
     grindSettings: grindRows.value.map((r) => {
@@ -564,17 +574,21 @@ async function save(): Promise<void> {
             <input id="water" aria-required="true" v-model="water" inputmode="decimal" placeholder="250" :aria-invalid="submitted && !!fieldErrors.water" />
             <span v-if="submitted && fieldErrors.water" class="field-error">{{ fieldErrors.water }}</span>
           </div>
-          <div v-if="!espresso && show('recipe.ice')" class="field">
-            <label for="ice">Ice (g)</label>
-            <input id="ice" v-model="ice" inputmode="decimal" placeholder="none" :aria-invalid="submitted && !!fieldErrors.ice" />
-            <span v-if="submitted && fieldErrors.ice" class="field-error">{{ fieldErrors.ice }}</span>
-            <span v-else class="hint">Flash chilled: in the server, brewed onto</span>
-          </div>
         </div>
         <p class="ratio" aria-live="polite">
           {{ espresso ? 'Coffee : shot' : iceGrams > 0 ? 'Coffee : water + ice' : 'Coffee : water' }} <strong>{{ ratio ?? '–' }}</strong>
           <span v-if="iceGrams > 0 && liquid !== null" class="muted small">({{ formatGrams(liquid) }} g; the pours count the hot water only)</span>
         </p>
+        <label v-if="!espresso && !coldStyle && show('recipe.ice')" class="checkbox">
+          <input v-model="flashChilled" type="checkbox" />
+          Flash chilled (brewed onto ice)
+        </label>
+        <div v-if="iced && show('recipe.ice')" class="field ice">
+          <label for="ice">Ice (g)<span class="req" aria-hidden="true">*</span></label>
+          <input id="ice" aria-required="true" v-model="ice" inputmode="decimal" placeholder="100" :aria-invalid="submitted && !!fieldErrors.ice" />
+          <span v-if="submitted && fieldErrors.ice" class="field-error">{{ fieldErrors.ice }}</span>
+          <span v-else class="hint">In the server, brewed onto</span>
+        </div>
 
         <div v-if="(!espresso && show('recipe.expectedYield')) || (show('recipe.temp') && !longStyle)" class="form-row">
           <div v-if="!espresso && show('recipe.expectedYield')" class="field">
@@ -616,7 +630,7 @@ async function save(): Promise<void> {
             <option v-for="(label, key) in STEEP_TEMPS" :key="key" :value="key">{{ label }}</option>
           </select>
         </div>
-        <fieldset v-if="coldStyle && show('recipe.dilution')" class="finish">
+        <fieldset v-if="dilutable && !iced && show('recipe.dilution')" class="finish">
           <legend>Serve diluted</legend>
           <div class="finish-row">
             <div class="field">
@@ -632,7 +646,8 @@ async function save(): Promise<void> {
             </div>
           </div>
           <span v-if="fieldErrors.dilution" class="field-error">{{ fieldErrors.dilution }}</span>
-          <span v-else class="hint">Parts added per part of concentrate, e.g. 1 for half and half. Leave empty if it's served as it is.</span>
+          <span v-else-if="coldStyle" class="hint">Parts added per part of concentrate, e.g. 1 for half and half. Leave empty if it's served as it is.</span>
+          <span v-else class="hint">For a concentrate, e.g. brewed hot and poured over ice: parts added per part brewed (0.7 for 105 g of ice onto 150 g). Its TDS is taken before diluting. Leave empty if it's served as it is; brewed straight onto ice is Flash chilled, above.</span>
         </fieldset>
         <fieldset v-if="show('recipe.finishWindow') && !longStyle" class="finish">
           <legend>{{ espresso ? 'Target shot time' : 'Target finish' }}</legend>
@@ -869,6 +884,9 @@ p {
 .ratio {
   margin-top: calc(-1 * var(--space-2));
   color: var(--text-muted);
+}
+.field.ice {
+  max-width: 14rem;
 }
 .ratio strong {
   color: var(--brand);

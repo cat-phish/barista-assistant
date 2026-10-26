@@ -8,7 +8,7 @@ import type { BrewContext, BrewSummary, GrinderInfo, WaterInfo } from "./context
 // Stored with each analysis (llm_analyses.prompt_version), so results can be
 // compared across changes (npm run eval). Bump it whenever the input, the
 // prompt or the schema changes.
-export const PROMPT_VERSION = "2026-10-d";
+export const PROMPT_VERSION = "2026-10-e";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type LlmInput = { [key: string]: Json };
@@ -131,6 +131,7 @@ const brewsLike = (input: LlmInput) =>
     .map((b) => (b.recipeStyle as Record<string, Json> | undefined)?.brewsLike)
     .concat((recipe(input).style as Record<string, Json> | undefined)?.brewsLike);
 const methodKinds = (input: LlmInput) => brews(input).map((b) => b.methodKind);
+const isCold = (style: Json | undefined) => style === "cold_brew" || style === "kyoto_drip" || style === "rapid_cold";
 
 export interface PromptSection {
   key: string;
@@ -282,7 +283,7 @@ export const PROMPT_SECTIONS: PromptSection[] = [
   },
   {
     key: "cold",
-    when: (i) => brewsLike(i).some((s) => s === "cold_brew" || s === "kyoto_drip" || s === "rapid_cold"),
+    when: (i) => brewsLike(i).some(isCold),
     text:
       "Cold styles (by brewsLike): cold_brew steeps for hours (the brew's steepMinHours-steepMaxHours, the window it " +
       "aimed for, which may differ from the recipe's; in the fridge or at room temperature per steepTemp; " +
@@ -293,6 +294,19 @@ export const PROMPT_SECTIONS: PromptSection[] = [
       "recipe's dilutionRatio is the intent): judge strength as served, after dilution. A concentrate's TDS is usually " +
       "around 2.5-5% and the diluted cup around 1.2-1.6%, so a high TDS isn't over-extraction by itself. For long cold " +
       "brews, steep time and grind are the main levers; temperature advice applies to rapid_cold only.",
+  },
+  {
+    key: "concentrate",
+    when: (i) =>
+      brews(i).some((b) => b.dilutionRatio !== undefined && !isCold((b.recipeStyle as Record<string, Json> | undefined)?.brewsLike)) ||
+      (recipe(i).dilutionRatio !== undefined && !isCold((recipe(i).style as Record<string, Json> | undefined)?.brewsLike)),
+    text:
+      "Hot concentrates (a brew that isn't a cold style, with dilutionRatio; the recipe's is the intent) are brewed " +
+      "strong and then served diluted 1 : dilutionRatio with dilutedWith, e.g. poured over ice. tdsPercent and " +
+      "extractionYieldPercent are the concentrate's, measured before diluting, so a TDS of 2-5% isn't " +
+      "over-extraction by itself; judge extraction from them and strength as served, after the dilution. Over ice " +
+      "the cup is also chilled, so judge it as an iced drink. A cup that's too strong or weak as served but well " +
+      "extracted needs a different dilution or brew ratio, not a grind change.",
   },
   {
     key: "flashChilled",

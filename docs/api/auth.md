@@ -96,7 +96,7 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
   - `grinder`;
   - `grind`: the setting and RPM, on the same grinder;
   - `waterProfile`;
-  - `dilution`: the dilution served (cold styles); a long brew's `steepTemp`
+  - `dilution`: the dilution served (cold styles, concentrates); a long brew's `steepTemp`
     goes with `temp`;
   - `window`: the window the brew aimed for (cold styles: a long brew's
     steep window, rapid cold's target finish, brew-logs.md §6);

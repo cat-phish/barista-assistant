@@ -23,7 +23,7 @@ import { grinderRetention } from '../lib/grinderRetention';
 import { batchSuffix } from '../lib/beans';
 import { formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen, MAX_BREW_SEC } from '../lib/format';
 import { formatFinishWindow } from '../lib/steps';
-import { dilutionText, STEEP_TEMPS, steepWindowText } from '../lib/coldBrew';
+import { dilutionText, isColdStyle, STEEP_TEMPS, steepWindowText } from '../lib/coldBrew';
 import { formatSize } from '../lib/servings';
 import { formatTemp } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
@@ -307,7 +307,7 @@ function markLabel(m: Mark): string {
         <dl class="details">
           <div><dt>{{ espresso ? 'Dose → shot' : log.actualIceGrams !== null ? 'Dose : water + ice' : 'Dose : water' }}</dt><dd>{{ formatDoseLine(log.actualDoseGrams, log.actualWaterGrams, log.actualYieldGrams, log.actualIceGrams) }}</dd></div>
           <div><dt>{{ espresso ? 'Shot weight' : 'Yield' }}</dt><dd>{{ yieldText(log) }}</dd></div>
-          <div v-if="log.tdsPercent !== null"><dt>TDS</dt><dd>{{ tdsText(log) }}</dd></div>
+          <div v-if="log.tdsPercent !== null"><dt>{{ log.dilutionRatio !== null && !isColdStyle(log.recipe?.style?.brewsLike) ? 'Concentrate TDS' : 'TDS' }}</dt><dd>{{ tdsText(log) }}</dd></div>
           <div v-if="log.steepTemp"><dt>Steeped in</dt><dd>{{ STEEP_TEMPS[log.steepTemp] }}</dd></div>
           <div v-if="log.dilutionRatio !== null"><dt>Served</dt><dd>Diluted {{ dilutionText(log.dilutionRatio, log.dilutedWith) }}</dd></div>
           <div><dt>Time</dt><dd>{{ formatTime(log.actualTimeSec) }}<template v-if="steepWindow && !log.steeping"> (steep for {{ steepWindow }})</template><template v-else-if="finishWindow"> (target {{ finishWindow }})</template></dd></div>

@@ -14,8 +14,16 @@ recipe can add `targetIceGrams`, the ice in the server the hot water drips
 onto. The ratio then counts the ice, dose:(water + ice), shown as
 "15 g : 250 g (150 g water + 100 g ice · 1:16.7)"; `targetWaterGrams` is the
 hot water and the pour targets count it only. It works with any style (a V60
-onto ice still brews like `pour_over`). `expectedYieldGrams` includes the
+onto ice still brews like `pour_over`); the recipe form asks for it with a
+"Flash chilled" checkbox, in place of a serving dilution. `expectedYieldGrams` includes the
 ice. Brews made onto ice take no TDS reading (§6).
+
+**Concentrate** (brewed strong, then diluted, e.g. a hot concentrate poured
+over ice): any filter recipe with a serving dilution, `dilutionRatio` and
+`dilutionWith` (below), is one; there's no style or flag for it, and the
+style still says how it extracts. Unlike flash chilled, the TDS is read on
+the concentrate before it's diluted, so extraction yield works as usual
+(§6), and the AI judges the cup as served, after the dilution (§9).
 
 **By brewer kind** (§3), checked against the recipe as it is after the
 request (so a `PATCH` that changes `brewerId` must also send the fields the
@@ -185,7 +193,8 @@ Creates a recipe, its grind starting points and its steps in one transaction.
     (archived allowed). Deleting the grinder sets it back to `null`.
   - `flowUnit` (optional, default `g_s`): `g_s` or `ml_s`.
   - **Cold styles** (§5e), all optional and nullable, accepted on any recipe;
-    clients show them for cold styles and the AI reads them for those:
+    clients show them for cold styles, and the dilution for any filter
+    recipe (a concentrate, above):
     - `steepMinHours` / `steepMaxHours`: the steep window of a long style
       (cold brew, Kyoto drip), 0.5–72 h, 1 decimal, a pair (both ends, min ≤
       max; `null` on either clears both). The steep reminder (§1b) comes at
