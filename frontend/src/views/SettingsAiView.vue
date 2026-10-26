@@ -88,7 +88,7 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
           <div class="field delay">
             <label for="auto-delay">Wait after saving</label>
             <select id="auto-delay" :value="delay" @change="save({ autoAnalyzeDelayMinutes: Number(($event.target as HTMLSelectElement).value) as AutoAnalyzeDelay }, 'auto')">
-              <option v-for="m in AUTO_ANALYZE_DELAYS" :key="m" :value="m">{{ m }} minutes</option>
+              <option v-for="m in AUTO_ANALYZE_DELAYS" :key="m" :value="m">{{ m === 0 ? 'No wait' : `${m} minutes` }}</option>
             </select>
           </div>
           <div class="caps" role="radiogroup" aria-label="Daily limit">

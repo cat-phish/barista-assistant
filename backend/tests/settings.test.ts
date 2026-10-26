@@ -47,7 +47,7 @@ describe("workspace settings", () => {
     expect((await owner.agent.get("/api/workspaces")).body.workspaces[0].settings.hiddenFields).toEqual(["brew.tds"]);
   });
 
-  it("auto-analyze: on/off, a wait of 5, 10, 15 or 30 minutes, no cap or 1-500 a day (docs/api/analysis.md §8)", async () => {
+  it("auto-analyze: on/off, a wait of 0, 5, 10, 15 or 30 minutes, no cap or 1-500 a day (docs/api/analysis.md §8)", async () => {
     const owner = await newUser();
     const ws = await newWorkspace(owner);
     const path = `/api/workspaces/${ws.id}/settings`;
@@ -55,7 +55,8 @@ describe("workspace settings", () => {
     expect(ok.status).toBe(200);
     expect(ok.body.settings).toMatchObject({ autoAnalyze: true, autoAnalyzeDelayMinutes: 15, autoAnalyzeDailyCap: 20 });
     expect((await owner.agent.patch(path).send({ autoAnalyzeDailyCap: null })).body.settings.autoAnalyzeDailyCap).toBeNull();
-    for (const bad of [{ autoAnalyze: "yes" }, { autoAnalyzeDelayMinutes: 7 }, { autoAnalyzeDelayMinutes: "10" }, { autoAnalyzeDailyCap: 0 }, { autoAnalyzeDailyCap: 501 }, { autoAnalyzeDailyCap: 2.5 }]) {
+    expect((await owner.agent.patch(path).send({ autoAnalyzeDelayMinutes: 0 })).body.settings.autoAnalyzeDelayMinutes).toBe(0);
+    for (const bad of [{ autoAnalyze: "yes" }, { autoAnalyzeDelayMinutes: 7 }, { autoAnalyzeDelayMinutes: -5 }, { autoAnalyzeDelayMinutes: "10" }, { autoAnalyzeDailyCap: 0 }, { autoAnalyzeDailyCap: 501 }, { autoAnalyzeDailyCap: 2.5 }]) {
       expect((await owner.agent.patch(path).send(bad)).status, JSON.stringify(bad)).toBe(400);
     }
   });
