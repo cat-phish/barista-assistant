@@ -35,7 +35,7 @@ import {
   type BeanFilter,
   type BeanSortColumn,
 } from '../lib/beans';
-import { formatAdded, formatDay, localDateInput, toDateInput } from '../lib/format';
+import { formatAdded, formatDay, formatListDay, localDateInput, toDateInput } from '../lib/format';
 import { isSortKey, recallView, rememberView, sortArrow, sortBy, sortLabel, sortColumnOptions, toggleHeader } from '../lib/listSort';
 import { effectiveRoastAge } from '../lib/roastAge';
 import { usePreferences } from '../composables/usePreferences';
@@ -246,6 +246,7 @@ const HEADERS: Array<{ id: BeanSortColumn; text: string; title?: string; class?:
   { id: 'roaster', text: 'Roaster' },
   { id: 'roast', text: 'Roast' },
   { id: 'process', text: 'Process' },
+  { id: 'roastDate', text: 'Roasted', title: 'Roast date' },
   { id: 'age', text: 'Age', title: 'Days off roast (not counting frozen days)' },
   { id: 'decaf', text: 'Caf', title: 'Caffeinated / decaf' },
   { id: 'stock', text: 'Stock' },
@@ -253,7 +254,7 @@ const HEADERS: Array<{ id: BeanSortColumn; text: string; title?: string; class?:
   { id: 'rating', text: 'Rating', class: 'end' },
 ];
 const TABLE_COLS =
-  'minmax(0, 1.6fr) 1.5rem minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.1fr) 3.25rem 3.5rem 4rem 4.5rem 5.5rem';
+  'minmax(0, 1.6fr) 1.5rem minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.1fr) 4.5rem 3.25rem 3.5rem 4rem 4.5rem 5.5rem';
 
 // "12 d" off roast, frozen days excluded; "–" without a roast date.
 function ageCell(bean: Bean): string {
@@ -464,6 +465,7 @@ const selection = useSelection();
               <span class="data-td first-on-phone">{{ bean.roasterName }}</span>
               <span class="data-td">{{ roastLabel(bean, roastScale) ?? '–' }}</span>
               <span class="data-td wide-only">{{ processName(bean.processId) ?? '–' }}</span>
+              <span class="data-td wide-only">{{ bean.roastDate ? formatListDay(bean.roastDate) : '–' }}</span>
               <span class="data-td wide-only">{{ ageCell(bean) }}</span>
               <span class="data-td wide-only" :title="bean.decaf ? 'Decaf' : 'Caffeinated'">{{ bean.decaf ? 'Decaf' : 'Caf' }}</span>
               <span class="data-td">{{ bean.inventoryWeightGrams }} g</span>
@@ -641,9 +643,9 @@ p {
 .small {
   font-size: 0.9rem;
 }
-/* Ten columns need more than the usual 640px page. */
+/* Eleven columns need more than the usual 640px page. */
 .page.wide {
-  max-width: 1080px;
+  max-width: 1150px;
 }
 .center {
   text-align: center;

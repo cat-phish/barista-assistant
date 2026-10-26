@@ -61,6 +61,14 @@ export function formatDay(date: string): string {
   return new Date(y ?? 0, (m ?? 1) - 1, d ?? 1).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+// A calendar date as a list date: "Oct 10", or "Oct 10, 2025" outside this year.
+export function formatListDay(date: string, now: Date = new Date()): string {
+  const [y, m, d] = date.slice(0, 10).split('-').map(Number);
+  const day = new Date(y ?? 0, (m ?? 1) - 1, d ?? 1);
+  const sameYear = day.getFullYear() === now.getFullYear();
+  return day.toLocaleDateString(undefined, sameYear ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 // An ISO timestamp as a list date: "Oct 21", or "Oct 21, 2025" outside this year.
 export function formatAdded(iso: string, now: Date = new Date()): string {
   const d = new Date(iso);

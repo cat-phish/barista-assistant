@@ -52,7 +52,7 @@ export interface WorkspaceSettings {
   autoAnalyzeDelayMinutes: AutoAnalyzeDelay;
   autoAnalyzeDailyCap: number | null; // null: no cap
 }
-export const AUTO_ANALYZE_DELAYS = [5, 10, 15, 30] as const;
+export const AUTO_ANALYZE_DELAYS = [0, 5, 10, 15, 30] as const;
 export type AutoAnalyzeDelay = (typeof AUTO_ANALYZE_DELAYS)[number];
 
 // docs/api/workspaces.md §2 Members

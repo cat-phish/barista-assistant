@@ -39,6 +39,16 @@ describe("auto-analyze", () => {
     expect(listed).toMatchObject({ id, analyzed: false, analysisDueAt: res.body.brewLog.analysisDueAt });
   });
 
+  it("with no wait, a rated brew is analyzed straight away", async () => {
+    const { owner, ws, bean } = await setup({ autoAnalyze: true, autoAnalyzeDelayMinutes: 0 });
+    const id = await newBrewLog(owner, ws.id, bean, { rating: 4 });
+    const queued = await job(id);
+    expect(queued?.data).toEqual({ brewLogId: id, auto: true });
+    expect(queued?.opts.delay ?? 0).toBe(0);
+    expect(await queued?.isDelayed()).toBe(false);
+    expect((await entry(owner, ws.id, id)).analysisDueAt).not.toBeNull();
+  });
+
   it("an unrated brew waits for its first rating, then is analyzed straight away", async () => {
     const { owner, ws, bean } = await setup();
     const id = await newBrewLog(owner, ws.id, bean);

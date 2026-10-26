@@ -46,7 +46,7 @@ Owners switch it on under Settings → **AI** (`autoAnalyze`,
 §2). Then:
 
 - **A rated brew** saved with `POST …/brew-logs` (§6) queues an analysis
-  `autoAnalyzeDelayMinutes` later: a delayed job, same `jobId` as above, data
+  `autoAnalyzeDelayMinutes` later (`0`: right away): a delayed job, same `jobId` as above, data
   `{ brewLogId, auto: true }`. The brew is read when the job runs, so edits
   made meanwhile are included; deleting the brew removes the waiting job.
 - **An unrated brew** (Rate later, or no rating given) and a cold brew still

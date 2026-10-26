@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatRatio, formatTime, localDateInput, parseDecimal, parseTime, toDateInput } from './format';
+import { formatListDay, formatRatio, formatTime, localDateInput, parseDecimal, parseTime, toDateInput } from './format';
 
 describe('parseDecimal', () => {
   const dose = { scale: 2, min: 0, max: 1000, exclusiveMin: true, exclusiveMax: true };
@@ -45,5 +45,15 @@ describe('dates and ratios', () => {
   it('formats brew ratios', () => {
     expect(formatRatio(15, 250)).toBe('1:16.7');
     expect(formatRatio(18, 36)).toBe('1:2');
+  });
+});
+
+describe('formatListDay', () => {
+  const now = new Date(2026, 9, 26);
+  it('is the calendar date, no time zone shift, with the year only outside this one', () => {
+    expect(formatListDay('2026-10-01T00:00:00.000Z', now)).toMatch(/1(?!\d)/);
+    expect(formatListDay('2026-10-01T00:00:00.000Z', now)).not.toMatch(/2026|30/);
+    expect(formatListDay('2025-12-31', now)).toMatch(/2025/);
+    expect(formatListDay('2025-12-31', now)).toMatch(/31/);
   });
 });
