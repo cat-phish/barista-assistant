@@ -101,7 +101,11 @@ queue:
    - Each brew includes its recipe's `methodKind` (or `null` without a
      recipe), `actualWaterGrams` (`null` for espresso), the measured
      `actualYieldGrams` (or `null`) and `brewRatio`: water ÷ dose, or for
-     espresso yield ÷ dose. It also includes `tdsPercent` (or `null`) and
+     espresso yield ÷ dose. A **flash chilled** brew (brewed onto ice, §5)
+     adds `actualIceGrams`, and its recipe `targetIceGrams`; `brewRatio`
+     then counts the ice, (water + ice) ÷ dose, and the yield is weighed with
+     the ice in. Such brews have no TDS. The prompt's `flashChilled` section
+     tells the AI they're judged as served over ice. It also includes `tdsPercent` (or `null`) and
      `extractionYieldPercent`, worked out as in §6 (`null` without TDS, or
      without a yield where one is needed). `methodKind` is `filter`,
      `espresso`, `stovetop` or `other` (the brewer's kind, §3b). The
@@ -255,7 +259,7 @@ and the prompt sections about them drop out with them (step 3). Keys
   `POST /analyze` is a `409` (§8), and a job already queued is skipped.
 
 Always sent: the bean and roaster names, roast date and age, dose, water,
-yield, time, grind setting, ratio, rating and tasting notes, and the
+ice (flash chilled), yield, time, grind setting, ratio, rating and tasting notes, and the
 recipe's targets.
 
 **Keeping it in step:** every field the analysis context can send is

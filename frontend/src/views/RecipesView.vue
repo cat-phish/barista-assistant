@@ -161,7 +161,7 @@ const selection = useSelection();
             <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(recipe.id) ? '☑' : '☐' }}</span>{{ recipe.name }}<span v-if="recipe.archivedAt" class="muted"> (archived)</span></span>
             <span class="data-td">{{ recipe.brewer.name }}</span>
             <span class="data-td">{{ recipe.style?.name ?? '–' }}</span>
-            <span class="data-td">{{ formatDoseLine(recipe.targetDoseGrams, recipe.targetWaterGrams, recipe.expectedYieldGrams) }}</span>
+            <span class="data-td">{{ formatDoseLine(recipe.targetDoseGrams, recipe.targetWaterGrams, recipe.expectedYieldGrams, recipe.targetIceGrams) }}</span>
             <span class="data-td end">{{ formatAdded(recipe.createdAt) }}</span>
           </button>
           <div v-if="openId === recipe.id" class="data-details">

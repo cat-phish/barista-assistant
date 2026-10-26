@@ -18,6 +18,7 @@ const recipe = (name: string, label: string, hint?: string): FieldInfo => ({ key
 
 // In the order the forms show them.
 export const FIELDS = [
+  brew('ice', 'Ice (flash chilled)', 'Ice in the server the hot water is brewed onto'),
   brew('yield', 'Yield', 'The weighed brewed coffee (filter; a shot always records its weight)'),
   brew('tds', 'TDS and Brix', 'Refractometer reading and the extraction worked out from it'),
   brew('temp', 'Water temperature'),
@@ -54,6 +55,7 @@ export const FIELDS = [
   bean('notes', 'Notes'),
 
   recipe('style', 'Style'),
+  recipe('ice', 'Ice (flash chilled)', 'Ice in the server the hot water is brewed onto; the ratio counts it'),
   recipe('expectedYield', 'Expected yield (filter)'),
   recipe('temp', 'Water temperature'),
   recipe('steepWindow', 'Steep time (cold brew, Kyoto drip)', 'In hours; sets when the ready reminder comes'),

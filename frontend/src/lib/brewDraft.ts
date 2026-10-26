@@ -8,9 +8,10 @@ import { parseTemp, tempText } from './units';
 
 export interface BrewDraft {
   dose: string;
-  water: string; // unused for espresso
+  water: string; // unused for espresso; the hot water for flash chilled
+  ice: string; // flash chilled: g in the server ('' = none); unused for espresso
   yieldGrams: string; // measured beverage weight: optional, but the shot weight (required) for espresso
-  tds: string; // % ('' = not measured)
+  tds: string; // % ('' = not measured); not sent with ice
   temp: string;
   grinderId: string; // '' = none
   waterProfileId: string; // '' = none recorded
@@ -32,13 +33,13 @@ export interface BrewDraft {
 }
 
 export type BrewValues = Omit<BrewLogInput, 'beanId' | 'recipeId'>;
-export type BrewDraftErrors = Partial<Record<'dose' | 'water' | 'yieldGrams' | 'tds' | 'temp' | 'time' | 'firstDrop' | 'rpm' | 'beanIn' | 'groundOut' | 'grind' | 'dilution', string>>;
+export type BrewDraftErrors = Partial<Record<'dose' | 'water' | 'ice' | 'yieldGrams' | 'tds' | 'temp' | 'time' | 'firstDrop' | 'rpm' | 'beanIn' | 'groundOut' | 'grind' | 'dilution', string>>;
 
 // What the RPM is checked against: the brew's grinder (null = none chosen).
 export type RpmGrinder = Pick<Grinder, 'variableSpeed' | 'rpmMin' | 'rpmMax'> | null;
 
 export function emptyDraft(): BrewDraft {
-  return { dose: '', water: '', yieldGrams: '', tds: '', temp: '', grinderId: '', waterProfileId: '', toolIds: [], problemIds: [], firstDrop: '', grind: '', rpm: '', beanIn: '', groundOut: '', steepTemp: '', dilution: '', dilutedWith: '', time: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
+  return { dose: '', water: '', ice: '', yieldGrams: '', tds: '', temp: '', grinderId: '', waterProfileId: '', toolIds: [], problemIds: [], firstDrop: '', grind: '', rpm: '', beanIn: '', groundOut: '', steepTemp: '', dilution: '', dilutedWith: '', time: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
 }
 
 // temp is text in the person's unit (°C stored); see lib/units.ts.
@@ -46,6 +47,7 @@ export function draftFromLog(log: BrewLog, tempUnit: TemperatureUnit = 'c'): Bre
   return {
     dose: formatGrams(log.actualDoseGrams),
     water: log.actualWaterGrams === null ? '' : formatGrams(log.actualWaterGrams),
+    ice: log.actualIceGrams === null ? '' : formatGrams(log.actualIceGrams),
     yieldGrams: log.actualYieldGrams === null ? '' : formatGrams(log.actualYieldGrams),
     tds: log.tdsPercent === null ? '' : String(log.tdsPercent),
     temp: tempText(log.actualTempC, tempUnit),
@@ -91,12 +93,14 @@ export function parseBrewDraft(
   const dose = parseDecimal(d.dose, { scale: 2, min: 0, max: 1000, exclusiveMin: true, exclusiveMax: true });
   const grams = { scale: 2, min: 0, max: 10000, exclusiveMin: true, exclusiveMax: true };
   const water = espresso ? ({ ok: true, value: null } as const) : parseDecimal(d.water, grams);
+  const ice = !espresso && d.ice.trim() ? parseDecimal(d.ice, grams) : null;
   const yieldGrams = d.yieldGrams.trim()
     ? parseDecimal(d.yieldGrams, grams)
     : espresso
       ? ({ ok: false, error: 'Enter the shot weight' } as const)
       : null;
-  const tds = d.tds.trim() ? parseDecimal(d.tds, { scale: 2, min: 0, max: 30, exclusiveMin: true }) : null;
+  // A brew made onto ice takes no TDS (docs/api/brew-logs.md §6).
+  const tds = !ice && d.tds.trim() ? parseDecimal(d.tds, { scale: 2, min: 0, max: 30, exclusiveMin: true }) : null;
   const temp = d.temp.trim() ? parseTemp(d.temp, tempUnit) : null;
   const time = parseTime(d.time);
   const firstDrop = espresso ? parseMark(d.firstDrop) : null;
@@ -110,6 +114,7 @@ export function parseBrewDraft(
   const errors: BrewDraftErrors = {};
   if (!dose.ok) errors.dose = dose.error;
   if (!water.ok) errors.water = water.error;
+  if (ice && !ice.ok) errors.ice = ice.error;
   if (yieldGrams && !yieldGrams.ok) errors.yieldGrams = yieldGrams.error;
   if (tds && !tds.ok) errors.tds = tds.error;
   if (temp && !temp.ok) errors.temp = temp.error;
@@ -125,7 +130,7 @@ export function parseBrewDraft(
   else if (rpm?.ok && grinder?.rpmMin != null && grinder.rpmMax != null && (rpm.value < grinder.rpmMin || rpm.value > grinder.rpmMax)) {
     errors.rpm = `Outside the grinder's range (${grinder.rpmMin}–${grinder.rpmMax})`;
   }
-  if (Object.keys(errors).length > 0 || !dose.ok || !water.ok || (yieldGrams && !yieldGrams.ok) || !time.ok || (tds && !tds.ok) || (temp && !temp.ok) || (rpm && !rpm.ok) || (beanIn && !beanIn.ok) || (groundOut && !groundOut.ok) || (grind && !grind.ok) || (dilution && !dilution.ok)) {
+  if (Object.keys(errors).length > 0 || !dose.ok || !water.ok || (ice && !ice.ok) || (yieldGrams && !yieldGrams.ok) || !time.ok || (tds && !tds.ok) || (temp && !temp.ok) || (rpm && !rpm.ok) || (beanIn && !beanIn.ok) || (groundOut && !groundOut.ok) || (grind && !grind.ok) || (dilution && !dilution.ok)) {
     return { errors, values: null, firstDropSec: null };
   }
 
@@ -135,6 +140,7 @@ export function parseBrewDraft(
     values: {
       actualDoseGrams: dose.value,
       actualWaterGrams: water.value,
+      actualIceGrams: ice?.ok ? ice.value : null,
       actualYieldGrams: yieldGrams?.ok ? yieldGrams.value : null,
       tdsPercent: tds?.ok ? tds.value : null,
       actualTempC: temp?.ok ? temp.value : null,

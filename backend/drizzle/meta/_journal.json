@@ -463,6 +463,13 @@
       "when": 1792822988627,
       "tag": "0065_espresso_dose_yield",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "5",
+      "when": 1792863503625,
+      "tag": "0066_flash_chilled",
+      "breakpoints": true
     }
   ]
 }

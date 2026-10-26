@@ -91,7 +91,7 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
 - `repeatKeeps`: what repeating a brew copies (Settings → Repeat brews), a
   list of `REPEAT_KEEPS`, each once:
   - `size`: the drink size;
-  - `doseWater`: dose and water;
+  - `doseWater`: dose and water, and a flash chilled brew's ice;
   - `temp`;
   - `grinder`;
   - `grind`: the setting and RPM, on the same grinder;

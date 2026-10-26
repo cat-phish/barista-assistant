@@ -2,7 +2,7 @@
 // and the beans, one row each, with names instead of IDs. Not for importing
 // back (that's the JSON export).
 import { count, desc, eq } from "drizzle-orm";
-import { extractionYield } from "@barista/shared/brew";
+import { extractionYield, ratioWater } from "@barista/shared/brew";
 import { beanProcesses, beans, brewLogs } from "@barista/shared/schema";
 import { db } from "./db.js";
 import { loadBrewLogs } from "./routes/brewLogs.js";
@@ -40,7 +40,7 @@ export async function brewLogsCsv(workspaceId: string): Promise<string> {
   const logs = await loadBrewLogs(eq(brewLogs.workspaceId, workspaceId), 1_000_000);
   const header = [
     "Date", "Date (UTC)", "Brewed by", "Roaster", "Bean", "Batch", "Recipe", "Style", "Brewer", "Drink", "Size",
-    "Grinder", "Grind setting", "Grind RPM", "Water profile", "Dose (g)", "Water (g)", "Yield (g)", "Ratio", "TDS (%)",
+    "Grinder", "Grind setting", "Grind RPM", "Water profile", "Dose (g)", "Water (g)", "Ice (g)", "Yield (g)", "Ratio", "TDS (%)",
     "Extraction (%)", "Water temp (°C)", "Time (s)", "Time", "Beans in (g)", "Grounds out (g)", "Steeping", "Steeped in",
     "Steep window (h)", "Target finish (s)", "Served diluted 1:", "Diluted with", "Prep", "Problems", "Rating",
     "Tasting notes", "Drink rating", "Drink notes",
@@ -63,9 +63,10 @@ export async function brewLogsCsv(workspaceId: string): Promise<string> {
     l.waterProfile?.name,
     l.actualDoseGrams,
     l.actualWaterGrams,
+    l.actualIceGrams,
     l.actualYieldGrams,
     (() => {
-      const out = l.actualWaterGrams ?? l.actualYieldGrams;
+      const out = ratioWater(l.actualWaterGrams, l.actualIceGrams) ?? l.actualYieldGrams;
       return out === null ? null : Math.round((out / l.actualDoseGrams) * 10) / 10;
     })(),
     l.tdsPercent,

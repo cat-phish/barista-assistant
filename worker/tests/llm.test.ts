@@ -60,6 +60,7 @@ const summary = (over: Partial<BrewSummary> = {}): BrewSummary => ({
   problems: [],
   actualDoseGrams: 15,
   actualWaterGrams: 250,
+  actualIceGrams: null,
   actualYieldGrams: null,
   brewRatio: 16.67,
   tdsPercent: null,
@@ -95,6 +96,7 @@ const context = (over: { brew?: Partial<BrewSummary>; previous?: Array<Partial<B
     methodKind: "filter",
     targetDoseGrams: 15,
     targetWaterGrams: 250,
+    targetIceGrams: null,
     expectedYieldGrams: 220,
     expectedFinishMinSec: 150,
     expectedFinishMaxSec: 180,
@@ -167,6 +169,9 @@ describe("what the AI is sent (docs/api/llm-contract.md §9)", () => {
     expect(promptSections(espresso)).toEqual(["core", "output", "style", "batch", "roastType", "decafBlend", "flavorProfile", "tds", "water", "prepTools", "problems", "rpm", "retention", "espresso", "end"]);
     const cold = toLlmInput(context({ brew: { recipeStyle: { name: "Cold brew", brewsLike: "cold_brew" }, drink: { name: "Iced latte", ingredientTypes: ["milk"] } } }));
     expect(promptSections(cold)).toEqual(expect.arrayContaining(["drink", "cold"]));
+    expect(promptSections(cold)).not.toContain("flashChilled");
+    const iced = toLlmInput(context({ brew: { actualWaterGrams: 150, actualIceGrams: 100 } }));
+    expect(promptSections(iced)).toContain("flashChilled");
   });
 
   it("pins the prompt for a plain filter brew", () => {

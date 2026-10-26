@@ -38,7 +38,7 @@ import {
   type StepDraft,
 } from '../lib/steps';
 import { useWorkspaceStore } from '../stores/workspace';
-import { estimateYield, ROAST_LEVELS } from '../lib/scale';
+import { estimateYield, ratioWater, ROAST_LEVELS } from '../lib/scale';
 import { parseTemp, tempText, TEMPERATURE_LABELS } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
@@ -66,6 +66,7 @@ const name = ref('');
 const brewerId = ref('');
 const dose = ref('');
 const water = ref('');
+const ice = ref(''); // flash chilled: ice in the server (docs/api/recipes.md §5)
 const expectedYield = ref('');
 // Expected yield follows a light-roast estimate until typed over.
 const yieldCustom = ref(false);
@@ -119,6 +120,7 @@ const STEEP_HOURS = { scale: 1, min: 0.5, max: 72 } as const;
 const parsed = computed(() => ({
   dose: parseDecimal(dose.value, { scale: 2, min: 0, max: 1000, exclusiveMin: true, exclusiveMax: true }),
   water: espresso.value ? ({ ok: true, value: null } as const) : parseDecimal(water.value, grams),
+  ice: !espresso.value && ice.value.trim() ? parseDecimal(ice.value, grams) : null,
   expectedYield: expectedYield.value.trim()
     ? parseDecimal(expectedYield.value, grams)
     : espresso.value
@@ -165,6 +167,7 @@ const fieldErrors = computed(() => {
     brewer: brewerId.value && brewerId.value !== NEW_METHOD ? '' : 'Choose a brewer',
     dose: p.dose.ok ? '' : p.dose.error,
     water: p.water.ok ? '' : p.water.error,
+    ice: p.ice && !p.ice.ok ? p.ice.error : '',
     expectedYield: p.expectedYield && !p.expectedYield.ok ? p.expectedYield.error : '',
     finish: p.finish.ok ? '' : p.finish.error,
     firstDrop: p.firstDrop.ok ? '' : p.firstDrop.error,
@@ -187,17 +190,20 @@ const valid = computed(
     grindErrors.value.every((e) => !e) &&
     Object.keys(stepsParsed.value.errors).length === 0,
 );
-// Coffee:water, or for espresso coffee:shot weight.
+// The ice typed (flash chilled), 0 without; the ratio and the yield count it.
+const iceGrams = computed(() => (parsed.value.ice?.ok ? parsed.value.ice.value : 0));
+const liquid = computed(() => (parsed.value.water.ok && parsed.value.water.value !== null ? ratioWater(parsed.value.water.value, iceGrams.value) : null));
+// Coffee:water (and ice), or for espresso coffee:shot weight.
 const ratio = computed(() => {
   const p = parsed.value;
   if (!p.dose.ok) return null;
-  const out = espresso.value ? (p.expectedYield?.ok ? p.expectedYield.value : null) : p.water.ok ? p.water.value : null;
+  const out = espresso.value ? (p.expectedYield?.ok ? p.expectedYield.value : null) : liquid.value;
   return out === null ? null : formatRatio(p.dose.value, out);
 });
 // Filter only: espresso's yield is a target, not an estimate.
 const yieldEstimate = computed(() =>
-  !espresso.value && parsed.value.dose.ok && parsed.value.water.ok && parsed.value.water.value !== null
-    ? estimateYield(parsed.value.dose.value, parsed.value.water.value, ROAST_LEVELS[recipeRoastLevel.value].retention)
+  !espresso.value && parsed.value.dose.ok && liquid.value !== null
+    ? estimateYield(parsed.value.dose.value, liquid.value, ROAST_LEVELS[recipeRoastLevel.value].retention)
     : null,
 );
 const expectedYieldValue = computed(() => (parsed.value.expectedYield?.ok ? parsed.value.expectedYield.value : null));
@@ -239,6 +245,7 @@ function fill(recipe: Recipe): void {
   brewerId.value = recipe.brewer.id;
   dose.value = formatGrams(recipe.targetDoseGrams);
   water.value = recipe.targetWaterGrams === null ? '' : formatGrams(recipe.targetWaterGrams);
+  ice.value = recipe.targetIceGrams === null ? '' : formatGrams(recipe.targetIceGrams);
   expectedYield.value = recipe.expectedYieldGrams === null ? '' : formatGrams(recipe.expectedYieldGrams);
   // A saved yield that isn't the estimate was typed by someone: keep it.
   yieldCustom.value = recipe.expectedYieldGrams !== null && recipe.expectedYieldGrams !== yieldEstimate.value;
@@ -259,6 +266,7 @@ function fill(recipe: Recipe): void {
   steps.value = recipe.steps.map((s) => stepDraft(newStepKey(), s, temperatureUnit.value));
   reveal({
     'recipe.style': recipe.style,
+    'recipe.ice': recipe.targetIceGrams,
     'recipe.expectedYield': recipe.targetWaterGrams !== null && yieldCustom.value,
     'recipe.temp': recipe.targetTempC,
     'recipe.finishWindow': recipe.expectedFinishMinSec,
@@ -454,6 +462,7 @@ async function save(): Promise<void> {
     brewerId: brewerId.value,
     targetDoseGrams: p.dose.value,
     targetWaterGrams: p.water.value,
+    targetIceGrams: p.ice?.ok ? p.ice.value : null,
     expectedYieldGrams: p.expectedYield?.ok ? p.expectedYield.value : null,
     expectedFinishMinSec: p.finish.ok ? (p.finish.value?.min ?? null) : null,
     expectedFinishMaxSec: p.finish.ok ? (p.finish.value?.max ?? null) : null,
@@ -551,13 +560,20 @@ async function save(): Promise<void> {
             <span v-if="submitted && fieldErrors.expectedYield" class="field-error">{{ fieldErrors.expectedYield }}</span>
           </div>
           <div v-else class="field">
-            <label for="water">Water (g)<span class="req" aria-hidden="true">*</span></label>
+            <label for="water">{{ iceGrams > 0 ? 'Hot water (g)' : 'Water (g)' }}<span class="req" aria-hidden="true">*</span></label>
             <input id="water" aria-required="true" v-model="water" inputmode="decimal" placeholder="250" :aria-invalid="submitted && !!fieldErrors.water" />
             <span v-if="submitted && fieldErrors.water" class="field-error">{{ fieldErrors.water }}</span>
           </div>
+          <div v-if="!espresso && show('recipe.ice')" class="field">
+            <label for="ice">Ice (g)</label>
+            <input id="ice" v-model="ice" inputmode="decimal" placeholder="none" :aria-invalid="submitted && !!fieldErrors.ice" />
+            <span v-if="submitted && fieldErrors.ice" class="field-error">{{ fieldErrors.ice }}</span>
+            <span v-else class="hint">Flash chilled: in the server, brewed onto</span>
+          </div>
         </div>
         <p class="ratio" aria-live="polite">
-          {{ espresso ? 'Coffee : shot' : 'Coffee : water' }} <strong>{{ ratio ?? '–' }}</strong>
+          {{ espresso ? 'Coffee : shot' : iceGrams > 0 ? 'Coffee : water + ice' : 'Coffee : water' }} <strong>{{ ratio ?? '–' }}</strong>
+          <span v-if="iceGrams > 0 && liquid !== null" class="muted small">({{ formatGrams(liquid) }} g; the pours count the hot water only)</span>
         </p>
 
         <div v-if="(!espresso && show('recipe.expectedYield')) || (show('recipe.temp') && !longStyle)" class="form-row">

@@ -24,6 +24,7 @@ created it and can't be changed.
   "timestamp": "2026-10-18T08:55:00.000Z",
   "actualDoseGrams": 15,
   "actualWaterGrams": 250,
+  "actualIceGrams": null,
   "actualYieldGrams": 225,
   "tdsPercent": 1.38,
   "actualTempC": 93,
@@ -132,6 +133,13 @@ says why the last analysis failed or wasn't made (e.g. the daily cap), else
     `actualWaterGrams`, except for **espresso**: when `recipeId` is an
     espresso recipe, `actualWaterGrams` must be absent/`null` and
     `actualYieldGrams` (the shot weight) is required.
+  - `actualIceGrams` (optional, nullable, same rules as water): **flash
+    chilled**, the ice in the server the hot water was brewed onto (§5).
+    `actualWaterGrams` is then the hot water; the ratio is dose:(water + ice)
+    and `actualYieldGrams` is the server weighed with the ice in it. Must be
+    absent/`null` for espresso. A brew with ice takes **no TDS reading**:
+    `tdsPercent` must be `null` when `actualIceGrams` is set (`400`), and it
+    has no extraction yield.
   - `marks` (optional, default `[]`): when things actually happened, recorded
     by the timer: `[{ "kind": "first_drop", "atSec": 7.4 }, { "kind":
     "step_end", "stepOrder": 1, "atSec": 52 }]`. `kind` is one of
@@ -182,7 +190,7 @@ says why the last analysis failed or wasn't made (e.g. the daily cap), else
     rounded to 0.1 %. The beverage is `actualWaterGrams` for styles that brew
     like `immersion`, `cold_brew` or `ibrik` (custom ones by their `brewsLike`, §5e) (the liquid left in the grounds is as
     strong as the cup), else the measured `actualYieldGrams`; with no yield
-    there's no extraction yield. Clients may also take a °Brix reading and
+    (or with ice, `actualIceGrams`) there's no extraction yield. Clients may also take a °Brix reading and
     convert it, `TDS = (0.0036 × Bx + 0.7897) × Bx − 0.0071` (as
     Beanconqueror does), rounded to 2 decimals; only `tdsPercent` is stored.
   - `grindRpm` (optional, nullable): the grinder's speed, an integer 50–5000,
@@ -256,8 +264,9 @@ says why the last analysis failed or wasn't made (e.g. the daily cap), else
   (`[]` clears it). Sending `recipeId` also sets the log's brewer to that
   recipe's. The espresso rule is checked against the log as it is after the
   change, but only when the request sends `recipeId`, `actualWaterGrams`,
-  `actualYieldGrams` or `marks` (marks must also fit within `actualTimeSec`),
-  so editing the notes of an old log whose recipe later moved to another
+  `actualIceGrams`, `actualYieldGrams` or `marks` (marks must also fit within
+  `actualTimeSec`), and so is TDS with ice when it sends `actualIceGrams` or
+  `tdsPercent`, so editing the notes of an old log whose recipe later moved to another
   brewer still works.
 - **Success (`200 OK`):** `{ "brewLog": { ...brewLog } }`
 - **Errors:** `400` invalid or empty body, or `beanId`/`recipeId` not in this

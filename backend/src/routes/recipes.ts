@@ -153,6 +153,8 @@ const recipeFields = {
   targetDoseGrams: decimalSchema({ min: 0, max: 1000, scale: 2, exclusiveMin: true, exclusiveMax: true }),
   // Required or forbidden depending on the method's kind (kindError).
   targetWaterGrams: waterGrams.nullable().optional(),
+  // Flash chilled: ice in the server (docs/api/recipes.md §5); null for espresso.
+  targetIceGrams: waterGrams.nullable().optional(),
   expectedYieldGrams: waterGrams.nullable().optional(),
   expectedFinishMinSec: seconds.nullable().optional(),
   expectedFinishMaxSec: seconds.nullable().optional(),
@@ -265,6 +267,7 @@ async function styleError(tx: Tx, styleId: string | null | undefined, kind: Meth
 // checked against the recipe as it is after the request.
 interface KindCheck {
   targetWaterGrams: number | null;
+  targetIceGrams: number | null;
   expectedYieldGrams: number | null;
   firstDropMinSec: number | null;
   steps: ReadonlyArray<{
@@ -278,6 +281,7 @@ interface KindCheck {
 function kindError(kind: MethodKind, r: KindCheck): string | null {
   if (kind === "espresso") {
     if (r.targetWaterGrams !== null) return "targetWaterGrams: must be null for an espresso recipe";
+    if (r.targetIceGrams !== null) return "targetIceGrams: must be null for an espresso recipe";
     if (r.expectedYieldGrams === null) return "expectedYieldGrams: is required for an espresso recipe (the target shot weight)";
     const i = r.steps.findIndex((step) => !isEspressoType(step.stepType) || step.targetWaterGrams != null);
     if (i >= 0) return `steps.${i}: espresso steps are pre-infusion, soak, pressure, flow or other, without pour-to targets`;
@@ -357,6 +361,7 @@ async function loadRecipes(workspaceId: string, recipeId?: string): Promise<Reci
       brewer: { id: brewers.id, name: brewers.name, kind: brewers.kind },
       targetDoseGrams: recipes.targetDoseGrams,
       targetWaterGrams: recipes.targetWaterGrams,
+      targetIceGrams: recipes.targetIceGrams,
       expectedYieldGrams: recipes.expectedYieldGrams,
       expectedFinishMinSec: recipes.expectedFinishMinSec,
       expectedFinishMaxSec: recipes.expectedFinishMaxSec,
@@ -442,6 +447,7 @@ recipesRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Reci
     if (!kind) return "brewerId: not a brewer in this workspace";
     const wrongForKind = kindError(kind, {
       targetWaterGrams: recipeFields.targetWaterGrams ?? null,
+      targetIceGrams: recipeFields.targetIceGrams ?? null,
       expectedYieldGrams: recipeFields.expectedYieldGrams ?? null,
       firstDropMinSec: recipeFields.firstDropMinSec ?? null,
       steps,
@@ -506,6 +512,7 @@ recipesRouter.patch("/:recipeId", async (req: Request<RecipeParams>, res: Respon
       .select({
         brewerId: recipes.brewerId,
         targetWaterGrams: recipes.targetWaterGrams,
+        targetIceGrams: recipes.targetIceGrams,
         expectedYieldGrams: recipes.expectedYieldGrams,
         firstDropMinSec: recipes.firstDropMinSec,
         styleId: recipes.styleId,
@@ -522,6 +529,7 @@ recipesRouter.patch("/:recipeId", async (req: Request<RecipeParams>, res: Respon
     const after = { ...existing, ...recipeFields };
     const wrongForKind = kindError(kind, {
       targetWaterGrams: after.targetWaterGrams ?? null,
+      targetIceGrams: after.targetIceGrams ?? null,
       expectedYieldGrams: after.expectedYieldGrams ?? null,
       firstDropMinSec: after.firstDropMinSec ?? null,
       steps:

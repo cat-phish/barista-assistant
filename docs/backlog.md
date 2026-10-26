@@ -25,13 +25,13 @@ and fix the references.
 **Contents**
 - A. Settings & configuration: 1
 - B. Beans: 2
-- C. Brewing & logging: 3–5
-- D. AI suggestions: 6–7
-- E. Insights: 8
-- F. Bar & menu: 9–11
-- G. Home roasting: 12
-- H. Accounts: 13–14
-- I. Deployment & the app: 15
+- C. Brewing & logging: 3–6
+- D. AI suggestions: 7–8
+- E. Insights: 9
+- F. Bar & menu: 10–12
+- G. Home roasting: 13
+- H. Accounts: 14–15
+- I. Deployment & the app: 16
 
 ---
 
@@ -113,34 +113,55 @@ What's recorded about each coffee.
 
 Recording a brew: what's measured, and how fast it is to log.
 
-### 3. Iced and flash-chilled styles
+### 3. Flash chilled (brewed onto ice)
 
-- **Status:** idea, needs workshopping.
+- **Status:** in progress (branch `flash-chilled`).
 - **Why:** cold brew is built (roadmap: cold brew refinements), but iced
-  coffee is often brewed hot and chilled on the spot: **Japanese iced**
-  (pour over brewed straight onto ice), or a hot concentrate diluted with
-  ice. The ice is part of the recipe's water, which the ratio, the yield
-  estimate and extraction yield don't account for today.
-- **Approach (to workshop):**
-  - Styles that brew like pour over (or immersion), plus an **ice** amount:
-    "250 g total: 150 g hot water + 100 g ice".
-  - The ratio shown as coffee : total liquid, with the hot water and the ice
-    apart. Pour targets count the hot water only.
-  - The brewed yield is measured after the ice melts (or estimated), and
-    extraction yield uses the hot water and the coffee in it, not the
-    melted ice.
-  - "Diluted with ice" from the cold styles' dilution may cover hot
-    concentrates served over ice; decide whether that's one feature or two.
-  - The AI is told the brew was flash-chilled: brighter, more aromatic than
-    cold brew, and judged as served.
+  coffee is often brewed hot onto ice: **Japanese iced**, a pour over that
+  drips straight onto ice in the server. The ice is part of the recipe's
+  water, which the ratio and the yield estimate don't account for today.
+- **Approach (agreed):**
+  - An optional **ice** amount (g) on filter recipes and brews, not a new
+    style: "250 g: 150 g hot water + 100 g ice". Any style can have it, so
+    a V60 onto ice still brews like pour over.
+  - The ratio is coffee : (hot water + ice), with the two shown apart. Pour
+    targets count the hot water only; scaling a batch scales the ice too.
+  - The yield is the server weighed with the ice in it (the scale counts
+    the ice anyway), so there's no second yield field.
+  - **No TDS** for brews made onto ice: the reading isn't useful when part
+    of the ice may not have melted, so the TDS field is greyed out and the
+    API refuses one.
+  - The AI is told the brew was flash chilled: brighter and more aromatic
+    than cold brew, judged as served.
 - **Size:** M
 - **Depends on:** nothing.
-- **Open questions:**
-  - Is ice an ingredient of the recipe (grams), or a recipe field?
-  - Which styles: Japanese iced, flash brew, "hot bloom, cold finish"?
-  - How is the yield weighed when part of it is ice that hasn't melted?
+- **Decided:** ice is a recipe field (grams), not an ingredient or a style.
+  A hot concentrate poured over ice afterwards is item 4, not this one.
 
-### 4. Grind settings for multi-ring grinders
+### 4. Concentrate (brewed strong, then diluted)
+
+- **Status:** idea
+- **Why:** some iced coffee is a hot concentrate poured over ice or cut with
+  water afterwards (e.g. a hot OXO Rapid Brewer concentrate over ice). Unlike
+  flash chilled (item 3), the TDS is read on the concentrate before it's
+  diluted, so extraction yield still works.
+- **Approach:**
+  - The cold styles' dilution already fits: `dilutionRatio` and
+    `dilutionWith` (water, milk, **ice**, other) are accepted on any recipe
+    and brew; the forms only show them for cold styles. Show them for a
+    concentrate too.
+  - Probably a style ("Concentrate", brewing like pour over or immersion)
+    that shows the dilution fields, so extraction yield keeps going by
+    `brewsLike`.
+  - The AI is told TDS and yield are the concentrate's, and the cup is
+    judged as served, after the dilution.
+- **Size:** S–M
+- **Depends on:** nothing.
+- **Open questions:**
+  - A style, or a "served diluted" switch on any filter recipe?
+  - Is the name right ("Concentrate", "Brewed strong", "Over ice")?
+
+### 5. Grind settings for multi-ring grinders
 
 - **Status:** idea
 - **Why:** grind settings are numbers on the grinder's dial now (roadmap:
@@ -165,7 +186,7 @@ Recording a brew: what's measured, and how fast it is to log.
   - Which grinders need it (1Zpresso, Kingrinder, Timemore with a dial)?
   - Should the AI see the total clicks, the formatted text, or both?
 
-### 5. Change the brew window for any brew on the brew page
+### 6. Change the brew window for any brew on the brew page
 
 - **Status:** idea
 - **Why:** cold styles can now change their steep or finish window on
@@ -195,7 +216,7 @@ Recording a brew: what's measured, and how fast it is to log.
 
 What the analysis worker sends to the LLM and what comes back.
 
-### 6. Build bar items from plain text (AI)
+### 7. Build bar items from plain text (AI)
 
 - **Status:** idea
 - **Why:** recipes, drinks and other bar items often come as text: a
@@ -223,7 +244,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Units and step types the text describes loosely ("pour to about 100 ml,
     wait 30 s"): how sure must the AI be before filling a field?
 
-### 7. Review and test the espresso dose and shot weight suggestions
+### 8. Review and test the espresso dose and shot weight suggestions
 
 - **Status:** planned
 - **Why:** dose and shot weight changes for espresso (roadmap: espresso dose
@@ -263,7 +284,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## E. Insights
 
-### 8. Statistics and graphs
+### 9. Statistics and graphs
 
 - **Status:** idea
 - **Why:** the brew history is a list. Trends (is this bean getting better
@@ -292,7 +313,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## F. Bar & menu
 
-### 9. Ingredient prep and stock
+### 10. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -309,7 +330,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should a finished cold brew batch (roadmap: cold brew refinements) be
     stock the same way, with each glass served taken from it and rated?
 
-### 10. Public menu: branding and sizes
+### 11. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
@@ -323,7 +344,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
-### 11. Drink categories: what else they could do
+### 12. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -342,7 +363,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## G. Home roasting
 
-### 12. Roasting: green stock, roast logs, resting
+### 13. Roasting: green stock, roast logs, resting
 
 - **Status:** idea
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
@@ -373,7 +394,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## H. Accounts
 
-### 13. Account management and password reset
+### 14. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -404,13 +425,13 @@ What the analysis worker sends to the LLM and what comes back.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 14. Email verification
+### 15. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 13), inviting a member by email, or notifications by email.
+  (item 14), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -420,7 +441,7 @@ What the analysis worker sends to the LLM and what comes back.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 13).
+  - Shares the mail and token pieces with password reset (item 14).
 - **Size:** M (mail is new to the stack).
 - **Depends on:** nothing; pairs with 13.
 - **Open questions:**
@@ -435,7 +456,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 How the app is served and installed.
 
-### 15. Serve the app as an installable PWA
+### 16. Serve the app as an installable PWA
 
 - **Status:** idea
 - **Why:** the PWA is configured (`vite-plugin-pwa`, `frontend/vite.config.ts`)

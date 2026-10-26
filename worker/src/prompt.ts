@@ -8,7 +8,7 @@ import type { BrewContext, BrewSummary, GrinderInfo, WaterInfo } from "./context
 // Stored with each analysis (llm_analyses.prompt_version), so results can be
 // compared across changes (npm run eval). Bump it whenever the input, the
 // prompt or the schema changes.
-export const PROMPT_VERSION = "2026-10-c";
+export const PROMPT_VERSION = "2026-10-d";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type LlmInput = { [key: string]: Json };
@@ -293,6 +293,17 @@ export const PROMPT_SECTIONS: PromptSection[] = [
       "recipe's dilutionRatio is the intent): judge strength as served, after dilution. A concentrate's TDS is usually " +
       "around 2.5-5% and the diluted cup around 1.2-1.6%, so a high TDS isn't over-extraction by itself. For long cold " +
       "brews, steep time and grind are the main levers; temperature advice applies to rapid_cold only.",
+  },
+  {
+    key: "flashChilled",
+    when: (i) => anyBrew(i, "actualIceGrams") || recipe(i).targetIceGrams !== undefined,
+    text:
+      "Flash chilled brews (with actualIceGrams; the recipe's targetIceGrams is the intent) were brewed hot onto that " +
+      "much ice in the server, e.g. Japanese iced pour over. actualWaterGrams is the hot water, which does the " +
+      "extracting and which pour targets count; brewRatio counts the ice too, (water + ice) / dose, and " +
+      "actualYieldGrams is weighed with the ice in. They take no TDS reading. Judge the cup as served over ice: it " +
+      "should be brighter and more aromatic than cold brew, and a thin or watery cup can mean too much ice for the " +
+      "hot water as well as under-extraction.",
   },
   {
     key: "end",

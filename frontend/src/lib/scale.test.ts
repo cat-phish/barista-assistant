@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { RecipeStep } from '../api/types';
-import { brewRetention, estimateYield, GRAMS_PER_FL_OZ, linkRatio, ratioText, retentionOf, scaleBatch, scaleShot, scaleSteps } from './scale';
+import { brewRetention, estimateYield, GRAMS_PER_FL_OZ, linkRatio, ratioText, retentionOf, scaleBatch, scaleShot, scaleSteps, waterShare } from './scale';
 
-const recipe = { targetDoseGrams: 15, targetWaterGrams: 250, expectedYieldGrams: null };
+const recipe = { targetDoseGrams: 15, targetWaterGrams: 250, targetIceGrams: null, expectedYieldGrams: null };
 
 describe('yield and retention', () => {
   it('estimates yield as water minus what the grounds keep', () => {
@@ -18,11 +18,11 @@ describe('yield and retention', () => {
 
   it('prefers measured brews (median), then the recipe adjusted for roast, then the roast default', () => {
     const measured = [
-      { actualDoseGrams: 15, actualWaterGrams: 250, actualYieldGrams: 217 }, // 2.2
-      { actualDoseGrams: 15, actualWaterGrams: 250, actualYieldGrams: 220 }, // 2.0
-      { actualDoseGrams: 15, actualWaterGrams: 250, actualYieldGrams: 218.5 }, // 2.1
-      { actualDoseGrams: 15, actualWaterGrams: 250, actualYieldGrams: null },
-      { actualDoseGrams: 15, actualWaterGrams: 250, actualYieldGrams: 250 }, // implausible
+      { actualDoseGrams: 15, actualWaterGrams: 150, actualIceGrams: 100, actualYieldGrams: 217 }, // 2.2, flash chilled
+      { actualDoseGrams: 15, actualWaterGrams: 250, actualIceGrams: null, actualYieldGrams: 220 }, // 2.0
+      { actualDoseGrams: 15, actualWaterGrams: 250, actualIceGrams: null, actualYieldGrams: 218.5 }, // 2.1
+      { actualDoseGrams: 15, actualWaterGrams: 250, actualIceGrams: null, actualYieldGrams: null },
+      { actualDoseGrams: 15, actualWaterGrams: 250, actualIceGrams: null, actualYieldGrams: 250 }, // implausible
     ];
     const m = brewRetention({ roastLevel: 'dark', recipeRoastLevel: 'light', recipe, measured });
     expect(m.source).toEqual({ kind: 'measured', count: 3 });
@@ -41,7 +41,7 @@ describe('yield and retention', () => {
     // No roast on the bean: the recipe roast is assumed.
     expect(brewRetention({ roastLevel: null, recipeRoastLevel: 'medium', recipe: null, measured: [] })).toEqual({ retention: 2.1, source: { kind: 'roast', roastLevel: 'medium' } });
     // A recipe written for medium (2.1), brewed with a medium bean: its own figure, unshifted.
-    const r = { targetDoseGrams: 15, targetWaterGrams: 250, expectedYieldGrams: 218.5 }; // retention 2.1
+    const r = { targetDoseGrams: 15, targetWaterGrams: 250, targetIceGrams: null, expectedYieldGrams: 218.5 }; // retention 2.1
     expect(brewRetention({ roastLevel: 'medium', recipeRoastLevel: 'medium', recipe: r, measured: [] }).retention).toBeCloseTo(2.1);
     expect(brewRetention({ roastLevel: 'dark', recipeRoastLevel: 'medium', recipe: r, measured: [] }).retention).toBeCloseTo(2.3);
   });
@@ -49,7 +49,7 @@ describe('yield and retention', () => {
 
 describe('scaleBatch', () => {
   it('keeps the recipe exactly when not scaled', () => {
-    expect(scaleBatch({ targetDoseGrams: 15, targetWaterGrams: 250.5 }, { field: 'dose', value: 15 }, 2)).toMatchObject({
+    expect(scaleBatch({ targetDoseGrams: 15, targetWaterGrams: 250.5, targetIceGrams: null }, { field: 'dose', value: 15 }, 2)).toMatchObject({
       dose: 15,
       water: 250.5,
       yield: 221,
@@ -95,7 +95,27 @@ describe('scaleBatch', () => {
   it('refuses values that cannot make a batch', () => {
     expect(scaleBatch(recipe, { field: 'dose', value: 0 }, 2)).toBeNull();
     expect(scaleBatch(recipe, { field: 'water', value: Number.NaN }, 2)).toBeNull();
-    expect(scaleBatch({ targetDoseGrams: 18, targetWaterGrams: 36 }, { field: 'yield', value: 40 }, 2)).toBeNull();
+    expect(scaleBatch({ targetDoseGrams: 18, targetWaterGrams: 36, targetIceGrams: null }, { field: 'yield', value: 40 }, 2)).toBeNull();
+  });
+
+  // Flash chilled (docs/api/recipes.md §5): 150 g hot water onto 100 g ice, 1:16.7.
+  const iced = { targetDoseGrams: 15, targetWaterGrams: 150, targetIceGrams: 100 };
+  it('flash chilled: the ratio and yield count the ice, which scales with the water', () => {
+    expect(scaleBatch(iced, { field: 'dose', value: 15 }, 2)).toMatchObject({ dose: 15, water: 150, ice: 100, yield: 220, factor: 1 });
+    expect(scaleBatch(iced, { field: 'dose', value: 30 }, 2)).toMatchObject({ dose: 30, water: 300, ice: 200, yield: 440, factor: 2 });
+    // Typing the hot water keeps the split: 225 g water → 150 g ice, 22.5 g coffee.
+    expect(scaleBatch(iced, { field: 'water', value: 225 }, 2)).toMatchObject({ dose: 22.5, water: 225, ice: 150, factor: 1.5 });
+    expect(scaleBatch(iced, { field: 'yield', value: 330 }, 2)).toMatchObject({ dose: 22.5, water: 225, ice: 150, yield: 330 });
+    expect(scaleBatch(recipe, { field: 'dose', value: 15 }, 2)!.ice).toBeNull();
+  });
+  it("flash chilled: a brew's own split replaces the recipe's", () => {
+    // A repeat of 160 g water + 90 g ice: same ratio, its split.
+    expect(scaleBatch(iced, { field: 'dose', value: 15 }, 2, 250 / 15, waterShare(160, 90))).toMatchObject({ dose: 15, water: 160, ice: 90, factor: 160 / 150 });
+    expect(waterShare(250, null)).toBe(1);
+  });
+  it('flash chilled: water and ice add up to the rounded liquid', () => {
+    // 251.25 g liquid: 150.75 → 151 g water, so 100 g ice (not 100.5 → 101).
+    expect(scaleBatch(iced, { field: 'dose', value: 15.075 }, 2)).toMatchObject({ water: 151, ice: 100 });
   });
 });
 

@@ -47,6 +47,7 @@ const props = defineProps<{
   espresso?: boolean; // shot weight instead of water (docs/api/brew-logs.md §6)
   drinkTasting?: boolean; // the drink has ingredients: rate the brew and the drink apart
   recipeStyle?: RecipeStyle | null; // decides how extraction yield is worked out
+  iced?: boolean; // the recipe is flash chilled (has ice), so the ice is asked for
 }>();
 
 // Measured yield vs the recipe's estimate, e.g. "+6 g vs expected 220 g".
@@ -99,6 +100,24 @@ watch(
   },
 );
 
+// Flash chilled (docs/api/brew-logs.md §6): brewed onto ice, weighed with it,
+// and no TDS reading, so TDS and Brix are greyed out (and TDS isn't sent;
+// clearing the ice brings a typed one back).
+const onIce = computed(() => !props.espresso && num(draft.value.ice) !== null);
+// The Ice field shows for a recipe with ice, and from the moment the brew has
+// some (a repeat, the recipe loading, an old log): it then stays, even if the
+// field is hidden under Settings → Fields or emptied to retype it.
+const hadIce = ref(false);
+watch(
+  () => draft.value.ice,
+  (ice) => {
+    if (!ice.trim()) return;
+    hadIce.value = true;
+    reveal({ 'brew.ice': ice });
+  },
+  { immediate: true },
+);
+
 // Active grinders, plus the brew's own even if it's since been archived.
 const grinderOptions = computed(() => props.grinders.filter((g) => !g.archivedAt || g.id === draft.value.grinderId));
 // Grounds out are what goes into the brew, so they fill in the dose.
@@ -144,13 +163,19 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
         <span v-else-if="yieldComparison" class="hint">{{ yieldComparison }}</span>
       </div>
       <div v-else class="field">
-        <label for="brew-water">Water (g)<span class="req" aria-hidden="true">*</span></label>
+        <label for="brew-water">{{ onIce ? 'Hot water (g)' : 'Water (g)' }}<span class="req" aria-hidden="true">*</span></label>
         <input id="brew-water" aria-required="true" v-model="draft.water" inputmode="decimal" :aria-invalid="showErrors && !!errors.water" />
         <span v-if="showErrors && errors.water" class="field-error">{{ errors.water }}</span>
       </div>
+      <div v-if="!espresso && show('brew.ice') && (iced || hadIce)" class="field">
+        <label for="brew-ice">Ice (g)</label>
+        <input id="brew-ice" v-model="draft.ice" inputmode="decimal" placeholder="none" :aria-invalid="showErrors && !!errors.ice" />
+        <span v-if="showErrors && errors.ice" class="field-error">{{ errors.ice }}</span>
+        <span v-else class="hint">Brewed onto it. Poured over ice later? Leave empty to take its TDS</span>
+      </div>
     </div>
     <div v-if="!espresso && show('brew.yield')" class="field">
-      <label for="brew-yield">Yield (g) <span class="muted">(weigh the brewed coffee)</span></label>
+      <label for="brew-yield">Yield (g) <span class="muted">({{ onIce ? 'weigh the server with the ice' : 'weigh the brewed coffee' }})</span></label>
       <input
         id="brew-yield"
         v-model="draft.yieldGrams"
@@ -164,14 +189,15 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
     <div v-if="show('brew.tds')" class="form-row">
       <div class="field">
         <label for="brew-brix">Brix (°Bx)</label>
-        <input id="brew-brix" v-model="brix" inputmode="decimal" :placeholder="espresso ? 'e.g. 11' : 'e.g. 1.6'" />
-        <span class="hint">Fills in TDS</span>
+        <input id="brew-brix" v-model="brix" inputmode="decimal" :placeholder="espresso ? 'e.g. 11' : 'e.g. 1.6'" :disabled="onIce" />
+        <span class="hint">{{ onIce ? 'Not taken when brewed onto ice' : 'Fills in TDS' }}</span>
       </div>
       <div class="field">
         <label for="brew-tds">TDS (%)</label>
-        <input id="brew-tds" v-model="draft.tds" inputmode="decimal" :placeholder="espresso ? 'e.g. 9.5' : 'e.g. 1.38'" :aria-invalid="showErrors && !!errors.tds" />
-        <span v-if="showErrors && errors.tds" class="field-error">{{ errors.tds }}</span>
-        <span v-else-if="extractionHint" class="hint">{{ extractionHint }}</span>
+        <input id="brew-tds" v-model="draft.tds" inputmode="decimal" :placeholder="espresso ? 'e.g. 9.5' : 'e.g. 1.38'" :disabled="onIce" :aria-invalid="showErrors && !!errors.tds" />
+        <span v-if="onIce && draft.tds.trim()" class="hint">Not saved while there's ice</span>
+        <span v-else-if="showErrors && errors.tds" class="field-error">{{ errors.tds }}</span>
+        <span v-else-if="extractionHint && !onIce" class="hint">{{ extractionHint }}</span>
       </div>
     </div>
     <div class="form-row">

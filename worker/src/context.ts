@@ -1,4 +1,4 @@
-import { extractionYield as sharedExtractionYield } from "@barista/shared/brew";
+import { ratioWater, extractionYield as sharedExtractionYield } from "@barista/shared/brew";
 import {
   beanProcesses,
   beanFreezes,
@@ -88,8 +88,9 @@ export interface BrewSummary {
   problems: string[];
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso
-  actualYieldGrams: number | null; // measured beverage weight (shot weight for espresso)
-  brewRatio: number | null; // water / dose; for espresso yield / dose
+  actualIceGrams: number | null; // flash chilled: ice in the server the hot water was brewed onto
+  actualYieldGrams: number | null; // measured beverage weight (shot weight for espresso; with the ice for flash chilled)
+  brewRatio: number | null; // (water + ice) / dose; for espresso yield / dose
   tdsPercent: number | null; // refractometer reading
   extractionYieldPercent: number | null; // from TDS (docs/api/brew-logs.md §6)
   actualTempC: number | null;
@@ -173,6 +174,7 @@ export interface BrewContext {
     methodKind: MethodKind;
     targetDoseGrams: number;
     targetWaterGrams: number | null; // null for espresso
+    targetIceGrams: number | null; // flash chilled: ice in the server
     expectedYieldGrams: number | null; // estimate; for espresso the target shot weight
     // Target window for total brew (or shot) time, seconds (both or neither).
     expectedFinishMinSec: number | null;
@@ -233,7 +235,7 @@ interface BrewJoins {
 type BrewRow = BrewLog & BrewJoins;
 
 function ratio(brew: BrewLog): number | null {
-  const out = brew.actualWaterGrams ?? brew.actualYieldGrams;
+  const out = ratioWater(brew.actualWaterGrams, brew.actualIceGrams) ?? brew.actualYieldGrams;
   return out === null ? null : Math.round((out / brew.actualDoseGrams) * 100) / 100;
 }
 
@@ -275,6 +277,7 @@ function summarize(
     problems: problems.get(brew.id) ?? [],
     actualDoseGrams: brew.actualDoseGrams,
     actualWaterGrams: brew.actualWaterGrams,
+    actualIceGrams: brew.actualIceGrams,
     actualYieldGrams: brew.actualYieldGrams,
     brewRatio: ratio(brew),
     tdsPercent: brew.tdsPercent,
@@ -510,6 +513,7 @@ async function loadRecipe(recipeId: string): Promise<BrewContext["recipe"]> {
       methodKind: brewers.kind,
       targetDoseGrams: recipes.targetDoseGrams,
       targetWaterGrams: recipes.targetWaterGrams,
+      targetIceGrams: recipes.targetIceGrams,
       expectedYieldGrams: recipes.expectedYieldGrams,
       expectedFinishMinSec: recipes.expectedFinishMinSec,
       expectedFinishMaxSec: recipes.expectedFinishMaxSec,

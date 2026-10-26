@@ -390,6 +390,7 @@ export interface Recipe extends ColdFields {
   brewer: BrewerRef;
   targetDoseGrams: number;
   targetWaterGrams: number | null; // null for espresso
+  targetIceGrams: number | null; // flash chilled: ice in the server; the ratio counts it (docs/api/recipes.md §5)
   expectedYieldGrams: number | null; // estimate; for espresso the target shot weight (always set)
   expectedFinishMinSec: number | null; // target finish (shot time) window (both or neither)
   expectedFinishMaxSec: number | null;
@@ -443,6 +444,7 @@ export interface BrewLog {
   utcOffsetMinutes: number | null; // the logging device's, minutes (-420 = PDT)
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso
+  actualIceGrams: number | null; // flash chilled: ice in the server; no TDS with it (docs/api/brew-logs.md §6)
   actualYieldGrams: number | null; // measured beverage weight
   tdsPercent: number | null; // refractometer reading; extraction yield is worked out (lib/extraction.ts)
   actualTempC: number | null;

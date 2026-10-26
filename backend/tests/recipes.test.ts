@@ -252,3 +252,47 @@ describe("cold styles (docs/api/recipes.md §5)", () => {
     );
   });
 });
+
+describe("flash chilled: brewed onto ice (docs/api/recipes.md §5, brew-logs.md §6)", () => {
+  it("recipes and brews keep their ice, optional and nullable; not for espresso", async () => {
+    const { owner, ws, base, recipe } = await setup();
+    const bean = await newBean(owner, ws.id);
+    const logs = `/api/workspaces/${ws.id}/brew-logs`;
+    const iced = await owner.agent.post(base).send({ ...recipe, targetWaterGrams: 150, targetIceGrams: 100, expectedYieldGrams: 225 });
+    expect(iced.body.recipe).toMatchObject({ targetWaterGrams: 150, targetIceGrams: 100, expectedYieldGrams: 225 });
+    expect((await owner.agent.post(base).send(recipe)).body.recipe.targetIceGrams).toBeNull();
+    expect((await owner.agent.patch(`${base}/${iced.body.recipe.id}`).send({ targetIceGrams: null })).body.recipe.targetIceGrams).toBeNull();
+    expect((await owner.agent.post(base).send({ ...recipe, targetIceGrams: 0 })).status).toBe(400);
+
+    const id = await newBrewLog(owner, ws.id, bean, { recipeId: iced.body.recipe.id, actualWaterGrams: 150, actualIceGrams: 100, actualYieldGrams: 228 });
+    expect((await owner.agent.get(`${logs}/${id}`)).body.brewLog).toMatchObject({ actualWaterGrams: 150, actualIceGrams: 100, actualYieldGrams: 228 });
+    expect((await owner.agent.patch(`${logs}/${id}`).send({ actualIceGrams: null })).body.brewLog.actualIceGrams).toBeNull();
+
+    const gaggia = (await owner.agent.post(`/api/workspaces/${ws.id}/brewers`).send({ name: "Gaggia", kind: "espresso" })).body.brewer.id;
+    const shot = { name: "Shot", brewerId: gaggia, targetDoseGrams: 18, expectedYieldGrams: 36 };
+    expect((await owner.agent.post(base).send({ ...shot, targetIceGrams: 50 })).body.error).toMatch(/targetIceGrams/);
+    // Moving an iced recipe to an espresso brewer needs its ice cleared too.
+    const moved = await owner.agent.patch(`${base}/${iced.body.recipe.id}`).send({ targetIceGrams: 100 });
+    expect(moved.status).toBe(200);
+    expect((await owner.agent.patch(`${base}/${iced.body.recipe.id}`).send({ brewerId: gaggia, targetWaterGrams: null, expectedYieldGrams: 36 })).body.error).toMatch(/targetIceGrams/);
+    const shotId = (await owner.agent.post(base).send(shot)).body.recipe.id;
+    const espressoLog = { beanId: bean, recipeId: shotId, actualDoseGrams: 18, actualWaterGrams: null, actualYieldGrams: 36, actualTimeSec: 28 };
+    expect((await owner.agent.post(logs).send({ ...espressoLog, actualIceGrams: 50 })).body.error).toMatch(/actualIceGrams/);
+  });
+
+  it("a brew made onto ice takes no TDS reading, checked after a PATCH", async () => {
+    const { owner, ws } = await setup();
+    const bean = await newBean(owner, ws.id);
+    const logs = `/api/workspaces/${ws.id}/brew-logs`;
+    const res = await owner.agent.post(logs).send({ beanId: bean, actualDoseGrams: 15, actualWaterGrams: 150, actualIceGrams: 100, actualTimeSec: 150, tdsPercent: 1.3 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/tdsPercent/);
+
+    const iced = await newBrewLog(owner, ws.id, bean, { actualWaterGrams: 150, actualIceGrams: 100 });
+    expect((await owner.agent.patch(`${logs}/${iced}`).send({ tdsPercent: 1.3 })).status).toBe(400);
+    const measured = await newBrewLog(owner, ws.id, bean, { actualYieldGrams: 220, tdsPercent: 1.38 });
+    expect((await owner.agent.patch(`${logs}/${measured}`).send({ actualIceGrams: 100 })).status).toBe(400);
+    // Both at once: ice in, TDS out.
+    expect((await owner.agent.patch(`${logs}/${measured}`).send({ actualIceGrams: 100, tdsPercent: null })).body.brewLog).toMatchObject({ actualIceGrams: 100, tdsPercent: null });
+  });
+});

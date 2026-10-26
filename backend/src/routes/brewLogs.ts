@@ -126,6 +126,8 @@ const brewLogFields = {
   actualDoseGrams: decimalSchema({ min: 0, max: 1000, scale: 2, exclusiveMin: true, exclusiveMax: true }),
   // Required, except null for espresso (espressoError).
   actualWaterGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
+  // Flash chilled: ice in the server; null for espresso, and no TDS with it (iceError).
+  actualIceGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
   // Measured beverage weight (optional, except for espresso; docs/api/brew-logs.md §6).
   actualYieldGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
   // Refractometer reading, % (docs/api/brew-logs.md §6). Espresso runs to ~12%.
@@ -223,6 +225,7 @@ function espressoError(
   kind: MethodKind | null,
   log: {
     actualWaterGrams: number | null;
+    actualIceGrams: number | null;
     actualYieldGrams: number | null;
     actualTimeSec: number;
     marks: ReadonlyArray<{ kind: MarkKind; atSec: number }>;
@@ -232,11 +235,17 @@ function espressoError(
   if (kind === null && log.marks.some((m) => m.kind === "step_end")) return "marks: step_end needs a recipe";
   if (kind === "espresso") {
     if (log.actualWaterGrams !== null) return "actualWaterGrams: must be null for an espresso brew";
+    if (log.actualIceGrams !== null) return "actualIceGrams: must be null for an espresso brew";
     if (log.actualYieldGrams === null) return "actualYieldGrams: is required for an espresso brew (the shot weight)";
     return null;
   }
   if (log.marks.some((m) => m.kind === "first_drop")) return "marks: only espresso brews record a first drop";
   return log.actualWaterGrams === null ? "actualWaterGrams: is required" : null;
+}
+
+// A brew made onto ice takes no TDS reading (docs/api/brew-logs.md §6).
+function iceError(log: { actualIceGrams?: number | null; tdsPercent?: number | null }): string | null {
+  return (log.actualIceGrams ?? null) !== null && (log.tdsPercent ?? null) !== null ? "tdsPercent: not taken for a brew made onto ice (actualIceGrams)" : null;
 }
 
 // A size is both its number and unit; it and the drink's tasting are only for
@@ -413,6 +422,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       utcOffsetMinutes: brewLogs.utcOffsetMinutes,
       actualDoseGrams: brewLogs.actualDoseGrams,
       actualWaterGrams: brewLogs.actualWaterGrams,
+      actualIceGrams: brewLogs.actualIceGrams,
       actualYieldGrams: brewLogs.actualYieldGrams,
       tdsPercent: brewLogs.tdsPercent,
       actualTempC: brewLogs.actualTempC,
@@ -613,11 +623,14 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Cre
     const brewer = await recipeBrewer(tx, fields.recipeId);
     const wrongForKind = espressoError(brewer?.kind ?? null, {
       actualWaterGrams: fields.actualWaterGrams ?? null,
+      actualIceGrams: fields.actualIceGrams ?? null,
       actualYieldGrams: fields.actualYieldGrams ?? null,
       actualTimeSec: fields.actualTimeSec,
       marks,
     });
     if (wrongForKind) return wrongForKind;
+    const wrongForIce = iceError(fields);
+    if (wrongForIce) return wrongForIce;
     const wrongForDrink = (await drinkError(tx, fields.drinkId ?? null, fields.recipeId ?? null)) ?? drinkOnlyError(fields);
     if (wrongForDrink) return wrongForDrink;
     const wrongRpm = await rpmError(tx, fields.grinderId ?? null, fields.grindRpm ?? null, true);
@@ -669,7 +682,9 @@ brewLogsRouter.patch(
           beanWeightInGrams: brewLogs.beanWeightInGrams,
           groundWeightOutGrams: brewLogs.groundWeightOutGrams,
           actualWaterGrams: brewLogs.actualWaterGrams,
+          actualIceGrams: brewLogs.actualIceGrams,
           actualYieldGrams: brewLogs.actualYieldGrams,
+          tdsPercent: brewLogs.tdsPercent,
           drinkId: brewLogs.drinkId,
           servingSize: brewLogs.servingSize,
           servingUnit: brewLogs.servingUnit,
@@ -693,12 +708,13 @@ brewLogsRouter.patch(
       const { marks, toolIds, problemIds, ...fields } = body;
       // A new recipe brings its brewer; the old brewer stays otherwise.
       const brewerUpdate = "recipeId" in body ? { brewerId: (await recipeBrewer(tx, fields.recipeId))?.brewerId ?? null } : {};
-      const touched = ["recipeId", "actualWaterGrams", "actualYieldGrams", "marks", "actualTimeSec"];
+      const touched = ["recipeId", "actualWaterGrams", "actualIceGrams", "actualYieldGrams", "marks", "actualTimeSec"];
       if (touched.some((key) => key in body)) {
         const after = { ...log, ...fields };
         const kind = (await recipeBrewer(tx, after.recipeId))?.kind ?? null;
         const wrongForKind = espressoError(kind, {
           actualWaterGrams: after.actualWaterGrams ?? null,
+          actualIceGrams: after.actualIceGrams ?? null,
           actualYieldGrams: after.actualYieldGrams ?? null,
           actualTimeSec: after.actualTimeSec,
           marks:
@@ -706,6 +722,10 @@ brewLogsRouter.patch(
             (await tx.select({ kind: brewLogMarks.kind, atSec: brewLogMarks.atSec }).from(brewLogMarks).where(eq(brewLogMarks.brewLogId, brewLogId))),
         });
         if (wrongForKind) return { status: "bad_ref", error: wrongForKind } as const;
+      }
+      if ("actualIceGrams" in body || "tdsPercent" in body) {
+        const wrongForIce = iceError({ ...log, ...fields });
+        if (wrongForIce) return { status: "bad_ref", error: wrongForIce } as const;
       }
 
       if ("drinkId" in body || "recipeId" in body) {
