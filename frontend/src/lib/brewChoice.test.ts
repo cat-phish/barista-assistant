@@ -10,6 +10,7 @@ import {
   encodeMethod,
   encodePlain,
   itemOptions,
+  setupMissing,
   itemValues,
   methodKind,
   NO_RECIPE,
@@ -170,5 +171,21 @@ describe('brew setup: method or drink category → (drink) → brewer → recipe
     expect(decodeItem(encodePlain('filter'))).toEqual({ kind: 'plain', method: 'filter' });
     expect(decodeItem('drink:Latte')).toEqual({ kind: 'drink', id: 'Latte' });
     expect(decodeItem('brewer:v60')).toBeNull();
+  });
+});
+
+describe('setupMissing', () => {
+  const ready = { bean: true, emptyCategory: false, noRecipes: false, sizeMissing: false, batchInvalid: false, finishError: false, steepError: false };
+  it('is empty when setup is ready', () => {
+    expect(setupMissing(ready)).toBe('');
+  });
+  it('names the first thing missing', () => {
+    expect(setupMissing({ ...ready, bean: false, sizeMissing: true })).toBe('Choose a bean.');
+    expect(setupMissing({ ...ready, emptyCategory: true })).toBe('Add a drink to this category first.');
+    expect(setupMissing({ ...ready, noRecipes: true })).toBe('Add a recipe for this brewer first.');
+    expect(setupMissing({ ...ready, sizeMissing: true, batchInvalid: true })).toBe('Enter a size.');
+    expect(setupMissing({ ...ready, batchInvalid: true })).toBe('Enter positive amounts for the batch.');
+    expect(setupMissing({ ...ready, finishError: true })).toBe('Fix the target finish.');
+    expect(setupMissing({ ...ready, steepError: true })).toBe('Fix the steep window.');
   });
 });

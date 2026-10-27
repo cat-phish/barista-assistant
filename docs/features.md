@@ -189,9 +189,15 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   **The brew** (optional rating and notes, if you tasted it on its own: the
   shot, or the V60 cup) and **The drink** (rating and notes). Brews served on
   their own keep one rating and notes.
-- **Setup:** pick bean, recipe and grinder. The grind pre-fills from your
-  last brew of that recipe on that grinder, else the AI suggestion, else the
-  recipe's starting point.
+- **Setup:** three cards. **What you're brewing** picks the bean, recipe and
+  grinder; **AI suggestion** (Suggest parameters) sits above the batch, so a
+  suggested ratio shows up right below it; **Batch and starting point**
+  holds the batch, temperature, grind and the rest, shown from the start
+  (not only once a bean is picked). The grind pre-fills from your last brew
+  of that recipe on that grinder, else the AI suggestion, else the recipe's
+  starting point. Start and Log stay disabled until the bean and the batch
+  are set, with a line saying what's still missing ("Choose a bean.",
+  "Enter a size.").
 - **Batch scaling:** the **ratio** (the 15 in 1:15) starts at the recipe's.
   Typing the dose or the water keeps the other and changes the ratio;
   typing the ratio changes the water; typing the approximate yield (in fl
