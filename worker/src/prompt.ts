@@ -1,14 +1,15 @@
 // What the AI is sent for an analysis (docs/api/llm-contract.md §9): the
-// brew's context made compact (no empty values, each grinder and water once,
-// what the workspace keeps from the AI left out), and a system prompt built
-// from sections that only appear when the input has what they talk about.
+// brew's context made compact (no empty values, its grinder and water
+// described once, what the workspace keeps from the AI left out), and a
+// system prompt built from sections that only appear when the input has what
+// they talk about.
 import type { AiDetail } from "@barista/shared/aiDetails";
 import type { BrewContext, BrewSummary, GrinderInfo, WaterInfo } from "./context.js";
 
 // Stored with each analysis (llm_analyses.prompt_version), so results can be
 // compared across changes (npm run eval). Bump it whenever the input, the
 // prompt or the schema changes.
-export const PROMPT_VERSION = "2026-10-e";
+export const PROMPT_VERSION = "2026-10-f";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type LlmInput = { [key: string]: Json };
@@ -34,10 +35,9 @@ const WATER_FIGURES: Array<keyof WaterInfo> = ["tdsPpm", "generalHardnessPpm", "
 
 // One brew as the AI sees it: the grinder and water by name (their details
 // are in `equipment`), without what the workspace keeps from the AI.
-function brewInput(b: BrewSummary, hidden: ReadonlySet<AiDetail>, sameRecipe?: boolean): Record<string, unknown> {
+function brewInput(b: BrewSummary, hidden: ReadonlySet<AiDetail>): Record<string, unknown> {
   const { grinder, water, machine, marks, prepTools, problems, drink, steeping, ...rest } = b;
   const out: Record<string, unknown> = { ...rest, grinder: grinder?.name, water: hidden.has("water") ? undefined : water?.name };
-  if (sameRecipe !== undefined) out.sameRecipe = sameRecipe;
   if (steeping) out.steeping = true;
   if (!hidden.has("machine")) out.machine = machine;
   if (!hidden.has("marks")) out.marks = marks;
@@ -61,29 +61,25 @@ function brewInput(b: BrewSummary, hidden: ReadonlySet<AiDetail>, sameRecipe?: b
   return out;
 }
 
-const isUnrated = (b: BrewSummary) => b.rating === null && b.drinkRating === null;
-
 export function toLlmInput(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set()): LlmInput {
-  const previous = hidden.has("unratedHistory") ? context.previousBrews.filter((b) => !isUnrated(b)) : context.previousBrews;
-  const all = [context.brew, ...previous];
+  const b = context.brew;
 
-  // Each grinder and water once, by name.
+  // The grinder and water by name, described here.
   const grinders: Record<string, unknown> = {};
   const waters: Record<string, unknown> = {};
-  for (const b of all) {
-    if (b.grinder && !(b.grinder.name in grinders)) {
-      const { name: _name, ...details } = b.grinder;
-      const shown: Partial<GrinderInfo> = hidden.has("grinderDetails") ? {} : details;
-      if (hidden.has("rpm")) {
-        delete shown.variableSpeed;
-        delete shown.rpmMin;
-        delete shown.rpmMax;
-      }
-      grinders[b.grinder.name] = shown;
+  if (b.grinder) {
+    const { name, ...details } = b.grinder;
+    const shown: Partial<GrinderInfo> = hidden.has("grinderDetails") ? {} : details;
+    if (hidden.has("rpm")) {
+      delete shown.variableSpeed;
+      delete shown.rpmMin;
+      delete shown.rpmMax;
     }
-    if (b.water && !hidden.has("water") && !(b.water.name in waters)) {
-      waters[b.water.name] = hidden.has("waterMinerals") ? {} : Object.fromEntries(WATER_FIGURES.map((k) => [k, b.water![k]]));
-    }
+    grinders[name] = shown;
+  }
+  if (b.water && !hidden.has("water")) {
+    const water = b.water;
+    waters[water.name] = hidden.has("waterMinerals") ? {} : Object.fromEntries(WATER_FIGURES.map((k) => [k, water[k]]));
   }
 
   const bean: Record<string, unknown> = { ...context.bean };
@@ -112,9 +108,8 @@ export function toLlmInput(context: BrewContext, hidden: ReadonlySet<AiDetail> =
     ratingScale: context.ratingScale,
     bean,
     recipe,
-    brew: brewInput(context.brew, hidden),
+    brew: brewInput(b, hidden),
     drink: hidden.has("drink") ? null : context.drink,
-    previousBrews: previous.map((b) => brewInput(b, hidden, b.recipeName === context.brew.recipeName)),
     equipment: { grinders, waters },
   };
   return (compact(input) ?? {}) as LlmInput;
@@ -122,7 +117,7 @@ export function toLlmInput(context: BrewContext, hidden: ReadonlySet<AiDetail> =
 
 // ---- The prompt, in sections ----------------------------------------------------
 
-const brews = (input: LlmInput): Array<Record<string, Json>> => [input.brew, ...((input.previousBrews as Json[] | undefined) ?? [])].filter((b): b is Record<string, Json> => !!b && typeof b === "object" && !Array.isArray(b));
+const brews = (input: LlmInput): Array<Record<string, Json>> => [input.brew].filter((b): b is Record<string, Json> => !!b && typeof b === "object" && !Array.isArray(b));
 const anyBrew = (input: LlmInput, key: string) => brews(input).some((b) => b[key] !== undefined);
 const bean = (input: LlmInput) => (input.bean ?? {}) as Record<string, Json>;
 const recipe = (input: LlmInput) => (input.recipe ?? {}) as Record<string, Json>;
@@ -144,12 +139,11 @@ export const PROMPT_SECTIONS: PromptSection[] = [
     key: "core",
     when: () => true,
     text:
-      "You are an expert specialty coffee roaster and barista. Analyze the brew (brew) against its recipe and the " +
-      "earlier brews of the same bean (previousBrews, newest first; sameRecipe marks the ones of this brew's recipe, the " +
-      "fairest comparison), and suggest concrete changes for the next brew. A missing field means it wasn't recorded, " +
-      "not that it was zero or absent. Grinders and waters are described once in equipment and named in each brew. " +
-      "Ratings are 1-5; rating and tastingNotes describe the coffee tasted on its own. Judge mainly from the tasting " +
-      "and how the brew went against the recipe's targets, and change as little as needed: one or two levers at a time.",
+      "You are an expert specialty coffee roaster and barista. Analyze this one brew (brew) against its recipe and the " +
+      "bean, and suggest concrete changes for the next brew. A missing field means it wasn't recorded, not that it was " +
+      "zero or absent. The brew's grinder and water are named in it and described in equipment. Ratings are 1-5; " +
+      "rating and tastingNotes describe the coffee tasted on its own. Judge mainly from the tasting and how the brew " +
+      "went against the recipe's targets, and change as little as needed: one or two levers at a time.",
   },
   {
     key: "output",
@@ -157,8 +151,8 @@ export const PROMPT_SECTIONS: PromptSection[] = [
     text:
       "reasoning is a concise 1-2 sentence diagnosis. nextStep is the one concrete thing to do on the next brew, in " +
       "plain words a barista can act on (e.g. 'Grind 2 clicks coarser and keep 93 °C'). confidence is low when the " +
-      "notes are vague, there's no earlier brew to compare with, or the measurements look wrong; high only when the " +
-      "taste and the numbers agree. suggestedRpmDelta is a change in grinder speed for a variable-speed grinder, " +
+      "notes are vague, the brew has no recipe to judge it against, or the measurements look wrong; high only when " +
+      "the taste and the numbers agree. suggestedRpmDelta is a change in grinder speed for a variable-speed grinder, " +
       "null otherwise or when the speed should stay. suggestedDoseDelta and suggestedYieldDelta are null except for " +
       "espresso.",
   },
@@ -166,9 +160,9 @@ export const PROMPT_SECTIONS: PromptSection[] = [
     key: "drink",
     when: (i) => i.drink !== undefined || anyBrew(i, "drink") || anyBrew(i, "drinkTastingNotes"),
     text:
-      "drinkRating and drinkTastingNotes describe the finished drink. Milk and syrup mask acidity and bitterness and " +
-      "add sweetness, so treat drink notes as weaker evidence of extraction than straight notes, and compare a brew " +
-      "mainly with earlier brews served the same way (each brew's drink says how).",
+      "drinkRating and drinkTastingNotes describe the finished drink (the brew's drink says how it was served). Milk " +
+      "and syrup mask acidity and bitterness and add sweetness, so treat drink notes as weaker evidence of extraction " +
+      "than straight notes.",
   },
   {
     key: "style",
@@ -188,9 +182,7 @@ export const PROMPT_SECTIONS: PromptSection[] = [
   {
     key: "batch",
     when: (i) => bean(i).batchNumber !== undefined,
-    text:
-      "A batchNumber marks one home-roast batch: the brews given are all of that batch, and another batch of the " +
-      "same coffee is a different roast.",
+    text: "A batchNumber marks one home-roast batch: another batch of the same coffee is a different roast.",
   },
   {
     key: "roastType",
@@ -242,8 +234,8 @@ export const PROMPT_SECTIONS: PromptSection[] = [
     key: "prepTools",
     when: (i) => anyBrew(i, "prepTools"),
     text:
-      "prepTools lists the prep used (WDT, puck screen, filter type…); a brew without it had none recorded, so only " +
-      "compare tools between brews that list them.",
+      "prepTools lists the prep used (WDT, puck screen, filter type…), as recorded; a tool not listed may still " +
+      "have been used.",
   },
   {
     key: "problems",

@@ -26,12 +26,12 @@ and fix the references.
 - A. Settings & configuration: 1
 - B. Beans: 2
 - C. Brewing & logging: 3–4
-- D. AI suggestions: 5–6
-- E. Insights: 7
-- F. Bar & menu: 8–10
-- G. Home roasting: 11
-- H. Accounts: 12–13
-- I. Deployment & the app: 14
+- D. AI suggestions: 5–7
+- E. Insights: 8
+- F. Bar & menu: 9–11
+- G. Home roasting: 12
+- H. Accounts: 13–14
+- I. Deployment & the app: 15
 
 ---
 
@@ -232,11 +232,46 @@ What the analysis worker sends to the LLM and what comes back.
   - Should the brew page say when it changed the shot because of the
     suggestion (like it does for the grind)?
 
+### 7. Tailor the AI suggestions: analysis per brew, history on "Suggest parameters"
+
+- **Status:** planned
+- **Why:** every analysis sends the brew plus the last 5 brews of its bean,
+  and "Suggest parameters" makes no AI call: it reuses the bean's newest
+  analysis. Nobody can choose which brews are compared (other recipes or
+  brewers of the bean, the recipe with other beans), see what was sent, or
+  change the prompt's wording.
+- **Approach:** workspace defaults (owners, Settings → AI), changeable each
+  time. Branches, in order:
+  1. **One brew on its own:** analyzing a brew (journal, auto-analyze)
+     sends only that brew, no history.
+  2. **Suggest parameters as an AI request:** on the brew page, a dropdown
+     picks the brews sent (this bean · bean and recipe · bean and brewer ·
+     this brewer · this recipe) and "up to N brews". Each brew goes with its
+     own latest analysis. The AI returns actual values for the brew being
+     set up (grind for the chosen grinder, temperature, dose, water or shot
+     weight), which are filled in. Saved in a new `parameter_suggestions`
+     table.
+  3. **Save what was sent:** each analysis and suggestion keeps its prompt
+     and input; "What was sent" shows them.
+  4. **Preview:** see the prompt and input before sending, built by the
+     worker (no LLM call) so it matches what's really sent.
+  5. **Edit the prompt:** a free-text box for the workspace's instructions;
+     an Advanced switch shows every built-in section, editable with "Reset
+     to default" (the schema sections stay locked); a one-off note each
+     time. Custom prompts are saved as `PROMPT_VERSION+custom`.
+  6. **New kinds of suggestion:** another recipe or brewer for this bean,
+     another bean in stock for this recipe.
+- **Size:** L
+- **Depends on:** nothing. Pairs with 6 (eval before and after the prompt
+  changes).
+- **Open questions:**
+  - Should baristas be able to add the one-off note, or only owners?
+
 ---
 
 ## E. Insights
 
-### 7. Statistics and graphs
+### 8. Statistics and graphs
 
 - **Status:** idea
 - **Why:** the brew history is a list. Trends (is this bean getting better
@@ -265,7 +300,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## F. Bar & menu
 
-### 8. Ingredient prep and stock
+### 9. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -282,7 +317,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should a finished cold brew batch (roadmap: cold brew refinements) be
     stock the same way, with each glass served taken from it and rated?
 
-### 9. Public menu: branding and sizes
+### 10. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
@@ -296,7 +331,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
-### 10. Drink categories: what else they could do
+### 11. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -315,7 +350,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## G. Home roasting
 
-### 11. Roasting: green stock, roast logs, resting
+### 12. Roasting: green stock, roast logs, resting
 
 - **Status:** idea
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
@@ -346,7 +381,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## H. Accounts
 
-### 12. Account management and password reset
+### 13. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -377,13 +412,13 @@ What the analysis worker sends to the LLM and what comes back.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 13. Email verification
+### 14. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 12), inviting a member by email, or notifications by email.
+  (item 13), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -393,9 +428,9 @@ What the analysis worker sends to the LLM and what comes back.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 12).
+  - Shares the mail and token pieces with password reset (item 13).
 - **Size:** M (mail is new to the stack).
-- **Depends on:** nothing; pairs with 12.
+- **Depends on:** nothing; pairs with 13.
 - **Open questions:**
   - Block unverified accounts, or only remind them?
   - What happens to accounts that existed before verification (treat as
@@ -408,7 +443,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 How the app is served and installed.
 
-### 14. Serve the app as an installable PWA
+### 15. Serve the app as an installable PWA
 
 - **Status:** idea
 - **Why:** the PWA is configured (`vite-plugin-pwa`, `frontend/vite.config.ts`)

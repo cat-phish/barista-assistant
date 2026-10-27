@@ -19,8 +19,8 @@ upcoming work is in `roadmap.md`.
   analysis sends (TDS, water, origin, recipe steps…, grouped by brew, bean,
   recipe and history), for the whole workspace. Switched-off details are left
   out of what's sent and the prompt stops mentioning them. Two history
-  switches: compare with unrated earlier brews, and analyze unrated brews at
-  all.
+  switches: send unrated earlier brews with "Suggest parameters", and
+  analyze unrated brews at all.
 - **Auto-analyze:** also under Settings → AI, off by default. Each rated brew
   gets an AI suggestion 5, 10, 15 or 30 minutes after it's saved (time to fix
   a typo or delete a mistake); one saved to rate later gets it once it's
@@ -287,14 +287,14 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   asks the LLM for grind and temperature changes with reasoning, shown next
   time you brew that bean, plus one next step and how confident it is. For
   espresso it can also change the dose and the shot weight (the ratio), and
-  "Suggest parameters" sets the shot to them. It sees the bean's roast level and age, the
-  recipe, your previous brews of that bean, the grinder's details and, for
-  espresso, the machine's capabilities and the shot timer's taps. Every brew
-  says how it was served (straight, or the drink and its ingredient types),
-  with the brew and drink tastings apart. The AI treats the brew's own notes
-  (tasted on its own) as the clearest sign of extraction and drink notes as weaker evidence (milk and
-  syrup soften sourness and bitterness), and compares a brew mainly with
-  earlier brews served the same way.
+  "Suggest parameters" sets the shot to them. It analyzes that one brew on
+  its own: the bean's roast level and age, the recipe, the grinder's details
+  and, for espresso, the machine's capabilities and the shot timer's taps;
+  earlier brews aren't sent. The brew says how it was served (straight, or
+  the drink and its ingredient types), with the brew and drink tastings
+  apart. The AI treats the brew's own notes (tasted on its own) as the
+  clearest sign of extraction and drink notes as weaker evidence (milk and
+  syrup soften sourness and bitterness).
 
 ## Public menu
 - An optional public page per workspace listing beans, plus plain

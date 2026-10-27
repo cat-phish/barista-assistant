@@ -5,9 +5,9 @@
 
 ## `POST /api/brew-logs/:brewLogId/analyze`
 
-Queues a background BullMQ job in Redis to analyze a brew log and historic
-brews for that bean, returning starting parameter suggestions for the next
-brew.
+Queues a background BullMQ job in Redis to analyze that one brew log (no
+earlier brews are sent, §9), returning starting parameter suggestions for
+the next brew.
 
 - **Auth Required:** `true` (role `owner` or `barista` in the brew log's
   workspace)

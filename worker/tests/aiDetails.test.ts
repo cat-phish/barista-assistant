@@ -19,7 +19,6 @@ const CONTEXT: Record<keyof BrewContext, Sees> = {
   recipe: "always",
   brew: "always",
   drink: "drink",
-  previousBrews: "always", // each like brew; unrated ones: unratedHistory
   ratingScale: "always",
 };
 
@@ -155,8 +154,8 @@ const WATER: Record<keyof WaterInfo, Sees> = {
 
 const DRINK: Record<keyof DrinkInfo, Sees> = { name: "drink", servingSize: "drink", ingredients: "drink" };
 
-// Not fields: they decide which brews are sent or analyzed (tested in
-// llm.test.ts and processor.test.ts).
+// Not fields: they decide which brews are analyzed (processor.test.ts) or,
+// for "Suggest parameters", sent as history.
 const NOT_FIELDS: AiDetail[] = ["unratedHistory", "analyzeUnrated"];
 
 // Every field recorded, so nothing is dropped as empty.
@@ -180,7 +179,6 @@ const full: BrewContext = {
   },
   brew,
   drink: { name: "Iced latte", servingSize: "12 fl oz", ingredients: [{ name: "Milk", ingredientType: "milk", amount: "200 g", note: null }] },
-  previousBrews: [{ ...brew, timestamp: "2026-10-18T08:00:00.000Z" }],
   ratingScale: "1-5",
 } as BrewContext;
 

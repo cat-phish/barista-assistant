@@ -37,14 +37,12 @@ import {
   type SteepTemp,
   type DilutionWith,
 } from "@barista/shared/schema";
-import { and, asc, desc, eq, inArray, lt, ne } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { db } from "./db.js";
 import { config } from "./config.js";
 import { localBrewDate } from "./localDate.js";
 import { effectiveRoastAge, type FreezePeriodLike } from "./roastAge.js";
-
-const PREVIOUS_BREW_COUNT = 5;
 
 // The grinder a grind setting refers to, with whatever details are recorded
 // (range and step size let the LLM talk in clicks; speed is for variable-speed
@@ -209,9 +207,9 @@ export interface BrewContext {
       flowEndRate: number | null;
     }>;
   } | null;
+  // Only this brew, no earlier ones (docs/api/llm-contract.md §9).
   brew: BrewSummary;
-  drink: DrinkInfo | null; // the target brew's drink, if any
-  previousBrews: BrewSummary[];
+  drink: DrinkInfo | null; // the brew's drink, if any
   ratingScale: "1-5";
 }
 
@@ -458,24 +456,13 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
     ? await db.select({ name: beanProcesses.name }).from(beanProcesses).where(eq(beanProcesses.id, bean.processId)).limit(1)
     : [];
 
-  const [previous, recipe, freezes] = await Promise.all([
-    // "Previous" = earlier than the analyzed brew, newest first.
-    selectBrews()
-      // A cold brew still steeping has no result yet.
-      .where(and(eq(brewLogs.beanId, brew.beanId), lt(brewLogs.timestamp, brew.timestamp), ne(brewLogs.id, brew.id), eq(brewLogs.steeping, false)))
-      .orderBy(desc(brewLogs.timestamp), desc(brewLogs.id))
-      .limit(PREVIOUS_BREW_COUNT),
+  const [recipe, freezes, marks, tools, problems, servedAs] = await Promise.all([
     brew.recipeId ? loadRecipe(brew.recipeId) : Promise.resolve(null),
     db.select({ frozenOn: beanFreezes.frozenOn, thawedOn: beanFreezes.thawedOn }).from(beanFreezes).where(eq(beanFreezes.beanId, brew.beanId)),
-  ]);
-
-  const previousRows = previous.map(withJoins);
-  const brewIds = [brew.id, ...previousRows.map((p) => p.id)];
-  const [marks, tools, problems, servedAs] = await Promise.all([
-    marksFor(brewIds),
-    toolsFor(brewIds),
-    problemsFor(brewIds),
-    drinksServed([brew, ...previousRows].flatMap((b) => (b.drinkId ? [b.drinkId] : []))),
+    marksFor([brew.id]),
+    toolsFor([brew.id]),
+    problemsFor([brew.id]),
+    drinksServed(brew.drinkId ? [brew.drinkId] : []),
   ]);
 
   return {
@@ -499,7 +486,6 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
     recipe,
     brew: summarize(brew, bean.roastDate, freezes, marks, tools, problems, servedAs),
     drink: brew.drinkId ? await loadDrink(brew.drinkId, { size: brew.servingSize, unit: brew.servingUnit }) : null,
-    previousBrews: previousRows.map((p) => summarize(p, bean.roastDate, freezes, marks, tools, problems, servedAs)),
     ratingScale: "1-5",
   };
 }

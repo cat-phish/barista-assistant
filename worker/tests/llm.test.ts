@@ -42,7 +42,7 @@ describe("parseAnalysisMessage", () => {
   });
 });
 
-// A filter brew and an earlier one of another recipe, on the same grinder and water.
+// A filter brew on a C40 with Third Wave Water.
 const grinder = { name: "C40", adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, burrType: "conical", burrSizeMm: 39, power: "manual", variableSpeed: false, rpmMin: null, rpmMax: null } as BrewSummary["grinder"];
 const water = { name: "TWW", tdsPpm: 120, generalHardnessPpm: 80, alkalinityPpm: 40, calciumPpm: null, magnesiumPpm: null, sodiumPpm: null, potassiumPpm: null, bicarbonatePpm: null, chloridePpm: null, sulfatePpm: null, ph: null } as BrewSummary["water"];
 const summary = (over: Partial<BrewSummary> = {}): BrewSummary => ({
@@ -87,7 +87,7 @@ const summary = (over: Partial<BrewSummary> = {}): BrewSummary => ({
   expectedFinishMaxSec: null,
   ...over,
 });
-const context = (over: { brew?: Partial<BrewSummary>; previous?: Array<Partial<BrewSummary>>; bean?: Partial<BrewContext["bean"]> } = {}): BrewContext => ({
+const context = (over: { brew?: Partial<BrewSummary>; bean?: Partial<BrewContext["bean"]> } = {}): BrewContext => ({
   bean: { roasterName: "Onyx", beanName: "Monarch", batchNumber: null, process: "Washed", roastLevel: "light", detailedRoastLevel: null, roastType: null, blendType: "single_origin", decaf: false, roastDate: "2026-10-10", flavorProfile: null, originArea: "africa", country: "Ethiopia", region: null, altitudeMasl: 2000, ...over.bean },
   recipe: {
     name: "House V60",
@@ -114,7 +114,6 @@ const context = (over: { brew?: Partial<BrewSummary>; previous?: Array<Partial<B
   },
   brew: summary(over.brew),
   drink: null,
-  previousBrews: (over.previous ?? [{ timestamp: "2026-10-18T08:00:00.000Z", recipeName: "Other V60", rating: null, tastingNotes: null }]).map(summary),
   ratingScale: "1-5",
 });
 const without = (...keys: AiDetail[]) => new Set<AiDetail>(keys);
@@ -134,7 +133,7 @@ describe("onlyWhatApplies: changes that don't fit the brew are dropped", () => {
 });
 
 describe("what the AI is sent (docs/api/llm-contract.md §9)", () => {
-  it("leaves out what wasn't recorded, and names each grinder and water once", () => {
+  it("sends only this brew, leaves out what wasn't recorded, and describes its grinder and water in equipment", () => {
     const input = toLlmInput(context());
     expect(input).toMatchObject({
       ratingScale: "1-5",
@@ -148,9 +147,7 @@ describe("what the AI is sent (docs/api/llm-contract.md §9)", () => {
     expect(input.recipe).not.toHaveProperty("flowUnit"); // the default
     expect(input.equipment).toEqual({ grinders: { C40: expect.any(Object) }, waters: { TWW: expect.any(Object) } });
     expect((input.equipment as { waters: { TWW: object } }).waters.TWW).not.toHaveProperty("calciumPpm");
-    // The earlier brew was another recipe, so it's a weaker comparison.
-    expect(input.previousBrews).toEqual([expect.objectContaining({ sameRecipe: false, recipeName: "Other V60" })]);
-    expect(input.previousBrews).toEqual([expect.not.objectContaining({ rating: expect.anything() })]);
+    expect(Object.keys(input)).toEqual(["ratingScale", "bean", "recipe", "brew", "equipment"]);
     expect(JSON.stringify(input)).not.toContain("null");
   });
 
@@ -229,11 +226,9 @@ describe("what the workspace keeps from the AI (Settings → AI)", () => {
     expect(promptSections(input)).not.toEqual(expect.arrayContaining(["tds", "problems", "retention", "origin", "altitude"]));
   });
 
-  it("can leave out unrated earlier brews and the drink", () => {
-    const ctx = context({ brew: { drink: { name: "Latte", ingredientTypes: ["milk"] }, drinkRating: 4, drinkTastingNotes: "Sweet" }, previous: [{ rating: null }, { rating: 4, timestamp: "2026-10-17T08:00:00.000Z" }] });
-    expect((toLlmInput(ctx).previousBrews as unknown[]).length).toBe(2);
-    const input = toLlmInput(ctx, without("unratedHistory", "drink"));
-    expect(input.previousBrews).toEqual([expect.objectContaining({ rating: 4 })]);
+  it("can leave out the drink", () => {
+    const ctx = context({ brew: { drink: { name: "Latte", ingredientTypes: ["milk"] }, drinkRating: 4, drinkTastingNotes: "Sweet" } });
+    const input = toLlmInput(ctx, without("drink"));
     for (const gone of ["drink", "drinkRating", "drinkTastingNotes"]) expect(input.brew, gone).not.toHaveProperty(gone);
     expect(promptSections(input)).not.toContain("drink");
   });
