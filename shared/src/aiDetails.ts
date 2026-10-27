@@ -29,7 +29,7 @@ export const AI_DETAILS = [
   "grinderDetails", // burrs, range, step size… (the name stays)
   "machine", // an espresso machine's controls
   // History
-  "unratedHistory", // earlier brews without a rating
+  "unratedHistory", // earlier brews without a rating, in what "Suggest parameters" sends
   "analyzeUnrated", // analyzing a brew that isn't rated yet
 ] as const;
 export type AiDetail = (typeof AI_DETAILS)[number];

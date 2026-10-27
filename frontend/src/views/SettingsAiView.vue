@@ -3,14 +3,16 @@
 // else sees it:
 //  - automatic analysis (docs/api/analysis.md §8): on or off, how long
 //    after saving, and a daily cap;
+//  - which earlier brews "Suggest parameters" sends by default (§8b);
 //  - which details the AI gets (docs/api/llm-contract.md §9, "What the AI sees").
 import { computed, ref, watch } from 'vue';
 import { errorMessage } from '../api/client';
-import { AUTO_ANALYZE_DELAYS, type AutoAnalyzeDelay, type WorkspaceSettings } from '../api/types';
+import { AUTO_ANALYZE_DELAYS, MAX_SUGGEST_BREWS, SUGGEST_SOURCES, type AutoAnalyzeDelay, type SuggestSource, type WorkspaceSettings } from '../api/types';
 import { workspacesApi } from '../api/workspaces';
 import SettingsLayout from '../components/SettingsLayout.vue';
 import { usePreferences } from '../composables/usePreferences';
 import { AI_GROUPS, aiDetailsFor, type AiDetail, type AiGroup } from '../lib/aiDetails';
+import { SUGGEST_SOURCE_LABELS } from '../lib/suggest';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
@@ -18,7 +20,7 @@ const { aiHidden, settings } = usePreferences();
 const isOwner = computed(() => workspaces.current?.role === 'owner');
 const saving = ref(false);
 const error = ref('');
-type Section = AiGroup | 'auto';
+type Section = AiGroup | 'auto' | 'suggest';
 const activeSection = ref<Section | null>(null); // the section last changed
 const saved = ref(false);
 const GROUPS = Object.keys(AI_GROUPS) as AiGroup[];
@@ -122,6 +124,31 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
       <p v-if="saved && activeSection === 'auto'" class="muted small" aria-live="polite">Saved.</p>
     </section>
 
+    <section class="card stack" aria-labelledby="ai-suggest">
+      <h2 id="ai-suggest">Suggest parameters</h2>
+      <p class="muted">
+        On the brew page, “Suggest parameters” sends earlier brews to the AI, each with the suggestion it got, and fills in starting values
+        for the brew you're making. Pick which brews it starts with; anyone brewing can change it each time.
+      </p>
+      <fieldset class="suggest" :disabled="!isOwner || saving">
+        <legend class="visually-hidden">Suggest parameters defaults</legend>
+        <div class="field">
+          <label for="suggest-source">Compare with</label>
+          <select id="suggest-source" :value="settings.suggestSource" @change="save({ suggestSource: ($event.target as HTMLSelectElement).value as SuggestSource }, 'suggest')">
+            <option v-for="src in SUGGEST_SOURCES" :key="src" :value="src">{{ SUGGEST_SOURCE_LABELS[src] }}</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="suggest-max">Up to</label>
+          <select id="suggest-max" :value="settings.suggestMaxBrews" @change="save({ suggestMaxBrews: Number(($event.target as HTMLSelectElement).value) }, 'suggest')">
+            <option v-for="n in MAX_SUGGEST_BREWS" :key="n" :value="n">{{ n }} {{ n === 1 ? 'brew' : 'brews' }}</option>
+          </select>
+        </div>
+      </fieldset>
+      <p v-if="error && activeSection === 'suggest'" class="form-error" role="alert">{{ error }}</p>
+      <p v-if="saved && activeSection === 'suggest'" class="muted small" aria-live="polite">Saved.</p>
+    </section>
+
     <h2 class="what">What the AI sees</h2>
     <p class="muted">
       What the AI gets when it analyzes a brew in {{ workspaces.current?.name }}. Switching a detail off leaves it out of what's sent, and the AI
@@ -177,6 +204,17 @@ p {
 }
 .hint {
   font-weight: 400;
+}
+.suggest {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.suggest .field {
+  flex: 1 1 12rem;
 }
 .auto {
   border: 0;

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { AI_DETAILS, type AiDetail } from "@barista/shared/aiDetails";
 import type { BrewContext, BrewSummary, DrinkInfo, GrinderInfo, WaterInfo } from "../src/context.js";
-import { toLlmInput } from "../src/prompt.js";
+import { toLlmInput, toSuggestInput } from "../src/prompt.js";
+import type { BrewerInfo, PastAnalysis, SuggestBatch, SuggestBrew, SuggestContext } from "../src/suggestContext.js";
 
 // Parity between what the AI is sent and what Settings → AI can switch off
 // (docs/api/llm-contract.md §9, "What the AI sees"). Every field of the
@@ -19,7 +20,6 @@ const CONTEXT: Record<keyof BrewContext, Sees> = {
   recipe: "always",
   brew: "always",
   drink: "drink",
-  previousBrews: "always", // each like brew; unrated ones: unratedHistory
   ratingScale: "always",
 };
 
@@ -155,8 +155,8 @@ const WATER: Record<keyof WaterInfo, Sees> = {
 
 const DRINK: Record<keyof DrinkInfo, Sees> = { name: "drink", servingSize: "drink", ingredients: "drink" };
 
-// Not fields: they decide which brews are sent or analyzed (tested in
-// llm.test.ts and processor.test.ts).
+// Not fields: they decide which brews are analyzed (processor.test.ts) or,
+// for "Suggest parameters", sent as history.
 const NOT_FIELDS: AiDetail[] = ["unratedHistory", "analyzeUnrated"];
 
 // Every field recorded, so nothing is dropped as empty.
@@ -180,7 +180,6 @@ const full: BrewContext = {
   },
   brew,
   drink: { name: "Iced latte", servingSize: "12 fl oz", ingredients: [{ name: "Milk", ingredientType: "milk", amount: "200 g", note: null }] },
-  previousBrews: [{ ...brew, timestamp: "2026-10-18T08:00:00.000Z" }],
   ratingScale: "1-5",
 } as BrewContext;
 
@@ -221,5 +220,86 @@ describe("what the AI sees: every field always sent or switchable (llm-contract.
   it("every AI_DETAILS key switches something off", () => {
     const used = new Set(cases.map(([, , sees]) => sees));
     expect(AI_DETAILS.filter((d) => !used.has(d) && !NOT_FIELDS.includes(d))).toEqual([]);
+  });
+});
+
+// "Suggest parameters" (§9b) sends the brew about to be made and earlier
+// brews: these fields on top of the maps above (each earlier brew is a BREW,
+// another bean's a BEAN, the recipe a RECIPE).
+const SUGGEST: Record<keyof SuggestContext, Sees> = {
+  source: "always",
+  batch: "always", // field by field in BATCH
+  bean: "always",
+  roastAgeDays: "always",
+  daysFrozen: "always",
+  recipe: "always",
+  brewer: "always", // field by field in BREWER
+  grinder: "always", // its name; details in GRINDER
+  brews: "always", // each like brew; unrated ones: unratedHistory
+  ratingScale: "always",
+};
+const EARLIER: Record<Exclude<keyof SuggestBrew, keyof BrewSummary>, Sees> = {
+  sameBean: "always",
+  sameRecipe: "always",
+  sameGrinder: "always",
+  bean: "always", // another bean's, field by field in BEAN
+  analysis: "always", // field by field in ANALYSIS
+};
+const ANALYSIS: Record<keyof PastAnalysis, Sees> = {
+  reasoning: "always",
+  nextStep: "always",
+  confidence: "always",
+  suggestedGrindDelta: "always",
+  suggestedTempDelta: "always",
+  suggestedRpmDelta: "always",
+  suggestedDoseDelta: "always",
+  suggestedYieldDelta: "always",
+  helpful: "always",
+};
+// The batch about to be brewed, which the AI keeps: it suggests the ratio.
+const BATCH: Record<keyof SuggestBatch, Sees> = { doseGrams: "always", waterGrams: "always", iceGrams: "always", yieldGrams: "always", ratio: "always" };
+// An espresso machine's controls go with machine.
+const BREWER: Record<keyof BrewerInfo, Sees> = { name: "always", kind: "always", preinfusion: "machine", flowControl: "machine", pressureControl: "machine" };
+
+const pastAnalysis: PastAnalysis = { reasoning: "Sour.", nextStep: "Finer.", confidence: "low", suggestedGrindDelta: "finer", suggestedTempDelta: 1, suggestedRpmDelta: 50, suggestedDoseDelta: 0.5, suggestedYieldDelta: 2, helpful: true };
+const suggest: SuggestContext = {
+  source: "recipe",
+  batch: { doseGrams: 20, waterGrams: 200, iceGrams: 100, yieldGrams: 36, ratio: 15 }, // every field, though no batch has them all
+  bean: full.bean,
+  roastAgeDays: 12,
+  daysFrozen: 2,
+  recipe: full.recipe,
+  brewer: { name: "Linea", kind: "espresso", preinfusion: "manual", flowControl: "manual", pressureControl: "manual" },
+  grinder,
+  brews: [{ ...brew, sameBean: false, sameRecipe: true, sameGrinder: true, bean: full.bean, analysis: pastAnalysis } as SuggestBrew],
+  ratingScale: "1-5",
+};
+const SUGGEST_PLACES: Array<[string, Record<string, Sees>, (input: Obj) => Obj | undefined]> = [
+  ["suggest", SUGGEST, (i) => i],
+  ["earlier", { ...BREW, ...EARLIER }, (i) => (i.brews as Obj[] | undefined)?.[0]],
+  ["earlier bean", BEAN, (i) => (i.brews as Obj[] | undefined)?.[0]?.bean as Obj | undefined],
+  ["analysis", ANALYSIS, (i) => (i.brews as Obj[] | undefined)?.[0]?.analysis as Obj | undefined],
+  ["brewer", BREWER, (i) => i.brewer as Obj | undefined],
+  ["batch", BATCH, (i) => i.batch as Obj | undefined],
+];
+const suggestSent = (input: Obj, place: string, key: string): boolean => {
+  const at = SUGGEST_PLACES.find(([p]) => p === place)![2](input);
+  if (place === "earlier" && key === "grinder") return at?.grinder === "EK43"; // by name
+  if (place === "earlier" && key === "water") return at?.water === "TWW";
+  return at?.[key] !== undefined;
+};
+
+describe("what Suggest parameters sends: every field always sent or switchable (llm-contract.md §9b)", () => {
+  const cases = SUGGEST_PLACES.flatMap(([place, map]) => Object.entries(map).map(([key, sees]) => [place, key, sees] as const));
+
+  it.each(cases.filter(([, , sees]) => sees === "always"))("%s.%s is always sent", (place, key) => {
+    const everythingOff = new Set<AiDetail>(AI_DETAILS.filter((d) => !NOT_FIELDS.includes(d)));
+    expect(suggestSent(toSuggestInput(suggest) as Obj, place, key)).toBe(true);
+    expect(suggestSent(toSuggestInput(suggest, everythingOff) as Obj, place, key)).toBe(true);
+  });
+
+  it.each(cases.filter(([, , sees]) => sees !== "always"))("%s.%s goes with %s", (place, key, sees) => {
+    expect(suggestSent(toSuggestInput(suggest) as Obj, place, key)).toBe(true);
+    expect(suggestSent(toSuggestInput(suggest, new Set([sees as AiDetail])) as Obj, place, key)).toBe(false);
   });
 });

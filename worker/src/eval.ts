@@ -5,10 +5,15 @@
 //
 //   npm run eval -w worker -- snapshot [--limit 12]   choose the brews
 //   npm run eval -w worker -- run --label baseline [--yes]
+//   npm run eval -w worker -- run --label sug --suggest [beanRecipe] [--yes]
 //   npm run eval -w worker -- compare baseline after
 //
 // `run` builds each brew's context with the code as it is now and sends it
 // through the prompt as it is now, so run it before and after a change.
+// With --suggest it asks "Suggest parameters" instead, as if setting up each
+// brew (its bean, recipe, brewer and grinder; brews before it, from the
+// source given, default beanRecipe), so the values can be held against the
+// brew as it went.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -91,17 +96,66 @@ async function snapshot(limit: number): Promise<void> {
   console.log(`Picked ${picked.length} rated brews → eval/brews.json`);
 }
 
-async function run(label: string, yes: boolean): Promise<void> {
+// A job to send: what goes in (for its size) and the call.
+interface EvalJob {
+  input: unknown;
+  send: () => Promise<{ output: unknown; usage: { promptTokens: number; completionTokens: number } | null }>;
+}
+
+async function analysisJobs(brews: Picked[]): Promise<Array<EvalJob | null>> {
   const { loadBrewContext } = await import("./context.js");
-  const { requestAnalysis, PROMPT_VERSION } = await import("./llm.js");
+  const { requestAnalysis } = await import("./llm.js");
   const { toLlmInput } = await import("./prompt.js");
+  return Promise.all(
+    brews.map(async (b) => {
+      const context = await loadBrewContext(b.brewLogId);
+      // What's actually sent: the compact input (prompt.ts), not the full context.
+      return context ? { input: toLlmInput(context), send: async () => { const r = await requestAnalysis(context); return { output: r.analysis, usage: r.usage }; } } : null;
+    }),
+  );
+}
+
+async function suggestJobs(brews: Picked[], source: string): Promise<Array<EvalJob | null>> {
+  const { db } = await import("./db.js");
+  const { brewLogs, SUGGEST_SOURCES } = await import("@barista/shared/schema");
+  const { eq } = await import("drizzle-orm");
+  const { loadSuggestContext } = await import("./suggestContext.js");
+  const { requestSuggestion } = await import("./llm.js");
+  const { toSuggestInput } = await import("./prompt.js");
+  const picked = SUGGEST_SOURCES.find((s) => s === source);
+  if (!picked) throw new Error(`--suggest takes one of ${SUGGEST_SOURCES.join(", ")}`);
+  return Promise.all(
+    brews.map(async (b) => {
+      const [brew] = await db.select().from(brewLogs).where(eq(brewLogs.id, b.brewLogId));
+      if (!brew) return null;
+      // The batch the barista went on to brew (espresso has no water: its yield is the shot).
+      const espresso = brew.actualWaterGrams === null;
+      const request = {
+        beanId: brew.beanId,
+        recipeId: brew.recipeId,
+        brewerId: brew.brewerId,
+        grinderId: brew.grinderId,
+        source: picked,
+        maxBrews: 5,
+        batchDoseGrams: brew.actualDoseGrams,
+        batchWaterGrams: brew.actualWaterGrams,
+        batchIceGrams: brew.actualIceGrams,
+        batchYieldGrams: espresso ? brew.actualYieldGrams : null,
+      };
+      const context = await loadSuggestContext(request, { before: brew.timestamp });
+      return context ? { input: toSuggestInput(context), send: async () => { const r = await requestSuggestion(context); return { output: r.suggestion, usage: r.usage }; } } : null;
+    }),
+  );
+}
+
+async function run(label: string, yes: boolean, suggest: string | null): Promise<void> {
+  const { PROMPT_VERSION } = await import("./llm.js");
   const { config } = await import("./config.js");
   const brews = readJson<Picked[]>("brews.json");
-  const contexts = await Promise.all(brews.map((b) => loadBrewContext(b.brewLogId)));
-  // What's actually sent: the compact input (prompt.ts), not the full context.
-  const inputs = contexts.map((c) => (c ? toLlmInput(c) : null));
-  const chars = inputs.reduce((n, c) => n + (c ? JSON.stringify(c).length : 0), 0);
-  console.log(`${brews.length} brews, prompt ${PROMPT_VERSION}, model ${config.openaiModel}: about ${Math.round(chars / 4).toLocaleString()} context tokens plus the prompt each time.`);
+  const jobs = suggest === null ? await analysisJobs(brews) : await suggestJobs(brews, suggest);
+  const inputs = jobs.map((j) => j?.input ?? null);
+  const chars = inputs.reduce<number>((n, c) => n + (c ? JSON.stringify(c).length : 0), 0);
+  console.log(`${brews.length} brews${suggest === null ? "" : ` (Suggest parameters, ${suggest})`}, prompt ${PROMPT_VERSION}, model ${config.openaiModel}: about ${Math.round(chars / 4).toLocaleString()} context tokens plus the prompt each time.`);
   if (!yes) {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     const answer = await rl.question("Send them to the API? [y/N] ");
@@ -110,14 +164,14 @@ async function run(label: string, yes: boolean): Promise<void> {
   }
   const out: RunResult = { label, promptVersion: PROMPT_VERSION, model: config.openaiModel, at: new Date().toISOString(), results: [] };
   for (const [i, b] of brews.entries()) {
-    const context = contexts[i];
-    if (!context) {
+    const job = jobs[i];
+    if (!job) {
       out.results.push({ brewLogId: b.brewLogId, contextChars: 0, context: null, output: null, usage: null, error: "brew no longer exists" });
       continue;
     }
     try {
-      const { analysis, usage } = await requestAnalysis(context);
-      out.results.push({ brewLogId: b.brewLogId, contextChars: JSON.stringify(inputs[i]).length, context: inputs[i], output: analysis, usage, error: null });
+      const { output, usage } = await job.send();
+      out.results.push({ brewLogId: b.brewLogId, contextChars: JSON.stringify(inputs[i]).length, context: inputs[i], output, usage, error: null });
       process.stdout.write(".");
     } catch (err) {
       out.results.push({ brewLogId: b.brewLogId, contextChars: JSON.stringify(inputs[i]).length, context: inputs[i], output: null, usage: null, error: err instanceof Error ? err.message : String(err) });
@@ -139,9 +193,22 @@ function compare(a: string, b: string): void {
   const show = (o: unknown) => {
     if (!o || typeof o !== "object") return "–";
     const x = o as Record<string, unknown>;
-    return [x.nextStep ? `**Next:** ${x.nextStep}` : null, `grind ${x.suggestedGrindDelta}, temp ${x.suggestedTempDelta}`, x.suggestedRpmDelta ? `rpm ${x.suggestedRpmDelta}` : null, x.suggestedDoseDelta ? `dose ${x.suggestedDoseDelta} g` : null, x.suggestedYieldDelta ? `shot weight ${x.suggestedYieldDelta} g` : null, x.confidence ? `(${x.confidence})` : null, `“${x.reasoning}”`]
+    // A suggestion's values, or an analysis's changes.
+    // (Runs from before the ratio gave dose → water or shot weight.)
+    const amounts = "ratio" in x ? `ratio ${x.ratio ?? "kept"}` : `${x.doseGrams} g → ${x.waterGrams ?? x.yieldGrams ?? "–"} g`;
+    const values = "ratio" in x || "doseGrams" in x
+      ? [`grind ${x.grindSetting ?? "–"}${x.grindRpm ? ` at ${x.grindRpm} rpm` : ""}, ${x.tempC ?? "–"} °C, ${amounts}`]
+      : [`grind ${x.suggestedGrindDelta}, temp ${x.suggestedTempDelta}`];
+    return [x.nextStep ? `**Next:** ${x.nextStep}` : null, ...values, x.suggestedRpmDelta ? `rpm ${x.suggestedRpmDelta}` : null, x.suggestedDoseDelta ? `dose ${x.suggestedDoseDelta} g` : null, x.suggestedYieldDelta ? `shot weight ${x.suggestedYieldDelta} g` : null, x.confidence ? `(${x.confidence})` : null, `“${x.reasoning}”`]
       .filter(Boolean)
       .join("<br>");
+  };
+  // A suggestion's batch, which it keeps.
+  const batchLine = (...contexts: unknown[]): string[] => {
+    const batch = contexts.map((c) => (c && typeof c === "object" ? (c as Record<string, unknown>).batch : undefined)).find((b) => b && typeof b === "object");
+    if (!batch) return [];
+    const t = batch as Record<string, number | undefined>;
+    return [`Batch: ${t.doseGrams ?? "–"} g → ${t.waterGrams ?? t.yieldGrams ?? "–"} g${t.iceGrams ? ` + ${t.iceGrams} g ice` : ""}, ratio ${t.ratio ?? "–"}`];
   };
   const lines = [
     `# ${a} vs ${b}`,
@@ -163,6 +230,7 @@ function compare(a: string, b: string): void {
       `## ${brew.timestamp.slice(0, 16).replace("T", " ")}`,
       "",
       `Rating ${brew.rating ?? "–"}${brew.drinkRating ? ` (drink ${brew.drinkRating})` : ""} · ${cell(brew.tastingNotes)}${brew.problems.length ? ` · problems: ${brew.problems.join(", ")}` : ""}`,
+      ...batchLine(x?.context, y?.context),
       brew.stored ? `Stored analysis${brew.stored.helpful === null ? "" : brew.stored.helpful ? " (rated 👍)" : " (rated 👎)"}: “${cell(brew.stored.reasoning)}”` : "No stored analysis.",
       "",
       `| ${a} | ${b} |`,
@@ -181,10 +249,14 @@ async function main(args: string[]): Promise<void> {
   if (!existsSync(OUT)) mkdirSync(OUT);
   const [command] = args;
   if (command === "snapshot") await snapshot(Number(flag(args, "limit") ?? 12));
-  else if (command === "run" && flag(args, "label")) await run(flag(args, "label")!, args.includes("--yes"));
+  else if (command === "run" && flag(args, "label")) {
+    const next = flag(args, "suggest"); // the source, if one follows
+    const suggest = !args.includes("--suggest") ? null : next && !next.startsWith("--") ? next : "beanRecipe";
+    await run(flag(args, "label")!, args.includes("--yes"), suggest);
+  }
   else if (command === "compare" && args[1] && args[2]) compare(args[1], args[2]);
   else {
-    console.error("Usage: snapshot [--limit N] | run --label NAME [--yes] | compare A B");
+    console.error("Usage: snapshot [--limit N] | run --label NAME [--suggest [SOURCE]] [--yes] | compare A B");
     process.exitCode = 2;
   }
 }

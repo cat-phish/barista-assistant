@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, MAX_AUTO_ANALYZE_DAILY_CAP, REPEAT_KEEPS, ROAST_LEVELS, ROAST_SCALES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
+import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_SUGGEST_BREWS, REPEAT_KEEPS, ROAST_LEVELS, ROAST_SCALES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
 import { AI_DETAILS } from "@barista/shared/aiDetails";
 import { ROLES } from "./auth/membership.js";
 
@@ -29,6 +29,9 @@ export const workspaceSettingsObject = z
     autoAnalyze: z.boolean(),
     autoAnalyzeDelayMinutes: z.literal(AUTO_ANALYZE_DELAYS),
     autoAnalyzeDailyCap: z.number().int().min(1).max(MAX_AUTO_ANALYZE_DAILY_CAP).nullable(),
+    // "Suggest parameters" defaults (docs/api/analysis.md §8b).
+    suggestSource: z.enum(SUGGEST_SOURCES),
+    suggestMaxBrews: z.number().int().min(1).max(MAX_SUGGEST_BREWS),
   })
   .partial()
   .strict();

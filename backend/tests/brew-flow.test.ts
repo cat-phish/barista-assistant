@@ -133,25 +133,6 @@ describe("brew logs", () => {
 });
 
 describe("suggestions and analysis", () => {
-  it("suggestions return the analyzed brew even when it's older than the last 5", async () => {
-    const { owner, ws } = await setup();
-    const bean = await newBean(owner, ws.id);
-    const oldest = await newBrewLog(owner, ws.id, bean, { timestamp: "2026-10-01T08:00:00Z", tastingNotes: "oldest" });
-    for (let d = 2; d <= 7; d++) await newBrewLog(owner, ws.id, bean, { timestamp: `2026-10-0${d}T08:00:00Z` });
-
-    const empty = await owner.agent.get(`/api/beans/${bean}/suggestions`);
-    expect(empty.body).toMatchObject({ latestAnalysis: null, analyzedBrew: null });
-    expect(empty.body.recentBrews).toHaveLength(5);
-
-    const { db } = await import("../src/db.js");
-    const { llmAnalyses } = await import("@barista/shared/schema");
-    await db.insert(llmAnalyses).values({ id: crypto.randomUUID(), brewLogId: oldest, reasoning: "r", suggestedGrindDelta: "finer", suggestedTempDelta: 1.5 });
-
-    const res = await owner.agent.get(`/api/beans/${bean}/suggestions`);
-    expect(res.body.latestAnalysis).toMatchObject({ brewLogId: oldest, suggestedTempDelta: 1.5 });
-    expect(res.body.analyzedBrew).toMatchObject({ id: oldest, tastingNotes: "oldest" });
-  });
-
   it("analyze queues one job per brew log, and repeat requests reuse it", async () => {
     const { owner, ws } = await setup();
     const bean = await newBean(owner, ws.id);
@@ -208,7 +189,7 @@ describe("suggestions and analysis", () => {
     expect((await owner.agent.put(`/api/brew-logs/${other}/analyses/${id}/feedback`).send({ helpful: false })).status).toBe(404); // another brew's
   });
 
-  it("viewers can't analyze; outsiders can't tell whether a log or bean exists", async () => {
+  it("viewers can't analyze; outsiders can't tell whether a log exists", async () => {
     const { owner, ws } = await setup();
     const viewer = await newUser();
     const outsider = await newUser();
@@ -222,9 +203,6 @@ describe("suggestions and analysis", () => {
     const missing = await outsider.agent.post(`/api/brew-logs/${fake}/analyze`);
     expect([real.status, missing.status]).toEqual([404, 404]);
     expect(real.body).toEqual(missing.body);
-    const realBean = await outsider.agent.get(`/api/beans/${bean}/suggestions`);
-    const missingBean = await outsider.agent.get(`/api/beans/${fake}/suggestions`);
-    expect(realBean.body).toEqual(missingBean.body);
     expect(await brewAnalysisQueue.getWaitingCount()).toBe(0);
   });
 });

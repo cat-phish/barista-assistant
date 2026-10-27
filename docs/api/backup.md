@@ -64,7 +64,7 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   `bean_freezes`, `recipes`, `recipe_steps`, `recipe_grind_settings`,
   `drinks`, `drink_ingredients`, `menu_sections`, `menu_items`,
   `brew_logs`, `brew_log_marks`, `brew_log_tools`, `brew_log_problems`,
-  `llm_analyses` (`BACKUP_TABLES`). A table left out of a file counts as
+  `llm_analyses`, `parameter_suggestions` (`BACKUP_TABLES`). A table left out of a file counts as
   empty.
 - **Not in a backup:** people, members, notification channels and
   preferences belong to the server, not the workspace. A brew says who made

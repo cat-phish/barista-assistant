@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { analysisRequests, beanFreezes, beans, brewLogMarks, brewLogs, brewers, ingredients, drinkIngredients, drinks, grinders, llmAnalyses, recipeGrindSettings, recipes, recipeSteps, users, waterProfiles, workspaces, prepTools, brewLogTools, brewProblems, brewLogProblems, recipeStyles } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { extractionYield, type BrewContext } from "../src/context.js";
+import { extractionYield, loadBrewContext, type BrewContext } from "../src/context.js";
 import { db } from "../src/db.js";
 import { analyzeWithLlm } from "../src/llm.js";
 import { CAP_REACHED, failureMessage, processBrewAnalysis, settleRequest } from "../src/processor.js";
@@ -19,6 +19,8 @@ let beanId: string;
 let workspaceId: string;
 let userId: string;
 const logIds: Record<string, string> = {};
+// Another brew as the AI would see it, analyzed on its own.
+const brewOf = async (day: string) => (await loadBrewContext(logIds[day]!))!.brew;
 
 // One bean roasted 2026-10-01, a V60 recipe with steps, and brews on days 2..9.
 beforeEach(async () => {
@@ -52,7 +54,7 @@ beforeEach(async () => {
 });
 
 describe("processBrewAnalysis", () => {
-  it("sends the brew, the recipe and the 5 brews before it, then saves the analysis", async () => {
+  it("sends the brew and its recipe, no earlier brews, then saves the analysis", async () => {
     llm.mockResolvedValue(ANALYSIS);
     const result = await processBrewAnalysis({ brewLogId: logIds.day8! });
 
@@ -60,7 +62,7 @@ describe("processBrewAnalysis", () => {
     const context = llm.mock.calls[0]![0] as BrewContext;
     expect(context.brew).toMatchObject({ tastingNotes: "day 8", roastAgeDays: 7, daysFrozenBeforeBrew: 0, brewRatio: 16.67, recipeName: "House V60", recipeStyle: { name: "Pour over", brewsLike: "pour_over" }, methodKind: "filter", actualWaterGrams: 250, actualYieldGrams: 221.5, tdsPercent: 1.38, extractionYieldPercent: 20.4 });
     // No yield measured and no recipe: the TDS goes through, extraction can't be worked out.
-    expect(context.previousBrews[0]).toMatchObject({ recipeName: null, methodKind: null, tdsPercent: 1.3, extractionYieldPercent: null });
+    expect(await brewOf("day7")).toMatchObject({ recipeName: null, methodKind: null, tdsPercent: 1.3, extractionYieldPercent: null });
     expect(context.recipe).toMatchObject({
       name: "House V60", brewer: "V60", style: { name: "Pour over", brewsLike: "pour_over" }, methodKind: "filter", firstDropMinSec: null, targetWaterGrams: 250, expectedYieldGrams: 220, expectedFinishMinSec: 165, expectedFinishMaxSec: 195, grindStartingPoints: [],
       steps: [
@@ -86,8 +88,8 @@ describe("processBrewAnalysis", () => {
       region: "Guji",
       altitudeMasl: 2100,
     });
-    // Only earlier brews (day 9 is later), newest first, at most 5.
-    expect(context.previousBrews.map((b) => b.tastingNotes)).toEqual(["day 7", "day 6", "day 5", "day 4", "day 3"]);
+    // Only this brew: history goes to "Suggest parameters" (docs/api/llm-contract.md §9).
+    expect(Object.keys(context).sort()).toEqual(["bean", "brew", "drink", "ratingScale", "recipe"]);
     expect(context.ratingScale).toBe("1-5");
 
     const saved = await db.select().from(llmAnalyses).where(eq(llmAnalyses.brewLogId, logIds.day8!));
@@ -114,7 +116,7 @@ describe("processBrewAnalysis", () => {
     expect(context.brew.machine).toEqual({ name: "Linea Mini", preinfusion: "manual", flowControl: "manual", pressureControl: "none" });
     expect(context.drink).toBeNull();
     expect(context.brew.marks).toEqual([{ kind: "step_end", stepOrder: 1, atSec: 6 }, { kind: "first_drop", stepOrder: null, atSec: 7.4 }]);
-    expect(context.previousBrews[0]?.marks).toEqual([]);
+    expect((await brewOf("day8")).marks).toEqual([]);
     expect(context.recipe).toMatchObject({ methodKind: "espresso", targetWaterGrams: null, expectedYieldGrams: 36, firstDropMinSec: 6, firstDropMaxSec: 9, flowUnit: "g_s" });
   });
 
@@ -187,11 +189,8 @@ describe("processBrewAnalysis", () => {
       drinkRating: 5,
       drinkTastingNotes: "sweet, caramel",
     });
-    const served = context.previousBrews.map((b) => [b.tastingNotes, b.drink?.name ?? null, b.drinkTastingNotes]);
-    expect(served.slice(0, 2)).toEqual([
-      ["day 7", null, null], // straight
-      ["day 6", "Vanilla Latte", "milky"], // in milk, with its own tasting
-    ]);
+    expect(await brewOf("day7")).toMatchObject({ drink: null, drinkTastingNotes: null }); // straight
+    expect(await brewOf("day6")).toMatchObject({ drink: { name: "Vanilla Latte" }, tastingNotes: "day 6", drinkTastingNotes: "milky" }); // in milk, with its own tasting
   });
 
   it("uses the effective roast age at each brew's date, excluding days frozen", async () => {
@@ -201,10 +200,9 @@ describe("processBrewAnalysis", () => {
     await processBrewAnalysis({ brewLogId: logIds.day8! });
     const context = llm.mock.calls[0]![0] as BrewContext;
     expect(context.brew).toMatchObject({ roastAgeDays: 5, daysFrozenBeforeBrew: 2 }); // Oct 8: 7 days - 2 frozen
-    const byDay = Object.fromEntries(context.previousBrews.map((b) => [b.tastingNotes, [b.roastAgeDays, b.daysFrozenBeforeBrew]]));
-    expect(byDay["day 3"]).toEqual([2, 0]); // before the freeze
-    expect(byDay["day 5"]).toEqual([3, 1]); // mid-freeze: age paused at 3
-    expect(byDay["day 7"]).toEqual([4, 2]); // after thawing: resumed
+    expect(await brewOf("day3")).toMatchObject({ roastAgeDays: 2, daysFrozenBeforeBrew: 0 }); // before the freeze
+    expect(await brewOf("day5")).toMatchObject({ roastAgeDays: 3, daysFrozenBeforeBrew: 1 }); // mid-freeze: age paused at 3
+    expect(await brewOf("day7")).toMatchObject({ roastAgeDays: 4, daysFrozenBeforeBrew: 2 }); // after thawing: resumed
   });
 
   it("names a stovetop brew's method and style", async () => {
@@ -264,8 +262,8 @@ describe("processBrewAnalysis", () => {
       variableSpeed: false, rpmMin: null, rpmMax: null,
     });
     expect(context.brew.grindRpm).toBeNull();
-    const byDay = Object.fromEntries(context.previousBrews.map((b) => [b.tastingNotes, b.grinder?.name ?? null]));
-    expect(byDay).toMatchObject({ "day 6": "Comandante C40", "day 7": null });
+    expect((await brewOf("day6")).grinder?.name).toBe("Comandante C40");
+    expect((await brewOf("day7")).grinder).toBeNull();
     expect(context.recipe?.grindStartingPoints).toEqual([{ grinderName: "Comandante C40", setting: 21 }]);
   });
 
@@ -279,7 +277,7 @@ describe("processBrewAnalysis", () => {
     const context = llm.mock.calls[0]![0] as BrewContext;
     expect(context.brew.grinder).toMatchObject({ name: "EK43", variableSpeed: true, rpmMin: 300, rpmMax: 1500 });
     expect(context.brew.grindRpm).toBe(900);
-    expect(context.previousBrews.find((b) => b.tastingNotes === "day 6")?.grindRpm).toBe(1200);
+    expect((await brewOf("day6")).grindRpm).toBe(1200);
   });
 
   it("tells the LLM the weights in and out of the grinder, and the retention", async () => {
@@ -288,16 +286,15 @@ describe("processBrewAnalysis", () => {
     await processBrewAnalysis({ brewLogId: logIds.day8! });
     const context = llm.mock.calls[0]![0] as BrewContext;
     expect(context.brew).toMatchObject({ beanWeightInGrams: 18.2, groundWeightOutGrams: 17.9, grinderRetentionGrams: 0.3 });
-    expect(context.previousBrews.every((b) => b.grinderRetentionGrams === null)).toBe(true);
+    expect((await brewOf("day7")).grinderRetentionGrams).toBeNull(); // not weighed
   });
 
-  it("cold brews: leaves a steeping brew out of the history, and doesn't analyze one", async () => {
+  it("cold brews: sends the steep and dilution, and doesn't analyze a brew still steeping", async () => {
     llm.mockResolvedValue(ANALYSIS);
     await db.update(brewLogs).set({ steeping: true }).where(eq(brewLogs.id, logIds.day7!));
     await db.update(brewLogs).set({ steepTemp: "fridge", dilutionRatio: 1, dilutedWith: "milk", steepMinHours: 14, steepMaxHours: 20 }).where(eq(brewLogs.id, logIds.day8!));
     await processBrewAnalysis({ brewLogId: logIds.day8! });
     const context = llm.mock.calls[0]![0] as BrewContext;
-    expect(context.previousBrews.map((b) => b.tastingNotes)).not.toContain("day 7");
     expect(context.brew).toMatchObject({ steeping: false, steepTemp: "fridge", dilutionRatio: 1, dilutedWith: "milk", steepMinHours: 14, steepMaxHours: 20, expectedFinishMinSec: null });
     expect(context.recipe).toMatchObject({ steepMinHours: null, dilutionRatio: null });
 
@@ -317,7 +314,7 @@ describe("processBrewAnalysis", () => {
       name: "Third Wave Water", tdsPpm: null, generalHardnessPpm: 102, alkalinityPpm: 0, calciumPpm: 30, magnesiumPpm: null,
       sodiumPpm: null, potassiumPpm: null, bicarbonatePpm: null, chloridePpm: null, sulfatePpm: null, ph: null,
     });
-    expect(context.previousBrews[0]?.water).toBeNull();
+    expect((await brewOf("day7")).water).toBeNull();
   });
 
   it("tells the LLM the prep tools each brew used, in checklist order", async () => {
@@ -334,7 +331,7 @@ describe("processBrewAnalysis", () => {
     await processBrewAnalysis({ brewLogId: logIds.day8! });
     const context = llm.mock.calls[0]![0] as BrewContext;
     expect(context.brew.prepTools).toEqual(["WDT", "RDT"]);
-    expect(context.previousBrews[0]?.prepTools).toEqual([]);
+    expect((await brewOf("day7")).prepTools).toEqual([]);
   });
 
   it("tells the LLM what went wrong in each brew, in list order", async () => {
@@ -352,8 +349,8 @@ describe("processBrewAnalysis", () => {
     await processBrewAnalysis({ brewLogId: logIds.day8! });
     const context = llm.mock.calls[0]![0] as BrewContext;
     expect(context.brew.problems).toEqual(["Slow drawdown", "Scale not tared"]);
-    expect(context.previousBrews.map((b) => b.problems)).toContainEqual(["Scale not tared"]);
-    expect(context.previousBrews.some((b) => b.problems.length === 0)).toBe(true);
+    expect((await brewOf("day7")).problems).toEqual(["Scale not tared"]);
+    expect((await brewOf("day6")).problems).toEqual([]);
   });
 
   it("passes on what the workspace keeps from the AI (Settings → AI)", async () => {

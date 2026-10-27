@@ -10,6 +10,8 @@ import { getTableConfig, type MySqlTable } from "drizzle-orm/mysql-core";
 import { z } from "zod";
 import {
   ANALYSIS_CONFIDENCE,
+  SUGGEST_SOURCES,
+  SUGGESTION_STATUSES,
   BEAN_MENU_FIELDS,
   BEAN_PROCESSES,
   BLEND_TYPES,
@@ -49,6 +51,7 @@ import {
   grinders,
   ingredients,
   llmAnalyses,
+  parameterSuggestions,
   menuItems,
   menuSections,
   notificationChannels,
@@ -101,6 +104,7 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
   { table: brewLogTools, scope: "brewLogId" },
   { table: brewLogProblems, scope: "brewLogId" },
   { table: llmAnalyses, scope: "brewLogId" },
+  { table: parameterSuggestions, scope: "beanId" },
 ];
 // Not in a backup: people, their memberships and the server's own settings
 // belong to the server, not the workspace, and the workspace row is the
@@ -145,6 +149,9 @@ const ENUMS: Record<string, readonly string[]> = {
   "brew_log_marks.kind": MARK_KINDS,
   "llm_analyses.suggestedGrindDelta": ["much_finer", "finer", "no_change", "coarser", "much_coarser"],
   "llm_analyses.confidence": ANALYSIS_CONFIDENCE,
+  "parameter_suggestions.source": SUGGEST_SOURCES,
+  "parameter_suggestions.status": SUGGESTION_STATUSES,
+  "parameter_suggestions.confidence": ANALYSIS_CONFIDENCE,
 };
 // JSON columns, checked by what the API accepts.
 const JSON_SCHEMAS: Record<string, z.ZodType> = {

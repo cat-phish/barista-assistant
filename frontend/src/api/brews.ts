@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { BrewLog, DilutionWith, LlmAnalysis, Mark, ServingUnit, SteepTemp, Suggestions } from './types';
+import type { BrewLog, DilutionWith, LlmAnalysis, Mark, ParameterSuggestion, ServingUnit, SteepTemp, SuggestionRequest } from './types';
 
 // What happened to a reminder asked for when saving (docs/api/notifications.md §1b).
 export type Reminder = 'queued' | 'off' | 'unavailable';
@@ -66,8 +66,12 @@ export const brewLogsApi = {
   remove: (workspaceId: string, id: string) => api.delete(`${base(workspaceId)}/${id}`),
 };
 
+// "Suggest parameters" (docs/api/analysis.md §8b): ask (202, pending), then poll.
 export const suggestionsApi = {
-  forBean: (beanId: string) => api.get<Suggestions>(`/api/beans/${beanId}/suggestions`),
+  request: (workspaceId: string, body: SuggestionRequest) =>
+    api.post<{ suggestion: ParameterSuggestion }>(`/api/workspaces/${workspaceId}/parameter-suggestions`, body),
+  get: (workspaceId: string, id: string) =>
+    api.get<{ suggestion: ParameterSuggestion }>(`/api/workspaces/${workspaceId}/parameter-suggestions/${id}`),
 };
 
 export const analysisApi = {

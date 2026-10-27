@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { AiDetail } from "@barista/shared/aiDetails";
 import type { BrewContext, BrewSummary } from "../src/context.js";
-import { buildCompletionRequest, onlyWhatApplies, parseAnalysisMessage } from "../src/llm.js";
-import { buildSystemPrompt, compact, promptSections, toLlmInput } from "../src/prompt.js";
+import { buildCompletionRequest, buildSuggestRequest, onlySuggestionsThatApply, onlyWhatApplies, parseAnalysisMessage, parseSuggestionMessage } from "../src/llm.js";
+import { buildSystemPrompt, compact, promptSections, SUGGEST_SECTIONS, toLlmInput, toSuggestInput } from "../src/prompt.js";
+import type { SuggestBrew, SuggestContext } from "../src/suggestContext.js";
 
 const reply = (body: unknown) => ({ content: JSON.stringify(body), refusal: null });
 const valid = { reasoning: "Under-extracted.", nextStep: "Grind 2 clicks finer.", confidence: "medium", suggestedGrindDelta: "finer", suggestedTempDelta: 1, suggestedRpmDelta: null, suggestedDoseDelta: null, suggestedYieldDelta: null };
@@ -42,7 +43,7 @@ describe("parseAnalysisMessage", () => {
   });
 });
 
-// A filter brew and an earlier one of another recipe, on the same grinder and water.
+// A filter brew on a C40 with Third Wave Water.
 const grinder = { name: "C40", adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, burrType: "conical", burrSizeMm: 39, power: "manual", variableSpeed: false, rpmMin: null, rpmMax: null } as BrewSummary["grinder"];
 const water = { name: "TWW", tdsPpm: 120, generalHardnessPpm: 80, alkalinityPpm: 40, calciumPpm: null, magnesiumPpm: null, sodiumPpm: null, potassiumPpm: null, bicarbonatePpm: null, chloridePpm: null, sulfatePpm: null, ph: null } as BrewSummary["water"];
 const summary = (over: Partial<BrewSummary> = {}): BrewSummary => ({
@@ -87,7 +88,7 @@ const summary = (over: Partial<BrewSummary> = {}): BrewSummary => ({
   expectedFinishMaxSec: null,
   ...over,
 });
-const context = (over: { brew?: Partial<BrewSummary>; previous?: Array<Partial<BrewSummary>>; bean?: Partial<BrewContext["bean"]> } = {}): BrewContext => ({
+const context = (over: { brew?: Partial<BrewSummary>; bean?: Partial<BrewContext["bean"]> } = {}): BrewContext => ({
   bean: { roasterName: "Onyx", beanName: "Monarch", batchNumber: null, process: "Washed", roastLevel: "light", detailedRoastLevel: null, roastType: null, blendType: "single_origin", decaf: false, roastDate: "2026-10-10", flavorProfile: null, originArea: "africa", country: "Ethiopia", region: null, altitudeMasl: 2000, ...over.bean },
   recipe: {
     name: "House V60",
@@ -114,7 +115,6 @@ const context = (over: { brew?: Partial<BrewSummary>; previous?: Array<Partial<B
   },
   brew: summary(over.brew),
   drink: null,
-  previousBrews: (over.previous ?? [{ timestamp: "2026-10-18T08:00:00.000Z", recipeName: "Other V60", rating: null, tastingNotes: null }]).map(summary),
   ratingScale: "1-5",
 });
 const without = (...keys: AiDetail[]) => new Set<AiDetail>(keys);
@@ -134,7 +134,7 @@ describe("onlyWhatApplies: changes that don't fit the brew are dropped", () => {
 });
 
 describe("what the AI is sent (docs/api/llm-contract.md §9)", () => {
-  it("leaves out what wasn't recorded, and names each grinder and water once", () => {
+  it("sends only this brew, leaves out what wasn't recorded, and describes its grinder and water in equipment", () => {
     const input = toLlmInput(context());
     expect(input).toMatchObject({
       ratingScale: "1-5",
@@ -148,9 +148,7 @@ describe("what the AI is sent (docs/api/llm-contract.md §9)", () => {
     expect(input.recipe).not.toHaveProperty("flowUnit"); // the default
     expect(input.equipment).toEqual({ grinders: { C40: expect.any(Object) }, waters: { TWW: expect.any(Object) } });
     expect((input.equipment as { waters: { TWW: object } }).waters.TWW).not.toHaveProperty("calciumPpm");
-    // The earlier brew was another recipe, so it's a weaker comparison.
-    expect(input.previousBrews).toEqual([expect.objectContaining({ sameRecipe: false, recipeName: "Other V60" })]);
-    expect(input.previousBrews).toEqual([expect.not.objectContaining({ rating: expect.anything() })]);
+    expect(Object.keys(input)).toEqual(["ratingScale", "bean", "recipe", "brew", "equipment"]);
     expect(JSON.stringify(input)).not.toContain("null");
   });
 
@@ -229,12 +227,122 @@ describe("what the workspace keeps from the AI (Settings → AI)", () => {
     expect(promptSections(input)).not.toEqual(expect.arrayContaining(["tds", "problems", "retention", "origin", "altitude"]));
   });
 
-  it("can leave out unrated earlier brews and the drink", () => {
-    const ctx = context({ brew: { drink: { name: "Latte", ingredientTypes: ["milk"] }, drinkRating: 4, drinkTastingNotes: "Sweet" }, previous: [{ rating: null }, { rating: 4, timestamp: "2026-10-17T08:00:00.000Z" }] });
-    expect((toLlmInput(ctx).previousBrews as unknown[]).length).toBe(2);
-    const input = toLlmInput(ctx, without("unratedHistory", "drink"));
-    expect(input.previousBrews).toEqual([expect.objectContaining({ rating: 4 })]);
+  it("can leave out the drink", () => {
+    const ctx = context({ brew: { drink: { name: "Latte", ingredientTypes: ["milk"] }, drinkRating: 4, drinkTastingNotes: "Sweet" } });
+    const input = toLlmInput(ctx, without("drink"));
     for (const gone of ["drink", "drinkRating", "drinkTastingNotes"]) expect(input.brew, gone).not.toHaveProperty(gone);
     expect(promptSections(input)).not.toContain("drink");
+  });
+});
+
+// "Suggest parameters" (docs/api/llm-contract.md §9b): the House V60 on the
+// C40, with an earlier brew of this bean (analyzed) and one of another bean.
+const earlier = (over: Partial<SuggestBrew> = {}): SuggestBrew => ({ ...summary(), sameBean: true, sameRecipe: true, sameGrinder: true, bean: null, analysis: null, ...over });
+const suggestContext = (over: Partial<SuggestContext> = {}): SuggestContext => {
+  const base = context();
+  return {
+    source: "recipe",
+    batch: { doseGrams: 22.5, waterGrams: 375, iceGrams: null, yieldGrams: null, ratio: 16.67 }, // scaled up from 15 g → 250 g
+    bean: base.bean,
+    roastAgeDays: 14,
+    daysFrozen: 0,
+    recipe: base.recipe,
+    brewer: { name: "V60", kind: "filter", preinfusion: "none", flowControl: "none", pressureControl: "none" },
+    grinder,
+    brews: [
+      earlier({ analysis: { reasoning: "Sour.", nextStep: "Grind finer.", confidence: "medium", suggestedGrindDelta: "finer", suggestedTempDelta: 0, suggestedRpmDelta: null, suggestedDoseDelta: null, suggestedYieldDelta: null, helpful: null } }),
+      earlier({ timestamp: "2026-10-18T08:00:00.000Z", sameBean: false, bean: { ...base.bean, beanName: "Kenya", country: "Kenya" }, tastingNotes: "Bright", water: null }),
+    ],
+    ratingScale: "1-5",
+    ...over,
+  };
+};
+const said = { reasoning: "Your last cup was sour.", nextStep: "Watch the drawdown.", confidence: "medium", grindSetting: 19, grindRpm: 900, tempC: 94, ratio: 16 };
+
+describe("what Suggest parameters sends (docs/api/llm-contract.md §9b)", () => {
+  it("the brew to make, and each earlier brew marked like it or not, with its analysis", () => {
+    const input = toSuggestInput(suggestContext());
+    expect(Object.keys(input)).toEqual(["ratingScale", "source", "batch", "bean", "roastAgeDays", "daysFrozen", "recipe", "brewer", "grinder", "brews", "equipment"]);
+    expect(input).toMatchObject({ source: "recipe", batch: { doseGrams: 22.5, waterGrams: 375, ratio: 16.67 }, roastAgeDays: 14, daysFrozen: 0, grinder: "C40", brewer: { name: "V60", kind: "filter" }, recipe: { name: "House V60" } });
+    expect(input.brewer).not.toHaveProperty("preinfusion"); // only an espresso machine's controls
+    const [mine, other] = input.brews as Array<Record<string, unknown>>;
+    expect(mine).toMatchObject({ sameBean: true, sameRecipe: true, sameGrinder: true, analysis: { reasoning: "Sour.", suggestedGrindDelta: "finer" } });
+    expect(mine).not.toHaveProperty("bean");
+    expect(other).toMatchObject({ sameBean: false, bean: { beanName: "Kenya", country: "Kenya" }, tastingNotes: "Bright" });
+    expect(input.equipment).toEqual({ grinders: { C40: expect.any(Object) }, waters: { TWW: expect.any(Object) } });
+  });
+
+  it("keeps the same details from the AI as an analysis, other beans' too", () => {
+    const input = toSuggestInput(suggestContext(), without("origin", "water", "temp"));
+    const [, other] = input.brews as Array<Record<string, unknown>>;
+    expect(input.bean).not.toHaveProperty("country");
+    expect(other?.bean).not.toHaveProperty("country");
+    expect(input.recipe).not.toHaveProperty("targetTempC");
+    expect(input.equipment).not.toHaveProperty("waters");
+  });
+
+  it("an espresso machine's controls, unless hidden", () => {
+    const machine = { name: "Linea", kind: "espresso", preinfusion: "manual", flowControl: "none", pressureControl: "none" } as const;
+    expect(toSuggestInput(suggestContext({ brewer: machine })).brewer).toMatchObject({ preinfusion: "manual" });
+    expect(toSuggestInput(suggestContext({ brewer: machine }), without("machine")).brewer).toEqual({ name: "Linea", kind: "espresso" });
+  });
+
+  it("its own opening, output and espresso sections; the topic sections as an analysis has them", () => {
+    const input = toSuggestInput(suggestContext());
+    expect(promptSections(input, SUGGEST_SECTIONS)).toEqual(["suggestCore", "suggestOutput", "style", "altitude", "origin", "water", "end"]);
+    const shot = toSuggestInput(suggestContext({ recipe: { ...context().recipe!, methodKind: "espresso" }, brews: [] }));
+    expect(promptSections(shot, SUGGEST_SECTIONS)).toContain("suggestEspresso"); // from the recipe, with no brews
+    expect(promptSections(shot, SUGGEST_SECTIONS)).not.toContain("espresso");
+  });
+
+  it("pins the prompt for a filter recipe", () => {
+    expect(buildSystemPrompt(toSuggestInput(suggestContext()), SUGGEST_SECTIONS)).toMatchSnapshot();
+  });
+
+  it("sends it under its own strict schema", () => {
+    const ctx = suggestContext();
+    const req = buildSuggestRequest(ctx);
+    expect(req.messages[0]).toEqual({ role: "system", content: buildSystemPrompt(toSuggestInput(ctx), SUGGEST_SECTIONS) });
+    expect(JSON.parse(String(req.messages[1]?.content))).toEqual(toSuggestInput(ctx));
+    expect(req.response_format).toMatchObject({
+      type: "json_schema",
+      json_schema: { name: "parameter_suggestion", strict: true, schema: { additionalProperties: false, required: ["reasoning", "nextStep", "confidence", "grindSetting", "grindRpm", "tempC", "ratio"] } },
+    });
+  });
+});
+
+describe("parseSuggestionMessage and onlySuggestionsThatApply", () => {
+  it("rounds to the columns", () => {
+    expect(parseSuggestionMessage(reply({ ...said, grindSetting: 19.256, tempC: 93.44, ratio: 16.666 }))).toMatchObject({ grindSetting: 19.26, tempC: 93.4, ratio: 16.67 });
+  });
+
+  it.each([
+    ["a temperature over 100 °C", { ...said, tempC: 120 }, /tempC/],
+    ["a ratio of 0", { ...said, ratio: 0 }, /ratio/],
+    ["a fractional RPM", { ...said, grindRpm: 900.5 }, /grindRpm/],
+    ["a missing field", { ...said, ratio: undefined }, /ratio/],
+  ])("rejects %s (so BullMQ retries)", (_label, body, error) => {
+    expect(() => parseSuggestionMessage(reply(body))).toThrow(error);
+  });
+
+  it("only a ratio the method brews at, and not the batch's own (kept either way)", () => {
+    const parsed = parseSuggestionMessage(reply(said));
+    expect(onlySuggestionsThatApply(parsed, suggestContext(), new Set()).ratio).toBe(16);
+    expect(onlySuggestionsThatApply({ ...parsed, ratio: 2.2 }, suggestContext(), new Set()).ratio).toBe(2.2); // a concentrate
+    expect(onlySuggestionsThatApply({ ...parsed, ratio: 1.5 }, suggestContext(), new Set()).ratio).toBeNull();
+    expect(onlySuggestionsThatApply({ ...parsed, ratio: 16.67 }, suggestContext(), new Set()).ratio).toBeNull();
+    const shot = suggestContext({ recipe: { ...context().recipe!, methodKind: "espresso" } });
+    expect(onlySuggestionsThatApply({ ...parsed, ratio: 2.2 }, shot, new Set()).ratio).toBe(2.2);
+    expect(onlySuggestionsThatApply(parsed, shot, new Set()).ratio).toBeNull(); // 1:16 isn't a shot
+  });
+
+  it("only a setting on the grinder's dial, a speed on a variable-speed one, a temperature the AI may see", () => {
+    const parsed = parseSuggestionMessage(reply(said));
+    expect(onlySuggestionsThatApply(parsed, suggestContext(), new Set())).toMatchObject({ grindSetting: 19, grindRpm: null, tempC: 94 }); // the C40 is fixed speed
+    expect(onlySuggestionsThatApply({ ...parsed, grindSetting: 55 }, suggestContext(), new Set()).grindSetting).toBeNull(); // the C40 goes to 40
+    expect(onlySuggestionsThatApply(parsed, suggestContext({ grinder: null }), new Set()).grindSetting).toBeNull();
+    const ek = suggestContext({ grinder: { ...grinder!, variableSpeed: true, rpmMin: 300, rpmMax: 1500 } });
+    expect(onlySuggestionsThatApply(parsed, ek, new Set()).grindRpm).toBe(900);
+    expect(onlySuggestionsThatApply(parsed, ek, without("rpm", "temp"))).toMatchObject({ grindRpm: null, tempC: null });
   });
 });
