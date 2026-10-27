@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { brewLogsApi } from '../api/brews';
+import { analysisApi, brewLogsApi } from '../api/brews';
 import { ApiError, errorMessage } from '../api/client';
 import type { BrewLog, LlmAnalysis, Mark } from '../api/types';
+import AiRequestDialog from '../components/AiRequestDialog.vue';
 import AnalysisCard from '../components/AnalysisCard.vue';
 import { grindersApi } from '../api/grinders';
 import type { BrewProblem, Grinder, PrepTool, WaterProfile } from '../api/types';
@@ -110,6 +111,10 @@ onMounted(load);
 // AI analysis: newest of the stored one and any just requested.
 const { analysis: freshAnalysis, state: aiState, error: aiError, request, awaitAuto } = useAnalysis();
 const analysis = computed(() => freshAnalysis.value ?? storedAnalysis.value);
+// What analyzing would send, without analyzing (docs/api/analysis.md §8d).
+const previewing = ref(false);
+const loadPreview = async () => (log.value ? (await analysisApi.preview(log.value.id)).request : null);
+
 function analyze(): void {
   const ws = workspaces.current?.id;
   if (ws && log.value) void request(ws, log.value.id, analysis.value);
@@ -374,6 +379,15 @@ function markLabel(m: Mark): string {
         >
           {{ aiButtonLabel }}
         </button>
+        <button
+          v-if="workspaces.canEdit && aiState !== 'waiting' && !unrated && !log.steeping"
+          class="btn-link small preview-link"
+          type="button"
+          @click="previewing = true"
+        >
+          Preview what's sent
+        </button>
+        <AiRequestDialog :open="previewing" :load="loadPreview" preview @close="previewing = false" />
       </section>
     </template>
   </main>
@@ -389,6 +403,9 @@ function markLabel(m: Mark): string {
 </template>
 
 <style scoped>
+.preview-link {
+  align-self: flex-start;
+}
 .steeping-note {
   margin: var(--space-1) 0 0;
   color: var(--brand);

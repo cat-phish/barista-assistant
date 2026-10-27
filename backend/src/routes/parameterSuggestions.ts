@@ -7,6 +7,8 @@ import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { enqueueParameterSuggestion, QueueUnavailableError } from "../queue.js";
+import { sendPreview } from "../preview.js";
+import type { SuggestionPreview } from "@barista/shared/jobs";
 import { SUGGESTION_COLUMNS, type SuggestionRow } from "../aiRequest.js";
 import {
   beans,
@@ -67,16 +69,19 @@ const NEEDS_BREWER: readonly SuggestSource[] = ["beanBrewer", "brewer"];
 export const parameterSuggestionsRouter = Router({ mergeParams: true });
 parameterSuggestionsRouter.use(requireAuth);
 
-parameterSuggestionsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<ParameterSuggestionResponse>) => {
+// The request as it would be saved: ids checked against the workspace, the
+// brewer from the recipe, the workspace's defaults filled in; or null once an
+// error is sent. Shared by POST and the preview, so they can't differ.
+async function resolveRequest(req: Request<WorkspaceParams>, res: Response): Promise<SuggestionPreview | null> {
   const { workspaceId } = req.params;
-  if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
+  if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return null;
   const body = parseBody(createSchema, req, res);
-  if (!body) return;
+  if (!body) return null;
 
   const [bean] = await db.select({ id: beans.id }).from(beans).where(and(eq(beans.id, body.beanId), eq(beans.workspaceId, workspaceId)));
   if (!bean) {
     sendError(res, 400, "beanId: not a bean in this workspace");
-    return;
+    return null;
   }
   let brewerId = body.brewerId ?? null;
   if (body.recipeId) {
@@ -86,14 +91,14 @@ parameterSuggestionsRouter.post("/", async (req: Request<WorkspaceParams>, res: 
       .where(and(eq(recipes.id, body.recipeId), eq(recipes.workspaceId, workspaceId)));
     if (!recipe) {
       sendError(res, 400, "recipeId: not a recipe in this workspace");
-      return;
+      return null;
     }
     brewerId = recipe.brewerId;
   } else if (brewerId) {
     const [brewer] = await db.select({ id: brewers.id }).from(brewers).where(and(eq(brewers.id, brewerId), eq(brewers.workspaceId, workspaceId)));
     if (!brewer) {
       sendError(res, 400, "brewerId: not a brewer in this workspace");
-      return;
+      return null;
     }
   }
   if (body.grinderId) {
@@ -101,7 +106,7 @@ parameterSuggestionsRouter.post("/", async (req: Request<WorkspaceParams>, res: 
     const [grinder] = await db.select({ id: grinders.id }).from(grinders).where(and(eq(grinders.id, body.grinderId), eq(grinders.workspaceId, workspaceId)));
     if (!grinder) {
       sendError(res, 400, "grinderId: not a grinder in this workspace");
-      return;
+      return null;
     }
   }
 
@@ -110,16 +115,13 @@ parameterSuggestionsRouter.post("/", async (req: Request<WorkspaceParams>, res: 
   const source = body.source ?? settings.suggestSource;
   if (NEEDS_RECIPE.includes(source) && !body.recipeId) {
     sendError(res, 400, "source: pick a recipe to compare its brews");
-    return;
+    return null;
   }
   if (NEEDS_BREWER.includes(source) && !brewerId) {
     sendError(res, 400, "source: pick a brewer to compare its brews");
-    return;
+    return null;
   }
-
-  const id = randomUUID();
-  await db.insert(parameterSuggestions).values({
-    id,
+  return {
     beanId: body.beanId,
     recipeId: body.recipeId ?? null,
     brewerId,
@@ -130,7 +132,14 @@ parameterSuggestionsRouter.post("/", async (req: Request<WorkspaceParams>, res: 
     batchWaterGrams: tenth(body.batch?.waterGrams),
     batchIceGrams: tenth(body.batch?.iceGrams),
     batchYieldGrams: tenth(body.batch?.yieldGrams),
-  });
+  };
+}
+
+parameterSuggestionsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<ParameterSuggestionResponse>) => {
+  const values = await resolveRequest(req, res);
+  if (!values) return;
+  const id = randomUUID();
+  await db.insert(parameterSuggestions).values({ id, ...values });
   try {
     await enqueueParameterSuggestion(id);
   } catch (err) {
@@ -145,6 +154,14 @@ parameterSuggestionsRouter.post("/", async (req: Request<WorkspaceParams>, res: 
   const [suggestion] = await db.select(SUGGESTION_COLUMNS).from(parameterSuggestions).where(eq(parameterSuggestions.id, id));
   if (!suggestion) throw new Error(`Parameter suggestion ${id} missing after insert`);
   res.status(202).json({ suggestion });
+});
+
+// What asking would send (docs/api/analysis.md §8d), without asking: the
+// same body as POST, nothing saved.
+parameterSuggestionsRouter.post("/preview", async (req: Request<WorkspaceParams>, res: Response<AiRequestResponse>) => {
+  const suggestion = await resolveRequest(req, res);
+  if (!suggestion) return;
+  await sendPreview(res, { kind: "suggest", suggestion });
 });
 
 // Polled until it's done or failed (any member can read it).

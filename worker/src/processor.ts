@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { BrewAnalysisJobData, ParameterSuggestionJobData } from "@barista/shared/jobs";
-import { analysisRequests, beans, brewLogs, DEFAULT_WORKSPACE_SETTINGS, llmAnalyses, parameterSuggestions, withDefaults, workspaces, type WorkspaceSettings } from "@barista/shared/schema";
+import type { AiPreviewJobData, BrewAnalysisJobData, ParameterSuggestionJobData } from "@barista/shared/jobs";
+import { analysisRequests, beans, brewLogs, DEFAULT_WORKSPACE_SETTINGS, llmAnalyses, parameterSuggestions, withDefaults, workspaces, type AiRequest, type WorkspaceSettings } from "@barista/shared/schema";
 import { and, count, eq, gte } from "drizzle-orm";
 import { loadBrewContext } from "./context.js";
 import { db } from "./db.js";
@@ -132,6 +132,27 @@ export async function processParameterSuggestion({ suggestionId }: ParameterSugg
     })
     .where(eq(parameterSuggestions.id, suggestionId));
   return { status: "saved", id: suggestionId };
+}
+
+// A preview (docs/api/analysis.md §8d): what the job would send, built the
+// same way (analysisSent / suggestionSent), without calling the AI. null
+// when the brew or bean is gone.
+export async function processAiPreview(data: AiPreviewJobData): Promise<AiRequest | null> {
+  if (data.kind === "analysis") {
+    const context = await loadBrewContext(data.brewLogId);
+    if (!context) return null;
+    const ws = await workspaceOf(data.brewLogId);
+    return analysisSent(context, new Set((ws?.settings ?? DEFAULT_WORKSPACE_SETTINGS).aiHidden));
+  }
+  const [row] = await db
+    .select({ settings: workspaces.settings })
+    .from(beans)
+    .innerJoin(workspaces, eq(beans.workspaceId, workspaces.id))
+    .where(eq(beans.id, data.suggestion.beanId));
+  if (!row) return null;
+  const hidden = new Set(withDefaults(DEFAULT_WORKSPACE_SETTINGS, row.settings ?? null).aiHidden);
+  const context = await loadSuggestContext(data.suggestion, { ratedOnly: hidden.has("unratedHistory") });
+  return context ? suggestionSent(context, hidden) : null;
 }
 
 // Every attempt failed: the brew page shows why, with "Try again".

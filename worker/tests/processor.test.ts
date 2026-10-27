@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { extractionYield, loadBrewContext, type BrewContext } from "../src/context.js";
 import { db } from "../src/db.js";
 import { analysisSent, analyzeWithLlm } from "../src/llm.js";
-import { CAP_REACHED, failureMessage, processBrewAnalysis, settleRequest } from "../src/processor.js";
+import { CAP_REACHED, failureMessage, processAiPreview, processBrewAnalysis, settleRequest } from "../src/processor.js";
 
 // Real database, fake LLM.
 vi.mock("../src/llm.js", async (importOriginal) => ({
@@ -98,6 +98,14 @@ describe("processBrewAnalysis", () => {
     // What was sent, saved with it (docs/api/analysis.md §8c).
     expect(saved[0]!.request).toEqual(analysisSent(context, new Set()));
     expect(saved[0]!.request).toMatchObject({ sections: expect.arrayContaining(["core", "output", "end"]), system: expect.stringContaining("Analyze this one brew"), input: { brew: { tastingNotes: "day 8" } } });
+  });
+
+  it("a preview is what the analysis would send, without calling the AI (docs/api/analysis.md §8d)", async () => {
+    await db.update(workspaces).set({ settings: { aiHidden: ["water"] } }).where(eq(workspaces.id, workspaceId));
+    const preview = await processAiPreview({ kind: "analysis", brewLogId: logIds.day8! });
+    expect(preview).toEqual(analysisSent((await loadBrewContext(logIds.day8!))!, new Set(["water"])));
+    expect(llm).not.toHaveBeenCalled();
+    expect(await processAiPreview({ kind: "analysis", brewLogId: randomUUID() })).toBeNull();
   });
 
   it("espresso brews: no water, ratio from the shot weight, first-drop window from the recipe", async () => {

@@ -5,10 +5,10 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { beansApi } from '../api/beans';
-import { brewLogsApi, suggestionsApi } from '../api/brews';
+import { analysisApi, brewLogsApi, suggestionsApi } from '../api/brews';
 import { ApiError, errorMessage } from '../api/client';
 import { recipesApi } from '../api/recipes';
-import { MAX_SUGGEST_BREWS, SUGGEST_SOURCES, type Bean, type BrewLog, type Recipe, type BrewerMethod, type SuggestionBatch, type SuggestSource } from '../api/types';
+import { MAX_SUGGEST_BREWS, SUGGEST_SOURCES, type Bean, type BrewLog, type Recipe, type BrewerMethod, type SuggestionBatch, type SuggestionRequest, type SuggestSource } from '../api/types';
 import AnalysisCard from '../components/AnalysisCard.vue';
 import AiRequestDialog from '../components/AiRequestDialog.vue';
 import RepeatBrewPicker from '../components/RepeatBrewPicker.vue';
@@ -587,10 +587,16 @@ const suggestBlocked = computed(() => {
 
 function suggest(): void {
   const ws = workspaces.current?.id;
-  if (!ws || !bean.value || suggestBlocked.value) return;
+  const body = suggestBody();
+  if (!ws || !body) return;
   remember('suggestSource', suggestSource.value);
   remember('suggestMax', String(suggestMax.value));
-  void suggester.ask(ws, {
+  void suggester.ask(ws, body);
+}
+// What Suggest parameters asks with (and its preview, §8d).
+function suggestBody(): SuggestionRequest | null {
+  if (!bean.value || suggestBlocked.value) return null;
+  return {
     beanId: bean.value.id,
     recipeId: recipe.value?.id ?? null,
     brewerId: recipe.value ? null : brewerId.value || null,
@@ -598,7 +604,14 @@ function suggest(): void {
     source: suggestSource.value,
     maxBrews: suggestMax.value,
     batch: plannedBatch(),
-  });
+  };
+}
+const previewing = ref<'suggest' | 'analysis' | null>(null);
+async function loadPreview() {
+  const ws = workspaces.current?.id;
+  if (previewing.value === 'analysis') return savedLogId.value ? (await analysisApi.preview(savedLogId.value)).request : null;
+  const body = suggestBody();
+  return ws && body ? (await suggestionsApi.preview(ws, body)).request : null;
 }
 // The batch as it stands: the barista's choice, which the AI keeps.
 function plannedBatch(): SuggestionBatch {
@@ -1246,6 +1259,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             {{ suggester.state.value === 'waiting' ? 'Asking the AI…' : 'Suggest parameters' }}
           </button>
         </div>
+        <button v-if="!suggestBlocked && bean" class="btn-link small preview-link" type="button" @click="previewing = 'suggest'">Preview what's sent</button>
         <p v-if="suggestBlocked" class="muted small">{{ suggestBlocked }}</p>
         <p v-if="suggester.state.value === 'error'" class="form-error" role="alert">{{ suggester.error.value }}</p>
         <p v-else-if="suggester.state.value === 'slow'" class="muted" aria-live="polite">Still working on it. Try again in a moment.</p>
@@ -1481,6 +1495,9 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <button v-if="aiState === 'idle' || aiState === 'error' || aiState === 'queued'" :class="['btn', aiState === 'queued' ? 'btn-secondary' : 'btn-primary']" type="button" @click="requestAnalysis">
             {{ aiState === 'queued' ? 'Analyze now' : 'Get AI suggestion' }}
           </button>
+          <button v-if="aiState === 'idle' || aiState === 'error' || aiState === 'queued'" class="btn-link small preview-link" type="button" @click="previewing = 'analysis'">
+            Preview what's sent
+          </button>
           <p v-if="aiState === 'error'" class="form-error" role="alert">{{ aiError }}</p>
           <p v-if="aiState === 'waiting'" class="muted" aria-live="polite">Analyzing your brew… this usually takes a few seconds.</p>
           <p v-if="aiState === 'slow'" class="muted" aria-live="polite">
@@ -1506,6 +1523,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       <button class="btn btn-secondary" type="button" @click="answerAbandon(false)">Keep brewing</button>
     </template>
   </ConfirmDialog>
+  <AiRequestDialog :open="previewing !== null" :load="loadPreview" preview @close="previewing = null" />
 </template>
 
 <style scoped>
@@ -1575,6 +1593,9 @@ p {
   margin-top: calc(-1 * var(--space-2));
 }
 /* Compare with · up to · button: one row when there's room, else wrapped. */
+.preview-link {
+  align-self: flex-start;
+}
 .suggest-pick {
   display: flex;
   flex-wrap: wrap;

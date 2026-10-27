@@ -197,3 +197,34 @@ built from the request itself (`analysisSent` / `suggestionSent`,
 The journal's analysis card and the brew page's Suggest parameters card
 have **What was sent to the AI** (`frontend/src/components/AiRequestDialog.vue`):
 the section keys, the system prompt, and each part of the input folded.
+
+## 8d. Preview what's sent
+
+Before asking, see what would be sent: the same `{ sections, system,
+input }` as §8c, built by the worker the same way as the real job
+(`processAiPreview`, `worker/src/processor.ts`), so it's what would really
+be sent, with the workspace's `aiHidden`. Nothing is sent to the AI and
+nothing is saved.
+
+- **Queue** `ai-preview` (`AI_PREVIEW_QUEUE`, `@barista/shared/jobs`), job
+  `preview`, data `{ "kind": "analysis", "brewLogId": "uuid" }` or
+  `{ "kind": "suggest", "suggestion": { ... } }` (the suggestion as POST
+  §8b would save it: ids, `source`, `maxBrews` and the `batch…` amounts).
+  Not retried; the return value is the request, or `null` when the brew
+  or bean is gone. The backend waits for it (`job.waitUntilFinished`, up
+  to 10 s, `AI_PREVIEW_TIMEOUT_MS`).
+
+### `POST /api/brew-logs/:brewLogId/analyze/preview`
+### `POST /api/workspaces/:workspaceId/parameter-suggestions/preview`
+
+- **Auth Required:** `true` (role `owner` or `barista`, as for asking)
+- **Body:** none for an analysis; for a suggestion the same body as its
+  POST (§8b), checked the same way (`resolveRequest`).
+- **Success Response (`200 OK`):** `{ "request": { ... } }`, or
+  `{ "request": null }` when there's nothing to preview.
+- **Errors:** as for asking (`400`, `403`, `404`); `503` the queue (Redis)
+  is unavailable; `504` the worker didn't answer in time.
+
+**Preview what's sent** sits under Suggest parameters on the brew page, and
+under Get AI suggestion on the saved brew and the journal entry; it opens
+the same dialog as §8c (`AiRequestDialog.vue`, `preview`).

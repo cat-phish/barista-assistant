@@ -75,6 +75,9 @@ export const suggestionsApi = {
   // What was sent to the AI (docs/api/analysis.md §8c).
   sent: (workspaceId: string, id: string) =>
     api.get<{ request: AiRequest | null }>(`/api/workspaces/${workspaceId}/parameter-suggestions/${id}/request`),
+  // What asking would send, without asking (§8d).
+  preview: (workspaceId: string, body: SuggestionRequest) =>
+    api.post<{ request: AiRequest | null }>(`/api/workspaces/${workspaceId}/parameter-suggestions/preview`, body),
 };
 
 export const analysisApi = {
@@ -87,4 +90,6 @@ export const analysisApi = {
   // What was sent to the AI (docs/api/analysis.md §8c).
   sent: (brewLogId: string, analysisId: string) =>
     api.get<{ request: AiRequest | null }>(`/api/brew-logs/${brewLogId}/analyses/${analysisId}/request`),
+  // What analyzing would send, without analyzing (§8d).
+  preview: (brewLogId: string) => api.post<{ request: AiRequest | null }>(`/api/brew-logs/${brewLogId}/analyze/preview`),
 };
