@@ -160,6 +160,17 @@ describe("processParameterSuggestion", () => {
     expect((await row(suggestionId))!.request?.sections).toContain("suggestCore");
   });
 
+  it("uses the asker's own prompt and the note (docs/api/auth.md §1c)", async () => {
+    llm.mockResolvedValue({ suggestion: RESULT, usage: null });
+    const prompt = { instructions: "Our guests like it strong.", overrides: {} };
+    await db.update(users).set({ aiPrompt: prompt }).where(eq(users.id, userId));
+    const suggestionId = await pending({ requestedBy: userId, note: "For iced coffee" });
+    await processParameterSuggestion({ suggestionId });
+    expect(llm.mock.calls[0]![2]).toEqual({ prompt, note: "For iced coffee" });
+    expect((await row(suggestionId))!.promptVersion).toMatch(/\+custom$/);
+    expect((await row(suggestionId))!.request?.system).toContain("Our guests like it strong.");
+  });
+
   it("leaves out unrated brews and passes on what the workspace keeps from the AI", async () => {
     llm.mockResolvedValue({ suggestion: RESULT, usage: null });
     await db.update(workspaces).set({ settings: { aiHidden: ["unratedHistory", "water"] } }).where(eq(workspaces.id, workspaceId));

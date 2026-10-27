@@ -128,6 +128,75 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
 - **Success (`200 OK`):** `{ "preferences": { ...all of them } }`
 - **Errors:** `400` invalid, empty or unknown keys.
 
+## 1c. Your AI prompt
+
+Each person can tune the AI's prompt (docs/api/llm-contract.md §9) to
+their own taste. It belongs to the person, not the workspace: it's the
+same in every workspace they're in, and there's no workspace or owner
+setting above it, so several people in one home can each keep their own.
+Stored as `users.ai_prompt` (`AiPrompt` in `@barista/shared/aiPrompt`),
+not in preferences, so it isn't sent with every `user`.
+
+- **Instructions** (up to 2000 characters): added to both prompts as the
+  `instructions` section, just before `end`, after `INSTRUCTIONS_INTRO`.
+- **Overrides** (section key → text, 1–4000 characters each): your own text
+  in place of a section's default. Locked sections (`output`,
+  `suggestOutput`, `end`) say what the answer must hold and can't be
+  changed. Whether a section is sent at all stays the worker's to decide
+  (the espresso section only with espresso, and so on).
+
+**Whose prompt is used:**
+- an analysis (§8) uses the **brew's barista's** prompt (`brew_logs.userId`),
+  whoever asks and also for auto-analyze; a brew with no barista (an account
+  deleted) uses the defaults;
+- Suggest parameters (§8b) uses the **asker's** (`requestedBy` on the row).
+
+**A one-off note** (up to 500 characters) can go with one request: the
+`note` body field on `POST …/analyze`, `POST …/parameter-suggestions` and
+their previews (§8, §8b, §8d). It's sent as the `note` section after the
+instructions (`NOTE_INTRO`). A suggestion keeps it on its row (`note`); an
+analysis doesn't save it apart from the request saved with it (§8c).
+Anyone who can ask (owner, barista) can add one.
+
+A result made with instructions, overrides or a note is saved with
+`promptVersion` `PROMPT_VERSION + "+custom"`, so it can be told apart from
+the default prompt's results.
+
+### `GET /api/auth/me/ai-prompt`
+
+- **Auth Required:** `true`
+- **Success (`200 OK`):**
+  ```json
+  {
+    "aiPrompt": { "instructions": "I prefer bright cups.", "overrides": { "core": "..." } },
+    "sections": [{ "key": "core", "label": "What to do (analysis)", "prompts": ["analysis"], "locked": false, "text": "..." }],
+    "instructionsIntro": "...", "noteIntro": "...",
+    "limits": { "instructions": 2000, "section": 4000, "note": 500 }
+  }
+  ```
+  `aiPrompt` is `{ "instructions": null, "overrides": {} }` when nothing is
+  changed. `sections` are every section's default, in the order sent, to
+  show and reset to.
+
+### `PUT /api/auth/me/ai-prompt`
+
+- **Auth Required:** `true`
+- **Body:** `{ "instructions": "..." | null, "overrides": { "<key>": "text" } }`,
+  replacing what's stored. Text is trimmed; empty instructions become
+  `null`, and an override equal to its default is dropped. Nothing left
+  changed is stored as `null`.
+- **Success (`200 OK`):** the same as `GET`.
+- **Errors:** `400` too long, an empty override, a key that isn't a
+  section ("not a prompt section") or a locked one ("can't be changed"),
+  an unknown body key.
+
+**Settings → Your AI prompt** (`SettingsPromptView.vue`, under "You"): an
+instructions box, and an **Advanced** switch that lists every section with
+its own text box, an "Edited" mark and "Reset to default" (locked ones
+shown read-only). The switch is on while there are overrides, otherwise
+remembered per viewer in the browser. "Add a note for the AI"
+(`AiNoteField.vue`) sits by Suggest parameters and Get AI suggestion.
+
 ## `POST /api/auth/password`
 
 Changes the caller's password and logs out all their **other** sessions.

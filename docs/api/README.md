@@ -11,6 +11,7 @@ means drinks, wherever you see it (code comments use
 | --- | --- | --- |
 | §1 | [auth.md](auth.md) | Authentication (JWT in httpOnly Cookie) |
 | §1b | [notifications.md](notifications.md) | Notification channels and rate-later reminders |
+| §1c | [auth.md](auth.md) | Your AI prompt (per person) and the one-off note |
 | §2 | [workspaces.md](workspaces.md) | Workspaces |
 | §2b | [backup.md](backup.md) | Backup and Restore (a workspace as one file) |
 | §3 | [brewers.md](brewers.md) | Brewers |

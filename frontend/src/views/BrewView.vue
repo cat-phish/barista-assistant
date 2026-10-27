@@ -10,6 +10,7 @@ import { ApiError, errorMessage } from '../api/client';
 import { recipesApi } from '../api/recipes';
 import { MAX_SUGGEST_BREWS, SUGGEST_SOURCES, type Bean, type BrewLog, type Recipe, type BrewerMethod, type SuggestionBatch, type SuggestionRequest, type SuggestSource } from '../api/types';
 import AnalysisCard from '../components/AnalysisCard.vue';
+import AiNoteField from '../components/AiNoteField.vue';
 import AiRequestDialog from '../components/AiRequestDialog.vue';
 import RepeatBrewPicker from '../components/RepeatBrewPicker.vue';
 import { recentByMade, repeatLabel, repeatPlan } from '../lib/repeatBrew';
@@ -604,12 +605,16 @@ function suggestBody(): SuggestionRequest | null {
     source: suggestSource.value,
     maxBrews: suggestMax.value,
     batch: plannedBatch(),
+    note: suggestNote.value.trim() || undefined,
   };
 }
+// One-off notes for the AI, this time only (docs/api/auth.md §1c).
+const suggestNote = ref('');
+const analyzeNote = ref('');
 const previewing = ref<'suggest' | 'analysis' | null>(null);
 async function loadPreview() {
   const ws = workspaces.current?.id;
-  if (previewing.value === 'analysis') return savedLogId.value ? (await analysisApi.preview(savedLogId.value)).request : null;
+  if (previewing.value === 'analysis') return savedLogId.value ? (await analysisApi.preview(savedLogId.value, analyzeNote.value.trim() || undefined)).request : null;
   const body = suggestBody();
   return ws && body ? (await suggestionsApi.preview(ws, body)).request : null;
 }
@@ -921,7 +926,7 @@ async function save(): Promise<void> {
 const { analysis, state: aiState, error: aiError, request: requestAi, awaitAuto: awaitAi, reset: resetAi } = useAnalysis();
 function requestAnalysis(): void {
   const ws = workspaces.current?.id;
-  if (ws && savedLogId.value) void requestAi(ws, savedLogId.value, null);
+  if (ws && savedLogId.value) void requestAi(ws, savedLogId.value, null, analyzeNote.value.trim() || undefined);
 }
 
 function brewAgain(): void {
@@ -1259,6 +1264,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             {{ suggester.state.value === 'waiting' ? 'Asking the AI…' : 'Suggest parameters' }}
           </button>
         </div>
+        <AiNoteField v-if="!suggestBlocked && bean" id="suggest-note" v-model="suggestNote" />
         <button v-if="!suggestBlocked && bean" class="btn-link small preview-link" type="button" @click="previewing = 'suggest'">Preview what's sent</button>
         <p v-if="suggestBlocked" class="muted small">{{ suggestBlocked }}</p>
         <p v-if="suggester.state.value === 'error'" class="form-error" role="alert">{{ suggester.error.value }}</p>
@@ -1492,6 +1498,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             An AI suggestion for your next brew of {{ beanLabel }} is on its way at {{ formatClock(savedDueAt) }}. It'll show here and in the journal.
           </p>
           <p v-else-if="aiState !== 'waiting'" class="muted">Want a suggestion for your next brew of {{ beanLabel }}?</p>
+          <AiNoteField v-if="aiState === 'idle' || aiState === 'error' || aiState === 'queued'" id="analyze-note" v-model="analyzeNote" />
           <button v-if="aiState === 'idle' || aiState === 'error' || aiState === 'queued'" :class="['btn', aiState === 'queued' ? 'btn-secondary' : 'btn-primary']" type="button" @click="requestAnalysis">
             {{ aiState === 'queued' ? 'Analyze now' : 'Get AI suggestion' }}
           </button>

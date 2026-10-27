@@ -62,6 +62,10 @@ export const users = mysqlTable("users", {
   // Display units (docs/api/auth.md §1): JSON, null or missing keys = the
   // defaults (DEFAULT_PREFERENCES). Validated by the backend.
   preferences: jsonValue<Partial<UserPreferences>>("preferences"),
+  // Their own AI prompt (docs/api/auth.md §1c): instructions and section
+  // texts, used for their brews' analyses and their suggestions. null = the
+  // defaults. Kept apart from preferences, which go with every response.
+  aiPrompt: jsonValue<AiPrompt>("ai_prompt"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -1052,6 +1056,10 @@ export const parameterSuggestions = mysqlTable("parameter_suggestions", {
   grinderId: varchar("grinder_id", { length: 36 }).references(() => grinders.id, { onDelete: "set null" }),
   source: varchar("source", { length: 20 }).$type<SuggestSource>().notNull(), // SUGGEST_SOURCES
   maxBrews: int("max_brews").notNull(),
+  // Who asked: their own AI prompt is used (docs/api/auth.md §1c); null once
+  // their account is deleted. note: a one-off note sent with it.
+  requestedBy: varchar("requested_by", { length: 36 }).references(() => users.id, { onDelete: "set null" }),
+  note: varchar("note", { length: 500 }),
   brewCount: int("brew_count"), // how many earlier brews were sent
   // The batch as planned when asked: the barista's to choose, so the AI
   // keeps it and suggests a ratio (filter: hot water and ice; espresso: the

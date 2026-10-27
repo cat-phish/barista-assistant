@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { User, UserPreferences } from './types';
+import type { AiPrompt, AiPromptSettings, User, UserPreferences } from './types';
 
 export const authApi = {
   me: () => api.get<{ user: User }>('/api/auth/me'),
@@ -14,4 +14,7 @@ export const authApi = {
   changePassword: (currentPassword: string, newPassword: string) => api.post<void>('/api/auth/password', { currentPassword, newPassword }),
   // 409 while the caller is the only owner of a workspace (body.workspaces lists them).
   deleteAccount: (password: string) => api.delete('/api/auth/me', { password }),
+  // Your own AI prompt (§1c), with the default sections to show.
+  aiPrompt: () => api.get<AiPromptSettings>('/api/auth/me/ai-prompt'),
+  setAiPrompt: (prompt: AiPrompt) => api.put<AiPromptSettings>('/api/auth/me/ai-prompt', prompt),
 };

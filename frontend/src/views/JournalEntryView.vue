@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { analysisApi, brewLogsApi } from '../api/brews';
 import { ApiError, errorMessage } from '../api/client';
 import type { BrewLog, LlmAnalysis, Mark } from '../api/types';
+import AiNoteField from '../components/AiNoteField.vue';
 import AiRequestDialog from '../components/AiRequestDialog.vue';
 import AnalysisCard from '../components/AnalysisCard.vue';
 import { grindersApi } from '../api/grinders';
@@ -113,11 +114,12 @@ const { analysis: freshAnalysis, state: aiState, error: aiError, request, awaitA
 const analysis = computed(() => freshAnalysis.value ?? storedAnalysis.value);
 // What analyzing would send, without analyzing (docs/api/analysis.md §8d).
 const previewing = ref(false);
-const loadPreview = async () => (log.value ? (await analysisApi.preview(log.value.id)).request : null);
+const loadPreview = async () => (log.value ? (await analysisApi.preview(log.value.id, aiNote.value.trim() || undefined)).request : null);
+const aiNote = ref(''); // this time only (docs/api/auth.md §1c)
 
 function analyze(): void {
   const ws = workspaces.current?.id;
-  if (ws && log.value) void request(ws, log.value.id, analysis.value);
+  if (ws && log.value) void request(ws, log.value.id, analysis.value, aiNote.value.trim() || undefined);
 }
 // An automatic analysis on its way (auto-analyze, docs/api/analysis.md §8),
 // e.g. queued by rating it here: show it when it lands.
@@ -371,6 +373,7 @@ function markLabel(m: Mark): string {
         <p v-if="aiState === 'error'" class="form-error" role="alert">{{ aiError }}</p>
         <p v-if="log.steeping" class="muted small">Still steeping: finish it first.</p>
         <p v-else-if="unrated && !analysis" class="muted small">Rate the brew first: the suggestion works from how it tasted.</p>
+        <AiNoteField v-if="workspaces.canEdit && aiState !== 'waiting' && !unrated && !log.steeping" id="analysis-note" v-model="aiNote" />
         <button
           v-if="workspaces.canEdit && aiState !== 'waiting' && !unrated && !log.steeping"
           class="btn btn-secondary"

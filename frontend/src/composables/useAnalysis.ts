@@ -48,12 +48,13 @@ export function useAnalysis() {
     timer = window.setTimeout(tick, firstInMs);
   }
 
-  async function request(workspaceId: string, brewLogId: string, previous: LlmAnalysis | null): Promise<void> {
+  // note: a one-off note for the AI (docs/api/auth.md §1c).
+  async function request(workspaceId: string, brewLogId: string, previous: LlmAnalysis | null, note?: string): Promise<void> {
     stop();
     state.value = 'waiting';
     error.value = '';
     try {
-      await analysisApi.request(brewLogId);
+      await analysisApi.request(brewLogId, note);
     } catch (err) {
       state.value = 'error';
       error.value = errorMessage(err);

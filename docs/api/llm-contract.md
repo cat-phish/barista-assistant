@@ -149,7 +149,18 @@ queue:
    | `espresso` | an `espresso` method | flow, windows, machine, step size; dose and shot weight as levers, one at a time |
    | `cold` | a style brews like `cold_brew`, `kyoto_drip` or `rapid_cold` | steep windows, dilution, concentrate TDS, levers |
    | `concentrate` | a brew or the recipe that isn't a cold style has a `dilutionRatio` | TDS and EY are the concentrate's; judge strength as served, over ice as an iced drink; dilution or ratio before grind |
+   | `instructions` | the barista has their own instructions | `INSTRUCTIONS_INTRO` and their text |
+   | `note` | a one-off note came with the request | `NOTE_INTRO` and the note |
    | `end` | always | respond strictly matching the schema |
+
+   Each section's default text, label and lock live in
+   `@barista/shared/aiPrompt` (`PROMPT_SECTION_TEXTS`); the `when` tests stay
+   in the worker. **Whose prompt** (`docs/api/auth.md` §1c): an analysis uses
+   the brew's barista's (`promptFor`, `worker/src/processor.ts`), with their
+   overrides in place of unlocked sections' text and their `instructions`,
+   then the request's `note`, before `end`. The locked sections (`output`,
+   `suggestOutput`, `end`) are never replaced. A customized prompt's result
+   is saved with `promptVersion` `PROMPT_VERSION + "+custom"`.
 
    Tests check which sections appear for given inputs and snapshot the
    assembled prompt for a fixed brew (`worker/tests/llm.test.ts`), so a
@@ -302,7 +313,8 @@ deleted with its bean) is skipped.
    (`aiHidden`) is left out the same way, other beans' details too.
 3. **Prompt** (`SUGGEST_SECTIONS`): its own opening and output sections,
    then the analysis's topic sections (drink … flashChilled), with
-   `suggestEspresso` in place of `espresso` (no change fields here), and
+   `suggestEspresso` in place of `espresso` (no change fields here), the
+   asker's `instructions` and `note` (step 3 above, `requestedBy`), and
    `end`:
 
    | Section | Included when | What it says |

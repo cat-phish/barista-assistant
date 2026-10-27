@@ -256,8 +256,8 @@ What the analysis worker sends to the LLM and what comes back.
   4. **Preview:** see the prompt and input before sending, built by the
      worker (no LLM call) so it matches what's really sent.
   5. **Edit the prompt, per barista:** each person tunes the prompt to
-     their own taste (often a home with several people), so it's a user
-     preference (`docs/api/auth.md` §1), not a workspace setting an owner
+     their own taste (often a home with several people), so it's theirs
+     (`users.ai_prompt`, `docs/api/auth.md` §1c), not a workspace setting an owner
      could override. A free-text box for their instructions; an Advanced
      switch shows every built-in section, editable with "Reset to default"
      (the schema sections stay locked); a one-off note each time, for

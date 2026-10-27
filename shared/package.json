@@ -28,6 +28,10 @@
     "./aiDetails": {
       "types": "./dist/aiDetails.d.ts",
       "default": "./dist/aiDetails.js"
+    },
+    "./aiPrompt": {
+      "types": "./dist/aiPrompt.d.ts",
+      "default": "./dist/aiPrompt.js"
     }
   },
   "scripts": {

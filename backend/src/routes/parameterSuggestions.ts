@@ -8,6 +8,7 @@ import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { enqueueParameterSuggestion, QueueUnavailableError } from "../queue.js";
 import { sendPreview } from "../preview.js";
+import { noteSchema } from "./aiPrompt.js";
 import type { SuggestionPreview } from "@barista/shared/jobs";
 import { SUGGESTION_COLUMNS, type SuggestionRow } from "../aiRequest.js";
 import {
@@ -52,6 +53,7 @@ const createSchema = z
     brewerId: z.uuid().nullable().optional(), // without a recipe; else the recipe's
     source: z.enum(SUGGEST_SOURCES).optional(), // default: the workspace's
     maxBrews: z.number().int().min(1).max(MAX_SUGGEST_BREWS).optional(),
+    note: noteSchema, // a one-off note (docs/api/auth.md §1c)
     // The batch as planned: kept as it is, the AI suggests a ratio for it.
     batch: z
       .object({ doseGrams: grams(1000), waterGrams: grams(10000), iceGrams: grams(10000), yieldGrams: grams(10000) })
@@ -74,7 +76,8 @@ parameterSuggestionsRouter.use(requireAuth);
 // error is sent. Shared by POST and the preview, so they can't differ.
 async function resolveRequest(req: Request<WorkspaceParams>, res: Response): Promise<SuggestionPreview | null> {
   const { workspaceId } = req.params;
-  if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return null;
+  const userId = authedUserId(req);
+  if (!(await requireMembership(res, userId, workspaceId, WRITE_ROLES))) return null;
   const body = parseBody(createSchema, req, res);
   if (!body) return null;
 
@@ -132,6 +135,8 @@ async function resolveRequest(req: Request<WorkspaceParams>, res: Response): Pro
     batchWaterGrams: tenth(body.batch?.waterGrams),
     batchIceGrams: tenth(body.batch?.iceGrams),
     batchYieldGrams: tenth(body.batch?.yieldGrams),
+    requestedBy: userId, // their own AI prompt is used
+    note: body.note || null,
   };
 }
 

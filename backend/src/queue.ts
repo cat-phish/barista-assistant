@@ -74,12 +74,15 @@ async function withTimeout<T>(work: () => Promise<T>): Promise<T> {
 }
 
 // auto: queued by auto-analyze, after delayMs (docs/api/analysis.md §8).
+// note: a one-off note from whoever asked (docs/api/auth.md §1c).
 export interface AnalysisJobOptions {
   auto?: boolean;
   delayMs?: number;
+  note?: string;
 }
 
-export function enqueueBrewAnalysis(brewLogId: string, { auto = false, delayMs = 0 }: AnalysisJobOptions = {}): Promise<string> {
+export function enqueueBrewAnalysis(brewLogId: string, { auto = false, delayMs = 0, note }: AnalysisJobOptions = {}): Promise<string> {
+  const data: BrewAnalysisJobData = auto ? { brewLogId, auto: true } : { brewLogId, ...(note ? { note } : {}) };
   const jobId = brewAnalysisJobId(brewLogId);
   return withTimeout(async () => {
     if (!auto) {
@@ -88,13 +91,14 @@ export function enqueueBrewAnalysis(brewLogId: string, { auto = false, delayMs =
       // simply the job already running.
       const waiting = await brewAnalysisQueue.getJob(jobId);
       if (waiting && (await waiting.isDelayed())) {
-        await waiting.updateData({ brewLogId });
+        await waiting.updateData(data);
         await waiting.promote().catch(() => undefined);
         return jobId;
       }
     }
     // Same jobId while waiting/active => BullMQ returns the existing job instead of adding one.
-    const job = await brewAnalysisQueue.add(BREW_ANALYSIS_JOB, auto ? { brewLogId, auto: true } : { brewLogId }, {
+    // (One already waiting or running keeps the data it was queued with.)
+    const job = await brewAnalysisQueue.add(BREW_ANALYSIS_JOB, data, {
       jobId,
       delay: delayMs,
       attempts: 3,

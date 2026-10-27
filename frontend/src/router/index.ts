@@ -51,6 +51,7 @@ export const router = createRouter({
     { path: '/settings/account', name: 'settings-account', component: () => import('../views/SettingsAccountView.vue'), meta: { requiresAuth: true } },
     { path: '/settings/preferences', name: 'settings-preferences', component: () => import('../views/SettingsPreferencesView.vue'), meta: { requiresAuth: true } },
     { path: '/settings/repeat', name: 'settings-repeat', component: () => import('../views/SettingsRepeatView.vue'), meta: { requiresAuth: true } },
+    { path: '/settings/ai-prompt', name: 'settings-ai-prompt', component: () => import('../views/SettingsPromptView.vue'), meta: { requiresAuth: true } },
     { path: '/settings/notifications', name: 'settings-notifications', component: () => import('../views/SettingsNotificationsView.vue'), meta: { requiresAuth: true } },
     { path: '/settings/lists', name: 'settings-lists', component: () => import('../views/SettingsListsView.vue'), meta: { requiresWorkspace: true } },
     { path: '/settings/defaults', name: 'settings-defaults', component: () => import('../views/SettingsDefaultsView.vue'), meta: { requiresWorkspace: true } },

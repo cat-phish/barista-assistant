@@ -6,7 +6,7 @@ import OpenAI from "openai";
 import { z } from "zod";
 import { config } from "./config.js";
 import type { BrewContext } from "./context.js";
-import { buildSystemPrompt, promptSections, SUGGEST_SECTIONS, toLlmInput, toSuggestInput } from "./prompt.js";
+import { buildSystemPrompt, PROMPT_SECTIONS, promptSections, SUGGEST_SECTIONS, toLlmInput, toSuggestInput, type PromptCustom } from "./prompt.js";
 import type { SuggestContext } from "./suggestContext.js";
 
 // The input and system prompt are built in prompt.ts; the schema and its
@@ -90,13 +90,18 @@ const openai = new OpenAI({ apiKey: config.openaiApiKey });
 
 // The exact request sent to OpenAI (pure, so tests can check it against §9):
 // the compact input, and the prompt sections it needs. `hidden` is what the
-// workspace keeps from the AI (Settings → AI).
-export function buildCompletionRequest(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set()): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
+// workspace keeps from the AI (Settings → AI); `custom` what the barista
+// adds to the prompt (docs/api/auth.md §1c).
+export function buildCompletionRequest(
+  context: BrewContext,
+  hidden: ReadonlySet<AiDetail> = new Set(),
+  custom?: PromptCustom,
+): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
   const input = toLlmInput(context, hidden);
   return {
     model: config.openaiModel,
     messages: [
-      { role: "system", content: buildSystemPrompt(input) },
+      { role: "system", content: buildSystemPrompt(input, PROMPT_SECTIONS, custom) },
       { role: "user", content: JSON.stringify(input) },
     ],
     response_format: {
@@ -112,11 +117,11 @@ function sent(request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStre
   const [system, user] = request.messages;
   return { sections, system: String(system?.content ?? ""), input: JSON.parse(String(user?.content ?? "{}")) as Record<string, unknown> };
 }
-export function analysisSent(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set()): AiRequest {
-  return sent(buildCompletionRequest(context, hidden), promptSections(toLlmInput(context, hidden)));
+export function analysisSent(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): AiRequest {
+  return sent(buildCompletionRequest(context, hidden, custom), promptSections(toLlmInput(context, hidden), PROMPT_SECTIONS, custom));
 }
-export function suggestionSent(context: SuggestContext, hidden: ReadonlySet<AiDetail> = new Set()): AiRequest {
-  return sent(buildSuggestRequest(context, hidden), promptSections(toSuggestInput(context, hidden), SUGGEST_SECTIONS));
+export function suggestionSent(context: SuggestContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): AiRequest {
+  return sent(buildSuggestRequest(context, hidden, custom), promptSections(toSuggestInput(context, hidden), SUGGEST_SECTIONS, custom));
 }
 
 type LlmMessage = { content?: string | null; refusal?: string | null } | undefined;
@@ -145,8 +150,8 @@ export function parseAnalysisMessage(message: LlmMessage): BrewAnalysis {
   return parseMessage(message, analysisSchema);
 }
 
-export async function analyzeWithLlm(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set()): Promise<BrewAnalysis> {
-  return (await requestAnalysis(context, hidden)).analysis;
+export async function analyzeWithLlm(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): Promise<BrewAnalysis> {
+  return (await requestAnalysis(context, hidden, custom)).analysis;
 }
 
 // The analysis plus what it cost, for the eval script (src/eval.ts).
@@ -171,8 +176,8 @@ async function complete(request: OpenAI.Chat.Completions.ChatCompletionCreatePar
   return { message: completion.choices[0]?.message, usage };
 }
 
-export async function requestAnalysis(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set()): Promise<AnalysisRun> {
-  const { message, usage } = await complete(buildCompletionRequest(context, hidden));
+export async function requestAnalysis(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): Promise<AnalysisRun> {
+  const { message, usage } = await complete(buildCompletionRequest(context, hidden, custom));
   return { analysis: onlyWhatApplies(parseAnalysisMessage(message), context, hidden), usage };
 }
 
@@ -239,12 +244,16 @@ const suggestionSchema = z.object({
 });
 export type ParameterSuggestionResult = z.infer<typeof suggestionSchema>;
 
-export function buildSuggestRequest(context: SuggestContext, hidden: ReadonlySet<AiDetail> = new Set()): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
+export function buildSuggestRequest(
+  context: SuggestContext,
+  hidden: ReadonlySet<AiDetail> = new Set(),
+  custom?: PromptCustom,
+): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
   const input = toSuggestInput(context, hidden);
   return {
     model: config.openaiModel,
     messages: [
-      { role: "system", content: buildSystemPrompt(input, SUGGEST_SECTIONS) },
+      { role: "system", content: buildSystemPrompt(input, SUGGEST_SECTIONS, custom) },
       { role: "user", content: JSON.stringify(input) },
     ],
     response_format: {
@@ -283,7 +292,7 @@ export interface SuggestionRun {
   suggestion: ParameterSuggestionResult;
   usage: Usage;
 }
-export async function requestSuggestion(context: SuggestContext, hidden: ReadonlySet<AiDetail> = new Set()): Promise<SuggestionRun> {
-  const { message, usage } = await complete(buildSuggestRequest(context, hidden));
+export async function requestSuggestion(context: SuggestContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): Promise<SuggestionRun> {
+  const { message, usage } = await complete(buildSuggestRequest(context, hidden, custom));
   return { suggestion: onlySuggestionsThatApply(parseSuggestionMessage(message), context, hidden), usage };
 }

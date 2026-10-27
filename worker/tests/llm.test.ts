@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { AiDetail } from "@barista/shared/aiDetails";
 import type { BrewContext, BrewSummary } from "../src/context.js";
 import { buildCompletionRequest, buildSuggestRequest, onlySuggestionsThatApply, onlyWhatApplies, parseAnalysisMessage, parseSuggestionMessage } from "../src/llm.js";
-import { buildSystemPrompt, compact, promptSections, SUGGEST_SECTIONS, toLlmInput, toSuggestInput } from "../src/prompt.js";
+import { INSTRUCTIONS_INTRO, NOTE_INTRO, PROMPT_SECTION_TEXTS, PROMPT_TEXT } from "@barista/shared/aiPrompt";
+import { buildSystemPrompt, compact, PROMPT_SECTIONS, promptSections, SUGGEST_SECTIONS, toLlmInput, toSuggestInput } from "../src/prompt.js";
 import type { SuggestBrew, SuggestContext } from "../src/suggestContext.js";
 
 const reply = (body: unknown) => ({ content: JSON.stringify(body), refusal: null });
@@ -176,6 +177,28 @@ describe("what the AI is sent (docs/api/llm-contract.md §9)", () => {
     expect(promptSections(concentrate)).not.toContain("cold");
     const dilutedCold = toLlmInput(context({ brew: { recipeStyle: { name: "Cold brew", brewsLike: "cold_brew" }, dilutionRatio: 1, dilutedWith: "water" } }));
     expect(promptSections(dilutedCold)).not.toContain("concentrate");
+  });
+
+  it("every section's text comes from @barista/shared/aiPrompt, each prompt's in it (docs/api/auth.md §1c)", () => {
+    const keys = (kind: "analysis" | "suggest") => PROMPT_SECTION_TEXTS.filter((t) => t.prompts.includes(kind)).map((t) => t.key).sort();
+    expect(PROMPT_SECTIONS.map((x) => x.key).sort()).toEqual(keys("analysis"));
+    expect(SUGGEST_SECTIONS.map((x) => x.key).sort()).toEqual(keys("suggest"));
+    for (const x of [...PROMPT_SECTIONS, ...SUGGEST_SECTIONS]) expect(x.text, x.key).toBe(PROMPT_TEXT[x.key]);
+  });
+
+  it("a barista's own prompt: their section texts, but never a locked one, then their instructions and a note before end", () => {
+    const input = toLlmInput(context());
+    const custom = { prompt: { instructions: "I like it light.", overrides: { core: "Be brief.", output: "Answer in prose.", origin: "Ignore origin." } }, note: "Tasted cold." };
+    expect(promptSections(input, PROMPT_SECTIONS, custom)).toEqual(["core", "output", "style", "altitude", "origin", "water", "instructions", "note", "end"]);
+    const system = buildSystemPrompt(input, PROMPT_SECTIONS, custom);
+    expect(system.startsWith("Be brief. " + PROMPT_TEXT.output)).toBe(true); // output is locked
+    expect(system).toContain("Ignore origin.");
+    expect(system).not.toContain("Answer in prose.");
+    expect(system.endsWith(`${INSTRUCTIONS_INTRO} I like it light. ${NOTE_INTRO} Tasted cold. ${PROMPT_TEXT.end}`)).toBe(true);
+    // A section that isn't needed stays out, overridden or not.
+    expect(promptSections(input, PROMPT_SECTIONS, { prompt: { instructions: null, overrides: { espresso: "Pull it short." } }, note: null })).not.toContain("espresso");
+    // Nothing added: the default prompt.
+    expect(buildSystemPrompt(input, PROMPT_SECTIONS, { prompt: { instructions: null, overrides: {} }, note: null })).toBe(buildSystemPrompt(input));
   });
 
   it("pins the prompt for a plain filter brew", () => {
