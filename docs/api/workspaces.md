@@ -85,6 +85,9 @@ Every workspace in a response carries `settings`, defaults filled in
   default `5`): which earlier brews "Suggest parameters" sends, and at most
   how many, unless the request says otherwise (`docs/api/analysis.md` §8b),
   set under Settings → **AI**.
+- `suggestAlternatives` (each of `recipe`, `brewer`, `bean` at most once;
+  default `[]`): what else "Suggest parameters" suggests by default, ticked
+  to start with on the brew page (§8b), set under Settings → **AI**.
 
 ### Field visibility
 

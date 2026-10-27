@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
+import { alternativeKinds } from "../validation.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { enqueueParameterSuggestion, QueueUnavailableError } from "../queue.js";
 import { sendPreview } from "../preview.js";
@@ -54,6 +55,7 @@ const createSchema = z
     source: z.enum(SUGGEST_SOURCES).optional(), // default: the workspace's
     maxBrews: z.number().int().min(1).max(MAX_SUGGEST_BREWS).optional(),
     note: noteSchema, // a one-off note (docs/api/auth.md §1c)
+    alternatives: alternativeKinds.optional(), // what else to suggest; default: the workspace's
     // The batch as planned: kept as it is, the AI suggests a ratio for it.
     batch: z
       .object({ doseGrams: grams(1000), waterGrams: grams(10000), iceGrams: grams(10000), yieldGrams: grams(10000) })
@@ -137,6 +139,7 @@ async function resolveRequest(req: Request<WorkspaceParams>, res: Response): Pro
     batchYieldGrams: tenth(body.batch?.yieldGrams),
     requestedBy: userId, // their own AI prompt is used
     note: body.note || null,
+    alternativesAsked: body.alternatives ?? settings.suggestAlternatives,
   };
 }
 

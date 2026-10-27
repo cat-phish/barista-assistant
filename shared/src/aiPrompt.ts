@@ -287,6 +287,20 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
       "capabilities; a " +
       "pre-infusion or profile change, if the machine allows it, goes in nextStep.",
   },
+  {
+    key: "suggestAlternatives",
+    label: "Something else to try (Suggest parameters)",
+    prompts: ["suggest"],
+    locked: false,
+    text:
+      "options lists what else the barista could brew, by kind: recipes (another recipe for this bean), brewers " +
+      "(another brewer, with its own recipes) and beans (another bean in stock for this recipe, with gramsLeft). In " +
+      "alternatives, suggest at most one of each kind listed, and only when the brews or the details give a reason to " +
+      "think it would suit better: a style or ratio that fits this bean's roast or flavorProfile, a brewer that " +
+      "suits it, or a bean that suits this recipe better. option is its ref; why says why in plain words (at most " +
+      "140 characters). Leave alternatives empty when nothing stands out. The values are still for this bean, recipe " +
+      "and grinder.",
+  },
 ];
 
 // Each section's default text by key.

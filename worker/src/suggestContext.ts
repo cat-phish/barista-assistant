@@ -2,8 +2,21 @@
 // docs/api/llm-contract.md §9b): the brew about to be made (bean, recipe,
 // brewer, grinder) and up to maxBrews earlier brews from the chosen source,
 // newest first, each with its latest analysis.
-import { brewers, brewLogs, grinders, llmAnalyses, type Brewer, type ParameterSuggestion, type SuggestSource } from "@barista/shared/schema";
-import { and, desc, eq, getTableColumns, inArray, isNotNull, lt, or, type SQL } from "drizzle-orm";
+import {
+  beans,
+  brewers,
+  brewLogs,
+  grinders,
+  llmAnalyses,
+  recipes,
+  recipeStyles,
+  type AlternativeKind,
+  type Brewer,
+  type MethodKind,
+  type ParameterSuggestion,
+  type SuggestSource,
+} from "@barista/shared/schema";
+import { and, asc, desc, eq, getTableColumns, gt, inArray, isNotNull, isNull, lt, ne, or, type SQL } from "drizzle-orm";
 import { config } from "./config.js";
 import {
   drinksServed,
@@ -19,6 +32,7 @@ import {
   type BrewSummary,
   type GrinderInfo,
   type LoadedBean,
+  type StyleInfo,
 } from "./context.js";
 import { db } from "./db.js";
 import { localBrewDate } from "./localDate.js";
@@ -59,6 +73,44 @@ export interface SuggestBatch {
   ratio: number | null;
 }
 
+// What else it may suggest (the kinds asked): the workspace's active
+// recipes and brewers other than this one, and its other beans with weight
+// left. ref is what the AI answers with ("r1"); id is matched back from it
+// and not sent.
+export interface RecipeOption {
+  ref: string;
+  id: string;
+  name: string;
+  brewer: string;
+  methodKind: MethodKind;
+  style: StyleInfo | null;
+  targetDoseGrams: number;
+  targetWaterGrams: number | null;
+  targetIceGrams: number | null;
+  expectedYieldGrams: number | null;
+  targetTempC: number | null;
+}
+export interface BrewerOption {
+  ref: string;
+  id: string;
+  name: string;
+  kind: MethodKind;
+}
+export interface BeanOption {
+  ref: string;
+  id: string;
+  bean: BrewContext["bean"];
+  roastAgeDays: number | null; // today, as for this bean
+  gramsLeft: number;
+}
+export interface SuggestOptions {
+  recipes?: RecipeOption[];
+  brewers?: BrewerOption[];
+  beans?: BeanOption[];
+}
+// At most this many of each kind, so a big workspace stays affordable.
+export const MAX_OPTIONS = 30;
+
 export interface SuggestContext {
   source: SuggestSource;
   batch: SuggestBatch;
@@ -70,12 +122,13 @@ export interface SuggestContext {
   brewer: BrewerInfo | null;
   grinder: GrinderInfo | null;
   brews: SuggestBrew[];
+  options: SuggestOptions; // empty when no alternatives were asked for
   ratingScale: "1-5";
 }
 
 export type SuggestRequest = Pick<
   ParameterSuggestion,
-  "beanId" | "recipeId" | "brewerId" | "grinderId" | "source" | "maxBrews" | "batchDoseGrams" | "batchWaterGrams" | "batchIceGrams" | "batchYieldGrams"
+  "beanId" | "recipeId" | "brewerId" | "grinderId" | "source" | "maxBrews" | "batchDoseGrams" | "batchWaterGrams" | "batchIceGrams" | "batchYieldGrams" | "alternativesAsked"
 >;
 
 // The batch asked with, else (none sent) the recipe's targets.
@@ -136,6 +189,60 @@ async function latestAnalyses(brewLogIds: string[]): Promise<Map<string, PastAna
     });
   }
   return byLog;
+}
+
+// The other recipes, brewers and beans the AI may suggest, for the kinds asked.
+async function loadOptions(r: SuggestRequest, workspaceId: string, kinds: readonly AlternativeKind[], today: string): Promise<SuggestOptions> {
+  const options: SuggestOptions = {};
+  if (kinds.includes("recipe")) {
+    const rows = await db
+      .select({
+        id: recipes.id,
+        name: recipes.name,
+        brewer: brewers.name,
+        methodKind: brewers.kind,
+        style: { name: recipeStyles.name, brewsLike: recipeStyles.brewsLike },
+        targetDoseGrams: recipes.targetDoseGrams,
+        targetWaterGrams: recipes.targetWaterGrams,
+        targetIceGrams: recipes.targetIceGrams,
+        expectedYieldGrams: recipes.expectedYieldGrams,
+        targetTempC: recipes.targetTempC,
+      })
+      .from(recipes)
+      .innerJoin(brewers, eq(recipes.brewerId, brewers.id))
+      .leftJoin(recipeStyles, eq(recipes.styleId, recipeStyles.id))
+      .where(and(eq(recipes.workspaceId, workspaceId), isNull(recipes.archivedAt), isNull(brewers.archivedAt), r.recipeId ? ne(recipes.id, r.recipeId) : undefined))
+      .orderBy(asc(brewers.name), asc(recipes.name))
+      .limit(MAX_OPTIONS);
+    options.recipes = rows.map((x, i) => ({ ref: `r${i + 1}`, ...x, style: x.style?.name ? x.style : null }));
+  }
+  if (kinds.includes("brewer")) {
+    // Only brewers with a recipe to brew with.
+    const rows = await db
+      .selectDistinct({ id: brewers.id, name: brewers.name, kind: brewers.kind })
+      .from(brewers)
+      .innerJoin(recipes, and(eq(recipes.brewerId, brewers.id), isNull(recipes.archivedAt)))
+      .where(and(eq(brewers.workspaceId, workspaceId), isNull(brewers.archivedAt), r.brewerId ? ne(brewers.id, r.brewerId) : undefined))
+      .orderBy(asc(brewers.name))
+      .limit(MAX_OPTIONS);
+    options.brewers = rows.map((x, i) => ({ ref: `b${i + 1}`, ...x }));
+  }
+  if (kinds.includes("bean")) {
+    const rows = await db
+      .select({ id: beans.id, gramsLeft: beans.inventoryWeightGrams })
+      .from(beans)
+      .where(and(eq(beans.workspaceId, workspaceId), isNull(beans.archivedAt), gt(beans.inventoryWeightGrams, 0), ne(beans.id, r.beanId)))
+      .orderBy(desc(beans.roastDate), asc(beans.id))
+      .limit(MAX_OPTIONS);
+    const loaded = await Promise.all(rows.map((x) => loadBean(x.id)));
+    options.beans = rows.flatMap((x, i) => {
+      const b = loaded[i];
+      if (!b) return [];
+      const age = b.roastDate ? effectiveRoastAge(b.roastDate.toISOString(), b.freezes, today) : null;
+      return [{ ref: `n${i + 1}`, id: x.id, bean: b.info, roastAgeDays: age?.ageDays ?? null, gramsLeft: x.gramsLeft }];
+    });
+  }
+  return options;
 }
 
 // options.ratedOnly: leave out brews without a rating (aiHidden
@@ -206,9 +313,11 @@ export async function loadSuggestContext(r: SuggestRequest, options: { ratedOnly
     if (b) beansById.set(id, b);
   });
 
-  const age = target.roastDate
-    ? effectiveRoastAge(target.roastDate.toISOString(), target.freezes, localBrewDate(options.before ?? new Date(), null, config.brewTimezone))
-    : null;
+  const today = localBrewDate(options.before ?? new Date(), null, config.brewTimezone);
+  const age = target.roastDate ? effectiveRoastAge(target.roastDate.toISOString(), target.freezes, today) : null;
+  const kinds = r.alternativesAsked ?? [];
+  const [ws] = kinds.length ? await db.select({ workspaceId: beans.workspaceId }).from(beans).where(eq(beans.id, r.beanId)) : [];
+  const alternatives = ws ? await loadOptions(r, ws.workspaceId, kinds, today) : {};
   return {
     source: r.source,
     batch: batchFor(r, recipe, (recipe?.methodKind ?? brewer?.kind) === "espresso"),
@@ -229,6 +338,7 @@ export async function loadSuggestContext(r: SuggestRequest, options: { ratedOnly
         analysis: analyses.get(b.id) ?? null,
       };
     }),
+    options: alternatives,
     ratingScale: "1-5",
   };
 }

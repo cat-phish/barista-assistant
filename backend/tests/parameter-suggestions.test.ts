@@ -48,6 +48,19 @@ describe("parameter suggestions", () => {
     expect((await owner.agent.patch(`/api/workspaces/${ws}/settings`).send({ suggestSource: "anything" })).status).toBe(400);
   });
 
+  it("asks for the alternatives picked, else the workspace's (Settings → AI)", async () => {
+    const { owner, ws, bean, recipe, base } = await setup();
+    expect((await owner.agent.post(base).send({ beanId: bean, recipeId: recipe })).body.suggestion).toMatchObject({ alternativesAsked: [], alternatives: null });
+    expect((await owner.agent.post(base).send({ beanId: bean, recipeId: recipe, alternatives: ["bean", "recipe"] })).body.suggestion).toMatchObject({ alternativesAsked: ["bean", "recipe"] });
+    expect((await owner.agent.patch(`/api/workspaces/${ws}/settings`).send({ suggestAlternatives: ["brewer"] })).status).toBe(200);
+    expect((await owner.agent.post(base).send({ beanId: bean, recipeId: recipe })).body.suggestion).toMatchObject({ alternativesAsked: ["brewer"] });
+    expect((await owner.agent.post(base).send({ beanId: bean, recipeId: recipe, alternatives: [] })).body.suggestion).toMatchObject({ alternativesAsked: [] });
+    for (const bad of [["drink"], ["bean", "bean"], "bean"]) {
+      expect((await owner.agent.post(base).send({ beanId: bean, alternatives: bad })).status, JSON.stringify(bad)).toBe(400);
+      expect((await owner.agent.patch(`/api/workspaces/${ws}/settings`).send({ suggestAlternatives: bad })).status, JSON.stringify(bad)).toBe(400);
+    }
+  });
+
   it("refuses a source it can't pick brews for, and things from another workspace", async () => {
     const { owner, bean, recipe, base } = await setup();
     const other = await newUser();

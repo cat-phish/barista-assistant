@@ -11,6 +11,7 @@ import {
   encodePlain,
   itemOptions,
   setupMissing,
+  switchPlan,
   itemValues,
   methodKind,
   NO_RECIPE,
@@ -187,5 +188,24 @@ describe('setupMissing', () => {
     expect(setupMissing({ ...ready, batchInvalid: true })).toBe('Enter positive amounts for the batch.');
     expect(setupMissing({ ...ready, finishError: true })).toBe('Fix the target finish.');
     expect(setupMissing({ ...ready, steepError: true })).toBe('Fix the steep window.');
+  });
+});
+
+describe('switchPlan (an alternative the AI suggested)', () => {
+  const sources = { brewers, recipes, drink: null };
+  it('a recipe: its brewer and method, as a plain brew', () => {
+    expect(switchPlan('recipe', 'chemex-std', sources)).toEqual({ what: 'method:filter', item: 'plain:filter', brewerId: 'chemex', recipeId: 'chemex-std' });
+  });
+  it('a brewer: its method, the recipe left for setup to pick', () => {
+    expect(switchPlan('brewer', 'lm', sources)).toEqual({ what: 'method:espresso', item: 'plain:espresso', brewerId: 'lm', recipeId: '' });
+  });
+  it('keeps the drink when the brewer can make it', () => {
+    expect(switchPlan('recipe', 'lm-shot', { ...sources, drink: latte })).toEqual({ what: 'cat:c-milk', item: 'drink:Latte', brewerId: 'lm', recipeId: 'lm-shot' });
+    expect(switchPlan('recipe', 'chemex-std', { ...sources, drink: latte })).toMatchObject({ what: 'method:filter', item: 'plain:filter' });
+  });
+  it("null when it's gone or archived", () => {
+    expect(switchPlan('recipe', 'nope', sources)).toBeNull();
+    expect(switchPlan('brewer', 'old-moka', sources)).toBeNull();
+    expect(switchPlan('recipe', 'v60-std', { ...sources, recipes: [{ ...recipes[0]!, archivedAt: '2026-01-01' }] })).toBeNull();
   });
 });

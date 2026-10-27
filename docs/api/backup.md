@@ -70,7 +70,9 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   preferences belong to the server, not the workspace. A brew says who made
   it as `brewedBy` (their email, or `null`) instead of `userId`, and a
   parameter suggestion who asked the same way (`brewedBy` for
-  `requestedBy`). People's own AI prompts (`docs/api/auth.md` §1c) aren't
+  `requestedBy`). A suggestion's `alternatives` keep the ids they named,
+  which aren't rewritten: once restored, the brew page shows them by name
+  only. People's own AI prompts (`docs/api/auth.md` §1c) aren't
   in it.
   `analysis_requests` (when an automatic analysis is due, why one failed,
   §8) is queue state and isn't backed up either.

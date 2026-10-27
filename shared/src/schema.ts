@@ -93,6 +93,8 @@ export interface WorkspaceSettings {
   // sends by default, and at most how many. Changeable each time.
   suggestSource: SuggestSource;
   suggestMaxBrews: number;
+  // What else it suggests by default (another recipe, brewer or bean).
+  suggestAlternatives: AlternativeKind[];
 }
 export const AUTO_ANALYZE_DELAYS = [0, 5, 10, 15, 30] as const;
 export type AutoAnalyzeDelay = (typeof AUTO_ANALYZE_DELAYS)[number];
@@ -103,6 +105,18 @@ export const MAX_AUTO_ANALYZE_DAILY_CAP = 500;
 export const SUGGEST_SOURCES = ["bean", "beanRecipe", "beanBrewer", "brewer", "recipe"] as const;
 export type SuggestSource = (typeof SUGGEST_SOURCES)[number];
 export const MAX_SUGGEST_BREWS = 20;
+// What else "Suggest parameters" can suggest (docs/api/analysis.md §8b):
+// another recipe or brewer for this bean, another bean in stock for this
+// recipe. An alternative names the row it means, by id and name (the name
+// as it was, so a restored backup can still show it).
+export const SUGGEST_ALTERNATIVES = ["recipe", "brewer", "bean"] as const;
+export type AlternativeKind = (typeof SUGGEST_ALTERNATIVES)[number];
+export interface SuggestedAlternative {
+  kind: AlternativeKind;
+  id: string;
+  name: string;
+  why: string;
+}
 export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   recipeRoastLevel: "light",
   roastScale: "names",
@@ -113,6 +127,7 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   autoAnalyzeDailyCap: null,
   suggestSource: "beanRecipe",
   suggestMaxBrews: 5,
+  suggestAlternatives: [],
 };
 
 export function withDefaults<T extends object>(defaults: T, stored: Partial<T> | null): T {
@@ -1180,6 +1195,7 @@ export const parameterSuggestions = mysqlTable("parameter_suggestions", {
   // their account is deleted. note: a one-off note sent with it.
   requestedBy: varchar("requested_by", { length: 36 }).references(() => users.id, { onDelete: "set null" }),
   note: varchar("note", { length: 500 }),
+  alternativesAsked: jsonValue<AlternativeKind[]>("alternatives_asked"), // null or [] = none
   brewCount: int("brew_count"), // how many earlier brews were sent
   // The batch as planned when asked: the barista's to choose, so the AI
   // keeps it and suggests a ratio (filter: hot water and ice; espresso: the
@@ -1201,6 +1217,8 @@ export const parameterSuggestions = mysqlTable("parameter_suggestions", {
   tempC: decimal("temp_c", { precision: 4, scale: 1, mode: "number" }),
   // Filter: (water + ice) / dose; espresso: shot weight / dose.
   ratio: decimal("ratio", { precision: 5, scale: 2, mode: "number" }),
+  // What else to try, of the kinds asked: at most one of each; [] = none.
+  alternatives: jsonValue<SuggestedAlternative[]>("alternatives"),
   model: varchar("model", { length: 100 }),
   promptVersion: varchar("prompt_version", { length: 30 }),
   request: jsonValue<AiRequest>("request"), // what was sent; null until done

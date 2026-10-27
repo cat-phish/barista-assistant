@@ -1,7 +1,7 @@
 // AI suggestions as the app shows them: an analysis's changes (AnalysisCard,
 // docs/api/analysis.md §8), and "Suggest parameters"' starting values for the
 // brew being set up (§8b).
-import type { GrindDelta, ParameterSuggestion, Recipe, SuggestSource } from '../api/types';
+import type { AlternativeKind, GrindDelta, ParameterSuggestion, Recipe, SuggestedAlternative, SuggestSource } from '../api/types';
 import { formatGrind } from './format';
 import type { ScaleField } from './scale';
 
@@ -35,6 +35,8 @@ export const SUGGEST_SOURCE_LABELS: Record<SuggestSource, string> = {
   brewer: 'This brewer, any bean',
   recipe: 'This recipe, any bean',
 };
+// What else it can suggest, as the checkboxes say it.
+export const ALTERNATIVE_LABELS: Record<AlternativeKind, string> = { recipe: 'Another recipe', brewer: 'Another brewer', bean: 'Another bean' };
 // What a source needs chosen first to pick brews by.
 export function sourceNeeds(source: SuggestSource): 'recipe' | 'brewer' | null {
   if (source === 'beanRecipe' || source === 'recipe') return 'recipe';
@@ -54,6 +56,7 @@ export interface StartingParameters {
   confidence: 'low' | 'medium' | 'high' | null;
   brewCount: number; // earlier brews it was based on
   source: SuggestSource;
+  alternatives: SuggestedAlternative[];
 }
 
 export function startingParameters(s: ParameterSuggestion): StartingParameters | null {
@@ -69,6 +72,7 @@ export function startingParameters(s: ParameterSuggestion): StartingParameters |
     confidence: s.confidence,
     brewCount: s.brewCount ?? 0,
     source: s.source,
+    alternatives: s.alternatives ?? [],
   };
 }
 

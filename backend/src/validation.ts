@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_SUGGEST_BREWS, REPEAT_KEEPS, ROAST_LEVELS, ROAST_SCALES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
+import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_SUGGEST_BREWS, REPEAT_KEEPS, ROAST_LEVELS, ROAST_SCALES, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
 import { AI_DETAILS } from "@barista/shared/aiDetails";
 import { ROLES } from "./auth/membership.js";
 
@@ -8,6 +8,11 @@ export const roleSchema = z.enum(ROLES);
 // Stored slugs always match this, so a param that doesn't can't be a real slug.
 // Checking it also stops the case-insensitive collation matching "TEST-BAR" to "test-bar".
 export const SLUG_PATTERN = /^[a-z0-9-]{3,64}$/;
+
+// What else Suggest parameters suggests (docs/api/analysis.md §8b), each kind once.
+export const alternativeKinds = z
+  .array(z.enum(SUGGEST_ALTERNATIVES))
+  .refine((kinds) => new Set(kinds).size === kinds.length, "each kind once");
 
 // Settings PATCH bodies (docs/api/workspaces.md §2, auth.md §1): any non-empty
 // subset of the keys; unknown keys are refused so a typo isn't silently kept.
@@ -32,6 +37,7 @@ export const workspaceSettingsObject = z
     // "Suggest parameters" defaults (docs/api/analysis.md §8b).
     suggestSource: z.enum(SUGGEST_SOURCES),
     suggestMaxBrews: z.number().int().min(1).max(MAX_SUGGEST_BREWS),
+    suggestAlternatives: alternativeKinds,
   })
   .partial()
   .strict();

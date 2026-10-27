@@ -7,12 +7,12 @@
 //  - which details the AI gets (docs/api/llm-contract.md §9, "What the AI sees").
 import { computed, ref, watch } from 'vue';
 import { errorMessage } from '../api/client';
-import { AUTO_ANALYZE_DELAYS, MAX_SUGGEST_BREWS, SUGGEST_SOURCES, type AutoAnalyzeDelay, type SuggestSource, type WorkspaceSettings } from '../api/types';
+import { AUTO_ANALYZE_DELAYS, MAX_SUGGEST_BREWS, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, type AlternativeKind, type AutoAnalyzeDelay, type SuggestSource, type WorkspaceSettings } from '../api/types';
 import { workspacesApi } from '../api/workspaces';
 import SettingsLayout from '../components/SettingsLayout.vue';
 import { usePreferences } from '../composables/usePreferences';
 import { AI_GROUPS, aiDetailsFor, type AiDetail, type AiGroup } from '../lib/aiDetails';
-import { SUGGEST_SOURCE_LABELS } from '../lib/suggest';
+import { ALTERNATIVE_LABELS, SUGGEST_SOURCE_LABELS } from '../lib/suggest';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
@@ -58,6 +58,16 @@ async function save(changes: Partial<WorkspaceSettings>, section: Section): Prom
 function setCapped(capped: boolean): void {
   if (capped && capInvalid.value) capDraft.value = '20';
   void save({ autoAnalyzeDailyCap: capped ? Number(capDraft.value) : null }, 'auto');
+}
+// What else Suggest parameters suggests, ticked to start with on the brew page.
+const ALTERNATIVE_HINTS: Record<AlternativeKind, string> = {
+  recipe: 'for this bean',
+  brewer: 'for this bean',
+  bean: 'in stock, for this recipe',
+};
+function toggleAlternative(kind: AlternativeKind, on: boolean): void {
+  const now = settings.value.suggestAlternatives;
+  void save({ suggestAlternatives: SUGGEST_ALTERNATIVES.filter((k) => (k === kind ? on : now.includes(k))) }, 'suggest');
 }
 function saveCap(): void {
   if (cap.value !== null && !capInvalid.value && Number(capDraft.value) !== cap.value) void save({ autoAnalyzeDailyCap: Number(capDraft.value) }, 'auto');
@@ -128,7 +138,8 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
       <h2 id="ai-suggest">Suggest parameters</h2>
       <p class="muted">
         On the brew page, “Suggest parameters” sends earlier brews to the AI, each with the suggestion it got, and fills in starting values
-        for the brew you're making. Pick which brews it starts with; anyone brewing can change it each time.
+        for the brew you're making. It can also suggest another recipe, brewer or bean to try. Pick what it starts with; anyone brewing can
+        change it each time.
       </p>
       <fieldset class="suggest" :disabled="!isOwner || saving">
         <legend class="visually-hidden">Suggest parameters defaults</legend>
@@ -144,6 +155,14 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
             <option v-for="n in MAX_SUGGEST_BREWS" :key="n" :value="n">{{ n }} {{ n === 1 ? 'brew' : 'brews' }}</option>
           </select>
         </div>
+      </fieldset>
+      <fieldset class="suggest-alts" :disabled="!isOwner || saving">
+        <legend>Also suggest, by default</legend>
+        <label v-for="k in SUGGEST_ALTERNATIVES" :key="k" class="checkbox">
+          <input type="checkbox" :checked="settings.suggestAlternatives.includes(k)" @change="toggleAlternative(k, ($event.target as HTMLInputElement).checked)" />
+          {{ ALTERNATIVE_LABELS[k] }}
+          <span class="muted small">{{ ALTERNATIVE_HINTS[k] }}</span>
+        </label>
       </fieldset>
       <p v-if="error && activeSection === 'suggest'" class="form-error" role="alert">{{ error }}</p>
       <p v-if="saved && activeSection === 'suggest'" class="muted small" aria-live="polite">Saved.</p>
@@ -181,6 +200,14 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
 </template>
 
 <style scoped>
+.suggest-alts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  border: none;
+  padding: 0;
+  margin: 0;
+}
 h2 {
   font-size: 1.15rem;
 }

@@ -53,6 +53,7 @@ export type SuggestionPreview = Pick<
   | "batchYieldGrams"
   | "requestedBy"
   | "note"
+  | "alternativesAsked"
 >;
 // note: a one-off note (docs/api/auth.md §1c), as asking would send it.
 export type AiPreviewJobData = { kind: "analysis"; brewLogId: string; note?: string } | { kind: "suggest"; suggestion: SuggestionPreview };

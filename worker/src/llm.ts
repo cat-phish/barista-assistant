@@ -1,6 +1,6 @@
 import type { AiDetail } from "@barista/shared/aiDetails";
 import { GRIND_DELTAS } from "@barista/shared/jobs";
-import { ANALYSIS_CONFIDENCE, type AiRequest } from "@barista/shared/schema";
+import { ANALYSIS_CONFIDENCE, SUGGEST_ALTERNATIVES, type AiRequest, type AlternativeKind, type SuggestedAlternative } from "@barista/shared/schema";
 import { UnrecoverableError } from "bullmq";
 import OpenAI from "openai";
 import { z } from "zod";
@@ -216,8 +216,22 @@ export const PARAMETER_SUGGESTION_JSON_SCHEMA = {
       type: ["number", "null"],
       description: "The brew ratio for the batch: (water + ice) / dose, or for espresso shot weight / dose; null to keep the batch's.",
     },
+    alternatives: {
+      type: "array",
+      description: "Something else to try from options, at most one of each kind; empty when there are no options or nothing stands out.",
+      items: {
+        type: "object",
+        properties: {
+          kind: { type: "string", enum: [...SUGGEST_ALTERNATIVES] },
+          option: { type: "string", description: "The option's ref, e.g. r2." },
+          why: { type: "string", description: "Why, in plain words (at most 140 characters)." },
+        },
+        required: ["kind", "option", "why"],
+        additionalProperties: false,
+      },
+    },
   },
-  required: ["reasoning", "nextStep", "confidence", "grindSetting", "grindRpm", "tempC", "ratio"],
+  required: ["reasoning", "nextStep", "confidence", "grindSetting", "grindRpm", "tempC", "ratio", "alternatives"],
   additionalProperties: false,
 } as const;
 
@@ -241,6 +255,7 @@ const suggestionSchema = z.object({
     .transform((n) => Math.round(n * 100) / 100)
     .refine((n) => n > 0 && n < 1000, "must be over 0 and under 1000")
     .nullable(),
+  alternatives: z.array(z.object({ kind: z.enum(SUGGEST_ALTERNATIVES), option: z.string().trim(), why: z.string().trim().min(1).max(300) })).max(10),
 });
 export type ParameterSuggestionResult = z.infer<typeof suggestionSchema>;
 
@@ -271,9 +286,28 @@ export function parseSuggestionMessage(message: LlmMessage): ParameterSuggestion
 // beyond; filter from a cold brew concentrate to a very light pour over.
 export const RATIO_RANGE = { espresso: [0.75, 5], filter: [2, 25] } as const;
 
+// What's saved: the alternatives as the rows they name.
+export type SuggestionValues = Omit<ParameterSuggestionResult, "alternatives"> & { alternatives: SuggestedAlternative[] };
+
+// The alternatives that name an option sent, of a kind asked, one of each
+// kind (the first), with the row's id and name.
+export function alternativesThatApply(given: ParameterSuggestionResult["alternatives"], options: SuggestContext["options"]): SuggestedAlternative[] {
+  const named = new Map<string, { kind: AlternativeKind; id: string; name: string }>();
+  for (const r of options.recipes ?? []) named.set(r.ref, { kind: "recipe", id: r.id, name: `${r.name} (${r.brewer})` });
+  for (const b of options.brewers ?? []) named.set(b.ref, { kind: "brewer", id: b.id, name: b.name });
+  for (const b of options.beans ?? []) named.set(b.ref, { kind: "bean", id: b.id, name: `${b.bean.roasterName} ${b.bean.beanName}` });
+  const out: SuggestedAlternative[] = [];
+  for (const a of given) {
+    const option = named.get(a.option);
+    if (!option || option.kind !== a.kind || out.some((x) => x.kind === a.kind)) continue;
+    out.push({ ...option, why: a.why.slice(0, 200) });
+  }
+  return out;
+}
+
 // Drops the values that don't fit the brew being set up, whatever the model said.
-export function onlySuggestionsThatApply(s: ParameterSuggestionResult, context: SuggestContext, hidden: ReadonlySet<AiDetail>): ParameterSuggestionResult {
-  const out = { ...s };
+export function onlySuggestionsThatApply(s: ParameterSuggestionResult, context: SuggestContext, hidden: ReadonlySet<AiDetail>): SuggestionValues {
+  const out: SuggestionValues = { ...s, alternatives: alternativesThatApply(s.alternatives, context.options) };
   const g = context.grinder;
   // A setting only means something on the grinder chosen, within its dial.
   const offDial = out.grindSetting !== null && g !== null && ((g.settingMin !== null && out.grindSetting < g.settingMin) || (g.settingMax !== null && out.grindSetting > g.settingMax));
@@ -289,7 +323,7 @@ export function onlySuggestionsThatApply(s: ParameterSuggestionResult, context: 
 }
 
 export interface SuggestionRun {
-  suggestion: ParameterSuggestionResult;
+  suggestion: SuggestionValues;
   usage: Usage;
 }
 export async function requestSuggestion(context: SuggestContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): Promise<SuggestionRun> {
