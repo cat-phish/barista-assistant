@@ -137,3 +137,25 @@ export function validWhat(value: string | null, options: WhatOption[]): string {
 export function validItem(value: string | null, values: string[]): string {
   return value && values.includes(value) ? value : (values[0] ?? '');
 }
+
+// What setup still needs before brewing, first thing first, or '' when it's
+// ready. Start and Log stay disabled while there's something, and say it.
+export interface SetupState {
+  bean: boolean;
+  emptyCategory: boolean; // a drink category with nothing in it
+  noRecipes: boolean; // a brewer chosen that has no recipes
+  sizeMissing: boolean; // a sized drink without a size
+  batchInvalid: boolean; // the recipe's batch or shot doesn't make sense
+  finishError: boolean; // rapid cold: the target finish
+  steepError: boolean; // long cold styles: the steep window
+}
+export function setupMissing(s: SetupState): string {
+  if (!s.bean) return 'Choose a bean.';
+  if (s.emptyCategory) return 'Add a drink to this category first.';
+  if (s.noRecipes) return 'Add a recipe for this brewer first.';
+  if (s.sizeMissing) return 'Enter a size.';
+  if (s.batchInvalid) return 'Enter positive amounts for the batch.';
+  if (s.finishError) return 'Fix the target finish.';
+  if (s.steepError) return 'Fix the steep window.';
+  return '';
+}

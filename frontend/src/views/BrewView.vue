@@ -40,6 +40,7 @@ import {
   validWhat,
   whatOptions,
   methodKind,
+  setupMissing,
 } from '../lib/brewChoice';
 import type { Brewer, BrewProblem, Drink, DrinkCategory, Grinder, Mark, MethodKind, NotificationChannel, PrepTool, ServingUnit, WaterProfile } from '../api/types';
 import { METHOD_KINDS } from '../lib/equipment';
@@ -409,17 +410,21 @@ watch(
 watch(shot, (s) => {
   if (s) draft.dose = formatGrams(s.dose);
 });
-// Setup can continue once the batch (or shot) makes sense.
-const setupReady = computed(
-  // An empty category has nothing to brew yet ("Something else" logs without a recipe).
-  () =>
-    !chosenCategory.value?.empty &&
-    !(brewerId.value && !recipeChoices.value.length) &&
-    (!baseSize.value || !!madeSize.value) &&
-    (!recipe.value || (espresso.value ? !!shot.value : !!batch.value)) &&
-    !(rapidCold.value && windowError.value.finish) &&
-    !(longStyle.value && windowError.value.steep),
+// Setup can continue once there's a bean and the batch (or shot) makes
+// sense; until then the buttons say what's missing. An empty category has
+// nothing to brew yet ("Something else" logs without a recipe).
+const setupMissingText = computed(() =>
+  setupMissing({
+    bean: !!bean.value,
+    emptyCategory: !!chosenCategory.value?.empty,
+    noRecipes: !!brewerId.value && !recipeChoices.value.length,
+    sizeMissing: !!baseSize.value && !madeSize.value,
+    batchInvalid: !!recipe.value && (espresso.value ? !shot.value : !batch.value),
+    finishError: rapidCold.value && !!windowError.value.finish,
+    steepError: longStyle.value && !!windowError.value.steep,
+  }),
 );
+const setupReady = computed(() => !setupMissingText.value);
 // The yield estimate in the person's volume unit(s) (fl oz, ml or both).
 const yieldFields = computed(() =>
   volumeUnits(prefs.value.volumeUnit, prefs.value.showBothVolumes).map((u) => ({ field: (u === 'ml' ? 'yieldMl' : 'yieldOz') as ScaleField, label: VOLUME_LABELS[u] })),
@@ -580,6 +585,7 @@ watch(
 );
 // A source that needs a recipe or brewer can't run without one.
 const suggestBlocked = computed(() => {
+  if (!bean.value) return 'Choose a bean to ask the AI.';
   const needs = sourceNeeds(suggestSource.value);
   if (needs === 'recipe' && !recipe.value) return 'Pick a recipe to compare its brews.';
   if (needs === 'brewer' && !(recipe.value || brewerId.value)) return 'Pick a brewer to compare its brews.';
@@ -1096,7 +1102,8 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       </section>
       <p v-if="repeatError" class="form-error" role="alert">{{ repeatError }}</p>
       <RepeatBrewPicker :open="pickerOpen" :beans="beans" @close="pickerOpen = false" @pick="applyRepeat" />
-      <section class="card stack">
+      <section class="card stack" aria-labelledby="brewing">
+        <h2 id="brewing">What you're brewing</h2>
         <div class="field">
           <label for="bean">Bean<span class="req" aria-hidden="true">*</span></label>
           <select id="bean" aria-required="true" v-model="beanId">
@@ -1182,6 +1189,57 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <button class="btn btn-secondary" type="button" :disabled="addingGrinder || !newGrinderName.trim()" @click="addGrinder">Add</button>
           <span v-if="grinderError" class="field-error full">{{ grinderError }}</span>
         </div>
+      </section>
+
+      <section class="card stack" aria-labelledby="ai-suggestion">
+        <h2 id="ai-suggestion">AI suggestion</h2>
+        <div class="suggest-pick">
+          <div class="field">
+            <label for="suggest-source">Compare with</label>
+            <select id="suggest-source" v-model="suggestSource">
+              <option v-for="src in SUGGEST_SOURCES" :key="src" :value="src">{{ SUGGEST_SOURCE_LABELS[src] }}</option>
+            </select>
+          </div>
+          <div class="field suggest-max">
+            <label for="suggest-max">Up to</label>
+            <select id="suggest-max" v-model.number="suggestMax">
+              <option v-for="n in MAX_SUGGEST_BREWS" :key="n" :value="n">{{ n }} {{ n === 1 ? 'brew' : 'brews' }}</option>
+            </select>
+          </div>
+          <button class="btn btn-secondary" type="button" :disabled="suggester.state.value === 'waiting' || !!suggestBlocked" @click="suggest">
+            {{ suggester.state.value === 'waiting' ? 'Asking the AI…' : 'Suggest parameters' }}
+          </button>
+        </div>
+        <AiNoteField v-if="!suggestBlocked" id="suggest-note" v-model="suggestNote" />
+        <button v-if="!suggestBlocked" class="btn-link small preview-link" type="button" @click="previewing = 'suggest'">Preview what's sent</button>
+        <p v-if="suggestBlocked" class="muted small">{{ suggestBlocked }}</p>
+        <p v-if="suggester.state.value === 'error'" class="form-error" role="alert">{{ suggester.error.value }}</p>
+        <p v-else-if="suggester.state.value === 'slow'" class="muted" aria-live="polite">Still working on it. Try again in a moment.</p>
+        <template v-else-if="suggestion">
+          <p v-if="suggestion.nextStep" class="next">
+            <strong>This brew:</strong> {{ suggestion.nextStep }}
+            <span v-if="suggestion.confidence" class="badge" :class="`conf-${suggestion.confidence}`">{{ CONFIDENCE_LABELS[suggestion.confidence] }}</span>
+          </p>
+          <p class="reasoning">“{{ suggestion.reasoning }}”</p>
+          <p v-if="suggestion.ratio !== null" class="small">
+            Ratio 1:{{ formatRatio(suggestion.ratio) }}<template v-if="ratioKept">, keeping your {{ ratioKept }}</template>.
+          </p>
+          <p v-else class="muted small">Your batch and its ratio stay as they are.</p>
+          <p v-if="suggestedFor" class="note small">
+            The grind was suggested for {{ suggestedFor }}, so it isn't filled in for {{ grinder?.name ?? 'no grinder' }}.
+          </p>
+          <p class="muted small">
+            <template v-if="suggestion.brewCount">Based on {{ suggestion.brewCount }} earlier {{ suggestion.brewCount === 1 ? 'brew' : 'brews' }} ({{ SUGGEST_SOURCE_LABELS[suggestion.source].toLowerCase() }}).</template>
+            <template v-else>No earlier brews to compare yet, so it's from the recipe and the bean alone.</template>
+            Filled in below; change anything you like.
+          </p>
+          <button v-if="suggester.suggestion.value?.hasRequest" class="btn-link small" type="button" @click="showSent = true">What was sent to the AI</button>
+          <AiRequestDialog :open="showSent" :load="loadSent" @close="showSent = false" />
+        </template>
+      </section>
+
+      <section class="card stack" aria-labelledby="starting-point">
+        <h2 id="starting-point">Batch and starting point</h2>
         <p v-if="recipe" class="muted recipe-summary">
           {{ formatDoseLine(recipe.targetDoseGrams, recipe.targetWaterGrams, recipe.expectedYieldGrams, recipe.targetIceGrams) }}
           <template v-if="recipe.targetTempC !== null"> · {{ formatTemp(recipe.targetTempC, temperatureUnit) }}</template>
@@ -1243,53 +1301,6 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <button v-if="scaled" class="btn-link small batch-reset" type="button" @click="resetBatch">Reset to recipe</button>
           <p v-if="grindNote" class="note small">{{ grindNote }}</p>
         </div>
-      </section>
-
-      <section v-if="bean" class="card stack">
-        <h2>Starting point</h2>
-        <div class="suggest-pick">
-          <div class="field">
-            <label for="suggest-source">Compare with</label>
-            <select id="suggest-source" v-model="suggestSource">
-              <option v-for="src in SUGGEST_SOURCES" :key="src" :value="src">{{ SUGGEST_SOURCE_LABELS[src] }}</option>
-            </select>
-          </div>
-          <div class="field suggest-max">
-            <label for="suggest-max">Up to</label>
-            <select id="suggest-max" v-model.number="suggestMax">
-              <option v-for="n in MAX_SUGGEST_BREWS" :key="n" :value="n">{{ n }} {{ n === 1 ? 'brew' : 'brews' }}</option>
-            </select>
-          </div>
-          <button class="btn btn-secondary" type="button" :disabled="suggester.state.value === 'waiting' || !!suggestBlocked" @click="suggest">
-            {{ suggester.state.value === 'waiting' ? 'Asking the AI…' : 'Suggest parameters' }}
-          </button>
-        </div>
-        <AiNoteField v-if="!suggestBlocked && bean" id="suggest-note" v-model="suggestNote" />
-        <button v-if="!suggestBlocked && bean" class="btn-link small preview-link" type="button" @click="previewing = 'suggest'">Preview what's sent</button>
-        <p v-if="suggestBlocked" class="muted small">{{ suggestBlocked }}</p>
-        <p v-if="suggester.state.value === 'error'" class="form-error" role="alert">{{ suggester.error.value }}</p>
-        <p v-else-if="suggester.state.value === 'slow'" class="muted" aria-live="polite">Still working on it. Try again in a moment.</p>
-        <template v-else-if="suggestion">
-          <p v-if="suggestion.nextStep" class="next">
-            <strong>This brew:</strong> {{ suggestion.nextStep }}
-            <span v-if="suggestion.confidence" class="badge" :class="`conf-${suggestion.confidence}`">{{ CONFIDENCE_LABELS[suggestion.confidence] }}</span>
-          </p>
-          <p class="reasoning">“{{ suggestion.reasoning }}”</p>
-          <p v-if="suggestion.ratio !== null" class="small">
-            Ratio 1:{{ formatRatio(suggestion.ratio) }}<template v-if="ratioKept">, keeping your {{ ratioKept }}</template>.
-          </p>
-          <p v-else class="muted small">Your batch and its ratio stay as they are.</p>
-          <p v-if="suggestedFor" class="note small">
-            The grind was suggested for {{ suggestedFor }}, so it isn't filled in for {{ grinder?.name ?? 'no grinder' }}.
-          </p>
-          <p class="muted small">
-            <template v-if="suggestion.brewCount">Based on {{ suggestion.brewCount }} earlier {{ suggestion.brewCount === 1 ? 'brew' : 'brews' }} ({{ SUGGEST_SOURCE_LABELS[suggestion.source].toLowerCase() }}).</template>
-            <template v-else>No earlier brews to compare yet, so it's from the recipe and the bean alone.</template>
-            Filled in below; change anything you like.
-          </p>
-          <button v-if="suggester.suggestion.value?.hasRequest" class="btn-link small" type="button" @click="showSent = true">What was sent to the AI</button>
-          <AiRequestDialog :open="showSent" :load="loadSent" @close="showSent = false" />
-        </template>
         <div v-if="show('brew.temp') || show('brew.grind')" class="form-row">
           <div v-if="show('brew.temp')" class="field">
             <label for="setup-temp">Water temp ({{ TEMPERATURE_LABELS[temperatureUnit] }})</label>
@@ -1394,6 +1405,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             Log a brew without the timer
           </button>
         </template>
+        <p v-if="setupMissingText" class="muted small setup-missing" aria-live="polite">{{ setupMissingText }}</p>
       </div>
     </template>
 
@@ -1594,6 +1606,9 @@ h2 {
 }
 p {
   margin: 0;
+}
+.setup-missing {
+  text-align: center;
 }
 .recipe-summary {
   font-size: 0.9rem;
