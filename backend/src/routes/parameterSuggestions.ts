@@ -7,6 +7,7 @@ import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { enqueueParameterSuggestion, QueueUnavailableError } from "../queue.js";
+import { SUGGESTION_COLUMNS, type SuggestionRow } from "../aiRequest.js";
 import {
   beans,
   brewers,
@@ -18,14 +19,17 @@ import {
   SUGGEST_SOURCES,
   withDefaults,
   workspaces,
-  type ParameterSuggestion,
+  type AiRequest,
   type SuggestSource,
 } from "@barista/shared/schema";
 
 // "Suggest parameters" (docs/api/analysis.md §8b): starting values for the
 // brew about to be made, from the earlier brews the caller picks.
 export interface ParameterSuggestionResponse {
-  suggestion: ParameterSuggestion;
+  suggestion: SuggestionRow;
+}
+export interface AiRequestResponse {
+  request: AiRequest | null; // null: not saved (pending, failed, or from before it was)
 }
 
 interface WorkspaceParams {
@@ -138,7 +142,7 @@ parameterSuggestionsRouter.post("/", async (req: Request<WorkspaceParams>, res: 
     }
     throw err;
   }
-  const [suggestion] = await db.select().from(parameterSuggestions).where(eq(parameterSuggestions.id, id));
+  const [suggestion] = await db.select(SUGGESTION_COLUMNS).from(parameterSuggestions).where(eq(parameterSuggestions.id, id));
   if (!suggestion) throw new Error(`Parameter suggestion ${id} missing after insert`);
   res.status(202).json({ suggestion });
 });
@@ -148,7 +152,7 @@ parameterSuggestionsRouter.get("/:suggestionId", async (req: Request<SuggestionP
   const { workspaceId, suggestionId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId))) return;
   const [row] = await db
-    .select({ suggestion: parameterSuggestions })
+    .select({ suggestion: SUGGESTION_COLUMNS })
     .from(parameterSuggestions)
     .innerJoin(beans, eq(parameterSuggestions.beanId, beans.id))
     .where(and(eq(parameterSuggestions.id, suggestionId), eq(beans.workspaceId, workspaceId)));
@@ -157,4 +161,20 @@ parameterSuggestionsRouter.get("/:suggestionId", async (req: Request<SuggestionP
     return;
   }
   res.json({ suggestion: row.suggestion });
+});
+
+// What was sent to the AI (docs/api/analysis.md §8c), any member.
+parameterSuggestionsRouter.get("/:suggestionId/request", async (req: Request<SuggestionParams>, res: Response<AiRequestResponse>) => {
+  const { workspaceId, suggestionId } = req.params;
+  if (!(await requireMembership(res, authedUserId(req), workspaceId))) return;
+  const [row] = await db
+    .select({ request: parameterSuggestions.request })
+    .from(parameterSuggestions)
+    .innerJoin(beans, eq(parameterSuggestions.beanId, beans.id))
+    .where(and(eq(parameterSuggestions.id, suggestionId), eq(beans.workspaceId, workspaceId)));
+  if (!row) {
+    sendError(res, 404, "Suggestion not found");
+    return;
+  }
+  res.json({ request: row.request });
 });

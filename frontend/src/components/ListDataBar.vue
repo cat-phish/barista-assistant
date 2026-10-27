@@ -8,8 +8,9 @@ import { computed, ref, watch } from 'vue';
 import { backupApi, type ListName } from '../api/backup';
 import { errorMessage } from '../api/client';
 import type { Selection } from '../composables/useSelection';
-import { COMES_ALONG, exportFileName, LIST_LABELS, saveJson } from '../lib/backup';
+import { COMES_ALONG, exportFileName, hasAiSuggestions, LIST_LABELS, saveJson } from '../lib/backup';
 import { useWorkspaceStore } from '../stores/workspace';
+import AiRequestsChoice from './AiRequestsChoice.vue';
 import ImportLists from './ImportLists.vue';
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -27,13 +28,21 @@ const busy = ref(false);
 const error = ref('');
 const count = computed(() => props.selection?.ids.size ?? 0);
 
-async function exportSelected(ids: string[]): Promise<void> {
+// Brews and beans carry AI suggestions: ask first whether to include what
+// each was sent.
+const choosing = ref(false);
+function startExport(): void {
+  if (hasAiSuggestions([props.list])) choosing.value = true;
+  else void exportSelected(false);
+}
+async function exportSelected(aiRequests: boolean): Promise<void> {
   const ws = workspaces.current?.id;
-  if (!ws) return;
+  choosing.value = false;
+  if (!ws || !props.selection) return;
   busy.value = true;
   error.value = '';
   try {
-    const file = await backupApi.exportLists(ws, [props.list], { [props.list]: ids });
+    const file = await backupApi.exportLists(ws, [props.list], { [props.list]: [...props.selection.ids] }, aiRequests);
     saveJson(exportFileName(file, [props.list]), file);
     props.selection?.stop();
   } catch (err) {
@@ -70,10 +79,11 @@ function openImport(): void {
     <template v-else>
       <span class="muted small" aria-live="polite">{{ count }} selected · tap rows to pick</span>
       <button v-if="visibleIds?.length" class="btn-link" type="button" @click="selection.setAll(visibleIds)">Select all shown</button>
-      <button class="btn btn-primary" type="button" :disabled="busy || !count" @click="exportSelected([...selection.ids])">Export selected</button>
+      <button class="btn btn-primary" type="button" :disabled="busy || !count" @click="startExport">Export selected</button>
       <button class="btn-link" type="button" @click="selection.stop()">Cancel</button>
     </template>
     <span v-if="error" class="form-error" role="alert">{{ error }}</span>
+    <AiRequestsChoice :open="choosing" @choose="exportSelected" @cancel="choosing = false" />
 
     <dialog ref="dialog" class="import-dialog" :aria-label="`Import ${LIST_LABELS[list].toLowerCase()}`" @cancel.prevent="importing = false">
       <h2>Import {{ LIST_LABELS[list].toLowerCase() }}</h2>

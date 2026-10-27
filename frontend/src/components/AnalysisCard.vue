@@ -3,6 +3,7 @@
 // the diagnosis and the changes, and "Was this useful?" for who can analyze
 // the brew (docs/api/analysis.md §8). Older analyses have no next step,
 // confidence, RPM, dose or shot weight change and show what they have.
+// "What was sent" shows the prompt and input it came from (§8c).
 import { computed, ref, watch } from 'vue';
 import { analysisApi } from '../api/brews';
 import { errorMessage } from '../api/client';
@@ -10,6 +11,7 @@ import type { LlmAnalysis } from '../api/types';
 import { CONFIDENCE_LABELS, GRIND_LABELS, gramsAdvice, rpmAdvice } from '../lib/suggest';
 import { formatTempChange } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
+import AiRequestDialog from './AiRequestDialog.vue';
 
 const props = defineProps<{ analysis: LlmAnalysis; canRate?: boolean }>();
 const { temperatureUnit } = usePreferences();
@@ -24,6 +26,9 @@ watch(
 const saving = ref(false);
 const error = ref('');
 // Tapping the chosen answer again takes it back.
+const showSent = ref(false);
+const loadSent = async () => (await analysisApi.sent(props.analysis.brewLogId, props.analysis.id)).request;
+
 async function rate(value: boolean): Promise<void> {
   const next = helpful.value === value ? null : value;
   saving.value = true;
@@ -59,6 +64,8 @@ async function rate(value: boolean): Promise<void> {
       <span v-if="helpful !== null" class="muted small">Thanks.</span>
       <span v-if="error" class="form-error" role="alert">{{ error }}</span>
     </div>
+    <button v-if="analysis.hasRequest" class="btn-link small sent" type="button" @click="showSent = true">What was sent to the AI</button>
+    <AiRequestDialog :open="showSent" :load="loadSent" @close="showSent = false" />
   </div>
 </template>
 
@@ -94,6 +101,9 @@ ul {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
+}
+.sent {
+  align-self: flex-start;
 }
 .vote {
   min-width: var(--tap);

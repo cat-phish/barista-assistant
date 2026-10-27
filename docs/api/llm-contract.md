@@ -204,7 +204,7 @@ sent as-is; no `$schema` key, which strict mode does not need):
 ```
 
 5. Once parsed, the worker inserts the result into the `llm_analyses` table,
-   with the `model` (`OPENAI_MODEL`) and `promptVersion` (`PROMPT_VERSION`
+   with what was sent (`request`, `analysis.md` §8c), the `model` (`OPENAI_MODEL`) and `promptVersion` (`PROMPT_VERSION`
    in `worker/src/prompt.ts`, bumped whenever the input, prompt or schema
    changes) that made it, so analyses can be compared (`npm run eval -w
    worker`).
@@ -325,7 +325,8 @@ deleted with its bean) is skipped.
      method brews at (`RATIO_RANGE`: espresso 0.75–5, filter 2–25) or the
      batch's own.
 5. The worker saves the values with `status: "done"`, `brewCount`, `model`,
-   `promptVersion` and `completedAt`.
+   `promptVersion`, what was sent (`request`, `analysis.md` §8c) and
+   `completedAt`.
 
 **What the AI sees:** the fields above are classified in
 `worker/tests/aiDetails.test.ts` like the analysis's (the `sameBean` /

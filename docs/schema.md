@@ -994,6 +994,16 @@ export const brewLogProblems = mysqlTable(
 );
 
 // 9. LLM Analyses (AI Parameter Suggestions)
+// What was sent to the AI for an analysis or a suggestion
+// (docs/api/analysis.md §8c): the system prompt, the keys of the sections it
+// was built from (worker/src/prompt.ts), and the input as JSON. Saved with
+// the result; backups and exports leave it out unless asked.
+export interface AiRequest {
+  sections: string[];
+  system: string;
+  input: Record<string, unknown>;
+}
+
 export const llmAnalyses = mysqlTable("llm_analyses", {
   id: varchar("id", { length: 36 }).primaryKey(),
   brewLogId: varchar("brew_log_id", { length: 36 })
@@ -1021,6 +1031,7 @@ export const llmAnalyses = mysqlTable("llm_analyses", {
   // Made by auto-analyze (docs/api/analysis.md §8), not asked for: these
   // count toward the workspace's daily cap.
   auto: boolean("auto").notNull().default(false),
+  request: jsonValue<AiRequest>("request"), // null on analyses made before it was saved
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 export const ANALYSIS_CONFIDENCE = ["low", "medium", "high"] as const;
@@ -1064,6 +1075,7 @@ export const parameterSuggestions = mysqlTable("parameter_suggestions", {
   ratio: decimal("ratio", { precision: 5, scale: 2, mode: "number" }),
   model: varchar("model", { length: 100 }),
   promptVersion: varchar("prompt_version", { length: 30 }),
+  request: jsonValue<AiRequest>("request"), // what was sent; null until done
   createdAt: timestamp("created_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"),
 });

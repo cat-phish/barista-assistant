@@ -75,6 +75,15 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   the server upgrades older versions on restore and refuses newer ones.
   New optional columns don't change it (an older file just lacks them).
 
+**What was sent to the AI** (`request` on `llm_analyses` and
+`parameter_suggestions`, `analysis.md` §8c) is large and only for looking
+back at, so a file leaves it out unless asked (`aiRequests`,
+`AI_REQUEST_COLUMNS` in `backend/src/backup.ts`). Restoring or importing
+a file with it keeps it (checked like any JSON column); without it, those
+rows have none. In the app, a backup, and an export of the journal or
+beans (which carry analyses and suggestions), first ask "Include what was
+sent to the AI?" (`frontend/src/components/AiRequestsChoice.vue`).
+
 **Adding a table** to the schema means deciding: back it up (add it to
 `BACKUP_TABLES` in insert order, any enum column to `ENUMS`, any JSON
 column to `JSON_SCHEMAS`, and for a top-level table a key in `MATCH_KEYS`,
@@ -85,6 +94,8 @@ above it.
 ## `GET /api/workspaces/:workspaceId/backup`
 
 - **Auth Required:** `true` (role `owner`)
+- **Query:** `?aiRequests=true` also includes what was sent to the AI
+  (below); `false` or left out, it isn't.
 - **Success (`200 OK`):** the file above, with
   `Content-Disposition: attachment; filename="<slug>-backup-YYYY-MM-DD.json"`.
 - **Errors:** `403` not an owner; `404` not a member.
@@ -175,8 +186,8 @@ page. Update the "Where it is" and "What comes along" tables here.
 ### `POST /api/workspaces/:workspaceId/export`
 
 - **Auth Required:** `true` (role `owner`)
-- **Body:** `{ "lists": ["recipes", "drinks"], "ids": { "recipes": ["uuid"] } }`
-  (`ids` optional: only those items of a list).
+- **Body:** `{ "lists": ["recipes", "drinks"], "ids": { "recipes": ["uuid"] }, "aiRequests": false }`
+  (`ids` optional: only those items of a list; `aiRequests` optional, below).
 - **Success (`200 OK`):** the file, as an attachment
   `<slug>-<lists>-YYYY-MM-DD.json`.
 - **Errors:** `400` unknown list; `403` not an owner.

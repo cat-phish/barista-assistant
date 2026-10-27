@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BackupFile } from '../api/backup';
-import { backupFileName, backupSummary, copyExample, detailsText, exportFileName, fileLists, missingListError, readBackup, tableLabel } from './backup';
+import { backupFileName, backupSummary, copyExample, detailsText, exportFileName, fileLists, hasAiSuggestions, missingListError, readBackup, tableLabel } from './backup';
 
 const file: BackupFile = {
   format: 'barista-backup',
@@ -45,5 +45,13 @@ describe('backup files', () => {
     expect(missingListError(file, 'beans')).toBeNull();
     expect(missingListError(file, 'recipes')).toBe('This file has no recipes (it has beans, grinders, journal (brews)); import it from Settings → Data.');
     expect(missingListError({ ...file, tables: {} }, 'drinks')).toBe('This file has no drinks.');
+  });
+});
+
+describe('hasAiSuggestions (asks whether to include what was sent to the AI)', () => {
+  it('for brews and beans, which carry analyses and suggested parameters', () => {
+    expect(hasAiSuggestions(['brew_logs'])).toBe(true);
+    expect(hasAiSuggestions(['recipes', 'beans'])).toBe(true);
+    expect(hasAiSuggestions(['recipes', 'grinders', 'drinks'])).toBe(false);
   });
 });

@@ -255,17 +255,22 @@ What the analysis worker sends to the LLM and what comes back.
      and input; "What was sent" shows them.
   4. **Preview:** see the prompt and input before sending, built by the
      worker (no LLM call) so it matches what's really sent.
-  5. **Edit the prompt:** a free-text box for the workspace's instructions;
-     an Advanced switch shows every built-in section, editable with "Reset
-     to default" (the schema sections stay locked); a one-off note each
-     time. Custom prompts are saved as `PROMPT_VERSION+custom`.
+  5. **Edit the prompt, per barista:** each person tunes the prompt to
+     their own taste (often a home with several people), so it's a user
+     preference (`docs/api/auth.md` §1), not a workspace setting an owner
+     could override. A free-text box for their instructions; an Advanced
+     switch shows every built-in section, editable with "Reset to default"
+     (the schema sections stay locked); a one-off note each time, for
+     baristas as well as owners. Whose prompt: Suggest parameters uses the
+     person asking; an analysis uses the brew's barista, also when it runs
+     automatically or someone else taps Get AI suggestion. Custom prompts
+     are saved as `PROMPT_VERSION+custom`.
   6. **New kinds of suggestion:** another recipe or brewer for this bean,
      another bean in stock for this recipe.
 - **Size:** L
 - **Depends on:** nothing. Pairs with 6 (eval before and after the prompt
   changes).
-- **Open questions:**
-  - Should baristas be able to add the one-off note, or only owners?
+- **Open questions:** none.
 
 ---
 

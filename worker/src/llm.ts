@@ -1,12 +1,12 @@
 import type { AiDetail } from "@barista/shared/aiDetails";
 import { GRIND_DELTAS } from "@barista/shared/jobs";
-import { ANALYSIS_CONFIDENCE } from "@barista/shared/schema";
+import { ANALYSIS_CONFIDENCE, type AiRequest } from "@barista/shared/schema";
 import { UnrecoverableError } from "bullmq";
 import OpenAI from "openai";
 import { z } from "zod";
 import { config } from "./config.js";
 import type { BrewContext } from "./context.js";
-import { buildSystemPrompt, SUGGEST_SECTIONS, toLlmInput, toSuggestInput } from "./prompt.js";
+import { buildSystemPrompt, promptSections, SUGGEST_SECTIONS, toLlmInput, toSuggestInput } from "./prompt.js";
 import type { SuggestContext } from "./suggestContext.js";
 
 // The input and system prompt are built in prompt.ts; the schema and its
@@ -104,6 +104,19 @@ export function buildCompletionRequest(context: BrewContext, hidden: ReadonlySet
       json_schema: { name: "brew_analysis", strict: true, schema: BREW_ANALYSIS_JSON_SCHEMA },
     },
   };
+}
+
+// What was sent, as saved with the result (docs/api/analysis.md §8c): read
+// back from the request itself, so it can't drift from it.
+function sent(request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming, sections: string[]): AiRequest {
+  const [system, user] = request.messages;
+  return { sections, system: String(system?.content ?? ""), input: JSON.parse(String(user?.content ?? "{}")) as Record<string, unknown> };
+}
+export function analysisSent(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set()): AiRequest {
+  return sent(buildCompletionRequest(context, hidden), promptSections(toLlmInput(context, hidden)));
+}
+export function suggestionSent(context: SuggestContext, hidden: ReadonlySet<AiDetail> = new Set()): AiRequest {
+  return sent(buildSuggestRequest(context, hidden), promptSections(toSuggestInput(context, hidden), SUGGEST_SECTIONS));
 }
 
 type LlmMessage = { content?: string | null; refusal?: string | null } | undefined;

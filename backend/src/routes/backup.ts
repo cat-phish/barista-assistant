@@ -7,7 +7,7 @@ import { db } from "../db.js";
 import { buildBackup, checkBackup, restoreBackup, type BackupFile } from "../backup.js";
 import { buildExport, fileLists, LISTS, previewImport, runImport, type ExportFile, type ImportSummary } from "../listImport.js";
 import { beansCsv, brewLogsCsv, CSV_LISTS } from "../csv.js";
-import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
+import { isDuplicateEntryError, parseBody, parseQuery, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { SLUG_PATTERN } from "../validation.js";
 
@@ -31,11 +31,16 @@ const restoreSchema = z
 export const backupRouter = Router();
 backupRouter.use(requireAuth);
 
+// ?aiRequests=true also includes what was sent to the AI (it's large).
+const backupQuery = z.object({ aiRequests: z.enum(["true", "false"]).optional() }).strict();
+
 // The whole workspace as one JSON file. Owners only: it holds everyone's brews.
 backupRouter.get("/:workspaceId/backup", async (req: Request<WorkspaceParams>, res: Response<BackupFile>) => {
   const { workspaceId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId, ["owner"]))) return;
-  const backup = await buildBackup(workspaceId);
+  const query = parseQuery(backupQuery, req, res);
+  if (!query) return;
+  const backup = await buildBackup(workspaceId, { aiRequests: query.aiRequests === "true" });
   const day = backup.exportedAt.slice(0, 10);
   res.setHeader("Content-Disposition", `attachment; filename="${backup.workspace.slug}-backup-${day}.json"`);
   res.json(backup);
@@ -75,6 +80,7 @@ const exportSchema = z
     lists: z.array(listSchema).min(1).refine((l) => new Set(l).size === l.length, "each list once"),
     // Only these items of a list (from a list page's select mode).
     ids: z.partialRecord(listSchema, z.array(z.uuid()).max(5000)).optional(),
+    aiRequests: z.boolean().optional(), // include what was sent to the AI
   })
   .strict();
 const importSchema = z
@@ -91,7 +97,7 @@ backupRouter.post("/:workspaceId/export", async (req: Request<WorkspaceParams>, 
   if (!(await requireMembership(res, authedUserId(req), workspaceId, ["owner"]))) return;
   const body = parseBody(exportSchema, req, res);
   if (!body) return;
-  const file = await buildExport(workspaceId, body.lists, body.ids);
+  const file = await buildExport(workspaceId, body.lists, body.ids, { aiRequests: body.aiRequests });
   res.setHeader("Content-Disposition", `attachment; filename="${file.workspace.slug}-${body.lists.join("-")}-${file.exportedAt.slice(0, 10)}.json"`);
   res.json(file);
 });

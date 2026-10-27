@@ -432,7 +432,15 @@ export interface LlmAnalysis {
   promptVersion: string | null;
   helpful: boolean | null; // 👍 / 👎 (docs/api/analysis.md §8)
   ratedAt: string | null;
+  hasRequest: boolean; // what was sent is saved (§8c)
   createdAt: string;
+}
+
+// What was sent to the AI (docs/api/analysis.md §8c).
+export interface AiRequest {
+  sections: string[];
+  system: string;
+  input: Record<string, unknown>;
 }
 
 // docs/api/brew-logs.md §6
@@ -519,6 +527,7 @@ export interface ParameterSuggestion {
   ratio: number | null; // filter (water + ice) / dose, espresso shot / dose; null: keep the batch's
   model: string | null;
   promptVersion: string | null;
+  hasRequest: boolean; // what was sent is saved (§8c)
   createdAt: string;
   completedAt: string | null;
 }

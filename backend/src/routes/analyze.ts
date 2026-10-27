@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { requireResourceMembership, WRITE_ROLES } from "../auth/membership.js";
+import type { AiRequestResponse } from "./parameterSuggestions.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { and, eq, sql } from "drizzle-orm";
@@ -80,5 +81,24 @@ analyzeRouter.put(
       return;
     }
     res.json({ helpful: body.helpful });
+  }
+);
+
+// What was sent to the AI for an analysis (docs/api/analysis.md §8c): any
+// member of the brew's workspace.
+analyzeRouter.get(
+  "/:brewLogId/analyses/:analysisId/request",
+  async (req: Request<{ brewLogId: string; analysisId: string }>, res: Response<AiRequestResponse>) => {
+    const { brewLogId, analysisId } = req.params;
+    if (!(await requireResourceMembership(res, authedUserId(req), "brewLog", brewLogId))) return;
+    const [row] = await db
+      .select({ request: llmAnalyses.request })
+      .from(llmAnalyses)
+      .where(and(eq(llmAnalyses.id, analysisId), eq(llmAnalyses.brewLogId, brewLogId)));
+    if (!row) {
+      sendError(res, 404, "Analysis not found");
+      return;
+    }
+    res.json({ request: row.request });
   }
 );
