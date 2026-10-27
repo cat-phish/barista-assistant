@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import type { BrewAnalysisJobData } from "@barista/shared/jobs";
-import { analysisRequests, brewLogs, DEFAULT_WORKSPACE_SETTINGS, llmAnalyses, withDefaults, workspaces, type WorkspaceSettings } from "@barista/shared/schema";
+import type { BrewAnalysisJobData, ParameterSuggestionJobData } from "@barista/shared/jobs";
+import { analysisRequests, beans, brewLogs, DEFAULT_WORKSPACE_SETTINGS, llmAnalyses, parameterSuggestions, withDefaults, workspaces, type WorkspaceSettings } from "@barista/shared/schema";
 import { and, count, eq, gte } from "drizzle-orm";
 import { loadBrewContext } from "./context.js";
 import { db } from "./db.js";
 import { config } from "./config.js";
-import { analyzeWithLlm, PROMPT_VERSION } from "./llm.js";
+import { analyzeWithLlm, PROMPT_VERSION, requestSuggestion } from "./llm.js";
+import { loadSuggestContext } from "./suggestContext.js";
 
 // The brew's workspace and its settings: what it keeps from the AI
 // (Settings → AI, docs/api/llm-contract.md §9 "What the AI sees") and
@@ -46,7 +47,8 @@ export async function settleRequest(brewLogId: string, error: string | null): Pr
 
 export const CAP_REACHED = "Not analyzed automatically: the workspace's daily limit was reached";
 
-export type JobResult = { status: "saved"; analysisId: string } | { status: "skipped"; reason: string };
+// id: the analysis or suggestion saved.
+export type JobResult = { status: "saved"; id: string } | { status: "skipped"; reason: string };
 
 // One brew-analysis job. Throwing makes BullMQ retry (docs/api/llm-contract.md §9).
 export async function processBrewAnalysis({ brewLogId, auto = false }: BrewAnalysisJobData): Promise<JobResult> {
@@ -97,7 +99,36 @@ export async function processBrewAnalysis({ brewLogId, auto = false }: BrewAnaly
     throw err;
   }
   await settleRequest(brewLogId, null);
-  return { status: "saved", analysisId };
+  return { status: "saved", id: analysisId };
+}
+
+// One "Suggest parameters" request (docs/api/analysis.md §8b): the row says
+// what for; the result goes back into it. Throwing makes BullMQ retry.
+export async function processParameterSuggestion({ suggestionId }: ParameterSuggestionJobData): Promise<JobResult> {
+  const [row] = await db
+    .select({ suggestion: parameterSuggestions, settings: workspaces.settings })
+    .from(parameterSuggestions)
+    .innerJoin(beans, eq(parameterSuggestions.beanId, beans.id))
+    .innerJoin(workspaces, eq(beans.workspaceId, workspaces.id))
+    .where(eq(parameterSuggestions.id, suggestionId));
+  if (!row) return { status: "skipped", reason: "suggestion no longer exists" };
+  if (row.suggestion.status !== "pending") return { status: "skipped", reason: `already ${row.suggestion.status}` };
+
+  const hidden = new Set(withDefaults(DEFAULT_WORKSPACE_SETTINGS, row.settings ?? null).aiHidden);
+  const context = await loadSuggestContext(row.suggestion, { ratedOnly: hidden.has("unratedHistory") });
+  if (!context) return { status: "skipped", reason: "bean no longer exists" };
+
+  const { suggestion } = await requestSuggestion(context, hidden);
+  await db
+    .update(parameterSuggestions)
+    .set({ ...suggestion, status: "done", brewCount: context.brews.length, model: config.openaiModel, promptVersion: PROMPT_VERSION, completedAt: new Date() })
+    .where(eq(parameterSuggestions.id, suggestionId));
+  return { status: "saved", id: suggestionId };
+}
+
+// Every attempt failed: the brew page shows why, with "Try again".
+export async function failSuggestion(suggestionId: string, error: string): Promise<void> {
+  await db.update(parameterSuggestions).set({ status: "failed", error, completedAt: new Date() }).where(eq(parameterSuggestions.id, suggestionId));
 }
 
 // What the journal says when every attempt failed (the details are in the

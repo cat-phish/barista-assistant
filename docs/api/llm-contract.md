@@ -274,6 +274,65 @@ removed, decide which it is and update, in the same change:
   checks the two lists match);
 - this section: the key's line above, or the "Always sent" list.
 
+## 9b. Suggest parameters
+
+The `parameter-suggestion` queue (`analysis.md` §8b): job `suggest`, data
+`{ "suggestionId": "uuid" }`, the row in `parameter_suggestions` saying what
+for. Retried like an analysis; once every attempt fails the row is
+`failed` with the same messages. A suggestion no longer `pending` (or
+deleted with its bean) is skipped.
+
+1. **Context** (`loadSuggestContext`, `worker/src/suggestContext.ts`): the
+   batch (the row's `batch…` amounts, else the recipe's targets, with its
+   ratio: `(water + ice) / dose`, or for espresso shot weight / dose), the
+   bean (as in step 1 above) and its effective roast age **today**, the
+   recipe (with steps), the brewer (`name`, `kind`, and for an espresso
+   machine its controls) and the grinder (its details); then up to
+   `maxBrews` earlier brews from the `source`, newest first, without ones
+   still steeping (and unrated ones when `unratedHistory` is hidden). Each
+   is a brew as in step 1, with its own bean's roast age, plus `sameBean`,
+   `sameRecipe`, `sameGrinder`, `bean` (another bean's details, `null` for
+   this bean) and `analysis`, its latest analysis (`reasoning`, `nextStep`,
+   `confidence`, the suggested changes and the barista's `helpful`), or
+   `null`.
+2. **Input** (`toSuggestInput`, compacted as in step 2): `{ ratingScale,
+   source, batch, bean, roastAgeDays, daysFrozen, recipe, brewer, grinder, brews,
+   equipment }`; the grinder and each brew's grinder and water by name,
+   described once in `equipment`. What the workspace keeps from the AI
+   (`aiHidden`) is left out the same way, other beans' details too.
+3. **Prompt** (`SUGGEST_SECTIONS`): its own opening and output sections,
+   then the analysis's topic sections (drink … flashChilled), with
+   `suggestEspresso` in place of `espresso` (no change fields here), and
+   `end`:
+
+   | Section | Included when | What it says |
+   | --- | --- | --- |
+   | `suggestCore` | always | values for a brew about to be made; what each source picks; the batch is the barista's, never changed, and a different batch size drains differently (grind); `sameBean`/`sameRecipe`/`sameGrinder`, and an earlier analysis judged by the brew after it; another bean's brews show the recipe, brewer or grinder, not this bean; start from the recipe's targets |
+   | `suggestOutput` | always | what each field holds; grind on the named grinder's dial from brews on it or its starting point, else null; a ratio for the batch, kept (or null) unless the brews show a strength problem |
+   | `suggestEspresso` | the recipe or a brew is espresso | windows and ratio as targets; the ratio sets the shot weight for the batch's dose; pre-infusion and profile in `nextStep` |
+
+4. **Schema** (`PARAMETER_SUGGESTION_JSON_SCHEMA`, `worker/src/llm.ts`,
+   strict): `reasoning`, `nextStep`, `confidence` (low / medium / high),
+   `grindSetting` (number or null), `grindRpm` (integer or null), `tempC`
+   (number or null) and `ratio` (number or null), all required.
+   - Checked after parsing: the grind rounded to 0.01 and 0–10000, the
+     temperature to 0.1 °C and 0–100, the ratio to 0.01 and above 0, the speed
+     an integer 50–5000; anything else fails the attempt.
+   - What doesn't apply is set to `null` (`onlySuggestionsThatApply`): the
+     grind without a grinder or off its dial (`settingMin`–`settingMax`),
+     the speed unless the grinder is variable speed (and `rpm` is sent),
+     the temperature when `temp` is hidden, and a ratio outside what the
+     method brews at (`RATIO_RANGE`: espresso 0.75–5, filter 2–25) or the
+     batch's own.
+5. The worker saves the values with `status: "done"`, `brewCount`, `model`,
+   `promptVersion` and `completedAt`.
+
+**What the AI sees:** the fields above are classified in
+`worker/tests/aiDetails.test.ts` like the analysis's (the `sameBean` /
+`sameRecipe` / `sameGrinder` flags, `source`, the `batch`, the roast age today, each
+brew's `analysis` and the brewer's name and kind are always sent; an
+espresso machine's controls go with `machine`).
+
 ## Evaluating changes
 
 `npm run eval -w worker` (run on the host from the repo root; it reads the
@@ -284,6 +343,10 @@ root `.env`, only reads the database, and writes to the git-ignored
 - `run --label <name> [--yes]` sends each through the input and prompt as
   the code has them now (real API calls; it shows the token estimate and
   asks first), saving the outputs and token counts;
+- `run --label <name> --suggest [source]` asks "Suggest parameters"
+  instead, as if setting up each picked brew (its bean, recipe, brewer and
+  grinder, brews before it from `source`, default `beanRecipe`), so the
+  values can be held against how the brew went;
 - `compare <a> <b>` writes a side-by-side report of two runs.
 
 Run it before and after changing the input, prompt or schema, and bump

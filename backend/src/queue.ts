@@ -15,6 +15,9 @@ import {
   DB_BACKUP_SCHEDULER,
   MAINTENANCE_QUEUE,
   type DbBackupJobData,
+  PARAMETER_SUGGESTION_JOB,
+  PARAMETER_SUGGESTION_QUEUE,
+  type ParameterSuggestionJobData,
 } from "@barista/shared/jobs";
 import type { BackupSettings } from "@barista/shared/schema";
 import { Queue } from "bullmq";
@@ -110,6 +113,27 @@ export function cancelWaitingAnalysis(brewLogId: string): Promise<void> {
   });
 }
 
+// "Suggest parameters" (docs/api/analysis.md §8b): one job per request, its
+// row already saved as pending. Retried like an analysis.
+export const parameterSuggestionQueue = new Queue<ParameterSuggestionJobData>(PARAMETER_SUGGESTION_QUEUE, { connection });
+let lastSuggestionError = "";
+parameterSuggestionQueue.on("error", (err: Error) => {
+  if (err.message !== lastSuggestionError) console.error("Parameter suggestion queue error:", err.message);
+  lastSuggestionError = err.message;
+});
+
+export async function enqueueParameterSuggestion(suggestionId: string): Promise<void> {
+  await withTimeout(() =>
+    parameterSuggestionQueue.add(PARAMETER_SUGGESTION_JOB, { suggestionId }, {
+      jobId: `suggest-${suggestionId}`,
+      attempts: 3,
+      backoff: { type: "exponential", delay: 5000 },
+      removeOnComplete: true,
+      removeOnFail: true,
+    })
+  );
+}
+
 // Same timeout as the analysis; the caller treats failure as "no reminder".
 export function enqueueRateReminder(data: RateReminderJobData, delayMs: number): Promise<void> {
   return enqueueReminder(RATE_REMINDER_JOB, rateReminderJobId(data.brewLogId), data, delayMs);
@@ -167,6 +191,6 @@ export async function enqueueBackupNow(): Promise<void> {
 }
 
 export async function closeQueue(): Promise<void> {
-  await Promise.all([brewAnalysisQueue.close(), reminderQueue.close(), maintenanceQueue.close()]);
+  await Promise.all([brewAnalysisQueue.close(), reminderQueue.close(), maintenanceQueue.close(), parameterSuggestionQueue.close()]);
   connection.disconnect();
 }

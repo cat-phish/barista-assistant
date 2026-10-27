@@ -1,76 +1,65 @@
 import { describe, expect, it } from 'vitest';
-import type { BrewLog, Recipe, Suggestions } from '../api/types';
-import { chooseGrind, gramsAdvice, rpmAdvice, startingParameters, suggestionFitsGrinder } from './suggest';
+import { SUGGEST_SOURCES, type ParameterSuggestion, type Recipe } from '../api/types';
+import { chooseGrind, gramsAdvice, heldForRatio, rpmAdvice, SUGGEST_SOURCE_LABELS, sourceNeeds, startingParameters, suggestionFitsGrinder } from './suggest';
 
-const brew = (over: Partial<BrewLog>): BrewLog => ({
-  id: 'b1', workspaceId: 'w', userId: 'u', beanId: 'bean', recipeId: null, timestamp: '2026-10-18T08:00:00.000Z', utcOffsetMinutes: null,
-  actualDoseGrams: 15, actualWaterGrams: 250, actualIceGrams: null, actualYieldGrams: null, tdsPercent: null, actualTempC: 93, actualGrindSetting: 22, grindRpm: null, beanWeightInGrams: null, groundWeightOutGrams: null, steeping: false, steepTemp: null, dilutionRatio: null, dilutedWith: null, steepMinHours: null, steepMaxHours: null, expectedFinishMinSec: null, expectedFinishMaxSec: null, actualTimeSec: 125,
-  rating: 2, tastingNotes: null, drinkRating: null, drinkTastingNotes: null, bean: { id: 'bean', roasterName: 'R', beanName: 'B', batchNumber: null }, recipe: null, brewedBy: null, analyzed: false, analysisDueAt: null, analysisError: null,
-  grinderId: 'c40', grinder: { id: 'c40', name: 'Comandante C40' }, waterProfileId: null, waterProfile: null, brewerId: null, brewer: null, drinkId: null, drink: null, servingSize: null, servingUnit: null, marks: [], tools: [], problems: [], ...over,
-});
 const recipe = { targetTempC: 94, grindSettings: [{ grinderId: 'c40', grinderName: 'Comandante C40', setting: 19 }] } as unknown as Recipe;
-const suggestions = (over: Partial<Suggestions> = {}): Suggestions => ({
-  latestAnalysis: { id: 'a', brewLogId: 'b1', reasoning: 'Under-extracted.', suggestedGrindDelta: 'finer', suggestedTempDelta: 1, nextStep: null, confidence: null, suggestedRpmDelta: null, suggestedDoseDelta: null, suggestedYieldDelta: null, model: null, promptVersion: null, helpful: null, ratedAt: null, createdAt: '' },
-  analyzedBrew: brew({}),
-  recentBrews: [brew({})],
-  ...over,
+const suggestion = (over: Partial<ParameterSuggestion> = {}): ParameterSuggestion => ({
+  id: 's', beanId: 'bean', recipeId: 'r', brewerId: 'v60', grinderId: 'c40', source: 'beanRecipe', maxBrews: 5, brewCount: 3, batchDoseGrams: 15, batchWaterGrams: 250, batchIceGrams: null, batchYieldGrams: null, status: 'done', error: null,
+  reasoning: 'The last cup was sour.', nextStep: 'Watch the drawdown.', confidence: 'medium', grindSetting: 22, grindRpm: null, tempC: 95, ratio: 16,
+  model: 'm', promptVersion: 'v', createdAt: '', completedAt: '', ...over,
+});
+
+// The shared list, read as text: the frontend doesn't import @barista/shared.
+const shared = Object.values(import.meta.glob('../../../shared/src/schema.ts', { query: '?raw', import: 'default', eager: true }))[0] as string;
+const sharedSources = JSON.parse((/SUGGEST_SOURCES = (\[[^\]]*\])/.exec(shared)?.[1] ?? '[]')) as string[];
+
+describe('Suggest parameters sources (docs/api/analysis.md §8b)', () => {
+  it("match the worker's, each with a label", () => {
+    expect([...SUGGEST_SOURCES]).toEqual(sharedSources);
+    expect(Object.keys(SUGGEST_SOURCE_LABELS)).toEqual(sharedSources);
+  });
+  it('say what has to be chosen first', () => {
+    expect(SUGGEST_SOURCES.map(sourceNeeds)).toEqual([null, 'recipe', 'brewer', 'brewer', 'recipe']);
+  });
 });
 
 describe('startingParameters', () => {
-  it('applies the temp change to the analyzed brew and keeps its grind as the base', () => {
-    expect(startingParameters(suggestions(), recipe)).toMatchObject({
-      tempC: 94, grindBase: 22, grindAdvice: 'Grind finer', tempDeltaC: 1, reasoning: 'Under-extracted.',
-      basedOn: { isLatestBrew: true },
-    });
+  it("is the suggestion's values once it's done", () => {
+    expect(startingParameters(suggestion())).toMatchObject({ grinderId: 'c40', grindSetting: 22, tempC: 95, ratio: 16, nextStep: 'Watch the drawdown.', confidence: 'medium', brewCount: 3, source: 'beanRecipe' });
   });
-  it("falls back to the recipe's temp when the analyzed brew has none; grind base stays the brew's own", () => {
-    const s = suggestions({ analyzedBrew: brew({ actualTempC: null, actualGrindSetting: null }) });
-    expect(startingParameters(s, recipe)).toMatchObject({ tempC: 95, grindBase: null });
+  it('is nothing while pending or after it failed', () => {
+    expect(startingParameters(suggestion({ status: 'pending', reasoning: null }))).toBeNull();
+    expect(startingParameters(suggestion({ status: 'failed', reasoning: null }))).toBeNull();
   });
-  it('rounds and clamps the temperature', () => {
-    const s = suggestions({ latestAnalysis: { ...suggestions().latestAnalysis!, suggestedTempDelta: 8.5 }, analyzedBrew: brew({ actualTempC: 96.2 }) });
-    expect(startingParameters(s, null)?.tempC).toBe(100);
-    const down = suggestions({ latestAnalysis: { ...suggestions().latestAnalysis!, suggestedTempDelta: -1.5 } });
-    expect(startingParameters(down, null)).toMatchObject({ tempC: 91.5, tempDeltaC: -1.5 });
-  });
-  it('flags when newer brews exist than the analyzed one', () => {
-    const s = suggestions({ recentBrews: [brew({ id: 'newer' }), brew({})] });
-    expect(startingParameters(s, null)?.basedOn.isLatestBrew).toBe(false);
-  });
-  it('returns null without an analysis', () => {
-    expect(startingParameters(suggestions({ latestAnalysis: null, analyzedBrew: null }), recipe)).toBeNull();
-  });
-  it('passes on the next step, confidence and speed change', () => {
-    const s = suggestions({ latestAnalysis: { ...suggestions().latestAnalysis!, nextStep: 'Grind 2 clicks finer.', confidence: 'medium', suggestedRpmDelta: -100 } });
-    expect(startingParameters(s, null)).toMatchObject({ nextStep: 'Grind 2 clicks finer.', confidence: 'medium', rpmDelta: -100 });
+  it('fits only the grinder it was asked for', () => {
+    const p = startingParameters(suggestion())!;
+    expect(suggestionFitsGrinder(p, 'c40')).toBe(true);
+    expect(suggestionFitsGrinder(p, 'ode')).toBe(false);
+    expect(suggestionFitsGrinder(startingParameters(suggestion({ grinderId: null }))!, '')).toBe(true);
   });
 });
 
-describe('espresso dose and shot weight', () => {
-  const espresso = (doseDelta: number | null, yieldDelta: number | null, shot: Partial<BrewLog> = {}) =>
-    startingParameters(
-      suggestions({
-        latestAnalysis: { ...suggestions().latestAnalysis!, suggestedDoseDelta: doseDelta, suggestedYieldDelta: yieldDelta },
-        analyzedBrew: brew({ actualDoseGrams: 18, actualWaterGrams: null, actualYieldGrams: 36, ...shot }),
-      }),
-      null,
-    );
-  it('applies the changes to the analyzed shot', () => {
-    expect(espresso(0.5, 4)?.shot).toEqual({ doseG: 18.5, yieldG: 40, doseDeltaG: 0.5, yieldDeltaG: 4 });
-    expect(espresso(null, -3)?.shot).toEqual({ doseG: 18, yieldG: 33, doseDeltaG: null, yieldDeltaG: -3 });
+describe('heldForRatio: a suggested ratio keeps the batch size', () => {
+  it('espresso keeps the dose, whatever was typed', () => {
+    expect(heldForRatio({ espresso: true, scaled: true, lead: 'yield' })).toBe('dose');
+    expect(heldForRatio({ espresso: true, scaled: false, lead: 'dose' })).toBe('dose');
   });
-  it('has no shot change without one, and no weight when the shot was never weighed', () => {
-    expect(espresso(null, null)?.shot).toBeNull();
-    expect(espresso(1, 4, { actualYieldGrams: null })?.shot).toEqual({ doseG: 19, yieldG: null, doseDeltaG: 1, yieldDeltaG: 4 });
+  it("an untouched filter batch keeps the recipe's water, so the cup stays its size", () => {
+    expect(heldForRatio({ espresso: false, scaled: false, lead: 'dose' })).toBe('water');
   });
+  it('a filter batch keeps what was typed last: a dose, the water (or a drink size), a cup', () => {
+    expect(heldForRatio({ espresso: false, scaled: true, lead: 'dose' })).toBe('dose');
+    expect(heldForRatio({ espresso: false, scaled: true, lead: 'water' })).toBe('water');
+    expect(heldForRatio({ espresso: false, scaled: true, lead: 'yieldOz' })).toBe('yieldOz');
+  });
+});
+
+describe('analysis advice', () => {
   it('words a change in grams', () => {
     expect(gramsAdvice('Dose', 0.5)).toBe('Dose +0.5 g');
     expect(gramsAdvice('Shot weight', -3)).toBe('Shot weight −3 g');
     expect(gramsAdvice('Dose', null)).toBeNull();
   });
-});
-
-describe('rpmAdvice', () => {
   it('words a speed change, and nothing for none', () => {
     expect(rpmAdvice(150)).toBe('Raise the grinder speed by 150 RPM');
     expect(rpmAdvice(-50)).toBe('Lower the grinder speed by 50 RPM');
@@ -80,31 +69,23 @@ describe('rpmAdvice', () => {
 });
 
 describe('chooseGrind', () => {
-  const params = startingParameters(suggestions(), recipe)!; // analyzed on c40 at 22
-  it('prefers the last setting for this grinder + recipe', () => {
-    expect(chooseGrind({ lastSetting: 20, suggestion: params, grinderId: 'c40' })).toEqual({ value: '20', source: 'last' });
+  const params = startingParameters(suggestion())!; // 22 on the C40
+  it('a suggestion asked for this grinder comes first', () => {
+    expect(chooseGrind({ lastSetting: 20, suggestion: params, grinderId: 'c40', recipe })).toEqual({ value: '22', source: 'suggestion' });
   });
-  it("falls back to the suggestion's base only on the same grinder", () => {
-    expect(chooseGrind({ lastSetting: null, suggestion: params, grinderId: 'c40' })).toEqual({ value: '22', source: 'suggestion' });
-    expect(chooseGrind({ lastSetting: null, suggestion: params, grinderId: 'ode' })).toEqual({ value: '', source: 'none' });
+  it("then the last setting, when the suggestion is for another grinder or has none", () => {
+    expect(chooseGrind({ lastSetting: 20, suggestion: params, grinderId: 'ode' })).toEqual({ value: '20', source: 'last' });
+    const none = startingParameters(suggestion({ grindSetting: null }))!;
+    expect(chooseGrind({ lastSetting: 20, suggestion: none, grinderId: 'c40' })).toEqual({ value: '20', source: 'last' });
     expect(chooseGrind({ lastSetting: null, suggestion: params, grinderId: '' })).toEqual({ value: '', source: 'none' });
-  });
-  it('a suggestion from a brew without a grinder fits "no grinder chosen"', () => {
-    const noGrinder = startingParameters(suggestions({ analyzedBrew: brew({ grinderId: null, grinder: null }) }), null)!;
-    expect(suggestionFitsGrinder(noGrinder, '')).toBe(true);
-    expect(suggestionFitsGrinder(noGrinder, 'c40')).toBe(false);
   });
   it("then the recipe's approximate starting point for this grinder, else nothing", () => {
     expect(chooseGrind({ lastSetting: null, suggestion: null, grinderId: 'c40', recipe })).toEqual({ value: '19', source: 'recipe' });
     expect(chooseGrind({ lastSetting: null, suggestion: null, grinderId: 'ode', recipe })).toEqual({ value: '', source: 'none' });
     expect(chooseGrind({ lastSetting: null, suggestion: null, grinderId: '', recipe })).toEqual({ value: '', source: 'none' });
   });
-  it('a setting of 0 still counts, and decimals keep their digits', () => {
-    expect(chooseGrind({ lastSetting: 0, suggestion: params, grinderId: 'c40' })).toEqual({ value: '0', source: 'last' });
+  it('keeps a setting of 0 and decimals', () => {
+    expect(chooseGrind({ lastSetting: 0, suggestion: null, grinderId: 'c40' })).toEqual({ value: '0', source: 'last' });
     expect(chooseGrind({ lastSetting: 4.25, suggestion: null, grinderId: 'c40' }).value).toBe('4.25');
-  });
-  it('a real setting beats the recipe starting point', () => {
-    expect(chooseGrind({ lastSetting: 21, suggestion: null, grinderId: 'c40', recipe })).toEqual({ value: '21', source: 'last' });
-    expect(chooseGrind({ lastSetting: null, suggestion: params, grinderId: 'c40', recipe }).source).toBe('suggestion');
   });
 });

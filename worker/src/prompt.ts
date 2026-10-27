@@ -1,10 +1,12 @@
-// What the AI is sent for an analysis (docs/api/llm-contract.md §9): the
-// brew's context made compact (no empty values, its grinder and water
-// described once, what the workspace keeps from the AI left out), and a
-// system prompt built from sections that only appear when the input has what
-// they talk about.
+// What the AI is sent (docs/api/llm-contract.md §9): for an analysis, the
+// brew's context; for "Suggest parameters" (§9b), the brew about to be made
+// and the earlier brews chosen. Both made compact (no empty values, each
+// grinder and water described once, what the workspace keeps from the AI left
+// out), with a system prompt built from sections that only appear when the
+// input has what they talk about.
 import type { AiDetail } from "@barista/shared/aiDetails";
 import type { BrewContext, BrewSummary, GrinderInfo, WaterInfo } from "./context.js";
+import type { BrewerInfo, SuggestContext } from "./suggestContext.js";
 
 // Stored with each analysis (llm_analyses.prompt_version), so results can be
 // compared across changes (npm run eval). Bump it whenever the input, the
@@ -61,28 +63,30 @@ function brewInput(b: BrewSummary, hidden: ReadonlySet<AiDetail>): Record<string
   return out;
 }
 
-export function toLlmInput(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set()): LlmInput {
-  const b = context.brew;
-
-  // The grinder and water by name, described here.
+// Each grinder and water once, by name.
+function equipment(used: Array<{ grinder: GrinderInfo | null; water: WaterInfo | null }>, hidden: ReadonlySet<AiDetail>): Record<string, unknown> {
   const grinders: Record<string, unknown> = {};
   const waters: Record<string, unknown> = {};
-  if (b.grinder) {
-    const { name, ...details } = b.grinder;
-    const shown: Partial<GrinderInfo> = hidden.has("grinderDetails") ? {} : details;
-    if (hidden.has("rpm")) {
-      delete shown.variableSpeed;
-      delete shown.rpmMin;
-      delete shown.rpmMax;
+  for (const { grinder, water } of used) {
+    if (grinder && !(grinder.name in grinders)) {
+      const { name, ...details } = grinder;
+      const shown: Partial<GrinderInfo> = hidden.has("grinderDetails") ? {} : details;
+      if (hidden.has("rpm")) {
+        delete shown.variableSpeed;
+        delete shown.rpmMin;
+        delete shown.rpmMax;
+      }
+      grinders[name] = shown;
     }
-    grinders[name] = shown;
+    if (water && !hidden.has("water") && !(water.name in waters)) {
+      waters[water.name] = hidden.has("waterMinerals") ? {} : Object.fromEntries(WATER_FIGURES.map((k) => [k, water[k]]));
+    }
   }
-  if (b.water && !hidden.has("water")) {
-    const water = b.water;
-    waters[water.name] = hidden.has("waterMinerals") ? {} : Object.fromEntries(WATER_FIGURES.map((k) => [k, water[k]]));
-  }
+  return { grinders, waters };
+}
 
-  const bean: Record<string, unknown> = { ...context.bean };
+function beanInput(info: BrewContext["bean"], hidden: ReadonlySet<AiDetail>): Record<string, unknown> {
+  const bean: Record<string, unknown> = { ...info };
   const drop = (keys: string[]) => keys.forEach((k) => delete bean[k]);
   if (hidden.has("origin")) drop(["originArea", "country", "region"]);
   if (hidden.has("altitude")) drop(["altitudeMasl"]);
@@ -93,31 +97,70 @@ export function toLlmInput(context: BrewContext, hidden: ReadonlySet<AiDetail> =
   if (hidden.has("decafBlend")) drop(["decaf", "blendType"]);
   if (hidden.has("batchNumber")) drop(["batchNumber"]);
   if (bean.decaf === false) delete bean.decaf; // only worth saying when it is
+  return bean;
+}
 
-  let recipe: Record<string, unknown> | null = null;
-  if (context.recipe) {
-    const { steps, grindStartingPoints, targetTempC, flowUnit, ...rest } = context.recipe;
-    recipe = { ...rest };
-    if (!hidden.has("temp")) recipe.targetTempC = targetTempC;
-    if (!hidden.has("grindStartingPoints")) recipe.grindStartingPoints = grindStartingPoints;
-    if (!hidden.has("recipeSteps")) recipe.steps = hidden.has("temp") ? steps.map(({ targetTempC: _t, ...s }) => s) : steps;
-    if (flowUnit !== "g_s") recipe.flowUnit = flowUnit; // g/s is the default; only flow steps use it
-  }
+function recipeInput(r: BrewContext["recipe"], hidden: ReadonlySet<AiDetail>): Record<string, unknown> | null {
+  if (!r) return null;
+  const { steps, grindStartingPoints, targetTempC, flowUnit, ...rest } = r;
+  const recipe: Record<string, unknown> = { ...rest };
+  if (!hidden.has("temp")) recipe.targetTempC = targetTempC;
+  if (!hidden.has("grindStartingPoints")) recipe.grindStartingPoints = grindStartingPoints;
+  if (!hidden.has("recipeSteps")) recipe.steps = hidden.has("temp") ? steps.map(({ targetTempC: _t, ...s }) => s) : steps;
+  if (flowUnit !== "g_s") recipe.flowUnit = flowUnit; // g/s is the default; only flow steps use it
+  return recipe;
+}
 
+export function toLlmInput(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set()): LlmInput {
   const input = {
     ratingScale: context.ratingScale,
-    bean,
-    recipe,
-    brew: brewInput(b, hidden),
+    bean: beanInput(context.bean, hidden),
+    recipe: recipeInput(context.recipe, hidden),
+    brew: brewInput(context.brew, hidden),
     drink: hidden.has("drink") ? null : context.drink,
-    equipment: { grinders, waters },
+    equipment: equipment([context.brew], hidden),
+  };
+  return (compact(input) ?? {}) as LlmInput;
+}
+
+// The brewer chosen: its controls only for an espresso machine the AI may see.
+function brewerInput(b: BrewerInfo | null, hidden: ReadonlySet<AiDetail>): Record<string, unknown> | null {
+  if (!b) return null;
+  const { name, kind, ...controls } = b;
+  return kind === "espresso" && !hidden.has("machine") ? { name, kind, ...controls } : { name, kind };
+}
+
+// "Suggest parameters" (§9b): the brew about to be made, and the earlier
+// brews (each marked like it or not, with the analysis given after it).
+export function toSuggestInput(context: SuggestContext, hidden: ReadonlySet<AiDetail> = new Set()): LlmInput {
+  const input = {
+    ratingScale: context.ratingScale,
+    source: context.source,
+    batch: context.batch,
+    bean: beanInput(context.bean, hidden),
+    roastAgeDays: context.roastAgeDays,
+    daysFrozen: context.daysFrozen,
+    recipe: recipeInput(context.recipe, hidden),
+    brewer: brewerInput(context.brewer, hidden),
+    grinder: context.grinder?.name,
+    brews: context.brews.map(({ sameBean, sameRecipe, sameGrinder, bean, analysis, ...b }) => ({
+      ...brewInput(b, hidden),
+      sameBean,
+      sameRecipe,
+      sameGrinder,
+      bean: bean ? beanInput(bean, hidden) : null,
+      analysis,
+    })),
+    equipment: equipment([{ grinder: context.grinder, water: null }, ...context.brews], hidden),
   };
   return (compact(input) ?? {}) as LlmInput;
 }
 
 // ---- The prompt, in sections ----------------------------------------------------
 
-const brews = (input: LlmInput): Array<Record<string, Json>> => [input.brew].filter((b): b is Record<string, Json> => !!b && typeof b === "object" && !Array.isArray(b));
+// The analyzed brew, or the earlier brews sent with a suggestion.
+const brews = (input: LlmInput): Array<Record<string, Json>> =>
+  [input.brew, ...((input.brews as Json[] | undefined) ?? [])].filter((b): b is Record<string, Json> => !!b && typeof b === "object" && !Array.isArray(b));
 const anyBrew = (input: LlmInput, key: string) => brews(input).some((b) => b[key] !== undefined);
 const bean = (input: LlmInput) => (input.bean ?? {}) as Record<string, Json>;
 const recipe = (input: LlmInput) => (input.recipe ?? {}) as Record<string, Json>;
@@ -125,7 +168,7 @@ const brewsLike = (input: LlmInput) =>
   brews(input)
     .map((b) => (b.recipeStyle as Record<string, Json> | undefined)?.brewsLike)
     .concat((recipe(input).style as Record<string, Json> | undefined)?.brewsLike);
-const methodKinds = (input: LlmInput) => brews(input).map((b) => b.methodKind);
+const methodKinds = (input: LlmInput) => brews(input).map((b) => b.methodKind).concat(recipe(input).methodKind);
 const isCold = (style: Json | undefined) => style === "cold_brew" || style === "kyoto_drip" || style === "rapid_cold";
 
 export interface PromptSection {
@@ -318,12 +361,67 @@ export const PROMPT_SECTIONS: PromptSection[] = [
   },
 ];
 
+// "Suggest parameters" (§9b): its own opening, output and espresso
+// sections; the topic sections (drink, style, cold, water…) as the analysis has them.
+const SUGGEST_OWN: PromptSection[] = [
+  {
+    key: "suggestCore",
+    when: () => true,
+    text:
+      "You are an expert specialty coffee roaster and barista. Suggest the starting values for a brew about to be made: " +
+      "this bean (bean; roastAgeDays is its age today), this recipe (recipe), on the brewer and grinder named. brews " +
+      "are earlier brews, newest first, chosen by source (bean: this bean's; beanRecipe: this bean's with this recipe; " +
+      "beanBrewer: this bean's on this brewer; brewer: this brewer's, any bean; recipe: this recipe's, any bean). Each " +
+      "says whether it was sameBean, sameRecipe and sameGrinder, and carries the analysis given after it, if any: a " +
+      "later brew shows whether that advice helped. Brews of this bean, recipe and grinder are the strongest evidence; " +
+      "another bean's brews (its bean says which) show how the recipe, brewer or grinder tends to behave, not this " +
+      "bean. A missing field means it wasn't recorded, not that it was zero or absent. Grinders and waters are " +
+      "described once in equipment and named where used. Ratings are 1-5; rating and tastingNotes describe the coffee " +
+      "tasted on its own. batch is the amount about to be brewed, chosen by the barista for the cup size or the beans " +
+      "left: never change it, even when it differs from the recipe's or earlier brews' amounts. Start from the " +
+      "recipe's targets and move only where the brews give a reason. A pour over batch a quarter or more bigger or " +
+      "smaller than the brews' drains slower or faster: allow for it with one small grind step at most, and not at all " +
+      "for a smaller difference.",
+  },
+  {
+    key: "suggestOutput",
+    when: () => true,
+    text:
+      "reasoning is a concise 1-2 sentence explanation of the values. nextStep is the one thing to do or watch on this " +
+      "brew, in plain words a barista can act on. confidence is low with no comparable brews, vague notes or " +
+      "measurements that look wrong; high only when several comparable brews agree. grindSetting is a number on the " +
+      "named grinder's dial, within its range, from brews on that grinder (sameGrinder) or the recipe's " +
+      "grindStartingPoints for it; null when neither gives one or no grinder is named. grindRpm is for a variable-speed " +
+      "grinder only, else null. tempC is the water temperature. ratio is the brew ratio to use with the batch, as " +
+      "batch.ratio and brewRatio count it ((water + ice) / dose; for espresso shot weight / dose); the batch's amounts " +
+      "follow from it. Keep batch.ratio (or return null) unless the brews show a strength problem, such as a weak or " +
+      "strong cup or a TDS off target, that a ratio change fixes.",
+  },
+  {
+    key: "suggestEspresso",
+    when: (i) => methodKinds(i).includes("espresso"),
+    text:
+      "For espresso, the recipe's first-drop and shot-time windows and its ratio are the targets: earlier shots that " +
+      "ran fast or slow on this grinder show which way to move the grind, and ratio sets the shot weight for the " +
+      "batch's dose, which the basket fixes (a longer shot extracts more and tastes lighter). Consider the machine's " +
+      "capabilities; a " +
+      "pre-infusion or profile change, if the machine allows it, goes in nextStep.",
+  },
+];
+const ownSection = (key: string) => SUGGEST_OWN.find((s) => s.key === key)!;
+export const SUGGEST_SECTIONS: PromptSection[] = [
+  ownSection("suggestCore"),
+  ownSection("suggestOutput"),
+  ...PROMPT_SECTIONS.filter((s) => s.key !== "core" && s.key !== "output").map((s) => (s.key === "espresso" ? ownSection("suggestEspresso") : s)),
+];
+
 // The sections this input needs, in order.
-export function promptSections(input: LlmInput): string[] {
-  return PROMPT_SECTIONS.filter((s) => s.when(input)).map((s) => s.key);
+export function promptSections(input: LlmInput, sections: PromptSection[] = PROMPT_SECTIONS): string[] {
+  return sections.filter((s) => s.when(input)).map((s) => s.key);
 }
-export function buildSystemPrompt(input: LlmInput): string {
-  return PROMPT_SECTIONS.filter((s) => s.when(input))
+export function buildSystemPrompt(input: LlmInput, sections: PromptSection[] = PROMPT_SECTIONS): string {
+  return sections
+    .filter((s) => s.when(input))
     .map((s) => s.text)
     .join(" ");
 }

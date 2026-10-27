@@ -6,7 +6,8 @@ import OpenAI from "openai";
 import { z } from "zod";
 import { config } from "./config.js";
 import type { BrewContext } from "./context.js";
-import { buildSystemPrompt, toLlmInput } from "./prompt.js";
+import { buildSystemPrompt, SUGGEST_SECTIONS, toLlmInput, toSuggestInput } from "./prompt.js";
+import type { SuggestContext } from "./suggestContext.js";
 
 // The input and system prompt are built in prompt.ts; the schema and its
 // checks are here (docs/api/llm-contract.md §9). PROMPT_VERSION (prompt.ts)
@@ -105,11 +106,11 @@ export function buildCompletionRequest(context: BrewContext, hidden: ReadonlySet
   };
 }
 
-// Turns the model's reply into a validated analysis, or throws (which makes
+type LlmMessage = { content?: string | null; refusal?: string | null } | undefined;
+
+// Turns the model's reply into what the schema says, or throws (which makes
 // BullMQ retry the job).
-export function parseAnalysisMessage(
-  message: { content?: string | null; refusal?: string | null } | undefined
-): BrewAnalysis {
+function parseMessage<T extends z.ZodType>(message: LlmMessage, schema: T): z.infer<T> {
   if (message?.refusal) throw new Error(`LLM refused: ${message.refusal}`);
   if (!message?.content) throw new Error("LLM returned an empty response");
 
@@ -120,11 +121,15 @@ export function parseAnalysisMessage(
     throw new Error("LLM returned invalid JSON");
   }
 
-  const result = analysisSchema.safeParse(parsed);
+  const result = schema.safeParse(parsed);
   if (!result.success) {
     throw new Error(`LLM response failed validation: ${result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
   }
   return result.data;
+}
+
+export function parseAnalysisMessage(message: LlmMessage): BrewAnalysis {
+  return parseMessage(message, analysisSchema);
 }
 
 export async function analyzeWithLlm(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set()): Promise<BrewAnalysis> {
@@ -132,14 +137,16 @@ export async function analyzeWithLlm(context: BrewContext, hidden: ReadonlySet<A
 }
 
 // The analysis plus what it cost, for the eval script (src/eval.ts).
+type Usage = { promptTokens: number; completionTokens: number } | null;
 export interface AnalysisRun {
   analysis: BrewAnalysis;
-  usage: { promptTokens: number; completionTokens: number } | null;
+  usage: Usage;
 }
-export async function requestAnalysis(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set()): Promise<AnalysisRun> {
+
+async function complete(request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming): Promise<{ message: LlmMessage; usage: Usage }> {
   let completion: OpenAI.Chat.Completions.ChatCompletion;
   try {
-    completion = await openai.chat.completions.create(buildCompletionRequest(context, hidden));
+    completion = await openai.chat.completions.create(request);
   } catch (err) {
     // Bad key, unknown model, malformed request: retrying won't help.
     if (err instanceof OpenAI.APIError && err.status !== undefined && [400, 401, 403, 404].includes(err.status)) {
@@ -148,7 +155,12 @@ export async function requestAnalysis(context: BrewContext, hidden: ReadonlySet<
     throw err; // 429 / 5xx / network: let BullMQ retry with backoff
   }
   const usage = completion.usage ? { promptTokens: completion.usage.prompt_tokens, completionTokens: completion.usage.completion_tokens } : null;
-  return { analysis: onlyWhatApplies(parseAnalysisMessage(completion.choices[0]?.message), context, hidden), usage };
+  return { message: completion.choices[0]?.message, usage };
+}
+
+export async function requestAnalysis(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set()): Promise<AnalysisRun> {
+  const { message, usage } = await complete(buildCompletionRequest(context, hidden));
+  return { analysis: onlyWhatApplies(parseAnalysisMessage(message), context, hidden), usage };
 }
 
 // Drops the changes that don't apply to this brew (§9), whatever the model said.
@@ -165,4 +177,100 @@ export function onlyWhatApplies(analysis: BrewAnalysis, context: BrewContext, hi
   if (out.suggestedDoseDelta === 0) out.suggestedDoseDelta = null;
   if (out.suggestedYieldDelta === 0) out.suggestedYieldDelta = null;
   return out;
+}
+
+// ---- "Suggest parameters" (docs/api/llm-contract.md §9b) -------------------------
+
+export const PARAMETER_SUGGESTION_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    reasoning: { type: "string", description: "A concise 1-2 sentence explanation of the values." },
+    nextStep: { type: "string", description: "The one thing to do or watch on this brew, in plain words (at most 140 characters)." },
+    confidence: {
+      type: "string",
+      enum: [...ANALYSIS_CONFIDENCE],
+      description: "How sure the values are: low with no comparable brews, vague notes or measurements that look wrong.",
+    },
+    grindSetting: { type: ["number", "null"], description: "The setting on the named grinder's dial; null without one to go on." },
+    grindRpm: { type: ["integer", "null"], description: "Grinder speed for a variable-speed grinder; null otherwise." },
+    tempC: { type: ["number", "null"], description: "Water temperature in Celsius." },
+    ratio: {
+      type: ["number", "null"],
+      description: "The brew ratio for the batch: (water + ice) / dose, or for espresso shot weight / dose; null to keep the batch's.",
+    },
+  },
+  required: ["reasoning", "nextStep", "confidence", "grindSetting", "grindRpm", "tempC", "ratio"],
+  additionalProperties: false,
+} as const;
+
+const suggestionSchema = z.object({
+  reasoning: z.string().trim().min(1).max(2000),
+  nextStep: z.string().trim().min(1).max(200),
+  confidence: z.enum(ANALYSIS_CONFIDENCE),
+  grindSetting: z
+    .number()
+    .transform((n) => Math.round(n * 100) / 100)
+    .refine((n) => n >= 0 && n < 10000, "must be from 0 to 10000")
+    .nullable(),
+  grindRpm: z.number().int().min(50).max(5000).nullable(),
+  tempC: z
+    .number()
+    .transform((n) => Math.round(n * 10) / 10)
+    .refine((n) => n >= 0 && n <= 100, "must be from 0 to 100 °C")
+    .nullable(),
+  ratio: z
+    .number()
+    .transform((n) => Math.round(n * 100) / 100)
+    .refine((n) => n > 0 && n < 1000, "must be over 0 and under 1000")
+    .nullable(),
+});
+export type ParameterSuggestionResult = z.infer<typeof suggestionSchema>;
+
+export function buildSuggestRequest(context: SuggestContext, hidden: ReadonlySet<AiDetail> = new Set()): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
+  const input = toSuggestInput(context, hidden);
+  return {
+    model: config.openaiModel,
+    messages: [
+      { role: "system", content: buildSystemPrompt(input, SUGGEST_SECTIONS) },
+      { role: "user", content: JSON.stringify(input) },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: { name: "parameter_suggestion", strict: true, schema: PARAMETER_SUGGESTION_JSON_SCHEMA },
+    },
+  };
+}
+
+export function parseSuggestionMessage(message: LlmMessage): ParameterSuggestionResult {
+  return parseMessage(message, suggestionSchema);
+}
+
+// Ratios a brew can sensibly use: espresso from ristretto to lungo and
+// beyond; filter from a cold brew concentrate to a very light pour over.
+export const RATIO_RANGE = { espresso: [0.75, 5], filter: [2, 25] } as const;
+
+// Drops the values that don't fit the brew being set up, whatever the model said.
+export function onlySuggestionsThatApply(s: ParameterSuggestionResult, context: SuggestContext, hidden: ReadonlySet<AiDetail>): ParameterSuggestionResult {
+  const out = { ...s };
+  const g = context.grinder;
+  // A setting only means something on the grinder chosen, within its dial.
+  const offDial = out.grindSetting !== null && g !== null && ((g.settingMin !== null && out.grindSetting < g.settingMin) || (g.settingMax !== null && out.grindSetting > g.settingMax));
+  if (!g || offDial) out.grindSetting = null;
+  if (!g?.variableSpeed || hidden.has("rpm")) out.grindRpm = null;
+  if (hidden.has("temp")) out.tempC = null;
+  // A ratio outside what the method brews at is a slip (e.g. 1:2 for a pour
+  // over), as is the batch's own: either way the batch keeps its ratio.
+  const espresso = (context.recipe?.methodKind ?? context.brewer?.kind) === "espresso";
+  const [min, max] = espresso ? RATIO_RANGE.espresso : RATIO_RANGE.filter;
+  if (out.ratio !== null && (out.ratio < min || out.ratio > max || out.ratio === context.batch.ratio)) out.ratio = null;
+  return out;
+}
+
+export interface SuggestionRun {
+  suggestion: ParameterSuggestionResult;
+  usage: Usage;
+}
+export async function requestSuggestion(context: SuggestContext, hidden: ReadonlySet<AiDetail> = new Set()): Promise<SuggestionRun> {
+  const { message, usage } = await complete(buildSuggestRequest(context, hidden));
+  return { suggestion: onlySuggestionsThatApply(parseSuggestionMessage(message), context, hidden), usage };
 }

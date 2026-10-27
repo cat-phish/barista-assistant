@@ -64,6 +64,7 @@ async function populated() {
     tastingNotes: "Sweet",
   });
   await db.insert(schema.llmAnalyses).values({ id: randomUUID(), brewLogId: log, reasoning: "Fine", suggestedGrindDelta: "finer", suggestedTempDelta: 1 });
+  await db.insert(schema.parameterSuggestions).values({ id: randomUUID(), beanId: bean, recipeId: recipe, brewerId: v60, grinderId: c40, source: "beanRecipe", maxBrews: 5, status: "done", reasoning: "Stay", batchDoseGrams: 15, batchWaterGrams: 250, grindSetting: 20, tempC: 94, ratio: 16.5, confidence: "low" });
   await owner.agent.patch(`${base}/grinders/${c40}`).send({ archived: true });
   return { owner, ws, base };
 }

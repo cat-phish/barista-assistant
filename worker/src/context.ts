@@ -230,7 +230,7 @@ interface BrewJoins {
   water: WaterInfo | null;
   machine: MachineInfo | null;
 }
-type BrewRow = BrewLog & BrewJoins;
+export type BrewRow = BrewLog & BrewJoins;
 
 function ratio(brew: BrewLog): number | null {
   const out = ratioWater(brew.actualWaterGrams, brew.actualIceGrams) ?? brew.actualYieldGrams;
@@ -248,7 +248,7 @@ export function grinderRetention(brew: Pick<BrewLog, "beanWeightInGrams" | "grou
   return into === null || out === null ? null : Math.round((into - out) * 100) / 100;
 }
 
-function summarize(
+export function summarize(
   brew: BrewRow,
   roastDate: Date | null,
   freezes: readonly FreezePeriodLike[],
@@ -304,7 +304,7 @@ function summarize(
 }
 
 // Each drink's name and ingredient types, for labelling how brews were served.
-async function drinksServed(drinkIds: string[]): Promise<Map<string, NonNullable<BrewSummary["drink"]>>> {
+export async function drinksServed(drinkIds: string[]): Promise<Map<string, NonNullable<BrewSummary["drink"]>>> {
   const ids = [...new Set(drinkIds)];
   if (ids.length === 0) return new Map();
   const [names, types] = await Promise.all([
@@ -349,7 +349,7 @@ async function loadDrink(drinkId: string, made: Size): Promise<DrinkInfo | null>
   };
 }
 
-async function marksFor(brewLogIds: string[]): Promise<Map<string, BrewSummary["marks"]>> {
+export async function marksFor(brewLogIds: string[]): Promise<Map<string, BrewSummary["marks"]>> {
   const rows = await db
     .select({ brewLogId: brewLogMarks.brewLogId, kind: brewLogMarks.kind, stepOrder: brewLogMarks.stepOrder, atSec: brewLogMarks.atSec })
     .from(brewLogMarks)
@@ -361,7 +361,7 @@ async function marksFor(brewLogIds: string[]): Promise<Map<string, BrewSummary["
 }
 
 // Each brew's prep tool names, in checklist order.
-async function toolsFor(brewLogIds: string[]): Promise<Map<string, string[]>> {
+export async function toolsFor(brewLogIds: string[]): Promise<Map<string, string[]>> {
   const rows = await db
     .select({ brewLogId: brewLogTools.brewLogId, name: prepTools.name })
     .from(brewLogTools)
@@ -374,7 +374,7 @@ async function toolsFor(brewLogIds: string[]): Promise<Map<string, string[]>> {
 }
 
 // Each brew's problem names, in list order.
-async function problemsFor(brewLogIds: string[]): Promise<Map<string, string[]>> {
+export async function problemsFor(brewLogIds: string[]): Promise<Map<string, string[]>> {
   const rows = await db
     .select({ brewLogId: brewLogProblems.brewLogId, name: brewProblems.name })
     .from(brewLogProblems)
@@ -386,13 +386,13 @@ async function problemsFor(brewLogIds: string[]): Promise<Map<string, string[]>>
   return byLog;
 }
 
-function withJoins({ brew, ...joins }: { brew: BrewLog } & BrewJoins): BrewRow {
+export function withJoins({ brew, ...joins }: { brew: BrewLog } & BrewJoins): BrewRow {
   return { ...brew, ...joins };
 }
 
 const machineBrewers = alias(brewers, "machine_brewer");
 
-function selectBrews() {
+export function selectBrews() {
   return db
     .select({
       brew: brewLogs,
@@ -443,30 +443,24 @@ function selectBrews() {
     .leftJoin(machineBrewers, and(eq(brewLogs.brewerId, machineBrewers.id), eq(machineBrewers.kind, "espresso")));
 }
 
-// Returns null if the brew log was deleted after the job was queued.
-export async function loadBrewContext(brewLogId: string): Promise<BrewContext | null> {
-  const [target] = await selectBrews().where(eq(brewLogs.id, brewLogId)).limit(1);
-  if (!target) return null;
-  const brew = withJoins(target);
-
-  const [beanRow] = await db.select().from(beans).where(eq(beans.id, brew.beanId)).limit(1);
-  if (!beanRow) return null; // Bean deletion cascades, so this means the log is going too.
+// A bean as the AI sees it, with what its roast age is worked out from.
+export interface LoadedBean {
+  info: BrewContext["bean"];
+  roastDate: Date | null;
+  freezes: FreezePeriodLike[];
+}
+export async function loadBean(beanId: string): Promise<LoadedBean | null> {
+  const [beanRow] = await db.select().from(beans).where(eq(beans.id, beanId)).limit(1);
+  if (!beanRow) return null;
   const bean: Bean = beanRow;
-  const [processRow] = bean.processId
-    ? await db.select({ name: beanProcesses.name }).from(beanProcesses).where(eq(beanProcesses.id, bean.processId)).limit(1)
-    : [];
-
-  const [recipe, freezes, marks, tools, problems, servedAs] = await Promise.all([
-    brew.recipeId ? loadRecipe(brew.recipeId) : Promise.resolve(null),
-    db.select({ frozenOn: beanFreezes.frozenOn, thawedOn: beanFreezes.thawedOn }).from(beanFreezes).where(eq(beanFreezes.beanId, brew.beanId)),
-    marksFor([brew.id]),
-    toolsFor([brew.id]),
-    problemsFor([brew.id]),
-    drinksServed(brew.drinkId ? [brew.drinkId] : []),
+  const [processRow, freezes] = await Promise.all([
+    bean.processId
+      ? db.select({ name: beanProcesses.name }).from(beanProcesses).where(eq(beanProcesses.id, bean.processId)).limit(1).then((r) => r[0])
+      : Promise.resolve(undefined),
+    db.select({ frozenOn: beanFreezes.frozenOn, thawedOn: beanFreezes.thawedOn }).from(beanFreezes).where(eq(beanFreezes.beanId, beanId)),
   ]);
-
   return {
-    bean: {
+    info: {
       roasterName: bean.roasterName,
       beanName: bean.beanName,
       batchNumber: bean.batchNumber,
@@ -483,14 +477,38 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
       region: bean.region,
       altitudeMasl: bean.altitudeMasl,
     },
+    roastDate: bean.roastDate,
+    freezes,
+  };
+}
+
+// Returns null if the brew log was deleted after the job was queued.
+export async function loadBrewContext(brewLogId: string): Promise<BrewContext | null> {
+  const [target] = await selectBrews().where(eq(brewLogs.id, brewLogId)).limit(1);
+  if (!target) return null;
+  const brew = withJoins(target);
+
+  const bean = await loadBean(brew.beanId);
+  if (!bean) return null; // Bean deletion cascades, so this means the log is going too.
+
+  const [recipe, marks, tools, problems, servedAs] = await Promise.all([
+    brew.recipeId ? loadRecipe(brew.recipeId) : Promise.resolve(null),
+    marksFor([brew.id]),
+    toolsFor([brew.id]),
+    problemsFor([brew.id]),
+    drinksServed(brew.drinkId ? [brew.drinkId] : []),
+  ]);
+
+  return {
+    bean: bean.info,
     recipe,
-    brew: summarize(brew, bean.roastDate, freezes, marks, tools, problems, servedAs),
+    brew: summarize(brew, bean.roastDate, bean.freezes, marks, tools, problems, servedAs),
     drink: brew.drinkId ? await loadDrink(brew.drinkId, { size: brew.servingSize, unit: brew.servingUnit }) : null,
     ratingScale: "1-5",
   };
 }
 
-async function loadRecipe(recipeId: string): Promise<BrewContext["recipe"]> {
+export async function loadRecipe(recipeId: string): Promise<BrewContext["recipe"]> {
   const [row] = await db
     .select({
       name: recipes.name,

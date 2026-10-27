@@ -5,10 +5,10 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { beansApi } from '../api/beans';
-import { brewLogsApi, suggestionsApi } from '../api/brews';
+import { brewLogsApi } from '../api/brews';
 import { ApiError, errorMessage } from '../api/client';
 import { recipesApi } from '../api/recipes';
-import type { Bean, BrewLog, Recipe, BrewerMethod } from '../api/types';
+import { MAX_SUGGEST_BREWS, SUGGEST_SOURCES, type Bean, type BrewLog, type Recipe, type BrewerMethod, type SuggestionBatch, type SuggestSource } from '../api/types';
 import AnalysisCard from '../components/AnalysisCard.vue';
 import RepeatBrewPicker from '../components/RepeatBrewPicker.vue';
 import { recentByMade, repeatLabel, repeatPlan } from '../lib/repeatBrew';
@@ -63,10 +63,11 @@ import { grinderRetentionText } from '../lib/grinderRetention';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
 import { batchSuffix, beanLabel as pickerLabel } from '../lib/beans';
 import { formatDay, formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen } from '../lib/format';
-import { CONFIDENCE_LABELS, chooseGrind, gramsAdvice, rpmAdvice, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
+import { CONFIDENCE_LABELS, chooseGrind, heldForRatio, SUGGEST_SOURCE_LABELS, sourceNeeds, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
+import { useParameterSuggestion } from '../composables/useParameterSuggestion';
 import { useWorkspaceStore } from '../stores/workspace';
 import { brewRetention, linkRatio, ratioText as formatRatio, ratioWater, ROAST_LEVELS, scaleBatch, scaleShot, scaleSteps, waterShare, type MeasuredBrew, type ScaleField } from '../lib/scale';
-import { formatTemp, formatTempChange, tempText, TEMPERATURE_LABELS, VOLUME_LABELS, volumeUnits } from '../lib/units';
+import { formatTemp, tempText, TEMPERATURE_LABELS, VOLUME_LABELS, volumeUnits } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 
 // 'steep': starting a long cold brew (a checklist, then it's saved steeping).
@@ -75,7 +76,7 @@ type Stage = 'setup' | 'timing' | 'log' | 'steep' | 'saved';
 const workspaces = useWorkspaceStore();
 const route = useRoute();
 const router = useRouter();
-const { prefs, temperatureUnit, recipeRoastLevel, aiHidden } = usePreferences();
+const { prefs, settings, temperatureUnit, recipeRoastLevel, aiHidden } = usePreferences();
 const stage = ref<Stage>('setup');
 const loading = ref(true);
 const loadError = ref('');
@@ -171,8 +172,10 @@ function sizeToBatch(): void {
 }
 const bean = computed(() => beans.value.find((b) => b.id === beanId.value) ?? null);
 const recipe = computed(() => recipes.value.find((r) => r.id === recipeId.value) ?? null);
-const suggestion = ref<StartingParameters | null>(null);
-const suggestionState = ref<'idle' | 'loading' | 'none' | 'error'>('idle');
+// "Suggest parameters" (docs/api/analysis.md §8b): values for this brew from
+// the earlier brews picked (which, and how many), filled in when they come.
+const suggester = useParameterSuggestion();
+const suggestion = computed(() => (suggester.suggestion.value ? startingParameters(suggester.suggestion.value) : null));
 
 // Espresso recipes record dose → shot weight instead of water (docs/api/brew-logs.md §6).
 const espresso = computed(() => recipe.value?.brewer.kind === 'espresso');
@@ -269,7 +272,7 @@ watch(recipe, (r) => {
   // (last used) one.
   const preferred = r?.defaultGrinderId;
   if (preferred && activeGrinders.value.some((x) => x.id === preferred)) draft.grinderId = preferred;
-  if (suggestion.value) applySuggestion(suggestion.value);
+  suggester.reset(); // a suggestion is for the recipe it was asked with
 });
 
 // Batch size (docs/features.md): the ratio defaults to the recipe's.
@@ -463,7 +466,7 @@ const NEW_GRINDER = '__new__';
 const activeGrinders = computed(() => grinders.value.filter((x) => !x.archivedAt));
 const grinder = computed(() => grinders.value.find((x) => x.id === draft.grinderId) ?? null);
 // The last grinder and brew choice, remembered per workspace.
-type Remembered = 'grinderId' | 'brewWhat' | 'brewItem' | `brewBrewer.${MethodKind}`;
+type Remembered = 'grinderId' | 'brewWhat' | 'brewItem' | `brewBrewer.${MethodKind}` | 'suggestSource' | 'suggestMax';
 const savedKey = (what: Remembered) => `brewlog.${what}.${workspaces.current?.id ?? ''}`;
 function recall(what: Remembered): string | null {
   try {
@@ -541,8 +544,9 @@ async function refreshGrind(): Promise<void> {
   const choice = chooseGrind({ lastSetting: last?.grindSetting ?? null, suggestion: suggestion.value, grinderId, recipe: recipe.value });
   draft.grind = choice.value;
   grindSource.value = choice.source;
-  // The speed goes with the last setting it was used at (variable-speed grinders).
-  draft.rpm = choice.source === 'last' && last?.grindRpm != null ? String(last.grindRpm) : '';
+  // The speed goes with the setting it came with (variable-speed grinders).
+  const rpm = choice.source === 'last' ? last?.grindRpm : choice.source === 'suggestion' ? suggestion.value?.grindRpm : null;
+  draft.rpm = rpm != null ? String(rpm) : '';
 }
 watch([recipeId, () => draft.grinderId], () => {
   if (draft.grinderId !== NEW_GRINDER) void refreshGrind();
@@ -550,38 +554,100 @@ watch([recipeId, () => draft.grinderId], () => {
 const grindPlaceholder = computed(() =>
   'e.g. 20',
 );
-const suggestionGrinderMismatch = computed(
-  () => !!suggestion.value && !suggestionFitsGrinder(suggestion.value, draft.grinderId === NEW_GRINDER ? '' : draft.grinderId),
+// The grinder the suggestion was asked for, when it isn't the one chosen now.
+const suggestedFor = computed(() => {
+  const s = suggestion.value;
+  if (!s || s.grindSetting === null || suggestionFitsGrinder(s, draft.grinderId === NEW_GRINDER ? '' : draft.grinderId)) return null;
+  return grinders.value.find((g) => g.id === s.grinderId)?.name ?? 'another grinder';
+});
+watch(beanId, () => suggester.reset());
+
+// Which earlier brews to send: the workspace's default (Settings → AI), else
+// the last one picked here.
+const suggestSource = ref<SuggestSource>('beanRecipe');
+const suggestMax = ref(5);
+watch(
+  () => workspaces.current?.id,
+  () => {
+    const savedSource = recall('suggestSource');
+    suggestSource.value = SUGGEST_SOURCES.find((x) => x === savedSource) ?? settings.value.suggestSource;
+    const savedMax = Number(recall('suggestMax'));
+    suggestMax.value = Number.isInteger(savedMax) && savedMax >= 1 && savedMax <= MAX_SUGGEST_BREWS ? savedMax : settings.value.suggestMaxBrews;
+  },
+  { immediate: true },
 );
-watch(beanId, () => {
-  suggestion.value = null;
-  suggestionState.value = 'idle';
+// A source that needs a recipe or brewer can't run without one.
+const suggestBlocked = computed(() => {
+  const needs = sourceNeeds(suggestSource.value);
+  if (needs === 'recipe' && !recipe.value) return 'Pick a recipe to compare its brews.';
+  if (needs === 'brewer' && !(recipe.value || brewerId.value)) return 'Pick a brewer to compare its brews.';
+  return '';
 });
 
-async function suggest(): Promise<void> {
-  if (!bean.value) return;
-  suggestionState.value = 'loading';
-  try {
-    const params = startingParameters(await suggestionsApi.forBean(bean.value.id), recipe.value);
-    suggestion.value = params;
-    suggestionState.value = params ? 'idle' : 'none';
-    if (params) applySuggestion(params);
-  } catch {
-    suggestionState.value = 'error';
-  }
+function suggest(): void {
+  const ws = workspaces.current?.id;
+  if (!ws || !bean.value || suggestBlocked.value) return;
+  remember('suggestSource', suggestSource.value);
+  remember('suggestMax', String(suggestMax.value));
+  void suggester.ask(ws, {
+    beanId: bean.value.id,
+    recipeId: recipe.value?.id ?? null,
+    brewerId: recipe.value ? null : brewerId.value || null,
+    grinderId: draft.grinderId && draft.grinderId !== NEW_GRINDER ? draft.grinderId : null,
+    source: suggestSource.value,
+    maxBrews: suggestMax.value,
+    batch: plannedBatch(),
+  });
 }
+// The batch as it stands: the barista's choice, which the AI keeps.
+function plannedBatch(): SuggestionBatch {
+  if (shotRecipe.value) return { doseGrams: shot.value?.dose ?? null, waterGrams: null, iceGrams: null, yieldGrams: shot.value?.yield ?? null };
+  if (filterRecipe.value) return { doseGrams: batch.value?.dose ?? null, waterGrams: batch.value?.water ?? null, iceGrams: batch.value?.ice ?? null, yieldGrams: null };
+  return { doseGrams: num(draft.dose), waterGrams: num(draft.water), iceGrams: num(draft.ice), yieldGrams: null };
+}
+// What the suggested ratio kept, for the card ("your 300 g of water").
+const ratioKept = ref('');
+watch(suggestion, (p) => {
+  if (p) applySuggestion(p);
+  else ratioKept.value = '';
+});
 
 function applySuggestion(p: StartingParameters): void {
   if (p.tempC !== null) draft.temp = tempText(p.tempC, temperatureUnit.value);
-  // Espresso: the suggested dose, and the ratio that gives the suggested shot weight.
-  if (p.shot && shotRecipe.value) {
-    setLeadText('dose', formatGrams(p.shot.doseG));
-    if (p.shot.yieldG !== null) {
-      const r = p.shot.yieldG / p.shot.doseG;
-      ratio.value = { text: formatRatio(r), value: r };
-    }
-  }
+  ratioKept.value = p.ratio === null ? '' : applyRatio(p.ratio);
   void refreshGrind(); // the suggestion may now supply the grind
+}
+// A suggested ratio moves the batch around what's held (heldForRatio).
+function applyRatio(r: number): string {
+  if (shotRecipe.value || filterRecipe.value) {
+    const held = heldForRatio({ espresso: !!shotRecipe.value, scaled: scaled.value, lead: lead.value.field });
+    // The amount held now, from the batch as it stands (only dose or water switch).
+    const now = held === 'dose' ? (shot.value ?? batch.value)?.dose : held === 'water' ? batch.value?.water : undefined;
+    if (held !== lead.value.field && now !== undefined) lead.value = { field: held, text: formatGrams(now) };
+  } else {
+    // No recipe, so no batch: the water stays if there is one, else the dose.
+    const water = num(draft.water);
+    const dose = num(draft.dose);
+    const ice = num(draft.ice) ?? 0;
+    if (water !== null && water > 0) {
+      draft.dose = formatGrams(Math.round(((water + ice) / r) * 10) / 10);
+      return `${formatGrams(water)} g of water`;
+    }
+    if (dose !== null && dose > 0) {
+      draft.water = formatGrams(Math.max(Math.round(dose * r - ice), 0));
+      return `${formatGrams(dose)} g dose`;
+    }
+    return '';
+  }
+  ratio.value = { text: formatRatio(r), value: r };
+  return heldText();
+}
+function heldText(): string {
+  const { field, text } = lead.value;
+  if (field === 'dose') return `${text} g dose`;
+  if (field === 'water') return `${text} g of water`;
+  if (field === 'yield') return `${text} g cup`;
+  return field === 'yieldOz' ? `${text} fl oz cup` : `${text} ml cup`;
 }
 
 const timerSteps = computed(() => scaleSteps(recipe.value?.steps ?? [], batch.value?.factor ?? 1));
@@ -850,8 +916,7 @@ function brewAgain(): void {
   draft.drinkRating = null;
   draft.drinkNotes = '';
   submitted.value = false;
-  suggestion.value = null;
-  suggestionState.value = 'idle';
+  suggester.reset();
   repeatFrom.value = null;
   repeatGrind.value = null;
   void loadRecent(); // the brew just saved is now the latest
@@ -1155,40 +1220,44 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       </section>
 
       <section v-if="bean" class="card stack">
-        <div class="suggest-head">
-          <h2>Starting point</h2>
-          <button class="btn btn-secondary" type="button" :disabled="suggestionState === 'loading'" @click="suggest">
-            {{ suggestionState === 'loading' ? 'Loading…' : 'Suggest parameters' }}
+        <h2>Starting point</h2>
+        <div class="suggest-pick">
+          <div class="field">
+            <label for="suggest-source">Compare with</label>
+            <select id="suggest-source" v-model="suggestSource">
+              <option v-for="src in SUGGEST_SOURCES" :key="src" :value="src">{{ SUGGEST_SOURCE_LABELS[src] }}</option>
+            </select>
+          </div>
+          <div class="field suggest-max">
+            <label for="suggest-max">Up to</label>
+            <select id="suggest-max" v-model.number="suggestMax">
+              <option v-for="n in MAX_SUGGEST_BREWS" :key="n" :value="n">{{ n }} {{ n === 1 ? 'brew' : 'brews' }}</option>
+            </select>
+          </div>
+          <button class="btn btn-secondary" type="button" :disabled="suggester.state.value === 'waiting' || !!suggestBlocked" @click="suggest">
+            {{ suggester.state.value === 'waiting' ? 'Asking the AI…' : 'Suggest parameters' }}
           </button>
         </div>
-        <p v-if="suggestionState === 'none'" class="muted">
-          No AI analysis for this bean yet. Brew, then ask for a suggestion after saving.
-        </p>
-        <p v-else-if="suggestionState === 'error'" class="form-error">Couldn't load suggestions. Try again.</p>
+        <p v-if="suggestBlocked" class="muted small">{{ suggestBlocked }}</p>
+        <p v-if="suggester.state.value === 'error'" class="form-error" role="alert">{{ suggester.error.value }}</p>
+        <p v-else-if="suggester.state.value === 'slow'" class="muted" aria-live="polite">Still working on it. Try again in a moment.</p>
         <template v-else-if="suggestion">
           <p v-if="suggestion.nextStep" class="next">
-            <strong>Next time:</strong> {{ suggestion.nextStep }}
+            <strong>This brew:</strong> {{ suggestion.nextStep }}
             <span v-if="suggestion.confidence" class="badge" :class="`conf-${suggestion.confidence}`">{{ CONFIDENCE_LABELS[suggestion.confidence] }}</span>
           </p>
           <p class="reasoning">“{{ suggestion.reasoning }}”</p>
-          <ul class="advice">
-            <li>
-              <strong>{{ suggestion.grindAdvice }}</strong><template v-if="suggestion.grindBase"> than {{ suggestion.grindBase }}</template><template v-if="suggestion.grinder"> ({{ suggestion.grinder.name }})</template>
-            </li>
-            <li><strong>{{ formatTempChange(suggestion.tempDeltaC, temperatureUnit) }}</strong><template v-if="suggestion.tempC !== null"> → {{ formatTemp(suggestion.tempC, temperatureUnit) }}</template></li>
-            <li v-if="rpmAdvice(suggestion.rpmDelta)"><strong>{{ rpmAdvice(suggestion.rpmDelta) }}</strong></li>
-            <li v-if="suggestion.shot && gramsAdvice('Dose', suggestion.shot.doseDeltaG)">
-              <strong>{{ gramsAdvice('Dose', suggestion.shot.doseDeltaG) }}</strong> → {{ formatGrams(suggestion.shot.doseG) }} g
-            </li>
-            <li v-if="suggestion.shot && gramsAdvice('Shot weight', suggestion.shot.yieldDeltaG)">
-              <strong>{{ gramsAdvice('Shot weight', suggestion.shot.yieldDeltaG) }}</strong><template v-if="suggestion.shot.yieldG !== null"> → {{ formatGrams(suggestion.shot.yieldG) }} g</template>
-            </li>
-          </ul>
-          <p v-if="suggestionGrinderMismatch" class="note small">
-            That brew was on {{ suggestion.grinder?.name ?? 'no recorded grinder' }}, so its grind setting isn't copied. Adjust for {{ grinder?.name ?? 'your grinder' }}.
+          <p v-if="suggestion.ratio !== null" class="small">
+            Ratio 1:{{ formatRatio(suggestion.ratio) }}<template v-if="ratioKept">, keeping your {{ ratioKept }}</template>.
+          </p>
+          <p v-else class="muted small">Your batch and its ratio stay as they are.</p>
+          <p v-if="suggestedFor" class="note small">
+            The grind was suggested for {{ suggestedFor }}, so it isn't filled in for {{ grinder?.name ?? 'no grinder' }}.
           </p>
           <p class="muted small">
-            Based on your brew from {{ formatDay(suggestion.basedOn.timestamp) }}<template v-if="!suggestion.basedOn.isLatestBrew"> (you've brewed since then)</template>.
+            <template v-if="suggestion.brewCount">Based on {{ suggestion.brewCount }} earlier {{ suggestion.brewCount === 1 ? 'brew' : 'brews' }} ({{ SUGGEST_SOURCE_LABELS[suggestion.source].toLowerCase() }}).</template>
+            <template v-else>No earlier brews to compare yet, so it's from the recipe and the bean alone.</template>
+            Filled in below; change anything you like.
           </p>
         </template>
         <div v-if="show('brew.temp') || show('brew.grind')" class="form-row">
@@ -1206,7 +1275,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <p v-if="grindSource === 'last' && lastSetting" class="muted small grind-hint">
             Last time with {{ grinder?.name }} on {{ recipe?.name }}: {{ formatGrind(lastSetting.grindSetting) }} ({{ formatDay(lastSetting.timestamp) }})
           </p>
-          <p v-else-if="grindSource === 'suggestion'" class="muted small grind-hint">Grind from the analyzed brew; adjust as suggested.</p>
+          <p v-else-if="grindSource === 'suggestion'" class="muted small grind-hint">The suggested grind for {{ grinder?.name }}.</p>
           <p v-else-if="grindSource === 'repeat' && repeatFrom" class="muted small grind-hint">
             From the brew you're repeating ({{ repeatLabel(repeatFrom.log).when }}). Adjust as you dial in.
           </p>
@@ -1405,7 +1474,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <p v-if="aiState === 'error'" class="form-error" role="alert">{{ aiError }}</p>
           <p v-if="aiState === 'waiting'" class="muted" aria-live="polite">Analyzing your brew… this usually takes a few seconds.</p>
           <p v-if="aiState === 'slow'" class="muted" aria-live="polite">
-            Still working on it. It'll show up in the journal, and next time you tap “Suggest parameters” for this bean.
+            Still working on it. It'll show up in the journal.
           </p>
           <AnalysisCard v-if="analysis" :analysis="analysis" :can-rate="workspaces.canEdit" />
         </template>
@@ -1495,12 +1564,18 @@ p {
   font-size: 0.9rem;
   margin-top: calc(-1 * var(--space-2));
 }
-.suggest-head {
+/* Compare with · up to · button: one row when there's room, else wrapped. */
+.suggest-pick {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-end;
   gap: var(--space-2);
+}
+.suggest-pick .field {
+  flex: 1 1 12rem;
+}
+.suggest-pick .suggest-max {
+  flex: 0 1 7rem;
 }
 .next {
   margin: 0;

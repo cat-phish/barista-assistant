@@ -20,6 +20,15 @@ export function brewAnalysisJobId(brewLogId: string): string {
   return `analyze-${brewLogId}`;
 }
 
+// "Suggest parameters" (docs/api/analysis.md §8b): one job per request; the
+// row in parameter_suggestions says what to suggest for and holds the result.
+export const PARAMETER_SUGGESTION_QUEUE = "parameter-suggestion";
+export const PARAMETER_SUGGESTION_JOB = "suggest";
+
+export interface ParameterSuggestionJobData {
+  suggestionId: string;
+}
+
 export const GRIND_DELTAS = ["much_finer", "finer", "no_change", "coarser", "much_coarser"] as const;
 export type GrindDelta = (typeof GRIND_DELTAS)[number];
 

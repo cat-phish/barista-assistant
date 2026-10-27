@@ -27,7 +27,7 @@ import { membersRouter } from "./routes/members.js";
 import { menuRouter } from "./routes/menu.js";
 import { publicMenuRouter } from "./routes/publicMenu.js";
 import { recipesRouter } from "./routes/recipes.js";
-import { suggestionsRouter } from "./routes/suggestions.js";
+import { parameterSuggestionsRouter } from "./routes/parameterSuggestions.js";
 import { workspacesRouter } from "./routes/workspaces.js";
 
 interface HealthResponse {
@@ -76,7 +76,7 @@ app.use("/api/workspaces/:workspaceId/menu", menuRouter);
 app.use("/api/workspaces/:workspaceId/beans", beansRouter);
 app.use("/api/workspaces/:workspaceId/recipes", recipesRouter);
 app.use("/api/workspaces/:workspaceId/brew-logs", brewLogsRouter);
-app.use("/api/beans", suggestionsRouter);
+app.use("/api/workspaces/:workspaceId/parameter-suggestions", parameterSuggestionsRouter);
 app.use("/api/brew-logs", analyzeRouter);
 app.use("/api/server", serverRouter); // server admins (docs/api/server.md §10)
 app.use("/api/workspaces", backupRouter); // GET /:workspaceId/backup, POST /restore

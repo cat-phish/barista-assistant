@@ -284,10 +284,9 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
 - **Journal:** every brew, newest first, filterable by bean; entries can be
   edited or deleted.
 - **AI analysis:** after a brew, ask for a suggestion; a background worker
-  asks the LLM for grind and temperature changes with reasoning, shown next
-  time you brew that bean, plus one next step and how confident it is. For
-  espresso it can also change the dose and the shot weight (the ratio), and
-  "Suggest parameters" sets the shot to them. It analyzes that one brew on
+  asks the LLM for grind and temperature changes with reasoning, plus one
+  next step and how confident it is. For espresso it can also change the
+  dose and the shot weight (the ratio). It analyzes that one brew on
   its own: the bean's roast level and age, the recipe, the grinder's details
   and, for espresso, the machine's capabilities and the shot timer's taps;
   earlier brews aren't sent. The brew says how it was served (straight, or
@@ -295,6 +294,15 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   apart. The AI treats the brew's own notes (tasted on its own) as the
   clearest sign of extraction and drink notes as weaker evidence (milk and
   syrup soften sourness and bitterness).
+- **Suggest parameters:** on the brew page, before brewing, pick which
+  earlier brews the AI compares (this bean's, with this recipe or on this
+  brewer, or this brewer's or this recipe's with any bean) and up to how
+  many (1–20). Each goes with the analysis it got, so the AI sees whether
+  that advice helped. It suggests the grind for the grinder chosen, the
+  temperature and the ratio, with its reasoning, and fills them in. The
+  batch size stays yours: espresso keeps its dose (the shot weight moves),
+  and a filter batch keeps what you typed last, or the recipe's water, so
+  the cup stays about the same size. Owners set the default under Settings → AI.
 
 ## Public menu
 - An optional public page per workspace listing beans, plus plain

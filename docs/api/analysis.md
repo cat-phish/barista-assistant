@@ -37,7 +37,7 @@ the next brew.
 - **Getting the result:** there is no job-status endpoint. The frontend polls
   `GET /api/workspaces/:workspaceId/brew-logs/:brewLogId` (§6) until
   `latestAnalysis` is newer than when it requested the analysis (by
-  `createdAt`), or uses `GET /api/beans/:beanId/suggestions`.
+  `createdAt`).
 
 ## Auto-analyze
 
@@ -69,38 +69,96 @@ says so ("The AI service couldn't be reached", or "The AI service refused
 the request" for a rejected key or model); the worker's log has the
 details. Asking again (`POST …/analyze`) clears it.
 
-## `GET /api/beans/:beanId/suggestions`
+## 8b. Suggest parameters
 
-Fetches the most recent `llm_analyses` record for the given bean, along with
-the last 5 `brew_logs` for that bean, so the frontend "Suggest Parameters"
-button can pre-fill targets when starting a new brew. `llm_analyses` has no
-`beanId`; the latest analysis is found by joining through `brew_logs` and
-ordering by `llm_analyses.createdAt` descending.
+On the brew page, before brewing: starting values for the brew being set
+up (bean, recipe, grinder, batch), from the earlier brews the barista
+picks, each sent with its latest analysis (§9b). The batch (how much to
+brew) is the barista's: the AI keeps it and suggests a ratio for it.
+Saved in `parameter_suggestions` (`docs/schema.md`), pending until the
+worker fills in the result. Always asked for, so the auto-analyze cap
+doesn't apply.
 
-- **Auth Required:** `true` (any member of the bean's workspace)
+**Sources** (`SUGGEST_SOURCES`, `@barista/shared/schema`), newest first, at
+most `maxBrews` (1–20), without brews still steeping (and without unrated
+ones when the workspace keeps them from the AI, `aiHidden`
+`unratedHistory`, §9):
+
+| `source` | Brews sent |
+| --- | --- |
+| `bean` | this bean's, any recipe |
+| `beanRecipe` | this bean's with this recipe |
+| `beanBrewer` | this bean's on this brewer (`brew_logs.brewerId`) |
+| `brewer` | this brewer's, any bean |
+| `recipe` | this recipe's, any bean |
+
+The workspace's defaults are `suggestSource` and `suggestMaxBrews`
+(`docs/api/workspaces.md` §2, Settings → **AI**).
+
+### `POST /api/workspaces/:workspaceId/parameter-suggestions`
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:**
+  ```json
+  {
+    "beanId": "uuid", "recipeId": "uuid", "grinderId": "uuid", "source": "beanRecipe", "maxBrews": 5,
+    "batch": { "doseGrams": 22.5, "waterGrams": 375, "iceGrams": null, "yieldGrams": null }
+  }
+  ```
+  - `beanId` required; `recipeId`, `grinderId` optional (or `null`). The
+    brewer is the recipe's; without a recipe, `brewerId` may name one.
+  - `source` and `maxBrews` optional: the workspace's defaults.
+  - `batch` optional: the batch as planned, each amount in grams (over 0,
+    saved to 0.1 g) or `null`. Filter: dose, hot water and ice; espresso:
+    dose and shot weight (`yieldGrams`). Without one the worker uses the
+    recipe's targets.
+- **Success Response (`202 Accepted`):** `{ "suggestion": { ... } }`, the
+  row below with `status: "pending"`. Queued on `parameter-suggestion`
+  (job `suggest`, data `{ "suggestionId": "uuid" }`, 3 attempts with
+  backoff, like an analysis).
+- **Errors:** `400` an id that isn't the workspace's, a `source` that needs
+  a recipe (`beanRecipe`, `recipe`) or a brewer (`beanBrewer`, `brewer`)
+  without one, a `maxBrews` out of range, an unknown key; `403` viewer;
+  `404` not a member; `503` the queue (Redis) is unavailable (nothing is
+  saved).
+
+### `GET /api/workspaces/:workspaceId/parameter-suggestions/:suggestionId`
+
+Any member. The frontend polls it until `status` is `done` or `failed`.
+
 - **Success Response (`200 OK`):**
   ```json
   {
-    "latestAnalysis": {
-      "id": "uuid",
-      "brewLogId": "uuid",
-      "reasoning": "Under-extracted: sour and thin at 2:30. Grind finer.",
-      "suggestedGrindDelta": "finer",
-      "suggestedTempDelta": 1,
-      "createdAt": "2026-10-18T09:00:00.000Z"
-    },
-    "analyzedBrew": { ...brewLog },
-    "recentBrews": [ { ...brewLog } ]
+    "suggestion": {
+      "id": "uuid", "beanId": "uuid", "recipeId": "uuid", "brewerId": "uuid", "grinderId": "uuid",
+      "source": "beanRecipe", "maxBrews": 5, "brewCount": 3,
+      "batchDoseGrams": 22.5, "batchWaterGrams": 375, "batchIceGrams": null, "batchYieldGrams": null,
+      "status": "done", "error": null,
+      "reasoning": "The last two cups were sour at 20; one step finer and a degree hotter.",
+      "nextStep": "Watch the drawdown: aim to finish by 3:00.",
+      "confidence": "medium",
+      "grindSetting": 19, "grindRpm": null, "tempC": 95, "ratio": 16,
+      "model": "gpt-…", "promptVersion": "2026-10-f",
+      "createdAt": "2026-10-26T08:00:00.000Z", "completedAt": "2026-10-26T08:00:06.000Z"
+    }
   }
   ```
-  - `latestAnalysis`: the newest analysis of any brew of this bean (by
-    `createdAt`), or `null` if none exists yet.
-  - `analyzedBrew`: the brew log that `latestAnalysis` analyzed (the §6
-    brew log object), or `null` when `latestAnalysis` is `null`. The
-    suggested deltas are relative to **this** brew, which may be older than
-    the newest brew or outside `recentBrews`. To pre-fill a new brew, start
-    from its parameters and apply the deltas.
-  - `recentBrews`: the last 5 brew logs for the bean (§6 brew log objects),
-    newest first; may be empty.
-- **Errors:** `404` bean not found or not in a workspace the caller belongs
-  to (same message for both).
+  - `brewCount`: how many earlier brews were sent (`0`: the recipe and
+    bean alone).
+  - The values are for the grinder named (`grindSetting` `null` without one,
+    or without a brew or starting point on it to go on); `ratio` is for the
+    batch, `(water + ice) / dose` or for espresso shot weight / dose, `null`
+    to keep the batch's; `grindRpm` only on a variable-speed grinder.
+    Results are `null` while pending.
+  - `failed`: `error` says why ("The AI service couldn't be reached", or
+    "… refused the request"), shown with Try again.
+- **Errors:** `404` not a member, or not a suggestion of this workspace's
+  beans (same message).
+
+The brew page fills the values in (temperature, the ratio, and the grind
+when it's for the grinder chosen) and they can be changed as usual. The
+ratio moves the batch around what it holds (`heldForRatio`,
+`frontend/src/lib/suggest.ts`): espresso keeps the dose, which the basket
+fixes, so the shot weight moves; a filter batch keeps what was typed last
+(dose, water, drink size or cup), and untouched the recipe's water, so the
+cup stays about the same size and the dose moves.

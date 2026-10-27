@@ -1,10 +1,10 @@
 import "dotenv/config";
-import { BREW_ANALYSIS_QUEUE, MAINTENANCE_QUEUE, REMINDER_QUEUE, STEEP_REMINDER_JOB, type BrewAnalysisJobData, type DbBackupJobData, type RateReminderJobData, type SteepReminderJobData } from "@barista/shared/jobs";
+import { BREW_ANALYSIS_QUEUE, MAINTENANCE_QUEUE, PARAMETER_SUGGESTION_QUEUE, REMINDER_QUEUE, STEEP_REMINDER_JOB, type BrewAnalysisJobData, type DbBackupJobData, type ParameterSuggestionJobData, type RateReminderJobData, type SteepReminderJobData } from "@barista/shared/jobs";
 import { UnrecoverableError, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 import { config } from "./config.js";
 import { pool } from "./db.js";
-import { failureMessage, processBrewAnalysis, settleRequest, type JobResult } from "./processor.js";
+import { failSuggestion, failureMessage, processBrewAnalysis, processParameterSuggestion, settleRequest, type JobResult } from "./processor.js";
 import { processRateReminder, processSteepReminder, type ReminderResult } from "./reminders.js";
 import { runDbBackup, type BackupResult } from "./dbBackup.js";
 
@@ -39,6 +39,23 @@ worker.on("failed", (job, err) => {
 });
 worker.on("error", (err) => console.error("Worker error:", err.message));
 
+// "Suggest parameters" (docs/api/analysis.md §8b): retried like an analysis;
+// once every attempt fails, the suggestion says why.
+const suggestions = new Worker<ParameterSuggestionJobData, JobResult>(PARAMETER_SUGGESTION_QUEUE, (job: Job<ParameterSuggestionJobData>) => processParameterSuggestion(job.data), {
+  connection,
+  concurrency: config.concurrency,
+});
+suggestions.on("completed", (job, result) => {
+  console.log(`Suggestion ${job.id}: ${result.status}${result.status === "skipped" ? ` (${result.reason})` : ""}`);
+});
+suggestions.on("failed", (job, err) => {
+  if (!job) return;
+  const final = err instanceof UnrecoverableError || job.attemptsMade >= (job.opts.attempts ?? 1);
+  console.error(`Suggestion ${job.id} failed (${final ? "giving up" : "will retry"}): ${err.message}`);
+  if (final) void failSuggestion(job.data.suggestionId, failureMessage(err instanceof UnrecoverableError)).catch(() => undefined);
+});
+suggestions.on("error", (err) => console.error("Suggestion worker error:", err.message));
+
 // Reminders (docs/api/notifications.md §1b): delayed jobs, sent once due.
 // The job name says which: rate later, or a cold brew's steep done.
 type ReminderJob = Job<RateReminderJobData | SteepReminderJobData>;
@@ -64,7 +81,7 @@ maintenance.on("error", (err) => console.error("Maintenance worker error:", err.
 async function shutdown(signal: string): Promise<void> {
   console.log(`${signal} received, finishing active jobs`);
   // close() waits for running jobs to finish before resolving.
-  const results = await Promise.allSettled([worker.close(), reminders.close(), maintenance.close()]);
+  const results = await Promise.allSettled([worker.close(), suggestions.close(), reminders.close(), maintenance.close()]);
   results.push(...(await Promise.allSettled([pool.end()])));
   for (const r of results) {
     if (r.status === "rejected") console.error("Error during shutdown:", r.reason);

@@ -1026,6 +1026,50 @@ export const llmAnalyses = mysqlTable("llm_analyses", {
 export const ANALYSIS_CONFIDENCE = ["low", "medium", "high"] as const;
 export type AnalysisConfidence = (typeof ANALYSIS_CONFIDENCE)[number];
 
+// "Suggest parameters" (docs/api/analysis.md §8b): starting values for a brew
+// about to be made, asked for on the brew page. The AI gets the bean, recipe,
+// grinder and brewer chosen, and up to maxBrews earlier brews from source,
+// each with its latest analysis. Pending until the worker fills in the
+// result, or failed with why. The bean gives the workspace.
+export const parameterSuggestions = mysqlTable("parameter_suggestions", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  beanId: varchar("bean_id", { length: 36 })
+    .notNull()
+    .references(() => beans.id, { onDelete: "cascade" }),
+  recipeId: varchar("recipe_id", { length: 36 }).references(() => recipes.id, { onDelete: "set null" }),
+  brewerId: varchar("brewer_id", { length: 36 }).references(() => brewers.id, { onDelete: "set null" }),
+  grinderId: varchar("grinder_id", { length: 36 }).references(() => grinders.id, { onDelete: "set null" }),
+  source: varchar("source", { length: 20 }).$type<SuggestSource>().notNull(), // SUGGEST_SOURCES
+  maxBrews: int("max_brews").notNull(),
+  brewCount: int("brew_count"), // how many earlier brews were sent
+  // The batch as planned when asked: the barista's to choose, so the AI
+  // keeps it and suggests a ratio (filter: hot water and ice; espresso: the
+  // shot weight). Null when not set.
+  batchDoseGrams: decimal("batch_dose_grams", { precision: 5, scale: 1, mode: "number" }),
+  batchWaterGrams: decimal("batch_water_grams", { precision: 6, scale: 1, mode: "number" }),
+  batchIceGrams: decimal("batch_ice_grams", { precision: 6, scale: 1, mode: "number" }),
+  batchYieldGrams: decimal("batch_yield_grams", { precision: 6, scale: 1, mode: "number" }),
+  status: varchar("status", { length: 10 }).$type<SuggestionStatus>().notNull().default("pending"), // SUGGESTION_STATUSES
+  error: varchar("error", { length: 200 }), // failed: why
+  // The result: values for the brew, on the chosen grinder; null where they
+  // don't apply (speed on a fixed-speed grinder) or the AI couldn't say (no
+  // brew or starting point on that grinder). ratio null: keep the batch's.
+  reasoning: text("reasoning"),
+  nextStep: varchar("next_step", { length: 200 }),
+  confidence: varchar("confidence", { length: 10 }).$type<AnalysisConfidence>(), // ANALYSIS_CONFIDENCE
+  grindSetting: decimal("grind_setting", { precision: 6, scale: 2, mode: "number" }),
+  grindRpm: int("grind_rpm"),
+  tempC: decimal("temp_c", { precision: 4, scale: 1, mode: "number" }),
+  // Filter: (water + ice) / dose; espresso: shot weight / dose.
+  ratio: decimal("ratio", { precision: 5, scale: 2, mode: "number" }),
+  model: varchar("model", { length: 100 }),
+  promptVersion: varchar("prompt_version", { length: 30 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+});
+export const SUGGESTION_STATUSES = ["pending", "done", "failed"] as const;
+export type SuggestionStatus = (typeof SUGGESTION_STATUSES)[number];
+
 // Where a brew's analysis stands while it isn't saved yet
 // (docs/api/analysis.md §8): when an automatic one is due, or why the last
 // one failed or was skipped. Queue state, so not backed up. No row: nothing

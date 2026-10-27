@@ -248,8 +248,8 @@ What the analysis worker sends to the LLM and what comes back.
      picks the brews sent (this bean · bean and recipe · bean and brewer ·
      this brewer · this recipe) and "up to N brews". Each brew goes with its
      own latest analysis. The AI returns actual values for the brew being
-     set up (grind for the chosen grinder, temperature, dose, water or shot
-     weight), which are filled in. Saved in a new `parameter_suggestions`
+     set up (grind for the chosen grinder, temperature, and a ratio for the
+     batch, which stays the barista's), which are filled in. Saved in a new `parameter_suggestions`
      table.
   3. **Save what was sent:** each analysis and suggestion keeps its prompt
      and input; "What was sent" shows them.

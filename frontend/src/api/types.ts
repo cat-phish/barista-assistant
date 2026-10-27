@@ -51,9 +51,17 @@ export interface WorkspaceSettings {
   autoAnalyze: boolean;
   autoAnalyzeDelayMinutes: AutoAnalyzeDelay;
   autoAnalyzeDailyCap: number | null; // null: no cap
+  // "Suggest parameters" (analysis.md §8b): the brews it sends by default, at most how many.
+  suggestSource: SuggestSource;
+  suggestMaxBrews: number;
 }
 export const AUTO_ANALYZE_DELAYS = [0, 5, 10, 15, 30] as const;
 export type AutoAnalyzeDelay = (typeof AUTO_ANALYZE_DELAYS)[number];
+// The earlier brews "Suggest parameters" sends (docs/api/analysis.md §8b);
+// the same list as @barista/shared/schema (lib/suggest.test.ts checks).
+export const SUGGEST_SOURCES = ['bean', 'beanRecipe', 'beanBrewer', 'brewer', 'recipe'] as const;
+export type SuggestSource = (typeof SUGGEST_SOURCES)[number];
+export const MAX_SUGGEST_BREWS = 20;
 
 // docs/api/workspaces.md §2 Members
 export interface Member {
@@ -484,11 +492,50 @@ export interface BrewLog {
   analysisError: string | null;
 }
 
-// docs/api/analysis.md §8
-export interface Suggestions {
-  latestAnalysis: LlmAnalysis | null;
-  analyzedBrew: BrewLog | null;
-  recentBrews: BrewLog[];
+// docs/api/analysis.md §8b: starting values for a brew about to be made.
+// Pending until the AI answers; the values are for the grinder chosen.
+export interface ParameterSuggestion {
+  id: string;
+  beanId: string;
+  recipeId: string | null;
+  brewerId: string | null;
+  grinderId: string | null;
+  source: SuggestSource;
+  maxBrews: number;
+  brewCount: number | null; // how many earlier brews were sent
+  // The batch as planned (kept as it is): null when not set.
+  batchDoseGrams: number | null;
+  batchWaterGrams: number | null;
+  batchIceGrams: number | null;
+  batchYieldGrams: number | null; // espresso: the shot weight
+  status: 'pending' | 'done' | 'failed';
+  error: string | null;
+  reasoning: string | null;
+  nextStep: string | null;
+  confidence: 'low' | 'medium' | 'high' | null;
+  grindSetting: number | null;
+  grindRpm: number | null;
+  tempC: number | null;
+  ratio: number | null; // filter (water + ice) / dose, espresso shot / dose; null: keep the batch's
+  model: string | null;
+  promptVersion: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+export interface SuggestionRequest {
+  beanId: string;
+  recipeId?: string | null;
+  grinderId?: string | null;
+  brewerId?: string | null;
+  source?: SuggestSource;
+  maxBrews?: number;
+  batch?: SuggestionBatch;
+}
+export interface SuggestionBatch {
+  doseGrams: number | null;
+  waterGrams: number | null;
+  iceGrams: number | null;
+  yieldGrams: number | null; // espresso: the shot weight
 }
 
 // docs/api/ingredients.md §5b: reusable preps that finish a drink.

@@ -115,6 +115,7 @@ const TABLE_LABELS: Record<string, string> = {
   brew_log_tools: 'prep ticks',
   brew_log_problems: 'problem ticks',
   llm_analyses: 'AI suggestions',
+  parameter_suggestions: 'suggested parameters',
 };
 export const tableLabel = (table: string): string => TABLE_LABELS[table] ?? table.replace(/_/g, ' ');
 
