@@ -477,6 +477,13 @@
       "when": 1793069549657,
       "tag": "0067_parameter_suggestions",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "5",
+      "when": 1793072486051,
+      "tag": "0068_ai_request",
+      "breakpoints": true
     }
   ]
 }

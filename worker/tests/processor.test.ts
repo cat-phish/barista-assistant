@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { extractionYield, loadBrewContext, type BrewContext } from "../src/context.js";
 import { db } from "../src/db.js";
-import { analyzeWithLlm } from "../src/llm.js";
+import { analysisSent, analyzeWithLlm } from "../src/llm.js";
 import { CAP_REACHED, failureMessage, processBrewAnalysis, settleRequest } from "../src/processor.js";
 
 // Real database, fake LLM.
@@ -95,6 +95,9 @@ describe("processBrewAnalysis", () => {
     const saved = await db.select().from(llmAnalyses).where(eq(llmAnalyses.brewLogId, logIds.day8!));
     expect(saved).toHaveLength(1);
     expect(saved[0]).toMatchObject(ANALYSIS);
+    // What was sent, saved with it (docs/api/analysis.md §8c).
+    expect(saved[0]!.request).toEqual(analysisSent(context, new Set()));
+    expect(saved[0]!.request).toMatchObject({ sections: expect.arrayContaining(["core", "output", "end"]), system: expect.stringContaining("Analyze this one brew"), input: { brew: { tastingNotes: "day 8" } } });
   });
 
   it("espresso brews: no water, ratio from the shot weight, first-drop window from the recipe", async () => {

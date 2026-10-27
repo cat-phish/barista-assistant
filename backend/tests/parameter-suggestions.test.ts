@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { addMember, brewerId, newBean, newUser, newWorkspace, type TestUser } from "./helpers.js";
+import { eq } from "drizzle-orm";
+import { parameterSuggestions } from "@barista/shared/schema";
+import { db } from "../src/db.js";
 import { parameterSuggestionQueue } from "../src/queue.js";
 
 // "Suggest parameters" (docs/api/analysis.md §8b).
@@ -56,6 +59,24 @@ describe("parameter suggestions", () => {
     expect((await owner.agent.post(base).send({ beanId: bean, maxBrews: 0 })).status).toBe(400);
     expect((await owner.agent.post(base).send({ beanId: bean, extra: 1 })).status).toBe(400);
     expect(await parameterSuggestionQueue.getWaitingCount()).toBe(0);
+  });
+
+  it("what was sent is read on its own, once the worker saved it (docs/api/analysis.md §8c)", async () => {
+    const { owner, ws, bean, base } = await setup();
+    const viewer = await newUser();
+    const outsider = await newUser();
+    await addMember(owner, ws, viewer, "viewer");
+    const id = (await owner.agent.post(base).send({ beanId: bean, source: "bean" })).body.suggestion.id as string;
+    expect((await owner.agent.get(`${base}/${id}`)).body.suggestion).toMatchObject({ hasRequest: false });
+    expect((await owner.agent.get(`${base}/${id}/request`)).body).toEqual({ request: null });
+
+    const sent = { sections: ["suggestCore", "end"], system: "Suggest.", input: { batch: { doseGrams: 15 } } };
+    await db.update(parameterSuggestions).set({ status: "done", request: sent }).where(eq(parameterSuggestions.id, id));
+    const done = (await owner.agent.get(`${base}/${id}`)).body.suggestion;
+    expect(done).toMatchObject({ hasRequest: true });
+    expect(done).not.toHaveProperty("request");
+    expect((await viewer.agent.get(`${base}/${id}/request`)).body).toEqual({ request: sent });
+    expect((await outsider.agent.get(`${base}/${id}/request`)).status).toBe(404);
   });
 
   it("viewers can read one but not ask; outsiders get a 404 either way", async () => {

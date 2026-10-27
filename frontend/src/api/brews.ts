@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { BrewLog, DilutionWith, LlmAnalysis, Mark, ParameterSuggestion, ServingUnit, SteepTemp, SuggestionRequest } from './types';
+import type { AiRequest, BrewLog, DilutionWith, LlmAnalysis, Mark, ParameterSuggestion, ServingUnit, SteepTemp, SuggestionRequest } from './types';
 
 // What happened to a reminder asked for when saving (docs/api/notifications.md §1b).
 export type Reminder = 'queued' | 'off' | 'unavailable';
@@ -72,6 +72,9 @@ export const suggestionsApi = {
     api.post<{ suggestion: ParameterSuggestion }>(`/api/workspaces/${workspaceId}/parameter-suggestions`, body),
   get: (workspaceId: string, id: string) =>
     api.get<{ suggestion: ParameterSuggestion }>(`/api/workspaces/${workspaceId}/parameter-suggestions/${id}`),
+  // What was sent to the AI (docs/api/analysis.md §8c).
+  sent: (workspaceId: string, id: string) =>
+    api.get<{ request: AiRequest | null }>(`/api/workspaces/${workspaceId}/parameter-suggestions/${id}/request`),
 };
 
 export const analysisApi = {
@@ -81,4 +84,7 @@ export const analysisApi = {
   // Was the suggestion useful? null takes the answer back (docs/api/analysis.md §8).
   rateAnalysis: (brewLogId: string, analysisId: string, helpful: boolean | null) =>
     api.put<{ helpful: boolean | null }>(`/api/brew-logs/${brewLogId}/analyses/${analysisId}/feedback`, { helpful }),
+  // What was sent to the AI (docs/api/analysis.md §8c).
+  sent: (brewLogId: string, analysisId: string) =>
+    api.get<{ request: AiRequest | null }>(`/api/brew-logs/${brewLogId}/analyses/${analysisId}/request`),
 };

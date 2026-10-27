@@ -4,10 +4,11 @@
 import { computed, ref } from 'vue';
 import { backupApi, LISTS, type ListName } from '../api/backup';
 import { errorMessage } from '../api/client';
+import AiRequestsChoice from '../components/AiRequestsChoice.vue';
 import ImportLists from '../components/ImportLists.vue';
 import RestoreBackup from '../components/RestoreBackup.vue';
 import SettingsLayout from '../components/SettingsLayout.vue';
-import { backupFileName, backupSummary, exportFileName, LIST_LABELS, saveBlob, saveJson } from '../lib/backup';
+import { backupFileName, backupSummary, exportFileName, hasAiSuggestions, LIST_LABELS, saveBlob, saveJson } from '../lib/backup';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
@@ -16,13 +17,22 @@ const isOwner = computed(() => workspaces.current?.role === 'owner');
 const downloading = ref(false);
 const downloadError = ref('');
 const downloaded = ref<string | null>(null); // what the last download held
-async function download(): Promise<void> {
+// Backups and exports with AI suggestions ask first whether to include what
+// each was sent (docs/api/backup.md §2b); then this runs with the answer.
+const choosing = ref<((aiRequests: boolean) => Promise<void>) | null>(null);
+function choose(aiRequests: boolean): void {
+  const next = choosing.value;
+  choosing.value = null;
+  void next?.(aiRequests);
+}
+
+async function download(aiRequests: boolean): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   downloading.value = true;
   downloadError.value = '';
   try {
-    const file = await backupApi.download(ws);
+    const file = await backupApi.download(ws, aiRequests);
     saveJson(backupFileName(file), file);
     downloaded.value = backupSummary(file);
   } catch (err) {
@@ -37,14 +47,18 @@ async function download(): Promise<void> {
 const exportLists = ref<ListName[]>([]);
 const exporting = ref(false);
 const exportError = ref('');
-async function exportChosen(): Promise<void> {
+function startExport(): void {
+  if (hasAiSuggestions(exportLists.value)) choosing.value = exportChosen;
+  else void exportChosen(false);
+}
+async function exportChosen(aiRequests: boolean): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws || !exportLists.value.length) return;
   exporting.value = true;
   exportError.value = '';
   try {
     const lists = LISTS.filter((l) => exportLists.value.includes(l)); // in the usual order
-    const file = await backupApi.exportLists(ws, lists);
+    const file = await backupApi.exportLists(ws, lists, undefined, aiRequests);
     saveJson(exportFileName(file, lists), file);
   } catch (err) {
     exportError.value = errorMessage(err);
@@ -81,12 +95,14 @@ async function downloadCsv(list: 'brew_logs' | 'beans'): Promise<void> {
         prep, problems and AI suggestions. Keep it somewhere safe, or restore it on another server.
       </p>
       <template v-if="isOwner">
-        <button class="btn btn-primary" type="button" :disabled="downloading" @click="download">{{ downloading ? 'Preparing…' : 'Download backup' }}</button>
+        <button class="btn btn-primary" type="button" :disabled="downloading" @click="choosing = download">{{ downloading ? 'Preparing…' : 'Download backup' }}</button>
         <p v-if="downloaded !== null" class="muted small" aria-live="polite">Saved: {{ downloaded || 'an empty workspace' }}.</p>
         <p v-if="downloadError" class="form-error" role="alert">{{ downloadError }}</p>
       </template>
       <p v-else class="muted small">Only owners can download a backup: it holds everyone's brews.</p>
     </section>
+
+    <AiRequestsChoice :open="choosing !== null" @choose="choose" @cancel="choosing = null" />
 
     <section class="card stack" aria-labelledby="data-export">
       <h2 id="data-export">Export lists</h2>
@@ -102,7 +118,7 @@ async function downloadCsv(list: 'brew_logs' | 'beans'): Promise<void> {
             {{ LIST_LABELS[l] }}
           </label>
         </div>
-        <button class="btn btn-primary" type="button" :disabled="exporting || !exportLists.length" @click="exportChosen">
+        <button class="btn btn-primary" type="button" :disabled="exporting || !exportLists.length" @click="startExport">
           {{ exporting ? 'Preparing…' : 'Download export' }}
         </button>
         <p v-if="exportError" class="form-error" role="alert">{{ exportError }}</p>

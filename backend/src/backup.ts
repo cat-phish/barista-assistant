@@ -154,9 +154,19 @@ const ENUMS: Record<string, readonly string[]> = {
   "parameter_suggestions.confidence": ANALYSIS_CONFIDENCE,
 };
 // JSON columns, checked by what the API accepts.
+// What was sent to the AI (docs/api/analysis.md §8c), when the file has it.
+const aiRequest = z.object({ sections: z.array(z.string()), system: z.string(), input: z.record(z.string(), z.unknown()) }).strict().nullable();
 const JSON_SCHEMAS: Record<string, z.ZodType> = {
   "menu_items.beanFields": z.array(z.enum(BEAN_MENU_FIELDS)).nullable(),
+  "llm_analyses.request": aiRequest,
+  "parameter_suggestions.request": aiRequest,
 };
+// Large, and only for looking back at: in a file only when asked for
+// (docs/api/backup.md §2b, "What was sent to the AI").
+export const AI_REQUEST_COLUMNS: Record<string, string> = { llm_analyses: "request", parameter_suggestions: "request" };
+export interface BackupOptions {
+  aiRequests?: boolean;
+}
 
 // What the schema says about a backed-up table.
 export interface TableInfo {
@@ -197,7 +207,7 @@ export interface BackupFile {
 
 // Everything the workspace owns. Brews say who made them by email
 // (brewedBy), since people aren't part of a backup.
-export async function buildBackup(workspaceId: string): Promise<BackupFile> {
+export async function buildBackup(workspaceId: string, options: BackupOptions = {}): Promise<BackupFile> {
   const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, workspaceId));
   if (!ws) throw new Error(`Workspace ${workspaceId} not found`);
   const ids = new Map<string, string[]>();
@@ -218,7 +228,9 @@ export async function buildBackup(workspaceId: string): Promise<BackupFile> {
         for (const u of await db.select({ id: users.id, email: users.email }).from(users).where(inArray(users.id, missing))) emails.set(u.id, u.email);
       }
     }
+    const aiColumn = options.aiRequests ? undefined : AI_REQUEST_COLUMNS[t.name];
     tables[t.name] = rows.map(({ workspaceId: _ws, ...row }) => {
+      if (aiColumn) delete row[aiColumn];
       for (const key of t.userColumns) {
         const id = row[key] as string | null;
         delete row[key];

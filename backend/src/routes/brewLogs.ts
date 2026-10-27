@@ -30,7 +30,6 @@ import {
   users,
   type Bean,
   type BrewLog,
-  type LlmAnalysis,
   MARK_KINDS,
   type MarkKind,
   type MethodKind,
@@ -38,6 +37,7 @@ import {
   recipeStyles,
 } from "@barista/shared/schema";
 import { decimalSchema, grindSettingSchema, optionalText, updateSchema } from "../validation.js";
+import { ANALYSIS_COLUMNS, type AnalysisRow } from "../aiRequest.js";
 import { remindToRate, remindWhenSteeped, type ReminderOutcome } from "../reminders.js";
 import { autoAnalyzeOnEdited, autoAnalyzeOnSave } from "../autoAnalyze.js";
 import { cancelWaitingAnalysis } from "../queue.js";
@@ -91,7 +91,7 @@ export interface CreatedBrewLogResponse extends BrewLogResponse {
 }
 
 export interface BrewLogWithAnalysisResponse {
-  brewLog: BrewLogDetails & { latestAnalysis: LlmAnalysis | null };
+  brewLog: BrewLogDetails & { latestAnalysis: AnalysisRow | null };
 }
 
 interface WorkspaceParams {
@@ -597,7 +597,7 @@ brewLogsRouter.get(
     }
 
     const [latestAnalysis] = await db
-      .select()
+      .select(ANALYSIS_COLUMNS)
       .from(llmAnalyses)
       .where(eq(llmAnalyses.brewLogId, brewLog.id))
       .orderBy(desc(llmAnalyses.createdAt), desc(llmAnalyses.id))

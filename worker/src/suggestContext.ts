@@ -3,7 +3,7 @@
 // brewer, grinder) and up to maxBrews earlier brews from the chosen source,
 // newest first, each with its latest analysis.
 import { brewers, brewLogs, grinders, llmAnalyses, type Brewer, type ParameterSuggestion, type SuggestSource } from "@barista/shared/schema";
-import { and, desc, eq, inArray, isNotNull, lt, or, type SQL } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, inArray, isNotNull, lt, or, type SQL } from "drizzle-orm";
 import { config } from "./config.js";
 import {
   drinksServed,
@@ -118,7 +118,8 @@ function sourceFilter(r: SuggestRequest): SQL | null {
 // Each brew's latest analysis.
 async function latestAnalyses(brewLogIds: string[]): Promise<Map<string, PastAnalysis>> {
   if (brewLogIds.length === 0) return new Map();
-  const rows = await db.select().from(llmAnalyses).where(inArray(llmAnalyses.brewLogId, brewLogIds)).orderBy(desc(llmAnalyses.createdAt), desc(llmAnalyses.id));
+  const { request: _sent, ...columns } = getTableColumns(llmAnalyses); // what was sent isn't needed
+  const rows = await db.select(columns).from(llmAnalyses).where(inArray(llmAnalyses.brewLogId, brewLogIds)).orderBy(desc(llmAnalyses.createdAt), desc(llmAnalyses.id));
   const byLog = new Map<string, PastAnalysis>();
   for (const a of rows) {
     if (byLog.has(a.brewLogId)) continue;

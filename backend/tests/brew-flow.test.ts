@@ -189,6 +189,33 @@ describe("suggestions and analysis", () => {
     expect((await owner.agent.put(`/api/brew-logs/${other}/analyses/${id}/feedback`).send({ helpful: false })).status).toBe(404); // another brew's
   });
 
+  it("what was sent is read on its own, by any member (docs/api/analysis.md §8c)", async () => {
+    const { owner, ws } = await setup();
+    const viewer = await newUser();
+    const outsider = await newUser();
+    await addMember(owner, ws.id, viewer, "viewer");
+    const bean = await newBean(owner, ws.id);
+    const log = await newBrewLog(owner, ws.id, bean);
+    const other = await newBrewLog(owner, ws.id, bean);
+    const { db } = await import("../src/db.js");
+    const { llmAnalyses } = await import("@barista/shared/schema");
+    const sent = { sections: ["core", "end"], system: "You are an expert.", input: { brew: { rating: 4 } } };
+    const id = crypto.randomUUID();
+    const older = crypto.randomUUID();
+    await db.insert(llmAnalyses).values([
+      { id: older, brewLogId: log, reasoning: "old", suggestedGrindDelta: "finer", suggestedTempDelta: 0, createdAt: new Date(Date.now() - 60_000) },
+      { id, brewLogId: log, reasoning: "r", suggestedGrindDelta: "finer", suggestedTempDelta: 0, request: sent },
+    ]);
+
+    const latest = (await owner.agent.get(`/api/workspaces/${ws.id}/brew-logs/${log}`)).body.brewLog.latestAnalysis;
+    expect(latest).toMatchObject({ id, hasRequest: true });
+    expect(latest).not.toHaveProperty("request");
+    expect((await viewer.agent.get(`/api/brew-logs/${log}/analyses/${id}/request`)).body).toEqual({ request: sent });
+    expect((await owner.agent.get(`/api/brew-logs/${log}/analyses/${older}/request`)).body).toEqual({ request: null }); // from before it was saved
+    expect((await owner.agent.get(`/api/brew-logs/${other}/analyses/${id}/request`)).status).toBe(404); // another brew's
+    expect((await outsider.agent.get(`/api/brew-logs/${log}/analyses/${id}/request`)).status).toBe(404);
+  });
+
   it("viewers can't analyze; outsiders can't tell whether a log exists", async () => {
     const { owner, ws } = await setup();
     const viewer = await newUser();

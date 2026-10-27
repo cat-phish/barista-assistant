@@ -64,6 +64,16 @@ describe("export by list (docs/api/backup.md §2b)", () => {
     expect(names(journal.tables.recipes)).toEqual(["House V60"]);
   });
 
+  it("brings what was sent to the AI only when asked", async () => {
+    const { owner, base, log } = await source();
+    const { db } = await import("../src/db.js");
+    const { llmAnalyses } = await import("@barista/shared/schema");
+    const sent = { sections: ["core"], system: "You are an expert.", input: {} };
+    await db.insert(llmAnalyses).values({ id: crypto.randomUUID(), brewLogId: log, reasoning: "r", suggestedGrindDelta: "finer", suggestedTempDelta: 0, request: sent });
+    expect((await exportOf(owner, base, { lists: ["brew_logs"] })).tables.llm_analyses[0]).not.toHaveProperty("request");
+    expect((await exportOf(owner, base, { lists: ["brew_logs"], ids: { brew_logs: [log] }, aiRequests: true })).tables.llm_analyses[0].request).toEqual(sent);
+  });
+
   it("can take only some items of a list", async () => {
     const { owner, base, c40 } = await source();
     const file = await exportOf(owner, base, { lists: ["grinders"], ids: { grinders: [c40] } });

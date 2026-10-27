@@ -3,7 +3,7 @@ import { beans, brewers, brewLogs, grinders, llmAnalyses, parameterSuggestions, 
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../src/db.js";
-import { requestSuggestion } from "../src/llm.js";
+import { requestSuggestion, suggestionSent } from "../src/llm.js";
 import { failSuggestion, processParameterSuggestion } from "../src/processor.js";
 import { loadSuggestContext, type SuggestRequest } from "../src/suggestContext.js";
 
@@ -142,6 +142,9 @@ describe("processParameterSuggestion", () => {
     expect(await processParameterSuggestion({ suggestionId })).toEqual({ status: "saved", id: suggestionId });
     expect(llm.mock.calls[0]![0].brews.map((b) => b.tastingNotes)).toEqual(["day5", "day1"]);
     expect(await row(suggestionId)).toMatchObject({ ...RESULT, status: "done", brewCount: 2, model: "test-model", error: null, completedAt: expect.any(Date) });
+    // What was sent, saved with it (docs/api/analysis.md §8c).
+    expect((await row(suggestionId))!.request).toEqual(suggestionSent(llm.mock.calls[0]![0], new Set()));
+    expect((await row(suggestionId))!.request?.sections).toContain("suggestCore");
   });
 
   it("leaves out unrated brews and passes on what the workspace keeps from the AI", async () => {

@@ -162,3 +162,38 @@ ratio moves the batch around what it holds (`heldForRatio`,
 fixes, so the shot weight moves; a filter batch keeps what was typed last
 (dose, water, drink size or cup), and untouched the recipe's water, so the
 cup stays about the same size and the dose moves.
+
+## 8c. What was sent to the AI
+
+Each analysis and each suggestion keeps exactly what the worker sent:
+`request`, a JSON column on `llm_analyses` and `parameter_suggestions`,
+built from the request itself (`analysisSent` / `suggestionSent`,
+`worker/src/llm.ts`):
+
+```json
+{ "sections": ["core", "output", "…", "end"], "system": "You are an expert…", "input": { "bean": { "…": "…" }, "brew": { "…": "…" } } }
+```
+
+- `sections`: the prompt sections it was built from (`docs/api/llm-contract.md`
+  §9 and §9b), in order; `system`: the system prompt as sent; `input`: the
+  user message, as JSON.
+- `null` on analyses made before it was saved, on a suggestion until it's
+  done, and after a restore or import of a file without it.
+- It's large (often 10-30 KB), so rows are returned without it: an
+  analysis (`latestAnalysis`, §6) and a suggestion (§8b) carry
+  `"hasRequest": true | false` instead, and it's read on its own.
+- Backups and exports leave it out unless asked (`docs/api/backup.md` §2b,
+  "What was sent to the AI").
+
+### `GET /api/brew-logs/:brewLogId/analyses/:analysisId/request`
+### `GET /api/workspaces/:workspaceId/parameter-suggestions/:suggestionId/request`
+
+- **Auth Required:** `true` (any member)
+- **Success Response (`200 OK`):** `{ "request": { ... } }`, or
+  `{ "request": null }` when there's none.
+- **Errors:** `404` not a member, or not an analysis of that brew / a
+  suggestion of this workspace's beans (same message).
+
+The journal's analysis card and the brew page's Suggest parameters card
+have **What was sent to the AI** (`frontend/src/components/AiRequestDialog.vue`):
+the section keys, the system prompt, and each part of the input folded.

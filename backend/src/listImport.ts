@@ -4,7 +4,7 @@
 // it already has by name instead of adding it again.
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { buildBackup, TABLE_INFO, type BackupFile, type BackupRow, type TableInfo } from "./backup.js";
+import { buildBackup, TABLE_INFO, type BackupFile, type BackupOptions, type BackupRow, type TableInfo } from "./backup.js";
 import { db } from "./db.js";
 
 // What can be exported or imported on its own (table names, as in the file).
@@ -100,8 +100,8 @@ export interface ExportFile extends BackupFile {
 }
 
 // Whole lists, or (with ids) only some of a list's items, with what they need.
-export async function buildExport(workspaceId: string, lists: ListName[], ids?: Partial<Record<ListName, string[]>>): Promise<ExportFile> {
-  const backup = await buildBackup(workspaceId);
+export async function buildExport(workspaceId: string, lists: ListName[], ids?: Partial<Record<ListName, string[]>>, options: BackupOptions = {}): Promise<ExportFile> {
+  const backup = await buildBackup(workspaceId, options);
   const roots = new Map<string, Set<string>>();
   for (const list of lists) {
     const chosen = ids?.[list];

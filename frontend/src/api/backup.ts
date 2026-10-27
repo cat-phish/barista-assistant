@@ -26,14 +26,15 @@ export interface ImportSummary {
 
 export const backupApi = {
   // Owners only.
-  download: (workspaceId: string) => api.get<BackupFile>(`/api/workspaces/${workspaceId}/backup`),
+  // aiRequests: also what was sent to the AI (§2b).
+  download: (workspaceId: string, aiRequests = false) => api.get<BackupFile>(`/api/workspaces/${workspaceId}/backup${aiRequests ? '?aiRequests=true' : ''}`),
   // Into a new workspace the caller owns; 409 when the slug is taken, 400
   // with the first problem when the file doesn't check out.
   restore: (name: string, slug: string, backup: BackupFile) =>
     api.post<{ workspaceId: string }>('/api/workspaces/restore', { name, slug, backup }),
   // Lists (or, with ids, some of their items) with what they need. Owners only.
-  exportLists: (workspaceId: string, lists: ListName[], ids?: Partial<Record<ListName, string[]>>) =>
-    api.post<BackupFile & { scope: 'lists'; lists: ListName[] }>(`/api/workspaces/${workspaceId}/export`, { lists, ...(ids ? { ids } : {}) }),
+  exportLists: (workspaceId: string, lists: ListName[], ids?: Partial<Record<ListName, string[]>>, aiRequests = false) =>
+    api.post<BackupFile & { scope: 'lists'; lists: ListName[] }>(`/api/workspaces/${workspaceId}/export`, { lists, ...(ids ? { ids } : {}), ...(aiRequests ? { aiRequests } : {}) }),
   previewImport: (workspaceId: string, file: BackupFile, duplicates: Duplicates, lists?: ListName[]) =>
     api.post<ImportSummary>(`/api/workspaces/${workspaceId}/import/preview`, { file, duplicates, ...(lists ? { lists } : {}) }),
   // The journal or the beans for a spreadsheet (names, not IDs). Owners only.

@@ -5,7 +5,7 @@ import { and, count, eq, gte } from "drizzle-orm";
 import { loadBrewContext } from "./context.js";
 import { db } from "./db.js";
 import { config } from "./config.js";
-import { analyzeWithLlm, PROMPT_VERSION, requestSuggestion } from "./llm.js";
+import { analysisSent, analyzeWithLlm, PROMPT_VERSION, requestSuggestion, suggestionSent } from "./llm.js";
 import { loadSuggestContext } from "./suggestContext.js";
 
 // The brew's workspace and its settings: what it keeps from the AI
@@ -90,7 +90,7 @@ export async function processBrewAnalysis({ brewLogId, auto = false }: BrewAnaly
 
   const analysisId = randomUUID();
   try {
-    await db.insert(llmAnalyses).values({ id: analysisId, brewLogId, ...analysis, auto, model: config.openaiModel, promptVersion: PROMPT_VERSION });
+    await db.insert(llmAnalyses).values({ id: analysisId, brewLogId, ...analysis, auto, model: config.openaiModel, promptVersion: PROMPT_VERSION, request: analysisSent(context, hidden) });
   } catch (err) {
     // The log may have been deleted while the LLM call was running (FK violation).
     if ((await loadBrewContext(brewLogId)) === null) {
@@ -121,7 +121,15 @@ export async function processParameterSuggestion({ suggestionId }: ParameterSugg
   const { suggestion } = await requestSuggestion(context, hidden);
   await db
     .update(parameterSuggestions)
-    .set({ ...suggestion, status: "done", brewCount: context.brews.length, model: config.openaiModel, promptVersion: PROMPT_VERSION, completedAt: new Date() })
+    .set({
+      ...suggestion,
+      status: "done",
+      brewCount: context.brews.length,
+      model: config.openaiModel,
+      promptVersion: PROMPT_VERSION,
+      request: suggestionSent(context, hidden),
+      completedAt: new Date(),
+    })
     .where(eq(parameterSuggestions.id, suggestionId));
   return { status: "saved", id: suggestionId };
 }

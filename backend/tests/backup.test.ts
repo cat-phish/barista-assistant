@@ -7,6 +7,9 @@ import { BACKUP_TABLES, BACKUP_VERSION, COLUMN_TYPES, NOT_BACKED_UP, TABLE_INFO 
 import { db } from "../src/db.js";
 import { addMember, brewerId, menuAdd, menuSection, newBean, newBrewLog, newUser, newWorkspace, styleId, type TestUser } from "./helpers.js";
 
+// What was sent to the AI, saved with an analysis and a suggestion.
+const SENT = { sections: ["core", "end"], system: "You are an expert.", input: { brew: { rating: 4 } } };
+
 // A workspace with something in every table a backup has.
 async function populated() {
   const owner = await newUser();
@@ -63,8 +66,8 @@ async function populated() {
     rating: 4,
     tastingNotes: "Sweet",
   });
-  await db.insert(schema.llmAnalyses).values({ id: randomUUID(), brewLogId: log, reasoning: "Fine", suggestedGrindDelta: "finer", suggestedTempDelta: 1 });
-  await db.insert(schema.parameterSuggestions).values({ id: randomUUID(), beanId: bean, recipeId: recipe, brewerId: v60, grinderId: c40, source: "beanRecipe", maxBrews: 5, status: "done", reasoning: "Stay", batchDoseGrams: 15, batchWaterGrams: 250, grindSetting: 20, tempC: 94, ratio: 16.5, confidence: "low" });
+  await db.insert(schema.llmAnalyses).values({ id: randomUUID(), brewLogId: log, reasoning: "Fine", suggestedGrindDelta: "finer", suggestedTempDelta: 1, request: SENT });
+  await db.insert(schema.parameterSuggestions).values({ id: randomUUID(), beanId: bean, recipeId: recipe, brewerId: v60, grinderId: c40, source: "beanRecipe", maxBrews: 5, status: "done", reasoning: "Stay", batchDoseGrams: 15, batchWaterGrams: 250, grindSetting: 20, tempC: 94, ratio: 16.5, confidence: "low", request: SENT });
   await owner.agent.patch(`${base}/grinders/${c40}`).send({ archived: true });
   return { owner, ws, base };
 }
@@ -104,7 +107,7 @@ async function snapshot(user: TestUser, workspaceId: string) {
 describe("workspace backup and restore (docs/api/backup.md §2b)", () => {
   it("restores into a new workspace that looks the same, with new IDs", async () => {
     const { owner, ws, base } = await populated();
-    const res = await owner.agent.get(`${base}/backup`);
+    const res = await owner.agent.get(`${base}/backup?aiRequests=true`); // everything there is
     expect(res.status).toBe(200);
     expect(res.headers["content-disposition"]).toMatch(new RegExp(`attachment; filename="${ws.slug}-backup-\\d{4}-\\d{2}-\\d{2}\\.json"`));
     const backup = res.body;
@@ -124,9 +127,29 @@ describe("workspace backup and restore (docs/api/backup.md §2b)", () => {
     const copy = await workspaceOf(owner, copyId);
     expect(copy).toMatchObject({ name: "Copy", slug: `copy-${ws.slug}`, isPublicMenuEnabled: false });
     // New IDs throughout: nothing in the copy points into the original.
-    const copyBackup = (await owner.agent.get(`/api/workspaces/${copyId}/backup`)).body;
+    const copyBackup = (await owner.agent.get(`/api/workspaces/${copyId}/backup?aiRequests=true`)).body;
     const originalIds = new Set(Object.values(backup.tables as Record<string, Array<{ id?: string }>>).flatMap((rows) => rows.map((r) => r.id)));
     expect(JSON.stringify(copyBackup.tables).match(/[0-9a-f]{8}-[0-9a-f-]{27}/g)?.some((id) => originalIds.has(id))).toBe(false);
+  });
+
+  it("leaves out what was sent to the AI unless asked, and restores it when it's there", async () => {
+    const { owner, base } = await populated();
+    const plain = (await owner.agent.get(`${base}/backup`)).body;
+    expect(plain.tables.llm_analyses[0]).not.toHaveProperty("request");
+    expect(plain.tables.parameter_suggestions[0]).not.toHaveProperty("request");
+    expect((await owner.agent.get(`${base}/backup?aiRequests=maybe`)).status).toBe(400);
+
+    const full = (await owner.agent.get(`${base}/backup?aiRequests=true`)).body;
+    expect(full.tables.llm_analyses[0].request).toEqual(SENT);
+    expect(full.tables.parameter_suggestions[0].request).toEqual(SENT);
+    const restored = await owner.agent.post("/api/workspaces/restore").send({ name: "With AI", slug: `ai-${randomUUID().slice(0, 8)}`, backup: full });
+    expect(restored.status, JSON.stringify(restored.body)).toBe(201);
+    const copy = (await owner.agent.get(`/api/workspaces/${restored.body.workspaceId}/backup?aiRequests=true`)).body;
+    expect(copy.tables.llm_analyses[0].request).toEqual(SENT);
+
+    // Checked like any column.
+    full.tables.llm_analyses[0].request = { system: 1 };
+    expect((await owner.agent.post("/api/workspaces/restore").send({ name: "Bad", slug: `bad-${randomUUID().slice(0, 8)}`, backup: full })).status).toBe(400);
   });
 
   it("gives every restored brew to the person restoring", async () => {

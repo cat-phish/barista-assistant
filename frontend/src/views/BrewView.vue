@@ -5,11 +5,12 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { beansApi } from '../api/beans';
-import { brewLogsApi } from '../api/brews';
+import { brewLogsApi, suggestionsApi } from '../api/brews';
 import { ApiError, errorMessage } from '../api/client';
 import { recipesApi } from '../api/recipes';
 import { MAX_SUGGEST_BREWS, SUGGEST_SOURCES, type Bean, type BrewLog, type Recipe, type BrewerMethod, type SuggestionBatch, type SuggestSource } from '../api/types';
 import AnalysisCard from '../components/AnalysisCard.vue';
+import AiRequestDialog from '../components/AiRequestDialog.vue';
 import RepeatBrewPicker from '../components/RepeatBrewPicker.vue';
 import { recentByMade, repeatLabel, repeatPlan } from '../lib/repeatBrew';
 import { grindersApi } from '../api/grinders';
@@ -604,6 +605,13 @@ function plannedBatch(): SuggestionBatch {
   if (shotRecipe.value) return { doseGrams: shot.value?.dose ?? null, waterGrams: null, iceGrams: null, yieldGrams: shot.value?.yield ?? null };
   if (filterRecipe.value) return { doseGrams: batch.value?.dose ?? null, waterGrams: batch.value?.water ?? null, iceGrams: batch.value?.ice ?? null, yieldGrams: null };
   return { doseGrams: num(draft.dose), waterGrams: num(draft.water), iceGrams: num(draft.ice), yieldGrams: null };
+}
+// What was sent for the suggestion shown (docs/api/analysis.md §8c).
+const showSent = ref(false);
+async function loadSent() {
+  const ws = workspaces.current?.id;
+  const s = suggester.suggestion.value;
+  return ws && s ? (await suggestionsApi.sent(ws, s.id)).request : null;
 }
 // What the suggested ratio kept, for the card ("your 300 g of water").
 const ratioKept = ref('');
@@ -1259,6 +1267,8 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             <template v-else>No earlier brews to compare yet, so it's from the recipe and the bean alone.</template>
             Filled in below; change anything you like.
           </p>
+          <button v-if="suggester.suggestion.value?.hasRequest" class="btn-link small" type="button" @click="showSent = true">What was sent to the AI</button>
+          <AiRequestDialog :open="showSent" :load="loadSent" @close="showSent = false" />
         </template>
         <div v-if="show('brew.temp') || show('brew.grind')" class="form-row">
           <div v-if="show('brew.temp')" class="field">

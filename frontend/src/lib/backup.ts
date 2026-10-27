@@ -38,6 +38,11 @@ export function fileLists(file: BackupFile): ListName[] {
   return LISTS.filter((l) => (file.tables[l]?.length ?? 0) > 0);
 }
 
+// Lists whose export carries AI suggestions: a brew's analyses, a bean's
+// suggested parameters (and a brew brings its bean). What each was sent to
+// the AI is left out unless asked (docs/api/backup.md §2b).
+export const hasAiSuggestions = (lists: readonly ListName[]): boolean => lists.some((l) => l === 'brew_logs' || l === 'beans');
+
 // What a list's items bring along when imported, if anything
 // (docs/api/backup.md §2b, "What comes along").
 export const COMES_ALONG: Record<ListName, string | null> = {
