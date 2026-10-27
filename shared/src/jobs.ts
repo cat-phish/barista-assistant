@@ -1,4 +1,4 @@
-import type { BackupSettings } from "./schema.js";
+import type { BackupSettings, ParameterSuggestion } from "./schema.js";
 
 // BullMQ contract between the backend (producer) and the worker (consumer).
 // See docs/api/llm-contract.md §9.
@@ -28,6 +28,19 @@ export const PARAMETER_SUGGESTION_JOB = "suggest";
 export interface ParameterSuggestionJobData {
   suggestionId: string;
 }
+
+// Previews (docs/api/analysis.md §8d): what an analysis or a suggestion
+// would send, built by the worker without calling the AI. The backend waits
+// for the answer (the job's return value, an AiRequest, or null when the
+// brew or bean is gone). The suggestion is as POST would save it.
+export const AI_PREVIEW_QUEUE = "ai-preview";
+export const AI_PREVIEW_JOB = "preview";
+
+export type SuggestionPreview = Pick<
+  ParameterSuggestion,
+  "beanId" | "recipeId" | "brewerId" | "grinderId" | "source" | "maxBrews" | "batchDoseGrams" | "batchWaterGrams" | "batchIceGrams" | "batchYieldGrams"
+>;
+export type AiPreviewJobData = { kind: "analysis"; brewLogId: string } | { kind: "suggest"; suggestion: SuggestionPreview };
 
 export const GRIND_DELTAS = ["much_finer", "finer", "no_change", "coarser", "much_coarser"] as const;
 export type GrindDelta = (typeof GRIND_DELTAS)[number];

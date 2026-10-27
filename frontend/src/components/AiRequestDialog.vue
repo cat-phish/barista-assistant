@@ -1,12 +1,14 @@
 <script setup lang="ts">
 // What was sent to the AI for an analysis or a suggestion
-// (docs/api/analysis.md §8c): the prompt sections used, the system prompt,
-// and the input, each top-level part of it folded. Loaded when opened.
+// (docs/api/analysis.md §8c), or with `preview` what would be sent (§8d):
+// the prompt sections used, the system prompt, and the input, each
+// top-level part of it folded. Loaded when opened.
 import { computed, ref, watch } from 'vue';
 import { errorMessage } from '../api/client';
 import type { AiRequest } from '../api/types';
 
-const props = defineProps<{ open: boolean; load: () => Promise<AiRequest | null> }>();
+const props = defineProps<{ open: boolean; load: () => Promise<AiRequest | null>; preview?: boolean }>();
+const title = computed(() => (props.preview ? 'What would be sent to the AI' : 'What was sent to the AI'));
 const emit = defineEmits<{ close: [] }>();
 const dialog = ref<HTMLDialogElement | null>(null);
 
@@ -54,13 +56,16 @@ async function copy(): Promise<void> {
 </script>
 
 <template>
-  <dialog ref="dialog" class="ai-request" aria-label="What was sent to the AI" @cancel.prevent="emit('close')">
-    <h2>What was sent to the AI</h2>
+  <dialog ref="dialog" class="ai-request" :aria-label="title" @cancel.prevent="emit('close')">
+    <h2>{{ title }}</h2>
     <p v-if="state === 'loading'" class="muted" aria-live="polite">Loading…</p>
     <p v-else-if="state === 'error'" class="form-error" role="alert">{{ error }}</p>
+    <p v-else-if="state === 'none' && preview" class="muted">Nothing to preview: the brew or bean is gone.</p>
     <p v-else-if="state === 'none'" class="muted">Not saved for this one: it was made before the app kept what it sent, or it was restored from a backup without it.</p>
     <template v-else-if="request">
-      <p class="muted small">{{ size }}, from {{ request.sections.length }} prompt sections.</p>
+      <p class="muted small">
+        {{ size }}, from {{ request.sections.length }} prompt sections.<template v-if="preview"> Nothing has been sent yet.</template>
+      </p>
       <details>
         <summary>Instructions (system prompt)</summary>
         <p class="sections small">

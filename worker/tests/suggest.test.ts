@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../src/db.js";
 import { requestSuggestion, suggestionSent } from "../src/llm.js";
-import { failSuggestion, processParameterSuggestion } from "../src/processor.js";
+import { failSuggestion, processAiPreview, processParameterSuggestion } from "../src/processor.js";
 import { loadSuggestContext, type SuggestRequest } from "../src/suggestContext.js";
 
 // Real database, fake LLM.
@@ -125,6 +125,19 @@ describe("which earlier brews Suggest parameters sends (docs/api/analysis.md §8
       reasoning: "Sour.", nextStep: "Grind finer.", confidence: null, suggestedGrindDelta: "finer", suggestedTempDelta: 1,
       suggestedRpmDelta: null, suggestedDoseDelta: null, suggestedYieldDelta: null, helpful: true,
     });
+  });
+});
+
+describe("processAiPreview for a suggestion (docs/api/analysis.md §8d)", () => {
+  it("is what asking would send, without calling the AI", async () => {
+    await db.update(workspaces).set({ settings: { aiHidden: ["unratedHistory"] } }).where(eq(workspaces.id, workspaceId));
+    await db.update(brewLogs).set({ rating: null }).where(eq(brewLogs.id, log.day5!));
+    const preview = await processAiPreview({ kind: "suggest", suggestion: request("beanRecipe") });
+    const context = (await loadSuggestContext(request("beanRecipe"), { ratedOnly: true }))!;
+    expect(preview).toEqual(suggestionSent(context, new Set(["unratedHistory"])));
+    expect((preview!.input.brews as Array<{ tastingNotes: string }>).map((b) => b.tastingNotes)).toEqual(["day1"]); // the unrated one left out
+    expect(llm).not.toHaveBeenCalled();
+    expect(await processAiPreview({ kind: "suggest", suggestion: request("bean", { beanId: randomUUID() }) })).toBeNull();
   });
 });
 

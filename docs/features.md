@@ -305,7 +305,9 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   the cup stays about the same size.
 - **What was sent to the AI:** every analysis and suggestion keeps the
   instructions and brew details it was sent; "What was sent to the AI" on
-  its card shows them. Backups and exports ask whether to include them. Owners set the default under Settings → AI.
+  its card shows them. Backups and exports ask whether to include them.
+  "Preview what's sent" shows the same before asking, without sending
+  anything. Owners set the default under Settings → AI.
 
 ## Public menu
 - An optional public page per workspace listing beans, plus plain

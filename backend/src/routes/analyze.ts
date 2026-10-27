@@ -8,6 +8,7 @@ import { z } from "zod";
 import { analysisRequests, brewLogs, DEFAULT_WORKSPACE_SETTINGS, llmAnalyses, withDefaults, workspaces } from "@barista/shared/schema";
 import { db } from "../db.js";
 import { enqueueBrewAnalysis, QueueUnavailableError } from "../queue.js";
+import { sendPreview } from "../preview.js";
 
 export interface AnalyzeResponse {
   status: "queued";
@@ -59,6 +60,17 @@ analyzeRouter.post(
     await db.delete(analysisRequests).where(eq(analysisRequests.brewLogId, brewLogId));
 
     res.status(202).json({ status: "queued", jobId, message: "Brew analysis queued." });
+  }
+);
+
+// What analyzing the brew would send (docs/api/analysis.md §8d), without
+// analyzing it. Who can analyze it can preview it.
+analyzeRouter.post(
+  "/:brewLogId/analyze/preview",
+  async (req: Request<{ brewLogId: string }>, res: Response<AiRequestResponse>) => {
+    const { brewLogId } = req.params;
+    if (!(await requireResourceMembership(res, authedUserId(req), "brewLog", brewLogId, WRITE_ROLES))) return;
+    await sendPreview(res, { kind: "analysis", brewLogId });
   }
 );
 

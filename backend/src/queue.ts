@@ -18,11 +18,14 @@ import {
   PARAMETER_SUGGESTION_JOB,
   PARAMETER_SUGGESTION_QUEUE,
   type ParameterSuggestionJobData,
+  AI_PREVIEW_JOB,
+  AI_PREVIEW_QUEUE,
+  type AiPreviewJobData,
 } from "@barista/shared/jobs";
-import type { BackupSettings } from "@barista/shared/schema";
-import { Queue } from "bullmq";
+import type { AiRequest, BackupSettings } from "@barista/shared/schema";
+import { Queue, QueueEvents } from "bullmq";
 import { Redis } from "ioredis";
-import { backupTimezone, config } from "./config.js";
+import { backupTimezone, config, previewTimeoutMs } from "./config.js";
 
 // Producer side of the brew-analysis queue (docs/api/llm-contract.md §9).
 const connection = new Redis(config.redis.url, {
@@ -134,6 +137,40 @@ export async function enqueueParameterSuggestion(suggestionId: string): Promise<
   );
 }
 
+// Previews (docs/api/analysis.md §8d): the worker builds what would be sent
+// and the request waits for it. Finished jobs stay a minute, so the answer
+// can still be read if it came before the wait began.
+export const aiPreviewQueue = new Queue<AiPreviewJobData, AiRequest | null>(AI_PREVIEW_QUEUE, { connection });
+let lastPreviewError = "";
+aiPreviewQueue.on("error", (err: Error) => {
+  if (err.message !== lastPreviewError) console.error("AI preview queue error:", err.message);
+  lastPreviewError = err.message;
+});
+// Waiting needs its own blocking connection; made on the first preview.
+let previewEvents: QueueEvents | null = null;
+let previewConnection: Redis | null = null;
+export class PreviewTimeoutError extends Error {}
+
+export async function previewAiRequest(data: AiPreviewJobData): Promise<AiRequest | null> {
+  const job = await withTimeout(async () => {
+    if (!previewEvents) {
+      previewConnection = new Redis(config.redis.url, { maxRetriesPerRequest: null, ...(config.redis.password ? { password: config.redis.password } : {}) });
+      previewEvents = new QueueEvents(AI_PREVIEW_QUEUE, { connection: previewConnection });
+    }
+    await previewEvents.waitUntilReady();
+    return aiPreviewQueue.add(AI_PREVIEW_JOB, data, { removeOnComplete: { age: 60 }, removeOnFail: { age: 60 } });
+  });
+  try {
+    return await job.waitUntilFinished(previewEvents!, previewTimeoutMs());
+  } catch (err) {
+    if (err instanceof Error && /timed out/i.test(err.message)) {
+      await job.remove().catch(() => undefined); // nobody's waiting for it any more
+      throw new PreviewTimeoutError(err.message);
+    }
+    throw err;
+  }
+}
+
 // Same timeout as the analysis; the caller treats failure as "no reminder".
 export function enqueueRateReminder(data: RateReminderJobData, delayMs: number): Promise<void> {
   return enqueueReminder(RATE_REMINDER_JOB, rateReminderJobId(data.brewLogId), data, delayMs);
@@ -191,6 +228,7 @@ export async function enqueueBackupNow(): Promise<void> {
 }
 
 export async function closeQueue(): Promise<void> {
-  await Promise.all([brewAnalysisQueue.close(), reminderQueue.close(), maintenanceQueue.close(), parameterSuggestionQueue.close()]);
+  await Promise.all([brewAnalysisQueue.close(), reminderQueue.close(), maintenanceQueue.close(), parameterSuggestionQueue.close(), aiPreviewQueue.close(), previewEvents?.close()]);
   connection.disconnect();
+  previewConnection?.disconnect();
 }
