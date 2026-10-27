@@ -308,6 +308,12 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   its card shows them. Backups and exports ask whether to include them.
   "Preview what's sent" shows the same before asking, without sending
   anything. Owners set the default under Settings → AI.
+- **Your AI prompt:** under Settings → Your AI prompt, each person adds
+  their own instructions (taste, kit quirks), and with Advanced rewrites any
+  part of the built-in prompt, with Reset to default. It's yours in every
+  workspace: your brews' analyses use it, whoever asks, and so does your
+  Suggest parameters. "Add a note for the AI" adds a one-off note to one
+  request.
 
 ## Public menu
 - An optional public page per workspace listing beans, plus plain

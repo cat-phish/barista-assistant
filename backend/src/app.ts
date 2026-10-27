@@ -7,6 +7,7 @@ import { db } from "./db.js";
 import { sendError } from "./http.js";
 import { analyzeRouter } from "./routes/analyze.js";
 import { authRouter } from "./routes/auth.js";
+import { aiPromptRouter } from "./routes/aiPrompt.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { beansRouter } from "./routes/beans.js";
 import { brewLogsRouter } from "./routes/brewLogs.js";
@@ -58,6 +59,7 @@ app.get("/health", async (_req: Request, res: Response<HealthResponse>) => {
 });
 
 app.use("/api/auth/me/notifications", notificationsRouter);
+app.use("/api/auth/me/ai-prompt", aiPromptRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/public/menu", publicMenuRouter);
 app.use("/api/workspaces/:workspaceId/brewers", brewersRouter);

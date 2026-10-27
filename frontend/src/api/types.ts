@@ -436,6 +436,26 @@ export interface LlmAnalysis {
   createdAt: string;
 }
 
+// Your own AI prompt (docs/api/auth.md §1c).
+export interface AiPrompt {
+  instructions: string | null;
+  overrides: Record<string, string>; // section key → your text
+}
+export interface PromptSectionText {
+  key: string;
+  label: string;
+  prompts: ReadonlyArray<'analysis' | 'suggest'>;
+  locked: boolean; // describes the answer's JSON: can't be changed
+  text: string; // the default
+}
+export interface AiPromptSettings {
+  aiPrompt: AiPrompt;
+  sections: PromptSectionText[];
+  instructionsIntro: string;
+  noteIntro: string;
+  limits: { instructions: number; section: number; note: number };
+}
+
 // What was sent to the AI (docs/api/analysis.md §8c).
 export interface AiRequest {
   sections: string[];
@@ -510,6 +530,8 @@ export interface ParameterSuggestion {
   grinderId: string | null;
   source: SuggestSource;
   maxBrews: number;
+  requestedBy: string | null; // whose own AI prompt was used (auth.md §1c)
+  note: string | null;
   brewCount: number | null; // how many earlier brews were sent
   // The batch as planned (kept as it is): null when not set.
   batchDoseGrams: number | null;
@@ -539,6 +561,7 @@ export interface SuggestionRequest {
   source?: SuggestSource;
   maxBrews?: number;
   batch?: SuggestionBatch;
+  note?: string; // a one-off note (docs/api/auth.md §1c)
 }
 export interface SuggestionBatch {
   doseGrams: number | null;

@@ -12,6 +12,9 @@ export interface BrewAnalysisJobData {
   // if auto-analyze was turned off or the daily cap is reached, and the
   // analysis is marked auto. Absent on older jobs (= asked for).
   auto?: boolean;
+  // A one-off note from whoever asked (docs/api/auth.md §1c), added to the
+  // prompt; absent on automatic ones.
+  note?: string;
 }
 
 // One job per brew log while it's waiting or running, so repeated clicks
@@ -38,9 +41,21 @@ export const AI_PREVIEW_JOB = "preview";
 
 export type SuggestionPreview = Pick<
   ParameterSuggestion,
-  "beanId" | "recipeId" | "brewerId" | "grinderId" | "source" | "maxBrews" | "batchDoseGrams" | "batchWaterGrams" | "batchIceGrams" | "batchYieldGrams"
+  | "beanId"
+  | "recipeId"
+  | "brewerId"
+  | "grinderId"
+  | "source"
+  | "maxBrews"
+  | "batchDoseGrams"
+  | "batchWaterGrams"
+  | "batchIceGrams"
+  | "batchYieldGrams"
+  | "requestedBy"
+  | "note"
 >;
-export type AiPreviewJobData = { kind: "analysis"; brewLogId: string } | { kind: "suggest"; suggestion: SuggestionPreview };
+// note: a one-off note (docs/api/auth.md §1c), as asking would send it.
+export type AiPreviewJobData = { kind: "analysis"; brewLogId: string; note?: string } | { kind: "suggest"; suggestion: SuggestionPreview };
 
 export const GRIND_DELTAS = ["much_finer", "finer", "no_change", "coarser", "much_coarser"] as const;
 export type GrindDelta = (typeof GRIND_DELTAS)[number];

@@ -68,7 +68,10 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   empty.
 - **Not in a backup:** people, members, notification channels and
   preferences belong to the server, not the workspace. A brew says who made
-  it as `brewedBy` (their email, or `null`) instead of `userId`.
+  it as `brewedBy` (their email, or `null`) instead of `userId`, and a
+  parameter suggestion who asked the same way (`brewedBy` for
+  `requestedBy`). People's own AI prompts (`docs/api/auth.md` §1c) aren't
+  in it.
   `analysis_requests` (when an automatic analysis is due, why one failed,
   §8) is queue state and isn't backed up either.
 - **`version`** goes up only when an older file can't be restored as is;
@@ -115,7 +118,8 @@ above it.
     added: the file has the workspace's own;
   - every row inserted with a new ID and its references rewritten; archive
     dates, positions and "date added" (`createdAt`) are kept;
-  - every brew belongs to the caller (`brewedBy` is only kept in the file).
+  - every brew, and every suggestion's `requestedBy`, belongs to the caller
+    (`brewedBy` is only kept in the file).
 - **Success (`201 Created`):** `{ "workspaceId": "uuid" }`
 - **Errors:** `400` the first problem found, e.g.
   `"tables.recipes[3].brewerId: not in the file"` or

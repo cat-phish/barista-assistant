@@ -82,8 +82,9 @@ export const suggestionsApi = {
 
 export const analysisApi = {
   // Queues an LLM analysis (202). Repeat requests while queued reuse the job (§8).
-  request: (brewLogId: string) =>
-    api.post<{ status: 'queued'; jobId: string; message: string }>(`/api/brew-logs/${brewLogId}/analyze`),
+  // note: a one-off note for the AI (docs/api/auth.md §1c).
+  request: (brewLogId: string, note?: string) =>
+    api.post<{ status: 'queued'; jobId: string; message: string }>(`/api/brew-logs/${brewLogId}/analyze`, note ? { note } : undefined),
   // Was the suggestion useful? null takes the answer back (docs/api/analysis.md §8).
   rateAnalysis: (brewLogId: string, analysisId: string, helpful: boolean | null) =>
     api.put<{ helpful: boolean | null }>(`/api/brew-logs/${brewLogId}/analyses/${analysisId}/feedback`, { helpful }),
@@ -91,5 +92,6 @@ export const analysisApi = {
   sent: (brewLogId: string, analysisId: string) =>
     api.get<{ request: AiRequest | null }>(`/api/brew-logs/${brewLogId}/analyses/${analysisId}/request`),
   // What analyzing would send, without analyzing (§8d).
-  preview: (brewLogId: string) => api.post<{ request: AiRequest | null }>(`/api/brew-logs/${brewLogId}/analyze/preview`),
+  preview: (brewLogId: string, note?: string) =>
+    api.post<{ request: AiRequest | null }>(`/api/brew-logs/${brewLogId}/analyze/preview`, note ? { note } : undefined),
 };

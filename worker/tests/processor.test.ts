@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { extractionYield, loadBrewContext, type BrewContext } from "../src/context.js";
 import { db } from "../src/db.js";
-import { analysisSent, analyzeWithLlm } from "../src/llm.js";
+import { analysisSent, analyzeWithLlm, PROMPT_VERSION } from "../src/llm.js";
 import { CAP_REACHED, failureMessage, processAiPreview, processBrewAnalysis, settleRequest } from "../src/processor.js";
 
 // Real database, fake LLM.
@@ -98,6 +98,28 @@ describe("processBrewAnalysis", () => {
     // What was sent, saved with it (docs/api/analysis.md §8c).
     expect(saved[0]!.request).toEqual(analysisSent(context, new Set()));
     expect(saved[0]!.request).toMatchObject({ sections: expect.arrayContaining(["core", "output", "end"]), system: expect.stringContaining("Analyze this one brew"), input: { brew: { tastingNotes: "day 8" } } });
+  });
+
+  it("uses the brew's barista's own prompt and the note, and marks the version custom (docs/api/auth.md §1c)", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    const prompt = { instructions: "I like it light.", overrides: { core: "Be brief." } };
+    await db.update(users).set({ aiPrompt: prompt }).where(eq(users.id, userId));
+    await processBrewAnalysis({ brewLogId: logIds.day8!, note: "Tasted it cold." });
+    expect(llm.mock.calls[0]![2]).toEqual({ prompt, note: "Tasted it cold." });
+    const [saved] = await db.select().from(llmAnalyses).where(eq(llmAnalyses.brewLogId, logIds.day8!));
+    expect(saved!.promptVersion).toBe(`${PROMPT_VERSION}+custom`);
+    expect(saved!.request?.sections).toEqual(expect.arrayContaining(["instructions", "note"]));
+    expect(saved!.request?.system.startsWith("Be brief.")).toBe(true);
+    // The preview uses the same.
+    expect((await processAiPreview({ kind: "analysis", brewLogId: logIds.day8!, note: "Tasted it cold." }))?.system).toBe(saved!.request?.system);
+  });
+
+  it("without a prompt of their own or a note: the defaults, and the plain version", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    await processBrewAnalysis({ brewLogId: logIds.day8! });
+    expect(llm.mock.calls[0]![2]).toEqual({ prompt: { instructions: null, overrides: {} }, note: null });
+    const [saved] = await db.select().from(llmAnalyses).where(eq(llmAnalyses.brewLogId, logIds.day8!));
+    expect(saved!.promptVersion).toBe(PROMPT_VERSION);
   });
 
   it("a preview is what the analysis would send, without calling the AI (docs/api/analysis.md §8d)", async () => {

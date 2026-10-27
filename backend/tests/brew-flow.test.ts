@@ -149,6 +149,14 @@ describe("suggestions and analysis", () => {
     expect(await brewAnalysisQueue.getWaitingCount()).toBe(1);
   });
 
+  it("a one-off note goes with the job (docs/api/auth.md §1c)", async () => {
+    const { owner, ws } = await setup();
+    const log = await newBrewLog(owner, ws.id, await newBean(owner, ws.id));
+    expect((await owner.agent.post(`/api/brew-logs/${log}/analyze`).send({ note: "x".repeat(501) })).status).toBe(400);
+    expect((await owner.agent.post(`/api/brew-logs/${log}/analyze`).send({ note: "  I drank it with milk  " })).status).toBe(202);
+    expect((await brewAnalysisQueue.getJob(brewAnalysisJobId(log)))?.data).toEqual({ brewLogId: log, note: "I drank it with milk" });
+  });
+
   it("a workspace that keeps unrated brews from the AI refuses to analyze one (llm-contract.md §9)", async () => {
     const { owner, ws } = await setup();
     const bean = await newBean(owner, ws.id);

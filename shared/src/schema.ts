@@ -13,6 +13,7 @@ import {
   type AnyMySqlColumn,
 } from "drizzle-orm/mysql-core";
 import type { AiDetail } from "./aiDetails.js";
+import type { AiPrompt } from "./aiPrompt.js";
 
 // A JSON column read back as a value: MariaDB stores JSON as text, so the
 // driver returns a string that drizzle's json() would leave unparsed.
@@ -152,6 +153,10 @@ export const users = mysqlTable("users", {
   // every older session invalid.
   sessionVersion: int("session_version").default(0).notNull(),
   preferences: jsonValue<Partial<UserPreferences>>("preferences"), // null = all defaults
+  // Their own AI prompt (docs/api/auth.md §1c): instructions and section
+  // texts, used for their brews' analyses and their suggestions. null = the
+  // defaults. Kept apart from preferences, which go with every response.
+  aiPrompt: jsonValue<AiPrompt>("ai_prompt"),
   // A server admin (docs/api/server.md §10). Only granted on the server
   // (`npm run admin -- grant <email>`), never through the API, so it can't
   // be claimed by registering an address.
@@ -1171,6 +1176,10 @@ export const parameterSuggestions = mysqlTable("parameter_suggestions", {
   grinderId: varchar("grinder_id", { length: 36 }).references(() => grinders.id, { onDelete: "set null" }),
   source: varchar("source", { length: 20 }).$type<SuggestSource>().notNull(), // SUGGEST_SOURCES
   maxBrews: int("max_brews").notNull(),
+  // Who asked: their own AI prompt is used (docs/api/auth.md §1c); null once
+  // their account is deleted. note: a one-off note sent with it.
+  requestedBy: varchar("requested_by", { length: 36 }).references(() => users.id, { onDelete: "set null" }),
+  note: varchar("note", { length: 500 }),
   brewCount: int("brew_count"), // how many earlier brews were sent
   // The batch as planned when asked: the barista's to choose, so the AI
   // keeps it and suggests a ratio (filter: hot water and ice; espresso: the

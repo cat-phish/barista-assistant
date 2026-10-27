@@ -19,7 +19,10 @@ describe("parameter suggestions", () => {
     const { owner, bean, recipe, v60, base } = await setup();
     const res = await owner.agent.post(base).send({ beanId: bean, recipeId: recipe });
     expect(res.status).toBe(202);
-    expect(res.body.suggestion).toMatchObject({ beanId: bean, recipeId: recipe, brewerId: v60, grinderId: null, source: "beanRecipe", maxBrews: 5, status: "pending", reasoning: null });
+    expect(res.body.suggestion).toMatchObject({ beanId: bean, recipeId: recipe, brewerId: v60, grinderId: null, source: "beanRecipe", maxBrews: 5, status: "pending", reasoning: null, requestedBy: owner.id, note: null });
+    // A one-off note goes with it (docs/api/auth.md §1c).
+    expect((await owner.agent.post(base).send({ beanId: bean, source: "bean", note: "For iced" })).body.suggestion).toMatchObject({ note: "For iced" });
+    expect((await owner.agent.post(base).send({ beanId: bean, source: "bean", note: "x".repeat(501) })).status).toBe(400);
     const job = await parameterSuggestionQueue.getJob(`suggest-${res.body.suggestion.id}`);
     expect(job?.data).toEqual({ suggestionId: res.body.suggestion.id });
     expect(job?.opts).toMatchObject({ attempts: 3, removeOnComplete: true, removeOnFail: true });

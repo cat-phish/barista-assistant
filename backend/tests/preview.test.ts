@@ -30,6 +30,9 @@ describe("previews: what would be sent, without sending it", () => {
     const res = await owner.agent.post(`/api/brew-logs/${log}/analyze/preview`);
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.body).toEqual({ request: { sections: ["end"], system: "Preview", input: { job: { kind: "analysis", brewLogId: log } } } });
+    // With a one-off note, as asking would send it.
+    expect((await owner.agent.post(`/api/brew-logs/${log}/analyze/preview`).send({ note: "Tasted it cold" })).body.request.input.job).toEqual({ kind: "analysis", brewLogId: log, note: "Tasted it cold" });
+    expect((await owner.agent.post(`/api/brew-logs/${log}/analyze/preview`).send({ note: "x".repeat(501) })).status).toBe(400);
   });
 
   it("a suggestion: resolved as asking would save it, and nothing is saved", async () => {
@@ -40,11 +43,11 @@ describe("previews: what would be sent, without sending it", () => {
     const recipe = (await owner.agent.post(`/api/workspaces/${ws}/recipes`).send({ name: "House", brewerId: v60, targetDoseGrams: 15, targetWaterGrams: 250 })).body.recipe.id as string;
     const bean = await newBean(owner, ws);
     const base = `/api/workspaces/${ws}/parameter-suggestions`;
-    const res = await owner.agent.post(`${base}/preview`).send({ beanId: bean, recipeId: recipe, batch: { doseGrams: 20, waterGrams: 333.33 } });
+    const res = await owner.agent.post(`${base}/preview`).send({ beanId: bean, recipeId: recipe, batch: { doseGrams: 20, waterGrams: 333.33 }, note: " Guests like it strong " });
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.body.request.input.job).toEqual({
       kind: "suggest",
-      suggestion: { beanId: bean, recipeId: recipe, brewerId: v60, grinderId: null, source: "beanRecipe", maxBrews: 5, batchDoseGrams: 20, batchWaterGrams: 333.3, batchIceGrams: null, batchYieldGrams: null },
+      suggestion: { beanId: bean, recipeId: recipe, brewerId: v60, grinderId: null, source: "beanRecipe", maxBrews: 5, batchDoseGrams: 20, batchWaterGrams: 333.3, batchIceGrams: null, batchYieldGrams: null, requestedBy: owner.id, note: "Guests like it strong" },
     });
     // The same checks as asking.
     expect((await owner.agent.post(`${base}/preview`).send({ beanId: bean, source: "recipe" })).body.error).toMatch(/pick a recipe/);

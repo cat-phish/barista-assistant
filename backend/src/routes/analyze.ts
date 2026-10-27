@@ -9,6 +9,7 @@ import { analysisRequests, brewLogs, DEFAULT_WORKSPACE_SETTINGS, llmAnalyses, wi
 import { db } from "../db.js";
 import { enqueueBrewAnalysis, QueueUnavailableError } from "../queue.js";
 import { sendPreview } from "../preview.js";
+import { noteSchema } from "./aiPrompt.js";
 
 export interface AnalyzeResponse {
   status: "queued";
@@ -20,6 +21,9 @@ export interface AnalyzeResponse {
 export const analyzeRouter = Router();
 analyzeRouter.use(requireAuth);
 
+// Optional: a one-off note for the AI (docs/api/auth.md §1c).
+const analyzeSchema = z.object({ note: noteSchema }).strict();
+
 analyzeRouter.post(
   "/:brewLogId/analyze",
   async (req: Request<{ brewLogId: string }>, res: Response<AnalyzeResponse>) => {
@@ -27,6 +31,8 @@ analyzeRouter.post(
     if (!(await requireResourceMembership(res, authedUserId(req), "brewLog", brewLogId, WRITE_ROLES))) {
       return;
     }
+    const body = parseBody(analyzeSchema, { body: req.body ?? {} }, res);
+    if (!body) return;
 
     // A cold brew still steeping has nothing to judge yet (docs/api/analysis.md §8).
     const [log] = await db
@@ -47,7 +53,7 @@ analyzeRouter.post(
 
     let jobId: string;
     try {
-      jobId = await enqueueBrewAnalysis(brewLogId);
+      jobId = await enqueueBrewAnalysis(brewLogId, { note: body.note || undefined });
     } catch (err) {
       if (err instanceof QueueUnavailableError) {
         console.error("Could not queue brew analysis:", err.message);
@@ -70,7 +76,9 @@ analyzeRouter.post(
   async (req: Request<{ brewLogId: string }>, res: Response<AiRequestResponse>) => {
     const { brewLogId } = req.params;
     if (!(await requireResourceMembership(res, authedUserId(req), "brewLog", brewLogId, WRITE_ROLES))) return;
-    await sendPreview(res, { kind: "analysis", brewLogId });
+    const body = parseBody(analyzeSchema, { body: req.body ?? {} }, res);
+    if (!body) return;
+    await sendPreview(res, { kind: "analysis", brewLogId, ...(body.note ? { note: body.note } : {}) });
   }
 );
 

@@ -1,24 +1,37 @@
 import { randomUUID } from "node:crypto";
 import type { AiPreviewJobData, BrewAnalysisJobData, ParameterSuggestionJobData } from "@barista/shared/jobs";
-import { analysisRequests, beans, brewLogs, DEFAULT_WORKSPACE_SETTINGS, llmAnalyses, parameterSuggestions, withDefaults, workspaces, type AiRequest, type WorkspaceSettings } from "@barista/shared/schema";
+import { EMPTY_AI_PROMPT, isCustomPrompt } from "@barista/shared/aiPrompt";
+import { analysisRequests, beans, brewLogs, DEFAULT_WORKSPACE_SETTINGS, llmAnalyses, parameterSuggestions, users, withDefaults, workspaces, type AiRequest, type WorkspaceSettings } from "@barista/shared/schema";
 import { and, count, eq, gte } from "drizzle-orm";
 import { loadBrewContext } from "./context.js";
 import { db } from "./db.js";
 import { config } from "./config.js";
 import { analysisSent, analyzeWithLlm, PROMPT_VERSION, requestSuggestion, suggestionSent } from "./llm.js";
+import type { PromptCustom } from "./prompt.js";
 import { loadSuggestContext } from "./suggestContext.js";
 
 // The brew's workspace and its settings: what it keeps from the AI
 // (Settings → AI, docs/api/llm-contract.md §9 "What the AI sees") and
 // auto-analyze (docs/api/analysis.md §8).
-async function workspaceOf(brewLogId: string): Promise<{ workspaceId: string; settings: WorkspaceSettings } | null> {
+// baristaId: who made the brew, whose AI prompt its analysis uses.
+async function workspaceOf(brewLogId: string): Promise<{ workspaceId: string; settings: WorkspaceSettings; baristaId: string | null } | null> {
   const [row] = await db
-    .select({ workspaceId: workspaces.id, settings: workspaces.settings })
+    .select({ workspaceId: workspaces.id, settings: workspaces.settings, baristaId: brewLogs.userId })
     .from(brewLogs)
     .innerJoin(workspaces, eq(brewLogs.workspaceId, workspaces.id))
     .where(eq(brewLogs.id, brewLogId));
-  return row ? { workspaceId: row.workspaceId, settings: withDefaults(DEFAULT_WORKSPACE_SETTINGS, row.settings ?? null) } : null;
+  return row ? { workspaceId: row.workspaceId, settings: withDefaults(DEFAULT_WORKSPACE_SETTINGS, row.settings ?? null), baristaId: row.baristaId } : null;
 }
+
+// A person's own AI prompt (docs/api/auth.md §1c), with a one-off note: an
+// analysis uses its brew's barista's, a suggestion the asker's. Nobody (a
+// deleted account) means the defaults.
+export async function promptFor(userId: string | null, note: string | null | undefined): Promise<PromptCustom> {
+  const [row] = userId ? await db.select({ aiPrompt: users.aiPrompt }).from(users).where(eq(users.id, userId)) : [];
+  return { prompt: row?.aiPrompt ?? EMPTY_AI_PROMPT, note: note || null };
+}
+// Saved with the result, so a customized prompt's results can be told apart.
+const versionFor = (custom: PromptCustom): string => (isCustomPrompt(custom.prompt, custom.note) ? `${PROMPT_VERSION}+custom` : PROMPT_VERSION);
 
 // Automatic analyses the workspace made in the last 24 hours (the daily cap).
 async function autoAnalysesToday(workspaceId: string): Promise<number> {
@@ -51,7 +64,7 @@ export const CAP_REACHED = "Not analyzed automatically: the workspace's daily li
 export type JobResult = { status: "saved"; id: string } | { status: "skipped"; reason: string };
 
 // One brew-analysis job. Throwing makes BullMQ retry (docs/api/llm-contract.md §9).
-export async function processBrewAnalysis({ brewLogId, auto = false }: BrewAnalysisJobData): Promise<JobResult> {
+export async function processBrewAnalysis({ brewLogId, auto = false, note }: BrewAnalysisJobData): Promise<JobResult> {
   const context = await loadBrewContext(brewLogId);
   if (!context) {
     // Deleted after queueing: nothing to analyze, and retrying won't change that.
@@ -86,11 +99,12 @@ export async function processBrewAnalysis({ brewLogId, auto = false }: BrewAnaly
     }
   }
 
-  const analysis = await analyzeWithLlm(context, hidden);
+  const custom = await promptFor(ws?.baristaId ?? null, note);
+  const analysis = await analyzeWithLlm(context, hidden, custom);
 
   const analysisId = randomUUID();
   try {
-    await db.insert(llmAnalyses).values({ id: analysisId, brewLogId, ...analysis, auto, model: config.openaiModel, promptVersion: PROMPT_VERSION, request: analysisSent(context, hidden) });
+    await db.insert(llmAnalyses).values({ id: analysisId, brewLogId, ...analysis, auto, model: config.openaiModel, promptVersion: versionFor(custom), request: analysisSent(context, hidden, custom) });
   } catch (err) {
     // The log may have been deleted while the LLM call was running (FK violation).
     if ((await loadBrewContext(brewLogId)) === null) {
@@ -118,7 +132,8 @@ export async function processParameterSuggestion({ suggestionId }: ParameterSugg
   const context = await loadSuggestContext(row.suggestion, { ratedOnly: hidden.has("unratedHistory") });
   if (!context) return { status: "skipped", reason: "bean no longer exists" };
 
-  const { suggestion } = await requestSuggestion(context, hidden);
+  const custom = await promptFor(row.suggestion.requestedBy, row.suggestion.note);
+  const { suggestion } = await requestSuggestion(context, hidden, custom);
   await db
     .update(parameterSuggestions)
     .set({
@@ -126,8 +141,8 @@ export async function processParameterSuggestion({ suggestionId }: ParameterSugg
       status: "done",
       brewCount: context.brews.length,
       model: config.openaiModel,
-      promptVersion: PROMPT_VERSION,
-      request: suggestionSent(context, hidden),
+      promptVersion: versionFor(custom),
+      request: suggestionSent(context, hidden, custom),
       completedAt: new Date(),
     })
     .where(eq(parameterSuggestions.id, suggestionId));
@@ -142,7 +157,7 @@ export async function processAiPreview(data: AiPreviewJobData): Promise<AiReques
     const context = await loadBrewContext(data.brewLogId);
     if (!context) return null;
     const ws = await workspaceOf(data.brewLogId);
-    return analysisSent(context, new Set((ws?.settings ?? DEFAULT_WORKSPACE_SETTINGS).aiHidden));
+    return analysisSent(context, new Set((ws?.settings ?? DEFAULT_WORKSPACE_SETTINGS).aiHidden), await promptFor(ws?.baristaId ?? null, data.note));
   }
   const [row] = await db
     .select({ settings: workspaces.settings })
@@ -152,7 +167,7 @@ export async function processAiPreview(data: AiPreviewJobData): Promise<AiReques
   if (!row) return null;
   const hidden = new Set(withDefaults(DEFAULT_WORKSPACE_SETTINGS, row.settings ?? null).aiHidden);
   const context = await loadSuggestContext(data.suggestion, { ratedOnly: hidden.has("unratedHistory") });
-  return context ? suggestionSent(context, hidden) : null;
+  return context ? suggestionSent(context, hidden, await promptFor(data.suggestion.requestedBy, data.suggestion.note)) : null;
 }
 
 // Every attempt failed: the brew page shows why, with "Try again".

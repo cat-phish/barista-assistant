@@ -11,6 +11,9 @@ the next brew.
 
 - **Auth Required:** `true` (role `owner` or `barista` in the brew log's
   workspace)
+- **Body (optional):** `{ "note": "Tasted papery today." }`, a one-off note
+  for the AI (up to 500 characters, `docs/api/auth.md` §1c). The prompt is
+  the brew's barista's own (§1c), whoever asks.
 - **Success Response (`202 Accepted`):**
   ```json
   {
@@ -29,10 +32,11 @@ the next brew.
 - **Duplicates:** while a log's analysis is waiting or running, another
   request returns `202` with the **same** `jobId` and queues nothing new. Once
   that job finishes (or finally fails), the log can be analyzed again, and each
-  run adds a new `llm_analyses` row.
+  run adds a new `llm_analyses` row. (One already waiting or running keeps
+  its note.)
 - **While an automatic analysis waits** (auto-analyze, below): the request
   runs that job now instead of adding one (same `jobId`), as asked for, so
-  the daily cap doesn't apply. Asking also clears the brew's
+  the daily cap doesn't apply, with the note asked with. Asking also clears the brew's
   `analysisDueAt` and `analysisError` (§6).
 - **Getting the result:** there is no job-status endpoint. The frontend polls
   `GET /api/workspaces/:workspaceId/brew-logs/:brewLogId` (§6) until
@@ -102,12 +106,16 @@ The workspace's defaults are `suggestSource` and `suggestMaxBrews`
   ```json
   {
     "beanId": "uuid", "recipeId": "uuid", "grinderId": "uuid", "source": "beanRecipe", "maxBrews": 5,
+    "note": "Guests like it stronger.",
     "batch": { "doseGrams": 22.5, "waterGrams": 375, "iceGrams": null, "yieldGrams": null }
   }
   ```
   - `beanId` required; `recipeId`, `grinderId` optional (or `null`). The
     brewer is the recipe's; without a recipe, `brewerId` may name one.
   - `source` and `maxBrews` optional: the workspace's defaults.
+  - `note` optional: a one-off note for the AI (up to 500 characters,
+    `docs/api/auth.md` §1c). The prompt is the asker's own (§1c), saved as
+    `requestedBy`.
   - `batch` optional: the batch as planned, each amount in grams (over 0,
     saved to 0.1 g) or `null`. Filter: dose, hot water and ice; espresso:
     dose and shot weight (`yieldGrams`). Without one the worker uses the
@@ -133,6 +141,7 @@ Any member. The frontend polls it until `status` is `done` or `failed`.
       "id": "uuid", "beanId": "uuid", "recipeId": "uuid", "brewerId": "uuid", "grinderId": "uuid",
       "source": "beanRecipe", "maxBrews": 5, "brewCount": 3,
       "batchDoseGrams": 22.5, "batchWaterGrams": 375, "batchIceGrams": null, "batchYieldGrams": null,
+      "requestedBy": "uuid", "note": null,
       "status": "done", "error": null,
       "reasoning": "The last two cups were sour at 20; one step finer and a degree hotter.",
       "nextStep": "Watch the drawdown: aim to finish by 3:00.",
@@ -145,6 +154,9 @@ Any member. The frontend polls it until `status` is `done` or `failed`.
   ```
   - `brewCount`: how many earlier brews were sent (`0`: the recipe and
     bean alone).
+  - `requestedBy`: who asked, whose AI prompt was used (`null` once their
+    account is deleted); `note`: the one-off note, if any. `promptVersion`
+    ends in `+custom` when either changed the prompt (`docs/api/auth.md` §1c).
   - The values are for the grinder named (`grindSetting` `null` without one,
     or without a brew or starting point on it to go on); `ratio` is for the
     batch, `(water + ice) / dose` or for espresso shot weight / dose, `null`
@@ -209,7 +221,9 @@ nothing is saved.
 - **Queue** `ai-preview` (`AI_PREVIEW_QUEUE`, `@barista/shared/jobs`), job
   `preview`, data `{ "kind": "analysis", "brewLogId": "uuid" }` or
   `{ "kind": "suggest", "suggestion": { ... } }` (the suggestion as POST
-  §8b would save it: ids, `source`, `maxBrews` and the `batch…` amounts).
+  §8b would save it: ids, `source`, `maxBrews`, the `batch…` amounts,
+  `requestedBy` and `note`). An analysis preview may carry `note` too. Both
+  use the same person's prompt as asking would (`docs/api/auth.md` §1c).
   Not retried; the return value is the request, or `null` when the brew
   or bean is gone. The backend waits for it (`job.waitUntilFinished`, up
   to 10 s, `AI_PREVIEW_TIMEOUT_MS`).
@@ -218,8 +232,8 @@ nothing is saved.
 ### `POST /api/workspaces/:workspaceId/parameter-suggestions/preview`
 
 - **Auth Required:** `true` (role `owner` or `barista`, as for asking)
-- **Body:** none for an analysis; for a suggestion the same body as its
-  POST (§8b), checked the same way (`resolveRequest`).
+- **Body:** for an analysis optional `{ "note": "..." }`; for a suggestion
+  the same body as its POST (§8b), checked the same way (`resolveRequest`).
 - **Success Response (`200 OK`):** `{ "request": { ... } }`, or
   `{ "request": null }` when there's nothing to preview.
 - **Errors:** as for asking (`400`, `403`, `404`); `503` the queue (Redis)

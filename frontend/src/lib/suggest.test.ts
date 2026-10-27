@@ -4,7 +4,7 @@ import { chooseGrind, gramsAdvice, heldForRatio, rpmAdvice, SUGGEST_SOURCE_LABEL
 
 const recipe = { targetTempC: 94, grindSettings: [{ grinderId: 'c40', grinderName: 'Comandante C40', setting: 19 }] } as unknown as Recipe;
 const suggestion = (over: Partial<ParameterSuggestion> = {}): ParameterSuggestion => ({
-  id: 's', beanId: 'bean', recipeId: 'r', brewerId: 'v60', grinderId: 'c40', source: 'beanRecipe', maxBrews: 5, brewCount: 3, batchDoseGrams: 15, batchWaterGrams: 250, batchIceGrams: null, batchYieldGrams: null, status: 'done', error: null,
+  id: 's', beanId: 'bean', recipeId: 'r', brewerId: 'v60', grinderId: 'c40', source: 'beanRecipe', maxBrews: 5, requestedBy: 'u', note: null, brewCount: 3, batchDoseGrams: 15, batchWaterGrams: 250, batchIceGrams: null, batchYieldGrams: null, status: 'done', error: null,
   reasoning: 'The last cup was sour.', nextStep: 'Watch the drawdown.', confidence: 'medium', grindSetting: 22, grindRpm: null, tempC: 95, ratio: 16,
   model: 'm', promptVersion: 'v', hasRequest: false, createdAt: '', completedAt: '', ...over,
 });
