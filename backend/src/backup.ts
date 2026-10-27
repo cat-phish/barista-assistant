@@ -10,6 +10,7 @@ import { getTableConfig, type MySqlTable } from "drizzle-orm/mysql-core";
 import { z } from "zod";
 import {
   ANALYSIS_CONFIDENCE,
+  SUGGEST_ALTERNATIVES,
   SUGGEST_SOURCES,
   SUGGESTION_STATUSES,
   BEAN_MENU_FIELDS,
@@ -160,6 +161,11 @@ const JSON_SCHEMAS: Record<string, z.ZodType> = {
   "menu_items.beanFields": z.array(z.enum(BEAN_MENU_FIELDS)).nullable(),
   "llm_analyses.request": aiRequest,
   "parameter_suggestions.request": aiRequest,
+  "parameter_suggestions.alternativesAsked": z.array(z.enum(SUGGEST_ALTERNATIVES)).nullable(),
+  // The ids are the source workspace's, not rewritten: a restored one shows the name.
+  "parameter_suggestions.alternatives": z
+    .array(z.object({ kind: z.enum(SUGGEST_ALTERNATIVES), id: z.string(), name: z.string(), why: z.string() }).strict())
+    .nullable(),
 };
 // Large, and only for looking back at: in a file only when asked for
 // (docs/api/backup.md §2b, "What was sent to the AI").

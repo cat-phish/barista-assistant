@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { AI_DETAILS, type AiDetail } from "@barista/shared/aiDetails";
 import type { BrewContext, BrewSummary, DrinkInfo, GrinderInfo, WaterInfo } from "../src/context.js";
 import { toLlmInput, toSuggestInput } from "../src/prompt.js";
-import type { BrewerInfo, PastAnalysis, SuggestBatch, SuggestBrew, SuggestContext } from "../src/suggestContext.js";
+import type { BeanOption, BrewerInfo, BrewerOption, PastAnalysis, RecipeOption, SuggestBatch, SuggestBrew, SuggestContext } from "../src/suggestContext.js";
 
 // Parity between what the AI is sent and what Settings → AI can switch off
 // (docs/api/llm-contract.md §9, "What the AI sees"). Every field of the
@@ -236,7 +236,28 @@ const SUGGEST: Record<keyof SuggestContext, Sees> = {
   brewer: "always", // field by field in BREWER
   grinder: "always", // its name; details in GRINDER
   brews: "always", // each like brew; unrated ones: unratedHistory
+  options: "always", // only the kinds asked; field by field below
   ratingScale: "always",
+};
+// What else it may suggest. The ids are matched back from ref, not sent.
+const RECIPE_OPTION: Record<Exclude<keyof RecipeOption, "id">, Sees> = {
+  ref: "always",
+  name: "always",
+  brewer: "always",
+  methodKind: "always",
+  style: "always",
+  targetDoseGrams: "always",
+  targetWaterGrams: "always",
+  targetIceGrams: "always",
+  expectedYieldGrams: "always",
+  targetTempC: "temp",
+};
+const BREWER_OPTION: Record<Exclude<keyof BrewerOption, "id">, Sees> = { ref: "always", name: "always", kind: "always" };
+const BEAN_OPTION: Record<Exclude<keyof BeanOption, "id">, Sees> = {
+  ref: "always",
+  bean: "always", // field by field in BEAN
+  roastAgeDays: "always",
+  gramsLeft: "always", // whether there's enough for the batch
 };
 const EARLIER: Record<Exclude<keyof SuggestBrew, keyof BrewSummary>, Sees> = {
   sameBean: "always",
@@ -272,6 +293,25 @@ const suggest: SuggestContext = {
   brewer: { name: "Linea", kind: "espresso", preinfusion: "manual", flowControl: "manual", pressureControl: "manual" },
   grinder,
   brews: [{ ...brew, sameBean: false, sameRecipe: true, sameGrinder: true, bean: full.bean, analysis: pastAnalysis } as SuggestBrew],
+  options: {
+    recipes: [
+      {
+        ref: "r1",
+        id: "recipe-2",
+        name: "Kalita",
+        brewer: "Wave",
+        methodKind: "filter",
+        style: { name: "Pour over", brewsLike: "pour_over" },
+        targetDoseGrams: 20,
+        targetWaterGrams: 320,
+        targetIceGrams: 10,
+        expectedYieldGrams: 280,
+        targetTempC: 93,
+      },
+    ],
+    brewers: [{ ref: "b1", id: "brewer-2", name: "Origami", kind: "filter" }],
+    beans: [{ ref: "n1", id: "bean-2", bean: full.bean, roastAgeDays: 9, gramsLeft: 120 }],
+  },
   ratingScale: "1-5",
 };
 const SUGGEST_PLACES: Array<[string, Record<string, Sees>, (input: Obj) => Obj | undefined]> = [
@@ -281,6 +321,10 @@ const SUGGEST_PLACES: Array<[string, Record<string, Sees>, (input: Obj) => Obj |
   ["analysis", ANALYSIS, (i) => (i.brews as Obj[] | undefined)?.[0]?.analysis as Obj | undefined],
   ["brewer", BREWER, (i) => i.brewer as Obj | undefined],
   ["batch", BATCH, (i) => i.batch as Obj | undefined],
+  ["recipe option", RECIPE_OPTION, (i) => ((i.options as Obj | undefined)?.recipes as Obj[] | undefined)?.[0]],
+  ["brewer option", BREWER_OPTION, (i) => ((i.options as Obj | undefined)?.brewers as Obj[] | undefined)?.[0]],
+  ["bean option", BEAN_OPTION, (i) => ((i.options as Obj | undefined)?.beans as Obj[] | undefined)?.[0]],
+  ["option bean", BEAN, (i) => ((i.options as Obj | undefined)?.beans as Obj[] | undefined)?.[0]?.bean as Obj | undefined],
 ];
 const suggestSent = (input: Obj, place: string, key: string): boolean => {
   const at = SUGGEST_PLACES.find(([p]) => p === place)![2](input);

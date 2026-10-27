@@ -308,7 +308,10 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   temperature and the ratio, with its reasoning, and fills them in. The
   batch size stays yours: espresso keeps its dose (the shot weight moves),
   and a filter batch keeps what you typed last, or the recipe's water, so
-  the cup stays about the same size.
+  the cup stays about the same size. **Also suggest** can ask for another
+  recipe or brewer for this bean, or another bean in stock for this
+  recipe; they show as **Or try**, and tapping one switches the brew page
+  to it. Owners pick which are ticked by default under Settings → AI.
 - **What was sent to the AI:** every analysis and suggestion keeps the
   instructions and brew details it was sent; "What was sent to the AI" on
   its card shows them. Backups and exports ask whether to include them.

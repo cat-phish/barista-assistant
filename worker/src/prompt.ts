@@ -12,7 +12,7 @@ import type { BrewerInfo, SuggestContext } from "./suggestContext.js";
 // Stored with each analysis (llm_analyses.prompt_version), so results can be
 // compared across changes (npm run eval). Bump it whenever the input, the
 // prompt or the schema changes.
-export const PROMPT_VERSION = "2026-10-f";
+export const PROMPT_VERSION = "2026-10-g";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type LlmInput = { [key: string]: Json };
@@ -153,8 +153,20 @@ export function toSuggestInput(context: SuggestContext, hidden: ReadonlySet<AiDe
       analysis,
     })),
     equipment: equipment([{ grinder: context.grinder, water: null }, ...context.brews], hidden),
+    options: optionsInput(context.options, hidden),
   };
   return (compact(input) ?? {}) as LlmInput;
+}
+
+// What else it may suggest, by ref (the ids stay here): undefined when
+// nothing was asked for, so the prompt section drops out.
+function optionsInput(o: SuggestContext["options"], hidden: ReadonlySet<AiDetail>): Record<string, unknown> | undefined {
+  if (!o.recipes && !o.brewers && !o.beans) return undefined;
+  return {
+    recipes: o.recipes?.map(({ id: _id, targetTempC, ...r }) => (hidden.has("temp") ? r : { ...r, targetTempC })),
+    brewers: o.brewers?.map(({ id: _id, ...b }) => b),
+    beans: o.beans?.map(({ id: _id, bean, ...b }) => ({ ...b, bean: beanInput(bean, hidden) })),
+  };
 }
 
 // ---- The prompt, in sections ----------------------------------------------------
@@ -311,12 +323,19 @@ const SUGGEST_OWN: PromptSection[] = [
     when: (i) => methodKinds(i).includes("espresso"),
     text: PROMPT_TEXT.suggestEspresso,
   },
+  {
+    key: "suggestAlternatives",
+    when: (i) => i.options !== undefined,
+    text: PROMPT_TEXT.suggestAlternatives,
+  },
 ];
 const ownSection = (key: string) => SUGGEST_OWN.find((s) => s.key === key)!;
 export const SUGGEST_SECTIONS: PromptSection[] = [
   ownSection("suggestCore"),
   ownSection("suggestOutput"),
-  ...PROMPT_SECTIONS.filter((s) => s.key !== "core" && s.key !== "output").map((s) => (s.key === "espresso" ? ownSection("suggestEspresso") : s)),
+  ...PROMPT_SECTIONS.filter((s) => s.key !== "core" && s.key !== "output" && s.key !== "end").map((s) => (s.key === "espresso" ? ownSection("suggestEspresso") : s)),
+  ownSection("suggestAlternatives"),
+  PROMPT_SECTIONS.find((s) => s.key === "end")!,
 ];
 
 // What the barista adds (docs/api/auth.md §1c): their own text for unlocked

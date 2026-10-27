@@ -305,10 +305,17 @@ deleted with its bean) is skipped.
    `sameRecipe`, `sameGrinder`, `bean` (another bean's details, `null` for
    this bean) and `analysis`, its latest analysis (`reasoning`, `nextStep`,
    `confidence`, the suggested changes and the barista's `helpful`), or
-   `null`.
+   `null`. Then `options`, for the kinds in `alternativesAsked` (at most
+   `MAX_OPTIONS`, 30, of each): `recipes` (the workspace's active recipes on
+   active brewers, not this one: name, brewer, method kind, style, dose,
+   water, ice, yield, temperature), `brewers` (active ones with an active
+   recipe, not this one: name, kind) and `beans` (other active beans with
+   weight left: the bean as in step 1, its roast age today, `gramsLeft`).
+   Each has a short `ref` (`r1`, `b1`, `n1`) the AI answers with; its id
+   stays in the worker.
 2. **Input** (`toSuggestInput`, compacted as in step 2): `{ ratingScale,
    source, batch, bean, roastAgeDays, daysFrozen, recipe, brewer, grinder, brews,
-   equipment }`; the grinder and each brew's grinder and water by name,
+   equipment, options }` (`options` only when there are some); the grinder and each brew's grinder and water by name,
    described once in `equipment`. What the workspace keeps from the AI
    (`aiHidden`) is left out the same way, other beans' details too.
 3. **Prompt** (`SUGGEST_SECTIONS`): its own opening and output sections,
@@ -322,11 +329,13 @@ deleted with its bean) is skipped.
    | `suggestCore` | always | values for a brew about to be made; what each source picks; the batch is the barista's, never changed, and a different batch size drains differently (grind); `sameBean`/`sameRecipe`/`sameGrinder`, and an earlier analysis judged by the brew after it; another bean's brews show the recipe, brewer or grinder, not this bean; start from the recipe's targets |
    | `suggestOutput` | always | what each field holds; grind on the named grinder's dial from brews on it or its starting point, else null; a ratio for the batch, kept (or null) unless the brews show a strength problem |
    | `suggestEspresso` | the recipe or a brew is espresso | windows and ratio as targets; the ratio sets the shot weight for the batch's dose; pre-infusion and profile in `nextStep` |
+   | `suggestAlternatives` | `options` are sent | what each kind of option is; at most one of each, only with a reason (style or ratio for the roast or flavor profile, a brewer or bean that suits better); `option` is its ref, `why` in plain words; empty when nothing stands out; the values stay for this setup |
 
 4. **Schema** (`PARAMETER_SUGGESTION_JSON_SCHEMA`, `worker/src/llm.ts`,
    strict): `reasoning`, `nextStep`, `confidence` (low / medium / high),
    `grindSetting` (number or null), `grindRpm` (integer or null), `tempC`
-   (number or null) and `ratio` (number or null), all required.
+   (number or null), `ratio` (number or null) and `alternatives` (an array
+   of `{ kind, option, why }`, empty when none), all required.
    - Checked after parsing: the grind rounded to 0.01 and 0–10000, the
      temperature to 0.1 °C and 0–100, the ratio to 0.01 and above 0, the speed
      an integer 50–5000; anything else fails the attempt.
@@ -335,7 +344,9 @@ deleted with its bean) is skipped.
      the speed unless the grinder is variable speed (and `rpm` is sent),
      the temperature when `temp` is hidden, and a ratio outside what the
      method brews at (`RATIO_RANGE`: espresso 0.75–5, filter 2–25) or the
-     batch's own.
+     batch's own. Alternatives keep only those naming an option sent, of
+     its kind, the first of each kind, saved as `{ kind, id, name, why }`
+     (`alternativesThatApply`).
 5. The worker saves the values with `status: "done"`, `brewCount`, `model`,
    `promptVersion`, what was sent (`request`, `analysis.md` §8c) and
    `completedAt`.
@@ -344,7 +355,9 @@ deleted with its bean) is skipped.
 `worker/tests/aiDetails.test.ts` like the analysis's (the `sameBean` /
 `sameRecipe` / `sameGrinder` flags, `source`, the `batch`, the roast age today, each
 brew's `analysis` and the brewer's name and kind are always sent; an
-espresso machine's controls go with `machine`).
+espresso machine's controls go with `machine`). The options are always
+sent but for a recipe's `targetTempC` (`temp`) and a bean's details, which
+go with their keys as the bean's do.
 
 ## Evaluating changes
 

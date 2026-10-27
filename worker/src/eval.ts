@@ -141,6 +141,7 @@ async function suggestJobs(brews: Picked[], source: string): Promise<Array<EvalJ
         batchWaterGrams: brew.actualWaterGrams,
         batchIceGrams: brew.actualIceGrams,
         batchYieldGrams: espresso ? brew.actualYieldGrams : null,
+        alternativesAsked: [], // the values only
       };
       const context = await loadSuggestContext(request, { before: brew.timestamp });
       return context ? { input: toSuggestInput(context), send: async () => { const r = await requestSuggestion(context); return { output: r.suggestion, usage: r.usage }; } } : null;

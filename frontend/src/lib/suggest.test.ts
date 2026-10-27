@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { SUGGEST_SOURCES, type ParameterSuggestion, type Recipe } from '../api/types';
-import { chooseGrind, gramsAdvice, heldForRatio, rpmAdvice, SUGGEST_SOURCE_LABELS, sourceNeeds, startingParameters, suggestionFitsGrinder } from './suggest';
+import { SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, type ParameterSuggestion, type Recipe } from '../api/types';
+import { ALTERNATIVE_LABELS, chooseGrind, gramsAdvice, heldForRatio, rpmAdvice, SUGGEST_SOURCE_LABELS, sourceNeeds, startingParameters, suggestionFitsGrinder } from './suggest';
 
 const recipe = { targetTempC: 94, grindSettings: [{ grinderId: 'c40', grinderName: 'Comandante C40', setting: 19 }] } as unknown as Recipe;
 const suggestion = (over: Partial<ParameterSuggestion> = {}): ParameterSuggestion => ({
-  id: 's', beanId: 'bean', recipeId: 'r', brewerId: 'v60', grinderId: 'c40', source: 'beanRecipe', maxBrews: 5, requestedBy: 'u', note: null, brewCount: 3, batchDoseGrams: 15, batchWaterGrams: 250, batchIceGrams: null, batchYieldGrams: null, status: 'done', error: null,
-  reasoning: 'The last cup was sour.', nextStep: 'Watch the drawdown.', confidence: 'medium', grindSetting: 22, grindRpm: null, tempC: 95, ratio: 16,
+  id: 's', beanId: 'bean', recipeId: 'r', brewerId: 'v60', grinderId: 'c40', source: 'beanRecipe', maxBrews: 5, requestedBy: 'u', note: null, alternativesAsked: [], brewCount: 3, batchDoseGrams: 15, batchWaterGrams: 250, batchIceGrams: null, batchYieldGrams: null, status: 'done', error: null,
+  reasoning: 'The last cup was sour.', nextStep: 'Watch the drawdown.', confidence: 'medium', grindSetting: 22, grindRpm: null, tempC: 95, ratio: 16, alternatives: [],
   model: 'm', promptVersion: 'v', hasRequest: false, createdAt: '', completedAt: '', ...over,
 });
 
@@ -17,6 +17,11 @@ describe('Suggest parameters sources (docs/api/analysis.md §8b)', () => {
   it("match the worker's, each with a label", () => {
     expect([...SUGGEST_SOURCES]).toEqual(sharedSources);
     expect(Object.keys(SUGGEST_SOURCE_LABELS)).toEqual(sharedSources);
+  });
+  it("alternatives match the worker's, each with a label", () => {
+    const kinds = JSON.parse((/SUGGEST_ALTERNATIVES = (\[[^\]]*\])/.exec(shared)?.[1] ?? '[]')) as string[];
+    expect([...SUGGEST_ALTERNATIVES]).toEqual(kinds);
+    expect(Object.keys(ALTERNATIVE_LABELS)).toEqual(kinds);
   });
   it('say what has to be chosen first', () => {
     expect(SUGGEST_SOURCES.map(sourceNeeds)).toEqual([null, 'recipe', 'brewer', 'brewer', 'recipe']);

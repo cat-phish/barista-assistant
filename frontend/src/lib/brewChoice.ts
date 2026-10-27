@@ -159,3 +159,28 @@ export function setupMissing(s: SetupState): string {
   if (s.steepError) return 'Fix the steep window.';
   return '';
 }
+
+// Switching setup to a recipe or brewer the AI suggested (docs/api/analysis.md
+// §8b): what, item, brewer and recipe to set, in that order. A drink being
+// made stays when the brewer can make it, else it's a plain brew of the
+// brewer's method. recipeId '' lets setup pick the brewer's recipe. null:
+// it's gone or archived.
+export interface SwitchPlan {
+  what: string;
+  item: string;
+  brewerId: string;
+  recipeId: string;
+}
+export function switchPlan(kind: 'recipe' | 'brewer', id: string, s: { brewers: Brewer[]; recipes: Recipe[]; drink: Drink | null }): SwitchPlan | null {
+  const recipe = kind === 'recipe' ? s.recipes.find((r) => r.id === id && !r.archivedAt) : undefined;
+  if (kind === 'recipe' && !recipe) return null;
+  const brewer = s.brewers.find((b) => b.id === (recipe ? recipe.brewer.id : id) && !b.archivedAt);
+  if (!brewer) return null;
+  const keepDrink = s.drink && s.drink.kind === brewer.kind;
+  return {
+    what: keepDrink ? encodeCategory(s.drink!.category?.id ?? null) : encodeMethod(methodKey(brewer)),
+    item: keepDrink ? encodeDrink(s.drink!.id) : encodePlain(methodKey(brewer)),
+    brewerId: brewer.id,
+    recipeId: recipe?.id ?? '',
+  };
+}

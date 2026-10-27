@@ -8,9 +8,9 @@ describe("workspace settings", () => {
   it("come with every workspace, defaults filled in", async () => {
     const owner = await newUser();
     const created = await owner.agent.post("/api/workspaces").send({ name: "Bar", slug: "settings-bar" });
-    expect(created.body.workspace.settings).toEqual({ recipeRoastLevel: "light", roastScale: "names", hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5 });
+    expect(created.body.workspace.settings).toEqual({ recipeRoastLevel: "light", roastScale: "names", hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5, suggestAlternatives: [] });
     const list = await owner.agent.get("/api/workspaces");
-    expect(list.body.workspaces[0].settings).toEqual({ recipeRoastLevel: "light", roastScale: "names", hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5 });
+    expect(list.body.workspaces[0].settings).toEqual({ recipeRoastLevel: "light", roastScale: "names", hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5, suggestAlternatives: [] });
   });
 
   it("owners change them; others get 403; bad values 400", async () => {
@@ -27,8 +27,8 @@ describe("workspace settings", () => {
 
     const ok = await owner.agent.patch(path).send({ recipeRoastLevel: "medium" });
     expect(ok.status).toBe(200);
-    expect(ok.body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "names", hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5 });
-    expect((await owner.agent.patch(path).send({ roastScale: "levels" })).body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "levels", hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5 });
+    expect(ok.body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "names", hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5, suggestAlternatives: [] });
+    expect((await owner.agent.patch(path).send({ roastScale: "levels" })).body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "levels", hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5, suggestAlternatives: [] });
     expect((await owner.agent.patch(path).send({ roastScale: "agtron" })).status).toBe(400);
     const list = await barista.agent.get("/api/workspaces");
     expect(list.body.workspaces[0].settings.recipeRoastLevel).toBe("medium");

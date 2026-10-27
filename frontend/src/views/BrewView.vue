@@ -8,7 +8,7 @@ import { beansApi } from '../api/beans';
 import { analysisApi, brewLogsApi, suggestionsApi } from '../api/brews';
 import { ApiError, errorMessage } from '../api/client';
 import { recipesApi } from '../api/recipes';
-import { MAX_SUGGEST_BREWS, SUGGEST_SOURCES, type Bean, type BrewLog, type Recipe, type BrewerMethod, type SuggestionBatch, type SuggestionRequest, type SuggestSource } from '../api/types';
+import { MAX_SUGGEST_BREWS, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, type AlternativeKind, type Bean, type BrewLog, type Recipe, type BrewerMethod, type SuggestionBatch, type SuggestionRequest, type SuggestSource, type SuggestedAlternative } from '../api/types';
 import AnalysisCard from '../components/AnalysisCard.vue';
 import AiNoteField from '../components/AiNoteField.vue';
 import AiRequestDialog from '../components/AiRequestDialog.vue';
@@ -41,6 +41,7 @@ import {
   whatOptions,
   methodKind,
   setupMissing,
+  switchPlan,
 } from '../lib/brewChoice';
 import type { Brewer, BrewProblem, Drink, DrinkCategory, Grinder, Mark, MethodKind, NotificationChannel, PrepTool, ServingUnit, WaterProfile } from '../api/types';
 import { METHOD_KINDS } from '../lib/equipment';
@@ -66,7 +67,7 @@ import { grinderRetentionText } from '../lib/grinderRetention';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
 import { batchSuffix, beanLabel as pickerLabel } from '../lib/beans';
 import { formatDay, formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen } from '../lib/format';
-import { CONFIDENCE_LABELS, chooseGrind, heldForRatio, SUGGEST_SOURCE_LABELS, sourceNeeds, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
+import { ALTERNATIVE_LABELS, CONFIDENCE_LABELS, chooseGrind, heldForRatio, SUGGEST_SOURCE_LABELS, sourceNeeds, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
 import { useParameterSuggestion } from '../composables/useParameterSuggestion';
 import { useWorkspaceStore } from '../stores/workspace';
 import { brewRetention, linkRatio, ratioText as formatRatio, ratioWater, ROAST_LEVELS, scaleBatch, scaleShot, scaleSteps, waterShare, type MeasuredBrew, type ScaleField } from '../lib/scale';
@@ -473,7 +474,7 @@ const NEW_GRINDER = '__new__';
 const activeGrinders = computed(() => grinders.value.filter((x) => !x.archivedAt));
 const grinder = computed(() => grinders.value.find((x) => x.id === draft.grinderId) ?? null);
 // The last grinder and brew choice, remembered per workspace.
-type Remembered = 'grinderId' | 'brewWhat' | 'brewItem' | `brewBrewer.${MethodKind}` | 'suggestSource' | 'suggestMax';
+type Remembered = 'grinderId' | 'brewWhat' | 'brewItem' | `brewBrewer.${MethodKind}` | 'suggestSource' | 'suggestMax' | 'suggestAlternatives';
 const savedKey = (what: Remembered) => `brewlog.${what}.${workspaces.current?.id ?? ''}`;
 function recall(what: Remembered): string | null {
   try {
@@ -573,6 +574,7 @@ watch(beanId, () => suggester.reset());
 // the last one picked here.
 const suggestSource = ref<SuggestSource>('beanRecipe');
 const suggestMax = ref(5);
+const suggestAlts = ref<AlternativeKind[]>([]); // what else to suggest
 watch(
   () => workspaces.current?.id,
   () => {
@@ -580,6 +582,8 @@ watch(
     suggestSource.value = SUGGEST_SOURCES.find((x) => x === savedSource) ?? settings.value.suggestSource;
     const savedMax = Number(recall('suggestMax'));
     suggestMax.value = Number.isInteger(savedMax) && savedMax >= 1 && savedMax <= MAX_SUGGEST_BREWS ? savedMax : settings.value.suggestMaxBrews;
+    const savedAlts = recall('suggestAlternatives'); // "none" when none were ticked
+    suggestAlts.value = savedAlts === null ? [...settings.value.suggestAlternatives] : SUGGEST_ALTERNATIVES.filter((k) => savedAlts.split(',').includes(k));
   },
   { immediate: true },
 );
@@ -598,6 +602,7 @@ function suggest(): void {
   if (!ws || !body) return;
   remember('suggestSource', suggestSource.value);
   remember('suggestMax', String(suggestMax.value));
+  remember('suggestAlternatives', suggestAlts.value.join(',') || 'none');
   void suggester.ask(ws, body);
 }
 // What Suggest parameters asks with (and its preview, §8d).
@@ -612,7 +617,32 @@ function suggestBody(): SuggestionRequest | null {
     maxBrews: suggestMax.value,
     batch: plannedBatch(),
     note: suggestNote.value.trim() || undefined,
+    alternatives: SUGGEST_ALTERNATIVES.filter((k) => suggestAlts.value.includes(k)),
   };
+}
+// Something else the AI suggested, if it's still here to switch to.
+function canSwitchTo(a: SuggestedAlternative): boolean {
+  if (a.kind === 'bean') return beans.value.some((b) => b.id === a.id);
+  return switchPlan(a.kind, a.id, { brewers: brewers.value, recipes: recipes.value, drink: drink.value }) !== null;
+}
+// Switches setup to it, as a repeat does (what → item → brewer → recipe).
+// The values were for the setup before, so the suggestion goes: ask again.
+async function switchTo(a: SuggestedAlternative): Promise<void> {
+  if (a.kind === 'bean') {
+    beanId.value = a.id;
+  } else {
+    const plan = switchPlan(a.kind, a.id, { brewers: brewers.value, recipes: recipes.value, drink: drink.value });
+    if (!plan) return;
+    what.value = plan.what;
+    await nextTick();
+    item.value = plan.item;
+    await nextTick();
+    brewerId.value = plan.brewerId;
+    await nextTick();
+    if (plan.recipeId) recipeId.value = plan.recipeId;
+    await nextTick();
+  }
+  suggester.reset();
 }
 // One-off notes for the AI, this time only (docs/api/auth.md §1c).
 const suggestNote = ref('');
@@ -1210,6 +1240,13 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             {{ suggester.state.value === 'waiting' ? 'Asking the AI…' : 'Suggest parameters' }}
           </button>
         </div>
+        <fieldset class="suggest-alts" :disabled="!!suggestBlocked">
+          <legend class="muted small">Also suggest</legend>
+          <label v-for="k in SUGGEST_ALTERNATIVES" :key="k" class="checkbox small">
+            <input v-model="suggestAlts" type="checkbox" :value="k" />
+            {{ ALTERNATIVE_LABELS[k] }}
+          </label>
+        </fieldset>
         <AiNoteField v-if="!suggestBlocked" id="suggest-note" v-model="suggestNote" />
         <button v-if="!suggestBlocked" class="btn-link small preview-link" type="button" @click="previewing = 'suggest'">Preview what's sent</button>
         <p v-if="suggestBlocked" class="muted small">{{ suggestBlocked }}</p>
@@ -1225,6 +1262,18 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             Ratio 1:{{ formatRatio(suggestion.ratio) }}<template v-if="ratioKept">, keeping your {{ ratioKept }}</template>.
           </p>
           <p v-else class="muted small">Your batch and its ratio stay as they are.</p>
+          <div v-if="suggestion.alternatives.length" class="alternatives">
+            <p class="small"><strong>Or try</strong></p>
+            <ul>
+              <li v-for="a in suggestion.alternatives" :key="a.kind">
+                <button v-if="canSwitchTo(a)" class="btn-link" type="button" @click="switchTo(a)">{{ a.name }}</button>
+                <span v-else>{{ a.name }} <span class="muted small">(no longer here)</span></span>
+                <span class="muted small"> · {{ a.why }}</span>
+              </li>
+            </ul>
+            <p class="muted small">Tapping one switches to it; then ask again for its values.</p>
+          </div>
+          <p v-else-if="suggester.suggestion.value?.alternativesAsked?.length" class="muted small">Nothing else stood out to try.</p>
           <p v-if="suggestedFor" class="note small">
             The grind was suggested for {{ suggestedFor }}, so it isn't filled in for {{ grinder?.name ?? 'no grinder' }}.
           </p>
@@ -1629,6 +1678,26 @@ p {
 }
 .suggest-pick .suggest-max {
   flex: 0 1 7rem;
+}
+.suggest-alts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+.suggest-alts legend {
+  float: left;
+  margin-right: var(--space-1);
+}
+.alternatives ul {
+  margin: var(--space-1) 0;
+  padding-left: var(--space-4);
+}
+.alternatives li + li {
+  margin-top: var(--space-1);
 }
 .next {
   margin: 0;

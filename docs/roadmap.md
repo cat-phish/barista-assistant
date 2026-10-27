@@ -1262,3 +1262,38 @@ cold styles, and unlike flash chilled its TDS is worth recording. Contract:
 - **Decided:** not a style (a style brews like only one built-in, so it
   couldn't also say pour over or immersion) and not a switch (it would only
   repeat "has a dilution").
+
+## Tailored AI suggestions (built)
+
+Backlog item "Tailor the AI suggestions", six branches (`ai-single-brew`,
+`ai-suggest-parameters`, `ai-saved-request`, `ai-preview`, `ai-prompt-edit`,
+`ai-alternatives`), migrations 0067–0070, prompts `2026-10-f` and
+`2026-10-g`. Every analysis sent the brew plus the bean's last five brews,
+and "Suggest parameters" reused the bean's newest analysis. Nobody could
+pick what was compared, see what was sent, or change the prompt. Contract:
+`api/analysis.md` §8–§8d, `api/llm-contract.md` §9–§9b, `api/auth.md` §1c.
+
+- **One brew on its own:** an analysis (journal, auto-analyze) sends only
+  that brew.
+- **Suggest parameters is its own AI request** (`parameter_suggestions`):
+  the barista picks the earlier brews (this bean, bean and recipe, bean and
+  brewer, this brewer, this recipe; up to 1–20), each sent with its latest
+  analysis. The AI returns a grind for the chosen grinder, a temperature and
+  a ratio. The batch stays the barista's: espresso keeps the dose, a filter
+  batch what was typed last (else the recipe's water).
+- **What was sent** is saved with each analysis and suggestion, and
+  **Preview what's sent** builds the same in the worker without calling the
+  AI. Backups and exports leave it out unless asked.
+- **Your own prompt, per person** (`users.ai_prompt`): instructions, and
+  with Advanced any unlocked section's text. An analysis uses the brew's
+  barista's prompt, a suggestion the asker's; a one-off note can go with
+  either. Customized results are saved as `PROMPT_VERSION+custom`.
+- **Alternatives:** Suggest parameters can also suggest another recipe or
+  brewer for this bean, or another bean in stock for this recipe, from
+  options sent by short ref. Tapping one switches the brew page to it.
+- **Brew page:** the AI suggestion card sits above the batch, and the
+  starting point shows from the start, with a line under Start/Log saying
+  what's still missing.
+- **Decided:** per person, not per workspace, prompts, so several people in
+  one home can each tune it; no owner override. Batch size is never the
+  AI's to change. "In stock" means not archived with weight left.

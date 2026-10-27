@@ -276,11 +276,20 @@ const suggestContext = (over: Partial<SuggestContext> = {}): SuggestContext => {
       earlier({ analysis: { reasoning: "Sour.", nextStep: "Grind finer.", confidence: "medium", suggestedGrindDelta: "finer", suggestedTempDelta: 0, suggestedRpmDelta: null, suggestedDoseDelta: null, suggestedYieldDelta: null, helpful: null } }),
       earlier({ timestamp: "2026-10-18T08:00:00.000Z", sameBean: false, bean: { ...base.bean, beanName: "Kenya", country: "Kenya" }, tastingNotes: "Bright", water: null }),
     ],
+    options: {},
     ratingScale: "1-5",
     ...over,
   };
 };
-const said = { reasoning: "Your last cup was sour.", nextStep: "Watch the drawdown.", confidence: "medium", grindSetting: 19, grindRpm: 900, tempC: 94, ratio: 16 };
+const said = { reasoning: "Your last cup was sour.", nextStep: "Watch the drawdown.", confidence: "medium", grindSetting: 19, grindRpm: 900, tempC: 94, ratio: 16, alternatives: [] };
+// Something else to try: one of each kind.
+const options: SuggestContext["options"] = {
+  recipes: [
+    { ref: "r1", id: "recipe-2", name: "Tetsu 4:6", brewer: "V60", methodKind: "filter", style: null, targetDoseGrams: 20, targetWaterGrams: 300, targetIceGrams: null, expectedYieldGrams: 260, targetTempC: 92 },
+  ],
+  brewers: [{ ref: "b1", id: "brewer-2", name: "Origami", kind: "filter" }],
+  beans: [{ ref: "n1", id: "bean-2", bean: { ...context().bean, beanName: "Kenya", country: "Kenya" }, roastAgeDays: 9, gramsLeft: 120 }],
+};
 
 describe("what Suggest parameters sends (docs/api/llm-contract.md §9b)", () => {
   it("the brew to make, and each earlier brew marked like it or not, with its analysis", () => {
@@ -318,6 +327,17 @@ describe("what Suggest parameters sends (docs/api/llm-contract.md §9b)", () => 
     expect(promptSections(shot, SUGGEST_SECTIONS)).not.toContain("espresso");
   });
 
+  it("what else it may suggest, by ref, only when asked for", () => {
+    expect(toSuggestInput(suggestContext())).not.toHaveProperty("options");
+    const input = toSuggestInput(suggestContext({ options }), without("origin", "temp"));
+    expect(input.options).toMatchObject({ recipes: [{ ref: "r1", name: "Tetsu 4:6", brewer: "V60" }], brewers: [{ ref: "b1", name: "Origami" }], beans: [{ ref: "n1", gramsLeft: 120, bean: { beanName: "Kenya" } }] });
+    expect(JSON.stringify(input.options)).not.toMatch(/recipe-2|brewer-2|bean-2/); // ids stay here
+    expect((input.options as { recipes: object[] }).recipes[0]).not.toHaveProperty("targetTempC");
+    expect((input.options as { beans: Array<{ bean: object }> }).beans[0]?.bean).not.toHaveProperty("country");
+    expect(promptSections(input, SUGGEST_SECTIONS).slice(-2)).toEqual(["suggestAlternatives", "end"]);
+    expect(promptSections(toSuggestInput(suggestContext()), SUGGEST_SECTIONS)).not.toContain("suggestAlternatives");
+  });
+
   it("pins the prompt for a filter recipe", () => {
     expect(buildSystemPrompt(toSuggestInput(suggestContext()), SUGGEST_SECTIONS)).toMatchSnapshot();
   });
@@ -329,7 +349,7 @@ describe("what Suggest parameters sends (docs/api/llm-contract.md §9b)", () => 
     expect(JSON.parse(String(req.messages[1]?.content))).toEqual(toSuggestInput(ctx));
     expect(req.response_format).toMatchObject({
       type: "json_schema",
-      json_schema: { name: "parameter_suggestion", strict: true, schema: { additionalProperties: false, required: ["reasoning", "nextStep", "confidence", "grindSetting", "grindRpm", "tempC", "ratio"] } },
+      json_schema: { name: "parameter_suggestion", strict: true, schema: { additionalProperties: false, required: ["reasoning", "nextStep", "confidence", "grindSetting", "grindRpm", "tempC", "ratio", "alternatives"] } },
     });
   });
 });
@@ -367,5 +387,25 @@ describe("parseSuggestionMessage and onlySuggestionsThatApply", () => {
     const ek = suggestContext({ grinder: { ...grinder!, variableSpeed: true, rpmMin: 300, rpmMax: 1500 } });
     expect(onlySuggestionsThatApply(parsed, ek, new Set()).grindRpm).toBe(900);
     expect(onlySuggestionsThatApply(parsed, ek, without("rpm", "temp"))).toMatchObject({ grindRpm: null, tempC: null });
+  });
+
+  it("alternatives: the option named, of its kind, one of each kind, as the row", () => {
+    const parsed = parseSuggestionMessage(
+      reply({
+        ...said,
+        alternatives: [
+          { kind: "recipe", option: "r1", why: "A lighter, more even extraction." },
+          { kind: "recipe", option: "r1", why: "Twice." },
+          { kind: "brewer", option: "n1", why: "Wrong kind." },
+          { kind: "bean", option: "n9", why: "Not an option." },
+          { kind: "bean", option: "n1", why: "Brighter, suits this recipe." },
+        ],
+      }),
+    );
+    expect(onlySuggestionsThatApply(parsed, suggestContext({ options }), new Set()).alternatives).toEqual([
+      { kind: "recipe", id: "recipe-2", name: "Tetsu 4:6 (V60)", why: "A lighter, more even extraction." },
+      { kind: "bean", id: "bean-2", name: "Onyx Kenya", why: "Brighter, suits this recipe." },
+    ]);
+    expect(onlySuggestionsThatApply(parsed, suggestContext(), new Set()).alternatives).toEqual([]); // none asked for
   });
 });

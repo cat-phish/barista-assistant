@@ -1060,6 +1060,7 @@ export const parameterSuggestions = mysqlTable("parameter_suggestions", {
   // their account is deleted. note: a one-off note sent with it.
   requestedBy: varchar("requested_by", { length: 36 }).references(() => users.id, { onDelete: "set null" }),
   note: varchar("note", { length: 500 }),
+  alternativesAsked: jsonValue<AlternativeKind[]>("alternatives_asked"), // null or [] = none
   brewCount: int("brew_count"), // how many earlier brews were sent
   // The batch as planned when asked: the barista's to choose, so the AI
   // keeps it and suggests a ratio (filter: hot water and ice; espresso: the
@@ -1081,6 +1082,9 @@ export const parameterSuggestions = mysqlTable("parameter_suggestions", {
   tempC: decimal("temp_c", { precision: 4, scale: 1, mode: "number" }),
   // Filter: (water + ice) / dose; espresso: shot weight / dose.
   ratio: decimal("ratio", { precision: 5, scale: 2, mode: "number" }),
+  // What else to try, of the kinds asked: at most one of each; [] = none.
+  // SuggestedAlternative { kind, id, name, why } (SUGGEST_ALTERNATIVES).
+  alternatives: jsonValue<SuggestedAlternative[]>("alternatives"),
   model: varchar("model", { length: 100 }),
   promptVersion: varchar("prompt_version", { length: 30 }),
   request: jsonValue<AiRequest>("request"), // what was sent; null until done

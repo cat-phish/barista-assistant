@@ -106,7 +106,7 @@ The workspace's defaults are `suggestSource` and `suggestMaxBrews`
   ```json
   {
     "beanId": "uuid", "recipeId": "uuid", "grinderId": "uuid", "source": "beanRecipe", "maxBrews": 5,
-    "note": "Guests like it stronger.",
+    "note": "Guests like it stronger.", "alternatives": ["recipe", "bean"],
     "batch": { "doseGrams": 22.5, "waterGrams": 375, "iceGrams": null, "yieldGrams": null }
   }
   ```
@@ -116,6 +116,11 @@ The workspace's defaults are `suggestSource` and `suggestMaxBrews`
   - `note` optional: a one-off note for the AI (up to 500 characters,
     `docs/api/auth.md` §1c). The prompt is the asker's own (§1c), saved as
     `requestedBy`.
+  - `alternatives` optional: what else to suggest, each of `recipe`
+    (another recipe for this bean), `brewer` (another brewer) and `bean`
+    (another bean in stock for this recipe) at most once; `[]` for none.
+    Default: the workspace's `suggestAlternatives`. Saved as
+    `alternativesAsked`.
   - `batch` optional: the batch as planned, each amount in grams (over 0,
     saved to 0.1 g) or `null`. Filter: dose, hot water and ice; espresso:
     dose and shot weight (`yieldGrams`). Without one the worker uses the
@@ -141,12 +146,13 @@ Any member. The frontend polls it until `status` is `done` or `failed`.
       "id": "uuid", "beanId": "uuid", "recipeId": "uuid", "brewerId": "uuid", "grinderId": "uuid",
       "source": "beanRecipe", "maxBrews": 5, "brewCount": 3,
       "batchDoseGrams": 22.5, "batchWaterGrams": 375, "batchIceGrams": null, "batchYieldGrams": null,
-      "requestedBy": "uuid", "note": null,
+      "requestedBy": "uuid", "note": null, "alternativesAsked": ["recipe"],
       "status": "done", "error": null,
       "reasoning": "The last two cups were sour at 20; one step finer and a degree hotter.",
       "nextStep": "Watch the drawdown: aim to finish by 3:00.",
       "confidence": "medium",
       "grindSetting": 19, "grindRpm": null, "tempC": 95, "ratio": 16,
+      "alternatives": [{ "kind": "recipe", "id": "uuid", "name": "Tetsu 4:6 (V60)", "why": "A lighter, more even pour for this washed Ethiopian." }],
       "model": "gpt-…", "promptVersion": "2026-10-f",
       "createdAt": "2026-10-26T08:00:00.000Z", "completedAt": "2026-10-26T08:00:06.000Z"
     }
@@ -157,6 +163,13 @@ Any member. The frontend polls it until `status` is `done` or `failed`.
   - `requestedBy`: who asked, whose AI prompt was used (`null` once their
     account is deleted); `note`: the one-off note, if any. `promptVersion`
     ends in `+custom` when either changed the prompt (`docs/api/auth.md` §1c).
+  - `alternatives`: what else to try, at most one of each kind asked, each
+    naming its row by `id` and `name` (as it was then) with `why`; `[]`
+    when nothing stood out or none were asked for, `null` while pending.
+    What can be suggested (§9b): the workspace's active recipes (on active
+    brewers) and active brewers with an active recipe, other than this
+    one; for `bean`, its other active beans with weight left
+    (`inventoryWeightGrams` over 0).
   - The values are for the grinder named (`grindSetting` `null` without one,
     or without a brew or starting point on it to go on); `ratio` is for the
     batch, `(water + ice) / dose` or for espresso shot weight / dose, `null`
@@ -174,6 +187,14 @@ ratio moves the batch around what it holds (`heldForRatio`,
 fixes, so the shot weight moves; a filter batch keeps what was typed last
 (dose, water, drink size or cup), and untouched the recipe's water, so the
 cup stays about the same size and the dose moves.
+
+**Also suggest** (checkboxes under the pickers, ticked from the workspace's
+`suggestAlternatives`, then as last left on the device) asks for
+alternatives. They show under the values as **Or try**; tapping one
+switches setup to that bean, recipe or brewer (keeping the drink when the
+brewer can make it, `switchPlan` in `frontend/src/lib/brewChoice.ts`) and
+clears the suggestion, since its values were for the setup before. One
+that's gone or archived shows by name only.
 
 ## 8c. What was sent to the AI
 
@@ -222,7 +243,7 @@ nothing is saved.
   `preview`, data `{ "kind": "analysis", "brewLogId": "uuid" }` or
   `{ "kind": "suggest", "suggestion": { ... } }` (the suggestion as POST
   §8b would save it: ids, `source`, `maxBrews`, the `batch…` amounts,
-  `requestedBy` and `note`). An analysis preview may carry `note` too. Both
+  `requestedBy`, `note` and `alternativesAsked`). An analysis preview may carry `note` too. Both
   use the same person's prompt as asking would (`docs/api/auth.md` §1c).
   Not retried; the return value is the request, or `null` when the brew
   or bean is gone. The backend waits for it (`job.waitUntilFinished`, up

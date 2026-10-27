@@ -54,6 +54,7 @@ export interface WorkspaceSettings {
   // "Suggest parameters" (analysis.md §8b): the brews it sends by default, at most how many.
   suggestSource: SuggestSource;
   suggestMaxBrews: number;
+  suggestAlternatives: AlternativeKind[]; // what else it suggests by default
 }
 export const AUTO_ANALYZE_DELAYS = [0, 5, 10, 15, 30] as const;
 export type AutoAnalyzeDelay = (typeof AUTO_ANALYZE_DELAYS)[number];
@@ -62,6 +63,18 @@ export type AutoAnalyzeDelay = (typeof AUTO_ANALYZE_DELAYS)[number];
 export const SUGGEST_SOURCES = ['bean', 'beanRecipe', 'beanBrewer', 'brewer', 'recipe'] as const;
 export type SuggestSource = (typeof SUGGEST_SOURCES)[number];
 export const MAX_SUGGEST_BREWS = 20;
+// What else Suggest parameters can suggest (analysis.md §8b); the same list
+// as @barista/shared/schema (lib/suggest.test.ts checks).
+export const SUGGEST_ALTERNATIVES = ['recipe', 'brewer', 'bean'] as const;
+export type AlternativeKind = (typeof SUGGEST_ALTERNATIVES)[number];
+// The row it names, by id, and its name when suggested (a restored backup's
+// ids may not be this workspace's).
+export interface SuggestedAlternative {
+  kind: AlternativeKind;
+  id: string;
+  name: string;
+  why: string;
+}
 
 // docs/api/workspaces.md §2 Members
 export interface Member {
@@ -532,6 +545,7 @@ export interface ParameterSuggestion {
   maxBrews: number;
   requestedBy: string | null; // whose own AI prompt was used (auth.md §1c)
   note: string | null;
+  alternativesAsked: AlternativeKind[] | null;
   brewCount: number | null; // how many earlier brews were sent
   // The batch as planned (kept as it is): null when not set.
   batchDoseGrams: number | null;
@@ -547,6 +561,7 @@ export interface ParameterSuggestion {
   grindRpm: number | null;
   tempC: number | null;
   ratio: number | null; // filter (water + ice) / dose, espresso shot / dose; null: keep the batch's
+  alternatives: SuggestedAlternative[] | null; // what else to try; null while pending
   model: string | null;
   promptVersion: string | null;
   hasRequest: boolean; // what was sent is saved (§8c)
@@ -562,6 +577,7 @@ export interface SuggestionRequest {
   maxBrews?: number;
   batch?: SuggestionBatch;
   note?: string; // a one-off note (docs/api/auth.md §1c)
+  alternatives?: AlternativeKind[]; // what else to suggest; default: the workspace's
 }
 export interface SuggestionBatch {
   doseGrams: number | null;

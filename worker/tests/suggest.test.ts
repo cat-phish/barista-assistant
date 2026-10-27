@@ -13,7 +13,7 @@ vi.mock("../src/llm.js", async (importOriginal) => ({
   requestSuggestion: vi.fn(),
 }));
 const llm = vi.mocked(requestSuggestion);
-const RESULT = { reasoning: "Last cup was sour: a touch finer.", nextStep: "Watch the drawdown.", confidence: "medium" as const, grindSetting: 19, grindRpm: null, tempC: 94, ratio: 16 };
+const RESULT = { reasoning: "Last cup was sour: a touch finer.", nextStep: "Watch the drawdown.", confidence: "medium" as const, grindSetting: 19, grindRpm: null, tempC: 94, ratio: 16, alternatives: [] };
 
 let workspaceId: string;
 let userId: string;
@@ -67,7 +67,7 @@ beforeEach(async () => {
 
 const request = (source: SuggestSource, over: Partial<SuggestRequest> = {}): SuggestRequest => ({
   beanId: id.guji, recipeId: id.house, brewerId: id.v60, grinderId: id.c40, source, maxBrews: 5,
-  batchDoseGrams: null, batchWaterGrams: null, batchIceGrams: null, batchYieldGrams: null, ...over,
+  batchDoseGrams: null, batchWaterGrams: null, batchIceGrams: null, batchYieldGrams: null, alternativesAsked: null, ...over,
 });
 const notes = async (r: SuggestRequest, options = {}) => (await loadSuggestContext(r, options))!.brews.map((b) => b.tastingNotes);
 
@@ -125,6 +125,43 @@ describe("which earlier brews Suggest parameters sends (docs/api/analysis.md §8
       reasoning: "Sour.", nextStep: "Grind finer.", confidence: null, suggestedGrindDelta: "finer", suggestedTempDelta: 1,
       suggestedRpmDelta: null, suggestedDoseDelta: null, suggestedYieldDelta: null, helpful: true,
     });
+  });
+});
+
+describe("what else it may suggest (docs/api/analysis.md §8b)", () => {
+  it("nothing unless asked", async () => {
+    expect((await loadSuggestContext(request("bean")))!.options).toEqual({});
+    expect((await loadSuggestContext(request("bean", { alternativesAsked: [] })))!.options).toEqual({});
+  });
+
+  it("the workspace's other active recipes and brewers with a recipe, and other beans with weight left", async () => {
+    const ws2 = randomUUID();
+    await db.insert(workspaces).values({ id: ws2, name: "Other", slug: "other" });
+    const lone = randomUUID();
+    const archived = randomUUID();
+    await db.insert(brewers).values([
+      { id: lone, workspaceId, name: "Aeropress" }, // no recipe
+      { id: archived, workspaceId, name: "Clever", archivedAt: new Date() },
+    ]);
+    await db.insert(recipes).values({ id: randomUUID(), workspaceId, name: "Clever steep", brewerId: archived, targetDoseGrams: 18, targetWaterGrams: 300 });
+    const [ethiopia, empty, gone, elsewhere] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+    await db.update(beans).set({ inventoryWeightGrams: 200 }).where(eq(beans.id, id.guji));
+    await db.insert(beans).values([
+      { id: ethiopia, workspaceId, roasterName: "Sey", beanName: "Ethiopia", inventoryWeightGrams: 120, roastDate: new Date("2026-10-08T00:00:00Z") },
+      { id: empty, workspaceId, roasterName: "Sey", beanName: "Empty", inventoryWeightGrams: 0 },
+      { id: gone, workspaceId, roasterName: "Sey", beanName: "Gone", inventoryWeightGrams: 100, archivedAt: new Date() },
+      { id: elsewhere, workspaceId: ws2, roasterName: "Sey", beanName: "Elsewhere", inventoryWeightGrams: 100 },
+    ]);
+    const { options } = (await loadSuggestContext(request("bean", { alternativesAsked: ["recipe", "brewer", "bean"] }), { before: new Date("2026-10-18T09:00:00Z") }))!;
+    expect(options.recipes?.map((r) => [r.ref, r.name, r.brewer])).toEqual([
+      ["r1", "Chemex 3-cup", "Chemex"],
+      ["r2", "Strong V60", "V60"],
+    ]); // not this one, nor the archived brewer's
+    expect(options.recipes?.[0]).toMatchObject({ id: id.chemexRecipe, targetDoseGrams: 30, targetWaterGrams: 500, methodKind: "filter" });
+    expect(options.brewers).toEqual([{ ref: "b1", id: id.chemex, name: "Chemex", kind: "filter" }]); // not this one, the archived one, or one with no recipe
+    expect(options.beans?.map((b) => [b.id, b.bean.beanName, b.gramsLeft, b.roastAgeDays])).toEqual([[ethiopia, "Ethiopia", 120, 10]]);
+    // Only the kinds asked.
+    expect(Object.keys((await loadSuggestContext(request("bean", { alternativesAsked: ["bean"] })))!.options)).toEqual(["beans"]);
   });
 });
 

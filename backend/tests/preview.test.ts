@@ -47,7 +47,7 @@ describe("previews: what would be sent, without sending it", () => {
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.body.request.input.job).toEqual({
       kind: "suggest",
-      suggestion: { beanId: bean, recipeId: recipe, brewerId: v60, grinderId: null, source: "beanRecipe", maxBrews: 5, batchDoseGrams: 20, batchWaterGrams: 333.3, batchIceGrams: null, batchYieldGrams: null, requestedBy: owner.id, note: "Guests like it strong" },
+      suggestion: { beanId: bean, recipeId: recipe, brewerId: v60, grinderId: null, source: "beanRecipe", maxBrews: 5, batchDoseGrams: 20, batchWaterGrams: 333.3, batchIceGrams: null, batchYieldGrams: null, requestedBy: owner.id, note: "Guests like it strong", alternativesAsked: [] },
     });
     // The same checks as asking.
     expect((await owner.agent.post(`${base}/preview`).send({ beanId: bean, source: "recipe" })).body.error).toMatch(/pick a recipe/);
