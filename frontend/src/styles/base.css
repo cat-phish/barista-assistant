@@ -319,6 +319,8 @@ a {
   font-weight: 600;
 }
 .checkbox input {
+  /* Never squeezed by a long, wrapping label beside it. */
+  flex: none;
   width: 1.25rem;
   height: 1.25rem;
   accent-color: var(--brand);
