@@ -118,11 +118,12 @@ export function recipeOptions(brewerId: string | null, recipes: Recipe[]): Recip
   return brewerId ? recipes.filter((r) => r.brewer.id === brewerId && !r.archivedAt) : [];
 }
 
-// The recipe to select: the drink's default, else the current one if it
-// still fits, else the first.
-export function pickRecipe(choices: Recipe[], drink: Drink | null, current: string): string {
+// The recipe to select: the drink's default, else the last one used on this
+// brewer, else the current one if it still fits, else the first.
+export function pickRecipe(choices: Recipe[], drink: Drink | null, remembered: string | null, current: string): string {
   const fits = (id: string | null | undefined): id is string => !!id && choices.some((r) => r.id === id);
   if (fits(drink?.defaultRecipeId)) return drink.defaultRecipeId;
+  if (fits(remembered)) return remembered;
   if (fits(current)) return current;
   return choices[0]?.id ?? '';
 }

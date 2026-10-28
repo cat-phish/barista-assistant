@@ -72,7 +72,7 @@ units, with defaults filled in. Storage is always grams, °C and metres;
 clients convert what they show and what's typed (roadmap: Units and defaults).
 
 ```json
-{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["size", "doseWater", "temp", "grinder", "grind", "waterProfile"] }
+{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "steepReminders": true }
 ```
 
 - `volumeUnit`: `fl_oz` | `ml`: the brew page's yield estimate, and a new
@@ -88,7 +88,8 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
   §1b.
 - `steepReminders` (default `true`): remind when a cold brew's steep window
   opens (§1b).
-- `repeatKeeps`: what repeating a brew copies (Settings → Repeat brews), a
+- `repeatKeeps`: what repeating a brew copies (Settings → Brew setup, "Copy
+  when repeating"), a
   list of `REPEAT_KEEPS`, each once:
   - `size`: the drink size;
   - `doseWater`: dose and water, and a flash chilled brew's ice;
@@ -119,6 +120,23 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
   and `applyRepeat`, and into the default only if repeating should copy it
   out of the box. The TypeScript type and `repeatBrew.test.ts` fail until
   it's done.
+- `rememberSetup`: what the brew page starts a new brew with from the last
+  brew (Settings → Brew setup, "Remember from last time"), a list of
+  `REMEMBER_KEYS`, each once:
+  - `what`: what you're making, and the drink;
+  - `brewer`: the brewer, for each method;
+  - `recipe`: the recipe, for each brewer;
+  - `bean`;
+  - `grinder`;
+  - `grind`: your last setting and RPM with that grinder and recipe;
+  - `waterProfile`;
+  - `prepTools`: the prep checklist, for each brewer;
+  - `size`: the drink size, for each drink.
+
+  Default: the first six. A `PATCH` sends the whole list. Only the choice
+  is stored here: the values themselves stay on each device (browser
+  storage, per workspace), and archived ones are skipped. A drink's default
+  brewer and recipe, and a repeat, come before what's remembered.
 
 ### `PATCH /api/auth/me/preferences`
 

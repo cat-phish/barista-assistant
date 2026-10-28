@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_SUGGEST_BREWS, REPEAT_KEEPS, ROAST_LEVELS, ROAST_SCALES, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
+import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_SUGGEST_BREWS, REMEMBER_KEYS, REPEAT_KEEPS, ROAST_LEVELS, ROAST_SCALES, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
 import { AI_DETAILS } from "@barista/shared/aiDetails";
 import { ROLES } from "./auth/membership.js";
 
@@ -58,6 +58,9 @@ export const preferencesSchema = z
     // The whole list (what's on); each once.
     repeatKeeps: z
       .array(z.enum(REPEAT_KEEPS))
+      .refine((keys) => new Set(keys).size === keys.length, "each once"),
+    rememberSetup: z
+      .array(z.enum(REMEMBER_KEYS))
       .refine((keys) => new Set(keys).size === keys.length, "each once"),
     steepReminders: z.boolean(),
   })

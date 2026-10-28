@@ -110,12 +110,16 @@ describe('brew setup: method or drink category → (drink) → brewer → recipe
     expect(pickBrewer([], vanilla, recipes, null, '')).toBe('');
   });
 
-  it("a brewer's recipes, with the drink's default selected when it fits", () => {
+  it("a brewer's recipes: the drink's default, else the last one used on it, else the current, else the first", () => {
     const choices = recipeOptions('dl', recipes);
     expect(choices.map((r) => r.id)).toEqual(['shot', 'ristretto']);
-    expect(pickRecipe(choices, latte, 'shot')).toBe('ristretto');
-    expect(pickRecipe(recipeOptions('lm', recipes), latte, '')).toBe('lm-shot'); // default is another machine's: first
-    expect(pickRecipe(choices, vanilla, 'shot')).toBe('shot');
+    expect(pickRecipe(choices, latte, 'shot', 'shot')).toBe('ristretto');
+    expect(pickRecipe(recipeOptions('lm', recipes), latte, null, '')).toBe('lm-shot'); // default is another machine's: first
+    expect(pickRecipe(choices, vanilla, null, 'shot')).toBe('shot');
+    expect(pickRecipe(choices, vanilla, 'ristretto', 'shot')).toBe('ristretto'); // no default: the last one used
+    expect(pickRecipe(choices, null, 'ristretto', '')).toBe('ristretto');
+    expect(pickRecipe(choices, null, 'lm-shot', 'shot')).toBe('shot'); // remembered for another brewer: not offered here
+    expect(pickRecipe(choices, null, 'gone', '')).toBe('shot');
     expect(recipeOptions(null, recipes)).toEqual([]);
     expect(recipeOptions('clever', recipes)).toEqual([]); // setup shows "No recipes yet: Add one"
   });
@@ -126,7 +130,7 @@ describe('brew setup: method or drink category → (drink) → brewer → recipe
     const archived = recipes.map((r) => (r.id === 'ristretto' ? { ...r, archivedAt: '2026-10-22T00:00:00.000Z' } : r));
     const choices = recipeOptions('dl', archived);
     expect(choices.map((r) => r.id)).toEqual(['shot']);
-    expect(pickRecipe(choices, latte, '')).toBe('shot'); // Latte's default is archived: the first instead
+    expect(pickRecipe(choices, latte, null, '')).toBe('shot'); // Latte's default is archived: the first instead
     const espressos = brewerOptions(options, { kind: 'drink', id: 'Latte' }, drinks);
     expect(pickBrewer(espressos, latte, archived, 'lm', '')).toBe('lm'); // the archived default doesn't pick the brewer
   });
