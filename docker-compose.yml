@@ -18,6 +18,8 @@ services:
       - "${FRONTEND_BIND:-127.0.0.1}:5173:5173"
     environment:
       - API_PROXY_TARGET=http://backend:3000
+      # No live-reload socket: on a phone it reloads the page after the camera (vite.config.ts).
+      - VITE_LIVE_RELOAD=false
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-}
     depends_on:
       - backend
