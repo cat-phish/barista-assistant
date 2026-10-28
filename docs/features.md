@@ -67,8 +67,9 @@ work is in `roadmap.md`.
   at most 1024 px, without the photo's EXIF (location, camera). Seen ones
   show offline. Hideable under Settings → Fields. A Duplicate starts
   without them. (`docs/api/bean-photos.md` §4c)
-- **Fill in from the photos:** the AI reads the bag's label off the photos
-  (a new bean's too, before it's saved) and fills in the empty fields:
+- **Fill in from a photo:** at the top of the bean form, take or pick
+  photos of the bag's label (only read, never kept as the bean's photos)
+  and the AI fills in the empty fields:
   roaster, coffee, process (one of the workspace's), origin, altitude,
   tasting notes, roast date and level, bag weight, website. A field that
   already says something else gets "Label says: X · Use". Nothing saves

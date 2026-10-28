@@ -3,17 +3,18 @@
 > Part of the API spec. Conventions, auth rules and the section index are in
 > [README.md](README.md); a bare `§N` refers to that index.
 
-**"Fill in from the photos"** on the bean form sends the bean's photos
-(§4c) to the AI, which reads the label and answers with the bean fields (§4)
-it could read. The form fills the **empty** fields and, under each one that
-already says something else, shows **"Label says: X · Use"**. Nothing is
-saved until the bean is.
+**"Fill in from a photo"**, a card at the top of the bean form (adding or
+editing), takes photos of the label (**Take photo**, or **Choose photos**
+for up to 6, e.g. front and back) and sends them to the AI, which reads the
+label and answers with the bean fields (§4) it could read. The form fills
+the **empty** fields and, under each one that already says something else,
+shows **"Label says: X · Use"**. Nothing is saved until the bean is.
 
-The photos come **with the request**: a new bean's aren't on the server
-until it's saved, and that's when the label matters most. The browser
-shrinks each to at most 1024 px (JPEG); for a saved bean it fetches its
-stored photos. Nothing about the request is stored (no row, no file); the
-job is kept a minute in Redis so the answer can be collected.
+The photos are **only read, then thrown away**: they aren't the bean's
+photos (§4c), so a back-of-the-bag shot doesn't have to be uploaded and
+deleted again. They come with the request; the browser shrinks each to at
+most 1024 px (JPEG). Nothing about the request is stored (no row, no file);
+the job is kept a minute in Redis so the answer can be collected.
 
 **How it's read:** the backend re-encodes each photo as a stored photo is
 (upright, no metadata, ≤1024 px WebP; `backend/src/photos.ts`), queues a
@@ -39,8 +40,8 @@ isn't retried: the person presses the button again.
   or suggested.
 
 **The switch:** workspace setting `readLabels` (default `true`,
-`workspaces.md` §2), under Settings → AI → **Bean labels**. The button
-shows when it's on, the bean has photos and the person can edit.
+`workspaces.md` §2), under Settings → AI → **Bean labels**. The card
+shows when it's on (the bean form is for those who can edit).
 
 ## `POST /api/workspaces/:workspaceId/bean-label`
 

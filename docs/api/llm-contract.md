@@ -400,7 +400,7 @@ retried. `worker/src/label.ts`:
    invalid JSON fails the job (the route answers `502`).
 
 The workspace's `readLabels` setting (`workspaces.md` §2) turns the route
-off; nothing is sent unless someone presses the button.
+off; nothing is sent unless someone takes or picks a photo for it.
 
 ## Evaluating changes
 

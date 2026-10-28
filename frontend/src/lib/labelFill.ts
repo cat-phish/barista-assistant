@@ -1,4 +1,4 @@
-// What "Fill in from the photos" does to the bean form (docs/api/bean-label.md
+// What "Fill in from a photo" does to the bean form (docs/api/bean-label.md
 // §4d): a field that's empty is filled; one that already says something else
 // gets a suggestion ("Label says: X · Use") and is left as typed.
 import type { AltitudeUnit, BeanProcess, LabelFields, RoastScale } from '../api/types';
