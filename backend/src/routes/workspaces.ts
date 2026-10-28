@@ -27,6 +27,7 @@ import { SLUG_PATTERN, workspaceSettingsSchema } from "../validation.js";
 import { defaultProcessRows } from "./beanProcesses.js";
 import { defaultStyleRows } from "./recipeStyles.js";
 import { defaultMethodRows } from "./brewerMethods.js";
+import { removeWorkspacePhotos } from "../photos.js";
 
 // A workspace as the API returns it: settings with the defaults filled in.
 export type WorkspaceView = Omit<Workspace, "settings"> & { settings: WorkspaceSettings };
@@ -208,5 +209,6 @@ workspacesRouter.delete("/:workspaceId", async (req: Request<{ workspaceId: stri
     sendError(res, 400, "confirm: must equal the workspace's slug");
     return;
   }
+  await removeWorkspacePhotos(workspaceId); // the rows cascaded (docs/api/bean-photos.md §4c)
   res.status(204).end();
 });

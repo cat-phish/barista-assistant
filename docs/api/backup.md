@@ -61,7 +61,7 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
 - **Tables, in restore order:** `brewer_methods`, `bean_processes`,
   `recipe_styles`, `grinders`, `water_profiles`, `prep_tools`,
   `brew_problems`, `ingredients`, `drink_categories`, `brewers`, `prep_tool_brewers`, `beans`,
-  `bean_freezes`, `recipes`, `recipe_steps`, `recipe_grind_settings`, `recipe_prep_tools`,
+  `bean_freezes`, `bean_photos`, `recipes`, `recipe_steps`, `recipe_grind_settings`, `recipe_prep_tools`,
   `drinks`, `drink_ingredients`, `menu_sections`, `menu_items`,
   `brew_logs`, `brew_log_marks`, `brew_log_tools`, `brew_log_problems`,
   `llm_analyses`, `parameter_suggestions` (`BACKUP_TABLES`). A table left out of a file counts as
@@ -89,6 +89,10 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
     now means every bag of the coffee (`analysis.md` §8b). A version 2
     file's `parameter_suggestions.source` and `settings.suggestSource` are
     renamed, and a workspace on the default gets `bagRecipe`.
+
+**Bean photos** (`bean-photos.md` §4c): `bean_photos` rows go only with
+their files, so a JSON file has none (`BackupOptions.photos` in
+`backend/src/backup.ts`); restoring one gives beans without photos.
 
 **What was sent to the AI** (`request` on `llm_analyses` and
 `parameter_suggestions`, `analysis.md` §8c) is large and only for looking

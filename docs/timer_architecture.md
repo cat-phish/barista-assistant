@@ -9,7 +9,7 @@
 *   To prevent accidental double-tap zooming and eliminate the 300ms tap delay on mobile devices during timed pours, apply `touch-action: manipulation;` to all interactive elements (`button`, `input`, `select`).
 
 ## 2. Vite PWA Configuration (`frontend/vite.config.ts`)
-Use `vite-plugin-pwa` with `registerType: 'autoUpdate'` and Workbox `NetworkFirst` runtime caching on `/api/public/menu/.*`:
+Use `vite-plugin-pwa` with `registerType: 'autoUpdate'` and Workbox `NetworkFirst` runtime caching on `/api/public/menu/.*`, plus `CacheFirst` for bean photos (they never change for an id, `docs/api/bean-photos.md` §4c, so the ones you've seen show offline):
 
 ```typescript
 import { defineConfig } from 'vite';
@@ -46,6 +46,15 @@ export default defineConfig({
               cacheName: 'public-menu-cache',
               expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 },
               cacheableResponse: { statuses: [0, 200] }
+            }
+          },
+          {
+            urlPattern: /\/api\/workspaces\/[^/]+\/beans\/[^/]+\/photos\/[^/]+$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'bean-photos',
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [200] }
             }
           }
         ]

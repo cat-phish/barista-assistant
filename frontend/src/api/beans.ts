@@ -1,5 +1,5 @@
-import { api } from './client';
-import type { Bean, BlendType, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from './types';
+import { api, API_URL } from './client';
+import type { Bean, BeanPhoto, BlendType, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from './types';
 
 // Request body for create/update (docs/api/beans.md §4). With roast names,
 // roastLevel is left out: the API derives it from detailedRoastLevel (only a
@@ -55,4 +55,11 @@ export const beansApi = {
   // Without deleteBrewLogs, a bean with brew logs answers 409 + brewLogCount.
   remove: (workspaceId: string, id: string, deleteBrewLogs = false) =>
     api.delete(`${base(workspaceId)}/${id}${deleteBrewLogs ? '?deleteBrewLogs=true' : ''}`),
+  // Photos (docs/api/bean-photos.md §4c): any image; the server resizes it
+  // and strips EXIF. 400 not an image, 413 over 15 MB, 409 the bean is full.
+  addPhoto: (workspaceId: string, beanId: string, image: Blob) => api.post<{ photo: BeanPhoto }>(`${base(workspaceId)}/${beanId}/photos`, image),
+  makeCover: (workspaceId: string, beanId: string, photoId: string) =>
+    api.patch<{ photos: BeanPhoto[] }>(`${base(workspaceId)}/${beanId}/photos/${photoId}`, { cover: true }),
+  removePhoto: (workspaceId: string, beanId: string, photoId: string) => api.delete(`${base(workspaceId)}/${beanId}/photos/${photoId}`),
+  photoUrl: (workspaceId: string, beanId: string, photoId: string) => `${API_URL}${base(workspaceId)}/${beanId}/photos/${photoId}`,
 };

@@ -8,6 +8,7 @@ import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import {
   beanFreezes,
+  beanPhotos,
   beanProcesses,
   beans,
   BLEND_TYPES,
@@ -23,13 +24,16 @@ import {
   type RoastLevel,
 } from "@barista/shared/schema";
 import { decimalSchema, optionalText, updateSchema } from "../validation.js";
+import { removePhotoFiles } from "../photos.js";
+import type { PhotoInfo } from "./beanPhotos.js";
 
 export type FreezePeriod = Pick<BeanFreeze, "id" | "frozenOn" | "thawedOn">;
 
 // Every bean the API returns carries its freeze history (docs/api/beans.md §4).
 // frozen: whether a period is still open (frozen now), worked out from the
 // history so the two can't disagree.
-export type BeanWithFreezes = Bean & { freezePeriods: FreezePeriod[]; frozen: boolean };
+// photos: cover first (docs/api/bean-photos.md §4c).
+export type BeanWithFreezes = Bean & { freezePeriods: FreezePeriod[]; frozen: boolean; photos: PhotoInfo[] };
 
 export interface BeanListResponse {
   beans: BeanWithFreezes[];
@@ -158,18 +162,30 @@ function serverToday(offsetDays = 0): string {
 async function loadBeans(where: SQL | undefined): Promise<BeanWithFreezes[]> {
   const rows = await db.select().from(beans).where(where).orderBy(asc(beans.roasterName), asc(beans.beanName));
   if (rows.length === 0) return [];
-  const periods = await db
-    .select({ id: beanFreezes.id, beanId: beanFreezes.beanId, frozenOn: beanFreezes.frozenOn, thawedOn: beanFreezes.thawedOn })
-    .from(beanFreezes)
-    .where(inArray(beanFreezes.beanId, rows.map((b) => b.id)))
-    .orderBy(asc(beanFreezes.frozenOn), asc(beanFreezes.createdAt));
+  const ids = rows.map((b) => b.id);
+  const [periods, photoRows] = await Promise.all([
+    db
+      .select({ id: beanFreezes.id, beanId: beanFreezes.beanId, frozenOn: beanFreezes.frozenOn, thawedOn: beanFreezes.thawedOn })
+      .from(beanFreezes)
+      .where(inArray(beanFreezes.beanId, ids))
+      .orderBy(asc(beanFreezes.frozenOn), asc(beanFreezes.createdAt)),
+    db
+      .select({ id: beanPhotos.id, beanId: beanPhotos.beanId, width: beanPhotos.width, height: beanPhotos.height })
+      .from(beanPhotos)
+      .where(inArray(beanPhotos.beanId, ids))
+      .orderBy(asc(beanPhotos.position), asc(beanPhotos.createdAt)),
+  ]);
   const byBean = new Map<string, FreezePeriod[]>();
   for (const { beanId, ...period } of periods) {
     byBean.set(beanId, [...(byBean.get(beanId) ?? []), period]);
   }
+  const photosByBean = new Map<string, PhotoInfo[]>();
+  for (const { beanId, ...photo } of photoRows) {
+    photosByBean.set(beanId, [...(photosByBean.get(beanId) ?? []), photo]);
+  }
   return rows.map((bean) => {
     const freezePeriods = byBean.get(bean.id) ?? [];
-    return { ...bean, freezePeriods, frozen: freezePeriods.some((p) => p.thawedOn === null) };
+    return { ...bean, freezePeriods, frozen: freezePeriods.some((p) => p.thawedOn === null), photos: photosByBean.get(bean.id) ?? [] };
   });
 }
 
@@ -298,8 +314,10 @@ beansRouter.delete("/:beanId", async (req: Request<BeanParams>, res: Response) =
       if (brewLogCount > 0) return { status: "has_logs", brewLogCount } as const;
     }
 
+    // The photo rows cascade; their files go after the commit.
+    const photoIds = (await tx.select({ id: beanPhotos.id }).from(beanPhotos).where(eq(beanPhotos.beanId, bean.id))).map((p) => p.id);
     await tx.delete(beans).where(eq(beans.id, bean.id));
-    return { status: "deleted" } as const;
+    return { status: "deleted", photoIds } as const;
   });
 
   if (outcome.status === "not_found") {
@@ -316,6 +334,7 @@ beansRouter.delete("/:beanId", async (req: Request<BeanParams>, res: Response) =
     );
     return;
   }
+  await removePhotoFiles(req.params.workspaceId, outcome.photoIds);
   res.status(204).end();
 });
 

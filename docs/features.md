@@ -59,6 +59,13 @@ work is in `roadmap.md`.
   tells the AI how developed the roast is.
 - **Freezing:** freeze/thaw periods pause the bean's roast age, so "days off
   roast" stays meaningful for frozen coffee.
+- **Photos:** up to 6 per bean (the bag, the label), taken with the phone's
+  camera (**Take photo**) or picked (**Choose photos**) in the bean form;
+  the first is the cover, beside the name in the bean list, and the bean's
+  details show them all (tap one to see it large). Stored once, upright and
+  at most 1024 px, without the photo's EXIF (location, camera). Seen ones
+  show offline. Hideable under Settings → Fields. A Duplicate starts
+  without them. (`docs/api/bean-photos.md` §4c)
 
 ## Bar setup
 One **Bar setup** section with tabs: Brewers, Grinders, Water, Prep and Menu.

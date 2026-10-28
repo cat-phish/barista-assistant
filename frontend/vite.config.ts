@@ -50,6 +50,17 @@ export default defineConfig({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
+          {
+            // Bean photos never change for an id (docs/api/bean-photos.md
+            // §4c): kept once seen, so they show offline too.
+            urlPattern: /\/api\/workspaces\/[^/]+\/beans\/[^/]+\/photos\/[^/]+$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'bean-photos',
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [200] },
+            },
+          },
         ],
       },
     }),

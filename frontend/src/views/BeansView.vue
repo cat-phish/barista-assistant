@@ -40,6 +40,7 @@ import { isSortKey, recallView, rememberView, sortArrow, sortBy, sortLabel, sort
 import { effectiveRoastAge } from '../lib/roastAge';
 import { usePreferences } from '../composables/usePreferences';
 import { useWorkspaceStore } from '../stores/workspace';
+import { useFieldVisibility } from '../composables/useFieldVisibility';
 
 const props = defineProps<{ archived?: boolean }>(); // the Archived tab (route prop)
 
@@ -47,6 +48,11 @@ const workspaces = useWorkspaceStore();
 const { altitudeUnit, roastScale } = usePreferences();
 const beans = ref<Bean[]>([]);
 const processes = ref<BeanProcess[]>([]); // the workspace's list, for names
+// Photos (docs/api/bean-photos.md §4c): the cover in the row, all of them in
+// the details; one opens large. Hidden with the field (Settings → Fields).
+const { show } = useFieldVisibility();
+const photoSrc = (bean: Bean, photoId: string) => beansApi.photoUrl(workspaces.current?.id ?? '', bean.id, photoId);
+const viewing = ref<{ bean: Bean; photoId: string } | null>(null);
 const loading = ref(true);
 const error = ref('');
 
@@ -457,6 +463,7 @@ const selection = useSelection();
           <div v-for="bean in shown" :key="bean.id" class="data-item" :class="{ open: openId === bean.id }">
             <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === bean.id" :aria-pressed="selection.selecting ? selection.has(bean.id) : undefined" @click="selection.selecting ? selection.toggle(bean.id) : toggle(bean.id)">
               <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(bean.id) ? '☑' : '☐' }}</span>
+                <img v-if="show('bean.photos') && bean.photos[0]" class="cover-thumb" :src="photoSrc(bean, bean.photos[0].id)" alt="" loading="lazy" />
                 {{ bean.beanName }}{{ batchSuffix(bean) }}<span v-if="openFreeze(bean)" class="frozen-mark phone-only" aria-label="frozen"> ❄</span>
               </span>
               <span class="data-td wide-only center">
@@ -483,6 +490,13 @@ const selection = useSelection();
                 <span v-if="bean.blendType" class="badge">{{ BLEND_TYPES[bean.blendType].label }}</span>
                 <span v-if="!bean.showOnPublicMenu" class="badge">Hidden from menu</span>
               </div>
+              <ul v-if="show('bean.photos') && bean.photos.length" class="photo-strip">
+                <li v-for="(photo, i) in bean.photos" :key="photo.id">
+                  <button type="button" class="photo-open" :aria-label="`Open photo ${i + 1} of ${bean.photos.length}`" @click="viewing = { bean, photoId: photo.id }">
+                    <img :src="photoSrc(bean, photo.id)" alt="" loading="lazy" />
+                  </button>
+                </li>
+              </ul>
               <p v-if="bean.flavorProfile" class="flavor">{{ bean.flavorProfile }}</p>
               <p class="facts">
                 <span v-if="ageLabel(bean)">{{ ageLabel(bean) }}</span>
@@ -635,9 +649,55 @@ const selection = useSelection();
       <button class="btn btn-secondary" type="button" :disabled="freezing" @click="freezeTarget = null">Cancel</button>
     </template>
   </ConfirmDialog>
+
+  <ConfirmDialog :open="viewing !== null" :title="viewing ? `${viewing.bean.roasterName} ${viewing.bean.beanName}` : ''" @cancel="viewing = null">
+    <img v-if="viewing" class="photo-large" :src="photoSrc(viewing.bean, viewing.photoId)" alt="" />
+    <template #actions>
+      <button class="btn btn-secondary" type="button" @click="viewing = null">Close</button>
+    </template>
+  </ConfirmDialog>
 </template>
 
 <style scoped>
+.cover-thumb {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  vertical-align: middle;
+  margin-right: var(--space-2);
+  background: var(--brand-tint);
+}
+.photo-strip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+}
+.photo-open {
+  display: block;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--brand-tint);
+  overflow: hidden;
+  cursor: zoom-in;
+}
+.photo-open img {
+  display: block;
+  width: 88px;
+  height: 88px;
+  object-fit: cover;
+}
+.photo-large {
+  display: block;
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: var(--radius);
+}
 p {
   margin: 0;
 }

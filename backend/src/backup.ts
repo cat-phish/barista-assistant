@@ -37,6 +37,7 @@ import {
   STEEP_TEMPS,
   STEP_ADVANCE,
   beanFreezes,
+  beanPhotos,
   beanProcesses,
   beans,
   brewerMethods,
@@ -137,6 +138,7 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
   { table: prepToolBrewers, scope: "prepToolId" },
   { table: beans, scope: "workspace" },
   { table: beanFreezes, scope: "beanId" },
+  { table: beanPhotos, scope: "beanId" },
   { table: recipes, scope: "workspace" },
   { table: recipeSteps, scope: "recipeId" },
   { table: recipeGrindSettings, scope: "recipeId" },
@@ -217,6 +219,9 @@ const JSON_SCHEMAS: Record<string, z.ZodType> = {
 export const AI_REQUEST_COLUMNS: Record<string, string> = { llm_analyses: "request", parameter_suggestions: "request" };
 export interface BackupOptions {
   aiRequests?: boolean;
+  // bean_photos rows only go with their files (a .zip, §2b); a JSON file
+  // has none, so a restore never points at a missing image.
+  photos?: boolean;
 }
 
 // What the schema says about a backed-up table.
@@ -266,7 +271,9 @@ export async function buildBackup(workspaceId: string, options: BackupOptions = 
   const emails = new Map<string, string | null>();
   for (const t of TABLE_INFO) {
     let rows: BackupRow[] = [];
-    if (t.scope === "workspace") {
+    if (t.table === beanPhotos && !options.photos) {
+      // left out: see BackupOptions.photos
+    } else if (t.scope === "workspace") {
       rows = (await db.select().from(t.table).where(eq(t.columns.workspaceId!, workspaceId))) as BackupRow[];
     } else {
       const parentIds = ids.get(t.refs[t.scope]!) ?? [];
