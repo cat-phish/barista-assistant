@@ -58,7 +58,7 @@ export interface WorkspaceSettings {
   suggestSource: SuggestSource;
   suggestMaxBrews: number;
   suggestAlternatives: AlternativeKind[]; // what else it suggests by default
-  readLabels: boolean; // "Fill in from the photos" on the bean form (bean-label.md §4d)
+  readLabels: boolean; // "Fill in from a photo" on the bean form (bean-label.md §4d)
 }
 export const AUTO_ANALYZE_DELAYS = [0, 5, 10, 15, 30] as const;
 export type AutoAnalyzeDelay = (typeof AUTO_ANALYZE_DELAYS)[number];
@@ -653,7 +653,7 @@ export interface Drink {
   ingredients: DrinkIngredient[];
 }
 
-// What "Fill in from the photos" read off a bean's label
+// What "Fill in from a photo" read off a bean's label
 // (docs/api/bean-label.md §4d): null where it couldn't tell.
 export interface LabelFields {
   roasterName: string | null;

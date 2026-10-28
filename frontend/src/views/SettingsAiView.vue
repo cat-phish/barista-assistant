@@ -173,9 +173,9 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
     <section class="card stack" aria-labelledby="ai-labels">
       <h2 id="ai-labels">Bean labels</h2>
       <p class="muted">
-        On the bean form, “Fill in from the photos” sends the bean's photos to the AI provider, which reads the label: roaster, coffee, origin,
+        On the bean form, “Fill in from a photo” sends photos of the bag's label to the AI provider, which reads it: roaster, coffee, origin,
         process, roast and so on. Empty fields are filled in and the rest get a suggestion; nothing is saved until you save the bean. The photos
-        are sent only when someone presses the button.
+        are only read, not kept, and nothing is sent unless someone takes or picks one there.
       </p>
       <label class="checkbox">
         <input type="checkbox" :checked="settings.readLabels" :disabled="!isOwner || saving" @change="save({ readLabels: ($event.target as HTMLInputElement).checked }, 'labels')" />

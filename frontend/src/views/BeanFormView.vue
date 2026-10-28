@@ -7,6 +7,7 @@ import { errorMessage } from '../api/client';
 import AppHeader from '../components/AppHeader.vue';
 import BeanPhotos from '../components/BeanPhotos.vue';
 import LabelHint from '../components/LabelHint.vue';
+import LabelReader from '../components/LabelReader.vue';
 import RatingInput from '../components/RatingInput.vue';
 import { localDateInput, parseDecimal, toDateInput } from '../lib/format';
 import { ALTITUDE_LABELS, altitudeText, parseAltitude } from '../lib/units';
@@ -160,7 +161,7 @@ const perGram = computed(() => {
 // already records stay shown.
 const { show, reveal } = useFieldVisibility();
 
-// "Fill in from the photos" (docs/api/bean-label.md §4d): empty fields are
+// "Fill in from a photo" (docs/api/bean-label.md §4d): empty fields are
 // filled, ones that say something else get a "Label says" suggestion.
 const labelRefs = computed<Record<TextKey, Ref<string>>>(() => ({
   roasterName,
@@ -406,6 +407,9 @@ async function save(): Promise<void> {
     <p v-if="loading" class="muted" aria-live="polite">Loading…</p>
 
     <form v-else class="stack" novalidate @submit.prevent="save">
+      <LabelReader v-if="settings.readLabels && workspaces.current" :workspace-id="workspaces.current.id" @label="applyLabel">
+        <p v-if="labelSummary" class="small" role="status">{{ labelSummary }}</p>
+      </LabelReader>
       <section class="card stack">
         <div class="field">
           <label for="roaster">Roaster<span class="req" aria-hidden="true">*</span></label>
@@ -485,15 +489,7 @@ async function save(): Promise<void> {
 
       <section v-if="show('bean.photos') && workspaces.current" class="card stack">
         <h2>Photos</h2>
-        <BeanPhotos
-          ref="photoPicker"
-          v-model="photos"
-          :workspace-id="workspaces.current.id"
-          :bean-id="props.id ?? null"
-          :read-labels="settings.readLabels"
-          @label="applyLabel"
-        />
-        <p v-if="labelSummary" class="muted small" role="status">{{ labelSummary }}</p>
+        <BeanPhotos ref="photoPicker" v-model="photos" :workspace-id="workspaces.current.id" :bean-id="props.id ?? null" />
       </section>
 
       <section class="card stack">

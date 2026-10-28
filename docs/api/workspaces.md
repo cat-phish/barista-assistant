@@ -90,7 +90,7 @@ Every workspace in a response carries `settings`, defaults filled in
   default `[]`): what else "Suggest parameters" suggests by default, ticked
   to start with on the brew page (§8b), set under Settings → **AI**.
 - `readLabels` (boolean, default `true`): whether the bean form offers
-  "Fill in from the photos", which sends a bean's photos to the AI provider
+  "Fill in from a photo", which sends label photos to the AI provider
   (`docs/api/bean-label.md` §4d), set under Settings → **AI**. Off, the
   route answers `403`.
 

@@ -1573,14 +1573,16 @@ Backlog item "Bean photos", branch `bean-photos`. `docs/api/bean-photos.md`
 Backlog item 3, branch `bean-label`. `docs/api/bean-label.md` §4d,
 `docs/api/llm-contract.md` §9c, `docs/features.md` (Beans).
 
-- Decided: **all the bean's photos** in one request (front, back, card);
+- Decided: the photos are **taken for the read and thrown away**, in a
+  "Fill in from a photo" card at the top of the form (first built on the
+  bean's own photos; changed so a back-of-the-bag shot needn't be uploaded
+  and deleted), up to 6 in one request;
   **fill empty fields, suggest for filled ones** ("Label says: X · Use");
   **match** the process to the workspace's visible ones (an enum in the
   schema), the growing area from the country, the roast to the workspace's
   roast scale; its **own switch** (`readLabels`, Settings → AI, on by
   default). No migration: settings are JSON.
-- The photos travel **with the request** (a new bean's aren't on the server
-  yet): the browser shrinks them to 1024 px JPEG, the backend re-encodes
+- The photos travel **with the request**: the browser shrinks them to 1024 px JPEG, the backend re-encodes
   them with `processPhoto` (no EXIF), queues a `label-read` job and waits
   for its return value (`addAndWait` in `backend/src/queue.ts`, shared with
   the previews; `LABEL_READ_TIMEOUT_MS`, default 60 s). Nothing is stored;
