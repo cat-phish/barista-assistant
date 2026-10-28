@@ -12,7 +12,7 @@ import type { BrewerInfo, SuggestContext } from "./suggestContext.js";
 // Stored with each analysis (llm_analyses.prompt_version), so results can be
 // compared across changes (npm run eval). Bump it whenever the input, the
 // prompt or the schema changes.
-export const PROMPT_VERSION = "2026-10-g";
+export const PROMPT_VERSION = "2026-10-h";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type LlmInput = { [key: string]: Json };
@@ -144,8 +144,9 @@ export function toSuggestInput(context: SuggestContext, hidden: ReadonlySet<AiDe
     recipe: recipeInput(context.recipe, hidden),
     brewer: brewerInput(context.brewer, hidden),
     grinder: context.grinder?.name,
-    brews: context.brews.map(({ sameBean, sameRecipe, sameGrinder, bean, analysis, ...b }) => ({
+    brews: context.brews.map(({ sameBag, sameBean, sameRecipe, sameGrinder, bean, analysis, ...b }) => ({
       ...brewInput(b, hidden),
+      sameBag,
       sameBean,
       sameRecipe,
       sameGrinder,

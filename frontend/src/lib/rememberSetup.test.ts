@@ -26,6 +26,7 @@ describe('rememberKeyFor', () => {
   });
   it('the Suggest parameters choices are always remembered', () => {
     expect(rememberKeyFor('suggestSource')).toBeNull();
+    expect(rememberKeyFor('compareWith')).toBeNull();
     expect(rememberKeyFor('suggestMax')).toBeNull();
     expect(rememberKeyFor('suggestAlternatives')).toBeNull();
   });

@@ -90,11 +90,21 @@ ones when the workspace keeps them from the AI, `aiHidden`
 
 | `source` | Brews sent |
 | --- | --- |
-| `bean` | this bean's, any recipe |
-| `beanRecipe` | this bean's with this recipe |
-| `beanBrewer` | this bean's on this brewer (`brew_logs.brewerId`) |
+| `bag` | this bag's (this exact bean), any recipe |
+| `bagRecipe` | this bag's with this recipe |
+| `bagBrewer` | this bag's on this brewer (`brew_logs.brewerId`) |
+| `bean` | every bag of this coffee, any recipe |
+| `beanRecipe` | every bag of this coffee, with this recipe |
+| `beanBrewer` | every bag of this coffee, on this brewer |
 | `brewer` | this brewer's, any bean |
 | `recipe` | this recipe's, any bean |
+
+A bag is one bean record (one bag, roast date or batch). The bean is every
+bag of the same coffee in the workspace: the same roaster and bean name,
+ignoring case and spaces at the ends, as Repeat brew's "next bag" does.
+Until migration 0074 the `bean…` sources meant this exact bean; it renamed
+them `bag…` in saved suggestions and workspace settings (a workspace on the
+default got `bagRecipe`), so nothing compared differently.
 
 The workspace's defaults are `suggestSource` and `suggestMaxBrews`
 (`docs/api/workspaces.md` §2, Settings → **AI**).
@@ -130,7 +140,8 @@ The workspace's defaults are `suggestSource` and `suggestMaxBrews`
   (job `suggest`, data `{ "suggestionId": "uuid" }`, 3 attempts with
   backoff, like an analysis).
 - **Errors:** `400` an id that isn't the workspace's, a `source` that needs
-  a recipe (`beanRecipe`, `recipe`) or a brewer (`beanBrewer`, `brewer`)
+  a recipe (`bagRecipe`, `beanRecipe`, `recipe`) or a brewer (`bagBrewer`,
+  `beanBrewer`, `brewer`)
   without one, a `maxBrews` out of range, an unknown key; `403` viewer;
   `404` not a member; `503` the queue (Redis) is unavailable (nothing is
   saved).

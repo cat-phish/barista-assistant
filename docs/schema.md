@@ -1095,7 +1095,7 @@ export const parameterSuggestions = mysqlTable("parameter_suggestions", {
   recipeId: varchar("recipe_id", { length: 36 }).references(() => recipes.id, { onDelete: "set null" }),
   brewerId: varchar("brewer_id", { length: 36 }).references(() => brewers.id, { onDelete: "set null" }),
   grinderId: varchar("grinder_id", { length: 36 }).references(() => grinders.id, { onDelete: "set null" }),
-  source: varchar("source", { length: 20 }).$type<SuggestSource>().notNull(), // SUGGEST_SOURCES
+  source: varchar("source", { length: 20 }).$type<SuggestSource>().notNull(), // SUGGEST_SOURCES: bag* this exact bean, bean* every bag of its coffee (0074 renamed the old bean* to bag*)
   maxBrews: int("max_brews").notNull(),
   // Who asked: their own AI prompt is used (docs/api/auth.md §1c); null once
   // their account is deleted. note: a one-off note sent with it.

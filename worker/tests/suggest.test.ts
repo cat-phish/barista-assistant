@@ -73,7 +73,10 @@ const notes = async (r: SuggestRequest, options = {}) => (await loadSuggestConte
 
 describe("which earlier brews Suggest parameters sends (docs/api/analysis.md §8b)", () => {
   it.each([
-    ["bean", ["day5", "day3", "day2", "day1"]],
+    ["bag", ["day5", "day3", "day2", "day1"]],
+    ["bagRecipe", ["day5", "day1"]],
+    ["bagBrewer", ["day5", "day2", "day1"]],
+    ["bean", ["day5", "day3", "day2", "day1"]], // only one bag of Guji yet
     ["beanRecipe", ["day5", "day1"]],
     ["beanBrewer", ["day5", "day2", "day1"]],
     ["brewer", ["day5", "day4", "day2", "day1"]],
@@ -98,7 +101,36 @@ describe("which earlier brews Suggest parameters sends (docs/api/analysis.md §8
     expect((await loadSuggestContext(request("bean", { recipeId: null })))!.batch).toEqual({ doseGrams: null, waterGrams: null, iceGrams: null, yieldGrams: null, ratio: null });
   });
 
+  it("bag: this exact bean; bean: every bag of its coffee, by roaster and name, in this workspace only", async () => {
+    const bag2 = randomUUID();
+    const ws2 = randomUUID();
+    const elsewhere = randomUUID();
+    await db.insert(workspaces).values({ id: ws2, name: "Other", slug: "other" });
+    await db.insert(beans).values([
+      { id: bag2, workspaceId, roasterName: " onyx", beanName: "GUJI ", roastLevel: "light", batchNumber: "2", roastDate: new Date("2026-10-08T00:00:00Z") },
+      { id: elsewhere, workspaceId: ws2, roasterName: "Onyx", beanName: "Guji" },
+    ]);
+    const brew = (beanId: string, ws: string, day: string) => ({
+      id: randomUUID(), workspaceId: ws, userId, beanId, recipeId: id.house, brewerId: id.v60, grinderId: id.c40,
+      timestamp: new Date(`2026-10-1${day}T08:00:00Z`), actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 180, rating: 3, tastingNotes: `day${day}`,
+    });
+    await db.insert(brewLogs).values([brew(bag2, workspaceId, "7"), brew(elsewhere, ws2, "8")]);
+
+    expect(await notes(request("bagRecipe"))).toEqual(["day5", "day1"]);
+    expect(await notes(request("beanRecipe"))).toEqual(["day7", "day5", "day1"]);
+    expect(await notes(request("bean"))).toEqual(["day7", "day5", "day3", "day2", "day1"]);
+    expect(await notes(request("beanBrewer"))).toEqual(["day7", "day5", "day2", "day1"]);
+    // From the newer bag, the older bag's brews are its coffee's too.
+    expect(await notes(request("bagRecipe", { beanId: bag2 }))).toEqual(["day7"]);
+    expect(await notes(request("beanRecipe", { beanId: bag2 }))).toEqual(["day7", "day5", "day1"]);
+
+    const [day7, day5] = (await loadSuggestContext(request("beanRecipe")))!.brews;
+    expect(day7).toMatchObject({ sameBag: false, sameBean: true, bean: { beanName: "GUJI ", batchNumber: "2" } });
+    expect(day5).toMatchObject({ sameBag: true, sameBean: true, bean: null });
+  });
+
   it("sends none when the source needs a recipe or brewer that's gone", async () => {
+    expect(await notes(request("bagRecipe", { recipeId: null }))).toEqual([]);
     expect(await notes(request("beanRecipe", { recipeId: null }))).toEqual([]);
     expect(await notes(request("brewer", { brewerId: null }))).toEqual([]);
   });
@@ -119,8 +151,8 @@ describe("which earlier brews Suggest parameters sends (docs/api/analysis.md §8
     });
     expect(context.roastAgeDays).toBeGreaterThan(20); // today, not at a brew
     const [day5, day4, day1] = context.brews;
-    expect(day5).toMatchObject({ sameBean: true, sameRecipe: true, sameGrinder: false, bean: null, analysis: null, grinder: { name: "Ode" } });
-    expect(day4).toMatchObject({ sameBean: false, sameGrinder: true, bean: { beanName: "Kenya", country: "Kenya" }, roastAgeDays: 12 }); // its own bean's age
+    expect(day5).toMatchObject({ sameBag: true, sameBean: true, sameRecipe: true, sameGrinder: false, bean: null, analysis: null, grinder: { name: "Ode" } });
+    expect(day4).toMatchObject({ sameBag: false, sameBean: false, sameGrinder: true, bean: { beanName: "Kenya", country: "Kenya" }, roastAgeDays: 12 }); // its own bean's age
     expect(day1?.analysis).toEqual({
       reasoning: "Sour.", nextStep: "Grind finer.", confidence: null, suggestedGrindDelta: "finer", suggestedTempDelta: 1,
       suggestedRpmDelta: null, suggestedDoseDelta: null, suggestedYieldDelta: null, helpful: true,

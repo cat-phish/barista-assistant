@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, type ParameterSuggestion, type Recipe } from '../api/types';
-import { ALTERNATIVE_LABELS, chooseGrind, gramsAdvice, heldForRatio, rpmAdvice, SUGGEST_SOURCE_LABELS, sourceNeeds, startingParameters, suggestionFitsGrinder } from './suggest';
+import { ALTERNATIVE_LABELS, chooseGrind, gramsAdvice, heldForRatio, rememberedSource, rpmAdvice, SUGGEST_SOURCE_LABELS, sourceNeeds, startingParameters, suggestionFitsGrinder } from './suggest';
 
 const recipe = { targetTempC: 94, grindSettings: [{ grinderId: 'c40', grinderName: 'Comandante C40', setting: 19 }] } as unknown as Recipe;
 const suggestion = (over: Partial<ParameterSuggestion> = {}): ParameterSuggestion => ({
@@ -24,7 +24,17 @@ describe('Suggest parameters sources (docs/api/analysis.md §8b)', () => {
     expect(Object.keys(ALTERNATIVE_LABELS)).toEqual(kinds);
   });
   it('say what has to be chosen first', () => {
-    expect(SUGGEST_SOURCES.map(sourceNeeds)).toEqual([null, 'recipe', 'brewer', 'brewer', 'recipe']);
+    expect(SUGGEST_SOURCES.map(sourceNeeds)).toEqual([null, 'recipe', 'brewer', null, 'recipe', 'brewer', 'brewer', 'recipe']);
+  });
+  it('remembered on this device: compareWith, else the old suggestSource as the bag it meant', () => {
+    expect(rememberedSource('beanRecipe', 'bean')).toBe('beanRecipe');
+    expect(rememberedSource('nonsense', 'bean')).toBeNull();
+    expect(rememberedSource(null, 'bean')).toBe('bag');
+    expect(rememberedSource(null, 'beanRecipe')).toBe('bagRecipe');
+    expect(rememberedSource(null, 'beanBrewer')).toBe('bagBrewer');
+    expect(rememberedSource(null, 'recipe')).toBe('recipe');
+    expect(rememberedSource(null, 'bag')).toBeNull();
+    expect(rememberedSource(null, null)).toBeNull();
   });
 });
 

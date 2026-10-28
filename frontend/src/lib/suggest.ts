@@ -1,7 +1,7 @@
 // AI suggestions as the app shows them: an analysis's changes (AnalysisCard,
 // docs/api/analysis.md §8), and "Suggest parameters"' starting values for the
 // brew being set up (§8b).
-import type { AlternativeKind, GrindDelta, ParameterSuggestion, Recipe, SuggestedAlternative, SuggestSource } from '../api/types';
+import { SUGGEST_SOURCES, type AlternativeKind, type GrindDelta, type ParameterSuggestion, type Recipe, type SuggestedAlternative, type SuggestSource } from '../api/types';
 import { formatGrind } from './format';
 import type { ScaleField } from './scale';
 
@@ -28,7 +28,12 @@ export function gramsAdvice(label: string, delta: number | null): string | null 
 }
 
 // Which earlier brews "Suggest parameters" sends, as the dropdown says it.
+// A bag is this exact bean; a bean is every bag of the coffee (roaster and
+// name), whatever its roast date or batch.
 export const SUGGEST_SOURCE_LABELS: Record<SuggestSource, string> = {
+  bag: 'This bag',
+  bagRecipe: 'This bag and recipe',
+  bagBrewer: 'This bag and brewer',
   bean: 'This bean',
   beanRecipe: 'This bean and recipe',
   beanBrewer: 'This bean and brewer',
@@ -39,9 +44,16 @@ export const SUGGEST_SOURCE_LABELS: Record<SuggestSource, string> = {
 export const ALTERNATIVE_LABELS: Record<AlternativeKind, string> = { recipe: 'Another recipe', brewer: 'Another brewer', bean: 'Another bean' };
 // What a source needs chosen first to pick brews by.
 export function sourceNeeds(source: SuggestSource): 'recipe' | 'brewer' | null {
-  if (source === 'beanRecipe' || source === 'recipe') return 'recipe';
-  if (source === 'beanBrewer' || source === 'brewer') return 'brewer';
+  if (source === 'bagRecipe' || source === 'beanRecipe' || source === 'recipe') return 'recipe';
+  if (source === 'bagBrewer' || source === 'beanBrewer' || source === 'brewer') return 'brewer';
   return null;
+}
+// The source last picked on this device. It's kept as compareWith; an older
+// suggestSource meant the exact bag by its bean* names, so it reads as bag*.
+const OLD_SOURCES: Partial<Record<string, SuggestSource>> = { bean: 'bag', beanRecipe: 'bagRecipe', beanBrewer: 'bagBrewer', brewer: 'brewer', recipe: 'recipe' };
+export function rememberedSource(compareWith: string | null, oldSuggestSource: string | null): SuggestSource | null {
+  if (compareWith !== null) return SUGGEST_SOURCES.find((x) => x === compareWith) ?? null;
+  return oldSuggestSource === null ? null : (OLD_SOURCES[oldSuggestSource] ?? null);
 }
 
 // A finished suggestion's values, for the brew being set up.
