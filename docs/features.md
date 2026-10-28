@@ -334,8 +334,10 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   clearest sign of extraction and drink notes as weaker evidence (milk and
   syrup soften sourness and bitterness).
 - **Suggest parameters:** on the brew page, before brewing, pick which
-  earlier brews the AI compares (this bean's, with this recipe or on this
-  brewer, or this brewer's or this recipe's with any bean) and up to how
+  earlier brews the AI compares (this bag's, or this bean's across every
+  bag of it whatever the roast date or batch, each with any recipe, this
+  recipe or on this brewer; or this brewer's or this recipe's with any
+  bean) and up to how
   many (1–20). Each goes with the analysis it got, so the AI sees whether
   that advice helped. It suggests the grind for the grinder chosen, the
   temperature and the ratio, with its reasoning, and fills them in. The

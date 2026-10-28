@@ -80,8 +80,9 @@ Every workspace in a response carries `settings`, defaults filled in
   `5`, `10`, `15` or `30`, default `10`; `0` analyzes right away), `autoAnalyzeDailyCap` (integer 1–500,
   or `null` for no cap, default `null`): auto-analyze (`docs/api/analysis.md`
   §8), set under Settings → **AI**.
-- `suggestSource` (one of `bean`, `beanRecipe`, `beanBrewer`, `brewer`,
-  `recipe`; default `beanRecipe`) and `suggestMaxBrews` (integer 1–20,
+- `suggestSource` (one of `bag`, `bagRecipe`, `bagBrewer`, `bean`,
+  `beanRecipe`, `beanBrewer`, `brewer`, `recipe`; default `beanRecipe`, every
+  bag of the coffee; workspaces from before migration 0074 have `bagRecipe`) and `suggestMaxBrews` (integer 1–20,
   default `5`): which earlier brews "Suggest parameters" sends, and at most
   how many, unless the request says otherwise (`docs/api/analysis.md` §8b),
   set under Settings → **AI**.

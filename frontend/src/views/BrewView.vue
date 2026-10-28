@@ -69,7 +69,7 @@ import { grinderRetentionText } from '../lib/grinderRetention';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
 import { batchSuffix, beanLabel as pickerLabel } from '../lib/beans';
 import { formatDay, formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen } from '../lib/format';
-import { ALTERNATIVE_LABELS, CONFIDENCE_LABELS, chooseGrind, heldForRatio, SUGGEST_SOURCE_LABELS, sourceNeeds, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
+import { ALTERNATIVE_LABELS, CONFIDENCE_LABELS, chooseGrind, heldForRatio, rememberedSource, SUGGEST_SOURCE_LABELS, sourceNeeds, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
 import { useParameterSuggestion } from '../composables/useParameterSuggestion';
 import { useWorkspaceStore } from '../stores/workspace';
 import { brewRetention, linkRatio, ratioText as formatRatio, ratioWater, ROAST_LEVELS, scaleBatch, scaleShot, scaleSteps, waterShare, type MeasuredBrew, type ScaleField } from '../lib/scale';
@@ -601,8 +601,7 @@ const suggestAlts = ref<AlternativeKind[]>([]); // what else to suggest
 watch(
   () => workspaces.current?.id,
   () => {
-    const savedSource = recall('suggestSource');
-    suggestSource.value = SUGGEST_SOURCES.find((x) => x === savedSource) ?? settings.value.suggestSource;
+    suggestSource.value = rememberedSource(recall('compareWith'), recall('suggestSource')) ?? settings.value.suggestSource;
     const savedMax = Number(recall('suggestMax'));
     suggestMax.value = Number.isInteger(savedMax) && savedMax >= 1 && savedMax <= MAX_SUGGEST_BREWS ? savedMax : settings.value.suggestMaxBrews;
     const savedAlts = recall('suggestAlternatives'); // "none" when none were ticked
@@ -623,7 +622,7 @@ function suggest(): void {
   const ws = workspaces.current?.id;
   const body = suggestBody();
   if (!ws || !body) return;
-  remember('suggestSource', suggestSource.value);
+  remember('compareWith', suggestSource.value);
   remember('suggestMax', String(suggestMax.value));
   remember('suggestAlternatives', suggestAlts.value.join(',') || 'none');
   void suggester.ask(ws, body);

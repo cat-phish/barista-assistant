@@ -44,7 +44,7 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
 ```json
 {
   "format": "barista-backup",
-  "version": 2,
+  "version": 3,
   "exportedAt": "2026-10-23T08:00:00.000Z",
   "workspace": { "name": "Home bar", "slug": "home-bar", "settings": { "roastScale": "levels" }, "menuTitle": null, "menuCurrency": "USD", "isPublicMenuEnabled": true },
   "tables": {
@@ -84,6 +84,11 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
     `methodKinds` (`[]` = every brew), plus the brewers it's offered for
     (`prep_tool_brewers`). A version 1 file restores with `[methodKind]`
     or `[]`, and no brewers.
+  - **3:** Suggest parameters' `bean`, `beanRecipe` and `beanBrewer` sources
+    (this exact bean) became `bag`, `bagRecipe` and `bagBrewer`; `bean…`
+    now means every bag of the coffee (`analysis.md` §8b). A version 2
+    file's `parameter_suggestions.source` and `settings.suggestSource` are
+    renamed, and a workspace on the default gets `bagRecipe`.
 
 **What was sent to the AI** (`request` on `llm_analyses` and
 `parameter_suggestions`, `analysis.md` §8c) is large and only for looking

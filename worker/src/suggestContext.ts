@@ -16,7 +16,7 @@ import {
   type ParameterSuggestion,
   type SuggestSource,
 } from "@barista/shared/schema";
-import { and, asc, desc, eq, getTableColumns, gt, inArray, isNotNull, isNull, lt, ne, or, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, gt, inArray, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { config } from "./config.js";
 import {
   drinksServed,
@@ -55,10 +55,11 @@ export interface PastAnalysis {
 }
 
 export interface SuggestBrew extends BrewSummary {
-  sameBean: boolean;
+  sameBag: boolean; // this exact bean
+  sameBean: boolean; // this coffee (roaster and name), any bag
   sameRecipe: boolean;
   sameGrinder: boolean;
-  bean: BrewContext["bean"] | null; // another bean's brew: which bean; null for this bean
+  bean: BrewContext["bean"] | null; // another bag's or bean's brew: which one; null for this bag
   analysis: PastAnalysis | null;
 }
 
@@ -148,13 +149,39 @@ function batchFor(r: SuggestRequest, recipe: BrewContext["recipe"], espresso: bo
   };
 }
 
+// The workspace's bags of this bean's coffee: the same roaster and name,
+// ignoring case and spaces at the ends (as the brew page's repeat does).
+async function sameCoffeeIds(beanId: string): Promise<string[]> {
+  const [b] = await db.select({ workspaceId: beans.workspaceId, roasterName: beans.roasterName, beanName: beans.beanName }).from(beans).where(eq(beans.id, beanId));
+  if (!b) return [beanId];
+  const rows = await db
+    .select({ id: beans.id })
+    .from(beans)
+    .where(
+      and(
+        eq(beans.workspaceId, b.workspaceId),
+        sql`LOWER(TRIM(${beans.roasterName})) = ${b.roasterName.trim().toLowerCase()}`,
+        sql`LOWER(TRIM(${beans.beanName})) = ${b.beanName.trim().toLowerCase()}`,
+      ),
+    );
+  return rows.map((x) => x.id);
+}
+
 // Which earlier brews each source picks, or null when it can't (its recipe
-// or brewer was deleted since): then no brews are sent.
-function sourceFilter(r: SuggestRequest): SQL | null {
-  const bean = eq(brewLogs.beanId, r.beanId);
+// or brewer was deleted since): then no brews are sent. coffee: the bags of
+// this bean's coffee (sameCoffeeIds).
+function sourceFilter(r: SuggestRequest, coffee: readonly string[]): SQL | null {
+  const bag = eq(brewLogs.beanId, r.beanId);
+  const bean = inArray(brewLogs.beanId, [...coffee]);
   const recipe = r.recipeId ? eq(brewLogs.recipeId, r.recipeId) : null;
   const brewer = r.brewerId ? eq(brewLogs.brewerId, r.brewerId) : null;
   switch (r.source) {
+    case "bag":
+      return bag;
+    case "bagRecipe":
+      return recipe && and(bag, recipe)!;
+    case "bagBrewer":
+      return brewer && and(bag, brewer)!;
     case "bean":
       return bean;
     case "beanRecipe":
@@ -252,7 +279,8 @@ export async function loadSuggestContext(r: SuggestRequest, options: { ratedOnly
   const target = await loadBean(r.beanId);
   if (!target) return null; // the bean was deleted: so is the suggestion
 
-  const filter = sourceFilter(r);
+  const coffee = await sameCoffeeIds(r.beanId);
+  const filter = sourceFilter(r, coffee);
   const [recipe, brewer, grinder, rows] = await Promise.all([
     r.recipeId ? loadRecipe(r.recipeId) : Promise.resolve(null),
     r.brewerId
@@ -331,7 +359,8 @@ export async function loadSuggestContext(r: SuggestRequest, options: { ratedOnly
       const bean = beansById.get(b.beanId);
       return {
         ...summarize(b, bean?.roastDate ?? null, bean?.freezes ?? [], marks, tools, problems, servedAs),
-        sameBean: b.beanId === r.beanId,
+        sameBag: b.beanId === r.beanId,
+        sameBean: coffee.includes(b.beanId),
         sameRecipe: r.recipeId !== null && b.recipeId === r.recipeId,
         sameGrinder: r.grinderId !== null && b.grinderId === r.grinderId,
         bean: b.beanId === r.beanId ? null : (bean?.info ?? null),

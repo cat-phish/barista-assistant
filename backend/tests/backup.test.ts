@@ -204,6 +204,27 @@ describe("workspace backup and restore (docs/api/backup.md §2b)", () => {
     expect(tools.find((t) => t.name === "RDT")).toMatchObject({ methodKinds: [] });
   });
 
+  it("restores a version 2 file, where the bean sources meant this bag (docs/api/backup.md §2b)", async () => {
+    const { owner, base } = await populated();
+    const backup = (await owner.agent.get(`${base}/backup`)).body;
+    const v2 = (settings: Record<string, unknown>) => ({
+      ...backup,
+      version: 2,
+      workspace: { ...backup.workspace, settings },
+      tables: { ...backup.tables, parameter_suggestions: backup.tables.parameter_suggestions.map((r: Record<string, unknown>) => ({ ...r, source: "beanRecipe" })) },
+    });
+    const restore = async (file: unknown) => {
+      const restored = await owner.agent.post("/api/workspaces/restore").send({ name: "Old", slug: `old-${randomUUID().slice(0, 8)}`, backup: file });
+      expect(restored.status, JSON.stringify(restored.body)).toBe(201);
+      return (await owner.agent.get(`/api/workspaces/${restored.body.workspaceId}/backup`)).body;
+    };
+    const onDefault = await restore(v2({ roastScale: "levels" }));
+    expect(onDefault.workspace.settings).toMatchObject({ roastScale: "levels", suggestSource: "bagRecipe" });
+    expect(onDefault.tables.parameter_suggestions.map((r: { source: string }) => r.source)).toEqual(["bagRecipe"]);
+    expect((await restore(v2({ suggestSource: "bean" }))).workspace.settings.suggestSource).toBe("bag");
+    expect((await restore(v2({ suggestSource: "recipe" }))).workspace.settings.suggestSource).toBe("recipe");
+  });
+
   it("refuses a bad file or a taken slug, and creates nothing", async () => {
     const { owner, ws, base } = await populated();
     const backup = (await owner.agent.get(`${base}/backup`)).body;

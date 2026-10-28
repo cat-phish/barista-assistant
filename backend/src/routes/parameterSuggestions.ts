@@ -66,8 +66,8 @@ const createSchema = z
 const tenth = (n: number | null | undefined): number | null => (n == null ? null : Math.round(n * 10) / 10);
 
 // What each source needs to pick brews by.
-const NEEDS_RECIPE: readonly SuggestSource[] = ["beanRecipe", "recipe"];
-const NEEDS_BREWER: readonly SuggestSource[] = ["beanBrewer", "brewer"];
+const NEEDS_RECIPE: readonly SuggestSource[] = ["bagRecipe", "beanRecipe", "recipe"];
+const NEEDS_BREWER: readonly SuggestSource[] = ["bagBrewer", "beanBrewer", "brewer"];
 
 // Mounted at /api/workspaces/:workspaceId/parameter-suggestions
 export const parameterSuggestionsRouter = Router({ mergeParams: true });

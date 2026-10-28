@@ -76,7 +76,7 @@ import { workspaceSettingsObject } from "./validation.js";
 export const BACKUP_FORMAT = "barista-backup";
 // Bumped when a backup made before the change can't be restored as is;
 // UPGRADES then turns an older file into the current shape.
-export const BACKUP_VERSION = 2;
+export const BACKUP_VERSION = 3;
 const UPGRADES: Record<number, (file: BackupFile) => BackupFile> = {
   // 2: a prep tool's one methodKind (null = every method) became a list,
   // methodKinds ([] = every method), plus brewers (prep_tool_brewers).
@@ -97,7 +97,28 @@ const UPGRADES: Record<number, (file: BackupFile) => BackupFile> = {
         : {}),
     },
   }),
+  // 3: Suggest parameters' bean sources became bag sources (migration 0074),
+  // bean* meaning every bag of the coffee now; a workspace on the default
+  // keeps comparing with the bag.
+  2: (file) => {
+    const settings = isObject(file.workspace?.settings) ? file.workspace.settings : {};
+    return {
+      ...file,
+      version: 3,
+      ...(isObject(file.workspace)
+        ? { workspace: { ...file.workspace, settings: { ...settings, suggestSource: bagSource(settings.suggestSource ?? "beanRecipe") } } }
+        : {}),
+      tables: {
+        ...file.tables,
+        ...(Array.isArray(file.tables?.parameter_suggestions)
+          ? { parameter_suggestions: file.tables.parameter_suggestions.map((r) => (isObject(r) ? { ...r, source: bagSource(r.source) } : r)) }
+          : {}),
+      },
+    };
+  },
 };
+const OLD_BEAN_SOURCES: Record<string, string> = { bean: "bag", beanRecipe: "bagRecipe", beanBrewer: "bagBrewer" };
+const bagSource = (source: unknown): unknown => (typeof source === "string" ? (OLD_BEAN_SOURCES[source] ?? source) : source);
 
 // In insert order: a table only points at tables above it (or at itself,
 // filled in afterwards, like a drink's parent). "workspace" rows are found by

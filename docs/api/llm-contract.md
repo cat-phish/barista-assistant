@@ -301,9 +301,10 @@ deleted with its bean) is skipped.
    machine its controls) and the grinder (its details); then up to
    `maxBrews` earlier brews from the `source`, newest first, without ones
    still steeping (and unrated ones when `unratedHistory` is hidden). Each
-   is a brew as in step 1, with its own bean's roast age, plus `sameBean`,
-   `sameRecipe`, `sameGrinder`, `bean` (another bean's details, `null` for
-   this bean) and `analysis`, its latest analysis (`reasoning`, `nextStep`,
+   is a brew as in step 1, with its own bean's roast age, plus `sameBag`
+   (this exact bean), `sameBean` (this coffee, any bag: roaster and name),
+   `sameRecipe`, `sameGrinder`, `bean` (another bag's or bean's details,
+   `null` for this bag) and `analysis`, its latest analysis (`reasoning`, `nextStep`,
    `confidence`, the suggested changes and the barista's `helpful`), or
    `null`. Then `options`, for the kinds in `alternativesAsked` (at most
    `MAX_OPTIONS`, 30, of each): `recipes` (the workspace's active recipes on
@@ -326,7 +327,7 @@ deleted with its bean) is skipped.
 
    | Section | Included when | What it says |
    | --- | --- | --- |
-   | `suggestCore` | always | values for a brew about to be made; what each source picks; the batch is the barista's, never changed, and a different batch size drains differently (grind); `sameBean`/`sameRecipe`/`sameGrinder`, and an earlier analysis judged by the brew after it; another bean's brews show the recipe, brewer or grinder, not this bean; start from the recipe's targets |
+   | `suggestCore` | always | values for a brew about to be made; what each source picks (bag: this exact bag; bean: every bag of the coffee); the batch is the barista's, never changed, and a different batch size drains differently (grind); `sameBag`/`sameBean`/`sameRecipe`/`sameGrinder`, and an earlier analysis judged by the brew after it; another bag of this coffee carries over, allowing for its roast age; another bean's brews show the recipe, brewer or grinder, not this bean; start from the recipe's targets |
    | `suggestOutput` | always | what each field holds; grind on the named grinder's dial from brews on it or its starting point, else null; a ratio for the batch, kept (or null) unless the brews show a strength problem |
    | `suggestEspresso` | the recipe or a brew is espresso | windows and ratio as targets; the ratio sets the shot weight for the batch's dose; pre-infusion and profile in `nextStep` |
    | `suggestAlternatives` | `options` are sent | what each kind of option is; at most one of each, only with a reason (style or ratio for the roast or flavor profile, a brewer or bean that suits better); `option` is its ref, `why` in plain words; empty when nothing stands out; the values stay for this setup |
@@ -352,7 +353,7 @@ deleted with its bean) is skipped.
    `completedAt`.
 
 **What the AI sees:** the fields above are classified in
-`worker/tests/aiDetails.test.ts` like the analysis's (the `sameBean` /
+`worker/tests/aiDetails.test.ts` like the analysis's (the `sameBag` / `sameBean` /
 `sameRecipe` / `sameGrinder` flags, `source`, the `batch`, the roast age today, each
 brew's `analysis` and the brewer's name and kind are always sent; an
 espresso machine's controls go with `machine`). The options are always

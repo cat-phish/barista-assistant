@@ -63,7 +63,7 @@ export const AUTO_ANALYZE_DELAYS = [0, 5, 10, 15, 30] as const;
 export type AutoAnalyzeDelay = (typeof AUTO_ANALYZE_DELAYS)[number];
 // The earlier brews "Suggest parameters" sends (docs/api/analysis.md §8b);
 // the same list as @barista/shared/schema (lib/suggest.test.ts checks).
-export const SUGGEST_SOURCES = ['bean', 'beanRecipe', 'beanBrewer', 'brewer', 'recipe'] as const;
+export const SUGGEST_SOURCES = ['bag', 'bagRecipe', 'bagBrewer', 'bean', 'beanRecipe', 'beanBrewer', 'brewer', 'recipe'] as const;
 export type SuggestSource = (typeof SUGGEST_SOURCES)[number];
 export const MAX_SUGGEST_BREWS = 20;
 // What else Suggest parameters can suggest (analysis.md §8b); the same list

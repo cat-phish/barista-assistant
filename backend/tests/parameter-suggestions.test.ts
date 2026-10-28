@@ -44,6 +44,8 @@ describe("parameter suggestions", () => {
     expect((await owner.agent.post(base).send({ beanId: bean, recipeId: recipe, source: "recipe", maxBrews: 12 })).body.suggestion).toMatchObject({ source: "recipe", maxBrews: 12 });
     expect((await owner.agent.patch(`/api/workspaces/${ws}/settings`).send({ suggestSource: "bean", suggestMaxBrews: 3 })).status).toBe(200);
     expect((await owner.agent.post(base).send({ beanId: bean })).body.suggestion).toMatchObject({ source: "bean", maxBrews: 3, recipeId: null, brewerId: null });
+    expect((await owner.agent.patch(`/api/workspaces/${ws}/settings`).send({ suggestSource: "bag" })).status).toBe(200);
+    expect((await owner.agent.post(base).send({ beanId: bean })).body.suggestion).toMatchObject({ source: "bag" });
     expect((await owner.agent.patch(`/api/workspaces/${ws}/settings`).send({ suggestMaxBrews: 21 })).status).toBe(400);
     expect((await owner.agent.patch(`/api/workspaces/${ws}/settings`).send({ suggestSource: "anything" })).status).toBe(400);
   });
@@ -70,6 +72,8 @@ describe("parameter suggestions", () => {
 
     expect((await owner.agent.post(base).send({ beanId: bean, source: "recipe" })).body.error).toMatch(/pick a recipe/);
     expect((await owner.agent.post(base).send({ beanId: bean, source: "brewer" })).body.error).toMatch(/pick a brewer/);
+    for (const source of ["bagRecipe", "beanRecipe"]) expect((await owner.agent.post(base).send({ beanId: bean, source })).body.error, source).toMatch(/pick a recipe/);
+    for (const source of ["bagBrewer", "beanBrewer"]) expect((await owner.agent.post(base).send({ beanId: bean, source })).body.error, source).toMatch(/pick a brewer/);
     expect((await owner.agent.post(base).send({ beanId: foreignBean })).body.error).toMatch(/beanId/);
     expect((await owner.agent.post(base).send({ beanId: bean, recipeId: recipe, grinderId: foreignGrinder })).body.error).toMatch(/grinderId/);
     expect((await owner.agent.post(base).send({ beanId: bean, maxBrews: 0 })).status).toBe(400);

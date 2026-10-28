@@ -108,9 +108,11 @@ export const AUTO_ANALYZE_DELAYS = [0, 5, 10, 15, 30] as const;
 export type AutoAnalyzeDelay = (typeof AUTO_ANALYZE_DELAYS)[number];
 export const MAX_AUTO_ANALYZE_DAILY_CAP = 500;
 // The brews "Suggest parameters" sends (docs/api/analysis.md §8b): this
-// bean's (any recipe, this recipe, this brewer), this brewer's or this
-// recipe's (any bean).
-export const SUGGEST_SOURCES = ["bean", "beanRecipe", "beanBrewer", "brewer", "recipe"] as const;
+// bag's (the exact bean) or this bean's (every bag of the same coffee: roaster
+// and name), each with any recipe, this recipe or this brewer; or this
+// brewer's or this recipe's (any bean). Migration 0074 renamed the old
+// bean-id sources to bag*.
+export const SUGGEST_SOURCES = ["bag", "bagRecipe", "bagBrewer", "bean", "beanRecipe", "beanBrewer", "brewer", "recipe"] as const;
 export type SuggestSource = (typeof SUGGEST_SOURCES)[number];
 export const MAX_SUGGEST_BREWS = 20;
 // What else "Suggest parameters" can suggest (docs/api/analysis.md §8b):

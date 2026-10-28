@@ -1452,3 +1452,24 @@ Contract: `api/auth.md` §1 `startDelays`, `timer_architecture.md` §3.
   stopwatch; long cold brews and logging without a timer skip it. Wake lock
   starts with the countdown; Cancel brew or unmount clears pending work and
   releases the lock. Deadline-based timing tolerates background throttling.
+
+## Compare with: this bag or this bean (built)
+
+Branch `compare-bag-bean`. Contract: `api/analysis.md` §8b sources,
+`api/llm-contract.md` §9b, `api/backup.md` §2 (version 3).
+
+- Suggest parameters' **Compare with** offers This bag, This bag and recipe
+  and This bag and brewer (this exact bean record, one bag) and This bean,
+  This bean and recipe and This bean and brewer (every bag of the coffee:
+  same roaster and name, whatever the roast date or batch), plus this
+  brewer's or this recipe's with any bean.
+- Decided: keep the behaviour. The old `bean…` sources always meant the
+  exact bag, so migration 0074 renamed them `bag…` in saved suggestions and
+  workspace settings, and a workspace on the default got `bagRecipe`.
+  Backups go to version 3 the same way, and the brew page's choice
+  remembered on a device moved to `compareWith`, an old one read as the
+  bag. New workspaces default to `beanRecipe`, every bag.
+- The AI gets `sameBag` beside `sameBean` (now this coffee). Another bag's
+  brews name the bag (roast date, batch) and its own roast age, and the
+  prompt says they carry over allowing for roast age. A barista's own
+  edited "What to do (Suggest parameters)" text keeps its old wording.

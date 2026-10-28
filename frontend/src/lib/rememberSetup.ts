@@ -31,7 +31,8 @@ export type Remembered =
   | 'waterProfileId'
   | `prepTools.${string}` // per brewer id ('none' without one)
   | `size.${string}` // per drink id
-  | 'suggestSource'
+  | 'compareWith'
+  | 'suggestSource' // read only: compareWith before bags (lib/suggest.ts rememberedSource)
   | 'suggestMax'
   | 'suggestAlternatives';
 export function rememberKeyFor(slot: Remembered): RememberKey | null {

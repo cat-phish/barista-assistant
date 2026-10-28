@@ -24,15 +24,15 @@ and fix the references.
 
 **Contents**
 - A. Settings & configuration: 1–2
-- B. Beans: 3
-- C. Brewing & logging: 4–7
-- D. Recipes: 8–9
-- E. AI suggestions: 10–11
-- F. Insights: 12
-- G. Bar & menu: 13–15
-- H. Home roasting: 16
-- I. Accounts: 17–18
-- J. Deployment & the app: 19
+- B. Beans: 3–4
+- C. Brewing & logging: 5–9
+- D. Recipes: 10–12
+- E. AI suggestions: 13–14
+- F. Insights: 15
+- G. Bar & menu: 16–18
+- H. Home roasting: 19
+- I. Accounts: 20–21
+- J. Deployment & the app: 22
 
 ---
 
@@ -140,13 +140,36 @@ What's recorded about each coffee.
   - Size limits, and does the PWA cache the photos for offline use?
   - Could a label photo fill in the bean form (AI reading the label)?
 
+### 4. Roast weight loss
+
+- **Status:** idea
+- **Why:** how much weight a roast lost (green in, roasted out) is the
+  clearest measure of roast degree, more exact than a roast level name, and
+  some roasters print it. It would help compare bags and tell the AI how
+  developed the roast is.
+- **Approach:**
+  - An optional bean field: weight loss during roast, in %. Or green and
+    roasted weights with the % worked out from them.
+  - A field registry entry and a `show('<key>')` in the bean form, so
+    Settings → Fields can hide it (CLAUDE.md rule 6). A new column, so
+    backups pick it up (rule 8).
+  - The bean list and bean page show it next to the roast level.
+  - Later, a roast log entry (home roasting) fills it in for its bean.
+- **Size:** S
+- **Depends on:** nothing; the roast log in 19 (weight in and out)
+  would fill it later.
+- **Open questions:**
+  - Store the % only, or the green and roasted weights?
+  - Should the AI see it, always or switchable under Settings → AI (rule 9)?
+    It could weigh it with the roast level for grind and temperature.
+
 ---
 
 ## C. Brewing & logging
 
 Recording a brew: what's measured, and how fast it is to log.
 
-### 4. Grind settings for multi-ring grinders
+### 5. Grind settings for multi-ring grinders
 
 - **Status:** idea
 - **Why:** grind settings are numbers on the grinder's dial now (roadmap:
@@ -171,7 +194,7 @@ Recording a brew: what's measured, and how fast it is to log.
   - Which grinders need it (1Zpresso, Kingrinder, Timemore with a dial)?
   - Should the AI see the total clicks, the formatted text, or both?
 
-### 5. Change the brew window for any brew on the brew page
+### 6. Change the brew window for any brew on the brew page
 
 - **Status:** idea
 - **Why:** cold styles can now change their steep or finish window on
@@ -195,7 +218,7 @@ Recording a brew: what's measured, and how fast it is to log.
   - Editable afterwards in the journal? A steeping cold brew's reminder
     would then need re-queuing.
 
-### 6. Repeat brews: bean and recipe as choices
+### 7. Repeat brews: bean and recipe as choices
 
 - **Status:** idea
 - **Why:** **Repeat** always copies the bean and what → brewer → recipe;
@@ -224,7 +247,7 @@ Recording a brew: what's measured, and how fast it is to log.
     recipe), or do "what" and the brewer become choices too?
   - With both off, is it still a repeat, or only "copy the settings"?
 
-### 7. What went wrong: offered by methods and brewers
+### 8. What went wrong: offered by methods and brewers
 
 - **Status:** idea
 - **Why:** a brew problem belongs to one method, or to every method
@@ -246,11 +269,34 @@ Recording a brew: what's measured, and how fast it is to log.
 - **Open questions:** move brew problems from Settings → Lists to Bar setup,
   next to the prep list?
 
+### 9. Yield scaler slider on the brew page
+
+- **Status:** idea
+- **Why:** scaling a brew means typing a dose, water or yield amount, or
+  picking a drink size. A slider ("0.5× … 2×") is quicker for making a bit
+  more or less than the recipe, one-handed at the bar.
+- **Approach:**
+  - An optional slider by the batch fields that scales the recipe's batch
+    as a multiplier: dose, water and ice (or espresso's shot weight), with
+    the pour targets following as they do now (`scaleBatch` / `scaleShot`,
+    `scaleSteps` in `frontend/src/lib/scale.ts`). Moving it sets the batch
+    the same way typing an amount does (`lead` in `BrewView.vue`), so the
+    AI suggestion's batch and the saved brew follow.
+  - Hideable under Settings → Fields (CLAUDE.md rule 6). A brew field, so it
+    needs its `REPEAT_FOR_FIELD` entry: probably copied with `doseWater`.
+- **Size:** S
+- **Depends on:** nothing; with step timing scaling (12), the step times
+  follow too.
+- **Open questions:**
+  - Range and step (0.5×–2× by 0.1?), and snapping amounts to whole grams?
+  - Does it drive the drink size, or only the batch?
+  - Is it the multiplier that's shown, or the yield it gives (e.g. "≈ 310 g")?
+
 ## D. Recipes
 
 Building recipes: their steps, timings and target window.
 
-### 8. Prep steps that don't start the timer
+### 10. Prep steps that don't start the timer
 
 - **Status:** parked. Built on branch `prep-steps` (commit `dfd67db`, not
   merged) and set aside for ticking the prep tools on brew setup instead
@@ -270,7 +316,7 @@ Building recipes: their steps, timings and target window.
     default prep? A countdown (preheat 2:00) is the one thing the tools
     can't do.
 
-### 9. Target finish window vs. the steps
+### 11. Target finish window vs. the steps
 
 - **Status:** idea
 - **Why:** the target finish window and the steps are typed separately and
@@ -292,7 +338,7 @@ Building recipes: their steps, timings and target window.
 - **Size:** S–M
 - **Depends on:** nothing (the summary line under the steps is built: "Steps
   end at 3:15 · Target finish 3:00–3:30", warning-coloured when outside);
-  pairs with 5 (a window per brew).
+  pairs with 6 (a window per brew).
 - **Open questions:**
   - Which leads: the steps (window derived) or the window (steps checked
     against it)?
@@ -300,13 +346,35 @@ Building recipes: their steps, timings and target window.
   - Should saving with a mismatch ask to confirm, or only warn?
   - Same for espresso's total shot time?
 
+### 12. Scale step timing with the batch
+
+- **Status:** idea
+- **Why:** a bigger or smaller batch scales the pour targets
+  (`scaleSteps`, `frontend/src/lib/scale.ts`) but not the step durations, so
+  a double batch on a pour over keeps the single batch's timings: the
+  pours come too fast and the bloom too short.
+- **Approach:**
+  - An optional per-recipe setting, off by default: scale step durations
+    with the batch.
+  - The timer and the planned step times use the scaled durations; the
+    target finish window follows the same way.
+  - Probably damped rather than linear (a double batch doesn't take twice
+    as long to drain), e.g. time × factor^0.5, maybe with a strength choice.
+- **Size:** S–M
+- **Depends on:** nothing; affects the target finish window vs. the steps
+  (11).
+- **Open questions:**
+  - Linear or damped, and should the recipe choose how much?
+  - Which steps scale: all, or only pours and drawdown, not a fixed bloom?
+  - Do the scaled times go to the AI, or the recipe's with the batch factor?
+
 ---
 
 ## E. AI suggestions
 
 What the analysis worker sends to the LLM and what comes back.
 
-### 10. Build bar items from plain text (AI)
+### 13. Build bar items from plain text (AI)
 
 - **Status:** idea
 - **Why:** recipes, drinks and other bar items often come as text: a
@@ -334,7 +402,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Units and step types the text describes loosely ("pour to about 100 ml,
     wait 30 s"): how sure must the AI be before filling a field?
 
-### 11. Review and test the espresso dose and shot weight suggestions
+### 14. Review and test the espresso dose and shot weight suggestions
 
 - **Status:** planned
 - **Why:** dose and shot weight changes for espresso (roadmap: espresso dose
@@ -374,7 +442,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## F. Insights
 
-### 12. Statistics and graphs
+### 15. Statistics and graphs
 
 - **Status:** idea
 - **Why:** the brew history is a list. Trends (is this bean getting better
@@ -403,7 +471,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## G. Bar & menu
 
-### 13. Ingredient prep and stock
+### 16. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -420,7 +488,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should a finished cold brew batch (roadmap: cold brew refinements) be
     stock the same way, with each glass served taken from it and rated?
 
-### 14. Public menu: branding and sizes
+### 17. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
@@ -434,7 +502,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
-### 15. Drink categories: what else they could do
+### 18. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -453,7 +521,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## H. Home roasting
 
-### 16. Roasting: green stock, roast logs, resting
+### 19. Roasting: green stock, roast logs, resting
 
 - **Status:** idea
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
@@ -484,7 +552,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## I. Accounts
 
-### 17. Account management and password reset
+### 20. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -515,13 +583,13 @@ What the analysis worker sends to the LLM and what comes back.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 18. Email verification
+### 21. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 17), inviting a member by email, or notifications by email.
+  (item 20), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -531,9 +599,9 @@ What the analysis worker sends to the LLM and what comes back.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 17).
+  - Shares the mail and token pieces with password reset (item 20).
 - **Size:** M (mail is new to the stack).
-- **Depends on:** nothing; pairs with 17.
+- **Depends on:** nothing; pairs with 20.
 - **Open questions:**
   - Block unverified accounts, or only remind them?
   - What happens to accounts that existed before verification (treat as
@@ -546,7 +614,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 How the app is served and installed.
 
-### 19. Serve the app as an installable PWA
+### 22. Serve the app as an installable PWA
 
 - **Status:** idea
 - **Why:** the PWA is configured (`vite-plugin-pwa`, `frontend/vite.config.ts`)

@@ -260,6 +260,7 @@ const BEAN_OPTION: Record<Exclude<keyof BeanOption, "id">, Sees> = {
   gramsLeft: "always", // whether there's enough for the batch
 };
 const EARLIER: Record<Exclude<keyof SuggestBrew, keyof BrewSummary>, Sees> = {
+  sameBag: "always",
   sameBean: "always",
   sameRecipe: "always",
   sameGrinder: "always",
@@ -292,7 +293,7 @@ const suggest: SuggestContext = {
   recipe: full.recipe,
   brewer: { name: "Linea", kind: "espresso", preinfusion: "manual", flowControl: "manual", pressureControl: "manual" },
   grinder,
-  brews: [{ ...brew, sameBean: false, sameRecipe: true, sameGrinder: true, bean: full.bean, analysis: pastAnalysis } as SuggestBrew],
+  brews: [{ ...brew, sameBag: false, sameBean: false, sameRecipe: true, sameGrinder: true, bean: full.bean, analysis: pastAnalysis } as SuggestBrew],
   options: {
     recipes: [
       {

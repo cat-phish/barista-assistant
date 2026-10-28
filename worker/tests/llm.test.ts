@@ -260,7 +260,7 @@ describe("what the workspace keeps from the AI (Settings → AI)", () => {
 
 // "Suggest parameters" (docs/api/llm-contract.md §9b): the House V60 on the
 // C40, with an earlier brew of this bean (analyzed) and one of another bean.
-const earlier = (over: Partial<SuggestBrew> = {}): SuggestBrew => ({ ...summary(), sameBean: true, sameRecipe: true, sameGrinder: true, bean: null, analysis: null, ...over });
+const earlier = (over: Partial<SuggestBrew> = {}): SuggestBrew => ({ ...summary(), sameBag: true, sameBean: true, sameRecipe: true, sameGrinder: true, bean: null, analysis: null, ...over });
 const suggestContext = (over: Partial<SuggestContext> = {}): SuggestContext => {
   const base = context();
   return {
@@ -274,7 +274,7 @@ const suggestContext = (over: Partial<SuggestContext> = {}): SuggestContext => {
     grinder,
     brews: [
       earlier({ analysis: { reasoning: "Sour.", nextStep: "Grind finer.", confidence: "medium", suggestedGrindDelta: "finer", suggestedTempDelta: 0, suggestedRpmDelta: null, suggestedDoseDelta: null, suggestedYieldDelta: null, helpful: null } }),
-      earlier({ timestamp: "2026-10-18T08:00:00.000Z", sameBean: false, bean: { ...base.bean, beanName: "Kenya", country: "Kenya" }, tastingNotes: "Bright", water: null }),
+      earlier({ timestamp: "2026-10-18T08:00:00.000Z", sameBag: false, sameBean: false, bean: { ...base.bean, beanName: "Kenya", country: "Kenya" }, tastingNotes: "Bright", water: null }),
     ],
     options: {},
     ratingScale: "1-5",
@@ -298,9 +298,9 @@ describe("what Suggest parameters sends (docs/api/llm-contract.md §9b)", () => 
     expect(input).toMatchObject({ source: "recipe", batch: { doseGrams: 22.5, waterGrams: 375, ratio: 16.67 }, roastAgeDays: 14, daysFrozen: 0, grinder: "C40", brewer: { name: "V60", kind: "filter" }, recipe: { name: "House V60" } });
     expect(input.brewer).not.toHaveProperty("preinfusion"); // only an espresso machine's controls
     const [mine, other] = input.brews as Array<Record<string, unknown>>;
-    expect(mine).toMatchObject({ sameBean: true, sameRecipe: true, sameGrinder: true, analysis: { reasoning: "Sour.", suggestedGrindDelta: "finer" } });
+    expect(mine).toMatchObject({ sameBag: true, sameBean: true, sameRecipe: true, sameGrinder: true, analysis: { reasoning: "Sour.", suggestedGrindDelta: "finer" } });
     expect(mine).not.toHaveProperty("bean");
-    expect(other).toMatchObject({ sameBean: false, bean: { beanName: "Kenya", country: "Kenya" }, tastingNotes: "Bright" });
+    expect(other).toMatchObject({ sameBag: false, sameBean: false, bean: { beanName: "Kenya", country: "Kenya" }, tastingNotes: "Bright" });
     expect(input.equipment).toEqual({ grinders: { C40: expect.any(Object) }, waters: { TWW: expect.any(Object) } });
   });
 
