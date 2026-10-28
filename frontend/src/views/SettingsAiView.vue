@@ -158,10 +158,12 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
       </fieldset>
       <fieldset class="suggest-alts" :disabled="!isOwner || saving">
         <legend>Also suggest, by default</legend>
-        <label v-for="k in SUGGEST_ALTERNATIVES" :key="k" class="checkbox">
+        <label v-for="k in SUGGEST_ALTERNATIVES" :key="k" class="checkbox detail-choice">
           <input type="checkbox" :checked="settings.suggestAlternatives.includes(k)" @change="toggleAlternative(k, ($event.target as HTMLInputElement).checked)" />
-          {{ ALTERNATIVE_LABELS[k] }}
-          <span class="muted small">{{ ALTERNATIVE_HINTS[k] }}</span>
+          <span>
+            {{ ALTERNATIVE_LABELS[k] }}
+            <span class="muted small hint">{{ ALTERNATIVE_HINTS[k] }}</span>
+          </span>
         </label>
       </fieldset>
       <p v-if="error && activeSection === 'suggest'" class="form-error" role="alert">{{ error }}</p>
