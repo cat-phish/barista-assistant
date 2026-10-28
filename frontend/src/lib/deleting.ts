@@ -19,7 +19,10 @@ const WARNINGS: Record<DeletableKind, Record<string, (n: number) => string>> = {
     recipeCount: (n) => `${plural(n, 'recipe')} will lose their grind starting point for it.`,
   },
   water: { brewLogCount: (n) => `${plural(n, 'brew')} will lose their water profile.` },
-  tool: { brewLogCount: (n) => `${plural(n, 'brew')} will no longer list this tool.` },
+  tool: {
+    brewLogCount: (n) => `${plural(n, 'brew')} will no longer list this tool.`,
+    recipeCount: (n) => `${plural(n, 'recipe')} will no longer start with it ticked.`,
+  },
   problem: { brewLogCount: (n) => `${plural(n, 'brew')} will no longer list this problem.` },
   recipe: {
     brewLogCount: (n) => `${plural(n, 'brew')} will lose their recipe. Everything else in them stays.`,

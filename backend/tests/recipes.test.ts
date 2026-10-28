@@ -104,6 +104,34 @@ describe("grind starting points", () => {
   });
 });
 
+describe("default prep (docs/api/recipes.md §5 prepToolIds)", () => {
+  it("in checklist order, replaced as a whole on PATCH; only this workspace's tools; a deleted tool drops off", async () => {
+    const { owner, ws, base, recipe } = await setup();
+    const tools = `/api/workspaces/${ws.id}/prep-tools`;
+    const byName = async (w: string, name: string) => ((await owner.agent.get(`/api/workspaces/${w}/prep-tools`)).body.tools as Array<{ id: string; name: string }>).find((t) => t.name === name)!.id;
+    const [rinsed, rdt] = [await byName(ws.id, "Rinsed paper filter"), await byName(ws.id, "RDT")];
+
+    expect((await owner.agent.post(base).send(recipe)).body.recipe.prepToolIds).toEqual([]);
+    const res = await owner.agent.post(base).send({ ...recipe, name: "Prepped", prepToolIds: [rdt, rinsed] });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    expect(res.body.recipe.prepToolIds).toEqual([rinsed, rdt]); // the tools' order, not the sent one
+    const id = res.body.recipe.id as string;
+    expect((await owner.agent.patch(`${base}/${id}`).send({ targetTempC: 93 })).body.recipe.prepToolIds).toHaveLength(2);
+    expect((await owner.agent.patch(`${base}/${id}`).send({ prepToolIds: [rdt] })).body.recipe.prepToolIds).toEqual([rdt]);
+
+    const other = await newWorkspace(owner);
+    const theirs = await byName(other.id, "RDT");
+    const foreign = await owner.agent.patch(`${base}/${id}`).send({ prepToolIds: [theirs] });
+    expect(foreign.status).toBe(400);
+    expect(foreign.body.error).toMatch(/prepToolIds/);
+    expect((await owner.agent.post(base).send({ ...recipe, name: "Twice", prepToolIds: [rdt, rdt] })).status).toBe(400);
+
+    expect((await owner.agent.get(`${tools}/${rdt}/usage`)).body).toEqual({ brewLogCount: 0, recipeCount: 1 });
+    expect((await owner.agent.delete(`${tools}/${rdt}`)).status).toBe(204);
+    expect((await owner.agent.get(base)).body.recipes.find((r: { id: string }) => r.id === id).prepToolIds).toEqual([]);
+  });
+});
+
 describe("recipe steps", () => {
   const bloom = { stepType: "bloom", durationSec: 10, targetWaterGrams: 45 };
 

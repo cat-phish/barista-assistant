@@ -91,7 +91,7 @@ describe('what a repeat keeps', () => {
     const brewFields = FIELDS.filter((f) => f.form === 'brew').map((f) => f.key);
     expect(Object.keys(REPEAT_FOR_FIELD).sort()).toEqual([...brewFields].sort());
     for (const [field, repeat] of Object.entries(REPEAT_FOR_FIELD) as Array<[string, string]>) {
-      expect(repeat === 'result' || keys.has(repeat), field).toBe(true);
+      expect(repeat === 'result' || repeat === 'always' || keys.has(repeat), field).toBe(true);
     }
   });
 });

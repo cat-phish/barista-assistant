@@ -55,7 +55,8 @@
    §2, "Field visibility"). A new **brew** field also needs an entry in
    `REPEAT_FOR_FIELD` (`frontend/src/lib/repeatBrew.ts`): either the Repeat
    brews option that copies it (add one to `REPEAT_KEEPS` and
-   `REPEAT_OPTIONS`, and apply it in `applyRepeat`), or `'result'` if it's
+   `REPEAT_OPTIONS`, and apply it in `applyRepeat`), `'always'` if a repeat
+   always copies it (like the prep checklist), or `'result'` if it's
    measured each time and never copied (`docs/api/auth.md` §1
    repeatKeeps). The type and a test fail until it's there.
 7. **Confirming major actions:** an action that can't be undone, or that

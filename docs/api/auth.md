@@ -101,21 +101,24 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
     goes with `temp`;
   - `window`: the window the brew aimed for (cold styles: a long brew's
     steep window, rapid cold's target finish, brew-logs.md §6);
-  - `prepTools`: ticks the tools that brew used;
   - `grinderWeights`;
   - `notes`: shown on the log form as a reminder, not copied.
 
-  Default: the first eight. A `PATCH` sends the whole list. The bean and what
-  → brewer → recipe always come along; results and ratings never do.
+  Default: the first eight. A `PATCH` sends the whole list. The bean, what
+  → brewer → recipe and the prep checklist (the tools that brew used,
+  rather than the recipe's default prep) always come along; results and
+  ratings never do. `prepTools` was an option until migration 0073, which
+  took it out of saved lists.
 
   **Parity rule:** the options follow the brew form. Every brew parameter
   (each `brew.*` field in the field registry, `frontend/src/lib/fields.ts`)
   is listed in `REPEAT_FOR_FIELD` (`frontend/src/lib/repeatBrew.ts`):
   - either with the `repeatKeeps` option that copies it;
+  - or as `'always'`, always copied (the prep checklist);
   - or as `'result'`, measured each time and never copied (yield, TDS,
     first drop).
 
-  A new brew parameter gets one or the other when it's added. A new option
+  A new brew parameter gets one of these when it's added. A new option
   goes into `REPEAT_KEEPS` (shared schema and validation), `REPEAT_OPTIONS`
   and `applyRepeat`, and into the default only if repeating should copy it
   out of the box. The TypeScript type and `repeatBrew.test.ts` fail until

@@ -8,8 +8,8 @@ import { batchSuffix } from './beans';
 import { encodeCategory, encodeDrink, encodeMethod, encodePlain, methodKey, NO_RECIPE } from './brewChoice';
 import { formatAdded } from './format';
 
-// What a repeat can copy besides the bean and what → brewer → recipe, which
-// it always takes (Settings → Brew setup, docs/api/auth.md §1 repeatKeeps).
+// What a repeat can copy besides the bean, what → brewer → recipe and the
+// prep checklist, which it always takes (Settings → Brew setup, docs/api/auth.md §1 repeatKeeps).
 // The defaults are the backend's (DEFAULT_PREFERENCES).
 export const REPEAT_OPTIONS: Array<{ key: RepeatKeep; label: string; hint?: string }> = [
   { key: 'size', label: 'Drink size', hint: 'Off: the drink’s default size' },
@@ -20,18 +20,18 @@ export const REPEAT_OPTIONS: Array<{ key: RepeatKeep; label: string; hint?: stri
   { key: 'waterProfile', label: 'Water profile', hint: 'Off: your default water' },
   { key: 'dilution', label: 'Dilution served (cold styles, concentrates)', hint: 'Off: the recipe’s' },
   { key: 'window', label: 'Steep or finish time (cold styles)', hint: 'Off: the recipe’s' },
-  { key: 'prepTools', label: 'Prep checklist', hint: 'Ticks the tools that brew used' },
   { key: 'grinderWeights', label: 'Beans in / grounds out' },
   { key: 'notes', label: 'Tasting notes, as a reminder', hint: 'Shown on the log form, not copied into the new brew' },
 ];
 
 // Parity with the brew form (docs/api/auth.md §1 repeatKeeps): every optional
 // brew field in the field registry (lib/fields.ts) says what a repeat does
-// with it. Either the REPEAT_OPTIONS key that copies it, or 'result' for
-// what's measured or tasted each time and never copied. Typed over every
+// with it. Either the REPEAT_OPTIONS key that copies it, 'always' for what
+// it always copies, or 'result' for what's measured or tasted each time and
+// never copied. Typed over every
 // brew.* key, so a new brew field doesn't build until it's decided here.
 type BrewFieldKey = Extract<FieldKey, `brew.${string}`>;
-export const REPEAT_FOR_FIELD: Record<BrewFieldKey, RepeatKeep | 'result'> = {
+export const REPEAT_FOR_FIELD: Record<BrewFieldKey, RepeatKeep | 'always' | 'result'> = {
   'brew.ice': 'doseWater', // goes with the water it was brewed with
   'brew.yield': 'result',
   'brew.tds': 'result',
@@ -41,7 +41,7 @@ export const REPEAT_FOR_FIELD: Record<BrewFieldKey, RepeatKeep | 'result'> = {
   'brew.rpm': 'grind',
   'brew.grinderWeights': 'grinderWeights',
   'brew.waterProfile': 'waterProfile',
-  'brew.prepTools': 'prepTools',
+  'brew.prepTools': 'always', // the earlier brew's ticks, whatever the recipe starts with
   'brew.problems': 'result', // what went wrong is noted each brew, never copied
   'brew.firstDrop': 'result',
   'brew.steepTemp': 'temp', // where it steeps goes with the temperature

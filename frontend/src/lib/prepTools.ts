@@ -31,6 +31,17 @@ export function toolsFor<T extends Offered & Pick<PrepTool, 'id' | 'archivedAt'>
   return checklist(tools, selected, (t) => offeredFor(t, brew));
 }
 
+// A recipe's default prep (docs/api/recipes.md §5 prepToolIds) to tick on
+// brew setup: the active ones still offered for its brewer, in list order.
+export function recipePrep<T extends Offered & Pick<PrepTool, 'id' | 'archivedAt'>>(
+  tools: readonly T[],
+  recipe: { prepToolIds: readonly string[]; brewer: { id: string; kind: MethodKind } },
+): string[] {
+  return toolsFor(tools, { kind: recipe.brewer.kind, brewerId: recipe.brewer.id }, [])
+    .filter((t) => recipe.prepToolIds.includes(t.id))
+    .map((t) => t.id);
+}
+
 // Brew problems (docs/api/brew-problems.md §6b): one method, or null for all.
 export function problemsFor<T extends Pick<BrewProblem, 'id' | 'methodKind' | 'archivedAt'>>(problems: readonly T[], kind: MethodKind | null, selected: readonly string[]): T[] {
   return checklist(problems, selected, (p) => kind === null || p.methodKind === null || p.methodKind === kind);

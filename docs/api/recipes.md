@@ -47,6 +47,12 @@ grinder and recipe (§3b `last-setting`). A recipe can name a
 **`defaultGrinderId`**: the grinder the brew flow preselects for it (instead
 of the last grinder used), if that grinder isn't archived.
 
+**Default prep** (`prepToolIds`): prep tools (§3d) brew setup ticks when the
+recipe is chosen, the active ones still offered for its brewer. A repeat
+ticks the repeated brew's prep instead (`docs/api/auth.md` §1
+repeatKeeps); without defaults, setup ticks what was last ticked with the
+brewer, if remembered (§1 rememberSetup), else nothing.
+
 **Steps** are what the timer runs (`docs/timer_architecture.md` §3). They run
 **back to back**: each starts when the previous one actually ended, so a step
 you end with a tap (a bloom that waits for the kettle) moves everything after
@@ -110,6 +116,7 @@ card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
   "grindSettings": [
     { "grinderId": "uuid", "grinderName": "Comandante C40", "setting": 20 }
   ],
+  "prepToolIds": ["uuid", "uuid"],
   "steps": [
     { "id": "uuid", "stepOrder": 1, "stepType": "bloom", "label": null, "durationSec": 45, "advance": "tap", "targetWaterGrams": 45, "targetTempC": 85, "pressureBar": null, "pressureEndBar": null, "flowRate": null, "flowEndRate": null },
     { "id": "uuid", "stepOrder": 2, "stepType": "pour", "label": "Main pour", "durationSec": 45, "advance": "auto", "targetWaterGrams": 250, "targetTempC": 93, "pressureBar": null, "pressureEndBar": null, "flowRate": null, "flowEndRate": null },
@@ -134,6 +141,8 @@ down to 2 g/s until the shot is done):
 ```
 
 `grindSettings` are sorted by grinder name and include archived grinders.
+`prepToolIds` are in checklist order (the tools' `position`) and include
+archived tools.
 `steps` are in `stepOrder` and may be empty.
 
 ## `GET /api/workspaces/:workspaceId/recipes`
@@ -191,6 +200,10 @@ Creates a recipe, its grind starting points and its steps in one transaction.
     grinder's `settingMin`, §3b). Text such as `"18 clicks"` is a `400`.
   - `defaultGrinderId` (optional, nullable): a grinder in this workspace
     (archived allowed). Deleting the grinder sets it back to `null`.
+  - `prepToolIds` (default `[]`, max 100): prep tools of this workspace
+    (archived allowed), each once; `400` "prepToolIds: must be prep tools
+    of this workspace" otherwise. Not checked against the brewer: clients
+    offer only the tools offered for it. Deleting a tool takes it off.
   - `flowUnit` (optional, default `g_s`): `g_s` or `ml_s`.
   - **Cold styles** (§5e), all optional and nullable, accepted on any recipe;
     clients show them for cold styles, and the dilution for any filter
@@ -224,7 +237,7 @@ Creates a recipe, its grind starting points and its steps in one transaction.
   The finish and first-drop windows are each treated as a pair: sending only
   one end applies the default spread to the other; setting one end to `null`
   clears both. The kind rules apply to the recipe as it is after the change.
-  `steps` and `grindSettings`, if present, each **replace** their whole list
+  `steps`, `grindSettings` and `prepToolIds`, if present, each **replace** their whole list
   (`[]` clears it); if absent, they're unchanged.
   Also `"archived": true | false`, like a bean's (§4): `true` sets
   `archivedAt` (unchanged if already archived), `false` restores the recipe.

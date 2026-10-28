@@ -17,6 +17,7 @@ export interface RecipeInput extends ColdFields {
   targetTempC: number | null;
   defaultGrinderId: string | null;
   grindSettings: Array<{ grinderId: string; setting: number }>;
+  prepToolIds: string[]; // replaces the recipe's default prep
   flowUnit: FlowUnit;
   styleId: string | null; // docs/api/recipe-styles.md §5e
   steps: StepFields[];

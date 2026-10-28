@@ -54,7 +54,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import FinishDrinkCard from '../components/FinishDrinkCard.vue';
 import { useBrewSessionStore } from '../stores/brewSession';
 import { formatMark } from '../lib/marks';
-import { toolsFor } from '../lib/prepTools';
+import { recipePrep, toolsFor } from '../lib/prepTools';
 import { formatFinishWindow, parseFinishWindow, stepTitle } from '../lib/steps';
 import { useAnalysis } from '../composables/useAnalysis';
 import { formatClock } from '../lib/analysisStatus';
@@ -139,7 +139,7 @@ watch(brewerId, (id) => {
   const kind = itemKind.value;
   if (id && kind) remember(`brewBrewer.${kind}`, id); // the last brewer used for this kind
   recipeId.value = pickRecipe(recipeChoices.value, drink.value, recallRecipe(), recipeId.value);
-  if (remembering('prepTools')) draft.toolIds = newBrewTools();
+  draft.toolIds = startingTools();
 });
 // The last recipe used on each brewer.
 const recallRecipe = () => (brewerId.value ? recall(`brewRecipe.${brewerId.value}`) : null);
@@ -292,6 +292,7 @@ watch(recipe, (r) => {
   // (last used) one.
   const preferred = r?.defaultGrinderId;
   if (preferred && activeGrinders.value.some((x) => x.id === preferred)) draft.grinderId = preferred;
+  draft.toolIds = startingTools();
   suggester.reset(); // a suggestion is for the recipe it was asked with
 });
 
@@ -946,8 +947,14 @@ function rememberBrew(values: Pick<BrewLogInput, 'grinderId' | 'waterProfileId' 
 }
 // New brews start on the water last used, if remembered, else the default (§3c).
 const newBrewWater = () => stillActive(recall('waterProfileId'), waterProfiles.value) ?? defaultWaterProfileId(waterProfiles.value);
-// The prep tools last ticked with this brewer, if remembered, else none.
-const newBrewTools = () => rememberedTools(recall(`prepTools.${brewerId.value || 'none'}`), prepTools.value) ?? [];
+// The prep a new brew starts with: the recipe's default prep (docs/api/recipes.md
+// §5 prepToolIds, the active ones still offered for its brewer), else the tools
+// last ticked with this brewer if remembered, else none. A repeat ticks its
+// brew's instead (applyRepeat).
+function startingTools(): string[] {
+  const defaults = recipe.value ? recipePrep(prepTools.value, recipe.value) : [];
+  return defaults.length ? defaults : (rememberedTools(recall(`prepTools.${brewerId.value || 'none'}`), prepTools.value) ?? []);
+}
 
 async function save(): Promise<void> {
   submitted.value = true;
@@ -1121,7 +1128,7 @@ async function applyRepeat(log: BrewLog): Promise<void> {
     windowText.finishTo = formatTime(log.expectedFinishMaxSec);
   }
   const activeTools = new Set(prepTools.value.filter((t) => !t.archivedAt).map((t) => t.id));
-  draft.toolIds = kept.has('prepTools') ? log.tools.map((t) => t.id).filter((id) => activeTools.has(id)) : newBrewTools();
+  draft.toolIds = log.tools.map((t) => t.id).filter((id) => activeTools.has(id)); // always: that brew's prep, not the recipe's
   draft.problemIds = []; // what went wrong is noted for each brew
   draft.beanIn = kept.has('grinderWeights') && log.beanWeightInGrams !== null ? formatGrams(log.beanWeightInGrams) : '';
   draft.groundOut = kept.has('grinderWeights') && log.groundWeightOutGrams !== null ? formatGrams(log.groundWeightOutGrams) : '';

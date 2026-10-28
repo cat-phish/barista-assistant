@@ -98,7 +98,7 @@ describe("prep tools (docs/api/prep-tools.md §3d)", () => {
     expect((await owner.agent.delete(`${base}/${await byName("Cloth filter")}`)).status).toBe(204);
     const wdt = await byName("WDT");
     const log = await newBrewLog(owner, ws.id, await newBean(owner, ws.id), { toolIds: [wdt] });
-    expect((await owner.agent.get(`${base}/${wdt}/usage`)).body).toEqual({ brewLogCount: 1 });
+    expect((await owner.agent.get(`${base}/${wdt}/usage`)).body).toEqual({ brewLogCount: 1, recipeCount: 0 });
     expect((await owner.agent.delete(`${base}/${wdt}`)).status).toBe(204);
     expect((await owner.agent.get(`/api/workspaces/${ws.id}/brew-logs/${log}`)).body.brewLog.tools).toEqual([]);
   });

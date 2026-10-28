@@ -58,6 +58,7 @@ export const FIELDS = [
   recipe('ice', 'Flash chilled and its ice', 'The checkbox, and the ice in the server the hot water is brewed onto; the ratio counts it'),
   recipe('expectedYield', 'Expected yield (filter)'),
   recipe('temp', 'Water temperature'),
+  recipe('prepTools', 'Default prep', 'Prep ticked when the recipe is brewed'),
   recipe('steepWindow', 'Steep time (cold brew, Kyoto drip)', 'In hours; sets when the ready reminder comes'),
   recipe('steepTemp', 'Steep in fridge or room (cold brew, Kyoto drip)'),
   recipe('dilution', 'Serving dilution (cold styles, concentrates)', 'A concentrate is any filter recipe served diluted, e.g. poured over ice'),

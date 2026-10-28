@@ -47,7 +47,7 @@ export const hasAiSuggestions = (lists: readonly ListName[]): boolean => lists.s
 // (docs/api/backup.md §2b, "What comes along").
 export const COMES_ALONG: Record<ListName, string | null> = {
   beans: 'each bean’s process',
-  recipes: 'each recipe’s brewer and its method, style and grinders',
+  recipes: 'each recipe’s brewer and its method, style, grinders and prep tools',
   drinks: 'each drink’s category, recipe (with its brewer and grinders) and ingredients',
   ingredients: null,
   brewers: 'each brewer’s method',
@@ -114,6 +114,7 @@ const TABLE_LABELS: Record<string, string> = {
   bean_freezes: 'freeze periods',
   recipe_steps: 'recipe steps',
   recipe_grind_settings: 'grind starting points',
+  recipe_prep_tools: 'recipe prep',
   drink_ingredients: 'drink ingredients',
   menu_items: 'menu items',
   brew_log_marks: 'timer marks',
