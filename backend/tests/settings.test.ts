@@ -100,7 +100,7 @@ describe("roast scale", () => {
 });
 
 describe("preferences", () => {
-  const defaults = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], steepReminders: true };
+  const defaults = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, steepReminders: true };
 
   it("come back on register and /me, defaults filled in", async () => {
     const user = await newUser();
@@ -118,13 +118,33 @@ describe("preferences", () => {
 
     expect((await a.agent.patch(path).send({ temperatureUnit: "f" })).body.preferences).toEqual({ ...defaults, temperatureUnit: "f" });
     const both = await a.agent.patch(path).send({ altitudeUnit: "ft", volumeUnit: "ml", showBothVolumes: true });
-    expect(both.body.preferences).toEqual({ volumeUnit: "ml", showBothVolumes: true, altitudeUnit: "ft", temperatureUnit: "f", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], steepReminders: true });
+    expect(both.body.preferences).toEqual({ volumeUnit: "ml", showBothVolumes: true, altitudeUnit: "ft", temperatureUnit: "f", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, steepReminders: true });
     expect((await a.agent.patch(path).send({ theme: "dark" })).body.preferences.theme).toBe("dark");
     expect((await a.agent.patch(path).send({ theme: "sepia" })).status).toBe(400);
 
     const login = await a.agent.post("/api/auth/login").send({ email: a.email, password: a.password });
     expect(login.body.user.preferences.altitudeUnit).toBe("ft");
     expect((await b.agent.get("/api/auth/me")).body.user.preferences).toEqual(defaults);
+  });
+
+  it("startDelays: 0, 3 or 5 seconds per method, whole map replaced, per person (docs/api/auth.md §1)", async () => {
+    const me = await newUser();
+    const other = await newUser();
+    const path = "/api/auth/me/preferences";
+    const startDelays = { filter: 5, espresso: 0, stovetop: 3, other: 5 };
+    const result = await me.agent.patch(path).send({ startDelays });
+    expect(result.status).toBe(200);
+    expect(result.body.preferences).toEqual({ ...defaults, startDelays });
+    expect((await me.agent.get("/api/auth/me")).body.user.preferences.startDelays).toEqual(startDelays);
+    expect((await other.agent.get("/api/auth/me")).body.user.preferences.startDelays).toEqual({});
+    for (const startDelays of [{ filter: 1 }, { espresso: "3" }, { stovetop: null }, { other: 4 }, { siphon: 3 }, 3, null, []]) {
+      expect((await me.agent.patch(path).send({ startDelays })).status, JSON.stringify(startDelays)).toBe(400);
+    }
+    const partial = await me.agent.patch(path).send({ startDelays: { espresso: 0 } });
+    expect(partial.body.preferences.startDelays).toEqual({ espresso: 0 });
+    await me.agent.patch(path).send({ temperatureUnit: "f" });
+    expect((await me.agent.get("/api/auth/me")).body.user.preferences.startDelays).toEqual({ espresso: 0 });
+    expect((await me.agent.patch(path).send({ startDelays: {} })).body.preferences.startDelays).toEqual({});
   });
 
   it("need a session", async () => {

@@ -72,7 +72,7 @@ units, with defaults filled in. Storage is always grams, °C and metres;
 clients convert what they show and what's typed (roadmap: Units and defaults).
 
 ```json
-{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "steepReminders": true }
+{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "startDelays": {}, "steepReminders": true }
 ```
 
 - `volumeUnit`: `fl_oz` | `ml`: the brew page's yield estimate, and a new
@@ -86,6 +86,15 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
 - `rateReminders` (default `true`), `rateReminderMinutes` (5–240, default
   `15`) and `rateLaterDefault` (default `false`): rate-later reminders, see
   §1b.
+- `startDelays`: an object of per-method delays (`filter`, `espresso`,
+  `stovetop`, `other`), each `0` | `3` | `5`. Default `{}`. PATCH replaces
+  the whole map; unknown keys are refused. Settings → Brew setup → Timer
+  start shows one control per type. Custom methods use their underlying
+  behaviour; a brew without a selected type uses `other`. A type missing
+  from the map has no delay.
+  Start counts down before a timed brew; Start now skips it. Long cold
+  brews and logging without a timer do not use it. See
+  `docs/timer_architecture.md` §3.
 - `steepReminders` (default `true`): remind when a cold brew's steep window
   opens (§1b).
 - `repeatKeeps`: what repeating a brew copies (Settings → Brew setup, "Copy

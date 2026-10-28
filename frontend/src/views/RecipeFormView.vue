@@ -752,7 +752,7 @@ async function save(): Promise<void> {
             {{ t.name }}<template v-if="t.archivedAt"> (archived)</template>
           </label>
         </fieldset>
-        <p v-else class="muted small">No prep is offered for this brewer (Bar setup → Tools).</p>
+        <p v-else class="muted small">No prep is offered for this brewer (Bar setup → Prep).</p>
       </section>
 
       <section class="card stack">

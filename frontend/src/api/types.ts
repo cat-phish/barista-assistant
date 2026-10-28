@@ -21,6 +21,7 @@ export interface UserPreferences {
   rateLaterDefault: boolean; // the log form's Rate later box starts ticked
   repeatKeeps: RepeatKeep[]; // what a repeat copies (lib/repeatBrew.ts REPEAT_OPTIONS)
   rememberSetup: RememberKey[]; // what the brew page remembers from last time (lib/rememberSetup.ts)
+  startDelays: Partial<Record<MethodKind, 0 | 3 | 5>>; // countdown before a timed brew, per method; missing = none (docs/api/auth.md §1)
   steepReminders: boolean; // remind when a cold brew's steep window opens
 }
 export type RepeatKeep = 'size' | 'doseWater' | 'temp' | 'grinder' | 'grind' | 'waterProfile' | 'dilution' | 'window' | 'prepTools' | 'grinderWeights' | 'notes';
