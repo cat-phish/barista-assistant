@@ -201,6 +201,10 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   starting point. Start and Log stay disabled until the bean and the batch
   are set, with a line saying what's still missing ("Choose a bean.",
   "Enter a size.").
+- **Prep on setup:** a **Prep** card above Start lists the prep tools for
+  the recipe's method (and the all-method ones), to tick as you get ready.
+  The ticks go to the log form, where they can still be changed. Hidden
+  with the Prep field (Settings → Fields).
 - **Remembered from last time:** a new brew starts with what you chose last
   time on this device: what you're making, the brewer for each method, the
   recipe for each brewer, the bean, the grinder and your last grind with it.

@@ -26,13 +26,14 @@ and fix the references.
 - A. Settings & configuration: 1–2
 - B. Beans: 3
 - C. Brewing & logging: 4–6
-- D. Recipes: 7–8
-- E. AI suggestions: 9–10
-- F. Insights: 11
-- G. Bar & menu: 12–14
-- H. Home roasting: 15
-- I. Accounts: 16–17
-- J. Deployment & the app: 18
+- D. Prep: 7–9
+- E. Recipes: 10–11
+- F. AI suggestions: 12–13
+- G. Insights: 14
+- H. Bar & menu: 15–17
+- I. Home roasting: 18
+- J. Accounts: 19–20
+- K. Deployment & the app: 21
 
 ---
 
@@ -226,37 +227,96 @@ Recording a brew: what's measured, and how fast it is to log.
 
 ---
 
-## D. Recipes
+## D. Prep
+
+The prep checklist (Bar setup → Tools today): what's offered where, what
+starts ticked, and what it's called.
+
+### 7. Where each prep item is offered
+
+- **Status:** idea
+- **Why:** a prep tool belongs to one method, or to every method
+  (`prep_tools.method_kind`). Some fit several but not all: a paper filter
+  (top, bottom or a sandwich) is used for espresso and in an OXO brewer, but
+  not in a V60. Today it has to be "every method" or a copy per method.
+- **Approach:**
+  - Each prep item gets an **edit page** to pick where it's offered: any
+    number of methods (e.g. all filter brewers) and/or specific brewers
+    (e.g. only the OXO), or everywhere.
+  - A join table (prep item → method kind or brewer) replaces
+    `method_kind`; a migration turns each current value into one row.
+  - The checklist (`toolsFor`, `lib/prepTools.ts`) offers an item when the
+    brew's brewer or its method is in its list.
+  - Backups (`BACKUP_TABLES`) and the list import (`MATCH_KEYS`, names for
+    methods and brewers) carry the new table.
+- **Size:** M
+- **Depends on:** nothing; pairs with 8 and 9.
+- **Open questions:**
+  - Brew problems (`brew_problems`) work the same way: change them too?
+  - What happens to an item limited to a brewer that's archived or deleted?
+
+### 8. Recipe default prep
+
+- **Status:** idea
+- **Why:** a recipe usually has the same prep (rinse the filter, WDT); it
+  has to be ticked by hand every brew, or remembered per brewer.
+- **Approach:**
+  - The recipe form picks prep items that start ticked when it's brewed
+    (only those offered for its brewer).
+  - Brew setup ticks them when the recipe is chosen; they can be unticked,
+    and the log form keeps what's ticked.
+  - A join table (recipe → prep item), in backups and the list import.
+- **Size:** S–M
+- **Depends on:** nothing; easier after 7.
+- **Open questions:**
+  - Which wins: the recipe's defaults, Repeat's prep, or the remembered
+    prep (Settings → Brew setup)? Or add them together?
+  - Should the AI see that prep came from the recipe's defaults?
+
+### 9. Call it Prep, and drag to reorder
+
+- **Status:** idea
+- **Why:** "Tools" doesn't fit everything on the list (a rinsed filter,
+  sifted fines), and the brew page already calls the checklist Prep.
+  Reordering is ↑/↓ one step at a time.
+- **Approach:**
+  - Rename Tools to **Prep** where people see it: Bar setup's tab, Settings
+    → Lists, backup and export labels, the docs. The API and tables can
+    keep `prep-tools` / `prep_tools`.
+  - **Drag and drop** in the list, as the recipe steps do (VueDraggable,
+    `RecipeFormView.vue`), saving with `PUT …/prep-tools/order`; keep moving
+    by keyboard.
+- **Size:** S
+- **Depends on:** nothing.
+- **Open questions:** drag to reorder brew problems too?
+
+---
+
+## E. Recipes
 
 Building recipes: their steps, timings and target window.
 
-### 7. Prep steps that don't start the timer
+### 10. Prep steps that don't start the timer
 
-- **Status:** idea
-- **Why:** rinsing the filter, preheating, grinding or taring come before
-  the brew. Written as steps, they start the timer and push every later
-  step's time; left out, they're forgotten or end up in the notes.
-- **Approach:**
-  - A recipe step can be marked **prep** (a column on `recipe_steps`, or a
-    step type every brewer kind allows). Prep steps come before the first
-    brew step.
-  - The brew page shows them as a checklist before **Start**, next to the
-    prep tools. A prep step with a time (preheat 2:00) gets its own small
-    countdown that doesn't start the brew clock.
-  - `plannedStarts`, the "Starts at" hints and the target window ignore
-    them; the timer starts at 0:00 on the first brew step.
-  - Update `docs/schema.md`, `docs/api/recipes.md`, the list import and
-    backups (a new column), and decide whether the AI sees them
-    (`worker/src/context.ts`, CLAUDE.md rule 9).
-- **Size:** M
+- **Status:** parked. Built on branch `prep-steps` (commit `dfd67db`, not
+  merged) and set aside for ticking the prep tools on brew setup instead
+  (roadmap: Prep on brew setup).
+- **Why:** rinsing the filter, preheating or warming the cup come before the
+  brew. Written as steps, they start the timer and push every later step.
+- **What the branch has:** a `prep` step type for every method (a label and
+  an optional countdown, always before the brew steps, no migration); a
+  **Before you start** card on setup with a countdown for timed ones that
+  doesn't start the timer; planned times and the window leave them out;
+  `step_end` marks shifted past them (`afterPrep`) so they keep the recipe's
+  step order; the AI gets them with the other steps.
+- **Size:** S to finish (rebase on `dev`, which has the step timings now).
 - **Depends on:** nothing.
 - **Open questions:**
-  - Only a checklist, or a countdown for timed prep?
-  - For every brewer kind, espresso too (warm the cup, flush the group)?
-  - Saved with the brew's copy of the steps, and shown in the journal?
-  - Does the AI see them (always, switchable, or never)?
+  - Is it needed alongside prep tools on setup, or once recipes have
+    default prep (Prep section)? A countdown (preheat 2:00) is the one thing
+    the tools can't do.
 
-### 8. Target finish window vs. the steps
+### 11. Target finish window vs. the steps
 
 - **Status:** idea
 - **Why:** the target finish window and the steps are typed separately and
@@ -288,11 +348,11 @@ Building recipes: their steps, timings and target window.
 
 ---
 
-## E. AI suggestions
+## F. AI suggestions
 
 What the analysis worker sends to the LLM and what comes back.
 
-### 9. Build bar items from plain text (AI)
+### 12. Build bar items from plain text (AI)
 
 - **Status:** idea
 - **Why:** recipes, drinks and other bar items often come as text: a
@@ -320,7 +380,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Units and step types the text describes loosely ("pour to about 100 ml,
     wait 30 s"): how sure must the AI be before filling a field?
 
-### 10. Review and test the espresso dose and shot weight suggestions
+### 13. Review and test the espresso dose and shot weight suggestions
 
 - **Status:** planned
 - **Why:** dose and shot weight changes for espresso (roadmap: espresso dose
@@ -358,9 +418,9 @@ What the analysis worker sends to the LLM and what comes back.
 
 ---
 
-## F. Insights
+## G. Insights
 
-### 11. Statistics and graphs
+### 14. Statistics and graphs
 
 - **Status:** idea
 - **Why:** the brew history is a list. Trends (is this bean getting better
@@ -387,9 +447,9 @@ What the analysis worker sends to the LLM and what comes back.
 
 ---
 
-## G. Bar & menu
+## H. Bar & menu
 
-### 12. Ingredient prep and stock
+### 15. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -406,7 +466,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should a finished cold brew batch (roadmap: cold brew refinements) be
     stock the same way, with each glass served taken from it and rated?
 
-### 13. Public menu: branding and sizes
+### 16. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
@@ -420,7 +480,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
-### 14. Drink categories: what else they could do
+### 17. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -437,9 +497,9 @@ What the analysis worker sends to the LLM and what comes back.
 
 ---
 
-## H. Home roasting
+## I. Home roasting
 
-### 15. Roasting: green stock, roast logs, resting
+### 18. Roasting: green stock, roast logs, resting
 
 - **Status:** idea
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
@@ -468,9 +528,9 @@ What the analysis worker sends to the LLM and what comes back.
 
 ---
 
-## I. Accounts
+## J. Accounts
 
-### 16. Account management and password reset
+### 19. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -501,13 +561,13 @@ What the analysis worker sends to the LLM and what comes back.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 17. Email verification
+### 20. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 16), inviting a member by email, or notifications by email.
+  (item 19), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -517,9 +577,9 @@ What the analysis worker sends to the LLM and what comes back.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 16).
+  - Shares the mail and token pieces with password reset (item 19).
 - **Size:** M (mail is new to the stack).
-- **Depends on:** nothing; pairs with 16.
+- **Depends on:** nothing; pairs with 19.
 - **Open questions:**
   - Block unverified accounts, or only remind them?
   - What happens to accounts that existed before verification (treat as
@@ -528,11 +588,11 @@ What the analysis worker sends to the LLM and what comes back.
 
 ---
 
-## J. Deployment & the app
+## K. Deployment & the app
 
 How the app is served and installed.
 
-### 18. Serve the app as an installable PWA
+### 21. Serve the app as an installable PWA
 
 - **Status:** idea
 - **Why:** the PWA is configured (`vite-plugin-pwa`, `frontend/vite.config.ts`)
