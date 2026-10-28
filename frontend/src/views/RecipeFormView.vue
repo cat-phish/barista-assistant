@@ -28,11 +28,12 @@ import {
   newStepKey,
   parseFinishWindow,
   parseSteps,
-  plannedStarts,
   pourAmounts,
   recipeWarnings,
   stepDraft,
   stepRules,
+  stepsTotalLine,
+  stepTimeParts,
   STEP_TYPES,
   stepTypesFor,
   type StepDraft,
@@ -387,20 +388,17 @@ function addStep(): void {
   );
 }
 
-// When each row is planned to start, from the times typed so far.
-const starts = computed(() =>
-  plannedStarts(
-    steps.value.map((d) => {
-      const t = d.duration.trim() ? parseTime(d.duration) : null;
-      return { durationSec: t?.ok ? t.value : null, advance: d.advance };
-    }),
-  ),
+// The rows' times as typed so far: when each starts and ends, and where the
+// steps end against the target finish window (docs/api/recipes.md §5).
+const timed = computed(() =>
+  steps.value.map((d) => {
+    const t = d.duration.trim() ? parseTime(d.duration) : null;
+    return { durationSec: t?.ok ? t.value : null, advance: d.advance };
+  }),
 );
-function startsText(i: number): string {
-  if (i === 0) return 'Starts at 0:00';
-  const at = starts.value[i];
-  return at ? `Starts ${at.exact ? 'at' : '≈'} ${formatTime(at.at)}` : `Starts after step ${i}`;
-}
+const stepsTotal = computed(() =>
+  longStyle.value ? null : stepsTotalLine(timed.value, parsed.value.finish.ok ? parsed.value.finish.value : null),
+);
 // The time field means a length, or only a guide for steps that wait.
 function timeLabel(step: StepDraft): string {
   return step.advance === 'tap' || step.advance === 'first_drop' ? 'About' : 'Time';
@@ -785,7 +783,10 @@ async function save(): Promise<void> {
                   <option v-for="a in advancesFor(kind)" :key="a" :value="a">{{ ADVANCE[a].label }}</option>
                 </select>
               </div>
-              <p v-if="!longStyle" class="step-when muted full">{{ startsText(i) }} · {{ ADVANCE[step.advance].hint }}</p>
+              <p v-if="!longStyle" class="step-when muted full">
+                <template v-for="(part, k) in stepTimeParts(timed, i)" :key="k"><span v-if="k" class="time-dot"> · </span>{{ part }}</template>
+                · {{ ADVANCE[step.advance].hint }}
+              </p>
               <div v-if="stepRules(step.stepType, kind).water !== 'none'" class="field">
                 <label :for="`step-water-${i}`">
                   Pour to (g)<span v-if="stepRules(step.stepType, kind).water === 'required'" class="req" aria-hidden="true">*</span>
@@ -839,6 +840,9 @@ async function save(): Promise<void> {
             </button>
           </li>
         </VueDraggable>
+        <p v-if="stepsTotal" class="steps-total" :class="{ outside: stepsTotal.outside }" aria-live="polite">
+          <template v-for="(part, k) in stepsTotal.parts" :key="k"><span v-if="k" class="time-dot"> · </span>{{ part }}</template>
+        </p>
         <button class="btn btn-secondary" type="button" :disabled="steps.length >= 20" @click="addStep">Add step</button>
       </section>
 
@@ -984,6 +988,21 @@ p {
 .step-when {
   margin: calc(-1 * var(--space-1)) 0 0;
   font-size: 0.8rem;
+}
+/* The dot between a step's start and end (and in the steps' total), a little
+   bigger than the text's. */
+.time-dot {
+  font-size: 1.4em;
+  line-height: 0;
+  vertical-align: -0.08em;
+}
+.steps-total {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.steps-total.outside {
+  color: var(--warning);
 }
 .full {
   grid-column: 1 / -1;

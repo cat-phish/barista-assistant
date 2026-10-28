@@ -115,8 +115,11 @@ Adding and editing a brewer, grinder or ingredient happen on their own page
   bloom that waits for the kettle to reach temperature). Pour-over types:
   bloom, pour, swirl, stir, wait, press, other, with a "pour to" weight and
   an optional temperature ("pour at 93 °C"). Each row shows when it's planned
-  to start; drag to reorder, or insert between steps. The last step can run
-  until you finish.
+  to start and end ("Starts at 0:30 · Ends at 1:15", ≈ after a step that
+  waits for a tap), and a line under the steps shows where they end against
+  the target finish window ("Steps end at 3:15 · Target finish 3:00–3:30",
+  in the warning colour when outside it). Drag to reorder, or insert between
+  steps. The last step can run until you finish.
 - **Grind starting points** per grinder, and an optional **default grinder**
   that's selected for you when you brew the recipe (otherwise the last
   grinder you used).
