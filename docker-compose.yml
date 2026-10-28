@@ -84,6 +84,8 @@ services:
       - REDIS_PASSWORD_FILE=/run/secrets/redis_password
       - OPENAI_API_KEY_FILE=/run/secrets/openai_api_key
       - OPENAI_MODEL=${OPENAI_MODEL}
+      # Reads bean labels from photos (docs/api/bean-label.md §4d); empty = OPENAI_MODEL.
+      - OPENAI_VISION_MODEL=${OPENAI_VISION_MODEL:-}
       # Zone for brews logged without a UTC offset (older ones); empty = UTC.
       - BREW_TIMEZONE=${BREW_TIMEZONE:-}
       # Where the app opens, for the link in rate-later reminders.

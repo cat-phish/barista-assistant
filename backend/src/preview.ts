@@ -4,7 +4,7 @@
 import type { AiPreviewJobData } from "@barista/shared/jobs";
 import type { Response } from "express";
 import { sendError } from "./http.js";
-import { PreviewTimeoutError, previewAiRequest, QueueUnavailableError } from "./queue.js";
+import { JobTimeoutError, previewAiRequest, QueueUnavailableError } from "./queue.js";
 
 export async function sendPreview(res: Response, data: AiPreviewJobData): Promise<void> {
   try {
@@ -15,7 +15,7 @@ export async function sendPreview(res: Response, data: AiPreviewJobData): Promis
       sendError(res, 503, "Previews are temporarily unavailable. Try again shortly.");
       return;
     }
-    if (err instanceof PreviewTimeoutError) {
+    if (err instanceof JobTimeoutError) {
       sendError(res, 504, "The worker didn't answer in time. Try again shortly.");
       return;
     }

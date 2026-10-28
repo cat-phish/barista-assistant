@@ -11,6 +11,7 @@ import { aiPromptRouter } from "./routes/aiPrompt.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { beansRouter } from "./routes/beans.js";
 import { beanPhotosRouter } from "./routes/beanPhotos.js";
+import { beanLabelRouter, LABEL_BODY_PATH } from "./routes/beanLabel.js";
 import { brewLogsRouter } from "./routes/brewLogs.js";
 import { brewersRouter } from "./routes/brewers.js";
 import { grindersRouter } from "./routes/grinders.js";
@@ -46,7 +47,8 @@ app.use(cors({ origin: config.corsOrigin, credentials: true }));
 // everything else keeps the default 100 kB limit.
 const jsonBody = express.json();
 const restoreBody = express.json({ limit: "50mb" });
-app.use((req, res, next) => (LARGE_BODY_PATH.test(req.path) ? restoreBody : jsonBody)(req, res, next));
+const labelBody = express.json({ limit: "25mb" }); // up to 6 photos, base64
+app.use((req, res, next) => (LARGE_BODY_PATH.test(req.path) ? restoreBody : LABEL_BODY_PATH.test(req.path) ? labelBody : jsonBody)(req, res, next));
 app.use(cookieParser());
 
 app.get("/health", async (_req: Request, res: Response<HealthResponse>) => {
@@ -77,6 +79,7 @@ app.use("/api/workspaces/:workspaceId/drinks", drinksRouter);
 app.use("/api/workspaces/:workspaceId/members", membersRouter);
 app.use("/api/workspaces/:workspaceId/menu", menuRouter);
 app.use("/api/workspaces/:workspaceId/beans/:beanId/photos", beanPhotosRouter);
+app.use("/api/workspaces/:workspaceId/bean-label", beanLabelRouter);
 app.use("/api/workspaces/:workspaceId/beans", beansRouter);
 app.use("/api/workspaces/:workspaceId/recipes", recipesRouter);
 app.use("/api/workspaces/:workspaceId/brew-logs", brewLogsRouter);

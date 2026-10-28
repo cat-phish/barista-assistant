@@ -1,20 +1,23 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch, type Ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { beanProcessesApi } from '../api/beanProcesses';
 import { beansApi, type BeanInput } from '../api/beans';
 import { errorMessage } from '../api/client';
 import AppHeader from '../components/AppHeader.vue';
 import BeanPhotos from '../components/BeanPhotos.vue';
+import LabelHint from '../components/LabelHint.vue';
 import RatingInput from '../components/RatingInput.vue';
 import { localDateInput, parseDecimal, toDateInput } from '../lib/format';
 import { ALTITUDE_LABELS, altitudeText, parseAltitude } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import { useWorkspaceStore } from '../stores/workspace';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
-import type { Bean, BeanPhoto, BeanProcess, BlendType, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from '../api/types';
+import type { Bean, BeanPhoto, BeanProcess, LabelFields, BlendType, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from '../api/types';
 import { COUNTRY_AREAS, ORIGIN_AREAS, areaForCountry } from '../lib/origins';
 import { ROAST_LEVELS } from '../lib/scale';
+import { LABEL_FIELD_KEYS, labelFill, type LabelForm, type LabelSuggestion, type TextKey } from '../lib/labelFill';
+import type { FieldKey } from '../lib/fields';
 import {
   BLEND_TYPES,
   DETAILED_ROAST_LEVELS,
@@ -29,7 +32,7 @@ import {
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 
 const workspaces = useWorkspaceStore();
-const { altitudeUnit, roastScale } = usePreferences();
+const { altitudeUnit, roastScale, settings } = usePreferences();
 const route = useRoute();
 const router = useRouter();
 const editing = computed(() => props.id !== undefined);
@@ -156,6 +159,59 @@ const perGram = computed(() => {
 // Optional fields the workspace hides (Settings → Fields); ones this bean
 // already records stay shown.
 const { show, reveal } = useFieldVisibility();
+
+// "Fill in from the photos" (docs/api/bean-label.md §4d): empty fields are
+// filled, ones that say something else get a "Label says" suggestion.
+const labelRefs = computed<Record<TextKey, Ref<string>>>(() => ({
+  roasterName,
+  beanName,
+  process,
+  country,
+  region,
+  producer,
+  altitude,
+  flavorProfile,
+  roastDate,
+  roastLevel: roastScale.value === 'levels' ? level : detailedRoastLevel,
+  roastType,
+  blendType,
+  bagWeight,
+  batchNumber,
+  website,
+  notes,
+}));
+const suggestions = ref<Partial<Record<TextKey, LabelSuggestion>>>({});
+const labelSummary = ref('');
+function applyLabel(fields: LabelFields): void {
+  const refs = labelRefs.value;
+  const form = { decaf: decaf.value } as LabelForm;
+  for (const key of Object.keys(refs) as TextKey[]) form[key] = refs[key].value;
+  const { fills, suggestions: offered } = labelFill(fields, form, {
+    processes: processes.value,
+    altitudeUnit: altitudeUnit.value,
+    roastScale: roastScale.value,
+  });
+  const filled = Object.keys(fills) as (keyof LabelForm)[];
+  for (const key of filled) {
+    if (key === 'decaf') decaf.value = true;
+    else refs[key].value = fills[key] ?? '';
+  }
+  // A filled field shows even if the workspace hides it.
+  const shown = filled.flatMap((key) => LABEL_FIELD_KEYS[key] ?? []).concat(Object.keys(offered).flatMap((key) => LABEL_FIELD_KEYS[key as TextKey] ?? []));
+  reveal(Object.fromEntries(shown.map((key) => [key as FieldKey, true])));
+  suggestions.value = offered;
+  const differ = Object.keys(offered).length;
+  labelSummary.value =
+    filled.length + differ === 0
+      ? 'Nothing new could be read from the label.'
+      : `Filled ${filled.length} field${filled.length === 1 ? '' : 's'} from the label${differ ? `; ${differ} differ${differ === 1 ? 's' : ''} from what's there (see "Label says")` : ''}. Check them before saving.`;
+}
+function useSuggestion(key: TextKey): void {
+  const s = suggestions.value[key];
+  if (s) labelRefs.value[key].value = s.value;
+  const { [key]: _used, ...rest } = suggestions.value;
+  suggestions.value = rest;
+}
 
 function fill(bean: Bean): void {
   reveal({
@@ -354,11 +410,13 @@ async function save(): Promise<void> {
         <div class="field">
           <label for="roaster">Roaster<span class="req" aria-hidden="true">*</span></label>
           <input id="roaster" aria-required="true" v-model="roasterName" maxlength="255" placeholder="e.g. Onyx Coffee Lab" :aria-invalid="submitted && !!fieldErrors.roasterName" />
+          <LabelHint v-if="suggestions.roasterName" :text="suggestions.roasterName.text" @use="useSuggestion('roasterName')" />
           <span v-if="submitted && fieldErrors.roasterName" class="field-error">{{ fieldErrors.roasterName }}</span>
         </div>
         <div class="field">
           <label for="bean">Coffee<span class="req" aria-hidden="true">*</span></label>
           <input id="bean" aria-required="true" v-model="beanName" maxlength="255" placeholder="e.g. Ethiopia Guji" :aria-invalid="submitted && !!fieldErrors.beanName" />
+          <LabelHint v-if="suggestions.beanName" :text="suggestions.beanName.text" @use="useSuggestion('beanName')" />
           <span v-if="submitted && fieldErrors.beanName" class="field-error">{{ fieldErrors.beanName }}</span>
         </div>
         <div v-if="show('bean.process') || show('bean.blendType')" class="form-row">
@@ -368,6 +426,7 @@ async function save(): Promise<void> {
               <option value="">Not sure</option>
               <option v-for="p in processChoices" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
+            <LabelHint v-if="suggestions.process" :text="suggestions.process.text" @use="useSuggestion('process')" />
           </div>
           <div v-if="show('bean.blendType')" class="field">
             <label for="blend-type">Type</label>
@@ -375,6 +434,7 @@ async function save(): Promise<void> {
               <option value="">Not sure</option>
               <option v-for="(b, key) in BLEND_TYPES" :key="key" :value="key">{{ b.label }}</option>
             </select>
+            <LabelHint v-if="suggestions.blendType" :text="suggestions.blendType.text" @use="useSuggestion('blendType')" />
           </div>
         </div>
         <div v-if="show('bean.origin')" class="form-row">
@@ -391,26 +451,31 @@ async function save(): Promise<void> {
             <datalist id="country-suggestions">
               <option v-for="c in countries" :key="c" :value="c" />
             </datalist>
+            <LabelHint v-if="suggestions.country" :text="suggestions.country.text" @use="useSuggestion('country')" />
           </div>
         </div>
         <div v-if="show('bean.region') || show('bean.producer')" class="form-row">
           <div v-if="show('bean.region')" class="field">
             <label for="region">Region</label>
             <input id="region" v-model="region" maxlength="255" placeholder="e.g. Yirgacheffe" />
+            <LabelHint v-if="suggestions.region" :text="suggestions.region.text" @use="useSuggestion('region')" />
           </div>
           <div v-if="show('bean.producer')" class="field">
             <label for="producer">Producer</label>
             <input id="producer" v-model="producer" maxlength="255" placeholder="e.g. a farm, co-op or washing station" />
+            <LabelHint v-if="suggestions.producer" :text="suggestions.producer.text" @use="useSuggestion('producer')" />
           </div>
         </div>
         <div v-if="show('bean.altitude')" class="field altitude">
           <label for="altitude">Altitude ({{ ALTITUDE_LABELS[altitudeUnit] }})</label>
           <input id="altitude" v-model="altitude" inputmode="numeric" :placeholder="altitudeUnit === 'ft' ? 'e.g. 6400' : 'e.g. 1950'" :aria-invalid="submitted && !!fieldErrors.altitude" />
+          <LabelHint v-if="suggestions.altitude" :text="suggestions.altitude.text" @use="useSuggestion('altitude')" />
           <span v-if="submitted && fieldErrors.altitude" class="field-error">{{ fieldErrors.altitude }}</span>
         </div>
         <div v-if="show('bean.flavorProfile')" class="field">
           <label for="flavor-profile">Flavor profile</label>
           <textarea id="flavor-profile" v-model="flavorProfile" rows="2" maxlength="500" placeholder="e.g. Milk chocolate, plum, cane sugar" />
+          <LabelHint v-if="suggestions.flavorProfile" :text="suggestions.flavorProfile.text" @use="useSuggestion('flavorProfile')" />
         </div>
         <label v-if="show('bean.decaf')" class="checkbox">
           <input v-model="decaf" type="checkbox" />
@@ -420,7 +485,15 @@ async function save(): Promise<void> {
 
       <section v-if="show('bean.photos') && workspaces.current" class="card stack">
         <h2>Photos</h2>
-        <BeanPhotos ref="photoPicker" v-model="photos" :workspace-id="workspaces.current.id" :bean-id="props.id ?? null" />
+        <BeanPhotos
+          ref="photoPicker"
+          v-model="photos"
+          :workspace-id="workspaces.current.id"
+          :bean-id="props.id ?? null"
+          :read-labels="settings.readLabels"
+          @label="applyLabel"
+        />
+        <p v-if="labelSummary" class="muted small" role="status">{{ labelSummary }}</p>
       </section>
 
       <section class="card stack">
@@ -432,15 +505,18 @@ async function save(): Promise<void> {
               <option value="">Not sure</option>
               <option v-for="(r, key) in ROAST_TYPES" :key="key" :value="key">{{ r.label }}</option>
             </select>
+            <LabelHint v-if="suggestions.roastType" :text="suggestions.roastType.text" @use="useSuggestion('roastType')" />
           </div>
           <div v-if="show('bean.roastDate')" class="field">
             <label for="roast-date">Roast date</label>
             <input id="roast-date" v-model="roastDate" type="date" :max="today" />
+            <LabelHint v-if="suggestions.roastDate" :text="suggestions.roastDate.text" @use="useSuggestion('roastDate')" />
           </div>
         </div>
         <div v-if="show('bean.batchNumber')" class="field">
           <label for="batch-number">Batch no.</label>
           <input id="batch-number" v-model="batchNumber" maxlength="50" placeholder="e.g. 3, for home roasts" />
+          <LabelHint v-if="suggestions.batchNumber" :text="suggestions.batchNumber.text" @use="useSuggestion('batchNumber')" />
         </div>
         <template v-if="show('bean.roastLevel')">
           <div v-if="roastScale === 'levels'" class="field">
@@ -449,6 +525,7 @@ async function save(): Promise<void> {
               <option value="">Not sure</option>
               <option v-for="(r, key) in ROAST_LEVELS" :key="key" :value="key">{{ r.label }}</option>
             </select>
+            <LabelHint v-if="suggestions.roastLevel" :text="suggestions.roastLevel.text" @use="useSuggestion('roastLevel')" />
             <span v-if="keptName" id="roast-level-note" class="hint">Recorded as {{ DETAILED_ROAST_LEVELS[keptName].label }}. Choosing another level replaces it.</span>
             <span v-else-if="sourceDetailed" id="roast-level-note" class="hint">Saving replaces the roast name {{ DETAILED_ROAST_LEVELS[sourceDetailed].label }}.</span>
           </div>
@@ -459,6 +536,7 @@ async function save(): Promise<void> {
                 <option value="">Not sure</option>
                 <option v-for="(d, key) in DETAILED_ROAST_LEVELS" :key="key" :value="key">{{ d.label }}</option>
               </select>
+              <LabelHint v-if="suggestions.roastLevel" :text="suggestions.roastLevel.text" @use="useSuggestion('roastLevel')" />
             </div>
             <div class="field">
               <span id="implied-roast-label" class="label">Light to dark</span>
@@ -509,6 +587,7 @@ async function save(): Promise<void> {
           <div v-if="show('bean.bagWeight')" class="field">
             <label for="bag-weight">Bag Weight (g)</label>
             <input id="bag-weight" v-model="bagWeight" inputmode="numeric" placeholder="e.g. 340" :aria-invalid="submitted && !!fieldErrors.bagWeight" />
+            <LabelHint v-if="suggestions.bagWeight" :text="suggestions.bagWeight.text" @use="useSuggestion('bagWeight')" />
             <span v-if="submitted && fieldErrors.bagWeight" class="field-error">{{ fieldErrors.bagWeight }}</span>
           </div>
         </div>
@@ -527,6 +606,7 @@ async function save(): Promise<void> {
         <div v-if="show('bean.website')" class="field">
           <label for="website">Website</label>
           <input id="website" v-model="website" type="url" inputmode="url" maxlength="500" placeholder="https://" :aria-invalid="submitted && !!fieldErrors.website" />
+          <LabelHint v-if="suggestions.website" :text="suggestions.website.text" @use="useSuggestion('website')" />
           <span v-if="submitted && fieldErrors.website" class="field-error">{{ fieldErrors.website }}</span>
         </div>
         <label class="checkbox">
@@ -540,6 +620,7 @@ async function save(): Promise<void> {
         <div v-if="show('bean.notes')" class="field">
           <label for="notes">Notes</label>
           <textarea id="notes" v-model="notes" rows="4" maxlength="2000" placeholder="e.g. Roaster suggests 1:16. Best after 10 days." />
+          <LabelHint v-if="suggestions.notes" :text="suggestions.notes.text" @use="useSuggestion('notes')" />
         </div>
       </section>
 

@@ -20,7 +20,7 @@ const { aiHidden, settings } = usePreferences();
 const isOwner = computed(() => workspaces.current?.role === 'owner');
 const saving = ref(false);
 const error = ref('');
-type Section = AiGroup | 'auto' | 'suggest';
+type Section = AiGroup | 'auto' | 'suggest' | 'labels';
 const activeSection = ref<Section | null>(null); // the section last changed
 const saved = ref(false);
 const GROUPS = Object.keys(AI_GROUPS) as AiGroup[];
@@ -168,6 +168,21 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
       </fieldset>
       <p v-if="error && activeSection === 'suggest'" class="form-error" role="alert">{{ error }}</p>
       <p v-if="saved && activeSection === 'suggest'" class="muted small" aria-live="polite">Saved.</p>
+    </section>
+
+    <section class="card stack" aria-labelledby="ai-labels">
+      <h2 id="ai-labels">Bean labels</h2>
+      <p class="muted">
+        On the bean form, “Fill in from the photos” sends the bean's photos to the AI provider, which reads the label: roaster, coffee, origin,
+        process, roast and so on. Empty fields are filled in and the rest get a suggestion; nothing is saved until you save the bean. The photos
+        are sent only when someone presses the button.
+      </p>
+      <label class="checkbox">
+        <input type="checkbox" :checked="settings.readLabels" :disabled="!isOwner || saving" @change="save({ readLabels: ($event.target as HTMLInputElement).checked }, 'labels')" />
+        Read bean labels from photos
+      </label>
+      <p v-if="error && activeSection === 'labels'" class="form-error" role="alert">{{ error }}</p>
+      <p v-if="saved && activeSection === 'labels'" class="muted small" aria-live="polite">Saved.</p>
     </section>
 
     <h2 class="what">What the AI sees</h2>

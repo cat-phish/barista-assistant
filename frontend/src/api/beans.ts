@@ -1,5 +1,5 @@
 import { api, API_URL } from './client';
-import type { Bean, BeanPhoto, BlendType, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from './types';
+import type { Bean, BeanPhoto, BlendType, LabelFields, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from './types';
 
 // Request body for create/update (docs/api/beans.md §4). With roast names,
 // roastLevel is left out: the API derives it from detailedRoastLevel (only a
@@ -62,4 +62,7 @@ export const beansApi = {
     api.patch<{ photos: BeanPhoto[] }>(`${base(workspaceId)}/${beanId}/photos/${photoId}`, { cover: true }),
   removePhoto: (workspaceId: string, beanId: string, photoId: string) => api.delete(`${base(workspaceId)}/${beanId}/photos/${photoId}`),
   photoUrl: (workspaceId: string, beanId: string, photoId: string) => `${API_URL}${base(workspaceId)}/${beanId}/photos/${photoId}`,
+  // Reads the label off 1–6 photos, base64 (docs/api/bean-label.md §4d). Can
+  // take half a minute; 403 when the workspace has it off.
+  readLabel: (workspaceId: string, images: string[]) => api.post<{ fields: LabelFields }>(`/api/workspaces/${workspaceId}/bean-label`, { images }),
 };

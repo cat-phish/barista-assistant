@@ -1,4 +1,4 @@
-import type { BackupSettings, ParameterSuggestion } from "./schema.js";
+import type { BackupSettings, BlendType, DetailedRoastLevel, ParameterSuggestion, RoastLevel, RoastType } from "./schema.js";
 
 // BullMQ contract between the backend (producer) and the worker (consumer).
 // See docs/api/llm-contract.md §9.
@@ -57,6 +57,38 @@ export type SuggestionPreview = Pick<
 >;
 // note: a one-off note (docs/api/auth.md §1c), as asking would send it.
 export type AiPreviewJobData = { kind: "analysis"; brewLogId: string; note?: string } | { kind: "suggest"; suggestion: SuggestionPreview };
+
+// Reading a bean's label from its photos (docs/api/bean-label.md §4d,
+// llm-contract.md §9c). The backend waits for the answer (the job's return
+// value); nothing is stored. images: base64 WebP, already resized by the
+// backend; processes: the workspace's visible process names to pick from.
+export const LABEL_READ_QUEUE = "label-read";
+export const LABEL_READ_JOB = "read";
+export interface LabelReadJobData {
+  images: string[];
+  processes: string[];
+}
+// What the label says, each null when it isn't printed (or can't be read).
+export interface LabelFields {
+  roasterName: string | null;
+  beanName: string | null;
+  processName: string | null; // one of the job's processes
+  processText: string | null; // the process as printed, when none of them fits
+  country: string | null;
+  region: string | null;
+  producer: string | null;
+  altitudeMasl: number | null; // a range gives its middle
+  flavorProfile: string | null;
+  roastDate: string | null; // YYYY-MM-DD; never a best-before date
+  detailedRoastLevel: DetailedRoastLevel | null;
+  roastLevel: RoastLevel | null; // when only light … dark is printed
+  roastType: RoastType | null;
+  blendType: BlendType | null;
+  decaf: true | null;
+  bagWeightGrams: number | null;
+  batchNumber: string | null;
+  website: string | null;
+}
 
 export const GRIND_DELTAS = ["much_finer", "finer", "no_change", "coarser", "much_coarser"] as const;
 export type GrindDelta = (typeof GRIND_DELTAS)[number];

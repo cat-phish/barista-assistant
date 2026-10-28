@@ -9,6 +9,9 @@ export const config = {
   openaiApiKey: requireSecret("OPENAI_API_KEY"),
   // No default: valid model names change over time.
   openaiModel: requireEnv("OPENAI_MODEL"),
+  // Reading bean labels from photos (docs/api/llm-contract.md §9c) needs a
+  // model that takes images; unset = OPENAI_MODEL.
+  openaiVisionModel: process.env.OPENAI_VISION_MODEL?.trim() || requireEnv("OPENAI_MODEL"),
   concurrency: Number(process.env.WORKER_CONCURRENCY ?? 2),
   // Zone for brews logged without a UTC offset (older ones); null = UTC.
   brewTimezone: parseTimeZone(process.env.BREW_TIMEZONE),

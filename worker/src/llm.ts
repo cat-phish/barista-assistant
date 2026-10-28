@@ -124,11 +124,11 @@ export function suggestionSent(context: SuggestContext, hidden: ReadonlySet<AiDe
   return sent(buildSuggestRequest(context, hidden, custom), promptSections(toSuggestInput(context, hidden), SUGGEST_SECTIONS, custom));
 }
 
-type LlmMessage = { content?: string | null; refusal?: string | null } | undefined;
+export type LlmMessage = { content?: string | null; refusal?: string | null } | undefined;
 
 // Turns the model's reply into what the schema says, or throws (which makes
 // BullMQ retry the job).
-function parseMessage<T extends z.ZodType>(message: LlmMessage, schema: T): z.infer<T> {
+export function parseMessage<T extends z.ZodType>(message: LlmMessage, schema: T): z.infer<T> {
   if (message?.refusal) throw new Error(`LLM refused: ${message.refusal}`);
   if (!message?.content) throw new Error("LLM returned an empty response");
 
@@ -155,13 +155,13 @@ export async function analyzeWithLlm(context: BrewContext, hidden: ReadonlySet<A
 }
 
 // The analysis plus what it cost, for the eval script (src/eval.ts).
-type Usage = { promptTokens: number; completionTokens: number } | null;
+export type Usage = { promptTokens: number; completionTokens: number } | null;
 export interface AnalysisRun {
   analysis: BrewAnalysis;
   usage: Usage;
 }
 
-async function complete(request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming): Promise<{ message: LlmMessage; usage: Usage }> {
+export async function complete(request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming): Promise<{ message: LlmMessage; usage: Usage }> {
   let completion: OpenAI.Chat.Completions.ChatCompletion;
   try {
     completion = await openai.chat.completions.create(request);

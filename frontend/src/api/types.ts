@@ -58,6 +58,7 @@ export interface WorkspaceSettings {
   suggestSource: SuggestSource;
   suggestMaxBrews: number;
   suggestAlternatives: AlternativeKind[]; // what else it suggests by default
+  readLabels: boolean; // "Fill in from the photos" on the bean form (bean-label.md §4d)
 }
 export const AUTO_ANALYZE_DELAYS = [0, 5, 10, 15, 30] as const;
 export type AutoAnalyzeDelay = (typeof AUTO_ANALYZE_DELAYS)[number];
@@ -650,4 +651,27 @@ export interface Drink {
   archivedAt: string | null; // set = archived: off the brew page (§5c)
   createdAt: string; // date added (ISO)
   ingredients: DrinkIngredient[];
+}
+
+// What "Fill in from the photos" read off a bean's label
+// (docs/api/bean-label.md §4d): null where it couldn't tell.
+export interface LabelFields {
+  roasterName: string | null;
+  beanName: string | null;
+  processName: string | null; // one of the workspace's visible processes
+  processText: string | null; // the process as printed, when it isn't one of them
+  country: string | null;
+  region: string | null;
+  producer: string | null;
+  altitudeMasl: number | null;
+  flavorProfile: string | null;
+  roastDate: string | null; // YYYY-MM-DD
+  detailedRoastLevel: DetailedRoastLevel | null;
+  roastLevel: RoastLevel | null;
+  roastType: RoastType | null;
+  blendType: BlendType | null;
+  decaf: true | null;
+  bagWeightGrams: number | null;
+  batchNumber: string | null;
+  website: string | null;
 }
