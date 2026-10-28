@@ -103,6 +103,9 @@ export interface WorkspaceSettings {
   suggestMaxBrews: number;
   // What else it suggests by default (another recipe, brewer or bean).
   suggestAlternatives: AlternativeKind[];
+  // "Fill in from the photos" on the bean form (docs/api/bean-label.md §4d):
+  // the bean's photos go to the AI to read the label. Off hides it.
+  readLabels: boolean;
 }
 export const AUTO_ANALYZE_DELAYS = [0, 5, 10, 15, 30] as const;
 export type AutoAnalyzeDelay = (typeof AUTO_ANALYZE_DELAYS)[number];
@@ -138,6 +141,7 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   suggestSource: "beanRecipe",
   suggestMaxBrews: 5,
   suggestAlternatives: [],
+  readLabels: true,
 };
 
 export function withDefaults<T extends object>(defaults: T, stored: Partial<T> | null): T {

@@ -18,7 +18,8 @@
 
 **Configuration (worker env):** `DATABASE_URL` + `DATABASE_PASSWORD`,
 `REDIS_URL` + `REDIS_PASSWORD`, `OPENAI_API_KEY`, and `OPENAI_MODEL`
-(required, no default, since valid model names change over time). Passwords
+(required, no default, since valid model names change over time);
+`OPENAI_VISION_MODEL` (optional) reads bean labels (§9c). Passwords
 are kept out of the URLs; a URL that also contains a password is rejected.
 Each secret can instead be given as `NAME_FILE` (a path, e.g. a Docker secret
 under `/run/secrets`), but not both. `OPENAI_BASE_URL` is optional and points
@@ -365,6 +366,41 @@ brew's `analysis` and the brewer's name and kind are always sent; an
 espresso machine's controls go with `machine`). The options are always
 sent but for a recipe's `targetTempC` (`temp`) and a bean's details, which
 go with their keys as the bean's do.
+
+## 9c. Reading a bean label
+
+The `label-read` queue (`bean-label.md` §4d): job `read`, data
+`{ "images": ["<base64 WebP>", ...], "processes": ["Washed", ...] }`, the
+photos already re-encoded by the backend and the workspace's visible
+process names. The job's **return value** is the answer (`LabelFields`,
+`@barista/shared/jobs`); nothing is written to the database, and it isn't
+retried. `worker/src/label.ts`:
+
+1. **Request:** `OPENAI_VISION_MODEL` (optional; empty uses `OPENAI_MODEL`),
+   which must take images. A fixed system prompt (`LABEL_PROMPT`: fill a
+   field only with what's printed, `null` otherwise, never from general
+   knowledge; a best-before date isn't a roast date; feet and altitude
+   ranges to one figure in metres; 12 oz = 340 g) and one user message: a
+   text part naming the processes to choose from, then one `image_url` part
+   per photo (`data:image/webp;base64,…`, `detail: "high"`). It isn't part
+   of "Your AI prompt" (the person's instructions are for judging brews, not
+   reading labels), and Settings → AI's "What the AI sees" doesn't apply:
+   only the photos and the process names are sent.
+2. **Schema** (`labelJsonSchema`, strict): every field of `LabelFields`,
+   each nullable; `processName` is an enum of the given processes (or only
+   `null` when there are none), the roast, type and blend fields enums of
+   their bean values (§4).
+3. **Checking the answer** (`labelSchema`): each value on its own, so one
+   bad value becomes `null` without losing the rest. Text is trimmed and
+   held to the bean's lengths; `altitudeMasl` 1–9000; `bagWeightGrams`
+   1–100000; `roastDate` a real date from 2000 to tomorrow; `website` an
+   http(s) address with a dotted host (`https://` added when missing);
+   `decaf` only `true` is kept; a `processName` not in the list is `null`,
+   and a matched one clears `processText`. A refusal, an empty response or
+   invalid JSON fails the job (the route answers `502`).
+
+The workspace's `readLabels` setting (`workspaces.md` §2) turns the route
+off; nothing is sent unless someone presses the button.
 
 ## Evaluating changes
 

@@ -2,16 +2,20 @@
 // A bean's photos on its form (docs/api/bean-photos.md §4c): the first is
 // the cover. Editing a saved bean changes them straight away; a new bean
 // holds the picked files until it's saved (uploadPending, called by the
-// form once it has the bean's id).
+// form once it has the bean's id). With readLabels, "Fill in from the
+// photos" sends them to be read (docs/api/bean-label.md §4d) and hands what
+// it read to the form.
 import { computed, onBeforeUnmount, ref } from 'vue';
 import { beansApi } from '../api/beans';
-import { errorMessage } from '../api/client';
-import type { BeanPhoto } from '../api/types';
+import { ApiError, errorMessage } from '../api/client';
+import type { BeanPhoto, LabelFields } from '../api/types';
+import { photoBase64 } from '../lib/photoResize';
 
 const MAX_PHOTOS = 6; // MAX_BEAN_PHOTOS in @barista/shared/schema
 
-const props = defineProps<{ workspaceId: string; beanId: string | null }>();
+const props = defineProps<{ workspaceId: string; beanId: string | null; readLabels: boolean }>();
 const photos = defineModel<BeanPhoto[]>({ required: true });
+const emit = defineEmits<{ label: [fields: LabelFields] }>();
 
 // Picked before the bean exists: shown from the file itself.
 interface Pending {
@@ -51,6 +55,31 @@ const tiles = computed<Tile[]>(() =>
       })),
 );
 const room = computed(() => MAX_PHOTOS - tiles.value.length);
+
+const reading = ref(false);
+// Each photo, shrunk in the browser, then read together.
+async function readLabel(): Promise<void> {
+  reading.value = true;
+  error.value = '';
+  try {
+    const blobs = props.beanId
+      ? await Promise.all(
+          tiles.value.map(async (t) => {
+            const res = await fetch(t.src, { credentials: 'include' });
+            if (!res.ok) throw new Error('A photo couldn’t be loaded');
+            return res.blob();
+          }),
+        )
+      : pending.value.map((p) => p.file);
+    const images = await Promise.all(blobs.map(photoBase64));
+    emit('label', (await beansApi.readLabel(props.workspaceId, images)).fields);
+  } catch (err) {
+    // Not the API's: a photo the browser couldn't load or decode.
+    error.value = err instanceof ApiError ? errorMessage(err) : 'A photo couldn’t be prepared. Try again, or with other photos.';
+  } finally {
+    reading.value = false;
+  }
+}
 
 async function picked(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement;
@@ -148,6 +177,12 @@ onBeforeUnmount(() => pending.value.forEach((p) => URL.revokeObjectURL(p.url)));
       <button type="button" class="btn btn-secondary" :disabled="busy" @click="chooser?.click()">Choose photos</button>
     </div>
     <p v-else class="muted small">{{ MAX_PHOTOS }} photos, the most a bean can have.</p>
+    <div v-if="readLabels && tiles.length" class="read">
+      <button type="button" class="btn btn-secondary" :disabled="busy || reading" @click="readLabel">
+        {{ reading ? 'Reading the label…' : 'Fill in from the photos' }}
+      </button>
+      <span class="muted small">{{ reading ? 'This can take half a minute.' : 'The AI reads the label; you check it before saving.' }}</span>
+    </div>
     <p v-if="busy" class="muted small" aria-live="polite">Saving photos…</p>
     <p v-if="error" class="field-error" role="alert">{{ error }}</p>
   </div>
@@ -186,6 +221,12 @@ onBeforeUnmount(() => pending.value.forEach((p) => URL.revokeObjectURL(p.url)));
   flex-wrap: wrap;
   justify-content: space-between;
   gap: var(--space-1);
+}
+.read {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
 }
 .pick {
   display: flex;

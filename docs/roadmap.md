@@ -1566,4 +1566,29 @@ Backlog item "Bean photos", branch `bean-photos`. `docs/api/bean-photos.md`
   either; zip photos must be WebP inside 1024 px and are written inside the
   restore transaction. Scheduled DB dumps don't cover `./photos`
   (`server.md`).
-- Later (backlog): read the label from the photo with AI.
+- Later (backlog): read the label from the photo with AI (built next).
+
+## Read the bean label from its photos (built)
+
+Backlog item 3, branch `bean-label`. `docs/api/bean-label.md` §4d,
+`docs/api/llm-contract.md` §9c, `docs/features.md` (Beans).
+
+- Decided: **all the bean's photos** in one request (front, back, card);
+  **fill empty fields, suggest for filled ones** ("Label says: X · Use");
+  **match** the process to the workspace's visible ones (an enum in the
+  schema), the growing area from the country, the roast to the workspace's
+  roast scale; its **own switch** (`readLabels`, Settings → AI, on by
+  default). No migration: settings are JSON.
+- The photos travel **with the request** (a new bean's aren't on the server
+  yet): the browser shrinks them to 1024 px JPEG, the backend re-encodes
+  them with `processPhoto` (no EXIF), queues a `label-read` job and waits
+  for its return value (`addAndWait` in `backend/src/queue.ts`, shared with
+  the previews; `LABEL_READ_TIMEOUT_MS`, default 60 s). Nothing is stored;
+  not retried. `502` when the AI call fails.
+- Worker `worker/src/label.ts`: fixed prompt (not "Your AI prompt": it's
+  reading, not judging), one `image_url` part per photo, strict schema,
+  then each value checked on its own (`.catch(null)`) so one bad value
+  doesn't lose the rest. `OPENAI_VISION_MODEL`, else `OPENAI_MODEL`.
+- Frontend: `lib/labelFill.ts` (pure, tested) turns the answer into fills
+  and suggestions in the form's terms; a process not in the list goes to
+  the notes. Filled or suggested hidden fields are revealed.

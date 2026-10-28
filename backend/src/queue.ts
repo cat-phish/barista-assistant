@@ -21,11 +21,15 @@ import {
   AI_PREVIEW_JOB,
   AI_PREVIEW_QUEUE,
   type AiPreviewJobData,
+  LABEL_READ_JOB,
+  LABEL_READ_QUEUE,
+  type LabelFields,
+  type LabelReadJobData,
 } from "@barista/shared/jobs";
 import type { AiRequest, BackupSettings } from "@barista/shared/schema";
 import { Queue, QueueEvents } from "bullmq";
 import { Redis } from "ioredis";
-import { backupTimezone, config, previewTimeoutMs } from "./config.js";
+import { backupTimezone, config, labelReadTimeoutMs, previewTimeoutMs } from "./config.js";
 
 // Producer side of the brew-analysis queue (docs/api/llm-contract.md §9).
 const connection = new Redis(config.redis.url, {
@@ -150,29 +154,54 @@ aiPreviewQueue.on("error", (err: Error) => {
   if (err.message !== lastPreviewError) console.error("AI preview queue error:", err.message);
   lastPreviewError = err.message;
 });
-// Waiting needs its own blocking connection; made on the first preview.
-let previewEvents: QueueEvents | null = null;
-let previewConnection: Redis | null = null;
-export class PreviewTimeoutError extends Error {}
+export class JobTimeoutError extends Error {}
 
-export async function previewAiRequest(data: AiPreviewJobData): Promise<AiRequest | null> {
-  const job = await withTimeout(async () => {
-    if (!previewEvents) {
-      previewConnection = new Redis(config.redis.url, { maxRetriesPerRequest: null, ...(config.redis.password ? { password: config.redis.password } : {}) });
-      previewEvents = new QueueEvents(AI_PREVIEW_QUEUE, { connection: previewConnection });
+// Waiting for a job's answer needs a blocking connection of its own, and a
+// QueueEvents per queue; made on first use.
+let waitConnection: Redis | null = null;
+const queueEvents = new Map<string, QueueEvents>();
+// Adds a job and waits for its return value (finished jobs stay a minute,
+// so the answer can still be read if it came before the wait began). A
+// timeout removes the job and throws JobTimeoutError; a failed job
+// rejects with its reason.
+async function addAndWait<D, R>(queue: Queue<D, R>, name: string, data: D, timeoutMs: number): Promise<R> {
+  const events = await withTimeout(async () => {
+    waitConnection ??= new Redis(config.redis.url, { maxRetriesPerRequest: null, ...(config.redis.password ? { password: config.redis.password } : {}) });
+    let e = queueEvents.get(queue.name);
+    if (!e) {
+      e = new QueueEvents(queue.name, { connection: waitConnection });
+      queueEvents.set(queue.name, e);
     }
-    await previewEvents.waitUntilReady();
-    return aiPreviewQueue.add(AI_PREVIEW_JOB, data, { removeOnComplete: { age: 60 }, removeOnFail: { age: 60 } });
+    await e.waitUntilReady();
+    return e;
   });
+  // bullmq's name type is generic over the data; this queue only has the one job name.
+  const job = await withTimeout(() => queue.add(name as never, data as never, { removeOnComplete: { age: 60 }, removeOnFail: { age: 60 } }));
   try {
-    return await job.waitUntilFinished(previewEvents!, previewTimeoutMs());
+    return (await job.waitUntilFinished(events, timeoutMs)) as R;
   } catch (err) {
     if (err instanceof Error && /timed out/i.test(err.message)) {
       await job.remove().catch(() => undefined); // nobody's waiting for it any more
-      throw new PreviewTimeoutError(err.message);
+      throw new JobTimeoutError(err.message);
     }
     throw err;
   }
+}
+
+export function previewAiRequest(data: AiPreviewJobData): Promise<AiRequest | null> {
+  return addAndWait(aiPreviewQueue, AI_PREVIEW_JOB, data, previewTimeoutMs());
+}
+
+// Reading a bean label (docs/api/bean-label.md §4d): an AI call, so a longer
+// wait; not retried (the person tries again).
+export const labelReadQueue = new Queue<LabelReadJobData, LabelFields>(LABEL_READ_QUEUE, { connection });
+let lastLabelError = "";
+labelReadQueue.on("error", (err: Error) => {
+  if (err.message !== lastLabelError) console.error("Label queue error:", err.message);
+  lastLabelError = err.message;
+});
+export function readBeanLabel(data: LabelReadJobData): Promise<LabelFields> {
+  return addAndWait(labelReadQueue, LABEL_READ_JOB, data, labelReadTimeoutMs());
 }
 
 // Same timeout as the analysis; the caller treats failure as "no reminder".
@@ -232,7 +261,7 @@ export async function enqueueBackupNow(): Promise<void> {
 }
 
 export async function closeQueue(): Promise<void> {
-  await Promise.all([brewAnalysisQueue.close(), reminderQueue.close(), maintenanceQueue.close(), parameterSuggestionQueue.close(), aiPreviewQueue.close(), previewEvents?.close()]);
+  await Promise.all([brewAnalysisQueue.close(), reminderQueue.close(), maintenanceQueue.close(), parameterSuggestionQueue.close(), aiPreviewQueue.close(), labelReadQueue.close(), ...[...queueEvents.values()].map((e) => e.close())]);
   connection.disconnect();
-  previewConnection?.disconnect();
+  waitConnection?.disconnect();
 }

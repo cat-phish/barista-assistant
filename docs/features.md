@@ -67,6 +67,13 @@ work is in `roadmap.md`.
   at most 1024 px, without the photo's EXIF (location, camera). Seen ones
   show offline. Hideable under Settings → Fields. A Duplicate starts
   without them. (`docs/api/bean-photos.md` §4c)
+- **Fill in from the photos:** the AI reads the bag's label off the photos
+  (a new bean's too, before it's saved) and fills in the empty fields:
+  roaster, coffee, process (one of the workspace's), origin, altitude,
+  tasting notes, roast date and level, bag weight, website. A field that
+  already says something else gets "Label says: X · Use". Nothing saves
+  until you save. Owners can turn it off under Settings → AI → Bean labels.
+  (`docs/api/bean-label.md` §4d)
 
 ## Bar setup
 One **Bar setup** section with tabs: Brewers, Grinders, Water, Prep and Menu.
