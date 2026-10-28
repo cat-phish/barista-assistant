@@ -1,5 +1,5 @@
-import type { LabelFields } from "@barista/shared/jobs";
-import { beanProcesses, DEFAULT_WORKSPACE_SETTINGS, MAX_BEAN_PHOTOS, withDefaults, workspaces } from "@barista/shared/schema";
+import { LABEL_MAX_IMAGES, type LabelFields } from "@barista/shared/jobs";
+import { beanProcesses, DEFAULT_WORKSPACE_SETTINGS, withDefaults, workspaces } from "@barista/shared/schema";
 import { and, asc, eq } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
@@ -26,7 +26,7 @@ const readSchema = z
     images: z
       .array(z.base64().max(Math.ceil(MAX_IMAGE_BYTES / 3) * 4, "a photo is too large"))
       .min(1)
-      .max(MAX_BEAN_PHOTOS),
+      .max(LABEL_MAX_IMAGES),
   })
   .strict();
 

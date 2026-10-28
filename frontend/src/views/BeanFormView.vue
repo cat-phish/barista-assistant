@@ -7,7 +7,6 @@ import { errorMessage } from '../api/client';
 import AppHeader from '../components/AppHeader.vue';
 import BeanPhotos from '../components/BeanPhotos.vue';
 import LabelHint from '../components/LabelHint.vue';
-import LabelReader from '../components/LabelReader.vue';
 import RatingInput from '../components/RatingInput.vue';
 import { localDateInput, parseDecimal, toDateInput } from '../lib/format';
 import { ALTITUDE_LABELS, altitudeText, parseAltitude } from '../lib/units';
@@ -407,9 +406,20 @@ async function save(): Promise<void> {
     <p v-if="loading" class="muted" aria-live="polite">Loading…</p>
 
     <form v-else class="stack" novalidate @submit.prevent="save">
-      <LabelReader v-if="settings.readLabels && workspaces.current" :workspace-id="workspaces.current.id" @label="applyLabel">
-        <p v-if="labelSummary" class="small" role="status">{{ labelSummary }}</p>
-      </LabelReader>
+      <section v-if="(show('bean.photos') || settings.readLabels) && workspaces.current" class="card stack">
+        <h2>Photos</h2>
+        <BeanPhotos
+          ref="photoPicker"
+          v-model="photos"
+          :workspace-id="workspaces.current.id"
+          :bean-id="props.id ?? null"
+          :show-photos="show('bean.photos')"
+          :read-labels="settings.readLabels"
+          @label="applyLabel"
+        >
+          <p v-if="labelSummary" class="small" role="status">{{ labelSummary }}</p>
+        </BeanPhotos>
+      </section>
       <section class="card stack">
         <div class="field">
           <label for="roaster">Roaster<span class="req" aria-hidden="true">*</span></label>
@@ -485,11 +495,6 @@ async function save(): Promise<void> {
           <input v-model="decaf" type="checkbox" />
           Decaf
         </label>
-      </section>
-
-      <section v-if="show('bean.photos') && workspaces.current" class="card stack">
-        <h2>Photos</h2>
-        <BeanPhotos ref="photoPicker" v-model="photos" :workspace-id="workspaces.current.id" :bean-id="props.id ?? null" />
       </section>
 
       <section class="card stack">

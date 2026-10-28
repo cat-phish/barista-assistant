@@ -114,6 +114,34 @@ beanPhotosRouter.get("/:photoId", async (req: Request<PhotoParams>, res: Respons
 });
 
 const coverSchema = z.object({ cover: z.literal(true) }).strict();
+const orderSchema = z
+  .object({ photoIds: z.array(z.uuid()).max(MAX_BEAN_PHOTOS).refine((ids) => new Set(ids).size === ids.length, "each photo once") })
+  .strict();
+
+// Every photo of the bean, once each, in the new order: the first is the cover.
+// Before /:photoId, so "order" isn't taken for an id.
+beanPhotosRouter.put("/order", async (req: Request<BeanParams>, res: Response<{ photos: PhotoInfo[] }>) => {
+  const { workspaceId, beanId } = req.params;
+  if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
+  const body = parseBody(orderSchema, req, res);
+  if (!body) return;
+  const result = await db.transaction(async (tx) => {
+    if (!(await lockBean(tx, req.params))) return "not_found" as const;
+    const ids = await orderedIds(tx, beanId);
+    if (ids.length !== body.photoIds.length || !body.photoIds.every((id) => ids.includes(id))) return "mismatch" as const;
+    await renumber(tx, body.photoIds);
+    return "ok" as const;
+  });
+  if (result === "not_found") {
+    sendError(res, 404, "Bean not found");
+    return;
+  }
+  if (result === "mismatch") {
+    sendError(res, 400, "photoIds: must list every photo of this bean exactly once");
+    return;
+  }
+  res.json({ photos: await photosOf(beanId) });
+});
 
 // { "cover": true } makes it the first photo; the rest keep their order.
 beanPhotosRouter.patch("/:photoId", async (req: Request<PhotoParams>, res: Response<{ photos: PhotoInfo[] }>) => {

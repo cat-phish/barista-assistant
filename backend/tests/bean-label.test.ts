@@ -66,6 +66,8 @@ describe("reading a bean label from photos", () => {
     expect([first.format, first.width, first.height]).toEqual(["webp", 1024, 768]);
     expect(received!.processes).toContain("Washed");
     expect(received!.processes).toContain("Natural");
+    // Up to 8: the bean's 6 and a couple taken just for the read.
+    expect((await owner.agent.post(`/api/workspaces/${ws}/bean-label`).send({ images: Array(8).fill(await jpeg(20, 20)) })).status).toBe(200);
   });
 
   it("checks the photos", async () => {
@@ -74,7 +76,7 @@ describe("reading a bean label from photos", () => {
     const url = `/api/workspaces/${ws}/bean-label`;
     const one = await jpeg(10, 10);
     expect((await owner.agent.post(url).send({ images: [] })).status).toBe(400);
-    expect((await owner.agent.post(url).send({ images: Array(7).fill(one) })).status).toBe(400);
+    expect((await owner.agent.post(url).send({ images: Array(9).fill(one) })).status).toBe(400); // LABEL_MAX_IMAGES
     expect((await owner.agent.post(url).send({ images: ["not base64!"] })).status).toBe(400);
     const notImage = await owner.agent.post(url).send({ images: [one, Buffer.from("hello").toString("base64")] });
     expect(notImage.status).toBe(400);

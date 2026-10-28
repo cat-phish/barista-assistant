@@ -3,17 +3,22 @@
 > Part of the API spec. Conventions, auth rules and the section index are in
 > [README.md](README.md); a bare `§N` refers to that index.
 
-**"Fill in from a photo"**, a card at the top of the bean form (adding or
-editing), takes photos of the label (**Take photo**, or **Choose photos**
-for up to 6, e.g. front and back) and sends them to the AI, which reads the
-label and answers with the bean fields (§4) it could read. The form fills
+The bean form's **Photos** card (at the top, adding or editing) has
+**✦ Fill in from photos**: it sends the bean's photos (§4c; a new bean's
+picked ones too) to the AI, which reads the label and answers with the
+bean fields (§4) it could read. **Read other photos (not kept)…** opens
+Take photo / Choose photos for shots taken just for the read (the back of
+the bag, say): those are sent first, with the bean's photos, at most **8**
+in all (`LABEL_MAX_IMAGES`). With photos hidden under Settings → Fields,
+the card only offers those. The form fills
 the **empty** fields and, under each one that already says something else,
 shows **"Label says: X · Use"**. Nothing is saved until the bean is.
 
-The photos are **only read, then thrown away**: they aren't the bean's
-photos (§4c), so a back-of-the-bag shot doesn't have to be uploaded and
-deleted again. They come with the request; the browser shrinks each to at
-most 1024 px (JPEG). Nothing about the request is stored (no row, no file);
+Photos taken for the read are **only read, then thrown away**: they never
+become the bean's photos, so a back-of-the-bag shot doesn't have to be
+uploaded and deleted again. All photos come with the request (a new bean's
+aren't on the server yet; a saved bean's are fetched); the browser shrinks
+each to at most 1024 px (JPEG). Nothing about the request is stored (no row, no file);
 the job is kept a minute in Redis so the answer can be collected.
 
 **How it's read:** the backend re-encodes each photo as a stored photo is
@@ -40,13 +45,13 @@ isn't retried: the person presses the button again.
   or suggested.
 
 **The switch:** workspace setting `readLabels` (default `true`,
-`workspaces.md` §2), under Settings → AI → **Bean labels**. The card
-shows when it's on (the bean form is for those who can edit).
+`workspaces.md` §2), under Settings → AI → **Bean labels**. The buttons
+show when it's on (the bean form is for those who can edit).
 
 ## `POST /api/workspaces/:workspaceId/bean-label`
 
 - **Auth Required:** `true` (role `owner` or `barista`)
-- **Body:** `{ "images": ["<base64>", ...] }`: 1–6 photos (`MAX_BEAN_PHOTOS`),
+- **Body:** `{ "images": ["<base64>", ...] }`: 1–8 photos (`LABEL_MAX_IMAGES`),
   each the image file's bytes in base64 (no `data:` prefix), at most 3 MB
   decoded. The JSON body may be up to 25 MB.
 - **Success (`200 OK`):** every field, `null` where it couldn't be read:

@@ -62,14 +62,14 @@ work is in `roadmap.md`.
   roast" stays meaningful for frozen coffee.
 - **Photos:** up to 6 per bean (the bag, the label), taken with the phone's
   camera (**Take photo**) or picked (**Choose photos**) in the bean form;
-  the first is the cover, beside the name in the bean list, and the bean's
+  drag to reorder them; the first is the cover, beside the name in the bean list, and the bean's
   details show them all (tap one to see it large). Stored once, upright and
   at most 1024 px, without the photo's EXIF (location, camera). Seen ones
   show offline. Hideable under Settings → Fields. A Duplicate starts
   without them. (`docs/api/bean-photos.md` §4c)
-- **Fill in from a photo:** at the top of the bean form, take or pick
-  photos of the bag's label (only read, never kept as the bean's photos)
-  and the AI fills in the empty fields:
+- **Fill in from photos:** in the Photos card at the top of the bean form,
+  the AI reads the label off the bean's photos, plus any taken just for the
+  read ("Read other photos", not kept), and fills in the empty fields:
   roaster, coffee, process (one of the workspace's), origin, altitude,
   tasting notes, roast date and level, bag weight, website. A field that
   already says something else gets "Label says: X · Use". Nothing saves
