@@ -113,3 +113,12 @@ export function labelFill(fields: LabelFields, form: LabelForm, options: LabelFi
   offer('website', fields.website);
   return result;
 }
+
+// The photos one read sends (LABEL_MAX_IMAGES in @barista/shared/jobs): ones
+// taken just for it first, then the bean's, cover first. left: how many
+// didn't fit.
+export const LABEL_MAX_IMAGES = 8;
+export function labelImages<T>(extras: readonly T[], beanPhotos: readonly T[], max = LABEL_MAX_IMAGES): { images: T[]; left: number } {
+  const all = [...extras, ...beanPhotos];
+  return { images: all.slice(0, max), left: Math.max(0, all.length - max) };
+}

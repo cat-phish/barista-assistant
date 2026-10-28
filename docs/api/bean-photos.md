@@ -6,7 +6,8 @@
 A bean (§4) can have up to **6 photos** (`MAX_BEAN_PHOTOS`): the bag, its
 label, the roaster's card. The first is the **cover**, which the bean list
 shows beside the name; the bean's details show them all, and the bean form
-adds, reorders and removes them.
+(its Photos card, at the top) adds and removes them, and reorders them by
+dragging ⠿ (or its arrow keys): whichever is first is the cover.
 
 **One size only.** The server keeps no original: on upload it turns the
 image upright (its EXIF orientation), fits it inside **1024 px** on the long
@@ -38,8 +39,8 @@ dumps (§10) don't include `./photos`: back that folder up with them.
 `Cache-Control: private, max-age=31536000, immutable`, and the PWA keeps
 the ones you've seen (`bean-photos` cache, `docs/timer_architecture.md`).
 
-**Reading the label:** "Fill in from a photo" on the bean form reads
-photos taken for that alone, not these (`bean-label.md` §4d).
+**Reading the label:** "Fill in from photos" in the same card reads these,
+with any taken just for the read (`bean-label.md` §4d).
 
 **Settings → Fields** can hide photos (`bean.photos`): off the form and the
 list; a bean that has some still shows them on its form.
@@ -60,6 +61,15 @@ list; a bean that has some still shows them on its form.
 - **Auth Required:** `true` (any member)
 - **Success (`200 OK`):** the image, `image/webp`, cacheable for good (above).
 - **Errors:** `404` no such photo of this bean in this workspace.
+
+## `PUT /api/workspaces/:workspaceId/beans/:beanId/photos/order`
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:** `{ "photoIds": ["uuid", ...] }`: every photo of the bean exactly
+  once, in the new order; the first becomes the cover.
+- **Success (`200 OK`):** `{ "photos": [ ... ] }` in that order.
+- **Errors:** `400` invalid body, or not every photo exactly once; `403`
+  viewer; `404` bean not in this workspace.
 
 ## `PATCH /api/workspaces/:workspaceId/beans/:beanId/photos/:photoId`
 

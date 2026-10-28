@@ -84,6 +84,27 @@ describe("bean photos (docs/api/bean-photos.md §4c)", () => {
     expect((await owner.agent.delete(`${base}/${ids[2]}`)).status).toBe(404);
   });
 
+  it("puts them in a new order: the first is the cover", async () => {
+    const { owner, ws, bean, base } = await setup();
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) ids.push((await upload(owner, base, await jpeg(40, 40))).body.photo.id);
+    const [a, b, c] = ids as [string, string, string];
+    const res = await owner.agent.put(`${base}/order`).send({ photoIds: [c, a, b] });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.photos.map((p: { id: string }) => p.id)).toEqual([c, a, b]);
+    expect((await photosOf(owner, ws.id, bean)).map((p) => p.id)).toEqual([c, a, b]);
+    // Every photo, once each.
+    for (const photoIds of [[a, b], [a, b, b], [a, b, crypto.randomUUID()], [a, b, c, crypto.randomUUID()]]) {
+      expect((await owner.agent.put(`${base}/order`).send({ photoIds })).status, JSON.stringify(photoIds)).toBe(400);
+    }
+    const viewer = await newUser();
+    await addMember(owner, ws.id, viewer, "viewer");
+    expect((await viewer.agent.put(`${base}/order`).send({ photoIds: [a, b, c] })).status).toBe(403);
+    const other = await newBean(owner, ws.id);
+    expect((await owner.agent.put(`/api/workspaces/${ws.id}/beans/${other}/photos/order`).send({ photoIds: [] })).status).toBe(200);
+    expect((await owner.agent.put(`/api/workspaces/${ws.id}/beans/${crypto.randomUUID()}/photos/order`).send({ photoIds: [] })).status).toBe(404);
+  });
+
   it("removes the files with the bean, and with the workspace", async () => {
     const { owner, ws, bean, base } = await setup();
     const id = (await upload(owner, base, await jpeg(50, 50))).body.photo.id as string;

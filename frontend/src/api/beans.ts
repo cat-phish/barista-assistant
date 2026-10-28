@@ -60,6 +60,9 @@ export const beansApi = {
   addPhoto: (workspaceId: string, beanId: string, image: Blob) => api.post<{ photo: BeanPhoto }>(`${base(workspaceId)}/${beanId}/photos`, image),
   makeCover: (workspaceId: string, beanId: string, photoId: string) =>
     api.patch<{ photos: BeanPhoto[] }>(`${base(workspaceId)}/${beanId}/photos/${photoId}`, { cover: true }),
+  // Every photo of the bean, in the new order; the first is the cover.
+  reorderPhotos: (workspaceId: string, beanId: string, photoIds: string[]) =>
+    api.put<{ photos: BeanPhoto[] }>(`${base(workspaceId)}/${beanId}/photos/order`, { photoIds }),
   removePhoto: (workspaceId: string, beanId: string, photoId: string) => api.delete(`${base(workspaceId)}/${beanId}/photos/${photoId}`),
   photoUrl: (workspaceId: string, beanId: string, photoId: string) => `${API_URL}${base(workspaceId)}/${beanId}/photos/${photoId}`,
   // Reads the label off 1–6 photos, base64 (docs/api/bean-label.md §4d). Can

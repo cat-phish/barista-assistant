@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BeanProcess, LabelFields } from '../api/types';
-import { labelFill, type LabelForm } from './labelFill';
+import { labelFill, labelImages, type LabelForm } from './labelFill';
 
 const NONE: LabelFields = {
   roasterName: null,
@@ -118,5 +118,12 @@ describe('labelFill', () => {
     // Roast names: a bare level can't be picked.
     expect(labelFill(levelOnly, EMPTY, options).fills).toEqual({});
     expect(labelFill(named, { ...EMPTY, roastLevel: 'city' }, options).suggestions.roastLevel).toEqual({ value: 'full_city', text: 'Full City' });
+  });
+});
+
+describe('labelImages', () => {
+  it('sends the photos taken for the read first, then the bean’s, up to 8', () => {
+    expect(labelImages(['x'], ['a', 'b'])).toEqual({ images: ['x', 'a', 'b'], left: 0 });
+    expect(labelImages(['x', 'y', 'z'], ['a', 'b', 'c', 'd', 'e', 'f'])).toEqual({ images: ['x', 'y', 'z', 'a', 'b', 'c', 'd', 'e'], left: 1 });
   });
 });

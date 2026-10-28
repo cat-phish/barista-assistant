@@ -64,6 +64,8 @@ export type AiPreviewJobData = { kind: "analysis"; brewLogId: string; note?: str
 // backend; processes: the workspace's visible process names to pick from.
 export const LABEL_READ_QUEUE = "label-read";
 export const LABEL_READ_JOB = "read";
+// Photos in one read: the bean's (up to 6) and a couple taken just for it.
+export const LABEL_MAX_IMAGES = 8;
 export interface LabelReadJobData {
   images: string[];
   processes: string[];
