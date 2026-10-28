@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RecipeStep } from '../api/types';
-import { brewRetention, estimateYield, GRAMS_PER_FL_OZ, linkRatio, ratioText, retentionOf, scaleBatch, scaleShot, scaleSteps, waterShare } from './scale';
+import { brewRetention, estimateYield, factorText, GRAMS_PER_FL_OZ, linkRatio, ratioText, retentionOf, scaleBatch, scaleShot, scaleSteps, sliderDose, sliderPosition, waterShare } from './scale';
 
 const recipe = { targetDoseGrams: 15, targetWaterGrams: 250, targetIceGrams: null, expectedYieldGrams: null };
 
@@ -172,5 +172,23 @@ describe('linkRatio', () => {
     expect(linkRatio('dose', Number.NaN, 250)).toBeNull();
     expect(linkRatio('dose', 18, null)).toBeNull();
     expect(linkRatio('water', 0, 15)).toBeNull();
+  });
+});
+
+describe('scale slider', () => {
+  it('sits at the dose over the recipe’s, to the nearest step, within half to double', () => {
+    expect(sliderPosition(15, 15)).toBe(1);
+    expect(sliderPosition(22.5, 15)).toBe(1.5);
+    expect(sliderPosition(16, 15)).toBe(1.05); // 1.067
+    expect(sliderPosition(5, 15)).toBe(0.5);
+    expect(sliderPosition(45, 15)).toBe(2);
+    expect(sliderPosition(null, 15)).toBe(1);
+  });
+  it('gives the dose to 0.1 g, and says the real factor', () => {
+    expect(sliderDose(1.35, 15)).toBe(20.3);
+    expect(sliderDose(0.5, 18)).toBe(9);
+    expect(factorText(22.5, 15)).toBe('×1.5');
+    expect(factorText(45, 15)).toBe('×3');
+    expect(factorText(15, 15)).toBe('×1');
   });
 });

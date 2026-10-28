@@ -32,6 +32,7 @@ export const REPEAT_OPTIONS: Array<{ key: RepeatKeep; label: string; hint?: stri
 // brew.* key, so a new brew field doesn't build until it's decided here.
 type BrewFieldKey = Extract<FieldKey, `brew.${string}`>;
 export const REPEAT_FOR_FIELD: Record<BrewFieldKey, RepeatKeep | 'always' | 'result'> = {
+  'brew.scaleSlider': 'doseWater', // sets the dose and water; a repeat copies those
   'brew.ice': 'doseWater', // goes with the water it was brewed with
   'brew.yield': 'result',
   'brew.tds': 'result',

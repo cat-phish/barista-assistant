@@ -18,6 +18,7 @@ const recipe = (name: string, label: string, hint?: string): FieldInfo => ({ key
 
 // In the order the forms show them.
 export const FIELDS = [
+  brew('scaleSlider', 'Scale slider (brew setup)', 'Half to double the recipe’s batch at its ratio; the amounts can always be typed'),
   brew('ice', 'Ice (flash chilled)', 'Ice in the server the hot water is brewed onto'),
   brew('yield', 'Yield', 'The weighed brewed coffee (filter; a shot always records its weight)'),
   brew('tds', 'TDS and Brix', 'Refractometer reading and the extraction worked out from it'),

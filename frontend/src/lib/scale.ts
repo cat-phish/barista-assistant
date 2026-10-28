@@ -188,3 +188,17 @@ export function scaleSteps(steps: RecipeStep[], factor: number): RecipeStep[] {
   if (Math.abs(factor - 1) < 1e-9) return steps;
   return steps.map((s) => (s.targetWaterGrams === null ? s : { ...s, targetWaterGrams: Math.round(s.targetWaterGrams * factor) }));
 }
+
+// The brew page's scale slider: half to double the recipe's dose, at the
+// ratio as it is. Typing an amount moves it too; past either end it stays
+// there and the label says the real factor.
+export const SCALE_SLIDER = { min: 0.5, max: 2, step: 0.05 } as const;
+export function sliderPosition(dose: number | null, recipeDose: number): number {
+  if (dose === null || !(dose > 0) || !(recipeDose > 0)) return 1;
+  const stepped = Math.round(dose / recipeDose / SCALE_SLIDER.step) * SCALE_SLIDER.step;
+  return Math.round(Math.min(SCALE_SLIDER.max, Math.max(SCALE_SLIDER.min, stepped)) * 100) / 100;
+}
+// The dose for a slider position, to 0.1 g.
+export const sliderDose = (factor: number, recipeDose: number): number => round1(recipeDose * factor);
+// "×1.5", "×0.75", "×1"
+export const factorText = (dose: number, recipeDose: number): string => `×${Math.round((dose / recipeDose) * 100) / 100}`;

@@ -72,7 +72,7 @@ import { formatDay, formatDoseLine, formatGrams, formatGrind, formatTime, format
 import { ALTERNATIVE_LABELS, CONFIDENCE_LABELS, chooseGrind, heldForRatio, rememberedSource, SUGGEST_SOURCE_LABELS, sourceNeeds, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
 import { useParameterSuggestion } from '../composables/useParameterSuggestion';
 import { useWorkspaceStore } from '../stores/workspace';
-import { brewRetention, linkRatio, ratioText as formatRatio, ratioWater, ROAST_LEVELS, scaleBatch, scaleShot, scaleSteps, waterShare, type MeasuredBrew, type ScaleField } from '../lib/scale';
+import { brewRetention, factorText, linkRatio, ratioText as formatRatio, ratioWater, ROAST_LEVELS, SCALE_SLIDER, scaleBatch, scaleShot, scaleSteps, sliderDose, sliderPosition, waterShare, type MeasuredBrew, type ScaleField } from '../lib/scale';
 import { formatTemp, tempText, TEMPERATURE_LABELS, VOLUME_LABELS, volumeUnits } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 
@@ -349,6 +349,17 @@ function setRatio(event: Event): void {
   const text = (event.target as HTMLInputElement).value;
   if (!espresso.value) adoptTypedSplit();
   ratio.value = { text, value: amount(text) };
+}
+// The scale slider (lib/scale.ts SCALE_SLIDER): the dose as a multiple of
+// the recipe's, at the ratio as it is (a typed dose keeps the water
+// instead). It sets the batch, not the drink size.
+const scaleRecipeDose = computed(() => (filterRecipe.value ?? shotRecipe.value)?.targetDoseGrams ?? null);
+const scaleDose = computed(() => batch.value?.dose ?? shot.value?.dose ?? null);
+function setScale(event: Event): void {
+  const d0 = scaleRecipeDose.value;
+  if (d0 === null) return;
+  if (!espresso.value) adoptTypedSplit();
+  lead.value = { field: 'dose', text: formatGrams(sliderDose(Number((event.target as HTMLInputElement).value), d0)) };
 }
 const num = (text: string): number | null => {
   const n = amount(text);
@@ -1334,6 +1345,23 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <template v-if="recipe.targetTempC !== null"> · {{ formatTemp(recipe.targetTempC, temperatureUnit) }}</template>
           <template v-if="recipe.steps.length"> · {{ recipe.steps.length }} step{{ recipe.steps.length === 1 ? '' : 's' }}</template>
         </p>
+        <div v-if="show('brew.scaleSlider') && scaleRecipeDose !== null" class="field scale-slider">
+          <label for="batch-scale">
+            Scale the recipe
+            <output for="batch-scale" class="scale-factor">{{ scaleDose === null ? '' : factorText(scaleDose, scaleRecipeDose) }}</output>
+          </label>
+          <input
+            id="batch-scale"
+            type="range"
+            :min="SCALE_SLIDER.min"
+            :max="SCALE_SLIDER.max"
+            :step="SCALE_SLIDER.step"
+            :value="sliderPosition(scaleDose, scaleRecipeDose)"
+            :aria-valuetext="scaleDose === null ? undefined : factorText(scaleDose, scaleRecipeDose)"
+            @input="setScale"
+          />
+          <span class="scale-ends muted small" aria-hidden="true"><span>×{{ SCALE_SLIDER.min }}</span><span>×1</span><span>×{{ SCALE_SLIDER.max }}</span></span>
+        </div>
         <div v-if="shotRecipe" class="batch" role="group" aria-labelledby="shot-label">
           <span id="shot-label" class="batch-label">Shot</span>
           <div class="batch-row">
@@ -1814,6 +1842,35 @@ p {
 }
 .size-row select {
   width: auto;
+}
+.scale-slider label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.scale-factor {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.scale-slider input[type='range'] {
+  width: 100%;
+  min-height: var(--tap);
+  margin: 0;
+  accent-color: var(--brand);
+}
+/* ×1 sits a third of the way along: (1 − 0.5) / (2 − 0.5). */
+.scale-ends {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  position: relative;
+}
+.scale-ends span:nth-child(2) {
+  position: absolute;
+  left: calc(100% / 3);
+  transform: translateX(-50%);
+}
+.scale-ends span:last-child {
+  justify-self: end;
 }
 .batch-row {
   display: grid;
