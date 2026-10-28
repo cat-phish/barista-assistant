@@ -1,22 +1,23 @@
 <script setup lang="ts">
 // Prep tools (docs/api/prep-tools.md §3d), one tab of Bar setup: the brew
-// form's Prep checklist, in this order. Add, edit (name and method), move
-// up/down, archive (keeps history) or delete (from the edit row, with a warning).
+// form's Prep checklist, in this order. Move up/down and archive (keeps
+// history) here; add, edit (name, where it's offered) and delete on
+// PrepToolFormView.
 import { computed, onMounted, ref } from 'vue';
-import { ApiError, errorMessage } from '../api/client';
+import { errorMessage } from '../api/client';
 import { prepToolsApi } from '../api/prepTools';
-import type { MethodKind, PrepTool } from '../api/types';
+import { brewersApi } from '../api/brewers';
+import type { Brewer, PrepTool } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
-import DeleteDialog from '../components/DeleteDialog.vue';
 import SetupTabs from '../components/SetupTabs.vue';
-import { METHOD_KINDS, METHOD_ORDER } from '../lib/equipment';
-import { methodLabel } from '../lib/prepTools';
+import { offeredLabel } from '../lib/prepTools';
 import ListDataBar from '../components/ListDataBar.vue';
 import { useSelection } from '../composables/useSelection';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
 const tools = ref<PrepTool[]>([]);
+const brewers = ref<Brewer[]>([]); // for the badges' brewer names
 const loading = ref(true);
 const error = ref('');
 const showArchived = ref(false);
@@ -28,7 +29,9 @@ async function load(): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    tools.value = (await prepToolsApi.list(ws)).tools;
+    const [list, b] = await Promise.all([prepToolsApi.list(ws), brewersApi.list(ws)]);
+    tools.value = list.tools;
+    brewers.value = b.brewers;
     if (archivedCount.value === 0) showArchived.value = false;
   } catch (err) {
     error.value = errorMessage(err);
@@ -39,7 +42,6 @@ async function load(): Promise<void> {
 onMounted(load);
 
 const busy = ref(false);
-const conflict = (err: unknown) => (err instanceof ApiError && err.status === 409 ? 'A tool with that name already exists.' : errorMessage(err));
 async function run(action: (ws: string) => Promise<unknown>): Promise<boolean> {
   const ws = workspaces.current?.id;
   if (!ws) return false;
@@ -50,34 +52,11 @@ async function run(action: (ws: string) => Promise<unknown>): Promise<boolean> {
     await load();
     return true;
   } catch (err) {
-    error.value = conflict(err);
+    error.value = errorMessage(err);
     return false;
   } finally {
     busy.value = false;
   }
-}
-
-// '' in the method selects = every method.
-type MethodChoice = MethodKind | '';
-const newName = ref('');
-const newMethod = ref<MethodChoice>('');
-async function add(): Promise<void> {
-  const name = newName.value.trim();
-  if (name && (await run((ws) => prepToolsApi.create(ws, { name, methodKind: newMethod.value || null })))) newName.value = '';
-}
-
-const editingId = ref<string | null>(null);
-const editName = ref('');
-const editMethod = ref<MethodChoice>('');
-function startEdit(t: PrepTool): void {
-  editingId.value = t.id;
-  editName.value = t.name;
-  editMethod.value = t.methodKind ?? '';
-  error.value = '';
-}
-async function saveEdit(t: PrepTool): Promise<void> {
-  const name = editName.value.trim();
-  if (name && (await run((ws) => prepToolsApi.update(ws, t.id, { name, methodKind: editMethod.value || null })))) editingId.value = null;
 }
 
 // Swap with the neighbour on screen; the API takes the whole list (archived too).
@@ -93,15 +72,6 @@ async function move(t: PrepTool, by: -1 | 1): Promise<void> {
 
 const setArchived = (t: PrepTool, archived: boolean) => run((ws) => prepToolsApi.update(ws, t.id, { archived }));
 
-// Delete, from a tool's edit row: DeleteDialog says what it unlinks first.
-const deleting = ref<PrepTool | null>(null);
-const deleteUsage = () => prepToolsApi.usage(workspaces.current?.id ?? '', deleting.value?.id ?? '');
-const deleteIt = () => prepToolsApi.remove(workspaces.current?.id ?? '', deleting.value?.id ?? '');
-async function deleted(): Promise<void> {
-  deleting.value = null;
-  editingId.value = null;
-  await load();
-}
 // Select mode for exporting some tools (components/ExportBar.vue).
 const selection = useSelection();
 </script>
@@ -113,7 +83,7 @@ const selection = useSelection();
       <h1>Bar setup</h1>
     </div>
     <SetupTabs />
-    <p class="muted intro">The prep you can tick on each brew, in this order. A tool for one method only shows on that method's brews; the AI sees what you ticked.</p>
+    <p class="muted intro">The prep you can tick on each brew, in this order. Each shows on the brews it's offered for: every brew, or chosen methods and brewers; the AI sees what you ticked.</p>
 
     <p v-if="loading" class="muted" aria-live="polite">Loading tools…</p>
     <template v-else>
@@ -128,26 +98,14 @@ const selection = useSelection();
         <ListDataBar list="prep_tools" noun="tools" :selection="selection" :visible-ids="shown.map((t) => t.id)" @imported="load()" />
         <ol v-if="shown.length" class="tools">
           <li v-for="(t, i) in shown" :key="t.id">
-            <form v-if="editingId === t.id" class="row" novalidate @submit.prevent="saveEdit(t)">
-              <label class="visually-hidden" :for="`tool-${t.id}`">Name</label>
-              <input :id="`tool-${t.id}`" v-model="editName" maxlength="100" />
-              <label class="visually-hidden" :for="`tool-method-${t.id}`">Method</label>
-              <select :id="`tool-method-${t.id}`" v-model="editMethod">
-                <option value="">All methods</option>
-                <option v-for="k in METHOD_ORDER" :key="k" :value="k">{{ METHOD_KINDS[k].label }}</option>
-              </select>
-              <button class="btn-link" type="submit" :disabled="busy || !editName.trim()">Save</button>
-              <button class="btn-link" type="button" @click="editingId = null">Cancel</button>
-              <button class="btn-link danger" type="button" @click="deleting = t">Delete</button>
-            </form>
-            <div v-else class="row">
+            <div class="row">
               <input v-if="selection.selecting" type="checkbox" :checked="selection.has(t.id)" :aria-label="`Select ${t.name}`" @change="selection.toggle(t.id)" />
               <span class="name" :class="{ muted: t.archivedAt }">{{ t.name }}<template v-if="t.archivedAt"> (archived)</template></span>
-              <span class="badge">{{ methodLabel(t.methodKind) }}</span>
+              <span class="badge">{{ offeredLabel(t, brewers) }}</span>
               <template v-if="workspaces.canEdit">
                 <button class="btn-link" type="button" :disabled="busy || i === 0" :aria-label="`Move ${t.name} up`" @click="move(t, -1)">↑</button>
                 <button class="btn-link" type="button" :disabled="busy || i === shown.length - 1" :aria-label="`Move ${t.name} down`" @click="move(t, 1)">↓</button>
-                <button class="btn-link" type="button" @click="startEdit(t)">Edit</button>
+                <RouterLink class="btn-link" :to="{ name: 'prep-tool-edit', params: { id: t.id } }">Edit</RouterLink>
                 <template v-if="t.archivedAt">
                   <button class="btn-link" type="button" :disabled="busy" @click="setArchived(t, false)">Restore</button>
                 </template>
@@ -159,31 +117,11 @@ const selection = useSelection();
           </li>
         </ol>
         <p v-else class="muted small">No tools yet.</p>
-        <form v-if="workspaces.canEdit" class="row" novalidate @submit.prevent="add">
-          <label class="visually-hidden" for="new-tool">New tool</label>
-          <input id="new-tool" v-model="newName" maxlength="100" placeholder="e.g. Melodrip" />
-          <label class="visually-hidden" for="new-tool-method">Method</label>
-          <select id="new-tool-method" v-model="newMethod">
-            <option value="">All methods</option>
-            <option v-for="k in METHOD_ORDER" :key="k" :value="k">{{ METHOD_KINDS[k].label }}</option>
-          </select>
-          <button class="btn btn-secondary" type="submit" :disabled="busy || !newName.trim()">Add</button>
-        </form>
+        <RouterLink v-if="workspaces.canEdit" class="btn btn-secondary add" :to="{ name: 'prep-tool-new' }">Add tool</RouterLink>
         <p v-if="error" class="form-error" role="alert">{{ error }}</p>
       </section>
     </template>
   </main>
-
-  <DeleteDialog
-    :open="deleting !== null"
-    kind="tool"
-    :name="deleting?.name ?? ''"
-    :archived="!!deleting?.archivedAt"
-    :load="deleteUsage"
-    :remove="deleteIt"
-    @cancel="deleting = null"
-    @deleted="deleted"
-  />
 </template>
 
 <style scoped>
@@ -220,9 +158,8 @@ p {
   gap: var(--space-2);
   flex-wrap: wrap;
 }
-.row input {
-  flex: 1;
-  min-width: 10rem;
+.add {
+  align-self: flex-start;
 }
 .name {
   flex: 1;

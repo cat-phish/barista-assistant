@@ -57,7 +57,7 @@ created it and can't be changed.
   "servingSize": null,
   "servingUnit": null,
   "marks": [],
-  "tools": [{ "id": "uuid", "name": "Rinsed paper filter", "methodKind": "filter" }],
+  "tools": [{ "id": "uuid", "name": "Rinsed paper filter" }],
   "problems": [{ "id": "uuid", "name": "Slow drawdown / stalled bed", "methodKind": "filter" }],
   "brewedBy": { "id": "uuid", "email": "barista@example.com" },
   "analyzed": false,
@@ -81,9 +81,9 @@ for a brew without a recipe. `drink`
 `hasIngredients` tells clients to show the shot and the drink tasting apart. `marks` lists
 the timer's marks (`{ "kind", "stepOrder", "atSec" }`, `stepOrder` `null`
 except for `step_end`), earliest first. `tools` lists the prep tools used
-(§3d, `{ "id", "name", "methodKind" }`, archived ones included) in checklist
-order; `[]` when none were recorded. `problems` lists what went wrong
-(§6b, same shape, archived ones included) in list order; `[]` when none
+(§3d, `{ "id", "name" }`, archived ones included) in checklist order; `[]`
+when none were recorded. `problems` lists what went wrong (§6b,
+`{ "id", "name", "methodKind" }`, archived ones included) in list order; `[]` when none
 were recorded. `userId` and `brewedBy` are `null` when the brewer deleted their
 account. Such logs can only be edited or deleted by owners. `analyzed` says
 whether it has at least one AI suggestion; `analysisDueAt` is when an

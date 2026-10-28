@@ -580,23 +580,24 @@ export const waterProfiles = mysqlTable(
 
 // 5d. Prep Tools (Per-Workspace, Ordered)
 // What a brew's prep used: WDT, a puck screen, a rinsed paper filter…
-// (docs/api/prep-tools.md §3d). methodKind limits a tool to one method's
-// brews (null = every method); position is the order of the brew checklist.
+// (docs/api/prep-tools.md §3d). methodKinds and prep_tool_brewers say which
+// brews offer it (both empty = every brew); position is the order of the
+// brew checklist.
 // Seeded with DEFAULT_PREP_TOOLS when a workspace is created. Archived like
 // grinders once brews use them.
 export const DEFAULT_PREP_TOOLS = [
-  { name: "WDT", methodKind: "espresso" },
-  { name: "Puck screen", methodKind: "espresso" },
-  { name: "Distributor", methodKind: "espresso" },
-  { name: "Shaker", methodKind: "espresso" },
-  { name: "Bottom paper filter", methodKind: "espresso" },
-  { name: "Top paper filter", methodKind: "espresso" },
-  { name: "Rinsed paper filter", methodKind: "filter" },
-  { name: "Metal filter", methodKind: "filter" },
-  { name: "Cloth filter", methodKind: "filter" },
-  { name: "RDT", methodKind: null },
-  { name: "Sifted fines", methodKind: null },
-] as const satisfies ReadonlyArray<{ name: string; methodKind: MethodKind | null }>;
+  { name: "WDT", methodKinds: ["espresso"] },
+  { name: "Puck screen", methodKinds: ["espresso"] },
+  { name: "Distributor", methodKinds: ["espresso"] },
+  { name: "Shaker", methodKinds: ["espresso"] },
+  { name: "Bottom paper filter", methodKinds: ["espresso"] },
+  { name: "Top paper filter", methodKinds: ["espresso"] },
+  { name: "Rinsed paper filter", methodKinds: ["filter"] },
+  { name: "Metal filter", methodKinds: ["filter"] },
+  { name: "Cloth filter", methodKinds: ["filter"] },
+  { name: "RDT", methodKinds: [] },
+  { name: "Sifted fines", methodKinds: [] },
+] as const satisfies ReadonlyArray<{ name: string; methodKinds: readonly MethodKind[] }>;
 
 export const prepTools = mysqlTable(
   "prep_tools",
@@ -606,13 +607,33 @@ export const prepTools = mysqlTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 100 }).notNull(),
-    methodKind: varchar("method_kind", { length: 20 }).$type<MethodKind>(), // METHOD_KINDS, or null = all
+    // Where it's offered (docs/api/prep-tools.md §3d): these methods, plus the
+    // brewers in prep_tool_brewers. Both empty = every brew.
+    methodKinds: jsonValue<MethodKind[]>("method_kinds").notNull(),
     position: int("position").notNull(), // 1, 2, 3...
     archivedAt: timestamp("archived_at"), // null = active
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
     workspaceNameUnique: unique("prep_tools_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+
+// 5f2. Prep Tool Brewers: the brewers a prep tool is offered for, on top of
+// its methodKinds (docs/api/prep-tools.md §3d). Replaced as a whole when the
+// tool is edited; deleting either side unlinks it.
+export const prepToolBrewers = mysqlTable(
+  "prep_tool_brewers",
+  {
+    prepToolId: varchar("prep_tool_id", { length: 36 })
+      .notNull()
+      .references(() => prepTools.id, { onDelete: "cascade" }),
+    brewerId: varchar("brewer_id", { length: 36 })
+      .notNull()
+      .references(() => brewers.id, { onDelete: "cascade" }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.prepToolId, table.brewerId] }),
   })
 );
 

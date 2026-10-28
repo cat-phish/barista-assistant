@@ -76,7 +76,7 @@ workspacesRouter.post("/", async (req: Request, res: Response<WorkspaceResponse>
         DEFAULT_BREWERS.map(({ name, kind }) => ({ id: randomUUID(), workspaceId, name, kind, methodId: methodOf(kind) }))
       );
       await tx.insert(prepTools).values(
-        DEFAULT_PREP_TOOLS.map(({ name, methodKind }, i) => ({ id: randomUUID(), workspaceId, name, methodKind, position: i + 1 }))
+        DEFAULT_PREP_TOOLS.map(({ name, methodKinds }, i) => ({ id: randomUUID(), workspaceId, name, methodKinds: [...methodKinds], position: i + 1 }))
       );
       await tx.insert(brewProblems).values(
         DEFAULT_BREW_PROBLEMS.map(({ name, methodKind }, i) => ({ id: randomUUID(), workspaceId, name, methodKind, position: i + 1 }))

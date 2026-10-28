@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_PREP_TOOLS } from "@barista/shared/schema";
-import { addMember, newBean, newBrewLog, newUser, newWorkspace } from "./helpers.js";
+import { addMember, brewerId, newBean, newBrewLog, newUser, newWorkspace } from "./helpers.js";
 
 interface Tool {
   id: string;
   name: string;
-  methodKind: string | null;
+  methodKinds: string[];
+  brewerIds: string[];
   position: number;
   archivedAt: string | null;
 }
@@ -23,27 +24,54 @@ describe("prep tools (docs/api/prep-tools.md §3d)", () => {
   it("new workspaces start with the default tools, in order", async () => {
     const { list } = await setup();
     const tools = await list();
-    expect(tools.map((t) => [t.name, t.methodKind])).toEqual(DEFAULT_PREP_TOOLS.map((t) => [t.name, t.methodKind]));
+    expect(tools.map((t) => [t.name, t.methodKinds, t.brewerIds])).toEqual(DEFAULT_PREP_TOOLS.map((t) => [t.name, t.methodKinds, []]));
     expect(tools.map((t) => t.position)).toEqual(tools.map((_, i) => i + 1));
   });
 
-  it("add goes last; rename and change method; names unique; method values checked", async () => {
+  it("add goes last; rename and change where it's offered; names unique; values checked", async () => {
     const { owner, base, list } = await setup();
-    const created = await owner.agent.post(base).send({ name: " Melodrip ", methodKind: "filter" });
+    const created = await owner.agent.post(base).send({ name: " Melodrip ", methodKinds: ["filter", "stovetop"] });
     expect(created.status).toBe(201);
-    expect(created.body.tool).toMatchObject({ name: "Melodrip", methodKind: "filter", position: DEFAULT_PREP_TOOLS.length + 1, archivedAt: null });
+    expect(created.body.tool).toMatchObject({ name: "Melodrip", methodKinds: ["filter", "stovetop"], brewerIds: [], position: DEFAULT_PREP_TOOLS.length + 1, archivedAt: null });
     const any = await owner.agent.post(base).send({ name: "Scale" });
-    expect(any.body.tool.methodKind).toBeNull();
+    expect(any.body.tool).toMatchObject({ methodKinds: [], brewerIds: [] });
 
     expect((await owner.agent.post(base).send({ name: "wdt" })).status).toBe(409);
-    expect((await owner.agent.post(base).send({ name: "X", methodKind: "pour_over" })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ name: "X", methodKinds: ["pour_over"] })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ name: "X", methodKinds: ["filter", "filter"] })).status).toBe(400);
     expect((await owner.agent.post(base).send({ name: "" })).status).toBe(400);
 
     const id = created.body.tool.id as string;
-    const changed = await owner.agent.patch(`${base}/${id}`).send({ name: "Melodrip Duo", methodKind: null });
-    expect(changed.body.tool).toMatchObject({ name: "Melodrip Duo", methodKind: null });
+    const changed = await owner.agent.patch(`${base}/${id}`).send({ name: "Melodrip Duo", methodKinds: [] });
+    expect(changed.body.tool).toMatchObject({ name: "Melodrip Duo", methodKinds: [] });
     expect((await owner.agent.patch(`${base}/${id}`).send({ name: "RDT" })).status).toBe(409);
     expect((await list()).at(-2)?.name).toBe("Melodrip Duo");
+  });
+
+  it("offered for chosen brewers: set, replaced, cleared; only this workspace's; a deleted brewer drops off", async () => {
+    const { owner, ws, base, list } = await setup();
+    const [v60, chemex] = [await brewerId(owner, ws.id, "V60"), await brewerId(owner, ws.id, "Aeropress")];
+    const created = await owner.agent.post(base).send({ name: "Sandwich", methodKinds: ["espresso"], brewerIds: [v60] });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    expect(created.body.tool).toMatchObject({ methodKinds: ["espresso"], brewerIds: [v60] });
+    const id = created.body.tool.id as string;
+
+    const both = await owner.agent.patch(`${base}/${id}`).send({ brewerIds: [v60, chemex] });
+    expect([...both.body.tool.brewerIds].sort()).toEqual([v60, chemex].sort());
+    // Other fields leave the brewers alone.
+    expect((await owner.agent.patch(`${base}/${id}`).send({ name: "Sandwiches" })).body.tool.brewerIds).toHaveLength(2);
+    expect((await owner.agent.patch(`${base}/${id}`).send({ brewerIds: [chemex] })).body.tool.brewerIds).toEqual([chemex]);
+
+    const other = await setup();
+    const theirs = await brewerId(other.owner, other.ws.id, "V60");
+    const foreign = await owner.agent.patch(`${base}/${id}`).send({ brewerIds: [theirs] });
+    expect(foreign.status).toBe(400);
+    expect(foreign.body.error).toMatch(/brewerIds/);
+    expect((await owner.agent.post(base).send({ name: "Y", brewerIds: [v60, v60] })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ name: "Y", brewerIds: ["nope"] })).status).toBe(400);
+
+    expect((await owner.agent.delete(`/api/workspaces/${ws.id}/brewers/${chemex}`)).status).toBe(204);
+    expect((await list()).find((t) => t.id === id)?.brewerIds).toEqual([]);
   });
 
   it("reorder takes every tool exactly once", async () => {
@@ -100,7 +128,7 @@ describe("brew logs with prep tools", () => {
     const id = await newBrewLog(owner, ws.id, bean, { toolIds: [rdt, wdt] });
     const log = (await owner.agent.get(`${logs}/${id}`)).body.brewLog;
     expect(log.tools.map((t: Tool) => t.name)).toEqual(["WDT", "RDT"]); // position order, not sent order
-    expect(log.tools[0]).toEqual({ id: wdt, name: "WDT", methodKind: "espresso" });
+    expect(log.tools[0]).toEqual({ id: wdt, name: "WDT" });
 
     await owner.agent.patch(`${base}/${screen}`).send({ archived: true });
     const replaced = await owner.agent.patch(`${logs}/${id}`).send({ toolIds: [screen] });

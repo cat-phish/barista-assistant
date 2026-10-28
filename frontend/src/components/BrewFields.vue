@@ -8,7 +8,7 @@ import { brixToTds, extractionYield, usesWater } from '../lib/extraction';
 import { DILUTION_WITH, isColdStyle, STEEP_TEMPS } from '../lib/coldBrew';
 import { formatGrams } from '../lib/format';
 import { grinderRetentionText } from '../lib/grinderRetention';
-import { toolsFor } from '../lib/prepTools';
+import { problemsFor, toolsFor } from '../lib/prepTools';
 import { TEMPERATURE_LABELS } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
@@ -58,6 +58,7 @@ const props = defineProps<{
   prepTools?: PrepTool[]; // the workspace's, in order (docs/api/prep-tools.md §3d)
   problems?: BrewProblem[]; // the workspace's, in order (docs/api/brew-problems.md §6b)
   methodKind?: MethodKind | null; // the recipe's; null = no recipe (every tool shows)
+  brewerId?: string | null; // the recipe's brewer, for the prep tools offered for it
   expectedYieldGrams?: number | null; // the recipe's estimate (espresso: target), shown for comparison
   espresso?: boolean; // shot weight instead of water (docs/api/brew-logs.md §6)
   drinkTasting?: boolean; // the drink has ingredients: rate the brew and the drink apart
@@ -150,10 +151,10 @@ const rpmPlaceholder = computed(() => {
   const g = speedGrinder.value;
   return g?.rpmMin != null && g.rpmMax != null ? `${g.rpmMin}–${g.rpmMax}` : 'e.g. 900';
 });
-// The prep checklist: the method's tools and the all-method ones (lib/prepTools.ts).
-const toolOptions = computed(() => toolsFor(props.prepTools ?? [], props.methodKind ?? null, draft.value.toolIds));
-// What went wrong, offered the same way (Settings → Lists → Brew problems).
-const problemOptions = computed(() => toolsFor(props.problems ?? [], props.methodKind ?? null, draft.value.problemIds));
+// The prep checklist: the tools offered for this method or brewer (lib/prepTools.ts).
+const toolOptions = computed(() => toolsFor(props.prepTools ?? [], { kind: props.methodKind ?? null, brewerId: props.brewerId ?? null }, draft.value.toolIds));
+// What went wrong: the method's and the all-method ones (Settings → Lists → Brew problems).
+const problemOptions = computed(() => problemsFor(props.problems ?? [], props.methodKind ?? null, draft.value.problemIds));
 // Likewise for water; with none set up, the only choice says so.
 const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w.archivedAt || w.id === draft.value.waterProfileId));
 </script>

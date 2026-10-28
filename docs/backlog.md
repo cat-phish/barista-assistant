@@ -25,8 +25,8 @@ and fix the references.
 **Contents**
 - A. Settings & configuration: 1–2
 - B. Beans: 3
-- C. Brewing & logging: 4–6
-- D. Prep: 7–9
+- C. Brewing & logging: 4–7
+- D. Prep: 8–9
 - E. Recipes: 10–11
 - F. AI suggestions: 12–13
 - G. Insights: 14
@@ -225,35 +225,34 @@ Recording a brew: what's measured, and how fast it is to log.
     recipe), or do "what" and the brewer become choices too?
   - With both off, is it still a repeat, or only "copy the settings"?
 
+### 7. What went wrong: offered by methods and brewers
+
+- **Status:** idea
+- **Why:** a brew problem belongs to one method, or to every method
+  (`brew_problems.method_kind`), as prep tools did. Prep tools can now be
+  offered for any methods and/or chosen brewers (Bar setup → Tools → Edit);
+  "Paper taste" fits filter brewers and the OXO, not a moka pot.
+- **Approach:**
+  - The same model as prep tools: `brew_problems.method_kinds` (JSON list)
+    plus a `brew_problem_brewers` join table; a migration turns each
+    `method_kind` into a one-item list.
+  - An edit page per problem like `PrepToolFormView.vue`, with "Every
+    brew" or methods and brewers; Settings → Lists links to it.
+  - `problemsFor` (`lib/prepTools.ts`) uses `offeredFor`, as `toolsFor`
+    does; the log ref drops `methodKind`.
+  - Backups: a new `BACKUP_VERSION` with an upgrade, the join table after
+    brewers, and the list export brings the brewers along.
+- **Size:** S–M (prep tools are the pattern).
+- **Depends on:** nothing.
+- **Open questions:** move brew problems from Settings → Lists to Bar setup,
+  next to the prep list?
+
 ---
 
 ## D. Prep
 
-The prep checklist (Bar setup → Tools today): what's offered where, what
-starts ticked, and what it's called.
-
-### 7. Where each prep item is offered
-
-- **Status:** idea
-- **Why:** a prep tool belongs to one method, or to every method
-  (`prep_tools.method_kind`). Some fit several but not all: a paper filter
-  (top, bottom or a sandwich) is used for espresso and in an OXO brewer, but
-  not in a V60. Today it has to be "every method" or a copy per method.
-- **Approach:**
-  - Each prep item gets an **edit page** to pick where it's offered: any
-    number of methods (e.g. all filter brewers) and/or specific brewers
-    (e.g. only the OXO), or everywhere.
-  - A join table (prep item → method kind or brewer) replaces
-    `method_kind`; a migration turns each current value into one row.
-  - The checklist (`toolsFor`, `lib/prepTools.ts`) offers an item when the
-    brew's brewer or its method is in its list.
-  - Backups (`BACKUP_TABLES`) and the list import (`MATCH_KEYS`, names for
-    methods and brewers) carry the new table.
-- **Size:** M
-- **Depends on:** nothing; pairs with 8 and 9.
-- **Open questions:**
-  - Brew problems (`brew_problems`) work the same way: change them too?
-  - What happens to an item limited to a brewer that's archived or deleted?
+The prep checklist (Bar setup → Tools today): what starts ticked, and what
+it's called.
 
 ### 8. Recipe default prep
 
@@ -262,12 +261,12 @@ starts ticked, and what it's called.
   has to be ticked by hand every brew, or remembered per brewer.
 - **Approach:**
   - The recipe form picks prep items that start ticked when it's brewed
-    (only those offered for its brewer).
+    (only those offered for its brewer: `offeredFor`, `lib/prepTools.ts`).
   - Brew setup ticks them when the recipe is chosen; they can be unticked,
     and the log form keeps what's ticked.
   - A join table (recipe → prep item), in backups and the list import.
 - **Size:** S–M
-- **Depends on:** nothing; easier after 7.
+- **Depends on:** nothing (where each item is offered is built).
 - **Open questions:**
   - Which wins: the recipe's defaults, Repeat's prep, or the remembered
     prep (Settings → Brew setup)? Or add them together?

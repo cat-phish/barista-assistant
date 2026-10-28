@@ -53,7 +53,7 @@ export const COMES_ALONG: Record<ListName, string | null> = {
   brewers: 'each brewer’s method',
   grinders: null,
   water_profiles: null,
-  prep_tools: null,
+  prep_tools: 'the brewers each is offered for, with their methods',
   brew_problems: null,
   brew_logs: 'each brew’s bean, recipe, grinder, water, drink, prep tools and problems',
 };
@@ -117,6 +117,7 @@ const TABLE_LABELS: Record<string, string> = {
   drink_ingredients: 'drink ingredients',
   menu_items: 'menu items',
   brew_log_marks: 'timer marks',
+  prep_tool_brewers: 'prep tool brewers',
   brew_log_tools: 'prep ticks',
   brew_log_problems: 'problem ticks',
   llm_analyses: 'AI suggestions',

@@ -1354,3 +1354,32 @@ parked) were tried first and set aside in favour of this.
   is there after the brew and can still be changed. Remembered prep
   (Settings → Brew setup) and Repeat fill it as before, now visibly.
 - Hidden with the Prep field (Settings → Fields), like the log form's.
+
+## Where each prep item is offered (built)
+
+Backlog item "Where each prep item is offered", branch `prep-offered`. A
+prep tool belonged to one method or to every method; a paper filter (top,
+bottom or a sandwich) fits espresso and the OXO Rapid Brewer, not the V60.
+
+- **Model:** `prep_tools.method_kinds` (a JSON list, replacing
+  `method_kind`) and a `prep_tool_brewers` join table. A tool is offered
+  for every brew when both are empty, else for brews of those methods and
+  with those brewers. A brew without a recipe offers every tool, and a
+  brew's own ticks always show. Migrations 0071 (add and backfill
+  `[method_kind]` or `[]`, new table) and 0072 (drop `method_kind`).
+- **API:** the tool object has `methodKinds` and `brewerIds`; POST and
+  PATCH take both, brewers checked against the workspace. Brew logs' tool
+  refs are now `{id, name}`.
+- **Edit page** (`PrepToolFormView.vue`, Bar setup → Tools → Edit / Add
+  tool): the name, and **Offered for**: Every brew, or method checkboxes
+  and brewer checkboxes grouped by method (archived brewers only when
+  already chosen). Delete moved there from the list's edit row; ↑/↓ and
+  archive stay on the list, whose badge says where each is offered
+  ("Every brew", "Espresso, Oxo Rapid Brewer").
+- **Backups:** version 2. A version 1 file's `methodKind` becomes
+  `methodKinds`; `prep_tool_brewers` restores after brewers, and a prep
+  tool export brings its brewers along (matched by name on import).
+- **Decided:** methods are the kinds (Espresso, Filter, Stovetop, Other),
+  not the workspace's custom brewer methods. A deleted brewer drops off the
+  tool; an archived one stays chosen. Brew problems keep one method for
+  now (backlog: "What went wrong: offered by methods and brewers").

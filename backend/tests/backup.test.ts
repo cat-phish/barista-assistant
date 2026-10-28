@@ -27,9 +27,9 @@ async function populated() {
   await post("brewer-methods", { name: "Siphon", behaviour: "filter" });
   const c40 = (await post("grinders", { name: "C40" })).grinder.id as string;
   const water = (await post("water-profiles", { name: "TWW", tdsPpm: 120 })).waterProfile.id as string;
-  const wdt = (await post("prep-tools", { name: "Needle", methodKind: "espresso" })).tool.id as string;
   const stalled = (await post("brew-problems", { name: "Paper taste", methodKind: "filter" })).problem.id as string;
   const v60 = await brewerId(owner, ws.id, "V60");
+  const wdt = (await post("prep-tools", { name: "Needle", methodKinds: ["espresso"], brewerIds: [v60] })).tool.id as string;
   const recipe = (
     await post("recipes", {
       name: "House V60",
@@ -80,7 +80,7 @@ function strip(value: unknown): unknown {
   if (typeof value !== "object" || value === null) return value;
   return Object.fromEntries(
     Object.entries(value)
-      .filter(([key]) => key !== "id" && !key.endsWith("Id") && key !== "total")
+      .filter(([key]) => key !== "id" && !/Ids?$/.test(key) && key !== "total")
       .map(([key, v]) => [key, strip(v)]),
   );
 }
@@ -124,6 +124,9 @@ describe("workspace backup and restore (docs/api/backup.md §2b)", () => {
     expect(copyId).not.toBe(ws.id);
 
     expect(await snapshot(owner, copyId)).toEqual(await snapshot(owner, ws.id));
+    // IDs are left out above, so check the prep tool still points at the copy's V60.
+    const needle = (await owner.agent.get(`/api/workspaces/${copyId}/prep-tools`)).body.tools.find((t: { name: string }) => t.name === "Needle");
+    expect(needle.brewerIds).toEqual([await brewerId(owner, copyId, "V60")]);
     const copy = await workspaceOf(owner, copyId);
     expect(copy).toMatchObject({ name: "Copy", slug: `copy-${ws.slug}`, isPublicMenuEnabled: false });
     // New IDs throughout: nothing in the copy points into the original.
@@ -177,6 +180,25 @@ describe("workspace backup and restore (docs/api/backup.md §2b)", () => {
     await addMember(owner, ws.id, barista, "barista");
     expect((await barista.agent.get(`/api/workspaces/${ws.id}/backup`)).status).toBe(403);
     expect((await (await newUser()).agent.get(`/api/workspaces/${ws.id}/backup`)).status).toBe(404);
+  });
+
+  it("restores a version 1 file, where a prep tool had one methodKind", async () => {
+    const { owner, base } = await populated();
+    const backup = (await owner.agent.get(`${base}/backup`)).body;
+    const v1 = {
+      ...backup,
+      version: 1,
+      tables: {
+        ...backup.tables,
+        prep_tool_brewers: undefined,
+        prep_tools: backup.tables.prep_tools.map(({ methodKinds, ...r }: Record<string, unknown> & { methodKinds: string[] }) => ({ ...r, methodKind: methodKinds[0] ?? null })),
+      },
+    };
+    const restored = await owner.agent.post("/api/workspaces/restore").send({ name: "Old", slug: `old-${randomUUID().slice(0, 8)}`, backup: v1 });
+    expect(restored.status, JSON.stringify(restored.body)).toBe(201);
+    const tools = (await owner.agent.get(`/api/workspaces/${restored.body.workspaceId}/prep-tools`)).body.tools as Array<{ name: string; methodKinds: string[]; brewerIds: string[] }>;
+    expect(tools.find((t) => t.name === "Needle")).toMatchObject({ methodKinds: ["espresso"], brewerIds: [] });
+    expect(tools.find((t) => t.name === "RDT")).toMatchObject({ methodKinds: [] });
   });
 
   it("refuses a bad file or a taken slug, and creates nothing", async () => {

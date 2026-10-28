@@ -67,9 +67,9 @@ archived** checkbox when there are archived ones (where Restore is); sort by
 any column (name, type, category; power, burrs, adjustment; date added), unset
 values last; tap a row to see details and edit or archive it. Filter and sort
 are remembered. **Delete** is on the edit page (for brewers, grinders, water,
-recipes, drinks and ingredients; in the edit row for tools): it says what
+recipes, drinks, ingredients and tools): it says what
 would be unlinked or removed and asks for "I understand" first.
-Adding and editing a brewer, grinder or ingredient happen on their own page
+Adding and editing a brewer, grinder, ingredient or tool happen on their own page
 (the **Add** button sits at the top of each list, like Recipes and Drinks).
 - **Grinders:** per workspace, with optional details: stepped/stepless,
   setting range and step size, burr type and size, hand/electric, and
@@ -91,6 +91,11 @@ Adding and editing a brewer, grinder or ingredient happen on their own page
   brewing) and can go on the menu as the plain brew, under a menu name
   ("Espresso" for the machine). Archived like grinders once brews used it;
   deleting is refused while recipes use it.
+- **Tools:** the prep checklist (WDT, a puck screen, a paper filter…), in
+  the order the brew page lists it; move with ↑/↓, archive and restore on
+  the list. Each tool is **offered for** every brew, or for the methods
+  and brewers ticked on its page (a paper filter sandwich for Espresso and
+  the Oxo Rapid Brewer, not the V60); the list shows which.
 
 ## Recipes
 - **Style** (optional): how the recipe brews, from its brewer's method:
@@ -201,8 +206,8 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   starting point. Start and Log stay disabled until the bean and the batch
   are set, with a line saying what's still missing ("Choose a bean.",
   "Enter a size.").
-- **Prep on setup:** a **Prep** card above Start lists the prep tools for
-  the recipe's method (and the all-method ones), to tick as you get ready.
+- **Prep on setup:** a **Prep** card above Start lists the prep tools
+  offered for the recipe's method or brewer, to tick as you get ready.
   The ticks go to the log form, where they can still be changed. Hidden
   with the Prep field (Settings → Fields).
 - **Remembered from last time:** a new brew starts with what you chose last

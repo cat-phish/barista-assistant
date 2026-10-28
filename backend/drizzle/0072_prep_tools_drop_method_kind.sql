@@ -1,0 +1,1 @@
+ALTER TABLE `prep_tools` DROP COLUMN `method_kind`;
