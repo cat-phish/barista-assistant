@@ -45,6 +45,7 @@ export const FIELDS = [
   bean('roastType', 'Roasted for'),
   bean('roastDate', 'Roast date'),
   bean('roastLevel', 'Roast level'),
+  bean('weightLoss', 'Roast weight loss'),
   bean('batchNumber', 'Batch no.'),
   bean('price', 'Bag price'),
   bean('bagWeight', 'Bag weight'),

@@ -164,6 +164,7 @@ export interface BrewContext {
     country: string | null;
     region: string | null;
     altitudeMasl: number | null;
+    roastWeightLossPercent: number | null; // % of the green weight lost in roasting
   };
   recipe: {
     name: string;
@@ -476,6 +477,7 @@ export async function loadBean(beanId: string): Promise<LoadedBean | null> {
       country: bean.country,
       region: bean.region,
       altitudeMasl: bean.altitudeMasl,
+      roastWeightLossPercent: bean.roastWeightLossPercent,
     },
     roastDate: bean.roastDate,
     freezes,

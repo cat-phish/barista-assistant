@@ -62,6 +62,7 @@ const bagWeight = ref('');
 const purchaseDate = ref('');
 const greenSupplier = ref('');
 const batchNumber = ref('');
+const weightLoss = ref(''); // roast weight loss, %
 const website = ref('');
 const showOnPublicMenu = ref(true);
 const rating = ref<number | null>(null);
@@ -105,6 +106,9 @@ const priceParsed = computed(() =>
   price.value.trim() ? parseDecimal(price.value, { scale: 2, min: 0, max: 1_000_000, exclusiveMin: true, exclusiveMax: true }) : null,
 );
 const currencyCode = computed(() => currency.value.trim().toUpperCase());
+const weightLossParsed = computed(() =>
+  weightLoss.value.trim() ? parseDecimal(weightLoss.value, { scale: 1, min: 0, max: 40, exclusiveMin: true }) : null,
+);
 const bagParsed = computed(() => (bagWeight.value.trim() ? parseDecimal(bagWeight.value, { scale: 0, min: 1, max: 100_000 }) : null));
 const websiteTrimmed = computed(() => website.value.trim());
 
@@ -132,6 +136,7 @@ const fieldErrors = computed(() => ({
         ? 'Required with a price'
         : '',
   bagWeight: bagParsed.value && !bagParsed.value.ok ? bagParsed.value.error : '',
+  weightLoss: weightLossParsed.value && !weightLossParsed.value.ok ? weightLossParsed.value.error : '',
   purchaseDate: purchaseDate.value > today ? "Can't be in the future" : '',
   website: websiteTrimmed.value && !isHttpUrl(websiteTrimmed.value) ? 'Enter a web address starting with https://' : '',
 }));
@@ -161,6 +166,7 @@ function fill(bean: Bean): void {
     'bean.roastDate': bean.roastDate,
     'bean.roastLevel': bean.detailedRoastLevel ?? bean.roastLevel,
     'bean.batchNumber': bean.batchNumber,
+    'bean.weightLoss': bean.roastWeightLossPercent,
     'bean.price': bean.priceAmount,
     'bean.bagWeight': bean.bagWeightGrams,
     'bean.purchaseDate': bean.purchaseDate,
@@ -194,6 +200,7 @@ function fill(bean: Bean): void {
   purchaseDate.value = bean.purchaseDate ?? '';
   greenSupplier.value = bean.greenSupplier ?? '';
   batchNumber.value = bean.batchNumber ?? '';
+  weightLoss.value = bean.roastWeightLossPercent === null ? '' : String(bean.roastWeightLossPercent);
   website.value = bean.website ?? '';
   showOnPublicMenu.value = bean.showOnPublicMenu;
   rating.value = bean.rating;
@@ -201,12 +208,13 @@ function fill(bean: Bean): void {
 }
 
 // A copy keeps the coffee and drops what belongs to one bag: roast and
-// purchase dates and the rating. Stock starts at the bag weight, if known,
+// purchase dates, the roast's weight loss and the rating. Stock starts at the bag weight, if known,
 // and a numbered batch moves on to the next one.
 function fillCopy(bean: Bean): void {
   fill(bean);
   batchNumber.value = nextBatch(bean.batchNumber);
   roastDate.value = '';
+  weightLoss.value = '';
   purchaseDate.value = '';
   rating.value = null;
   inventory.value = bean.bagWeightGrams === null ? '0' : String(bean.bagWeightGrams);
@@ -282,6 +290,7 @@ async function save(): Promise<void> {
     priceAmount,
     priceCurrency: priceAmount === null ? null : currencyCode.value,
     bagWeightGrams: bagParsed.value?.ok ? bagParsed.value.value : null,
+    roastWeightLossPercent: weightLossParsed.value?.ok ? weightLossParsed.value.value : null,
     purchaseDate: purchaseDate.value || null,
     greenSupplier: greenSupplier.value.trim() || null,
     batchNumber: batchNumber.value.trim() || null,
@@ -431,6 +440,12 @@ async function save(): Promise<void> {
           </div>
           <p class="muted small">The roast helps estimate how much coffee ends up in the cup when you scale a recipe.</p>
         </template>
+        <div v-if="show('bean.weightLoss')" class="field">
+          <label for="weight-loss">Roast weight loss (%)</label>
+          <input id="weight-loss" v-model="weightLoss" inputmode="decimal" placeholder="e.g. 14.5" aria-describedby="weight-loss-hint" :aria-invalid="submitted && !!fieldErrors.weightLoss" />
+          <span id="weight-loss-hint" class="hint">The green weight lost in roasting, if the roaster gives it: about 11–13% light, 14–16% medium, 17%+ dark.</span>
+          <span v-if="submitted && fieldErrors.weightLoss" class="field-error">{{ fieldErrors.weightLoss }}</span>
+        </div>
       </section>
 
       <section class="card stack">

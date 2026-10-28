@@ -81,6 +81,7 @@ const BEAN: Record<keyof BrewContext["bean"], Sees> = {
   country: "origin",
   region: "origin",
   altitudeMasl: "altitude",
+  roastWeightLossPercent: "weightLoss",
 };
 
 const RECIPE: Record<keyof Recipe, Sees> = {
@@ -171,7 +172,7 @@ const brew: BrewSummary = {
   dilutedWith: "milk", steepMinHours: 14, steepMaxHours: 20, expectedFinishMinSec: 100, expectedFinishMaxSec: 200,
 } as BrewSummary;
 const full: BrewContext = {
-  bean: { roasterName: "Onyx", beanName: "Monarch", batchNumber: "7", process: "Washed", roastLevel: "light", detailedRoastLevel: "city", roastType: "filter", blendType: "blend", decaf: true, roastDate: "2026-10-10", flavorProfile: "Peach", originArea: "africa", country: "Ethiopia", region: "Guji", altitudeMasl: 2000 },
+  bean: { roasterName: "Onyx", beanName: "Monarch", batchNumber: "7", process: "Washed", roastLevel: "light", detailedRoastLevel: "city", roastType: "filter", blendType: "blend", decaf: true, roastDate: "2026-10-10", flavorProfile: "Peach", originArea: "africa", country: "Ethiopia", region: "Guji", altitudeMasl: 2000, roastWeightLossPercent: 15 },
   recipe: {
     name: "House", brewer: "Toddy", style: { name: "Cold brew", brewsLike: "cold_brew" }, methodKind: "filter", targetDoseGrams: 60, targetWaterGrams: 500, targetIceGrams: 100, expectedYieldGrams: 420, expectedFinishMinSec: 100,
     expectedFinishMaxSec: 200, firstDropMinSec: 5, firstDropMaxSec: 9, targetTempC: 20, steepMinHours: 14, steepMaxHours: 20, steepTemp: "fridge", dilutionRatio: 1, dilutionWith: "milk",

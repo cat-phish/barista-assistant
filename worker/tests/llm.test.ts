@@ -90,7 +90,7 @@ const summary = (over: Partial<BrewSummary> = {}): BrewSummary => ({
   ...over,
 });
 const context = (over: { brew?: Partial<BrewSummary>; bean?: Partial<BrewContext["bean"]> } = {}): BrewContext => ({
-  bean: { roasterName: "Onyx", beanName: "Monarch", batchNumber: null, process: "Washed", roastLevel: "light", detailedRoastLevel: null, roastType: null, blendType: "single_origin", decaf: false, roastDate: "2026-10-10", flavorProfile: null, originArea: "africa", country: "Ethiopia", region: null, altitudeMasl: 2000, ...over.bean },
+  bean: { roasterName: "Onyx", beanName: "Monarch", batchNumber: null, process: "Washed", roastLevel: "light", detailedRoastLevel: null, roastType: null, blendType: "single_origin", decaf: false, roastDate: "2026-10-10", flavorProfile: null, originArea: "africa", country: "Ethiopia", region: null, altitudeMasl: 2000, roastWeightLossPercent: null, ...over.bean },
   recipe: {
     name: "House V60",
     brewer: "V60",
@@ -236,6 +236,15 @@ describe("what the workspace keeps from the AI (Settings → AI)", () => {
     expect(nameOnly.brew).toMatchObject({ water: "TWW" });
     expect(nameOnly.equipment).not.toHaveProperty("waters"); // no figures left
     expect(promptSections(nameOnly)).not.toContain("water");
+  });
+
+  it("sends the roast weight loss with its section, unless kept from the AI", () => {
+    const ctx = context({ bean: { roastWeightLossPercent: 15.5 } });
+    expect(toLlmInput(ctx).bean).toMatchObject({ roastWeightLossPercent: 15.5 });
+    expect(promptSections(toLlmInput(ctx))).toContain("weightLoss");
+    const hidden = toLlmInput(ctx, without("weightLoss"));
+    expect(hidden.bean).not.toHaveProperty("roastWeightLossPercent");
+    expect(promptSections(hidden)).not.toContain("weightLoss");
   });
 
   it("drops brew, bean, recipe and equipment details", () => {
