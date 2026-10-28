@@ -3,7 +3,8 @@
 > Part of the API spec. Conventions, auth rules and the section index are in
 > [README.md](README.md); a bare `§N` refers to that index.
 
-A **backup** is a whole workspace as one JSON file: every list, bean,
+A **backup** is a whole workspace as one JSON file (or, with its bean
+photos, a `.zip` holding that file and the photos): every list, bean,
 recipe, drink, the menu, and every brew with its marks, prep items,
 problems and AI analyses. A **restore** turns a backup into a **new**
 workspace owned by the person restoring; nothing existing is changed. An
@@ -92,7 +93,8 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
 
 **Bean photos** (`bean-photos.md` §4c): `bean_photos` rows go only with
 their files, so a JSON file has none (`BackupOptions.photos` in
-`backend/src/backup.ts`); restoring one gives beans without photos.
+`backend/src/backup.ts`) and a `.zip` has both (below). Exports and imports
+(By list) don't carry photos.
 
 **What was sent to the AI** (`request` on `llm_analyses` and
 `parameter_suggestions`, `analysis.md` §8c) is large and only for looking
@@ -114,9 +116,14 @@ above it.
 
 - **Auth Required:** `true` (role `owner`)
 - **Query:** `?aiRequests=true` also includes what was sent to the AI
-  (below); `false` or left out, it isn't.
+  (below); `false` or left out, it isn't. `?photos=true` makes it a `.zip`
+  (`backend/src/backupZip.ts`): `backup.json` (the file above, with its
+  `bean_photos` rows) and `photos/<id>.webp` for each, stored as they are on
+  the server. A row whose file is missing on the server is left out.
 - **Success (`200 OK`):** the file above, with
-  `Content-Disposition: attachment; filename="<slug>-backup-YYYY-MM-DD.json"`.
+  `Content-Disposition: attachment; filename="<slug>-backup-YYYY-MM-DD.json"`
+  (`.zip` and `application/zip` with photos). In the app, Settings → Data →
+  Back up has "Include bean photos (a .zip instead of .json)".
 - **Errors:** `403` not an owner; `404` not a member.
 
 ## `POST /api/workspaces/restore`
@@ -124,7 +131,14 @@ above it.
 - **Auth Required:** `true` (anyone signed in; they own the new workspace)
 - **Body** (up to 50 MB, unlike the usual 100 kB):
   `{ "name": "Home bar", "slug": "home-bar", "backup": { ...file } }`.
-  `name` and `slug` follow §2's rules.
+  `name` and `slug` follow §2's rules. **Or a `.zip` backup** as it is
+  (`Content-Type: application/zip`, up to 250 MB), with `?name=…&slug=…`.
+  Only `backup.json` (≤ 50 MB) and `photos/<id>.webp` (≤ 5 MB each) are
+  unpacked; anything else in the zip is ignored. A photo row restores only
+  with a file that's a WebP inside 1024 px (its real size is used); others
+  are left out, as are all photo rows of a JSON file. The photo files are
+  written inside the restore, so a failed restore leaves none. The restore
+  form takes either file.
 - **What happens:** the whole file is checked first (format, version, every
   table and column known, values of the column's type, enum values, every
   reference pointing at a row in the file). Then, in one transaction:
@@ -137,7 +151,8 @@ above it.
   - every brew, and every suggestion's `requestedBy`, belongs to the caller
     (`brewedBy` is only kept in the file).
 - **Success (`201 Created`):** `{ "workspaceId": "uuid" }`
-- **Errors:** `400` the first problem found, e.g.
+- **Errors:** `400` the first problem found (for a zip, also "Not a zip
+  file that can be read" or "The zip has no backup.json"), e.g.
   `"tables.recipes[3].brewerId: not in the file"` or
   `"backup.version: made by a newer version of the app; update this server
   first"`; `409` `"Slug already taken"`, or the file repeats a name a

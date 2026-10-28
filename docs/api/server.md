@@ -35,7 +35,9 @@ takes effect on the next request; nobody is an admin until one is granted.
 A `mariadb-dump` of the whole database (every workspace and account),
 gzipped into the backup folder (`./backups` next to `docker-compose.yml`,
 mounted at `/backups`), on the admins' schedule. Unlike a workspace backup
-(§2b) it's restored on the server, not in the app.
+(§2b) it's restored on the server, not in the app. Bean photos
+(`bean-photos.md` §4c) are files, not in the database: back up `./photos`
+alongside the dumps (or use a workspace `.zip` backup, which has them).
 
 - **Settings** (`server_settings` key `"backups"`): `frequency` (`off`,
   `daily`, `weekly`), `hour` (0–23), `weekday` (0–6, Sunday first; weekly
@@ -99,4 +101,6 @@ docker compose start backend worker
 ```
 
 The backend applies any newer migrations when it starts, so a dump from an
-older version is brought up to date.
+older version is brought up to date. Put `./photos` back from the same
+time; photos newer than the dump are removed when the backend starts (no
+row points at them), and rows whose file is missing show no image.

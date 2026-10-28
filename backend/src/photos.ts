@@ -78,3 +78,17 @@ export async function sweepOrphanPhotos(): Promise<number> {
   }
   return removed;
 }
+
+// A photo from a backup zip (docs/api/backup.md §2b) as the server would have
+// stored it: a WebP inside
+// PHOTO_MAX_EDGE. Its real size, or null to leave it out.
+export async function checkStoredPhoto(data: Buffer): Promise<{ width: number; height: number } | null> {
+  try {
+    const meta = await sharp(data, { failOn: "error" }).metadata();
+    if (meta.format !== "webp" || !meta.width || !meta.height) return null;
+    if (meta.width > PHOTO_MAX_EDGE || meta.height > PHOTO_MAX_EDGE) return null;
+    return { width: meta.width, height: meta.height };
+  } catch {
+    return null;
+  }
+}

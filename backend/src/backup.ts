@@ -73,6 +73,7 @@ import {
 } from "@barista/shared/schema";
 import { db } from "./db.js";
 import { workspaceSettingsObject } from "./validation.js";
+import { checkStoredPhoto, removeWorkspacePhotos, writePhotoFile } from "./photos.js";
 
 export const BACKUP_FORMAT = "barista-backup";
 // Bumped when a backup made before the change can't be restored as is;
@@ -428,8 +429,38 @@ const CHUNK = 500;
 
 // Into a new workspace, owned by ownerId: no default lists (the file has the
 // workspace's own), the public menu off, and every brew the owner's.
-export async function restoreBackup(file: BackupFile, target: { name: string; slug: string; ownerId: string }): Promise<string> {
+// photos: a zip's files by their id in the file (backupZip.ts). A
+// bean_photos row without a valid file is left out, so a JSON file restores
+// with no photos; the files are written before the commit, and removed if
+// the restore fails.
+export async function restoreBackup(
+  input: BackupFile,
+  target: { name: string; slug: string; ownerId: string },
+  photos: ReadonlyMap<string, Buffer> = new Map(),
+): Promise<string> {
   const workspaceId = randomUUID();
+  const photoRows: BackupRow[] = [];
+  for (const row of input.tables.bean_photos ?? []) {
+    const data = photos.get(row.id as string);
+    const size = data && (await checkStoredPhoto(data));
+    if (size) photoRows.push({ ...row, ...size });
+  }
+  const file: BackupFile = { ...input, tables: { ...input.tables, bean_photos: photoRows } };
+  try {
+    await insertBackup(file, target, workspaceId, photos);
+  } catch (err) {
+    await removeWorkspacePhotos(workspaceId);
+    throw err;
+  }
+  return workspaceId;
+}
+
+async function insertBackup(
+  file: BackupFile,
+  target: { name: string; slug: string; ownerId: string },
+  workspaceId: string,
+  photos: ReadonlyMap<string, Buffer>,
+): Promise<void> {
   await db.transaction(async (tx) => {
     await tx.insert(workspaces).values({
       id: workspaceId,
@@ -467,6 +498,8 @@ export async function restoreBackup(file: BackupFile, target: { name: string; sl
       for (let i = 0; i < values.length; i += CHUNK) await tx.insert(t.table).values(values.slice(i, i + CHUNK));
       for (const { id, key, ref } of later) await tx.update(t.table).set({ [key]: ref }).where(eq(t.columns.id!, id));
     }
+    for (const row of file.tables.bean_photos ?? []) {
+      await writePhotoFile(workspaceId, newIds.get("bean_photos")!.get(row.id as string)!, photos.get(row.id as string)!);
+    }
   });
-  return workspaceId;
 }

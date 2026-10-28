@@ -1,10 +1,11 @@
 import { eq } from "drizzle-orm";
-import { Router, type Request, type Response } from "express";
+import express, { Router, type Request, type Response } from "express";
 import { workspaces } from "@barista/shared/schema";
 import { z } from "zod";
 import { requireMembership } from "../auth/membership.js";
 import { db } from "../db.js";
 import { buildBackup, checkBackup, restoreBackup, type BackupFile } from "../backup.js";
+import { buildBackupZip, readBackupZip } from "../backupZip.js";
 import { buildExport, fileLists, LISTS, previewImport, runImport, type ExportFile, type ImportSummary } from "../listImport.js";
 import { beansCsv, brewLogsCsv, CSV_LISTS } from "../csv.js";
 import { isDuplicateEntryError, parseBody, parseQuery, sendError } from "../http.js";
@@ -31,26 +32,53 @@ const restoreSchema = z
 export const backupRouter = Router();
 backupRouter.use(requireAuth);
 
-// ?aiRequests=true also includes what was sent to the AI (it's large).
-const backupQuery = z.object({ aiRequests: z.enum(["true", "false"]).optional() }).strict();
+// ?aiRequests=true also includes what was sent to the AI (it's large);
+// ?photos=true makes it a .zip with the bean photos.
+const backupQuery = z.object({ aiRequests: z.enum(["true", "false"]).optional(), photos: z.enum(["true", "false"]).optional() }).strict();
 
 // The whole workspace as one JSON file. Owners only: it holds everyone's brews.
-backupRouter.get("/:workspaceId/backup", async (req: Request<WorkspaceParams>, res: Response<BackupFile>) => {
+backupRouter.get("/:workspaceId/backup", async (req: Request<WorkspaceParams>, res: Response<BackupFile | Buffer>) => {
   const { workspaceId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId, ["owner"]))) return;
   const query = parseQuery(backupQuery, req, res);
   if (!query) return;
-  const backup = await buildBackup(workspaceId, { aiRequests: query.aiRequests === "true" });
+  const aiRequests = query.aiRequests === "true";
+  if (query.photos === "true") {
+    const { file, zip } = await buildBackupZip(workspaceId, { aiRequests });
+    res.setHeader("Content-Disposition", `attachment; filename="${file.workspace.slug}-backup-${file.exportedAt.slice(0, 10)}.zip"`);
+    res.type("application/zip").send(Buffer.from(zip));
+    return;
+  }
+  const backup = await buildBackup(workspaceId, { aiRequests });
   const day = backup.exportedAt.slice(0, 10);
   res.setHeader("Content-Disposition", `attachment; filename="${backup.workspace.slug}-backup-${day}.json"`);
   res.json(backup);
 });
 
+// A .zip backup (with photos) is sent as it is, the name and slug in the query.
+const zipBody = express.raw({ type: ["application/zip", "application/x-zip-compressed"], limit: "250mb" });
+const restoreQuery = restoreSchema.omit({ backup: true });
+
 // A backup into a new workspace, owned by the caller (any signed-in person).
 // Nothing is written unless the whole file checks out.
-backupRouter.post("/restore", async (req: Request, res: Response<{ workspaceId: string }>) => {
-  const body = parseBody(restoreSchema, req, res);
-  if (!body) return;
+backupRouter.post("/restore", zipBody, async (req: Request, res: Response<{ workspaceId: string }>) => {
+  let body: z.infer<typeof restoreSchema>;
+  let photos = new Map<string, Buffer>();
+  if (Buffer.isBuffer(req.body)) {
+    const query = parseQuery(restoreQuery, req, res);
+    if (!query) return;
+    const zip = readBackupZip(req.body);
+    if (!zip.ok) {
+      sendError(res, 400, zip.error);
+      return;
+    }
+    body = { ...query, backup: zip.backup };
+    photos = zip.photos;
+  } else {
+    const parsed = parseBody(restoreSchema, req, res);
+    if (!parsed) return;
+    body = parsed;
+  }
   const [taken] = await db.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.slug, body.slug));
   if (taken) {
     sendError(res, 409, "Slug already taken");
@@ -62,7 +90,7 @@ backupRouter.post("/restore", async (req: Request, res: Response<{ workspaceId: 
     return;
   }
   try {
-    const workspaceId = await restoreBackup(checked.file, { name: body.name, slug: body.slug, ownerId: authedUserId(req) });
+    const workspaceId = await restoreBackup(checked.file, { name: body.name, slug: body.slug, ownerId: authedUserId(req) }, photos);
     res.status(201).json({ workspaceId });
   } catch (err) {
     if (!isDuplicateEntryError(err)) throw err;

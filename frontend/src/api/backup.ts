@@ -28,10 +28,18 @@ export const backupApi = {
   // Owners only.
   // aiRequests: also what was sent to the AI (§2b).
   download: (workspaceId: string, aiRequests = false) => api.get<BackupFile>(`/api/workspaces/${workspaceId}/backup${aiRequests ? '?aiRequests=true' : ''}`),
+  // With the bean photos: a .zip (backup.json + photos/<id>.webp).
+  downloadZip: (workspaceId: string, aiRequests = false) => api.file(`/api/workspaces/${workspaceId}/backup?photos=true${aiRequests ? '&aiRequests=true' : ''}`),
   // Into a new workspace the caller owns; 409 when the slug is taken, 400
   // with the first problem when the file doesn't check out.
   restore: (name: string, slug: string, backup: BackupFile) =>
     api.post<{ workspaceId: string }>('/api/workspaces/restore', { name, slug, backup }),
+  // A .zip backup is sent as it is.
+  restoreZip: (name: string, slug: string, zip: Blob) =>
+    api.post<{ workspaceId: string }>(
+      `/api/workspaces/restore?${new URLSearchParams({ name, slug })}`,
+      new Blob([zip], { type: 'application/zip' }),
+    ),
   // Lists (or, with ids, some of their items) with what they need. Owners only.
   exportLists: (workspaceId: string, lists: ListName[], ids?: Partial<Record<ListName, string[]>>, aiRequests = false) =>
     api.post<BackupFile & { scope: 'lists'; lists: ListName[] }>(`/api/workspaces/${workspaceId}/export`, { lists, ...(ids ? { ids } : {}), ...(aiRequests ? { aiRequests } : {}) }),
