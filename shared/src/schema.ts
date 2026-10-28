@@ -358,6 +358,9 @@ export const beans = mysqlTable("beans", {
   // Optional details (docs/api/beans.md §4). null = unknown.
   roastType: varchar("roast_type", { length: 20 }).$type<RoastType>(), // ROAST_TYPES
   detailedRoastLevel: varchar("detailed_roast_level", { length: 20 }).$type<DetailedRoastLevel>(), // DETAILED_ROAST_LEVELS
+  // Weight lost in roasting, % of the green weight (docs/api/beans.md §4): how
+  // developed the roast is. One bag's roast, so a copy doesn't keep it.
+  roastWeightLossPercent: decimal("roast_weight_loss_percent", { precision: 3, scale: 1, mode: "number" }),
   blendType: varchar("blend_type", { length: 20 }).$type<BlendType>(), // BLEND_TYPES
   decaf: boolean("decaf").default(false).notNull(),
   website: varchar("website", { length: 500 }), // http(s) URL, to buy it again

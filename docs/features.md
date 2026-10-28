@@ -55,7 +55,8 @@ work is in `roadmap.md`.
 
 ## Beans
 - Roaster, coffee name, process, **roast level** (light → dark, optional),
-  roast date and stock.
+  roast date and stock. Optionally the **roast weight loss** (%), which
+  tells the AI how developed the roast is.
 - **Freezing:** freeze/thaw periods pause the bean's roast age, so "days off
   roast" stays meaningful for frozen coffee.
 

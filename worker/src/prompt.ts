@@ -12,7 +12,7 @@ import type { BrewerInfo, SuggestContext } from "./suggestContext.js";
 // Stored with each analysis (llm_analyses.prompt_version), so results can be
 // compared across changes (npm run eval). Bump it whenever the input, the
 // prompt or the schema changes.
-export const PROMPT_VERSION = "2026-10-h";
+export const PROMPT_VERSION = "2026-10-i";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type LlmInput = { [key: string]: Json };
@@ -95,6 +95,7 @@ function beanInput(info: BrewContext["bean"], hidden: ReadonlySet<AiDetail>): Re
   if (hidden.has("flavorProfile")) drop(["flavorProfile"]);
   if (hidden.has("roastType")) drop(["roastType"]);
   if (hidden.has("roastLevel")) drop(["roastLevel", "detailedRoastLevel"]);
+  if (hidden.has("weightLoss")) drop(["roastWeightLossPercent"]);
   if (hidden.has("decafBlend")) drop(["decaf", "blendType"]);
   if (hidden.has("batchNumber")) drop(["batchNumber"]);
   if (bean.decaf === false) delete bean.decaf; // only worth saying when it is
@@ -236,6 +237,11 @@ export const PROMPT_SECTIONS: PromptSection[] = [
     key: "flavorProfile",
     when: (i) => bean(i).flavorProfile !== undefined,
     text: PROMPT_TEXT.flavorProfile,
+  },
+  {
+    key: "weightLoss",
+    when: (i) => bean(i).roastWeightLossPercent !== undefined,
+    text: PROMPT_TEXT.weightLoss,
   },
   {
     key: "altitude",

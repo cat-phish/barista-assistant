@@ -336,6 +336,7 @@ export interface Bean {
   showOnPublicMenu: boolean;
   roastType: RoastType | null;
   detailedRoastLevel: DetailedRoastLevel | null;
+  roastWeightLossPercent: number | null; // % of the green weight lost in roasting
   blendType: BlendType | null;
   decaf: boolean;
   website: string | null; // http(s)

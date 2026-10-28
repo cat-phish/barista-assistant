@@ -36,8 +36,8 @@ queue:
    - The bean includes its `roastLevel` (or `null` if unknown), which
      matters for temperature advice, and its `detailedRoastLevel`,
      `roastType`, `blendType` (each `null` if unknown) and `decaf` (§4), plus
-     `flavorProfile`, `originArea`, `country`, `region`, `altitudeMasl` and
-     `batchNumber` (a home-roast batch).
+     `flavorProfile`, `originArea`, `country`, `region`, `altitudeMasl`,
+     `roastWeightLossPercent` and `batchNumber` (a home-roast batch).
      Price, website, notes, rating, producer, purchase date and green
      supplier aren't sent.
    - The prompt includes the bean's **effective** roast age in days at brew
@@ -138,6 +138,7 @@ queue:
    | `roastType` | the bean has `roastType` | espresso roast as filter may need a different approach |
    | `decafBlend` | decaf or blend | extracts differently |
    | `flavorProfile` | the bean has one | the cup to aim for |
+   | `weightLoss` | `roastWeightLossPercent` | how developed the roast is (11–13% light, 14–16% medium, 17%+ dark); more developed extracts more easily (coarser, cooler); trusted over the roast level |
    | `altitude` | `altitudeMasl` | denser beans |
    | `origin` | origin area, country or region | context, not a rule |
    | `tds` | a brew has `tdsPercent` | judge strength and extraction from TDS and EY |
@@ -255,8 +256,8 @@ and the prompt sections about them drop out with them (step 3). Keys
   `waterMinerals` (the figures only; the name is still sent).
 - **The bean:** `origin` (`originArea`, `country`, `region`), `altitude`,
   `process`, `flavorProfile`, `roastType`, `roastLevel` (with
-  `detailedRoastLevel`), `decafBlend` (`decaf`, `blendType`),
-  `batchNumber`.
+  `detailedRoastLevel`), `weightLoss` (`roastWeightLossPercent`),
+  `decafBlend` (`decaf`, `blendType`), `batchNumber`.
 - **Recipe and equipment:** `recipeSteps`, `grindStartingPoints`,
   `grinderDetails` (everything but the grinder's name), `machine`.
 - **History:** `unratedHistory` leaves earlier brews without a rating out

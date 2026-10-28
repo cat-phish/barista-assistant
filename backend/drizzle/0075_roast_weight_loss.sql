@@ -1,0 +1,1 @@
+ALTER TABLE `beans` ADD `roast_weight_loss_percent` decimal(3,1);

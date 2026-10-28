@@ -486,6 +486,7 @@ const selection = useSelection();
               <p v-if="bean.flavorProfile" class="flavor">{{ bean.flavorProfile }}</p>
               <p class="facts">
                 <span v-if="ageLabel(bean)">{{ ageLabel(bean) }}</span>
+                <span v-if="bean.roastWeightLossPercent !== null">{{ bean.roastWeightLossPercent }}% roast loss</span>
                 <span v-if="openFreeze(bean)" class="frozen-since">Frozen since {{ formatDay(openFreeze(bean)!.frozenOn) }}</span>
                 <span v-if="originLabel(bean)">{{ originLabel(bean) }}</span>
                 <span v-if="priceLabel(bean)">{{ priceLabel(bean) }}</span>

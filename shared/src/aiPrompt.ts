@@ -100,6 +100,17 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
     text: "The flavorProfile is the roaster's description of the cup to aim for.",
   },
   {
+    key: "weightLoss",
+    label: "Roast weight loss",
+    prompts: ["analysis", "suggest"],
+    locked: false,
+    text:
+      "roastWeightLossPercent is the green weight lost in roasting, which measures how developed the roast is more " +
+      "exactly than a roast name: around 11-13% is a light roast, 14-16% medium and 17% or more dark. A more developed " +
+      "roast is more soluble and extracts more easily, so it takes a coarser grind or cooler water; a less developed " +
+      "one needs more extraction. Trust it over the roast level when they disagree.",
+  },
+  {
     key: "altitude",
     label: "Growing altitude",
     prompts: ["analysis", "suggest"],

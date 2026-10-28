@@ -21,6 +21,7 @@ export interface BeanInput {
   priceAmount: number | null;
   priceCurrency: string | null;
   bagWeightGrams: number | null;
+  roastWeightLossPercent: number | null;
   notes: string | null;
   flavorProfile: string | null;
   originArea: OriginArea | null;

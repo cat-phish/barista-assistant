@@ -59,6 +59,7 @@ is no age.
     "country": "Colombia",
     "region": "Huila",
     "altitudeMasl": 1950,
+    "roastWeightLossPercent": 14.5,
     "producer": "Finca El Paraíso",
     "purchaseDate": "2026-10-05",
     "greenSupplier": "Covoya",
@@ -110,6 +111,11 @@ is no age.
   - `altitudeMasl`: integer 0–9000, metres above sea level. Clients show it
     in feet when the person prefers (docs/api/auth.md §1 preferences); it's
     always stored in metres.
+  - `roastWeightLossPercent`: the green weight lost in roasting, in %:
+    above 0, at most 40, one decimal place (`14.5`). How developed the
+    roast is (about 11–13% light, 14–16% medium, 17%+ dark). It belongs to
+    one bag's roast, so copying a bean leaves it out. In the beans CSV as
+    "Roast loss (%)"; not on the public menu.
   - `purchaseDate`: `YYYY-MM-DD`, at most one day after the server's date.
   - `greenSupplier`: who sold the green coffee, free text, ≤255 chars.
   - `batchNumber`: which roast of this coffee, free text, ≤50 chars (`"3"`,

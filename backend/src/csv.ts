@@ -102,14 +102,14 @@ export async function beansCsv(workspaceId: string): Promise<string> {
     .groupBy(beans.id, beanProcesses.name)
     .orderBy(desc(beans.createdAt));
   const header = [
-    "Roaster", "Bean", "Batch", "Process", "Roast level", "Detailed roast level", "Roast type", "Roast date", "Blend",
+    "Roaster", "Bean", "Batch", "Process", "Roast level", "Detailed roast level", "Roast loss (%)", "Roast type", "Roast date", "Blend",
     "Decaf", "Origin", "Country", "Region", "Altitude (m)", "Producer", "Flavor profile", "Bag (g)", "In stock (g)",
     "Price", "Currency", "Purchased", "Green supplier", "Website", "Rating", "Notes", "Brews", "Archived", "Added",
   ];
   return toCsv(
     header,
     rows.map(({ bean: b, process, brews }) => [
-      b.roasterName, b.beanName, b.batchNumber, process, b.roastLevel, b.detailedRoastLevel, b.roastType, b.roastDate?.toISOString().slice(0, 10), b.blendType,
+      b.roasterName, b.beanName, b.batchNumber, process, b.roastLevel, b.detailedRoastLevel, b.roastWeightLossPercent, b.roastType, b.roastDate?.toISOString().slice(0, 10), b.blendType,
       b.decaf, b.originArea, b.country, b.region, b.altitudeMasl, b.producer, b.flavorProfile, b.bagWeightGrams, b.inventoryWeightGrams,
       b.priceAmount, b.priceCurrency, b.purchaseDate, b.greenSupplier, b.website, b.rating, b.notes, brews,
       b.archivedAt ? b.archivedAt.toISOString().slice(0, 10) : null, b.createdAt.toISOString().slice(0, 10),

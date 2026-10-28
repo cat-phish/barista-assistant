@@ -77,6 +77,8 @@ const beanFields = {
     .nullable()
     .optional(),
   bagWeightGrams: z.number().int().min(1).max(100_000).nullable().optional(),
+  // % of the green weight lost in roasting (docs/api/beans.md §4).
+  roastWeightLossPercent: decimalSchema({ min: 0, max: 40, scale: 1, exclusiveMin: true }).nullable().optional(),
   notes: optionalText(2000),
   flavorProfile: optionalText(500),
   originArea: z.enum(ORIGIN_AREAS).nullable().optional(),

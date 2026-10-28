@@ -1473,3 +1473,23 @@ Branch `compare-bag-bean`. Contract: `api/analysis.md` §8b sources,
   brews name the bag (roast date, batch) and its own roast age, and the
   prompt says they carry over allowing for roast age. A barista's own
   edited "What to do (Suggest parameters)" text keeps its old wording.
+
+## Roast weight loss (built)
+
+Backlog item "Roast weight loss", branch `roast-weight-loss`. Contract:
+`api/beans.md` §4 `roastWeightLossPercent`, `api/llm-contract.md` §9.
+
+- An optional bean field, **Roast weight loss (%)**: the green weight lost
+  in roasting, above 0 and at most 40, one decimal place
+  (`beans.roast_weight_loss_percent`, migration 0075). Hideable under
+  Settings → Fields (`bean.weightLoss`). The bean list's details show it
+  ("14.5% roast loss"), and the beans CSV has a "Roast loss (%)" column.
+  Backups pick it up as a new column; it's not on the public menu.
+- Decided: the % only, not green and roasted weights (what roasters print).
+  It's one bag's roast, so Duplicate leaves it out, like the roast date.
+- The AI sees it, switchable under Settings → AI (`weightLoss`). A prompt
+  section explains it measures roast development (about 11–13% light,
+  14–16% medium, 17%+ dark), that a more developed roast extracts more
+  easily, and that it's trusted over the roast level when they disagree.
+  PROMPT_VERSION 2026-10-i.
+- The home roasting roast log will fill it in when built.

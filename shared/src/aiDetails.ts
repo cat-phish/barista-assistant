@@ -21,6 +21,7 @@ export const AI_DETAILS = [
   "flavorProfile",
   "roastType",
   "roastLevel",
+  "weightLoss", // roast weight loss
   "decafBlend", // decaf and single origin / blend
   "batchNumber",
   // Recipe and equipment

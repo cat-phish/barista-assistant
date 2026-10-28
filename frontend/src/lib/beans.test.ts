@@ -57,6 +57,7 @@ const bean = (over: Partial<Bean>): Bean => ({
   country: null,
   region: null,
   altitudeMasl: null,
+  roastWeightLossPercent: null,
   producer: null,
   purchaseDate: null,
   greenSupplier: null,

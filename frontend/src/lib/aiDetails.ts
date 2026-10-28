@@ -3,7 +3,7 @@
 // AI_DETAILS in @barista/shared/aiDetails (aiDetails.test.ts checks).
 export type AiDetail =
   | 'tds' | 'temp' | 'marks' | 'prepTools' | 'problems' | 'grinderWeights' | 'rpm' | 'drink' | 'water' | 'waterMinerals'
-  | 'origin' | 'altitude' | 'process' | 'flavorProfile' | 'roastType' | 'roastLevel' | 'decafBlend' | 'batchNumber'
+  | 'origin' | 'altitude' | 'process' | 'flavorProfile' | 'roastType' | 'roastLevel' | 'weightLoss' | 'decafBlend' | 'batchNumber'
   | 'recipeSteps' | 'grindStartingPoints' | 'grinderDetails' | 'machine'
   | 'unratedHistory' | 'analyzeUnrated';
 
@@ -36,6 +36,7 @@ export const AI_DETAIL_LIST: AiDetailInfo[] = [
   d('bean', 'flavorProfile', 'Flavor profile', 'The roaster’s description'),
   d('bean', 'roastType', 'Roasted for', 'Filter, espresso or omni'),
   d('bean', 'roastLevel', 'Roast level', 'And the roast name'),
+  d('bean', 'weightLoss', 'Roast weight loss', 'How developed the roast is'),
   d('bean', 'decafBlend', 'Decaf and blend', ''),
   d('bean', 'batchNumber', 'Batch number', 'Home-roast batches'),
   d('recipe', 'recipeSteps', 'Recipe steps', 'Pours, waits and their targets'),
