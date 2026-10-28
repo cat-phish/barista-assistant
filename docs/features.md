@@ -30,7 +30,8 @@ work is in `roadmap.md`.
   again.
 - **Backup and restore:** Settings → Data. Owners download the whole
   workspace as one JSON file (lists, beans, equipment, recipes, drinks, the
-  menu, and every brew with its marks, prep, problems and AI suggestions).
+  menu, and every brew with its marks, prep, problems and AI suggestions),
+  or with "Include bean photos" a .zip with the photos too.
   Anyone signed in can restore a backup, from Settings → Data or the
   workspaces page, as a **new** workspace they own: every brew becomes
   theirs, the public menu starts off, members are invited again.
@@ -59,6 +60,13 @@ work is in `roadmap.md`.
   tells the AI how developed the roast is.
 - **Freezing:** freeze/thaw periods pause the bean's roast age, so "days off
   roast" stays meaningful for frozen coffee.
+- **Photos:** up to 6 per bean (the bag, the label), taken with the phone's
+  camera (**Take photo**) or picked (**Choose photos**) in the bean form;
+  the first is the cover, beside the name in the bean list, and the bean's
+  details show them all (tap one to see it large). Stored once, upright and
+  at most 1024 px, without the photo's EXIF (location, camera). Seen ones
+  show offline. Hideable under Settings → Fields. A Duplicate starts
+  without them. (`docs/api/bean-photos.md` §4c)
 
 ## Bar setup
 One **Bar setup** section with tabs: Brewers, Grinders, Water, Prep and Menu.

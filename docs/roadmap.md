@@ -1538,3 +1538,32 @@ Backlog item "Scale step timing with the batch", branch `step-timing-scale`.
   the brew's water; Suggest parameters: the batch asked with) plus
   `stepTimeScaling` under the `recipeSteps` switch, with a `stepTimes`
   prompt section. PROMPT_VERSION 2026-10-j.
+
+## Bean photos (built)
+
+Backlog item "Bean photos", branch `bean-photos`. `docs/api/bean-photos.md`
+§4c, `docs/api/backup.md` §2b, `docs/features.md` (Beans).
+
+- `bean_photos` (migration 0077): up to 6 per bean, `position` 0 the cover,
+  width and height. Files at `PHOTO_DIR/<workspaceId>/<id>.webp`
+  (`./photos` mounted at `/photos` on the backend).
+- **One size only** (decided: no original kept): sharp turns it upright
+  (EXIF orientation), fits it inside 1024 px, WebP q80, no metadata.
+  Upload is the image as the body (≤ 15 MB); HEIC isn't read.
+- Routes under `…/beans/:beanId/photos` (`backend/src/routes/beanPhotos.ts`):
+  upload, get (cached for good: a photo never changes), make cover,
+  delete. Beans carry `photos`. Deleting a photo, bean or workspace removes
+  files after the commit; the backend sweeps orphans on start.
+- Bean form: Photos card (Take photo with `capture`, Choose photos), make
+  cover, remove (plain: nothing else uses a photo); a new bean uploads them
+  once saved, and on a failed upload carries on as an edit. Bean list:
+  cover beside the name, a strip in the details, tap for large. Hideable
+  (`bean.photos`). A Duplicate starts without photos. PWA `CacheFirst`
+  (`bean-photos`, 200 entries).
+- Backups (decided: optional zip): a JSON file has no `bean_photos` rows;
+  "Include bean photos" downloads a `.zip` (`backup.json` +
+  `photos/<id>.webp`, `backend/src/backupZip.ts`, fflate). Restore takes
+  either; zip photos must be WebP inside 1024 px and are written inside the
+  restore transaction. Scheduled DB dumps don't cover `./photos`
+  (`server.md`).
+- Later (backlog): read the label from the photo with AI.

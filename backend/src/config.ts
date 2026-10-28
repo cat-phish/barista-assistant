@@ -31,6 +31,8 @@ export const backupDownloadsEnabled = (): boolean => process.env.BACKUP_DOWNLOAD
 export const previewTimeoutMs = (): number => Number(process.env.AI_PREVIEW_TIMEOUT_MS ?? 10_000);
 // Where scheduled database dumps are written (the worker) and listed from.
 export const backupDir = (): string => process.env.BACKUP_DIR ?? "/backups";
+// Where bean photos are kept (docs/api/bean-photos.md §4c).
+export const photoDir = (): string => process.env.PHOTO_DIR ?? "/photos";
 // The zone the backup hour is in; an unknown zone falls back to UTC.
 export function backupTimezone(): string {
   const tz = process.env.BACKUP_TIMEZONE?.trim() || "UTC";

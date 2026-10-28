@@ -67,6 +67,7 @@ const bean = (over: Partial<Bean>): Bean => ({
   createdAt: '2026-10-01T00:00:00.000Z',
   freezePeriods: [],
   frozen: false,
+  photos: [],
   ...over,
 });
 // The workspace's process names, by id (editable, so the list passes them in).

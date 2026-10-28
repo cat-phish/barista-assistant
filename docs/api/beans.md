@@ -18,7 +18,8 @@
   Every endpoint that returns a bean includes `freezePeriods` and `frozen`
   (boolean): `true` while a period is open (`thawedOn: null`). `frozen` is
   worked out from the periods, not stored, so the two always agree; clients
-  read it instead of looking at the order of the periods.
+  read it instead of looking at the order of the periods. It also includes
+  `photos`, cover first (`[{ id, width, height }]`, `bean-photos.md` §4c).
 
   The list includes archived beans: `archivedAt` is when the bean was
   archived, or `null` while it's active. `createdAt` is when it was added
@@ -158,7 +159,7 @@ The schema cascades a bean's deletion to its `brew_logs` and their
 - **Query:** `?deleteBrewLogs=true` confirms that the bean's brew logs (and
   their analyses) should be deleted with it. Without it, a bean that has brew
   logs is not deleted.
-- **Success (`204 No Content`)**
+- **Success (`204 No Content`)**; its photo files go too (§4c).
 - **Errors:** `403` viewer; `404` bean not in this workspace; `409` the bean
   has brew logs and `deleteBrewLogs=true` was not passed, with body
   `{ "error": "...", "brewLogCount": 12 }`.

@@ -76,7 +76,7 @@ Where the app's choices live, and what you can switch on, off or take out.
     preparation's typical brew, or skipped?
   - Ratings: how its scale maps to our 1–5 (and the drink rating).
   - Grind settings that are text rather than a dial number.
-  - Photos: bring them along once bean photos (item 3) exist?
+  - Photos: bring a bean's photos along (they're built, `bean-photos.md` §4c)?
   - Run it once (a migration into a fresh workspace), or again later
     without duplicating what came in before?
 
@@ -118,27 +118,30 @@ Where the app's choices live, and what you can switch on, off or take out.
 
 What's recorded about each coffee.
 
-### 3. Bean photos
+### 3. Read the bean label from its photo (AI)
 
 - **Status:** idea
-- **Why:** a photo of the bag or label is the quickest way to recognize a
-  bean and keeps the roaster's details at hand.
+- **Why:** bean photos are built (roadmap: bean photos, `docs/api/bean-photos.md`
+  §4c), and the bag's label already says most of what the bean form asks:
+  roaster, name, origin, process, roast date, tasting notes, altitude.
+  Typing it in is the slowest part of adding a bag.
 - **Approach:**
-  - A `bean_photos` table (bean, file key, position, created at), several
-    per bean, one marked as the cover.
-  - The first file uploads in the app: the backend takes the image, removes
-    EXIF, resizes it (full size and a thumbnail) and stores it.
-  - The bean list shows the cover thumbnail; the bean page has a gallery.
-    On a phone the camera opens directly (`capture` on the file input).
-  - Photos get a field registry entry, so Settings → Fields can hide them.
-- **Size:** M–L (storage is new to the stack).
-- **Depends on:** nothing. Backups and list exports (`docs/api/backup.md`
-  §2b) should then include photos: a zip, or JSON with the photos left out?
+  - On the bean form, "Fill in from the photo": the worker sends the cover
+    (already small, 1024 px WebP) to a vision-capable model with a
+    Structured Output of the bean fields it can read.
+  - The form shows what it found next to each field to accept or change,
+    never saving on its own.
+  - Its own AI setting (on/off) and a note on what's sent (`llm-contract.md`
+    §9): the photo leaves the server.
+- **Size:** M
+- **Depends on:** nothing (photos are built); 2 if the model is chosen in
+  Settings.
 - **Open questions:**
-  - Storage: a Docker volume on local disk, or S3-compatible storage
-    (MinIO)?
-  - Size limits, and does the PWA cache the photos for offline use?
-  - Could a label photo fill in the bean form (AI reading the label)?
+  - Which fields to trust: dates on labels come in many formats; a roast
+    level from a colour band?
+  - Match the process and origin to the workspace's own lists, or only fill
+    free text?
+  - Several photos (front and back of the bag) in one request?
 
 ---
 
@@ -427,10 +430,10 @@ What the analysis worker sends to the LLM and what comes back.
   every bar, and a drink has one price even when it's made in several sizes.
 - **Approach:**
   - **Branding:** per-workspace accent colour, a tagline under the name, and
-    maybe a logo (uploads are new to the stack, like item 3's photos).
+    maybe a logo (uploaded and resized like bean photos, `backend/src/photos.ts`).
   - **Sizes:** prices per serving size once drinks have more than one size.
 - **Size:** S–M (branding without a logo is S).
-- **Depends on:** nothing; a logo fits with 3.
+- **Depends on:** nothing; a logo can reuse the bean photos' storage.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
@@ -476,7 +479,7 @@ What the analysis worker sends to the LLM and what comes back.
     be compared.
 - **Size:** L (several branches: green stock and roast log, then resting and
   reminders, then roast comparison).
-- **Depends on:** 3 for photos.
+- **Depends on:** nothing (bean photos are built, for roast photos).
 - **Open questions:**
   - Its own section, or a part of Beans?
   - Import roast curves (Artisan `.alog`), or only link to them?

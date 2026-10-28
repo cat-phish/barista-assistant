@@ -43,6 +43,7 @@ export const FIELDS = [
   bean('altitude', 'Altitude'),
   bean('flavorProfile', 'Flavor profile'),
   bean('decaf', 'Decaf'),
+  bean('photos', 'Photos', 'Of the bag or label; the cover shows in the bean list'),
   bean('roastType', 'Roasted for'),
   bean('roastDate', 'Roast date'),
   bean('roastLevel', 'Roast level'),

@@ -1,6 +1,7 @@
+import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import type { BackupFile } from '../api/backup';
-import { backupFileName, backupSummary, copyExample, detailsText, exportFileName, fileLists, hasAiSuggestions, missingListError, readBackup, tableLabel } from './backup';
+import { backupFileName, backupSummary, copyExample, detailsText, exportFileName, fileLists, hasAiSuggestions, isZip, missingListError, readBackup, readBackupZip, tableLabel } from './backup';
 
 const file: BackupFile = {
   format: 'barista-backup',
@@ -53,5 +54,24 @@ describe('hasAiSuggestions (asks whether to include what was sent to the AI)', (
     expect(hasAiSuggestions(['brew_logs'])).toBe(true);
     expect(hasAiSuggestions(['recipes', 'beans'])).toBe(true);
     expect(hasAiSuggestions(['recipes', 'grinders', 'drinks'])).toBe(false);
+  });
+});
+
+describe('readBackupZip', () => {
+  it('reads backup.json from a .zip backup, with its photos counted', () => {
+    const withPhotos = { ...file, tables: { ...file.tables, bean_photos: [{}, {}] } };
+    const zip = zipSync({ 'backup.json': strToU8(JSON.stringify(withPhotos)), 'photos/x.webp': new Uint8Array([1, 2]) });
+    const read = readBackupZip(zip);
+    expect(read).toMatchObject({ ok: true, file: { workspace: { slug: 'home-bar' } } });
+    expect(read.ok && backupSummary(read.file)).toBe('2 brews · 1 bean · 1 grinder · 2 photos');
+  });
+  it("says what's wrong with a zip that isn't a backup", () => {
+    expect(readBackupZip(strToU8('nope'))).toMatchObject({ ok: false, error: expect.stringMatching(/isn't a zip/) });
+    expect(readBackupZip(zipSync({ 'a.txt': strToU8('hi') }))).toMatchObject({ ok: false, error: expect.stringMatching(/no backup\.json/) });
+    expect(readBackupZip(zipSync({ 'backup.json': strToU8('{}') }))).toMatchObject({ ok: false });
+  });
+  it('tells a zip by its name', () => {
+    expect(isZip('home-bar-backup.ZIP')).toBe(true);
+    expect(isZip('home-bar-backup.json')).toBe(false);
   });
 });

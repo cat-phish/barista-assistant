@@ -404,6 +404,22 @@ export const beanFreezes = mysqlTable("bean_freezes", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// 4c. Bean photos (docs/api/bean-photos.md §4c): the bag or label, up to
+// MAX_BEAN_PHOTOS per bean, position 0 is the cover. The image is a WebP
+// file (PHOTO_DIR/<workspaceId>/<id>.webp), resized and stripped of EXIF on
+// upload; only its size is stored here.
+export const MAX_BEAN_PHOTOS = 6;
+export const beanPhotos = mysqlTable("bean_photos", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  beanId: varchar("bean_id", { length: 36 })
+    .notNull()
+    .references(() => beans.id, { onDelete: "cascade" }),
+  position: int("position").notNull(), // 0 = the cover
+  width: int("width").notNull(),
+  height: int("height").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const GRINDER_ADJUSTMENTS = ["stepped", "stepless"] as const;
 export const BURR_TYPES = ["conical", "flat"] as const;
 export const GRINDER_POWER = ["manual", "electric"] as const;
@@ -1311,6 +1327,7 @@ export type NewBean = typeof beans.$inferInsert;
 export type Brewer = typeof brewers.$inferSelect;
 export type NewBrewer = typeof brewers.$inferInsert;
 export type BeanFreeze = typeof beanFreezes.$inferSelect;
+export type BeanPhoto = typeof beanPhotos.$inferSelect;
 export type NewBeanFreeze = typeof beanFreezes.$inferInsert;
 export type Grinder = typeof grinders.$inferSelect;
 export type NewGrinder = typeof grinders.$inferInsert;

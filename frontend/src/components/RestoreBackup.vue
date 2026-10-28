@@ -7,7 +7,7 @@ import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { backupApi, type BackupFile } from '../api/backup';
 import { ApiError, errorMessage } from '../api/client';
-import { backupSummary, readBackup } from '../lib/backup';
+import { backupSummary, isZip, readBackup, readBackupZip } from '../lib/backup';
 import { formatWhen } from '../lib/format';
 import { SLUG_PATTERN } from '../lib/slug';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -16,6 +16,7 @@ const workspaces = useWorkspaceStore();
 const router = useRouter();
 
 const file = ref<BackupFile | null>(null);
+const zip = ref<File | null>(null); // a .zip backup, restored as it is (with its photos)
 const fileError = ref('');
 const name = ref('');
 const slug = ref('');
@@ -25,15 +26,18 @@ const error = ref('');
 async function pick(event: Event): Promise<void> {
   const chosen = (event.target as HTMLInputElement).files?.[0];
   file.value = null;
+  zip.value = null;
   fileError.value = '';
   error.value = '';
   if (!chosen) return;
-  const read = readBackup(await chosen.text());
+  const zipped = isZip(chosen.name);
+  const read = zipped ? readBackupZip(new Uint8Array(await chosen.arrayBuffer())) : readBackup(await chosen.text());
   if (!read.ok) {
     fileError.value = read.error;
     return;
   }
   file.value = read.file;
+  if (zipped) zip.value = chosen;
   name.value = read.file.workspace.name;
   // The original address, unless one of your workspaces already has it.
   const taken = workspaces.workspaces.some((w) => w.slug === read.file.workspace.slug);
@@ -48,7 +52,9 @@ async function restore(): Promise<void> {
   restoring.value = true;
   error.value = '';
   try {
-    const { workspaceId } = await backupApi.restore(name.value.trim(), slug.value, file.value);
+    const { workspaceId } = zip.value
+      ? await backupApi.restoreZip(name.value.trim(), slug.value, zip.value)
+      : await backupApi.restore(name.value.trim(), slug.value, file.value);
     await workspaces.load();
     workspaces.select(workspaceId);
     await router.push({ name: 'home' });
@@ -67,7 +73,7 @@ async function restore(): Promise<void> {
   <form class="stack" novalidate @submit.prevent="restore">
     <div class="field">
       <label for="restore-file">Backup file</label>
-      <input id="restore-file" type="file" accept="application/json,.json" @change="pick" />
+      <input id="restore-file" type="file" accept="application/json,.json,application/zip,.zip" @change="pick" />
       <span v-if="fileError" class="field-error" role="alert">{{ fileError }}</span>
     </div>
     <template v-if="file">

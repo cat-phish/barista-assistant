@@ -5,13 +5,14 @@ import { beanProcessesApi } from '../api/beanProcesses';
 import { beansApi, type BeanInput } from '../api/beans';
 import { errorMessage } from '../api/client';
 import AppHeader from '../components/AppHeader.vue';
+import BeanPhotos from '../components/BeanPhotos.vue';
 import RatingInput from '../components/RatingInput.vue';
 import { localDateInput, parseDecimal, toDateInput } from '../lib/format';
 import { ALTITUDE_LABELS, altitudeText, parseAltitude } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import { useWorkspaceStore } from '../stores/workspace';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
-import type { Bean, BeanProcess, BlendType, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from '../api/types';
+import type { Bean, BeanPhoto, BeanProcess, BlendType, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from '../api/types';
 import { COUNTRY_AREAS, ORIGIN_AREAS, areaForCountry } from '../lib/origins';
 import { ROAST_LEVELS } from '../lib/scale';
 import {
@@ -67,6 +68,10 @@ const website = ref('');
 const showOnPublicMenu = ref(true);
 const rating = ref<number | null>(null);
 const notes = ref('');
+// Saved photos, cover first (docs/api/bean-photos.md §4c); a new bean's are
+// held by BeanPhotos until it's saved.
+const photos = ref<BeanPhoto[]>([]);
+const photoPicker = ref<InstanceType<typeof BeanPhotos> | null>(null);
 
 const countries = Object.keys(COUNTRY_AREAS);
 // A known country fills in its growing area, unless one is already chosen.
@@ -174,7 +179,9 @@ function fill(bean: Bean): void {
     'bean.website': bean.website,
     'bean.rating': bean.rating,
     'bean.notes': bean.notes,
+    'bean.photos': bean.photos,
   });
+  photos.value = bean.photos;
   roasterName.value = bean.roasterName;
   beanName.value = bean.beanName;
   process.value = bean.processId ?? '';
@@ -217,6 +224,7 @@ function fillCopy(bean: Bean): void {
   weightLoss.value = '';
   purchaseDate.value = '';
   rating.value = null;
+  photos.value = []; // a new bag: its own photos
   inventory.value = bean.bagWeightGrams === null ? '0' : String(bean.bagWeightGrams);
   // Nothing is stored for the copy yet: an older bean's 5-step level (no
   // roast name) is sent explicitly, else the API derives it from the name.
@@ -233,6 +241,11 @@ onMounted(async () => {
       .then((r) => (processes.value = r.processes))
       .catch(() => (processes.value = [])); // the select just offers "Not sure"
   }
+  await load();
+});
+
+async function load(): Promise<void> {
+  const ws = workspaces.current?.id;
   if (!editing.value && !copyFrom) return;
   try {
     const list = ws ? (await beansApi.list(ws)).beans : [];
@@ -252,7 +265,7 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
-});
+}
 
 async function save(): Promise<void> {
   submitted.value = true;
@@ -303,7 +316,18 @@ async function save(): Promise<void> {
   error.value = '';
   try {
     if (props.id) await beansApi.update(ws, props.id, input);
-    else await beansApi.create(ws, input);
+    else {
+      const { bean } = await beansApi.create(ws, input);
+      const photoError = (await photoPicker.value?.uploadPending(bean.id)) ?? '';
+      if (photoError) {
+        // The bean is saved: carry on editing it, with the photos that made it.
+        if (input.priceCurrency) rememberCurrency(input.priceCurrency);
+        await router.replace({ name: 'bean-edit', params: { id: bean.id } });
+        await load();
+        error.value = `Bean saved, but ${photoError}`;
+        return;
+      }
+    }
     if (input.priceCurrency) rememberCurrency(input.priceCurrency);
     await router.push({ name: 'beans' });
   } catch (err) {
@@ -392,6 +416,11 @@ async function save(): Promise<void> {
           <input v-model="decaf" type="checkbox" />
           Decaf
         </label>
+      </section>
+
+      <section v-if="show('bean.photos') && workspaces.current" class="card stack">
+        <h2>Photos</h2>
+        <BeanPhotos ref="photoPicker" v-model="photos" :workspace-id="workspaces.current.id" :bean-id="props.id ?? null" />
       </section>
 
       <section class="card stack">

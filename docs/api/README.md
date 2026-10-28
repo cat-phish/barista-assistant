@@ -21,6 +21,7 @@ means drinks, wherever you see it (code comments use
 | §3e | [brewer-methods.md](brewer-methods.md) | Brewer Methods |
 | §4 | [beans.md](beans.md) | Beans |
 | §4b | [bean-processes.md](bean-processes.md) | Bean Processes |
+| §4c | [bean-photos.md](bean-photos.md) | Bean Photos (the bag or label; cover in the list) |
 | §5 | [recipes.md](recipes.md) | Recipes |
 | §5b | [ingredients.md](ingredients.md) | Ingredients |
 | §5c | [drinks.md](drinks.md) | Drinks |

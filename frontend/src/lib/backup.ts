@@ -1,5 +1,6 @@
 // Reading a backup file before restoring it (docs/api/backup.md §2b), and
 // saving one. Unit-tested in backup.test.ts.
+import { unzipSync } from 'fflate';
 import { LISTS, type BackupFile, type ListName } from '../api/backup';
 
 // What the preview counts, by the file's table names.
@@ -13,6 +14,7 @@ const COUNTED: Array<[table: string, one: string, many: string]> = [
   ['grinders', 'grinder', 'grinders'],
   ['water_profiles', 'water profile', 'water profiles'],
   ['menu_items', 'menu item', 'menu items'],
+  ['bean_photos', 'photo', 'photos'],
 ];
 
 export type ReadBackup = { ok: true; file: BackupFile } | { ok: false; error: string };
@@ -30,6 +32,21 @@ export function readBackup(text: string): ReadBackup {
   }
   return { ok: true, file: file as BackupFile };
 }
+
+// A .zip backup (with photos): its backup.json, read like a JSON file. The
+// photos stay in the zip, which is sent as it is to restore.
+export const ZIP_BACKUP_JSON = 'backup.json';
+export function readBackupZip(bytes: Uint8Array): ReadBackup {
+  let json: Uint8Array | undefined;
+  try {
+    json = unzipSync(bytes, { filter: (f) => f.name === ZIP_BACKUP_JSON })[ZIP_BACKUP_JSON];
+  } catch {
+    return { ok: false, error: "That file isn't a backup (it isn't a zip that can be read)." };
+  }
+  if (!json) return { ok: false, error: `That zip isn't a Barista backup (it has no ${ZIP_BACKUP_JSON}).` };
+  return readBackup(new TextDecoder().decode(json));
+}
+export const isZip = (name: string): boolean => name.toLowerCase().endsWith('.zip');
 
 // The lists a file can import (docs/api/backup.md §2b, "By list"): an export
 // says which it was made for; a backup has every list it has rows of.

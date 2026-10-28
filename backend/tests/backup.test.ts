@@ -114,7 +114,9 @@ describe("workspace backup and restore (docs/api/backup.md §2b)", () => {
     const backup = res.body;
     expect(backup).toMatchObject({ format: "barista-backup", version: BACKUP_VERSION, workspace: { slug: ws.slug, menuTitle: "Our bar" } });
     // The test workspace has rows in every table, so the comparison below covers them all.
-    for (const t of TABLE_INFO) expect(backup.tables[t.name]?.length, t.name).toBeGreaterThan(0);
+    // (Photos only go in a .zip with their files: a JSON file has none.)
+    for (const t of TABLE_INFO) if (t.name !== "bean_photos") expect(backup.tables[t.name]?.length, t.name).toBeGreaterThan(0);
+    expect(backup.tables.bean_photos).toEqual([]);
     expect(backup.tables.brew_logs[0]).toMatchObject({ brewedBy: owner.email });
     expect(backup.tables.brew_logs[0]).not.toHaveProperty("userId");
     expect(backup.tables.brew_logs[0]).not.toHaveProperty("workspaceId");

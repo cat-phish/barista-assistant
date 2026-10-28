@@ -324,6 +324,13 @@ export interface BeanProcess {
   builtin: BeanProcessKey | null; // null = added by the workspace
 }
 
+// The image is at beansApi.photoUrl (WebP, at most 1024 px).
+export interface BeanPhoto {
+  id: string;
+  width: number;
+  height: number;
+}
+
 export interface Bean {
   id: string;
   workspaceId: string;
@@ -358,6 +365,7 @@ export interface Bean {
   createdAt: string;
   freezePeriods: FreezePeriod[]; // oldest first; one with thawedOn null = frozen now
   frozen: boolean; // a period is open (from the API, worked out from freezePeriods)
+  photos: BeanPhoto[]; // cover first (docs/api/bean-photos.md §4c)
 }
 
 export interface FreezePeriod {

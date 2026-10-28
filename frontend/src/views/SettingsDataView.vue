@@ -8,7 +8,7 @@ import AiRequestsChoice from '../components/AiRequestsChoice.vue';
 import ImportLists from '../components/ImportLists.vue';
 import RestoreBackup from '../components/RestoreBackup.vue';
 import SettingsLayout from '../components/SettingsLayout.vue';
-import { backupFileName, backupSummary, exportFileName, hasAiSuggestions, LIST_LABELS, saveBlob, saveJson } from '../lib/backup';
+import { backupFileName, backupSummary, exportFileName, hasAiSuggestions, LIST_LABELS, readBackupZip, saveBlob, saveJson } from '../lib/backup';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
@@ -26,12 +26,22 @@ function choose(aiRequests: boolean): void {
   void next?.(aiRequests);
 }
 
+// With photos, the backup is a .zip (docs/api/backup.md §2b).
+const withPhotos = ref(false);
 async function download(aiRequests: boolean): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   downloading.value = true;
   downloadError.value = '';
   try {
+    if (withPhotos.value) {
+      const zip = await backupApi.downloadZip(ws, aiRequests);
+      const read = readBackupZip(new Uint8Array(await zip.arrayBuffer()));
+      if (!read.ok) throw new Error(read.error);
+      saveBlob(backupFileName(read.file).replace(/\.json$/, '.zip'), zip);
+      downloaded.value = backupSummary(read.file);
+      return;
+    }
     const file = await backupApi.download(ws, aiRequests);
     saveJson(backupFileName(file), file);
     downloaded.value = backupSummary(file);
@@ -95,6 +105,10 @@ async function downloadCsv(list: 'brew_logs' | 'beans'): Promise<void> {
         prep, problems and AI suggestions. Keep it somewhere safe, or restore it on another server.
       </p>
       <template v-if="isOwner">
+        <label class="checkbox">
+          <input v-model="withPhotos" type="checkbox" />
+          Include bean photos (a .zip instead of .json)
+        </label>
         <button class="btn btn-primary" type="button" :disabled="downloading" @click="choosing = download">{{ downloading ? 'Preparing…' : 'Download backup' }}</button>
         <p v-if="downloaded !== null" class="muted small" aria-live="polite">Saved: {{ downloaded || 'an empty workspace' }}.</p>
         <p v-if="downloadError" class="form-error" role="alert">{{ downloadError }}</p>
