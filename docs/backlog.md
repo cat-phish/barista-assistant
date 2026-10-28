@@ -25,8 +25,8 @@ and fix the references.
 **Contents**
 - A. Settings & configuration: 1–2
 - B. Beans: 3
-- C. Brewing & logging: 4–7
-- D. Prep: 8–9
+- C. Brewing & logging: 4–8
+- D. Prep: 9
 - E. Recipes: 10–11
 - F. AI suggestions: 12–13
 - G. Insights: 14
@@ -247,30 +247,34 @@ Recording a brew: what's measured, and how fast it is to log.
 - **Open questions:** move brew problems from Settings → Lists to Bar setup,
   next to the prep list?
 
+### 8. A delay before the timer starts
+
+- **Status:** idea
+- **Why:** pressing Start and then reaching for the kettle or the
+  machine's button costs a second or two, so the timer runs ahead of the
+  brew. A short countdown gives time to get in place.
+- **Approach:**
+  - A per-person preference under Settings → Brew setup:
+    **Start delay** 0, 3 or 5 seconds, default 0 (as now).
+  - Pressing Start shows "3, 2, 1" over the clock, then starts the timer;
+    the brew's start time is when the countdown ends, not the press.
+  - Tapping again during the countdown starts at once; Cancel brew stops
+    it. A beep or vibration at zero, if the device allows.
+  - Backend `DEFAULT_PREFERENCES` and the preferences validator;
+    `docs/api/auth.md` §1; `docs/timer_architecture.md` for the start.
+- **Size:** S
+- **Depends on:** nothing.
+- **Open questions:**
+  - Espresso too, or only filter (a shot often starts with the machine's
+    own button)?
+  - Does the wake lock and the steps' first cue wait for the countdown?
+
 ---
 
 ## D. Prep
 
-The prep checklist (Bar setup → Tools today): what starts ticked, and what
-it's called.
-
-### 8. Recipe default prep
-
-- **Status:** idea
-- **Why:** a recipe usually has the same prep (rinse the filter, WDT); it
-  has to be ticked by hand every brew, or remembered per brewer.
-- **Approach:**
-  - The recipe form picks prep items that start ticked when it's brewed
-    (only those offered for its brewer: `offeredFor`, `lib/prepTools.ts`).
-  - Brew setup ticks them when the recipe is chosen; they can be unticked,
-    and the log form keeps what's ticked.
-  - A join table (recipe → prep item), in backups and the list import.
-- **Size:** S–M
-- **Depends on:** nothing (where each item is offered is built).
-- **Open questions:**
-  - Which wins: the recipe's defaults, Repeat's prep, or the remembered
-    prep (Settings → Brew setup)? Or add them together?
-  - Should the AI see that prep came from the recipe's defaults?
+The prep checklist (Bar setup → Tools today): what it's called and how it's
+ordered.
 
 ### 9. Call it Prep, and drag to reorder
 
@@ -311,9 +315,9 @@ Building recipes: their steps, timings and target window.
 - **Size:** S to finish (rebase on `dev`, which has the step timings now).
 - **Depends on:** nothing.
 - **Open questions:**
-  - Is it needed alongside prep tools on setup, or once recipes have
-    default prep (Prep section)? A countdown (preheat 2:00) is the one thing
-    the tools can't do.
+  - Is it needed now that setup has the prep checklist and recipes have
+    default prep? A countdown (preheat 2:00) is the one thing the tools
+    can't do.
 
 ### 11. Target finish window vs. the steps
 
