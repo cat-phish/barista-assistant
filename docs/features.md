@@ -1,8 +1,8 @@
 # Features
 
 What the app does, briefly, kept up to date as features land. The contracts
-are in `schema.md`, `api/` (index in `api/README.md`) and `timer_architecture.md`; the plan for
-upcoming work is in `roadmap.md`.
+are in `schema.md`, `api/` (index in `api/README.md`) and `timer_architecture.md`; upcoming work is in `backlog.md`, and completed
+work is in `roadmap.md`.
 
 ## Accounts & workspaces
 - **Accounts:** email + password; the session is an httpOnly cookie.
@@ -35,7 +35,7 @@ upcoming work is in `roadmap.md`.
   workspaces page, as a **new** workspace they own: every brew becomes
   theirs, the public menu starts off, members are invited again.
 - **Export and import by list:** each list page (beans, recipes, drinks,
-  ingredients, brewers, grinders, water, prep tools, the journal; brew
+  ingredients, brewers, grinders, water, prep items, the journal; brew
   problems in Settings → Lists) exports the items picked in "Select to
   export…" and imports into that list with "Import…". Settings → Data
   exports whole lists, several at once, and imports several at once. What
@@ -60,16 +60,16 @@ upcoming work is in `roadmap.md`.
   roast" stays meaningful for frozen coffee.
 
 ## Bar setup
-One **Bar setup** section with tabs: Brewers, Grinders, Water, Tools and Menu.
+One **Bar setup** section with tabs: Brewers, Grinders, Water, Prep and Menu.
 Brewers and Grinders are tables like Recipes: filter brewers by type (pour
 over, immersion, espresso) and grinders by hand or electric, with a **Show
 archived** checkbox when there are archived ones (where Restore is); sort by
 any column (name, type, category; power, burrs, adjustment; date added), unset
 values last; tap a row to see details and edit or archive it. Filter and sort
 are remembered. **Delete** is on the edit page (for brewers, grinders, water,
-recipes, drinks, ingredients and tools): it says what
+recipes, drinks, ingredients and prep items): it says what
 would be unlinked or removed and asks for "I understand" first.
-Adding and editing a brewer, grinder, ingredient or tool happen on their own page
+Adding and editing a brewer, grinder, ingredient or prep item happen on their own page
 (the **Add** button sits at the top of each list, like Recipes and Drinks).
 - **Grinders:** per workspace, with optional details: stepped/stepless,
   setting range and step size, burr type and size, hand/electric, and
@@ -91,11 +91,15 @@ Adding and editing a brewer, grinder, ingredient or tool happen on their own pag
   brewing) and can go on the menu as the plain brew, under a menu name
   ("Espresso" for the machine). Archived like grinders once brews used it;
   deleting is refused while recipes use it.
-- **Tools:** the prep checklist (WDT, a puck screen, a paper filter…), in
-  the order the brew page lists it; move with ↑/↓, archive and restore on
-  the list. Each tool is **offered for** every brew, or for the methods
+- **Prep:** the prep checklist (WDT, a puck screen, a paper filter…), in
+  the order the brew page lists it; drag to reorder or move with ↑/↓ on
+  the list, with Archive/Restore and Delete on the edit page. Each item is **offered for** every brew, or for the methods
   and brewers ticked on its page (a paper filter sandwich for Espresso and
   the Oxo Rapid Brewer, not the V60); the list shows which.
+
+Brew problems (Settings → Lists) also support drag reordering, handle arrow
+keys and ↑/↓ buttons, including archived entries. Both checklists save their
+order immediately and restore it if saving fails.
 
 ## Recipes
 - **Style** (optional): how the recipe brews, from its brewer's method:
@@ -128,7 +132,7 @@ Adding and editing a brewer, grinder, ingredient or tool happen on their own pag
 - **Grind starting points** per grinder, and an optional **default grinder**
   that's selected for you when you brew the recipe (otherwise the last
   grinder you used).
-- **Default prep:** the prep tools (offered for its brewer) that start
+- **Default prep:** the prep items (offered for its brewer) that start
   ticked when you brew the recipe; a field you can hide (Settings → Fields).
 - **Espresso recipes:** dose and target shot weight (ratio 1:2 style), target
   shot time and first-drop windows, temperature, and a **shot profile**: steps
@@ -208,7 +212,12 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   starting point. Start and Log stay disabled until the bean and the batch
   are set, with a line saying what's still missing ("Choose a bean.",
   "Enter a size.").
-- **Prep on setup:** a **Prep** card above Start lists the prep tools
+- **Start delay:** Settings → Brew setup → Timer start offers no delay,
+  3 seconds or 5 seconds for each brew type (Filter, Espresso, Stovetop,
+  Other), per person. Custom methods follow their underlying type. The timer
+  counts down before starting, with Start now to skip it and a beep/vibration where
+  supported. Cancel clears it; long cold brews start immediately.
+- **Prep on setup:** a **Prep** card above Start lists the prep items
   offered for the recipe's method or brewer, to tick as you get ready.
   The recipe's **default prep** starts ticked; without any, what you last
   ticked with that brewer (if remembered), else nothing. The ticks go to

@@ -1,15 +1,23 @@
-# 3d. Prep Tools
+# 3d. Prep
 
 > Part of the API spec. Conventions, auth rules and the section index are in
 > [README.md](README.md); a bare `§N` refers to that index.
 
-An ordered list per workspace (Bar setup → Tools) of the prep a brew can use:
+An ordered list per workspace (Bar setup → Prep) of the prep a brew can use:
 WDT, a puck screen, a rinsed paper filter… Brew logs record the tools used
 (§6) and the AI analysis gets their names (§9). The brew page lists them as
 a checklist in this order, showing the tools offered for the recipe's
 method or brewer: on setup above Start, to tick while getting ready, and on
 the log form with the same ticks, to change afterwards. Each tool is edited
-on its own page (Bar setup → Tools → Edit).
+on its own page (Bar setup → Prep → Edit), including Archive/Restore and
+Delete. The list shows each item’s offered-for tag beneath its name.
+
+Owners and baristas can drag the handles to reorder, use the handles' up/down
+arrow keys, or use the ↑/↓ buttons. Changes save immediately; a failed save
+restores the previous order and shows an error. Viewers cannot reorder.
+When archived items are hidden, they keep their slots in the full order;
+only visible slots are reordered. Showing archived items lets them move too.
+Reordering is disabled while selecting items to export.
 
 **Tool object:**
 

@@ -4,7 +4,7 @@
 > [README.md](README.md); a bare `§N` refers to that index.
 
 A **backup** is a whole workspace as one JSON file: every list, bean,
-recipe, drink, the menu, and every brew with its marks, prep tools,
+recipe, drink, the menu, and every brew with its marks, prep items,
 problems and AI analyses. A **restore** turns a backup into a **new**
 workspace owned by the person restoring; nothing existing is changed. An
 **export** is the same file format holding only some lists, and an
@@ -28,7 +28,7 @@ new workspace).
 | Spreadsheet (CSV) | Settings → Data → Spreadsheet | `GET …/csv/:list` | `backend/src/csv.ts` |
 
 **List pages** (Journal, Beans, Recipes, Drinks, Ingredients, Brewers,
-Grinders, Water profiles, Prep tools, and brew problems on Settings →
+Grinders, Water profiles, Prep, and brew problems on Settings →
 Lists) have one bar, `frontend/src/components/ListDataBar.vue`:
 "Select to export…" (the rows get ticks; "Export selected" downloads them
 with what they need) and "Import…" (a dialog with the import below,
@@ -80,7 +80,7 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   the server upgrades older versions on restore and refuses newer ones.
   New optional columns don't change it (an older file just lacks them).
   Versions so far (`UPGRADES` in `backend/src/backup.ts`):
-  - **2:** a prep tool's one `methodKind` (`null` = every method) became
+  - **2:** a prep item's one `methodKind` (`null` = every method) became
     `methodKinds` (`[]` = every brew), plus the brewers it's offered for
     (`prep_tool_brewers`). A version 1 file restores with `[methodKind]`
     or `[]`, and no brewers.
@@ -152,24 +152,24 @@ too. Where the app offers them: "Where it is" above. Code:
   marks, prep and problem ticks, AI analyses) and, repeatedly, every row
   they point at: a recipe's brewer, style and grinders, the brewer's method,
   a drink's recipe and ingredients, a brew's bean, recipe, grinder, water,
-  drink, tools and problems. Nothing else (no menu, no other lists). It's
+  drink, prep items and problems. Nothing else (no menu, no other lists). It's
   worked out from each table's references (`TABLE_INFO`), so a new
   reference comes along by itself:
 
   | List | Its own rows | Comes along (and what that needs in turn) |
   | --- | --- | --- |
   | `beans` | beans, bean freezes | bean process |
-  | `recipes` | recipes, steps, grind starting points, default prep | brewer (→ brewer method), recipe style, default grinder, the grinders of its starting points, its prep tools |
+  | `recipes` | recipes, steps, grind starting points, default prep | brewer (→ brewer method), recipe style, default grinder, the grinders of its starting points, its prep items |
   | `drinks` | drinks, drink ingredients | drink category, the drink it's a variant of, default recipe (→ as recipes), ingredients |
   | `ingredients` | ingredients | – |
   | `brewers` | brewers | brewer method |
-  | `prep_tools` | prep tools, the brewers each is offered for | those brewers (→ as brewers) |
+  | `prep_tools` | prep items, the brewers each is offered for | those brewers (→ as brewers) |
   | `grinders`, `water_profiles`, `brew_problems` | themselves | – |
-  | `brew_logs` | brews, their marks, prep and problem ticks, AI analyses | bean (→ as beans), recipe (→ as recipes), grinder, water profile, drink (→ as drinks), brewer, prep tools, brew problems |
+  | `brew_logs` | brews, their marks, prep and problem ticks, AI analyses | bean (→ as beans), recipe (→ as recipes), grinder, water profile, drink (→ as drinks), brewer, prep items, brew problems |
 - **Matching** (`MATCH_KEYS`): a row is "already here" when the workspace
   has one with the same key, and the import uses that one instead:
   - by name (case-insensitive) for brewers, grinders, water profiles, prep
-    tools, brew problems, ingredients, drink categories and menu sections;
+    items, brew problems, ingredients, drink categories and menu sections;
   - brewer methods and bean processes by built-in key or name; recipe
     styles by method and built-in key or name;
   - beans by roaster, name, batch and roast date (two bags of the same

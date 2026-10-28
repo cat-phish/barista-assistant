@@ -26,7 +26,7 @@ async function deleted(): Promise<void> {
 <template>
   <section class="card danger-zone">
     <div>
-      <h2>Delete this {{ kind === 'water' ? 'water profile' : kind }}</h2>
+      <h2>Delete this {{ kind === 'water' ? 'water profile' : kind === 'tool' ? 'prep item' : kind }}</h2>
       <p class="muted small">It's gone for good. You'll see what uses it before anything is deleted.</p>
     </div>
     <button class="btn btn-danger" type="button" @click="open = true">Delete</button>

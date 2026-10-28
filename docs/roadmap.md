@@ -1408,3 +1408,42 @@ brew, or remembered per brewer.
   out of saved repeat choices. The AI isn't told where a tick came from;
   it sees what was ticked, as before.
 
+
+## Prep naming and checklist reordering (built)
+
+Backlog item "Call it Prep, and drag to reorder", branch `prep-reorder`.
+Tools now reads **Prep** across Bar setup, its editor, and data import/export;
+individual entries are prep items. Existing URLs, API names, table names and
+backup formats stay compatible. Contracts: `api/prep-tools.md` §3d,
+`api/brew-problems.md` §6b.
+
+- **Prep and brew problems** both have touch drag handles, handle arrow
+  keys with focus retained and move announcements, and the existing ↑/↓
+  buttons. Other Settings lists keep their existing controls.
+- Changes save immediately through the existing reorder endpoints; a failed
+  save restores the old order and shows the error. Viewers cannot reorder,
+  nor can editors while saving, selecting Prep for export, or renaming a
+  brew problem.
+- Hidden archived Prep items keep their slots while the visible items move;
+  showing archived items makes them movable. Brew problems already lists
+  archived entries, and includes them in reordering.
+- Offered-for tags always sit below the prep item name; Archive/Restore
+  lives on its edit page alongside Delete.
+- No schema migration or backup-version change.
+
+## Delay before the timer starts (built)
+
+Backlog item "A delay before the timer starts", branch `timer-start-delay`.
+Contract: `api/auth.md` §1 `startDelays`, `timer_architecture.md` §3.
+
+- Settings → Brew setup → Timer start: no delay / 3 seconds / 5 seconds,
+  separately for Filter, Espresso, Stovetop and Other, per person. Custom
+  methods use their underlying type. Default off: a type not set has no
+  delay.
+- Tapping Start on the timer shows a countdown; Start now skips it. The
+  countdown is excluded from brew time and marks; step cards and recording
+  controls appear at zero, with a short beep/vibration where allowed.
+- Decided: applies to espresso and every other timed brew, including a
+  stopwatch; long cold brews and logging without a timer skip it. Wake lock
+  starts with the countdown; Cancel brew or unmount clears pending work and
+  releases the lock. Deadline-based timing tolerates background throttling.

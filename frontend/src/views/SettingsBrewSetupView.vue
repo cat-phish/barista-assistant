@@ -7,14 +7,16 @@
 // Yours only; saved as soon as a box changes.
 import { computed, ref } from 'vue';
 import { errorMessage } from '../api/client';
-import type { RememberKey, RepeatKeep, UserPreferences } from '../api/types';
+import type { MethodKind, RememberKey, RepeatKeep, UserPreferences } from '../api/types';
 import SettingsLayout from '../components/SettingsLayout.vue';
 import { DEFAULT_PREFERENCES, usePreferences } from '../composables/usePreferences';
 import { REMEMBER_OPTIONS } from '../lib/rememberSetup';
 import { REPEAT_OPTIONS } from '../lib/repeatBrew';
+import { METHOD_KINDS, METHOD_ORDER } from '../lib/equipment';
+import { startDelayFor } from '../lib/startDelay';
 import { useAuthStore } from '../stores/auth';
 
-type Section = 'remember' | 'repeat';
+type Section = 'remember' | 'repeat' | 'timer';
 const auth = useAuthStore();
 const { prefs } = usePreferences();
 const remembers = computed(() => new Set(prefs.value.rememberSetup));
@@ -23,7 +25,7 @@ const saving = ref(false);
 const error = ref<{ in: Section; text: string } | null>(null);
 const saved = ref<Section | null>(null);
 
-async function save(section: Section, patch: Partial<Pick<UserPreferences, 'rememberSetup' | 'repeatKeeps'>>): Promise<void> {
+async function save(section: Section, patch: Partial<Pick<UserPreferences, 'rememberSetup' | 'repeatKeeps' | 'startDelays'>>): Promise<void> {
   saving.value = true;
   error.value = null;
   saved.value = null;
@@ -35,6 +37,12 @@ async function save(section: Section, patch: Partial<Pick<UserPreferences, 'reme
   } finally {
     saving.value = false;
   }
+}
+// The selects stay enabled while saving, so a keyboard user keeps focus; a
+// change made mid-save, or a refused one, puts the saved value back.
+async function saveDelay(kind: MethodKind, select: HTMLSelectElement): Promise<void> {
+  if (!saving.value) await save('timer', { startDelays: { ...prefs.value.startDelays, [kind]: Number(select.value) as 0 | 3 | 5 } });
+  select.value = String(startDelayFor(prefs.value, kind));
 }
 // Kept in the options' order, so the list reads the same however it's ticked.
 function toggleRemember(key: RememberKey, on: boolean): Promise<void> {
@@ -51,6 +59,20 @@ const repeatDefault = computed(() => sameSet(DEFAULT_PREFERENCES.repeatKeeps, pr
 <template>
   <SettingsLayout title="Brew setup">
     <p class="muted">How the brew page fills itself in: from your last brew, or from the brew you repeat.</p>
+    <section class="card stack" aria-labelledby="timer-start">
+      <h2 id="timer-start">Timer start</h2>
+      <div v-for="kind in METHOD_ORDER" :key="kind" class="field">
+        <label :for="`start-delay-${kind}`">{{ METHOD_KINDS[kind].label }} start delay</label>
+        <select :id="`start-delay-${kind}`" :value="startDelayFor(prefs, kind)" @change="saveDelay(kind, $event.target as HTMLSelectElement)">
+          <option :value="0">No delay</option>
+          <option :value="3">3 seconds</option>
+          <option :value="5">5 seconds</option>
+        </select>
+      </div>
+      <p class="muted small">Choose a delay for each brew type. Custom methods use the delay for the type they behave like. Tap Start now to skip the countdown. Long cold brews start immediately.</p>
+      <p v-if="error?.in === 'timer'" class="form-error" role="alert">{{ error.text }}</p>
+      <p v-else-if="saved === 'timer'" class="muted small" aria-live="polite">Saved.</p>
+    </section>
     <section class="card stack" aria-labelledby="remember-setup">
       <h2 id="remember-setup">Remember from last time</h2>
       <p class="muted small">A new brew starts with what you chose last time on this device. Archived beans, recipes and the like are skipped.</p>

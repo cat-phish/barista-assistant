@@ -5,7 +5,10 @@
 // like"): asked when adding, shown and changeable on the row. Built-ins (builtin set) can be renamed and hidden but not deleted.
 // Deleting goes through DeleteDialog, so what uses it is listed first and an
 // "I understand" is needed when anything does (CLAUDE.md rule 7).
-import { computed, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { VueDraggable } from 'vue-draggable-plus';
+import ReorderHandle from './ReorderHandle.vue';
+import { type DragUpdate, reorderVisible, undoDragMove } from '../lib/reorder';
 import { ApiError, errorMessage } from '../api/client';
 import type { DeletableKind, Usage } from '../lib/deleting';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -28,6 +31,8 @@ export interface ListApi {
 
 const props = defineProps<{
   entries: ListEntry[];
+  draggable?: boolean; // opt in for brew problems
+  refresh?: () => Promise<void>; // keep mutations locked until the parent reloads
   api: ListApi;
   kind: DeletableKind; // for the delete dialog's wording
   noun: string; // "process"
@@ -39,19 +44,28 @@ const props = defineProps<{
   words?: { hide: string; show: string; hidden: string };
 }>();
 const words = computed(() => props.words ?? { hide: 'Hide', show: 'Show', hidden: 'Hidden' });
-const emit = defineEmits<{ changed: [] }>();
+const emit = defineEmits<{ changed: []; saving: [value: boolean] }>();
 const workspaces = useWorkspaceStore();
+const ordered = ref<ListEntry[]>([...props.entries]);
+watch(() => props.entries, (entries) => { ordered.value = [...entries]; });
+const orderList = ref<InstanceType<typeof VueDraggable> | null>(null);
+const moveAnnouncement = ref('');
 
 const busy = ref(false);
+watch(busy, (value) => emit('saving', value), { flush: 'sync' });
+// A failed refresh can replace the list with the parent's error mid-save;
+// the parent mustn't stay locked by a list that's gone.
+onBeforeUnmount(() => { if (busy.value) emit('saving', false); });
 const error = ref('');
 async function run(action: (ws: string) => Promise<unknown>): Promise<boolean> {
   const ws = workspaces.current?.id;
-  if (!ws) return false;
+  if (!ws || busy.value) return false;
   busy.value = true;
   error.value = '';
   try {
     await action(ws);
-    emit('changed');
+    if (props.refresh) await props.refresh();
+    else emit('changed');
     return true;
   } catch (err) {
     // A 409 is a taken name, unless the server explains (e.g. recipes use a
@@ -81,6 +95,7 @@ async function setChoice(e: ListEntry, choice: string): Promise<void> {
 const editingId = ref<string | null>(null);
 const editName = ref('');
 function startEdit(e: ListEntry): void {
+  if (busy.value) return;
   editingId.value = e.id;
   editName.value = e.name;
   error.value = '';
@@ -91,12 +106,28 @@ async function saveEdit(e: ListEntry): Promise<void> {
   else if (name && (await run((ws) => props.api.update(ws, e.id, { name })))) editingId.value = null;
 }
 
-async function move(index: number, by: -1 | 1): Promise<void> {
-  const ids = props.entries.map((e) => e.id);
-  const [id] = ids.splice(index, 1);
-  if (!id) return;
-  ids.splice(index + by, 0, id);
-  await run((ws) => props.api.reorder(ws, ids));
+const reorderDisabled = computed(() => busy.value || !workspaces.canEdit || editingId.value !== null);
+async function reorder(from: number, to: number): Promise<void> {
+  if (reorderDisabled.value) return;
+  const previous = ordered.value;
+  const moved = previous[from];
+  const next = reorderVisible(previous, previous, from, to);
+  if (next.every((item, i) => item.id === previous[i]?.id)) return;
+  ordered.value = next;
+  if (await run((ws) => props.api.reorder(ws, next.map((item) => item.id)))) {
+    moveAnnouncement.value = `${moved?.name} moved to position ${to + 1} of ${next.length}`;
+  } else {
+    ordered.value = previous;
+  }
+  await nextTick();
+  orderList.value?.$el.querySelector(`[data-reorder-id="${moved?.id}"] .reorder-handle`)?.focus();
+}
+function onDragUpdate(event: DragUpdate): void {
+  undoDragMove(event);
+  if (event.oldIndex !== undefined && event.newIndex !== undefined) void reorder(event.oldIndex, event.newIndex);
+}
+function move(index: number, by: -1 | 1): void {
+  void reorder(index, index + by);
 }
 
 const toggleHidden = (e: ListEntry) => run((ws) => props.api.update(ws, e.id, { hidden: !e.hidden }));
@@ -111,8 +142,12 @@ function deleted(): void {
 </script>
 
 <template>
-  <ol class="entries">
-    <li v-for="(e, i) in entries" :key="e.id" :class="{ hidden: e.hidden }">
+  <p v-if="draggable && workspaces.canEdit && ordered.length > 1" class="muted small">Drag ⠿ to reorder, or use the arrow buttons.</p>
+  <span class="visually-hidden" aria-live="polite">{{ moveAnnouncement }}</span>
+  <VueDraggable ref="orderList" :model-value="ordered" tag="ol" class="entries"
+    handle=".reorder-handle" :animation="150" ghost-class="drag-ghost"
+    :disabled="!draggable || reorderDisabled" :custom-update="onDragUpdate" :inert="busy">
+    <li v-for="(e, i) in ordered" :key="e.id" :data-reorder-id="e.id" :class="{ hidden: e.hidden }">
       <form v-if="editingId === e.id" class="row" novalidate @submit.prevent="saveEdit(e)">
         <label class="visually-hidden" :for="`entry-${e.id}`">Name</label>
         <input :id="`entry-${e.id}`" v-model="editName" maxlength="100" />
@@ -120,6 +155,7 @@ function deleted(): void {
         <button class="btn-link" type="button" @click="editingId = null">Cancel</button>
       </form>
       <div v-else class="row">
+        <ReorderHandle v-if="draggable && workspaces.canEdit" :name="e.name" :disabled="reorderDisabled" @move="move(i, $event)" />
         <span class="name">
           {{ e.name }}
           <span v-if="e.hidden" class="badge">{{ words.hidden }}</span>
@@ -134,8 +170,8 @@ function deleted(): void {
         </span>
         <template v-if="workspaces.canEdit">
           <span class="actions">
-            <button class="btn-link" type="button" :disabled="busy || i === 0" :aria-label="`Move ${e.name} up`" @click="move(i, -1)">↑</button>
-            <button class="btn-link" type="button" :disabled="busy || i === entries.length - 1" :aria-label="`Move ${e.name} down`" @click="move(i, 1)">↓</button>
+            <button class="btn-link" type="button" :disabled="reorderDisabled || i === 0" :aria-label="`Move ${e.name} up`" @click="move(i, -1)">↑</button>
+            <button class="btn-link" type="button" :disabled="reorderDisabled || i === ordered.length - 1" :aria-label="`Move ${e.name} down`" @click="move(i, 1)">↓</button>
             <button class="btn-link" type="button" @click="startEdit(e)">Rename</button>
             <button class="btn-link" type="button" :disabled="busy" @click="toggleHidden(e)">{{ e.hidden ? words.show : words.hide }}</button>
             <button v-if="!e.builtin" class="btn-link danger" type="button" @click="deleting = e">Delete</button>
@@ -143,9 +179,9 @@ function deleted(): void {
         </template>
       </div>
     </li>
-  </ol>
+  </VueDraggable>
   <p class="muted small">{{ hiddenHint }}</p>
-  <form v-if="workspaces.canEdit" class="row" novalidate @submit.prevent="add">
+  <form v-if="workspaces.canEdit" class="row" :inert="busy" novalidate @submit.prevent="add">
     <label class="visually-hidden" :for="`new-${kind}`">New {{ noun }}</label>
     <input :id="`new-${kind}`" v-model="newName" maxlength="100" :placeholder="placeholder" />
     <label v-if="choices && choices.length > 1" class="choice-new">
@@ -171,6 +207,7 @@ function deleted(): void {
 </template>
 
 <style scoped>
+.drag-ghost { opacity: 0.35; }
 .entries {
   margin: 0;
   padding: 0;

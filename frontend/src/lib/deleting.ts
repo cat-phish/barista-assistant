@@ -20,7 +20,7 @@ const WARNINGS: Record<DeletableKind, Record<string, (n: number) => string>> = {
   },
   water: { brewLogCount: (n) => `${plural(n, 'brew')} will lose their water profile.` },
   tool: {
-    brewLogCount: (n) => `${plural(n, 'brew')} will no longer list this tool.`,
+    brewLogCount: (n) => `${plural(n, 'brew')} will no longer list this prep item.`,
     recipeCount: (n) => `${plural(n, 'recipe')} will no longer start with it ticked.`,
   },
   problem: { brewLogCount: (n) => `${plural(n, 'brew')} will no longer list this problem.` },

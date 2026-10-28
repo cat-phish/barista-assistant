@@ -1518,6 +1518,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         :subtitle="timerSubtitle"
         :steps="timerSteps"
         :espresso="espresso"
+        :method-kind="recipe?.brewer.kind ?? itemKind"
         :flow-unit="recipe?.flowUnit ?? 'g_s'"
         :expected-finish-min-sec="timerFinish.min"
         :expected-finish-max-sec="timerFinish.max"

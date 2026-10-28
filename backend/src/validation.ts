@@ -62,6 +62,14 @@ export const preferencesSchema = z
     rememberSetup: z
       .array(z.enum(REMEMBER_KEYS))
       .refine((keys) => new Set(keys).size === keys.length, "each once"),
+    // Whole map of per-method delays; an omitted method has none
+    // (docs/api/auth.md §1).
+    startDelays: z.object({
+      filter: z.literal([0, 3, 5]),
+      espresso: z.literal([0, 3, 5]),
+      stovetop: z.literal([0, 3, 5]),
+      other: z.literal([0, 3, 5]),
+    }).partial().strict(),
     steepReminders: z.boolean(),
   })
   .partial()

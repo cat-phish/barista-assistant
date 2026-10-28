@@ -5,12 +5,19 @@
 
 An ordered list per workspace (Settings → Lists → Brew problems) of what can
 go wrong while brewing: a stalled drawdown, a channeling shot, an untared
-scale… It works like prep tools (§3d). Brew logs record the problems ticked
+scale… It works like prep items (§3d). Brew logs record the problems ticked
 (§6, `problemIds`) and the AI analysis gets their names (§9) as the clearest
 clues for the next brew. The brew log form and journal edit list them as a
 checklist in this order, showing a recipe's method's problems and the
 all-method ones. Repeating a brew never copies them (they're noted each
 time; `docs/api/auth.md` §1 repeatKeeps).
+
+Owners and baristas can drag the handles to reorder, use the handles' up/down
+arrow keys, or use the ↑/↓ buttons. Changes save immediately; a failed save
+restores the previous order and shows an error. Viewers cannot reorder.
+Archived problems remain on this list and can be reordered. Reordering is
+disabled while renaming a problem. Other Settings lists keep their existing
+↑/↓ controls.
 
 **Problem object:**
 

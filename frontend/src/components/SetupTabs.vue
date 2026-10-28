@@ -7,7 +7,7 @@ const tabs = [
   { to: { name: 'brewers' }, text: 'Brewers' },
   { to: { name: 'grinders' }, text: 'Grinders' },
   { to: { name: 'water-profiles' }, text: 'Water' },
-  { to: { name: 'prep-tools' }, text: 'Tools' },
+  { to: { name: 'prep-tools' }, text: 'Prep' },
   { to: { name: 'menu-builder' }, text: 'Menu' },
 ];
 </script>

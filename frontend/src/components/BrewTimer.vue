@@ -8,10 +8,12 @@
 //  - Previous / Current / Up next cards with the same structure for every
 //    step, so the layout doesn't jump. No steps = plain stopwatch.
 import { computed, onUnmounted, ref } from 'vue';
-import type { FlowUnit, MachineCapabilities, Mark, StepFields } from '../api/types';
+import type { FlowUnit, MachineCapabilities, Mark, MethodKind, StepFields } from '../api/types';
 import { formatTime } from '../lib/format';
 import { formatTemp } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
+import { useStartDelay } from '../composables/useStartDelay';
+import { startDelayFor } from '../lib/startDelay';
 import { firstDropVerdict, formatMark, withMark } from '../lib/marks';
 import {
   brewSchedule,
@@ -24,12 +26,13 @@ import {
   STEP_TYPES,
 } from '../lib/steps';
 
-const { temperatureUnit } = usePreferences();
+const { temperatureUnit, prefs } = usePreferences();
 const props = defineProps<{
   recipeName: string;
   subtitle: string; // "Bean • 15 g dose", or "Bean • 18 g → 36 g"
   steps: StepFields[];
   espresso: boolean;
+  methodKind: MethodKind | null;
   flowUnit: FlowUnit;
   expectedFinishMinSec: number | null;
   expectedFinishMaxSec: number | null;
@@ -47,6 +50,38 @@ const elapsedMs = ref(0);
 const marks = ref<Mark[]>([]);
 let animationFrameId: number | null = null;
 let wakeLock: WakeLockSentinel | null = null;
+let wantsWakeLock = false;
+let cueAudio: AudioContext | null = null;
+let delayedStart = false;
+// The context is only for the one beep, so it closes once that's played.
+function closeCueAudio(): void {
+  if (cueAudio && cueAudio.state !== 'closed') void cueAudio.close().catch(() => undefined);
+  cueAudio = null;
+}
+const startDelay = useStartDelay((at) => {
+  startTime.value = at;
+  elapsedMs.value = Math.max(0, Date.now() - at);
+  isRunning.value = true;
+  if (delayedStart) {
+    try { navigator.vibrate?.(150); } catch { /* Optional device cue. */ }
+    try {
+      if (cueAudio?.state === 'running') {
+        const tone = cueAudio.createOscillator();
+        const volume = cueAudio.createGain();
+        volume.gain.setValueAtTime(0.08, cueAudio.currentTime);
+        volume.gain.exponentialRampToValueAtTime(0.001, cueAudio.currentTime + 0.15);
+        tone.frequency.value = 880;
+        tone.connect(volume).connect(cueAudio.destination);
+        tone.onended = closeCueAudio;
+        tone.start();
+        tone.stop(cueAudio.currentTime + 0.15);
+      } else closeCueAudio();
+    } catch { closeCueAudio(); /* Audio support never blocks starting the brew. */ }
+  }
+  animationFrameId = requestAnimationFrame(tick);
+});
+const countingDown = computed(() => startDelay.remaining.value > 0);
+const configuredDelay = computed(() => startDelayFor(prefs.value, props.methodKind));
 
 const elapsedSec = computed(() => elapsedMs.value / 1000);
 const formattedTime = computed(() => formatTime(Math.floor(elapsedSec.value)));
@@ -118,9 +153,12 @@ const tick = () => {
 };
 
 const requestWakeLock = async () => {
+  wantsWakeLock = true;
   try {
     if ('wakeLock' in navigator) {
-      wakeLock = await navigator.wakeLock.request('screen');
+      const lock = await navigator.wakeLock.request('screen');
+      if (wantsWakeLock) wakeLock = lock;
+      else await lock.release();
     }
   } catch (err) {
     console.warn('Wake Lock request failed:', err);
@@ -128,17 +166,31 @@ const requestWakeLock = async () => {
 };
 
 const releaseWakeLock = async () => {
+  wantsWakeLock = false;
   if (wakeLock !== null) {
     await wakeLock.release();
     wakeLock = null;
   }
 };
 
-const startTimer = async () => {
-  startTime.value = Date.now() - elapsedMs.value;
-  isRunning.value = true;
-  await requestWakeLock();
-  animationFrameId = requestAnimationFrame(tick);
+const startTimer = () => {
+  if (isRunning.value) return;
+  if (!countingDown.value) {
+    delayedStart = configuredDelay.value !== 0;
+    // Unlock audio in the user's tap, rather than the countdown callback.
+    if (delayedStart) {
+      try {
+        cueAudio = new AudioContext();
+        void cueAudio.resume().catch(() => undefined);
+      } catch { /* Vibration is still available on supported devices. */ }
+    }
+    void requestWakeLock();
+  } else {
+    // Start now: the tap is the cue, so no beep or vibration.
+    delayedStart = false;
+    closeCueAudio();
+  }
+  startDelay.start(configuredDelay.value);
 };
 
 const finishBrew = async () => {
@@ -152,6 +204,8 @@ const finishBrew = async () => {
 };
 
 onUnmounted(() => {
+  startDelay.cancel();
+  closeCueAudio();
   if (animationFrameId) cancelAnimationFrame(animationFrameId);
   void releaseWakeLock();
 });
@@ -164,7 +218,7 @@ onUnmounted(() => {
       <p class="subtitle">{{ subtitle }}</p>
     </header>
 
-    <template v-if="phase.kind !== 'idle'">
+    <template v-if="!countingDown && phase.kind !== 'idle'">
       <div class="step-card side" aria-label="Previous step">
         <span class="label">Previous</span>
         <span class="side-text" :class="{ none: prevIndex === null }">
@@ -226,7 +280,7 @@ onUnmounted(() => {
     </template>
     <!-- Steps first (they say what to do), then the buttons, then the clock. -->
     <div class="controls">
-      <button v-if="!isRunning && elapsedMs === 0" @click="startTimer" class="btn primary">{{ espresso ? 'Start shot' : 'Start brew' }}</button>
+      <button v-if="!isRunning && elapsedMs === 0" @click="startTimer" class="btn primary">{{ countingDown ? 'Start now' : espresso ? 'Start shot' : 'Start brew' }}</button>
       <button v-else-if="isRunning" @click="finishBrew" class="btn success">Finish & Save</button>
       <template v-if="espresso">
         <button v-if="isRunning && firstDropAt === null" class="btn tap drop" type="button" @click="record('first_drop')">First drop</button>
@@ -239,8 +293,10 @@ onUnmounted(() => {
     </div>
 
     <div class="clock-display" role="timer" aria-live="off">
-      <span class="time">{{ formattedTime }}</span>
-      <p v-if="finishNote" class="finish-note" :class="{ late: finishLate }">{{ finishNote }}</p>
+      <span v-if="countingDown" class="time" role="status" aria-live="polite">{{ startDelay.remaining.value }}</span>
+      <span v-else class="time">{{ formattedTime }}</span>
+      <p v-if="countingDown" class="finish-note">Get ready · tap Start now to skip the countdown.</p>
+      <p v-if="!countingDown && finishNote" class="finish-note" :class="{ late: finishLate }">{{ finishNote }}</p>
     </div>
   </div>
 </template>

@@ -21,6 +21,7 @@ const processes = ref<BeanProcess[]>([]);
 const styles = ref<RecipeStyleItem[]>([]);
 const methods = ref<BrewerMethod[]>([]);
 const problems = ref<BrewProblem[]>([]);
+const problemBusy = ref(false);
 const loading = ref(true);
 const error = ref('');
 
@@ -179,7 +180,7 @@ const styleApi = computed<ListApi>(() => {
       />
     </section>
 
-    <section class="card stack" aria-labelledby="list-problems">
+    <section class="card stack" aria-labelledby="list-problems" :inert="problemBusy">
       <div class="card-head">
         <h2 id="list-problems">Brew problems</h2>
         <ListDataBar list="brew_problems" noun="brew problems" @imported="load()" />
@@ -192,6 +193,9 @@ const styleApi = computed<ListApi>(() => {
       <EditableList
         v-else-if="!error"
         :entries="problemEntries"
+        draggable
+        :refresh="load"
+        @saving="problemBusy = $event"
         :api="problemApi"
         kind="problem"
         noun="problem"

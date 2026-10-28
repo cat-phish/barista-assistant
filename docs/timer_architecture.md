@@ -63,7 +63,25 @@ export default defineConfig({
 > finished later from the journal (docs/api/brew-logs.md §6). Rapid cold brew
 > uses the timer as below.
 *   **Delta-Timestamp Calculation:** Never increment a counter inside `setInterval`. Store `startTime = Date.now() - elapsedMs` and compute `elapsedMs = Date.now() - startTime` inside a `requestAnimationFrame` loop.
-*   **Screen Wake Lock:** Request `navigator.wakeLock.request('screen')` when the brew starts and release it when finished or unmounted.
+*   **Start delay:** Settings → Brew setup → Timer start sets the person's
+    `startDelays` to 0 / 3 / 5 separately for Filter, Espresso, Stovetop
+    and Other (`docs/api/auth.md` §1). Custom methods use their underlying
+    behaviour; no selected type uses Other. A type without one has no
+    delay.
+    Setup opens the timer as before; tapping its Start button begins the
+    countdown. The clock shows the remaining seconds and Start becomes
+    **Start now**; tapping again starts immediately. Step cards and recording
+    controls wait until zero. Cancel brew or leaving the timer clears the
+    pending start. Long cold brews bypass the timer and countdown.
+    The countdown uses a deadline (`Date.now()`), not accumulated ticks;
+    the elapsed brew time starts at that deadline (or the skip tap), even if
+    the browser delivers the callback late. At zero it gives a short beep
+    and vibration where allowed; audio is unlocked by the initial tap and
+    unavailable cues never block the start.
+*   **Screen Wake Lock:** Request `navigator.wakeLock.request('screen')` on
+    the initial Start tap, including the countdown, and release it when
+    finished or unmounted. Release a pending request too if it resolves
+    after cancellation.
 *   **Steps run back to back** (supersedes the reference component's manual "Next Step" button and the earlier fixed start/end times). Recipe steps have a `durationSec` and an `advance` mode (`docs/api/README.md` §5); each step starts when the previous one actually ended:
     *   `auto`: ends `durationSec` after it started. An instant step (0 s) is shown for about two seconds without delaying the next one.
     *   `auto_log`: the same, with a **Log it** button that records a `step_end` mark (the real moment, e.g. when you actually poured) without changing the schedule.

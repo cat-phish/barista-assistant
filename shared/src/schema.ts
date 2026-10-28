@@ -54,6 +54,7 @@ export interface UserPreferences {
   rateLaterDefault: boolean; // the log form's Rate later box starts ticked
   repeatKeeps: RepeatKeep[]; // what a repeat copies (notes: shown as a reminder, not copied)
   rememberSetup: RememberKey[]; // what the brew page remembers from last time
+  startDelays: Partial<Record<MethodKind, 0 | 3 | 5>>; // countdown before a timed brew, per method; missing = none (docs/api/auth.md §1)
   steepReminders: boolean; // remind when a cold brew's steep window opens (docs/api/notifications.md §1b)
 }
 export const DEFAULT_PREFERENCES: UserPreferences = {
@@ -67,6 +68,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   rateLaterDefault: false,
   repeatKeeps: ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"],
   rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"],
+  startDelays: {},
   steepReminders: true,
 };
 

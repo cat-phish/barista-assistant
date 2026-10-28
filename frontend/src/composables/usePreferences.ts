@@ -16,6 +16,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   rateLaterDefault: false,
   repeatKeeps: ['size', 'doseWater', 'temp', 'grinder', 'grind', 'waterProfile', 'dilution', 'window'],
   rememberSetup: ['what', 'brewer', 'recipe', 'bean', 'grinder', 'grind'],
+  startDelays: {},
   steepReminders: true,
 };
 export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: 'light', roastScale: 'names', hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: 'beanRecipe', suggestMaxBrews: 5, suggestAlternatives: [] };

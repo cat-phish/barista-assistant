@@ -47,7 +47,7 @@ export const hasAiSuggestions = (lists: readonly ListName[]): boolean => lists.s
 // (docs/api/backup.md §2b, "What comes along").
 export const COMES_ALONG: Record<ListName, string | null> = {
   beans: 'each bean’s process',
-  recipes: 'each recipe’s brewer and its method, style, grinders and prep tools',
+  recipes: 'each recipe’s brewer and its method, style, grinders and prep items',
   drinks: 'each drink’s category, recipe (with its brewer and grinders) and ingredients',
   ingredients: null,
   brewers: 'each brewer’s method',
@@ -55,7 +55,7 @@ export const COMES_ALONG: Record<ListName, string | null> = {
   water_profiles: null,
   prep_tools: 'the brewers each is offered for, with their methods',
   brew_problems: null,
-  brew_logs: 'each brew’s bean, recipe, grinder, water, drink, prep tools and problems',
+  brew_logs: 'each brew’s bean, recipe, grinder, water, drink, prep items and problems',
 };
 
 // The "add as a copy" example, from the file's own items: "Test Bean (2)"
@@ -100,7 +100,7 @@ export const LIST_LABELS: Record<ListName, string> = {
   brewers: 'Brewers',
   grinders: 'Grinders',
   water_profiles: 'Water profiles',
-  prep_tools: 'Prep tools',
+  prep_tools: 'Prep',
   brew_problems: 'Brew problems',
   brew_logs: 'Journal (brews)',
 };
@@ -118,7 +118,7 @@ const TABLE_LABELS: Record<string, string> = {
   drink_ingredients: 'drink ingredients',
   menu_items: 'menu items',
   brew_log_marks: 'timer marks',
-  prep_tool_brewers: 'prep tool brewers',
+  prep_tool_brewers: 'prep item brewers',
   brew_log_tools: 'prep ticks',
   brew_log_problems: 'problem ticks',
   llm_analyses: 'AI suggestions',
