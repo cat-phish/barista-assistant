@@ -170,6 +170,9 @@ const recipeFields = {
   firstDropMinSec: seconds.nullable().optional(),
   firstDropMaxSec: seconds.nullable().optional(),
   flowUnit: z.enum(FLOW_UNITS),
+  // Filter only (kindError): pour and wait times × batch factor^this
+  // (docs/api/recipes.md §5); null = step times stay the same.
+  stepTimeScaling: decimalSchema({ min: 0, max: 1, scale: 2, exclusiveMin: true }).nullable().optional(),
   targetTempC: decimalSchema({ min: 0, max: 100, scale: 1 }).nullable().optional(),
   // Cold styles (docs/api/recipes.md §5): the steep window in hours (a pair,
   // steepPairIssue), fridge or room, and the serving dilution.
@@ -281,6 +284,7 @@ interface KindCheck {
   targetIceGrams: number | null;
   expectedYieldGrams: number | null;
   firstDropMinSec: number | null;
+  stepTimeScaling: number | null;
   steps: ReadonlyArray<{
     stepType: string;
     advance: string;
@@ -293,6 +297,7 @@ function kindError(kind: MethodKind, r: KindCheck): string | null {
   if (kind === "espresso") {
     if (r.targetWaterGrams !== null) return "targetWaterGrams: must be null for an espresso recipe";
     if (r.targetIceGrams !== null) return "targetIceGrams: must be null for an espresso recipe";
+    if (r.stepTimeScaling !== null) return "stepTimeScaling: must be null for an espresso recipe";
     if (r.expectedYieldGrams === null) return "expectedYieldGrams: is required for an espresso recipe (the target shot weight)";
     const i = r.steps.findIndex((step) => !isEspressoType(step.stepType) || step.targetWaterGrams != null);
     if (i >= 0) return `steps.${i}: espresso steps are pre-infusion, soak, pressure, flow or other, without pour-to targets`;
@@ -396,6 +401,7 @@ async function loadRecipes(workspaceId: string, recipeId?: string): Promise<Reci
       firstDropMinSec: recipes.firstDropMinSec,
       firstDropMaxSec: recipes.firstDropMaxSec,
       flowUnit: recipes.flowUnit,
+      stepTimeScaling: recipes.stepTimeScaling,
       style: { id: recipeStyles.id, name: recipeStyles.name, brewsLike: recipeStyles.brewsLike },
       targetTempC: recipes.targetTempC,
       steepMinHours: recipes.steepMinHours,
@@ -490,6 +496,7 @@ recipesRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Reci
       targetIceGrams: recipeFields.targetIceGrams ?? null,
       expectedYieldGrams: recipeFields.expectedYieldGrams ?? null,
       firstDropMinSec: recipeFields.firstDropMinSec ?? null,
+      stepTimeScaling: recipeFields.stepTimeScaling ?? null,
       steps,
     });
     if (wrongForKind) return wrongForKind;
@@ -557,6 +564,7 @@ recipesRouter.patch("/:recipeId", async (req: Request<RecipeParams>, res: Respon
         targetIceGrams: recipes.targetIceGrams,
         expectedYieldGrams: recipes.expectedYieldGrams,
         firstDropMinSec: recipes.firstDropMinSec,
+        stepTimeScaling: recipes.stepTimeScaling,
         styleId: recipes.styleId,
       })
       .from(recipes)
@@ -574,6 +582,7 @@ recipesRouter.patch("/:recipeId", async (req: Request<RecipeParams>, res: Respon
       targetIceGrams: after.targetIceGrams ?? null,
       expectedYieldGrams: after.expectedYieldGrams ?? null,
       firstDropMinSec: after.firstDropMinSec ?? null,
+      stepTimeScaling: after.stepTimeScaling ?? null,
       steps:
         steps ??
         (await tx

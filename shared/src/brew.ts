@@ -28,3 +28,32 @@ export function extractionYield(brew: {
   const beverage = brew.brewsLike && IMMERSION_STYLES.includes(brew.brewsLike) ? brew.actualWaterGrams : brew.actualYieldGrams;
   return beverage === null ? null : Math.round(((brew.tdsPercent * beverage) / brew.actualDoseGrams) * 10) / 10;
 }
+
+// Step times with the batch (docs/api/recipes.md §5): a recipe with
+// stepTimeScaling gives its pour and wait steps time × factor^stepTimeScaling,
+// to the second, where factor is the batch's water ÷ the recipe's; the finish
+// window moves by the time they gained or lost. The frontend has the same rule
+// in lib/scale.ts.
+export const TIMED_WITH_BATCH: readonly string[] = ["pour", "wait"];
+export function scaleStepTimes<S extends { stepType: string; durationSec: number | null }>(
+  steps: S[],
+  factor: number,
+  exponent: number | null,
+): { steps: S[]; shiftSec: number } {
+  if (exponent === null || !(factor > 0) || Math.abs(factor - 1) < 1e-9) return { steps, shiftSec: 0 };
+  const k = factor ** exponent;
+  let shiftSec = 0;
+  const scaled = steps.map((s) => {
+    if (s.durationSec === null || !TIMED_WITH_BATCH.includes(s.stepType)) return s;
+    const durationSec = Math.round(s.durationSec * k);
+    shiftSec += durationSec - s.durationSec;
+    return { ...s, durationSec };
+  });
+  return { steps: scaled, shiftSec };
+}
+
+// A finish window moved by shiftSec, never below 0.
+export function shiftWindow(min: number | null, max: number | null, shiftSec: number): { min: number | null; max: number | null } {
+  if (min === null || max === null) return { min, max };
+  return { min: Math.max(0, min + shiftSec), max: Math.max(0, max + shiftSec) };
+}

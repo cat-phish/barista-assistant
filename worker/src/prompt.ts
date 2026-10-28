@@ -12,7 +12,7 @@ import type { BrewerInfo, SuggestContext } from "./suggestContext.js";
 // Stored with each analysis (llm_analyses.prompt_version), so results can be
 // compared across changes (npm run eval). Bump it whenever the input, the
 // prompt or the schema changes.
-export const PROMPT_VERSION = "2026-10-i";
+export const PROMPT_VERSION = "2026-10-j";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type LlmInput = { [key: string]: Json };
@@ -104,11 +104,14 @@ function beanInput(info: BrewContext["bean"], hidden: ReadonlySet<AiDetail>): Re
 
 function recipeInput(r: BrewContext["recipe"], hidden: ReadonlySet<AiDetail>): Record<string, unknown> | null {
   if (!r) return null;
-  const { steps, grindStartingPoints, targetTempC, flowUnit, ...rest } = r;
+  const { steps, grindStartingPoints, targetTempC, flowUnit, stepTimeScaling, ...rest } = r;
   const recipe: Record<string, unknown> = { ...rest };
   if (!hidden.has("temp")) recipe.targetTempC = targetTempC;
   if (!hidden.has("grindStartingPoints")) recipe.grindStartingPoints = grindStartingPoints;
-  if (!hidden.has("recipeSteps")) recipe.steps = hidden.has("temp") ? steps.map(({ targetTempC: _t, ...s }) => s) : steps;
+  if (!hidden.has("recipeSteps")) {
+    recipe.steps = hidden.has("temp") ? steps.map(({ targetTempC: _t, ...s }) => s) : steps;
+    recipe.stepTimeScaling = stepTimeScaling;
+  }
   if (flowUnit !== "g_s") recipe.flowUnit = flowUnit; // g/s is the default; only flow steps use it
   return recipe;
 }
@@ -242,6 +245,11 @@ export const PROMPT_SECTIONS: PromptSection[] = [
     key: "weightLoss",
     when: (i) => bean(i).roastWeightLossPercent !== undefined,
     text: PROMPT_TEXT.weightLoss,
+  },
+  {
+    key: "stepTimes",
+    when: (i) => recipe(i).stepTimeScaling !== undefined,
+    text: PROMPT_TEXT.stepTimes,
   },
   {
     key: "altitude",

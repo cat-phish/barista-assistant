@@ -69,6 +69,7 @@ export const FIELDS = [
   recipe('defaultGrinder', 'Default grinder'),
   recipe('grindSettings', 'Grind starting points'),
   recipe('flowUnit', 'Flow unit (espresso)'),
+  recipe('stepTimeScaling', 'Step times that scale with the batch (filter)', 'Pour and wait steps take longer for a bigger batch, less for a smaller one'),
   recipe('stepTemp', 'Step temperatures'),
 ] as const satisfies readonly FieldInfo[];
 

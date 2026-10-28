@@ -1,4 +1,4 @@
-import { ratioWater, extractionYield as sharedExtractionYield } from "@barista/shared/brew";
+import { ratioWater, scaleStepTimes, shiftWindow, extractionYield as sharedExtractionYield } from "@barista/shared/brew";
 import {
   beanProcesses,
   beanFreezes,
@@ -192,6 +192,10 @@ export interface BrewContext {
     // Approximate starting points, per grinder (the brew's grinder is in grinderName).
     grindStartingPoints: Array<{ grinderName: string; setting: number }>;
     flowUnit: FlowUnit; // for flow steps: g/s or ml/s
+    // Filter: pour and wait times scale with the batch, × factor^this
+    // (docs/api/recipes.md §5); null = they don't. For an analysis the steps
+    // and the finish window are already the brew's (scaledToBrew).
+    stepTimeScaling: number | null;
     // Back to back: each starts when the previous one actually ended
     // (step_end marks say when, for tap/logged steps).
     steps: Array<{
@@ -503,11 +507,23 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
 
   return {
     bean: bean.info,
-    recipe,
+    recipe: recipe && scaledToBrew(recipe, brew.actualWaterGrams),
     brew: summarize(brew, bean.roastDate, bean.freezes, marks, tools, problems, servedAs),
     drink: brew.drinkId ? await loadDrink(brew.drinkId, { size: brew.servingSize, unit: brew.servingUnit }) : null,
     ratingScale: "1-5",
   };
+}
+
+// The step times and finish window the brew was timed against: with
+// stepTimeScaling, pour and wait steps follow its water ÷ the recipe's, as
+// the brew page's timer does (docs/api/llm-contract.md §9).
+export function scaledToBrew(recipe: NonNullable<BrewContext["recipe"]>, water: number | null): NonNullable<BrewContext["recipe"]> {
+  const w0 = recipe.targetWaterGrams;
+  if (recipe.stepTimeScaling === null || water === null || w0 === null || !(w0 > 0)) return recipe;
+  const { steps, shiftSec } = scaleStepTimes(recipe.steps, water / w0, recipe.stepTimeScaling);
+  if (steps === recipe.steps) return recipe;
+  const window = shiftWindow(recipe.expectedFinishMinSec, recipe.expectedFinishMaxSec, shiftSec);
+  return { ...recipe, steps, expectedFinishMinSec: window.min, expectedFinishMaxSec: window.max };
 }
 
 export async function loadRecipe(recipeId: string): Promise<BrewContext["recipe"]> {
@@ -526,6 +542,7 @@ export async function loadRecipe(recipeId: string): Promise<BrewContext["recipe"
       firstDropMinSec: recipes.firstDropMinSec,
       firstDropMaxSec: recipes.firstDropMaxSec,
       flowUnit: recipes.flowUnit,
+      stepTimeScaling: recipes.stepTimeScaling,
       targetTempC: recipes.targetTempC,
       steepMinHours: recipes.steepMinHours,
       steepMaxHours: recipes.steepMaxHours,

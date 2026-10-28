@@ -768,6 +768,10 @@ export const recipes = mysqlTable("recipes", {
   firstDropMaxSec: int("first_drop_max_sec"),
   // Unit for espresso flow steps: g/s (a scale) or ml/s (a machine's flow meter).
   flowUnit: varchar("flow_unit", { length: 10 }).$type<FlowUnit>().default("g_s").notNull(),
+  // Filter only: pour and wait steps take time × (batch factor)^this when the
+  // batch is scaled (0.5 = a double batch takes ~1.41× as long, 1 = linear);
+  // null = step times stay the same (docs/api/recipes.md §5).
+  stepTimeScaling: decimal("step_time_scaling", { precision: 3, scale: 2, mode: "number" }),
   targetTempC: decimal("target_temp_c", { precision: 4, scale: 1, mode: "number" }),
   // Cold styles (docs/api/recipes.md §5): the steep window in hours (both or
   // neither, long styles), fridge or room, and how the concentrate is served:

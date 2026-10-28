@@ -105,6 +105,7 @@ const RECIPE: Record<keyof Recipe, Sees> = {
   dilutionWith: "always",
   grindStartingPoints: "grindStartingPoints",
   flowUnit: "always",
+  stepTimeScaling: "recipeSteps", // says the step times were scaled
   steps: "recipeSteps", // field by field in STEP
 };
 
@@ -176,7 +177,7 @@ const full: BrewContext = {
   recipe: {
     name: "House", brewer: "Toddy", style: { name: "Cold brew", brewsLike: "cold_brew" }, methodKind: "filter", targetDoseGrams: 60, targetWaterGrams: 500, targetIceGrams: 100, expectedYieldGrams: 420, expectedFinishMinSec: 100,
     expectedFinishMaxSec: 200, firstDropMinSec: 5, firstDropMaxSec: 9, targetTempC: 20, steepMinHours: 14, steepMaxHours: 20, steepTemp: "fridge", dilutionRatio: 1, dilutionWith: "milk",
-    grindStartingPoints: [{ grinderName: "EK43", setting: 12 }], flowUnit: "ml_s",
+    grindStartingPoints: [{ grinderName: "EK43", setting: 12 }], flowUnit: "ml_s", stepTimeScaling: 0.5,
     steps: [{ stepOrder: 1, stepType: "pour", label: "Fill", durationSec: 30, advance: "tap", targetWaterGrams: 500, targetTempC: 20, pressureBar: 9, pressureEndBar: 6, flowRate: 2, flowEndRate: 1 }],
   },
   brew,

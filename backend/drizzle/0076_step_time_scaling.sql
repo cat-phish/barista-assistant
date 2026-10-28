@@ -1,0 +1,1 @@
+ALTER TABLE `recipes` ADD `step_time_scaling` decimal(3,2);

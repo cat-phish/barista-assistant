@@ -111,6 +111,17 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
       "one needs more extraction. Trust it over the roast level when they disagree.",
   },
   {
+    key: "stepTimes",
+    label: "Step times that scale with the batch",
+    prompts: ["analysis", "suggest"],
+    locked: false,
+    text:
+      "The recipe has stepTimeScaling: its pour and wait step times scale with the batch, as time × (batch water ÷ " +
+      "recipe water) to the power of stepTimeScaling, and its finish window moves by the time they gain or lose. The " +
+      "steps and finish window given are already scaled to this batch, so a bigger batch taking longer is planned, " +
+      "not a sign of a too-fine grind.",
+  },
+  {
     key: "altitude",
     label: "Growing altitude",
     prompts: ["analysis", "suggest"],
