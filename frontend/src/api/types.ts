@@ -427,6 +427,7 @@ export interface Recipe extends ColdFields {
   archivedAt: string | null; // set = archived: off the brew page and drink forms (§5)
   createdAt: string; // date added (ISO)
   grindSettings: RecipeGrindSetting[];
+  prepToolIds: string[]; // default prep, ticked when it's brewed; in checklist order (§5)
   steps: RecipeStep[];
 }
 

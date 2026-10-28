@@ -79,8 +79,8 @@ const repeatDefault = computed(() => sameSet(DEFAULT_PREFERENCES.repeatKeeps, pr
     <section class="card stack" aria-labelledby="repeat-keeps">
       <h2 id="repeat-keeps">Copy when repeating</h2>
       <p class="muted small">
-        What a repeat copies from the brew you pick (Brew again in the journal, or the repeat buttons on the brew page). The bean and what you're
-        making, brewer and recipe always come along. Anything left out starts as for a new brew.
+        What a repeat copies from the brew you pick (Brew again in the journal, or the repeat buttons on the brew page). The bean, what you're
+        making, brewer and recipe, and the prep checklist always come along. Anything left out starts as for a new brew.
       </p>
       <fieldset class="keeps" :disabled="saving">
         <legend class="visually-hidden">What a repeat copies</legend>

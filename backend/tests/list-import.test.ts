@@ -13,6 +13,7 @@ async function source() {
     expect(res.status, `${path}: ${JSON.stringify(res.body)}`).toBeLessThan(300);
     return res.body;
   };
+  const rdt = ((await owner.agent.get(`${base}/prep-tools`)).body.tools as Array<{ id: string; name: string }>).find((t) => t.name === "RDT")!.id;
   const c40 = (await post("grinders", { name: "C40" })).grinder.id as string;
   const ode = (await post("grinders", { name: "Ode" })).grinder.id as string;
   const recipe = (
@@ -24,6 +25,7 @@ async function source() {
       targetWaterGrams: 250,
       defaultGrinderId: c40,
       grindSettings: [{ grinderId: c40, setting: 20 }, { grinderId: ode, setting: 4 }],
+      prepToolIds: [rdt],
       steps: [{ stepType: "bloom", durationSec: 30, targetWaterGrams: 45 }],
     })
   ).recipe.id as string;
@@ -51,9 +53,11 @@ describe("export by list (docs/api/backup.md §2b)", () => {
     expect(names(file.tables.grinders)).toEqual(["C40", "Ode"]);
     expect(file.tables.recipe_steps).toHaveLength(1);
     expect(file.tables.recipe_grind_settings).toHaveLength(2);
+    expect(names(file.tables.prep_tools)).toEqual(["RDT"]);
+    expect(file.tables.recipe_prep_tools).toHaveLength(1);
     expect(file.tables.brewer_methods).toHaveLength(1);
     expect(file.tables.recipe_styles).toHaveLength(1);
-    for (const none of ["beans", "brew_logs", "drinks", "ingredients", "prep_tools", "menu_items"]) expect(file.tables[none], none).toEqual([]);
+    for (const none of ["beans", "brew_logs", "drinks", "ingredients", "menu_items"]) expect(file.tables[none], none).toEqual([]);
 
     // A drink brings its recipe and ingredients; a brew its bean and recipe.
     const drinks = await exportOf(owner, base, { lists: ["drinks"] });
@@ -106,7 +110,8 @@ describe("import by list", () => {
     expect(byTable.recipes).toEqual({ table: "recipes", added: ["House V60"], matched: [] });
     expect(byTable.grinders).toEqual({ table: "grinders", added: ["Ode"], matched: [{ name: "C40", existing: "c40" }] });
     expect(byTable.brewers).toEqual({ table: "brewers", added: [], matched: [{ name: "V60", existing: "V60" }] });
-    expect(preview.body.details).toEqual({ recipe_steps: 1, recipe_grind_settings: 2 });
+    expect(byTable.prep_tools).toEqual({ table: "prep_tools", added: [], matched: [{ name: "RDT", existing: "RDT" }] });
+    expect(preview.body.details).toEqual({ recipe_steps: 1, recipe_grind_settings: 2, recipe_prep_tools: 1 });
     expect((await other.agent.get(`${tbase}/recipes`)).body.recipes).toEqual([]); // nothing written yet
 
     const done = await other.agent.post(`${tbase}/import`).send({ file });
@@ -116,6 +121,8 @@ describe("import by list", () => {
     expect(recipe).toMatchObject({ name: "House V60", brewer: { name: "V60" }, defaultGrinderId: theirC40, style: { brewsLike: "pour_over" } });
     expect(recipe.grindSettings.map((g: { grinderName: string }) => g.grinderName).sort()).toEqual(["Ode", "c40"]);
     expect(recipe.steps).toHaveLength(1);
+    const theirRdt = (await other.agent.get(`${tbase}/prep-tools`)).body.tools.find((t: { name: string }) => t.name === "RDT").id;
+    expect(recipe.prepToolIds).toEqual([theirRdt]);
 
     // Again: everything's there now. As copies: a renamed recipe.
     const again = await other.agent.post(`${tbase}/import`).send({ file });

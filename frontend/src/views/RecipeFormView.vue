@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Recipe editor (docs/api/recipes.md §5): dose + water (live ratio), optional
 // expected yield / finish time / temperature, per-grinder grind starting
-// points, and typed steps that run back to back (each with a time and how it
+// points, default prep (ticked when it's brewed), and typed steps that run back to back (each with a time and how it
 // moves on). Espresso brewers instead take dose + target shot weight (ratio
 // dose:yield), a shot-time and first-drop window, and a shot profile
 // (pre-infusion / soak / pressure / flow steps).
@@ -10,8 +10,9 @@ import { useRoute, useRouter } from 'vue-router';
 import { ApiError, errorMessage } from '../api/client';
 import { grindersApi } from '../api/grinders';
 import { brewersApi } from '../api/brewers';
+import { prepToolsApi } from '../api/prepTools';
 import { recipesApi, type RecipeInput } from '../api/recipes';
-import type { Brewer, DilutionWith, FlowUnit, Grinder, MethodKind, Recipe, RecipeStyleItem, SteepTemp } from '../api/types';
+import type { Brewer, DilutionWith, FlowUnit, Grinder, MethodKind, PrepTool, Recipe, RecipeStyleItem, SteepTemp } from '../api/types';
 import { DILUTION_WITH, isColdStyle, isLongStyle, STEEP_TEMPS } from '../lib/coldBrew';
 import AppHeader from '../components/AppHeader.vue';
 import DeleteSection from '../components/DeleteSection.vue';
@@ -44,6 +45,7 @@ import { parseTemp, tempText, TEMPERATURE_LABELS } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
 import { METHOD_KINDS, pickCopyBrewer } from '../lib/equipment';
+import { offeredFor, toolsFor } from '../lib/prepTools';
 import { recipeStylesApi } from '../api/recipeStyles';
 
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
@@ -250,6 +252,17 @@ const copyOf = ref<string | null>(null);
 // when hidden, so only one typed by hand reveals it.
 const { show, reveal } = useFieldVisibility();
 
+// Default prep (docs/api/recipes.md §5 prepToolIds): the prep tools offered
+// for the brewer (lib/prepTools.ts), ticked when the recipe is brewed. A
+// brewer change drops ticks the new one isn't offered.
+const prepTools = ref<PrepTool[]>([]);
+const prepToolIds = ref<string[]>([]);
+const prepBrew = computed(() => ({ kind: kind.value, brewerId: brewerId.value && brewerId.value !== NEW_METHOD ? brewerId.value : null }));
+const prepOptions = computed(() => toolsFor(prepTools.value, prepBrew.value, prepToolIds.value));
+watch(prepBrew, (brew) => {
+  prepToolIds.value = prepToolIds.value.filter((id) => prepTools.value.some((t) => t.id === id && offeredFor(t, brew)));
+});
+
 function fill(recipe: Recipe): void {
   name.value = recipe.name;
   brewerId.value = recipe.brewer.id;
@@ -267,6 +280,7 @@ function fill(recipe: Recipe): void {
   temp.value = tempText(recipe.targetTempC, temperatureUnit.value);
   defaultGrinderId.value = recipe.defaultGrinderId ?? '';
   grindRows.value = recipe.grindSettings.map((g) => ({ grinderId: g.grinderId, setting: formatGrind(g.setting) }));
+  prepToolIds.value = [...recipe.prepToolIds];
   flowUnit.value = recipe.flowUnit;
   style.value = recipe.style?.id ?? '';
   steepFrom.value = recipe.steepMinHours === null ? '' : String(recipe.steepMinHours);
@@ -284,6 +298,7 @@ function fill(recipe: Recipe): void {
     'recipe.firstDropWindow': recipe.firstDropMinSec,
     'recipe.defaultGrinder': recipe.defaultGrinderId,
     'recipe.grindSettings': recipe.grindSettings,
+    'recipe.prepTools': recipe.prepToolIds,
     'recipe.flowUnit': recipe.flowUnit !== 'g_s',
     'recipe.stepTemp': recipe.steps.some((s) => s.targetTempC !== null),
     'recipe.steepWindow': recipe.steepMinHours,
@@ -296,13 +311,15 @@ onMounted(async () => {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [methodList, grinderList, recipeList, styleList] = await Promise.all([
+    const [methodList, grinderList, recipeList, styleList, toolList] = await Promise.all([
       brewersApi.list(ws),
       grindersApi.list(ws),
       editing.value || route.query.from ? recipesApi.list(ws) : Promise.resolve(null),
       recipeStylesApi.list(ws),
+      prepToolsApi.list(ws).catch(() => ({ tools: [] })), // without it, no default prep
     ]);
     styles.value = styleList.styles;
+    prepTools.value = toolList.tools;
     methods.value = methodList.brewers;
     grinders.value = grinderList.grinders;
     if (editing.value) {
@@ -484,6 +501,7 @@ async function save(): Promise<void> {
     dilutionRatio: dilutable.value && !iced.value && p.dilution?.ok ? p.dilution.value : null,
     dilutionWith: dilutable.value && !iced.value && p.dilution?.ok ? dilutionWith.value || null : null,
     defaultGrinderId: defaultGrinderId.value || null,
+    prepToolIds: prepToolIds.value,
     // grindErrors has checked every row parses.
     grindSettings: grindRows.value.map((r) => {
       const setting = parseDecimal(r.setting, GRIND_SETTING);
@@ -720,6 +738,21 @@ async function save(): Promise<void> {
           </li>
         </ul>
         <button v-if="grinders.length && show('recipe.grindSettings')" class="btn btn-secondary" type="button" :disabled="!canAddGrindRow" @click="addGrindRow">Add starting point</button>
+      </section>
+
+      <section v-if="show('recipe.prepTools') && prepTools.length" class="card stack" aria-labelledby="prep-title">
+        <div>
+          <h2 id="prep-title">Default prep</h2>
+          <p class="muted small">Ticked when you brew this recipe; you can still change them then. Only prep offered for its brewer is listed.</p>
+        </div>
+        <fieldset v-if="prepOptions.length" class="prep">
+          <legend class="visually-hidden">Default prep</legend>
+          <label v-for="t in prepOptions" :key="t.id" class="checkbox">
+            <input v-model="prepToolIds" type="checkbox" :value="t.id" />
+            {{ t.name }}<template v-if="t.archivedAt"> (archived)</template>
+          </label>
+        </fieldset>
+        <p v-else class="muted small">No prep is offered for this brewer (Bar setup → Tools).</p>
       </section>
 
       <section class="card stack">
@@ -1108,5 +1141,13 @@ p {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-2);
+}
+.prep {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
 }
 </style>

@@ -20,6 +20,7 @@ import {
   menuItems,
   prepTools,
   recipeGrindSettings,
+  recipePrepTools,
   recipes,
   waterProfiles,
 } from "@barista/shared/schema";
@@ -66,7 +67,11 @@ export async function waterProfileUsage(id: string): Promise<Counts> {
 }
 
 export async function prepToolUsage(id: string): Promise<Counts> {
-  return { brewLogCount: await countWhere(brewLogTools, eq(brewLogTools.toolId, id)) };
+  const [brewLogCount, recipeCount] = await Promise.all([
+    countWhere(brewLogTools, eq(brewLogTools.toolId, id)),
+    countWhere(recipePrepTools, eq(recipePrepTools.toolId, id)),
+  ]);
+  return { brewLogCount, recipeCount };
 }
 
 // Brews that recorded it lose it (FK cascade on brew_log_problems).

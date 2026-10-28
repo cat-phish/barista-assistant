@@ -128,6 +128,8 @@ Adding and editing a brewer, grinder, ingredient or tool happen on their own pag
 - **Grind starting points** per grinder, and an optional **default grinder**
   that's selected for you when you brew the recipe (otherwise the last
   grinder you used).
+- **Default prep:** the prep tools (offered for its brewer) that start
+  ticked when you brew the recipe; a field you can hide (Settings → Fields).
 - **Espresso recipes:** dose and target shot weight (ratio 1:2 style), target
   shot time and first-drop windows, temperature, and a **shot profile**: steps
   of pre-infusion, soak (pump off), pressure (bar) or flow (g/s or ml/s, set
@@ -208,8 +210,10 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   "Enter a size.").
 - **Prep on setup:** a **Prep** card above Start lists the prep tools
   offered for the recipe's method or brewer, to tick as you get ready.
-  The ticks go to the log form, where they can still be changed. Hidden
-  with the Prep field (Settings → Fields).
+  The recipe's **default prep** starts ticked; without any, what you last
+  ticked with that brewer (if remembered), else nothing. The ticks go to
+  the log form, where they can still be changed. Hidden with the Prep field
+  (Settings → Fields).
 - **Remembered from last time:** a new brew starts with what you chose last
   time on this device: what you're making, the brewer for each method, the
   recipe for each brewer, the bean, the grinder and your last grind with it.
@@ -236,12 +240,13 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   again** on every journal entry. It fills the bean (the newest bag of the
   same coffee if that one is archived), what you're making, brewer, recipe,
   drink size, dose and water (espresso: the dose, at the recipe's ratio),
-  temperature, grinder, grind and RPM, and the water. Prep tools, grinder
-  weights, results, ratings and notes start blank, and anything archived
-  since is skipped and named. The timer starts when you press Start.
+  temperature, grinder, grind and RPM, and the water, and always ticks the
+  prep that brew used (not the recipe's default prep). Grinder weights,
+  results, ratings and notes start blank, and anything archived since is
+  skipped and named. The timer starts when you press Start.
   **Settings → Brew setup** (per person) chooses what's copied: each of
-  those, plus the prep checklist, beans in / grounds out, and the earlier
-  tasting notes shown as a reminder on the log form.
+  those but the prep, plus beans in / grounds out, and the earlier tasting
+  notes shown as a reminder on the log form.
 - **Rate later:** the log form has a **Rate later** box. Tick it and save
   without a rating, and a reminder ("How was it? Rate your brew") arrives
   after your delay (15 min by default), unless you've rated it by then.

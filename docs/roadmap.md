@@ -1383,3 +1383,28 @@ bottom or a sandwich) fits espresso and the OXO Rapid Brewer, not the V60.
   not the workspace's custom brewer methods. A deleted brewer drops off the
   tool; an archived one stays chosen. Brew problems keep one method for
   now (backlog: "What went wrong: offered by methods and brewers").
+
+## Recipe default prep (built)
+
+Backlog item "Recipe default prep", branch `recipe-prep`. A recipe usually
+has the same prep (rinse the filter, WDT); it had to be ticked by hand each
+brew, or remembered per brewer.
+
+- **Recipe form:** a **Default prep** card lists the prep tools offered for
+  the recipe's brewer; changing the brewer drops ticks it isn't offered.
+  A field (`recipe.prepTools`) that can be hidden under Settings → Fields.
+  Duplicating a recipe copies it.
+- **Model and API:** `recipe_prep_tools` (recipe → tool, migration 0073);
+  `prepToolIds` on the recipe, in checklist order, replaced as a whole on
+  PATCH. Deleting a tool takes it off, and its delete warning counts the
+  recipes. Backups restore it after recipes; a recipe export brings its
+  prep tools along, matched by name on import.
+- **Brew setup:** choosing a recipe ticks its default prep (active, still
+  offered for its brewer); without any, what was last ticked with the
+  brewer if remembered (Settings → Brew setup), else nothing.
+- **Decided:** a repeat always ticks the repeated brew's prep, never the
+  recipe's defaults, so prep left the "Copy when repeating" options
+  (`REPEAT_FOR_FIELD` gained `'always'`); migration 0073 took `prepTools`
+  out of saved repeat choices. The AI isn't told where a tick came from;
+  it sees what was ticked, as before.
+

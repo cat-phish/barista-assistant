@@ -14,11 +14,13 @@ import {
   FLOW_UNITS,
   STEEP_TEMPS,
   grinders,
+  prepTools,
   RECIPE_STEP_TYPES,
   RECIPE_STYLES,
   STEP_ADVANCE,
   STYLES_BY_KIND,
   recipeGrindSettings,
+  recipePrepTools,
   recipes,
   recipeSteps,
   recipeStyles,
@@ -40,6 +42,7 @@ export interface RecipeDetails extends Omit<Recipe, "brewerId" | "styleId"> {
   brewer: Pick<Brewer, "id" | "name" | "kind">;
   style: RecipeStyleSummary | null;
   grindSettings: Array<{ grinderId: string; grinderName: string; setting: number }>;
+  prepToolIds: string[]; // ticked when it's brewed, in checklist order
   steps: Array<Omit<RecipeStep, "recipeId">>;
 }
 
@@ -130,6 +133,12 @@ const grindSettingsSchema = z
     });
   });
 
+// The prep it starts with: the workspace's prep tools, each once.
+const prepToolIdsSchema = z
+  .array(z.uuid())
+  .max(100)
+  .refine((ids) => new Set(ids).size === ids.length, "each once");
+
 const steepHours = decimalSchema({ min: 0.5, max: 72, scale: 1 }).nullable().optional();
 
 // The steep window is a pair: both ends (min ≤ max), or null on either clears both.
@@ -175,6 +184,7 @@ const recipeFields = {
   // Preselected when brewing this recipe (docs/api/recipes.md §5).
   defaultGrinderId: z.uuid().nullable().optional(),
   grindSettings: grindSettingsSchema,
+  prepToolIds: prepToolIdsSchema,
   steps: stepsSchema,
 };
 
@@ -183,6 +193,7 @@ const createRecipeSchema = z
     ...recipeFields,
     flowUnit: recipeFields.flowUnit.default("g_s"),
     grindSettings: recipeFields.grindSettings.default([]),
+    prepToolIds: recipeFields.prepToolIds.default([]),
     steps: recipeFields.steps.default([]),
   })
   .superRefine(steepPairIssue)
@@ -323,6 +334,23 @@ async function grindersInWorkspace(tx: Tx, grinderIds: string[], workspaceId: st
   return found.length === new Set(grinderIds).size;
 }
 
+// The recipe's prep: every tool in this workspace (archived ones allowed),
+// locked like the grinders above.
+async function prepToolsInWorkspace(tx: Tx, toolIds: string[], workspaceId: string): Promise<boolean> {
+  if (toolIds.length === 0) return true;
+  const found = await tx
+    .select({ id: prepTools.id })
+    .from(prepTools)
+    .where(and(inArray(prepTools.id, toolIds), eq(prepTools.workspaceId, workspaceId)))
+    .for("update");
+  return found.length === toolIds.length;
+}
+
+async function insertPrepTools(tx: Tx, recipeId: string, toolIds: string[]): Promise<void> {
+  if (toolIds.length === 0) return;
+  await tx.insert(recipePrepTools).values(toolIds.map((toolId) => ({ recipeId, toolId })));
+}
+
 async function insertSteps(tx: Tx, recipeId: string, steps: z.infer<typeof stepsSchema>): Promise<void> {
   if (steps.length === 0) return;
   await tx.insert(recipeSteps).values(
@@ -388,7 +416,7 @@ async function loadRecipes(workspaceId: string, recipeId?: string): Promise<Reci
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
 
-  const [steps, grindRows] = await Promise.all([
+  const [steps, grindRows, prepRows] = await Promise.all([
     db.select().from(recipeSteps).where(inArray(recipeSteps.recipeId, ids)).orderBy(asc(recipeSteps.stepOrder)),
     db
       .select({ recipeId: recipeGrindSettings.recipeId, grinderId: grinders.id, grinderName: grinders.name, setting: recipeGrindSettings.setting })
@@ -396,6 +424,12 @@ async function loadRecipes(workspaceId: string, recipeId?: string): Promise<Reci
       .innerJoin(grinders, eq(recipeGrindSettings.grinderId, grinders.id))
       .where(inArray(recipeGrindSettings.recipeId, ids))
       .orderBy(asc(grinders.name)),
+    db
+      .select({ recipeId: recipePrepTools.recipeId, toolId: recipePrepTools.toolId })
+      .from(recipePrepTools)
+      .innerJoin(prepTools, eq(recipePrepTools.toolId, prepTools.id))
+      .where(inArray(recipePrepTools.recipeId, ids))
+      .orderBy(asc(prepTools.position), asc(prepTools.name)),
   ]);
 
   const stepsByRecipe = new Map<string, RecipeDetails["steps"]>();
@@ -407,9 +441,15 @@ async function loadRecipes(workspaceId: string, recipeId?: string): Promise<Reci
     grindByRecipe.set(owner, [...(grindByRecipe.get(owner) ?? []), g]);
   }
 
+  const prepByRecipe = new Map<string, string[]>();
+  for (const { recipeId: owner, toolId } of prepRows) {
+    prepByRecipe.set(owner, [...(prepByRecipe.get(owner) ?? []), toolId]);
+  }
+
   return rows.map((row) => ({
     ...row,
     grindSettings: grindByRecipe.get(row.id) ?? [],
+    prepToolIds: prepByRecipe.get(row.id) ?? [],
     steps: stepsByRecipe.get(row.id) ?? [],
   }));
 }
@@ -433,7 +473,7 @@ recipesRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Reci
   const body = parseBody(createRecipeSchema, req, res);
   if (!body) return;
 
-  const { steps, grindSettings, expectedFinishMinSec, expectedFinishMaxSec, firstDropMinSec, firstDropMaxSec, ...rest } = body;
+  const { steps, grindSettings, prepToolIds, expectedFinishMinSec, expectedFinishMaxSec, firstDropMinSec, firstDropMaxSec, ...rest } = body;
   const window = windows(body);
   if ("error" in window) {
     sendError(res, 400, window.error);
@@ -461,8 +501,10 @@ recipesRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Reci
     if (body.defaultGrinderId && !(await grindersInWorkspace(tx, [body.defaultGrinderId], workspaceId))) {
       return "defaultGrinderId: not a grinder in this workspace";
     }
+    if (!(await prepToolsInWorkspace(tx, prepToolIds, workspaceId))) return "prepToolIds: must be prep tools of this workspace";
     await tx.insert(recipes).values({ id: recipeId, workspaceId, ...recipeFields });
     await insertGrindSettings(tx, recipeId, grindSettings);
+    await insertPrepTools(tx, recipeId, prepToolIds);
     await insertSteps(tx, recipeId, steps);
     return null;
   });
@@ -499,7 +541,7 @@ recipesRouter.patch("/:recipeId", async (req: Request<RecipeParams>, res: Respon
     return;
   }
 
-  const { steps, grindSettings, expectedFinishMinSec, expectedFinishMaxSec, firstDropMinSec, firstDropMaxSec, ...rest } = body;
+  const { steps, grindSettings, prepToolIds, expectedFinishMinSec, expectedFinishMaxSec, firstDropMinSec, firstDropMaxSec, ...rest } = body;
   const window = windows(body);
   if ("error" in window) {
     sendError(res, 400, window.error);
@@ -558,6 +600,9 @@ recipesRouter.patch("/:recipeId", async (req: Request<RecipeParams>, res: Respon
     if (recipeFields.defaultGrinderId && !(await grindersInWorkspace(tx, [recipeFields.defaultGrinderId], workspaceId))) {
       return { status: 400, error: "defaultGrinderId: not a grinder in this workspace" } as const;
     }
+    if (prepToolIds && !(await prepToolsInWorkspace(tx, prepToolIds, workspaceId))) {
+      return { status: 400, error: "prepToolIds: must be prep tools of this workspace" } as const;
+    }
 
     const archive = archiveUpdate(recipes.archivedAt, archived);
     if (Object.keys(recipeFields).length > 0 || Object.keys(archive).length > 0) {
@@ -567,6 +612,10 @@ recipesRouter.patch("/:recipeId", async (req: Request<RecipeParams>, res: Respon
     if (grindSettings) {
       await tx.delete(recipeGrindSettings).where(eq(recipeGrindSettings.recipeId, recipeId));
       await insertGrindSettings(tx, recipeId, grindSettings);
+    }
+    if (prepToolIds) {
+      await tx.delete(recipePrepTools).where(eq(recipePrepTools.recipeId, recipeId));
+      await insertPrepTools(tx, recipeId, prepToolIds);
     }
     if (steps) {
       await tx.delete(recipeSteps).where(eq(recipeSteps.recipeId, recipeId));

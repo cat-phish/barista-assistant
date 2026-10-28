@@ -135,8 +135,8 @@ describe("preferences", () => {
   it("repeatKeeps: what a repeat copies, each once, from the known list (docs/api/auth.md §1)", async () => {
     const me = await newUser();
     const path = "/api/auth/me/preferences";
-    const ok = await me.agent.patch(path).send({ repeatKeeps: ["grind", "prepTools", "notes"] });
-    expect(ok.body.preferences.repeatKeeps).toEqual(["grind", "prepTools", "notes"]);
+    const ok = await me.agent.patch(path).send({ repeatKeeps: ["grind", "grinderWeights", "notes"] });
+    expect(ok.body.preferences.repeatKeeps).toEqual(["grind", "grinderWeights", "notes"]);
     expect((await me.agent.patch(path).send({ repeatKeeps: [] })).body.preferences.repeatKeeps).toEqual([]);
     for (const repeatKeeps of [["rating"], ["grind", "grind"], "grind"]) {
       expect((await me.agent.patch(path).send({ repeatKeeps })).status, JSON.stringify(repeatKeeps)).toBe(400);

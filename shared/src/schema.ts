@@ -32,7 +32,7 @@ export const TEMPERATURE_UNITS = ["c", "f"] as const;
 export const THEMES = ["system", "light", "dark"] as const; // system = follow the device
 // What "Brew again" / a repeat copies from the earlier brew, besides the bean
 // and what → brewer → recipe, which a repeat always takes (docs/api/auth.md §1).
-export const REPEAT_KEEPS = ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "prepTools", "grinderWeights", "notes"] as const;
+export const REPEAT_KEEPS = ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "grinderWeights", "notes"] as const;
 export type RepeatKeep = (typeof REPEAT_KEEPS)[number];
 // What the brew page fills in from last time on this device (Settings → Brew
 // setup, docs/api/auth.md §1 rememberSetup).
@@ -801,6 +801,25 @@ export const recipeGrindSettings = mysqlTable(
   },
   (table) => ({
     recipeGrinderUnique: unique("recipe_grind_settings_recipe_grinder_unique").on(table.recipeId, table.grinderId),
+  })
+);
+
+// 6c. Recipe Prep (the Prep a Recipe Starts With)
+// Prep tools ticked when the recipe is chosen on brew setup
+// (docs/api/recipes.md §5). Replaced as a whole when the recipe is edited;
+// deleting either side unlinks it.
+export const recipePrepTools = mysqlTable(
+  "recipe_prep_tools",
+  {
+    recipeId: varchar("recipe_id", { length: 36 })
+      .notNull()
+      .references(() => recipes.id, { onDelete: "cascade" }),
+    toolId: varchar("tool_id", { length: 36 })
+      .notNull()
+      .references(() => prepTools.id, { onDelete: "cascade" }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.recipeId, table.toolId] }),
   })
 );
 

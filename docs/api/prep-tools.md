@@ -79,12 +79,15 @@ the brews that used it (see `DELETE` below).
 What deleting it would take with it (see README, "Deleting").
 
 - **Auth Required:** `true` (any member)
-- **Success (`200 OK`):** `{ "brewLogCount": 3 }`: brews that used it.
+- **Success (`200 OK`):** `{ "brewLogCount": 3, "recipeCount": 1 }`: brews
+  that used it, and recipes that start with it ticked (`docs/api/recipes.md`
+  §5 `prepToolIds`).
 - **Errors:** `404` not in this workspace.
 
 ## `DELETE /api/workspaces/:workspaceId/prep-tools/:toolId`
 
-Brews that used it are kept, without it in their `tools`. Clients warn first,
+Brews that used it are kept, without it in their `tools`; recipes lose it
+from their `prepToolIds`. Clients warn first,
 from `/usage`.
 
 - **Auth Required:** `true` (role `owner` or `barista`)

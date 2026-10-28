@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BrewProblem, PrepTool } from '../api/types';
-import { methodLabel, offeredLabel, problemsFor, toolsFor } from './prepTools';
+import { methodLabel, offeredLabel, problemsFor, recipePrep, toolsFor } from './prepTools';
 
 const at = '2026-10-22T00:00:00.000Z';
 const tool = (id: string, methodKinds: PrepTool['methodKinds'], brewerIds: string[] = [], archived = false): PrepTool => ({
@@ -37,6 +37,16 @@ describe('toolsFor', () => {
 
   it("keeps the brew's own tools, archived or not offered for it", () => {
     expect(ids(toolsFor(tools, { kind: 'filter', brewerId: 'v60' }, ['old', 'wdt']))).toEqual(['wdt', 'paper', 'kettle', 'rdt', 'old']);
+  });
+});
+
+describe('recipePrep', () => {
+  it("ticks the recipe's prep that's active and offered for its brewer, in list order", () => {
+    const recipe = (prepToolIds: string[], kind: 'espresso' | 'filter', id: string) => ({ prepToolIds, brewer: { id, kind } });
+    expect(recipePrep(tools, recipe(['rdt', 'wdt'], 'espresso', 'gaggia'))).toEqual(['wdt', 'rdt']);
+    expect(recipePrep(tools, recipe(['wdt', 'old', 'paper', 'gone'], 'espresso', 'gaggia'))).toEqual(['wdt']); // archived, not offered, deleted: left out
+    expect(recipePrep(tools, recipe(['sandwich'], 'filter', 'oxo'))).toEqual(['sandwich']);
+    expect(recipePrep(tools, recipe([], 'filter', 'v60'))).toEqual([]);
   });
 });
 

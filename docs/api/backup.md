@@ -61,7 +61,7 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
 - **Tables, in restore order:** `brewer_methods`, `bean_processes`,
   `recipe_styles`, `grinders`, `water_profiles`, `prep_tools`,
   `brew_problems`, `ingredients`, `drink_categories`, `brewers`, `prep_tool_brewers`, `beans`,
-  `bean_freezes`, `recipes`, `recipe_steps`, `recipe_grind_settings`,
+  `bean_freezes`, `recipes`, `recipe_steps`, `recipe_grind_settings`, `recipe_prep_tools`,
   `drinks`, `drink_ingredients`, `menu_sections`, `menu_items`,
   `brew_logs`, `brew_log_marks`, `brew_log_tools`, `brew_log_problems`,
   `llm_analyses`, `parameter_suggestions` (`BACKUP_TABLES`). A table left out of a file counts as
@@ -159,7 +159,7 @@ too. Where the app offers them: "Where it is" above. Code:
   | List | Its own rows | Comes along (and what that needs in turn) |
   | --- | --- | --- |
   | `beans` | beans, bean freezes | bean process |
-  | `recipes` | recipes, steps, grind starting points | brewer (→ brewer method), recipe style, default grinder, the grinders of its starting points |
+  | `recipes` | recipes, steps, grind starting points, default prep | brewer (→ brewer method), recipe style, default grinder, the grinders of its starting points, its prep tools |
   | `drinks` | drinks, drink ingredients | drink category, the drink it's a variant of, default recipe (→ as recipes), ingredients |
   | `ingredients` | ingredients | – |
   | `brewers` | brewers | brewer method |

@@ -39,6 +39,7 @@ async function populated() {
       targetWaterGrams: 250,
       defaultGrinderId: c40,
       grindSettings: [{ grinderId: c40, setting: 20 }],
+      prepToolIds: [wdt],
       steps: [
         { stepType: "bloom", durationSec: 30, targetWaterGrams: 45 },
         { stepType: "pour", durationSec: 60, targetWaterGrams: 250 },
@@ -127,6 +128,8 @@ describe("workspace backup and restore (docs/api/backup.md §2b)", () => {
     // IDs are left out above, so check the prep tool still points at the copy's V60.
     const needle = (await owner.agent.get(`/api/workspaces/${copyId}/prep-tools`)).body.tools.find((t: { name: string }) => t.name === "Needle");
     expect(needle.brewerIds).toEqual([await brewerId(owner, copyId, "V60")]);
+    const copyRecipe = (await owner.agent.get(`/api/workspaces/${copyId}/recipes`)).body.recipes[0];
+    expect(copyRecipe.prepToolIds).toEqual([needle.id]);
     const copy = await workspaceOf(owner, copyId);
     expect(copy).toMatchObject({ name: "Copy", slug: `copy-${ws.slug}`, isPublicMenuEnabled: false });
     // New IDs throughout: nothing in the copy points into the original.
