@@ -91,18 +91,49 @@ export function pourAmounts(steps: Array<{ targetWaterGrams: number | null }>): 
   });
 }
 
-// When each step is planned to start (from the durations), and whether that's
-// exact: after a step that waits for a tap or first drop, it's an estimate,
-// and after one with no duration it's unknown (null).
-export function plannedStarts(steps: Array<Pick<StepFields, 'durationSec' | 'advance'>>): Array<{ at: number; exact: boolean } | null> {
+// When each step is planned to start and end (from the durations), and
+// whether that's exact: a tap or first-drop step's time is a guide, so its end
+// and everything after it are estimates; after a step with no duration
+// they're unknown (null).
+type Planned = { at: number; exact: boolean } | null;
+type Timed = Pick<StepFields, 'durationSec' | 'advance'>;
+export function plannedTimes(steps: readonly Timed[]): Array<{ start: Planned; end: Planned }> {
   let at: number | null = 0;
   let exact = true;
   return steps.map((s) => {
-    const here = at === null ? null : { at, exact };
-    if (at !== null) at = s.durationSec === null ? null : at + s.durationSec;
+    const start = at === null ? null : { at, exact };
     if (s.advance === 'tap' || s.advance === 'first_drop') exact = false;
-    return here;
+    at = at === null || s.durationSec === null ? null : at + s.durationSec;
+    return { start, end: at === null ? null : { at, exact } };
   });
+}
+export const plannedStarts = (steps: readonly Timed[]): Planned[] => plannedTimes(steps).map((t) => t.start);
+// When the steps are planned to end (null: open-ended, or no steps).
+export const plannedEnd = (steps: readonly Timed[]): Planned => plannedTimes(steps).at(-1)?.end ?? null;
+
+// The recipe builder's line under a step, in parts the form separates with a
+// dot: ["Starts at 0:30", "Ends at 1:15"], ["Starts ≈ 1:00", "Ends ≈ 1:45"]
+// after a tap, [..., "Runs until you finish"].
+export function stepTimeParts(steps: readonly Timed[], i: number): string[] {
+  const s = steps[i];
+  const times = plannedTimes(steps)[i];
+  if (!s || !times) return [];
+  const { start, end } = times;
+  const from = start ? `Starts ${start.exact ? 'at' : '≈'} ${formatTime(start.at)}` : `Starts after step ${i}`;
+  if (end) return [from, `Ends ${end.exact ? 'at' : '≈'} ${formatTime(end.at)}`];
+  if (start && s.durationSec === null && s.advance === 'auto' && i === steps.length - 1) return [from, 'Runs until you finish'];
+  return [from];
+}
+
+// The line under the step list, in parts the form separates with a dot:
+// ["Steps end at 3:15", "Target finish 3:00–3:30"]; outside when the planned
+// end falls outside the window. null without steps.
+export function stepsTotalLine(steps: readonly Timed[], finish: { min: number; max: number } | null): { parts: string[]; outside: boolean } | null {
+  if (!steps.length) return null;
+  const end = plannedEnd(steps);
+  const parts = [end ? `Steps end ${end.exact ? 'at' : '≈'} ${formatTime(end.at)}` : 'Steps run until you finish'];
+  if (finish) parts.push(`Target finish ${formatFinishWindow(finish.min, finish.max)}`);
+  return { parts, outside: !!(end && finish && (end.at < finish.min || end.at > finish.max)) };
 }
 
 // ---- Editor -----------------------------------------------------------------
@@ -281,12 +312,9 @@ export function recipeWarnings(opts: { waterGrams: number | null; finishMaxSec: 
   if (opts.waterGrams !== null && lastWater !== null && lastWater !== opts.waterGrams) {
     warnings.push(`The steps pour to ${formatGrams(lastWater)} g, but the recipe's water is ${formatGrams(opts.waterGrams)} g.`);
   }
-  const starts = plannedStarts(opts.steps);
-  const last = opts.steps[opts.steps.length - 1];
-  const lastStart = starts[starts.length - 1];
-  const plannedEnd = last && lastStart && last.durationSec !== null ? lastStart.at + last.durationSec : null;
-  if (opts.finishMaxSec !== null && plannedEnd !== null && opts.finishMaxSec < plannedEnd) {
-    warnings.push(`The target finish window ends (${formatTime(opts.finishMaxSec)}) before the steps do (${formatTime(plannedEnd)}).`);
+  const end = plannedEnd(opts.steps)?.at ?? null;
+  if (opts.finishMaxSec !== null && end !== null && opts.finishMaxSec < end) {
+    warnings.push(`The target finish window ends (${formatTime(opts.finishMaxSec)}) before the steps do (${formatTime(end)}).`);
   }
   return warnings;
 }

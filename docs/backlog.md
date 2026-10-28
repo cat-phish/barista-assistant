@@ -26,13 +26,13 @@ and fix the references.
 - A. Settings & configuration: 1–2
 - B. Beans: 3
 - C. Brewing & logging: 4–6
-- D. Recipes: 7–9
-- E. AI suggestions: 10–11
-- F. Insights: 12
-- G. Bar & menu: 13–15
-- H. Home roasting: 16
-- I. Accounts: 17–18
-- J. Deployment & the app: 19
+- D. Recipes: 7–8
+- E. AI suggestions: 9–10
+- F. Insights: 11
+- G. Bar & menu: 12–14
+- H. Home roasting: 15
+- I. Accounts: 16–17
+- J. Deployment & the app: 18
 
 ---
 
@@ -256,42 +256,29 @@ Building recipes: their steps, timings and target window.
   - Saved with the brew's copy of the steps, and shown in the journal?
   - Does the AI see them (always, switchable, or never)?
 
-### 8. Step timings: "ends at" and the target window in the builder
-
-- **Status:** idea
-- **Why:** each step in the recipe builder says when it starts ("Starts at
-  0:30", `startsText` in `RecipeFormView.vue`), so you add up its time to
-  see when it ends. The planned total is never shown, and the target finish
-  window is set further up the form, out of view while building the steps.
-- **Approach:**
-  - Each step's hint shows both: "Starts at 0:30 · ends at 1:15" (≈ after
-    tap or first-drop steps, "until done" for an open-ended last step).
-  - Under the step list, a summary: "Steps end at 3:15 · target finish
-    3:00–3:30", in a warning colour when outside the window (item 9).
-  - Both come from `plannedStarts` (`frontend/src/lib/steps.ts`).
-- **Size:** S
-- **Depends on:** nothing.
-- **Open questions:** espresso's first-drop window too, next to the total?
-
-### 9. Target finish window vs. the steps
+### 8. Target finish window vs. the steps
 
 - **Status:** idea
 - **Why:** the target finish window and the steps are typed separately and
-  nothing keeps them in step. The only check (`recipeWarnings`) is when the
-  window ends before the steps do, shown at the top of the form. A recipe
-  can say 3:00–3:30 while its steps add up to 4:10; the timer then marks
-  every brew as slow, and the AI sees a target the recipe can't reach.
+  nothing keeps them in step. The line under the steps shows both and turns
+  the warning colour when they disagree, and `recipeWarnings` warns at the
+  top of the form when the window ends before the steps do, but nothing
+  fixes it. A recipe can say 3:00–3:30 while its steps add up to 4:10; the
+  timer then marks every brew as slow, and the AI sees a target the recipe
+  can't reach.
 - **Approach:** decide which way round it works, then:
   - Fill the window from the steps (planned end, plus or minus a
     tolerance) until it's edited, with "Use the steps' time" to go back.
-  - Or move the window below the step list, by the summary from item 8.
-  - Warn whenever the planned end falls outside the window (not only past
-    its end), with a one-tap "Fit the window to the steps". Softer wording
-    when the end is approximate (tap or first-drop steps).
+  - Or move the window below the step list, by the summary line (built).
+  - Offer a one-tap "Fit the window to the steps" next to the summary line
+    when it's outside, and fold the top-of-form warning into it. Softer
+    wording when the end is approximate (tap or first-drop steps).
   - The server keeps not enforcing it (`docs/api/recipes.md`: "clients
     warn instead").
 - **Size:** S–M
-- **Depends on:** 8 for the summary line; pairs with 5 (a window per brew).
+- **Depends on:** nothing (the summary line under the steps is built: "Steps
+  end at 3:15 · Target finish 3:00–3:30", warning-coloured when outside);
+  pairs with 5 (a window per brew).
 - **Open questions:**
   - Which leads: the steps (window derived) or the window (steps checked
     against it)?
@@ -305,7 +292,7 @@ Building recipes: their steps, timings and target window.
 
 What the analysis worker sends to the LLM and what comes back.
 
-### 10. Build bar items from plain text (AI)
+### 9. Build bar items from plain text (AI)
 
 - **Status:** idea
 - **Why:** recipes, drinks and other bar items often come as text: a
@@ -333,7 +320,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Units and step types the text describes loosely ("pour to about 100 ml,
     wait 30 s"): how sure must the AI be before filling a field?
 
-### 11. Review and test the espresso dose and shot weight suggestions
+### 10. Review and test the espresso dose and shot weight suggestions
 
 - **Status:** planned
 - **Why:** dose and shot weight changes for espresso (roadmap: espresso dose
@@ -373,7 +360,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## F. Insights
 
-### 12. Statistics and graphs
+### 11. Statistics and graphs
 
 - **Status:** idea
 - **Why:** the brew history is a list. Trends (is this bean getting better
@@ -402,7 +389,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## G. Bar & menu
 
-### 13. Ingredient prep and stock
+### 12. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -419,7 +406,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should a finished cold brew batch (roadmap: cold brew refinements) be
     stock the same way, with each glass served taken from it and rated?
 
-### 14. Public menu: branding and sizes
+### 13. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
@@ -433,7 +420,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
-### 15. Drink categories: what else they could do
+### 14. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -452,7 +439,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## H. Home roasting
 
-### 16. Roasting: green stock, roast logs, resting
+### 15. Roasting: green stock, roast logs, resting
 
 - **Status:** idea
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
@@ -483,7 +470,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## I. Accounts
 
-### 17. Account management and password reset
+### 16. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -514,13 +501,13 @@ What the analysis worker sends to the LLM and what comes back.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 18. Email verification
+### 17. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 17), inviting a member by email, or notifications by email.
+  (item 16), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -530,9 +517,9 @@ What the analysis worker sends to the LLM and what comes back.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 17).
+  - Shares the mail and token pieces with password reset (item 16).
 - **Size:** M (mail is new to the stack).
-- **Depends on:** nothing; pairs with 17.
+- **Depends on:** nothing; pairs with 16.
 - **Open questions:**
   - Block unverified accounts, or only remind them?
   - What happens to accounts that existed before verification (treat as
@@ -545,7 +532,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 How the app is served and installed.
 
-### 19. Serve the app as an installable PWA
+### 18. Serve the app as an installable PWA
 
 - **Status:** idea
 - **Why:** the PWA is configured (`vite-plugin-pwa`, `frontend/vite.config.ts`)

@@ -9,11 +9,15 @@ import {
   moveStep,
   parseFinishWindow,
   parseSteps,
+  plannedEnd,
   plannedStarts,
+  plannedTimes,
   pourAmounts,
   recipeWarnings,
   stepDraft,
   stepInstruction,
+  stepsTotalLine,
+  stepTimeParts,
   stepTitle,
   stepTypesFor,
 } from './steps';
@@ -96,6 +100,39 @@ describe('planned starts', () => {
       { at: 75, exact: false },
     ]);
     expect(plannedStarts([step({ durationSec: null, advance: 'first_drop' }), step({})])).toEqual([{ at: 0, exact: true }, null]);
+  });
+  it("ends too; a tap step's end is an estimate (its time is a guide)", () => {
+    expect(plannedTimes([step({ durationSec: 30 }), step({ durationSec: 45, advance: 'tap' })])).toEqual([
+      { start: { at: 0, exact: true }, end: { at: 30, exact: true } },
+      { start: { at: 30, exact: true }, end: { at: 75, exact: false } },
+    ]);
+    expect(plannedEnd([step({ durationSec: 30 }), step({ durationSec: 60 })])).toEqual({ at: 90, exact: true });
+    expect(plannedEnd([step({ durationSec: 30 }), step({ durationSec: null })])).toBeNull();
+    expect(plannedEnd([])).toBeNull();
+  });
+});
+
+describe("the builder's step times", () => {
+  const steps = [step({ durationSec: 30 }), step({ durationSec: 45, advance: 'tap' }), step({ durationSec: 60 }), step({ durationSec: null })];
+  it('start and end under each step', () => {
+    expect(steps.map((_s, i) => stepTimeParts(steps, i))).toEqual([
+      ['Starts at 0:00', 'Ends at 0:30'],
+      ['Starts at 0:30', 'Ends ≈ 1:15'],
+      ['Starts ≈ 1:15', 'Ends ≈ 2:15'],
+      ['Starts ≈ 2:15', 'Runs until you finish'],
+    ]);
+    const unknown = [step({ durationSec: null, advance: 'tap' }), step({ durationSec: 20 })];
+    expect(stepTimeParts(unknown, 0)).toEqual(['Starts at 0:00']);
+    expect(stepTimeParts(unknown, 1)).toEqual(['Starts after step 1']);
+  });
+  it('the total against the target finish window', () => {
+    const timed = [step({ durationSec: 60 }), step({ durationSec: 135 })];
+    expect(stepsTotalLine(timed, { min: 180, max: 210 })).toEqual({ parts: ['Steps end at 3:15', 'Target finish 3:00–3:30'], outside: false });
+    expect(stepsTotalLine(timed, { min: 120, max: 150 })).toEqual({ parts: ['Steps end at 3:15', 'Target finish 2:00–2:30'], outside: true });
+    expect(stepsTotalLine(timed, { min: 240, max: 270 })?.outside).toBe(true);
+    expect(stepsTotalLine(timed, null)).toEqual({ parts: ['Steps end at 3:15'], outside: false });
+    expect(stepsTotalLine(steps, { min: 180, max: 210 })).toEqual({ parts: ['Steps run until you finish', 'Target finish 3:00–3:30'], outside: false });
+    expect(stepsTotalLine([], null)).toBeNull();
   });
 });
 

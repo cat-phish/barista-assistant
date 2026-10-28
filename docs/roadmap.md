@@ -1322,3 +1322,22 @@ every time. Contract: `api/auth.md` §1 `rememberSetup`.
   recipe and aren't remembered (that's what Repeat is for). Making the bean
   and recipe Repeat options (backlog "Repeat brews: bean and recipe as
   choices") was set aside: it may not make sense.
+
+## Step timings in the recipe builder (built)
+
+Backlog item "Step timings: 'ends at' and the target window in the
+builder", branch `step-timings`. Each step only said when it starts, so you
+added up its time to see when it ends, and the target finish window was set
+further up the form, out of view while building the steps.
+
+- Each step says when it starts and ends: "Starts at 0:30 · Ends at 1:15",
+  ≈ after a step that waits for a tap or first drop, "Runs until you
+  finish" for an open-ended last step.
+- A line under the steps: "Steps end at 3:15 · Target finish 3:00–3:30",
+  in the warning colour when the steps end outside the window.
+- `plannedTimes` / `plannedEnd` (`lib/steps.ts`) work out both, and the
+  recipe list's step summary and the "window ends before the steps"
+  warning use them too.
+- Built alongside prep steps (recipe steps done before the timer starts),
+  which were set aside unmerged on branch `prep-steps`. What to do when the
+  steps and the window disagree stays on the backlog.

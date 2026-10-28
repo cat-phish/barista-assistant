@@ -14,7 +14,7 @@ import { useSelection } from '../composables/useSelection';
 import MenuTabs from '../components/MenuTabs.vue';
 import { formatAdded, formatDoseLine, formatGrams, formatGrind, formatTime } from '../lib/format';
 import { addedColumn, isSortKey, nameColumn, recallView, rememberView, sortArrow, sortBy, sortLabel, sortColumnOptions, toggleHeader, type SortColumns } from '../lib/listSort';
-import { formatFinishWindow, plannedStarts, stepTitle } from '../lib/steps';
+import { formatFinishWindow, plannedEnd, stepTitle } from '../lib/steps';
 import { formatTemp } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -88,16 +88,13 @@ const shown = computed(() =>
 const openId = ref<string | null>(null);
 const toggle = (id: string) => (openId.value = openId.value === id ? null : id);
 
-// "Bloom → Swirl → Main pour → Drawdown · ≈ 3:00": the planned end, when the
-// steps have one (≈ when a step waits for a tap or first drop).
+// "Bloom → Swirl → Main pour → Drawdown · ends ≈ 3:00": the planned end, when
+// the steps have one (≈ when a step waits for a tap or first drop).
 function stepsSummary(recipe: Recipe): string | null {
-  const last = recipe.steps[recipe.steps.length - 1];
-  if (!last) return null;
-  const starts = plannedStarts(recipe.steps);
-  const lastStart = starts[starts.length - 1];
-  const end = lastStart && last.durationSec !== null ? lastStart.at + last.durationSec : null;
+  if (!recipe.steps.length) return null;
+  const end = plannedEnd(recipe.steps);
   const titles = recipe.steps.map(stepTitle).join(' → ');
-  return end === null ? titles : `${titles} · ${lastStart?.exact ? 'ends' : 'ends ≈'} ${formatTime(end)}`;
+  return end === null ? titles : `${titles} · ${end.exact ? 'ends' : 'ends ≈'} ${formatTime(end.at)}`;
 }
 
 const busyId = ref<string | null>(null);
