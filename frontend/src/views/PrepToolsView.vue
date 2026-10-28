@@ -3,10 +3,9 @@
 // form's Prep checklist, in this order. Reorder here; add, edit (name,
 // where it's offered), archive/restore and delete on
 // PrepToolFormView.
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 import ReorderHandle from '../components/ReorderHandle.vue';
-import { type DragUpdate, reorderVisible, undoDragMove } from '../lib/reorder';
 import { errorMessage } from '../api/client';
 import { prepToolsApi } from '../api/prepTools';
 import { brewersApi } from '../api/brewers';
@@ -15,6 +14,7 @@ import AppHeader from '../components/AppHeader.vue';
 import SetupTabs from '../components/SetupTabs.vue';
 import { offeredLabel } from '../lib/prepTools';
 import ListDataBar from '../components/ListDataBar.vue';
+import { useReorder } from '../composables/useReorder';
 import { useSelection } from '../composables/useSelection';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -45,40 +45,26 @@ async function load(): Promise<void> {
 onMounted(load);
 
 const busy = ref(false);
-// Keep hidden archived items in their slots, including them in every save.
+// Hidden archived items keep their slots and go in every save.
 const reorderDisabled = computed(() => busy.value || !workspaces.canEdit || selection.selecting);
-const orderList = ref<InstanceType<typeof VueDraggable> | null>(null);
-const moveAnnouncement = ref('');
-async function reorder(from: number, to: number): Promise<void> {
-  const ws = workspaces.current?.id;
-  if (!ws || reorderDisabled.value) return;
-  const previous = tools.value;
-  const moved = shown.value[from];
-  const next = reorderVisible(previous, shown.value, from, to);
-  if (next.every((item, i) => item.id === previous[i]?.id)) return;
-  busy.value = true;
-  error.value = '';
-  tools.value = next;
-  try {
-    tools.value = (await prepToolsApi.reorder(ws, next.map((item) => item.id))).tools;
-    moveAnnouncement.value = `${moved?.name} moved to position ${to + 1} of ${shown.value.length}`;
-  } catch (err) {
-    tools.value = previous;
-    error.value = errorMessage(err);
-  } finally {
-    busy.value = false;
-    await nextTick();
-    orderList.value?.$el.querySelector(`[data-reorder-id="${moved?.id}"] .reorder-handle`)?.focus();
-  }
-}
-function onDragUpdate(event: DragUpdate): void {
-  undoDragMove(event);
-  if (event.oldIndex !== undefined && event.newIndex !== undefined) void reorder(event.oldIndex, event.newIndex);
-}
-function move(t: PrepTool, by: -1 | 1): void {
-  const from = shown.value.indexOf(t);
-  void reorder(from, from + by);
-}
+const { announcement: moveAnnouncement, onDragUpdate, move } = useReorder({
+  items: tools,
+  visible: () => shown.value,
+  disabled: () => reorderDisabled.value || !workspaces.current,
+  async save(next) {
+    busy.value = true;
+    error.value = '';
+    try {
+      tools.value = (await prepToolsApi.reorder(workspaces.current?.id ?? '', next.map((item) => item.id))).tools;
+      return true;
+    } catch (err) {
+      error.value = errorMessage(err);
+      return false;
+    } finally {
+      busy.value = false;
+    }
+  },
+});
 
 // Select mode for exporting some tools (components/ExportBar.vue).
 const selection = useSelection();
@@ -106,13 +92,13 @@ const selection = useSelection();
         <ListDataBar list="prep_tools" noun="prep items" :selection="selection" :visible-ids="shown.map((t) => t.id)" @imported="load()" />
         <p v-if="workspaces.canEdit && shown.length > 1" class="muted small">Drag ⠿ to reorder, or use the arrow buttons.</p>
         <span class="visually-hidden" aria-live="polite">{{ moveAnnouncement }}</span>
-        <VueDraggable v-if="shown.length" ref="orderList" :model-value="shown" tag="ol" class="tools"
+        <VueDraggable v-if="shown.length" ref="reorder-list" :model-value="shown" tag="ol" class="tools"
           handle=".reorder-handle" :animation="150" ghost-class="drag-ghost"
           :disabled="reorderDisabled" :custom-update="onDragUpdate">
           <li v-for="(t, i) in shown" :key="t.id" :data-reorder-id="t.id">
             <div class="row">
               <div class="row-controls">
-                <ReorderHandle v-if="workspaces.canEdit" :name="t.name" :disabled="reorderDisabled" @move="move(t, $event)" />
+                <ReorderHandle v-if="workspaces.canEdit" :name="t.name" :disabled="reorderDisabled" @move="move(i, $event)" />
                 <input v-if="selection.selecting" type="checkbox" :checked="selection.has(t.id)" :aria-label="`Select ${t.name}`" @change="selection.toggle(t.id)" />
               </div>
               <div class="details">
@@ -120,8 +106,8 @@ const selection = useSelection();
                 <span class="badge">{{ offeredLabel(t, brewers) }}</span>
               </div>
               <div v-if="workspaces.canEdit" class="actions">
-                <button class="btn-link" type="button" :disabled="reorderDisabled || i === 0" :aria-label="`Move ${t.name} up`" @click="move(t, -1)">↑</button>
-                <button class="btn-link" type="button" :disabled="reorderDisabled || i === shown.length - 1" :aria-label="`Move ${t.name} down`" @click="move(t, 1)">↓</button>
+                <button class="btn-link" type="button" :disabled="reorderDisabled || i === 0" :aria-label="`Move ${t.name} up`" @click="move(i, -1)">↑</button>
+                <button class="btn-link" type="button" :disabled="reorderDisabled || i === shown.length - 1" :aria-label="`Move ${t.name} down`" @click="move(i, 1)">↓</button>
                 <RouterLink class="btn-link" :to="{ name: 'prep-tool-edit', params: { id: t.id } }">Edit</RouterLink>
               </div>
             </div>

@@ -5,12 +5,12 @@
 // like"): asked when adding, shown and changeable on the row. Built-ins (builtin set) can be renamed and hidden but not deleted.
 // Deleting goes through DeleteDialog, so what uses it is listed first and an
 // "I understand" is needed when anything does (CLAUDE.md rule 7).
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 import ReorderHandle from './ReorderHandle.vue';
-import { type DragUpdate, reorderVisible, undoDragMove } from '../lib/reorder';
 import { ApiError, errorMessage } from '../api/client';
 import type { DeletableKind, Usage } from '../lib/deleting';
+import { useReorder } from '../composables/useReorder';
 import { useWorkspaceStore } from '../stores/workspace';
 import DeleteDialog from './DeleteDialog.vue';
 
@@ -32,7 +32,7 @@ export interface ListApi {
 const props = defineProps<{
   entries: ListEntry[];
   draggable?: boolean; // opt in for brew problems
-  refresh?: () => Promise<void>; // keep mutations locked until the parent reloads
+  reload: () => Promise<void>; // after every change; the list stays locked until it's done
   api: ListApi;
   kind: DeletableKind; // for the delete dialog's wording
   noun: string; // "process"
@@ -44,18 +44,16 @@ const props = defineProps<{
   words?: { hide: string; show: string; hidden: string };
 }>();
 const words = computed(() => props.words ?? { hide: 'Hide', show: 'Show', hidden: 'Hidden' });
-const emit = defineEmits<{ changed: []; saving: [value: boolean] }>();
 const workspaces = useWorkspaceStore();
 const ordered = ref<ListEntry[]>([...props.entries]);
 watch(() => props.entries, (entries) => { ordered.value = [...entries]; });
-const orderList = ref<InstanceType<typeof VueDraggable> | null>(null);
-const moveAnnouncement = ref('');
 
-const busy = ref(false);
-watch(busy, (value) => emit('saving', value), { flush: 'sync' });
-// A failed refresh can replace the list with the parent's error mid-save;
+// v-model:busy lets a parent lock what's around the list (e.g. its import)
+// while a change saves.
+const busy = defineModel<boolean>('busy', { default: false });
+// A failed reload can replace the list with the parent's error mid-save;
 // the parent mustn't stay locked by a list that's gone.
-onBeforeUnmount(() => { if (busy.value) emit('saving', false); });
+onBeforeUnmount(() => { busy.value = false; });
 const error = ref('');
 async function run(action: (ws: string) => Promise<unknown>): Promise<boolean> {
   const ws = workspaces.current?.id;
@@ -64,8 +62,7 @@ async function run(action: (ws: string) => Promise<unknown>): Promise<boolean> {
   error.value = '';
   try {
     await action(ws);
-    if (props.refresh) await props.refresh();
-    else emit('changed');
+    await props.reload();
     return true;
   } catch (err) {
     // A 409 is a taken name, unless the server explains (e.g. recipes use a
@@ -107,28 +104,12 @@ async function saveEdit(e: ListEntry): Promise<void> {
 }
 
 const reorderDisabled = computed(() => busy.value || !workspaces.canEdit || editingId.value !== null);
-async function reorder(from: number, to: number): Promise<void> {
-  if (reorderDisabled.value) return;
-  const previous = ordered.value;
-  const moved = previous[from];
-  const next = reorderVisible(previous, previous, from, to);
-  if (next.every((item, i) => item.id === previous[i]?.id)) return;
-  ordered.value = next;
-  if (await run((ws) => props.api.reorder(ws, next.map((item) => item.id)))) {
-    moveAnnouncement.value = `${moved?.name} moved to position ${to + 1} of ${next.length}`;
-  } else {
-    ordered.value = previous;
-  }
-  await nextTick();
-  orderList.value?.$el.querySelector(`[data-reorder-id="${moved?.id}"] .reorder-handle`)?.focus();
-}
-function onDragUpdate(event: DragUpdate): void {
-  undoDragMove(event);
-  if (event.oldIndex !== undefined && event.newIndex !== undefined) void reorder(event.oldIndex, event.newIndex);
-}
-function move(index: number, by: -1 | 1): void {
-  void reorder(index, index + by);
-}
+const { announcement: moveAnnouncement, onDragUpdate, move } = useReorder({
+  items: ordered,
+  visible: () => ordered.value,
+  disabled: () => reorderDisabled.value,
+  save: (next) => run((ws) => props.api.reorder(ws, next.map((item) => item.id))),
+});
 
 const toggleHidden = (e: ListEntry) => run((ws) => props.api.update(ws, e.id, { hidden: !e.hidden }));
 
@@ -137,14 +118,14 @@ const loadUsage = () => props.api.usage(workspaces.current?.id ?? '', deleting.v
 const remove = () => props.api.remove(workspaces.current?.id ?? '', deleting.value?.id ?? '');
 function deleted(): void {
   deleting.value = null;
-  emit('changed');
+  void props.reload();
 }
 </script>
 
 <template>
   <p v-if="draggable && workspaces.canEdit && ordered.length > 1" class="muted small">Drag ⠿ to reorder, or use the arrow buttons.</p>
   <span class="visually-hidden" aria-live="polite">{{ moveAnnouncement }}</span>
-  <VueDraggable ref="orderList" :model-value="ordered" tag="ol" class="entries"
+  <VueDraggable ref="reorder-list" :model-value="ordered" tag="ol" class="entries"
     handle=".reorder-handle" :animation="150" ghost-class="drag-ghost"
     :disabled="!draggable || reorderDisabled" :custom-update="onDragUpdate" :inert="busy">
     <li v-for="(e, i) in ordered" :key="e.id" :data-reorder-id="e.id" :class="{ hidden: e.hidden }">

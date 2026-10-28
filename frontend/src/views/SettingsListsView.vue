@@ -124,7 +124,7 @@ const styleApi = computed<ListApi>(() => {
         hidden-hint="Hidden methods aren't offered for new brewers; brewers already in one stay there."
         :choices="behaviourChoices"
         choice-label="Works like"
-        @changed="load"
+        :reload="load"
       />
     </section>
 
@@ -141,7 +141,7 @@ const styleApi = computed<ListApi>(() => {
         noun="process"
         placeholder="e.g. Yeast Inoculated"
         hidden-hint="Hidden processes aren't offered for new beans; beans that already have one keep it."
-        @changed="load"
+        :reload="load"
       />
     </section>
 
@@ -176,7 +176,7 @@ const styleApi = computed<ListApi>(() => {
         hidden-hint="Hidden styles aren't offered for new recipes; recipes that already have one keep it."
         :choices="brewsLikeChoices"
         choice-label="Brews like"
-        @changed="load"
+        :reload="load"
       />
     </section>
 
@@ -194,8 +194,7 @@ const styleApi = computed<ListApi>(() => {
         v-else-if="!error"
         :entries="problemEntries"
         draggable
-        :refresh="load"
-        @saving="problemBusy = $event"
+        v-model:busy="problemBusy"
         :api="problemApi"
         kind="problem"
         noun="problem"
@@ -204,7 +203,7 @@ const styleApi = computed<ListApi>(() => {
         :choices="problemMethodChoices"
         choice-label="For"
         :words="archiveWords"
-        @changed="load"
+        :reload="load"
       />
     </section>
     <p v-if="!workspaces.canEdit" class="muted small">Only owners and baristas can change lists.</p>

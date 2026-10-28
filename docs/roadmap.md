@@ -1429,6 +1429,11 @@ backup formats stay compatible. Contracts: `api/prep-tools.md` §3d,
   archived entries, and includes them in reordering.
 - Offered-for tags always sit below the prep item name; Archive/Restore
   lives on its edit page alongside Delete.
+- Both lists share `composables/useReorder.ts` (optimistic move, revert
+  on a refused save, announcement, handle refocus). A refused drag puts
+  the row back on screen too. Every Settings list reloads one way:
+  EditableList awaits its `reload` prop after each change, and a parent
+  that locks around the list (Brew problems' import) uses `v-model:busy`.
 - No schema migration or backup-version change.
 
 ## Delay before the timer starts (built)

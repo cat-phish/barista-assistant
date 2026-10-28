@@ -33,7 +33,6 @@ and fix the references.
 - H. Home roasting: 16
 - I. Accounts: 17–18
 - J. Deployment & the app: 19
-- K. Bugs & cleanups: 20
 
 ---
 
@@ -588,29 +587,3 @@ How the app is served and installed.
   - Later: **Web Push** from the installed app, as one more notification
     channel next to ntfy and the others (roadmap: rate later)?
 
----
-
-## K. Bugs & cleanups
-
-Known problems and code that needs tidying, found in reviews.
-
-### 20. Reorder lists: one shared implementation, one refresh path
-
-- **Status:** idea
-- **Why:** from the `timer-start-delay` review. Drag-to-reorder is written
-  twice: `PrepToolsView.vue` (`reorder`, `onDragUpdate`, `move`) and
-  `EditableList.vue` repeat the same optimistic save, revert on failure,
-  announcement and handle refocus, so every fix has to be made in both.
-  Brew problems in `SettingsListsView.vue` also reload two ways
-  (`:refresh="load"` for edits, `@changed="load"` for deletes), and both
-  the list and its section go `inert` while saving, through a `saving`
-  event. That double lock is what could leave the section stuck before
-  the unmount guard was added.
-- **Approach:**
-  - A `useReorder(items, visible, save)` composable next to
-    `lib/reorder.ts`, used by both lists.
-  - EditableList always awaits an async `changed` handler (dropping the
-    `refresh` prop), and the parent's lock comes from one place.
-  - A component test for a refused drop (the rows stay in the saved order).
-- **Size:** S
-- **Depends on:** nothing.
