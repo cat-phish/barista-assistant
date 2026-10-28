@@ -20,9 +20,11 @@ export interface UserPreferences {
   rateReminderMinutes: number; // 5–240
   rateLaterDefault: boolean; // the log form's Rate later box starts ticked
   repeatKeeps: RepeatKeep[]; // what a repeat copies (lib/repeatBrew.ts REPEAT_OPTIONS)
+  rememberSetup: RememberKey[]; // what the brew page remembers from last time (lib/rememberSetup.ts)
   steepReminders: boolean; // remind when a cold brew's steep window opens
 }
 export type RepeatKeep = 'size' | 'doseWater' | 'temp' | 'grinder' | 'grind' | 'waterProfile' | 'dilution' | 'window' | 'prepTools' | 'grinderWeights' | 'notes';
+export type RememberKey = 'what' | 'brewer' | 'recipe' | 'bean' | 'grinder' | 'grind' | 'waterProfile' | 'prepTools' | 'size';
 
 // docs/api/notifications.md §1b: a person's own reminder channels.
 export type NotificationKind = 'ntfy' | 'gotify' | 'pushover' | 'discord' | 'telegram' | 'slack' | 'webhook';

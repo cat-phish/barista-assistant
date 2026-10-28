@@ -1297,3 +1297,28 @@ pick what was compared, see what was sent, or change the prompt. Contract:
 - **Decided:** per person, not per workspace, prompts, so several people in
   one home can each tune it; no owner override. Batch size is never the
   AI's to change. "In stock" means not archived with weight left.
+
+## Remember the brew setup (built)
+
+Backlog item "Remember the last bean and recipe on the brew page", branch
+`remember-setup`. The brew page remembered what you're making, the brewer
+for each method and the grinder, but the bean and recipe started empty
+every time. Contract: `api/auth.md` §1 `rememberSetup`.
+
+- **Bean and recipe** are remembered too: the last bean (skipped once
+  archived), and the last recipe on each brewer.
+- **Settings → Brew setup** (was Repeat brews; `/settings/repeat`
+  redirects) has a new **Remember from last time** section, a checkbox for
+  each: what you're making, brewer, recipe, bean, grinder and grind (on by
+  default, as before plus bean and recipe), and water profile, the prep
+  checklist for each brewer and the drink size for each drink (off by
+  default). The repeat options are its second section, unchanged.
+- **Order:** a repeat, then a drink's default brewer and recipe, then
+  what's remembered, then the first. A repeat that leaves something out
+  starts it from what's remembered.
+- **Decided:** the choice of what's remembered is a preference (per
+  person, every device); the values stay per device and per workspace, as
+  before. Dose, water, temperature, dilution and the window follow the
+  recipe and aren't remembered (that's what Repeat is for). Making the bean
+  and recipe Repeat options (backlog "Repeat brews: bean and recipe as
+  choices") was set aside: it may not make sense.

@@ -50,7 +50,8 @@ export const router = createRouter({
     { path: '/settings', name: 'settings', component: () => import('../views/SettingsView.vue'), meta: { requiresAuth: true } },
     { path: '/settings/account', name: 'settings-account', component: () => import('../views/SettingsAccountView.vue'), meta: { requiresAuth: true } },
     { path: '/settings/preferences', name: 'settings-preferences', component: () => import('../views/SettingsPreferencesView.vue'), meta: { requiresAuth: true } },
-    { path: '/settings/repeat', name: 'settings-repeat', component: () => import('../views/SettingsRepeatView.vue'), meta: { requiresAuth: true } },
+    { path: '/settings/brew-setup', name: 'settings-brew-setup', component: () => import('../views/SettingsBrewSetupView.vue'), meta: { requiresAuth: true } },
+    { path: '/settings/repeat', redirect: { name: 'settings-brew-setup' } }, // its old name, Repeat brews
     { path: '/settings/ai-prompt', name: 'settings-ai-prompt', component: () => import('../views/SettingsPromptView.vue'), meta: { requiresAuth: true } },
     { path: '/settings/notifications', name: 'settings-notifications', component: () => import('../views/SettingsNotificationsView.vue'), meta: { requiresAuth: true } },
     { path: '/settings/lists', name: 'settings-lists', component: () => import('../views/SettingsListsView.vue'), meta: { requiresWorkspace: true } },

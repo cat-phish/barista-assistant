@@ -34,6 +34,10 @@ export const THEMES = ["system", "light", "dark"] as const; // system = follow t
 // and what → brewer → recipe, which a repeat always takes (docs/api/auth.md §1).
 export const REPEAT_KEEPS = ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "prepTools", "grinderWeights", "notes"] as const;
 export type RepeatKeep = (typeof REPEAT_KEEPS)[number];
+// What the brew page fills in from last time on this device (Settings → Brew
+// setup, docs/api/auth.md §1 rememberSetup).
+export const REMEMBER_KEYS = ["what", "brewer", "recipe", "bean", "grinder", "grind", "waterProfile", "prepTools", "size"] as const;
+export type RememberKey = (typeof REMEMBER_KEYS)[number];
 
 // Per person (docs/api/auth.md §1 preferences).
 export interface UserPreferences {
@@ -49,6 +53,7 @@ export interface UserPreferences {
   rateReminderMinutes: number; // 5–240
   rateLaterDefault: boolean; // the log form's Rate later box starts ticked
   repeatKeeps: RepeatKeep[]; // what a repeat copies (notes: shown as a reminder, not copied)
+  rememberSetup: RememberKey[]; // what the brew page remembers from last time
   steepReminders: boolean; // remind when a cold brew's steep window opens (docs/api/notifications.md §1b)
 }
 export const DEFAULT_PREFERENCES: UserPreferences = {
@@ -61,6 +66,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   rateReminderMinutes: 15,
   rateLaterDefault: false,
   repeatKeeps: ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"],
+  rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"],
   steepReminders: true,
 };
 

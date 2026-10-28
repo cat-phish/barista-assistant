@@ -25,14 +25,14 @@ and fix the references.
 **Contents**
 - A. Settings & configuration: 1–2
 - B. Beans: 3
-- C. Brewing & logging: 4–7
-- D. Recipes: 8–10
-- E. AI suggestions: 11–12
-- F. Insights: 13
-- G. Bar & menu: 14–16
-- H. Home roasting: 17
-- I. Accounts: 18–19
-- J. Deployment & the app: 20
+- C. Brewing & logging: 4–6
+- D. Recipes: 7–9
+- E. AI suggestions: 10–11
+- F. Insights: 12
+- G. Bar & menu: 13–15
+- H. Home roasting: 16
+- I. Accounts: 17–18
+- J. Deployment & the app: 19
 
 ---
 
@@ -207,42 +207,22 @@ Recording a brew: what's measured, and how fast it is to log.
   - Add `bean` and `recipe` to the Repeat brews options (`RepeatKeep`,
     `REPEAT_KEEPS`, `REPEAT_OPTIONS`, `applyRepeat`), on by default so
     nothing changes for anyone who doesn't touch them.
-  - **Off:** setup fills that choice as it would without a repeat (the
-    remembered one, item 7, or empty to pick).
+  - **Off:** setup fills that choice as it would without a repeat (what
+    Settings → Brew setup remembers, or empty to pick).
   - With bean on, the "next bag of the same coffee" fallback stays.
   - Backend `DEFAULT_PREFERENCES` and the preferences validator;
-    `docs/api/auth.md` §1 repeatKeeps.
+    `docs/api/auth.md` §1 repeatKeeps. People who already saved their
+    repeat choices need `bean` and `recipe` added to them (a data
+    migration), or a repeat stops copying them.
 - **Size:** S
-- **Depends on:** 7 decides what "off" falls back to.
+- **Depends on:** nothing (remembering the last bean and recipe is built).
 - **Open questions:**
+  - Does it make sense at all? Set aside on 2026-10-27, when remembering
+    the bean and recipe was built: a repeat that doesn't copy the bean or
+    recipe may not be a repeat any more.
   - With recipe off, does the brewer stay (and setup picks its last
     recipe), or do "what" and the brewer become choices too?
   - With both off, is it still a repeat, or only "copy the settings"?
-
-### 7. Remember the last bean and recipe on the brew page
-
-- **Status:** idea
-- **Why:** the brew page remembers what you're making, the brewer for each
-  method and the grinder (`remember` / `recall` in `BrewView.vue`, per
-  workspace in local storage). The bean and recipe start empty every time,
-  though most brews use the same bag and recipe as the last one.
-- **Approach:**
-  - Remember the bean, and the recipe for each brewer. A remembered bean
-    that's been archived, finished or deleted is skipped, as are recipes.
-  - Settings → Brewing: **Remember on the brew page**, a checkbox for each
-    of what you're making, brewer, recipe, grinder and bean. Saved in the
-    user's preferences (`docs/api/auth.md` §1), so it's the same on every
-    device.
-  - Repeat (item 6) and links that fill the setup (`?bean=…`) still come
-    first.
-  - With bean and recipe filled, the AI suggestion can show straight away.
-- **Size:** S–M
-- **Depends on:** nothing.
-- **Open questions:**
-  - Keep the remembered values per device (as now), or on the server so
-    phone and tablet agree?
-  - The recipe per brewer, or per "what you're making"?
-  - Bean: the last one brewed by you, or by anyone in the workspace?
 
 ---
 
@@ -250,7 +230,7 @@ Recording a brew: what's measured, and how fast it is to log.
 
 Building recipes: their steps, timings and target window.
 
-### 8. Prep steps that don't start the timer
+### 7. Prep steps that don't start the timer
 
 - **Status:** idea
 - **Why:** rinsing the filter, preheating, grinding or taring come before
@@ -276,7 +256,7 @@ Building recipes: their steps, timings and target window.
   - Saved with the brew's copy of the steps, and shown in the journal?
   - Does the AI see them (always, switchable, or never)?
 
-### 9. Step timings: "ends at" and the target window in the builder
+### 8. Step timings: "ends at" and the target window in the builder
 
 - **Status:** idea
 - **Why:** each step in the recipe builder says when it starts ("Starts at
@@ -287,13 +267,13 @@ Building recipes: their steps, timings and target window.
   - Each step's hint shows both: "Starts at 0:30 · ends at 1:15" (≈ after
     tap or first-drop steps, "until done" for an open-ended last step).
   - Under the step list, a summary: "Steps end at 3:15 · target finish
-    3:00–3:30", in a warning colour when outside the window (item 10).
+    3:00–3:30", in a warning colour when outside the window (item 9).
   - Both come from `plannedStarts` (`frontend/src/lib/steps.ts`).
 - **Size:** S
 - **Depends on:** nothing.
 - **Open questions:** espresso's first-drop window too, next to the total?
 
-### 10. Target finish window vs. the steps
+### 9. Target finish window vs. the steps
 
 - **Status:** idea
 - **Why:** the target finish window and the steps are typed separately and
@@ -304,14 +284,14 @@ Building recipes: their steps, timings and target window.
 - **Approach:** decide which way round it works, then:
   - Fill the window from the steps (planned end, plus or minus a
     tolerance) until it's edited, with "Use the steps' time" to go back.
-  - Or move the window below the step list, by the summary from item 9.
+  - Or move the window below the step list, by the summary from item 8.
   - Warn whenever the planned end falls outside the window (not only past
     its end), with a one-tap "Fit the window to the steps". Softer wording
     when the end is approximate (tap or first-drop steps).
   - The server keeps not enforcing it (`docs/api/recipes.md`: "clients
     warn instead").
 - **Size:** S–M
-- **Depends on:** 9 for the summary line; pairs with 5 (a window per brew).
+- **Depends on:** 8 for the summary line; pairs with 5 (a window per brew).
 - **Open questions:**
   - Which leads: the steps (window derived) or the window (steps checked
     against it)?
@@ -325,7 +305,7 @@ Building recipes: their steps, timings and target window.
 
 What the analysis worker sends to the LLM and what comes back.
 
-### 11. Build bar items from plain text (AI)
+### 10. Build bar items from plain text (AI)
 
 - **Status:** idea
 - **Why:** recipes, drinks and other bar items often come as text: a
@@ -353,7 +333,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Units and step types the text describes loosely ("pour to about 100 ml,
     wait 30 s"): how sure must the AI be before filling a field?
 
-### 12. Review and test the espresso dose and shot weight suggestions
+### 11. Review and test the espresso dose and shot weight suggestions
 
 - **Status:** planned
 - **Why:** dose and shot weight changes for espresso (roadmap: espresso dose
@@ -393,7 +373,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## F. Insights
 
-### 13. Statistics and graphs
+### 12. Statistics and graphs
 
 - **Status:** idea
 - **Why:** the brew history is a list. Trends (is this bean getting better
@@ -422,7 +402,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## G. Bar & menu
 
-### 14. Ingredient prep and stock
+### 13. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -439,7 +419,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should a finished cold brew batch (roadmap: cold brew refinements) be
     stock the same way, with each glass served taken from it and rated?
 
-### 15. Public menu: branding and sizes
+### 14. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
@@ -453,7 +433,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
-### 16. Drink categories: what else they could do
+### 15. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -472,7 +452,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## H. Home roasting
 
-### 17. Roasting: green stock, roast logs, resting
+### 16. Roasting: green stock, roast logs, resting
 
 - **Status:** idea
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
@@ -503,7 +483,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## I. Accounts
 
-### 18. Account management and password reset
+### 17. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -534,13 +514,13 @@ What the analysis worker sends to the LLM and what comes back.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 19. Email verification
+### 18. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 18), inviting a member by email, or notifications by email.
+  (item 17), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -550,9 +530,9 @@ What the analysis worker sends to the LLM and what comes back.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 18).
+  - Shares the mail and token pieces with password reset (item 17).
 - **Size:** M (mail is new to the stack).
-- **Depends on:** nothing; pairs with 18.
+- **Depends on:** nothing; pairs with 17.
 - **Open questions:**
   - Block unverified accounts, or only remind them?
   - What happens to accounts that existed before verification (treat as
@@ -565,7 +545,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 How the app is served and installed.
 
-### 20. Serve the app as an installable PWA
+### 19. Serve the app as an installable PWA
 
 - **Status:** idea
 - **Why:** the PWA is configured (`vite-plugin-pwa`, `frontend/vite.config.ts`)

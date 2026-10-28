@@ -9,7 +9,7 @@ import { encodeCategory, encodeDrink, encodeMethod, encodePlain, methodKey, NO_R
 import { formatAdded } from './format';
 
 // What a repeat can copy besides the bean and what → brewer → recipe, which
-// it always takes (Settings → Repeat brews, docs/api/auth.md §1 repeatKeeps).
+// it always takes (Settings → Brew setup, docs/api/auth.md §1 repeatKeeps).
 // The defaults are the backend's (DEFAULT_PREFERENCES).
 export const REPEAT_OPTIONS: Array<{ key: RepeatKeep; label: string; hint?: string }> = [
   { key: 'size', label: 'Drink size', hint: 'Off: the drink’s default size' },

@@ -198,6 +198,13 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   starting point. Start and Log stay disabled until the bean and the batch
   are set, with a line saying what's still missing ("Choose a bean.",
   "Enter a size.").
+- **Remembered from last time:** a new brew starts with what you chose last
+  time on this device: what you're making, the brewer for each method, the
+  recipe for each brewer, the bean, the grinder and your last grind with it.
+  **Settings → Brew setup** (per person) switches each off, or on for the
+  water, the prep checklist (for each brewer) and the drink size (for each
+  drink). Archived ones are skipped; a drink's default brewer and recipe
+  come first.
 - **Batch scaling:** the **ratio** (the 15 in 1:15) starts at the recipe's.
   Typing the dose or the water keeps the other and changes the ratio;
   typing the ratio changes the water; typing the approximate yield (in fl
@@ -220,7 +227,7 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   temperature, grinder, grind and RPM, and the water. Prep tools, grinder
   weights, results, ratings and notes start blank, and anything archived
   since is skipped and named. The timer starts when you press Start.
-  **Settings → Repeat brews** (per person) chooses what's copied: each of
+  **Settings → Brew setup** (per person) chooses what's copied: each of
   those, plus the prep checklist, beans in / grounds out, and the earlier
   tasting notes shown as a reminder on the log form.
 - **Rate later:** the log form has a **Rate later** box. Tick it and save
@@ -248,8 +255,8 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   - **Rapid cold brew** (e.g. an OXO Rapid Brewer) uses the normal timer.
     Its target finish can be changed on setup for this brew, and the brew
     keeps it.
-  - Both windows are a brew field (Settings → Fields) and a Repeat brews
-    option.
+  - Both windows are a brew field (Settings → Fields) and a repeat
+    option (Settings → Brew setup).
   - All three ask on setup whether it's steeping in the fridge or at room
     temperature (the recipe's, for cold brew and Kyoto drip).
   - All three ask for the dilution served. The AI judges them as served,

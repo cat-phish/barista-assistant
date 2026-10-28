@@ -14,6 +14,7 @@ import AiNoteField from '../components/AiNoteField.vue';
 import AiRequestDialog from '../components/AiRequestDialog.vue';
 import RepeatBrewPicker from '../components/RepeatBrewPicker.vue';
 import { recentByMade, repeatLabel, repeatPlan } from '../lib/repeatBrew';
+import { rememberedSize, rememberedTools, rememberKeyFor, stillActive, storedSize, storedTools, type Remembered } from '../lib/rememberSetup';
 import { grindersApi } from '../api/grinders';
 import { waterProfilesApi } from '../api/waterProfiles';
 import { prepToolsApi } from '../api/prepTools';
@@ -43,7 +44,7 @@ import {
   setupMissing,
   switchPlan,
 } from '../lib/brewChoice';
-import type { Brewer, BrewProblem, Drink, DrinkCategory, Grinder, Mark, MethodKind, NotificationChannel, PrepTool, ServingUnit, WaterProfile } from '../api/types';
+import type { Brewer, BrewProblem, Drink, DrinkCategory, Grinder, Mark, MethodKind, NotificationChannel, PrepTool, RememberKey, ServingUnit, WaterProfile } from '../api/types';
 import { METHOD_KINDS } from '../lib/equipment';
 import { convertSize, defaultSize, formatSize, SERVING_UNITS, sizeFactor, type Size } from '../lib/servings';
 import AppHeader from '../components/AppHeader.vue';
@@ -131,14 +132,20 @@ watch(item, (value) => {
   remember('brewItem', value);
   const kind = itemKind.value;
   brewerId.value = pickBrewer(brewerList.value, drink.value, recipes.value, kind ? recall(`brewBrewer.${kind}`) : null, brewerId.value);
-  recipeId.value = pickRecipe(recipeChoices.value, drink.value, recipeId.value);
+  recipeId.value = pickRecipe(recipeChoices.value, drink.value, recallRecipe(), recipeId.value);
 });
 watch(brewerId, (id) => {
   const kind = itemKind.value;
   if (id && kind) remember(`brewBrewer.${kind}`, id); // the last brewer used for this kind
-  recipeId.value = pickRecipe(recipeChoices.value, drink.value, recipeId.value);
+  recipeId.value = pickRecipe(recipeChoices.value, drink.value, recallRecipe(), recipeId.value);
+  if (remembering('prepTools')) draft.toolIds = newBrewTools();
 });
-// Drink size (lib/servings.ts): starts at the drink's default; a bigger or
+// The last recipe used on each brewer.
+const recallRecipe = () => (brewerId.value ? recall(`brewRecipe.${brewerId.value}`) : null);
+watch(recipeId, (id) => {
+  if (id && recipes.value.some((r) => r.id === id && r.brewer.id === brewerId.value)) remember(`brewRecipe.${brewerId.value}`, id);
+});
+// Drink size (lib/servings.ts): starts at the drink's default (or the last; startSize); a bigger or
 // smaller one scales the ingredients and, on a filter method, the batch. An
 // espresso shot stays as the recipe says.
 const baseSize = computed(() => defaultSize(drink.value));
@@ -154,8 +161,15 @@ function resetSize(): void {
   sizeText.value = b ? formatGrams(b.size) : '';
   sizeUnit.value = b?.unit ?? 'fl_oz';
 }
+// A drink starts at the size last made of it, if remembered, else its default.
+function startSize(): void {
+  const saved = drink.value && baseSize.value ? rememberedSize(recall(`size.${drink.value.id}`)) : null;
+  if (!saved) return resetSize();
+  sizeText.value = formatGrams(saved.size);
+  sizeUnit.value = saved.unit;
+}
 watch(baseSize, () => {
-  resetSize();
+  startSize();
   sizeToBatch();
 });
 function setSize(event: Event): void {
@@ -175,6 +189,7 @@ function sizeToBatch(): void {
   else lead.value = { field: 'water', text: formatGrams(Math.round(r.targetWaterGrams * sizeScale.value)) };
 }
 const bean = computed(() => beans.value.find((b) => b.id === beanId.value) ?? null);
+watch(beanId, (id) => remember('beanId', id));
 const recipe = computed(() => recipes.value.find((r) => r.id === recipeId.value) ?? null);
 // "Suggest parameters" (docs/api/analysis.md §8b): values for this brew from
 // the earlier brews picked (which, and how many), filled in when they come.
@@ -231,9 +246,9 @@ onMounted(async () => {
     grinders.value = g.grinders;
     waterProfiles.value = w.waterProfiles;
     prepTools.value = t.tools;
-    draft.waterProfileId = defaultWaterProfileId(w.waterProfiles); // new brews start on the default (§3c)
+    draft.waterProfileId = newBrewWater();
     brewers.value = m.brewers;
-    if (beans.value.length === 1) beanId.value = beans.value[0]?.id ?? '';
+    beanId.value = stillActive(recall('beanId'), beans.value) ?? (beans.value.length === 1 ? (beans.value[0]?.id ?? '') : '');
     const saved = recall('grinderId');
     if (saved && activeGrinders.value.some((x) => x.id === saved)) draft.grinderId = saved;
     what.value = validWhat(recall('brewWhat'), whatList.value); // the last choice, if it's still offered
@@ -473,10 +488,13 @@ const grindNote = computed(() => {
 const NEW_GRINDER = '__new__';
 const activeGrinders = computed(() => grinders.value.filter((x) => !x.archivedAt));
 const grinder = computed(() => grinders.value.find((x) => x.id === draft.grinderId) ?? null);
-// The last grinder and brew choice, remembered per workspace.
-type Remembered = 'grinderId' | 'brewWhat' | 'brewItem' | `brewBrewer.${MethodKind}` | 'suggestSource' | 'suggestMax' | 'suggestAlternatives';
+// The last brew's choices, remembered per workspace on this device; which
+// ones is up to the person (Settings → Brew setup, lib/rememberSetup.ts).
 const savedKey = (what: Remembered) => `brewlog.${what}.${workspaces.current?.id ?? ''}`;
+const remembering = (key: RememberKey) => prefs.value.rememberSetup.includes(key);
 function recall(what: Remembered): string | null {
+  const key = rememberKeyFor(what);
+  if (key && !remembering(key)) return null;
   try {
     return localStorage.getItem(savedKey(what));
   } catch {
@@ -549,7 +567,7 @@ async function refreshGrind(): Promise<void> {
     grindSource.value = 'repeat';
     return;
   }
-  const choice = chooseGrind({ lastSetting: last?.grindSetting ?? null, suggestion: suggestion.value, grinderId, recipe: recipe.value });
+  const choice = chooseGrind({ lastSetting: remembering('grind') ? (last?.grindSetting ?? null) : null, suggestion: suggestion.value, grinderId, recipe: recipe.value });
   draft.grind = choice.value;
   grindSource.value = choice.source;
   // The speed goes with the setting it came with (variable-speed grinders).
@@ -821,7 +839,7 @@ async function startSteep(): Promise<void> {
       ...windowValues(),
       steeping: true,
     });
-    if (values.grinderId) remember('grinderId', values.grinderId);
+    rememberBrew(values);
     savedLogId.value = brewLog.id;
     steepStarted.value = {
       at: brewLog.timestamp,
@@ -915,6 +933,18 @@ notificationsApi
   .then((r) => (notifyChannels.value = r.channels))
   .catch(() => (notifyChannels.value = [])); // without it, brews just save without Rate later
 
+// What this brew used, for the next one (Settings → Brew setup).
+function rememberBrew(values: Pick<BrewLogInput, 'grinderId' | 'waterProfileId' | 'toolIds'>): void {
+  if (values.grinderId) remember('grinderId', values.grinderId);
+  if (values.waterProfileId) remember('waterProfileId', values.waterProfileId);
+  remember(`prepTools.${brewerId.value || 'none'}`, storedTools(values.toolIds ?? []));
+  if (drink.value && madeSize.value) remember(`size.${drink.value.id}`, storedSize(madeSize.value));
+}
+// New brews start on the water last used, if remembered, else the default (§3c).
+const newBrewWater = () => stillActive(recall('waterProfileId'), waterProfiles.value) ?? defaultWaterProfileId(waterProfiles.value);
+// The prep tools last ticked with this brewer, if remembered, else none.
+const newBrewTools = () => rememberedTools(recall(`prepTools.${brewerId.value || 'none'}`), prepTools.value) ?? [];
+
 async function save(): Promise<void> {
   submitted.value = true;
   const ws = workspaces.current?.id;
@@ -943,7 +973,7 @@ async function save(): Promise<void> {
         ...(parsed.value.firstDropSec !== null ? [{ kind: 'first_drop' as const, stepOrder: null, atSec: parsed.value.firstDropSec }] : []),
       ],
     });
-    if (values.grinderId) remember('grinderId', values.grinderId);
+    rememberBrew(values);
     savedLogId.value = brewLog.id;
     savedUnrated.value = values.rating === null && (values.drinkRating ?? null) === null;
     savedDueAt.value = brewLog.analysisDueAt;
@@ -1041,12 +1071,12 @@ async function applyRepeat(log: BrewLog): Promise<void> {
   if (plan.recipeId) recipeId.value = plan.recipeId;
   await nextTick();
   if (repeatGrind.value) repeatGrind.value.recipeId = recipeId.value; // another recipe if the brew's is gone
-  // What else it copies is yours to choose (Settings → Repeat brews,
+  // What else it copies is yours to choose (Settings → Brew setup,
   // repeatKeeps); what's left out is set as for a new brew.
   if (kept.has('size') && log.servingSize !== null && log.servingUnit && baseSize.value) {
     sizeText.value = formatGrams(log.servingSize);
     sizeUnit.value = log.servingUnit;
-  } else resetSize();
+  } else startSize();
   // Filter: the brew's dose, water and ice (so the ratio and the ice are the
   // ones it had); espresso: its dose, with the shot weight at the recipe's ratio.
   if (!kept.has('doseWater')) {
@@ -1069,7 +1099,7 @@ async function applyRepeat(log: BrewLog): Promise<void> {
   if (kept.has('grinder')) draft.grinderId = plan.grinderId; // else the one setup already has
   // The grind follows only on the brew's own grinder (repeatGrind checks it).
   if (!kept.has('grind')) repeatGrind.value = null;
-  draft.waterProfileId = kept.has('waterProfile') && plan.waterProfileId ? plan.waterProfileId : defaultWaterProfileId(waterProfiles.value);
+  draft.waterProfileId = kept.has('waterProfile') && plan.waterProfileId ? plan.waterProfileId : newBrewWater();
   // Cold styles: where it steeped goes with the temperature; the dilution
   // has its own switch. Otherwise the recipe's (set when the recipe was chosen).
   if (kept.has('temp') && log.steepTemp) draft.steepTemp = log.steepTemp;
@@ -1087,7 +1117,7 @@ async function applyRepeat(log: BrewLog): Promise<void> {
     windowText.finishTo = formatTime(log.expectedFinishMaxSec);
   }
   const activeTools = new Set(prepTools.value.filter((t) => !t.archivedAt).map((t) => t.id));
-  draft.toolIds = kept.has('prepTools') ? log.tools.map((t) => t.id).filter((id) => activeTools.has(id)) : [];
+  draft.toolIds = kept.has('prepTools') ? log.tools.map((t) => t.id).filter((id) => activeTools.has(id)) : newBrewTools();
   draft.problemIds = []; // what went wrong is noted for each brew
   draft.beanIn = kept.has('grinderWeights') && log.beanWeightInGrams !== null ? formatGrams(log.beanWeightInGrams) : '';
   draft.groundOut = kept.has('grinderWeights') && log.groundWeightOutGrams !== null ? formatGrams(log.groundWeightOutGrams) : '';
@@ -1507,7 +1537,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         ><template v-if="recipe"> · {{ recipe.name }}</template>
       </p>
       <FinishDrinkCard v-if="drink" :drink="drink" :factor="sizeScale" :size-label="madeSize ? formatSize(madeSize) : null" />
-      <!-- Settings → Repeat brews: the repeated brew's notes, as a reminder (not copied). -->
+      <!-- Settings → Brew setup: the repeated brew's notes, as a reminder (not copied). -->
       <section v-if="repeatNotes" class="card notes-reminder">
         <h2>Last time ({{ repeatLabel(repeatFrom!.log).when }})</h2>
         <p v-if="repeatFrom!.log.tastingNotes">{{ repeatFrom!.log.tastingNotes }}</p>
