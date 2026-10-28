@@ -5,9 +5,10 @@
 
 An ordered list per workspace (Bar setup → Tools) of the prep a brew can use:
 WDT, a puck screen, a rinsed paper filter… Brew logs record the tools used
-(§6) and the AI analysis gets their names (§9). The brew form lists them as
+(§6) and the AI analysis gets their names (§9). The brew page lists them as
 a checklist in this order, showing a recipe's method's tools and the
-all-method ones.
+all-method ones: on setup above Start, to tick while getting ready, and on
+the log form with the same ticks, to change afterwards.
 
 **Tool object:**
 

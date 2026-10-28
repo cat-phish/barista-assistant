@@ -54,6 +54,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import FinishDrinkCard from '../components/FinishDrinkCard.vue';
 import { useBrewSessionStore } from '../stores/brewSession';
 import { formatMark } from '../lib/marks';
+import { toolsFor } from '../lib/prepTools';
 import { formatFinishWindow, parseFinishWindow, stepTitle } from '../lib/steps';
 import { useAnalysis } from '../composables/useAnalysis';
 import { formatClock } from '../lib/analysisStatus';
@@ -365,6 +366,9 @@ function setGroundOut(event: Event): void {
 // Optional setup fields the workspace hides (Settings → Fields). Setup is
 // always a new brew, so nothing recorded needs revealing.
 const { show } = useFieldVisibility();
+// The prep checklist on setup (docs/api/prep-tools.md §3d): the same ticks
+// as the log form's, so they carry over and can still be changed there.
+const setupTools = computed(() => (show('brew.prepTools') ? toolsFor(prepTools.value, recipe.value?.brewer.kind ?? null, draft.toolIds) : []));
 // Shown while typing, except mid-number ("2.").
 const setupGrindError = computed(() => (draft.grind.trim().endsWith('.') ? '' : (parsed.value.errors.grind ?? '')));
 const setupRetention = computed(() => grinderRetentionText(num(draft.beanIn), num(draft.groundOut)));
@@ -1469,6 +1473,17 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         </fieldset>
       </section>
 
+      <section v-if="setupTools.length" class="card stack" aria-labelledby="setup-prep">
+        <h2 id="setup-prep">Prep</h2>
+        <div class="prep-list">
+          <label v-for="t in setupTools" :key="t.id" class="checkbox">
+            <input v-model="draft.toolIds" type="checkbox" :value="t.id" />
+            {{ t.name }}{{ t.archivedAt ? ' (archived)' : '' }}
+          </label>
+        </div>
+        <p class="muted small">Tick what you've done. It goes on the log, where you can still change it.</p>
+      </section>
+
       <div class="stack">
         <template v-if="longStyle">
           <button class="btn btn-primary btn-block" type="button" :disabled="!bean || !setupReady" @click="leaveSetup('steep')">Start steep</button>
@@ -1682,6 +1697,11 @@ h1 {
 }
 h2 {
   font-size: 1.1rem;
+}
+.prep-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
 }
 p {
   margin: 0;

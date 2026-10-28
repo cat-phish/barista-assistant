@@ -1341,3 +1341,16 @@ further up the form, out of view while building the steps.
 - Built alongside prep steps (recipe steps done before the timer starts),
   which were set aside unmerged on branch `prep-steps`. What to do when the
   steps and the window disagree stays on the backlog.
+
+## Prep on brew setup (built)
+
+Branch `setup-prep`. The prep checklist was only on the log form, after the
+brew; it's done before. Prep steps as part of a recipe (branch `prep-steps`,
+parked) were tried first and set aside in favour of this.
+
+- Brew setup has a **Prep** card above Start: the prep tools for the
+  recipe's method and the all-method ones, as on the log form.
+- It's the same list of ticks as the log form's, so what's ticked on setup
+  is there after the brew and can still be changed. Remembered prep
+  (Settings → Brew setup) and Repeat fill it as before, now visibly.
+- Hidden with the Prep field (Settings → Fields), like the log form's.
