@@ -239,6 +239,12 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   held. Pour targets scale with the water; step times stay the same. A much bigger or smaller
   dose than the recipe suggests a coarser or finer grind. "Reset to recipe"
   undoes it all.
+- **Scale slider:** above the batch (filter and espresso), from ×0.5 to ×2
+  in steps of 0.05. It sets the dose as a multiple of the recipe's at the
+  ratio as it is, so water, ice, yield or shot weight and the pour targets
+  follow; the drink size stays. Typing an amount moves it to match (past
+  either end it stays there, and its label shows the real factor, "×3").
+  Hideable under Settings → Fields.
 - **Espresso shots:** the same setup shows dose, ratio and shot weight
   instead. The dose and the ratio move the shot weight; typing the shot
   weight keeps the dose and changes the ratio. The brew records its recipe's

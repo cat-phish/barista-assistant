@@ -1493,3 +1493,22 @@ Backlog item "Roast weight loss", branch `roast-weight-loss`. Contract:
   easily, and that it's trusted over the roast level when they disagree.
   PROMPT_VERSION 2026-10-i.
 - The home roasting roast log will fill it in when built.
+
+## Scale slider on the brew page (built)
+
+Backlog item "Yield scaler slider on the brew page", branch `yield-slider`.
+`docs/features.md` (Scale slider), `frontend/src/lib/scale.ts`
+(`SCALE_SLIDER`).
+
+- Brew setup's "Batch and starting point" card has a **Scale the recipe**
+  slider above the batch, for filter and espresso: ×0.5 to ×2 in steps of
+  0.05, labelled with the multiplier ("×1.5").
+- It sets the dose to the recipe's × the factor (to 0.1 g) at the ratio as
+  it is (a custom ratio included), so water and ice, the yield estimate or
+  the shot weight, and the pour targets follow, as does the AI
+  suggestion's batch. Typing an amount moves it to match; past either end it
+  stays there and the label says the real factor.
+- Decided: the drink size stays (the size is the cup, the batch is what's
+  brewed); multiplier only in the label, not the yield.
+- Hideable under Settings → Fields (`brew.scaleSlider`); a repeat copies
+  the dose and water it set (`doseWater`). Nothing new is stored.
