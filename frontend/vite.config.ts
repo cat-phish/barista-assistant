@@ -14,6 +14,11 @@ export default defineConfig({
     // IPs and localhost always work; a hostname (e.g. barista.lan) must be
     // listed: ALLOWED_HOSTS=barista.lan,other.lan
     allowedHosts: process.env.ALLOWED_HOSTS ? process.env.ALLOWED_HOSTS.split(',').map((h) => h.trim()) : [],
+    // Vite reloads the page when its live-reload socket drops and comes back,
+    // which on a phone happens whenever the camera or photo picker opens:
+    // whatever was in progress is lost. Docker sets VITE_LIVE_RELOAD=false
+    // (its source is copied in, so live reload does nothing there).
+    ws: process.env.VITE_LIVE_RELOAD === 'false' ? false : undefined,
   },
   plugins: [
     vue(),

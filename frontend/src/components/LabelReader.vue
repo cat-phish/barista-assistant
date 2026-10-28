@@ -16,6 +16,7 @@ const emit = defineEmits<{ label: [fields: LabelFields] }>();
 const reading = ref(false);
 const error = ref('');
 const camera = ref<HTMLInputElement | null>(null);
+const source = ref<'camera' | 'chooser'>('camera'); // the button that started the read
 const chooser = ref<HTMLInputElement | null>(null);
 
 async function picked(event: Event): Promise<void> {
@@ -48,10 +49,14 @@ async function picked(event: Event): Promise<void> {
     <input ref="camera" class="visually-hidden" type="file" accept="image/*" capture="environment" tabindex="-1" @change="picked" />
     <input ref="chooser" class="visually-hidden" type="file" accept="image/*" multiple tabindex="-1" @change="picked" />
     <div class="pick">
-      <button type="button" class="btn btn-secondary" :disabled="reading" @click="camera?.click()">Take photo</button>
-      <button type="button" class="btn btn-secondary" :disabled="reading" @click="chooser?.click()">Choose photos</button>
+      <button type="button" class="btn btn-secondary" :disabled="reading" @click="(source = 'camera'), camera?.click()">
+        {{ reading && source === 'camera' ? 'Reading the label…' : 'Take photo' }}
+      </button>
+      <button type="button" class="btn btn-secondary" :disabled="reading" @click="(source = 'chooser'), chooser?.click()">
+        {{ reading && source === 'chooser' ? 'Reading the label…' : 'Choose photos' }}
+      </button>
     </div>
-    <p v-if="reading" class="muted small" aria-live="polite">Reading the label… this can take half a minute.</p>
+    <p class="small" role="status">{{ reading ? 'Still reading the label: this can take half a minute. Keep this page open.' : '' }}</p>
     <p v-if="error" class="field-error" role="alert">{{ error }}</p>
     <slot />
   </section>
