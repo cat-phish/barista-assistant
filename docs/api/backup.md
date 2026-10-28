@@ -44,7 +44,7 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
 ```json
 {
   "format": "barista-backup",
-  "version": 1,
+  "version": 2,
   "exportedAt": "2026-10-23T08:00:00.000Z",
   "workspace": { "name": "Home bar", "slug": "home-bar", "settings": { "roastScale": "levels" }, "menuTitle": null, "menuCurrency": "USD", "isPublicMenuEnabled": true },
   "tables": {
@@ -60,7 +60,7 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   `YYYY-MM-DD`, decimals numbers.
 - **Tables, in restore order:** `brewer_methods`, `bean_processes`,
   `recipe_styles`, `grinders`, `water_profiles`, `prep_tools`,
-  `brew_problems`, `ingredients`, `drink_categories`, `brewers`, `beans`,
+  `brew_problems`, `ingredients`, `drink_categories`, `brewers`, `prep_tool_brewers`, `beans`,
   `bean_freezes`, `recipes`, `recipe_steps`, `recipe_grind_settings`,
   `drinks`, `drink_ingredients`, `menu_sections`, `menu_items`,
   `brew_logs`, `brew_log_marks`, `brew_log_tools`, `brew_log_problems`,
@@ -79,6 +79,11 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
 - **`version`** goes up only when an older file can't be restored as is;
   the server upgrades older versions on restore and refuses newer ones.
   New optional columns don't change it (an older file just lacks them).
+  Versions so far (`UPGRADES` in `backend/src/backup.ts`):
+  - **2:** a prep tool's one `methodKind` (`null` = every method) became
+    `methodKinds` (`[]` = every brew), plus the brewers it's offered for
+    (`prep_tool_brewers`). A version 1 file restores with `[methodKind]`
+    or `[]`, and no brewers.
 
 **What was sent to the AI** (`request` on `llm_analyses` and
 `parameter_suggestions`, `analysis.md` §8c) is large and only for looking
@@ -158,7 +163,8 @@ too. Where the app offers them: "Where it is" above. Code:
   | `drinks` | drinks, drink ingredients | drink category, the drink it's a variant of, default recipe (→ as recipes), ingredients |
   | `ingredients` | ingredients | – |
   | `brewers` | brewers | brewer method |
-  | `grinders`, `water_profiles`, `prep_tools`, `brew_problems` | themselves | – |
+  | `prep_tools` | prep tools, the brewers each is offered for | those brewers (→ as brewers) |
+  | `grinders`, `water_profiles`, `brew_problems` | themselves | – |
   | `brew_logs` | brews, their marks, prep and problem ticks, AI analyses | bean (→ as beans), recipe (→ as recipes), grinder, water profile, drink (→ as drinks), brewer, prep tools, brew problems |
 - **Matching** (`MATCH_KEYS`): a row is "already here" when the workspace
   has one with the same key, and the import uses that one instead:

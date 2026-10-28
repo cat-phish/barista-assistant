@@ -56,6 +56,7 @@ import {
   menuItems,
   menuSections,
   notificationChannels,
+  prepToolBrewers,
   prepTools,
   recipeGrindSettings,
   recipes,
@@ -74,8 +75,28 @@ import { workspaceSettingsObject } from "./validation.js";
 export const BACKUP_FORMAT = "barista-backup";
 // Bumped when a backup made before the change can't be restored as is;
 // UPGRADES then turns an older file into the current shape.
-export const BACKUP_VERSION = 1;
-const UPGRADES: Record<number, (file: BackupFile) => BackupFile> = {};
+export const BACKUP_VERSION = 2;
+const UPGRADES: Record<number, (file: BackupFile) => BackupFile> = {
+  // 2: a prep tool's one methodKind (null = every method) became a list,
+  // methodKinds ([] = every method), plus brewers (prep_tool_brewers).
+  1: (file) => ({
+    ...file,
+    version: 2,
+    tables: {
+      ...file.tables,
+      ...(Array.isArray(file.tables?.prep_tools)
+        ? {
+            // Not-an-object rows are left for checkBackup to report.
+            prep_tools: file.tables.prep_tools.map((r) => {
+              if (!isObject(r)) return r;
+              const { methodKind, ...row } = r;
+              return { ...row, methodKinds: methodKind == null ? [] : [methodKind] };
+            }),
+          }
+        : {}),
+    },
+  }),
+};
 
 // In insert order: a table only points at tables above it (or at itself,
 // filled in afterwards, like a drink's parent). "workspace" rows are found by
@@ -91,6 +112,7 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
   { table: ingredients, scope: "workspace" },
   { table: drinkCategories, scope: "workspace" },
   { table: brewers, scope: "workspace" },
+  { table: prepToolBrewers, scope: "prepToolId" },
   { table: beans, scope: "workspace" },
   { table: beanFreezes, scope: "beanId" },
   { table: recipes, scope: "workspace" },
@@ -128,7 +150,6 @@ const ENUMS: Record<string, readonly string[]> = {
   "grinders.adjustment": GRINDER_ADJUSTMENTS,
   "grinders.burrType": BURR_TYPES,
   "grinders.power": GRINDER_POWER,
-  "prep_tools.methodKind": METHOD_KINDS,
   "brew_problems.methodKind": METHOD_KINDS,
   "beans.roastLevel": ROAST_LEVELS,
   "beans.roastType": ROAST_TYPES,
@@ -159,6 +180,7 @@ const ENUMS: Record<string, readonly string[]> = {
 const aiRequest = z.object({ sections: z.array(z.string()), system: z.string(), input: z.record(z.string(), z.unknown()) }).strict().nullable();
 const JSON_SCHEMAS: Record<string, z.ZodType> = {
   "menu_items.beanFields": z.array(z.enum(BEAN_MENU_FIELDS)).nullable(),
+  "prep_tools.methodKinds": z.array(z.enum(METHOD_KINDS)),
   "llm_analyses.request": aiRequest,
   "parameter_suggestions.request": aiRequest,
   "parameter_suggestions.alternativesAsked": z.array(z.enum(SUGGEST_ALTERNATIVES)).nullable(),

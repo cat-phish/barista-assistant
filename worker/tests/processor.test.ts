@@ -354,8 +354,8 @@ describe("processBrewAnalysis", () => {
     llm.mockResolvedValue(ANALYSIS);
     const [rdt, wdt] = [randomUUID(), randomUUID()];
     await db.insert(prepTools).values([
-      { id: rdt, workspaceId, name: "RDT", methodKind: null, position: 2 },
-      { id: wdt, workspaceId, name: "WDT", methodKind: "espresso", position: 1, archivedAt: new Date() },
+      { id: rdt, workspaceId, name: "RDT", methodKinds: [], position: 2 },
+      { id: wdt, workspaceId, name: "WDT", methodKinds: ["espresso"], position: 1, archivedAt: new Date() },
     ]);
     await db.insert(brewLogTools).values([
       { brewLogId: logIds.day8!, toolId: rdt },

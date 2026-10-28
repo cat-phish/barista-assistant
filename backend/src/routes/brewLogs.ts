@@ -60,7 +60,7 @@ export interface BrewLogDetails extends BrewLog {
   // The drink it was for; hasIngredients = the shot and the drink are tasted apart.
   drink: { id: string; name: string; hasIngredients: boolean } | null;
   marks: Mark[]; // when things actually happened, earliest first
-  tools: Array<{ id: string; name: string; methodKind: MethodKind | null }>; // prep tools used, in checklist order
+  tools: Array<{ id: string; name: string }>; // prep tools used, in checklist order
   problems: Array<{ id: string; name: string; methodKind: MethodKind | null }>; // what went wrong, in checklist order
   // Null when the brewer deleted their account (the log is kept).
   brewedBy: { id: string; email: string } | null;
@@ -498,7 +498,7 @@ async function toolsFor(brewLogIds: string[]): Promise<Map<string, BrewLogDetail
   const byLog = new Map<string, BrewLogDetails["tools"]>();
   if (brewLogIds.length === 0) return byLog;
   const rows = await db
-    .select({ brewLogId: brewLogTools.brewLogId, id: prepTools.id, name: prepTools.name, methodKind: prepTools.methodKind })
+    .select({ brewLogId: brewLogTools.brewLogId, id: prepTools.id, name: prepTools.name })
     .from(brewLogTools)
     .innerJoin(prepTools, eq(brewLogTools.toolId, prepTools.id))
     .where(inArray(brewLogTools.brewLogId, brewLogIds))

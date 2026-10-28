@@ -9,9 +9,10 @@ export const prepToolsApi = {
   // In checklist order, archived ones included.
   list: (workspaceId: string) => api.get<{ tools: PrepTool[] }>(base(workspaceId)),
   // New ones go last; 409 when the name is taken.
-  create: (workspaceId: string, input: { name: string; methodKind: MethodKind | null }) =>
+  create: (workspaceId: string, input: { name: string; methodKinds: MethodKind[]; brewerIds: string[] }) =>
     api.post<{ tool: PrepTool }>(base(workspaceId), input),
-  update: (workspaceId: string, id: string, input: { name?: string; methodKind?: MethodKind | null; archived?: boolean }) =>
+  // brewerIds replaces the tool's brewers.
+  update: (workspaceId: string, id: string, input: { name?: string; methodKinds?: MethodKind[]; brewerIds?: string[]; archived?: boolean }) =>
     api.patch<{ tool: PrepTool }>(`${base(workspaceId)}/${id}`, input),
   // Every tool of the workspace (archived too), in the new order.
   reorder: (workspaceId: string, toolIds: string[]) => api.put<{ tools: PrepTool[] }>(`${base(workspaceId)}/order`, { toolIds }),

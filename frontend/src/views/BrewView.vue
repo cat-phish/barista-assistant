@@ -368,7 +368,7 @@ function setGroundOut(event: Event): void {
 const { show } = useFieldVisibility();
 // The prep checklist on setup (docs/api/prep-tools.md §3d): the same ticks
 // as the log form's, so they carry over and can still be changed there.
-const setupTools = computed(() => (show('brew.prepTools') ? toolsFor(prepTools.value, recipe.value?.brewer.kind ?? null, draft.toolIds) : []));
+const setupTools = computed(() => (show('brew.prepTools') ? toolsFor(prepTools.value, { kind: recipe.value?.brewer.kind ?? null, brewerId: recipe.value?.brewer.id ?? null }, draft.toolIds) : []));
 // Shown while typing, except mid-number ("2.").
 const setupGrindError = computed(() => (draft.grind.trim().endsWith('.') ? '' : (parsed.value.errors.grind ?? '')));
 const setupRetention = computed(() => grinderRetentionText(num(draft.beanIn), num(draft.groundOut)));
@@ -1560,7 +1560,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       </section>
       <section class="card">
         <p v-if="stepMarksLine" class="muted small marks-line">{{ stepMarksLine }}</p>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :prep-tools="prepTools" :problems="problems" :method-kind="recipe?.brewer.kind ?? null" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="recipe?.style?.brewsLike ?? null" :iced="recipe?.targetIceGrams != null" :concentrate="recipe?.dilutionRatio != null" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :prep-tools="prepTools" :problems="problems" :method-kind="recipe?.brewer.kind ?? null" :brewer-id="recipe?.brewer.id ?? null" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="recipe?.style?.brewsLike ?? null" :iced="recipe?.targetIceGrams != null" :concentrate="recipe?.dilutionRatio != null" />
       </section>
       <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
       <div v-if="userPrefs.rateReminders" class="rate-later">
