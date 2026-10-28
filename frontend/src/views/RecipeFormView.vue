@@ -40,7 +40,7 @@ import {
   type StepDraft,
 } from '../lib/steps';
 import { useWorkspaceStore } from '../stores/workspace';
-import { estimateYield, ratioWater, ROAST_LEVELS } from '../lib/scale';
+import { DEFAULT_STEP_TIME_SCALING, estimateYield, ratioWater, ROAST_LEVELS, scaledTime, STEP_TIME_SCALING } from '../lib/scale';
 import { parseTemp, tempText, TEMPERATURE_LABELS } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
@@ -82,6 +82,13 @@ const finishTo = ref('');
 const firstDropFrom = ref(''); // espresso only
 const firstDropTo = ref('');
 const flowUnit = ref<FlowUnit>('g_s'); // espresso flow steps
+// Filter: pour and wait times scale with the batch (lib/scale.ts
+// scaleStepTimes), × factor^timeScaling; unticked, they stay.
+const scaleTimes = ref(false);
+const timeScaling = ref('');
+watch(scaleTimes, (on) => {
+  if (on && !timeScaling.value.trim()) timeScaling.value = String(DEFAULT_STEP_TIME_SCALING);
+});
 const style = ref(''); // a styleId: how the cup is brewed; '' = not set
 const styles = ref<RecipeStyleItem[]>([]); // docs/api/recipe-styles.md §5e
 const temp = ref('');
@@ -126,6 +133,9 @@ const coldStyle = computed(() => isColdStyle(brewsLike.value));
 const dilutable = computed(() => kind.value === 'filter');
 // Not for cold styles, which are served cold anyway (and diluted, if at all).
 const iced = computed(() => !espresso.value && !coldStyle.value && flashChilled.value);
+// Step times scale on any timed recipe but espresso (a long steep's steps are a checklist).
+const timesScalable = computed(() => kind.value !== null && !espresso.value && !longStyle.value);
+const timesScale = computed(() => timesScalable.value && scaleTimes.value);
 
 const grams = { scale: 2, min: 0, max: 10000, exclusiveMin: true, exclusiveMax: true } as const;
 const STEEP_HOURS = { scale: 1, min: 0.5, max: 72 } as const;
@@ -144,6 +154,7 @@ const parsed = computed(() => ({
   steepMin: steepFrom.value.trim() ? parseDecimal(steepFrom.value, STEEP_HOURS) : null,
   steepMax: steepTo.value.trim() ? parseDecimal(steepTo.value, STEEP_HOURS) : null,
   dilution: dilutionRatio.value.trim() ? parseDecimal(dilutionRatio.value, { scale: 1, min: 0, max: 10, exclusiveMin: true }) : null,
+  timeScaling: timesScale.value ? parseDecimal(timeScaling.value, STEP_TIME_SCALING) : null,
 }));
 // A long style's steps are a checklist: no times, each waits for you.
 const stepsParsed = computed(() =>
@@ -186,6 +197,7 @@ const fieldErrors = computed(() => {
     temp: p.temp && !p.temp.ok ? p.temp.error : '',
     steep: steepError(p.steepMin, p.steepMax),
     dilution: p.dilution && !p.dilution.ok && !iced.value ? p.dilution.error : '',
+    timeScaling: p.timeScaling && !p.timeScaling.ok ? p.timeScaling.error : '',
   };
 });
 function steepError(min: Parsed<number> | null, max: Parsed<number> | null): string {
@@ -202,6 +214,12 @@ const valid = computed(
     grindErrors.value.every((e) => !e) &&
     Object.keys(stepsParsed.value.errors).length === 0,
 );
+// "A double batch's 1:00 pour takes 1:25, a half batch's 0:42."
+const timeScalingHint = computed(() => {
+  const p = parsed.value.timeScaling;
+  if (!p?.ok) return '';
+  return `A double batch’s 1:00 pour or wait takes ${formatTime(scaledTime(60, 2, p.value))}, a half batch’s ${formatTime(scaledTime(60, 0.5, p.value))}. 1 scales them fully; less, gentler.`;
+});
 // The ice typed (flash chilled), 0 without; the ratio and the yield count it.
 const iceGrams = computed(() => (parsed.value.ice?.ok ? parsed.value.ice.value : 0));
 const liquid = computed(() => (parsed.value.water.ok && parsed.value.water.value !== null ? ratioWater(parsed.value.water.value, iceGrams.value) : null));
@@ -282,6 +300,8 @@ function fill(recipe: Recipe): void {
   grindRows.value = recipe.grindSettings.map((g) => ({ grinderId: g.grinderId, setting: formatGrind(g.setting) }));
   prepToolIds.value = [...recipe.prepToolIds];
   flowUnit.value = recipe.flowUnit;
+  scaleTimes.value = recipe.stepTimeScaling !== null;
+  timeScaling.value = recipe.stepTimeScaling === null ? '' : String(recipe.stepTimeScaling);
   style.value = recipe.style?.id ?? '';
   steepFrom.value = recipe.steepMinHours === null ? '' : String(recipe.steepMinHours);
   steepTo.value = recipe.steepMaxHours === null ? '' : String(recipe.steepMaxHours);
@@ -300,6 +320,7 @@ function fill(recipe: Recipe): void {
     'recipe.grindSettings': recipe.grindSettings,
     'recipe.prepTools': recipe.prepToolIds,
     'recipe.flowUnit': recipe.flowUnit !== 'g_s',
+    'recipe.stepTimeScaling': recipe.stepTimeScaling,
     'recipe.stepTemp': recipe.steps.some((s) => s.targetTempC !== null),
     'recipe.steepWindow': recipe.steepMinHours,
     'recipe.steepTemp': recipe.steepTemp,
@@ -508,6 +529,7 @@ async function save(): Promise<void> {
       return { grinderId: r.grinderId, setting: setting.ok ? setting.value : 0 };
     }),
     flowUnit: flowUnit.value,
+    stepTimeScaling: p.timeScaling?.ok ? p.timeScaling.value : null,
     styleId: style.value || null,
     steps: stepsParsed.value.steps,
   };
@@ -770,6 +792,18 @@ async function save(): Promise<void> {
             <option value="ml_s">ml/s (flow meter)</option>
           </select>
         </div>
+        <template v-if="timesScalable && show('recipe.stepTimeScaling')">
+          <label class="checkbox">
+            <input v-model="scaleTimes" type="checkbox" />
+            Step times scale with the batch
+          </label>
+          <div v-if="scaleTimes" class="field time-scaling">
+            <label for="time-scaling">Scaling factor</label>
+            <input id="time-scaling" v-model="timeScaling" inputmode="decimal" placeholder="0.5" aria-describedby="time-scaling-hint" :aria-invalid="submitted && !!fieldErrors.timeScaling" />
+            <span v-if="submitted && fieldErrors.timeScaling" class="field-error">{{ fieldErrors.timeScaling }}</span>
+            <span v-else id="time-scaling-hint" class="hint">{{ timeScalingHint || 'Above 0, up to 1' }}</span>
+          </div>
+        </template>
         <p v-if="steps.length === 0" class="muted">
           {{ espresso ? 'No steps: the shot timer just times the shot and records the first drop.' : 'No steps: the timer works as a stopwatch.' }}
         </p>
@@ -1040,7 +1074,8 @@ p {
 .full {
   grid-column: 1 / -1;
 }
-.flow-unit {
+.flow-unit,
+.time-scaling input {
   max-width: 14rem;
 }
 /* A dashed rule on each side of the label, like a divider between steps. */

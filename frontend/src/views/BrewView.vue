@@ -72,7 +72,7 @@ import { formatDay, formatDoseLine, formatGrams, formatGrind, formatTime, format
 import { ALTERNATIVE_LABELS, CONFIDENCE_LABELS, chooseGrind, heldForRatio, rememberedSource, SUGGEST_SOURCE_LABELS, sourceNeeds, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
 import { useParameterSuggestion } from '../composables/useParameterSuggestion';
 import { useWorkspaceStore } from '../stores/workspace';
-import { brewRetention, factorText, linkRatio, ratioText as formatRatio, ratioWater, ROAST_LEVELS, SCALE_SLIDER, scaleBatch, scaleShot, scaleSteps, sliderDose, sliderPosition, waterShare, type MeasuredBrew, type ScaleField } from '../lib/scale';
+import { brewRetention, factorText, linkRatio, ratioText as formatRatio, ratioWater, ROAST_LEVELS, SCALE_SLIDER, scaleBatch, scaleShot, scaleSteps, scaleStepTimes, shiftWindow, sliderDose, sliderPosition, waterShare, type MeasuredBrew, type ScaleField } from '../lib/scale';
 import { formatTemp, tempText, TEMPERATURE_LABELS, VOLUME_LABELS, volumeUnits } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 
@@ -745,7 +745,16 @@ function heldText(): string {
   return field === 'yieldOz' ? `${text} fl oz cup` : `${text} ml cup`;
 }
 
-const timerSteps = computed(() => scaleSteps(recipe.value?.steps ?? [], batch.value?.factor ?? 1));
+// Pour targets follow the water; with the recipe's stepTimeScaling, pour and
+// wait times do too, and the finish window moves by what they gain or lose
+// (docs/api/recipes.md §5).
+const timed = computed(() => {
+  const factor = batch.value?.factor ?? 1;
+  return scaleStepTimes(scaleSteps(recipe.value?.steps ?? [], factor), factor, espresso.value ? null : (recipe.value?.stepTimeScaling ?? null));
+});
+const timerSteps = computed(() => timed.value.steps);
+// "+0:37", "−0:12"
+const timeShiftText = computed(() => `${timed.value.shiftSec < 0 ? '−' : '+'}${formatTime(Math.abs(timed.value.shiftSec))}`);
 const timerDose = computed(() => (espresso.value ? shot.value?.dose : batch.value?.dose) ?? recipe.value?.targetDoseGrams ?? 0);
 // What the log form compares the measured yield / shot weight with.
 const expectedYield = computed(() => (espresso.value ? shot.value?.yield : batch.value?.yield) ?? recipe.value?.expectedYieldGrams ?? null);
@@ -823,7 +832,9 @@ const recipeFinishNote = computed(() => {
 });
 // The timer's target: rapid cold's own, else the recipe's.
 const timerFinish = computed(() =>
-  rapidCold.value ? (finishRange.value ?? { min: null, max: null }) : { min: recipe.value?.expectedFinishMinSec ?? null, max: recipe.value?.expectedFinishMaxSec ?? null },
+  rapidCold.value
+    ? (finishRange.value ?? { min: null, max: null })
+    : shiftWindow(recipe.value?.expectedFinishMinSec ?? null, recipe.value?.expectedFinishMaxSec ?? null, timed.value.shiftSec),
 );
 // What's saved with the brew; other styles leave it out.
 function windowValues(): Pick<BrewLogInput, 'steepMinHours' | 'steepMaxHours' | 'expectedFinishMinSec' | 'expectedFinishMaxSec'> {
@@ -1413,7 +1424,11 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <p v-if="batch?.ice" class="small">Brew onto <strong>{{ formatGrams(batch.ice) }} g of ice</strong> in the server: the ratio and the yield count it, the pours don't.</p>
           <p v-if="batch" class="muted small">
             Yield estimated {{ retentionNote }}.
-            <template v-if="scaled">Pours scale ×{{ Math.round(batch.factor * 100) / 100 }} with the water; step times stay the same.</template>
+            <template v-if="scaled">
+              Pours scale ×{{ Math.round(batch.factor * 100) / 100 }} with the water;
+              <template v-if="timed.shiftSec">pour and wait times follow ({{ timeShiftText }} in all, and the target finish).</template>
+              <template v-else>step times stay the same.</template>
+            </template>
           </p>
           <button v-if="scaled" class="btn-link small batch-reset" type="button" @click="resetBatch">Reset to recipe</button>
           <p v-if="grindNote" class="note small">{{ grindNote }}</p>

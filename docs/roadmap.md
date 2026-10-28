@@ -1512,3 +1512,29 @@ Backlog item "Yield scaler slider on the brew page", branch `yield-slider`.
   brewed); multiplier only in the label, not the yield.
 - Hideable under Settings → Fields (`brew.scaleSlider`); a repeat copies
   the dose and water it set (`doseWater`). Nothing new is stored.
+
+## Step times that scale with the batch (built)
+
+Backlog item "Scale step timing with the batch", branch `step-timing-scale`.
+`docs/api/recipes.md` §5 (Step times with the batch), `docs/features.md`.
+
+- `recipes.step_time_scaling` (migration 0076), nullable, above 0 up to 1,
+  2 decimals; `null` = step times stay the same. Not for espresso (`400`).
+- A scaled batch (water ÷ the recipe's = the factor) gives `pour` and `wait`
+  steps time × factor^stepTimeScaling, to the second; bloom, swirl, stir,
+  press and other keep theirs. The target finish window moves by the
+  seconds they gained or lost. Worked out the same way in
+  `@barista/shared/brew` (worker) and `frontend/src/lib/scale.ts`
+  (`scaleStepTimes`, `shiftWindow`); nothing scaled is stored.
+- Recipe form: "Step times scale with the batch" checkbox in the steps card
+  (any method but espresso; not long steeps), then a **Scaling factor** box
+  (0.5 to start) whose hint shows a double and a half batch's 1:00 step.
+  Hideable (`recipe.stepTimeScaling`).
+- Brew page: the timer and its finish window use the scaled times; the
+  batch note says "pour and wait times follow (+0:37 in all…)".
+- Decided: per recipe, the user picks the exponent (not a fixed strength);
+  only pours and waits scale; the window shifts rather than stretches;
+  filter only. The AI gets the scaled times it was timed against (analysis:
+  the brew's water; Suggest parameters: the batch asked with) plus
+  `stepTimeScaling` under the `recipeSteps` switch, with a `stepTimes`
+  prompt section. PROMPT_VERSION 2026-10-j.

@@ -112,7 +112,10 @@ queue:
      expected yield (the target for espresso), finish window
      (`expectedFinishMinSec`/`MaxSec`), first-drop window (espresso), flow
      unit, and its steps with type, label, duration, how each moves on, and
-     their values (pour-to, temperature, pressure, flow).
+     their values (pour-to, temperature, pressure, flow). With
+     `stepTimeScaling` (recipes.md §5) the step durations and the finish
+     window are the ones the brew was timed against, scaled to its water
+     (`scaledToBrew`); pour targets stay the recipe's.
 2. It turns that context into the **input** actually sent
    (`toLlmInput`, `worker/src/prompt.ts`), smaller than the context above:
    - **Empty values are dropped:** `null`, `""`, `[]` and `{}` keys are left
@@ -139,6 +142,7 @@ queue:
    | `decafBlend` | decaf or blend | extracts differently |
    | `flavorProfile` | the bean has one | the cup to aim for |
    | `weightLoss` | `roastWeightLossPercent` | how developed the roast is (11–13% light, 14–16% medium, 17%+ dark); more developed extracts more easily (coarser, cooler); trusted over the roast level |
+   | `stepTimes` | the recipe has `stepTimeScaling` | step times and the finish window are already scaled to the batch; a bigger batch taking longer is planned, not a grind problem |
    | `altitude` | `altitudeMasl` | denser beans |
    | `origin` | origin area, country or region | context, not a rule |
    | `tds` | a brew has `tdsPercent` | judge strength and extraction from TDS and EY |
@@ -258,7 +262,7 @@ and the prompt sections about them drop out with them (step 3). Keys
   `process`, `flavorProfile`, `roastType`, `roastLevel` (with
   `detailedRoastLevel`), `weightLoss` (`roastWeightLossPercent`),
   `decafBlend` (`decaf`, `blendType`), `batchNumber`.
-- **Recipe and equipment:** `recipeSteps`, `grindStartingPoints`,
+- **Recipe and equipment:** `recipeSteps` (with `stepTimeScaling`), `grindStartingPoints`,
   `grinderDetails` (everything but the grinder's name), `machine`.
 - **History:** `unratedHistory` leaves earlier brews without a rating out
   of what "Suggest parameters" sends (an analysis sends no earlier brews);
@@ -298,7 +302,8 @@ deleted with its bean) is skipped.
    batch (the row's `batch…` amounts, else the recipe's targets, with its
    ratio: `(water + ice) / dose`, or for espresso shot weight / dose), the
    bean (as in step 1 above) and its effective roast age **today**, the
-   recipe (with steps), the brewer (`name`, `kind`, and for an espresso
+   recipe (with steps, their times scaled to the batch when it has
+   `stepTimeScaling`), the brewer (`name`, `kind`, and for an espresso
    machine its controls) and the grinder (its details); then up to
    `maxBrews` earlier brews from the `source`, newest first, without ones
    still steeping (and unrated ones when `unratedHistory` is hidden). Each

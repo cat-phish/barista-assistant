@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RecipeStep } from '../api/types';
-import { brewRetention, estimateYield, factorText, GRAMS_PER_FL_OZ, linkRatio, ratioText, retentionOf, scaleBatch, scaleShot, scaleSteps, sliderDose, sliderPosition, waterShare } from './scale';
+import { brewRetention, estimateYield, factorText, scaledTime, scaleStepTimes, shiftWindow, GRAMS_PER_FL_OZ, linkRatio, ratioText, retentionOf, scaleBatch, scaleShot, scaleSteps, sliderDose, sliderPosition, waterShare } from './scale';
 
 const recipe = { targetDoseGrams: 15, targetWaterGrams: 250, targetIceGrams: null, expectedYieldGrams: null };
 
@@ -190,5 +190,34 @@ describe('scale slider', () => {
     expect(factorText(22.5, 15)).toBe('×1.5');
     expect(factorText(45, 15)).toBe('×3');
     expect(factorText(15, 15)).toBe('×1');
+  });
+});
+
+describe('step times with the batch', () => {
+  const steps = [
+    { stepType: 'bloom', durationSec: 45 },
+    { stepType: 'pour', durationSec: 90 },
+    { stepType: 'swirl', durationSec: 0 },
+    { stepType: 'wait', durationSec: 60 },
+    { stepType: 'wait', durationSec: null },
+  ];
+  it('scales pour and wait steps by factor^exponent; bloom, swirl and open-ended steps stay', () => {
+    const { steps: out, shiftSec } = scaleStepTimes(steps, 2, 0.5);
+    expect(out.map((s) => s.durationSec)).toEqual([45, 127, 0, 85, null]);
+    expect(shiftSec).toBe(37 + 25);
+    expect(scaleStepTimes(steps, 0.5, 1).steps.map((s) => s.durationSec)).toEqual([45, 45, 0, 30, null]);
+  });
+  it('leaves the steps alone when off or at the recipe\'s batch', () => {
+    expect(scaleStepTimes(steps, 2, null)).toEqual({ steps, shiftSec: 0 });
+    expect(scaleStepTimes(steps, 1, 0.5)).toEqual({ steps, shiftSec: 0 });
+  });
+  it('moves the finish window by the shift, never below 0', () => {
+    expect(shiftWindow(165, 195, 62)).toEqual({ min: 227, max: 257 });
+    expect(shiftWindow(20, 40, -30)).toEqual({ min: 0, max: 10 });
+    expect(shiftWindow(null, null, 30)).toEqual({ min: null, max: null });
+  });
+  it('gives one step\'s time for the form\'s hint', () => {
+    expect(scaledTime(60, 2, 0.5)).toBe(85);
+    expect(scaledTime(60, 0.5, 0.5)).toBe(42);
   });
 });

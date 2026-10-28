@@ -183,7 +183,8 @@ export function scaleShot(
   return { dose: unscaled ? d0 : round1(lead.value / r), yield: lead.value, ratio: r };
 }
 
-// Pour targets follow the water; step times stay the same.
+// Pour targets follow the water; step times stay the same unless the recipe
+// scales them (scaleStepTimes).
 export function scaleSteps(steps: RecipeStep[], factor: number): RecipeStep[] {
   if (Math.abs(factor - 1) < 1e-9) return steps;
   return steps.map((s) => (s.targetWaterGrams === null ? s : { ...s, targetWaterGrams: Math.round(s.targetWaterGrams * factor) }));
@@ -202,3 +203,34 @@ export function sliderPosition(dose: number | null, recipeDose: number): number 
 export const sliderDose = (factor: number, recipeDose: number): number => round1(recipeDose * factor);
 // "×1.5", "×0.75", "×1"
 export const factorText = (dose: number, recipeDose: number): string => `×${Math.round((dose / recipeDose) * 100) / 100}`;
+
+// Step times with the batch (docs/api/recipes.md §5), as in
+// @barista/shared/brew: a recipe with stepTimeScaling gives its pour and wait
+// steps time × factor^stepTimeScaling, to the second; the finish window moves
+// by the time they gained or lost (shiftWindow).
+export const TIMED_WITH_BATCH: readonly string[] = ['pour', 'wait'];
+export const STEP_TIME_SCALING = { scale: 2, min: 0, max: 1, exclusiveMin: true } as const;
+export const DEFAULT_STEP_TIME_SCALING = 0.5;
+export function scaleStepTimes<S extends { stepType: string; durationSec: number | null }>(
+  steps: S[],
+  factor: number,
+  exponent: number | null,
+): { steps: S[]; shiftSec: number } {
+  if (exponent === null || !(factor > 0) || Math.abs(factor - 1) < 1e-9) return { steps, shiftSec: 0 };
+  const k = factor ** exponent;
+  let shiftSec = 0;
+  const scaled = steps.map((s) => {
+    if (s.durationSec === null || !TIMED_WITH_BATCH.includes(s.stepType)) return s;
+    const durationSec = Math.round(s.durationSec * k);
+    shiftSec += durationSec - s.durationSec;
+    return { ...s, durationSec };
+  });
+  return { steps: scaled, shiftSec };
+}
+// A finish window moved by shiftSec, never below 0.
+export function shiftWindow(min: number | null, max: number | null, shiftSec: number): { min: number | null; max: number | null } {
+  if (min === null || max === null) return { min, max };
+  return { min: Math.max(0, min + shiftSec), max: Math.max(0, max + shiftSec) };
+}
+// One step's time at a batch factor, for the recipe form's hint.
+export const scaledTime = (sec: number, factor: number, exponent: number): number => Math.round(sec * factor ** exponent);

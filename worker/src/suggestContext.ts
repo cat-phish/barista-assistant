@@ -24,6 +24,7 @@ import {
   loadRecipe,
   marksFor,
   problemsFor,
+  scaledToBrew,
   selectBrews,
   summarize,
   toolsFor,
@@ -346,13 +347,15 @@ export async function loadSuggestContext(r: SuggestRequest, options: { ratedOnly
   const kinds = r.alternativesAsked ?? [];
   const [ws] = kinds.length ? await db.select({ workspaceId: beans.workspaceId }).from(beans).where(eq(beans.id, r.beanId)) : [];
   const alternatives = ws ? await loadOptions(r, ws.workspaceId, kinds, today) : {};
+  const batch = batchFor(r, recipe, (recipe?.methodKind ?? brewer?.kind) === "espresso");
   return {
     source: r.source,
-    batch: batchFor(r, recipe, (recipe?.methodKind ?? brewer?.kind) === "espresso"),
+    batch,
     bean: target.info,
     roastAgeDays: age?.ageDays ?? null,
     daysFrozen: age?.daysFrozen ?? null,
-    recipe,
+    // Step times for the batch asked with, as the brew page will time it.
+    recipe: recipe && scaledToBrew(recipe, batch.waterGrams),
     brewer,
     grinder,
     brews: brewRows.map((b) => {

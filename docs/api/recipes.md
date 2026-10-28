@@ -39,6 +39,7 @@ new kind needs):
 | step types | `bloom` `pour` `swirl` `stir` `wait` `press` `other` | `preinfusion` `soak` `pressure` `flow` `other` (`ESPRESSO_STEP_TYPES`) |
 | step `advance` | `auto`, `auto_log`, `tap` | also `first_drop` (at most one step) |
 | `flowUnit` | ignored (default `g_s`) | `g_s` or `ml_s` for flow steps |
+| `stepTimeScaling` | optional | must be absent/`null` |
 
 Recipes are grinder-neutral: instead of one grind setting they carry
 **approximate starting points per grinder** (`grindSettings`). The brew flow
@@ -83,6 +84,15 @@ card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
 - `targetWaterGrams`: the cumulative scale weight to **pour to** by the step's
   end (> 0, < 10000, max 2 decimals; never decreasing across steps). Clients
   show the per-step amount next to it.
+- **Step times with the batch** (`stepTimeScaling`, filter only, nullable,
+  above 0 up to 1, 2 decimals): when a brew scales the batch (water ÷ the
+  recipe's water = the factor), `pour` and `wait` steps take
+  `durationSec × factor ^ stepTimeScaling`, to the second; other steps keep
+  their time, and open-ended ones stay open. 1 is linear; 0.5 (what clients
+  offer first) makes a double batch's 1:00 pour 1:25. The target finish
+  window moves by the seconds the steps gained or lost (both ends, never
+  below 0). `null` (the default): step times stay the same. Clients and the
+  worker (§9) work it out the same way; nothing scaled is stored.
 - `targetTempC` (any step, optional, 0–100, 1 decimal): e.g. bloom at 85 °C,
   pour at 93 °C.
 - `pressureBar`/`pressureEndBar` (0–20 bar, 1 decimal) and
@@ -108,6 +118,7 @@ card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
   "firstDropMinSec": null,
   "firstDropMaxSec": null,
   "flowUnit": "g_s",
+  "stepTimeScaling": null,
   "style": { "id": "uuid", "name": "Pour over", "brewsLike": "pour_over" },
   "targetTempC": 94,
   "defaultGrinderId": "uuid",
@@ -205,6 +216,8 @@ Creates a recipe, its grind starting points and its steps in one transaction.
     of this workspace" otherwise. Not checked against the brewer: clients
     offer only the tools offered for it. Deleting a tool takes it off.
   - `flowUnit` (optional, default `g_s`): `g_s` or `ml_s`.
+  - `stepTimeScaling` (optional, nullable): above 0, at most 1, 2 decimals;
+    `400` on an espresso recipe (step times above).
   - **Cold styles** (§5e), all optional and nullable, accepted on any recipe;
     clients show them for cold styles, and the dilution for any filter
     recipe (a concentrate, above):

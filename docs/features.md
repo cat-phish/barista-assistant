@@ -130,6 +130,12 @@ order immediately and restore it if saving fails.
   the target finish window ("Steps end at 3:15 · Target finish 3:00–3:30",
   in the warning colour when outside it). Drag to reorder, or insert between
   steps. The last step can run until you finish.
+- **Step times that scale with the batch** (not espresso or long steeps):
+  ticked, pour and wait steps take longer for a bigger batch and less for a
+  smaller one, by time × (batch ÷ recipe)^the scaling factor (0.5 to start;
+  1 is linear). Its hint shows what a double and a half batch's 1:00 step
+  takes. The target finish window moves by what the steps gain or lose.
+  Hideable under Settings → Fields.
 - **Grind starting points** per grinder, and an optional **default grinder**
   that's selected for you when you brew the recipe (otherwise the last
   grinder you used).
@@ -236,7 +242,9 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   typing the ratio changes the water; typing the approximate yield (in fl
   oz, ml or both, by your preference) sets dose and water at the ratio.
   Each change updates the yield estimate, and whatever you typed last is
-  held. Pour targets scale with the water; step times stay the same. A much bigger or smaller
+  held. Pour targets scale with the water; step times stay the same unless
+  the recipe scales them (above), when pour and wait times and the target
+  finish follow ("+0:37 in all"). A much bigger or smaller
   dose than the recipe suggests a coarser or finer grind. "Reset to recipe"
   undoes it all.
 - **Scale slider:** above the batch (filter and espresso), from ×0.5 to ×2

@@ -324,3 +324,27 @@ describe("flash chilled: brewed onto ice (docs/api/recipes.md §5, brew-logs.md 
     expect((await owner.agent.patch(`${logs}/${measured}`).send({ actualIceGrams: 100, tdsPercent: null })).body.brewLog).toMatchObject({ actualIceGrams: 100, tdsPercent: null });
   });
 });
+
+describe("step times with the batch (docs/api/recipes.md §5)", () => {
+  it("stepTimeScaling: optional, nullable, above 0 to 1, filter only", async () => {
+    const { owner, ws, base, recipe } = await setup();
+    const scaled = await owner.agent.post(base).send({ ...recipe, stepTimeScaling: 0.5 });
+    expect(scaled.status).toBe(201);
+    expect(scaled.body.recipe.stepTimeScaling).toBe(0.5);
+    expect((await owner.agent.post(base).send(recipe)).body.recipe.stepTimeScaling).toBeNull();
+    const id = scaled.body.recipe.id;
+    expect((await owner.agent.patch(`${base}/${id}`).send({ stepTimeScaling: 1 })).body.recipe.stepTimeScaling).toBe(1);
+    expect((await owner.agent.patch(`${base}/${id}`).send({ stepTimeScaling: null })).body.recipe.stepTimeScaling).toBeNull();
+    for (const bad of [0, -0.5, 1.01, 0.555, "0.5"]) {
+      expect((await owner.agent.post(base).send({ ...recipe, stepTimeScaling: bad })).status, JSON.stringify(bad)).toBe(400);
+    }
+
+    const gaggia = (await owner.agent.post(`/api/workspaces/${ws.id}/brewers`).send({ name: "Gaggia", kind: "espresso" })).body.brewer.id;
+    const shot = { name: "Shot", brewerId: gaggia, targetDoseGrams: 18, expectedYieldGrams: 36 };
+    expect((await owner.agent.post(base).send({ ...shot, stepTimeScaling: 0.5 })).body.error).toMatch(/stepTimeScaling/);
+    // Moving a scaling recipe to an espresso brewer needs it cleared too.
+    await owner.agent.patch(`${base}/${id}`).send({ stepTimeScaling: 0.5 });
+    expect((await owner.agent.patch(`${base}/${id}`).send({ brewerId: gaggia, targetWaterGrams: null, expectedYieldGrams: 36 })).body.error).toMatch(/stepTimeScaling/);
+    expect((await owner.agent.patch(`${base}/${id}`).send({ brewerId: gaggia, targetWaterGrams: null, expectedYieldGrams: 36, stepTimeScaling: null })).status).toBe(200);
+  });
+});

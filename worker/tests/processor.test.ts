@@ -154,6 +154,19 @@ describe("processBrewAnalysis", () => {
     expect(context.recipe).toMatchObject({ methodKind: "espresso", targetWaterGrams: null, expectedYieldGrams: 36, firstDropMinSec: 6, firstDropMaxSec: 9, flowUnit: "g_s" });
   });
 
+  it("sends the step times a bigger batch was timed against (docs/api/recipes.md §5)", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    await db.update(recipes).set({ stepTimeScaling: 0.5 }).where(eq(recipes.workspaceId, workspaceId));
+    await db.update(brewLogs).set({ actualDoseGrams: 30, actualWaterGrams: 500 }).where(eq(brewLogs.id, logIds.day8!));
+    await processBrewAnalysis({ brewLogId: logIds.day8! });
+    const context = llm.mock.calls[0]![0] as BrewContext;
+    // A double batch: the pour takes 90 × √2 ≈ 127 s, the bloom and swirl stay; the window moves by the 37 s gained.
+    expect(context.recipe).toMatchObject({
+      stepTimeScaling: 0.5, targetWaterGrams: 250, expectedFinishMinSec: 202, expectedFinishMaxSec: 232,
+      steps: [{ stepType: "bloom", durationSec: 45 }, { stepType: "swirl", durationSec: 0 }, { stepType: "pour", durationSec: 127 }],
+    });
+  });
+
   it("includes the drink a brew was for, with its ingredients in order", async () => {
     llm.mockResolvedValue(ANALYSIS);
     const drinkId = randomUUID();

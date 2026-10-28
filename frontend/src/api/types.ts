@@ -423,6 +423,8 @@ export interface Recipe extends ColdFields {
   firstDropMinSec: number | null; // espresso only (both or neither)
   firstDropMaxSec: number | null;
   flowUnit: FlowUnit;
+  // Filter: pour and wait times × batch factor^this; null = they stay (§5).
+  stepTimeScaling: number | null;
   style: StyleRef | null; // one of the workspace's styles for brewer.kind
   targetTempC: number | null;
   defaultGrinderId: string | null; // preselected when brewing this recipe

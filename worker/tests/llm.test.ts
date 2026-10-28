@@ -112,6 +112,7 @@ const context = (over: { brew?: Partial<BrewSummary>; bean?: Partial<BrewContext
     dilutionWith: null,
     grindStartingPoints: [{ grinderName: "C40", setting: 20 }],
     flowUnit: "g_s",
+    stepTimeScaling: null,
     steps: [{ stepOrder: 1, stepType: "bloom", label: null, durationSec: 30, advance: "auto", targetWaterGrams: 45, targetTempC: 94, pressureBar: null, pressureEndBar: null, flowRate: null, flowEndRate: null }],
   },
   brew: summary(over.brew),
@@ -245,6 +246,17 @@ describe("what the workspace keeps from the AI (Settings → AI)", () => {
     const hidden = toLlmInput(ctx, without("weightLoss"));
     expect(hidden.bean).not.toHaveProperty("roastWeightLossPercent");
     expect(promptSections(hidden)).not.toContain("weightLoss");
+  });
+
+  it("says when step times scale with the batch, with the steps", () => {
+    const base = context();
+    const ctx = { ...base, recipe: base.recipe && { ...base.recipe, stepTimeScaling: 0.5 } };
+    expect(toLlmInput(ctx).recipe).toMatchObject({ stepTimeScaling: 0.5 });
+    expect(promptSections(toLlmInput(ctx))).toContain("stepTimes");
+    expect(promptSections(toLlmInput(context()))).not.toContain("stepTimes");
+    const hidden = toLlmInput(ctx, without("recipeSteps"));
+    expect(hidden.recipe).not.toHaveProperty("stepTimeScaling");
+    expect(promptSections(hidden)).not.toContain("stepTimes");
   });
 
   it("drops brew, bean, recipe and equipment details", () => {
