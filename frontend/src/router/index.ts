@@ -16,7 +16,15 @@ declare module 'vue-router' {
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', name: 'home', component: () => import('../views/HomeView.vue'), meta: { requiresAuth: true, requiresWorkspace: true } },
+    // The landing page: Brew, or the Journal for a viewer (who can't log brews).
+    // Kept as a route so pushes to 'home' land in the right place.
+    {
+      path: '/',
+      name: 'home',
+      component: () => import('../views/BrewView.vue'),
+      meta: { requiresAuth: true, requiresWorkspace: true },
+      beforeEnter: () => ({ name: useWorkspaceStore().canEdit ? 'brew' : 'journal' }),
+    },
     { path: '/menu/:slug', name: 'public-menu', component: () => import('../views/PublicMenuView.vue'), props: true, meta: { public: true } },
     { path: '/login', name: 'login', component: () => import('../views/LoginView.vue'), meta: { guestOnly: true } },
     { path: '/register', name: 'register', component: () => import('../views/RegisterView.vue'), meta: { guestOnly: true } },
