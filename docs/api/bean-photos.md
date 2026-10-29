@@ -18,6 +18,13 @@ the database (`bean_photos`, `docs/schema.md`); the file is
 `PHOTO_DIR` defaults to `/photos`, mounted from `./photos` in
 `docker-compose.yml`).
 
+**Crop and rotate** happen in the browser (`PhotoCropDialog.vue`, on
+Cropper.js): a free box or a square, and quarter turns. A photo picked for a
+new bean is swapped for the cropped file before it's uploaded; a saved one
+is replaced in place (`PUT …/image` below). Since only the 1024 px copy is
+kept, cropping a saved photo again starts from that, so it gets smaller each
+time. No confirmation: the editor's Done says it replaces the saved photo.
+
 **Every bean** the API returns (§4) carries its photos, cover first:
 
 ```json
@@ -79,6 +86,20 @@ list; a bean that has some still shows them on its form.
 - **Success (`200 OK`):** `{ "photos": [ ... ] }`, the bean's photos in their
   new order.
 - **Errors:** `400` invalid body; `403` viewer; `404` no such photo.
+
+## `PUT /api/workspaces/:workspaceId/beans/:beanId/photos/:photoId/image`
+
+A new image for a photo (cropped or rotated), in its place.
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:** the image file, as for `POST` (15 MB, any decodable type); it's
+  processed the same way.
+- **Success (`200 OK`):** `{ "photo": { "id", "width", "height" }, "photos":
+  [ ... ] }`. The photo gets a **new id** at the same position (the cover
+  stays the cover), because an image never changes for its id (cached for
+  good); the old file is removed. Works on a bean that already has 6.
+- **Errors:** `400` not an image that can be read; `403` viewer; `404` no
+  such photo of this bean in this workspace.
 
 ## `DELETE /api/workspaces/:workspaceId/beans/:beanId/photos/:photoId`
 

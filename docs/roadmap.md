@@ -1764,3 +1764,28 @@ Backlog item "Statistics and graphs", branches `stats-foundation`,
   `grinder`), and the filters keep them.
 - **Nav:** seven links no longer fit a 320px phone, so the row scrolls on
   the smallest screens.
+
+## Crop photos (built)
+
+Backlog item "Crop photos", branch `crop-photos`. Contract:
+`api/bean-photos.md` §4c (`PUT …/photos/:photoId/image`), `api/bean-label.md`
+§4d.
+
+- A **crop** button on each photo in the bean form's Photos card, and on the
+  photos taken just for a label read. It opens `PhotoCropDialog.vue`: full
+  screen, on **Cropper.js 1.6** (picked over our own box for pinch-zoom and
+  touch handling), loaded only when it first opens (a ~12 KB gzip chunk).
+- Tools: a free box by default with a **Square** toggle (for the list's
+  square cover), quarter turns left and right, Reset. Done hands back a
+  full-size JPEG (0.92); the server or the label read shrinks it as before.
+- **A photo not yet uploaded** (a new bean's, or a label-read one): the
+  cropped file takes its place in the list (`lib/photoCrop.ts`
+  `replaceFile`, same key, so the order and the Add bean draft hold).
+- **A saved photo** is replaced in place by the new endpoint: a new id at
+  the same position (images are cached `immutable` by id), the old file
+  removed, in one transaction under the bean's lock, so it works on a full
+  bean of 6. Rejected: POST + reorder + DELETE (a full bean gets 409, and
+  it isn't one step). Only the 1024 px copy is kept, so a second crop starts
+  from that.
+- No "I understand" confirmation (CLAUDE.md rule 7, asked): Done is a
+  deliberate step and says "Replaces the saved photo".

@@ -6,10 +6,13 @@
 // web afterwards: ticked per read, as it takes longer. "Look it up on the
 // web" runs the lookup alone, from what the form says (again after a read,
 // or without photos). The read runs in stores/labelRead.ts, so it carries on
-// if you leave; the form takes the answer.
+// if you leave; the form takes the answer. Its photos can be cropped first
+// (PhotoCropDialog), so the label fills more of the picture.
 import { computed, onBeforeUnmount, ref } from 'vue';
 import type { LabelLookUp } from '../api/types';
 import { LABEL_MAX_IMAGES, canLookUp, labelImages } from '../lib/labelFill';
+import { croppedFile, replaceFile } from '../lib/photoCrop';
+import PhotoCropDialog from './PhotoCropDialog.vue';
 import { useLabelReadStore, type LabelReadKey } from '../stores/labelRead';
 
 const props = defineProps<{
@@ -61,6 +64,16 @@ function remove(key: number): void {
   extras.value = extras.value.filter((x) => x.key !== key);
 }
 
+const cropping = ref<Extra | null>(null);
+function cropped(image: Blob): void {
+  const target = cropping.value;
+  cropping.value = null;
+  if (!target) return;
+  const { list, revoke } = replaceFile(extras.value, target.key, croppedFile(image, target.file.name));
+  extras.value = list;
+  if (revoke) URL.revokeObjectURL(revoke);
+}
+
 async function readLabel(): Promise<void> {
   const { images, left } = sending.value;
   note.value = left ? `Read the first ${images.length} photos; ${left} left out.` : '';
@@ -84,10 +97,17 @@ onBeforeUnmount(() => extras.value.forEach((e) => URL.revokeObjectURL(e.url)));
     <!-- capture opens the camera on a phone; the other picks from the library or files. -->
     <input ref="camera" class="visually-hidden" type="file" accept="image/*" capture="environment" tabindex="-1" @change="picked" />
     <input ref="chooser" class="visually-hidden" type="file" accept="image/*" multiple tabindex="-1" @change="picked" />
+    <PhotoCropDialog :open="!!cropping" :source="cropping?.file ?? null" @done="cropped" @cancel="cropping = null" />
     <ul v-if="extras.length" class="extras">
       <li v-for="(e, i) in extras" :key="e.key">
         <img :src="e.url" :alt="`Label photo ${i + 1}`" />
         <button type="button" class="extra-remove" :disabled="reading" :aria-label="`Remove label photo ${i + 1}`" @click="remove(e.key)">✕</button>
+        <button type="button" class="extra-crop" :disabled="reading" :aria-label="`Crop label photo ${i + 1}`" title="Crop or rotate" @click="cropping = e">
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 2v14a2 2 0 0 0 2 2h14" />
+            <path d="M18 22V8a2 2 0 0 0-2-2H2" />
+          </svg>
+        </button>
       </li>
     </ul>
     <div class="row">
@@ -174,7 +194,8 @@ p {
   border-radius: var(--radius);
   border: 1px solid var(--border);
 }
-.extra-remove {
+.extra-remove,
+.extra-crop {
   position: absolute;
   top: -0.5rem;
   right: -0.5rem;
@@ -185,5 +206,13 @@ p {
   background: var(--surface);
   color: var(--text);
   cursor: pointer;
+}
+.extra-crop {
+  top: auto;
+  bottom: -0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
 }
 </style>

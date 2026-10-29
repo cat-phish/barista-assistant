@@ -162,6 +162,41 @@ beanPhotosRouter.patch("/:photoId", async (req: Request<PhotoParams>, res: Respo
   res.json({ photos: await photosOf(beanId) });
 });
 
+// A new image for a photo (cropped or rotated in the browser), in its place.
+// It gets a new id: images are cached for good, so the old URL must not change.
+beanPhotosRouter.put("/:photoId/image", imageBody, async (req: Request<PhotoParams>, res: Response<{ photo: PhotoInfo; photos: PhotoInfo[] }>) => {
+  const { workspaceId, beanId, photoId } = req.params;
+  if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
+  const photo = Buffer.isBuffer(req.body) && req.body.length > 0 ? await processPhoto(req.body) : null;
+  if (!photo) {
+    sendError(res, 400, "Not an image that can be read (JPEG, PNG, WebP, GIF, AVIF or TIFF)");
+    return;
+  }
+
+  // The file goes first: a row never points at a missing file.
+  const id = randomUUID();
+  await writePhotoFile(workspaceId, id, photo.data);
+  const replaced = await db.transaction(async (tx) => {
+    if (!(await lockBean(tx, req.params))) return false;
+    const [old] = await tx
+      .select({ position: beanPhotos.position })
+      .from(beanPhotos)
+      .where(and(eq(beanPhotos.id, photoId), eq(beanPhotos.beanId, beanId)))
+      .limit(1);
+    if (!old) return false;
+    await tx.delete(beanPhotos).where(eq(beanPhotos.id, photoId));
+    await tx.insert(beanPhotos).values({ id, beanId, position: old.position, width: photo.width, height: photo.height });
+    return true;
+  });
+  if (!replaced) {
+    await removePhotoFiles(workspaceId, [id]);
+    sendError(res, 404, "Photo not found");
+    return;
+  }
+  await removePhotoFiles(workspaceId, [photoId]);
+  res.json({ photo: { id, width: photo.width, height: photo.height }, photos: await photosOf(beanId) });
+});
+
 beanPhotosRouter.delete("/:photoId", async (req: Request<PhotoParams>, res: Response) => {
   const { workspaceId, beanId, photoId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;

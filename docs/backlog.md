@@ -24,15 +24,14 @@ and fix the references.
 
 **Contents**
 - A. Settings & configuration: 1–2
-- B. Beans: 3
-- C. Brewing & logging: 4–7
-- D. Recipes: 8–9
-- E. AI suggestions: 10–11
-- F. Insights: 12
-- G. Bar & menu: 13–15
-- H. Home roasting: 16
-- I. Accounts: 17–18
-- J. Deployment & the app: 19
+- B. Brewing & logging: 3–6
+- C. Recipes: 7–8
+- D. AI suggestions: 9–10
+- E. Insights: 11
+- F. Bar & menu: 12–14
+- G. Home roasting: 15
+- H. Accounts: 16–17
+- I. Deployment & the app: 18
 
 ---
 
@@ -114,41 +113,11 @@ Where the app's choices live, and what you can switch on, off or take out.
 
 ---
 
-## B. Beans
-
-What's recorded about each coffee.
-
-### 3. Crop photos
-
-- **Status:** idea
-- **Why:** a bag photo takes in the counter, a hand and the shelf behind it.
-  The cover in the bean list is small, so the bag ends up tiny, and a label
-  photo with less around it may read better.
-- **Approach:**
-  - A **Crop** button on a photo in the bean form (its own photos and the
-    ones taken just for the label read): a box with draggable corners over
-    the photo, then Done.
-  - Done in the browser on a canvas, before the photo is shrunk to 1024 px
-    and sent (`lib/photoResize.ts`), so the server stays as it is for new
-    photos.
-  - A saved photo, cropped later, is uploaded again as a new file in the
-    same place (the old one deleted), so its cache entry changes.
-- **Size:** S–M
-- **Depends on:** nothing (bean photos are built).
-- **Open questions:**
-  - Rotate too (a photo that came out sideways), or only crop?
-  - A small library (e.g. Cropper.js) or our own box? A library is quicker
-    and handles pinch-zoom on a phone; our own keeps the bundle small.
-  - Fixed shapes (square for the cover), or free?
-  - Crop a saved photo at all, or only before it's added?
-
----
-
-## C. Brewing & logging
+## B. Brewing & logging
 
 Recording a brew: what's measured, and how fast it is to log.
 
-### 4. Grind settings for multi-ring grinders
+### 3. Grind settings for multi-ring grinders
 
 - **Status:** idea
 - **Why:** grind settings are numbers on the grinder's dial now (roadmap:
@@ -173,7 +142,7 @@ Recording a brew: what's measured, and how fast it is to log.
   - Which grinders need it (1Zpresso, Kingrinder, Timemore with a dial)?
   - Should the AI see the total clicks, the formatted text, or both?
 
-### 5. Change the brew window for any brew on the brew page
+### 4. Change the brew window for any brew on the brew page
 
 - **Status:** idea
 - **Why:** cold styles can now change their steep or finish window on
@@ -197,7 +166,7 @@ Recording a brew: what's measured, and how fast it is to log.
   - Editable afterwards in the journal? A steeping cold brew's reminder
     would then need re-queuing.
 
-### 6. Repeat brews: bean and recipe as choices
+### 5. Repeat brews: bean and recipe as choices
 
 - **Status:** idea
 - **Why:** **Repeat** always copies the bean and what → brewer → recipe;
@@ -226,7 +195,7 @@ Recording a brew: what's measured, and how fast it is to log.
     recipe), or do "what" and the brewer become choices too?
   - With both off, is it still a repeat, or only "copy the settings"?
 
-### 7. What went wrong: offered by methods and brewers
+### 6. What went wrong: offered by methods and brewers
 
 - **Status:** idea
 - **Why:** a brew problem belongs to one method, or to every method
@@ -248,11 +217,11 @@ Recording a brew: what's measured, and how fast it is to log.
 - **Open questions:** move brew problems from Settings → Lists to Bar setup,
   next to the prep list?
 
-## D. Recipes
+## C. Recipes
 
 Building recipes: their steps, timings and target window.
 
-### 8. Prep steps that don't start the timer
+### 7. Prep steps that don't start the timer
 
 - **Status:** parked. Built on branch `prep-steps` (commit `dfd67db`, not
   merged) and set aside for ticking the prep tools on brew setup instead
@@ -272,7 +241,7 @@ Building recipes: their steps, timings and target window.
     default prep? A countdown (preheat 2:00) is the one thing the tools
     can't do.
 
-### 9. Target finish window vs. the steps
+### 8. Target finish window vs. the steps
 
 - **Status:** idea
 - **Why:** the target finish window and the steps are typed separately and
@@ -294,7 +263,7 @@ Building recipes: their steps, timings and target window.
 - **Size:** S–M
 - **Depends on:** nothing (the summary line under the steps is built: "Steps
   end at 3:15 · Target finish 3:00–3:30", warning-coloured when outside);
-  pairs with 5 (a window per brew).
+  pairs with 4 (a window per brew).
 - **Open questions:**
   - Which leads: the steps (window derived) or the window (steps checked
     against it)?
@@ -304,11 +273,11 @@ Building recipes: their steps, timings and target window.
 
 ---
 
-## E. AI suggestions
+## D. AI suggestions
 
 What the analysis worker sends to the LLM and what comes back.
 
-### 10. Build bar items from plain text (AI)
+### 9. Build bar items from plain text (AI)
 
 - **Status:** idea
 - **Why:** recipes, drinks and other bar items often come as text: a
@@ -336,7 +305,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Units and step types the text describes loosely ("pour to about 100 ml,
     wait 30 s"): how sure must the AI be before filling a field?
 
-### 11. Review and test the espresso dose and shot weight suggestions
+### 10. Review and test the espresso dose and shot weight suggestions
 
 - **Status:** planned
 - **Why:** dose and shot weight changes for espresso (roadmap: espresso dose
@@ -374,9 +343,9 @@ What the analysis worker sends to the LLM and what comes back.
 
 ---
 
-## F. Insights
+## E. Insights
 
-### 12. Save insights for the AI
+### 11. Save insights for the AI
 
 - **Status:** idea
 - **Why:** the Insights page shows patterns (this bean rates higher past
@@ -411,9 +380,9 @@ What the analysis worker sends to the LLM and what comes back.
 
 ---
 
-## G. Bar & menu
+## F. Bar & menu
 
-### 13. Ingredient prep and stock
+### 12. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -430,7 +399,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should a finished cold brew batch (roadmap: cold brew refinements) be
     stock the same way, with each glass served taken from it and rated?
 
-### 14. Public menu: branding and sizes
+### 13. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
@@ -444,7 +413,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
-### 15. Drink categories: what else they could do
+### 14. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -461,9 +430,9 @@ What the analysis worker sends to the LLM and what comes back.
 
 ---
 
-## H. Home roasting
+## G. Home roasting
 
-### 16. Roasting: green stock, roast logs, resting
+### 15. Roasting: green stock, roast logs, resting
 
 - **Status:** idea
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
@@ -494,9 +463,9 @@ What the analysis worker sends to the LLM and what comes back.
 
 ---
 
-## I. Accounts
+## H. Accounts
 
-### 17. Account management and password reset
+### 16. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -527,13 +496,13 @@ What the analysis worker sends to the LLM and what comes back.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 18. Email verification
+### 17. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 17), inviting a member by email, or notifications by email.
+  (item 16), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -543,9 +512,9 @@ What the analysis worker sends to the LLM and what comes back.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 17).
+  - Shares the mail and token pieces with password reset (item 16).
 - **Size:** M (mail is new to the stack).
-- **Depends on:** nothing; pairs with 17.
+- **Depends on:** nothing; pairs with 16.
 - **Open questions:**
   - Block unverified accounts, or only remind them?
   - What happens to accounts that existed before verification (treat as
@@ -554,11 +523,11 @@ What the analysis worker sends to the LLM and what comes back.
 
 ---
 
-## J. Deployment & the app
+## I. Deployment & the app
 
 How the app is served and installed.
 
-### 19. Serve the app as an installable PWA
+### 18. Serve the app as an installable PWA
 
 - **Status:** idea
 - **Why:** the PWA is configured (`vite-plugin-pwa`, `frontend/vite.config.ts`)

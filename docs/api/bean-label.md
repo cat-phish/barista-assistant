@@ -5,7 +5,8 @@
 
 The bean form's **Fill in with AI** card, under the Photos card (adding or
 editing; `LabelCard.vue`), takes photos just for the read (**Take photo**,
-**Choose photos**; shown as thumbnails to remove, the back of the bag, say)
+**Choose photos**; shown as thumbnails to crop, rotate or remove, the back
+of the bag, say; cropping is in the browser, §4c)
 and has **"Also read the bean's photos"** (ticked by default; §4c, a new
 bean's picked ones too; not offered when photos are hidden under
 Settings → Fields). Nothing is sent until **✦ Fill in from N photos** is
