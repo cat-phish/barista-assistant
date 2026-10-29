@@ -166,7 +166,8 @@ function barConfig(c: ChartColors): ChartConfiguration<'bar'> {
     data: s.data,
     backgroundColor: slot(c, i, s.label),
     borderColor: c.surface,
-    borderWidth: props.stacked ? { top: 2 } : 0,
+    // Stacked: a 2px gap of the card's colour between segments.
+    borderWidth: props.stacked ? (props.horizontal ? { right: 2 } : { top: 2 }) : 0,
     borderRadius: 4,
     borderSkipped: 'start',
     maxBarThickness: 28,

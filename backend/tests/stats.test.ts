@@ -11,7 +11,7 @@ describe("stats (docs/api/stats.md §11)", () => {
     const base = `/api/workspaces/${ws.id}`;
     const c40 = (await owner.agent.post(`${base}/grinders`).send({ name: "C40" })).body.grinder.id as string;
     const [v60, pourOver] = [await brewerId(owner, ws.id, "V60"), await styleId(owner, ws.id, "filter", "pour_over")];
-    const recipe = (await owner.agent.post(`${base}/recipes`).send({ name: "House V60", brewerId: v60, styleId: pourOver, targetDoseGrams: 15, targetWaterGrams: 250 })).body.recipe.id as string;
+    const recipe = (await owner.agent.post(`${base}/recipes`).send({ name: "House V60", brewerId: v60, styleId: pourOver, targetDoseGrams: 15, targetWaterGrams: 250, expectedFinishMinSec: 165, expectedFinishMaxSec: 195 })).body.recipe.id as string;
     const tools = (await owner.agent.get(`${base}/prep-tools`)).body.tools as Array<{ id: string; name: string }>;
     const problems = (await owner.agent.get(`${base}/brew-problems`)).body.problems as Array<{ id: string; name: string }>;
     const rdt = tools.find((t) => t.name === "RDT")!.id;
@@ -54,7 +54,7 @@ describe("stats (docs/api/stats.md §11)", () => {
       }),
     ]);
     expect(res.body.brews[0]).not.toHaveProperty("tastingNotes");
-    expect(res.body.lookups.recipes).toEqual([{ id: recipe, name: "House V60" }]);
+    expect(res.body.lookups.recipes).toEqual([{ id: recipe, name: "House V60", expectedFinishMinSec: 165, expectedFinishMaxSec: 195 }]);
     expect(res.body.lookups.methods).toContainEqual({ id: method, name: expect.any(String) });
     expect(res.body.lookups.tools).toContainEqual({ id: rdt, name: "RDT" });
     expect(res.body.lookups.problems).toContainEqual({ id: fast, name: "Fast drawdown" });

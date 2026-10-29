@@ -773,7 +773,7 @@ export interface StatsData {
     brewers: Array<StatsNamed & { methodId: string | null }>;
     methods: StatsNamed[];
     styles: Array<StatsNamed & { brewsLike: RecipeStyle }>;
-    recipes: StatsNamed[];
+    recipes: Array<StatsNamed & { expectedFinishMinSec: number | null; expectedFinishMaxSec: number | null }>; // the recipe's finish window
     grinders: StatsNamed[];
     tools: StatsNamed[];
     problems: StatsNamed[];

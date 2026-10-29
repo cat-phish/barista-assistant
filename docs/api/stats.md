@@ -88,7 +88,7 @@ out to keep the reply small.
     "brewers": [{ "id": "uuid", "name": "V60", "methodId": "uuid" }],
     "methods": [{ "id": "uuid", "name": "Pour over" }],
     "styles": [{ "id": "uuid", "name": "Pour over", "brewsLike": "pour_over" }],
-    "recipes": [{ "id": "uuid", "name": "Daily V60" }],
+    "recipes": [{ "id": "uuid", "name": "Daily V60", "expectedFinishMinSec": 165, "expectedFinishMaxSec": 195 }],
     "grinders": [{ "id": "uuid", "name": "Comandante C40" }],
     "tools": [{ "id": "uuid", "name": "WDT" }],
     "problems": [{ "id": "uuid", "name": "Channeling" }],
@@ -110,7 +110,8 @@ out to keep the reply small.
   the filters are. Bean totals (stock, spend) cover all of them.
   - `freezes`: the bean's freeze periods, oldest first (§4).
   - `photoCount`: how many photos the bean has (§4c).
-- **`lookups`:** names for every id the rows use. Archived and hidden ones
+- **`lookups`:** names for every id the rows use. A recipe also has its
+  finish window (§5); a brew's own window (rapid cold, §6) wins over it. Archived and hidden ones
   are included, so history keeps its names.
 - **Errors:** `400` an invalid query (a bad date, `from` after `to`, or an
   id that isn't a UUID); `404` the caller isn't a member.
