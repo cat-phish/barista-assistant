@@ -52,10 +52,10 @@ function onBrewClick(): void {
     <RouterLink :to="{ name: 'home' }" exact-active-class="active">Home</RouterLink>
     <RouterLink :to="{ name: 'brew' }" active-class="active" @click="onBrewClick">Brew</RouterLink>
     <RouterLink :to="{ name: 'journal' }" active-class="active">Journal</RouterLink>
-    <RouterLink :to="{ name: 'stats' }" :class="{ active: route.path.startsWith('/insights') }">Insights</RouterLink>
     <RouterLink :to="{ name: 'beans' }" active-class="active">Beans</RouterLink>
     <RouterLink :to="{ name: 'recipes' }" :class="{ active: ['/recipes', '/drinks', '/ingredients'].some((p) => route.path.startsWith(p)) }">Recipes</RouterLink>
     <RouterLink :to="{ name: 'brewers' }" :class="{ active: route.path.startsWith('/setup') }">Bar setup</RouterLink>
+    <RouterLink :to="{ name: 'stats' }" :class="{ active: route.path.startsWith('/insights') }">Insights</RouterLink>
   </nav>
   <LabelReadNotice />
 </template>
