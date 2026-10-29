@@ -117,7 +117,8 @@ Every workspace in a response carries `settings`, defaults filled in
 ### Field visibility
 
 Settings → **Fields** lets owners hide the optional fields of the brew
-(setup and log), bean, recipe and green coffee (`green.*`, §4e) forms that
+(setup and log), bean, recipe, green coffee (`green.*`, §4e) and roast
+(`roast.*`, §4f) forms that
 the bar doesn't use. Everyone in
 the workspace sees the same forms.
 

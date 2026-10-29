@@ -298,6 +298,37 @@ export interface GreenCoffee extends GreenCoffeeDetails {
 }
 export type GreenCoffeeInput = GreenCoffeeDetails & { name: string };
 
+// docs/api/roasts.md §4f: one batch roasted; saving it makes its bean.
+export interface RoastDetails {
+  greenCoffeeId: string | null; // null once that green coffee is deleted
+  machineId: string | null;
+  roastedAt: string; // ISO
+  utcOffsetMinutes: number | null; // the logging device's: the local roast date
+  batchNumber: string | null;
+  greenGrams: number;
+  roastedGrams: number; // less than greenGrams, at most 40% lost
+  roastType: RoastType | null;
+  detailedRoastLevel: DetailedRoastLevel | null; // sets roastLevel, as on beans
+  roastLevel: RoastLevel | null;
+  chargeTempC: number | null;
+  dropTempC: number | null;
+  firstCrackSec: number | null; // from the charge; before totalSec
+  totalSec: number | null; // charge to drop
+  restDays: number;
+  notes: string | null;
+}
+export interface Roast extends RoastDetails {
+  id: string;
+  beanId: string | null; // the bean it made; null once deleted
+  userId: string | null;
+  greenStockTakenGrams: number; // what it took off the green stock (no more than was left)
+  greenCoffee: { id: string; name: string } | null;
+  machine: { id: string; name: string } | null;
+  createdAt: string;
+}
+// What the form sends; left out on a new roast, batchNumber and restDays get the defaults.
+export type RoastInput = Omit<RoastDetails, 'greenCoffeeId' | 'batchNumber'> & { greenCoffeeId: string; batchNumber?: string | null };
+
 // docs/api/water-profiles.md §3c: every figure in mg/L (ppm), GH and KH as CaCO3.
 export const WATER_FIGURES = [
   'tdsPpm', 'generalHardnessPpm', 'alkalinityPpm', 'calciumPpm', 'magnesiumPpm', 'sodiumPpm',

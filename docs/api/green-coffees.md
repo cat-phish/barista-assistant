@@ -6,8 +6,8 @@
 Home roasting (workspace setting `homeRoasting`, §2): the green (unroasted)
 coffee a workspace has bought to roast, and how much is left. The app shows
 it in roast mode under **Green**. The origin fields are a bean's (§4), so a
-roast (coming with the roast log, docs/backlog.md item 15) can copy them
-onto the bean it makes, and take its green weight off `weightLeftGrams`.
+roast (§4f) copies them onto the bean it makes, and takes its green weight
+off `weightLeftGrams`.
 
 **Green coffee object:**
 
@@ -85,13 +85,13 @@ now) leaves the pickers; it can be restored.
 ## `GET /api/workspaces/:workspaceId/green-coffees/:greenId/usage`
 
 - **Auth Required:** `true` (any member)
-- **Success (`200 OK`):** `{ "roastCount": 0 }`: the roasts of it. Always
-  `0` until roasts are logged.
+- **Success (`200 OK`):** `{ "roastCount": 3 }`: the roasts of it.
 - **Errors:** `404` not in this workspace.
 
 ## `DELETE /api/workspaces/:workspaceId/green-coffees/:greenId`
 
-Roasts of it will keep their record (and their beans) with it unlinked.
+Roasts of it keep their record (and their beans) with `greenCoffeeId` set
+to `null`.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Success (`204 No Content`)**

@@ -15,7 +15,7 @@ const mode = computed(() => headerMode(route.path, workspaces.current?.id ?? nul
 
 const LANDING: Record<AppMode, () => RouteLocationRaw> = {
   brew: () => ({ name: workspaces.canEdit ? 'brew' : 'journal' }),
-  roast: () => ({ name: 'roast' }),
+  roast: () => ({ name: 'roast-home' }),
 };
 const target = (m: AppMode): RouteLocationRaw => {
   void route.fullPath; // recomputed on every move, when the last page changes

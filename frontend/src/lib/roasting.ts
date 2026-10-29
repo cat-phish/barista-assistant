@@ -1,9 +1,25 @@
 // Home roasting's forms and lists (docs/api/roasting-machines.md §3f,
-// docs/api/green-coffees.md §4e): the form state as typed, its checks, and
+// docs/api/green-coffees.md §4e, docs/api/roasts.md §4f): the form state as typed, its checks, and
 // how much green coffee is left. Unit-tested in roasting.test.ts.
-import type { AltitudeUnit, CoffeeSpecies, GreenCoffee, GreenCoffeeInput, OriginArea, RoastingMachine, RoastingMachineInput } from '../api/types';
-import { formatPrice } from './beans';
-import { localDateInput, parseDecimal } from './format';
+import type {
+  AltitudeUnit,
+  CoffeeSpecies,
+  DetailedRoastLevel,
+  GreenCoffee,
+  GreenCoffeeInput,
+  OriginArea,
+  Roast,
+  RoastInput,
+  RoastingMachine,
+  RoastingMachineInput,
+  RoastLevel,
+  RoastScale,
+  RoastType,
+  TemperatureUnit,
+} from '../api/types';
+import { DETAILED_ROAST_LEVELS, formatPrice } from './beans';
+import { formatTime, localDateInput, parseDecimal, parseTime } from './format';
+import { ROAST_LEVELS } from './scale';
 import { altitudeText, parseAltitude } from './units';
 
 type Errors = Partial<Record<string, string>>;
@@ -140,4 +156,156 @@ export function greenPrice(g: Pick<GreenCoffee, 'priceAmount' | 'priceCurrency' 
   if (g.priceAmount === null || g.priceCurrency === null) return null;
   const total = formatPrice(g.priceAmount, g.priceCurrency);
   return g.weightBoughtGrams ? `${total} · ${((g.priceAmount / g.weightBoughtGrams) * 100).toFixed(2)} ${g.priceCurrency}/100 g` : total;
+}
+
+// ---- Roasts -------------------------------------------------------------
+
+export const MAX_WEIGHT_LOSS = 40; // %, as the API
+
+export interface RoastForm {
+  greenCoffeeId: string;
+  machineId: string;
+  roastedAt: string; // datetime-local, this device's time
+  batchNumber: string; // blank on a new one: the next batch
+  green: string; // grams in
+  roasted: string; // grams out
+  roastType: RoastType | '';
+  detailed: DetailedRoastLevel | ''; // roast names (roastScale "names")
+  level: RoastLevel | ''; // light to dark ("levels")
+  chargeTemp: string; // in the person's unit
+  dropTemp: string;
+  firstCrack: string; // m:ss from the charge
+  total: string; // m:ss, charge to drop
+  restDays: string;
+  notes: string;
+}
+
+const pad = (n: number) => String(n).padStart(2, '0');
+// An ISO time as a datetime-local value on this device, to the minute.
+export function toLocalInput(iso: string | Date): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// Roasting temperatures: up to 350 °C (662 °F), 1 decimal, stored in °C.
+const toF = (c: number) => Math.round(((c * 9) / 5 + 32) * 10) / 10;
+export function roastTempText(c: number | null, unit: TemperatureUnit): string {
+  return c === null ? '' : String(unit === 'f' ? toF(c) : c);
+}
+export function parseRoastTemp(text: string, unit: TemperatureUnit) {
+  if (unit === 'c') return parseDecimal(text, { scale: 1, min: 0, max: 350 });
+  const f = parseDecimal(text, { scale: 1, min: 32, max: 662 });
+  return f.ok ? { ok: true as const, value: Math.round((((f.value - 32) * 5) / 9) * 10) / 10 } : f;
+}
+
+export function roastForm(unit: TemperatureUnit, r?: Roast, defaults: { now?: Date; restDays?: number } = {}): RoastForm {
+  return {
+    greenCoffeeId: r?.greenCoffeeId ?? '',
+    machineId: r?.machineId ?? '',
+    roastedAt: toLocalInput(r?.roastedAt ?? defaults.now ?? new Date()),
+    batchNumber: r?.batchNumber ?? '',
+    green: r ? String(r.greenGrams) : '',
+    roasted: r ? String(r.roastedGrams) : '',
+    roastType: r?.roastType ?? '',
+    detailed: r?.detailedRoastLevel ?? '',
+    level: r?.roastLevel ?? '',
+    chargeTemp: roastTempText(r?.chargeTempC ?? null, unit),
+    dropTemp: roastTempText(r?.dropTempC ?? null, unit),
+    firstCrack: r?.firstCrackSec != null ? formatTime(r.firstCrackSec) : '',
+    total: r?.totalSec != null ? formatTime(r.totalSec) : '',
+    restDays: String(r?.restDays ?? defaults.restDays ?? ''),
+    notes: r?.notes ?? '',
+  };
+}
+
+export function parseRoastForm(
+  f: RoastForm,
+  // greenOptional: editing a roast whose green coffee was deleted ('' = leave it).
+  opts: { unit: TemperatureUnit; scale: RoastScale; now?: Date; greenOptional?: boolean },
+): { errors: Errors; values: RoastInput | null } {
+  const errors: Errors = {};
+  if (!f.greenCoffeeId && !opts.greenOptional) errors.greenCoffeeId = 'Pick the green coffee';
+  const at = f.roastedAt ? new Date(f.roastedAt) : null;
+  if (!at || Number.isNaN(at.getTime())) errors.roastedAt = 'Required';
+  else if (at.getTime() > (opts.now ?? new Date()).getTime() + 5 * 60_000) errors.roastedAt = 'Can’t be in the future';
+  const weight = { scale: 0, min: 1, max: 100_000 };
+  const green = f.green.trim() ? parseDecimal(f.green, weight) : null;
+  const roasted = f.roasted.trim() ? parseDecimal(f.roasted, weight) : null;
+  if (!green) errors.green = 'Required';
+  else if (!green.ok) errors.green = green.error;
+  if (!roasted) errors.roasted = 'Required';
+  else if (!roasted.ok) errors.roasted = roasted.error;
+  else if (green?.ok && roasted.value >= green.value) errors.roasted = 'Less than the green weight';
+  else if (green?.ok && weightLoss(green.value, roasted.value) > MAX_WEIGHT_LOSS) errors.roasted = `More than ${MAX_WEIGHT_LOSS}% lost: check the weights`;
+  const charge = f.chargeTemp.trim() ? parseRoastTemp(f.chargeTemp, opts.unit) : null;
+  const drop = f.dropTemp.trim() ? parseRoastTemp(f.dropTemp, opts.unit) : null;
+  if (charge && !charge.ok) errors.chargeTemp = charge.error;
+  if (drop && !drop.ok) errors.dropTemp = drop.error;
+  const time = (t: string) => {
+    if (!t.trim()) return null;
+    const p = parseTime(t);
+    return p.ok && (p.value < 1 || p.value > 5999) ? { ok: false as const, error: 'Between 0:01 and 99:59' } : p;
+  };
+  const crack = time(f.firstCrack);
+  const total = time(f.total);
+  if (crack && !crack.ok) errors.firstCrack = crack.error;
+  if (total && !total.ok) errors.total = total.error;
+  else if (crack?.ok && total?.ok && crack.value >= total.value) errors.firstCrack = 'Before the end of the roast';
+  const rest = parseDecimal(f.restDays, { scale: 0, min: 0, max: 60 });
+  if (!rest.ok) errors.restDays = rest.error;
+  if (Object.keys(errors).length || !at || !green?.ok || !roasted?.ok || !rest.ok) return { errors, values: null };
+
+  // Light to dark keeps a roast name already recorded while its level stays chosen.
+  const detailed = opts.scale === 'names' ? f.detailed || null : f.detailed && f.level === DETAILED_ROAST_LEVELS[f.detailed].roastLevel ? f.detailed : null;
+  return {
+    errors,
+    values: {
+      greenCoffeeId: f.greenCoffeeId,
+      machineId: f.machineId || null,
+      roastedAt: at.toISOString(),
+      utcOffsetMinutes: -at.getTimezoneOffset(),
+      ...(f.batchNumber.trim() ? { batchNumber: f.batchNumber.trim() } : {}),
+      greenGrams: green.value,
+      roastedGrams: roasted.value,
+      roastType: f.roastType || null,
+      detailedRoastLevel: detailed,
+      // Roast names with none picked keep the level already recorded.
+      roastLevel: detailed ? DETAILED_ROAST_LEVELS[detailed].roastLevel : f.level || null,
+      chargeTempC: charge?.ok ? charge.value : null,
+      dropTempC: drop?.ok ? drop.value : null,
+      firstCrackSec: crack?.ok ? crack.value : null,
+      totalSec: total?.ok ? total.value : null,
+      restDays: rest.value,
+      notes: text(f.notes),
+    },
+  };
+}
+
+// % of the green weight lost, 1 decimal, as the bean stores it.
+export function weightLoss(green: number, roasted: number): number {
+  return Math.round(((green - roasted) / green) * 1000) / 10;
+}
+
+// Development: from first crack to the drop, and its share of the roast.
+export function development(firstCrackSec: number | null, totalSec: number | null): { sec: number; percent: number } | null {
+  if (firstCrackSec === null || totalSec === null || firstCrackSec >= totalSec) return null;
+  const sec = totalSec - firstCrackSec;
+  return { sec, percent: Math.round((sec / totalSec) * 1000) / 10 };
+}
+
+// The local roast date (YYYY-MM-DD) and the day it's ready: that + its rest days.
+export function roastDay(r: Pick<Roast, 'roastedAt' | 'utcOffsetMinutes'>): string {
+  const at = new Date(r.roastedAt);
+  const offset = r.utcOffsetMinutes ?? -at.getTimezoneOffset();
+  return new Date(at.getTime() + offset * 60_000).toISOString().slice(0, 10);
+}
+export function readyOn(r: Pick<Roast, 'roastedAt' | 'utcOffsetMinutes' | 'restDays'>): string {
+  const [y, m, d] = roastDay(r).split('-').map(Number);
+  return new Date(Date.UTC(y!, m! - 1, d! + r.restDays)).toISOString().slice(0, 10);
+}
+
+// "City+" (roast names) or "Medium" (light to dark), or null.
+export function roastLevelLabel(r: Pick<Roast, 'detailedRoastLevel' | 'roastLevel'>): string | null {
+  if (r.detailedRoastLevel) return DETAILED_ROAST_LEVELS[r.detailedRoastLevel].label;
+  return r.roastLevel ? ROAST_LEVELS[r.roastLevel].label : null;
 }

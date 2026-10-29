@@ -7,7 +7,7 @@ describe('field registry', () => {
     expect(new Set(keys).size).toBe(keys.length);
     for (const f of FIELDS) {
       expect(f.key.startsWith(`${f.form}.`), f.key).toBe(true);
-      expect(f.key).toMatch(/^(brew|bean|recipe|green)\.[a-zA-Z]+$/);
+      expect(f.key).toMatch(/^(brew|bean|recipe|green|roast)\.[a-zA-Z]+$/);
     }
     expect(keys.length).toBeLessThanOrEqual(100); // the API's limit
   });
@@ -22,7 +22,7 @@ describe('field registry', () => {
   });
   it('groups by form', () => {
     expect(fieldsFor('brew').every((f) => f.form === 'brew')).toBe(true);
-    expect(fieldsFor('bean').length + fieldsFor('brew').length + fieldsFor('recipe').length + fieldsFor('green').length).toBe(FIELDS.length);
+    expect(fieldsFor('bean').length + fieldsFor('brew').length + fieldsFor('recipe').length + fieldsFor('green').length + fieldsFor('roast').length).toBe(FIELDS.length);
   });
 });
 

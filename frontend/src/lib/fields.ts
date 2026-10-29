@@ -1,9 +1,9 @@
 // Field visibility (docs/api/workspaces.md §2, "Field visibility"): the
-// optional fields of the brew, bean, recipe and green coffee forms that a workspace can
+// optional fields of the brew, bean, recipe, green coffee and roast forms that a workspace can
 // hide (Settings → Fields). Required fields aren't listed, so they can't be.
 // Every new optional field on these forms gets an entry here.
 
-export type FieldForm = 'brew' | 'bean' | 'recipe' | 'green';
+export type FieldForm = 'brew' | 'bean' | 'recipe' | 'green' | 'roast';
 
 export interface FieldInfo {
   key: string; // `${form}.${name}`, stored in settings.hiddenFields
@@ -16,6 +16,7 @@ const brew = (name: string, label: string, hint?: string): FieldInfo => ({ key: 
 const bean = (name: string, label: string, hint?: string): FieldInfo => ({ key: `bean.${name}`, form: 'bean', label, hint });
 const recipe = (name: string, label: string, hint?: string): FieldInfo => ({ key: `recipe.${name}`, form: 'recipe', label, hint });
 const green = (name: string, label: string, hint?: string): FieldInfo => ({ key: `green.${name}`, form: 'green', label, hint });
+const roast = (name: string, label: string, hint?: string): FieldInfo => ({ key: `roast.${name}`, form: 'roast', label, hint });
 
 // In the order the forms show them.
 export const FIELDS = [
@@ -90,11 +91,21 @@ export const FIELDS = [
   green('lowStock', 'Low stock at', 'Below it, the coffee shows as low'),
   green('purchaseDate', 'Purchase date'),
   green('notes', 'Notes'),
+
+  // Home roasting's roast log (docs/api/roasts.md §4f).
+  roast('machine', 'Roaster'),
+  roast('batchNumber', 'Batch no.', 'Left blank, the next batch of the green coffee'),
+  roast('roastType', 'Roasted for', 'Filter, espresso or omni; sets the rest days'),
+  roast('roastLevel', 'Roast level'),
+  roast('temps', 'Charge and drop temperatures'),
+  roast('times', 'First crack and total time', 'And the development time worked out from them'),
+  roast('restDays', 'Rest days', 'Hidden: the workspace’s default for the roast type'),
+  roast('notes', 'Notes'),
 ] as const satisfies readonly FieldInfo[];
 
 export type FieldKey = (typeof FIELDS)[number]['key'];
 
-export const FIELD_FORMS: Record<FieldForm, string> = { brew: 'Brews', bean: 'Beans', recipe: 'Recipes', green: 'Green coffees (home roasting)' };
+export const FIELD_FORMS: Record<FieldForm, string> = { brew: 'Brews', bean: 'Beans', recipe: 'Recipes', green: 'Green coffees (home roasting)', roast: 'Roasts (home roasting)' };
 
 export function fieldsFor(form: FieldForm): FieldInfo[] {
   return FIELDS.filter((f) => f.form === form);

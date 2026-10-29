@@ -25,6 +25,7 @@ means drinks, wherever you see it (code comments use
 | §4c | [bean-photos.md](bean-photos.md) | Bean Photos (the bag or label; cover in the list) |
 | §4d | [bean-label.md](bean-label.md) | Read the Bean Label (fill the bean form from its photos, AI) |
 | §4e | [green-coffees.md](green-coffees.md) | Green Coffees (green stock, home roasting) |
+| §4f | [roasts.md](roasts.md) | Roasts (the roast log; each makes a bean) |
 | §5 | [recipes.md](recipes.md) | Recipes |
 | §5b | [ingredients.md](ingredients.md) | Ingredients |
 | §5c | [drinks.md](drinks.md) | Drinks |

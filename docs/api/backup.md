@@ -63,7 +63,7 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   `recipe_styles`, `grinders`, `water_profiles`, `prep_tools`,
   `brew_problems`, `ingredients`, `drink_categories`, `brewers`,
   `roasting_machines`, `green_coffees`, `prep_tool_brewers`, `beans`,
-  `bean_freezes`, `bean_photos`, `recipes`, `recipe_steps`, `recipe_grind_settings`, `recipe_prep_tools`,
+  `bean_freezes`, `bean_photos`, `roasts`, `recipes`, `recipe_steps`, `recipe_grind_settings`, `recipe_prep_tools`,
   `drinks`, `drink_ingredients`, `menu_sections`, `menu_items`,
   `brew_logs`, `brew_log_marks`, `brew_log_tools`, `brew_log_problems`,
   `llm_analyses`, `parameter_suggestions` (`BACKUP_TABLES`). A table left out of a file counts as
@@ -196,6 +196,7 @@ too. Where the app offers them: "Where it is" above. Code:
   - by name (case-insensitive) for brewers, grinders, water profiles, prep
     items, brew problems, ingredients, drink categories, menu sections,
     roasting machines and green coffees;
+  - roasts by when they were roasted and their green coffee;
   - brewer methods and bean processes by built-in key or name; recipe
     styles by method and built-in key or name;
   - beans by roaster, name, batch and roast date (two bags of the same
