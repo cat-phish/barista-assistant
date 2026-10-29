@@ -183,7 +183,7 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
         <input type="checkbox" :checked="settings.readLabels" :disabled="!isOwner || saving" @change="save({ readLabels: ($event.target as HTMLInputElement).checked }, 'labels')" />
         Read bean labels from photos
       </label>
-      <label class="checkbox">
+      <label class="checkbox detail-choice">
         <input
           type="checkbox"
           :checked="settings.labelWebLookup"
