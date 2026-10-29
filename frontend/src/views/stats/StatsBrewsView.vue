@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Stats → Brews: how much and how well, over time; when people brew; the
-// extraction chart; what goes wrong (docs/backlog.md item 12).
+// extraction chart; what goes wrong (docs/roadmap.md, "Insights").
 import { computed } from 'vue';
 import ChartCard from '../../components/charts/ChartCard.vue';
 import StatsChart, { type Box } from '../../components/charts/StatsChart.vue';

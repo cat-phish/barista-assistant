@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Statistics (docs/backlog.md item 12): the filters and the data, shared by
+// Statistics (docs/roadmap.md, "Insights"): the filters and the data, shared by
 // every tab (child routes; composables/useStats.ts).
 import AppHeader from '../components/AppHeader.vue';
 import StatsFilters from '../components/StatsFilters.vue';

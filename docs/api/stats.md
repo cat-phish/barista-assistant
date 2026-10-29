@@ -3,7 +3,7 @@
 > Part of the API spec. Conventions, auth rules and the section index are in
 > [README.md](README.md); a bare `§N` refers to that index.
 
-The Insights page (`docs/backlog.md` item 12) charts a workspace's brews and
+The Insights page (`docs/roadmap.md`, "Insights") charts a workspace's brews and
 beans. The API sends compact rows, and the client adds them up
 (`frontend/src/lib/stats.ts`): the Explore chart needs a point per brew, and
 per-day buckets need each brew's local date. Notes and other text are left

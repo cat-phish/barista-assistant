@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Tabs across the Insights screens (docs/backlog.md item 12). The filters ride
+// Tabs across the Insights screens (docs/roadmap.md, "Insights"). The filters ride
 // along in the query, so switching tabs keeps them. A tab whose field the
 // workspace hides (Settings → Fields) is left out.
 import { computed } from 'vue';
@@ -15,6 +15,7 @@ const TABS: Array<{ name: string; text: string; field?: string }> = [
   { name: 'stats-recipes', text: 'Recipes' },
   { name: 'stats-tools', text: 'Prep', field: 'brew.prepTools' },
   { name: 'stats-grinders', text: 'Grinders', field: 'brew.grinder' },
+  { name: 'stats-explore', text: 'Explore' },
 ];
 
 const route = useRoute();
