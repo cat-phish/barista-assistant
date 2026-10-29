@@ -39,7 +39,7 @@ dumps (§10) don't include `./photos`: back that folder up with them.
 `Cache-Control: private, max-age=31536000, immutable`, and the PWA keeps
 the ones you've seen (`bean-photos` cache, `docs/timer_architecture.md`).
 
-**Reading the label:** "Fill in from photos" in the same card reads these,
+**Reading the label:** the "Fill in with AI" card below can read these,
 with any taken just for the read (`bean-label.md` §4d).
 
 **Settings → Fields** can hide photos (`bean.photos`): off the form and the

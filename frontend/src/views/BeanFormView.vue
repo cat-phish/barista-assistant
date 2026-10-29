@@ -6,6 +6,7 @@ import { beansApi, type BeanInput } from '../api/beans';
 import { errorMessage } from '../api/client';
 import AppHeader from '../components/AppHeader.vue';
 import BeanPhotos from '../components/BeanPhotos.vue';
+import LabelCard from '../components/LabelCard.vue';
 import LabelHint from '../components/LabelHint.vue';
 import RatingInput from '../components/RatingInput.vue';
 import { localDateInput, parseDecimal, toDateInput } from '../lib/format';
@@ -406,19 +407,15 @@ async function save(): Promise<void> {
     <p v-if="loading" class="muted" aria-live="polite">Loading…</p>
 
     <form v-else class="stack" novalidate @submit.prevent="save">
-      <section v-if="(show('bean.photos') || settings.readLabels) && workspaces.current" class="card stack">
+      <section v-if="show('bean.photos') && workspaces.current" class="card stack">
         <h2>Photos</h2>
-        <BeanPhotos
-          ref="photoPicker"
-          v-model="photos"
-          :workspace-id="workspaces.current.id"
-          :bean-id="props.id ?? null"
-          :show-photos="show('bean.photos')"
-          :read-labels="settings.readLabels"
-          @label="applyLabel"
-        >
+        <BeanPhotos ref="photoPicker" v-model="photos" :workspace-id="workspaces.current.id" :bean-id="props.id ?? null" />
+      </section>
+      <section v-if="settings.readLabels && workspaces.current" class="card stack">
+        <h2>Fill in with AI</h2>
+        <LabelCard :workspace-id="workspaces.current.id" :bean-photos="show('bean.photos') ? (photoPicker?.photoSources ?? []) : []" @label="applyLabel">
           <p v-if="labelSummary" class="small" role="status">{{ labelSummary }}</p>
-        </BeanPhotos>
+        </LabelCard>
       </section>
       <section class="card stack">
         <div class="field">
