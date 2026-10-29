@@ -38,6 +38,7 @@ export const router = createRouter({
         { path: 'recipes', name: 'stats-recipes', component: () => import('../views/stats/StatsRecipesView.vue') },
         { path: 'prep', name: 'stats-tools', component: () => import('../views/stats/StatsToolsView.vue') },
         { path: 'grinders', name: 'stats-grinders', component: () => import('../views/stats/StatsGrindersView.vue') },
+        { path: 'explore', name: 'stats-explore', component: () => import('../views/stats/StatsExploreView.vue') },
       ],
     },
     // Bar setup: three tabs (components/SetupTabs.vue).

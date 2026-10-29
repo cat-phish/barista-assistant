@@ -18,6 +18,8 @@ const RANGE_DAYS: Partial<Record<RangeKey, number>> = { '30d': 30, '90d': 90, '1
 export const GROUPINGS = { auto: 'Auto', day: 'Day', week: 'Week', month: 'Month' } as const;
 export type Grouping = keyof typeof GROUPINGS;
 
+const FILTER_KEYS = ['range', 'from', 'to', 'bean', 'recipe', 'brewer', 'mine', 'unit', 'by'];
+
 export interface StatsFilters {
   range: RangeKey;
   from: string; // custom range only
@@ -73,10 +75,11 @@ export function provideStats(): StatsContext {
     return { range, from: str(q.from), to: str(q.to), bean: str(q.bean), recipe: str(q.recipe), brewer: str(q.brewer), mine: q.mine === '1', unit, by };
   });
 
-  // Defaults stay out of the URL, so a plain /stats link means "all of it".
+  // Defaults stay out of the URL, so a plain /insights link means "all of it".
+  // A tab's own keys (Explore's picks) are kept.
   function setFilters(change: Partial<StatsFilters>): void {
     const f = { ...filters.value, ...change };
-    const query: LocationQueryRaw = {};
+    const query: LocationQueryRaw = Object.fromEntries(Object.entries(route.query).filter(([k]) => !FILTER_KEYS.includes(k)));
     if (f.range !== 'all') query.range = f.range;
     if (f.range === 'custom') {
       if (f.from) query.from = f.from;

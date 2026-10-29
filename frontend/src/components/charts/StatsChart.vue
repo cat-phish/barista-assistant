@@ -60,6 +60,7 @@ const props = withDefaults(
     yMin?: number;
     yMax?: number;
     box?: Box; // scatter: a shaded target area (EY against TDS)
+    trend?: { x1: number; y1: number; x2: number; y2: number } | null; // scatter: a fitted line, dashed
     height?: number;
   }>(),
   { labels: () => [], series: () => [], points: () => [], height: 240 },
@@ -223,6 +224,19 @@ function scatterConfig(c: ChartColors): ChartConfiguration<'scatter'> {
     pointHoverRadius: 6,
     pointHitRadius: 8,
   }));
+  if (props.trend) {
+    const t = props.trend;
+    datasets.push({
+      label: 'Trend',
+      data: [{ x: t.x1, y: t.y1 }, { x: t.x2, y: t.y2 }],
+      showLine: true,
+      borderColor: c.muted,
+      borderWidth: 2,
+      borderDash: [6, 4],
+      pointRadius: 0,
+      pointHitRadius: 0,
+    });
+  }
   const base = common(c, props.points.length > 1);
   const scales = axes(c);
   const fx = props.formatX ?? plain;
@@ -254,7 +268,7 @@ function draw(): void {
 }
 
 onMounted(draw);
-watch(() => [props.labels, props.series, props.points, props.box, props.kind, colors.value], draw, { deep: true });
+watch(() => [props.labels, props.series, props.points, props.box, props.trend, props.kind, colors.value], draw, { deep: true });
 onBeforeUnmount(() => chart?.destroy());
 </script>
 

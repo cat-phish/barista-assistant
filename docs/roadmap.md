@@ -1706,3 +1706,61 @@ Backlog item "Coffee varieties (Bourbon, Typica, Geisha…)", branch
   arabica alone.
 - The AI sees both, switchable under Settings → AI (`variety`), with a
   prompt section treating them as context. PROMPT_VERSION 2026-10-k.
+
+## Insights (built)
+
+Backlog item "Statistics and graphs", branches `stats-foundation`,
+`stats-tabs` and `stats-explore`. Contract: `api/stats.md` §11.
+
+- An **Insights** item, last in the nav (`/insights`; "stats" in the code
+  and the API). One view (`StatsView`) holds the filters and the data;
+  each tab is a child route, so switching tabs doesn't fetch again.
+  Tabs: Overview, Brews, Beans, Methods, Recipes, Prep, Grinders,
+  Explore. Prep and Grinders leave the tab row when the workspace hides
+  the prep checklist or the grinder (Settings → Fields), as do charts of
+  other hidden fields (TDS, problems, grind setting).
+- **Filters**, kept in the URL with defaults left out: period (30 days,
+  90 days, a year, all time, or custom dates), bean, recipe, brewer,
+  group by (auto, day, week, month), volume unit (starts from the
+  person's), and **Only mine**. The whole workspace is the default.
+- **Data:** one endpoint sends a compact row per brew, every bean with
+  its freezes and photo count, and id → name lookups (archived included,
+  recipes with their finish window). The date range is the brew's
+  **local** date: the API pads the UTC window by 14 hours in SQL and
+  checks the shifted date exactly. Steeping brews are left out. Decided
+  over server-side totals: Explore needs a point per brew, buckets need
+  the local date, and the client helpers (`extractionYield`,
+  `effectiveRoastAge`, `estimateYield`) get reused. The sums are in
+  `lib/stats.ts` and `lib/explore.ts`, both tested.
+- **Counting rules** (also in `api/stats.md`):
+  - Volume drunk: a drink's size (the brew's, else the drink's default),
+    else the measured yield, else the estimated yield; served diluted
+    counts as yield × (1 + ratio). 1 g = 1 ml; totals with an estimate
+    show "≈".
+  - Money spent: bag prices per currency by purchase date (else the date
+    added), never converted. Charts use the currency most bags were bought
+    in and name the others.
+  - Beans available: active with stock, as frozen (an open freeze), thawed
+    (frozen before) or fresh. Bean charts count every bean unfiltered;
+    with a filter, the beans it brewed.
+  - Countries: a blend's list counts under each (split on , ; / & +, not
+    "and", so "Trinidad and Tobago" stays whole).
+  - Finish window: the brew's own (rapid cold), else its recipe's.
+- **Charts:** Chart.js 4 (`components/charts/StatsChart.vue`: line, bar,
+  doughnut, scatter), only loaded with the Insights page. Eight series
+  colours (`--series-1…8` in `base.css`, light and dark), checked for
+  colour-blind separation against `--surface` in both themes: never
+  reorder or cycle them. Three are under 3:1 contrast on white, so every
+  chart card has a **Table** view (`ChartCard.vue`). Pies keep the top 7
+  plus a grey "Other"; scatters colour at most three groups.
+- **Explore:** a brew detail (numbers: dose, water, ratio, temperature,
+  grind setting on one grinder, roast age, altitude, brew time; groups:
+  process, roast level, country, origin, species, roaster, method,
+  brewer, recipe, style, grinder, prep tool, problem, weekday) against a
+  result (rating, drink rating, EY, TDS, brew time, volume). A number is a
+  scatter with a least-squares trend line, r and a plain-words strength
+  ("a moderate positive link"), plus an optional colour by; a group is a
+  bar of averages with n. The picks are in the URL (`x`, `y`, `color`,
+  `grinder`), and the filters keep them.
+- **Nav:** seven links no longer fit a 320px phone, so the row scrolls on
+  the smallest screens.
