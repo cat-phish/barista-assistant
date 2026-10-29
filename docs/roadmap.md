@@ -1594,9 +1594,10 @@ Backlog item 3, branch `bean-label`. `docs/api/bean-label.md` §4d,
 - Frontend: `lib/labelFill.ts` (pure, tested) turns the answer into fills
   and suggestions in the form's terms; a process not in the list goes to
   the notes. Filled or suggested hidden fields are revealed.
-- Refined after trying it (branch `photo-card`): one **Photos card at the top**
-  of the form. "✦ Fill in from photos" reads the bean's photos; "Read other
-  photos (not kept)…" adds shots just for the read, sent first, up to 8
-  (`LABEL_MAX_IMAGES`). Photos are **dragged to reorder** (`PUT …/photos/order`,
+- Refined after trying it (branches `photo-card`, `label-card`): the
+  **Photos card at the top** of the form, then a **Fill in with AI** card:
+  photos just for the read (thumbnails, not kept, sent first) plus "Also
+  read the bean's photos" (ticked), up to 8 (`LABEL_MAX_IMAGES`); nothing is
+  read until the button. Photos are **dragged to reorder** (`PUT …/photos/order`,
   `useReorder` + vue-draggable-plus); the first is the cover. A phone reloading
   mid-read was Vite's live-reload socket (off in Docker: `VITE_LIVE_RELOAD`).

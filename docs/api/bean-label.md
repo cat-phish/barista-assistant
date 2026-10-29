@@ -3,14 +3,15 @@
 > Part of the API spec. Conventions, auth rules and the section index are in
 > [README.md](README.md); a bare `§N` refers to that index.
 
-The bean form's **Photos** card (at the top, adding or editing) has
-**✦ Fill in from photos**: it sends the bean's photos (§4c; a new bean's
-picked ones too) to the AI, which reads the label and answers with the
-bean fields (§4) it could read. **Read other photos (not kept)…** opens
-Take photo / Choose photos for shots taken just for the read (the back of
-the bag, say): those are sent first, with the bean's photos, at most **8**
-in all (`LABEL_MAX_IMAGES`). With photos hidden under Settings → Fields,
-the card only offers those. The form fills
+The bean form's **Fill in with AI** card, under the Photos card (adding or
+editing; `LabelCard.vue`), takes photos just for the read (**Take photo**,
+**Choose photos**; shown as thumbnails to remove, the back of the bag, say)
+and has **"Also read the bean's photos"** (ticked by default; §4c, a new
+bean's picked ones too; not offered when photos are hidden under
+Settings → Fields). Nothing is sent until **✦ Fill in from N photos** is
+pressed: the AI reads the label and answers with the bean fields (§4) it
+could read. Those taken here go first, then the bean's, at most **8** in
+all (`LABEL_MAX_IMAGES`). The form fills
 the **empty** fields and, under each one that already says something else,
 shows **"Label says: X · Use"**. Nothing is saved until the bean is.
 
