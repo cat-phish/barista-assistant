@@ -92,7 +92,7 @@ onBeforeUnmount(() => extras.value.forEach((e) => URL.revokeObjectURL(e.url)));
       <input v-model="lookUp" type="checkbox" :disabled="reading" />
       <span>
         Also look it up on the web
-        <span class="muted small hint">Takes longer (up to a couple of minutes). Searches the roaster's site when it's known; what it finds is only suggested, with a link.</span>
+        <span class="muted small hint">Takes longer, provides suggestions with sources.</span>
       </span>
     </label>
     <div class="row">
