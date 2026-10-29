@@ -33,6 +33,11 @@ export const router = createRouter({
         { path: '', name: 'stats', redirect: (to) => ({ name: 'stats-overview', query: to.query }) },
         { path: 'overview', name: 'stats-overview', component: () => import('../views/stats/StatsOverviewView.vue') },
         { path: 'brews', name: 'stats-brews', component: () => import('../views/stats/StatsBrewsView.vue') },
+        { path: 'beans', name: 'stats-beans', component: () => import('../views/stats/StatsBeansView.vue') },
+        { path: 'methods', name: 'stats-methods', component: () => import('../views/stats/StatsMethodsView.vue') },
+        { path: 'recipes', name: 'stats-recipes', component: () => import('../views/stats/StatsRecipesView.vue') },
+        { path: 'prep', name: 'stats-tools', component: () => import('../views/stats/StatsToolsView.vue') },
+        { path: 'grinders', name: 'stats-grinders', component: () => import('../views/stats/StatsGrindersView.vue') },
       ],
     },
     // Bar setup: three tabs (components/SetupTabs.vue).

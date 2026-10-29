@@ -208,3 +208,51 @@ export function formatDuration(totalSec: number): string {
 export function formatWeight(grams: number): string {
   return grams >= 1000 ? `${(grams / 1000).toFixed(2)} kg` : `${Math.round(grams)} g`;
 }
+
+// ── Per-item breakdowns (Methods, Recipes, Grinders, Prep tools) ──
+
+// One series per key over the buckets: the `keep` busiest keys, the rest
+// summed into OTHER (left out when `other` is false, e.g. for prep tools,
+// where one brew counts under several and an "Other" total means nothing).
+export function seriesByKey(
+  brews: readonly StatsBrew[],
+  buckets: readonly string[],
+  g: Granularity,
+  keys: (b: StatsBrew) => string | readonly string[] | null,
+  options: { value?: (b: StatsBrew) => number | null; keep?: number; other?: boolean } = {},
+): Array<{ key: string; data: number[] }> {
+  const { value = () => 1, keep = 7, other = true } = options;
+  const top = countBy(brews, keys).slice(0, keep).map((c) => c.key);
+  const has = (b: StatsBrew, key: string) => {
+    const k = keys(b);
+    return k === null ? false : typeof k === 'string' ? k === key : k.includes(key);
+  };
+  const out = top.map((key) => ({ key, data: sumByBucket(brews.filter((b) => has(b, key)), buckets, g, value) }));
+  if (other) {
+    const rest = brews.filter((b) => {
+      const k = keys(b);
+      return k !== null && (typeof k === 'string' ? [k] : k).length > 0 && !top.some((key) => has(b, key));
+    });
+    if (rest.length) out.push({ key: OTHER, data: sumByBucket(rest, buckets, g, value) });
+  }
+  return out;
+}
+
+// Rated brews with and without each tool: the mean rating either side, with n.
+export function ratingWithWithout(brews: readonly StatsBrew[], toolIds: readonly string[]): Array<{ key: string; with: { mean: number; n: number } | null; without: { mean: number; n: number } | null }> {
+  const rated = brews.filter((b) => b.rating !== null);
+  const mean = (list: StatsBrew[]) => (list.length ? { mean: Math.round((list.reduce((s, b) => s + b.rating!, 0) / list.length) * 100) / 100, n: list.length } : null);
+  return toolIds.map((key) => ({ key, with: mean(rated.filter((b) => b.toolIds.includes(key))), without: mean(rated.filter((b) => !b.toolIds.includes(key))) }));
+}
+
+export type FinishFit = 'early' | 'inside' | 'late';
+type FinishWindow = { expectedFinishMinSec: number | null; expectedFinishMaxSec: number | null };
+// Where the brew's time landed against its finish window: its own (rapid
+// cold), else its recipe's; null without one.
+export function finishFit(brew: Pick<StatsBrew, 'timeSec'> & FinishWindow, recipe?: FinishWindow): FinishFit | null {
+  const own = brew.expectedFinishMinSec !== null && brew.expectedFinishMaxSec !== null;
+  const min = own ? brew.expectedFinishMinSec : (recipe?.expectedFinishMinSec ?? null);
+  const max = own ? brew.expectedFinishMaxSec : (recipe?.expectedFinishMaxSec ?? null);
+  if (min === null || max === null || brew.timeSec <= 0) return null;
+  return brew.timeSec < min ? 'early' : brew.timeSec > max ? 'late' : 'inside';
+}

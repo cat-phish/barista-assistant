@@ -9,6 +9,9 @@ import {
   bucketRange,
   countBy,
   cumulative,
+  finishFit,
+  ratingWithWithout,
+  seriesByKey,
   formatDuration,
   formatWeight,
   freezeState,
@@ -169,5 +172,50 @@ describe('formatting', () => {
     expect(formatDuration(45)).toBe('45 s');
     expect(formatWeight(850.4)).toBe('850 g');
     expect(formatWeight(1240)).toBe('1.24 kg');
+  });
+});
+
+describe('per-item breakdowns', () => {
+  const buckets = ['2026-10-20', '2026-10-21'];
+  const on21 = '2026-10-21T15:00:00.000Z';
+  const brews = [
+    brew({ grinderId: 'a', toolIds: ['wdt'], rating: 5 }),
+    brew({ grinderId: 'a', toolIds: ['wdt', 'rdt'], rating: 3, timestamp: on21 }),
+    brew({ grinderId: 'b', rating: 2, timestamp: on21 }),
+    brew({ grinderId: 'c', toolIds: ['rdt'] }),
+    brew({ grinderId: null }),
+  ];
+  it('splits the busiest keys into series and folds the rest into Other', () => {
+    expect(seriesByKey(brews, buckets, 'day', (b) => b.grinderId, { keep: 1 })).toEqual([
+      { key: 'a', data: [1, 1] },
+      { key: 'Other', data: [1, 1] },
+    ]);
+    expect(seriesByKey(brews, buckets, 'day', (b) => b.grinderId, { value: (b) => b.doseGrams, keep: 2 })).toEqual([
+      { key: 'a', data: [15, 15] },
+      { key: 'b', data: [0, 15] },
+      { key: 'Other', data: [15, 0] },
+    ]);
+  });
+  it('counts a brew under each of its tools, with no Other', () => {
+    expect(seriesByKey(brews, buckets, 'day', (b) => b.toolIds, { other: false })).toEqual([
+      { key: 'rdt', data: [1, 1] },
+      { key: 'wdt', data: [1, 1] },
+    ]);
+  });
+  it('compares the rating with and without a tool', () => {
+    expect(ratingWithWithout(brews, ['wdt', 'rdt'])).toEqual([
+      { key: 'wdt', with: { mean: 4, n: 2 }, without: { mean: 2, n: 1 } },
+      { key: 'rdt', with: { mean: 3, n: 1 }, without: { mean: 3.5, n: 2 } },
+    ]);
+  });
+  it('places the time against the finish window', () => {
+    const w = { expectedFinishMinSec: 150, expectedFinishMaxSec: 180 };
+    expect(finishFit({ timeSec: 140, ...w })).toBe('early');
+    expect(finishFit({ timeSec: 180, ...w })).toBe('inside');
+    expect(finishFit({ timeSec: 200, ...w })).toBe('late');
+    const none = { expectedFinishMinSec: null, expectedFinishMaxSec: null };
+    expect(finishFit({ timeSec: 160, ...none })).toBeNull();
+    expect(finishFit({ timeSec: 160, ...none }, w)).toBe('inside'); // the recipe's
+    expect(finishFit({ timeSec: 160, ...w }, { expectedFinishMinSec: 100, expectedFinishMaxSec: 120 })).toBe('inside'); // its own wins
   });
 });

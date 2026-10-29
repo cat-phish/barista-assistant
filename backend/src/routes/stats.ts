@@ -96,7 +96,7 @@ export interface StatsResponse {
     brewers: Array<Named & { methodId: string | null }>;
     methods: Named[];
     styles: Array<Named & { brewsLike: RecipeStyle }>;
-    recipes: Named[];
+    recipes: Array<Named & { expectedFinishMinSec: number | null; expectedFinishMaxSec: number | null }>;
     grinders: Named[];
     tools: Named[];
     problems: Named[];
@@ -269,7 +269,10 @@ async function loadLookups(workspaceId: string): Promise<StatsResponse["lookups"
       .from(recipeStyles)
       .where(eq(recipeStyles.workspaceId, workspaceId))
       .orderBy(asc(recipeStyles.position)),
-    db.select({ id: recipes.id, name: recipes.name }).from(recipes).where(eq(recipes.workspaceId, workspaceId)),
+    db
+      .select({ id: recipes.id, name: recipes.name, expectedFinishMinSec: recipes.expectedFinishMinSec, expectedFinishMaxSec: recipes.expectedFinishMaxSec })
+      .from(recipes)
+      .where(eq(recipes.workspaceId, workspaceId)),
     db.select({ id: grinders.id, name: grinders.name }).from(grinders).where(eq(grinders.workspaceId, workspaceId)),
     db.select({ id: prepTools.id, name: prepTools.name }).from(prepTools).where(eq(prepTools.workspaceId, workspaceId)).orderBy(asc(prepTools.position)),
     db.select({ id: brewProblems.id, name: brewProblems.name }).from(brewProblems).where(eq(brewProblems.workspaceId, workspaceId)).orderBy(asc(brewProblems.position)),
