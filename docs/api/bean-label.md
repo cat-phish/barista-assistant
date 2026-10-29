@@ -47,6 +47,18 @@ bean label" section. It isn't retried: the person presses the button again.
 - A field the workspace hides (Settings → Fields) is shown when it's filled
   or suggested.
 
+**Leaving while it reads:** the read runs app-wide
+(`frontend/src/stores/labelRead.ts`), not in the form, so you can go
+elsewhere in the app (start a timer) while it works. A notice under the
+header says how it's going, then "Back to the bean"; the answer is applied
+when that bean's form (or Add bean) is open again. One read at a time; an
+older read's late answer is ignored. An unsaved Add bean (or Duplicate)
+form is kept in memory meanwhile, fields and picked photos
+(`stores/beanDraft.ts`): coming back says "Picked up where you left off ·
+Start over"; saving or Cancel drops it. A reload loses both. "Web says"
+suggestions from an earlier read stay until used, or until a later read
+says something about that field.
+
 **The switch:** workspace setting `readLabels` (default `true`,
 `workspaces.md` §2), under Settings → AI → **Bean labels**. The buttons
 show when it's on (the bean form is for those who can edit).

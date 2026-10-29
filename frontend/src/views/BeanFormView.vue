@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch, type Ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { beanProcessesApi } from '../api/beanProcesses';
 import { beansApi, type BeanInput } from '../api/beans';
@@ -13,6 +13,8 @@ import { localDateInput, parseDecimal, toDateInput } from '../lib/format';
 import { ALTITUDE_LABELS, altitudeText, parseAltitude } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import { useWorkspaceStore } from '../stores/workspace';
+import { useBeanDraftStore } from '../stores/beanDraft';
+import { labelReadKey, useLabelReadStore } from '../stores/labelRead';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
 import type { Bean, BeanPhoto, BeanProcess, LabelReadResult, BlendType, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from '../api/types';
 import { COUNTRY_AREAS, ORIGIN_AREAS, areaForCountry } from '../lib/origins';
@@ -76,6 +78,7 @@ const notes = ref('');
 // held by BeanPhotos until it's saved.
 const photos = ref<BeanPhoto[]>([]);
 const photoPicker = ref<InstanceType<typeof BeanPhotos> | null>(null);
+const labelCard = ref<InstanceType<typeof LabelCard> | null>(null);
 
 const countries = Object.keys(COUNTRY_AREAS);
 // A known country fills in its growing area, unless one is already chosen.
@@ -200,7 +203,12 @@ function applyLabel({ fields, web, webError }: LabelReadResult): void {
   // A filled field shows even if the workspace hides it.
   const shown = filled.flatMap((key) => LABEL_FIELD_KEYS[key] ?? []).concat(Object.keys(offered).flatMap((key) => LABEL_FIELD_KEYS[key as TextKey] ?? []));
   reveal(Object.fromEntries(shown.map((key) => [key as FieldKey, true])));
-  suggestions.value = offered;
+  // What an earlier web lookup found stays, unless this read says something
+  // about that field or the field already says it.
+  const kept = Object.fromEntries(
+    Object.entries(suggestions.value).filter(([key, s]) => s.source && !(key in offered) && refs[key as TextKey].value.trim() !== s.value.trim()),
+  );
+  suggestions.value = { ...kept, ...offered };
   const fromWeb = Object.values(offered).filter((s) => s.source).length;
   const differ = Object.keys(offered).length - fromWeb;
   const parts = [
@@ -295,6 +303,88 @@ function fillCopy(bean: Bean): void {
   copyOf.value = `${bean.roasterName} ${bean.beanName}`;
 }
 
+// The label read runs in a store, so it carries on if you leave this page
+// (docs/api/bean-label.md §4d): its answer is applied once the form is ready,
+// now or when you come back.
+const labelReads = useLabelReadStore();
+const readKey = labelReadKey(props.id);
+const readName = computed(() => `${roasterName.value} ${beanName.value}`.trim() || (editing.value ? 'this bean' : 'the new bean'));
+const ready = ref(false); // loaded, or a kept draft restored: answers apply from then
+watch(
+  [() => labelReads.current?.status, ready],
+  () => {
+    if (!ready.value) return;
+    const result = labelReads.take(readKey);
+    if (result) applyLabel(result);
+  },
+  { immediate: true },
+);
+
+// Add bean keeps what's entered while you're elsewhere in the app
+// (stores/beanDraft.ts); saving, Cancel and Start over drop it.
+const drafts = useBeanDraftStore();
+const draftRefs: Record<string, Ref<unknown>> = {
+  roasterName, beanName, process, originArea, country, region, producer, altitude, flavorProfile, blendType, decaf, roastType,
+  roastDate, detailedRoastLevel, inventory, price, currency, bagWeight, purchaseDate, greenSupplier, batchNumber, weightLoss,
+  website, showOnPublicMenu, rating, notes, level, sourceDetailed, savedDetailed, savedRoastLevel, copyOf, suggestions, labelSummary,
+};
+const snapshot = () => Object.fromEntries(Object.entries(draftRefs).map(([name, r]) => [name, r.value]));
+let blank = ''; // the form as it opened, to tell whether anything was entered
+const restored = ref(false); // picked up a kept draft
+const resetKey = ref(0); // remounts the photo cards on Start over
+const draftPhotos = ref<File[]>([]);
+const draftLabelPhotos = ref<File[]>([]);
+let finished = false; // saved or cancelled: nothing to keep
+
+const draftFits = () => !editing.value && drafts.draft?.workspaceId === workspaces.current?.id && drafts.draft?.from === copyFrom;
+function restoreDraft(): boolean {
+  const d = drafts.draft;
+  if (!d || !draftFits()) return false;
+  for (const [name, value] of Object.entries(d.values)) if (name in draftRefs) draftRefs[name]!.value = value;
+  draftPhotos.value = d.photos;
+  draftLabelPhotos.value = d.labelPhotos;
+  revealEntered();
+  restored.value = true;
+  return true;
+}
+// Hidden fields that have something in them stay shown.
+function revealEntered(): void {
+  reveal({
+    'bean.process': process.value, 'bean.blendType': blendType.value, 'bean.origin': originArea.value || country.value,
+    'bean.region': region.value, 'bean.producer': producer.value, 'bean.altitude': altitude.value, 'bean.flavorProfile': flavorProfile.value,
+    'bean.decaf': decaf.value || null, 'bean.roastType': roastType.value, 'bean.roastDate': roastDate.value,
+    'bean.roastLevel': detailedRoastLevel.value || level.value, 'bean.batchNumber': batchNumber.value, 'bean.weightLoss': weightLoss.value,
+    'bean.price': price.value, 'bean.bagWeight': bagWeight.value, 'bean.purchaseDate': purchaseDate.value,
+    'bean.greenSupplier': greenSupplier.value, 'bean.website': website.value, 'bean.rating': rating.value, 'bean.notes': notes.value,
+    'bean.photos': draftPhotos.value.length ? draftPhotos.value : null,
+  });
+}
+function keepDraft(): void {
+  const ws = workspaces.current?.id;
+  if (editing.value || finished || !ws) return;
+  const photos = photoPicker.value?.pendingFiles() ?? [];
+  const labelPhotos = labelCard.value?.extraFiles() ?? [];
+  const reading = labelReads.current?.key === readKey;
+  const values = snapshot();
+  if (JSON.stringify(values) === blank && !photos.length && !labelPhotos.length && !reading) drafts.clear();
+  else drafts.keep({ workspaceId: ws, from: copyFrom, values, photos, labelPhotos });
+}
+onBeforeUnmount(keepDraft);
+function startOver(): void {
+  drafts.clear();
+  if (labelReads.current?.key === readKey) labelReads.dismiss();
+  for (const [name, value] of Object.entries(JSON.parse(blank) as Record<string, unknown>)) draftRefs[name]!.value = value;
+  draftPhotos.value = [];
+  draftLabelPhotos.value = [];
+  restored.value = false;
+  submitted.value = false;
+  resetKey.value++;
+}
+function cancel(): void {
+  finished = true;
+  if (!editing.value) drafts.clear();
+}
+
 onMounted(async () => {
   const ws = workspaces.current?.id;
   if (ws) {
@@ -303,7 +393,11 @@ onMounted(async () => {
       .then((r) => (processes.value = r.processes))
       .catch(() => (processes.value = [])); // the select just offers "Not sure"
   }
+  // The form as it opens (for Start over), then what was kept, if any.
   await load();
+  blank = JSON.stringify(snapshot());
+  restoreDraft();
+  ready.value = true;
 });
 
 async function load(): Promise<void> {
@@ -380,6 +474,8 @@ async function save(): Promise<void> {
     if (props.id) await beansApi.update(ws, props.id, input);
     else {
       const { bean } = await beansApi.create(ws, input);
+      finished = true;
+      drafts.clear();
       const photoError = (await photoPicker.value?.uploadPending(bean.id)) ?? '';
       if (photoError) {
         // The bean is saved: carry on editing it, with the photos that made it.
@@ -391,6 +487,7 @@ async function save(): Promise<void> {
       }
     }
     if (input.priceCurrency) rememberCurrency(input.priceCurrency);
+    finished = true;
     await router.push({ name: 'beans' });
   } catch (err) {
     error.value = errorMessage(err);
@@ -410,20 +507,35 @@ async function save(): Promise<void> {
       A copy of {{ copyOf }}, for a new bag: set its roast date and stock. The original stays as it is.
     </p>
     <p v-if="loading" class="muted" aria-live="polite">Loading…</p>
+    <p v-else-if="restored" class="muted small" role="status">
+      Picked up where you left off.
+      <button type="button" class="btn-link small" @click="startOver">Start over</button>
+    </p>
 
     <form v-else class="stack" novalidate @submit.prevent="save">
       <section v-if="show('bean.photos') && workspaces.current" class="card stack">
         <h2>Photos</h2>
-        <BeanPhotos ref="photoPicker" v-model="photos" :workspace-id="workspaces.current.id" :bean-id="props.id ?? null" />
+        <BeanPhotos
+          :key="resetKey"
+          ref="photoPicker"
+          v-model="photos"
+          :workspace-id="workspaces.current.id"
+          :bean-id="props.id ?? null"
+          :initial-pending="draftPhotos"
+        />
       </section>
       <section v-if="settings.readLabels && workspaces.current" class="card stack">
         <h2>Fill in with AI</h2>
         <LabelCard
+          :key="resetKey"
+          ref="labelCard"
           :workspace-id="workspaces.current.id"
           :bean-photos="show('bean.photos') ? (photoPicker?.photoSources ?? []) : []"
           :web-lookup="settings.labelWebLookup"
           :website="website"
-          @label="applyLabel"
+          :read-key="readKey"
+          :name="readName"
+          :initial-extras="draftLabelPhotos"
         >
           <p v-if="labelSummary" class="small" role="status">{{ labelSummary }}</p>
         </LabelCard>
@@ -636,7 +748,7 @@ async function save(): Promise<void> {
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
       <p v-else-if="submitted && !valid" class="form-error" role="alert">Fix the highlighted fields to save.</p>
       <div class="buttons">
-        <RouterLink class="btn btn-secondary" :to="{ name: 'beans' }">Cancel</RouterLink>
+        <RouterLink class="btn btn-secondary" :to="{ name: 'beans' }" @click="cancel">Cancel</RouterLink>
         <button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? 'Saving…' : 'Save bean' }}</button>
       </div>
     </form>

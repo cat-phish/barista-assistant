@@ -3,35 +3,40 @@
 // photos taken or picked here are only for the read (shown, not kept), and
 // the bean's photos can go with them. Nothing is read until the button.
 // With the workspace's labelWebLookup, it can also look the bean up on the
-// web afterwards: ticked per read, as it takes longer.
+// web afterwards: ticked per read, as it takes longer. The read runs in
+// stores/labelRead.ts, so it carries on if you leave; the form takes the answer.
 import { computed, onBeforeUnmount, ref } from 'vue';
-import type { LabelReadResult } from '../api/types';
-import { useLabelRead } from '../composables/useLabelRead';
 import { LABEL_MAX_IMAGES, labelImages } from '../lib/labelFill';
+import { useLabelReadStore, type LabelReadKey } from '../stores/labelRead';
 
 const props = defineProps<{
   workspaceId: string;
   beanPhotos: ReadonlyArray<() => Promise<Blob>>; // cover first; [] when photos are hidden
   webLookup: boolean; // the workspace allows "Also look it up on the web"
   website: string; // the form's, to keep the search to the roaster's site
+  readKey: LabelReadKey; // which form the answer is for
+  name: string; // the bean, for the notice while you're elsewhere
+  initialExtras?: File[]; // picked before you left Add bean (stores/beanDraft.ts)
 }>();
-const emit = defineEmits<{ label: [result: LabelReadResult] }>();
 
 interface Extra {
   key: number;
   file: File;
   url: string;
 }
-const extras = ref<Extra[]>([]);
 let nextKey = 0;
+const extras = ref<Extra[]>((props.initialExtras ?? []).map((file) => ({ key: nextKey++, file, url: URL.createObjectURL(file) })));
 const includeBean = ref(true);
 const lookUp = ref(false); // unticked each time: slower, and costs more
 const note = ref('');
 const camera = ref<HTMLInputElement | null>(null);
 const chooser = ref<HTMLInputElement | null>(null);
 
-const { reading, error, read } = useLabelRead(() => props.workspaceId, (result) => emit('label', result));
-const searching = ref(false); // this read includes a web lookup
+const reads = useLabelReadStore();
+const mine = computed(() => (reads.current?.key === props.readKey ? reads.current : null));
+const reading = computed(() => mine.value?.status === 'reading');
+const searching = computed(() => !!mine.value?.web); // this read includes a web lookup
+const error = computed(() => (mine.value?.status === 'failed' ? mine.value.error : ''));
 
 const sending = computed(() => labelImages<File | (() => Promise<Blob>)>(extras.value.map((e) => e.file), includeBean.value ? props.beanPhotos : []));
 const count = computed(() => sending.value.images.length);
@@ -53,9 +58,10 @@ function remove(key: number): void {
 async function readLabel(): Promise<void> {
   const { images, left } = sending.value;
   note.value = left ? `Read the first ${images.length} photos; ${left} left out.` : '';
-  searching.value = props.webLookup && lookUp.value;
-  await read(images, searching.value ? { web: true, website: props.website.trim() || null } : {});
+  const web = props.webLookup && lookUp.value;
+  await reads.start(props.readKey, props.name, props.workspaceId, images, web ? { web, website: props.website.trim() || null } : {});
 }
+defineExpose({ extraFiles: () => extras.value.map((e) => e.file) });
 
 onBeforeUnmount(() => extras.value.forEach((e) => URL.revokeObjectURL(e.url)));
 </script>
@@ -100,8 +106,8 @@ onBeforeUnmount(() => extras.value.forEach((e) => URL.revokeObjectURL(e.url)));
         !reading
           ? ''
           : searching
-            ? 'Reading the label, then looking it up on the web: this can take a couple of minutes. Keep this page open.'
-            : 'Still reading the label: this can take half a minute. Keep this page open.'
+            ? 'Reading the label, then looking it up on the web: this can take a couple of minutes. You can leave this page meanwhile.'
+            : 'Still reading the label: this can take half a minute. You can leave this page meanwhile.'
       }}
     </p>
     <p v-if="note" class="muted small">{{ note }}</p>

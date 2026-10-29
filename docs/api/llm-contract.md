@@ -409,11 +409,13 @@ retried. `worker/src/label.ts`:
    vision model), with the `web_search` tool and
    `include: ["web_search_call.action.sources"]`:
    - **Sent:** the `labelWeb` section ("Looking a bean up on the web",
-     editable), the asker's label instructions and `end` as `instructions`;
+     editable; it asks for this coffee's own product page, not the home
+     page), the asker's label instructions and `end` as `instructions`;
      as `input` what the label says (not the photos, roast date or batch
      number) and the processes. When the roaster's site is known (the
      label's `website`, else the job's `website`, the form's), the tool is
-     limited to it (`filters.allowed_domains`).
+     limited to it (`filters.allowed_domains`). `search_context_size:
+     "high"`, so more of each page is read.
    - **Schema** (`labelWebJsonSchema`, strict): for each of
      `LABEL_WEB_FIELDS` (`@barista/shared/jobs`), `null` or
      `{ value, url }`, the value typed as in step 2.

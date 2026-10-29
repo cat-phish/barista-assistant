@@ -78,7 +78,9 @@ work is in `roadmap.md`.
   They can also allow **Also look it up on the web** (off by default): ticked
   for a read, it takes longer and searches the roaster's site for what the
   label leaves out; each find shows as "Web says: X · source · Use", never
-  filled in by itself.
+  filled in by itself. You can leave the page while it reads (a notice
+  says when it's done, "Back to the bean"); an unsaved new bean is kept
+  until you're back.
   (`docs/api/bean-label.md` §4d)
 
 ## Bar setup

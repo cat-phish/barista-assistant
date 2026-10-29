@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useBrewSessionStore } from '../stores/brewSession';
 import { useWorkspaceStore } from '../stores/workspace';
+import LabelReadNotice from './LabelReadNotice.vue';
 
 const auth = useAuthStore();
 const workspaces = useWorkspaceStore();
@@ -55,6 +56,7 @@ function onBrewClick(): void {
     <RouterLink :to="{ name: 'recipes' }" :class="{ active: ['/recipes', '/drinks', '/ingredients'].some((p) => route.path.startsWith(p)) }">Recipes</RouterLink>
     <RouterLink :to="{ name: 'brewers' }" :class="{ active: route.path.startsWith('/setup') }">Bar setup</RouterLink>
   </nav>
+  <LabelReadNotice />
 </template>
 
 <style scoped>
