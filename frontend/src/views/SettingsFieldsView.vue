@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Settings → Fields (docs/api/workspaces.md §2, "Field visibility"): which
-// optional fields the brew, bean and recipe forms show, for everyone in the
+// optional fields the brew, bean, recipe (and green coffee) forms show, for everyone in the
 // workspace. Owners change them; everyone else sees them.
 import { computed, ref } from 'vue';
 import { errorMessage } from '../api/client';
@@ -11,13 +11,14 @@ import { FIELD_FORMS, fieldsFor, type FieldForm } from '../lib/fields';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
-const { hiddenFields } = usePreferences();
+const { hiddenFields, settings } = usePreferences();
 const isOwner = computed(() => workspaces.current?.role === 'owner');
 const saving = ref(false);
 const error = ref('');
 const activeForm = ref<FieldForm | null>(null); // the section last changed
 const saved = ref(false);
-const FORMS = Object.keys(FIELD_FORMS) as FieldForm[];
+// The green coffee form is only there with home roasting on.
+const FORMS = computed(() => (Object.keys(FIELD_FORMS) as FieldForm[]).filter((f) => f !== 'green' || settings.value.homeRoasting));
 
 async function toggle(key: string, form: FieldForm, shown: boolean): Promise<void> {
   const ws = workspaces.current?.id;

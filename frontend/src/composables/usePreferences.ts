@@ -19,7 +19,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   startDelays: {},
   steepReminders: true,
 };
-export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: 'light', roastScale: 'names', hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: 'beanRecipe', suggestMaxBrews: 5, suggestAlternatives: [], readLabels: true, labelWebLookup: false, labelWebContext: 'high' };
+export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: 'light', roastScale: 'names', hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: 'beanRecipe', suggestMaxBrews: 5, suggestAlternatives: [], readLabels: true, labelWebLookup: false, labelWebContext: 'high', homeRoasting: false, homeRoasterName: 'Home roast', restDays: { filter: 7, espresso: 14, omni: 10 } };
 
 // The signed-in person's display units and the current workspace's settings.
 export function usePreferences() {

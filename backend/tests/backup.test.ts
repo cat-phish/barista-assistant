@@ -23,9 +23,11 @@ async function populated() {
   expect((await owner.agent.patch(`${base}/settings`).send({ roastScale: "levels", hiddenFields: ["brew.tds"] })).status).toBe(200);
   expect((await owner.agent.patch(`${base}/menu`).send({ title: "Our bar", currency: "USD" })).status).toBe(200);
 
-  await post("bean-processes", { name: "Yeast inoculated" });
+  const yeast = (await post("bean-processes", { name: "Yeast inoculated" })).process.id as string;
   await post("brewer-methods", { name: "Siphon", behaviour: "filter" });
   const c40 = (await post("grinders", { name: "C40" })).grinder.id as string;
+  await post("roasting-machines", { name: "Nano 7", capacityGrams: 120 });
+  await post("green-coffees", { name: "Guji", processId: yeast, varieties: ["74110"], species: ["arabica"], originArea: "africa", weightBoughtGrams: 1000 });
   const water = (await post("water-profiles", { name: "TWW", tdsPpm: 120 })).waterProfile.id as string;
   const stalled = (await post("brew-problems", { name: "Paper taste", methodKind: "filter" })).problem.id as string;
   const v60 = await brewerId(owner, ws.id, "V60");
@@ -75,7 +77,7 @@ async function populated() {
 
 // What the workspace looks like through the API, without IDs (they differ
 // after a restore) and with lists in a stable order.
-const LISTS = ["bean-processes", "brewer-methods", "recipe-styles", "grinders", "water-profiles", "prep-tools", "brew-problems", "brewers", "beans", "recipes", "ingredients", "drink-categories", "drinks", "menu", "brew-logs"];
+const LISTS = ["bean-processes", "brewer-methods", "recipe-styles", "grinders", "roasting-machines", "green-coffees", "water-profiles", "prep-tools", "brew-problems", "brewers", "beans", "recipes", "ingredients", "drink-categories", "drinks", "menu", "brew-logs"];
 function strip(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(strip);
   if (typeof value !== "object" || value === null) return value;

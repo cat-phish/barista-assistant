@@ -62,7 +62,12 @@ export interface WorkspaceSettings {
   readLabels: boolean; // "Fill in with AI" on the bean form (bean-label.md §4d)
   labelWebLookup: boolean; // its "Also look it up on the web" (off by default)
   labelWebContext: LabelWebContext; // default 'high'
+  // Home roasting (workspaces.md §2): the Brew | Roast switch and roast mode.
+  homeRoasting: boolean;
+  homeRoasterName: string; // the roaster name on beans roasts create
+  restDays: Record<RoastType, number>; // days a roast rests, by roast type (0–60)
 }
+export const MAX_REST_DAYS = 60;
 export const AUTO_ANALYZE_DELAYS = [0, 5, 10, 15, 30] as const;
 export type AutoAnalyzeDelay = (typeof AUTO_ANALYZE_DELAYS)[number];
 // The earlier brews "Suggest parameters" sends (docs/api/analysis.md §8b);
@@ -253,6 +258,45 @@ export interface Grinder extends GrinderDetails {
   archivedAt: string | null; // set = archived (hidden from pickers, kept in history)
   createdAt: string; // date added (ISO)
 }
+
+// docs/api/roasting-machines.md §3f: what a home roaster roasts on.
+export interface RoastingMachine {
+  id: string;
+  name: string;
+  notes: string | null;
+  capacityGrams: number | null; // the largest batch of green coffee
+  archivedAt: string | null; // set = archived (hidden from pickers, kept in history)
+  createdAt: string;
+}
+export type RoastingMachineInput = Pick<RoastingMachine, 'name' | 'notes' | 'capacityGrams'>;
+
+// docs/api/green-coffees.md §4e: green stock. The origin fields are a bean's.
+export interface GreenCoffeeDetails {
+  originArea: OriginArea | null;
+  country: string | null;
+  region: string | null;
+  producer: string | null;
+  altitudeMasl: number | null;
+  varieties: string[] | null;
+  species: CoffeeSpecies[] | null;
+  processId: string | null;
+  supplier: string | null;
+  lot: string | null;
+  priceAmount: number | null; // the whole purchase: with priceCurrency, both or neither
+  priceCurrency: string | null;
+  weightBoughtGrams: number | null;
+  weightLeftGrams: number;
+  lowStockGrams: number | null; // below it, the stock is low; null = never
+  purchaseDate: string | null; // YYYY-MM-DD
+  notes: string | null;
+}
+export interface GreenCoffee extends GreenCoffeeDetails {
+  id: string;
+  name: string;
+  archivedAt: string | null; // set = archived (used up, or not roasting it now)
+  createdAt: string;
+}
+export type GreenCoffeeInput = GreenCoffeeDetails & { name: string };
 
 // docs/api/water-profiles.md §3c: every figure in mg/L (ppm), GH and KH as CaCO3.
 export const WATER_FIGURES = [

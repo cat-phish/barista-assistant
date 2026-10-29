@@ -1,16 +1,21 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useBrewSessionStore } from '../stores/brewSession';
 import { useWorkspaceStore } from '../stores/workspace';
+import { headerMode } from '../lib/mode';
 import LabelReadNotice from './LabelReadNotice.vue';
+import ModeSwitch from './ModeSwitch.vue';
 
 const auth = useAuthStore();
 const workspaces = useWorkspaceStore();
 const router = useRouter();
 const route = useRoute();
 const loggingOut = ref(false);
+// Home roasting (docs/api/workspaces.md §2): roast mode has its own tabs.
+const roasting = computed(() => !!workspaces.current?.settings.homeRoasting);
+const mode = computed(() => (roasting.value ? headerMode(route.path, workspaces.current?.id ?? null) : 'brew'));
 
 async function logout(): Promise<void> {
   loggingOut.value = true;
@@ -37,7 +42,10 @@ function onBrewClick(): void {
       <img src="/favicon.svg" alt="" width="32" height="32" />
       <div>
         <strong>{{ workspaces.current?.name ?? 'Coffee Brew Journal' }}</strong>
-        <RouterLink v-if="workspaces.current" class="switch" :to="{ name: 'workspaces' }">Switch workspace</RouterLink>
+        <span v-if="workspaces.current" class="under-name">
+          <ModeSwitch v-if="roasting" />
+          <RouterLink class="switch" :to="{ name: 'workspaces' }">Switch workspace</RouterLink>
+        </span>
       </div>
     </div>
     <div class="account">
@@ -48,7 +56,12 @@ function onBrewClick(): void {
       <button class="btn btn-secondary" type="button" :disabled="loggingOut" @click="logout">Log out</button>
     </div>
   </header>
-  <nav v-if="workspaces.current" class="tabs" aria-label="Sections">
+  <!-- Roast mode's tabs: Roast, Roasts and Resting join as the roast log is built (docs/backlog.md item 15). -->
+  <nav v-if="workspaces.current && mode === 'roast'" class="tabs" aria-label="Roasting sections">
+    <RouterLink :to="{ name: 'green-coffees' }" :class="{ active: route.path.startsWith('/roast/green') }">Green</RouterLink>
+    <RouterLink :to="{ name: 'roasting-machines' }" :class="{ active: route.path.startsWith('/roast/setup') }">Roasters</RouterLink>
+  </nav>
+  <nav v-else-if="workspaces.current" class="tabs" aria-label="Sections">
     <RouterLink :to="{ name: 'brew' }" active-class="active" @click="onBrewClick">Brew</RouterLink>
     <RouterLink :to="{ name: 'journal' }" active-class="active">Journal</RouterLink>
     <RouterLink :to="{ name: 'beans' }" active-class="active">Beans</RouterLink>
@@ -84,6 +97,12 @@ function onBrewClick(): void {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.under-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--space-2);
 }
 .switch {
   font-size: 0.85rem;

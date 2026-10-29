@@ -48,6 +48,41 @@ interface WorkspaceParams {
   workspaceId: string;
 }
 
+// Lists (docs/api/beans.md §4): each entry once, ignoring case; [] is
+// stored as null. Shared with green coffees (docs/api/green-coffees.md §4e).
+export const varietiesSchema = z
+  .array(z.string().trim().min(1).max(100))
+  .max(20)
+  .nullable()
+  .transform((list) => {
+    const out = new Map<string, string>();
+    for (const v of list ?? []) if (!out.has(v.toLowerCase())) out.set(v.toLowerCase(), v);
+    return out.size ? [...out.values()] : null;
+  })
+  .optional();
+export const speciesSchema = z
+  .array(z.enum(COFFEE_SPECIES))
+  .nullable()
+  .transform((list) => {
+    const out = COFFEE_SPECIES.filter((s) => list?.includes(s));
+    return out.length ? out : null;
+  })
+  .optional();
+export const priceAmountSchema = decimalSchema({ min: 0, max: 1_000_000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional();
+export const priceCurrencySchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z]{3}$/, "must be a 3-letter currency code, e.g. USD")
+  .nullable()
+  .optional();
+// Allows a day ahead for time zones, like freeze dates.
+export const purchaseDateSchema = z.iso
+  .date()
+  .refine((d) => d <= serverToday(1), "can't be in the future")
+  .nullable()
+  .optional();
+
 const beanFields = {
   roasterName: z.string().trim().min(1).max(255),
   beanName: z.string().trim().min(1).max(255),
@@ -64,26 +99,8 @@ const beanFields = {
   detailedRoastLevel: z.enum(DETAILED_ROAST_LEVELS).nullable().optional(),
   blendType: z.enum(BLEND_TYPES).nullable().optional(),
   decaf: z.boolean(),
-  // Lists (docs/api/beans.md §4): each entry once, ignoring case; [] is
-  // stored as null.
-  varieties: z
-    .array(z.string().trim().min(1).max(100))
-    .max(20)
-    .nullable()
-    .transform((list) => {
-      const out = new Map<string, string>();
-      for (const v of list ?? []) if (!out.has(v.toLowerCase())) out.set(v.toLowerCase(), v);
-      return out.size ? [...out.values()] : null;
-    })
-    .optional(),
-  species: z
-    .array(z.enum(COFFEE_SPECIES))
-    .nullable()
-    .transform((list) => {
-      const out = COFFEE_SPECIES.filter((s) => list?.includes(s));
-      return out.length ? out : null;
-    })
-    .optional(),
+  varieties: varietiesSchema,
+  species: speciesSchema,
   // Shown as a link, so only http(s): no javascript: or data: URLs.
   website: z
     .string()
@@ -93,14 +110,8 @@ const beanFields = {
     .transform((s) => (s ? s : null))
     .refine((s) => s === null || isHttpUrl(s), "must be an http or https URL")
     .optional(),
-  priceAmount: decimalSchema({ min: 0, max: 1_000_000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
-  priceCurrency: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(/^[A-Z]{3}$/, "must be a 3-letter currency code, e.g. USD")
-    .nullable()
-    .optional(),
+  priceAmount: priceAmountSchema,
+  priceCurrency: priceCurrencySchema,
   bagWeightGrams: z.number().int().min(1).max(100_000).nullable().optional(),
   // % of the green weight lost in roasting (docs/api/beans.md §4).
   roastWeightLossPercent: decimalSchema({ min: 0, max: 40, scale: 1, exclusiveMin: true }).nullable().optional(),
@@ -111,12 +122,7 @@ const beanFields = {
   region: optionalText(255),
   altitudeMasl: z.number().int().min(0).max(9000).nullable().optional(),
   producer: optionalText(255),
-  // Allows a day ahead for time zones, like freeze dates.
-  purchaseDate: z.iso
-    .date()
-    .refine((d) => d <= serverToday(1), "can't be in the future")
-    .nullable()
-    .optional(),
+  purchaseDate: purchaseDateSchema,
   greenSupplier: optionalText(255),
   // Which roast of this bean, for home roasters (docs/api/beans.md §4).
   batchNumber: optionalText(50),
@@ -140,8 +146,8 @@ const createBeanSchema = z.object({
 });
 
 // A price needs its amount and currency, or neither.
-const PRICE_ERROR = "priceAmount: priceAmount and priceCurrency go together";
-const priceMismatch = (amount: number | null | undefined, currency: string | null | undefined) =>
+export const PRICE_ERROR = "priceAmount: priceAmount and priceCurrency go together";
+export const priceMismatch = (amount: number | null | undefined, currency: string | null | undefined) =>
   (amount ?? null) === null !== ((currency ?? null) === null);
 
 // archived: true archives the bean (keeping the first date), false restores it.
@@ -225,10 +231,10 @@ beansRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<BeanLis
   res.json({ beans: await loadBeans(eq(beans.workspaceId, workspaceId)) });
 });
 
-const PROCESS_ERROR = "processId: not a process of this workspace";
+export const PROCESS_ERROR = "processId: not a process of this workspace";
 // processId must be one of the workspace's own processes (hidden ones too,
 // so a bean keeps its process when edited); null or absent is fine.
-async function processInWorkspace(processId: string | null | undefined, workspaceId: string): Promise<boolean> {
+export async function processInWorkspace(processId: string | null | undefined, workspaceId: string): Promise<boolean> {
   if (!processId) return true;
   const [row] = await db
     .select({ id: beanProcesses.id })

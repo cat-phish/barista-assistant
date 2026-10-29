@@ -434,32 +434,44 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 15. Roasting: green stock, roast logs, resting
 
-- **Status:** idea
+- **Status:** planned (branch 1, `roast-mode`, in progress)
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
   roast results and resting time are tracked in another notebook or not at
   all, and a roast that's ready to drink gets forgotten.
-- **Approach:**
-  - **Green stock:** green coffees (origin, producer, process, supplier,
-    price, weight bought and left).
-  - **Roast log:** green coffee, roaster, green weight in, roasted weight
-    out (weight loss %), drop temperature, development time, profile notes,
-    and an optional curve file or link (e.g. from Artisan).
-    The weight loss fills in the roasted bean's `roastWeightLossPercent`
-    (built: roadmap, Roast weight loss).
-  - **Resting stock:** each roast creates a `bean` (roaster = "home", the
-    roast date, the detailed roast level from roadmap phase 5) marked as resting until
-    a set day, then ready.
-  - **Reminders** when a roast has finished resting or green stock is low,
-    through the notification channels (roadmap: rate later).
-  - Ratings for brews of a roasted bean link back to its roast, so roasts can
-    be compared.
-- **Size:** L (several branches: green stock and roast log, then resting and
-  reminders, then roast comparison).
+- **Decided:**
+  - **Its own mode**, not a part of Beans and not a separate workspace: a
+    **Brew | Roast** switch in the header, shown when the workspace turns
+    on Home roasting (Settings → Defaults). Roast mode lives under
+    `/roast/…`, and each device remembers the last mode it used.
+  - **Roast mode tabs:** Roast (log a roast), Roasts (history), Green (green
+    stock), Resting, Roasters (the roasting machines).
+  - **Rest time:** a workspace default per roast type (filter, espresso,
+    omni), which each roast starts from and can change.
+  - **Times are typed in first;** a live roast timer comes later.
+  - **Roast curves** (Artisan `.alog`): not for now.
+- **Branches:**
+  1. **`roast-mode`:** the setting, the switch, the roast tabs, Roasters
+     (`roasting_machines`) and Green stock (`green_coffees`: origin,
+     producer, process, supplier, price, weight bought and left, a low-stock
+     threshold).
+  2. **`roast-log`:** the `roasts` table and the Roast form: green coffee,
+     machine, green weight in, roasted weight out, charge and drop
+     temperatures, first crack and total time (development time), notes.
+     Saving creates the roasted bean (roaster = the workspace's home roaster
+     name, the roast date, weight loss %, detailed roast level and type, the
+     next batch number) and takes the green weight off the stock; editing
+     the roast keeps its bean in step. Plus the Roasts history and a roast's
+     page.
+  3. **`roast-resting`:** the Resting tab (resting, then ready), a "Resting
+     until …" badge on the bean in brew mode, a rest-done reminder through
+     the notification channels, and a low-green-stock notice.
+  4. **`roast-timer`:** a live timer with First crack and Drop marks,
+     reusing the brew timer's clock and marks.
+  5. **Later:** comparing roasts (how each roast's brews rated), roast stats
+     in Insights, roast details for the AI (rule 9, decided then), curve
+     files if wanted.
+- **Size:** L.
 - **Depends on:** nothing (bean photos are built, for roast photos).
-- **Open questions:**
-  - Its own section, or a part of Beans?
-  - Import roast curves (Artisan `.alog`), or only link to them?
-  - Rest time per roast, or a default by roast type (filter vs. espresso)?
 
 ---
 

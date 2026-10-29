@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, LABEL_WEB_CONTEXTS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_SUGGEST_BREWS, REMEMBER_KEYS, REPEAT_KEEPS, ROAST_LEVELS, ROAST_SCALES, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
+import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, LABEL_WEB_CONTEXTS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_REST_DAYS, MAX_SUGGEST_BREWS, REMEMBER_KEYS, REPEAT_KEEPS, ROAST_LEVELS, ROAST_SCALES, ROAST_TYPES, type RoastType, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
 import { AI_DETAILS } from "@barista/shared/aiDetails";
 import { ROLES } from "./auth/membership.js";
 
@@ -16,6 +16,9 @@ export const alternativeKinds = z
 
 // Settings PATCH bodies (docs/api/workspaces.md §2, auth.md §1): any non-empty
 // subset of the keys; unknown keys are refused so a typo isn't silently kept.
+const restDay = z.number().int().min(0).max(MAX_REST_DAYS);
+const restDayShape = Object.fromEntries(ROAST_TYPES.map((t) => [t, restDay])) as Record<RoastType, typeof restDay>;
+
 export const workspaceSettingsObject = z
   .object({
     recipeRoastLevel: z.enum(ROAST_LEVELS),
@@ -23,7 +26,7 @@ export const workspaceSettingsObject = z
     // Field keys are checked by shape, not a list: the registry lives in the
     // frontend (lib/fields.ts), and an unknown key simply hides nothing.
     hiddenFields: z
-      .array(z.string().regex(/^(brew|bean|recipe)\.[a-zA-Z]+$/, "a field key like brew.tds"))
+      .array(z.string().regex(/^(brew|bean|recipe|green)\.[a-zA-Z]+$/, "a field key like brew.tds"))
       .max(100)
       .refine((keys) => new Set(keys).size === keys.length, "each field once"),
     // What the AI doesn't get (docs/api/llm-contract.md §9); the whole list.
@@ -41,6 +44,10 @@ export const workspaceSettingsObject = z
     readLabels: z.boolean(), // docs/api/bean-label.md §4d
     labelWebLookup: z.boolean(),
     labelWebContext: z.enum(LABEL_WEB_CONTEXTS),
+    // Home roasting (docs/api/workspaces.md §2).
+    homeRoasting: z.boolean(),
+    homeRoasterName: z.string().trim().min(1).max(255),
+    restDays: z.object(restDayShape).strict(),
   })
   .partial()
   .strict();
