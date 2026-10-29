@@ -17,8 +17,8 @@ const saving = ref(false);
 const error = ref('');
 const activeForm = ref<FieldForm | null>(null); // the section last changed
 const saved = ref(false);
-// The green coffee form is only there with home roasting on.
-const FORMS = computed(() => (Object.keys(FIELD_FORMS) as FieldForm[]).filter((f) => f !== 'green' || settings.value.homeRoasting));
+// The green coffee and roast forms are only there with home roasting on.
+const FORMS = computed(() => (Object.keys(FIELD_FORMS) as FieldForm[]).filter((f) => (f !== 'green' && f !== 'roast') || settings.value.homeRoasting));
 
 async function toggle(key: string, form: FieldForm, shown: boolean): Promise<void> {
   const ws = workspaces.current?.id;

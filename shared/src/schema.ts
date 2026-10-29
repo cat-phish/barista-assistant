@@ -664,6 +664,47 @@ export const greenCoffees = mysqlTable(
 );
 export type GreenCoffee = typeof greenCoffees.$inferSelect;
 
+// 10c. Roasts (Home Roasting's Roast Log)
+// One batch roasted (docs/api/roasts.md §4f): which green coffee and how much
+// went in, what came out, and the roast's temperatures and times. Saving one
+// creates its bean (beanId), and editing the roast keeps that bean in step.
+// greenStockTakenGrams is what it took off the green coffee's weightLeftGrams
+// (no more than was left), given back when the roast is deleted or changed.
+// The links are set null when what they point at is deleted: the roast stays.
+export const roasts = mysqlTable(
+  "roasts",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    greenCoffeeId: varchar("green_coffee_id", { length: 36 }).references(() => greenCoffees.id, { onDelete: "set null" }),
+    machineId: varchar("machine_id", { length: 36 }).references(() => roastingMachines.id, { onDelete: "set null" }),
+    beanId: varchar("bean_id", { length: 36 }).references(() => beans.id, { onDelete: "set null" }),
+    userId: varchar("user_id", { length: 36 }).references(() => users.id, { onDelete: "set null" }), // who roasted it
+    roastedAt: timestamp("roasted_at").notNull(),
+    utcOffsetMinutes: int("utc_offset_minutes"), // the logging device's, as on brew logs: the local roast date
+    batchNumber: varchar("batch_number", { length: 50 }),
+    greenGrams: int("green_grams").notNull(),
+    roastedGrams: int("roasted_grams").notNull(),
+    greenStockTakenGrams: int("green_stock_taken_grams").default(0).notNull(),
+    roastType: varchar("roast_type", { length: 20 }).$type<RoastType>(), // ROAST_TYPES
+    detailedRoastLevel: varchar("detailed_roast_level", { length: 20 }).$type<DetailedRoastLevel>(), // sets roastLevel, as on beans
+    roastLevel: varchar("roast_level", { length: 20 }).$type<RoastLevel>(),
+    chargeTempC: decimal("charge_temp_c", { precision: 4, scale: 1, mode: "number" }),
+    dropTempC: decimal("drop_temp_c", { precision: 4, scale: 1, mode: "number" }),
+    firstCrackSec: int("first_crack_sec"), // from charge; development time = totalSec - firstCrackSec
+    totalSec: int("total_sec"), // charge to drop
+    restDays: int("rest_days").notNull(), // ready on the local roast date + restDays
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    beanUnique: unique("roasts_bean_unique").on(table.beanId),
+  })
+);
+export type Roast = typeof roasts.$inferSelect;
+
 // 5c. Water Profiles (Per-Workspace Brew Water)
 // The water a brew was made with (docs/api/water-profiles.md §3c). Every
 // figure is optional, in mg/L (ppm); GH and KH are expressed as CaCO3. At most

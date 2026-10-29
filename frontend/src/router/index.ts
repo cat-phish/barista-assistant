@@ -29,7 +29,7 @@ export const router = createRouter({
       beforeEnter: () => {
         const workspaces = useWorkspaceStore();
         const ws = workspaces.current;
-        if (ws?.settings.homeRoasting && lastMode(ws.id) === 'roast') return lastPage(ws.id, 'roast') ?? { name: 'roast' };
+        if (ws?.settings.homeRoasting && lastMode(ws.id) === 'roast') return lastPage(ws.id, 'roast') ?? { name: 'roast-home' };
         return { name: workspaces.canEdit ? 'brew' : 'journal' };
       },
     },
@@ -58,8 +58,18 @@ export const router = createRouter({
       ],
     },
     // Roast mode (docs/backlog.md item 15): its own tabs in the header.
-    // /roast lands on Green until the roast log exists.
-    { path: '/roast', name: 'roast', redirect: { name: 'green-coffees' } },
+    // /roast lands on the Roast form, or the roast history for a viewer.
+    {
+      path: '/roast',
+      name: 'roast-home',
+      component: () => import('../views/RoastsView.vue'),
+      meta: { requiresWorkspace: true, requiresRoasting: true },
+      beforeEnter: () => ({ name: useWorkspaceStore().canEdit ? 'roast-new' : 'roasts' }),
+    },
+    { path: '/roast/new', name: 'roast-new', component: () => import('../views/RoastFormView.vue'), meta: { requiresWorkspace: true, requiresRoasting: true, requiresEditor: true } },
+    { path: '/roast/roasts', name: 'roasts', component: () => import('../views/RoastsView.vue'), meta: { requiresWorkspace: true, requiresRoasting: true } },
+    { path: '/roast/roasts/:id', name: 'roast', component: () => import('../views/RoastView.vue'), props: true, meta: { requiresWorkspace: true, requiresRoasting: true } },
+    { path: '/roast/roasts/:id/edit', name: 'roast-edit', component: () => import('../views/RoastFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresRoasting: true, requiresEditor: true } },
     { path: '/roast/green', name: 'green-coffees', component: () => import('../views/GreenView.vue'), meta: { requiresWorkspace: true, requiresRoasting: true } },
     { path: '/roast/green/new', name: 'green-coffee-new', component: () => import('../views/GreenFormView.vue'), meta: { requiresWorkspace: true, requiresRoasting: true, requiresEditor: true } },
     { path: '/roast/green/:id/edit', name: 'green-coffee-edit', component: () => import('../views/GreenFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresRoasting: true, requiresEditor: true } },
@@ -149,7 +159,7 @@ router.beforeEach(async (to): Promise<RouteLocationRaw | true> => {
     if (to.meta.requiresRoasting && !workspaces.current.settings.homeRoasting) return { name: 'home' };
     // Viewers following an edit link land on the read-only list instead.
     if (to.meta.requiresEditor && !workspaces.canEdit) {
-      if (to.path.startsWith('/roast/')) return { name: to.path.startsWith('/roast/setup') ? 'roasting-machines' : 'green-coffees' };
+      if (to.path.startsWith('/roast/')) return { name: to.path.startsWith('/roast/setup') ? 'roasting-machines' : to.path.startsWith('/roast/green') ? 'green-coffees' : 'roasts' };
       return to.path.startsWith('/recipes') ? { name: 'recipes' } : { name: 'beans' };
     }
   }

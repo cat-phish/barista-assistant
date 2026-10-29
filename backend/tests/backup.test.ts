@@ -26,8 +26,9 @@ async function populated() {
   const yeast = (await post("bean-processes", { name: "Yeast inoculated" })).process.id as string;
   await post("brewer-methods", { name: "Siphon", behaviour: "filter" });
   const c40 = (await post("grinders", { name: "C40" })).grinder.id as string;
-  await post("roasting-machines", { name: "Nano 7", capacityGrams: 120 });
-  await post("green-coffees", { name: "Guji", processId: yeast, varieties: ["74110"], species: ["arabica"], originArea: "africa", weightBoughtGrams: 1000 });
+  const nano = (await post("roasting-machines", { name: "Nano 7", capacityGrams: 120 })).machine.id as string;
+  const guji = (await post("green-coffees", { name: "Guji", processId: yeast, varieties: ["74110"], species: ["arabica"], originArea: "africa", weightBoughtGrams: 1000 })).greenCoffee.id as string;
+  await post("roasts", { greenCoffeeId: guji, machineId: nano, greenGrams: 120, roastedGrams: 103, roastType: "filter", detailedRoastLevel: "city", firstCrackSec: 420, totalSec: 540 });
   const water = (await post("water-profiles", { name: "TWW", tdsPpm: 120 })).waterProfile.id as string;
   const stalled = (await post("brew-problems", { name: "Paper taste", methodKind: "filter" })).problem.id as string;
   const v60 = await brewerId(owner, ws.id, "V60");
@@ -77,7 +78,7 @@ async function populated() {
 
 // What the workspace looks like through the API, without IDs (they differ
 // after a restore) and with lists in a stable order.
-const LISTS = ["bean-processes", "brewer-methods", "recipe-styles", "grinders", "roasting-machines", "green-coffees", "water-profiles", "prep-tools", "brew-problems", "brewers", "beans", "recipes", "ingredients", "drink-categories", "drinks", "menu", "brew-logs"];
+const LISTS = ["bean-processes", "brewer-methods", "recipe-styles", "grinders", "roasting-machines", "green-coffees", "roasts", "water-profiles", "prep-tools", "brew-problems", "brewers", "beans", "recipes", "ingredients", "drink-categories", "drinks", "menu", "brew-logs"];
 function strip(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(strip);
   if (typeof value !== "object" || value === null) return value;

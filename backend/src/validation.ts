@@ -26,7 +26,7 @@ export const workspaceSettingsObject = z
     // Field keys are checked by shape, not a list: the registry lives in the
     // frontend (lib/fields.ts), and an unknown key simply hides nothing.
     hiddenFields: z
-      .array(z.string().regex(/^(brew|bean|recipe|green)\.[a-zA-Z]+$/, "a field key like brew.tds"))
+      .array(z.string().regex(/^(brew|bean|recipe|green|roast)\.[a-zA-Z]+$/, "a field key like brew.tds"))
       .max(100)
       .refine((keys) => new Set(keys).size === keys.length, "each field once"),
     // What the AI doesn't get (docs/api/llm-contract.md §9); the whole list.

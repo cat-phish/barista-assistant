@@ -434,7 +434,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 15. Roasting: green stock, roast logs, resting
 
-- **Status:** planned (branch 1, `roast-mode`, in progress)
+- **Status:** planned (branch 1, `roast-mode`, built; branch 2, `roast-log`, in progress)
 - **Why:** for home roasters, the bean starts as green coffee. Green stock,
   roast results and resting time are tracked in another notebook or not at
   all, and a roast that's ready to drink gets forgotten.

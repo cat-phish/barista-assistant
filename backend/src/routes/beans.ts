@@ -157,7 +157,7 @@ const updateBeanSchema = updateSchema({ ...beanFields, archived: z.boolean() });
 // level sets it, clearing a stored detailed level clears it, and it can only
 // be set on its own while the bean has no detailed level. Returns the roastLevel to
 // store (undefined = unchanged), or an error.
-function resolveRoastLevel(
+export function resolveRoastLevel(
   body: { detailedRoastLevel?: DetailedRoastLevel | null; roastLevel?: RoastLevel | null },
   storedDetailed: DetailedRoastLevel | null,
 ): { roastLevel: RoastLevel | null | undefined } | { error: string } {

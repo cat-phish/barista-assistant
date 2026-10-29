@@ -33,6 +33,8 @@ export const MATCH_KEYS: Record<string, (row: BackupRow) => string[]> = {
   brewers: (r) => [lower(r.name)],
   roasting_machines: (r) => [lower(r.name)],
   green_coffees: (r) => [lower(r.name)],
+  // The same roast imported twice: same moment and green coffee.
+  roasts: (r) => [`${new Date(r.roastedAt as string | Date).toISOString()}|${r.greenCoffeeId}`],
   // Two bags of the same coffee are two beans: the roast date tells them apart.
   beans: (r) => [`${lower(r.roasterName)}|${lower(r.beanName)}|${lower(r.batchNumber)}|${roastDay(r.roastDate)}`],
   recipes: (r) => [`${lower(r.name)}|${r.brewerId}`],

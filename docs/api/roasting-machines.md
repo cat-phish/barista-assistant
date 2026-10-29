@@ -4,8 +4,7 @@
 > [README.md](README.md); a bare `§N` refers to that index.
 
 Home roasting (workspace setting `homeRoasting`, §2): the machines a
-workspace roasts on. Roasts (coming with the roast log, docs/backlog.md
-item 15) will record which one was used. The app shows them in roast mode
+workspace roasts on. Roasts (§4f) record which one was used. The app shows them in roast mode
 under **Roasters**.
 
 **Roasting machine object:**
@@ -60,13 +59,12 @@ roast mode in the app.
 What deleting it would affect (see README, "Deleting").
 
 - **Auth Required:** `true` (any member)
-- **Success (`200 OK`):** `{ "roastCount": 0 }`: the roasts made on it.
-  Always `0` until roasts are logged.
+- **Success (`200 OK`):** `{ "roastCount": 3 }`: the roasts made on it.
 - **Errors:** `404` not in this workspace.
 
 ## `DELETE /api/workspaces/:workspaceId/roasting-machines/:machineId`
 
-Roasts made on it will keep their record with the machine unlinked.
+Roasts made on it keep their record with `machineId` set to `null`.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Success (`204 No Content`)**
