@@ -69,6 +69,7 @@ export const LABEL_MAX_IMAGES = 8;
 export interface LabelReadJobData {
   images: string[];
   processes: string[];
+  requestedBy: string; // whose AI prompt is used (docs/api/auth.md §1c)
 }
 // What the label says, each null when it isn't printed (or can't be read).
 export interface LabelFields {

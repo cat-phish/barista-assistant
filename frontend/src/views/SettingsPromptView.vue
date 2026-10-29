@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // Settings → Your AI prompt (docs/api/auth.md §1c): instructions of your
 // own, added to every AI request made with your prompt (your brews'
-// analyses, your Suggest parameters), and with Advanced, your own text for
-// any section that isn't locked. Yours only, the same in every workspace.
+// analyses, your Suggest parameters), others for reading bean labels, and
+// with Advanced, your own text for any section that isn't locked. Yours
+// only, the same in every workspace.
 import { computed, onMounted, reactive, ref } from 'vue';
 import { authApi } from '../api/auth';
 import { errorMessage } from '../api/client';
@@ -11,6 +12,7 @@ import SettingsLayout from '../components/SettingsLayout.vue';
 
 const settings = ref<AiPromptSettings | null>(null);
 const instructions = ref('');
+const labelInstructions = ref('');
 const texts = reactive<Record<string, string>>({}); // section key → what the box shows
 const loadError = ref('');
 const saving = ref(false);
@@ -32,6 +34,7 @@ function setAdvanced(on: boolean): void {
 function fill(s: AiPromptSettings): void {
   settings.value = s;
   instructions.value = s.aiPrompt.instructions ?? '';
+  labelInstructions.value = s.aiPrompt.labelInstructions ?? '';
   for (const section of s.sections) texts[section.key] = s.aiPrompt.overrides[section.key] ?? section.text;
 }
 onMounted(async () => {
@@ -52,12 +55,13 @@ onMounted(async () => {
 
 const edited = (s: PromptSectionText) => !s.locked && texts[s.key]?.trim() !== s.text;
 const editedCount = computed(() => settings.value?.sections.filter(edited).length ?? 0);
-const usedFor = (s: PromptSectionText) =>
-  s.prompts.length === 2 ? 'Analyses and Suggest parameters' : s.prompts[0] === 'analysis' ? 'Analyses' : 'Suggest parameters';
+const PROMPT_NAMES = { analysis: 'Analyses', suggest: 'Suggest parameters', label: 'Reading bean labels' } as const;
+const usedFor = (s: PromptSectionText) => s.prompts.map((p) => PROMPT_NAMES[p]).join(', ');
 const tooLong = computed(() => {
   const s = settings.value;
   if (!s) return '';
   if (instructions.value.length > s.limits.instructions) return `Your instructions can be up to ${s.limits.instructions} characters.`;
+  if (labelInstructions.value.length > s.limits.instructions) return `Your label instructions can be up to ${s.limits.instructions} characters.`;
   const long = s.sections.find((x) => (texts[x.key]?.length ?? 0) > s.limits.section);
   return long ? `“${long.label}” can be up to ${s.limits.section} characters.` : '';
 });
@@ -71,7 +75,9 @@ async function save(): Promise<void> {
   // A box left empty would be refused: it goes back to the default instead.
   const overrides = Object.fromEntries(s.sections.filter((x) => edited(x) && texts[x.key]?.trim()).map((x) => [x.key, texts[x.key]!.trim()]));
   try {
-    fill(await authApi.setAiPrompt({ instructions: instructions.value.trim() || null, overrides }));
+    fill(
+      await authApi.setAiPrompt({ instructions: instructions.value.trim() || null, labelInstructions: labelInstructions.value.trim() || null, overrides }),
+    );
     saved.value = true;
   } catch (err) {
     saveError.value = errorMessage(err);
@@ -89,13 +95,13 @@ function reset(s: PromptSectionText): void {
   <SettingsLayout title="Your AI prompt">
     <p class="muted">
       Tune the AI to your taste. This is yours only and the same in every workspace: it's used when your brews are analyzed (by you, someone
-      else, or automatically) and when you tap Suggest parameters. Use Preview what's sent next to those buttons to see it in place.
+      else, or automatically), when you tap Suggest parameters, and when you use Fill in with AI on a bean. Use Preview what's sent next to those buttons to see it in place.
     </p>
     <p v-if="loadError" class="form-error" role="alert">{{ loadError }}</p>
     <form v-else-if="settings" class="stack" @submit.prevent="save">
       <section class="card stack" aria-labelledby="prompt-instructions">
         <h2 id="prompt-instructions">Your instructions</h2>
-        <label for="ai-instructions" class="muted small">Added to every request, just before the AI answers: “{{ settings.instructionsIntro }} …”</label>
+        <label for="ai-instructions" class="muted small">Added to analyses and Suggest parameters, just before the AI answers: “{{ settings.instructionsIntro }} …”</label>
         <textarea
           id="ai-instructions"
           v-model="instructions"
@@ -105,6 +111,23 @@ function reset(s: PromptSectionText): void {
           @input="saved = false"
         />
         <p class="muted small counter">{{ instructions.length }} / {{ settings.limits.instructions }}</p>
+      </section>
+
+      <section class="card stack" aria-labelledby="prompt-labels">
+        <h2 id="prompt-labels">Reading bean labels</h2>
+        <label for="ai-label-instructions" class="muted small">
+          Added when you use Fill in with AI on the bean form (your brewing instructions above aren't sent there): “{{ settings.labelInstructionsIntro }} …”
+        </label>
+        <textarea
+          id="ai-label-instructions"
+          v-model="labelInstructions"
+          rows="4"
+          :maxlength="settings.limits.instructions"
+          placeholder="e.g. My roaster prints the roast date as DD.MM.YY. Put the variety (e.g. Gesha) in the coffee's name."
+          @input="saved = false"
+        />
+        <p class="muted small counter">{{ labelInstructions.length }} / {{ settings.limits.instructions }}</p>
+        <p class="muted small">To change what the AI is told about reading labels, edit “Reading a bean label” under Advanced.</p>
       </section>
 
       <section class="card stack" aria-labelledby="prompt-advanced">

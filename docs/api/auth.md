@@ -167,8 +167,13 @@ setting above it, so several people in one home can each keep their own.
 Stored as `users.ai_prompt` (`AiPrompt` in `@barista/shared/aiPrompt`),
 not in preferences, so it isn't sent with every `user`.
 
-- **Instructions** (up to 2000 characters): added to both prompts as the
-  `instructions` section, just before `end`, after `INSTRUCTIONS_INTRO`.
+- **Instructions** (up to 2000 characters): added to the analysis and
+  suggest prompts as the `instructions` section, just before `end`, after
+  `INSTRUCTIONS_INTRO`.
+- **Label instructions** (`labelInstructions`, up to 2000 characters):
+  added to the label-reading prompt instead (llm-contract.md §9c), after
+  `LABEL_INSTRUCTIONS_INTRO`; brewing instructions aren't sent there. A
+  prompt saved before it has none (`null` in responses).
 - **Overrides** (section key → text, 1–4000 characters each): your own text
   in place of a section's default. Locked sections (`output`,
   `suggestOutput`, `end`) say what the answer must hold and can't be
@@ -180,6 +185,9 @@ not in preferences, so it isn't sent with every `user`.
   whoever asks and also for auto-analyze; a brew with no barista (an account
   deleted) uses the defaults;
 - Suggest parameters (§8b) uses the **asker's** (`requestedBy` on the row).
+- Reading a bean label (§4d) uses the **asker's** (`requestedBy` in the job).
+  Its section (`labelCore`, "Reading a bean label") and label instructions
+  don't make analyses or suggestions count as customized.
 
 **A one-off note** (up to 500 characters) can go with one request: the
 `note` body field on `POST …/analyze`, `POST …/parameter-suggestions` and
@@ -198,9 +206,9 @@ the default prompt's results.
 - **Success (`200 OK`):**
   ```json
   {
-    "aiPrompt": { "instructions": "I prefer bright cups.", "overrides": { "core": "..." } },
+    "aiPrompt": { "instructions": "I prefer bright cups.", "labelInstructions": null, "overrides": { "core": "..." } },
     "sections": [{ "key": "core", "label": "What to do (analysis)", "prompts": ["analysis"], "locked": false, "text": "..." }],
-    "instructionsIntro": "...", "noteIntro": "...",
+    "instructionsIntro": "...", "labelInstructionsIntro": "...", "noteIntro": "...",
     "limits": { "instructions": 2000, "section": 4000, "note": 500 }
   }
   ```
@@ -211,7 +219,7 @@ the default prompt's results.
 ### `PUT /api/auth/me/ai-prompt`
 
 - **Auth Required:** `true`
-- **Body:** `{ "instructions": "..." | null, "overrides": { "<key>": "text" } }`,
+- **Body:** `{ "instructions": "..." | null, "labelInstructions"?: "..." | null, "overrides": { "<key>": "text" } }`,
   replacing what's stored. Text is trimmed; empty instructions become
   `null`, and an override equal to its default is dropped. Nothing left
   changed is stored as `null`.

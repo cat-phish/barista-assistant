@@ -29,7 +29,9 @@ images and the workspace's visible **process** names (§4b), and waits for
 the worker's answer, up to `LABEL_READ_TIMEOUT_MS` (default 60 s). The
 worker asks the vision model (`OPENAI_VISION_MODEL`, else `OPENAI_MODEL`);
 the request and how the answer is checked are in `llm-contract.md` §9c. It
-isn't retried: the person presses the button again.
+uses the asker's own AI prompt (Settings → Your AI prompt, `auth.md` §1c):
+their "Reading bean labels" instructions and their text for the "Reading a
+bean label" section. It isn't retried: the person presses the button again.
 
 **What the form does with it** (`frontend/src/lib/labelFill.ts`):
 

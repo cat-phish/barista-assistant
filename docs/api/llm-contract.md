@@ -370,22 +370,25 @@ go with their keys as the bean's do.
 ## 9c. Reading a bean label
 
 The `label-read` queue (`bean-label.md` §4d): job `read`, data
-`{ "images": ["<base64 WebP>", ...], "processes": ["Washed", ...] }`, the
-photos already re-encoded by the backend and the workspace's visible
-process names. The job's **return value** is the answer (`LabelFields`,
+`{ "images": ["<base64 WebP>", ...], "processes": ["Washed", ...], "requestedBy": "uuid" }`,
+the photos already re-encoded by the backend, the workspace's visible
+process names, and whose AI prompt to use. The job's **return value** is the answer (`LabelFields`,
 `@barista/shared/jobs`); nothing is written to the database, and it isn't
 retried. `worker/src/label.ts`:
 
 1. **Request:** `OPENAI_VISION_MODEL` (optional; empty uses `OPENAI_MODEL`),
-   which must take images. A fixed system prompt (`LABEL_PROMPT`: fill a
-   field only with what's printed, `null` otherwise, never from general
-   knowledge; a best-before date isn't a roast date; feet and altitude
-   ranges to one figure in metres; 12 oz = 340 g) and one user message: a
-   text part naming the processes to choose from, then one `image_url` part
-   per photo (`data:image/webp;base64,…`, `detail: "high"`). It isn't part
-   of "Your AI prompt" (the person's instructions are for judging brews, not
-   reading labels), and Settings → AI's "What the AI sees" doesn't apply:
-   only the photos and the process names are sent.
+   which must take images. The system prompt (`labelSystemPrompt`) is the
+   `labelCore` section (fill a field only with what's printed, `null`
+   otherwise, never from general knowledge; a best-before date isn't a
+   roast date; feet and altitude ranges to one figure in metres; 12 oz =
+   340 g), then the asker's label instructions (`LABEL_INSTRUCTIONS_INTRO`),
+   then the locked `end`. The asker's own prompt (`requestedBy`, auth.md
+   §1c) applies: their text for `labelCore`, their label instructions, not
+   their brewing ones. One user message: a text part naming the processes
+   to choose from, then one `image_url` part per photo
+   (`data:image/webp;base64,…`, `detail: "high"`). Settings → AI's "What
+   the AI sees" doesn't apply: only the photos and the process names are
+   sent.
 2. **Schema** (`labelJsonSchema`, strict): every field of `LabelFields`,
    each nullable; `processName` is an enum of the given processes (or only
    `null` when there are none), the roast, type and blend fields enums of

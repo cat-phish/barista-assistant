@@ -1,6 +1,7 @@
 import type { LabelFields } from "@barista/shared/jobs";
 import { describe, expect, it } from "vitest";
-import { buildLabelRequest, labelJsonSchema, parseLabelMessage } from "../src/label.js";
+import { LABEL_INSTRUCTIONS_INTRO, PROMPT_TEXT } from "@barista/shared/aiPrompt";
+import { buildLabelRequest, labelJsonSchema, labelSystemPrompt, parseLabelMessage } from "../src/label.js";
 
 const reply = (body: unknown) => ({ content: JSON.stringify(body), refusal: null });
 const PROCESSES = ["Washed", "Natural", "Honey"];
@@ -27,7 +28,8 @@ const EMPTY: LabelFields = {
 
 describe("reading a bean label (docs/api/llm-contract.md §9c)", () => {
   it("sends each photo as an image, with the processes to choose from", () => {
-    const request = buildLabelRequest({ images: ["AAA", "BBB"], processes: PROCESSES });
+    const request = buildLabelRequest({ images: ["AAA", "BBB"], processes: PROCESSES, requestedBy: "u" });
+    expect(request.messages[0]!.content).toBe(`${PROMPT_TEXT.labelCore} ${PROMPT_TEXT.end}`);
     expect(request.model).toBe("test-model"); // OPENAI_VISION_MODEL unset: OPENAI_MODEL
     const user = request.messages[1] as { content: Array<{ type: string; text?: string; image_url?: { url: string } }> };
     expect(user.content.map((p) => p.type)).toEqual(["text", "image_url", "image_url"]);
@@ -99,6 +101,17 @@ describe("reading a bean label (docs/api/llm-contract.md §9c)", () => {
     );
     expect(fields).toEqual({ ...EMPTY, beanName: "Kenya AA", processText: "Anaerobic natural" });
     expect(parseLabelMessage(reply({ ...EMPTY, roastDate: "2026-02-30" }), PROCESSES).roastDate).toBeNull();
+  });
+
+  it("uses the person's own label prompt, never their brewing instructions (docs/api/auth.md §1c)", () => {
+    const system = labelSystemPrompt({
+      instructions: "I like it light.",
+      labelInstructions: "Our roaster prints the roast date as DD.MM.YY.",
+      overrides: { labelCore: "Read the label.", core: "Be brief.", end: "Answer in prose." },
+    });
+    expect(system).toBe(`Read the label. ${LABEL_INSTRUCTIONS_INTRO} Our roaster prints the roast date as DD.MM.YY. ${PROMPT_TEXT.end}`);
+    // A prompt saved before label instructions existed.
+    expect(labelSystemPrompt({ instructions: "x", overrides: {} })).toBe(`${PROMPT_TEXT.labelCore} ${PROMPT_TEXT.end}`);
   });
 
   it("fails on a refusal or a reply that isn't JSON", () => {

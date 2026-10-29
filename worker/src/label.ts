@@ -1,29 +1,16 @@
 // Reading a bean's label from its photos (docs/api/llm-contract.md §9c): the
 // photos go to a vision model with a fixed prompt, and the answer is the bean
 // fields it could read. Nothing is stored; the backend waits for the result.
-// Not part of "Your AI prompt": it's reading, not judging.
+// The asker's own prompt applies (docs/api/auth.md §1c): their text for the
+// labelCore section and their label instructions, not their brewing ones.
+import { EMPTY_AI_PROMPT, LABEL_INSTRUCTIONS_INTRO, PROMPT_TEXT, type AiPrompt } from "@barista/shared/aiPrompt";
 import type { LabelFields, LabelReadJobData } from "@barista/shared/jobs";
 import { BLEND_TYPES, DETAILED_ROAST_LEVELS, ROAST_LEVELS, ROAST_TYPES } from "@barista/shared/schema";
 import type OpenAI from "openai";
 import { z } from "zod";
 import { config } from "./config.js";
 import { complete, parseMessage, type LlmMessage } from "./llm.js";
-
-export const LABEL_PROMPT = [
-  "You read the label of a bag of roasted coffee from photos (front, back, a card), to fill in a form about the coffee.",
-  "Fill a field only with what is printed or clearly shown; null when it isn't there or can't be read. Never guess or",
-  "fill from general knowledge. roasterName is the roaster's name; beanName the coffee's name (often the farm, region or",
-  "blend name), without the roaster. processName is one of the given processes when the printed process is one of them",
-  "(e.g. 'Natural' for 'Dry process'); otherwise null, with the process as printed in processText. country is in English",
-  "(e.g. 'Ethiopia'); region the area within it. altitudeMasl is in metres above sea level: a range gives its middle,",
-  "feet are converted. flavorProfile is the tasting notes as printed, comma-separated. roastDate is the date it was",
-  "roasted, as YYYY-MM-DD; a best-before or packed-on date is not a roast date. detailedRoastLevel is a named roast",
-  "(City, Full City…) when one is printed; roastLevel only when just light, medium-light, medium, medium-dark or dark",
-  "is. roastType is filter, espresso or omni when the bag says what it's roasted for. blendType is blend when it says",
-  "blend, single_origin when it names one origin as such. decaf is true only when it says decaf. bagWeightGrams is the",
-  "net weight in grams (12 oz = 340). batchNumber is a roast batch or lot number. website is the roaster's web address",
-  "with https://.",
-].join(" ");
+import { promptFor } from "./processor.js";
 
 const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: "null" }] });
 const text = nullable({ type: "string" });
@@ -53,12 +40,21 @@ export function labelJsonSchema(processes: readonly string[]): Record<string, un
   return { type: "object", additionalProperties: false, required: Object.keys(properties), properties };
 }
 
-export function buildLabelRequest(data: LabelReadJobData): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
+// The system prompt: labelCore (theirs or the default), their label
+// instructions, then the locked end section.
+export function labelSystemPrompt(prompt: AiPrompt = EMPTY_AI_PROMPT): string {
+  const parts = [prompt.overrides.labelCore || PROMPT_TEXT.labelCore!];
+  if (prompt.labelInstructions) parts.push(`${LABEL_INSTRUCTIONS_INTRO} ${prompt.labelInstructions}`);
+  parts.push(PROMPT_TEXT.end!);
+  return parts.join(" ");
+}
+
+export function buildLabelRequest(data: LabelReadJobData, prompt: AiPrompt = EMPTY_AI_PROMPT): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
   const processes = data.processes.length ? data.processes.join(", ") : "none";
   return {
     model: config.openaiVisionModel,
     messages: [
-      { role: "system", content: LABEL_PROMPT },
+      { role: "system", content: labelSystemPrompt(prompt) },
       {
         role: "user",
         content: [
@@ -149,6 +145,7 @@ export function parseLabelMessage(message: LlmMessage, processes: readonly strin
 }
 
 export async function readLabel(data: LabelReadJobData): Promise<LabelFields> {
-  const { message } = await complete(buildLabelRequest(data));
+  const { prompt } = await promptFor(data.requestedBy, null);
+  const { message } = await complete(buildLabelRequest(data, prompt));
   return parseLabelMessage(message, data.processes);
 }

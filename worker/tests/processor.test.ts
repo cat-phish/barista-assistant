@@ -118,7 +118,7 @@ describe("processBrewAnalysis", () => {
   it("without a prompt of their own or a note: the defaults, and the plain version", async () => {
     llm.mockResolvedValue(ANALYSIS);
     await processBrewAnalysis({ brewLogId: logIds.day8! });
-    expect(llm.mock.calls[0]![2]).toEqual({ prompt: { instructions: null, overrides: {} }, note: null });
+    expect(llm.mock.calls[0]![2]).toEqual({ prompt: { instructions: null, labelInstructions: null, overrides: {} }, note: null });
     const [saved] = await db.select().from(llmAnalyses).where(eq(llmAnalyses.brewLogId, logIds.day8!));
     expect(saved!.promptVersion).toBe(PROMPT_VERSION);
   });
