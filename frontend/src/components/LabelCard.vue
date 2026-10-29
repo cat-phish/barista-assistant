@@ -2,16 +2,20 @@
 // "Fill in with AI", under the Photos card (docs/api/bean-label.md §4d):
 // photos taken or picked here are only for the read (shown, not kept), and
 // the bean's photos can go with them. Nothing is read until the button.
+// With the workspace's labelWebLookup, it can also look the bean up on the
+// web afterwards: ticked per read, as it takes longer.
 import { computed, onBeforeUnmount, ref } from 'vue';
-import type { LabelFields } from '../api/types';
+import type { LabelReadResult } from '../api/types';
 import { useLabelRead } from '../composables/useLabelRead';
 import { LABEL_MAX_IMAGES, labelImages } from '../lib/labelFill';
 
 const props = defineProps<{
   workspaceId: string;
   beanPhotos: ReadonlyArray<() => Promise<Blob>>; // cover first; [] when photos are hidden
+  webLookup: boolean; // the workspace allows "Also look it up on the web"
+  website: string; // the form's, to keep the search to the roaster's site
 }>();
-const emit = defineEmits<{ label: [fields: LabelFields] }>();
+const emit = defineEmits<{ label: [result: LabelReadResult] }>();
 
 interface Extra {
   key: number;
@@ -21,11 +25,13 @@ interface Extra {
 const extras = ref<Extra[]>([]);
 let nextKey = 0;
 const includeBean = ref(true);
+const lookUp = ref(false); // unticked each time: slower, and costs more
 const note = ref('');
 const camera = ref<HTMLInputElement | null>(null);
 const chooser = ref<HTMLInputElement | null>(null);
 
-const { reading, error, read } = useLabelRead(() => props.workspaceId, (fields) => emit('label', fields));
+const { reading, error, read } = useLabelRead(() => props.workspaceId, (result) => emit('label', result));
+const searching = ref(false); // this read includes a web lookup
 
 const sending = computed(() => labelImages<File | (() => Promise<Blob>)>(extras.value.map((e) => e.file), includeBean.value ? props.beanPhotos : []));
 const count = computed(() => sending.value.images.length);
@@ -47,7 +53,8 @@ function remove(key: number): void {
 async function readLabel(): Promise<void> {
   const { images, left } = sending.value;
   note.value = left ? `Read the first ${images.length} photos; ${left} left out.` : '';
-  await read(images);
+  searching.value = props.webLookup && lookUp.value;
+  await read(images, searching.value ? { web: true, website: props.website.trim() || null } : {});
 }
 
 onBeforeUnmount(() => extras.value.forEach((e) => URL.revokeObjectURL(e.url)));
@@ -75,13 +82,28 @@ onBeforeUnmount(() => extras.value.forEach((e) => URL.revokeObjectURL(e.url)));
       <input v-model="includeBean" type="checkbox" :disabled="reading" />
       Also read the bean's photos ({{ beanPhotos.length }})
     </label>
+    <label v-if="webLookup" class="checkbox">
+      <input v-model="lookUp" type="checkbox" :disabled="reading" />
+      <span>
+        Also look it up on the web
+        <span class="muted small hint">Takes longer (up to a couple of minutes). Searches the roaster's site when it's known; what it finds is only suggested, with a link.</span>
+      </span>
+    </label>
     <div class="row">
       <button type="button" class="btn btn-primary" :disabled="reading || count === 0" @click="readLabel">
         {{ reading ? 'Reading the label…' : count ? `✦ Fill in from ${count} photo${count === 1 ? '' : 's'}` : '✦ Fill in from photos' }}
       </button>
       <span v-if="!count && !reading" class="muted small">Add a photo of the label first.</span>
     </div>
-    <p class="small" role="status">{{ reading ? 'Still reading the label: this can take half a minute. Keep this page open.' : '' }}</p>
+    <p class="small" role="status">
+      {{
+        !reading
+          ? ''
+          : searching
+            ? 'Reading the label, then looking it up on the web: this can take a couple of minutes. Keep this page open.'
+            : 'Still reading the label: this can take half a minute. Keep this page open.'
+      }}
+    </p>
     <p v-if="note" class="muted small">{{ note }}</p>
     <p v-if="error" class="field-error" role="alert">{{ error }}</p>
     <slot />
@@ -91,6 +113,9 @@ onBeforeUnmount(() => extras.value.forEach((e) => URL.revokeObjectURL(e.url)));
 <style scoped>
 p {
   margin: 0;
+}
+.hint {
+  display: block;
 }
 .row {
   display: flex;

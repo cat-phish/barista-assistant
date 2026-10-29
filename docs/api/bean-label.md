@@ -51,13 +51,32 @@ bean label" section. It isn't retried: the person presses the button again.
 `workspaces.md` §2), under Settings → AI → **Bean labels**. The buttons
 show when it's on (the bean form is for those who can edit).
 
+**Looking it up on the web** (optional): with the workspace's
+`labelWebLookup` (default `false`, same place), the card has **"Also look it
+up on the web"**, unticked each time, noting that it takes longer. Ticked,
+after the label is read its text (never the photos, the roast date or the
+batch number) goes to a model with a web search (`llm-contract.md` §9c,
+step 2), kept to the roaster's site when its address is known (read off the
+label, else the form's Website). What it finds is **only ever suggested**:
+"Web says: X · source · Use" under the field, the link to the page it's on;
+nothing it finds fills a field by itself. Not shown where it says what the
+form (after the label) already says, or where the label already suggested
+something. The wait is `LABEL_WEB_TIMEOUT_MS` (default 120 s). If the
+lookup fails (a provider or model without web search), the label is still
+read and `webError` says so.
+
 ## `POST /api/workspaces/:workspaceId/bean-label`
 
 - **Auth Required:** `true` (role `owner` or `barista`)
-- **Body:** `{ "images": ["<base64>", ...] }`: 1–8 photos (`LABEL_MAX_IMAGES`),
-  each the image file's bytes in base64 (no `data:` prefix), at most 3 MB
-  decoded. The JSON body may be up to 25 MB.
-- **Success (`200 OK`):** every field, `null` where it couldn't be read:
+- **Body:** `{ "images": ["<base64>", ...], "web"?: boolean, "website"?: string | null }`:
+  1–8 photos (`LABEL_MAX_IMAGES`), each the image file's bytes in base64
+  (no `data:` prefix), at most 3 MB decoded; the JSON body may be up to
+  25 MB. `web` (default `false`) also looks it up on the web; `website` is
+  the form's, to keep the search to that site when the label gives none.
+- **Success (`200 OK`):** every label field, `null` where it couldn't be
+  read; `web`, when asked, what the web added (`LabelWebFinds`: only the
+  fields found, each `{ value, url }`; never `roastDate` or `batchNumber`),
+  else `null`; `webError` when the lookup failed:
 
 ```json
 {
@@ -80,12 +99,17 @@ show when it's on (the bean form is for those who can edit).
     "bagWeightGrams": 340,
     "batchNumber": null,
     "website": "https://onyxcoffeelab.com/"
-  }
+  },
+  "web": {
+    "producer": { "value": "Many smallholders, Worka", "url": "https://onyxcoffeelab.com/products/geometry" }
+  },
+  "webError": null
 }
 ```
 
 - **Errors:** `400` invalid body, or a photo that isn't an image (`"Photo 2
-  isn't an image that can be read"`); `403` viewer, or `readLabels` is off;
+  isn't an image that can be read"`); `403` viewer, `readLabels` is off, or
+  `web` without `labelWebLookup`;
   `413` body over 25 MB; `502` the AI call failed (the provider's error,
   e.g. a model that can't take images, or an answer that didn't parse);
   `503` the queue is unreachable; `504` no answer in time.

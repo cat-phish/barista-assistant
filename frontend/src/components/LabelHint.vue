@@ -1,13 +1,15 @@
 <script setup lang="ts">
-// Under a bean form field the label read differently (lib/labelFill.ts):
-// what the label says, and a button to use it instead.
-defineProps<{ text: string }>();
+// Under a bean form field the label read differently, or the web found
+// something for (lib/labelFill.ts): what it says, the page it's from, and a
+// button to use it instead.
+defineProps<{ text: string; source?: string }>();
 defineEmits<{ use: [] }>();
 </script>
 
 <template>
   <span class="label-hint">
-    Label says: <strong>{{ text }}</strong>
+    {{ source ? 'Web says:' : 'Label says:' }} <strong>{{ text }}</strong>
+    <a v-if="source" class="small" :href="source" target="_blank" rel="noopener noreferrer">source</a>
     <button type="button" class="btn-link small" @click="$emit('use')">Use</button>
   </span>
 </template>

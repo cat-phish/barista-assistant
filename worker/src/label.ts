@@ -4,12 +4,13 @@
 // The asker's own prompt applies (docs/api/auth.md §1c): their text for the
 // labelCore section and their label instructions, not their brewing ones.
 import { EMPTY_AI_PROMPT, LABEL_INSTRUCTIONS_INTRO, PROMPT_TEXT, type AiPrompt } from "@barista/shared/aiPrompt";
-import type { LabelFields, LabelReadJobData } from "@barista/shared/jobs";
+import type { LabelFields, LabelReadJobData, LabelReadResult } from "@barista/shared/jobs";
 import { BLEND_TYPES, DETAILED_ROAST_LEVELS, ROAST_LEVELS, ROAST_TYPES } from "@barista/shared/schema";
 import type OpenAI from "openai";
 import { z } from "zod";
 import { config } from "./config.js";
 import { complete, parseMessage, type LlmMessage } from "./llm.js";
+import { lookUpBean } from "./labelWeb.js";
 import { promptFor } from "./processor.js";
 
 const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: "null" }] });
@@ -144,8 +145,17 @@ export function parseLabelMessage(message: LlmMessage, processes: readonly strin
   return { ...fields, processText: fields.processName ? null : fields.processText };
 }
 
-export async function readLabel(data: LabelReadJobData): Promise<LabelFields> {
+// The label, then (when asked) the web lookup. A failed lookup still
+// returns what the label says, with webError for the person.
+export async function readLabel(data: LabelReadJobData): Promise<LabelReadResult> {
   const { prompt } = await promptFor(data.requestedBy, null);
   const { message } = await complete(buildLabelRequest(data, prompt));
-  return parseLabelMessage(message, data.processes);
+  const fields = parseLabelMessage(message, data.processes);
+  if (!data.web) return { fields, web: null, webError: null };
+  try {
+    return { fields, web: await lookUpBean(fields, data, prompt), webError: null };
+  } catch (err) {
+    console.error("Web lookup failed:", err instanceof Error ? err.message : err);
+    return { fields, web: null, webError: "The web lookup didn't work (the AI provider or model may not support web search). The label was still read." };
+  }
 }

@@ -88,6 +88,8 @@ services:
       - OPENAI_MODEL=${OPENAI_MODEL}
       # Reads bean labels from photos (docs/api/bean-label.md §4d); empty = OPENAI_MODEL.
       - OPENAI_VISION_MODEL=${OPENAI_VISION_MODEL:-}
+      # Looks beans up on the web (Responses API web search); empty = the vision model.
+      - OPENAI_WEB_MODEL=${OPENAI_WEB_MODEL:-}
       # Zone for brews logged without a UTC offset (older ones); empty = UTC.
       - BREW_TIMEZONE=${BREW_TIMEZONE:-}
       # Where the app opens, for the link in rate-later reminders.

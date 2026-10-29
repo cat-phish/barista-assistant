@@ -93,6 +93,10 @@ Every workspace in a response carries `settings`, defaults filled in
   "Fill in from a photo", which sends label photos to the AI provider
   (`docs/api/bean-label.md` §4d), set under Settings → **AI**. Off, the
   route answers `403`.
+- `labelWebLookup` (boolean, default `false`): whether that card offers
+  "Also look it up on the web" (the label's text goes to a web search;
+  bean-label.md §4d), set under Settings → **AI**. Off, a `web` read is a
+  `403`.
 
 ### Field visibility
 

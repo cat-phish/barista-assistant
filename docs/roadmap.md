@@ -1598,11 +1598,22 @@ Backlog item 3, branch `bean-label`. `docs/api/bean-label.md` §4d,
   **Photos card at the top** of the form, then a **Fill in with AI** card:
   photos just for the read (thumbnails, not kept, sent first) plus "Also
   read the bean's photos" (ticked), up to 8 (`LABEL_MAX_IMAGES`); nothing is
-  read until the button.
+  read until the button. Photos are **dragged to reorder**
+  (`PUT …/photos/order`, `useReorder` + vue-draggable-plus); the first is the
+  cover. A phone reloading mid-read was Vite's live-reload socket (off in
+  Docker: `VITE_LIVE_RELOAD`).
 - Its prompt is part of "Your AI prompt" (branch `label-prompt`): the
   `labelCore` section (editable under Advanced) and separate label
   instructions (`labelInstructions`), the asker's; brewing instructions
   aren't sent with it. The Docker dev server now refuses websocket requests
-  outright (a hanging one, reset by a phone, crashed it). Photos are **dragged to reorder** (`PUT …/photos/order`,
-  `useReorder` + vue-draggable-plus); the first is the cover. A phone reloading
-  mid-read was Vite's live-reload socket (off in Docker: `VITE_LIVE_RELOAD`).
+  outright (a hanging one, reset by a phone, crashed it).
+- **Web lookup** (branch `label-web`), decided: opt-in per workspace
+  (`labelWebLookup`, off by default) and then per read ("Also look it up on
+  the web", unticked, noting it takes longer); web values are **only ever
+  suggestions** with a source link; the **roaster's site first**
+  (`allowed_domains` when its address is known). A second call after the
+  label read, on the Responses API with `web_search`; the photos aren't
+  sent to it, nor the roast date or batch number. A value is kept only with
+  a page the search really visited (no invented links). A failed lookup
+  still returns the label (`webError`). `LABEL_WEB_TIMEOUT_MS` 120 s;
+  `OPENAI_WEB_MODEL`.

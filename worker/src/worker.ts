@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { AI_PREVIEW_QUEUE, BREW_ANALYSIS_QUEUE, LABEL_READ_QUEUE, MAINTENANCE_QUEUE, PARAMETER_SUGGESTION_QUEUE, REMINDER_QUEUE, STEEP_REMINDER_JOB, type AiPreviewJobData, type BrewAnalysisJobData, type DbBackupJobData, type LabelFields, type LabelReadJobData, type ParameterSuggestionJobData, type RateReminderJobData, type SteepReminderJobData } from "@barista/shared/jobs";
+import { AI_PREVIEW_QUEUE, BREW_ANALYSIS_QUEUE, LABEL_READ_QUEUE, MAINTENANCE_QUEUE, PARAMETER_SUGGESTION_QUEUE, REMINDER_QUEUE, STEEP_REMINDER_JOB, type AiPreviewJobData, type BrewAnalysisJobData, type DbBackupJobData, type LabelReadJobData, type LabelReadResult, type ParameterSuggestionJobData, type RateReminderJobData, type SteepReminderJobData } from "@barista/shared/jobs";
 import { UnrecoverableError, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 import { config } from "./config.js";
@@ -69,7 +69,7 @@ previews.on("error", (err) => console.error("Preview worker error:", err.message
 
 // Bean labels (docs/api/llm-contract.md §9c): an AI call the backend waits
 // for; not retried (the person tries again), nothing stored.
-const labels = new Worker<LabelReadJobData, LabelFields>(LABEL_READ_QUEUE, (job: Job<LabelReadJobData>) => readLabel(job.data), {
+const labels = new Worker<LabelReadJobData, LabelReadResult>(LABEL_READ_QUEUE, (job: Job<LabelReadJobData>) => readLabel(job.data), {
   connection,
   concurrency: config.concurrency,
 });

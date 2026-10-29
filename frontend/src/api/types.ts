@@ -58,7 +58,8 @@ export interface WorkspaceSettings {
   suggestSource: SuggestSource;
   suggestMaxBrews: number;
   suggestAlternatives: AlternativeKind[]; // what else it suggests by default
-  readLabels: boolean; // "Fill in from a photo" on the bean form (bean-label.md §4d)
+  readLabels: boolean; // "Fill in with AI" on the bean form (bean-label.md §4d)
+  labelWebLookup: boolean; // its "Also look it up on the web" (off by default)
 }
 export const AUTO_ANALYZE_DELAYS = [0, 5, 10, 15, 30] as const;
 export type AutoAnalyzeDelay = (typeof AUTO_ANALYZE_DELAYS)[number];
@@ -676,4 +677,14 @@ export interface LabelFields {
   bagWeightGrams: number | null;
   batchNumber: string | null;
   website: string | null;
+}
+
+// What a web lookup added (bean-label.md §4d), each with the page it's on.
+// Never the roast date or batch number.
+export type LabelWebField = Exclude<keyof LabelFields, 'roastDate' | 'batchNumber'>;
+export type LabelWebFinds = { [K in LabelWebField]?: { value: NonNullable<LabelFields[K]>; url: string } };
+export interface LabelReadResult {
+  fields: LabelFields;
+  web: LabelWebFinds | null; // null when not asked
+  webError: string | null; // the lookup failed; the label was still read
 }

@@ -23,13 +23,13 @@ import {
   type AiPreviewJobData,
   LABEL_READ_JOB,
   LABEL_READ_QUEUE,
-  type LabelFields,
+  type LabelReadResult,
   type LabelReadJobData,
 } from "@barista/shared/jobs";
 import type { AiRequest, BackupSettings } from "@barista/shared/schema";
 import { Queue, QueueEvents } from "bullmq";
 import { Redis } from "ioredis";
-import { backupTimezone, config, labelReadTimeoutMs, previewTimeoutMs } from "./config.js";
+import { backupTimezone, config, labelReadTimeoutMs, labelWebTimeoutMs, previewTimeoutMs } from "./config.js";
 
 // Producer side of the brew-analysis queue (docs/api/llm-contract.md §9).
 const connection = new Redis(config.redis.url, {
@@ -194,14 +194,14 @@ export function previewAiRequest(data: AiPreviewJobData): Promise<AiRequest | nu
 
 // Reading a bean label (docs/api/bean-label.md §4d): an AI call, so a longer
 // wait; not retried (the person tries again).
-export const labelReadQueue = new Queue<LabelReadJobData, LabelFields>(LABEL_READ_QUEUE, { connection });
+export const labelReadQueue = new Queue<LabelReadJobData, LabelReadResult>(LABEL_READ_QUEUE, { connection });
 let lastLabelError = "";
 labelReadQueue.on("error", (err: Error) => {
   if (err.message !== lastLabelError) console.error("Label queue error:", err.message);
   lastLabelError = err.message;
 });
-export function readBeanLabel(data: LabelReadJobData): Promise<LabelFields> {
-  return addAndWait(labelReadQueue, LABEL_READ_JOB, data, labelReadTimeoutMs());
+export function readBeanLabel(data: LabelReadJobData): Promise<LabelReadResult> {
+  return addAndWait(labelReadQueue, LABEL_READ_JOB, data, data.web ? labelWebTimeoutMs() : labelReadTimeoutMs());
 }
 
 // Same timeout as the analysis; the caller treats failure as "no reminder".

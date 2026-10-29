@@ -1,4 +1,4 @@
-import { LABEL_READ_QUEUE, type LabelFields, type LabelReadJobData } from "@barista/shared/jobs";
+import { LABEL_READ_QUEUE, type LabelFields, type LabelReadJobData, type LabelReadResult } from "@barista/shared/jobs";
 import { Worker } from "bullmq";
 import { Redis } from "ioredis";
 import sharp from "sharp";
@@ -27,17 +27,18 @@ const FIELDS: LabelFields = {
   batchNumber: null,
   website: null,
 };
-let worker: Worker<LabelReadJobData, LabelFields> | null = null;
+const WEB = { producer: { value: "Many farms", url: "https://onyxcoffeelab.com/geometry" } };
+let worker: Worker<LabelReadJobData, LabelReadResult> | null = null;
 let connection: Redis | null = null;
 let received: LabelReadJobData | null = null;
 function startWorker(fail = false): void {
   connection = new Redis(process.env.REDIS_URL ?? "", { password: process.env.REDIS_PASSWORD, maxRetriesPerRequest: null });
-  worker = new Worker<LabelReadJobData, LabelFields>(
+  worker = new Worker<LabelReadJobData, LabelReadResult>(
     LABEL_READ_QUEUE,
     async (job) => {
       received = job.data;
       if (fail) throw new Error("model can't see");
-      return FIELDS;
+      return { fields: FIELDS, web: job.data.web ? WEB : null, webError: null };
     },
     { connection },
   );
@@ -48,6 +49,7 @@ afterEach(async () => {
   worker = null;
   received = null;
   delete process.env.LABEL_READ_TIMEOUT_MS;
+  delete process.env.LABEL_WEB_TIMEOUT_MS;
 });
 
 const jpeg = async (width: number, height: number) =>
@@ -60,7 +62,8 @@ describe("reading a bean label from photos", () => {
     const ws = (await newWorkspace(owner)).id;
     const res = await owner.agent.post(`/api/workspaces/${ws}/bean-label`).send({ images: [await jpeg(2000, 1500), await jpeg(300, 400)] });
     expect(res.status, JSON.stringify(res.body)).toBe(200);
-    expect(res.body).toEqual({ fields: FIELDS });
+    expect(res.body).toEqual({ fields: FIELDS, web: null, webError: null });
+    expect(received!.web).toBe(false);
     expect(received!.images).toHaveLength(2);
     const first = await sharp(Buffer.from(received!.images[0]!, "base64")).metadata();
     expect([first.format, first.width, first.height]).toEqual(["webp", 1024, 768]);
@@ -110,5 +113,27 @@ describe("reading a bean label from photos", () => {
     const res = await owner.agent.post(url).send(body);
     expect(res.status).toBe(504);
     expect(res.body.error).toMatch(/in time/);
+  });
+  it("looks it up on the web only when asked and the workspace allows it", async () => {
+    const owner = await newUser();
+    const ws = (await newWorkspace(owner)).id;
+    const url = `/api/workspaces/${ws}/bean-label`;
+    const body = { images: [await jpeg(10, 10)], web: true, website: " onyxcoffeelab.com " };
+    const off = await owner.agent.post(url).send(body);
+    expect(off.status).toBe(403);
+    expect(off.body.error).toMatch(/web is turned off/);
+    await owner.agent.patch(`/api/workspaces/${ws}/settings`).send({ labelWebLookup: true });
+    startWorker();
+    const res = await owner.agent.post(url).send(body);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toEqual({ fields: FIELDS, web: WEB, webError: null });
+    expect(received).toMatchObject({ web: true, website: "onyxcoffeelab.com" });
+    // A web read waits longer than a plain one.
+    await worker!.close();
+    process.env.LABEL_READ_TIMEOUT_MS = "100";
+    process.env.LABEL_WEB_TIMEOUT_MS = "400";
+    const started = Date.now();
+    expect((await owner.agent.post(url).send(body)).status).toBe(504);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(400);
   });
 });

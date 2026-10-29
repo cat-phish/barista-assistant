@@ -39,6 +39,7 @@ export const workspaceSettingsObject = z
     suggestMaxBrews: z.number().int().min(1).max(MAX_SUGGEST_BREWS),
     suggestAlternatives: alternativeKinds,
     readLabels: z.boolean(), // docs/api/bean-label.md §4d
+    labelWebLookup: z.boolean(),
   })
   .partial()
   .strict();

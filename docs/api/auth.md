@@ -186,8 +186,9 @@ not in preferences, so it isn't sent with every `user`.
   deleted) uses the defaults;
 - Suggest parameters (§8b) uses the **asker's** (`requestedBy` on the row).
 - Reading a bean label (§4d) uses the **asker's** (`requestedBy` in the job).
-  Its section (`labelCore`, "Reading a bean label") and label instructions
-  don't make analyses or suggestions count as customized.
+  Its sections (`labelCore`, "Reading a bean label", and `labelWeb`,
+  "Looking a bean up on the web") and label instructions don't make
+  analyses or suggestions count as customized.
 
 **A one-off note** (up to 500 characters) can go with one request: the
 `note` body field on `POST …/analyze`, `POST …/parameter-suggestions` and

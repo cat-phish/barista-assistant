@@ -75,6 +75,10 @@ work is in `roadmap.md`.
   tasting notes, roast date and level, bag weight, website. A field that
   already says something else gets "Label says: X · Use". Nothing saves
   until you save. Owners can turn it off under Settings → AI → Bean labels.
+  They can also allow **Also look it up on the web** (off by default): ticked
+  for a read, it takes longer and searches the roaster's site for what the
+  label leaves out; each find shows as "Web says: X · source · Use", never
+  filled in by itself.
   (`docs/api/bean-label.md` §4d)
 
 ## Bar setup

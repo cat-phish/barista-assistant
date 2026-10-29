@@ -31,6 +31,8 @@ export const backupDownloadsEnabled = (): boolean => process.env.BACKUP_DOWNLOAD
 export const previewTimeoutMs = (): number => Number(process.env.AI_PREVIEW_TIMEOUT_MS ?? 10_000);
 // How long reading a bean label may take (docs/api/bean-label.md §4d): a vision call.
 export const labelReadTimeoutMs = (): number => Number(process.env.LABEL_READ_TIMEOUT_MS ?? 60_000);
+// With a web lookup after it (§4d): searches take longer.
+export const labelWebTimeoutMs = (): number => Number(process.env.LABEL_WEB_TIMEOUT_MS ?? 120_000);
 // Where scheduled database dumps are written (the worker) and listed from.
 export const backupDir = (): string => process.env.BACKUP_DIR ?? "/backups";
 // Where bean photos are kept (docs/api/bean-photos.md §4c).

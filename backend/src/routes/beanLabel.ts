@@ -1,4 +1,4 @@
-import { LABEL_MAX_IMAGES, type LabelFields } from "@barista/shared/jobs";
+import { LABEL_MAX_IMAGES, type LabelReadResult } from "@barista/shared/jobs";
 import { beanProcesses, DEFAULT_WORKSPACE_SETTINGS, withDefaults, workspaces } from "@barista/shared/schema";
 import { and, asc, eq } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
@@ -27,6 +27,9 @@ const readSchema = z
       .array(z.base64().max(Math.ceil(MAX_IMAGE_BYTES / 3) * 4, "a photo is too large"))
       .min(1)
       .max(LABEL_MAX_IMAGES),
+    // Then look it up on the web (needs labelWebLookup); website: the form's.
+    web: z.boolean().optional(),
+    website: z.string().trim().max(500).nullable().optional(),
   })
   .strict();
 
@@ -34,16 +37,21 @@ const readSchema = z
 export const beanLabelRouter = Router({ mergeParams: true });
 beanLabelRouter.use(requireAuth);
 
-beanLabelRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<{ fields: LabelFields }>) => {
+beanLabelRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<LabelReadResult>) => {
   const { workspaceId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
   const [ws] = await db.select({ settings: workspaces.settings }).from(workspaces).where(eq(workspaces.id, workspaceId));
-  if (!withDefaults(DEFAULT_WORKSPACE_SETTINGS, ws?.settings ?? null).readLabels) {
+  const settings = withDefaults(DEFAULT_WORKSPACE_SETTINGS, ws?.settings ?? null);
+  if (!settings.readLabels) {
     sendError(res, 403, "Reading bean labels is turned off for this workspace (Settings → AI)");
     return;
   }
   const body = parseBody(readSchema, req, res);
   if (!body) return;
+  if (body.web && !settings.labelWebLookup) {
+    sendError(res, 403, "Looking beans up on the web is turned off for this workspace (Settings → AI)");
+    return;
+  }
 
   // Re-encoded as stored photos are: upright, no metadata, at most 1024 px.
   const images: string[] = [];
@@ -64,7 +72,7 @@ beanLabelRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<{ 
   ).map((p) => p.name);
 
   try {
-    res.json({ fields: await readBeanLabel({ images, processes, requestedBy: authedUserId(req) }) });
+    res.json(await readBeanLabel({ images, processes, requestedBy: authedUserId(req), web: body.web ?? false, website: body.website || null }));
   } catch (err) {
     if (err instanceof QueueUnavailableError) {
       console.error("Could not queue a label read:", err.message);
