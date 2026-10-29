@@ -66,6 +66,7 @@ describe("reading a bean label from photos", () => {
     expect([first.format, first.width, first.height]).toEqual(["webp", 1024, 768]);
     expect(received!.processes).toContain("Washed");
     expect(received!.processes).toContain("Natural");
+    expect(received!.requestedBy).toBe(owner.id); // their AI prompt is used
     // Up to 8: the bean's 6 and a couple taken just for the read.
     expect((await owner.agent.post(`/api/workspaces/${ws}/bean-label`).send({ images: Array(8).fill(await jpeg(20, 20)) })).status).toBe(200);
   });

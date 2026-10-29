@@ -1598,6 +1598,11 @@ Backlog item 3, branch `bean-label`. `docs/api/bean-label.md` §4d,
   **Photos card at the top** of the form, then a **Fill in with AI** card:
   photos just for the read (thumbnails, not kept, sent first) plus "Also
   read the bean's photos" (ticked), up to 8 (`LABEL_MAX_IMAGES`); nothing is
-  read until the button. Photos are **dragged to reorder** (`PUT …/photos/order`,
+  read until the button.
+- Its prompt is part of "Your AI prompt" (branch `label-prompt`): the
+  `labelCore` section (editable under Advanced) and separate label
+  instructions (`labelInstructions`), the asker's; brewing instructions
+  aren't sent with it. The Docker dev server now refuses websocket requests
+  outright (a hanging one, reset by a phone, crashed it). Photos are **dragged to reorder** (`PUT …/photos/order`,
   `useReorder` + vue-draggable-plus); the first is the cover. A phone reloading
   mid-read was Vite's live-reload socket (off in Docker: `VITE_LIVE_RELOAD`).

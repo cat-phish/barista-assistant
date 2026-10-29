@@ -1,6 +1,26 @@
 import vue from '@vitejs/plugin-vue';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+
+// Vite reloads the page when its live-reload socket drops and comes back,
+// which on a phone happens whenever the camera or photo picker opens:
+// whatever was in progress is lost. Docker sets VITE_LIVE_RELOAD=false (its
+// source is copied in, so live reload does nothing there).
+const liveReload = process.env.VITE_LIVE_RELOAD !== 'false';
+// Without it, nothing answers the page's websocket request: it would hang,
+// and a phone resetting it crashed the server (ECONNRESET with no handler).
+// Refuse it at once instead; the page then never connects, so never reloads.
+const refuseWebSockets: Plugin = {
+  name: 'refuse-websockets',
+  apply: 'serve',
+  configureServer(server) {
+    if (liveReload) return;
+    server.httpServer?.on('upgrade', (_req, socket) => {
+      socket.on('error', () => undefined);
+      socket.end('HTTP/1.1 404 Not Found\r\n\r\n');
+    });
+  },
+};
 
 // PWA settings follow docs/timer_architecture.md §2.
 export default defineConfig({
@@ -14,13 +34,10 @@ export default defineConfig({
     // IPs and localhost always work; a hostname (e.g. barista.lan) must be
     // listed: ALLOWED_HOSTS=barista.lan,other.lan
     allowedHosts: process.env.ALLOWED_HOSTS ? process.env.ALLOWED_HOSTS.split(',').map((h) => h.trim()) : [],
-    // Vite reloads the page when its live-reload socket drops and comes back,
-    // which on a phone happens whenever the camera or photo picker opens:
-    // whatever was in progress is lost. Docker sets VITE_LIVE_RELOAD=false
-    // (its source is copied in, so live reload does nothing there).
-    ws: process.env.VITE_LIVE_RELOAD === 'false' ? false : undefined,
+    ws: liveReload ? undefined : false, // see refuseWebSockets
   },
   plugins: [
+    refuseWebSockets,
     vue(),
     VitePWA({
       registerType: 'autoUpdate',

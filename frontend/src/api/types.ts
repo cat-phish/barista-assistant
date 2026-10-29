@@ -468,13 +468,14 @@ export interface LlmAnalysis {
 
 // Your own AI prompt (docs/api/auth.md §1c).
 export interface AiPrompt {
-  instructions: string | null;
+  instructions: string | null; // analyses and Suggest parameters
+  labelInstructions: string | null; // reading bean labels (bean-label.md §4d)
   overrides: Record<string, string>; // section key → your text
 }
 export interface PromptSectionText {
   key: string;
   label: string;
-  prompts: ReadonlyArray<'analysis' | 'suggest'>;
+  prompts: ReadonlyArray<'analysis' | 'suggest' | 'label'>;
   locked: boolean; // describes the answer's JSON: can't be changed
   text: string; // the default
 }
@@ -482,6 +483,7 @@ export interface AiPromptSettings {
   aiPrompt: AiPrompt;
   sections: PromptSectionText[];
   instructionsIntro: string;
+  labelInstructionsIntro: string;
   noteIntro: string;
   limits: { instructions: number; section: number; note: number };
 }

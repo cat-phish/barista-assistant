@@ -1,10 +1,10 @@
-// The AI prompt's sections (docs/api/llm-contract.md §9 and §9b) as text:
+// The AI prompt's sections (docs/api/llm-contract.md §9, §9b and §9c) as text:
 // the defaults, which prompt each belongs to, and which are locked (they
 // describe the answer's JSON, so editing them could break it). The worker
 // decides when each is included (worker/src/prompt.ts); a barista can
 // replace an unlocked section's text and add instructions of their own
 // (docs/api/auth.md §1c, "Your AI prompt").
-export type PromptKind = "analysis" | "suggest";
+export type PromptKind = "analysis" | "suggest" | "label";
 
 export interface PromptSectionText {
   key: string;
@@ -256,7 +256,7 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
   {
     key: "end",
     label: "Answer in the JSON schema",
-    prompts: ["analysis", "suggest"],
+    prompts: ["analysis", "suggest", "label"],
     locked: true,
     text: "Respond strictly matching the provided JSON schema.",
   },
@@ -325,19 +325,42 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
       "140 characters). Leave alternatives empty when nothing stands out. The values are still for this bean, recipe " +
       "and grinder.",
   },
+  {
+    key: "labelCore",
+    label: "Reading a bean label",
+    prompts: ["label"],
+    locked: false,
+    text:
+      "You read the label of a bag of roasted coffee from photos (front, back, a card), to fill in a form about the coffee. " +
+      "Fill a field only with what is printed or clearly shown; null when it isn't there or can't be read. Never guess or " +
+      "fill from general knowledge. roasterName is the roaster's name; beanName the coffee's name (often the farm, region or " +
+      "blend name), without the roaster. processName is one of the given processes when the printed process is one of them " +
+      "(e.g. 'Natural' for 'Dry process'); otherwise null, with the process as printed in processText. country is in English " +
+      "(e.g. 'Ethiopia'); region the area within it. altitudeMasl is in metres above sea level: a range gives its middle, " +
+      "feet are converted. flavorProfile is the tasting notes as printed, comma-separated. roastDate is the date it was " +
+      "roasted, as YYYY-MM-DD; a best-before or packed-on date is not a roast date. detailedRoastLevel is a named roast " +
+      "(City, Full City…) when one is printed; roastLevel only when just light, medium-light, medium, medium-dark or dark " +
+      "is. roastType is filter, espresso or omni when the bag says what it's roasted for. blendType is blend when it says " +
+      "blend, single_origin when it names one origin as such. decaf is true only when it says decaf. bagWeightGrams is the " +
+      "net weight in grams (12 oz = 340). batchNumber is a roast batch or lot number. website is the roaster's web address " +
+      "with https://.",
+  },
 ];
 
 // Each section's default text by key.
 export const PROMPT_TEXT: Readonly<Record<string, string>> = Object.fromEntries(PROMPT_SECTION_TEXTS.map((s) => [s.key, s.text]));
 export const LOCKED_SECTIONS: readonly string[] = PROMPT_SECTION_TEXTS.filter((s) => s.locked).map((s) => s.key);
 
-// A barista's own prompt (users.ai_prompt): instructions added to both
-// prompts, and their text for any unlocked section, by key.
+// A barista's own prompt (users.ai_prompt): instructions added to the
+// analysis and suggest prompts, instructions of their own for reading bean
+// labels (missing in prompts saved before it), and their text for any
+// unlocked section, by key.
 export interface AiPrompt {
   instructions: string | null;
+  labelInstructions?: string | null;
   overrides: Record<string, string>;
 }
-export const EMPTY_AI_PROMPT: AiPrompt = { instructions: null, overrides: {} };
+export const EMPTY_AI_PROMPT: AiPrompt = { instructions: null, labelInstructions: null, overrides: {} };
 export const AI_INSTRUCTIONS_MAX = 2000;
 export const AI_SECTION_MAX = 4000;
 export const AI_NOTE_MAX = 500; // a one-off note with one request
@@ -346,9 +369,14 @@ export const AI_NOTE_MAX = 500; // a one-off note with one request
 // the closing section (the worker adds them; the settings page shows this).
 export const INSTRUCTIONS_INTRO = "The barista's own instructions; follow them unless they contradict the JSON schema:";
 export const NOTE_INTRO = "For this request only, the barista adds:";
+export const LABEL_INSTRUCTIONS_INTRO = "The person's own instructions for reading labels; follow them unless they contradict the JSON schema:";
+
+// The sections only the label read uses: changing them isn't a custom
+// analysis or suggestion.
+const LABEL_ONLY = PROMPT_SECTION_TEXTS.filter((s) => s.prompts.length === 1 && s.prompts[0] === "label").map((s) => s.key);
 
 // Whether a prompt differs from the defaults: then it's saved as
 // PROMPT_VERSION + "+custom".
 export function isCustomPrompt(prompt: AiPrompt, note: string | null = null): boolean {
-  return !!prompt.instructions || Object.keys(prompt.overrides).length > 0 || !!note;
+  return !!prompt.instructions || Object.keys(prompt.overrides).some((key) => !LABEL_ONLY.includes(key)) || !!note;
 }
