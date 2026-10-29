@@ -68,8 +68,8 @@ export function buildWebRequest(fields: LabelFields, data: LabelReadJobData, pro
     input:
       `The label says: ${JSON.stringify(known)}. Processes to choose from: ${processes}.` +
       (site ? ` Search only the roaster's site, ${site}, for this coffee's own product page.` : " Look for the roaster's own product page for this coffee."),
-    // "high": more of each page read, so the product page's details are seen.
-    tools: [{ type: "web_search", search_context_size: "high", ...(site ? { filters: { allowed_domains: [site] } } : {}) }],
+    // How much of each page is read: the workspace's labelWebContext.
+    tools: [{ type: "web_search", search_context_size: data.webContext ?? "high", ...(site ? { filters: { allowed_domains: [site] } } : {}) }],
     include: ["web_search_call.action.sources"],
     text: { format: { type: "json_schema", name: "bean_web", strict: true, schema: labelWebJsonSchema(data.processes) } },
   };

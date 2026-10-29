@@ -72,7 +72,7 @@ beanLabelRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<La
   ).map((p) => p.name);
 
   try {
-    res.json(await readBeanLabel({ images, processes, requestedBy: authedUserId(req), web: body.web ?? false, website: body.website || null }));
+    res.json(await readBeanLabel({ images, processes, requestedBy: authedUserId(req), web: body.web ?? false, website: body.website || null, webContext: settings.labelWebContext }));
   } catch (err) {
     if (err instanceof QueueUnavailableError) {
       console.error("Could not queue a label read:", err.message);

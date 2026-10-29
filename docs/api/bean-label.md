@@ -73,7 +73,9 @@ label, else the form's Website). What it finds is **only ever suggested**:
 "Web says: X · source · Use" under the field, the link to the page it's on;
 nothing it finds fills a field by itself. Not shown where it says what the
 form (after the label) already says, or where the label already suggested
-something. The wait is `LABEL_WEB_TIMEOUT_MS` (default 120 s). If the
+something. How much of each page it reads is the workspace's
+`labelWebContext` (Low, Medium, High; default High). The wait is
+`LABEL_WEB_TIMEOUT_MS` (default 120 s). If the
 lookup fails (a provider or model without web search), the label is still
 read and `webError` says so.
 

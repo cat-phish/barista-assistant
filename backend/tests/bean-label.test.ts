@@ -127,7 +127,10 @@ describe("reading a bean label from photos", () => {
     const res = await owner.agent.post(url).send(body);
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.body).toEqual({ fields: FIELDS, web: WEB, webError: null });
-    expect(received).toMatchObject({ web: true, website: "onyxcoffeelab.com" });
+    expect(received).toMatchObject({ web: true, website: "onyxcoffeelab.com", webContext: "high" });
+    await owner.agent.patch(`/api/workspaces/${ws}/settings`).send({ labelWebContext: "medium" });
+    await owner.agent.post(url).send(body);
+    expect(received!.webContext).toBe("medium");
     // A web read waits longer than a plain one.
     await worker!.close();
     process.env.LABEL_READ_TIMEOUT_MS = "100";

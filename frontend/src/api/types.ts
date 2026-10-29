@@ -45,6 +45,7 @@ export interface User {
 
 // Per workspace, owners edit (docs/api/workspaces.md §2 settings).
 export type RoastScale = 'names' | 'levels';
+export type LabelWebContext = 'low' | 'medium' | 'high'; // how much of each page the web search reads
 export interface WorkspaceSettings {
   recipeRoastLevel: RoastLevel; // the roast recipes are written for
   roastScale: RoastScale; // beans record roast names (Cinnamon … French) or light to dark only
@@ -60,6 +61,7 @@ export interface WorkspaceSettings {
   suggestAlternatives: AlternativeKind[]; // what else it suggests by default
   readLabels: boolean; // "Fill in with AI" on the bean form (bean-label.md §4d)
   labelWebLookup: boolean; // its "Also look it up on the web" (off by default)
+  labelWebContext: LabelWebContext; // default 'high'
 }
 export const AUTO_ANALYZE_DELAYS = [0, 5, 10, 15, 30] as const;
 export type AutoAnalyzeDelay = (typeof AUTO_ANALYZE_DELAYS)[number];
