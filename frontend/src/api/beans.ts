@@ -66,6 +66,9 @@ export const beansApi = {
   reorderPhotos: (workspaceId: string, beanId: string, photoIds: string[]) =>
     api.put<{ photos: BeanPhoto[] }>(`${base(workspaceId)}/${beanId}/photos/order`, { photoIds }),
   removePhoto: (workspaceId: string, beanId: string, photoId: string) => api.delete(`${base(workspaceId)}/${beanId}/photos/${photoId}`),
+  // A cropped image in a photo's place: a new id (images are cached for good), same position.
+  replacePhoto: (workspaceId: string, beanId: string, photoId: string, image: Blob) =>
+    api.put<{ photo: BeanPhoto; photos: BeanPhoto[] }>(`${base(workspaceId)}/${beanId}/photos/${photoId}/image`, image),
   photoUrl: (workspaceId: string, beanId: string, photoId: string) => `${API_URL}${base(workspaceId)}/${beanId}/photos/${photoId}`,
   // Reads the label off 1–6 photos, base64 (docs/api/bean-label.md §4d). Can
   // take half a minute; 403 when the workspace has it off.

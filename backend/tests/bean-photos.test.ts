@@ -137,4 +137,48 @@ describe("bean photos (docs/api/bean-photos.md §4c)", () => {
     expect((await upload(owner, `/api/workspaces/${ws.id}/beans/${theirBean}/photos`, await jpeg(50, 50))).status).toBe(404);
     expect((await owner.agent.get(`/api/workspaces/${ws.id}/beans/${bean}/photos/${theirBean}`)).status).toBe(404);
   });
+
+  describe("replacing an image (PUT …/:photoId/image)", () => {
+    const replace = (user: TestUser, base: string, id: string, image: Buffer | string) => user.agent.put(`${base}/${id}/image`).set("Content-Type", "image/jpeg").send(image);
+
+    it("puts the new image in the old one's place under a new id, and removes the old file", async () => {
+      const { owner, ws, bean, base } = await setup();
+      const ids: string[] = [];
+      for (let i = 0; i < MAX_BEAN_PHOTOS; i += 1) ids.push((await upload(owner, base, await jpeg(400, 300))).body.photo.id);
+
+      // A full bean: no room to add, but a replace still works. The cover stays the cover.
+      const res = await replace(owner, base, ids[0]!, await jpeg(200, 200));
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      const fresh = res.body.photo as { id: string; width: number; height: number };
+      expect(fresh).toMatchObject({ width: 200, height: 200 });
+      expect(fresh.id).not.toBe(ids[0]);
+      expect(res.body.photos.map((p: { id: string }) => p.id)).toEqual([fresh.id, ...ids.slice(1)]);
+      expect((await photosOf(owner, ws.id, bean)).map((p) => p.id)).toEqual([fresh.id, ...ids.slice(1)]);
+      expect(existsSync(fileOf(ws.id, ids[0]!))).toBe(false);
+      expect(existsSync(fileOf(ws.id, fresh.id))).toBe(true);
+      expect((await owner.agent.get(`${base}/${ids[0]}`)).status).toBe(404);
+
+      // One in the middle keeps its position too.
+      const middle = (await replace(owner, base, ids[3]!, await jpeg(100, 50))).body.photos.map((p: { id: string }) => p.id);
+      expect(middle[3]).not.toBe(ids[3]);
+      expect(middle.filter((id: string, i: number) => i !== 3)).toEqual([fresh.id, ids[1], ids[2], ids[4], ids[5]]);
+    });
+
+    it("refuses what isn't an image, viewers, and photos of another bean or workspace", async () => {
+      const { owner, ws, bean, base } = await setup();
+      const id = (await upload(owner, base, await jpeg(400, 300))).body.photo.id as string;
+      expect((await replace(owner, base, id, "not an image")).status).toBe(400);
+      expect(existsSync(fileOf(ws.id, id))).toBe(true);
+
+      const viewer = await newUser("viewer");
+      await addMember(owner, ws.id, viewer, "viewer");
+      expect((await replace(viewer, base, id, await jpeg(10, 10))).status).toBe(403);
+
+      const otherBean = `/api/workspaces/${ws.id}/beans/${await newBean(owner, ws.id)}/photos`;
+      expect((await replace(owner, otherBean, id, await jpeg(10, 10))).status).toBe(404);
+      const stranger = await newUser("stranger");
+      expect((await replace(stranger, base, id, await jpeg(10, 10))).status).toBe(404);
+      expect((await photosOf(owner, ws.id, bean)).map((p) => p.id)).toEqual([id]);
+    });
+  });
 });

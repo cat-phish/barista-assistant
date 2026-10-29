@@ -3,13 +3,17 @@
 // The bean's photos: drag ⠿ to reorder, the first is the cover. Editing a
 // saved bean changes them straight away; a new bean holds the picked files
 // until it's saved (uploadPending, called by the form once it has the bean's
-// id). photoSources hands them to the label reader (LabelCard.vue).
+// id). photoSources hands them to the label reader (LabelCard.vue). Crop
+// opens PhotoCropDialog: a saved photo is replaced in place, a picked one
+// swapped for the cropped file.
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 import { beansApi } from '../api/beans';
 import { errorMessage } from '../api/client';
 import type { BeanPhoto } from '../api/types';
 import { useReorder } from '../composables/useReorder';
+import { croppedFile, replaceFile } from '../lib/photoCrop';
+import PhotoCropDialog from './PhotoCropDialog.vue';
 import ReorderHandle from './ReorderHandle.vue';
 
 const MAX_PHOTOS = 6; // MAX_BEAN_PHOTOS in @barista/shared/schema
@@ -128,6 +132,38 @@ async function remove(tile: Tile): Promise<void> {
   }
 }
 
+// The photo being cropped, and its image.
+const cropping = ref<{ id: string; source: Blob } | null>(null);
+async function crop(tile: Tile): Promise<void> {
+  error.value = '';
+  try {
+    cropping.value = { id: tile.id, source: await tile.blob() };
+  } catch (err) {
+    error.value = errorMessage(err);
+  }
+}
+async function cropped(image: Blob): Promise<void> {
+  const target = cropping.value;
+  cropping.value = null;
+  if (!target) return;
+  if (!props.beanId) {
+    const old = pending.value.find((p) => p.key === target.id);
+    if (!old) return;
+    const { list, revoke } = replaceFile(pending.value, target.id, croppedFile(image, old.file.name));
+    pending.value = list;
+    if (revoke) URL.revokeObjectURL(revoke);
+    return;
+  }
+  busy.value = true;
+  try {
+    photos.value = (await beansApi.replacePhoto(props.workspaceId, props.beanId, target.id, image)).photos;
+  } catch (err) {
+    error.value = errorMessage(err);
+  } finally {
+    busy.value = false;
+  }
+}
+
 // After the bean is created: uploads what was picked, in order. Returns an
 // error message if any didn't make it ('' if all did).
 async function uploadPending(beanId: string): Promise<string> {
@@ -172,6 +208,12 @@ onBeforeUnmount(() => pending.value.forEach((p) => URL.revokeObjectURL(p.url)));
         <span v-if="i === 0" class="badge cover-badge">Cover</span>
         <ReorderHandle v-if="tiles.length > 1" class="tile-handle" :name="t.name" :disabled="reorderDisabled" @move="move(i, $event)" />
         <button type="button" class="tile-remove" :disabled="busy" :aria-label="`Remove ${t.name.toLowerCase()}`" @click="remove(t)">✕</button>
+        <button type="button" class="tile-crop" :disabled="busy" :aria-label="`Crop ${t.name.toLowerCase()}`" title="Crop or rotate" @click="crop(t)">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 2v14a2 2 0 0 0 2 2h14" />
+            <path d="M18 22V8a2 2 0 0 0-2-2H2" />
+          </svg>
+        </button>
       </li>
     </VueDraggable>
     <p v-if="tiles.length > 1" class="muted small">Drag ⠿ to reorder; the first is the cover in the bean list.</p>
@@ -183,6 +225,7 @@ onBeforeUnmount(() => pending.value.forEach((p) => URL.revokeObjectURL(p.url)));
     <p v-else class="muted small">{{ MAX_PHOTOS }} photos, the most a bean can have.</p>
     <p v-if="busy" class="muted small" aria-live="polite">Saving photos…</p>
     <p v-if="error" class="field-error" role="alert">{{ error }}</p>
+    <PhotoCropDialog :open="!!cropping" :source="cropping?.source ?? null" :saved="!!beanId" @done="cropped" @cancel="cropping = null" />
   </div>
 </template>
 
@@ -217,7 +260,8 @@ p {
 }
 /* Over the photo, on a light chip so they show on any image. */
 .tile .tile-handle,
-.tile .tile-remove {
+.tile .tile-remove,
+.tile .tile-crop {
   position: absolute;
   bottom: var(--space-1);
   width: 2.25rem;
@@ -230,12 +274,21 @@ p {
 .tile .tile-handle {
   left: var(--space-1);
 }
-.tile .tile-remove {
+.tile .tile-remove,
+.tile .tile-crop {
   right: var(--space-1);
   border: none;
   cursor: pointer;
 }
-.tile .tile-remove:disabled {
+.tile .tile-crop {
+  top: var(--space-1);
+  bottom: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tile .tile-remove:disabled,
+.tile .tile-crop:disabled {
   opacity: 0.5;
   cursor: default;
 }
