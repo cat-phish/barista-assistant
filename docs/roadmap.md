@@ -1617,3 +1617,13 @@ Backlog item 3, branch `bean-label`. `docs/api/bean-label.md` §4d,
   a page the search really visited (no invented links). A failed lookup
   still returns the label (`webError`). `LABEL_WEB_TIMEOUT_MS` 120 s;
   `OPENAI_WEB_MODEL`.
+- After trying it (branch `label-read-away`): leaving the form (to start a
+  timer) lost the read, though the server finished it. The read now runs
+  in a store (`stores/labelRead.ts`) with a notice under the header and is
+  applied when the form is back; an unsaved Add bean is kept in memory
+  (`stores/beanDraft.ts`, "Picked up where you left off · Start over").
+  Decided against keeping reads across a reload (a server-side read id):
+  moving around the app was the need. Also: earlier "Web says" stay across
+  reads, a late answer from an older read is ignored, and the web step
+  asks for the product page with `search_context_size: "high"` (two runs had
+  found the product page once and only the home page once).

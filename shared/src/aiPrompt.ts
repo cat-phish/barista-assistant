@@ -352,7 +352,9 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
     locked: false,
     text:
       "You look up one bag of roasted coffee on the web, given what its label says, to fill in details the label leaves " +
-      "out. Look for the roaster's own page for this coffee first. Give a value only when a page you found states it for " +
+      "out. Find this coffee's own product page on the roaster's site (search for the coffee's name, origin and process " +
+      "there; the home page or a shop listing isn't enough) and read the details on it. Give a value only when a page " +
+      "you found states it for " +
       "this coffee (the same roaster and coffee, not another lot or a similar coffee), with url the address of that page; " +
       "null otherwise. Never guess or fill from general knowledge. Values follow the label's rules: processName is one of " +
       "the given processes when it fits, otherwise null with the process in processText; country in English; " +

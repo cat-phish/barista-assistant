@@ -14,7 +14,11 @@ import ReorderHandle from './ReorderHandle.vue';
 
 const MAX_PHOTOS = 6; // MAX_BEAN_PHOTOS in @barista/shared/schema
 
-const props = defineProps<{ workspaceId: string; beanId: string | null }>();
+const props = defineProps<{
+  workspaceId: string;
+  beanId: string | null;
+  initialPending?: File[]; // picked before you left Add bean (stores/beanDraft.ts)
+}>();
 const photos = defineModel<BeanPhoto[]>({ required: true });
 
 // Picked before the bean exists: shown from the file itself.
@@ -23,8 +27,8 @@ interface Pending {
   file: File;
   url: string;
 }
-const pending = ref<Pending[]>([]);
 let nextKey = 0;
+const pending = ref<Pending[]>((props.initialPending ?? []).map((file) => ({ key: `new-${nextKey++}`, file, url: URL.createObjectURL(file) })));
 const busy = ref(false);
 const error = ref('');
 const camera = ref<HTMLInputElement | null>(null);
@@ -139,7 +143,7 @@ async function uploadPending(beanId: string): Promise<string> {
 }
 // The photos, cover first, each loaded when it's needed.
 const photoSources = computed(() => tiles.value.map((t) => t.blob));
-defineExpose({ uploadPending, photoSources });
+defineExpose({ uploadPending, photoSources, pendingFiles: () => pending.value.map((p) => p.file) });
 
 onBeforeUnmount(() => pending.value.forEach((p) => URL.revokeObjectURL(p.url)));
 </script>
