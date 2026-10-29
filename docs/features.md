@@ -58,6 +58,13 @@ work is in `roadmap.md`.
 - Roaster, coffee name, process, **roast level** (light → dark, optional),
   roast date and stock. Optionally the **roast weight loss** (%), which
   tells the AI how developed the roast is.
+- **Name suggestions:** roaster, coffee, producer and green supplier
+  suggest the workspace's names while you type (archived beans' too; the
+  roaster's own coffees first). A roaster, producer or supplier spelled
+  differently from one you have ("Proud Mary" for "Proud Mary Coffee
+  Roasters" or the other way round, a typo, extra words) gets "You have:
+  X · Use", as you type. A new bean of a coffee
+  you've had offers **Start from your last bag**, like Duplicate.
 - **Freezing:** freeze/thaw periods pause the bean's roast age, so "days off
   roast" stays meaningful for frozen coffee.
 - **Photos:** up to 6 per bean (the bag, the label), taken with the phone's
@@ -78,7 +85,10 @@ work is in `roadmap.md`.
   They can also allow **Also look it up on the web** (off by default): ticked
   for a read, it takes longer and searches the roaster's site for what the
   label leaves out; each find shows as "Web says: X · source · Use", never
-  filled in by itself. You can leave the page while it reads (a notice
+  filled in by itself. **Look it up on the web** runs the search alone,
+  from what the form says: to try again without reading the photos again,
+  or from details typed in by hand. The pages it looked at are listed under the card,
+  to look up by hand what it missed (often the altitude). You can leave the page while it reads (a notice
   says when it's done, "Back to the bean"); an unsaved new bean is kept
   until you're back.
   (`docs/api/bean-label.md` §4d)

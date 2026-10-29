@@ -8,19 +8,21 @@ import AppHeader from '../components/AppHeader.vue';
 import BeanPhotos from '../components/BeanPhotos.vue';
 import LabelCard from '../components/LabelCard.vue';
 import LabelHint from '../components/LabelHint.vue';
+import NameInput from '../components/NameInput.vue';
 import RatingInput from '../components/RatingInput.vue';
 import { localDateInput, parseDecimal, toDateInput } from '../lib/format';
 import { ALTITUDE_LABELS, altitudeText, parseAltitude } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import { useWorkspaceStore } from '../stores/workspace';
 import { useBeanDraftStore } from '../stores/beanDraft';
-import { labelReadKey, useLabelReadStore } from '../stores/labelRead';
+import { labelReadKey, useLabelReadStore, type LabelAnswer } from '../stores/labelRead';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
-import type { Bean, BeanPhoto, BeanProcess, LabelReadResult, BlendType, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from '../api/types';
+import type { Bean, BeanPhoto, BeanProcess, BlendType, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from '../api/types';
 import { COUNTRY_AREAS, ORIGIN_AREAS, areaForCountry } from '../lib/origins';
 import { ROAST_LEVELS } from '../lib/scale';
-import { LABEL_FIELD_KEYS, labelFill, type LabelForm, type LabelSuggestion, type TextKey } from '../lib/labelFill';
+import { LABEL_FIELD_KEYS, labelFill, lookUpFields, pageLabel, type LabelForm, type LabelSuggestion, type TextKey } from '../lib/labelFill';
 import type { FieldKey } from '../lib/fields';
+import { distinctNames, lastBag, normalizeName } from '../lib/nameSuggest';
 import {
   BLEND_TYPES,
   DETAILED_ROAST_LEVELS,
@@ -78,6 +80,25 @@ const notes = ref('');
 // held by BeanPhotos until it's saved.
 const photos = ref<BeanPhoto[]>([]);
 const photoPicker = ref<InstanceType<typeof BeanPhotos> | null>(null);
+
+// The workspace's other beans, archived ones too: the names the roaster,
+// coffee, producer and supplier fields suggest, and the last bag of a coffee
+// you've had before.
+const otherBeans = ref<Bean[]>([]);
+const roasterNames = computed(() => distinctNames(otherBeans.value.map((b) => b.roasterName)));
+const coffeeNames = computed(() => distinctNames(otherBeans.value.map((b) => b.beanName)));
+const producerNames = computed(() => distinctNames(otherBeans.value.map((b) => b.producer)));
+const supplierNames = computed(() => distinctNames(otherBeans.value.map((b) => b.greenSupplier)));
+// This roaster's coffees come first.
+const roasterCoffees = computed(() => {
+  const roaster = normalizeName(roasterName.value);
+  return roaster ? otherBeans.value.filter((b) => normalizeName(b.roasterName) === roaster).map((b) => b.beanName) : [];
+});
+// A new bean (not already a copy) of a coffee you've had: offer to start
+// from its last bag, as Duplicate does.
+const previousBag = computed(() =>
+  editing.value || copyOf.value ? null : lastBag(otherBeans.value, roasterName.value, beanName.value),
+);
 const labelCard = ref<InstanceType<typeof LabelCard> | null>(null);
 
 const countries = Object.keys(COUNTRY_AREAS);
@@ -186,7 +207,10 @@ const labelRefs = computed<Record<TextKey, Ref<string>>>(() => ({
 }));
 const suggestions = ref<Partial<Record<TextKey, LabelSuggestion>>>({});
 const labelSummary = ref('');
-function applyLabel({ fields, web, webError }: LabelReadResult): void {
+// The pages the last web lookup looked at, to look for what it didn't pick
+// out (docs/api/bean-label.md §4d). A read without a lookup keeps them.
+const webSources = ref<string[]>([]);
+function applyLabel({ fields, web, webSources: pages, webError, fromPhotos }: LabelAnswer): void {
   const refs = labelRefs.value;
   const form = { decaf: decaf.value } as LabelForm;
   for (const key of Object.keys(refs) as TextKey[]) form[key] = refs[key].value;
@@ -209,6 +233,7 @@ function applyLabel({ fields, web, webError }: LabelReadResult): void {
     Object.entries(suggestions.value).filter(([key, s]) => s.source && !(key in offered) && refs[key as TextKey].value.trim() !== s.value.trim()),
   );
   suggestions.value = { ...kept, ...offered };
+  if (web) webSources.value = pages;
   const fromWeb = Object.values(offered).filter((s) => s.source).length;
   const differ = Object.keys(offered).length - fromWeb;
   const parts = [
@@ -216,10 +241,29 @@ function applyLabel({ fields, web, webError }: LabelReadResult): void {
     differ ? `${differ} differ${differ === 1 ? 's' : ''} from what's there (see "Label says")` : '',
     fromWeb ? `${fromWeb} suggestion${fromWeb === 1 ? '' : 's'} from the web (see "Web says")` : '',
   ].filter(Boolean);
-  const summary = parts.length ? `${parts.join('; ')}. Check them before saving.` : 'Nothing new could be read from the label.';
-  const nothingOnWeb = web && fromWeb === 0 ? ' Nothing more was found on the web.' : '';
-  labelSummary.value = `${summary}${nothingOnWeb}${webError ? ` ${webError}` : ''}`;
+  // A lookup alone (no photos) only speaks for the web.
+  const summary = parts.length ? `${parts.join('; ')}. Check them before saving.` : fromPhotos ? 'Nothing new could be read from the label.' : '';
+  const nothingOnWeb = web && fromWeb === 0 ? 'Nothing more was found on the web.' : '';
+  labelSummary.value = [summary, nothingOnWeb, webError ?? ''].filter(Boolean).join(' ');
 }
+// What the form says, for "Look it up on the web" without photos.
+const knownForLookUp = computed(() =>
+  lookUpFields({
+    roasterName: roasterName.value,
+    beanName: beanName.value,
+    processName: processes.value.find((p) => p.id === process.value)?.name ?? null,
+    country: country.value,
+    region: region.value,
+    producer: producer.value,
+    altitudeMasl: altitudeParsed.value?.ok ? altitudeParsed.value.value : null,
+    flavorProfile: flavorProfile.value,
+    roastType: roastType.value || null,
+    blendType: blendType.value || null,
+    decaf: decaf.value || null,
+    bagWeightGrams: bagParsed.value?.ok ? bagParsed.value.value : null,
+    website: website.value,
+  }),
+);
 function useSuggestion(key: TextKey): void {
   const s = suggestions.value[key];
   if (s) labelRefs.value[key].value = s.value;
@@ -326,7 +370,7 @@ const drafts = useBeanDraftStore();
 const draftRefs: Record<string, Ref<unknown>> = {
   roasterName, beanName, process, originArea, country, region, producer, altitude, flavorProfile, blendType, decaf, roastType,
   roastDate, detailedRoastLevel, inventory, price, currency, bagWeight, purchaseDate, greenSupplier, batchNumber, weightLoss,
-  website, showOnPublicMenu, rating, notes, level, sourceDetailed, savedDetailed, savedRoastLevel, copyOf, suggestions, labelSummary,
+  website, showOnPublicMenu, rating, notes, level, sourceDetailed, savedDetailed, savedRoastLevel, copyOf, suggestions, labelSummary, webSources,
 };
 const snapshot = () => Object.fromEntries(Object.entries(draftRefs).map(([name, r]) => [name, r.value]));
 let blank = ''; // the form as it opened, to tell whether anything was entered
@@ -402,9 +446,14 @@ onMounted(async () => {
 
 async function load(): Promise<void> {
   const ws = workspaces.current?.id;
-  if (!editing.value && !copyFrom) return;
+  if (!editing.value && !copyFrom) {
+    // A blank bean only needs the names; it opens without waiting for them.
+    if (ws) beansApi.list(ws).then((r) => (otherBeans.value = r.beans)).catch(() => {});
+    return;
+  }
   try {
     const list = ws ? (await beansApi.list(ws)).beans : [];
+    otherBeans.value = list.filter((b) => b.id !== props.id);
     if (copyFrom) {
       const from = list.find((b) => b.id === copyFrom);
       if (from) fillCopy(from);
@@ -533,23 +582,36 @@ async function save(): Promise<void> {
           :bean-photos="show('bean.photos') ? (photoPicker?.photoSources ?? []) : []"
           :web-lookup="settings.labelWebLookup"
           :website="website"
+          :known="knownForLookUp"
           :read-key="readKey"
           :name="readName"
           :initial-extras="draftLabelPhotos"
         >
           <p v-if="labelSummary" class="small" role="status">{{ labelSummary }}</p>
+          <div v-if="webSources.length" class="web-sources small">
+            <p class="muted">Pages the web lookup looked at, for anything it missed:</p>
+            <ul>
+              <li v-for="url in webSources" :key="url">
+                <a :href="url" target="_blank" rel="noopener noreferrer">{{ pageLabel(url) }}</a>
+              </li>
+            </ul>
+          </div>
         </LabelCard>
       </section>
       <section class="card stack">
         <div class="field">
           <label for="roaster">Roaster<span class="req" aria-hidden="true">*</span></label>
-          <input id="roaster" aria-required="true" v-model="roasterName" maxlength="255" placeholder="e.g. Onyx Coffee Lab" :aria-invalid="submitted && !!fieldErrors.roasterName" />
+          <NameInput id="roaster" v-model="roasterName" :names="roasterNames" aria-required="true" maxlength="255" placeholder="e.g. Onyx Coffee Lab" :aria-invalid="submitted && !!fieldErrors.roasterName" />
           <LabelHint v-if="suggestions.roasterName" :text="suggestions.roasterName.text" :source="suggestions.roasterName.source" @use="useSuggestion('roasterName')" />
           <span v-if="submitted && fieldErrors.roasterName" class="field-error">{{ fieldErrors.roasterName }}</span>
         </div>
         <div class="field">
           <label for="bean">Coffee<span class="req" aria-hidden="true">*</span></label>
-          <input id="bean" aria-required="true" v-model="beanName" maxlength="255" placeholder="e.g. Ethiopia Guji" :aria-invalid="submitted && !!fieldErrors.beanName" />
+          <NameInput id="bean" v-model="beanName" :names="coffeeNames" :prefer="roasterCoffees" :hint="false" aria-required="true" maxlength="255" placeholder="e.g. Ethiopia Guji" :aria-invalid="submitted && !!fieldErrors.beanName" />
+          <span v-if="previousBag" class="small muted">
+            You've had this coffee.
+            <button type="button" class="btn-link small" @click="fillCopy(previousBag)">Start from your last bag</button>
+          </span>
           <LabelHint v-if="suggestions.beanName" :text="suggestions.beanName.text" :source="suggestions.beanName.source" @use="useSuggestion('beanName')" />
           <span v-if="submitted && fieldErrors.beanName" class="field-error">{{ fieldErrors.beanName }}</span>
         </div>
@@ -596,7 +658,7 @@ async function save(): Promise<void> {
           </div>
           <div v-if="show('bean.producer')" class="field">
             <label for="producer">Producer</label>
-            <input id="producer" v-model="producer" maxlength="255" placeholder="e.g. a farm, co-op or washing station" />
+            <NameInput id="producer" v-model="producer" :names="producerNames" maxlength="255" placeholder="e.g. a farm, co-op or washing station" />
             <LabelHint v-if="suggestions.producer" :text="suggestions.producer.text" :source="suggestions.producer.source" @use="useSuggestion('producer')" />
           </div>
         </div>
@@ -721,7 +783,7 @@ async function save(): Promise<void> {
           </div>
           <div v-if="show('bean.greenSupplier')" class="field">
             <label for="green-supplier">Green bean supplier</label>
-            <input id="green-supplier" v-model="greenSupplier" maxlength="255" />
+            <NameInput id="green-supplier" v-model="greenSupplier" :names="supplierNames" maxlength="255" />
           </div>
         </div>
         <div v-if="show('bean.website')" class="field">
@@ -764,6 +826,13 @@ h2 {
 }
 .small {
   font-size: 0.85rem;
+}
+.web-sources ul {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
+}
+.web-sources li {
+  overflow-wrap: anywhere;
 }
 .altitude {
   max-width: 12rem;

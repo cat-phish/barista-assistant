@@ -1,4 +1,5 @@
 import { LABEL_WEB_FIELDS } from "@barista/shared/jobs";
+import { UnrecoverableError } from "bullmq";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // readLabel with the AI calls stood in: the label, then the web lookup.
@@ -17,19 +18,25 @@ beforeEach(() => {
 });
 
 describe("readLabel (docs/api/llm-contract.md §9c)", () => {
-  it("only looks it up when asked", async () => {
-    expect(await readLabel(data)).toEqual({ fields: label, web: null, webError: null });
+  it("reads the label, or looks it up on the web on its own", async () => {
+    expect(await readLabel(data)).toEqual({ fields: label, web: null, webSources: [], webError: null });
     expect(respond).not.toHaveBeenCalled();
+    complete.mockClear();
     const page = "https://onyxcoffeelab.com/products/geometry";
-    respond.mockResolvedValue({ text: JSON.stringify({ ...Object.fromEntries(LABEL_WEB_FIELDS.map((f) => [f, null])), producer: { value: "Many farms", url: page } }), refusal: null, visited: [page] });
-    expect(await readLabel({ ...data, web: true })).toEqual({ fields: label, web: { producer: { value: "Many farms", url: page } }, webError: null });
+    const shop = "https://onyxcoffeelab.com/collections/coffee";
+    respond.mockResolvedValue({ text: JSON.stringify({ ...Object.fromEntries(LABEL_WEB_FIELDS.map((f) => [f, null])), producer: { value: "Many farms", url: page } }), refusal: null, visited: [shop, page] });
+    const lookUp = { ...data, images: [], lookUp: label };
+    expect(await readLabel(lookUp)).toEqual({ fields: label, web: { producer: { value: "Many farms", url: page } }, webSources: [page, shop], webError: null });
+    expect(complete).not.toHaveBeenCalled(); // no photos read again
   });
 
-  it("a failed lookup still gives the label", async () => {
-    respond.mockRejectedValue(new Error("web_search is not supported"));
-    const result = await readLabel({ ...data, web: true });
-    expect(result.fields).toEqual(label);
-    expect(result.web).toBeNull();
-    expect(result.webError).toMatch(/didn't work/);
+  it("a failed lookup answers webError: try again, or not supported", async () => {
+    const lookUp = { ...data, images: [], lookUp: label };
+    respond.mockRejectedValue(new Error("Connection error."));
+    const result = await readLabel(lookUp);
+    expect(result).toMatchObject({ fields: label, web: null, webSources: [] });
+    expect(result.webError).toMatch(/this time/);
+    respond.mockRejectedValue(new UnrecoverableError("OpenAI rejected the request (400): web_search is not supported"));
+    expect((await readLabel(lookUp)).webError).toMatch(/may not support web search/);
   });
 });

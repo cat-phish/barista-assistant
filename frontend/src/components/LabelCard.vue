@@ -3,10 +3,13 @@
 // photos taken or picked here are only for the read (shown, not kept), and
 // the bean's photos can go with them. Nothing is read until the button.
 // With the workspace's labelWebLookup, it can also look the bean up on the
-// web afterwards: ticked per read, as it takes longer. The read runs in
-// stores/labelRead.ts, so it carries on if you leave; the form takes the answer.
+// web afterwards: ticked per read, as it takes longer. "Look it up on the
+// web" runs the lookup alone, from what the form says (again after a read,
+// or without photos). The read runs in stores/labelRead.ts, so it carries on
+// if you leave; the form takes the answer.
 import { computed, onBeforeUnmount, ref } from 'vue';
-import { LABEL_MAX_IMAGES, labelImages } from '../lib/labelFill';
+import type { LabelLookUp } from '../api/types';
+import { LABEL_MAX_IMAGES, canLookUp, labelImages } from '../lib/labelFill';
 import { useLabelReadStore, type LabelReadKey } from '../stores/labelRead';
 
 const props = defineProps<{
@@ -14,6 +17,7 @@ const props = defineProps<{
   beanPhotos: ReadonlyArray<() => Promise<Blob>>; // cover first; [] when photos are hidden
   webLookup: boolean; // the workspace allows "Also look it up on the web"
   website: string; // the form's, to keep the search to the roaster's site
+  known: LabelLookUp; // what the form says, for "Look it up on the web"
   readKey: LabelReadKey; // which form the answer is for
   name: string; // the bean, for the notice while you're elsewhere
   initialExtras?: File[]; // picked before you left Add bean (stores/beanDraft.ts)
@@ -36,6 +40,8 @@ const reads = useLabelReadStore();
 const mine = computed(() => (reads.current?.key === props.readKey ? reads.current : null));
 const reading = computed(() => mine.value?.status === 'reading');
 const searching = computed(() => !!mine.value?.web); // this read includes a web lookup
+const step = computed(() => mine.value?.step);
+const canSearch = computed(() => canLookUp(props.known));
 const error = computed(() => (mine.value?.status === 'failed' ? mine.value.error : ''));
 
 const sending = computed(() => labelImages<File | (() => Promise<Blob>)>(extras.value.map((e) => e.file), includeBean.value ? props.beanPhotos : []));
@@ -60,6 +66,10 @@ async function readLabel(): Promise<void> {
   note.value = left ? `Read the first ${images.length} photos; ${left} left out.` : '';
   const web = props.webLookup && lookUp.value;
   await reads.start(props.readKey, props.name, props.workspaceId, images, web ? { web, website: props.website.trim() || null } : {});
+}
+async function lookUpOnly(): Promise<void> {
+  note.value = '';
+  await reads.lookUp(props.readKey, props.name, props.workspaceId, props.known);
 }
 defineExpose({ extraFiles: () => extras.value.map((e) => e.file) });
 
@@ -97,17 +107,25 @@ onBeforeUnmount(() => extras.value.forEach((e) => URL.revokeObjectURL(e.url)));
     </label>
     <div class="row">
       <button type="button" class="btn btn-primary" :disabled="reading || count === 0" @click="readLabel">
-        {{ reading ? 'Reading the label…' : count ? `✦ Fill in from ${count} photo${count === 1 ? '' : 's'}` : '✦ Fill in from photos' }}
+        {{ reading && mine?.photos ? 'Reading the label…' : count ? `✦ Fill in from ${count} photo${count === 1 ? '' : 's'}` : '✦ Fill in from photos' }}
       </button>
       <span v-if="!count && !reading" class="muted small">Add a photo of the label first.</span>
+    </div>
+    <div v-if="webLookup" class="row">
+      <button type="button" class="btn btn-secondary" :disabled="reading || !canSearch" @click="lookUpOnly">
+        {{ reading && step === 'web' ? 'Looking it up…' : 'Look it up on the web' }}
+      </button>
+      <span v-if="!reading" class="muted small">{{ canSearch ? "From what's filled in below, no photos." : 'Needs the roaster or the coffee first.' }}</span>
     </div>
     <p class="small" role="status">
       {{
         !reading
           ? ''
-          : searching
-            ? 'Reading the label, then looking it up on the web: this can take a couple of minutes. You can leave this page meanwhile.'
-            : 'Still reading the label: this can take half a minute. You can leave this page meanwhile.'
+          : step === 'web'
+            ? 'Looking it up on the web: this can take a couple of minutes. You can leave this page meanwhile.'
+            : searching
+              ? 'Reading the label, then looking it up on the web: this can take a couple of minutes. You can leave this page meanwhile.'
+              : 'Still reading the label: this can take half a minute. You can leave this page meanwhile.'
       }}
     </p>
     <p v-if="note" class="muted small">{{ note }}</p>

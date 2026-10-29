@@ -373,9 +373,11 @@ go with their keys as the bean's do.
 The `label-read` queue (`bean-label.md` §4d): job `read`, data
 `{ "images": ["<base64 WebP>", ...], "processes": ["Washed", ...], "requestedBy": "uuid" }`,
 the photos already re-encoded by the backend, the workspace's visible
-process names, and whose AI prompt to use. The job's **return value** is the answer (`LabelFields`,
-`@barista/shared/jobs`); nothing is written to the database, and it isn't
-retried. `worker/src/label.ts`:
+process names, and whose AI prompt to use. A web lookup is the same job
+with `images: []` and `lookUp` (what's known of the bean, `LabelFields`)
+instead, plus `webContext`: then only step 4 runs. The job's **return
+value** is the answer (`LabelReadResult`, `@barista/shared/jobs`); nothing
+is written to the database, and it isn't retried. `worker/src/label.ts`:
 
 1. **Request:** `OPENAI_VISION_MODEL` (optional; empty uses `OPENAI_MODEL`),
    which must take images. The system prompt (`labelSystemPrompt`) is the
@@ -403,18 +405,18 @@ retried. `worker/src/label.ts`:
    and a matched one clears `processText`. A refusal, an empty response or
    invalid JSON fails the job (the route answers `502`).
 
-4. **Web lookup** (step 2, only with `web: true` in the job;
-   `worker/src/labelWeb.ts`): a **Responses API** call
+4. **Web lookup** (only for a job with `lookUp`, its own request after the
+   label read or from the form; `worker/src/labelWeb.ts`): a **Responses API** call
    (`openai.responses.create`) on `OPENAI_WEB_MODEL` (optional; else the
    vision model), with the `web_search` tool and
    `include: ["web_search_call.action.sources"]`:
    - **Sent:** the `labelWeb` section ("Looking a bean up on the web",
      editable; it asks for this coffee's own product page, not the home
      page), the asker's label instructions and `end` as `instructions`;
-     as `input` what the label says (not the photos, roast date or batch
-     number) and the processes. When the roaster's site is known (the
-     label's `website`, else the job's `website`, the form's), the tool is
-     limited to it (`filters.allowed_domains`). `search_context_size` is
+     as `input` what's known (`lookUp`'s non-null fields: never the
+     photos, roast date or batch number) and the processes. When its
+     `website` is known (the label's, else the form's), the tool is
+     limited to that site (`filters.allowed_domains`). `search_context_size` is
      the workspace's `labelWebContext` (job `webContext`, default `high`).
    - **Schema** (`labelWebJsonSchema`, strict): for each of
      `LABEL_WEB_FIELDS` (`@barista/shared/jobs`), `null` or
@@ -424,11 +426,21 @@ retried. `worker/src/label.ts`:
      `sources` and `url_citation`s), and on the roaster's site when the
      search was limited to it; otherwise dropped. A matched `processName`
      drops `processText`.
+   - **Sources** (`webSources`): the pages to list for the person, those a
+     kept value came from first, then the rest of what it visited or cited,
+     deduplicated, on the roaster's site when limited, at most
+     `WEB_SOURCES_MAX` (8).
    - **Failing** (a provider or model without the Responses API or web
-     search, a refusal, bad JSON) doesn't fail the job: it returns the
-     label with `web: null` and `webError`.
+     search, a refusal, bad JSON, a dropped connection) doesn't fail the
+     job: it answers `web: null`, `webSources: []` and `webError`, which
+     says "may not support web search" when the provider rejected the
+     request (400/401/403/404), else "didn't work this time" (try again).
+   - **Logged:** one line per lookup (seconds taken, the site or any site,
+     pages seen, fields found), and the reason when it fails, to see why a
+     lookup found nothing.
 
-   The job's answer is `LabelReadResult` `{ fields, web, webError }`.
+   The job's answer is `LabelReadResult` `{ fields, web, webSources, webError }`
+   (`fields`: the label's, or `lookUp` as given).
 
 The workspace's `readLabels` setting (`workspaces.md` §2) turns the route
 off, and `labelWebLookup` the web step; nothing is sent unless someone

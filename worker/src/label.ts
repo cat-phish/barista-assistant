@@ -6,6 +6,7 @@
 import { EMPTY_AI_PROMPT, LABEL_INSTRUCTIONS_INTRO, PROMPT_TEXT, type AiPrompt } from "@barista/shared/aiPrompt";
 import type { LabelFields, LabelReadJobData, LabelReadResult } from "@barista/shared/jobs";
 import { BLEND_TYPES, DETAILED_ROAST_LEVELS, ROAST_LEVELS, ROAST_TYPES } from "@barista/shared/schema";
+import { UnrecoverableError } from "bullmq";
 import type OpenAI from "openai";
 import { z } from "zod";
 import { config } from "./config.js";
@@ -145,17 +146,28 @@ export function parseLabelMessage(message: LlmMessage, processes: readonly strin
   return { ...fields, processText: fields.processName ? null : fields.processText };
 }
 
-// The label, then (when asked) the web lookup. A failed lookup still
-// returns what the label says, with webError for the person.
+// The label from its photos, or (lookUp) the web lookup on its own: the two
+// are separate requests, so a slow or failed search doesn't lose the label
+// and can be tried again by itself. A failed lookup isn't a failed job: it
+// answers webError, telling a provider that refused web search apart from
+// one that didn't manage it this time.
 export async function readLabel(data: LabelReadJobData): Promise<LabelReadResult> {
   const { prompt } = await promptFor(data.requestedBy, null);
-  const { message } = await complete(buildLabelRequest(data, prompt));
-  const fields = parseLabelMessage(message, data.processes);
-  if (!data.web) return { fields, web: null, webError: null };
-  try {
-    return { fields, web: await lookUpBean(fields, data, prompt), webError: null };
-  } catch (err) {
-    console.error("Web lookup failed:", err instanceof Error ? err.message : err);
-    return { fields, web: null, webError: "The web lookup didn't work (the AI provider or model may not support web search). The label was still read." };
+  if (data.lookUp) {
+    const fields = data.lookUp;
+    const started = Date.now();
+    try {
+      return { fields, ...(await lookUpBean(fields, data, prompt)), webError: null };
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      console.error(`Web lookup failed after ${Math.round((Date.now() - started) / 1000)} s:`, reason);
+      const webError =
+        err instanceof UnrecoverableError
+          ? "The web lookup didn't work: the AI provider or model may not support web search."
+          : "The web lookup didn't work this time. Try “Look it up on the web” again.";
+      return { fields, web: null, webSources: [], webError };
+    }
   }
+  const { message } = await complete(buildLabelRequest(data, prompt));
+  return { fields: parseLabelMessage(message, data.processes), web: null, webSources: [], webError: null };
 }

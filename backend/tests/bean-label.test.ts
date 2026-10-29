@@ -38,7 +38,9 @@ function startWorker(fail = false): void {
     async (job) => {
       received = job.data;
       if (fail) throw new Error("model can't see");
-      return { fields: FIELDS, web: job.data.web ? WEB : null, webError: null };
+      return job.data.lookUp
+        ? { fields: job.data.lookUp, web: WEB, webSources: [WEB.producer.url], webError: null }
+        : { fields: FIELDS, web: null, webSources: [], webError: null };
     },
     { connection },
   );
@@ -62,8 +64,8 @@ describe("reading a bean label from photos", () => {
     const ws = (await newWorkspace(owner)).id;
     const res = await owner.agent.post(`/api/workspaces/${ws}/bean-label`).send({ images: [await jpeg(2000, 1500), await jpeg(300, 400)] });
     expect(res.status, JSON.stringify(res.body)).toBe(200);
-    expect(res.body).toEqual({ fields: FIELDS, web: null, webError: null });
-    expect(received!.web).toBe(false);
+    expect(res.body).toEqual({ fields: FIELDS, web: null, webSources: [], webError: null });
+    expect(received!.lookUp).toBeUndefined();
     expect(received!.images).toHaveLength(2);
     const first = await sharp(Buffer.from(received!.images[0]!, "base64")).metadata();
     expect([first.format, first.width, first.height]).toEqual(["webp", 1024, 768]);
@@ -114,11 +116,11 @@ describe("reading a bean label from photos", () => {
     expect(res.status).toBe(504);
     expect(res.body.error).toMatch(/in time/);
   });
-  it("looks it up on the web only when asked and the workspace allows it", async () => {
+  it("looks it up on the web on its own, when the workspace allows it", async () => {
     const owner = await newUser();
     const ws = (await newWorkspace(owner)).id;
-    const url = `/api/workspaces/${ws}/bean-label`;
-    const body = { images: [await jpeg(10, 10)], web: true, website: " onyxcoffeelab.com " };
+    const url = `/api/workspaces/${ws}/bean-label/web`;
+    const body = { fields: { roasterName: "Onyx", beanName: " Geometry ", region: "", altitudeMasl: 2000, website: "onyxcoffeelab.com" } };
     const off = await owner.agent.post(url).send(body);
     expect(off.status).toBe(403);
     expect(off.body.error).toMatch(/web is turned off/);
@@ -126,17 +128,31 @@ describe("reading a bean label from photos", () => {
     startWorker();
     const res = await owner.agent.post(url).send(body);
     expect(res.status, JSON.stringify(res.body)).toBe(200);
-    expect(res.body).toEqual({ fields: FIELDS, web: WEB, webError: null });
-    expect(received).toMatchObject({ web: true, website: "onyxcoffeelab.com", webContext: "high" });
+    expect(res.body).toEqual({ web: WEB, webSources: [WEB.producer.url], webError: null });
+    // What's known, the rest null; no photos.
+    expect(received).toMatchObject({ images: [], webContext: "high", requestedBy: owner.id });
+    expect(received!.lookUp).toMatchObject({ roasterName: "Onyx", beanName: "Geometry", region: null, altitudeMasl: 2000, website: "onyxcoffeelab.com", roastDate: null, batchNumber: null });
     await owner.agent.patch(`/api/workspaces/${ws}/settings`).send({ labelWebContext: "medium" });
     await owner.agent.post(url).send(body);
     expect(received!.webContext).toBe("medium");
-    // A web read waits longer than a plain one.
+    // A name to look for; nothing that belongs to one bag.
+    expect((await owner.agent.post(url).send({ fields: { country: "Ethiopia" } })).status).toBe(400);
+    expect((await owner.agent.post(url).send({ fields: { beanName: "Geometry", roastDate: "2026-10-01" } })).status).toBe(400);
+    // It waits longer than a label read.
     await worker!.close();
     process.env.LABEL_READ_TIMEOUT_MS = "100";
     process.env.LABEL_WEB_TIMEOUT_MS = "400";
     const started = Date.now();
-    expect((await owner.agent.post(url).send(body)).status).toBe(504);
+    const late = await owner.agent.post(url).send(body);
+    expect(late.status).toBe(504);
+    expect(late.body.error).toMatch(/web lookup/);
     expect(Date.now() - started).toBeGreaterThanOrEqual(400);
+  });
+
+  it("no longer takes web with the photos", async () => {
+    const owner = await newUser();
+    const ws = (await newWorkspace(owner)).id;
+    const res = await owner.agent.post(`/api/workspaces/${ws}/bean-label`).send({ images: [await jpeg(10, 10)], web: true });
+    expect(res.status).toBe(400);
   });
 });

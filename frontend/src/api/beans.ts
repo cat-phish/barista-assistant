@@ -1,5 +1,5 @@
 import { api, API_URL } from './client';
-import type { Bean, BeanPhoto, BlendType, LabelReadResult, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from './types';
+import type { Bean, BeanPhoto, BlendType, LabelLookUp, LabelReadResult, LabelWebResult, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from './types';
 
 // Request body for create/update (docs/api/beans.md §4). With roast names,
 // roastLevel is left out: the API derives it from detailedRoastLevel (only a
@@ -68,6 +68,6 @@ export const beansApi = {
   // Reads the label off 1–6 photos, base64 (docs/api/bean-label.md §4d). Can
   // take half a minute; 403 when the workspace has it off.
   // web: then look it up on the web (needs labelWebLookup); website: the form's.
-  readLabel: (workspaceId: string, images: string[], options: { web?: boolean; website?: string | null } = {}) =>
-    api.post<LabelReadResult>(`/api/workspaces/${workspaceId}/bean-label`, { images, ...options }),
+  readLabel: (workspaceId: string, images: string[]) => api.post<LabelReadResult>(`/api/workspaces/${workspaceId}/bean-label`, { images }),
+  lookUpBean: (workspaceId: string, fields: LabelLookUp) => api.post<LabelWebResult>(`/api/workspaces/${workspaceId}/bean-label/web`, { fields }),
 };

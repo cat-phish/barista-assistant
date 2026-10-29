@@ -66,31 +66,38 @@ show when it's on (the bean form is for those who can edit).
 **Looking it up on the web** (optional): with the workspace's
 `labelWebLookup` (default `false`, same place), the card has **"Also look it
 up on the web"**, unticked each time, noting that it takes longer. Ticked,
-after the label is read its text (never the photos, the roast date or the
-batch number) goes to a model with a web search (`llm-contract.md` §9c,
-step 2), kept to the roaster's site when its address is known (read off the
-label, else the form's Website). What it finds is **only ever suggested**:
+once the label is read the browser sends what it says (never the photos,
+the roast date or the batch number) to `POST …/bean-label/web`, its own
+request: a model with a web search (`llm-contract.md` §9c, step 2), kept to
+the roaster's site when its address is known (read off the label, else the
+form's Website). The two are separate so a slow or failed search doesn't
+lose the label, and each has its own wait. The card's **"Look it up on the
+web"** button sends the same request on its own, from what the form says
+now (typed in, or filled by an earlier read; it needs the roaster or the
+coffee): to try the search again without reading the photos again, or with
+no photos at all. What it finds is **only ever suggested**:
 "Web says: X · source · Use" under the field, the link to the page it's on;
 nothing it finds fills a field by itself. Not shown where it says what the
 form (after the label) already says, or where the label already suggested
 something. How much of each page it reads is the workspace's
 `labelWebContext` (Low, Medium, High; default High). The wait is
 `LABEL_WEB_TIMEOUT_MS` (default 120 s). If the
-lookup fails (a provider or model without web search), the label is still
-read and `webError` says so.
+lookup fails, the label is still read and `webError` says so: either the
+provider or model doesn't do web search, or it didn't manage this time (try
+the button again). Under the card's summary, **the pages it looked
+at** are listed as links ("Pages the web lookup looked at, for anything it
+missed"), so what wasn't picked out (often the altitude) can be found by
+hand; a later read without the lookup keeps them, Start over clears them.
 
 ## `POST /api/workspaces/:workspaceId/bean-label`
 
 - **Auth Required:** `true` (role `owner` or `barista`)
-- **Body:** `{ "images": ["<base64>", ...], "web"?: boolean, "website"?: string | null }`:
-  1–8 photos (`LABEL_MAX_IMAGES`), each the image file's bytes in base64
-  (no `data:` prefix), at most 3 MB decoded; the JSON body may be up to
-  25 MB. `web` (default `false`) also looks it up on the web; `website` is
-  the form's, to keep the search to that site when the label gives none.
+- **Body:** `{ "images": ["<base64>", ...] }`: 1–8 photos
+  (`LABEL_MAX_IMAGES`), each the image file's bytes in base64 (no `data:`
+  prefix), at most 3 MB decoded; the JSON body may be up to 25 MB.
 - **Success (`200 OK`):** every label field, `null` where it couldn't be
-  read; `web`, when asked, what the web added (`LabelWebFinds`: only the
-  fields found, each `{ value, url }`; never `roastDate` or `batchNumber`),
-  else `null`; `webError` when the lookup failed:
+  read, with `web: null`, `webSources: []`, `webError: null` (the shape the
+  form takes; the web lookup is the next route):
 
 ```json
 {
@@ -114,16 +121,53 @@ read and `webError` says so.
     "batchNumber": null,
     "website": "https://onyxcoffeelab.com/"
   },
-  "web": {
-    "producer": { "value": "Many smallholders, Worka", "url": "https://onyxcoffeelab.com/products/geometry" }
-  },
+  "web": null,
+  "webSources": [],
   "webError": null
 }
 ```
 
 - **Errors:** `400` invalid body, or a photo that isn't an image (`"Photo 2
-  isn't an image that can be read"`); `403` viewer, `readLabels` is off, or
-  `web` without `labelWebLookup`;
+  isn't an image that can be read"`); `403` viewer or `readLabels` is off;
   `413` body over 25 MB; `502` the AI call failed (the provider's error,
   e.g. a model that can't take images, or an answer that didn't parse);
   `503` the queue is unreachable; `504` no answer in time.
+
+## `POST /api/workspaces/:workspaceId/bean-label/web`
+
+Looks a bean up on the web on its own: after a label read, again, or from
+what was typed in.
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body:** `{ "fields": { ... } }`: what's known of the bean, any of the
+  label fields except `roastDate` and `batchNumber` (they belong to one bag;
+  sent, they're a `400`), each optional; blank text is `null`. Needs
+  `roasterName` or `beanName`. `website` keeps the search to that site.
+- **Queued** as a `label-read` job with no images and `lookUp` (the fields,
+  the rest `null`), waiting up to `LABEL_WEB_TIMEOUT_MS` (default 120 s).
+- **Success (`200 OK`):** `web`, what the web added (`LabelWebFinds`: only
+  the fields found, each `{ value, url }`; never `roastDate` or
+  `batchNumber`), or `null` when the lookup failed; `webSources`, the pages
+  it looked at (those a value came from first, then the rest it visited or
+  cited; once each, without `utm_` parameters or `#fragment`, on the
+  roaster's site when limited to it, at most 8), `[]` when it failed;
+  `webError`, why it failed: the provider or model doesn't do web search,
+  or it didn't manage this time:
+
+```json
+{
+  "web": {
+    "producer": { "value": "Many smallholders, Worka", "url": "https://onyxcoffeelab.com/products/geometry" }
+  },
+  "webSources": [
+    "https://onyxcoffeelab.com/products/geometry",
+    "https://onyxcoffeelab.com/collections/coffee"
+  ],
+  "webError": null
+}
+```
+
+- **Errors:** `400` invalid body or no name; `403` viewer, `readLabels` or
+  `labelWebLookup` is off; `502` the job itself failed; `503` the queue is
+  unreachable; `504` no answer in time.
+

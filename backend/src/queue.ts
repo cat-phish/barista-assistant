@@ -201,7 +201,7 @@ labelReadQueue.on("error", (err: Error) => {
   lastLabelError = err.message;
 });
 export function readBeanLabel(data: LabelReadJobData): Promise<LabelReadResult> {
-  return addAndWait(labelReadQueue, LABEL_READ_JOB, data, data.web ? labelWebTimeoutMs() : labelReadTimeoutMs());
+  return addAndWait(labelReadQueue, LABEL_READ_JOB, data, data.lookUp ? labelWebTimeoutMs() : labelReadTimeoutMs());
 }
 
 // Same timeout as the analysis; the caller treats failure as "no reminder".

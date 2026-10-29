@@ -1,7 +1,7 @@
 import { LABEL_INSTRUCTIONS_INTRO, PROMPT_TEXT } from "@barista/shared/aiPrompt";
 import { LABEL_WEB_FIELDS, type LabelFields } from "@barista/shared/jobs";
 import { describe, expect, it } from "vitest";
-import { buildWebRequest, hostOf, labelWebJsonSchema, parseWebReply, webSystemPrompt } from "../src/labelWeb.js";
+import { WEB_SOURCES_MAX, buildWebRequest, hostOf, labelWebJsonSchema, parseWebReply, webSources, webSystemPrompt } from "../src/labelWeb.js";
 
 const PROCESSES = ["Washed", "Natural"];
 const LABEL: LabelFields = {
@@ -24,7 +24,7 @@ const LABEL: LabelFields = {
   batchNumber: "B12",
   website: "https://proudmarycoffee.com/",
 };
-const job = { images: ["AAA"], processes: PROCESSES, requestedBy: "u", web: true };
+const job = { images: [], processes: PROCESSES, requestedBy: "u", lookUp: LABEL };
 const reply = (body: unknown, visited: string[] = ["https://proudmarycoffee.com/products/elida"]) => ({ text: JSON.stringify(body), refusal: null, visited });
 const none = Object.fromEntries(LABEL_WEB_FIELDS.map((f) => [f, null]));
 
@@ -38,11 +38,7 @@ describe("looking a bean up on the web (docs/api/llm-contract.md §9c)", () => {
     expect(request.input).toContain("product page");
     expect(request.input).not.toContain("2026-10-20");
     expect(request.input).not.toContain("B12");
-    expect(request.input).not.toContain("AAA");
-    // No website on the label: the form's; neither: the whole web.
-    expect(buildWebRequest({ ...LABEL, website: null }, { ...job, website: "onyxcoffeelab.com" }).tools).toEqual([
-      { type: "web_search", search_context_size: "high", filters: { allowed_domains: ["onyxcoffeelab.com"] } },
-    ]);
+    // No website: the whole web.
     expect(buildWebRequest({ ...LABEL, website: null }, job).tools).toEqual([{ type: "web_search", search_context_size: "high" }]);
     // The workspace's labelWebContext.
     expect(buildWebRequest({ ...LABEL, website: null }, { ...job, webContext: "low" }).tools).toEqual([{ type: "web_search", search_context_size: "low" }]);
@@ -88,5 +84,25 @@ describe("looking a bean up on the web (docs/api/llm-contract.md §9c)", () => {
   it("fails on a refusal or a reply that isn't JSON", () => {
     expect(() => parseWebReply({ text: "", refusal: "no", visited: [] }, PROCESSES, null)).toThrow(/refused/);
     expect(() => parseWebReply({ text: "nope", refusal: null, visited: [] }, PROCESSES, null)).toThrow(/invalid JSON/);
+  });
+
+  it("lists the pages it looked at, those with a find first, once each", () => {
+    const page = "https://proudmarycoffee.com/products/elida";
+    const finds = { producer: { value: "Lamastus family", url: page }, altitudeMasl: { value: 1900, url: page } };
+    const visited = [
+      "https://www.proudmarycoffee.com/collections/all",
+      `${page}/?utm_source=openai#:~:text=1900`, // the same page, cited
+      "https://shop.example.com/elida", // off the roaster's site
+      "not a url",
+    ];
+    expect(webSources(visited, finds, "proudmarycoffee.com")).toEqual([page, "https://www.proudmarycoffee.com/collections/all"]);
+    // Unlimited search: any site.
+    expect(webSources(visited, {}, null)).toEqual([
+      "https://www.proudmarycoffee.com/collections/all",
+      `${page}/`,
+      "https://shop.example.com/elida",
+    ]);
+    const many = Array.from({ length: 20 }, (_, i) => `https://proudmarycoffee.com/p/${i}`);
+    expect(webSources(many, {}, null)).toHaveLength(WEB_SOURCES_MAX);
   });
 });
