@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, type RouteLocationRaw } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useWorkspaceStore } from '../stores/workspace';
+import { lastMode, lastPage, rememberPage } from '../lib/mode';
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -10,20 +11,27 @@ declare module 'vue-router' {
     guestOnly?: boolean; // login/register: logged-in users go home
     requiresEditor?: boolean; // owner or barista in the current workspace (viewers are read-only)
     requiresAdmin?: boolean; // a server admin (granted on the server); implies requiresAuth
+    requiresRoasting?: boolean; // roast mode: the workspace has home roasting on (docs/api/workspaces.md §2)
   }
 }
 
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    // The landing page: Brew, or the Journal for a viewer (who can't log brews).
+    // The landing page: roast mode if this device was last in it (lib/mode.ts),
+    // else Brew, or the Journal for a viewer (who can't log brews).
     // Kept as a route so pushes to 'home' land in the right place.
     {
       path: '/',
       name: 'home',
       component: () => import('../views/BrewView.vue'),
       meta: { requiresAuth: true, requiresWorkspace: true },
-      beforeEnter: () => ({ name: useWorkspaceStore().canEdit ? 'brew' : 'journal' }),
+      beforeEnter: () => {
+        const workspaces = useWorkspaceStore();
+        const ws = workspaces.current;
+        if (ws?.settings.homeRoasting && lastMode(ws.id) === 'roast') return lastPage(ws.id, 'roast') ?? { name: 'roast' };
+        return { name: workspaces.canEdit ? 'brew' : 'journal' };
+      },
     },
     { path: '/menu/:slug', name: 'public-menu', component: () => import('../views/PublicMenuView.vue'), props: true, meta: { public: true } },
     { path: '/login', name: 'login', component: () => import('../views/LoginView.vue'), meta: { guestOnly: true } },
@@ -49,6 +57,15 @@ export const router = createRouter({
         { path: 'explore', name: 'stats-explore', component: () => import('../views/stats/StatsExploreView.vue') },
       ],
     },
+    // Roast mode (docs/backlog.md item 15): its own tabs in the header.
+    // /roast lands on Green until the roast log exists.
+    { path: '/roast', name: 'roast', redirect: { name: 'green-coffees' } },
+    { path: '/roast/green', name: 'green-coffees', component: () => import('../views/GreenView.vue'), meta: { requiresWorkspace: true, requiresRoasting: true } },
+    { path: '/roast/green/new', name: 'green-coffee-new', component: () => import('../views/GreenFormView.vue'), meta: { requiresWorkspace: true, requiresRoasting: true, requiresEditor: true } },
+    { path: '/roast/green/:id/edit', name: 'green-coffee-edit', component: () => import('../views/GreenFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresRoasting: true, requiresEditor: true } },
+    { path: '/roast/setup', name: 'roasting-machines', component: () => import('../views/RoastersView.vue'), meta: { requiresWorkspace: true, requiresRoasting: true } },
+    { path: '/roast/setup/new', name: 'roasting-machine-new', component: () => import('../views/RoasterFormView.vue'), meta: { requiresWorkspace: true, requiresRoasting: true, requiresEditor: true } },
+    { path: '/roast/setup/:id/edit', name: 'roasting-machine-edit', component: () => import('../views/RoasterFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresRoasting: true, requiresEditor: true } },
     // Bar setup: three tabs (components/SetupTabs.vue).
     { path: '/setup', redirect: '/setup/brewers' },
     { path: '/setup/brewers', name: 'brewers', component: () => import('../views/BrewersView.vue'), meta: { requiresWorkspace: true } },
@@ -128,8 +145,22 @@ router.beforeEach(async (to): Promise<RouteLocationRaw | true> => {
     const workspaces = useWorkspaceStore();
     await workspaces.ensureLoaded();
     if (!workspaces.current) return { name: 'workspaces' };
+    // Roasting turned off (or another workspace): back to brew mode.
+    if (to.meta.requiresRoasting && !workspaces.current.settings.homeRoasting) return { name: 'home' };
     // Viewers following an edit link land on the read-only list instead.
-    if (to.meta.requiresEditor && !workspaces.canEdit) return to.path.startsWith('/recipes') ? { name: 'recipes' } : { name: 'beans' };
+    if (to.meta.requiresEditor && !workspaces.canEdit) {
+      if (to.path.startsWith('/roast/')) return { name: to.path.startsWith('/roast/setup') ? 'roasting-machines' : 'green-coffees' };
+      return to.path.startsWith('/recipes') ? { name: 'recipes' } : { name: 'beans' };
+    }
   }
   return true;
+});
+
+// The mode's last page, for the Brew | Roast switch and the next app start
+// (lib/mode.ts). Forms aren't remembered (the switch goes back to their
+// list), and neither is Settings, which belongs to both modes.
+router.afterEach((to, _from, failure) => {
+  if (failure || !to.meta.requiresWorkspace || to.meta.requiresEditor || to.name === 'home' || to.path.startsWith('/settings')) return;
+  const ws = useWorkspaceStore().current;
+  if (ws) rememberPage(ws.id, to.fullPath);
 });

@@ -101,11 +101,24 @@ Every workspace in a response carries `settings`, defaults filled in
   of each page that web search reads (its `search_context_size`): more
   finds details deeper in a page but costs more and takes longer. Shown
   under Settings → **AI** when the web lookup is allowed.
+- `homeRoasting` (boolean, default `false`): turns on **roast mode** for
+  home roasters (docs/backlog.md item 15). The app shows a **Brew | Roast**
+  switch in the header; roast mode has its own tabs under `/roast/…`
+  (green stock, §4e; roasting machines, §3f). Off hides roast mode and its
+  routes send you back to brew mode; nothing is deleted. Set under
+  Settings → **Defaults**.
+- `homeRoasterName` (text, 1–255 chars, trimmed, default `"Home roast"`):
+  the roaster name on the beans that logged roasts create.
+- `restDays` (default `{ "filter": 7, "espresso": 14, "omni": 10 }`): days a
+  roast rests before it's ready, by roast type (`ROAST_TYPES`), each an
+  integer 0–60. Sent as the whole map. A roast starts from its type's
+  days and can change its own.
 
 ### Field visibility
 
 Settings → **Fields** lets owners hide the optional fields of the brew
-(setup and log), bean and recipe forms that the bar doesn't use. Everyone in
+(setup and log), bean, recipe and green coffee (`green.*`, §4e) forms that
+the bar doesn't use. Everyone in
 the workspace sees the same forms.
 
 - The fields are listed once, in the frontend's registry

@@ -112,7 +112,17 @@ export interface WorkspaceSettings {
   // How much of each page the web search reads (its search_context_size):
   // more finds the details, but costs more and takes longer.
   labelWebContext: LabelWebContext;
+  // Home roasting (docs/api/workspaces.md §2): shows the Brew | Roast switch
+  // and roast mode (green stock, roasting machines, roasts). Off hides it;
+  // nothing is deleted.
+  homeRoasting: boolean;
+  // The roaster name on the beans roasts create.
+  homeRoasterName: string;
+  // Days a roast rests before it's ready, by roast type; each roast starts
+  // from these and can change its own.
+  restDays: Record<RoastType, number>;
 }
+export const MAX_REST_DAYS = 60;
 export const LABEL_WEB_CONTEXTS = ["low", "medium", "high"] as const;
 export type LabelWebContext = (typeof LABEL_WEB_CONTEXTS)[number];
 export const AUTO_ANALYZE_DELAYS = [0, 5, 10, 15, 30] as const;
@@ -152,6 +162,9 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   readLabels: true,
   labelWebLookup: false,
   labelWebContext: "high",
+  homeRoasting: false,
+  homeRoasterName: "Home roast",
+  restDays: { filter: 7, espresso: 14, omni: 10 },
 };
 
 export function withDefaults<T extends object>(defaults: T, stored: Partial<T> | null): T {
@@ -588,6 +601,68 @@ export const grinders = mysqlTable(
     workspaceNameUnique: unique("grinders_workspace_name_unique").on(table.workspaceId, table.name),
   })
 );
+
+// 10. Roasting Machines (Per-Workspace, Home Roasting)
+// What a home roaster roasts on (docs/api/roasting-machines.md §3f). Roasts
+// record which one. Archived like grinders once roasts use it.
+export const roastingMachines = mysqlTable(
+  "roasting_machines",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(), // e.g. "Kaffelogic Nano 7"
+    notes: varchar("notes", { length: 255 }),
+    capacityGrams: int("capacity_grams"), // the largest batch of green coffee
+    archivedAt: timestamp("archived_at"), // null = active
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("roasting_machines_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+export type RoastingMachine = typeof roastingMachines.$inferSelect;
+
+// 10b. Green Coffees (Per-Workspace Green Stock, Home Roasting)
+// Unroasted coffee bought to roast (docs/api/green-coffees.md §4e). The
+// origin columns mirror the bean's, so a roast can copy them onto the bean
+// it makes. weightLeftGrams goes down as roasts use it; below lowStockGrams
+// it's low. Archived once used up, or deleted.
+export const greenCoffees = mysqlTable(
+  "green_coffees",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(), // e.g. "Ethiopia Guji Hambela"
+    originArea: varchar("origin_area", { length: 20 }).$type<OriginArea>(), // ORIGIN_AREAS
+    country: varchar("country", { length: 100 }),
+    region: varchar("region", { length: 255 }),
+    producer: varchar("producer", { length: 255 }),
+    altitudeMasl: int("altitude_masl"),
+    varieties: jsonValue<string[]>("varieties"), // as on beans: null = not stated
+    species: jsonValue<CoffeeSpecies[]>("species"),
+    processId: varchar("process_id", { length: 36 }).references((): AnyMySqlColumn => beanProcesses.id, { onDelete: "set null" }),
+    supplier: varchar("supplier", { length: 255 }),
+    lot: varchar("lot", { length: 100 }), // the supplier's lot or reference
+    // What the whole purchase cost: amount and ISO 4217 currency, both or neither.
+    priceAmount: decimal("price_amount", { precision: 8, scale: 2, mode: "number" }),
+    priceCurrency: varchar("price_currency", { length: 3 }),
+    weightBoughtGrams: int("weight_bought_grams"),
+    weightLeftGrams: int("weight_left_grams").default(0).notNull(),
+    lowStockGrams: int("low_stock_grams"), // null = never low
+    purchaseDate: date("purchase_date", { mode: "string" }), // YYYY-MM-DD
+    notes: text("notes"),
+    archivedAt: timestamp("archived_at"), // null = active
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("green_coffees_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+export type GreenCoffee = typeof greenCoffees.$inferSelect;
 
 // 5c. Water Profiles (Per-Workspace Brew Water)
 // The water a brew was made with (docs/api/water-profiles.md §3c). Every

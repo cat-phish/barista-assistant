@@ -8,9 +8,9 @@ describe("workspace settings", () => {
   it("come with every workspace, defaults filled in", async () => {
     const owner = await newUser();
     const created = await owner.agent.post("/api/workspaces").send({ name: "Bar", slug: "settings-bar" });
-    expect(created.body.workspace.settings).toEqual({ recipeRoastLevel: "light", roastScale: "names", hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5, suggestAlternatives: [], readLabels: true, labelWebLookup: false, labelWebContext: "high" });
+    expect(created.body.workspace.settings).toEqual({ recipeRoastLevel: "light", roastScale: "names", hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5, suggestAlternatives: [], readLabels: true, labelWebLookup: false, labelWebContext: "high", homeRoasting: false, homeRoasterName: "Home roast", restDays: { filter: 7, espresso: 14, omni: 10 } });
     const list = await owner.agent.get("/api/workspaces");
-    expect(list.body.workspaces[0].settings).toEqual({ recipeRoastLevel: "light", roastScale: "names", hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5, suggestAlternatives: [], readLabels: true, labelWebLookup: false, labelWebContext: "high" });
+    expect(list.body.workspaces[0].settings).toEqual({ recipeRoastLevel: "light", roastScale: "names", hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5, suggestAlternatives: [], readLabels: true, labelWebLookup: false, labelWebContext: "high", homeRoasting: false, homeRoasterName: "Home roast", restDays: { filter: 7, espresso: 14, omni: 10 } });
   });
 
   it("owners change them; others get 403; bad values 400", async () => {
@@ -27,8 +27,8 @@ describe("workspace settings", () => {
 
     const ok = await owner.agent.patch(path).send({ recipeRoastLevel: "medium" });
     expect(ok.status).toBe(200);
-    expect(ok.body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "names", hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5, suggestAlternatives: [], readLabels: true, labelWebLookup: false, labelWebContext: "high" });
-    expect((await owner.agent.patch(path).send({ roastScale: "levels" })).body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "levels", hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5, suggestAlternatives: [], readLabels: true, labelWebLookup: false, labelWebContext: "high" });
+    expect(ok.body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "names", hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5, suggestAlternatives: [], readLabels: true, labelWebLookup: false, labelWebContext: "high", homeRoasting: false, homeRoasterName: "Home roast", restDays: { filter: 7, espresso: 14, omni: 10 } });
+    expect((await owner.agent.patch(path).send({ roastScale: "levels" })).body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "levels", hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5, suggestAlternatives: [], readLabels: true, labelWebLookup: false, labelWebContext: "high", homeRoasting: false, homeRoasterName: "Home roast", restDays: { filter: 7, espresso: 14, omni: 10 } });
     expect((await owner.agent.patch(path).send({ roastScale: "agtron" })).status).toBe(400);
     expect((await owner.agent.patch(path).send({ readLabels: "yes" })).status).toBe(400);
     expect((await owner.agent.patch(path).send({ readLabels: false })).body.settings.readLabels).toBe(false);
@@ -36,6 +36,12 @@ describe("workspace settings", () => {
     expect((await owner.agent.patch(path).send({ labelWebLookup: true })).body.settings.labelWebLookup).toBe(true);
     expect((await owner.agent.patch(path).send({ labelWebContext: "huge" })).status).toBe(400);
     expect((await owner.agent.patch(path).send({ labelWebContext: "low" })).body.settings.labelWebContext).toBe("low");
+    // Home roasting: on/off, the roaster name, rest days for every roast type.
+    const roasting = await owner.agent.patch(path).send({ homeRoasting: true, homeRoasterName: "  Garage roast ", restDays: { filter: 5, espresso: 12, omni: 8 } });
+    expect(roasting.body.settings).toMatchObject({ homeRoasting: true, homeRoasterName: "Garage roast", restDays: { filter: 5, espresso: 12, omni: 8 } });
+    for (const bad of [{ homeRoasterName: " " }, { restDays: { filter: 5 } }, { restDays: { filter: 5, espresso: 61, omni: 8 } }, { restDays: { filter: 5, espresso: 12, omni: 8, cold: 1 } }, { homeRoasting: "on" }]) {
+      expect((await owner.agent.patch(path).send(bad)).status, JSON.stringify(bad)).toBe(400);
+    }
     const list = await barista.agent.get("/api/workspaces");
     expect(list.body.workspaces[0].settings.recipeRoastLevel).toBe("medium");
   });
@@ -44,8 +50,8 @@ describe("workspace settings", () => {
     const owner = await newUser();
     const ws = await newWorkspace(owner);
     const path = `/api/workspaces/${ws.id}/settings`;
-    const ok = await owner.agent.patch(path).send({ hiddenFields: ["brew.tds", "bean.website", "recipe.flowUnit"] });
-    expect(ok.body.settings).toMatchObject({ roastScale: "names", hiddenFields: ["brew.tds", "bean.website", "recipe.flowUnit"] });
+    const ok = await owner.agent.patch(path).send({ hiddenFields: ["brew.tds", "bean.website", "recipe.flowUnit", "green.lot"] });
+    expect(ok.body.settings).toMatchObject({ roastScale: "names", hiddenFields: ["brew.tds", "bean.website", "recipe.flowUnit", "green.lot"] });
     expect((await owner.agent.patch(path).send({ hiddenFields: ["brew.tds"] })).body.settings.hiddenFields).toEqual(["brew.tds"]);
     for (const hiddenFields of [["tds"], ["menu.price"], ["brew.tds", "brew.tds"], "brew.tds", [3], Array.from({ length: 101 }, (_, i) => `brew.f${"x".repeat(i)}`)]) {
       expect((await owner.agent.patch(path).send({ hiddenFields })).status, JSON.stringify(hiddenFields).slice(0, 40)).toBe(400);

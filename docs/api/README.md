@@ -19,10 +19,12 @@ means drinks, wherever you see it (code comments use
 | §3c | [water-profiles.md](water-profiles.md) | Water Profiles |
 | §3d | [prep-tools.md](prep-tools.md) | Prep Tools |
 | §3e | [brewer-methods.md](brewer-methods.md) | Brewer Methods |
+| §3f | [roasting-machines.md](roasting-machines.md) | Roasting Machines (home roasting) |
 | §4 | [beans.md](beans.md) | Beans |
 | §4b | [bean-processes.md](bean-processes.md) | Bean Processes |
 | §4c | [bean-photos.md](bean-photos.md) | Bean Photos (the bag or label; cover in the list) |
 | §4d | [bean-label.md](bean-label.md) | Read the Bean Label (fill the bean form from its photos, AI) |
+| §4e | [green-coffees.md](green-coffees.md) | Green Coffees (green stock, home roasting) |
 | §5 | [recipes.md](recipes.md) | Recipes |
 | §5b | [ingredients.md](ingredients.md) | Ingredients |
 | §5c | [drinks.md](drinks.md) | Drinks |

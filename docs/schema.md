@@ -438,6 +438,68 @@ export const grinders = mysqlTable(
   })
 );
 
+// 10. Roasting Machines (Per-Workspace, Home Roasting)
+// What a home roaster roasts on (docs/api/roasting-machines.md §3f). Roasts
+// record which one. Archived like grinders once roasts use it.
+export const roastingMachines = mysqlTable(
+  "roasting_machines",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(), // e.g. "Kaffelogic Nano 7"
+    notes: varchar("notes", { length: 255 }),
+    capacityGrams: int("capacity_grams"), // the largest batch of green coffee
+    archivedAt: timestamp("archived_at"), // null = active
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("roasting_machines_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+export type RoastingMachine = typeof roastingMachines.$inferSelect;
+
+// 10b. Green Coffees (Per-Workspace Green Stock, Home Roasting)
+// Unroasted coffee bought to roast (docs/api/green-coffees.md §4e). The
+// origin columns mirror the bean's, so a roast can copy them onto the bean
+// it makes. weightLeftGrams goes down as roasts use it; below lowStockGrams
+// it's low. Archived once used up, or deleted.
+export const greenCoffees = mysqlTable(
+  "green_coffees",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(), // e.g. "Ethiopia Guji Hambela"
+    originArea: varchar("origin_area", { length: 20 }).$type<OriginArea>(), // ORIGIN_AREAS
+    country: varchar("country", { length: 100 }),
+    region: varchar("region", { length: 255 }),
+    producer: varchar("producer", { length: 255 }),
+    altitudeMasl: int("altitude_masl"),
+    varieties: jsonValue<string[]>("varieties"), // as on beans: null = not stated
+    species: jsonValue<CoffeeSpecies[]>("species"),
+    processId: varchar("process_id", { length: 36 }).references((): AnyMySqlColumn => beanProcesses.id, { onDelete: "set null" }),
+    supplier: varchar("supplier", { length: 255 }),
+    lot: varchar("lot", { length: 100 }), // the supplier's lot or reference
+    // What the whole purchase cost: amount and ISO 4217 currency, both or neither.
+    priceAmount: decimal("price_amount", { precision: 8, scale: 2, mode: "number" }),
+    priceCurrency: varchar("price_currency", { length: 3 }),
+    weightBoughtGrams: int("weight_bought_grams"),
+    weightLeftGrams: int("weight_left_grams").default(0).notNull(),
+    lowStockGrams: int("low_stock_grams"), // null = never low
+    purchaseDate: date("purchase_date", { mode: "string" }), // YYYY-MM-DD
+    notes: text("notes"),
+    archivedAt: timestamp("archived_at"), // null = active
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("green_coffees_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+export type GreenCoffee = typeof greenCoffees.$inferSelect;
+
 // 5c. Water Profiles (Per-Workspace Brew Water)
 // The water a brew was made with (docs/api/water-profiles.md §3c). Every
 // figure is optional, in mg/L (ppm); GH and KH are expressed as CaCO3. At most

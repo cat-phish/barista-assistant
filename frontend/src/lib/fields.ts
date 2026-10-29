@@ -1,9 +1,9 @@
 // Field visibility (docs/api/workspaces.md §2, "Field visibility"): the
-// optional fields of the brew, bean and recipe forms that a workspace can
+// optional fields of the brew, bean, recipe and green coffee forms that a workspace can
 // hide (Settings → Fields). Required fields aren't listed, so they can't be.
 // Every new optional field on these forms gets an entry here.
 
-export type FieldForm = 'brew' | 'bean' | 'recipe';
+export type FieldForm = 'brew' | 'bean' | 'recipe' | 'green';
 
 export interface FieldInfo {
   key: string; // `${form}.${name}`, stored in settings.hiddenFields
@@ -15,6 +15,7 @@ export interface FieldInfo {
 const brew = (name: string, label: string, hint?: string): FieldInfo => ({ key: `brew.${name}`, form: 'brew', label, hint });
 const bean = (name: string, label: string, hint?: string): FieldInfo => ({ key: `bean.${name}`, form: 'bean', label, hint });
 const recipe = (name: string, label: string, hint?: string): FieldInfo => ({ key: `recipe.${name}`, form: 'recipe', label, hint });
+const green = (name: string, label: string, hint?: string): FieldInfo => ({ key: `green.${name}`, form: 'green', label, hint });
 
 // In the order the forms show them.
 export const FIELDS = [
@@ -74,11 +75,26 @@ export const FIELDS = [
   recipe('flowUnit', 'Flow unit (espresso)'),
   recipe('stepTimeScaling', 'Step times that scale with the batch (filter)', 'Pour and wait steps take longer for a bigger batch, less for a smaller one'),
   recipe('stepTemp', 'Step temperatures'),
+
+  // Home roasting's green stock (docs/api/green-coffees.md §4e).
+  green('process', 'Process'),
+  green('origin', 'Growing area and country'),
+  green('region', 'Region'),
+  green('producer', 'Producer'),
+  green('altitude', 'Altitude'),
+  green('varieties', 'Variety'),
+  green('species', 'Species'),
+  green('supplier', 'Supplier'),
+  green('lot', 'Lot'),
+  green('price', 'Price'),
+  green('lowStock', 'Low stock at', 'Below it, the coffee shows as low'),
+  green('purchaseDate', 'Purchase date'),
+  green('notes', 'Notes'),
 ] as const satisfies readonly FieldInfo[];
 
 export type FieldKey = (typeof FIELDS)[number]['key'];
 
-export const FIELD_FORMS: Record<FieldForm, string> = { brew: 'Brews', bean: 'Beans', recipe: 'Recipes' };
+export const FIELD_FORMS: Record<FieldForm, string> = { brew: 'Brews', bean: 'Beans', recipe: 'Recipes', green: 'Green coffees (home roasting)' };
 
 export function fieldsFor(form: FieldForm): FieldInfo[] {
   return FIELDS.filter((f) => f.form === form);
