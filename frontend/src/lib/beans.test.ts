@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Bean } from '../api/types';
-import { batchSuffix, beanLabel, beanSortColumns, DETAILED_ROAST_LEVELS, nextBatch, formatAltitude, roastLabel, formatPricePerGram, freezeState, latestThaw, periodsLatestFirst, pricePerGram } from './beans';
+import { batchSuffix, beanFilter, beanFilterOptions, beanLabel, beanSortColumns, isBeanFilter, varietyLabel, DETAILED_ROAST_LEVELS, nextBatch, formatAltitude, roastLabel, formatPricePerGram, freezeState, latestThaw, periodsLatestFirst, pricePerGram } from './beans';
 import { sortBy, sortColumnOptions } from './listSort';
 import { ROAST_LEVELS } from './scale';
 
@@ -47,6 +47,8 @@ const bean = (over: Partial<Bean>): Bean => ({
   detailedRoastLevel: null,
   blendType: null,
   decaf: false,
+  varieties: null,
+  species: null,
   website: null,
   priceAmount: null,
   priceCurrency: null,
@@ -130,7 +132,7 @@ describe('bean sorting', () => {
 
   it('offers every column in the Sort by dropdown', () => {
     expect(sortColumnOptions(BEAN_SORT_COLUMNS).map((c) => c.value)).toEqual([
-      'name', 'roaster', 'added', 'purchased', 'roastDate', 'age', 'roast', 'process', 'frozen', 'decaf', 'rating', 'stock',
+      'name', 'roaster', 'added', 'purchased', 'roastDate', 'age', 'roast', 'process', 'variety', 'frozen', 'decaf', 'rating', 'stock',
     ]);
     expect(sortColumnOptions(BEAN_SORT_COLUMNS).find((c) => c.value === 'name')).toMatchObject({ asc: 'Ascending (A–Z)' });
     expect(sortColumnOptions(BEAN_SORT_COLUMNS).find((c) => c.value === 'roast')).toMatchObject({ asc: 'Ascending (lightest first)', desc: 'Descending (darkest first)' });
@@ -172,5 +174,44 @@ describe('batch no.', () => {
     expect(nextBatch(' 09 ')).toBe('10');
     expect(nextBatch('R-12')).toBe('');
     expect(nextBatch(null)).toBe('');
+  });
+});
+
+describe('varieties and species', () => {
+  const geisha = bean({ beanName: 'Panama', varieties: ['Geisha'], species: ['arabica'] });
+  const sl = bean({ beanName: 'Kenya', varieties: ['SL28', 'SL34'], species: ['arabica'] });
+  const crema = bean({ beanName: 'Crema', varieties: ['geisha'], species: ['arabica', 'robusta'] });
+  const plain = bean({ beanName: 'Plain' });
+
+  it('labels the varieties, then the species', () => {
+    expect(varietyLabel(sl)).toBe('SL28, SL34 · Arabica');
+    expect(varietyLabel(bean({ species: ['arabica', 'robusta'] }))).toBe('Arabica & Robusta');
+    expect(varietyLabel(plain)).toBeNull();
+  });
+
+  it('offers each variety once and each species the beans have, after the fixed filters', () => {
+    const extra = beanFilterOptions([geisha, sl, crema, plain]).filter((o) => o.group);
+    expect(extra).toEqual([
+      { value: 'variety:Geisha', label: 'Geisha', group: 'Variety' },
+      { value: 'variety:SL28', label: 'SL28', group: 'Variety' },
+      { value: 'variety:SL34', label: 'SL34', group: 'Variety' },
+      { value: 'species:arabica', label: 'Arabica', group: 'Species' },
+      { value: 'species:robusta', label: 'Robusta', group: 'Species' },
+    ]);
+    // A remembered choice stays offered after its beans are gone.
+    expect(beanFilterOptions([plain], 'variety:Sidra').map((o) => o.value)).toContain('variety:Sidra');
+  });
+
+  it('filters by a variety ignoring case, or by a species', () => {
+    const beans = [geisha, sl, crema, plain];
+    expect(beans.filter(beanFilter('variety:GEISHA').test).map((b) => b.beanName)).toEqual(['Panama', 'Crema']);
+    expect(beans.filter(beanFilter('species:robusta').test).map((b) => b.beanName)).toEqual(['Crema']);
+    expect(isBeanFilter('species:robusta')).toBe(true);
+    expect(isBeanFilter('species:coffea')).toBe(false);
+    expect(isBeanFilter('variety:')).toBe(false);
+  });
+
+  it('sorts by the first variety, beans without one last', () => {
+    expect(order([plain, sl, geisha], 'variety_asc')).toEqual(['Panama', 'Kenya', 'Plain']);
   });
 });

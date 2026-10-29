@@ -110,14 +110,14 @@ describe("CSV export (docs/api/backup.md §2b, CSV)", () => {
     const owner = await newUser();
     const ws = await newWorkspace(owner);
     const washed = await processId(owner, ws.id, "washed");
-    const bean = await newBean(owner, ws.id, { roasterName: "Onyx", beanName: "Monarch", processId: washed, roastDate: "2026-10-01", decaf: true });
+    const bean = await newBean(owner, ws.id, { roasterName: "Onyx", beanName: "Monarch", processId: washed, roastDate: "2026-10-01", decaf: true, varieties: ["SL28", "SL34"], species: ["arabica"] });
     await newBean(owner, ws.id, { roasterName: "Sey", beanName: "Gatomboya" });
     await newBrewLog(owner, ws.id, bean);
     await newBrewLog(owner, ws.id, bean);
     const res = await owner.agent.get(`/api/workspaces/${ws.id}/csv/beans`);
     expect(res.status).toBe(200);
     const rows = asObjects(res.text);
-    expect(rows.find((r) => r.Bean === "Monarch")).toMatchObject({ Roaster: "Onyx", Process: "Washed", "Roast date": "2026-10-01", Decaf: "yes", Brews: "2", Archived: "" });
+    expect(rows.find((r) => r.Bean === "Monarch")).toMatchObject({ Roaster: "Onyx", Process: "Washed", "Roast date": "2026-10-01", Decaf: "yes", Varieties: "SL28, SL34", Species: "arabica", Brews: "2", Archived: "" });
     expect(rows.find((r) => r.Bean === "Gatomboya")).toMatchObject({ Brews: "0", Process: "" });
   });
 

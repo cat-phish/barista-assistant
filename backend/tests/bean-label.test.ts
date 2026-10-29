@@ -16,6 +16,8 @@ const FIELDS: LabelFields = {
   region: null,
   producer: null,
   altitudeMasl: 2000,
+  varieties: ["Heirloom"],
+  species: null,
   flavorProfile: null,
   roastDate: null,
   detailedRoastLevel: null,
@@ -120,7 +122,7 @@ describe("reading a bean label from photos", () => {
     const owner = await newUser();
     const ws = (await newWorkspace(owner)).id;
     const url = `/api/workspaces/${ws}/bean-label/web`;
-    const body = { fields: { roasterName: "Onyx", beanName: " Geometry ", region: "", altitudeMasl: 2000, website: "onyxcoffeelab.com" } };
+    const body = { fields: { roasterName: "Onyx", beanName: " Geometry ", region: "", altitudeMasl: 2000, varieties: ["Heirloom"], website: "onyxcoffeelab.com" } };
     const off = await owner.agent.post(url).send(body);
     expect(off.status).toBe(403);
     expect(off.body.error).toMatch(/web is turned off/);
@@ -131,12 +133,13 @@ describe("reading a bean label from photos", () => {
     expect(res.body).toEqual({ web: WEB, webSources: [WEB.producer.url], webError: null });
     // What's known, the rest null; no photos.
     expect(received).toMatchObject({ images: [], webContext: "high", requestedBy: owner.id });
-    expect(received!.lookUp).toMatchObject({ roasterName: "Onyx", beanName: "Geometry", region: null, altitudeMasl: 2000, website: "onyxcoffeelab.com", roastDate: null, batchNumber: null });
+    expect(received!.lookUp).toMatchObject({ roasterName: "Onyx", beanName: "Geometry", region: null, altitudeMasl: 2000, varieties: ["Heirloom"], species: null, website: "onyxcoffeelab.com", roastDate: null, batchNumber: null });
     await owner.agent.patch(`/api/workspaces/${ws}/settings`).send({ labelWebContext: "medium" });
     await owner.agent.post(url).send(body);
     expect(received!.webContext).toBe("medium");
     // A name to look for; nothing that belongs to one bag.
     expect((await owner.agent.post(url).send({ fields: { country: "Ethiopia" } })).status).toBe(400);
+    expect((await owner.agent.post(url).send({ fields: { beanName: "Geometry", species: ["coffea"] } })).status).toBe(400);
     expect((await owner.agent.post(url).send({ fields: { beanName: "Geometry", roastDate: "2026-10-01" } })).status).toBe(400);
     // It waits longer than a label read.
     await worker!.close();

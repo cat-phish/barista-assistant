@@ -63,6 +63,8 @@ is no age.
     "country": "Colombia",
     "region": "Huila",
     "altitudeMasl": 1950,
+    "varieties": ["Pink Bourbon", "Caturra"],
+    "species": ["arabica"],
     "roastWeightLossPercent": 14.5,
     "producer": "Finca El Paraíso",
     "purchaseDate": "2026-10-05",
@@ -115,6 +117,17 @@ is no age.
   - `altitudeMasl`: integer 0–9000, metres above sea level. Clients show it
     in feet when the person prefers (docs/api/auth.md §1 preferences); it's
     always stored in metres.
+  - `varieties`: the coffee's varieties (cultivars) as the roaster names
+    them, a list of 1–20 names, each trimmed and 1–100 chars
+    (`["SL28", "SL34"]`, `["Pink Bourbon"]`). Each is kept once, ignoring
+    case (the first spelling wins). Clients suggest common varieties and the
+    workspace's own while typing.
+  - `species`: a list of `COFFEE_SPECIES` (`arabica`, `robusta`, `liberica`,
+    `excelsa`, `eugenioides`); a blend may have several. Stored once each,
+    in that order.
+  - For both, `[]` is stored (and returned) as `null`, "not stated". A copy
+    of a bean keeps them; they're in the beans CSV ("Varieties", "Species",
+    comma-separated) and on the public menu as the `variety` detail.
   - `roastWeightLossPercent`: the green weight lost in roasting, in %:
     above 0, at most 40, one decimal place (`14.5`). How developed the
     roast is (about 11–13% light, 14–16% medium, 17%+ dark). It belongs to

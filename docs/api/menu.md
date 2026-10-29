@@ -67,7 +67,7 @@ or a brewer's name (brewers have no menu description; set one on the item).
 
 `beanFields` (the beans block only; `null` on other items) is what guests see
 about each bean besides its roaster and name: a list of `BEAN_MENU_FIELDS`
-(`flavorProfile`, `origin`, `producer`, `altitude`, `process`, `roastLevel`,
+(`flavorProfile`, `origin`, `producer`, `altitude`, `variety`, `process`, `roastLevel`,
 `roastDate`, `decaf`, `blendType`, `roastType`), each once; `null` = all of
 them. The public menu (§7) sends only those.
 

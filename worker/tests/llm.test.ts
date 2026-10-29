@@ -90,7 +90,7 @@ const summary = (over: Partial<BrewSummary> = {}): BrewSummary => ({
   ...over,
 });
 const context = (over: { brew?: Partial<BrewSummary>; bean?: Partial<BrewContext["bean"]> } = {}): BrewContext => ({
-  bean: { roasterName: "Onyx", beanName: "Monarch", batchNumber: null, process: "Washed", roastLevel: "light", detailedRoastLevel: null, roastType: null, blendType: "single_origin", decaf: false, roastDate: "2026-10-10", flavorProfile: null, originArea: "africa", country: "Ethiopia", region: null, altitudeMasl: 2000, roastWeightLossPercent: null, ...over.bean },
+  bean: { roasterName: "Onyx", beanName: "Monarch", batchNumber: null, process: "Washed", roastLevel: "light", detailedRoastLevel: null, roastType: null, blendType: "single_origin", decaf: false, roastDate: "2026-10-10", flavorProfile: null, originArea: "africa", country: "Ethiopia", region: null, altitudeMasl: 2000, varieties: null, species: null, roastWeightLossPercent: null, ...over.bean },
   recipe: {
     name: "House V60",
     brewer: "V60",
@@ -237,6 +237,17 @@ describe("what the workspace keeps from the AI (Settings → AI)", () => {
     expect(nameOnly.brew).toMatchObject({ water: "TWW" });
     expect(nameOnly.equipment).not.toHaveProperty("waters"); // no figures left
     expect(promptSections(nameOnly)).not.toContain("water");
+  });
+
+  it("sends the varieties and species with their section, unless kept from the AI", () => {
+    const ctx = context({ bean: { varieties: ["SL28"], species: ["arabica", "robusta"] } });
+    expect(toLlmInput(ctx).bean).toMatchObject({ varieties: ["SL28"], species: ["arabica", "robusta"] });
+    expect(promptSections(toLlmInput(ctx))).toContain("variety");
+    expect(promptSections(toLlmInput(context()))).not.toContain("variety");
+    const hidden = toLlmInput(ctx, without("variety"));
+    expect(hidden.bean).not.toHaveProperty("varieties");
+    expect(hidden.bean).not.toHaveProperty("species");
+    expect(promptSections(hidden)).not.toContain("variety");
   });
 
   it("sends the roast weight loss with its section, unless kept from the AI", () => {

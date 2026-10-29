@@ -129,6 +129,16 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
     text: "A higher altitudeMasl usually means denser beans that take a finer grind or hotter water.",
   },
   {
+    key: "variety",
+    label: "Variety and species",
+    prompts: ["analysis", "suggest"],
+    locked: false,
+    text:
+      "The bean's varieties (cultivars) and species hint at its character: e.g. Geisha and many Ethiopian landraces are " +
+      "delicate and floral and suit gentler, longer extractions, while SL28 and SL34 are dense and bright. Robusta or " +
+      "liberica in a blend extract more easily and add body and bitterness. Treat it as context, not a rule.",
+  },
+  {
     key: "origin",
     label: "Origin",
     prompts: ["analysis", "suggest"],
@@ -337,7 +347,10 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
       "blend name), without the roaster. processName is one of the given processes when the printed process is one of them " +
       "(e.g. 'Natural' for 'Dry process'); otherwise null, with the process as printed in processText. country is in English " +
       "(e.g. 'Ethiopia'); region the area within it. altitudeMasl is in metres above sea level: a range gives its middle, " +
-      "feet are converted. flavorProfile is the tasting notes as printed, comma-separated. roastDate is the date it was " +
+      "feet are converted. varieties are the coffee varieties (cultivars) as printed, one entry each (e.g. 'SL28', 'Pink " +
+      "Bourbon'), never the species. species lists arabica, robusta, liberica, excelsa or eugenioides only when the label " +
+      "names them (e.g. '100% Arabica', or a blend's 'Arabica & Robusta'). flavorProfile is the tasting notes as printed, " +
+      "comma-separated. roastDate is the date it was " +
       "roasted, as YYYY-MM-DD; a best-before or packed-on date is not a roast date. detailedRoastLevel is a named roast " +
       "(City, Full City…) when one is printed; roastLevel only when just light, medium-light, medium, medium-dark or dark " +
       "is. roastType is filter, espresso or omni when the bag says what it's roasted for. blendType is blend when it says " +
@@ -358,7 +371,8 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
       "this coffee (the same roaster and coffee, not another lot or a similar coffee), with url the address of that page; " +
       "null otherwise. Never guess or fill from general knowledge. Values follow the label's rules: processName is one of " +
       "the given processes when it fits, otherwise null with the process in processText; country in English; " +
-      "altitudeMasl in metres (a range gives its middle); flavorProfile the roaster's tasting notes, comma-separated; " +
+      "altitudeMasl in metres (a range gives its middle); varieties the cultivars, one entry each; species only when the " +
+      "page names it; flavorProfile the roaster's tasting notes, comma-separated; " +
       "detailedRoastLevel a named roast, roastLevel only light to dark; bagWeightGrams the net weight in grams; website " +
       "the roaster's web address.",
   },

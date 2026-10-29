@@ -36,7 +36,7 @@ export interface LabelRead {
 
 const NO_FIELDS: LabelFields = {
   roasterName: null, beanName: null, processName: null, processText: null, country: null, region: null, producer: null,
-  altitudeMasl: null, flavorProfile: null, roastDate: null, detailedRoastLevel: null, roastLevel: null, roastType: null,
+  altitudeMasl: null, varieties: null, species: null, flavorProfile: null, roastDate: null, detailedRoastLevel: null, roastLevel: null, roastType: null,
   blendType: null, decaf: null, bagWeightGrams: null, batchNumber: null, website: null,
 };
 

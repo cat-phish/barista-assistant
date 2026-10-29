@@ -51,7 +51,7 @@ Retrieves the read-only menu for a workspace, as arranged in the menu builder
         "items": [
           {
             "type": "beans",
-            "fields": ["flavorProfile", "origin", "producer", "altitude", "process", "roastLevel", "roastDate", "decaf", "blendType", "roastType"],
+            "fields": ["flavorProfile", "origin", "producer", "altitude", "variety", "process", "roastLevel", "roastDate", "decaf", "blendType", "roastType"],
             "beans": [
               {
                 "id": "uuid",
@@ -69,7 +69,9 @@ Retrieves the read-only menu for a workspace, as arranged in the menu builder
                 "country": "Colombia",
                 "region": "Huila",
                 "altitudeMasl": 1950,
-                "producer": "Finca El Paraíso"
+                "producer": "Finca El Paraíso",
+                "varieties": ["Pink Bourbon"],
+                "species": ["arabica"]
               }
             ]
           }
@@ -97,7 +99,9 @@ Retrieves the read-only menu for a workspace, as arranged in the menu builder
     `country` and `region`; `process` is the process's name (§4b); `roastLevel` is `roastLevel` and
     `detailedRoastLevel` (always `null` while the workspace records roasts
     light to dark, `settings.roastScale` "levels", §2); the others are the bean field of the same name
-    (`altitude` = `altitudeMasl`). A field that isn't chosen is left out of
+    (`altitude` = `altitudeMasl`; `variety` is `varieties` and `species`).
+    The guest page shows the varieties after the origin, and the species
+    as a badge unless it's arabica alone. A field that isn't chosen is left out of
     each bean, not sent as `null`. A bean's stock, price, bag weight, purchase
     date, green supplier, website, rating and notes are never published; nor
     are recipe details (doses, steps).

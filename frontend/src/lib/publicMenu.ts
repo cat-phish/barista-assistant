@@ -2,7 +2,7 @@
 // details its beans block includes (BEAN_MENU_FIELDS). Unit-tested in
 // publicMenu.test.ts.
 import type { BeanMenuField, PublicBean } from '../api/types';
-import { BLEND_TYPES, DETAILED_ROAST_LEVELS, ROAST_TYPES, formatAltitude } from './beans';
+import { BLEND_TYPES, DETAILED_ROAST_LEVELS, ROAST_TYPES, formatAltitude, speciesLabel } from './beans';
 import { ORIGIN_AREAS } from './origins';
 import { ROAST_LEVELS } from './scale';
 
@@ -12,6 +12,7 @@ export const BEAN_MENU_FIELDS: Record<BeanMenuField, string> = {
   origin: 'Origin (country and region)',
   producer: 'Producer',
   altitude: 'Altitude',
+  variety: 'Variety and species',
   process: 'Process',
   roastLevel: 'Roast level',
   roastDate: 'Roast date (how many days ago)',
@@ -22,7 +23,7 @@ export const BEAN_MENU_FIELDS: Record<BeanMenuField, string> = {
 
 export interface BeanLines {
   badges: string[]; // "Decaf", "Single origin", "Espresso roast"
-  origin: string | null; // "Colombia, Huila · Finca El Paraíso · 1,950 m"
+  origin: string | null; // "Colombia, Huila · Finca El Paraíso · 1,950 m · Pink Bourbon"
   roast: string | null; // "Washed · City+ roast · roasted 5 days ago"
   flavor: string | null;
 }
@@ -40,10 +41,12 @@ export function beanLines(b: PublicBean, fields: readonly BeanMenuField[], now: 
     has('decaf') && b.decaf ? 'Decaf' : null,
     has('blendType') && b.blendType && b.blendType !== 'other' ? BLEND_TYPES[b.blendType].label : null,
     has('roastType') && b.roastType ? `${ROAST_TYPES[b.roastType].label} roast` : null,
+    // Arabica is what guests expect: only worth a badge when it's something else.
+    has('variety') && b.species?.some((s) => s !== 'arabica') ? speciesLabel(b.species) : null,
   ].filter((x): x is string => !!x);
 
   const place = has('origin') ? [b.country, b.region].filter(Boolean).join(', ') || (b.originArea ? ORIGIN_AREAS[b.originArea].label : '') : '';
-  const origin = [place || null, has('producer') ? b.producer : null, has('altitude') && b.altitudeMasl != null ? formatAltitude(b.altitudeMasl) : null] // guests have no preference: metres
+  const origin = [place || null, has('producer') ? b.producer : null, has('altitude') && b.altitudeMasl != null ? formatAltitude(b.altitudeMasl) : null, has('variety') ? (b.varieties?.join(', ') ?? null) : null] // guests have no preference: metres
     .filter((x): x is string => !!x)
     .join(' · ');
 

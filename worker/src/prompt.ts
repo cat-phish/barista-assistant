@@ -12,7 +12,7 @@ import type { BrewerInfo, SuggestContext } from "./suggestContext.js";
 // Stored with each analysis (llm_analyses.prompt_version), so results can be
 // compared across changes (npm run eval). Bump it whenever the input, the
 // prompt or the schema changes.
-export const PROMPT_VERSION = "2026-10-j";
+export const PROMPT_VERSION = "2026-10-k";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type LlmInput = { [key: string]: Json };
@@ -91,6 +91,7 @@ function beanInput(info: BrewContext["bean"], hidden: ReadonlySet<AiDetail>): Re
   const drop = (keys: string[]) => keys.forEach((k) => delete bean[k]);
   if (hidden.has("origin")) drop(["originArea", "country", "region"]);
   if (hidden.has("altitude")) drop(["altitudeMasl"]);
+  if (hidden.has("variety")) drop(["varieties", "species"]);
   if (hidden.has("process")) drop(["process"]);
   if (hidden.has("flavorProfile")) drop(["flavorProfile"]);
   if (hidden.has("roastType")) drop(["roastType"]);
@@ -255,6 +256,11 @@ export const PROMPT_SECTIONS: PromptSection[] = [
     key: "altitude",
     when: (i) => bean(i).altitudeMasl !== undefined,
     text: PROMPT_TEXT.altitude,
+  },
+  {
+    key: "variety",
+    when: (i) => bean(i).varieties !== undefined || bean(i).species !== undefined,
+    text: PROMPT_TEXT.variety,
   },
   {
     key: "origin",

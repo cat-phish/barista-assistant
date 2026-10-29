@@ -25,6 +25,7 @@ import {
   type OriginArea,
   type RoastType,
   type BrewLog,
+  type CoffeeSpecies,
   type Grinder,
   type Brewer,
   type FlowUnit,
@@ -164,6 +165,8 @@ export interface BrewContext {
     country: string | null;
     region: string | null;
     altitudeMasl: number | null;
+    varieties: string[] | null; // cultivars, as the roaster names them
+    species: CoffeeSpecies[] | null;
     roastWeightLossPercent: number | null; // % of the green weight lost in roasting
   };
   recipe: {
@@ -481,6 +484,8 @@ export async function loadBean(beanId: string): Promise<LoadedBean | null> {
       country: bean.country,
       region: bean.region,
       altitudeMasl: bean.altitudeMasl,
+      varieties: bean.varieties,
+      species: bean.species,
       roastWeightLossPercent: bean.roastWeightLossPercent,
     },
     roastDate: bean.roastDate,

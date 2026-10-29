@@ -1669,3 +1669,40 @@ Backlog item 3, branch `bean-name-suggestions`. Frontend only:
   photos). Its failure message now tells "the provider doesn't do web
   search" from "didn't work this time", and the worker logs each lookup
   (time, site, pages seen, found) to see why one finds nothing.
+
+## Coffee varieties and species (built)
+
+Backlog item "Coffee varieties (Bourbon, Typica, Geisha…)", branch
+`bean-varieties`. Contract: `api/beans.md` §4 `varieties` / `species`,
+`api/menu.md` §7b, `api/public-menu.md` §7, `api/bean-label.md` §4d,
+`api/llm-contract.md` §9 and §9c.
+
+- Two bean columns (migration 0078), JSON lists: `varieties` (free text,
+  1–20 names of up to 100 chars, each once ignoring case) and `species`
+  (`COFFEE_SPECIES`: arabica, robusta, liberica, excelsa, eugenioides,
+  stored in that order). An empty list is stored as `null`. Backups and
+  the list import take them as JSON columns (`JSON_SCHEMAS`); the beans
+  CSV has "Varieties" and "Species".
+- Decided: free text with suggestions rather than a managed list under
+  Settings → Lists (no table, and the spelling suggestions already exist).
+  Species as a multi-pick, not a single choice, since a blend like an
+  arabica/robusta espresso has several.
+- Bean form: **Variety** is chips with a box to add more (`NamesInput`):
+  Enter, a comma or a picked suggestion adds one, × removes it.
+  Suggestions are the workspace's varieties, then a built-in list of
+  common ones (`lib/varieties.ts`). **Species** is toggle chips. Both
+  are hideable (`bean.varieties`, `bean.species`); a Duplicate keeps them.
+  `NameInput` now emits `pick`, and binds its attributes after its own
+  listeners so a parent's keydown can see a suggestion took Enter.
+- Bean list: details show "SL28, SL34 · Arabica"; the Show filter gets
+  a Variety group (each variety once) and a Species group, as optgroups
+  (`ListControls` takes an option `group`); Sort by has Variety (the first
+  one).
+- Label read and web lookup fill both (`LabelFields`,
+  `LABEL_WEB_FIELDS`, the label prompts); the form holds them as text for
+  the fill, so a differing list is one "Label says" suggestion.
+- Public menu: a `variety` detail (both columns). The guest page adds the
+  varieties to the origin line, and the species as a badge unless it's
+  arabica alone.
+- The AI sees both, switchable under Settings → AI (`variety`), with a
+  prompt section treating them as context. PROMPT_VERSION 2026-10-k.

@@ -2,13 +2,14 @@
 // §4d): a field that's empty is filled; one that already says something else
 // gets a suggestion ("Label says: X · Use") and is left as typed.
 import type { AltitudeUnit, BeanProcess, LabelFields, LabelLookUp, LabelWebFinds, RoastScale } from '../api/types';
-import { BLEND_TYPES, DETAILED_ROAST_LEVELS, ROAST_TYPES } from './beans';
+import { BLEND_TYPES, DETAILED_ROAST_LEVELS, ROAST_TYPES, speciesLabel } from './beans';
 import { ROAST_LEVELS } from './scale';
 import { ALTITUDE_LABELS, altitudeText } from './units';
 
 // The form's values the label can fill, as the form holds them (text, ids
 // and keys; '' is empty). roastLevel is a 5-step key with roastScale
-// "levels", else a roast name key.
+// "levels", else a roast name key. varieties are comma-separated
+// ("SL28, SL34"), species keys too ("arabica,robusta").
 export interface LabelForm {
   roasterName: string;
   beanName: string;
@@ -17,6 +18,8 @@ export interface LabelForm {
   region: string;
   producer: string;
   altitude: string;
+  varieties: string;
+  species: string;
   flavorProfile: string;
   roastDate: string;
   roastLevel: string;
@@ -50,6 +53,8 @@ export const LABEL_FIELD_KEYS: Record<keyof LabelForm, string | null> = {
   region: 'bean.region',
   producer: 'bean.producer',
   altitude: 'bean.altitude',
+  varieties: 'bean.varieties',
+  species: 'bean.species',
   flavorProfile: 'bean.flavorProfile',
   roastDate: 'bean.roastDate',
   roastLevel: 'bean.roastLevel',
@@ -105,6 +110,8 @@ function offers(fields: Partial<LabelFields>, form: LabelForm, options: LabelFil
   offer('producer', 'producer', fields.producer);
   const altitude = altitudeText(fields.altitudeMasl ?? null, options.altitudeUnit);
   offer('altitude', 'altitudeMasl', altitude, altitude && `${altitude} ${ALTITUDE_LABELS[options.altitudeUnit]}`);
+  offer('varieties', 'varieties', fields.varieties?.join(', '));
+  offer('species', 'species', fields.species?.join(','), speciesLabel(fields.species ?? null));
   offer('flavorProfile', 'flavorProfile', fields.flavorProfile);
   offer('roastDate', 'roastDate', fields.roastDate);
   // Light to dark takes either; roast names only a name.
@@ -174,7 +181,9 @@ export function pageLabel(address: string): string {
 export function lookUpFields(fields: Partial<LabelFields>, website = ''): LabelLookUp {
   const { roastDate: _date, batchNumber: _batch, ...rest } = fields;
   const known = Object.fromEntries(
-    Object.entries(rest).filter(([, v]) => v !== null && v !== undefined && (typeof v !== 'string' || v.trim() !== '')),
+    Object.entries(rest).filter(
+      ([, v]) => v !== null && v !== undefined && (typeof v !== 'string' || v.trim() !== '') && (!Array.isArray(v) || v.length > 0),
+    ),
   ) as LabelLookUp;
   if (!known.website && website.trim()) known.website = website.trim();
   return known;

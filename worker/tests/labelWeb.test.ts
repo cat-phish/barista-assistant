@@ -13,6 +13,8 @@ const LABEL: LabelFields = {
   region: null,
   producer: null,
   altitudeMasl: null,
+  varieties: ["Geisha"],
+  species: null,
   flavorProfile: null,
   roastDate: "2026-10-20",
   detailedRoastLevel: null,

@@ -1,8 +1,9 @@
 // Labels and helpers for a bean's optional details (docs/api/beans.md §4).
-import type { Bean, BlendType, DetailedRoastLevel, RoastLevel, RoastScale, RoastType } from '../api/types';
+import type { Bean, BlendType, CoffeeSpecies, DetailedRoastLevel, RoastLevel, RoastScale, RoastType } from '../api/types';
 import { ROAST_LEVELS } from './scale';
 import { localDateInput } from './format';
 import { enumColumn, type SortColumns } from './listSort';
+import { distinctNames } from './nameSuggest';
 import { effectiveRoastAge } from './roastAge';
 
 export const ROAST_TYPES: Record<RoastType, { label: string }> = {
@@ -34,6 +35,21 @@ export const BLEND_TYPES: Record<BlendType, { label: string }> = {
   blend: { label: 'Blend' },
   other: { label: 'Other' },
 };
+
+// docs/schema.md COFFEE_SPECIES, in its order.
+export const COFFEE_SPECIES: Record<CoffeeSpecies, { label: string }> = {
+  arabica: { label: 'Arabica' },
+  robusta: { label: 'Robusta' },
+  liberica: { label: 'Liberica' },
+  excelsa: { label: 'Excelsa' },
+  eugenioides: { label: 'Eugenioides' },
+};
+export const speciesLabel = (species: readonly CoffeeSpecies[] | null): string | null =>
+  species?.length ? species.map((s) => COFFEE_SPECIES[s].label).join(' & ') : null;
+// "SL28, SL34 · Arabica", either part alone, or null.
+export function varietyLabel(b: Pick<Bean, 'varieties' | 'species'>): string | null {
+  return [b.varieties?.join(', '), speciesLabel(b.species)].filter(Boolean).join(' · ') || null;
+}
 
 
 // " · Batch 3" after a bean's name, or '' without a batch no.
@@ -139,7 +155,7 @@ export function roastAgeDays(bean: Pick<Bean, 'roastDate' | 'freezePeriods'>, to
 // lib/listSort.ts), in the dropdown's order. Unset values sort last either way.
 export type BeanSortColumn =
   | 'name' | 'roaster' | 'added' | 'purchased' | 'roastDate' | 'age' | 'roast'
-  | 'process' | 'frozen' | 'decaf' | 'rating' | 'stock';
+  | 'process' | 'variety' | 'frozen' | 'decaf' | 'rating' | 'stock';
 // processName: the workspace's name for a processId (they're editable,
 // docs/api/bean-processes.md §4b); labels don't depend on it.
 export const beanSortColumns = (processName: (id: string) => string | null = () => null): SortColumns<Bean, BeanSortColumn> => ({
@@ -151,19 +167,53 @@ export const beanSortColumns = (processName: (id: string) => string | null = () 
   age: { label: 'Age', value: (b) => roastAgeDays(b), asc: 'Freshest first', desc: 'Oldest first' },
   roast: { label: 'Roast level', value: roastRank, asc: 'Lightest first', desc: 'Darkest first' },
   process: { label: 'Process', value: (b) => (b.processId ? processName(b.processId) : null), asc: 'A–Z', desc: 'Z–A' },
+  variety: { label: 'Variety', value: (b) => b.varieties?.[0] ?? null, asc: 'A–Z', desc: 'Z–A' },
   frozen: { ...enumColumn<Bean, FreezeState>('Frozen', FREEZE_STATES, freezeState), asc: 'Frozen first', desc: 'Never frozen first' },
   decaf: { label: 'Caffeinated / decaf', value: (b) => (b.decaf ? 1 : 0), asc: 'Caffeinated first', desc: 'Decaf first' },
   rating: { label: 'Rating', value: (b) => b.rating, asc: 'Lowest first', desc: 'Highest first', firstDir: 'desc' },
   stock: { label: 'In stock', value: (b) => b.inventoryWeightGrams, asc: 'Least first', desc: 'Most first', firstDir: 'desc' },
 });
 
-// The list's Filter dropdown.
-export type BeanFilter = 'all' | 'in_stock' | 'out_of_stock' | 'frozen' | 'decaf';
-export const BEAN_FILTERS: Record<BeanFilter, { label: string; test: (b: Bean) => boolean }> = {
+// The list's Filter dropdown: these, then each variety and species the
+// workspace's beans have ("variety:<name>", "species:<key>").
+export type BeanFilterKey = 'all' | 'in_stock' | 'out_of_stock' | 'frozen' | 'decaf';
+export type BeanFilter = BeanFilterKey | `variety:${string}` | `species:${CoffeeSpecies}`;
+export const BEAN_FILTERS: Record<BeanFilterKey, { label: string; test: (b: Bean) => boolean }> = {
   all: { label: 'All beans', test: () => true },
   in_stock: { label: 'In stock', test: (b) => b.inventoryWeightGrams > 0 },
   out_of_stock: { label: 'Out of stock', test: (b) => b.inventoryWeightGrams === 0 },
   frozen: { label: 'Frozen', test: (b) => freezeState(b) === 'frozen' },
   decaf: { label: 'Decaf', test: (b) => b.decaf },
 };
-export const isBeanFilter = (v: unknown): v is BeanFilter => typeof v === 'string' && v in BEAN_FILTERS;
+const isSpecies = (v: string): v is CoffeeSpecies => v in COFFEE_SPECIES;
+export const isBeanFilter = (v: unknown): v is BeanFilter =>
+  typeof v === 'string' &&
+  (v in BEAN_FILTERS || (v.startsWith('variety:') && v.length > 8) || (v.startsWith('species:') && isSpecies(v.slice(8))));
+// A variety matches ignoring case.
+export function beanFilter(f: BeanFilter): { label: string; test: (b: Bean) => boolean } {
+  if (f.startsWith('variety:')) {
+    const name = f.slice(8);
+    return { label: name, test: (b) => !!b.varieties?.some((v) => v.toLowerCase() === name.toLowerCase()) };
+  }
+  if (f.startsWith('species:')) {
+    const species = f.slice(8) as CoffeeSpecies;
+    return { label: COFFEE_SPECIES[species].label, test: (b) => !!b.species?.includes(species) };
+  }
+  return BEAN_FILTERS[f as BeanFilterKey];
+}
+export interface BeanFilterOption {
+  value: BeanFilter;
+  label: string;
+  group?: string;
+}
+// The fixed filters, then the varieties (each once, in the spelling used
+// most) and species these beans have; current stays offered while chosen.
+export function beanFilterOptions(beans: readonly Bean[], current: BeanFilter = 'all'): BeanFilterOption[] {
+  const options: BeanFilterOption[] = Object.entries(BEAN_FILTERS).map(([value, f]) => ({ value: value as BeanFilter, label: f.label }));
+  const varieties = distinctNames(beans.flatMap((b) => b.varieties ?? []));
+  if (current.startsWith('variety:') && !varieties.includes(current.slice(8))) varieties.push(current.slice(8));
+  options.push(...varieties.map((v) => ({ value: `variety:${v}` as BeanFilter, label: v, group: 'Variety' })));
+  const species = (Object.keys(COFFEE_SPECIES) as CoffeeSpecies[]).filter((s) => current === `species:${s}` || beans.some((b) => b.species?.includes(s)));
+  options.push(...species.map((s) => ({ value: `species:${s}` as BeanFilter, label: COFFEE_SPECIES[s].label, group: 'Species' })));
+  return options;
+}

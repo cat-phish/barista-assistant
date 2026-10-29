@@ -11,6 +11,8 @@ const NONE: LabelFields = {
   region: null,
   producer: null,
   altitudeMasl: null,
+  varieties: null,
+  species: null,
   flavorProfile: null,
   roastDate: null,
   detailedRoastLevel: null,
@@ -30,6 +32,8 @@ const EMPTY: LabelForm = {
   region: '',
   producer: '',
   altitude: '',
+  varieties: '',
+  species: '',
   flavorProfile: '',
   roastDate: '',
   roastLevel: '',
@@ -174,5 +178,19 @@ describe('lookUpFields', () => {
     expect(lookUpFields({ ...fields, website: 'https://onyx.com' }, 'other.com').website).toBe('https://onyx.com');
     expect(canLookUp(lookUpFields(fields))).toBe(true);
     expect(canLookUp(lookUpFields({ country: 'Ethiopia' }))).toBe(false);
+  });
+});
+
+describe('labelFill: varieties and species', () => {
+  it('fills them as the form holds them, and suggests a different list', () => {
+    const fields = { ...NONE, varieties: ['SL28', 'SL34'], species: ['arabica' as const, 'robusta' as const] };
+    expect(labelFill(fields, EMPTY, options).fills).toEqual({ varieties: 'SL28, SL34', species: 'arabica,robusta' });
+    const { fills, suggestions } = labelFill(fields, { ...EMPTY, varieties: 'sl28, sl34', species: 'arabica' }, options);
+    expect(fills).toEqual({});
+    expect(suggestions).toEqual({ species: { value: 'arabica,robusta', text: 'Arabica & Robusta' } });
+  });
+
+  it('a lookup leaves out empty lists', () => {
+    expect(lookUpFields({ beanName: 'Geometry', varieties: [], species: ['arabica'] })).toEqual({ beanName: 'Geometry', species: ['arabica'] });
   });
 });

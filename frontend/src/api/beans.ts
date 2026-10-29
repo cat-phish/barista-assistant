@@ -1,5 +1,5 @@
 import { api, API_URL } from './client';
-import type { Bean, BeanPhoto, BlendType, LabelLookUp, LabelReadResult, LabelWebResult, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from './types';
+import type { Bean, BeanPhoto, BlendType, CoffeeSpecies, LabelLookUp, LabelReadResult, LabelWebResult, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from './types';
 
 // Request body for create/update (docs/api/beans.md §4). With roast names,
 // roastLevel is left out: the API derives it from detailedRoastLevel (only a
@@ -17,6 +17,8 @@ export interface BeanInput {
   detailedRoastLevel?: DetailedRoastLevel | null;
   blendType: BlendType | null;
   decaf: boolean;
+  varieties: string[] | null;
+  species: CoffeeSpecies[] | null;
   website: string | null;
   priceAmount: number | null;
   priceCurrency: string | null;

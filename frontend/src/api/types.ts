@@ -116,7 +116,7 @@ export interface MenuItem {
 }
 // docs/api/menu.md §7b BEAN_MENU_FIELDS: what the beans block can show per bean.
 export type BeanMenuField =
-  | 'flavorProfile' | 'origin' | 'producer' | 'altitude' | 'process' | 'roastLevel' | 'roastDate' | 'decaf' | 'blendType' | 'roastType';
+  | 'flavorProfile' | 'origin' | 'producer' | 'altitude' | 'variety' | 'process' | 'roastLevel' | 'roastDate' | 'decaf' | 'blendType' | 'roastType';
 export interface MenuSection {
   id: string;
   name: string;
@@ -137,7 +137,7 @@ export type PublicBean = Pick<Bean, 'id' | 'roasterName' | 'beanName'> &
     { process: string | null } & Pick< // process: the process's name
       Bean,
       | 'roastDate' | 'roastLevel' | 'detailedRoastLevel' | 'roastType' | 'blendType' | 'decaf'
-      | 'flavorProfile' | 'originArea' | 'country' | 'region' | 'altitudeMasl' | 'producer'
+      | 'flavorProfile' | 'originArea' | 'country' | 'region' | 'altitudeMasl' | 'producer' | 'varieties' | 'species'
     >
   >;
 export interface PublicMenuItem {
@@ -313,6 +313,8 @@ export type DetailedRoastLevel =
   | 'cinnamon' | 'american' | 'new_england' | 'half_city' | 'modern_light' | 'city'
   | 'city_plus' | 'full_city' | 'full_city_plus' | 'italian' | 'vienna' | 'french';
 export type BlendType = 'single_origin' | 'blend' | 'other';
+// docs/schema.md COFFEE_SPECIES
+export type CoffeeSpecies = 'arabica' | 'robusta' | 'liberica' | 'excelsa' | 'eugenioides';
 // docs/schema.md ORIGIN_AREAS
 export type OriginArea = 'africa' | 'arabia' | 'central_america' | 'south_america' | 'asia' | 'pacific';
 // docs/schema.md BEAN_PROCESSES: the built-in keys
@@ -350,6 +352,8 @@ export interface Bean {
   roastWeightLossPercent: number | null; // % of the green weight lost in roasting
   blendType: BlendType | null;
   decaf: boolean;
+  varieties: string[] | null; // cultivars, e.g. ["SL28", "SL34"]; null = not stated
+  species: CoffeeSpecies[] | null; // COFFEE_SPECIES order; null = not stated
   website: string | null; // http(s)
   priceAmount: number | null; // one bag, with priceCurrency (both or neither)
   priceCurrency: string | null; // ISO 4217, e.g. "USD"
@@ -669,6 +673,8 @@ export interface LabelFields {
   region: string | null;
   producer: string | null;
   altitudeMasl: number | null;
+  varieties: string[] | null;
+  species: CoffeeSpecies[] | null;
   flavorProfile: string | null;
   roastDate: string | null; // YYYY-MM-DD
   detailedRoastLevel: DetailedRoastLevel | null;

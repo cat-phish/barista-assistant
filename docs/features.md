@@ -58,6 +58,12 @@ work is in `roadmap.md`.
 - Roaster, coffee name, process, **roast level** (light → dark, optional),
   roast date and stock. Optionally the **roast weight loss** (%), which
   tells the AI how developed the roast is.
+- **Variety and species:** a bean's varieties (Bourbon, SL28, Geisha…) as
+  chips, suggested from a built-in list and the workspace's own while
+  typing, and its species (arabica, robusta…; a blend can have several).
+  The label read fills them; the bean list shows, filters and sorts by
+  them; the public menu can show them; the AI sees them unless switched
+  off under Settings → AI.
 - **Name suggestions:** roaster, coffee, producer and green supplier
   suggest the workspace's names while you type (archived beans' too; the
   roaster's own coffees first). A roaster, producer or supplier spelled

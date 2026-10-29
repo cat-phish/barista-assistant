@@ -3,7 +3,7 @@
 // AI_DETAILS in @barista/shared/aiDetails (aiDetails.test.ts checks).
 export type AiDetail =
   | 'tds' | 'temp' | 'marks' | 'prepTools' | 'problems' | 'grinderWeights' | 'rpm' | 'drink' | 'water' | 'waterMinerals'
-  | 'origin' | 'altitude' | 'process' | 'flavorProfile' | 'roastType' | 'roastLevel' | 'weightLoss' | 'decafBlend' | 'batchNumber'
+  | 'origin' | 'altitude' | 'variety' | 'process' | 'flavorProfile' | 'roastType' | 'roastLevel' | 'weightLoss' | 'decafBlend' | 'batchNumber'
   | 'recipeSteps' | 'grindStartingPoints' | 'grinderDetails' | 'machine'
   | 'unratedHistory' | 'analyzeUnrated';
 
@@ -32,6 +32,7 @@ export const AI_DETAIL_LIST: AiDetailInfo[] = [
   d('brew', 'waterMinerals', 'Water figures only', 'Hardness, minerals, pH; the water’s name is still sent'),
   d('bean', 'origin', 'Origin', 'Area, country and region'),
   d('bean', 'altitude', 'Altitude', ''),
+  d('bean', 'variety', 'Variety and species', 'Bourbon, SL28…; arabica, robusta…'),
   d('bean', 'process', 'Process', ''),
   d('bean', 'flavorProfile', 'Flavor profile', 'The roaster’s description'),
   d('bean', 'roastType', 'Roasted for', 'Filter, espresso or omni'),
