@@ -181,6 +181,21 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
         <input type="checkbox" :checked="settings.readLabels" :disabled="!isOwner || saving" @change="save({ readLabels: ($event.target as HTMLInputElement).checked }, 'labels')" />
         Read bean labels from photos
       </label>
+      <label class="checkbox">
+        <input
+          type="checkbox"
+          :checked="settings.labelWebLookup"
+          :disabled="!isOwner || saving || !settings.readLabels"
+          @change="save({ labelWebLookup: ($event.target as HTMLInputElement).checked }, 'labels')"
+        />
+        <span>
+          Allow looking beans up on the web
+          <span class="muted small web-hint">
+            Adds “Also look it up on the web” to the bean form, ticked per read. What the label says (not the photos) goes to a web search, on
+            the roaster's site when it's known. It takes longer and costs more; what it finds is only suggested, with a link to the page.
+          </span>
+        </span>
+      </label>
       <p v-if="error && activeSection === 'labels'" class="form-error" role="alert">{{ error }}</p>
       <p v-if="saved && activeSection === 'labels'" class="muted small" aria-live="polite">Saved.</p>
     </section>
@@ -217,6 +232,9 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
 </template>
 
 <style scoped>
+.web-hint {
+  display: block;
+}
 .suggest-alts {
   display: flex;
   flex-direction: column;

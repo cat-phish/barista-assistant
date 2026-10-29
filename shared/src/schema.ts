@@ -106,6 +106,9 @@ export interface WorkspaceSettings {
   // "Fill in from the photos" on the bean form (docs/api/bean-label.md §4d):
   // the bean's photos go to the AI to read the label. Off hides it.
   readLabels: boolean;
+  // With it, "Also look it up on the web" on that card (bean-label.md §4d):
+  // the label's text goes to a web search. Off by default.
+  labelWebLookup: boolean;
 }
 export const AUTO_ANALYZE_DELAYS = [0, 5, 10, 15, 30] as const;
 export type AutoAnalyzeDelay = (typeof AUTO_ANALYZE_DELAYS)[number];
@@ -142,6 +145,7 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   suggestMaxBrews: 5,
   suggestAlternatives: [],
   readLabels: true,
+  labelWebLookup: false,
 };
 
 export function withDefaults<T extends object>(defaults: T, stored: Partial<T> | null): T {

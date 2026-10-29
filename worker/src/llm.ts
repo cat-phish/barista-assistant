@@ -176,6 +176,41 @@ export async function complete(request: OpenAI.Chat.Completions.ChatCompletionCr
   return { message: completion.choices[0]?.message, usage };
 }
 
+// A Responses API call (the web lookup, docs/api/llm-contract.md §9c): its
+// text, a refusal if there was one, and every web address the search
+// visited or cited, so an answer can only point at pages it really saw.
+export interface WebReply {
+  text: string;
+  refusal: string | null;
+  visited: string[];
+}
+export async function respond(request: OpenAI.Responses.ResponseCreateParamsNonStreaming): Promise<WebReply> {
+  let response: OpenAI.Responses.Response;
+  try {
+    response = await openai.responses.create(request);
+  } catch (err) {
+    if (err instanceof OpenAI.APIError && err.status !== undefined && [400, 401, 403, 404].includes(err.status)) {
+      throw new UnrecoverableError(`OpenAI rejected the request (${err.status}): ${err.message}`);
+    }
+    throw err;
+  }
+  const visited: string[] = [];
+  let refusal: string | null = null;
+  for (const item of response.output) {
+    if (item.type === "web_search_call") {
+      const action = item.action;
+      if (action.type === "search") visited.push(...(action.sources ?? []).map((s) => s.url));
+      else if ("url" in action && typeof action.url === "string") visited.push(action.url);
+    } else if (item.type === "message") {
+      for (const part of item.content) {
+        if (part.type === "refusal") refusal = part.refusal;
+        else for (const a of part.annotations) if (a.type === "url_citation") visited.push(a.url);
+      }
+    }
+  }
+  return { text: response.output_text, refusal, visited };
+}
+
 export async function requestAnalysis(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): Promise<AnalysisRun> {
   const { message, usage } = await complete(buildCompletionRequest(context, hidden, custom));
   return { analysis: onlyWhatApplies(parseAnalysisMessage(message), context, hidden), usage };

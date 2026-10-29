@@ -1,7 +1,7 @@
 // What "Fill in from a photo" does to the bean form (docs/api/bean-label.md
 // §4d): a field that's empty is filled; one that already says something else
 // gets a suggestion ("Label says: X · Use") and is left as typed.
-import type { AltitudeUnit, BeanProcess, LabelFields, RoastScale } from '../api/types';
+import type { AltitudeUnit, BeanProcess, LabelFields, LabelWebFinds, RoastScale } from '../api/types';
 import { BLEND_TYPES, DETAILED_ROAST_LEVELS, ROAST_TYPES } from './beans';
 import { ROAST_LEVELS } from './scale';
 import { ALTITUDE_LABELS, altitudeText } from './units';
@@ -33,6 +33,7 @@ export type TextKey = Exclude<keyof LabelForm, 'decaf'>;
 export interface LabelSuggestion {
   value: string; // what Use puts in the field
   text: string; // what the label says, as shown
+  source?: string; // from the web: the page it's on
 }
 
 export interface LabelFill {
@@ -72,45 +73,77 @@ export interface LabelFillOptions {
   roastScale: RoastScale;
 }
 
-export function labelFill(fields: LabelFields, form: LabelForm, options: LabelFillOptions): LabelFill {
-  const result: LabelFill = { fills: {}, suggestions: {} };
-  const offer = (key: TextKey, value: string | null, text: string | null = value) => {
-    if (value === null || value === '') return;
-    if (!form[key].trim()) result.fills[key] = value;
-    else if (!same(form[key], value)) result.suggestions[key] = { value, text: text ?? value };
+// One value the label (or web) gives a form field: what Use puts in, how
+// it's shown, and the LabelFields key it came from (for its web source).
+interface Offer {
+  key: TextKey;
+  value: string;
+  text: string;
+  from: keyof LabelFields;
+}
+function offers(fields: Partial<LabelFields>, form: LabelForm, options: LabelFillOptions): Offer[] {
+  const out: Offer[] = [];
+  const offer = (key: TextKey, from: keyof LabelFields, value: string | null | undefined, text: string | null | undefined = value) => {
+    if (value) out.push({ key, value, text: text || value, from });
   };
-
-  offer('roasterName', fields.roasterName);
-  offer('beanName', fields.beanName);
+  offer('roasterName', 'roasterName', fields.roasterName);
+  offer('beanName', 'beanName', fields.beanName);
   const process = fields.processName
     ? options.processes.find((p) => !p.hidden && p.name.toLowerCase() === fields.processName!.toLowerCase())
     : undefined;
-  if (process) offer('process', process.id, process.name);
+  if (process) offer('process', 'processName', process.id, process.name);
   // A process not in the list goes in the notes, added to what's there.
-  if (!process && (fields.processText ?? fields.processName)) {
-    const line = `Process: ${fields.processText ?? fields.processName}`;
-    if (!form.notes.toLowerCase().includes(line.toLowerCase())) offer('notes', form.notes.trim() ? `${form.notes.trimEnd()}\n${line}` : line, line);
+  const printed = fields.processText ?? fields.processName;
+  if (!process && printed) {
+    const line = `Process: ${printed}`;
+    if (!form.notes.toLowerCase().includes(line.toLowerCase())) {
+      offer('notes', fields.processText ? 'processText' : 'processName', form.notes.trim() ? `${form.notes.trimEnd()}\n${line}` : line, line);
+    }
   }
-  offer('country', fields.country); // the form fills its growing area from it
-  offer('region', fields.region);
-  offer('producer', fields.producer);
-  const altitude = altitudeText(fields.altitudeMasl, options.altitudeUnit);
-  offer('altitude', altitude, altitude && `${altitude} ${ALTITUDE_LABELS[options.altitudeUnit]}`);
-  offer('flavorProfile', fields.flavorProfile);
-  offer('roastDate', fields.roastDate);
+  offer('country', 'country', fields.country); // the form fills its growing area from it
+  offer('region', 'region', fields.region);
+  offer('producer', 'producer', fields.producer);
+  const altitude = altitudeText(fields.altitudeMasl ?? null, options.altitudeUnit);
+  offer('altitude', 'altitudeMasl', altitude, altitude && `${altitude} ${ALTITUDE_LABELS[options.altitudeUnit]}`);
+  offer('flavorProfile', 'flavorProfile', fields.flavorProfile);
+  offer('roastDate', 'roastDate', fields.roastDate);
   // Light to dark takes either; roast names only a name.
   if (options.roastScale === 'levels') {
     const level = fields.roastLevel ?? (fields.detailedRoastLevel ? DETAILED_ROAST_LEVELS[fields.detailedRoastLevel].roastLevel : null);
-    if (level) offer('roastLevel', level, ROAST_LEVELS[level].label);
+    if (level) offer('roastLevel', fields.roastLevel ? 'roastLevel' : 'detailedRoastLevel', level, ROAST_LEVELS[level].label);
   } else if (fields.detailedRoastLevel) {
-    offer('roastLevel', fields.detailedRoastLevel, DETAILED_ROAST_LEVELS[fields.detailedRoastLevel].label);
+    offer('roastLevel', 'detailedRoastLevel', fields.detailedRoastLevel, DETAILED_ROAST_LEVELS[fields.detailedRoastLevel].label);
   }
-  if (fields.roastType) offer('roastType', fields.roastType, ROAST_TYPES[fields.roastType].label);
-  if (fields.blendType) offer('blendType', fields.blendType, BLEND_TYPES[fields.blendType].label);
+  if (fields.roastType) offer('roastType', 'roastType', fields.roastType, ROAST_TYPES[fields.roastType].label);
+  if (fields.blendType) offer('blendType', 'blendType', fields.blendType, BLEND_TYPES[fields.blendType].label);
+  const bag = fields.bagWeightGrams ?? null;
+  offer('bagWeight', 'bagWeightGrams', bag === null ? null : String(bag), bag === null ? null : `${bag} g`);
+  offer('batchNumber', 'batchNumber', fields.batchNumber);
+  offer('website', 'website', fields.website);
+  return out;
+}
+
+// The label fills empty fields and suggests for the rest. What the web
+// found (bean-label.md §4d) is only ever suggested, with its page, and not
+// where it says what the form (after the label) already says, or where the
+// label already made a suggestion.
+export function labelFill(fields: LabelFields, form: LabelForm, options: LabelFillOptions, web: LabelWebFinds | null = null): LabelFill {
+  const result: LabelFill = { fills: {}, suggestions: {} };
+  for (const o of offers(fields, form, options)) {
+    if (!form[o.key].trim()) result.fills[o.key] = o.value;
+    else if (!same(form[o.key], o.value)) result.suggestions[o.key] = { value: o.value, text: o.text };
+  }
   if (fields.decaf && !form.decaf) result.fills.decaf = true;
-  offer('bagWeight', fields.bagWeightGrams === null ? null : String(fields.bagWeightGrams), fields.bagWeightGrams === null ? null : `${fields.bagWeightGrams} g`);
-  offer('batchNumber', fields.batchNumber);
-  offer('website', fields.website);
+  if (!web) return result;
+
+  const after: LabelForm = { ...form, ...result.fills };
+  const values: Partial<LabelFields> = Object.fromEntries(Object.entries(web).map(([field, find]) => [field, find.value]));
+  const sourceOf = (from: keyof LabelFields) => (web as Partial<Record<keyof LabelFields, { url: string }>>)[from]?.url;
+  for (const o of offers(values, after, options)) {
+    const source = sourceOf(o.from);
+    if (!source || result.suggestions[o.key] || same(after[o.key], o.value)) continue;
+    result.suggestions[o.key] = { value: o.value, text: o.text, source };
+  }
   return result;
 }
 

@@ -70,6 +70,10 @@ export interface LabelReadJobData {
   images: string[];
   processes: string[];
   requestedBy: string; // whose AI prompt is used (docs/api/auth.md §1c)
+  // Then look it up on the web (llm-contract.md §9c, step 2): only that site
+  // when the roaster's website is known (read off the label, or this, the form's).
+  web?: boolean;
+  website?: string | null;
 }
 // What the label says, each null when it isn't printed (or can't be read).
 export interface LabelFields {
@@ -91,6 +95,36 @@ export interface LabelFields {
   bagWeightGrams: number | null;
   batchNumber: string | null;
   website: string | null;
+}
+
+// What a web lookup can add, each with the page it came from. Not the roast
+// date or batch number: they belong to one bag.
+export const LABEL_WEB_FIELDS = [
+  "roasterName",
+  "beanName",
+  "processName",
+  "processText",
+  "country",
+  "region",
+  "producer",
+  "altitudeMasl",
+  "flavorProfile",
+  "detailedRoastLevel",
+  "roastLevel",
+  "roastType",
+  "blendType",
+  "decaf",
+  "bagWeightGrams",
+  "website",
+] as const satisfies ReadonlyArray<keyof LabelFields>;
+export type LabelWebField = (typeof LABEL_WEB_FIELDS)[number];
+export type LabelWebFinds = { [K in LabelWebField]?: { value: NonNullable<LabelFields[K]>; url: string } };
+// The job's answer: what the label says, and, when asked, what the web adds
+// (null when not asked; webError when the lookup failed, the label still read).
+export interface LabelReadResult {
+  fields: LabelFields;
+  web: LabelWebFinds | null;
+  webError: string | null;
 }
 
 export const GRIND_DELTAS = ["much_finer", "finer", "no_change", "coarser", "much_coarser"] as const;

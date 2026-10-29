@@ -19,7 +19,8 @@
 **Configuration (worker env):** `DATABASE_URL` + `DATABASE_PASSWORD`,
 `REDIS_URL` + `REDIS_PASSWORD`, `OPENAI_API_KEY`, and `OPENAI_MODEL`
 (required, no default, since valid model names change over time);
-`OPENAI_VISION_MODEL` (optional) reads bean labels (§9c). Passwords
+`OPENAI_VISION_MODEL` (optional) reads bean labels and `OPENAI_WEB_MODEL`
+(optional) looks them up on the web (§9c). Passwords
 are kept out of the URLs; a URL that also contains a password is rejected.
 Each secret can instead be given as `NAME_FILE` (a path, e.g. a Docker secret
 under `/run/secrets`), but not both. `OPENAI_BASE_URL` is optional and points
@@ -402,8 +403,34 @@ retried. `worker/src/label.ts`:
    and a matched one clears `processText`. A refusal, an empty response or
    invalid JSON fails the job (the route answers `502`).
 
+4. **Web lookup** (step 2, only with `web: true` in the job;
+   `worker/src/labelWeb.ts`): a **Responses API** call
+   (`openai.responses.create`) on `OPENAI_WEB_MODEL` (optional; else the
+   vision model), with the `web_search` tool and
+   `include: ["web_search_call.action.sources"]`:
+   - **Sent:** the `labelWeb` section ("Looking a bean up on the web",
+     editable), the asker's label instructions and `end` as `instructions`;
+     as `input` what the label says (not the photos, roast date or batch
+     number) and the processes. When the roaster's site is known (the
+     label's `website`, else the job's `website`, the form's), the tool is
+     limited to it (`filters.allowed_domains`).
+   - **Schema** (`labelWebJsonSchema`, strict): for each of
+     `LABEL_WEB_FIELDS` (`@barista/shared/jobs`), `null` or
+     `{ value, url }`, the value typed as in step 2.
+   - **Checking** (`parseWebReply`): each value as in step 3; its `url`
+     must be http(s), on a host the search visited or cited (its
+     `sources` and `url_citation`s), and on the roaster's site when the
+     search was limited to it; otherwise dropped. A matched `processName`
+     drops `processText`.
+   - **Failing** (a provider or model without the Responses API or web
+     search, a refusal, bad JSON) doesn't fail the job: it returns the
+     label with `web: null` and `webError`.
+
+   The job's answer is `LabelReadResult` `{ fields, web, webError }`.
+
 The workspace's `readLabels` setting (`workspaces.md` §2) turns the route
-off; nothing is sent unless someone takes or picks a photo for it.
+off, and `labelWebLookup` the web step; nothing is sent unless someone
+takes or picks a photo for it.
 
 ## Evaluating changes
 

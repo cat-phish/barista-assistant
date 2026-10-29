@@ -127,3 +127,34 @@ describe('labelImages', () => {
     expect(labelImages(['x', 'y', 'z'], ['a', 'b', 'c', 'd', 'e', 'f'])).toEqual({ images: ['x', 'y', 'z', 'a', 'b', 'c', 'd', 'e'], left: 1 });
   });
 });
+
+describe('labelFill with what the web found', () => {
+  const page = 'https://onyxcoffeelab.com/products/geometry';
+  it('only ever suggests, with the page, never where the form or the label already says it', () => {
+    const { fills, suggestions } = labelFill(
+      { ...NONE, roasterName: 'Onyx', beanName: 'Geometry' },
+      { ...EMPTY, region: 'Guji' },
+      options,
+      {
+        producer: { value: 'Many farms', url: page },
+        region: { value: 'guji', url: page }, // what the form says
+        beanName: { value: 'Geometry', url: page }, // what the label filled
+        altitudeMasl: { value: 2100, url: page },
+        processName: { value: 'Washed', url: page },
+      },
+    );
+    expect(fills).toEqual({ roasterName: 'Onyx', beanName: 'Geometry' });
+    expect(suggestions).toEqual({
+      producer: { value: 'Many farms', text: 'Many farms', source: page },
+      altitude: { value: '2100', text: '2100 m', source: page },
+      process: { value: 'p-washed', text: 'Washed', source: page },
+    });
+  });
+
+  it('leaves the label’s own suggestion in place', () => {
+    const { suggestions } = labelFill({ ...NONE, beanName: 'Geometry' }, { ...EMPTY, beanName: 'Geo' }, options, {
+      beanName: { value: 'Geometry Blend', url: page },
+    });
+    expect(suggestions).toEqual({ beanName: { value: 'Geometry', text: 'Geometry' } });
+  });
+});

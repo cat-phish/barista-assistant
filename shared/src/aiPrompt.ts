@@ -345,6 +345,21 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
       "net weight in grams (12 oz = 340). batchNumber is a roast batch or lot number. website is the roaster's web address " +
       "with https://.",
   },
+  {
+    key: "labelWeb",
+    label: "Looking a bean up on the web",
+    prompts: ["label"],
+    locked: false,
+    text:
+      "You look up one bag of roasted coffee on the web, given what its label says, to fill in details the label leaves " +
+      "out. Look for the roaster's own page for this coffee first. Give a value only when a page you found states it for " +
+      "this coffee (the same roaster and coffee, not another lot or a similar coffee), with url the address of that page; " +
+      "null otherwise. Never guess or fill from general knowledge. Values follow the label's rules: processName is one of " +
+      "the given processes when it fits, otherwise null with the process in processText; country in English; " +
+      "altitudeMasl in metres (a range gives its middle); flavorProfile the roaster's tasting notes, comma-separated; " +
+      "detailedRoastLevel a named roast, roastLevel only light to dark; bagWeightGrams the net weight in grams; website " +
+      "the roaster's web address.",
+  },
 ];
 
 // Each section's default text by key.
