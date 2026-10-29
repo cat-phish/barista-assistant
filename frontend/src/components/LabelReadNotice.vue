@@ -20,9 +20,9 @@ const back = computed(() => (read.value?.key === 'new' ? { name: 'bean-new' } : 
 <template>
   <div v-if="read && !here" class="label-read-notice" role="status">
     <span v-if="read.status === 'reading'">
-      {{ read.web ? 'Reading the label and looking it up on the web' : 'Reading the label' }} for {{ read.name }}…
+      {{ read.step === 'web' ? 'Looking it up on the web' : read.web ? 'Reading the label, then the web' : 'Reading the label' }} for {{ read.name }}…
     </span>
-    <span v-else-if="read.status === 'done'">The label for {{ read.name }} is read.</span>
+    <span v-else-if="read.status === 'done'">{{ read.photos ? 'The label' : 'The web lookup' }} for {{ read.name }} is done.</span>
     <span v-else>Reading the label for {{ read.name }} didn't work.</span>
     <RouterLink :to="back">Back to the bean</RouterLink>
     <button v-if="read.status !== 'reading'" type="button" class="btn-link small" aria-label="Dismiss" @click="reads.dismiss()">✕</button>

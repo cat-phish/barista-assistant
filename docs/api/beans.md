@@ -27,6 +27,9 @@
   show active and archived beans apart, and leave archived ones out of the
   brew picker; past brews and the AI keep them.
 
+  The bean form suggests roaster, coffee, producer and supplier names from
+  this list, archived beans included (no separate names endpoint).
+
 **Effective roast age** (days), computed by clients and the worker, as of
 calendar date `D`:
 `(D − roastDate) − Σ days frozen between roastDate and D`, where a period

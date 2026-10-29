@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BeanProcess, LabelFields } from '../api/types';
-import { labelFill, labelImages, type LabelForm } from './labelFill';
+import { canLookUp, labelFill, labelImages, lookUpFields, pageLabel, type LabelForm } from './labelFill';
 
 const NONE: LabelFields = {
   roasterName: null,
@@ -156,5 +156,23 @@ describe('labelFill with what the web found', () => {
       beanName: { value: 'Geometry Blend', url: page },
     });
     expect(suggestions).toEqual({ beanName: { value: 'Geometry', text: 'Geometry' } });
+  });
+});
+
+describe('pageLabel', () => {
+  it('shows the host without www. and the path', () => {
+    expect(pageLabel('https://www.onyxcoffeelab.com/products/geometry/')).toBe('onyxcoffeelab.com/products/geometry');
+    expect(pageLabel('https://onyxcoffeelab.com/')).toBe('onyxcoffeelab.com');
+    expect(pageLabel('https://example.com/caf%C3%A9')).toBe('example.com/café');
+  });
+});
+
+describe('lookUpFields', () => {
+  it("keeps what's known, never one bag's details, and the form's website when there's none", () => {
+    const fields = { ...NONE, roasterName: 'Onyx', beanName: ' ', altitudeMasl: 2000, roastDate: '2026-10-01', batchNumber: 'B1' };
+    expect(lookUpFields(fields, ' onyxcoffeelab.com ')).toEqual({ roasterName: 'Onyx', altitudeMasl: 2000, website: 'onyxcoffeelab.com' });
+    expect(lookUpFields({ ...fields, website: 'https://onyx.com' }, 'other.com').website).toBe('https://onyx.com');
+    expect(canLookUp(lookUpFields(fields))).toBe(true);
+    expect(canLookUp(lookUpFields({ country: 'Ethiopia' }))).toBe(false);
   });
 });

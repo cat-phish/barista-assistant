@@ -687,6 +687,11 @@ export type LabelWebField = Exclude<keyof LabelFields, 'roastDate' | 'batchNumbe
 export type LabelWebFinds = { [K in LabelWebField]?: { value: NonNullable<LabelFields[K]>; url: string } };
 export interface LabelReadResult {
   fields: LabelFields;
-  web: LabelWebFinds | null; // null when not asked
+  web: LabelWebFinds | null; // null when not looked up, or the lookup failed
+  webSources: string[]; // pages the lookup looked at, those with a find first; [] without one
   webError: string | null; // the lookup failed; the label was still read
 }
+// POST …/bean-label/web: what's known of the bean (a label read's fields or
+// the form's), and the answer.
+export type LabelLookUp = { [K in LabelWebField]?: LabelFields[K] };
+export type LabelWebResult = Pick<LabelReadResult, 'web' | 'webSources' | 'webError'>;

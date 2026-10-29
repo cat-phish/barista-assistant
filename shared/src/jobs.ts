@@ -58,10 +58,11 @@ export type SuggestionPreview = Pick<
 // note: a one-off note (docs/api/auth.md §1c), as asking would send it.
 export type AiPreviewJobData = { kind: "analysis"; brewLogId: string; note?: string } | { kind: "suggest"; suggestion: SuggestionPreview };
 
-// Reading a bean's label from its photos (docs/api/bean-label.md §4d,
-// llm-contract.md §9c). The backend waits for the answer (the job's return
-// value); nothing is stored. images: base64 WebP, already resized by the
-// backend; processes: the workspace's visible process names to pick from.
+// Reading a bean's label from its photos, or looking a bean up on the web
+// (docs/api/bean-label.md §4d, llm-contract.md §9c). The backend waits for the
+// answer (the job's return value); nothing is stored. images: base64 WebP,
+// already resized by the backend; processes: the workspace's visible process
+// names to pick from.
 export const LABEL_READ_QUEUE = "label-read";
 export const LABEL_READ_JOB = "read";
 // Photos in one read: the bean's (up to 6) and a couple taken just for it.
@@ -70,10 +71,10 @@ export interface LabelReadJobData {
   images: string[];
   processes: string[];
   requestedBy: string; // whose AI prompt is used (docs/api/auth.md §1c)
-  // Then look it up on the web (llm-contract.md §9c, step 2): only that site
-  // when the roaster's website is known (read off the label, or this, the form's).
-  web?: boolean;
-  website?: string | null;
+  // Set (and images []) for a web lookup instead (llm-contract.md §9c, step
+  // 2): what's known of the bean, from a label read or the form; only its
+  // website's site is searched when it has one.
+  lookUp?: LabelFields;
   webContext?: LabelWebContext; // the workspace's labelWebContext; unset = "high"
 }
 // What the label says, each null when it isn't printed (or can't be read).
@@ -120,13 +121,38 @@ export const LABEL_WEB_FIELDS = [
 ] as const satisfies ReadonlyArray<keyof LabelFields>;
 export type LabelWebField = (typeof LABEL_WEB_FIELDS)[number];
 export type LabelWebFinds = { [K in LabelWebField]?: { value: NonNullable<LabelFields[K]>; url: string } };
-// The job's answer: what the label says, and, when asked, what the web adds
-// (null when not asked; webError when the lookup failed, the label still read).
+// The job's answer. A label read: what the label says (web null). A web
+// lookup: the fields it was given, what the web adds (null when it failed,
+// with webError) and the pages it looked at (webSources, [] when it failed).
 export interface LabelReadResult {
   fields: LabelFields;
   web: LabelWebFinds | null;
+  webSources: string[];
   webError: string | null;
 }
+// What POST …/bean-label/web answers.
+export type LabelWebResult = Pick<LabelReadResult, "web" | "webSources" | "webError">;
+// Nothing known: a field each, null.
+export const EMPTY_LABEL_FIELDS: LabelFields = {
+  roasterName: null,
+  beanName: null,
+  processName: null,
+  processText: null,
+  country: null,
+  region: null,
+  producer: null,
+  altitudeMasl: null,
+  flavorProfile: null,
+  roastDate: null,
+  detailedRoastLevel: null,
+  roastLevel: null,
+  roastType: null,
+  blendType: null,
+  decaf: null,
+  bagWeightGrams: null,
+  batchNumber: null,
+  website: null,
+};
 
 export const GRIND_DELTAS = ["much_finer", "finer", "no_change", "coarser", "much_coarser"] as const;
 export type GrindDelta = (typeof GRIND_DELTAS)[number];

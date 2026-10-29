@@ -1,7 +1,7 @@
 // What "Fill in from a photo" does to the bean form (docs/api/bean-label.md
 // §4d): a field that's empty is filled; one that already says something else
 // gets a suggestion ("Label says: X · Use") and is left as typed.
-import type { AltitudeUnit, BeanProcess, LabelFields, LabelWebFinds, RoastScale } from '../api/types';
+import type { AltitudeUnit, BeanProcess, LabelFields, LabelLookUp, LabelWebFinds, RoastScale } from '../api/types';
 import { BLEND_TYPES, DETAILED_ROAST_LEVELS, ROAST_TYPES } from './beans';
 import { ROAST_LEVELS } from './scale';
 import { ALTITUDE_LABELS, altitudeText } from './units';
@@ -155,3 +155,29 @@ export function labelImages<T>(extras: readonly T[], beanPhotos: readonly T[], m
   const all = [...extras, ...beanPhotos];
   return { images: all.slice(0, max), left: Math.max(0, all.length - max) };
 }
+
+// A page the web lookup looked at, short enough to list: host (no www.) and
+// path, "onyxcoffeelab.com/products/geometry"; the home page is just the host.
+export function pageLabel(address: string): string {
+  try {
+    const url = new URL(address);
+    const path = decodeURI(url.pathname).replace(/\/+$/, '');
+    return `${url.hostname.replace(/^www\./, '')}${path}`;
+  } catch {
+    return address;
+  }
+}
+
+// What a web lookup is given (docs/api/bean-label.md §4d): what's known of
+// the bean, blanks left out, never one bag's roast date or batch number.
+// After a label read, the form's website stands in when the label has none.
+export function lookUpFields(fields: Partial<LabelFields>, website = ''): LabelLookUp {
+  const { roastDate: _date, batchNumber: _batch, ...rest } = fields;
+  const known = Object.fromEntries(
+    Object.entries(rest).filter(([, v]) => v !== null && v !== undefined && (typeof v !== 'string' || v.trim() !== '')),
+  ) as LabelLookUp;
+  if (!known.website && website.trim()) known.website = website.trim();
+  return known;
+}
+// The lookup needs a name to search for.
+export const canLookUp = (fields: LabelLookUp): boolean => !!(fields.roasterName || fields.beanName);

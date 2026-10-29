@@ -1630,3 +1630,42 @@ Backlog item 3, branch `bean-label`. `docs/api/bean-label.md` §4d,
 - Branch `web-context`: the search depth is a workspace setting,
   `labelWebContext` (low, medium, high; default high), shown under the web
   lookup switch; "source · Use" under a field no longer splits across lines.
+
+## Suggest roasters and coffees while typing (built)
+
+Backlog item 3, branch `bean-name-suggestions`. Frontend only:
+`lib/nameSuggest.ts` (pure, tested), `components/NameInput.vue`.
+
+- Decided: a **custom dropdown**, not a `<datalist>` (it filters and looks
+  different per browser, and iOS shows it poorly); on the bean form's
+  **roaster, coffee, producer and green supplier** fields.
+- The names come from the bean list the form already loads (it includes
+  archived beans; `beans.md` §4), so no `/beans/names` endpoint. A blank Add
+  bean now loads the list too, without waiting for it; editing leaves the
+  bean itself out.
+- Ranking: starts with, then a word starts with, then contains (from two
+  letters), then a typo away (none under 4 letters, 1 under 8, else 2, on
+  what's typed so far). Exactly what's typed isn't offered. The coffee field
+  puts the typed roaster's coffees first.
+- "**You have: X · Use**" (the `LabelHint` look) under a roaster,
+  producer or supplier that's an existing name spelled differently:
+  case, accents, punctuation, trailing filler words ("Coffee", "Roasters",
+  "Lab", "Co" …; never the first word), a typo, or more words after it
+  ("Proud Mary Melbourne" for "Proud Mary"; whole words, the shorter name
+  at least 5 letters). It shows while typing too, unless the list already
+  offers that name (first built only after leaving the field, which hid it
+  when typing a longer name). A label read's roaster gets it too. Not on the coffee name, where one letter can be another
+  coffee ("Kenya AA" / "Kenya AB").
+- A new bean whose roaster and coffee match one you've had offers "**Start
+  from your last bag**" (latest by roast date, else added), which fills
+  the form as Duplicate does.
+- Same branch, for the label read: the **pages the web lookup looked at**
+  are listed under the card (`webSources`), to look by hand for what it
+  missed (often the altitude). The lookup is now **its own request**
+  (`POST …/bean-label/web`) after the photos, not part of the same job:
+  both had to finish within the one 120 s wait, so a slow read left the
+  search less time and a timeout lost the label too. A **Look it up on the
+  web** button runs it alone from what the form says (again, or without
+  photos). Its failure message now tells "the provider doesn't do web
+  search" from "didn't work this time", and the worker logs each lookup
+  (time, site, pages seen, found) to see why one finds nothing.

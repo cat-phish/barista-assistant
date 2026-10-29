@@ -4,7 +4,7 @@
 // Each value comes with the page it's from, and is kept only when that page
 // is one the search really visited (and on the roaster's site, if limited).
 import { EMPTY_AI_PROMPT, LABEL_INSTRUCTIONS_INTRO, PROMPT_TEXT, type AiPrompt } from "@barista/shared/aiPrompt";
-import { LABEL_WEB_FIELDS, type LabelFields, type LabelReadJobData, type LabelWebFinds } from "@barista/shared/jobs";
+import { LABEL_WEB_FIELDS, type LabelFields, type LabelReadJobData, type LabelReadResult, type LabelWebFinds } from "@barista/shared/jobs";
 import type OpenAI from "openai";
 import { config } from "./config.js";
 import { labelJsonSchema, labelSchema } from "./label.js";
@@ -53,11 +53,11 @@ export function webSystemPrompt(prompt: AiPrompt = EMPTY_AI_PROMPT): string {
   return parts.join(" ");
 }
 
-// The site to keep to: the website the label gave, else the form's.
-export const siteFor = (fields: LabelFields, data: LabelReadJobData): string | null => hostOf(fields.website) ?? hostOf(data.website);
+// The site to keep to: the bean's website (the label's, else the form's).
+export const siteFor = (fields: LabelFields): string | null => hostOf(fields.website);
 
 export function buildWebRequest(fields: LabelFields, data: LabelReadJobData, prompt: AiPrompt = EMPTY_AI_PROMPT): OpenAI.Responses.ResponseCreateParamsNonStreaming {
-  const site = siteFor(fields, data);
+  const site = siteFor(fields);
   // What the label says, without what belongs to one bag.
   const { roastDate: _date, batchNumber: _batch, ...label } = fields;
   const known = Object.fromEntries(Object.entries(label).filter(([, v]) => v !== null));
@@ -103,6 +103,42 @@ export function parseWebReply(reply: WebReply, processes: readonly string[], sit
   return finds as LabelWebFinds;
 }
 
-export async function lookUpBean(fields: LabelFields, data: LabelReadJobData, prompt: AiPrompt): Promise<LabelWebFinds> {
-  return parseWebReply(await respond(buildWebRequest(fields, data, prompt)), data.processes, siteFor(fields, data));
+// The pages listed under the form's AI card, to look for what wasn't picked
+// out (docs/api/bean-label.md §4d): those a value came from first, then the
+// rest the search visited or cited, once each (no tracking parameters or
+// #fragment), on the roaster's site when the search was limited to it.
+export const WEB_SOURCES_MAX = 8;
+export function webSources(visited: readonly string[], finds: LabelWebFinds, site: string | null): string[] {
+  const found = Object.values(finds).flatMap((f) => (f ? [f.url] : []));
+  const pages = new Map<string, string>();
+  for (const address of [...found, ...visited]) {
+    let url: URL;
+    try {
+      url = new URL(address);
+    } catch {
+      continue;
+    }
+    const host = hostOf(url.href);
+    if (!host || (site && !onSite(host, site))) continue;
+    url.hash = "";
+    for (const key of [...url.searchParams.keys()]) if (key.startsWith("utm_")) url.searchParams.delete(key);
+    const key = `${host}${url.pathname.replace(/\/+$/, "")}${url.search}`;
+    if (!pages.has(key)) pages.set(key, url.href);
+    if (pages.size === WEB_SOURCES_MAX) break;
+  }
+  return [...pages.values()];
+}
+
+export async function lookUpBean(fields: LabelFields, data: LabelReadJobData, prompt: AiPrompt): Promise<Pick<LabelReadResult, "web" | "webSources">> {
+  const started = Date.now();
+  const reply = await respond(buildWebRequest(fields, data, prompt));
+  const site = siteFor(fields);
+  const web = parseWebReply(reply, data.processes, site);
+  const sources = webSources(reply.visited, web, site);
+  // One line per lookup, to see why one finds nothing (where it looked, how long).
+  console.log(
+    `Web lookup: ${Math.round((Date.now() - started) / 1000)} s, ${site ? `on ${site}` : "any site"}, ` +
+      `${reply.visited.length} pages seen, found ${Object.keys(web).join(", ") || "nothing"}`,
+  );
+  return { web, webSources: sources };
 }
