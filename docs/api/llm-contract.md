@@ -39,7 +39,8 @@ queue:
      matters for temperature advice, and its `detailedRoastLevel`,
      `roastType`, `blendType` (each `null` if unknown) and `decaf` (§4), plus
      `flavorProfile`, `originArea`, `country`, `region`, `altitudeMasl`,
-     `roastWeightLossPercent` and `batchNumber` (a home-roast batch).
+     `varieties`, `species`, `roastWeightLossPercent` and `batchNumber` (a
+     home-roast batch).
      Price, website, notes, rating, producer, purchase date and green
      supplier aren't sent.
    - The prompt includes the bean's **effective** roast age in days at brew
@@ -146,6 +147,7 @@ queue:
    | `weightLoss` | `roastWeightLossPercent` | how developed the roast is (11–13% light, 14–16% medium, 17%+ dark); more developed extracts more easily (coarser, cooler); trusted over the roast level |
    | `stepTimes` | the recipe has `stepTimeScaling` | step times and the finish window are already scaled to the batch; a bigger batch taking longer is planned, not a grind problem |
    | `altitude` | `altitudeMasl` | denser beans |
+   | `variety` | `varieties` or `species` | the cultivar's typical character (Geisha delicate, SL28/SL34 dense and bright); robusta or liberica in a blend extract more easily and add body and bitterness; context, not a rule |
    | `origin` | origin area, country or region | context, not a rule |
    | `tds` | a brew has `tdsPercent` | judge strength and extraction from TDS and EY |
    | `water` | a water with figures | hardness and alkalinity effects |
@@ -263,6 +265,7 @@ and the prompt sections about them drop out with them (step 3). Keys
 - **The bean:** `origin` (`originArea`, `country`, `region`), `altitude`,
   `process`, `flavorProfile`, `roastType`, `roastLevel` (with
   `detailedRoastLevel`), `weightLoss` (`roastWeightLossPercent`),
+  `variety` (`varieties`, `species`),
   `decafBlend` (`decaf`, `blendType`), `batchNumber`.
 - **Recipe and equipment:** `recipeSteps` (with `stepTimeScaling`), `grindStartingPoints`,
   `grinderDetails` (everything but the grinder's name), `machine`.
@@ -384,7 +387,8 @@ is written to the database, and it isn't retried. `worker/src/label.ts`:
    `labelCore` section (fill a field only with what's printed, `null`
    otherwise, never from general knowledge; a best-before date isn't a
    roast date; feet and altitude ranges to one figure in metres; 12 oz =
-   340 g), then the asker's label instructions (`LABEL_INSTRUCTIONS_INTRO`),
+   340 g; varieties one entry each, never the species; a species only when
+   it's named), then the asker's label instructions (`LABEL_INSTRUCTIONS_INTRO`),
    then the locked `end`. The asker's own prompt (`requestedBy`, auth.md
    §1c) applies: their text for `labelCore`, their label instructions, not
    their brewing ones. One user message: a text part naming the processes
@@ -398,7 +402,9 @@ is written to the database, and it isn't retried. `worker/src/label.ts`:
    their bean values (§4).
 3. **Checking the answer** (`labelSchema`): each value on its own, so one
    bad value becomes `null` without losing the rest. Text is trimmed and
-   held to the bean's lengths; `altitudeMasl` 1–9000; `bagWeightGrams`
+   held to the bean's lengths; `varieties` each trimmed, at most 100
+   chars, once ignoring case, `null` when none are left; `species` only
+   `COFFEE_SPECIES`, in that order; `altitudeMasl` 1–9000; `bagWeightGrams`
    1–100000; `roastDate` a real date from 2000 to tomorrow; `website` an
    http(s) address with a dotted host (`https://` added when missing);
    `decaf` only `true` is kept; a `processName` not in the list is `null`,

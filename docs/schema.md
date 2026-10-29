@@ -175,6 +175,9 @@ export const DETAILED_ROAST_TO_LEVEL: Record<DetailedRoastLevel, RoastLevel> = {
 };
 export const BLEND_TYPES = ["single_origin", "blend", "other"] as const;
 export type BlendType = (typeof BLEND_TYPES)[number];
+// Which coffee species it is (docs/api/beans.md §4); a blend may have several.
+export const COFFEE_SPECIES = ["arabica", "robusta", "liberica", "excelsa", "eugenioides"] as const;
+export type CoffeeSpecies = (typeof COFFEE_SPECIES)[number];
 // Where the coffee was grown, as the coffee trade groups origins
 // (docs/api/beans.md §4). central_america includes Mexico and the Caribbean;
 // arabia is Yemen; pacific is PNG, Hawaii and Australia.
@@ -239,6 +242,11 @@ export const beans = mysqlTable("beans", {
   roastWeightLossPercent: decimal("roast_weight_loss_percent", { precision: 3, scale: 1, mode: "number" }),
   blendType: varchar("blend_type", { length: 20 }).$type<BlendType>(), // BLEND_TYPES
   decaf: boolean("decaf").default(false).notNull(),
+  // The varieties (cultivars) as the roaster names them, e.g. ["SL28", "SL34"],
+  // and the species, each COFFEE_SPECIES once (docs/api/beans.md §4). null =
+  // not stated; the API never stores an empty list. Migration 0078.
+  varieties: jsonValue<string[]>("varieties"),
+  species: jsonValue<CoffeeSpecies[]>("species"),
   website: varchar("website", { length: 500 }), // http(s) URL, to buy it again
   // Price of one bag: amount and ISO 4217 currency, both or neither (the API).
   // With bagWeightGrams, clients work out a price per gram.
@@ -868,9 +876,9 @@ export const MENU_ITEM_TYPES = ["drink", "brewer", "beans"] as const;
 export type MenuItemType = (typeof MENU_ITEM_TYPES)[number];
 // What the beans block shows guests about each bean, besides the roaster and
 // name (docs/api/menu.md §7b). origin = area, country and region; roastLevel =
-// the 5-step level and the detailed one.
+// the 5-step level and the detailed one; variety = the varieties and species.
 export const BEAN_MENU_FIELDS = [
-  "flavorProfile", "origin", "producer", "altitude", "process", "roastLevel", "roastDate", "decaf", "blendType", "roastType",
+  "flavorProfile", "origin", "producer", "altitude", "variety", "process", "roastLevel", "roastDate", "decaf", "blendType", "roastType",
 ] as const;
 export type BeanMenuField = (typeof BEAN_MENU_FIELDS)[number];
 

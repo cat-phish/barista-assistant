@@ -17,6 +17,7 @@ export const AI_DETAILS = [
   // The bean
   "origin", // origin area, country, region
   "altitude",
+  "variety", // varieties and species
   "process",
   "flavorProfile",
   "roastType",

@@ -1,4 +1,4 @@
-import type { BackupSettings, BlendType, DetailedRoastLevel, LabelWebContext, ParameterSuggestion, RoastLevel, RoastType } from "./schema.js";
+import type { BackupSettings, BlendType, CoffeeSpecies, DetailedRoastLevel, LabelWebContext, ParameterSuggestion, RoastLevel, RoastType } from "./schema.js";
 
 // BullMQ contract between the backend (producer) and the worker (consumer).
 // See docs/api/llm-contract.md §9.
@@ -87,6 +87,8 @@ export interface LabelFields {
   region: string | null;
   producer: string | null;
   altitudeMasl: number | null; // a range gives its middle
+  varieties: string[] | null; // as printed, each once; null = none
+  species: CoffeeSpecies[] | null;
   flavorProfile: string | null;
   roastDate: string | null; // YYYY-MM-DD; never a best-before date
   detailedRoastLevel: DetailedRoastLevel | null;
@@ -110,6 +112,8 @@ export const LABEL_WEB_FIELDS = [
   "region",
   "producer",
   "altitudeMasl",
+  "varieties",
+  "species",
   "flavorProfile",
   "detailedRoastLevel",
   "roastLevel",
@@ -142,6 +146,8 @@ export const EMPTY_LABEL_FIELDS: LabelFields = {
   region: null,
   producer: null,
   altitudeMasl: null,
+  varieties: null,
+  species: null,
   flavorProfile: null,
   roastDate: null,
   detailedRoastLevel: null,

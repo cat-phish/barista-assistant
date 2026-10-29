@@ -9,6 +9,7 @@ import BeanPhotos from '../components/BeanPhotos.vue';
 import LabelCard from '../components/LabelCard.vue';
 import LabelHint from '../components/LabelHint.vue';
 import NameInput from '../components/NameInput.vue';
+import NamesInput from '../components/NamesInput.vue';
 import RatingInput from '../components/RatingInput.vue';
 import { localDateInput, parseDecimal, toDateInput } from '../lib/format';
 import { ALTITUDE_LABELS, altitudeText, parseAltitude } from '../lib/units';
@@ -17,14 +18,16 @@ import { useWorkspaceStore } from '../stores/workspace';
 import { useBeanDraftStore } from '../stores/beanDraft';
 import { labelReadKey, useLabelReadStore, type LabelAnswer } from '../stores/labelRead';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
-import type { Bean, BeanPhoto, BeanProcess, BlendType, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from '../api/types';
+import type { Bean, BeanPhoto, BeanProcess, BlendType, CoffeeSpecies, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from '../api/types';
 import { COUNTRY_AREAS, ORIGIN_AREAS, areaForCountry } from '../lib/origins';
 import { ROAST_LEVELS } from '../lib/scale';
 import { LABEL_FIELD_KEYS, labelFill, lookUpFields, pageLabel, type LabelForm, type LabelSuggestion, type TextKey } from '../lib/labelFill';
 import type { FieldKey } from '../lib/fields';
 import { distinctNames, lastBag, normalizeName } from '../lib/nameSuggest';
+import { COMMON_VARIETIES } from '../lib/varieties';
 import {
   BLEND_TYPES,
+  COFFEE_SPECIES,
   DETAILED_ROAST_LEVELS,
   ROAST_TYPES,
   formatPricePerGram,
@@ -58,6 +61,8 @@ const country = ref('');
 const region = ref('');
 const producer = ref('');
 const altitude = ref('');
+const varieties = ref<string[]>([]);
+const species = ref<CoffeeSpecies[]>([]); // in COFFEE_SPECIES order
 const flavorProfile = ref('');
 const blendType = ref<BlendType | ''>('');
 const decaf = ref(false);
@@ -89,6 +94,12 @@ const roasterNames = computed(() => distinctNames(otherBeans.value.map((b) => b.
 const coffeeNames = computed(() => distinctNames(otherBeans.value.map((b) => b.beanName)));
 const producerNames = computed(() => distinctNames(otherBeans.value.map((b) => b.producer)));
 const supplierNames = computed(() => distinctNames(otherBeans.value.map((b) => b.greenSupplier)));
+// The workspace's spellings first, so they win over the built-in ones.
+const varietyNames = computed(() => distinctNames([...otherBeans.value.flatMap((b) => b.varieties ?? []), ...COMMON_VARIETIES]));
+const SPECIES_KEYS = Object.keys(COFFEE_SPECIES) as CoffeeSpecies[];
+function toggleSpecies(s: CoffeeSpecies): void {
+  species.value = species.value.includes(s) ? species.value.filter((x) => x !== s) : SPECIES_KEYS.filter((x) => x === s || species.value.includes(x));
+}
 // This roaster's coffees come first.
 const roasterCoffees = computed(() => {
   const roaster = normalizeName(roasterName.value);
@@ -186,7 +197,16 @@ const perGram = computed(() => {
 const { show, reveal } = useFieldVisibility();
 
 // "Fill in from a photo" (docs/api/bean-label.md §4d): empty fields are
-// filled, ones that say something else get a "Label says" suggestion.
+// filled, ones that say something else get a "Label says" suggestion. The
+// lists go through it as text (LabelForm).
+const varietiesText = computed({
+  get: () => varieties.value.join(', '),
+  set: (text: string) => (varieties.value = text.split(',').map((s) => s.trim()).filter(Boolean)),
+});
+const speciesText = computed({
+  get: () => species.value.join(','),
+  set: (text: string) => (species.value = SPECIES_KEYS.filter((s) => text.split(',').includes(s))),
+});
 const labelRefs = computed<Record<TextKey, Ref<string>>>(() => ({
   roasterName,
   beanName,
@@ -195,6 +215,8 @@ const labelRefs = computed<Record<TextKey, Ref<string>>>(() => ({
   region,
   producer,
   altitude,
+  varieties: varietiesText,
+  species: speciesText,
   flavorProfile,
   roastDate,
   roastLevel: roastScale.value === 'levels' ? level : detailedRoastLevel,
@@ -256,6 +278,8 @@ const knownForLookUp = computed(() =>
     region: region.value,
     producer: producer.value,
     altitudeMasl: altitudeParsed.value?.ok ? altitudeParsed.value.value : null,
+    varieties: varieties.value.length ? varieties.value : null,
+    species: species.value.length ? species.value : null,
     flavorProfile: flavorProfile.value,
     roastType: roastType.value || null,
     blendType: blendType.value || null,
@@ -279,6 +303,8 @@ function fill(bean: Bean): void {
     'bean.region': bean.region,
     'bean.producer': bean.producer,
     'bean.altitude': bean.altitudeMasl,
+    'bean.varieties': bean.varieties,
+    'bean.species': bean.species,
     'bean.flavorProfile': bean.flavorProfile,
     'bean.decaf': bean.decaf,
     'bean.roastType': bean.roastType,
@@ -304,6 +330,8 @@ function fill(bean: Bean): void {
   region.value = bean.region ?? '';
   producer.value = bean.producer ?? '';
   altitude.value = altitudeText(bean.altitudeMasl, altitudeUnit.value);
+  varieties.value = bean.varieties ?? [];
+  species.value = bean.species ?? [];
   flavorProfile.value = bean.flavorProfile ?? '';
   blendType.value = bean.blendType ?? '';
   decaf.value = bean.decaf;
@@ -368,7 +396,7 @@ watch(
 // (stores/beanDraft.ts); saving, Cancel and Start over drop it.
 const drafts = useBeanDraftStore();
 const draftRefs: Record<string, Ref<unknown>> = {
-  roasterName, beanName, process, originArea, country, region, producer, altitude, flavorProfile, blendType, decaf, roastType,
+  roasterName, beanName, process, originArea, country, region, producer, altitude, varieties, species, flavorProfile, blendType, decaf, roastType,
   roastDate, detailedRoastLevel, inventory, price, currency, bagWeight, purchaseDate, greenSupplier, batchNumber, weightLoss,
   website, showOnPublicMenu, rating, notes, level, sourceDetailed, savedDetailed, savedRoastLevel, copyOf, suggestions, labelSummary, webSources,
 };
@@ -396,6 +424,7 @@ function revealEntered(): void {
   reveal({
     'bean.process': process.value, 'bean.blendType': blendType.value, 'bean.origin': originArea.value || country.value,
     'bean.region': region.value, 'bean.producer': producer.value, 'bean.altitude': altitude.value, 'bean.flavorProfile': flavorProfile.value,
+    'bean.varieties': varieties.value.length ? varieties.value : null, 'bean.species': species.value.length ? species.value : null,
     'bean.decaf': decaf.value || null, 'bean.roastType': roastType.value, 'bean.roastDate': roastDate.value,
     'bean.roastLevel': detailedRoastLevel.value || level.value, 'bean.batchNumber': batchNumber.value, 'bean.weightLoss': weightLoss.value,
     'bean.price': price.value, 'bean.bagWeight': bagWeight.value, 'bean.purchaseDate': purchaseDate.value,
@@ -498,6 +527,8 @@ async function save(): Promise<void> {
     region: region.value.trim() || null,
     producer: producer.value.trim() || null,
     altitudeMasl: altitudeParsed.value?.ok ? altitudeParsed.value.value : null,
+    varieties: varieties.value.length ? varieties.value : null,
+    species: species.value.length ? species.value : null,
     flavorProfile: flavorProfile.value.trim() || null,
     blendType: blendType.value || null,
     decaf: decaf.value,
@@ -668,6 +699,27 @@ async function save(): Promise<void> {
           <LabelHint v-if="suggestions.altitude" :text="suggestions.altitude.text" :source="suggestions.altitude.source" @use="useSuggestion('altitude')" />
           <span v-if="submitted && fieldErrors.altitude" class="field-error">{{ fieldErrors.altitude }}</span>
         </div>
+        <div v-if="show('bean.varieties')" class="field">
+          <label for="varieties">Variety</label>
+          <NamesInput id="varieties" v-model="varieties" :names="varietyNames" placeholder="e.g. Bourbon, SL28" />
+          <LabelHint v-if="suggestions.varieties" :text="suggestions.varieties.text" :source="suggestions.varieties.source" @use="useSuggestion('varieties')" />
+        </div>
+        <fieldset v-if="show('bean.species')" class="field species">
+          <legend>Species</legend>
+          <div class="species-choices">
+            <button
+              v-for="s in SPECIES_KEYS"
+              :key="s"
+              type="button"
+              class="species-choice"
+              :aria-pressed="species.includes(s)"
+              @click="toggleSpecies(s)"
+            >
+              {{ COFFEE_SPECIES[s].label }}
+            </button>
+          </div>
+          <LabelHint v-if="suggestions.species" :text="suggestions.species.text" :source="suggestions.species.source" @use="useSuggestion('species')" />
+        </fieldset>
         <div v-if="show('bean.flavorProfile')" class="field">
           <label for="flavor-profile">Flavor profile</label>
           <textarea id="flavor-profile" v-model="flavorProfile" rows="2" maxlength="500" placeholder="e.g. Milk chocolate, plum, cane sugar" />
@@ -836,6 +888,39 @@ h2 {
 }
 .altitude {
   max-width: 12rem;
+}
+.species {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.species legend {
+  padding: 0;
+  margin-bottom: var(--space-1);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.species-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+/* Toggle chips: any number can be on (a blend of arabica and robusta). */
+.species-choice {
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.species-choice[aria-pressed='true'] {
+  border-color: var(--brand);
+  background: var(--brand-tint);
+  color: var(--brand);
+  font-weight: 600;
 }
 /* Looks like a field, but is computed: the 5-step level the roast implies. */
 .label {

@@ -14,7 +14,7 @@ import { loadMenu } from "./menu.js";
 type BeanDetails = { process: string | null } & Pick<
   Bean,
   | "roastDate" | "roastLevel" | "detailedRoastLevel" | "roastType" | "blendType" | "decaf"
-  | "flavorProfile" | "originArea" | "country" | "region" | "altitudeMasl" | "producer"
+  | "flavorProfile" | "originArea" | "country" | "region" | "altitudeMasl" | "producer" | "varieties" | "species"
 >;
 export type PublicBean = Pick<Bean, "id" | "roasterName" | "beanName"> & Partial<BeanDetails>;
 // The bean columns each menu field shows.
@@ -23,6 +23,7 @@ const FIELD_COLUMNS: Record<BeanMenuField, ReadonlyArray<keyof BeanDetails>> = {
   origin: ["originArea", "country", "region"],
   producer: ["producer"],
   altitude: ["altitudeMasl"],
+  variety: ["varieties", "species"],
   process: ["process"],
   roastLevel: ["roastLevel", "detailedRoastLevel"],
   roastDate: ["roastDate"],
@@ -133,6 +134,8 @@ export async function buildPublicMenu(workspace: Pick<Workspace, "id" | "name" |
             region: beans.region,
             altitudeMasl: beans.altitudeMasl,
             producer: beans.producer,
+            varieties: beans.varieties,
+            species: beans.species,
           })
           .from(beans)
           .leftJoin(beanProcesses, eq(beans.processId, beanProcesses.id))

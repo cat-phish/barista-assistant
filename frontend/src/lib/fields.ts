@@ -41,6 +41,8 @@ export const FIELDS = [
   bean('region', 'Region'),
   bean('producer', 'Producer'),
   bean('altitude', 'Altitude'),
+  bean('varieties', 'Variety', 'Bourbon, SL28, Geisha…'),
+  bean('species', 'Species', 'Arabica, robusta…'),
   bean('flavorProfile', 'Flavor profile'),
   bean('decaf', 'Decaf'),
   bean('photos', 'Photos', 'Of the bag or label; the cover shows in the bean list'),

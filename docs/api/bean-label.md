@@ -40,6 +40,8 @@ bean label" section. It isn't retried: the person presses the button again.
   "Process: …".
 - `country` fills the country, and with it the growing area if that's empty.
 - `altitudeMasl` shows in the person's altitude unit.
+- `varieties` and `species` fill the bean's lists (`null` = not printed); a
+  list that differs from the form's is a suggestion for the whole list.
 - Roast: with roast names (`roastScale` `names`) only `detailedRoastLevel`
   is used; with light to dark, `roastLevel`, or the level of the name.
 - `decaf` is `true` or `null`: a label that says nothing about it doesn't
@@ -110,6 +112,8 @@ hand; a later read without the lookup keeps them, Start over clears them.
     "region": "Guji",
     "producer": null,
     "altitudeMasl": 2100,
+    "varieties": ["Heirloom"],
+    "species": null,
     "flavorProfile": "Peach, jasmine, bergamot",
     "roastDate": "2026-10-20",
     "detailedRoastLevel": "city",

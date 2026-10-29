@@ -1,5 +1,5 @@
 import { EMPTY_LABEL_FIELDS, LABEL_MAX_IMAGES, type LabelFields, type LabelReadResult, type LabelWebResult } from "@barista/shared/jobs";
-import { BLEND_TYPES, beanProcesses, DEFAULT_WORKSPACE_SETTINGS, DETAILED_ROAST_LEVELS, ROAST_LEVELS, ROAST_TYPES, withDefaults, workspaces, type WorkspaceSettings } from "@barista/shared/schema";
+import { BLEND_TYPES, beanProcesses, COFFEE_SPECIES, DEFAULT_WORKSPACE_SETTINGS, DETAILED_ROAST_LEVELS, ROAST_LEVELS, ROAST_TYPES, withDefaults, workspaces, type WorkspaceSettings } from "@barista/shared/schema";
 import { and, asc, eq } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
@@ -47,6 +47,8 @@ const lookUpSchema = z
         region: known,
         producer: known,
         altitudeMasl: optional(z.number().int().min(0).max(10_000)),
+        varieties: optional(z.array(z.string().trim().min(1).max(100)).max(20)),
+        species: optional(z.array(z.enum(COFFEE_SPECIES)).max(COFFEE_SPECIES.length)),
         flavorProfile: known,
         detailedRoastLevel: optional(z.enum(DETAILED_ROAST_LEVELS)),
         roastLevel: optional(z.enum(ROAST_LEVELS)),

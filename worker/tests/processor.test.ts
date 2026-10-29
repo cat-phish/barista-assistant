@@ -35,7 +35,7 @@ beforeEach(async () => {
   await db.insert(workspaces).values({ id: workspaceId, name: "W", slug: "w" });
   await db.insert(brewers).values({ id: brewerId, workspaceId, name: "V60" });
   await db.insert(recipeStyles).values({ id: pourOver, workspaceId, kind: "filter", name: "Pour over", position: 1, builtin: "pour_over", brewsLike: "pour_over" });
-  await db.insert(beans).values({ id: beanId, workspaceId, roasterName: "Onyx", beanName: "Guji", roastLevel: "light", detailedRoastLevel: "city", roastType: "filter", blendType: "single_origin", flavorProfile: "Peach, black tea", originArea: "africa", country: "Ethiopia", region: "Guji", altitudeMasl: 2100, roastWeightLossPercent: 15.5, roastDate: new Date("2026-10-01T00:00:00Z") });
+  await db.insert(beans).values({ id: beanId, workspaceId, roasterName: "Onyx", beanName: "Guji", roastLevel: "light", detailedRoastLevel: "city", roastType: "filter", blendType: "single_origin", flavorProfile: "Peach, black tea", originArea: "africa", country: "Ethiopia", region: "Guji", altitudeMasl: 2100, varieties: ["Heirloom"], species: ["arabica"], roastWeightLossPercent: 15.5, roastDate: new Date("2026-10-01T00:00:00Z") });
   await db.insert(recipes).values({ id: recipeId, workspaceId, name: "House V60", brewerId, targetDoseGrams: 15, targetWaterGrams: 250, expectedYieldGrams: 220, expectedFinishMinSec: 165, expectedFinishMaxSec: 195, targetTempC: 94, styleId: pourOver });
   await db.insert(recipeSteps).values([
     { id: randomUUID(), recipeId, stepOrder: 1, stepType: "bloom", durationSec: 45, advance: "tap", targetWaterGrams: 50, targetTempC: 85 },
@@ -87,6 +87,8 @@ describe("processBrewAnalysis", () => {
       country: "Ethiopia",
       region: "Guji",
       altitudeMasl: 2100,
+      varieties: ["Heirloom"],
+      species: ["arabica"],
       roastWeightLossPercent: 15.5,
     });
     // Only this brew: history goes to "Suggest parameters" (docs/api/llm-contract.md §9).

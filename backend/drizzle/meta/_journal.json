@@ -547,6 +547,13 @@
       "when": 1793225251512,
       "tag": "0077_bean_photos",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "5",
+      "when": 1793242689239,
+      "tag": "0078_bean_varieties",
+      "breakpoints": true
     }
   ]
 }

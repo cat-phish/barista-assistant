@@ -14,6 +14,8 @@ const EMPTY: LabelFields = {
   region: null,
   producer: null,
   altitudeMasl: null,
+  varieties: null,
+  species: null,
   flavorProfile: null,
   roastDate: null,
   detailedRoastLevel: null,
@@ -52,6 +54,8 @@ describe("reading a bean label (docs/api/llm-contract.md §9c)", () => {
         processText: "Washed",
         country: "Ethiopia",
         altitudeMasl: 2100,
+        varieties: [" Heirloom ", "74110", "heirloom", ""],
+        species: ["robusta", "arabica"],
         flavorProfile: "Peach, jasmine",
         roastDate: "2026-10-20",
         detailedRoastLevel: "city",
@@ -71,6 +75,8 @@ describe("reading a bean label (docs/api/llm-contract.md §9c)", () => {
       processText: null, // matched, so not repeated
       country: "Ethiopia",
       altitudeMasl: 2100,
+      varieties: ["Heirloom", "74110"], // each once, blanks dropped
+      species: ["arabica", "robusta"], // in COFFEE_SPECIES order
       flavorProfile: "Peach, jasmine",
       roastDate: "2026-10-20",
       detailedRoastLevel: "city",
@@ -90,6 +96,8 @@ describe("reading a bean label (docs/api/llm-contract.md §9c)", () => {
         processName: "Anaerobic", // not one of the workspace's
         processText: "Anaerobic natural",
         altitudeMasl: 12000,
+        varieties: ["x".repeat(101), "   "],
+        species: ["coffea"],
         roastDate: "2999-01-01",
         detailedRoastLevel: "burnt",
         bagWeightGrams: -5,

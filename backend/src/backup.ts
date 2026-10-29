@@ -17,6 +17,7 @@ import {
   BEAN_PROCESSES,
   BLEND_TYPES,
   BURR_TYPES,
+  COFFEE_SPECIES,
   DETAILED_ROAST_LEVELS,
   DILUTION_WITH,
   FLOW_UNITS,
@@ -205,6 +206,8 @@ const ENUMS: Record<string, readonly string[]> = {
 // What was sent to the AI (docs/api/analysis.md §8c), when the file has it.
 const aiRequest = z.object({ sections: z.array(z.string()), system: z.string(), input: z.record(z.string(), z.unknown()) }).strict().nullable();
 const JSON_SCHEMAS: Record<string, z.ZodType> = {
+  "beans.varieties": z.array(z.string().min(1).max(100)).max(20).nullable(),
+  "beans.species": z.array(z.enum(COFFEE_SPECIES)).nullable(),
   "menu_items.beanFields": z.array(z.enum(BEAN_MENU_FIELDS)).nullable(),
   "prep_tools.methodKinds": z.array(z.enum(METHOD_KINDS)),
   "llm_analyses.request": aiRequest,

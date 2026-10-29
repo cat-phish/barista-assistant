@@ -13,6 +13,7 @@ import {
   beans,
   BLEND_TYPES,
   brewLogs,
+  COFFEE_SPECIES,
   DETAILED_ROAST_LEVELS,
   DETAILED_ROAST_TO_LEVEL,
   ORIGIN_AREAS,
@@ -63,6 +64,26 @@ const beanFields = {
   detailedRoastLevel: z.enum(DETAILED_ROAST_LEVELS).nullable().optional(),
   blendType: z.enum(BLEND_TYPES).nullable().optional(),
   decaf: z.boolean(),
+  // Lists (docs/api/beans.md §4): each entry once, ignoring case; [] is
+  // stored as null.
+  varieties: z
+    .array(z.string().trim().min(1).max(100))
+    .max(20)
+    .nullable()
+    .transform((list) => {
+      const out = new Map<string, string>();
+      for (const v of list ?? []) if (!out.has(v.toLowerCase())) out.set(v.toLowerCase(), v);
+      return out.size ? [...out.values()] : null;
+    })
+    .optional(),
+  species: z
+    .array(z.enum(COFFEE_SPECIES))
+    .nullable()
+    .transform((list) => {
+      const out = COFFEE_SPECIES.filter((s) => list?.includes(s));
+      return out.length ? out : null;
+    })
+    .optional(),
   // Shown as a link, so only http(s): no javascript: or data: URLs.
   website: z
     .string()

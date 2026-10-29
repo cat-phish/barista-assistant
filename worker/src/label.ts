@@ -5,7 +5,7 @@
 // labelCore section and their label instructions, not their brewing ones.
 import { EMPTY_AI_PROMPT, LABEL_INSTRUCTIONS_INTRO, PROMPT_TEXT, type AiPrompt } from "@barista/shared/aiPrompt";
 import type { LabelFields, LabelReadJobData, LabelReadResult } from "@barista/shared/jobs";
-import { BLEND_TYPES, DETAILED_ROAST_LEVELS, ROAST_LEVELS, ROAST_TYPES } from "@barista/shared/schema";
+import { BLEND_TYPES, COFFEE_SPECIES, DETAILED_ROAST_LEVELS, ROAST_LEVELS, ROAST_TYPES } from "@barista/shared/schema";
 import { UnrecoverableError } from "bullmq";
 import type OpenAI from "openai";
 import { z } from "zod";
@@ -28,6 +28,8 @@ export function labelJsonSchema(processes: readonly string[]): Record<string, un
     region: text,
     producer: text,
     altitudeMasl: nullable({ type: "integer" }),
+    varieties: nullable({ type: "array", items: { type: "string" } }),
+    species: nullable({ type: "array", items: { type: "string", enum: [...COFFEE_SPECIES] } }),
     flavorProfile: text,
     roastDate: text,
     detailedRoastLevel: nullable({ type: "string", enum: [...DETAILED_ROAST_LEVELS] }),
@@ -82,6 +84,27 @@ const clean = (max: number) =>
     .catch(null);
 const oneOf = <T extends string>(values: readonly T[]) => z.enum(values as [T, ...T[]]).nullable().catch(null);
 const whole = (min: number, max: number) => z.number().int().min(min).max(max).nullable().catch(null);
+// Each entry cleaned as text, once (ignoring case); none is null.
+const varieties = z
+  .array(z.unknown())
+  .nullable()
+  .transform((list) => {
+    const out = new Map<string, string>();
+    for (const v of list ?? []) {
+      const t = typeof v === "string" ? v.trim().replace(/\s+/g, " ") : "";
+      if (t && t.length <= 100 && !out.has(t.toLowerCase())) out.set(t.toLowerCase(), t);
+    }
+    return out.size ? [...out.values()].slice(0, 20) : null;
+  })
+  .catch(null);
+const species = z
+  .array(z.unknown())
+  .nullable()
+  .transform((list) => {
+    const out = COFFEE_SPECIES.filter((s) => list?.includes(s));
+    return out.length ? out : null;
+  })
+  .catch(null);
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 // A real date, from 2000 up to tomorrow (a roast date can't be later).
 const roastDate = z
@@ -123,6 +146,8 @@ export function labelSchema(processes: readonly string[]) {
     region: clean(255),
     producer: clean(255),
     altitudeMasl: whole(1, 9000),
+    varieties,
+    species,
     flavorProfile: clean(500),
     roastDate,
     detailedRoastLevel: oneOf(DETAILED_ROAST_LEVELS),

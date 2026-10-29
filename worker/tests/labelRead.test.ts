@@ -9,7 +9,7 @@ vi.mock("../src/llm.js", async (original) => ({ ...(await original<typeof import
 vi.mock("../src/processor.js", () => ({ promptFor: async () => ({ prompt: { instructions: null, overrides: {} }, note: null }) }));
 const { readLabel } = await import("../src/label.js");
 
-const label = { roasterName: "Onyx", beanName: "Geometry", processName: null, processText: null, country: null, region: null, producer: null, altitudeMasl: null, flavorProfile: null, roastDate: null, detailedRoastLevel: null, roastLevel: null, roastType: null, blendType: null, decaf: null, bagWeightGrams: null, batchNumber: null, website: "https://onyxcoffeelab.com/" };
+const label = { roasterName: "Onyx", beanName: "Geometry", processName: null, processText: null, country: null, region: null, producer: null, altitudeMasl: null, varieties: null, species: null, flavorProfile: null, roastDate: null, detailedRoastLevel: null, roastLevel: null, roastType: null, blendType: null, decaf: null, bagWeightGrams: null, batchNumber: null, website: "https://onyxcoffeelab.com/" };
 const data = { images: ["AAA"], processes: ["Washed"], requestedBy: "u" };
 
 beforeEach(() => {

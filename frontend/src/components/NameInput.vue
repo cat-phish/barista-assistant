@@ -3,7 +3,8 @@
 // coffees, producers, suppliers on the bean form; lib/nameSuggest.ts): a list
 // under it while typing, and "You have: …" when what's there is one of them
 // spelled differently (while typing too, unless the list already offers it).
-// The input's own attributes (maxlength, placeholder, aria-*) pass through.
+// The input's own attributes (maxlength, placeholder, aria-*, listeners) pass
+// through. pick: a suggestion was chosen (NamesInput adds it to its list).
 import { computed, ref } from 'vue';
 import LabelHint from './LabelHint.vue';
 import { closeMatch, rankNames } from '../lib/nameSuggest';
@@ -14,6 +15,7 @@ const props = withDefaults(defineProps<{ id: string; names: readonly string[]; p
   hint: true,
 });
 const model = defineModel<string>({ required: true });
+const emit = defineEmits<{ pick: [name: string] }>();
 
 const focused = ref(false);
 const dismissed = ref(false); // Escape: closed until the next keystroke
@@ -36,6 +38,7 @@ function pick(name: string): void {
   model.value = name;
   dismissed.value = true;
   active.value = -1;
+  emit('pick', name);
 }
 function onKeydown(e: KeyboardEvent): void {
   if (!open.value) {
@@ -61,8 +64,9 @@ function onBlur(): void {
 
 <template>
   <div class="name-input">
+    <!-- $attrs last: a parent's keydown runs after this one's, so it can
+         tell from defaultPrevented that a suggestion took the key -->
     <input
-      v-bind="$attrs"
       :id="id"
       :value="model"
       autocomplete="off"
@@ -75,6 +79,7 @@ function onBlur(): void {
       @keydown="onKeydown"
       @focus="focused = true"
       @blur="onBlur"
+      v-bind="$attrs"
     />
     <!-- mousedown.prevent keeps focus in the input, so the tap's click lands -->
     <ul v-show="open" :id="listId" role="listbox" class="names" @mousedown.prevent>

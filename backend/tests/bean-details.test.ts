@@ -18,6 +18,8 @@ const DETAILS = {
   country: "Colombia",
   region: "Huila",
   altitudeMasl: 1950,
+  varieties: ["Pink Bourbon", "Caturra"],
+  species: ["arabica"],
   roastWeightLossPercent: 14.5,
   producer: "Finca El Paraíso",
   purchaseDate: "2026-10-05",
@@ -66,12 +68,24 @@ describe("bean details (docs/api/beans.md §4)", () => {
       country: null,
       region: null,
       altitudeMasl: null,
+      varieties: null,
+      species: null,
       producer: null,
       purchaseDate: null,
       greenSupplier: null,
       batchNumber: null,
       rating: null,
     });
+  });
+
+  it("varieties and species: trimmed, each once, species in their order, an empty list is null", async () => {
+    const { owner, ws, beansUrl } = await setup();
+    const id = await newBean(owner, ws.id, { varieties: [" SL28 ", "SL34", "sl28"], species: ["robusta", "arabica", "robusta"] });
+    const [bean] = (await owner.agent.get(beansUrl)).body.beans;
+    expect(bean).toMatchObject({ varieties: ["SL28", "SL34"], species: ["arabica", "robusta"] });
+    const cleared = await owner.agent.patch(`${beansUrl}/${id}`).send({ varieties: [], species: null });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.bean).toMatchObject({ varieties: null, species: null });
   });
 
   it("clears details with null on PATCH, and blank text becomes null", async () => {
@@ -141,6 +155,12 @@ describe("bean details (docs/api/beans.md §4)", () => {
       { altitudeMasl: -1 },
       { altitudeMasl: 9001 },
       { altitudeMasl: 1950.5 },
+      { varieties: "Bourbon" },
+      { varieties: [""] },
+      { varieties: ["x".repeat(101)] },
+      { varieties: Array.from({ length: 21 }, (_, i) => `V${i}`) },
+      { species: ["coffea"] },
+      { species: "arabica" },
       { roastWeightLossPercent: 0 },
       { roastWeightLossPercent: 40.1 },
       { roastWeightLossPercent: 14.55 },
@@ -217,6 +237,8 @@ describe("bean details (docs/api/beans.md §4)", () => {
       region: "Huila",
       altitudeMasl: 1950,
       producer: "Finca El Paraíso",
+      varieties: ["Pink Bourbon", "Caturra"],
+      species: ["arabica"],
     });
     for (const key of ["website", "priceAmount", "priceCurrency", "bagWeightGrams", "notes", "rating", "purchaseDate", "greenSupplier", "batchNumber"]) {
       expect(bean).not.toHaveProperty(key);

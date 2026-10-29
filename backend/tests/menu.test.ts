@@ -265,7 +265,7 @@ describe("what the beans block shows (docs/api/menu.md §7b)", () => {
     const block = async () => (await request(app).get(`/api/public/menu/${ws.slug}`)).body.sections[0].items[0];
 
     const all = await block();
-    expect(all.fields).toHaveLength(10);
+    expect(all.fields).toHaveLength(11);
     expect(all.beans[0]).toMatchObject({ beanName: "Guji", process: "Washed", country: "Ethiopia", producer: "Shantawene", flavorProfile: "Peach" });
     expect(all.beans[0]).not.toHaveProperty("inventoryWeightGrams");
 
@@ -280,7 +280,7 @@ describe("what the beans block shows (docs/api/menu.md §7b)", () => {
     await owner.agent.patch(`${base}/items/${beansItem.id}`).send({ beanFields: [] });
     expect(Object.keys((await block()).beans[0]).sort()).toEqual(["beanName", "id", "roasterName"]);
     await owner.agent.patch(`${base}/items/${beansItem.id}`).send({ beanFields: null });
-    expect((await block()).fields).toHaveLength(10);
+    expect((await block()).fields).toHaveLength(11);
   });
 
   it("is only for the beans block, with known fields once each", async () => {

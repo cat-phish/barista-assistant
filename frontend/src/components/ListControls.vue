@@ -4,11 +4,12 @@
 // "<column>_<asc|desc>" (lib/listSort.ts), shared with the column headers;
 // columns come from sortColumnOptions. Lists with archived items (Brewers,
 // Grinders, Water) pass archivedCount and get a "Show archived" checkbox,
-// shown only while there are some.
+// shown only while there are some. Filter options with a group go under it,
+// after the ungrouped ones.
 import { computed } from 'vue';
 import { parseSortKey, type SortColumnOption, type SortDir } from '../lib/listSort';
 
-type Option = { value: string; label: string };
+type Option = { value: string; label: string; group?: string };
 const filter = defineModel<string>('filter', { default: '' });
 const sort = defineModel<string>('sort', { required: true });
 const showArchived = defineModel<boolean>('showArchived', { default: false });
@@ -26,6 +27,12 @@ const direction = computed<SortDir>({
   set: (d) => (sort.value = `${column.value}_${d}`),
 });
 const current = computed(() => props.sortColumns.find((c) => c.value === column.value));
+const ungrouped = computed(() => props.filterOptions?.filter((o) => !o.group) ?? []);
+const groups = computed(() => {
+  const out = new Map<string, Option[]>();
+  for (const o of props.filterOptions ?? []) if (o.group) out.set(o.group, [...(out.get(o.group) ?? []), o]);
+  return [...out.entries()];
+});
 </script>
 
 <template>
@@ -38,7 +45,10 @@ const current = computed(() => props.sortColumns.find((c) => c.value === column.
     <div v-if="filterOptions?.length" class="field">
       <label :for="`${idPrefix}-filter`">{{ filterLabel }}</label>
       <select :id="`${idPrefix}-filter`" v-model="filter">
-        <option v-for="o in filterOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+        <option v-for="o in ungrouped" :key="o.value" :value="o.value">{{ o.label }}</option>
+        <optgroup v-for="[name, options] in groups" :key="name" :label="name">
+          <option v-for="o in options" :key="o.value" :value="o.value">{{ o.label }}</option>
+        </optgroup>
       </select>
     </div>
     <div class="field">

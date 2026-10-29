@@ -17,7 +17,8 @@ import { useSelection } from '../composables/useSelection';
 import RatingInput from '../components/RatingInput.vue';
 import RatingStars from '../components/RatingStars.vue';
 import {
-  BEAN_FILTERS,
+  beanFilter,
+  beanFilterOptions,
   beanSortColumns,
   BLEND_TYPES,
   ROAST_TYPES,
@@ -31,6 +32,7 @@ import {
   pricePerGram,
   roastAgeDays,
   roastLabel,
+  varietyLabel,
   batchSuffix,
   type BeanFilter,
   type BeanSortColumn,
@@ -67,8 +69,8 @@ const DEFAULT_SORT = 'roaster_asc';
 const processName = (id: string | null) => (id ? (processes.value.find((p) => p.id === id)?.name ?? null) : null);
 const BEAN_SORT_COLUMNS = computed(() => beanSortColumns(processName));
 const sortChoices = sortColumnOptions(beanSortColumns());
-const filterOptions = Object.entries(BEAN_FILTERS).map(([value, f]) => ({ value, label: f.label }));
 const filter = ref<BeanFilter>('all');
+const filterOptions = computed(() => beanFilterOptions(inTab.value, filter.value));
 const sort = ref(DEFAULT_SORT);
 // The view is reused across tabs, so restore that tab's choices when it changes.
 function restoreView(): void {
@@ -82,8 +84,11 @@ watch(tab, restoreView);
 watch(sort, (v) => rememberView(viewKey('sort'), v));
 watch(filter, (v) => rememberView(viewKey('filter'), v));
 
-const filterName = computed(() => BEAN_FILTERS[filter.value].label.toLowerCase());
-const shown = computed(() => sortBy(inTab.value.filter(BEAN_FILTERS[filter.value].test), sort.value, BEAN_SORT_COLUMNS.value, (b) => b.beanName));
+const filterName = computed(() => {
+  const { label } = beanFilter(filter.value);
+  return filter.value.includes(':') ? label : label.toLowerCase(); // a variety keeps its spelling
+});
+const shown = computed(() => sortBy(inTab.value.filter(beanFilter(filter.value).test), sort.value, BEAN_SORT_COLUMNS.value, (b) => b.beanName));
 const unrated = computed(() => (props.archived ? inTab.value.filter((b) => b.rating === null) : []));
 
 async function load(): Promise<void> {
@@ -503,6 +508,7 @@ const selection = useSelection();
                 <span v-if="bean.roastWeightLossPercent !== null">{{ bean.roastWeightLossPercent }}% roast loss</span>
                 <span v-if="openFreeze(bean)" class="frozen-since">Frozen since {{ formatDay(openFreeze(bean)!.frozenOn) }}</span>
                 <span v-if="originLabel(bean)">{{ originLabel(bean) }}</span>
+                <span v-if="varietyLabel(bean)">{{ varietyLabel(bean) }}</span>
                 <span v-if="priceLabel(bean)">{{ priceLabel(bean) }}</span>
                 <a v-if="bean.website" :href="bean.website" target="_blank" rel="noopener noreferrer">Website</a>
               </p>
