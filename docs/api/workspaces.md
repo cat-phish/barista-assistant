@@ -97,6 +97,10 @@ Every workspace in a response carries `settings`, defaults filled in
   "Also look it up on the web" (the label's text goes to a web search;
   bean-label.md §4d), set under Settings → **AI**. Off, a `web` read is a
   `403`.
+- `labelWebContext` (`low`, `medium` or `high`, default `high`): how much
+  of each page that web search reads (its `search_context_size`): more
+  finds details deeper in a page but costs more and takes longer. Shown
+  under Settings → **AI** when the web lookup is allowed.
 
 ### Field visibility
 

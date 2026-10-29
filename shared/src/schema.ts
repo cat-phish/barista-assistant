@@ -109,7 +109,12 @@ export interface WorkspaceSettings {
   // With it, "Also look it up on the web" on that card (bean-label.md §4d):
   // the label's text goes to a web search. Off by default.
   labelWebLookup: boolean;
+  // How much of each page the web search reads (its search_context_size):
+  // more finds the details, but costs more and takes longer.
+  labelWebContext: LabelWebContext;
 }
+export const LABEL_WEB_CONTEXTS = ["low", "medium", "high"] as const;
+export type LabelWebContext = (typeof LABEL_WEB_CONTEXTS)[number];
 export const AUTO_ANALYZE_DELAYS = [0, 5, 10, 15, 30] as const;
 export type AutoAnalyzeDelay = (typeof AUTO_ANALYZE_DELAYS)[number];
 export const MAX_AUTO_ANALYZE_DAILY_CAP = 500;
@@ -146,6 +151,7 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   suggestAlternatives: [],
   readLabels: true,
   labelWebLookup: false,
+  labelWebContext: "high",
 };
 
 export function withDefaults<T extends object>(defaults: T, stored: Partial<T> | null): T {

@@ -1,4 +1,4 @@
-import type { BackupSettings, BlendType, DetailedRoastLevel, ParameterSuggestion, RoastLevel, RoastType } from "./schema.js";
+import type { BackupSettings, BlendType, DetailedRoastLevel, LabelWebContext, ParameterSuggestion, RoastLevel, RoastType } from "./schema.js";
 
 // BullMQ contract between the backend (producer) and the worker (consumer).
 // See docs/api/llm-contract.md §9.
@@ -74,6 +74,7 @@ export interface LabelReadJobData {
   // when the roaster's website is known (read off the label, or this, the form's).
   web?: boolean;
   website?: string | null;
+  webContext?: LabelWebContext; // the workspace's labelWebContext; unset = "high"
 }
 // What the label says, each null when it isn't printed (or can't be read).
 export interface LabelFields {

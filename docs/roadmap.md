@@ -1627,3 +1627,6 @@ Backlog item 3, branch `bean-label`. `docs/api/bean-label.md` §4d,
   reads, a late answer from an older read is ignored, and the web step
   asks for the product page with `search_context_size: "high"` (two runs had
   found the product page once and only the home page once).
+- Branch `web-context`: the search depth is a workspace setting,
+  `labelWebContext` (low, medium, high; default high), shown under the web
+  lookup switch; "source · Use" under a field no longer splits across lines.

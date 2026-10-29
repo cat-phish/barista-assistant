@@ -414,8 +414,8 @@ retried. `worker/src/label.ts`:
      as `input` what the label says (not the photos, roast date or batch
      number) and the processes. When the roaster's site is known (the
      label's `website`, else the job's `website`, the form's), the tool is
-     limited to it (`filters.allowed_domains`). `search_context_size:
-     "high"`, so more of each page is read.
+     limited to it (`filters.allowed_domains`). `search_context_size` is
+     the workspace's `labelWebContext` (job `webContext`, default `high`).
    - **Schema** (`labelWebJsonSchema`, strict): for each of
      `LABEL_WEB_FIELDS` (`@barista/shared/jobs`), `null` or
      `{ value, url }`, the value typed as in step 2.

@@ -44,6 +44,8 @@ describe("looking a bean up on the web (docs/api/llm-contract.md §9c)", () => {
       { type: "web_search", search_context_size: "high", filters: { allowed_domains: ["onyxcoffeelab.com"] } },
     ]);
     expect(buildWebRequest({ ...LABEL, website: null }, job).tools).toEqual([{ type: "web_search", search_context_size: "high" }]);
+    // The workspace's labelWebContext.
+    expect(buildWebRequest({ ...LABEL, website: null }, { ...job, webContext: "low" }).tools).toEqual([{ type: "web_search", search_context_size: "low" }]);
     const schema = labelWebJsonSchema(PROCESSES) as { required: string[] };
     expect(schema.required).not.toContain("roastDate");
     expect(schema.required).not.toContain("batchNumber");

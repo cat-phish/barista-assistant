@@ -7,7 +7,7 @@
 //  - which details the AI gets (docs/api/llm-contract.md §9, "What the AI sees").
 import { computed, ref, watch } from 'vue';
 import { errorMessage } from '../api/client';
-import { AUTO_ANALYZE_DELAYS, MAX_SUGGEST_BREWS, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, type AlternativeKind, type AutoAnalyzeDelay, type SuggestSource, type WorkspaceSettings } from '../api/types';
+import { AUTO_ANALYZE_DELAYS, MAX_SUGGEST_BREWS, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, type AlternativeKind, type AutoAnalyzeDelay, type LabelWebContext, type SuggestSource, type WorkspaceSettings } from '../api/types';
 import { workspacesApi } from '../api/workspaces';
 import SettingsLayout from '../components/SettingsLayout.vue';
 import { usePreferences } from '../composables/usePreferences';
@@ -17,6 +17,8 @@ import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
 const { aiHidden, settings } = usePreferences();
+// The web search's search_context_size (docs/api/bean-label.md §4d).
+const WEB_CONTEXTS: Record<LabelWebContext, string> = { low: 'Low: quickest, cheapest', medium: 'Medium', high: 'High: most thorough' };
 const isOwner = computed(() => workspaces.current?.role === 'owner');
 const saving = ref(false);
 const error = ref('');
@@ -196,6 +198,21 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
           </span>
         </span>
       </label>
+      <div v-if="settings.readLabels && settings.labelWebLookup" class="field web-context">
+        <label for="web-context">How much of each page to read</label>
+        <select
+          id="web-context"
+          :value="settings.labelWebContext"
+          :disabled="!isOwner || saving"
+          aria-describedby="web-context-hint"
+          @change="save({ labelWebContext: ($event.target as HTMLSelectElement).value as LabelWebContext }, 'labels')"
+        >
+          <option v-for="(c, key) in WEB_CONTEXTS" :key="key" :value="key">{{ c }}</option>
+        </select>
+        <span id="web-context-hint" class="hint">
+          More finds details deeper in a page (altitude, producer) but costs more and takes longer. High is the default.
+        </span>
+      </div>
       <p v-if="error && activeSection === 'labels'" class="form-error" role="alert">{{ error }}</p>
       <p v-if="saved && activeSection === 'labels'" class="muted small" aria-live="polite">Saved.</p>
     </section>
@@ -234,6 +251,9 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
 <style scoped>
 .web-hint {
   display: block;
+}
+.web-context {
+  max-width: 20rem;
 }
 .suggest-alts {
   display: flex;
