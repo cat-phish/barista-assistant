@@ -701,3 +701,83 @@ export interface LabelReadResult {
 // the form's), and the answer.
 export type LabelLookUp = { [K in LabelWebField]?: LabelFields[K] };
 export type LabelWebResult = Pick<LabelReadResult, 'web' | 'webSources' | 'webError'>;
+
+// Insights page rows (docs/api/stats.md §11): ids and numbers, no notes.
+export interface StatsBrew {
+  id: string;
+  timestamp: string;
+  utcOffsetMinutes: number | null;
+  userId: string | null;
+  beanId: string;
+  recipeId: string | null;
+  brewerId: string | null;
+  methodId: string | null;
+  styleId: string | null;
+  brewsLike: RecipeStyle | null;
+  grinderId: string | null;
+  drinkId: string | null;
+  toolIds: string[];
+  problemIds: string[];
+  doseGrams: number;
+  waterGrams: number | null;
+  iceGrams: number | null;
+  yieldGrams: number | null;
+  servingSize: number | null;
+  servingUnit: ServingUnit | null;
+  drinkServingSize: number | null; // the drink's default size
+  drinkServingUnit: ServingUnit | null;
+  dilutionRatio: number | null; // served 1 : ratio
+  timeSec: number;
+  expectedFinishMinSec: number | null;
+  expectedFinishMaxSec: number | null;
+  grindSetting: number | null;
+  tempC: number | null;
+  tdsPercent: number | null;
+  rating: number | null;
+  drinkRating: number | null;
+}
+
+export interface StatsBean {
+  id: string;
+  roasterName: string;
+  beanName: string;
+  batchNumber: string | null;
+  country: string | null;
+  originArea: OriginArea | null;
+  altitudeMasl: number | null;
+  processId: string | null;
+  roastLevel: RoastLevel | null;
+  roastDate: string | null;
+  varieties: string[] | null;
+  species: CoffeeSpecies[] | null;
+  priceAmount: number | null;
+  priceCurrency: string | null;
+  bagWeightGrams: number | null;
+  inventoryWeightGrams: number;
+  purchaseDate: string | null;
+  createdAt: string;
+  archivedAt: string | null;
+  freezes: Array<{ frozenOn: string; thawedOn: string | null }>;
+  photoCount: number;
+}
+
+export interface StatsNamed {
+  id: string;
+  name: string;
+}
+
+export interface StatsData {
+  brews: StatsBrew[];
+  beans: StatsBean[];
+  lookups: {
+    brewers: Array<StatsNamed & { methodId: string | null }>;
+    methods: StatsNamed[];
+    styles: Array<StatsNamed & { brewsLike: RecipeStyle }>;
+    recipes: StatsNamed[];
+    grinders: StatsNamed[];
+    tools: StatsNamed[];
+    problems: StatsNamed[];
+    processes: StatsNamed[];
+    drinks: StatsNamed[];
+  };
+}

@@ -55,6 +55,7 @@ function onBrewClick(): void {
     <RouterLink :to="{ name: 'beans' }" active-class="active">Beans</RouterLink>
     <RouterLink :to="{ name: 'recipes' }" :class="{ active: ['/recipes', '/drinks', '/ingredients'].some((p) => route.path.startsWith(p)) }">Recipes</RouterLink>
     <RouterLink :to="{ name: 'brewers' }" :class="{ active: route.path.startsWith('/setup') }">Bar setup</RouterLink>
+    <RouterLink :to="{ name: 'stats' }" :class="{ active: route.path.startsWith('/insights') }">Insights</RouterLink>
   </nav>
   <LabelReadNotice />
 </template>
@@ -136,7 +137,8 @@ function onBrewClick(): void {
   align-items: center;
   flex-shrink: 0;
   min-height: var(--tap);
-  /* Six tabs must fit a 320px phone without scrolling (see the media queries). */
+  /* Six tabs fit a 320px phone without scrolling (see the media queries);
+     with Insights, the smallest phones scroll the row. */
   padding: 0 var(--space-2);
   color: var(--text-muted);
   text-decoration: none;

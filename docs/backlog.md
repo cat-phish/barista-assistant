@@ -378,28 +378,70 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 12. Statistics and graphs
 
-- **Status:** idea
+- **Status:** in progress (`stats-foundation`)
 - **Why:** the brew history is a list. Trends (is this bean getting better
   as it rests? which grinder rates higher?) aren't visible.
 - **Approach:**
-  - A **Stats** item in the nav, filtered by date range, bean, recipe and
-    brewer.
-  - Possible views:
-    - brews per day or week;
-    - average rating by bean, recipe, grinder and brewer;
-    - rating against roast age, grind setting or ratio (scatter);
-    - EY against TDS, with the target box (brews record TDS);
-    - coffee used and stock left per bean;
-    - brew problems over time: how often each comes up, by bean, grinder
-      or recipe (e.g. how often a bean channels; brews record them since
-      migration 0060).
-  - The backend adds aggregate endpoints under `/api/workspaces/:id/stats`
-    instead of sending every log to the client.
-- **Size:** M–L
+  - An **Insights** item in the nav (`/insights`; "stats" in code and the API), with one route per tab: Overview, Brews,
+    Beans, Methods, Recipes, Prep tools, Grinders, Explore.
+  - A filter bar kept in the URL: a date range (30 days, 90 days, 1 year,
+    All, or custom), bean, recipe, brewer, **Only mine** (the whole
+    workspace by default), and an ml / fl oz switch that starts from the
+    user's volume unit.
+  - **Data:** one endpoint, `GET /api/workspaces/:id/stats`
+    (`docs/api/stats.md` §11). It returns a compact row per brew (ids,
+    amounts and results, no notes), every bean with its freezes and photo
+    count, and id → name lookups that include archived items. The client
+    works out the totals in `frontend/src/lib/stats.ts`. This replaces the
+    earlier idea of server-side totals: the Explore chart needs a point per
+    brew, per-day buckets need each brew's local date, and the existing
+    client helpers (`extractionYield`, `effectiveRoastAge`,
+    `estimateYield`) get reused. Steeping brews are left out.
+  - **Volume drunk** per brew comes from the first of these that exists:
+    a drink's serving size (the brew's own, else the drink's default);
+    the measured yield; the estimated yield (roast-level retention).
+    1 g counts as 1 ml, and estimates are marked "≈".
+  - **Money spent** adds up bean prices per currency, by purchase date
+    (else the date added). Currencies are never converted.
+  - **Charts:** Chart.js, lazy-loaded with the Insights route. Colours come
+    from theme tokens, so light and dark both work. Pies fold everything
+    past the top 7 slices into "Other". Fields the workspace hides are
+    left out of charts and pickers.
+  - **Tabs:**
+    - **Overview:** tiles for brews, coffee used, beans explored, beans
+      available (frozen / thawed / fresh), grinders, brew methods, money
+      spent, volume drunk, photos, total brew time, average rating,
+      longest daily streak and most-brewed bean.
+    - **Brews:** cumulative brews, brews per day or week, volume, coffee
+      ground and rating, all over time. Also brews by weekday and hour,
+      EY against TDS with the target box, and how often each brew
+      problem comes up.
+    - **Beans:** pies by country (blends count toward each country),
+      process and roaster; average rating by country; roast level, origin
+      area, species and varieties; spend over time; rating against
+      effective roast age; coffee used vs stock left per bean.
+    - **Methods:** brew methods (`brewer_methods`) as a share, over time,
+      and by average rating.
+    - **Recipes:** recipe use, style share, average rating, and how often
+      the finish landed in the recipe's window.
+    - **Prep tools:** the share of brews that used each tool, use over
+      time, and average rating with vs without each tool.
+    - **Grinders:** share, use over time, coffee ground over time,
+      average rating, and grind setting against rating.
+    - **Explore:** pick an X field (a number or a category) and a result
+      (rating, drink rating, EY, TDS, brew time, volume). A number gives a
+      scatter with a trend line; a category gives a bar of averages with
+      n. An optional "colour by", and the choices are kept in the URL.
+- **Size:** L. Three branches:
+  1. `stats-foundation`: endpoint, `lib/stats.ts`, page, filters, charts,
+     and the Overview and Brews tabs.
+  2. `stats-tabs`: Beans, Methods, Recipes, Prep tools, Grinders.
+  3. `stats-explore`: Explore.
 - **Depends on:** nothing.
 - **Open questions:**
-  - Charting library (Chart.js, ECharts, or plain SVG)?
-  - The whole workspace, or each person's brews by default?
+  - Does Insights fit in the nav row at 340px, or does it go on Home as a
+    card?
+  - Cold brew: does the dilution count toward the volume drunk?
 
 ---
 
