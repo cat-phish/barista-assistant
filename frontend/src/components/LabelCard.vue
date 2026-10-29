@@ -88,7 +88,7 @@ onBeforeUnmount(() => extras.value.forEach((e) => URL.revokeObjectURL(e.url)));
       <input v-model="includeBean" type="checkbox" :disabled="reading" />
       Also read the bean's photos ({{ beanPhotos.length }})
     </label>
-    <label v-if="webLookup" class="checkbox">
+    <label v-if="webLookup" class="checkbox with-note">
       <input v-model="lookUp" type="checkbox" :disabled="reading" />
       <span>
         Also look it up on the web
@@ -120,8 +120,16 @@ onBeforeUnmount(() => extras.value.forEach((e) => URL.revokeObjectURL(e.url)));
 p {
   margin: 0;
 }
+/* The box beside the label's first line, not centred on label and note. */
+.with-note {
+  align-items: flex-start;
+}
+.with-note input {
+  margin-top: 0.1rem;
+}
 .hint {
   display: block;
+  font-weight: 400;
 }
 .row {
   display: flex;
