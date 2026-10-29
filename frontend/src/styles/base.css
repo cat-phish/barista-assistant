@@ -23,6 +23,16 @@
   --frozen: #1565c0;
   --frozen-tint: #e3f2fd;
   --focus: #8d6e63;
+  /* Chart series (Insights page), in this order: validated for colour-blind
+     separation against --surface in each theme, so never reorder or cycle. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #6250d6;
+  --series-8: #e34948;
   color-scheme: light;
 
   --radius: 8px;
@@ -68,6 +78,14 @@
   --frozen: #64b5f6;
   --frozen-tint: #172a3a;
   --focus: #bcaaa4;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+  --series-8: #e66767;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -95,6 +113,14 @@
     --frozen: #64b5f6;
     --frozen-tint: #172a3a;
     --focus: #bcaaa4;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
     color-scheme: dark;
   }
 }

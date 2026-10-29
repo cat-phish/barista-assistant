@@ -378,11 +378,11 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 12. Statistics and graphs
 
-- **Status:** planned
+- **Status:** in progress (`stats-foundation`)
 - **Why:** the brew history is a list. Trends (is this bean getting better
   as it rests? which grinder rates higher?) aren't visible.
 - **Approach:**
-  - A **Stats** item in the nav, with one route per tab: Overview, Brews,
+  - An **Insights** item in the nav (`/insights`; "stats" in code and the API), with one route per tab: Overview, Brews,
     Beans, Methods, Recipes, Prep tools, Grinders, Explore.
   - A filter bar kept in the URL: a date range (30 days, 90 days, 1 year,
     All, or custom), bean, recipe, brewer, **Only mine** (the whole
@@ -403,7 +403,7 @@ What the analysis worker sends to the LLM and what comes back.
     1 g counts as 1 ml, and estimates are marked "≈".
   - **Money spent** adds up bean prices per currency, by purchase date
     (else the date added). Currencies are never converted.
-  - **Charts:** Chart.js, lazy-loaded with the Stats route. Colours come
+  - **Charts:** Chart.js, lazy-loaded with the Insights route. Colours come
     from theme tokens, so light and dark both work. Pies fold everything
     past the top 7 slices into "Other". Fields the workspace hides are
     left out of charts and pickers.
@@ -439,7 +439,7 @@ What the analysis worker sends to the LLM and what comes back.
   3. `stats-explore`: Explore.
 - **Depends on:** nothing.
 - **Open questions:**
-  - Does Stats fit in the nav row at 340px, or does it go on Home as a
+  - Does Insights fit in the nav row at 340px, or does it go on Home as a
     card?
   - Cold brew: does the dilution count toward the volume drunk?
 

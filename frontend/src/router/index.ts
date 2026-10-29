@@ -24,6 +24,17 @@ export const router = createRouter({
     { path: '/brew', name: 'brew', component: () => import('../views/BrewView.vue'), meta: { requiresWorkspace: true } },
     { path: '/journal', name: 'journal', component: () => import('../views/JournalView.vue'), meta: { requiresWorkspace: true } },
     { path: '/journal/:id', name: 'journal-entry', component: () => import('../views/JournalEntryView.vue'), props: true, meta: { requiresWorkspace: true } },
+    // Insights (Stats in code): one view holding the filters and data, a child route per tab (components/StatsTabs.vue).
+    {
+      path: '/insights',
+      component: () => import('../views/StatsView.vue'),
+      meta: { requiresWorkspace: true },
+      children: [
+        { path: '', name: 'stats', redirect: (to) => ({ name: 'stats-overview', query: to.query }) },
+        { path: 'overview', name: 'stats-overview', component: () => import('../views/stats/StatsOverviewView.vue') },
+        { path: 'brews', name: 'stats-brews', component: () => import('../views/stats/StatsBrewsView.vue') },
+      ],
+    },
     // Bar setup: three tabs (components/SetupTabs.vue).
     { path: '/setup', redirect: '/setup/brewers' },
     { path: '/setup/brewers', name: 'brewers', component: () => import('../views/BrewersView.vue'), meta: { requiresWorkspace: true } },
