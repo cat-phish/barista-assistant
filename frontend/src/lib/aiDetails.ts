@@ -22,7 +22,7 @@ const d = (group: AiGroup, key: AiDetail, label: string, hint: string): AiDetail
 export const AI_DETAIL_LIST: AiDetailInfo[] = [
   d('brew', 'tds', 'TDS and extraction', 'Refractometer readings, and the extraction worked out from them'),
   d('brew', 'temp', 'Water temperature', 'The brew’s, the recipe’s and each step’s'),
-  d('brew', 'marks', 'Timer marks', 'First drop, and when steps really ended'),
+  d('brew', 'marks', 'Timer marks', 'First drop, when steps really ended, and steps held'),
   d('brew', 'prepTools', 'Prep checklist', 'WDT, puck screen, filter…'),
   d('brew', 'problems', 'Problems checklist', 'What went wrong while brewing'),
   d('brew', 'grinderWeights', 'Beans in / grounds out', 'And the grinder retention'),

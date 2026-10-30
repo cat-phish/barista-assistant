@@ -6,7 +6,7 @@ export const AI_DETAILS = [
   // The brew
   "tds", // TDS and extraction yield
   "temp", // water temperature (brew, recipe, steps)
-  "marks", // timer marks (first drop, step ends)
+  "marks", // timer marks (first drop, step ends, holds)
   "prepTools",
   "problems",
   "grinderWeights", // beans in / grounds out, retention

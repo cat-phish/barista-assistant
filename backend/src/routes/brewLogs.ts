@@ -42,10 +42,11 @@ import { remindToRate, remindWhenSteeped, type ReminderOutcome } from "../remind
 import { autoAnalyzeOnEdited, autoAnalyzeOnSave } from "../autoAnalyze.js";
 import { cancelWaitingAnalysis } from "../queue.js";
 
-// docs/api/brew-logs.md §6: first_drop (espresso), step_end (a step's real end).
+// docs/api/brew-logs.md §6: first_drop (espresso), step_end (a step's real end),
+// step_hold / step_resume (a step held on the timer).
 export interface Mark {
   kind: MarkKind;
-  stepOrder: number | null; // step_end only
+  stepOrder: number | null; // all but first_drop
   atSec: number;
 }
 
@@ -104,6 +105,26 @@ interface BrewLogParams extends WorkspaceParams {
 
 const FUTURE_SKEW_MS = 5 * 60 * 1000;
 const MAX_TIME_SEC = 7 * 24 * 60 * 60;
+// A first drop, a step_end per step, and up to MAX_HOLDS holds per step.
+const MAX_HOLDS = 10;
+const MAX_MARKS = 1 + 50 + 50 * MAX_HOLDS * 2;
+
+// A step's holds (docs/api/brew-logs.md §6): step_hold and step_resume
+// alternate, starting with a hold, each later than the last; the last hold may
+// be left open (ended by Next, or the brew finished while held).
+function holdsError(marks: ReadonlyArray<{ kind: MarkKind; stepOrder?: number | null; atSec: number }>): string | null {
+  const byStep = new Map<number, Array<{ kind: MarkKind; atSec: number }>>();
+  for (const m of marks) {
+    if ((m.kind === "step_hold" || m.kind === "step_resume") && m.stepOrder != null) byStep.set(m.stepOrder, [...(byStep.get(m.stepOrder) ?? []), m]);
+  }
+  for (const list of byStep.values()) {
+    const sorted = [...list].sort((a, b) => a.atSec - b.atSec);
+    if (sorted.filter((m) => m.kind === "step_hold").length > MAX_HOLDS) return `marks: at most ${MAX_HOLDS} holds per step`;
+    const ok = sorted.every((m, i) => m.kind === (i % 2 === 0 ? "step_hold" : "step_resume") && (i === 0 || m.atSec > sorted[i - 1]!.atSec));
+    if (!ok) return "marks: a step's step_hold and step_resume must alternate, starting with a hold, each later than the last";
+  }
+  return null;
+}
 
 const brewLogFields = {
   beanId: z.uuid(),
@@ -153,7 +174,8 @@ const brewLogFields = {
   // The finished drink: only for a brew made for a drink (drinkOnlyError).
   drinkRating: z.number().int().min(1).max(5).nullable().optional(),
   drinkTastingNotes: optionalText(5000),
-  // Timer marks: one first_drop (espresso), one step_end per step.
+  // Timer marks: one first_drop (espresso), one step_end per step, and
+  // step_hold / step_resume pairs (holdsError).
   marks: z
     .array(
       z
@@ -163,10 +185,20 @@ const brewLogFields = {
           atSec: decimalSchema({ min: 0, max: MAX_TIME_SEC, scale: 1 }),
         })
         .strict()
-        .refine((m) => (m.kind === "step_end") === (m.stepOrder != null), "stepOrder is required for step_end and only for it")
+        .refine((m) => (m.kind !== "first_drop") === (m.stepOrder != null), "stepOrder is required for step marks and only for them")
     )
-    .max(51)
-    .refine((list) => new Set(list.map((m) => `${m.kind}:${m.stepOrder ?? ""}`)).size === list.length, "at most one first_drop and one step_end per step")
+    .max(MAX_MARKS)
+    .refine(
+      (list) => {
+        const once = list.filter((m) => m.kind === "first_drop" || m.kind === "step_end");
+        return new Set(once.map((m) => `${m.kind}:${m.stepOrder ?? ""}`)).size === once.length;
+      },
+      "at most one first_drop and one step_end per step"
+    )
+    .superRefine((list, ctx) => {
+      const error = holdsError(list);
+      if (error) ctx.addIssue({ code: "custom", message: error });
+    })
     .optional(),
   // Prep tools used (docs/api/prep-tools.md §3d); PATCH replaces the list.
   toolIds: z
@@ -232,7 +264,7 @@ function espressoError(
   }
 ): string | null {
   if (log.marks.some((m) => m.atSec > log.actualTimeSec)) return "marks: must be within actualTimeSec";
-  if (kind === null && log.marks.some((m) => m.kind === "step_end")) return "marks: step_end needs a recipe";
+  if (kind === null && log.marks.some((m) => m.kind !== "first_drop")) return "marks: a step mark needs a recipe";
   if (kind === "espresso") {
     if (log.actualWaterGrams !== null) return "actualWaterGrams: must be null for an espresso brew";
     if (log.actualIceGrams !== null) return "actualIceGrams: must be null for an espresso brew";

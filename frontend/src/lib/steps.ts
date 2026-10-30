@@ -3,6 +3,7 @@
 // back: each starts when the previous one actually ended. Tested in steps.test.ts.
 import type { FlowUnit, MachineCapabilities, Mark, MethodKind, StepAdvance, StepFields, StepType, TemperatureUnit } from '../api/types';
 import { formatGrams, formatTime, parseDecimal, parseTime, type Parsed } from './format';
+import { holdsOf } from './marks';
 import { parseTemp, tempText } from './units';
 
 type Rule = 'required' | 'optional' | 'none';
@@ -335,6 +336,8 @@ export type BrewPhase =
       end: number | null; // when it ends / ended; null = waiting for a tap or first drop, or until you finish
       guideEnd: number | null; // start + duration (the plan, or a guide for tap steps)
       due: boolean; // a tap step past its guide: "Tap Next when ready"
+      held: number; // seconds this step has been held so far
+      holding: boolean; // held now: its countdown is stopped (Resume or Next)
       amount: number | null;
       prevIndex: number | null;
       nextIndex: number | null;
@@ -342,6 +345,27 @@ export type BrewPhase =
       to: number | null;
     }
   | { kind: 'done'; prevIndex: number; from: number }; // after a timed last step
+
+// A timed step with its holds: the countdown stops while it's held, so it ends
+// later by the time held; Next while held (a step_end) ends it then. Holds
+// after the step's end are ignored. left: its countdown's remaining seconds.
+function withHolds(start: number, duration: number, holds: ReturnType<typeof holdsOf>, next: number | null, t: number) {
+  let at = start;
+  let left = duration;
+  let held = 0;
+  for (const h of holds) {
+    if (h.from >= at + left) break;
+    const from = Math.max(h.from, at);
+    left -= from - at;
+    if (h.to === null) {
+      if (next !== null && next >= from) return { end: next, held: held + next - from, holding: false, left };
+      return { end: null, held: held + Math.max(0, t - from), holding: true, left };
+    }
+    held += Math.max(0, h.to - from);
+    at = Math.max(h.to, from);
+  }
+  return { end: at + left, held, holding: false, left };
+}
 
 // What the timer shows `t` seconds in, given the marks so far
 // (docs/timer_architecture.md §3). windows: ends for the progress bar of
@@ -362,10 +386,17 @@ export function brewSchedule(
     const guideEnd = step.durationSec === null ? null : start + step.durationSec;
     const tapped = marks.find((m) => m.kind === 'step_end' && m.stepOrder === i + 1)?.atSec ?? null;
     let end: number | null;
+    let hold = { held: 0, holding: false, guideEnd };
     if (step.advance === 'tap') end = tapped === null ? null : Math.max(start, tapped);
     else if (step.advance === 'first_drop') end = firstDrop === null ? null : Math.max(start, firstDrop);
-    else end = guideEnd;
-    const frame = { index: i, step, start, guideEnd, amount: amounts[i] ?? null, prevIndex: i > 0 ? i - 1 : null, nextIndex: i < last ? i + 1 : null };
+    else if (step.durationSec === null) end = null;
+    else {
+      const h = withHolds(start, step.durationSec, holdsOf(marks, i + 1), tapped, t);
+      end = h.end;
+      // While held, the countdown stays at what was left.
+      hold = { held: h.held, holding: h.holding, guideEnd: h.end ?? t + h.left };
+    }
+    const frame = { index: i, step, start, guideEnd: hold.guideEnd, held: hold.held, holding: hold.holding, amount: amounts[i] ?? null, prevIndex: i > 0 ? i - 1 : null, nextIndex: i < last ? i + 1 : null };
 
     // An instant step is shown briefly without delaying what follows.
     if (end === start && step.advance !== 'tap' && step.advance !== 'first_drop') {
@@ -373,8 +404,9 @@ export function brewSchedule(
       continue;
     }
     if (end === null || t < end) {
-      const to = end ?? guideEnd ?? (step.advance === 'first_drop' ? (windows.firstDropMax ?? null) : i === last ? (windows.finishMax ?? null) : null);
-      return { kind: 'step', ...frame, end, due: step.advance === 'tap' && guideEnd !== null && t >= guideEnd, from: start, to };
+      const to = end ?? frame.guideEnd ?? (step.advance === 'first_drop' ? (windows.firstDropMax ?? null) : i === last ? (windows.finishMax ?? null) : null);
+      // The progress bar leaves out the time held, so it stops while held.
+      return { kind: 'step', ...frame, end, due: step.advance === 'tap' && guideEnd !== null && t >= guideEnd, from: start + frame.held, to };
     }
     start = end;
   }

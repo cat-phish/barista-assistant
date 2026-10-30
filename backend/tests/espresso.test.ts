@@ -265,6 +265,41 @@ describe("espresso profiles and marks", () => {
     const noRecipe = { beanId: bean, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150 };
     expect((await owner.agent.post(base).send({ ...noRecipe, marks: [{ kind: "step_end", stepOrder: 1, atSec: 52 }] })).body.error).toMatch(/needs a recipe/);
   });
+
+  it("marks: a step's holds alternate, can repeat, and may end open", async () => {
+    const { owner, ws, v60 } = await setup();
+    const bean = await newBean(owner, ws.id);
+    const recipe = (await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name: "F", brewerId: v60, targetDoseGrams: 15, targetWaterGrams: 250 })).body.recipe.id;
+    const base = `/api/workspaces/${ws.id}/brew-logs`;
+    const log = { beanId: bean, recipeId: recipe, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150 };
+    const post = async (marks: unknown[]) => owner.agent.post(base).send({ ...log, marks });
+    const hold = (stepOrder: number, atSec: number) => ({ kind: "step_hold", stepOrder, atSec });
+    const resume = (stepOrder: number, atSec: number) => ({ kind: "step_resume", stepOrder, atSec });
+
+    // Two holds on step 2 (sent out of order), and step 3 held until Next ended it.
+    const created = await post([resume(2, 70), hold(2, 60), hold(2, 80), resume(2, 85), hold(3, 100), { kind: "step_end", stepOrder: 3, atSec: 110 }]);
+    expect(created.status).toBe(201);
+    expect(created.body.brewLog.marks).toEqual([
+      { kind: "step_hold", stepOrder: 2, atSec: 60 },
+      { kind: "step_resume", stepOrder: 2, atSec: 70 },
+      { kind: "step_hold", stepOrder: 2, atSec: 80 },
+      { kind: "step_resume", stepOrder: 2, atSec: 85 },
+      { kind: "step_hold", stepOrder: 3, atSec: 100 },
+      { kind: "step_end", stepOrder: 3, atSec: 110 },
+    ]);
+    // Finished while held: the last hold is left open.
+    expect((await post([hold(1, 40)])).status).toBe(201);
+
+    expect((await post([{ kind: "step_hold", atSec: 40 }])).status).toBe(400); // no stepOrder
+    expect((await post([resume(1, 40)])).body.error).toMatch(/alternate/);
+    expect((await post([hold(1, 40), hold(1, 50)])).body.error).toMatch(/alternate/);
+    expect((await post([hold(1, 40), resume(1, 40)])).body.error).toMatch(/alternate/); // not later
+    const many = Array.from({ length: 11 }, (_, i) => [hold(1, i * 2), resume(1, i * 2 + 1)]).flat();
+    expect((await post(many)).body.error).toMatch(/at most 10 holds/);
+    expect((await post([hold(1, 151)])).body.error).toMatch(/within actualTimeSec/);
+    const noRecipe = { beanId: bean, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150 };
+    expect((await owner.agent.post(base).send({ ...noRecipe, marks: [hold(1, 40)] })).body.error).toMatch(/needs a recipe/);
+  });
 });
 
 describe("recipe styles", () => {

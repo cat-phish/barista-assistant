@@ -95,8 +95,10 @@ queue:
    - Espresso brews include their `machine` (or `null`): the log's brewer's
      name and capabilities (pre-infusion, flow and pressure control).
    - The brew includes its `marks` (`{ kind, stepOrder, atSec }`): the first
-     drop for espresso, and the real end of steps that waited for a tap or
-     were logged, so the LLM sees e.g. that the bloom ran 52 s, not 45.
+     drop for espresso, the real end of steps that waited for a tap or were
+     logged, so the LLM sees e.g. that the bloom ran 52 s, not 45, and the
+     `step_hold` / `step_resume` pairs of steps held on the timer because
+     they ran slow (the `heldSteps` section says what they mean).
    - The brew includes its recipe's `methodKind` (or `null` without a
      recipe), `actualWaterGrams` (`null` for espresso), the measured
      `actualYieldGrams` (or `null`) and `brewRatio`: water ÷ dose, or for
@@ -146,6 +148,7 @@ queue:
    | `flavorProfile` | the bean has one | the cup to aim for |
    | `weightLoss` | `roastWeightLossPercent` | how developed the roast is (11–13% light, 14–16% medium, 17%+ dark); more developed extracts more easily (coarser, cooler); trusted over the roast level |
    | `stepTimes` | the recipe has `stepTimeScaling` | step times and the finish window are already scaled to the batch; a bigger batch taking longer is planned, not a grind problem |
+   | `heldSteps` | a brew's `marks` include a `step_hold` | the barista held that step because it ran slow; a `step_end` in a hold ended it; later steps moved but the finish window didn't, so a held brew can finish late; say where it ran slow and what that points to |
    | `altitude` | `altitudeMasl` | denser beans |
    | `variety` | `varieties` or `species` | the cultivar's typical character (Geisha delicate, SL28/SL34 dense and bright); robusta or liberica in a blend extract more easily and add body and bitterness; context, not a rule |
    | `origin` | origin area, country or region | context, not a rule |

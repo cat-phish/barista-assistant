@@ -146,8 +146,15 @@ says why the last analysis failed or wasn't made (e.g. the daily cap), else
     `MARK_KINDS`; `atSec` is 0–`actualTimeSec` with at most 1 decimal.
     - `first_drop`: espresso brews only, at most one, no `stepOrder`. It can
       also be typed into the log form after the shot.
-    - `step_end`: the real end of a step that waited for a tap or was logged
-      (`stepOrder` 1–50, at most one per step); needs a `recipeId`.
+    - `step_end`: the real end of a step that waited for a tap or was logged,
+      or of a held step ended with Next (`stepOrder` 1–50, at most one per
+      step); needs a `recipeId`.
+    - `step_hold` / `step_resume`: a timed step held on the timer, its
+      countdown stopped until it was resumed (`docs/timer_architecture.md`
+      §3). Per step (`stepOrder` 1–50, needs a `recipeId`) they alternate,
+      starting with a hold, each later than the last, at most 10 holds; the
+      last hold may have no resume (ended by a `step_end`, or the brew
+      finished while held). The list holds at most 1,051 marks.
   - `drinkId` (optional, nullable): the drink this brew was for, in this
     workspace. With a `recipeId`, the recipe's brewer must be of the drink's
     kind (any such brewer). A plain brew (just the V60) has no drink.

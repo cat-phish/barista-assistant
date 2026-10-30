@@ -1128,9 +1128,10 @@ export const brewLogs = mysqlTable("brew_logs", {
 
 // 8b. Brew Log Marks (Tapped Events During a Brew)
 // When things actually happened, recorded by the timer (docs/api/brew-logs.md §6):
-// the first drop (espresso), and the real end of steps that wait for a tap or
-// have a "log it" button (step_end, with that step's stepOrder).
-export const MARK_KINDS = ["first_drop", "step_end"] as const;
+// the first drop (espresso), the real end of steps that wait for a tap or
+// have a "log it" button (step_end, with that step's stepOrder), and a step
+// held on the timer (step_hold / step_resume pairs, with its stepOrder).
+export const MARK_KINDS = ["first_drop", "step_end", "step_hold", "step_resume"] as const;
 export type MarkKind = (typeof MARK_KINDS)[number];
 export const brewLogMarks = mysqlTable("brew_log_marks", {
   id: varchar("id", { length: 36 }).primaryKey(),
@@ -1138,7 +1139,7 @@ export const brewLogMarks = mysqlTable("brew_log_marks", {
     .notNull()
     .references(() => brewLogs.id, { onDelete: "cascade" }),
   kind: varchar("kind", { length: 30 }).$type<MarkKind>().notNull(),
-  stepOrder: int("step_order"), // step_end only
+  stepOrder: int("step_order"), // all but first_drop
   atSec: decimal("at_sec", { precision: 6, scale: 1, mode: "number" }).notNull(), // seconds from the start, 0.1 s
 });
 

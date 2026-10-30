@@ -1874,3 +1874,29 @@ Home roasting section.
   understand" checkbox (CLAUDE.md rule 7) is still an open question in the
   backlog.
 - No roast details for the AI yet (backlog: Roast details for the AI).
+
+## Hold a step on the timer (built)
+
+Backlog item "Hold a step on the timer", branch `hold-step`, no migration.
+`docs/timer_architecture.md` §3, `docs/api/brew-logs.md` §6.
+
+- **Hold** on the current step card for `auto` and `auto_log` steps with a
+  duration (tap and first-drop steps wait anyway). The countdown stops at
+  what was left ("Held · +0:12"), the progress bar with it; **Resume**
+  carries on, **Next** ends the step now. A step can be held more than once.
+- Recorded as marks: `step_hold` / `step_resume` with the step's
+  `stepOrder` (and a `step_end` for Next), added to `MARK_KINDS`. The kind
+  column is a varchar, so no migration; backups take them with the other
+  marks. Per step they alternate, starting with a hold, each later than
+  the last, at most 10; the last may stay open (Next, or finished while
+  held). `brewSchedule` stays a pure function of steps, time and marks:
+  a held step ends later by the time held, and later steps follow.
+- Shown on the Previous card ("held 0:12"), the log form ("Pour held
+  0:12") and the journal ("Step 2 held", a total per step).
+- The AI gets them in `marks` (already switchable under Settings → AI), and
+  a `heldSteps` prompt section says what they mean. PROMPT_VERSION
+  2026-10-l.
+- Decided: Hold / Resume / Next rather than "+15 s" (it records how long it
+  really took); no pause for the whole brew (the coffee keeps brewing, so
+  `actualTimeSec` stays the real time); the target finish window doesn't
+  move, so a held brew shows as slow.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { firstDropVerdict, formatMark, parseMark, withMark } from './marks';
+import { firstDropVerdict, formatMark, heldSec, holdsOf, parseMark, withMark } from './marks';
 
 describe('marks', () => {
   it('re-recording replaces the same mark (per step for step_end), earliest first', () => {
@@ -12,6 +12,17 @@ describe('marks', () => {
       { kind: 'first_drop', stepOrder: null, atSec: 8 },
       { kind: 'step_end', stepOrder: 2, atSec: 12 },
     ]);
+  });
+  it('holds add up per step, each after the last; an open hold ends at Next or the end', () => {
+    let marks = withMark([], 'step_hold', 10, 2);
+    marks = withMark(marks, 'step_resume', 10.02, 2); // same tenth: nudged later
+    marks = withMark(marks, 'step_hold', 20, 2);
+    marks = withMark(marks, 'step_hold', 25, 3);
+    expect(holdsOf(marks, 2)).toEqual([{ from: 10, to: 10.1 }, { from: 20, to: null }]);
+    expect(heldSec(marks, 2, 30)).toBeCloseTo(10.1);
+    expect(heldSec(withMark(marks, 'step_end', 24, 2), 2, 30)).toBeCloseTo(4.1);
+    expect(heldSec(marks, 3, 30)).toBe(5);
+    expect(heldSec(marks, 1, 30)).toBe(0);
   });
   it('formats and parses with tenths', () => {
     expect(formatMark(7.4)).toBe('0:07.4');

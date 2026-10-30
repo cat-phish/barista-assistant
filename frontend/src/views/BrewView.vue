@@ -53,7 +53,7 @@ import BrewTimer from '../components/BrewTimer.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import FinishDrinkCard from '../components/FinishDrinkCard.vue';
 import { useBrewSessionStore } from '../stores/brewSession';
-import { formatMark } from '../lib/marks';
+import { formatMark, heldSec } from '../lib/marks';
 import { recipePrep, toolsFor } from '../lib/prepTools';
 import { formatFinishWindow, parseFinishWindow, stepTitle } from '../lib/steps';
 import { useAnalysis } from '../composables/useAnalysis';
@@ -774,13 +774,17 @@ const firstDropWindow = computed(() => {
   return r && r.firstDropMinSec !== null && r.firstDropMaxSec !== null ? { min: r.firstDropMinSec, max: r.firstDropMaxSec } : null;
 });
 const marks = ref<Mark[]>([]);
-// "Bloom ended 0:52 · Pour logged 1:30": the steps' real times, shown on the log form.
+// "Bloom ended 0:52 · Pour held 0:12 · Pour logged 1:30": the steps' real
+// times, shown on the log form; a step's holds as one total, at its first.
+const timerSec = ref(0); // the timer's time, where a hold left open ends
 const stepMarksLine = computed(() =>
   marks.value
-    .filter((m) => m.kind === 'step_end' && m.stepOrder !== null)
+    .filter((m) => m.stepOrder !== null && (m.kind === 'step_end' || (m.kind === 'step_hold' && m === marks.value.find((h) => h.kind === 'step_hold' && h.stepOrder === m.stepOrder))))
     .map((m) => {
-      const step = recipe.value?.steps[(m.stepOrder ?? 0) - 1];
-      const name = step ? stepTitle(step) : `Step ${m.stepOrder}`;
+      const order = m.stepOrder ?? 0;
+      const step = recipe.value?.steps[order - 1];
+      const name = step ? stepTitle(step) : `Step ${order}`;
+      if (m.kind === 'step_hold') return `${name} held ${formatTime(Math.floor(heldSec(marks.value, order, timerSec.value)))}`;
       return `${name} ${step?.advance === 'auto_log' ? 'logged' : 'ended'} ${formatMark(m.atSec)}`;
     })
     .join(' · '),
@@ -890,6 +894,7 @@ function logWithoutTimer(): void {
 function onTimerComplete(seconds: number, timerMarks: Mark[] = []): void {
   draft.time = formatTime(seconds);
   marks.value = timerMarks;
+  timerSec.value = seconds;
   // The first drop goes in the log's field, where it can be fixed or typed in.
   const drop = timerMarks.find((m) => m.kind === 'first_drop');
   draft.firstDrop = drop ? String(drop.atSec) : '';
@@ -1003,7 +1008,7 @@ async function save(): Promise<void> {
       // The steps' real times, plus the first drop from the log's field. A time
       // typed shorter than a tap drops that tap.
       marks: [
-        ...(recipe.value ? marks.value.filter((m) => m.kind === 'step_end' && m.atSec <= values.actualTimeSec) : []),
+        ...(recipe.value ? marks.value.filter((m) => m.kind !== 'first_drop' && m.atSec <= values.actualTimeSec) : []),
         ...(parsed.value.firstDropSec !== null ? [{ kind: 'first_drop' as const, stepOrder: null, atSec: parsed.value.firstDropSec }] : []),
       ],
     });

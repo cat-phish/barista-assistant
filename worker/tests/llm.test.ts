@@ -270,6 +270,15 @@ describe("what the workspace keeps from the AI (Settings → AI)", () => {
     expect(promptSections(hidden)).not.toContain("stepTimes");
   });
 
+  it("explains held steps when a brew has a hold, with the marks", () => {
+    const ctx = context({ brew: { marks: [{ kind: "step_hold", stepOrder: 2, atSec: 60 }, { kind: "step_resume", stepOrder: 2, atSec: 72 }] } });
+    expect(promptSections(toLlmInput(ctx))).toContain("heldSteps");
+    expect(promptSections(toLlmInput(context({ brew: { marks: [{ kind: "step_end", stepOrder: 1, atSec: 52 }] } })))).not.toContain("heldSteps");
+    const hidden = toLlmInput(ctx, without("marks"));
+    expect(hidden.brew).not.toHaveProperty("marks");
+    expect(promptSections(hidden)).not.toContain("heldSteps");
+  });
+
   it("drops brew, bean, recipe and equipment details", () => {
     const ctx = context({ brew: { tdsPercent: 1.4, extractionYieldPercent: 20, problems: ["Fast drawdown"], grinderRetentionGrams: 0.2, beanWeightInGrams: 15.2 } });
     const input = toLlmInput(ctx, without("tds", "temp", "problems", "grinderWeights", "origin", "altitude", "process", "recipeSteps", "grindStartingPoints", "grinderDetails"));
