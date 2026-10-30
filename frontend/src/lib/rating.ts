@@ -7,6 +7,7 @@ export type StarFill = 'full' | 'half' | 'empty';
 const LABELS = ['', 'Bad', 'Meh', 'OK', 'Good', 'Great'];
 
 // How each of the 5 stars shows a rating: 3.5 is three full, one half, one empty.
+// Shown as fill-<fill> classes: a bare "empty" would pick up base.css's .empty.
 export function starFills(rating: number): StarFill[] {
   return [1, 2, 3, 4, 5].map((n) => (rating >= n ? 'full' : rating >= n - 0.5 ? 'half' : 'empty'));
 }

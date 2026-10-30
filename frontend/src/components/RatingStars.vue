@@ -6,7 +6,7 @@ defineProps<{ rating: number | null }>();
 
 <template>
   <span v-if="rating !== null" class="stars" :aria-label="`Rated ${rating} of 5`" role="img">
-    <span v-for="(fill, i) in starFills(rating)" :key="i" :class="fill" aria-hidden="true">★</span>
+    <span v-for="(fill, i) in starFills(rating)" :key="i" :class="`fill-${fill}`" aria-hidden="true">★</span>
   </span>
   <span v-else class="muted unrated">Not rated</span>
 </template>
@@ -17,15 +17,15 @@ defineProps<{ rating: number | null }>();
   letter-spacing: 1px;
   white-space: nowrap;
 }
-.full {
+.fill-full {
   color: #f9a825;
 }
 /* A half star: the gold glyph over the grey one, cut at the middle. */
-.half {
+.fill-half {
   position: relative;
   display: inline-block;
 }
-.half::before {
+.fill-half::before {
   content: '★';
   position: absolute;
   left: 0;
