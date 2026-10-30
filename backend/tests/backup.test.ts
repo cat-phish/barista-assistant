@@ -251,7 +251,7 @@ describe("workspace backup and restore (docs/api/backup.md §2b)", () => {
       [changed("recipes", { brewerId: randomUUID() }), /tables\.recipes\[0\]\.brewerId: not in the file/],
       [changed("brew_logs", { actualDoseGrams: "lots" }), /actualDoseGrams: must be a number/],
       [changed("bean_freezes", { frozenOn: "yesterday" }), /frozenOn: must be a date/],
-      [changed("brew_log_flavors", { flavorKey: "fruity.banana" }), /tables\.brew_log_flavors\[0\]\.flavorKey: must be one of/],
+      [changed("brew_log_flavors", { label: "x".repeat(61) }), /tables\.brew_log_flavors\[0\]\.label/],
       [changed("menu_items", { beanFields: ["smell"] }), /tables\.menu_items\[0\]\.beanFields/],
       [{ ...backup, workspace: { ...backup.workspace, settings: { roastScale: "loud" } } }, /settings/],
     ];

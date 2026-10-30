@@ -1,7 +1,10 @@
-// The flavor wheel (docs/api/brew-logs.md §6, "flavors"): the same keys and
-// labels as FLAVORS in @barista/shared/flavors (flavors.test.ts checks), plus
-// how the wheel draws them. A key's dots give its place: "fruity.berry" sits
-// under "fruity". Our own wheel and colours, not the SCA/WCR artwork.
+// The flavor wheel (docs/api/brew-logs.md §6, "flavors"), built from a
+// lexicon: the workspace's own (docs/api/flavor-lexicon.md §2c) or the
+// built-in one below. A key's dots give its place: "fruity.berry" sits under
+// "fruity". The built-in list has the same keys, labels and colours as
+// FLAVORS / FLAVOR_COLORS in @barista/shared/flavors (flavors.test.ts checks).
+import type { FlavorLexicon } from '../api/types';
+
 export const FLAVOR_LABELS = {
   'fruity': 'Fruity',
   'fruity.berry': 'Berry',
@@ -125,18 +128,9 @@ export const FLAVOR_LABELS = {
   'off.harsh.astringent': 'Astringent',
   'off.harsh.salty': 'Salty',
 } as const;
-export type FlavorKey = keyof typeof FLAVOR_LABELS;
 
-export interface FlavorNode {
-  key: FlavorKey;
-  label: string;
-  depth: number; // 0 = inner ring
-  children: FlavorNode[];
-  leaves: number; // outermost descendants (itself if none): its share of the wheel
-}
-
-// Each category's colour; its rings are lighter shades of it.
-const CATEGORY_COLORS: Record<string, string> = {
+// The built-in wheel's colours, one per inner-ring flavor.
+export const FLAVOR_COLORS: Readonly<Record<string, string>> = {
   fruity: '#d0453f',
   floral: '#b86aa6',
   sweet: '#d98b2b',
@@ -148,64 +142,95 @@ const CATEGORY_COLORS: Record<string, string> = {
   off: '#7b8794',
 };
 
-export const isFlavorKey = (key: string): key is FlavorKey => Object.hasOwn(FLAVOR_LABELS, key);
+export const DEFAULT_LEXICON: FlavorLexicon = {
+  format: 'barista-flavor-lexicon',
+  version: 1,
+  name: 'Built-in wheel',
+  flavors: Object.entries(FLAVOR_LABELS).map(([key, label]) => (FLAVOR_COLORS[key] ? { key, label, color: FLAVOR_COLORS[key] } : { key, label })),
+};
+
+export interface FlavorNode {
+  key: string;
+  label: string;
+  depth: number; // 0 = inner ring
+  color: string; // #rrggbb: its own, else the nearest one further in, lighter
+  ink: string; // text on it: dark or white, whichever reads
+  children: FlavorNode[];
+  leaves: number; // outermost descendants (itself if none): its share of the wheel
+}
+
+export interface Wheel {
+  name: string;
+  roots: FlavorNode[];
+  node: (key: string) => FlavorNode | undefined;
+  path: (key: string) => FlavorNode[]; // the rings above it, innermost first
+  place: (key: string) => string; // "Fruity › Berry"
+  sort: (keys: readonly string[]) => string[]; // wheel order; keys it doesn't have last
+  search: (query: string) => string[];
+}
+
 const parentKey = (key: string): string | null => (key.includes('.') ? key.slice(0, key.lastIndexOf('.')) : null);
 
-function build(): FlavorNode[] {
+// Colours for inner-ring flavors a lexicon leaves without one.
+const PALETTE = Object.values(FLAVOR_COLORS);
+const channels = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+// Mixed with white: share 0 = the colour, 1 = white.
+function lighten(hex: string, share: number): string {
+  return '#' + channels(hex).map((c) => Math.round(c + (255 - c) * share).toString(16).padStart(2, '0')).join('');
+}
+// Dark text unless the colour is dark (WCAG relative luminance).
+function inkFor(hex: string): string {
+  const [r, g, b] = channels(hex).map((c) => {
+    const v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  const luminance = 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+  return luminance > 0.22 ? '#1d1b1a' : '#ffffff';
+}
+
+export function buildWheel(lexicon: FlavorLexicon): Wheel {
   const nodes = new Map<string, FlavorNode>();
   const roots: FlavorNode[] = [];
-  for (const [key, label] of Object.entries(FLAVOR_LABELS) as Array<[FlavorKey, string]>) {
-    const node: FlavorNode = { key, label, depth: key.split('.').length - 1, children: [], leaves: 0 };
-    nodes.set(key, node);
-    const parent = parentKey(key);
-    if (parent) nodes.get(parent)!.children.push(node);
+  for (const f of lexicon.flavors) {
+    const parent = parentKey(f.key);
+    const above = parent ? nodes.get(parent) : undefined;
+    const depth = f.key.split('.').length - 1;
+    const color = f.color ?? (above ? lighten(above.color, 0.22) : PALETTE[roots.length % PALETTE.length]!);
+    const node: FlavorNode = { key: f.key, label: f.label, depth, color, ink: inkFor(color), children: [], leaves: 0 };
+    nodes.set(f.key, node);
+    if (above) above.children.push(node);
     else roots.push(node);
   }
   const count = (n: FlavorNode): number => (n.leaves = n.children.length ? n.children.reduce((sum, c) => sum + count(c), 0) : 1);
   roots.forEach(count);
-  return roots;
+  const order = new Map(lexicon.flavors.map((f, i) => [f.key, i]));
+  const path = (key: string): FlavorNode[] => {
+    const out: FlavorNode[] = [];
+    for (let k = parentKey(key); k; k = parentKey(k)) {
+      const n = nodes.get(k);
+      if (n) out.unshift(n);
+    }
+    return out;
+  };
+  return {
+    name: lexicon.name,
+    roots,
+    node: (key) => nodes.get(key),
+    path,
+    place: (key) => (nodes.has(key) ? path(key).map((n) => n.label).join(' › ') : ''),
+    sort: (keys) => [...keys].sort((a, b) => (order.get(a) ?? Infinity) - (order.get(b) ?? Infinity)),
+    // Flavors whose label matches, outer rings first so "berry" finds the
+    // berries before Berry itself.
+    search: (query) => {
+      const q = query.trim().toLowerCase();
+      if (!q) return [];
+      const hits = lexicon.flavors.filter((f) => f.label.toLowerCase().includes(q)).map((f) => f.key);
+      return hits.sort((a, b) => b.split('.').length - a.split('.').length || order.get(a)! - order.get(b)!);
+    },
+  };
 }
 
-export const FLAVOR_WHEEL: readonly FlavorNode[] = build();
-const BY_KEY = new Map<string, FlavorNode>();
-const index = (n: FlavorNode) => {
-  BY_KEY.set(n.key, n);
-  n.children.forEach(index);
-};
-FLAVOR_WHEEL.forEach(index);
-const ORDER = new Map((Object.keys(FLAVOR_LABELS) as FlavorKey[]).map((key, i) => [key, i]));
-
-export const flavorNode = (key: FlavorKey): FlavorNode => BY_KEY.get(key)!;
-
-// The rings above a flavor, innermost first: "fruity.berry.blueberry" →
-// [Fruity, Berry].
-export function flavorPath(key: FlavorKey): FlavorNode[] {
-  const path: FlavorNode[] = [];
-  for (let k = parentKey(key); k; k = parentKey(k)) path.unshift(BY_KEY.get(k)!);
-  return path;
-}
-
-// "Fruity › Berry", for a chip's title and the list view.
-export const flavorPlace = (key: FlavorKey): string => flavorPath(key).map((n) => n.label).join(' › ');
-
-// Wheel order, whatever order they were picked in (as the API returns them).
-export const sortFlavors = (keys: readonly FlavorKey[]): FlavorKey[] => [...keys].sort((a, b) => ORDER.get(a)! - ORDER.get(b)!);
-
-// A flavor's colour: its category's, lighter on each ring further out.
-export function flavorColor(key: FlavorKey): string {
-  const depth = key.split('.').length - 1;
-  const base = CATEGORY_COLORS[key.split('.')[0]!] ?? '#888888';
-  return depth === 0 ? base : `color-mix(in srgb, ${base} ${100 - depth * 22}%, white)`;
-}
-
-// Flavors whose label matches the search, outer rings
-// first so "berry" finds the berries before Berry itself.
-export function searchFlavors(query: string): FlavorKey[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
-  const hits = (Object.keys(FLAVOR_LABELS) as FlavorKey[]).filter((key) => FLAVOR_LABELS[key].toLowerCase().includes(q));
-  return hits.sort((a, b) => b.split('.').length - a.split('.').length || ORDER.get(a)! - ORDER.get(b)!);
-}
+export const DEFAULT_WHEEL: Wheel = buildWheel(DEFAULT_LEXICON);
 
 // ---- The wheel's geometry (components/FlavorWheel.vue) ----------------------
 
@@ -222,12 +247,12 @@ export interface WheelSegment {
   r1: number;
 }
 
-// The two rings around the centre: focus's children (the categories when
+// The two rings around the centre: focus's children (the inner ring when
 // null) and their children, each sized by how many outer flavors it holds.
 // A segment with nothing further out reaches the edge.
-export function wheelSegments(focus: FlavorKey | null): WheelSegment[] {
+export function wheelSegments(wheel: Wheel, focus: string | null): WheelSegment[] {
   const { center, mid, outer } = WHEEL_RADII;
-  const top = focus ? flavorNode(focus).children : FLAVOR_WHEEL;
+  const top = focus ? (wheel.node(focus)?.children ?? []) : wheel.roots;
   const total = top.reduce((sum, n) => sum + n.leaves, 0);
   const segments: WheelSegment[] = [];
   let a = 0;

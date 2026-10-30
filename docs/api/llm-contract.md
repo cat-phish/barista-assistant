@@ -83,9 +83,10 @@ queue:
      to prep, a mistake like an untared scale to repeating rather than
      adjusting).
    - The brew includes `flavors`: the coffee's flavors picked on the flavor
-     wheel (§6), in wheel order, each as its label with its place on the
-     wheel, e.g. `"Blueberry (Fruity › Berry)"` or just `"Floral"` for a
-     pick from the inner ring. `[]` means none were picked. Like `rating`
+     wheel (§6), in the workspace's wheel order (§2c), each as its label with
+     its place on that wheel, e.g. `"Blueberry (Fruity › Berry)"` or just
+     `"Floral"` for a pick from the inner ring; a pick the wheel no longer
+     has is just its saved label. `[]` means none were picked. Like `rating`
      and `tastingNotes`, they're the coffee on its own; the prompt's
      `flavors` section says how to read them.
    - The brew includes its `drink` (or `null`): name, `servingSize` (the size

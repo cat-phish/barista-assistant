@@ -1,7 +1,6 @@
 // Response shapes from docs/api/README.md. Dates arrive as ISO strings;
 // decimals as numbers (§0).
 import type { AiDetail } from '../lib/aiDetails';
-import type { FlavorKey } from '../lib/flavors';
 
 export type Role = 'owner' | 'barista' | 'viewer';
 
@@ -633,7 +632,9 @@ export interface BrewLog {
   marks: Mark[]; // earliest first
   tools: PrepToolRef[]; // prep tools used, in checklist order (§3d)
   problems: BrewProblemRef[]; // what went wrong, in list order (§6b)
-  flavors: FlavorKey[]; // the coffee's flavors from the wheel, in wheel order (§6)
+  // The coffee's flavors from the wheel, in its order; label: the wheel's
+  // now, else the one saved when picked (§6).
+  flavors: FlavorPick[];
   brewedBy: { id: string; email: string } | null;
   // Its AI suggestion (§8): one exists; an automatic one is due then; why the
   // last one failed or wasn't made.
@@ -891,4 +892,29 @@ export interface StatsData {
     processes: StatsNamed[];
     drinks: StatsNamed[];
   };
+}
+
+// docs/api/flavor-lexicon.md §2c: a flavor wheel as a file
+// (docs/custom-flavor-wheel.md). Flavors in wheel order, each after the one
+// it sits under; a key's dots give its place ("fruity.berry").
+export interface LexiconFlavor {
+  key: string;
+  label: string;
+  color?: string; // #rrggbb
+}
+export interface FlavorLexicon {
+  format: 'barista-flavor-lexicon';
+  version: number;
+  name: string;
+  flavors: LexiconFlavor[];
+}
+export interface WorkspaceLexicon {
+  lexicon: FlavorLexicon;
+  custom: boolean; // false = the built-in wheel
+  updatedAt: string | null;
+}
+// A brew's pick: its key and its label (docs/api/brew-logs.md §6).
+export interface FlavorPick {
+  key: string;
+  label: string;
 }

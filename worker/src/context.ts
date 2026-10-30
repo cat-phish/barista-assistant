@@ -20,6 +20,7 @@ import {
   brewProblems,
   brewLogProblems,
   brewLogFlavors,
+  flavorLexicons,
   type Bean,
   type BlendType,
   type DetailedRoastLevel,
@@ -39,7 +40,7 @@ import {
   type SteepTemp,
   type DilutionWith,
 } from "@barista/shared/schema";
-import { FLAVOR_KEYS, flavorLabel } from "@barista/shared/flavors";
+import { DEFAULT_LEXICON, LEXICON_FORMAT, LEXICON_VERSION, flavorLabel, resolvePicks, type FlavorLexicon, type FlavorPick } from "@barista/shared/flavors";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { db } from "./db.js";
@@ -403,14 +404,32 @@ export async function problemsFor(brewLogIds: string[]): Promise<Map<string, str
   return byLog;
 }
 
-// Each brew's flavor picks as the AI reads them, in wheel order.
+// Each brew's flavor picks as the AI reads them, in its workspace's wheel
+// order, labelled from that wheel (the saved label for one it no longer has).
 export async function flavorsFor(brewLogIds: string[]): Promise<Map<string, string[]>> {
   const byLog = new Map<string, string[]>();
   if (brewLogIds.length === 0) return byLog;
-  const rows = await db.select().from(brewLogFlavors).where(inArray(brewLogFlavors.brewLogId, brewLogIds));
-  const order = new Map(FLAVOR_KEYS.map((key, i) => [key, i]));
-  rows.sort((a, b) => (order.get(a.flavorKey) ?? 0) - (order.get(b.flavorKey) ?? 0));
-  for (const { brewLogId, flavorKey } of rows) byLog.set(brewLogId, [...(byLog.get(brewLogId) ?? []), flavorLabel(flavorKey)]);
+  const rows = await db
+    .select({ brewLogId: brewLogFlavors.brewLogId, key: brewLogFlavors.flavorKey, label: brewLogFlavors.label, workspaceId: brewLogs.workspaceId })
+    .from(brewLogFlavors)
+    .innerJoin(brewLogs, eq(brewLogFlavors.brewLogId, brewLogs.id))
+    .where(inArray(brewLogFlavors.brewLogId, brewLogIds));
+  if (rows.length === 0) return byLog;
+  const lexicons = new Map<string, FlavorLexicon>();
+  const workspaceIds = [...new Set(rows.map((r) => r.workspaceId))];
+  for (const row of await db.select().from(flavorLexicons).where(inArray(flavorLexicons.workspaceId, workspaceIds))) {
+    lexicons.set(row.workspaceId, { format: LEXICON_FORMAT, version: LEXICON_VERSION, name: row.name, flavors: row.flavors });
+  }
+  const saved = new Map<string, { workspaceId: string; picks: FlavorPick[] }>();
+  for (const { brewLogId, key, label, workspaceId } of rows) {
+    const entry = saved.get(brewLogId) ?? { workspaceId, picks: [] };
+    entry.picks.push({ key, label });
+    saved.set(brewLogId, entry);
+  }
+  for (const [brewLogId, { workspaceId, picks }] of saved) {
+    const lexicon = lexicons.get(workspaceId) ?? DEFAULT_LEXICON;
+    byLog.set(brewLogId, resolvePicks(lexicon, picks).map((p) => flavorLabel(lexicon, p)));
+  }
   return byLog;
 }
 

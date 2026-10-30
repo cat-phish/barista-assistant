@@ -24,6 +24,7 @@ import { prepToolsRouter } from "./routes/prepTools.js";
 import { backupRouter, LARGE_BODY_PATH } from "./routes/backup.js";
 import { serverRouter } from "./routes/server.js";
 import { brewProblemsRouter } from "./routes/brewProblems.js";
+import { flavorLexiconRouter } from "./routes/flavorLexicon.js";
 import { ingredientsRouter } from "./routes/ingredients.js";
 import { drinkCategoriesRouter } from "./routes/drinkCategories.js";
 import { beanProcessesRouter } from "./routes/beanProcesses.js";
@@ -77,6 +78,7 @@ app.use("/api/workspaces/:workspaceId/roasts", roastsRouter); // docs/api/roasts
 app.use("/api/workspaces/:workspaceId/water-profiles", waterProfilesRouter);
 app.use("/api/workspaces/:workspaceId/prep-tools", prepToolsRouter);
 app.use("/api/workspaces/:workspaceId/brew-problems", brewProblemsRouter);
+app.use("/api/workspaces/:workspaceId/flavor-lexicon", flavorLexiconRouter);
 app.use("/api/workspaces/:workspaceId/ingredients", ingredientsRouter);
 app.use("/api/workspaces/:workspaceId/drink-categories", drinkCategoriesRouter);
 app.use("/api/workspaces/:workspaceId/bean-processes", beanProcessesRouter);

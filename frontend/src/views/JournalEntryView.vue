@@ -31,7 +31,7 @@ import { formatSize } from '../lib/servings';
 import { formatTemp } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
-import { FLAVOR_LABELS, flavorColor, flavorPlace, type FlavorKey } from '../lib/flavors';
+import { useFlavorWheel } from '../composables/useFlavorWheel';
 import { canModifyBrewLog } from '../lib/permissions';
 import { useAuthStore } from '../stores/auth';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -204,12 +204,15 @@ async function saveEdit(): Promise<void> {
 // (e.g. "Save, rate later", whose reminder links here) is rated in place.
 // The AI suggestion waits for it, then is offered.
 const unrated = computed(() => !!log.value && !log.value.steeping && log.value.rating === null && log.value.drinkRating === null);
-const quick = reactive({ rating: null as number | null, flavors: [] as FlavorKey[], notes: '', drinkRating: null as number | null, drinkNotes: '' });
+const quick = reactive({ rating: null as number | null, flavors: [] as string[], notes: '', drinkRating: null as number | null, drinkNotes: '' });
 // The wheel starts from any flavors already picked (Settings → Fields can hide it).
 const { show } = useFieldVisibility();
+// Chips in the workspace's wheel colours (grey for a flavor it no longer has).
+const { wheel } = useFlavorWheel();
+const flavorColor = (key: string) => wheel.value.node(key)?.color ?? 'var(--text-muted)';
 watch(
   () => log.value?.id,
-  () => (quick.flavors = [...(log.value?.flavors ?? [])]),
+  () => (quick.flavors = (log.value?.flavors ?? []).map((f) => f.key)),
 );
 const rating = ref(false);
 const rateError = ref('');
@@ -298,7 +301,7 @@ const markRows = computed(() => {
         <fieldset v-if="drinkTasting" class="tasting">
           <legend>The brew <span class="muted">(if you tasted it on its own)</span></legend>
           <RatingInput v-model="quick.rating" name="quick-rating" label="Brew rating" />
-          <FlavorWheel v-if="show('brew.flavors') || quick.flavors.length" v-model="quick.flavors" label="Brew flavors" />
+          <FlavorWheel v-if="show('brew.flavors') || quick.flavors.length" v-model="quick.flavors" :saved="log.flavors" label="Brew flavors" />
           <div class="field">
             <label for="quick-notes">Brew notes</label>
             <textarea id="quick-notes" v-model="quick.notes" rows="2" maxlength="5000" />
@@ -306,7 +309,7 @@ const markRows = computed(() => {
         </fieldset>
         <template v-else>
           <RatingInput v-model="quick.rating" name="quick-rating" label="Rating" />
-          <FlavorWheel v-if="show('brew.flavors') || quick.flavors.length" v-model="quick.flavors" />
+          <FlavorWheel v-if="show('brew.flavors') || quick.flavors.length" v-model="quick.flavors" :saved="log.flavors" />
           <div class="field">
             <label for="quick-notes">Tasting notes</label>
             <textarea id="quick-notes" v-model="quick.notes" rows="3" maxlength="5000" placeholder="e.g. Sweet, round, a bit flat at the end" />
@@ -356,8 +359,8 @@ const markRows = computed(() => {
             <dt>{{ drinkTasting ? 'Brew flavors' : 'Flavors' }}</dt>
             <dd>
               <ul class="flavor-chips">
-                <li v-for="key in log.flavors" :key="key" class="badge" :title="flavorPlace(key) || undefined">
-                  <span class="swatch" :style="{ background: flavorColor(key) }" aria-hidden="true" />{{ FLAVOR_LABELS[key] }}
+                <li v-for="f in log.flavors" :key="f.key" class="badge" :title="wheel.place(f.key) || undefined">
+                  <span class="swatch" :style="{ background: flavorColor(f.key) }" aria-hidden="true" />{{ f.label }}
                 </li>
               </ul>
             </dd>
@@ -385,7 +388,7 @@ const markRows = computed(() => {
       <!-- Edit -->
       <form v-else class="card stack" novalidate @submit.prevent="saveEdit">
         <h2>Edit brew</h2>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :prep-tools="prepTools" :problems="problems" :method-kind="log.recipe?.methodKind ?? null" :brewer-id="log.brewer?.id ?? null" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="log.recipe?.style?.brewsLike ?? null" :iced="log.actualIceGrams !== null" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :prep-tools="prepTools" :problems="problems" :method-kind="log.recipe?.methodKind ?? null" :brewer-id="log.brewer?.id ?? null" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="log.recipe?.style?.brewsLike ?? null" :iced="log.actualIceGrams !== null" :saved-flavors="log.flavors" />
         <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
         <div class="buttons">
           <button class="btn btn-secondary" type="button" :disabled="saving" @click="editing = false">Cancel</button>

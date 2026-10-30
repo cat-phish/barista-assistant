@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Settings → Lists: the workspace's editable lists (roadmap, editable lists): brewer
-// methods, bean processes, recipe styles (a list per method behaviour) and
-// brew problems.
+// methods, bean processes, recipe styles (a list per method behaviour),
+// brew problems and the flavor wheel.
 import { computed, onMounted, ref } from 'vue';
 import { beanProcessesApi } from '../api/beanProcesses';
 import { errorMessage } from '../api/client';
@@ -13,6 +13,7 @@ import { METHOD_KINDS, METHOD_ORDER, RECIPE_STYLES, STYLES_BY_KIND } from '../li
 import { methodLabel } from '../lib/prepTools';
 import EditableList, { type ListApi } from '../components/EditableList.vue';
 import ListDataBar from '../components/ListDataBar.vue';
+import FlavorLexiconCard from '../components/FlavorLexiconCard.vue';
 import SettingsLayout from '../components/SettingsLayout.vue';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -206,6 +207,7 @@ const styleApi = computed<ListApi>(() => {
         :reload="load"
       />
     </section>
+    <FlavorLexiconCard />
     <p v-if="!workspaces.canEdit" class="muted small">Only owners and baristas can change lists.</p>
   </SettingsLayout>
 </template>

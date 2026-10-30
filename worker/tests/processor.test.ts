@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { analysisRequests, beanFreezes, beans, brewLogMarks, brewLogs, brewers, ingredients, drinkIngredients, drinks, grinders, llmAnalyses, recipeGrindSettings, recipes, recipeSteps, users, waterProfiles, workspaces, prepTools, brewLogTools, brewProblems, brewLogProblems, brewLogFlavors, recipeStyles } from "@barista/shared/schema";
+import { analysisRequests, beanFreezes, beans, brewLogMarks, brewLogs, brewers, ingredients, drinkIngredients, drinks, grinders, llmAnalyses, recipeGrindSettings, recipes, recipeSteps, users, waterProfiles, workspaces, prepTools, brewLogTools, brewProblems, brewLogProblems, brewLogFlavors, flavorLexicons, recipeStyles } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { extractionYield, loadBrewContext, type BrewContext } from "../src/context.js";
@@ -405,14 +405,35 @@ describe("processBrewAnalysis", () => {
   it("tells the LLM the flavors picked on the wheel, in wheel order, with their place", async () => {
     llm.mockResolvedValue(ANALYSIS);
     await db.insert(brewLogFlavors).values([
-      { brewLogId: logIds.day8!, flavorKey: "off.stale.papery" },
-      { brewLogId: logIds.day8!, flavorKey: "fruity.citrus.lemon" },
-      { brewLogId: logIds.day8!, flavorKey: "sweet" },
+      { brewLogId: logIds.day8!, flavorKey: "off.stale.papery", label: "Papery" },
+      { brewLogId: logIds.day8!, flavorKey: "fruity.citrus.lemon", label: "Lemon" },
+      { brewLogId: logIds.day8!, flavorKey: "sweet", label: "Sweet" },
     ]);
     await processBrewAnalysis({ brewLogId: logIds.day8! });
     const context = llm.mock.calls[0]![0] as BrewContext;
     expect(context.brew.flavors).toEqual(["Lemon (Fruity › Citrus)", "Sweet", "Papery (Off flavors › Stale)"]);
     expect((await brewOf("day7")).flavors).toEqual([]);
+  });
+
+  it("reads flavors from the workspace's own wheel, saved labels for ones it doesn't have", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    await db.insert(flavorLexicons).values({
+      workspaceId,
+      name: "Ours",
+      flavors: [
+        { key: "bright", label: "Bright" },
+        { key: "bright.citrus", label: "Zesty" },
+        { key: "fruity", label: "Fruit" },
+      ],
+    });
+    await db.insert(brewLogFlavors).values([
+      { brewLogId: logIds.day8!, flavorKey: "fruity", label: "Fruity" },
+      { brewLogId: logIds.day8!, flavorKey: "off.stale.papery", label: "Papery" },
+      { brewLogId: logIds.day8!, flavorKey: "bright.citrus", label: "Citrus" },
+    ]);
+    await processBrewAnalysis({ brewLogId: logIds.day8! });
+    const context = llm.mock.calls[0]![0] as BrewContext;
+    expect(context.brew.flavors).toEqual(["Zesty (Bright)", "Fruit", "Papery"]);
   });
 
   it("passes on what the workspace keeps from the AI (Settings → AI)", async () => {

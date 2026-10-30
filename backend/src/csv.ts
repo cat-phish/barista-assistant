@@ -3,7 +3,6 @@
 // back (that's the JSON export).
 import { count, desc, eq } from "drizzle-orm";
 import { extractionYield, ratioWater } from "@barista/shared/brew";
-import { FLAVORS } from "@barista/shared/flavors";
 import { beanProcesses, beans, brewLogs } from "@barista/shared/schema";
 import { db } from "./db.js";
 import { loadBrewLogs } from "./routes/brewLogs.js";
@@ -86,7 +85,7 @@ export async function brewLogsCsv(workspaceId: string): Promise<string> {
     l.tools.map((t) => t.name).join("; ") || null,
     l.problems.map((p) => p.name).join("; ") || null,
     l.rating,
-    l.flavors.map((key) => FLAVORS[key]).join("; ") || null,
+    l.flavors.map((f) => f.label).join("; ") || null,
     l.tastingNotes,
     l.drinkRating,
     l.drinkTastingNotes,

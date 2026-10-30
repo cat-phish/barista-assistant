@@ -14,7 +14,7 @@ import {
 } from "drizzle-orm/mysql-core";
 import type { AiDetail } from "./aiDetails.js";
 import type { AiPrompt } from "./aiPrompt.js";
-import type { FlavorKey } from "./flavors.js";
+import type { LexiconFlavor } from "./flavors.js";
 
 // A JSON column read back as a value: MariaDB stores JSON as text, so the
 // driver returns a string that drizzle's json() would leave unparsed.
@@ -1375,20 +1375,37 @@ export const brewLogProblems = mysqlTable(
 
 // 8e. Brew Log Flavors (Picks on the Flavor Wheel)
 // The coffee's flavors, picked on the wheel (docs/api/brew-logs.md §6): keys
-// from FLAVORS (@barista/shared/flavors), any ring. Replaced as a whole when
-// a log is edited; free-text tastingNotes stay alongside.
+// from the workspace's lexicon (flavor_lexicons, else the built-in FLAVORS in
+// @barista/shared/flavors), any ring. label is the flavor's label when
+// picked, shown once the lexicon no longer has the key. Replaced as a whole
+// when a log is edited; free-text tastingNotes stay alongside.
 export const brewLogFlavors = mysqlTable(
   "brew_log_flavors",
   {
     brewLogId: varchar("brew_log_id", { length: 36 })
       .notNull()
       .references(() => brewLogs.id, { onDelete: "cascade" }),
-    flavorKey: varchar("flavor_key", { length: 64 }).$type<FlavorKey>().notNull(), // FLAVOR_KEYS
+    flavorKey: varchar("flavor_key", { length: 64 }).notNull(),
+    label: varchar("label", { length: 60 }).notNull(),
   },
   (table) => ({
     pk: primaryKey({ columns: [table.brewLogId, table.flavorKey] }),
   })
 );
+
+// 8f. Flavor Lexicons (A Workspace's Own Flavor Wheel)
+// Replaces the built-in wheel for one workspace (docs/api/flavor-lexicon.md
+// §2c); no row = the built-in one. flavors as checked by parseLexicon
+// (@barista/shared/flavors), in wheel order. Backups carry it in the file's
+// workspace block, not as a table.
+export const flavorLexicons = mysqlTable("flavor_lexicons", {
+  workspaceId: varchar("workspace_id", { length: 36 })
+    .primaryKey()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 100 }).notNull(),
+  flavors: jsonValue<LexiconFlavor[]>("flavors").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
 
 // 9. LLM Analyses (AI Parameter Suggestions)
 // What was sent to the AI for an analysis or a suggestion

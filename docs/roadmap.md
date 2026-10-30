@@ -1958,3 +1958,42 @@ migration 0084. `docs/api/brew-logs.md` §6, `docs/api/llm-contract.md` §9,
   off flavors (papery, rubber…) alongside brew problems: problems are what
   went wrong, flavors what's tasted; full three rings with zoom rather
   than stopping at the middle ring on small screens.
+
+## Your own flavor wheel (built)
+
+Follow-up to "Flavor wheel", branch `custom-lexicon`, migration 0085.
+`docs/api/flavor-lexicon.md` §2c, how to build one:
+`docs/custom-flavor-wheel.md`.
+
+- A workspace can replace the built-in wheel with its own **lexicon file**:
+  JSON, `format: "barista-flavor-lexicon"`, `version: 1`, a name and up to
+  500 flavors (`key` with dots for rings, up to three; `label`; optional
+  `#rrggbb` `color`), in wheel order, each after its parent.
+  `parseLexicon` (`@barista/shared/flavors`) checks it for the API and
+  restores, naming the first problem and where it is.
+- `flavor_lexicons` (one row per workspace, none = built-in); `GET` for
+  members, `PUT` / `DELETE` for owners. Settings → Lists → **Flavor wheel**:
+  download the current wheel as a starting point, import a file, go back
+  to the built-in one; both confirm with "I understand" (they change the
+  wheel for everyone). The card
+  has a short format summary.
+- Picks now store their **label at the time** (`brew_log_flavors.label`,
+  backfilled from the built-in wheel), so changing the wheel never loses a
+  tasting: a pick the wheel no longer has shows (and goes to the AI) by its
+  saved label, after the others, uncoloured; new brews can't pick it,
+  editing a brew can keep it. The API now returns picks as
+  `{ key, label }`.
+- The frontend builds the wheel from whichever lexicon the workspace has
+  (`buildWheel`, cached per workspace by `useFlavorWheel`), working out
+  shades and dark-or-white text for any colour.
+- Backups carry the wheel in the `workspace` block (`flavorLexicon`); list
+  export/import doesn't. No new `BACKUP_VERSION`: older files have no
+  wheel, and their picks without labels take the built-in ones.
+- `scripts/flavor-lexicon-from-csv.mjs` builds a file from a CSV
+  (`ring1,ring2,ring3,color`, one flavor per row) and checks it.
+- Decided: the repo ships no lexicon but its own. Published wheels (the
+  SCA/WCR one is, as far as we know, non-commercial and no-derivatives)
+  don't fit AGPL, so users build their own
+  files from whatever source they choose, outside the repo (`lexicons/`
+  and `*.flavor-wheel.json` are git-ignored). One wheel per workspace,
+  replaced whole (no merge); flavor rules stay the same under any wheel.

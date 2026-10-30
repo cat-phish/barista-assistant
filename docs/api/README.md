@@ -14,6 +14,7 @@ means drinks, wherever you see it (code comments use
 | §1c | [auth.md](auth.md) | Your AI prompt (per person) and the one-off note |
 | §2 | [workspaces.md](workspaces.md) | Workspaces |
 | §2b | [backup.md](backup.md) | Backup and Restore (a workspace as one file) |
+| §2c | [flavor-lexicon.md](flavor-lexicon.md) | Flavor Lexicon (a workspace's own flavor wheel, as a JSON file) |
 | §3 | [brewers.md](brewers.md) | Brewers |
 | §3b | [grinders.md](grinders.md) | Grinders |
 | §3c | [water-profiles.md](water-profiles.md) | Water Profiles |
