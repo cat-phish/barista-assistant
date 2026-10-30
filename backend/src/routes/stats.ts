@@ -81,6 +81,7 @@ export type StatsBean = Pick<
   | "roastDate"
   | "varieties"
   | "species"
+  | "decaf"
   | "priceAmount"
   | "priceCurrency"
   | "bagWeightGrams"
@@ -234,6 +235,7 @@ async function loadBeans(workspaceId: string): Promise<StatsBean[]> {
       roastDate: beans.roastDate,
       varieties: beans.varieties,
       species: beans.species,
+      decaf: beans.decaf,
       priceAmount: beans.priceAmount,
       priceCurrency: beans.priceCurrency,
       bagWeightGrams: beans.bagWeightGrams,

@@ -106,6 +106,7 @@ describe("stats (docs/api/stats.md §11)", () => {
       expect.objectContaining({
         id: bean,
         country: "Colombia, Ethiopia",
+        decaf: false,
         priceAmount: 22.5,
         priceCurrency: "USD",
         bagWeightGrams: 340,

@@ -2042,4 +2042,22 @@ README "Install it on your phone".
 - Decided: one way to run it in Docker, the build; no dev-server container
   or override (live reload was already off in Docker, and `npm run dev` on
   the host still has it). Internal CA over a domain or Tailscale: no
-  account, works offline on the LAN. Web Push is backlog item 29; testing on phones, 28.
+  account, works offline on the LAN. Web Push is backlog item 30; testing on phones, 29.
+
+## Caffeine estimate (built)
+
+A brew's journal entry shows its estimated caffeine, and Insights → Overview
+has three new tiles: Caffeine Total, Caffeine/Brew and Caffeine/Day.
+
+- **Worked out, not stored** (`lib/caffeine.ts`, `docs/api/stats.md` §11, "How
+  the client counts"), like extraction yield: no migration, and old brews have
+  a figure straight away. Dose × the species' caffeine × the share extracted,
+  with decaf taking off about 97%. Brew logs and stats beans now send what it
+  needs (`decaf`, `species`).
+- **Espresso is the brew without water**, not its method or style, so it still
+  counts when the recipe was deleted or has no style.
+- **The tiles follow the Insights filters**, as the others do, and Edit layout
+  hides and orders them. Caffeine/Day counts quiet days.
+- Decided: a brew counts its whole dose, since the log doesn't say how much of
+  a batch was drunk. The AI doesn't see it, and there's no caffeine % per bean
+  or Explore field for now.
