@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { StatsBean, StatsBrew } from '../api/types';
-import { COLOR_BY, INPUTS, linearFit, RESULTS, strength, visible, type ExploreContext } from './explore';
+import { builtIn, COLOR_BY, fieldLabel, GROUPS, linearFit, NUMBERS, pickAxes, strength, visible, type ExploreContext } from './explore';
 
 const brew = (fields: Partial<StatsBrew> = {}): StatsBrew => ({
   id: 'b', timestamp: '2026-10-20T15:00:00.000Z', utcOffsetMinutes: null, userId: 'u', beanId: 'bean', recipeId: null, brewerId: null,
@@ -17,8 +17,8 @@ const ctx: ExploreContext = {
   volumeIn: (ml) => ml,
   volumeLabel: 'ml',
 };
-const input = (key: string) => INPUTS.find((f) => f.key === key)!;
-const result = (key: string) => RESULTS.find((f) => f.key === key)!;
+const input = (key: string) => [...NUMBERS, ...GROUPS].find((f) => f.key === key)!;
+const result = (key: string) => NUMBERS.find((f) => f.key === key)!;
 
 describe('explore fields', () => {
   it('reads the brew and its bean', () => {
@@ -38,12 +38,39 @@ describe('explore fields', () => {
     expect(result('time').value(brew({ timeSec: 0 }), ctx)).toBeNull();
   });
   it('leaves out fields the workspace hides, and multi-valued ones from colour by', () => {
-    const keys = visible(RESULTS, new Set(['brew.tds'])).map((f) => f.key);
+    const keys = visible(NUMBERS, new Set(['brew.tds'])).map((f) => f.key);
     expect(keys).not.toContain('ey');
     expect(keys).not.toContain('tds');
-    expect(visible(INPUTS, new Set(['brew.grinder'])).map((f) => f.key)).not.toContain('grinder');
+    expect(visible(GROUPS, new Set(['brew.grinder'])).map((f) => f.key)).not.toContain('grinder');
     expect(COLOR_BY.map((f) => f.key)).not.toContain('tool');
     expect(COLOR_BY.map((f) => f.key)).toContain('grinder');
+  });
+});
+
+describe('picking the two sides', () => {
+  it('lists each field once', () => {
+    const keys = [...NUMBERS, ...GROUPS].map((f) => f.key);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+  it('takes the picks, numbers on either side', () => {
+    const { x, y } = pickAxes('rating', 'tds', NUMBERS, GROUPS);
+    expect([x.key, y.key]).toEqual(['rating', 'tds']);
+    expect(pickAxes('process', 'time', NUMBERS, GROUPS).x.key).toBe('process');
+  });
+  it('never puts a field against itself, and falls back on unknown keys', () => {
+    expect(pickAxes('rating', 'rating', NUMBERS, GROUPS).y.key).not.toBe('rating');
+    expect(pickAxes('time', 'time', NUMBERS, GROUPS).y.key).toBe('rating');
+    const d = pickAxes('', 'process', NUMBERS, GROUPS);
+    expect([d.x.key, d.y.key]).toEqual(['roastAge', 'rating']);
+  });
+  it('names volume in the chosen unit', () => {
+    expect(fieldLabel(result('volume'), { ...ctx, volumeLabel: 'fl oz' })).toBe('Volume drunk (fl oz)');
+    expect(fieldLabel(result('rating'), ctx)).toBe('Rating');
+  });
+  it('knows when one is worked out from the other', () => {
+    expect(builtIn(result('ey'), result('tds'))).toBe(true);
+    expect(builtIn(result('dose'), result('ratio'))).toBe(true);
+    expect(builtIn(result('rating'), result('tds'))).toBe(false);
   });
 });
 

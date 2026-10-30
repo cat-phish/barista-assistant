@@ -1,97 +1,57 @@
 <script setup lang="ts">
-// Insights → Explore: pick a brew detail and a result. A number gives a
-// scatter with a trend line; a category gives the average result for each.
-// The picks live in the URL (?x=&y=&color=&grinder=), so a view can be shared.
-import { computed } from 'vue';
+// Insights → Explore: pick two numbers for a scatter with a trend line, or a
+// group (Compare only) for the average of a number in each. Never one field
+// against itself.
+// The picks live in the URL (?x=&y=&color=&grinder=), so a view can be shared,
+// and "Add to a tab…" keeps them on a tab (docs/api/stats.md §11b).
+import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import type { StatsBrew } from '../../api/types';
-import ChartCard from '../../components/charts/ChartCard.vue';
-import StatsChart, { type PointSeries } from '../../components/charts/StatsChart.vue';
-import { useStats } from '../../composables/useStats';
-import { COLOR_BY, INPUTS, linearFit, RESULTS, strength, visible, type CategoryField, type ExploreContext } from '../../lib/explore';
-import { countBy, meanBy, OTHER } from '../../lib/stats';
-import { VOLUME_LABELS } from '../../lib/units';
-import { barsHeight } from './charts';
+import type { InsightTab } from '../../api/types';
+import ConfirmDialog from '../../components/ConfirmDialog.vue';
+import ExploreChart from '../../components/charts/ExploreChart.vue';
+import { useExplore, type ExplorePicks } from '../../composables/useExplore';
+import { INSIGHT_TAB_INFO, newUuid, visibleTabs } from '../../lib/insightCharts';
 
-const stats = useStats();
 const route = useRoute();
 const router = useRouter();
-
-const ctx = computed<ExploreContext>(() => ({
-  bean: stats.bean,
-  name: stats.name,
-  volume: stats.volume,
-  volumeIn: stats.volumeIn,
-  volumeLabel: VOLUME_LABELS[stats.filters.value.unit],
-}));
-
-const inputs = computed(() => visible(INPUTS, stats.hidden.value));
-const results = computed(() => visible(RESULTS, stats.hidden.value));
-const colorFields = computed(() => visible(COLOR_BY, stats.hidden.value));
 
 const q = (key: string) => (typeof route.query[key] === 'string' ? (route.query[key] as string) : '');
 function pick(key: string, value: string): void {
   const query = { ...route.query, [key]: value || undefined };
   void router.replace({ query });
 }
+const asked = computed<ExplorePicks>(() => ({ x: q('x'), y: q('y'), color: q('color') || undefined, grinder: q('grinder') || undefined }));
+const { stats, numbers, groups, colorFields, x, y, color, label, grinders, onGrind, grinder } = useExplore(() => asked.value);
+const resultNumbers = computed(() => numbers.value.filter((f) => f.group === 'result'));
+const brewNumbers = computed(() => numbers.value.filter((f) => f.group === 'brew'));
+// What's drawn, with the fallbacks filled in: what an added chart keeps.
+const shown = computed<ExplorePicks>(() => ({ x: x.value.key, y: y.value.key, color: color.value?.key, grinder: grinder.value ?? undefined }));
 
-const x = computed(() => inputs.value.find((f) => f.key === q('x')) ?? inputs.value.find((f) => f.key === 'roastAge')!);
-const y = computed(() => results.value.find((f) => f.key === q('y')) ?? results.value[0]!);
-const color = computed<CategoryField | null>(() => (x.value.kind === 'number' ? (colorFields.value.find((f) => f.key === q('color')) ?? null) : null));
-const yLabel = computed(() => (y.value.key === 'volume' ? `Volume drunk (${ctx.value.volumeLabel})` : y.value.label));
+// Both numbers: swap which goes across.
+const swap = () => void router.replace({ query: { ...route.query, x: y.value.key, y: x.value.key } });
 
-// Grind settings only compare on one grinder: the picked one, else the most used.
-const grinders = computed(() => countBy(stats.brews.value.filter((b) => b.grindSetting !== null), (b) => b.grinderId));
-const grinder = computed(() => (x.value.key !== 'grind' ? null : (grinders.value.find((g) => g.key === q('grinder'))?.key ?? grinders.value[0]?.key ?? null)));
-const brews = computed<StatsBrew[]>(() => (grinder.value ? stats.brews.value.filter((b) => b.grinderId === grinder.value) : stats.brews.value));
-
-// ── A number: one point per brew ──
-const points = computed(() =>
-  brews.value.flatMap((b) => {
-    if (x.value.kind !== 'number') return [];
-    const xv = x.value.value(b, ctx.value);
-    const yv = y.value.value(b, ctx.value);
-    return xv === null || yv === null ? [] : [{ x: xv, y: yv, brew: b }];
-  }),
-);
-// Colour by a category: its three biggest groups (more blur together on a scatter), the rest grey.
-const pointSeries = computed<PointSeries[]>(() => {
-  const all = points.value.map(({ x: px, y: py }) => ({ x: px, y: py }));
-  const by = color.value;
-  if (!by) return [{ label: 'Brews', data: all }];
-  const keyOf = (b: StatsBrew) => {
-    const k = by.value(b, ctx.value);
-    return typeof k === 'string' ? k : null;
-  };
-  const top = countBy(points.value, (p) => keyOf(p.brew)).slice(0, 3).map((c) => c.key);
-  const series = top.map((key) => ({ label: by.name(key, ctx.value), data: points.value.filter((p) => keyOf(p.brew) === key).map(({ x: px, y: py }) => ({ x: px, y: py })) }));
-  const rest = points.value.filter((p) => !top.includes(keyOf(p.brew) ?? ''));
-  if (rest.length) series.push({ label: OTHER, data: rest.map(({ x: px, y: py }) => ({ x: px, y: py })) });
-  return series;
-});
-const fit = computed(() => linearFit(points.value));
-const trend = computed(() => {
-  const f = fit.value;
-  if (!f) return null;
-  const xs = points.value.map((p) => p.x);
-  const x1 = Math.min(...xs);
-  const x2 = Math.max(...xs);
-  return { x1, y1: f.intercept + f.slope * x1, x2, y2: f.intercept + f.slope * x2 };
-});
-const fitNote = computed(() => {
-  const f = fit.value;
-  if (!f) return points.value.length ? 'Needs at least 3 brews with different values for a trend' : undefined;
-  return `${f.n} brews: ${strength(f.r)} (r = ${f.r.toFixed(2)}). A link isn't proof of cause; other things change between brews too.`;
-});
-
-// ── A category: the average result in each ──
-const means = computed(() => {
-  const field = x.value;
-  if (field.kind !== 'category') return [];
-  return meanBy(brews.value, (b) => field.value(b, ctx.value), (b) => y.value.value(b, ctx.value)).slice(0, 15).map((m) => ({ ...m, name: field.name(m.key, ctx.value) }));
-});
-const fmtY = (n: number) => (Math.abs(n) >= 100 ? String(Math.round(n)) : n.toFixed(y.value.key === 'tds' ? 2 : 1));
-const ratingScale = computed(() => (y.value.key === 'rating' || y.value.key === 'drinkRating' ? { min: 0, max: 5 } : { min: undefined, max: undefined }));
+// Add to a tab: pick one, then it's kept there until removed on that tab.
+const adding = ref(false);
+const tabs = computed(() => visibleTabs(stats.hidden.value));
+const target = ref<InsightTab>('overview');
+const added = ref<InsightTab | null>(null);
+const busy = ref(false);
+const tabLabel = (t: InsightTab) => INSIGHT_TAB_INFO.find((i) => i.tab === t)?.label ?? t;
+const tabRoute = (t: InsightTab) => INSIGHT_TAB_INFO.find((i) => i.tab === t)!.route;
+function openAdd(): void {
+  added.value = null;
+  stats.pinError.value = '';
+  adding.value = true;
+}
+async function add(): Promise<void> {
+  busy.value = true;
+  const ok = await stats.addChart({ id: newUuid(), kind: 'explore', tab: target.value, ...shown.value });
+  busy.value = false;
+  if (!ok) return;
+  added.value = target.value;
+  adding.value = false;
+}
+const otherQuery = computed(() => Object.fromEntries(Object.entries(route.query).filter(([k]) => !['x', 'y', 'color', 'grinder'].includes(k))));
 
 const value = (e: Event) => (e.target as HTMLSelectElement).value;
 </script>
@@ -102,21 +62,32 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value;
       <div class="field">
         <label for="explore-x">Compare</label>
         <select id="explore-x" :value="x.key" @change="pick('x', value($event))">
-          <optgroup label="Numbers">
-            <option v-for="f in inputs.filter((f) => f.kind === 'number')" :key="f.key" :value="f.key">{{ f.label }}</option>
+          <optgroup label="Results">
+            <option v-for="f in resultNumbers" :key="f.key" :value="f.key" :disabled="f.key === y.key">{{ label(f) }}</option>
+          </optgroup>
+          <optgroup label="Brew & bean">
+            <option v-for="f in brewNumbers" :key="f.key" :value="f.key" :disabled="f.key === y.key">{{ label(f) }}</option>
           </optgroup>
           <optgroup label="Groups">
-            <option v-for="f in inputs.filter((f) => f.kind === 'category')" :key="f.key" :value="f.key">{{ f.label }}</option>
+            <option v-for="f in groups" :key="f.key" :value="f.key">{{ f.label }}</option>
           </optgroup>
         </select>
       </div>
       <div class="field">
         <label for="explore-y">With</label>
-        <select id="explore-y" :value="y.key" @change="pick('y', value($event))">
-          <option v-for="f in results" :key="f.key" :value="f.key">{{ f.key === 'volume' ? yLabel : f.label }}</option>
-        </select>
+        <div class="with">
+          <select id="explore-y" :value="y.key" @change="pick('y', value($event))">
+            <optgroup label="Results">
+              <option v-for="f in resultNumbers" :key="f.key" :value="f.key" :disabled="f.key === x.key">{{ label(f) }}</option>
+            </optgroup>
+            <optgroup label="Brew & bean">
+              <option v-for="f in brewNumbers" :key="f.key" :value="f.key" :disabled="f.key === x.key">{{ label(f) }}</option>
+            </optgroup>
+          </select>
+          <button v-if="x.kind === 'number'" type="button" class="btn-link swap" aria-label="Swap the two" title="Swap the two" @click="swap">⇅</button>
+        </div>
       </div>
-      <div v-if="x.key === 'grind' && grinders.length" class="field">
+      <div v-if="onGrind && grinders.length" class="field">
         <label for="explore-grinder">Grinder</label>
         <select id="explore-grinder" :value="grinder ?? ''" @change="pick('grinder', value($event))">
           <option v-for="g in grinders" :key="g.key" :value="g.key">{{ stats.name(g.key) ?? 'Removed grinder' }} ({{ g.n }})</option>
@@ -131,48 +102,29 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value;
       </div>
     </div>
 
-    <ChartCard
-      v-if="x.kind === 'number'"
-      :title="`${yLabel} against ${x.label.toLowerCase()}`"
-      :note="fitNote"
-      :empty="points.length === 0"
-      empty-text="No brews have both of these yet."
-      :table="{ head: [x.label, yLabel], rows: points.map((p) => [p.x, fmtY(p.y)]) }"
-    >
-      <StatsChart
-        kind="scatter"
-        :label="`${yLabel} against ${x.label}`"
-        :points="pointSeries"
-        :trend="trend"
-        :x-title="x.label"
-        :y-title="yLabel"
-        :format="fmtY"
-        :y-min="ratingScale.min"
-        :y-max="ratingScale.max"
-        :height="340"
-      />
-    </ChartCard>
+    <ExploreChart :picks="shown">
+      <template #actions>
+        <button type="button" class="btn-link" @click="openAdd">Add to a tab…</button>
+      </template>
+    </ExploreChart>
+    <p v-if="added" class="muted added" role="status">
+      Added to <RouterLink :to="{ name: tabRoute(added), query: otherQuery }">{{ tabLabel(added) }}</RouterLink>. Remove it there when you're done with it.
+    </p>
 
-    <ChartCard
-      v-else
-      :title="`${yLabel} by ${x.label.toLowerCase()}`"
-      note="The average for each; the number of brews in brackets. Small groups swing easily."
-      :empty="means.length === 0"
-      empty-text="No brews have both of these yet."
-      :table="{ head: [x.label, `Average ${yLabel.toLowerCase()}`, 'Brews'], rows: means.map((m) => [m.name, fmtY(m.mean), m.n]) }"
-    >
-      <StatsChart
-        kind="bar"
-        horizontal
-        :label="`Average ${yLabel} by ${x.label}`"
-        :labels="means.map((m) => `${m.name} (${m.n})`)"
-        :series="[{ label: `Average ${yLabel.toLowerCase()}`, data: means.map((m) => m.mean) }]"
-        :format="fmtY"
-        :y-min="ratingScale.min"
-        :y-max="ratingScale.max"
-        :height="barsHeight(means.length)"
-      />
-    </ChartCard>
+    <ConfirmDialog :open="adding" title="Add this chart to a tab" @cancel="adding = false">
+      <fieldset class="tabs">
+        <legend class="muted">It stays there, with the page's filters, until you remove it.</legend>
+        <label v-for="t in tabs" :key="t.tab" class="checkbox">
+          <input v-model="target" type="radio" name="explore-tab" :value="t.tab" />
+          {{ t.label }}
+        </label>
+      </fieldset>
+      <p v-if="stats.pinError.value" class="form-error" role="alert">{{ stats.pinError.value }}</p>
+      <template #actions>
+        <button type="button" class="btn btn-primary" :disabled="busy" @click="add">{{ busy ? 'Adding…' : `Add to ${tabLabel(target)}` }}</button>
+        <button type="button" class="btn btn-secondary" @click="adding = false">Cancel</button>
+      </template>
+    </ConfirmDialog>
   </div>
 </template>
 
@@ -189,5 +141,31 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value;
 }
 .field select {
   width: 100%;
+}
+.with {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+}
+.added {
+  margin: 0;
+}
+.tabs {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.tabs legend {
+  margin-bottom: var(--space-2);
+  padding: 0;
+}
+.swap {
+  flex: none;
+  font-size: 1.1rem;
+  min-width: 44px;
+  min-height: 44px;
 }
 </style>

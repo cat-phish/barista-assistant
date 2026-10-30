@@ -3,6 +3,7 @@
 // and how often a brew finished inside its window.
 import { computed } from 'vue';
 import ChartCard from '../../components/charts/ChartCard.vue';
+import PinnedCharts from '../../components/charts/PinnedCharts.vue';
 import StatsChart from '../../components/charts/StatsChart.vue';
 import { useStats } from '../../composables/useStats';
 import { countBy, finishFit, meanBy, type FinishFit } from '../../lib/stats';
@@ -49,21 +50,22 @@ function total(r: Record<FinishFit, number>): number {
 
 <template>
   <div class="charts">
-    <ChartCard title="Brews by recipe" note="The 10 most brewed" :empty="use.labels.length === 0" empty-text="No brews with a recipe yet." :table="use.table">
+    <ChartCard chart-id="recipes.recipes" title="Brews by recipe" note="The 10 most brewed" :empty="use.labels.length === 0" empty-text="No brews with a recipe yet." :table="use.table">
       <StatsChart kind="bar" horizontal label="Brews by recipe" :labels="use.labels" :series="use.series" :height="barsHeight(use.labels.length)" />
     </ChartCard>
 
-    <ChartCard title="Brews by style" :empty="style.labels.length === 0" empty-text="No brews with a styled recipe yet." :table="style.table">
+    <ChartCard chart-id="recipes.styles" title="Brews by style" :empty="style.labels.length === 0" empty-text="No brews with a styled recipe yet." :table="style.table">
       <StatsChart kind="doughnut" label="Brews by recipe style" :labels="style.labels" :series="style.series" />
     </ChartCard>
 
-    <ChartCard title="Rating by recipe" note="Average rating; rated brews in brackets" :empty="rating.labels.length === 0" empty-text="No rated brews with a recipe yet." :table="rating.table">
+    <ChartCard chart-id="recipes.rating" title="Rating by recipe" note="Average rating; rated brews in brackets" :empty="rating.labels.length === 0" empty-text="No rated brews with a recipe yet." :table="rating.table">
       <StatsChart kind="bar" horizontal label="Average rating by recipe" :labels="rating.labels" :series="rating.series" :y-min="0" :y-max="5" :format="(n) => n.toFixed(1)" :height="barsHeight(rating.labels.length)" />
     </ChartCard>
 
-    <ChartCard title="Finish time against the window" note="Brews of recipes with a target finish" :empty="finish.labels.length === 0" empty-text="No brews of recipes with a finish window yet." :table="finish.table">
+    <ChartCard chart-id="recipes.finish" title="Finish time against the window" note="Brews of recipes with a target finish" :empty="finish.labels.length === 0" empty-text="No brews of recipes with a finish window yet." :table="finish.table">
       <StatsChart kind="bar" horizontal stacked label="Finish time against the window, by recipe" :labels="finish.labels" :series="finish.series" :height="barsHeight(finish.labels.length) + 30" />
     </ChartCard>
+    <PinnedCharts tab="recipes" />
   </div>
 </template>
 

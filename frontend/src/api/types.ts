@@ -845,6 +845,34 @@ export interface StatsNamed {
   name: string;
 }
 
+// A person's own added Insights charts (docs/api/stats.md §11b): an Explore
+// view kept on a tab, or a built-in chart on the Overview. The same tabs as
+// @barista/shared/schema (lib/insightCharts.test.ts checks).
+export const INSIGHT_TABS = ['overview', 'brews', 'beans', 'methods', 'recipes', 'tools', 'grinders'] as const;
+export type InsightTab = (typeof INSIGHT_TABS)[number];
+export interface ExplorePin {
+  id: string;
+  kind: 'explore';
+  tab: InsightTab;
+  x: string;
+  y: string;
+  color?: string;
+  grinder?: string;
+}
+export interface ChartPin {
+  id: string;
+  kind: 'chart';
+  tab: 'overview';
+  chart: string; // "brews.rating": the tab, then the chart (ChartCard's chart-id)
+}
+export type InsightChart = ExplorePin | ChartPin;
+export const MAX_INSIGHT_CHARTS = 50;
+// Each tab's own order and hidden charts (§11b): a built-in chart's id
+// ("brews.rating"), an Overview tile's ("tile.brews") or an added one's
+// ("pin:<id>"); only built-in ones hide. `tilesBelow`: Overview tiles under
+// its charts.
+export type InsightLayout = Partial<Record<InsightTab, { order?: string[]; hidden?: string[]; tilesBelow?: boolean }>>;
+
 export interface StatsData {
   brews: StatsBrew[];
   beans: StatsBean[];

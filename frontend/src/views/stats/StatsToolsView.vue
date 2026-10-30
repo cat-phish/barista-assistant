@@ -4,6 +4,8 @@
 // shares don't add up to 100% and there's no "Other".
 import { computed } from 'vue';
 import ChartCard from '../../components/charts/ChartCard.vue';
+import PinnedCharts from '../../components/charts/PinnedCharts.vue';
+import ChartPeriod from '../../components/charts/ChartPeriod.vue';
 import StatsChart from '../../components/charts/StatsChart.vue';
 import { useStats } from '../../composables/useStats';
 import { countBy, ratingWithWithout, seriesByKey } from '../../lib/stats';
@@ -21,10 +23,11 @@ const share = computed(() => ({
   table: { head: ['Tool', 'Brews', 'Share'], rows: counts.value.map((c) => [nameOf(c.key), c.n, `${pct(c.n)}%`]) },
 }));
 
-const labels = computed(() => stats.axis.value.buckets.map(stats.bucketLabel));
+const overView = stats.chart('tools');
+const labels = computed(() => overView.labels.value);
 // The five most used, as lines: one brew can be under several.
 const overTime = computed(() =>
-  seriesByKey(brews.value, stats.axis.value.buckets, stats.axis.value.granularity, (b) => b.toolIds, { keep: 5, other: false }).map((s) => ({ label: nameOf(s.key), data: s.data })),
+  seriesByKey(overView.brews.value, overView.axis.value.buckets, overView.axis.value.granularity, (b) => b.toolIds, { keep: 5, other: false }).map((s) => ({ label: nameOf(s.key), data: s.data })),
 );
 
 // Tools with rated brews both with and without them.
@@ -43,15 +46,16 @@ const compare = computed(() => {
 
 <template>
   <div class="charts">
-    <ChartCard title="How often each tool is used" note="Share of brews that ticked it" :empty="counts.length === 0" empty-text="No prep tools ticked in this period." :table="share.table">
+    <ChartCard chart-id="tools.share" title="How often each tool is used" note="Share of brews that ticked it" :empty="counts.length === 0" empty-text="No prep tools ticked in this period." :table="share.table">
       <StatsChart kind="bar" horizontal label="Share of brews using each prep tool" :labels="share.labels" :series="share.series" :y-min="0" :y-max="100" :format="(n) => `${n}%`" :height="barsHeight(share.labels.length)" />
     </ChartCard>
 
-    <ChartCard title="Tools over time" note="Brews using each of the five most used tools" :empty="overTime.length === 0" empty-text="No prep tools ticked in this period." :table="seriesTable('', labels, overTime)">
+    <ChartCard chart-id="tools.overTime" title="Tools over time" note="Brews using each of the five most used tools" :empty="overTime.length === 0" empty-text="No prep tools ticked in this period." :table="seriesTable('', labels, overTime)">
+      <template #period><ChartPeriod :view="overView" label="Tools over time" /></template>
       <StatsChart kind="line" label="Brews using each prep tool over time" :labels="labels" :series="overTime" :height="280" />
     </ChartCard>
 
-    <ChartCard
+    <ChartCard chart-id="tools.compare"
       title="Rating with and without"
       note="Average rating of rated brews that did and didn't use each tool"
       :empty="compare.labels.length === 0"
@@ -60,6 +64,7 @@ const compare = computed(() => {
     >
       <StatsChart kind="bar" horizontal label="Average rating with and without each prep tool" :labels="compare.labels" :series="compare.series" :y-min="0" :y-max="5" :format="(n) => n.toFixed(1)" :height="barsHeight(compare.labels.length * 2)" />
     </ChartCard>
+    <PinnedCharts tab="tools" />
   </div>
 </template>
 

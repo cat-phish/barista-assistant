@@ -1722,7 +1722,24 @@ Backlog item "Statistics and graphs", branches `stats-foundation`,
 - **Filters**, kept in the URL with defaults left out: period (30 days,
   90 days, a year, all time, or custom dates), bean, recipe, brewer,
   group by (auto, day, week, month), volume unit (starts from the
-  person's), and **Only mine**. The whole workspace is the default.
+  person's), and **Only mine**, ticked by default (`mine=0` in the URL
+  shows the whole workspace).
+- **Chart periods:** every over-time chart (Brews: running total, per
+  day/week/month, volume, coffee ground, rating; Beans: spend; Methods,
+  Grinders and Prep tools over time) has its own period picker, "Page
+  period" until changed, kept in the URL as `p.<chart>=30d` (or
+  `from~to` for custom dates). The tab links leave these out, so a
+  chart's period resets on switching tabs. The fetch widens to cover every chart's period,
+  and the rest of the page is cut back to its own on the client.
+- **Extraction against rating** (Brews tab, hidden with TDS): rated
+  brews with an extraction yield, filter and espresso/moka as separate
+  series, the 18–22% band shaded, and the average rating in and outside
+  the band in the note. No trend line: the expected shape is a peak, not
+  a slope.
+- **Bars or line:** the over-time bar charts (brews per day/week/month,
+  volume, coffee ground, spend, methods and grinders over time) switch
+  to a line; each chart remembers its choice in this browser
+  (`localStorage`, `insights.chartKind.<chart>`).
 - **Data:** one endpoint sends a compact row per brew, every bean with
   its freezes and photo count, and id → name lookups (archived included,
   recipes with their finish window). The date range is the brew's
@@ -1753,15 +1770,41 @@ Backlog item "Statistics and graphs", branches `stats-foundation`,
   reorder or cycle them. Three are under 3:1 contrast on white, so every
   chart card has a **Table** view (`ChartCard.vue`). Pies keep the top 7
   plus a grey "Other"; scatters colour at most three groups.
-- **Explore:** a brew detail (numbers: dose, water, ratio, temperature,
-  grind setting on one grinder, roast age, altitude, brew time; groups:
-  process, roast level, country, origin, species, roaster, method,
-  brewer, recipe, style, grinder, prep tool, problem, weekday) against a
-  result (rating, drink rating, EY, TDS, brew time, volume). A number is a
-  scatter with a least-squares trend line, r and a plain-words strength
-  ("a moderate positive link"), plus an optional colour by; a group is a
-  bar of averages with n. The picks are in the URL (`x`, `y`, `color`,
+- **Explore:** any number against any other (results: rating, drink
+  rating, EY, TDS, volume; brew & bean: dose, water, ratio, temperature,
+  grind setting on one grinder, brew time, roast age, altitude), never a
+  field against itself, with a ⇅ swap. Groups (process, roast level,
+  country, origin, species, roaster, method, brewer, recipe, style,
+  grinder, prep tool, problem, weekday) go on the Compare side only. Two
+  numbers are a scatter with a least-squares trend line, r and a
+  plain-words strength ("a moderate positive link"), plus an optional
+  colour by; the note says when one is worked out from the other (EY from
+  TDS, dose and water; ratio from dose and water). A group is a bar of
+  averages with n. The picks are in the URL (`x`, `y`, `color`,
   `grinder`), and the filters keep them.
+- **Added charts** (`docs/api/stats.md` §11b): Explore's "Add to a tab…"
+  keeps the current picks on a tab of the person's choosing (the Overview
+  included), at the end of its charts with a Remove button. Every built-in
+  chart has a pin that adds it to the Overview, or takes it off, from its tab
+  or from the Overview. The Overview draws pinned charts below the tiles by
+  drawing their own tab with only those charts showing (`ONLY_CHARTS`), so
+  periods and bar/line work as on the tab. They show in tab order, then the
+  Explore charts in the order they were added. The list is each person's
+  own, per workspace, on their membership, and isn't in backups.
+- **Layout:** every tab but Explore has **Edit layout**: its charts by title
+  to drag (touch too, as prep items) or move with the arrows, a Show box per
+  built-in chart, Remove for added and Overview-pinned ones, Reset tab and
+  Done. Each tab's layout is its own (hiding a chart on Brews leaves its copy
+  on the Overview). Saved per person on the membership (§11b), a pause after
+  the last change. The charts take their place with CSS `order` in the tab's
+  grid, so the templates don't change; a screen reader still reads them in
+  template order (the editor's list is in the real order). With charts
+  hidden, the tab ends "N charts hidden · Edit layout".
+- **Overview layout:** the editor has two lists, Tiles and Charts. Tiles
+  drag and hide among tiles (`tile.<key>`), staying in their compact grid,
+  and "Tiles below the charts" moves the whole block. Charts drag among
+  charts and are removed rather than hidden. Reset Overview puts it all
+  back.
 - **Nav:** seven links no longer fit a 320px phone, so the row scrolls on
   the smallest screens.
 
