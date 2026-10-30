@@ -66,7 +66,7 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   `bean_freezes`, `bean_photos`, `roasts`, `recipes`, `recipe_steps`, `recipe_grind_settings`, `recipe_prep_tools`,
   `drinks`, `drink_ingredients`, `menu_sections`, `menu_items`,
   `brew_logs`, `brew_log_marks`, `brew_log_tools`, `brew_log_problems`,
-  `llm_analyses`, `parameter_suggestions` (`BACKUP_TABLES`). A table left out of a file counts as
+  `brew_log_flavors`, `llm_analyses`, `parameter_suggestions` (`BACKUP_TABLES`). A table left out of a file counts as
   empty.
 - **Not in a backup:** people, members, notification channels and
   preferences belong to the server, not the workspace. A brew says who made
@@ -276,7 +276,8 @@ Offered on Settings → Data only. Code: `backend/src/csv.ts`.
     yield, ratio, TDS, extraction (worked out as in §6), water temperature,
     time (seconds and m:ss), beans in / grounds out, steeping, steeped in,
     steep window, target finish, dilution, prep and problems (`; `
-    between), rating, tasting notes, drink rating, drink notes.
+    between), rating, flavors (the wheel's labels, `; ` between), tasting
+    notes, drink rating, drink notes.
   - **Beans**, newest first: roaster, bean, batch, process, roast level,
     detailed roast level, roast type, roast date, blend, decaf, origin,
     country, region, altitude, producer, flavor profile, bag and stock

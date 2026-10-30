@@ -1,6 +1,7 @@
 // Response shapes from docs/api/README.md. Dates arrive as ISO strings;
 // decimals as numbers (§0).
 import type { AiDetail } from '../lib/aiDetails';
+import type { FlavorKey } from '../lib/flavors';
 
 export type Role = 'owner' | 'barista' | 'viewer';
 
@@ -632,6 +633,7 @@ export interface BrewLog {
   marks: Mark[]; // earliest first
   tools: PrepToolRef[]; // prep tools used, in checklist order (§3d)
   problems: BrewProblemRef[]; // what went wrong, in list order (§6b)
+  flavors: FlavorKey[]; // the coffee's flavors from the wheel, in wheel order (§6)
   brewedBy: { id: string; email: string } | null;
   // Its AI suggestion (§8): one exists; an automatic one is due then; why the
   // last one failed or wasn't made.

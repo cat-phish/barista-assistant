@@ -24,6 +24,7 @@ import {
   loadRecipe,
   marksFor,
   problemsFor,
+  flavorsFor,
   scaledToBrew,
   selectBrews,
   summarize,
@@ -328,10 +329,11 @@ export async function loadSuggestContext(r: SuggestRequest, options: { ratedOnly
   const brewRows = rows.map(withJoins);
   const ids = brewRows.map((b) => b.id);
   const otherBeanIds = [...new Set(brewRows.map((b) => b.beanId).filter((id) => id !== r.beanId))];
-  const [marks, tools, problems, servedAs, analyses, ...others] = await Promise.all([
+  const [marks, tools, problems, flavors, servedAs, analyses, ...others] = await Promise.all([
     marksFor(ids),
     toolsFor(ids),
     problemsFor(ids),
+    flavorsFor(ids),
     drinksServed(brewRows.flatMap((b) => (b.drinkId ? [b.drinkId] : []))),
     latestAnalyses(ids),
     ...otherBeanIds.map(loadBean),
@@ -361,7 +363,7 @@ export async function loadSuggestContext(r: SuggestRequest, options: { ratedOnly
     brews: brewRows.map((b) => {
       const bean = beansById.get(b.beanId);
       return {
-        ...summarize(b, bean?.roastDate ?? null, bean?.freezes ?? [], marks, tools, problems, servedAs),
+        ...summarize(b, bean?.roastDate ?? null, bean?.freezes ?? [], marks, tools, problems, flavors, servedAs),
         sameBag: b.beanId === r.beanId,
         sameBean: coffee.includes(b.beanId),
         sameRecipe: r.recipeId !== null && b.recipeId === r.recipeId,

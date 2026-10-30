@@ -14,6 +14,7 @@ import { prepToolsApi } from '../api/prepTools';
 import { brewProblemsApi } from '../api/brewProblems';
 import AppHeader from '../components/AppHeader.vue';
 import BrewFields from '../components/BrewFields.vue';
+import FlavorWheel from '../components/FlavorWheel.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import RatingInput from '../components/RatingInput.vue';
 import RatingStars from '../components/RatingStars.vue';
@@ -29,6 +30,8 @@ import { dilutionText, isColdStyle, STEEP_TEMPS, steepWindowText } from '../lib/
 import { formatSize } from '../lib/servings';
 import { formatTemp } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
+import { useFieldVisibility } from '../composables/useFieldVisibility';
+import { FLAVOR_LABELS, flavorColor, flavorPlace, type FlavorKey } from '../lib/flavors';
 import { canModifyBrewLog } from '../lib/permissions';
 import { useAuthStore } from '../stores/auth';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -201,7 +204,13 @@ async function saveEdit(): Promise<void> {
 // (e.g. "Save, rate later", whose reminder links here) is rated in place.
 // The AI suggestion waits for it, then is offered.
 const unrated = computed(() => !!log.value && !log.value.steeping && log.value.rating === null && log.value.drinkRating === null);
-const quick = reactive({ rating: null as number | null, notes: '', drinkRating: null as number | null, drinkNotes: '' });
+const quick = reactive({ rating: null as number | null, flavors: [] as FlavorKey[], notes: '', drinkRating: null as number | null, drinkNotes: '' });
+// The wheel starts from any flavors already picked (Settings → Fields can hide it).
+const { show } = useFieldVisibility();
+watch(
+  () => log.value?.id,
+  () => (quick.flavors = [...(log.value?.flavors ?? [])]),
+);
 const rating = ref(false);
 const rateError = ref('');
 const justRated = ref(false);
@@ -214,6 +223,7 @@ async function saveRating(): Promise<void> {
     log.value = (
       await brewLogsApi.update(ws, log.value.id, {
         rating: quick.rating,
+        flavors: quick.flavors,
         tastingNotes: quick.notes.trim() || log.value.tastingNotes,
         ...(drinkTasting.value ? { drinkRating: quick.drinkRating, drinkTastingNotes: quick.drinkNotes.trim() || log.value.drinkTastingNotes } : {}),
       })
@@ -288,6 +298,7 @@ const markRows = computed(() => {
         <fieldset v-if="drinkTasting" class="tasting">
           <legend>The brew <span class="muted">(if you tasted it on its own)</span></legend>
           <RatingInput v-model="quick.rating" name="quick-rating" label="Brew rating" />
+          <FlavorWheel v-if="show('brew.flavors') || quick.flavors.length" v-model="quick.flavors" label="Brew flavors" />
           <div class="field">
             <label for="quick-notes">Brew notes</label>
             <textarea id="quick-notes" v-model="quick.notes" rows="2" maxlength="5000" />
@@ -295,6 +306,7 @@ const markRows = computed(() => {
         </fieldset>
         <template v-else>
           <RatingInput v-model="quick.rating" name="quick-rating" label="Rating" />
+          <FlavorWheel v-if="show('brew.flavors') || quick.flavors.length" v-model="quick.flavors" />
           <div class="field">
             <label for="quick-notes">Tasting notes</label>
             <textarea id="quick-notes" v-model="quick.notes" rows="3" maxlength="5000" placeholder="e.g. Sweet, round, a bit flat at the end" />
@@ -340,6 +352,16 @@ const markRows = computed(() => {
           <div v-for="row in markRows" :key="row.key"><dt>{{ row.label }}</dt><dd>{{ row.value }}</dd></div>
           <div><dt>{{ drinkTasting ? 'Brew rating' : 'Rating' }}</dt><dd><RatingStars :rating="log.rating" /></dd></div>
           <div v-if="drinkTasting"><dt>Drink rating</dt><dd><RatingStars :rating="log.drinkRating" /></dd></div>
+          <div v-if="log.flavors.length">
+            <dt>{{ drinkTasting ? 'Brew flavors' : 'Flavors' }}</dt>
+            <dd>
+              <ul class="flavor-chips">
+                <li v-for="key in log.flavors" :key="key" class="badge" :title="flavorPlace(key) || undefined">
+                  <span class="swatch" :style="{ background: flavorColor(key) }" aria-hidden="true" />{{ FLAVOR_LABELS[key] }}
+                </li>
+              </ul>
+            </dd>
+          </div>
           <div><dt>Brewed by</dt><dd>{{ log.brewedBy?.email ?? 'Deleted user' }}</dd></div>
         </dl>
         <div v-if="log.tastingNotes" class="notes">
@@ -424,6 +446,25 @@ const markRows = computed(() => {
 .steeping-note {
   margin: var(--space-1) 0 0;
   color: var(--brand);
+}
+.flavor-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.flavor-chips .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: 0.8rem;
+}
+.flavor-chips .swatch {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
 }
 .quick-rate h2 {
   font-size: 1.15rem;

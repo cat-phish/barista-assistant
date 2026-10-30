@@ -13,6 +13,7 @@ import { TEMPERATURE_LABELS } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
 import RatingInput from './RatingInput.vue';
+import FlavorWheel from './FlavorWheel.vue';
 
 const draft = defineModel<BrewDraft>({ required: true });
 // Hidden fields (Settings → Fields) that this brew already records stay shown.
@@ -28,6 +29,7 @@ reveal({
   'brew.waterProfile': draft.value.waterProfileId,
   'brew.prepTools': draft.value.toolIds,
   'brew.problems': draft.value.problemIds,
+  'brew.flavors': draft.value.flavors,
   'brew.firstDrop': draft.value.firstDrop,
   'brew.steepTemp': draft.value.steepTemp,
 });
@@ -317,6 +319,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
     <fieldset v-if="drinkTasting" class="tasting">
       <legend>The brew <span class="muted">(if you tasted it on its own)</span></legend>
       <RatingInput v-model="draft.rating" name="brew-rating" label="Brew rating" />
+      <FlavorWheel v-if="show('brew.flavors')" v-model="draft.flavors" label="Brew flavors" />
       <div class="field">
         <label for="brew-notes">Brew notes</label>
         <textarea id="brew-notes" v-model="draft.notes" rows="2" maxlength="5000" placeholder="e.g. Bright, a bit sharp" />
@@ -333,6 +336,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
     </fieldset>
     <template v-else>
       <RatingInput v-model="draft.rating" />
+      <FlavorWheel v-if="show('brew.flavors')" v-model="draft.flavors" />
       <div class="field">
         <label for="brew-notes">Tasting notes</label>
         <textarea id="brew-notes" v-model="draft.notes" rows="3" maxlength="5000" placeholder="e.g. Sour, thin, drained fast" />

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { analysisRequests, beanFreezes, beans, brewLogMarks, brewLogs, brewers, ingredients, drinkIngredients, drinks, grinders, llmAnalyses, recipeGrindSettings, recipes, recipeSteps, users, waterProfiles, workspaces, prepTools, brewLogTools, brewProblems, brewLogProblems, recipeStyles } from "@barista/shared/schema";
+import { analysisRequests, beanFreezes, beans, brewLogMarks, brewLogs, brewers, ingredients, drinkIngredients, drinks, grinders, llmAnalyses, recipeGrindSettings, recipes, recipeSteps, users, waterProfiles, workspaces, prepTools, brewLogTools, brewProblems, brewLogProblems, brewLogFlavors, recipeStyles } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { extractionYield, loadBrewContext, type BrewContext } from "../src/context.js";
@@ -400,6 +400,19 @@ describe("processBrewAnalysis", () => {
     expect(context.brew.problems).toEqual(["Slow drawdown", "Scale not tared"]);
     expect((await brewOf("day7")).problems).toEqual(["Scale not tared"]);
     expect((await brewOf("day6")).problems).toEqual([]);
+  });
+
+  it("tells the LLM the flavors picked on the wheel, in wheel order, with their place", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    await db.insert(brewLogFlavors).values([
+      { brewLogId: logIds.day8!, flavorKey: "off.stale.papery" },
+      { brewLogId: logIds.day8!, flavorKey: "fruity.citrus.lemon" },
+      { brewLogId: logIds.day8!, flavorKey: "sweet" },
+    ]);
+    await processBrewAnalysis({ brewLogId: logIds.day8! });
+    const context = llm.mock.calls[0]![0] as BrewContext;
+    expect(context.brew.flavors).toEqual(["Lemon (Fruity › Citrus)", "Sweet", "Papery (Off flavors › Stale)"]);
+    expect((await brewOf("day7")).flavors).toEqual([]);
   });
 
   it("passes on what the workspace keeps from the AI (Settings → AI)", async () => {

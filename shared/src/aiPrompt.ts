@@ -201,6 +201,18 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
       "adjusting).",
   },
   {
+    key: "flavors",
+    label: "Flavor wheel",
+    prompts: ["analysis", "suggest"],
+    locked: false,
+    text:
+      "flavors are the coffee's flavors picked on a flavor wheel, each with its place on the wheel, e.g. \"Blueberry " +
+      "(Fruity › Berry)\"; a pick from an inner ring (\"Fruity\") is broader, not weaker. Read them with " +
+      "tastingNotes as the same tasting: sour, fermented or green picks often point to under-extraction, harsh, " +
+      "ashy or bitter ones to over-extraction or the roast, and off flavors like papery or musty to the beans or " +
+      "the filter rather than the recipe. Compare them with the bean's flavorProfile when given.",
+  },
+  {
     key: "rpm",
     label: "Grinder speed (RPM)",
     prompts: ["analysis", "suggest"],

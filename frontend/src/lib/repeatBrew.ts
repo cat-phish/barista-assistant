@@ -44,6 +44,7 @@ export const REPEAT_FOR_FIELD: Record<BrewFieldKey, RepeatKeep | 'always' | 'res
   'brew.waterProfile': 'waterProfile',
   'brew.prepTools': 'always', // the earlier brew's ticks, whatever the recipe starts with
   'brew.problems': 'result', // what went wrong is noted each brew, never copied
+  'brew.flavors': 'result', // tasted each brew, never copied
   'brew.firstDrop': 'result',
   'brew.steepTemp': 'temp', // where it steeps goes with the temperature
   'brew.dilution': 'dilution',

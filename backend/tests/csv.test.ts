@@ -58,6 +58,7 @@ describe("CSV export (docs/api/backup.md §2b, CSV)", () => {
       utcOffsetMinutes: -420,
       toolIds: [tools.find((t) => t.name === "RDT")!.id],
       problemIds: [problems.find((p) => p.name === "Fast drawdown")!.id],
+      flavors: ["off.harsh.bitter", "fruity.citrus.lemon"],
       rating: 4,
       tastingNotes: "Sweet, a bit thin",
     });
@@ -94,6 +95,7 @@ describe("CSV export (docs/api/backup.md §2b, CSV)", () => {
       Prep: "RDT",
       Problems: "Fast drawdown",
       Rating: "4",
+      Flavors: "Lemon; Bitter", // wheel order, by label
       "Tasting notes": "Sweet, a bit thin",
     });
   });

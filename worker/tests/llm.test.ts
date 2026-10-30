@@ -60,6 +60,7 @@ const summary = (over: Partial<BrewSummary> = {}): BrewSummary => ({
   marks: [],
   prepTools: [],
   problems: [],
+  flavors: [],
   actualDoseGrams: 15,
   actualWaterGrams: 250,
   actualIceGrams: null,
@@ -277,6 +278,14 @@ describe("what the workspace keeps from the AI (Settings → AI)", () => {
     const hidden = toLlmInput(ctx, without("marks"));
     expect(hidden.brew).not.toHaveProperty("marks");
     expect(promptSections(hidden)).not.toContain("heldSteps");
+  });
+
+  it("sends wheel flavors with the tasting notes and explains them, whatever is hidden", () => {
+    const ctx = context({ brew: { flavors: ["Lemon (Fruity › Citrus)", "Papery (Off flavors › Stale)"] } });
+    const input = toLlmInput(ctx, without("problems", "drink", "flavorProfile"));
+    expect((input.brew as Record<string, unknown>).flavors).toEqual(["Lemon (Fruity › Citrus)", "Papery (Off flavors › Stale)"]);
+    expect(promptSections(input)).toContain("flavors");
+    expect(promptSections(toLlmInput(context()))).not.toContain("flavors"); // none picked
   });
 
   it("drops brew, bean, recipe and equipment details", () => {

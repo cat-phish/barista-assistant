@@ -1179,6 +1179,25 @@ export const brewLogProblems = mysqlTable(
   })
 );
 
+// 8e. Brew Log Flavors (Picks on the Flavor Wheel)
+// The coffee's flavors, picked on the wheel (docs/api/brew-logs.md §6): keys
+// from FLAVORS (@barista/shared/flavors, a fixed three-ring lexicon whose
+// dots give each key's place: "fruity.berry.blueberry"), any ring. Replaced
+// as a whole when a log is edited; free-text tastingNotes stay alongside.
+// Keys are stored, so a label can be renamed but a key never.
+export const brewLogFlavors = mysqlTable(
+  "brew_log_flavors",
+  {
+    brewLogId: varchar("brew_log_id", { length: 36 })
+      .notNull()
+      .references(() => brewLogs.id, { onDelete: "cascade" }),
+    flavorKey: varchar("flavor_key", { length: 64 }).$type<FlavorKey>().notNull(), // FLAVOR_KEYS
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.brewLogId, table.flavorKey] }),
+  })
+);
+
 // 9. LLM Analyses (AI Parameter Suggestions)
 // What was sent to the AI for an analysis or a suggestion
 // (docs/api/analysis.md §8c): the system prompt, the keys of the sections it
