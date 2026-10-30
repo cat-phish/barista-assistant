@@ -27,11 +27,11 @@ and fix the references.
 - B. Brewing & logging: 3–7
 - C. Recipes: 8–9
 - D. AI suggestions: 10–11
-- E. Insights: 12
-- F. Bar & menu: 13–15
-- G. Home roasting: 16–25
-- H. Accounts: 26–27
-- I. Deployment & the app: 28–29
+- E. Insights: 12–13
+- F. Bar & menu: 14–16
+- G. Home roasting: 17–26
+- H. Accounts: 27–28
+- I. Deployment & the app: 29–30
 
 ---
 
@@ -403,11 +403,36 @@ What the analysis worker sends to the LLM and what comes back.
   - Does it go in backups (CLAUDE.md rule 8)? It's a new table, so yes or
     a deliberate no.
 
+### 13. Cold brew batches skew the caffeine and volume figures
+
+- **Status:** idea
+- **Why:** a brew log is one batch, and it doesn't say how much of it was
+  drunk or when. A big cold brew counts its whole dose on the day it's
+  logged, so one 1 L batch shows as a huge day and a huge "brew", and pulls
+  up Caffeine Total, Caffeine/Brew and Caffeine/Day (`docs/api/stats.md` §11,
+  "How the client counts"). Volume drunk has the same problem, and any
+  batch brewed to share or kept for later does too.
+- **Approach:** to review; a starting sketch:
+  - Look at how far real batches move the figures before picking a fix.
+  - Record servings or the portion drunk on a batch, and count each brew's
+    share of its dose and volume.
+  - Or spread a batch over the days it was drunk.
+  - Or leave batch styles out of the per-brew average, or say on the tile
+    that batches count in full.
+- **Size:** S to review and label; M if it records what was drunk.
+- **Depends on:** nothing; 14 (a finished cold brew as stock, each glass
+  served taken from it) could answer it.
+- **Open questions:**
+  - Is a rough split (servings per batch) enough, or does each glass need
+    logging?
+  - What counts as a batch: cold styles only, or any brew over a set dose?
+  - Whose intake is it when a batch is shared with other people?
+
 ---
 
 ## F. Bar & menu
 
-### 13. Ingredient prep and stock
+### 14. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -424,7 +449,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should a finished cold brew batch (roadmap: cold brew refinements) be
     stock the same way, with each glass served taken from it and rated?
 
-### 14. Public menu: branding and sizes
+### 15. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
@@ -438,7 +463,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
-### 15. Drink categories: what else they could do
+### 16. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -467,7 +492,7 @@ Home roasting). Paused here; these are what's next.
   whoever logged it?
 - Should freezing a home-roasted bean pause or extend its rest?
 
-### 16. Live roast timer
+### 17. Live roast timer
 
 - **Status:** planned (branch `roast-timer`)
 - **Why:** roast times are typed in after the roast; a timer running while
@@ -481,7 +506,7 @@ Home roasting). Paused here; these are what's next.
   - Note a temperature at each mark?
   - Keep the screen awake while it runs?
 
-### 17. Roast insights
+### 18. Roast insights
 
 - **Status:** idea
 - **Why:** Insights covers brewing only; a home roaster wants to see what
@@ -494,11 +519,11 @@ Home roasting). Paused here; these are what's next.
   - **rest sweet spot:** brew ratings by days off roast for home roasts,
     suggesting rest days per roast type or green coffee.
 - **Size:** M
-- **Depends on:** nothing; 18 and 22 make it richer.
+- **Depends on:** nothing; 19 and 23 make it richer.
 - **Open questions:** should the rest sweet spot offer to change the
   workspace's default rest days?
 
-### 18. Compare roasts
+### 19. Compare roasts
 
 - **Status:** idea
 - **Why:** with several batches of one green coffee, it's hard to see which
@@ -506,9 +531,9 @@ Home roasting). Paused here; these are what's next.
 - **Approach:** the batches of a green coffee side by side: levels, times,
   temperatures, weight loss, development, and how each one's brews rated.
 - **Size:** M
-- **Depends on:** nothing; can share a branch with 17.
+- **Depends on:** nothing; can share a branch with 18.
 
-### 19. Roast again, and roast plans
+### 20. Roast again, and roast plans
 
 - **Status:** idea
 - **Why:** a good roast is worth repeating, and today the form starts empty.
@@ -520,7 +545,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** S–M (plans are the M)
 - **Depends on:** nothing.
 
-### 20. Running low on roasted coffee
+### 21. Running low on roasted coffee
 
 - **Status:** idea
 - **Why:** the low notice covers green coffee; running out of roasted coffee
@@ -530,10 +555,10 @@ Home roasting). Paused here; these are what's next.
   suggesting the next roast, like the `green-low` job
   (`docs/api/notifications.md` §1b).
 - **Size:** S
-- **Depends on:** nothing; pairs with 19's plans.
+- **Depends on:** nothing; pairs with 20's plans.
 - **Open questions:** a threshold per workspace, or per green coffee?
 
-### 21. Green coffee details and restocks
+### 22. Green coffee details and restocks
 
 - **Status:** idea
 - **Why:** buying the same coffee again means editing the weight left by
@@ -546,18 +571,18 @@ Home roasting). Paused here; these are what's next.
 - **Size:** M
 - **Depends on:** nothing.
 
-### 22. Cupping notes per roast
+### 23. Cupping notes per roast
 
 - **Status:** idea
 - **Why:** brew ratings mix the roast with the brewing; cupping judges the
   roast itself.
 - **Approach:** a short cupping form on a roast: aroma, sweetness, acidity,
   body, a score, and roast defects (scorching, tipping, baked,
-  underdeveloped). Shown on the roast's page; feeds 17 and 18.
+  underdeveloped). Shown on the roast's page; feeds 18 and 19.
 - **Size:** S–M
 - **Depends on:** nothing.
 
-### 23. Roast details for the AI
+### 24. Roast details for the AI
 
 - **Status:** idea
 - **Why:** for a home roast, how it was roasted explains a lot about how it
@@ -569,7 +594,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** S
 - **Depends on:** nothing.
 
-### 24. Roast curves
+### 25. Roast curves
 
 - **Status:** idea
 - **Why:** roasting software (Artisan) records the whole curve; the log only
@@ -580,7 +605,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** L
 - **Depends on:** nothing.
 
-### 25. Roasting machine upkeep
+### 26. Roasting machine upkeep
 
 - **Status:** idea
 - **Why:** roasters need regular chaff and cleaning, easy to forget.
@@ -593,7 +618,7 @@ Home roasting). Paused here; these are what's next.
 
 ## H. Accounts
 
-### 26. Account management and password reset
+### 27. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -624,13 +649,13 @@ Home roasting). Paused here; these are what's next.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 27. Email verification
+### 28. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 26), inviting a member by email, or notifications by email.
+  (item 27), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -640,9 +665,9 @@ Home roasting). Paused here; these are what's next.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 26).
+  - Shares the mail and token pieces with password reset (item 27).
 - **Size:** M (mail is new to the stack).
-- **Depends on:** nothing; pairs with 26.
+- **Depends on:** nothing; pairs with 27.
 - **Open questions:**
   - Block unverified accounts, or only remind them?
   - What happens to accounts that existed before verification (treat as
@@ -655,7 +680,7 @@ Home roasting). Paused here; these are what's next.
 
 How the app is served and installed.
 
-### 28. Test the installed app on phones
+### 29. Test the installed app on phones
 
 - **Status:** idea
 - **Why:** the PWA is now served as a build over HTTPS (roadmap:
@@ -682,7 +707,7 @@ How the app is served and installed.
 - **Depends on:** the app running on the home server.
 - **Open questions:** none.
 
-### 29. Web Push from the installed app
+### 30. Web Push from the installed app
 
 - **Status:** idea
 - **Why:** reminders (rate later) go out through ntfy, Gotify and the

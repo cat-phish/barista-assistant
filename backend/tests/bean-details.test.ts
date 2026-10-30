@@ -255,4 +255,14 @@ describe("bean details (docs/api/beans.md §4)", () => {
     expect(log.bean).toMatchObject({ id, batchNumber: "3" });
     expect((await owner.agent.patch(`${beansUrl}/${id}`).send({ batchNumber: "" })).body.bean.batchNumber).toBeNull();
   });
+
+  it("brew logs carry the bean's decaf and species, for the caffeine estimate", async () => {
+    const { owner, ws, beansUrl } = await setup();
+    const id = await newBean(owner, ws.id, { decaf: true, species: ["arabica", "robusta"] });
+    const logs = `/api/workspaces/${ws.id}/brew-logs`;
+    const log = (await owner.agent.post(logs).send({ beanId: id, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150 })).body.brewLog;
+    expect(log.bean).toMatchObject({ id, decaf: true, species: ["arabica", "robusta"] });
+    await owner.agent.patch(`${beansUrl}/${id}`).send({ decaf: false, species: [] });
+    expect((await owner.agent.get(`${logs}/${log.id}`)).body.brewLog.bean).toMatchObject({ decaf: false, species: null });
+  });
 });

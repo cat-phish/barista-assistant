@@ -47,7 +47,7 @@ created it and can't be changed.
   "tastingNotes": "Sour, thin body",
   "drinkRating": null,
   "drinkTastingNotes": null,
-  "bean": { "id": "uuid", "roasterName": "Onyx Coffee Lab", "beanName": "Southern Weather", "batchNumber": null },
+  "bean": { "id": "uuid", "roasterName": "Onyx Coffee Lab", "beanName": "Southern Weather", "batchNumber": null, "decaf": false, "species": ["arabica"] },
   "recipe": { "id": "uuid", "name": "House V60", "expectedYieldGrams": 220, "style": { "id": "uuid", "name": "Pour over", "brewsLike": "pour_over" }, "methodKind": "filter" },
   "grinder": { "id": "uuid", "name": "Comandante C40" },
   "waterProfile": { "id": "uuid", "name": "Third Wave Water (classic)" },
@@ -67,8 +67,9 @@ created it and can't be changed.
 }
 ```
 
-`recipe` is `null` when `recipeId` is `null` (no recipe used, or the recipe was
-deleted later); its `expectedYieldGrams` is the recipe's current estimate (or
+`bean`'s `decaf` and `species` are for the caffeine estimate, worked out by
+clients (§11, "How the client counts"). `recipe` is `null` when `recipeId` is
+`null` (no recipe used, or the recipe was deleted later); its `expectedYieldGrams` is the recipe's current estimate (or
 target, for espresso), for comparing with the measured `actualYieldGrams`,
 `style` is its style (`{ id, name, brewsLike }`, §5e, or `null`), whose
 `brewsLike` decides how extraction yield is worked out, and `methodKind` is its brewer's kind. `grinder` is

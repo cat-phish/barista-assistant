@@ -39,7 +39,7 @@ const brew = (fields: Partial<StatsBrew> = {}): StatsBrew => ({
 
 const bean = (fields: Partial<StatsBean> = {}): StatsBean => ({
   id: 'bean', roasterName: 'Onyx', beanName: 'Monarch', batchNumber: null, country: null, originArea: null, altitudeMasl: null, processId: null,
-  roastLevel: null, roastDate: null, varieties: null, species: null, priceAmount: null, priceCurrency: null, bagWeightGrams: null,
+  roastLevel: null, roastDate: null, varieties: null, species: null, decaf: false, priceAmount: null, priceCurrency: null, bagWeightGrams: null,
   inventoryWeightGrams: 0, purchaseDate: null, createdAt: '2026-10-01T09:00:00.000Z', archivedAt: null, freezes: [], photoCount: 0, ...fields,
 });
 

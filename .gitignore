@@ -13,3 +13,6 @@ eval/
 # which ships only its built-in wheel. Build them here or anywhere else.
 lexicons/
 *.flavor-wheel.json
+
+# Personal notes, never committed.
+.privatenotes.md

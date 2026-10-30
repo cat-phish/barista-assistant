@@ -73,6 +73,7 @@ out to keep the reply small.
       "roastDate": "2026-10-01T00:00:00.000Z",
       "varieties": ["Caturra"],
       "species": ["arabica"],
+      "decaf": false,
       "priceAmount": 22.5,
       "priceCurrency": "USD",
       "bagWeightGrams": 340,
@@ -131,6 +132,20 @@ Recorded here because the numbers aren't stored anywhere:
   include an estimate are shown with "≈".
 - **Coffee used:** the sum of `doseGrams`. Logging a brew doesn't change a
   bean's stock (§6).
+- **Caffeine** (`frontend/src/lib/caffeine.ts`), also shown on a brew's
+  journal entry, is an estimate, always shown with "≈":
+  mg = dose (g) × 1000 × the bean's caffeine share × share extracted.
+  - Caffeine share by species: arabica 1.2%, robusta 2.2%, liberica 1.2%,
+    excelsa 1.1%, eugenioides 0.6%. A blend counts each species equally;
+    no species counts as arabica.
+  - Decaf: × 0.03.
+  - Share extracted: 0.8 for espresso (the brew with no `waterGrams`), else
+    0.9.
+  - A brew counts its whole dose, on the day it's logged: the log doesn't say
+    how much of a batch was drunk.
+  - Caffeine/Day divides the total by the calendar days in the period, quiet
+    days included: from the period's start (the first brew when open) to its
+    end, never past today.
 - **Beans available:** beans that aren't archived and have stock left, by
   freeze state:
   - frozen: a freeze is still open;

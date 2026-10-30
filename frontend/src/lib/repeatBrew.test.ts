@@ -6,7 +6,7 @@ import { madeKey, recentByMade, REPEAT_FOR_FIELD, REPEAT_OPTIONS, repeatLabel, r
 
 const log = (over: Partial<BrewLog> = {}): BrewLog =>
   ({
-    id: 'l1', beanId: 'guji3', bean: { id: 'guji3', roasterName: 'Home', beanName: 'Guji', batchNumber: '3' },
+    id: 'l1', beanId: 'guji3', bean: { id: 'guji3', roasterName: 'Home', beanName: 'Guji', batchNumber: '3', decaf: false, species: null },
     timestamp: '2026-10-21T08:00:00.000Z', brewerId: 'v60', brewer: { id: 'v60', name: 'V60', kind: 'filter' },
     recipeId: 'house', recipe: { id: 'house', name: 'House V60' }, drinkId: null, drink: null,
     grinderId: 'c40', grinder: { id: 'c40', name: 'C40' }, waterProfileId: 'tww', waterProfile: { id: 'tww', name: 'TWW' },
