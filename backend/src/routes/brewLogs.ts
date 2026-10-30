@@ -36,7 +36,7 @@ import {
   type Recipe,
   recipeStyles,
 } from "@barista/shared/schema";
-import { decimalSchema, grindSettingSchema, optionalText, updateSchema } from "../validation.js";
+import { decimalSchema, grindSettingSchema, optionalText, ratingSchema, updateSchema } from "../validation.js";
 import { ANALYSIS_COLUMNS, type AnalysisRow } from "../aiRequest.js";
 import { remindToRate, remindWhenSteeped, type ReminderOutcome } from "../reminders.js";
 import { autoAnalyzeOnEdited, autoAnalyzeOnSave } from "../autoAnalyze.js";
@@ -169,10 +169,10 @@ const brewLogFields = {
   dilutionRatio: decimalSchema({ min: 0, max: 10, scale: 1, exclusiveMin: true }).nullable().optional(),
   dilutedWith: z.enum(DILUTION_WITH).nullable().optional(),
   // The coffee tasted on its own (for a milk drink, only if tasted straight).
-  rating: z.number().int().min(1).max(5).nullable().optional(),
+  rating: ratingSchema.nullable().optional(),
   tastingNotes: optionalText(5000),
   // The finished drink: only for a brew made for a drink (drinkOnlyError).
-  drinkRating: z.number().int().min(1).max(5).nullable().optional(),
+  drinkRating: ratingSchema.nullable().optional(),
   drinkTastingNotes: optionalText(5000),
   // Timer marks: one first_drop (espresso), one step_end per step, and
   // step_hold / step_resume pairs (holdsError).

@@ -3,7 +3,7 @@
 // workspace assumes. Owners change them; everyone else sees them.
 import { computed, ref, watch } from 'vue';
 import { errorMessage } from '../api/client';
-import { MAX_REST_DAYS, type RoastLevel, type RoastScale, type RoastType, type WorkspaceSettings } from '../api/types';
+import { MAX_REST_DAYS, type RoastLevel, type RatingStep, type RoastScale, type RoastType, type WorkspaceSettings } from '../api/types';
 import { workspacesApi } from '../api/workspaces';
 import SettingsLayout from '../components/SettingsLayout.vue';
 import { usePreferences } from '../composables/usePreferences';
@@ -13,7 +13,7 @@ import { ROAST_LEVELS } from '../lib/scale';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
-const { recipeRoastLevel, roastScale, settings } = usePreferences();
+const { recipeRoastLevel, ratingStep, roastScale, settings } = usePreferences();
 const isOwner = computed(() => workspaces.current?.role === 'owner');
 const saving = ref(false);
 const error = ref('');
@@ -23,7 +23,11 @@ const SCALES: Array<{ value: RoastScale; label: string; hint: string }> = [
   { value: 'names', label: 'Roast names', hint: 'Cinnamon, City, Full City+ … French. Each implies a level from light to dark.' },
   { value: 'levels', label: 'Light to dark', hint: 'Light, medium-light, medium, medium-dark or dark. Roast names already recorded are kept but not shown.' },
 ];
-type Where = 'roast' | 'scale' | 'roasting';
+const STEPS: Array<{ value: RatingStep; label: string; hint: string }> = [
+  { value: 'half', label: 'Half stars', hint: 'From ½ to 5 stars: tap the left half of a star for the half below it.' },
+  { value: 'whole', label: 'Whole stars', hint: '1 to 5 stars. Half ratings already recorded still show.' },
+];
+type Where = 'roast' | 'scale' | 'rating' | 'roasting';
 const savedWhere = ref<Where | null>(null);
 
 async function set(changes: Partial<WorkspaceSettings>, where: Where): Promise<boolean> {
@@ -111,6 +115,23 @@ async function saveRoasting(): Promise<void> {
       <p class="muted small">The bean form, the bean list and the guest menu follow this.</p>
       <p v-if="error && savedWhere === 'scale'" class="form-error" role="alert">{{ error }}</p>
       <p v-if="saved && savedWhere === 'scale'" class="muted small" aria-live="polite">Saved.</p>
+    </section>
+
+    <section class="card stack" aria-labelledby="def-rating">
+      <h2 id="def-rating">Ratings</h2>
+      <fieldset class="choices" :disabled="!isOwner || saving">
+        <legend class="visually-hidden">Ratings</legend>
+        <label v-for="s in STEPS" :key="s.value" class="choice">
+          <input type="radio" name="rating-step" :value="s.value" :checked="ratingStep === s.value" @change="set({ ratingStep: s.value }, 'rating')" />
+          <span>
+            <strong>{{ s.label }}</strong>
+            <span class="muted small">{{ s.hint }}</span>
+          </span>
+        </label>
+      </fieldset>
+      <p class="muted small">How brews and beans are rated.</p>
+      <p v-if="error && savedWhere === 'rating'" class="form-error" role="alert">{{ error }}</p>
+      <p v-if="saved && savedWhere === 'rating'" class="muted small" aria-live="polite">Saved.</p>
     </section>
     <section class="card stack" aria-labelledby="def-roasting">
       <h2 id="def-roasting">Home roasting</h2>

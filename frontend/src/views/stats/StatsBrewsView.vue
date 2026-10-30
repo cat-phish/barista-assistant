@@ -121,7 +121,7 @@ const pct = (n: number) => `${Math.round((n / Math.max(1, brews.value.length)) *
       :table="table(ratingView, 'Rating', rating)"
     >
       <template #period><ChartPeriod :view="ratingView" label="Average rating" /></template>
-      <StatsChart kind="line" label="Average rating over time" :labels="ratingView.labels.value" :series="[{ label: 'Rating', data: rating }]" :y-min="1" :y-max="5" />
+      <StatsChart kind="line" label="Average rating over time" :labels="ratingView.labels.value" :series="[{ label: 'Rating', data: rating }]" :y-min="0.5" :y-max="5" />
     </ChartCard>
 
     <ChartCard chart-id="brews.weekday" title="By day of the week" :empty="brews.length === 0" :table="{ head: ['Day', 'Brews'], rows: WEEKDAYS.map((d, i) => [d, byWeekday[i]!]) }">
@@ -166,7 +166,7 @@ const pct = (n: number) => `${Math.round((n / Math.max(1, brews.value.length)) *
         :box="EY_BAND"
         x-title="Extraction yield %"
         y-title="Rating"
-        :y-min="0.5"
+        :y-min="0"
         :y-max="5.5"
         :height="280"
       />

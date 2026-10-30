@@ -23,7 +23,7 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
     text:
       "You are an expert specialty coffee roaster and barista. Analyze this one brew (brew) against its recipe and the " +
       "bean, and suggest concrete changes for the next brew. A missing field means it wasn't recorded, not that it was " +
-      "zero or absent. The brew's grinder and water are named in it and described in equipment. Ratings are 1-5; " +
+      "zero or absent. The brew's grinder and water are named in it and described in equipment. Ratings are 0.5-5 in half steps; " +
       "rating and tastingNotes describe the coffee tasted on its own. Judge mainly from the tasting and how the brew " +
       "went against the recipe's targets, and change as little as needed: one or two levers at a time.",
   },
@@ -298,7 +298,7 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
       "are the strongest evidence. Another bag of this coffee (sameBean but not sameBag; its bean and roastAgeDays " +
       "say which) is the same coffee roasted another day: it carries over, allowing for its roast age and roast. " +
       "Another bean's brews show how the recipe, brewer or grinder tends to behave, not this bean. A missing field means it wasn't recorded, not that it was zero or absent. Grinders and waters are " +
-      "described once in equipment and named where used. Ratings are 1-5; rating and tastingNotes describe the coffee " +
+      "described once in equipment and named where used. Ratings are 0.5-5 in half steps; rating and tastingNotes describe the coffee " +
       "tasted on its own. batch is the amount about to be brewed, chosen by the barista for the cup size or the beans " +
       "left: never change it, even when it differs from the recipe's or earlier brews' amounts. Start from the " +
       "recipe's targets and move only where the brews give a reason. A pour over batch a quarter or more bigger or " +

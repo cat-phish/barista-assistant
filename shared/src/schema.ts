@@ -79,6 +79,8 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
 // Per workspace, owners edit (docs/api/workspaces.md §2 settings).
 export const ROAST_SCALES = ["names", "levels"] as const;
 export type RoastScale = (typeof ROAST_SCALES)[number];
+export const RATING_STEPS = ["whole", "half"] as const;
+export type RatingStep = (typeof RATING_STEPS)[number];
 export interface WorkspaceSettings {
   // The roast recipes are written for: the recipe form's yield estimate, the
   // baseline when a bean's roast adjusts it, and beans with no roast level.
@@ -87,6 +89,10 @@ export interface WorkspaceSettings {
   // the 5-step level) or "levels" (light … dark only; roast names already
   // recorded are kept but not shown).
   roastScale: RoastScale;
+  // How ratings are entered: "whole" (1-5 stars) or "half" (0.5-5 in half
+  // stars). Input only: ratings are stored in 0.5 steps either way, and half
+  // ratings already recorded still show (docs/api/workspaces.md §2).
+  ratingStep: RatingStep;
   // Optional form fields the workspace hides (docs/api/workspaces.md §2,
   // "Field visibility"): keys like "brew.tds" from the frontend's registry
   // (frontend/src/lib/fields.ts). Values stay stored, and the AI still gets them.
@@ -155,6 +161,7 @@ export interface SuggestedAlternative {
 export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   recipeRoastLevel: "light",
   roastScale: "names",
+  ratingStep: "half",
   hiddenFields: [],
   aiHidden: [],
   autoAnalyze: false,
@@ -437,7 +444,7 @@ export const beans = mysqlTable("beans", {
   // Which roast of this bean: home roasters log each small batch as its own
   // bean (docs/api/beans.md §4). Free text: "3", "R-12".
   batchNumber: varchar("batch_number", { length: 50 }),
-  rating: int("rating"), // 1-5, the bean overall
+  rating: decimal("rating", { precision: 2, scale: 1, mode: "number" }), // 0.5-5 in 0.5 steps, the bean overall
   // Archived beans (docs/api/beans.md §4) leave the brew picker and the public
   // menu; past brews keep them. null = active.
   archivedAt: timestamp("archived_at"),
@@ -1304,11 +1311,11 @@ export const brewLogs = mysqlTable("brew_logs", {
   expectedFinishMinSec: int("expected_finish_min_sec"),
   expectedFinishMaxSec: int("expected_finish_max_sec"),
   // The coffee tasted on its own (for a milk drink, only if tasted straight).
-  rating: int("rating"), // 1-5
+  rating: decimal("rating", { precision: 2, scale: 1, mode: "number" }), // 0.5-5 in 0.5 steps
   tastingNotes: text("tasting_notes"),
   // The finished drink, for brews of a drink with ingredients (docs/api/README.md
   // §6). Milk and syrup change the taste, so the AI weighs these apart.
-  drinkRating: int("drink_rating"), // 1-5
+  drinkRating: decimal("drink_rating", { precision: 2, scale: 1, mode: "number" }), // 0.5-5 in 0.5 steps
   drinkTastingNotes: text("drink_tasting_notes"),
 });
 

@@ -117,7 +117,7 @@ const context = (over: { brew?: Partial<BrewSummary>; bean?: Partial<BrewContext
   },
   brew: summary(over.brew),
   drink: null,
-  ratingScale: "1-5",
+  ratingScale: "0.5-5",
 });
 const without = (...keys: AiDetail[]) => new Set<AiDetail>(keys);
 
@@ -139,7 +139,7 @@ describe("what the AI is sent (docs/api/llm-contract.md §9)", () => {
   it("sends only this brew, leaves out what wasn't recorded, and describes its grinder and water in equipment", () => {
     const input = toLlmInput(context());
     expect(input).toMatchObject({
-      ratingScale: "1-5",
+      ratingScale: "0.5-5",
       brew: { grinder: "C40", water: "TWW", actualTempC: 93, tastingNotes: "A bit sour" },
       equipment: { grinders: { C40: { adjustment: "stepped", stepSize: 1, variableSpeed: false } }, waters: { TWW: { tdsPpm: 120, generalHardnessPpm: 80, alkalinityPpm: 40 } } },
     });
@@ -318,7 +318,7 @@ const suggestContext = (over: Partial<SuggestContext> = {}): SuggestContext => {
       earlier({ timestamp: "2026-10-18T08:00:00.000Z", sameBag: false, sameBean: false, bean: { ...base.bean, beanName: "Kenya", country: "Kenya" }, tastingNotes: "Bright", water: null }),
     ],
     options: {},
-    ratingScale: "1-5",
+    ratingScale: "0.5-5",
     ...over,
   };
 };

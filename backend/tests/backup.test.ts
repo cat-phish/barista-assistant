@@ -67,7 +67,7 @@ async function populated() {
     toolIds: [wdt],
     problemIds: [stalled],
     marks: [{ kind: "step_end", stepOrder: 1, atSec: 31.5 }],
-    rating: 4,
+    rating: 3.5, // a half step survives the round trip
     tastingNotes: "Sweet",
   });
   await db.insert(schema.llmAnalyses).values({ id: randomUUID(), brewLogId: log, reasoning: "Fine", suggestedGrindDelta: "finer", suggestedTempDelta: 1, request: SENT });

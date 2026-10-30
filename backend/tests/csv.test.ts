@@ -61,7 +61,7 @@ describe("CSV export (docs/api/backup.md §2b, CSV)", () => {
       rating: 4,
       tastingNotes: "Sweet, a bit thin",
     });
-    await newBrewLog(owner, ws.id, bean, { timestamp: "2026-10-21T08:00:00.000Z" });
+    await newBrewLog(owner, ws.id, bean, { timestamp: "2026-10-21T08:00:00.000Z", rating: 3.5 });
 
     const res = await owner.agent.get(`${base}/csv/brew_logs`);
     expect(res.status).toBe(200);
@@ -69,6 +69,7 @@ describe("CSV export (docs/api/backup.md §2b, CSV)", () => {
     expect(res.headers["content-disposition"]).toMatch(new RegExp(`attachment; filename="${ws.slug}-journal-\\d{4}-\\d{2}-\\d{2}\\.csv"`));
     const [newest, older] = asObjects(res.text);
     expect(newest!.Date).toBe("2026-10-21 08:00");
+    expect(newest!.Rating).toBe("3.5"); // half steps (docs/api/brew-logs.md §6)
     expect(older).toMatchObject({
       Date: "2026-10-20 08:30", // the brewing device's local time
       "Date (UTC)": "2026-10-20T15:30:00.000Z",

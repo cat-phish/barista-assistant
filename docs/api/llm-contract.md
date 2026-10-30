@@ -131,6 +131,8 @@ queue:
      { <name>: figures } }`.
    - The recipe's `flowUnit` is only sent when it isn't `g_s` (the default).
    - Shape: `{ ratingScale, bean, recipe, brew, drink, equipment }`.
+     `ratingScale` is `"0.5-5"`: ratings come in half steps (`brew-logs.md`
+     §6), whatever the workspace's `ratingStep`; the prompt says so.
 3. It builds the **system prompt from sections** (`PROMPT_SECTIONS` in
    `worker/src/prompt.ts`), each included only when the input has what it's
    about, so a plain filter brew gets a short prompt. In order:
@@ -279,7 +281,8 @@ and the prompt sections about them drop out with them (step 3). Keys
 
 Always sent: the bean and roaster names, roast date and age, dose, water,
 ice (flash chilled), yield, time, grind setting, ratio, rating and tasting notes, and the
-recipe's targets.
+recipe's targets. Ratings are sent as stored, 0.5–5 in half steps (`ratingScale`
+`"0.5-5"`).
 
 **Keeping it in step:** every field the analysis context can send is
 either always sent or belongs to one of these keys, and this list says

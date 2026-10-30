@@ -47,10 +47,12 @@ export interface User {
 
 // Per workspace, owners edit (docs/api/workspaces.md §2 settings).
 export type RoastScale = 'names' | 'levels';
+export type RatingStep = 'whole' | 'half';
 export type LabelWebContext = 'low' | 'medium' | 'high'; // how much of each page the web search reads
 export interface WorkspaceSettings {
   recipeRoastLevel: RoastLevel; // the roast recipes are written for
   roastScale: RoastScale; // beans record roast names (Cinnamon … French) or light to dark only
+  ratingStep: RatingStep; // ratings are entered in whole or half stars (stored in 0.5 steps either way)
   hiddenFields: string[]; // optional form fields hidden for everyone (lib/fields.ts keys)
   aiHidden: AiDetail[]; // what the AI doesn't get (lib/aiDetails.ts, llm-contract.md §9)
   // Auto-analyze (analysis.md §8): each rated brew this long after saving, at most cap a day.
@@ -446,7 +448,7 @@ export interface Bean {
   purchaseDate: string | null; // YYYY-MM-DD
   greenSupplier: string | null;
   batchNumber: string | null; // which home-roast batch ("3", "R-12")
-  rating: number | null; // 1-5
+  rating: number | null; // 0.5-5 in 0.5 steps
   archivedAt: string | null; // null = active
   createdAt: string;
   freezePeriods: FreezePeriod[]; // oldest first; one with thawedOn null = frozen now

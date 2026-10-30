@@ -25,7 +25,7 @@ const DETAILS = {
   purchaseDate: "2026-10-05",
   greenSupplier: "Covoya",
   batchNumber: "R-12",
-  rating: 4,
+  rating: 4.5, // half steps (docs/api/brew-logs.md §6)
 };
 
 async function setup() {
@@ -167,7 +167,9 @@ describe("bean details (docs/api/beans.md §4)", () => {
       { roastWeightLossPercent: "15" },
       { rating: 0 },
       { rating: 6 },
-      { rating: 3.5 },
+      { rating: 0.25 },
+      { rating: 3.25 },
+      { rating: 5.5 },
       { purchaseDate: "2026-13-01" },
       { purchaseDate: new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10) },
       { flavorProfile: "x".repeat(501) },

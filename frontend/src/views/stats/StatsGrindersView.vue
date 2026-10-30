@@ -74,7 +74,7 @@ const noGrinderNote = computed(() => (without.value ? `; ${without.value} brew${
       empty-text="No rated brews with a grind setting yet."
       :table="{ head: ['Grinder', 'Setting', 'Rating'], rows: grind.flatMap((s) => s.data.map((p) => [s.label, p.x, p.y])) }"
     >
-      <StatsChart kind="scatter" label="Grind setting against rating" :points="grind" x-title="Grind setting" y-title="Rating" :y-min="0.5" :y-max="5.5" :height="280" />
+      <StatsChart kind="scatter" label="Grind setting against rating" :points="grind" x-title="Grind setting" y-title="Rating" :y-min="0" :y-max="5.5" :height="280" />
     </ChartCard>
     <PinnedCharts tab="grinders" />
   </div>

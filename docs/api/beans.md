@@ -143,7 +143,8 @@ is no age.
     `"R-12"`). Home roasters roast a little at a time and log each batch as
     its own bean. Clients show it after the bean's name ("· Batch 3"), and
     copying a bean suggests the next whole number. Not on the public menu.
-  - `rating`: the bean overall, integer 1–5.
+  - `rating`: the bean overall, 0.5–5 in steps of 0.5 (as a brew's,
+    `docs/api/brew-logs.md` §6).
 - **Success (`201 Created`):** `{ "bean": { ...bean } }`
 - **Errors:** `400` invalid body, a price without its currency (or the
   reverse), or a `roastLevel` that contradicts the detailed level; `403`

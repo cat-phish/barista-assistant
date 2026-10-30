@@ -41,7 +41,7 @@ const byName = (fallback: string) => (key: string, ctx: ExploreContext) => ctx.n
 const plain = (key: string) => key;
 const bean = (b: StatsBrew, ctx: ExploreContext) => ctx.bean(b.beanId);
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const RATING = { min: 1, max: 5 };
+const RATING = { min: 0.5, max: 5 };
 
 // Every number can go on either axis (never against itself).
 export const NUMBERS: readonly NumberField[] = [

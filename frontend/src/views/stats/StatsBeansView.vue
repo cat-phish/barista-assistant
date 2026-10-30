@@ -156,7 +156,7 @@ const usage = computed(() => {
       empty-text="No rated brews of beans with a roast date yet."
       :table="{ head: ['Roast age (days)', 'Rating'], rows: roastAge.map((p) => [p.x, p.y]) }"
     >
-      <StatsChart kind="scatter" label="Rating against roast age" :points="[{ label: 'Brews', data: roastAge }]" x-title="Days since roasting" y-title="Rating" :y-min="0.5" :y-max="5.5" />
+      <StatsChart kind="scatter" label="Rating against roast age" :points="[{ label: 'Brews', data: roastAge }]" x-title="Days since roasting" y-title="Rating" :y-min="0" :y-max="5.5" />
     </ChartCard>
 
     <section class="card usage">

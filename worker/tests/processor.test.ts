@@ -93,7 +93,7 @@ describe("processBrewAnalysis", () => {
     });
     // Only this brew: history goes to "Suggest parameters" (docs/api/llm-contract.md §9).
     expect(Object.keys(context).sort()).toEqual(["bean", "brew", "drink", "ratingScale", "recipe"]);
-    expect(context.ratingScale).toBe("1-5");
+    expect(context.ratingScale).toBe("0.5-5");
 
     const saved = await db.select().from(llmAnalyses).where(eq(llmAnalyses.brewLogId, logIds.day8!));
     expect(saved).toHaveLength(1);

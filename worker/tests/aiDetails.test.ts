@@ -184,7 +184,7 @@ const full: BrewContext = {
   },
   brew,
   drink: { name: "Iced latte", servingSize: "12 fl oz", ingredients: [{ name: "Milk", ingredientType: "milk", amount: "200 g", note: null }] },
-  ratingScale: "1-5",
+  ratingScale: "0.5-5",
 } as BrewContext;
 
 type Obj = Record<string, unknown>;
@@ -317,7 +317,7 @@ const suggest: SuggestContext = {
     brewers: [{ ref: "b1", id: "brewer-2", name: "Origami", kind: "filter" }],
     beans: [{ ref: "n1", id: "bean-2", bean: full.bean, roastAgeDays: 9, gramsLeft: 120 }],
   },
-  ratingScale: "1-5",
+  ratingScale: "0.5-5",
 };
 const SUGGEST_PLACES: Array<[string, Record<string, Sees>, (input: Obj) => Obj | undefined]> = [
   ["suggest", SUGGEST, (i) => i],

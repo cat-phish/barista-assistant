@@ -1900,3 +1900,26 @@ Backlog item "Hold a step on the timer", branch `hold-step`, no migration.
   really took); no pause for the whole brew (the coffee keeps brewing, so
   `actualTimeSec` stays the real time); the target finish window doesn't
   move, so a held brew shows as slow.
+
+## Half-step ratings (built)
+
+Backlog item "Half-step ratings", branch `half-ratings`, migration 0083.
+`docs/api/brew-logs.md` §6, `docs/api/beans.md` §4, `docs/api/workspaces.md` §2.
+
+- Brew `rating`, `drinkRating` and the bean's `rating` take 0.5 steps from
+  0.5 to 5: `decimal(2,1)` columns, so existing whole stars carry over. The
+  API refuses anything finer (`ratingSchema`).
+- A workspace setting, `ratingStep` (`half` by default, Settings →
+  Defaults → Ratings), picks how they're entered: half stars (the left half
+  of a star is the .5 below it) or whole stars, 1–5. Input only: the API
+  takes halves either way, and half ratings recorded earlier still show.
+- Half stars show everywhere ratings do (`RatingStars`). Insights' averages
+  already worked on plain numbers; the rating axes now start at 0.5 (0 on
+  scatter plots).
+- The AI's `ratingScale` is `"0.5-5"` and the prompt says "Ratings are 0.5-5
+  in half steps". PROMPT_VERSION 2026-10-m.
+- Backups: no new `BACKUP_VERSION`. A v3 file restores as is (whole numbers
+  are valid decimals), and the version only changes when an older file
+  can't.
+- Decided: brews and beans alike; 0.5 allowed as the lowest; a workspace
+  setting rather than always half.

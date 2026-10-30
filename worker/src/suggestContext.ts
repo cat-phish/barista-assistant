@@ -125,7 +125,7 @@ export interface SuggestContext {
   grinder: GrinderInfo | null;
   brews: SuggestBrew[];
   options: SuggestOptions; // empty when no alternatives were asked for
-  ratingScale: "1-5";
+  ratingScale: "0.5-5";
 }
 
 export type SuggestRequest = Pick<
@@ -371,6 +371,6 @@ export async function loadSuggestContext(r: SuggestRequest, options: { ratedOnly
       };
     }),
     options: alternatives,
-    ratingScale: "1-5",
+    ratingScale: "0.5-5",
   };
 }
