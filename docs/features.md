@@ -384,7 +384,10 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   plain list do the same without the wheel. Tasting notes stay alongside.
   The journal shows them as coloured chips, the AI reads them with the
   tasting, Repeat brews never copies them, and Settings → Fields can hide
-  the wheel.
+  the wheel. Owners can replace the built-in wheel with their own JSON file
+  (Settings → Lists → Flavor wheel; how to build one:
+  `custom-flavor-wheel.md`); brews keep their picks' names when it
+  changes.
 
 ## Journal & AI
 - **Journal:** every brew, newest first, filterable by bean; entries can be

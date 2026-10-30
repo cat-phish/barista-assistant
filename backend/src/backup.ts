@@ -8,7 +8,8 @@ import { randomUUID } from "node:crypto";
 import { eq, getTableColumns, inArray, type Column } from "drizzle-orm";
 import { getTableConfig, type MySqlTable } from "drizzle-orm/mysql-core";
 import { z } from "zod";
-import { FLAVOR_KEYS } from "@barista/shared/flavors";
+import { FLAVORS, parseLexicon, type FlavorLexicon } from "@barista/shared/flavors";
+import { workspaceLexicon } from "./flavorLexicon.js";
 import {
   ANALYSIS_CONFIDENCE,
   SUGGEST_ALTERNATIVES,
@@ -47,6 +48,7 @@ import {
   brewLogMarks,
   brewLogProblems,
   brewLogFlavors,
+  flavorLexicons,
   brewLogs,
   brewLogTools,
   brewProblems,
@@ -167,9 +169,10 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
 ];
 // Not in a backup: people, their memberships and the server's own settings
 // belong to the server, not the workspace, and the workspace row is the
-// file's own "workspace" block. analysis_requests is queue state (when an
-// automatic analysis is due, why one failed), meaningless without the queue.
-export const NOT_BACKED_UP: readonly MySqlTable[] = [users, notificationChannels, workspaces, workspaceMembers, serverSettings, analysisRequests];
+// file's own "workspace" block, as is its flavor lexicon (flavorLexicon).
+// analysis_requests is queue state (when an automatic analysis is due, why
+// one failed), meaningless without the queue.
+export const NOT_BACKED_UP: readonly MySqlTable[] = [users, notificationChannels, workspaces, workspaceMembers, serverSettings, analysisRequests, flavorLexicons];
 
 // Columns that only hold one of a list (varchar in the database).
 const ENUMS: Record<string, readonly string[]> = {
@@ -209,7 +212,6 @@ const ENUMS: Record<string, readonly string[]> = {
   "brew_logs.steepTemp": STEEP_TEMPS,
   "brew_logs.dilutedWith": DILUTION_WITH,
   "brew_log_marks.kind": MARK_KINDS,
-  "brew_log_flavors.flavorKey": FLAVOR_KEYS,
   "llm_analyses.suggestedGrindDelta": ["much_finer", "finer", "no_change", "coarser", "much_coarser"],
   "llm_analyses.confidence": ANALYSIS_CONFIDENCE,
   "parameter_suggestions.source": SUGGEST_SOURCES,
@@ -277,7 +279,17 @@ export interface BackupFile {
   format: typeof BACKUP_FORMAT;
   version: number;
   exportedAt: string;
-  workspace: { name: string; slug: string; settings: unknown; menuTitle: string | null; menuCurrency: string | null; isPublicMenuEnabled: boolean };
+  workspace: {
+    name: string;
+    slug: string;
+    settings: unknown;
+    menuTitle: string | null;
+    menuCurrency: string | null;
+    isPublicMenuEnabled: boolean;
+    // The workspace's own flavor wheel (docs/api/flavor-lexicon.md §2c);
+    // null or left out = the built-in one.
+    flavorLexicon?: FlavorLexicon | null;
+  };
   tables: Record<string, BackupRow[]>;
 }
 
@@ -286,6 +298,7 @@ export interface BackupFile {
 export async function buildBackup(workspaceId: string, options: BackupOptions = {}): Promise<BackupFile> {
   const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, workspaceId));
   if (!ws) throw new Error(`Workspace ${workspaceId} not found`);
+  const lexicon = await workspaceLexicon(workspaceId);
   const ids = new Map<string, string[]>();
   const tables: Record<string, BackupRow[]> = {};
   const emails = new Map<string, string | null>();
@@ -321,7 +334,15 @@ export async function buildBackup(workspaceId: string, options: BackupOptions = 
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
-    workspace: { name: ws.name, slug: ws.slug, settings: ws.settings ?? {}, menuTitle: ws.menuTitle, menuCurrency: ws.menuCurrency, isPublicMenuEnabled: ws.isPublicMenuEnabled },
+    workspace: {
+      name: ws.name,
+      slug: ws.slug,
+      settings: ws.settings ?? {},
+      menuTitle: ws.menuTitle,
+      menuCurrency: ws.menuCurrency,
+      isPublicMenuEnabled: ws.isPublicMenuEnabled,
+      flavorLexicon: lexicon.custom ? lexicon.lexicon : null,
+    },
     tables,
   };
 }
@@ -388,6 +409,12 @@ export function checkBackup(input: unknown): Checked {
   if (!settings.success) return { ok: false, error: `backup.workspace.settings: ${settings.error.issues[0]?.message ?? "not valid"}` };
   if (ws.menuTitle != null && (typeof ws.menuTitle !== "string" || ws.menuTitle.length > 255)) return { ok: false, error: "backup.workspace.menuTitle: not valid" };
   if (ws.menuCurrency != null && (typeof ws.menuCurrency !== "string" || !/^[A-Z]{3}$/.test(ws.menuCurrency))) return { ok: false, error: "backup.workspace.menuCurrency: not valid" };
+  let flavorLexicon: FlavorLexicon | null = null;
+  if (ws.flavorLexicon != null) {
+    const parsed = parseLexicon(ws.flavorLexicon);
+    if (!parsed.ok) return { ok: false, error: `backup.workspace.flavorLexicon.${parsed.error}` };
+    flavorLexicon = parsed.lexicon;
+  }
   if (!isObject(file.tables)) return { ok: false, error: "backup.tables: missing" };
   for (const name of Object.keys(file.tables)) if (!INFO_BY_NAME.has(name)) return { ok: false, error: `tables.${name}: not a table a backup has` };
 
@@ -401,6 +428,10 @@ export function checkBackup(input: unknown): Checked {
     for (const [i, raw] of rows.entries()) {
       const at = `tables.${t.name}[${i}]`;
       if (!isObject(raw)) return { ok: false, error: `${at}: must be an object` };
+      // Picks saved before labels were (migration 0085) take the built-in wheel's.
+      if (t.name === "brew_log_flavors" && raw.label === undefined && typeof raw.flavorKey === "string") {
+        raw.label = (FLAVORS as Record<string, string>)[raw.flavorKey] ?? raw.flavorKey;
+      }
       const row: BackupRow = {};
       for (const [key, value] of Object.entries(raw)) {
         if (key === "brewedBy" && t.userColumns.length > 0) {
@@ -439,7 +470,7 @@ export function checkBackup(input: unknown): Checked {
     if (t.hasId) ids.set(t.name, seen);
     tables[t.name] = checked;
   }
-  return { ok: true, file: { ...file, workspace: { ...ws, settings: settings.data }, tables } };
+  return { ok: true, file: { ...file, workspace: { ...ws, settings: settings.data, flavorLexicon }, tables } };
 }
 
 // ---- Restoring -------------------------------------------------------------
@@ -491,6 +522,8 @@ async function insertBackup(
       isPublicMenuEnabled: false,
     });
     await tx.insert(workspaceMembers).values({ userId: target.ownerId, workspaceId, role: "owner" });
+    const lexicon = file.workspace.flavorLexicon;
+    if (lexicon) await tx.insert(flavorLexicons).values({ workspaceId, name: lexicon.name, flavors: lexicon.flavors });
 
     const newIds = new Map<string, Map<string, string>>();
     for (const t of TABLE_INFO) {

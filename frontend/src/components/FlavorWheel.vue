@@ -1,30 +1,19 @@
 <script setup lang="ts">
-// The coffee's flavors (docs/api/brew-logs.md §6, "flavors"), picked on a
-// wheel: tap a segment to zoom into it, then tap the centre to pick it; an
-// outermost flavor is picked straight away. Picks show as chips. A search
-// box, and a plain list instead of the wheel, for anyone who'd rather not
-// use it (and for screen readers).
+// The coffee's flavors (docs/api/brew-logs.md §6, "flavors"), picked on the
+// workspace's wheel (docs/api/flavor-lexicon.md §2c): tap a segment to zoom
+// into it, then tap the centre to pick it; an outermost flavor is picked
+// straight away. Picks show as chips. A search box, and a plain list instead
+// of the wheel, for anyone who'd rather not use it (and for screen readers).
 import { computed, ref, watch } from 'vue';
-import {
-  FLAVOR_LABELS,
-  FLAVOR_WHEEL,
-  flavorColor,
-  flavorNode,
-  flavorPath,
-  flavorPlace,
-  searchFlavors,
-  segmentLabel,
-  segmentPath,
-  sortFlavors,
-  WHEEL_RADII,
-  wheelSegments,
-  type FlavorKey,
-  type FlavorNode,
-  type WheelSegment,
-} from '../lib/flavors';
+import type { FlavorPick } from '../api/types';
+import { useFlavorWheel } from '../composables/useFlavorWheel';
+import { segmentLabel, segmentPath, WHEEL_RADII, wheelSegments, type FlavorNode, type WheelSegment } from '../lib/flavors';
 
-const model = defineModel<FlavorKey[]>({ required: true });
-defineProps<{ label?: string }>();
+const model = defineModel<string[]>({ required: true });
+// saved: the brew's picks as stored, for the label of one the wheel no
+// longer has (it was replaced since).
+const props = defineProps<{ label?: string; saved?: readonly FlavorPick[] }>();
+const { wheel } = useFlavorWheel();
 
 // The wheel or the list, remembered on this device.
 const VIEW_KEY = 'flavorView';
@@ -46,18 +35,24 @@ watch(view, (v) => {
 
 const picked = computed(() => new Set(model.value));
 // Segments holding a pick further out, so the way back to it shows.
-const holdsPick = computed(() => new Set(model.value.flatMap((key) => flavorPath(key).map((n) => n.key))));
+const holdsPick = computed(() => new Set(model.value.flatMap((key) => wheel.value.path(key).map((n) => n.key))));
+const savedLabels = computed(() => new Map((props.saved ?? []).map((p) => [p.key, p.label])));
+const labelOf = (key: string) => wheel.value.node(key)?.label ?? savedLabels.value.get(key) ?? key;
+const colorOf = (key: string) => wheel.value.node(key)?.color ?? 'var(--text-muted)';
+const placeOf = (key: string) => (wheel.value.node(key) ? wheel.value.place(key) : 'Not on the current wheel');
 
-function toggle(key: FlavorKey): void {
-  model.value = picked.value.has(key) ? model.value.filter((k) => k !== key) : sortFlavors([...model.value, key]);
+function toggle(key: string): void {
+  model.value = picked.value.has(key) ? model.value.filter((k) => k !== key) : wheel.value.sort([...model.value, key]);
 }
 
 // ---- Wheel ----
-const focus = ref<FlavorKey | null>(null);
-const shapes = computed(() => wheelSegments(focus.value).map((s) => ({ ...s, path: segmentPath(s), text: segmentLabel(s) })));
+const focus = ref<string | null>(null);
+watch(wheel, () => (focus.value = null)); // another wheel was loaded
+const focusNode = computed(() => (focus.value ? wheel.value.node(focus.value) : undefined));
+const shapes = computed(() => wheelSegments(wheel.value, focus.value).map((s) => ({ ...s, path: segmentPath(s), text: segmentLabel(s) })));
 // Picks drawn last, so their outline isn't painted over by a neighbour.
 const segments = computed(() => [...shapes.value].sort((a, b) => Number(picked.value.has(a.node.key)) - Number(picked.value.has(b.node.key))));
-const trail = computed(() => (focus.value ? [...flavorPath(focus.value), flavorNode(focus.value)] : []));
+const trail = computed(() => (focusNode.value ? [...wheel.value.path(focusNode.value.key), focusNode.value] : []));
 
 function tapSegment(s: WheelSegment): void {
   if (s.node.children.length) focus.value = s.node.key;
@@ -67,12 +62,10 @@ function segmentAction(n: FlavorNode): string {
   if (n.children.length) return `${n.label}: show its flavors`;
   return `${n.label}: ${picked.value.has(n.key) ? 'picked, tap to remove' : 'pick'}`;
 }
-// Text on a segment: dark on the pale outer shades, white on a category.
-const textFill = (n: FlavorNode) => (n.depth === 0 ? '#ffffff' : '#1d1b1a');
 
 // ---- Search ----
 const query = ref('');
-const results = computed(() => searchFlavors(query.value).slice(0, 12));
+const results = computed(() => wheel.value.search(query.value).slice(0, 12));
 </script>
 
 <template>
@@ -80,10 +73,10 @@ const results = computed(() => searchFlavors(query.value).slice(0, 12));
     <legend>{{ label ?? 'Flavors' }} <span class="muted">(optional)</span></legend>
 
     <ul v-if="model.length" class="chips" aria-label="Picked flavors">
-      <li v-for="key in model" :key="key" class="badge chip" :title="flavorPlace(key) || undefined">
-        <span class="swatch" :style="{ background: flavorColor(key) }" aria-hidden="true" />
-        {{ FLAVOR_LABELS[key] }}
-        <button type="button" class="remove" :aria-label="`Remove ${FLAVOR_LABELS[key]}`" @click="toggle(key)">×</button>
+      <li v-for="key in model" :key="key" class="badge chip" :title="placeOf(key) || undefined">
+        <span class="swatch" :style="{ background: colorOf(key) }" aria-hidden="true" />
+        {{ labelOf(key) }}
+        <button type="button" class="remove" :aria-label="`Remove ${labelOf(key)}`" @click="toggle(key)">×</button>
       </li>
     </ul>
 
@@ -98,8 +91,8 @@ const results = computed(() => searchFlavors(query.value).slice(0, 12));
     <ul v-if="query.trim()" class="options" aria-label="Matching flavors">
       <li v-for="key in results" :key="key">
         <button type="button" class="option" :aria-pressed="picked.has(key)" @click="toggle(key)">
-          <span class="swatch" :style="{ background: flavorColor(key) }" aria-hidden="true" />
-          {{ FLAVOR_LABELS[key] }}<span v-if="flavorPlace(key)" class="muted small"> · {{ flavorPlace(key) }}</span>
+          <span class="swatch" :style="{ background: colorOf(key) }" aria-hidden="true" />
+          {{ labelOf(key) }}<span v-if="wheel.place(key)" class="muted small"> · {{ wheel.place(key) }}</span>
         </button>
       </li>
       <li v-if="!results.length" class="muted small">No flavor on the wheel matches; tasting notes take anything.</li>
@@ -113,7 +106,7 @@ const results = computed(() => searchFlavors(query.value).slice(0, 12));
           <button type="button" class="btn-link" :disabled="n.key === focus" @click="focus = n.key">{{ n.label }}</button>
         </template>
       </nav>
-      <svg class="wheel" viewBox="-100 -100 200 200" role="group" :aria-label="focus ? `${FLAVOR_LABELS[focus]} on the flavor wheel` : 'Flavor wheel'">
+      <svg class="wheel" viewBox="-100 -100 200 200" role="group" :aria-label="focusNode ? `${focusNode.label} on the flavor wheel` : wheel.name">
         <g
           v-for="s in segments"
           :key="s.node.key"
@@ -127,12 +120,12 @@ const results = computed(() => searchFlavors(query.value).slice(0, 12));
           @keydown.enter.prevent="tapSegment(s)"
           @keydown.space.prevent="tapSegment(s)"
         >
-          <path :d="s.path" :fill="flavorColor(s.node.key)" />
+          <path :d="s.path" :fill="s.node.color" />
           <text
             v-if="s.text"
             :transform="`translate(${s.text.x.toFixed(2)} ${s.text.y.toFixed(2)}) rotate(${s.text.rotate.toFixed(1)})`"
             :font-size="s.text.size.toFixed(2)"
-            :fill="textFill(s.node)"
+            :fill="s.node.ink"
             text-anchor="middle"
             aria-hidden="true"
           >
@@ -143,21 +136,21 @@ const results = computed(() => searchFlavors(query.value).slice(0, 12));
         </g>
         <!-- The centre: the flavor zoomed into, tapped to pick it. -->
         <g
-          v-if="focus"
+          v-if="focusNode"
           class="segment center"
-          :class="{ picked: picked.has(focus) }"
+          :class="{ picked: picked.has(focusNode.key) }"
           role="button"
           tabindex="0"
-          :aria-label="`${FLAVOR_LABELS[focus]}: ${picked.has(focus) ? 'picked, tap to remove' : 'pick'}`"
-          :aria-pressed="picked.has(focus)"
-          @click="toggle(focus)"
-          @keydown.enter.prevent="toggle(focus)"
-          @keydown.space.prevent="toggle(focus)"
+          :aria-label="`${focusNode.label}: ${picked.has(focusNode.key) ? 'picked, tap to remove' : 'pick'}`"
+          :aria-pressed="picked.has(focusNode.key)"
+          @click="toggle(focusNode.key)"
+          @keydown.enter.prevent="toggle(focusNode.key)"
+          @keydown.space.prevent="toggle(focusNode.key)"
         >
-          <circle :r="WHEEL_RADII.center - 1" :fill="picked.has(focus) ? flavorColor(focus) : 'var(--surface)'" :stroke="flavorColor(focus)" stroke-width="2" />
-          <text text-anchor="middle" font-size="6" font-weight="600" :fill="picked.has(focus) ? textFill(flavorNode(focus)) : 'var(--text)'" aria-hidden="true">
-            <tspan x="0" dy="-0.2em">{{ picked.has(focus) ? '✓ ' : '' }}{{ FLAVOR_LABELS[focus] }}</tspan>
-            <tspan x="0" dy="1.4em" font-size="4.5" font-weight="400">{{ picked.has(focus) ? 'tap to remove' : 'tap to pick' }}</tspan>
+          <circle :r="WHEEL_RADII.center - 1" :fill="picked.has(focusNode.key) ? focusNode.color : 'var(--surface)'" :stroke="focusNode.color" stroke-width="2" />
+          <text text-anchor="middle" font-size="6" font-weight="600" :fill="picked.has(focusNode.key) ? focusNode.ink : 'var(--text)'" aria-hidden="true">
+            <tspan x="0" dy="-0.2em">{{ picked.has(focusNode.key) ? '✓ ' : '' }}{{ focusNode.label }}</tspan>
+            <tspan x="0" dy="1.4em" font-size="4.5" font-weight="400">{{ picked.has(focusNode.key) ? 'tap to remove' : 'tap to pick' }}</tspan>
           </text>
         </g>
         <text v-else text-anchor="middle" font-size="5" fill="var(--text-muted)" aria-hidden="true">
@@ -168,9 +161,9 @@ const results = computed(() => searchFlavors(query.value).slice(0, 12));
     </template>
 
     <div v-else class="list">
-      <details v-for="cat in FLAVOR_WHEEL" :key="cat.key" :open="holdsPick.has(cat.key) || picked.has(cat.key)">
+      <details v-for="cat in wheel.roots" :key="cat.key" :open="holdsPick.has(cat.key) || picked.has(cat.key)">
         <summary>
-          <span class="swatch" :style="{ background: flavorColor(cat.key) }" aria-hidden="true" />
+          <span class="swatch" :style="{ background: cat.color }" aria-hidden="true" />
           {{ cat.label }}
         </summary>
         <div class="options">

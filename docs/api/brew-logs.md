@@ -59,7 +59,7 @@ created it and can't be changed.
   "marks": [],
   "tools": [{ "id": "uuid", "name": "Rinsed paper filter" }],
   "problems": [{ "id": "uuid", "name": "Slow drawdown / stalled bed", "methodKind": "filter" }],
-  "flavors": ["fruity.citrus.lemon", "sour_fermented.sour"],
+  "flavors": [{ "key": "fruity.citrus.lemon", "label": "Lemon" }, { "key": "sour_fermented.sour", "label": "Sour" }],
   "brewedBy": { "id": "uuid", "email": "barista@example.com" },
   "analyzed": false,
   "analysisDueAt": "2026-10-23T09:15:00.000Z",
@@ -85,9 +85,10 @@ except for `step_end`), earliest first. `tools` lists the prep tools used
 (§3d, `{ "id", "name" }`, archived ones included) in checklist order; `[]`
 when none were recorded. `problems` lists what went wrong (§6b,
 `{ "id", "name", "methodKind" }`, archived ones included) in list order; `[]` when none
-were recorded. `flavors` lists the coffee's flavors picked on the wheel
-(keys from `FLAVORS`, `@barista/shared/flavors`) in wheel order; `[]` when
-none were picked. `userId` and `brewedBy` are `null` when the brewer deleted their
+were recorded. `flavors` lists the coffee's flavors picked on the
+workspace's wheel (§2c) as `{ "key", "label" }`, in the wheel's order;
+`label` is the wheel's now, or for a flavor it no longer has, the one saved
+when it was picked (those come last). `[]` when none were picked. `userId` and `brewedBy` are `null` when the brewer deleted their
 account. Such logs can only be edited or deleted by owners. `analyzed` says
 whether it has at least one AI suggestion; `analysisDueAt` is when an
 automatic analysis is due (auto-analyze, §8), else `null`; `analysisError`
@@ -174,19 +175,21 @@ says why the last analysis failed or wasn't made (e.g. the daily cap), else
   - `problemIds` (optional): what went wrong (§6b), with the same rules as
     `toolIds`: each once, all from this workspace (archived accepted), the
     method not checked, replaced on `PATCH`.
-  - `flavors` (optional): **the coffee's flavors**, picked on the flavor
-    wheel, as keys from `FLAVORS` (`@barista/shared/flavors`), each once
-    (`400` for an unknown key). The wheel has three rings and its dots give
-    each key's place (`"fruity.berry.blueberry"` sits under
-    `"fruity.berry"`, under `"fruity"`); a pick can be from any ring, so
-    "Berry" alone says berry without saying which. It includes the wheel's
-    off flavors (`off.*`, papery, rubber…), which overlap with problems on
-    purpose: problems are what went wrong while brewing, these are what's
-    tasted. Like `rating` and `tastingNotes`, they describe the coffee on
-    its own (not the finished drink), and `tastingNotes` stays alongside
-    for anything the wheel doesn't have. Replaced on `PATCH`; `[]` clears
-    it. Keys are stored, so the wheel can relabel a flavor but never
-    renames a key.
+  - `flavors` (optional): **the coffee's flavors**, picked on the
+    workspace's flavor wheel (§2c: the built-in `FLAVORS`,
+    `@barista/shared/flavors`, or its own lexicon), as keys, each once. A
+    key must be on the current wheel (`400` otherwise), except that editing
+    a brew can keep a pick it already had after the wheel changed. Each
+    pick is stored with its label at the time. The wheel has up to three
+    rings and its dots give each key's place (`"fruity.berry.blueberry"`
+    sits under `"fruity.berry"`, under `"fruity"`); a pick can be from any
+    ring, so "Berry" alone says berry without saying which. The built-in
+    wheel includes off flavors (`off.*`, papery, rubber…), which overlap
+    with problems on purpose: problems are what went wrong while brewing,
+    these are what's tasted. Like `rating` and `tastingNotes`, they
+    describe the coffee on its own (not the finished drink), and
+    `tastingNotes` stays alongside for anything the wheel doesn't have.
+    Replaced on `PATCH`; `[]` clears it.
   - `beanId`, plus `recipeId`, `grinderId` and `waterProfileId` (all
     optional, nullable), must belong to **this** workspace. An archived grinder
     or water profile is accepted (e.g. when logging an old brew afterwards);

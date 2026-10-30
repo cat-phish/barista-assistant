@@ -47,7 +47,7 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   "format": "barista-backup",
   "version": 3,
   "exportedAt": "2026-10-23T08:00:00.000Z",
-  "workspace": { "name": "Home bar", "slug": "home-bar", "settings": { "roastScale": "levels" }, "menuTitle": null, "menuCurrency": "USD", "isPublicMenuEnabled": true },
+  "workspace": { "name": "Home bar", "slug": "home-bar", "settings": { "roastScale": "levels" }, "menuTitle": null, "menuCurrency": "USD", "isPublicMenuEnabled": true, "flavorLexicon": null },
   "tables": {
     "brewer_methods": [ { "id": "uuid", "name": "Filter", "builtin": "filter", "...": "…" } ],
     "brew_logs": [ { "id": "uuid", "beanId": "uuid", "brewedBy": "barista@example.com", "...": "…" } ]
@@ -78,6 +78,13 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   added Insights charts (`docs/api/stats.md` §11b) aren't in it.
   `analysis_requests` (when an automatic analysis is due, why one failed,
   §8) is queue state and isn't backed up either.
+- **The flavor wheel:** a workspace's own lexicon (§2c, `flavor_lexicons`)
+  goes in the `workspace` block as `flavorLexicon` (the lexicon file), or
+  `null` on the built-in wheel; it's checked like an import on restore
+  (`backup.workspace.flavorLexicon.flavors[3].key: …`). Brews' picks are in
+  `brew_log_flavors` with their `label`; a row from before labels were
+  saved (migration 0085) takes the built-in wheel's. Exporting and
+  importing lists doesn't carry the wheel.
 - **`version`** goes up only when an older file can't be restored as is;
   the server upgrades older versions on restore and refuses newer ones.
   New optional columns don't change it (an older file just lacks them).

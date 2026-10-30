@@ -2,7 +2,7 @@
 // Brew detail inputs shared by the brew flow's log form and journal editing.
 // Validate with parseBrewDraft (lib/brewDraft.ts); pass its errors in.
 import { computed, ref, watch } from 'vue';
-import type { BrewProblem, Grinder, MethodKind, PrepTool, RecipeStyle, WaterProfile } from '../api/types';
+import type { BrewProblem, FlavorPick, Grinder, MethodKind, PrepTool, RecipeStyle, WaterProfile } from '../api/types';
 import type { BrewDraft, BrewDraftErrors } from '../lib/brewDraft';
 import { brixToTds, extractionYield, usesWater } from '../lib/extraction';
 import { DILUTION_WITH, isColdStyle, STEEP_TEMPS } from '../lib/coldBrew';
@@ -67,6 +67,7 @@ const props = defineProps<{
   recipeStyle?: RecipeStyle | null; // decides how extraction yield is worked out
   iced?: boolean; // the recipe is flash chilled (has ice), so the ice is asked for
   concentrate?: boolean; // the recipe is served diluted, so the dilution is asked for
+  savedFlavors?: readonly FlavorPick[]; // editing: the brew's picks as stored (labels of ones the wheel no longer has)
 }>();
 
 // Measured yield vs the recipe's estimate, e.g. "+6 g vs expected 220 g".
@@ -319,7 +320,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
     <fieldset v-if="drinkTasting" class="tasting">
       <legend>The brew <span class="muted">(if you tasted it on its own)</span></legend>
       <RatingInput v-model="draft.rating" name="brew-rating" label="Brew rating" />
-      <FlavorWheel v-if="show('brew.flavors')" v-model="draft.flavors" label="Brew flavors" />
+      <FlavorWheel v-if="show('brew.flavors')" v-model="draft.flavors" :saved="savedFlavors" label="Brew flavors" />
       <div class="field">
         <label for="brew-notes">Brew notes</label>
         <textarea id="brew-notes" v-model="draft.notes" rows="2" maxlength="5000" placeholder="e.g. Bright, a bit sharp" />
@@ -336,7 +337,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
     </fieldset>
     <template v-else>
       <RatingInput v-model="draft.rating" />
-      <FlavorWheel v-if="show('brew.flavors')" v-model="draft.flavors" />
+      <FlavorWheel v-if="show('brew.flavors')" v-model="draft.flavors" :saved="savedFlavors" />
       <div class="field">
         <label for="brew-notes">Tasting notes</label>
         <textarea id="brew-notes" v-model="draft.notes" rows="3" maxlength="5000" placeholder="e.g. Sour, thin, drained fast" />
