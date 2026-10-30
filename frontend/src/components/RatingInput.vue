@@ -20,7 +20,7 @@ function pick(value: number): void {
   <fieldset class="rating">
     <legend>{{ label }}</legend>
     <div class="options">
-      <span v-for="n in 5" :key="n" class="star" :class="fills[n - 1]">
+      <span v-for="n in 5" :key="n" class="star" :class="`fill-${fills[n - 1]}`">
         <span aria-hidden="true">★</span>
         <label
           v-for="v in starValues(n, ratingStep)"
@@ -62,14 +62,14 @@ legend {
   font-size: 1.8rem;
   color: var(--border);
 }
-.star.full {
+.star.fill-full {
   color: #f9a825;
 }
 /* A half star: the gold glyph over the grey one, cut at the middle. */
-.star.half > span[aria-hidden] {
+.star.fill-half > span[aria-hidden] {
   position: relative;
 }
-.star.half > span[aria-hidden]::before {
+.star.fill-half > span[aria-hidden]::before {
   content: '★';
   position: absolute;
   left: 0;
