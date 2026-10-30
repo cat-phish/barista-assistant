@@ -7,6 +7,10 @@ services:
   # not as environment variables, so they don't show up in `docker inspect`.
   # The apps read them through NAME_FILE variables (shared/src/env.ts).
   #
+  # Built images are named barista-assistant-<service> whatever the folder
+  # is called, so images built elsewhere and copied over (docker save |
+  # docker load) are used by `docker compose up -d` without rebuilding.
+  #
   # Data: named volumes and ./photos, ./backups by default; each can live
   # elsewhere instead (the *_DIR settings in .env.example). The backend and
   # worker run as uid 1000, which must own the photos and backups folders.
@@ -14,6 +18,7 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+    image: barista-assistant-frontend
     restart: unless-stopped
     # The built app over HTTPS, from Caddy's own CA (frontend/Caddyfile).
     # Local only by default (https://localhost). To open it to your LAN (and
@@ -38,6 +43,7 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+    image: barista-assistant-backend
     restart: unless-stopped
     # Lets notification services on this machine (a local ntfy or Gotify) be
     # reached as http://host.docker.internal:<port>: inside the container,
@@ -84,6 +90,7 @@ services:
     build:
       context: .
       dockerfile: worker/Dockerfile
+    image: barista-assistant-worker
     restart: unless-stopped
     # Lets notification services on this machine (a local ntfy or Gotify) be
     # reached as http://host.docker.internal:<port>: inside the container,
