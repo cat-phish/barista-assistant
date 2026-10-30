@@ -1,5 +1,10 @@
 # Barista-Assistant
 
+> [!WARNING]
+> This app is in rapid development and isn't ready for production. Features
+> and the database schema change often, and updates may break things. Keep
+> backups of your data if you run it.
+
 A self-hosted coffee journal: brew timer, beans, recipes and roasts, AI brew
 analysis, and a menu for your bar. What it does: `docs/features.md`.
 
