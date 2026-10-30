@@ -16,6 +16,26 @@
     "./env": {
       "types": "./dist/env.d.ts",
       "default": "./dist/env.js"
+    },
+    "./notify": {
+      "types": "./dist/notify.d.ts",
+      "default": "./dist/notify.js"
+    },
+    "./brew": {
+      "types": "./dist/brew.d.ts",
+      "default": "./dist/brew.js"
+    },
+    "./aiDetails": {
+      "types": "./dist/aiDetails.d.ts",
+      "default": "./dist/aiDetails.js"
+    },
+    "./aiPrompt": {
+      "types": "./dist/aiPrompt.d.ts",
+      "default": "./dist/aiPrompt.js"
+    },
+    "./flavors": {
+      "types": "./dist/flavors.d.ts",
+      "default": "./dist/flavors.js"
     }
   },
   "scripts": {

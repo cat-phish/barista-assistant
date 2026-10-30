@@ -1,19 +1,20 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, count, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, parseQuery, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
-import { brewLogs, grinders, type Grinder } from "@barista/shared/schema";
-import { optionalText, updateSchema } from "../validation.js";
+import { addUsageRoute, grinderUsage } from "../usage.js";
+import { BURR_TYPES, brewLogs, GRINDER_ADJUSTMENTS, GRINDER_POWER, grinders, type Grinder } from "@barista/shared/schema";
+import { decimalSchema, grindSettingSchema, optionalText, updateSchema } from "../validation.js";
 
-// docs/api_spec.md §3b
-export type GrinderSummary = Pick<Grinder, "id" | "name" | "notes" | "retiredAt">;
+// docs/api/grinders.md §3b
+export type GrinderSummary = Omit<Grinder, "workspaceId">;
 
 export interface LastSettingResponse {
-  lastSetting: { grindSetting: string; timestamp: Date; brewLogId: string } | null;
+  lastSetting: { grindSetting: number; grindRpm: number | null; timestamp: Date; brewLogId: string } | null;
 }
 
 interface WorkspaceParams {
@@ -23,15 +24,75 @@ interface GrinderParams extends WorkspaceParams {
   grinderId: string;
 }
 
+const rpmSchema = z.number().int().min(50).max(5000).nullable().optional();
+const settingSchema = grindSettingSchema.nullable().optional();
 const grinderFields = {
   name: z.string().trim().min(1).max(100),
   notes: optionalText(255),
+  adjustment: z.enum(GRINDER_ADJUSTMENTS).nullable().optional(),
+  settingMin: settingSchema,
+  settingMax: settingSchema,
+  stepSize: decimalSchema({ min: 0, max: 1000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
+  burrType: z.enum(BURR_TYPES).nullable().optional(),
+  burrSizeMm: z.number().int().min(10).max(200).nullable().optional(),
+  power: z.enum(GRINDER_POWER).nullable().optional(),
+  variableSpeed: z.boolean().optional(),
+  rpmMin: rpmSchema,
+  rpmMax: rpmSchema,
 };
-const createSchema = z.object(grinderFields);
-const updateGrinderSchema = updateSchema({ ...grinderFields, retired: z.boolean() });
+
+type RangeBody = { settingMin?: number | null; settingMax?: number | null; rpmMin?: number | null; rpmMax?: number | null; variableSpeed?: boolean };
+
+// A range is a pair: both ends (min < max), or null on either clears both.
+function pairIssue(min: number | null | undefined, max: number | null | undefined, keys: [string, string], ctx: z.RefinementCtx): void {
+  if (min === undefined && max === undefined) return;
+  if (min === null || max === null) return;
+  if (min === undefined || max === undefined) {
+    ctx.addIssue({ code: "custom", path: [min === undefined ? keys[0] : keys[1]], message: "send both ends of the range" });
+  } else if (min >= max) {
+    ctx.addIssue({ code: "custom", path: [keys[1]], message: `must be greater than ${keys[0]}` });
+  }
+}
+function rangeIssue(body: RangeBody, ctx: z.RefinementCtx): void {
+  pairIssue(body.settingMin, body.settingMax, ["settingMin", "settingMax"], ctx);
+  pairIssue(body.rpmMin, body.rpmMax, ["rpmMin", "rpmMax"], ctx);
+  if (body.variableSpeed === false && (body.rpmMin ?? null) !== null) {
+    ctx.addIssue({ code: "custom", path: ["rpmMin"], message: "an RPM range is only for a variable-speed grinder" });
+  }
+}
+// Clearing either end clears both; a grinder that isn't variable speed has no RPM range.
+function clearRangeTogether<T extends RangeBody>(body: T): T {
+  const out = { ...body };
+  if (out.settingMin === null || out.settingMax === null) Object.assign(out, { settingMin: null, settingMax: null });
+  if (out.rpmMin === null || out.rpmMax === null || out.variableSpeed === false) Object.assign(out, { rpmMin: null, rpmMax: null });
+  return out;
+}
+
+const createSchema = z
+  .object(grinderFields)
+  .superRefine(rangeIssue)
+  .refine((b) => (b.rpmMin ?? null) === null || b.variableSpeed === true, { path: ["rpmMin"], message: "an RPM range is only for a variable-speed grinder" })
+  .transform(clearRangeTogether);
+const updateGrinderSchema = updateSchema({ ...grinderFields, archived: z.boolean() }).superRefine(rangeIssue).transform(clearRangeTogether);
 const lastSettingQuery = z.object({ recipeId: z.uuid() });
 
-const summary = { id: grinders.id, name: grinders.name, notes: grinders.notes, retiredAt: grinders.retiredAt };
+const summary = {
+  id: grinders.id,
+  name: grinders.name,
+  notes: grinders.notes,
+  adjustment: grinders.adjustment,
+  settingMin: grinders.settingMin,
+  settingMax: grinders.settingMax,
+  stepSize: grinders.stepSize,
+  burrType: grinders.burrType,
+  burrSizeMm: grinders.burrSizeMm,
+  power: grinders.power,
+  variableSpeed: grinders.variableSpeed,
+  rpmMin: grinders.rpmMin,
+  rpmMax: grinders.rpmMax,
+  archivedAt: grinders.archivedAt,
+  createdAt: grinders.createdAt,
+};
 
 function inWorkspace(p: GrinderParams) {
   return and(eq(grinders.id, p.grinderId), eq(grinders.workspaceId, p.workspaceId));
@@ -40,6 +101,7 @@ function inWorkspace(p: GrinderParams) {
 // Mounted at /api/workspaces/:workspaceId/grinders
 export const grindersRouter = Router({ mergeParams: true });
 grindersRouter.use(requireAuth);
+addUsageRoute(grindersRouter, "grinderId", "grinders", grinderUsage, "Grinder not found");
 
 grindersRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<{ grinders: GrinderSummary[] }>) => {
   const { workspaceId } = req.params;
@@ -48,8 +110,8 @@ grindersRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<{ gr
     .select(summary)
     .from(grinders)
     .where(eq(grinders.workspaceId, workspaceId))
-    // Active first, then retired; each by name.
-    .orderBy(sql`${grinders.retiredAt} IS NOT NULL`, asc(grinders.name));
+    // Active first, then archived; each by name.
+    .orderBy(sql`${grinders.archivedAt} IS NOT NULL`, asc(grinders.name));
   res.json({ grinders: rows });
 });
 
@@ -60,7 +122,7 @@ grindersRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<{ g
   if (!body) return;
   const id = randomUUID();
   try {
-    await db.insert(grinders).values({ id, workspaceId, name: body.name, notes: body.notes ?? null });
+    await db.insert(grinders).values({ id, workspaceId, ...body });
   } catch (err) {
     if (isDuplicateEntryError(err)) {
       sendError(res, 409, "A grinder with that name already exists");
@@ -77,16 +139,25 @@ grindersRouter.patch("/:grinderId", async (req: Request<GrinderParams>, res: Res
   if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId, WRITE_ROLES))) return;
   const body = parseBody(updateGrinderSchema, req, res);
   if (!body) return;
-  const { retired, ...fields } = body;
+  const { archived, ...fields } = body;
+
+  // An RPM range on its own needs the grinder to already be variable speed.
+  if ((fields.rpmMin ?? null) !== null && fields.variableSpeed === undefined) {
+    const [current] = await db.select({ variableSpeed: grinders.variableSpeed }).from(grinders).where(inWorkspace(req.params));
+    if (current && !current.variableSpeed) {
+      sendError(res, 400, "rpmMin: an RPM range is only for a variable-speed grinder");
+      return;
+    }
+  }
 
   try {
     await db
       .update(grinders)
       .set({
         ...fields,
-        // Keep the original retirement date if it's already retired.
-        ...(retired === true ? { retiredAt: sql`COALESCE(${grinders.retiredAt}, NOW())` } : {}),
-        ...(retired === false ? { retiredAt: null } : {}),
+        // Keep the original archive date if it's already archived.
+        ...(archived === true ? { archivedAt: sql`COALESCE(${grinders.archivedAt}, NOW())` } : {}),
+        ...(archived === false ? { archivedAt: null } : {}),
       })
       .where(inWorkspace(req.params));
   } catch (err) {
@@ -104,29 +175,13 @@ grindersRouter.patch("/:grinderId", async (req: Request<GrinderParams>, res: Res
   res.json({ grinder });
 });
 
-// Only unused grinders can be deleted; used ones are retired so history keeps them.
+// Deleting unlinks what used it; GET /usage says what, for the warning
+// (docs/api/README.md, "Deleting"). Brews keep their record with the grinder unlinked; recipes lose their grind setting for it.
 grindersRouter.delete("/:grinderId", async (req: Request<GrinderParams>, res: Response) => {
   if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId, WRITE_ROLES))) return;
-  const outcome = await db.transaction(async (tx) => {
-    const [grinder] = await tx.select({ id: grinders.id }).from(grinders).where(inWorkspace(req.params)).for("update");
-    if (!grinder) return { status: "not_found" } as const;
-    const [{ brewLogCount } = { brewLogCount: 0 }] = await tx
-      .select({ brewLogCount: count() })
-      .from(brewLogs)
-      .where(eq(brewLogs.grinderId, grinder.id));
-    if (brewLogCount > 0) return { status: "in_use", brewLogCount } as const;
-    await tx.delete(grinders).where(eq(grinders.id, grinder.id));
-    return { status: "deleted" } as const;
-  });
-
-  if (outcome.status === "not_found") {
+  const [result] = await db.delete(grinders).where(inWorkspace(req.params));
+  if (result.affectedRows === 0) {
     sendError(res, 404, "Grinder not found");
-    return;
-  }
-  if (outcome.status === "in_use") {
-    sendError(res, 409, `${outcome.brewLogCount} brew(s) were made with this grinder. Retire it instead.`, {
-      brewLogCount: outcome.brewLogCount,
-    });
     return;
   }
   res.status(204).end();
@@ -146,7 +201,7 @@ grindersRouter.get(
       return;
     }
     const [last] = await db
-      .select({ grindSetting: brewLogs.actualGrindSetting, timestamp: brewLogs.timestamp, brewLogId: brewLogs.id })
+      .select({ grindSetting: brewLogs.actualGrindSetting, grindRpm: brewLogs.grindRpm, timestamp: brewLogs.timestamp, brewLogId: brewLogs.id })
       .from(brewLogs)
       .where(
         and(
@@ -159,6 +214,6 @@ grindersRouter.get(
       .orderBy(desc(brewLogs.timestamp), desc(brewLogs.id))
       .limit(1);
 
-    res.json({ lastSetting: last?.grindSetting ? { ...last, grindSetting: last.grindSetting } : null });
+    res.json({ lastSetting: last && last.grindSetting !== null ? { ...last, grindSetting: last.grindSetting } : null });
   }
 );

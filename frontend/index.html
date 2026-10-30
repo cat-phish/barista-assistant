@@ -5,11 +5,19 @@
     <!-- Per docs/timer_architecture.md: no maximum-scale / user-scalable=no. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#3e2723" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      // Apply a remembered Light/Dark choice before the app loads (src/lib/theme.ts).
+      try {
+        var t = localStorage.getItem('brewlog.theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="mask-icon" href="/mask-icon.svg" color="#3e2723" />
-    <title>Coffee Brew Journal</title>
+    <title>Barista-Assistant</title>
   </head>
   <body>
     <div id="app"></div>

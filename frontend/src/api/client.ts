@@ -1,6 +1,9 @@
 import type { ErrorBody } from './types';
 
-const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
+// Same origin by default: the Vite dev server (or a reverse proxy) forwards
+// /api to the backend, so the app works from any address, e.g. a phone on the
+// LAN. VITE_API_URL points at a backend on another origin instead.
+export const API_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '');
 
 export class ApiError extends Error {
   readonly status: number; // 0 = the server couldn't be reached
@@ -32,8 +35,9 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       method,
       // The session is an httpOnly cookie (§1), so it must be sent explicitly.
       credentials: 'include',
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      // A Blob (a photo) goes as it is, with its own type; anything else as JSON.
+      headers: body === undefined ? undefined : { 'Content-Type': body instanceof Blob ? body.type || 'application/octet-stream' : 'application/json' },
+      body: body === undefined ? undefined : body instanceof Blob ? body : JSON.stringify(body),
     });
   } catch {
     throw new ApiError(0, "Can't reach the server. Check your connection and try again.");
@@ -56,10 +60,37 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return data as T;
 }
 
+// A file the server sends (e.g. a CSV), as a Blob; errors as for request().
+// With a body it's a POST (e.g. a password to confirm the download).
+async function file(path: string, body?: unknown): Promise<Blob> {
+  let res: Response;
+  try {
+    res = await fetch(
+      `${API_URL}${path}`,
+      body === undefined
+        ? { credentials: 'include' }
+        : { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+    );
+  } catch {
+    throw new ApiError(0, "Can't reach the server. Check your connection and try again.");
+  }
+  if (res.ok) return res.blob();
+  let data: unknown = null;
+  try {
+    data = await res.json();
+  } catch {
+    // Not JSON; handled below.
+  }
+  if (res.status === 401) onUnauthorized?.();
+  throw new ApiError(res.status, isErrorBody(data) ? data.error : `Request failed (${res.status})`, isErrorBody(data) ? data : null);
+}
+
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
+  file,
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
   patch: <T>(path: string, body: unknown) => request<T>('PATCH', path, body),
+  put: <T>(path: string, body: unknown) => request<T>('PUT', path, body),
   delete: <T = void>(path: string, body?: unknown) => request<T>('DELETE', path, body),
 };
 

@@ -9,7 +9,7 @@ vi.mock('../api/brews', () => ({
 const { useAnalysis } = await import('./useAnalysis');
 
 const analysis = (id: string): LlmAnalysis => ({
-  id, brewLogId: 'log', reasoning: id, suggestedGrindDelta: 'finer', suggestedTempDelta: 1, createdAt: '',
+  id, brewLogId: 'log', reasoning: id, suggestedGrindDelta: 'finer', suggestedTempDelta: 1, nextStep: null, confidence: null, suggestedRpmDelta: null, suggestedDoseDelta: null, suggestedYieldDelta: null, model: null, promptVersion: null, helpful: null, ratedAt: null, hasRequest: false, createdAt: '',
 });
 const respond = (latest: LlmAnalysis | null) => ({ brewLog: { latestAnalysis: latest } });
 
@@ -65,5 +65,32 @@ describe('useAnalysis', () => {
     await ai.request('ws', 'log', null);
     expect(ai.state.value).toBe('error');
     expect(ai.error.value).toBe('Analysis is temporarily unavailable.');
+  });
+
+  it('stops with the reason once every attempt has failed', async () => {
+    api.get.mockResolvedValueOnce(respond(null)).mockResolvedValueOnce({ brewLog: { latestAnalysis: null, analysisDueAt: null, analysisError: 'The AI service couldn’t be reached' } });
+    const ai = useAnalysis();
+    await ai.request('ws', 'log', null);
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(ai.state.value).toBe('error');
+    expect(ai.error.value).toBe('The AI service couldn’t be reached');
+    expect(api.get).toHaveBeenCalledTimes(2);
+  });
+
+  it('awaits an automatic analysis without asking: queued until due, then polls', async () => {
+    vi.setSystemTime(new Date('2026-10-23T09:00:00Z'));
+    api.get.mockResolvedValueOnce(respond(null)).mockResolvedValueOnce(respond(analysis('auto')));
+    const ai = useAnalysis();
+    ai.awaitAuto('ws', 'log', null, '2026-10-23T09:10:00Z');
+    expect(ai.state.value).toBe('queued');
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(api.get).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2000); // shortly after it's due
+    expect(ai.state.value).toBe('waiting');
+    await vi.advanceTimersByTimeAsync(4000); // the first look finds nothing yet, the next finds it
+    expect(ai.state.value).toBe('done');
+    expect(ai.analysis.value?.id).toBe('auto');
+    expect(api.get).toHaveBeenCalledTimes(2);
+    expect(api.request).not.toHaveBeenCalled();
   });
 });

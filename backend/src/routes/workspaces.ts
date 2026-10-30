@@ -7,25 +7,52 @@ import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, parseQuery, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import {
-  brewMethods,
-  DEFAULT_BREW_METHODS,
+  beanProcesses,
+  brewerMethods,
+  brewers,
+  recipeStyles,
+  DEFAULT_BREWERS,
+  DEFAULT_WORKSPACE_SETTINGS,
+  withDefaults,
+  type WorkspaceSettings,
+  DEFAULT_PREP_TOOLS,
+  prepTools,
+  DEFAULT_BREW_PROBLEMS,
+  brewProblems,
   workspaceMembers,
   workspaces,
   type Workspace,
 } from "@barista/shared/schema";
-import { SLUG_PATTERN } from "../validation.js";
+import { SLUG_PATTERN, workspaceSettingsSchema } from "../validation.js";
+import { defaultProcessRows } from "./beanProcesses.js";
+import { defaultStyleRows } from "./recipeStyles.js";
+import { defaultMethodRows } from "./brewerMethods.js";
+import { removeWorkspacePhotos } from "../photos.js";
+
+// A workspace as the API returns it: settings with the defaults filled in.
+export type WorkspaceView = Omit<Workspace, "settings"> & { settings: WorkspaceSettings };
 
 export interface WorkspaceResponse {
-  workspace: Workspace;
+  workspace: WorkspaceView;
 }
 
 export interface WorkspaceListResponse {
-  workspaces: Array<Workspace & { role: Role }>;
+  workspaces: Array<WorkspaceView & { role: Role }>;
 }
+
+export interface WorkspaceSettingsResponse {
+  settings: WorkspaceSettings;
+}
+
+function toView(workspace: Workspace): WorkspaceView {
+  return { ...workspace, settings: withDefaults(DEFAULT_WORKSPACE_SETTINGS, workspace.settings) };
+}
+
+const slugSchema = z.string().regex(SLUG_PATTERN, "must be 3-64 lowercase letters, digits or hyphens");
 
 const createWorkspaceSchema = z.object({
   name: z.string().trim().min(1).max(255),
-  slug: z.string().regex(SLUG_PATTERN, "must be 3-64 lowercase letters, digits or hyphens"),
+  slug: slugSchema,
 });
 
 export const workspacesRouter = Router();
@@ -43,9 +70,20 @@ workspacesRouter.post("/", async (req: Request, res: Response<WorkspaceResponse>
     workspace = await db.transaction(async (tx) => {
       await tx.insert(workspaces).values({ id: workspaceId, name: body.name, slug: body.slug });
       await tx.insert(workspaceMembers).values({ userId, workspaceId, role: "owner" });
-      await tx.insert(brewMethods).values(
-        DEFAULT_BREW_METHODS.map((name) => ({ id: randomUUID(), workspaceId, name }))
+      const methods = defaultMethodRows(workspaceId);
+      await tx.insert(brewerMethods).values(methods);
+      const methodOf = (kind: string) => methods.find((m) => m.builtin === kind)?.id ?? null;
+      await tx.insert(brewers).values(
+        DEFAULT_BREWERS.map(({ name, kind }) => ({ id: randomUUID(), workspaceId, name, kind, methodId: methodOf(kind) }))
       );
+      await tx.insert(prepTools).values(
+        DEFAULT_PREP_TOOLS.map(({ name, methodKinds }, i) => ({ id: randomUUID(), workspaceId, name, methodKinds: [...methodKinds], position: i + 1 }))
+      );
+      await tx.insert(brewProblems).values(
+        DEFAULT_BREW_PROBLEMS.map(({ name, methodKind }, i) => ({ id: randomUUID(), workspaceId, name, methodKind, position: i + 1 }))
+      );
+      await tx.insert(beanProcesses).values(defaultProcessRows(workspaceId));
+      await tx.insert(recipeStyles).values(defaultStyleRows(workspaceId));
       const [created] = await tx.select().from(workspaces).where(eq(workspaces.id, workspaceId));
       return created;
     });
@@ -60,7 +98,7 @@ workspacesRouter.post("/", async (req: Request, res: Response<WorkspaceResponse>
   if (!workspace) {
     throw new Error(`Workspace ${workspaceId} missing after insert`);
   }
-  res.status(201).json({ workspace });
+  res.status(201).json({ workspace: toView(workspace) });
 });
 
 workspacesRouter.get("/", async (req: Request, res: Response<WorkspaceListResponse>) => {
@@ -72,13 +110,15 @@ workspacesRouter.get("/", async (req: Request, res: Response<WorkspaceListRespon
     .orderBy(workspaces.name);
 
   res.json({
-    workspaces: rows.flatMap(({ workspace, role }) => (isRole(role) ? [{ ...workspace, role }] : [])),
+    workspaces: rows.flatMap(({ workspace, role }) => (isRole(role) ? [{ ...toView(workspace), role }] : [])),
   });
 });
 
 const updateWorkspaceSchema = z
   .object({
     name: z.string().trim().min(1).max(255).optional(),
+    // Changing it moves the public menu: the old /menu/:slug stops working (§2).
+    slug: slugSchema.optional(),
     isPublicMenuEnabled: z.boolean().optional(),
   })
   .strict()
@@ -93,21 +133,55 @@ workspacesRouter.patch(
     const body = parseBody(updateWorkspaceSchema, req, res);
     if (!body) return;
 
-    await db.update(workspaces).set(body).where(eq(workspaces.id, workspaceId));
+    try {
+      await db.update(workspaces).set(body).where(eq(workspaces.id, workspaceId));
+    } catch (err) {
+      if (isDuplicateEntryError(err)) {
+        sendError(res, 409, "Slug already taken");
+        return;
+      }
+      throw err;
+    }
     const [workspace] = await db.select().from(workspaces).where(eq(workspaces.id, workspaceId));
     if (!workspace) {
       // Deleted between the membership check and now
       sendError(res, 404, "Workspace not found");
       return;
     }
-    res.json({ workspace });
+    res.json({ workspace: toView(workspace) });
+  }
+);
+
+// Owners change the workspace's settings; the body's keys are merged into
+// what's stored (docs/api/workspaces.md §2).
+workspacesRouter.patch(
+  "/:workspaceId/settings",
+  async (req: Request<{ workspaceId: string }>, res: Response<WorkspaceSettingsResponse>) => {
+    const { workspaceId } = req.params;
+    if (!(await requireMembership(res, authedUserId(req), workspaceId, ["owner"]))) return;
+
+    const body = parseBody(workspaceSettingsSchema, req, res);
+    if (!body) return;
+
+    const settings = await db.transaction(async (tx) => {
+      const [row] = await tx.select({ settings: workspaces.settings }).from(workspaces).where(eq(workspaces.id, workspaceId)).for("update");
+      if (!row) return null;
+      const merged = { ...(row.settings ?? {}), ...body };
+      await tx.update(workspaces).set({ settings: merged }).where(eq(workspaces.id, workspaceId));
+      return merged;
+    });
+    if (!settings) {
+      sendError(res, 404, "Workspace not found");
+      return;
+    }
+    res.json({ settings: withDefaults(DEFAULT_WORKSPACE_SETTINGS, settings) });
   }
 );
 
 const deleteWorkspaceQuery = z.object({ confirm: z.string().optional() });
 
-// Cascades to members, brew methods, beans, recipes, brew logs and analyses.
-// ?confirm must be the slug as typed by the owner (docs/api_spec.md §2).
+// Cascades to members, brewers, beans, recipes, brew logs and analyses.
+// ?confirm must be the slug as typed by the owner (docs/api/workspaces.md §2).
 workspacesRouter.delete("/:workspaceId", async (req: Request<{ workspaceId: string }>, res: Response) => {
   const { workspaceId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId, ["owner"]))) return;
@@ -135,5 +209,6 @@ workspacesRouter.delete("/:workspaceId", async (req: Request<{ workspaceId: stri
     sendError(res, 400, "confirm: must equal the workspace's slug");
     return;
   }
+  await removeWorkspacePhotos(workspaceId); // the rows cascaded (docs/api/bean-photos.md §4c)
   res.status(204).end();
 });

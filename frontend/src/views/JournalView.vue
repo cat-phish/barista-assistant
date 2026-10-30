@@ -1,18 +1,35 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { beansApi } from '../api/beans';
 import { brewLogsApi } from '../api/brews';
 import { errorMessage } from '../api/client';
 import type { Bean, BrewLog } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
+import ListDataBar from '../components/ListDataBar.vue';
 import RatingStars from '../components/RatingStars.vue';
-import { formatGrams, formatRatio, formatTime, formatWhen } from '../lib/format';
+import { useSelection } from '../composables/useSelection';
+import { batchSuffix, beanLabel } from '../lib/beans';
+import { analysisStatus, formatClock } from '../lib/analysisStatus';
+import { formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen } from '../lib/format';
+import { formatSize } from '../lib/servings';
+import { formatTemp } from '../lib/units';
+import { usePreferences } from '../composables/usePreferences';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const PAGE_SIZE = 20;
 
+// The card's AI pill (docs/api/analysis.md §8): not analyzed yet, or when an
+// automatic analysis is due. Nothing once it has a suggestion.
+function aiBadge(log: BrewLog): { kind: 'due' | 'none'; label: string; title: string } | null {
+  const s = analysisStatus(log);
+  if (s.kind === 'due') return { kind: 'due', label: `AI at ${formatClock(s.at)}`, title: 'An automatic AI suggestion is on its way' };
+  if (s.kind === 'none') return { kind: 'none', label: 'Not analyzed', title: s.reason ?? 'No AI suggestion yet' };
+  return null;
+}
+
 const workspaces = useWorkspaceStore();
+const { temperatureUnit } = usePreferences();
 const route = useRoute();
 const router = useRouter();
 
@@ -57,6 +74,13 @@ onMounted(async () => {
   await load(true);
 });
 watch(beanFilter, () => load(true));
+// Select mode for exporting some brews (components/ExportBar.vue): a card
+// is then a button that ticks it, not a link.
+const selection = useSelection();
+const cardProps = (id: string) =>
+  selection.selecting
+    ? { type: 'button', 'aria-pressed': selection.has(id), onClick: () => selection.toggle(id) }
+    : { to: { name: 'journal-entry', params: { id } } };
 </script>
 
 <template>
@@ -71,7 +95,7 @@ watch(beanFilter, () => load(true));
       <label for="filter">Bean</label>
       <select id="filter" v-model="beanFilter">
         <option value="">All beans</option>
-        <option v-for="b in beans" :key="b.id" :value="b.id">{{ b.roasterName }} – {{ b.beanName }}</option>
+        <option v-for="b in beans" :key="b.id" :value="b.id">{{ beanLabel(b) }}</option>
       </select>
     </div>
 
@@ -83,23 +107,37 @@ watch(beanFilter, () => load(true));
 
     <template v-else>
       <p class="muted count">{{ total }} brew{{ total === 1 ? '' : 's' }}</p>
+      <ListDataBar list="brew_logs" noun="brews" :selection="selection" :visible-ids="logs.map((l) => l.id)" @imported="load(true)" />
       <ul class="list">
-        <li v-for="log in logs" :key="log.id">
-          <RouterLink class="card entry" :to="{ name: 'journal-entry', params: { id: log.id } }">
+        <li v-for="log in logs" :key="log.id" class="item">
+          <component
+            :is="selection.selecting ? 'button' : RouterLink"
+            class="card entry"
+            :class="{ repeatable: workspaces.canEdit && !selection.selecting, picked: selection.has(log.id) }"
+            v-bind="cardProps(log.id)"
+          >
             <div class="head">
-              <span class="when">{{ formatWhen(log.timestamp) }}</span>
-              <RatingStars :rating="log.rating" />
+              <span class="when"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(log.id) ? '☑' : '☐' }}</span>{{ formatWhen(log.timestamp) }}</span>
+              <span v-if="log.steeping" class="badge steeping">Steeping</span>
+              <span v-else class="right">
+                <span v-if="aiBadge(log)" class="badge ai" :class="aiBadge(log)!.kind" :title="aiBadge(log)!.title">{{ aiBadge(log)!.label }}</span>
+                <RatingStars :rating="log.rating ?? log.drinkRating" />
+              </span>
             </div>
-            <strong>{{ log.bean.roasterName }} {{ log.bean.beanName }}</strong>
-            <span v-if="log.recipe" class="muted">{{ log.recipe.name }}</span>
+            <strong>{{ log.bean.roasterName }} {{ log.bean.beanName }}{{ batchSuffix(log.bean) }}</strong>
+            <span v-if="log.drink || log.recipe" class="muted">{{ [log.drink?.name, log.servingSize !== null && log.servingUnit ? formatSize({ size: log.servingSize, unit: log.servingUnit }) : null, log.recipe?.name].filter(Boolean).join(' · ') }}</span>
             <span class="facts">
-              <span>{{ formatGrams(log.actualDoseGrams) }} g → {{ formatGrams(log.actualYieldGrams) }} g ({{ formatRatio(log.actualDoseGrams, log.actualYieldGrams) }})</span>
+              <span>{{ formatDoseLine(log.actualDoseGrams, log.actualWaterGrams, log.actualYieldGrams, log.actualIceGrams) }}</span>
+              <span v-if="log.actualYieldGrams !== null && log.actualWaterGrams !== null">→ {{ formatGrams(log.actualYieldGrams) }} g yield</span>
+              <span v-if="log.tdsPercent !== null">{{ log.tdsPercent }}% TDS</span>
               <span>{{ formatTime(log.actualTimeSec) }}</span>
-              <span v-if="log.actualTempC !== null">{{ log.actualTempC }} °C</span>
-              <span v-if="log.actualGrindSetting || log.grinder">{{ [log.actualGrindSetting, log.grinder?.name].filter(Boolean).join(' · ') }}</span>
+              <span v-if="log.actualTempC !== null">{{ formatTemp(log.actualTempC, temperatureUnit) }}</span>
+              <span v-if="log.actualGrindSetting !== null || log.grinder">{{ [log.actualGrindSetting !== null ? formatGrind(log.actualGrindSetting) : null, log.grindRpm !== null ? `${log.grindRpm} RPM` : null, log.grinder?.name].filter(Boolean).join(' · ') }}</span>
             </span>
-            <span v-if="log.tastingNotes" class="notes">{{ log.tastingNotes }}</span>
-          </RouterLink>
+            <span v-if="log.tastingNotes || log.drinkTastingNotes" class="notes">{{ log.tastingNotes ?? log.drinkTastingNotes }}</span>
+          </component>
+          <!-- Beside the card link, not inside it: links can't nest. -->
+          <RouterLink v-if="workspaces.canEdit && !selection.selecting" class="btn-link small brew-again" :to="{ name: 'brew', query: { repeat: log.id } }">Brew again</RouterLink>
         </li>
       </ul>
       <button v-if="logs.length < total" class="btn btn-secondary" type="button" :disabled="loadingMore" @click="load(false)">
@@ -110,6 +148,30 @@ watch(beanFilter, () => load(true));
 </template>
 
 <style scoped>
+.badge.steeping {
+  font-size: 0.8rem;
+  padding: 1px var(--space-2);
+  border-radius: 999px;
+  border: 1px solid var(--brand);
+  color: var(--brand);
+}
+.right {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.badge.ai {
+  padding: 1px var(--space-2);
+  font-weight: 500;
+}
+.badge.ai.none {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+}
+.badge.ai.due {
+  border: 1px solid var(--brand);
+}
 .count {
   margin: 0;
   font-size: 0.9rem;
@@ -122,6 +184,17 @@ watch(beanFilter, () => load(true));
   flex-direction: column;
   gap: var(--space-2);
 }
+.item {
+  position: relative;
+}
+.entry.repeatable {
+  padding-bottom: calc(var(--space-3) + 1.75rem);
+}
+.brew-again {
+  position: absolute;
+  right: var(--space-4);
+  bottom: var(--space-2);
+}
 .entry {
   display: flex;
   flex-direction: column;
@@ -130,8 +203,16 @@ watch(beanFilter, () => load(true));
   color: var(--text);
   text-decoration: none;
 }
-.entry:hover {
+.entry:hover,
+.entry.picked {
   border-color: var(--brand);
+}
+/* A card in select mode is a button. */
+button.entry {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 .head {
   display: flex;

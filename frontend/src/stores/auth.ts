@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { authApi } from '../api/auth';
 import { ApiError } from '../api/client';
-import type { User } from '../api/types';
+import type { User, UserPreferences } from '../api/types';
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null);
@@ -36,10 +36,15 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function setPreferences(changes: Partial<UserPreferences>): Promise<void> {
+    const { preferences } = await authApi.setPreferences(changes);
+    if (user.value) user.value = { ...user.value, preferences };
+  }
+
   // The server said the session is gone (401 on some request).
   function sessionEnded(): void {
     user.value = null;
   }
 
-  return { user, checked, fetchMe, login, register, logout, sessionEnded };
+  return { user, checked, fetchMe, login, register, logout, setPreferences, sessionEnded };
 });

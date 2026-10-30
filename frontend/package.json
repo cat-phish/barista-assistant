@@ -10,17 +10,24 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "chart.js": "^4.5.0",
+    "cropperjs": "^1.6.2",
+    "fflate": "^0.8.3",
     "pinia": "^4.1.0",
+    "qrcode": "1.5.4",
     "vue": "^3.5.42",
+    "vue-draggable-plus": "^0.6.1",
     "vue-router": "^5.4.0"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
+    "@types/qrcode": "1.5.5",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/tsconfig": "^0.9.1",
     "typescript": "~6.0.2",
     "vite": "^8.3.0",
     "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.0.5",
     "vue-tsc": "^3.3.11"
   }
 }

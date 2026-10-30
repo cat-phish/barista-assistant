@@ -1,26 +1,68 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { db } from "../db.js";
 import { sendError } from "../http.js";
-import {
-  beans,
-  brewMethods,
-  recipes,
-  workspaces,
-  type Bean,
-  type Recipe,
-  type Workspace,
-} from "@barista/shared/schema";
+import { BEAN_MENU_FIELDS, beanProcesses, beans, DEFAULT_WORKSPACE_SETTINGS, drinkIngredients, drinks, ingredients, withDefaults, workspaces, type Bean, type BeanMenuField, type MethodKind, type Workspace } from "@barista/shared/schema";
 import { SLUG_PATTERN } from "../validation.js";
+import { loadMenu } from "./menu.js";
 
+// docs/api/public-menu.md §7: the menu as arranged in the builder (§7b).
+// A bean always has its roaster and name; the rest only when the beans block
+// shows that field (BEAN_MENU_FIELDS, chosen in the builder). Stock, price,
+// website, notes, rating, purchase date and supplier stay private.
+// process: the process's name (docs/api/bean-processes.md §4b).
+type BeanDetails = { process: string | null } & Pick<
+  Bean,
+  | "roastDate" | "roastLevel" | "detailedRoastLevel" | "roastType" | "blendType" | "decaf"
+  | "flavorProfile" | "originArea" | "country" | "region" | "altitudeMasl" | "producer" | "varieties" | "species"
+>;
+export type PublicBean = Pick<Bean, "id" | "roasterName" | "beanName"> & Partial<BeanDetails>;
+// The bean columns each menu field shows.
+const FIELD_COLUMNS: Record<BeanMenuField, ReadonlyArray<keyof BeanDetails>> = {
+  flavorProfile: ["flavorProfile"],
+  origin: ["originArea", "country", "region"],
+  producer: ["producer"],
+  altitude: ["altitudeMasl"],
+  variety: ["varieties", "species"],
+  process: ["process"],
+  roastLevel: ["roastLevel", "detailedRoastLevel"],
+  roastDate: ["roastDate"],
+  decaf: ["decaf"],
+  blendType: ["blendType"],
+  roastType: ["roastType"],
+};
+function publicBean(bean: PublicBean & BeanDetails, fields: readonly BeanMenuField[]): PublicBean {
+  const out: PublicBean = { id: bean.id, roasterName: bean.roasterName, beanName: bean.beanName };
+  for (const f of fields) for (const key of FIELD_COLUMNS[f]) Object.assign(out, { [key]: bean[key] });
+  return out;
+}
+
+export interface PublicMenuItem {
+  type: "drink" | "brewer";
+  id: string; // the drink or brewer
+  name: string;
+  description: string | null;
+  method: string; // how it's made: "Filter", "Espresso"
+  variantOf: string | null;
+  ingredients: string[];
+  price: number | null;
+  available: boolean;
+}
+export interface PublicBeansBlock {
+  type: "beans";
+  fields: BeanMenuField[]; // what each bean shows besides its roaster and name
+  beans: PublicBean[];
+}
+export interface PublicMenuSection {
+  name: string;
+  description: string | null;
+  items: Array<PublicMenuItem | PublicBeansBlock>;
+}
 export interface PublicMenuResponse {
+  title: string; // the menu's title, else the workspace name
   workspace: Pick<Workspace, "name" | "slug">;
-  beans: Array<
-    Pick<Bean, "id" | "roasterName" | "beanName" | "process" | "roastDate" | "inventoryWeightGrams">
-  >;
-  recipes: Array<
-    Pick<Recipe, "id" | "name" | "targetDoseGrams" | "targetYieldGrams"> & { method: string }
-  >;
+  currency: string | null;
+  sections: PublicMenuSection[];
 }
 
 // Mounted at /api/public/menu. Unauthenticated: only expose explicitly public data.
@@ -35,7 +77,7 @@ publicMenuRouter.get(
     }
 
     const [workspace] = await db
-      .select({ id: workspaces.id, name: workspaces.name, slug: workspaces.slug })
+      .select({ id: workspaces.id, name: workspaces.name, slug: workspaces.slug, settings: workspaces.settings })
       .from(workspaces)
       .where(and(eq(workspaces.slug, req.params.slug), eq(workspaces.isPublicMenuEnabled, true)))
       .limit(1);
@@ -46,37 +88,96 @@ publicMenuRouter.get(
       return;
     }
 
-    const [menuBeans, menuRecipes] = await Promise.all([
-      db
-        .select({
-          id: beans.id,
-          roasterName: beans.roasterName,
-          beanName: beans.beanName,
-          process: beans.process,
-          roastDate: beans.roastDate,
-          inventoryWeightGrams: beans.inventoryWeightGrams,
-        })
-        .from(beans)
-        .where(and(eq(beans.workspaceId, workspace.id), eq(beans.showOnPublicMenu, true)))
-        .orderBy(asc(beans.roasterName), asc(beans.beanName)),
-      db
-        .select({
-          id: recipes.id,
-          name: recipes.name,
-          method: brewMethods.name,
-          targetDoseGrams: recipes.targetDoseGrams,
-          targetYieldGrams: recipes.targetYieldGrams,
-        })
-        .from(recipes)
-        .innerJoin(brewMethods, eq(recipes.methodId, brewMethods.id))
-        .where(and(eq(recipes.workspaceId, workspace.id), eq(recipes.showOnPublicMenu, true)))
-        .orderBy(asc(recipes.name)),
-    ]);
-
-    res.json({
-      workspace: { name: workspace.name, slug: workspace.slug },
-      beans: menuBeans,
-      recipes: menuRecipes,
-    });
+    res.json(await buildPublicMenu(workspace));
   }
 );
+
+// The menu as guests see it (§7): also the builder's preview (§7b), which
+// members can see while the public menu is off.
+// A workspace that records roasts light to dark (settings.roastScale "levels")
+// shows only the 5-step level: roast names it recorded earlier are left out.
+export async function buildPublicMenu(workspace: Pick<Workspace, "id" | "name" | "slug" | "settings">): Promise<PublicMenuResponse> {
+  const levelsOnly = withDefaults(DEFAULT_WORKSPACE_SETTINGS, workspace.settings).roastScale === "levels";
+  const menu = await loadMenu(workspace.id);
+  const allItems = menu.sections.flatMap((s) => s.items);
+  const drinkIds = allItems.flatMap((i) => (i.drinkId ? [i.drinkId] : []));
+  const hasBeans = allItems.some((i) => i.itemType === "beans");
+
+  const [drinkRows, ingredientRows, menuBeans] = await Promise.all([
+    drinkIds.length
+      ? db.select({ id: drinks.id, parentDrinkId: drinks.parentDrinkId }).from(drinks).where(inArray(drinks.id, drinkIds))
+      : Promise.resolve([]),
+    drinkIds.length
+      ? db
+          .select({ drinkId: drinkIngredients.drinkId, name: ingredients.name })
+          .from(drinkIngredients)
+          .innerJoin(ingredients, eq(drinkIngredients.ingredientId, ingredients.id))
+          .where(inArray(drinkIngredients.drinkId, drinkIds))
+          .orderBy(asc(drinkIngredients.position))
+      : Promise.resolve([]),
+    hasBeans
+      ? db
+          .select({
+            id: beans.id,
+            roasterName: beans.roasterName,
+            beanName: beans.beanName,
+            process: beanProcesses.name,
+            roastDate: beans.roastDate,
+            roastLevel: beans.roastLevel,
+            detailedRoastLevel: beans.detailedRoastLevel,
+            roastType: beans.roastType,
+            blendType: beans.blendType,
+            decaf: beans.decaf,
+            flavorProfile: beans.flavorProfile,
+            originArea: beans.originArea,
+            country: beans.country,
+            region: beans.region,
+            altitudeMasl: beans.altitudeMasl,
+            producer: beans.producer,
+            varieties: beans.varieties,
+            species: beans.species,
+          })
+          .from(beans)
+          .leftJoin(beanProcesses, eq(beans.processId, beanProcesses.id))
+          .where(and(eq(beans.workspaceId, workspace.id), eq(beans.showOnPublicMenu, true), isNull(beans.archivedAt)))
+          .orderBy(asc(beans.roasterName), asc(beans.beanName))
+      : Promise.resolve([]),
+  ]);
+
+  // Name a parent drink only if it's on the menu too, so hidden drinks stay hidden.
+  const parentOf = new Map(drinkRows.map((d) => [d.id, d.parentDrinkId]));
+  const menuNameOf = new Map<string, string>();
+  for (const i of allItems) if (i.drinkId && i.source) menuNameOf.set(i.drinkId, i.name ?? i.source.name);
+
+  const sections: PublicMenuSection[] = menu.sections
+    .map((s) => ({
+      name: s.name,
+      description: s.description,
+      items: s.items.flatMap((i): Array<PublicMenuItem | PublicBeansBlock> => {
+        if (i.itemType === "beans") {
+          const fields = i.beanFields ?? [...BEAN_MENU_FIELDS];
+          return menuBeans.length ? [{ type: "beans", fields, beans: menuBeans.map((b) => publicBean(levelsOnly ? { ...b, detailedRoastLevel: null } : b, fields)) }] : [];
+        }
+        // An archived brewer, or a source that's gone, is left off.
+        if (!i.source || i.source.archived) return [];
+        const id = (i.drinkId ?? i.brewerId)!;
+        const parent = i.drinkId ? parentOf.get(i.drinkId) : null;
+        return [
+          {
+            type: i.itemType,
+            id,
+            name: i.name ?? i.source.name,
+            description: i.description ?? i.source.description,
+            method: i.source.method,
+            variantOf: (parent && menuNameOf.get(parent)) ?? null,
+            ingredients: i.drinkId ? ingredientRows.filter((r) => r.drinkId === i.drinkId).map((r) => r.name) : [],
+            price: i.price,
+            available: i.available,
+          },
+        ];
+      }),
+    }))
+    .filter((s) => s.items.length > 0);
+
+  return { title: menu.title ?? workspace.name, workspace: { name: workspace.name, slug: workspace.slug }, currency: menu.currency, sections };
+}

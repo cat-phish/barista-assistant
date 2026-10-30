@@ -1,16 +1,27 @@
 import { api } from './client';
-import type { BrewMethod, Recipe } from './types';
+import type { Usage } from '../lib/deleting';
+import type { ColdFields, FlowUnit, Recipe, StepFields } from './types';
 
-// Request body for create/update (docs/api_spec.md §5).
-export interface RecipeInput {
+// Request body for create/update (docs/api/recipes.md §5).
+export interface RecipeInput extends ColdFields {
   name: string;
-  methodId: string;
+  brewerId: string;
   targetDoseGrams: number;
-  targetYieldGrams: number;
+  targetWaterGrams: number | null; // null for espresso
+  targetIceGrams: number | null; // flash chilled: ice in the server; null for espresso
+  expectedYieldGrams: number | null; // required for espresso
+  expectedFinishMinSec: number | null;
+  expectedFinishMaxSec: number | null;
+  firstDropMinSec: number | null; // espresso only
+  firstDropMaxSec: number | null;
   targetTempC: number | null;
-  targetGrindSetting: string | null;
-  showOnPublicMenu: boolean;
-  steps: Array<{ actionName: string; targetTimeSec: number; targetWaterGrams: number }>;
+  defaultGrinderId: string | null;
+  grindSettings: Array<{ grinderId: string; setting: number }>;
+  prepToolIds: string[]; // replaces the recipe's default prep
+  flowUnit: FlowUnit;
+  stepTimeScaling: number | null; // filter only; null = step times stay
+  styleId: string | null; // docs/api/recipe-styles.md §5e
+  steps: StepFields[];
 }
 
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/recipes`;
@@ -18,14 +29,11 @@ const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/recipes`;
 export const recipesApi = {
   list: (workspaceId: string) => api.get<{ recipes: Recipe[] }>(base(workspaceId)),
   create: (workspaceId: string, input: RecipeInput) => api.post<{ recipe: Recipe }>(base(workspaceId), input),
-  update: (workspaceId: string, id: string, input: Partial<RecipeInput>) =>
+  update: (workspaceId: string, id: string, input: Partial<RecipeInput> & { archived?: boolean }) =>
     api.patch<{ recipe: Recipe }>(`${base(workspaceId)}/${id}`, input),
+  // What a delete would unlink or remove (README, "Archiving and deleting").
+  usage: (workspaceId: string, id: string) => api.get<Usage>(`${base(workspaceId)}/${id}/usage`),
+  // Unlinks what used it; show usage() in a warning first.
   remove: (workspaceId: string, id: string) => api.delete(`${base(workspaceId)}/${id}`),
 };
 
-export const brewMethodsApi = {
-  list: (workspaceId: string) =>
-    api.get<{ brewMethods: BrewMethod[] }>(`/api/workspaces/${workspaceId}/brew-methods`),
-  create: (workspaceId: string, name: string) =>
-    api.post<{ brewMethod: BrewMethod }>(`/api/workspaces/${workspaceId}/brew-methods`, { name }),
-};

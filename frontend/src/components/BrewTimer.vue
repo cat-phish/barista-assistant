@@ -1,0 +1,555 @@
+<script setup lang="ts">
+// The brew timer for every recipe (docs/timer_architecture.md §3):
+//  - Never increments a counter: elapsed = Date.now() - startTime, recomputed
+//    in a requestAnimationFrame loop. Holds a screen wake lock while running.
+//  - Steps run back to back (brewSchedule): each moves on after its time, on
+//    Next, or (espresso) at First drop. A timed step can be held: its
+//    countdown stops (the brew clock doesn't) until Resume or Next. Taps,
+//    "Log it" and holds become marks, emitted with the time on Finish & Save.
+//  - Previous / Current / Up next cards with the same structure for every
+//    step, so the layout doesn't jump. No steps = plain stopwatch.
+import { computed, onUnmounted, ref } from 'vue';
+import type { FlowUnit, MachineCapabilities, Mark, MethodKind, StepFields } from '../api/types';
+import { formatTime } from '../lib/format';
+import { formatTemp } from '../lib/units';
+import { usePreferences } from '../composables/usePreferences';
+import { useStartDelay } from '../composables/useStartDelay';
+import { startDelayFor } from '../lib/startDelay';
+import { firstDropVerdict, formatMark, heldSec, withMark } from '../lib/marks';
+import {
+  brewSchedule,
+  finishStatus,
+  formatFinishWindow,
+  machineNote,
+  pourAmounts,
+  stepInstruction,
+  stepTitle,
+  STEP_TYPES,
+} from '../lib/steps';
+
+const { temperatureUnit, prefs } = usePreferences();
+const props = defineProps<{
+  recipeName: string;
+  subtitle: string; // "Bean • 15 g dose", or "Bean • 18 g → 36 g"
+  steps: StepFields[];
+  espresso: boolean;
+  methodKind: MethodKind | null;
+  flowUnit: FlowUnit;
+  expectedFinishMinSec: number | null;
+  expectedFinishMaxSec: number | null;
+  firstDropWindow: { min: number; max: number } | null;
+  machine: MachineCapabilities | null; // the espresso brewer's controls
+}>();
+
+const emit = defineEmits<{
+  (e: 'complete', actualTimeSec: number, marks: Mark[]): void;
+}>();
+
+const isRunning = ref(false);
+const startTime = ref(0);
+const elapsedMs = ref(0);
+const marks = ref<Mark[]>([]);
+let animationFrameId: number | null = null;
+let wakeLock: WakeLockSentinel | null = null;
+let wantsWakeLock = false;
+let cueAudio: AudioContext | null = null;
+let delayedStart = false;
+// The context is only for the one beep, so it closes once that's played.
+function closeCueAudio(): void {
+  if (cueAudio && cueAudio.state !== 'closed') void cueAudio.close().catch(() => undefined);
+  cueAudio = null;
+}
+const startDelay = useStartDelay((at) => {
+  startTime.value = at;
+  elapsedMs.value = Math.max(0, Date.now() - at);
+  isRunning.value = true;
+  if (delayedStart) {
+    try { navigator.vibrate?.(150); } catch { /* Optional device cue. */ }
+    try {
+      if (cueAudio?.state === 'running') {
+        const tone = cueAudio.createOscillator();
+        const volume = cueAudio.createGain();
+        volume.gain.setValueAtTime(0.08, cueAudio.currentTime);
+        volume.gain.exponentialRampToValueAtTime(0.001, cueAudio.currentTime + 0.15);
+        tone.frequency.value = 880;
+        tone.connect(volume).connect(cueAudio.destination);
+        tone.onended = closeCueAudio;
+        tone.start();
+        tone.stop(cueAudio.currentTime + 0.15);
+      } else closeCueAudio();
+    } catch { closeCueAudio(); /* Audio support never blocks starting the brew. */ }
+  }
+  animationFrameId = requestAnimationFrame(tick);
+});
+const countingDown = computed(() => startDelay.remaining.value > 0);
+const configuredDelay = computed(() => startDelayFor(prefs.value, props.methodKind));
+
+const elapsedSec = computed(() => elapsedMs.value / 1000);
+const formattedTime = computed(() => formatTime(Math.floor(elapsedSec.value)));
+const phase = computed(() =>
+  brewSchedule(props.steps, elapsedSec.value, marks.value, { firstDropMax: props.firstDropWindow?.max ?? null, finishMax: props.expectedFinishMaxSec }),
+);
+const amounts = computed(() => pourAmounts(props.steps));
+const progress = computed(() => {
+  const p = phase.value;
+  if (p.kind === 'idle') return 0;
+  if (p.kind === 'done') return 1;
+  if (p.to === null || p.to <= p.from) return 0;
+  return Math.min(1, Math.max(0, (elapsedSec.value - p.from) / (p.to - p.from)));
+});
+const finishNote = computed(() => finishStatus(props.expectedFinishMinSec, props.expectedFinishMaxSec, elapsedSec.value));
+const finishLate = computed(() => props.expectedFinishMaxSec !== null && elapsedSec.value > props.expectedFinishMaxSec);
+
+const prevIndex = computed(() => (phase.value.kind === 'idle' ? null : phase.value.prevIndex));
+const nextIndex = computed(() => (phase.value.kind === 'step' ? phase.value.nextIndex : null));
+const stepEnd = (index: number) => marks.value.find((m) => m.kind === 'step_end' && m.stepOrder === index + 1)?.atSec ?? null;
+const stepHeld = (index: number) => heldSec(marks.value, index + 1, elapsedSec.value);
+// Timed steps can be held (docs/timer_architecture.md §3); tap and first-drop
+// steps wait anyway, and an instant step is gone in a moment.
+const holdable = computed(() => {
+  const p = phase.value;
+  return isRunning.value && p.kind === 'step' && (p.step.advance === 'auto' || p.step.advance === 'auto_log') && !!p.step.durationSec;
+});
+
+// Previous / Up next: the instruction (shown bold) between the step's name and
+// its length: "Pour · **Pour to 210 g (+90)** · 0:30", "Soak · **Pump off** · 0:10".
+function sideParts(index: number): { title: string; instruction: string | null; how: string } {
+  const step = props.steps[index]!;
+  const how = step.advance === 'first_drop' ? 'until first drop' : step.advance === 'tap' ? 'until you tap' : step.durationSec === null ? 'until done' : formatTime(step.durationSec);
+  return { title: stepTitle(step), instruction: stepInstruction(step, amounts.value[index] ?? null, props.flowUnit), how };
+}
+// "1:22", or "≈ 1:22" when the current step has no fixed end (it waits for a tap).
+const nextStarts = computed(() => {
+  const p = phase.value;
+  if (p.kind !== 'step') return null;
+  if (p.end !== null) return formatTime(Math.round(p.end));
+  return p.guideEnd === null ? null : `≈ ${formatTime(Math.round(p.guideEnd))}`;
+});
+
+// Right-hand side of the current card: a countdown when the step has an end
+// (or a guide), with a small line under it; otherwise how it ends.
+const countdown = computed((): { big: string; small: string } => {
+  const p = phase.value;
+  if (p.kind !== 'step') return { big: '', small: '' };
+  const left = (at: number) => formatTime(Math.max(0, Math.ceil(at - elapsedSec.value)));
+  if (p.step.advance === 'first_drop') return { big: 'At first drop', small: '' };
+  if (p.step.advance === 'tap') {
+    if (p.due) return { big: 'Tap Next', small: 'when ready' };
+    return p.guideEnd !== null ? { big: left(p.guideEnd), small: 'left (guide)' } : { big: 'Tap Next', small: 'when ready' };
+  }
+  if (p.holding && p.guideEnd !== null) return { big: left(p.guideEnd), small: `Held · +${formatTime(Math.floor(p.held))}` };
+  if (p.end === null) return { big: 'Until done', small: 'tap Finish' };
+  return { big: left(p.end), small: p.held >= 1 ? `left · held ${formatTime(Math.floor(p.held))}` : 'left' };
+});
+
+const firstDropAt = computed(() => marks.value.find((m) => m.kind === 'first_drop')?.atSec ?? null);
+const firstDropText = computed(() => {
+  const at = firstDropAt.value;
+  if (at === null) return null;
+  const verdict = firstDropVerdict(at, props.firstDropWindow);
+  return `First drop ${formatMark(at)}${verdict ? ` · ${verdict}` : ''}`;
+});
+const firstDropTarget = computed(() => (props.firstDropWindow ? formatFinishWindow(props.firstDropWindow.min, props.firstDropWindow.max) : null));
+
+function record(kind: Mark['kind'], stepOrder: number | null = null): void {
+  if (!isRunning.value) return;
+  marks.value = withMark(marks.value, kind, (Date.now() - startTime.value) / 1000, stepOrder);
+}
+
+const tick = () => {
+  if (!isRunning.value) return;
+  elapsedMs.value = Date.now() - startTime.value;
+  animationFrameId = requestAnimationFrame(tick);
+};
+
+const requestWakeLock = async () => {
+  wantsWakeLock = true;
+  try {
+    if ('wakeLock' in navigator) {
+      const lock = await navigator.wakeLock.request('screen');
+      if (wantsWakeLock) wakeLock = lock;
+      else await lock.release();
+    }
+  } catch (err) {
+    console.warn('Wake Lock request failed:', err);
+  }
+};
+
+const releaseWakeLock = async () => {
+  wantsWakeLock = false;
+  if (wakeLock !== null) {
+    await wakeLock.release();
+    wakeLock = null;
+  }
+};
+
+const startTimer = () => {
+  if (isRunning.value) return;
+  if (!countingDown.value) {
+    delayedStart = configuredDelay.value !== 0;
+    // Unlock audio in the user's tap, rather than the countdown callback.
+    if (delayedStart) {
+      try {
+        cueAudio = new AudioContext();
+        void cueAudio.resume().catch(() => undefined);
+      } catch { /* Vibration is still available on supported devices. */ }
+    }
+    void requestWakeLock();
+  } else {
+    // Start now: the tap is the cue, so no beep or vibration.
+    delayedStart = false;
+    closeCueAudio();
+  }
+  startDelay.start(configuredDelay.value);
+};
+
+const finishBrew = async () => {
+  isRunning.value = false;
+  if (animationFrameId) cancelAnimationFrame(animationFrameId);
+  elapsedMs.value = Date.now() - startTime.value; // exact at the moment of the tap
+  await releaseWakeLock();
+  const seconds = Math.floor(elapsedMs.value / 1000);
+  // A mark can't be after the saved (whole-second) time.
+  emit('complete', seconds, marks.value.map((m) => ({ ...m, atSec: Math.min(m.atSec, seconds) })));
+};
+
+onUnmounted(() => {
+  startDelay.cancel();
+  closeCueAudio();
+  if (animationFrameId) cancelAnimationFrame(animationFrameId);
+  void releaseWakeLock();
+});
+</script>
+
+<template>
+  <div class="timer-container">
+    <header class="timer-header">
+      <h2>{{ recipeName }}</h2>
+      <p class="subtitle">{{ subtitle }}</p>
+    </header>
+
+    <template v-if="!countingDown && phase.kind !== 'idle'">
+      <div class="step-card side" aria-label="Previous step">
+        <span class="label">Previous</span>
+        <span class="side-text" :class="{ none: prevIndex === null }">
+          <template v-if="prevIndex !== null">
+            {{ sideParts(prevIndex).title }}<template v-if="sideParts(prevIndex).instruction"> · <strong>{{ sideParts(prevIndex).instruction }}</strong></template> · {{ sideParts(prevIndex).how }}<template v-if="stepHeld(prevIndex) >= 1"> · held {{ formatTime(Math.floor(stepHeld(prevIndex))) }}</template><template v-if="stepEnd(prevIndex) !== null"> · ended {{ formatMark(stepEnd(prevIndex)!) }}</template>
+          </template>
+          <template v-else>None</template>
+        </span>
+      </div>
+
+      <!-- Same structure for every step so the layout doesn't jump. -->
+      <div
+        class="step-card current"
+        :class="phase.kind === 'step' ? { waiting: STEP_TYPES[phase.step.stepType].waiting, due: phase.due, holding: phase.holding } : 'phase-done'"
+        aria-label="Current step"
+      >
+        <template v-if="phase.kind === 'step'">
+          <span class="label">
+            Step {{ phase.index + 1 }} of {{ steps.length }} · {{ STEP_TYPES[phase.step.stepType].label }}<template v-if="phase.step.targetTempC !== null"> · {{ formatTemp(phase.step.targetTempC, temperatureUnit) }}</template>
+          </span>
+          <!-- What to do is the big line; the step's name is the small one under it. -->
+          <div class="main-row">
+            <h3 aria-live="polite">{{ stepInstruction(phase.step, phase.amount, flowUnit) ?? stepTitle(phase.step) }}</h3>
+            <span class="count" :class="{ text: !/^\d/.test(countdown.big) }" aria-live="off">{{ countdown.big }}</span>
+          </div>
+          <div class="sub-row">
+            <span>{{ stepInstruction(phase.step, phase.amount, flowUnit) ? stepTitle(phase.step) : '' }}</span>
+            <span>{{ countdown.small }}</span>
+          </div>
+          <p v-if="machineNote(phase.step, machine)" class="machine-note">{{ machineNote(phase.step, machine) }}</p>
+          <button v-if="isRunning && phase.step.advance === 'tap'" class="btn tap" :class="{ due: phase.due }" type="button" @click="record('step_end', phase.index + 1)">
+            Next
+          </button>
+          <p v-if="holdable && !phase.holding && phase.step.advance === 'auto_log' && stepEnd(phase.index) !== null" class="logged">Logged at {{ formatMark(stepEnd(phase.index)!) }}</p>
+          <!-- Held: Resume carries on with the time left; Next ends the step now. -->
+          <div v-if="holdable && phase.holding" class="step-actions">
+            <button class="btn tap due" type="button" @click="record('step_resume', phase.index + 1)">Resume</button>
+            <button class="btn tap" type="button" @click="record('step_end', phase.index + 1)">Next</button>
+          </div>
+          <div v-else-if="holdable" class="step-actions">
+            <button v-if="phase.step.advance === 'auto_log' && stepEnd(phase.index) === null" class="btn tap" type="button" @click="record('step_end', phase.index + 1)">Log it</button>
+            <button class="btn tap hold" type="button" @click="record('step_hold', phase.index + 1)">Hold</button>
+          </div>
+        </template>
+        <template v-else>
+          <span class="label">All steps done</span>
+          <h3 aria-live="polite">{{ espresso ? 'Finishing the shot' : 'Drawdown / finishing' }}</h3>
+          <div class="step-metrics">
+            <span class="value">Last step ended {{ formatTime(Math.round(phase.from)) }}</span>
+            <span class="value right">{{ formatFinishWindow(expectedFinishMinSec, expectedFinishMaxSec) ?? '' }}</span>
+          </div>
+        </template>
+        <div class="progress" aria-hidden="true"><span :style="{ width: `${progress * 100}%` }" /></div>
+      </div>
+
+      <div class="step-card side" aria-label="Next step">
+        <span class="label">Up next</span>
+        <span class="side-text" :class="{ none: nextIndex === null }">
+          <template v-if="nextIndex !== null">
+            {{ sideParts(nextIndex).title }}<template v-if="sideParts(nextIndex).instruction"> · <strong>{{ sideParts(nextIndex).instruction }}</strong></template> · {{ sideParts(nextIndex).how }}<template v-if="nextStarts"> · at {{ nextStarts }}</template>
+          </template>
+          <template v-else>None</template>
+        </span>
+      </div>
+    </template>
+    <!-- Steps first (they say what to do), then the buttons, then the clock. -->
+    <div class="controls">
+      <button v-if="!isRunning && elapsedMs === 0" @click="startTimer" class="btn primary">{{ countingDown ? 'Start now' : espresso ? 'Start shot' : 'Start brew' }}</button>
+      <button v-else-if="isRunning" @click="finishBrew" class="btn success">Finish & Save</button>
+      <template v-if="espresso">
+        <button v-if="isRunning && firstDropAt === null" class="btn tap drop" type="button" @click="record('first_drop')">First drop</button>
+        <p v-else-if="firstDropText" class="drop-line" aria-live="polite">
+          {{ firstDropText }}
+          <button v-if="isRunning" class="btn-link small" type="button" @click="record('first_drop')">Re-record</button>
+        </p>
+        <p v-else-if="firstDropTarget" class="drop-line muted">First drop target {{ firstDropTarget }}</p>
+      </template>
+    </div>
+
+    <div class="clock-display" role="timer" aria-live="off">
+      <span v-if="countingDown" class="time" role="status" aria-live="polite">{{ startDelay.remaining.value }}</span>
+      <span v-else class="time">{{ formattedTime }}</span>
+      <p v-if="countingDown" class="finish-note">Get ready · tap Start now to skip the countdown.</p>
+      <p v-if="!countingDown && finishNote" class="finish-note" :class="{ late: finishLate }">{{ finishNote }}</p>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.timer-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  /* The page around it already pads; doubling it narrowed the timer on phones. */
+  padding: 0;
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+}
+.timer-header h2 {
+  font-size: 1.4rem;
+}
+.subtitle {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+}
+.clock-display {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 1rem;
+  background: var(--bg);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+.time {
+  font-size: 3.75rem;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  font-weight: bold;
+  color: var(--brand);
+}
+.finish-note {
+  margin: 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+.finish-note.late {
+  color: var(--danger);
+}
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.controls > button,
+.tap {
+  width: 100%;
+  padding: 0.85rem;
+  font-size: 1.15rem;
+  border-radius: 8px;
+  border: none;
+  font-weight: bold;
+  cursor: pointer;
+  touch-action: manipulation;
+  min-height: var(--tap);
+}
+.btn.primary {
+  background: var(--brand);
+  color: var(--on-brand);
+}
+.btn.success {
+  background: var(--success);
+  color: var(--on-success);
+}
+/* Big, easy targets for a thumb while watching the cup. Two classes, so it
+   beats ".controls > button" (which removes borders). */
+.btn.tap {
+  background: var(--surface);
+  color: var(--brand);
+  border: 2px solid var(--brand);
+}
+.btn.tap.due {
+  background: var(--brand);
+  color: var(--on-brand);
+}
+.drop-line {
+  margin: 0;
+  text-align: center;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.drop-line.muted {
+  font-weight: 400;
+}
+.step-card {
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.step-card h3 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+/* Current step: something to do = warm tint; waiting (wait, soak) = white. */
+.current {
+  min-height: 9.25rem;
+  background: var(--brand-tint);
+  border-color: var(--brand-line);
+  border-left: 4px solid var(--brand);
+}
+.current.waiting {
+  background: var(--surface);
+  border-color: var(--border);
+  border-left-color: var(--brand-edge);
+}
+.current.due h3,
+.current.due .right {
+  color: var(--brand);
+}
+.current.phase-done {
+  background: var(--surface);
+  border-color: var(--border);
+  border-left-color: var(--success);
+}
+.side {
+  font-size: 1.05rem;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  background: var(--bg);
+}
+.side .label {
+  flex-shrink: 0;
+  min-width: 4.5rem;
+}
+.side-text.none {
+  color: var(--text-muted);
+  font-style: italic;
+}
+.main-row,
+.sub-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+.main-row h3 {
+  font-size: 1.8rem;
+  line-height: 1.2;
+}
+.count {
+  font-size: 2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.count.text {
+  font-size: 1.25rem;
+}
+.sub-row {
+  color: var(--text-muted);
+  font-size: 1.05rem;
+  margin-bottom: 0.4rem;
+}
+.current.due .count {
+  color: var(--brand);
+}
+.side-text strong {
+  font-weight: 700;
+  color: var(--text);
+}
+.step-metrics {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0.4rem 0 0.4rem;
+}
+.label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.value {
+  font-size: 1.15rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.right {
+  text-align: right;
+}
+.machine-note,
+.logged {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.current .tap {
+  margin: 0.25rem 0;
+}
+.step-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.step-actions .tap {
+  flex: 1;
+}
+/* Hold is the lesser action next to Log it, and on its own it shouldn't
+   pull the eye from the countdown. */
+.btn.tap.hold {
+  border-color: var(--brand-line);
+  color: var(--text-muted);
+}
+.current.holding .count {
+  color: var(--text-muted);
+}
+.progress {
+  margin-top: auto;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--brand-line);
+}
+.progress span {
+  display: block;
+  height: 100%;
+  background: var(--brand);
+}
+.waiting .progress span {
+  background: var(--brand-soft);
+}
+.small {
+  font-size: 0.85rem;
+}
+</style>

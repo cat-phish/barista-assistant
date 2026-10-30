@@ -1,5 +1,7 @@
+import request from "supertest";
 import { describe, expect, it } from "vitest";
-import { addMember, methodId, newBean, newBrewLog, newUser, newWorkspace } from "./helpers.js";
+import { app } from "../src/app.js";
+import { addMember, brewerId, newBean, newBrewLog, newUser, newWorkspace } from "./helpers.js";
 
 describe("workspaces", () => {
   it("creating one makes the caller owner and seeds the default brew methods", async () => {
@@ -7,8 +9,8 @@ describe("workspaces", () => {
     const ws = await newWorkspace(owner);
     const list = await owner.agent.get("/api/workspaces");
     expect(list.body.workspaces).toMatchObject([{ id: ws.id, role: "owner", isPublicMenuEnabled: false }]);
-    const methods = await owner.agent.get(`/api/workspaces/${ws.id}/brew-methods`);
-    expect(methods.body.brewMethods.map((m: { name: string }) => m.name)).toEqual(["Aeropress", "Espresso", "Latte", "V60"]);
+    const methods = await owner.agent.get(`/api/workspaces/${ws.id}/brewers`);
+    expect(methods.body.brewers.map((m: { name: string }) => m.name)).toEqual(["Aeropress", "Espresso", "V60"]);
   });
 
   it("rejects duplicate and malformed slugs", async () => {
@@ -29,6 +31,32 @@ describe("workspaces", () => {
   });
 });
 
+describe("changing the web address (slug)", () => {
+  it("moves the public menu to the new address", async () => {
+    const owner = await newUser();
+    const ws = await newWorkspace(owner, "old-address");
+    await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ isPublicMenuEnabled: true });
+    const res = await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ slug: "new-address" });
+    expect(res.status).toBe(200);
+    expect(res.body.workspace.slug).toBe("new-address");
+    expect((await request(app).get("/api/public/menu/new-address")).status).toBe(200);
+    expect((await request(app).get("/api/public/menu/old-address")).status).toBe(404);
+  });
+
+  it("rejects taken and malformed slugs, and non-owners", async () => {
+    const owner = await newUser();
+    const barista = await newUser();
+    await newWorkspace(owner, "someone-else");
+    const ws = await newWorkspace(owner, "mine-to-move");
+    await addMember(owner, ws.id, barista, "barista");
+    expect((await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ slug: "someone-else" })).status).toBe(409);
+    expect((await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ slug: "No Spaces" })).status).toBe(400);
+    expect((await barista.agent.patch(`/api/workspaces/${ws.id}`).send({ slug: "barista-move" })).status).toBe(403);
+    // Saving the current slug unchanged is fine.
+    expect((await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ slug: "mine-to-move" })).status).toBe(200);
+  });
+});
+
 describe("deleting a workspace", () => {
   it("needs ?confirm=<slug> and an owner", async () => {
     const owner = await newUser();
@@ -45,13 +73,13 @@ describe("deleting a workspace", () => {
     const owner = await newUser();
     const ws = await newWorkspace(owner, "doomed");
     const bean = await newBean(owner, ws.id);
-    const v60 = await methodId(owner, ws.id, "V60"); // resolve before starting the next request
+    const v60 = await brewerId(owner, ws.id, "V60"); // resolve before starting the next request
     const recipe = await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({
       name: "House V60",
-      methodId: v60,
+      brewerId: v60,
       targetDoseGrams: 15,
-      targetYieldGrams: 250,
-      steps: [{ actionName: "Bloom", targetTimeSec: 45, targetWaterGrams: 50 }],
+      targetWaterGrams: 250,
+      steps: [{ stepType: "bloom", durationSec: 45, targetWaterGrams: 50 }],
     });
     expect(recipe.status).toBe(201);
     await newBrewLog(owner, ws.id, bean, { recipeId: recipe.body.recipe.id });
@@ -83,6 +111,37 @@ describe("members and roles", () => {
     expect((await barista.agent.delete(`/api/workspaces/${ws.id}/members/${viewer.id}`)).status).toBe(403);
     expect((await viewer.agent.delete(`/api/workspaces/${ws.id}/members/${viewer.id}`)).status).toBe(204);
     expect((await viewer.agent.get(`/api/workspaces/${ws.id}/beans`)).status).toBe(404);
+  });
+
+  // What Settings → Members does (docs/api/workspaces.md §2 Members).
+  it("lists members by email for any member; owners add, change roles and remove", async () => {
+    const owner = await newUser("zed");
+    const barista = await newUser("amy");
+    const ws = await newWorkspace(owner);
+    const base = `/api/workspaces/${ws.id}/members`;
+
+    const added = await owner.agent.post(base).send({ email: barista.email, role: "barista" });
+    expect(added.status).toBe(201);
+    expect(added.body.member).toEqual({ userId: barista.id, email: barista.email, role: "barista" });
+    expect((await owner.agent.post(base).send({ email: barista.email, role: "viewer" })).status).toBe(409);
+    expect((await owner.agent.post(base).send({ email: "nobody-here@example.com", role: "viewer" })).status).toBe(404);
+
+    const list = await barista.agent.get(base);
+    expect(list.body.members.map((m: { email: string }) => m.email)).toEqual([barista.email, owner.email]);
+
+    const changed = await owner.agent.patch(`${base}/${barista.id}`).send({ role: "viewer" });
+    expect(changed.body.member).toEqual({ userId: barista.id, email: barista.email, role: "viewer" });
+    expect((await owner.agent.delete(`${base}/${barista.id}`)).status).toBe(204);
+    expect((await owner.agent.get(base)).body.members).toHaveLength(1);
+  });
+
+  it("an owner can leave once another owner exists", async () => {
+    const owner = await newUser();
+    const second = await newUser();
+    const ws = await newWorkspace(owner);
+    await addMember(owner, ws.id, second, "owner");
+    expect((await owner.agent.delete(`/api/workspaces/${ws.id}/members/${owner.id}`)).status).toBe(204);
+    expect((await second.agent.delete(`/api/workspaces/${ws.id}/members/${second.id}`)).status).toBe(409);
   });
 });
 

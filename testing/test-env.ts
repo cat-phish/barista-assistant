@@ -5,7 +5,9 @@
 //   Redis    database 1 (the app uses 0; flushed before every test)
 //   OpenAI   an unroutable URL, so an accidental real call fails fast
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "dotenv";
 
@@ -35,6 +37,8 @@ export function applyTestEnv(): void {
     OPENAI_API_KEY: "sk-test-not-a-real-key",
     OPENAI_MODEL: "test-model",
     OPENAI_BASE_URL: "http://127.0.0.1:9/v1",
+    // Photos go to a fresh folder per run, never the real ./photos.
+    PHOTO_DIR: mkdtempSync(join(tmpdir(), "barista-photos-")),
   });
   assertTestDatabase();
 }

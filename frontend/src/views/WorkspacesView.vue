@@ -2,12 +2,11 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ApiError, errorMessage } from '../api/client';
-import type { Role } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
+import RestoreBackup from '../components/RestoreBackup.vue';
+import { ROLE_LABELS } from '../lib/roles';
+import { SLUG_PATTERN, slugify } from '../lib/slug';
 import { useWorkspaceStore } from '../stores/workspace';
-
-const SLUG_PATTERN = /^[a-z0-9-]{3,64}$/; // same rule as the API (§2)
-const ROLE_LABELS: Record<Role, string> = { owner: 'Owner', barista: 'Barista', viewer: 'Viewer' };
 
 const workspaces = useWorkspaceStore();
 const router = useRouter();
@@ -19,18 +18,6 @@ const slug = ref('');
 const slugEdited = ref(false);
 const creating = ref(false);
 const createError = ref('');
-
-// "Jordan's Café" -> "jordans-cafe"
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/['’]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 64);
-}
 
 watch(name, (value) => {
   if (!slugEdited.value) slug.value = slugify(value);
@@ -100,13 +87,13 @@ async function create(): Promise<void> {
       <h2>Create a workspace</h2>
       <form class="stack" novalidate @submit.prevent="create">
         <div class="field">
-          <label for="ws-name">Name</label>
-          <input id="ws-name" v-model="name" type="text" maxlength="255" placeholder="e.g. Jordan's Coffee Bar" required />
+          <label for="ws-name">Name<span class="req" aria-hidden="true">*</span></label>
+          <input id="ws-name" aria-required="true" v-model="name" type="text" maxlength="255" placeholder="e.g. Jordan's Coffee Bar" required />
         </div>
         <div class="field">
-          <label for="ws-slug">Web address</label>
+          <label for="ws-slug">Web address<span class="req" aria-hidden="true">*</span></label>
           <input
-            id="ws-slug"
+            id="ws-slug" aria-required="true"
             v-model.trim="slug"
             type="text"
             inputmode="url"
@@ -126,6 +113,13 @@ async function create(): Promise<void> {
           {{ creating ? 'Creating…' : 'Create workspace' }}
         </button>
       </form>
+    </section>
+
+    <!-- Moving to this server: a backup from Settings → Data elsewhere (docs/api/backup.md §2b). -->
+    <section v-if="!loading && !loadError" class="card stack">
+      <h2>Restore from a backup</h2>
+      <p class="muted small">A backup file from Settings → Data becomes a new workspace here.</p>
+      <RestoreBackup />
     </section>
   </main>
 </template>

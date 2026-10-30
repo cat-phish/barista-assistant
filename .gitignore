@@ -1,5 +1,18 @@
 node_modules/
 dist/
+*.tsbuildinfo
 .env
 .env.*
 !.env.example
+.claude/worktrees/
+
+# Prompt evaluations on real brews (worker/src/eval.ts): real data.
+eval/
+
+# Your own flavor wheels (docs/custom-flavor-wheel.md): kept out of the repo,
+# which ships only its built-in wheel. Build them here or anywhere else.
+lexicons/
+*.flavor-wheel.json
+
+# Personal notes, never committed.
+.privatenotes.md

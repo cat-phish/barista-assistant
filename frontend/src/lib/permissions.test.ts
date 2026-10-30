@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { canModifyBrewLog } from './permissions';
 
 describe('canModifyBrewLog', () => {
-  const mine = { brewer: { id: 'me', email: 'me@x' } };
-  const theirs = { brewer: { id: 'them', email: 'them@x' } };
-  const orphan = { brewer: null };
+  const mine = { brewedBy: { id: 'me', email: 'me@x' } };
+  const theirs = { brewedBy: { id: 'them', email: 'them@x' } };
+  const orphan = { brewedBy: null };
   it('owners can change any log', () => {
     for (const log of [mine, theirs, orphan]) expect(canModifyBrewLog(log, 'owner', 'me')).toBe(true);
   });

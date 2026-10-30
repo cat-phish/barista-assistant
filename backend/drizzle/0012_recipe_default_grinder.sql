@@ -1,0 +1,2 @@
+ALTER TABLE `recipes` ADD `default_grinder_id` varchar(36);--> statement-breakpoint
+ALTER TABLE `recipes` ADD CONSTRAINT `recipes_default_grinder_id_grinders_id_fk` FOREIGN KEY (`default_grinder_id`) REFERENCES `grinders`(`id`) ON DELETE set null ON UPDATE no action;

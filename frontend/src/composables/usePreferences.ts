@@ -1,0 +1,44 @@
+import { computed } from 'vue';
+import type { UserPreferences, WorkspaceSettings } from '../api/types';
+import { useAuthStore } from '../stores/auth';
+import { useWorkspaceStore } from '../stores/workspace';
+
+// The defaults match the API's (DEFAULT_PREFERENCES / DEFAULT_WORKSPACE_SETTINGS
+// in @barista/shared), for the moment before /me or the workspace has loaded.
+export const DEFAULT_PREFERENCES: UserPreferences = {
+  volumeUnit: 'fl_oz',
+  showBothVolumes: false,
+  altitudeUnit: 'm',
+  temperatureUnit: 'c',
+  theme: 'system',
+  rateReminders: true,
+  rateReminderMinutes: 15,
+  rateLaterDefault: false,
+  repeatKeeps: ['size', 'doseWater', 'temp', 'grinder', 'grind', 'waterProfile', 'dilution', 'window'],
+  rememberSetup: ['what', 'brewer', 'recipe', 'bean', 'grinder', 'grind'],
+  startDelays: {},
+  steepReminders: true,
+  restReminders: true,
+  greenStockAlerts: true,
+};
+export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: 'light', roastScale: 'names', ratingStep: 'half', hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: 'beanRecipe', suggestMaxBrews: 5, suggestAlternatives: [], readLabels: true, labelWebLookup: false, labelWebContext: 'high', homeRoasting: false, homeRoasterName: 'Home roast', restDays: { filter: 7, espresso: 14, omni: 10 } };
+
+// The signed-in person's display units and the current workspace's settings.
+export function usePreferences() {
+  const auth = useAuthStore();
+  const workspaces = useWorkspaceStore();
+  const prefs = computed(() => auth.user?.preferences ?? DEFAULT_PREFERENCES);
+  const settings = computed(() => workspaces.current?.settings ?? DEFAULT_WORKSPACE_SETTINGS);
+  return {
+    prefs,
+    settings,
+    temperatureUnit: computed(() => prefs.value.temperatureUnit),
+    altitudeUnit: computed(() => prefs.value.altitudeUnit),
+    recipeRoastLevel: computed(() => settings.value.recipeRoastLevel),
+    roastScale: computed(() => settings.value.roastScale),
+    ratingStep: computed(() => settings.value.ratingStep ?? 'half'),
+    // Older stored settings may lack it until the API fills in defaults.
+    hiddenFields: computed(() => settings.value.hiddenFields ?? []),
+    aiHidden: computed(() => settings.value.aiHidden ?? []),
+  };
+}

@@ -9,7 +9,8 @@
     "build": "tsc -b",
     "start": "node dist/worker.js",
     "test": "vitest run",
-    "typecheck:tests": "tsc -p tsconfig.test.json"
+    "typecheck:tests": "tsc -p tsconfig.test.json",
+    "eval": "tsx src/eval.ts"
   },
   "dependencies": {
     "@barista/shared": "^1.0.0",

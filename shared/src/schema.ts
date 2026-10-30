@@ -6,10 +6,207 @@ import {
   decimal,
   boolean,
   primaryKey,
+  customType,
   text,
   unique,
   date,
+  type AnyMySqlColumn,
 } from "drizzle-orm/mysql-core";
+import type { AiDetail } from "./aiDetails.js";
+import type { AiPrompt } from "./aiPrompt.js";
+import type { LexiconFlavor } from "./flavors.js";
+
+// A JSON column read back as a value: MariaDB stores JSON as text, so the
+// driver returns a string that drizzle's json() would leave unparsed.
+const jsonValue = <T>(name: string) =>
+  customType<{ data: T; driverData: string }>({
+    dataType: () => "json",
+    toDriver: (value) => JSON.stringify(value),
+    fromDriver: (value) => (typeof value === "string" ? (JSON.parse(value) as T) : (value as T)),
+  })(name);
+
+// Settings (docs/schema.md "Settings"): stored as JSON, null or missing keys =
+// the defaults. Validated by the backend; read through withDefaults().
+export const VOLUME_UNITS = ["fl_oz", "ml"] as const;
+export const ALTITUDE_UNITS = ["m", "ft"] as const;
+export const TEMPERATURE_UNITS = ["c", "f"] as const;
+export const THEMES = ["system", "light", "dark"] as const; // system = follow the device
+// What "Brew again" / a repeat copies from the earlier brew, besides the bean
+// and what → brewer → recipe, which a repeat always takes (docs/api/auth.md §1).
+export const REPEAT_KEEPS = ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "grinderWeights", "notes"] as const;
+export type RepeatKeep = (typeof REPEAT_KEEPS)[number];
+// What the brew page fills in from last time on this device (Settings → Brew
+// setup, docs/api/auth.md §1 rememberSetup).
+export const REMEMBER_KEYS = ["what", "brewer", "recipe", "bean", "grinder", "grind", "waterProfile", "prepTools", "size"] as const;
+export type RememberKey = (typeof REMEMBER_KEYS)[number];
+
+// Per person (docs/api/auth.md §1 preferences).
+export interface UserPreferences {
+  volumeUnit: (typeof VOLUME_UNITS)[number]; // yield estimates, new drinks' size
+  showBothVolumes: boolean; // also show the other volume unit
+  altitudeUnit: (typeof ALTITUDE_UNITS)[number]; // stored in metres regardless
+  temperatureUnit: (typeof TEMPERATURE_UNITS)[number]; // stored in °C regardless
+  theme: (typeof THEMES)[number];
+  // Rate later (docs/api/notifications.md §1b): remind to rate a brew saved
+  // without a rating, after this many minutes, through the person's enabled
+  // notification channels.
+  rateReminders: boolean;
+  rateReminderMinutes: number; // 5–240
+  rateLaterDefault: boolean; // the log form's Rate later box starts ticked
+  repeatKeeps: RepeatKeep[]; // what a repeat copies (notes: shown as a reminder, not copied)
+  rememberSetup: RememberKey[]; // what the brew page remembers from last time
+  startDelays: Partial<Record<MethodKind, 0 | 3 | 5>>; // countdown before a timed brew, per method; missing = none (docs/api/auth.md §1)
+  steepReminders: boolean; // remind when a cold brew's steep window opens (docs/api/notifications.md §1b)
+  restReminders: boolean; // remind the morning a home roast is ready to brew
+  greenStockAlerts: boolean; // tell when a roast takes a green coffee below its low-stock threshold
+}
+export const DEFAULT_PREFERENCES: UserPreferences = {
+  volumeUnit: "fl_oz",
+  showBothVolumes: false,
+  altitudeUnit: "m",
+  temperatureUnit: "c",
+  theme: "system",
+  rateReminders: true,
+  rateReminderMinutes: 15,
+  rateLaterDefault: false,
+  repeatKeeps: ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"],
+  rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"],
+  startDelays: {},
+  steepReminders: true,
+  restReminders: true,
+  greenStockAlerts: true,
+};
+
+// Per workspace, owners edit (docs/api/workspaces.md §2 settings).
+export const ROAST_SCALES = ["names", "levels"] as const;
+export type RoastScale = (typeof ROAST_SCALES)[number];
+export const RATING_STEPS = ["whole", "half"] as const;
+export type RatingStep = (typeof RATING_STEPS)[number];
+export interface WorkspaceSettings {
+  // The roast recipes are written for: the recipe form's yield estimate, the
+  // baseline when a bean's roast adjusts it, and beans with no roast level.
+  recipeRoastLevel: RoastLevel;
+  // How beans record their roast: "names" (Cinnamon … French, which imply
+  // the 5-step level) or "levels" (light … dark only; roast names already
+  // recorded are kept but not shown).
+  roastScale: RoastScale;
+  // How ratings are entered: "whole" (1-5 stars) or "half" (0.5-5 in half
+  // stars). Input only: ratings are stored in 0.5 steps either way, and half
+  // ratings already recorded still show (docs/api/workspaces.md §2).
+  ratingStep: RatingStep;
+  // Optional form fields the workspace hides (docs/api/workspaces.md §2,
+  // "Field visibility"): keys like "brew.tds" from the frontend's registry
+  // (frontend/src/lib/fields.ts). Values stay stored, and the AI still gets them.
+  hiddenFields: string[];
+  // Details kept from the AI (docs/api/llm-contract.md §9, "What the AI
+  // sees"): AI_DETAILS keys (aiDetails.ts). The worker leaves them out of the
+  // analysis input and its prompt; "analyzeUnrated" refuses unrated brews.
+  aiHidden: AiDetail[];
+  // Auto-analyze (docs/api/analysis.md §8): analyze each rated brew this many
+  // minutes after it's saved (an unrated one once it's first rated), at most
+  // autoAnalyzeDailyCap a day (null: no cap). Manual requests aren't capped.
+  autoAnalyze: boolean;
+  autoAnalyzeDelayMinutes: AutoAnalyzeDelay;
+  autoAnalyzeDailyCap: number | null;
+  // "Suggest parameters" (docs/api/analysis.md §8b): which earlier brews it
+  // sends by default, and at most how many. Changeable each time.
+  suggestSource: SuggestSource;
+  suggestMaxBrews: number;
+  // What else it suggests by default (another recipe, brewer or bean).
+  suggestAlternatives: AlternativeKind[];
+  // "Fill in from the photos" on the bean form (docs/api/bean-label.md §4d):
+  // the bean's photos go to the AI to read the label. Off hides it.
+  readLabels: boolean;
+  // With it, "Also look it up on the web" on that card (bean-label.md §4d):
+  // the label's text goes to a web search. Off by default.
+  labelWebLookup: boolean;
+  // How much of each page the web search reads (its search_context_size):
+  // more finds the details, but costs more and takes longer.
+  labelWebContext: LabelWebContext;
+  // Home roasting (docs/api/workspaces.md §2): shows the Brew | Roast switch
+  // and roast mode (green stock, roasting machines, roasts). Off hides it;
+  // nothing is deleted.
+  homeRoasting: boolean;
+  // The roaster name on the beans roasts create.
+  homeRoasterName: string;
+  // Days a roast rests before it's ready, by roast type; each roast starts
+  // from these and can change its own.
+  restDays: Record<RoastType, number>;
+}
+export const MAX_REST_DAYS = 60;
+export const LABEL_WEB_CONTEXTS = ["low", "medium", "high"] as const;
+export type LabelWebContext = (typeof LABEL_WEB_CONTEXTS)[number];
+export const AUTO_ANALYZE_DELAYS = [0, 5, 10, 15, 30] as const;
+export type AutoAnalyzeDelay = (typeof AUTO_ANALYZE_DELAYS)[number];
+export const MAX_AUTO_ANALYZE_DAILY_CAP = 500;
+// The brews "Suggest parameters" sends (docs/api/analysis.md §8b): this
+// bag's (the exact bean) or this bean's (every bag of the same coffee: roaster
+// and name), each with any recipe, this recipe or this brewer; or this
+// brewer's or this recipe's (any bean). Migration 0074 renamed the old
+// bean-id sources to bag*.
+export const SUGGEST_SOURCES = ["bag", "bagRecipe", "bagBrewer", "bean", "beanRecipe", "beanBrewer", "brewer", "recipe"] as const;
+export type SuggestSource = (typeof SUGGEST_SOURCES)[number];
+export const MAX_SUGGEST_BREWS = 20;
+// What else "Suggest parameters" can suggest (docs/api/analysis.md §8b):
+// another recipe or brewer for this bean, another bean in stock for this
+// recipe. An alternative names the row it means, by id and name (the name
+// as it was, so a restored backup can still show it).
+export const SUGGEST_ALTERNATIVES = ["recipe", "brewer", "bean"] as const;
+export type AlternativeKind = (typeof SUGGEST_ALTERNATIVES)[number];
+export interface SuggestedAlternative {
+  kind: AlternativeKind;
+  id: string;
+  name: string;
+  why: string;
+}
+export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
+  recipeRoastLevel: "light",
+  roastScale: "names",
+  ratingStep: "half",
+  hiddenFields: [],
+  aiHidden: [],
+  autoAnalyze: false,
+  autoAnalyzeDelayMinutes: 10,
+  autoAnalyzeDailyCap: null,
+  suggestSource: "beanRecipe",
+  suggestMaxBrews: 5,
+  suggestAlternatives: [],
+  readLabels: true,
+  labelWebLookup: false,
+  labelWebContext: "high",
+  homeRoasting: false,
+  homeRoasterName: "Home roast",
+  restDays: { filter: 7, espresso: 14, omni: 10 },
+};
+
+export function withDefaults<T extends object>(defaults: T, stored: Partial<T> | null): T {
+  return { ...defaults, ...(stored ?? {}) };
+}
+
+// Notification channels (docs/api/notifications.md §1b): where a person's
+// reminders go. One of each kind per person; each can be switched off.
+export const NOTIFICATION_KINDS = ["ntfy", "gotify", "pushover", "discord", "telegram", "slack", "webhook"] as const;
+export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
+export interface NotificationConfigs {
+  ntfy: { server: string; topic: string; token: string | null }; // server: https://ntfy.sh or self-hosted
+  gotify: { server: string; appToken: string };
+  pushover: { userKey: string; appToken: string };
+  discord: { url: string }; // a channel webhook
+  telegram: { botToken: string; chatId: string };
+  slack: { url: string }; // an incoming webhook
+  webhook: { url: string }; // any URL: POSTed { title, message, url } as JSON
+}
+export type NotificationConfig = NotificationConfigs[NotificationKind];
+// Fields that are credentials: the API sends them back masked.
+export const SECRET_FIELDS: { [K in NotificationKind]: ReadonlyArray<keyof NotificationConfigs[K]> } = {
+  ntfy: ["token"],
+  gotify: ["appToken"],
+  pushover: ["userKey", "appToken"],
+  discord: ["url"],
+  telegram: ["botToken"],
+  slack: ["url"],
+  webhook: ["url"],
+};
 
 // 1. Users
 export const users = mysqlTable("users", {
@@ -19,8 +216,59 @@ export const users = mysqlTable("users", {
   // Embedded in session tokens; bumping it (e.g. on password change) makes
   // every older session invalid.
   sessionVersion: int("session_version").default(0).notNull(),
+  preferences: jsonValue<Partial<UserPreferences>>("preferences"), // null = all defaults
+  // Their own AI prompt (docs/api/auth.md §1c): instructions and section
+  // texts, used for their brews' analyses and their suggestions. null = the
+  // defaults. Kept apart from preferences, which go with every response.
+  aiPrompt: jsonValue<AiPrompt>("ai_prompt"),
+  // A server admin (docs/api/server.md §10). Only granted on the server
+  // (`npm run admin -- grant <email>`), never through the API, so it can't
+  // be claimed by registering an address.
+  isAdmin: boolean("is_admin").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// 1c. Server settings (docs/api/server.md §10): what server admins set for
+// the whole server, one row per key. "backups" holds BackupSettings;
+// "backups_status" what the worker last did (BackupStatus).
+export const BACKUP_FREQUENCIES = ["off", "daily", "weekly"] as const;
+export type BackupFrequency = (typeof BACKUP_FREQUENCIES)[number];
+export interface BackupSettings {
+  frequency: BackupFrequency;
+  hour: number; // 0-23, in BACKUP_TIMEZONE
+  weekday: number; // 0-6, Sunday first (weekly only)
+  keep: number; // 1-90: the newest dumps kept, older ones deleted
+}
+export const DEFAULT_BACKUP_SETTINGS: BackupSettings = { frequency: "off", hour: 3, weekday: 0, keep: 7 };
+export interface BackupStatus {
+  lastRunAt: string | null; // ISO
+  lastFile: string | null;
+  lastBytes: number | null;
+  lastError: string | null; // set when the last run failed
+}
+export const serverSettings = mysqlTable("server_settings", {
+  key: varchar("key", { length: 50 }).primaryKey(),
+  value: jsonValue<unknown>("value"),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+// 1b. Notification channels (per person; see NOTIFICATION_KINDS above)
+export const notificationChannels = mysqlTable(
+  "notification_channels",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: varchar("kind", { length: 20 }).$type<NotificationKind>().notNull(),
+    enabled: boolean("enabled").default(true).notNull(),
+    config: jsonValue<NotificationConfig>("config").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userKindUnique: unique("notification_channels_user_kind_unique").on(table.userId, table.kind),
+  })
+);
 
 // 2. Workspaces (Coffee Bars)
 export const workspaces = mysqlTable("workspaces", {
@@ -28,10 +276,31 @@ export const workspaces = mysqlTable("workspaces", {
   name: varchar("name", { length: 255 }).notNull(),
   slug: varchar("slug", { length: 255 }).unique().notNull(), // Powers /menu/:slug
   isPublicMenuEnabled: boolean("is_public_menu_enabled").default(false).notNull(),
+  // Currency of menu prices (ISO 4217, e.g. "USD"); needed once an item has a
+  // price (docs/api/menu.md §7b).
+  menuCurrency: varchar("menu_currency", { length: 3 }),
+  // The public menu's title (docs/api/menu.md §7b); null = the workspace name.
+  menuTitle: varchar("menu_title", { length: 255 }),
+  settings: jsonValue<Partial<WorkspaceSettings>>("settings"), // null = all defaults
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 // 3. Workspace Members (Many-to-Many User <-> Workspace)
+// A person's own added Insights charts in a workspace (docs/api/stats.md
+// §11b): an Explore view kept on a tab, or a built-in chart on the Overview.
+export const INSIGHT_TABS = ["overview", "brews", "beans", "methods", "recipes", "tools", "grinders"] as const;
+export type InsightTab = (typeof INSIGHT_TABS)[number];
+export type InsightChart =
+  | { id: string; kind: "explore"; tab: InsightTab; x: string; y: string; color?: string; grinder?: string }
+  | { id: string; kind: "chart"; tab: "overview"; chart: string }; // a built-in chart's id, "brews.rating"
+export const MAX_INSIGHT_CHARTS = 50;
+// Each tab's own order and hidden charts (§11b): ids are a built-in chart's
+// ("brews.rating"), an Overview tile's ("tile.brews") or an added Explore
+// chart's ("pin:<id>"); only built-in ones hide (an added one is removed
+// instead). `tilesBelow`: the Overview's tiles go under its charts.
+export type InsightLayout = Partial<Record<InsightTab, { order?: string[]; hidden?: string[]; tilesBelow?: boolean }>>;
+export const MAX_LAYOUT_IDS = 100;
+
 export const workspaceMembers = mysqlTable(
   "workspace_members",
   {
@@ -42,6 +311,8 @@ export const workspaceMembers = mysqlTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     role: varchar("role", { length: 50 }).notNull(), // 'owner' | 'barista' | 'viewer'
+    insightCharts: jsonValue<InsightChart[]>("insight_charts"), // in the order added; null = none
+    insightLayout: jsonValue<InsightLayout>("insight_layout"), // null = every tab as built
   },
   (table) => ({
     pk: primaryKey({ columns: [table.userId, table.workspaceId] }),
@@ -49,6 +320,85 @@ export const workspaceMembers = mysqlTable(
 );
 
 // 4. Beans & Inventory
+export const ROAST_LEVELS = ["light", "medium_light", "medium", "medium_dark", "dark"] as const;
+export type RoastLevel = (typeof ROAST_LEVELS)[number];
+// What the roaster roasted it for (docs/api/beans.md §4).
+export const ROAST_TYPES = ["filter", "espresso", "omni"] as const;
+export type RoastType = (typeof ROAST_TYPES)[number];
+// The traditional roast names, lightest to darkest. Each one implies a 5-step
+// ROAST_LEVEL (DETAILED_ROAST_TO_LEVEL); the form fills roastLevel from it,
+// but the two are stored apart so roastLevel can still be set by hand.
+export const DETAILED_ROAST_LEVELS = [
+  "cinnamon", "american", "new_england", "half_city", "modern_light", "city",
+  "city_plus", "full_city", "full_city_plus", "italian", "vienna", "french",
+] as const;
+export type DetailedRoastLevel = (typeof DETAILED_ROAST_LEVELS)[number];
+export const DETAILED_ROAST_TO_LEVEL: Record<DetailedRoastLevel, RoastLevel> = {
+  cinnamon: "light",
+  american: "light",
+  new_england: "light",
+  half_city: "light",
+  modern_light: "medium_light",
+  city: "medium_light",
+  city_plus: "medium",
+  full_city: "medium",
+  full_city_plus: "medium_dark",
+  italian: "dark",
+  vienna: "dark",
+  french: "dark",
+};
+export const BLEND_TYPES = ["single_origin", "blend", "other"] as const;
+export type BlendType = (typeof BLEND_TYPES)[number];
+// Which coffee species it is (docs/api/beans.md §4); a blend may have several.
+export const COFFEE_SPECIES = ["arabica", "robusta", "liberica", "excelsa", "eugenioides"] as const;
+export type CoffeeSpecies = (typeof COFFEE_SPECIES)[number];
+// Where the coffee was grown, as the coffee trade groups origins
+// (docs/api/beans.md §4). central_america includes Mexico and the Caribbean;
+// arabia is Yemen; pacific is PNG, Hawaii and Australia.
+export const ORIGIN_AREAS = [
+  "africa", "arabia", "central_america", "south_america", "asia", "pacific",
+] as const;
+export type OriginArea = (typeof ORIGIN_AREAS)[number];
+// How the coffee was processed (docs/api/bean-processes.md §4b): an editable
+// list per workspace, seeded with these built-ins. A built-in keeps its key
+// (`builtin`) when renamed, so the AI still knows what it is.
+export const BEAN_PROCESSES = [
+  "washed", "natural", "wet_hulled", "honey", "mechanically_washed", "anaerobic",
+  "carbonic_maceration", "co_fermentation", "thermal_shock", "lactic",
+] as const;
+export type BeanProcess = (typeof BEAN_PROCESSES)[number];
+export const DEFAULT_BEAN_PROCESSES: ReadonlyArray<{ builtin: BeanProcess; name: string }> = [
+  { builtin: "washed", name: "Washed" },
+  { builtin: "natural", name: "Natural" },
+  { builtin: "wet_hulled", name: "Wet-Hulled" },
+  { builtin: "honey", name: "Honey" },
+  { builtin: "mechanically_washed", name: "Mechanically Washed" },
+  { builtin: "anaerobic", name: "Anaerobic Fermentation" },
+  { builtin: "carbonic_maceration", name: "Carbonic Maceration" },
+  { builtin: "co_fermentation", name: "Co-Fermentation" },
+  { builtin: "thermal_shock", name: "Thermal Shock" },
+  { builtin: "lactic", name: "Lactic Fermentation" },
+];
+
+export const beanProcesses = mysqlTable(
+  "bean_processes",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(), // unique per workspace, case-insensitive
+    position: int("position").notNull(),
+    hidden: boolean("hidden").default(false).notNull(), // left out of the bean form's choices
+    builtin: varchar("builtin", { length: 30 }).$type<BeanProcess>(), // the seeded key, or null for custom ones
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    uniqueName: unique("bean_processes_workspace_name").on(table.workspaceId, table.name),
+  })
+);
+export type BeanProcessRow = typeof beanProcesses.$inferSelect;
+
 export const beans = mysqlTable("beans", {
   id: varchar("id", { length: 36 }).primaryKey(),
   workspaceId: varchar("workspace_id", { length: 36 })
@@ -56,10 +406,50 @@ export const beans = mysqlTable("beans", {
     .references(() => workspaces.id, { onDelete: "cascade" }),
   roasterName: varchar("roaster_name", { length: 255 }).notNull(),
   beanName: varchar("bean_name", { length: 255 }).notNull(),
-  process: varchar("process", { length: 100 }), // Washed, Natural, Honey, etc.
+  processId: varchar("process_id", { length: 36 }).references((): AnyMySqlColumn => beanProcesses.id, { onDelete: "set null" }),
+  // One of ROAST_LEVELS, or null if unknown. Used to estimate beverage yield
+  // when scaling a recipe (unknown is treated as light). Derived by the API
+  // from detailedRoastLevel when that is set (docs/api/beans.md §4).
+  roastLevel: varchar("roast_level", { length: 20 }),
   roastDate: timestamp("roast_date"),
   inventoryWeightGrams: int("inventory_weight_grams").default(0).notNull(),
   showOnPublicMenu: boolean("show_on_public_menu").default(true).notNull(),
+  // Optional details (docs/api/beans.md §4). null = unknown.
+  roastType: varchar("roast_type", { length: 20 }).$type<RoastType>(), // ROAST_TYPES
+  detailedRoastLevel: varchar("detailed_roast_level", { length: 20 }).$type<DetailedRoastLevel>(), // DETAILED_ROAST_LEVELS
+  // Weight lost in roasting, % of the green weight (docs/api/beans.md §4): how
+  // developed the roast is. One bag's roast, so a copy doesn't keep it.
+  roastWeightLossPercent: decimal("roast_weight_loss_percent", { precision: 3, scale: 1, mode: "number" }),
+  blendType: varchar("blend_type", { length: 20 }).$type<BlendType>(), // BLEND_TYPES
+  decaf: boolean("decaf").default(false).notNull(),
+  // The varieties (cultivars) as the roaster names them, e.g. ["SL28", "SL34"],
+  // and the species, each COFFEE_SPECIES once (docs/api/beans.md §4). null =
+  // not stated; the API never stores an empty list.
+  varieties: jsonValue<string[]>("varieties"),
+  species: jsonValue<CoffeeSpecies[]>("species"),
+  website: varchar("website", { length: 500 }), // http(s) URL, to buy it again
+  // Price of one bag: amount and ISO 4217 currency, both or neither (the API).
+  // With bagWeightGrams, clients work out a price per gram.
+  priceAmount: decimal("price_amount", { precision: 8, scale: 2, mode: "number" }),
+  priceCurrency: varchar("price_currency", { length: 3 }),
+  bagWeightGrams: int("bag_weight_grams"),
+  notes: text("notes"),
+  flavorProfile: varchar("flavor_profile", { length: 500 }), // the roaster's tasting notes
+  originArea: varchar("origin_area", { length: 20 }).$type<OriginArea>(), // ORIGIN_AREAS
+  country: varchar("country", { length: 100 }), // free text; a blend may list several
+  region: varchar("region", { length: 255 }), // the growing area within the country, e.g. Yirgacheffe
+  altitudeMasl: int("altitude_masl"), // metres above sea level
+  producer: varchar("producer", { length: 255 }),
+  purchaseDate: date("purchase_date", { mode: "string" }), // YYYY-MM-DD
+  greenSupplier: varchar("green_supplier", { length: 255 }), // who sold the green coffee
+  // Which roast of this bean: home roasters log each small batch as its own
+  // bean (docs/api/beans.md §4). Free text: "3", "R-12".
+  batchNumber: varchar("batch_number", { length: 50 }),
+  rating: decimal("rating", { precision: 2, scale: 1, mode: "number" }), // 0.5-5 in 0.5 steps, the bean overall
+  // Archived beans (docs/api/beans.md §4) leave the brew picker and the public
+  // menu; past brews keep them. null = active.
+  archivedAt: timestamp("archived_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(), // "date added"
 });
 
 // 4b. Bean Freeze Periods (Effective Roast Age)
@@ -78,33 +468,137 @@ export const beanFreezes = mysqlTable("bean_freezes", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// 5. Brew Methods (Per-Workspace Selectable List)
-// Seeded with DEFAULT_BREW_METHODS when a workspace is created. Members with
-// role 'owner' or 'barista' may add more. Recipes select from this list.
-export const DEFAULT_BREW_METHODS = ["V60", "Espresso", "Aeropress", "Latte"] as const;
+// 4c. Bean photos (docs/api/bean-photos.md §4c): the bag or label, up to
+// MAX_BEAN_PHOTOS per bean, position 0 is the cover. The image is a WebP
+// file (PHOTO_DIR/<workspaceId>/<id>.webp), resized and stripped of EXIF on
+// upload; only its size is stored here.
+export const MAX_BEAN_PHOTOS = 6;
+export const beanPhotos = mysqlTable("bean_photos", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  beanId: varchar("bean_id", { length: 36 })
+    .notNull()
+    .references(() => beans.id, { onDelete: "cascade" }),
+  position: int("position").notNull(), // 0 = the cover
+  width: int("width").notNull(),
+  height: int("height").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
 
-export const brewMethods = mysqlTable(
-  "brew_methods",
+export const GRINDER_ADJUSTMENTS = ["stepped", "stepless"] as const;
+export const BURR_TYPES = ["conical", "flat"] as const;
+export const GRINDER_POWER = ["manual", "electric"] as const;
+// Machine capabilities: who controls pre-infusion, flow and pressure.
+export const PREINFUSION_MODES = ["none", "automatic", "manual"] as const;
+export const PROFILE_CONTROLS = ["none", "manual", "programmable"] as const;
+export type GrinderAdjustment = (typeof GRINDER_ADJUSTMENTS)[number];
+export type BurrType = (typeof BURR_TYPES)[number];
+export type GrinderPower = (typeof GRINDER_POWER)[number];
+export type Preinfusion = (typeof PREINFUSION_MODES)[number];
+export type ProfileControl = (typeof PROFILE_CONTROLS)[number];
+
+// 5. Brewers (Per-Workspace Equipment That Makes the Coffee)
+// A V60, French press, AeroPress, OXO Rapid Brewer or an espresso machine.
+// Seeded with DEFAULT_BREWERS when a workspace is created; owners and baristas
+// may add more. Recipes belong to a brewer.
+// - `kind`, the brew method (METHOD_KINDS), is how brewers are grouped (they
+//   have no category) and decides which recipe fields apply, the steps and
+//   the timer (docs/api/README.md §3, §5), and which drinks the brewer can make
+//   (a drink needs a method, 7d). Espresso has its own fields; filter,
+//   stovetop (moka pot, ibrik) and other all use filter's (dose + water).
+// How a cup is brewed (pour over, immersion, soup shot, moka…) is the recipe's
+// `style`, not the brewer's: one brewer can do several.
+// Espresso brewers also record what the barista controls (pre-infusion, flow,
+// pressure); the shot timer and the AI use it. The public menu places brewers
+// through the menu builder (7e). Archived like grinders once brews used it.
+export const METHOD_KINDS = ["filter", "espresso", "stovetop", "other"] as const;
+export type MethodKind = (typeof METHOD_KINDS)[number];
+// A recipe's style, by its brewer's method: how the cup is brewed. Descriptive
+// (lists, the AI); it changes no fields or timer behaviour.
+export const FILTER_STYLES = ["pour_over", "immersion", "hybrid", "cold_brew", "rapid_cold", "kyoto_drip", "other"] as const;
+export const ESPRESSO_STYLES = ["standard", "soup", "other"] as const;
+export const STOVETOP_STYLES = ["moka", "ibrik", "other"] as const;
+export const OTHER_STYLES = ["other"] as const;
+export const RECIPE_STYLES = ["pour_over", "immersion", "hybrid", "cold_brew", "rapid_cold", "kyoto_drip", "standard", "soup", "moka", "ibrik", "other"] as const;
+export type RecipeStyle = (typeof RECIPE_STYLES)[number];
+// Cold styles (docs/api/recipe-styles.md §5e), by what a style brews like:
+// long ones steep or drip for hours (Start steep, then Finish later; no
+// timer), rapid cold runs the timer in minutes. All three can be served
+// diluted. Kyoto drip is percolation; cold brew and rapid cold (an OXO Rapid
+// Brewer) are immersion for extraction yield.
+export const LONG_STYLES: readonly RecipeStyle[] = ["cold_brew", "kyoto_drip"];
+export const COLD_STYLES: readonly RecipeStyle[] = ["cold_brew", "kyoto_drip", "rapid_cold"];
+export const STEEP_TEMPS = ["fridge", "room"] as const;
+export type SteepTemp = (typeof STEEP_TEMPS)[number];
+export const DILUTION_WITH = ["water", "milk", "ice", "other"] as const;
+export type DilutionWith = (typeof DILUTION_WITH)[number];
+export const STYLES_BY_KIND: Record<MethodKind, readonly RecipeStyle[]> = {
+  filter: FILTER_STYLES,
+  espresso: ESPRESSO_STYLES,
+  stovetop: STOVETOP_STYLES,
+  other: OTHER_STYLES,
+};
+export const DEFAULT_BREWERS = [
+  { name: "V60", kind: "filter" },
+  { name: "Espresso", kind: "espresso" },
+  { name: "Aeropress", kind: "filter" },
+] as const satisfies ReadonlyArray<{ name: string; kind: MethodKind }>;
+
+// 5f. Brewer methods (docs/api/brewer-methods.md §3e): how the workspace
+// groups its brewers, seeded with the built-in methods. A method behaves like
+// one of METHOD_KINDS (behaviour): itself for a built-in, the one chosen for a
+// custom method ("Siphon" behaves like filter). A brewer's kind is always its
+// method's behaviour, so recipe fields, the timer, styles, drinks, tools and
+// the AI keep working off the kind; the method only names and groups.
+export const METHOD_NAMES: Record<MethodKind, string> = { filter: "Filter", espresso: "Espresso", stovetop: "Stovetop", other: "Other" };
+export const brewerMethods = mysqlTable(
+  "brewer_methods",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     workspaceId: varchar("workspace_id", { length: 36 })
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    name: varchar("name", { length: 100 }).notNull(),
+    name: varchar("name", { length: 100 }).notNull(), // unique per workspace, case-insensitive
+    position: int("position").notNull(),
+    hidden: boolean("hidden").default(false).notNull(), // left out of the brewer form's choices
+    builtin: varchar("builtin", { length: 20 }).$type<MethodKind>(), // the seeded kind, or null for custom ones
+    behaviour: varchar("behaviour", { length: 20 }).$type<MethodKind>().notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
-    workspaceNameUnique: unique("brew_methods_workspace_name_unique").on(
-      table.workspaceId,
-      table.name
-    ),
+    uniqueName: unique("brewer_methods_workspace_name").on(table.workspaceId, table.name),
+  })
+);
+export type BrewerMethodRow = typeof brewerMethods.$inferSelect;
+
+export const brewers = mysqlTable(
+  "brewers",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(), // e.g. "V60", "Linea Mini"
+    kind: varchar("kind", { length: 20 }).$type<MethodKind>().default("filter").notNull(), // its method's behaviour
+    // The workspace's method it's grouped under (§3e). Deleting a custom method
+    // moves its brewers to the built-in of the same behaviour first.
+    methodId: varchar("method_id", { length: 36 }).references((): AnyMySqlColumn => brewerMethods.id, { onDelete: "set null" }),
+    notes: varchar("notes", { length: 255 }),
+    // Espresso only (other kinds keep "none").
+    preinfusion: varchar("preinfusion", { length: 20 }).$type<Preinfusion>().default("none").notNull(),
+    flowControl: varchar("flow_control", { length: 20 }).$type<ProfileControl>().default("none").notNull(),
+    pressureControl: varchar("pressure_control", { length: 20 }).$type<ProfileControl>().default("none").notNull(),
+    archivedAt: timestamp("archived_at"), // null = active
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("brewers_workspace_name_unique").on(table.workspaceId, table.name),
   })
 );
 
 // 5b. Grinders (Per-Workspace Equipment)
 // Brew logs record which grinder was used, since a grind setting ("20") only
 // means something for a specific grinder. Recipes stay grinder-neutral.
-// A grinder used by brew logs is retired (retiredAt set) rather than deleted:
+// A grinder used by brew logs is archived (archivedAt set) rather than deleted:
 // it leaves the pickers but history keeps its name. Unused ones can be deleted.
 export const grinders = mysqlTable(
   "grinders",
@@ -115,13 +609,311 @@ export const grinders = mysqlTable(
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 100 }).notNull(), // e.g. "Comandante C40"
     notes: varchar("notes", { length: 255 }), // e.g. "stepped, 0-40 clicks"
-    retiredAt: timestamp("retired_at"), // null = active
+    // Optional details (docs/api/grinders.md §3b). The range and step let the AI
+    // talk in clicks/steps; the rest is reference.
+    adjustment: varchar("adjustment", { length: 20 }).$type<GrinderAdjustment>(), // GRINDER_ADJUSTMENTS
+    settingMin: decimal("setting_min", { precision: 6, scale: 2, mode: "number" }), // with settingMax: both or neither
+    settingMax: decimal("setting_max", { precision: 6, scale: 2, mode: "number" }),
+    stepSize: decimal("step_size", { precision: 5, scale: 2, mode: "number" }), // e.g. 1 click
+    burrType: varchar("burr_type", { length: 20 }).$type<BurrType>(), // BURR_TYPES
+    burrSizeMm: int("burr_size_mm"),
+    power: varchar("power", { length: 20 }).$type<GrinderPower>(), // GRINDER_POWER
+    // Variable-speed grinders: brews record the speed (grindRpm). The RPM
+    // range is optional, both or neither, and only with variableSpeed.
+    variableSpeed: boolean("variable_speed").default(false).notNull(),
+    rpmMin: int("rpm_min"),
+    rpmMax: int("rpm_max"),
+    archivedAt: timestamp("archived_at"), // null = active
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
     workspaceNameUnique: unique("grinders_workspace_name_unique").on(table.workspaceId, table.name),
   })
 );
+
+// 10. Roasting Machines (Per-Workspace, Home Roasting)
+// What a home roaster roasts on (docs/api/roasting-machines.md §3f). Roasts
+// record which one. Archived like grinders once roasts use it.
+export const roastingMachines = mysqlTable(
+  "roasting_machines",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(), // e.g. "Kaffelogic Nano 7"
+    notes: varchar("notes", { length: 255 }),
+    capacityGrams: int("capacity_grams"), // the largest batch of green coffee
+    archivedAt: timestamp("archived_at"), // null = active
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("roasting_machines_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+export type RoastingMachine = typeof roastingMachines.$inferSelect;
+
+// 10b. Green Coffees (Per-Workspace Green Stock, Home Roasting)
+// Unroasted coffee bought to roast (docs/api/green-coffees.md §4e). The
+// origin columns mirror the bean's, so a roast can copy them onto the bean
+// it makes. weightLeftGrams goes down as roasts use it; below lowStockGrams
+// it's low. Archived once used up, or deleted.
+export const greenCoffees = mysqlTable(
+  "green_coffees",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(), // e.g. "Ethiopia Guji Hambela"
+    originArea: varchar("origin_area", { length: 20 }).$type<OriginArea>(), // ORIGIN_AREAS
+    country: varchar("country", { length: 100 }),
+    region: varchar("region", { length: 255 }),
+    producer: varchar("producer", { length: 255 }),
+    altitudeMasl: int("altitude_masl"),
+    varieties: jsonValue<string[]>("varieties"), // as on beans: null = not stated
+    species: jsonValue<CoffeeSpecies[]>("species"),
+    processId: varchar("process_id", { length: 36 }).references((): AnyMySqlColumn => beanProcesses.id, { onDelete: "set null" }),
+    supplier: varchar("supplier", { length: 255 }),
+    lot: varchar("lot", { length: 100 }), // the supplier's lot or reference
+    // What the whole purchase cost: amount and ISO 4217 currency, both or neither.
+    priceAmount: decimal("price_amount", { precision: 8, scale: 2, mode: "number" }),
+    priceCurrency: varchar("price_currency", { length: 3 }),
+    weightBoughtGrams: int("weight_bought_grams"),
+    weightLeftGrams: int("weight_left_grams").default(0).notNull(),
+    lowStockGrams: int("low_stock_grams"), // null = never low
+    purchaseDate: date("purchase_date", { mode: "string" }), // YYYY-MM-DD
+    notes: text("notes"),
+    archivedAt: timestamp("archived_at"), // null = active
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("green_coffees_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+export type GreenCoffee = typeof greenCoffees.$inferSelect;
+
+// 10c. Roasts (Home Roasting's Roast Log)
+// One batch roasted (docs/api/roasts.md §4f): which green coffee and how much
+// went in, what came out, and the roast's temperatures and times. Saving one
+// creates its bean (beanId), and editing the roast keeps that bean in step.
+// greenStockTakenGrams is what it took off the green coffee's weightLeftGrams
+// (no more than was left), given back when the roast is deleted or changed.
+// The links are set null when what they point at is deleted: the roast stays.
+export const roasts = mysqlTable(
+  "roasts",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    greenCoffeeId: varchar("green_coffee_id", { length: 36 }).references(() => greenCoffees.id, { onDelete: "set null" }),
+    machineId: varchar("machine_id", { length: 36 }).references(() => roastingMachines.id, { onDelete: "set null" }),
+    beanId: varchar("bean_id", { length: 36 }).references(() => beans.id, { onDelete: "set null" }),
+    userId: varchar("user_id", { length: 36 }).references(() => users.id, { onDelete: "set null" }), // who roasted it
+    roastedAt: timestamp("roasted_at").notNull(),
+    utcOffsetMinutes: int("utc_offset_minutes"), // the logging device's, as on brew logs: the local roast date
+    batchNumber: varchar("batch_number", { length: 50 }),
+    greenGrams: int("green_grams").notNull(),
+    roastedGrams: int("roasted_grams").notNull(),
+    greenStockTakenGrams: int("green_stock_taken_grams").default(0).notNull(),
+    roastType: varchar("roast_type", { length: 20 }).$type<RoastType>(), // ROAST_TYPES
+    detailedRoastLevel: varchar("detailed_roast_level", { length: 20 }).$type<DetailedRoastLevel>(), // sets roastLevel, as on beans
+    roastLevel: varchar("roast_level", { length: 20 }).$type<RoastLevel>(),
+    chargeTempC: decimal("charge_temp_c", { precision: 4, scale: 1, mode: "number" }),
+    dropTempC: decimal("drop_temp_c", { precision: 4, scale: 1, mode: "number" }),
+    firstCrackSec: int("first_crack_sec"), // from charge; development time = totalSec - firstCrackSec
+    totalSec: int("total_sec"), // charge to drop
+    restDays: int("rest_days").notNull(), // ready on the local roast date + restDays
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    beanUnique: unique("roasts_bean_unique").on(table.beanId),
+  })
+);
+export type Roast = typeof roasts.$inferSelect;
+
+// 5c. Water Profiles (Per-Workspace Brew Water)
+// The water a brew was made with (docs/api/water-profiles.md §3c). Every
+// figure is optional, in mg/L (ppm); GH and KH are expressed as CaCO3. At most
+// one profile is the default (the API keeps it so), which new brews start on.
+// Archived like grinders once brews use them.
+export const waterProfiles = mysqlTable(
+  "water_profiles",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(), // e.g. "Third Wave Water"
+    notes: varchar("notes", { length: 255 }),
+    isDefault: boolean("is_default").default(false).notNull(),
+    tdsPpm: decimal("tds_ppm", { precision: 7, scale: 2, mode: "number" }),
+    generalHardnessPpm: decimal("general_hardness_ppm", { precision: 7, scale: 2, mode: "number" }), // GH as CaCO3
+    alkalinityPpm: decimal("alkalinity_ppm", { precision: 7, scale: 2, mode: "number" }), // KH as CaCO3
+    calciumPpm: decimal("calcium_ppm", { precision: 7, scale: 2, mode: "number" }),
+    magnesiumPpm: decimal("magnesium_ppm", { precision: 7, scale: 2, mode: "number" }),
+    sodiumPpm: decimal("sodium_ppm", { precision: 7, scale: 2, mode: "number" }),
+    potassiumPpm: decimal("potassium_ppm", { precision: 7, scale: 2, mode: "number" }),
+    bicarbonatePpm: decimal("bicarbonate_ppm", { precision: 7, scale: 2, mode: "number" }),
+    chloridePpm: decimal("chloride_ppm", { precision: 7, scale: 2, mode: "number" }),
+    sulfatePpm: decimal("sulfate_ppm", { precision: 7, scale: 2, mode: "number" }),
+    ph: decimal("ph", { precision: 3, scale: 1, mode: "number" }),
+    archivedAt: timestamp("archived_at"), // null = active
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("water_profiles_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+
+// 5d. Prep Tools (Per-Workspace, Ordered)
+// What a brew's prep used: WDT, a puck screen, a rinsed paper filter…
+// (docs/api/prep-tools.md §3d). methodKinds and prep_tool_brewers say which
+// brews offer it (both empty = every brew); position is the order of the
+// brew checklist.
+// Seeded with DEFAULT_PREP_TOOLS when a workspace is created. Archived like
+// grinders once brews use them.
+export const DEFAULT_PREP_TOOLS = [
+  { name: "WDT", methodKinds: ["espresso"] },
+  { name: "Puck screen", methodKinds: ["espresso"] },
+  { name: "Distributor", methodKinds: ["espresso"] },
+  { name: "Shaker", methodKinds: ["espresso"] },
+  { name: "Bottom paper filter", methodKinds: ["espresso"] },
+  { name: "Top paper filter", methodKinds: ["espresso"] },
+  { name: "Rinsed paper filter", methodKinds: ["filter"] },
+  { name: "Metal filter", methodKinds: ["filter"] },
+  { name: "Cloth filter", methodKinds: ["filter"] },
+  { name: "RDT", methodKinds: [] },
+  { name: "Sifted fines", methodKinds: [] },
+] as const satisfies ReadonlyArray<{ name: string; methodKinds: readonly MethodKind[] }>;
+
+export const prepTools = mysqlTable(
+  "prep_tools",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(),
+    // Where it's offered (docs/api/prep-tools.md §3d): these methods, plus the
+    // brewers in prep_tool_brewers. Both empty = every brew.
+    methodKinds: jsonValue<MethodKind[]>("method_kinds").notNull(),
+    position: int("position").notNull(), // 1, 2, 3...
+    archivedAt: timestamp("archived_at"), // null = active
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("prep_tools_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+
+// 5f2. Prep Tool Brewers: the brewers a prep tool is offered for, on top of
+// its methodKinds (docs/api/prep-tools.md §3d). Replaced as a whole when the
+// tool is edited; deleting either side unlinks it.
+export const prepToolBrewers = mysqlTable(
+  "prep_tool_brewers",
+  {
+    prepToolId: varchar("prep_tool_id", { length: 36 })
+      .notNull()
+      .references(() => prepTools.id, { onDelete: "cascade" }),
+    brewerId: varchar("brewer_id", { length: 36 })
+      .notNull()
+      .references(() => brewers.id, { onDelete: "cascade" }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.prepToolId, table.brewerId] }),
+  })
+);
+
+// 5g. Brew problems (docs/api/brew-problems.md §6b): what went wrong while
+// brewing, a per-workspace checklist like prep tools. methodKind limits one
+// to a method's brews (null = every method); position is the checklist
+// order. Seeded with DEFAULT_BREW_PROBLEMS when a workspace is created;
+// archived (kept on old brews) or deleted in Settings → Lists.
+export const DEFAULT_BREW_PROBLEMS = [
+  { name: "Slow drawdown / stalled bed", methodKind: "filter" },
+  { name: "Fast drawdown", methodKind: "filter" },
+  { name: "Uneven or cratered bed", methodKind: "filter" },
+  { name: "Grounds high on the walls", methodKind: "filter" },
+  { name: "Channeling (holes in the bed)", methodKind: "filter" },
+  { name: "Filter clogged or collapsed", methodKind: "filter" },
+  { name: "Poured too fast or uneven", methodKind: "filter" },
+  { name: "Missed a pour target", methodKind: "filter" },
+  { name: "Water too hot or cold (kettle off)", methodKind: "filter" },
+  { name: "Immersion: grounds didn't sink, crust didn't break", methodKind: "filter" },
+  { name: "Channeling / spurting", methodKind: "espresso" },
+  { name: "Shot ran fast (gushed)", methodKind: "espresso" },
+  { name: "Shot choked or dripped slowly", methodKind: "espresso" },
+  { name: "Uneven extraction (one spout first, blonding early)", methodKind: "espresso" },
+  { name: "Puck wet or soupy", methodKind: "espresso" },
+  { name: "Puck cracked or stuck to the screen", methodKind: "espresso" },
+  { name: "Grinder clumping", methodKind: "espresso" },
+  { name: "Dose spilled or uneven tamp", methodKind: "espresso" },
+  { name: "Machine temperature not settled", methodKind: "espresso" },
+  { name: "Stale or old beans", methodKind: null },
+  { name: "Grind setting changed by mistake", methodKind: null },
+  { name: "Scale not tared", methodKind: null },
+  { name: "Distracted / timer missed", methodKind: null },
+] as const satisfies ReadonlyArray<{ name: string; methodKind: MethodKind | null }>;
+
+export const brewProblems = mysqlTable(
+  "brew_problems",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(),
+    methodKind: varchar("method_kind", { length: 20 }).$type<MethodKind>(), // METHOD_KINDS, or null = all
+    position: int("position").notNull(), // 1, 2, 3...
+    archivedAt: timestamp("archived_at"), // null = active
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("brew_problems_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+
+// 5e. Recipe styles (docs/api/recipe-styles.md §5e): each workspace's list of
+// how a recipe brews, per brewer method, seeded with the built-ins below. A
+// style "brews like" a built-in (brewsLike): itself for a built-in, the one
+// chosen for a custom style ("Inverted" brews like immersion). Extraction yield
+// and the AI go by brewsLike, so custom styles are worked out correctly.
+export const STYLE_NAMES: Record<RecipeStyle, string> = {
+  pour_over: "Pour over",
+  immersion: "Immersion",
+  hybrid: "Hybrid",
+  cold_brew: "Cold brew",
+  rapid_cold: "Rapid cold brew",
+  kyoto_drip: "Kyoto drip",
+  standard: "Standard",
+  soup: "Soup",
+  moka: "Moka",
+  ibrik: "Ibrik",
+  other: "Other",
+};
+export const recipeStyles = mysqlTable(
+  "recipe_styles",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    kind: varchar("kind", { length: 20 }).$type<MethodKind>().notNull(), // the brewer method it's for
+    name: varchar("name", { length: 100 }).notNull(), // unique per workspace and method, case-insensitive
+    position: int("position").notNull(), // within its method
+    hidden: boolean("hidden").default(false).notNull(), // left out of the recipe form's choices
+    builtin: varchar("builtin", { length: 20 }).$type<RecipeStyle>(), // the seeded key, or null for custom ones
+    brewsLike: varchar("brews_like", { length: 20 }).$type<RecipeStyle>().notNull(), // one of STYLES_BY_KIND[kind]
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    uniqueName: unique("recipe_styles_workspace_kind_name").on(table.workspaceId, table.kind, table.name),
+  })
+);
+export type RecipeStyleRow = typeof recipeStyles.$inferSelect;
 
 // 6. Recipe Templates (Target Parameters)
 export const recipes = mysqlTable("recipes", {
@@ -130,31 +922,311 @@ export const recipes = mysqlTable("recipes", {
     .notNull()
     .references(() => workspaces.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 255 }).notNull(),
-  // The API refuses (409) to delete a brew method that recipes still use.
-  // The FK cascades rather than restricts so that deleting a workspace (which
-  // cascades to both brew_methods and recipes) isn't blocked by this FK.
-  // The API must also reject a methodId from a different workspace.
-  methodId: varchar("method_id", { length: 36 })
+  // The API refuses (409) to delete a brewer that recipes still use. The FK
+  // cascades rather than restricts so that deleting a workspace (which
+  // cascades to both brewers and recipes) isn't blocked by this FK. The API
+  // must also reject a brewerId from a different workspace.
+  brewerId: varchar("brewer_id", { length: 36 })
     .notNull()
-    .references(() => brewMethods.id, { onDelete: "cascade" }),
+    .references(() => brewers.id, { onDelete: "cascade" }),
   targetDoseGrams: decimal("target_dose_grams", { precision: 5, scale: 2, mode: "number" }).notNull(),
-  targetYieldGrams: decimal("target_yield_grams", { precision: 6, scale: 2, mode: "number" }).notNull(),
+  // Water poured in total; the coffee:water ratio is dose:water. Required for
+  // filter recipes, null for espresso (enforced by the API).
+  targetWaterGrams: decimal("target_water_grams", { precision: 6, scale: 2, mode: "number" }),
+  // Flash chilled: ice in the server the hot water is brewed onto (g). The
+  // ratio is dose:(water + ice); pour targets count the hot water only.
+  // Optional for filter recipes, null for espresso (enforced by the API).
+  targetIceGrams: decimal("target_ice_grams", { precision: 6, scale: 2, mode: "number" }),
+  // Filter: rough estimate of beverage weight (water minus what
+  // the grounds retain). Espresso: the target shot weight (required by the
+  // API); the ratio is dose:yield.
+  expectedYieldGrams: decimal("expected_yield_grams", { precision: 6, scale: 2, mode: "number" }),
+  // Optional target window for the total brew time, in seconds. The API fills
+  // a missing end with the other ±15 s, so it's either both or neither.
+  expectedFinishMinSec: int("expected_finish_min_sec"),
+  expectedFinishMaxSec: int("expected_finish_max_sec"),
+  // Espresso only: target window for the first drop, seconds from the start
+  // of the shot. Both or neither (the API fills a missing end with ±3 s).
+  firstDropMinSec: int("first_drop_min_sec"),
+  firstDropMaxSec: int("first_drop_max_sec"),
+  // Unit for espresso flow steps: g/s (a scale) or ml/s (a machine's flow meter).
+  flowUnit: varchar("flow_unit", { length: 10 }).$type<FlowUnit>().default("g_s").notNull(),
+  // Filter only: pour and wait steps take time × (batch factor)^this when the
+  // batch is scaled (0.5 = a double batch takes ~1.41× as long, 1 = linear);
+  // null = step times stay the same (docs/api/recipes.md §5).
+  stepTimeScaling: decimal("step_time_scaling", { precision: 3, scale: 2, mode: "number" }),
   targetTempC: decimal("target_temp_c", { precision: 4, scale: 1, mode: "number" }),
-  targetGrindSetting: varchar("target_grind_setting", { length: 100 }),
-  showOnPublicMenu: boolean("show_on_public_menu").default(true).notNull(),
+  // Cold styles (docs/api/recipes.md §5): the steep window in hours (both or
+  // neither, long styles), fridge or room, and how the concentrate is served:
+  // 1 : dilutionRatio with dilutionWith (e.g. 1 : 1 water).
+  steepMinHours: decimal("steep_min_hours", { precision: 4, scale: 1, mode: "number" }),
+  steepMaxHours: decimal("steep_max_hours", { precision: 4, scale: 1, mode: "number" }),
+  steepTemp: varchar("steep_temp", { length: 10 }).$type<SteepTemp>(), // STEEP_TEMPS
+  dilutionRatio: decimal("dilution_ratio", { precision: 3, scale: 1, mode: "number" }),
+  dilutionWith: varchar("dilution_with", { length: 10 }).$type<DilutionWith>(), // DILUTION_WITH
+  // How the cup is brewed: one of the workspace's styles for the brewer's
+  // method (docs/api/recipe-styles.md §5e); null = not set.
+  styleId: varchar("style_id", { length: 36 }).references((): AnyMySqlColumn => recipeStyles.id, { onDelete: "set null" }),
+  // Recipes aren't on the public menu; drinks and brewers are (7e).
+  // Grind is per grinder: see recipeGrindSettings. The default grinder is
+  // preselected when brewing this recipe (else the last one used); deleting
+  // the grinder clears it.
+  defaultGrinderId: varchar("default_grinder_id", { length: 36 }).references(() => grinders.id, { onDelete: "set null" }),
+  // Archived recipes leave the brew page and drink forms; past brews and drinks
+  // that already use them keep them (docs/api/recipes.md §5). null = active.
+  archivedAt: timestamp("archived_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(), // "date added" in lists
 });
 
-// 7. Recipe Steps (Time-Series Pour-Over Intervals)
+// 6b. Recipe Grind Starting Points (One Per Grinder)
+// An approximate starting setting for this recipe on a given grinder. The
+// brew flow prefers your last actual setting with that grinder and recipe.
+export const recipeGrindSettings = mysqlTable(
+  "recipe_grind_settings",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    recipeId: varchar("recipe_id", { length: 36 })
+      .notNull()
+      .references(() => recipes.id, { onDelete: "cascade" }),
+    grinderId: varchar("grinder_id", { length: 36 })
+      .notNull()
+      .references(() => grinders.id, { onDelete: "cascade" }),
+    setting: decimal("setting", { precision: 6, scale: 2, mode: "number" }).notNull(), // e.g. 20, on the grinder's dial
+  },
+  (table) => ({
+    recipeGrinderUnique: unique("recipe_grind_settings_recipe_grinder_unique").on(table.recipeId, table.grinderId),
+  })
+);
+
+// 6c. Recipe Prep (the Prep a Recipe Starts With)
+// Prep tools ticked when the recipe is chosen on brew setup
+// (docs/api/recipes.md §5). Replaced as a whole when the recipe is edited;
+// deleting either side unlinks it.
+export const recipePrepTools = mysqlTable(
+  "recipe_prep_tools",
+  {
+    recipeId: varchar("recipe_id", { length: 36 })
+      .notNull()
+      .references(() => recipes.id, { onDelete: "cascade" }),
+    toolId: varchar("tool_id", { length: 36 })
+      .notNull()
+      .references(() => prepTools.id, { onDelete: "cascade" }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.recipeId, table.toolId] }),
+  })
+);
+
+// 7. Recipe Steps (The Brew's Schedule)
+// Steps run back to back: each starts when the previous one actually ended
+// (docs/api/README.md §5, docs/timer_architecture.md §3). durationSec is the
+// plan (or a guide, for steps you end with a tap); `advance` says how the
+// timer moves on. Waiting is a "wait" (pour over) or "soak" (espresso) step.
+// stepType is one of RECIPE_STEP_TYPES; which types a recipe may use depends
+// on its method's kind. The values (water, temperature, pressure, flow) are
+// instructions shown on the step's card.
+export const RECIPE_STEP_TYPES = [
+  "bloom", "pour", "swirl", "stir", "wait", "press", // filter
+  "preinfusion", "soak", "pressure", "flow", // espresso
+  "other", // any
+] as const;
+export const WATER_STEP_TYPES = ["bloom", "pour"] as const;
+export const ESPRESSO_STEP_TYPES = ["preinfusion", "soak", "pressure", "flow", "other"] as const;
+// auto: moves on after durationSec. auto_log: the same, plus a button to log
+// when you really did it. tap: waits for a tap (durationSec is a guide).
+// first_drop: espresso only; ends when First drop is tapped.
+export const STEP_ADVANCE = ["auto", "auto_log", "tap", "first_drop"] as const;
+export type StepAdvance = (typeof STEP_ADVANCE)[number];
+export const FLOW_UNITS = ["g_s", "ml_s"] as const;
+export type FlowUnit = (typeof FLOW_UNITS)[number];
+
 export const recipeSteps = mysqlTable("recipe_steps", {
   id: varchar("id", { length: 36 }).primaryKey(),
   recipeId: varchar("recipe_id", { length: 36 })
     .notNull()
     .references(() => recipes.id, { onDelete: "cascade" }),
   stepOrder: int("step_order").notNull(), // 1, 2, 3...
-  actionName: varchar("action_name", { length: 255 }).notNull(), // 'Bloom', 'First Pour', 'Drawdown'
-  targetTimeSec: int("target_time_sec").notNull(), // Cumulative time in seconds when step ends
-  targetWaterGrams: decimal("target_water_grams", { precision: 6, scale: 2, mode: "number" }).notNull(), // Cumulative scale weight
+  stepType: varchar("step_type", { length: 20 }).notNull(), // RECIPE_STEP_TYPES
+  label: varchar("label", { length: 255 }), // optional, e.g. 'Second bloom', 'Center pour'
+  // Seconds; null only on the last step = "until you finish". 0 = instant.
+  durationSec: int("duration_sec"),
+  advance: varchar("advance", { length: 20 }).$type<StepAdvance>().default("auto").notNull(),
+  // Cumulative scale weight to pour to by the step's end; only for water step
+  // types (and optional for 'other' on filter recipes).
+  targetWaterGrams: decimal("target_water_grams", { precision: 6, scale: 2, mode: "number" }),
+  targetTempC: decimal("target_temp_c", { precision: 4, scale: 1, mode: "number" }), // e.g. bloom at 85, pour at 93
+  // Espresso: target pressure (bar) or flow (recipes.flowUnit); an end value
+  // makes it a ramp shown as "9 → 6 bar".
+  pressureBar: decimal("pressure_bar", { precision: 4, scale: 1, mode: "number" }),
+  pressureEndBar: decimal("pressure_end_bar", { precision: 4, scale: 1, mode: "number" }),
+  flowRate: decimal("flow_rate", { precision: 4, scale: 1, mode: "number" }),
+  flowEndRate: decimal("flow_end_rate", { precision: 4, scale: 1, mode: "number" }),
 });
+
+// 7b. Ingredients (Reusable Preps)
+// What goes into a drink besides the coffee: orange-infused cold foam,
+// steamed oat milk, vanilla syrup, ice. Instructions are free text for now.
+// The API refuses (409) to delete an ingredient that drinks use.
+export const INGREDIENT_TYPES = ["milk", "foam", "syrup", "ice", "water", "other"] as const;
+export type IngredientType = (typeof INGREDIENT_TYPES)[number];
+export const ingredients = mysqlTable(
+  "ingredients",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(), // e.g. "Orange cold foam"
+    ingredientType: varchar("ingredient_type", { length: 20 }).$type<IngredientType>().default("other").notNull(),
+    instructions: text("instructions"), // how to make it, e.g. infuse overnight
+    // Archived ingredients can't be added to drinks; drinks that have them keep
+    // them (docs/api/ingredients.md §5b). null = active.
+    archivedAt: timestamp("archived_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("ingredients_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+
+// 7c. Drink Categories (Ordered Groups on the Brew Page)
+// Group drinks in the brew picker, after the brew methods: e.g. "Espresso
+// milk drinks", "Specialty drinks". For drinks only; brewers are grouped by
+// method. The public menu has its own sections (7e). Deleting one leaves its
+// drinks uncategorised.
+export const drinkCategories = mysqlTable(
+  "drink_categories",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(),
+    position: int("position").notNull(), // 1, 2, 3...
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("drink_categories_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+
+// Serving sizes for drinks and brews (fl_oz = US fluid ounces).
+export const SERVING_UNITS = ["fl_oz", "ml"] as const;
+export type ServingUnit = (typeof SERVING_UNITS)[number];
+
+// 7d. Drinks (What's Served; the Menu Builder Places Them, 7e)
+// A drink needs a kind of coffee (METHOD_KINDS), not a particular device: any
+// active brewer of that kind can make it, with that brewer's recipes (the
+// default, a recipe of the kind, is preselected), finished with ingredients:
+// "Oat Latte" (espresso + steamed oat milk), "The Atlas" (pour over + orange
+// cold foam).
+// A drink can be a variant of another (Vanilla Latte of Latte), like a
+// cocktail riff: an independent copy that remembers its parent. Deleting a
+// drink moves its variants up to its parent (the API; set null is a backstop).
+export const drinks = mysqlTable("drinks", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  workspaceId: varchar("workspace_id", { length: 36 })
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: varchar("description", { length: 500 }),
+  kind: varchar("kind", { length: 20 }).$type<MethodKind>().notNull(), // METHOD_KINDS
+  categoryId: varchar("category_id", { length: 36 }).references(() => drinkCategories.id, { onDelete: "set null" }),
+  parentDrinkId: varchar("parent_drink_id", { length: 36 }).references((): AnyMySqlColumn => drinks.id, {
+    onDelete: "set null",
+  }),
+  // A recipe whose brewer is of this kind (enforced by the API), or null.
+  defaultRecipeId: varchar("default_recipe_id", { length: 36 }).references(() => recipes.id, { onDelete: "set null" }),
+  // Default size, e.g. 8 fl oz: brewing scales the ingredient amounts (and a
+  // filter method's batch) from it. Both or neither (the API); null = no scaling.
+  servingSize: decimal("serving_size", { precision: 6, scale: 1, mode: "number" }),
+  servingUnit: varchar("serving_unit", { length: 10 }).$type<ServingUnit>(), // SERVING_UNITS
+  // How to make it, shown after the brew: "Add the syrup to the cup, pull the
+  // shot onto it, steam the milk and pour." Free text.
+  instructions: text("instructions"),
+  // Archived drinks leave the brew page; past brews and the public menu keep
+  // them (docs/api/drinks.md §5c). null = active.
+  archivedAt: timestamp("archived_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// A drink's ingredients, in order, with an amount for the drink's default size
+// and a note. The unit is free text: "fl oz", "ml" and "g" are built in,
+// others ("pump", "tsp") are typed. A value scales with the size; a unit alone
+// ("to taste") doesn't.
+export const drinkIngredients = mysqlTable("drink_ingredients", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  drinkId: varchar("drink_id", { length: 36 })
+    .notNull()
+    .references(() => drinks.id, { onDelete: "cascade" }),
+  // Cascade so workspace deletion works; the API is what refuses deleting a used ingredient.
+  ingredientId: varchar("ingredient_id", { length: 36 })
+    .notNull()
+    .references(() => ingredients.id, { onDelete: "cascade" }),
+  position: int("position").notNull(), // 1, 2, 3...
+  amountValue: decimal("amount_value", { precision: 8, scale: 2, mode: "number" }), // e.g. 2
+  amountUnit: varchar("amount_unit", { length: 20 }), // e.g. "pump"
+  note: varchar("note", { length: 255 }), // e.g. "spooned on top"
+});
+
+// 7e. Menu Builder (The Public Menu, Arranged by Hand)
+// docs/api/menu.md §7b. The menu is its own thing: sections you name and
+// order, holding items you place: a drink, a brewer (its plain brew), or the
+// beans block (the bar's active beans that are switched on for the menu).
+// Items can rename and describe their source for the menu, carry a price
+// and be marked unavailable. Deleting a drink or brewer removes its items.
+export const MENU_ITEM_TYPES = ["drink", "brewer", "beans"] as const;
+export type MenuItemType = (typeof MENU_ITEM_TYPES)[number];
+// What the beans block shows guests about each bean, besides the roaster and
+// name (docs/api/menu.md §7b). origin = area, country and region; roastLevel =
+// the 5-step level and the detailed one; variety = the varieties and species.
+export const BEAN_MENU_FIELDS = [
+  "flavorProfile", "origin", "producer", "altitude", "variety", "process", "roastLevel", "roastDate", "decaf", "blendType", "roastType",
+] as const;
+export type BeanMenuField = (typeof BEAN_MENU_FIELDS)[number];
+
+export const menuSections = mysqlTable(
+  "menu_sections",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(),
+    description: varchar("description", { length: 500 }),
+    position: int("position").notNull(), // 1, 2, 3...
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("menu_sections_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+
+export const menuItems = mysqlTable(
+  "menu_items",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    sectionId: varchar("section_id", { length: 36 })
+      .notNull()
+      .references(() => menuSections.id, { onDelete: "cascade" }),
+    position: int("position").notNull(), // 1, 2, 3... within the section
+    itemType: varchar("item_type", { length: 20 }).$type<MenuItemType>().notNull(), // MENU_ITEM_TYPES
+    // Exactly the one matching itemType (the API); neither for "beans".
+    drinkId: varchar("drink_id", { length: 36 }).references(() => drinks.id, { onDelete: "cascade" }),
+    brewerId: varchar("brewer_id", { length: 36 }).references(() => brewers.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }), // null = the source's name
+    description: varchar("description", { length: 500 }), // null = the source's
+    price: decimal("price", { precision: 8, scale: 2, mode: "number" }), // in workspaces.menuCurrency
+    available: boolean("available").default(true).notNull(), // false = shown as unavailable
+    // The beans block only: which BEAN_MENU_FIELDS guests see; null = all.
+    beanFields: jsonValue<BeanMenuField[]>("bean_fields"),
+  },
+  (table) => ({
+    // A drink or brewer once per section (NULLs don't collide).
+    sectionDrinkUnique: unique("menu_items_section_drink_unique").on(table.sectionId, table.drinkId),
+    sectionBrewerUnique: unique("menu_items_section_brewer_unique").on(table.sectionId, table.brewerId),
+  })
+);
 
 // 8. Brew Logs (Actual Execution & Tasting Notes)
 export const brewLogs = mysqlTable("brew_logs", {
@@ -172,21 +1244,180 @@ export const brewLogs = mysqlTable("brew_logs", {
     onDelete: "set null",
   }),
   // Which grinder actualGrindSetting refers to. Optional. Grinders in use are
-  // retired, not deleted, so this normally survives; set null as a backstop.
+  // archived, not deleted, so this normally survives; set null as a backstop.
   grinderId: varchar("grinder_id", { length: 36 }).references(() => grinders.id, {
     onDelete: "set null",
   }),
+  // The water used (optional; docs/api/brew-logs.md §6). Profiles in use are
+  // archived, not deleted; set null as a backstop.
+  waterProfileId: varchar("water_profile_id", { length: 36 }).references(() => waterProfiles.id, {
+    onDelete: "set null",
+  }),
+  // The drink this brew was for (optional; docs/api/brew-logs.md §6). Null for a
+  // plain brew of the method.
+  drinkId: varchar("drink_id", { length: 36 }).references(() => drinks.id, { onDelete: "set null" }),
+  // The size made, if the drink was scaled from its default (docs/api/README.md
+  // §6). Both or neither, and only with a drink.
+  servingSize: decimal("serving_size", { precision: 6, scale: 1, mode: "number" }),
+  servingUnit: varchar("serving_unit", { length: 10 }).$type<ServingUnit>(), // SERVING_UNITS
+  // The brewer used: the recipe's, set by the API (docs/api/brew-logs.md §6), and
+  // kept if the recipe later changes or is deleted. Brewers in use are
+  // archived, not deleted; set null as a backstop.
+  brewerId: varchar("brewer_id", { length: 36 }).references(() => brewers.id, {
+    onDelete: "set null",
+  }),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
+  // The logging device's offset from UTC in minutes (-420 = PDT), so the
+  // worker knows the brew's local date for roast age (docs/api/brew-logs.md §6).
+  // null = unknown (older brews): the worker falls back to BREW_TIMEZONE.
+  utcOffsetMinutes: int("utc_offset_minutes"),
   actualDoseGrams: decimal("actual_dose_grams", { precision: 5, scale: 2, mode: "number" }).notNull(),
-  actualYieldGrams: decimal("actual_yield_grams", { precision: 6, scale: 2, mode: "number" }).notNull(),
+  // Required unless the log's recipe is an espresso recipe, where it's null.
+  actualWaterGrams: decimal("actual_water_grams", { precision: 6, scale: 2, mode: "number" }),
+  // Flash chilled: ice in the server (g), as on the recipe. A brew with ice
+  // takes no TDS reading (docs/api/brew-logs.md §6); null for espresso.
+  actualIceGrams: decimal("actual_ice_grams", { precision: 6, scale: 2, mode: "number" }),
+  // Measured beverage weight. Optional, except for espresso (the shot
+  // weight). Compared against the recipe's expected yield; with tdsPercent it
+  // gives extraction yield.
+  actualYieldGrams: decimal("actual_yield_grams", { precision: 6, scale: 2, mode: "number" }),
+  // Refractometer reading, %. With the yield (or the water, for immersion) and
+  // the dose it gives extraction yield, which is worked out, not stored
+  // (docs/api/brew-logs.md §6).
+  tdsPercent: decimal("tds_percent", { precision: 4, scale: 2, mode: "number" }),
   actualTempC: decimal("actual_temp_c", { precision: 4, scale: 1, mode: "number" }),
-  actualGrindSetting: varchar("actual_grind_setting", { length: 100 }),
+  actualGrindSetting: decimal("actual_grind_setting", { precision: 6, scale: 2, mode: "number" }), // the dial number, like settingMin
+  // Grinder speed, only for a variable-speed grinder (docs/api/brew-logs.md §6).
+  grindRpm: int("grind_rpm"),
+  // Grinder retention (docs/api/brew-logs.md §6): the beans weighed before
+  // grinding and the grounds that came out. actualDoseGrams stays the dose
+  // that went into the brew; retention (in − out) is worked out, not stored.
+  beanWeightInGrams: decimal("bean_weight_in_grams", { precision: 5, scale: 2, mode: "number" }),
+  groundWeightOutGrams: decimal("ground_weight_out_grams", { precision: 5, scale: 2, mode: "number" }),
   actualTimeSec: int("actual_time_sec").notNull(),
-  rating: int("rating"), // 1-5 or 1-100 scale
+  // Cold styles (docs/api/brew-logs.md §6): a long brew (cold brew, Kyoto
+  // drip) is saved when it starts, steeping = true, and finished later
+  // (steeping false, with its time, yield and rating). steepTemp is where it
+  // steeped; the dilution is what it was served with (1 : dilutionRatio).
+  steeping: boolean("steeping").default(false).notNull(),
+  steepTemp: varchar("steep_temp", { length: 10 }).$type<SteepTemp>(), // STEEP_TEMPS
+  dilutionRatio: decimal("dilution_ratio", { precision: 3, scale: 1, mode: "number" }),
+  dilutedWith: varchar("diluted_with", { length: 10 }).$type<DilutionWith>(), // DILUTION_WITH
+  // The window this brew aimed for, set when it starts (the recipe's, or
+  // changed for this brew; docs/api/brew-logs.md §6). Each pair is both or
+  // neither: a long style's steep in hours (the ready reminder comes at its
+  // min), rapid cold's finish in seconds (the timer's target).
+  steepMinHours: decimal("steep_min_hours", { precision: 4, scale: 1, mode: "number" }),
+  steepMaxHours: decimal("steep_max_hours", { precision: 4, scale: 1, mode: "number" }),
+  expectedFinishMinSec: int("expected_finish_min_sec"),
+  expectedFinishMaxSec: int("expected_finish_max_sec"),
+  // The coffee tasted on its own (for a milk drink, only if tasted straight).
+  rating: decimal("rating", { precision: 2, scale: 1, mode: "number" }), // 0.5-5 in 0.5 steps
   tastingNotes: text("tasting_notes"),
+  // The finished drink, for brews of a drink with ingredients (docs/api/README.md
+  // §6). Milk and syrup change the taste, so the AI weighs these apart.
+  drinkRating: decimal("drink_rating", { precision: 2, scale: 1, mode: "number" }), // 0.5-5 in 0.5 steps
+  drinkTastingNotes: text("drink_tasting_notes"),
+});
+
+// 8b. Brew Log Marks (Tapped Events During a Brew)
+// When things actually happened, recorded by the timer (docs/api/brew-logs.md §6):
+// the first drop (espresso), the real end of steps that wait for a tap or
+// have a "log it" button (step_end, with that step's stepOrder), and a step
+// held on the timer (step_hold / step_resume pairs, with its stepOrder).
+export const MARK_KINDS = ["first_drop", "step_end", "step_hold", "step_resume"] as const;
+export type MarkKind = (typeof MARK_KINDS)[number];
+export const brewLogMarks = mysqlTable("brew_log_marks", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  brewLogId: varchar("brew_log_id", { length: 36 })
+    .notNull()
+    .references(() => brewLogs.id, { onDelete: "cascade" }),
+  kind: varchar("kind", { length: 30 }).$type<MarkKind>().notNull(),
+  stepOrder: int("step_order"), // all but first_drop
+  atSec: decimal("at_sec", { precision: 6, scale: 1, mode: "number" }).notNull(), // seconds from the start, 0.1 s
+});
+
+// 8c. Brew Log Tools (The Prep Tools a Brew Used)
+// Replaced as a whole when a log is edited (docs/api/brew-logs.md §6). Tools
+// in use are archived, not deleted; cascade is a backstop.
+export const brewLogTools = mysqlTable(
+  "brew_log_tools",
+  {
+    brewLogId: varchar("brew_log_id", { length: 36 })
+      .notNull()
+      .references(() => brewLogs.id, { onDelete: "cascade" }),
+    toolId: varchar("tool_id", { length: 36 })
+      .notNull()
+      .references(() => prepTools.id, { onDelete: "cascade" }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.brewLogId, table.toolId] }),
+  })
+);
+
+// 8d. Brew Log Problems (What Went Wrong in a Brew)
+// Replaced as a whole when a log is edited (docs/api/brew-logs.md §6).
+// Deleting a problem unlinks it from brews (cascade); archiving keeps it.
+export const brewLogProblems = mysqlTable(
+  "brew_log_problems",
+  {
+    brewLogId: varchar("brew_log_id", { length: 36 })
+      .notNull()
+      .references(() => brewLogs.id, { onDelete: "cascade" }),
+    problemId: varchar("problem_id", { length: 36 })
+      .notNull()
+      .references(() => brewProblems.id, { onDelete: "cascade" }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.brewLogId, table.problemId] }),
+  })
+);
+
+// 8e. Brew Log Flavors (Picks on the Flavor Wheel)
+// The coffee's flavors, picked on the wheel (docs/api/brew-logs.md §6): keys
+// from the workspace's lexicon (flavor_lexicons, else the built-in FLAVORS in
+// @barista/shared/flavors), any ring. label is the flavor's label when
+// picked, shown once the lexicon no longer has the key. Replaced as a whole
+// when a log is edited; free-text tastingNotes stay alongside.
+export const brewLogFlavors = mysqlTable(
+  "brew_log_flavors",
+  {
+    brewLogId: varchar("brew_log_id", { length: 36 })
+      .notNull()
+      .references(() => brewLogs.id, { onDelete: "cascade" }),
+    flavorKey: varchar("flavor_key", { length: 64 }).notNull(),
+    label: varchar("label", { length: 60 }).notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.brewLogId, table.flavorKey] }),
+  })
+);
+
+// 8f. Flavor Lexicons (A Workspace's Own Flavor Wheel)
+// Replaces the built-in wheel for one workspace (docs/api/flavor-lexicon.md
+// §2c); no row = the built-in one. flavors as checked by parseLexicon
+// (@barista/shared/flavors), in wheel order. Backups carry it in the file's
+// workspace block, not as a table.
+export const flavorLexicons = mysqlTable("flavor_lexicons", {
+  workspaceId: varchar("workspace_id", { length: 36 })
+    .primaryKey()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 100 }).notNull(),
+  flavors: jsonValue<LexiconFlavor[]>("flavors").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
 
 // 9. LLM Analyses (AI Parameter Suggestions)
+// What was sent to the AI for an analysis or a suggestion
+// (docs/api/analysis.md §8c): the system prompt, the keys of the sections it
+// was built from (worker/src/prompt.ts), and the input as JSON. Saved with
+// the result; backups and exports leave it out unless asked.
+export interface AiRequest {
+  sections: string[];
+  system: string;
+  input: Record<string, unknown>;
+}
+
 export const llmAnalyses = mysqlTable("llm_analyses", {
   id: varchar("id", { length: 36 }).primaryKey(),
   brewLogId: varchar("brew_log_id", { length: 36 })
@@ -195,11 +1426,99 @@ export const llmAnalyses = mysqlTable("llm_analyses", {
   reasoning: text("reasoning").notNull(),
   suggestedGrindDelta: varchar("suggested_grind_delta", { length: 50 }).notNull(), // 'much_finer' | 'finer' | 'no_change' | 'coarser' | 'much_coarser'
   suggestedTempDelta: decimal("suggested_temp_delta", { precision: 3, scale: 1, mode: "number" }).notNull(),
+  // One concrete instruction for the next brew, how sure the model is, and an
+  // RPM change for variable-speed grinders (docs/api/llm-contract.md §9).
+  // Null on analyses made before they existed.
+  nextStep: varchar("next_step", { length: 200 }),
+  confidence: varchar("confidence", { length: 10 }).$type<AnalysisConfidence>(), // ANALYSIS_CONFIDENCE
+  suggestedRpmDelta: int("suggested_rpm_delta"),
+  // Espresso only (docs/api/llm-contract.md §9): change the dose and the shot
+  // weight, in grams; null for other brews and older analyses.
+  suggestedDoseDelta: decimal("suggested_dose_delta", { precision: 3, scale: 1, mode: "number" }),
+  suggestedYieldDelta: decimal("suggested_yield_delta", { precision: 4, scale: 1, mode: "number" }),
+  // What made it: the model and the prompt version (worker/src/prompt.ts).
+  model: varchar("model", { length: 100 }),
+  promptVersion: varchar("prompt_version", { length: 30 }),
+  // Was it useful? Set by the brew's people (docs/api/analysis.md §8).
+  helpful: boolean("helpful"),
+  ratedAt: timestamp("rated_at"),
+  // Made by auto-analyze (docs/api/analysis.md §8), not asked for: these
+  // count toward the workspace's daily cap.
+  auto: boolean("auto").notNull().default(false),
+  request: jsonValue<AiRequest>("request"), // null on analyses made before it was saved
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const ANALYSIS_CONFIDENCE = ["low", "medium", "high"] as const;
+export type AnalysisConfidence = (typeof ANALYSIS_CONFIDENCE)[number];
+
+// "Suggest parameters" (docs/api/analysis.md §8b): starting values for a brew
+// about to be made, asked for on the brew page. The AI gets the bean, recipe,
+// grinder and brewer chosen, and up to maxBrews earlier brews from source,
+// each with its latest analysis. Pending until the worker fills in the
+// result, or failed with why. The bean gives the workspace.
+export const parameterSuggestions = mysqlTable("parameter_suggestions", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  beanId: varchar("bean_id", { length: 36 })
+    .notNull()
+    .references(() => beans.id, { onDelete: "cascade" }),
+  recipeId: varchar("recipe_id", { length: 36 }).references(() => recipes.id, { onDelete: "set null" }),
+  brewerId: varchar("brewer_id", { length: 36 }).references(() => brewers.id, { onDelete: "set null" }),
+  grinderId: varchar("grinder_id", { length: 36 }).references(() => grinders.id, { onDelete: "set null" }),
+  source: varchar("source", { length: 20 }).$type<SuggestSource>().notNull(), // SUGGEST_SOURCES
+  maxBrews: int("max_brews").notNull(),
+  // Who asked: their own AI prompt is used (docs/api/auth.md §1c); null once
+  // their account is deleted. note: a one-off note sent with it.
+  requestedBy: varchar("requested_by", { length: 36 }).references(() => users.id, { onDelete: "set null" }),
+  note: varchar("note", { length: 500 }),
+  alternativesAsked: jsonValue<AlternativeKind[]>("alternatives_asked"), // null or [] = none
+  brewCount: int("brew_count"), // how many earlier brews were sent
+  // The batch as planned when asked: the barista's to choose, so the AI
+  // keeps it and suggests a ratio (filter: hot water and ice; espresso: the
+  // shot weight). Null when not set.
+  batchDoseGrams: decimal("batch_dose_grams", { precision: 5, scale: 1, mode: "number" }),
+  batchWaterGrams: decimal("batch_water_grams", { precision: 6, scale: 1, mode: "number" }),
+  batchIceGrams: decimal("batch_ice_grams", { precision: 6, scale: 1, mode: "number" }),
+  batchYieldGrams: decimal("batch_yield_grams", { precision: 6, scale: 1, mode: "number" }),
+  status: varchar("status", { length: 10 }).$type<SuggestionStatus>().notNull().default("pending"), // SUGGESTION_STATUSES
+  error: varchar("error", { length: 200 }), // failed: why
+  // The result: values for the brew, on the chosen grinder; null where they
+  // don't apply (speed on a fixed-speed grinder) or the AI couldn't say (no
+  // brew or starting point on that grinder). ratio null: keep the batch's.
+  reasoning: text("reasoning"),
+  nextStep: varchar("next_step", { length: 200 }),
+  confidence: varchar("confidence", { length: 10 }).$type<AnalysisConfidence>(), // ANALYSIS_CONFIDENCE
+  grindSetting: decimal("grind_setting", { precision: 6, scale: 2, mode: "number" }),
+  grindRpm: int("grind_rpm"),
+  tempC: decimal("temp_c", { precision: 4, scale: 1, mode: "number" }),
+  // Filter: (water + ice) / dose; espresso: shot weight / dose.
+  ratio: decimal("ratio", { precision: 5, scale: 2, mode: "number" }),
+  // What else to try, of the kinds asked: at most one of each; [] = none.
+  alternatives: jsonValue<SuggestedAlternative[]>("alternatives"),
+  model: varchar("model", { length: 100 }),
+  promptVersion: varchar("prompt_version", { length: 30 }),
+  request: jsonValue<AiRequest>("request"), // what was sent; null until done
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+});
+export const SUGGESTION_STATUSES = ["pending", "done", "failed"] as const;
+export type SuggestionStatus = (typeof SUGGESTION_STATUSES)[number];
+
+// Where a brew's analysis stands while it isn't saved yet
+// (docs/api/analysis.md §8): when an automatic one is due, or why the last
+// one failed or was skipped. Queue state, so not backed up. No row: nothing
+// pending, nothing failed.
+export const analysisRequests = mysqlTable("analysis_requests", {
+  brewLogId: varchar("brew_log_id", { length: 36 })
+    .primaryKey()
+    .references(() => brewLogs.id, { onDelete: "cascade" }),
+  dueAt: timestamp("due_at"), // an automatic analysis waiting until then
+  error: varchar("error", { length: 200 }), // shown with "Try again"
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 // Inferred row types for API payloads
 export type User = typeof users.$inferSelect;
+export type NotificationChannel = typeof notificationChannels.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Workspace = typeof workspaces.$inferSelect;
 export type NewWorkspace = typeof workspaces.$inferInsert;
@@ -207,17 +1526,30 @@ export type WorkspaceMember = typeof workspaceMembers.$inferSelect;
 export type NewWorkspaceMember = typeof workspaceMembers.$inferInsert;
 export type Bean = typeof beans.$inferSelect;
 export type NewBean = typeof beans.$inferInsert;
-export type BrewMethod = typeof brewMethods.$inferSelect;
-export type NewBrewMethod = typeof brewMethods.$inferInsert;
+export type Brewer = typeof brewers.$inferSelect;
+export type NewBrewer = typeof brewers.$inferInsert;
 export type BeanFreeze = typeof beanFreezes.$inferSelect;
+export type BeanPhoto = typeof beanPhotos.$inferSelect;
 export type NewBeanFreeze = typeof beanFreezes.$inferInsert;
 export type Grinder = typeof grinders.$inferSelect;
 export type NewGrinder = typeof grinders.$inferInsert;
+export type WaterProfile = typeof waterProfiles.$inferSelect;
+export type PrepTool = typeof prepTools.$inferSelect;
+export type BrewProblem = typeof brewProblems.$inferSelect;
+export type RecipeGrindSetting = typeof recipeGrindSettings.$inferSelect;
+export type RecipeStepType = (typeof RECIPE_STEP_TYPES)[number];
 export type Recipe = typeof recipes.$inferSelect;
 export type NewRecipe = typeof recipes.$inferInsert;
 export type RecipeStep = typeof recipeSteps.$inferSelect;
 export type NewRecipeStep = typeof recipeSteps.$inferInsert;
 export type BrewLog = typeof brewLogs.$inferSelect;
+export type Ingredient = typeof ingredients.$inferSelect;
+export type Drink = typeof drinks.$inferSelect;
+export type DrinkCategory = typeof drinkCategories.$inferSelect;
+export type MenuSectionRow = typeof menuSections.$inferSelect;
+export type MenuItemRow = typeof menuItems.$inferSelect;
+export type BrewLogMark = typeof brewLogMarks.$inferSelect;
 export type NewBrewLog = typeof brewLogs.$inferInsert;
 export type LlmAnalysis = typeof llmAnalyses.$inferSelect;
 export type NewLlmAnalysis = typeof llmAnalyses.$inferInsert;
+export type ParameterSuggestion = typeof parameterSuggestions.$inferSelect;

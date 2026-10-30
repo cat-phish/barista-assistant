@@ -1,13 +1,21 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { useBrewSessionStore } from '../stores/brewSession';
 import { useWorkspaceStore } from '../stores/workspace';
+import { headerMode } from '../lib/mode';
+import LabelReadNotice from './LabelReadNotice.vue';
+import ModeSwitch from './ModeSwitch.vue';
 
 const auth = useAuthStore();
 const workspaces = useWorkspaceStore();
 const router = useRouter();
+const route = useRoute();
 const loggingOut = ref(false);
+// Home roasting (docs/api/workspaces.md §2): roast mode has its own tabs.
+const roasting = computed(() => !!workspaces.current?.settings.homeRoasting);
+const mode = computed(() => (roasting.value ? headerMode(route.path, workspaces.current?.id ?? null) : 'brew'));
 
 async function logout(): Promise<void> {
   loggingOut.value = true;
@@ -19,6 +27,13 @@ async function logout(): Promise<void> {
     await router.replace({ name: 'login' });
   }
 }
+
+// Already on the brew screen: clicking Brew starts a new brew (after a saved
+// one), or offers to abandon the one in progress.
+const brewSession = useBrewSessionStore();
+function onBrewClick(): void {
+  if (route.name === 'brew') brewSession.requestRestart();
+}
 </script>
 
 <template>
@@ -27,21 +42,37 @@ async function logout(): Promise<void> {
       <img src="/favicon.svg" alt="" width="32" height="32" />
       <div>
         <strong>{{ workspaces.current?.name ?? 'Coffee Brew Journal' }}</strong>
-        <RouterLink v-if="workspaces.current" class="switch" :to="{ name: 'workspaces' }">Switch workspace</RouterLink>
+        <span v-if="workspaces.current" class="under-name">
+          <ModeSwitch v-if="roasting" />
+          <RouterLink class="switch" :to="{ name: 'workspaces' }">Switch workspace</RouterLink>
+        </span>
       </div>
     </div>
     <div class="account">
       <span class="email" :title="auth.user?.email">{{ auth.user?.email }}</span>
+      <RouterLink v-if="auth.user" class="settings" :class="{ active: route.path.startsWith('/settings') }" :to="{ name: 'settings' }" aria-label="Settings" title="Settings">
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg><span class="settings-text">Settings</span>
+      </RouterLink>
       <button class="btn btn-secondary" type="button" :disabled="loggingOut" @click="logout">Log out</button>
     </div>
   </header>
-  <nav v-if="workspaces.current" class="tabs" aria-label="Sections">
-    <RouterLink :to="{ name: 'home' }" exact-active-class="active">Home</RouterLink>
-    <RouterLink :to="{ name: 'brew' }" active-class="active">Brew</RouterLink>
+  <!-- Roast mode's tabs (docs/roadmap.md, Home roasting). Viewers can't log a roast. -->
+  <nav v-if="workspaces.current && mode === 'roast'" class="tabs" aria-label="Roasting sections">
+    <RouterLink v-if="workspaces.canEdit" :to="{ name: 'roast-new' }" active-class="active">Roast</RouterLink>
+    <RouterLink :to="{ name: 'roasts' }" :class="{ active: route.path.startsWith('/roast/roasts') }">Roasts</RouterLink>
+    <RouterLink :to="{ name: 'green-coffees' }" :class="{ active: route.path.startsWith('/roast/green') }">Green</RouterLink>
+    <RouterLink :to="{ name: 'resting' }" active-class="active">Resting</RouterLink>
+    <RouterLink :to="{ name: 'roasting-machines' }" :class="{ active: route.path.startsWith('/roast/setup') }">Roasters</RouterLink>
+  </nav>
+  <nav v-else-if="workspaces.current" class="tabs" aria-label="Sections">
+    <RouterLink :to="{ name: 'brew' }" active-class="active" @click="onBrewClick">Brew</RouterLink>
     <RouterLink :to="{ name: 'journal' }" active-class="active">Journal</RouterLink>
     <RouterLink :to="{ name: 'beans' }" active-class="active">Beans</RouterLink>
-    <RouterLink :to="{ name: 'recipes' }" active-class="active">Recipes</RouterLink>
+    <RouterLink :to="{ name: 'recipes' }" :class="{ active: ['/recipes', '/drinks', '/ingredients'].some((p) => route.path.startsWith(p)) }">Recipes</RouterLink>
+    <RouterLink :to="{ name: 'brewers' }" :class="{ active: route.path.startsWith('/setup') }">Bar setup</RouterLink>
+    <RouterLink :to="{ name: 'stats' }" :class="{ active: route.path.startsWith('/insights') }">Insights</RouterLink>
   </nav>
+  <LabelReadNotice />
 </template>
 
 <style scoped>
@@ -70,6 +101,12 @@ async function logout(): Promise<void> {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.under-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--space-2);
+}
 .switch {
   font-size: 0.85rem;
 }
@@ -87,6 +124,27 @@ async function logout(): Promise<void> {
   font-size: 0.9rem;
   color: var(--text-muted);
 }
+.settings {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--tap);
+  min-width: var(--tap);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-weight: 600;
+  text-decoration: none;
+}
+.settings svg {
+  flex-shrink: 0;
+}
+.settings:hover,
+.settings.active {
+  color: var(--brand);
+  background: var(--brand-tint);
+}
 .tabs {
   display: flex;
   gap: 0;
@@ -100,17 +158,32 @@ async function logout(): Promise<void> {
   align-items: center;
   flex-shrink: 0;
   min-height: var(--tap);
-  /* Five tabs must fit a 360px phone without scrolling. */
+  /* Six tabs must fit a 320px phone without scrolling (see the media queries). */
   padding: 0 var(--space-2);
   color: var(--text-muted);
   text-decoration: none;
   font-weight: 600;
   border-bottom: 3px solid transparent;
 }
-@media (max-width: 340px) {
+@media (max-width: 420px) {
   .tabs a {
     padding: 0 6px;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
+  }
+}
+@media (max-width: 370px) {
+  .tabs a {
+    padding: 0 4px;
+    font-size: 0.85rem;
+  }
+}
+@media (max-width: 340px) {
+  .tabs {
+    padding: 0 2px;
+  }
+  .tabs a {
+    padding: 0 3px;
+    font-size: 0.8rem;
   }
 }
 .tabs a.active {
@@ -118,7 +191,8 @@ async function logout(): Promise<void> {
   border-bottom-color: var(--brand);
 }
 @media (max-width: 480px) {
-  .email {
+  .email,
+  .settings-text {
     display: none;
   }
 }

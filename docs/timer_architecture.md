@@ -9,7 +9,7 @@
 *   To prevent accidental double-tap zooming and eliminate the 300ms tap delay on mobile devices during timed pours, apply `touch-action: manipulation;` to all interactive elements (`button`, `input`, `select`).
 
 ## 2. Vite PWA Configuration (`frontend/vite.config.ts`)
-Use `vite-plugin-pwa` with `registerType: 'autoUpdate'` and Workbox `NetworkFirst` runtime caching on `/api/public/menu/.*`:
+Use `vite-plugin-pwa` with `registerType: 'prompt'` (the app applies updates itself, below) and Workbox `NetworkFirst` runtime caching on `/api/public/menu/.*`, plus `CacheFirst` for bean photos (they never change for an id, `docs/api/bean-photos.md` §4c, so the ones you've seen show offline):
 
 ```typescript
 import { defineConfig } from 'vite';
@@ -20,12 +20,18 @@ export default defineConfig({
   plugins: [
     vue(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
+      injectRegister: false, // main.ts registers it
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       manifest: {
-        name: 'Coffee Brew Journal',
-        short_name: 'BrewLog',
-        description: 'Self-hosted pour-over timer and LLM extraction analysis',
+        id: '/',
+        name: 'Barista-Assistant',
+        short_name: 'Barista',
+        description: 'Self-hosted coffee journal: brew timer, beans, recipes and roasts, AI brew analysis, and a menu for your bar',
+        start_url: '/',
+        scope: '/',
+        handle_links: 'preferred',
+        launch_handler: { client_mode: 'navigate-existing' },
         theme_color: '#3e2723',
         background_color: '#f5f5f5',
         display: 'standalone',
@@ -38,6 +44,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        navigateFallback: 'index.html',
+        navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
             urlPattern: /\/api\/public\/menu\/.*/i,
@@ -47,6 +55,15 @@ export default defineConfig({
               expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 },
               cacheableResponse: { statuses: [0, 200] }
             }
+          },
+          {
+            urlPattern: /\/api\/workspaces\/[^/]+\/beans\/[^/]+\/photos\/[^/]+$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'bean-photos',
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [200] }
+            }
           }
         ]
       }
@@ -55,9 +72,87 @@ export default defineConfig({
 });
 ```
 
-## 3. Timer State Mechanics (`PourOverTimer.vue`)
+*   **Links open the app (Android):** `handle_links: 'preferred'` and
+    `launch_handler` `navigate-existing` open links into the app (the
+    rate-later reminder's) in the installed app's open window. iOS always
+    opens links in Safari, whatever the manifest says.
+*   **Updates never land mid-brew:** a new service worker reloads the page
+    when it takes over, and a brew in progress (the timer, its countdown,
+    or the log form before Save) lives only in memory. So `main.ts`
+    registers the worker (`virtual:pwa-register`) and passes a waiting
+    update through `createUpdateGate` (`lib/swUpdate.ts`, unit-tested): it
+    applies at once unless `brewSession.inProgress` is set (by `BrewView`),
+    and then when the brew is saved or abandoned. Browsers look for a new
+    worker on page loads, which an installed app may not have for days, so
+    it also checks hourly.
+*   **Served as a build, over HTTPS:** service workers and installs need
+    HTTPS (or `localhost`), and only `vite build` makes the worker and the
+    manifest. The Docker frontend (`frontend/Dockerfile`) builds the app
+    and serves `dist/` with Caddy (`frontend/Caddyfile`):
+    *   HTTPS for `localhost` and `APP_HOST` (the LAN IP or name) from
+        Caddy's own CA; `default_sni` answers phones that connect by IP
+        (they send no server name). Each device trusts the CA root once,
+        from `http://<address>/ca.crt`; the CA lives in the `caddy_data`
+        volume, so it survives rebuilds.
+    *   Port 80 serves `/ca.crt` and redirects everything else to HTTPS.
+    *   `/api/*` goes to the backend (with `X-Forwarded-For`, for
+        `TRUST_PROXY=1`); other paths fall back to `index.html`.
+    *   `/assets/*` (hashed names) is cached for a year; everything else,
+        the shell, `sw.js` and the manifest included, is `no-cache`, so
+        updates are found.
+    *   The backend runs as production (Secure session cookie);
+        `APP_URL` and `CORS_ORIGIN` are the https address.
+    For live reload, run `npm run dev` in `frontend/` on the host (the Vite
+    dev server proxies `/api` the same way, and makes no service worker).
+
+## 3. Timer State Mechanics (`BrewTimer.vue`, every recipe but long cold brews)
+
+> **Long cold brews** (styles that brew like cold brew or Kyoto drip,
+> `lib/coldBrew.ts`) don't use the timer. Setup's **Start steep** shows the
+> recipe's steps as a checklist and saves the brew as steeping; it's
+> finished later from the journal (docs/api/brew-logs.md §6). Rapid cold brew
+> uses the timer as below.
 *   **Delta-Timestamp Calculation:** Never increment a counter inside `setInterval`. Store `startTime = Date.now() - elapsedMs` and compute `elapsedMs = Date.now() - startTime` inside a `requestAnimationFrame` loop.
-*   **Screen Wake Lock:** Request `navigator.wakeLock.request('screen')` when the brew starts and release it when finished or unmounted.
+*   **Start delay:** Settings → Brew setup → Timer start sets the person's
+    `startDelays` to 0 / 3 / 5 separately for Filter, Espresso, Stovetop
+    and Other (`docs/api/auth.md` §1). Custom methods use their underlying
+    behaviour; no selected type uses Other. A type without one has no
+    delay.
+    Setup opens the timer as before; tapping its Start button begins the
+    countdown. The clock shows the remaining seconds and Start becomes
+    **Start now**; tapping again starts immediately. Step cards and recording
+    controls wait until zero. Cancel brew or leaving the timer clears the
+    pending start. Long cold brews bypass the timer and countdown.
+    The countdown uses a deadline (`Date.now()`), not accumulated ticks;
+    the elapsed brew time starts at that deadline (or the skip tap), even if
+    the browser delivers the callback late. At zero it gives a short beep
+    and vibration where allowed; audio is unlocked by the initial tap and
+    unavailable cues never block the start.
+*   **Screen Wake Lock:** Request `navigator.wakeLock.request('screen')` on
+    the initial Start tap, including the countdown, and release it when
+    finished or unmounted. Release a pending request too if it resolves
+    after cancellation.
+*   **Steps run back to back** (supersedes the reference component's manual "Next Step" button and the earlier fixed start/end times). Recipe steps have a `durationSec` and an `advance` mode (`docs/api/README.md` §5); each step starts when the previous one actually ended:
+    *   `auto`: ends `durationSec` after it started. An instant step (0 s) is shown for about two seconds without delaying the next one.
+    *   `auto_log`: the same, with a **Log it** button that records a `step_end` mark (the real moment, e.g. when you actually poured) without changing the schedule.
+    *   `tap`: ends when **Next** is tapped (recorded as a `step_end` mark). Its duration is a guide: once passed, the card says "Tap Next when ready".
+    *   `first_drop` (espresso): ends when **First drop** is tapped. A first drop tapped before this step starts ends it as soon as it starts.
+    *   A last step with no duration runs until **Finish & Save**; after a timed last step the card shows "All steps done".
+    *   **Hold** (`auto` and `auto_log` steps with a duration, while running): for a pour or a drawdown running slow. The step's countdown stops at what was left and the small line says "Held · +0:12"; the brew clock keeps running, and so does the target finish window, so a held brew can finish late. **Resume** carries on with the time left; **Next** ends the step now. A step can be held more than once ("left · held 0:12" after); later steps move by the time held, and the progress bar leaves it out. Recorded as `step_hold` / `step_resume` marks (and a `step_end` for Next), so the schedule stays a function of the steps, the time and the marks. No pause for the whole brew: the coffee is still brewing. The Previous card adds "held 0:12", the log form "Pour held 0:12", and the journal "Step 2 held".
+    *   The schedule is a pure function, `brewSchedule(steps, t, marks)` in `lib/steps.ts`, unit-tested.
+*   **Layout, top to bottom:** header, the step cards, the buttons (Start / Finish & Save / First drop), then the clock. Steps come first because they say what to do; before the start there are no cards, so it's the buttons and the clock.
+*   **Cards:** **Previous** → **Current** → **Up next**, the same structure for every step so the layout doesn't jump. Current shows a label line ("Step 2 of 4 · Pour · 93 °C"), a big line, a small line and a progress bar:
+    *   Big, left: the instruction ("Pour to 150 g (+100)", "9 bar", "9 → 6 bar", "4 → 2 g/s", "Pump off"), or the step's name when it has none. The name goes on the small line under it.
+    *   Big, right: a countdown ("0:20", small "left"; for a tap step's guide "left (guide)", then "Tap Next"), or "At first drop" / "Until done".
+    *   Previous / Up next are one line each with the instruction in bold ("Pour · **Pour to 210 g (+150)** · 0:30 · at 1:23").
+    *   Progress runs from the step's start to its planned end (the guide for tap steps, the first-drop window's end for first-drop steps).
+    *   Steps you're doing get the warm brand-tint background; waiting steps (`wait`, `soak`) are plain white.
+    *   If the espresso brewer (the recipe's) can't control what a step asks for (pressure/flow `none`), the card adds "Your machine can't set pressure", and the step still runs on time.
+*   **Espresso** adds a **First drop** button under Finish & Save while running (whether or not a step waits for it). After the tap it shows the time and "early / in the window / late" against the recipe's window, with a way to re-record. With no steps the shot timer is just the clock and this button.
+*   **Target finish window** (recipe's `expectedFinishMinSec`–`expectedFinishMaxSec`, if set) under the clock: "Target 2:45–3:15 · in 0:40" before the window, "· in the window" inside it, "· 0:12 over" after it. Espresso headers show "18 g → 36 g".
+*   **Finish & Save** is available from the start. It emits the elapsed seconds and the marks; the log form has a **First drop** field (espresso), filled from the tap or typed in afterwards, and blank = not recorded.
+*   **Scaled batches:** brew setup can scale the recipe (dose, water or yield; `docs/roadmap.md` phase 1). The timer receives the scaled steps: pour targets × (batch water / recipe water), rounded to whole grams; durations unchanged. The header shows the batch dose.
+*   **Layout:** **Cancel brew** (in `BrewView`) → recipe header → clock with the target-finish note → **Start / Finish & Save** (→ **First drop** for espresso) → Previous → Current → Up next. Everything stays on screen on a phone (390×844) without scrolling.
 
 ### Reference Component Implementation (`frontend/src/components/PourOverTimer.vue`)
 

@@ -1,0 +1,150 @@
+# 7b. Menu Builder
+
+> Part of the API spec. Conventions, auth rules and the section index are in
+> [README.md](README.md); a bare `§N` refers to that index.
+
+The public menu (§7), arranged by hand. It's separate from drink categories
+(§5d), which only group drinks on the brew page. A menu is a list of
+**sections** you name and order. Each section holds **items** in order:
+
+- a **drink** (§5c);
+- a **brewer** (§3): its plain brew, e.g. "Espresso" for a Linea Mini;
+- the **beans block**: the bar's active (not archived) beans whose
+  `showOnPublicMenu` is on (§4), listed where you place it. At most one per
+  menu.
+
+An item can rename and describe its source for the menu (`name`,
+`description`; `null` = the source's own), carry a `price` (in the menu's
+`currency`), and be marked unavailable (`available: false`: still listed,
+shown as unavailable). Each drink or brewer can be in a section once (it may
+be in several sections). Deleting a drink or brewer removes its items; a
+archived brewer stays in the builder (flagged) but is left off the public
+menu.
+
+All routes are under `/api/workspaces/:workspaceId/menu`. Any member can
+read; writes need role `owner` or `barista`. Turning the public menu on or
+off is the workspace's `isPublicMenuEnabled` (§2, owners only).
+
+**Every route returns the whole menu** (`200`, or `201` for creates):
+
+```json
+{
+  "title": "The Brew Bar",
+  "currency": "USD",
+  "sections": [
+    {
+      "id": "uuid",
+      "name": "Espresso milk drinks",
+      "description": null,
+      "position": 1,
+      "items": [
+        {
+          "id": "uuid",
+          "itemType": "drink",
+          "drinkId": "uuid",
+          "brewerId": null,
+          "name": "House latte",
+          "description": null,
+          "price": 5.5,
+          "available": true,
+          "source": { "name": "Latte", "description": "Double shot, steamed milk", "kind": "espresso", "method": "Espresso", "archived": false },
+          "beanFields": null
+        },
+        {
+          "id": "uuid", "itemType": "beans", "drinkId": null, "brewerId": null,
+          "name": null, "description": null, "price": null, "available": true, "source": null,
+          "beanFields": ["flavorProfile", "origin", "process", "roastDate"]
+        }
+      ]
+    }
+  ]
+}
+```
+
+`source` is what the item shows by default (`method`: how it's made, the
+brewer's method name for a plain brew, §3e, or the drink's kind): a drink's name and description,
+or a brewer's name (brewers have no menu description; set one on the item).
+
+`beanFields` (the beans block only; `null` on other items) is what guests see
+about each bean besides its roaster and name: a list of `BEAN_MENU_FIELDS`
+(`flavorProfile`, `origin`, `producer`, `altitude`, `variety`, `process`, `roastLevel`,
+`roastDate`, `decaf`, `blendType`, `roastType`), each once; `null` = all of
+them. The public menu (§7) sends only those.
+
+## `GET /`
+
+- **Errors:** `404` not a member.
+
+## `GET /preview`
+
+The menu as guests would see it: exactly the public menu's shape (§7), built
+the same way, but for any member and whether or not the public menu is on.
+The builder's Preview shows it.
+
+- **Errors:** `404` not a member.
+
+## `PATCH /`
+
+- **Body:** any non-empty subset of `{ "currency": "usd" | null, "title":
+  "The Brew Bar" | null }`. `currency` is an ISO 4217 code (uppercased).
+  `title` is the public menu's heading, ≤ 255 chars; blank or `null` uses the
+  workspace name. Both are set in Settings → Workspace, with the public
+  menu's on/off switch (§2).
+- **Errors:** `400` invalid, or a `null` currency while items still have
+  prices; `403` viewer.
+
+## `POST /sections`
+
+- **Body:** `{ "name": "Pour over", "description"?: "..." }`: name 1–100
+  chars, unique per menu (case-insensitive); description ≤ 500. It goes last.
+- **Errors:** `400`; `403` viewer; `409` name taken.
+
+## `PATCH /sections/:sectionId`
+
+- **Body:** any non-empty subset of `{ "name", "description" }`.
+- **Errors:** `400`; `403`; `404` not in this menu; `409` name taken.
+
+## `DELETE /sections/:sectionId`
+
+Deletes the section and its items (not the drinks or brewers).
+
+- **Errors:** `403`; `404`.
+
+## `PUT /layout`
+
+The whole arrangement at once, as a drag-and-drop or ↑/↓ editor has it: every
+section of the menu exactly once, in the new order, each with its items in
+order. Items can move between sections this way.
+
+- **Body:** `{ "sections": [ { "id": "uuid", "itemIds": ["uuid", ...] } ] }`
+- **Errors:** `400` a section or item missing, unknown or listed twice, or a
+  drink or brewer twice in one section; `403`.
+
+## `POST /sections/:sectionId/items`
+
+- **Body:** `{ "itemType": "drink" | "brewer" | "beans", "drinkId"?, "brewerId"?,
+  "name"?, "description"?, "price"?, "available"? }`. A drink item needs
+  `drinkId` (and no `brewerId`), a brewer item `brewerId`, the beans block
+  neither. `name` ≤ 255 and `description` ≤ 500 (blank = `null`); `price`
+  0–999999.99, at most 2 decimals, and only once the menu has a `currency`;
+  `available` defaults to `true`. `beanFields` (optional, nullable) is only
+  for the beans block. It goes last in the section.
+
+  Or several at once: `{ "items": [ { ...item }, ... ] }` (1–100), each with
+  the same rules. They go last, in the order sent, and it's **all or
+  nothing**: if any is refused, none are added.
+- **Errors:** `400` invalid body, a drink or brewer not in this workspace, or
+  a price without a currency; `403`; `404` section not in this menu; `409`
+  already in this section (or sent twice), or the menu already has the beans
+  block.
+
+## `PATCH /items/:itemId`
+
+- **Body:** any non-empty subset of `{ "name", "description", "price",
+  "available", "beanFields" }`, same rules (`beanFields` on a drink or brewer
+  item is a `400`). To move an item, use `PUT /layout`.
+- **Errors:** `400`; `403`; `404`.
+
+## `DELETE /items/:itemId`
+
+- **Errors:** `403`; `404`.

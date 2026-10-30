@@ -8,12 +8,28 @@ import { clearSessionCookie, setSessionCookie } from "../auth/session.js";
 import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
-import { users, workspaceMembers, workspaces, type User, type Workspace } from "@barista/shared/schema";
-import { emailSchema } from "../validation.js";
+import {
+  DEFAULT_PREFERENCES,
+  users,
+  withDefaults,
+  workspaceMembers,
+  workspaces,
+  type User,
+  type UserPreferences,
+  type Workspace,
+} from "@barista/shared/schema";
+import { emailSchema, preferencesSchema } from "../validation.js";
+import { registrationOpen } from "../config.js";
 
 export interface PublicUser {
   id: string;
   email: string;
+  preferences: UserPreferences; // defaults filled in
+  isAdmin: boolean; // a server admin, granted on the server (docs/api/server.md §10)
+}
+
+export interface PreferencesResponse {
+  preferences: UserPreferences;
 }
 
 export interface UserResponse {
@@ -44,15 +60,15 @@ export interface SoleOwnerConflict {
   workspaces: Array<Pick<Workspace, "id" | "name" | "slug">>;
 }
 
-function toPublicUser(user: Pick<User, "id" | "email">): PublicUser {
-  return { id: user.id, email: user.email };
+function toPublicUser(user: Pick<User, "id" | "email"> & { preferences?: User["preferences"]; isAdmin?: boolean }): PublicUser {
+  return { id: user.id, email: user.email, preferences: withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null), isAdmin: user.isAdmin ?? false };
 }
 
 // Per-IP brute-force protection, shared by every endpoint that checks a
 // password (login, change password, delete account), so guesses across them
 // count together. In-memory store: fine for a single backend instance; move
 // to a Redis store if the backend is ever scaled out.
-const loginLimiter = rateLimit({
+export const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 10,
   skipSuccessfulRequests: true,
@@ -65,7 +81,17 @@ const loginLimiter = rateLimit({
 
 export const authRouter = Router();
 
+// Whether anyone can create an account here (ALLOW_REGISTRATION), so the
+// app can say so before the form is filled in.
+authRouter.get("/registration", (_req: Request, res: Response<{ open: boolean }>) => {
+  res.json({ open: registrationOpen() });
+});
+
 authRouter.post("/register", async (req: Request, res: Response<UserResponse>) => {
+  if (!registrationOpen()) {
+    sendError(res, 403, "Registration is closed on this server");
+    return;
+  }
   const body = parseBody(registerSchema, req, res);
   if (!body) return;
 
@@ -81,7 +107,7 @@ authRouter.post("/register", async (req: Request, res: Response<UserResponse>) =
   }
 
   setSessionCookie(res, user.id, 0); // new users start at session_version 0
-  res.status(201).json({ user });
+  res.status(201).json({ user: toPublicUser(user) });
 });
 
 authRouter.post("/login", loginLimiter, async (req: Request, res: Response<UserResponse>) => {
@@ -106,7 +132,7 @@ authRouter.post("/logout", (_req: Request, res: Response) => {
 
 authRouter.get("/me", requireAuth, async (req: Request, res: Response<UserResponse>) => {
   const [user] = await db
-    .select({ id: users.id, email: users.email })
+    .select({ id: users.id, email: users.email, preferences: users.preferences, isAdmin: users.isAdmin })
     .from(users)
     .where(eq(users.id, authedUserId(req)))
     .limit(1);
@@ -117,6 +143,28 @@ authRouter.get("/me", requireAuth, async (req: Request, res: Response<UserRespon
     return;
   }
   res.json({ user: toPublicUser(user) });
+});
+
+// The caller's display preferences; the body's keys are merged into what's
+// stored (docs/api/auth.md §1).
+authRouter.patch("/me/preferences", requireAuth, async (req: Request, res: Response<PreferencesResponse>) => {
+  const body = parseBody(preferencesSchema, req, res);
+  if (!body) return;
+
+  const userId = authedUserId(req);
+  const preferences = await db.transaction(async (tx) => {
+    const [row] = await tx.select({ preferences: users.preferences }).from(users).where(eq(users.id, userId)).for("update");
+    if (!row) return null;
+    const merged = { ...(row.preferences ?? {}), ...body };
+    await tx.update(users).set({ preferences: merged }).where(eq(users.id, userId));
+    return merged;
+  });
+  if (!preferences) {
+    clearSessionCookie(res);
+    sendError(res, 401, "Not authenticated");
+    return;
+  }
+  res.json({ preferences: withDefaults(DEFAULT_PREFERENCES, preferences) });
 });
 
 // Changing the password bumps session_version, which revokes every other

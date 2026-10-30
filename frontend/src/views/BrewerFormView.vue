@@ -1,0 +1,120 @@
+<script setup lang="ts">
+// Brewer editor (docs/api/brewers.md §3), a page of its own like recipes: add a
+// brewer, or edit one (route param).
+import { computed, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { brewerMethodsApi } from '../api/brewerMethods';
+import { brewersApi } from '../api/brewers';
+import type { BrewerMethod } from '../api/types';
+import { ApiError, errorMessage } from '../api/client';
+import AppHeader from '../components/AppHeader.vue';
+import DeleteSection from '../components/DeleteSection.vue';
+import BrewerFields from '../components/BrewerFields.vue';
+import { brewerForm, brewerInput } from '../lib/equipment';
+import { useWorkspaceStore } from '../stores/workspace';
+
+const props = defineProps<{ id?: string }>(); // set when editing (route param)
+const workspaces = useWorkspaceStore();
+// As saved, for the Delete section (editing only).
+const saved = ref<{ name: string; archived: boolean } | null>(null);
+const deleteUsage = () => brewersApi.usage(workspaces.current?.id ?? '', props.id ?? '');
+const deleteIt = () => brewersApi.remove(workspaces.current?.id ?? '', props.id ?? '');
+const router = useRouter();
+const editing = computed(() => props.id !== undefined);
+
+const form = ref(brewerForm());
+const methods = ref<BrewerMethod[]>([]); // the workspace's (docs/api/brewer-methods.md §3e)
+const loading = ref(true);
+const saving = ref(false);
+const submitted = ref(false);
+const error = ref('');
+
+// 409s: a taken name, or recipes that pin the kind.
+function conflict(err: unknown): string {
+  if (!(err instanceof ApiError) || err.status !== 409) return errorMessage(err);
+  const count = err.body?.recipeCount;
+  if (typeof count === 'number') {
+    return `${count} recipe${count === 1 ? ' uses' : 's use'} this brewer, so its kind can't change: their fields depend on it. Add a new brewer instead.`;
+  }
+  return 'A brewer with that name already exists.';
+}
+
+onMounted(async () => {
+  const ws = workspaces.current?.id;
+  if (!ws) return;
+  try {
+    const [b, bm] = await Promise.all([
+      editing.value ? brewersApi.list(ws) : Promise.resolve(null),
+      brewerMethodsApi.list(ws).catch(() => ({ methods: [] })), // the form falls back to the kinds
+    ]);
+    if (editing.value) {
+      const brewer = b?.brewers.find((x) => x.id === props.id);
+      if (!brewer) {
+        error.value = 'This brewer no longer exists.';
+        return;
+      }
+      saved.value = { name: brewer.name, archived: !!brewer.archivedAt };
+      form.value = brewerForm(brewer);
+    }
+    methods.value = bm.methods;
+  } catch (err) {
+    error.value = errorMessage(err);
+  } finally {
+    loading.value = false;
+  }
+});
+
+async function save(): Promise<void> {
+  submitted.value = true;
+  const ws = workspaces.current?.id;
+  if (!ws || !form.value.name.trim()) return;
+  saving.value = true;
+  error.value = '';
+  try {
+    if (props.id) await brewersApi.update(ws, props.id, brewerInput(form.value));
+    else await brewersApi.create(ws, brewerInput(form.value));
+    await router.push({ name: 'brewers' });
+  } catch (err) {
+    error.value = conflict(err);
+  } finally {
+    saving.value = false;
+  }
+}
+</script>
+
+<template>
+  <AppHeader />
+  <main class="page">
+    <div class="page-header">
+      <h1>{{ editing ? 'Edit brewer' : 'Add brewer' }}</h1>
+    </div>
+    <p v-if="loading" class="muted" aria-live="polite">Loading…</p>
+    <form v-else class="stack" novalidate @submit.prevent="save">
+      <section class="card stack">
+        <BrewerFields v-model="form" id-prefix="brewer" :show-errors="submitted" :methods="methods" />
+      </section>
+      <p v-if="error" class="form-error" role="alert">{{ error }}</p>
+      <div class="buttons">
+        <RouterLink class="btn btn-secondary" :to="{ name: 'brewers' }">Cancel</RouterLink>
+        <button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? 'Saving…' : editing ? 'Save brewer' : 'Add brewer' }}</button>
+      </div>
+    </form>
+    <DeleteSection
+      v-if="props.id && saved && workspaces.canEdit"
+      kind="brewer"
+      :name="saved.name"
+      :archived="saved.archived"
+      :load="deleteUsage"
+      :remove="deleteIt"
+      :back="{ name: 'brewers' }"
+    />
+  </main>
+</template>
+
+<style scoped>
+.buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+</style>
