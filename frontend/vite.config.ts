@@ -4,8 +4,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // Vite reloads the page when its live-reload socket drops and comes back,
 // which on a phone happens whenever the camera or photo picker opens:
-// whatever was in progress is lost. Docker sets VITE_LIVE_RELOAD=false (its
-// source is copied in, so live reload does nothing there).
+// whatever was in progress is lost. Set VITE_LIVE_RELOAD=false to test on a
+// phone against `npm run dev`. (Docker serves a build, not this server.)
 const liveReload = process.env.VITE_LIVE_RELOAD !== 'false';
 // Without it, nothing answers the page's websocket request: it would hang,
 // and a phone resetting it crashed the server (ECONNRESET with no handler).
@@ -40,12 +40,23 @@ export default defineConfig({
     refuseWebSockets,
     vue(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt' so main.ts decides when an update applies: never mid-brew
+      // (src/lib/swUpdate.ts). It registers the worker itself.
+      registerType: 'prompt',
+      injectRegister: false,
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       manifest: {
-        name: 'Coffee Brew Journal',
-        short_name: 'BrewLog',
-        description: 'Self-hosted pour-over timer and LLM extraction analysis',
+        id: '/',
+        name: 'Barista-Assistant',
+        short_name: 'Barista',
+        description:
+          'Self-hosted coffee journal: brew timer, beans, recipes and roasts, AI brew analysis, and a menu for your bar',
+        start_url: '/',
+        scope: '/',
+        // Links into the app (rate-later reminders) open the installed app on
+        // Android, in its open window. iOS always opens links in Safari.
+        handle_links: 'preferred',
+        launch_handler: { client_mode: 'navigate-existing' },
         theme_color: '#3e2723',
         background_color: '#f5f5f5',
         display: 'standalone',

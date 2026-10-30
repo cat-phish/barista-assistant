@@ -1997,3 +1997,49 @@ Follow-up to "Flavor wheel", branch `custom-lexicon`, migration 0085.
   files from whatever source they choose, outside the repo (`lexicons/`
   and `*.flavor-wheel.json` are git-ignored). One wheel per workspace,
   replaced whole (no merge); flavor rules stay the same under any wheel.
+
+## Installable PWA, served over HTTPS (built)
+
+Backlog item 28, branch `pwa-serve`. `docs/timer_architecture.md` §2,
+README "Install it on your phone".
+
+- The PWA was configured but never served: the frontend container ran the
+  Vite dev server (no service worker or manifest, which only `vite build`
+  makes) over plain HTTP on a LAN IP, where browsers allow neither. Phones
+  got a browser shortcut.
+- The frontend image now **builds the app and serves it with Caddy**
+  (`frontend/Caddyfile`), which also proxies `/api` to the backend as the
+  dev proxy did (`X-Forwarded-For`, so `TRUST_PROXY=1` still works). Hashed
+  assets cache for a year; the shell, `sw.js` and the manifest are
+  `no-cache`.
+- **HTTPS from Caddy's internal CA**, for `localhost` and `APP_HOST`
+  (`default_sni`, since a phone connecting by IP sends no server name).
+  Each device trusts the root once, from `http://<address>/ca.crt`; port 80
+  otherwise redirects to HTTPS. The CA lives in the `caddy_data` volume.
+  `HTTPS_PORT` / `HTTP_PORT` if 443 / 80 are taken.
+- The backend runs as production now (Secure session cookie); `APP_URL`
+  and `CORS_ORIGIN` default to `https://localhost`.
+- **Manifest:** named Barista-Assistant (short name Barista, also the page
+  title), a description of what it does now, explicit `id`, `start_url`
+  and `scope`, and `handle_links: preferred` with `launch_handler`
+  `navigate-existing`, so reminder links open the installed app on
+  Android.
+- **Updates never land mid-brew:** `registerType: 'prompt'`, registered in
+  `main.ts`; `createUpdateGate` (`lib/swUpdate.ts`) applies a waiting
+  update at once, or after the brew is saved or abandoned while
+  `brewSession.inProgress`. Plus an hourly update check, since an
+  installed app can go days without a page load.
+- **Ready for a server:** every service has `restart: unless-stopped`
+  (nothing came back after a reboot before). Each data location can be set
+  in `.env` (`DB_DATA_DIR`, `REDIS_DATA_DIR`, `CADDY_DATA_DIR`,
+  `PHOTOS_DIR`, `BACKUPS_DIR`), defaulting to the named volumes and
+  folders as before; MariaDB, Redis and Caddy take ownership of a new
+  folder themselves, photos and backups must be owned by uid 1000. README
+  "Run it on a server": configure, start, update, and move from another
+  machine (stop, dump, copy, restore).
+- `vitest` is now a frontend devDependency (it ran from the backend's
+  hoisted copy, which the image's `npm ci -w frontend` doesn't install).
+- Decided: one way to run it in Docker, the build; no dev-server container
+  or override (live reload was already off in Docker, and `npm run dev` on
+  the host still has it). Internal CA over a domain or Tailscale: no
+  account, works offline on the LAN. Web Push is backlog item 29; testing on phones, 28.

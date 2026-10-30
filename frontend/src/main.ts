@@ -1,10 +1,13 @@
 import { createPinia } from 'pinia';
 import { createApp, watch } from 'vue';
+import { registerSW } from 'virtual:pwa-register';
 import App from './App.vue';
 import { setUnauthorizedHandler } from './api/client';
+import { createUpdateGate } from './lib/swUpdate';
 import { applyTheme } from './lib/theme';
 import { router } from './router';
 import { useAuthStore } from './stores/auth';
+import { useBrewSessionStore } from './stores/brewSession';
 import { useWorkspaceStore } from './stores/workspace';
 import './styles/base.css';
 
@@ -30,6 +33,23 @@ watch(
   (theme) => {
     if (theme) applyTheme(theme);
   },
+  { immediate: true },
+);
+
+// Service worker updates apply on their own, but never mid-brew
+// (lib/swUpdate.ts). An installed app can stay open for days without a page
+// load, which is when browsers look for updates, so check hourly too.
+const UPDATE_CHECK_MS = 60 * 60 * 1000;
+const updateGate = createUpdateGate(() => void updateSW());
+const updateSW = registerSW({
+  onNeedRefresh: () => updateGate.ready(),
+  onRegisteredSW: (_url, registration) => {
+    if (registration) setInterval(() => void registration.update(), UPDATE_CHECK_MS);
+  },
+});
+watch(
+  () => useBrewSessionStore().inProgress,
+  (busy) => updateGate.setBusy(busy),
   { immediate: true },
 );
 

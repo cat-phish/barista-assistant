@@ -1,0 +1,51 @@
+# Serves the built app over HTTPS and proxies /api to the backend
+# (docs/timer_architecture.md §2). Certificates come from Caddy's own CA:
+# each device trusts its root once, downloaded from http://<address>/ca.crt.
+# The CA lives in the caddy_data volume; losing it means trusting a new root.
+{
+	# The container can't add the root to this machine's trust store.
+	skip_install_trust
+	admin off
+	# Its own redirects would also catch /ca.crt: the http:// site redirects.
+	auto_https disable_redirects
+	# Phones reaching the app by IP send no server name; answer with this
+	# address's certificate.
+	default_sni {$APP_HOST}
+}
+
+# Plain HTTP: the CA root to download, and a redirect to HTTPS for the rest.
+http:// {
+	handle /ca.crt {
+		root * /data/caddy/pki/authorities/local
+		rewrite * /root.crt
+		header Content-Type application/x-x509-ca-cert
+		file_server
+	}
+	handle {
+		redir https://{host}:{$HTTPS_PORT}{uri} permanent
+	}
+}
+
+localhost, {$APP_HOST} {
+	tls internal
+	encode zstd gzip
+
+	# Passes the client IP on (X-Forwarded-For): the backend trusts one
+	# proxy (TRUST_PROXY=1), so the login rate limit is per device.
+	handle /api/* {
+		reverse_proxy {$API_UPSTREAM}
+	}
+
+	handle {
+		root * /srv
+		# App routes (/brew, /menu/:slug, …) load the app shell.
+		try_files {path} /index.html
+		file_server
+		# Hashed file names never change; the shell, the service worker and
+		# the manifest are checked on every load so updates are found.
+		@hashed path /assets/*
+		header @hashed Cache-Control "public, max-age=31536000, immutable"
+		@unhashed not path /assets/*
+		header @unhashed Cache-Control "no-cache"
+	}
+}

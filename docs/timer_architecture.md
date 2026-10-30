@@ -9,7 +9,7 @@
 *   To prevent accidental double-tap zooming and eliminate the 300ms tap delay on mobile devices during timed pours, apply `touch-action: manipulation;` to all interactive elements (`button`, `input`, `select`).
 
 ## 2. Vite PWA Configuration (`frontend/vite.config.ts`)
-Use `vite-plugin-pwa` with `registerType: 'autoUpdate'` and Workbox `NetworkFirst` runtime caching on `/api/public/menu/.*`, plus `CacheFirst` for bean photos (they never change for an id, `docs/api/bean-photos.md` §4c, so the ones you've seen show offline):
+Use `vite-plugin-pwa` with `registerType: 'prompt'` (the app applies updates itself, below) and Workbox `NetworkFirst` runtime caching on `/api/public/menu/.*`, plus `CacheFirst` for bean photos (they never change for an id, `docs/api/bean-photos.md` §4c, so the ones you've seen show offline):
 
 ```typescript
 import { defineConfig } from 'vite';
@@ -20,12 +20,18 @@ export default defineConfig({
   plugins: [
     vue(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
+      injectRegister: false, // main.ts registers it
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       manifest: {
-        name: 'Coffee Brew Journal',
-        short_name: 'BrewLog',
-        description: 'Self-hosted pour-over timer and LLM extraction analysis',
+        id: '/',
+        name: 'Barista-Assistant',
+        short_name: 'Barista',
+        description: 'Self-hosted coffee journal: brew timer, beans, recipes and roasts, AI brew analysis, and a menu for your bar',
+        start_url: '/',
+        scope: '/',
+        handle_links: 'preferred',
+        launch_handler: { client_mode: 'navigate-existing' },
         theme_color: '#3e2723',
         background_color: '#f5f5f5',
         display: 'standalone',
@@ -38,6 +44,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        navigateFallback: 'index.html',
+        navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
             urlPattern: /\/api\/public\/menu\/.*/i,
@@ -63,6 +71,39 @@ export default defineConfig({
   ]
 });
 ```
+
+*   **Links open the app (Android):** `handle_links: 'preferred'` and
+    `launch_handler` `navigate-existing` open links into the app (the
+    rate-later reminder's) in the installed app's open window. iOS always
+    opens links in Safari, whatever the manifest says.
+*   **Updates never land mid-brew:** a new service worker reloads the page
+    when it takes over, and a brew in progress (the timer, its countdown,
+    or the log form before Save) lives only in memory. So `main.ts`
+    registers the worker (`virtual:pwa-register`) and passes a waiting
+    update through `createUpdateGate` (`lib/swUpdate.ts`, unit-tested): it
+    applies at once unless `brewSession.inProgress` is set (by `BrewView`),
+    and then when the brew is saved or abandoned. Browsers look for a new
+    worker on page loads, which an installed app may not have for days, so
+    it also checks hourly.
+*   **Served as a build, over HTTPS:** service workers and installs need
+    HTTPS (or `localhost`), and only `vite build` makes the worker and the
+    manifest. The Docker frontend (`frontend/Dockerfile`) builds the app
+    and serves `dist/` with Caddy (`frontend/Caddyfile`):
+    *   HTTPS for `localhost` and `APP_HOST` (the LAN IP or name) from
+        Caddy's own CA; `default_sni` answers phones that connect by IP
+        (they send no server name). Each device trusts the CA root once,
+        from `http://<address>/ca.crt`; the CA lives in the `caddy_data`
+        volume, so it survives rebuilds.
+    *   Port 80 serves `/ca.crt` and redirects everything else to HTTPS.
+    *   `/api/*` goes to the backend (with `X-Forwarded-For`, for
+        `TRUST_PROXY=1`); other paths fall back to `index.html`.
+    *   `/assets/*` (hashed names) is cached for a year; everything else,
+        the shell, `sw.js` and the manifest included, is `no-cache`, so
+        updates are found.
+    *   The backend runs as production (Secure session cookie);
+        `APP_URL` and `CORS_ORIGIN` are the https address.
+    For live reload, run `npm run dev` in `frontend/` on the host (the Vite
+    dev server proxies `/api` the same way, and makes no service worker).
 
 ## 3. Timer State Mechanics (`BrewTimer.vue`, every recipe but long cold brews)
 
