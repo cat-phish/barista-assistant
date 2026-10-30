@@ -67,8 +67,8 @@ import { useAuthStore } from '../stores/auth';
 import { DEFAULT_PREFERENCES } from '../composables/usePreferences';
 import { grinderRetentionText } from '../lib/grinderRetention';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
-import { batchSuffix, beanLabel as pickerLabel } from '../lib/beans';
-import { formatDay, formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen } from '../lib/format';
+import { batchSuffix, beanLabel as pickerLabel, restingUntil } from '../lib/beans';
+import { formatDay, formatDoseLine, formatGrams, formatGrind, formatListDay, formatTime, formatWhen } from '../lib/format';
 import { ALTERNATIVE_LABELS, CONFIDENCE_LABELS, chooseGrind, heldForRatio, rememberedSource, SUGGEST_SOURCE_LABELS, sourceNeeds, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
 import { useParameterSuggestion } from '../composables/useParameterSuggestion';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -190,6 +190,8 @@ function sizeToBatch(): void {
   else lead.value = { field: 'water', text: formatGrams(Math.round(r.targetWaterGrams * sizeScale.value)) };
 }
 const bean = computed(() => beans.value.find((b) => b.id === beanId.value) ?? null);
+// A home roast still resting (docs/api/roasts.md §4f): brewing it is fine, just early.
+const beanRestingUntil = computed(() => (bean.value ? restingUntil(bean.value) : null));
 watch(beanId, (id) => remember('beanId', id));
 const recipe = computed(() => recipes.value.find((r) => r.id === recipeId.value) ?? null);
 // "Suggest parameters" (docs/api/analysis.md §8b): values for this brew from
@@ -1200,8 +1202,9 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <label for="bean">Bean<span class="req" aria-hidden="true">*</span></label>
           <select id="bean" aria-required="true" v-model="beanId">
             <option value="" disabled>Choose a bean…</option>
-            <option v-for="b in beans" :key="b.id" :value="b.id">{{ pickerLabel(b) }}</option>
+            <option v-for="b in beans" :key="b.id" :value="b.id">{{ pickerLabel(b) }}{{ restingUntil(b) ? ' (resting)' : '' }}</option>
           </select>
+          <span v-if="beanRestingUntil" class="hint"><span class="badge resting">Resting until {{ formatListDay(beanRestingUntil) }}</span></span>
         </div>
         <div class="field">
           <label for="what">What are you making?<span class="req" aria-hidden="true">*</span></label>

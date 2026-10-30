@@ -11,6 +11,7 @@ import SettingsLayout from '../components/SettingsLayout.vue';
 import { usePreferences } from '../composables/usePreferences';
 import { configFromForm, formatDelay, formValues, SERVICES, type Service } from '../lib/notifications';
 import { useAuthStore } from '../stores/auth';
+import { useWorkspaceStore } from '../stores/workspace';
 
 const auth = useAuthStore();
 const { prefs } = usePreferences();
@@ -90,7 +91,9 @@ const DELAYS = [5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240];
 const delays = computed(() => [...new Set([...DELAYS, prefs.value.rateReminderMinutes])].sort((a, b) => a - b));
 const prefSaving = ref(false);
 const prefError = ref('');
-async function setPref(changes: Partial<Pick<UserPreferences, 'rateReminders' | 'rateReminderMinutes' | 'rateLaterDefault' | 'steepReminders'>>): Promise<void> {
+// Home roasting's reminders show while the current workspace roasts.
+const roasting = computed(() => !!useWorkspaceStore().current?.settings.homeRoasting);
+async function setPref(changes: Partial<Pick<UserPreferences, 'rateReminders' | 'rateReminderMinutes' | 'rateLaterDefault' | 'steepReminders' | 'restReminders' | 'greenStockAlerts'>>): Promise<void> {
   prefSaving.value = true;
   prefError.value = '';
   try {
@@ -135,6 +138,19 @@ async function setPref(changes: Partial<Pick<UserPreferences, 'rateReminders' | 
         Remind me when a cold brew is ready to filter
       </label>
       <p class="muted small">Sent when its recipe's steep time opens (e.g. after 12 h of a 12–18 h steep), unless you've finished it already.</p>
+    </section>
+
+    <section v-if="roasting" class="card stack" aria-labelledby="roast-reminders">
+      <h2 id="roast-reminders">Home roasting</h2>
+      <label class="checkbox">
+        <input type="checkbox" :checked="prefs.restReminders" :disabled="prefSaving" @change="setPref({ restReminders: ($event.target as HTMLInputElement).checked })" />
+        Remind me when a roast I logged has rested
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" :checked="prefs.greenStockAlerts" :disabled="prefSaving" @change="setPref({ greenStockAlerts: ($event.target as HTMLInputElement).checked })" />
+        Tell me when a roast takes a green coffee below its low-stock amount
+      </label>
+      <p class="muted small">The rest reminder comes at 8:00 on the day it's ready (its roast date plus its rest days).</p>
     </section>
 
     <p v-if="loading" class="muted" aria-live="polite">Loading…</p>

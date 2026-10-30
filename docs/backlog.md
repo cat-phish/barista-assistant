@@ -29,9 +29,9 @@ and fix the references.
 - D. AI suggestions: 9–10
 - E. Insights: 11
 - F. Bar & menu: 12–14
-- G. Home roasting: 15
-- H. Accounts: 16–17
-- I. Deployment & the app: 18
+- G. Home roasting: 15–24
+- H. Accounts: 25–26
+- I. Deployment & the app: 27
 
 ---
 
@@ -432,52 +432,143 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## G. Home roasting
 
-### 15. Roasting: green stock, roast logs, resting
+Roast mode, green stock, the roast log and resting are built (roadmap:
+Home roasting). Paused here; these are what's next.
 
-- **Status:** planned (branch 1, `roast-mode`, built; branch 2, `roast-log`, in progress)
-- **Why:** for home roasters, the bean starts as green coffee. Green stock,
-  roast results and resting time are tracked in another notebook or not at
-  all, and a roast that's ready to drink gets forgotten.
-- **Decided:**
-  - **Its own mode**, not a part of Beans and not a separate workspace: a
-    **Brew | Roast** switch in the header, shown when the workspace turns
-    on Home roasting (Settings → Defaults). Roast mode lives under
-    `/roast/…`, and each device remembers the last mode it used.
-  - **Roast mode tabs:** Roast (log a roast), Roasts (history), Green (green
-    stock), Resting, Roasters (the roasting machines).
-  - **Rest time:** a workspace default per roast type (filter, espresso,
-    omni), which each roast starts from and can change.
-  - **Times are typed in first;** a live roast timer comes later.
-  - **Roast curves** (Artisan `.alog`): not for now.
-- **Branches:**
-  1. **`roast-mode`:** the setting, the switch, the roast tabs, Roasters
-     (`roasting_machines`) and Green stock (`green_coffees`: origin,
-     producer, process, supplier, price, weight bought and left, a low-stock
-     threshold).
-  2. **`roast-log`:** the `roasts` table and the Roast form: green coffee,
-     machine, green weight in, roasted weight out, charge and drop
-     temperatures, first crack and total time (development time), notes.
-     Saving creates the roasted bean (roaster = the workspace's home roaster
-     name, the roast date, weight loss %, detailed roast level and type, the
-     next batch number) and takes the green weight off the stock; editing
-     the roast keeps its bean in step. Plus the Roasts history and a roast's
-     page.
-  3. **`roast-resting`:** the Resting tab (resting, then ready), a "Resting
-     until …" badge on the bean in brew mode, a rest-done reminder through
-     the notification channels, and a low-green-stock notice.
-  4. **`roast-timer`:** a live timer with First crack and Drop marks,
-     reusing the brew timer's clock and marks.
-  5. **Later:** comparing roasts (how each roast's brews rated), roast stats
-     in Insights, roast details for the AI (rule 9, decided then), curve
-     files if wanted.
-- **Size:** L.
-- **Depends on:** nothing (bean photos are built, for roast photos).
+**Open questions (home roasting):**
+- Should deleting a roast get the "I understand" checkbox (CLAUDE.md
+  rule 7)? It uses the plain confirm dialog today.
+- Should other members be able to get a roast's rest reminder, not only
+  whoever logged it?
+- Should freezing a home-roasted bean pause or extend its rest?
+
+### 15. Live roast timer
+
+- **Status:** planned (branch `roast-timer`)
+- **Why:** roast times are typed in after the roast; a timer running while
+  roasting is easier and more exact.
+- **Approach:** a live clock on the Roast form with **Charge**, **First
+  crack** and **Drop** marks that fill in `firstCrackSec` and `totalSec`,
+  reusing the brew timer's clock and marks (`docs/timer_architecture.md`).
+- **Size:** M
+- **Depends on:** nothing.
+- **Open questions:**
+  - Note a temperature at each mark?
+  - Keep the screen awake while it runs?
+
+### 16. Roast insights
+
+- **Status:** idea
+- **Why:** Insights covers brewing only; a home roaster wants to see what
+  their roasts cost, how consistent they are, and how long to rest them.
+- **Approach:** a Roasting area in Insights (roast mode), on the existing
+  charts and filters (`frontend/src/views/stats`, `docs/api/stats.md`):
+  - roasts per month, green used, and spend;
+  - weight loss and development % by green coffee, roast level and machine;
+  - cost per roasted 100 g;
+  - **rest sweet spot:** brew ratings by days off roast for home roasts,
+    suggesting rest days per roast type or green coffee.
+- **Size:** M
+- **Depends on:** nothing; 17 and 21 make it richer.
+- **Open questions:** should the rest sweet spot offer to change the
+  workspace's default rest days?
+
+### 17. Compare roasts
+
+- **Status:** idea
+- **Why:** with several batches of one green coffee, it's hard to see which
+  roast tasted best and what was different about it.
+- **Approach:** the batches of a green coffee side by side: levels, times,
+  temperatures, weight loss, development, and how each one's brews rated.
+- **Size:** M
+- **Depends on:** nothing; can share a branch with 16.
+
+### 18. Roast again, and roast plans
+
+- **Status:** idea
+- **Why:** a good roast is worth repeating, and today the form starts empty.
+- **Approach:**
+  - **Roast again** on a roast's page copies its green coffee, machine,
+    weights, temperatures and times as targets, like Repeat brew;
+  - optionally a **plan** list: roasts to do next (green coffee, weight,
+    for filter or espresso), ticked off when logged.
+- **Size:** S–M (plans are the M)
+- **Depends on:** nothing.
+
+### 19. Running low on roasted coffee
+
+- **Status:** idea
+- **Why:** the low notice covers green coffee; running out of roasted coffee
+  is what actually interrupts brewing.
+- **Approach:** when a home-roasted bean (or all rested roasts together)
+  drops below a threshold, a notice through the notification channels
+  suggesting the next roast, like the `green-low` job
+  (`docs/api/notifications.md` §1b).
+- **Size:** S
+- **Depends on:** nothing; pairs with 18's plans.
+- **Open questions:** a threshold per workspace, or per green coffee?
+
+### 20. Green coffee details and restocks
+
+- **Status:** idea
+- **Why:** buying the same coffee again means editing the weight left by
+  hand, which loses the purchase history and price changes.
+- **Approach:**
+  - **restocks** as dated entries (weight, price) instead of editing
+    `weightLeftGrams`, giving purchase history and cost per kg over time;
+  - optional **moisture %** and **density**;
+  - mark a green coffee as a **sample**.
+- **Size:** M
+- **Depends on:** nothing.
+
+### 21. Cupping notes per roast
+
+- **Status:** idea
+- **Why:** brew ratings mix the roast with the brewing; cupping judges the
+  roast itself.
+- **Approach:** a short cupping form on a roast: aroma, sweetness, acidity,
+  body, a score, and roast defects (scorching, tipping, baked,
+  underdeveloped). Shown on the roast's page; feeds 16 and 17.
+- **Size:** S–M
+- **Depends on:** nothing.
+
+### 22. Roast details for the AI
+
+- **Status:** idea
+- **Why:** for a home roast, how it was roasted explains a lot about how it
+  brews.
+- **Approach:** add the roast's level, development time, weight loss and
+  days rested to the analysis context for brews of home-roasted beans.
+  CLAUDE.md rule 9: decide always sent or switchable, and update
+  `docs/api/llm-contract.md` §9.
+- **Size:** S
+- **Depends on:** nothing.
+
+### 23. Roast curves
+
+- **Status:** idea
+- **Why:** roasting software (Artisan) records the whole curve; the log only
+  keeps a few numbers.
+- **Approach:** attach an Artisan `.alog` file to a roast and show bean
+  temperature and rate of rise on its page; fill in the roast's times and
+  temperatures from it.
+- **Size:** L
+- **Depends on:** nothing.
+
+### 24. Roasting machine upkeep
+
+- **Status:** idea
+- **Why:** roasters need regular chaff and cleaning, easy to forget.
+- **Approach:** batches since the last cleaning on each machine, a
+  "Cleaned" button, and a reminder after a set number of roasts.
+- **Size:** S
+- **Depends on:** nothing.
 
 ---
 
 ## H. Accounts
 
-### 16. Account management and password reset
+### 25. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -508,13 +599,13 @@ What the analysis worker sends to the LLM and what comes back.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 17. Email verification
+### 26. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 16), inviting a member by email, or notifications by email.
+  (item 25), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -524,9 +615,9 @@ What the analysis worker sends to the LLM and what comes back.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 16).
+  - Shares the mail and token pieces with password reset (item 25).
 - **Size:** M (mail is new to the stack).
-- **Depends on:** nothing; pairs with 16.
+- **Depends on:** nothing; pairs with 25.
 - **Open questions:**
   - Block unverified accounts, or only remind them?
   - What happens to accounts that existed before verification (treat as
@@ -539,7 +630,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 How the app is served and installed.
 
-### 18. Serve the app as an installable PWA
+### 27. Serve the app as an installable PWA
 
 - **Status:** idea
 - **Why:** the PWA is configured (`vite-plugin-pwa`, `frontend/vite.config.ts`)

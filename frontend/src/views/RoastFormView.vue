@@ -120,8 +120,9 @@ async function save(): Promise<void> {
   error.value = '';
   try {
     const { greenCoffeeId, ...rest } = values;
-    const { roast } = props.id ? await roastsApi.update(ws, props.id, greenCoffeeId ? values : rest) : await roastsApi.create(ws, values);
-    await router.push({ name: 'roast', params: { id: roast.id } });
+    const { roast, restReminder } = props.id ? await roastsApi.update(ws, props.id, greenCoffeeId ? values : rest) : await roastsApi.create(ws, values);
+    // The roast page says whether the rest reminder was queued.
+    await router.push({ name: 'roast', params: { id: roast.id }, state: restReminder ? { restReminder } : {} });
   } catch (err) {
     error.value = errorMessage(err);
   } finally {

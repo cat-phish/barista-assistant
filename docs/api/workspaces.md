@@ -102,7 +102,7 @@ Every workspace in a response carries `settings`, defaults filled in
   finds details deeper in a page but costs more and takes longer. Shown
   under Settings → **AI** when the web lookup is allowed.
 - `homeRoasting` (boolean, default `false`): turns on **roast mode** for
-  home roasters (docs/backlog.md item 15). The app shows a **Brew | Roast**
+  home roasters (roadmap.md, Home roasting). The app shows a **Brew | Roast**
   switch in the header; roast mode has its own tabs under `/roast/…`
   (green stock, §4e; roasting machines, §3f). Off hides roast mode and its
   routes send you back to brew mode; nothing is deleted. Set under

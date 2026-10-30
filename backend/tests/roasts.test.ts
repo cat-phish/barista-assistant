@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { GREEN_LOW_JOB, restReminderJobId } from "@barista/shared/jobs";
+import { reminderQueue } from "../src/queue.js";
 import { addMember, newUser, newWorkspace } from "./helpers.js";
 
 // The roast log (docs/api/roasts.md §4f).
@@ -126,7 +128,7 @@ describe("roasts", () => {
 
     // Another green coffee: the stock goes back to the first, and the bean is that coffee now.
     const moved = await owner.agent.patch(url).send({ greenCoffeeId: kenya, roastedAt: "2026-10-22T10:00:00Z" });
-    expect(moved.body.roast.greenCoffee).toEqual({ id: kenya, name: "Kenya Nyeri" });
+    expect(moved.body.roast.greenCoffee).toMatchObject({ id: kenya, name: "Kenya Nyeri" });
     expect((await greenOf(guji)).weightLeftGrams).toBe(1000);
     expect((await greenOf(kenya)).weightLeftGrams).toBe(850);
     expect(await beanOf(r.beanId)).toMatchObject({ beanName: "Kenya Nyeri", country: "Kenya", region: "Nyeri", priceAmount: null, roastDate: "2026-10-22T00:00:00.000Z" });
@@ -165,5 +167,92 @@ describe("roasts", () => {
     expect((await viewer.agent.post(`${base}/roasts`).send({ greenCoffeeId: r.greenCoffeeId, greenGrams: 10, roastedGrams: 9 })).status).toBe(403);
     expect((await viewer.agent.patch(`${base}/roasts/${r.id}`).send({ notes: "x" })).status).toBe(403);
     expect((await viewer.agent.delete(`${base}/roasts/${r.id}`)).status).toBe(403);
+  });
+});
+
+// Resting (docs/api/notifications.md §1b, docs/api/roasts.md §4f).
+describe("resting roasts", () => {
+  const NOTIFY = "/api/auth/me/notifications";
+  const lowJobs = async (greenCoffeeId: string) =>
+    (await reminderQueue.getJobs(["waiting", "delayed"])).filter((j) => j.name === GREEN_LOW_JOB && (j.data as { greenCoffeeId?: string }).greenCoffeeId === greenCoffeeId);
+
+  it("queues the rest reminder for 8:00 local on the ready day, and moves or drops it with the roast", async () => {
+    const { owner, base, green, roast, beanOf } = await setup();
+    await owner.agent.put(`${NOTIFY}/ntfy`).send({ config: { topic: "coffee" } });
+    const now = new Date();
+    const res = await roast({ greenCoffeeId: await green(), greenGrams: 100, roastedGrams: 85, roastType: "filter", roastedAt: now.toISOString(), utcOffsetMinutes: 0 });
+    expect(res.body.restReminder).toBe("queued");
+    const r = res.body.roast;
+    const readyOn = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 5)).toISOString().slice(0, 10);
+    // When it's due, to the second (the delay is counted from when it was queued).
+    const dueAt = (job: Awaited<ReturnType<typeof reminderQueue.getJob>>) => (job ? Math.round((job.timestamp + (job.opts.delay ?? 0)) / 1000) * 1000 : null);
+    let job = await reminderQueue.getJob(restReminderJobId(r.id));
+    expect(job?.name).toBe("rest-done");
+    expect(job?.data).toEqual({ roastId: r.id, userId: r.userId });
+    expect(dueAt(job)).toBe(Date.parse(`${readyOn}T08:00:00Z`));
+    expect((await beanOf(r.beanId)).roastReadyOn).toBe(readyOn);
+
+    // A longer rest, in UTC-7: moved to 8:00 there (15:00 UTC).
+    const moved = await owner.agent.patch(`${base}/roasts/${r.id}`).send({ restDays: 9, utcOffsetMinutes: -420, roastedAt: new Date(now.getTime() - 3_600_000).toISOString() });
+    expect(moved.body.restReminder).toBe("queued");
+    job = await reminderQueue.getJob(restReminderJobId(r.id));
+    const localDay = new Date(now.getTime() - 3_600_000 - 420 * 60_000);
+    const movedOn = new Date(Date.UTC(localDay.getUTCFullYear(), localDay.getUTCMonth(), localDay.getUTCDate() + 9)).toISOString().slice(0, 10);
+    expect(dueAt(job)).toBe(Date.parse(`${movedOn}T15:00:00Z`));
+    // Editing something else leaves it be.
+    expect((await owner.agent.patch(`${base}/roasts/${r.id}`).send({ notes: "Sweet" })).body).not.toHaveProperty("restReminder");
+
+    // No rest: ready now, no reminder.
+    const none = await owner.agent.patch(`${base}/roasts/${r.id}`).send({ restDays: 0 });
+    expect(none.body).not.toHaveProperty("restReminder");
+    expect(await reminderQueue.getJob(restReminderJobId(r.id))).toBeUndefined();
+
+    await owner.agent.patch(`${base}/roasts/${r.id}`).send({ restDays: 3 });
+    expect(await reminderQueue.getJob(restReminderJobId(r.id))).toBeDefined();
+    await owner.agent.delete(`${base}/roasts/${r.id}`);
+    expect(await reminderQueue.getJob(restReminderJobId(r.id))).toBeUndefined();
+  });
+
+  it("is off without a channel or with rest reminders off; an old roast is ready already", async () => {
+    const { owner, green, roast } = await setup();
+    const guji = await green();
+    const fresh = { greenCoffeeId: guji, greenGrams: 100, roastedGrams: 85 };
+    expect((await roast(fresh)).body.restReminder).toBe("off");
+    await owner.agent.put(`${NOTIFY}/ntfy`).send({ config: { topic: "coffee" } });
+    await owner.agent.patch("/api/auth/me/preferences").send({ restReminders: false });
+    expect((await roast(fresh)).body.restReminder).toBe("off");
+    await owner.agent.patch("/api/auth/me/preferences").send({ restReminders: true });
+    expect((await roast({ ...fresh, roastedAt: "2026-01-02T08:00:00Z" })).body).not.toHaveProperty("restReminder");
+  });
+
+  it("says what its bean and green coffee have left", async () => {
+    const { owner, base, green, roast } = await setup();
+    const r = (await roast({ greenCoffeeId: await green({ lowStockGrams: 500 }), greenGrams: 100, roastedGrams: 85 })).body.roast;
+    expect(r.greenCoffee).toMatchObject({ weightLeftGrams: 900, lowStockGrams: 500 });
+    expect(r.bean).toEqual({ id: r.beanId, inventoryWeightGrams: 85, archived: false });
+    await owner.agent.patch(`${base}/beans/${r.beanId}`).send({ archived: true });
+    expect((await owner.agent.get(`${base}/roasts/${r.id}`)).body.roast.bean.archived).toBe(true);
+  });
+
+  it("tells the roaster once when a roast takes the green coffee below its threshold", async () => {
+    const { owner, base, green, roast } = await setup();
+    await owner.agent.put(`${NOTIFY}/ntfy`).send({ config: { topic: "coffee" } });
+    const guji = await green({ lowStockGrams: 500 });
+    await roast({ greenCoffeeId: guji, greenGrams: 400, roastedGrams: 340 }); // 600 left
+    expect(await lowJobs(guji)).toHaveLength(0);
+    const crossing = (await roast({ greenCoffeeId: guji, greenGrams: 200, roastedGrams: 170 })).body.roast; // 400 left
+    expect((await lowJobs(guji)).map((j) => j.data)).toEqual([{ greenCoffeeId: guji, userId: crossing.userId }]);
+    await roast({ greenCoffeeId: guji, greenGrams: 100, roastedGrams: 85 }); // already low
+    expect(await lowJobs(guji)).toHaveLength(1);
+
+    // An edit that takes it below again counts too; with alerts off it doesn't.
+    const other = await green({ name: "Kenya", lowStockGrams: 500 });
+    const r = (await roast({ greenCoffeeId: other, greenGrams: 400, roastedGrams: 340 })).body.roast;
+    await owner.agent.patch(`${base}/roasts/${r.id}`).send({ greenGrams: 600, roastedGrams: 510 });
+    expect(await lowJobs(other)).toHaveLength(1);
+    await owner.agent.patch("/api/auth/me/preferences").send({ greenStockAlerts: false });
+    const third = await green({ name: "Brazil", lowStockGrams: 500 });
+    await roast({ greenCoffeeId: third, greenGrams: 600, roastedGrams: 510 });
+    expect(await lowJobs(third)).toHaveLength(0);
   });
 });

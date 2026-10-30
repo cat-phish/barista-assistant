@@ -23,6 +23,8 @@ export interface UserPreferences {
   rememberSetup: RememberKey[]; // what the brew page remembers from last time (lib/rememberSetup.ts)
   startDelays: Partial<Record<MethodKind, 0 | 3 | 5>>; // countdown before a timed brew, per method; missing = none (docs/api/auth.md §1)
   steepReminders: boolean; // remind when a cold brew's steep window opens
+  restReminders: boolean; // remind the morning a home roast is ready to brew
+  greenStockAlerts: boolean; // tell when a roast takes a green coffee below its low-stock threshold
 }
 export type RepeatKeep = 'size' | 'doseWater' | 'temp' | 'grinder' | 'grind' | 'waterProfile' | 'dilution' | 'window' | 'prepTools' | 'grinderWeights' | 'notes';
 export type RememberKey = 'what' | 'brewer' | 'recipe' | 'bean' | 'grinder' | 'grind' | 'waterProfile' | 'prepTools' | 'size';
@@ -322,8 +324,9 @@ export interface Roast extends RoastDetails {
   beanId: string | null; // the bean it made; null once deleted
   userId: string | null;
   greenStockTakenGrams: number; // what it took off the green stock (no more than was left)
-  greenCoffee: { id: string; name: string } | null;
+  greenCoffee: Pick<GreenCoffee, 'id' | 'name' | 'weightLeftGrams' | 'lowStockGrams'> | null; // with what's left now
   machine: { id: string; name: string } | null;
+  bean: { id: string; inventoryWeightGrams: number; archived: boolean } | null; // the bean it made, while it exists
   createdAt: string;
 }
 // What the form sends; left out on a new roast, batchNumber and restDays get the defaults.
@@ -449,6 +452,7 @@ export interface Bean {
   freezePeriods: FreezePeriod[]; // oldest first; one with thawedOn null = frozen now
   frozen: boolean; // a period is open (from the API, worked out from freezePeriods)
   photos: BeanPhoto[]; // cover first (docs/api/bean-photos.md §4c)
+  roastReadyOn: string | null; // YYYY-MM-DD the home roast that made it has rested (docs/api/roasts.md §4f); null = not from a roast
 }
 
 export interface FreezePeriod {

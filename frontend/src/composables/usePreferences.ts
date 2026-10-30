@@ -18,6 +18,8 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   rememberSetup: ['what', 'brewer', 'recipe', 'bean', 'grinder', 'grind'],
   startDelays: {},
   steepReminders: true,
+  restReminders: true,
+  greenStockAlerts: true,
 };
 export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: 'light', roastScale: 'names', hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: 'beanRecipe', suggestMaxBrews: 5, suggestAlternatives: [], readLabels: true, labelWebLookup: false, labelWebContext: 'high', homeRoasting: false, homeRoasterName: 'Home roast', restDays: { filter: 7, espresso: 14, omni: 10 } };
 

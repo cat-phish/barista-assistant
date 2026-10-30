@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Brew | Roast (docs/backlog.md item 15): switches between brew mode and roast
+// Brew | Roast (docs/roadmap.md, Home roasting): switches between brew mode and roast
 // mode, each with its own tabs, in the same workspace. Shown when the
 // workspace has home roasting on (docs/api/workspaces.md §2). Each side goes
 // back to the last page used in that mode (lib/mode.ts), or the mode's

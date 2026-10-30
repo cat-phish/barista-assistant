@@ -19,6 +19,7 @@ import {
   ORIGIN_AREAS,
   ROAST_LEVELS,
   ROAST_TYPES,
+  roasts,
   type Bean,
   type BeanFreeze,
   type DetailedRoastLevel,
@@ -26,6 +27,7 @@ import {
 } from "@barista/shared/schema";
 import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 import { removePhotoFiles } from "../photos.js";
+import { restReadyOn } from "../reminders.js";
 import type { PhotoInfo } from "./beanPhotos.js";
 
 export type FreezePeriod = Pick<BeanFreeze, "id" | "frozenOn" | "thawedOn">;
@@ -34,7 +36,8 @@ export type FreezePeriod = Pick<BeanFreeze, "id" | "frozenOn" | "thawedOn">;
 // frozen: whether a period is still open (frozen now), worked out from the
 // history so the two can't disagree.
 // photos: cover first (docs/api/bean-photos.md §4c).
-export type BeanWithFreezes = Bean & { freezePeriods: FreezePeriod[]; frozen: boolean; photos: PhotoInfo[] };
+// roastReadyOn: the day the home roast that made it is rested (docs/api/roasts.md §4f), else null.
+export type BeanWithFreezes = Bean & { freezePeriods: FreezePeriod[]; frozen: boolean; photos: PhotoInfo[]; roastReadyOn: string | null };
 
 export interface BeanListResponse {
   beans: BeanWithFreezes[];
@@ -190,7 +193,7 @@ async function loadBeans(where: SQL | undefined): Promise<BeanWithFreezes[]> {
   const rows = await db.select().from(beans).where(where).orderBy(asc(beans.roasterName), asc(beans.beanName));
   if (rows.length === 0) return [];
   const ids = rows.map((b) => b.id);
-  const [periods, photoRows] = await Promise.all([
+  const [periods, photoRows, roastRows] = await Promise.all([
     db
       .select({ id: beanFreezes.id, beanId: beanFreezes.beanId, frozenOn: beanFreezes.frozenOn, thawedOn: beanFreezes.thawedOn })
       .from(beanFreezes)
@@ -201,7 +204,12 @@ async function loadBeans(where: SQL | undefined): Promise<BeanWithFreezes[]> {
       .from(beanPhotos)
       .where(inArray(beanPhotos.beanId, ids))
       .orderBy(asc(beanPhotos.position), asc(beanPhotos.createdAt)),
+    db
+      .select({ beanId: roasts.beanId, roastedAt: roasts.roastedAt, utcOffsetMinutes: roasts.utcOffsetMinutes, restDays: roasts.restDays })
+      .from(roasts)
+      .where(inArray(roasts.beanId, ids)),
   ]);
+  const readyByBean = new Map(roastRows.map((r) => [r.beanId, restReadyOn(r)]));
   const byBean = new Map<string, FreezePeriod[]>();
   for (const { beanId, ...period } of periods) {
     byBean.set(beanId, [...(byBean.get(beanId) ?? []), period]);
@@ -212,7 +220,7 @@ async function loadBeans(where: SQL | undefined): Promise<BeanWithFreezes[]> {
   }
   return rows.map((bean) => {
     const freezePeriods = byBean.get(bean.id) ?? [];
-    return { ...bean, freezePeriods, frozen: freezePeriods.some((p) => p.thawedOn === null), photos: photosByBean.get(bean.id) ?? [] };
+    return { ...bean, freezePeriods, frozen: freezePeriods.some((p) => p.thawedOn === null), photos: photosByBean.get(bean.id) ?? [], roastReadyOn: readyByBean.get(bean.id) ?? null };
   });
 }
 

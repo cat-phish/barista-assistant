@@ -81,6 +81,8 @@ export const preferencesSchema = z
       other: z.literal([0, 3, 5]),
     }).partial().strict(),
     steepReminders: z.boolean(),
+    restReminders: z.boolean(),
+    greenStockAlerts: z.boolean(),
   })
   .partial()
   .strict()

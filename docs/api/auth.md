@@ -72,7 +72,7 @@ units, with defaults filled in. Storage is always grams, °C and metres;
 clients convert what they show and what's typed (roadmap: Units and defaults).
 
 ```json
-{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "startDelays": {}, "steepReminders": true }
+{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "startDelays": {}, "steepReminders": true, "restReminders": true, "greenStockAlerts": true }
 ```
 
 - `volumeUnit`: `fl_oz` | `ml`: the brew page's yield estimate, and a new
@@ -97,6 +97,10 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
   `docs/timer_architecture.md` §3.
 - `steepReminders` (default `true`): remind when a cold brew's steep window
   opens (§1b).
+- `restReminders` (default `true`): remind, the morning it's ready, when a
+  roast you logged has rested (§1b).
+- `greenStockAlerts` (default `true`): tell when a roast you save takes a
+  green coffee below its `lowStockGrams` (§1b).
 - `repeatKeeps`: what repeating a brew copies (Settings → Brew setup, "Copy
   when repeating"), a
   list of `REPEAT_KEEPS`, each once:

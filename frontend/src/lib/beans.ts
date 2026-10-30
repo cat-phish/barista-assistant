@@ -128,6 +128,12 @@ export function latestThaw(periods: readonly Period[]): string {
 // Whole days between two YYYY-MM-DD dates.
 export const daysBetween = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
 
+// The day a home-roasted bean is ready, while it's still resting
+// (docs/api/roasts.md §4f), else null.
+export function restingUntil(bean: Pick<Bean, 'roastReadyOn'>, today = localDateInput()): string | null {
+  return bean.roastReadyOn && bean.roastReadyOn > today ? bean.roastReadyOn : null;
+}
+
 // How a list shows a bean's roast: the name when the workspace records roast
 // names and the bean has one ("City+"), else the 5-step level ("Medium").
 export function roastLabel(bean: Pick<Bean, 'detailedRoastLevel' | 'roastLevel'>, scale: RoastScale): string | null {

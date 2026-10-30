@@ -1,11 +1,11 @@
 import "dotenv/config";
-import { AI_PREVIEW_QUEUE, BREW_ANALYSIS_QUEUE, LABEL_READ_QUEUE, MAINTENANCE_QUEUE, PARAMETER_SUGGESTION_QUEUE, REMINDER_QUEUE, STEEP_REMINDER_JOB, type AiPreviewJobData, type BrewAnalysisJobData, type DbBackupJobData, type LabelReadJobData, type LabelReadResult, type ParameterSuggestionJobData, type RateReminderJobData, type SteepReminderJobData } from "@barista/shared/jobs";
+import { AI_PREVIEW_QUEUE, BREW_ANALYSIS_QUEUE, LABEL_READ_QUEUE, MAINTENANCE_QUEUE, PARAMETER_SUGGESTION_QUEUE, REMINDER_QUEUE, STEEP_REMINDER_JOB, REST_REMINDER_JOB, GREEN_LOW_JOB, type AiPreviewJobData, type BrewAnalysisJobData, type DbBackupJobData, type LabelReadJobData, type LabelReadResult, type ParameterSuggestionJobData, type GreenLowJobData, type RateReminderJobData, type RestReminderJobData, type SteepReminderJobData } from "@barista/shared/jobs";
 import { UnrecoverableError, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 import { config } from "./config.js";
 import { pool } from "./db.js";
 import { failSuggestion, failureMessage, processAiPreview, processBrewAnalysis, processParameterSuggestion, settleRequest, type JobResult } from "./processor.js";
-import { processRateReminder, processSteepReminder, type ReminderResult } from "./reminders.js";
+import { processGreenLow, processRateReminder, processRestReminder, processSteepReminder, type ReminderResult } from "./reminders.js";
 import { runDbBackup, type BackupResult } from "./dbBackup.js";
 import { readLabel } from "./label.js";
 import type { AiRequest } from "@barista/shared/schema";
@@ -77,9 +77,22 @@ labels.on("failed", (job, err) => console.error(`Label read ${job?.id ?? "?"} fa
 labels.on("error", (err) => console.error("Label worker error:", err.message));
 
 // Reminders (docs/api/notifications.md §1b): delayed jobs, sent once due.
-// The job name says which: rate later, or a cold brew's steep done.
-type ReminderJob = Job<RateReminderJobData | SteepReminderJobData>;
-const reminders = new Worker<RateReminderJobData | SteepReminderJobData, ReminderResult>(REMINDER_QUEUE, (job: ReminderJob) => (job.name === STEEP_REMINDER_JOB ? processSteepReminder(job.data) : processRateReminder(job.data)), {
+// The job name says which: rate later, a cold brew's steep done, a roast
+// rested, or a green coffee running low.
+type ReminderData = RateReminderJobData | SteepReminderJobData | RestReminderJobData | GreenLowJobData;
+function runReminder(job: Job<ReminderData>): Promise<ReminderResult> {
+  switch (job.name) {
+    case STEEP_REMINDER_JOB:
+      return processSteepReminder(job.data as SteepReminderJobData);
+    case REST_REMINDER_JOB:
+      return processRestReminder(job.data as RestReminderJobData);
+    case GREEN_LOW_JOB:
+      return processGreenLow(job.data as GreenLowJobData);
+    default:
+      return processRateReminder(job.data as RateReminderJobData);
+  }
+}
+const reminders = new Worker<ReminderData, ReminderResult>(REMINDER_QUEUE, runReminder, {
   connection,
   concurrency: config.concurrency,
 });

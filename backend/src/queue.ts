@@ -7,8 +7,13 @@ import {
   REMINDER_QUEUE,
   STEEP_REMINDER_JOB,
   steepReminderJobId,
+  REST_REMINDER_JOB,
+  restReminderJobId,
+  GREEN_LOW_JOB,
   type BrewAnalysisJobData,
+  type GreenLowJobData,
   type RateReminderJobData,
+  type RestReminderJobData,
   type SteepReminderJobData,
   backupCron,
   DB_BACKUP_JOB,
@@ -48,7 +53,7 @@ brewAnalysisQueue.on("error", (err: Error) => {
 
 // Delayed rate-later reminders (docs/api/notifications.md §1b).
 // Both kinds of reminder share the queue; the job name says which.
-export const reminderQueue = new Queue<RateReminderJobData | SteepReminderJobData>(REMINDER_QUEUE, { connection });
+export const reminderQueue = new Queue<ReminderJobData>(REMINDER_QUEUE, { connection });
 let lastReminderError = "";
 reminderQueue.on("error", (err: Error) => {
   if (err.message !== lastReminderError) console.error("Reminder queue error:", err.message);
@@ -212,10 +217,30 @@ export function enqueueSteepReminder(data: SteepReminderJobData, delayMs: number
   return enqueueReminder(STEEP_REMINDER_JOB, steepReminderJobId(data.brewLogId), data, delayMs);
 }
 
-async function enqueueReminder(name: string, jobId: string, data: RateReminderJobData | SteepReminderJobData, delayMs: number): Promise<void> {
+// A roast's rest reminder: replaces one still waiting, so an edited roast
+// reminds on its new ready day.
+export async function enqueueRestReminder(data: RestReminderJobData, delayMs: number): Promise<void> {
+  await cancelRestReminder(data.roastId);
+  await enqueueReminder(REST_REMINDER_JOB, restReminderJobId(data.roastId), data, delayMs);
+}
+// A deleted roast, or one that's no longer resting.
+export function cancelRestReminder(roastId: string): Promise<void> {
+  return withTimeout(() => removeWaiting(restReminderJobId(roastId)));
+}
+async function removeWaiting(jobId: string): Promise<void> {
+  const job = await reminderQueue.getJob(jobId);
+  if (job && (await job.isDelayed())) await job.remove();
+}
+// Sent right away; each crossing below the threshold is its own job.
+export function enqueueGreenLow(data: GreenLowJobData): Promise<void> {
+  return enqueueReminder(GREEN_LOW_JOB, undefined, data, 0);
+}
+
+type ReminderJobData = RateReminderJobData | SteepReminderJobData | RestReminderJobData | GreenLowJobData;
+async function enqueueReminder(name: string, jobId: string | undefined, data: ReminderJobData, delayMs: number): Promise<void> {
   await withTimeout(() =>
     reminderQueue.add(name, data, {
-      jobId,
+      ...(jobId ? { jobId } : {}),
       delay: delayMs,
       attempts: 3,
       backoff: { type: "exponential", delay: 30_000 },
