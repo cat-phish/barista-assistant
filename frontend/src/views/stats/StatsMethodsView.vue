@@ -3,6 +3,7 @@
 // time, and how each rates.
 import { computed } from 'vue';
 import ChartCard from '../../components/charts/ChartCard.vue';
+import PinnedCharts from '../../components/charts/PinnedCharts.vue';
 import ChartPeriod from '../../components/charts/ChartPeriod.vue';
 import StatsChart from '../../components/charts/StatsChart.vue';
 import { useStats } from '../../composables/useStats';
@@ -26,18 +27,19 @@ const rating = computed(() => meansOf(meanBy(brews.value, (b) => b.methodId, (b)
 
 <template>
   <div class="charts">
-    <ChartCard title="Brews by method" :empty="share.labels.length === 0" :table="share.table">
+    <ChartCard chart-id="methods.share" title="Brews by method" :empty="share.labels.length === 0" :table="share.table">
       <StatsChart kind="doughnut" label="Brews by method" :labels="share.labels" :series="share.series" />
     </ChartCard>
 
-    <ChartCard title="Methods over time" note="Brews of each method" :empty="overTime.length === 0" :table="seriesTable('', labels, overTime)" v-model:kind="overKind">
+    <ChartCard chart-id="methods.overTime" title="Methods over time" note="Brews of each method" :empty="overTime.length === 0" :table="seriesTable('', labels, overTime)" v-model:kind="overKind">
       <template #period><ChartPeriod :view="overView" label="Methods over time" /></template>
       <StatsChart :kind="overKind" :stacked="overKind === 'bar'" label="Brews of each method over time" :labels="labels" :series="overTime" :height="280" />
     </ChartCard>
 
-    <ChartCard title="Rating by method" note="Average rating; rated brews in brackets" :empty="rating.labels.length === 0" empty-text="No rated brews yet." :table="rating.table">
+    <ChartCard chart-id="methods.rating" title="Rating by method" note="Average rating; rated brews in brackets" :empty="rating.labels.length === 0" empty-text="No rated brews yet." :table="rating.table">
       <StatsChart kind="bar" horizontal label="Average rating by method" :labels="rating.labels" :series="rating.series" :y-min="0" :y-max="5" :format="(n) => n.toFixed(1)" :height="barsHeight(rating.labels.length)" />
     </ChartCard>
+    <PinnedCharts tab="methods" />
   </div>
 </template>
 

@@ -3,6 +3,7 @@
 // how each rates, and grind setting against rating.
 import { computed } from 'vue';
 import ChartCard from '../../components/charts/ChartCard.vue';
+import PinnedCharts from '../../components/charts/PinnedCharts.vue';
 import ChartPeriod from '../../components/charts/ChartPeriod.vue';
 import StatsChart from '../../components/charts/StatsChart.vue';
 import { useStats, type ChartView } from '../../composables/useStats';
@@ -47,25 +48,25 @@ const noGrinderNote = computed(() => (without.value ? `; ${without.value} brew${
 
 <template>
   <div class="charts">
-    <ChartCard title="Brews by grinder" :note="`Brews with a grinder recorded${noGrinderNote}`" :empty="share.labels.length === 0" empty-text="No brews with a grinder yet." :table="share.table">
+    <ChartCard chart-id="grinders.share" title="Brews by grinder" :note="`Brews with a grinder recorded${noGrinderNote}`" :empty="share.labels.length === 0" empty-text="No brews with a grinder yet." :table="share.table">
       <StatsChart kind="doughnut" label="Brews by grinder" :labels="share.labels" :series="share.series" />
     </ChartCard>
 
-    <ChartCard title="Grinders over time" note="Brews on each grinder" :empty="useOverTime.length === 0" empty-text="No brews with a grinder yet." :table="seriesTable('', useView.labels.value, useOverTime)" v-model:kind="useKind">
+    <ChartCard chart-id="grinders.overTime" title="Grinders over time" note="Brews on each grinder" :empty="useOverTime.length === 0" empty-text="No brews with a grinder yet." :table="seriesTable('', useView.labels.value, useOverTime)" v-model:kind="useKind">
       <template #period><ChartPeriod :view="useView" label="Grinders over time" /></template>
       <StatsChart :kind="useKind" :stacked="useKind === 'bar'" label="Brews on each grinder over time" :labels="useView.labels.value" :series="useOverTime" :height="280" />
     </ChartCard>
 
-    <ChartCard title="Coffee ground" note="Grams through each grinder" :empty="groundOverTime.length === 0" empty-text="No brews with a grinder yet." :table="seriesTable('', groundView.labels.value, groundOverTime)" v-model:kind="groundKind">
+    <ChartCard chart-id="grinders.coffee" title="Coffee ground" note="Grams through each grinder" :empty="groundOverTime.length === 0" empty-text="No brews with a grinder yet." :table="seriesTable('', groundView.labels.value, groundOverTime)" v-model:kind="groundKind">
       <template #period><ChartPeriod :view="groundView" label="Coffee ground per grinder" /></template>
       <StatsChart :kind="groundKind" :stacked="groundKind === 'bar'" label="Coffee ground on each grinder over time" :labels="groundView.labels.value" :series="groundOverTime" :format="(n) => `${n} g`" :height="280" />
     </ChartCard>
 
-    <ChartCard title="Rating by grinder" note="Average rating; rated brews in brackets" :empty="rating.labels.length === 0" empty-text="No rated brews with a grinder yet." :table="rating.table">
+    <ChartCard chart-id="grinders.rating" title="Rating by grinder" note="Average rating; rated brews in brackets" :empty="rating.labels.length === 0" empty-text="No rated brews with a grinder yet." :table="rating.table">
       <StatsChart kind="bar" horizontal label="Average rating by grinder" :labels="rating.labels" :series="rating.series" :y-min="0" :y-max="5" :format="(n) => n.toFixed(1)" :height="barsHeight(rating.labels.length)" />
     </ChartCard>
 
-    <ChartCard
+    <ChartCard chart-id="grinders.grind"
       v-if="showGrind"
       title="Grind setting against rating"
       note="The three most used grinders"
@@ -75,6 +76,7 @@ const noGrinderNote = computed(() => (without.value ? `; ${without.value} brew${
     >
       <StatsChart kind="scatter" label="Grind setting against rating" :points="grind" x-title="Grind setting" y-title="Rating" :y-min="0.5" :y-max="5.5" :height="280" />
     </ChartCard>
+    <PinnedCharts tab="grinders" />
   </div>
 </template>
 

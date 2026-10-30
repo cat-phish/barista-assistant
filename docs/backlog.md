@@ -24,14 +24,14 @@ and fix the references.
 
 **Contents**
 - A. Settings & configuration: 1–2
-- B. Brewing & logging: 3–6
-- C. Recipes: 7–8
-- D. AI suggestions: 9–10
-- E. Insights: 11
-- F. Bar & menu: 12–14
-- G. Home roasting: 15–24
-- H. Accounts: 25–26
-- I. Deployment & the app: 27
+- B. Brewing & logging: 3–9
+- C. Recipes: 10–11
+- D. AI suggestions: 12–13
+- E. Insights: 14
+- F. Bar & menu: 15–17
+- G. Home roasting: 18–27
+- H. Accounts: 28–29
+- I. Deployment & the app: 30
 
 ---
 
@@ -217,11 +217,103 @@ Recording a brew: what's measured, and how fast it is to log.
 - **Open questions:** move brew problems from Settings → Lists to Bar setup,
   next to the prep list?
 
+### 7. Flavor wheel for tasting a brew
+
+- **Status:** idea
+- **Why:** tasting notes are free text (`tastingNotes`,
+  `drinkTastingNotes`). That's hard to fill in quickly on a phone, words
+  vary from brew to brew ("berry", "berries", "blueberry-ish"), and nothing
+  can be counted or compared. The SCA Coffee Taster's Flavor Wheel gives a
+  shared vocabulary, and tapping it is faster than typing.
+- **Approach:**
+  - An interactive wheel among the rating options on the log form:
+    an SVG sunburst, inner ring (fruity, floral, sweet, nutty/cocoa, …)
+    → middle → outer descriptors. Tap a segment to zoom in, tap again to
+    pick it; picks show as chips under the wheel and can be removed. A
+    search box and a plain chip list for anyone who'd rather not use the
+    wheel (and for screen readers).
+  - Picks are saved on the brew as a list of descriptor keys (a JSON
+    column, or a `brew_log_flavors` table if they're counted in Insights);
+    free-text tasting notes stay alongside.
+  - Field registry `brew.flavors` with `show('brew.flavors')`;
+    `REPEAT_FOR_FIELD` `'result'` (tasted each time, never copied).
+  - The journal shows the picks as coloured chips; the AI gets them with
+    the tasting notes (CLAUDE.md rule 9: always sent, or switchable under
+    Settings → AI); backups and the list import carry them (rule 8 if it's
+    a table).
+  - Later: flavors per bean in Insights, compared with the roaster's
+    `flavorProfile`.
+- **Size:** M–L (the wheel UI is most of it).
+- **Depends on:** nothing.
+- **Open questions:**
+  - Can we use the SCA/WCR wheel's descriptors and colours as published
+    (licence), or draw our own wheel on the same lexicon?
+  - The full 3-ring wheel, or stop at the middle ring on small screens?
+  - An intensity per flavor (faint / clear / strong), or just picked?
+  - A wheel for the drink tasting too, or only the coffee on its own?
+  - The wheel's defect segments (papery, rubber, …) overlap with "What went
+    wrong" (brew problems): keep both, or link them?
+
+### 8. Half-step ratings
+
+- **Status:** idea
+- **Why:** ratings are whole stars, 1–5 (`rating`, `drinkRating`). Most
+  brews land at 3 or 4, so "a bit better than last time" often can't be
+  recorded, and the AI and Insights can't see small improvements.
+- **Approach:**
+  - Ratings take 0.5 steps (1, 1.5 … 5). `RatingInput.vue` and
+    `RatingStars.vue` show half stars; tap the left half of a star for .5,
+    the right half for the whole.
+  - Schema: `rating` and `drinkRating` go from `int` to
+    `decimal(2,1)` (`mode: "number"`); existing values carry over. The
+    validator accepts multiples of 0.5 in 1–5;
+    `docs/api/brew-logs.md` and `docs/schema.md` updated.
+  - Everything that reads a rating copes with halves: Insights charts and
+    Explore (buckets, averages), CSV export, backups and the list import
+    (a new `BACKUP_VERSION` if validation changes), the AI's
+    `ratingScale` and prompt (`docs/api/llm-contract.md`, a new prompt
+    version), and the auto-analyze "rated" check.
+- **Size:** M (small change, touches many places).
+- **Depends on:** nothing; makes 1 (Beanconqueror's scale) easier to map.
+- **Open questions:**
+  - The bean's overall rating too, or brews only?
+  - Should 0.5 be allowed, or stay at 1 as the lowest?
+  - A workspace setting for whole or half stars, or always half?
+
+### 9. Hold a step on the timer
+
+- **Status:** idea
+- **Why:** steps run back to back on their planned durations
+  (`brewSchedule`, `docs/timer_architecture.md`). When a pour or a
+  drawdown runs slow, an `auto` step ends on schedule anyway and the next
+  one starts while you're still on the last, so the cards and beeps no
+  longer match what's in the kettle. Only `tap` steps wait.
+- **Approach:**
+  - A **Hold** button on the current step card while it's running. The
+    step's countdown stops ("Held · +0:12") and later steps shift; the brew
+    clock keeps running, since the coffee is still brewing. **Resume**
+    carries on with the time that was left, or **Next** ends the step now.
+  - Recorded as marks (`step_hold` / `step_resume` with the step's
+    `stepOrder`, or a `step_end` when Next ends it), so `brewSchedule`
+    stays a pure function of the steps, the time and the marks, and the
+    real step timings are kept. `MARK_KINDS`, the mark validator and
+    `docs/api/brew-logs.md` §6.
+  - The journal shows how long a step was held; the AI sees it with the
+    other step timings (rule 9), which tells it the brew ran slow there.
+- **Size:** S–M
+- **Depends on:** nothing; pairs with 4 (changing the window on the fly).
+- **Open questions:**
+  - Hold and resume, or just "+15 s" on the step (simpler, no second tap)?
+  - Pause the whole brew as well (interrupted), which would stop the brew
+    clock and leave `actualTimeSec` short?
+  - After a hold, should the target finish window move by the held time,
+    or stay so the brew shows as slow?
+
 ## C. Recipes
 
 Building recipes: their steps, timings and target window.
 
-### 7. Prep steps that don't start the timer
+### 10. Prep steps that don't start the timer
 
 - **Status:** parked. Built on branch `prep-steps` (commit `dfd67db`, not
   merged) and set aside for ticking the prep tools on brew setup instead
@@ -241,7 +333,7 @@ Building recipes: their steps, timings and target window.
     default prep? A countdown (preheat 2:00) is the one thing the tools
     can't do.
 
-### 8. Target finish window vs. the steps
+### 11. Target finish window vs. the steps
 
 - **Status:** idea
 - **Why:** the target finish window and the steps are typed separately and
@@ -277,7 +369,7 @@ Building recipes: their steps, timings and target window.
 
 What the analysis worker sends to the LLM and what comes back.
 
-### 9. Build bar items from plain text (AI)
+### 12. Build bar items from plain text (AI)
 
 - **Status:** idea
 - **Why:** recipes, drinks and other bar items often come as text: a
@@ -305,7 +397,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Units and step types the text describes loosely ("pour to about 100 ml,
     wait 30 s"): how sure must the AI be before filling a field?
 
-### 10. Review and test the espresso dose and shot weight suggestions
+### 13. Review and test the espresso dose and shot weight suggestions
 
 - **Status:** planned
 - **Why:** dose and shot weight changes for espresso (roadmap: espresso dose
@@ -345,7 +437,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## E. Insights
 
-### 11. Save insights for the AI
+### 14. Save insights for the AI
 
 - **Status:** idea
 - **Why:** the Insights page shows patterns (this bean rates higher past
@@ -382,7 +474,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## F. Bar & menu
 
-### 12. Ingredient prep and stock
+### 15. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -399,7 +491,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should a finished cold brew batch (roadmap: cold brew refinements) be
     stock the same way, with each glass served taken from it and rated?
 
-### 13. Public menu: branding and sizes
+### 16. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
@@ -413,7 +505,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
-### 14. Drink categories: what else they could do
+### 17. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -442,7 +534,7 @@ Home roasting). Paused here; these are what's next.
   whoever logged it?
 - Should freezing a home-roasted bean pause or extend its rest?
 
-### 15. Live roast timer
+### 18. Live roast timer
 
 - **Status:** planned (branch `roast-timer`)
 - **Why:** roast times are typed in after the roast; a timer running while
@@ -456,7 +548,7 @@ Home roasting). Paused here; these are what's next.
   - Note a temperature at each mark?
   - Keep the screen awake while it runs?
 
-### 16. Roast insights
+### 19. Roast insights
 
 - **Status:** idea
 - **Why:** Insights covers brewing only; a home roaster wants to see what
@@ -469,11 +561,11 @@ Home roasting). Paused here; these are what's next.
   - **rest sweet spot:** brew ratings by days off roast for home roasts,
     suggesting rest days per roast type or green coffee.
 - **Size:** M
-- **Depends on:** nothing; 17 and 21 make it richer.
+- **Depends on:** nothing; 20 and 24 make it richer.
 - **Open questions:** should the rest sweet spot offer to change the
   workspace's default rest days?
 
-### 17. Compare roasts
+### 20. Compare roasts
 
 - **Status:** idea
 - **Why:** with several batches of one green coffee, it's hard to see which
@@ -481,9 +573,9 @@ Home roasting). Paused here; these are what's next.
 - **Approach:** the batches of a green coffee side by side: levels, times,
   temperatures, weight loss, development, and how each one's brews rated.
 - **Size:** M
-- **Depends on:** nothing; can share a branch with 16.
+- **Depends on:** nothing; can share a branch with 19.
 
-### 18. Roast again, and roast plans
+### 21. Roast again, and roast plans
 
 - **Status:** idea
 - **Why:** a good roast is worth repeating, and today the form starts empty.
@@ -495,7 +587,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** S–M (plans are the M)
 - **Depends on:** nothing.
 
-### 19. Running low on roasted coffee
+### 22. Running low on roasted coffee
 
 - **Status:** idea
 - **Why:** the low notice covers green coffee; running out of roasted coffee
@@ -505,10 +597,10 @@ Home roasting). Paused here; these are what's next.
   suggesting the next roast, like the `green-low` job
   (`docs/api/notifications.md` §1b).
 - **Size:** S
-- **Depends on:** nothing; pairs with 18's plans.
+- **Depends on:** nothing; pairs with 21's plans.
 - **Open questions:** a threshold per workspace, or per green coffee?
 
-### 20. Green coffee details and restocks
+### 23. Green coffee details and restocks
 
 - **Status:** idea
 - **Why:** buying the same coffee again means editing the weight left by
@@ -521,18 +613,18 @@ Home roasting). Paused here; these are what's next.
 - **Size:** M
 - **Depends on:** nothing.
 
-### 21. Cupping notes per roast
+### 24. Cupping notes per roast
 
 - **Status:** idea
 - **Why:** brew ratings mix the roast with the brewing; cupping judges the
   roast itself.
 - **Approach:** a short cupping form on a roast: aroma, sweetness, acidity,
   body, a score, and roast defects (scorching, tipping, baked,
-  underdeveloped). Shown on the roast's page; feeds 16 and 17.
+  underdeveloped). Shown on the roast's page; feeds 19 and 20.
 - **Size:** S–M
 - **Depends on:** nothing.
 
-### 22. Roast details for the AI
+### 25. Roast details for the AI
 
 - **Status:** idea
 - **Why:** for a home roast, how it was roasted explains a lot about how it
@@ -544,7 +636,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** S
 - **Depends on:** nothing.
 
-### 23. Roast curves
+### 26. Roast curves
 
 - **Status:** idea
 - **Why:** roasting software (Artisan) records the whole curve; the log only
@@ -555,7 +647,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** L
 - **Depends on:** nothing.
 
-### 24. Roasting machine upkeep
+### 27. Roasting machine upkeep
 
 - **Status:** idea
 - **Why:** roasters need regular chaff and cleaning, easy to forget.
@@ -568,7 +660,7 @@ Home roasting). Paused here; these are what's next.
 
 ## H. Accounts
 
-### 25. Account management and password reset
+### 28. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -599,13 +691,13 @@ Home roasting). Paused here; these are what's next.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 26. Email verification
+### 29. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 25), inviting a member by email, or notifications by email.
+  (item 28), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -615,9 +707,9 @@ Home roasting). Paused here; these are what's next.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 25).
+  - Shares the mail and token pieces with password reset (item 28).
 - **Size:** M (mail is new to the stack).
-- **Depends on:** nothing; pairs with 25.
+- **Depends on:** nothing; pairs with 28.
 - **Open questions:**
   - Block unverified accounts, or only remind them?
   - What happens to accounts that existed before verification (treat as
@@ -630,7 +722,7 @@ Home roasting). Paused here; these are what's next.
 
 How the app is served and installed.
 
-### 27. Serve the app as an installable PWA
+### 30. Serve the app as an installable PWA
 
 - **Status:** idea
 - **Why:** the PWA is configured (`vite-plugin-pwa`, `frontend/vite.config.ts`)

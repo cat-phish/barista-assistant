@@ -140,3 +140,80 @@ Recorded here because the numbers aren't stored anywhere:
   bean counts on its `purchaseDate`, else on the date it was added.
 - **Country:** a blend's list ("Colombia, Ethiopia") counts toward each
   country.
+
+## 11b. Added charts
+
+A person keeps charts on the Insights tabs: an Explore view on any tab, or a
+built-in chart on the Overview, and lays out each tab: the charts' order, and
+which built-in ones are hidden. Both are each person's own, per workspace,
+stored on their membership (`workspace_members.insight_charts`,
+`insight_layout`). It goes when
+they leave the workspace and isn't in backups (people and members aren't,
+§2b). It names this workspace's grinder ids too, so it wouldn't carry over
+anyway.
+
+### `GET /api/workspaces/:workspaceId/stats/charts`
+
+- **Auth Required:** `true` (any member, viewers included)
+- **Success (`200 OK`):** `{ "charts": [...], "layout": {...} }`: the
+  charts in the order they were added (`[]` when none), and the layout
+  (`{}` when every tab is as built; see `PUT .../layout`).
+
+### `PUT /api/workspaces/:workspaceId/stats/charts`
+
+- **Auth Required:** `true` (any member, viewers included: it's their own
+  layout)
+- **Body:** `{ "charts": [...] }`, the whole list. It replaces the old one.
+
+```json
+{
+  "charts": [
+    { "id": "uuid", "kind": "explore", "tab": "brews", "x": "tds", "y": "rating", "color": "process", "grinder": "uuid" },
+    { "id": "uuid", "kind": "chart", "tab": "overview", "chart": "brews.rating" }
+  ]
+}
+```
+
+- `kind: "explore"`: `tab` is one of `overview`, `brews`, `beans`,
+  `methods`, `recipes`, `tools`, `grinders`. `x`, `y`, `color` are Explore
+  field keys (letters only, up to 40). `grinder` is the grinder a grind
+  setting is compared on. The server doesn't check the keys against
+  Explore's list: the client owns that list and leaves out a chart whose
+  field it doesn't know or the workspace hides.
+- `kind: "chart"`: a built-in chart (`<tab>.<chart>`, e.g. `beans.spend`),
+  only on `overview`, each chart once.
+- At most 50 charts, each `id` (a UUID, made by the client) once. Unknown
+  keys are refused.
+- **Success (`200 OK`):** `{ "charts": [...] }` as saved.
+- **Errors:** `400` for a bad list, `404` outside the workspace.
+
+### `PUT /api/workspaces/:workspaceId/stats/layout`
+
+- **Auth Required:** `true` (any member, viewers included)
+- **Body:** `{ "layout": {...} }`, every tab's layout. It replaces the old one.
+
+```json
+{
+  "layout": {
+    "brews": { "order": ["brews.rating", "pin:uuid", "brews.total"], "hidden": ["brews.problems"] },
+    "overview": { "order": ["tile.rating", "tile.brews", "beans.spend", "brews.rating"], "hidden": ["tile.photos"], "tilesBelow": true }
+  }
+}
+```
+
+- Keys are tabs (`overview`, `brews`, `beans`, `methods`, `recipes`,
+  `tools`, `grinders`), each with optional `order` and `hidden`, at most 100
+  ids each, each id once. A tab left out is as built.
+- An id is a built-in chart's (`brews.rating`), an Overview tile's
+  (`tile.brews`, `tile.coffee`, …) or an added chart's (`pin:<its id>`).
+  Only built-in ids (charts and tiles) go in `hidden`: an added chart is
+  removed instead (`PUT .../charts`). On the Overview, a pinned built-in
+  chart is taken off rather than hidden.
+- `tilesBelow` (the Overview's): `true` puts the tiles under the charts.
+  The tiles and the charts are ordered within their own groups; one `order`
+  list holds both.
+- `order` is the order shown. Charts it doesn't name (new ones, say) follow
+  in their usual order: a tab's template order, or on the Overview the order
+  they were added. Ids for charts not on the page are kept and ignored.
+- **Success (`200 OK`):** `{ "layout": {...} }` as saved.
+- **Errors:** `400` for a bad layout, `404` outside the workspace.

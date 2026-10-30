@@ -278,6 +278,21 @@ export const workspaces = mysqlTable("workspaces", {
 });
 
 // 3. Workspace Members (Many-to-Many User <-> Workspace)
+// A person's own added Insights charts in a workspace (docs/api/stats.md
+// §11b): an Explore view kept on a tab, or a built-in chart on the Overview.
+export const INSIGHT_TABS = ["overview", "brews", "beans", "methods", "recipes", "tools", "grinders"] as const;
+export type InsightTab = (typeof INSIGHT_TABS)[number];
+export type InsightChart =
+  | { id: string; kind: "explore"; tab: InsightTab; x: string; y: string; color?: string; grinder?: string }
+  | { id: string; kind: "chart"; tab: "overview"; chart: string }; // a built-in chart's id, "brews.rating"
+export const MAX_INSIGHT_CHARTS = 50;
+// Each tab's own order and hidden charts (§11b): ids are a built-in chart's
+// ("brews.rating"), an Overview tile's ("tile.brews") or an added Explore
+// chart's ("pin:<id>"); only built-in ones hide (an added one is removed
+// instead). `tilesBelow`: the Overview's tiles go under its charts.
+export type InsightLayout = Partial<Record<InsightTab, { order?: string[]; hidden?: string[]; tilesBelow?: boolean }>>;
+export const MAX_LAYOUT_IDS = 100;
+
 export const workspaceMembers = mysqlTable(
   "workspace_members",
   {
@@ -288,6 +303,8 @@ export const workspaceMembers = mysqlTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     role: varchar("role", { length: 50 }).notNull(), // 'owner' | 'barista' | 'viewer'
+    insightCharts: jsonValue<InsightChart[]>("insight_charts"), // in the order added; null = none
+    insightLayout: jsonValue<InsightLayout>("insight_layout"), // null = every tab as built
   },
   (table) => ({
     pk: primaryKey({ columns: [table.userId, table.workspaceId] }),

@@ -39,6 +39,7 @@ means drinks, wherever you see it (code comments use
 | §9 | [llm-contract.md](llm-contract.md) | Worker -> LLM Structured Output Contract |
 | §10 | [server.md](server.md) | Server Administration (admins, scheduled database backups) |
 | §11 | [stats.md](stats.md) | Statistics (brew and bean rows for the Insights page) |
+| §11b | [stats.md](stats.md) | Added Insights charts and each tab's layout (a person's own, per workspace) |
 
 Read this file's conventions first, then only the section(s) the change
 touches. For example, a new drink field needs `drinks.md`, plus `brew-logs.md`

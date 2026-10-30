@@ -568,6 +568,20 @@
       "when": 1793295518818,
       "tag": "0080_roasts",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "5",
+      "when": 1793328890061,
+      "tag": "0081_insight_charts",
+      "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "5",
+      "when": 1793330354095,
+      "tag": "0082_insight_layout",
+      "breakpoints": true
     }
   ]
 }

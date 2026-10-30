@@ -139,6 +139,12 @@ export const workspaceMembers = mysqlTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     role: varchar("role", { length: 50 }).notNull(), // 'owner' | 'barista' | 'viewer'
+    // The person's added Insights charts here (docs/api/stats.md §11b), in the
+    // order added; null = none. InsightChart in @barista/shared/schema.
+    insightCharts: jsonValue<InsightChart[]>("insight_charts"),
+    // Their own order and hidden charts per Insights tab (§11b); null = every
+    // tab as built. InsightLayout in @barista/shared/schema.
+    insightLayout: jsonValue<InsightLayout>("insight_layout"),
   },
   (table) => ({
     pk: primaryKey({ columns: [table.userId, table.workspaceId] }),

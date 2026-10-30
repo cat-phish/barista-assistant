@@ -3,6 +3,7 @@
 // extraction chart; what goes wrong (docs/roadmap.md, "Insights").
 import { computed } from 'vue';
 import ChartCard from '../../components/charts/ChartCard.vue';
+import PinnedCharts from '../../components/charts/PinnedCharts.vue';
 import ChartPeriod from '../../components/charts/ChartPeriod.vue';
 import StatsChart, { type Box } from '../../components/charts/StatsChart.vue';
 import { useStats, type ChartView } from '../../composables/useStats';
@@ -86,17 +87,17 @@ const pct = (n: number) => `${Math.round((n / Math.max(1, brews.value.length)) *
 
 <template>
   <div class="charts">
-    <ChartCard title="Brews over time" note="Running total in this period" :empty="totalView.brews.value.length === 0" :table="table(totalView, 'Total', total)">
+    <ChartCard chart-id="brews.total" title="Brews over time" note="Running total in this period" :empty="totalView.brews.value.length === 0" :table="table(totalView, 'Total', total)">
       <template #period><ChartPeriod :view="totalView" label="Brews over time" /></template>
       <StatsChart kind="line" label="Running total of brews" :labels="totalView.labels.value" :series="[{ label: 'Brews', data: total }]" fill />
     </ChartCard>
 
-    <ChartCard :title="`Brews per ${per(countView)}`" :empty="countView.brews.value.length === 0" :table="table(countView, 'Brews', perBucket)" v-model:kind="countKind">
+    <ChartCard chart-id="brews.count" :title="`Brews per ${per(countView)}`" :empty="countView.brews.value.length === 0" :table="table(countView, 'Brews', perBucket)" v-model:kind="countKind">
       <template #period><ChartPeriod :view="countView" :label="`Brews per ${per(countView)}`" /></template>
       <StatsChart :kind="countKind" :label="`Brews per ${per(countView)}`" :labels="countView.labels.value" :series="[{ label: 'Brews', data: perBucket }]" />
     </ChartCard>
 
-    <ChartCard
+    <ChartCard chart-id="brews.volume"
       title="Volume drunk"
       :note="`${unit} per ${per(volumeView)}; a drink's size, else the yield (weighed or estimated)`"
       :empty="volumeView.brews.value.length === 0"
@@ -107,12 +108,12 @@ const pct = (n: number) => `${Math.round((n / Math.max(1, brews.value.length)) *
       <StatsChart :kind="volumeKind" :label="`Volume drunk per ${per(volumeView)}`" :labels="volumeView.labels.value" :series="[{ label: unit, data: volume }]" />
     </ChartCard>
 
-    <ChartCard title="Coffee ground" :note="`Grams per ${per(coffeeView)}`" :empty="coffeeView.brews.value.length === 0" :table="table(coffeeView, 'Grams', coffee)" v-model:kind="coffeeKind">
+    <ChartCard chart-id="brews.coffee" title="Coffee ground" :note="`Grams per ${per(coffeeView)}`" :empty="coffeeView.brews.value.length === 0" :table="table(coffeeView, 'Grams', coffee)" v-model:kind="coffeeKind">
       <template #period><ChartPeriod :view="coffeeView" label="Coffee ground" /></template>
       <StatsChart :kind="coffeeKind" :label="`Coffee ground per ${per(coffeeView)}`" :labels="coffeeView.labels.value" :series="[{ label: 'g', data: coffee }]" />
     </ChartCard>
 
-    <ChartCard
+    <ChartCard chart-id="brews.rating"
       title="Average rating"
       :note="`Per ${per(ratingView)}, rated brews only`"
       :empty="!anyRated"
@@ -123,15 +124,15 @@ const pct = (n: number) => `${Math.round((n / Math.max(1, brews.value.length)) *
       <StatsChart kind="line" label="Average rating over time" :labels="ratingView.labels.value" :series="[{ label: 'Rating', data: rating }]" :y-min="1" :y-max="5" />
     </ChartCard>
 
-    <ChartCard title="By day of the week" :empty="brews.length === 0" :table="{ head: ['Day', 'Brews'], rows: WEEKDAYS.map((d, i) => [d, byWeekday[i]!]) }">
+    <ChartCard chart-id="brews.weekday" title="By day of the week" :empty="brews.length === 0" :table="{ head: ['Day', 'Brews'], rows: WEEKDAYS.map((d, i) => [d, byWeekday[i]!]) }">
       <StatsChart kind="bar" label="Brews by day of the week" :labels="WEEKDAYS" :series="[{ label: 'Brews', data: byWeekday }]" :height="200" />
     </ChartCard>
 
-    <ChartCard title="By time of day" note="Hour the brew was logged, local time" :empty="brews.length === 0" :table="{ head: ['Hour', 'Brews'], rows: HOURS.map((h, i) => [`${h}:00`, byHour[i]!]).filter((r) => r[1] !== 0) }">
+    <ChartCard chart-id="brews.hour" title="By time of day" note="Hour the brew was logged, local time" :empty="brews.length === 0" :table="{ head: ['Hour', 'Brews'], rows: HOURS.map((h, i) => [`${h}:00`, byHour[i]!]).filter((r) => r[1] !== 0) }">
       <StatsChart kind="bar" label="Brews by hour of the day" :labels="HOURS" :series="[{ label: 'Brews', data: byHour }]" :height="200" />
     </ChartCard>
 
-    <ChartCard
+    <ChartCard chart-id="brews.extraction"
       v-if="showTds"
       title="Extraction against strength"
       :note="extraction.length ? `${inTarget} of ${extraction.length} in the 18–22% / 1.15–1.45% box (filter brews with a TDS reading)` : undefined"
@@ -150,7 +151,7 @@ const pct = (n: number) => `${Math.round((n / Math.max(1, brews.value.length)) *
       />
     </ChartCard>
 
-    <ChartCard
+    <ChartCard chart-id="brews.eyRating"
       v-if="showTds"
       title="Extraction against rating"
       :note="eyRated.length ? eyRatingNote : undefined"
@@ -171,7 +172,7 @@ const pct = (n: number) => `${Math.round((n / Math.max(1, brews.value.length)) *
       />
     </ChartCard>
 
-    <ChartCard
+    <ChartCard chart-id="brews.problems"
       v-if="showProblems"
       title="What went wrong"
       note="Brews that ticked each problem"
@@ -188,6 +189,7 @@ const pct = (n: number) => `${Math.round((n / Math.max(1, brews.value.length)) *
         :height="Math.max(120, problems.length * 32 + 40)"
       />
     </ChartCard>
+    <PinnedCharts tab="brews" />
   </div>
 </template>
 

@@ -74,8 +74,8 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   parameter suggestion who asked the same way (`brewedBy` for
   `requestedBy`). A suggestion's `alternatives` keep the ids they named,
   which aren't rewritten: once restored, the brew page shows them by name
-  only. People's own AI prompts (`docs/api/auth.md` §1c) aren't
-  in it.
+  only. People's own AI prompts (`docs/api/auth.md` §1c) and
+  added Insights charts (`docs/api/stats.md` §11b) aren't in it.
   `analysis_requests` (when an automatic analysis is due, why one failed,
   §8) is queue state and isn't backed up either.
 - **`version`** goes up only when an older file can't be restored as is;

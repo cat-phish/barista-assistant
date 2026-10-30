@@ -1,12 +1,13 @@
 // The Insights page's data (docs/api/stats.md §11): the filters live in the URL,
 // StatsView fetches once per change, and each tab reads it with useStats().
-import { computed, inject, provide, ref, shallowRef, watch, type ComputedRef, type InjectionKey, type Ref } from 'vue';
+import { computed, inject, provide, reactive, ref, shallowRef, watch, type ComputedRef, type InjectionKey, type Ref } from 'vue';
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router';
 import { errorMessage } from '../api/client';
 import { statsApi, type StatsQuery } from '../api/stats';
-import type { StatsBean, StatsBrew, StatsData, VolumeUnit } from '../api/types';
+import type { InsightChart, InsightLayout, InsightTab, StatsBean, StatsBrew, StatsData, VolumeUnit } from '../api/types';
 import { formatDay, localDateInput } from '../lib/format';
 import { bucketRange, brewVolumeMl, localDay, pickGranularity, type Granularity, type VolumeSource } from '../lib/stats';
+import { canAdd, isTileId, layoutOrder, newUuid, pinLayoutId, toggleOverview, withoutPin, type LaidOutChart } from '../lib/insightCharts';
 import { CHART_PERIOD_PREFIX, formatChartPeriod, inRange, parseChartPeriod, RANGES, resolveRange, widestRange, type DayRange, type Period, type RangeKey } from '../lib/statsRange';
 import { GRAMS_PER_FL_OZ } from '../lib/scale';
 import { VOLUME_LABELS } from '../lib/units';
@@ -62,6 +63,19 @@ export interface StatsContext {
   hidden: ComputedRef<ReadonlySet<string>>; // settings.hiddenFields keys, e.g. "brew.tds"
   range: ComputedRef<{ from: string | null; to: string | null }>; // what was asked for; null = open
   chart: (id: string) => ChartView; // call in setup
+  // The person's added charts (docs/api/stats.md §11b); changes show at once.
+  pinned: Ref<InsightChart[]>;
+  pinError: Ref<string>;
+  addChart: (c: InsightChart) => Promise<boolean>;
+  removeChart: (id: string) => void;
+  toggleOverview: (chartId: string) => void;
+  // Each tab's order and hidden charts; the cards on the page register so the
+  // layout editor can list them.
+  layout: Ref<InsightLayout>;
+  setLayout: (next: InsightLayout) => void;
+  register: (tab: InsightTab, id: string, title: () => string) => () => void;
+  charts: (tab: InsightTab) => LaidOutChart[]; // in layout order
+  placeOf: (tab: InsightTab, id: string) => { order: number; hidden: boolean };
   volume: (brew: StatsBrew) => { ml: number; source: VolumeSource } | null;
   formatVolume: (ml: number) => string;
   volumeIn: (ml: number) => number; // in the chosen unit, for chart values
@@ -153,6 +167,100 @@ export function provideStats(): StatsContext {
   const fetched = computed(() => data.value?.brews ?? []);
   const within = (r: DayRange) => (r.from === fetchRange.value.from && r.to === fetchRange.value.to ? fetched.value : fetched.value.filter((b) => inRange(localDay(b), r)));
   const brews = computed(() => within(range.value));
+
+  const pinned = ref<InsightChart[]>([]);
+  const pinError = ref('');
+  const layout = ref<InsightLayout>({});
+  let savedLayout: InsightLayout = {};
+  watch(
+    () => workspaces.current?.id,
+    async (ws) => {
+      pinned.value = [];
+      layout.value = savedLayout = {};
+      if (!ws) return;
+      try {
+        const res = await statsApi.charts(ws);
+        if (ws !== workspaces.current?.id) return;
+        pinned.value = res.charts;
+        layout.value = savedLayout = res.layout;
+      } catch (err) {
+        pinError.value = errorMessage(err);
+      }
+    },
+    { immediate: true },
+  );
+  // Saves the whole list; puts the old one back if that fails.
+  async function savePinned(next: InsightChart[]): Promise<boolean> {
+    const ws = workspaces.current?.id;
+    if (!ws) return false;
+    const before = pinned.value;
+    pinned.value = next;
+    pinError.value = '';
+    try {
+      await statsApi.saveCharts(ws, next);
+      return true;
+    } catch (err) {
+      pinned.value = before;
+      pinError.value = errorMessage(err);
+      return false;
+    }
+  }
+  // Shown at once; saved after a pause, so a drag is one request. A failed
+  // save goes back to what was last saved.
+  let layoutTimer: ReturnType<typeof setTimeout> | undefined;
+  function setLayout(next: InsightLayout): void {
+    layout.value = next;
+    clearTimeout(layoutTimer);
+    layoutTimer = setTimeout(async () => {
+      const ws = workspaces.current?.id;
+      if (!ws) return;
+      const sending = layout.value;
+      try {
+        await statsApi.saveLayout(ws, sending);
+        savedLayout = sending;
+      } catch (err) {
+        if (layout.value === sending) layout.value = savedLayout;
+        pinError.value = errorMessage(err);
+      }
+    }, 400);
+  }
+
+  // The cards on the page, by tab. On a tab they rank in template order (the
+  // order they set up in); on the Overview, tiles first in their own order,
+  // then charts in the order they were added.
+  const registry = reactive(new Map<InsightTab, Map<string, { title: () => string; rank: number }>>());
+  let registered = 0;
+  function register(tab: InsightTab, id: string, title: () => string): () => void {
+    const cards = registry.get(tab) ?? registry.set(tab, new Map()).get(tab)!;
+    const entry = { title, rank: registered++ };
+    cards.set(id, entry);
+    return () => {
+      if (cards.get(id) === entry) cards.delete(id);
+    };
+  }
+  const overviewRank = (id: string) =>
+    pinned.value.findIndex((c) => (c.kind === 'chart' ? c.chart === id : pinLayoutId(c.id) === id));
+  const orders = computed(() => {
+    const out = new Map<InsightTab, LaidOutChart[]>();
+    for (const [tab, cards] of registry) {
+      const present = [...cards].map(([id, c]) => ({ id, title: c.title(), rank: tab !== 'overview' ? c.rank : isTileId(id) ? c.rank - 1e9 : overviewRank(id) }));
+      const byId = new Map(present.map((c) => [c.id, c]));
+      out.set(tab, layoutOrder(present, layout.value[tab]?.order).map((id) => byId.get(id)!));
+    }
+    return out;
+  });
+  function placeOf(tab: InsightTab, id: string): { order: number; hidden: boolean } {
+    const order = orders.value.get(tab)?.findIndex((c) => c.id === id) ?? -1;
+    return { order: Math.max(0, order), hidden: !!layout.value[tab]?.hidden?.includes(id) };
+  }
+
+  async function addChart(c: InsightChart): Promise<boolean> {
+    if (!canAdd(pinned.value)) {
+      pinError.value = 'That’s the most charts you can add. Remove one first.';
+      return false;
+    }
+    return savePinned([...pinned.value, c]);
+  }
   const beans = computed(() => data.value?.beans ?? []);
   const beanById = computed(() => new Map(beans.value.map((b) => [b.id, b])));
   const names = computed(() => {
@@ -224,6 +332,27 @@ export function provideStats(): StatsContext {
     hidden: computed(() => new Set(hiddenFields.value)),
     range,
     chart,
+    pinned,
+    pinError,
+    addChart,
+    removeChart: (id) => {
+      void savePinned(pinned.value.filter((c) => c.id !== id)).then((ok) => {
+        if (ok) setLayout(withoutPin(layout.value, id));
+      });
+    },
+    toggleOverview: (chartId) => {
+      const next = toggleOverview(pinned.value, chartId, newUuid);
+      if (next.length > pinned.value.length && !canAdd(pinned.value)) {
+        pinError.value = 'That’s the most charts you can add. Remove one first.';
+        return;
+      }
+      void savePinned(next);
+    },
+    layout,
+    setLayout,
+    register,
+    charts: (tab) => orders.value.get(tab) ?? [],
+    placeOf,
     volume: (brew) => volumes.value.get(brew.id) ?? null,
     formatVolume,
     volumeIn,

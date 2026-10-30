@@ -1782,6 +1782,29 @@ Backlog item "Statistics and graphs", branches `stats-foundation`,
   TDS, dose and water; ratio from dose and water). A group is a bar of
   averages with n. The picks are in the URL (`x`, `y`, `color`,
   `grinder`), and the filters keep them.
+- **Added charts** (`docs/api/stats.md` §11b): Explore's "Add to a tab…"
+  keeps the current picks on a tab of the person's choosing (the Overview
+  included), at the end of its charts with a Remove button. Every built-in
+  chart has a pin that adds it to the Overview, or takes it off, from its tab
+  or from the Overview. The Overview draws pinned charts below the tiles by
+  drawing their own tab with only those charts showing (`ONLY_CHARTS`), so
+  periods and bar/line work as on the tab. They show in tab order, then the
+  Explore charts in the order they were added. The list is each person's
+  own, per workspace, on their membership, and isn't in backups.
+- **Layout:** every tab but Explore has **Edit layout**: its charts by title
+  to drag (touch too, as prep items) or move with the arrows, a Show box per
+  built-in chart, Remove for added and Overview-pinned ones, Reset tab and
+  Done. Each tab's layout is its own (hiding a chart on Brews leaves its copy
+  on the Overview). Saved per person on the membership (§11b), a pause after
+  the last change. The charts take their place with CSS `order` in the tab's
+  grid, so the templates don't change; a screen reader still reads them in
+  template order (the editor's list is in the real order). With charts
+  hidden, the tab ends "N charts hidden · Edit layout".
+- **Overview layout:** the editor has two lists, Tiles and Charts. Tiles
+  drag and hide among tiles (`tile.<key>`), staying in their compact grid,
+  and "Tiles below the charts" moves the whole block. Charts drag among
+  charts and are removed rather than hidden. Reset Overview puts it all
+  back.
 - **Nav:** seven links no longer fit a 320px phone, so the row scrolls on
   the smallest screens.
 
