@@ -24,14 +24,14 @@ and fix the references.
 
 **Contents**
 - A. Settings & configuration: 1–2
-- B. Brewing & logging: 3–8
-- C. Recipes: 9–10
-- D. AI suggestions: 11–12
-- E. Insights: 13
-- F. Bar & menu: 14–16
-- G. Home roasting: 17–26
-- H. Accounts: 27–28
-- I. Deployment & the app: 29
+- B. Brewing & logging: 3–7
+- C. Recipes: 8–9
+- D. AI suggestions: 10–11
+- E. Insights: 12
+- F. Bar & menu: 13–15
+- G. Home roasting: 16–25
+- H. Accounts: 26–27
+- I. Deployment & the app: 28
 
 ---
 
@@ -73,7 +73,8 @@ Where the app's choices live, and what you can switch on, off or take out.
     (its zip with a JSON inside, or the JSON alone)?
   - Does it hold anything like our recipes, or are they built from a
     preparation's typical brew, or skipped?
-  - Ratings: how its scale maps to our 1–5 (and the drink rating).
+  - Ratings: how its scale maps to our 0.5–5 in half steps (and the drink
+    rating).
   - Grind settings that are text rather than a dial number.
   - Photos: bring a bean's photos along (they're built, `bean-photos.md` §4c)?
   - Run it once (a migration into a fresh workspace), or again later
@@ -254,37 +255,11 @@ Recording a brew: what's measured, and how fast it is to log.
   - The wheel's defect segments (papery, rubber, …) overlap with "What went
     wrong" (brew problems): keep both, or link them?
 
-### 8. Half-step ratings
-
-- **Status:** idea
-- **Why:** ratings are whole stars, 1–5 (`rating`, `drinkRating`). Most
-  brews land at 3 or 4, so "a bit better than last time" often can't be
-  recorded, and the AI and Insights can't see small improvements.
-- **Approach:**
-  - Ratings take 0.5 steps (1, 1.5 … 5). `RatingInput.vue` and
-    `RatingStars.vue` show half stars; tap the left half of a star for .5,
-    the right half for the whole.
-  - Schema: `rating` and `drinkRating` go from `int` to
-    `decimal(2,1)` (`mode: "number"`); existing values carry over. The
-    validator accepts multiples of 0.5 in 1–5;
-    `docs/api/brew-logs.md` and `docs/schema.md` updated.
-  - Everything that reads a rating copes with halves: Insights charts and
-    Explore (buckets, averages), CSV export, backups and the list import
-    (a new `BACKUP_VERSION` if validation changes), the AI's
-    `ratingScale` and prompt (`docs/api/llm-contract.md`, a new prompt
-    version), and the auto-analyze "rated" check.
-- **Size:** M (small change, touches many places).
-- **Depends on:** nothing; makes 1 (Beanconqueror's scale) easier to map.
-- **Open questions:**
-  - The bean's overall rating too, or brews only?
-  - Should 0.5 be allowed, or stay at 1 as the lowest?
-  - A workspace setting for whole or half stars, or always half?
-
 ## C. Recipes
 
 Building recipes: their steps, timings and target window.
 
-### 9. Prep steps that don't start the timer
+### 8. Prep steps that don't start the timer
 
 - **Status:** parked. Built on branch `prep-steps` (commit `dfd67db`, not
   merged) and set aside for ticking the prep tools on brew setup instead
@@ -304,7 +279,7 @@ Building recipes: their steps, timings and target window.
     default prep? A countdown (preheat 2:00) is the one thing the tools
     can't do.
 
-### 10. Target finish window vs. the steps
+### 9. Target finish window vs. the steps
 
 - **Status:** idea
 - **Why:** the target finish window and the steps are typed separately and
@@ -340,7 +315,7 @@ Building recipes: their steps, timings and target window.
 
 What the analysis worker sends to the LLM and what comes back.
 
-### 11. Build bar items from plain text (AI)
+### 10. Build bar items from plain text (AI)
 
 - **Status:** idea
 - **Why:** recipes, drinks and other bar items often come as text: a
@@ -368,7 +343,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Units and step types the text describes loosely ("pour to about 100 ml,
     wait 30 s"): how sure must the AI be before filling a field?
 
-### 12. Review and test the espresso dose and shot weight suggestions
+### 11. Review and test the espresso dose and shot weight suggestions
 
 - **Status:** planned
 - **Why:** dose and shot weight changes for espresso (roadmap: espresso dose
@@ -408,7 +383,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## E. Insights
 
-### 13. Save insights for the AI
+### 12. Save insights for the AI
 
 - **Status:** idea
 - **Why:** the Insights page shows patterns (this bean rates higher past
@@ -445,7 +420,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## F. Bar & menu
 
-### 14. Ingredient prep and stock
+### 13. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -462,7 +437,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should a finished cold brew batch (roadmap: cold brew refinements) be
     stock the same way, with each glass served taken from it and rated?
 
-### 15. Public menu: branding and sizes
+### 14. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
@@ -476,7 +451,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
-### 16. Drink categories: what else they could do
+### 15. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -505,7 +480,7 @@ Home roasting). Paused here; these are what's next.
   whoever logged it?
 - Should freezing a home-roasted bean pause or extend its rest?
 
-### 17. Live roast timer
+### 16. Live roast timer
 
 - **Status:** planned (branch `roast-timer`)
 - **Why:** roast times are typed in after the roast; a timer running while
@@ -519,7 +494,7 @@ Home roasting). Paused here; these are what's next.
   - Note a temperature at each mark?
   - Keep the screen awake while it runs?
 
-### 18. Roast insights
+### 17. Roast insights
 
 - **Status:** idea
 - **Why:** Insights covers brewing only; a home roaster wants to see what
@@ -532,11 +507,11 @@ Home roasting). Paused here; these are what's next.
   - **rest sweet spot:** brew ratings by days off roast for home roasts,
     suggesting rest days per roast type or green coffee.
 - **Size:** M
-- **Depends on:** nothing; 19 and 23 make it richer.
+- **Depends on:** nothing; 18 and 22 make it richer.
 - **Open questions:** should the rest sweet spot offer to change the
   workspace's default rest days?
 
-### 19. Compare roasts
+### 18. Compare roasts
 
 - **Status:** idea
 - **Why:** with several batches of one green coffee, it's hard to see which
@@ -544,9 +519,9 @@ Home roasting). Paused here; these are what's next.
 - **Approach:** the batches of a green coffee side by side: levels, times,
   temperatures, weight loss, development, and how each one's brews rated.
 - **Size:** M
-- **Depends on:** nothing; can share a branch with 18.
+- **Depends on:** nothing; can share a branch with 17.
 
-### 20. Roast again, and roast plans
+### 19. Roast again, and roast plans
 
 - **Status:** idea
 - **Why:** a good roast is worth repeating, and today the form starts empty.
@@ -558,7 +533,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** S–M (plans are the M)
 - **Depends on:** nothing.
 
-### 21. Running low on roasted coffee
+### 20. Running low on roasted coffee
 
 - **Status:** idea
 - **Why:** the low notice covers green coffee; running out of roasted coffee
@@ -568,10 +543,10 @@ Home roasting). Paused here; these are what's next.
   suggesting the next roast, like the `green-low` job
   (`docs/api/notifications.md` §1b).
 - **Size:** S
-- **Depends on:** nothing; pairs with 20's plans.
+- **Depends on:** nothing; pairs with 19's plans.
 - **Open questions:** a threshold per workspace, or per green coffee?
 
-### 22. Green coffee details and restocks
+### 21. Green coffee details and restocks
 
 - **Status:** idea
 - **Why:** buying the same coffee again means editing the weight left by
@@ -584,18 +559,18 @@ Home roasting). Paused here; these are what's next.
 - **Size:** M
 - **Depends on:** nothing.
 
-### 23. Cupping notes per roast
+### 22. Cupping notes per roast
 
 - **Status:** idea
 - **Why:** brew ratings mix the roast with the brewing; cupping judges the
   roast itself.
 - **Approach:** a short cupping form on a roast: aroma, sweetness, acidity,
   body, a score, and roast defects (scorching, tipping, baked,
-  underdeveloped). Shown on the roast's page; feeds 18 and 19.
+  underdeveloped). Shown on the roast's page; feeds 17 and 18.
 - **Size:** S–M
 - **Depends on:** nothing.
 
-### 24. Roast details for the AI
+### 23. Roast details for the AI
 
 - **Status:** idea
 - **Why:** for a home roast, how it was roasted explains a lot about how it
@@ -607,7 +582,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** S
 - **Depends on:** nothing.
 
-### 25. Roast curves
+### 24. Roast curves
 
 - **Status:** idea
 - **Why:** roasting software (Artisan) records the whole curve; the log only
@@ -618,7 +593,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** L
 - **Depends on:** nothing.
 
-### 26. Roasting machine upkeep
+### 25. Roasting machine upkeep
 
 - **Status:** idea
 - **Why:** roasters need regular chaff and cleaning, easy to forget.
@@ -631,7 +606,7 @@ Home roasting). Paused here; these are what's next.
 
 ## H. Accounts
 
-### 27. Account management and password reset
+### 26. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -662,13 +637,13 @@ Home roasting). Paused here; these are what's next.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 28. Email verification
+### 27. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 27), inviting a member by email, or notifications by email.
+  (item 26), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -678,9 +653,9 @@ Home roasting). Paused here; these are what's next.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 27).
+  - Shares the mail and token pieces with password reset (item 26).
 - **Size:** M (mail is new to the stack).
-- **Depends on:** nothing; pairs with 27.
+- **Depends on:** nothing; pairs with 26.
 - **Open questions:**
   - Block unverified accounts, or only remind them?
   - What happens to accounts that existed before verification (treat as
@@ -693,7 +668,7 @@ Home roasting). Paused here; these are what's next.
 
 How the app is served and installed.
 
-### 29. Serve the app as an installable PWA
+### 28. Serve the app as an installable PWA
 
 - **Status:** idea
 - **Why:** the PWA is configured (`vite-plugin-pwa`, `frontend/vite.config.ts`)

@@ -58,6 +58,11 @@ Every workspace in a response carries `settings`, defaults filled in
   workspace's recipes are written for. The recipe form's yield estimate
   uses it, a bean's roast adjusts a recipe's expected yield relative to it,
   and beans with no roast level are assumed to be it.
+- `ratingStep` (`whole` | `half`, default `half`): how brews and beans are
+  rated, set under Settings → **Defaults**. `half`: ½ to 5 stars, the left
+  half of a star picking the half below it. `whole`: 1 to 5 stars. Input
+  only: the API takes 0.5 steps either way (`brew-logs.md` §6), and half
+  ratings recorded earlier still show as half stars.
 - `roastScale` (`names` | `levels`, default `names`): how beans record their
   roast. `names`: the roast name (`detailedRoastLevel`, Cinnamon … French),
   which sets the 5-step level. `levels`: the 5-step `roastLevel` only

@@ -328,6 +328,13 @@ describe("drink instructions and tasting", () => {
     expect(doppio.body.brewLog.drink).toMatchObject({ hasIngredients: false });
     expect((await owner.agent.post(`${base}/brew-logs`).send({ ...log, drinkRating: 4 })).body.error).toMatch(/only for a brew made for a drink/);
     expect((await owner.agent.post(`${base}/brew-logs`).send({ ...log, drinkId: latte, drinkRating: 6 })).status).toBe(400);
+    // Half steps (docs/api/brew-logs.md §6): 0.5-5, nothing finer.
+    const halves = await owner.agent.post(`${base}/brew-logs`).send({ ...log, drinkId: latte, rating: 0.5, drinkRating: 4.5 });
+    expect(halves.body.brewLog).toMatchObject({ rating: 0.5, drinkRating: 4.5 });
+    expect((await owner.agent.get(`${base}/brew-logs/${halves.body.brewLog.id}`)).body.brewLog).toMatchObject({ rating: 0.5, drinkRating: 4.5 });
+    for (const bad of [0, 0.3, 3.75, 5.5]) {
+      expect((await owner.agent.post(`${base}/brew-logs`).send({ ...log, rating: bad })).status, String(bad)).toBe(400);
+    }
 
     const url = `${base}/brew-logs/${made.body.brewLog.id}`;
     expect((await owner.agent.patch(url).send({ drinkId: null })).status).toBe(400); // the drink's tasting would be orphaned

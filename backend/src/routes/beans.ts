@@ -25,7 +25,7 @@ import {
   type DetailedRoastLevel,
   type RoastLevel,
 } from "@barista/shared/schema";
-import { decimalSchema, optionalText, updateSchema } from "../validation.js";
+import { decimalSchema, optionalText, ratingSchema, updateSchema } from "../validation.js";
 import { removePhotoFiles } from "../photos.js";
 import { restReadyOn } from "../reminders.js";
 import type { PhotoInfo } from "./beanPhotos.js";
@@ -129,7 +129,7 @@ const beanFields = {
   greenSupplier: optionalText(255),
   // Which roast of this bean, for home roasters (docs/api/beans.md §4).
   batchNumber: optionalText(50),
-  rating: z.number().int().min(1).max(5).nullable().optional(),
+  rating: ratingSchema.nullable().optional(),
 };
 
 function isHttpUrl(s: string): boolean {

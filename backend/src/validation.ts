@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, LABEL_WEB_CONTEXTS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_REST_DAYS, MAX_SUGGEST_BREWS, REMEMBER_KEYS, REPEAT_KEEPS, ROAST_LEVELS, ROAST_SCALES, ROAST_TYPES, type RoastType, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
+import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, LABEL_WEB_CONTEXTS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_REST_DAYS, MAX_SUGGEST_BREWS, REMEMBER_KEYS, REPEAT_KEEPS, RATING_STEPS, ROAST_LEVELS, ROAST_SCALES, ROAST_TYPES, type RoastType, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
 import { AI_DETAILS } from "@barista/shared/aiDetails";
 import { ROLES } from "./auth/membership.js";
 
@@ -23,6 +23,7 @@ export const workspaceSettingsObject = z
   .object({
     recipeRoastLevel: z.enum(ROAST_LEVELS),
     roastScale: z.enum(ROAST_SCALES),
+    ratingStep: z.enum(RATING_STEPS),
     // Field keys are checked by shape, not a list: the registry lives in the
     // frontend (lib/fields.ts), and an unknown key simply hides nothing.
     hiddenFields: z
@@ -106,6 +107,14 @@ export function decimalSchema(opts: {
     .refine((n) => (exclusiveMax ? n < max : n <= max), `must be ${exclusiveMax ? "less than" : "at most"} ${max}`)
     .refine((n) => Number(n.toFixed(scale)) === n, `must have at most ${scale} decimal places`);
 }
+
+// A brew's or bean's rating (docs/api/brew-logs.md §6): 0.5-5 in half steps,
+// whatever the workspace's ratingStep (that only changes the input).
+export const ratingSchema = z
+  .number()
+  .min(0.5)
+  .max(5)
+  .refine((n) => Number.isInteger(n * 2), "must be in steps of 0.5");
 
 // A grind setting: the number on the grinder's dial, like its settingMin/Max
 // (docs/api/grinders.md §3b).

@@ -220,7 +220,7 @@ export interface BrewContext {
   // Only this brew, no earlier ones (docs/api/llm-contract.md §9).
   brew: BrewSummary;
   drink: DrinkInfo | null; // the brew's drink, if any
-  ratingScale: "1-5";
+  ratingScale: "0.5-5";
 }
 
 // A recipe's style (docs/api/recipe-styles.md §5e): the workspace's name for
@@ -517,7 +517,7 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
     recipe: recipe && scaledToBrew(recipe, brew.actualWaterGrams),
     brew: summarize(brew, bean.roastDate, bean.freezes, marks, tools, problems, servedAs),
     drink: brew.drinkId ? await loadDrink(brew.drinkId, { size: brew.servingSize, unit: brew.servingUnit }) : null,
-    ratingScale: "1-5",
+    ratingScale: "0.5-5",
   };
 }
 

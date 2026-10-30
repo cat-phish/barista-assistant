@@ -242,13 +242,15 @@ says why the last analysis failed or wasn't made (e.g. the daily cap), else
       recipe's steep window; the finish window stays `null`. The steep
       reminder and "ready from" use the brew's `steepMinHours`. Brews from
       before migration 0059 got their recipe's steep window then.
-  - `actualTimeSec`: integer 0–604800 (7 days, for long steeps). `rating`: integer **1–5**,
-    nullable. `actualGrindSetting` (nullable): the number on the grinder's
+  - `actualTimeSec`: integer 0–604800 (7 days, for long steeps). `rating`: **0.5–5 in steps
+    of 0.5** (3.5 is fine, 3.25 a `400`), nullable; whole stars before
+    migration 0083 carry over. The workspace's `ratingStep`
+    (`workspaces.md` §2) only changes how clients enter it. `actualGrindSetting` (nullable): the number on the grinder's
     dial, 0 ≤ x < 10000 with at most 2 decimals, as in `grindSettings` (§5);
     text is a `400`. `tastingNotes` ≤ 5000 chars, nullable, and blank
     becomes `null`. `rating` and `tastingNotes` are
     **the coffee tasted on its own**.
-  - `drinkRating` (1–5) and `drinkTastingNotes` (≤ 5000), both optional and
+  - `drinkRating` (0.5–5 in steps of 0.5, as `rating`) and `drinkTastingNotes` (≤ 5000), both optional and
     nullable: **the finished drink**, for a brew made for a drink (`400`
     otherwise; on `PATCH`, checked against the log after the change, so
     clearing the drink means clearing these too). Clients show both groups when
