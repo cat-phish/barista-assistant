@@ -31,7 +31,7 @@ and fix the references.
 - F. Bar & menu: 13–15
 - G. Home roasting: 16–25
 - H. Accounts: 26–27
-- I. Deployment & the app: 28
+- I. Deployment & the app: 28–29
 
 ---
 
@@ -655,44 +655,46 @@ Home roasting). Paused here; these are what's next.
 
 How the app is served and installed.
 
-### 28. Serve the app as an installable PWA
+### 28. Test the installed app on phones
 
 - **Status:** idea
-- **Why:** the PWA is configured (`vite-plugin-pwa`, `frontend/vite.config.ts`)
-  but never served. The frontend container runs the Vite **dev server**,
-  which doesn't generate the service worker or manifest (only `vite build`
-  does). It's also reached over plain HTTP on a LAN IP, and browsers only
-  allow service workers and installs over HTTPS (or `localhost`). So
-  phones get a browser shortcut, not an app, and nothing works offline.
-  Links, like the rate-later reminder's, open in the browser.
-- **Approach:**
-  - **Production frontend image:** `vite build`, served by Caddy (or nginx),
-    which also proxies `/api` to the backend as Vite's dev proxy does now
-    (`xfwd`, so `TRUST_PROXY` keeps working). The dev server stays for
-    development, e.g. a compose profile or override file.
-  - **HTTPS on the LAN.** Options, simplest first:
-    - Caddy's internal CA (each device trusts its root once);
-    - a real domain with a DNS-challenge certificate;
-    - a Tailscale certificate (`*.ts.net`).
-    `APP_URL` and `CORS_ORIGIN` then use the https address.
-  - **Manifest:**
-    - name Barista-Assistant (now "Coffee Brew Journal" / "BrewLog"), and
-      a description of what it does now;
-    - `id`, `start_url` and `scope` set explicitly;
-    - `handle_links: "preferred"` and `launch_handler` (`navigate-existing`),
-      so links into the app (reminders) open the installed app on Android.
-      iOS always opens links in Safari, whatever the manifest says.
-  - Check the service worker's update flow (`registerType: 'autoUpdate'`)
-    doesn't reload mid-brew. The timer page could hold the update until the
-    brew is saved.
-  - Update `docs/timer_architecture.md` §2 and the README's run
-    instructions.
-- **Size:** M
-- **Depends on:** nothing.
-- **Open questions:**
-  - Which HTTPS route fits: internal CA, own domain, or Tailscale?
-  - Keep the dev server as the default `docker compose up`, or make
-    production the default and dev an override?
-  - Later: **Web Push** from the installed app, as one more notification
-    channel next to ntfy and the others (roadmap: rate later)?
+- **Why:** the PWA is now served as a build over HTTPS (roadmap:
+  "Installable PWA, served over HTTPS"), but only checked with curl. Nobody
+  has installed it on a phone yet.
+- **Approach:** on the server it will run on, on an Android phone and an
+  iPhone:
+  - trust the CA from `http://<address>/ca.crt` (README steps; fix them
+    where they're wrong);
+  - install it, and check the name, icon, standalone window and
+    portrait lock;
+  - **offline:** with the server stopped, the app shell and the public
+    menu still open, and bean photos seen before still show;
+  - **links:** a rate-later reminder's link opens the installed app
+    (Android) rather than the browser. If Android only made a shortcut
+    (a self-trusted CA can stop it building a full app), note it: links
+    then open in the browser;
+  - **updates:** rebuild mid-brew; the brew isn't reloaded away, and the
+    new version applies after Save (and after Cancel). With no brew
+    running it applies on its own, also in an app left open (hourly
+    check);
+  - the session survives closing and reopening the app.
+- **Size:** S
+- **Depends on:** the app running on the home server.
+- **Open questions:** none.
 
+### 29. Web Push from the installed app
+
+- **Status:** idea
+- **Why:** reminders (rate later) go out through ntfy, Gotify and the
+  others, which each need their own app. The installed PWA could get them
+  itself, as one more channel.
+- **Approach:** a Web Push channel in Settings → Notifications: the app
+  subscribes (VAPID keys from the server's secrets), the backend stores the
+  subscription, and the worker sends to it like the other channels. The
+  service worker shows the notification and opens the brew when tapped.
+- **Size:** M
+- **Depends on:** nothing (the app is served as an installable PWA now).
+- **Open questions:**
+  - iOS only delivers Web Push to an app added to the Home Screen (16.4+):
+    say so on the channel, or hide it in the browser?
+  - Several devices per person: one subscription each, all notified?
