@@ -56,6 +56,8 @@ export interface UserPreferences {
   rememberSetup: RememberKey[]; // what the brew page remembers from last time
   startDelays: Partial<Record<MethodKind, 0 | 3 | 5>>; // countdown before a timed brew, per method; missing = none (docs/api/auth.md §1)
   steepReminders: boolean; // remind when a cold brew's steep window opens (docs/api/notifications.md §1b)
+  restReminders: boolean; // remind the morning a home roast is ready to brew
+  greenStockAlerts: boolean; // tell when a roast takes a green coffee below its low-stock threshold
 }
 export const DEFAULT_PREFERENCES: UserPreferences = {
   volumeUnit: "fl_oz",
@@ -70,6 +72,8 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"],
   startDelays: {},
   steepReminders: true,
+  restReminders: true,
+  greenStockAlerts: true,
 };
 
 // Per workspace, owners edit (docs/api/workspaces.md §2 settings).

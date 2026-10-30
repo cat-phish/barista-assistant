@@ -92,8 +92,4 @@ p {
   align-items: flex-start;
   gap: var(--space-2);
 }
-.badge.resting {
-  background: var(--warning-tint);
-  color: var(--warning);
-}
 </style>

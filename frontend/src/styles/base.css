@@ -309,6 +309,11 @@ a {
   color: var(--brand);
   white-space: nowrap;
 }
+/* A home roast still resting (docs/api/roasts.md §4f). */
+.badge.resting {
+  background: var(--warning-tint);
+  color: var(--warning);
+}
 .btn-danger {
   background: var(--danger-solid);
   color: #fff;

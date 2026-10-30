@@ -31,6 +31,7 @@ import {
   periodsLatestFirst,
   pricePerGram,
   roastAgeDays,
+  restingUntil,
   roastLabel,
   varietyLabel,
   batchSuffix,
@@ -470,6 +471,7 @@ const selection = useSelection();
               <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(bean.id) ? '☑' : '☐' }}</span>
                 <img v-if="show('bean.photos') && bean.photos[0]" class="cover-thumb" :src="photoSrc(bean, bean.photos[0].id)" alt="" loading="lazy" />
                 {{ bean.beanName }}{{ batchSuffix(bean) }}<span v-if="openFreeze(bean)" class="frozen-mark phone-only" aria-label="frozen"> ❄</span>
+                <span v-if="restingUntil(bean)" class="badge resting" :title="`Resting until ${formatListDay(restingUntil(bean)!)}`">Resting</span>
               </span>
               <span class="data-td wide-only center">
                 <span v-if="openFreeze(bean)" class="frozen-mark" title="Frozen" aria-label="Frozen">❄</span>
@@ -490,6 +492,7 @@ const selection = useSelection();
             <div v-if="openId === bean.id" class="data-details">
               <div class="badges">
                 <span v-if="openFreeze(bean)" class="badge frozen">Frozen</span>
+                <span v-if="restingUntil(bean)" class="badge resting">Resting until {{ formatListDay(restingUntil(bean)!) }}</span>
                 <span v-if="bean.decaf" class="badge">Decaf</span>
                 <span v-if="bean.roastType" class="badge">{{ ROAST_TYPES[bean.roastType].label }} roast</span>
                 <span v-if="bean.blendType" class="badge">{{ BLEND_TYPES[bean.blendType].label }}</span>

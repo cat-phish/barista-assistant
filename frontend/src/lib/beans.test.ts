@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Bean } from '../api/types';
-import { batchSuffix, beanFilter, beanFilterOptions, beanLabel, beanSortColumns, isBeanFilter, varietyLabel, DETAILED_ROAST_LEVELS, nextBatch, formatAltitude, roastLabel, formatPricePerGram, freezeState, latestThaw, periodsLatestFirst, pricePerGram } from './beans';
+import { batchSuffix, beanFilter, beanFilterOptions, beanLabel, beanSortColumns, isBeanFilter, varietyLabel, DETAILED_ROAST_LEVELS, nextBatch, formatAltitude, roastLabel, formatPricePerGram, freezeState, latestThaw, periodsLatestFirst, pricePerGram, restingUntil } from './beans';
 import { sortBy, sortColumnOptions } from './listSort';
 import { ROAST_LEVELS } from './scale';
 
@@ -70,6 +70,7 @@ const bean = (over: Partial<Bean>): Bean => ({
   freezePeriods: [],
   frozen: false,
   photos: [],
+  roastReadyOn: null,
   ...over,
 });
 // The workspace's process names, by id (editable, so the list passes them in).
@@ -213,5 +214,13 @@ describe('varieties and species', () => {
 
   it('sorts by the first variety, beans without one last', () => {
     expect(order([plain, sl, geisha], 'variety_asc')).toEqual(['Panama', 'Kenya', 'Plain']);
+  });
+});
+
+describe('restingUntil', () => {
+  it('is the ready day while a home roast rests, else null', () => {
+    expect(restingUntil({ roastReadyOn: '2026-11-02' }, '2026-10-29')).toBe('2026-11-02');
+    expect(restingUntil({ roastReadyOn: '2026-10-29' }, '2026-10-29')).toBeNull(); // ready today
+    expect(restingUntil({ roastReadyOn: null }, '2026-10-29')).toBeNull();
   });
 });

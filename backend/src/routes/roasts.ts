@@ -21,14 +21,22 @@ import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
+import { cancelRestReminder } from "../queue.js";
+import { alertGreenLow, remindWhenRested, type ReminderOutcome } from "../reminders.js";
 import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 import { resolveRoastLevel } from "./beans.js";
 
 // docs/api/roasts.md §4f
 export type RoastSummary = Omit<Roast, "workspaceId"> & {
-  greenCoffee: { id: string; name: string } | null;
+  greenCoffee: Pick<GreenCoffee, "id" | "name" | "weightLeftGrams" | "lowStockGrams"> | null;
   machine: { id: string; name: string } | null;
+  bean: { id: string; inventoryWeightGrams: number; archived: boolean } | null;
 };
+// A saved roast, and its rest reminder when it's still resting (§1b).
+interface SavedRoast {
+  roast: RoastSummary;
+  restReminder?: ReminderOutcome;
+}
 
 interface WorkspaceParams {
   workspaceId: string;
@@ -132,6 +140,8 @@ async function takeStock(tx: Tx, green: GreenCoffee, wanted: number): Promise<nu
   if (taken > 0) await tx.update(greenCoffees).set({ weightLeftGrams: sql`${greenCoffees.weightLeftGrams} - ${taken}` }).where(eq(greenCoffees.id, green.id));
   return taken;
 }
+// Whether taking stock moved a green coffee from at or above its threshold to below it.
+const wentLow = (lowStockGrams: number | null, before: number, after: number) => lowStockGrams !== null && after < lowStockGrams && before >= lowStockGrams;
 async function returnStock(tx: Tx, greenId: string | null, grams: number): Promise<void> {
   if (greenId && grams > 0) await tx.update(greenCoffees).set({ weightLeftGrams: sql`${greenCoffees.weightLeftGrams} + ${grams}` }).where(eq(greenCoffees.id, greenId));
 }
@@ -156,26 +166,42 @@ async function settingsOf(tx: Tx, workspaceId: string) {
 
 async function loadRoasts(where: SQL | undefined): Promise<RoastSummary[]> {
   const rows = await db
-    .select({ roast: roasts, greenName: greenCoffees.name, machineName: roastingMachines.name })
+    .select({
+      roast: roasts,
+      green: { name: greenCoffees.name, weightLeftGrams: greenCoffees.weightLeftGrams, lowStockGrams: greenCoffees.lowStockGrams },
+      machineName: roastingMachines.name,
+      bean: { inventoryWeightGrams: beans.inventoryWeightGrams, archivedAt: beans.archivedAt },
+    })
     .from(roasts)
     .leftJoin(greenCoffees, eq(roasts.greenCoffeeId, greenCoffees.id))
     .leftJoin(roastingMachines, eq(roasts.machineId, roastingMachines.id))
+    .leftJoin(beans, eq(roasts.beanId, beans.id))
     .where(where)
     .orderBy(desc(roasts.roastedAt), desc(roasts.createdAt));
-  return rows.map(({ roast: { workspaceId: _ws, ...r }, greenName, machineName }) => ({
+  return rows.map(({ roast: { workspaceId: _ws, ...r }, green, machineName, bean }) => ({
     ...r,
-    greenCoffee: r.greenCoffeeId && greenName !== null ? { id: r.greenCoffeeId, name: greenName } : null,
+    greenCoffee: r.greenCoffeeId && green ? { id: r.greenCoffeeId, ...green } : null,
     machine: r.machineId && machineName !== null ? { id: r.machineId, name: machineName } : null,
+    bean: r.beanId && bean ? { id: r.beanId, inventoryWeightGrams: bean.inventoryWeightGrams, archived: bean.archivedAt !== null } : null,
   }));
 }
 const inWorkspace = (p: RoastParams) => and(eq(roasts.id, p.roastId), eq(roasts.workspaceId, p.workspaceId));
 
-type Outcome = { status: "ok"; id: string } | { status: "not_found" } | { status: "invalid"; error: string };
+type Outcome = { status: "ok"; id: string; lowGreenId: string | null; restChanged: boolean } | { status: "not_found" } | { status: "invalid"; error: string };
 const invalid = (error: string): Outcome => ({ status: "invalid", error });
 
 function send(res: Response, outcome: Exclude<Outcome, { status: "ok" }>): void {
   if (outcome.status === "not_found") sendError(res, 404, "Roast not found");
   else sendError(res, 400, outcome.error);
+}
+
+// After a save (docs/api/notifications.md §1b): the rest reminder, for whoever
+// logged the roast, when its ready day may have moved; and a low-stock notice
+// for whoever saved it, when it took the green coffee below its threshold.
+async function afterSave(userId: string, roast: RoastSummary, outcome: Extract<Outcome, { status: "ok" }>): Promise<SavedRoast> {
+  if (outcome.lowGreenId) await alertGreenLow(userId, outcome.lowGreenId);
+  const restReminder = outcome.restChanged ? await remindWhenRested(roast.userId, roast) : undefined;
+  return { roast, ...(restReminder ? { restReminder } : {}) };
 }
 
 // Mounted at /api/workspaces/:workspaceId/roasts
@@ -199,7 +225,7 @@ roastsRouter.get("/:roastId", async (req: Request<RoastParams>, res: Response<{ 
 });
 
 // Saving a roast creates its bean and takes its green weight off the stock.
-roastsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<{ roast: RoastSummary }>) => {
+roastsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<SavedRoast>) => {
   const { workspaceId } = req.params;
   const userId = authedUserId(req);
   if (!(await requireMembership(res, userId, workspaceId, WRITE_ROLES))) return;
@@ -247,7 +273,8 @@ roastsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<{ roa
     const id = randomUUID();
     const greenStockTakenGrams = await takeStock(tx, green, roast.greenGrams);
     await tx.insert(roasts).values({ id, workspaceId, userId, beanId, greenStockTakenGrams, ...roast });
-    return { status: "ok", id };
+    const low = wentLow(green.lowStockGrams, green.weightLeftGrams, green.weightLeftGrams - greenStockTakenGrams);
+    return { status: "ok", id, lowGreenId: low ? green.id : null, restChanged: true };
   });
   if (outcome.status !== "ok") {
     send(res, outcome);
@@ -255,14 +282,15 @@ roastsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<{ roa
   }
   const [roast] = await loadRoasts(eq(roasts.id, outcome.id));
   if (!roast) throw new Error(`Roast ${outcome.id} missing after insert`);
-  res.status(201).json({ roast });
+  res.status(201).json(await afterSave(userId, roast, outcome));
 });
 
 // The bean follows the roast: its roast details, and its coffee when the
 // green coffee changes. Its stock moves by the change in roasted weight.
-roastsRouter.patch("/:roastId", async (req: Request<RoastParams>, res: Response<{ roast: RoastSummary }>) => {
+roastsRouter.patch("/:roastId", async (req: Request<RoastParams>, res: Response<SavedRoast>) => {
   const { workspaceId } = req.params;
-  if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
+  const userId = authedUserId(req);
+  if (!(await requireMembership(res, userId, workspaceId, WRITE_ROLES))) return;
   const body = parseBody(updateRoastSchema, req, res);
   if (!body) return;
   const outcome = await db.transaction(async (tx): Promise<Outcome> => {
@@ -280,14 +308,17 @@ roastsRouter.patch("/:roastId", async (req: Request<RoastParams>, res: Response<
     const greenChanged = body.greenCoffeeId !== undefined && body.greenCoffeeId !== old.greenCoffeeId;
     let green: GreenCoffee | undefined;
     let taken = old.greenStockTakenGrams;
+    let low = false;
     if (greenChanged || next.greenGrams !== old.greenGrams) {
       if (next.greenCoffeeId) {
         green = await lockGreen(tx, next.greenCoffeeId, workspaceId);
         if (!green) return invalid("greenCoffeeId: not a green coffee of this workspace");
       }
+      const before = green?.weightLeftGrams ?? 0; // its stock before this edit
       await returnStock(tx, old.greenCoffeeId, old.greenStockTakenGrams);
       if (green) green = await lockGreen(tx, green.id, workspaceId); // with what was given back
       taken = green ? await takeStock(tx, green, next.greenGrams) : 0;
+      if (green) low = wentLow(green.lowStockGrams, before, green.weightLeftGrams - taken);
     }
     const { id: _id, workspaceId: _ws, createdAt: _c, ...fields } = next;
     await tx.update(roasts).set({ ...fields, greenStockTakenGrams: taken }).where(eq(roasts.id, old.id));
@@ -309,7 +340,8 @@ roastsRouter.patch("/:roastId", async (req: Request<RoastParams>, res: Response<
         })
         .where(eq(beans.id, old.beanId));
     }
-    return { status: "ok", id: old.id };
+    const restChanged = next.roastedAt.getTime() !== old.roastedAt.getTime() || next.utcOffsetMinutes !== old.utcOffsetMinutes || next.restDays !== old.restDays;
+    return { status: "ok", id: old.id, lowGreenId: low && green ? green.id : null, restChanged };
   });
   if (outcome.status !== "ok") {
     send(res, outcome);
@@ -317,7 +349,7 @@ roastsRouter.patch("/:roastId", async (req: Request<RoastParams>, res: Response<
   }
   const [roast] = await loadRoasts(eq(roasts.id, outcome.id));
   if (!roast) throw new Error(`Roast ${outcome.id} missing after update`);
-  res.json({ roast });
+  res.json(await afterSave(userId, roast, outcome));
 });
 
 // Gives back the green weight it took. Its bean stays, with its brews.
@@ -334,5 +366,6 @@ roastsRouter.delete("/:roastId", async (req: Request<RoastParams>, res: Response
     sendError(res, 404, "Roast not found");
     return;
   }
+  await cancelRestReminder(req.params.roastId).catch(() => undefined); // the worker skips deleted roasts anyway
   res.status(204).end();
 });

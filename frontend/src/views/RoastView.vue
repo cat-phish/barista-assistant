@@ -2,6 +2,8 @@
 // A roast's page (docs/api/roasts.md §4f): what went in and came out, the
 // profile, when it's ready, and the bean it made. Edit and delete for
 // owners and baristas; deleting gives the green weight back and keeps the bean.
+// Says when its green coffee is running low, and, just after a save, whether
+// the rest-done reminder was queued (docs/api/notifications.md §1b).
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { errorMessage } from '../api/client';
@@ -12,7 +14,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { usePreferences } from '../composables/usePreferences';
 import { ROAST_TYPES } from '../lib/beans';
 import { formatListDay, formatTime, formatWhen, localDateInput } from '../lib/format';
-import { development, formatStock, readyOn, roastLevelLabel, roastTempText, weightLoss } from '../lib/roasting';
+import { development, formatStock, greenStock, readyOn, roastLevelLabel, roastTempText, weightLoss } from '../lib/roasting';
 import { TEMPERATURE_LABELS } from '../lib/units';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -40,6 +42,9 @@ onMounted(async () => {
 const temp = (c: number | null) => (c === null ? null : `${roastTempText(c, temperatureUnit.value)} ${TEMPERATURE_LABELS[temperatureUnit.value]}`);
 const dev = computed(() => (roast.value ? development(roast.value.firstCrackSec, roast.value.totalSec) : null));
 const ready = computed(() => (roast.value ? readyOn(roast.value) : null));
+const greenState = computed(() => (roast.value?.greenCoffee ? greenStock({ ...roast.value.greenCoffee, weightBoughtGrams: null }).state : 'ok'));
+// From the form, after a save (history state, so a reload doesn't repeat it).
+const savedReminder = typeof history.state?.restReminder === 'string' ? (history.state.restReminder as string) : null;
 const shortStock = computed(() => (roast.value && roast.value.greenCoffeeId && roast.value.greenStockTakenGrams < roast.value.greenGrams ? roast.value.greenStockTakenGrams : null));
 
 const confirming = ref(false);
@@ -116,9 +121,17 @@ async function remove(): Promise<void> {
             <dd>{{ roast.restDays }} {{ roast.restDays === 1 ? 'day' : 'days' }}: {{ ready <= today ? 'ready' : `ready ${formatListDay(ready)}` }}</dd>
           </div>
         </dl>
+        <p v-if="ready && ready > today && savedReminder === 'queued'" class="muted small">You'll get a reminder the morning it's ready.</p>
+        <p v-else-if="ready && ready > today && savedReminder === 'unavailable'" class="muted small">The ready reminder couldn't be scheduled right now.</p>
         <p v-if="roast.notes" class="notes">{{ roast.notes }}</p>
         <p v-if="shortStock !== null" class="muted small">Took {{ formatStock(shortStock) }} off the green stock: that was all there was.</p>
       </section>
+
+      <div v-if="roast.greenCoffee && greenState !== 'ok'" class="card stock-notice" :class="greenState" role="status">
+        <p v-if="greenState === 'out'">{{ roast.greenCoffee.name }} is used up.</p>
+        <p v-else>Only {{ formatStock(roast.greenCoffee.weightLeftGrams) }} of {{ roast.greenCoffee.name }} left.</p>
+        <RouterLink class="btn-link" :to="{ name: 'green-coffees' }">Green stock</RouterLink>
+      </div>
 
       <section class="card stack" aria-label="Its bean">
         <template v-if="roast.beanId">
@@ -174,6 +187,19 @@ h2 {
 }
 .notes {
   white-space: pre-wrap;
+}
+.stock-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  background: var(--warning-tint);
+  border-color: var(--warning);
+}
+.stock-notice.out {
+  background: var(--danger-tint);
+  border-color: var(--danger);
 }
 .danger-zone {
   display: flex;

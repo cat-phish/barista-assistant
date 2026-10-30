@@ -304,6 +304,18 @@ export function readyOn(r: Pick<Roast, 'roastedAt' | 'utcOffsetMinutes' | 'restD
   return new Date(Date.UTC(y!, m! - 1, d! + r.restDays)).toISOString().slice(0, 10);
 }
 
+// Roast mode → Resting (docs/roadmap.md, Home roasting): roasts still resting,
+// soonest ready first; then ready ones whose bean is still in use (there,
+// not archived, some left), most recently ready first.
+export function restingRoasts(roasts: Roast[], today = localDateInput()): { resting: Roast[]; ready: Roast[] } {
+  const dated = roasts.map((r) => ({ r, on: readyOn(r) }));
+  const resting = dated.filter((d) => d.on > today).sort((a, b) => a.on.localeCompare(b.on));
+  const ready = dated
+    .filter((d) => d.on <= today && d.r.bean && !d.r.bean.archived && d.r.bean.inventoryWeightGrams > 0)
+    .sort((a, b) => b.on.localeCompare(a.on));
+  return { resting: resting.map((d) => d.r), ready: ready.map((d) => d.r) };
+}
+
 // "City+" (roast names) or "Medium" (light to dark), or null.
 export function roastLevelLabel(r: Pick<Roast, 'detailedRoastLevel' | 'roastLevel'>): string | null {
   if (r.detailedRoastLevel) return DETAILED_ROAST_LEVELS[r.detailedRoastLevel].label;

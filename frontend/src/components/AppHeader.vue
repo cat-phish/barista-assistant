@@ -56,11 +56,12 @@ function onBrewClick(): void {
       <button class="btn btn-secondary" type="button" :disabled="loggingOut" @click="logout">Log out</button>
     </div>
   </header>
-  <!-- Roast mode's tabs; Resting joins with the next branch (docs/backlog.md item 15). Viewers can't log a roast. -->
+  <!-- Roast mode's tabs (docs/roadmap.md, Home roasting). Viewers can't log a roast. -->
   <nav v-if="workspaces.current && mode === 'roast'" class="tabs" aria-label="Roasting sections">
     <RouterLink v-if="workspaces.canEdit" :to="{ name: 'roast-new' }" active-class="active">Roast</RouterLink>
     <RouterLink :to="{ name: 'roasts' }" :class="{ active: route.path.startsWith('/roast/roasts') }">Roasts</RouterLink>
     <RouterLink :to="{ name: 'green-coffees' }" :class="{ active: route.path.startsWith('/roast/green') }">Green</RouterLink>
+    <RouterLink :to="{ name: 'resting' }" active-class="active">Resting</RouterLink>
     <RouterLink :to="{ name: 'roasting-machines' }" :class="{ active: route.path.startsWith('/roast/setup') }">Roasters</RouterLink>
   </nav>
   <nav v-else-if="workspaces.current" class="tabs" aria-label="Sections">

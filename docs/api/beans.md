@@ -19,7 +19,11 @@
   (boolean): `true` while a period is open (`thawedOn: null`). `frozen` is
   worked out from the periods, not stored, so the two always agree; clients
   read it instead of looking at the order of the periods. It also includes
-  `photos`, cover first (`[{ id, width, height }]`, `bean-photos.md` §4c).
+  `photos`, cover first (`[{ id, width, height }]`, `bean-photos.md` §4c),
+  and `roastReadyOn`: for a bean a home roast made (§4f), the day that roast
+  has rested (`YYYY-MM-DD`, its local roast date + `restDays`), else `null`.
+  Until then clients show it as **Resting until …** in Beans and the brew
+  picker; it can still be brewed.
 
   The list includes archived beans: `archivedAt` is when the bean was
   archived, or `null` while it's active. `createdAt` is when it was added

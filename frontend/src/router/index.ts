@@ -57,7 +57,7 @@ export const router = createRouter({
         { path: 'explore', name: 'stats-explore', component: () => import('../views/stats/StatsExploreView.vue') },
       ],
     },
-    // Roast mode (docs/backlog.md item 15): its own tabs in the header.
+    // Roast mode (docs/roadmap.md, Home roasting): its own tabs in the header.
     // /roast lands on the Roast form, or the roast history for a viewer.
     {
       path: '/roast',
@@ -73,6 +73,7 @@ export const router = createRouter({
     { path: '/roast/green', name: 'green-coffees', component: () => import('../views/GreenView.vue'), meta: { requiresWorkspace: true, requiresRoasting: true } },
     { path: '/roast/green/new', name: 'green-coffee-new', component: () => import('../views/GreenFormView.vue'), meta: { requiresWorkspace: true, requiresRoasting: true, requiresEditor: true } },
     { path: '/roast/green/:id/edit', name: 'green-coffee-edit', component: () => import('../views/GreenFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresRoasting: true, requiresEditor: true } },
+    { path: '/roast/resting', name: 'resting', component: () => import('../views/RestingView.vue'), meta: { requiresWorkspace: true, requiresRoasting: true } },
     { path: '/roast/setup', name: 'roasting-machines', component: () => import('../views/RoastersView.vue'), meta: { requiresWorkspace: true, requiresRoasting: true } },
     { path: '/roast/setup/new', name: 'roasting-machine-new', component: () => import('../views/RoasterFormView.vue'), meta: { requiresWorkspace: true, requiresRoasting: true, requiresEditor: true } },
     { path: '/roast/setup/:id/edit', name: 'roasting-machine-edit', component: () => import('../views/RoasterFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresRoasting: true, requiresEditor: true } },

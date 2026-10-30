@@ -16,10 +16,11 @@ The app shows roasts in roast mode under **Roast** (the form) and
 {
   "id": "uuid",
   "greenCoffeeId": "uuid",
-  "greenCoffee": { "id": "uuid", "name": "Ethiopia Guji" },
+  "greenCoffee": { "id": "uuid", "name": "Ethiopia Guji", "weightLeftGrams": 380, "lowStockGrams": 500 },
   "machineId": "uuid",
   "machine": { "id": "uuid", "name": "Nano 7" },
   "beanId": "uuid",
+  "bean": { "id": "uuid", "inventoryWeightGrams": 85, "archived": false },
   "userId": "uuid",
   "roastedAt": "2026-10-21T06:30:00.000Z",
   "utcOffsetMinutes": -420,
@@ -57,8 +58,17 @@ The app shows roasts in roast mode under **Roast** (the form) and
 Read-only: `beanId` (the bean it made; `null` once that bean is deleted),
 `userId` (who logged it), `greenStockTakenGrams` (what it took off the green
 coffee's `weightLeftGrams`: never more than was left, so a roast logged with
-no stock recorded takes nothing), `greenCoffee` and `machine` (name, `null`
+no stock recorded takes nothing), `greenCoffee` (name and what's left of it
+now, with its threshold) and `machine` (name), each `null` once deleted, and
+`bean` (what's left of the bean it made, and whether it's archived; `null`
 once deleted).
+
+**Resting:** a roast is ready on its local roast date + `restDays`. Roast
+mode's **Resting** tab lists the roasts still resting, soonest ready first,
+then the ready ones whose bean is still in use (there, not archived, some
+left), latest ready first. The bean shows **Resting until …** until then
+(`roastReadyOn`, §4). A roast's page says when its green coffee is low or
+used up.
 
 **The bean it makes** (§4): roaster = the workspace's `homeRoasterName`; the
 green coffee's name, process, origin, producer, altitude, varieties, species
@@ -86,7 +96,11 @@ coffee's stock, in one transaction.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Body:** `{ "greenCoffeeId": "uuid", "greenGrams": 120, "roastedGrams": 102, ...fields }`
-- **Success (`201 Created`):** `{ "roast": { ...roast } }`
+- **Success (`201 Created`):** `{ "roast": { ...roast }, "restReminder": "queued" }`.
+  `restReminder` (`queued`, `off` or `unavailable`, as a brew's `reminder`,
+  §1b) is left out when the roast is ready already (no rest, or roasted
+  long enough ago). Taking the green coffee below its `lowStockGrams` also
+  sends the low-stock notice (§1b).
 - **Errors:** `400` invalid body, weights that don't add up, first crack at
   or after the end, a roast level that disagrees with the detailed level, or
   a green coffee or machine from another workspace; `403` viewer.
@@ -103,13 +117,18 @@ coffee's stock, in one transaction.
   another green weight, its price follows.
 - **The stock follows:** with another green coffee or green weight, what was
   taken goes back and the new amount is taken (again no more than is left).
-- **Success (`200 OK`):** `{ "roast": { ...roast } }`
+- **The reminder follows:** with another `roastedAt`, `utcOffsetMinutes` or
+  `restDays`, the rest reminder moves to the new ready day (or is dropped
+  when it's ready now), and the reply has `restReminder`; other edits leave
+  it be. An edit that takes the green coffee below its threshold sends the
+  low-stock notice.
+- **Success (`200 OK`):** `{ "roast": { ...roast }, "restReminder"?: … }`
 - **Errors:** as `POST`; `404` not in this workspace.
 
 ## `DELETE /api/workspaces/:workspaceId/roasts/:roastId`
 
-Gives back `greenStockTakenGrams` to the green coffee. The bean stays, with
-its brews.
+Gives back `greenStockTakenGrams` to the green coffee and drops its rest
+reminder. The bean stays, with its brews.
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Success (`204 No Content`)**

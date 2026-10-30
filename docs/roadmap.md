@@ -1789,3 +1789,45 @@ Backlog item "Crop photos", branch `crop-photos`. Contract:
   from that.
 - No "I understand" confirmation (CLAUDE.md rule 7, asked): Done is a
   deliberate step and says "Replaces the saved photo".
+
+## Home roasting: roast mode, roast log, resting (built)
+
+Backlog item "Roasting: green stock, roast logs, resting", three branches:
+`roast-mode`, `roast-log`, `roast-resting`. Contracts: `api/workspaces.md`
+§2 (`homeRoasting`, `homeRoasterName`, `restDays`), `api/roasting-machines.md`
+§3f, `api/green-coffees.md` §4e, `api/roasts.md` §4f, `api/notifications.md`
+§1b (rest reminders, low green stock). What's next is in the backlog's
+Home roasting section.
+
+- **Its own mode**, not part of Beans and not a separate workspace: a
+  **Brew | Roast** switch in the header when the workspace turns on Home
+  roasting (Settings → Defaults). Roast mode lives under `/roast/…`, with
+  the tabs Roast, Roasts, Green, Resting and Roasters; each device
+  remembers the last mode and page (`lib/mode.ts`).
+- **Green stock** (`green_coffees`): origin, producer, process, supplier,
+  price, weight bought and left, a low-stock threshold. **Roasters**
+  (`roasting_machines`), archived like grinders once roasts use them.
+- **Saving a roast creates its bean** (roaster = the home roaster name, the
+  local roast date, weight loss, levels, the next batch number, its share
+  of the green price) and takes the green weight off the stock, never more
+  than is left. Editing the roast keeps its bean and the stock in step;
+  deleting it gives the green weight back and keeps the bean. Times are
+  typed in; a live timer comes later.
+- **Rest:** a workspace default per roast type, which each roast starts from
+  and can change. A roast is ready on its local roast date + its rest days.
+  The **Resting** tab lists roasts still resting, then ready ones whose bean
+  is still in use (there, not archived, some left). The bean shows
+  **Resting until …** in Beans and the brew picker (`roastReadyOn`); it can
+  still be brewed.
+- **Rest reminder** (`rest-done`, preference `restReminders`): to whoever
+  logged the roast, at 8:00 local on the ready day (chosen over the exact
+  rest time, since "ready" is a calendar day). An edit to its date or rest
+  moves it; deleting the roast drops it.
+- **Low green stock** (`green-low`, preference `greenStockAlerts`): a push to
+  whoever saved the roast, once each time a roast takes a green coffee
+  below its threshold, plus a notice on the roast's page and the Green
+  tab's Low / None left badge.
+- Deleting a roast uses the plain confirm dialog; whether it needs the "I
+  understand" checkbox (CLAUDE.md rule 7) is still an open question in the
+  backlog.
+- No roast details for the AI yet (backlog: Roast details for the AI).

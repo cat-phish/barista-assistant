@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import type { RateReminderJobData, SteepReminderJobData } from "@barista/shared/jobs";
+import type { GreenLowJobData, RateReminderJobData, RestReminderJobData, SteepReminderJobData } from "@barista/shared/jobs";
 import { sendNotification, type NotificationMessage } from "@barista/shared/notify";
 import {
   beans,
@@ -7,7 +7,9 @@ import {
   brewLogs,
   DEFAULT_PREFERENCES,
   drinks,
+  greenCoffees,
   notificationChannels,
+  roasts,
   users,
   withDefaults,
   type NotificationConfigs,
@@ -109,6 +111,67 @@ export async function processSteepReminder({ brewLogId, userId }: SteepReminderJ
       title: "Your cold brew is ready to filter",
       message: `${made} · ${brew.roasterName} ${brew.beanName} · started ${brewTime(brew.timestamp, brew.utcOffsetMinutes)}`,
       url: entryUrl(brewLogId),
+    },
+    send
+  );
+}
+
+// The roast's ready moment, 8:00 local on its roast date + rest days. Twin of
+// restReadyAt in backend/src/reminders.ts; keep both in sync.
+function restReadyAt(r: { roastedAt: Date; utcOffsetMinutes: number | null; restDays: number }): Date {
+  const offsetMs = (r.utcOffsetMinutes ?? 0) * 60_000;
+  const day = new Date(r.roastedAt.getTime() + offsetMs);
+  return new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate() + r.restDays, 8) - offsetMs);
+}
+
+// "21 Oct", the roast's local date.
+function roastDayText(roastedAt: Date, utcOffsetMinutes: number | null): string {
+  return new Date(roastedAt.getTime() + (utcOffsetMinutes ?? 0) * 60_000).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+}
+
+// A home roast has rested: ready to brew. Skipped once deleted, or when an
+// edit moved its ready day later (its new reminder is queued for then).
+export async function processRestReminder({ roastId, userId }: RestReminderJobData, send: Send = sendNotification): Promise<ReminderResult> {
+  const [roast] = await db
+    .select({ roastedAt: roasts.roastedAt, utcOffsetMinutes: roasts.utcOffsetMinutes, restDays: roasts.restDays, batchNumber: roasts.batchNumber, greenName: greenCoffees.name })
+    .from(roasts)
+    .leftJoin(greenCoffees, eq(roasts.greenCoffeeId, greenCoffees.id))
+    .where(eq(roasts.id, roastId));
+  if (!roast) return { status: "skipped", reason: "roast deleted" };
+  if (restReadyAt(roast).getTime() > Date.now() + 60_000) return { status: "skipped", reason: "not ready yet" };
+  const prefs = await preferencesOf(userId);
+  if (!prefs) return { status: "skipped", reason: "user deleted" };
+  if (!prefs.restReminders) return { status: "skipped", reason: "rest reminders off" };
+  const batch = roast.batchNumber ? ` · batch ${roast.batchNumber}` : "";
+  return deliver(
+    userId,
+    {
+      title: "Your roast is ready to brew",
+      message: `${roast.greenName ?? "Your roast"}${batch} · roasted ${roastDayText(roast.roastedAt, roast.utcOffsetMinutes)}`,
+      url: config.appUrl ? `${config.appUrl}/roast/roasts/${roastId}` : null,
+    },
+    send
+  );
+}
+
+// A roast took a green coffee below its low-stock threshold. Skipped if it's
+// been restocked (or deleted) since.
+export async function processGreenLow({ greenCoffeeId, userId }: GreenLowJobData, send: Send = sendNotification): Promise<ReminderResult> {
+  const [green] = await db
+    .select({ name: greenCoffees.name, weightLeftGrams: greenCoffees.weightLeftGrams, lowStockGrams: greenCoffees.lowStockGrams })
+    .from(greenCoffees)
+    .where(eq(greenCoffees.id, greenCoffeeId));
+  if (!green) return { status: "skipped", reason: "green coffee deleted" };
+  if (green.lowStockGrams === null || green.weightLeftGrams >= green.lowStockGrams) return { status: "skipped", reason: "not low any more" };
+  const prefs = await preferencesOf(userId);
+  if (!prefs) return { status: "skipped", reason: "user deleted" };
+  if (!prefs.greenStockAlerts) return { status: "skipped", reason: "stock alerts off" };
+  return deliver(
+    userId,
+    {
+      title: green.weightLeftGrams > 0 ? "Green coffee running low" : "Green coffee used up",
+      message: green.weightLeftGrams > 0 ? `${green.name} · ${green.weightLeftGrams} g left` : `${green.name} · none left`,
+      url: config.appUrl ? `${config.appUrl}/roast/green` : null,
     },
     send
   );

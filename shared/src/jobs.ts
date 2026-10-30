@@ -192,6 +192,29 @@ export function steepReminderJobId(brewLogId: string): string {
   return `steep-${brewLogId}`;
 }
 
+// Rest reminders (docs/api/notifications.md §1b): the morning a home roast
+// is ready to brew, on the same queue. Moved when the roast's date or rest
+// changes; skipped if it's been deleted or isn't ready by then.
+export const REST_REMINDER_JOB = "rest-done";
+
+export interface RestReminderJobData {
+  roastId: string;
+  userId: string;
+}
+
+export function restReminderJobId(roastId: string): string {
+  return `rest-${roastId}`;
+}
+
+// Low green stock (docs/api/notifications.md §1b): sent right away when a
+// roast takes a green coffee below its lowStockGrams.
+export const GREEN_LOW_JOB = "green-low";
+
+export interface GreenLowJobData {
+  greenCoffeeId: string;
+  userId: string;
+}
+
 // Scheduled server backups (docs/api/server.md §10): a BullMQ job scheduler
 // on the maintenance queue runs a whole-database dump on the admins' schedule.
 export const MAINTENANCE_QUEUE = "maintenance";

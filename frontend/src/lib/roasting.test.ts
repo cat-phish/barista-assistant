@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GreenCoffee, Roast } from '../api/types';
-import { development, formatStock, greenForm, greenPrice, greenStock, machineForm, parseGreenForm, parseMachineForm, parseRoastForm, readyOn, roastDay, roastForm, weightLoss } from './roasting';
+import { development, formatStock, greenForm, greenPrice, greenStock, machineForm, parseGreenForm, parseMachineForm, parseRoastForm, readyOn, restingRoasts, roastDay, roastForm, weightLoss } from './roasting';
 
 describe('roasting machine form', () => {
   it('needs a name; capacity is whole grams', () => {
@@ -86,7 +86,7 @@ describe('roast form', () => {
     expect(parseRoastForm({ ...base, detailed: 'city_plus', level: 'dark' }, levels).values).toMatchObject({ detailedRoastLevel: null, roastLevel: 'dark' });
   });
   it('round-trips a saved roast', () => {
-    const r: Roast = { id: 'r', greenCoffeeId: 'g', machineId: 'm', roastedAt: new Date('2026-10-20T08:15').toISOString(), utcOffsetMinutes: null, batchNumber: '3', greenGrams: 120, roastedGrams: 102, roastType: 'filter', detailedRoastLevel: 'city', roastLevel: 'medium_light', chargeTempC: 210.5, dropTempC: 205, firstCrackSec: 450, totalSec: 560, restDays: 5, notes: 'Even', beanId: 'b', userId: 'u', greenStockTakenGrams: 120, greenCoffee: null, machine: null, createdAt: '' };
+    const r: Roast = { id: 'r', greenCoffeeId: 'g', machineId: 'm', roastedAt: new Date('2026-10-20T08:15').toISOString(), utcOffsetMinutes: null, batchNumber: '3', greenGrams: 120, roastedGrams: 102, roastType: 'filter', detailedRoastLevel: 'city', roastLevel: 'medium_light', chargeTempC: 210.5, dropTempC: 205, firstCrackSec: 450, totalSec: 560, restDays: 5, notes: 'Even', beanId: 'b', userId: 'u', greenStockTakenGrams: 120, greenCoffee: null, machine: null, bean: null, createdAt: '' };
     const f = roastForm('c', r);
     expect(f).toMatchObject({ firstCrack: '7:30', total: '9:20', chargeTemp: '210.5', batchNumber: '3' });
     expect(parseRoastForm(f, opts).values).toMatchObject({ batchNumber: '3', machineId: 'm', roastedAt: r.roastedAt, chargeTempC: 210.5, detailedRoastLevel: 'city' });
@@ -102,5 +102,31 @@ describe('roast numbers', () => {
     const r = { roastedAt: '2026-10-21T06:30:00.000Z', utcOffsetMinutes: -420, restDays: 12 };
     expect(roastDay(r)).toBe('2026-10-20');
     expect(readyOn(r)).toBe('2026-11-01');
+  });
+});
+
+describe('resting roasts', () => {
+  const roast = (id: string, roastedAt: string, restDays: number, bean: Roast['bean']): Roast => ({
+    id, greenCoffeeId: 'g', machineId: null, roastedAt, utcOffsetMinutes: 0, batchNumber: null, greenGrams: 100, roastedGrams: 85, roastType: null, detailedRoastLevel: null, roastLevel: null,
+    chargeTempC: null, dropTempC: null, firstCrackSec: null, totalSec: null, restDays, notes: null, beanId: bean?.id ?? null, userId: 'u', greenStockTakenGrams: 100, greenCoffee: null, machine: null, bean, createdAt: '',
+  });
+  const inUse = (id: string, grams = 85, archived = false) => ({ id, inventoryWeightGrams: grams, archived });
+
+  it('lists resting ones soonest first, then ready ones still in use, latest ready first', () => {
+    const today = '2026-10-29';
+    const { resting, ready } = restingRoasts(
+      [
+        roast('soon', '2026-10-25T10:00:00Z', 5, inUse('b1')), // ready Oct 30
+        roast('later', '2026-10-28T10:00:00Z', 7, inUse('b2')), // Nov 4
+        roast('today', '2026-10-22T10:00:00Z', 7, inUse('b3')), // ready today
+        roast('earlier', '2026-10-10T10:00:00Z', 7, inUse('b4')),
+        roast('drunk', '2026-10-12T10:00:00Z', 7, inUse('b5', 0)),
+        roast('archived', '2026-10-12T10:00:00Z', 7, inUse('b6', 85, true)),
+        roast('no-bean', '2026-10-12T10:00:00Z', 7, null),
+      ],
+      today,
+    );
+    expect(resting.map((r) => r.id)).toEqual(['soon', 'later']);
+    expect(ready.map((r) => r.id)).toEqual(['today', 'earlier']);
   });
 });

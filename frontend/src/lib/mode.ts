@@ -1,4 +1,4 @@
-// Brew mode and roast mode (docs/backlog.md item 15): roast mode is every
+// Brew mode and roast mode (docs/roadmap.md, Home roasting): roast mode is every
 // route under /roast, shown when the workspace turns on home roasting
 // (docs/api/workspaces.md §2). Each device remembers, per workspace, the last
 // mode used and the last page in each, so the app reopens where you were and
