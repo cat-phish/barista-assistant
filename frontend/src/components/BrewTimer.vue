@@ -3,8 +3,9 @@
 //  - Never increments a counter: elapsed = Date.now() - startTime, recomputed
 //    in a requestAnimationFrame loop. Holds a screen wake lock while running.
 //  - Steps run back to back (brewSchedule): each moves on after its time, on
-//    Next, or (espresso) at First drop. Taps and "Log it" become marks,
-//    emitted with the time on Finish & Save.
+//    Next, or (espresso) at First drop. A timed step can be held: its
+//    countdown stops (the brew clock doesn't) until Resume or Next. Taps,
+//    "Log it" and holds become marks, emitted with the time on Finish & Save.
 //  - Previous / Current / Up next cards with the same structure for every
 //    step, so the layout doesn't jump. No steps = plain stopwatch.
 import { computed, onUnmounted, ref } from 'vue';
@@ -14,7 +15,7 @@ import { formatTemp } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import { useStartDelay } from '../composables/useStartDelay';
 import { startDelayFor } from '../lib/startDelay';
-import { firstDropVerdict, formatMark, withMark } from '../lib/marks';
+import { firstDropVerdict, formatMark, heldSec, withMark } from '../lib/marks';
 import {
   brewSchedule,
   finishStatus,
@@ -102,6 +103,13 @@ const finishLate = computed(() => props.expectedFinishMaxSec !== null && elapsed
 const prevIndex = computed(() => (phase.value.kind === 'idle' ? null : phase.value.prevIndex));
 const nextIndex = computed(() => (phase.value.kind === 'step' ? phase.value.nextIndex : null));
 const stepEnd = (index: number) => marks.value.find((m) => m.kind === 'step_end' && m.stepOrder === index + 1)?.atSec ?? null;
+const stepHeld = (index: number) => heldSec(marks.value, index + 1, elapsedSec.value);
+// Timed steps can be held (docs/timer_architecture.md §3); tap and first-drop
+// steps wait anyway, and an instant step is gone in a moment.
+const holdable = computed(() => {
+  const p = phase.value;
+  return isRunning.value && p.kind === 'step' && (p.step.advance === 'auto' || p.step.advance === 'auto_log') && !!p.step.durationSec;
+});
 
 // Previous / Up next: the instruction (shown bold) between the step's name and
 // its length: "Pour · **Pour to 210 g (+90)** · 0:30", "Soak · **Pump off** · 0:10".
@@ -129,7 +137,9 @@ const countdown = computed((): { big: string; small: string } => {
     if (p.due) return { big: 'Tap Next', small: 'when ready' };
     return p.guideEnd !== null ? { big: left(p.guideEnd), small: 'left (guide)' } : { big: 'Tap Next', small: 'when ready' };
   }
-  return p.end === null ? { big: 'Until done', small: 'tap Finish' } : { big: left(p.end), small: 'left' };
+  if (p.holding && p.guideEnd !== null) return { big: left(p.guideEnd), small: `Held · +${formatTime(Math.floor(p.held))}` };
+  if (p.end === null) return { big: 'Until done', small: 'tap Finish' };
+  return { big: left(p.end), small: p.held >= 1 ? `left · held ${formatTime(Math.floor(p.held))}` : 'left' };
 });
 
 const firstDropAt = computed(() => marks.value.find((m) => m.kind === 'first_drop')?.atSec ?? null);
@@ -223,7 +233,7 @@ onUnmounted(() => {
         <span class="label">Previous</span>
         <span class="side-text" :class="{ none: prevIndex === null }">
           <template v-if="prevIndex !== null">
-            {{ sideParts(prevIndex).title }}<template v-if="sideParts(prevIndex).instruction"> · <strong>{{ sideParts(prevIndex).instruction }}</strong></template> · {{ sideParts(prevIndex).how }}<template v-if="stepEnd(prevIndex) !== null"> · ended {{ formatMark(stepEnd(prevIndex)!) }}</template>
+            {{ sideParts(prevIndex).title }}<template v-if="sideParts(prevIndex).instruction"> · <strong>{{ sideParts(prevIndex).instruction }}</strong></template> · {{ sideParts(prevIndex).how }}<template v-if="stepHeld(prevIndex) >= 1"> · held {{ formatTime(Math.floor(stepHeld(prevIndex))) }}</template><template v-if="stepEnd(prevIndex) !== null"> · ended {{ formatMark(stepEnd(prevIndex)!) }}</template>
           </template>
           <template v-else>None</template>
         </span>
@@ -232,7 +242,7 @@ onUnmounted(() => {
       <!-- Same structure for every step so the layout doesn't jump. -->
       <div
         class="step-card current"
-        :class="phase.kind === 'step' ? { waiting: STEP_TYPES[phase.step.stepType].waiting, due: phase.due } : 'phase-done'"
+        :class="phase.kind === 'step' ? { waiting: STEP_TYPES[phase.step.stepType].waiting, due: phase.due, holding: phase.holding } : 'phase-done'"
         aria-label="Current step"
       >
         <template v-if="phase.kind === 'step'">
@@ -252,10 +262,16 @@ onUnmounted(() => {
           <button v-if="isRunning && phase.step.advance === 'tap'" class="btn tap" :class="{ due: phase.due }" type="button" @click="record('step_end', phase.index + 1)">
             Next
           </button>
-          <template v-else-if="isRunning && phase.step.advance === 'auto_log'">
-            <p v-if="stepEnd(phase.index) !== null" class="logged">Logged at {{ formatMark(stepEnd(phase.index)!) }}</p>
-            <button v-else class="btn tap" type="button" @click="record('step_end', phase.index + 1)">Log it</button>
-          </template>
+          <p v-if="holdable && !phase.holding && phase.step.advance === 'auto_log' && stepEnd(phase.index) !== null" class="logged">Logged at {{ formatMark(stepEnd(phase.index)!) }}</p>
+          <!-- Held: Resume carries on with the time left; Next ends the step now. -->
+          <div v-if="holdable && phase.holding" class="step-actions">
+            <button class="btn tap due" type="button" @click="record('step_resume', phase.index + 1)">Resume</button>
+            <button class="btn tap" type="button" @click="record('step_end', phase.index + 1)">Next</button>
+          </div>
+          <div v-else-if="holdable" class="step-actions">
+            <button v-if="phase.step.advance === 'auto_log' && stepEnd(phase.index) === null" class="btn tap" type="button" @click="record('step_end', phase.index + 1)">Log it</button>
+            <button class="btn tap hold" type="button" @click="record('step_hold', phase.index + 1)">Hold</button>
+          </div>
         </template>
         <template v-else>
           <span class="label">All steps done</span>
@@ -501,6 +517,22 @@ onUnmounted(() => {
 }
 .current .tap {
   margin: 0.25rem 0;
+}
+.step-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.step-actions .tap {
+  flex: 1;
+}
+/* Hold is the lesser action next to Log it, and on its own it shouldn't
+   pull the eye from the countdown. */
+.btn.tap.hold {
+  border-color: var(--brand-line);
+  color: var(--text-muted);
+}
+.current.holding .count {
+  color: var(--text-muted);
 }
 .progress {
   margin-top: auto;

@@ -77,7 +77,8 @@ export interface BrewSummary {
   grinder: GrinderInfo | null;
   water: WaterInfo | null; // the water profile used, if recorded
   machine: MachineInfo | null; // espresso only
-  // Shot timer taps, earliest first (espresso): first drop, end of manual pre-infusion.
+  // Timer marks, earliest first: first drop (espresso), a step's real end,
+  // and steps held on the timer (docs/api/llm-contract.md §9).
   marks: Array<{ kind: MarkKind; stepOrder: number | null; atSec: number }>;
   // Prep tools used, in checklist order (docs/api/prep-tools.md §3d). Empty
   // means none were recorded, not that none were used.
@@ -200,7 +201,8 @@ export interface BrewContext {
     // and the finish window are already the brew's (scaledToBrew).
     stepTimeScaling: number | null;
     // Back to back: each starts when the previous one actually ended
-    // (step_end marks say when, for tap/logged steps).
+    // (step_end marks say when, for tap/logged steps; step_hold/step_resume
+    // when a step was held).
     steps: Array<{
       stepOrder: number;
       stepType: string;

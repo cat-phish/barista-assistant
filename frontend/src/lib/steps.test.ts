@@ -182,6 +182,30 @@ describe('brewSchedule', () => {
     expect(brewSchedule([step({ advance: 'auto_log', durationSec: 30 }), step({})], 35, [mark('step_end', 40, 1)])).toMatchObject({ index: 1, start: 30 });
   });
 
+  it('a held step stops its countdown; later steps move by the time held; Next ends it', () => {
+    const timed = [step({ durationSec: 30, targetWaterGrams: 100 }), step({ durationSec: 30, targetWaterGrams: 200 })];
+    // Held at 10 s: 20 s left, frozen; the progress bar stops too.
+    const held = [mark('step_hold', 10, 1)];
+    expect(brewSchedule(timed, 25, held)).toMatchObject({ index: 0, end: null, holding: true, held: 15, guideEnd: 45, from: 15, to: 45 });
+    expect(brewSchedule(timed, 40, held)).toMatchObject({ index: 0, holding: true, held: 30, guideEnd: 60 });
+    // Resumed at 22 s: the step ends 12 s late, and so does the next.
+    const resumed = [...held, mark('step_resume', 22, 1)];
+    expect(brewSchedule(timed, 35, resumed)).toMatchObject({ index: 0, end: 42, held: 12, holding: false, from: 12, to: 42 });
+    expect(brewSchedule(timed, 50, resumed)).toMatchObject({ index: 1, start: 42, end: 72, held: 0 });
+    // Held twice.
+    const twice = [...resumed, mark('step_hold', 30, 1), mark('step_resume', 35, 1)];
+    expect(brewSchedule(timed, 40, twice)).toMatchObject({ index: 0, end: 47, held: 17 });
+    // Next while held ends the step then.
+    const next = [...held, mark('step_end', 18, 1)];
+    expect(brewSchedule(timed, 20, next)).toMatchObject({ index: 1, start: 18, end: 48 });
+    expect(brewSchedule(timed, 17, next)).toMatchObject({ index: 0, held: 8, end: 18 });
+    // An auto_log step logged before the hold stays held.
+    const logged = [step({ advance: 'auto_log', durationSec: 30 }), step({})];
+    expect(brewSchedule(logged, 20, [mark('step_end', 5, 1), mark('step_hold', 10, 1)])).toMatchObject({ index: 0, holding: true });
+    // A hold after the step ended changes nothing.
+    expect(brewSchedule(timed, 40, [mark('step_hold', 31, 1)])).toMatchObject({ index: 1, start: 30, end: 60 });
+  });
+
   it('an instant step shows briefly without delaying the next', () => {
     const steps = [step({ durationSec: 10 }), step({ stepType: 'swirl', durationSec: 0 }), step({ durationSec: 20 })];
     expect(brewSchedule(steps, 11, [])).toMatchObject({ index: 1, from: 10, to: 12 });

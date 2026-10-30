@@ -32,7 +32,7 @@ import { usePreferences } from '../composables/usePreferences';
 import { canModifyBrewLog } from '../lib/permissions';
 import { useAuthStore } from '../stores/auth';
 import { useWorkspaceStore } from '../stores/workspace';
-import { formatMark } from '../lib/marks';
+import { formatMark, heldSec } from '../lib/marks';
 
 const props = defineProps<{ id: string }>();
 
@@ -180,10 +180,10 @@ async function saveEdit(): Promise<void> {
   saving.value = true;
   saveError.value = '';
   try {
-    // Espresso: the first drop is edited in the form; step times are kept.
+    // Espresso: the first drop is edited in the form; step times and holds are kept.
     const marks = espresso.value
       ? [
-          ...log.value.marks.filter((m) => m.kind === 'step_end'),
+          ...log.value.marks.filter((m) => m.kind !== 'first_drop'),
           ...(parsed.value.firstDropSec !== null ? [{ kind: 'first_drop' as const, stepOrder: null, atSec: parsed.value.firstDropSec }] : []),
         ]
       : undefined;
@@ -243,10 +243,22 @@ async function remove(): Promise<void> {
     deleting.value = false;
   }
 }
-// "First drop" / "Step 2 ended" (the journal doesn't load the recipe's steps).
-function markLabel(m: Mark): string {
-  return m.kind === 'first_drop' ? 'First drop' : `Step ${m.stepOrder} ended`;
-}
+// "First drop 0:07.4" / "Step 2 ended 0:52.0" / "Step 3 held 0:12" (the
+// journal doesn't load the recipe's steps); a step's holds as one total, at
+// its first.
+const markRows = computed(() => {
+  const l = log.value;
+  if (!l) return [];
+  return l.marks.flatMap((m: Mark) => {
+    const key = `${m.kind}-${m.stepOrder}-${m.atSec}`;
+    if (m.kind === 'first_drop') return [{ key, label: 'First drop', value: formatMark(m.atSec) }];
+    if (m.kind === 'step_end') return [{ key, label: `Step ${m.stepOrder} ended`, value: formatMark(m.atSec) }];
+    if (m.kind === 'step_hold' && m === l.marks.find((h) => h.kind === 'step_hold' && h.stepOrder === m.stepOrder)) {
+      return [{ key, label: `Step ${m.stepOrder} held`, value: formatTime(Math.floor(heldSec(l.marks, m.stepOrder ?? 0, l.actualTimeSec))) }];
+    }
+    return [];
+  });
+});
 </script>
 
 <template>
@@ -325,7 +337,7 @@ function markLabel(m: Mark): string {
           <div v-if="log.waterProfile"><dt>Water profile</dt><dd>{{ log.waterProfile.name }}</dd></div>
           <div v-if="log.tools.length"><dt>Prep</dt><dd>{{ log.tools.map((t) => t.name).join(' · ') }}</dd></div>
           <div v-if="log.problems.length"><dt>Problems</dt><dd>{{ log.problems.map((p) => p.name).join(' · ') }}</dd></div>
-          <div v-for="m in log.marks" :key="`${m.kind}-${m.stepOrder}`"><dt>{{ markLabel(m) }}</dt><dd>{{ formatMark(m.atSec) }}</dd></div>
+          <div v-for="row in markRows" :key="row.key"><dt>{{ row.label }}</dt><dd>{{ row.value }}</dd></div>
           <div><dt>{{ drinkTasting ? 'Brew rating' : 'Rating' }}</dt><dd><RatingStars :rating="log.rating" /></dd></div>
           <div v-if="drinkTasting"><dt>Drink rating</dt><dd><RatingStars :rating="log.drinkRating" /></dd></div>
           <div><dt>Brewed by</dt><dd>{{ log.brewedBy?.email ?? 'Deleted user' }}</dd></div>

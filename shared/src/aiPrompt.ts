@@ -122,6 +122,18 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
       "not a sign of a too-fine grind.",
   },
   {
+    key: "heldSteps",
+    label: "Steps held on the timer",
+    prompts: ["analysis", "suggest"],
+    locked: false,
+    text:
+      "A brew's marks include step_hold and step_resume (with the step's stepOrder): the barista held that step on " +
+      "the timer because it ran slow, such as a pour or a drawdown taking longer than planned. A step_end during a " +
+      "hold ended the step then. Later steps moved by the time held but the finish window didn't, so a held brew " +
+      "can finish late. Say where it ran slow and what that points to: a slow drawdown at the grind or fines, a slow " +
+      "pour at the pouring.",
+  },
+  {
     key: "altitude",
     label: "Growing altitude",
     prompts: ["analysis", "suggest"],

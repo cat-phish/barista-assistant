@@ -473,10 +473,10 @@ export type StepAdvance = 'auto' | 'auto_log' | 'tap' | 'first_drop';
 export type FlowUnit = 'g_s' | 'ml_s';
 
 // docs/api/brew-logs.md §6: when things actually happened.
-export type MarkKind = 'first_drop' | 'step_end';
+export type MarkKind = 'first_drop' | 'step_end' | 'step_hold' | 'step_resume';
 export interface Mark {
   kind: MarkKind;
-  stepOrder: number | null; // step_end only: which step (1-based)
+  stepOrder: number | null; // all but first_drop: which step (1-based)
   atSec: number; // seconds from the start, 0.1 s
 }
 
@@ -627,7 +627,7 @@ export interface BrewLog {
   waterProfile: { id: string; name: string } | null; // archived ones included
   brewer: BrewerRef | null; // archived ones included
   drink: { id: string; name: string; hasIngredients: boolean } | null; // hasIngredients: shot and drink tasted apart
-  marks: Mark[]; // earliest first; espresso only
+  marks: Mark[]; // earliest first
   tools: PrepToolRef[]; // prep tools used, in checklist order (§3d)
   problems: BrewProblemRef[]; // what went wrong, in list order (§6b)
   brewedBy: { id: string; email: string } | null;

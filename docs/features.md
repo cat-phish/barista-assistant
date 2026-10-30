@@ -356,7 +356,12 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   really ended. Espresso adds a big **First drop** button (judged against the
   recipe's window), and notes when your machine can't set the pressure or
   flow a step asks for. With no steps it's just the clock (+ First drop).
-  The real times (taps, logs, first drop) are saved with the brew, shown in
+  A timed step running slow (a pour, a drawdown) can be **held**: its
+  countdown stops ("Held · +0:12") while the brew clock carries on, and
+  the later steps move with it; **Resume** goes on with the time left, or
+  **Next** ends the step now. The target finish window stays put, so a
+  held brew can finish late.
+  The real times (taps, logs, holds, first drop) are saved with the brew, shown in
   the journal and sent to the AI. The log asks for the shot weight, shot
   time and an optional **first drop** you can type in if you didn't tap.
 - **Yield estimate:** water − retention × dose. Retention comes from your
