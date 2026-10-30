@@ -7,14 +7,13 @@ import { statsApi, type StatsQuery } from '../api/stats';
 import type { StatsBean, StatsBrew, StatsData, VolumeUnit } from '../api/types';
 import { formatDay, localDateInput } from '../lib/format';
 import { bucketRange, brewVolumeMl, localDay, pickGranularity, type Granularity, type VolumeSource } from '../lib/stats';
+import { CHART_PERIOD_PREFIX, formatChartPeriod, inRange, parseChartPeriod, RANGES, resolveRange, widestRange, type DayRange, type Period, type RangeKey } from '../lib/statsRange';
 import { GRAMS_PER_FL_OZ } from '../lib/scale';
 import { VOLUME_LABELS } from '../lib/units';
 import { useWorkspaceStore } from '../stores/workspace';
 import { usePreferences } from './usePreferences';
 
-export const RANGES = { '30d': 'Last 30 days', '90d': 'Last 90 days', '1y': 'Last year', all: 'All time', custom: 'Custom' } as const;
-export type RangeKey = keyof typeof RANGES;
-const RANGE_DAYS: Partial<Record<RangeKey, number>> = { '30d': 30, '90d': 90, '1y': 365 };
+export { RANGES, type RangeKey };
 export const GROUPINGS = { auto: 'Auto', day: 'Day', week: 'Week', month: 'Month' } as const;
 export type Grouping = keyof typeof GROUPINGS;
 
@@ -32,20 +31,37 @@ export interface StatsFilters {
   by: Grouping;
 }
 
+export interface StatsAxis {
+  from: string;
+  to: string;
+  granularity: Granularity;
+  buckets: string[];
+}
+
+// One over-time chart: its own period (null = the page's), and the brews and
+// date axis that period gives.
+export interface ChartView {
+  period: ComputedRef<Period | null>;
+  setPeriod: (p: Period | null) => void;
+  range: ComputedRef<DayRange>;
+  brews: ComputedRef<StatsBrew[]>;
+  axis: ComputedRef<StatsAxis>;
+  labels: ComputedRef<string[]>;
+}
+
 export interface StatsContext {
   filters: ComputedRef<StatsFilters>;
   setFilters: (change: Partial<StatsFilters>) => void;
   loading: Ref<boolean>;
   error: Ref<string>;
   data: Ref<StatsData | null>;
-  brews: ComputedRef<StatsBrew[]>;
+  brews: ComputedRef<StatsBrew[]>; // in the page's period
   beans: ComputedRef<StatsBean[]>;
   bean: (id: string) => StatsBean | undefined;
   name: (id: string | null) => string | null; // any lookup's name (ids are UUIDs, so one map)
   hidden: ComputedRef<ReadonlySet<string>>; // settings.hiddenFields keys, e.g. "brew.tds"
   range: ComputedRef<{ from: string | null; to: string | null }>; // what was asked for; null = open
-  axis: ComputedRef<{ from: string; to: string; granularity: Granularity; buckets: string[] }>;
-  bucketLabel: (key: string) => string;
+  chart: (id: string) => ChartView; // call in setup
   volume: (brew: StatsBrew) => { ml: number; source: VolumeSource } | null;
   formatVolume: (ml: number) => string;
   volumeIn: (ml: number) => number; // in the chosen unit, for chart values
@@ -54,12 +70,6 @@ export interface StatsContext {
 const KEY: InjectionKey<StatsContext> = Symbol('stats');
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
-const isDay = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
-
-function daysBefore(day: string, n: number): string {
-  return new Date(Date.parse(day) - n * 86_400_000).toISOString().slice(0, 10);
-}
-
 // Called once, by StatsView.
 export function provideStats(): StatsContext {
   const route = useRoute();
@@ -72,11 +82,11 @@ export function provideStats(): StatsContext {
     const range = str(q.range) in RANGES ? (str(q.range) as RangeKey) : 'all';
     const unit = str(q.unit) === 'ml' || str(q.unit) === 'fl_oz' ? (str(q.unit) as VolumeUnit) : prefs.value.volumeUnit;
     const by = str(q.by) in GROUPINGS ? (str(q.by) as Grouping) : 'auto';
-    return { range, from: str(q.from), to: str(q.to), bean: str(q.bean), recipe: str(q.recipe), brewer: str(q.brewer), mine: q.mine === '1', unit, by };
+    return { range, from: str(q.from), to: str(q.to), bean: str(q.bean), recipe: str(q.recipe), brewer: str(q.brewer), mine: q.mine !== '0', unit, by };
   });
 
-  // Defaults stay out of the URL, so a plain /insights link means "all of it".
-  // A tab's own keys (Explore's picks) are kept.
+  // Defaults stay out of the URL, so a plain /insights link means "all of my brews".
+  // A tab's own keys (Explore's picks) and the charts' periods are kept.
   function setFilters(change: Partial<StatsFilters>): void {
     const f = { ...filters.value, ...change };
     const query: LocationQueryRaw = Object.fromEntries(Object.entries(route.query).filter(([k]) => !FILTER_KEYS.includes(k)));
@@ -88,29 +98,29 @@ export function provideStats(): StatsContext {
     if (f.bean) query.bean = f.bean;
     if (f.recipe) query.recipe = f.recipe;
     if (f.brewer) query.brewer = f.brewer;
-    if (f.mine) query.mine = '1';
+    if (!f.mine) query.mine = '0';
     if (f.unit !== prefs.value.volumeUnit) query.unit = f.unit;
     if (f.by !== 'auto') query.by = f.by;
     void router.replace({ query });
   }
 
-  const range = computed(() => {
-    const f = filters.value;
-    const today = localDateInput();
-    const days = RANGE_DAYS[f.range];
-    if (days) return { from: daysBefore(today, days - 1), to: today };
-    if (f.range === 'custom') {
-      const from = isDay(f.from) ? f.from : null;
-      const to = isDay(f.to) ? f.to : null;
-      // Typed the wrong way round: swap rather than fail.
-      return from && to && from > to ? { from: to, to: from } : { from, to };
+  const range = computed(() => resolveRange(filters.value, localDateInput()));
+
+  // Charts with their own period (`p.<chart>` in the URL); the fetch covers
+  // them all, and the page's brews are cut back to its own period below.
+  const chartPeriods = computed(() => {
+    const out = new Map<string, Period>();
+    for (const [k, v] of Object.entries(route.query)) {
+      const p = k.startsWith(CHART_PERIOD_PREFIX) ? parseChartPeriod(v) : null;
+      if (p) out.set(k.slice(CHART_PERIOD_PREFIX.length), p);
     }
-    return { from: null, to: null };
+    return out;
   });
+  const fetchRange = computed(() => widestRange([range.value, ...[...chartPeriods.value.values()].map((p) => resolveRange(p, localDateInput()))]));
 
   const apiQuery = computed<StatsQuery>(() => ({
-    from: range.value.from ?? undefined,
-    to: range.value.to ?? undefined,
+    from: fetchRange.value.from ?? undefined,
+    to: fetchRange.value.to ?? undefined,
     beanId: filters.value.bean || undefined,
     recipeId: filters.value.recipe || undefined,
     brewerId: filters.value.brewer || undefined,
@@ -140,7 +150,9 @@ export function provideStats(): StatsContext {
     { immediate: true },
   );
 
-  const brews = computed(() => data.value?.brews ?? []);
+  const fetched = computed(() => data.value?.brews ?? []);
+  const within = (r: DayRange) => (r.from === fetchRange.value.from && r.to === fetchRange.value.to ? fetched.value : fetched.value.filter((b) => inRange(localDay(b), r)));
+  const brews = computed(() => within(range.value));
   const beans = computed(() => data.value?.beans ?? []);
   const beanById = computed(() => new Map(beans.value.map((b) => [b.id, b])));
   const names = computed(() => {
@@ -150,19 +162,40 @@ export function provideStats(): StatsContext {
     return out;
   });
 
-  const axis = computed(() => {
+  function axisOf(r: DayRange, inIt: readonly StatsBrew[]): StatsAxis {
     const today = localDateInput();
-    const first = brews.value[0];
-    const from = range.value.from ?? (first ? localDay(first) : today);
-    const to = range.value.to ?? today;
+    const first = inIt[0];
+    const from = r.from ?? (first ? localDay(first) : today);
+    const to = r.to ?? today;
     const granularity = filters.value.by === 'auto' ? pickGranularity(from, to) : filters.value.by;
     return { from, to, granularity, buckets: bucketRange(from, to, granularity) };
-  });
+  }
 
-  function bucketLabel(key: string): string {
-    if (axis.value.granularity !== 'month') return formatDay(key);
+  function bucketLabel(key: string, g: Granularity): string {
+    if (g !== 'month') return formatDay(key);
     const [y, m] = key.split('-').map(Number);
     return new Date(y ?? 0, (m ?? 1) - 1, 1).toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
+  }
+
+  function chart(id: string): ChartView {
+    const key = CHART_PERIOD_PREFIX + id;
+    const period = computed(() => chartPeriods.value.get(id) ?? null);
+    const chartRange = computed(() => (period.value ? resolveRange(period.value, localDateInput()) : range.value));
+    const chartBrews = computed(() => within(chartRange.value));
+    const axis = computed(() => axisOf(chartRange.value, chartBrews.value));
+    return {
+      period,
+      setPeriod(p) {
+        const query: LocationQueryRaw = { ...route.query };
+        delete query[key];
+        if (p) query[key] = formatChartPeriod(p);
+        void router.replace({ query });
+      },
+      range: chartRange,
+      brews: chartBrews,
+      axis,
+      labels: computed(() => axis.value.buckets.map((k) => bucketLabel(k, axis.value.granularity))),
+    };
   }
 
   const volumes = computed(() => {
@@ -190,8 +223,7 @@ export function provideStats(): StatsContext {
     name: (id) => (id ? (names.value.get(id) ?? null) : null),
     hidden: computed(() => new Set(hiddenFields.value)),
     range,
-    axis,
-    bucketLabel,
+    chart,
     volume: (brew) => volumes.value.get(brew.id) ?? null,
     formatVolume,
     volumeIn,

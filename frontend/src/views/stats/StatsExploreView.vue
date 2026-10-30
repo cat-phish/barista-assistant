@@ -1,6 +1,7 @@
 <script setup lang="ts">
-// Insights → Explore: pick a brew detail and a result. A number gives a
-// scatter with a trend line; a category gives the average result for each.
+// Insights → Explore: pick two numbers for a scatter with a trend line, or a
+// group (Compare only) for the average of a number in each. Never one field
+// against itself.
 // The picks live in the URL (?x=&y=&color=&grinder=), so a view can be shared.
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -8,7 +9,7 @@ import type { StatsBrew } from '../../api/types';
 import ChartCard from '../../components/charts/ChartCard.vue';
 import StatsChart, { type PointSeries } from '../../components/charts/StatsChart.vue';
 import { useStats } from '../../composables/useStats';
-import { COLOR_BY, INPUTS, linearFit, RESULTS, strength, visible, type CategoryField, type ExploreContext } from '../../lib/explore';
+import { builtIn, COLOR_BY, fieldLabel, GROUPS, linearFit, NUMBERS, pickAxes, strength, visible, type CategoryField, type ExploreContext, type ExploreField, type NumberField } from '../../lib/explore';
 import { countBy, meanBy, OTHER } from '../../lib/stats';
 import { VOLUME_LABELS } from '../../lib/units';
 import { barsHeight } from './charts';
@@ -25,8 +26,8 @@ const ctx = computed<ExploreContext>(() => ({
   volumeLabel: VOLUME_LABELS[stats.filters.value.unit],
 }));
 
-const inputs = computed(() => visible(INPUTS, stats.hidden.value));
-const results = computed(() => visible(RESULTS, stats.hidden.value));
+const numbers = computed(() => visible(NUMBERS, stats.hidden.value));
+const groups = computed(() => visible(GROUPS, stats.hidden.value));
 const colorFields = computed(() => visible(COLOR_BY, stats.hidden.value));
 
 const q = (key: string) => (typeof route.query[key] === 'string' ? (route.query[key] as string) : '');
@@ -35,14 +36,23 @@ function pick(key: string, value: string): void {
   void router.replace({ query });
 }
 
-const x = computed(() => inputs.value.find((f) => f.key === q('x')) ?? inputs.value.find((f) => f.key === 'roastAge')!);
-const y = computed(() => results.value.find((f) => f.key === q('y')) ?? results.value[0]!);
+const axes = computed(() => pickAxes(q('x'), q('y'), numbers.value, groups.value));
+const x = computed(() => axes.value.x);
+const y = computed(() => axes.value.y);
 const color = computed<CategoryField | null>(() => (x.value.kind === 'number' ? (colorFields.value.find((f) => f.key === q('color')) ?? null) : null));
-const yLabel = computed(() => (y.value.key === 'volume' ? `Volume drunk (${ctx.value.volumeLabel})` : y.value.label));
+const label = (f: ExploreField) => fieldLabel(f, ctx.value);
+const xLabel = computed(() => label(x.value));
+const yLabel = computed(() => label(y.value));
+const resultNumbers = computed(() => numbers.value.filter((f) => f.group === 'result'));
+const brewNumbers = computed(() => numbers.value.filter((f) => f.group === 'brew'));
+
+// Both numbers: swap which goes across.
+const swap = () => void router.replace({ query: { ...route.query, x: y.value.key, y: x.value.key } });
 
 // Grind settings only compare on one grinder: the picked one, else the most used.
 const grinders = computed(() => countBy(stats.brews.value.filter((b) => b.grindSetting !== null), (b) => b.grinderId));
-const grinder = computed(() => (x.value.key !== 'grind' ? null : (grinders.value.find((g) => g.key === q('grinder'))?.key ?? grinders.value[0]?.key ?? null)));
+const onGrind = computed(() => x.value.key === 'grind' || y.value.key === 'grind');
+const grinder = computed(() => (!onGrind.value ? null : (grinders.value.find((g) => g.key === q('grinder'))?.key ?? grinders.value[0]?.key ?? null)));
 const brews = computed<StatsBrew[]>(() => (grinder.value ? stats.brews.value.filter((b) => b.grinderId === grinder.value) : stats.brews.value));
 
 // ── A number: one point per brew ──
@@ -81,7 +91,8 @@ const trend = computed(() => {
 const fitNote = computed(() => {
   const f = fit.value;
   if (!f) return points.value.length ? 'Needs at least 3 brews with different values for a trend' : undefined;
-  return `${f.n} brews: ${strength(f.r)} (r = ${f.r.toFixed(2)}). A link isn't proof of cause; other things change between brews too.`;
+  const built = builtIn(x.value, y.value) ? ' One is worked out from the other, so part of this link is just arithmetic.' : '';
+  return `${f.n} brews: ${strength(f.r)} (r = ${f.r.toFixed(2)}).${built} A link isn't proof of cause; other things change between brews too.`;
 });
 
 // ── A category: the average result in each ──
@@ -90,8 +101,14 @@ const means = computed(() => {
   if (field.kind !== 'category') return [];
   return meanBy(brews.value, (b) => field.value(b, ctx.value), (b) => y.value.value(b, ctx.value)).slice(0, 15).map((m) => ({ ...m, name: field.name(m.key, ctx.value) }));
 });
-const fmtY = (n: number) => (Math.abs(n) >= 100 ? String(Math.round(n)) : n.toFixed(y.value.key === 'tds' ? 2 : 1));
-const ratingScale = computed(() => (y.value.key === 'rating' || y.value.key === 'drinkRating' ? { min: 0, max: 5 } : { min: undefined, max: undefined }));
+const fmtOf = (f: NumberField) => (n: number) => (f.decimals !== undefined ? n.toFixed(f.decimals) : Math.abs(n) >= 100 ? String(Math.round(n)) : String(Math.round(n * 10) / 10));
+const fmtX = computed(() => (x.value.kind === 'number' ? fmtOf(x.value) : String));
+const fmtY = computed(() => fmtOf(y.value));
+// A rating's axis: half a step of room each side on a scatter, from 0 on bars.
+const scatterScale = (f: ExploreField) => (f.kind === 'number' && f.scale ? { min: f.scale.min - 0.5, max: f.scale.max + 0.5 } : { min: undefined, max: undefined });
+const xScale = computed(() => scatterScale(x.value));
+const yScale = computed(() => scatterScale(y.value));
+const barScale = computed(() => (y.value.scale ? { min: 0, max: y.value.scale.max } : { min: undefined, max: undefined }));
 
 const value = (e: Event) => (e.target as HTMLSelectElement).value;
 </script>
@@ -102,21 +119,32 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value;
       <div class="field">
         <label for="explore-x">Compare</label>
         <select id="explore-x" :value="x.key" @change="pick('x', value($event))">
-          <optgroup label="Numbers">
-            <option v-for="f in inputs.filter((f) => f.kind === 'number')" :key="f.key" :value="f.key">{{ f.label }}</option>
+          <optgroup label="Results">
+            <option v-for="f in resultNumbers" :key="f.key" :value="f.key" :disabled="f.key === y.key">{{ label(f) }}</option>
+          </optgroup>
+          <optgroup label="Brew & bean">
+            <option v-for="f in brewNumbers" :key="f.key" :value="f.key" :disabled="f.key === y.key">{{ label(f) }}</option>
           </optgroup>
           <optgroup label="Groups">
-            <option v-for="f in inputs.filter((f) => f.kind === 'category')" :key="f.key" :value="f.key">{{ f.label }}</option>
+            <option v-for="f in groups" :key="f.key" :value="f.key">{{ f.label }}</option>
           </optgroup>
         </select>
       </div>
       <div class="field">
         <label for="explore-y">With</label>
-        <select id="explore-y" :value="y.key" @change="pick('y', value($event))">
-          <option v-for="f in results" :key="f.key" :value="f.key">{{ f.key === 'volume' ? yLabel : f.label }}</option>
-        </select>
+        <div class="with">
+          <select id="explore-y" :value="y.key" @change="pick('y', value($event))">
+            <optgroup label="Results">
+              <option v-for="f in resultNumbers" :key="f.key" :value="f.key" :disabled="f.key === x.key">{{ label(f) }}</option>
+            </optgroup>
+            <optgroup label="Brew & bean">
+              <option v-for="f in brewNumbers" :key="f.key" :value="f.key" :disabled="f.key === x.key">{{ label(f) }}</option>
+            </optgroup>
+          </select>
+          <button v-if="x.kind === 'number'" type="button" class="btn-link swap" aria-label="Swap the two" title="Swap the two" @click="swap">⇅</button>
+        </div>
       </div>
-      <div v-if="x.key === 'grind' && grinders.length" class="field">
+      <div v-if="onGrind && grinders.length" class="field">
         <label for="explore-grinder">Grinder</label>
         <select id="explore-grinder" :value="grinder ?? ''" @change="pick('grinder', value($event))">
           <option v-for="g in grinders" :key="g.key" :value="g.key">{{ stats.name(g.key) ?? 'Removed grinder' }} ({{ g.n }})</option>
@@ -133,43 +161,46 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value;
 
     <ChartCard
       v-if="x.kind === 'number'"
-      :title="`${yLabel} against ${x.label.toLowerCase()}`"
+      :title="`${yLabel} against ${xLabel.toLowerCase()}`"
       :note="fitNote"
       :empty="points.length === 0"
       empty-text="No brews have both of these yet."
-      :table="{ head: [x.label, yLabel], rows: points.map((p) => [p.x, fmtY(p.y)]) }"
+      :table="{ head: [xLabel, yLabel], rows: points.map((p) => [fmtX(p.x), fmtY(p.y)]) }"
     >
       <StatsChart
         kind="scatter"
-        :label="`${yLabel} against ${x.label}`"
+        :label="`${yLabel} against ${xLabel}`"
         :points="pointSeries"
         :trend="trend"
-        :x-title="x.label"
+        :x-title="xLabel"
         :y-title="yLabel"
         :format="fmtY"
-        :y-min="ratingScale.min"
-        :y-max="ratingScale.max"
+        :format-x="fmtX"
+        :x-min="xScale.min"
+        :x-max="xScale.max"
+        :y-min="yScale.min"
+        :y-max="yScale.max"
         :height="340"
       />
     </ChartCard>
 
     <ChartCard
       v-else
-      :title="`${yLabel} by ${x.label.toLowerCase()}`"
+      :title="`${yLabel} by ${xLabel.toLowerCase()}`"
       note="The average for each; the number of brews in brackets. Small groups swing easily."
       :empty="means.length === 0"
       empty-text="No brews have both of these yet."
-      :table="{ head: [x.label, `Average ${yLabel.toLowerCase()}`, 'Brews'], rows: means.map((m) => [m.name, fmtY(m.mean), m.n]) }"
+      :table="{ head: [xLabel, `Average ${yLabel.toLowerCase()}`, 'Brews'], rows: means.map((m) => [m.name, fmtY(m.mean), m.n]) }"
     >
       <StatsChart
         kind="bar"
         horizontal
-        :label="`Average ${yLabel} by ${x.label}`"
+        :label="`Average ${yLabel} by ${xLabel}`"
         :labels="means.map((m) => `${m.name} (${m.n})`)"
         :series="[{ label: `Average ${yLabel.toLowerCase()}`, data: means.map((m) => m.mean) }]"
         :format="fmtY"
-        :y-min="ratingScale.min"
-        :y-max="ratingScale.max"
+        :y-min="barScale.min"
+        :y-max="barScale.max"
         :height="barsHeight(means.length)"
       />
     </ChartCard>
@@ -189,5 +220,16 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value;
 }
 .field select {
   width: 100%;
+}
+.with {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+}
+.swap {
+  flex: none;
+  font-size: 1.1rem;
+  min-width: 44px;
+  min-height: 44px;
 }
 </style>

@@ -3,8 +3,10 @@
 // how each rates, and grind setting against rating.
 import { computed } from 'vue';
 import ChartCard from '../../components/charts/ChartCard.vue';
+import ChartPeriod from '../../components/charts/ChartPeriod.vue';
 import StatsChart from '../../components/charts/StatsChart.vue';
-import { useStats } from '../../composables/useStats';
+import { useStats, type ChartView } from '../../composables/useStats';
+import { useChartKind } from '../../lib/chartKind';
 import { countBy, meanBy, OTHER, seriesByKey } from '../../lib/stats';
 import { barsHeight, meansOf, pieOf, seriesTable } from './charts';
 
@@ -15,14 +17,17 @@ const withGrinder = computed(() => brews.value.filter((b) => b.grinderId !== nul
 const without = computed(() => brews.value.length - withGrinder.value.length);
 
 const share = computed(() => pieOf(countBy(brews.value, (b) => b.grinderId), nameOf, 'Brews'));
-const labels = computed(() => stats.axis.value.buckets.map(stats.bucketLabel));
-const over = (value?: (b: (typeof brews.value)[number]) => number | null) =>
-  seriesByKey(brews.value, stats.axis.value.buckets, stats.axis.value.granularity, (b) => b.grinderId, { value }).map((s) => ({
+const useView = stats.chart('grinders');
+const groundView = stats.chart('grinders-coffee');
+const useKind = useChartKind('grinders');
+const groundKind = useChartKind('grinders-coffee');
+const over = (v: ChartView, value?: (b: (typeof brews.value)[number]) => number | null) =>
+  seriesByKey(v.brews.value, v.axis.value.buckets, v.axis.value.granularity, (b) => b.grinderId, { value }).map((s) => ({
     label: nameOf(s.key),
     data: s.data.map((n) => Math.round(n * 10) / 10),
   }));
-const useOverTime = computed(() => over());
-const groundOverTime = computed(() => over((b) => b.doseGrams));
+const useOverTime = computed(() => over(useView));
+const groundOverTime = computed(() => over(groundView, (b) => b.doseGrams));
 const rating = computed(() => meansOf(meanBy(brews.value, (b) => b.grinderId, (b) => b.rating), nameOf));
 
 // A grind setting only means something on its own grinder: one series each,
@@ -46,12 +51,14 @@ const noGrinderNote = computed(() => (without.value ? `; ${without.value} brew${
       <StatsChart kind="doughnut" label="Brews by grinder" :labels="share.labels" :series="share.series" />
     </ChartCard>
 
-    <ChartCard title="Grinders over time" note="Brews on each grinder" :empty="useOverTime.length === 0" empty-text="No brews with a grinder yet." :table="seriesTable('', labels, useOverTime)">
-      <StatsChart kind="bar" stacked label="Brews on each grinder over time" :labels="labels" :series="useOverTime" :height="280" />
+    <ChartCard title="Grinders over time" note="Brews on each grinder" :empty="useOverTime.length === 0" empty-text="No brews with a grinder yet." :table="seriesTable('', useView.labels.value, useOverTime)" v-model:kind="useKind">
+      <template #period><ChartPeriod :view="useView" label="Grinders over time" /></template>
+      <StatsChart :kind="useKind" :stacked="useKind === 'bar'" label="Brews on each grinder over time" :labels="useView.labels.value" :series="useOverTime" :height="280" />
     </ChartCard>
 
-    <ChartCard title="Coffee ground" note="Grams through each grinder" :empty="groundOverTime.length === 0" empty-text="No brews with a grinder yet." :table="seriesTable('', labels, groundOverTime)">
-      <StatsChart kind="bar" stacked label="Coffee ground on each grinder over time" :labels="labels" :series="groundOverTime" :format="(n) => `${n} g`" :height="280" />
+    <ChartCard title="Coffee ground" note="Grams through each grinder" :empty="groundOverTime.length === 0" empty-text="No brews with a grinder yet." :table="seriesTable('', groundView.labels.value, groundOverTime)" v-model:kind="groundKind">
+      <template #period><ChartPeriod :view="groundView" label="Coffee ground per grinder" /></template>
+      <StatsChart :kind="groundKind" :stacked="groundKind === 'bar'" label="Coffee ground on each grinder over time" :labels="groundView.labels.value" :series="groundOverTime" :format="(n) => `${n} g`" :height="280" />
     </ChartCard>
 
     <ChartCard title="Rating by grinder" note="Average rating; rated brews in brackets" :empty="rating.labels.length === 0" empty-text="No rated brews with a grinder yet." :table="rating.table">

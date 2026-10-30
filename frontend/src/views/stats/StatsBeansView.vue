@@ -5,12 +5,14 @@
 import { computed } from 'vue';
 import type { CoffeeSpecies, OriginArea, RoastLevel, StatsBean, StatsBrew } from '../../api/types';
 import ChartCard from '../../components/charts/ChartCard.vue';
+import ChartPeriod from '../../components/charts/ChartPeriod.vue';
 import StatsChart from '../../components/charts/StatsChart.vue';
 import { useStats } from '../../composables/useStats';
 import { useWorkspaceStore } from '../../stores/workspace';
 import { beanLabel, COFFEE_SPECIES, formatPrice } from '../../lib/beans';
 import { ORIGIN_AREAS } from '../../lib/origins';
 import { ROAST_LEVELS } from '../../lib/scale';
+import { useChartKind } from '../../lib/chartKind';
 import { boughtOn, brewRoastAge, bucketOf, countBy, formatWeight, meanBy, splitCountries, spendByCurrency } from '../../lib/stats';
 import { barOf, barsHeight, meansOf, pieOf } from './charts';
 
@@ -53,10 +55,12 @@ const beanOf = (b: StatsBrew) => stats.bean(b.beanId);
 const ratingByCountry = computed(() => meansOf(meanBy(brews.value, (b) => splitCountries(beanOf(b)?.country ?? null), (b) => b.rating), same));
 
 // Spend over time, in the currency most bags were bought in (amounts are never converted).
-const spendAll = computed(() => spendByCurrency(beans.value, stats.range.value.from ?? undefined, stats.range.value.to ?? undefined));
+const spendView = stats.chart('spend');
+const spendKind = useChartKind('spend');
+const spendAll = computed(() => spendByCurrency(beans.value, spendView.range.value.from ?? undefined, spendView.range.value.to ?? undefined));
 const spendCurrency = computed(() => spendAll.value[0]?.currency ?? null);
 const spend = computed(() => {
-  const { buckets, granularity, from, to } = stats.axis.value;
+  const { buckets, granularity, from, to } = spendView.axis.value;
   const index = new Map(buckets.map((k, i) => [k, i]));
   const data = buckets.map(() => 0);
   for (const b of beans.value) {
@@ -67,7 +71,7 @@ const spend = computed(() => {
   }
   return data;
 });
-const spendLabels = computed(() => stats.axis.value.buckets.map(stats.bucketLabel));
+const spendLabels = computed(() => spendView.labels.value);
 const otherCurrencies = computed(() => spendAll.value.slice(1).map((s) => formatPrice(s.amount, s.currency)).join(', '));
 
 const roastAge = computed(() =>
@@ -138,8 +142,10 @@ const usage = computed(() => {
       :empty="!spendCurrency"
       empty-text="No bean prices in this period."
       :table="{ head: ['', spendCurrency ?? ''], rows: spendLabels.map((l, i) => [l, spend[i]!.toFixed(2)]) }"
+      v-model:kind="spendKind"
     >
-      <StatsChart kind="bar" label="Spent on beans over time" :labels="spendLabels" :series="[{ label: spendCurrency ?? '', data: spend }]" :format="(n) => n.toFixed(2)" />
+      <template #period><ChartPeriod :view="spendView" label="Spent on beans" /></template>
+      <StatsChart :kind="spendKind" label="Spent on beans over time" :labels="spendLabels" :series="[{ label: spendCurrency ?? '', data: spend }]" :format="(n) => n.toFixed(2)" />
     </ChartCard>
 
     <ChartCard

@@ -55,6 +55,8 @@ const props = withDefaults(
     fill?: boolean; // line: shade under a single series
     format?: (n: number) => string; // values on the axis and in tooltips
     formatX?: (n: number) => string; // scatter x
+    xMin?: number; // scatter x
+    xMax?: number;
     xTitle?: string;
     yTitle?: string;
     yMin?: number;
@@ -105,7 +107,7 @@ function axes(c: ChartColors) {
     stacked: props.stacked,
     min: props.yMin,
     max: props.yMax,
-    beginAtZero: props.kind === 'bar',
+    beginAtZero: props.kind === 'bar' || props.kind === 'line',
     ticks: { ...tick, callback: (v: number | string) => fmt(Number(v)) },
     grid,
     border: { display: false },
@@ -247,7 +249,7 @@ function scatterConfig(c: ChartColors): ChartConfiguration<'scatter'> {
     options: {
       ...base,
       scales: {
-        x: { ...scales.x, type: 'linear', ticks: { color: c.muted, callback: (v: number | string) => fx(Number(v)) }, grid: { color: c.grid } },
+        x: { ...scales.x, type: 'linear', min: props.xMin, max: props.xMax, ticks: { color: c.muted, callback: (v: number | string) => fx(Number(v)) }, grid: { color: c.grid } },
         y: scales.y,
       },
       plugins: { ...base.plugins, tooltip: { ...base.plugins.tooltip, callbacks: { label: (t: TooltipItem<'scatter'>) => ` ${fx(t.parsed.x)}, ${fmt(t.parsed.y)}` } } },

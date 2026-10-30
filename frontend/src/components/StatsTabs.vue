@@ -1,10 +1,12 @@
 <script setup lang="ts">
 // Tabs across the Insights screens (docs/roadmap.md, "Insights"). The filters ride
-// along in the query, so switching tabs keeps them. A tab whose field the
-// workspace hides (Settings → Fields) is left out.
+// along in the query, so switching tabs keeps them; the charts' own periods
+// (`p.<chart>`) don't. A tab whose field the workspace hides (Settings →
+// Fields) is left out.
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useStats } from '../composables/useStats';
+import { CHART_PERIOD_PREFIX } from '../lib/statsRange';
 import SectionTabs from './SectionTabs.vue';
 
 const TABS: Array<{ name: string; text: string; field?: string }> = [
@@ -20,8 +22,9 @@ const TABS: Array<{ name: string; text: string; field?: string }> = [
 
 const route = useRoute();
 const stats = useStats();
+const query = computed(() => Object.fromEntries(Object.entries(route.query).filter(([k]) => !k.startsWith(CHART_PERIOD_PREFIX))));
 const tabs = computed(() =>
-  TABS.filter((t) => !t.field || !stats.hidden.value.has(t.field)).map((t) => ({ to: { name: t.name, query: route.query }, text: t.text })),
+  TABS.filter((t) => !t.field || !stats.hidden.value.has(t.field)).map((t) => ({ to: { name: t.name, query: query.value }, text: t.text })),
 );
 </script>
 

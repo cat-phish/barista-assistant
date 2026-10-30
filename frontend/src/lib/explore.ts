@@ -1,5 +1,6 @@
-// Insights → Explore: pick a brew detail and a result and see how they move
-// together (docs/roadmap.md, "Insights"). The fields here are what can be picked.
+// Insights → Explore: pick two brew numbers, or a group and a number, and see
+// how they move together (docs/roadmap.md, "Insights"). The fields here are
+// what can be picked.
 import type { CoffeeSpecies, OriginArea, RoastLevel, StatsBean, StatsBrew } from '../api/types';
 import { COFFEE_SPECIES } from './beans';
 import { ORIGIN_AREAS } from './origins';
@@ -21,7 +22,12 @@ interface FieldBase {
 }
 export interface NumberField extends FieldBase {
   kind: 'number';
+  group: 'result' | 'brew'; // its optgroup: how it turned out, or what it was made with
   value: (b: StatsBrew, ctx: ExploreContext) => number | null;
+  labelFor?: (ctx: ExploreContext) => string; // a label that depends on the settings (volume's unit)
+  decimals?: number; // on axes, tooltips and the table; default up to 1
+  scale?: { min: number; max: number }; // the values' fixed range (ratings); a chart pads it
+  builtFrom?: readonly string[]; // worked out from these, so a link with them is partly built in
 }
 export interface CategoryField extends FieldBase {
   kind: 'category';
@@ -35,26 +41,58 @@ const byName = (fallback: string) => (key: string, ctx: ExploreContext) => ctx.n
 const plain = (key: string) => key;
 const bean = (b: StatsBrew, ctx: ExploreContext) => ctx.bean(b.beanId);
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const RATING = { min: 1, max: 5 };
 
-// What a brew was made with: the X axis.
-export const INPUTS: readonly ExploreField[] = [
-  { key: 'dose', label: 'Dose (g)', kind: 'number', value: (b) => b.doseGrams },
-  { key: 'water', label: 'Water (g)', kind: 'number', value: (b) => b.waterGrams },
+// Every number can go on either axis (never against itself).
+export const NUMBERS: readonly NumberField[] = [
+  { key: 'rating', label: 'Rating', kind: 'number', group: 'result', value: (b) => b.rating, scale: RATING },
+  { key: 'drinkRating', label: 'Drink rating', kind: 'number', group: 'result', value: (b) => b.drinkRating, scale: RATING },
+  {
+    key: 'ey',
+    label: 'Extraction yield (%)',
+    kind: 'number',
+    group: 'result',
+    value: (b) => brewEY(b),
+    hiddenBy: 'brew.tds',
+    decimals: 1,
+    builtFrom: ['tds', 'dose', 'water', 'ratio'],
+  },
+  { key: 'tds', label: 'TDS (%)', kind: 'number', group: 'result', value: (b) => b.tdsPercent, hiddenBy: 'brew.tds', decimals: 2 },
+  {
+    key: 'volume',
+    label: 'Volume drunk',
+    kind: 'number',
+    group: 'result',
+    labelFor: (ctx) => `Volume drunk (${ctx.volumeLabel})`,
+    value: (b, ctx) => {
+      const v = ctx.volume(b);
+      return v ? ctx.volumeIn(v.ml) : null;
+    },
+  },
+  { key: 'dose', label: 'Dose (g)', kind: 'number', group: 'brew', value: (b) => b.doseGrams },
+  { key: 'water', label: 'Water (g)', kind: 'number', group: 'brew', value: (b) => b.waterGrams },
   {
     key: 'ratio',
     label: 'Ratio (1 : x)',
     kind: 'number',
+    group: 'brew',
+    decimals: 1,
+    builtFrom: ['dose', 'water'],
     // Water + ice per gram; an espresso's shot weight per gram.
     value: (b) => {
       const liquid = b.waterGrams !== null ? b.waterGrams + (b.iceGrams ?? 0) : b.yieldGrams;
       return liquid !== null && b.doseGrams > 0 ? Math.round((liquid / b.doseGrams) * 10) / 10 : null;
     },
   },
-  { key: 'temp', label: 'Water temperature (°C)', kind: 'number', value: (b) => b.tempC, hiddenBy: 'brew.temp' },
-  { key: 'grind', label: 'Grind setting', kind: 'number', value: (b) => b.grindSetting, hiddenBy: 'brew.grind' },
-  { key: 'roastAge', label: 'Roast age (days)', kind: 'number', value: (b, ctx) => brewRoastAge(b, bean(b, ctx)) },
-  { key: 'altitude', label: 'Altitude (masl)', kind: 'number', value: (b, ctx) => bean(b, ctx)?.altitudeMasl ?? null },
-  { key: 'time', label: 'Brew time (s)', kind: 'number', value: (b) => (b.timeSec > 0 ? b.timeSec : null) },
+  { key: 'temp', label: 'Water temperature (°C)', kind: 'number', group: 'brew', value: (b) => b.tempC, hiddenBy: 'brew.temp' },
+  { key: 'grind', label: 'Grind setting', kind: 'number', group: 'brew', value: (b) => b.grindSetting, hiddenBy: 'brew.grind' },
+  { key: 'time', label: 'Brew time (s)', kind: 'number', group: 'brew', value: (b) => (b.timeSec > 0 ? b.timeSec : null) },
+  { key: 'roastAge', label: 'Roast age (days)', kind: 'number', group: 'brew', value: (b, ctx) => brewRoastAge(b, bean(b, ctx)) },
+  { key: 'altitude', label: 'Altitude (masl)', kind: 'number', group: 'brew', value: (b, ctx) => bean(b, ctx)?.altitudeMasl ?? null },
+];
+
+// Groups go on the Compare side only: a bar of the average number in each.
+export const GROUPS: readonly CategoryField[] = [
   { key: 'process', label: 'Process', kind: 'category', value: (b, ctx) => bean(b, ctx)?.processId ?? null, name: byName('Removed process') },
   {
     key: 'roast',
@@ -89,26 +127,22 @@ export const INPUTS: readonly ExploreField[] = [
   { key: 'weekday', label: 'Day of the week', kind: 'category', value: (b) => WEEKDAYS[localWeekday(b)]!, name: plain },
 ];
 
-// How it turned out: the Y axis. Always a number.
-export const RESULTS: readonly NumberField[] = [
-  { key: 'rating', label: 'Rating', kind: 'number', value: (b) => b.rating },
-  { key: 'drinkRating', label: 'Drink rating', kind: 'number', value: (b) => b.drinkRating },
-  { key: 'ey', label: 'Extraction yield (%)', kind: 'number', value: (b) => brewEY(b), hiddenBy: 'brew.tds' },
-  { key: 'tds', label: 'TDS (%)', kind: 'number', value: (b) => b.tdsPercent, hiddenBy: 'brew.tds' },
-  { key: 'time', label: 'Brew time (s)', kind: 'number', value: (b) => (b.timeSec > 0 ? b.timeSec : null) },
-  {
-    key: 'volume',
-    label: 'Volume drunk',
-    kind: 'number',
-    value: (b, ctx) => {
-      const v = ctx.volume(b);
-      return v ? ctx.volumeIn(v.ml) : null;
-    },
-  },
-];
-
 // Colour a scatter by one of these.
-export const COLOR_BY: readonly CategoryField[] = INPUTS.filter((f): f is CategoryField => f.kind === 'category' && !['tool', 'problem', 'country', 'species'].includes(f.key));
+export const COLOR_BY: readonly CategoryField[] = GROUPS.filter((f) => !['tool', 'problem', 'country', 'species'].includes(f.key));
+
+export const fieldLabel = (f: ExploreField, ctx: ExploreContext) => (f.kind === 'number' && f.labelFor ? f.labelFor(ctx) : f.label);
+
+// The picks from the URL: Compare (x) is a number or a group, With (y) a
+// number; never the same field twice. Unknown keys fall back to the defaults.
+export function pickAxes(xKey: string, yKey: string, numbers: readonly NumberField[], groups: readonly CategoryField[]): { x: ExploreField; y: NumberField } {
+  const x = [...numbers, ...groups].find((f) => f.key === xKey) ?? numbers.find((f) => f.key === 'roastAge') ?? numbers[0]!;
+  const y = numbers.find((f) => f.key === yKey && f.key !== x.key) ?? numbers.find((f) => f.key === 'rating' && f.key !== x.key) ?? numbers.find((f) => f.key !== x.key)!;
+  return { x, y };
+}
+
+// A pair where one is worked out from the other: part of the link is arithmetic.
+export const builtIn = (a: ExploreField, b: ExploreField) =>
+  (a.kind === 'number' && !!a.builtFrom?.includes(b.key)) || (b.kind === 'number' && !!b.builtFrom?.includes(a.key));
 
 export const visible = <F extends ExploreField>(fields: readonly F[], hidden: ReadonlySet<string>): F[] => fields.filter((f) => !f.hiddenBy || !hidden.has(f.hiddenBy));
 

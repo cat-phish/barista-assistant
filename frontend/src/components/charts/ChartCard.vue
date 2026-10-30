@@ -1,9 +1,13 @@
 <script setup lang="ts">
 // A chart's card on the Insights page: title, the chart, and the same numbers as
 // a table (some series colours are light on a white card, so the figures are
-// always one tap away). Empty: says so instead of drawing nothing.
+// always one tap away). Empty: says so instead of drawing nothing. An over-time
+// chart puts its own period picker in the `period` slot, shown even when empty.
+// With `kind` (v-model), a bar chart can be drawn as a line instead.
 import { ref } from 'vue';
+import type { SwitchableKind } from '../../lib/chartKind';
 
+const kind = defineModel<SwitchableKind>('kind');
 defineProps<{
   title: string;
   note?: string; // a line under the title: what's counted
@@ -22,10 +26,16 @@ const asTable = ref(false);
         <h2>{{ title }}</h2>
         <p v-if="note" class="muted note">{{ note }}</p>
       </div>
-      <button v-if="table && !empty" type="button" class="btn-link" :aria-pressed="asTable" @click="asTable = !asTable">
-        {{ asTable ? 'Chart' : 'Table' }}
-      </button>
+      <div v-if="!empty" class="actions">
+        <button v-if="kind && !asTable" type="button" class="btn-link" :aria-label="`Show ${title} as a ${kind === 'bar' ? 'line' : 'bar'} chart`" @click="kind = kind === 'bar' ? 'line' : 'bar'">
+          {{ kind === 'bar' ? 'Line' : 'Bars' }}
+        </button>
+        <button v-if="table" type="button" class="btn-link" :aria-pressed="asTable" @click="asTable = !asTable">
+          {{ asTable ? 'Chart' : 'Table' }}
+        </button>
+      </div>
     </header>
+    <slot name="period" />
     <p v-if="empty" class="muted empty-text">{{ emptyText ?? 'Not enough brews yet.' }}</p>
     <div v-else-if="asTable && table" class="table-wrap">
       <table>
@@ -65,7 +75,8 @@ h2 {
   margin: 0;
   font-size: 0.85rem;
 }
-header .btn-link {
+header .actions {
+  display: flex;
   margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) 0 0;
   flex: none;
 }
