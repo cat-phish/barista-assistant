@@ -2,6 +2,7 @@
 // rules as the API (docs/api/brew-logs.md §6). Unit-tested in brewDraft.test.ts.
 import type { BrewLogInput } from '../api/brews';
 import type { BrewLog, DilutionWith, Grinder, Mark, MethodKind, SteepTemp, TemperatureUnit } from '../api/types';
+import type { FlavorKey } from './flavors';
 import { formatGrams, formatGrind, formatTime, GRIND_SETTING, parseDecimal, parseTime } from './format';
 import { parseMark } from './marks';
 import { parseTemp, tempText } from './units';
@@ -17,6 +18,7 @@ export interface BrewDraft {
   waterProfileId: string; // '' = none recorded
   toolIds: string[]; // prep tools ticked (§3d); unticked to start
   problemIds: string[]; // what went wrong (§6b); unticked to start
+  flavors: FlavorKey[]; // the coffee's flavors from the wheel (§6), in wheel order
   firstDrop: string; // espresso: seconds, e.g. "7.4" ('' = not recorded); from the timer's tap or typed
   grind: string;
   rpm: string; // grinder speed ('' = not recorded); only sent for a variable-speed grinder
@@ -39,7 +41,7 @@ export type BrewDraftErrors = Partial<Record<'dose' | 'water' | 'ice' | 'yieldGr
 export type RpmGrinder = Pick<Grinder, 'variableSpeed' | 'rpmMin' | 'rpmMax'> | null;
 
 export function emptyDraft(): BrewDraft {
-  return { dose: '', water: '', ice: '', yieldGrams: '', tds: '', temp: '', grinderId: '', waterProfileId: '', toolIds: [], problemIds: [], firstDrop: '', grind: '', rpm: '', beanIn: '', groundOut: '', steepTemp: '', dilution: '', dilutedWith: '', time: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
+  return { dose: '', water: '', ice: '', yieldGrams: '', tds: '', temp: '', grinderId: '', waterProfileId: '', toolIds: [], problemIds: [], flavors: [], firstDrop: '', grind: '', rpm: '', beanIn: '', groundOut: '', steepTemp: '', dilution: '', dilutedWith: '', time: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
 }
 
 // temp is text in the person's unit (°C stored); see lib/units.ts.
@@ -55,6 +57,7 @@ export function draftFromLog(log: BrewLog, tempUnit: TemperatureUnit = 'c'): Bre
     waterProfileId: log.waterProfileId ?? '',
     toolIds: log.tools.map((t) => t.id),
     problemIds: log.problems.map((p) => p.id),
+    flavors: [...log.flavors],
     firstDrop: firstDropOf(log.marks),
     grind: log.actualGrindSetting === null ? '' : formatGrind(log.actualGrindSetting),
     rpm: log.grindRpm === null ? '' : String(log.grindRpm),
@@ -148,6 +151,7 @@ export function parseBrewDraft(
       waterProfileId: d.waterProfileId || null,
       toolIds: [...d.toolIds],
       problemIds: [...d.problemIds],
+      flavors: [...d.flavors],
       actualGrindSetting: grind?.ok ? grind.value : null,
       grindRpm: rpm?.ok ? rpm.value : null,
       beanWeightInGrams: beanIn?.ok ? beanIn.value : null,

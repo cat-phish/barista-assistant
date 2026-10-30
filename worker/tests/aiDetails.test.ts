@@ -36,6 +36,7 @@ const BREW: Record<keyof BrewSummary, Sees> = {
   marks: "marks",
   prepTools: "prepTools",
   problems: "problems",
+  flavors: "always", // with the tasting notes
   actualDoseGrams: "always",
   actualWaterGrams: "always",
   actualIceGrams: "always",
@@ -169,7 +170,7 @@ const water: WaterInfo = { name: "TWW", tdsPpm: 120, generalHardnessPpm: 80, alk
 const brew: BrewSummary = {
   timestamp: "2026-10-20T08:00:00.000Z", roastAgeDays: 10, daysFrozenBeforeBrew: 2, recipeName: "House", recipeStyle: { name: "Cold brew", brewsLike: "cold_brew" }, methodKind: "filter",
   grinder, water, machine: { name: "Linea", preinfusion: "manual", flowControl: "manual", pressureControl: "none" }, marks: [{ kind: "first_drop", stepOrder: null, atSec: 7 }],
-  prepTools: ["WDT"], problems: ["Channeling"], actualDoseGrams: 60, actualWaterGrams: 500, actualIceGrams: 100, actualYieldGrams: 420, brewRatio: 8.33, tdsPercent: 4.2, extractionYieldPercent: 19.5,
+  prepTools: ["WDT"], problems: ["Channeling"], flavors: ["Blueberry (Fruity › Berry)"], actualDoseGrams: 60, actualWaterGrams: 500, actualIceGrams: 100, actualYieldGrams: 420, brewRatio: 8.33, tdsPercent: 4.2, extractionYieldPercent: 19.5,
   actualTempC: 20, actualGrindSetting: 12, grindRpm: 900, steeping: true, beanWeightInGrams: 60.3, groundWeightOutGrams: 60, grinderRetentionGrams: 0.3, actualTimeSec: 57600,
   drink: { name: "Iced latte", ingredientTypes: ["milk"] }, rating: 4, tastingNotes: "Chocolate", drinkRating: 5, drinkTastingNotes: "Sweet", steepTemp: "fridge", dilutionRatio: 1,
   dilutedWith: "milk", steepMinHours: 14, steepMaxHours: 20, expectedFinishMinSec: 100, expectedFinishMaxSec: 200,

@@ -21,6 +21,7 @@ import {
   brewLogTools,
   brewProblems,
   brewLogProblems,
+  brewLogFlavors,
   llmAnalyses,
   analysisRequests,
   recipes,
@@ -36,6 +37,7 @@ import {
   type Recipe,
   recipeStyles,
 } from "@barista/shared/schema";
+import { FLAVOR_KEYS, isFlavorKey, type FlavorKey } from "@barista/shared/flavors";
 import { decimalSchema, grindSettingSchema, optionalText, ratingSchema, updateSchema } from "../validation.js";
 import { ANALYSIS_COLUMNS, type AnalysisRow } from "../aiRequest.js";
 import { remindToRate, remindWhenSteeped, type ReminderOutcome } from "../reminders.js";
@@ -63,6 +65,7 @@ export interface BrewLogDetails extends BrewLog {
   marks: Mark[]; // when things actually happened, earliest first
   tools: Array<{ id: string; name: string }>; // prep tools used, in checklist order
   problems: Array<{ id: string; name: string; methodKind: MethodKind | null }>; // what went wrong, in checklist order
+  flavors: FlavorKey[]; // picked on the flavor wheel, in wheel order
   // Null when the brewer deleted their account (the log is kept).
   brewedBy: { id: string; email: string } | null;
   // Where its AI suggestion stands (docs/api/analysis.md §8): analyzed at
@@ -211,6 +214,13 @@ const brewLogFields = {
     .array(z.uuid())
     .max(100)
     .refine((ids) => new Set(ids).size === ids.length, "each problem once")
+    .optional(),
+  // The coffee's flavors from the wheel (@barista/shared/flavors), any ring;
+  // PATCH replaces the list.
+  flavors: z
+    .array(z.string().refine(isFlavorKey, "not a flavor on the wheel"))
+    .max(FLAVOR_KEYS.length)
+    .refine((keys) => new Set(keys).size === keys.length, "each flavor once")
     .optional(),
 };
 
@@ -510,7 +520,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
     .limit(limit)
     .offset(offset);
   const ids = rows.map((r) => r.id);
-  const [marks, tools, problems] = await Promise.all([marksFor(ids), toolsFor(ids), problemsFor(ids)]);
+  const [marks, tools, problems, flavors] = await Promise.all([marksFor(ids), toolsFor(ids), problemsFor(ids), flavorsFor(ids)]);
   // A recipe always has a method (inner FK), so its kind is set whenever recipe is.
   return rows.map(({ recipeMethodKind, styleId, styleName, styleBrewsLike, recipe, drink, drinkHasIngredients, analyzedFlag, ...row }) => ({
     ...row,
@@ -523,6 +533,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
     marks: marks.get(row.id) ?? [],
     tools: tools.get(row.id) ?? [],
     problems: problems.get(row.id) ?? [],
+    flavors: flavors.get(row.id) ?? [],
   }));
 }
 
@@ -560,6 +571,22 @@ async function problemsFor(brewLogIds: string[]): Promise<Map<string, BrewLogDet
 async function insertProblems(tx: Tx, brewLogId: string, problemIds: readonly string[]): Promise<void> {
   if (problemIds.length === 0) return;
   await tx.insert(brewLogProblems).values(problemIds.map((problemId) => ({ brewLogId, problemId })));
+}
+
+// In wheel order, whatever order they were picked in.
+async function flavorsFor(brewLogIds: string[]): Promise<Map<string, FlavorKey[]>> {
+  const byLog = new Map<string, FlavorKey[]>();
+  if (brewLogIds.length === 0) return byLog;
+  const rows = await db.select().from(brewLogFlavors).where(inArray(brewLogFlavors.brewLogId, brewLogIds));
+  const order = new Map(FLAVOR_KEYS.map((key, i) => [key, i]));
+  rows.sort((a, b) => (order.get(a.flavorKey) ?? 0) - (order.get(b.flavorKey) ?? 0));
+  for (const { brewLogId, flavorKey } of rows) byLog.set(brewLogId, [...(byLog.get(brewLogId) ?? []), flavorKey]);
+  return byLog;
+}
+
+async function insertFlavors(tx: Tx, brewLogId: string, flavors: readonly FlavorKey[]): Promise<void> {
+  if (flavors.length === 0) return;
+  await tx.insert(brewLogFlavors).values(flavors.map((flavorKey) => ({ brewLogId, flavorKey })));
 }
 
 async function marksFor(brewLogIds: string[]): Promise<Map<string, BrewLogDetails["marks"]>> {
@@ -651,7 +678,7 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Cre
   const refError = await db.transaction(async (tx) => {
     const error = await referencesInWorkspace(tx, workspaceId, body);
     if (error) return error;
-    const { marks = [], toolIds = [], problemIds = [], remindToRate: _remind, ...fields } = body;
+    const { marks = [], toolIds = [], problemIds = [], flavors = [], remindToRate: _remind, ...fields } = body;
     const brewer = await recipeBrewer(tx, fields.recipeId);
     const wrongForKind = espressoError(brewer?.kind ?? null, {
       actualWaterGrams: fields.actualWaterGrams ?? null,
@@ -675,6 +702,7 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Cre
     await insertMarks(tx, id, marks);
     await insertTools(tx, id, toolIds);
     await insertProblems(tx, id, problemIds);
+    await insertFlavors(tx, id, flavors);
     return null;
   });
 
@@ -737,7 +765,7 @@ brewLogsRouter.patch(
 
       // Only when the change touches it, so old logs whose recipe later moved
       // to another brewer can still be edited (docs/api/brew-logs.md §6).
-      const { marks, toolIds, problemIds, ...fields } = body;
+      const { marks, toolIds, problemIds, flavors, ...fields } = body;
       // A new recipe brings its brewer; the old brewer stays otherwise.
       const brewerUpdate = "recipeId" in body ? { brewerId: (await recipeBrewer(tx, fields.recipeId))?.brewerId ?? null } : {};
       const touched = ["recipeId", "actualWaterGrams", "actualIceGrams", "actualYieldGrams", "marks", "actualTimeSec"];
@@ -793,6 +821,10 @@ brewLogsRouter.patch(
       if (problemIds) {
         await tx.delete(brewLogProblems).where(eq(brewLogProblems.brewLogId, brewLogId));
         await insertProblems(tx, brewLogId, problemIds);
+      }
+      if (flavors) {
+        await tx.delete(brewLogFlavors).where(eq(brewLogFlavors.brewLogId, brewLogId));
+        await insertFlavors(tx, brewLogId, flavors);
       }
       return { status: "updated", before: { rating: log.rating, drinkRating: log.drinkRating, steeping: log.steeping } } as const;
     });

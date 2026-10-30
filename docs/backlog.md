@@ -218,42 +218,29 @@ Recording a brew: what's measured, and how fast it is to log.
 - **Open questions:** move brew problems from Settings → Lists to Bar setup,
   next to the prep list?
 
-### 7. Flavor wheel for tasting a brew
+### 7. Flavor wheel: intensity, and flavors in Insights
 
 - **Status:** idea
-- **Why:** tasting notes are free text (`tastingNotes`,
-  `drinkTastingNotes`). That's hard to fill in quickly on a phone, words
-  vary from brew to brew ("berry", "berries", "blueberry-ish"), and nothing
-  can be counted or compared. The SCA Coffee Taster's Flavor Wheel gives a
-  shared vocabulary, and tapping it is faster than typing.
+- **Why:** the flavor wheel (roadmap, "Flavor wheel") records a flavor as
+  just picked. "A hint of lemon" and "lemon everywhere" look the same, to
+  you and to the AI. And the picks are counted nowhere yet, though that
+  was half the reason to have a fixed vocabulary.
 - **Approach:**
-  - An interactive wheel among the rating options on the log form:
-    an SVG sunburst, inner ring (fruity, floral, sweet, nutty/cocoa, …)
-    → middle → outer descriptors. Tap a segment to zoom in, tap again to
-    pick it; picks show as chips under the wheel and can be removed. A
-    search box and a plain chip list for anyone who'd rather not use the
-    wheel (and for screen readers).
-  - Picks are saved on the brew as a list of descriptor keys (a JSON
-    column, or a `brew_log_flavors` table if they're counted in Insights);
-    free-text tasting notes stay alongside.
-  - Field registry `brew.flavors` with `show('brew.flavors')`;
-    `REPEAT_FOR_FIELD` `'result'` (tasted each time, never copied).
-  - The journal shows the picks as coloured chips; the AI gets them with
-    the tasting notes (CLAUDE.md rule 9: always sent, or switchable under
-    Settings → AI); backups and the list import carry them (rule 8 if it's
-    a table).
-  - Later: flavors per bean in Insights, compared with the roaster's
-    `flavorProfile`.
-- **Size:** M–L (the wheel UI is most of it).
+  - Review after living with the wheel for a while: is intensity missed?
+    If so, an optional intensity per pick (faint / clear / strong): a
+    nullable column on `brew_log_flavors`, `flavors` as
+    `[{ key, intensity }]` (or keys staying valid on their own, so old
+    clients and backups still work), tapping a picked chip to cycle it, and
+    the AI reading "Lemon (strong)".
+  - Insights: flavors per bean (which ones keep coming up), compared with
+    the roaster's `flavorProfile`; flavors against rating.
+- **Size:** S–M each.
 - **Depends on:** nothing.
 - **Open questions:**
-  - Can we use the SCA/WCR wheel's descriptors and colours as published
-    (licence), or draw our own wheel on the same lexicon?
-  - The full 3-ring wheel, or stop at the middle ring on small screens?
-  - An intensity per flavor (faint / clear / strong), or just picked?
-  - A wheel for the drink tasting too, or only the coffee on its own?
-  - The wheel's defect segments (papery, rubber, …) overlap with "What went
-    wrong" (brew problems): keep both, or link them?
+  - Intensity: worth the extra tap, or does it slow logging down for
+    little gain? Decide from use.
+  - Insights: a chart of its own, or a filter on the existing brew charts
+    (Explore) like problems?
 
 ## C. Recipes
 

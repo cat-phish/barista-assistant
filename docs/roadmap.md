@@ -1923,3 +1923,38 @@ Backlog item "Half-step ratings", branch `half-ratings`, migration 0083.
   can't.
 - Decided: brews and beans alike; 0.5 allowed as the lowest; a workspace
   setting rather than always half.
+
+## Flavor wheel (built)
+
+Backlog item "Flavor wheel for tasting a brew", branch `flavor-wheel`,
+migration 0084. `docs/api/brew-logs.md` §6, `docs/api/llm-contract.md` §9,
+`docs/api/backup.md` §2b.
+
+- A fixed lexicon, `FLAVORS` in `@barista/shared/flavors`: 9 categories →
+  26 groups → 86 descriptors (121 keys), each key a dotted path
+  (`fruity.berry.blueberry`). Our own wheel and colours on the common
+  tasting vocabulary, not the SCA/WCR artwork (its design is copyrighted).
+  The frontend keeps the same list with its colours
+  (`frontend/src/lib/flavors.ts`, a test checks they match). Keys are
+  stored, so labels can change but keys can't.
+- Brews get `flavors` (keys, any ring, in wheel order), stored in
+  `brew_log_flavors` so they can be counted later; `tastingNotes` stays
+  alongside. Replaced on `PATCH`; an unknown key is a `400`.
+- The log form, between the rating and the notes (and the journal's
+  quick rating): an SVG wheel showing two rings around a centre. Tap a
+  segment to zoom into it, tap the centre to pick it; an outermost flavor is
+  picked straight away. Picks show as chips. There's a search box and a
+  plain list view (remembered per device) for anyone who'd rather not use
+  the wheel, and for screen readers. The journal shows the picks as
+  coloured chips; the CSV export has a Flavors column.
+- Field registry `brew.flavors`; Repeat brews `'result'` (tasted each
+  time, never copied). Backups take `brew_log_flavors` (checked against
+  `FLAVOR_KEYS` on restore), no new `BACKUP_VERSION`.
+- The AI always gets them, with the tasting (not switchable), as labels
+  with their place ("Blueberry (Fruity › Berry)"), and a `flavors` prompt
+  section says how to read them. PROMPT_VERSION 2026-10-n.
+- Decided: coffee only (the drink tasting keeps free text); just picked,
+  no intensity (backlog item 7 reviews that later); the wheel keeps its
+  off flavors (papery, rubber…) alongside brew problems: problems are what
+  went wrong, flavors what's tasted; full three rings with zoom rather
+  than stopping at the middle ring on small screens.

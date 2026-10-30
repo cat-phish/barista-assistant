@@ -19,6 +19,7 @@ import {
   brewLogTools,
   brewProblems,
   brewLogProblems,
+  brewLogFlavors,
   type Bean,
   type BlendType,
   type DetailedRoastLevel,
@@ -38,6 +39,7 @@ import {
   type SteepTemp,
   type DilutionWith,
 } from "@barista/shared/schema";
+import { FLAVOR_KEYS, flavorLabel } from "@barista/shared/flavors";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { db } from "./db.js";
@@ -86,6 +88,9 @@ export interface BrewSummary {
   // What went wrong while brewing, in list order (docs/api/brew-problems.md
   // §6b). Empty means none were recorded, not that nothing went wrong.
   problems: string[];
+  // The coffee's flavors picked on the wheel, in wheel order, each with its
+  // place: "Blueberry (Fruity › Berry)" (docs/api/llm-contract.md §9).
+  flavors: string[];
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso
   actualIceGrams: number | null; // flash chilled: ice in the server the hot water was brewed onto
@@ -265,6 +270,7 @@ export function summarize(
   marks: ReadonlyMap<string, BrewSummary["marks"]>,
   tools: ReadonlyMap<string, string[]>,
   problems: ReadonlyMap<string, string[]>,
+  flavors: ReadonlyMap<string, string[]>,
   servedAs: ReadonlyMap<string, NonNullable<BrewSummary["drink"]>>
 ): BrewSummary {
   const age = roastDate
@@ -283,6 +289,7 @@ export function summarize(
     marks: marks.get(brew.id) ?? [],
     prepTools: tools.get(brew.id) ?? [],
     problems: problems.get(brew.id) ?? [],
+    flavors: flavors.get(brew.id) ?? [],
     actualDoseGrams: brew.actualDoseGrams,
     actualWaterGrams: brew.actualWaterGrams,
     actualIceGrams: brew.actualIceGrams,
@@ -396,6 +403,17 @@ export async function problemsFor(brewLogIds: string[]): Promise<Map<string, str
   return byLog;
 }
 
+// Each brew's flavor picks as the AI reads them, in wheel order.
+export async function flavorsFor(brewLogIds: string[]): Promise<Map<string, string[]>> {
+  const byLog = new Map<string, string[]>();
+  if (brewLogIds.length === 0) return byLog;
+  const rows = await db.select().from(brewLogFlavors).where(inArray(brewLogFlavors.brewLogId, brewLogIds));
+  const order = new Map(FLAVOR_KEYS.map((key, i) => [key, i]));
+  rows.sort((a, b) => (order.get(a.flavorKey) ?? 0) - (order.get(b.flavorKey) ?? 0));
+  for (const { brewLogId, flavorKey } of rows) byLog.set(brewLogId, [...(byLog.get(brewLogId) ?? []), flavorLabel(flavorKey)]);
+  return byLog;
+}
+
 export function withJoins({ brew, ...joins }: { brew: BrewLog } & BrewJoins): BrewRow {
   return { ...brew, ...joins };
 }
@@ -504,18 +522,19 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
   const bean = await loadBean(brew.beanId);
   if (!bean) return null; // Bean deletion cascades, so this means the log is going too.
 
-  const [recipe, marks, tools, problems, servedAs] = await Promise.all([
+  const [recipe, marks, tools, problems, flavors, servedAs] = await Promise.all([
     brew.recipeId ? loadRecipe(brew.recipeId) : Promise.resolve(null),
     marksFor([brew.id]),
     toolsFor([brew.id]),
     problemsFor([brew.id]),
+    flavorsFor([brew.id]),
     drinksServed(brew.drinkId ? [brew.drinkId] : []),
   ]);
 
   return {
     bean: bean.info,
     recipe: recipe && scaledToBrew(recipe, brew.actualWaterGrams),
-    brew: summarize(brew, bean.roastDate, bean.freezes, marks, tools, problems, servedAs),
+    brew: summarize(brew, bean.roastDate, bean.freezes, marks, tools, problems, flavors, servedAs),
     drink: brew.drinkId ? await loadDrink(brew.drinkId, { size: brew.servingSize, unit: brew.servingUnit }) : null,
     ratingScale: "0.5-5",
   };

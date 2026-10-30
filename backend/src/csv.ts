@@ -3,6 +3,7 @@
 // back (that's the JSON export).
 import { count, desc, eq } from "drizzle-orm";
 import { extractionYield, ratioWater } from "@barista/shared/brew";
+import { FLAVORS } from "@barista/shared/flavors";
 import { beanProcesses, beans, brewLogs } from "@barista/shared/schema";
 import { db } from "./db.js";
 import { loadBrewLogs } from "./routes/brewLogs.js";
@@ -43,7 +44,7 @@ export async function brewLogsCsv(workspaceId: string): Promise<string> {
     "Grinder", "Grind setting", "Grind RPM", "Water profile", "Dose (g)", "Water (g)", "Ice (g)", "Yield (g)", "Ratio", "TDS (%)",
     "Extraction (%)", "Water temp (°C)", "Time (s)", "Time", "Beans in (g)", "Grounds out (g)", "Steeping", "Steeped in",
     "Steep window (h)", "Target finish (s)", "Served diluted 1:", "Diluted with", "Prep", "Problems", "Rating",
-    "Tasting notes", "Drink rating", "Drink notes",
+    "Flavors", "Tasting notes", "Drink rating", "Drink notes",
   ];
   const rows = logs.map((l) => [
     localTime(l.timestamp, l.utcOffsetMinutes),
@@ -85,6 +86,7 @@ export async function brewLogsCsv(workspaceId: string): Promise<string> {
     l.tools.map((t) => t.name).join("; ") || null,
     l.problems.map((p) => p.name).join("; ") || null,
     l.rating,
+    l.flavors.map((key) => FLAVORS[key]).join("; ") || null,
     l.tastingNotes,
     l.drinkRating,
     l.drinkTastingNotes,

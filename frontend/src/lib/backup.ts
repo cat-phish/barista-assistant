@@ -138,6 +138,7 @@ const TABLE_LABELS: Record<string, string> = {
   prep_tool_brewers: 'prep item brewers',
   brew_log_tools: 'prep ticks',
   brew_log_problems: 'problem ticks',
+  brew_log_flavors: 'flavor picks',
   llm_analyses: 'AI suggestions',
   parameter_suggestions: 'suggested parameters',
 };

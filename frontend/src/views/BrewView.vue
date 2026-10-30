@@ -854,7 +854,7 @@ async function startSteep(): Promise<void> {
   if (windowError.value.steep) return;
   const ws = workspaces.current?.id;
   // Nothing's measured yet: time 0, no results or rating.
-  const start = { ...draft, time: '0', yieldGrams: '', tds: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
+  const start = { ...draft, time: '0', yieldGrams: '', tds: '', rating: null, flavors: [], notes: '', drinkRating: null, drinkNotes: '' };
   const values = parseBrewDraft(start, recipe.value?.brewer.kind ?? null, false, temperatureUnit.value, grinders.value.find((g) => g.id === draft.grinderId) ?? null).values;
   if (!ws || !bean.value || !values) return;
   saving.value = true;
@@ -1044,6 +1044,7 @@ function brewAgain(): void {
   draft.rating = null;
   draft.notes = '';
   draft.problemIds = [];
+  draft.flavors = [];
   draft.drinkRating = null;
   draft.drinkNotes = '';
   submitted.value = false;
@@ -1158,6 +1159,7 @@ async function applyRepeat(log: BrewLog): Promise<void> {
   const activeTools = new Set(prepTools.value.filter((t) => !t.archivedAt).map((t) => t.id));
   draft.toolIds = log.tools.map((t) => t.id).filter((id) => activeTools.has(id)); // always: that brew's prep, not the recipe's
   draft.problemIds = []; // what went wrong is noted for each brew
+  draft.flavors = []; // tasted each brew
   draft.beanIn = kept.has('grinderWeights') && log.beanWeightInGrams !== null ? formatGrams(log.beanWeightInGrams) : '';
   draft.groundOut = kept.has('grinderWeights') && log.groundWeightOutGrams !== null ? formatGrams(log.groundWeightOutGrams) : '';
   await nextTick();

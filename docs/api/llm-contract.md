@@ -82,6 +82,12 @@ queue:
      the next brew (a stalled bed or choked shot points coarser, channeling
      to prep, a mistake like an untared scale to repeating rather than
      adjusting).
+   - The brew includes `flavors`: the coffee's flavors picked on the flavor
+     wheel (§6), in wheel order, each as its label with its place on the
+     wheel, e.g. `"Blueberry (Fruity › Berry)"` or just `"Floral"` for a
+     pick from the inner ring. `[]` means none were picked. Like `rating`
+     and `tastingNotes`, they're the coffee on its own; the prompt's
+     `flavors` section says how to read them.
    - The brew includes its `drink` (or `null`): name, `servingSize` (the size
      made, else the drink's default, e.g. `"12 fl oz"`, or `null`) and
      ingredients (name, type, amount scaled to that size such as
@@ -158,6 +164,7 @@ queue:
    | `water` | a water with figures | hardness and alkalinity effects |
    | `prepTools` | the brew lists prep tools | a tool not listed may still have been used |
    | `problems` | a brew lists problems | the clearest clues, explained first |
+   | `flavors` | a brew has wheel flavors | read with the tasting notes; an inner-ring pick is broader, not weaker; sour, fermented or green picks often mean under-extraction, harsh, ashy or bitter ones over-extraction or the roast, off flavors (papery, musty) the beans or filter; compare with `flavorProfile` |
    | `rpm` | a brew has `grindRpm` | speed is part of the grind |
    | `retention` | a brew has `grinderRetentionGrams` | retention and stale grounds |
    | `espresso` | an `espresso` method | flow, windows, machine, step size; dose and shot weight as levers, one at a time |
@@ -280,8 +287,8 @@ and the prompt sections about them drop out with them (step 3). Keys
   `POST /analyze` is a `409` (§8), and a job already queued is skipped.
 
 Always sent: the bean and roaster names, roast date and age, dose, water,
-ice (flash chilled), yield, time, grind setting, ratio, rating and tasting notes, and the
-recipe's targets. Ratings are sent as stored, 0.5–5 in half steps (`ratingScale`
+ice (flash chilled), yield, time, grind setting, ratio, rating, tasting notes and
+wheel flavors (`flavors`, part of the tasting), and the recipe's targets. Ratings are sent as stored, 0.5–5 in half steps (`ratingScale`
 `"0.5-5"`).
 
 **Keeping it in step:** every field the analysis context can send is

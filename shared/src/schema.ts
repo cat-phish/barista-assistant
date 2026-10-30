@@ -14,6 +14,7 @@ import {
 } from "drizzle-orm/mysql-core";
 import type { AiDetail } from "./aiDetails.js";
 import type { AiPrompt } from "./aiPrompt.js";
+import type { FlavorKey } from "./flavors.js";
 
 // A JSON column read back as a value: MariaDB stores JSON as text, so the
 // driver returns a string that drizzle's json() would leave unparsed.
@@ -1369,6 +1370,23 @@ export const brewLogProblems = mysqlTable(
   },
   (table) => ({
     pk: primaryKey({ columns: [table.brewLogId, table.problemId] }),
+  })
+);
+
+// 8e. Brew Log Flavors (Picks on the Flavor Wheel)
+// The coffee's flavors, picked on the wheel (docs/api/brew-logs.md §6): keys
+// from FLAVORS (@barista/shared/flavors), any ring. Replaced as a whole when
+// a log is edited; free-text tastingNotes stay alongside.
+export const brewLogFlavors = mysqlTable(
+  "brew_log_flavors",
+  {
+    brewLogId: varchar("brew_log_id", { length: 36 })
+      .notNull()
+      .references(() => brewLogs.id, { onDelete: "cascade" }),
+    flavorKey: varchar("flavor_key", { length: 64 }).$type<FlavorKey>().notNull(), // FLAVOR_KEYS
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.brewLogId, table.flavorKey] }),
   })
 );
 

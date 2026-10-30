@@ -589,6 +589,13 @@
       "when": 1793335672500,
       "tag": "0083_half_ratings",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "5",
+      "when": 1793337683381,
+      "tag": "0084_brew_log_flavors",
+      "breakpoints": true
     }
   ]
 }

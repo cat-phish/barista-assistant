@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { eq, getTableColumns, inArray, type Column } from "drizzle-orm";
 import { getTableConfig, type MySqlTable } from "drizzle-orm/mysql-core";
 import { z } from "zod";
+import { FLAVOR_KEYS } from "@barista/shared/flavors";
 import {
   ANALYSIS_CONFIDENCE,
   SUGGEST_ALTERNATIVES,
@@ -45,6 +46,7 @@ import {
   brewers,
   brewLogMarks,
   brewLogProblems,
+  brewLogFlavors,
   brewLogs,
   brewLogTools,
   brewProblems,
@@ -159,6 +161,7 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
   { table: brewLogMarks, scope: "brewLogId" },
   { table: brewLogTools, scope: "brewLogId" },
   { table: brewLogProblems, scope: "brewLogId" },
+  { table: brewLogFlavors, scope: "brewLogId" },
   { table: llmAnalyses, scope: "brewLogId" },
   { table: parameterSuggestions, scope: "beanId" },
 ];
@@ -206,6 +209,7 @@ const ENUMS: Record<string, readonly string[]> = {
   "brew_logs.steepTemp": STEEP_TEMPS,
   "brew_logs.dilutedWith": DILUTION_WITH,
   "brew_log_marks.kind": MARK_KINDS,
+  "brew_log_flavors.flavorKey": FLAVOR_KEYS,
   "llm_analyses.suggestedGrindDelta": ["much_finer", "finer", "no_change", "coarser", "much_coarser"],
   "llm_analyses.confidence": ANALYSIS_CONFIDENCE,
   "parameter_suggestions.source": SUGGEST_SOURCES,
