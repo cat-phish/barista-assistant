@@ -60,6 +60,7 @@ export const FIELDS = [
   bean('greenSupplier', 'Green bean supplier'),
   bean('website', 'Website'),
   bean('rating', 'Rating'),
+  bean('review', 'Review'),
   bean('notes', 'Notes'),
 
   recipe('style', 'Style'),

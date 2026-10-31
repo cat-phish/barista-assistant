@@ -530,6 +530,7 @@ const selection = useSelection();
                 <span v-if="bean.greenSupplier">Green from {{ bean.greenSupplier }}</span>
                 <span v-if="bean.archivedAt">Archived {{ formatAdded(bean.archivedAt) }}</span>
               </p>
+              <p v-if="bean.review" class="notes">{{ bean.review }}</p>
               <p v-if="bean.notes" class="notes muted">{{ bean.notes }}</p>
               <div v-if="workspaces.canEdit" class="data-actions">
                 <template v-if="bean.archivedAt">

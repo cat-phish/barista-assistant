@@ -13,6 +13,7 @@ const DETAILS = {
   priceCurrency: "usd",
   bagWeightGrams: 340,
   notes: "Roaster suggests 1:2 in 28 s.",
+  review: "Juicy on the V60, thin as espresso.",
   flavorProfile: "Dark chocolate, cherry",
   originArea: "south_america",
   country: "Colombia",
@@ -75,7 +76,18 @@ describe("bean details (docs/api/beans.md §4)", () => {
       greenSupplier: null,
       batchNumber: null,
       rating: null,
+      review: null,
     });
+  });
+
+  it("review: kept apart from notes, blank clears it", async () => {
+    const { owner, ws, beansUrl, details } = await setup();
+    const id = await newBean(owner, ws.id, details);
+    const [bean] = (await owner.agent.get(beansUrl)).body.beans;
+    expect(bean).toMatchObject({ review: details.review, notes: details.notes });
+    const cleared = await owner.agent.patch(`${beansUrl}/${id}`).send({ review: "  " });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.bean).toMatchObject({ review: null, notes: details.notes });
   });
 
   it("varieties and species: trimmed, each once, species in their order, an empty list is null", async () => {
@@ -147,6 +159,7 @@ describe("bean details (docs/api/beans.md §4)", () => {
       { bagWeightGrams: 0 },
       { bagWeightGrams: 250.5 },
       { notes: "x".repeat(2001) },
+      { review: "x".repeat(2001) },
       { processId: "washed" },
       { processId: randomUUID() }, // not one of this workspace's
       { originArea: "Africa" },
@@ -242,7 +255,7 @@ describe("bean details (docs/api/beans.md §4)", () => {
       varieties: ["Pink Bourbon", "Caturra"],
       species: ["arabica"],
     });
-    for (const key of ["website", "priceAmount", "priceCurrency", "bagWeightGrams", "notes", "rating", "purchaseDate", "greenSupplier", "batchNumber"]) {
+    for (const key of ["website", "priceAmount", "priceCurrency", "bagWeightGrams", "notes", "review", "rating", "purchaseDate", "greenSupplier", "batchNumber"]) {
       expect(bean).not.toHaveProperty(key);
     }
   });

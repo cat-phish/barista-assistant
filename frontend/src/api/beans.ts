@@ -35,6 +35,7 @@ export interface BeanInput {
   greenSupplier: string | null;
   batchNumber: string | null;
   rating: number | null;
+  review: string | null;
 }
 
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/beans`;

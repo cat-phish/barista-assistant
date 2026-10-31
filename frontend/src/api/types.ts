@@ -449,6 +449,7 @@ export interface Bean {
   greenSupplier: string | null;
   batchNumber: string | null; // which home-roast batch ("3", "R-12")
   rating: number | null; // 0.5-5 in 0.5 steps
+  review: string | null; // what the coffee was like overall
   archivedAt: string | null; // null = active
   createdAt: string;
   freezePeriods: FreezePeriod[]; // oldest first; one with thawedOn null = frozen now

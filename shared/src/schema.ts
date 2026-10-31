@@ -446,6 +446,7 @@ export const beans = mysqlTable("beans", {
   // bean (docs/api/beans.md §4). Free text: "3", "R-12".
   batchNumber: varchar("batch_number", { length: 50 }),
   rating: decimal("rating", { precision: 2, scale: 1, mode: "number" }), // 0.5-5 in 0.5 steps, the bean overall
+  review: text("review"), // what the coffee was like overall; Notes hold the facts
   // Archived beans (docs/api/beans.md §4) leave the brew picker and the public
   // menu; past brews keep them. null = active.
   archivedAt: timestamp("archived_at"),

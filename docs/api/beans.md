@@ -74,7 +74,8 @@ is no age.
     "purchaseDate": "2026-10-05",
     "greenSupplier": "Covoya",
     "batchNumber": "3",
-    "rating": 4
+    "rating": 4,
+    "review": "Juicy on the V60, thin as espresso."
   }
   ```
   `roasterName` and `beanName` are required (trimmed, 1–255 chars).
@@ -145,6 +146,9 @@ is no age.
     copying a bean suggests the next whole number. Not on the public menu.
   - `rating`: the bean overall, 0.5–5 in steps of 0.5 (as a brew's,
     `docs/api/brew-logs.md` §6).
+  - `review`: what the coffee was like overall, ≤2000 chars (`notes` hold the
+    facts: "Roaster suggests 1:16"). Not on the public menu, and not sent to
+    the brew analysis or Suggest parameters.
 - **Success (`201 Created`):** `{ "bean": { ...bean } }`
 - **Errors:** `400` invalid body, a price without its currency (or the
   reverse), or a `roastLevel` that contradicts the detailed level; `403`

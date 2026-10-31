@@ -130,6 +130,7 @@ const beanFields = {
   // Which roast of this bean, for home roasters (docs/api/beans.md §4).
   batchNumber: optionalText(50),
   rating: ratingSchema.nullable().optional(),
+  review: optionalText(2000),
 };
 
 function isHttpUrl(s: string): boolean {
