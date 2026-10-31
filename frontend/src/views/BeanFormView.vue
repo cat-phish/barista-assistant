@@ -80,6 +80,7 @@ const weightLoss = ref(''); // roast weight loss, %
 const website = ref('');
 const showOnPublicMenu = ref(true);
 const rating = ref<number | null>(null);
+const review = ref('');
 const notes = ref('');
 // Saved photos, cover first (docs/api/bean-photos.md §4c); a new bean's are
 // held by BeanPhotos until it's saved.
@@ -318,6 +319,7 @@ function fill(bean: Bean): void {
     'bean.greenSupplier': bean.greenSupplier,
     'bean.website': bean.website,
     'bean.rating': bean.rating,
+    'bean.review': bean.review,
     'bean.notes': bean.notes,
     'bean.photos': bean.photos,
   });
@@ -353,6 +355,7 @@ function fill(bean: Bean): void {
   website.value = bean.website ?? '';
   showOnPublicMenu.value = bean.showOnPublicMenu;
   rating.value = bean.rating;
+  review.value = bean.review ?? '';
   notes.value = bean.notes ?? '';
 }
 
@@ -366,6 +369,7 @@ function fillCopy(bean: Bean): void {
   weightLoss.value = '';
   purchaseDate.value = '';
   rating.value = null;
+  review.value = '';
   photos.value = []; // a new bag: its own photos
   inventory.value = bean.bagWeightGrams === null ? '0' : String(bean.bagWeightGrams);
   // Nothing is stored for the copy yet: an older bean's 5-step level (no
@@ -398,7 +402,7 @@ const drafts = useBeanDraftStore();
 const draftRefs: Record<string, Ref<unknown>> = {
   roasterName, beanName, process, originArea, country, region, producer, altitude, varieties, species, flavorProfile, blendType, decaf, roastType,
   roastDate, detailedRoastLevel, inventory, price, currency, bagWeight, purchaseDate, greenSupplier, batchNumber, weightLoss,
-  website, showOnPublicMenu, rating, notes, level, sourceDetailed, savedDetailed, savedRoastLevel, copyOf, suggestions, labelSummary, webSources,
+  website, showOnPublicMenu, rating, review, notes, level, sourceDetailed, savedDetailed, savedRoastLevel, copyOf, suggestions, labelSummary, webSources,
 };
 const snapshot = () => Object.fromEntries(Object.entries(draftRefs).map(([name, r]) => [name, r.value]));
 let blank = ''; // the form as it opened, to tell whether anything was entered
@@ -428,7 +432,7 @@ function revealEntered(): void {
     'bean.decaf': decaf.value || null, 'bean.roastType': roastType.value, 'bean.roastDate': roastDate.value,
     'bean.roastLevel': detailedRoastLevel.value || level.value, 'bean.batchNumber': batchNumber.value, 'bean.weightLoss': weightLoss.value,
     'bean.price': price.value, 'bean.bagWeight': bagWeight.value, 'bean.purchaseDate': purchaseDate.value,
-    'bean.greenSupplier': greenSupplier.value, 'bean.website': website.value, 'bean.rating': rating.value, 'bean.notes': notes.value,
+    'bean.greenSupplier': greenSupplier.value, 'bean.website': website.value, 'bean.rating': rating.value, 'bean.review': review.value, 'bean.notes': notes.value,
     'bean.photos': draftPhotos.value.length ? draftPhotos.value : null,
   });
 }
@@ -546,6 +550,7 @@ async function save(): Promise<void> {
     website: websiteTrimmed.value || null,
     showOnPublicMenu: showOnPublicMenu.value,
     rating: rating.value,
+    review: review.value.trim() || null,
     notes: notes.value.trim() || null,
   };
   saving.value = true;
@@ -850,8 +855,12 @@ async function save(): Promise<void> {
         </label>
       </section>
 
-      <section v-if="show('bean.rating') || show('bean.notes')" class="card stack">
+      <section v-if="show('bean.rating') || show('bean.review') || show('bean.notes')" class="card stack">
         <RatingInput v-if="show('bean.rating')" v-model="rating" name="bean-rating" label="Rating" />
+        <div v-if="show('bean.review')" class="field">
+          <label for="review">Review</label>
+          <textarea id="review" v-model="review" rows="4" maxlength="2000" placeholder="e.g. Bright and juicy on the V60, a bit thin as espresso. Would buy again." />
+        </div>
         <div v-if="show('bean.notes')" class="field">
           <label for="notes">Notes</label>
           <textarea id="notes" v-model="notes" rows="4" maxlength="2000" placeholder="e.g. Roaster suggests 1:16. Best after 10 days." />

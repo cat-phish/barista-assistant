@@ -57,7 +57,7 @@ async function populated() {
   await menuAdd(owner, ws.id, section, { itemType: "drink", drinkId: drink });
   await menuAdd(owner, ws.id, section, { itemType: "beans", beanFields: ["origin"] });
 
-  const bean = await newBean(owner, ws.id, { roastDate: "2026-10-01", varieties: ["Geisha"], species: ["arabica"] });
+  const bean = await newBean(owner, ws.id, { roastDate: "2026-10-01", varieties: ["Geisha"], species: ["arabica"], review: "Floral, would buy again" });
   await owner.agent.post(`${base}/beans/${bean}/freeze`).send({ date: "2026-10-05" });
   const log = await newBrewLog(owner, ws.id, bean, {
     recipeId: recipe,
