@@ -1,10 +1,10 @@
 import "dotenv/config";
-import { AI_PREVIEW_QUEUE, BREW_ANALYSIS_QUEUE, LABEL_READ_QUEUE, MAINTENANCE_QUEUE, PARAMETER_SUGGESTION_QUEUE, REMINDER_QUEUE, STEEP_REMINDER_JOB, REST_REMINDER_JOB, GREEN_LOW_JOB, type AiPreviewJobData, type BrewAnalysisJobData, type DbBackupJobData, type LabelReadJobData, type LabelReadResult, type ParameterSuggestionJobData, type GreenLowJobData, type RateReminderJobData, type RestReminderJobData, type SteepReminderJobData } from "@barista/shared/jobs";
+import { AI_PREVIEW_QUEUE, BEAN_REVIEW_QUEUE, BREW_ANALYSIS_QUEUE, LABEL_READ_QUEUE, MAINTENANCE_QUEUE, PARAMETER_SUGGESTION_QUEUE, REMINDER_QUEUE, STEEP_REMINDER_JOB, REST_REMINDER_JOB, GREEN_LOW_JOB, type AiPreviewJobData, type BeanReviewJobData, type BeanReviewResult, type BrewAnalysisJobData, type DbBackupJobData, type LabelReadJobData, type LabelReadResult, type ParameterSuggestionJobData, type GreenLowJobData, type RateReminderJobData, type RestReminderJobData, type SteepReminderJobData } from "@barista/shared/jobs";
 import { UnrecoverableError, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 import { config } from "./config.js";
 import { pool } from "./db.js";
-import { failSuggestion, failureMessage, processAiPreview, processBrewAnalysis, processParameterSuggestion, settleRequest, type JobResult } from "./processor.js";
+import { failSuggestion, failureMessage, processAiPreview, processBeanReview, processBrewAnalysis, processParameterSuggestion, settleRequest, type JobResult } from "./processor.js";
 import { processGreenLow, processRateReminder, processRestReminder, processSteepReminder, type ReminderResult } from "./reminders.js";
 import { runDbBackup, type BackupResult } from "./dbBackup.js";
 import { readLabel } from "./label.js";
@@ -76,6 +76,15 @@ const labels = new Worker<LabelReadJobData, LabelReadResult>(LABEL_READ_QUEUE, (
 labels.on("failed", (job, err) => console.error(`Label read ${job?.id ?? "?"} failed: ${err.message}`));
 labels.on("error", (err) => console.error("Label worker error:", err.message));
 
+// Bean review drafts (docs/api/llm-contract.md §9d): the same, an AI call the
+// backend waits for; not retried, nothing stored.
+const beanReviews = new Worker<BeanReviewJobData, BeanReviewResult | null>(BEAN_REVIEW_QUEUE, (job: Job<BeanReviewJobData>) => processBeanReview(job.data), {
+  connection,
+  concurrency: config.concurrency,
+});
+beanReviews.on("failed", (job, err) => console.error(`Bean review ${job?.id ?? "?"} failed: ${err.message}`));
+beanReviews.on("error", (err) => console.error("Bean review worker error:", err.message));
+
 // Reminders (docs/api/notifications.md §1b): delayed jobs, sent once due.
 // The job name says which: rate later, a cold brew's steep done, a roast
 // rested, or a green coffee running low.
@@ -114,7 +123,7 @@ maintenance.on("error", (err) => console.error("Maintenance worker error:", err.
 async function shutdown(signal: string): Promise<void> {
   console.log(`${signal} received, finishing active jobs`);
   // close() waits for running jobs to finish before resolving.
-  const results = await Promise.allSettled([worker.close(), suggestions.close(), previews.close(), labels.close(), reminders.close(), maintenance.close()]);
+  const results = await Promise.allSettled([worker.close(), suggestions.close(), previews.close(), labels.close(), beanReviews.close(), reminders.close(), maintenance.close()]);
   results.push(...(await Promise.allSettled([pool.end()])));
   for (const r of results) {
     if (r.status === "rejected") console.error("Error during shutdown:", r.reason);

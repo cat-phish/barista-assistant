@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
-import type { AiPreviewJobData, BrewAnalysisJobData, ParameterSuggestionJobData } from "@barista/shared/jobs";
+import type { AiPreviewJobData, BeanReviewJobData, BeanReviewResult, BrewAnalysisJobData, ParameterSuggestionJobData } from "@barista/shared/jobs";
 import { EMPTY_AI_PROMPT, isCustomPrompt } from "@barista/shared/aiPrompt";
 import { analysisRequests, beans, brewLogs, DEFAULT_WORKSPACE_SETTINGS, llmAnalyses, parameterSuggestions, users, withDefaults, workspaces, type AiRequest, type WorkspaceSettings } from "@barista/shared/schema";
+import type { AiDetail } from "@barista/shared/aiDetails";
 import { and, count, eq, gte } from "drizzle-orm";
+import { loadBeanReviewContext } from "./beanReview.js";
 import { loadBrewContext } from "./context.js";
 import { db } from "./db.js";
 import { config } from "./config.js";
-import { analysisSent, analyzeWithLlm, PROMPT_VERSION, requestSuggestion, suggestionSent } from "./llm.js";
+import { analysisSent, analyzeWithLlm, beanReviewSent, PROMPT_VERSION, requestBeanReview, requestSuggestion, suggestionSent } from "./llm.js";
 import type { PromptCustom } from "./prompt.js";
 import { loadSuggestContext } from "./suggestContext.js";
 
@@ -149,6 +151,23 @@ export async function processParameterSuggestion({ suggestionId }: ParameterSugg
   return { status: "saved", id: suggestionId };
 }
 
+// What the bean's workspace keeps from the AI; null when the bean is gone.
+async function hiddenFor(beanId: string): Promise<Set<AiDetail> | null> {
+  const [row] = await db.select({ settings: workspaces.settings }).from(beans).innerJoin(workspaces, eq(beans.workspaceId, workspaces.id)).where(eq(beans.id, beanId));
+  return row ? new Set(withDefaults(DEFAULT_WORKSPACE_SETTINGS, row.settings ?? null).aiHidden) : null;
+}
+
+// A draft of a bean's Review (docs/api/analysis.md §8e): the answer goes back
+// to the waiting request, nothing is stored. null: the bean is gone or no
+// brews match. Not retried (the person tries again).
+export async function processBeanReview(data: BeanReviewJobData): Promise<BeanReviewResult | null> {
+  const hidden = await hiddenFor(data.beanId);
+  const context = hidden && (await loadBeanReviewContext(data));
+  if (!context) return null;
+  const draft = await requestBeanReview(context, hidden!, await promptFor(data.requestedBy, data.note));
+  return { ...draft, brewCount: context.brews.length };
+}
+
 // A preview (docs/api/analysis.md §8d): what the job would send, built the
 // same way (analysisSent / suggestionSent), without calling the AI. null
 // when the brew or bean is gone.
@@ -159,13 +178,13 @@ export async function processAiPreview(data: AiPreviewJobData): Promise<AiReques
     const ws = await workspaceOf(data.brewLogId);
     return analysisSent(context, new Set((ws?.settings ?? DEFAULT_WORKSPACE_SETTINGS).aiHidden), await promptFor(ws?.baristaId ?? null, data.note));
   }
-  const [row] = await db
-    .select({ settings: workspaces.settings })
-    .from(beans)
-    .innerJoin(workspaces, eq(beans.workspaceId, workspaces.id))
-    .where(eq(beans.id, data.suggestion.beanId));
-  if (!row) return null;
-  const hidden = new Set(withDefaults(DEFAULT_WORKSPACE_SETTINGS, row.settings ?? null).aiHidden);
+  if (data.kind === "beanReview") {
+    const hidden = await hiddenFor(data.review.beanId);
+    const context = hidden && (await loadBeanReviewContext(data.review));
+    return context ? beanReviewSent(context, hidden!, await promptFor(data.review.requestedBy, data.review.note)) : null;
+  }
+  const hidden = await hiddenFor(data.suggestion.beanId);
+  if (!hidden) return null;
   const context = await loadSuggestContext(data.suggestion, { ratedOnly: hidden.has("unratedHistory") });
   return context ? suggestionSent(context, hidden, await promptFor(data.suggestion.requestedBy, data.suggestion.note)) : null;
 }

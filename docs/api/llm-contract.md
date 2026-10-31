@@ -469,6 +469,31 @@ The workspace's `readLabels` setting (`workspaces.md` §2) turns the route
 off, and `labelWebLookup` the web step; nothing is sent unless someone
 takes or picks a photo for it.
 
+## 9d. A bean's review draft
+
+The `bean-review` queue (`analysis.md` §8e): job `draft`, data `{ beanId,
+brewerIds, maxBrews, ratedOnly, requestedBy, note }`. Not retried; the
+backend waits for the answer, nothing is stored.
+
+1. **Context** (`loadBeanReviewContext`, `worker/src/beanReview.ts`): the bean
+   (as in step 1 of §9) and up to `maxBrews` of this bag's brews, newest first,
+   without ones still steeping, filtered by `brewerIds` and `ratedOnly`. Each
+   is a brew as in step 1, plus `brewer`, its name. `null` when the bean is
+   gone or nothing matches.
+2. **Input** (`toBeanReviewInput`): `{ ratingScale, bean, brews, equipment }`,
+   compacted as in step 2, with what the workspace keeps from the AI
+   (`aiHidden`) left out the same way.
+3. **Prompt** (`BEAN_REVIEW_SECTIONS`): `reviewCore`, `reviewOutput`, `drink`,
+   the asker's `instructions` and `note`, and `end`.
+4. **Schema** (`BEAN_REVIEW_JSON_SCHEMA`, strict): `review` (string) and
+   `suggestedRating` (number), both required. After parsing, `review` is cut
+   to 2000 characters and `suggestedRating` rounded to a half step within
+   0.5–5.
+
+**What the AI sees:** classified in `worker/tests/aiDetails.test.ts`; the
+`brewer` name is always sent, everything else goes with its key as in the
+analysis. A bean's `notes`, `review` and `rating` aren't sent.
+
 ## Evaluating changes
 
 `npm run eval -w worker` (run on the host from the repo root; it reads the

@@ -6,6 +6,7 @@ import { beansApi, type BeanBrewSummary, type BeanInput } from '../api/beans';
 import { errorMessage } from '../api/client';
 import AppHeader from '../components/AppHeader.vue';
 import BeanPhotos from '../components/BeanPhotos.vue';
+import BeanReviewDialog from '../components/BeanReviewDialog.vue';
 import BrewAverageHint from '../components/BrewAverageHint.vue';
 import LabelCard from '../components/LabelCard.vue';
 import LabelHint from '../components/LabelHint.vue';
@@ -84,6 +85,9 @@ const rating = ref<number | null>(null);
 const review = ref('');
 // How its brews went: the hint under the rating. A new bean has none.
 const brewSummary = ref<BeanBrewSummary | null>(null);
+// "Write with AI" (docs/api/analysis.md §8e) needs brews to read.
+const writingReview = ref(false);
+const canWriteReview = computed(() => settings.value.beanReviews && workspaces.canEdit && (brewSummary.value?.brewCount ?? 0) > 0);
 const notes = ref('');
 // Saved photos, cover first (docs/api/bean-photos.md §4c); a new bean's are
 // held by BeanPhotos until it's saved.
@@ -868,7 +872,10 @@ async function save(): Promise<void> {
         <RatingInput v-if="show('bean.rating')" v-model="rating" name="bean-rating" label="Rating" />
         <BrewAverageHint v-if="show('bean.rating')" :summary="brewSummary" />
         <div v-if="show('bean.review')" class="field">
-          <label for="review">Review</label>
+          <div class="review-head">
+            <label for="review">Review</label>
+            <button v-if="canWriteReview" class="btn-link small" type="button" @click="writingReview = true">Write with AI</button>
+          </div>
           <textarea id="review" v-model="review" rows="4" maxlength="2000" placeholder="e.g. Bright and juicy on the V60, a bit thin as espresso. Would buy again." />
         </div>
         <div v-if="show('bean.notes')" class="field">
@@ -885,6 +892,16 @@ async function save(): Promise<void> {
         <button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? 'Saving…' : 'Save bean' }}</button>
       </div>
     </form>
+    <BeanReviewDialog
+      v-if="props.id && brewSummary"
+      :open="writingReview"
+      :bean-id="props.id"
+      :summary="brewSummary"
+      :offer-rating="show('bean.rating')"
+      @close="writingReview = false"
+      @use-review="(text) => (review = text)"
+      @use-rating="(value) => (rating = value)"
+    />
   </main>
 </template>
 
@@ -897,6 +914,12 @@ h2 {
 }
 .small {
   font-size: 0.85rem;
+}
+.review-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
 }
 .web-sources ul {
   margin: var(--space-1) 0 0;

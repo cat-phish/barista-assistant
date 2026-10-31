@@ -36,7 +36,7 @@ means drinks, wherever you see it (code comments use
 | §6b | [brew-problems.md](brew-problems.md) | Brew Problems (what went wrong, a checklist on §6) |
 | §7 | [public-menu.md](public-menu.md) | Public Menu Endpoint |
 | §7b | [menu.md](menu.md) | Menu Builder (sections and items for §7) |
-| §8 | [analysis.md](analysis.md) | LLM Brew Analysis / Parameter Suggestions (§8b), what was sent to the AI (§8c), previews (§8d) |
+| §8 | [analysis.md](analysis.md) | LLM Brew Analysis / Parameter Suggestions (§8b), what was sent to the AI (§8c), previews (§8d), a bean's review draft (§8e) |
 | §9 | [llm-contract.md](llm-contract.md) | Worker -> LLM Structured Output Contract |
 | §10 | [server.md](server.md) | Server Administration (admins, scheduled database backups) |
 | §11 | [stats.md](stats.md) | Statistics (brew and bean rows for the Insights page) |

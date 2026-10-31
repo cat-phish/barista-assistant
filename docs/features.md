@@ -55,6 +55,9 @@ work is in `roadmap.md`.
   to restore one.
 
 ## Beans
+- **Rating** with the brews' average beside it, and a **Review** of the coffee
+  overall, apart from Notes; **Write with AI** drafts it, with a suggested
+  rating, from the brews you pick.
 - Roaster, coffee name, process, **roast level** (light → dark, optional),
   roast date and stock. Optionally the **roast weight loss** (%), which
   tells the AI how developed the roast is.
