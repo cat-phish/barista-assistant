@@ -36,7 +36,7 @@ work is in `roadmap.md`.
   workspaces page, as a **new** workspace they own: every brew becomes
   theirs, the public menu starts off, members are invited again.
 - **Export and import by list:** each list page (beans, recipes, drinks,
-  ingredients, brewers, grinders, water, prep items, the journal; brew
+  ingredients, brewers, grinders, water, vessels, prep items, the journal; brew
   problems in Settings → Lists) exports the items picked in "Select to
   export…" and imports into that list with "Import…". Settings → Data
   exports whole lists, several at once, and imports several at once. What
@@ -103,7 +103,7 @@ work is in `roadmap.md`.
   (`docs/api/bean-label.md` §4d)
 
 ## Bar setup
-One **Bar setup** section with tabs: Brewers, Grinders, Water, Prep and Menu.
+One **Bar setup** section with tabs: Brewers, Grinders, Water, Vessels, Prep and Menu.
 Brewers and Grinders are tables like Recipes: filter brewers by type (pour
 over, immersion, espresso) and grinders by hand or electric, with a **Show
 archived** checkbox when there are archived ones (where Restore is); sort by
@@ -114,6 +114,12 @@ recipes, drinks, ingredients and prep items): it says what
 would be unlinked or removed and asks for "I understand" first.
 Adding and editing a brewer, grinder, ingredient or prep item happen on their own page
 (the **Add** button sits at the top of each list, like Recipes and Drinks).
+- **Vessels:** carafes, mugs and cups, each a name and a weight. On the brew
+  log, **Weighed** beside the yield or shot weight says how it was weighed:
+  directly, or in a vessel. Pick a vessel and the box takes the total, and
+  the vessel's weight comes off to make the yield. Past brews keep the weight
+  they were saved with if a vessel is re-weighed. New brews start on directly;
+  remembering or repeating the vessel are settings, off by default.
 - **Grinders:** per workspace, with optional details: stepped/stepless,
   setting range and step size, burr type and size, hand/electric, and
   variable speed with an RPM range. The range and step let the AI talk in

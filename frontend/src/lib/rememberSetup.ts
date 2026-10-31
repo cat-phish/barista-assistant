@@ -15,6 +15,7 @@ export const REMEMBER_OPTIONS: Array<{ key: RememberKey; label: string; hint?: s
   { key: 'grinder', label: 'Grinder', hint: 'Off: the recipe’s default grinder' },
   { key: 'grind', label: 'Grind setting and speed', hint: 'Your last with that grinder and recipe. Off: the AI suggestion, if any' },
   { key: 'waterProfile', label: 'Water profile', hint: 'Off: your default water' },
+  { key: 'vessel', label: 'Vessel', hint: 'What the yield is weighed in. Off: weighed directly' },
   { key: 'prepTools', label: 'Prep checklist, for each brewer', hint: 'Off: nothing ticked' },
   { key: 'size', label: 'Drink size, for each drink', hint: 'Off: the drink’s default size' },
 ];
@@ -29,6 +30,7 @@ export type Remembered =
   | 'beanId'
   | 'grinderId'
   | 'waterProfileId'
+  | 'vesselId' // 'direct' when weighed without one
   | `prepTools.${string}` // per brewer id ('none' without one)
   | `size.${string}` // per drink id
   | 'compareWith'
@@ -42,6 +44,7 @@ export function rememberKeyFor(slot: Remembered): RememberKey | null {
   if (slot === 'beanId') return 'bean';
   if (slot === 'grinderId') return 'grinder';
   if (slot === 'waterProfileId') return 'waterProfile';
+  if (slot === 'vesselId') return 'vessel';
   if (slot.startsWith('prepTools.')) return 'prepTools';
   if (slot.startsWith('size.')) return 'size';
   return null;

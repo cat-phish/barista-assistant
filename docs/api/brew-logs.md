@@ -26,6 +26,8 @@ created it and can't be changed.
   "actualWaterGrams": 250,
   "actualIceGrams": null,
   "actualYieldGrams": 225,
+  "vesselId": "uuid",
+  "vesselWeightGrams": 312.5,
   "tdsPercent": 1.38,
   "actualTempC": 93,
   "grinderId": "uuid",
@@ -51,6 +53,7 @@ created it and can't be changed.
   "recipe": { "id": "uuid", "name": "House V60", "expectedYieldGrams": 220, "style": { "id": "uuid", "name": "Pour over", "brewsLike": "pour_over" }, "methodKind": "filter" },
   "grinder": { "id": "uuid", "name": "Comandante C40" },
   "waterProfile": { "id": "uuid", "name": "Third Wave Water (classic)" },
+  "vessel": { "id": "uuid", "name": "Glass carafe" },
   "brewerId": "uuid",
   "brewer": { "id": "uuid", "name": "V60", "kind": "filter" },
   "drink": { "id": "uuid", "name": "The Atlas", "hasIngredients": true },
@@ -75,7 +78,9 @@ target, for espresso), for comparing with the measured `actualYieldGrams`,
 `brewsLike` decides how extraction yield is worked out, and `methodKind` is its brewer's kind. `grinder` is
 `null` when no grinder was recorded; an archived
 grinder still appears here. `waterProfile` (`{ "id", "name" }`, §3c) is the
-water used, or `null`; archived ones still appear. `brewerId` / `brewer` (`{ "id", "name",
+water used, or `null`; archived ones still appear. `vessel`
+(`{ "id", "name" }`, §3g) is what the yield was weighed in, or `null`;
+archived ones still appear. `brewerId` / `brewer` (`{ "id", "name",
 "kind" }`, archived ones included) is the brewer it was made with: set by the
 API from the recipe, kept if the recipe later moves or is deleted, and `null`
 for a brew without a recipe. `drink`
@@ -211,6 +216,17 @@ says why the last analysis failed or wasn't made (e.g. the daily cap), else
     nullable, same rules as water. Unlike the recipe's rough
     `expectedYieldGrams`, it's a measurement, and clients show it against the
     recipe's expected yield.
+  - `vesselId` / `vesselWeightGrams` (optional, nullable, both or neither,
+    only with an `actualYieldGrams`; on `PATCH`, checked after the change
+    when any of the three is sent): the vessel the yield was weighed in
+    (§3g, of this workspace, archived ones accepted) and the weight
+    subtracted, same rules as water. `actualYieldGrams` is always already
+    **net** of it, for filter and espresso alike: clients take the total
+    weighed, subtract the vessel, and send both. The weight is the one used
+    then, so re-weighing the vessel changes no past brew, and clients show
+    the original total (yield + `vesselWeightGrams`) when editing. Deleting
+    the vessel clears both; the yield stays. With ice, only the vessel
+    comes off: the yield is still weighed with the ice.
   - `tdsPercent` (optional, nullable): a refractometer reading in %, > 0 and
     ≤ 30, max 2 decimals. **Extraction yield** isn't stored; clients and the
     worker (§9) work it out as `tdsPercent × beverage / actualDoseGrams`,
@@ -284,7 +300,7 @@ says why the last analysis failed or wasn't made (e.g. the daily cap), else
 - **Success (`201 Created`):** `{ "brewLog": { ...brewLog } }` (plus
   `reminder` when `remindToRate` was sent)
 - **Errors:** `400` invalid body, or `beanId`/`recipeId`/`grinderId`/
-  `waterProfileId`/`toolIds`/`problemIds` not in this workspace; `403` viewer.
+  `waterProfileId`/`vesselId`/`toolIds`/`problemIds` not in this workspace; `403` viewer.
 - Logging a brew does **not** change the bean's `inventoryWeightGrams`.
 
 ## `PATCH /api/workspaces/:workspaceId/brew-logs/:brewLogId`

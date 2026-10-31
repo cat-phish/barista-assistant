@@ -110,6 +110,8 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
   - `grinder`;
   - `grind`: the setting and RPM, on the same grinder;
   - `waterProfile`;
+  - `vessel`: what the yield is weighed in (off by default: new brews are
+    weighed directly);
   - `dilution`: the dilution served (cold styles, concentrates); a long brew's `steepTemp`
     goes with `temp`;
   - `window`: the window the brew aimed for (cold styles: a long brew's
@@ -146,6 +148,8 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
   - `grinder`;
   - `grind`: your last setting and RPM with that grinder and recipe;
   - `waterProfile`;
+  - `vessel`: what the yield is weighed in, or weighed directly (off by
+    default);
   - `prepTools`: the prep checklist, for each brewer;
   - `size`: the drink size, for each drink.
 

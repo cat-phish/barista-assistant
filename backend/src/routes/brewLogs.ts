@@ -17,6 +17,7 @@ import {
   drinks,
   grinders,
   waterProfiles,
+  vessels,
   prepTools,
   brewLogTools,
   brewProblems,
@@ -60,6 +61,7 @@ export interface BrewLogDetails extends BrewLog {
   recipe: (Pick<Recipe, "id" | "name" | "expectedYieldGrams"> & { methodKind: MethodKind; style: RecipeStyleSummary | null }) | null;
   grinder: { id: string; name: string } | null; // archived grinders included
   waterProfile: { id: string; name: string } | null; // archived profiles included
+  vessel: { id: string; name: string } | null; // what it was weighed in; archived included
   // The brewer it was made with (the recipe's at the time); archived included.
   brewer: { id: string; name: string; kind: MethodKind } | null;
   // The drink it was for; hasIngredients = the shot and the drink are tasted apart.
@@ -158,6 +160,9 @@ const brewLogFields = {
   actualIceGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
   // Measured beverage weight (optional, except for espresso; docs/api/brew-logs.md §6).
   actualYieldGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
+  // What the yield was weighed in, and the weight subtracted (vesselError).
+  vesselId: z.uuid().nullable().optional(),
+  vesselWeightGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
   // Refractometer reading, % (docs/api/brew-logs.md §6). Espresso runs to ~12%.
   tdsPercent: decimalSchema({ min: 0, max: 30, scale: 2, exclusiveMin: true }).nullable().optional(),
   actualTempC: decimalSchema({ min: 0, max: 100, scale: 1 }).nullable().optional(),
@@ -294,6 +299,15 @@ function iceError(log: { actualIceGrams?: number | null; tdsPercent?: number | n
   return (log.actualIceGrams ?? null) !== null && (log.tdsPercent ?? null) !== null ? "tdsPercent: not taken for a brew made onto ice (actualIceGrams)" : null;
 }
 
+// A vessel is both its id and the weight subtracted, and only with a yield to
+// have subtracted it from (docs/api/brew-logs.md §6).
+function vesselError(log: { vesselId?: string | null; vesselWeightGrams?: number | null; actualYieldGrams?: number | null }): string | null {
+  const vessel = log.vesselId ?? null;
+  const weight = log.vesselWeightGrams ?? null;
+  if ((vessel === null) !== (weight === null)) return "send both vesselId and vesselWeightGrams, or neither";
+  return vessel !== null && (log.actualYieldGrams ?? null) === null ? "vesselId: needs actualYieldGrams" : null;
+}
+
 // A size is both its number and unit; it and the drink's tasting are only for
 // a brew made for a drink (docs/api/brew-logs.md §6).
 function drinkOnlyError(log: {
@@ -379,6 +393,7 @@ async function referencesInWorkspace(
     recipeId?: string | null;
     grinderId?: string | null;
     waterProfileId?: string | null;
+    vesselId?: string | null;
     drinkId?: string | null;
     toolIds?: string[];
     problemIds?: string[];
@@ -444,6 +459,15 @@ async function referencesInWorkspace(
       .for("update");
     if (!profile) return "waterProfileId: not a water profile in this workspace";
   }
+  if (refs.vesselId) {
+    // Archived vessels are accepted, like grinders.
+    const [vessel] = await tx
+      .select({ id: vessels.id })
+      .from(vessels)
+      .where(and(eq(vessels.id, refs.vesselId), eq(vessels.workspaceId, workspaceId)))
+      .for("update");
+    if (!vessel) return "vesselId: not a vessel in this workspace";
+  }
   return null;
 }
 
@@ -470,6 +494,8 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       actualWaterGrams: brewLogs.actualWaterGrams,
       actualIceGrams: brewLogs.actualIceGrams,
       actualYieldGrams: brewLogs.actualYieldGrams,
+      vesselId: brewLogs.vesselId,
+      vesselWeightGrams: brewLogs.vesselWeightGrams,
       tdsPercent: brewLogs.tdsPercent,
       actualTempC: brewLogs.actualTempC,
       actualGrindSetting: brewLogs.actualGrindSetting,
@@ -498,6 +524,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       styleBrewsLike: recipeStyles.brewsLike,
       grinder: { id: grinders.id, name: grinders.name },
       waterProfile: { id: waterProfiles.id, name: waterProfiles.name },
+      vessel: { id: vessels.id, name: vessels.name },
       brewer: { id: logBrewers.id, name: logBrewers.name, kind: logBrewers.kind },
       drink: { id: drinks.id, name: drinks.name },
       // Separate column, like recipeMethodKind: whether the drink has ingredients.
@@ -514,6 +541,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
     .leftJoin(recipeStyles, eq(recipes.styleId, recipeStyles.id))
     .leftJoin(grinders, eq(brewLogs.grinderId, grinders.id))
     .leftJoin(waterProfiles, eq(brewLogs.waterProfileId, waterProfiles.id))
+    .leftJoin(vessels, eq(brewLogs.vesselId, vessels.id))
     .leftJoin(logBrewers, eq(brewLogs.brewerId, logBrewers.id))
     .leftJoin(drinks, eq(brewLogs.drinkId, drinks.id))
     // Left join: logs of deleted accounts (userId null) must still be listed.
@@ -719,6 +747,8 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Cre
     if (wrongForKind) return wrongForKind;
     const wrongForIce = iceError(fields);
     if (wrongForIce) return wrongForIce;
+    const wrongVessel = vesselError(fields);
+    if (wrongVessel) return wrongVessel;
     const wrongForDrink = (await drinkError(tx, fields.drinkId ?? null, fields.recipeId ?? null)) ?? drinkOnlyError(fields);
     if (wrongForDrink) return wrongForDrink;
     const wrongRpm = await rpmError(tx, fields.grinderId ?? null, fields.grindRpm ?? null, true);
@@ -775,6 +805,8 @@ brewLogsRouter.patch(
           actualWaterGrams: brewLogs.actualWaterGrams,
           actualIceGrams: brewLogs.actualIceGrams,
           actualYieldGrams: brewLogs.actualYieldGrams,
+          vesselId: brewLogs.vesselId,
+          vesselWeightGrams: brewLogs.vesselWeightGrams,
           tdsPercent: brewLogs.tdsPercent,
           drinkId: brewLogs.drinkId,
           servingSize: brewLogs.servingSize,
@@ -817,6 +849,10 @@ brewLogsRouter.patch(
       if ("actualIceGrams" in body || "tdsPercent" in body) {
         const wrongForIce = iceError({ ...log, ...fields });
         if (wrongForIce) return { status: "bad_ref", error: wrongForIce } as const;
+      }
+      if ("vesselId" in body || "vesselWeightGrams" in body || "actualYieldGrams" in body) {
+        const wrongVessel = vesselError({ ...log, ...fields });
+        if (wrongVessel) return { status: "bad_ref", error: wrongVessel } as const;
       }
 
       if ("drinkId" in body || "recipeId" in body) {

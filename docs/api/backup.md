@@ -29,7 +29,7 @@ new workspace).
 | Spreadsheet (CSV) | Settings → Data → Spreadsheet | `GET …/csv/:list` | `backend/src/csv.ts` |
 
 **List pages** (Journal, Beans, Recipes, Drinks, Ingredients, Brewers,
-Grinders, Water profiles, Prep, and brew problems on Settings →
+Grinders, Water profiles, Vessels, Prep, and brew problems on Settings →
 Lists) have one bar, `frontend/src/components/ListDataBar.vue`:
 "Select to export…" (the rows get ticks; "Export selected" downloads them
 with what they need) and "Import…" (a dialog with the import below,
@@ -60,7 +60,7 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   only link rows inside the file. Timestamps are ISO strings, dates
   `YYYY-MM-DD`, decimals numbers.
 - **Tables, in restore order:** `brewer_methods`, `bean_processes`,
-  `recipe_styles`, `grinders`, `water_profiles`, `prep_tools`,
+  `recipe_styles`, `grinders`, `water_profiles`, `vessels`, `prep_tools`,
   `brew_problems`, `ingredients`, `drink_categories`, `brewers`,
   `roasting_machines`, `green_coffees`, `prep_tool_brewers`, `beans`,
   `bean_freezes`, `bean_photos`, `roasts`, `recipes`, `recipe_steps`, `recipe_grind_settings`, `recipe_prep_tools`,
@@ -176,14 +176,14 @@ too. Where the app offers them: "Where it is" above. Code:
 `backend/src/listImport.ts`.
 
 - **Lists:** `beans`, `recipes`, `drinks`, `ingredients`, `brewers`,
-  `grinders`, `water_profiles`, `prep_tools`, `brew_problems`, `brew_logs`
+  `grinders`, `water_profiles`, `vessels`, `prep_tools`, `brew_problems`, `brew_logs`
   (the journal).
 - **The file** is the backup format above plus `"scope": "lists"` and
   `"lists": [...]`. Besides the chosen rows it holds their child rows
   (steps, grind starting points, freezes, a drink's ingredients, a brew's
   marks, prep and problem ticks, AI analyses) and, repeatedly, every row
   they point at: a recipe's brewer, style and grinders, the brewer's method,
-  a drink's recipe and ingredients, a brew's bean, recipe, grinder, water,
+  a drink's recipe and ingredients, a brew's bean, recipe, grinder, water, vessel,
   drink, prep items and problems. Nothing else (no menu, no other lists). It's
   worked out from each table's references (`TABLE_INFO`), so a new
   reference comes along by itself:
@@ -196,11 +196,11 @@ too. Where the app offers them: "Where it is" above. Code:
   | `ingredients` | ingredients | – |
   | `brewers` | brewers | brewer method |
   | `prep_tools` | prep items, the brewers each is offered for | those brewers (→ as brewers) |
-  | `grinders`, `water_profiles`, `brew_problems` | themselves | – |
-  | `brew_logs` | brews, their marks, prep and problem ticks, AI analyses | bean (→ as beans), recipe (→ as recipes), grinder, water profile, drink (→ as drinks), brewer, prep items, brew problems |
+  | `grinders`, `water_profiles`, `vessels`, `brew_problems` | themselves | – |
+  | `brew_logs` | brews, their marks, prep and problem ticks, AI analyses | bean (→ as beans), recipe (→ as recipes), grinder, water profile, vessel, drink (→ as drinks), brewer, prep items, brew problems |
 - **Matching** (`MATCH_KEYS`): a row is "already here" when the workspace
   has one with the same key, and the import uses that one instead:
-  - by name (case-insensitive) for brewers, grinders, water profiles, prep
+  - by name (case-insensitive) for brewers, grinders, water profiles, vessels, prep
     items, brew problems, ingredients, drink categories, menu sections,
     roasting machines and green coffees;
   - roasts by when they were roasted and their green coffee;
@@ -280,7 +280,7 @@ Offered on Settings → Data only. Code: `backend/src/csv.ts`.
   - **Journal**, newest first: date (the brewing device's local time) and
     UTC, brewed by (email), roaster, bean, batch, recipe, style, brewer,
     drink, size, grinder, grind setting, RPM, water profile, dose, water,
-    yield, ratio, TDS, extraction (worked out as in §6), water temperature,
+    yield, vessel, ratio, TDS, extraction (worked out as in §6), water temperature,
     time (seconds and m:ss), beans in / grounds out, steeping, steeped in,
     steep window, target finish, dilution, prep and problems (`; `
     between), rating, flavors (the wheel's labels, `; ` between), tasting

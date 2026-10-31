@@ -8,7 +8,8 @@ import AiNoteField from '../components/AiNoteField.vue';
 import AiRequestDialog from '../components/AiRequestDialog.vue';
 import AnalysisCard from '../components/AnalysisCard.vue';
 import { grindersApi } from '../api/grinders';
-import type { BrewProblem, Grinder, PrepTool, WaterProfile } from '../api/types';
+import type { BrewProblem, Grinder, PrepTool, Vessel, WaterProfile } from '../api/types';
+import { vesselsApi } from '../api/vessels';
 import { waterProfilesApi } from '../api/waterProfiles';
 import { prepToolsApi } from '../api/prepTools';
 import { brewProblemsApi } from '../api/brewProblems';
@@ -49,6 +50,7 @@ const log = ref<BrewLog | null>(null);
 const storedAnalysis = ref<LlmAnalysis | null>(null);
 const grinders = ref<Grinder[]>([]);
 const waterProfiles = ref<WaterProfile[]>([]);
+const vessels = ref<Vessel[]>([]);
 const prepTools = ref<PrepTool[]>([]);
 const problems = ref<BrewProblem[]>([]);
 const loading = ref(true);
@@ -91,14 +93,16 @@ async function load(): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [{ brewLog }, g, w, t, bp] = await Promise.all([
+    const [{ brewLog }, g, w, t, bp, v] = await Promise.all([
       brewLogsApi.get(ws, props.id),
       grindersApi.list(ws),
       waterProfilesApi.list(ws),
       prepToolsApi.list(ws),
       brewProblemsApi.list(ws).catch(() => ({ problems: [] })),
+      vesselsApi.list(ws),
     ]);
     prepTools.value = t.tools;
+    vessels.value = v.vessels;
     problems.value = bp.problems;
     grinders.value = g.grinders;
     waterProfiles.value = w.waterProfiles;
@@ -342,6 +346,7 @@ const markRows = computed(() => {
         <dl class="details">
           <div><dt>{{ espresso ? 'Dose → shot' : log.actualIceGrams !== null ? 'Dose : water + ice' : 'Dose : water' }}</dt><dd>{{ formatDoseLine(log.actualDoseGrams, log.actualWaterGrams, log.actualYieldGrams, log.actualIceGrams) }}</dd></div>
           <div><dt>{{ espresso ? 'Shot weight' : 'Yield' }}</dt><dd>{{ yieldText(log) }}</dd></div>
+          <div v-if="log.vessel && log.vesselWeightGrams !== null"><dt>Weighed in</dt><dd>{{ log.vessel.name }} ({{ formatGrams(log.vesselWeightGrams) }} g)</dd></div>
           <div v-if="log.tdsPercent !== null"><dt>{{ log.dilutionRatio !== null && !isColdStyle(log.recipe?.style?.brewsLike) ? 'Concentrate TDS' : 'TDS' }}</dt><dd>{{ tdsText(log) }}</dd></div>
           <div v-if="!log.steeping"><dt>Caffeine</dt><dd>{{ formatCaffeine(brewCaffeineMg({ doseGrams: log.actualDoseGrams, waterGrams: log.actualWaterGrams }, log.bean)) }}</dd></div>
           <div v-if="log.steepTemp"><dt>Steeped in</dt><dd>{{ STEEP_TEMPS[log.steepTemp] }}</dd></div>
@@ -390,7 +395,7 @@ const markRows = computed(() => {
       <!-- Edit -->
       <form v-else class="card stack" novalidate @submit.prevent="saveEdit">
         <h2>Edit brew</h2>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :prep-tools="prepTools" :problems="problems" :method-kind="log.recipe?.methodKind ?? null" :brewer-id="log.brewer?.id ?? null" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="log.recipe?.style?.brewsLike ?? null" :iced="log.actualIceGrams !== null" :saved-flavors="log.flavors" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :vessels="vessels" :prep-tools="prepTools" :problems="problems" :method-kind="log.recipe?.methodKind ?? null" :brewer-id="log.brewer?.id ?? null" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="log.recipe?.style?.brewsLike ?? null" :iced="log.actualIceGrams !== null" :saved-flavors="log.flavors" />
         <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
         <div class="buttons">
           <button class="btn btn-secondary" type="button" :disabled="saving" @click="editing = false">Cancel</button>

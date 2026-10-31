@@ -24,14 +24,28 @@ const sources = (over: Partial<RepeatSources> = {}): RepeatSources => ({
   recipes: [{ id: 'house', brewer: { id: 'v60' }, archivedAt: null }] as Recipe[],
   grinders: [{ id: 'c40', archivedAt: null }] as Grinder[],
   waterProfiles: [{ id: 'tww', archivedAt: null }] as WaterProfile[],
+  vessels: [],
   ...over,
+});
+
+describe('repeatPlan: the vessel', () => {
+  const carafe = { id: 'carafe', name: 'Carafe', weightGrams: 300, archivedAt: null, createdAt: '' };
+  const inCarafe = { vesselId: 'carafe', vessel: { id: 'carafe', name: 'Carafe' } };
+  it('takes the vessel at its weight now', () => {
+    expect(repeatPlan(log(inCarafe), sources({ vessels: [carafe] }))).toMatchObject({ vessel: carafe, missing: [] });
+  });
+  it('names an archived one', () => {
+    const p = repeatPlan(log(inCarafe), sources({ vessels: [{ ...carafe, archivedAt: '2026-10-22' }] }));
+    expect(p.vessel).toBeNull();
+    expect(p.missing).toContain('The vessel Carafe is archived.');
+  });
 });
 
 describe('repeatPlan', () => {
   it('a plain brew: its method, brewer, recipe, grinder and water', () => {
     expect(repeatPlan(log(), sources())).toEqual({
       beanId: 'guji3', what: 'method:pour', item: 'plain:pour', brewerId: 'v60', recipeId: 'house',
-      grinderId: 'c40', waterProfileId: 'tww', missing: [],
+      grinderId: 'c40', waterProfileId: 'tww', vessel: null, missing: [],
     });
   });
   it("a drink: its category and the drink, on the log's brewer", () => {

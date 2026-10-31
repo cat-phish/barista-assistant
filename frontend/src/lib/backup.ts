@@ -13,6 +13,7 @@ const COUNTED: Array<[table: string, one: string, many: string]> = [
   ['brewers', 'brewer', 'brewers'],
   ['grinders', 'grinder', 'grinders'],
   ['water_profiles', 'water profile', 'water profiles'],
+  ['vessels', 'vessel', 'vessels'],
   ['menu_items', 'menu item', 'menu items'],
   ['bean_photos', 'photo', 'photos'],
 ];
@@ -70,9 +71,10 @@ export const COMES_ALONG: Record<ListName, string | null> = {
   brewers: 'each brewer’s method',
   grinders: null,
   water_profiles: null,
+  vessels: null,
   prep_tools: 'the brewers each is offered for, with their methods',
   brew_problems: null,
-  brew_logs: 'each brew’s bean, recipe, grinder, water, drink, prep items and problems',
+  brew_logs: 'each brew’s bean, recipe, grinder, water, vessel, drink, prep items and problems',
 };
 
 // The "add as a copy" example, from the file's own items: "Test Bean (2)"
@@ -117,6 +119,7 @@ export const LIST_LABELS: Record<ListName, string> = {
   brewers: 'Brewers',
   grinders: 'Grinders',
   water_profiles: 'Water profiles',
+  vessels: 'Vessels',
   prep_tools: 'Prep',
   brew_problems: 'Brew problems',
   brew_logs: 'Journal (brews)',

@@ -20,7 +20,9 @@ export interface BrewLogInput {
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso
   actualIceGrams: number | null; // flash chilled: ice in the server (no TDS with it)
-  actualYieldGrams: number | null;
+  actualYieldGrams: number | null; // net of the vessel, if weighed in one
+  vesselId?: string | null; // what it was weighed in (§3g); with vesselWeightGrams
+  vesselWeightGrams?: number | null; // the weight subtracted
   tdsPercent: number | null; // %
   actualTempC: number | null;
   actualGrindSetting: number | null; // the dial number

@@ -29,7 +29,7 @@ export const VOLUME_UNITS = ["fl_oz", "ml"] as const;
 export const ALTITUDE_UNITS = ["m", "ft"] as const;
 export const TEMPERATURE_UNITS = ["c", "f"] as const;
 export const THEMES = ["system", "light", "dark"] as const;
-export const REPEAT_KEEPS = ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "grinderWeights", "notes"] as const; // what a repeat copies
+export const REPEAT_KEEPS = ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "grinderWeights", "vessel", "notes"] as const; // what a repeat copies
 export interface UserPreferences {
   volumeUnit: (typeof VOLUME_UNITS)[number];
   showBothVolumes: boolean;
@@ -463,6 +463,26 @@ export const roastingMachines = mysqlTable(
   },
   (table) => ({
     workspaceNameUnique: unique("roasting_machines_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+
+// 11. Vessels (Per-Workspace Equipment)
+// A carafe, mug or cup with a known weight (docs/api/vessels.md §3g). A brew
+// weighed in one subtracts it to get its yield. Archived like grinders.
+export const vessels = mysqlTable(
+  "vessels",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(), // e.g. "Glass carafe"
+    weightGrams: decimal("weight_grams", { precision: 6, scale: 2, mode: "number" }).notNull(),
+    archivedAt: timestamp("archived_at"), // null = active
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("vessels_workspace_name_unique").on(table.workspaceId, table.name),
   })
 );
 export type RoastingMachine = typeof roastingMachines.$inferSelect;
@@ -1088,6 +1108,11 @@ export const brewLogs = mysqlTable("brew_logs", {
   // weight). Compared against the recipe's expected yield; with tdsPercent it
   // gives extraction yield.
   actualYieldGrams: decimal("actual_yield_grams", { precision: 6, scale: 2, mode: "number" }),
+  // What it was weighed in (optional; docs/api/brew-logs.md §6). actualYieldGrams
+  // is already net of it. The weight is the one subtracted, kept so re-weighing
+  // the vessel doesn't change this brew. Both or neither.
+  vesselId: varchar("vessel_id", { length: 36 }).references(() => vessels.id, { onDelete: "set null" }),
+  vesselWeightGrams: decimal("vessel_weight_grams", { precision: 6, scale: 2, mode: "number" }),
   // Refractometer reading, %. With the yield (or the water, for immersion) and
   // the dose it gives extraction yield, which is worked out, not stored
   // (docs/api/brew-logs.md §6).
