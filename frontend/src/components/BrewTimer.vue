@@ -21,7 +21,9 @@ import {
   finishStatus,
   formatFinishWindow,
   machineNote,
+  nextTempChange,
   pourAmounts,
+  setTempLine,
   stepInstruction,
   stepTitle,
   STEP_TYPES,
@@ -39,6 +41,7 @@ const props = defineProps<{
   expectedFinishMaxSec: number | null;
   firstDropWindow: { min: number; max: number } | null;
   machine: MachineCapabilities | null; // the espresso brewer's controls
+  waterTempC: number | null; // the brew's, until a step sets one
 }>();
 
 const emit = defineEmits<{
@@ -116,8 +119,23 @@ const holdable = computed(() => {
 function sideParts(index: number): { title: string; instruction: string | null; how: string } {
   const step = props.steps[index]!;
   const how = step.advance === 'first_drop' ? 'until first drop' : step.advance === 'tap' ? 'until you tap' : step.durationSec === null ? 'until done' : formatTime(step.durationSec);
-  return { title: stepTitle(step), instruction: stepInstruction(step, amounts.value[index] ?? null, props.flowUnit), how };
+  return { title: stepTitle(step), instruction: stepInstruction(step, amounts.value[index] ?? null, props.flowUnit, temperatureUnit.value), how };
 }
+// The current card's big line: what to do, or for a step that only changes the
+// temperature, that. The step's name goes under it. tempShown: it says the
+// step's temperature, so the label needn't.
+const currentLine = computed(() => {
+  const p = phase.value;
+  if (p.kind !== 'step') return null;
+  const instruction = stepInstruction(p.step, p.amount, props.flowUnit, temperatureUnit.value);
+  const line = instruction ?? (props.espresso ? null : setTempLine(props.steps, p.index, props.waterTempC, temperatureUnit.value));
+  return { big: line ?? stepTitle(p.step), small: line ? stepTitle(p.step) : '', tempShown: p.step.targetWaterGrams !== null || (instruction === null && line !== null) };
+});
+// Up next's callout. A recipe that ever changes temperature keeps its space,
+// so the cards don't jump when it comes and goes.
+const tempChange = (index: number) => nextTempChange(props.steps, index, props.waterTempC, temperatureUnit.value);
+const nextTemp = computed(() => (phase.value.kind === 'step' ? tempChange(phase.value.index) : null));
+const tempChanges = computed(() => props.steps.some((_, i) => tempChange(i) !== null));
 // "1:22", or "≈ 1:22" when the current step has no fixed end (it waits for a tap).
 const nextStarts = computed(() => {
   const p = phase.value;
@@ -247,15 +265,15 @@ onUnmounted(() => {
       >
         <template v-if="phase.kind === 'step'">
           <span class="label">
-            Step {{ phase.index + 1 }} of {{ steps.length }} · {{ STEP_TYPES[phase.step.stepType].label }}<template v-if="phase.step.targetTempC !== null"> · {{ formatTemp(phase.step.targetTempC, temperatureUnit) }}</template>
+            Step {{ phase.index + 1 }} of {{ steps.length }} · {{ STEP_TYPES[phase.step.stepType].label }}<template v-if="phase.step.targetTempC !== null && !currentLine?.tempShown"> · {{ formatTemp(phase.step.targetTempC, temperatureUnit) }}</template>
           </span>
           <!-- What to do is the big line; the step's name is the small one under it. -->
           <div class="main-row">
-            <h3 aria-live="polite">{{ stepInstruction(phase.step, phase.amount, flowUnit) ?? stepTitle(phase.step) }}</h3>
+            <h3 :class="{ long: (currentLine?.big.length ?? 0) > 22 }" aria-live="polite">{{ currentLine?.big }}</h3>
             <span class="count" :class="{ text: !/^\d/.test(countdown.big) }" aria-live="off">{{ countdown.big }}</span>
           </div>
           <div class="sub-row">
-            <span>{{ stepInstruction(phase.step, phase.amount, flowUnit) ? stepTitle(phase.step) : '' }}</span>
+            <span>{{ currentLine?.small }}</span>
             <span>{{ countdown.small }}</span>
           </div>
           <p v-if="machineNote(phase.step, machine)" class="machine-note">{{ machineNote(phase.step, machine) }}</p>
@@ -292,6 +310,9 @@ onUnmounted(() => {
           </template>
           <template v-else>None</template>
         </span>
+        <p v-if="tempChanges" class="temp-change" :class="{ off: !nextTemp }" aria-live="polite">
+          <template v-if="nextTemp">Next step {{ nextTemp.next }}<template v-if="nextTemp.now"> (now {{ nextTemp.now }})</template></template>
+        </p>
       </div>
     </template>
     <!-- Steps first (they say what to do), then the buttons, then the clock. -->
@@ -445,10 +466,26 @@ onUnmounted(() => {
 .side {
   font-size: 1.05rem;
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 0.5rem;
   min-height: 2.75rem;
   background: var(--bg);
+}
+.temp-change {
+  flex-basis: 100%;
+  margin: 0.25rem 0 0;
+  padding: 0.35rem 0.6rem;
+  min-height: 2.2rem;
+  border-radius: 6px;
+  border: 1px solid var(--brand-line);
+  background: var(--brand-tint);
+  color: var(--brand);
+  font-weight: 700;
+}
+/* Keeps its space while there's no change to show. */
+.temp-change.off {
+  visibility: hidden;
 }
 .side .label {
   flex-shrink: 0;
@@ -468,6 +505,10 @@ onUnmounted(() => {
 .main-row h3 {
   font-size: 1.8rem;
   line-height: 1.2;
+}
+/* A pour with its temperature, so it stays on two lines on a phone. */
+.main-row h3.long {
+  font-size: 1.4rem;
 }
 .count {
   font-size: 2rem;
