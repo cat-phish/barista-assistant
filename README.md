@@ -44,14 +44,11 @@ images are built on the server).
    - `ALLOW_REGISTRATION=false` once the accounts exist, if the server is
      reachable by people who shouldn't sign up; `BREW_TIMEZONE` and
      `BACKUP_TIMEZONE`.
-3. **Let the app write its folders:** the backend and worker run as uid
-   1000. `sudo chown 1000:1000 photos backups` (or the `PHOTOS_DIR` and
-   `BACKUPS_DIR` folders you set; create them first).
-4. **Start it:** `docker compose up -d --build`. `docker compose ps` should
+3. **Start it:** `docker compose up -d --build`. `docker compose ps` should
    show every service running, and db, redis and backend healthy. The
    containers restart on their own, after a reboot too, as long as Docker
    starts at boot.
-5. **Trust the CA** on each device and install the app (next section).
+4. **Trust the CA** on each device and install the app (next section).
 
 **Updating:** `git pull && docker compose up -d --build`. The backend
 applies new database migrations when it starts. Open apps pick up the new
@@ -67,9 +64,10 @@ version on their own, but never mid-brew.
    docker compose down
    ```
 2. Copy `move.sql.gz` and the `photos/` folder to the server. Start the app
-   there (steps above), put the photos in its photos folder (owned by uid
-   1000), then restore the dump as `docs/api/server.md` "Restoring a dump"
-   says, with `move.sql.gz` as the file.
+   there (steps above), restore the dump as `docs/api/server.md` "Restoring
+   a dump" says, with `move.sql.gz` as the file, and only then put the
+   photos in its photos folder: when the backend starts, it deletes photos
+   no row points at.
 3. Devices trust the new server's CA (it's a new one) and install the app
    again from the new address.
 
@@ -85,8 +83,8 @@ plus:
 
 - `IMAGE_TAG`: `latest` (the default, from `main`), `testing`, `dev`, or a
   fixed build such as `sha-7a093cd`;
-- every `*_DIR` setting, which is required here. Create the photos and
-  backups folders and `chown 1000:1000` them.
+- every `*_DIR` setting, which is required here. Docker creates the folders
+  and the app sets their owner when it starts.
 
 It doesn't map ports 3000, 3306 or 6379 on the host, and it has no test
 database.

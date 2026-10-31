@@ -2080,5 +2080,10 @@ repo. README: "Run the published images".
   `/ca.crt`) rather than 443 and 80, which most servers already use. Caddy
   still listens on 443 and 80 inside the container, and `HTTPS_PORT` and
   `HTTP_PORT` override them.
+- **Data folders set themselves up:** the backend and worker start as root,
+  take ownership of `/photos` and `/backups` (`DATA_DIRS`,
+  `docker/entrypoint.sh`), then run as `node`, as the MariaDB and Redis images
+  do. No `chown` on install, and it recovers from Unraid's New Permissions on
+  the next restart.
 - Decided: a second compose file over configurable image names, so the main
   file stays simple for building from source. `amd64` only for now.
