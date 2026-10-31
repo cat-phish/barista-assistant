@@ -2,10 +2,11 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { beanProcessesApi } from '../api/beanProcesses';
-import { beansApi, type BeanInput } from '../api/beans';
+import { beansApi, type BeanBrewSummary, type BeanInput } from '../api/beans';
 import { errorMessage } from '../api/client';
 import AppHeader from '../components/AppHeader.vue';
 import BeanPhotos from '../components/BeanPhotos.vue';
+import BrewAverageHint from '../components/BrewAverageHint.vue';
 import LabelCard from '../components/LabelCard.vue';
 import LabelHint from '../components/LabelHint.vue';
 import NameInput from '../components/NameInput.vue';
@@ -81,6 +82,8 @@ const website = ref('');
 const showOnPublicMenu = ref(true);
 const rating = ref<number | null>(null);
 const review = ref('');
+// How its brews went: the hint under the rating. A new bean has none.
+const brewSummary = ref<BeanBrewSummary | null>(null);
 const notes = ref('');
 // Saved photos, cover first (docs/api/bean-photos.md §4c); a new bean's are
 // held by BeanPhotos until it's saved.
@@ -469,6 +472,12 @@ onMounted(async () => {
       .list(ws)
       .then((r) => (processes.value = r.processes))
       .catch(() => (processes.value = [])); // the select just offers "Not sure"
+    if (props.id) {
+      beansApi
+        .brewSummary(ws, props.id)
+        .then((summary) => (brewSummary.value = summary))
+        .catch(() => undefined); // only a hint
+    }
   }
   // The form as it opens (for Start over), then what was kept, if any.
   await load();
@@ -857,6 +866,7 @@ async function save(): Promise<void> {
 
       <section v-if="show('bean.rating') || show('bean.review') || show('bean.notes')" class="card stack">
         <RatingInput v-if="show('bean.rating')" v-model="rating" name="bean-rating" label="Rating" />
+        <BrewAverageHint v-if="show('bean.rating')" :summary="brewSummary" />
         <div v-if="show('bean.review')" class="field">
           <label for="review">Review</label>
           <textarea id="review" v-model="review" rows="4" maxlength="2000" placeholder="e.g. Bright and juicy on the V60, a bit thin as espresso. Would buy again." />

@@ -175,6 +175,27 @@ is no age.
 - **Errors:** `400` invalid or empty body; `403` viewer; `404` bean not in this
   workspace.
 
+## `GET /api/workspaces/:workspaceId/beans/:beanId/brew-summary`
+
+How this bag's brews went, for the hint where a bean is rated and the
+brewers offered for a review draft (`analysis.md` §8e).
+
+- **Auth Required:** `true` (any member)
+- **Success (`200 OK`):**
+  ```json
+  {
+    "brewCount": 14,
+    "ratedCount": 12,
+    "averageRating": 3.83,
+    "brewers": [{ "id": "uuid", "name": "V60", "brewCount": 9 }]
+  }
+  ```
+  Brews still steeping aren't counted. `averageRating` is the coffee's own
+  `rating` (not `drinkRating`), to 2 decimals, `null` with nothing rated.
+  `brewers`, by name, are those used, archived ones too; a brew with no
+  brewer counts towards `brewCount` only.
+- **Errors:** `404` not a bean in this workspace.
+
 ## `DELETE /api/workspaces/:workspaceId/beans/:beanId`
 
 The schema cascades a bean's deletion to its `brew_logs` and their

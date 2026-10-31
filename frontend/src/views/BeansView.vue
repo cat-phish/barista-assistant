@@ -5,7 +5,7 @@
 // rating, and unrated archived beans keep asking until rated.
 import { computed, onMounted, ref, watch } from 'vue';
 import { beanProcessesApi } from '../api/beanProcesses';
-import { beansApi } from '../api/beans';
+import { beansApi, type BeanBrewSummary } from '../api/beans';
 import { ApiError, errorMessage } from '../api/client';
 import type { Bean, BeanProcess } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
@@ -14,6 +14,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import ListControls from '../components/ListControls.vue';
 import ListDataBar from '../components/ListDataBar.vue';
 import { useSelection } from '../composables/useSelection';
+import BrewAverageHint from '../components/BrewAverageHint.vue';
 import RatingInput from '../components/RatingInput.vue';
 import RatingStars from '../components/RatingStars.vue';
 import {
@@ -210,12 +211,22 @@ const rateTarget = ref<Bean | null>(null);
 const rateMode = ref<'archive' | 'rate'>('rate');
 const rateValue = ref<number | null>(null);
 const rateError = ref('');
+const rateSummary = ref<BeanBrewSummary | null>(null);
 const rating = ref(false);
 function openRating(bean: Bean, mode: 'archive' | 'rate'): void {
   rateTarget.value = bean;
   rateMode.value = mode;
   rateValue.value = null;
   rateError.value = '';
+  rateSummary.value = null;
+  const ws = workspaces.current?.id;
+  if (!ws) return;
+  beansApi
+    .brewSummary(ws, bean.id)
+    .then((summary) => {
+      if (rateTarget.value?.id === bean.id) rateSummary.value = summary;
+    })
+    .catch(() => undefined); // only a hint
 }
 async function saveRating(withRating: boolean): Promise<void> {
   const ws = workspaces.current?.id;
@@ -563,6 +574,7 @@ const selection = useSelection();
     </p>
     <p v-else>How was {{ rateTarget && beanTitle(rateTarget) }}?</p>
     <RatingInput v-model="rateValue" name="archive-rating" label="Rating" />
+    <BrewAverageHint :summary="rateSummary" />
     <p v-if="rateError" class="form-error" role="alert">{{ rateError }}</p>
     <template #actions>
       <template v-if="rateMode === 'archive'">

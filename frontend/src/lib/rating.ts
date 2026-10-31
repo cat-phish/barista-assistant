@@ -18,6 +18,12 @@ export function starValues(n: number, step: RatingStep): number[] {
   return step === 'half' ? [n - 0.5, n] : [n];
 }
 
+// "Brews average 3.8 from 12 rated", or null with nothing rated.
+export function brewAverageText(summary: { averageRating: number | null; ratedCount: number } | null): string | null {
+  if (summary?.averageRating == null) return null;
+  return `Brews average ${summary.averageRating.toFixed(1)} from ${summary.ratedCount} rated`;
+}
+
 // "4 – Good" for a whole star, "3.5" between two.
 export function ratingLabel(rating: number): string {
   return Number.isInteger(rating) ? `${rating} – ${LABELS[rating]}` : String(rating);

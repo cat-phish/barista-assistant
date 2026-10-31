@@ -38,6 +38,14 @@ export interface BeanInput {
   review: string | null;
 }
 
+// How a bean's brews went (§4 brew-summary).
+export interface BeanBrewSummary {
+  brewCount: number;
+  ratedCount: number;
+  averageRating: number | null;
+  brewers: { id: string; name: string; brewCount: number }[];
+}
+
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/beans`;
 
 export const beansApi = {
@@ -46,6 +54,7 @@ export const beansApi = {
   // archived: true archives (keeping the first date), false restores (§4).
   update: (workspaceId: string, id: string, input: Partial<BeanInput> & { archived?: boolean }) =>
     api.patch<{ bean: Bean }>(`${base(workspaceId)}/${id}`, input),
+  brewSummary: (workspaceId: string, id: string) => api.get<BeanBrewSummary>(`${base(workspaceId)}/${id}/brew-summary`),
   // date: the user's local YYYY-MM-DD (§4).
   freeze: (workspaceId: string, id: string, date: string) =>
     api.post<{ bean: Bean }>(`${base(workspaceId)}/${id}/freeze`, { date }),

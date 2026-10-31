@@ -12,6 +12,7 @@ import {
   beanProcesses,
   beans,
   BLEND_TYPES,
+  brewers,
   brewLogs,
   COFFEE_SPECIES,
   DETAILED_ROAST_LEVELS,
@@ -43,6 +44,12 @@ export interface BeanListResponse {
   beans: BeanWithFreezes[];
 }
 
+export interface BeanBrewSummary {
+  brewCount: number;
+  ratedCount: number;
+  averageRating: number | null;
+  brewers: { id: string; name: string; brewCount: number }[];
+}
 export interface BeanResponse {
   bean: BeanWithFreezes;
 }
@@ -468,6 +475,38 @@ async function lockedPeriods(tx: Tx, params: BeanParams) {
   const [latest, previous] = [...periods].sort(byLatest);
   return { bean, latest, previous };
 }
+
+// How the bean's brews went (docs/api/beans.md §4): the rating hint, and the
+// brewers to pick from for a review draft (§8e). Brews still steeping aren't done.
+beansRouter.get("/:beanId/brew-summary", async (req: Request<BeanParams>, res: Response<BeanBrewSummary>) => {
+  if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId))) return;
+  const [bean] = await db.select({ id: beans.id }).from(beans).where(beanInWorkspace(req.params));
+  if (!bean) {
+    sendError(res, 404, "Bean not found");
+    return;
+  }
+  const rows = await db
+    .select({
+      id: brewLogs.brewerId,
+      name: brewers.name,
+      brewCount: count(),
+      ratedCount: count(brewLogs.rating),
+      ratingSum: sql<string | null>`sum(${brewLogs.rating})`,
+    })
+    .from(brewLogs)
+    .leftJoin(brewers, eq(brewLogs.brewerId, brewers.id))
+    .where(and(eq(brewLogs.beanId, bean.id), eq(brewLogs.steeping, false)))
+    .groupBy(brewLogs.brewerId, brewers.name)
+    .orderBy(asc(brewers.name));
+  const ratedCount = rows.reduce((n, r) => n + r.ratedCount, 0);
+  const ratingSum = rows.reduce((n, r) => n + Number(r.ratingSum ?? 0), 0);
+  res.json({
+    brewCount: rows.reduce((n, r) => n + r.brewCount, 0),
+    ratedCount,
+    averageRating: ratedCount ? Math.round((ratingSum / ratedCount) * 100) / 100 : null,
+    brewers: rows.flatMap((r) => (r.id && r.name ? [{ id: r.id, name: r.name, brewCount: r.brewCount }] : [])),
+  });
+});
 
 async function sendBean(req: Request<BeanParams>, res: Response<BeanResponse>): Promise<void> {
   const [bean] = await loadBeans(beanInWorkspace(req.params));
