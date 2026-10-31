@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, LABEL_WEB_CONTEXTS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_REST_DAYS, MAX_SUGGEST_BREWS, REMEMBER_KEYS, REPEAT_KEEPS, RATING_STEPS, ROAST_LEVELS, ROAST_SCALES, ROAST_TYPES, type RoastType, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
+import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, LABEL_WEB_CONTEXTS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_REST_DAYS, MAX_REVIEW_BREWS, MAX_SUGGEST_BREWS, REMEMBER_KEYS, REPEAT_KEEPS, RATING_STEPS, ROAST_LEVELS, ROAST_SCALES, ROAST_TYPES, type RoastType, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
 import { AI_DETAILS } from "@barista/shared/aiDetails";
 import { ROLES } from "./auth/membership.js";
 
@@ -42,6 +42,11 @@ export const workspaceSettingsObject = z
     suggestSource: z.enum(SUGGEST_SOURCES),
     suggestMaxBrews: z.number().int().min(1).max(MAX_SUGGEST_BREWS),
     suggestAlternatives: alternativeKinds,
+    // "Write with AI" on a bean's Review (docs/api/analysis.md §8e).
+    beanReviews: z.boolean(),
+    beanReviewMaxBrews: z.number().int().min(1).max(MAX_REVIEW_BREWS),
+    beanReviewRatedOnly: z.boolean(),
+    beanReviewBrewers: z.union([z.literal("all"), z.array(z.uuid()).max(200).refine((ids) => new Set(ids).size === ids.length, "each brewer once")]),
     readLabels: z.boolean(), // docs/api/bean-label.md §4d
     labelWebLookup: z.boolean(),
     labelWebContext: z.enum(LABEL_WEB_CONTEXTS),

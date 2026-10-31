@@ -4,10 +4,12 @@
 //  - automatic analysis (docs/api/analysis.md §8): on or off, how long
 //    after saving, and a daily cap;
 //  - which earlier brews "Suggest parameters" sends by default (§8b);
+//  - what a bean's "Write with AI" starts with (§8e);
 //  - which details the AI gets (docs/api/llm-contract.md §9, "What the AI sees").
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { errorMessage } from '../api/client';
-import { AUTO_ANALYZE_DELAYS, MAX_SUGGEST_BREWS, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, type AlternativeKind, type AutoAnalyzeDelay, type LabelWebContext, type SuggestSource, type WorkspaceSettings } from '../api/types';
+import { AUTO_ANALYZE_DELAYS, MAX_REVIEW_BREWS, MAX_SUGGEST_BREWS, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, type AlternativeKind, type AutoAnalyzeDelay, type Brewer, type LabelWebContext, type SuggestSource, type WorkspaceSettings } from '../api/types';
+import { brewersApi } from '../api/brewers';
 import { workspacesApi } from '../api/workspaces';
 import SettingsLayout from '../components/SettingsLayout.vue';
 import { usePreferences } from '../composables/usePreferences';
@@ -22,7 +24,7 @@ const WEB_CONTEXTS: Record<LabelWebContext, string> = { low: 'Low: quickest, che
 const isOwner = computed(() => workspaces.current?.role === 'owner');
 const saving = ref(false);
 const error = ref('');
-type Section = AiGroup | 'auto' | 'suggest' | 'labels';
+type Section = AiGroup | 'auto' | 'suggest' | 'reviews' | 'labels';
 const activeSection = ref<Section | null>(null); // the section last changed
 const saved = ref(false);
 const GROUPS = Object.keys(AI_GROUPS) as AiGroup[];
@@ -38,6 +40,28 @@ const capInvalid = computed(() => {
   const n = Number(capDraft.value);
   return !Number.isInteger(n) || n < 1 || n > MAX_CAP;
 });
+
+// Bean reviews: the active brewers to start with, or all of them. With
+// unrated brews kept from the AI, rated only can't be turned off.
+const brewers = ref<Brewer[]>([]);
+onMounted(() => {
+  const ws = workspaces.current?.id;
+  if (ws) {
+    brewersApi
+      .list(ws)
+      .then((r) => (brewers.value = r.brewers.filter((b) => b.archivedAt === null)))
+      .catch(() => (brewers.value = [])); // "All brewers" still works
+  }
+});
+const reviewBrewers = computed(() => settings.value.beanReviewBrewers);
+const ratedLocked = computed(() => aiHidden.value.includes('unratedHistory'));
+function setAllBrewers(all: boolean): void {
+  void save({ beanReviewBrewers: all ? 'all' : brewers.value.map((b) => b.id) }, 'reviews');
+}
+function toggleReviewBrewer(id: string, on: boolean): void {
+  const current = reviewBrewers.value === 'all' ? [] : reviewBrewers.value;
+  void save({ beanReviewBrewers: on ? [...current, id] : current.filter((b) => b !== id) }, 'reviews');
+}
 
 async function save(changes: Partial<WorkspaceSettings>, section: Section): Promise<void> {
   const ws = workspaces.current?.id;
@@ -172,6 +196,44 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
       <p v-if="saved && activeSection === 'suggest'" class="muted small" aria-live="polite">Saved.</p>
     </section>
 
+    <section class="card stack" aria-labelledby="ai-reviews">
+      <h2 id="ai-reviews">Bean reviews</h2>
+      <p class="muted">
+        On the bean form, “Write with AI” sends a bean's brews to the AI, which drafts its Review and suggests a rating. Nothing is saved until
+        you save the bean. Pick what it starts with; anyone editing the bean can change it each time.
+      </p>
+      <label class="checkbox">
+        <input type="checkbox" :checked="settings.beanReviews" :disabled="!isOwner || saving" @change="save({ beanReviews: ($event.target as HTMLInputElement).checked }, 'reviews')" />
+        Write bean reviews with AI
+      </label>
+      <fieldset class="stack review-defaults" :disabled="!isOwner || saving || !settings.beanReviews">
+        <legend class="visually-hidden">Bean review defaults</legend>
+        <div class="field">
+          <label for="review-max">Up to</label>
+          <select id="review-max" :value="settings.beanReviewMaxBrews" @change="save({ beanReviewMaxBrews: Number(($event.target as HTMLSelectElement).value) }, 'reviews')">
+            <option v-for="n in MAX_REVIEW_BREWS" :key="n" :value="n">{{ n }} {{ n === 1 ? 'brew' : 'brews' }}</option>
+          </select>
+        </div>
+        <label class="checkbox">
+          <input type="checkbox" :checked="settings.beanReviewRatedOnly || ratedLocked" :disabled="ratedLocked" @change="save({ beanReviewRatedOnly: ($event.target as HTMLInputElement).checked }, 'reviews')" />
+          Rated brews only
+        </label>
+        <p v-if="ratedLocked" class="muted small">Unrated brews are kept from the AI below.</p>
+        <label class="checkbox">
+          <input type="checkbox" :checked="reviewBrewers === 'all'" @change="setAllBrewers(($event.target as HTMLInputElement).checked)" />
+          All brewers
+        </label>
+        <template v-if="reviewBrewers !== 'all'">
+          <label v-for="b in brewers" :key="b.id" class="checkbox detail-choice">
+            <input type="checkbox" :checked="reviewBrewers.includes(b.id)" @change="toggleReviewBrewer(b.id, ($event.target as HTMLInputElement).checked)" />
+            {{ b.name }}
+          </label>
+        </template>
+      </fieldset>
+      <p v-if="error && activeSection === 'reviews'" class="form-error" role="alert">{{ error }}</p>
+      <p v-if="saved && activeSection === 'reviews'" class="muted small" aria-live="polite">Saved.</p>
+    </section>
+
     <section class="card stack" aria-labelledby="ai-labels">
       <h2 id="ai-labels">Bean labels</h2>
       <p class="muted">
@@ -254,6 +316,12 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
 }
 .web-context {
   max-width: 20rem;
+}
+.review-defaults {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
 }
 .suggest-alts {
   display: flex;

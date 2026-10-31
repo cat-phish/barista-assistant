@@ -94,6 +94,14 @@ Every workspace in a response carries `settings`, defaults filled in
 - `suggestAlternatives` (each of `recipe`, `brewer`, `bean` at most once;
   default `[]`): what else "Suggest parameters" suggests by default, ticked
   to start with on the brew page (§8b), set under Settings → **AI**.
+- `beanReviews` (boolean, default `true`): whether a bean's Review offers
+  "Write with AI"; off, the route answers `403` (`docs/api/analysis.md` §8e).
+  `beanReviewMaxBrews` (integer 1–30, default `10`), `beanReviewRatedOnly`
+  (boolean, default `true`) and `beanReviewBrewers` (`"all"`, the default, or
+  brewer ids): what that dialog starts with, changeable each time, set under
+  Settings → **AI**. Ids the bean never used are ignored, and when none of
+  them apply it starts with all its brewers (so does a restored backup,
+  whose brewers have new ids).
 - `readLabels` (boolean, default `true`): whether the bean form offers
   "Fill in from a photo", which sends label photos to the AI provider
   (`docs/api/bean-label.md` §4d), set under Settings → **AI**. Off, the
