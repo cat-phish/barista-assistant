@@ -134,6 +134,33 @@ describe("import by list", () => {
     expect(names((await other.agent.get(`${tbase}/recipes`)).body.recipes)).toEqual(["House V60", "House V60 (2)"]);
   });
 
+  it("vessels export picked ones, import by name, and a brew brings its own", async () => {
+    const { owner, ws, base, bean } = await source();
+    const vessel = async (name: string, weightGrams: number) => (await owner.agent.post(`${base}/vessels`).send({ name, weightGrams })).body.vessel.id as string;
+    const carafe = await vessel("Carafe", 312.5);
+    await vessel("Mug", 280);
+    const picked = await exportOf(owner, base, { lists: ["vessels"], ids: { vessels: [carafe] } });
+    expect(names(picked.tables.vessels)).toEqual(["Carafe"]);
+
+    const other = await newUser();
+    const target = await newWorkspace(other);
+    const tbase = `/api/workspaces/${target.id}`;
+    await other.agent.post(`${tbase}/vessels`).send({ name: "carafe", weightGrams: 100 });
+    const done = await other.agent.post(`${tbase}/import`).send({ file: await exportOf(owner, base, { lists: ["vessels"] }) });
+    expect(done.status, JSON.stringify(done.body)).toBe(200);
+    const listed = (await other.agent.get(`${tbase}/vessels`)).body.vessels as Array<{ name: string; weightGrams: number }>;
+    expect(listed.map((v) => [v.name, v.weightGrams])).toEqual([["carafe", 100], ["Mug", 280]]); // matched by name, the rest added
+
+    const log = await newBrewLog(owner, ws.id, bean, { actualYieldGrams: 225, vesselId: carafe, vesselWeightGrams: 312.5 });
+    const third = await newUser();
+    const thirdWs = await newWorkspace(third);
+    const brews = await exportOf(owner, base, { lists: ["brew_logs"], ids: { brew_logs: [log] } });
+    expect(names(brews.tables.vessels)).toEqual(["Carafe"]);
+    expect((await third.agent.post(`/api/workspaces/${thirdWs.id}/import`).send({ file: brews })).status).toBe(200);
+    const imported = (await third.agent.get(`/api/workspaces/${thirdWs.id}/brew-logs`)).body.brewLogs;
+    expect(imported[0]).toMatchObject({ actualYieldGrams: 225, vesselWeightGrams: 312.5, vessel: { name: "Carafe" } });
+  });
+
   it("a prep tool brings the brewers it's offered for, matched by name", async () => {
     const { owner, ws, base } = await source();
     const v60 = await brewerId(owner, ws.id, "V60");

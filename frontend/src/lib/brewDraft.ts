@@ -1,7 +1,7 @@
 // Editable brew details (log form and journal edit), validated with the same
 // rules as the API (docs/api/brew-logs.md §6). Unit-tested in brewDraft.test.ts.
 import type { BrewLogInput } from '../api/brews';
-import type { BrewLog, DilutionWith, Grinder, Mark, MethodKind, SteepTemp, TemperatureUnit } from '../api/types';
+import type { BrewLog, DilutionWith, Grinder, Mark, MethodKind, SteepTemp, TemperatureUnit, Vessel } from '../api/types';
 import { formatGrams, formatGrind, formatTime, GRIND_SETTING, parseDecimal, parseTime } from './format';
 import { parseMark } from './marks';
 import { parseTemp, tempText } from './units';
@@ -10,7 +10,9 @@ export interface BrewDraft {
   dose: string;
   water: string; // unused for espresso; the hot water for flash chilled
   ice: string; // flash chilled: g in the server ('' = none); unused for espresso
-  yieldGrams: string; // measured beverage weight: optional, but the shot weight (required) for espresso
+  yieldGrams: string; // the weight typed: optional, but the shot weight (required) for espresso. With a vessel, the total: netYield is the yield
+  vesselId: string; // what it's weighed in; '' = weighed directly
+  vesselGrams: number | null; // the weight to subtract: set with setVessel
   tds: string; // % ('' = not measured); not sent with ice
   temp: string;
   grinderId: string; // '' = none
@@ -33,6 +35,23 @@ export interface BrewDraft {
   drinkNotes: string;
 }
 
+// The yield typed, less the vessel: null if it isn't a weight above 0. As a
+// number, for the form's hints; parseBrewDraft checks the text.
+export function netYield(d: Pick<BrewDraft, 'yieldGrams' | 'vesselId' | 'vesselGrams'>): number | null {
+  const typed = Number(d.yieldGrams.replace(',', '.'));
+  if (!d.yieldGrams.trim() || !Number.isFinite(typed)) return null;
+  const net = d.vesselId && d.vesselGrams !== null ? minusVessel(typed, d.vesselGrams) : typed;
+  return net > 0 ? net : null;
+}
+const minusVessel = (total: number, vessel: number) => Math.round((total - vessel) * 100) / 100;
+
+// Weighing in a vessel (null = directly). The typed number stays: it's now
+// read as the total, or the other way round.
+export function setVessel(d: Pick<BrewDraft, 'vesselId' | 'vesselGrams'>, vessel: Pick<Vessel, 'id' | 'weightGrams'> | null): void {
+  d.vesselId = vessel?.id ?? '';
+  d.vesselGrams = vessel?.weightGrams ?? null;
+}
+
 export type BrewValues = Omit<BrewLogInput, 'beanId' | 'recipeId'>;
 export type BrewDraftErrors = Partial<Record<'dose' | 'water' | 'ice' | 'yieldGrams' | 'tds' | 'temp' | 'time' | 'firstDrop' | 'rpm' | 'beanIn' | 'groundOut' | 'grind' | 'dilution', string>>;
 
@@ -40,16 +59,21 @@ export type BrewDraftErrors = Partial<Record<'dose' | 'water' | 'ice' | 'yieldGr
 export type RpmGrinder = Pick<Grinder, 'variableSpeed' | 'rpmMin' | 'rpmMax'> | null;
 
 export function emptyDraft(): BrewDraft {
-  return { dose: '', water: '', ice: '', yieldGrams: '', tds: '', temp: '', grinderId: '', waterProfileId: '', toolIds: [], problemIds: [], flavors: [], firstDrop: '', grind: '', rpm: '', beanIn: '', groundOut: '', steepTemp: '', dilution: '', dilutedWith: '', time: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
+  return { dose: '', water: '', ice: '', yieldGrams: '', vesselId: '', vesselGrams: null, tds: '', temp: '', grinderId: '', waterProfileId: '', toolIds: [], problemIds: [], flavors: [], firstDrop: '', grind: '', rpm: '', beanIn: '', groundOut: '', steepTemp: '', dilution: '', dilutedWith: '', time: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
 }
 
 // temp is text in the person's unit (°C stored); see lib/units.ts.
 export function draftFromLog(log: BrewLog, tempUnit: TemperatureUnit = 'c'): BrewDraft {
+  const vessel = log.vesselId && log.vesselWeightGrams !== null ? { id: log.vesselId, weightGrams: log.vesselWeightGrams } : null;
   return {
     dose: formatGrams(log.actualDoseGrams),
     water: log.actualWaterGrams === null ? '' : formatGrams(log.actualWaterGrams),
     ice: log.actualIceGrams === null ? '' : formatGrams(log.actualIceGrams),
-    yieldGrams: log.actualYieldGrams === null ? '' : formatGrams(log.actualYieldGrams),
+    // With a vessel, the total as weighed: the weight saved then, whatever
+    // the vessel weighs now.
+    yieldGrams: log.actualYieldGrams === null ? '' : formatGrams(vessel ? minusVessel(log.actualYieldGrams, -vessel.weightGrams) : log.actualYieldGrams),
+    vesselId: vessel?.id ?? '',
+    vesselGrams: vessel?.weightGrams ?? null,
     tds: log.tdsPercent === null ? '' : String(log.tdsPercent),
     temp: tempText(log.actualTempC, tempUnit),
     grinderId: log.grinderId ?? '',
@@ -101,6 +125,9 @@ export function parseBrewDraft(
     : espresso
       ? ({ ok: false, error: 'Enter the shot weight' } as const)
       : null;
+  // Weighed in a vessel: what was typed is the total (docs/api/brew-logs.md §6).
+  const vessel = d.vesselId && d.vesselGrams !== null ? { id: d.vesselId, grams: d.vesselGrams } : null;
+  const net = yieldGrams?.ok && vessel ? minusVessel(yieldGrams.value, vessel.grams) : (yieldGrams?.ok ? yieldGrams.value : null);
   // A brew made onto ice takes no TDS (docs/api/brew-logs.md §6).
   const tds = !ice && d.tds.trim() ? parseDecimal(d.tds, { scale: 2, min: 0, max: 30, exclusiveMin: true }) : null;
   const temp = d.temp.trim() ? parseTemp(d.temp, tempUnit) : null;
@@ -118,6 +145,7 @@ export function parseBrewDraft(
   if (!water.ok) errors.water = water.error;
   if (ice && !ice.ok) errors.ice = ice.error;
   if (yieldGrams && !yieldGrams.ok) errors.yieldGrams = yieldGrams.error;
+  else if (vessel && net !== null && net <= 0) errors.yieldGrams = `Less than the vessel's ${formatGrams(vessel.grams)} g`;
   if (tds && !tds.ok) errors.tds = tds.error;
   if (temp && !temp.ok) errors.temp = temp.error;
   if (!time.ok) errors.time = time.error;
@@ -143,7 +171,9 @@ export function parseBrewDraft(
       actualDoseGrams: dose.value,
       actualWaterGrams: water.value,
       actualIceGrams: ice?.ok ? ice.value : null,
-      actualYieldGrams: yieldGrams?.ok ? yieldGrams.value : null,
+      actualYieldGrams: net,
+      vesselId: vessel && net !== null ? vessel.id : null,
+      vesselWeightGrams: vessel && net !== null ? vessel.grams : null,
       tdsPercent: tds?.ok ? tds.value : null,
       actualTempC: temp?.ok ? temp.value : null,
       grinderId: d.grinderId || null,

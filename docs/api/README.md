@@ -21,6 +21,7 @@ means drinks, wherever you see it (code comments use
 | §3d | [prep-tools.md](prep-tools.md) | Prep Tools |
 | §3e | [brewer-methods.md](brewer-methods.md) | Brewer Methods |
 | §3f | [roasting-machines.md](roasting-machines.md) | Roasting Machines (home roasting) |
+| §3g | [vessels.md](vessels.md) | Vessels (carafes, mugs and cups a yield is weighed in) |
 | §4 | [beans.md](beans.md) | Beans |
 | §4b | [bean-processes.md](bean-processes.md) | Bean Processes |
 | §4c | [bean-photos.md](bean-photos.md) | Bean Photos (the bag or label; cover in the list) |
@@ -63,7 +64,7 @@ and `public-menu.md` if brews or the menu show it.
 - Error responses may include extra fields alongside `error` where noted
   (e.g. `brewLogCount`).
 - **Archiving and deleting.** Beans, brewers, grinders, water profiles,
-  prep tools, recipes, drinks and ingredients can be **archived** (PATCH
+  vessels, prep tools, recipes, drinks and ingredients can be **archived** (PATCH
   `"archived": true | false`, `archivedAt` in responses): they leave the
   pickers for new brews and drinks, and history keeps them. **Deleting**
   never refuses because something uses the item: what used it is unlinked

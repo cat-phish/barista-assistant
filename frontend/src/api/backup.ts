@@ -13,7 +13,7 @@ export interface BackupFile {
 }
 
 // What can be exported and imported on its own (docs/api/backup.md §2b, "By list").
-export const LISTS = ['beans', 'recipes', 'drinks', 'ingredients', 'brewers', 'grinders', 'water_profiles', 'prep_tools', 'brew_problems', 'brew_logs'] as const;
+export const LISTS = ['beans', 'recipes', 'drinks', 'ingredients', 'brewers', 'grinders', 'water_profiles', 'vessels', 'prep_tools', 'brew_problems', 'brew_logs'] as const;
 export type ListName = (typeof LISTS)[number];
 export type Duplicates = 'existing' | 'copy';
 

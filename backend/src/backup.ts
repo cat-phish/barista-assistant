@@ -76,6 +76,7 @@ import {
   analysisRequests,
   users,
   waterProfiles,
+  vessels,
   workspaceMembers,
   workspaces,
 } from "@barista/shared/schema";
@@ -139,6 +140,7 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
   { table: recipeStyles, scope: "workspace" },
   { table: grinders, scope: "workspace" },
   { table: waterProfiles, scope: "workspace" },
+  { table: vessels, scope: "workspace" },
   { table: prepTools, scope: "workspace" },
   { table: brewProblems, scope: "workspace" },
   { table: ingredients, scope: "workspace" },

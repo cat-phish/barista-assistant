@@ -23,6 +23,7 @@ export const FIELDS = [
   brew('scaleSlider', 'Scale slider (brew setup)', 'Half to double the recipe’s batch at its ratio; the amounts can always be typed'),
   brew('ice', 'Ice (flash chilled)', 'Ice in the server the hot water is brewed onto'),
   brew('yield', 'Yield', 'The weighed brewed coffee (filter; a shot always records its weight)'),
+  brew('vessel', 'Vessel', 'Weigh the yield in a carafe or mug and subtract it (Bar setup → Vessels)'),
   brew('tds', 'TDS and Brix', 'Refractometer reading and the extraction worked out from it'),
   brew('temp', 'Water temperature'),
   brew('grinder', 'Grinder'),

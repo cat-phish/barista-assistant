@@ -26,6 +26,7 @@ import {
   roastingMachines,
   roasts,
   waterProfiles,
+  vessels,
 } from "@barista/shared/schema";
 import { db } from "./db.js";
 
@@ -124,6 +125,10 @@ export async function brewerMethodUsage(id: string): Promise<Counts> {
 
 // Home roasting (docs/api/roasting-machines.md §3f, green-coffees.md §4e):
 // the roasts that used it keep their record with it unlinked.
+export async function vesselUsage(id: string): Promise<Counts> {
+  return { brewLogCount: await countWhere(brewLogs, eq(brewLogs.vesselId, id)) };
+}
+
 export async function roastingMachineUsage(id: string): Promise<Counts> {
   return { roastCount: await countWhere(roasts, eq(roasts.machineId, id)) };
 }
@@ -131,7 +136,7 @@ export async function greenCoffeeUsage(id: string): Promise<Counts> {
   return { roastCount: await countWhere(roasts, eq(roasts.greenCoffeeId, id)) };
 }
 
-const tables = { roastingMachines, greenCoffees, brewers, grinders, waterProfiles, prepTools, brewProblems, recipes, drinks, ingredients, beanProcesses, recipeStyles, brewerMethods } as const;
+const tables = { roastingMachines, greenCoffees, brewers, grinders, waterProfiles, vessels, prepTools, brewProblems, recipes, drinks, ingredients, beanProcesses, recipeStyles, brewerMethods } as const;
 
 // GET /:<param>/usage on a resource router: the counts above, for any member.
 export function addUsageRoute(

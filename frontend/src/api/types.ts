@@ -26,8 +26,8 @@ export interface UserPreferences {
   restReminders: boolean; // remind the morning a home roast is ready to brew
   greenStockAlerts: boolean; // tell when a roast takes a green coffee below its low-stock threshold
 }
-export type RepeatKeep = 'size' | 'doseWater' | 'temp' | 'grinder' | 'grind' | 'waterProfile' | 'dilution' | 'window' | 'prepTools' | 'grinderWeights' | 'notes';
-export type RememberKey = 'what' | 'brewer' | 'recipe' | 'bean' | 'grinder' | 'grind' | 'waterProfile' | 'prepTools' | 'size';
+export type RepeatKeep = 'size' | 'doseWater' | 'temp' | 'grinder' | 'grind' | 'waterProfile' | 'dilution' | 'window' | 'prepTools' | 'grinderWeights' | 'vessel' | 'notes';
+export type RememberKey = 'what' | 'brewer' | 'recipe' | 'bean' | 'grinder' | 'grind' | 'waterProfile' | 'vessel' | 'prepTools' | 'size';
 
 // docs/api/notifications.md §1b: a person's own reminder channels.
 export type NotificationKind = 'ntfy' | 'gotify' | 'pushover' | 'discord' | 'telegram' | 'slack' | 'webhook';
@@ -279,6 +279,16 @@ export interface RoastingMachine {
   createdAt: string;
 }
 export type RoastingMachineInput = Pick<RoastingMachine, 'name' | 'notes' | 'capacityGrams'>;
+
+// docs/api/vessels.md §3g: a carafe, mug or cup a yield is weighed in.
+export interface Vessel {
+  id: string;
+  name: string;
+  weightGrams: number;
+  archivedAt: string | null; // set = archived (hidden from pickers, kept in history)
+  createdAt: string;
+}
+export type VesselInput = Pick<Vessel, 'name' | 'weightGrams'>;
 
 // docs/api/green-coffees.md §4e: green stock. The origin fields are a bean's.
 export interface GreenCoffeeDetails {
@@ -599,6 +609,8 @@ export interface BrewLog {
   recipeId: string | null;
   grinderId: string | null;
   waterProfileId: string | null; // the water used (§3c)
+  vesselId: string | null; // what the yield was weighed in (§3g)
+  vesselWeightGrams: number | null; // the weight subtracted, as it was then
   brewerId: string | null; // the recipe's brewer at brew time (set by the API)
   drinkId: string | null; // the drink it was for
   servingSize: number | null; // the size made, when the drink was scaled
@@ -634,6 +646,7 @@ export interface BrewLog {
   recipe: { id: string; name: string; expectedYieldGrams: number | null; style: StyleRef | null; methodKind: MethodKind } | null;
   grinder: { id: string; name: string } | null;
   waterProfile: { id: string; name: string } | null; // archived ones included
+  vessel: { id: string; name: string } | null; // archived ones included
   brewer: BrewerRef | null; // archived ones included
   drink: { id: string; name: string; hasIngredients: boolean } | null; // hasIngredients: shot and drink tasted apart
   marks: Mark[]; // earliest first

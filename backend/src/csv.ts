@@ -40,7 +40,7 @@ export async function brewLogsCsv(workspaceId: string): Promise<string> {
   const logs = await loadBrewLogs(eq(brewLogs.workspaceId, workspaceId), 1_000_000);
   const header = [
     "Date", "Date (UTC)", "Brewed by", "Roaster", "Bean", "Batch", "Recipe", "Style", "Brewer", "Drink", "Size",
-    "Grinder", "Grind setting", "Grind RPM", "Water profile", "Dose (g)", "Water (g)", "Ice (g)", "Yield (g)", "Ratio", "TDS (%)",
+    "Grinder", "Grind setting", "Grind RPM", "Water profile", "Dose (g)", "Water (g)", "Ice (g)", "Yield (g)", "Vessel", "Ratio", "TDS (%)",
     "Extraction (%)", "Water temp (°C)", "Time (s)", "Time", "Beans in (g)", "Grounds out (g)", "Steeping", "Steeped in",
     "Steep window (h)", "Target finish (s)", "Served diluted 1:", "Diluted with", "Prep", "Problems", "Rating",
     "Flavors", "Tasting notes", "Drink rating", "Drink notes",
@@ -65,6 +65,7 @@ export async function brewLogsCsv(workspaceId: string): Promise<string> {
     l.actualWaterGrams,
     l.actualIceGrams,
     l.actualYieldGrams,
+    l.vessel?.name,
     (() => {
       const out = ratioWater(l.actualWaterGrams, l.actualIceGrams) ?? l.actualYieldGrams;
       return out === null ? null : Math.round((out / l.actualDoseGrams) * 10) / 10;

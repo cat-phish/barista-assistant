@@ -30,6 +30,7 @@ async function populated() {
   const guji = (await post("green-coffees", { name: "Guji", processId: yeast, varieties: ["74110"], species: ["arabica"], originArea: "africa", weightBoughtGrams: 1000 })).greenCoffee.id as string;
   await post("roasts", { greenCoffeeId: guji, machineId: nano, greenGrams: 120, roastedGrams: 103, roastType: "filter", detailedRoastLevel: "city", firstCrackSec: 420, totalSec: 540 });
   const water = (await post("water-profiles", { name: "TWW", tdsPpm: 120 })).waterProfile.id as string;
+  const carafe = (await post("vessels", { name: "Carafe", weightGrams: 312.5 })).vessel.id as string;
   const stalled = (await post("brew-problems", { name: "Paper taste", methodKind: "filter" })).problem.id as string;
   const v60 = await brewerId(owner, ws.id, "V60");
   const wdt = (await post("prep-tools", { name: "Needle", methodKinds: ["espresso"], brewerIds: [v60] })).tool.id as string;
@@ -63,6 +64,9 @@ async function populated() {
     recipeId: recipe,
     grinderId: c40,
     waterProfileId: water,
+    actualYieldGrams: 225,
+    vesselId: carafe,
+    vesselWeightGrams: 312.5,
     drinkId: drink,
     toolIds: [wdt],
     problemIds: [stalled],
@@ -189,6 +193,28 @@ describe("workspace backup and restore (docs/api/backup.md §2b)", () => {
     await addMember(owner, ws.id, barista, "barista");
     expect((await barista.agent.get(`/api/workspaces/${ws.id}/backup`)).status).toBe(403);
     expect((await (await newUser()).agent.get(`/api/workspaces/${ws.id}/backup`)).status).toBe(404);
+  });
+
+  it("restores a file from before vessels, and one with them", async () => {
+    const { owner, base } = await populated();
+    const backup = (await owner.agent.get(`${base}/backup`)).body;
+    const before = {
+      ...backup,
+      tables: {
+        ...backup.tables,
+        vessels: undefined,
+        brew_logs: backup.tables.brew_logs.map(({ vesselId: _id, vesselWeightGrams: _grams, ...r }: Record<string, unknown>) => r),
+      },
+    };
+    const old = await owner.agent.post("/api/workspaces/restore").send({ name: "Old", slug: `old-${randomUUID().slice(0, 8)}`, backup: before });
+    expect(old.status, JSON.stringify(old.body)).toBe(201);
+    const oldLogs = (await owner.agent.get(`/api/workspaces/${old.body.workspaceId}/brew-logs`)).body.brewLogs;
+    expect(oldLogs[0]).toMatchObject({ actualYieldGrams: 225, vesselId: null, vesselWeightGrams: null, vessel: null });
+
+    const same = await owner.agent.post("/api/workspaces/restore").send({ name: "New", slug: `new-${randomUUID().slice(0, 8)}`, backup });
+    expect(same.status, JSON.stringify(same.body)).toBe(201);
+    const logs = (await owner.agent.get(`/api/workspaces/${same.body.workspaceId}/brew-logs`)).body.brewLogs;
+    expect(logs[0]).toMatchObject({ actualYieldGrams: 225, vesselWeightGrams: 312.5, vessel: { name: "Carafe" } });
   });
 
   it("restores a version 1 file, where a prep tool had one methodKind", async () => {

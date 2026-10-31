@@ -5,10 +5,14 @@ import { REMEMBER_OPTIONS, rememberedSize, rememberedTools, rememberKeyFor, stor
 
 describe('REMEMBER_OPTIONS', () => {
   it('lists every setting once, and the defaults are among them', () => {
-    const all: Record<RememberKey, true> = { what: true, brewer: true, recipe: true, bean: true, grinder: true, grind: true, waterProfile: true, prepTools: true, size: true };
+    const all: Record<RememberKey, true> = { what: true, brewer: true, recipe: true, bean: true, grinder: true, grind: true, waterProfile: true, vessel: true, prepTools: true, size: true };
     const keys = REMEMBER_OPTIONS.map((o) => o.key);
     expect([...keys].sort()).toEqual(Object.keys(all).sort());
     for (const k of DEFAULT_PREFERENCES.rememberSetup) expect(keys).toContain(k);
+  });
+  it('the vessel is its own setting, off by default', () => {
+    expect(rememberKeyFor('vesselId')).toBe('vessel');
+    expect(DEFAULT_PREFERENCES.rememberSetup).not.toContain('vessel');
   });
 });
 

@@ -33,11 +33,11 @@ export const TEMPERATURE_UNITS = ["c", "f"] as const;
 export const THEMES = ["system", "light", "dark"] as const; // system = follow the device
 // What "Brew again" / a repeat copies from the earlier brew, besides the bean
 // and what → brewer → recipe, which a repeat always takes (docs/api/auth.md §1).
-export const REPEAT_KEEPS = ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "grinderWeights", "notes"] as const;
+export const REPEAT_KEEPS = ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "grinderWeights", "vessel", "notes"] as const;
 export type RepeatKeep = (typeof REPEAT_KEEPS)[number];
 // What the brew page fills in from last time on this device (Settings → Brew
 // setup, docs/api/auth.md §1 rememberSetup).
-export const REMEMBER_KEYS = ["what", "brewer", "recipe", "bean", "grinder", "grind", "waterProfile", "prepTools", "size"] as const;
+export const REMEMBER_KEYS = ["what", "brewer", "recipe", "bean", "grinder", "grind", "waterProfile", "vessel", "prepTools", "size"] as const;
 export type RememberKey = (typeof REMEMBER_KEYS)[number];
 
 // Per person (docs/api/auth.md §1 preferences).
@@ -667,6 +667,27 @@ export const roastingMachines = mysqlTable(
 );
 export type RoastingMachine = typeof roastingMachines.$inferSelect;
 
+// 11. Vessels (Per-Workspace Equipment)
+// A carafe, mug or cup with a known weight (docs/api/vessels.md §3g). A brew
+// weighed in one subtracts it to get its yield. Archived like grinders.
+export const vessels = mysqlTable(
+  "vessels",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(), // e.g. "Glass carafe"
+    weightGrams: decimal("weight_grams", { precision: 6, scale: 2, mode: "number" }).notNull(),
+    archivedAt: timestamp("archived_at"), // null = active
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("vessels_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+export type Vessel = typeof vessels.$inferSelect;
+
 // 10b. Green Coffees (Per-Workspace Green Stock, Home Roasting)
 // Unroasted coffee bought to roast (docs/api/green-coffees.md §4e). The
 // origin columns mirror the bean's, so a roast can copy them onto the bean
@@ -1295,6 +1316,11 @@ export const brewLogs = mysqlTable("brew_logs", {
   // weight). Compared against the recipe's expected yield; with tdsPercent it
   // gives extraction yield.
   actualYieldGrams: decimal("actual_yield_grams", { precision: 6, scale: 2, mode: "number" }),
+  // What it was weighed in (optional; docs/api/brew-logs.md §6). actualYieldGrams
+  // is already net of it. The weight is the one subtracted, kept so re-weighing
+  // the vessel doesn't change this brew. Both or neither.
+  vesselId: varchar("vessel_id", { length: 36 }).references(() => vessels.id, { onDelete: "set null" }),
+  vesselWeightGrams: decimal("vessel_weight_grams", { precision: 6, scale: 2, mode: "number" }),
   // Refractometer reading, %. With the yield (or the water, for immersion) and
   // the dose it gives extraction yield, which is worked out, not stored
   // (docs/api/brew-logs.md §6).

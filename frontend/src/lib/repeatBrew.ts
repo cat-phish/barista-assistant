@@ -2,7 +2,7 @@
 // earlier brew log. This works out the setup choices; BrewView applies them
 // and fills dose, water, size, temperature and grind from the log itself.
 // What's no longer available (archived or deleted) is skipped and named.
-import type { Bean, BrewLog, Brewer, Drink, Grinder, Recipe, RepeatKeep, WaterProfile } from '../api/types';
+import type { Bean, BrewLog, Brewer, Drink, Grinder, Recipe, RepeatKeep, Vessel, WaterProfile } from '../api/types';
 import type { FieldKey } from './fields';
 import { batchSuffix } from './beans';
 import { encodeCategory, encodeDrink, encodeMethod, encodePlain, methodKey, NO_RECIPE } from './brewChoice';
@@ -21,6 +21,7 @@ export const REPEAT_OPTIONS: Array<{ key: RepeatKeep; label: string; hint?: stri
   { key: 'dilution', label: 'Dilution served (cold styles, concentrates)', hint: 'Off: the recipe’s' },
   { key: 'window', label: 'Steep or finish time (cold styles)', hint: 'Off: the recipe’s' },
   { key: 'grinderWeights', label: 'Beans in / grounds out' },
+  { key: 'vessel', label: 'Vessel', hint: 'What the yield is weighed in. Off: weighed directly, unless remembered' },
   { key: 'notes', label: 'Tasting notes, as a reminder', hint: 'Shown on the log form, not copied into the new brew' },
 ];
 
@@ -35,6 +36,7 @@ export const REPEAT_FOR_FIELD: Record<BrewFieldKey, RepeatKeep | 'always' | 'res
   'brew.scaleSlider': 'doseWater', // sets the dose and water; a repeat copies those
   'brew.ice': 'doseWater', // goes with the water it was brewed with
   'brew.yield': 'result',
+  'brew.vessel': 'vessel',
   'brew.tds': 'result',
   'brew.temp': 'temp',
   'brew.grinder': 'grinder',
@@ -59,6 +61,7 @@ export interface RepeatPlan {
   recipeId: string;
   grinderId: string; // '' = none
   waterProfileId: string | null; // null = keep setup's (the default)
+  vessel: Vessel | null; // null = none, or it's archived or gone
   missing: string[]; // what couldn't be filled, one sentence each
 }
 
@@ -69,6 +72,7 @@ export interface RepeatSources {
   recipes: Recipe[];
   grinders: Grinder[];
   waterProfiles: WaterProfile[];
+  vessels: Vessel[];
 }
 
 const sameCoffee = (a: Pick<Bean, 'roasterName' | 'beanName'>, b: Pick<Bean, 'roasterName' | 'beanName'>) =>
@@ -110,6 +114,8 @@ export function repeatPlan(log: BrewLog, s: RepeatSources): RepeatPlan {
   if (log.grinder && !grinder) missing.push(`The grinder ${log.grinder.name} is archived, so the grind wasn't filled.`);
   const water = log.waterProfileId ? s.waterProfiles.find((w) => w.id === log.waterProfileId && !w.archivedAt) : undefined;
   if (log.waterProfile && !water) missing.push(`The water ${log.waterProfile.name} is archived.`);
+  const vessel = log.vesselId ? s.vessels.find((v) => v.id === log.vesselId && !v.archivedAt) : undefined;
+  if (log.vessel && !vessel) missing.push(`The vessel ${log.vessel.name} is archived.`);
 
   return {
     beanId: bean.id,
@@ -119,6 +125,7 @@ export function repeatPlan(log: BrewLog, s: RepeatSources): RepeatPlan {
     recipeId: recipe?.id ?? '',
     grinderId: grinder?.id ?? '',
     waterProfileId: water?.id ?? null,
+    vessel: vessel ?? null,
     missing,
   };
 }

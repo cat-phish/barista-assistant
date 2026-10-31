@@ -2,8 +2,8 @@
 // Brew detail inputs shared by the brew flow's log form and journal editing.
 // Validate with parseBrewDraft (lib/brewDraft.ts); pass its errors in.
 import { computed, ref, watch } from 'vue';
-import type { BrewProblem, FlavorPick, Grinder, MethodKind, PrepTool, RecipeStyle, WaterProfile } from '../api/types';
-import type { BrewDraft, BrewDraftErrors } from '../lib/brewDraft';
+import type { BrewProblem, FlavorPick, Grinder, MethodKind, PrepTool, RecipeStyle, Vessel, WaterProfile } from '../api/types';
+import { netYield, type BrewDraft, type BrewDraftErrors } from '../lib/brewDraft';
 import { brixToTds, extractionYield, usesWater } from '../lib/extraction';
 import { DILUTION_WITH, isColdStyle, STEEP_TEMPS } from '../lib/coldBrew';
 import { formatGrams } from '../lib/format';
@@ -14,6 +14,7 @@ import { usePreferences } from '../composables/usePreferences';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
 import RatingInput from './RatingInput.vue';
 import FlavorWheel from './FlavorWheel.vue';
+import VesselField from './VesselField.vue';
 
 const draft = defineModel<BrewDraft>({ required: true });
 // Hidden fields (Settings → Fields) that this brew already records stay shown.
@@ -57,6 +58,7 @@ const props = defineProps<{
   showErrors: boolean;
   grinders: Grinder[];
   waterProfiles?: WaterProfile[]; // the workspace's (docs/api/water-profiles.md §3c)
+  vessels?: Vessel[]; // the workspace's (docs/api/vessels.md §3g)
   prepTools?: PrepTool[]; // the workspace's, in order (docs/api/prep-tools.md §3d)
   problems?: BrewProblem[]; // the workspace's, in order (docs/api/brew-problems.md §6b)
   methodKind?: MethodKind | null; // the recipe's; null = no recipe (every tool shows)
@@ -74,11 +76,25 @@ const props = defineProps<{
 const expectedWord = computed(() => (props.espresso ? 'target' : 'expected'));
 const yieldComparison = computed(() => {
   const expected = props.expectedYieldGrams;
-  const measured = Number(draft.value.yieldGrams.replace(',', '.'));
-  if (expected == null || !draft.value.yieldGrams.trim() || !Number.isFinite(measured) || measured <= 0) return '';
+  const measured = netYield(draft.value);
+  if (expected == null || measured === null) return '';
   const diff = Math.round((measured - expected) * 10) / 10;
   return `${diff > 0 ? '+' : diff < 0 ? '−' : '±'}${Math.abs(diff)} g vs ${expectedWord.value} ${formatGrams(expected)} g`;
 });
+
+// In a vessel the box holds the total, so the hint says what that makes.
+const yieldHint = computed(() => {
+  const net = draft.value.vesselId ? netYield(draft.value) : null;
+  const made = net === null ? '' : `Yield ${formatGrams(net)} g`;
+  return [made, yieldComparison.value].filter(Boolean).join(' · ');
+});
+// The vessel picker shows while the brew has one, even if hidden under
+// Settings → Fields: its weight is being subtracted.
+watch(
+  () => draft.value.vesselId,
+  (vesselId) => reveal({ 'brew.vessel': vesselId }),
+  { immediate: true },
+);
 
 // Extraction yield from the TDS as typed, e.g. "Extraction ≈ 20.2%", or a hint
 // when the yield it needs is missing.
@@ -93,7 +109,7 @@ const extractionHint = computed(() => {
   const ey = extractionYield({
     tdsPercent: tds,
     doseGrams: num(draft.value.dose) ?? 0,
-    yieldGrams: num(draft.value.yieldGrams),
+    yieldGrams: netYield(draft.value),
     waterGrams: props.espresso ? null : num(draft.value.water),
     style,
   });
@@ -124,6 +140,10 @@ watch(
 // and no TDS reading, so TDS and Brix are greyed out (and TDS isn't sent;
 // clearing the ice brings a typed one back).
 const onIce = computed(() => !props.espresso && num(draft.value.ice) !== null);
+const yieldNote = computed(() => {
+  if (draft.value.vesselId) return onIce.value ? 'vessel, coffee and ice' : 'vessel and coffee';
+  return onIce.value ? 'weigh the server with the ice' : 'weigh the brewed coffee';
+});
 // The Ice field shows for a recipe with ice, and from the moment the brew has
 // some (a repeat, the recipe loading, an old log): it then stays, even if the
 // field is hidden under Settings → Fields or emptied to retype it.
@@ -171,18 +191,19 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
         <span v-if="showErrors && errors.dose" class="field-error">{{ errors.dose }}</span>
       </div>
       <div v-if="espresso" class="field">
-        <label for="brew-yield">Shot weight (g)<span class="req" aria-hidden="true">*</span></label>
+        <label for="brew-yield">{{ draft.vesselId ? 'Total weight (g)' : 'Shot weight (g)' }}<span class="req" aria-hidden="true">*</span></label>
         <input
           id="brew-yield" aria-required="true"
           v-model="draft.yieldGrams"
           inputmode="decimal"
-          :placeholder="expectedYieldGrams != null ? `Target ${formatGrams(expectedYieldGrams)}` : ''"
+          :placeholder="expectedYieldGrams != null && !draft.vesselId ? `Target ${formatGrams(expectedYieldGrams)}` : ''"
           :aria-invalid="showErrors && !!errors.yieldGrams"
         />
         <span v-if="showErrors && errors.yieldGrams" class="field-error">{{ errors.yieldGrams }}</span>
-        <span v-else-if="yieldComparison" class="hint">{{ yieldComparison }}</span>
+        <span v-else-if="yieldHint" class="hint">{{ yieldHint }}</span>
       </div>
-      <div v-else class="field">
+      <VesselField v-if="espresso && show('brew.vessel')" v-model="draft" :vessels="vessels ?? []" />
+      <div v-if="!espresso" class="field">
         <label for="brew-water">{{ onIce ? 'Hot water (g)' : 'Water (g)' }}<span class="req" aria-hidden="true">*</span></label>
         <input id="brew-water" aria-required="true" v-model="draft.water" inputmode="decimal" :aria-invalid="showErrors && !!errors.water" />
         <span v-if="showErrors && errors.water" class="field-error">{{ errors.water }}</span>
@@ -194,17 +215,20 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
         <span v-else class="hint">Brewed onto it. Poured over ice afterwards? Leave empty: that’s a concentrate, set by the recipe’s dilution</span>
       </div>
     </div>
-    <div v-if="!espresso && show('brew.yield')" class="field">
-      <label for="brew-yield">Yield (g) <span class="muted">({{ onIce ? 'weigh the server with the ice' : 'weigh the brewed coffee' }})</span></label>
-      <input
-        id="brew-yield"
-        v-model="draft.yieldGrams"
-        inputmode="decimal"
-        :placeholder="expectedYieldGrams != null ? `Expected ~${formatGrams(expectedYieldGrams)}` : ''"
-        :aria-invalid="showErrors && !!errors.yieldGrams"
-      />
-      <span v-if="showErrors && errors.yieldGrams" class="field-error">{{ errors.yieldGrams }}</span>
-      <span v-else-if="yieldComparison" class="hint">{{ yieldComparison }}</span>
+    <div v-if="!espresso && show('brew.yield')" class="form-row">
+      <div class="field">
+        <label for="brew-yield">{{ draft.vesselId ? 'Total weight (g)' : 'Yield (g)' }} <span class="muted">({{ yieldNote }})</span></label>
+        <input
+          id="brew-yield"
+          v-model="draft.yieldGrams"
+          inputmode="decimal"
+          :placeholder="expectedYieldGrams != null && !draft.vesselId ? `Expected ~${formatGrams(expectedYieldGrams)}` : ''"
+          :aria-invalid="showErrors && !!errors.yieldGrams"
+        />
+        <span v-if="showErrors && errors.yieldGrams" class="field-error">{{ errors.yieldGrams }}</span>
+        <span v-else-if="yieldHint" class="hint">{{ yieldHint }}</span>
+      </div>
+      <VesselField v-if="show('brew.vessel')" v-model="draft" :vessels="vessels ?? []" />
     </div>
     <div v-if="show('brew.tds')" class="form-row">
       <div class="field">

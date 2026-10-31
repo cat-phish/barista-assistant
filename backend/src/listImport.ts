@@ -8,7 +8,7 @@ import { buildBackup, TABLE_INFO, type BackupFile, type BackupOptions, type Back
 import { db } from "./db.js";
 
 // What can be exported or imported on its own (table names, as in the file).
-export const LISTS = ["beans", "recipes", "drinks", "ingredients", "brewers", "grinders", "water_profiles", "prep_tools", "brew_problems", "brew_logs"] as const;
+export const LISTS = ["beans", "recipes", "drinks", "ingredients", "brewers", "grinders", "water_profiles", "vessels", "prep_tools", "brew_problems", "brew_logs"] as const;
 export type ListName = (typeof LISTS)[number];
 
 const lower = (v: unknown) => String(v ?? "").trim().toLowerCase();
@@ -26,6 +26,7 @@ export const MATCH_KEYS: Record<string, (row: BackupRow) => string[]> = {
   recipe_styles: (r) => [...(r.builtin ? [`b:${r.kind}:${r.builtin}`] : []), `n:${r.kind}:${lower(r.name)}`],
   grinders: (r) => [lower(r.name)],
   water_profiles: (r) => [lower(r.name)],
+  vessels: (r) => [lower(r.name)],
   prep_tools: (r) => [lower(r.name)],
   brew_problems: (r) => [lower(r.name)],
   ingredients: (r) => [lower(r.name)],
