@@ -405,12 +405,13 @@ export async function problemsFor(brewLogIds: string[]): Promise<Map<string, str
 }
 
 // Each brew's flavor picks as the AI reads them, in its workspace's wheel
-// order, labelled from that wheel (the saved label for one it no longer has).
+// order, labelled and placed from that wheel (as saved for one it no longer
+// has).
 export async function flavorsFor(brewLogIds: string[]): Promise<Map<string, string[]>> {
   const byLog = new Map<string, string[]>();
   if (brewLogIds.length === 0) return byLog;
   const rows = await db
-    .select({ brewLogId: brewLogFlavors.brewLogId, key: brewLogFlavors.flavorKey, label: brewLogFlavors.label, workspaceId: brewLogs.workspaceId })
+    .select({ brewLogId: brewLogFlavors.brewLogId, key: brewLogFlavors.flavorKey, label: brewLogFlavors.label, place: brewLogFlavors.place, workspaceId: brewLogs.workspaceId })
     .from(brewLogFlavors)
     .innerJoin(brewLogs, eq(brewLogFlavors.brewLogId, brewLogs.id))
     .where(inArray(brewLogFlavors.brewLogId, brewLogIds));
@@ -421,9 +422,9 @@ export async function flavorsFor(brewLogIds: string[]): Promise<Map<string, stri
     lexicons.set(row.workspaceId, { format: LEXICON_FORMAT, version: LEXICON_VERSION, name: row.name, flavors: row.flavors });
   }
   const saved = new Map<string, { workspaceId: string; picks: FlavorPick[] }>();
-  for (const { brewLogId, key, label, workspaceId } of rows) {
+  for (const { brewLogId, key, label, place, workspaceId } of rows) {
     const entry = saved.get(brewLogId) ?? { workspaceId, picks: [] };
-    entry.picks.push({ key, label });
+    entry.picks.push({ key, label, place });
     saved.set(brewLogId, entry);
   }
   for (const [brewLogId, { workspaceId, picks }] of saved) {

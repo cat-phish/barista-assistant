@@ -37,7 +37,7 @@ import {
   type Recipe,
   recipeStyles,
 } from "@barista/shared/schema";
-import { LEXICON_KEY, LEXICON_LIMITS, resolvePicks, type FlavorPick } from "@barista/shared/flavors";
+import { LEXICON_KEY, LEXICON_LIMITS, flavorPlace, resolvePicks, type FlavorPick } from "@barista/shared/flavors";
 import { lexiconsFor, workspaceLexicon } from "../flavorLexicon.js";
 import { decimalSchema, grindSettingSchema, optionalText, ratingSchema, updateSchema } from "../validation.js";
 import { ANALYSIS_COLUMNS, type AnalysisRow } from "../aiRequest.js";
@@ -593,29 +593,29 @@ async function flavorsFor(logs: ReadonlyArray<{ id: string; workspaceId: string 
   return byLog;
 }
 
-// The keys sent, with their labels: each must be on the workspace's wheel,
-// or (editing) already on this brew, kept with its saved label after the
-// wheel changed (docs/api/flavor-lexicon.md §2c).
+// The keys sent, with their labels and places: each must be on the
+// workspace's wheel, or (editing) already on this brew, kept as saved after
+// the wheel changed (docs/api/flavor-lexicon.md §2c).
 async function flavorPicks(tx: Tx, workspaceId: string, keys: readonly string[], brewLogId: string | null): Promise<FlavorPick[] | string> {
   if (keys.length === 0) return [];
   const { lexicon } = await workspaceLexicon(workspaceId, tx);
-  const labels = new Map(lexicon.flavors.map((f) => [f.key, f.label] as const));
+  const allowed = new Map(lexicon.flavors.map((f): [string, FlavorPick] => [f.key, { key: f.key, label: f.label, place: flavorPlace(lexicon, f.key) }]));
   if (brewLogId) {
     const had = await tx.select().from(brewLogFlavors).where(eq(brewLogFlavors.brewLogId, brewLogId));
-    for (const { flavorKey, label } of had) if (!labels.has(flavorKey)) labels.set(flavorKey, label);
+    for (const { flavorKey, label, place } of had) if (!allowed.has(flavorKey)) allowed.set(flavorKey, { key: flavorKey, label, place });
   }
   const picks: FlavorPick[] = [];
   for (const key of keys) {
-    const label = labels.get(key);
-    if (label === undefined) return `flavors: "${key}" isn't on this workspace's flavor wheel`;
-    picks.push({ key, label });
+    const pick = allowed.get(key);
+    if (!pick) return `flavors: "${key}" isn't on this workspace's flavor wheel`;
+    picks.push(pick);
   }
   return picks;
 }
 
 async function insertFlavors(tx: Tx, brewLogId: string, picks: readonly FlavorPick[]): Promise<void> {
   if (picks.length === 0) return;
-  await tx.insert(brewLogFlavors).values(picks.map(({ key, label }) => ({ brewLogId, flavorKey: key, label })));
+  await tx.insert(brewLogFlavors).values(picks.map(({ key, label, place }) => ({ brewLogId, flavorKey: key, label, place: place ?? null })));
 }
 
 async function marksFor(brewLogIds: string[]): Promise<Map<string, BrewLogDetails["marks"]>> {

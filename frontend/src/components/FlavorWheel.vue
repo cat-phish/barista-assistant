@@ -2,12 +2,13 @@
 // The coffee's flavors (docs/api/brew-logs.md §6, "flavors"), picked on the
 // workspace's wheel (docs/api/flavor-lexicon.md §2c): tap a segment to zoom
 // into it, then tap the centre to pick it; an outermost flavor is picked
-// straight away. Picks show as chips. A search box, and a plain list instead
-// of the wheel, for anyone who'd rather not use it (and for screen readers).
+// straight away. An arrow at a segment's outer edge marks one that opens.
+// Picks show as chips. A search box, and a plain list instead of the wheel,
+// for anyone who'd rather not use it (and for screen readers).
 import { computed, ref, watch } from 'vue';
 import type { FlavorPick } from '../api/types';
 import { useFlavorWheel } from '../composables/useFlavorWheel';
-import { segmentLabel, segmentPath, WHEEL_RADII, wheelSegments, type FlavorNode, type WheelSegment } from '../lib/flavors';
+import { segmentCue, segmentLabel, segmentPath, WHEEL_RADII, wheelSegments, type FlavorNode, type WheelSegment } from '../lib/flavors';
 
 const model = defineModel<string[]>({ required: true });
 // saved: the brew's picks as stored, for the label of one the wheel no
@@ -49,7 +50,7 @@ function toggle(key: string): void {
 const focus = ref<string | null>(null);
 watch(wheel, () => (focus.value = null)); // another wheel was loaded
 const focusNode = computed(() => (focus.value ? wheel.value.node(focus.value) : undefined));
-const shapes = computed(() => wheelSegments(wheel.value, focus.value).map((s) => ({ ...s, path: segmentPath(s), text: segmentLabel(s) })));
+const shapes = computed(() => wheelSegments(wheel.value, focus.value).map((s) => ({ ...s, path: segmentPath(s), text: segmentLabel(s), cue: segmentCue(s) })));
 // Picks drawn last, so their outline isn't painted over by a neighbour.
 const segments = computed(() => [...shapes.value].sort((a, b) => Number(picked.value.has(a.node.key)) - Number(picked.value.has(b.node.key))));
 const trail = computed(() => (focusNode.value ? [...wheel.value.path(focusNode.value.key), focusNode.value] : []));
@@ -61,6 +62,23 @@ function tapSegment(s: WheelSegment): void {
 function segmentAction(n: FlavorNode): string {
   if (n.children.length) return `${n.label}: show its flavors`;
   return `${n.label}: ${picked.value.has(n.key) ? 'picked, tap to remove' : 'pick'}`;
+}
+
+// What a tap would do, shown in the centre for a mouse or keyboard. Not for
+// touch: a tap would leave it showing, with no pointer to take it away.
+const hint = ref<FlavorNode | null>(null);
+watch([focus, wheel], () => (hint.value = null));
+const hintAction = computed(() => {
+  const n = hint.value;
+  if (!n) return '';
+  if (n.children.length) return 'tap to open';
+  return picked.value.has(n.key) ? 'tap to remove' : 'tap to pick';
+});
+function hoverSegment(e: PointerEvent, n: FlavorNode): void {
+  if (e.pointerType === 'mouse') hint.value = n;
+}
+function focusSegment(e: FocusEvent, n: FlavorNode): void {
+  if ((e.target as Element).matches(':focus-visible')) hint.value = n;
 }
 
 // ---- Search ----
@@ -119,6 +137,10 @@ const results = computed(() => wheel.value.search(query.value).slice(0, 12));
           @click="tapSegment(s)"
           @keydown.enter.prevent="tapSegment(s)"
           @keydown.space.prevent="tapSegment(s)"
+          @pointerenter="hoverSegment($event, s.node)"
+          @pointerleave="hint = null"
+          @focus="focusSegment($event, s.node)"
+          @blur="hint = null"
         >
           <path :d="s.path" :fill="s.node.color" />
           <text
@@ -133,6 +155,9 @@ const results = computed(() => wheel.value.search(query.value).slice(0, 12));
               {{ i === 0 && picked.has(s.node.key) ? '✓ ' : '' }}{{ line }}
             </tspan>
           </text>
+          <g v-if="s.cue" class="cue" :transform="`translate(${s.cue.x.toFixed(2)} ${s.cue.y.toFixed(2)}) rotate(${s.cue.rotate.toFixed(1)})`" :stroke="s.node.ink" aria-hidden="true">
+            <path d="M -1.8 0.9 L 0 -0.9 L 1.8 0.9" />
+          </g>
         </g>
         <!-- The centre: the flavor zoomed into, tapped to pick it. -->
         <g
@@ -147,17 +172,22 @@ const results = computed(() => wheel.value.search(query.value).slice(0, 12));
           @keydown.enter.prevent="toggle(focusNode.key)"
           @keydown.space.prevent="toggle(focusNode.key)"
         >
-          <circle :r="WHEEL_RADII.center - 1" :fill="picked.has(focusNode.key) ? focusNode.color : 'var(--surface)'" :stroke="focusNode.color" stroke-width="2" />
-          <text text-anchor="middle" font-size="6" font-weight="600" :fill="picked.has(focusNode.key) ? focusNode.ink : 'var(--text)'" aria-hidden="true">
+          <circle :r="WHEEL_RADII.center - 1" :fill="picked.has(focusNode.key) && !hint ? focusNode.color : 'var(--surface)'" :stroke="focusNode.color" stroke-width="2" />
+          <text v-if="!hint" text-anchor="middle" font-size="6" font-weight="600" :fill="picked.has(focusNode.key) ? focusNode.ink : 'var(--text)'" aria-hidden="true">
             <tspan x="0" dy="-0.2em">{{ picked.has(focusNode.key) ? '✓ ' : '' }}{{ focusNode.label }}</tspan>
             <tspan x="0" dy="1.4em" font-size="4.5" font-weight="400">{{ picked.has(focusNode.key) ? 'tap to remove' : 'tap to pick' }}</tspan>
           </text>
         </g>
-        <text v-else text-anchor="middle" font-size="5" fill="var(--text-muted)" aria-hidden="true">
-          <tspan x="0" dy="-0.2em">Tap to</tspan>
-          <tspan x="0" dy="1.2em">zoom in</tspan>
+        <text v-else-if="!hint" text-anchor="middle" font-size="5" fill="var(--text-muted)" aria-hidden="true">
+          <tspan x="0" dy="-0.2em">Tap a</tspan>
+          <tspan x="0" dy="1.2em">flavor</tspan>
+        </text>
+        <text v-if="hint" class="hint" text-anchor="middle" font-size="5" font-weight="600" aria-hidden="true">
+          <tspan x="0" dy="-0.2em">{{ hint.label.length > 16 ? `${hint.label.slice(0, 15)}…` : hint.label }}</tspan>
+          <tspan x="0" dy="1.4em" font-size="4.5" font-weight="400">{{ hintAction }}</tspan>
         </text>
       </svg>
+      <p class="legend muted small"><span aria-hidden="true">›</span> opens more</p>
     </template>
 
     <div v-else class="list">
@@ -331,8 +361,25 @@ const results = computed(() => wheel.value.search(query.value).slice(0, 12));
 .segment.holds text {
   font-weight: 700;
 }
-.segment text {
+.segment text,
+.cue,
+.hint {
   pointer-events: none;
+}
+.segment .cue path {
+  fill: none;
+  stroke: inherit;
+  stroke-width: 0.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: none;
+}
+.hint {
+  fill: var(--text);
+}
+.legend {
+  margin: 0;
+  text-align: center;
 }
 .list details {
   border-top: 1px solid var(--border);

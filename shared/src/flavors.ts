@@ -221,6 +221,7 @@ export function parseLexicon(input: unknown): { ok: true; lexicon: FlavorLexicon
 export interface FlavorPick {
   key: string;
   label: string;
+  place?: string | null; // the rings above it when picked (flavorPlace)
 }
 
 // Picks in the lexicon's wheel order (ones it no longer has last, as
@@ -231,17 +232,34 @@ export function resolvePicks(lexicon: FlavorLexicon, picks: readonly FlavorPick[
   return [...picks]
     .map((p, i) => ({ p, at: order.get(p.key) ?? lexicon.flavors.length + i }))
     .sort((a, b) => a.at - b.at)
-    .map(({ p }) => ({ key: p.key, label: labels.get(p.key) ?? p.label }));
+    .map(({ p }) => ({ ...p, label: labels.get(p.key) ?? p.label }));
+}
+
+// The rings above a flavor, innermost first: "Fruity › Berry"; null on the
+// inner ring or off this lexicon. A ring repeating the name next to it says
+// nothing, so it's left out: "Rose" under "Floral › Floral" is "Floral".
+export function flavorPlace(lexicon: FlavorLexicon, key: string): string | null {
+  const labels = new Map(lexicon.flavors.map((f) => [f.key, f.label] as const));
+  const label = labels.get(key);
+  if (label === undefined) return null;
+  const parts = key.split(".");
+  const rings = parts.slice(0, -1).map((_, i) => labels.get(parts.slice(0, i + 1).join(".")) ?? parts[i]!);
+  const same = (a: string | undefined, b: string) => a?.toLowerCase() === b.toLowerCase();
+  const above = rings.filter((ring, i) => !same(rings[i + 1] ?? label, ring));
+  return above.length ? above.join(" › ") : null;
 }
 
 // How the AI reads a pick: its label with the rings above it, e.g.
-// "Blueberry (Fruity › Berry)"; just the saved label for a flavor the
-// lexicon no longer has.
+// "Blueberry (Fruity › Berry)". A flavor the lexicon no longer has keeps the
+// place saved with it. Picks from before places were saved look theirs up on
+// the built-in wheel, the only one with those keys, if the label still agrees
+// (a custom wheel could have used the same key for something else).
 export function flavorLabel(lexicon: FlavorLexicon, pick: FlavorPick): string {
-  const labels = new Map(lexicon.flavors.map((f) => [f.key, f.label] as const));
-  const label = labels.get(pick.key);
-  if (label === undefined) return pick.label;
-  const parts = pick.key.split(".");
-  const above = parts.slice(0, -1).map((_, i) => labels.get(parts.slice(0, i + 1).join(".")) ?? parts[i]!);
-  return above.length ? `${label} (${above.join(" › ")})` : label;
+  const onWheel = lexicon.flavors.find((f) => f.key === pick.key);
+  const builtIn = DEFAULT_LEXICON.flavors.find((f) => f.key === pick.key);
+  const place = onWheel
+    ? flavorPlace(lexicon, pick.key)
+    : (pick.place ?? (builtIn?.label === pick.label ? flavorPlace(DEFAULT_LEXICON, pick.key) : null));
+  const label = onWheel?.label ?? pick.label;
+  return place ? `${label} (${place})` : label;
 }

@@ -206,11 +206,14 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
     prompts: ["analysis", "suggest"],
     locked: false,
     text:
-      "flavors are the coffee's flavors picked on a flavor wheel, each with its place on the wheel, e.g. \"Blueberry " +
-      "(Fruity › Berry)\"; a pick from an inner ring (\"Fruity\") is broader, not weaker. Read them with " +
-      "tastingNotes as the same tasting: sour, fermented or green picks often point to under-extraction, harsh, " +
-      "ashy or bitter ones to over-extraction or the roast, and off flavors like papery or musty to the beans or " +
-      "the filter rather than the recipe. Compare them with the bean's flavorProfile when given.",
+      "flavors are the coffee's flavors picked on the workspace's flavor wheel, which can be its own, in its own words. " +
+      "Each may come with its place on that wheel, broadest group first: \"Blueberry (Fruity › Berry)\" is a kind of " +
+      "Berry and of Fruity, and belongs to both. A pick without a place is either an inner-ring group or has no place " +
+      "on record; a broader pick (\"Fruity\") is less specific, not weaker. Go by what the words mean, not by the exact " +
+      "names of the groups, and read them with tastingNotes as the same tasting: sour, fermented or green picks often " +
+      "point to under-extraction, harsh, ashy or bitter ones to over-extraction or the roast, and off flavors like " +
+      "papery or musty to the beans or the filter rather than the recipe. Compare them with the bean's flavorProfile " +
+      "when given.",
   },
   {
     key: "rpm",

@@ -181,7 +181,7 @@ says why the last analysis failed or wasn't made (e.g. the daily cap), else
     `@barista/shared/flavors`, or its own lexicon), as keys, each once. A
     key must be on the current wheel (`400` otherwise), except that editing
     a brew can keep a pick it already had after the wheel changed. Each
-    pick is stored with its label at the time. The wheel has up to three
+    pick is stored with its label and place at the time. The wheel has up to three
     rings and its dots give each key's place (`"fruity.berry.blueberry"`
     sits under `"fruity.berry"`, under `"fruity"`); a pick can be from any
     ring, so "Berry" alone says berry without saying which. The built-in
