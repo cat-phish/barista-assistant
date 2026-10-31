@@ -16,7 +16,8 @@ services:
   #
   # Data: named volumes and ./photos, ./backups by default; each can live
   # elsewhere instead (the *_DIR settings in .env.example). The backend and
-  # worker run as uid 1000, which must own the photos and backups folders.
+  # worker own their folders at startup, then run as uid 1000
+  # (docker/entrypoint.sh).
   frontend:
     build:
       context: .

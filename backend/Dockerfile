@@ -17,6 +17,7 @@ COPY backend/ backend/
 RUN npm run build -w backend
 
 FROM node:22-alpine
+RUN apk add --no-cache su-exec
 ENV NODE_ENV=production
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -28,7 +29,10 @@ RUN npm ci --omit=dev -w backend -w @barista/shared && npm cache clean --force
 COPY --from=build /app/shared/dist shared/dist
 COPY --from=build /app/backend/dist backend/dist
 COPY backend/drizzle backend/drizzle
-USER node
+# Starts as root to take ownership of DATA_DIRS, then runs as node (docker/entrypoint.sh).
+COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/app-entrypoint
+ENV DATA_DIRS=/photos
+ENTRYPOINT ["app-entrypoint"]
 WORKDIR /app/backend
 EXPOSE 3000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \

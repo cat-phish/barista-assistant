@@ -18,7 +18,7 @@ RUN npm run build -w worker
 
 FROM node:22-alpine
 # mariadb-dump, for scheduled server backups (docs/api/server.md §10).
-RUN apk add --no-cache mariadb-client
+RUN apk add --no-cache mariadb-client su-exec
 ENV NODE_ENV=production
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -29,7 +29,10 @@ COPY frontend/package.json frontend/
 RUN npm ci --omit=dev -w worker -w @barista/shared && npm cache clean --force
 COPY --from=build /app/shared/dist shared/dist
 COPY --from=build /app/worker/dist worker/dist
-USER node
+# Starts as root to take ownership of DATA_DIRS, then runs as node (docker/entrypoint.sh).
+COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/app-entrypoint
+ENV DATA_DIRS=/backups
+ENTRYPOINT ["app-entrypoint"]
 WORKDIR /app/worker
 # Exec form: node is PID 1 and gets SIGTERM, so active jobs finish before exit.
 CMD ["node", "dist/worker.js"]

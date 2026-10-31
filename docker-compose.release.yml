@@ -8,8 +8,7 @@
 # - No 3000, 3306 or 6379 ports on the host: those are for dev tools.
 # - No test database.
 # - There's no folder next to this file to rely on, so the *_DIR settings are
-#   required. The backend and worker run as uid 1000, which must own the
-#   photos and backups folders.
+#   required. Docker creates missing folders.
 #
 # Secrets: values come from .env but reach the containers as files under
 # /run/secrets, not as environment variables (shared/src/env.ts).
