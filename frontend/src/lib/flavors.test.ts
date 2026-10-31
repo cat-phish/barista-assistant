@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FlavorLexicon } from '../api/types';
-import { buildWheel, DEFAULT_LEXICON, DEFAULT_WHEEL, FLAVOR_COLORS, FLAVOR_LABELS, segmentLabel, wheelSegments } from './flavors';
+import { buildWheel, DEFAULT_LEXICON, DEFAULT_WHEEL, FLAVOR_COLORS, FLAVOR_LABELS, segmentCue, segmentLabel, wheelSegments } from './flavors';
 
 // The shared lists, read as text: the frontend doesn't import @barista/shared.
 const shared = Object.values(import.meta.glob('../../../shared/src/flavors.ts', { query: '?raw', import: 'default', eager: true }))[0] as string;
@@ -58,6 +58,31 @@ describe('the built-in flavor wheel', () => {
         expect(label!.rotate).toBeLessThanOrEqual(90);
       }
     }
+  });
+
+  it('puts an arrow on segments that open and nothing on the rest', () => {
+    const segments = wheelSegments(DEFAULT_WHEEL, null);
+    expect(segmentCue(segments.find((s) => s.node.key === 'fruity.berry')!)).not.toBeNull();
+    expect(segmentCue(segments.find((s) => s.node.key === 'roasted.tobacco')!)).toBeNull();
+  });
+
+  it('fits the arrow inside even the thinnest slice', () => {
+    const rows = Array.from({ length: 60 }, (_, i) => [{ key: `one.f${i}`, label: `F${i}` }, { key: `one.f${i}.x`, label: 'X' }]).flat();
+    const wheel = buildWheel({ ...DEFAULT_LEXICON, flavors: [{ key: 'one', label: 'One' }, ...rows] });
+    for (const s of wheelSegments(wheel, null)) {
+      const cue = segmentCue(s)!;
+      expect(Math.hypot(cue.x, cue.y)).toBeGreaterThan(s.r0);
+      expect(Math.hypot(cue.x, cue.y)).toBeLessThan(s.r1);
+    }
+  });
+
+  it('keeps room for the arrow only where there is one', () => {
+    const berry = wheelSegments(DEFAULT_WHEEL, null).find((s) => s.node.key === 'fruity.berry')!;
+    const opens = segmentLabel(berry)!;
+    const picks = segmentLabel({ ...berry, node: { ...berry.node, children: [] } })!;
+    const middle = (berry.r0 + berry.r1) / 2;
+    expect(Math.hypot(picks.x, picks.y)).toBeCloseTo(middle);
+    expect(Math.hypot(opens.x, opens.y)).toBeLessThan(middle);
   });
 });
 
