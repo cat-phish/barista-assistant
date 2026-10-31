@@ -168,9 +168,10 @@ is no age.
   Archived beans leave the public menu (§7).
 
   > **Frontend (rating prompt):** archiving a bean with no `rating` first asks
-  > for one (stars, **Rate and archive** or **Skip rating**). Archived beans
-  > that are still unrated are listed on the Archived tab with a **Rate**
-  > button until they're rated.
+  > for one (stars, **Rate and archive** or **Skip rating**) and offers the
+  > Review, with **Suggest with AI** (`analysis.md` §8e), saved either way.
+  > Archived beans that are still unrated are listed on the Archived tab with
+  > a **Rate** button until they're rated.
 - **Success (`200 OK`):** `{ "bean": { ...bean } }`
 - **Errors:** `400` invalid or empty body; `403` viewer; `404` bean not in this
   workspace.

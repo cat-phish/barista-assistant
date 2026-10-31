@@ -14,6 +14,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import ListControls from '../components/ListControls.vue';
 import ListDataBar from '../components/ListDataBar.vue';
 import { useSelection } from '../composables/useSelection';
+import BeanReviewDialog from '../components/BeanReviewDialog.vue';
 import BrewAverageHint from '../components/BrewAverageHint.vue';
 import RatingInput from '../components/RatingInput.vue';
 import RatingStars from '../components/RatingStars.vue';
@@ -41,6 +42,7 @@ import {
 } from '../lib/beans';
 import { formatAdded, formatDay, formatListDay, localDateInput, toDateInput } from '../lib/format';
 import { isSortKey, recallView, rememberView, sortArrow, sortBy, sortLabel, sortColumnOptions, toggleHeader } from '../lib/listSort';
+import { reviewChange } from '../lib/beanReview';
 import { effectiveRoastAge } from '../lib/roastAge';
 import { usePreferences } from '../composables/usePreferences';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -49,7 +51,7 @@ import { useFieldVisibility } from '../composables/useFieldVisibility';
 const props = defineProps<{ archived?: boolean }>(); // the Archived tab (route prop)
 
 const workspaces = useWorkspaceStore();
-const { altitudeUnit, roastScale } = usePreferences();
+const { altitudeUnit, roastScale, settings } = usePreferences();
 const beans = ref<Bean[]>([]);
 const processes = ref<BeanProcess[]>([]); // the workspace's list, for names
 // Photos (docs/api/bean-photos.md §4c): the cover in the row, all of them in
@@ -212,6 +214,12 @@ const rateMode = ref<'archive' | 'rate'>('rate');
 const rateValue = ref<number | null>(null);
 const rateError = ref('');
 const rateSummary = ref<BeanBrewSummary | null>(null);
+const rateReview = ref('');
+// "Suggest with AI" (docs/api/analysis.md §8e) needs brews to read.
+const suggestingReview = ref(false);
+const canSuggestReview = computed(() => settings.value.beanReviews && workspaces.canEdit && (rateSummary.value?.brewCount ?? 0) > 0);
+// What the dialog would change besides the rating.
+const rateReviewChange = computed(() => (rateTarget.value && show('bean.review') ? reviewChange(rateReview.value, rateTarget.value.review) : {}));
 const rating = ref(false);
 function openRating(bean: Bean, mode: 'archive' | 'rate'): void {
   rateTarget.value = bean;
@@ -219,6 +227,8 @@ function openRating(bean: Bean, mode: 'archive' | 'rate'): void {
   rateValue.value = null;
   rateError.value = '';
   rateSummary.value = null;
+  rateReview.value = bean.review ?? '';
+  suggestingReview.value = false;
   const ws = workspaces.current?.id;
   if (!ws) return;
   beansApi
@@ -233,12 +243,13 @@ async function saveRating(withRating: boolean): Promise<void> {
   const bean = rateTarget.value;
   if (!ws || !bean) return;
   const value = withRating ? rateValue.value : null;
-  if (rateMode.value === 'rate' && value === null) return;
+  if (rateMode.value === 'rate' && value === null && !('review' in rateReviewChange.value)) return;
   rating.value = true;
   rateError.value = '';
   try {
     const input = {
       ...(value !== null ? { rating: value } : {}),
+      ...rateReviewChange.value,
       ...(rateMode.value === 'archive' ? { archived: true } : {}),
     };
     replace((await beansApi.update(ws, bean.id, input)).bean);
@@ -575,16 +586,33 @@ const selection = useSelection();
     <p v-else>How was {{ rateTarget && beanTitle(rateTarget) }}?</p>
     <RatingInput v-model="rateValue" name="archive-rating" label="Rating" />
     <BrewAverageHint :summary="rateSummary" />
+    <div v-if="show('bean.review')" class="field rate-review">
+      <div class="rate-review-head">
+        <label for="rate-review">Review</label>
+        <button v-if="canSuggestReview" class="btn-link small" type="button" @click="suggestingReview = true">Suggest with AI</button>
+      </div>
+      <textarea id="rate-review" v-model="rateReview" rows="3" maxlength="2000" placeholder="e.g. Bright and juicy on the V60, a bit thin as espresso. Would buy again." />
+    </div>
     <p v-if="rateError" class="form-error" role="alert">{{ rateError }}</p>
     <template #actions>
       <template v-if="rateMode === 'archive'">
         <button class="btn btn-primary" type="button" :disabled="rating || rateValue === null" @click="saveRating(true)">Rate and archive</button>
         <button class="btn btn-secondary" type="button" :disabled="rating" @click="saveRating(false)">Skip rating</button>
       </template>
-      <button v-else class="btn btn-primary" type="button" :disabled="rating || rateValue === null" @click="saveRating(true)">Save rating</button>
+      <button v-else class="btn btn-primary" type="button" :disabled="rating || (rateValue === null && !('review' in rateReviewChange))" @click="saveRating(true)">Save</button>
       <button class="btn btn-secondary" type="button" :disabled="rating" @click="rateTarget = null">Cancel</button>
     </template>
   </ConfirmDialog>
+  <BeanReviewDialog
+    v-if="rateTarget && rateSummary"
+    :open="suggestingReview"
+    :bean-id="rateTarget.id"
+    :summary="rateSummary"
+    offer-rating
+    @close="suggestingReview = false"
+    @use-review="(text) => (rateReview = text)"
+    @use-rating="(value) => (rateValue = value)"
+  />
 
   <ConfirmDialog :open="editTarget !== null" title="Edit the latest freeze" @cancel="editTarget = null">
     <form id="freeze-edit-form" class="stack" @submit.prevent="saveFreezeEdit('save')">
@@ -787,6 +815,15 @@ p {
 }
 .facts.small {
   font-size: 0.85rem;
+}
+.rate-review {
+  margin-top: var(--space-3);
+}
+.rate-review-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
 }
 .notes {
   font-size: 0.9rem;

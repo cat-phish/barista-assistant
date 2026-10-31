@@ -277,7 +277,7 @@ the same dialog as §8c (`AiRequestDialog.vue`, `preview`).
 
 ## 8e. A bean's review draft
 
-"Write with AI" on a bean's Review: the AI drafts the Review, and suggests a
+"Suggest with AI" on a bean's Review: the AI drafts the Review, and suggests a
 rating, from the brews the person picks. The request waits for the answer,
 as a label read does (`bean-label.md` §4d); nothing is stored, and nothing
 reaches the bean until the person uses it and saves. A workspace turns it

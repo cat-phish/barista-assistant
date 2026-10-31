@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// "Write with AI" on a bean's Review (docs/api/analysis.md §8e): which brews to
+// "Suggest with AI" on a bean's Review (docs/api/analysis.md §8e): which brews to
 // send, then the draft. Nothing reaches the form until Use, and nothing is
 // saved until the bean is.
 import { computed, ref, watch } from 'vue';
@@ -86,7 +86,7 @@ function useRating(): void {
 </script>
 
 <template>
-  <ConfirmDialog :open="open" title="Write the review with AI" @cancel="emit('close')">
+  <ConfirmDialog :open="open" title="Suggest a review with AI" @cancel="emit('close')">
     <div v-if="draft" class="stack">
       <p class="muted small">From {{ draft.brewCount }} {{ draft.brewCount === 1 ? 'brew' : 'brews' }}</p>
       <p class="draft">{{ draft.review }}</p>
@@ -122,7 +122,7 @@ function useRating(): void {
         <button class="btn btn-secondary" type="button" @click="emit('close')">Done</button>
       </template>
       <template v-else>
-        <button class="btn btn-primary" type="submit" form="bean-review-choices" :disabled="!canAsk">{{ busy ? 'Writing…' : 'Write review' }}</button>
+        <button class="btn btn-primary" type="submit" form="bean-review-choices" :disabled="!canAsk">{{ busy ? 'Suggesting…' : 'Suggest review' }}</button>
         <button class="btn btn-secondary" type="button" @click="emit('close')">Cancel</button>
       </template>
     </template>

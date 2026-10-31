@@ -42,7 +42,7 @@ export const workspaceSettingsObject = z
     suggestSource: z.enum(SUGGEST_SOURCES),
     suggestMaxBrews: z.number().int().min(1).max(MAX_SUGGEST_BREWS),
     suggestAlternatives: alternativeKinds,
-    // "Write with AI" on a bean's Review (docs/api/analysis.md §8e).
+    // "Suggest with AI" on a bean's Review (docs/api/analysis.md §8e).
     beanReviews: z.boolean(),
     beanReviewMaxBrews: z.number().int().min(1).max(MAX_REVIEW_BREWS),
     beanReviewRatedOnly: z.boolean(),
