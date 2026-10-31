@@ -136,6 +136,10 @@ const iced = computed(() => !espresso.value && !coldStyle.value && flashChilled.
 // Step times scale on any timed recipe but espresso (a long steep's steps are a checklist).
 const timesScalable = computed(() => kind.value !== null && !espresso.value && !longStyle.value);
 const timesScale = computed(() => timesScalable.value && scaleTimes.value);
+// Step temps can follow the brew's water temp when there's a target to move
+// from and a step temp to move (docs/api/recipes.md §5).
+const stepTempsFollow = ref(false);
+const tempsFollowable = computed(() => !longStyle.value && !!temp.value.trim() && steps.value.some((d) => d.temp.trim()));
 
 const grams = { scale: 2, min: 0, max: 10000, exclusiveMin: true, exclusiveMax: true } as const;
 const STEEP_HOURS = { scale: 1, min: 0.5, max: 72 } as const;
@@ -302,6 +306,7 @@ function fill(recipe: Recipe): void {
   flowUnit.value = recipe.flowUnit;
   scaleTimes.value = recipe.stepTimeScaling !== null;
   timeScaling.value = recipe.stepTimeScaling === null ? '' : String(recipe.stepTimeScaling);
+  stepTempsFollow.value = recipe.stepTempsFollowBrew;
   style.value = recipe.style?.id ?? '';
   steepFrom.value = recipe.steepMinHours === null ? '' : String(recipe.steepMinHours);
   steepTo.value = recipe.steepMaxHours === null ? '' : String(recipe.steepMaxHours);
@@ -322,6 +327,7 @@ function fill(recipe: Recipe): void {
     'recipe.flowUnit': recipe.flowUnit !== 'g_s',
     'recipe.stepTimeScaling': recipe.stepTimeScaling,
     'recipe.stepTemp': recipe.steps.some((s) => s.targetTempC !== null),
+    'recipe.stepTempsFollowBrew': recipe.stepTempsFollowBrew,
     'recipe.steepWindow': recipe.steepMinHours,
     'recipe.steepTemp': recipe.steepTemp,
     'recipe.dilution': recipe.dilutionRatio,
@@ -530,6 +536,7 @@ async function save(): Promise<void> {
     }),
     flowUnit: flowUnit.value,
     stepTimeScaling: p.timeScaling?.ok ? p.timeScaling.value : null,
+    stepTempsFollowBrew: tempsFollowable.value && stepTempsFollow.value,
     styleId: style.value || null,
     steps: stepsParsed.value.steps,
   };
@@ -804,6 +811,10 @@ async function save(): Promise<void> {
             <span v-else id="time-scaling-hint" class="hint">{{ timeScalingHint || 'Above 0, up to 1' }}</span>
           </div>
         </template>
+        <label v-if="tempsFollowable && show('recipe.stepTempsFollowBrew')" class="checkbox">
+          <input v-model="stepTempsFollow" type="checkbox" />
+          Step temps follow the brew’s water temp
+        </label>
         <p v-if="steps.length === 0" class="muted">
           {{ espresso ? 'No steps: the shot timer just times the shot and records the first drop.' : 'No steps: the timer works as a stopwatch.' }}
         </p>

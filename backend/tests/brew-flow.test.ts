@@ -103,6 +103,19 @@ describe("brew logs", () => {
     expect((await owner.agent.post(base).send({ ...brew, timestamp: "2026-10-01T08:00:00-07:00" })).body.brewLog.timestamp).toBe("2026-10-01T15:00:00.000Z");
   });
 
+  it("keeps how far the step temps moved (docs/api/brew-logs.md §6)", async () => {
+    const { owner, ws } = await setup();
+    const bean = await newBean(owner, ws.id);
+    const base = `/api/workspaces/${ws.id}/brew-logs`;
+    const brew = { beanId: bean, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150 };
+    expect((await owner.agent.post(base).send(brew)).body.brewLog.stepTempShiftC).toBeNull();
+    const made = await owner.agent.post(base).send({ ...brew, stepTempShiftC: -1.5 });
+    expect(made.body.brewLog.stepTempShiftC).toBe(-1.5);
+    expect((await owner.agent.get(`${base}/${made.body.brewLog.id}`)).body.brewLog.stepTempShiftC).toBe(-1.5);
+    expect((await owner.agent.patch(`${base}/${made.body.brewLog.id}`).send({ actualTempC: 90 })).body.brewLog.stepTempShiftC).toBe(-1.5);
+    for (const bad of [101, -101, 1.55]) expect((await owner.agent.post(base).send({ ...brew, stepTempShiftC: bad })).status, String(bad)).toBe(400);
+  });
+
   it("records the device's UTC offset for the local brew date", async () => {
     const { owner, ws } = await setup();
     const bean = await newBean(owner, ws.id);

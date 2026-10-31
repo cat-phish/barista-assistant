@@ -26,6 +26,7 @@ export const FIELDS = [
   brew('vessel', 'Vessel', 'Weigh the yield in a carafe or mug and subtract it (Bar setup → Vessels)'),
   brew('tds', 'TDS and Brix', 'Refractometer reading and the extraction worked out from it'),
   brew('temp', 'Water temperature'),
+  brew('stepTempsFollow', 'Step temps follow the water temp', 'Only asked for on recipes with step temperatures'),
   brew('grinder', 'Grinder'),
   brew('grind', 'Grind setting'),
   brew('rpm', 'Grind speed (RPM)', 'Only asked for on variable-speed grinders'),
@@ -79,6 +80,7 @@ export const FIELDS = [
   recipe('flowUnit', 'Flow unit (espresso)'),
   recipe('stepTimeScaling', 'Step times that scale with the batch (filter)', 'The steps you pick take longer for a bigger batch, less for a smaller one'),
   recipe('stepTemp', 'Step temperatures'),
+  recipe('stepTempsFollowBrew', 'Step temps that follow the brew’s water temp', 'Changing the water temp on the brew page moves the step temps by the same degrees'),
 
   // Home roasting's green stock (docs/api/green-coffees.md §4e).
   green('process', 'Process'),

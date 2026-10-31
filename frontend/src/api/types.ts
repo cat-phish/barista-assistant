@@ -540,6 +540,7 @@ export interface Recipe extends ColdFields {
   flowUnit: FlowUnit;
   // Filter: pour and wait times × batch factor^this; null = they stay (§5).
   stepTimeScaling: number | null;
+  stepTempsFollowBrew: boolean;
   style: StyleRef | null; // one of the workspace's styles for brewer.kind
   targetTempC: number | null;
   defaultGrinderId: string | null; // preselected when brewing this recipe
@@ -624,6 +625,7 @@ export interface BrewLog {
   actualYieldGrams: number | null; // measured beverage weight
   tdsPercent: number | null; // refractometer reading; extraction yield is worked out (lib/extraction.ts)
   actualTempC: number | null;
+  stepTempShiftC: number | null; // how far the step temps moved; null = as the recipe wrote them
   actualGrindSetting: number | null; // the number on the grinder's dial
   grindRpm: number | null; // grinder speed, variable-speed grinders only
   beanWeightInGrams: number | null; // weighed before grinding; retention = in − out (lib/grinderRetention.ts)

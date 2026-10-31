@@ -326,6 +326,16 @@ describe("flash chilled: brewed onto ice (docs/api/recipes.md §5, brew-logs.md 
 });
 
 describe("step times with the batch (docs/api/recipes.md §5)", () => {
+  it("stepTempsFollowBrew: off by default, kept as sent", async () => {
+    const { owner, base, recipe } = await setup();
+    const made = await owner.agent.post(base).send(recipe);
+    expect(made.body.recipe.stepTempsFollowBrew).toBe(false);
+    const id = made.body.recipe.id;
+    expect((await owner.agent.patch(`${base}/${id}`).send({ stepTempsFollowBrew: true })).body.recipe.stepTempsFollowBrew).toBe(true);
+    expect((await owner.agent.post(base).send({ ...recipe, stepTempsFollowBrew: true })).body.recipe.stepTempsFollowBrew).toBe(true);
+    expect((await owner.agent.post(base).send({ ...recipe, stepTempsFollowBrew: "yes" })).status).toBe(400);
+  });
+
   it("scalesWithBatch: the type's default unless a step says, kept as sent (docs/api/recipes.md §5)", async () => {
     const { owner, base, recipe } = await setup();
     const omitted = [

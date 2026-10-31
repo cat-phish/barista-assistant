@@ -176,6 +176,7 @@ const recipeFields = {
   // Filter only (kindError): pour and wait times × batch factor^this
   // (docs/api/recipes.md §5); null = step times stay the same.
   stepTimeScaling: decimalSchema({ min: 0, max: 1, scale: 2, exclusiveMin: true }).nullable().optional(),
+  stepTempsFollowBrew: z.boolean().optional(),
   targetTempC: decimalSchema({ min: 0, max: 100, scale: 1 }).nullable().optional(),
   // Cold styles (docs/api/recipes.md §5): the steep window in hours (a pair,
   // steepPairIssue), fridge or room, and the serving dilution.
@@ -406,6 +407,7 @@ async function loadRecipes(workspaceId: string, recipeId?: string): Promise<Reci
       firstDropMaxSec: recipes.firstDropMaxSec,
       flowUnit: recipes.flowUnit,
       stepTimeScaling: recipes.stepTimeScaling,
+      stepTempsFollowBrew: recipes.stepTempsFollowBrew,
       style: { id: recipeStyles.id, name: recipeStyles.name, brewsLike: recipeStyles.brewsLike },
       targetTempC: recipes.targetTempC,
       steepMinHours: recipes.steepMinHours,

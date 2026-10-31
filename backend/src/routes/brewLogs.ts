@@ -166,6 +166,8 @@ const brewLogFields = {
   // Refractometer reading, % (docs/api/brew-logs.md §6). Espresso runs to ~12%.
   tdsPercent: decimalSchema({ min: 0, max: 30, scale: 2, exclusiveMin: true }).nullable().optional(),
   actualTempC: decimalSchema({ min: 0, max: 100, scale: 1 }).nullable().optional(),
+  // How far this brew moved the recipe's step temps (docs/api/brew-logs.md §6).
+  stepTempShiftC: decimalSchema({ min: -100, max: 100, scale: 1 }).nullable().optional(),
   // The number on the grinder's dial (docs/api/brew-logs.md §6).
   actualGrindSetting: grindSettingSchema.nullable().optional(),
   // Grinder speed: only with a variable-speed grinder (rpmError).
@@ -498,6 +500,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       vesselWeightGrams: brewLogs.vesselWeightGrams,
       tdsPercent: brewLogs.tdsPercent,
       actualTempC: brewLogs.actualTempC,
+      stepTempShiftC: brewLogs.stepTempShiftC,
       actualGrindSetting: brewLogs.actualGrindSetting,
       grindRpm: brewLogs.grindRpm,
       beanWeightInGrams: brewLogs.beanWeightInGrams,

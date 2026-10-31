@@ -229,6 +229,13 @@ export function scaleStepTimes<S extends { scalesWithBatch: boolean; durationSec
   });
   return { steps: scaled, shiftSec };
 }
+// Step temps with the brew's water temp (docs/api/recipes.md §5), as in
+// @barista/shared/brew: moved by the same degrees, within 0-100; a step with
+// none stays without.
+export function shiftStepTemps<S extends { targetTempC: number | null }>(steps: S[], shiftC: number | null): S[] {
+  if (!shiftC) return steps;
+  return steps.map((s) => (s.targetTempC === null ? s : { ...s, targetTempC: Math.min(100, Math.max(0, round1(s.targetTempC + shiftC))) }));
+}
 // A finish window moved by shiftSec, never below 0.
 export function shiftWindow(min: number | null, max: number | null, shiftSec: number): { min: number | null; max: number | null } {
   if (min === null || max === null) return { min, max };
