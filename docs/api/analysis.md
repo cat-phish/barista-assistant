@@ -274,3 +274,41 @@ nothing is saved.
 **Preview what's sent** sits under Suggest parameters on the brew page, and
 under Get AI suggestion on the saved brew and the journal entry; it opens
 the same dialog as §8c (`AiRequestDialog.vue`, `preview`).
+
+## 8e. A bean's review draft
+
+"Write with AI" on a bean's Review: the AI drafts the Review, and suggests a
+rating, from the brews the person picks. The request waits for the answer,
+as a label read does (`bean-label.md` §4d); nothing is stored, and nothing
+reaches the bean until the person uses it and saves. A workspace turns it
+off with `beanReviews` and sets what the dialog starts with
+(`beanReviewMaxBrews`, `beanReviewRatedOnly`, `beanReviewBrewers`,
+`workspaces.md` §2), under Settings → **AI**.
+
+### `POST /api/workspaces/:workspaceId/beans/:beanId/review-draft`
+
+- **Auth Required:** `true` (role `owner` or `barista`)
+- **Body** (all optional; left out, the workspace's):
+  ```json
+  { "brewerIds": ["uuid"], "maxBrews": 10, "ratedOnly": true, "note": "We mostly drank it with milk." }
+  ```
+  - `brewerIds`: only these brewers' brews; `null` for every brew, with or
+    without a brewer. Left out, the workspace's `beanReviewBrewers`, or every
+    brew when none of those match.
+  - `maxBrews`: 1–30, newest first, of this bag only.
+  - `ratedOnly`: only brews with a rating or a drink rating. Always on when
+    the workspace hides `unratedHistory` (`llm-contract.md` §9).
+  - `note`: a one-off note (`auth.md` §1c). There's no workspace default for
+    it: standing instructions are under Settings → Your AI prompt.
+- **Success (`200 OK`):**
+  `{ "review": "…", "suggestedRating": 4, "brewCount": 8 }`, `brewCount`
+  being how many brews were sent.
+- **Errors:** `400` invalid body or a brewer outside the workspace; `403`
+  viewer, or `beanReviews` off; `404` bean not found; `409` no brews match;
+  `502` the AI failed; `503` the queue (Redis) is unavailable; `504` no answer
+  in time (`BEAN_REVIEW_TIMEOUT_MS`, default 60 s).
+
+### `POST /api/workspaces/:workspaceId/beans/:beanId/review-draft/preview`
+
+What asking would send (§8d): the same body and checks, `{ "request": { ... } }`.
+Its preview job is `{ "kind": "beanReview", "review": { ... } }`.

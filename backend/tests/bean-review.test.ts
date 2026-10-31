@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beanReviewQueue } from "../src/queue.js";
 import { brewerId, newBean, newBrewLog, newUser, newWorkspace, addMember, type TestUser } from "./helpers.js";
 
 async function setup(): Promise<{ owner: TestUser; ws: string; bean: string; recipe: string; v60: string; summary: string }> {
@@ -58,5 +60,65 @@ describe("bean review defaults (docs/api/workspaces.md §2)", () => {
     for (const bad of [{ beanReviewMaxBrews: 0 }, { beanReviewMaxBrews: 31 }, { beanReviewBrewers: "some" }, { beanReviewBrewers: [v60, v60] }, { beanReviewBrewers: ["x"] }]) {
       expect((await owner.agent.patch(settings).send(bad)).status).toBe(400);
     }
+  });
+});
+
+describe("a bean's review draft (docs/api/analysis.md §8e)", () => {
+  const body = { brewerIds: null, maxBrews: 5, ratedOnly: true };
+  const preview = (over: object = {}) => ({ ...body, ...over });
+  // The worker isn't running here: the job is checked as queued.
+  beforeEach(async () => {
+    vi.restoreAllMocks();
+    await beanReviewQueue.obliterate({ force: true });
+  });
+
+  it("refuses a viewer, a stranger's bean, a bad body and a foreign brewer", async () => {
+    const { owner, ws, bean } = await setup();
+    await newBrewLog(owner, ws, bean, { rating: 4 });
+    const url = `/api/workspaces/${ws}/beans/${bean}/review-draft/preview`;
+    const viewer = await newUser("viewer");
+    await addMember(owner, ws, viewer, "viewer");
+    expect((await viewer.agent.post(url).send(body)).status).toBe(403);
+    expect((await owner.agent.post(`/api/workspaces/${ws}/beans/${await newBean(owner, (await newWorkspace(owner)).id)}/review-draft/preview`).send(body)).status).toBe(404);
+    expect((await owner.agent.post(url).send({ maxBrews: 31 })).status).toBe(400);
+    expect((await owner.agent.post(url).send({ brewerIds: [] })).status).toBe(400);
+    const theirs = await brewerId(owner, (await newWorkspace(owner)).id, "V60");
+    expect((await owner.agent.post(url).send({ brewerIds: [theirs] })).status).toBe(400);
+  });
+
+  it("is a 403 when the workspace turned it off", async () => {
+    const { owner, ws, bean } = await setup();
+    await newBrewLog(owner, ws, bean, { rating: 4 });
+    await owner.agent.patch(`/api/workspaces/${ws}/settings`).send({ beanReviews: false });
+    expect((await owner.agent.post(`/api/workspaces/${ws}/beans/${bean}/review-draft`).send(body)).status).toBe(403);
+  });
+
+  it("is a 409 when no brews match, and unrated brews stay out when the workspace hides them", async () => {
+    const { owner, ws, bean } = await setup();
+    const url = `/api/workspaces/${ws}/beans/${bean}/review-draft/preview`;
+    expect((await owner.agent.post(url).send(preview({ ratedOnly: false }))).status).toBe(409);
+    await newBrewLog(owner, ws, bean); // unrated
+    expect((await owner.agent.post(url).send(preview({ ratedOnly: true }))).status).toBe(409);
+    await owner.agent.patch(`/api/workspaces/${ws}/settings`).send({ aiHidden: ["unratedHistory"] });
+    expect((await owner.agent.post(url).send(preview({ ratedOnly: false }))).status).toBe(409);
+  });
+
+  it("queues what was asked, the workspace's defaults filling the rest", async () => {
+    const { owner, ws, bean, recipe, v60 } = await setup();
+    await newBrewLog(owner, ws, bean, { recipeId: recipe, rating: 4 });
+    await owner.agent.patch(`/api/workspaces/${ws}/settings`).send({ beanReviewMaxBrews: 7, beanReviewRatedOnly: false, beanReviewBrewers: [v60] });
+    const add = vi.spyOn(beanReviewQueue, "add").mockRejectedValue(new Error("stop here"));
+    const url = `/api/workspaces/${ws}/beans/${bean}/review-draft`;
+    expect((await owner.agent.post(url).send({ note: "  with milk " })).status).toBe(503);
+    expect(add.mock.calls[0]![1]).toEqual({ beanId: bean, brewerIds: [v60], maxBrews: 7, ratedOnly: false, requestedBy: owner.id, note: "with milk" });
+  });
+
+  it("a saved brewer choice that doesn't apply falls back to every brew", async () => {
+    const { owner, ws, bean } = await setup();
+    await newBrewLog(owner, ws, bean, { rating: 4 }); // no brewer
+    await owner.agent.patch(`/api/workspaces/${ws}/settings`).send({ beanReviewBrewers: [randomUUID()] });
+    const add = vi.spyOn(beanReviewQueue, "add").mockRejectedValue(new Error("stop here"));
+    await owner.agent.post(`/api/workspaces/${ws}/beans/${bean}/review-draft`).send({});
+    expect(add.mock.calls[0]![1]).toMatchObject({ brewerIds: null });
   });
 });

@@ -4,7 +4,7 @@
 // decides when each is included (worker/src/prompt.ts); a barista can
 // replace an unlocked section's text and add instructions of their own
 // (docs/api/auth.md §1c, "Your AI prompt").
-export type PromptKind = "analysis" | "suggest" | "label";
+export type PromptKind = "analysis" | "suggest" | "label" | "review";
 
 export interface PromptSectionText {
   key: string;
@@ -43,7 +43,7 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
   {
     key: "drink",
     label: "Drinks and their tasting",
-    prompts: ["analysis", "suggest"],
+    prompts: ["analysis", "suggest", "review"],
     locked: false,
     text:
       "drinkRating and drinkTastingNotes describe the finished drink (the brew's drink says how it was served). Milk " +
@@ -293,9 +293,32 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
   {
     key: "end",
     label: "Answer in the JSON schema",
-    prompts: ["analysis", "suggest", "label"],
+    prompts: ["analysis", "suggest", "label", "review"],
     locked: true,
     text: "Respond strictly matching the provided JSON schema.",
+  },
+  {
+    key: "reviewCore",
+    label: "What to do (bean review)",
+    prompts: ["review"],
+    locked: false,
+    text:
+      "You are helping a barista write their own review of one bag of coffee, from the brews they logged of it " +
+      "(brews, newest first; each names its brewer). A missing field means it wasn't recorded. Ratings are 0.5-5 in half " +
+      "steps; rating and tastingNotes describe the coffee tasted on its own. Say what the coffee was like overall: " +
+      "how it tasted, how it held up as it aged, and which brewers or recipes showed it best. Use only what the brews " +
+      "say, weigh a pattern over one odd cup, and never invent a flavor or a detail. This is a verdict on the coffee, " +
+      "not advice: don't suggest grind, temperature or recipe changes.",
+  },
+  {
+    key: "reviewOutput",
+    label: "What each answer field holds (bean review)",
+    prompts: ["review"],
+    locked: true,
+    text:
+      "review is 2-4 plain sentences in the barista's own voice, as a note they'd keep, in the first person or " +
+      "with no subject, under 1500 characters. suggestedRating is the coffee overall, 0.5-5 in half steps, from " +
+      "the brews' ratings and notes; with no ratings, judge it from the notes.",
   },
   {
     key: "suggestCore",

@@ -6,7 +6,8 @@ import OpenAI from "openai";
 import { z } from "zod";
 import { config } from "./config.js";
 import type { BrewContext } from "./context.js";
-import { buildSystemPrompt, PROMPT_SECTIONS, promptSections, SUGGEST_SECTIONS, toLlmInput, toSuggestInput, type PromptCustom } from "./prompt.js";
+import type { BeanReviewContext } from "./beanReview.js";
+import { BEAN_REVIEW_SECTIONS, buildSystemPrompt, PROMPT_SECTIONS, promptSections, SUGGEST_SECTIONS, toBeanReviewInput, toLlmInput, toSuggestInput, type PromptCustom } from "./prompt.js";
 import type { SuggestContext } from "./suggestContext.js";
 
 // The input and system prompt are built in prompt.ts; the schema and its
@@ -364,4 +365,51 @@ export interface SuggestionRun {
 export async function requestSuggestion(context: SuggestContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): Promise<SuggestionRun> {
   const { message, usage } = await complete(buildSuggestRequest(context, hidden, custom));
   return { suggestion: onlySuggestionsThatApply(parseSuggestionMessage(message), context, hidden), usage };
+}
+
+// A draft of a bean's Review (docs/api/llm-contract.md §9d).
+export const BEAN_REVIEW_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    review: { type: "string" },
+    suggestedRating: { type: "number" },
+  },
+  required: ["review", "suggestedRating"],
+  additionalProperties: false,
+} as const;
+
+// A long review is cut rather than failed: the barista edits it anyway.
+const beanReviewSchema = z.object({
+  review: z.string().trim().min(1).transform((s) => s.slice(0, 2000).trimEnd()),
+  suggestedRating: z.number().transform((n) => Math.min(5, Math.max(0.5, Math.round(n * 2) / 2))),
+});
+export type BeanReviewDraft = z.infer<typeof beanReviewSchema>;
+
+export function buildBeanReviewRequest(
+  context: BeanReviewContext,
+  hidden: ReadonlySet<AiDetail> = new Set(),
+  custom?: PromptCustom,
+): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
+  const input = toBeanReviewInput(context, hidden);
+  return {
+    model: config.openaiModel,
+    messages: [
+      { role: "system", content: buildSystemPrompt(input, BEAN_REVIEW_SECTIONS, custom) },
+      { role: "user", content: JSON.stringify(input) },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: { name: "bean_review", strict: true, schema: BEAN_REVIEW_JSON_SCHEMA },
+    },
+  };
+}
+export function beanReviewSent(context: BeanReviewContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): AiRequest {
+  return sent(buildBeanReviewRequest(context, hidden, custom), promptSections(toBeanReviewInput(context, hidden), BEAN_REVIEW_SECTIONS, custom));
+}
+export function parseBeanReviewMessage(message: LlmMessage): BeanReviewDraft {
+  return parseMessage(message, beanReviewSchema);
+}
+export async function requestBeanReview(context: BeanReviewContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): Promise<BeanReviewDraft> {
+  const { message } = await complete(buildBeanReviewRequest(context, hidden, custom));
+  return parseBeanReviewMessage(message);
 }

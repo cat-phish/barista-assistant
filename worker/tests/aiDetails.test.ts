@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { AI_DETAILS, type AiDetail } from "@barista/shared/aiDetails";
 import type { BrewContext, BrewSummary, DrinkInfo, GrinderInfo, WaterInfo } from "../src/context.js";
-import { toLlmInput, toSuggestInput } from "../src/prompt.js";
+import { toBeanReviewInput, toLlmInput, toSuggestInput } from "../src/prompt.js";
+import type { BeanReviewContext, ReviewBrew } from "../src/beanReview.js";
 import type { BeanOption, BrewerInfo, BrewerOption, PastAnalysis, RecipeOption, SuggestBatch, SuggestBrew, SuggestContext } from "../src/suggestContext.js";
 
 // Parity between what the AI is sent and what Settings → AI can switch off
@@ -351,5 +352,29 @@ describe("what Suggest parameters sends: every field always sent or switchable (
   it.each(cases.filter(([, , sees]) => sees !== "always"))("%s.%s goes with %s", (place, key, sees) => {
     expect(suggestSent(toSuggestInput(suggest) as Obj, place, key)).toBe(true);
     expect(suggestSent(toSuggestInput(suggest, new Set([sees as AiDetail])) as Obj, place, key)).toBe(false);
+  });
+});
+
+// A bean review (docs/api/llm-contract.md §9d): the brews and the bean as the
+// analysis sends them, so only what it adds is classified here.
+const REVIEW: Record<keyof BeanReviewContext, Sees> = { bean: "always", brews: "always", ratingScale: "always" };
+const REVIEW_BREW: Record<Exclude<keyof ReviewBrew, keyof BrewSummary>, Sees> = { brewer: "always" };
+
+describe("what a bean review sends (llm-contract.md §9d)", () => {
+  const context: BeanReviewContext = { bean: full.bean, brews: [{ ...brew, brewer: "V60" }], ratingScale: "0.5-5" };
+
+  it("classifies its own fields as always sent", () => {
+    const input = toBeanReviewInput(context) as Obj;
+    for (const key of Object.keys(REVIEW)) expect(input[key], key).toBeDefined();
+    for (const key of Object.keys(REVIEW_BREW)) expect((input.brews as Obj[])[0]![key], key).toBeDefined();
+  });
+
+  it("drops what the workspace hides, as the analysis does", () => {
+    const bean = (hidden: AiDetail[]) => toBeanReviewInput(context, new Set(hidden)).bean as Obj;
+    expect(bean([]).country).toBeDefined();
+    expect(bean(["origin"]).country).toBeUndefined();
+    const sent = toBeanReviewInput(context, new Set<AiDetail>(["tds", "problems"])).brews as unknown as Obj[];
+    expect(sent[0]!.tdsPercent).toBeUndefined();
+    expect(sent[0]!.problems).toBeUndefined();
   });
 });

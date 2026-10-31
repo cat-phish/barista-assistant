@@ -26,15 +26,19 @@ import {
   AI_PREVIEW_JOB,
   AI_PREVIEW_QUEUE,
   type AiPreviewJobData,
+  BEAN_REVIEW_JOB,
+  BEAN_REVIEW_QUEUE,
   LABEL_READ_JOB,
   LABEL_READ_QUEUE,
   type LabelReadResult,
   type LabelReadJobData,
+  type BeanReviewJobData,
+  type BeanReviewResult,
 } from "@barista/shared/jobs";
 import type { AiRequest, BackupSettings } from "@barista/shared/schema";
 import { Queue, QueueEvents } from "bullmq";
 import { Redis } from "ioredis";
-import { backupTimezone, config, labelReadTimeoutMs, labelWebTimeoutMs, previewTimeoutMs } from "./config.js";
+import { backupTimezone, beanReviewTimeoutMs, config, labelReadTimeoutMs, labelWebTimeoutMs, previewTimeoutMs } from "./config.js";
 
 // Producer side of the brew-analysis queue (docs/api/llm-contract.md §9).
 const connection = new Redis(config.redis.url, {
@@ -207,6 +211,18 @@ labelReadQueue.on("error", (err: Error) => {
 });
 export function readBeanLabel(data: LabelReadJobData): Promise<LabelReadResult> {
   return addAndWait(labelReadQueue, LABEL_READ_JOB, data, data.lookUp ? labelWebTimeoutMs() : labelReadTimeoutMs());
+}
+
+// A draft of a bean's Review (docs/api/analysis.md §8e): the same, an AI call
+// the request waits for.
+export const beanReviewQueue = new Queue<BeanReviewJobData, BeanReviewResult | null>(BEAN_REVIEW_QUEUE, { connection });
+let lastBeanReviewError = "";
+beanReviewQueue.on("error", (err: Error) => {
+  if (err.message !== lastBeanReviewError) console.error("Bean review queue error:", err.message);
+  lastBeanReviewError = err.message;
+});
+export function requestBeanReview(data: BeanReviewJobData): Promise<BeanReviewResult | null> {
+  return addAndWait(beanReviewQueue, BEAN_REVIEW_JOB, data, beanReviewTimeoutMs());
 }
 
 // Same timeout as the analysis; the caller treats failure as "no reminder".

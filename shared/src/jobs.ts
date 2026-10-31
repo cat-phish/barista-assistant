@@ -56,7 +56,7 @@ export type SuggestionPreview = Pick<
   | "alternativesAsked"
 >;
 // note: a one-off note (docs/api/auth.md §1c), as asking would send it.
-export type AiPreviewJobData = { kind: "analysis"; brewLogId: string; note?: string } | { kind: "suggest"; suggestion: SuggestionPreview };
+export type AiPreviewJobData = { kind: "analysis"; brewLogId: string; note?: string } | { kind: "suggest"; suggestion: SuggestionPreview } | { kind: "beanReview"; review: BeanReviewJobData };
 
 // Reading a bean's label from its photos, or looking a bean up on the web
 // (docs/api/bean-label.md §4d, llm-contract.md §9c). The backend waits for the
@@ -159,6 +159,27 @@ export const EMPTY_LABEL_FIELDS: LabelFields = {
   batchNumber: null,
   website: null,
 };
+
+// A draft of a bean's Review (docs/api/analysis.md §8e, llm-contract.md §9d):
+// the backend waits for the answer; nothing is stored. brewerIds null: every
+// brew, with or without a brewer. ratedOnly: as resolved by the backend (the
+// workspace may keep unrated brews from the AI). The answer is null when the
+// bean is gone or no brews match.
+export const BEAN_REVIEW_QUEUE = "bean-review";
+export const BEAN_REVIEW_JOB = "draft";
+export interface BeanReviewJobData {
+  beanId: string;
+  brewerIds: string[] | null;
+  maxBrews: number;
+  ratedOnly: boolean;
+  requestedBy: string; // whose AI prompt is used (docs/api/auth.md §1c)
+  note: string | null;
+}
+export interface BeanReviewResult {
+  review: string;
+  suggestedRating: number; // 0.5-5 in half steps
+  brewCount: number; // how many brews were sent
+}
 
 export const GRIND_DELTAS = ["much_finer", "finer", "no_change", "coarser", "much_coarser"] as const;
 export type GrindDelta = (typeof GRIND_DELTAS)[number];

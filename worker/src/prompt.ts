@@ -6,6 +6,7 @@
 // input has what they talk about.
 import type { AiDetail } from "@barista/shared/aiDetails";
 import { INSTRUCTIONS_INTRO, LOCKED_SECTIONS, NOTE_INTRO, PROMPT_TEXT, type AiPrompt } from "@barista/shared/aiPrompt";
+import type { BeanReviewContext } from "./beanReview.js";
 import type { BrewContext, BrewSummary, GrinderInfo, WaterInfo } from "./context.js";
 import type { BrewerInfo, SuggestContext } from "./suggestContext.js";
 
@@ -38,7 +39,7 @@ const WATER_FIGURES: Array<keyof WaterInfo> = ["tdsPpm", "generalHardnessPpm", "
 
 // One brew as the AI sees it: the grinder and water by name (their details
 // are in `equipment`), without what the workspace keeps from the AI.
-function brewInput(b: BrewSummary, hidden: ReadonlySet<AiDetail>): Record<string, unknown> {
+export function brewInput(b: BrewSummary, hidden: ReadonlySet<AiDetail>): Record<string, unknown> {
   const { grinder, water, machine, marks, prepTools, problems, drink, steeping, ...rest } = b;
   const out: Record<string, unknown> = { ...rest, grinder: grinder?.name, water: hidden.has("water") ? undefined : water?.name };
   if (steeping) out.steeping = true;
@@ -160,6 +161,18 @@ export function toSuggestInput(context: SuggestContext, hidden: ReadonlySet<AiDe
     })),
     equipment: equipment([{ grinder: context.grinder, water: null }, ...context.brews], hidden),
     options: optionsInput(context.options, hidden),
+  };
+  return (compact(input) ?? {}) as LlmInput;
+}
+
+// A bean review (docs/api/llm-contract.md §9d): the bean and its brews, with
+// what the workspace keeps from the AI left out as everywhere else.
+export function toBeanReviewInput(context: BeanReviewContext, hidden: ReadonlySet<AiDetail> = new Set()): LlmInput {
+  const input = {
+    ratingScale: context.ratingScale,
+    bean: beanInput(context.bean, hidden),
+    brews: context.brews.map(({ brewer, ...b }) => ({ ...brewInput(b, hidden), brewer })),
+    equipment: equipment(context.brews, hidden),
   };
   return (compact(input) ?? {}) as LlmInput;
 }
@@ -366,6 +379,14 @@ export const SUGGEST_SECTIONS: PromptSection[] = [
   ownSection("suggestOutput"),
   ...PROMPT_SECTIONS.filter((s) => s.key !== "core" && s.key !== "output" && s.key !== "end").map((s) => (s.key === "espresso" ? ownSection("suggestEspresso") : s)),
   ownSection("suggestAlternatives"),
+  PROMPT_SECTIONS.find((s) => s.key === "end")!,
+];
+
+// A bean review: its own sections, and how drinks read.
+export const BEAN_REVIEW_SECTIONS: PromptSection[] = [
+  { key: "reviewCore", when: () => true, text: PROMPT_TEXT.reviewCore },
+  { key: "reviewOutput", when: () => true, text: PROMPT_TEXT.reviewOutput },
+  PROMPT_SECTIONS.find((s) => s.key === "drink")!,
   PROMPT_SECTIONS.find((s) => s.key === "end")!,
 ];
 

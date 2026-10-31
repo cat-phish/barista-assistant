@@ -1,5 +1,5 @@
 import { api, API_URL } from './client';
-import type { Bean, BeanPhoto, BlendType, CoffeeSpecies, LabelLookUp, LabelReadResult, LabelWebResult, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from './types';
+import type { AiRequest, Bean, BeanPhoto, BlendType, CoffeeSpecies, LabelLookUp, LabelReadResult, LabelWebResult, DetailedRoastLevel, OriginArea, RoastLevel, RoastType } from './types';
 
 // Request body for create/update (docs/api/beans.md §4). With roast names,
 // roastLevel is left out: the API derives it from detailedRoastLevel (only a
@@ -46,6 +46,19 @@ export interface BeanBrewSummary {
   brewers: { id: string; name: string; brewCount: number }[];
 }
 
+// What a review draft asks with (docs/api/analysis.md §8e); brewerIds null: every brew.
+export interface BeanReviewRequest {
+  brewerIds: string[] | null;
+  maxBrews: number;
+  ratedOnly: boolean;
+  note?: string;
+}
+export interface BeanReviewDraft {
+  review: string;
+  suggestedRating: number;
+  brewCount: number;
+}
+
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/beans`;
 
 export const beansApi = {
@@ -55,6 +68,9 @@ export const beansApi = {
   update: (workspaceId: string, id: string, input: Partial<BeanInput> & { archived?: boolean }) =>
     api.patch<{ bean: Bean }>(`${base(workspaceId)}/${id}`, input),
   brewSummary: (workspaceId: string, id: string) => api.get<BeanBrewSummary>(`${base(workspaceId)}/${id}/brew-summary`),
+  reviewDraft: (workspaceId: string, id: string, body: BeanReviewRequest) => api.post<BeanReviewDraft>(`${base(workspaceId)}/${id}/review-draft`, body),
+  reviewPreview: (workspaceId: string, id: string, body: BeanReviewRequest) =>
+    api.post<{ request: AiRequest | null }>(`${base(workspaceId)}/${id}/review-draft/preview`, body),
   // date: the user's local YYYY-MM-DD (§4).
   freeze: (workspaceId: string, id: string, date: string) =>
     api.post<{ bean: Bean }>(`${base(workspaceId)}/${id}/freeze`, { date }),
