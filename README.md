@@ -13,7 +13,7 @@ analysis, and a menu for your bar. What it does: `docs/features.md`.
 1. `cp .env.example .env && chmod 600 .env`, then fill in the secrets and
    `OPENAI_MODEL` (the file says how).
 2. `docker compose up -d --build`
-3. Open https://localhost. The certificate comes from the app's own CA, so
+3. Open https://localhost:42069. The certificate comes from the app's own CA, so
    the browser warns until you trust it (below).
 
 Code changes need `docker compose up -d --build` again: the images copy the
@@ -32,10 +32,10 @@ images are built on the server).
    - the secrets and `OPENAI_MODEL`, as the file says. Moving from another
      machine? Copy its `JWT_SECRET` to keep everyone logged in;
    - `FRONTEND_BIND=0.0.0.0`, `APP_HOST` to the server's LAN IP or a name
-     your network resolves, and `APP_URL=https://<that address>`. The HTTPS
+     your network resolves, and `APP_URL=https://<that address>:42069`. The HTTPS
      certificate is made for that address, so give the server a fixed IP
      (e.g. a DHCP reservation on the router);
-   - if something else on the server already uses port 443 or 80:
+   - if something else on the server already uses port 42069 or 42070:
      `HTTPS_PORT` / `HTTP_PORT` (e.g. 8443 / 8080), and the port in
      `APP_URL` (`https://192.168.1.20:8443`);
    - optionally, where data is kept (`DB_DATA_DIR` and the rest, under
@@ -103,9 +103,9 @@ serves it over HTTPS with certificates from its own CA; each device trusts
 that CA once.
 
 1. In `.env`, set `FRONTEND_BIND=0.0.0.0`, `APP_HOST` to this machine's LAN
-   IP (or a name your network resolves) and `APP_URL=https://<that address>`,
+   IP (or a name your network resolves) and `APP_URL=https://<that address>:42069`,
    then `docker compose up -d --build`.
-2. On the phone, open `http://<address>/ca.crt` and trust it:
+2. On the phone, open `http://<address>:42070/ca.crt` and trust it:
    - **Android:** Settings → Security → Encryption & credentials → Install a
      certificate → **CA certificate** (the path varies by phone).
    - **iOS:** allow the profile download, install it under Settings →
@@ -113,7 +113,7 @@ that CA once.
      Settings → General → About → Certificate Trust Settings.
    - **A computer:** import it in the browser's certificate settings as an
      authority.
-3. Open `https://<address>` and install it: Chrome's menu → **Install app**
+3. Open `https://<address>:42069` and install it: Chrome's menu → **Install app**
    (Android), or Share → **Add to Home Screen** (iOS Safari).
 
 The CA lives in the `caddy_data` Docker volume and lasts ten years; keep

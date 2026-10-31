@@ -92,7 +92,7 @@ export default defineConfig({
     *   HTTPS for `localhost` and `APP_HOST` (the LAN IP or name) from
         Caddy's own CA; `default_sni` answers phones that connect by IP
         (they send no server name). Each device trusts the CA root once,
-        from `http://<address>/ca.crt`; the CA lives in the `caddy_data`
+        from `http://<address>:42070/ca.crt`; the CA lives in the `caddy_data`
         volume, so it survives rebuilds.
     *   Port 80 serves `/ca.crt` and redirects everything else to HTTPS.
     *   `/api/*` goes to the backend (with `X-Forwarded-For`, for

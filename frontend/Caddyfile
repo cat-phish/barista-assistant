@@ -1,6 +1,6 @@
 # Serves the built app over HTTPS and proxies /api to the backend
 # (docs/timer_architecture.md §2). Certificates come from Caddy's own CA:
-# each device trusts its root once, downloaded from http://<address>/ca.crt.
+# each device trusts its root once, downloaded from http://<address>:42070/ca.crt.
 # The CA lives in the caddy_data volume; losing it means trusting a new root.
 {
 	# The container can't add the root to this machine's trust store.

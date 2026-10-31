@@ -688,7 +688,7 @@ How the app is served and installed.
   has installed it on a phone yet.
 - **Approach:** on the server it will run on, on an Android phone and an
   iPhone:
-  - trust the CA from `http://<address>/ca.crt` (README steps; fix them
+  - trust the CA from `http://<address>:42070/ca.crt` (README steps; fix them
     where they're wrong);
   - install it, and check the name, icon, standalone window and
     portrait lock;

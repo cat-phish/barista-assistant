@@ -2076,5 +2076,9 @@ repo. README: "Run the published images".
   `IMAGE_TAG` picks the build. Unlike `docker-compose.yml` it has no `build:`,
   no host ports for dev tools and no test database, and it requires the
   `*_DIR` settings, since there's no folder next to it to fall back on.
+- **Host ports** default to 42069 (HTTPS) and 42070 (HTTP redirect and
+  `/ca.crt`) rather than 443 and 80, which most servers already use. Caddy
+  still listens on 443 and 80 inside the container, and `HTTPS_PORT` and
+  `HTTP_PORT` override them.
 - Decided: a second compose file over configurable image names, so the main
   file stays simple for building from source. `amd64` only for now.
