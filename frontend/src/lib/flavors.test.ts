@@ -76,6 +76,15 @@ describe('the built-in flavor wheel', () => {
     }
   });
 
+  it('sets a long label whichever way fits largest', () => {
+    const berry = wheelSegments(DEFAULT_WHEEL, null).find((s) => s.node.key === 'fruity.berry')!;
+    const labelled = (label: string, seg = berry) => segmentLabel({ ...seg, node: { ...seg.node, label } })!.lines;
+    expect(labelled('Woodland/Mushroomy')).toEqual(['Woodland/', 'Mushroomy']); // no space, on a segment that opens
+    expect(labelled('Dry / Dusty')).toEqual(['Dry /', 'Dusty']);
+    const thin = { ...berry, a1: berry.a0 + 0.075 };
+    expect(labelled('Pickled onion', thin)).toEqual(['Pickled onion']); // two lines wouldn't fit across
+  });
+
   it('keeps room for the arrow only where there is one', () => {
     const berry = wheelSegments(DEFAULT_WHEEL, null).find((s) => s.node.key === 'fruity.berry')!;
     const opens = segmentLabel(berry)!;

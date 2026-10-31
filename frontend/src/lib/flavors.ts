@@ -304,19 +304,29 @@ export function segmentCue(s: WheelSegment): SegmentCue | null {
   return { x: r * Math.sin(mid), y: -r * Math.cos(mid), rotate: (mid * 180) / Math.PI };
 }
 
-// A label along the segment's radius, on one line or split in two, as big as
-// fits (at most 7 units) beside any arrow; null when the segment is too thin
-// to read.
-export function segmentLabel(s: WheelSegment): SegmentLabel | null {
-  const label = s.node.label;
+// The ways to set a label, best first when they fit equally: one line, split
+// after a slash ("Woodland/" + "Mushroomy"), or near the middle at a space.
+function labelLayouts(label: string): string[][] {
+  const layouts = [[label]];
+  const slash = label.indexOf('/');
+  if (slash > 0 && slash < label.length - 1) layouts.push([label.slice(0, slash + 1).trim(), label.slice(slash + 1).trim()]);
   const space = label.indexOf(' ', Math.floor(label.length / 2) - 3);
-  const lines = label.length > 9 && space > 0 ? [label.slice(0, space), label.slice(space + 1)] : [label];
-  const longest = Math.max(...lines.map((l) => l.length));
+  if (label.length > 9 && space > 0) layouts.push([label.slice(0, space), label.slice(space + 1)]);
+  return layouts;
+}
+
+// A label along the segment's radius, in whichever layout fits largest (at
+// most 7 units, one line if that's as good) beside any arrow; null when the
+// segment is too thin to read.
+export function segmentLabel(s: WheelSegment): SegmentLabel | null {
   const mid = (s.a0 + s.a1) / 2;
   const cueRoom = s.node.children.length ? CUE_ROOM : 0;
   const r = (s.r0 + s.r1 - cueRoom) / 2;
   const across = r * (s.a1 - s.a0); // room across the radius, at the middle
-  const size = Math.min(7, (s.r1 - s.r0 - cueRoom - 4) / (longest * 0.56), (across * 0.8) / (lines.length * 1.15));
+  const fit = (lines: string[]) => Math.min(7, (s.r1 - s.r0 - cueRoom - 4) / (Math.max(...lines.map((l) => l.length)) * 0.56), (across * 0.8) / (lines.length * 1.15));
+  const [lines, size] = labelLayouts(s.node.label)
+    .map((l): [string[], number] => [l, fit(l)])
+    .reduce((best, next) => (next[1] > best[1] ? next : best));
   if (size < 3.2) return null;
   const deg = (mid * 180) / Math.PI;
   return { x: r * Math.sin(mid), y: -r * Math.cos(mid), rotate: deg < 180 ? deg - 90 : deg - 270, size, lines };
