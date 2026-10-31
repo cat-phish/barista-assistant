@@ -114,7 +114,7 @@ export interface WorkspaceSettings {
   suggestMaxBrews: number;
   // What else it suggests by default (another recipe, brewer or bean).
   suggestAlternatives: AlternativeKind[];
-  // "Write with AI" on a bean's Review (docs/api/analysis.md §8e): off hides
+  // "Suggest with AI" on a bean's Review (docs/api/analysis.md §8e): off hides
   // it. The rest are what its dialog starts with, changeable each time:
   // at most how many brews, rated ones only, and which brewers' ("all", or
   // ids; ones the bean never used are ignored).

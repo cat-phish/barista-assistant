@@ -63,7 +63,7 @@ export interface WorkspaceSettings {
   suggestSource: SuggestSource;
   suggestMaxBrews: number;
   suggestAlternatives: AlternativeKind[]; // what else it suggests by default
-  // "Write with AI" on a bean's Review (analysis.md §8e), and what its dialog starts with.
+  // "Suggest with AI" on a bean's Review (analysis.md §8e), and what its dialog starts with.
   beanReviews: boolean;
   beanReviewMaxBrews: number;
   beanReviewRatedOnly: boolean;

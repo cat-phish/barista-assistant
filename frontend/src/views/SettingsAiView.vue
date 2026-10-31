@@ -4,7 +4,7 @@
 //  - automatic analysis (docs/api/analysis.md §8): on or off, how long
 //    after saving, and a daily cap;
 //  - which earlier brews "Suggest parameters" sends by default (§8b);
-//  - what a bean's "Write with AI" starts with (§8e);
+//  - what a bean's "Suggest with AI" starts with (§8e);
 //  - which details the AI gets (docs/api/llm-contract.md §9, "What the AI sees").
 import { computed, onMounted, ref, watch } from 'vue';
 import { errorMessage } from '../api/client';
@@ -199,7 +199,7 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
     <section class="card stack" aria-labelledby="ai-reviews">
       <h2 id="ai-reviews">Bean reviews</h2>
       <p class="muted">
-        On the bean form, “Write with AI” sends a bean's brews to the AI, which drafts its Review and suggests a rating. Nothing is saved until
+        On the bean form, “Suggest with AI” sends a bean's brews to the AI, which drafts its Review and suggests a rating. Nothing is saved until
         you save the bean. Pick what it starts with; anyone editing the bean can change it each time.
       </p>
       <label class="checkbox">

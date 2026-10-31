@@ -85,9 +85,9 @@ const rating = ref<number | null>(null);
 const review = ref('');
 // How its brews went: the hint under the rating. A new bean has none.
 const brewSummary = ref<BeanBrewSummary | null>(null);
-// "Write with AI" (docs/api/analysis.md §8e) needs brews to read.
-const writingReview = ref(false);
-const canWriteReview = computed(() => settings.value.beanReviews && workspaces.canEdit && (brewSummary.value?.brewCount ?? 0) > 0);
+// "Suggest with AI" (docs/api/analysis.md §8e) needs brews to read.
+const suggestingReview = ref(false);
+const canSuggestReview = computed(() => settings.value.beanReviews && workspaces.canEdit && (brewSummary.value?.brewCount ?? 0) > 0);
 const notes = ref('');
 // Saved photos, cover first (docs/api/bean-photos.md §4c); a new bean's are
 // held by BeanPhotos until it's saved.
@@ -868,14 +868,12 @@ async function save(): Promise<void> {
         </label>
       </section>
 
-      <section v-if="show('bean.rating') || show('bean.review') || show('bean.notes')" class="card stack">
+      <section v-if="show('bean.rating') || show('bean.review') || show('bean.notes')" class="card stack review-card">
+        <button v-if="canSuggestReview && show('bean.review')" class="btn-link small suggest-review" type="button" @click="suggestingReview = true">Suggest with AI</button>
         <RatingInput v-if="show('bean.rating')" v-model="rating" name="bean-rating" label="Rating" />
         <BrewAverageHint v-if="show('bean.rating')" :summary="brewSummary" />
         <div v-if="show('bean.review')" class="field">
-          <div class="review-head">
-            <label for="review">Review</label>
-            <button v-if="canWriteReview" class="btn-link small" type="button" @click="writingReview = true">Write with AI</button>
-          </div>
+          <label for="review">Review</label>
           <textarea id="review" v-model="review" rows="4" maxlength="2000" placeholder="e.g. Bright and juicy on the V60, a bit thin as espresso. Would buy again." />
         </div>
         <div v-if="show('bean.notes')" class="field">
@@ -894,11 +892,11 @@ async function save(): Promise<void> {
     </form>
     <BeanReviewDialog
       v-if="props.id && brewSummary"
-      :open="writingReview"
+      :open="suggestingReview"
       :bean-id="props.id"
       :summary="brewSummary"
       :offer-rating="show('bean.rating')"
-      @close="writingReview = false"
+      @close="suggestingReview = false"
       @use-review="(text) => (review = text)"
       @use-rating="(value) => (rating = value)"
     />
@@ -915,11 +913,13 @@ h2 {
 .small {
   font-size: 0.85rem;
 }
-.review-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--space-2);
+.review-card {
+  position: relative;
+}
+.suggest-review {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-4);
 }
 .web-sources ul {
   margin: var(--space-1) 0 0;

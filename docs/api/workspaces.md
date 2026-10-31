@@ -95,7 +95,7 @@ Every workspace in a response carries `settings`, defaults filled in
   default `[]`): what else "Suggest parameters" suggests by default, ticked
   to start with on the brew page (§8b), set under Settings → **AI**.
 - `beanReviews` (boolean, default `true`): whether a bean's Review offers
-  "Write with AI"; off, the route answers `403` (`docs/api/analysis.md` §8e).
+  "Suggest with AI"; off, the route answers `403` (`docs/api/analysis.md` §8e).
   `beanReviewMaxBrews` (integer 1–30, default `10`), `beanReviewRatedOnly`
   (boolean, default `true`) and `beanReviewBrewers` (`"all"`, the default, or
   brewer ids): what that dialog starts with, changeable each time, set under

@@ -11,7 +11,7 @@ import { sendPreview } from "../preview.js";
 import { JobTimeoutError, QueueUnavailableError, requestBeanReview } from "../queue.js";
 import { noteSchema } from "./aiPrompt.js";
 
-// "Write with AI" on a bean's Review (docs/api/analysis.md §8e): a draft from
+// "Suggest with AI" on a bean's Review (docs/api/analysis.md §8e): a draft from
 // the brews the caller picks. The request waits for it; nothing is saved
 // until the person saves the bean.
 interface ReviewParams {
