@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_LEXICON, FLAVOR_KEYS, LEXICON_FORMAT, flavorLabel, parseLexicon } from "@barista/shared/flavors";
+import { DEFAULT_LEXICON, FLAVOR_KEYS, LEXICON_FORMAT, flavorLabel, flavorPlace, parseLexicon } from "@barista/shared/flavors";
+import { brewLogFlavors } from "@barista/shared/schema";
+import { eq } from "drizzle-orm";
+import { db } from "../src/db.js";
 import { addMember, newBean, newBrewLog, newUser, newWorkspace } from "./helpers.js";
 
 async function setup() {
@@ -35,6 +38,28 @@ describe("the built-in wheel (@barista/shared/flavors)", () => {
     expect(flavorLabel(DEFAULT_LEXICON, { key: "sour_fermented.sour", label: "x" })).toBe("Sour (Sour & fermented)");
     expect(flavorLabel(DEFAULT_LEXICON, { key: "floral", label: "x" })).toBe("Floral");
     expect(flavorLabel(DEFAULT_LEXICON, { key: "gone.away", label: "Old label" })).toBe("Old label");
+  });
+
+  it("gives the AI a pick's place on any wheel, and keeps it when the wheel changes", () => {
+    const ours = {
+      ...DEFAULT_LEXICON,
+      flavors: [
+        { key: "bloom", label: "Bloom" },
+        { key: "bloom.bloom", label: "Bloom" },
+        { key: "bloom.bloom.iris", label: "Iris" },
+        { key: "herb", label: "Herb" },
+        { key: "herb.thyme", label: "Thyme" },
+        { key: "herb.thyme.thyme", label: "Thyme" },
+      ],
+    };
+    expect(flavorLabel(ours, { key: "bloom.bloom.iris", label: "x" })).toBe("Iris (Bloom)"); // repeats say nothing
+    expect(flavorLabel(ours, { key: "bloom.bloom", label: "x" })).toBe("Bloom");
+    expect(flavorLabel(ours, { key: "herb.thyme.thyme", label: "x" })).toBe("Thyme (Herb)");
+    expect(flavorPlace(ours, "gone")).toBeNull();
+    // Off the wheel: the saved place, else the built-in wheel's if the label agrees.
+    expect(flavorLabel(ours, { key: "gone.away", label: "Old", place: "Kept › Group" })).toBe("Old (Kept › Group)");
+    expect(flavorLabel(ours, { key: "fruity.citrus.lemon", label: "Lemon" })).toBe("Lemon (Fruity › Citrus)");
+    expect(flavorLabel(ours, { key: "fruity.citrus.lemon", label: "Something else" })).toBe("Something else");
   });
 });
 
@@ -140,6 +165,9 @@ describe("a workspace's flavor wheel (docs/api/flavor-lexicon.md §2c)", () => {
       { key: "bright", label: "Bright" },
       { key: "fruity.citrus.lemon", label: "Lemon" },
     ]);
+    // Each pick's place is saved, and one the wheel no longer has keeps its own.
+    const stored = await db.select().from(brewLogFlavors).where(eq(brewLogFlavors.brewLogId, id));
+    expect(Object.fromEntries(stored.map((r) => [r.flavorKey, r.place]))).toEqual({ bright: null, "fruity.citrus.lemon": "Fruity › Citrus" });
     const added = await owner.agent.patch(`${logs}/${id}`).send({ flavors: ["fruity.citrus.lime"], rating: 2 });
     expect(added.status).toBe(400);
     expect((await owner.agent.get(`${logs}/${id}`)).body.brewLog.rating).toBeNull(); // nothing written

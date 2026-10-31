@@ -82,8 +82,8 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   goes in the `workspace` block as `flavorLexicon` (the lexicon file), or
   `null` on the built-in wheel; it's checked like an import on restore
   (`backup.workspace.flavorLexicon.flavors[3].key: …`). Brews' picks are in
-  `brew_log_flavors` with their `label`; a row from before labels were
-  saved (migration 0085) takes the built-in wheel's. Exporting and
+  `brew_log_flavors` with their `label` and `place`; a row from before
+  labels were saved (migration 0085) takes the built-in wheel's label. Exporting and
   importing lists doesn't carry the wheel.
 - **`version`** goes up only when an older file can't be restored as is;
   the server upgrades older versions on restore and refuses newer ones.

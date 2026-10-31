@@ -74,9 +74,9 @@ Back to the built-in wheel.
 
 ## When the wheel changes
 
-Brews store each pick's **key and its label at the time**
-(`brew_log_flavors.label`, §6), so changing the wheel never loses a
-tasting:
+Brews store each pick's **key, and its label and place at the time**
+(`brew_log_flavors.label`, `.place`, §6), so changing the wheel never loses
+a tasting:
 
 - A brew's `flavors` show in the current wheel's order with its labels; a
   pick the wheel no longer has shows **by its saved label**, after the
@@ -85,7 +85,8 @@ tasting:
   Editing a brew can **keep** a pick it already had, even one the wheel no
   longer has (with its saved label), but not add one.
 - The AI (§9) reads picks with their place on the current wheel
-  ("Lemon (Fruity › Citrus)"), or just the saved label.
+  ("Lemon (Fruity › Citrus)"), or its saved label and place. A pick saved
+  before places were takes the built-in wheel's if the label agrees.
 - Keep a flavor's `key` when you rename it: a new key is a new flavor, and
   brews with the old one keep the old label.
 - Backups carry the wheel in the file's `workspace` block (`backup.md`

@@ -1,0 +1,1 @@
+ALTER TABLE `brew_log_flavors` ADD `place` varchar(130);

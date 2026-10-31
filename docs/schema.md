@@ -1185,8 +1185,11 @@ export const brewLogProblems = mysqlTable(
 // @barista/shared/flavors, a three-ring lexicon whose dots give each key's
 // place: "fruity.berry.blueberry"), any ring. label is the flavor's label
 // when picked, shown once the lexicon no longer has the key (migration 0085
-// filled it from the built-in wheel for earlier picks). Replaced as a whole
-// when a log is edited; free-text tastingNotes stay alongside. Keys are
+// filled it from the built-in wheel for earlier picks); place the rings above
+// it then ("Fruity › Berry", flavorPlace), for the AI once the lexicon no
+// longer has it (null on the inner ring and for picks from before migration
+// 0086, which use the built-in wheel's if the label agrees). Replaced as a
+// whole when a log is edited; free-text tastingNotes stay alongside. Keys are
 // stored, so a label can be renamed but a key never.
 export const brewLogFlavors = mysqlTable(
   "brew_log_flavors",
@@ -1196,6 +1199,7 @@ export const brewLogFlavors = mysqlTable(
       .references(() => brewLogs.id, { onDelete: "cascade" }),
     flavorKey: varchar("flavor_key", { length: 64 }).notNull(),
     label: varchar("label", { length: 60 }).notNull(),
+    place: varchar("place", { length: 130 }),
   },
   (table) => ({
     pk: primaryKey({ columns: [table.brewLogId, table.flavorKey] }),

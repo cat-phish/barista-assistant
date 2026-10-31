@@ -84,9 +84,12 @@ queue:
      adjusting).
    - The brew includes `flavors`: the coffee's flavors picked on the flavor
      wheel (§6), in the workspace's wheel order (§2c), each as its label with
-     its place on that wheel, e.g. `"Blueberry (Fruity › Berry)"` or just
-     `"Floral"` for a pick from the inner ring; a pick the wheel no longer
-     has is just its saved label. `[]` means none were picked. Like `rating`
+     its place on that wheel, broadest group first, e.g.
+     `"Blueberry (Fruity › Berry)"` or just `"Floral"` for a pick from the
+     inner ring. A ring repeating the name next to it is left out. A pick
+     the wheel no longer has uses its saved label and place; one saved
+     before places were takes the built-in wheel's place if the label
+     agrees, else it's just the label. `[]` means none were picked. Like `rating`
      and `tastingNotes`, they're the coffee on its own; the prompt's
      `flavors` section says how to read them.
    - The brew includes its `drink` (or `null`): name, `servingSize` (the size
@@ -165,7 +168,7 @@ queue:
    | `water` | a water with figures | hardness and alkalinity effects |
    | `prepTools` | the brew lists prep tools | a tool not listed may still have been used |
    | `problems` | a brew lists problems | the clearest clues, explained first |
-   | `flavors` | a brew has wheel flavors | read with the tasting notes; an inner-ring pick is broader, not weaker; sour, fermented or green picks often mean under-extraction, harsh, ashy or bitter ones over-extraction or the roast, off flavors (papery, musty) the beans or filter; compare with `flavorProfile` |
+   | `flavors` | a brew has wheel flavors | the wheel can be the workspace's own; a place reads broadest group first and a flavor belongs to every group in it; go by meaning, not group names; read with the tasting notes; a broader pick is less specific, not weaker; sour, fermented or green picks often mean under-extraction, harsh, ashy or bitter ones over-extraction or the roast, off flavors (papery, musty) the beans or filter; compare with `flavorProfile` |
    | `rpm` | a brew has `grindRpm` | speed is part of the grind |
    | `retention` | a brew has `grinderRetentionGrams` | retention and stale grounds |
    | `espresso` | an `espresso` method | flow, windows, machine, step size; dose and shot weight as levers, one at a time |
