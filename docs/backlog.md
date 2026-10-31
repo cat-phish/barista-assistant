@@ -32,6 +32,7 @@ and fix the references.
 - G. Home roasting: 17–26
 - H. Accounts: 27–28
 - I. Deployment & the app: 29–30
+- J. Backups: 31
 
 ---
 
@@ -723,3 +724,40 @@ How the app is served and installed.
   - iOS only delivers Web Push to an app added to the Home Screen (16.4+):
     say so on the channel, or hide it in the browser?
   - Several devices per person: one subscription each, all notified?
+
+---
+
+## J. Backups
+
+What a backup keeps, so moving to a new server loses nothing.
+
+### 31. Back up every setting
+
+- **Status:** idea
+- **Why:** a workspace backup (`docs/api/backup.md` §2b) leaves out what
+  belongs to a person, so restoring on a new server quietly resets it.
+  Notification defaults were noticed missing, and there's more. Workspace
+  settings are already in it.
+- **Approach:** first audit every setting against the backup, then close the
+  gaps. Known to be left out today:
+  - **Preferences** (`users.preferences`): units, theme, reminder settings
+    (rate-later, steep, rest, low green stock), repeat and remember choices,
+    start delays.
+  - **Notification channels** (`notification_channels`).
+  - **Their own AI prompt** (`users.ai_prompt`).
+  - **Added Insights charts and tab layouts** (`insight_charts` and the
+    layout beside it on the member).
+  - **Server settings** (`server_settings`, such as the backup schedule):
+    server-wide, so maybe only in a database dump.
+  - A way to save them could be a personal settings section in the backup,
+    applied to whoever restores it, or a separate account export.
+- **Size:** M
+- **Depends on:** nothing.
+- **Open questions:**
+  - Whose settings go in a shared workspace's backup: only the person
+    backing up, or every member's?
+  - Do restored settings overwrite the restorer's own, or does the app ask?
+  - Channels hold bot tokens and webhook URLs: include them, encrypt them, or
+    leave them out and restore everything else?
+  - Should a test fail when a new setting isn't classified, like the table
+    check (`NOT_BACKED_UP`, CLAUDE.md rule 8)?
