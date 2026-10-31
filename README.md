@@ -73,6 +73,29 @@ version on their own, but never mid-brew.
 3. Devices trust the new server's CA (it's a new one) and install the app
    again from the new address.
 
+## Run the published images
+
+Docker Hub has images of each branch, so a server needs no copy of the repo
+and builds nothing. Use `docker-compose.release.yml` in place of
+`docker-compose.yml`: paste it into a Compose Manager stack on Unraid, or
+run it with `docker compose -f docker-compose.release.yml up -d`.
+
+In `.env` (Compose Manager's ENV File), set what "Run it on a server" lists,
+plus:
+
+- `IMAGE_TAG`: `latest` (the default, from `main`), `testing`, `dev`, or a
+  fixed build such as `sha-7a093cd`;
+- every `*_DIR` setting, which is required here. Create the photos and
+  backups folders and `chown 1000:1000` them.
+
+It doesn't map ports 3000, 3306 or 6379 on the host, and it has no test
+database.
+
+**Updating:** pull the images and start the stack again (`docker compose
+pull`, then `up -d`). The backend migrates the database when it starts, so
+take a backup first when a new build changes the schema. Going back to an
+older build after that means restoring a dump, not just changing the tag.
+
 ## Install it on your phone
 
 The app installs as a PWA, which needs HTTPS. The frontend container
