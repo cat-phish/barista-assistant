@@ -381,8 +381,9 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   rating (fruity → berry → blueberry, nine categories including off flavors
   like papery or rubber). Tap a segment to zoom in, tap the centre to pick
   it; outer flavors pick at once. Segments that open more have an arrow at
-  their edge. Picks show as chips; a search box and a plain list do the same
-  without the wheel. Tasting notes stay alongside.
+  their edge, and holding one picks it without zooming in. Picks show as
+  chips; a search box and a plain list do the same without the wheel.
+  Tasting notes stay alongside.
   The journal shows them as coloured chips, the AI reads them with the
   tasting, Repeat brews never copies them, and Settings → Fields can hide
   the wheel. Owners can replace the built-in wheel with their own JSON file
