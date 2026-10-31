@@ -879,6 +879,9 @@ export const recipeSteps = mysqlTable("recipe_steps", {
   pressureEndBar: decimal("pressure_end_bar", { precision: 4, scale: 1, mode: "number" }),
   flowRate: decimal("flow_rate", { precision: 4, scale: 1, mode: "number" }),
   flowEndRate: decimal("flow_end_rate", { precision: 4, scale: 1, mode: "number" }),
+  // Filter: this step's time follows the batch when the recipe has
+  // stepTimeScaling (docs/api/recipes.md §5).
+  scalesWithBatch: boolean("scales_with_batch").default(false).notNull(),
 });
 
 // 7b. Ingredients (Reusable Preps)

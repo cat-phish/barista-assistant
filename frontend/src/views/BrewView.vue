@@ -752,8 +752,8 @@ function heldText(): string {
   return field === 'yieldOz' ? `${text} fl oz cup` : `${text} ml cup`;
 }
 
-// Pour targets follow the water; with the recipe's stepTimeScaling, pour and
-// wait times do too, and the finish window moves by what they gain or lose
+// Pour targets follow the water; with the recipe's stepTimeScaling, the times
+// of steps that scale do too, and the finish window moves by what they gain or lose
 // (docs/api/recipes.md §5).
 const timed = computed(() => {
   const factor = batch.value?.factor ?? 1;

@@ -45,7 +45,7 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
 ```json
 {
   "format": "barista-backup",
-  "version": 3,
+  "version": 4,
   "exportedAt": "2026-10-23T08:00:00.000Z",
   "workspace": { "name": "Home bar", "slug": "home-bar", "settings": { "roastScale": "levels" }, "menuTitle": null, "menuCurrency": "USD", "isPublicMenuEnabled": true, "flavorLexicon": null },
   "tables": {
@@ -98,6 +98,9 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
     now means every bag of the coffee (`analysis.md` §8b). A version 2
     file's `parameter_suggestions.source` and `settings.suggestSource` are
     renamed, and a workspace on the default gets `bagRecipe`.
+  - **4:** which steps follow the batch became each step's `scalesWithBatch`
+    (`recipes.md` §5). A version 3 file's `recipe_steps` get the defaults for
+    their types.
 
 **Bean photos** (`bean-photos.md` §4c): `bean_photos` rows go only with
 their files, so a JSON file has none (`BackupOptions.photos` in

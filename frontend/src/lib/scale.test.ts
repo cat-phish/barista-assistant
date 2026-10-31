@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RecipeStep } from '../api/types';
-import { brewRetention, estimateYield, factorText, scaledTime, scaleStepTimes, shiftWindow, GRAMS_PER_FL_OZ, linkRatio, ratioText, retentionOf, scaleBatch, scaleShot, scaleSteps, sliderDose, sliderPosition, waterShare } from './scale';
+import { brewRetention, estimateYield, factorText, scaledTime, scalesByDefault, scaleStepTimes, shiftWindow, GRAMS_PER_FL_OZ, linkRatio, ratioText, retentionOf, scaleBatch, scaleShot, scaleSteps, sliderDose, sliderPosition, waterShare } from './scale';
 
 const recipe = { targetDoseGrams: 15, targetWaterGrams: 250, targetIceGrams: null, expectedYieldGrams: null };
 
@@ -120,7 +120,7 @@ describe('scaleBatch', () => {
 });
 
 describe('scaleSteps', () => {
-  const base = { label: null, advance: 'auto', targetTempC: null, pressureBar: null, pressureEndBar: null, flowRate: null, flowEndRate: null } as const;
+  const base = { label: null, advance: 'auto', targetTempC: null, pressureBar: null, pressureEndBar: null, flowRate: null, flowEndRate: null, scalesWithBatch: true } as const;
   const steps: RecipeStep[] = [
     { ...base, id: 'a', stepOrder: 1, stepType: 'bloom', durationSec: 45, targetWaterGrams: 50 },
     { ...base, id: 'b', stepOrder: 2, stepType: 'swirl', durationSec: 0, targetWaterGrams: null },
@@ -195,13 +195,16 @@ describe('scale slider', () => {
 
 describe('step times with the batch', () => {
   const steps = [
-    { stepType: 'bloom', durationSec: 45 },
-    { stepType: 'pour', durationSec: 90 },
-    { stepType: 'swirl', durationSec: 0 },
-    { stepType: 'wait', durationSec: 60 },
-    { stepType: 'wait', durationSec: null },
+    { scalesWithBatch: false, durationSec: 45 },
+    { scalesWithBatch: true, durationSec: 90 },
+    { scalesWithBatch: false, durationSec: 0 },
+    { scalesWithBatch: true, durationSec: 60 },
+    { scalesWithBatch: true, durationSec: null },
   ];
-  it('scales pour and wait steps by factor^exponent; bloom, swirl and open-ended steps stay', () => {
+  it('bloom, pour, wait and press scale unless the recipe says otherwise', () => {
+    expect(['bloom', 'pour', 'swirl', 'stir', 'wait', 'press', 'other', 'soak'].filter(scalesByDefault)).toEqual(['bloom', 'pour', 'wait', 'press']);
+  });
+  it('scales the steps ticked by factor^exponent; unticked and open-ended steps stay', () => {
     const { steps: out, shiftSec } = scaleStepTimes(steps, 2, 0.5);
     expect(out.map((s) => s.durationSec)).toEqual([45, 127, 0, 85, null]);
     expect(shiftSec).toBe(37 + 25);

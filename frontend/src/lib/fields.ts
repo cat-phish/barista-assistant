@@ -77,7 +77,7 @@ export const FIELDS = [
   recipe('defaultGrinder', 'Default grinder'),
   recipe('grindSettings', 'Grind starting points'),
   recipe('flowUnit', 'Flow unit (espresso)'),
-  recipe('stepTimeScaling', 'Step times that scale with the batch (filter)', 'Pour and wait steps take longer for a bigger batch, less for a smaller one'),
+  recipe('stepTimeScaling', 'Step times that scale with the batch (filter)', 'The steps you pick take longer for a bigger batch, less for a smaller one'),
   recipe('stepTemp', 'Step temperatures'),
 
   // Home roasting's green stock (docs/api/green-coffees.md §4e).

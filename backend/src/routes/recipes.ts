@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, type SQL } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
+import { scalesByDefault } from "@barista/shared/brew";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
@@ -81,6 +82,8 @@ const stepSchema = z
     pressureEndBar: profileValue,
     flowRate: profileValue,
     flowEndRate: profileValue,
+    // Left out: the default for its type (scalesByDefault).
+    scalesWithBatch: z.boolean().optional(),
   })
   .superRefine((step, ctx) => {
     const issue = (path: string, message: string) => ctx.addIssue({ code: "custom", path: [path], message });
@@ -373,6 +376,7 @@ async function insertSteps(tx: Tx, recipeId: string, steps: z.infer<typeof steps
       pressureEndBar: step.pressureEndBar ?? null,
       flowRate: step.flowRate ?? null,
       flowEndRate: step.flowEndRate ?? null,
+      scalesWithBatch: step.scalesWithBatch ?? scalesByDefault(step.stepType),
     }))
   );
 }

@@ -126,6 +126,7 @@ const STEP: Record<keyof Step, Sees> = {
   pressureEndBar: "always",
   flowRate: "always",
   flowEndRate: "always",
+  scalesWithBatch: "always", // only on a recipe with stepTimeScaling
 };
 
 // All but the name also go with grinderDetails.
@@ -182,7 +183,7 @@ const full: BrewContext = {
     name: "House", brewer: "Toddy", style: { name: "Cold brew", brewsLike: "cold_brew" }, methodKind: "filter", targetDoseGrams: 60, targetWaterGrams: 500, targetIceGrams: 100, expectedYieldGrams: 420, expectedFinishMinSec: 100,
     expectedFinishMaxSec: 200, firstDropMinSec: 5, firstDropMaxSec: 9, targetTempC: 20, steepMinHours: 14, steepMaxHours: 20, steepTemp: "fridge", dilutionRatio: 1, dilutionWith: "milk",
     grindStartingPoints: [{ grinderName: "EK43", setting: 12 }], flowUnit: "ml_s", stepTimeScaling: 0.5,
-    steps: [{ stepOrder: 1, stepType: "pour", label: "Fill", durationSec: 30, advance: "tap", targetWaterGrams: 500, targetTempC: 20, pressureBar: 9, pressureEndBar: 6, flowRate: 2, flowEndRate: 1 }],
+    steps: [{ stepOrder: 1, stepType: "pour", label: "Fill", durationSec: 30, advance: "tap", targetWaterGrams: 500, targetTempC: 20, pressureBar: 9, pressureEndBar: 6, flowRate: 2, flowEndRate: 1 , scalesWithBatch: true}],
   },
   brew,
   drink: { name: "Iced latte", servingSize: "12 fl oz", ingredients: [{ name: "Milk", ingredientType: "milk", amount: "200 g", note: null }] },

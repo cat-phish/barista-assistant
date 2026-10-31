@@ -4,6 +4,7 @@
 import type { FlowUnit, MachineCapabilities, Mark, MethodKind, StepAdvance, StepFields, StepType, TemperatureUnit } from '../api/types';
 import { formatGrams, formatTime, parseDecimal, parseTime, type Parsed } from './format';
 import { holdsOf } from './marks';
+import { scalesByDefault } from './scale';
 import { parseTemp, tempText } from './units';
 
 type Rule = 'required' | 'optional' | 'none';
@@ -151,13 +152,15 @@ export interface StepDraft {
   pressureEnd: string;
   flow: string; // recipe's flow unit
   flowEnd: string;
+  scalesWithBatch: boolean; // kept while the recipe's scaling is off
 }
 
 export function stepDraft(key: string, s?: Partial<StepFields>, tempUnit: TemperatureUnit = 'c'): StepDraft {
   const text = (n: number | null | undefined) => (n == null ? '' : formatGrams(n));
+  const stepType = s?.stepType ?? 'pour';
   return {
     key,
-    stepType: s?.stepType ?? 'pour',
+    stepType,
     label: s?.label ?? '',
     duration: s?.durationSec == null ? '' : formatTime(s.durationSec),
     advance: s?.advance ?? 'auto',
@@ -167,6 +170,7 @@ export function stepDraft(key: string, s?: Partial<StepFields>, tempUnit: Temper
     pressureEnd: text(s?.pressureEndBar),
     flow: text(s?.flowRate),
     flowEnd: text(s?.flowEndRate),
+    scalesWithBatch: s?.scalesWithBatch ?? scalesByDefault(stepType),
   };
 }
 
@@ -225,6 +229,7 @@ export function parseSteps(drafts: StepDraft[], kind: MethodKind | null, tempUni
       pressureEndBar: value(pressureEnd),
       flowRate: value(flow),
       flowEndRate: value(flowEnd),
+      scalesWithBatch: d.scalesWithBatch,
     });
     if (targetWaterGrams !== null) lastWater = targetWaterGrams;
   });
