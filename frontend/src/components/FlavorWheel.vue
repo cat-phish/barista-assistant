@@ -2,12 +2,14 @@
 // The coffee's flavors (docs/api/brew-logs.md §6, "flavors"), picked on the
 // workspace's wheel (docs/api/flavor-lexicon.md §2c): tap a segment to zoom
 // into it, then tap the centre to pick it; an outermost flavor is picked
-// straight away. An arrow at a segment's outer edge marks one that opens.
+// straight away. An arrow at a segment's outer edge marks one that opens, and
+// holding any segment picks it without zooming.
 // Picks show as chips. A search box, and a plain list instead of the wheel,
 // for anyone who'd rather not use it (and for screen readers).
 import { computed, ref, watch } from 'vue';
 import type { FlavorPick } from '../api/types';
 import { useFlavorWheel } from '../composables/useFlavorWheel';
+import { createLongPress } from '../lib/longPress';
 import { segmentCue, segmentLabel, segmentPath, WHEEL_RADII, wheelSegments, type FlavorNode, type WheelSegment } from '../lib/flavors';
 
 const model = defineModel<string[]>({ required: true });
@@ -64,6 +66,29 @@ function segmentAction(n: FlavorNode): string {
   return `${n.label}: ${picked.value.has(n.key) ? 'picked, tap to remove' : 'pick'}`;
 }
 
+// Holding a segment picks it, whether or not it opens.
+const press = createLongPress();
+const pressing = ref<string | null>(null);
+function pressSegment(e: PointerEvent, n: FlavorNode): void {
+  if (e.button !== 0) return;
+  pressing.value = n.key;
+  press.start(e.clientX, e.clientY, () => {
+    pressing.value = null;
+    toggle(n.key);
+    navigator.vibrate?.(20);
+  });
+}
+function moveSegment(e: PointerEvent): void {
+  if (pressing.value && !press.move(e.clientX, e.clientY)) pressing.value = null;
+}
+function endPress(): void {
+  press.cancel();
+  pressing.value = null;
+}
+function clickSegment(s: WheelSegment): void {
+  if (!press.held()) tapSegment(s);
+}
+
 // What a tap would do, shown in the centre for a mouse or keyboard. Not for
 // touch: a tap would leave it showing, with no pointer to take it away.
 const hint = ref<FlavorNode | null>(null);
@@ -73,6 +98,11 @@ const hintAction = computed(() => {
   if (!n) return '';
   if (n.children.length) return 'tap to open';
   return picked.value.has(n.key) ? 'tap to remove' : 'tap to pick';
+});
+const hintHold = computed(() => {
+  const n = hint.value;
+  if (!n?.children.length) return '';
+  return picked.value.has(n.key) ? 'hold to remove' : 'hold to pick';
 });
 function hoverSegment(e: PointerEvent, n: FlavorNode): void {
   if (e.pointerType === 'mouse') hint.value = n;
@@ -129,16 +159,21 @@ const results = computed(() => wheel.value.search(query.value).slice(0, 12));
           v-for="s in segments"
           :key="s.node.key"
           class="segment"
-          :class="{ picked: picked.has(s.node.key), holds: holdsPick.has(s.node.key) }"
+          :class="{ picked: picked.has(s.node.key), holds: holdsPick.has(s.node.key), pressing: pressing === s.node.key }"
           role="button"
           tabindex="0"
           :aria-label="segmentAction(s.node)"
           :aria-pressed="s.node.children.length ? undefined : picked.has(s.node.key)"
-          @click="tapSegment(s)"
+          @click="clickSegment(s)"
+          @contextmenu.prevent
           @keydown.enter.prevent="tapSegment(s)"
           @keydown.space.prevent="tapSegment(s)"
           @pointerenter="hoverSegment($event, s.node)"
-          @pointerleave="hint = null"
+          @pointerleave="hint = null; endPress()"
+          @pointerdown="pressSegment($event, s.node)"
+          @pointermove="moveSegment"
+          @pointerup="endPress"
+          @pointercancel="endPress"
           @focus="focusSegment($event, s.node)"
           @blur="hint = null"
         >
@@ -183,11 +218,12 @@ const results = computed(() => wheel.value.search(query.value).slice(0, 12));
           <tspan x="0" dy="1.2em">flavor</tspan>
         </text>
         <text v-if="hint" class="hint" text-anchor="middle" font-size="5" font-weight="600" aria-hidden="true">
-          <tspan x="0" dy="-0.2em">{{ hint.label.length > 16 ? `${hint.label.slice(0, 15)}…` : hint.label }}</tspan>
+          <tspan x="0" :dy="hintHold ? '-0.9em' : '-0.2em'">{{ hint.label.length > 16 ? `${hint.label.slice(0, 15)}…` : hint.label }}</tspan>
           <tspan x="0" dy="1.4em" font-size="4.5" font-weight="400">{{ hintAction }}</tspan>
+          <tspan v-if="hintHold" x="0" dy="1.2em" font-size="4.5" font-weight="400">{{ hintHold }}</tspan>
         </text>
       </svg>
-      <p class="legend muted small"><span aria-hidden="true">›</span> opens more</p>
+      <p class="legend muted small"><span aria-hidden="true">›</span> opens more · hold to pick</p>
     </template>
 
     <div v-else class="list">
@@ -336,6 +372,8 @@ const results = computed(() => wheel.value.search(query.value).slice(0, 12));
   margin: 0 auto;
   touch-action: manipulation;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .segment {
   cursor: pointer;
@@ -348,6 +386,9 @@ const results = computed(() => wheel.value.search(query.value).slice(0, 12));
 .segment:hover path,
 .segment:focus-visible path {
   filter: brightness(0.92);
+}
+.segment.pressing path {
+  filter: brightness(0.8);
 }
 .segment:focus-visible path,
 .segment:focus-visible circle {
