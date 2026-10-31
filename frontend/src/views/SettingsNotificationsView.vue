@@ -163,11 +163,12 @@ async function setPref(changes: Partial<Pick<UserPreferences, 'rateReminders' | 
       <form v-if="open === s.kind && forms[s.kind]" class="stack" novalidate @submit.prevent="save(s)">
         <p class="muted small">{{ s.hint }}</p>
         <div v-for="f in s.fields" :key="f.key" class="field">
-          <label :for="`svc-${s.kind}-${f.key}`">{{ f.label }}<span v-if="f.optional" class="muted"> (optional)</span></label>
+          <label :for="`svc-${s.kind}-${f.key}`">{{ f.label }}<span v-if="!f.optional" class="req" aria-hidden="true">*</span></label>
           <input
             :id="`svc-${s.kind}-${f.key}`"
             v-model="forms[s.kind]![f.key]"
             :type="f.secret ? 'password' : 'text'"
+            :aria-required="!f.optional"
             autocomplete="off"
             spellcheck="false"
             :placeholder="f.placeholder"

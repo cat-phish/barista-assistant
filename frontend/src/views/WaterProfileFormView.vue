@@ -92,7 +92,7 @@ async function save(): Promise<void> {
 
       <section class="card stack">
         <h2>Figures</h2>
-        <p class="muted small">All optional, in mg/L (ppm). Fill in what your water report or recipe gives; the AI uses whatever is here.</p>
+        <p class="muted small">In mg/L (ppm). Fill in what your water report or recipe gives; the AI uses whatever is here.</p>
         <div class="figures">
           <div v-for="key in headline" :key="key" class="field">
             <label :for="`water-${key}`">{{ WATER_FIGURE_LABELS[key].label }}</label>

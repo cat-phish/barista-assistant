@@ -118,7 +118,7 @@ const results = computed(() => wheel.value.search(query.value).slice(0, 12));
 
 <template>
   <fieldset class="flavors">
-    <legend>{{ label ?? 'Flavors' }} <span class="muted">(optional)</span></legend>
+    <legend>{{ label ?? 'Flavors' }}</legend>
 
     <ul v-if="model.length" class="chips" aria-label="Picked flavors">
       <li v-for="key in model" :key="key" class="badge chip" :title="placeOf(key) || undefined">

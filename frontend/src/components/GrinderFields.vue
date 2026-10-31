@@ -81,7 +81,7 @@ defineProps<{ idPrefix: string; errors: GrinderFormErrors; showErrors: boolean }
           </div>
         </div>
         <span v-if="showErrors && errors.rpm" class="field-error">{{ errors.rpm }}</span>
-        <span v-else class="hint">Optional: the speeds the grinder can run at.</span>
+        <span v-else class="hint">The speeds the grinder can run at.</span>
       </template>
     </fieldset>
     <div class="field">
