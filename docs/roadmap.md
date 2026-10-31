@@ -2085,5 +2085,8 @@ repo. README: "Run the published images".
   `docker/entrypoint.sh`), then run as `node`, as the MariaDB and Redis images
   do. No `chown` on install, and it recovers from Unraid's New Permissions on
   the next restart.
+- **Behind a reverse proxy:** README section, from running it behind Nginx
+  Proxy Manager with a mkcert certificate. The app keeps its own HTTPS, so the
+  proxy forwards to `HTTPS_PORT` with scheme https.
 - Decided: a second compose file over configurable image names, so the main
   file stays simple for building from source. `amd64` only for now.
