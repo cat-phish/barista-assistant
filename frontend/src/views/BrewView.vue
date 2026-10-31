@@ -74,7 +74,7 @@ import { ALTERNATIVE_LABELS, CONFIDENCE_LABELS, chooseGrind, heldForRatio, remem
 import { useParameterSuggestion } from '../composables/useParameterSuggestion';
 import { useWorkspaceStore } from '../stores/workspace';
 import { brewRetention, factorText, linkRatio, ratioText as formatRatio, ratioWater, ROAST_LEVELS, SCALE_SLIDER, scaleBatch, scaleShot, scaleSteps, scaleStepTimes, shiftWindow, sliderDose, sliderPosition, waterShare, type MeasuredBrew, type ScaleField } from '../lib/scale';
-import { formatTemp, tempText, TEMPERATURE_LABELS, VOLUME_LABELS, volumeUnits } from '../lib/units';
+import { formatTemp, parseTemp, tempText, TEMPERATURE_LABELS, VOLUME_LABELS, volumeUnits } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 
 // 'steep': starting a long cold brew (a checklist, then it's saved steeping).
@@ -760,6 +760,11 @@ const timed = computed(() => {
   return scaleStepTimes(scaleSteps(recipe.value?.steps ?? [], factor), factor, espresso.value ? null : (recipe.value?.stepTimeScaling ?? null));
 });
 const timerSteps = computed(() => timed.value.steps);
+// The temperature set up for this brew, or the recipe's.
+const timerWaterTemp = computed(() => {
+  const set = draft.temp.trim() ? parseTemp(draft.temp, temperatureUnit.value) : null;
+  return set?.ok ? set.value : (recipe.value?.targetTempC ?? null);
+});
 // "+0:37", "−0:12"
 const timeShiftText = computed(() => `${timed.value.shiftSec < 0 ? '−' : '+'}${formatTime(Math.abs(timed.value.shiftSec))}`);
 const timerDose = computed(() => (espresso.value ? shot.value?.dose : batch.value?.dose) ?? recipe.value?.targetDoseGrams ?? 0);
@@ -1589,6 +1594,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         :expected-finish-max-sec="timerFinish.max"
         :first-drop-window="firstDropWindow"
         :machine="machine"
+        :water-temp-c="timerWaterTemp"
         @complete="onTimerComplete"
       />
     </template>

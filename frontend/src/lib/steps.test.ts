@@ -7,6 +7,7 @@ import {
   insertStepAfter,
   machineNote,
   moveStep,
+  nextTempChange,
   parseFinishWindow,
   parseSteps,
   plannedEnd,
@@ -14,6 +15,7 @@ import {
   plannedTimes,
   pourAmounts,
   recipeWarnings,
+  setTempLine,
   stepDraft,
   stepInstruction,
   stepsTotalLine,
@@ -151,12 +153,36 @@ describe("the builder's step times", () => {
 
 describe('what a card says', () => {
   it('instructions: pour-to with amount, pressure/flow (ramps), pump off', () => {
-    expect(stepInstruction(step({ targetWaterGrams: 150 }), 100, 'g_s')).toBe('Pour to 150 g (+100)');
-    expect(stepInstruction(step({ stepType: 'pressure', pressureBar: 9 }), null, 'g_s')).toBe('9 bar');
-    expect(stepInstruction(step({ stepType: 'pressure', pressureBar: 9, pressureEndBar: 6 }), null, 'g_s')).toBe('9 → 6 bar');
-    expect(stepInstruction(step({ stepType: 'flow', flowRate: 4, flowEndRate: 2 }), null, 'ml_s')).toBe('4 → 2 ml/s');
-    expect(stepInstruction(step({ stepType: 'soak' }), null, 'g_s')).toBe('Pump off');
-    expect(stepInstruction(step({ stepType: 'swirl' }), null, 'g_s')).toBeNull();
+    expect(stepInstruction(step({ targetWaterGrams: 150 }), 100, 'g_s', 'c')).toBe('Pour to 150 g (+100)');
+    expect(stepInstruction(step({ stepType: 'pressure', pressureBar: 9 }), null, 'g_s', 'c')).toBe('9 bar');
+    expect(stepInstruction(step({ stepType: 'pressure', pressureBar: 9, pressureEndBar: 6 }), null, 'g_s', 'c')).toBe('9 → 6 bar');
+    expect(stepInstruction(step({ stepType: 'flow', flowRate: 4, flowEndRate: 2 }), null, 'ml_s', 'c')).toBe('4 → 2 ml/s');
+    expect(stepInstruction(step({ stepType: 'soak' }), null, 'g_s', 'c')).toBe('Pump off');
+    expect(stepInstruction(step({ stepType: 'swirl' }), null, 'g_s', 'c')).toBeNull();
+    expect(stepInstruction(step({ targetWaterGrams: 150, targetTempC: 93 }), 100, 'g_s', 'c')).toBe('Pour to 150 g (+100) at 93 °C');
+    expect(stepInstruction(step({ stepType: 'bloom', targetWaterGrams: 50, targetTempC: 85 }), 50, 'g_s', 'f')).toBe('Pour to 50 g (+50) at 185 °F');
+    expect(stepInstruction(step({ stepType: 'pressure', pressureBar: 9, targetTempC: 93 }), null, 'g_s', 'c')).toBe('9 bar');
+  });
+  it('a change of temperature, on a step that only sets it and on the step before', () => {
+    const bloom = step({ stepType: 'bloom', targetWaterGrams: 50, targetTempC: 85 });
+    const wait = (targetTempC: number | null) => step({ stepType: 'wait', targetTempC });
+    const pour = step({ targetWaterGrams: 250, targetTempC: 93 });
+    const set = [bloom, wait(93), pour];
+    expect(setTempLine(set, 1, 94, 'c')).toBe('Set kettle to 93 °C');
+    expect(setTempLine(set, 0, 94, 'c')).toBeNull(); // pours, so its line says it
+    expect(setTempLine([bloom, wait(85)], 1, 94, 'c')).toBeNull();
+    expect(setTempLine([bloom, wait(null)], 1, 94, 'c')).toBeNull();
+    expect(setTempLine([wait(90)], 0, null, 'c')).toBe('Set kettle to 90 °C');
+    expect(setTempLine([wait(94)], 0, 94, 'c')).toBeNull(); // the brew's already
+    expect(nextTempChange(set, 0, 94, 'c')).toEqual({ next: '93 °C', now: '85 °C' });
+    expect(nextTempChange([pour, bloom], 0, 94, 'c')).toEqual({ next: '85 °C', now: '93 °C' });
+    expect(nextTempChange(set, 1, 94, 'c')).toBeNull(); // same again
+    expect(nextTempChange([bloom, wait(null), pour], 0, 94, 'c')).toBeNull(); // the next step sets none
+    expect(nextTempChange([bloom, wait(null), pour], 1, 94, 'c')).toEqual({ next: '93 °C', now: '85 °C' }); // carried past the wait
+    expect(nextTempChange([wait(null), pour], 0, 94, 'c')).toEqual({ next: '93 °C', now: '94 °C' });
+    expect(nextTempChange([wait(null), pour], 0, null, 'c')).toEqual({ next: '93 °C', now: null });
+    expect(nextTempChange([step({ targetTempC: 93 }), step({ targetTempC: 92.9 })], 0, null, 'f')).toBeNull(); // both 199 °F
+    expect(nextTempChange(set, 2, 94, 'c')).toBeNull(); // last step
   });
   it("notes what the machine can't do", () => {
     const basic = { preinfusion: 'none', flowControl: 'none', pressureControl: 'none' } as const;

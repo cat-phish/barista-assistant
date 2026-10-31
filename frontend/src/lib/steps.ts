@@ -5,7 +5,7 @@ import type { FlowUnit, MachineCapabilities, Mark, MethodKind, StepAdvance, Step
 import { formatGrams, formatTime, parseDecimal, parseTime, type Parsed } from './format';
 import { holdsOf } from './marks';
 import { scalesByDefault } from './scale';
-import { parseTemp, tempText } from './units';
+import { formatTemp, parseTemp, tempText } from './units';
 
 type Rule = 'required' | 'optional' | 'none';
 interface StepTypeInfo {
@@ -64,13 +64,44 @@ export function stepTitle(step: { stepType: StepType; label: string | null }): s
 const num = (n: number) => formatGrams(n); // drops trailing zeros: 9, 6.5
 const ramp = (from: number, to: number | null, unit: string) => (to === null || to === from ? `${num(from)} ${unit}` : `${num(from)} → ${num(to)} ${unit}`);
 
-// The instruction: "Pour to 150 g (+100)", "9 → 6 bar", "4 → 2 g/s", "Pump off".
-export function stepInstruction(step: StepFields, amount: number | null, flowUnit: FlowUnit): string | null {
-  if (step.targetWaterGrams !== null) return `Pour to ${formatGrams(step.targetWaterGrams)} g${amount !== null ? ` (+${formatGrams(amount)})` : ''}`;
+// The instruction: "Pour to 150 g (+100) at 93 °C", "9 → 6 bar", "4 → 2 g/s", "Pump off".
+export function stepInstruction(step: StepFields, amount: number | null, flowUnit: FlowUnit, tempUnit: TemperatureUnit): string | null {
+  if (step.targetWaterGrams !== null) {
+    const temp = step.targetTempC !== null ? ` at ${formatTemp(step.targetTempC, tempUnit)}` : '';
+    return `Pour to ${formatGrams(step.targetWaterGrams)} g${amount !== null ? ` (+${formatGrams(amount)})` : ''}${temp}`;
+  }
   if (step.pressureBar !== null) return ramp(step.pressureBar, step.pressureEndBar, 'bar');
   if (step.flowRate !== null) return ramp(step.flowRate, step.flowEndRate, FLOW_UNITS[flowUnit]);
   if (step.stepType === 'soak') return 'Pump off';
   return null;
+}
+
+// The water's temperature going into step `index`: the latest step before it
+// that set one, or the brew's. Compared as shown, so a difference that rounds
+// away in °F isn't a change.
+function tempBefore(steps: readonly StepFields[], index: number, waterTempC: number | null): number | null {
+  for (let i = index - 1; i >= 0; i--) {
+    const c = steps[i]!.targetTempC;
+    if (c !== null) return c;
+  }
+  return waterTempC;
+}
+function tempChange(steps: readonly StepFields[], index: number, waterTempC: number | null, tempUnit: TemperatureUnit): { next: string; now: string | null } | null {
+  const c = steps[index]?.targetTempC ?? null;
+  if (c === null) return null;
+  const before = tempBefore(steps, index, waterTempC);
+  const next = formatTemp(c, tempUnit);
+  const now = before === null ? null : formatTemp(before, tempUnit);
+  return next === now ? null : { next, now };
+}
+// Up next's callout: the step after `index` changes the temperature.
+export const nextTempChange = (steps: readonly StepFields[], index: number, waterTempC: number | null, tempUnit: TemperatureUnit) =>
+  tempChange(steps, index + 1, waterTempC, tempUnit);
+// A step that changes the temperature without pouring: "Set kettle to 93 °C".
+export function setTempLine(steps: readonly StepFields[], index: number, waterTempC: number | null, tempUnit: TemperatureUnit): string | null {
+  if (steps[index]?.targetWaterGrams !== null) return null;
+  const change = tempChange(steps, index, waterTempC, tempUnit);
+  return change && `Set kettle to ${change.next}`;
 }
 
 // What the chosen machine can't do for this step (the step still runs on time).
