@@ -624,6 +624,13 @@
       "when": 1793470795125,
       "tag": "0088_vessels",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "5",
+      "when": 1793476576025,
+      "tag": "0089_step_scales_with_batch",
+      "breakpoints": true
     }
   ]
 }

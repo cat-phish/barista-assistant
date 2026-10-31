@@ -24,10 +24,23 @@ import {
 
 const step = (s: Partial<StepFields>): StepFields => ({
   stepType: 'pour', label: null, durationSec: 10, advance: 'auto', targetWaterGrams: null, targetTempC: null,
-  pressureBar: null, pressureEndBar: null, flowRate: null, flowEndRate: null, ...s,
+  pressureBar: null, pressureEndBar: null, flowRate: null, flowEndRate: null, scalesWithBatch: true, ...s,
 });
 const draft = (s: Partial<StepFields> & { water?: string }) => ({ ...stepDraft('k', { durationSec: 10, ...s }), ...(s.water !== undefined ? { water: s.water } : {}) });
 const mark = (kind: Mark['kind'], atSec: number, stepOrder: number | null = null): Mark => ({ kind, stepOrder, atSec });
+
+describe('scalesWithBatch', () => {
+  it('defaults by type, keeps what a saved step says, and goes out with the step', () => {
+    expect(stepDraft('k', { stepType: 'bloom' }).scalesWithBatch).toBe(true);
+    expect(stepDraft('k', { stepType: 'stir' }).scalesWithBatch).toBe(false);
+    expect(stepDraft('k').scalesWithBatch).toBe(true); // a new pour
+    const saved = stepDraft('k', { stepType: 'pour', targetWaterGrams: 100, durationSec: 10, scalesWithBatch: false });
+    expect(saved.scalesWithBatch).toBe(false);
+    expect(parseSteps([saved], 'filter').steps[0]?.scalesWithBatch).toBe(false);
+    const ticked = stepDraft('k', { stepType: 'stir', durationSec: 10, scalesWithBatch: true });
+    expect(parseSteps([ticked], 'filter').steps[0]?.scalesWithBatch).toBe(true);
+  });
+});
 
 describe('step types per kind', () => {
   it('pour over and espresso get their own types, both get Other', () => {

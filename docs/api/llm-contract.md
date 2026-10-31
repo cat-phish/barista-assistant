@@ -128,7 +128,8 @@ queue:
      (`expectedFinishMinSec`/`MaxSec`), first-drop window (espresso), flow
      unit, and its steps with type, label, duration, how each moves on, and
      their values (pour-to, temperature, pressure, flow). With
-     `stepTimeScaling` (recipes.md §5) the step durations and the finish
+     `stepTimeScaling` (recipes.md §5), which also sends each step's
+     `scalesWithBatch`, the step durations and the finish
      window are the ones the brew was timed against, scaled to its water
      (`scaledToBrew`); pour targets stay the recipe's.
 2. It turns that context into the **input** actually sent
@@ -283,7 +284,7 @@ and the prompt sections about them drop out with them (step 3). Keys
   `detailedRoastLevel`), `weightLoss` (`roastWeightLossPercent`),
   `variety` (`varieties`, `species`),
   `decafBlend` (`decaf`, `blendType`), `batchNumber`.
-- **Recipe and equipment:** `recipeSteps` (with `stepTimeScaling`), `grindStartingPoints`,
+- **Recipe and equipment:** `recipeSteps` (with `stepTimeScaling` and each step's `scalesWithBatch`), `grindStartingPoints`,
   `grinderDetails` (everything but the grinder's name), `machine`.
 - **History:** `unratedHistory` leaves earlier brews without a rating out
   of what "Suggest parameters" sends (an analysis sends no earlier brews);

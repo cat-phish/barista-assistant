@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { eq, getTableColumns, inArray, type Column } from "drizzle-orm";
 import { getTableConfig, type MySqlTable } from "drizzle-orm/mysql-core";
 import { z } from "zod";
+import { scalesByDefault } from "@barista/shared/brew";
 import { FLAVORS, parseLexicon, type FlavorLexicon } from "@barista/shared/flavors";
 import { workspaceLexicon } from "./flavorLexicon.js";
 import {
@@ -87,7 +88,7 @@ import { checkStoredPhoto, removeWorkspacePhotos, writePhotoFile } from "./photo
 export const BACKUP_FORMAT = "barista-backup";
 // Bumped when a backup made before the change can't be restored as is;
 // UPGRADES then turns an older file into the current shape.
-export const BACKUP_VERSION = 3;
+export const BACKUP_VERSION = 4;
 const UPGRADES: Record<number, (file: BackupFile) => BackupFile> = {
   // 2: a prep tool's one methodKind (null = every method) became a list,
   // methodKinds ([] = every method), plus brewers (prep_tool_brewers).
@@ -127,6 +128,22 @@ const UPGRADES: Record<number, (file: BackupFile) => BackupFile> = {
       },
     };
   },
+  // 4: which steps follow the batch became each step's scalesWithBatch
+  // (migration 0089); a file from before it gets the defaults for its types.
+  3: (file) => ({
+    ...file,
+    version: 4,
+    tables: {
+      ...file.tables,
+      ...(Array.isArray(file.tables?.recipe_steps)
+        ? {
+            recipe_steps: file.tables.recipe_steps.map((r) =>
+              isObject(r) ? { ...r, scalesWithBatch: typeof r.stepType === "string" && scalesByDefault(r.stepType) } : r,
+            ),
+          }
+        : {}),
+    },
+  }),
 };
 const OLD_BEAN_SOURCES: Record<string, string> = { bean: "bag", beanRecipe: "bagRecipe", beanBrewer: "bagBrewer" };
 const bagSource = (source: unknown): unknown => (typeof source === "string" ? (OLD_BEAN_SOURCES[source] ?? source) : source);

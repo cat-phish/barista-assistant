@@ -111,7 +111,9 @@ function recipeInput(r: BrewContext["recipe"], hidden: ReadonlySet<AiDetail>): R
   if (!hidden.has("temp")) recipe.targetTempC = targetTempC;
   if (!hidden.has("grindStartingPoints")) recipe.grindStartingPoints = grindStartingPoints;
   if (!hidden.has("recipeSteps")) {
-    recipe.steps = hidden.has("temp") ? steps.map(({ targetTempC: _t, ...s }) => s) : steps;
+    const sent = hidden.has("temp") ? steps.map(({ targetTempC: _t, ...s }) => s) : steps;
+    // Only worth saying on a recipe that scales.
+    recipe.steps = stepTimeScaling === null ? sent.map(({ scalesWithBatch: _s, ...s }) => s) : sent;
     recipe.stepTimeScaling = stepTimeScaling;
   }
   if (flowUnit !== "g_s") recipe.flowUnit = flowUnit; // g/s is the default; only flow steps use it

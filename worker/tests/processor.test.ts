@@ -40,7 +40,7 @@ beforeEach(async () => {
   await db.insert(recipeSteps).values([
     { id: randomUUID(), recipeId, stepOrder: 1, stepType: "bloom", durationSec: 45, advance: "tap", targetWaterGrams: 50, targetTempC: 85 },
     { id: randomUUID(), recipeId, stepOrder: 2, stepType: "swirl", label: "Gentle swirl", durationSec: 0 },
-    { id: randomUUID(), recipeId, stepOrder: 3, stepType: "pour", durationSec: 90, targetWaterGrams: 250 },
+    { id: randomUUID(), recipeId, stepOrder: 3, stepType: "pour", durationSec: 90, targetWaterGrams: 250, scalesWithBatch: true },
   ]);
   for (let day = 2; day <= 9; day++) {
     const id = randomUUID();
@@ -162,7 +162,7 @@ describe("processBrewAnalysis", () => {
     await db.update(brewLogs).set({ actualDoseGrams: 30, actualWaterGrams: 500 }).where(eq(brewLogs.id, logIds.day8!));
     await processBrewAnalysis({ brewLogId: logIds.day8! });
     const context = llm.mock.calls[0]![0] as BrewContext;
-    // A double batch: the pour takes 90 × √2 ≈ 127 s, the bloom and swirl stay; the window moves by the 37 s gained.
+    // A double batch: the pour takes 90 × √2 ≈ 127 s, the unticked bloom and swirl stay; the window moves by the 37 s gained.
     expect(context.recipe).toMatchObject({
       stepTimeScaling: 0.5, targetWaterGrams: 250, expectedFinishMinSec: 202, expectedFinishMaxSec: 232,
       steps: [{ stepType: "bloom", durationSec: 45 }, { stepType: "swirl", durationSec: 0 }, { stepType: "pour", durationSec: 127 }],

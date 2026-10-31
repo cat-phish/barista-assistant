@@ -257,6 +257,17 @@ describe("workspace backup and restore (docs/api/backup.md §2b)", () => {
     expect((await restore(v2({ suggestSource: "recipe" }))).workspace.settings.suggestSource).toBe("recipe");
   });
 
+  it("restores a version 3 file, before steps said whether they scale (docs/api/backup.md §2b)", async () => {
+    const { owner, base } = await populated();
+    const backup = (await owner.agent.get(`${base}/backup`)).body;
+    const steps = ["bloom", "swirl", "press"].map((stepType, i) => ({ ...backup.tables.recipe_steps[0], id: randomUUID(), stepOrder: i + 1, stepType, scalesWithBatch: undefined }));
+    const v3 = { ...backup, version: 3, tables: { ...backup.tables, recipe_steps: steps } };
+    const restored = await owner.agent.post("/api/workspaces/restore").send({ name: "Old", slug: `old-${randomUUID().slice(0, 8)}`, backup: v3 });
+    expect(restored.status, JSON.stringify(restored.body)).toBe(201);
+    const after = (await owner.agent.get(`/api/workspaces/${restored.body.workspaceId}/backup`)).body;
+    expect(after.tables.recipe_steps.map((r: { stepType: string; scalesWithBatch: boolean }) => [r.stepType, r.scalesWithBatch]).sort()).toEqual([["bloom", true], ["press", true], ["swirl", false]]);
+  });
+
   it("refuses a bad file or a taken slug, and creates nothing", async () => {
     const { owner, ws, base } = await populated();
     const backup = (await owner.agent.get(`${base}/backup`)).body;

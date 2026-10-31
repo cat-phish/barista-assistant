@@ -114,7 +114,7 @@ const context = (over: { brew?: Partial<BrewSummary>; bean?: Partial<BrewContext
     grindStartingPoints: [{ grinderName: "C40", setting: 20 }],
     flowUnit: "g_s",
     stepTimeScaling: null,
-    steps: [{ stepOrder: 1, stepType: "bloom", label: null, durationSec: 30, advance: "auto", targetWaterGrams: 45, targetTempC: 94, pressureBar: null, pressureEndBar: null, flowRate: null, flowEndRate: null }],
+    steps: [{ stepOrder: 1, stepType: "bloom", label: null, durationSec: 30, advance: "auto", targetWaterGrams: 45, targetTempC: 94, pressureBar: null, pressureEndBar: null, flowRate: null, flowEndRate: null , scalesWithBatch: true}],
   },
   brew: summary(over.brew),
   drink: null,
@@ -263,7 +263,9 @@ describe("what the workspace keeps from the AI (Settings → AI)", () => {
   it("says when step times scale with the batch, with the steps", () => {
     const base = context();
     const ctx = { ...base, recipe: base.recipe && { ...base.recipe, stepTimeScaling: 0.5 } };
-    expect(toLlmInput(ctx).recipe).toMatchObject({ stepTimeScaling: 0.5 });
+    expect(toLlmInput(ctx).recipe).toMatchObject({ stepTimeScaling: 0.5, steps: [{ scalesWithBatch: true }] });
+    expect(toLlmInput(context()).recipe).not.toMatchObject({ steps: [{ scalesWithBatch: true }] });
+    expect(JSON.stringify(toLlmInput(context()).recipe)).not.toContain("scalesWithBatch");
     expect(promptSections(toLlmInput(ctx))).toContain("stepTimes");
     expect(promptSections(toLlmInput(context()))).not.toContain("stepTimes");
     const hidden = toLlmInput(ctx, without("recipeSteps"));

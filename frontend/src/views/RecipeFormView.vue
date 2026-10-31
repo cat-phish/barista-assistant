@@ -40,7 +40,7 @@ import {
   type StepDraft,
 } from '../lib/steps';
 import { useWorkspaceStore } from '../stores/workspace';
-import { DEFAULT_STEP_TIME_SCALING, estimateYield, ratioWater, ROAST_LEVELS, scaledTime, STEP_TIME_SCALING } from '../lib/scale';
+import { DEFAULT_STEP_TIME_SCALING, estimateYield, ratioWater, ROAST_LEVELS, scaledTime, scalesByDefault, STEP_TIME_SCALING } from '../lib/scale';
 import { parseTemp, tempText, TEMPERATURE_LABELS } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
@@ -82,8 +82,8 @@ const finishTo = ref('');
 const firstDropFrom = ref(''); // espresso only
 const firstDropTo = ref('');
 const flowUnit = ref<FlowUnit>('g_s'); // espresso flow steps
-// Filter: pour and wait times scale with the batch (lib/scale.ts
-// scaleStepTimes), × factor^timeScaling; unticked, they stay.
+// Filter: the times of the steps ticked to scale follow the batch (lib/scale.ts
+// scaleStepTimes), × factor^timeScaling; unticked, they all stay.
 const scaleTimes = ref(false);
 const timeScaling = ref('');
 watch(scaleTimes, (on) => {
@@ -218,7 +218,7 @@ const valid = computed(
 const timeScalingHint = computed(() => {
   const p = parsed.value.timeScaling;
   if (!p?.ok) return '';
-  return `A double batch’s 1:00 pour or wait takes ${formatTime(scaledTime(60, 2, p.value))}, a half batch’s ${formatTime(scaledTime(60, 0.5, p.value))}. 1 scales them fully; less, gentler.`;
+  return `A double batch’s 1:00 step takes ${formatTime(scaledTime(60, 2, p.value))}, a half batch’s ${formatTime(scaledTime(60, 0.5, p.value))}. 1 scales them fully; less, gentler.`;
 });
 // The ice typed (flash chilled), 0 without; the ratio and the yield count it.
 const iceGrams = computed(() => (parsed.value.ice?.ok ? parsed.value.ice.value : 0));
@@ -835,7 +835,7 @@ async function save(): Promise<void> {
             <div class="step-fields">
               <div class="field full">
                 <label :for="`step-type-${i}`">Type<span class="req" aria-hidden="true">*</span></label>
-                <select :id="`step-type-${i}`" aria-required="true" v-model="step.stepType">
+                <select :id="`step-type-${i}`" aria-required="true" v-model="step.stepType" @change="step.scalesWithBatch = scalesByDefault(step.stepType)">
                   <option v-for="t in stepTypesFor(kind)" :key="t" :value="t">{{ STEP_TYPES[t].label }}</option>
                   <option v-if="!stepTypesFor(kind).includes(step.stepType)" :value="step.stepType" disabled>{{ STEP_TYPES[step.stepType].label }}</option>
                 </select>
@@ -891,6 +891,10 @@ async function save(): Promise<void> {
                 <label :for="`step-temp-${i}`">Temp ({{ TEMPERATURE_LABELS[temperatureUnit] }})</label>
                 <input :id="`step-temp-${i}`" v-model="step.temp" inputmode="decimal" :placeholder="temperatureUnit === 'f' ? 'e.g. 199' : 'e.g. 93'" />
               </div>
+              <label v-if="timesScale" class="checkbox full">
+                <input v-model="step.scalesWithBatch" type="checkbox" />
+                Scales with the batch
+              </label>
               <span v-if="stepsParsed.errors[i]" class="field-error full">{{ stepsParsed.errors[i] }}</span>
             </div>
             <button class="btn-link danger" type="button" :aria-label="`Remove step ${i + 1}`" @click="removeStep(i)">✕</button>

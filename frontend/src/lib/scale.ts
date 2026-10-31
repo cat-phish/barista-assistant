@@ -205,13 +205,15 @@ export const sliderDose = (factor: number, recipeDose: number): number => round1
 export const factorText = (dose: number, recipeDose: number): string => `×${Math.round((dose / recipeDose) * 100) / 100}`;
 
 // Step times with the batch (docs/api/recipes.md §5), as in
-// @barista/shared/brew: a recipe with stepTimeScaling gives its pour and wait
-// steps time × factor^stepTimeScaling, to the second; the finish window moves
-// by the time they gained or lost (shiftWindow).
-export const TIMED_WITH_BATCH: readonly string[] = ['pour', 'wait'];
+// @barista/shared/brew: a recipe with stepTimeScaling gives its steps with
+// scalesWithBatch time × factor^stepTimeScaling, to the second; the finish
+// window moves by the time they gained or lost (shiftWindow). TIMED_WITH_BATCH:
+// the step types that scale unless the recipe says otherwise.
+export const TIMED_WITH_BATCH: readonly string[] = ['bloom', 'pour', 'wait', 'press'];
+export const scalesByDefault = (stepType: string): boolean => TIMED_WITH_BATCH.includes(stepType);
 export const STEP_TIME_SCALING = { scale: 2, min: 0, max: 1, exclusiveMin: true } as const;
 export const DEFAULT_STEP_TIME_SCALING = 0.5;
-export function scaleStepTimes<S extends { stepType: string; durationSec: number | null }>(
+export function scaleStepTimes<S extends { scalesWithBatch: boolean; durationSec: number | null }>(
   steps: S[],
   factor: number,
   exponent: number | null,
@@ -220,7 +222,7 @@ export function scaleStepTimes<S extends { stepType: string; durationSec: number
   const k = factor ** exponent;
   let shiftSec = 0;
   const scaled = steps.map((s) => {
-    if (s.durationSec === null || !TIMED_WITH_BATCH.includes(s.stepType)) return s;
+    if (s.durationSec === null || !s.scalesWithBatch) return s;
     const durationSec = Math.round(s.durationSec * k);
     shiftSec += durationSec - s.durationSec;
     return { ...s, durationSec };

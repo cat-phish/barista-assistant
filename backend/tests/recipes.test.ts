@@ -326,6 +326,28 @@ describe("flash chilled: brewed onto ice (docs/api/recipes.md §5, brew-logs.md 
 });
 
 describe("step times with the batch (docs/api/recipes.md §5)", () => {
+  it("scalesWithBatch: the type's default unless a step says, kept as sent (docs/api/recipes.md §5)", async () => {
+    const { owner, base, recipe } = await setup();
+    const omitted = [
+      { stepType: "bloom", durationSec: 30, targetWaterGrams: 50 },
+      { stepType: "pour", durationSec: 30, targetWaterGrams: 100 },
+      { stepType: "swirl", durationSec: 5 },
+      { stepType: "stir", durationSec: 5 },
+      { stepType: "wait", durationSec: 5 },
+      { stepType: "press", durationSec: 5 },
+      { stepType: "other", durationSec: 5 },
+    ];
+    const made = await owner.agent.post(base).send({ ...recipe, steps: omitted });
+    expect(made.status, JSON.stringify(made.body)).toBe(201);
+    expect(made.body.recipe.steps.map((s: { scalesWithBatch: boolean }) => s.scalesWithBatch)).toEqual([true, true, false, false, true, true, false]);
+    const sent = await owner.agent.post(base).send({
+      ...recipe,
+      steps: [{ stepType: "pour", durationSec: 30, targetWaterGrams: 100, scalesWithBatch: false }, { stepType: "stir", durationSec: 5, scalesWithBatch: true }],
+    });
+    expect(sent.body.recipe.steps.map((s: { scalesWithBatch: boolean }) => s.scalesWithBatch)).toEqual([false, true]);
+    expect((await owner.agent.post(base).send({ ...recipe, steps: [{ stepType: "stir", durationSec: 5, scalesWithBatch: "yes" }] })).status).toBe(400);
+  });
+
   it("stepTimeScaling: optional, nullable, above 0 to 1, filter only", async () => {
     const { owner, ws, base, recipe } = await setup();
     const scaled = await owner.agent.post(base).send({ ...recipe, stepTimeScaling: 0.5 });

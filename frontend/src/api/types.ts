@@ -511,6 +511,7 @@ export interface StepFields {
   pressureEndBar: number | null;
   flowRate: number | null; // in the recipe's flowUnit
   flowEndRate: number | null;
+  scalesWithBatch: boolean; // filter: its time follows the batch, with the recipe's stepTimeScaling
 }
 export interface RecipeStep extends StepFields {
   id: string;

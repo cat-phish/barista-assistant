@@ -30,12 +30,14 @@ export function extractionYield(brew: {
 }
 
 // Step times with the batch (docs/api/recipes.md §5): a recipe with
-// stepTimeScaling gives its pour and wait steps time × factor^stepTimeScaling,
-// to the second, where factor is the batch's water ÷ the recipe's; the finish
-// window moves by the time they gained or lost. The frontend has the same rule
-// in lib/scale.ts.
-export const TIMED_WITH_BATCH: readonly string[] = ["pour", "wait"];
-export function scaleStepTimes<S extends { stepType: string; durationSec: number | null }>(
+// stepTimeScaling gives its steps with scalesWithBatch time ×
+// factor^stepTimeScaling, to the second, where factor is the batch's water ÷
+// the recipe's; the finish window moves by the time they gained or lost. The
+// frontend has the same rule in lib/scale.ts. TIMED_WITH_BATCH: the step types
+// that scale unless the recipe says otherwise.
+export const TIMED_WITH_BATCH: readonly string[] = ["bloom", "pour", "wait", "press"];
+export const scalesByDefault = (stepType: string): boolean => TIMED_WITH_BATCH.includes(stepType);
+export function scaleStepTimes<S extends { scalesWithBatch: boolean; durationSec: number | null }>(
   steps: S[],
   factor: number,
   exponent: number | null,
@@ -44,7 +46,7 @@ export function scaleStepTimes<S extends { stepType: string; durationSec: number
   const k = factor ** exponent;
   let shiftSec = 0;
   const scaled = steps.map((s) => {
-    if (s.durationSec === null || !TIMED_WITH_BATCH.includes(s.stepType)) return s;
+    if (s.durationSec === null || !s.scalesWithBatch) return s;
     const durationSec = Math.round(s.durationSec * k);
     shiftSec += durationSec - s.durationSec;
     return { ...s, durationSec };

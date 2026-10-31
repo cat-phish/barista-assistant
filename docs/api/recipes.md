@@ -86,9 +86,12 @@ card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
   show the per-step amount next to it.
 - **Step times with the batch** (`stepTimeScaling`, filter only, nullable,
   above 0 up to 1, 2 decimals): when a brew scales the batch (water ÷ the
-  recipe's water = the factor), `pour` and `wait` steps take
+  recipe's water = the factor), steps with `scalesWithBatch` take
   `durationSec × factor ^ stepTimeScaling`, to the second; other steps keep
-  their time, and open-ended ones stay open. 1 is linear; 0.5 (what clients
+  their time, and open-ended ones stay open. A step's `scalesWithBatch`
+  (boolean, any type) defaults by type when left out: true for `bloom`,
+  `pour`, `wait` and `press`, false for the rest (`scalesByDefault`). It's
+  stored whether or not the recipe scales; espresso ignores it. 1 is linear; 0.5 (what clients
   offer first) makes a double batch's 1:00 pour 1:25. The target finish
   window moves by the seconds the steps gained or lost (both ends, never
   below 0). `null` (the default): step times stay the same. Clients and the
@@ -129,9 +132,9 @@ card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
   ],
   "prepToolIds": ["uuid", "uuid"],
   "steps": [
-    { "id": "uuid", "stepOrder": 1, "stepType": "bloom", "label": null, "durationSec": 45, "advance": "tap", "targetWaterGrams": 45, "targetTempC": 85, "pressureBar": null, "pressureEndBar": null, "flowRate": null, "flowEndRate": null },
-    { "id": "uuid", "stepOrder": 2, "stepType": "pour", "label": "Main pour", "durationSec": 45, "advance": "auto", "targetWaterGrams": 250, "targetTempC": 93, "pressureBar": null, "pressureEndBar": null, "flowRate": null, "flowEndRate": null },
-    { "id": "uuid", "stepOrder": 3, "stepType": "wait", "label": "Drawdown", "durationSec": null, "advance": "auto", "targetWaterGrams": null, "targetTempC": null, "pressureBar": null, "pressureEndBar": null, "flowRate": null, "flowEndRate": null }
+    { "id": "uuid", "stepOrder": 1, "stepType": "bloom", "label": null, "durationSec": 45, "advance": "tap", "targetWaterGrams": 45, "targetTempC": 85, "pressureBar": null, "pressureEndBar": null, "flowRate": null, "flowEndRate": null, "scalesWithBatch": true },
+    { "id": "uuid", "stepOrder": 2, "stepType": "pour", "label": "Main pour", "durationSec": 45, "advance": "auto", "targetWaterGrams": 250, "targetTempC": 93, "pressureBar": null, "pressureEndBar": null, "flowRate": null, "flowEndRate": null, "scalesWithBatch": true },
+    { "id": "uuid", "stepOrder": 3, "stepType": "wait", "label": "Drawdown", "durationSec": null, "advance": "auto", "targetWaterGrams": null, "targetTempC": null, "pressureBar": null, "pressureEndBar": null, "flowRate": null, "flowEndRate": null, "scalesWithBatch": true }
   ]
 }
 ```
@@ -235,6 +238,7 @@ Creates a recipe, its grind starting points and its steps in one transaction.
     - `advance` (default `auto`) and `durationSec` (integer 0–86400, or
       `null`) as in the advance table. Only the last step may be open-ended.
     - The values allowed for the type (other values must be absent/`null`).
+    - `scalesWithBatch` (optional): the type's default if left out (above).
   - Not enforced (clients warn instead): the last pour reaching
     `targetWaterGrams`, and the finish window ending after the planned last
     step.

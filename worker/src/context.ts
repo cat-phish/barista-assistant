@@ -202,8 +202,8 @@ export interface BrewContext {
     // Approximate starting points, per grinder (the brew's grinder is in grinderName).
     grindStartingPoints: Array<{ grinderName: string; setting: number }>;
     flowUnit: FlowUnit; // for flow steps: g/s or ml/s
-    // Filter: pour and wait times scale with the batch, × factor^this
-    // (docs/api/recipes.md §5); null = they don't. For an analysis the steps
+    // Filter: the times of steps with scalesWithBatch follow the batch, ×
+    // factor^this (docs/api/recipes.md §5); null = none do. For an analysis the steps
     // and the finish window are already the brew's (scaledToBrew).
     stepTimeScaling: number | null;
     // Back to back: each starts when the previous one actually ended
@@ -221,6 +221,7 @@ export interface BrewContext {
       pressureEndBar: number | null; // ramp end
       flowRate: number | null;
       flowEndRate: number | null;
+      scalesWithBatch: boolean; // sent only with stepTimeScaling
     }>;
   } | null;
   // Only this brew, no earlier ones (docs/api/llm-contract.md §9).
@@ -561,7 +562,7 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
 }
 
 // The step times and finish window the brew was timed against: with
-// stepTimeScaling, pour and wait steps follow its water ÷ the recipe's, as
+// stepTimeScaling, steps with scalesWithBatch follow its water ÷ the recipe's, as
 // the brew page's timer does (docs/api/llm-contract.md §9).
 export function scaledToBrew(recipe: NonNullable<BrewContext["recipe"]>, water: number | null): NonNullable<BrewContext["recipe"]> {
   const w0 = recipe.targetWaterGrams;
@@ -617,6 +618,7 @@ export async function loadRecipe(recipeId: string): Promise<BrewContext["recipe"
         pressureEndBar: recipeSteps.pressureEndBar,
         flowRate: recipeSteps.flowRate,
         flowEndRate: recipeSteps.flowEndRate,
+        scalesWithBatch: recipeSteps.scalesWithBatch,
       })
       .from(recipeSteps)
       .where(eq(recipeSteps.recipeId, recipeId))
