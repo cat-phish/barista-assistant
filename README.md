@@ -96,9 +96,14 @@ older build after that means restoring a dump, not just changing the tag.
 
 ## Install it on your phone
 
-The app installs as a PWA, which needs HTTPS. The frontend container
-serves it over HTTPS with certificates from its own CA; each device trusts
-that CA once.
+The app installs as a PWA, which needs HTTPS and a certificate the device
+really trusts: clicking through a browser warning isn't enough. There are two
+ways to get that:
+
+- **Built in (below):** the frontend container serves HTTPS with certificates
+  from its own CA, and each device trusts that CA once. Nothing else needed.
+- **Your own reverse proxy:** next section. Use this if you already have one,
+  or want an address with no port.
 
 1. In `.env`, set `FRONTEND_BIND=0.0.0.0`, `APP_HOST` to this machine's LAN
    IP (or a name your network resolves) and `APP_URL=https://<that address>:42069`,
@@ -114,5 +119,47 @@ that CA once.
 3. Open `https://<address>:42069` and install it: Chrome's menu → **Install app**
    (Android), or Share → **Add to Home Screen** (iOS Safari).
 
-The CA lives in the `caddy_data` Docker volume and lasts ten years; keep
-the volume, or every device has to trust a new one.
+The CA lives in the `caddy_data` Docker volume (or `CADDY_DATA_DIR`) and lasts
+ten years; keep it, or every device has to trust a new one.
+
+The certificate only covers `localhost` and `APP_HOST`, so open the app at
+exactly that address. Any other name for the same server fails with
+`SSL_ERROR_INTERNAL_ERROR_ALERT` in Firefox. To change the address, update
+`APP_HOST` and `APP_URL` and recreate the containers.
+
+## Behind a reverse proxy
+
+To use an address with no port, such as `https://coffee.server.lan`, put a
+reverse proxy like Nginx Proxy Manager in front. The app still runs its own
+HTTPS, so the proxy talks HTTPS to it, unlike most self-hosted apps.
+
+1. Point the name at the proxy, for example with a local DNS record in
+   Pi-hole.
+2. In `.env`, set `APP_HOST` and `APP_URL` to the name, with no port:
+   ```sh
+   APP_HOST=coffee.server.lan
+   APP_URL=https://coffee.server.lan
+   ```
+   Then recreate the containers. The app needs `HTTPS_PORT` to be free on the
+   server, as usual.
+3. Add a proxy host for the name, forwarding to the server's IP and
+   `HTTPS_PORT` with the scheme set to **https**. With `http` you get "Client
+   sent an HTTP request to an HTTPS server." `HTTP_PORT` won't work here: it
+   only redirects and serves the CA. The proxy doesn't need to verify the
+   app's certificate.
+4. Give the proxy host a certificate for the name that your devices trust, and
+   force SSL. Without HTTPS the page may load, but login fails, because the
+   session cookie is HTTPS-only.
+   - **A public domain:** a Let's Encrypt certificate works, using a DNS
+     challenge if the server isn't reachable from the internet.
+   - **A local name (`.lan`):** Let's Encrypt won't issue one. Make one with
+     [mkcert](https://github.com/FiloSottile/mkcert) (`mkcert coffee.server.lan`,
+     or reuse a wildcard), upload it to the proxy as a custom certificate, and
+     trust mkcert's root CA on each device, phones included.
+5. Open `https://coffee.server.lan` and install it as above. You don't need
+   the app's own CA on your devices, because they only see the proxy's
+   certificate.
+
+With a proxy in front, the backend sees every request as coming from the
+proxy, so all devices share one login rate limit. Keep the proxy on your own
+network or VPN unless you've closed sign-ups (`ALLOW_REGISTRATION=false`).
