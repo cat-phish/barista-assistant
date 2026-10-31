@@ -11,6 +11,9 @@ services:
   # is called, so images built elsewhere and copied over (docker save |
   # docker load) are used by `docker compose up -d` without rebuilding.
   #
+  # docker-compose.release.yml runs the published images instead: keep the
+  # two in step.
+  #
   # Data: named volumes and ./photos, ./backups by default; each can live
   # elsewhere instead (the *_DIR settings in .env.example). The backend and
   # worker run as uid 1000, which must own the photos and backups folders.

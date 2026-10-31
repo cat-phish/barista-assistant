@@ -1,0 +1,174 @@
+# Runs the published images, with no copy of the repo needed: paste this into
+# a Compose Manager stack, or use it with `docker compose -f`. README: "Run the
+# published images". Keep it in step with docker-compose.yml, which differs
+# only as follows:
+#
+# - Images come from Docker Hub. IMAGE_TAG picks the build: latest (main),
+#   testing, dev, or a fixed sha-<short>.
+# - No 3000, 3306 or 6379 ports on the host: those are for dev tools.
+# - No test database.
+# - There's no folder next to this file to rely on, so the *_DIR settings are
+#   required. The backend and worker run as uid 1000, which must own the
+#   photos and backups folders.
+#
+# Secrets: values come from .env but reach the containers as files under
+# /run/secrets, not as environment variables (shared/src/env.ts).
+services:
+  frontend:
+    image: catphish403/barista-assistant-frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_BIND:-127.0.0.1}:${HTTPS_PORT:-443}:443"
+      # Redirects to HTTPS, and serves the CA root at /ca.crt.
+      - "${FRONTEND_BIND:-127.0.0.1}:${HTTP_PORT:-80}:80"
+    environment:
+      - API_UPSTREAM=backend:3000
+      - APP_HOST=${APP_HOST:-localhost}
+      - HTTPS_PORT=${HTTPS_PORT:-443}
+    # The CA (keep it: devices trust its root) and the certificates it issued.
+    volumes:
+      - ${CADDY_DATA_DIR:?set CADDY_DATA_DIR in .env}:/data
+    depends_on:
+      - backend
+
+  backend:
+    image: catphish403/barista-assistant-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    # Lets notification services on this machine be reached as
+    # http://host.docker.internal:<port>.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - DATABASE_URL=mysql://barista@db:3306/coffee_journal
+      - DATABASE_PASSWORD_FILE=/run/secrets/db_password
+      - REDIS_URL=redis://redis:6379
+      - REDIS_PASSWORD_FILE=/run/secrets/redis_password
+      - JWT_SECRET_FILE=/run/secrets/jwt_secret
+      - CORS_ORIGIN=${APP_URL:-https://localhost}
+      # Requests arrive through the frontend's Caddy: trust it for the
+      # client IP, so the login rate limit is per device.
+      - TRUST_PROXY=1
+      # false closes sign-ups (a public server); existing accounts still log in.
+      - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-true}
+      # The zone scheduled backups' hour is in (e.g. America/Los_Angeles).
+      - BACKUP_TIMEZONE=${BACKUP_TIMEZONE:-UTC}
+      # false keeps database dumps on the server (no downloads in the app).
+      - BACKUP_DOWNLOADS=${BACKUP_DOWNLOADS:-true}
+    volumes:
+      - ${BACKUPS_DIR:?set BACKUPS_DIR in .env}:/backups:ro
+      - ${PHOTOS_DIR:?set PHOTOS_DIR in .env}:/photos
+    secrets:
+      - db_password
+      - redis_password
+      - jwt_secret
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    image: catphish403/barista-assistant-worker:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - DATABASE_URL=mysql://barista@db:3306/coffee_journal
+      - DATABASE_PASSWORD_FILE=/run/secrets/db_password
+      - REDIS_URL=redis://redis:6379
+      - REDIS_PASSWORD_FILE=/run/secrets/redis_password
+      - OPENAI_API_KEY_FILE=/run/secrets/openai_api_key
+      - OPENAI_MODEL=${OPENAI_MODEL}
+      # Reads bean labels from photos (docs/api/bean-label.md §4d); empty = OPENAI_MODEL.
+      - OPENAI_VISION_MODEL=${OPENAI_VISION_MODEL:-}
+      # Looks beans up on the web (Responses API web search); empty = the vision model.
+      - OPENAI_WEB_MODEL=${OPENAI_WEB_MODEL:-}
+      # Zone for brews logged without a UTC offset (older ones); empty = UTC.
+      - BREW_TIMEZONE=${BREW_TIMEZONE:-}
+      # Where the app opens, for the link in rate-later reminders.
+      - APP_URL=${APP_URL:-https://localhost}
+    # Scheduled database dumps (docs/api/server.md §10).
+    volumes:
+      - ${BACKUPS_DIR:?set BACKUPS_DIR in .env}:/backups
+    secrets:
+      - db_password
+      - redis_password
+      - openai_api_key
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      # Healthy only after its startup migrations ran, so tables exist.
+      backend:
+        condition: service_healthy
+
+  db:
+    image: mariadb:lts
+    restart: unless-stopped
+    # An empty variable means no secret file, and MariaDB must not initialize
+    # users with empty passwords.
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        for s in db_password db_root_password; do
+        [ -s "/run/secrets/$$s" ] || { echo "$$s secret is missing or empty: set MARIADB_PASSWORD and MARIADB_ROOT_PASSWORD in .env" >&2; exit 1; };
+        done;
+        exec docker-entrypoint.sh mariadbd
+    environment:
+      - MARIADB_DATABASE=coffee_journal
+      # The app connects as this user, which only has rights on coffee_journal.
+      - MARIADB_USER=barista
+      - MARIADB_PASSWORD_FILE=/run/secrets/db_password
+      - MARIADB_ROOT_PASSWORD_FILE=/run/secrets/db_root_password
+    secrets:
+      - db_password
+      - db_root_password
+    volumes:
+      - ${DB_DATA_DIR:?set DB_DATA_DIR in .env}:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:alpine
+    restart: unless-stopped
+    # Redis can't read its password from a file, so read the secret here.
+    # Refuse to start without it: `--requirepass ""` would mean NO password.
+    # AOF so queued jobs survive restarts; noeviction because BullMQ breaks if
+    # Redis evicts its keys under memory pressure.
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        pw="$$(cat /run/secrets/redis_password 2>/dev/null)";
+        [ -n "$$pw" ] || { echo "redis_password secret is missing or empty: set REDIS_PASSWORD in .env" >&2; exit 1; };
+        exec docker-entrypoint.sh redis-server
+        --appendonly yes --maxmemory-policy noeviction
+        --requirepass "$$pw"
+    secrets:
+      - redis_password
+    volumes:
+      - ${REDIS_DATA_DIR:?set REDIS_DATA_DIR in .env}:/data
+    healthcheck:
+      # redis-cli exits 0 even on an auth error, so check for the PONG reply.
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$(cat /run/secrets/redis_password)\" redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+# Each secret is read from the variable of the same (upper-case) name in .env.
+secrets:
+  db_root_password:
+    environment: MARIADB_ROOT_PASSWORD
+  db_password:
+    environment: MARIADB_PASSWORD
+  redis_password:
+    environment: REDIS_PASSWORD
+  jwt_secret:
+    environment: JWT_SECRET
+  openai_api_key:
+    environment: OPENAI_API_KEY

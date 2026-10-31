@@ -2061,3 +2061,20 @@ has three new tiles: Caffeine Total, Caffeine/Brew and Caffeine/Day.
 - Decided: a brew counts its whole dose, since the log doesn't say how much of
   a batch was drunk. The AI doesn't see it, and there's no caffeine % per bean
   or Explore field for now.
+
+## Published Docker images (built)
+
+Images of each branch on Docker Hub, so a server can run the app without the
+repo. README: "Run the published images".
+
+- **Publishing:** `.github/workflows/docker-publish.yml` builds the frontend,
+  backend and worker on every push to `main`, `testing` and `dev`, for
+  `linux/amd64`. `main` is tagged `latest`, the others by name, and every
+  build also `sha-<short>`. It runs on pushes only, so pull requests from
+  forks can't reach the Docker Hub secrets.
+- **`docker-compose.release.yml`** can be pasted into a Compose Manager stack.
+  `IMAGE_TAG` picks the build. Unlike `docker-compose.yml` it has no `build:`,
+  no host ports for dev tools and no test database, and it requires the
+  `*_DIR` settings, since there's no folder next to it to fall back on.
+- Decided: a second compose file over configurable image names, so the main
+  file stays simple for building from source. `amd64` only for now.
