@@ -46,3 +46,17 @@ describe("a bean's brew summary (docs/api/beans.md §4)", () => {
     expect((await other.agent.get(`/api/workspaces/${theirs}/beans/${summary.split("/")[5]}/brew-summary`)).status).toBe(404);
   });
 });
+
+describe("bean review defaults (docs/api/workspaces.md §2)", () => {
+  it("keeps valid defaults and refuses bad ones", async () => {
+    const { owner, ws, v60 } = await setup();
+    const settings = `/api/workspaces/${ws}/settings`;
+    const ok = await owner.agent.patch(settings).send({ beanReviews: false, beanReviewMaxBrews: 30, beanReviewRatedOnly: false, beanReviewBrewers: [v60] });
+    expect(ok.status).toBe(200);
+    expect(ok.body.settings).toMatchObject({ beanReviews: false, beanReviewMaxBrews: 30, beanReviewRatedOnly: false, beanReviewBrewers: [v60] });
+    expect((await owner.agent.patch(settings).send({ beanReviewBrewers: "all" })).body.settings.beanReviewBrewers).toBe("all");
+    for (const bad of [{ beanReviewMaxBrews: 0 }, { beanReviewMaxBrews: 31 }, { beanReviewBrewers: "some" }, { beanReviewBrewers: [v60, v60] }, { beanReviewBrewers: ["x"] }]) {
+      expect((await owner.agent.patch(settings).send(bad)).status).toBe(400);
+    }
+  });
+});

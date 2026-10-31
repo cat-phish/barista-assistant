@@ -63,6 +63,11 @@ export interface WorkspaceSettings {
   suggestSource: SuggestSource;
   suggestMaxBrews: number;
   suggestAlternatives: AlternativeKind[]; // what else it suggests by default
+  // "Write with AI" on a bean's Review (analysis.md §8e), and what its dialog starts with.
+  beanReviews: boolean;
+  beanReviewMaxBrews: number;
+  beanReviewRatedOnly: boolean;
+  beanReviewBrewers: 'all' | string[]; // ones the bean never used are ignored
   readLabels: boolean; // "Fill in with AI" on the bean form (bean-label.md §4d)
   labelWebLookup: boolean; // its "Also look it up on the web" (off by default)
   labelWebContext: LabelWebContext; // default 'high'
@@ -79,6 +84,7 @@ export type AutoAnalyzeDelay = (typeof AUTO_ANALYZE_DELAYS)[number];
 export const SUGGEST_SOURCES = ['bag', 'bagRecipe', 'bagBrewer', 'bean', 'beanRecipe', 'beanBrewer', 'brewer', 'recipe'] as const;
 export type SuggestSource = (typeof SUGGEST_SOURCES)[number];
 export const MAX_SUGGEST_BREWS = 20;
+export const MAX_REVIEW_BREWS = 30;
 // What else Suggest parameters can suggest (analysis.md §8b); the same list
 // as @barista/shared/schema (lib/suggest.test.ts checks).
 export const SUGGEST_ALTERNATIVES = ['recipe', 'brewer', 'bean'] as const;

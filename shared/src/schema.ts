@@ -114,6 +114,14 @@ export interface WorkspaceSettings {
   suggestMaxBrews: number;
   // What else it suggests by default (another recipe, brewer or bean).
   suggestAlternatives: AlternativeKind[];
+  // "Write with AI" on a bean's Review (docs/api/analysis.md §8e): off hides
+  // it. The rest are what its dialog starts with, changeable each time:
+  // at most how many brews, rated ones only, and which brewers' ("all", or
+  // ids; ones the bean never used are ignored).
+  beanReviews: boolean;
+  beanReviewMaxBrews: number;
+  beanReviewRatedOnly: boolean;
+  beanReviewBrewers: "all" | string[];
   // "Fill in from the photos" on the bean form (docs/api/bean-label.md §4d):
   // the bean's photos go to the AI to read the label. Off hides it.
   readLabels: boolean;
@@ -147,6 +155,7 @@ export const MAX_AUTO_ANALYZE_DAILY_CAP = 500;
 export const SUGGEST_SOURCES = ["bag", "bagRecipe", "bagBrewer", "bean", "beanRecipe", "beanBrewer", "brewer", "recipe"] as const;
 export type SuggestSource = (typeof SUGGEST_SOURCES)[number];
 export const MAX_SUGGEST_BREWS = 20;
+export const MAX_REVIEW_BREWS = 30; // a bean review draft (docs/api/analysis.md §8e)
 // What else "Suggest parameters" can suggest (docs/api/analysis.md §8b):
 // another recipe or brewer for this bean, another bean in stock for this
 // recipe. An alternative names the row it means, by id and name (the name
@@ -171,6 +180,10 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   suggestSource: "beanRecipe",
   suggestMaxBrews: 5,
   suggestAlternatives: [],
+  beanReviews: true,
+  beanReviewMaxBrews: 10,
+  beanReviewRatedOnly: true,
+  beanReviewBrewers: "all",
   readLabels: true,
   labelWebLookup: false,
   labelWebContext: "high",
