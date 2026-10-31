@@ -1,11 +1,14 @@
 # Publishes the app's images to Docker Hub for docker-compose.release.yml.
 # main is tagged latest; testing and dev by name; every build also sha-<short>.
-# Runs on pushes only, never pull requests, so forks can't reach the secrets.
+# Runs on pushes or by hand, never pull requests, so forks can't reach the
+# secrets. Push branches one at a time: pushing dev and testing together at
+# the same commit started a run for dev only.
 name: Publish images
 
 on:
   push:
     branches: [main, testing, dev]
+  workflow_dispatch:
 
 permissions:
   contents: read
