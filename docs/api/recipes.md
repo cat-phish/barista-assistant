@@ -98,6 +98,14 @@ card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
   worker (§9) work it out the same way; nothing scaled is stored.
 - `targetTempC` (any step, optional, 0–100, 1 decimal): e.g. bloom at 85 °C,
   pour at 93 °C.
+- **Step temps with the brew** (`stepTempsFollowBrew`, boolean, default
+  `false`): the brew page loads it and can change it for one brew. When it's
+  on and the brew's water temp differs from the recipe's `targetTempC`, each
+  step's temp moves by the same degrees, within 0–100: recipe 94 °C with
+  bloom 85 and pour 93, brewed at 96 °C, gives bloom 87 and pour 95. Steps
+  with no temp stay without one. Clients offer it only with a `targetTempC`
+  and a step temp. The brew keeps the shift as `stepTempShiftC`
+  (`brew-logs.md` §6); the recipe doesn't change.
 - `pressureBar`/`pressureEndBar` (0–20 bar, 1 decimal) and
   `flowRate`/`flowEndRate` (0–20 in the recipe's `flowUnit`, 1 decimal): an end
   value needs a start value and makes a ramp ("9 → 6 bar"). They're
@@ -122,6 +130,7 @@ card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
   "firstDropMaxSec": null,
   "flowUnit": "g_s",
   "stepTimeScaling": null,
+  "stepTempsFollowBrew": false,
   "style": { "id": "uuid", "name": "Pour over", "brewsLike": "pour_over" },
   "targetTempC": 94,
   "defaultGrinderId": "uuid",
@@ -221,6 +230,7 @@ Creates a recipe, its grind starting points and its steps in one transaction.
   - `flowUnit` (optional, default `g_s`): `g_s` or `ml_s`.
   - `stepTimeScaling` (optional, nullable): above 0, at most 1, 2 decimals;
     `400` on an espresso recipe (step times above).
+  - `stepTempsFollowBrew` (optional, default `false`): step temps above.
   - **Cold styles** (§5e), all optional and nullable, accepted on any recipe;
     clients show them for cold styles, and the dilution for any filter
     recipe (a concentrate, above):

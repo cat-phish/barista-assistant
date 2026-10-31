@@ -39,6 +39,7 @@ export const REPEAT_FOR_FIELD: Record<BrewFieldKey, RepeatKeep | 'always' | 'res
   'brew.vessel': 'vessel',
   'brew.tds': 'result',
   'brew.temp': 'temp',
+  'brew.stepTempsFollow': 'temp', // goes with the temperature it moved from
   'brew.grinder': 'grinder',
   'brew.grind': 'grind',
   'brew.rpm': 'grind',

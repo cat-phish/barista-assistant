@@ -25,6 +25,7 @@ export interface BrewLogInput {
   vesselWeightGrams?: number | null; // the weight subtracted
   tdsPercent: number | null; // %
   actualTempC: number | null;
+  stepTempShiftC?: number | null; // how far this brew moved the step temps
   actualGrindSetting: number | null; // the dial number
   grindRpm?: number | null; // only with a variable-speed grinder
   beanWeightInGrams?: number | null; // beans weighed before grinding

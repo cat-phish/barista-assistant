@@ -73,8 +73,8 @@ import { formatDay, formatDoseLine, formatGrams, formatGrind, formatListDay, for
 import { ALTERNATIVE_LABELS, CONFIDENCE_LABELS, chooseGrind, heldForRatio, rememberedSource, SUGGEST_SOURCE_LABELS, sourceNeeds, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
 import { useParameterSuggestion } from '../composables/useParameterSuggestion';
 import { useWorkspaceStore } from '../stores/workspace';
-import { brewRetention, factorText, linkRatio, ratioText as formatRatio, ratioWater, ROAST_LEVELS, SCALE_SLIDER, scaleBatch, scaleShot, scaleSteps, scaleStepTimes, shiftWindow, sliderDose, sliderPosition, waterShare, type MeasuredBrew, type ScaleField } from '../lib/scale';
-import { formatTemp, parseTemp, tempText, TEMPERATURE_LABELS, VOLUME_LABELS, volumeUnits } from '../lib/units';
+import { brewRetention, factorText, linkRatio, ratioText as formatRatio, ratioWater, ROAST_LEVELS, SCALE_SLIDER, scaleBatch, scaleShot, scaleSteps, scaleStepTimes, shiftStepTemps, shiftWindow, sliderDose, sliderPosition, waterShare, type MeasuredBrew, type ScaleField } from '../lib/scale';
+import { formatTemp, formatTempChange, parseTemp, tempText, TEMPERATURE_LABELS, VOLUME_LABELS, volumeUnits } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 
 // 'steep': starting a long cold brew (a checklist, then it's saved steeping).
@@ -85,6 +85,8 @@ const route = useRoute();
 const router = useRouter();
 const { prefs, settings, temperatureUnit, recipeRoastLevel, aiHidden } = usePreferences();
 const stage = ref<Stage>('setup');
+const stepTempsFollow = ref(false);
+const brewTempShift = ref<number | null>(null); // as this brew left setup
 const loading = ref(true);
 const loadError = ref('');
 const beans = ref<Bean[]>([]);
@@ -288,6 +290,7 @@ watch(recipe, (r) => {
   draft.ice = r?.targetIceGrams != null ? formatGrams(r.targetIceGrams) : '';
   draft.yieldGrams = ''; // measured after brewing
   draft.temp = tempText(r?.targetTempC, temperatureUnit.value);
+  stepTempsFollow.value = r?.stepTempsFollowBrew ?? false;
   // Cold styles: where it steeps and how it's served, as the recipe says.
   draft.steepTemp = r?.steepTemp ?? '';
   draft.dilution = r?.dilutionRatio != null ? String(r.dilutionRatio) : '';
@@ -759,11 +762,19 @@ const timed = computed(() => {
   const factor = batch.value?.factor ?? 1;
   return scaleStepTimes(scaleSteps(recipe.value?.steps ?? [], factor), factor, espresso.value ? null : (recipe.value?.stepTimeScaling ?? null));
 });
-const timerSteps = computed(() => timed.value.steps);
+const timerSteps = computed(() => shiftStepTemps(timed.value.steps, stepTempShift.value));
 // The temperature set up for this brew, or the recipe's.
 const timerWaterTemp = computed(() => {
   const set = draft.temp.trim() ? parseTemp(draft.temp, temperatureUnit.value) : null;
   return set?.ok ? set.value : (recipe.value?.targetTempC ?? null);
+});
+// A recipe's step temps can follow this brew's water temp, by the same degrees
+// (docs/api/recipes.md §5). Loaded from the recipe; this brew can change it.
+const tempsFollowable = computed(() => !longStyle.value && recipe.value?.targetTempC != null && recipe.value.steps.some((s) => s.targetTempC !== null));
+const stepTempShift = computed(() => {
+  const target = recipe.value?.targetTempC ?? null;
+  if (!stepTempsFollow.value || !tempsFollowable.value || target === null || timerWaterTemp.value === null) return null;
+  return Math.round((timerWaterTemp.value - target) * 10) / 10 || null;
 });
 // "+0:37", "−0:12"
 const timeShiftText = computed(() => `${timed.value.shiftSec < 0 ? '−' : '+'}${formatTime(Math.abs(timed.value.shiftSec))}`);
@@ -804,6 +815,8 @@ const stepMarksLine = computed(() =>
 function leaveSetup(next: Stage): void {
   if (draft.grinderId === NEW_GRINDER) draft.grinderId = '';
   marks.value = [];
+  // Fixed here: the log form's temperature is what was measured, not this.
+  brewTempShift.value = stepTempShift.value;
   stage.value = next;
 }
 // Long cold styles (lib/coldBrew.ts) have no timer: Start steep saves the brew
@@ -1019,6 +1032,7 @@ async function save(): Promise<void> {
       // So the AI dates the brew by this device's calendar day, like freeze dates.
       utcOffsetMinutes: -new Date().getTimezoneOffset(),
       ...values,
+      stepTempShiftC: brewTempShift.value,
       ...windowValues(),
       ...(remind ? { remindToRate: true } : {}),
       // The steps' real times, plus the first drop from the log's field. A time
@@ -1153,6 +1167,7 @@ async function applyRepeat(log: BrewLog): Promise<void> {
     draft.ice = log.actualIceGrams === null ? '' : formatGrams(log.actualIceGrams);
   }
   draft.temp = tempText(kept.has('temp') ? log.actualTempC : (recipe.value?.targetTempC ?? null), temperatureUnit.value);
+  stepTempsFollow.value = kept.has('temp') ? log.stepTempShiftC !== null : (recipe.value?.stepTempsFollowBrew ?? false);
   if (kept.has('grinder')) draft.grinderId = plan.grinderId; // else the one setup already has
   // The grind follows only on the brew's own grinder (repeatGrind checks it).
   if (!kept.has('grind')) repeatGrind.value = null;
@@ -1465,6 +1480,11 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <div v-if="show('brew.temp')" class="field">
             <label for="setup-temp">Water temp ({{ TEMPERATURE_LABELS[temperatureUnit] }})</label>
             <input id="setup-temp" v-model="draft.temp" inputmode="decimal" :placeholder="temperatureUnit === 'f' ? 'e.g. 201' : 'e.g. 94'" />
+            <label v-if="tempsFollowable && show('brew.stepTempsFollow')" class="checkbox">
+              <input v-model="stepTempsFollow" type="checkbox" />
+              Step temps follow
+            </label>
+            <span v-if="stepTempShift !== null" class="hint">Step temps {{ formatTempChange(stepTempShift, temperatureUnit) }}</span>
           </div>
           <div v-if="show('brew.grind')" class="field">
             <label for="setup-grind">Grind setting</label>

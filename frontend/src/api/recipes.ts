@@ -20,6 +20,7 @@ export interface RecipeInput extends ColdFields {
   prepToolIds: string[]; // replaces the recipe's default prep
   flowUnit: FlowUnit;
   stepTimeScaling: number | null; // filter only; null = step times stay
+  stepTempsFollowBrew: boolean;
   styleId: string | null; // docs/api/recipe-styles.md §5e
   steps: StepFields[];
 }

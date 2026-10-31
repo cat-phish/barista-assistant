@@ -30,6 +30,7 @@ created it and can't be changed.
   "vesselWeightGrams": 312.5,
   "tdsPercent": 1.38,
   "actualTempC": 93,
+  "stepTempShiftC": null,
   "grinderId": "uuid",
   "waterProfileId": "uuid",
   "actualGrindSetting": 18,
@@ -212,6 +213,11 @@ says why the last analysis failed or wasn't made (e.g. the daily cap), else
   - Grams and °C follow the recipe rules in §5 (`actualDoseGrams` 0–1000,
     `actualWaterGrams` 0–10000, both > 0, max 2 decimals; `actualTempC` 0–100,
     max 1 decimal, nullable).
+  - `stepTempShiftC` (optional, nullable, −100 to 100, 1 decimal): how far this
+    brew moved the recipe's step temps (`recipes.md` §5); `null` = as written.
+    Clients fix it when the brew leaves setup, so changing the log's
+    temperature afterwards doesn't change it. The AI doesn't use it yet
+    (`docs/backlog.md` item 32).
   - `actualYieldGrams` is the **measured** beverage weight: optional,
     nullable, same rules as water. Unlike the recipe's rough
     `expectedYieldGrams`, it's a measurement, and clients show it against the

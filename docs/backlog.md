@@ -369,6 +369,27 @@ What the analysis worker sends to the LLM and what comes back.
 
 ---
 
+### 32. Review how step temps reach the brew log and the AI
+
+- **Status:** idea
+- **Why:** recipes can set a temperature per step, and a brew can now move
+  them all (`stepTempsFollowBrew`), but the log and the analysis were built
+  around one water temperature, so the AI can misread a stepped brew.
+- **What we found:**
+  - The brew log stores only `actualTempC`, plus `stepTempShiftC`.
+  - The worker reads step temps from the live recipe, and `scaledToBrew`
+    doesn't apply `stepTempShiftC`, so on a shifted brew the AI sees the
+    recipe's step temps next to the brew's real water temp.
+  - `shared/src/aiPrompt.ts` never says how `actualTempC`, the recipe's
+    target and the step temps relate, or what `suggestedTempDelta` and
+    Suggest's `tempC` mean for the steps.
+  - Editing a recipe changes what old brews appear to have used, for every
+    recipe field, not only temps.
+- **Open questions:**
+  - Apply the shift in `scaledToBrew` (`shiftStepTemps` is already in
+    `@barista/shared/brew`) and add a prompt section explaining step temps?
+  - Should a brew keep a copy of its recipe, so old brews stay as brewed?
+
 ## E. Insights
 
 ### 12. Save insights for the AI

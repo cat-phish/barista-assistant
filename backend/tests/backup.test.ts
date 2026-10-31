@@ -268,6 +268,18 @@ describe("workspace backup and restore (docs/api/backup.md §2b)", () => {
     expect(after.tables.recipe_steps.map((r: { stepType: string; scalesWithBatch: boolean }) => [r.stepType, r.scalesWithBatch]).sort()).toEqual([["bloom", true], ["press", true], ["swirl", false]]);
   });
 
+  it("restores a file from before step temps could follow the brew", async () => {
+    const { owner, base } = await populated();
+    const backup = (await owner.agent.get(`${base}/backup`)).body;
+    const without = (rows: Array<Record<string, unknown>>, column: string) => rows.map(({ [column]: _gone, ...r }) => r);
+    const old = { ...backup, tables: { ...backup.tables, recipes: without(backup.tables.recipes, "stepTempsFollowBrew"), brew_logs: without(backup.tables.brew_logs, "stepTempShiftC") } };
+    const restored = await owner.agent.post("/api/workspaces/restore").send({ name: "Old", slug: `old-${randomUUID().slice(0, 8)}`, backup: old });
+    expect(restored.status, JSON.stringify(restored.body)).toBe(201);
+    const after = (await owner.agent.get(`/api/workspaces/${restored.body.workspaceId}/backup`)).body;
+    expect(after.tables.recipes.every((r: { stepTempsFollowBrew: boolean }) => r.stepTempsFollowBrew === false)).toBe(true);
+    expect(after.tables.brew_logs.every((r: { stepTempShiftC: number | null }) => r.stepTempShiftC === null)).toBe(true);
+  });
+
   it("refuses a bad file or a taken slug, and creates nothing", async () => {
     const { owner, ws, base } = await populated();
     const backup = (await owner.agent.get(`${base}/backup`)).body;

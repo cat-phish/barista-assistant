@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RecipeStep } from '../api/types';
-import { brewRetention, estimateYield, factorText, scaledTime, scalesByDefault, scaleStepTimes, shiftWindow, GRAMS_PER_FL_OZ, linkRatio, ratioText, retentionOf, scaleBatch, scaleShot, scaleSteps, sliderDose, sliderPosition, waterShare } from './scale';
+import { brewRetention, estimateYield, factorText, scaledTime, scalesByDefault, scaleStepTimes, shiftStepTemps, shiftWindow, GRAMS_PER_FL_OZ, linkRatio, ratioText, retentionOf, scaleBatch, scaleShot, scaleSteps, sliderDose, sliderPosition, waterShare } from './scale';
 
 const recipe = { targetDoseGrams: 15, targetWaterGrams: 250, targetIceGrams: null, expectedYieldGrams: null };
 
@@ -116,6 +116,22 @@ describe('scaleBatch', () => {
   it('flash chilled: water and ice add up to the rounded liquid', () => {
     // 251.25 g liquid: 150.75 → 151 g water, so 100 g ice (not 100.5 → 101).
     expect(scaleBatch(iced, { field: 'dose', value: 15.075 }, 2)).toMatchObject({ water: 151, ice: 100 });
+  });
+});
+
+describe('shiftStepTemps', () => {
+  const steps = [{ targetTempC: 85 }, { targetTempC: null }, { targetTempC: 93 }];
+  it('moves the temps by the same degrees; a step with none stays without', () => {
+    expect(shiftStepTemps(steps, 2).map((s) => s.targetTempC)).toEqual([87, null, 95]);
+    expect(shiftStepTemps(steps, -1.5).map((s) => s.targetTempC)).toEqual([83.5, null, 91.5]);
+  });
+  it('stays within 0-100', () => {
+    expect(shiftStepTemps(steps, 10).map((s) => s.targetTempC)).toEqual([95, null, 100]);
+    expect(shiftStepTemps(steps, -90).map((s) => s.targetTempC)).toEqual([0, null, 3]);
+  });
+  it('leaves them alone with no shift', () => {
+    expect(shiftStepTemps(steps, null)).toBe(steps);
+    expect(shiftStepTemps(steps, 0)).toBe(steps);
   });
 });
 
