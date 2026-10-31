@@ -369,7 +369,7 @@ async function save(): Promise<void> {
       <section class="card stack" aria-labelledby="instructions-heading">
         <div>
           <h2 id="instructions-heading">Instructions</h2>
-          <p class="muted small">How to make it, shown when the brew is done. Optional.</p>
+          <p class="muted small">How to make it, shown when the brew is done.</p>
         </div>
         <div class="field">
           <label for="instructions" class="visually-hidden">Instructions</label>
