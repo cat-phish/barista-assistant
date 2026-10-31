@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { SuggestionPreview } from "@barista/shared/jobs";
 import { beans, brewers, brewLogs, grinders, llmAnalyses, parameterSuggestions, recipes, users, workspaces, type SuggestSource } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -69,6 +70,7 @@ const request = (source: SuggestSource, over: Partial<SuggestRequest> = {}): Sug
   beanId: id.guji, recipeId: id.house, brewerId: id.v60, grinderId: id.c40, source, maxBrews: 5,
   batchDoseGrams: null, batchWaterGrams: null, batchIceGrams: null, batchYieldGrams: null, alternativesAsked: null, ...over,
 });
+const previewJob = (source: SuggestSource, over: Partial<SuggestRequest> = {}): SuggestionPreview => ({ ...request(source, over), note: null, requestedBy: userId });
 const notes = async (r: SuggestRequest, options = {}) => (await loadSuggestContext(r, options))!.brews.map((b) => b.tastingNotes);
 
 describe("which earlier brews Suggest parameters sends (docs/api/analysis.md §8b)", () => {
@@ -201,12 +203,12 @@ describe("processAiPreview for a suggestion (docs/api/analysis.md §8d)", () => 
   it("is what asking would send, without calling the AI", async () => {
     await db.update(workspaces).set({ settings: { aiHidden: ["unratedHistory"] } }).where(eq(workspaces.id, workspaceId));
     await db.update(brewLogs).set({ rating: null }).where(eq(brewLogs.id, log.day5!));
-    const preview = await processAiPreview({ kind: "suggest", suggestion: request("beanRecipe") });
+    const preview = await processAiPreview({ kind: "suggest", suggestion: previewJob("beanRecipe") });
     const context = (await loadSuggestContext(request("beanRecipe"), { ratedOnly: true }))!;
     expect(preview).toEqual(suggestionSent(context, new Set(["unratedHistory"])));
     expect((preview!.input.brews as Array<{ tastingNotes: string }>).map((b) => b.tastingNotes)).toEqual(["day1"]); // the unrated one left out
     expect(llm).not.toHaveBeenCalled();
-    expect(await processAiPreview({ kind: "suggest", suggestion: request("bean", { beanId: randomUUID() }) })).toBeNull();
+    expect(await processAiPreview({ kind: "suggest", suggestion: previewJob("bean", { beanId: randomUUID() }) })).toBeNull();
   });
 });
 
