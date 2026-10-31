@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ratingLabel, starFills, starValues } from './rating';
+import { brewAverageText, ratingLabel, starFills, starValues } from './rating';
 
 describe('starFills', () => {
   it('fills whole stars, then a half for a .5', () => {
@@ -23,5 +23,15 @@ describe('ratingLabel', () => {
     expect(ratingLabel(4)).toBe('4 – Good');
     expect(ratingLabel(1)).toBe('1 – Bad');
     expect(ratingLabel(3.5)).toBe('3.5');
+  });
+});
+
+describe('brewAverageText', () => {
+  it('rounds to one decimal and says how many were rated', () => {
+    expect(brewAverageText({ averageRating: 3.83, ratedCount: 12 })).toBe('Brews average 3.8 from 12 rated');
+  });
+  it('says nothing with nothing rated, or no summary yet', () => {
+    expect(brewAverageText({ averageRating: null, ratedCount: 0 })).toBeNull();
+    expect(brewAverageText(null)).toBeNull();
   });
 });
