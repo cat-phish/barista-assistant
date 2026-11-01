@@ -6,6 +6,7 @@ import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { analysisRequests, brewLogs, DEFAULT_WORKSPACE_SETTINGS, llmAnalyses, withDefaults, workspaces } from "@barista/shared/schema";
+import { requireAi } from "../aiConfig.js";
 import { db } from "../db.js";
 import { enqueueBrewAnalysis, QueueUnavailableError } from "../queue.js";
 import { sendPreview } from "../preview.js";
@@ -28,9 +29,8 @@ analyzeRouter.post(
   "/:brewLogId/analyze",
   async (req: Request<{ brewLogId: string }>, res: Response<AnalyzeResponse>) => {
     const { brewLogId } = req.params;
-    if (!(await requireResourceMembership(res, authedUserId(req), "brewLog", brewLogId, WRITE_ROLES))) {
-      return;
-    }
+    const access = await requireResourceMembership(res, authedUserId(req), "brewLog", brewLogId, WRITE_ROLES);
+    if (!access) return;
     const body = parseBody(analyzeSchema, { body: req.body ?? {} }, res);
     if (!body) return;
 
@@ -50,6 +50,8 @@ analyzeRouter.post(
       sendError(res, 409, "Rate this brew first: this workspace only analyzes rated brews");
       return;
     }
+
+    if (!(await requireAi(res, access.workspaceId))) return;
 
     let jobId: string;
     try {

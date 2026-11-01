@@ -19,6 +19,8 @@ export const config = {
   // Looking a bean up on the web (§9c, step 2) needs a model with the web
   // search tool on the Responses API; unset = the vision model.
   openaiWebModel: process.env.OPENAI_WEB_MODEL?.trim() || openaiVisionModel,
+  // Decrypts AI keys saved in Settings.
+  aiConfigSecret: secretIfSet("AI_CONFIG_SECRET") ?? null,
   concurrency: Number(process.env.WORKER_CONCURRENCY ?? 2),
   // Zone for brews logged without a UTC offset (older ones); null = UTC.
   brewTimezone: parseTimeZone(process.env.BREW_TIMEZONE),

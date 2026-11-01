@@ -34,6 +34,7 @@ export function applyTestEnv(): void {
     REDIS_URL: "redis://localhost:6379/1",
     REDIS_PASSWORD: env.REDIS_PASSWORD,
     JWT_SECRET: randomBytes(32).toString("hex"),
+    AI_CONFIG_SECRET: randomBytes(32).toString("hex"),
     OPENAI_API_KEY: "sk-test-not-a-real-key",
     OPENAI_MODEL: "test-model",
     OPENAI_BASE_URL: "http://127.0.0.1:9/v1",

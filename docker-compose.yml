@@ -62,6 +62,9 @@ services:
       - REDIS_URL=redis://redis:6379
       - REDIS_PASSWORD_FILE=/run/secrets/redis_password
       - JWT_SECRET_FILE=/run/secrets/jwt_secret
+      # Optional, so not a secret file: Compose won't start if a secret's
+      # variable is missing, which would stop installs that don't set it.
+      - AI_CONFIG_SECRET=${AI_CONFIG_SECRET:-}
       - CORS_ORIGIN=${APP_URL:-https://localhost:42069}
       # Requests arrive through the frontend's Caddy: trust it for the
       # client IP, so the login rate limit is per device.
@@ -107,6 +110,9 @@ services:
       - REDIS_URL=redis://redis:6379
       - REDIS_PASSWORD_FILE=/run/secrets/redis_password
       - OPENAI_API_KEY_FILE=/run/secrets/openai_api_key
+      # Optional, so not a secret file: Compose won't start if a secret's
+      # variable is missing, which would stop installs that don't set it.
+      - AI_CONFIG_SECRET=${AI_CONFIG_SECRET:-}
       - OPENAI_MODEL=${OPENAI_MODEL}
       # Reads bean labels from photos (docs/api/bean-label.md §4d); empty = OPENAI_MODEL.
       - OPENAI_VISION_MODEL=${OPENAI_VISION_MODEL:-}

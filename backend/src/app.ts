@@ -15,6 +15,7 @@ import { beanPhotosRouter } from "./routes/beanPhotos.js";
 import { beanLabelRouter, LABEL_BODY_PATH } from "./routes/beanLabel.js";
 import { brewLogsRouter } from "./routes/brewLogs.js";
 import { statsRouter } from "./routes/stats.js";
+import { aiConfigRouter } from "./routes/aiConfig.js";
 import { brewersRouter } from "./routes/brewers.js";
 import { grindersRouter } from "./routes/grinders.js";
 import { roastingMachinesRouter } from "./routes/roastingMachines.js";
@@ -72,6 +73,7 @@ app.use("/api/auth/me/notifications", notificationsRouter);
 app.use("/api/auth/me/ai-prompt", aiPromptRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/public/menu", publicMenuRouter);
+app.use("/api/workspaces/:workspaceId/ai-config", aiConfigRouter); // docs/api/workspaces.md §2d
 app.use("/api/workspaces/:workspaceId/brewers", brewersRouter);
 app.use("/api/workspaces/:workspaceId/grinders", grindersRouter);
 app.use("/api/workspaces/:workspaceId/roasting-machines", roastingMachinesRouter); // docs/api/roasting-machines.md §3f

@@ -2,8 +2,9 @@
 // brew is analyzed autoAnalyzeDelayMinutes after it's saved, and an unrated
 // (or still steeping) one as soon as it's first rated. Queueing never fails
 // the save: if Redis is down the brew just isn't analyzed automatically.
-import { analysisRequests, DEFAULT_WORKSPACE_SETTINGS, withDefaults, workspaces } from "@barista/shared/schema";
+import { analysisRequests, brewLogs, DEFAULT_WORKSPACE_SETTINGS, withDefaults, workspaces } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
+import { aiStatus } from "./aiConfig.js";
 import { db } from "./db.js";
 import { enqueueBrewAnalysis } from "./queue.js";
 
@@ -27,6 +28,8 @@ async function settingsOf(workspaceId: string) {
 // the due time, or null when nothing was queued.
 async function queue(brewLogId: string, delayMs: number): Promise<Date | null> {
   try {
+    const [log] = await db.select({ workspaceId: brewLogs.workspaceId }).from(brewLogs).where(eq(brewLogs.id, brewLogId));
+    if (!log || !(await aiStatus(log.workspaceId)).available) return null; // nothing would answer it
     await enqueueBrewAnalysis(brewLogId, { auto: true, delayMs });
   } catch (err) {
     console.error(`Could not queue the automatic analysis of ${brewLogId}:`, err instanceof Error ? err.message : err);

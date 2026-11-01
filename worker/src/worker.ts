@@ -8,6 +8,7 @@ import { failSuggestion, failureMessage, processAiPreview, processBeanReview, pr
 import { processGreenLow, processRateReminder, processRestReminder, processSteepReminder, type ReminderResult } from "./reminders.js";
 import { runDbBackup, type BackupResult } from "./dbBackup.js";
 import { readLabel } from "./label.js";
+import { publishEnvStatus } from "./ai/resolve.js";
 import type { AiRequest } from "@barista/shared/schema";
 
 // BullMQ workers need maxRetriesPerRequest: null (blocking commands).
@@ -119,6 +120,8 @@ maintenance.on("completed", (job, r) => {
 });
 maintenance.on("failed", (job, err) => console.error(`Backup ${job?.id ?? "?"} failed: ${err.message}`));
 maintenance.on("error", (err) => console.error("Maintenance worker error:", err.message));
+
+publishEnvStatus().catch((err: unknown) => console.error("AI status not saved:", err instanceof Error ? err.message : err));
 
 async function shutdown(signal: string): Promise<void> {
   console.log(`${signal} received, finishing active jobs`);
