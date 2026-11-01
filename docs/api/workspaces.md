@@ -170,6 +170,11 @@ Who answers a workspace's AI jobs, looked up when each job runs
 3. nothing. AI routes answer 409 `{ code: "ai_not_configured" }`, and automatic
    analyses aren't queued.
 
+`provider` is `openai` (or compatible) or `anthropic`. Jobs build the same
+requests either way, and `worker/src/ai/anthropic.ts` translates them for
+Claude. Its web lookup is two calls, since Claude can't return a schema along
+with a web search's citations: the search, then one that fills in the schema.
+
 Keys are AES-256-GCM encrypted under `AI_CONFIG_SECRET` (`shared/src/secrets.ts`),
 kept in `workspace_ai_configs`, never sent back, and not in backups
 (`NOT_BACKED_UP`). Without that secret a key can't be saved (409).

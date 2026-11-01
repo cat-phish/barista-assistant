@@ -1,6 +1,7 @@
-import { AI_ENV_KEY, AI_SERVER_KEY, aiSource, DEFAULT_SERVER_AI, modelsFor, type AiEnvStatus, type ServerAiConfig } from "@barista/shared/aiConfig";
+import { AI_ENV_KEY, AI_SERVER_KEY, aiSource, DEFAULT_SERVER_AI, modelsFor, type AiEnvStatus, type AiProvider, type ServerAiConfig } from "@barista/shared/aiConfig";
 import { serverSettings, workspaceAiConfigs } from "@barista/shared/schema";
 import { decryptSecret } from "@barista/shared/secrets";
+import Anthropic from "@anthropic-ai/sdk";
 import { UnrecoverableError } from "bullmq";
 import { eq } from "drizzle-orm";
 import OpenAI from "openai";
@@ -9,7 +10,7 @@ import { db } from "../db.js";
 import type { AiClient, AiModels } from "./client.js";
 
 export const NO_AI = "No AI is set up for this workspace";
-const OPENAI_URL = "https://api.openai.com/v1";
+const OFFICIAL_URLS: Record<AiProvider, string> = { openai: "https://api.openai.com/v1", anthropic: "https://api.anthropic.com" };
 
 const envConfigured = (): boolean => Boolean(config.openaiApiKey && config.openaiModel);
 
@@ -22,9 +23,13 @@ function readKey(stored: string): string {
 }
 
 // baseURL is always passed for a saved key: left out, the SDK reads
-// OPENAI_BASE_URL, and a workspace's key would go to the server's address.
-function client(apiKey: string, baseURL: string | undefined, models: AiModels): AiClient {
-  return { apiKey, models, openai: new OpenAI({ apiKey, baseURL }) };
+// OPENAI_BASE_URL or ANTHROPIC_BASE_URL, and a workspace's key would go to
+// the server's address.
+function client(provider: AiProvider, apiKey: string, baseURL: string | undefined, models: AiModels): AiClient {
+  if (provider === "anthropic") {
+    return { provider, apiKey, models, official: baseURL === OFFICIAL_URLS.anthropic, anthropic: new Anthropic({ apiKey, baseURL }) };
+  }
+  return { provider, apiKey, models, openai: new OpenAI({ apiKey, baseURL }) };
 }
 
 async function serverConfig(): Promise<ServerAiConfig> {
@@ -48,11 +53,11 @@ export async function resolveServerAi(): Promise<AiClient> {
 function clientFor(own: typeof workspaceAiConfigs.$inferSelect | undefined, server: ServerAiConfig): AiClient {
   switch (aiSource(Boolean(own), server, envConfigured())) {
     case "workspace":
-      return client(readKey(own!.apiKeyEncrypted), OPENAI_URL, modelsFor(own!));
+      return client(own!.provider, readKey(own!.apiKeyEncrypted), OFFICIAL_URLS[own!.provider], modelsFor(own!));
     case "server":
-      return client(readKey(server.apiKeyEncrypted!), server.baseUrl ?? OPENAI_URL, modelsFor({ ...server, model: server.model! }));
+      return client(server.provider, readKey(server.apiKeyEncrypted!), server.baseUrl ?? OFFICIAL_URLS[server.provider], modelsFor({ ...server, model: server.model! }));
     case "env":
-      return client(config.openaiApiKey!, undefined, modelsFor({ model: config.openaiModel!, visionModel: config.openaiVisionModel, webModel: config.openaiWebModel }));
+      return client("openai", config.openaiApiKey!, undefined, modelsFor({ model: config.openaiModel!, visionModel: config.openaiVisionModel, webModel: config.openaiWebModel }));
     default:
       throw new UnrecoverableError(NO_AI);
   }

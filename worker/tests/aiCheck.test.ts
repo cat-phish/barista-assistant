@@ -4,8 +4,8 @@ const complete = vi.fn();
 const list = vi.fn();
 vi.mock("../src/llm.js", async (original) => ({ ...(await original<typeof import("../src/llm.js")>()), complete }));
 vi.mock("../src/ai/resolve.js", () => ({
-  resolveAi: async () => ({ apiKey: "sk-secret", models: { main: "m", vision: "m", web: "m" }, openai: { models: { list } } }),
-  resolveServerAi: async () => ({ apiKey: "sk-server", models: { main: "s", vision: "s", web: "s" }, openai: { models: { list } } }),
+  resolveAi: async () => ({ provider: "openai", apiKey: "sk-secret", models: { main: "m", vision: "m", web: "m" }, openai: { models: { list } } }),
+  resolveServerAi: async () => ({ provider: "openai", apiKey: "sk-server", models: { main: "s", vision: "s", web: "s" }, openai: { models: { list } } }),
 }));
 const { runAiCheck } = await import("../src/ai/check.js");
 

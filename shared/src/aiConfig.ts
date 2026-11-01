@@ -1,6 +1,6 @@
 // Who answers a workspace's AI jobs (docs/api/workspaces.md §2d). Used by the
 // backend, to say whether AI is available, and the worker, to call it.
-export const AI_PROVIDERS = ["openai"] as const;
+export const AI_PROVIDERS = ["openai", "anthropic"] as const;
 export type AiProvider = (typeof AI_PROVIDERS)[number];
 export type AiSource = "workspace" | "server" | "env";
 

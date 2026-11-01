@@ -29,14 +29,24 @@ describe("resolveAi (docs/api/workspaces.md §2d)", () => {
   it("prefers the server's saved AI, at its address", async () => {
     await serverAi({ apiKeyEncrypted: encryptSecret("server-key", SECRET), baseUrl: "http://10.0.0.5:11434/v1", model: "local" });
     const ai = await resolveAi();
-    expect([ai.apiKey, ai.models.main, ai.openai.baseURL]).toEqual(["server-key", "local", "http://10.0.0.5:11434/v1"]);
+    expect([ai.apiKey, ai.models.main, ai.provider === "openai" && ai.openai.baseURL]).toEqual(["server-key", "local", "http://10.0.0.5:11434/v1"]);
   });
 
   it("prefers the workspace's own, and never sends its key to a server address", async () => {
     await serverAi({ apiKeyEncrypted: encryptSecret("server-key", SECRET), baseUrl: "http://10.0.0.5:11434/v1", model: "local" });
     const ai = await resolveAi(await workspaceWithKey("own-key", { visionModel: "eyes" }));
-    expect([ai.apiKey, ai.openai.baseURL]).toEqual(["own-key", "https://api.openai.com/v1"]); // OPENAI_BASE_URL is set in tests
+    expect([ai.apiKey, ai.provider === "openai" && ai.openai.baseURL]).toEqual(["own-key", "https://api.openai.com/v1"]); // OPENAI_BASE_URL is set in tests
     expect(ai.models).toEqual({ main: "own", vision: "eyes", web: "eyes" });
+  });
+
+  it("uses Claude's own client and address for an Anthropic key", async () => {
+    const id = await workspaceWithKey("ant-key");
+    await db.update(workspaceAiConfigs).set({ provider: "anthropic" }).where(eq(workspaceAiConfigs.workspaceId, id));
+    process.env.ANTHROPIC_BASE_URL = "http://10.0.0.5:9"; // never for a workspace's key
+    const ai = await resolveAi(id);
+    delete process.env.ANTHROPIC_BASE_URL;
+    expect(ai.provider).toBe("anthropic");
+    expect(ai.provider === "anthropic" && [ai.official, ai.anthropic.baseURL]).toEqual([true, "https://api.anthropic.com"]);
   });
 
   it("switched off, stops the server's and the env's AI but not a workspace's own", async () => {

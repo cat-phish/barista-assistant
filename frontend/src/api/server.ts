@@ -17,7 +17,8 @@ export interface ServerBackups {
   downloadsEnabled: boolean; // false: dumps stay on the server (BACKUP_DOWNLOADS)
 }
 
-export type AiProvider = 'openai';
+export const AI_PROVIDERS = { openai: 'OpenAI or compatible', anthropic: 'Anthropic' } as const;
+export type AiProvider = keyof typeof AI_PROVIDERS;
 export interface AiCheck {
   ok: boolean;
   models: string[];
