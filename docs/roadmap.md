@@ -2084,7 +2084,9 @@ repo. README: "Run the published images".
   take ownership of `/photos` and `/backups` (`DATA_DIRS`,
   `docker/entrypoint.sh`), then run as `node`, as the MariaDB and Redis images
   do. No `chown` on install, and it recovers from Unraid's New Permissions on
-  the next restart.
+  the next restart. MariaDB also needs its `.my-healthcheck.cnf` mode put
+  back, which the `db` service does at startup: it ignores a world-writable
+  config file, so the healthcheck fails and the stack waits on it forever.
 - **Behind a reverse proxy:** README section, from running it behind Nginx
   Proxy Manager with a mkcert certificate. The app keeps its own HTTPS, so the
   proxy forwards to `HTTPS_PORT` with scheme https.

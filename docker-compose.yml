@@ -137,6 +137,9 @@ services:
     restart: unless-stopped
     # Same guard as redis: an empty variable means no secret file, and MariaDB
     # must not initialize users with empty passwords.
+    # MariaDB ignores a world-writable config file, so Unraid's New Permissions
+    # would lock the healthcheck out of a running database: restore the mode
+    # (the image's entrypoint only restores the owner).
     entrypoint:
       - sh
       - -c
@@ -144,6 +147,7 @@ services:
         for s in db_password db_root_password; do
         [ -s "/run/secrets/$$s" ] || { echo "$$s secret is missing or empty: set MARIADB_PASSWORD and MARIADB_ROOT_PASSWORD in .env" >&2; exit 1; };
         done;
+        chmod go-w /var/lib/mysql/.my-healthcheck.cnf 2>/dev/null;
         exec docker-entrypoint.sh mariadbd
     # Loopback only: containers reach it as db:3306 over the compose network;
     # this mapping is just for tools on this machine (npm run dev, DB clients).
