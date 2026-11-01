@@ -159,6 +159,38 @@ the workspace sees the same forms.
 - **Success (`200 OK`):** `{ "settings": { ...all of them } }`
 - **Errors:** `400` invalid, empty or unknown keys; `403` not an owner.
 
+## AI key and models (§2d)
+
+Who answers a workspace's AI jobs, looked up when each job runs
+(`worker/src/ai/resolve.ts`, `@barista/shared/aiConfig`):
+
+1. the workspace's own key, always at the provider's official address;
+2. if the server offers its AI (`docs/api/server.md` §10b): the key saved there,
+   else the worker's `OPENAI_*` env;
+3. nothing. AI routes answer 409 `{ code: "ai_not_configured" }`, and automatic
+   analyses aren't queued.
+
+Keys are AES-256-GCM encrypted under `AI_CONFIG_SECRET` (`shared/src/secrets.ts`),
+kept in `workspace_ai_configs`, never sent back, and not in backups
+(`NOT_BACKED_UP`). Without that secret a key can't be saved (409).
+
+### `GET /api/workspaces/:workspaceId/ai-config`
+
+Any member: `{ available, source: "workspace"|"server"|"env"|null, model,
+own, canSaveKeys }`. `own` is `{ provider, keyLast4, model, visionModel,
+webModel }` for owners with a key saved, otherwise `null`.
+
+### `PUT /api/workspaces/:workspaceId/ai-config`
+
+Owners. Body `{ provider, apiKey?, model, visionModel?, webModel? }`. `apiKey`
+left out keeps the saved key; a different provider needs a new one. A blank
+vision model uses `model`, a blank web model the vision model. A `baseUrl` is
+refused (400): only the server's admin says where requests go.
+
+### `DELETE /api/workspaces/:workspaceId/ai-config`
+
+Owners. Forgets the key and models: the workspace goes back to the server's AI.
+
 ## `DELETE /api/workspaces/:workspaceId?confirm=<slug>`
 
 Permanently deletes the workspace and everything in it: members, brewers,

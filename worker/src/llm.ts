@@ -4,7 +4,7 @@ import { ANALYSIS_CONFIDENCE, SUGGEST_ALTERNATIVES, type AiRequest, type Alterna
 import { UnrecoverableError } from "bullmq";
 import OpenAI from "openai";
 import { z } from "zod";
-import type { AiClient } from "./ai/client.js";
+import { withoutKey, type AiClient } from "./ai/client.js";
 import type { BrewContext } from "./context.js";
 import type { BeanReviewContext } from "./beanReview.js";
 import { BEAN_REVIEW_SECTIONS, buildSystemPrompt, PROMPT_SECTIONS, promptSections, SUGGEST_SECTIONS, toBeanReviewInput, toLlmInput, toSuggestInput, type PromptCustom } from "./prompt.js";
@@ -163,6 +163,11 @@ export interface AnalysisRun {
   usage: Usage;
 }
 
+function safeError(err: unknown, ai: AiClient): unknown {
+  if (err instanceof Error) err.message = withoutKey(err.message, ai.apiKey);
+  return err;
+}
+
 export async function complete(ai: AiClient, request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming): Promise<{ message: LlmMessage; usage: Usage }> {
   let completion: OpenAI.Chat.Completions.ChatCompletion;
   try {
@@ -170,9 +175,9 @@ export async function complete(ai: AiClient, request: OpenAI.Chat.Completions.Ch
   } catch (err) {
     // Bad key, unknown model, malformed request: retrying won't help.
     if (err instanceof OpenAI.APIError && err.status !== undefined && [400, 401, 403, 404].includes(err.status)) {
-      throw new UnrecoverableError(`OpenAI rejected the request (${err.status}): ${err.message}`);
+      throw new UnrecoverableError(withoutKey(`OpenAI rejected the request (${err.status}): ${err.message}`, ai.apiKey));
     }
-    throw err; // 429 / 5xx / network: let BullMQ retry with backoff
+    throw safeError(err, ai); // 429 / 5xx / network: let BullMQ retry with backoff
   }
   const usage = completion.usage ? { promptTokens: completion.usage.prompt_tokens, completionTokens: completion.usage.completion_tokens } : null;
   return { message: completion.choices[0]?.message, usage };
@@ -192,9 +197,9 @@ export async function respond(ai: AiClient, request: OpenAI.Responses.ResponseCr
     response = await ai.openai.responses.create(request);
   } catch (err) {
     if (err instanceof OpenAI.APIError && err.status !== undefined && [400, 401, 403, 404].includes(err.status)) {
-      throw new UnrecoverableError(`OpenAI rejected the request (${err.status}): ${err.message}`);
+      throw new UnrecoverableError(withoutKey(`OpenAI rejected the request (${err.status}): ${err.message}`, ai.apiKey));
     }
-    throw err;
+    throw safeError(err, ai);
   }
   const visited: string[] = [];
   let refusal: string | null = null;

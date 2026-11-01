@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { BeanReviewJobData, BeanReviewResult } from "@barista/shared/jobs";
 import { beans, brewers, brewLogs, DEFAULT_WORKSPACE_SETTINGS, MAX_REVIEW_BREWS, withDefaults, workspaces, type AiRequest } from "@barista/shared/schema";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
+import { requireAi } from "../aiConfig.js";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
@@ -56,6 +57,7 @@ async function resolveRequest(req: Request<ReviewParams>, res: Response): Promis
     sendError(res, 403, "Writing bean reviews with AI is turned off for this workspace (Settings → AI)");
     return null;
   }
+  if (!(await requireAi(res, workspaceId))) return null;
 
   // Unset, the workspace's list, or every brew when none of it applies.
   let brewerIds = body.brewerIds === undefined ? (settings.beanReviewBrewers === "all" ? null : settings.beanReviewBrewers) : body.brewerIds;

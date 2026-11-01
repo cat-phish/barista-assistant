@@ -1,4 +1,4 @@
-import { connectionSettings, requireSecret } from "@barista/shared/env";
+import { connectionSettings, requireSecret, secretIfSet } from "@barista/shared/env";
 
 // Secrets accept NAME or NAME_FILE (Docker secrets); see shared/src/env.ts.
 const jwtSecret = requireSecret("JWT_SECRET");
@@ -19,6 +19,8 @@ export const config = {
   trustProxy: process.env.TRUST_PROXY ? Number(process.env.TRUST_PROXY) : 0,
   isProduction: process.env.NODE_ENV === "production",
   jwtSecret,
+  // Encrypts AI keys saved in Settings; without it, they can't be saved.
+  aiConfigSecret: secretIfSet("AI_CONFIG_SECRET") ?? null,
 } as const;
 
 // Switches read on each call, so tests can change them.

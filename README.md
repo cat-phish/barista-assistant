@@ -83,6 +83,8 @@ plus:
 
 - `IMAGE_TAG`: `latest` (the default, from `main`), `testing`, `dev`, or a
   fixed build such as `sha-7a093cd`;
+- `AI_CONFIG_SECRET` (optional, at least 32 characters): lets keys be saved
+  in Settings. Generate one with `openssl rand -hex 32`;
 - every `*_DIR` setting, which is required here. Docker creates the folders
   and the app sets their owner when it starts.
 

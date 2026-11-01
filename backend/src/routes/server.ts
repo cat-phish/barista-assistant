@@ -1,18 +1,21 @@
+import { AI_PROVIDERS, DEFAULT_SERVER_AI, lastFour, type AiEnvStatus, type ServerAiConfig } from "@barista/shared/aiConfig";
+import { encryptSecret } from "@barista/shared/secrets";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { eq } from "drizzle-orm";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
+import { aiKey } from "./aiConfig.js";
 import { DB_BACKUP_FILE } from "@barista/shared/jobs";
 import { BACKUP_FREQUENCIES, users, type BackupSettings, type BackupStatus } from "@barista/shared/schema";
 import { verifyPassword } from "../auth/password.js";
-import { backupDir, backupDownloadsEnabled, backupTimezone } from "../config.js";
+import { backupDir, backupDownloadsEnabled, backupTimezone, config } from "../config.js";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { loginLimiter } from "./auth.js";
 import { enqueueBackupNow, nextBackupAt, syncBackupSchedule } from "../queue.js";
-import { getBackupSettings, getBackupStatus, saveBackupSettings } from "../serverSettings.js";
+import { getAiEnvStatus, getServerAi, saveServerAi, getBackupSettings, getBackupStatus, saveBackupSettings } from "../serverSettings.js";
 
 // docs/api/server.md §10: server administration, for server admins (granted
 // on the server: npm run admin -- grant <email>). Mounted at /api/server.
@@ -75,6 +78,68 @@ async function overview(): Promise<ServerBackupsResponse> {
 
 export const serverRouter = Router();
 serverRouter.use(requireAuth, requireAdmin);
+
+// The AI offered to workspaces without their own key (docs/api/server.md §10b).
+// The key is write-only; apiKey left out keeps the one saved.
+const serverAiSchema = z
+  .object({
+    enabled: z.boolean(),
+    provider: z.enum(AI_PROVIDERS),
+    apiKey: aiKey.optional(),
+    baseUrl: z.string().trim().url().max(500).regex(/^https?:\/\//i, "must start with http:// or https://").nullable().optional(),
+    model: z.string().trim().min(1).max(100).nullable().optional(),
+    visionModel: z.string().trim().min(1).max(100).nullable().optional(),
+    webModel: z.string().trim().min(1).max(100).nullable().optional(),
+  })
+  .strict();
+
+export interface ServerAiResponse extends Omit<ServerAiConfig, "apiKeyEncrypted" | "apiKeyLast4"> {
+  keyLast4: string | null;
+  env: AiEnvStatus;
+  canSaveKeys: boolean;
+}
+
+async function serverAiView(): Promise<ServerAiResponse> {
+  const [{ apiKeyEncrypted: _key, apiKeyLast4, ...rest }, env] = await Promise.all([getServerAi(), getAiEnvStatus()]);
+  return { ...rest, keyLast4: apiKeyLast4, env, canSaveKeys: config.aiConfigSecret !== null };
+}
+
+serverRouter.get("/ai", async (_req: Request, res: Response<ServerAiResponse>) => {
+  res.json(await serverAiView());
+});
+
+serverRouter.put("/ai", async (req: Request, res: Response<ServerAiResponse>) => {
+  const body = parseBody(serverAiSchema, req, res);
+  if (!body) return;
+  if (body.apiKey && !config.aiConfigSecret) {
+    sendError(res, 409, "Keys can't be saved until AI_CONFIG_SECRET is set on the server");
+    return;
+  }
+  const saved = await getServerAi();
+  const apiKeyEncrypted = body.apiKey ? encryptSecret(body.apiKey, config.aiConfigSecret!) : saved.apiKeyEncrypted;
+  if (apiKeyEncrypted && !body.model) {
+    sendError(res, 400, "Choose a model");
+    return;
+  }
+  await saveServerAi({
+    enabled: body.enabled,
+    provider: body.provider,
+    apiKeyEncrypted,
+    apiKeyLast4: body.apiKey ? lastFour(body.apiKey) : saved.apiKeyLast4,
+    baseUrl: body.baseUrl ?? null,
+    model: body.model ?? null,
+    visionModel: body.visionModel ?? null,
+    webModel: body.webModel ?? null,
+  });
+  res.json(await serverAiView());
+});
+
+// Forgets the key and models; whether the server's AI is offered stays.
+serverRouter.delete("/ai", async (_req: Request, res: Response<ServerAiResponse>) => {
+  const { enabled } = await getServerAi();
+  await saveServerAi({ ...DEFAULT_SERVER_AI, enabled });
+  res.json(await serverAiView());
+});
 
 serverRouter.get("/backups", async (_req: Request, res: Response<ServerBackupsResponse>) => {
   res.json(await overview());

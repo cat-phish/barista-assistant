@@ -89,6 +89,28 @@ alone isn't enough; rate-limited together with logins).
 
 It holds every account's data, including password hashes.
 
+## The server's AI (§10b)
+
+What workspaces without their own key use (`workspaces.md` §2d), kept in
+`server_settings` under `ai`. The worker tells the backend whether its env has
+a key by writing `ai_env` when it starts: the backend is never given that key.
+
+### `GET /api/server/ai`
+
+`{ enabled, provider, keyLast4, baseUrl, model, visionModel, webModel,
+env: { configured, model }, canSaveKeys }`. The key itself is never sent.
+
+### `PUT /api/server/ai`
+
+Body `{ enabled, provider, apiKey?, baseUrl?, model?, visionModel?, webModel? }`.
+`apiKey` left out keeps the saved key; a key needs a `model`. `enabled: false`
+stops this and the env's AI for every workspace without its own key.
+`baseUrl` points at an OpenAI-compatible server.
+
+### `DELETE /api/server/ai`
+
+Forgets the key and models; `enabled` stays.
+
 ## Restoring a dump
 
 It replaces the whole database. From the app's folder:

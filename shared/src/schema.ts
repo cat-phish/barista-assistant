@@ -1,3 +1,4 @@
+import type { AiProvider } from "./aiConfig.js";
 import {
   mysqlTable,
   varchar,
@@ -1457,6 +1458,21 @@ export const flavorLexicons = mysqlTable("flavor_lexicons", {
     .references(() => workspaces.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 100 }).notNull(),
   flavors: jsonValue<LexiconFlavor[]>("flavors").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+// A workspace's own AI (docs/api/workspaces.md §2d). No row: the server's.
+// Apart from workspaces, whose rows and settings go to members and backups.
+export const workspaceAiConfigs = mysqlTable("workspace_ai_configs", {
+  workspaceId: varchar("workspace_id", { length: 36 })
+    .primaryKey()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  provider: varchar("provider", { length: 20 }).$type<AiProvider>().notNull(),
+  apiKeyEncrypted: text("api_key_encrypted").notNull(),
+  apiKeyLast4: varchar("api_key_last4", { length: 4 }).notNull(),
+  model: varchar("model", { length: 100 }).notNull(),
+  visionModel: varchar("vision_model", { length: 100 }),
+  webModel: varchar("web_model", { length: 100 }),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
 

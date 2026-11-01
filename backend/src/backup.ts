@@ -50,6 +50,7 @@ import {
   brewLogProblems,
   brewLogFlavors,
   flavorLexicons,
+  workspaceAiConfigs,
   brewLogs,
   brewLogTools,
   brewProblems,
@@ -191,7 +192,7 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
 // file's own "workspace" block, as is its flavor lexicon (flavorLexicon).
 // analysis_requests is queue state (when an automatic analysis is due, why
 // one failed), meaningless without the queue.
-export const NOT_BACKED_UP: readonly MySqlTable[] = [users, notificationChannels, workspaces, workspaceMembers, serverSettings, analysisRequests, flavorLexicons];
+export const NOT_BACKED_UP: readonly MySqlTable[] = [users, notificationChannels, workspaces, workspaceMembers, serverSettings, analysisRequests, flavorLexicons, workspaceAiConfigs];
 
 // Columns that only hold one of a list (varchar in the database).
 const ENUMS: Record<string, readonly string[]> = {
