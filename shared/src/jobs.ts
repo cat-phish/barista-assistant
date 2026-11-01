@@ -71,6 +71,7 @@ export interface LabelReadJobData {
   images: string[];
   processes: string[];
   requestedBy: string; // whose AI prompt is used (docs/api/auth.md §1c)
+  workspaceId?: string; // whose AI answers; unset (queued by an older backend) = the server's
   // Set (and images []) for a web lookup instead (llm-contract.md §9c, step
   // 2): what's known of the bean, from a label read or the form; only its
   // website's site is searched when it has one.

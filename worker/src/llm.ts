@@ -4,7 +4,7 @@ import { ANALYSIS_CONFIDENCE, SUGGEST_ALTERNATIVES, type AiRequest, type Alterna
 import { UnrecoverableError } from "bullmq";
 import OpenAI from "openai";
 import { z } from "zod";
-import { config } from "./config.js";
+import type { AiClient } from "./ai/client.js";
 import type { BrewContext } from "./context.js";
 import type { BeanReviewContext } from "./beanReview.js";
 import { BEAN_REVIEW_SECTIONS, buildSystemPrompt, PROMPT_SECTIONS, promptSections, SUGGEST_SECTIONS, toBeanReviewInput, toLlmInput, toSuggestInput, type PromptCustom } from "./prompt.js";
@@ -87,20 +87,19 @@ const analysisSchema = z.object({
 
 export type BrewAnalysis = z.infer<typeof analysisSchema>;
 
-const openai = new OpenAI({ apiKey: config.openaiApiKey });
-
 // The exact request sent to OpenAI (pure, so tests can check it against §9):
 // the compact input, and the prompt sections it needs. `hidden` is what the
 // workspace keeps from the AI (Settings → AI); `custom` what the barista
 // adds to the prompt (docs/api/auth.md §1c).
 export function buildCompletionRequest(
+  model: string,
   context: BrewContext,
   hidden: ReadonlySet<AiDetail> = new Set(),
   custom?: PromptCustom,
 ): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
   const input = toLlmInput(context, hidden);
   return {
-    model: config.openaiModel,
+    model,
     messages: [
       { role: "system", content: buildSystemPrompt(input, PROMPT_SECTIONS, custom) },
       { role: "user", content: JSON.stringify(input) },
@@ -113,16 +112,18 @@ export function buildCompletionRequest(
 }
 
 // What was sent, as saved with the result (docs/api/analysis.md §8c): read
-// back from the request itself, so it can't drift from it.
+// back from the request itself, so it can't drift from it. The model isn't
+// part of it (it's saved beside it, or has no answer yet in a preview).
+const ANY_MODEL = "";
 function sent(request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming, sections: string[]): AiRequest {
   const [system, user] = request.messages;
   return { sections, system: String(system?.content ?? ""), input: JSON.parse(String(user?.content ?? "{}")) as Record<string, unknown> };
 }
 export function analysisSent(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): AiRequest {
-  return sent(buildCompletionRequest(context, hidden, custom), promptSections(toLlmInput(context, hidden), PROMPT_SECTIONS, custom));
+  return sent(buildCompletionRequest(ANY_MODEL, context, hidden, custom), promptSections(toLlmInput(context, hidden), PROMPT_SECTIONS, custom));
 }
 export function suggestionSent(context: SuggestContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): AiRequest {
-  return sent(buildSuggestRequest(context, hidden, custom), promptSections(toSuggestInput(context, hidden), SUGGEST_SECTIONS, custom));
+  return sent(buildSuggestRequest(ANY_MODEL, context, hidden, custom), promptSections(toSuggestInput(context, hidden), SUGGEST_SECTIONS, custom));
 }
 
 export type LlmMessage = { content?: string | null; refusal?: string | null } | undefined;
@@ -151,8 +152,8 @@ export function parseAnalysisMessage(message: LlmMessage): BrewAnalysis {
   return parseMessage(message, analysisSchema);
 }
 
-export async function analyzeWithLlm(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): Promise<BrewAnalysis> {
-  return (await requestAnalysis(context, hidden, custom)).analysis;
+export async function analyzeWithLlm(ai: AiClient, context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): Promise<BrewAnalysis> {
+  return (await requestAnalysis(ai, context, hidden, custom)).analysis;
 }
 
 // The analysis plus what it cost, for the eval script (src/eval.ts).
@@ -162,10 +163,10 @@ export interface AnalysisRun {
   usage: Usage;
 }
 
-export async function complete(request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming): Promise<{ message: LlmMessage; usage: Usage }> {
+export async function complete(ai: AiClient, request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming): Promise<{ message: LlmMessage; usage: Usage }> {
   let completion: OpenAI.Chat.Completions.ChatCompletion;
   try {
-    completion = await openai.chat.completions.create(request);
+    completion = await ai.openai.chat.completions.create(request);
   } catch (err) {
     // Bad key, unknown model, malformed request: retrying won't help.
     if (err instanceof OpenAI.APIError && err.status !== undefined && [400, 401, 403, 404].includes(err.status)) {
@@ -185,10 +186,10 @@ export interface WebReply {
   refusal: string | null;
   visited: string[];
 }
-export async function respond(request: OpenAI.Responses.ResponseCreateParamsNonStreaming): Promise<WebReply> {
+export async function respond(ai: AiClient, request: OpenAI.Responses.ResponseCreateParamsNonStreaming): Promise<WebReply> {
   let response: OpenAI.Responses.Response;
   try {
-    response = await openai.responses.create(request);
+    response = await ai.openai.responses.create(request);
   } catch (err) {
     if (err instanceof OpenAI.APIError && err.status !== undefined && [400, 401, 403, 404].includes(err.status)) {
       throw new UnrecoverableError(`OpenAI rejected the request (${err.status}): ${err.message}`);
@@ -212,8 +213,8 @@ export async function respond(request: OpenAI.Responses.ResponseCreateParamsNonS
   return { text: response.output_text, refusal, visited };
 }
 
-export async function requestAnalysis(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): Promise<AnalysisRun> {
-  const { message, usage } = await complete(buildCompletionRequest(context, hidden, custom));
+export async function requestAnalysis(ai: AiClient, context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): Promise<AnalysisRun> {
+  const { message, usage } = await complete(ai, buildCompletionRequest(ai.models.main, context, hidden, custom));
   return { analysis: onlyWhatApplies(parseAnalysisMessage(message), context, hidden), usage };
 }
 
@@ -296,13 +297,14 @@ const suggestionSchema = z.object({
 export type ParameterSuggestionResult = z.infer<typeof suggestionSchema>;
 
 export function buildSuggestRequest(
+  model: string,
   context: SuggestContext,
   hidden: ReadonlySet<AiDetail> = new Set(),
   custom?: PromptCustom,
 ): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
   const input = toSuggestInput(context, hidden);
   return {
-    model: config.openaiModel,
+    model,
     messages: [
       { role: "system", content: buildSystemPrompt(input, SUGGEST_SECTIONS, custom) },
       { role: "user", content: JSON.stringify(input) },
@@ -362,8 +364,8 @@ export interface SuggestionRun {
   suggestion: SuggestionValues;
   usage: Usage;
 }
-export async function requestSuggestion(context: SuggestContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): Promise<SuggestionRun> {
-  const { message, usage } = await complete(buildSuggestRequest(context, hidden, custom));
+export async function requestSuggestion(ai: AiClient, context: SuggestContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): Promise<SuggestionRun> {
+  const { message, usage } = await complete(ai, buildSuggestRequest(ai.models.main, context, hidden, custom));
   return { suggestion: onlySuggestionsThatApply(parseSuggestionMessage(message), context, hidden), usage };
 }
 
@@ -386,13 +388,14 @@ const beanReviewSchema = z.object({
 export type BeanReviewDraft = z.infer<typeof beanReviewSchema>;
 
 export function buildBeanReviewRequest(
+  model: string,
   context: BeanReviewContext,
   hidden: ReadonlySet<AiDetail> = new Set(),
   custom?: PromptCustom,
 ): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
   const input = toBeanReviewInput(context, hidden);
   return {
-    model: config.openaiModel,
+    model,
     messages: [
       { role: "system", content: buildSystemPrompt(input, BEAN_REVIEW_SECTIONS, custom) },
       { role: "user", content: JSON.stringify(input) },
@@ -404,12 +407,12 @@ export function buildBeanReviewRequest(
   };
 }
 export function beanReviewSent(context: BeanReviewContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): AiRequest {
-  return sent(buildBeanReviewRequest(context, hidden, custom), promptSections(toBeanReviewInput(context, hidden), BEAN_REVIEW_SECTIONS, custom));
+  return sent(buildBeanReviewRequest(ANY_MODEL, context, hidden, custom), promptSections(toBeanReviewInput(context, hidden), BEAN_REVIEW_SECTIONS, custom));
 }
 export function parseBeanReviewMessage(message: LlmMessage): BeanReviewDraft {
   return parseMessage(message, beanReviewSchema);
 }
-export async function requestBeanReview(context: BeanReviewContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): Promise<BeanReviewDraft> {
-  const { message } = await complete(buildBeanReviewRequest(context, hidden, custom));
+export async function requestBeanReview(ai: AiClient, context: BeanReviewContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): Promise<BeanReviewDraft> {
+  const { message } = await complete(ai, buildBeanReviewRequest(ai.models.main, context, hidden, custom));
   return parseBeanReviewMessage(message);
 }

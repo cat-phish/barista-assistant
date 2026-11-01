@@ -7,7 +7,7 @@ import { and, count, eq, gte } from "drizzle-orm";
 import { loadBeanReviewContext } from "./beanReview.js";
 import { loadBrewContext } from "./context.js";
 import { db } from "./db.js";
-import { config } from "./config.js";
+import { resolveAi } from "./ai/resolve.js";
 import { analysisSent, analyzeWithLlm, beanReviewSent, PROMPT_VERSION, requestBeanReview, requestSuggestion, suggestionSent } from "./llm.js";
 import type { PromptCustom } from "./prompt.js";
 import { loadSuggestContext } from "./suggestContext.js";
@@ -102,11 +102,12 @@ export async function processBrewAnalysis({ brewLogId, auto = false, note }: Bre
   }
 
   const custom = await promptFor(ws?.baristaId ?? null, note);
-  const analysis = await analyzeWithLlm(context, hidden, custom);
+  const ai = await resolveAi(ws?.workspaceId);
+  const analysis = await analyzeWithLlm(ai, context, hidden, custom);
 
   const analysisId = randomUUID();
   try {
-    await db.insert(llmAnalyses).values({ id: analysisId, brewLogId, ...analysis, auto, model: config.openaiModel, promptVersion: versionFor(custom), request: analysisSent(context, hidden, custom) });
+    await db.insert(llmAnalyses).values({ id: analysisId, brewLogId, ...analysis, auto, model: ai.models.main, promptVersion: versionFor(custom), request: analysisSent(context, hidden, custom) });
   } catch (err) {
     // The log may have been deleted while the LLM call was running (FK violation).
     if ((await loadBrewContext(brewLogId)) === null) {
@@ -122,7 +123,7 @@ export async function processBrewAnalysis({ brewLogId, auto = false, note }: Bre
 // what for; the result goes back into it. Throwing makes BullMQ retry.
 export async function processParameterSuggestion({ suggestionId }: ParameterSuggestionJobData): Promise<JobResult> {
   const [row] = await db
-    .select({ suggestion: parameterSuggestions, settings: workspaces.settings })
+    .select({ suggestion: parameterSuggestions, workspaceId: workspaces.id, settings: workspaces.settings })
     .from(parameterSuggestions)
     .innerJoin(beans, eq(parameterSuggestions.beanId, beans.id))
     .innerJoin(workspaces, eq(beans.workspaceId, workspaces.id))
@@ -135,14 +136,15 @@ export async function processParameterSuggestion({ suggestionId }: ParameterSugg
   if (!context) return { status: "skipped", reason: "bean no longer exists" };
 
   const custom = await promptFor(row.suggestion.requestedBy, row.suggestion.note);
-  const { suggestion } = await requestSuggestion(context, hidden, custom);
+  const ai = await resolveAi(row.workspaceId);
+  const { suggestion } = await requestSuggestion(ai, context, hidden, custom);
   await db
     .update(parameterSuggestions)
     .set({
       ...suggestion,
       status: "done",
       brewCount: context.brews.length,
-      model: config.openaiModel,
+      model: ai.models.main,
       promptVersion: versionFor(custom),
       request: suggestionSent(context, hidden, custom),
       completedAt: new Date(),
@@ -151,20 +153,21 @@ export async function processParameterSuggestion({ suggestionId }: ParameterSugg
   return { status: "saved", id: suggestionId };
 }
 
-// What the bean's workspace keeps from the AI; null when the bean is gone.
-async function hiddenFor(beanId: string): Promise<Set<AiDetail> | null> {
-  const [row] = await db.select({ settings: workspaces.settings }).from(beans).innerJoin(workspaces, eq(beans.workspaceId, workspaces.id)).where(eq(beans.id, beanId));
-  return row ? new Set(withDefaults(DEFAULT_WORKSPACE_SETTINGS, row.settings ?? null).aiHidden) : null;
+// The bean's workspace and what it keeps from the AI; null when the bean is gone.
+async function beanWorkspace(beanId: string): Promise<{ workspaceId: string; hidden: Set<AiDetail> } | null> {
+  const [row] = await db.select({ workspaceId: workspaces.id, settings: workspaces.settings }).from(beans).innerJoin(workspaces, eq(beans.workspaceId, workspaces.id)).where(eq(beans.id, beanId));
+  return row ? { workspaceId: row.workspaceId, hidden: new Set(withDefaults(DEFAULT_WORKSPACE_SETTINGS, row.settings ?? null).aiHidden) } : null;
 }
+const hiddenFor = async (beanId: string): Promise<Set<AiDetail> | null> => (await beanWorkspace(beanId))?.hidden ?? null;
 
 // A draft of a bean's Review (docs/api/analysis.md §8e): the answer goes back
 // to the waiting request, nothing is stored. null: the bean is gone or no
 // brews match. Not retried (the person tries again).
 export async function processBeanReview(data: BeanReviewJobData): Promise<BeanReviewResult | null> {
-  const hidden = await hiddenFor(data.beanId);
-  const context = hidden && (await loadBeanReviewContext(data));
+  const ws = await beanWorkspace(data.beanId);
+  const context = ws && (await loadBeanReviewContext(data));
   if (!context) return null;
-  const draft = await requestBeanReview(context, hidden!, await promptFor(data.requestedBy, data.note));
+  const draft = await requestBeanReview(await resolveAi(ws!.workspaceId), context, ws!.hidden, await promptFor(data.requestedBy, data.note));
   return { ...draft, brewCount: context.brews.length };
 }
 

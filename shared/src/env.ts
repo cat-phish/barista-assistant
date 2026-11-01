@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 // Environment/secret loading shared by backend and worker.
 //
@@ -41,6 +41,14 @@ export function requireSecret(name: string): string {
     throw new Error(`${name} (or ${name}_FILE) is not set`);
   }
   return value;
+}
+
+// A secret the app can run without. Compose leaves a secret's file out when
+// its variable is empty, so a missing or empty file means not set here.
+export function secretIfSet(name: string): string | undefined {
+  const file = process.env[`${name}_FILE`];
+  if (file && !process.env[name] && !(existsSync(file) && readFileSync(file, "utf8").trim())) return undefined;
+  return optionalSecret(name);
 }
 
 export interface ConnectionSettings {

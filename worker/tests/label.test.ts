@@ -30,7 +30,7 @@ const EMPTY: LabelFields = {
 
 describe("reading a bean label (docs/api/llm-contract.md §9c)", () => {
   it("sends each photo as an image, with the processes to choose from", () => {
-    const request = buildLabelRequest({ images: ["AAA", "BBB"], processes: PROCESSES, requestedBy: "u" });
+    const request = buildLabelRequest("test-model", { images: ["AAA", "BBB"], processes: PROCESSES, requestedBy: "u" });
     expect(request.messages[0]!.content).toBe(`${PROMPT_TEXT.labelCore} ${PROMPT_TEXT.end}`);
     expect(request.model).toBe("test-model"); // OPENAI_VISION_MODEL unset: OPENAI_MODEL
     const user = request.messages[1] as { content: Array<{ type: string; text?: string; image_url?: { url: string } }> };

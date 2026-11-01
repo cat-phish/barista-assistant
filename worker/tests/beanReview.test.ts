@@ -77,7 +77,7 @@ describe("a bean review's brews", () => {
     llm.mockResolvedValue({ review: "Juicy.", suggestedRating: 4 });
     await db.update(workspaces).set({ settings: { aiHidden: ["origin"] } }).where(eq(workspaces.id, workspaceId));
     expect(await processBeanReview(job())).toEqual({ review: "Juicy.", suggestedRating: 4, brewCount: 3 });
-    expect(llm.mock.calls[0]![1]).toEqual(new Set(["origin"]));
+    expect(llm.mock.calls[0]![2]).toEqual(new Set(["origin"]));
   });
   it("previews the same request, with the note, without asking the AI", async () => {
     const preview = await processAiPreview({ kind: "beanReview", review: job({ note: "Mostly with milk." }) });

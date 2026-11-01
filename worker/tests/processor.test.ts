@@ -59,7 +59,7 @@ describe("processBrewAnalysis", () => {
     const result = await processBrewAnalysis({ brewLogId: logIds.day8! });
 
     expect(result.status).toBe("saved");
-    const context = llm.mock.calls[0]![0] as BrewContext;
+    const context = llm.mock.calls[0]![1] as BrewContext;
     expect(context.brew).toMatchObject({ tastingNotes: "day 8", roastAgeDays: 7, daysFrozenBeforeBrew: 0, brewRatio: 16.67, recipeName: "House V60", recipeStyle: { name: "Pour over", brewsLike: "pour_over" }, methodKind: "filter", actualWaterGrams: 250, actualYieldGrams: 221.5, tdsPercent: 1.38, extractionYieldPercent: 20.4 });
     // No yield measured and no recipe: the TDS goes through, extraction can't be worked out.
     expect(await brewOf("day7")).toMatchObject({ recipeName: null, methodKind: null, tdsPercent: 1.3, extractionYieldPercent: null });
@@ -108,7 +108,7 @@ describe("processBrewAnalysis", () => {
     const prompt = { instructions: "I like it light.", overrides: { core: "Be brief." } };
     await db.update(users).set({ aiPrompt: prompt }).where(eq(users.id, userId));
     await processBrewAnalysis({ brewLogId: logIds.day8!, note: "Tasted it cold." });
-    expect(llm.mock.calls[0]![2]).toEqual({ prompt, note: "Tasted it cold." });
+    expect(llm.mock.calls[0]![3]).toEqual({ prompt, note: "Tasted it cold." });
     const [saved] = await db.select().from(llmAnalyses).where(eq(llmAnalyses.brewLogId, logIds.day8!));
     expect(saved!.promptVersion).toBe(`${PROMPT_VERSION}+custom`);
     expect(saved!.request?.sections).toEqual(expect.arrayContaining(["instructions", "note"]));
@@ -120,7 +120,7 @@ describe("processBrewAnalysis", () => {
   it("without a prompt of their own or a note: the defaults, and the plain version", async () => {
     llm.mockResolvedValue(ANALYSIS);
     await processBrewAnalysis({ brewLogId: logIds.day8! });
-    expect(llm.mock.calls[0]![2]).toEqual({ prompt: { instructions: null, labelInstructions: null, overrides: {} }, note: null });
+    expect(llm.mock.calls[0]![3]).toEqual({ prompt: { instructions: null, labelInstructions: null, overrides: {} }, note: null });
     const [saved] = await db.select().from(llmAnalyses).where(eq(llmAnalyses.brewLogId, logIds.day8!));
     expect(saved!.promptVersion).toBe(PROMPT_VERSION);
   });
@@ -147,7 +147,7 @@ describe("processBrewAnalysis", () => {
     ]);
 
     await processBrewAnalysis({ brewLogId: id });
-    const context = llm.mock.calls[0]![0] as BrewContext;
+    const context = llm.mock.calls[0]![1] as BrewContext;
     expect(context.brew).toMatchObject({ methodKind: "espresso", actualWaterGrams: null, actualYieldGrams: 40, brewRatio: 2.22, tdsPercent: 9.5, extractionYieldPercent: 21.1 });
     expect(context.brew.machine).toEqual({ name: "Linea Mini", preinfusion: "manual", flowControl: "manual", pressureControl: "none" });
     expect(context.drink).toBeNull();
@@ -161,7 +161,7 @@ describe("processBrewAnalysis", () => {
     await db.update(recipes).set({ stepTimeScaling: 0.5 }).where(eq(recipes.workspaceId, workspaceId));
     await db.update(brewLogs).set({ actualDoseGrams: 30, actualWaterGrams: 500 }).where(eq(brewLogs.id, logIds.day8!));
     await processBrewAnalysis({ brewLogId: logIds.day8! });
-    const context = llm.mock.calls[0]![0] as BrewContext;
+    const context = llm.mock.calls[0]![1] as BrewContext;
     // A double batch: the pour takes 90 × √2 ≈ 127 s, the unticked bloom and swirl stay; the window moves by the 37 s gained.
     expect(context.recipe).toMatchObject({
       stepTimeScaling: 0.5, targetWaterGrams: 250, expectedFinishMinSec: 202, expectedFinishMaxSec: 232,
@@ -185,7 +185,7 @@ describe("processBrewAnalysis", () => {
     ]);
     await db.update(brewLogs).set({ drinkId }).where(eq(brewLogs.id, logIds.day8!));
     await processBrewAnalysis({ brewLogId: logIds.day8! });
-    const context = llm.mock.calls[0]![0] as BrewContext;
+    const context = llm.mock.calls[0]![1] as BrewContext;
     expect(context.drink).toEqual({
       name: "Vanilla Oat Latte",
       servingSize: null,
@@ -205,7 +205,7 @@ describe("processBrewAnalysis", () => {
     await db.insert(drinkIngredients).values({ id: randomUUID(), drinkId, ingredientId: syrup, position: 1, amountValue: 2, amountUnit: "pump" });
     await db.update(brewLogs).set({ drinkId, servingSize: 12, servingUnit: "fl_oz" }).where(eq(brewLogs.id, logIds.day8!));
     await processBrewAnalysis({ brewLogId: logIds.day8! });
-    const context = llm.mock.calls[0]![0] as BrewContext;
+    const context = llm.mock.calls[0]![1] as BrewContext;
     expect(context.drink).toEqual({
       name: "Vanilla Latte",
       servingSize: "12 fl oz",
@@ -230,7 +230,7 @@ describe("processBrewAnalysis", () => {
     await db.update(brewLogs).set({ drinkId, rating: null, tastingNotes: null, drinkRating: 5, drinkTastingNotes: "sweet, caramel" }).where(eq(brewLogs.id, logIds.day8!));
     await db.update(brewLogs).set({ drinkId, drinkRating: 4, drinkTastingNotes: "milky" }).where(eq(brewLogs.id, logIds.day6!));
     await processBrewAnalysis({ brewLogId: logIds.day8! });
-    const context = llm.mock.calls[0]![0] as BrewContext;
+    const context = llm.mock.calls[0]![1] as BrewContext;
     expect(context.brew).toMatchObject({
       drink: { name: "Vanilla Latte", ingredientTypes: ["milk", "syrup"] },
       rating: null,
@@ -247,7 +247,7 @@ describe("processBrewAnalysis", () => {
     // Roasted Oct 1; frozen Oct 4 -> Oct 6 (2 days). Brews on days 2..9.
     await db.insert(beanFreezes).values({ id: randomUUID(), beanId, frozenOn: "2026-10-04", thawedOn: "2026-10-06" });
     await processBrewAnalysis({ brewLogId: logIds.day8! });
-    const context = llm.mock.calls[0]![0] as BrewContext;
+    const context = llm.mock.calls[0]![1] as BrewContext;
     expect(context.brew).toMatchObject({ roastAgeDays: 5, daysFrozenBeforeBrew: 2 }); // Oct 8: 7 days - 2 frozen
     expect(await brewOf("day3")).toMatchObject({ roastAgeDays: 2, daysFrozenBeforeBrew: 0 }); // before the freeze
     expect(await brewOf("day5")).toMatchObject({ roastAgeDays: 3, daysFrozenBeforeBrew: 1 }); // mid-freeze: age paused at 3
@@ -268,7 +268,7 @@ describe("processBrewAnalysis", () => {
       actualDoseGrams: 15, actualWaterGrams: 150, actualTimeSec: 240,
     });
     await processBrewAnalysis({ brewLogId: id });
-    const context = llm.mock.calls[0]![0] as BrewContext;
+    const context = llm.mock.calls[0]![1] as BrewContext;
     expect(context.brew).toMatchObject({ methodKind: "stovetop", recipeStyle: { name: "Moka", brewsLike: "moka" } });
   });
 
@@ -277,7 +277,7 @@ describe("processBrewAnalysis", () => {
     await db.update(recipes).set({ targetWaterGrams: 150, targetIceGrams: 100 }).where(eq(recipes.workspaceId, workspaceId));
     await db.update(brewLogs).set({ actualWaterGrams: 150, actualIceGrams: 100, actualYieldGrams: 228, tdsPercent: null }).where(eq(brewLogs.id, logIds.day8!));
     await processBrewAnalysis({ brewLogId: logIds.day8! });
-    const context = llm.mock.calls[0]![0] as BrewContext;
+    const context = llm.mock.calls[0]![1] as BrewContext;
     expect(context.brew).toMatchObject({ actualWaterGrams: 150, actualIceGrams: 100, actualYieldGrams: 228, brewRatio: 16.67, extractionYieldPercent: null });
     expect(context.recipe).toMatchObject({ targetWaterGrams: 150, targetIceGrams: 100 });
   });
@@ -291,7 +291,7 @@ describe("processBrewAnalysis", () => {
       actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150,
     });
     await processBrewAnalysis({ brewLogId: id });
-    const context = llm.mock.calls[0]![0] as BrewContext;
+    const context = llm.mock.calls[0]![1] as BrewContext;
     expect(context.brew.roastAgeDays).toBe(7); // Oct 1 -> Oct 8 (UTC would say 8)
   });
 
@@ -304,7 +304,7 @@ describe("processBrewAnalysis", () => {
     const recipeId = (await db.select({ id: recipes.id }).from(recipes))[0]!.id;
     await db.insert(recipeGrindSettings).values({ id: randomUUID(), recipeId, grinderId: c40, setting: 21 });
     await processBrewAnalysis({ brewLogId: logIds.day8! });
-    const context = llm.mock.calls[0]![0] as BrewContext;
+    const context = llm.mock.calls[0]![1] as BrewContext;
     expect(context.brew).toMatchObject({ actualGrindSetting: 20, machine: null });
     expect(context.brew.grinder).toEqual({
       name: "Comandante C40", adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, burrType: null, burrSizeMm: null, power: null,
@@ -323,7 +323,7 @@ describe("processBrewAnalysis", () => {
     await db.update(brewLogs).set({ grinderId: ek, grindRpm: 900 }).where(eq(brewLogs.id, logIds.day8!));
     await db.update(brewLogs).set({ grinderId: ek, grindRpm: 1200 }).where(eq(brewLogs.id, logIds.day6!));
     await processBrewAnalysis({ brewLogId: logIds.day8! });
-    const context = llm.mock.calls[0]![0] as BrewContext;
+    const context = llm.mock.calls[0]![1] as BrewContext;
     expect(context.brew.grinder).toMatchObject({ name: "EK43", variableSpeed: true, rpmMin: 300, rpmMax: 1500 });
     expect(context.brew.grindRpm).toBe(900);
     expect((await brewOf("day6")).grindRpm).toBe(1200);
@@ -333,7 +333,7 @@ describe("processBrewAnalysis", () => {
     llm.mockResolvedValue(ANALYSIS);
     await db.update(brewLogs).set({ beanWeightInGrams: 18.2, groundWeightOutGrams: 17.9 }).where(eq(brewLogs.id, logIds.day8!));
     await processBrewAnalysis({ brewLogId: logIds.day8! });
-    const context = llm.mock.calls[0]![0] as BrewContext;
+    const context = llm.mock.calls[0]![1] as BrewContext;
     expect(context.brew).toMatchObject({ beanWeightInGrams: 18.2, groundWeightOutGrams: 17.9, grinderRetentionGrams: 0.3 });
     expect((await brewOf("day7")).grinderRetentionGrams).toBeNull(); // not weighed
   });
@@ -343,7 +343,7 @@ describe("processBrewAnalysis", () => {
     await db.update(brewLogs).set({ steeping: true }).where(eq(brewLogs.id, logIds.day7!));
     await db.update(brewLogs).set({ steepTemp: "fridge", dilutionRatio: 1, dilutedWith: "milk", steepMinHours: 14, steepMaxHours: 20 }).where(eq(brewLogs.id, logIds.day8!));
     await processBrewAnalysis({ brewLogId: logIds.day8! });
-    const context = llm.mock.calls[0]![0] as BrewContext;
+    const context = llm.mock.calls[0]![1] as BrewContext;
     expect(context.brew).toMatchObject({ steeping: false, steepTemp: "fridge", dilutionRatio: 1, dilutedWith: "milk", steepMinHours: 14, steepMaxHours: 20, expectedFinishMinSec: null });
     expect(context.recipe).toMatchObject({ steepMinHours: null, dilutionRatio: null });
 
@@ -358,7 +358,7 @@ describe("processBrewAnalysis", () => {
     await db.insert(waterProfiles).values({ id: tww, workspaceId, name: "Third Wave Water", generalHardnessPpm: 102, alkalinityPpm: 0, calciumPpm: 30, archivedAt: new Date() });
     await db.update(brewLogs).set({ waterProfileId: tww }).where(eq(brewLogs.id, logIds.day8!));
     await processBrewAnalysis({ brewLogId: logIds.day8! });
-    const context = llm.mock.calls[0]![0] as BrewContext;
+    const context = llm.mock.calls[0]![1] as BrewContext;
     expect(context.brew.water).toEqual({
       name: "Third Wave Water", tdsPpm: null, generalHardnessPpm: 102, alkalinityPpm: 0, calciumPpm: 30, magnesiumPpm: null,
       sodiumPpm: null, potassiumPpm: null, bicarbonatePpm: null, chloridePpm: null, sulfatePpm: null, ph: null,
@@ -378,7 +378,7 @@ describe("processBrewAnalysis", () => {
       { brewLogId: logIds.day8!, toolId: wdt },
     ]);
     await processBrewAnalysis({ brewLogId: logIds.day8! });
-    const context = llm.mock.calls[0]![0] as BrewContext;
+    const context = llm.mock.calls[0]![1] as BrewContext;
     expect(context.brew.prepTools).toEqual(["WDT", "RDT"]);
     expect((await brewOf("day7")).prepTools).toEqual([]);
   });
@@ -396,7 +396,7 @@ describe("processBrewAnalysis", () => {
       { brewLogId: logIds.day7!, problemId: tared },
     ]);
     await processBrewAnalysis({ brewLogId: logIds.day8! });
-    const context = llm.mock.calls[0]![0] as BrewContext;
+    const context = llm.mock.calls[0]![1] as BrewContext;
     expect(context.brew.problems).toEqual(["Slow drawdown", "Scale not tared"]);
     expect((await brewOf("day7")).problems).toEqual(["Scale not tared"]);
     expect((await brewOf("day6")).problems).toEqual([]);
@@ -410,7 +410,7 @@ describe("processBrewAnalysis", () => {
       { brewLogId: logIds.day8!, flavorKey: "sweet", label: "Sweet" },
     ]);
     await processBrewAnalysis({ brewLogId: logIds.day8! });
-    const context = llm.mock.calls[0]![0] as BrewContext;
+    const context = llm.mock.calls[0]![1] as BrewContext;
     expect(context.brew.flavors).toEqual(["Lemon (Fruity › Citrus)", "Sweet", "Papery (Off flavors › Stale)"]);
     expect((await brewOf("day7")).flavors).toEqual([]);
   });
@@ -433,19 +433,19 @@ describe("processBrewAnalysis", () => {
       { brewLogId: logIds.day8!, flavorKey: "old.wheel.nib", label: "Nib", place: "Deep › Cacao" },
     ]);
     await processBrewAnalysis({ brewLogId: logIds.day8! });
-    const context = llm.mock.calls[0]![0] as BrewContext;
+    const context = llm.mock.calls[0]![1] as BrewContext;
     expect(context.brew.flavors).toEqual(["Zesty (Bright)", "Fruit", "Papery (Off flavors › Stale)", "Nib (Deep › Cacao)"]);
   });
 
   it("passes on what the workspace keeps from the AI (Settings → AI)", async () => {
     llm.mockResolvedValue(ANALYSIS);
     await processBrewAnalysis({ brewLogId: logIds.day8! });
-    expect(llm.mock.calls[0]![1]).toEqual(new Set());
+    expect(llm.mock.calls[0]![2]).toEqual(new Set());
 
     llm.mockClear();
     await db.update(workspaces).set({ settings: { aiHidden: ["water", "origin"] } }).where(eq(workspaces.id, workspaceId));
     await processBrewAnalysis({ brewLogId: logIds.day8! });
-    expect(llm.mock.calls[0]![1]).toEqual(new Set(["water", "origin"]));
+    expect(llm.mock.calls[0]![2]).toEqual(new Set(["water", "origin"]));
   });
 
   it("skips an unrated brew when the workspace only analyzes rated ones", async () => {
