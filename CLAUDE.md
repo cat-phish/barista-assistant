@@ -93,3 +93,8 @@
     asterisk after its label (`<span class="req" aria-hidden="true">*</span>`,
     with `aria-required` on the field). An optional field carries no note:
     no "(optional)" tag and no "Optional" in its hint.
+11. **Tests before pushing `testing`:** `testing` is what the test server
+    pulls, so run `npm test` at the repo root on the `dev` commit first, and
+    push `testing` only once every suite passes. Nothing checks this
+    automatically (the workflows only publish images). If a suite fails, fix
+    it on a branch off `dev` rather than pushing anyway.
