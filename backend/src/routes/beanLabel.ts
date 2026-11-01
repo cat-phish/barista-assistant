@@ -129,7 +129,7 @@ beanLabelRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<La
     images.push(photo.data.toString("base64"));
   }
   try {
-    res.json(await readBeanLabel({ images, processes: context.processes, requestedBy: authedUserId(req) }));
+    res.json(await readBeanLabel({ images, processes: context.processes, requestedBy: authedUserId(req), workspaceId: req.params.workspaceId }));
   } catch (err) {
     sendJobError(res, err, "label");
   }
@@ -148,6 +148,7 @@ beanLabelRouter.post("/web", async (req: Request<WorkspaceParams>, res: Response
       images: [],
       processes: context.processes,
       requestedBy: authedUserId(req),
+      workspaceId: req.params.workspaceId,
       lookUp,
       webContext: context.settings.labelWebContext,
     });

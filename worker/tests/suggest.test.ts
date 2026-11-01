@@ -224,10 +224,10 @@ describe("processParameterSuggestion", () => {
     llm.mockResolvedValue({ suggestion: RESULT, usage: null });
     const suggestionId = await pending();
     expect(await processParameterSuggestion({ suggestionId })).toEqual({ status: "saved", id: suggestionId });
-    expect(llm.mock.calls[0]![0].brews.map((b) => b.tastingNotes)).toEqual(["day5", "day1"]);
+    expect(llm.mock.calls[0]![1].brews.map((b) => b.tastingNotes)).toEqual(["day5", "day1"]);
     expect(await row(suggestionId)).toMatchObject({ ...RESULT, status: "done", brewCount: 2, model: "test-model", error: null, completedAt: expect.any(Date) });
     // What was sent, saved with it (docs/api/analysis.md §8c).
-    expect((await row(suggestionId))!.request).toEqual(suggestionSent(llm.mock.calls[0]![0], new Set()));
+    expect((await row(suggestionId))!.request).toEqual(suggestionSent(llm.mock.calls[0]![1], new Set()));
     expect((await row(suggestionId))!.request?.sections).toContain("suggestCore");
   });
 
@@ -237,7 +237,7 @@ describe("processParameterSuggestion", () => {
     await db.update(users).set({ aiPrompt: prompt }).where(eq(users.id, userId));
     const suggestionId = await pending({ requestedBy: userId, note: "For iced coffee" });
     await processParameterSuggestion({ suggestionId });
-    expect(llm.mock.calls[0]![2]).toEqual({ prompt, note: "For iced coffee" });
+    expect(llm.mock.calls[0]![3]).toEqual({ prompt, note: "For iced coffee" });
     expect((await row(suggestionId))!.promptVersion).toMatch(/\+custom$/);
     expect((await row(suggestionId))!.request?.system).toContain("Our guests like it strong.");
   });
@@ -247,8 +247,8 @@ describe("processParameterSuggestion", () => {
     await db.update(workspaces).set({ settings: { aiHidden: ["unratedHistory", "water"] } }).where(eq(workspaces.id, workspaceId));
     await db.update(brewLogs).set({ rating: null }).where(eq(brewLogs.id, log.day5!));
     await processParameterSuggestion({ suggestionId: await pending() });
-    expect(llm.mock.calls[0]![0].brews.map((b) => b.tastingNotes)).toEqual(["day1"]);
-    expect(llm.mock.calls[0]![1]).toEqual(new Set(["unratedHistory", "water"]));
+    expect(llm.mock.calls[0]![1].brews.map((b) => b.tastingNotes)).toEqual(["day1"]);
+    expect(llm.mock.calls[0]![2]).toEqual(new Set(["unratedHistory", "water"]));
   });
 
   it("skips one that's gone or already settled, and records why one failed", async () => {

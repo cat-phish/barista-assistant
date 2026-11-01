@@ -9,7 +9,7 @@ import { BLEND_TYPES, COFFEE_SPECIES, DETAILED_ROAST_LEVELS, ROAST_LEVELS, ROAST
 import { UnrecoverableError } from "bullmq";
 import type OpenAI from "openai";
 import { z } from "zod";
-import { config } from "./config.js";
+import { resolveAi } from "./ai/resolve.js";
 import { complete, parseMessage, type LlmMessage } from "./llm.js";
 import { lookUpBean } from "./labelWeb.js";
 import { promptFor } from "./processor.js";
@@ -53,10 +53,10 @@ export function labelSystemPrompt(prompt: AiPrompt = EMPTY_AI_PROMPT): string {
   return parts.join(" ");
 }
 
-export function buildLabelRequest(data: LabelReadJobData, prompt: AiPrompt = EMPTY_AI_PROMPT): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
+export function buildLabelRequest(model: string, data: LabelReadJobData, prompt: AiPrompt = EMPTY_AI_PROMPT): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
   const processes = data.processes.length ? data.processes.join(", ") : "none";
   return {
-    model: config.openaiVisionModel,
+    model,
     messages: [
       { role: "system", content: labelSystemPrompt(prompt) },
       {
@@ -178,11 +178,12 @@ export function parseLabelMessage(message: LlmMessage, processes: readonly strin
 // one that didn't manage it this time.
 export async function readLabel(data: LabelReadJobData): Promise<LabelReadResult> {
   const { prompt } = await promptFor(data.requestedBy, null);
+  const ai = await resolveAi(data.workspaceId);
   if (data.lookUp) {
     const fields = data.lookUp;
     const started = Date.now();
     try {
-      return { fields, ...(await lookUpBean(fields, data, prompt)), webError: null };
+      return { fields, ...(await lookUpBean(ai, fields, data, prompt)), webError: null };
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       console.error(`Web lookup failed after ${Math.round((Date.now() - started) / 1000)} s:`, reason);
@@ -193,6 +194,6 @@ export async function readLabel(data: LabelReadJobData): Promise<LabelReadResult
       return { fields, web: null, webSources: [], webError };
     }
   }
-  const { message } = await complete(buildLabelRequest(data, prompt));
+  const { message } = await complete(ai, buildLabelRequest(ai.models.vision, data, prompt));
   return { fields: parseLabelMessage(message, data.processes), web: null, webSources: [], webError: null };
 }

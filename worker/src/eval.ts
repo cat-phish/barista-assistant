@@ -105,12 +105,13 @@ interface EvalJob {
 async function analysisJobs(brews: Picked[]): Promise<Array<EvalJob | null>> {
   const { loadBrewContext } = await import("./context.js");
   const { requestAnalysis } = await import("./llm.js");
+  const { resolveAi } = await import("./ai/resolve.js");
   const { toLlmInput } = await import("./prompt.js");
   return Promise.all(
     brews.map(async (b) => {
       const context = await loadBrewContext(b.brewLogId);
       // What's actually sent: the compact input (prompt.ts), not the full context.
-      return context ? { input: toLlmInput(context), send: async () => { const r = await requestAnalysis(context); return { output: r.analysis, usage: r.usage }; } } : null;
+      return context ? { input: toLlmInput(context), send: async () => { const r = await requestAnalysis(await resolveAi(), context); return { output: r.analysis, usage: r.usage }; } } : null;
     }),
   );
 }
@@ -121,6 +122,7 @@ async function suggestJobs(brews: Picked[], source: string): Promise<Array<EvalJ
   const { eq } = await import("drizzle-orm");
   const { loadSuggestContext } = await import("./suggestContext.js");
   const { requestSuggestion } = await import("./llm.js");
+  const { resolveAi } = await import("./ai/resolve.js");
   const { toSuggestInput } = await import("./prompt.js");
   const picked = SUGGEST_SOURCES.find((s) => s === source);
   if (!picked) throw new Error(`--suggest takes one of ${SUGGEST_SOURCES.join(", ")}`);
@@ -144,7 +146,7 @@ async function suggestJobs(brews: Picked[], source: string): Promise<Array<EvalJ
         alternativesAsked: [], // the values only
       };
       const context = await loadSuggestContext(request, { before: brew.timestamp });
-      return context ? { input: toSuggestInput(context), send: async () => { const r = await requestSuggestion(context); return { output: r.suggestion, usage: r.usage }; } } : null;
+      return context ? { input: toSuggestInput(context), send: async () => { const r = await requestSuggestion(await resolveAi(), context); return { output: r.suggestion, usage: r.usage }; } } : null;
     }),
   );
 }
@@ -163,7 +165,7 @@ async function run(label: string, yes: boolean, suggest: string | null): Promise
     rl.close();
     if (!/^y/i.test(answer)) return;
   }
-  const out: RunResult = { label, promptVersion: PROMPT_VERSION, model: config.openaiModel, at: new Date().toISOString(), results: [] };
+  const out: RunResult = { label, promptVersion: PROMPT_VERSION, model: config.openaiModel ?? "", at: new Date().toISOString(), results: [] };
   for (const [i, b] of brews.entries()) {
     const job = jobs[i];
     if (!job) {

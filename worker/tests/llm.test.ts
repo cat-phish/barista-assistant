@@ -209,7 +209,7 @@ describe("what the AI is sent (docs/api/llm-contract.md §9)", () => {
 
   it("sends the compact input with its prompt, under the strict schema", () => {
     const ctx = context();
-    const req = buildCompletionRequest(ctx);
+    const req = buildCompletionRequest("test-model", ctx);
     expect(req.model).toBe("test-model"); // from OPENAI_MODEL
     expect(req.messages[0]).toEqual({ role: "system", content: buildSystemPrompt(toLlmInput(ctx)) });
     expect(JSON.parse(String(req.messages[1]?.content))).toEqual(toLlmInput(ctx));
@@ -396,7 +396,7 @@ describe("what Suggest parameters sends (docs/api/llm-contract.md §9b)", () => 
 
   it("sends it under its own strict schema", () => {
     const ctx = suggestContext();
-    const req = buildSuggestRequest(ctx);
+    const req = buildSuggestRequest("test-model", ctx);
     expect(req.messages[0]).toEqual({ role: "system", content: buildSystemPrompt(toSuggestInput(ctx), SUGGEST_SECTIONS) });
     expect(JSON.parse(String(req.messages[1]?.content))).toEqual(toSuggestInput(ctx));
     expect(req.response_format).toMatchObject({

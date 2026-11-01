@@ -17,8 +17,10 @@
   `analysisError`, §6).
 
 **Configuration (worker env):** `DATABASE_URL` + `DATABASE_PASSWORD`,
-`REDIS_URL` + `REDIS_PASSWORD`, `OPENAI_API_KEY`, and `OPENAI_MODEL`
-(required, no default, since valid model names change over time);
+`REDIS_URL` + `REDIS_PASSWORD`; `OPENAI_API_KEY` and `OPENAI_MODEL` (no
+default, since valid model names change over time). Without those two the
+worker still runs, and AI jobs fail at once with "No AI is set up for this
+workspace"; a job looks them up when it runs (`worker/src/ai/resolve.ts`).
 `OPENAI_VISION_MODEL` (optional) reads bean labels and `OPENAI_WEB_MODEL`
 (optional) looks them up on the web (§9c). Passwords
 are kept out of the URLs; a URL that also contains a password is rejected.

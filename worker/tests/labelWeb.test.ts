@@ -34,16 +34,16 @@ describe("looking a bean up on the web (docs/api/llm-contract.md §9c)", () => {
   it("searches the roaster's site with the label's text, never the photos or one bag's details", () => {
     expect(hostOf("https://www.proudmarycoffee.com/x")).toBe("proudmarycoffee.com");
     expect(hostOf("javascript:alert(1)")).toBeNull();
-    const request = buildWebRequest(LABEL, job);
+    const request = buildWebRequest("test-model", LABEL, job);
     expect(request.tools).toEqual([{ type: "web_search", search_context_size: "high", filters: { allowed_domains: ["proudmarycoffee.com"] } }]);
     expect(request.input).toContain("Elida Estate");
     expect(request.input).toContain("product page");
     expect(request.input).not.toContain("2026-10-20");
     expect(request.input).not.toContain("B12");
     // No website: the whole web.
-    expect(buildWebRequest({ ...LABEL, website: null }, job).tools).toEqual([{ type: "web_search", search_context_size: "high" }]);
+    expect(buildWebRequest("test-model", { ...LABEL, website: null }, job).tools).toEqual([{ type: "web_search", search_context_size: "high" }]);
     // The workspace's labelWebContext.
-    expect(buildWebRequest({ ...LABEL, website: null }, { ...job, webContext: "low" }).tools).toEqual([{ type: "web_search", search_context_size: "low" }]);
+    expect(buildWebRequest("test-model", { ...LABEL, website: null }, { ...job, webContext: "low" }).tools).toEqual([{ type: "web_search", search_context_size: "low" }]);
     const schema = labelWebJsonSchema(PROCESSES) as { required: string[] };
     expect(schema.required).not.toContain("roastDate");
     expect(schema.required).not.toContain("batchNumber");

@@ -6,7 +6,7 @@
 import { EMPTY_AI_PROMPT, LABEL_INSTRUCTIONS_INTRO, PROMPT_TEXT, type AiPrompt } from "@barista/shared/aiPrompt";
 import { LABEL_WEB_FIELDS, type LabelFields, type LabelReadJobData, type LabelReadResult, type LabelWebFinds } from "@barista/shared/jobs";
 import type OpenAI from "openai";
-import { config } from "./config.js";
+import type { AiClient } from "./ai/client.js";
 import { labelJsonSchema, labelSchema } from "./label.js";
 import { respond, type WebReply } from "./llm.js";
 
@@ -56,14 +56,14 @@ export function webSystemPrompt(prompt: AiPrompt = EMPTY_AI_PROMPT): string {
 // The site to keep to: the bean's website (the label's, else the form's).
 export const siteFor = (fields: LabelFields): string | null => hostOf(fields.website);
 
-export function buildWebRequest(fields: LabelFields, data: LabelReadJobData, prompt: AiPrompt = EMPTY_AI_PROMPT): OpenAI.Responses.ResponseCreateParamsNonStreaming {
+export function buildWebRequest(model: string, fields: LabelFields, data: LabelReadJobData, prompt: AiPrompt = EMPTY_AI_PROMPT): OpenAI.Responses.ResponseCreateParamsNonStreaming {
   const site = siteFor(fields);
   // What the label says, without what belongs to one bag.
   const { roastDate: _date, batchNumber: _batch, ...label } = fields;
   const known = Object.fromEntries(Object.entries(label).filter(([, v]) => v !== null));
   const processes = data.processes.length ? data.processes.join(", ") : "none";
   return {
-    model: config.openaiWebModel,
+    model,
     instructions: webSystemPrompt(prompt),
     input:
       `The label says: ${JSON.stringify(known)}. Processes to choose from: ${processes}.` +
@@ -129,9 +129,9 @@ export function webSources(visited: readonly string[], finds: LabelWebFinds, sit
   return [...pages.values()];
 }
 
-export async function lookUpBean(fields: LabelFields, data: LabelReadJobData, prompt: AiPrompt): Promise<Pick<LabelReadResult, "web" | "webSources">> {
+export async function lookUpBean(ai: AiClient, fields: LabelFields, data: LabelReadJobData, prompt: AiPrompt): Promise<Pick<LabelReadResult, "web" | "webSources">> {
   const started = Date.now();
-  const reply = await respond(buildWebRequest(fields, data, prompt));
+  const reply = await respond(ai, buildWebRequest(ai.models.web, fields, data, prompt));
   const site = siteFor(fields);
   const web = parseWebReply(reply, data.processes, site);
   const sources = webSources(reply.visited, web, site);
