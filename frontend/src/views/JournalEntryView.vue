@@ -36,12 +36,14 @@ import { useFieldVisibility } from '../composables/useFieldVisibility';
 import { useFlavorWheel } from '../composables/useFlavorWheel';
 import { canModifyBrewLog } from '../lib/permissions';
 import { useAuthStore } from '../stores/auth';
+import { useAiAvailable } from '../composables/useAiAvailable';
 import { useWorkspaceStore } from '../stores/workspace';
 import { formatMark, heldSec } from '../lib/marks';
 
 const props = defineProps<{ id: string }>();
 
 const workspaces = useWorkspaceStore();
+const aiAvailable = useAiAvailable();
 const auth = useAuthStore();
 const { temperatureUnit } = usePreferences();
 const router = useRouter();
@@ -333,7 +335,7 @@ const markRows = computed(() => {
           {{ rating ? 'Saving…' : 'Save rating' }}
         </button>
       </form>
-      <section v-else-if="justRated && !analysis && workspaces.canEdit" class="card stack">
+      <section v-else-if="justRated && !analysis && workspaces.canEdit && aiAvailable" class="card stack">
         <p v-if="log.analysisDueAt">Rated, thanks. Your AI suggestion for next time is on its way.</p>
         <template v-else>
           <p>Rated, thanks. Want an AI suggestion for next time?</p>
@@ -417,9 +419,9 @@ const markRows = computed(() => {
         <p v-if="aiState === 'error'" class="form-error" role="alert">{{ aiError }}</p>
         <p v-if="log.steeping" class="muted small">Still steeping: finish it first.</p>
         <p v-else-if="unrated && !analysis" class="muted small">Rate the brew first: the suggestion works from how it tasted.</p>
-        <AiNoteField v-if="workspaces.canEdit && aiState !== 'waiting' && !unrated && !log.steeping" id="analysis-note" v-model="aiNote" />
+        <AiNoteField v-if="workspaces.canEdit && aiAvailable && aiState !== 'waiting' && !unrated && !log.steeping" id="analysis-note" v-model="aiNote" />
         <button
-          v-if="workspaces.canEdit && aiState !== 'waiting' && !unrated && !log.steeping"
+          v-if="workspaces.canEdit && aiAvailable && aiState !== 'waiting' && !unrated && !log.steeping"
           class="btn btn-secondary"
           type="button"
           @click="analyze"
@@ -427,7 +429,7 @@ const markRows = computed(() => {
           {{ aiButtonLabel }}
         </button>
         <button
-          v-if="workspaces.canEdit && aiState !== 'waiting' && !unrated && !log.steeping"
+          v-if="workspaces.canEdit && aiAvailable && aiState !== 'waiting' && !unrated && !log.steeping"
           class="btn-link small preview-link"
           type="button"
           @click="previewing = true"

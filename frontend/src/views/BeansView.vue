@@ -45,6 +45,7 @@ import { isSortKey, recallView, rememberView, sortArrow, sortBy, sortLabel, sort
 import { reviewChange } from '../lib/beanReview';
 import { effectiveRoastAge } from '../lib/roastAge';
 import { usePreferences } from '../composables/usePreferences';
+import { useAiAvailable } from '../composables/useAiAvailable';
 import { useWorkspaceStore } from '../stores/workspace';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
 
@@ -217,7 +218,8 @@ const rateSummary = ref<BeanBrewSummary | null>(null);
 const rateReview = ref('');
 // "Suggest with AI" (docs/api/analysis.md §8e) needs brews to read.
 const suggestingReview = ref(false);
-const canSuggestReview = computed(() => settings.value.beanReviews && workspaces.canEdit && (rateSummary.value?.brewCount ?? 0) > 0);
+const aiAvailable = useAiAvailable();
+const canSuggestReview = computed(() => aiAvailable.value && settings.value.beanReviews && workspaces.canEdit && (rateSummary.value?.brewCount ?? 0) > 0);
 // What the dialog would change besides the rating.
 const rateReviewChange = computed(() => (rateTarget.value && show('bean.review') ? reviewChange(rateReview.value, rateTarget.value.review) : {}));
 const rating = ref(false);

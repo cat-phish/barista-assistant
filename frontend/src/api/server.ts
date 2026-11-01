@@ -17,7 +17,40 @@ export interface ServerBackups {
   downloadsEnabled: boolean; // false: dumps stay on the server (BACKUP_DOWNLOADS)
 }
 
+export type AiProvider = 'openai';
+export interface AiCheck {
+  ok: boolean;
+  models: string[];
+  error: string | null;
+}
+// docs/api/server.md §10b: what workspaces without their own key use.
+export interface ServerAi {
+  enabled: boolean;
+  provider: AiProvider;
+  keyLast4: string | null;
+  baseUrl: string | null;
+  model: string | null;
+  visionModel: string | null;
+  webModel: string | null;
+  env: { configured: boolean; model: string | null };
+  canSaveKeys: boolean;
+}
+export interface ServerAiInput {
+  enabled: boolean;
+  provider: AiProvider;
+  apiKey?: string;
+  baseUrl?: string | null;
+  model?: string | null;
+  visionModel?: string | null;
+  webModel?: string | null;
+}
+
 export const serverApi = {
+  ai: () => api.get<ServerAi>('/api/server/ai'),
+  saveAi: (input: ServerAiInput) => api.put<ServerAi>('/api/server/ai', input),
+  removeAi: () => api.delete<ServerAi>('/api/server/ai'),
+  aiModels: () => api.post<AiCheck>('/api/server/ai/models'),
+  testAi: () => api.post<AiCheck>('/api/server/ai/test'),
   backups: () => api.get<ServerBackups>('/api/server/backups'),
   saveBackupSettings: (settings: BackupSettings) => api.put<ServerBackups>('/api/server/backups/settings', settings),
   backUpNow: () => api.post<{ queued: true }>('/api/server/backups/run'),

@@ -187,6 +187,13 @@ left out keeps the saved key; a different provider needs a new one. A blank
 vision model uses `model`, a blank web model the vision model. A `baseUrl` is
 refused (400): only the server's admin says where requests go.
 
+### `POST /api/workspaces/:workspaceId/ai-config/models` and `.../test`
+
+Owners, once a key is saved (409 otherwise). Both run on the worker with the
+saved key, so no key is ever in a job, and answer `{ ok, models, error }`,
+`error` being the provider's reason. Test sends a tiny request with the real
+analysis schema to the main model; vision and web aren't tried.
+
 ### `DELETE /api/workspaces/:workspaceId/ai-config`
 
 Owners. Forgets the key and models: the workspace goes back to the server's AI.

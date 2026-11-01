@@ -16,6 +16,7 @@ import RatingInput from '../components/RatingInput.vue';
 import { localDateInput, parseDecimal, toDateInput } from '../lib/format';
 import { ALTITUDE_LABELS, altitudeText, parseAltitude } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
+import { useAiAvailable } from '../composables/useAiAvailable';
 import { useWorkspaceStore } from '../stores/workspace';
 import { useBeanDraftStore } from '../stores/beanDraft';
 import { labelReadKey, useLabelReadStore, type LabelAnswer } from '../stores/labelRead';
@@ -87,7 +88,8 @@ const review = ref('');
 const brewSummary = ref<BeanBrewSummary | null>(null);
 // "Suggest with AI" (docs/api/analysis.md §8e) needs brews to read.
 const suggestingReview = ref(false);
-const canSuggestReview = computed(() => settings.value.beanReviews && workspaces.canEdit && (brewSummary.value?.brewCount ?? 0) > 0);
+const aiAvailable = useAiAvailable();
+const canSuggestReview = computed(() => aiAvailable.value && settings.value.beanReviews && workspaces.canEdit && (brewSummary.value?.brewCount ?? 0) > 0);
 const notes = ref('');
 // Saved photos, cover first (docs/api/bean-photos.md §4c); a new bean's are
 // held by BeanPhotos until it's saved.
@@ -622,7 +624,7 @@ async function save(): Promise<void> {
           :initial-pending="draftPhotos"
         />
       </section>
-      <section v-if="settings.readLabels && workspaces.current" class="card stack">
+      <section v-if="aiAvailable && settings.readLabels && workspaces.current" class="card stack">
         <h2>Fill in with AI</h2>
         <LabelCard
           :key="resetKey"

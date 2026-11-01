@@ -5,7 +5,7 @@ import { encryptSecret } from "@barista/shared/secrets";
 import { eq } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
-import { aiStatus, type AiStatus } from "../aiConfig.js";
+import { aiStatus, sendAiCheck, type AiStatus } from "../aiConfig.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { requireMembership } from "../auth/membership.js";
 import { config } from "../config.js";
@@ -77,6 +77,20 @@ aiConfigRouter.put("/", async (req: Request<Params>, res: Response<AiConfigRespo
   await db.insert(workspaceAiConfigs).values({ workspaceId, ...values }).onDuplicateKeyUpdate({ set: values });
   res.json(await view(workspaceId, true));
 });
+
+// On the saved key, so one has to be saved first.
+for (const action of ["models", "test"] as const) {
+  aiConfigRouter.post(`/${action}`, async (req: Request<Params>, res: Response) => {
+    const { workspaceId } = req.params;
+    if (!(await requireMembership(res, authedUserId(req), workspaceId, ["owner"]))) return;
+    const [saved] = await db.select({ workspaceId: workspaceAiConfigs.workspaceId }).from(workspaceAiConfigs).where(eq(workspaceAiConfigs.workspaceId, workspaceId));
+    if (!saved) {
+      sendError(res, 409, "Save a key first");
+      return;
+    }
+    await sendAiCheck(res, { workspaceId, action });
+  });
+}
 
 aiConfigRouter.delete("/", async (req: Request<Params>, res: Response<AiConfigResponse>) => {
   const { workspaceId } = req.params;

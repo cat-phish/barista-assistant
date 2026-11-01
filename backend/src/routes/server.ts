@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
 import { aiKey } from "./aiConfig.js";
+import { sendAiCheck } from "../aiConfig.js";
 import { DB_BACKUP_FILE } from "@barista/shared/jobs";
 import { BACKUP_FREQUENCIES, users, type BackupSettings, type BackupStatus } from "@barista/shared/schema";
 import { verifyPassword } from "../auth/password.js";
@@ -140,6 +141,16 @@ serverRouter.delete("/ai", async (_req: Request, res: Response<ServerAiResponse>
   await saveServerAi({ ...DEFAULT_SERVER_AI, enabled });
   res.json(await serverAiView());
 });
+
+for (const action of ["models", "test"] as const) {
+  serverRouter.post(`/ai/${action}`, async (_req: Request, res: Response) => {
+    if (!(await getServerAi()).apiKeyEncrypted) {
+      sendError(res, 409, "Save a key first");
+      return;
+    }
+    await sendAiCheck(res, { workspaceId: null, action });
+  });
+}
 
 serverRouter.get("/backups", async (_req: Request, res: Response<ServerBackupsResponse>) => {
   res.json(await overview());

@@ -24,7 +24,11 @@ import {
   PARAMETER_SUGGESTION_QUEUE,
   type ParameterSuggestionJobData,
   AI_PREVIEW_JOB,
+  AI_CHECK_JOB,
+  AI_CHECK_QUEUE,
   AI_PREVIEW_QUEUE,
+  type AiCheckJobData,
+  type AiCheckResult,
   type AiPreviewJobData,
   BEAN_REVIEW_JOB,
   BEAN_REVIEW_QUEUE,
@@ -223,6 +227,17 @@ beanReviewQueue.on("error", (err: Error) => {
 });
 export function requestBeanReview(data: BeanReviewJobData): Promise<BeanReviewResult | null> {
   return addAndWait(beanReviewQueue, BEAN_REVIEW_JOB, data, beanReviewTimeoutMs());
+}
+
+// Settings' model list and Test (docs/api/workspaces.md §2d).
+export const aiCheckQueue = new Queue<AiCheckJobData, AiCheckResult>(AI_CHECK_QUEUE, { connection });
+let lastAiCheckError = "";
+aiCheckQueue.on("error", (err: Error) => {
+  if (err.message !== lastAiCheckError) console.error("AI check queue error:", err.message);
+  lastAiCheckError = err.message;
+});
+export function checkAi(data: AiCheckJobData): Promise<AiCheckResult> {
+  return addAndWait(aiCheckQueue, AI_CHECK_JOB, data, labelReadTimeoutMs());
 }
 
 // Same timeout as the analysis; the caller treats failure as "no reminder".
