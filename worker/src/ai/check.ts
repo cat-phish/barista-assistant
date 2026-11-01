@@ -1,4 +1,5 @@
 import type { AiCheckJobData, AiCheckResult } from "@barista/shared/jobs";
+import { listAnthropicModels } from "./anthropic.js";
 import { BREW_ANALYSIS_JSON_SCHEMA, complete } from "../llm.js";
 import { withoutKey, type AiClient } from "./client.js";
 import { resolveAi, resolveServerAi } from "./resolve.js";
@@ -19,6 +20,7 @@ async function testModel(ai: AiClient): Promise<void> {
 }
 
 async function listModels(ai: AiClient): Promise<string[]> {
+  if (ai.provider === "anthropic") return (await listAnthropicModels(ai)).sort();
   const ids: string[] = [];
   for await (const model of ai.openai.models.list()) ids.push(model.id);
   return ids.sort();

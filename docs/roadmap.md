@@ -2092,3 +2092,32 @@ repo. README: "Run the published images".
   proxy forwards to `HTTPS_PORT` with scheme https.
 - Decided: a second compose file over configurable image names, so the main
   file stays simple for building from source. `amd64` only for now.
+
+## AI model and key in Settings (built)
+
+Keys and models are set in the app, not only in `.env`, so a workspace can use
+its own and the planned AI chat can pick a model that sees photos. API:
+`docs/api/workspaces.md` §2d, `docs/api/server.md` §10b.
+
+- **Who answers:** the workspace's own key, then the server's saved AI or its
+  env, looked up when each job runs. An admin can stop offering the server's
+  AI (with "I understand"), and workspaces with their own key carry on.
+- **Providers:** OpenAI or compatible, and Anthropic natively. Jobs still build
+  OpenAI-shaped requests, and `worker/src/ai/anthropic.ts` translates them, so
+  the prompts, saved requests and snapshots didn't change.
+- **Decided:** three models (main, vision, web). Base URLs are the server's
+  alone: an owner setting one could make the worker reach inside the network,
+  and a workspace's key always goes to the provider's own address.
+- **Keys:** AES-256-GCM under `AI_CONFIG_SECRET`, in `workspace_ai_configs` and
+  `server_settings`, never sent back, in job data or in backups, and scrubbed
+  from provider errors. Test and the model list run on the saved key.
+- **`AI_CONFIG_SECRET` is a plain variable, not a Compose secret:** Compose won't
+  start if a secret's variable is missing, which would have stopped every
+  existing install on its next update. An empty `OPENAI_API_KEY` is fine, since
+  Compose then leaves the file out and the worker runs without it.
+- **The backend never gets the env's key:** the worker writes whether it has one
+  to `server_settings` (`ai_env`) when it starts.
+- **Claude's web lookup is two calls:** it can't return a schema along with a web
+  search's citations, so it searches, then a second call fills in the schema.
+- Left out: usage or cost per workspace, a model per job type, and showing the
+  model in the journal (it's recorded, not displayed).

@@ -22,7 +22,7 @@ onMounted(async () => {
   }
 });
 
-const saved = computed(() => (data.value ? { keyLast4: data.value.keyLast4, baseUrl: data.value.baseUrl, model: data.value.model, visionModel: data.value.visionModel, webModel: data.value.webModel } : null));
+const saved = computed(() => (data.value ? { provider: data.value.provider, keyLast4: data.value.keyLast4, baseUrl: data.value.baseUrl, model: data.value.model, visionModel: data.value.visionModel, webModel: data.value.webModel } : null));
 const source = computed(() => (data.value?.keyLast4 ? `the key below, ${data.value.model}` : data.value?.env.configured ? `the server's environment${data.value.env.model ? `, ${data.value.env.model}` : ''}` : null));
 
 async function saveKey(values: AiKeyValues): Promise<void> {

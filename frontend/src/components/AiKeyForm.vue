@@ -3,7 +3,7 @@
 // Server → AI). The key is write-only: only its last four come back.
 import { computed, reactive, ref, watch } from 'vue';
 import { errorMessage } from '../api/client';
-import type { AiCheck, AiProvider } from '../api/server';
+import { AI_PROVIDERS, type AiCheck, type AiProvider } from '../api/server';
 
 export interface AiKeyValues {
   provider: AiProvider;
@@ -15,7 +15,7 @@ export interface AiKeyValues {
 }
 const props = defineProps<{
   id: string;
-  saved: { keyLast4: string | null; model: string | null; visionModel: string | null; webModel: string | null; baseUrl?: string | null } | null;
+  saved: { provider: AiProvider; keyLast4: string | null; model: string | null; visionModel: string | null; webModel: string | null; baseUrl?: string | null } | null;
   canSaveKeys: boolean;
   disabled?: boolean;
   withBaseUrl?: boolean;
@@ -25,19 +25,22 @@ const props = defineProps<{
   test: () => Promise<AiCheck>;
 }>();
 
-const form = reactive({ apiKey: '', baseUrl: '', model: '', visionModel: '', webModel: '' });
+// The default offered for a new Anthropic key; it can be changed like any other.
+const ANTHROPIC_MODEL = 'claude-opus-5-5';
+const form = reactive({ provider: 'openai' as AiProvider, apiKey: '', baseUrl: '', model: '', visionModel: '', webModel: '' });
 const replacing = ref(false);
 const busy = ref(false);
 const error = ref('');
 const note = ref('');
 const models = ref<string[]>([]);
 const hasKey = computed(() => !!props.saved?.keyLast4);
-const needsKey = computed(() => !hasKey.value || replacing.value);
+// Another provider's key won't do.
+const needsKey = computed(() => !hasKey.value || replacing.value || form.provider !== props.saved?.provider);
 
 watch(
   () => props.saved,
   (s) => {
-    Object.assign(form, { apiKey: '', baseUrl: s?.baseUrl ?? '', model: s?.model ?? '', visionModel: s?.visionModel ?? '', webModel: s?.webModel ?? '' });
+    Object.assign(form, { provider: s?.provider ?? 'openai', apiKey: '', baseUrl: s?.baseUrl ?? '', model: s?.model ?? '', visionModel: s?.visionModel ?? '', webModel: s?.webModel ?? '' });
     replacing.value = false;
   },
   { immediate: true },
@@ -59,7 +62,7 @@ async function run(action: () => Promise<void>): Promise<void> {
 const submit = () =>
   run(async () => {
     await props.save({
-      provider: 'openai',
+      provider: form.provider,
       ...(form.apiKey.trim() ? { apiKey: form.apiKey.trim() } : {}),
       ...(props.withBaseUrl ? { baseUrl: form.baseUrl.trim() || null } : {}),
       model: form.model.trim(),
@@ -79,6 +82,10 @@ const tryIt = () =>
     if (r.ok) note.value = `${form.model} answered.`;
     else error.value = r.error ?? "It didn't answer.";
   });
+function changeProvider(): void {
+  models.value = [];
+  if (form.provider === 'anthropic' && !form.model) form.model = ANTHROPIC_MODEL;
+}
 const forget = () => run(() => props.remove().then(() => undefined));
 watch(hasKey, (has) => has && void loadModels(), { immediate: true });
 </script>
@@ -87,7 +94,13 @@ watch(hasKey, (has) => has && void loadModels(), { immediate: true });
   <form class="stack" novalidate @submit.prevent="submit">
     <fieldset class="stack" :disabled="disabled || busy">
       <p v-if="!canSaveKeys" class="muted small">Keys can't be saved until <code>AI_CONFIG_SECRET</code> is set on the server.</p>
-      <div v-if="hasKey && !replacing" class="key-line">
+      <div class="field">
+        <label :for="`${id}-provider`">Provider</label>
+        <select :id="`${id}-provider`" v-model="form.provider" @change="changeProvider">
+          <option v-for="(label, value) in AI_PROVIDERS" :key="value" :value="value">{{ label }}</option>
+        </select>
+      </div>
+      <div v-if="!needsKey" class="key-line">
         <span>Key set, ends in …{{ saved?.keyLast4 }}</span>
         <button class="btn-link small" type="button" @click="replacing = true">Replace</button>
         <button class="btn-link small" type="button" @click="forget">Remove</button>
@@ -99,7 +112,7 @@ watch(hasKey, (has) => has && void loadModels(), { immediate: true });
       <div v-if="withBaseUrl" class="field">
         <label :for="`${id}-url`">Base URL</label>
         <input :id="`${id}-url`" v-model="form.baseUrl" type="url" inputmode="url" placeholder="https://api.openai.com/v1" />
-        <p class="muted small">For an OpenAI-compatible server.</p>
+        <p class="muted small">For a server compatible with this provider.</p>
       </div>
       <div class="field">
         <label :for="`${id}-model`">Model<span class="req" aria-hidden="true">*</span></label>

@@ -4,6 +4,7 @@ import { ANALYSIS_CONFIDENCE, SUGGEST_ALTERNATIVES, type AiRequest, type Alterna
 import { UnrecoverableError } from "bullmq";
 import OpenAI from "openai";
 import { z } from "zod";
+import { completeWithAnthropic, respondWithAnthropic } from "./ai/anthropic.js";
 import { withoutKey, type AiClient } from "./ai/client.js";
 import type { BrewContext } from "./context.js";
 import type { BeanReviewContext } from "./beanReview.js";
@@ -169,6 +170,7 @@ function safeError(err: unknown, ai: AiClient): unknown {
 }
 
 export async function complete(ai: AiClient, request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming): Promise<{ message: LlmMessage; usage: Usage }> {
+  if (ai.provider === "anthropic") return completeWithAnthropic(ai, request);
   let completion: OpenAI.Chat.Completions.ChatCompletion;
   try {
     completion = await ai.openai.chat.completions.create(request);
@@ -192,6 +194,7 @@ export interface WebReply {
   visited: string[];
 }
 export async function respond(ai: AiClient, request: OpenAI.Responses.ResponseCreateParamsNonStreaming): Promise<WebReply> {
+  if (ai.provider === "anthropic") return respondWithAnthropic(ai, request);
   let response: OpenAI.Responses.Response;
   try {
     response = await ai.openai.responses.create(request);

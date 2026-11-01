@@ -105,7 +105,7 @@ env: { configured, model }, canSaveKeys }`. The key itself is never sent.
 Body `{ enabled, provider, apiKey?, baseUrl?, model?, visionModel?, webModel? }`.
 `apiKey` left out keeps the saved key; a key needs a `model`. `enabled: false`
 stops this and the env's AI for every workspace without its own key.
-`baseUrl` points at an OpenAI-compatible server.
+`baseUrl` points at a server compatible with the provider.
 
 ### `POST /api/server/ai/models` and `.../test`
 

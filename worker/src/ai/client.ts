@@ -1,3 +1,4 @@
+import type Anthropic from "@anthropic-ai/sdk";
 import type OpenAI from "openai";
 
 // What a job calls the AI with, resolved for its workspace (resolve.ts).
@@ -13,8 +14,17 @@ export interface AiModels {
   // Looking a bean up on the web (§9c, step 2).
   web: string;
 }
-export interface AiClient {
+interface AiBase {
   apiKey: string; // to keep it out of what's logged (withoutKey)
-  openai: OpenAI;
   models: AiModels;
 }
+export interface OpenAiAi extends AiBase {
+  provider: "openai";
+  openai: OpenAI;
+}
+export interface AnthropicAi extends AiBase {
+  provider: "anthropic";
+  anthropic: Anthropic;
+  official: boolean; // Anthropic's own API, not one at a base URL
+}
+export type AiClient = OpenAiAi | AnthropicAi;
