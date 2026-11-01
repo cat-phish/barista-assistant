@@ -1,6 +1,8 @@
 <script setup lang="ts">
 // Settings → AI, for everyone in the workspace; owners change it, everyone
 // else sees it:
+//  - the workspace's own key and models (docs/api/workspaces.md §2d), for
+//    owners;
 //  - automatic analysis (docs/api/analysis.md §8): on or off, how long
 //    after saving, and a daily cap;
 //  - which earlier brews "Suggest parameters" sends by default (§8b);
@@ -10,7 +12,9 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { errorMessage } from '../api/client';
 import { AUTO_ANALYZE_DELAYS, MAX_REVIEW_BREWS, MAX_SUGGEST_BREWS, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, type AlternativeKind, type AutoAnalyzeDelay, type Brewer, type LabelWebContext, type SuggestSource, type WorkspaceSettings } from '../api/types';
 import { brewersApi } from '../api/brewers';
-import { workspacesApi } from '../api/workspaces';
+import { workspacesApi, type AiConfig } from '../api/workspaces';
+import AiKeyForm, { type AiKeyValues } from '../components/AiKeyForm.vue';
+import { refreshAiAvailable } from '../composables/useAiAvailable';
 import SettingsLayout from '../components/SettingsLayout.vue';
 import { usePreferences } from '../composables/usePreferences';
 import { AI_GROUPS, aiDetailsFor, type AiDetail, type AiGroup } from '../lib/aiDetails';
@@ -41,12 +45,35 @@ const capInvalid = computed(() => {
   return !Number.isInteger(n) || n < 1 || n > MAX_CAP;
 });
 
+// Who answers, and the workspace's own key.
+const aiConfig = ref<AiConfig | null>(null);
+const AI_SOURCES: Record<NonNullable<AiConfig['source']>, string> = { workspace: "this workspace's key", server: "the server's AI", env: "the server's AI" };
+const aiSummary = computed(() => {
+  const c = aiConfig.value;
+  if (!c) return '';
+  if (!c.source) return 'No AI is set up, so the AI features are hidden.';
+  return `Using ${AI_SOURCES[c.source]}${c.model ? `, ${c.model}` : ''}.`;
+});
+const workspaceId = computed(() => workspaces.current?.id ?? '');
+async function applyAiConfig(next: Promise<AiConfig>): Promise<void> {
+  aiConfig.value = await next;
+  await refreshAiAvailable(workspaceId.value);
+}
+const saveKey = ({ baseUrl: _serverOnly, ...values }: AiKeyValues) => applyAiConfig(workspacesApi.saveAiConfig(workspaceId.value, values));
+const removeKey = () => applyAiConfig(workspacesApi.removeAiConfig(workspaceId.value));
+const listModels = () => workspacesApi.aiModels(workspaceId.value);
+const testKey = () => workspacesApi.testAi(workspaceId.value);
+
 // Bean reviews: the active brewers to start with, or all of them. With
 // unrated brews kept from the AI, rated only can't be turned off.
 const brewers = ref<Brewer[]>([]);
 onMounted(() => {
   const ws = workspaces.current?.id;
   if (ws) {
+    workspacesApi
+      .aiConfig(ws)
+      .then((c) => (aiConfig.value = c))
+      .catch((err) => (error.value = errorMessage(err)));
     brewersApi
       .list(ws)
       .then((r) => (brewers.value = r.brewers.filter((b) => b.archivedAt === null)))
@@ -110,6 +137,21 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
 
 <template>
   <SettingsLayout title="AI">
+    <section class="card stack" aria-labelledby="ai-key">
+      <h2 id="ai-key">Model and key</h2>
+      <p class="muted" aria-live="polite">{{ aiSummary }}</p>
+      <AiKeyForm
+        v-if="isOwner && aiConfig"
+        id="workspace-ai"
+        :saved="aiConfig.own"
+        :can-save-keys="aiConfig.canSaveKeys"
+        :save="saveKey"
+        :remove="removeKey"
+        :list-models="listModels"
+        :test="testKey"
+      />
+    </section>
+
     <section class="card stack" aria-labelledby="ai-auto">
       <h2 id="ai-auto">Automatic analysis</h2>
       <p class="muted">

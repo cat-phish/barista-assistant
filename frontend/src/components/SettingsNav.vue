@@ -28,7 +28,8 @@ const auth = useAuthStore();
     </template>
     <template v-if="auth.user?.isAdmin">
       <h2>Server</h2>
-      <RouterLink :to="{ name: 'settings-server' }" active-class="active">Backups</RouterLink>
+      <RouterLink :to="{ name: 'settings-server' }" active-class="" exact-active-class="active">Backups</RouterLink>
+      <RouterLink :to="{ name: 'settings-server-ai' }" active-class="active">AI</RouterLink>
     </template>
   </nav>
 </template>

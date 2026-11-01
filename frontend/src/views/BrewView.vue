@@ -72,6 +72,7 @@ import { batchSuffix, beanLabel as pickerLabel, restingUntil } from '../lib/bean
 import { formatDay, formatDoseLine, formatGrams, formatGrind, formatListDay, formatTime, formatWhen } from '../lib/format';
 import { ALTERNATIVE_LABELS, CONFIDENCE_LABELS, chooseGrind, heldForRatio, rememberedSource, SUGGEST_SOURCE_LABELS, sourceNeeds, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
 import { useParameterSuggestion } from '../composables/useParameterSuggestion';
+import { useAiAvailable } from '../composables/useAiAvailable';
 import { useWorkspaceStore } from '../stores/workspace';
 import { brewRetention, factorText, linkRatio, ratioText as formatRatio, ratioWater, ROAST_LEVELS, SCALE_SLIDER, scaleBatch, scaleShot, scaleSteps, scaleStepTimes, shiftStepTemps, shiftWindow, sliderDose, sliderPosition, waterShare, type MeasuredBrew, type ScaleField } from '../lib/scale';
 import { formatTemp, formatTempChange, parseTemp, tempText, TEMPERATURE_LABELS, VOLUME_LABELS, volumeUnits } from '../lib/units';
@@ -81,6 +82,7 @@ import { usePreferences } from '../composables/usePreferences';
 type Stage = 'setup' | 'timing' | 'log' | 'steep' | 'saved';
 
 const workspaces = useWorkspaceStore();
+const aiAvailable = useAiAvailable();
 const route = useRoute();
 const router = useRouter();
 const { prefs, settings, temperatureUnit, recipeRoastLevel, aiHidden } = usePreferences();
@@ -632,6 +634,7 @@ watch(
 );
 // A source that needs a recipe or brewer can't run without one.
 const suggestBlocked = computed(() => {
+  if (!aiAvailable.value) return 'No AI is set up for this workspace (Settings → AI).';
   if (!bean.value) return 'Choose a bean to ask the AI.';
   const needs = sourceNeeds(suggestSource.value);
   if (needs === 'recipe' && !recipe.value) return 'Pick a recipe to compare its brews.';

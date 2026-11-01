@@ -1,8 +1,11 @@
 import { AI_ENV_KEY, AI_SERVER_KEY, DEFAULT_SERVER_AI } from "@barista/shared/aiConfig";
 import { analysisRequests, serverSettings, workspaceAiConfigs } from "@barista/shared/schema";
 import { decryptSecret, encryptSecret } from "@barista/shared/secrets";
+import { AI_CHECK_QUEUE, type AiCheckJobData, type AiCheckResult } from "@barista/shared/jobs";
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it } from "vitest";
+import { Worker } from "bullmq";
+import { Redis } from "ioredis";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { setAdmin } from "../src/adminAccess.js";
 import { db } from "../src/db.js";
 import { addMember, newBean, newBrewLog, newUser, newWorkspace, type TestUser } from "./helpers.js";
@@ -105,6 +108,49 @@ describe("the server's AI (docs/api/server.md §10b)", () => {
     await admin.agent.put("/api/server/ai").send({ enabled: false, provider: "openai" });
     expect((await owner.agent.get(url())).body).toMatchObject({ available: false, source: null });
     expect((await owner.agent.put(url()).send({ ...save, apiKey: KEY })).body).toMatchObject({ available: true, source: "workspace" });
+  });
+});
+
+describe("the model list and Test", () => {
+  let worker: Worker<AiCheckJobData, AiCheckResult> | null = null;
+  let connection: Redis | null = null;
+  let received: AiCheckJobData | null = null;
+  beforeEach(() => {
+    received = null;
+    connection = new Redis(process.env.REDIS_URL ?? "", { password: process.env.REDIS_PASSWORD, maxRetriesPerRequest: null });
+    worker = new Worker<AiCheckJobData, AiCheckResult>(
+      AI_CHECK_QUEUE,
+      async (job) => {
+        received = job.data;
+        return { ok: true, models: ["m1"], error: null };
+      },
+      { connection },
+    );
+  });
+  afterEach(async () => {
+    await worker?.close();
+    connection?.disconnect();
+  });
+
+  it("need a saved key, and only owners ask; the job never carries the key", async () => {
+    expect((await owner.agent.post(`${url()}/models`)).status).toBe(409);
+    await owner.agent.put(url()).send({ ...save, apiKey: KEY });
+    const barista = await newUser();
+    await addMember(owner, ws, barista, "barista");
+    expect((await barista.agent.post(`${url()}/test`)).status).toBe(403);
+    const res = await owner.agent.post(`${url()}/models`);
+    expect(res.body).toEqual({ ok: true, models: ["m1"], error: null });
+    expect(received).toEqual({ workspaceId: ws, action: "models" });
+  });
+
+  it("try the server's key for admins", async () => {
+    const admin = await newUser();
+    await setAdmin(admin.email, true);
+    expect((await admin.agent.post("/api/server/ai/test")).status).toBe(409);
+    await admin.agent.put("/api/server/ai").send({ enabled: false, provider: "openai", apiKey: KEY, model: "m" });
+    expect((await admin.agent.post("/api/server/ai/test")).status).toBe(200);
+    expect(received).toEqual({ workspaceId: null, action: "test" });
+    expect((await owner.agent.post("/api/server/ai/test")).status).toBe(403);
   });
 });
 

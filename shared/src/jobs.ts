@@ -58,6 +58,21 @@ export type SuggestionPreview = Pick<
 // note: a one-off note (docs/api/auth.md §1c), as asking would send it.
 export type AiPreviewJobData = { kind: "analysis"; brewLogId: string; note?: string } | { kind: "suggest"; suggestion: SuggestionPreview } | { kind: "beanReview"; review: BeanReviewJobData };
 
+// Settings' model list and Test (docs/api/workspaces.md §2d), on the saved
+// key: the job carries no key, since it would sit in Redis. workspaceId null:
+// the server's own, even while it's switched off.
+export const AI_CHECK_QUEUE = "ai-check";
+export const AI_CHECK_JOB = "check";
+export interface AiCheckJobData {
+  workspaceId: string | null;
+  action: "models" | "test";
+}
+export interface AiCheckResult {
+  ok: boolean;
+  models: string[];
+  error: string | null; // the provider's reason, without the key
+}
+
 // Reading a bean's label from its photos, or looking a bean up on the web
 // (docs/api/bean-label.md §4d, llm-contract.md §9c). The backend waits for the
 // answer (the job's return value); nothing is stored. images: base64 WebP,

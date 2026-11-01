@@ -107,6 +107,11 @@ Body `{ enabled, provider, apiKey?, baseUrl?, model?, visionModel?, webModel? }`
 stops this and the env's AI for every workspace without its own key.
 `baseUrl` points at an OpenAI-compatible server.
 
+### `POST /api/server/ai/models` and `.../test`
+
+As for a workspace (`workspaces.md` §2d), on the key saved here, even while
+`enabled` is false.
+
 ### `DELETE /api/server/ai`
 
 Forgets the key and models; `enabled` stays.

@@ -37,7 +37,15 @@ async function serverConfig(): Promise<ServerAiConfig> {
 // change between attempts.
 export async function resolveAi(workspaceId?: string | null): Promise<AiClient> {
   const [own] = workspaceId ? await db.select().from(workspaceAiConfigs).where(eq(workspaceAiConfigs.workspaceId, workspaceId)) : [];
-  const server = await serverConfig();
+  return clientFor(own, await serverConfig());
+}
+
+// The server's own, whether or not it's offered: for trying it in Settings.
+export async function resolveServerAi(): Promise<AiClient> {
+  return clientFor(undefined, { ...(await serverConfig()), enabled: true });
+}
+
+function clientFor(own: typeof workspaceAiConfigs.$inferSelect | undefined, server: ServerAiConfig): AiClient {
   switch (aiSource(Boolean(own), server, envConfigured())) {
     case "workspace":
       return client(readKey(own!.apiKeyEncrypted), OPENAI_URL, modelsFor(own!));
