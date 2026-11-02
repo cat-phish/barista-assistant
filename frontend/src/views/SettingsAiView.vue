@@ -278,7 +278,7 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
 
     <section class="card stack" aria-labelledby="ai-labels">
       <h2 id="ai-chat">Chat</h2>
-      <p class="muted">The Chat tab in Insights: people ask the AI their own questions, attaching brews, beans, recipes and photos. Chats are private to each person. Owners can turn it off for one person under Members.</p>
+      <p class="muted">The Chat tab in Insights: people ask the AI their own questions, attaching brews, beans, recipes and photos. Chats are private to each person. What's attached is sent in full: the details hidden on this page are only kept from analyses and suggestions. Owners can turn chat off for one person under Members.</p>
       <label class="checkbox">
         <input type="checkbox" :checked="settings.aiChat" :disabled="!isOwner || saving" @change="save({ aiChat: ($event.target as HTMLInputElement).checked }, 'labels')" />
         Offer AI chat in this workspace

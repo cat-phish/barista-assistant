@@ -74,28 +74,17 @@ describe("loadAttachments", () => {
     await db.insert(brewLogs).values({ id: brewId, workspaceId, beanId, timestamp: new Date("2026-10-02T08:00:00Z"), actualDoseGrams: 15, actualTimeSec: 180, actualTempC: 94, rating: null });
   });
 
-  it("sends a bean, leaving out what the workspace hides", async () => {
-    const [seen] = await loadAttachments([attach("bean", beanId)], workspaceId, new Set(["origin"]));
-    expect(seen).toMatchObject({ kind: "bean", data: { beanName: "Guji", altitudeMasl: 2100 } });
-    expect(JSON.stringify(seen)).not.toContain("Ethiopia");
-  });
-
-  it("sends a brew as the analysis would, leaving out what the workspace hides", async () => {
-    const [seen] = await loadAttachments([attach("brew", brewId)], workspaceId, new Set(["temp"]));
-    expect(seen).toMatchObject({ kind: "brew", data: { bean: { beanName: "Guji" }, brew: { actualDoseGrams: 15 } } });
-    expect(JSON.stringify(seen)).not.toContain("actualTempC");
-  });
-
-  it("keeps an unrated brew back when the workspace does", async () => {
-    for (const key of ["analyzeUnrated", "unratedHistory"] as const) {
-      expect((await loadAttachments([attach("brew", brewId)], workspaceId, new Set([key])))[0]).toEqual({ kind: "brew", label: "L", unavailable: true });
-    }
+  it("sends a bean and a brew in full, whatever the workspace hides from analyses", async () => {
+    await db.update(workspaces).set({ settings: { aiHidden: ["origin", "temp", "analyzeUnrated", "unratedHistory"] } }).where(eq(workspaces.id, workspaceId));
+    const [bean, brew] = await loadAttachments([attach("bean", beanId), attach("brew", brewId)], workspaceId);
+    expect(bean).toMatchObject({ kind: "bean", data: { beanName: "Guji", country: "Ethiopia", altitudeMasl: 2100 } });
+    expect(brew).toMatchObject({ kind: "brew", data: { bean: { country: "Ethiopia" }, brew: { actualDoseGrams: 15, actualTempC: 94 } } });
   });
 
   it("marks what's gone or from another workspace as unavailable", async () => {
     const other = randomUUID();
     await db.insert(workspaces).values({ id: other, name: "O", slug: other });
-    const seen = await loadAttachments([attach("bean", beanId), attach("recipe", randomUUID())], other, new Set());
+    const seen = await loadAttachments([attach("bean", beanId), attach("recipe", randomUUID())], other);
     expect(seen).toEqual([{ kind: "bean", label: "L", unavailable: true }, { kind: "recipe", label: "L", unavailable: true }]);
   });
 });

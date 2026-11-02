@@ -43,8 +43,9 @@ error, model, createdAt }`.
 "recipe", "id": "uuid" }`, each from this workspace, or the request is a `400`.
 A message comes back with `attachments: [{ kind, id, label }]`, where `label`
 is what the item was called when attached, and `[]` when there are none. Only
-the reference is kept: each reply reads the item afresh (§9e), so a change, a
-delete or a new Settings → AI choice applies to the rest of the chat.
+the reference is kept: each reply reads the item afresh (§9e), so a change or a
+delete applies to the rest of the chat. Attachments go in full: what Settings →
+AI hides is kept from analyses and suggestions, not from chat.
 
 **Photos:** upload each one first, then send up to 4 as `photoIds`; a photo
 that's yours, not yet sent and in this workspace, or the request is a `400`. A

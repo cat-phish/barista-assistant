@@ -2,8 +2,7 @@
 // publishes the reply to a Redis stream as it's written, for the backend to
 // pass on (docs/api/chat.md §12), then saves it on the message.
 import { CHAT_EVENT_FIELD, chatReplyKey, type ChatJobData, type ChatJobPhoto, type ChatStreamEvent } from "@barista/shared/jobs";
-import type { AiDetail } from "@barista/shared/aiDetails";
-import { aiChatMessages, aiChats, beans, brewLogs, DEFAULT_WORKSPACE_SETTINGS, recipes, withDefaults, workspaces, type ChatAttachment } from "@barista/shared/schema";
+import { aiChatMessages, aiChats, beans, brewLogs, recipes, type ChatAttachment } from "@barista/shared/schema";
 import { UnrecoverableError } from "bullmq";
 import { and, asc, eq } from "drizzle-orm";
 import type { Redis } from "ioredis";
@@ -16,6 +15,7 @@ import { beanInput, compact, recipeInput, toLlmInput, type LlmInput } from "./pr
 
 const HISTORY_MESSAGES = 40;
 const ATTACHMENTS_SENT = 20;
+const NOTHING_HIDDEN = new Set<never>();
 const FLUSH_MS = 50;
 const STREAM_TTL_SECONDS = 300;
 
@@ -65,31 +65,28 @@ export function attachedIn(messages: readonly StoredTurn[], before: number): Cha
   return unique.slice(-ATTACHMENTS_SENT);
 }
 
-// One attachment as the AI sees it, read now and only from this workspace.
-// null: it's gone, or the workspace keeps it from the AI.
-async function attachmentInput(a: ChatAttachment, workspaceId: string, hidden: ReadonlySet<AiDetail>): Promise<Record<string, unknown> | null> {
+// One attachment as the AI sees it, read now and only from this workspace, in
+// full: Settings → AI tunes the analysis and suggestions, not chat. null: it's gone.
+async function attachmentInput(a: ChatAttachment, workspaceId: string): Promise<Record<string, unknown> | null> {
   if (a.kind === "brew") {
     const [own] = await db.select({ id: brewLogs.id }).from(brewLogs).where(and(eq(brewLogs.id, a.id), eq(brewLogs.workspaceId, workspaceId)));
     const context = own ? await loadBrewContext(a.id) : null;
-    if (!context) return null;
-    const unrated = context.brew.rating === null && context.brew.drinkRating === null;
-    if (unrated && (hidden.has("analyzeUnrated") || hidden.has("unratedHistory"))) return null;
-    return toLlmInput(context, hidden);
+    return context && toLlmInput(context);
   }
   if (a.kind === "bean") {
     const [own] = await db.select({ id: beans.id }).from(beans).where(and(eq(beans.id, a.id), eq(beans.workspaceId, workspaceId)));
     const bean = own ? await loadBean(a.id) : null;
-    return bean && beanInput(bean.info, hidden);
+    return bean && beanInput(bean.info, NOTHING_HIDDEN);
   }
   const [own] = await db.select({ id: recipes.id }).from(recipes).where(and(eq(recipes.id, a.id), eq(recipes.workspaceId, workspaceId)));
   const recipe = own ? await loadRecipe(a.id) : null;
-  return recipe && recipeInput(recipe, hidden);
+  return recipe && recipeInput(recipe, NOTHING_HIDDEN);
 }
 
-export async function loadAttachments(attachments: ChatAttachment[], workspaceId: string, hidden: ReadonlySet<AiDetail>): Promise<LlmInput[]> {
+export async function loadAttachments(attachments: ChatAttachment[], workspaceId: string): Promise<LlmInput[]> {
   return Promise.all(
     attachments.map(async (a) => {
-      const data = await attachmentInput(a, workspaceId, hidden);
+      const data = await attachmentInput(a, workspaceId);
       return (compact({ kind: a.kind, label: a.label, ...(data ? { data } : { unavailable: true }) }) ?? {}) as LlmInput;
     }),
   );
@@ -132,9 +129,7 @@ export async function processChatReply({ messageId, photos }: ChatJobData, publi
     const messages = await db.select().from(aiChatMessages).where(eq(aiChatMessages.chatId, row.chat.id)).orderBy(asc(aiChatMessages.position));
     const ai = await resolveAi(row.chat.workspaceId);
     const custom = await promptFor(row.chat.userId, null);
-    const [ws] = await db.select({ settings: workspaces.settings }).from(workspaces).where(eq(workspaces.id, row.chat.workspaceId));
-    const hidden = new Set(withDefaults(DEFAULT_WORKSPACE_SETTINGS, ws?.settings ?? null).aiHidden);
-    const attached = await loadAttachments(attachedIn(messages, row.message.position), row.chat.workspaceId, hidden);
+    const attached = await loadAttachments(attachedIn(messages, row.message.position), row.chat.workspaceId);
     const turns = chatTurns(messages, row.message.position, photos);
     const model = turns.some((t) => typeof t.content !== "string") ? ai.models.vision : ai.models.main;
     const request = buildChatRequest(model, turns, custom, attached);

@@ -510,9 +510,8 @@ has already read, so a failed reply is marked failed and they send again.
 2. **Attachments** (`loadAttachments`, `worker/src/chat.ts`): what those
    messages attached, the 20 most recent, each read now from the chat's
    workspace. A brew is the analysis input (`toLlmInput`); a bean or a recipe is
-   that part of it. One that's been deleted, or an unrated brew the workspace
-   keeps from the AI (`analyzeUnrated`, `unratedHistory`), is named as
-   unavailable, by the label saved with the message.
+   that part of it. One that's been deleted is named as unavailable, by the
+   label saved with the message.
 3. **Photos:** the worker can't read the photo files, so the backend puts the
    chat's latest 6 in the job, and they go with the message they came on.
    Earlier ones aren't sent. A chat with photos in the job uses the vision
@@ -524,11 +523,11 @@ has already read, so a failed reply is marked failed and they send again.
    `worker/src/llm.ts`, on both providers). Pieces are published about every
    50 ms; the text, model and token counts are saved on the message.
 
-**What the AI sees:** the conversation and what was attached, through the same
-`toLlmInput`, `beanInput` and `recipeInput` as an analysis, so `aiHidden` applies
-in the same way (checked in `worker/tests/chat.test.ts`). The analysis context
-itself doesn't change, so there's nothing new to classify in
-`worker/tests/aiDetails.test.ts`.
+**What the AI sees:** the conversation and what was attached, in full, through
+the same `toLlmInput`, `beanInput` and `recipeInput` as an analysis. **`aiHidden`
+doesn't apply:** it's for fine tuning the automatic analysis and suggestions,
+and chat is for exploring deeper, with the person choosing what to attach
+(checked in `worker/tests/chat.test.ts`).
 
 ## Evaluating changes
 
