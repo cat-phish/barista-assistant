@@ -4,11 +4,11 @@ import { ANALYSIS_CONFIDENCE, SUGGEST_ALTERNATIVES, type AiRequest, type Alterna
 import { UnrecoverableError } from "bullmq";
 import OpenAI from "openai";
 import { z } from "zod";
-import { completeWithAnthropic, respondWithAnthropic } from "./ai/anthropic.js";
+import { completeWithAnthropic, respondWithAnthropic, streamWithAnthropic } from "./ai/anthropic.js";
 import { withoutKey, type AiClient } from "./ai/client.js";
 import type { BrewContext } from "./context.js";
 import type { BeanReviewContext } from "./beanReview.js";
-import { BEAN_REVIEW_SECTIONS, buildSystemPrompt, PROMPT_SECTIONS, promptSections, SUGGEST_SECTIONS, toBeanReviewInput, toLlmInput, toSuggestInput, type PromptCustom } from "./prompt.js";
+import { BEAN_REVIEW_SECTIONS, buildChatSystem, buildSystemPrompt, PROMPT_SECTIONS, promptSections, SUGGEST_SECTIONS, toBeanReviewInput, toLlmInput, toSuggestInput, type PromptCustom } from "./prompt.js";
 import type { SuggestContext } from "./suggestContext.js";
 
 // The input and system prompt are built in prompt.ts; the schema and its
@@ -183,6 +183,41 @@ export async function complete(ai: AiClient, request: OpenAI.Chat.Completions.Ch
   }
   const usage = completion.usage ? { promptTokens: completion.usage.prompt_tokens, completionTokens: completion.usage.completion_tokens } : null;
   return { message: completion.choices[0]?.message, usage };
+}
+
+// A chat reply (docs/api/llm-contract.md §9e): the conversation so far, and no
+// schema, since it's read as it's written.
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+export function buildChatRequest(model: string, turns: ChatTurn[], custom?: PromptCustom): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
+  return { model, messages: [{ role: "system", content: buildChatSystem(custom) }, ...turns] };
+}
+
+export interface StreamedReply {
+  refusal: string | null;
+  usage: Usage;
+}
+export async function streamReply(ai: AiClient, request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming, onText: (text: string) => void): Promise<StreamedReply> {
+  if (ai.provider === "anthropic") return streamWithAnthropic(ai, request, onText);
+  let refusal = "";
+  let usage: Usage = null;
+  try {
+    const stream = await ai.openai.chat.completions.create({ ...request, stream: true, stream_options: { include_usage: true } });
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta;
+      if (delta?.content) onText(delta.content);
+      if (delta?.refusal) refusal += delta.refusal;
+      if (chunk.usage) usage = { promptTokens: chunk.usage.prompt_tokens, completionTokens: chunk.usage.completion_tokens };
+    }
+  } catch (err) {
+    if (err instanceof OpenAI.APIError && err.status !== undefined && [400, 401, 403, 404].includes(err.status)) {
+      throw new UnrecoverableError(withoutKey(`OpenAI rejected the request (${err.status}): ${err.message}`, ai.apiKey));
+    }
+    throw safeError(err, ai);
+  }
+  return { refusal: refusal || null, usage };
 }
 
 // A Responses API call (the web lookup, docs/api/llm-contract.md §9c): its

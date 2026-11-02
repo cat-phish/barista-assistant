@@ -411,6 +411,15 @@ function customized(sections: PromptSection[], custom: PromptCustom | undefined)
   return [...own.slice(0, end), ...added, ...own.slice(end)];
 }
 
+// A chat (docs/api/llm-contract.md §9e): fixed, plus the person's own
+// instructions. Plain text, since the page shows replies as they are.
+export const CHAT_SYSTEM =
+  "You are a coffee expert talking with a home barista in their brew journal. Answer what they ask, directly and practically, and ask if you need a detail you weren't given. You can't see their journal or change anything in it; only use what's in this conversation. Write plain text, without Markdown.";
+export function buildChatSystem(custom?: PromptCustom): string {
+  const instructions = custom?.prompt.instructions;
+  return instructions ? `${CHAT_SYSTEM} The barista's own instructions: ${instructions}` : CHAT_SYSTEM;
+}
+
 // The sections this input needs, in order.
 export function promptSections(input: LlmInput, sections: PromptSection[] = PROMPT_SECTIONS, custom?: PromptCustom): string[] {
   return customized(sections, custom)

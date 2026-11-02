@@ -497,6 +497,25 @@ backend waits for the answer, nothing is stored.
 `brewer` name is always sent, everything else goes with its key as in the
 analysis. A bean's `notes`, `review` and `rating` aren't sent.
 
+## 9e. Chat replies
+
+The `ai-chat` queue (`chat.md` §12): job `reply`, data `{ messageId }`, the
+pending assistant message. One attempt: a retry would repeat text the person
+has already read, so a failed reply is marked failed and they send again.
+
+1. **Conversation** (`worker/src/chat.ts`): the chat's last 40 finished
+   messages, oldest first, starting on one of the person's. Failed replies are
+   left out.
+2. **Prompt** (`CHAT_SYSTEM`, `worker/src/prompt.ts`): fixed, plus the person's
+   own `instructions` (`auth.md` §1c). Their section texts don't apply.
+3. **Reply:** plain text, streamed, no schema (`streamReply`,
+   `worker/src/llm.ts`, on both providers). Pieces are published about every
+   50 ms; the text, model and token counts are saved on the message.
+
+**What the AI sees:** only the conversation so far. Nothing from the journal
+is sent yet, so nothing here is classified in
+`worker/tests/aiDetails.test.ts`.
+
 ## Evaluating changes
 
 `npm run eval -w worker` (run on the host from the repo root; it reads the

@@ -1270,6 +1270,48 @@ export const workspaceAiConfigs = mysqlTable("workspace_ai_configs", {
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
 
+// AI chat (docs/api/chat.md §12): a person's own, in a workspace. Not in
+// workspace backups (NOT_BACKED_UP in backend/src/backup.ts).
+export const CHAT_ROLES = ["user", "assistant"] as const;
+export const CHAT_STATUSES = ["pending", "done", "failed"] as const;
+
+export const aiChats = mysqlTable(
+  "ai_chats",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: varchar("title", { length: 120 }).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [index("ai_chats_owner_idx").on(t.workspaceId, t.userId, t.updatedAt)],
+);
+
+export const aiChatMessages = mysqlTable(
+  "ai_chat_messages",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    chatId: varchar("chat_id", { length: 36 })
+      .notNull()
+      .references(() => aiChats.id, { onDelete: "cascade" }),
+    position: int("position").notNull(), // 1, 2, … within the chat
+    role: varchar("role", { length: 10 }).$type<ChatRole>().notNull(), // CHAT_ROLES
+    content: mediumtext("content").notNull(),
+    status: varchar("status", { length: 10 }).$type<ChatStatus>().notNull(), // CHAT_STATUSES
+    error: varchar("error", { length: 200 }), // failed: why
+    model: varchar("model", { length: 100 }), // a finished reply's
+    promptTokens: int("prompt_tokens"),
+    completionTokens: int("completion_tokens"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [unique("ai_chat_messages_position").on(t.chatId, t.position)],
+);
+
 // 9. LLM Analyses (AI Parameter Suggestions)
 // What was sent to the AI for an analysis or a suggestion
 // (docs/api/analysis.md §8c): the system prompt, the keys of the sections it

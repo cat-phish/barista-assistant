@@ -32,6 +32,10 @@ import {
   type AiPreviewJobData,
   BEAN_REVIEW_JOB,
   BEAN_REVIEW_QUEUE,
+  CHAT_JOB,
+  CHAT_QUEUE,
+  chatJobId,
+  type ChatJobData,
   LABEL_READ_JOB,
   LABEL_READ_QUEUE,
   type LabelReadResult,
@@ -229,6 +233,18 @@ export function requestBeanReview(data: BeanReviewJobData): Promise<BeanReviewRe
   return addAndWait(beanReviewQueue, BEAN_REVIEW_JOB, data, beanReviewTimeoutMs());
 }
 
+// A chat reply (docs/api/llm-contract.md §9e): one attempt, since a retry
+// would repeat text the person has already read.
+export const chatQueue = new Queue<ChatJobData>(CHAT_QUEUE, { connection });
+let lastChatError = "";
+chatQueue.on("error", (err: Error) => {
+  if (err.message !== lastChatError) console.error("Chat queue error:", err.message);
+  lastChatError = err.message;
+});
+export async function enqueueChatReply(messageId: string): Promise<void> {
+  await withTimeout(() => chatQueue.add(CHAT_JOB, { messageId }, { jobId: chatJobId(messageId), removeOnComplete: true, removeOnFail: true }));
+}
+
 // Settings' model list and Test (docs/api/workspaces.md §2d).
 export const aiCheckQueue = new Queue<AiCheckJobData, AiCheckResult>(AI_CHECK_QUEUE, { connection });
 let lastAiCheckError = "";
@@ -317,7 +333,7 @@ export async function enqueueBackupNow(): Promise<void> {
 }
 
 export async function closeQueue(): Promise<void> {
-  await Promise.all([brewAnalysisQueue.close(), reminderQueue.close(), maintenanceQueue.close(), parameterSuggestionQueue.close(), aiPreviewQueue.close(), labelReadQueue.close(), ...[...queueEvents.values()].map((e) => e.close())]);
+  await Promise.all([brewAnalysisQueue.close(), reminderQueue.close(), maintenanceQueue.close(), parameterSuggestionQueue.close(), aiPreviewQueue.close(), labelReadQueue.close(), chatQueue.close(), ...[...queueEvents.values()].map((e) => e.close())]);
   connection.disconnect();
   waitConnection?.disconnect();
 }

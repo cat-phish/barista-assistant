@@ -27,12 +27,12 @@ and fix the references.
 - B. Brewing & logging: 4–8
 - C. Recipes: 9–10
 - D. AI suggestions: 11–14
-- E. Insights: 15–17
-- F. Bar & menu: 18–20
-- G. Home roasting: 21–30
-- H. Accounts: 31–32
-- I. Deployment & the app: 33–35
-- J. Backups: 36
+- E. Insights: 15–18
+- F. Bar & menu: 19–21
+- G. Home roasting: 22–31
+- H. Accounts: 32–33
+- I. Deployment & the app: 34–36
+- J. Backups: 37
 
 ---
 
@@ -121,7 +121,7 @@ Where the app's choices live, and what you can switch on, off or take out.
   - Move the ones that are wrong, with a data migration, and make Settings
     say which kind each one is.
 - **Size:** S to review; each move S–M.
-- **Depends on:** nothing; do it before 36, since where a setting lives
+- **Depends on:** nothing; do it before 37, since where a setting lives
   decides how it's backed up, and the audit is the same work.
 - **Open questions:**
   - Is "workspace default, person overrides" worth having, or is it one or
@@ -487,7 +487,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Or leave batch styles out of the per-brew average, or say on the tile
     that batches count in full.
 - **Size:** S to review and label; M if it records what was drunk.
-- **Depends on:** nothing; 18 (a finished cold brew as stock, each glass
+- **Depends on:** nothing; 19 (a finished cold brew as stock, each glass
   served taken from it) could answer it.
 - **Open questions:**
   - Is a rough split (servings per batch) enough, or does each glass need
@@ -497,44 +497,67 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 17. AI chat in Insights
 
-- **Status:** idea
+- **Status:** in progress (spec: `docs/api/chat.md` §12)
 - **Why:** the AI only answers through fixed jobs (analysis, Suggest
   parameters, bean review). There's no way to ask it something of your own,
   like why two brews tasted so different or what to try next with a bean,
   or to show it a photo of a puck or a roaster's bag.
-- **Approach:**
-  - A **Chat** tab in Insights, with replies appearing as they're written.
-  - **Attach** brew logs, recipes, beans and the like from a picker, so the
-    AI works from what the person chose. Attachments go through the same
-    summaries as the analysis (`worker/src/context.ts`), and what's hidden
-    under Settings → AI stays hidden (CLAUDE.md rule 9).
-  - **Photos:** upload one into the chat, resized as bean photos are
-    (`backend/src/photos.ts`).
-  - Today's jobs run through BullMQ and return one Structured Outputs
-    result, so streaming a conversation needs a new path from the LLM to
-    the browser.
+- **Approach:** a **Chat** tab in Insights, replies appearing as they're
+  written. The worker holds the AI keys, so it calls the model and writes to
+  a Redis stream, and the backend passes that to the browser as server-sent
+  events. Branches, in order:
+  1. Text chat: tables, routes, the streaming path, the tab.
+  2. **Attach** brew logs, recipes and beans from a picker. Attachments go
+     through the same summaries as the analysis (`worker/src/context.ts`),
+     and what's hidden under Settings → AI stays hidden (CLAUDE.md rule 9).
+     Rebuilt on every turn, so a later hide or delete applies.
+  3. **Photos:** uploaded into the chat, resized as bean photos are
+     (`backend/src/photos.ts`) and kept with it.
+  4. **Keeping and purging:** limits on history size and age, set for the
+     server and by each person (a person's can't exceed the server's, and
+     either can be unlimited); purging chat data; a limit on messages.
+     **Turning chat off:** for a whole workspace, and for one member by the
+     workspace's owner.
+  5. **Export and import** of a person's chats.
 - **Size:** L
 - **Depends on:** nothing (choosing a model is built: photos need one that can
   see them). Pairs with 15: a useful answer could be saved
   as an insight.
+- **Decided:**
+  - Chats are kept and private to the person. Not in workspace backups (a
+    backup would hand them to whoever downloads it): they have their own
+    export and import.
+  - Read-only for now; proposals are item 18.
+  - The AI sees only what's attached; it can't look things up itself.
+  - Photos stay with their chat and go when it does.
+  - Max size is what a person's chats take on disk, messages and photos
+    together, entered in KB, MB or GB. The server's default is 1 GB; going
+    over removes that person's oldest chats first.
+  - Purging chat data takes the "I understand" checkbox (CLAUDE.md rule 7).
+    Deleting one chat doesn't, and has no confirmation.
+  - Leaving or being removed from a workspace deletes your chats there; the
+    dialogs say so.
+
+### 18. AI chat proposals
+
+- **Status:** idea
+- **Why:** the chat in 17 is read-only, so a recipe or a parameter change it
+  suggests has to be typed in by hand.
+- **Approach:** a reply can carry a proposal (a new recipe, a parameter
+  change) shown as a card the person accepts or dismisses; accepting goes
+  through the normal routes. Nothing changes without that.
+- **Size:** M
+- **Depends on:** 17.
 - **Open questions:**
-  - Are chats kept? If so, per person or shared with the workspace, and in
-    backups or not (CLAUDE.md rule 8)?
-  - Does the chat live on the backend or the worker, and how do replies
-    stream (server-sent events, Redis)?
-  - Read-only, or can it propose changes (a new recipe, a parameter change)
-    for the person to accept?
-  - Are photos kept with the chat or dropped after the reply?
-  - Limits per person or workspace, since a chat can use far more of the API
-    than an analysis?
-  - Can it look things up on its own (all of a bean's brews, the stats), or
-    only see what was attached?
+  - Which changes can it propose first?
+  - How does a structured proposal fit into a streamed reply, on both
+    providers?
 
 ---
 
 ## F. Bar & menu
 
-### 18. Ingredient prep and stock
+### 19. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -551,7 +574,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should a finished cold brew batch (roadmap: cold brew refinements) be
     stock the same way, with each glass served taken from it and rated?
 
-### 19. Public menu: branding and sizes
+### 20. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
@@ -565,7 +588,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
-### 20. Drink categories: what else they could do
+### 21. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -594,7 +617,7 @@ Home roasting). Paused here; these are what's next.
   whoever logged it?
 - Should freezing a home-roasted bean pause or extend its rest?
 
-### 21. Live roast timer
+### 22. Live roast timer
 
 - **Status:** planned (branch `roast-timer`)
 - **Why:** roast times are typed in after the roast; a timer running while
@@ -608,7 +631,7 @@ Home roasting). Paused here; these are what's next.
   - Note a temperature at each mark?
   - Keep the screen awake while it runs?
 
-### 22. Roast insights
+### 23. Roast insights
 
 - **Status:** idea
 - **Why:** Insights covers brewing only; a home roaster wants to see what
@@ -621,11 +644,11 @@ Home roasting). Paused here; these are what's next.
   - **rest sweet spot:** brew ratings by days off roast for home roasts,
     suggesting rest days per roast type or green coffee.
 - **Size:** M
-- **Depends on:** nothing; 23 and 27 make it richer.
+- **Depends on:** nothing; 24 and 28 make it richer.
 - **Open questions:** should the rest sweet spot offer to change the
   workspace's default rest days?
 
-### 23. Compare roasts
+### 24. Compare roasts
 
 - **Status:** idea
 - **Why:** with several batches of one green coffee, it's hard to see which
@@ -633,9 +656,9 @@ Home roasting). Paused here; these are what's next.
 - **Approach:** the batches of a green coffee side by side: levels, times,
   temperatures, weight loss, development, and how each one's brews rated.
 - **Size:** M
-- **Depends on:** nothing; can share a branch with 22.
+- **Depends on:** nothing; can share a branch with 23.
 
-### 24. Roast again, and roast plans
+### 25. Roast again, and roast plans
 
 - **Status:** idea
 - **Why:** a good roast is worth repeating, and today the form starts empty.
@@ -647,7 +670,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** S–M (plans are the M)
 - **Depends on:** nothing.
 
-### 25. Running low on roasted coffee
+### 26. Running low on roasted coffee
 
 - **Status:** idea
 - **Why:** the low notice covers green coffee; running out of roasted coffee
@@ -657,10 +680,10 @@ Home roasting). Paused here; these are what's next.
   suggesting the next roast, like the `green-low` job
   (`docs/api/notifications.md` §1b).
 - **Size:** S
-- **Depends on:** nothing; pairs with 24's plans.
+- **Depends on:** nothing; pairs with 25's plans.
 - **Open questions:** a threshold per workspace, or per green coffee?
 
-### 26. Green coffee details and restocks
+### 27. Green coffee details and restocks
 
 - **Status:** idea
 - **Why:** buying the same coffee again means editing the weight left by
@@ -673,18 +696,18 @@ Home roasting). Paused here; these are what's next.
 - **Size:** M
 - **Depends on:** nothing.
 
-### 27. Cupping notes per roast
+### 28. Cupping notes per roast
 
 - **Status:** idea
 - **Why:** brew ratings mix the roast with the brewing; cupping judges the
   roast itself.
 - **Approach:** a short cupping form on a roast: aroma, sweetness, acidity,
   body, a score, and roast defects (scorching, tipping, baked,
-  underdeveloped). Shown on the roast's page; feeds 22 and 23.
+  underdeveloped). Shown on the roast's page; feeds 23 and 24.
 - **Size:** S–M
 - **Depends on:** nothing.
 
-### 28. Roast details for the AI
+### 29. Roast details for the AI
 
 - **Status:** idea
 - **Why:** for a home roast, how it was roasted explains a lot about how it
@@ -696,7 +719,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** S
 - **Depends on:** nothing.
 
-### 29. Roast curves
+### 30. Roast curves
 
 - **Status:** idea
 - **Why:** roasting software (Artisan) records the whole curve; the log only
@@ -707,7 +730,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** L
 - **Depends on:** nothing.
 
-### 30. Roasting machine upkeep
+### 31. Roasting machine upkeep
 
 - **Status:** idea
 - **Why:** roasters need regular chaff and cleaning, easy to forget.
@@ -720,7 +743,7 @@ Home roasting). Paused here; these are what's next.
 
 ## H. Accounts
 
-### 31. Account management and password reset
+### 32. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -751,13 +774,13 @@ Home roasting). Paused here; these are what's next.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 32. Email verification
+### 33. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 31), inviting a member by email, or notifications by email.
+  (item 32), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -767,9 +790,9 @@ Home roasting). Paused here; these are what's next.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 31).
+  - Shares the mail and token pieces with password reset (item 32).
 - **Size:** M (mail is new to the stack).
-- **Depends on:** nothing; pairs with 31.
+- **Depends on:** nothing; pairs with 32.
 - **Open questions:**
   - Block unverified accounts, or only remind them?
   - What happens to accounts that existed before verification (treat as
@@ -782,7 +805,7 @@ Home roasting). Paused here; these are what's next.
 
 How the app is served and installed.
 
-### 33. Test the installed app on phones
+### 34. Test the installed app on phones
 
 - **Status:** idea
 - **Why:** the PWA is now served as a build over HTTPS (roadmap:
@@ -809,7 +832,7 @@ How the app is served and installed.
 - **Depends on:** the app running on the home server.
 - **Open questions:** none.
 
-### 34. Web Push from the installed app
+### 35. Web Push from the installed app
 
 - **Status:** idea
 - **Why:** reminders (rate later) go out through ntfy, Gotify and the
@@ -826,7 +849,7 @@ How the app is served and installed.
     say so on the channel, or hide it in the browser?
   - Several devices per person: one subscription each, all notified?
 
-### 35. Protect the testing branch on GitHub
+### 36. Protect the testing branch on GitHub
 
 - **Status:** idea
 - **Why:** the server pulls whatever is pushed to `testing`, and a push can
@@ -843,7 +866,7 @@ How the app is served and installed.
 
 What a backup keeps, so moving to a new server loses nothing.
 
-### 36. Back up every setting
+### 37. Back up every setting
 
 - **Status:** idea
 - **Why:** a workspace backup (`docs/api/backup.md` §2b) leaves out what

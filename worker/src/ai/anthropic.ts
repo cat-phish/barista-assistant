@@ -47,7 +47,11 @@ export function toAnthropicRequest(request: ChatRequest): Anthropic.MessageCreat
     model: request.model,
     max_tokens: MAX_TOKENS,
     system: textOf(system?.content),
-    messages: request.messages.flatMap((m) => (m.role === "user" ? [{ role: "user" as const, content: userContent(m.content) }] : [])),
+    messages: request.messages.flatMap((m): Anthropic.MessageParam[] => {
+      if (m.role === "user") return [{ role: "user", content: userContent(m.content) }];
+      if (m.role === "assistant") return [{ role: "assistant", content: textOf(m.content) }];
+      return [];
+    }),
     ...(format?.type === "json_schema" ? { output_config: outputFormat(format.json_schema.schema) } : {}),
   };
 }
@@ -85,6 +89,19 @@ export function toLlmMessage(reply: Reply): LlmMessage {
 export async function completeWithAnthropic(ai: AnthropicAi, request: ChatRequest): Promise<{ message: LlmMessage; usage: Usage }> {
   const reply = await send(ai, toAnthropicRequest(request));
   return { message: toLlmMessage(reply), usage: { promptTokens: reply.usage.input_tokens, completionTokens: reply.usage.output_tokens } };
+}
+
+// A chat reply (docs/api/llm-contract.md §9e), each piece as it's written. No
+// fallbacks: switching model part way would restart text already shown.
+export async function streamWithAnthropic(ai: AnthropicAi, request: ChatRequest, onText: (text: string) => void): Promise<{ refusal: string | null; usage: Usage }> {
+  try {
+    const stream = ai.anthropic.messages.stream(toAnthropicRequest(request));
+    stream.on("text", onText);
+    const reply = await stream.finalMessage();
+    return { refusal: toLlmMessage(reply)?.refusal ?? null, usage: { promptTokens: reply.usage.input_tokens, completionTokens: reply.usage.output_tokens } };
+  } catch (err) {
+    rethrow(err, ai);
+  }
 }
 
 // Every address a search found or the answer cited.

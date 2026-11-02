@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { UnrecoverableError } from "bullmq";
 import { describe, expect, it, vi } from "vitest";
-import { completeWithAnthropic, respondWithAnthropic, toAnthropicRequest, toLlmMessage, visitedIn } from "../src/ai/anthropic.js";
+import { completeWithAnthropic, respondWithAnthropic, streamWithAnthropic, toAnthropicRequest, toLlmMessage, visitedIn } from "../src/ai/anthropic.js";
 import type { AnthropicAi } from "../src/ai/client.js";
 import { buildLabelRequest } from "../src/label.js";
 import { buildWebRequest } from "../src/labelWeb.js";
@@ -29,6 +29,25 @@ describe("toAnthropicRequest", () => {
     const content = request.messages[0]!.content as Anthropic.ContentBlockParam[];
     expect(content[0]).toMatchObject({ type: "text" });
     expect(content[1]).toEqual({ type: "image", source: { type: "base64", media_type: "image/webp", data: "AAA" } });
+  });
+});
+
+describe("streamWithAnthropic", () => {
+  const request = { model: "claude-x", messages: [{ role: "system" as const, content: "S" }, { role: "user" as const, content: "Q" }, { role: "assistant" as const, content: "A" }, { role: "user" as const, content: "Q2" }] };
+  const anthropicWith = (stream: unknown): AnthropicAi => ({ provider: "anthropic", apiKey: "sk-ant-secret", models: { main: "claude-x", vision: "claude-x", web: "claude-x" }, official: true, anthropic: { messages: { stream } } as unknown as Anthropic });
+
+  it("keeps the conversation's turns", () => {
+    expect(toAnthropicRequest(request).messages.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
+  });
+
+  it("passes the text on, and returns usage and any refusal", async () => {
+    const pieces: string[] = [];
+    const stream = vi.fn(() => ({
+      on: (_event: string, listener: (text: string) => void) => listener("Hi"),
+      finalMessage: async () => ({ content: [{ type: "text", text: "Hi" }], stop_reason: "end_turn", usage }),
+    }));
+    expect(await streamWithAnthropic(anthropicWith(stream), request, (t) => pieces.push(t))).toEqual({ refusal: null, usage: { promptTokens: 3, completionTokens: 4 } });
+    expect(pieces).toEqual(["Hi"]);
   });
 });
 

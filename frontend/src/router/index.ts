@@ -55,6 +55,7 @@ export const router = createRouter({
         { path: 'prep', name: 'stats-tools', component: () => import('../views/stats/StatsToolsView.vue') },
         { path: 'grinders', name: 'stats-grinders', component: () => import('../views/stats/StatsGrindersView.vue') },
         { path: 'explore', name: 'stats-explore', component: () => import('../views/stats/StatsExploreView.vue') },
+        { path: 'chat', name: 'stats-chat', component: () => import('../views/stats/StatsChatView.vue') },
       ],
     },
     // Roast mode (docs/roadmap.md, Home roasting): its own tabs in the header.
