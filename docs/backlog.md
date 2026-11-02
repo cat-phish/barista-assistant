@@ -518,6 +518,13 @@ What the analysis worker sends to the LLM and what comes back.
      **Turning chat off:** for a whole workspace, and for one member by the
      workspace's owner.
   5. **Export and import** of a person's chats.
+
+  All five are built. Still to do:
+  - **Paste pictures** into the chat, as well as picking a file.
+  - **Refine the chat's layout and look.**
+  - **Test chat fully** in the browser: messages, the attachment picker,
+    photos, Settings → AI chats (a person's and the server's), and both
+    on/off switches.
 - **Size:** L
 - **Depends on:** nothing (choosing a model is built: photos need one that can
   see them). Pairs with 15: a useful answer could be saved
