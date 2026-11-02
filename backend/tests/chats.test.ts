@@ -41,7 +41,7 @@ describe("chats", () => {
     expect(res.body.chat.title).toBe("Why is my V60 sour?");
     expect(res.body.messages.map((m: { role: string; status: string; position: number }) => [m.position, m.role, m.status])).toEqual([[1, "user", "done"], [2, "assistant", "pending"]]);
     const reply = res.body.messages[1].id as string;
-    expect((await chatQueue.getJob(`chat-${reply}`))?.data).toEqual({ messageId: reply });
+    expect((await chatQueue.getJob(`chat-${reply}`))?.data).toEqual({ messageId: reply, photos: [] });
     expect((await owner.agent.get(url(workspaceId))).body.chats.map((c: { id: string }) => c.id)).toEqual([res.body.chat.id]);
   });
 
@@ -156,8 +156,10 @@ describe("photos", () => {
     await db.update(aiChatPhotos).set({ createdAt: new Date(Date.now() - 25 * 3600_000) }).where(eq(aiChatPhotos.id, old.id));
     const stray = randomUUID();
     await writeChatPhotoFile(workspaceId, stray, Buffer.from("x"));
-    expect(await sweepChatPhotos()).toBe(2);
+    // At least these two: other tests' workspaces leave files behind.
+    expect(await sweepChatPhotos()).toBeGreaterThanOrEqual(2);
     await access(chatPhotoPath(workspaceId, fresh.id));
+    await expect(access(chatPhotoPath(workspaceId, stray))).rejects.toThrow();
     await expect(access(chatPhotoPath(workspaceId, old.id))).rejects.toThrow();
     // The bean photo sweep leaves chat photos alone.
     await sweepOrphanPhotos();
