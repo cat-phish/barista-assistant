@@ -10,6 +10,7 @@ import express, { Router, type Request, type Response } from "express";
 import { Redis } from "ioredis";
 import { z } from "zod";
 import { requireAi } from "../aiConfig.js";
+import { buildChatsZip, importChats } from "../chatExport.js";
 import { chatLimitsSchema, deleteAllChatsOf, deleteChats, pruneChatsOf, userChatBytes } from "../chatData.js";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { config } from "../config.js";
@@ -269,6 +270,33 @@ chatsRouter.post("/", async (req: Request<Params>, res: Response<ChatPair>) => {
   }
   await pruneChatsOf(userId, id);
   res.status(202).json(await theTwo(chat!, turn.ids));
+});
+
+chatsRouter.get("/export", async (req: Request<Params>, res: Response) => {
+  const userId = authedUserId(req);
+  const { workspaceId } = req.params;
+  if (!(await requireMembership(res, userId, workspaceId))) return;
+  const zip = await buildChatsZip(workspaceId, userId);
+  res.setHeader("Content-Disposition", `attachment; filename="chats-${new Date().toISOString().slice(0, 10)}.zip"`);
+  res.type("application/zip").send(Buffer.from(zip));
+});
+
+const zipBody = express.raw({ type: ["application/zip", "application/x-zip-compressed"], limit: "250mb" });
+chatsRouter.post("/import", zipBody, async (req: Request<Params>, res: Response<{ imported: number; skipped: number }>) => {
+  const userId = authedUserId(req);
+  const { workspaceId } = req.params;
+  if (!(await requireMembership(res, userId, workspaceId, WRITE_ROLES))) return;
+  if (!(await requireChatOn(res, userId, workspaceId))) return;
+  if (!Buffer.isBuffer(req.body)) {
+    sendError(res, 400, "Send the .zip as the body");
+    return;
+  }
+  const result = await importChats(req.body, workspaceId, userId);
+  if (!result.ok) {
+    sendError(res, result.status, result.error);
+    return;
+  }
+  res.json({ imported: result.imported, skipped: result.skipped });
 });
 
 // The image itself, whatever its type: sharp decides whether it is one.

@@ -79,6 +79,12 @@ export const chatsApi = {
   send(workspaceId: string, chatId: string, body: ChatSend) {
     return api.post<ChatPair>(`${base(workspaceId)}/${chatId}/messages`, body);
   },
+  exportZip(workspaceId: string) {
+    return api.file(`${base(workspaceId)}/export`);
+  },
+  importZip(workspaceId: string, zip: Blob) {
+    return api.post<{ imported: number; skipped: number }>(`${base(workspaceId)}/import`, new Blob([zip], { type: 'application/zip' }));
+  },
   addPhoto(workspaceId: string, image: Blob) {
     return api.post<{ photo: ChatPhoto }>(`${base(workspaceId)}/photos`, image);
   },
