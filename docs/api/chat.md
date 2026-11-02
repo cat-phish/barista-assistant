@@ -117,3 +117,24 @@ a send is a `429` with `code: "chat_limit"`.
 | `DELETE /api/server/chats` | Admins. Purges everyone's chats and photos. `204`. |
 
 Leaving a workspace, or being removed from it, deletes your chats there.
+
+## Export and import
+
+Your chats in a workspace as one `.zip`, to keep or to bring into another
+workspace or server. Not a workspace backup: it holds only your own chats.
+
+| Route | |
+| --- | --- |
+| `GET /export` | The zip: `chats.json` and `photos/<id>.webp`. Any member. A reply still being written is left out. |
+| `POST /import` | The zip as the body, `application/zip`, up to 250 MB. `owner` or `barista`, with chat on. `200` with `{ imported, skipped }`. |
+
+`chats.json` is `{ version: 1, exportedAt, chats }`; a chat is `{ id, title,
+createdAt, updatedAt, messages }`, and a message as above without its `id`, with
+`photos` as `{ id, width, height }`.
+
+Importing adds chats to your own, keeping their dates. A chat you already have
+here, by `id`, is skipped. Photos are checked as a backup's are, and one that
+can't be read is left out. A file that would take you past your size limit is a
+`409`, and nothing is added. Chats older than your age limit are removed as
+usual, right after the import. An attachment from another workspace stays as its
+label, and the AI is told it's unavailable (§9e).

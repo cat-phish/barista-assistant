@@ -4,6 +4,7 @@ import { AI_SERVER_KEY, CHAT_LIMITS_KEY, DEFAULT_SERVER_AI } from "@barista/shar
 import { CHAT_EVENT_FIELD, chatReplyKey, type ChatStreamEvent } from "@barista/shared/jobs";
 import { aiChatMessages, aiChatPhotos, aiChats, serverSettings, workspaceAiConfigs } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
+import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { Redis } from "ioredis";
 import sharp from "sharp";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -290,6 +291,85 @@ describe("limits and purging", () => {
     expect((await barista.agent.delete(`/api/workspaces/${workspaceId}/members/${barista.id}`)).status).toBe(204);
     expect(await db.select().from(aiChats).where(eq(aiChats.userId, barista.id))).toEqual([]);
     expect((await owner.agent.get(url(workspaceId))).body.chats).toHaveLength(1);
+  });
+});
+
+describe("export and import", () => {
+  const binary = (r: { on(e: string, f: (c?: Buffer) => void): void }, done: (err: Error | null, body: Buffer) => void) => {
+    const parts: Buffer[] = [];
+    r.on("data", (c) => parts.push(c!));
+    r.on("end", () => done(null, Buffer.concat(parts)));
+  };
+  const exported = async (user: TestUser, ws: string): Promise<Buffer> => (await user.agent.get(`${url(ws)}/export`).buffer(true).parse(binary as never)).body as Buffer;
+  const imported = (user: TestUser, ws: string, zip: Buffer) => user.agent.post(`${url(ws)}/import`).set("Content-Type", "application/zip").send(zip);
+  const png = () => sharp({ create: { width: 20, height: 20, channels: 3, background: "#123456" } }).png().toBuffer();
+
+  async function chatWithPhoto(): Promise<{ chatId: string; photoId: string }> {
+    const photo = (await owner.agent.post(`${url(workspaceId)}/photos`).set("Content-Type", "image/png").send(await png())).body.photo as { id: string };
+    const bean = await newBean(owner, workspaceId, { roasterName: "Onyx", beanName: "Guji" });
+    const res = await owner.agent.post(url(workspaceId)).send({ content: "Look", photoIds: [photo.id], attachments: [{ kind: "bean", id: bean }] });
+    await finish(res.body.messages[1].id, "A puck");
+    return { chatId: res.body.chat.id, photoId: photo.id };
+  }
+
+  it("brings a chat and its photo into another workspace, and skips it there next time", async () => {
+    const { chatId } = await chatWithPhoto();
+    const zip = await exported(owner, workspaceId);
+    const other = (await newWorkspace(owner)).id;
+    await withAi(other);
+    const res = await imported(owner, other, zip);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toEqual({ imported: 1, skipped: 0 });
+    const [chat] = (await owner.agent.get(url(other))).body.chats as Array<{ id: string; title: string }>;
+    expect(chat!.title).toBe("Look");
+    expect(chat!.id).not.toBe(chatId);
+    const { messages } = (await owner.agent.get(`${url(other)}/${chat!.id}`)).body as { messages: Array<{ id: string; content: string; attachments: unknown[]; photos: Array<{ id: string }> }> };
+    expect(messages.map((m) => m.content)).toEqual(["Look", "A puck"]);
+    expect(messages[0]!.attachments).toHaveLength(1);
+    expect((await owner.agent.get(`${url(other)}/photos/${messages[0]!.photos[0]!.id}`)).status).toBe(200);
+
+    expect((await imported(owner, workspaceId, zip)).body).toEqual({ imported: 0, skipped: 1 });
+  });
+
+  it("only holds your own, and leaves out a reply still being written", async () => {
+    const barista = await newUser();
+    await addMember(owner, workspaceId, barista, "barista");
+    await chatWithPhoto();
+    await barista.agent.post(url(workspaceId)).send({ content: "Theirs" });
+    const { chats } = JSON.parse(strFromU8(unzipSync(await exported(barista, workspaceId))["chats.json"]!)) as { chats: Array<{ title: string; messages: unknown[] }> };
+    expect(chats.map((c) => c.title)).toEqual(["Theirs"]);
+    expect(chats[0]!.messages).toHaveLength(1);
+  });
+
+  it("restores your own after a purge, with the same id", async () => {
+    const { chatId } = await chatWithPhoto();
+    const zip = await exported(owner, workspaceId);
+    await owner.agent.delete("/api/auth/me/chats");
+    expect((await imported(owner, workspaceId, zip)).body).toEqual({ imported: 1, skipped: 0 });
+    expect((await owner.agent.get(`${url(workspaceId)}/${chatId}`)).status).toBe(200);
+  });
+
+  it("refuses what isn't an export, and what won't fit", async () => {
+    const big = await owner.agent.post(url(workspaceId)).send({ content: "x".repeat(900) });
+    await finish(big.body.messages[1].id, "Reply");
+    const zip = await exported(owner, workspaceId);
+    expect((await imported(owner, workspaceId, Buffer.from("nope"))).status).toBe(400);
+    expect((await imported(owner, workspaceId, Buffer.from(zipSync({ "chats.json": strToU8("{}") })))).status).toBe(400);
+    const other = (await newWorkspace(owner)).id;
+    await owner.agent.put("/api/auth/me/chat-settings").send({ maxBytes: 1024, maxDays: null });
+    const res = await imported(owner, other, zip);
+    expect(res.status).toBe(409);
+    expect((await owner.agent.get(url(other))).body.chats).toEqual([]);
+  });
+
+  it("needs chat on, and write access, to import", async () => {
+    await chatWithPhoto();
+    const zip = await exported(owner, workspaceId);
+    const viewer = await newUser();
+    await addMember(owner, workspaceId, viewer, "viewer");
+    expect((await imported(viewer, workspaceId, zip)).status).toBe(403);
+    await owner.agent.patch(`/api/workspaces/${workspaceId}/settings`).send({ aiChat: false });
+    expect((await imported(owner, workspaceId, zip)).status).toBe(403);
   });
 });
 
