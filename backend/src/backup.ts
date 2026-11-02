@@ -53,6 +53,7 @@ import {
   workspaceAiConfigs,
   aiChats,
   aiChatMessages,
+  aiChatPhotos,
   brewLogs,
   brewLogTools,
   brewProblems,
@@ -195,7 +196,7 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
 // analysis_requests is queue state (when an automatic analysis is due, why
 // one failed), meaningless without the queue. AI chats are private to the
 // person (docs/api/chat.md §12), and whoever has a backup could read them.
-export const NOT_BACKED_UP: readonly MySqlTable[] = [users, notificationChannels, workspaces, workspaceMembers, serverSettings, analysisRequests, flavorLexicons, workspaceAiConfigs, aiChats, aiChatMessages];
+export const NOT_BACKED_UP: readonly MySqlTable[] = [users, notificationChannels, workspaces, workspaceMembers, serverSettings, analysisRequests, flavorLexicons, workspaceAiConfigs, aiChats, aiChatMessages, aiChatPhotos];
 
 // Columns that only hold one of a list (varchar in the database).
 const ENUMS: Record<string, readonly string[]> = {

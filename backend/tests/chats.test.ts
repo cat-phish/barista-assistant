@@ -1,12 +1,16 @@
+import { randomUUID } from "node:crypto";
+import { access } from "node:fs/promises";
 import { AI_SERVER_KEY, DEFAULT_SERVER_AI } from "@barista/shared/aiConfig";
 import { CHAT_EVENT_FIELD, chatReplyKey, type ChatStreamEvent } from "@barista/shared/jobs";
-import { aiChatMessages, serverSettings, workspaceAiConfigs } from "@barista/shared/schema";
+import { aiChatMessages, aiChatPhotos, serverSettings, workspaceAiConfigs } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import { Redis } from "ioredis";
+import sharp from "sharp";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { app } from "../src/app.js";
 import { config } from "../src/config.js";
 import { db } from "../src/db.js";
+import { chatPhotoPath, sweepChatPhotos, sweepOrphanPhotos, writeChatPhotoFile } from "../src/photos.js";
 import { chatQueue } from "../src/queue.js";
 import { addMember, newBean, newBrewLog, newUser, newWorkspace, type TestUser } from "./helpers.js";
 
@@ -105,6 +109,59 @@ describe("attachments", () => {
     expect((await owner.agent.get(url(workspaceId))).body.chats).toEqual([]);
     const many = Array.from({ length: 11 }, () => ({ kind: "bean", id: theirs }));
     expect((await owner.agent.post(url(workspaceId)).send({ content: "Hi", attachments: many })).status).toBe(400);
+  });
+});
+
+describe("photos", () => {
+  const png = () => sharp({ create: { width: 2000, height: 1000, channels: 3, background: "#654321" } }).png().toBuffer();
+  const upload = async (user: TestUser, ws = workspaceId) => (await user.agent.post(`${url(ws)}/photos`).set("Content-Type", "image/png").send(await png())).body.photo as { id: string; width: number };
+
+  it("resizes one, sends it with a message and puts it in the job", async () => {
+    const photo = await upload(owner);
+    expect(photo.width).toBe(1024);
+    const res = await owner.agent.post(url(workspaceId)).send({ content: "What's this?", photoIds: [photo.id] });
+    expect(res.status, JSON.stringify(res.body)).toBe(202);
+    expect(res.body.messages[0].photos).toEqual([{ id: photo.id, width: 1024, height: 512 }]);
+    const job = await chatQueue.getJob(`chat-${res.body.messages[1].id}`);
+    expect(job?.data.photos).toEqual([{ messageId: res.body.messages[0].id, base64: expect.any(String) }]);
+    expect((await owner.agent.get(`${url(workspaceId)}/photos/${photo.id}`)).headers["content-type"]).toMatch(/image\/webp/);
+  });
+
+  it("is only for whoever uploaded it, and can only be sent once", async () => {
+    const barista = await newUser();
+    await addMember(owner, workspaceId, barista, "barista");
+    const photo = await upload(owner);
+    expect((await barista.agent.get(`${url(workspaceId)}/photos/${photo.id}`)).status).toBe(404);
+    expect((await barista.agent.post(url(workspaceId)).send({ content: "Hi", photoIds: [photo.id] })).status).toBe(400);
+    expect((await owner.agent.post(url(workspaceId)).send({ content: "Hi", photoIds: [photo.id] })).status).toBe(202);
+    expect((await owner.agent.post(url(workspaceId)).send({ content: "Again", photoIds: [photo.id] })).status).toBe(400);
+  });
+
+  it("refuses what isn't an image, and more than four", async () => {
+    expect((await owner.agent.post(`${url(workspaceId)}/photos`).set("Content-Type", "image/png").send(Buffer.from("nope"))).status).toBe(400);
+    const ids = Array.from({ length: 5 }, () => randomUUID());
+    expect((await owner.agent.post(url(workspaceId)).send({ content: "Hi", photoIds: ids })).status).toBe(400);
+  });
+
+  it("removes the file with the chat", async () => {
+    const photo = await upload(owner);
+    const res = await owner.agent.post(url(workspaceId)).send({ content: "Hi", photoIds: [photo.id] });
+    await owner.agent.delete(`${url(workspaceId)}/${res.body.chat.id}`);
+    await expect(access(chatPhotoPath(workspaceId, photo.id))).rejects.toThrow();
+  });
+
+  it("sweeps a photo never sent after a day, and files with no row", async () => {
+    const fresh = await upload(owner);
+    const old = await upload(owner);
+    await db.update(aiChatPhotos).set({ createdAt: new Date(Date.now() - 25 * 3600_000) }).where(eq(aiChatPhotos.id, old.id));
+    const stray = randomUUID();
+    await writeChatPhotoFile(workspaceId, stray, Buffer.from("x"));
+    expect(await sweepChatPhotos()).toBe(2);
+    await access(chatPhotoPath(workspaceId, fresh.id));
+    await expect(access(chatPhotoPath(workspaceId, old.id))).rejects.toThrow();
+    // The bean photo sweep leaves chat photos alone.
+    await sweepOrphanPhotos();
+    await access(chatPhotoPath(workspaceId, fresh.id));
   });
 });
 

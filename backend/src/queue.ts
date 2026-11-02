@@ -36,6 +36,7 @@ import {
   CHAT_QUEUE,
   chatJobId,
   type ChatJobData,
+  type ChatJobPhoto,
   LABEL_READ_JOB,
   LABEL_READ_QUEUE,
   type LabelReadResult,
@@ -241,8 +242,8 @@ chatQueue.on("error", (err: Error) => {
   if (err.message !== lastChatError) console.error("Chat queue error:", err.message);
   lastChatError = err.message;
 });
-export async function enqueueChatReply(messageId: string): Promise<void> {
-  await withTimeout(() => chatQueue.add(CHAT_JOB, { messageId }, { jobId: chatJobId(messageId), removeOnComplete: true, removeOnFail: true }));
+export async function enqueueChatReply(messageId: string, photos: ChatJobPhoto[]): Promise<void> {
+  await withTimeout(() => chatQueue.add(CHAT_JOB, { messageId, photos }, { jobId: chatJobId(messageId), removeOnComplete: true, removeOnFail: true }));
 }
 
 // Settings' model list and Test (docs/api/workspaces.md §2d).

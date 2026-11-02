@@ -4,13 +4,14 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { beansApi } from '../../api/beans';
 import { brewLogsApi } from '../../api/brews';
-import { chatsApi, type Chat, type ChatAttachment, type ChatAttachmentKind, type ChatMessage } from '../../api/chats';
+import { chatsApi, type Chat, type ChatAttachment, type ChatAttachmentKind, type ChatMessage, type ChatPhoto } from '../../api/chats';
 import { ApiError } from '../../api/client';
 import { recipesApi } from '../../api/recipes';
 import { useWorkspaceStore } from '../../stores/workspace';
 
 const MESSAGE_MAX = 4000;
 const ATTACHMENTS_MAX = 10;
+const PHOTOS_MAX = 4;
 const RECENT_BREWS = 50;
 
 const KIND_LABELS: Record<ChatAttachmentKind, string> = { brew: 'Brew', bean: 'Bean', recipe: 'Recipe' };
@@ -56,6 +57,26 @@ function attach() {
 }
 function detach(item: ChatAttachment) {
   attachments.value = attachments.value.filter((a) => a !== item);
+}
+
+// Photos go up as they're picked, and are sent with the next message.
+const photos = ref<ChatPhoto[]>([]);
+const uploading = ref(false);
+const photoUrl = (id: string) => (workspaceId.value ? chatsApi.photoUrl(workspaceId.value, id) : '');
+async function addPhotos(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const files = [...(input.files ?? [])].slice(0, PHOTOS_MAX - photos.value.length);
+  input.value = '';
+  if (!workspaceId.value || !files.length) return;
+  uploading.value = true;
+  error.value = '';
+  try {
+    for (const file of files) photos.value = [...photos.value, (await chatsApi.addPhoto(workspaceId.value, file)).photo];
+  } catch (err) {
+    say(err);
+  } finally {
+    uploading.value = false;
+  }
 }
 
 let stopFollowing: (() => void) | null = null;
@@ -137,12 +158,13 @@ async function send() {
   sending.value = true;
   error.value = '';
   try {
-    const refs = attachments.value.map(({ kind, id }) => ({ kind, id }));
-    const pair = chatId.value ? await chatsApi.send(workspaceId.value, chatId.value, content, refs) : await chatsApi.start(workspaceId.value, content, refs);
+    const body = { content, attachments: attachments.value.map(({ kind, id }) => ({ kind, id })), photoIds: photos.value.map((p) => p.id) };
+    const pair = chatId.value ? await chatsApi.send(workspaceId.value, chatId.value, body) : await chatsApi.start(workspaceId.value, body);
     chatId.value = pair.chat.id;
     messages.value = [...messages.value, ...pair.messages];
     draft.value = '';
     attachments.value = [];
+    photos.value = [];
     picking.value = false;
     const reply = pair.messages.find((m) => m.status === 'pending');
     if (reply) follow(reply);
@@ -178,6 +200,8 @@ watch(
   workspaceId,
   () => {
     newChat();
+    attachments.value = [];
+    photos.value = [];
     void refreshList().catch(say);
   },
   { immediate: true },
@@ -204,6 +228,9 @@ onBeforeUnmount(stop);
           <ul v-if="m.attachments.length" class="chips">
             <li v-for="a in m.attachments" :key="`${a.kind}:${a.id}`" class="chip">{{ KIND_LABELS[a.kind] }}: {{ a.label }}</li>
           </ul>
+          <div v-if="m.photos.length" class="photos">
+            <img v-for="p in m.photos" :key="p.id" :src="photoUrl(p.id)" :width="p.width" :height="p.height" alt="Photo you sent" loading="lazy" />
+          </div>
           <p v-if="m.content" class="text">{{ m.content }}</p>
           <p v-if="m.status === 'pending' && !m.content" class="muted">Thinking…</p>
           <p v-if="m.status === 'failed'" class="form-error" role="alert">{{ m.error ?? 'The reply failed' }}. Send your message again to retry.</p>
@@ -217,6 +244,16 @@ onBeforeUnmount(stop);
             <button type="button" class="btn-link" :aria-label="`Remove ${a.label}`" @click="detach(a)">×</button>
           </li>
         </ul>
+        <div v-if="photos.length" class="photos">
+          <span v-for="p in photos" :key="p.id" class="pending-photo">
+            <img :src="photoUrl(p.id)" :width="p.width" :height="p.height" alt="Photo to send" />
+            <button type="button" class="btn-link" aria-label="Remove this photo" @click="photos = photos.filter((x) => x !== p)">×</button>
+          </span>
+        </div>
+        <label v-if="photos.length < PHOTOS_MAX" class="btn-link photo-add">
+          {{ uploading ? 'Adding…' : 'Add a photo' }}
+          <input type="file" accept="image/*" multiple class="visually-hidden" :disabled="uploading" @change="addPhotos" />
+        </label>
         <button v-if="!picking" type="button" class="btn-link" @click="openPicker">Attach a brew, bean or recipe</button>
         <div v-else class="picker">
           <label for="chat-kind" class="visually-hidden">Attach what</label>
@@ -329,6 +366,28 @@ onBeforeUnmount(stop);
   background: var(--surface);
   font-size: 0.85rem;
   overflow-wrap: anywhere;
+}
+.photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-bottom: var(--space-1);
+}
+.photos img {
+  display: block;
+  width: auto;
+  max-width: 160px;
+  height: auto;
+  max-height: 160px;
+  border-radius: 6px;
+}
+.pending-photo {
+  display: inline-flex;
+  align-items: flex-start;
+}
+.photo-add {
+  margin-right: var(--space-3);
+  cursor: pointer;
 }
 .picker {
   display: flex;
