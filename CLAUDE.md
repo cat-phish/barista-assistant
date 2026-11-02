@@ -89,6 +89,8 @@
    in `AI_DETAILS` (`@barista/shared/aiDetails`) and
    `frontend/src/lib/aiDetails.ts` with its label (a frontend test checks
    they match). Ask the user which it should be when it isn't obvious.
+   Those switches tune the analysis and suggestions only: AI chat attachments
+   go in full (`docs/api/llm-contract.md` §9e).
 10. **Required and optional fields:** only a required field gets the red
     asterisk after its label (`<span class="req" aria-hidden="true">*</span>`,
     with `aria-required` on the field). An optional field carries no note:

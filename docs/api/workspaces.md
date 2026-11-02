@@ -80,7 +80,7 @@ Every workspace in a response carries `settings`, defaults filled in
   get when it analyzes a brew, set under Settings → **AI**. Keys are
   `AI_DETAILS` (`@barista/shared/aiDetails`), each at most once; an unknown
   key is a `400`. A `PATCH` sends the whole list. What each key does is in
-  `docs/api/llm-contract.md` §9, "What the AI sees".
+  `docs/api/llm-contract.md` §9, "What the AI sees". AI chat ignores it (§12).
 - `autoAnalyze` (boolean, default `false`), `autoAnalyzeDelayMinutes` (`0`,
   `5`, `10`, `15` or `30`, default `10`; `0` analyzes right away), `autoAnalyzeDailyCap` (integer 1–500,
   or `null` for no cap, default `null`): auto-analyze (`docs/api/analysis.md`
