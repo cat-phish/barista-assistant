@@ -15,6 +15,9 @@ const route = useRoute();
 
 // Edit layout, on every tab but Explore; closes on leaving the tab.
 const tab = computed(() => tabOfRoute(route.name));
+// Chat (docs/api/chat.md §12) has no charts, so the filters and the brews they
+// pick don't apply to it.
+const chat = computed(() => route.name === 'stats-chat');
 const editing = ref(false);
 watch(tab, () => (editing.value = false));
 const hiddenCount = computed(() => {
@@ -31,8 +34,10 @@ const hiddenCount = computed(() => {
     <div class="page-header">
       <h1>Insights</h1>
     </div>
-    <StatsFilters />
+    <StatsFilters v-if="!chat" />
     <StatsTabs />
+    <RouterView v-if="chat" />
+    <template v-else>
     <p v-if="stats.pinError.value" class="form-error" role="alert">Your added charts: {{ stats.pinError.value }}</p>
     <p v-if="stats.error.value" class="form-error" role="alert">{{ stats.error.value }}</p>
     <p v-else-if="stats.loading.value && !stats.data.value" class="muted" aria-live="polite">Loading insights…</p>
@@ -49,6 +54,7 @@ const hiddenCount = computed(() => {
         {{ hiddenCount }}{{ tab === 'overview' ? '' : hiddenCount === 1 ? ' chart' : ' charts' }} hidden ·
         <button type="button" class="btn-link" @click="editing = true">Edit layout</button>
       </p>
+    </template>
     </template>
   </main>
 </template>

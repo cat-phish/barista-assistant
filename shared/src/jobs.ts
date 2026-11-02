@@ -252,6 +252,20 @@ export interface GreenLowJobData {
   userId: string;
 }
 
+// A chat reply (docs/api/llm-contract.md §9e, docs/api/chat.md §12): the
+// pending assistant message. The worker publishes it to a Redis stream the
+// backend passes on to the browser.
+export const CHAT_QUEUE = "ai-chat";
+export const CHAT_JOB = "reply";
+export interface ChatJobData {
+  messageId: string;
+}
+export const chatJobId = (messageId: string) => `chat-${messageId}`;
+export const chatReplyKey = (messageId: string) => `chat-reply:${messageId}`;
+// One entry, as JSON in the field "event".
+export const CHAT_EVENT_FIELD = "event";
+export type ChatStreamEvent = { type: "text"; text: string } | { type: "end" };
+
 // Scheduled server backups (docs/api/server.md §10): a BullMQ job scheduler
 // on the maintenance queue runs a whole-database dump on the admins' schedule.
 export const MAINTENANCE_QUEUE = "maintenance";
