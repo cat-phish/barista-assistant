@@ -1484,6 +1484,15 @@ export const CHAT_ROLES = ["user", "assistant"] as const;
 export type ChatRole = (typeof CHAT_ROLES)[number];
 export const CHAT_STATUSES = ["pending", "done", "failed"] as const;
 export type ChatStatus = (typeof CHAT_STATUSES)[number];
+export const CHAT_ATTACHMENT_KINDS = ["brew", "bean", "recipe"] as const;
+export type ChatAttachmentKind = (typeof CHAT_ATTACHMENT_KINDS)[number];
+// A reference, not a copy: each reply reads the item afresh. label: what it
+// was called when attached, to show once it's gone.
+export interface ChatAttachment {
+  kind: ChatAttachmentKind;
+  id: string;
+  label: string;
+}
 
 export const aiChats = mysqlTable(
   "ai_chats",
@@ -1512,6 +1521,7 @@ export const aiChatMessages = mysqlTable(
     position: int("position").notNull(), // 1, 2, … within the chat
     role: varchar("role", { length: 10 }).$type<ChatRole>().notNull(), // CHAT_ROLES
     content: mediumtext("content").notNull(),
+    attachments: jsonValue<ChatAttachment[]>("attachments"), // null = none
     status: varchar("status", { length: 10 }).$type<ChatStatus>().notNull(), // CHAT_STATUSES
     error: varchar("error", { length: 200 }), // failed: why
     model: varchar("model", { length: 100 }), // a finished reply's

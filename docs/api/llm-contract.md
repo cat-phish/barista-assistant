@@ -506,14 +506,23 @@ has already read, so a failed reply is marked failed and they send again.
 1. **Conversation** (`worker/src/chat.ts`): the chat's last 40 finished
    messages, oldest first, starting on one of the person's. Failed replies are
    left out.
-2. **Prompt** (`CHAT_SYSTEM`, `worker/src/prompt.ts`): fixed, plus the person's
-   own `instructions` (`auth.md` §1c). Their section texts don't apply.
-3. **Reply:** plain text, streamed, no schema (`streamReply`,
+2. **Attachments** (`loadAttachments`, `worker/src/chat.ts`): what those
+   messages attached, the 20 most recent, each read now from the chat's
+   workspace. A brew is the analysis input (`toLlmInput`); a bean or a recipe is
+   that part of it. One that's been deleted, or an unrated brew the workspace
+   keeps from the AI (`analyzeUnrated`, `unratedHistory`), is named as
+   unavailable, by the label saved with the message.
+3. **Prompt** (`buildChatSystem`, `worker/src/prompt.ts`): fixed, the person's
+   own `instructions` (`auth.md` §1c), then the attachments as JSON. Their
+   section texts don't apply.
+4. **Reply:** plain text, streamed, no schema (`streamReply`,
    `worker/src/llm.ts`, on both providers). Pieces are published about every
    50 ms; the text, model and token counts are saved on the message.
 
-**What the AI sees:** only the conversation so far. Nothing from the journal
-is sent yet, so nothing here is classified in
+**What the AI sees:** the conversation and what was attached, through the same
+`toLlmInput`, `beanInput` and `recipeInput` as an analysis, so `aiHidden` applies
+in the same way (checked in `worker/tests/chat.test.ts`). The analysis context
+itself doesn't change, so there's nothing new to classify in
 `worker/tests/aiDetails.test.ts`.
 
 ## Evaluating changes

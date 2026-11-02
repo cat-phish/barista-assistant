@@ -8,7 +8,7 @@ import { completeWithAnthropic, respondWithAnthropic, streamWithAnthropic } from
 import { withoutKey, type AiClient } from "./ai/client.js";
 import type { BrewContext } from "./context.js";
 import type { BeanReviewContext } from "./beanReview.js";
-import { BEAN_REVIEW_SECTIONS, buildChatSystem, buildSystemPrompt, PROMPT_SECTIONS, promptSections, SUGGEST_SECTIONS, toBeanReviewInput, toLlmInput, toSuggestInput, type PromptCustom } from "./prompt.js";
+import { BEAN_REVIEW_SECTIONS, buildChatSystem, buildSystemPrompt, PROMPT_SECTIONS, promptSections, SUGGEST_SECTIONS, toBeanReviewInput, toLlmInput, toSuggestInput, type LlmInput, type PromptCustom } from "./prompt.js";
 import type { SuggestContext } from "./suggestContext.js";
 
 // The input and system prompt are built in prompt.ts; the schema and its
@@ -191,8 +191,8 @@ export interface ChatTurn {
   role: "user" | "assistant";
   content: string;
 }
-export function buildChatRequest(model: string, turns: ChatTurn[], custom?: PromptCustom): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
-  return { model, messages: [{ role: "system", content: buildChatSystem(custom) }, ...turns] };
+export function buildChatRequest(model: string, turns: ChatTurn[], custom?: PromptCustom, attached: LlmInput[] = []): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
+  return { model, messages: [{ role: "system", content: buildChatSystem(custom, attached) }, ...turns] };
 }
 
 export interface StreamedReply {

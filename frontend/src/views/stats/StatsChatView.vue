@@ -2,11 +2,18 @@
 // Insights → Chat (docs/api/chat.md §12): your own conversations with the AI,
 // replies appearing as they're written. Nobody else in the workspace sees them.
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import { chatsApi, type Chat, type ChatMessage } from '../../api/chats';
+import { beansApi } from '../../api/beans';
+import { brewLogsApi } from '../../api/brews';
+import { chatsApi, type Chat, type ChatAttachment, type ChatAttachmentKind, type ChatMessage } from '../../api/chats';
 import { ApiError } from '../../api/client';
+import { recipesApi } from '../../api/recipes';
 import { useWorkspaceStore } from '../../stores/workspace';
 
 const MESSAGE_MAX = 4000;
+const ATTACHMENTS_MAX = 10;
+const RECENT_BREWS = 50;
+
+const KIND_LABELS: Record<ChatAttachmentKind, string> = { brew: 'Brew', bean: 'Bean', recipe: 'Recipe' };
 
 const workspaces = useWorkspaceStore();
 const workspaceId = computed(() => workspaces.current?.id ?? null);
@@ -18,6 +25,38 @@ const draft = ref('');
 const sending = ref(false);
 const error = ref('');
 const thread = ref<HTMLElement | null>(null);
+
+// What the next message attaches, and the picker's choices.
+const attachments = ref<ChatAttachment[]>([]);
+const picking = ref(false);
+const pickKind = ref<ChatAttachmentKind>('brew');
+const pickId = ref('');
+const options = ref<Record<ChatAttachmentKind, Array<{ id: string; label: string }>>>({ brew: [], bean: [], recipe: [] });
+const choices = computed(() => options.value[pickKind.value].filter((o) => !attachments.value.some((a) => a.kind === pickKind.value && a.id === o.id)));
+
+async function openPicker() {
+  picking.value = true;
+  if (!workspaceId.value) return;
+  try {
+    const [beans, recipes, brews] = await Promise.all([beansApi.list(workspaceId.value), recipesApi.list(workspaceId.value), brewLogsApi.list(workspaceId.value, { limit: RECENT_BREWS })]);
+    options.value = {
+      bean: beans.beans.map((b) => ({ id: b.id, label: `${b.roasterName} ${b.beanName}` })),
+      recipe: recipes.recipes.map((r) => ({ id: r.id, label: r.name })),
+      brew: brews.brewLogs.map((b) => ({ id: b.id, label: `${b.bean.beanName}, ${new Date(b.timestamp).toLocaleDateString()}` })),
+    };
+  } catch (err) {
+    say(err);
+  }
+}
+function attach() {
+  const choice = choices.value.find((o) => o.id === pickId.value);
+  if (!choice || attachments.value.length >= ATTACHMENTS_MAX) return;
+  attachments.value = [...attachments.value, { kind: pickKind.value, ...choice }];
+  pickId.value = '';
+}
+function detach(item: ChatAttachment) {
+  attachments.value = attachments.value.filter((a) => a !== item);
+}
 
 let stopFollowing: (() => void) | null = null;
 const writing = computed(() => messages.value.some((m) => m.status === 'pending'));
@@ -98,10 +137,13 @@ async function send() {
   sending.value = true;
   error.value = '';
   try {
-    const pair = chatId.value ? await chatsApi.send(workspaceId.value, chatId.value, content) : await chatsApi.start(workspaceId.value, content);
+    const refs = attachments.value.map(({ kind, id }) => ({ kind, id }));
+    const pair = chatId.value ? await chatsApi.send(workspaceId.value, chatId.value, content, refs) : await chatsApi.start(workspaceId.value, content, refs);
     chatId.value = pair.chat.id;
     messages.value = [...messages.value, ...pair.messages];
     draft.value = '';
+    attachments.value = [];
+    picking.value = false;
     const reply = pair.messages.find((m) => m.status === 'pending');
     if (reply) follow(reply);
     await refreshList();
@@ -159,12 +201,39 @@ onBeforeUnmount(stop);
       <div ref="thread" class="thread" aria-live="polite">
         <p v-if="!messages.length" class="muted">Ask about your coffee. Only you can see your chats.</p>
         <div v-for="m in messages" :key="m.id" class="message" :class="m.role">
+          <ul v-if="m.attachments.length" class="chips">
+            <li v-for="a in m.attachments" :key="`${a.kind}:${a.id}`" class="chip">{{ KIND_LABELS[a.kind] }}: {{ a.label }}</li>
+          </ul>
           <p v-if="m.content" class="text">{{ m.content }}</p>
           <p v-if="m.status === 'pending' && !m.content" class="muted">Thinking…</p>
           <p v-if="m.status === 'failed'" class="form-error" role="alert">{{ m.error ?? 'The reply failed' }}. Send your message again to retry.</p>
         </div>
       </div>
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
+      <div v-if="workspaces.canEdit" class="attachments">
+        <ul v-if="attachments.length" class="chips">
+          <li v-for="a in attachments" :key="`${a.kind}:${a.id}`" class="chip">
+            {{ KIND_LABELS[a.kind] }}: {{ a.label }}
+            <button type="button" class="btn-link" :aria-label="`Remove ${a.label}`" @click="detach(a)">×</button>
+          </li>
+        </ul>
+        <button v-if="!picking" type="button" class="btn-link" @click="openPicker">Attach a brew, bean or recipe</button>
+        <div v-else class="picker">
+          <label for="chat-kind" class="visually-hidden">Attach what</label>
+          <select id="chat-kind" v-model="pickKind" @change="pickId = ''">
+            <option value="brew">Brew</option>
+            <option value="bean">Bean</option>
+            <option value="recipe">Recipe</option>
+          </select>
+          <label for="chat-pick" class="visually-hidden">Which one</label>
+          <select id="chat-pick" v-model="pickId">
+            <option value="">Choose…</option>
+            <option v-for="o in choices" :key="o.id" :value="o.id">{{ o.label }}</option>
+          </select>
+          <button type="button" class="btn-secondary" :disabled="!pickId || attachments.length >= ATTACHMENTS_MAX" @click="attach">Attach</button>
+          <button type="button" class="btn-link" @click="picking = false">Done</button>
+        </div>
+      </div>
       <form v-if="workspaces.canEdit" class="composer" @submit.prevent="send">
         <label for="chat-message" class="visually-hidden">Message</label>
         <textarea id="chat-message" v-model="draft" rows="2" :maxlength="MESSAGE_MAX" placeholder="Ask about a bean, a brew, a recipe…" @keydown="onKey"></textarea>
@@ -244,6 +313,32 @@ onBeforeUnmount(stop);
 .text {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-1);
+  padding: 0;
+  list-style: none;
+}
+.chip {
+  padding: 0 var(--space-2);
+  border: 1px solid var(--brand-line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+.picker select {
+  min-width: 0;
+  max-width: 100%;
 }
 .composer {
   display: flex;
