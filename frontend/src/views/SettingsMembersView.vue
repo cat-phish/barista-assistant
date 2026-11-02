@@ -88,6 +88,19 @@ async function setRole(member: Member, next: Role): Promise<void> {
 }
 
 // One confirmation dialog, for demoting yourself, removing someone, or leaving.
+async function onChatChange(member: Member, event: Event): Promise<void> {
+  const box = event.target as HTMLInputElement;
+  const ws = workspaces.current?.id;
+  if (!ws) return;
+  try {
+    const { chatEnabled } = await membersApi.setChat(ws, member.userId, box.checked);
+    member.chatEnabled = chatEnabled;
+  } catch (err) {
+    box.checked = !box.checked;
+    error.value = errorMessage(err);
+  }
+}
+
 type Pending = { kind: 'demote'; member: Member; role: Role } | { kind: 'remove'; member: Member } | { kind: 'leave' };
 const pending = ref<Pending | null>(null);
 const pendingError = ref('');
@@ -165,6 +178,10 @@ async function confirmPending(): Promise<void> {
             <select :id="`role-${m.userId}`" class="role-select" :value="m.role" :disabled="busy" @change="onRoleChange(m, $event)">
               <option v-for="r in ROLES" :key="r" :value="r">{{ ROLE_LABELS[r] }}</option>
             </select>
+            <label class="checkbox chat-toggle">
+              <input type="checkbox" :checked="m.chatEnabled !== false" :disabled="busy" @change="onChatChange(m, $event)" />
+              AI chat<span class="visually-hidden"> for {{ m.email }}</span>
+            </label>
             <button v-if="m.userId !== myId" class="btn-link danger" type="button" :disabled="busy" @click="ask({ kind: 'remove', member: m })">
               Remove<span class="visually-hidden"> {{ m.email }}</span>
             </button>
@@ -211,8 +228,8 @@ async function confirmPending(): Promise<void> {
 
   <ConfirmDialog :open="pending !== null" :title="dialogTitle" @cancel="pending = null">
     <p v-if="pending?.kind === 'demote'">You won't be able to change settings or members any more, and only another owner can make you owner again.</p>
-    <p v-else-if="pending?.kind === 'remove'">They lose access to this workspace. Brews they logged stay in it. You can add them again later.</p>
-    <p v-else-if="pending?.kind === 'leave'">You'll need an owner to add you again to get back in.</p>
+    <p v-else-if="pending?.kind === 'remove'">They lose access to this workspace and their AI chats in it are deleted. Brews they logged stay in it. You can add them again later.</p>
+    <p v-else-if="pending?.kind === 'leave'">Your AI chats in this workspace are deleted, and you'll need an owner to add you again to get back in.</p>
     <label class="checkbox">
       <input v-model="understood" type="checkbox" />
       I understand

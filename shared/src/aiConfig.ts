@@ -43,3 +43,21 @@ export function modelsFor(c: { model: string; visionModel: string | null; webMod
 }
 
 export const lastFour = (key: string): string => key.slice(-4);
+
+// Limits on AI chats (docs/api/chat.md §12). null: no limit.
+export interface ChatLimits {
+  maxBytes: number | null; // what a person's chats take on disk
+  maxDays: number | null; // since a chat's last message
+}
+export interface ServerChatLimits extends ChatLimits {
+  dailyMessages: number | null; // what one person can send in 24 hours
+}
+export const CHAT_LIMITS_KEY = "chat_limits";
+export const DEFAULT_SERVER_CHAT_LIMITS: ServerChatLimits = { maxBytes: 1024 ** 3, maxDays: null, dailyMessages: 200 };
+export const NO_CHAT_LIMITS: ChatLimits = { maxBytes: null, maxDays: null };
+
+const stricter = (a: number | null, b: number | null): number | null => (a === null ? b : b === null ? a : Math.min(a, b));
+// Both apply, so a person can't go past the server's.
+export function effectiveChatLimits(server: ChatLimits, own: ChatLimits | null): ChatLimits {
+  return { maxBytes: stricter(server.maxBytes, own?.maxBytes ?? null), maxDays: stricter(server.maxDays, own?.maxDays ?? null) };
+}

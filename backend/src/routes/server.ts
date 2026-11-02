@@ -1,4 +1,4 @@
-import { AI_PROVIDERS, DEFAULT_SERVER_AI, lastFour, type AiEnvStatus, type ServerAiConfig } from "@barista/shared/aiConfig";
+import { AI_PROVIDERS, DEFAULT_SERVER_AI, lastFour, type AiEnvStatus, type ServerAiConfig, type ServerChatLimits } from "@barista/shared/aiConfig";
 import { encryptSecret } from "@barista/shared/secrets";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
@@ -11,12 +11,13 @@ import { DB_BACKUP_FILE } from "@barista/shared/jobs";
 import { BACKUP_FREQUENCIES, users, type BackupSettings, type BackupStatus } from "@barista/shared/schema";
 import { verifyPassword } from "../auth/password.js";
 import { backupDir, backupDownloadsEnabled, backupTimezone, config } from "../config.js";
+import { chatLimitsSchema, deleteAllChats, pruneAllChats, totalChatBytes } from "../chatData.js";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { loginLimiter } from "./auth.js";
 import { enqueueBackupNow, nextBackupAt, syncBackupSchedule } from "../queue.js";
-import { getAiEnvStatus, getServerAi, saveServerAi, getBackupSettings, getBackupStatus, saveBackupSettings } from "../serverSettings.js";
+import { getAiEnvStatus, getChatLimits, getServerAi, saveChatLimits, saveServerAi, getBackupSettings, getBackupStatus, saveBackupSettings } from "../serverSettings.js";
 
 // docs/api/server.md §10: server administration, for server admins (granted
 // on the server: npm run admin -- grant <email>). Mounted at /api/server.
@@ -151,6 +152,28 @@ for (const action of ["models", "test"] as const) {
     await sendAiCheck(res, { workspaceId: null, action });
   });
 }
+
+// AI chat limits and purging (docs/api/chat.md §12).
+const serverChatSchema = chatLimitsSchema.extend({ dailyMessages: z.number().int().min(1).max(100_000).nullable() }).strict();
+interface ServerChatResponse {
+  limits: ServerChatLimits;
+  usedBytes: number;
+}
+const chatView = async (): Promise<ServerChatResponse> => ({ limits: await getChatLimits(), usedBytes: await totalChatBytes() });
+serverRouter.get("/chat", async (_req: Request, res: Response<ServerChatResponse>) => {
+  res.json(await chatView());
+});
+serverRouter.put("/chat", async (req: Request, res: Response<ServerChatResponse>) => {
+  const body = parseBody(serverChatSchema, req, res);
+  if (!body) return;
+  await saveChatLimits(body);
+  await pruneAllChats();
+  res.json(await chatView());
+});
+serverRouter.delete("/chats", async (_req: Request, res: Response) => {
+  await deleteAllChats();
+  res.status(204).end();
+});
 
 serverRouter.get("/backups", async (_req: Request, res: Response<ServerBackupsResponse>) => {
   res.json(await overview());

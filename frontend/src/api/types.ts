@@ -68,6 +68,7 @@ export interface WorkspaceSettings {
   beanReviewMaxBrews: number;
   beanReviewRatedOnly: boolean;
   beanReviewBrewers: 'all' | string[]; // ones the bean never used are ignored
+  aiChat: boolean; // the Chat tab in Insights (chat.md §12)
   readLabels: boolean; // "Fill in with AI" on the bean form (bean-label.md §4d)
   labelWebLookup: boolean; // its "Also look it up on the web" (off by default)
   labelWebContext: LabelWebContext; // default 'high'
@@ -103,6 +104,7 @@ export interface Member {
   userId: string;
   email: string;
   role: Role;
+  chatEnabled?: boolean; // in the members list (docs/api/chat.md §12)
 }
 
 export interface Workspace {

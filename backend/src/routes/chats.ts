@@ -3,19 +3,22 @@
 import { randomUUID } from "node:crypto";
 import { access, readFile } from "node:fs/promises";
 import { CHAT_EVENT_FIELD, chatReplyKey, type ChatJobPhoto, type ChatStreamEvent } from "@barista/shared/jobs";
-import { aiChatMessages, aiChatPhotos, aiChats, beans, brewLogs, CHAT_ATTACHMENT_KINDS, recipes, type AiChat, type AiChatMessage, type ChatAttachment } from "@barista/shared/schema";
-import { and, asc, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
+import { effectiveChatLimits, NO_CHAT_LIMITS, type ChatLimits, type ServerChatLimits } from "@barista/shared/aiConfig";
+import { aiChatMessages, aiChatPhotos, aiChats, beans, brewLogs, CHAT_ATTACHMENT_KINDS, DEFAULT_WORKSPACE_SETTINGS, recipes, users, withDefaults, workspaceMembers, workspaces, type AiChat, type AiChatMessage, type ChatAttachment } from "@barista/shared/schema";
+import { and, asc, count, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import express, { Router, type Request, type Response } from "express";
 import { Redis } from "ioredis";
 import { z } from "zod";
 import { requireAi } from "../aiConfig.js";
+import { chatLimitsSchema, deleteAllChatsOf, deleteChats, pruneChatsOf, userChatBytes } from "../chatData.js";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { config } from "../config.js";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
-import { chatPhotoPath, PHOTO_MAX_UPLOAD_BYTES, processPhoto, removeChatPhotoFiles, writeChatPhotoFile } from "../photos.js";
+import { chatPhotoPath, PHOTO_MAX_UPLOAD_BYTES, processPhoto, writeChatPhotoFile } from "../photos.js";
 import { enqueueChatReply, QueueUnavailableError } from "../queue.js";
+import { getChatLimits } from "../serverSettings.js";
 
 export const CHAT_MESSAGE_MAX = 4000;
 const CHAT_ATTACHMENTS_MAX = 10;
@@ -57,6 +60,33 @@ const titleOf = (content: string): string => {
   const line = content.split("\n")[0]!.trim();
   return line.length > TITLE_MAX ? `${line.slice(0, TITLE_MAX - 1).trimEnd()}…` : line;
 };
+
+// Whether this person can send here: the workspace's switch and their own.
+async function chatOn(userId: string, workspaceId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ settings: workspaces.settings, enabled: workspaceMembers.chatEnabled })
+    .from(workspaces)
+    .innerJoin(workspaceMembers, and(eq(workspaceMembers.workspaceId, workspaces.id), eq(workspaceMembers.userId, userId)))
+    .where(eq(workspaces.id, workspaceId));
+  return !!row && row.enabled && withDefaults(DEFAULT_WORKSPACE_SETTINGS, row.settings).aiChat;
+}
+async function requireChatOn(res: Response, userId: string, workspaceId: string): Promise<boolean> {
+  if (await chatOn(userId, workspaceId)) return true;
+  sendError(res, 403, "Chat is turned off here", { code: "chat_off" });
+  return false;
+}
+
+async function requireUnderDailyLimit(res: Response, userId: string, limits: ServerChatLimits): Promise<boolean> {
+  if (limits.dailyMessages === null) return true;
+  const [row] = await db
+    .select({ n: count() })
+    .from(aiChatMessages)
+    .innerJoin(aiChats, eq(aiChatMessages.chatId, aiChats.id))
+    .where(and(eq(aiChats.userId, userId), eq(aiChatMessages.role, "user"), gte(aiChatMessages.createdAt, new Date(Date.now() - 24 * 3600_000))));
+  if ((row?.n ?? 0) < limits.dailyMessages) return true;
+  sendError(res, 429, "You've reached the daily limit for chat messages. Try again later.", { code: "chat_limit" });
+  return false;
+}
 
 type Params = { workspaceId: string };
 type ChatParams = Params & { chatId: string };
@@ -192,7 +222,7 @@ async function theTwo(chat: AiChat, ids: [string, string]): Promise<ChatPair> {
 export const chatsRouter = Router({ mergeParams: true });
 chatsRouter.use(requireAuth);
 
-chatsRouter.get("/", async (req: Request<Params>, res: Response<{ chats: AiChat[] }>) => {
+chatsRouter.get("/", async (req: Request<Params>, res: Response<{ chats: AiChat[]; canSend: boolean }>) => {
   const userId = authedUserId(req);
   const { workspaceId } = req.params;
   if (!(await requireMembership(res, userId, workspaceId))) return;
@@ -201,13 +231,14 @@ chatsRouter.get("/", async (req: Request<Params>, res: Response<{ chats: AiChat[
     .from(aiChats)
     .where(and(eq(aiChats.workspaceId, workspaceId), eq(aiChats.userId, userId)))
     .orderBy(desc(aiChats.updatedAt), desc(aiChats.createdAt));
-  res.json({ chats });
+  res.json({ chats, canSend: await chatOn(userId, workspaceId) });
 });
 
 chatsRouter.post("/", async (req: Request<Params>, res: Response<ChatPair>) => {
   const userId = authedUserId(req);
   const { workspaceId } = req.params;
   if (!(await requireMembership(res, userId, workspaceId, WRITE_ROLES))) return;
+  if (!(await requireChatOn(res, userId, workspaceId))) return;
   const body = parseBody(sendSchema, req, res);
   if (!body) return;
   const attachments = await labelled(workspaceId, body.attachments ?? []);
@@ -221,6 +252,7 @@ chatsRouter.post("/", async (req: Request<Params>, res: Response<ChatPair>) => {
     return;
   }
   if (!(await requireAi(res, workspaceId))) return;
+  if (!(await requireUnderDailyLimit(res, userId, await getChatLimits()))) return;
 
   const id = randomUUID();
   await db.insert(aiChats).values({ id, workspaceId, userId, title: titleOf(body.content) });
@@ -235,6 +267,7 @@ chatsRouter.post("/", async (req: Request<Params>, res: Response<ChatPair>) => {
     sendUnavailable(res, err);
     return;
   }
+  await pruneChatsOf(userId, id);
   res.status(202).json(await theTwo(chat!, turn.ids));
 });
 
@@ -243,6 +276,7 @@ chatsRouter.post("/photos", express.raw({ type: () => true, limit: PHOTO_MAX_UPL
   const userId = authedUserId(req);
   const { workspaceId } = req.params;
   if (!(await requireMembership(res, userId, workspaceId, WRITE_ROLES))) return;
+  if (!(await requireChatOn(res, userId, workspaceId))) return;
   const photo = Buffer.isBuffer(req.body) && req.body.length > 0 ? await processPhoto(req.body) : null;
   if (!photo) {
     sendError(res, 400, "Not an image that can be read (JPEG, PNG, WebP, GIF, AVIF or TIFF)");
@@ -286,9 +320,7 @@ chatsRouter.delete("/:chatId", async (req: Request<ChatParams>, res: Response) =
   const { workspaceId, chatId } = req.params;
   if (!(await requireMembership(res, userId, workspaceId))) return;
   if (!(await ownChat(res, userId, workspaceId, chatId))) return;
-  const photos = await db.select({ id: aiChatPhotos.id }).from(aiChatPhotos).innerJoin(aiChatMessages, eq(aiChatPhotos.messageId, aiChatMessages.id)).where(eq(aiChatMessages.chatId, chatId));
-  await db.delete(aiChats).where(eq(aiChats.id, chatId));
-  await removeChatPhotoFiles(workspaceId, photos.map((p) => p.id));
+  await deleteChats([chatId]);
   res.status(204).end();
 });
 
@@ -296,6 +328,7 @@ chatsRouter.post("/:chatId/messages", async (req: Request<ChatParams>, res: Resp
   const userId = authedUserId(req);
   const { workspaceId, chatId } = req.params;
   if (!(await requireMembership(res, userId, workspaceId, WRITE_ROLES))) return;
+  if (!(await requireChatOn(res, userId, workspaceId))) return;
   const chat = await ownChat(res, userId, workspaceId, chatId);
   if (!chat) return;
   const body = parseBody(sendSchema, req, res);
@@ -311,6 +344,7 @@ chatsRouter.post("/:chatId/messages", async (req: Request<ChatParams>, res: Resp
     return;
   }
   if (!(await requireAi(res, workspaceId))) return;
+  if (!(await requireUnderDailyLimit(res, userId, await getChatLimits()))) return;
 
   await settleStale(chatId);
   const turn = await addTurn(chatId, body.content, attachments, photoIds);
@@ -326,6 +360,7 @@ chatsRouter.post("/:chatId/messages", async (req: Request<ChatParams>, res: Resp
     sendUnavailable(res, err);
     return;
   }
+  await pruneChatsOf(userId, chatId);
   res.status(202).json(await theTwo(chat, turn.ids));
 });
 
@@ -413,4 +448,46 @@ chatsRouter.get("/:chatId/messages/:messageId/stream", async (req: Request<Strea
   } finally {
     redis.disconnect();
   }
+});
+
+// Your limits and purging (docs/api/chat.md §12). Mounted at /api/auth/me.
+export const myChatsRouter = Router();
+myChatsRouter.use("/chat-settings", requireAuth);
+myChatsRouter.use("/chats", requireAuth);
+
+interface ChatSettings {
+  own: ChatLimits;
+  server: ServerChatLimits;
+  effective: ChatLimits;
+  usedBytes: number;
+}
+async function settingsOf(userId: string): Promise<ChatSettings> {
+  const [row] = await db.select({ chatLimits: users.chatLimits }).from(users).where(eq(users.id, userId));
+  const own = row?.chatLimits ?? NO_CHAT_LIMITS;
+  const server = await getChatLimits();
+  return { own, server, effective: effectiveChatLimits(server, own), usedBytes: await userChatBytes(userId) };
+}
+
+myChatsRouter.get("/chat-settings", async (req: Request, res: Response<ChatSettings>) => {
+  res.json(await settingsOf(authedUserId(req)));
+});
+
+const over = (own: number | null, server: number | null): boolean => server !== null && (own === null ? false : own > server);
+myChatsRouter.put("/chat-settings", async (req: Request, res: Response<ChatSettings>) => {
+  const userId = authedUserId(req);
+  const body = parseBody(chatLimitsSchema, req, res);
+  if (!body) return;
+  const server = await getChatLimits();
+  if (over(body.maxBytes, server.maxBytes) || over(body.maxDays, server.maxDays)) {
+    sendError(res, 400, "That's more than this server allows");
+    return;
+  }
+  await db.update(users).set({ chatLimits: body }).where(eq(users.id, userId));
+  await pruneChatsOf(userId, null);
+  res.json(await settingsOf(userId));
+});
+
+myChatsRouter.delete("/chats", async (req: Request, res: Response) => {
+  await deleteAllChatsOf(authedUserId(req));
+  res.status(204).end();
 });

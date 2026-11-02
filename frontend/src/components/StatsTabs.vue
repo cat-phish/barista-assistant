@@ -5,11 +5,12 @@
 // Fields) is left out.
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
+import { usePreferences } from '../composables/usePreferences';
 import { useStats } from '../composables/useStats';
 import { CHART_PERIOD_PREFIX } from '../lib/statsRange';
 import SectionTabs from './SectionTabs.vue';
 
-const TABS: Array<{ name: string; text: string; field?: string }> = [
+const TABS: Array<{ name: string; text: string; field?: string; chat?: boolean }> = [
   { name: 'stats-overview', text: 'Overview' },
   { name: 'stats-brews', text: 'Brews' },
   { name: 'stats-beans', text: 'Beans' },
@@ -18,14 +19,15 @@ const TABS: Array<{ name: string; text: string; field?: string }> = [
   { name: 'stats-tools', text: 'Prep', field: 'brew.prepTools' },
   { name: 'stats-grinders', text: 'Grinders', field: 'brew.grinder' },
   { name: 'stats-explore', text: 'Explore' },
-  { name: 'stats-chat', text: 'Chat' },
+  { name: 'stats-chat', text: 'Chat', chat: true },
 ];
 
 const route = useRoute();
 const stats = useStats();
+const { settings } = usePreferences();
 const query = computed(() => Object.fromEntries(Object.entries(route.query).filter(([k]) => !k.startsWith(CHART_PERIOD_PREFIX))));
 const tabs = computed(() =>
-  TABS.filter((t) => !t.field || !stats.hidden.value.has(t.field)).map((t) => ({ to: { name: t.name, query: query.value }, text: t.text })),
+  TABS.filter((t) => (!t.field || !stats.hidden.value.has(t.field)) && (!t.chat || settings.value.aiChat)).map((t) => ({ to: { name: t.name, query: query.value }, text: t.text })),
 );
 </script>
 

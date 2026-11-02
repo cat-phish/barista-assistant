@@ -666,6 +666,13 @@
       "when": 1793586188785,
       "tag": "0094_chat_photos",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "5",
+      "when": 1793587221476,
+      "tag": "0095_chat_limits",
+      "breakpoints": true
     }
   ]
 }

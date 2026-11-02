@@ -2,6 +2,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { isRole, requireMembership, type Role } from "../auth/membership.js";
+import { deleteMemberChats } from "../chatData.js";
 import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
@@ -15,7 +16,7 @@ export interface Member {
 }
 
 export interface MemberListResponse {
-  members: Member[];
+  members: Array<Member & { chatEnabled: boolean }>;
 }
 
 export interface MemberResponse {
@@ -42,7 +43,7 @@ membersRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<Membe
   if (!(await requireMembership(res, authedUserId(req), workspaceId))) return;
 
   const rows = await db
-    .select({ userId: users.id, email: users.email, role: workspaceMembers.role })
+    .select({ userId: users.id, email: users.email, role: workspaceMembers.role, chatEnabled: workspaceMembers.chatEnabled })
     .from(workspaceMembers)
     .innerJoin(users, eq(workspaceMembers.userId, users.id))
     .where(eq(workspaceMembers.workspaceId, workspaceId))
@@ -125,6 +126,23 @@ membersRouter.patch("/:userId", async (req: Request<MemberParams>, res: Response
   res.json({ member: { userId, email: user?.email ?? "", role: body.role } });
 });
 
+// AI chat for this member (docs/api/chat.md §12).
+const chatSchema = z.object({ enabled: z.boolean() }).strict();
+membersRouter.put("/:userId/chat", async (req: Request<MemberParams>, res: Response<{ userId: string; chatEnabled: boolean }>) => {
+  const { workspaceId, userId } = req.params;
+  if (!(await requireMembership(res, authedUserId(req), workspaceId, ["owner"]))) return;
+  const body = parseBody(chatSchema, req, res);
+  if (!body) return;
+  const where = and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId));
+  const [member] = await db.select({ userId: workspaceMembers.userId }).from(workspaceMembers).where(where);
+  if (!member) {
+    sendError(res, 404, "That user is not a member");
+    return;
+  }
+  await db.update(workspaceMembers).set({ chatEnabled: body.enabled }).where(where);
+  res.json({ userId, chatEnabled: body.enabled });
+});
+
 // Owners can remove anyone; any member can remove themselves (leave).
 membersRouter.delete("/:userId", async (req: Request<MemberParams>, res: Response) => {
   const { workspaceId, userId } = req.params;
@@ -163,5 +181,6 @@ membersRouter.delete("/:userId", async (req: Request<MemberParams>, res: Respons
     sendError(res, 409, "A workspace must keep at least one owner");
     return;
   }
+  await deleteMemberChats(workspaceId, userId);
   res.status(204).end();
 });

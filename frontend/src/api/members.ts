@@ -10,5 +10,6 @@ export const membersApi = {
   list: (workspaceId: string) => api.get<{ members: Member[] }>(base(workspaceId)),
   add: (workspaceId: string, email: string, role: Role) => api.post<{ member: Member }>(base(workspaceId), { email, role }),
   setRole: (workspaceId: string, userId: string, role: Role) => api.patch<{ member: Member }>(`${base(workspaceId)}/${userId}`, { role }),
+  setChat: (workspaceId: string, userId: string, enabled: boolean) => api.put<{ userId: string; chatEnabled: boolean }>(`${base(workspaceId)}/${userId}/chat`, { enabled }),
   remove: (workspaceId: string, userId: string) => api.delete(`${base(workspaceId)}/${userId}`),
 };
