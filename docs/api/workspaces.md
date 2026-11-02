@@ -102,6 +102,9 @@ Every workspace in a response carries `settings`, defaults filled in
   Settings → **AI**. Ids the bean never used are ignored, and when none of
   them apply it starts with all its brewers (so does a restored backup,
   whose brewers have new ids).
+- `aiChat` (boolean, default `true`): whether the workspace has AI chat
+  (`docs/api/chat.md` §12), set under Settings → **AI**. Off, sending is a
+  `403`.
 - `readLabels` (boolean, default `true`): whether the bean form offers
   "Fill in from a photo", which sends label photos to the AI provider
   (`docs/api/bean-label.md` §4d), set under Settings → **AI**. Off, the

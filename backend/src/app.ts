@@ -15,7 +15,7 @@ import { beanPhotosRouter } from "./routes/beanPhotos.js";
 import { beanLabelRouter, LABEL_BODY_PATH } from "./routes/beanLabel.js";
 import { brewLogsRouter } from "./routes/brewLogs.js";
 import { statsRouter } from "./routes/stats.js";
-import { chatsRouter } from "./routes/chats.js";
+import { chatsRouter, myChatsRouter } from "./routes/chats.js";
 import { aiConfigRouter } from "./routes/aiConfig.js";
 import { brewersRouter } from "./routes/brewers.js";
 import { grindersRouter } from "./routes/grinders.js";
@@ -72,6 +72,7 @@ app.get("/health", async (_req: Request, res: Response<HealthResponse>) => {
 
 app.use("/api/auth/me/notifications", notificationsRouter);
 app.use("/api/auth/me/ai-prompt", aiPromptRouter);
+app.use("/api/auth/me", myChatsRouter); // docs/api/chat.md §12
 app.use("/api/auth", authRouter);
 app.use("/api/public/menu", publicMenuRouter);
 app.use("/api/workspaces/:workspaceId/ai-config", aiConfigRouter); // docs/api/workspaces.md §2d

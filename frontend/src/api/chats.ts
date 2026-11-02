@@ -43,11 +43,32 @@ export interface ChatSend {
   photoIds: string[];
 }
 
+// null: no limit.
+export interface ChatLimits {
+  maxBytes: number | null;
+  maxDays: number | null;
+}
+export interface ServerChatLimits extends ChatLimits {
+  dailyMessages: number | null;
+}
+export interface ChatSettings {
+  own: ChatLimits;
+  server: ServerChatLimits;
+  effective: ChatLimits;
+  usedBytes: number;
+}
+
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/chats`;
+
+export const chatSettingsApi = {
+  get: () => api.get<ChatSettings>('/api/auth/me/chat-settings'),
+  save: (limits: ChatLimits) => api.put<ChatSettings>('/api/auth/me/chat-settings', limits),
+  purge: () => api.delete('/api/auth/me/chats'),
+};
 
 export const chatsApi = {
   list(workspaceId: string) {
-    return api.get<{ chats: Chat[] }>(base(workspaceId));
+    return api.get<{ chats: Chat[]; canSend: boolean }>(base(workspaceId));
   },
   get(workspaceId: string, chatId: string) {
     return api.get<ChatPair>(`${base(workspaceId)}/${chatId}`);

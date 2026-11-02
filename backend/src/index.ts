@@ -5,10 +5,17 @@ import { pool } from "./db.js";
 import { closeQueue, syncBackupSchedule } from "./queue.js";
 import { getBackupSettings } from "./serverSettings.js";
 import { sweepChatPhotos, sweepOrphanPhotos } from "./photos.js";
+import { pruneAllChats } from "./chatData.js";
 
 const server = app.listen(config.port, () => {
   console.log(`Backend listening on port ${config.port}`);
 });
+
+// Chats past their limits (docs/api/chat.md §12): the worker can't reach the
+// photo files, so this runs here.
+const prune = (): void => void pruneAllChats().catch((err: unknown) => console.error("Chat prune failed:", err instanceof Error ? err.message : err));
+prune();
+setInterval(prune, 3600_000).unref();
 
 // Photo files whose rows are gone (docs/api/bean-photos.md §4c).
 Promise.all([sweepOrphanPhotos(), sweepChatPhotos()])

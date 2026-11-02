@@ -47,6 +47,7 @@ export const workspaceSettingsObject = z
     beanReviewMaxBrews: z.number().int().min(1).max(MAX_REVIEW_BREWS),
     beanReviewRatedOnly: z.boolean(),
     beanReviewBrewers: z.union([z.literal("all"), z.array(z.uuid()).max(200).refine((ids) => new Set(ids).size === ids.length, "each brewer once")]),
+    aiChat: z.boolean(), // docs/api/chat.md §12
     readLabels: z.boolean(), // docs/api/bean-label.md §4d
     labelWebLookup: z.boolean(),
     labelWebContext: z.enum(LABEL_WEB_CONTEXTS),

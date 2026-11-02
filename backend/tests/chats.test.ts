@@ -1,13 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { access } from "node:fs/promises";
-import { AI_SERVER_KEY, DEFAULT_SERVER_AI } from "@barista/shared/aiConfig";
+import { AI_SERVER_KEY, CHAT_LIMITS_KEY, DEFAULT_SERVER_AI } from "@barista/shared/aiConfig";
 import { CHAT_EVENT_FIELD, chatReplyKey, type ChatStreamEvent } from "@barista/shared/jobs";
-import { aiChatMessages, aiChatPhotos, serverSettings, workspaceAiConfigs } from "@barista/shared/schema";
+import { aiChatMessages, aiChatPhotos, aiChats, serverSettings, workspaceAiConfigs } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import { Redis } from "ioredis";
 import sharp from "sharp";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { setAdmin } from "../src/adminAccess.js";
 import { app } from "../src/app.js";
+import { overLimits } from "../src/chatData.js";
 import { config } from "../src/config.js";
 import { db } from "../src/db.js";
 import { chatPhotoPath, sweepChatPhotos, sweepOrphanPhotos, writeChatPhotoFile } from "../src/photos.js";
@@ -164,6 +166,130 @@ describe("photos", () => {
     // The bean photo sweep leaves chat photos alone.
     await sweepOrphanPhotos();
     await access(chatPhotoPath(workspaceId, fresh.id));
+  });
+});
+
+describe("turning chat off", () => {
+  it("off for the workspace, sending is refused and reading isn't", async () => {
+    const start = await owner.agent.post(url(workspaceId)).send({ content: "Hi" });
+    await finish(start.body.messages[1].id, "Hello");
+    await owner.agent.patch(`/api/workspaces/${workspaceId}/settings`).send({ aiChat: false });
+    const chat = `${url(workspaceId)}/${start.body.chat.id}`;
+    const refused = await owner.agent.post(`${chat}/messages`).send({ content: "Again" });
+    expect([refused.status, refused.body.code]).toEqual([403, "chat_off"]);
+    expect((await owner.agent.post(url(workspaceId)).send({ content: "New" })).status).toBe(403);
+    expect((await owner.agent.get(chat)).body.messages).toHaveLength(2);
+    expect((await owner.agent.get(url(workspaceId))).body.canSend).toBe(false);
+  });
+
+  it("off for one member, set only by an owner", async () => {
+    const barista = await newUser();
+    await addMember(owner, workspaceId, barista, "barista");
+    const set = `/api/workspaces/${workspaceId}/members/${barista.id}/chat`;
+    expect((await barista.agent.put(set).send({ enabled: true })).status).toBe(403);
+    expect((await owner.agent.put(set).send({ enabled: false })).body).toEqual({ userId: barista.id, chatEnabled: false });
+    expect((await barista.agent.post(url(workspaceId)).send({ content: "Hi" })).status).toBe(403);
+    expect((await barista.agent.get(url(workspaceId))).body.canSend).toBe(false);
+    expect((await owner.agent.post(url(workspaceId)).send({ content: "Hi" })).status).toBe(202);
+    const members = (await owner.agent.get(`/api/workspaces/${workspaceId}/members`)).body.members as Array<{ userId: string; chatEnabled: boolean }>;
+    expect(members.find((m) => m.userId === barista.id)?.chatEnabled).toBe(false);
+    await owner.agent.put(set).send({ enabled: true });
+    expect((await barista.agent.post(url(workspaceId)).send({ content: "Hi" })).status).toBe(202);
+  });
+});
+
+describe("limits and purging", () => {
+  const MB = 1024 ** 2;
+  const day = 24 * 3600_000;
+  const now = new Date("2026-11-01T00:00:00Z");
+  const chat = (id: string, age: number, bytes: number) => ({ id, userId: "u", updatedAt: new Date(now.getTime() - age * day), bytes });
+
+  it("takes the oldest first until the rest fit, never the one in use", () => {
+    const chats = [chat("new", 0, 5), chat("old", 9, 5), chat("mid", 5, 5)];
+    expect(overLimits(chats, { maxBytes: 10, maxDays: null }, null, now)).toEqual(["old"]);
+    expect(overLimits(chats, { maxBytes: 4, maxDays: null }, "old", now)).toEqual(["mid", "new"]);
+    expect(overLimits(chats, { maxBytes: null, maxDays: 6 }, null, now)).toEqual(["old"]);
+    expect(overLimits(chats, { maxBytes: null, maxDays: null }, null, now)).toEqual([]);
+  });
+
+  it("a person can be stricter than the server, not looser", async () => {
+    await owner.agent.get("/api/auth/me/chat-settings").expect(200);
+    await db.insert(serverSettings).values({ key: CHAT_LIMITS_KEY, value: { maxBytes: 10 * MB, maxDays: 30, dailyMessages: null } });
+    const settings = "/api/auth/me/chat-settings";
+    expect((await owner.agent.put(settings).send({ maxBytes: 11 * MB, maxDays: null })).status).toBe(400);
+    expect((await owner.agent.put(settings).send({ maxBytes: null, maxDays: 31 })).status).toBe(400);
+    const saved = await owner.agent.put(settings).send({ maxBytes: 2 * MB, maxDays: null });
+    expect(saved.body.effective).toEqual({ maxBytes: 2 * MB, maxDays: 30 });
+    // Lowering the server's below it wins without rewriting theirs.
+    await db.update(serverSettings).set({ value: { maxBytes: MB, maxDays: 30, dailyMessages: null } }).where(eq(serverSettings.key, CHAT_LIMITS_KEY));
+    const after = await owner.agent.get(settings);
+    expect(after.body.own.maxBytes).toBe(2 * MB);
+    expect(after.body.effective.maxBytes).toBe(MB);
+  });
+
+  it("deletes older chats when a limit is lowered, and counts what's kept", async () => {
+    const first = await owner.agent.post(url(workspaceId)).send({ content: "x".repeat(2000) });
+    await finish(first.body.messages[1].id, "y".repeat(2000));
+    await db.update(aiChats).set({ updatedAt: new Date(Date.now() - 2 * day) }).where(eq(aiChats.id, first.body.chat.id));
+    const second = await owner.agent.post(url(workspaceId)).send({ content: "z".repeat(1500) });
+    expect((await owner.agent.get("/api/auth/me/chat-settings")).body.usedBytes).toBe(5500);
+    await owner.agent.put("/api/auth/me/chat-settings").send({ maxBytes: 2048, maxDays: null });
+    expect((await owner.agent.get(url(workspaceId))).body.chats.map((c: { id: string }) => c.id)).toEqual([second.body.chat.id]);
+  });
+
+  it("stops at the daily limit", async () => {
+    await db.insert(serverSettings).values({ key: CHAT_LIMITS_KEY, value: { maxBytes: null, maxDays: null, dailyMessages: 1 } });
+    expect((await owner.agent.post(url(workspaceId)).send({ content: "One" })).status).toBe(202);
+    const res = await owner.agent.post(url(workspaceId)).send({ content: "Two" });
+    expect([res.status, res.body.code]).toEqual([429, "chat_limit"]);
+  });
+
+  it("purges your own chats and photos, in every workspace, and nobody else's", async () => {
+    const barista = await newUser();
+    await addMember(owner, workspaceId, barista, "barista");
+    await barista.agent.post(url(workspaceId)).send({ content: "Theirs" });
+    const photo = (await owner.agent.post(`${url(workspaceId)}/photos`).set("Content-Type", "image/png").send(await sharp({ create: { width: 10, height: 10, channels: 3, background: "#000" } }).png().toBuffer())).body.photo as { id: string };
+    await owner.agent.post(url(workspaceId)).send({ content: "Mine" });
+    expect((await owner.agent.delete("/api/auth/me/chats")).status).toBe(204);
+    expect((await owner.agent.get(url(workspaceId))).body.chats).toEqual([]);
+    await expect(access(chatPhotoPath(workspaceId, photo.id))).rejects.toThrow();
+    expect((await barista.agent.get(url(workspaceId))).body.chats).toHaveLength(1);
+  });
+
+  it("keeps the server's routes to admins", async () => {
+    expect((await owner.agent.get("/api/server/chat")).status).toBe(403);
+    expect((await owner.agent.delete("/api/server/chats")).status).toBe(403);
+  });
+
+  it("lets an admin set the server's limits, which prune, and purge everyone's chats", async () => {
+    const admin = await newUser();
+    expect(await setAdmin(admin.email, true)).toBe(true);
+    expect((await admin.agent.get("/api/server/chat")).body.limits).toEqual({ maxBytes: 1024 ** 3, maxDays: null, dailyMessages: 200 });
+    const old = await owner.agent.post(url(workspaceId)).send({ content: "Old" });
+    await finish(old.body.messages[1].id, "Reply");
+    await db.update(aiChats).set({ updatedAt: new Date(Date.now() - 40 * day) }).where(eq(aiChats.id, old.body.chat.id));
+    await owner.agent.post(url(workspaceId)).send({ content: "New" });
+
+    const limits = { maxBytes: 5 * MB, maxDays: 30, dailyMessages: 50 };
+    const saved = await admin.agent.put("/api/server/chat").send(limits);
+    expect(saved.status, JSON.stringify(saved.body)).toBe(200);
+    expect(saved.body.limits).toEqual(limits);
+    expect(saved.body.usedBytes).toBe(3);
+    expect((await owner.agent.get(url(workspaceId))).body.chats).toHaveLength(1);
+    expect((await admin.agent.put("/api/server/chat").send({ ...limits, maxDays: 0 })).status).toBe(400);
+
+    expect((await admin.agent.delete("/api/server/chats")).status).toBe(204);
+    expect((await owner.agent.get(url(workspaceId))).body.chats).toEqual([]);
+  });
+
+  it("deletes a member's chats when they leave, and only theirs", async () => {
+    const barista = await newUser();
+    await addMember(owner, workspaceId, barista, "barista");
+    await barista.agent.post(url(workspaceId)).send({ content: "Mine" });
+    await owner.agent.post(url(workspaceId)).send({ content: "Stays" });
+    expect((await barista.agent.delete(`/api/workspaces/${workspaceId}/members/${barista.id}`)).status).toBe(204);
+    expect(await db.select().from(aiChats).where(eq(aiChats.userId, barista.id))).toEqual([]);
+    expect((await owner.agent.get(url(workspaceId))).body.chats).toHaveLength(1);
   });
 });
 

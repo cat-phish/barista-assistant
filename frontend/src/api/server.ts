@@ -1,3 +1,4 @@
+import type { ServerChatLimits } from './chats';
 import { api } from './client';
 
 // docs/api/server.md §10: server administration (admins only).
@@ -15,6 +16,12 @@ export interface ServerBackups {
   nextRunAt: string | null;
   files: Array<{ name: string; bytes: number; createdAt: string }>;
   downloadsEnabled: boolean; // false: dumps stay on the server (BACKUP_DOWNLOADS)
+}
+
+// docs/api/chat.md §12.
+export interface ServerChat {
+  limits: ServerChatLimits;
+  usedBytes: number;
 }
 
 export const AI_PROVIDERS = { openai: 'OpenAI or compatible', anthropic: 'Anthropic' } as const;
@@ -47,6 +54,9 @@ export interface ServerAiInput {
 }
 
 export const serverApi = {
+  chat: () => api.get<ServerChat>('/api/server/chat'),
+  saveChat: (limits: ServerChatLimits) => api.put<ServerChat>('/api/server/chat', limits),
+  purgeChats: () => api.delete('/api/server/chats'),
   ai: () => api.get<ServerAi>('/api/server/ai'),
   saveAi: (input: ServerAiInput) => api.put<ServerAi>('/api/server/ai', input),
   removeAi: () => api.delete<ServerAi>('/api/server/ai'),

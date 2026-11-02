@@ -15,6 +15,7 @@ const auth = useAuthStore();
     <RouterLink :to="{ name: 'settings-preferences' }" active-class="active">Preferences</RouterLink>
     <RouterLink :to="{ name: 'settings-brew-setup' }" active-class="active">Brew setup</RouterLink>
     <RouterLink :to="{ name: 'settings-ai-prompt' }" active-class="active">Your AI prompt</RouterLink>
+    <RouterLink :to="{ name: 'settings-chats' }" active-class="active">AI chats</RouterLink>
     <RouterLink :to="{ name: 'settings-notifications' }" active-class="active">Notifications</RouterLink>
     <template v-if="workspaces.current">
       <h2 :title="workspaces.current.name">{{ workspaces.current.name }}</h2>
@@ -30,6 +31,7 @@ const auth = useAuthStore();
       <h2>Server</h2>
       <RouterLink :to="{ name: 'settings-server' }" active-class="" exact-active-class="active">Backups</RouterLink>
       <RouterLink :to="{ name: 'settings-server-ai' }" active-class="active">AI</RouterLink>
+      <RouterLink :to="{ name: 'settings-server-chats' }" active-class="active">AI chats</RouterLink>
     </template>
   </nav>
 </template>

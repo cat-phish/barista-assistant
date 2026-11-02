@@ -24,6 +24,7 @@ const chatId = ref<string | null>(null);
 const messages = ref<ChatMessage[]>([]);
 const draft = ref('');
 const sending = ref(false);
+const canSend = ref(true);
 const error = ref('');
 const thread = ref<HTMLElement | null>(null);
 
@@ -96,7 +97,9 @@ function stop() {
 
 async function refreshList() {
   if (!workspaceId.value) return;
-  chats.value = (await chatsApi.list(workspaceId.value)).chats;
+  const list = await chatsApi.list(workspaceId.value);
+  chats.value = list.chats;
+  canSend.value = list.canSend;
 }
 
 function replace(message: ChatMessage) {
@@ -237,7 +240,7 @@ onBeforeUnmount(stop);
         </div>
       </div>
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
-      <div v-if="workspaces.canEdit" class="attachments">
+      <div v-if="workspaces.canEdit && canSend" class="attachments">
         <ul v-if="attachments.length" class="chips">
           <li v-for="a in attachments" :key="`${a.kind}:${a.id}`" class="chip">
             {{ KIND_LABELS[a.kind] }}: {{ a.label }}
@@ -271,11 +274,12 @@ onBeforeUnmount(stop);
           <button type="button" class="btn-link" @click="picking = false">Done</button>
         </div>
       </div>
-      <form v-if="workspaces.canEdit" class="composer" @submit.prevent="send">
+      <form v-if="workspaces.canEdit && canSend" class="composer" @submit.prevent="send">
         <label for="chat-message" class="visually-hidden">Message</label>
         <textarea id="chat-message" v-model="draft" rows="2" :maxlength="MESSAGE_MAX" placeholder="Ask about a bean, a brew, a recipe…" @keydown="onKey"></textarea>
         <button type="submit" class="btn-primary" :disabled="!draft.trim() || sending || writing">Send</button>
       </form>
+      <p v-else-if="!canSend" class="muted">Chat is turned off for you here. You can still read your chats.</p>
       <p v-else class="muted">Viewers can read their chats but can't send messages.</p>
     </section>
   </div>

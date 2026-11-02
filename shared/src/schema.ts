@@ -1,4 +1,4 @@
-import type { AiProvider } from "./aiConfig.js";
+import type { AiProvider, ChatLimits } from "./aiConfig.js";
 import {
   mysqlTable,
   varchar,
@@ -127,6 +127,7 @@ export interface WorkspaceSettings {
   beanReviewBrewers: "all" | string[];
   // "Fill in from the photos" on the bean form (docs/api/bean-label.md §4d):
   // the bean's photos go to the AI to read the label. Off hides it.
+  aiChat: boolean; // docs/api/chat.md §12
   readLabels: boolean;
   // With it, "Also look it up on the web" on that card (bean-label.md §4d):
   // the label's text goes to a web search. Off by default.
@@ -187,6 +188,7 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   beanReviewMaxBrews: 10,
   beanReviewRatedOnly: true,
   beanReviewBrewers: "all",
+  aiChat: true,
   readLabels: true,
   labelWebLookup: false,
   labelWebContext: "high",
@@ -237,6 +239,7 @@ export const users = mysqlTable("users", {
   // texts, used for their brews' analyses and their suggestions. null = the
   // defaults. Kept apart from preferences, which go with every response.
   aiPrompt: jsonValue<AiPrompt>("ai_prompt"),
+  chatLimits: jsonValue<ChatLimits>("chat_limits"), // docs/api/chat.md §12; null = none of their own
   // A server admin (docs/api/server.md §10). Only granted on the server
   // (`npm run admin -- grant <email>`), never through the API, so it can't
   // be claimed by registering an address.
@@ -327,6 +330,7 @@ export const workspaceMembers = mysqlTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     role: varchar("role", { length: 50 }).notNull(), // 'owner' | 'barista' | 'viewer'
+    chatEnabled: boolean("chat_enabled").notNull().default(true), // docs/api/chat.md §12
     insightCharts: jsonValue<InsightChart[]>("insight_charts"), // in the order added; null = none
     insightLayout: jsonValue<InsightLayout>("insight_layout"), // null = every tab as built
   },

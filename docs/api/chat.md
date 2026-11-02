@@ -76,3 +76,44 @@ Closing the stream doesn't stop the reply: the worker finishes and saves it.
 entry is one field, `event`, holding `{ "type": "text", "text": "…" }` or
 `{ "type": "end" }`. The message row is saved before `end`, so the `done` event
 is read from the database. The Redis stream expires 5 minutes after the reply.
+
+## Turning chat off
+
+- **A workspace:** `aiChat` in its settings (§2, default `true`), under
+  Settings → **AI**, owners.
+- **One member:** `PUT /api/workspaces/:workspaceId/members/:userId/chat`, body
+  `{ "enabled": boolean }`, owners. `200` with `{ userId, chatEnabled }`. The
+  members list carries `chatEnabled`.
+
+Off, starting a chat, sending a message and uploading a photo are a `403` with
+`code: "chat_off"`. Chats already made stay readable, and `GET /` says whether
+the caller can send: `{ chats, canSend }`.
+
+## Keeping and purging
+
+A person's chats are limited across all their workspaces, by what they take on
+disk (messages, attachment references and photos together) and by age. **Both
+limits apply:** the server's, and the person's own, which can be stricter but
+not looser. `null` means no limit. Chats over a limit are deleted, oldest first
+by `updatedAt`, within seconds of a change to a limit, after each message, and
+hourly. The chat in use is never deleted for size.
+
+| Limit | Server default | Range |
+| --- | --- | --- |
+| `maxBytes` | 1 GB (1073741824) | 1 KB to 1 PB |
+| `maxDays` | none | 1 to 36500 |
+| `dailyMessages` (server only) | 200 | 1 to 100000 |
+
+`dailyMessages` is how many messages one person can send in 24 hours; over it,
+a send is a `429` with `code: "chat_limit"`.
+
+| Route | |
+| --- | --- |
+| `GET /api/auth/me/chat-settings` | `{ own, server, effective, usedBytes }`. `own` and `effective` are `{ maxBytes, maxDays }`; `server` adds `dailyMessages`. |
+| `PUT /api/auth/me/chat-settings` | Body `{ maxBytes, maxDays }`. `400` if either is over the server's. Answers as `GET`. |
+| `DELETE /api/auth/me/chats` | Purges all your chats and photos, in every workspace. `204`. |
+| `GET /api/server/chat` | Admins. `{ limits, usedBytes }`, `usedBytes` for the whole server. |
+| `PUT /api/server/chat` | Admins. Body as `limits`. Answers as `GET`. Lowering a limit never rewrites a person's own: the lower one applies. |
+| `DELETE /api/server/chats` | Admins. Purges everyone's chats and photos. `204`. |
+
+Leaving a workspace, or being removed from it, deletes your chats there.

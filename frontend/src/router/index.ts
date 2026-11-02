@@ -112,6 +112,7 @@ export const router = createRouter({
     { path: '/settings/brew-setup', name: 'settings-brew-setup', component: () => import('../views/SettingsBrewSetupView.vue'), meta: { requiresAuth: true } },
     { path: '/settings/repeat', redirect: { name: 'settings-brew-setup' } }, // its old name, Repeat brews
     { path: '/settings/ai-prompt', name: 'settings-ai-prompt', component: () => import('../views/SettingsPromptView.vue'), meta: { requiresAuth: true } },
+    { path: '/settings/chats', name: 'settings-chats', component: () => import('../views/SettingsChatsView.vue'), meta: { requiresAuth: true } },
     { path: '/settings/notifications', name: 'settings-notifications', component: () => import('../views/SettingsNotificationsView.vue'), meta: { requiresAuth: true } },
     { path: '/settings/lists', name: 'settings-lists', component: () => import('../views/SettingsListsView.vue'), meta: { requiresWorkspace: true } },
     { path: '/settings/defaults', name: 'settings-defaults', component: () => import('../views/SettingsDefaultsView.vue'), meta: { requiresWorkspace: true } },
@@ -119,6 +120,7 @@ export const router = createRouter({
     { path: '/settings/ai', name: 'settings-ai', component: () => import('../views/SettingsAiView.vue'), meta: { requiresWorkspace: true } },
     { path: '/settings/workspace', name: 'settings-workspace', component: () => import('../views/SettingsWorkspaceView.vue'), meta: { requiresWorkspace: true } },
     { path: '/settings/members', name: 'settings-members', component: () => import('../views/SettingsMembersView.vue'), meta: { requiresWorkspace: true } },
+    { path: '/settings/server/chats', name: 'settings-server-chats', component: () => import('../views/SettingsServerChatsView.vue'), meta: { requiresAdmin: true } },
     { path: '/settings/server/ai', name: 'settings-server-ai', component: () => import('../views/SettingsServerAiView.vue'), meta: { requiresAdmin: true } },
     { path: '/settings/server', name: 'settings-server', component: () => import('../views/SettingsServerView.vue'), meta: { requiresAdmin: true } },
     { path: '/settings/data', name: 'settings-data', component: () => import('../views/SettingsDataView.vue'), meta: { requiresWorkspace: true } },
