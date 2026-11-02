@@ -1,10 +1,11 @@
 // AI chat (docs/api/chat.md §12): a person's own conversations. Every query
 // is scoped to the caller, so someone else's chat is a 404.
 import { randomUUID } from "node:crypto";
-import { CHAT_EVENT_FIELD, chatReplyKey, type ChatStreamEvent } from "@barista/shared/jobs";
-import { aiChatMessages, aiChats, beans, brewLogs, CHAT_ATTACHMENT_KINDS, recipes, type AiChat, type AiChatMessage, type ChatAttachment } from "@barista/shared/schema";
-import { and, asc, desc, eq, inArray, lt, sql } from "drizzle-orm";
-import { Router, type Request, type Response } from "express";
+import { access, readFile } from "node:fs/promises";
+import { CHAT_EVENT_FIELD, chatReplyKey, type ChatJobPhoto, type ChatStreamEvent } from "@barista/shared/jobs";
+import { aiChatMessages, aiChatPhotos, aiChats, beans, brewLogs, CHAT_ATTACHMENT_KINDS, recipes, type AiChat, type AiChatMessage, type ChatAttachment } from "@barista/shared/schema";
+import { and, asc, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
+import express, { Router, type Request, type Response } from "express";
 import { Redis } from "ioredis";
 import { z } from "zod";
 import { requireAi } from "../aiConfig.js";
@@ -13,16 +14,25 @@ import { config } from "../config.js";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
+import { chatPhotoPath, PHOTO_MAX_UPLOAD_BYTES, processPhoto, removeChatPhotoFiles, writeChatPhotoFile } from "../photos.js";
 import { enqueueChatReply, QueueUnavailableError } from "../queue.js";
 
 export const CHAT_MESSAGE_MAX = 4000;
 const CHAT_ATTACHMENTS_MAX = 10;
+const CHAT_PHOTOS_MAX = 4;
+// What a reply is sent, for the model and for the job's size.
+const PHOTOS_SENT = 6;
 const TITLE_MAX = 60;
 // Longer than any reply takes: the worker died.
 const STALE_MS = 10 * 60_000;
 const STREAM_BLOCK_MS = 10_000;
 
-type ChatMessage = Omit<AiChatMessage, "chatId" | "promptTokens" | "completionTokens" | "attachments"> & { attachments: ChatAttachment[] };
+export interface ChatPhoto {
+  id: string;
+  width: number;
+  height: number;
+}
+type ChatMessage = Omit<AiChatMessage, "chatId" | "promptTokens" | "completionTokens" | "attachments"> & { attachments: ChatAttachment[]; photos: ChatPhoto[] };
 export interface ChatPair {
   chat: AiChat;
   messages: ChatMessage[];
@@ -42,7 +52,7 @@ const MESSAGE_COLUMNS = {
 
 const attachmentSchema = z.object({ kind: z.enum(CHAT_ATTACHMENT_KINDS), id: z.string().uuid() }).strict();
 type AttachmentRef = z.infer<typeof attachmentSchema>;
-const sendSchema = z.object({ content: z.string().trim().min(1).max(CHAT_MESSAGE_MAX), attachments: z.array(attachmentSchema).max(CHAT_ATTACHMENTS_MAX).optional() }).strict();
+const sendSchema = z.object({ content: z.string().trim().min(1).max(CHAT_MESSAGE_MAX), attachments: z.array(attachmentSchema).max(CHAT_ATTACHMENTS_MAX).optional(), photoIds: z.array(z.string().uuid()).max(CHAT_PHOTOS_MAX).optional() }).strict();
 const titleOf = (content: string): string => {
   const line = content.split("\n")[0]!.trim();
   return line.length > TITLE_MAX ? `${line.slice(0, TITLE_MAX - 1).trimEnd()}…` : line;
@@ -69,9 +79,41 @@ function settleStale(chatId: string): Promise<unknown> {
     .where(and(eq(aiChatMessages.chatId, chatId), eq(aiChatMessages.status, "pending"), lt(aiChatMessages.createdAt, new Date(Date.now() - STALE_MS))));
 }
 
-const shown = <T extends { attachments: ChatAttachment[] | null }>(m: T): T & { attachments: ChatAttachment[] } => ({ ...m, attachments: m.attachments ?? [] });
+type MessageRow = Omit<ChatMessage, "attachments" | "photos"> & { attachments: ChatAttachment[] | null };
+async function shown(rows: MessageRow[]): Promise<ChatMessage[]> {
+  const ids = rows.map((m) => m.id);
+  const photos = ids.length
+    ? await db.select({ id: aiChatPhotos.id, width: aiChatPhotos.width, height: aiChatPhotos.height, messageId: aiChatPhotos.messageId }).from(aiChatPhotos).where(inArray(aiChatPhotos.messageId, ids)).orderBy(asc(aiChatPhotos.createdAt))
+    : [];
+  return rows.map((m) => ({ ...m, attachments: m.attachments ?? [], photos: photos.filter((p) => p.messageId === m.id).map(({ id, width, height }) => ({ id, width, height })) }));
+}
 const messagesOf = async (chatId: string): Promise<ChatMessage[]> =>
-  (await db.select(MESSAGE_COLUMNS).from(aiChatMessages).where(eq(aiChatMessages.chatId, chatId)).orderBy(asc(aiChatMessages.position))).map(shown);
+  shown(await db.select(MESSAGE_COLUMNS).from(aiChatMessages).where(eq(aiChatMessages.chatId, chatId)).orderBy(asc(aiChatMessages.position)));
+
+// The photos named are the caller's, in this workspace, and not yet sent.
+async function photosFree(userId: string, workspaceId: string, photoIds: string[]): Promise<boolean> {
+  if (!photoIds.length) return true;
+  const unique = new Set(photoIds);
+  const rows = await db
+    .select({ id: aiChatPhotos.id })
+    .from(aiChatPhotos)
+    .where(and(inArray(aiChatPhotos.id, [...unique]), eq(aiChatPhotos.userId, userId), eq(aiChatPhotos.workspaceId, workspaceId), isNull(aiChatPhotos.messageId)));
+  return rows.length === unique.size;
+}
+
+// What the job carries: the chat's latest photos, oldest first. A file that's
+// gone is skipped; the reply goes without it.
+async function photosToSend(chatId: string, workspaceId: string): Promise<ChatJobPhoto[]> {
+  const rows = await db
+    .select({ id: aiChatPhotos.id, messageId: aiChatPhotos.messageId })
+    .from(aiChatPhotos)
+    .innerJoin(aiChatMessages, eq(aiChatPhotos.messageId, aiChatMessages.id))
+    .where(eq(aiChatMessages.chatId, chatId))
+    .orderBy(desc(aiChatMessages.position), desc(aiChatPhotos.createdAt))
+    .limit(PHOTOS_SENT);
+  const read = await Promise.all(rows.reverse().map(async (r) => ({ messageId: r.messageId!, base64: await readFile(chatPhotoPath(workspaceId, r.id), "base64").catch(() => null) })));
+  return read.flatMap((p) => (p.base64 === null ? [] : [{ messageId: p.messageId, base64: p.base64 }]));
+}
 
 // The items named, with their labels, or null if any isn't in this workspace.
 async function labelled(workspaceId: string, refs: AttachmentRef[]): Promise<ChatAttachment[] | null> {
@@ -113,7 +155,7 @@ async function labelled(workspaceId: string, refs: AttachmentRef[]): Promise<Cha
 
 // Saves the message and its pending reply, then queues the reply. The row
 // lock keeps two sends to one chat from taking the same position.
-async function addTurn(chatId: string, content: string, attachments: ChatAttachment[]): Promise<{ ids: [string, string] } | "busy"> {
+async function addTurn(chatId: string, content: string, attachments: ChatAttachment[], photoIds: string[]): Promise<{ ids: [string, string] } | "busy"> {
   const ids: [string, string] = [randomUUID(), randomUUID()];
   const added = await db.transaction(async (tx) => {
     await tx.select({ id: aiChats.id }).from(aiChats).where(eq(aiChats.id, chatId)).for("update");
@@ -129,6 +171,7 @@ async function addTurn(chatId: string, content: string, attachments: ChatAttachm
       { id: ids[0], chatId, position: position + 1, role: "user", content, attachments: attachments.length ? attachments : null, status: "done" },
       { id: ids[1], chatId, position: position + 2, role: "assistant", content: "", status: "pending" },
     ]);
+    if (photoIds.length) await tx.update(aiChatPhotos).set({ messageId: ids[0] }).where(inArray(aiChatPhotos.id, photoIds));
     await tx.update(aiChats).set({ updatedAt: sql`NOW()` }).where(eq(aiChats.id, chatId));
     return true;
   });
@@ -172,21 +215,60 @@ chatsRouter.post("/", async (req: Request<Params>, res: Response<ChatPair>) => {
     sendError(res, 400, "An attachment isn't in this workspace");
     return;
   }
+  const photoIds = body.photoIds ?? [];
+  if (!(await photosFree(userId, workspaceId, photoIds))) {
+    sendError(res, 400, "A photo can't be sent with this message");
+    return;
+  }
   if (!(await requireAi(res, workspaceId))) return;
 
   const id = randomUUID();
   await db.insert(aiChats).values({ id, workspaceId, userId, title: titleOf(body.content) });
   const [chat] = await db.select().from(aiChats).where(eq(aiChats.id, id));
-  const turn = await addTurn(id, body.content, attachments);
+  const turn = await addTurn(id, body.content, attachments, photoIds);
   if (turn === "busy") throw new Error("A new chat can't have a reply pending");
   try {
-    await enqueueChatReply(turn.ids[1]);
+    await enqueueChatReply(turn.ids[1], await photosToSend(id, workspaceId));
   } catch (err) {
+    await db.update(aiChatPhotos).set({ messageId: null }).where(eq(aiChatPhotos.messageId, turn.ids[0]));
     await db.delete(aiChats).where(eq(aiChats.id, id));
     sendUnavailable(res, err);
     return;
   }
   res.status(202).json(await theTwo(chat!, turn.ids));
+});
+
+// The image itself, whatever its type: sharp decides whether it is one.
+chatsRouter.post("/photos", express.raw({ type: () => true, limit: PHOTO_MAX_UPLOAD_BYTES }), async (req: Request<Params>, res: Response<{ photo: ChatPhoto }>) => {
+  const userId = authedUserId(req);
+  const { workspaceId } = req.params;
+  if (!(await requireMembership(res, userId, workspaceId, WRITE_ROLES))) return;
+  const photo = Buffer.isBuffer(req.body) && req.body.length > 0 ? await processPhoto(req.body) : null;
+  if (!photo) {
+    sendError(res, 400, "Not an image that can be read (JPEG, PNG, WebP, GIF, AVIF or TIFF)");
+    return;
+  }
+  // The file goes first: a row never points at a missing file.
+  const id = randomUUID();
+  await writeChatPhotoFile(workspaceId, id, photo.data);
+  await db.insert(aiChatPhotos).values({ id, workspaceId, userId, width: photo.width, height: photo.height, sizeBytes: photo.data.length });
+  res.status(201).json({ photo: { id, width: photo.width, height: photo.height } });
+});
+
+chatsRouter.get("/photos/:photoId", async (req: Request<Params & { photoId: string }>, res: Response) => {
+  const userId = authedUserId(req);
+  const { workspaceId, photoId } = req.params;
+  if (!(await requireMembership(res, userId, workspaceId))) return;
+  const [row] = await db
+    .select({ id: aiChatPhotos.id })
+    .from(aiChatPhotos)
+    .where(and(eq(aiChatPhotos.id, photoId), eq(aiChatPhotos.workspaceId, workspaceId), eq(aiChatPhotos.userId, userId)));
+  const path = row ? chatPhotoPath(workspaceId, row.id) : null;
+  if (!path || !(await access(path).then(() => true, () => false))) {
+    sendError(res, 404, "Photo not found");
+    return;
+  }
+  res.set("Cache-Control", "private, max-age=86400").type("image/webp").sendFile(path);
 });
 
 chatsRouter.get("/:chatId", async (req: Request<ChatParams>, res: Response<ChatPair>) => {
@@ -204,7 +286,9 @@ chatsRouter.delete("/:chatId", async (req: Request<ChatParams>, res: Response) =
   const { workspaceId, chatId } = req.params;
   if (!(await requireMembership(res, userId, workspaceId))) return;
   if (!(await ownChat(res, userId, workspaceId, chatId))) return;
+  const photos = await db.select({ id: aiChatPhotos.id }).from(aiChatPhotos).innerJoin(aiChatMessages, eq(aiChatPhotos.messageId, aiChatMessages.id)).where(eq(aiChatMessages.chatId, chatId));
   await db.delete(aiChats).where(eq(aiChats.id, chatId));
+  await removeChatPhotoFiles(workspaceId, photos.map((p) => p.id));
   res.status(204).end();
 });
 
@@ -221,17 +305,23 @@ chatsRouter.post("/:chatId/messages", async (req: Request<ChatParams>, res: Resp
     sendError(res, 400, "An attachment isn't in this workspace");
     return;
   }
+  const photoIds = body.photoIds ?? [];
+  if (!(await photosFree(userId, workspaceId, photoIds))) {
+    sendError(res, 400, "A photo can't be sent with this message");
+    return;
+  }
   if (!(await requireAi(res, workspaceId))) return;
 
   await settleStale(chatId);
-  const turn = await addTurn(chatId, body.content, attachments);
+  const turn = await addTurn(chatId, body.content, attachments, photoIds);
   if (turn === "busy") {
     sendError(res, 409, "The last reply is still being written");
     return;
   }
   try {
-    await enqueueChatReply(turn.ids[1]);
+    await enqueueChatReply(turn.ids[1], await photosToSend(chatId, workspaceId));
   } catch (err) {
+    await db.update(aiChatPhotos).set({ messageId: null }).where(eq(aiChatPhotos.messageId, turn.ids[0]));
     await db.delete(aiChatMessages).where(sql`${aiChatMessages.id} IN (${turn.ids[0]}, ${turn.ids[1]})`);
     sendUnavailable(res, err);
     return;
@@ -244,7 +334,7 @@ const finished = async (chatId: string, messageId: string): Promise<ChatMessage 
     .select(MESSAGE_COLUMNS)
     .from(aiChatMessages)
     .where(and(eq(aiChatMessages.id, messageId), eq(aiChatMessages.chatId, chatId)));
-  return row ? shown(row) : null;
+  return row ? (await shown([row]))[0]! : null;
 };
 
 // The reply as server-sent events: see "The reply stream" in chat.md §12.

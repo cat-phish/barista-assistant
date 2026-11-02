@@ -15,12 +15,18 @@ export interface ChatAttachmentRef {
 export interface ChatAttachment extends ChatAttachmentRef {
   label: string;
 }
+export interface ChatPhoto {
+  id: string;
+  width: number;
+  height: number;
+}
 export interface ChatMessage {
   id: string;
   position: number;
   role: 'user' | 'assistant';
   content: string;
   attachments: ChatAttachment[];
+  photos: ChatPhoto[];
   status: 'pending' | 'done' | 'failed';
   error: string | null;
   model: string | null;
@@ -29,6 +35,12 @@ export interface ChatMessage {
 export interface ChatPair {
   chat: Chat;
   messages: ChatMessage[];
+}
+
+export interface ChatSend {
+  content: string;
+  attachments: ChatAttachmentRef[];
+  photoIds: string[];
 }
 
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/chats`;
@@ -40,11 +52,17 @@ export const chatsApi = {
   get(workspaceId: string, chatId: string) {
     return api.get<ChatPair>(`${base(workspaceId)}/${chatId}`);
   },
-  start(workspaceId: string, content: string, attachments: ChatAttachmentRef[]) {
-    return api.post<ChatPair>(base(workspaceId), { content, attachments });
+  start(workspaceId: string, body: ChatSend) {
+    return api.post<ChatPair>(base(workspaceId), body);
   },
-  send(workspaceId: string, chatId: string, content: string, attachments: ChatAttachmentRef[]) {
-    return api.post<ChatPair>(`${base(workspaceId)}/${chatId}/messages`, { content, attachments });
+  send(workspaceId: string, chatId: string, body: ChatSend) {
+    return api.post<ChatPair>(`${base(workspaceId)}/${chatId}/messages`, body);
+  },
+  addPhoto(workspaceId: string, image: Blob) {
+    return api.post<{ photo: ChatPhoto }>(`${base(workspaceId)}/photos`, image);
+  },
+  photoUrl(workspaceId: string, photoId: string) {
+    return `${API_URL}${base(workspaceId)}/photos/${photoId}`;
   },
   remove(workspaceId: string, chatId: string) {
     return api.delete<void>(`${base(workspaceId)}/${chatId}`);

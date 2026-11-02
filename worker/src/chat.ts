@@ -1,7 +1,7 @@
 // Chat replies (docs/api/llm-contract.md §9e): the worker calls the model and
 // publishes the reply to a Redis stream as it's written, for the backend to
 // pass on (docs/api/chat.md §12), then saves it on the message.
-import { CHAT_EVENT_FIELD, chatReplyKey, type ChatJobData, type ChatStreamEvent } from "@barista/shared/jobs";
+import { CHAT_EVENT_FIELD, chatReplyKey, type ChatJobData, type ChatJobPhoto, type ChatStreamEvent } from "@barista/shared/jobs";
 import type { AiDetail } from "@barista/shared/aiDetails";
 import { aiChatMessages, aiChats, beans, brewLogs, DEFAULT_WORKSPACE_SETTINGS, recipes, withDefaults, workspaces, type ChatAttachment } from "@barista/shared/schema";
 import { UnrecoverableError } from "bullmq";
@@ -35,6 +35,7 @@ export function redisPublisher(redis: Redis): ChatPublisher {
 // What the AI is sent: the finished messages before this reply, starting on
 // one of the person's.
 interface StoredTurn {
+  id?: string;
   role: ChatTurn["role"];
   content: string;
   status: string;
@@ -46,8 +47,16 @@ function recentTurns<T extends StoredTurn>(messages: readonly T[], before: numbe
   const first = recent.findIndex((m) => m.role === "user");
   return first < 0 ? [] : recent.slice(first);
 }
-export function chatTurns(messages: readonly StoredTurn[], before: number): ChatTurn[] {
-  return recentTurns(messages, before).map(({ role, content }) => ({ role, content }));
+export function chatTurns(messages: readonly StoredTurn[], before: number, photos: readonly ChatJobPhoto[] = []): ChatTurn[] {
+  return recentTurns(messages, before).map(({ id, role, content }): ChatTurn => {
+    if (role === "assistant") return { role, content };
+    const images = photos.filter((p) => p.messageId === id);
+    if (!images.length) return { role, content };
+    return {
+      role,
+      content: [{ type: "text", text: content }, ...images.map((p) => ({ type: "image_url" as const, image_url: { url: `data:image/webp;base64,${p.base64}` } }))],
+    };
+  });
 }
 // What those turns attached: each item once, the latest ATTACHMENTS_SENT.
 export function attachedIn(messages: readonly StoredTurn[], before: number): ChatAttachment[] {
@@ -111,7 +120,7 @@ function batched(messageId: string, publisher: ChatPublisher): { add(text: strin
 export type ChatResult = { status: "saved" | "failed" } | { status: "skipped"; reason: string };
 
 // Never throws for a failed reply: it's saved as failed, with one attempt.
-export async function processChatReply({ messageId }: ChatJobData, publisher: ChatPublisher): Promise<ChatResult> {
+export async function processChatReply({ messageId, photos }: ChatJobData, publisher: ChatPublisher): Promise<ChatResult> {
   const [row] = await db.select({ message: aiChatMessages, chat: aiChats }).from(aiChatMessages).innerJoin(aiChats, eq(aiChatMessages.chatId, aiChats.id)).where(eq(aiChatMessages.id, messageId));
   if (!row) return { status: "skipped", reason: "chat no longer exists" };
   if (row.message.status !== "pending") return { status: "skipped", reason: `already ${row.message.status}` };
@@ -126,7 +135,9 @@ export async function processChatReply({ messageId }: ChatJobData, publisher: Ch
     const [ws] = await db.select({ settings: workspaces.settings }).from(workspaces).where(eq(workspaces.id, row.chat.workspaceId));
     const hidden = new Set(withDefaults(DEFAULT_WORKSPACE_SETTINGS, ws?.settings ?? null).aiHidden);
     const attached = await loadAttachments(attachedIn(messages, row.message.position), row.chat.workspaceId, hidden);
-    const request = buildChatRequest(ai.models.main, chatTurns(messages, row.message.position), custom, attached);
+    const turns = chatTurns(messages, row.message.position, photos);
+    const model = turns.some((t) => typeof t.content !== "string") ? ai.models.vision : ai.models.main;
+    const request = buildChatRequest(model, turns, custom, attached);
     const reply = await streamReply(ai, request, (text) => {
       written += text;
       pieces.add(text);
@@ -136,7 +147,7 @@ export async function processChatReply({ messageId }: ChatJobData, publisher: Ch
     if (!written) throw new Error("The AI returned an empty reply");
     await db
       .update(aiChatMessages)
-      .set({ content: written, status: "done", model: ai.models.main, promptTokens: reply.usage?.promptTokens ?? null, completionTokens: reply.usage?.completionTokens ?? null })
+      .set({ content: written, status: "done", model, promptTokens: reply.usage?.promptTokens ?? null, completionTokens: reply.usage?.completionTokens ?? null })
       .where(eq(aiChatMessages.id, messageId));
   } catch (err) {
     console.error(`Chat reply ${messageId} failed: ${err instanceof Error ? err.message : String(err)}`);

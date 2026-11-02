@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { aiChatMessages, aiChats, beans, brewLogs, users, workspaces } from "@barista/shared/schema";
 import type { ChatStreamEvent } from "@barista/shared/jobs";
 import { UnrecoverableError } from "bullmq";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AiClient } from "../src/ai/client.js";
 import { resolveAi } from "../src/ai/resolve.js";
@@ -31,6 +31,15 @@ describe("chatTurns", () => {
     const turns = chatTurns(long, 52);
     expect(turns[0]).toEqual({ role: "user", content: "m13" });
     expect(turns).toHaveLength(39);
+  });
+});
+
+describe("chatTurns with photos", () => {
+  it("puts each photo on the message it came on", () => {
+    const messages = [{ ...turn(1, "user"), id: "a" }, { ...turn(2, "assistant"), id: "b" }, { ...turn(3, "user"), id: "c" }];
+    const turns = chatTurns(messages, 4, [{ messageId: "c", base64: "AAA" }]);
+    expect(turns[0]).toEqual({ role: "user", content: "m1" });
+    expect(turns[2]).toEqual({ role: "user", content: [{ type: "text", text: "m3" }, { type: "image_url", image_url: { url: "data:image/webp;base64,AAA" } }] });
   });
 });
 
@@ -134,11 +143,23 @@ describe("processChatReply", () => {
       onText("finer.");
       return { refusal: null, usage: { promptTokens: 5, completionTokens: 2 } };
     });
-    expect(await processChatReply({ messageId: replyId }, publisher)).toEqual({ status: "saved" });
+    expect(await processChatReply({ messageId: replyId, photos: [] }, publisher)).toEqual({ status: "saved" });
     expect(text()).toBe("Grind finer.");
     expect(events.at(-1)).toEqual({ type: "end" });
     expect(await saved()).toMatchObject({ content: "Grind finer.", status: "done", model: "m", promptTokens: 5, completionTokens: 2 });
     expect(stream.mock.calls[0]![1].messages[1]).toEqual({ role: "user", content: "Why sour?" });
+  });
+
+  it("uses the vision model when photos are sent", async () => {
+    vi.mocked(resolveAi).mockResolvedValueOnce({ provider: "openai", apiKey: "k", models: { main: "m", vision: "v", web: "m" } } as unknown as AiClient);
+    stream.mockImplementation(async (_ai, _request, onText) => {
+      onText("A puck");
+      return { refusal: null, usage: null };
+    });
+    const [first] = await db.select({ id: aiChatMessages.id }).from(aiChatMessages).where(and(eq(aiChatMessages.chatId, chatId), eq(aiChatMessages.position, 1)));
+    await processChatReply({ messageId: replyId, photos: [{ messageId: first!.id, base64: "AAA" }] }, publisher);
+    expect(stream.mock.calls[0]![1].model).toBe("v");
+    expect(await saved()).toMatchObject({ model: "v" });
   });
 
   it("keeps what was written when the AI fails part way, and still ends", async () => {
@@ -146,24 +167,24 @@ describe("processChatReply", () => {
       onText("Grind");
       throw new UnrecoverableError("OpenAI rejected the request (400): nope");
     });
-    expect(await processChatReply({ messageId: replyId }, publisher)).toEqual({ status: "failed" });
+    expect(await processChatReply({ messageId: replyId, photos: [] }, publisher)).toEqual({ status: "failed" });
     expect(await saved()).toMatchObject({ content: "Grind", status: "failed", error: "The AI service refused the request" });
     expect(events.at(-1)).toEqual({ type: "end" });
   });
 
   it("treats a refusal or an empty reply as failed", async () => {
     stream.mockResolvedValueOnce({ refusal: null, usage: null });
-    expect(await processChatReply({ messageId: replyId }, publisher)).toEqual({ status: "failed" });
+    expect(await processChatReply({ messageId: replyId, photos: [] }, publisher)).toEqual({ status: "failed" });
     await db.update(aiChatMessages).set({ status: "pending", error: null }).where(eq(aiChatMessages.id, replyId));
     stream.mockResolvedValueOnce({ refusal: "No", usage: null });
-    expect(await processChatReply({ messageId: replyId }, publisher)).toEqual({ status: "failed" });
+    expect(await processChatReply({ messageId: replyId, photos: [] }, publisher)).toEqual({ status: "failed" });
   });
 
   it("skips a chat that's gone or a reply already finished", async () => {
     await db.update(aiChatMessages).set({ status: "done" }).where(eq(aiChatMessages.id, replyId));
-    expect((await processChatReply({ messageId: replyId }, publisher)).status).toBe("skipped");
+    expect((await processChatReply({ messageId: replyId, photos: [] }, publisher)).status).toBe("skipped");
     await db.delete(aiChats).where(eq(aiChats.id, chatId));
-    expect((await processChatReply({ messageId: replyId }, publisher)).status).toBe("skipped");
+    expect((await processChatReply({ messageId: replyId, photos: [] }, publisher)).status).toBe("skipped");
     expect(stream).not.toHaveBeenCalled();
   });
 });

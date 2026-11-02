@@ -187,10 +187,8 @@ export async function complete(ai: AiClient, request: OpenAI.Chat.Completions.Ch
 
 // A chat reply (docs/api/llm-contract.md §9e): the conversation so far, and no
 // schema, since it's read as it's written.
-export interface ChatTurn {
-  role: "user" | "assistant";
-  content: string;
-}
+type UserContent = OpenAI.Chat.Completions.ChatCompletionUserMessageParam["content"];
+export type ChatTurn = { role: "user"; content: UserContent } | { role: "assistant"; content: string };
 export function buildChatRequest(model: string, turns: ChatTurn[], custom?: PromptCustom, attached: LlmInput[] = []): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
   return { model, messages: [{ role: "system", content: buildChatSystem(custom, attached) }, ...turns] };
 }

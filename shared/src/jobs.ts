@@ -257,8 +257,13 @@ export interface GreenLowJobData {
 // backend passes on to the browser.
 export const CHAT_QUEUE = "ai-chat";
 export const CHAT_JOB = "reply";
+export interface ChatJobPhoto {
+  messageId: string; // the message it came on
+  base64: string;
+}
 export interface ChatJobData {
   messageId: string;
+  photos: ChatJobPhoto[];
 }
 export const chatJobId = (messageId: string) => `chat-${messageId}`;
 export const chatReplyKey = (messageId: string) => `chat-reply:${messageId}`;

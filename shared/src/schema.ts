@@ -1532,6 +1532,23 @@ export const aiChatMessages = mysqlTable(
   (t) => [unique("ai_chat_messages_position").on(t.chatId, t.position)],
 );
 
+// A photo in a chat, as a file under PHOTO_DIR/chats/<workspaceId>/.
+// messageId: null until it's sent. Not in workspace backups, like the chat.
+export const aiChatPhotos = mysqlTable("ai_chat_photos", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  workspaceId: varchar("workspace_id", { length: 36 })
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  userId: varchar("user_id", { length: 36 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  messageId: varchar("message_id", { length: 36 }).references(() => aiChatMessages.id, { onDelete: "cascade" }),
+  width: int("width").notNull(),
+  height: int("height").notNull(),
+  sizeBytes: int("size_bytes").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // 9. LLM Analyses (AI Parameter Suggestions)
 // What was sent to the AI for an analysis or a suggestion
 // (docs/api/analysis.md §8c): the system prompt, the keys of the sections it

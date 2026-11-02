@@ -499,8 +499,9 @@ analysis. A bean's `notes`, `review` and `rating` aren't sent.
 
 ## 9e. Chat replies
 
-The `ai-chat` queue (`chat.md` §12): job `reply`, data `{ messageId }`, the
-pending assistant message. One attempt: a retry would repeat text the person
+The `ai-chat` queue (`chat.md` §12): job `reply`, data `{ messageId, photos }`:
+the pending assistant message and the chat's photos to send, as `[{ messageId,
+base64 }]`. One attempt: a retry would repeat text the person
 has already read, so a failed reply is marked failed and they send again.
 
 1. **Conversation** (`worker/src/chat.ts`): the chat's last 40 finished
@@ -512,10 +513,14 @@ has already read, so a failed reply is marked failed and they send again.
    that part of it. One that's been deleted, or an unrated brew the workspace
    keeps from the AI (`analyzeUnrated`, `unratedHistory`), is named as
    unavailable, by the label saved with the message.
-3. **Prompt** (`buildChatSystem`, `worker/src/prompt.ts`): fixed, the person's
+3. **Photos:** the worker can't read the photo files, so the backend puts the
+   chat's latest 6 in the job, and they go with the message they came on.
+   Earlier ones aren't sent. A chat with photos in the job uses the vision
+   model; otherwise the main one.
+4. **Prompt** (`buildChatSystem`, `worker/src/prompt.ts`): fixed, the person's
    own `instructions` (`auth.md` §1c), then the attachments as JSON. Their
    section texts don't apply.
-4. **Reply:** plain text, streamed, no schema (`streamReply`,
+5. **Reply:** plain text, streamed, no schema (`streamReply`,
    `worker/src/llm.ts`, on both providers). Pieces are published about every
    50 ms; the text, model and token counts are saved on the message.
 
