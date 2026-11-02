@@ -87,7 +87,7 @@ function equipment(used: Array<{ grinder: GrinderInfo | null; water: WaterInfo |
   return { grinders, waters };
 }
 
-function beanInput(info: BrewContext["bean"], hidden: ReadonlySet<AiDetail>): Record<string, unknown> {
+export function beanInput(info: BrewContext["bean"], hidden: ReadonlySet<AiDetail>): Record<string, unknown> {
   const bean: Record<string, unknown> = { ...info };
   const drop = (keys: string[]) => keys.forEach((k) => delete bean[k]);
   if (hidden.has("origin")) drop(["originArea", "country", "region"]);
@@ -104,7 +104,7 @@ function beanInput(info: BrewContext["bean"], hidden: ReadonlySet<AiDetail>): Re
   return bean;
 }
 
-function recipeInput(r: BrewContext["recipe"], hidden: ReadonlySet<AiDetail>): Record<string, unknown> | null {
+export function recipeInput(r: BrewContext["recipe"], hidden: ReadonlySet<AiDetail>): Record<string, unknown> | null {
   if (!r) return null;
   const { steps, grindStartingPoints, targetTempC, flowUnit, stepTimeScaling, ...rest } = r;
   const recipe: Record<string, unknown> = { ...rest };
@@ -411,13 +411,16 @@ function customized(sections: PromptSection[], custom: PromptCustom | undefined)
   return [...own.slice(0, end), ...added, ...own.slice(end)];
 }
 
-// A chat (docs/api/llm-contract.md §9e): fixed, plus the person's own
-// instructions. Plain text, since the page shows replies as they are.
+// A chat (docs/api/llm-contract.md §9e): fixed, the person's own instructions,
+// then what they attached. Plain text, since the page shows replies as they are.
 export const CHAT_SYSTEM =
-  "You are a coffee expert talking with a home barista in their brew journal. Answer what they ask, directly and practically, and ask if you need a detail you weren't given. You can't see their journal or change anything in it; only use what's in this conversation. Write plain text, without Markdown.";
-export function buildChatSystem(custom?: PromptCustom): string {
-  const instructions = custom?.prompt.instructions;
-  return instructions ? `${CHAT_SYSTEM} The barista's own instructions: ${instructions}` : CHAT_SYSTEM;
+  "You are a coffee expert talking with a home barista in their brew journal. Answer what they ask, directly and practically, and ask if you need a detail you weren't given. You see only what they attach from their journal and can't change anything in it; only use what's in this conversation. Write plain text, without Markdown.";
+const ATTACHED_INTRO = "They attached these from their journal, as JSON. A missing key means it wasn't recorded or isn't shared with you; ratings run 0.5-5; an item marked unavailable can't be read, so don't guess at it:";
+export function buildChatSystem(custom?: PromptCustom, attached: LlmInput[] = []): string {
+  const parts = [CHAT_SYSTEM];
+  if (custom?.prompt.instructions) parts.push(`The barista's own instructions: ${custom.prompt.instructions}`);
+  if (attached.length) parts.push(`${ATTACHED_INTRO} ${JSON.stringify(attached)}`);
+  return parts.join(" ");
 }
 
 // The sections this input needs, in order.

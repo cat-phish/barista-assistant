@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { aiChatMessages, aiChats, users, workspaces } from "@barista/shared/schema";
+import { aiChatMessages, aiChats, beans, brewLogs, users, workspaces } from "@barista/shared/schema";
 import type { ChatStreamEvent } from "@barista/shared/jobs";
 import { UnrecoverableError } from "bullmq";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AiClient } from "../src/ai/client.js";
 import { resolveAi } from "../src/ai/resolve.js";
-import { chatTurns, processChatReply, type ChatPublisher } from "../src/chat.js";
+import { attachedIn, chatTurns, loadAttachments, processChatReply, type ChatPublisher } from "../src/chat.js";
 import { db } from "../src/db.js";
 import { buildChatRequest, streamReply } from "../src/llm.js";
 import { CHAT_SYSTEM } from "../src/prompt.js";
@@ -34,12 +34,73 @@ describe("chatTurns", () => {
   });
 });
 
+describe("attachedIn", () => {
+  it("takes each item once, from the turns sent, the latest 20", () => {
+    const a = (i: number) => ({ kind: "bean" as const, id: `b${i}`, label: `B${i}` });
+    const messages = [
+      { ...turn(1, "user"), attachments: Array.from({ length: 25 }, (_, i) => a(i)) },
+      { ...turn(2, "assistant", "failed") },
+      { ...turn(3, "user"), attachments: [a(24)] },
+    ];
+    const sent = attachedIn(messages, 4);
+    expect(sent).toHaveLength(20);
+    expect(sent.at(-1)!.id).toBe("b24");
+    expect(sent.filter((x) => x.id === "b24")).toHaveLength(1);
+    expect(attachedIn(messages, 1)).toEqual([]);
+  });
+});
+
+describe("loadAttachments", () => {
+  let workspaceId: string;
+  let beanId: string;
+  let brewId: string;
+  const attach = (kind: "bean" | "brew" | "recipe", id: string) => ({ kind, id, label: "L" });
+
+  beforeEach(async () => {
+    workspaceId = randomUUID();
+    beanId = randomUUID();
+    brewId = randomUUID();
+    await db.insert(workspaces).values({ id: workspaceId, name: "W", slug: workspaceId });
+    await db.insert(beans).values({ id: beanId, workspaceId, roasterName: "Onyx", beanName: "Guji", country: "Ethiopia", altitudeMasl: 2100 });
+    await db.insert(brewLogs).values({ id: brewId, workspaceId, beanId, timestamp: new Date("2026-10-02T08:00:00Z"), actualDoseGrams: 15, actualTimeSec: 180, actualTempC: 94, rating: null });
+  });
+
+  it("sends a bean, leaving out what the workspace hides", async () => {
+    const [seen] = await loadAttachments([attach("bean", beanId)], workspaceId, new Set(["origin"]));
+    expect(seen).toMatchObject({ kind: "bean", data: { beanName: "Guji", altitudeMasl: 2100 } });
+    expect(JSON.stringify(seen)).not.toContain("Ethiopia");
+  });
+
+  it("sends a brew as the analysis would, leaving out what the workspace hides", async () => {
+    const [seen] = await loadAttachments([attach("brew", brewId)], workspaceId, new Set(["temp"]));
+    expect(seen).toMatchObject({ kind: "brew", data: { bean: { beanName: "Guji" }, brew: { actualDoseGrams: 15 } } });
+    expect(JSON.stringify(seen)).not.toContain("actualTempC");
+  });
+
+  it("keeps an unrated brew back when the workspace does", async () => {
+    for (const key of ["analyzeUnrated", "unratedHistory"] as const) {
+      expect((await loadAttachments([attach("brew", brewId)], workspaceId, new Set([key])))[0]).toEqual({ kind: "brew", label: "L", unavailable: true });
+    }
+  });
+
+  it("marks what's gone or from another workspace as unavailable", async () => {
+    const other = randomUUID();
+    await db.insert(workspaces).values({ id: other, name: "O", slug: other });
+    const seen = await loadAttachments([attach("bean", beanId), attach("recipe", randomUUID())], other, new Set());
+    expect(seen).toEqual([{ kind: "bean", label: "L", unavailable: true }, { kind: "recipe", label: "L", unavailable: true }]);
+  });
+});
+
 describe("buildChatRequest", () => {
   it("is the conversation, with no schema, and the person's instructions", () => {
     const request = buildChatRequest("m", [{ role: "user", content: "Hi" }], { prompt: { instructions: "Be brief.", labelInstructions: null, overrides: {} }, note: null });
     expect(request.response_format).toBeUndefined();
     expect(request.messages[0]).toEqual({ role: "system", content: `${CHAT_SYSTEM} The barista's own instructions: Be brief.` });
     expect(request.messages[1]).toEqual({ role: "user", content: "Hi" });
+  });
+  it("puts attachments in the system prompt", () => {
+    const request = buildChatRequest("m", [{ role: "user", content: "Hi" }], undefined, [{ kind: "bean", label: "Guji", data: { beanName: "Guji" } }]);
+    expect(String(request.messages[0]!.content)).toContain('[{"kind":"bean","label":"Guji","data":{"beanName":"Guji"}}]');
   });
 });
 

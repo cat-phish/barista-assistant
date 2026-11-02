@@ -8,7 +8,7 @@ import { app } from "../src/app.js";
 import { config } from "../src/config.js";
 import { db } from "../src/db.js";
 import { chatQueue } from "../src/queue.js";
-import { addMember, newUser, newWorkspace, type TestUser } from "./helpers.js";
+import { addMember, newBean, newBrewLog, newUser, newWorkspace, type TestUser } from "./helpers.js";
 
 // AI chat (docs/api/chat.md §12), with the worker's part played by the test.
 const redis = new Redis(config.redis.url, { ...(config.redis.password ? { password: config.redis.password } : {}) });
@@ -81,6 +81,30 @@ describe("chats", () => {
     expect((await viewer.agent.post(url(workspaceId)).send({ content: "Hi" })).status).toBe(403);
     expect((await viewer.agent.get(url(workspaceId))).status).toBe(200);
     expect((await (await newUser()).agent.get(url(workspaceId))).status).toBe(404);
+  });
+});
+
+describe("attachments", () => {
+  it("saves them with their labels, each once", async () => {
+    const bean = await newBean(owner, workspaceId, { roasterName: "Onyx", beanName: "Guji" });
+    const brew = await newBrewLog(owner, workspaceId, bean);
+    const res = await owner.agent.post(url(workspaceId)).send({ content: "Compare", attachments: [{ kind: "bean", id: bean }, { kind: "bean", id: bean }, { kind: "brew", id: brew }] });
+    expect(res.status, JSON.stringify(res.body)).toBe(202);
+    expect(res.body.messages[0].attachments).toEqual([
+      { kind: "bean", id: bean, label: "Onyx Guji" },
+      { kind: "brew", id: brew, label: expect.stringMatching(/^Guji, \d{4}-\d{2}-\d{2}$/) },
+    ]);
+    expect(res.body.messages[1].attachments).toEqual([]);
+    expect((await owner.agent.get(`${url(workspaceId)}/${res.body.chat.id}`)).body.messages[0].attachments).toHaveLength(2);
+  });
+
+  it("refuses another workspace's, and too many", async () => {
+    const other = await newUser();
+    const theirs = await newBean(other, (await newWorkspace(other)).id);
+    expect((await owner.agent.post(url(workspaceId)).send({ content: "Hi", attachments: [{ kind: "bean", id: theirs }] })).status).toBe(400);
+    expect((await owner.agent.get(url(workspaceId))).body.chats).toEqual([]);
+    const many = Array.from({ length: 11 }, () => ({ kind: "bean", id: theirs }));
+    expect((await owner.agent.post(url(workspaceId)).send({ content: "Hi", attachments: many })).status).toBe(400);
   });
 });
 

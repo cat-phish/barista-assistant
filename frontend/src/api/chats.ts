@@ -7,11 +7,20 @@ export interface Chat {
   createdAt: string;
   updatedAt: string;
 }
+export type ChatAttachmentKind = 'brew' | 'bean' | 'recipe';
+export interface ChatAttachmentRef {
+  kind: ChatAttachmentKind;
+  id: string;
+}
+export interface ChatAttachment extends ChatAttachmentRef {
+  label: string;
+}
 export interface ChatMessage {
   id: string;
   position: number;
   role: 'user' | 'assistant';
   content: string;
+  attachments: ChatAttachment[];
   status: 'pending' | 'done' | 'failed';
   error: string | null;
   model: string | null;
@@ -31,11 +40,11 @@ export const chatsApi = {
   get(workspaceId: string, chatId: string) {
     return api.get<ChatPair>(`${base(workspaceId)}/${chatId}`);
   },
-  start(workspaceId: string, content: string) {
-    return api.post<ChatPair>(base(workspaceId), { content });
+  start(workspaceId: string, content: string, attachments: ChatAttachmentRef[]) {
+    return api.post<ChatPair>(base(workspaceId), { content, attachments });
   },
-  send(workspaceId: string, chatId: string, content: string) {
-    return api.post<ChatPair>(`${base(workspaceId)}/${chatId}/messages`, { content });
+  send(workspaceId: string, chatId: string, content: string, attachments: ChatAttachmentRef[]) {
+    return api.post<ChatPair>(`${base(workspaceId)}/${chatId}/messages`, { content, attachments });
   },
   remove(workspaceId: string, chatId: string) {
     return api.delete<void>(`${base(workspaceId)}/${chatId}`);

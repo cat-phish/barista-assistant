@@ -20,8 +20,8 @@ your own chats is open to any member; starting one or sending a message needs
 **A chat:** `{ id, title, createdAt, updatedAt }`. `title` is the start of the
 first message; `updatedAt` moves with each message.
 
-**A message:** `{ id, position, role, content, status, error, model,
-createdAt }`.
+**A message:** `{ id, position, role, content, attachments, status, error,
+model, createdAt }`.
 - `role`: `user` or `assistant`.
 - `status`: `done`; `pending` while the reply is being written; `failed` with
   `error` saying why. A failed reply keeps whatever it had written in `content`
@@ -31,11 +31,18 @@ createdAt }`.
 | Route | |
 | --- | --- |
 | `GET /` | `{ chats }`, yours, latest first. |
-| `POST /` | Body `{ content }`, 1–4000 characters. Starts a chat with that message. `202` with `{ chat, messages }`: the message and its pending reply. |
+| `POST /` | Body `{ content, attachments? }`; `content` is 1–4000 characters. Starts a chat with that message. `202` with `{ chat, messages }`: the message and its pending reply. |
 | `GET /:chatId` | `{ chat, messages }`, oldest first. |
 | `DELETE /:chatId` | `204`. |
-| `POST /:chatId/messages` | Body `{ content }`. `202` with `{ chat, messages }`: only the two new ones. `409` while a reply is still being written. |
+| `POST /:chatId/messages` | Body as for `POST /`. `202` with `{ chat, messages }`: only the two new ones. `409` while a reply is still being written. |
 | `GET /:chatId/messages/:messageId/stream` | The reply as server-sent events, below. |
+
+**Attachments:** `attachments` is up to 10 `{ "kind": "brew" | "bean" |
+"recipe", "id": "uuid" }`, each from this workspace, or the request is a `400`.
+A message comes back with `attachments: [{ kind, id, label }]`, where `label`
+is what the item was called when attached, and `[]` when there are none. Only
+the reference is kept: each reply reads the item afresh (§9e), so a change, a
+delete or a new Settings → AI choice applies to the rest of the chat.
 
 `POST`s answer `409` with `code: "ai_not_configured"` when the workspace has no
 AI (§2d), and `503` when the queue can't be reached (nothing is saved).

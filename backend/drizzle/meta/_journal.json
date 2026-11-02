@@ -652,6 +652,13 @@
       "when": 1793581645388,
       "tag": "0092_ai_chats",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "5",
+      "when": 1793584874875,
+      "tag": "0093_chat_attachments",
+      "breakpoints": true
     }
   ]
 }
