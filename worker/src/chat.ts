@@ -2,11 +2,12 @@
 // publishes the reply to a Redis stream as it's written, for the backend to
 // pass on (docs/api/chat.md §12), then saves it on the message.
 import { CHAT_EVENT_FIELD, chatReplyKey, type ChatJobData, type ChatJobPhoto, type ChatStreamEvent } from "@barista/shared/jobs";
-import { aiChatMessages, aiChats, beans, brewLogs, DEFAULT_WORKSPACE_SETTINGS, recipes, withDefaults, workspaces, type ChatAttachment } from "@barista/shared/schema";
+import { aiChatMessages, aiChats, beans, brewLogs, DEFAULT_WORKSPACE_SETTINGS, recipes, withDefaults, workspaces, type ChatAttachment, type ChatProposal } from "@barista/shared/schema";
 import { UnrecoverableError } from "bullmq";
 import { and, asc, eq } from "drizzle-orm";
 import type { Redis } from "ioredis";
 import { loadBean, loadBrewContext, loadRecipe } from "./context.js";
+import { checkProposals, proposalFilter, refOf, refTable, splitProposals } from "./chatProposals.js";
 import { db } from "./db.js";
 import { resolveAi } from "./ai/resolve.js";
 import { buildChatRequest, streamReply, type ChatTurn } from "./llm.js";
@@ -40,6 +41,7 @@ interface StoredTurn {
   status: string;
   position: number;
   attachments?: ChatAttachment[] | null;
+  proposals?: ChatProposal[] | null;
 }
 function recentTurns<T extends StoredTurn>(messages: readonly T[], before: number): T[] {
   const recent = messages.filter((m) => m.position < before && m.status === "done").slice(-HISTORY_MESSAGES);
@@ -47,8 +49,8 @@ function recentTurns<T extends StoredTurn>(messages: readonly T[], before: numbe
   return first < 0 ? [] : recent.slice(first);
 }
 export function chatTurns(messages: readonly StoredTurn[], before: number, photos: readonly ChatJobPhoto[] = []): ChatTurn[] {
-  return recentTurns(messages, before).map(({ id, role, content }): ChatTurn => {
-    if (role === "assistant") return { role, content };
+  return recentTurns(messages, before).map(({ id, role, content, proposals }): ChatTurn => {
+    if (role === "assistant") return { role, content: withProposals(content, proposals) };
     const images = photos.filter((p) => p.messageId === id);
     if (!images.length) return { role, content };
     return {
@@ -57,6 +59,14 @@ export function chatTurns(messages: readonly StoredTurn[], before: number, photo
     };
   });
 }
+// A reply's proposals were taken out of its text, so the AI is told what it
+// proposed and whether the person dismissed it.
+function withProposals(content: string, proposals: readonly ChatProposal[] | null | undefined): string {
+  if (!proposals?.length) return content;
+  const shown = proposals.map(({ state, ...p }) => ({ ...p, dismissed: state === "dismissed" }));
+  return `${content}\n\n[Shown as proposal cards with this reply: ${JSON.stringify(shown)}]`;
+}
+
 // What those turns attached: each item once, the latest `max` (the
 // workspace's chatMaxAttachments, docs/api/chat.md §12).
 export function attachedIn(messages: readonly StoredTurn[], before: number, max: number): ChatAttachment[] {
@@ -95,9 +105,9 @@ async function attachmentInput(a: ChatAttachment, workspaceId: string): Promise<
 
 export async function loadAttachments(attachments: ChatAttachment[], workspaceId: string): Promise<LlmInput[]> {
   return Promise.all(
-    attachments.map(async (a) => {
+    attachments.map(async (a, i) => {
       const data = await attachmentInput(a, workspaceId);
-      return (compact({ kind: a.kind, label: a.label, ...(data ? { data } : { unavailable: true }) }) ?? {}) as LlmInput;
+      return (compact({ ref: refOf(i), kind: a.kind, label: a.label, ...(data ? { data } : { unavailable: true }) }) ?? {}) as LlmInput;
     }),
   );
 }
@@ -139,27 +149,32 @@ export async function processChatReply({ messageId, photos }: ChatJobData, publi
     const messages = await db.select().from(aiChatMessages).where(eq(aiChatMessages.chatId, row.chat.id)).orderBy(asc(aiChatMessages.position));
     const ai = await resolveAi(row.chat.workspaceId);
     const custom = await promptFor(row.chat.userId, null);
-    const attached = await loadAttachments(attachedIn(messages, row.message.position, await attachmentLimit(row.chat.workspaceId)), row.chat.workspaceId);
+    const attachments = attachedIn(messages, row.message.position, await attachmentLimit(row.chat.workspaceId));
+    const attached = await loadAttachments(attachments, row.chat.workspaceId);
     const turns = chatTurns(messages, row.message.position, photos);
     const model = turns.some((t) => typeof t.content !== "string") ? ai.models.vision : ai.models.main;
     const request = buildChatRequest(model, turns, custom, attached);
+    const shown = proposalFilter((text) => pieces.add(text));
     const reply = await streamReply(ai, request, (text) => {
       written += text;
-      pieces.add(text);
+      shown.add(text);
     });
+    shown.end();
     await pieces.flush();
     if (reply.refusal) throw new UnrecoverableError(reply.refusal);
-    if (!written) throw new Error("The AI returned an empty reply");
+    const { text, blocks } = splitProposals(written);
+    const proposals = checkProposals(blocks, blocks.length ? await refTable(attachments, row.chat.workspaceId) : new Map());
+    if (!text && !proposals.length) throw new Error("The AI returned an empty reply");
     await db
       .update(aiChatMessages)
-      .set({ content: written, status: "done", model, promptTokens: reply.usage?.promptTokens ?? null, completionTokens: reply.usage?.completionTokens ?? null })
+      .set({ content: text, proposals: proposals.length ? proposals : null, status: "done", model, promptTokens: reply.usage?.promptTokens ?? null, completionTokens: reply.usage?.completionTokens ?? null })
       .where(eq(aiChatMessages.id, messageId));
   } catch (err) {
     console.error(`Chat reply ${messageId} failed: ${err instanceof Error ? err.message : String(err)}`);
     result = { status: "failed" };
     await db
       .update(aiChatMessages)
-      .set({ content: written, status: "failed", error: failureMessage(err instanceof UnrecoverableError) })
+      .set({ content: splitProposals(written).text, status: "failed", error: failureMessage(err instanceof UnrecoverableError) })
       .where(eq(aiChatMessages.id, messageId));
   }
   await pieces.flush().catch(() => undefined);

@@ -22,15 +22,15 @@ interface ChatSize {
   bytes: number;
 }
 
-// Each chat with what it takes: its messages, their attachment references and
-// its photos.
+// Each chat with what it takes: its messages, their attachment references,
+// proposals and photos.
 async function chatSizes(where?: SQL): Promise<ChatSize[]> {
   const chats = await db.select({ id: aiChats.id, userId: aiChats.userId, updatedAt: aiChats.updatedAt }).from(aiChats).where(where);
   if (!chats.length) return [];
   const ids = chats.map((c) => c.id);
   const [text, photos] = await Promise.all([
     db
-      .select({ chatId: aiChatMessages.chatId, bytes: sql<string>`SUM(OCTET_LENGTH(${aiChatMessages.content}) + COALESCE(OCTET_LENGTH(${aiChatMessages.attachments}), 0))` })
+      .select({ chatId: aiChatMessages.chatId, bytes: sql<string>`SUM(OCTET_LENGTH(${aiChatMessages.content}) + COALESCE(OCTET_LENGTH(${aiChatMessages.attachments}), 0) + COALESCE(OCTET_LENGTH(${aiChatMessages.proposals}), 0))` })
       .from(aiChatMessages)
       .where(inArray(aiChatMessages.chatId, ids))
       .groupBy(aiChatMessages.chatId),

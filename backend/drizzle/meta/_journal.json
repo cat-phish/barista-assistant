@@ -673,6 +673,13 @@
       "when": 1793587221476,
       "tag": "0095_chat_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "5",
+      "when": 1793688353319,
+      "tag": "0096_chat_proposals",
+      "breakpoints": true
     }
   ]
 }

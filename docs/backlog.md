@@ -545,18 +545,24 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 19. AI chat proposals
 
-- **Status:** idea
-- **Why:** AI chat (roadmap, "AI chat in Insights") is read-only, so a recipe or a parameter change it
-  suggests has to be typed in by hand.
+- **Status:** in progress (spec: `docs/api/chat.md` §12 "Proposals",
+  `docs/api/llm-contract.md` §9e). Built: the worker reads, checks and
+  saves them, and the routes carry them (branch `chat-proposals`). Next: the
+  cards in the Chat tab and opening one into the brew page or recipe form.
+- **Why:** AI chat (roadmap, "AI chat in Insights") is read-only, so a
+  recipe or a parameter change it suggests has to be typed in by hand.
 - **Approach:** a reply can carry a proposal (a new recipe, a parameter
   change) shown as a card the person accepts or dismisses; accepting goes
   through the normal routes. Nothing changes without that.
 - **Size:** M
 - **Depends on:** nothing (chat is built); 18 tests what it builds on.
-- **Open questions:**
-  - Which changes can it propose first?
-  - How does a structured proposal fit into a streamed reply, on both
-    providers?
+- **Decided:**
+  - Three kinds first: the next brew's settings, a change to an attached
+    recipe, and a new recipe. Opening a card fills in the brew page or the
+    recipe form; nothing is saved until the person saves there.
+  - A fenced ```` ```proposal ```` block at the end of the reply, not a tool
+    call, so any OpenAI-compatible server works; the worker holds it back
+    from the stream.
 
 ### 20. Ask in chat from a chart card
 

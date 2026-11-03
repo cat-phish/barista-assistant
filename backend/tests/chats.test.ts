@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { access } from "node:fs/promises";
 import { AI_SERVER_KEY, CHAT_LIMITS_KEY, DEFAULT_SERVER_AI } from "@barista/shared/aiConfig";
 import { CHAT_EVENT_FIELD, chatReplyKey, type ChatStreamEvent } from "@barista/shared/jobs";
-import { aiChatMessages, aiChatPhotos, aiChats, serverSettings, workspaceAiConfigs } from "@barista/shared/schema";
+import { aiChatMessages, aiChatPhotos, aiChats, serverSettings, workspaceAiConfigs, type ChatProposal } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { Redis } from "ioredis";
@@ -10,7 +10,7 @@ import sharp from "sharp";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { setAdmin } from "../src/adminAccess.js";
 import { app } from "../src/app.js";
-import { overLimits } from "../src/chatData.js";
+import { overLimits, userChatBytes } from "../src/chatData.js";
 import { config } from "../src/config.js";
 import { db } from "../src/db.js";
 import { chatPhotoPath, sweepChatPhotos, sweepOrphanPhotos, writeChatPhotoFile } from "../src/photos.js";
@@ -322,6 +322,69 @@ describe("limits and purging", () => {
     expect((await barista.agent.delete(`/api/workspaces/${workspaceId}/members/${barista.id}`)).status).toBe(204);
     expect(await db.select().from(aiChats).where(eq(aiChats.userId, barista.id))).toEqual([]);
     expect((await owner.agent.get(url(workspaceId))).body.chats).toHaveLength(1);
+  });
+});
+
+describe("proposals", () => {
+  const proposals: ChatProposal[] = [
+    { kind: "brew", title: "One finer", why: "Sour.", state: "open", beanId: null, beanLabel: null, recipeId: null, recipeLabel: null, grinderId: null, grinderLabel: null, grindSetting: null, tempC: 95, ratio: null },
+    { kind: "newRecipe", title: "Iced V60", why: "Hot day.", state: "open", brewerId: null, brewerLabel: null, recipe: { name: "Iced V60", targetDoseGrams: 20, targetIceGrams: 100 } },
+  ];
+  async function chatWithProposals(): Promise<{ chat: string; reply: string }> {
+    const start = await owner.agent.post(url(workspaceId)).send({ content: "Sour?" });
+    const reply = start.body.messages[1].id as string;
+    await db.update(aiChatMessages).set({ content: "Try these.", status: "done", proposals }).where(eq(aiChatMessages.id, reply));
+    return { chat: `${url(workspaceId)}/${start.body.chat.id}`, reply };
+  }
+
+  it("come with the reply, [] when there are none, and count toward the chat's size", async () => {
+    const { chat } = await chatWithProposals();
+    const { messages } = (await owner.agent.get(chat)).body as { messages: Array<{ proposals: ChatProposal[] }> };
+    expect(messages[0]!.proposals).toEqual([]);
+    expect(messages[1]!.proposals).toEqual(proposals);
+    expect(await userChatBytes(owner.id)).toBeGreaterThan("Sour?".length + "Try these.".length + JSON.stringify(proposals).length - 1);
+  });
+
+  it("are dismissed and brought back one at a time, on your own chat only", async () => {
+    const { chat, reply } = await chatWithProposals();
+    const card = (i: number | string) => `${chat}/messages/${reply}/proposals/${i}`;
+    const res = await owner.agent.put(card(1)).send({ state: "dismissed" });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.proposals.map((p: ChatProposal) => p.state)).toEqual(["open", "dismissed"]);
+    expect((await owner.agent.get(chat)).body.messages[1].proposals[1].state).toBe("dismissed");
+    expect((await owner.agent.put(card(1)).send({ state: "open" })).body.proposals[1].state).toBe("open");
+
+    expect((await owner.agent.put(card(2)).send({ state: "dismissed" })).status).toBe(404);
+    expect((await owner.agent.put(card("x")).send({ state: "dismissed" })).status).toBe(404);
+    expect((await owner.agent.put(card(0)).send({ state: "done" })).status).toBe(400);
+    const barista = await newUser();
+    await addMember(owner, workspaceId, barista, "barista");
+    expect((await barista.agent.put(card(0)).send({ state: "dismissed" })).status).toBe(404);
+  });
+
+  it("go in the export and come back with an import", async () => {
+    await chatWithProposals();
+    await chatWithProposals();
+    const zip = (await owner.agent.get(`${url(workspaceId)}/export`).buffer(true).parse(((r: { on(e: string, f: (c?: Buffer) => void): void }, done: (err: Error | null, body: Buffer) => void) => {
+      const parts: Buffer[] = [];
+      r.on("data", (c) => parts.push(c!));
+      r.on("end", () => done(null, Buffer.concat(parts)));
+    }) as never)).body as Buffer;
+    const file = JSON.parse(strFromU8(unzipSync(zip)["chats.json"]!)) as { chats: Array<{ messages: Array<{ proposals?: unknown }> }> };
+    expect(file.chats[0]!.messages[1]!.proposals).toEqual(proposals);
+    const other = (await newWorkspace(owner)).id;
+    await withAi(other);
+    expect((await owner.agent.post(`${url(other)}/import`).set("Content-Type", "application/zip").send(zip)).body).toEqual({ imported: 2, skipped: 0 });
+    const [first] = (await owner.agent.get(url(other))).body.chats as Array<{ id: string }>;
+    expect((await owner.agent.get(`${url(other)}/${first!.id}`)).body.messages[1].proposals).toEqual(proposals);
+
+    // An older export has none; a bad one is refused.
+    for (const c of file.chats) for (const m of c.messages) delete m.proposals;
+    const third = (await newWorkspace(owner)).id;
+    await withAi(third);
+    expect((await owner.agent.post(`${url(third)}/import`).set("Content-Type", "application/zip").send(Buffer.from(zipSync({ "chats.json": strToU8(JSON.stringify(file)) })))).body).toEqual({ imported: 2, skipped: 0 });
+    (file.chats[0]!.messages[1] as { proposals?: unknown }).proposals = [{ kind: "brew", title: "x" }];
+    expect((await owner.agent.post(`${url(third)}/import`).set("Content-Type", "application/zip").send(Buffer.from(zipSync({ "chats.json": strToU8(JSON.stringify(file)) })))).status).toBe(400);
   });
 });
 

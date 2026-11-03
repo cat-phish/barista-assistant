@@ -1519,6 +1519,67 @@ export interface ChatAttachment {
   label: string;
 }
 
+// A change a chat reply proposes (docs/api/chat.md §12, "Proposals"), shown
+// as a card. Opening one fills in the brew page or the recipe form; nothing is
+// saved until the person saves there. Ids name what was attached when it was
+// proposed (it may be gone since); labels are what they were called then.
+export const CHAT_PROPOSAL_KINDS = ["brew", "recipeChange", "newRecipe"] as const;
+export type ChatProposalKind = (typeof CHAT_PROPOSAL_KINDS)[number];
+export const CHAT_PROPOSAL_STATES = ["open", "dismissed"] as const;
+export type ChatProposalState = (typeof CHAT_PROPOSAL_STATES)[number];
+export const CHAT_PROPOSALS_MAX = 3; // on one reply
+export interface ChatProposalStep {
+  stepType: RecipeStepType;
+  label: string | null;
+  durationSec: number | null;
+  targetWaterGrams: number | null;
+  targetTempC: number | null;
+  pressureBar: number | null;
+  flowRate: number | null;
+}
+// A recipe's values as proposed: only what the AI set.
+export interface ChatProposalRecipe {
+  name?: string;
+  targetDoseGrams?: number;
+  targetWaterGrams?: number | null;
+  targetIceGrams?: number | null;
+  expectedYieldGrams?: number | null;
+  targetTempC?: number | null;
+  expectedFinishMinSec?: number | null;
+  expectedFinishMaxSec?: number | null;
+  steps?: ChatProposalStep[];
+}
+interface ChatProposalBase {
+  title: string;
+  why: string;
+  state: ChatProposalState;
+}
+export interface ChatBrewProposal extends ChatProposalBase {
+  kind: "brew";
+  beanId: string | null;
+  beanLabel: string | null;
+  recipeId: string | null;
+  recipeLabel: string | null;
+  grinderId: string | null; // what grindSetting is on; null = no grind
+  grinderLabel: string | null;
+  grindSetting: number | null;
+  tempC: number | null;
+  ratio: number | null; // (water + ice) / dose, or shot weight / dose
+}
+export interface ChatRecipeChangeProposal extends ChatProposalBase {
+  kind: "recipeChange";
+  recipeId: string;
+  recipeLabel: string;
+  changes: ChatProposalRecipe;
+}
+export interface ChatNewRecipeProposal extends ChatProposalBase {
+  kind: "newRecipe";
+  brewerId: string | null; // the brewer of what it's based on; null = the person picks
+  brewerLabel: string | null;
+  recipe: ChatProposalRecipe & { name: string; targetDoseGrams: number };
+}
+export type ChatProposal = ChatBrewProposal | ChatRecipeChangeProposal | ChatNewRecipeProposal;
+
 export const aiChats = mysqlTable(
   "ai_chats",
   {
@@ -1547,6 +1608,7 @@ export const aiChatMessages = mysqlTable(
     role: varchar("role", { length: 10 }).$type<ChatRole>().notNull(), // CHAT_ROLES
     content: mediumtext("content").notNull(),
     attachments: jsonValue<ChatAttachment[]>("attachments"), // null = none
+    proposals: jsonValue<ChatProposal[]>("proposals"), // a reply's; null = none
     status: varchar("status", { length: 10 }).$type<ChatStatus>().notNull(), // CHAT_STATUSES
     error: varchar("error", { length: 200 }), // failed: why
     model: varchar("model", { length: 100 }), // a finished reply's
