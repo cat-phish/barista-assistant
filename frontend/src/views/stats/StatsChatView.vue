@@ -4,16 +4,20 @@
 // Fills the screen below the tabs: the thread scrolls, the composer stays at
 // the bottom. On a phone the chat list is a drawer behind "Chats".
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { chatsApi, type Chat, type ChatAttachment, type ChatMessage, type ChatPhoto } from '../../api/chats';
-import { ApiError } from '../../api/client';
+import { useRouter } from 'vue-router';
+import { chatsApi, type Chat, type ChatAttachment, type ChatMessage, type ChatPhoto, type ChatProposal } from '../../api/chats';
+import { ApiError, errorMessage } from '../../api/client';
 import ChatAttachChips from '../../components/ChatAttachChips.vue';
 import ChatAttachDialog from '../../components/ChatAttachDialog.vue';
 import ChatList from '../../components/ChatList.vue';
 import ChatMarkdown from '../../components/ChatMarkdown.vue';
+import ChatProposalCard from '../../components/ChatProposalCard.vue';
 import { usePreferences } from '../../composables/usePreferences';
 import { attachKey } from '../../lib/chatAttach';
+import { proposalRoute } from '../../lib/chatProposal';
 import { formatWhen } from '../../lib/format';
 import { droppedImages, pastedImages } from '../../lib/pastedImages';
+import { useChatProposalStore } from '../../stores/chatProposal';
 import { useWorkspaceStore } from '../../stores/workspace';
 
 const MESSAGE_MAX = 4000;
@@ -47,6 +51,28 @@ function attachPicked(picked: ChatAttachment[]) {
 }
 function detach(item: ChatAttachment) {
   attachments.value = attachments.value.filter((a) => attachKey(a) !== attachKey(item));
+}
+
+// A reply's proposals (docs/api/chat.md §12, "Proposals"): Open hands one
+// to the page it fills in; Dismiss is saved on the chat.
+const router = useRouter();
+const proposalStore = useChatProposalStore();
+const proposalBusy = ref<string | null>(null); // the message being saved
+function openProposal(p: ChatProposal) {
+  proposalStore.give(p);
+  void router.push(proposalRoute(p));
+}
+async function setProposal(m: ChatMessage, index: number, state: ChatProposal['state']) {
+  if (!workspaceId.value || !chatId.value) return;
+  proposalBusy.value = m.id;
+  error.value = '';
+  try {
+    m.proposals = (await chatsApi.setProposal(workspaceId.value, chatId.value, m.id, index, state)).proposals;
+  } catch (err) {
+    error.value = errorMessage(err);
+  } finally {
+    proposalBusy.value = null;
+  }
 }
 
 // Photos go up as they're picked, pasted or dropped, and are sent with the
@@ -368,6 +394,15 @@ onBeforeUnmount(stop);
               <span>{{ m.error ?? 'The reply failed' }}.</span>
               <button v-if="composing" type="button" class="btn-link" @click="retry(m)">Retry</button>
             </div>
+            <ChatProposalCard
+              v-for="(p, i) in m.proposals"
+              :key="i"
+              :proposal="p"
+              :can-open="workspaces.canEdit"
+              :busy="proposalBusy === m.id"
+              @open="openProposal(p)"
+              @state="setProposal(m, i, $event)"
+            />
           </div>
           <span class="when">{{ timeOf(m.createdAt) }}</span>
         </div>

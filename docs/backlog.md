@@ -547,8 +547,10 @@ What the analysis worker sends to the LLM and what comes back.
 
 - **Status:** in progress (spec: `docs/api/chat.md` §12 "Proposals",
   `docs/api/llm-contract.md` §9e). Built: the worker reads, checks and
-  saves them, and the routes carry them (branch `chat-proposals`). Next: the
-  cards in the Chat tab and opening one into the brew page or recipe form.
+  saves them (`chat-proposals`), and the cards in the Chat tab open them
+  into the brew page or the recipe form (`chat-proposal-cards`). Left: try
+  it in the browser on both providers (with 18), then move it to the
+  roadmap.
 - **Why:** AI chat (roadmap, "AI chat in Insights") is read-only, so a
   recipe or a parameter change it suggests has to be typed in by hand.
 - **Approach:** a reply can carry a proposal (a new recipe, a parameter

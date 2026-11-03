@@ -1,4 +1,5 @@
 import { API_URL, api } from './client';
+import type { StepType } from './types';
 
 // docs/api/chat.md §12: a person's own chats.
 export interface Chat {
@@ -32,12 +33,68 @@ export interface ChatPhoto {
   width: number;
   height: number;
 }
+// A change a reply proposes, shown as a card (docs/api/chat.md §12,
+// "Proposals"). Opening it fills in the brew page or the recipe form.
+export type ChatProposalState = 'open' | 'dismissed';
+export interface ChatProposalStep {
+  stepType: StepType;
+  label: string | null;
+  durationSec: number | null;
+  targetWaterGrams: number | null;
+  targetTempC: number | null;
+  pressureBar: number | null;
+  flowRate: number | null;
+}
+// Only what the AI set.
+export interface ChatProposalRecipe {
+  name?: string;
+  targetDoseGrams?: number;
+  targetWaterGrams?: number | null;
+  targetIceGrams?: number | null;
+  expectedYieldGrams?: number | null;
+  targetTempC?: number | null;
+  expectedFinishMinSec?: number | null;
+  expectedFinishMaxSec?: number | null;
+  steps?: ChatProposalStep[];
+}
+interface ProposalBase {
+  title: string;
+  why: string;
+  state: ChatProposalState;
+}
+export interface ChatBrewProposal extends ProposalBase {
+  kind: 'brew';
+  beanId: string | null;
+  beanLabel: string | null;
+  recipeId: string | null;
+  recipeLabel: string | null;
+  grinderId: string | null;
+  grinderLabel: string | null;
+  grindSetting: number | null;
+  tempC: number | null;
+  ratio: number | null;
+}
+export interface ChatRecipeChangeProposal extends ProposalBase {
+  kind: 'recipeChange';
+  recipeId: string;
+  recipeLabel: string;
+  changes: ChatProposalRecipe;
+}
+export interface ChatNewRecipeProposal extends ProposalBase {
+  kind: 'newRecipe';
+  brewerId: string | null;
+  brewerLabel: string | null;
+  recipe: ChatProposalRecipe & { name: string; targetDoseGrams: number };
+}
+export type ChatProposal = ChatBrewProposal | ChatRecipeChangeProposal | ChatNewRecipeProposal;
+
 export interface ChatMessage {
   id: string;
   position: number;
   role: 'user' | 'assistant';
   content: string;
   attachments: ChatAttachment[];
+  proposals: ChatProposal[];
   photos: ChatPhoto[];
   status: 'pending' | 'done' | 'failed';
   error: string | null;
@@ -102,6 +159,9 @@ export const chatsApi = {
   },
   photoUrl(workspaceId: string, photoId: string) {
     return `${API_URL}${base(workspaceId)}/photos/${photoId}`;
+  },
+  setProposal(workspaceId: string, chatId: string, messageId: string, index: number, state: ChatProposalState) {
+    return api.put<{ proposals: ChatProposal[] }>(`${base(workspaceId)}/${chatId}/messages/${messageId}/proposals/${index}`, { state });
   },
   remove(workspaceId: string, chatId: string) {
     return api.delete<void>(`${base(workspaceId)}/${chatId}`);

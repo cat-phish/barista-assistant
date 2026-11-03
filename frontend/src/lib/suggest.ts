@@ -106,7 +106,7 @@ export function suggestionFitsGrinder(p: StartingParameters, grinderId: string):
 }
 
 // 'repeat': taken from the brew being repeated (lib/repeatBrew.ts).
-export type GrindSource = 'last' | 'suggestion' | 'recipe' | 'repeat' | 'none';
+export type GrindSource = 'last' | 'suggestion' | 'recipe' | 'repeat' | 'proposal' | 'none';
 
 // What to pre-fill the grind setting with when starting a brew:
 //   1. the suggested setting, when it was asked for this grinder,
