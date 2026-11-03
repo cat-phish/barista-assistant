@@ -2150,7 +2150,7 @@ then the attach picker, pasted photos, the layout and charts.
   - Chats are private to the person, owners included, and not in workspace
     backups (a backup would hand them to whoever downloads it): they have
     their own export.
-  - Read-only: proposals are backlog 19.
+  - Read-only at first: proposals came next (below, "AI chat proposals").
   - The AI sees only what's attached; it can't look things up itself.
   - Max size is what a person's chats take on disk, messages and photos
     together; the server's default is 1 GB, and going over removes their
@@ -2205,3 +2205,26 @@ table).
 - Insights' filter bar also got **Reset filters**, shown once a filter is off
   its default.
 - Still to do: **Ask in chat** on a chart card (backlog 20).
+
+## AI chat proposals (built)
+
+Backlog item 19, branches `chat-proposals` (migration 0096),
+`chat-proposal-cards` and `chat-proposal-form-fix`. A chat reply can carry up
+to 3 proposals, shown as cards that open a form already filled in
+(`docs/api/chat.md` §12 "Proposals", `docs/api/llm-contract.md` §9e).
+
+- **Three kinds:** the next brew (bean, recipe, grind, temperature, ratio),
+  a change to an attached recipe (only what changes), and a new recipe.
+  **Open** fills in the brew page or the recipe form through a store, and
+  nothing is saved until the person saves there; what's gone since is
+  named. **Dismiss** folds a card, with **Undo**, saved on the chat.
+- **A fenced block, not a tool call:** the reply ends with ```` ```proposal ````
+  blocks of JSON, so any OpenAI-compatible server works. The worker holds
+  them back from the stream, takes them out of the saved text, and checks
+  each: refs (`a1`, `a2`, …) only to what's attached, values in range, a
+  grind on the grinder's dial and a ratio in the method's range, as Suggest
+  parameters does. One that fails is dropped.
+- **Later turns** tell the AI what it proposed and what was dismissed.
+- Proposals are on `ai_chat_messages.proposals`, count toward a chat's size
+  and go in the export.
+- Left for later: reviewing how good the suggestions are (backlog 19).
