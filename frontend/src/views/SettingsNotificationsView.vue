@@ -1,15 +1,16 @@
 <script setup lang="ts">
 // Settings → Notifications (docs/api/notifications.md §1b): your own reminder
-// channels (ntfy, Gotify, Pushover, Discord, Telegram, Slack, a webhook) and
-// rate-later reminders. Each service saves on its own; the switch and the
+// channels (Web Push to this app's devices, ntfy, Gotify, Pushover, Discord,
+// Telegram, Slack, a webhook) and rate-later reminders. Each service saves on its own; the switch and the
 // delay save as soon as they change.
 import { computed, onMounted, reactive, ref } from 'vue';
-import { errorMessage } from '../api/client';
+import { ApiError, errorMessage } from '../api/client';
 import { notificationsApi } from '../api/notifications';
-import type { NotificationChannel, NotificationKind, UserPreferences } from '../api/types';
+import type { NotificationChannel, NotificationKind, PushDevice, UserPreferences } from '../api/types';
 import SettingsLayout from '../components/SettingsLayout.vue';
 import { usePreferences } from '../composables/usePreferences';
 import { configFromForm, formatDelay, formValues, SERVICES, type Service } from '../lib/notifications';
+import { currentPushEnv, currentSubscription, deviceLabel, pushSupport, sha256Hex, subscribeThisDevice, SUPPORT_TEXT } from '../lib/webPush';
 import { useAuthStore } from '../stores/auth';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -19,7 +20,8 @@ const channels = ref<NotificationChannel[]>([]);
 const loading = ref(true);
 const loadError = ref('');
 const saved = (kind: NotificationKind) => channels.value.find((c) => c.kind === kind);
-const anyEnabled = computed(() => channels.value.some((c) => c.enabled)); // reminders can be delivered
+const pushDevices = ref<PushDevice[]>([]);
+const anyEnabled = computed(() => channels.value.some((c) => c.enabled) || pushDevices.value.some((d) => d.enabled)); // reminders can be delivered
 
 // Per service: open or not, the form, its Enabled box, and what happened.
 const open = ref<NotificationKind | null>(null);
@@ -36,14 +38,92 @@ function reset(service: Service): void {
 
 onMounted(async () => {
   try {
-    channels.value = (await notificationsApi.list()).channels;
+    ({ channels: channels.value, pushDevices: pushDevices.value } = await notificationsApi.list());
   } catch (err) {
     loadError.value = errorMessage(err);
   } finally {
     loading.value = false;
   }
   for (const s of SERVICES) reset(s);
+  void loadPush();
 });
+
+// Web Push ("Web Push" in §1b): this device's own notifications. One entry
+// per device; this one is recognised by its subscription's endpoint hash.
+const support = pushSupport(currentPushEnv());
+const serverKey = ref<string | null | undefined>(undefined); // null = not set up on the server
+const thisHash = ref<string | null>(null);
+const pushBusy = ref<string | null>(null); // 'section' (subscribing) or a device id
+const pushStatus = reactive<Record<string, { ok: boolean; text: string } | undefined>>({});
+
+async function loadPush(): Promise<void> {
+  try {
+    serverKey.value = (await notificationsApi.pushKey()).publicKey;
+  } catch (err) {
+    serverKey.value = err instanceof ApiError && err.status === 404 ? null : undefined;
+  }
+  const sub = await currentSubscription();
+  thisHash.value = sub ? await sha256Hex(sub.endpoint) : null;
+}
+const thisDevice = computed(() => pushDevices.value.find((d) => d.endpointHash === thisHash.value));
+
+async function pushRun(key: string, action: () => Promise<string>): Promise<void> {
+  pushBusy.value = key;
+  pushStatus[key] = undefined;
+  pushStatus.section = undefined;
+  try {
+    pushStatus[key] = { ok: true, text: await action() };
+  } catch (err) {
+    pushStatus[key] = { ok: false, text: errorMessage(err) };
+  } finally {
+    pushBusy.value = null;
+  }
+}
+function subscribe(): Promise<void> {
+  return pushRun('section', async () => {
+    if (!serverKey.value) throw new Error("Web Push isn't set up on this server.");
+    const sub = await subscribeThisDevice(serverKey.value);
+    if (!sub.endpoint || !sub.keys?.p256dh || !sub.keys.auth) throw new Error("The browser didn't return a usable subscription.");
+    const { device } = await notificationsApi.subscribe({ endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth }, label: deviceLabel(navigator.userAgent, navigator.maxTouchPoints) });
+    pushDevices.value = [...pushDevices.value.filter((d) => d.id !== device.id), device];
+    thisHash.value = device.endpointHash;
+    return 'This device gets notifications now. Send a test to check.';
+  });
+}
+function setDeviceEnabled(device: PushDevice, on: boolean): Promise<void> {
+  return pushRun(device.id, async () => {
+    const { device: saved } = await notificationsApi.setDeviceEnabled(device.id, on);
+    pushDevices.value = pushDevices.value.map((d) => (d.id === saved.id ? saved : d));
+    return on ? 'On.' : 'Off: no reminders here.';
+  });
+}
+function testDevice(device: PushDevice): Promise<void> {
+  return pushRun(device.id, async () => {
+    try {
+      await notificationsApi.testDevice(device.id);
+    } catch (err) {
+      // Gone: the device left the list, so say so under the section.
+      if (err instanceof ApiError && err.status === 410) {
+        pushDevices.value = pushDevices.value.filter((d) => d.id !== device.id);
+        pushStatus.section = { ok: false, text: `${device.label}: ${errorMessage(err)}` };
+      }
+      throw err;
+    }
+    return 'Sent: check that it arrived.';
+  });
+}
+function removeDevice(device: PushDevice): Promise<void> {
+  return pushRun(device.id, async () => {
+    await notificationsApi.removeDevice(device.id);
+    pushDevices.value = pushDevices.value.filter((d) => d.id !== device.id);
+    if (device.endpointHash === thisHash.value) {
+      await (await currentSubscription())?.unsubscribe();
+      thisHash.value = null;
+    }
+    pushStatus.section = { ok: true, text: `${device.label} removed.` };
+    return '';
+  });
+}
 
 function toggle(service: Service): void {
   open.value = open.value === service.kind ? null : service.kind;
@@ -127,7 +207,7 @@ async function setPref(changes: Partial<Pick<UserPreferences, 'rateReminders' | 
         Start with "Rate later" ticked
       </label>
       <p v-if="!prefs.rateReminders" class="muted small">Off: the brew page doesn't show Rate later.</p>
-      <p v-else-if="!anyEnabled" class="muted small">No service is set up and on yet, so the brew page shows Rate later greyed out. Set one up below.</p>
+      <p v-else-if="!anyEnabled" class="muted small">Nothing is set up and on yet, so the brew page shows Rate later greyed out. Turn on this app's notifications or set up a service below.</p>
       <p v-if="prefError" class="form-error" role="alert">{{ prefError }}</p>
     </section>
 
@@ -155,6 +235,36 @@ async function setPref(changes: Partial<Pick<UserPreferences, 'rateReminders' | 
 
     <p v-if="loading" class="muted" aria-live="polite">Loading…</p>
     <p v-else-if="loadError" class="form-error" role="alert">{{ loadError }}</p>
+    <section v-if="!loading && !loadError" class="card stack" aria-labelledby="web-push">
+      <h2 id="web-push">This app</h2>
+      <p class="muted small">Notifications from the app itself on your phone or computer, with no other app needed. Each device is turned on from that device.</p>
+      <p v-if="serverKey === null" class="muted small">Web Push isn't set up on this server: whoever runs it adds VAPID keys to turn it on.</p>
+      <p v-else-if="support !== 'ok'" class="muted small">{{ SUPPORT_TEXT[support] }}</p>
+      <div v-else-if="serverKey && !thisDevice" class="actions">
+        <button class="btn btn-primary" type="button" :disabled="pushBusy === 'section'" @click="subscribe">Get notifications on this device</button>
+      </div>
+      <p v-if="pushStatus.section" :class="pushStatus.section.ok ? 'muted small' : 'form-error'" :role="pushStatus.section.ok ? 'status' : 'alert'">
+        {{ pushStatus.section.text }}
+      </p>
+      <ul v-if="pushDevices.length" class="devices">
+        <li v-for="d in pushDevices" :key="d.id" class="device stack">
+          <div class="device-head">
+            <span>{{ d.label }}<span v-if="d.id === thisDevice?.id" class="muted"> · this device</span></span>
+            <label class="checkbox">
+              <input type="checkbox" :checked="d.enabled" :disabled="pushBusy === d.id" @change="setDeviceEnabled(d, ($event.target as HTMLInputElement).checked)" />
+              On
+            </label>
+          </div>
+          <div class="actions">
+            <button class="btn btn-secondary" type="button" :disabled="pushBusy === d.id || serverKey === null" @click="testDevice(d)">Send test</button>
+            <button class="btn-link danger" type="button" :disabled="pushBusy === d.id" @click="removeDevice(d)">Remove</button>
+          </div>
+          <p v-if="pushStatus[d.id]" :class="pushStatus[d.id]!.ok ? 'muted small' : 'form-error'" :role="pushStatus[d.id]!.ok ? 'status' : 'alert'">
+            {{ pushStatus[d.id]!.text }}
+          </p>
+        </li>
+      </ul>
+    </section>
     <section v-for="s in SERVICES" v-else :key="s.kind" class="card service" :aria-labelledby="`svc-${s.kind}`">
       <button class="service-head" type="button" :aria-expanded="open === s.kind" @click="toggle(s)">
         <h2 :id="`svc-${s.kind}`">{{ s.name }}</h2>
@@ -232,6 +342,24 @@ p {
 .badge.on {
   border-color: var(--brand);
   color: var(--brand);
+}
+.devices {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.device + .device {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-3);
+}
+.device-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
 }
 .actions {
   display: flex;

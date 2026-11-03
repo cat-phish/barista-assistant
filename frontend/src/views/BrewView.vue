@@ -45,7 +45,7 @@ import {
   setupMissing,
   switchPlan,
 } from '../lib/brewChoice';
-import type { Brewer, BrewProblem, Drink, DrinkCategory, Grinder, Mark, MethodKind, NotificationChannel, PrepTool, RememberKey, ServingUnit, Vessel, WaterProfile } from '../api/types';
+import type { Brewer, BrewProblem, Drink, DrinkCategory, Grinder, Mark, MethodKind, PrepTool, RememberKey, ServingUnit, Vessel, WaterProfile } from '../api/types';
 import { METHOD_KINDS } from '../lib/equipment';
 import { convertSize, defaultSize, formatSize, SERVING_UNITS, sizeFactor, type Size } from '../lib/servings';
 import AppHeader from '../components/AppHeader.vue';
@@ -1000,7 +1000,7 @@ const aiNeedsRating = computed(() => savedUnrated.value && aiHidden.value.includ
 // reminders are on (Settings → Notifications), ticked to start or not as set
 // there, and greyed out while no service is on to deliver the reminder.
 const auth = useAuthStore();
-const notifyChannels = ref<NotificationChannel[]>([]);
+const notifyChannels = ref<{ enabled: boolean }[]>([]); // channels and Web Push devices
 const userPrefs = computed(() => auth.user?.preferences ?? DEFAULT_PREFERENCES);
 const deliverable = computed(() => canRemind(userPrefs.value, notifyChannels.value));
 const rateLater = ref(false);
@@ -1010,7 +1010,7 @@ watch(stage, (s) => {
 const reminder = ref<'queued' | 'off' | 'unavailable' | null>(null); // for the brew just saved
 notificationsApi
   .list()
-  .then((r) => (notifyChannels.value = r.channels))
+  .then((r) => (notifyChannels.value = [...r.channels, ...r.pushDevices]))
   .catch(() => (notifyChannels.value = [])); // without it, brews just save without Rate later
 
 // What this brew used, for the next one (Settings → Brew setup).
