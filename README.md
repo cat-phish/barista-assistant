@@ -85,6 +85,10 @@ plus:
   fixed build such as `sha-7a093cd`;
 - `AI_CONFIG_SECRET` (optional, at least 32 characters): lets keys be saved
   in Settings. Generate one with `openssl rand -hex 32`;
+- `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (optional,
+  all three or none): reminders as the app's own notifications (Web Push).
+  Make the keys with `npx web-push generate-vapid-keys`; the subject is a
+  `mailto:` address or an `https://` URL;
 - every `*_DIR` setting, which is required here. Docker creates the folders
   and the app sets their owner when it starts.
 

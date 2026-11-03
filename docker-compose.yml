@@ -65,6 +65,9 @@ services:
       # Optional, so not a secret file: Compose won't start if a secret's
       # variable is missing, which would stop installs that don't set it.
       - AI_CONFIG_SECRET=${AI_CONFIG_SECRET:-}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-}
       - CORS_ORIGIN=${APP_URL:-https://localhost:42069}
       # Requests arrive through the frontend's Caddy: trust it for the
       # client IP, so the login rate limit is per device.
@@ -113,6 +116,9 @@ services:
       # Optional, so not a secret file: Compose won't start if a secret's
       # variable is missing, which would stop installs that don't set it.
       - AI_CONFIG_SECRET=${AI_CONFIG_SECRET:-}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-}
       - OPENAI_MODEL=${OPENAI_MODEL}
       # Reads bean labels from photos (docs/api/bean-label.md §4d); empty = OPENAI_MODEL.
       - OPENAI_VISION_MODEL=${OPENAI_VISION_MODEL:-}
