@@ -18,6 +18,7 @@ import { INSIGHT_TAB_INFO, visibleTabs } from '../lib/insightCharts';
 import { RANGES } from '../lib/statsRange';
 import { VOLUME_LABELS } from '../lib/units';
 import ChartHarvestTab from './charts/ChartHarvestTab.vue';
+import FilterBar from './FilterBar.vue';
 import OverviewTotalsHarvest from './charts/OverviewTotalsHarvest.vue';
 import PinnedCharts from './charts/PinnedCharts.vue';
 import StatsFilters from './StatsFilters.vue';
@@ -94,14 +95,15 @@ const pickedHere = computed(() => props.selected.filter((a) => a.kind === 'chart
 
 <template>
   <div class="chart-picker">
-    <StatsFilters />
+    <FilterBar :summary="words" describe="Attached as the numbers for">
+      <StatsFilters />
+    </FilterBar>
     <div class="bulk">
       <span class="muted small" aria-live="polite">{{ stats.loading.value && !stats.data.value ? 'Loading charts…' : `${usable.length} ${usable.length === 1 ? 'chart' : 'charts'} with data` }}</span>
       <button v-if="usable.length" type="button" class="btn-link" :disabled="full" @click="emit('pickAll', usable)">Select all {{ usable.length }}</button>
       <button v-if="pickedHere" type="button" class="btn-link" @click="emit('clear')">Clear</button>
     </div>
     <p v-if="stats.error.value" class="form-error" role="alert">{{ stats.error.value }}</p>
-    <p class="muted small covers">Attached as the numbers for: {{ words }}</p>
 
     <div class="rows">
       <section v-for="g in groups" :key="g.tab" class="group" :aria-label="g.label">
@@ -116,9 +118,11 @@ const pickedHere = computed(() => props.selected.filter((a) => a.kind === 'chart
                 @change="r.item && emit('toggle', r.item)"
               />
               <span class="text">
-                <strong>{{ r.title }}</strong>
-                <span v-if="r.note" class="muted small note">{{ r.note }}</span>
-                <span class="muted small">{{ r.item ? `${r.rows} ${r.rows === 1 ? 'row' : 'rows'}` : 'No data for these filters' }}</span>
+                <span class="top">
+                  <strong>{{ r.title }}</strong>
+                  <span class="muted small count">{{ r.item ? `${r.rows} ${r.rows === 1 ? 'row' : 'rows'}` : 'No data' }}</span>
+                </span>
+                <span v-if="r.note" class="muted small note" :title="r.note">{{ r.note }}</span>
               </span>
             </label>
           </li>
@@ -140,12 +144,13 @@ const pickedHere = computed(() => props.selected.filter((a) => a.kind === 'chart
 </template>
 
 <style scoped>
+/* No min-height: 0, so it keeps the list's 12rem and the dialog's panel
+   scrolls on a short screen instead. */
 .chart-picker {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   flex: 1;
-  min-height: 0;
 }
 .bulk {
   display: flex;
@@ -163,8 +168,7 @@ p {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  flex: 1;
-  min-height: 0;
+  flex: 1 0 12rem;
   overflow-y: auto;
 }
 h3 {
@@ -178,7 +182,7 @@ h3 {
 ul {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -187,7 +191,7 @@ ul {
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
+  padding: 6px var(--space-3);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -212,13 +216,20 @@ ul {
 .text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  flex: 1;
   min-width: 0;
 }
+.top {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.count {
+  flex: none;
+}
 .note {
-  display: -webkit-box;
   overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
