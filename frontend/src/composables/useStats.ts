@@ -53,6 +53,8 @@ export interface ChartView {
 export interface StatsContext {
   filters: ComputedRef<StatsFilters>;
   setFilters: (change: Partial<StatsFilters>) => void;
+  filtered: ComputedRef<boolean>; // any filter off its default (Reset)
+  resetFilters: () => void;
   loading: Ref<boolean>;
   error: Ref<string>;
   data: Ref<StatsData | null>;
@@ -117,6 +119,10 @@ export function provideStats(): StatsContext {
     if (f.by !== 'auto') query.by = f.by;
     void router.replace({ query });
   }
+
+  // A plain /insights: all of my brews, grouped automatically, in my unit.
+  const defaults = computed<StatsFilters>(() => ({ range: 'all', from: '', to: '', bean: '', recipe: '', brewer: '', mine: true, unit: prefs.value.volumeUnit, by: 'auto' }));
+  const filtered = computed(() => (Object.keys(defaults.value) as Array<keyof StatsFilters>).some((k) => filters.value[k] !== defaults.value[k]));
 
   const range = computed(() => resolveRange(filters.value, localDateInput()));
 
@@ -322,6 +328,8 @@ export function provideStats(): StatsContext {
   const ctx: StatsContext = {
     filters,
     setFilters,
+    filtered,
+    resetFilters: () => setFilters(defaults.value),
     loading,
     error,
     data,

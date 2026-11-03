@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// The Stats filter bar: one row above the charts, wrapping on a phone.
+// The Stats filter bar: one row above the charts, wrapping on a phone. Reset
+// shows once any filter is off its default.
 import { computed } from 'vue';
 import type { VolumeUnit } from '../api/types';
 import { GROUPINGS, RANGES, useStats, type Grouping, type RangeKey } from '../composables/useStats';
@@ -70,6 +71,7 @@ const value = (e: Event) => (e.target as HTMLInputElement | HTMLSelectElement).v
       <input type="checkbox" :checked="f.mine" @change="stats.setFilters({ mine: ($event.target as HTMLInputElement).checked })" />
       Only mine
     </label>
+    <button v-if="stats.filtered.value" type="button" class="btn-link reset" @click="stats.resetFilters()">Reset filters</button>
   </div>
 </template>
 
@@ -89,5 +91,10 @@ const value = (e: Event) => (e.target as HTMLInputElement | HTMLSelectElement).v
 }
 .mine {
   align-self: end;
+}
+.reset {
+  align-self: end;
+  justify-self: start;
+  min-height: var(--tap);
 }
 </style>
