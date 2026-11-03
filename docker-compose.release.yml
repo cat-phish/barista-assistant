@@ -71,6 +71,15 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # The image's healthcheck, with time for migrations and a slow database:
+    # failures in the first 5 minutes don't count, so `up` doesn't give up
+    # and leave the worker and frontend in Created.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health || exit 1"]
+      start_period: 5m
+      interval: 10s
+      timeout: 3s
+      retries: 3
 
   worker:
     image: catphish403/barista-assistant-worker:${IMAGE_TAG:-latest}
@@ -142,8 +151,14 @@ services:
       - db_root_password
     volumes:
       - ${DB_DATA_DIR:?set DB_DATA_DIR in .env}:/var/lib/mysql
+    # Time to flush and stop cleanly (Docker's default is 10 s, then a kill),
+    # so the next start doesn't begin with crash recovery.
+    stop_grace_period: 1m
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      # A slow start (crash recovery, a new image, a busy disk) isn't counted
+      # as failing for 5 minutes; it's healthy as soon as it's ready.
+      start_period: 5m
       interval: 5s
       timeout: 5s
       retries: 20
