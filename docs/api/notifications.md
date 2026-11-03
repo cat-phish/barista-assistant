@@ -107,7 +107,9 @@ on/off; every enabled one is notified.
   `https://` URL the push services can contact) on both backend and worker,
   all three or none. `npx web-push generate-vapid-keys` makes a key pair.
   Without them Web Push is off: the key route answers 404, and devices
-  already saved are kept but not sent to.
+  already saved are kept but not sent to. New keys silence every device until it
+  subscribes again: a client whose subscription was made with other keys
+  offers to subscribe again, and drops that device's old entry.
 - **Where it works:** Chrome, Edge, Firefox and Safari on desktop, and
   Android; on iPhone and iPad (iOS 16.4+) only from the app added to the
   Home Screen, never a Safari tab. It needs HTTPS with a certificate the

@@ -44,6 +44,9 @@ images are built on the server).
    - `ALLOW_REGISTRATION=false` once the accounts exist, if the server is
      reachable by people who shouldn't sign up; `BREW_TIMEZONE` and
      `BACKUP_TIMEZONE`.
+   - optionally, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and
+     `VAPID_SUBJECT`, so reminders can arrive as the app's own
+     notifications (see "Notifications from the app" below).
 3. **Start it:** `docker compose up -d --build`. `docker compose ps` should
    show every service running, and db, redis and backend healthy. The
    containers restart on their own, after a reboot too, as long as Docker
@@ -85,10 +88,6 @@ plus:
   fixed build such as `sha-7a093cd`;
 - `AI_CONFIG_SECRET` (optional, at least 32 characters): lets keys be saved
   in Settings. Generate one with `openssl rand -hex 32`;
-- `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (optional,
-  all three or none): reminders as the app's own notifications (Web Push).
-  Make the keys with `npx web-push generate-vapid-keys`; the subject is a
-  `mailto:` address or an `https://` URL;
 - every `*_DIR` setting, which is required here. Docker creates the folders
   and the app sets their owner when it starts.
 
@@ -132,6 +131,60 @@ The certificate only covers `localhost` and `APP_HOST`, so open the app at
 exactly that address. Any other name for the same server fails with
 `SSL_ERROR_INTERNAL_ERROR_ALERT` in Firefox. To change the address, update
 `APP_HOST` and `APP_URL` and recreate the containers.
+
+## Notifications from the app
+
+Reminders (rate later, cold brew ready, roast rested, green coffee low) can
+go to ntfy, Gotify, Discord and the like, or straight to the app on your
+phone or computer as its own notifications (Web Push). Web Push needs three
+settings in `.env`; without them it's off, and everything else works.
+
+**What they are:** phones don't get notifications from the server directly.
+The server hands each one to the phone's push service (Google for Android
+and Chrome, Apple for iPhone and Safari, Mozilla for Firefox), which
+delivers it. VAPID is how the server proves to those services who it is:
+
+- `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`: a key pair the server signs
+  its pushes with. Each device subscribes with the public key, and the push
+  service only accepts pushes signed with the matching private key. Treat
+  the private key like a password: it can also come from a file, with
+  `VAPID_PRIVATE_KEY_FILE`.
+- `VAPID_SUBJECT`: a way for the push services to contact whoever runs the
+  server if something goes wrong. Use your email as `mailto:you@example.com`
+  (or an `https://` address you own). It isn't shown to anyone else. Apple
+  refuses pushes from a made-up subject such as `mailto:admin@localhost`.
+
+**Setting them up:**
+
+1. Make a key pair once. With nothing but Docker:
+   ```sh
+   docker run --rm node:22-alpine npx --yes web-push generate-vapid-keys
+   ```
+   (or `npx web-push generate-vapid-keys` in this repo). It prints a
+   **Public Key** and a **Private Key**.
+2. Put them in `.env`, all three or none (the app won't start with only some
+   of them):
+   ```sh
+   VAPID_PUBLIC_KEY=<the Public Key>
+   VAPID_PRIVATE_KEY=<the Private Key>
+   VAPID_SUBJECT=mailto:you@example.com
+   ```
+3. Recreate the containers: `docker compose up -d` (with `--build` when
+   building from the repo). The backend and the worker both read them.
+4. On each phone or computer, open the app, go to Settings → Notifications →
+   **This app** and tap **Get notifications on this device**, then
+   **Send test**.
+
+**Keep the keys.** Every subscribed device is tied to this public key: with
+new keys, each device has to open Settings → Notifications and tap **Get
+notifications on this device** again (the button comes back for it). Moving to another machine, copy the three settings along
+with `JWT_SECRET`.
+
+**Where it works:** Android (Chrome, Firefox, Edge, Samsung Internet) and
+desktop browsers. On iPhone and iPad (iOS 16.4 or later) only from the app
+added to the Home Screen, not a Safari tab. The device must trust the app's
+HTTPS certificate (see "Install it on your phone"), and the server needs to
+reach the internet, since the push services do the delivering.
 
 ## Behind a reverse proxy
 

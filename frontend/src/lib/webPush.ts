@@ -103,6 +103,12 @@ export async function currentSubscription(): Promise<PushSubscription | null> {
   }
 }
 
+// Whether a subscription was made with this server key: one from older keys
+// (they were changed) no longer gets anything.
+export function madeWithKey(sub: PushSubscription, publicKey: string): boolean {
+  return sameKey(sub.options.applicationServerKey, keyBytes(publicKey));
+}
+
 // Asks for permission (call it from a tap) and subscribes this device.
 export async function subscribeThisDevice(publicKey: string): Promise<PushSubscriptionJSON> {
   const permission = await Notification.requestPermission();
