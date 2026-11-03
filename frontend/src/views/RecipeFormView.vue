@@ -610,10 +610,10 @@ async function save(): Promise<void> {
     <div class="page-header">
       <h1>{{ editing ? 'Edit recipe' : copyOf ? 'Duplicate recipe' : 'Add recipe' }}</h1>
     </div>
-    <p v-if="loading" class="muted" aria-live="polite">Loading…</p>
     <p v-if="fromChat" class="muted" aria-live="polite">
       Filled from AI chat: {{ fromChat.title }}. Check it, then save. {{ fromChat.note }}
     </p>
+    <p v-if="loading" class="muted" aria-live="polite">Loading…</p>
 
     <form v-else class="stack" novalidate @submit.prevent="save">
       <section class="card stack">
