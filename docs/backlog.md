@@ -543,28 +543,37 @@ What the analysis worker sends to the LLM and what comes back.
 - **Depends on:** nothing.
 - **Open questions:** none.
 
-### 19. AI chat proposals
+### 19. Review and refine parameter and recipe suggestions
 
-- **Status:** in progress (spec: `docs/api/chat.md` §12 "Proposals",
-  `docs/api/llm-contract.md` §9e). Built: the worker reads, checks and
-  saves them (`chat-proposals`), and the cards in the Chat tab open them
-  into the brew page or the recipe form (`chat-proposal-cards`). Left: try
-  it in the browser on both providers (with 18), then move it to the
-  roadmap.
-- **Why:** AI chat (roadmap, "AI chat in Insights") is read-only, so a
-  recipe or a parameter change it suggests has to be typed in by hand.
-- **Approach:** a reply can carry a proposal (a new recipe, a parameter
-  change) shown as a card the person accepts or dismisses; accepting goes
-  through the normal routes. Nothing changes without that.
+- **Status:** idea
+- **Why:** the AI now suggests brew values in two places: **Suggest
+  parameters** on the brew page (`docs/api/analysis.md` §8b) and chat
+  proposals (roadmap, "AI chat proposals"), which also change and create
+  recipes. Both work, but the advice hasn't been judged: a first chat
+  proposal for a V60 gave two blooms with 11-second pours and 22-second
+  drawdowns, timings no one would brew.
+- **Approach:**
+  - Collect real cases from both: what was asked, what came back, and
+    whether it was sensible (grind steps, temperatures, ratios, step
+    timings, finish windows).
+  - Tighten the prompts where they go wrong: step guidance for recipes
+    (realistic pour and drawdown times, steps that end inside the finish
+    window, totals that match the water), and when not to propose at all.
+  - Consider checks after parsing for recipe steps (last pour reaching the
+    water, the steps' time against the finish window, 11), dropping or
+    flagging a proposal that fails them.
+  - Run the eval (`docs/api/llm-contract.md` §9, "Evaluating changes") on
+    both providers before and after; bump `PROMPT_VERSION` for the
+    analysis prompts.
 - **Size:** M
-- **Depends on:** nothing (chat is built); 18 tests what it builds on.
-- **Decided:**
-  - Three kinds first: the next brew's settings, a change to an attached
-    recipe, and a new recipe. Opening a card fills in the brew page or the
-    recipe form; nothing is saved until the person saves there.
-  - A fenced ```` ```proposal ```` block at the end of the reply, not a tool
-    call, so any OpenAI-compatible server works; the worker holds it back
-    from the stream.
+- **Depends on:** nothing; pairs with 13 (espresso dose and shot weight)
+  and 11 (target window vs. the steps).
+- **Open questions:**
+  - Should a "next brew" proposal also set the dose and water, not only
+    grind, temperature and ratio?
+  - Does the eval need chat cases, or are chat proposals judged by hand?
+  - Should the recipe form point out where a proposal differs from the
+    saved recipe?
 
 ### 20. Ask in chat from a chart card
 
