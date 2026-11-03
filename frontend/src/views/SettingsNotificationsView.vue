@@ -10,7 +10,7 @@ import type { NotificationChannel, NotificationKind, PushDevice, UserPreferences
 import SettingsLayout from '../components/SettingsLayout.vue';
 import { usePreferences } from '../composables/usePreferences';
 import { configFromForm, formatDelay, formValues, SERVICES, type Service } from '../lib/notifications';
-import { currentPushEnv, currentSubscription, deviceLabel, pushSupport, sha256Hex, subscribeThisDevice, SUPPORT_TEXT } from '../lib/webPush';
+import { currentPushEnv, currentSubscription, deviceLabel, madeWithKey, pushSupport, sha256Hex, subscribeThisDevice, SUPPORT_TEXT } from '../lib/webPush';
 import { useAuthStore } from '../stores/auth';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -53,6 +53,7 @@ onMounted(async () => {
 const support = pushSupport(currentPushEnv());
 const serverKey = ref<string | null | undefined>(undefined); // null = not set up on the server
 const thisHash = ref<string | null>(null);
+const staleHash = ref<string | null>(null); // this device's subscription from older server keys
 const pushBusy = ref<string | null>(null); // 'section' (subscribing) or a device id
 const pushStatus = reactive<Record<string, { ok: boolean; text: string } | undefined>>({});
 
@@ -63,7 +64,12 @@ async function loadPush(): Promise<void> {
     serverKey.value = err instanceof ApiError && err.status === 404 ? null : undefined;
   }
   const sub = await currentSubscription();
-  thisHash.value = sub ? await sha256Hex(sub.endpoint) : null;
+  if (!sub) return;
+  const hash = await sha256Hex(sub.endpoint);
+  // Made with older server keys: no longer reached, so offer to subscribe
+  // again, and drop its old entry once that's done.
+  if (serverKey.value && !madeWithKey(sub, serverKey.value)) staleHash.value = hash;
+  else thisHash.value = hash;
 }
 const thisDevice = computed(() => pushDevices.value.find((d) => d.endpointHash === thisHash.value));
 
@@ -87,6 +93,12 @@ function subscribe(): Promise<void> {
     const { device } = await notificationsApi.subscribe({ endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth }, label: deviceLabel(navigator.userAgent, navigator.maxTouchPoints) });
     pushDevices.value = [...pushDevices.value.filter((d) => d.id !== device.id), device];
     thisHash.value = device.endpointHash;
+    const stale = pushDevices.value.find((d) => d.endpointHash === staleHash.value && d.id !== device.id);
+    staleHash.value = null;
+    if (stale) {
+      await notificationsApi.removeDevice(stale.id).catch(() => undefined); // it's dead either way
+      pushDevices.value = pushDevices.value.filter((d) => d.id !== stale.id);
+    }
     return 'This device gets notifications now. Send a test to check.';
   });
 }
