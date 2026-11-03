@@ -1311,6 +1311,7 @@ export const aiChatMessages = mysqlTable(
     role: varchar("role", { length: 10 }).$type<ChatRole>().notNull(), // CHAT_ROLES
     content: mediumtext("content").notNull(),
     attachments: jsonValue<ChatAttachment[]>("attachments"), // null = none
+    proposals: jsonValue<ChatProposal[]>("proposals"), // a reply's (docs/api/chat.md §12); null = none. Migration 0096
     status: varchar("status", { length: 10 }).$type<ChatStatus>().notNull(), // CHAT_STATUSES
     error: varchar("error", { length: 200 }), // failed: why
     model: varchar("model", { length: 100 }), // a finished reply's

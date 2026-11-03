@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { access, readFile } from "node:fs/promises";
 import { CHAT_EVENT_FIELD, chatReplyKey, type ChatJobPhoto, type ChatStreamEvent } from "@barista/shared/jobs";
 import { effectiveChatLimits, NO_CHAT_LIMITS, type ChatLimits, type ServerChatLimits } from "@barista/shared/aiConfig";
-import { aiChatMessages, aiChatPhotos, aiChats, beans, brewLogs, CHAT_ATTACHMENT_KINDS, DEFAULT_WORKSPACE_SETTINGS, MAX_CHAT_ATTACHMENTS, recipes, users, withDefaults, workspaceMembers, workspaces, type AiChat, type AiChatMessage, type ChatAttachment } from "@barista/shared/schema";
+import { aiChatMessages, aiChatPhotos, aiChats, beans, brewLogs, CHAT_ATTACHMENT_KINDS, DEFAULT_WORKSPACE_SETTINGS, MAX_CHAT_ATTACHMENTS, recipes, users, withDefaults, workspaceMembers, workspaces, type AiChat, type AiChatMessage, type ChatAttachment, CHAT_PROPOSAL_STATES, type ChatProposal } from "@barista/shared/schema";
 import { and, asc, count, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import express, { Router, type Request, type Response } from "express";
 import { Redis } from "ioredis";
@@ -36,7 +36,7 @@ export interface ChatPhoto {
   width: number;
   height: number;
 }
-type ChatMessage = Omit<AiChatMessage, "chatId" | "promptTokens" | "completionTokens" | "attachments"> & { attachments: ChatAttachment[]; photos: ChatPhoto[] };
+type ChatMessage = Omit<AiChatMessage, "chatId" | "promptTokens" | "completionTokens" | "attachments" | "proposals"> & { attachments: ChatAttachment[]; proposals: ChatProposal[]; photos: ChatPhoto[] };
 export interface ChatPair {
   chat: AiChat;
   messages: ChatMessage[];
@@ -48,6 +48,7 @@ const MESSAGE_COLUMNS = {
   role: aiChatMessages.role,
   content: aiChatMessages.content,
   attachments: aiChatMessages.attachments,
+  proposals: aiChatMessages.proposals,
   status: aiChatMessages.status,
   error: aiChatMessages.error,
   model: aiChatMessages.model,
@@ -122,13 +123,13 @@ function settleStale(chatId: string): Promise<unknown> {
     .where(and(eq(aiChatMessages.chatId, chatId), eq(aiChatMessages.status, "pending"), lt(aiChatMessages.createdAt, new Date(Date.now() - STALE_MS))));
 }
 
-type MessageRow = Omit<ChatMessage, "attachments" | "photos"> & { attachments: ChatAttachment[] | null };
+type MessageRow = Omit<ChatMessage, "attachments" | "proposals" | "photos"> & { attachments: ChatAttachment[] | null; proposals: ChatProposal[] | null };
 async function shown(rows: MessageRow[]): Promise<ChatMessage[]> {
   const ids = rows.map((m) => m.id);
   const photos = ids.length
     ? await db.select({ id: aiChatPhotos.id, width: aiChatPhotos.width, height: aiChatPhotos.height, messageId: aiChatPhotos.messageId }).from(aiChatPhotos).where(inArray(aiChatPhotos.messageId, ids)).orderBy(asc(aiChatPhotos.createdAt))
     : [];
-  return rows.map((m) => ({ ...m, attachments: m.attachments ?? [], photos: photos.filter((p) => p.messageId === m.id).map(({ id, width, height }) => ({ id, width, height })) }));
+  return rows.map((m) => ({ ...m, attachments: m.attachments ?? [], proposals: m.proposals ?? [], photos: photos.filter((p) => p.messageId === m.id).map(({ id, width, height }) => ({ id, width, height })) }));
 }
 const messagesOf = async (chatId: string): Promise<ChatMessage[]> =>
   shown(await db.select(MESSAGE_COLUMNS).from(aiChatMessages).where(eq(aiChatMessages.chatId, chatId)).orderBy(asc(aiChatMessages.position)));
@@ -417,6 +418,28 @@ const finished = async (chatId: string, messageId: string): Promise<ChatMessage 
 
 // The reply as server-sent events: see "The reply stream" in chat.md §12.
 // Each stream blocks on Redis, so each has a connection of its own.
+// Dismissing a proposal card, or bringing it back (docs/api/chat.md §12,
+// "Proposals"). Changes nothing else, so any member can on their own chat.
+const proposalStateSchema = z.object({ state: z.enum(CHAT_PROPOSAL_STATES) }).strict();
+chatsRouter.put("/:chatId/messages/:messageId/proposals/:index", async (req: Request<StreamParams & { index: string }>, res: Response<{ proposals: ChatProposal[] }>) => {
+  const userId = authedUserId(req);
+  const { workspaceId, chatId, messageId } = req.params;
+  if (!(await requireMembership(res, userId, workspaceId))) return;
+  if (!(await ownChat(res, userId, workspaceId, chatId))) return;
+  const body = parseBody(proposalStateSchema, req, res);
+  if (!body) return;
+  const [row] = await db.select({ proposals: aiChatMessages.proposals }).from(aiChatMessages).where(and(eq(aiChatMessages.id, messageId), eq(aiChatMessages.chatId, chatId)));
+  const index = /^\d+$/.test(req.params.index) ? Number(req.params.index) : -1;
+  const proposals = row?.proposals ?? [];
+  if (index < 0 || index >= proposals.length) {
+    sendError(res, 404, "Proposal not found");
+    return;
+  }
+  const next = proposals.map((p, i) => (i === index ? { ...p, state: body.state } : p));
+  await db.update(aiChatMessages).set({ proposals: next }).where(eq(aiChatMessages.id, messageId));
+  res.json({ proposals: next });
+});
+
 chatsRouter.get("/:chatId/messages/:messageId/stream", async (req: Request<StreamParams>, res: Response) => {
   const userId = authedUserId(req);
   const { workspaceId, chatId, messageId } = req.params;

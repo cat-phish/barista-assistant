@@ -527,6 +527,30 @@ has already read, so a failed reply is marked failed and they send again.
    lists, tables, code), which the chat shows formatted (`chat.md` §12, "The
    Chat tab"); HTML in it is shown as text. Pieces are published about every
    50 ms; the text, model and token counts are saved on the message.
+6. **Proposals** (`worker/src/chatProposals.ts`, `chat.md` §12
+   "Proposals"): the prompt (`CHAT_PROPOSALS`) lets the reply end with up to 3
+   ```` ```proposal ```` blocks of JSON, naming what's attached by its `ref`
+   (`a1`, `a2`, … in the order sent). A fenced block rather than a tool call,
+   so it works with any OpenAI-compatible server and streams as text.
+   - **Held back from the stream** (`proposalFilter`): text passes until a
+     block starts; a piece that could be the start of one, and spaces at the
+     end, wait for the next.
+   - **Taken out** of the saved text (`splitProposals`); a block cut off by
+     the end of the reply is read as far as it goes, one that isn't JSON is
+     dropped.
+   - **Checked** (`checkProposal`): the shape, and each ref against what was
+     attached, read from the chat's workspace (`refTable`): a brew's bean,
+     recipe, brewer and grinder; a recipe's brewer. A `brew` starts from
+     `from` (a brew), with `bean` and `recipe` to use instead; its grind is
+     on the from brew's grinder, kept only on its dial, and its ratio only in
+     the method's range (`RATIO_RANGE`), as Suggest parameters does (§9b). A
+     ref to nothing attached, a value out of range (as `recipes.md` §5), a
+     finish window that ends before it starts, or a proposal with nothing to
+     do drops it. Grams round to 0.01, degrees to 0.1.
+   - A reply that is only proposals is fine; one with neither text nor a
+     proposal is an empty reply (failed).
+   - **Later turns:** since the blocks are out of the text, an earlier reply
+     is sent with a note of what it proposed and whether each was dismissed.
 
 **What the AI sees:** the conversation and what was attached, in full, through
 the same `toLlmInput`, `beanInput` and `recipeInput` as an analysis. **`aiHidden`

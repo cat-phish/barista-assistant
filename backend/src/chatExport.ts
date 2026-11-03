@@ -9,6 +9,7 @@ import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 import { chartSnapshotSchema } from "./chatChart.js";
 import { pruneChatsOf, userChatBytes } from "./chatData.js";
+import { proposalsSchema } from "./chatProposal.js";
 import { db } from "./db.js";
 import { chatPhotoPath, checkStoredPhoto, removeChatPhotoFiles, writeChatPhotoFile } from "./photos.js";
 import { getChatLimits } from "./serverSettings.js";
@@ -34,6 +35,7 @@ const fileSchema = z.object({
           role: z.enum(["user", "assistant"]),
           content: z.string().max(16_000_000),
           attachments: z.array(z.object({ kind: z.enum(CHAT_ATTACHMENT_KINDS), id: z.string().max(36), label: z.string().max(200), chart: chartSnapshotSchema.optional() })).nullable(),
+          proposals: proposalsSchema.nullable().optional(), // since proposals; older files have none
           status: z.enum(["done", "failed"]),
           error: z.string().max(200).nullable(),
           model: z.string().max(100).nullable(),
@@ -86,6 +88,7 @@ export async function buildChatsZip(workspaceId: string, userId: string): Promis
           role: m.role,
           content: m.content,
           attachments: m.attachments,
+          proposals: m.proposals,
           status: m.status,
           error: m.error,
           model: m.model,
@@ -130,7 +133,8 @@ function readChatsZip(data: Buffer): ReadChats {
 export type ImportResult = { ok: true; imported: number; skipped: number } | { ok: false; status: 400 | 409; error: string };
 
 const encoder = new TextEncoder();
-const textBytes = (m: ChatsFile["chats"][number]["messages"][number]): number => encoder.encode(m.content).length + (m.attachments ? encoder.encode(JSON.stringify(m.attachments)).length : 0);
+const jsonBytes = (value: unknown): number => (value ? encoder.encode(JSON.stringify(value)).length : 0);
+const textBytes = (m: ChatsFile["chats"][number]["messages"][number]): number => encoder.encode(m.content).length + jsonBytes(m.attachments) + jsonBytes(m.proposals);
 
 export async function importChats(data: Buffer, workspaceId: string, userId: string): Promise<ImportResult> {
   const read = readChatsZip(data);
@@ -166,8 +170,8 @@ export async function importChats(data: Buffer, workspaceId: string, userId: str
         const ordered = [...chat.messages].sort((a, b) => a.position - b.position);
         for (const [i, message] of ordered.entries()) {
           const id = randomUUID();
-          const { photos: _photos, createdAt, ...fields } = message;
-          await tx.insert(aiChatMessages).values({ ...fields, id, chatId, position: i + 1, createdAt: new Date(createdAt) });
+          const { photos: _photos, createdAt, proposals, ...fields } = message;
+          await tx.insert(aiChatMessages).values({ ...fields, proposals: proposals?.length ? proposals : null, id, chatId, position: i + 1, createdAt: new Date(createdAt) });
           for (const photo of message.photos) {
             const stored = photos.get(photo.id);
             if (stored) await tx.insert(aiChatPhotos).values({ id: stored.id, workspaceId, userId, messageId: id, width: stored.width, height: stored.height, sizeBytes: stored.data.length });

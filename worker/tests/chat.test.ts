@@ -9,7 +9,7 @@ import { resolveAi } from "../src/ai/resolve.js";
 import { attachedIn, chatTurns, loadAttachments, processChatReply, type ChatPublisher } from "../src/chat.js";
 import { db } from "../src/db.js";
 import { buildChatRequest, streamReply } from "../src/llm.js";
-import { CHAT_SYSTEM } from "../src/prompt.js";
+import { CHAT_PROPOSALS, CHAT_SYSTEM } from "../src/prompt.js";
 
 // Real database, fake LLM.
 vi.mock("../src/llm.js", async (importOriginal) => ({ ...(await importOriginal<typeof import("../src/llm.js")>()), streamReply: vi.fn() }));
@@ -85,14 +85,14 @@ describe("loadAttachments", () => {
   it("sends a chart as its snapshot", async () => {
     const chart = { tab: "beans", title: "Beans by country", note: null, filters: "All time", head: ["Country", "Beans"], rows: [["Kenya", 2]], cut: 4 };
     const [sent] = await loadAttachments([{ kind: "chart", id: randomUUID(), label: "Beans by country", chart }], workspaceId);
-    expect(sent).toEqual({ kind: "chart", label: "Beans by country", data: { insightsTab: "beans", covers: "All time", columns: ["Country", "Beans"], rows: [["Kenya", 2]], rowsLeftOut: 4 } });
+    expect(sent).toEqual({ ref: "a1", kind: "chart", label: "Beans by country", data: { insightsTab: "beans", covers: "All time", columns: ["Country", "Beans"], rows: [["Kenya", 2]], rowsLeftOut: 4 } });
   });
 
   it("marks what's gone or from another workspace as unavailable", async () => {
     const other = randomUUID();
     await db.insert(workspaces).values({ id: other, name: "O", slug: other });
     const seen = await loadAttachments([attach("bean", beanId), attach("recipe", randomUUID())], other);
-    expect(seen).toEqual([{ kind: "bean", label: "L", unavailable: true }, { kind: "recipe", label: "L", unavailable: true }]);
+    expect(seen).toEqual([{ ref: "a1", kind: "bean", label: "L", unavailable: true }, { ref: "a2", kind: "recipe", label: "L", unavailable: true }]);
   });
 });
 
@@ -100,7 +100,7 @@ describe("buildChatRequest", () => {
   it("is the conversation, with no schema, and the person's instructions", () => {
     const request = buildChatRequest("m", [{ role: "user", content: "Hi" }], { prompt: { instructions: "Be brief.", labelInstructions: null, overrides: {} }, note: null });
     expect(request.response_format).toBeUndefined();
-    expect(request.messages[0]).toEqual({ role: "system", content: `${CHAT_SYSTEM} The barista's own instructions: Be brief.` });
+    expect(request.messages[0]).toEqual({ role: "system", content: `${CHAT_SYSTEM} The barista's own instructions: Be brief. ${CHAT_PROPOSALS}` });
     expect(request.messages[1]).toEqual({ role: "user", content: "Hi" });
   });
   it("puts attachments in the system prompt", () => {

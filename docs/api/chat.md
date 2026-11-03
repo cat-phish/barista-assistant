@@ -4,7 +4,8 @@
 > [README.md](README.md); a bare `§N` refers to that index.
 
 The **Chat** tab in Insights: a conversation with the AI, its replies appearing
-as they're written. Read-only: it changes nothing in the journal. The worker
+as they're written. It changes nothing in the journal itself: a reply can
+carry **proposals**, which only fill in a form for the person to save. The worker
 makes the AI call (§9e), since only it can read the keys.
 
 A chat belongs to the person who started it, in that workspace. **Nobody else
@@ -20,8 +21,9 @@ your own chats is open to any member; starting one or sending a message needs
 **A chat:** `{ id, title, createdAt, updatedAt }`. `title` is the start of the
 first message; `updatedAt` moves with each message.
 
-**A message:** `{ id, position, role, content, attachments, photos, status,
-error, model, createdAt }`.
+**A message:** `{ id, position, role, content, attachments, proposals, photos,
+status, error, model, createdAt }`. `proposals` is `[]` but on a reply that
+made some (below).
 - `role`: `user` or `assistant`.
 - `status`: `done`; `pending` while the reply is being written; `failed` with
   `error` saying why. A failed reply keeps whatever it had written in `content`
@@ -36,6 +38,7 @@ error, model, createdAt }`.
 | `DELETE /:chatId` | `204`. |
 | `POST /:chatId/messages` | Body as for `POST /`. `202` with `{ chat, messages }`: only the two new ones. `409` while a reply is still being written. |
 | `GET /:chatId/messages/:messageId/stream` | The reply as server-sent events, below. |
+| `PUT /:chatId/messages/:messageId/proposals/:index` | Body `{ state: "open" \| "dismissed" }`. Any member, on their own chat. `200` with `{ proposals }`, the message's, updated. `404` for an index it doesn't have. |
 | `POST /photos` | The image as the body, any type, up to 15 MB. `201` with `{ photo: { id, width, height } }`. `400` if it can't be read. |
 | `GET /photos/:photoId` | The image, as WebP. Only the person who uploaded it. |
 
@@ -70,6 +73,28 @@ under `PHOTO_DIR/chats/<workspaceId>/`, and go when it does. One uploaded but
 never sent is removed the next time the server starts, a day later or more. The
 Chat tab uploads a photo as soon as it's picked, pasted into the message box or
 dropped on the conversation (images only; pasted text stays text).
+
+## Proposals
+
+A reply can end with up to 3 proposals (`CHAT_PROPOSALS_MAX`), each shown as a
+card under it with **Open** and **Dismiss**. Opening one fills in a form; the
+journal changes only when the person saves there, through its usual route.
+Every proposal has `kind`, `title`, `why` and `state` (`open` or `dismissed`).
+Ids name what was attached when it was proposed, and may be gone since; each
+label is what it was called then.
+
+| `kind` | Also | Open fills in |
+| --- | --- | --- |
+| `brew` | `beanId`, `recipeId`, `grinderId` (each with its label, or `null`), `grindSetting` (on that grinder; `null` without one), `tempC`, `ratio` ((water + ice) / dose, or shot weight / dose) | the brew page, as Suggest parameters does (`analysis.md` §8b) |
+| `recipeChange` | `recipeId`, `recipeLabel`, `changes`: only the recipe fields that change | that recipe's form |
+| `newRecipe` | `brewerId`, `brewerLabel` (`null`: the person picks), `recipe`: at least `name` and `targetDoseGrams` | a new recipe form |
+
+Recipe fields are `name`, `targetDoseGrams`, `targetWaterGrams`,
+`targetIceGrams`, `expectedYieldGrams`, `targetTempC`, `expectedFinishMinSec`,
+`expectedFinishMaxSec` and `steps` (the whole list, each `{ stepType, label,
+durationSec, targetWaterGrams, targetTempC, pressureBar, flowRate }`), as in
+`recipes.md` §5; the form checks them on saving. How the worker reads them is
+`llm-contract.md` §9e. They count toward the chat's size and go in the export.
 
 `POST`s answer `409` with `code: "ai_not_configured"` when the workspace has no
 AI (§2d), and `503` when the queue can't be reached (nothing is saved).
@@ -116,7 +141,9 @@ what authorizes it.
 - `event: text`, data `{ "text": "…" }`: the next piece, to append. Each has an
   `id:`, so a browser that reconnects carries on from where it was
   (`Last-Event-ID`).
-- `event: done`, data: the finished message (above), `done` or `failed`. The
+- `event: done`, data: the finished message (above), `done` or `failed`. Its
+  `content` is the reply without its proposal blocks, which never reach the
+  stream, and its `proposals` are the cards to show. The
   stream then ends. For a message that has already finished, this is all that's
   sent.
 - A comment line every 10 seconds keeps idle connections open.
@@ -182,7 +209,8 @@ workspace or server. Not a workspace backup: it holds only your own chats.
 
 `chats.json` is `{ version: 1, exportedAt, chats }`; a chat is `{ id, title,
 createdAt, updatedAt, messages }`, and a message as above without its `id`, with
-`photos` as `{ id, width, height }`.
+`photos` as `{ id, width, height }` and `proposals` `null` when there are none
+(a file from before proposals has no `proposals`, and imports as none).
 
 Importing adds chats to your own, keeping their dates. A chat you already have
 here, by `id`, is skipped. Photos are checked as a backup's are, and one that
