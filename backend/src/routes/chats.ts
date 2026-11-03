@@ -9,6 +9,7 @@ import { and, asc, count, desc, eq, gte, inArray, isNull, lt, sql } from "drizzl
 import express, { Router, type Request, type Response } from "express";
 import { Redis } from "ioredis";
 import { z } from "zod";
+import { chartSnapshotSchema } from "../chatChart.js";
 import { requireAi } from "../aiConfig.js";
 import { buildChatsZip, importChats } from "../chatExport.js";
 import { chatLimitsSchema, deleteAllChatsOf, deleteChats, pruneChatsOf, userChatBytes } from "../chatData.js";
@@ -53,7 +54,11 @@ const MESSAGE_COLUMNS = {
   createdAt: aiChatMessages.createdAt,
 };
 
-const attachmentSchema = z.object({ kind: z.enum(CHAT_ATTACHMENT_KINDS), id: z.string().uuid() }).strict();
+// A brew, bean or recipe by reference; a chart with its snapshot.
+const attachmentSchema = z.union([
+  z.object({ kind: z.enum(CHAT_ATTACHMENT_KINDS.filter((k) => k !== "chart") as ["brew", "bean", "recipe"]), id: z.string().uuid() }).strict(),
+  z.object({ kind: z.literal("chart"), id: z.string().uuid(), chart: chartSnapshotSchema }).strict(),
+]);
 type AttachmentRef = z.infer<typeof attachmentSchema>;
 const sendSchema = z.object({ content: z.string().trim().min(1).max(CHAT_MESSAGE_MAX), attachments: z.array(attachmentSchema).max(MAX_CHAT_ATTACHMENTS).optional(), photoIds: z.array(z.string().uuid()).max(CHAT_PHOTOS_MAX).optional() }).strict();
 const titleOf = (content: string): string => {
@@ -184,7 +189,8 @@ async function labelled(workspaceId: string, refs: AttachmentRef[]): Promise<Cha
     ...recipeRows.map((r): [string, string] => [`recipe:${r.id}`, r.name]),
   ]);
   const unique = [...new Map(refs.map((r) => [`${r.kind}:${r.id}`, r])).values()];
-  const found = unique.flatMap((r) => {
+  const found = unique.flatMap((r): ChatAttachment[] => {
+    if (r.kind === "chart") return [{ kind: r.kind, id: r.id, label: r.chart.title, chart: r.chart }];
     const label = labels.get(`${r.kind}:${r.id}`);
     return label ? [{ ...r, label: label.slice(0, 200) }] : [];
   });

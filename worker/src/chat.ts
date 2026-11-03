@@ -72,6 +72,12 @@ async function attachmentLimit(workspaceId: string): Promise<number> {
 // One attachment as the AI sees it, read now and only from this workspace, in
 // full: Settings → AI tunes the analysis and suggestions, not chat. null: it's gone.
 async function attachmentInput(a: ChatAttachment, workspaceId: string): Promise<Record<string, unknown> | null> {
+  // A chart is its snapshot, as the person saw it (docs/api/chat.md §12).
+  if (a.kind === "chart") {
+    if (!a.chart) return null;
+    const { tab, note, filters, head, rows, cut } = a.chart;
+    return { insightsTab: tab, note, covers: filters, columns: head, rows, ...(cut ? { rowsLeftOut: cut } : {}) };
+  }
   if (a.kind === "brew") {
     const [own] = await db.select({ id: brewLogs.id }).from(brewLogs).where(and(eq(brewLogs.id, a.id), eq(brewLogs.workspaceId, workspaceId)));
     const context = own ? await loadBrewContext(a.id) : null;

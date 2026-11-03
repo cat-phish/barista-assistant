@@ -3,11 +3,12 @@
 // workspace's chatMaxAttachments, each item once.
 import type { ChatAttachment, ChatAttachmentKind } from '../api/chats';
 
-export const ATTACH_KINDS: readonly ChatAttachmentKind[] = ['brew', 'bean', 'recipe'];
+export const ATTACH_KINDS: readonly ChatAttachmentKind[] = ['brew', 'bean', 'recipe', 'chart'];
 export const KIND_NAMES: Record<ChatAttachmentKind, { one: string; many: string }> = {
   brew: { one: 'Brew', many: 'brews' },
   bean: { one: 'Bean', many: 'beans' },
   recipe: { one: 'Recipe', many: 'recipes' },
+  chart: { one: 'Chart', many: 'charts' },
 };
 
 type Ref = Pick<ChatAttachment, 'kind' | 'id'>;

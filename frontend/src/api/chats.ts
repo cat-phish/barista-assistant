@@ -7,10 +7,22 @@ export interface Chat {
   createdAt: string;
   updatedAt: string;
 }
-export type ChatAttachmentKind = 'brew' | 'bean' | 'recipe';
+export type ChatAttachmentKind = 'brew' | 'bean' | 'recipe' | 'chart';
+// An Insights chart's numbers as they were when attached (lib/chartHarvest.ts).
+export interface ChatChartSnapshot {
+  tab: string;
+  title: string;
+  note: string | null;
+  filters: string;
+  head: string[];
+  rows: Array<Array<string | number>>;
+  cut: number; // rows left out
+}
+// A brew, bean or recipe by id; a chart with its snapshot.
 export interface ChatAttachmentRef {
   kind: ChatAttachmentKind;
   id: string;
+  chart?: ChatChartSnapshot;
 }
 export interface ChatAttachment extends ChatAttachmentRef {
   label: string;

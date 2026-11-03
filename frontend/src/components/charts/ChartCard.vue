@@ -10,10 +10,13 @@
 // layout places it (CSS order in the grid) or hides it. Copy puts the chart
 // on the clipboard as a picture (or downloads it where that can't be done),
 // or the table as text while the table is showing (lib/chartImage.ts).
+// Drawn for the chat's chart picker (CHART_HARVEST, lib/chartHarvest.ts), it
+// hands over its title, note and table and draws nothing.
 import { computed, inject, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useStats } from '../../composables/useStats';
 import { saveBlob } from '../../lib/backup';
+import { CHART_HARVEST } from '../../lib/chartHarvest';
 import { chartFileName, chartPng, tableText } from '../../lib/chartImage';
 import type { SwitchableKind } from '../../lib/chartKind';
 import { ONLY_CHARTS, tabOfRoute } from '../../lib/insightCharts';
@@ -47,6 +50,16 @@ watch(
   { immediate: true },
 );
 const place = computed(() => (tab && id.value ? stats.placeOf(tab, id.value) : null));
+
+const harvest = inject(CHART_HARVEST, null);
+watch(
+  id,
+  (cardId, _, onCleanup) => {
+    if (harvest && cardId)
+      onCleanup(harvest.add({ id: cardId, title: () => props.title, note: () => props.note ?? null, table: () => props.table ?? null, empty: () => !!props.empty }));
+  },
+  { immediate: true },
+);
 
 const card = ref<HTMLElement | null>(null);
 const copied = ref<'' | 'Copied' | 'Saved' | "Couldn't copy">('');
@@ -91,7 +104,7 @@ async function copy(): Promise<void> {
 </script>
 
 <template>
-  <section v-if="shown && !place?.hidden" ref="card" class="card chart-card" :style="place ? { order: place.order } : undefined">
+  <section v-if="!harvest && shown && !place?.hidden" ref="card" class="card chart-card" :style="place ? { order: place.order } : undefined">
     <header>
       <div>
         <h2>{{ title }}</h2>

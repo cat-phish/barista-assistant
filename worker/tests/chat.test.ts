@@ -82,6 +82,12 @@ describe("loadAttachments", () => {
     expect(brew).toMatchObject({ kind: "brew", data: { bean: { country: "Ethiopia" }, brew: { actualDoseGrams: 15, actualTempC: 94 } } });
   });
 
+  it("sends a chart as its snapshot", async () => {
+    const chart = { tab: "beans", title: "Beans by country", note: null, filters: "All time", head: ["Country", "Beans"], rows: [["Kenya", 2]], cut: 4 };
+    const [sent] = await loadAttachments([{ kind: "chart", id: randomUUID(), label: "Beans by country", chart }], workspaceId);
+    expect(sent).toEqual({ kind: "chart", label: "Beans by country", data: { insightsTab: "beans", covers: "All time", columns: ["Country", "Beans"], rows: [["Kenya", 2]], rowsLeftOut: 4 } });
+  });
+
   it("marks what's gone or from another workspace as unavailable", async () => {
     const other = randomUUID();
     await db.insert(workspaces).values({ id: other, name: "O", slug: other });

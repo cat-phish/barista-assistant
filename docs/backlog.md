@@ -564,30 +564,21 @@ What the analysis worker sends to the LLM and what comes back.
   - How does a structured proposal fit into a streamed reply, on both
     providers?
 
-### 19. Attach charts to AI chat
+### 19. Ask in chat from a chart card
 
 - **Status:** planned
-- **Why:** the best questions come up while looking at a chart, and the chat
-  in 17 can't see one. The chat is for deeper exploration, so it should be
-  able to work from what Insights shows.
-- **Approach:**
-  - **Ask in chat** on each chart card opens the Chat tab with the chart
-    attached.
-  - The chart's numbers, not a picture: `ChartCard`'s `table` (all 37 cards
-    have one), plus its title, note and the filters in use (dates, bean,
-    recipe, brewer, "mine").
-  - Kept as a snapshot on the message, in the `attachments` column: the
-    figures are worked out in the browser, so the server can't rebuild them.
-    Counts toward the size limits and goes in the export. No migration.
-  - Capped at 200 rows. A big Explore scatter sends its trend figures and the
-    first 200 rows, and tells the AI the list was cut.
-  - Settings → AI doesn't apply: hiding details is for fine tuning the
-    automatic analysis and parameter suggestions, not for this.
-- **Size:** M
-- **Depends on:** 17. Shares its snapshot shape with 15.
+- **Why:** charts can be attached from the chat's picker (Charts tab), but
+  the question usually comes up while looking at the chart itself.
+- **Approach:** an **Ask in chat** button on each chart card opens the Chat
+  tab with that chart attached, under the page's filters. The snapshot is the
+  one the picker sends (`lib/chartHarvest.ts`, `docs/api/chat.md` §12), so
+  only the hand-over is new: the Chat tab reads the chart from a store or the
+  route and starts with it attached.
+- **Size:** S
+- **Depends on:** nothing (attaching charts is built). Shares its snapshot
+  shape with 15.
 - **Open questions:**
-  - Should the Overview's stat tiles be attachable? They aren't chart cards;
-    left out to start.
+  - Should it go into the chat in use, or always start a new one?
 
 ---
 
