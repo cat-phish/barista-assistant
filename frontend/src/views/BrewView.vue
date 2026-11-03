@@ -74,6 +74,8 @@ import { ALTERNATIVE_LABELS, CONFIDENCE_LABELS, chooseGrind, heldForRatio, remem
 import { useParameterSuggestion } from '../composables/useParameterSuggestion';
 import { useAiAvailable } from '../composables/useAiAvailable';
 import { useWorkspaceStore } from '../stores/workspace';
+import { useChatProposalStore } from '../stores/chatProposal';
+import type { ChatBrewProposal } from '../api/chats';
 import { brewRetention, factorText, linkRatio, ratioText as formatRatio, ratioWater, ROAST_LEVELS, SCALE_SLIDER, scaleBatch, scaleShot, scaleSteps, scaleStepTimes, shiftStepTemps, shiftWindow, sliderDose, sliderPosition, waterShare, type MeasuredBrew, type ScaleField } from '../lib/scale';
 import { formatTemp, formatTempChange, parseTemp, tempText, TEMPERATURE_LABELS, VOLUME_LABELS, volumeUnits } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
@@ -279,6 +281,16 @@ onMounted(async () => {
       await applyRepeat((await brewLogsApi.get(ws, repeatId)).brewLog);
     } catch (err) {
       repeatError.value = `Couldn't load that brew to repeat: ${errorMessage(err)}`;
+    }
+    void router.replace({ name: 'brew' });
+  }
+  // A chat proposal (docs/api/chat.md §12, "Proposals"): /brew?proposal,
+  // handed over by the card. Gone after a reload, so setup starts as usual.
+  if (route.query.proposal !== undefined) {
+    const proposal = chatProposals.take('brew');
+    if (proposal && !loadError.value) {
+      await nextTick();
+      await applyProposal(proposal);
     }
     void router.replace({ name: 'brew' });
   }
@@ -571,6 +583,8 @@ async function addGrinder(): Promise<void> {
 const lastSetting = ref<{ grindSetting: number; grindRpm: number | null; timestamp: string } | null>(null);
 // The grind of the brew being repeated, with the grinder and recipe it goes with.
 const repeatGrind = ref<{ grinderId: string; recipeId: string; grind: string; rpm: string } | null>(null);
+// The grind a chat proposal set, kept while its grinder and recipe are chosen.
+const proposalGrind = ref<{ grinderId: string; recipeId: string; grind: string } | null>(null);
 const grindSource = ref<GrindSource>('none');
 let grindRequest = 0;
 async function refreshGrind(): Promise<void> {
@@ -593,6 +607,13 @@ async function refreshGrind(): Promise<void> {
     draft.grind = kept.grind;
     draft.rpm = kept.rpm;
     grindSource.value = 'repeat';
+    return;
+  }
+  const proposed = proposalGrind.value;
+  if (proposed && proposed.grinderId === grinderId && proposed.recipeId === recipeId.value) {
+    draft.grind = proposed.grind;
+    draft.rpm = '';
+    grindSource.value = 'proposal';
     return;
   }
   const choice = chooseGrind({ lastSetting: remembering('grind') ? (last?.grindSetting ?? null) : null, suggestion: suggestion.value, grinderId, recipe: recipe.value });
@@ -1084,8 +1105,48 @@ function brewAgain(): void {
   suggester.reset();
   repeatFrom.value = null;
   repeatGrind.value = null;
+  fromChat.value = null;
+  proposalGrind.value = null;
   void loadRecent(); // the brew just saved is now the latest
   void refreshGrind(); // the brew just saved is now the "last setting"
+}
+
+// A chat proposal's next brew: its bean and recipe (switched to as an
+// alternative is), then its grind, temperature and ratio, as a suggestion's
+// are filled in. What's gone or archived since is named and left as it is.
+const chatProposals = useChatProposalStore();
+const fromChat = ref<{ title: string; missing: string[] } | null>(null);
+async function applyProposal(p: ChatBrewProposal): Promise<void> {
+  const missing: string[] = [];
+  if (p.beanId) {
+    if (beans.value.some((b) => b.id === p.beanId && !b.archivedAt)) beanId.value = p.beanId;
+    else missing.push(`The bean (${p.beanLabel ?? 'unnamed'}) isn't in stock any more.`);
+  }
+  await nextTick();
+  if (p.recipeId) {
+    const plan = switchPlan('recipe', p.recipeId, { brewers: brewers.value, recipes: recipes.value, drink: drink.value });
+    if (plan) {
+      what.value = plan.what;
+      await nextTick();
+      item.value = plan.item;
+      await nextTick();
+      brewerId.value = plan.brewerId;
+      await nextTick();
+      recipeId.value = plan.recipeId;
+      await nextTick();
+    } else missing.push(`The recipe (${p.recipeLabel ?? 'unnamed'}) is gone or archived.`);
+  }
+  if (p.grinderId && p.grindSetting !== null) {
+    if (activeGrinders.value.some((g) => g.id === p.grinderId)) {
+      draft.grinderId = p.grinderId;
+      proposalGrind.value = { grinderId: p.grinderId, recipeId: recipeId.value, grind: formatGrind(p.grindSetting) };
+    } else missing.push(`The grinder (${p.grinderLabel ?? 'unnamed'}) is gone or archived, so the grind isn't set.`);
+  }
+  await nextTick();
+  if (p.tempC !== null) draft.temp = tempText(p.tempC, temperatureUnit.value);
+  if (p.ratio !== null) applyRatio(p.ratio);
+  void refreshGrind();
+  fromChat.value = { title: p.title, missing };
 }
 
 // Repeat a brew (lib/repeatBrew.ts): quick buttons for the latest brew of
@@ -1116,6 +1177,8 @@ async function loadRecent(): Promise<void> {
 async function applyRepeat(log: BrewLog): Promise<void> {
   pickerOpen.value = false;
   repeatError.value = '';
+  fromChat.value = null;
+  proposalGrind.value = null;
   const plan = repeatPlan(log, {
     beans: beans.value,
     brewers: brewers.value,
@@ -1238,6 +1301,10 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         </p>
       </section>
       <p v-if="repeatError" class="form-error" role="alert">{{ repeatError }}</p>
+      <p v-if="fromChat" class="muted small" aria-live="polite">
+        Filled from AI chat: {{ fromChat.title }}. Check it before you brew.
+        <template v-for="m in fromChat.missing" :key="m"> {{ m }}</template>
+      </p>
       <RepeatBrewPicker :open="pickerOpen" :beans="beans" @close="pickerOpen = false" @pick="applyRepeat" />
       <section class="card stack" aria-labelledby="brewing">
         <h2 id="brewing">What you're brewing</h2>
@@ -1503,6 +1570,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <p v-else-if="grindSource === 'repeat' && repeatFrom" class="muted small grind-hint">
             From the brew you're repeating ({{ repeatLabel(repeatFrom.log).when }}). Adjust as you dial in.
           </p>
+          <p v-else-if="grindSource === 'proposal'" class="muted small grind-hint">The grind proposed in AI chat for {{ grinder?.name }}. Adjust as you dial in.</p>
           <p v-else-if="grindSource === 'recipe'" class="muted small grind-hint">
             The recipe's approximate starting point for {{ grinder?.name }}. Adjust to taste; next time your own setting is used.
           </p>

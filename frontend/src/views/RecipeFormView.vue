@@ -11,6 +11,7 @@ import { ApiError, errorMessage } from '../api/client';
 import { grindersApi } from '../api/grinders';
 import { brewersApi } from '../api/brewers';
 import { prepToolsApi } from '../api/prepTools';
+import type { ChatProposalRecipe } from '../api/chats';
 import { recipesApi, type RecipeInput } from '../api/recipes';
 import type { Brewer, DilutionWith, FlowUnit, Grinder, MethodKind, PrepTool, Recipe, RecipeStyleItem, SteepTemp } from '../api/types';
 import { DILUTION_WITH, isColdStyle, isLongStyle, STEEP_TEMPS } from '../lib/coldBrew';
@@ -39,6 +40,7 @@ import {
   stepTypesFor,
   type StepDraft,
 } from '../lib/steps';
+import { useChatProposalStore } from '../stores/chatProposal';
 import { useWorkspaceStore } from '../stores/workspace';
 import { DEFAULT_STEP_TIME_SCALING, estimateYield, ratioWater, ROAST_LEVELS, scaledTime, scalesByDefault, STEP_TIME_SCALING } from '../lib/scale';
 import { parseTemp, tempText, TEMPERATURE_LABELS } from '../lib/units';
@@ -334,6 +336,37 @@ function fill(recipe: Recipe): void {
   });
 }
 
+// A chat proposal (docs/api/chat.md §12, "Proposals"), handed over by its
+// card with ?proposal: its values over the recipe's (or a new one's). Saving
+// is still yours; a reload loses it.
+const chatProposals = useChatProposalStore();
+const fromChat = ref<{ title: string; note: string } | null>(null);
+function applyProposal(v: ChatProposalRecipe): void {
+  const grams = (n: number | null | undefined) => (n == null ? '' : formatGrams(n));
+  if (v.name !== undefined) name.value = v.name;
+  if (v.targetDoseGrams !== undefined) dose.value = formatGrams(v.targetDoseGrams);
+  if (v.targetWaterGrams !== undefined) water.value = grams(v.targetWaterGrams);
+  if (v.targetIceGrams !== undefined) {
+    ice.value = grams(v.targetIceGrams);
+    flashChilled.value = v.targetIceGrams !== null;
+  }
+  if (v.expectedYieldGrams !== undefined) {
+    expectedYield.value = grams(v.expectedYieldGrams);
+    yieldCustom.value = v.expectedYieldGrams !== null;
+  }
+  if (v.targetTempC !== undefined) temp.value = tempText(v.targetTempC, temperatureUnit.value);
+  if (v.expectedFinishMinSec !== undefined) finishFrom.value = v.expectedFinishMinSec === null ? '' : formatTime(v.expectedFinishMinSec);
+  if (v.expectedFinishMaxSec !== undefined) finishTo.value = v.expectedFinishMaxSec === null ? '' : formatTime(v.expectedFinishMaxSec);
+  if (v.steps !== undefined) steps.value = v.steps.map((x) => stepDraft(newStepKey(), x, temperatureUnit.value));
+  reveal({
+    'recipe.ice': v.targetIceGrams,
+    'recipe.expectedYield': v.expectedYieldGrams,
+    'recipe.temp': v.targetTempC,
+    'recipe.finishWindow': v.expectedFinishMinSec ?? v.expectedFinishMaxSec,
+    'recipe.stepTemp': v.steps?.some((x) => x.targetTempC !== null),
+  });
+}
+
 onMounted(async () => {
   const ws = workspaces.current?.id;
   if (!ws) return;
@@ -357,6 +390,12 @@ onMounted(async () => {
       }
       saved.value = { name: recipe.name, archived: !!recipe.archivedAt };
       fill(recipe);
+      const change = route.query.proposal !== undefined ? chatProposals.take('recipeChange') : null;
+      if (change && change.recipeId === recipe.id) {
+        await nextTick();
+        applyProposal(change.changes);
+        fromChat.value = { title: change.title, note: 'Only what it changes is filled in; the rest is the recipe as saved.' };
+      }
       return;
     }
     // Duplicate: a copy of that recipe, starting on another brewer of the same
@@ -371,6 +410,17 @@ onMounted(async () => {
     // From brew setup's "add a recipe" for a brewer that has none.
     const brewer = methods.value.find((m) => m.id === route.query.brewer && !m.archivedAt);
     if (!from && brewer) brewerId.value = brewer.id;
+    const proposed = route.query.proposal !== undefined ? chatProposals.take('newRecipe') : null;
+    if (proposed) {
+      const on = methods.value.find((m) => m.id === proposed.brewerId && !m.archivedAt);
+      if (on) brewerId.value = on.id;
+      await nextTick();
+      applyProposal(proposed.recipe);
+      fromChat.value = {
+        title: proposed.title,
+        note: on ? '' : proposed.brewerLabel ? `${proposed.brewerLabel} is gone or archived: choose a brewer.` : 'Choose the brewer it\'s for.',
+      };
+    }
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -561,6 +611,9 @@ async function save(): Promise<void> {
       <h1>{{ editing ? 'Edit recipe' : copyOf ? 'Duplicate recipe' : 'Add recipe' }}</h1>
     </div>
     <p v-if="loading" class="muted" aria-live="polite">Loading…</p>
+    <p v-if="fromChat" class="muted" aria-live="polite">
+      Filled from AI chat: {{ fromChat.title }}. Check it, then save. {{ fromChat.note }}
+    </p>
 
     <form v-else class="stack" novalidate @submit.prevent="save">
       <section class="card stack">

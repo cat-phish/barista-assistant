@@ -132,6 +132,19 @@ bottom. On a phone the chat list is a drawer behind **Chats**.
   messages stay as typed.
 - A failed reply has **Retry**, which puts the message and its attachments
   back in the box.
+- **Proposal cards** (`ChatProposalCard.vue`, `lib/chatProposal.ts`) under a
+  reply: the kind, title, why and the values it would set. **Open** (owners
+  and baristas) hands it over through a store (`stores/chatProposal.ts`) and
+  goes to `/brew?proposal`, `/recipes/:id/edit?proposal` or
+  `/recipes/new?proposal`, which take it once:
+  - The brew page switches to its bean and recipe (as an "Or try" does),
+    then fills the temperature, the ratio (around what the batch holds) and
+    the grind on its grinder, saying "Filled from AI chat" and naming what's
+    gone or archived since.
+  - The recipe form fills only what a change changes, over the recipe as
+    saved, or a new recipe's values on its brewer (or none, to choose).
+  - A reload drops it, and the page starts as usual.
+  **Dismiss** folds a card to one line with **Undo**, saved on the chat.
 
 ## The reply stream
 
