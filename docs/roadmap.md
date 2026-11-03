@@ -2121,3 +2121,21 @@ its own and the planned AI chat can pick a model that sees photos. API:
   search's citations, so it searches, then a second call fills in the schema.
 - Left out: usage or cost per workspace, a model per job type, and showing the
   model in the journal (it's recorded, not displayed).
+
+## Copy a chart (built)
+
+Each chart card in Insights has a **Copy** button, so a chart can go into a
+message or a note without a screenshot (`lib/chartImage.ts`, `ChartCard.vue`).
+
+- **A picture of the chart:** the Chart.js canvas as a PNG, drawn onto a solid
+  background in the theme's surface colour (the canvas itself is transparent),
+  with the card's title drawn above it, since the canvas has none. It's drawn
+  at the screen's pixel ratio, so it stays sharp.
+- **While the card shows its table**, Copy copies the rows as tab-separated
+  text, which pastes into a spreadsheet as columns.
+- **Where an image can't go on the clipboard** (no `ClipboardItem`, a page
+  that isn't a secure context, a phone that refuses it), the PNG downloads
+  instead and the button says "Saved". The image is handed to the clipboard
+  as a promise, straight from the click, which Safari requires.
+- The button says "Copied" for two seconds, the same label swap as the
+  menu's Copy link. There's no toast.

@@ -7,12 +7,17 @@
 // built-in chart's `chart-id` gives it a pin for the Overview; drawn there,
 // only the pinned ids show (ONLY_CHARTS). Extra buttons go in `actions`.
 // With a layout id (the chart-id, or an added chart's "pin:<id>"), the tab's
-// layout places it (CSS order in the grid) or hides it.
-import { computed, inject, ref, watch } from 'vue';
+// layout places it (CSS order in the grid) or hides it. Copy puts the chart
+// on the clipboard as a picture (or downloads it where that can't be done),
+// or the table as text while the table is showing (lib/chartImage.ts).
+import { computed, inject, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useStats } from '../../composables/useStats';
+import { saveBlob } from '../../lib/backup';
+import { chartFileName, chartPng, tableText } from '../../lib/chartImage';
 import type { SwitchableKind } from '../../lib/chartKind';
 import { ONLY_CHARTS, tabOfRoute } from '../../lib/insightCharts';
+import { readChartColors } from './chartTheme';
 import OverviewPin from './OverviewPin.vue';
 
 const kind = defineModel<SwitchableKind>('kind');
@@ -42,10 +47,51 @@ watch(
   { immediate: true },
 );
 const place = computed(() => (tab && id.value ? stats.placeOf(tab, id.value) : null));
+
+const card = ref<HTMLElement | null>(null);
+const copied = ref<'' | 'Copied' | 'Saved' | "Couldn't copy">('');
+let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+function copyDone(label: typeof copied.value): void {
+  copied.value = label;
+  clearTimeout(copiedTimer);
+  copiedTimer = setTimeout(() => (copied.value = ''), 2000);
+}
+onBeforeUnmount(() => clearTimeout(copiedTimer));
+
+async function copy(): Promise<void> {
+  if (asTable.value && props.table) {
+    try {
+      await navigator.clipboard.writeText(tableText(props.table));
+      copyDone('Copied');
+    } catch {
+      copyDone("Couldn't copy");
+    }
+    return;
+  }
+  const canvas = card.value?.querySelector('canvas');
+  if (!canvas) return;
+  // Handed to the clipboard as a promise, before any await: Safari only
+  // allows the write straight from the click.
+  const png = chartPng(canvas, props.title, readChartColors());
+  try {
+    if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) throw new Error('No image clipboard');
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+    copyDone('Copied');
+  } catch {
+    // No image clipboard (an older browser, a phone, a page that isn't a
+    // secure context): download it instead.
+    try {
+      saveBlob(chartFileName(props.title), await png);
+      copyDone('Saved');
+    } catch {
+      copyDone("Couldn't copy");
+    }
+  }
+}
 </script>
 
 <template>
-  <section v-if="shown && !place?.hidden" class="card chart-card" :style="place ? { order: place.order } : undefined">
+  <section v-if="shown && !place?.hidden" ref="card" class="card chart-card" :style="place ? { order: place.order } : undefined">
     <header>
       <div>
         <h2>{{ title }}</h2>
@@ -57,6 +103,9 @@ const place = computed(() => (tab && id.value ? stats.placeOf(tab, id.value) : n
         </button>
         <button v-if="table && !empty" type="button" class="btn-link" :aria-pressed="asTable" @click="asTable = !asTable">
           {{ asTable ? 'Chart' : 'Table' }}
+        </button>
+        <button v-if="!empty" type="button" class="btn-link" :aria-label="`Copy ${title} as ${asTable && table ? 'a table' : 'an image'}`" @click="copy">
+          {{ copied || 'Copy' }}
         </button>
         <OverviewPin v-if="chartId" :chart-id="chartId" :title="title" />
         <slot name="actions" />
