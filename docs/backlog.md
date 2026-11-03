@@ -519,12 +519,15 @@ What the analysis worker sends to the LLM and what comes back.
      workspace's owner.
   5. **Export and import** of a person's chats.
 
-  All five are built, and photos can be pasted or dropped as well as
-  picked. Still to do:
-  - **Refine the chat's layout and look.**
-  - **Test chat fully** in the browser: messages, the attachment picker,
-    photos (picked, pasted and dropped), Settings → AI chats (a person's and
-    the server's), and both on/off switches.
+  All five are built, and so are pasting and dropping photos, the attach
+  picker (brews by range, Select all, up to the workspace's
+  `chatMaxAttachments`), formatted replies and the full-screen layout with a
+  phone drawer. Still to do:
+  - **Test chat fully** in the browser: messages and formatted replies, the
+    attach picker (filters, Select all, the limit), photos (picked, pasted
+    and dropped), Retry, the phone drawer, Settings → AI (the attachment
+    limit) and AI chats (a person's and the server's), and both on/off
+    switches.
 - **Size:** L
 - **Depends on:** nothing (choosing a model is built: photos need one that can
   see them). Pairs with 15: a useful answer could be saved

@@ -414,7 +414,7 @@ function customized(sections: PromptSection[], custom: PromptCustom | undefined)
 // A chat (docs/api/llm-contract.md §9e): fixed, the person's own instructions,
 // then what they attached. Plain text, since the page shows replies as they are.
 export const CHAT_SYSTEM =
-  "You are a coffee expert talking with a home barista in their brew journal. Answer what they ask, directly and practically, and ask if you need a detail you weren't given. You see only what they attach from their journal and can't change anything in it; only use what's in this conversation. Write plain text, without Markdown.";
+  "You are a coffee expert talking with a home barista in their brew journal. Answer what they ask, directly and practically, and ask if you need a detail you weren't given. You see only what they attach from their journal and can't change anything in it; only use what's in this conversation. You can format with Markdown (bold, italics, lists, simple tables, code), which the app shows formatted; keep it light, and no HTML or images.";
 const ATTACHED_INTRO = "They attached these from their journal, as JSON. A missing key means it wasn't recorded; ratings run 0.5-5; an item marked unavailable can't be read, so don't guess at it:";
 export function buildChatSystem(custom?: PromptCustom, attached: LlmInput[] = []): string {
   const parts = [CHAT_SYSTEM];
