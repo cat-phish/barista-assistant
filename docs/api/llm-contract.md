@@ -508,7 +508,8 @@ has already read, so a failed reply is marked failed and they send again.
    messages, oldest first, starting on one of the person's. Failed replies are
    left out.
 2. **Attachments** (`loadAttachments`, `worker/src/chat.ts`): what those
-   messages attached, the 20 most recent, each read now from the chat's
+   messages attached, the workspace's `chatMaxAttachments` most recent
+   (`workspaces.md` §2, default 50), each read now from the chat's
    workspace. A brew is the analysis input (`toLlmInput`); a bean or a recipe is
    that part of it. One that's been deleted is named as unavailable, by the
    label saved with the message.
@@ -519,8 +520,10 @@ has already read, so a failed reply is marked failed and they send again.
 4. **Prompt** (`buildChatSystem`, `worker/src/prompt.ts`): fixed, the person's
    own `instructions` (`auth.md` §1c), then the attachments as JSON. Their
    section texts don't apply.
-5. **Reply:** plain text, streamed, no schema (`streamReply`,
-   `worker/src/llm.ts`, on both providers). Pieces are published about every
+5. **Reply:** text, streamed, no schema (`streamReply`, `worker/src/llm.ts`,
+   on both providers). The prompt allows light Markdown (bold, italics,
+   lists, tables, code), which the chat shows formatted (`chat.md` §12, "The
+   Chat tab"); HTML in it is shown as text. Pieces are published about every
    50 ms; the text, model and token counts are saved on the message.
 
 **What the AI sees:** the conversation and what was attached, in full, through

@@ -62,6 +62,31 @@ dropped on the conversation (images only; pasted text stays text).
 `POST`s answer `409` with `code: "ai_not_configured"` when the workspace has no
 AI (§2d), and `503` when the queue can't be reached (nothing is saved).
 
+## The Chat tab
+
+Insights → Chat (`frontend/src/views/stats/StatsChatView.vue`) fills the
+screen below the tabs: the thread scrolls and the composer stays at the
+bottom. On a phone the chat list is a drawer behind **Chats**.
+
+- **Attaching** opens a picker (`ChatAttachDialog.vue`) with Brews, Beans and
+  Recipes tabs, a checkbox on each row. Brews narrow through the brew-log
+  list's filters (`brew-logs.md`: a period, bean, recipe, brewer, only mine),
+  and **Select all** ticks every brew that matches, newest first, up to
+  `chatMaxAttachments`. Beans and recipes are searched in the browser. The
+  picker edits the whole selection, so unticking removes an item.
+- **Attachments show as chips** by kind; more than three of a kind fold into
+  one ("14 brews ▾") that opens the list.
+- **Photos** are picked, pasted into the message box or dropped on the
+  conversation.
+- **Formatted replies** (`lib/markdown.ts`, `ChatMarkdown.vue`): paragraphs,
+  headings, lists (one level of nesting), quotes, fenced code, pipe tables
+  and rules; bold, italics, inline code and `http(s)` links. Drawn as
+  elements, never as HTML: anything else the model writes, HTML included,
+  is shown as text, and a link that isn't `http(s)` is only its text. Your own
+  messages stay as typed.
+- A failed reply has **Retry**, which puts the message and its attachments
+  back in the box.
+
 ## The reply stream
 
 `text/event-stream`, on a same-origin `EventSource`, so the session cookie is
