@@ -1,7 +1,7 @@
 // The Insights page's data (docs/api/stats.md §11): the filters live in the URL,
 // StatsView fetches once per change, and each tab reads it with useStats().
 import { computed, inject, provide, reactive, ref, shallowRef, watch, type ComputedRef, type InjectionKey, type Ref } from 'vue';
-import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router';
+import { useRoute, useRouter, type LocationQuery, type LocationQueryRaw } from 'vue-router';
 import { errorMessage } from '../api/client';
 import { statsApi, type StatsQuery } from '../api/stats';
 import type { InsightChart, InsightLayout, InsightTab, StatsBean, StatsBrew, StatsData, VolumeUnit } from '../api/types';
@@ -86,15 +86,24 @@ export interface StatsContext {
 const KEY: InjectionKey<StatsContext> = Symbol('stats');
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
-// Called once, by StatsView.
-export function provideStats(): StatsContext {
+// Called by StatsView, with the filters in the URL. With `local`, they're
+// kept there instead, apart from the page's (the chat's chart picker,
+// docs/api/chat.md §12): it starts from the page's filters, without the
+// charts' own periods.
+export function provideStats(local?: Ref<LocationQuery>): StatsContext {
   const route = useRoute();
   const router = useRouter();
+  if (local) local.value = Object.fromEntries(Object.entries(route.query).filter(([k]) => FILTER_KEYS.includes(k)));
+  const query = (): LocationQuery => (local ? local.value : route.query);
+  const replace = (next: LocationQueryRaw) => {
+    if (local) local.value = Object.fromEntries(Object.entries(next).flatMap(([k, v]) => (typeof v === 'string' ? [[k, v]] : [])));
+    else void router.replace({ query: next });
+  };
   const workspaces = useWorkspaceStore();
   const { prefs, recipeRoastLevel, hiddenFields } = usePreferences();
 
   const filters = computed<StatsFilters>(() => {
-    const q = route.query;
+    const q = query();
     const range = str(q.range) in RANGES ? (str(q.range) as RangeKey) : 'all';
     const unit = str(q.unit) === 'ml' || str(q.unit) === 'fl_oz' ? (str(q.unit) as VolumeUnit) : prefs.value.volumeUnit;
     const by = str(q.by) in GROUPINGS ? (str(q.by) as Grouping) : 'auto';
@@ -105,19 +114,19 @@ export function provideStats(): StatsContext {
   // A tab's own keys (Explore's picks) and the charts' periods are kept.
   function setFilters(change: Partial<StatsFilters>): void {
     const f = { ...filters.value, ...change };
-    const query: LocationQueryRaw = Object.fromEntries(Object.entries(route.query).filter(([k]) => !FILTER_KEYS.includes(k)));
-    if (f.range !== 'all') query.range = f.range;
+    const next: LocationQueryRaw = Object.fromEntries(Object.entries(query()).filter(([k]) => !FILTER_KEYS.includes(k)));
+    if (f.range !== 'all') next.range = f.range;
     if (f.range === 'custom') {
-      if (f.from) query.from = f.from;
-      if (f.to) query.to = f.to;
+      if (f.from) next.from = f.from;
+      if (f.to) next.to = f.to;
     }
-    if (f.bean) query.bean = f.bean;
-    if (f.recipe) query.recipe = f.recipe;
-    if (f.brewer) query.brewer = f.brewer;
-    if (!f.mine) query.mine = '0';
-    if (f.unit !== prefs.value.volumeUnit) query.unit = f.unit;
-    if (f.by !== 'auto') query.by = f.by;
-    void router.replace({ query });
+    if (f.bean) next.bean = f.bean;
+    if (f.recipe) next.recipe = f.recipe;
+    if (f.brewer) next.brewer = f.brewer;
+    if (!f.mine) next.mine = '0';
+    if (f.unit !== prefs.value.volumeUnit) next.unit = f.unit;
+    if (f.by !== 'auto') next.by = f.by;
+    replace(next);
   }
 
   // A plain /insights: all of my brews, grouped automatically, in my unit.
@@ -130,7 +139,7 @@ export function provideStats(): StatsContext {
   // them all, and the page's brews are cut back to its own period below.
   const chartPeriods = computed(() => {
     const out = new Map<string, Period>();
-    for (const [k, v] of Object.entries(route.query)) {
+    for (const [k, v] of Object.entries(query())) {
       const p = k.startsWith(CHART_PERIOD_PREFIX) ? parseChartPeriod(v) : null;
       if (p) out.set(k.slice(CHART_PERIOD_PREFIX.length), p);
     }
@@ -300,10 +309,10 @@ export function provideStats(): StatsContext {
     return {
       period,
       setPeriod(p) {
-        const query: LocationQueryRaw = { ...route.query };
-        delete query[key];
-        if (p) query[key] = formatChartPeriod(p);
-        void router.replace({ query });
+        const next: LocationQueryRaw = { ...query() };
+        delete next[key];
+        if (p) next[key] = formatChartPeriod(p);
+        replace(next);
       },
       range: chartRange,
       brews: chartBrews,

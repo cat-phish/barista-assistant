@@ -50,6 +50,18 @@ the reference is kept: each reply reads the item afresh (§9e), so a change or a
 delete applies to the rest of the chat. Attachments go in full: what Settings →
 AI hides is kept from analyses and suggestions, not from chat.
 
+**Charts:** an Insights chart is `{ "kind": "chart", "id": "uuid", "chart":
+snapshot }`, its numbers as the browser worked them out, since the server
+can't rebuild them. The snapshot is `{ tab, title, note, filters, head, rows,
+cut }`: `filters` says in words what the numbers cover ("Last 30 days · Only
+mine"), `head` is up to 20 column names, `rows` up to 200 rows of strings (200
+characters at most) and numbers, and `cut` how many rows were left out past
+200. It's kept on the message as sent, comes back as `chart` on the
+attachment, with the title as its `label`, counts toward the chat's size and
+goes in the export. A chart's `id` is the browser's: the same chart under the
+same filters is the same attachment. The Overview's tiles go as one chart,
+"Overview totals". Settings → AI doesn't apply to it.
+
 **Photos:** upload each one first, then send up to 4 as `photoIds`; a photo
 that's yours, not yet sent and in this workspace, or the request is a `400`. A
 message comes back with `photos: [{ id, width, height }]`. Photos are resized as
@@ -68,12 +80,19 @@ Insights → Chat (`frontend/src/views/stats/StatsChatView.vue`) fills the
 screen below the tabs: the thread scrolls and the composer stays at the
 bottom. On a phone the chat list is a drawer behind **Chats**.
 
-- **Attaching** opens a picker (`ChatAttachDialog.vue`) with Brews, Beans and
-  Recipes tabs, a checkbox on each row. Brews narrow through the brew-log
+- **Attaching** opens a picker (`ChatAttachDialog.vue`) with Brews, Beans,
+  Recipes and Charts tabs, a checkbox on each row. Brews narrow through the brew-log
   list's filters (`brew-logs.md`: a period, bean, recipe, brewer, only mine),
   and **Select all** ticks every brew that matches, newest first, up to
   `chatMaxAttachments`. Beans and recipes are searched in the browser. The
   picker edits the whole selection, so unticking removes an item.
+- **Charts** (`ChartPicker.vue`) lists every chart on the Insights tabs the
+  workspace shows, the Explore charts the person added included, and
+  "Overview totals", under the Insights filter bar. Those filters start as the
+  Insights page has them but are the picker's own: changing them leaves the
+  page alone, and charts with their own period follow the picker's. The tab
+  views are drawn out of sight with `CHART_HARVEST` provided, so each
+  `ChartCard` hands over its title, note and table instead of drawing.
 - **Attachments show as chips** by kind; more than three of a kind fold into
   one ("14 brews ▾") that opens the list.
 - **Photos** are picked, pasted into the message box or dropped on the

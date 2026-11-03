@@ -512,7 +512,9 @@ has already read, so a failed reply is marked failed and they send again.
    (`workspaces.md` §2, default 50), each read now from the chat's
    workspace. A brew is the analysis input (`toLlmInput`); a bean or a recipe is
    that part of it. One that's been deleted is named as unavailable, by the
-   label saved with the message.
+   label saved with the message. A chart is its snapshot as attached
+   (`chat.md` §12): `insightsTab`, `note`, `covers` (the filters in words),
+   `columns`, `rows`, and `rowsLeftOut` when rows were cut.
 3. **Photos:** the worker can't read the photo files, so the backend puts the
    chat's latest 6 in the job, and they go with the message they came on.
    Earlier ones aren't sent. A chat with photos in the job uses the vision

@@ -1,9 +1,9 @@
 <script setup lang="ts">
-// The chat's attach picker (docs/api/chat.md §12): brews, beans and recipes
-// to send with the next message, ticked in a list like "Pick a brew…"
-// (RepeatBrewPicker). Brews narrow to a period, bean, recipe, brewer or your
-// own, and "Select all" ticks every brew that matches, up to the workspace's
-// limit. It edits the whole selection: what's already attached starts ticked.
+// The chat's attach picker (docs/api/chat.md §12): brews, beans, recipes and
+// Insights charts to send with the next message, ticked in a list like "Pick
+// a brew…" (RepeatBrewPicker). Brews narrow to a period, bean, recipe, brewer
+// or your own, and "Select all" ticks every brew that matches, up to the
+// workspace's limit. Charts have their own tab and filters (ChartPicker). It edits the whole selection: what's already attached starts ticked.
 // A native <dialog>: Escape or ✕ closes it; full screen on a phone.
 import { computed, ref, watch } from 'vue';
 import { beansApi } from '../api/beans';
@@ -19,6 +19,7 @@ import { formatListDay, localDateInput } from '../lib/format';
 import { RANGES, resolveRange, type RangeKey } from '../lib/statsRange';
 import { useWorkspaceStore } from '../stores/workspace';
 import BrewLogRow from './BrewLogRow.vue';
+import ChartPicker from './ChartPicker.vue';
 
 const props = defineProps<{ open: boolean; selected: ChatAttachment[]; max: number }>();
 const emit = defineEmits<{ close: []; done: [attachments: ChatAttachment[]] }>();
@@ -133,6 +134,15 @@ function selectAllShown(): void {
   if (left > 0) notice.value = `${left} didn't fit: up to ${props.max} can be attached.`;
 }
 
+// Drawn once the Charts tab is first opened, then kept, filters and all.
+const chartsSeen = ref(false);
+function pickAllCharts(items: ChatAttachment[]): void {
+  notice.value = '';
+  const { selection, left } = selectAll(draft.value, items, props.max);
+  draft.value = selection;
+  if (left > 0) notice.value = `${left} didn't fit: up to ${props.max} can be attached.`;
+}
+
 function pick(item: ChatAttachment): void {
   draft.value = toggle(draft.value, item, props.max);
 }
@@ -173,9 +183,10 @@ watch([range, from, to, beanId, recipeId, brewerId, mine], () => {
   notice.value = '';
   if (range.value !== 'custom' || (from.value && to.value) || (!from.value && !to.value)) void loadBrews(true);
 });
-watch(tab, () => {
+watch(tab, (t) => {
   search.value = '';
   notice.value = '';
+  if (t === 'chart') chartsSeen.value = true;
 });
 </script>
 
@@ -253,7 +264,7 @@ watch(tab, () => {
           <button v-if="countOf('brew')" type="button" class="btn-link" @click="clearTab">Clear</button>
         </div>
       </template>
-      <template v-else>
+      <template v-else-if="tab !== 'chart'">
         <div class="field">
           <label :for="`attach-search-${tab}`" class="visually-hidden">Search {{ KIND_NAMES[tab].many }}</label>
           <input :id="`attach-search-${tab}`" v-model="search" type="search" :placeholder="`Search ${KIND_NAMES[tab].many}`" />
@@ -268,7 +279,8 @@ watch(tab, () => {
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
       <p v-if="notice" class="muted small" role="status">{{ notice }}</p>
 
-      <ul class="rows">
+      <ChartPicker v-if="chartsSeen" v-show="tab === 'chart'" :selected="draft" :full="full" @toggle="pick" @pick-all="pickAllCharts" @clear="clearTab" />
+      <ul v-if="tab !== 'chart'" class="rows">
         <template v-if="tab === 'brew'">
           <li v-for="l in logs" :key="l.id">
             <label class="row" :class="{ picked: isPicked(draft, brewItem(l)) }">

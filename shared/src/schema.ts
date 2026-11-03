@@ -1493,13 +1493,29 @@ export const CHAT_ROLES = ["user", "assistant"] as const;
 export type ChatRole = (typeof CHAT_ROLES)[number];
 export const CHAT_STATUSES = ["pending", "done", "failed"] as const;
 export type ChatStatus = (typeof CHAT_STATUSES)[number];
-export const CHAT_ATTACHMENT_KINDS = ["brew", "bean", "recipe"] as const;
+export const CHAT_ATTACHMENT_KINDS = ["brew", "bean", "recipe", "chart"] as const;
 export type ChatAttachmentKind = (typeof CHAT_ATTACHMENT_KINDS)[number];
-// A reference, not a copy: each reply reads the item afresh. label: what it
-// was called when attached, to show once it's gone.
+// An Insights chart as it was when attached (docs/api/chat.md §12): its
+// numbers, worked out in the browser, so kept as they are. `cut`: rows left
+// out past CHART_ROWS_MAX.
+export const CHART_ROWS_MAX = 200;
+export const CHART_COLUMNS_MAX = 20;
+export interface ChatChartSnapshot {
+  tab: string; // the Insights tab it's on
+  title: string;
+  note: string | null;
+  filters: string; // what the numbers cover, e.g. "Last 30 days · Only mine"
+  head: string[];
+  rows: Array<Array<string | number>>;
+  cut: number;
+}
+// Brews, beans and recipes are references, not copies: each reply reads the
+// item afresh. A chart carries its snapshot. label: what it was called when
+// attached, to show once it's gone.
 export interface ChatAttachment {
   kind: ChatAttachmentKind;
   id: string;
+  chart?: ChatChartSnapshot; // kind "chart" only
   label: string;
 }
 

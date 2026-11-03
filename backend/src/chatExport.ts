@@ -7,6 +7,7 @@ import { aiChatMessages, aiChatPhotos, aiChats, CHAT_ATTACHMENT_KINDS, users } f
 import { unzipSync, zipSync, type Zippable } from "fflate";
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
+import { chartSnapshotSchema } from "./chatChart.js";
 import { pruneChatsOf, userChatBytes } from "./chatData.js";
 import { db } from "./db.js";
 import { chatPhotoPath, checkStoredPhoto, removeChatPhotoFiles, writeChatPhotoFile } from "./photos.js";
@@ -32,7 +33,7 @@ const fileSchema = z.object({
           position: z.number().int(),
           role: z.enum(["user", "assistant"]),
           content: z.string().max(16_000_000),
-          attachments: z.array(z.object({ kind: z.enum(CHAT_ATTACHMENT_KINDS), id: z.string().max(36), label: z.string().max(200) })).nullable(),
+          attachments: z.array(z.object({ kind: z.enum(CHAT_ATTACHMENT_KINDS), id: z.string().max(36), label: z.string().max(200), chart: chartSnapshotSchema.optional() })).nullable(),
           status: z.enum(["done", "failed"]),
           error: z.string().max(200).nullable(),
           model: z.string().max(100).nullable(),

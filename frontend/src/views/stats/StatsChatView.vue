@@ -204,7 +204,7 @@ async function send() {
   sending.value = true;
   error.value = '';
   try {
-    const body = { content, attachments: attachments.value.map(({ kind, id }) => ({ kind, id })), photoIds: photos.value.map((p) => p.id) };
+    const body = { content, attachments: attachments.value.map(({ kind, id, chart }) => ({ kind, id, ...(chart ? { chart } : {}) })), photoIds: photos.value.map((p) => p.id) };
     const pair = chatId.value ? await chatsApi.send(workspaceId.value, chatId.value, body) : await chatsApi.start(workspaceId.value, body);
     chatId.value = pair.chat.id;
     messages.value = [...messages.value, ...pair.messages];

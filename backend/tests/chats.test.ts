@@ -112,6 +112,20 @@ describe("attachments", () => {
     expect((await owner.agent.get(url(workspaceId))).body.chats).toEqual([]);
   });
 
+  it("keeps a chart as its snapshot, and refuses one that's too big", async () => {
+    const chart = { tab: "beans", title: "Beans by country", note: null, filters: "All time · Only mine", head: ["Country", "Beans"], rows: [["Kenya", 2]], cut: 0 };
+    const id = randomUUID();
+    const res = await owner.agent.post(url(workspaceId)).send({ content: "Why?", attachments: [{ kind: "chart", id, chart }] });
+    expect(res.status, JSON.stringify(res.body)).toBe(202);
+    expect(res.body.messages[0].attachments).toEqual([{ kind: "chart", id, label: "Beans by country", chart }]);
+    const send = (c: unknown) => owner.agent.post(url(workspaceId)).send({ content: "Hi", attachments: [{ kind: "chart", id: randomUUID(), chart: c }] });
+    expect((await send({ ...chart, rows: Array.from({ length: 201 }, () => ["a", 1]) })).status).toBe(400);
+    expect((await send({ ...chart, title: "" })).status).toBe(400);
+    expect((await send({ ...chart, extra: 1 })).status).toBe(400);
+    expect((await owner.agent.post(url(workspaceId)).send({ content: "Hi", attachments: [{ kind: "chart", id: randomUUID() }] })).status).toBe(400);
+    expect((await owner.agent.post(url(workspaceId)).send({ content: "Hi", attachments: [{ kind: "bean", id: randomUUID(), chart }] })).status).toBe(400);
+  });
+
   it("takes up to the workspace's limit: 50 unless changed, at most 100", async () => {
     const bean = await newBean(owner, workspaceId);
     const many = (n: number) => Array.from({ length: n }, () => ({ kind: "bean", id: bean }));
@@ -324,7 +338,8 @@ describe("export and import", () => {
   async function chatWithPhoto(): Promise<{ chatId: string; photoId: string }> {
     const photo = (await owner.agent.post(`${url(workspaceId)}/photos`).set("Content-Type", "image/png").send(await png())).body.photo as { id: string };
     const bean = await newBean(owner, workspaceId, { roasterName: "Onyx", beanName: "Guji" });
-    const res = await owner.agent.post(url(workspaceId)).send({ content: "Look", photoIds: [photo.id], attachments: [{ kind: "bean", id: bean }] });
+    const chart = { tab: "brews", title: "Rating over time", note: "Average rating", filters: "All time", head: ["Week", "Rating"], rows: [["Oct 5", 4.5]], cut: 3 };
+    const res = await owner.agent.post(url(workspaceId)).send({ content: "Look", photoIds: [photo.id], attachments: [{ kind: "bean", id: bean }, { kind: "chart", id: randomUUID(), chart }] });
     await finish(res.body.messages[1].id, "A puck");
     return { chatId: res.body.chat.id, photoId: photo.id };
   }
@@ -342,7 +357,8 @@ describe("export and import", () => {
     expect(chat!.id).not.toBe(chatId);
     const { messages } = (await owner.agent.get(`${url(other)}/${chat!.id}`)).body as { messages: Array<{ id: string; content: string; attachments: unknown[]; photos: Array<{ id: string }> }> };
     expect(messages.map((m) => m.content)).toEqual(["Look", "A puck"]);
-    expect(messages[0]!.attachments).toHaveLength(1);
+    expect(messages[0]!.attachments).toHaveLength(2);
+    expect(messages[0]!.attachments[1]).toMatchObject({ kind: "chart", label: "Rating over time", chart: { rows: [["Oct 5", 4.5]], cut: 3 } });
     expect((await owner.agent.get(`${url(other)}/photos/${messages[0]!.photos[0]!.id}`)).status).toBe(200);
 
     expect((await imported(owner, workspaceId, zip)).body).toEqual({ imported: 0, skipped: 1 });

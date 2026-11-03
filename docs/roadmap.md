@@ -2139,3 +2139,30 @@ message or a note without a screenshot (`lib/chartImage.ts`, `ChartCard.vue`).
   as a promise, straight from the click, which Safari requires.
 - The button says "Copied" for two seconds, the same label swap as the
   menu's Copy link. There's no toast.
+
+## Attach charts to AI chat (built)
+
+The chat's attach picker has a **Charts** tab (`ChartPicker.vue`): every
+chart on the Insights tabs the workspace shows, the Explore charts the person
+added to a tab included, and **Overview totals** (the Overview's tiles as one
+table).
+
+- **The numbers, not a picture:** each chart goes as a snapshot of its
+  title, note, table and what it covers ("Last 30 days · Only mine"), kept
+  on the message (`docs/api/chat.md` §12). The figures are worked out in the
+  browser, so the server can't rebuild them. Capped at 200 rows; past that,
+  the AI is told how many were left out. No migration: it's in the
+  `attachments` column, counts toward the chat's size and goes in the export.
+- **Filters of its own:** the Insights filter bar sits on the Charts tab,
+  starting as the page has it. Changing it there leaves the Insights page
+  alone (`provideStats` with local filters). Charts with their own period
+  follow the picker's.
+- **How it gathers them:** the tab views are drawn out of sight with
+  `CHART_HARVEST` provided; each `ChartCard` hands over its title, note and
+  table instead of drawing (`lib/chartHarvest.ts`). The Overview's tiles moved
+  into `useOverviewTiles` so both can use them.
+- The same chart under the same filters is one attachment (its id is a hash
+  of the two); under other filters, another.
+- Insights' filter bar also got **Reset filters**, shown once a filter is off
+  its default.
+- Still to do: **Ask in chat** on a chart card (backlog 19).
