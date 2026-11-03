@@ -52,7 +52,9 @@ that's yours, not yet sent and in this workspace, or the request is a `400`. A
 message comes back with `photos: [{ id, width, height }]`. Photos are resized as
 bean photos are (`bean-photos.md` §4c, EXIF dropped) and kept with the chat,
 under `PHOTO_DIR/chats/<workspaceId>/`, and go when it does. One uploaded but
-never sent is removed the next time the server starts, a day later or more.
+never sent is removed the next time the server starts, a day later or more. The
+Chat tab uploads a photo as soon as it's picked, pasted into the message box or
+dropped on the conversation (images only; pasted text stays text).
 
 `POST`s answer `409` with `code: "ai_not_configured"` when the workspace has no
 AI (§2d), and `503` when the queue can't be reached (nothing is saved).

@@ -7,6 +7,7 @@ import { brewLogsApi } from '../../api/brews';
 import { chatsApi, type Chat, type ChatAttachment, type ChatAttachmentKind, type ChatMessage, type ChatPhoto } from '../../api/chats';
 import { ApiError } from '../../api/client';
 import { recipesApi } from '../../api/recipes';
+import { droppedImages, pastedImages } from '../../lib/pastedImages';
 import { useWorkspaceStore } from '../../stores/workspace';
 
 const MESSAGE_MAX = 4000;
@@ -60,17 +61,18 @@ function detach(item: ChatAttachment) {
   attachments.value = attachments.value.filter((a) => a !== item);
 }
 
-// Photos go up as they're picked, and are sent with the next message.
+// Photos go up as they're picked, pasted or dropped, and are sent with the
+// next message.
 const photos = ref<ChatPhoto[]>([]);
 const uploading = ref(false);
 const photoUrl = (id: string) => (workspaceId.value ? chatsApi.photoUrl(workspaceId.value, id) : '');
-async function addPhotos(e: Event) {
-  const input = e.target as HTMLInputElement;
-  const files = [...(input.files ?? [])].slice(0, PHOTOS_MAX - photos.value.length);
-  input.value = '';
-  if (!workspaceId.value || !files.length) return;
-  uploading.value = true;
+async function addFiles(picked: File[]) {
+  if (!workspaceId.value || !picked.length || uploading.value) return;
+  const files = picked.slice(0, PHOTOS_MAX - photos.value.length);
   error.value = '';
+  if (files.length < picked.length) error.value = `Up to ${PHOTOS_MAX} photos a message.`;
+  if (!files.length) return;
+  uploading.value = true;
   try {
     for (const file of files) photos.value = [...photos.value, (await chatsApi.addPhoto(workspaceId.value, file)).photo];
   } catch (err) {
@@ -78,6 +80,41 @@ async function addPhotos(e: Event) {
   } finally {
     uploading.value = false;
   }
+}
+function addPhotos(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const files = [...(input.files ?? [])];
+  input.value = '';
+  void addFiles(files);
+}
+// A pasted picture goes up as a photo; pasted text goes in the message as usual.
+function onPaste(e: ClipboardEvent) {
+  const files = pastedImages(e.clipboardData?.items ?? []);
+  if (!files.length) return;
+  e.preventDefault();
+  void addFiles(files);
+}
+// Files dragged over the conversation highlight it; dropping adds the images.
+// Counted, since dragenter and dragleave fire for every child crossed.
+const dragDepth = ref(0);
+const canDrop = computed(() => workspaces.canEdit && canSend.value);
+const carriesFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files');
+function onDragEnter(e: DragEvent) {
+  if (!canDrop.value || !carriesFiles(e)) return;
+  e.preventDefault();
+  dragDepth.value++;
+}
+function onDragOver(e: DragEvent) {
+  if (canDrop.value && carriesFiles(e)) e.preventDefault();
+}
+function onDragLeave(e: DragEvent) {
+  if (carriesFiles(e)) dragDepth.value = Math.max(0, dragDepth.value - 1);
+}
+function onDrop(e: DragEvent) {
+  dragDepth.value = 0;
+  if (!canDrop.value || !carriesFiles(e)) return;
+  e.preventDefault();
+  void addFiles(droppedImages(e.dataTransfer?.files ?? []));
 }
 
 let stopFollowing: (() => void) | null = null;
@@ -224,7 +261,15 @@ onBeforeUnmount(stop);
       </ul>
     </aside>
 
-    <section class="card chat-main" aria-label="Conversation">
+    <section
+      class="card chat-main"
+      :class="{ dropping: dragDepth > 0 }"
+      aria-label="Conversation"
+      @dragenter="onDragEnter"
+      @dragover="onDragOver"
+      @dragleave="onDragLeave"
+      @drop="onDrop"
+    >
       <div ref="thread" class="thread" aria-live="polite">
         <p v-if="!messages.length" class="muted">Ask about your coffee. Only you can see your chats.</p>
         <div v-for="m in messages" :key="m.id" class="message" :class="m.role">
@@ -276,7 +321,7 @@ onBeforeUnmount(stop);
       </div>
       <form v-if="workspaces.canEdit && canSend" class="composer" @submit.prevent="send">
         <label for="chat-message" class="visually-hidden">Message</label>
-        <textarea id="chat-message" v-model="draft" rows="2" :maxlength="MESSAGE_MAX" placeholder="Ask about a bean, a brew, a recipe…" @keydown="onKey"></textarea>
+        <textarea id="chat-message" v-model="draft" rows="2" :maxlength="MESSAGE_MAX" placeholder="Ask about a bean, a brew, a recipe…" @keydown="onKey" @paste="onPaste"></textarea>
         <button type="submit" class="btn-primary" :disabled="!draft.trim() || sending || writing">Send</button>
       </form>
       <p v-else-if="!canSend" class="muted">Chat is turned off for you here. You can still read your chats.</p>
@@ -402,6 +447,11 @@ onBeforeUnmount(stop);
 .picker select {
   min-width: 0;
   max-width: 100%;
+}
+/* Files dragged over the conversation: dropping them adds photos. */
+.chat-main.dropping {
+  outline: 2px dashed var(--focus);
+  outline-offset: -2px;
 }
 .composer {
   display: flex;
