@@ -20,6 +20,7 @@ import { RANGES, resolveRange, type RangeKey } from '../lib/statsRange';
 import { useWorkspaceStore } from '../stores/workspace';
 import BrewLogRow from './BrewLogRow.vue';
 import ChartPicker from './ChartPicker.vue';
+import FilterBar from './FilterBar.vue';
 
 const props = defineProps<{ open: boolean; selected: ChatAttachment[]; max: number }>();
 const emit = defineEmits<{ close: []; done: [attachments: ChatAttachment[]] }>();
@@ -67,6 +68,22 @@ function query(): BrewLogQuery {
   };
 }
 const brewItem = (l: BrewLog): ChatAttachment => ({ kind: 'brew', id: l.id, label: brewAttachLabel(l) });
+// The filters in words, for the folded filter bar.
+const brewSummary = computed(() => {
+  const nameIn = <T extends { id: string }>(list: T[], id: string, name: (x: T) => string) => {
+    const found = list.find((x) => x.id === id);
+    return found ? name(found) : null;
+  };
+  const period = range.value === 'custom' ? `${from.value ? formatListDay(from.value) : 'the start'} – ${to.value ? formatListDay(to.value) : 'today'}` : range.value === 'all' ? null : RANGES[range.value];
+  const parts = [
+    period,
+    beanId.value && nameIn(beans.value, beanId.value, beanLabel),
+    recipeId.value && nameIn(recipes.value, recipeId.value, (r) => r.name),
+    brewerId.value && nameIn(brewers.value, brewerId.value, (b) => b.name),
+    mine.value && 'Only mine',
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : 'All brews, no filters';
+});
 
 async function loadBrews(fresh: boolean): Promise<void> {
   const ws = workspaces.current?.id;
@@ -197,7 +214,7 @@ watch(tab, (t) => {
       <button class="btn-link close" type="button" aria-label="Close" @click="emit('close')">✕</button>
     </div>
 
-    <div class="tabs" role="tablist" aria-label="What to attach">
+    <div class="tabs" role="tablist" aria-label="What to attach" :style="{ '--tabs': ATTACH_KINDS.length }">
       <button
         v-for="k in ATTACH_KINDS"
         :id="`attach-tab-${k}`"
@@ -215,6 +232,7 @@ watch(tab, (t) => {
 
     <div id="attach-panel" class="panel" role="tabpanel" :aria-labelledby="`attach-tab-${tab}`">
       <template v-if="tab === 'brew'">
+        <FilterBar :summary="brewSummary">
         <div class="filters">
           <div class="field">
             <label for="attach-range">Period</label>
@@ -258,6 +276,7 @@ watch(tab, (t) => {
             Only mine
           </label>
         </div>
+        </FilterBar>
         <div class="bulk">
           <span class="muted small" aria-live="polite">{{ loading && !logs.length ? 'Loading…' : `${total} ${total === 1 ? 'brew matches' : 'brews match'}` }}</span>
           <button v-if="total" type="button" class="btn-link" :disabled="loading || full" @click="selectAllBrews">Select all {{ total }}</button>
@@ -335,8 +354,8 @@ watch(tab, (t) => {
 
 <style scoped>
 .attach {
-  width: min(600px, calc(100vw - 2 * var(--space-3)));
-  height: min(85vh, 760px);
+  width: min(640px, calc(100vw - 2 * var(--space-3)));
+  height: min(92dvh, 900px);
   border: none;
   border-radius: var(--radius-lg);
   padding: var(--space-4);
@@ -370,7 +389,7 @@ p {
 /* The look of SectionTabs, as buttons. */
 .tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--tabs), minmax(0, 1fr));
   gap: var(--space-1);
   padding: var(--space-1);
   background: var(--brand-tint);
@@ -410,6 +429,8 @@ p {
   gap: var(--space-2);
   flex: 1;
   min-height: 0;
+  /* On a short screen the whole panel scrolls, not a squeezed list. */
+  overflow-y: auto;
 }
 .filters {
   display: grid;
@@ -442,8 +463,7 @@ p {
   flex-direction: column;
   gap: var(--space-2);
   overflow-y: auto;
-  flex: 1;
-  min-height: 0;
+  flex: 1 0 12rem;
 }
 .row {
   display: flex;

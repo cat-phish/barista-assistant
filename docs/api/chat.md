@@ -85,7 +85,9 @@ bottom. On a phone the chat list is a drawer behind **Chats**.
   list's filters (`brew-logs.md`: a period, bean, recipe, brewer, only mine),
   and **Select all** ticks every brew that matches, newest first, up to
   `chatMaxAttachments`. Beans and recipes are searched in the browser. The
-  picker edits the whole selection, so unticking removes an item.
+  picker edits the whole selection, so unticking removes an item. On the
+  Brews and Charts tabs the filters fold into one line (what they're set to,
+  in words) with a **Filters** button, so the list gets the room.
 - **Charts** (`ChartPicker.vue`) lists every chart on the Insights tabs the
   workspace shows, the Explore charts the person added included, and
   "Overview totals", under the Insights filter bar. Those filters start as the
