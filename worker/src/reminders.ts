@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { GreenLowJobData, RateReminderJobData, RestReminderJobData, SteepReminderJobData } from "@barista/shared/jobs";
 import { sendNotification, type NotificationMessage } from "@barista/shared/notify";
+import { PushGoneError, sendWebPush, vapidFromEnv } from "@barista/shared/webPush";
 import {
   beans,
   brewers,
@@ -9,6 +10,7 @@ import {
   drinks,
   greenCoffees,
   notificationChannels,
+  pushSubscriptions,
   roasts,
   users,
   withDefaults,
@@ -24,6 +26,7 @@ import { db } from "./db.js";
 
 export type ReminderResult = { status: "sent"; channels: number; failed: string[] } | { status: "skipped"; reason: string };
 type Send = typeof sendNotification;
+type Push = typeof sendWebPush;
 
 // "8:42" in the brew's own time zone (its device's offset, else BREW_TIMEZONE).
 function brewTime(timestamp: Date, utcOffsetMinutes: number | null): string {
@@ -58,25 +61,42 @@ async function preferencesOf(userId: string) {
   return user ? withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null) : null;
 }
 
-// Sends to each enabled channel; one failing doesn't stop the others, and
-// every one failing throws, so BullMQ retries.
-async function deliver(userId: string, message: NotificationMessage, send: Send): Promise<ReminderResult> {
+// Sends to each enabled channel and Web Push device; one failing doesn't
+// stop the others, and every one failing throws, so BullMQ retries. A
+// device whose subscription is gone is removed.
+async function deliver(userId: string, message: NotificationMessage, send: Send, push: Push): Promise<ReminderResult> {
   const channels = await db
     .select({ kind: notificationChannels.kind, config: notificationChannels.config })
     .from(notificationChannels)
     .where(and(eq(notificationChannels.userId, userId), eq(notificationChannels.enabled, true)));
-  if (channels.length === 0) return { status: "skipped", reason: "no enabled channel" };
-  const results = await Promise.allSettled(
-    channels.map((c) => send(c.kind, c.config as NotificationConfigs[NotificationKind], message))
-  );
-  const failed = results.flatMap((r, i) => (r.status === "rejected" ? [`${channels[i]?.kind}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`] : []));
-  if (failed.length === channels.length) throw new Error(`Every channel failed (${failed.join("; ")})`);
-  return { status: "sent", channels: channels.length - failed.length, failed };
+  const vapid = vapidFromEnv();
+  const devices = vapid
+    ? (await db.select().from(pushSubscriptions).where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.enabled, true)))).map((d) => ({ ...d, vapid }))
+    : [];
+  const targets = [
+    ...channels.map((c) => ({ name: c.kind as string, run: () => send(c.kind, c.config as NotificationConfigs[NotificationKind], message) })),
+    ...devices.map((d) => ({
+      name: `push (${d.label})`,
+      run: async () => {
+        try {
+          await push(d, d.vapid, message);
+        } catch (err) {
+          if (err instanceof PushGoneError) await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, d.id));
+          throw err;
+        }
+      },
+    })),
+  ];
+  if (targets.length === 0) return { status: "skipped", reason: "no enabled channel" };
+  const results = await Promise.allSettled(targets.map((t) => t.run()));
+  const failed = results.flatMap((r, i) => (r.status === "rejected" ? [`${targets[i]?.name}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`] : []));
+  if (failed.length === targets.length) throw new Error(`Every channel failed (${failed.join("; ")})`);
+  return { status: "sent", channels: targets.length - failed.length, failed };
 }
 
 const entryUrl = (brewLogId: string) => (config.appUrl ? `${config.appUrl}/journal/${brewLogId}` : null);
 
-export async function processRateReminder({ brewLogId, userId }: RateReminderJobData, send: Send = sendNotification): Promise<ReminderResult> {
+export async function processRateReminder({ brewLogId, userId }: RateReminderJobData, send: Send = sendNotification, push: Push = sendWebPush): Promise<ReminderResult> {
   const brew = await loadBrew(brewLogId);
   if (!brew) return { status: "skipped", reason: "brew deleted" };
   if (brew.rating !== null || brew.drinkRating !== null) return { status: "skipped", reason: "already rated" };
@@ -91,13 +111,14 @@ export async function processRateReminder({ brewLogId, userId }: RateReminderJob
       message: `${made} · ${brew.roasterName} ${brew.beanName} · ${brewTime(brew.timestamp, brew.utcOffsetMinutes)}`,
       url: entryUrl(brewLogId),
     },
-    send
+    send,
+    push
   );
 }
 
 // A cold brew's steep window has opened: time to filter it (and then finish
 // it in the journal). Skipped once it's finished or deleted.
-export async function processSteepReminder({ brewLogId, userId }: SteepReminderJobData, send: Send = sendNotification): Promise<ReminderResult> {
+export async function processSteepReminder({ brewLogId, userId }: SteepReminderJobData, send: Send = sendNotification, push: Push = sendWebPush): Promise<ReminderResult> {
   const brew = await loadBrew(brewLogId);
   if (!brew) return { status: "skipped", reason: "brew deleted" };
   if (!brew.steeping) return { status: "skipped", reason: "already finished" };
@@ -112,7 +133,8 @@ export async function processSteepReminder({ brewLogId, userId }: SteepReminderJ
       message: `${made} · ${brew.roasterName} ${brew.beanName} · started ${brewTime(brew.timestamp, brew.utcOffsetMinutes)}`,
       url: entryUrl(brewLogId),
     },
-    send
+    send,
+    push
   );
 }
 
@@ -131,7 +153,7 @@ function roastDayText(roastedAt: Date, utcOffsetMinutes: number | null): string 
 
 // A home roast has rested: ready to brew. Skipped once deleted, or when an
 // edit moved its ready day later (its new reminder is queued for then).
-export async function processRestReminder({ roastId, userId }: RestReminderJobData, send: Send = sendNotification): Promise<ReminderResult> {
+export async function processRestReminder({ roastId, userId }: RestReminderJobData, send: Send = sendNotification, push: Push = sendWebPush): Promise<ReminderResult> {
   const [roast] = await db
     .select({ roastedAt: roasts.roastedAt, utcOffsetMinutes: roasts.utcOffsetMinutes, restDays: roasts.restDays, batchNumber: roasts.batchNumber, greenName: greenCoffees.name })
     .from(roasts)
@@ -150,13 +172,14 @@ export async function processRestReminder({ roastId, userId }: RestReminderJobDa
       message: `${roast.greenName ?? "Your roast"}${batch} · roasted ${roastDayText(roast.roastedAt, roast.utcOffsetMinutes)}`,
       url: config.appUrl ? `${config.appUrl}/roast/roasts/${roastId}` : null,
     },
-    send
+    send,
+    push
   );
 }
 
 // A roast took a green coffee below its low-stock threshold. Skipped if it's
 // been restocked (or deleted) since.
-export async function processGreenLow({ greenCoffeeId, userId }: GreenLowJobData, send: Send = sendNotification): Promise<ReminderResult> {
+export async function processGreenLow({ greenCoffeeId, userId }: GreenLowJobData, send: Send = sendNotification, push: Push = sendWebPush): Promise<ReminderResult> {
   const [green] = await db
     .select({ name: greenCoffees.name, weightLeftGrams: greenCoffees.weightLeftGrams, lowStockGrams: greenCoffees.lowStockGrams })
     .from(greenCoffees)
@@ -173,6 +196,7 @@ export async function processGreenLow({ greenCoffeeId, userId }: GreenLowJobData
       message: green.weightLeftGrams > 0 ? `${green.name} · ${green.weightLeftGrams} g left` : `${green.name} · none left`,
       url: config.appUrl ? `${config.appUrl}/roast/green` : null,
     },
-    send
+    send,
+    push
   );
 }

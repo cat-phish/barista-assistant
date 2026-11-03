@@ -1,4 +1,5 @@
 import { connectionSettings, secretIfSet } from "@barista/shared/env";
+import { vapidFromEnv } from "@barista/shared/webPush";
 import { parseTimeZone } from "./localDate.js";
 
 // Secrets accept NAME or NAME_FILE (Docker secrets); see shared/src/env.ts.
@@ -28,3 +29,7 @@ export const config = {
   // unset = reminders without a link.
   appUrl: process.env.APP_URL ? process.env.APP_URL.replace(/\/+$/, "") : null,
 } as const;
+
+// Refuse to start with Web Push half set up; reminders read the keys when
+// they send (docs/api/notifications.md §1b, "Web Push").
+vapidFromEnv();
