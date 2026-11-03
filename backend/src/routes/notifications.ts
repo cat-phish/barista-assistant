@@ -3,14 +3,17 @@ import { and, eq } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { NotificationError, sendNotification } from "@barista/shared/notify";
+import { endpointHash, PushGoneError, sendWebPush } from "@barista/shared/webPush";
 import {
   NOTIFICATION_KINDS,
   notificationChannels,
+  pushSubscriptions,
   SECRET_FIELDS,
   type NotificationConfig,
   type NotificationConfigs,
   type NotificationKind,
 } from "@barista/shared/schema";
+import { webPushSettings } from "../config.js";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
@@ -28,6 +31,19 @@ export interface ChannelSummary {
 
 interface KindParams {
   kind: string;
+}
+
+// A Web Push device; the endpoint stays on the server.
+export interface PushDeviceSummary {
+  id: string;
+  label: string;
+  enabled: boolean;
+  endpointHash: string;
+  createdAt: Date;
+}
+
+interface IdParams {
+  id: string;
 }
 
 const MASK = "••••";
@@ -52,6 +68,22 @@ const configSchemas: { [K in NotificationKind]: z.ZodType<NotificationConfigs[K]
 };
 
 const putBody = z.object({ enabled: z.boolean().default(true), config: z.record(z.string(), z.string().nullable()) }).strict();
+
+const base64url = z.string().regex(/^[A-Za-z0-9_-]+=*$/, "base64url").max(200);
+const subscribeBody = z
+  .object({
+    endpoint: z.url({ protocol: /^https$/ }).max(1000),
+    keys: z.object({ p256dh: base64url, auth: base64url }),
+    label: z.string().trim().min(1).max(60),
+  })
+  .strict();
+const patchDeviceBody = z.object({ enabled: z.boolean() }).strict();
+
+function summarizeDevice(row: typeof pushSubscriptions.$inferSelect): PushDeviceSummary {
+  return { id: row.id, label: row.label, enabled: row.enabled, endpointHash: row.endpointHash, createdAt: row.createdAt };
+}
+
+const ownDevice = (userId: string, id: string) => and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.id, id));
 
 function isKind(kind: string): kind is NotificationKind {
   return (NOTIFICATION_KINDS as readonly string[]).includes(kind);
@@ -84,11 +116,95 @@ const own = (userId: string, kind: NotificationKind) => and(eq(notificationChann
 export const notificationsRouter = Router();
 notificationsRouter.use(requireAuth);
 
-notificationsRouter.get("/", async (req: Request, res: Response<{ channels: ChannelSummary[] }>) => {
-  const rows = await db.select().from(notificationChannels).where(eq(notificationChannels.userId, authedUserId(req)));
+notificationsRouter.get("/", async (req: Request, res: Response<{ channels: ChannelSummary[]; pushDevices: PushDeviceSummary[] }>) => {
+  const userId = authedUserId(req);
+  const rows = await db.select().from(notificationChannels).where(eq(notificationChannels.userId, userId));
   // In the services' fixed order (NOTIFICATION_KINDS), as the settings page lists them.
   rows.sort((a, b) => NOTIFICATION_KINDS.indexOf(a.kind) - NOTIFICATION_KINDS.indexOf(b.kind));
-  res.json({ channels: rows.map(summarize) });
+  const devices = await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, userId)).orderBy(pushSubscriptions.createdAt, pushSubscriptions.id);
+  res.json({ channels: rows.map(summarize), pushDevices: devices.map(summarizeDevice) });
+});
+
+// Web Push (docs/api/notifications.md §1b, "Web Push"): one entry per device.
+// Declared before the /:kind routes.
+const NOT_SET_UP = "Web Push isn't set up on this server";
+
+notificationsRouter.get("/push/key", (_req: Request, res: Response<{ publicKey: string }>) => {
+  const vapid = webPushSettings();
+  if (!vapid) {
+    sendError(res, 404, NOT_SET_UP);
+    return;
+  }
+  res.json({ publicKey: vapid.publicKey });
+});
+
+// Saves this device's subscription. The same endpoint again (re-subscribed,
+// or now signed in as someone else) updates that device instead.
+notificationsRouter.post("/push", async (req: Request, res: Response<{ device: PushDeviceSummary }>) => {
+  if (!webPushSettings()) {
+    sendError(res, 404, NOT_SET_UP);
+    return;
+  }
+  const body = parseBody(subscribeBody, req, res);
+  if (!body) return;
+  const userId = authedUserId(req);
+  const hash = endpointHash(body.endpoint);
+  const values = { userId, endpoint: body.endpoint, p256dh: body.keys.p256dh, auth: body.keys.auth, label: body.label, enabled: true };
+  await db
+    .insert(pushSubscriptions)
+    .values({ id: randomUUID(), endpointHash: hash, ...values })
+    .onDuplicateKeyUpdate({ set: values });
+  const [row] = await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.endpointHash, hash));
+  if (!row) throw new Error("Push device missing after save");
+  res.json({ device: summarizeDevice(row) });
+});
+
+notificationsRouter.patch("/push/:id", async (req: Request<IdParams>, res: Response<{ device: PushDeviceSummary }>) => {
+  const body = parseBody(patchDeviceBody, req, res);
+  if (!body) return;
+  const userId = authedUserId(req);
+  const [existing] = await db.select().from(pushSubscriptions).where(ownDevice(userId, req.params.id));
+  if (!existing) {
+    sendError(res, 404, "Not one of your devices");
+    return;
+  }
+  await db.update(pushSubscriptions).set({ enabled: body.enabled }).where(eq(pushSubscriptions.id, existing.id));
+  res.json({ device: summarizeDevice({ ...existing, enabled: body.enabled }) });
+});
+
+notificationsRouter.delete("/push/:id", async (req: Request<IdParams>, res: Response) => {
+  const [result] = await db.delete(pushSubscriptions).where(ownDevice(authedUserId(req), req.params.id));
+  if (result.affectedRows === 0) {
+    sendError(res, 404, "Not one of your devices");
+    return;
+  }
+  res.status(204).end();
+});
+
+// A test to the device, enabled or not. A gone subscription removes it.
+notificationsRouter.post("/push/:id/test", async (req: Request<IdParams>, res: Response) => {
+  const vapid = webPushSettings();
+  if (!vapid) {
+    sendError(res, 404, NOT_SET_UP);
+    return;
+  }
+  const [row] = await db.select().from(pushSubscriptions).where(ownDevice(authedUserId(req), req.params.id));
+  if (!row) {
+    sendError(res, 404, "Not one of your devices");
+    return;
+  }
+  try {
+    await sendWebPush(row, vapid, { title: "Test from Barista-Assistant", message: "Reminders will arrive like this.", url: null });
+  } catch (err) {
+    if (err instanceof PushGoneError) {
+      await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, row.id));
+      sendError(res, 410, "This device is no longer subscribed, so it was removed");
+      return;
+    }
+    sendError(res, 502, err instanceof NotificationError ? `The push service ${err.message}` : "Sending failed");
+    return;
+  }
+  res.status(204).end();
 });
 
 notificationsRouter.put("/:kind", async (req: Request<KindParams>, res: Response<{ channel: ChannelSummary }>) => {

@@ -13,6 +13,11 @@ stock** notices.
 Channels belong to a person, not a workspace: they're under
 `/api/auth/me/…` like preferences (§1), and nobody else can see them.
 
+Besides the services below, the installed app itself can receive them as
+native notifications: **Web Push**, one subscription per device (see
+"Web Push" below). Wherever this page says "an enabled channel", an
+enabled Web Push device counts too, while the server has Web Push set up.
+
 ## Services
 
 `kind` is one of `NOTIFICATION_KINDS`. Each has its own `config`; every
@@ -57,8 +62,9 @@ retyping it.
 ## `GET /api/auth/me/notifications`
 
 - **Auth Required:** `true`
-- **Success (`200 OK`):** `{ "channels": [ ...channel ] }`: the caller's own,
-  in `NOTIFICATION_KINDS` order. `[]` when none are set up.
+- **Success (`200 OK`):** `{ "channels": [ ...channel ], "pushDevices": [ ...device ] }`:
+  the caller's own channels, in `NOTIFICATION_KINDS` order, and their Web
+  Push devices, oldest first. `[]` when none are set up.
 
 ## `PUT /api/auth/me/notifications/:kind`
 
@@ -88,6 +94,82 @@ Sends "Test from Barista-Assistant" through the saved channel, enabled or not.
   or couldn't be reached. `error` says which, e.g. `"The service answered
   401 Unauthorized"`, `"The service couldn't reach it (…)"` or `"no answer
   within 10 s"`.
+
+## Web Push
+
+The app (installed or in the browser) subscribes the device it's running
+on, and reminders arrive as the device's own notifications. Tapping one
+opens its link in the app. Each device is its own entry, with its own
+on/off; every enabled one is notified.
+
+- **Server setup:** `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` (or
+  `VAPID_PRIVATE_KEY_FILE`) and `VAPID_SUBJECT` (a `mailto:` address or an
+  `https://` URL the push services can contact) on both backend and worker,
+  all three or none. `npx web-push generate-vapid-keys` makes a key pair.
+  Without them Web Push is off: the key route answers 404, and devices
+  already saved are kept but not sent to.
+- **Where it works:** Chrome, Edge, Firefox and Safari on desktop, and
+  Android; on iPhone and iPad (iOS 16.4+) only from the app added to the
+  Home Screen, never a Safari tab. It needs HTTPS with a certificate the
+  device trusts. Clients show why when the device can't subscribe, and
+  still list the devices already saved.
+- **Sending:** the server `POST`s an encrypted payload
+  `{ "title", "message", "url" }` (as for the services above; `url` may be
+  `null`) to the device's push service (Google, Mozilla, Apple, …), with a
+  1-day TTL and a 10 s timeout. A push service answering `404` or `410`
+  means the subscription is gone (the app was uninstalled, or permission
+  withdrawn): the device is removed.
+- **Device object** (the endpoint itself isn't returned; `endpointHash`,
+  its SHA-256 in hex, lets a client recognise its own subscription):
+
+```json
+{ "id": "…", "label": "Android · Chrome", "enabled": true, "endpointHash": "3f2a…", "createdAt": "…" }
+```
+
+### `GET /api/auth/me/notifications/push/key`
+
+- **Auth Required:** `true`
+- **Success (`200 OK`):** `{ "publicKey": "BO…" }`, the VAPID public key
+  for `pushManager.subscribe({ applicationServerKey })`.
+- **Errors:** `404` Web Push isn't set up on this server.
+
+### `POST /api/auth/me/notifications/push`
+
+Saves this device's subscription (from `PushSubscription.toJSON()`).
+
+- **Auth Required:** `true`
+- **Body:** `{ "endpoint": "https://…", "keys": { "p256dh": "…", "auth": "…" }, "label": "Android · Chrome" }`:
+  `endpoint` an `https` URL (≤ 1000), keys as base64url (≤ 200), `label`
+  1–60 characters.
+- **Success (`200 OK`):** `{ "device": { ...device } }`. The same endpoint
+  sent again updates that device (keys and label, switched on), also when
+  it was another person's: whoever subscribes a device last gets its
+  notifications.
+- **Errors:** `400` invalid body; `404` Web Push isn't set up.
+
+### `PATCH /api/auth/me/notifications/push/:id`
+
+- **Auth Required:** `true`
+- **Body:** `{ "enabled": false }`
+- **Success (`200 OK`):** `{ "device": { ...device } }`
+- **Errors:** `400` invalid body; `404` not one of the caller's devices.
+
+### `DELETE /api/auth/me/notifications/push/:id`
+
+- **Auth Required:** `true`
+- **Success (`204 No Content`)**
+- **Errors:** `404` not one of the caller's devices.
+
+### `POST /api/auth/me/notifications/push/:id/test`
+
+Sends "Test from Barista-Assistant" to the device, enabled or not.
+
+- **Auth Required:** `true`
+- **Success (`204 No Content`)**: the push service accepted it.
+- **Errors:** `404` not one of the caller's devices, or Web Push isn't set
+  up; `410` the subscription is gone and the device was removed; `502` the
+  push service refused it or couldn't be reached (`error` says which, as
+  for the services above).
 
 ## Steep reminders
 

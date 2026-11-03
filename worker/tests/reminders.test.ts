@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { beans, brewers, brewLogs, greenCoffees, notificationChannels, roasts, users, workspaces } from "@barista/shared/schema";
+import { beans, brewers, brewLogs, greenCoffees, notificationChannels, pushSubscriptions, roasts, users, workspaces } from "@barista/shared/schema";
 import { NotificationError } from "@barista/shared/notify";
+import { endpointHash, PushGoneError } from "@barista/shared/webPush";
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { config } from "../src/config.js";
 import { db } from "../src/db.js";
 import { processGreenLow, processRateReminder, processRestReminder, processSteepReminder } from "../src/reminders.js";
@@ -135,5 +136,52 @@ describe("processGreenLow", () => {
     await db.update(users).set({ preferences: { greenStockAlerts: false } }).where(eq(users.id, userId));
     expect(await processGreenLow({ greenCoffeeId, userId }, send)).toEqual({ status: "skipped", reason: "stock alerts off" });
     expect(send).not.toHaveBeenCalled();
+  });
+});
+
+describe("Web Push devices (docs/api/notifications.md §1b, \"Web Push\")", () => {
+  const pushDevice = (label: string, enabled = true) => {
+    const endpoint = `https://push.example/${randomUUID()}`;
+    return { id: randomUUID(), userId, endpoint, endpointHash: endpointHash(endpoint), p256dh: "p", auth: "a", label, enabled };
+  };
+  afterEach(() => vi.unstubAllEnvs());
+  function vapidOn() {
+    vi.stubEnv("VAPID_PUBLIC_KEY", "BPublicKeyForTests");
+    vi.stubEnv("VAPID_PRIVATE_KEY", "private-key-for-tests");
+    vi.stubEnv("VAPID_SUBJECT", "mailto:admin@example.com");
+  }
+
+  it("are sent to alongside the channels, only enabled ones, only with VAPID keys", async () => {
+    await db.insert(pushSubscriptions).values([pushDevice("Pixel"), pushDevice("Old phone", false)]);
+    const send = vi.fn().mockResolvedValue(undefined);
+    const push = vi.fn().mockResolvedValue(undefined);
+    expect(await processRateReminder({ brewLogId, userId }, send, push)).toMatchObject({ status: "sent", channels: 2 });
+    expect(push).not.toHaveBeenCalled(); // no keys: Web Push is off
+    vapidOn();
+    expect(await processRateReminder({ brewLogId, userId }, send, push)).toEqual({ status: "sent", channels: 3, failed: [] });
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(push.mock.calls[0]![0]).toMatchObject({ label: "Pixel" });
+    expect(push.mock.calls[0]![1]).toMatchObject({ publicKey: "BPublicKeyForTests", subject: "mailto:admin@example.com" });
+    expect(push.mock.calls[0]![2]).toMatchObject({ title: "How was it? Rate your brew" });
+  });
+
+  it("a gone subscription is removed; every target failing is still retried", async () => {
+    vapidOn();
+    const gone = pushDevice("Pixel");
+    await db.insert(pushSubscriptions).values(gone);
+    const send = vi.fn().mockResolvedValue(undefined);
+    const push = vi.fn().mockRejectedValue(new PushGoneError("says the device is no longer subscribed"));
+    expect(await processRateReminder({ brewLogId, userId }, send, push)).toEqual({
+      status: "sent",
+      channels: 2,
+      failed: ["push (Pixel): says the device is no longer subscribed"],
+    });
+    expect(await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.id, gone.id))).toEqual([]);
+
+    await db.insert(pushSubscriptions).values(pushDevice("Tablet"));
+    const none = vi.fn().mockRejectedValue(new NotificationError("answered 503"));
+    const refused = vi.fn().mockRejectedValue(new NotificationError("answered 403"));
+    await expect(processRateReminder({ brewLogId, userId }, none, refused)).rejects.toThrow(/push \(Tablet\): answered 403/);
+    expect(await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, userId))).toHaveLength(1); // kept: not gone
   });
 });

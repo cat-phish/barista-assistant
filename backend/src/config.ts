@@ -1,4 +1,5 @@
 import { connectionSettings, requireSecret, secretIfSet } from "@barista/shared/env";
+import { vapidFromEnv, type VapidSettings } from "@barista/shared/webPush";
 
 // Secrets accept NAME or NAME_FILE (Docker secrets); see shared/src/env.ts.
 const jwtSecret = requireSecret("JWT_SECRET");
@@ -23,7 +24,12 @@ export const config = {
   aiConfigSecret: secretIfSet("AI_CONFIG_SECRET") ?? null,
 } as const;
 
+// Refuse to start with Web Push half set up.
+vapidFromEnv();
+
 // Switches read on each call, so tests can change them.
+// Web Push (docs/api/notifications.md §1b): the VAPID keys, or null = off.
+export const webPushSettings = (): VapidSettings | null => vapidFromEnv();
 // ALLOW_REGISTRATION=false closes sign-ups (docs/api/auth.md §1).
 export const registrationOpen = (): boolean => process.env.ALLOW_REGISTRATION?.trim().toLowerCase() !== "false";
 // BACKUP_DOWNLOADS=false keeps database dumps on the server: admins can't

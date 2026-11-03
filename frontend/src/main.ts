@@ -53,4 +53,13 @@ watch(
   { immediate: true },
 );
 
+// A tapped reminder (public/push-sw.js) opens its page here, through the
+// router, so a brew in progress asks before leaving.
+navigator.serviceWorker?.addEventListener('message', (event: MessageEvent<unknown>) => {
+  const data = event.data;
+  if (typeof data === 'object' && data !== null && 'type' in data && data.type === 'open-path' && 'path' in data && typeof data.path === 'string' && data.path.startsWith('/')) {
+    void router.push(data.path);
+  }
+});
+
 app.mount('#app');

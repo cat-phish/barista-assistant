@@ -29,6 +29,10 @@
       "types": "./dist/notify.d.ts",
       "default": "./dist/notify.js"
     },
+    "./webPush": {
+      "types": "./dist/webPush.d.ts",
+      "default": "./dist/webPush.js"
+    },
     "./brew": {
       "types": "./dist/brew.d.ts",
       "default": "./dist/brew.js"
@@ -52,9 +56,11 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "@types/web-push": "^3.6.4",
     "typescript": "^7.0.2"
   },
   "dependencies": {
-    "drizzle-orm": "^0.45.4"
+    "drizzle-orm": "^0.45.4",
+    "web-push": "^3.6.7"
   }
 }

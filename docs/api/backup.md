@@ -68,8 +68,8 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   `brew_logs`, `brew_log_marks`, `brew_log_tools`, `brew_log_problems`,
   `brew_log_flavors`, `llm_analyses`, `parameter_suggestions` (`BACKUP_TABLES`). A table left out of a file counts as
   empty.
-- **Not in a backup:** people, members, notification channels and
-  preferences belong to the server, not the workspace. A brew says who made
+- **Not in a backup:** people, members, notification channels, Web Push
+  devices and preferences belong to the server, not the workspace. A brew says who made
   it as `brewedBy` (their email, or `null`) instead of `userId`, and a
   parameter suggestion who asked the same way (`brewedBy` for
   `requestedBy`). A suggestion's `alternatives` keep the ids they named,

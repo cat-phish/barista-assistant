@@ -37,6 +37,14 @@ export interface NotificationChannel {
   config: Record<string, string | null>; // credentials come back masked ("••••1234")
   createdAt: string;
 }
+// A Web Push device (docs/api/notifications.md §1b, "Web Push").
+export interface PushDevice {
+  id: string;
+  label: string; // e.g. "Android · Chrome"
+  enabled: boolean;
+  endpointHash: string; // SHA-256 hex of its endpoint: recognises this device
+  createdAt: string;
+}
 
 export interface User {
   id: string;

@@ -31,9 +31,9 @@ and fix the references.
 - F. Bar & menu: 23–25
 - G. Home roasting: 26–35
 - H. Accounts: 36–37
-- I. Deployment & the app: 38–40
-- J. Backups: 41
-- K. Lists & layout: 42–43
+- I. Deployment & the app: 38–39
+- J. Backups: 40
+- K. Lists & layout: 41–42
 
 ---
 
@@ -122,7 +122,7 @@ Where the app's choices live, and what you can switch on, off or take out.
   - Move the ones that are wrong, with a data migration, and make Settings
     say which kind each one is.
 - **Size:** S to review; each move S–M.
-- **Depends on:** nothing; do it before 41, since where a setting lives
+- **Depends on:** nothing; do it before 40, since where a setting lives
   decides how it's backed up, and the audit is the same work.
 - **Open questions:**
   - Is "workspace default, person overrides" worth having, or is it one or
@@ -912,24 +912,7 @@ How the app is served and installed.
 - **Depends on:** the app running on the home server.
 - **Open questions:** none.
 
-### 39. Web Push from the installed app
-
-- **Status:** idea
-- **Why:** reminders (rate later) go out through ntfy, Gotify and the
-  others, which each need their own app. The installed PWA could get them
-  itself, as one more channel.
-- **Approach:** a Web Push channel in Settings → Notifications: the app
-  subscribes (VAPID keys from the server's secrets), the backend stores the
-  subscription, and the worker sends to it like the other channels. The
-  service worker shows the notification and opens the brew when tapped.
-- **Size:** M
-- **Depends on:** nothing (the app is served as an installable PWA now).
-- **Open questions:**
-  - iOS only delivers Web Push to an app added to the Home Screen (16.4+):
-    say so on the channel, or hide it in the browser?
-  - Several devices per person: one subscription each, all notified?
-
-### 40. Protect the testing branch on GitHub
+### 39. Protect the testing branch on GitHub
 
 - **Status:** idea
 - **Why:** the server pulls whatever is pushed to `testing`, and a push can
@@ -946,7 +929,7 @@ How the app is served and installed.
 
 What a backup keeps, so moving to a new server loses nothing.
 
-### 41. Back up every setting
+### 40. Back up every setting
 
 - **Status:** idea
 - **Why:** a workspace backup (`docs/api/backup.md` §2b) leaves out what
@@ -983,7 +966,7 @@ What a backup keeps, so moving to a new server loses nothing.
 
 How pages, lists and tables fit the screen.
 
-### 42. Settings nav scrolls on its own
+### 41. Settings nav scrolls on its own
 
 - **Status:** idea
 - **Why:** on a wide screen the Settings categories sit beside the page,
@@ -999,7 +982,7 @@ How pages, lists and tables fit the screen.
 - **Open questions:**
   - Should the selected category scroll into view when the page opens?
 
-### 43. Resizable table columns
+### 42. Resizable table columns
 
 - **Status:** idea
 - **Why:** list pages like Beans are tables whose columns size themselves.

@@ -68,6 +68,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Web Push: showing a reminder and opening it (public/push-sw.js).
+        importScripts: ['push-sw.js'],
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         // App routes (the guest menu at /menu/:slug too) load the cached shell
         // offline; API addresses opened directly are never answered with it.

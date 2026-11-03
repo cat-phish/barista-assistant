@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
-import { DEFAULT_PREFERENCES, notificationChannels, users, withDefaults } from "@barista/shared/schema";
+import { DEFAULT_PREFERENCES, notificationChannels, pushSubscriptions, users, withDefaults } from "@barista/shared/schema";
+import { webPushSettings } from "./config.js";
 import { db } from "./db.js";
 import { cancelRestReminder, enqueueGreenLow, enqueueRateReminder, enqueueRestReminder, enqueueSteepReminder } from "./queue.js";
 
@@ -18,13 +19,22 @@ async function preferencesOf(userId: string) {
   return user ? withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null) : null;
 }
 
+// An enabled channel, or an enabled Web Push device while the server has
+// Web Push set up (docs/api/notifications.md §1b).
 async function hasEnabledChannel(userId: string): Promise<boolean> {
   const [channel] = await db
     .select({ id: notificationChannels.id })
     .from(notificationChannels)
     .where(and(eq(notificationChannels.userId, userId), eq(notificationChannels.enabled, true)))
     .limit(1);
-  return !!channel;
+  if (channel) return true;
+  if (!webPushSettings()) return false;
+  const [device] = await db
+    .select({ id: pushSubscriptions.id })
+    .from(pushSubscriptions)
+    .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.enabled, true)))
+    .limit(1);
+  return !!device;
 }
 
 export type ReminderOutcome = "queued" | "off" | "unavailable";
