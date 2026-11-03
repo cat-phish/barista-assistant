@@ -7,10 +7,8 @@ import { brewLogsApi } from '../api/brews';
 import { errorMessage } from '../api/client';
 import type { Bean, BrewLog } from '../api/types';
 import { beanLabel } from '../lib/beans';
-import { formatDoseLine, formatGrind } from '../lib/format';
-import { repeatLabel } from '../lib/repeatBrew';
 import { useWorkspaceStore } from '../stores/workspace';
-import RatingStars from './RatingStars.vue';
+import BrewLogRow from './BrewLogRow.vue';
 
 const props = defineProps<{ open: boolean; beans: Bean[] }>();
 const emit = defineEmits<{ close: []; pick: [log: BrewLog] }>();
@@ -72,16 +70,7 @@ watch(beanFilter, () => void load(true));
     <ul class="rows">
       <li v-for="l in logs" :key="l.id">
         <button class="row" type="button" @click="emit('pick', l)">
-          <span class="top">
-            <strong>{{ repeatLabel(l).made }}</strong>
-            <span class="muted small">{{ repeatLabel(l).when }}</span>
-          </span>
-          <span class="muted small">{{ l.bean.roasterName }} {{ repeatLabel(l).bean }}<template v-if="l.recipe"> · {{ l.recipe.name }}</template></span>
-          <span class="facts small">
-            <span>{{ formatDoseLine(l.actualDoseGrams, l.actualWaterGrams, l.actualYieldGrams, l.actualIceGrams) }}</span>
-            <span v-if="l.actualGrindSetting !== null">grind {{ formatGrind(l.actualGrindSetting) }}</span>
-            <RatingStars :rating="l.rating ?? l.drinkRating" />
-          </span>
+          <BrewLogRow :log="l" />
         </button>
       </li>
     </ul>
@@ -138,9 +127,7 @@ p {
 .row {
   width: 100%;
   text-align: left;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: block;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -152,16 +139,5 @@ p {
 .row:hover,
 .row:focus-visible {
   border-color: var(--brand);
-}
-.top {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-.facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-3);
-  align-items: center;
 }
 </style>
