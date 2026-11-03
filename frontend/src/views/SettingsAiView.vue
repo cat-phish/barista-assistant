@@ -10,7 +10,7 @@
 //  - which details the AI gets (docs/api/llm-contract.md §9, "What the AI sees").
 import { computed, onMounted, ref, watch } from 'vue';
 import { errorMessage } from '../api/client';
-import { AUTO_ANALYZE_DELAYS, MAX_REVIEW_BREWS, MAX_SUGGEST_BREWS, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, type AlternativeKind, type AutoAnalyzeDelay, type Brewer, type LabelWebContext, type SuggestSource, type WorkspaceSettings } from '../api/types';
+import { AUTO_ANALYZE_DELAYS, MAX_CHAT_ATTACHMENTS, MAX_REVIEW_BREWS, MAX_SUGGEST_BREWS, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, type AlternativeKind, type AutoAnalyzeDelay, type Brewer, type LabelWebContext, type SuggestSource, type WorkspaceSettings } from '../api/types';
 import { brewersApi } from '../api/brewers';
 import { workspacesApi, type AiConfig } from '../api/workspaces';
 import AiKeyForm, { type AiKeyValues } from '../components/AiKeyForm.vue';
@@ -44,6 +44,18 @@ const capInvalid = computed(() => {
   const n = Number(capDraft.value);
   return !Number.isInteger(n) || n < 1 || n > MAX_CAP;
 });
+
+// Chat: how many brews, beans and recipes a message attaches and a reply is sent.
+const attachMax = computed(() => settings.value.chatMaxAttachments ?? 50);
+const attachDraft = ref('');
+watch(attachMax, (n) => (attachDraft.value = String(n)), { immediate: true });
+const attachInvalid = computed(() => {
+  const n = Number(attachDraft.value);
+  return !Number.isInteger(n) || n < 1 || n > MAX_CHAT_ATTACHMENTS;
+});
+function saveAttachMax(): void {
+  if (!attachInvalid.value && Number(attachDraft.value) !== attachMax.value) void save({ chatMaxAttachments: Number(attachDraft.value) }, 'labels');
+}
 
 // Who answers, and the workspace's own key.
 const aiConfig = ref<AiConfig | null>(null);
@@ -283,6 +295,26 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
         <input type="checkbox" :checked="settings.aiChat" :disabled="!isOwner || saving" @change="save({ aiChat: ($event.target as HTMLInputElement).checked }, 'labels')" />
         Offer AI chat in this workspace
       </label>
+      <div class="field">
+        <label class="checkbox cap-line" for="chat-attach-max">
+          Attach up to
+          <input
+            id="chat-attach-max"
+            v-model="attachDraft"
+            class="cap"
+            type="number"
+            inputmode="numeric"
+            min="1"
+            :max="MAX_CHAT_ATTACHMENTS"
+            :aria-invalid="attachInvalid"
+            :disabled="!isOwner || saving || !settings.aiChat"
+            @change="saveAttachMax"
+          />
+          brews, beans and recipes
+        </label>
+        <p v-if="attachInvalid" class="form-error small">A whole number from 1 to {{ MAX_CHAT_ATTACHMENTS }}.</p>
+        <p class="muted small">In one message, and sent with each reply across the chat (the latest ones). More gives the AI more to go on, but each reply costs more and takes longer to start.</p>
+      </div>
       <h2 id="ai-labels">Bean labels</h2>
       <p class="muted">
         On the bean form, “Fill in from a photo” sends photos of the bag's label to the AI provider, which reads it: roaster, coffee, origin,

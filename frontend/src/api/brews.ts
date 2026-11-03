@@ -50,15 +50,32 @@ export interface BrewLogInput {
 
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/brew-logs`;
 
+export interface BrewLogQuery {
+  beanId?: string;
+  recipeId?: string;
+  brewerId?: string;
+  mine?: boolean;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+}
+
 export const brewLogsApi = {
   // reminder: only when remindToRate was sent (queued, off or unavailable).
   create: (workspaceId: string, input: BrewLogInput) =>
     api.post<{ brewLog: BrewLog; reminder?: Reminder; steepReminder?: Reminder }>(base(workspaceId), input),
   get: (workspaceId: string, id: string) =>
     api.get<{ brewLog: BrewLog & { latestAnalysis: LlmAnalysis | null } }>(`${base(workspaceId)}/${id}`),
-  list: (workspaceId: string, query: { beanId?: string; limit?: number; offset?: number } = {}) => {
+  // from/to: ISO dates, the brews' own local dates (brew-logs.md).
+  list: (workspaceId: string, query: BrewLogQuery = {}) => {
     const params = new URLSearchParams();
     if (query.beanId) params.set('beanId', query.beanId);
+    if (query.recipeId) params.set('recipeId', query.recipeId);
+    if (query.brewerId) params.set('brewerId', query.brewerId);
+    if (query.mine) params.set('mine', '1');
+    if (query.from) params.set('from', query.from);
+    if (query.to) params.set('to', query.to);
     if (query.limit !== undefined) params.set('limit', String(query.limit));
     if (query.offset !== undefined) params.set('offset', String(query.offset));
     const qs = params.toString();

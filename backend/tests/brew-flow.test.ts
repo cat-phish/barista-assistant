@@ -143,6 +143,33 @@ describe("brew logs", () => {
     expect(page.body).toMatchObject({ total: 4, brewLogs: [{ beanId: a }] });
     expect((await owner.agent.get(`${base}?limit=500`)).status).toBe(400);
   });
+
+  it("narrows to a range of the brews' local dates, a brewer, and your own", async () => {
+    const { owner, ws, v60 } = await setup();
+    const bean = await newBean(owner, ws.id);
+    const base = `/api/workspaces/${ws.id}/brew-logs`;
+    const recipe = await owner.agent.post(`/api/workspaces/${ws.id}/recipes`).send({ name: "R", brewerId: v60, targetDoseGrams: 15, targetWaterGrams: 250 });
+    // 2026-10-02 at 23:30 local in UTC-7 is the 3rd in UTC.
+    const lateLocal = await newBrewLog(owner, ws.id, bean, { timestamp: "2026-10-03T06:30:00Z", utcOffsetMinutes: -420 });
+    const third = await newBrewLog(owner, ws.id, bean, { timestamp: "2026-10-03T08:00:00Z", recipeId: recipe.body.recipe.id });
+    const fifth = await newBrewLog(owner, ws.id, bean, { timestamp: "2026-10-05T08:00:00Z" });
+    const ids = async (qs: string) => {
+      const res = await owner.agent.get(`${base}?${qs}`);
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      return (res.body.brewLogs as Array<{ id: string }>).map((l) => l.id);
+    };
+    expect(await ids("from=2026-10-03&to=2026-10-03")).toEqual([third]);
+    expect(await ids("to=2026-10-02")).toEqual([lateLocal]);
+    expect(await ids("from=2026-10-03")).toEqual([fifth, third]);
+    expect(await ids(`brewerId=${v60}`)).toEqual([third]);
+    expect((await owner.agent.get(`${base}?from=2026-10-05&to=2026-10-01`)).status).toBe(400);
+
+    const barista = await newUser("barista");
+    await addMember(owner, ws.id, barista, "barista");
+    const theirs = await newBrewLog(barista, ws.id, bean, { timestamp: "2026-10-06T08:00:00Z" });
+    expect((await barista.agent.get(`${base}?mine=1`)).body.brewLogs.map((l: { id: string }) => l.id)).toEqual([theirs]);
+    expect(await ids("mine=1")).toEqual([fifth, third, lateLocal]);
+  });
 });
 
 describe("suggestions and analysis", () => {

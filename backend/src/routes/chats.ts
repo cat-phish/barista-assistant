@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { access, readFile } from "node:fs/promises";
 import { CHAT_EVENT_FIELD, chatReplyKey, type ChatJobPhoto, type ChatStreamEvent } from "@barista/shared/jobs";
 import { effectiveChatLimits, NO_CHAT_LIMITS, type ChatLimits, type ServerChatLimits } from "@barista/shared/aiConfig";
-import { aiChatMessages, aiChatPhotos, aiChats, beans, brewLogs, CHAT_ATTACHMENT_KINDS, DEFAULT_WORKSPACE_SETTINGS, recipes, users, withDefaults, workspaceMembers, workspaces, type AiChat, type AiChatMessage, type ChatAttachment } from "@barista/shared/schema";
+import { aiChatMessages, aiChatPhotos, aiChats, beans, brewLogs, CHAT_ATTACHMENT_KINDS, DEFAULT_WORKSPACE_SETTINGS, MAX_CHAT_ATTACHMENTS, recipes, users, withDefaults, workspaceMembers, workspaces, type AiChat, type AiChatMessage, type ChatAttachment } from "@barista/shared/schema";
 import { and, asc, count, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import express, { Router, type Request, type Response } from "express";
 import { Redis } from "ioredis";
@@ -22,7 +22,6 @@ import { enqueueChatReply, QueueUnavailableError } from "../queue.js";
 import { getChatLimits } from "../serverSettings.js";
 
 export const CHAT_MESSAGE_MAX = 4000;
-const CHAT_ATTACHMENTS_MAX = 10;
 const CHAT_PHOTOS_MAX = 4;
 // What a reply is sent, for the model and for the job's size.
 const PHOTOS_SENT = 6;
@@ -56,7 +55,7 @@ const MESSAGE_COLUMNS = {
 
 const attachmentSchema = z.object({ kind: z.enum(CHAT_ATTACHMENT_KINDS), id: z.string().uuid() }).strict();
 type AttachmentRef = z.infer<typeof attachmentSchema>;
-const sendSchema = z.object({ content: z.string().trim().min(1).max(CHAT_MESSAGE_MAX), attachments: z.array(attachmentSchema).max(CHAT_ATTACHMENTS_MAX).optional(), photoIds: z.array(z.string().uuid()).max(CHAT_PHOTOS_MAX).optional() }).strict();
+const sendSchema = z.object({ content: z.string().trim().min(1).max(CHAT_MESSAGE_MAX), attachments: z.array(attachmentSchema).max(MAX_CHAT_ATTACHMENTS).optional(), photoIds: z.array(z.string().uuid()).max(CHAT_PHOTOS_MAX).optional() }).strict();
 const titleOf = (content: string): string => {
   const line = content.split("\n")[0]!.trim();
   return line.length > TITLE_MAX ? `${line.slice(0, TITLE_MAX - 1).trimEnd()}…` : line;
@@ -70,6 +69,14 @@ async function chatOn(userId: string, workspaceId: string): Promise<boolean> {
     .innerJoin(workspaceMembers, and(eq(workspaceMembers.workspaceId, workspaces.id), eq(workspaceMembers.userId, userId)))
     .where(eq(workspaces.id, workspaceId));
   return !!row && row.enabled && withDefaults(DEFAULT_WORKSPACE_SETTINGS, row.settings).aiChat;
+}
+// The workspace's own limit on a message's attachments, up to MAX_CHAT_ATTACHMENTS.
+async function underAttachmentLimit(res: Response, workspaceId: string, attachments: readonly AttachmentRef[] = []): Promise<boolean> {
+  const [row] = await db.select({ settings: workspaces.settings }).from(workspaces).where(eq(workspaces.id, workspaceId));
+  const max = withDefaults(DEFAULT_WORKSPACE_SETTINGS, row?.settings ?? null).chatMaxAttachments;
+  if (attachments.length <= max) return true;
+  sendError(res, 400, `A message can attach up to ${max} items here`);
+  return false;
 }
 async function requireChatOn(res: Response, userId: string, workspaceId: string): Promise<boolean> {
   if (await chatOn(userId, workspaceId)) return true;
@@ -242,6 +249,7 @@ chatsRouter.post("/", async (req: Request<Params>, res: Response<ChatPair>) => {
   if (!(await requireChatOn(res, userId, workspaceId))) return;
   const body = parseBody(sendSchema, req, res);
   if (!body) return;
+  if (!(await underAttachmentLimit(res, workspaceId, body.attachments))) return;
   const attachments = await labelled(workspaceId, body.attachments ?? []);
   if (!attachments) {
     sendError(res, 400, "An attachment isn't in this workspace");
@@ -361,6 +369,7 @@ chatsRouter.post("/:chatId/messages", async (req: Request<ChatParams>, res: Resp
   if (!chat) return;
   const body = parseBody(sendSchema, req, res);
   if (!body) return;
+  if (!(await underAttachmentLimit(res, workspaceId, body.attachments))) return;
   const attachments = await labelled(workspaceId, body.attachments ?? []);
   if (!attachments) {
     sendError(res, 400, "An attachment isn't in this workspace");

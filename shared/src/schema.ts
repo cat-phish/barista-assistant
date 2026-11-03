@@ -128,6 +128,9 @@ export interface WorkspaceSettings {
   // "Fill in from the photos" on the bean form (docs/api/bean-label.md §4d):
   // the bean's photos go to the AI to read the label. Off hides it.
   aiChat: boolean; // docs/api/chat.md §12
+  // At most how many brews, beans and recipes a chat message attaches, and a
+  // reply is sent across the chat (docs/api/chat.md §12): more costs more.
+  chatMaxAttachments: number;
   readLabels: boolean;
   // With it, "Also look it up on the web" on that card (bean-label.md §4d):
   // the label's text goes to a web search. Off by default.
@@ -160,6 +163,7 @@ export const SUGGEST_SOURCES = ["bag", "bagRecipe", "bagBrewer", "bean", "beanRe
 export type SuggestSource = (typeof SUGGEST_SOURCES)[number];
 export const MAX_SUGGEST_BREWS = 20;
 export const MAX_REVIEW_BREWS = 30; // a bean review draft (docs/api/analysis.md §8e)
+export const MAX_CHAT_ATTACHMENTS = 100; // chatMaxAttachments' ceiling
 // What else "Suggest parameters" can suggest (docs/api/analysis.md §8b):
 // another recipe or brewer for this bean, another bean in stock for this
 // recipe. An alternative names the row it means, by id and name (the name
@@ -189,6 +193,7 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   beanReviewRatedOnly: true,
   beanReviewBrewers: "all",
   aiChat: true,
+  chatMaxAttachments: 50,
   readLabels: true,
   labelWebLookup: false,
   labelWebContext: "high",

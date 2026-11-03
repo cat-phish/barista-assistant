@@ -1,6 +1,6 @@
 import type { RecipeStyleSummary } from "./recipes.js";
 import { randomUUID } from "node:crypto";
-import { and, asc, count, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, not, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
@@ -263,12 +263,27 @@ function windowPairIssue(body: WindowBody, ctx: z.RefinementCtx): void {
 const createBrewLogSchema = z.object({ ...brewLogFields, ...windowFields, remindToRate: z.boolean().optional() }).strict().superRefine(windowPairIssue);
 const updateBrewLogSchema = updateSchema(brewLogFields);
 
-const listQuerySchema = z.object({
-  beanId: z.uuid().optional(),
-  recipeId: z.uuid().optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
-  offset: z.coerce.number().int().min(0).default(0),
-});
+// from/to: the brew's own local date, as Insights counts it (stats.md).
+const listQuerySchema = z
+  .object({
+    beanId: z.uuid().optional(),
+    recipeId: z.uuid().optional(),
+    brewerId: z.uuid().optional(),
+    mine: z.literal("1").optional(),
+    from: z.iso.date().optional(),
+    to: z.iso.date().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    offset: z.coerce.number().int().min(0).default(0),
+  })
+  .refine((q) => !q.from || !q.to || q.from <= q.to, { message: "from: can't be after to", path: ["from"] });
+const DAY_MS = 24 * 60 * 60 * 1000;
+// The brew's local time (UTC when its offset is unknown) on or after a day's
+// start. As a UTC string, the way drizzle writes the column; a Date here
+// would go to mysql2 as local time.
+const localFrom = (day: number) => {
+  const start = new Date(day).toISOString().slice(0, 19).replace("T", " ");
+  return sql`${brewLogs.timestamp} >= ${start} - INTERVAL COALESCE(${brewLogs.utcOffsetMinutes}, 0) MINUTE`;
+};
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -686,7 +701,8 @@ brewLogsRouter.use(requireAuth);
 
 brewLogsRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<BrewLogListResponse>) => {
   const { workspaceId } = req.params;
-  if (!(await requireMembership(res, authedUserId(req), workspaceId))) return;
+  const userId = authedUserId(req);
+  if (!(await requireMembership(res, userId, workspaceId))) return;
 
   const query = parseQuery(listQuerySchema, req, res);
   if (!query) return;
@@ -694,6 +710,10 @@ brewLogsRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<Brew
   const conditions: SQL[] = [eq(brewLogs.workspaceId, workspaceId)];
   if (query.beanId) conditions.push(eq(brewLogs.beanId, query.beanId));
   if (query.recipeId) conditions.push(eq(brewLogs.recipeId, query.recipeId));
+  if (query.brewerId) conditions.push(eq(brewLogs.brewerId, query.brewerId));
+  if (query.mine) conditions.push(eq(brewLogs.userId, userId));
+  if (query.from) conditions.push(localFrom(Date.parse(query.from)));
+  if (query.to) conditions.push(not(localFrom(Date.parse(query.to) + DAY_MS)));
   const where = and(...conditions);
 
   const [rows, [totals]] = await Promise.all([

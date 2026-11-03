@@ -110,8 +110,25 @@ describe("attachments", () => {
     const theirs = await newBean(other, (await newWorkspace(other)).id);
     expect((await owner.agent.post(url(workspaceId)).send({ content: "Hi", attachments: [{ kind: "bean", id: theirs }] })).status).toBe(400);
     expect((await owner.agent.get(url(workspaceId))).body.chats).toEqual([]);
-    const many = Array.from({ length: 11 }, () => ({ kind: "bean", id: theirs }));
-    expect((await owner.agent.post(url(workspaceId)).send({ content: "Hi", attachments: many })).status).toBe(400);
+  });
+
+  it("takes up to the workspace's limit: 50 unless changed, at most 100", async () => {
+    const bean = await newBean(owner, workspaceId);
+    const many = (n: number) => Array.from({ length: n }, () => ({ kind: "bean", id: bean }));
+    const send = (n: number) => owner.agent.post(url(workspaceId)).send({ content: "Hi", attachments: many(n) });
+    expect((await send(50)).status).toBe(202);
+    const over = await send(51);
+    expect(over.status).toBe(400);
+    expect(over.body.error).toMatch(/up to 50/);
+
+    const settings = `/api/workspaces/${workspaceId}/settings`;
+    await owner.agent.patch(settings).send({ chatMaxAttachments: 5 }).expect(200);
+    expect((await send(6)).status).toBe(400);
+    await owner.agent.patch(settings).send({ chatMaxAttachments: 100 }).expect(200);
+    expect((await send(100)).status).toBe(202);
+    expect((await send(101)).status).toBe(400);
+    expect((await owner.agent.patch(settings).send({ chatMaxAttachments: 101 })).status).toBe(400);
+    expect((await owner.agent.patch(settings).send({ chatMaxAttachments: 0 })).status).toBe(400);
   });
 });
 

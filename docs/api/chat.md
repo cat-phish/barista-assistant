@@ -39,8 +39,11 @@ error, model, createdAt }`.
 | `POST /photos` | The image as the body, any type, up to 15 MB. `201` with `{ photo: { id, width, height } }`. `400` if it can't be read. |
 | `GET /photos/:photoId` | The image, as WebP. Only the person who uploaded it. |
 
-**Attachments:** `attachments` is up to 10 `{ "kind": "brew" | "bean" |
+**Attachments:** `attachments` is up to the workspace's `chatMaxAttachments`
+(§2 of `workspaces.md`: 1–100, default 50) `{ "kind": "brew" | "bean" |
 "recipe", "id": "uuid" }`, each from this workspace, or the request is a `400`.
+Each reply is sent the latest `chatMaxAttachments` items attached across the
+chat's last 40 messages, each once.
 A message comes back with `attachments: [{ kind, id, label }]`, where `label`
 is what the item was called when attached, and `[]` when there are none. Only
 the reference is kept: each reply reads the item afresh (§9e), so a change or a
