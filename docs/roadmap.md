@@ -2122,6 +2122,45 @@ its own and the planned AI chat can pick a model that sees photos. API:
 - Left out: usage or cost per workspace, a model per job type, and showing the
   model in the journal (it's recorded, not displayed).
 
+## AI chat in Insights (built)
+
+A **Chat** tab in Insights for asking the AI something of your own, with
+brews, beans, recipes, charts and photos attached (`docs/api/chat.md` §12,
+`docs/api/llm-contract.md` §9e). Five branches: `ai-chat`,
+`ai-chat-attachments`, `ai-chat-photos`, `ai-chat-limits`, `ai-chat-export`,
+then the attach picker, pasted photos, the layout and charts.
+
+- **Streamed replies:** the worker holds the keys, so it calls the model and
+  writes to a Redis stream (`chat-reply:<messageId>`); the backend passes it
+  on as server-sent events, resumable with `Last-Event-ID`. One attempt: a
+  retry would repeat text already read, so a failed reply has **Retry**.
+- **Attachments** go through the analysis's summaries (`toLlmInput`,
+  `beanInput`, `recipeInput`), read afresh every turn, so an edit or delete
+  applies. In full: Settings → AI tunes the analysis and suggestions, not
+  chat. Up to the workspace's `chatMaxAttachments` (default 50). The picker
+  narrows brews by period, bean, recipe, brewer and only mine, with
+  **Select all**; charts go as snapshots of their numbers.
+- **Photos** picked, pasted or dropped, resized as bean photos are and kept
+  with the chat; a chat with photos uses the vision model.
+- **Keeping and purging:** limits on size and age for the server and each
+  person (a person's can't exceed the server's), a daily message limit, and
+  purging. Chat can be turned off for a workspace or one member.
+- **Export and import** of a person's chats as a zip.
+- **Decided:**
+  - Chats are private to the person, owners included, and not in workspace
+    backups (a backup would hand them to whoever downloads it): they have
+    their own export.
+  - Read-only: proposals are backlog 19.
+  - The AI sees only what's attached; it can't look things up itself.
+  - Max size is what a person's chats take on disk, messages and photos
+    together; the server's default is 1 GB, and going over removes their
+    oldest chats first.
+  - Purging chat data takes the "I understand" checkbox; deleting one chat
+    doesn't, and has no confirmation.
+  - Leaving or being removed from a workspace deletes your chats there; the
+    dialogs say so.
+- Still to do: a full test in the browser (backlog 18).
+
 ## Copy a chart (built)
 
 Each chart card in Insights has a **Copy** button, so a chart can go into a
@@ -2165,4 +2204,4 @@ table).
   of the two); under other filters, another.
 - Insights' filter bar also got **Reset filters**, shown once a filter is off
   its default.
-- Still to do: **Ask in chat** on a chart card (backlog 19).
+- Still to do: **Ask in chat** on a chart card (backlog 20).
