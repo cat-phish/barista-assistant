@@ -69,6 +69,7 @@ export interface WorkspaceSettings {
   beanReviewRatedOnly: boolean;
   beanReviewBrewers: 'all' | string[]; // ones the bean never used are ignored
   aiChat: boolean; // the Chat tab in Insights (chat.md §12)
+  chatMaxAttachments: number; // per message, and sent per reply (1–MAX_CHAT_ATTACHMENTS)
   readLabels: boolean; // "Fill in with AI" on the bean form (bean-label.md §4d)
   labelWebLookup: boolean; // its "Also look it up on the web" (off by default)
   labelWebContext: LabelWebContext; // default 'high'
@@ -86,6 +87,7 @@ export const SUGGEST_SOURCES = ['bag', 'bagRecipe', 'bagBrewer', 'bean', 'beanRe
 export type SuggestSource = (typeof SUGGEST_SOURCES)[number];
 export const MAX_SUGGEST_BREWS = 20;
 export const MAX_REVIEW_BREWS = 30;
+export const MAX_CHAT_ATTACHMENTS = 100;
 // What else Suggest parameters can suggest (analysis.md §8b); the same list
 // as @barista/shared/schema (lib/suggest.test.ts checks).
 export const SUGGEST_ALTERNATIVES = ['recipe', 'brewer', 'bean'] as const;

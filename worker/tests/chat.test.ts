@@ -44,18 +44,19 @@ describe("chatTurns with photos", () => {
 });
 
 describe("attachedIn", () => {
-  it("takes each item once, from the turns sent, the latest 20", () => {
+  it("takes each item once, from the turns sent, the latest up to the limit", () => {
     const a = (i: number) => ({ kind: "bean" as const, id: `b${i}`, label: `B${i}` });
     const messages = [
       { ...turn(1, "user"), attachments: Array.from({ length: 25 }, (_, i) => a(i)) },
       { ...turn(2, "assistant", "failed") },
       { ...turn(3, "user"), attachments: [a(24)] },
     ];
-    const sent = attachedIn(messages, 4);
+    const sent = attachedIn(messages, 4, 20);
     expect(sent).toHaveLength(20);
     expect(sent.at(-1)!.id).toBe("b24");
     expect(sent.filter((x) => x.id === "b24")).toHaveLength(1);
-    expect(attachedIn(messages, 1)).toEqual([]);
+    expect(attachedIn(messages, 1, 20)).toEqual([]);
+    expect(attachedIn(messages, 4, 50)).toHaveLength(25);
   });
 });
 
@@ -105,6 +106,7 @@ describe("buildChatRequest", () => {
 describe("processChatReply", () => {
   let chatId: string;
   let replyId: string;
+  let workspaceId: string;
   let events: ChatStreamEvent[];
   const publisher: ChatPublisher = { publish: async (_id, event) => void events.push(event) };
   const saved = async () => (await db.select().from(aiChatMessages).where(eq(aiChatMessages.id, replyId)))[0]!;
@@ -114,7 +116,7 @@ describe("processChatReply", () => {
     stream.mockReset();
     events = [];
     const userId = randomUUID();
-    const workspaceId = randomUUID();
+    workspaceId = randomUUID();
     chatId = randomUUID();
     replyId = randomUUID();
     await db.insert(users).values({ id: userId, email: `${userId}@example.com`, passwordHash: "x" });
@@ -149,6 +151,18 @@ describe("processChatReply", () => {
     await processChatReply({ messageId: replyId, photos: [{ messageId: first!.id, base64: "AAA" }] }, publisher);
     expect(stream.mock.calls[0]![1].model).toBe("v");
     expect(await saved()).toMatchObject({ model: "v" });
+  });
+
+  it("sends the workspace's number of attachments, the latest", async () => {
+    await db.update(workspaces).set({ settings: { chatMaxAttachments: 2 } }).where(eq(workspaces.id, workspaceId));
+    const attachments = [0, 1, 2].map((i) => ({ kind: "bean" as const, id: randomUUID(), label: `Bean${i}` }));
+    await db.update(aiChatMessages).set({ attachments }).where(and(eq(aiChatMessages.chatId, chatId), eq(aiChatMessages.position, 1)));
+    stream.mockResolvedValueOnce({ refusal: null, usage: null });
+    await processChatReply({ messageId: replyId, photos: [] }, publisher);
+    const system = JSON.stringify(stream.mock.calls[0]![1].messages[0]);
+    expect(system).not.toContain("Bean0");
+    expect(system).toContain("Bean1");
+    expect(system).toContain("Bean2");
   });
 
   it("keeps what was written when the AI fails part way, and still ends", async () => {

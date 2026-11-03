@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, LABEL_WEB_CONTEXTS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_REST_DAYS, MAX_REVIEW_BREWS, MAX_SUGGEST_BREWS, REMEMBER_KEYS, REPEAT_KEEPS, RATING_STEPS, ROAST_LEVELS, ROAST_SCALES, ROAST_TYPES, type RoastType, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
+import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, LABEL_WEB_CONTEXTS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_CHAT_ATTACHMENTS, MAX_REST_DAYS, MAX_REVIEW_BREWS, MAX_SUGGEST_BREWS, REMEMBER_KEYS, REPEAT_KEEPS, RATING_STEPS, ROAST_LEVELS, ROAST_SCALES, ROAST_TYPES, type RoastType, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
 import { AI_DETAILS } from "@barista/shared/aiDetails";
 import { ROLES } from "./auth/membership.js";
 
@@ -48,6 +48,7 @@ export const workspaceSettingsObject = z
     beanReviewRatedOnly: z.boolean(),
     beanReviewBrewers: z.union([z.literal("all"), z.array(z.uuid()).max(200).refine((ids) => new Set(ids).size === ids.length, "each brewer once")]),
     aiChat: z.boolean(), // docs/api/chat.md §12
+    chatMaxAttachments: z.number().int().min(1).max(MAX_CHAT_ATTACHMENTS),
     readLabels: z.boolean(), // docs/api/bean-label.md §4d
     labelWebLookup: z.boolean(),
     labelWebContext: z.enum(LABEL_WEB_CONTEXTS),

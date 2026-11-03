@@ -2,7 +2,7 @@
 // publishes the reply to a Redis stream as it's written, for the backend to
 // pass on (docs/api/chat.md §12), then saves it on the message.
 import { CHAT_EVENT_FIELD, chatReplyKey, type ChatJobData, type ChatJobPhoto, type ChatStreamEvent } from "@barista/shared/jobs";
-import { aiChatMessages, aiChats, beans, brewLogs, recipes, type ChatAttachment } from "@barista/shared/schema";
+import { aiChatMessages, aiChats, beans, brewLogs, DEFAULT_WORKSPACE_SETTINGS, recipes, withDefaults, workspaces, type ChatAttachment } from "@barista/shared/schema";
 import { UnrecoverableError } from "bullmq";
 import { and, asc, eq } from "drizzle-orm";
 import type { Redis } from "ioredis";
@@ -14,7 +14,6 @@ import { failureMessage, promptFor } from "./processor.js";
 import { beanInput, compact, recipeInput, toLlmInput, type LlmInput } from "./prompt.js";
 
 const HISTORY_MESSAGES = 40;
-const ATTACHMENTS_SENT = 20;
 const NOTHING_HIDDEN = new Set<never>();
 const FLUSH_MS = 50;
 const STREAM_TTL_SECONDS = 300;
@@ -58,11 +57,16 @@ export function chatTurns(messages: readonly StoredTurn[], before: number, photo
     };
   });
 }
-// What those turns attached: each item once, the latest ATTACHMENTS_SENT.
-export function attachedIn(messages: readonly StoredTurn[], before: number): ChatAttachment[] {
+// What those turns attached: each item once, the latest `max` (the
+// workspace's chatMaxAttachments, docs/api/chat.md §12).
+export function attachedIn(messages: readonly StoredTurn[], before: number, max: number): ChatAttachment[] {
   const all = recentTurns(messages, before).flatMap((m) => m.attachments ?? []);
   const unique = [...new Map(all.map((a) => [`${a.kind}:${a.id}`, a])).values()];
-  return unique.slice(-ATTACHMENTS_SENT);
+  return unique.slice(-max);
+}
+async function attachmentLimit(workspaceId: string): Promise<number> {
+  const [row] = await db.select({ settings: workspaces.settings }).from(workspaces).where(eq(workspaces.id, workspaceId));
+  return withDefaults(DEFAULT_WORKSPACE_SETTINGS, row?.settings ?? null).chatMaxAttachments;
 }
 
 // One attachment as the AI sees it, read now and only from this workspace, in
@@ -129,7 +133,7 @@ export async function processChatReply({ messageId, photos }: ChatJobData, publi
     const messages = await db.select().from(aiChatMessages).where(eq(aiChatMessages.chatId, row.chat.id)).orderBy(asc(aiChatMessages.position));
     const ai = await resolveAi(row.chat.workspaceId);
     const custom = await promptFor(row.chat.userId, null);
-    const attached = await loadAttachments(attachedIn(messages, row.message.position), row.chat.workspaceId);
+    const attached = await loadAttachments(attachedIn(messages, row.message.position, await attachmentLimit(row.chat.workspaceId)), row.chat.workspaceId);
     const turns = chatTurns(messages, row.message.position, photos);
     const model = turns.some((t) => typeof t.content !== "string") ? ai.models.vision : ai.models.main;
     const request = buildChatRequest(model, turns, custom, attached);

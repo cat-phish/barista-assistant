@@ -105,8 +105,11 @@ says why the last analysis failed or wasn't made (e.g. the daily cap), else
 ## `GET /api/workspaces/:workspaceId/brew-logs`
 
 - **Auth Required:** `true` (any member)
-- **Query (all optional):** `beanId`, `recipeId` (filters); `limit` (1–100,
-  default 50); `offset` (default 0).
+- **Query (all optional):** `beanId`, `recipeId`, `brewerId` (filters);
+  `mine=1` (only the caller's brews); `from`, `to` (ISO dates, inclusive, on
+  the brew's own local date as Insights counts it: UTC when its
+  `utcOffsetMinutes` is unknown; `from` after `to` is a `400`); `limit`
+  (1–100, default 50); `offset` (default 0).
 - **Success (`200 OK`):** `{ "brewLogs": [ ...brewLog ], "total": 123 }`, newest
   `timestamp` first. `total` counts all matches, ignoring `limit`/`offset`.
 - **Errors:** `400` invalid query.
