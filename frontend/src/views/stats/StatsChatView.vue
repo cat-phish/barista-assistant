@@ -2,22 +2,20 @@
 // Insights → Chat (docs/api/chat.md §12): your own conversations with the AI,
 // replies appearing as they're written. Nobody else in the workspace sees them.
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import { beansApi } from '../../api/beans';
-import { brewLogsApi } from '../../api/brews';
-import { chatsApi, type Chat, type ChatAttachment, type ChatAttachmentKind, type ChatMessage, type ChatPhoto } from '../../api/chats';
+import { chatsApi, type Chat, type ChatAttachment, type ChatMessage, type ChatPhoto } from '../../api/chats';
 import { ApiError } from '../../api/client';
-import { recipesApi } from '../../api/recipes';
+import ChatAttachChips from '../../components/ChatAttachChips.vue';
+import ChatAttachDialog from '../../components/ChatAttachDialog.vue';
+import { usePreferences } from '../../composables/usePreferences';
+import { attachKey } from '../../lib/chatAttach';
 import { droppedImages, pastedImages } from '../../lib/pastedImages';
 import { useWorkspaceStore } from '../../stores/workspace';
 
 const MESSAGE_MAX = 4000;
-const ATTACHMENTS_MAX = 10;
 const PHOTOS_MAX = 4;
-const RECENT_BREWS = 50;
-
-const KIND_LABELS: Record<ChatAttachmentKind, string> = { brew: 'Brew', bean: 'Bean', recipe: 'Recipe' };
 
 const workspaces = useWorkspaceStore();
+const { settings } = usePreferences();
 const workspaceId = computed(() => workspaces.current?.id ?? null);
 
 const chats = ref<Chat[]>([]);
@@ -29,36 +27,17 @@ const canSend = ref(true);
 const error = ref('');
 const thread = ref<HTMLElement | null>(null);
 
-// What the next message attaches, and the picker's choices.
+// What the next message attaches, picked in ChatAttachDialog, up to the
+// workspace's limit (docs/api/chat.md §12).
 const attachments = ref<ChatAttachment[]>([]);
 const picking = ref(false);
-const pickKind = ref<ChatAttachmentKind>('brew');
-const pickId = ref('');
-const options = ref<Record<ChatAttachmentKind, Array<{ id: string; label: string }>>>({ brew: [], bean: [], recipe: [] });
-const choices = computed(() => options.value[pickKind.value].filter((o) => !attachments.value.some((a) => a.kind === pickKind.value && a.id === o.id)));
-
-async function openPicker() {
-  picking.value = true;
-  if (!workspaceId.value) return;
-  try {
-    const [beans, recipes, brews] = await Promise.all([beansApi.list(workspaceId.value), recipesApi.list(workspaceId.value), brewLogsApi.list(workspaceId.value, { limit: RECENT_BREWS })]);
-    options.value = {
-      bean: beans.beans.map((b) => ({ id: b.id, label: `${b.roasterName} ${b.beanName}` })),
-      recipe: recipes.recipes.map((r) => ({ id: r.id, label: r.name })),
-      brew: brews.brewLogs.map((b) => ({ id: b.id, label: `${b.bean.beanName}, ${new Date(b.timestamp).toLocaleDateString()}` })),
-    };
-  } catch (err) {
-    say(err);
-  }
-}
-function attach() {
-  const choice = choices.value.find((o) => o.id === pickId.value);
-  if (!choice || attachments.value.length >= ATTACHMENTS_MAX) return;
-  attachments.value = [...attachments.value, { kind: pickKind.value, ...choice }];
-  pickId.value = '';
+const attachMax = computed(() => settings.value.chatMaxAttachments ?? 50);
+function attachPicked(picked: ChatAttachment[]) {
+  attachments.value = picked;
+  picking.value = false;
 }
 function detach(item: ChatAttachment) {
-  attachments.value = attachments.value.filter((a) => a !== item);
+  attachments.value = attachments.value.filter((a) => attachKey(a) !== attachKey(item));
 }
 
 // Photos go up as they're picked, pasted or dropped, and are sent with the
@@ -273,9 +252,7 @@ onBeforeUnmount(stop);
       <div ref="thread" class="thread" aria-live="polite">
         <p v-if="!messages.length" class="muted">Ask about your coffee. Only you can see your chats.</p>
         <div v-for="m in messages" :key="m.id" class="message" :class="m.role">
-          <ul v-if="m.attachments.length" class="chips">
-            <li v-for="a in m.attachments" :key="`${a.kind}:${a.id}`" class="chip">{{ KIND_LABELS[a.kind] }}: {{ a.label }}</li>
-          </ul>
+          <ChatAttachChips :attachments="m.attachments" class="message-chips" />
           <div v-if="m.photos.length" class="photos">
             <img v-for="p in m.photos" :key="p.id" :src="photoUrl(p.id)" :width="p.width" :height="p.height" alt="Photo you sent" loading="lazy" />
           </div>
@@ -286,12 +263,7 @@ onBeforeUnmount(stop);
       </div>
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
       <div v-if="workspaces.canEdit && canSend" class="attachments">
-        <ul v-if="attachments.length" class="chips">
-          <li v-for="a in attachments" :key="`${a.kind}:${a.id}`" class="chip">
-            {{ KIND_LABELS[a.kind] }}: {{ a.label }}
-            <button type="button" class="btn-link" :aria-label="`Remove ${a.label}`" @click="detach(a)">×</button>
-          </li>
-        </ul>
+        <ChatAttachChips :attachments="attachments" removable @remove="detach" />
         <div v-if="photos.length" class="photos">
           <span v-for="p in photos" :key="p.id" class="pending-photo">
             <img :src="photoUrl(p.id)" :width="p.width" :height="p.height" alt="Photo to send" />
@@ -302,22 +274,8 @@ onBeforeUnmount(stop);
           {{ uploading ? 'Adding…' : 'Add a photo' }}
           <input type="file" accept="image/*" multiple class="visually-hidden" :disabled="uploading" @change="addPhotos" />
         </label>
-        <button v-if="!picking" type="button" class="btn-link" @click="openPicker">Attach a brew, bean or recipe</button>
-        <div v-else class="picker">
-          <label for="chat-kind" class="visually-hidden">Attach what</label>
-          <select id="chat-kind" v-model="pickKind" @change="pickId = ''">
-            <option value="brew">Brew</option>
-            <option value="bean">Bean</option>
-            <option value="recipe">Recipe</option>
-          </select>
-          <label for="chat-pick" class="visually-hidden">Which one</label>
-          <select id="chat-pick" v-model="pickId">
-            <option value="">Choose…</option>
-            <option v-for="o in choices" :key="o.id" :value="o.id">{{ o.label }}</option>
-          </select>
-          <button type="button" class="btn-secondary" :disabled="!pickId || attachments.length >= ATTACHMENTS_MAX" @click="attach">Attach</button>
-          <button type="button" class="btn-link" @click="picking = false">Done</button>
-        </div>
+        <button type="button" class="btn-link" @click="picking = true">{{ attachments.length ? 'Change attachments' : 'Attach brews, beans or recipes' }}</button>
+        <ChatAttachDialog :open="picking" :selected="attachments" :max="attachMax" @close="picking = false" @done="attachPicked" />
       </div>
       <form v-if="workspaces.canEdit && canSend" class="composer" @submit.prevent="send">
         <label for="chat-message" class="visually-hidden">Message</label>
@@ -400,21 +358,8 @@ onBeforeUnmount(stop);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  margin: 0 0 var(--space-1);
-  padding: 0;
-  list-style: none;
-}
-.chip {
-  padding: 0 var(--space-2);
-  border: 1px solid var(--brand-line);
-  border-radius: 999px;
-  background: var(--surface);
-  font-size: 0.85rem;
-  overflow-wrap: anywhere;
+.message-chips {
+  margin-bottom: var(--space-1);
 }
 .photos {
   display: flex;
@@ -437,16 +382,6 @@ onBeforeUnmount(stop);
 .photo-add {
   margin-right: var(--space-3);
   cursor: pointer;
-}
-.picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: center;
-}
-.picker select {
-  min-width: 0;
-  max-width: 100%;
 }
 /* Files dragged over the conversation: dropping them adds photos. */
 .chat-main.dropping {
