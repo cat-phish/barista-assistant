@@ -68,6 +68,7 @@ import {
   menuItems,
   menuSections,
   notificationChannels,
+  pushSubscriptions,
   prepToolBrewers,
   prepTools,
   recipeGrindSettings,
@@ -190,13 +191,14 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
   { table: llmAnalyses, scope: "brewLogId" },
   { table: parameterSuggestions, scope: "beanId" },
 ];
-// Not in a backup: people, their memberships and the server's own settings
+// Not in a backup: people (with their notification channels and Web Push
+// devices), their memberships and the server's own settings
 // belong to the server, not the workspace, and the workspace row is the
 // file's own "workspace" block, as is its flavor lexicon (flavorLexicon).
 // analysis_requests is queue state (when an automatic analysis is due, why
 // one failed), meaningless without the queue. AI chats are private to the
 // person (docs/api/chat.md §12), and whoever has a backup could read them.
-export const NOT_BACKED_UP: readonly MySqlTable[] = [users, notificationChannels, workspaces, workspaceMembers, serverSettings, analysisRequests, flavorLexicons, workspaceAiConfigs, aiChats, aiChatMessages, aiChatPhotos];
+export const NOT_BACKED_UP: readonly MySqlTable[] = [users, notificationChannels, pushSubscriptions, workspaces, workspaceMembers, serverSettings, analysisRequests, flavorLexicons, workspaceAiConfigs, aiChats, aiChatMessages, aiChatPhotos];
 
 // Columns that only hold one of a list (varchar in the database).
 const ENUMS: Record<string, readonly string[]> = {

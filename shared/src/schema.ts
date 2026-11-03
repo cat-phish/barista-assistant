@@ -294,6 +294,23 @@ export const notificationChannels = mysqlTable(
   })
 );
 
+// 1c. Web Push devices (docs/api/notifications.md §1b, "Web Push"): one row
+// per subscribed device, each switchable. endpoint_hash (SHA-256 hex of the
+// endpoint) is the unique key, since the endpoint is too long to index.
+export const pushSubscriptions = mysqlTable("push_subscriptions", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  userId: varchar("user_id", { length: 36 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  endpoint: varchar("endpoint", { length: 1000 }).notNull(),
+  endpointHash: varchar("endpoint_hash", { length: 64 }).notNull().unique(),
+  p256dh: varchar("p256dh", { length: 200 }).notNull(),
+  auth: varchar("auth", { length: 200 }).notNull(),
+  label: varchar("label", { length: 60 }).notNull(),
+  enabled: boolean("enabled").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // 2. Workspaces (Coffee Bars)
 export const workspaces = mysqlTable("workspaces", {
   id: varchar("id", { length: 36 }).primaryKey(),
@@ -1748,6 +1765,7 @@ export const analysisRequests = mysqlTable("analysis_requests", {
 // Inferred row types for API payloads
 export type User = typeof users.$inferSelect;
 export type NotificationChannel = typeof notificationChannels.$inferSelect;
+export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Workspace = typeof workspaces.$inferSelect;
 export type NewWorkspace = typeof workspaces.$inferInsert;

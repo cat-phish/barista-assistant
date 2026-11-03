@@ -680,6 +680,13 @@
       "when": 1793688353319,
       "tag": "0096_chat_proposals",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "5",
+      "when": 1793725981824,
+      "tag": "0097_push_subscriptions",
+      "breakpoints": true
     }
   ]
 }
