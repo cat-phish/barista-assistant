@@ -963,20 +963,23 @@ How pages, lists and tables fit the screen.
 - **Open questions:**
   - Should the selected category scroll into view when the page opens?
 
-### 41. Resizable table columns
+### 41. Hide and reorder table columns
 
 - **Status:** idea
-- **Why:** list pages like Beans are tables whose columns size themselves.
-  A long bean or roaster name squeezes the others, and a column you care
-  about can't be made wider.
+- **Why:** list tables can be resized now (roadmap, "Resizable table
+  columns"), but every column always shows in its fixed place. Someone who
+  never looks at a bean's process or caf/decaf can't drop it to make room,
+  or move Stock next to the name.
 - **Approach:**
-  - Drag a header's edge to resize its column; double-click to fit it.
-  - Widths remembered per list on the device, as the sort is
-    (`recallView` in `lib/listSort.ts`), with a way to reset them.
-  - Desktop only: on phones the tables already drop to fewer columns.
-- **Size:** S–M
+  - A column menu on the header (or a "Columns" control beside "Reset
+    columns") with a checkbox per column and a way to move it.
+  - Remembered per list on the device with the widths
+    (`lib/columnWidths.ts`); the name column always shows.
+  - Desktop only, like resizing: phones already drop to fewer columns.
+- **Size:** M (each view's rows are hand-written cells, so hiding or moving
+  one means building the rows from a column list).
 - **Depends on:** nothing.
 - **Open questions:**
-  - Which lists: Beans first, then all the table pages (Recipes, Grinders,
-    Brewers, Drinks, Ingredients…) through a shared piece?
-  - Should hiding and reordering columns come with it, or stay out?
+  - Should a column hidden in a workspace's field settings (Settings →
+    Fields) drop out of the table too?
+  - Phones: should hiding also apply to the second line of a row there?

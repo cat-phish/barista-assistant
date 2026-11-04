@@ -13,6 +13,8 @@ import type { Drink, Ingredient, IngredientType } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ListControls from '../components/ListControls.vue';
 import ListDataBar from '../components/ListDataBar.vue';
+import ColumnResizers from '../components/ColumnResizers.vue';
+import { useColumnWidths } from '../lib/columnWidths';
 import { useSelection } from '../composables/useSelection';
 import MenuTabs from '../components/MenuTabs.vue';
 import { INGREDIENT_TYPES, ingredientUsage } from '../lib/drinks';
@@ -56,6 +58,8 @@ async function load(): Promise<void> {
 
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `ingredients.${what}.${workspaces.current?.id ?? ''}`;
+// Column widths, resizable from the header (ColumnResizers).
+const colWidths = useColumnWidths(() => viewKey('columns'), ['minmax(0, 2fr)', 'minmax(0, 1fr)', 'minmax(0, 1fr)', '5.5rem']);
 const ALL = 'all';
 const UNUSED = 'unused';
 const TYPES = Object.keys(INGREDIENT_TYPES) as IngredientType[];
@@ -140,9 +144,11 @@ const selection = useSelection();
         <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="ingredients" filter-label="Show" :filter-options="filterOptions" v-model:show-archived="showArchived" :archived-count="archivedCount" />
         <ListDataBar list="ingredients" noun="ingredients" :selection="selection" :visible-ids="shown.map((x) => x.id)" @imported="load()" />
         <p v-if="showArchived" class="muted small">Archived ingredients can't be added to drinks; drinks that have them keep them.</p>
+        <p v-if="colWidths.resized && shown.length" class="columns-reset"><button class="btn-link small" type="button" @click="colWidths.reset()">Reset columns</button></p>
         <p v-if="shown.length === 0" class="card empty">Nothing here yet.</p>
-        <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) 5.5rem">
+        <div v-else class="data-table" :style="{ '--cols': colWidths.template }">
           <div class="data-row data-head">
+            <ColumnResizers :state="colWidths" :labels="[...['name', 'type', 'used'].map((c) => columns[c]!.label), 'Added']" />
             <button v-for="c in ['name', 'type', 'used']" :key="c" class="data-th" type="button" :aria-label="sortLabel(sort, c, columns[c]!.label)" @click="sort = toggleHeader(sort, c, columns)">
               {{ columns[c]!.label }} <span aria-hidden="true">{{ sortArrow(sort, c) }}</span>
             </button>

@@ -14,6 +14,8 @@ import AppHeader from '../components/AppHeader.vue';
 import DrinkCategoriesPanel from '../components/DrinkCategoriesPanel.vue';
 import ListControls from '../components/ListControls.vue';
 import ListDataBar from '../components/ListDataBar.vue';
+import ColumnResizers from '../components/ColumnResizers.vue';
+import { useColumnWidths } from '../lib/columnWidths';
 import { useSelection } from '../composables/useSelection';
 import MenuTabs from '../components/MenuTabs.vue';
 import { ingredientLine, nestDrinks, type NestedDrink } from '../lib/drinks';
@@ -33,6 +35,8 @@ const error = ref('');
 
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `drinks.${what}.${workspaces.current?.id ?? ''}`;
+// Column widths, resizable from the header (ColumnResizers).
+const colWidths = useColumnWidths(() => viewKey('columns'), ['minmax(0, 2fr)', 'minmax(0, 1.3fr)', 'minmax(0, 1.2fr)', '5.5rem']);
 const ALL = 'all';
 const columns: SortColumns<Drink> = { name: nameColumn(), added: addedColumn() };
 const sortChoices = sortColumnOptions(columns);
@@ -142,9 +146,11 @@ const selection = useSelection();
       <ListControls v-model:filter="categoryFilter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="drinks" filter-label="Category" :filter-options="categoryOptions" v-model:show-archived="showArchived" :archived-count="archivedCount" />
       <ListDataBar list="drinks" noun="drinks" :selection="selection" :visible-ids="shown.map((x) => x.drink.id)" @imported="load()" />
       <p v-if="showArchived" class="muted small">Archived drinks are hidden when brewing; past brews still show them, and so does the public menu if it has them.</p>
+      <p v-if="colWidths.resized && shown.length" class="columns-reset"><button class="btn-link small" type="button" @click="colWidths.reset()">Reset columns</button></p>
       <p v-if="shown.length === 0" class="card empty">No drinks in {{ filterName }} yet.</p>
-      <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.2fr) 5.5rem">
+      <div v-else class="data-table" :style="{ '--cols': colWidths.template }">
         <div class="data-row data-head">
+          <ColumnResizers :state="colWidths" :labels="['Name', 'Category', 'Method', 'Added']" />
           <button class="data-th" type="button" :aria-label="sortLabel(sort, 'name', 'Name')" @click="sort = toggleHeader(sort, 'name', columns)">
             Name <span aria-hidden="true">{{ sortArrow(sort, 'name') }}</span>
           </button>

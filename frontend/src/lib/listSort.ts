@@ -130,3 +130,10 @@ export function rememberView(key: string, value: string): void {
     // Not remembering is fine.
   }
 }
+export function forgetView(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Nothing remembered, nothing to forget.
+  }
+}

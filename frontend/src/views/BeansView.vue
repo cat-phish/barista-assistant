@@ -18,6 +18,7 @@ import BeanReviewDialog from '../components/BeanReviewDialog.vue';
 import BrewAverageHint from '../components/BrewAverageHint.vue';
 import RatingInput from '../components/RatingInput.vue';
 import RatingStars from '../components/RatingStars.vue';
+import ColumnResizers from '../components/ColumnResizers.vue';
 import {
   beanFilter,
   beanFilterOptions,
@@ -41,6 +42,7 @@ import {
   type BeanSortColumn,
 } from '../lib/beans';
 import { formatAdded, formatDay, formatListDay, localDateInput, toDateInput } from '../lib/format';
+import { useColumnWidths } from '../lib/columnWidths';
 import { isSortKey, recallView, rememberView, sortArrow, sortBy, sortLabel, sortColumnOptions, toggleHeader } from '../lib/listSort';
 import { reviewChange } from '../lib/beanReview';
 import { effectiveRoastAge } from '../lib/roastAge';
@@ -296,8 +298,9 @@ const HEADERS: Array<{ id: BeanSortColumn; text: string; title?: string; class?:
   { id: 'added', text: 'Added' },
   { id: 'rating', text: 'Rating', class: 'end' },
 ];
-const TABLE_COLS =
-  'minmax(0, 1.6fr) 1.5rem minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.1fr) 4.5rem 3.25rem 3.5rem 4rem 4.5rem 5.5rem';
+const TABLE_COLS = ['minmax(0, 1.6fr)', '1.5rem', 'minmax(0, 1.2fr)', 'minmax(0, 1fr)', 'minmax(0, 1.1fr)', '4.5rem', '3.25rem', '3.5rem', '4rem', '4.5rem', '5.5rem'];
+// Resizable from the header (ColumnResizers); the same widths on every tab.
+const colWidths = useColumnWidths(() => `beans.columns.${workspaces.current?.id ?? ''}`, TABLE_COLS);
 
 // "12 d" off roast, frozen days excluded; "–" without a roast date.
 function ageCell(bean: Bean): string {
@@ -487,9 +490,11 @@ const selection = useSelection();
 
         <ListDataBar list="beans" noun="beans" :selection="selection" :visible-ids="shown.map((x) => x.id)" @imported="load()" />
         <p v-if="rowError" class="form-error" role="alert">{{ rowError }}</p>
+        <p v-if="colWidths.resized && shown.length" class="columns-reset"><button class="btn-link small" type="button" @click="colWidths.reset()">Reset columns</button></p>
         <p v-if="shown.length === 0" class="card empty">No {{ filterName }} {{ archived ? 'archived ' : '' }}beans.</p>
-        <div v-else class="data-table" :style="{ '--cols': TABLE_COLS }">
+        <div v-else class="data-table" :style="{ '--cols': colWidths.template }">
           <div class="data-row data-head">
+            <ColumnResizers :state="colWidths" :labels="HEADERS.map((h) => h.title ?? h.text)" />
             <button
               v-for="h in HEADERS"
               :key="h.id"
