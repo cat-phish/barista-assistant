@@ -10,6 +10,8 @@ import type { Brewer, Recipe } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ListControls from '../components/ListControls.vue';
 import ListDataBar from '../components/ListDataBar.vue';
+import ColumnResizers from '../components/ColumnResizers.vue';
+import { useColumnWidths } from '../lib/columnWidths';
 import { useSelection } from '../composables/useSelection';
 import MenuTabs from '../components/MenuTabs.vue';
 import { formatAdded, formatDoseLine, formatGrams, formatGrind, formatTime } from '../lib/format';
@@ -28,6 +30,8 @@ const error = ref('');
 
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `recipes.${what}.${workspaces.current?.id ?? ''}`;
+// Column widths, resizable from the header (ColumnResizers).
+const colWidths = useColumnWidths(() => viewKey('columns'), ['minmax(0, 2fr)', 'minmax(0, 1.1fr)', 'minmax(0, 0.9fr)', 'minmax(0, 1.2fr)', '5.5rem']);
 const ALL = 'all';
 const columns: SortColumns<Recipe> = {
   name: nameColumn(),
@@ -138,9 +142,11 @@ const selection = useSelection();
       <ListControls v-model:filter="brewerFilter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="recipes" filter-label="Brewer" :filter-options="brewerOptions" v-model:show-archived="showArchived" :archived-count="archivedCount" />
       <ListDataBar list="recipes" noun="recipes" :selection="selection" :visible-ids="shown.map((x) => x.id)" @imported="load()" />
       <p v-if="showArchived" class="muted small">Archived recipes are hidden when brewing and in drink forms; past brews still show them.</p>
+      <p v-if="colWidths.resized && shown.length" class="columns-reset"><button class="btn-link small" type="button" @click="colWidths.reset()">Reset columns</button></p>
       <p v-if="shown.length === 0" class="card empty">No recipes for {{ filterName }} yet.</p>
-      <div v-else class="data-table" style="--cols: minmax(0, 2fr) minmax(0, 1.1fr) minmax(0, 0.9fr) minmax(0, 1.2fr) 5.5rem">
+      <div v-else class="data-table" :style="{ '--cols': colWidths.template }">
         <div class="data-row data-head">
+          <ColumnResizers :state="colWidths" :labels="['Name', 'Brewer', 'Style', 'Dose', 'Added']" />
           <button class="data-th" type="button" :aria-label="sortLabel(sort, 'name', 'Name')" @click="sort = toggleHeader(sort, 'name', columns)">
             Name <span aria-hidden="true">{{ sortArrow(sort, 'name') }}</span>
           </button>

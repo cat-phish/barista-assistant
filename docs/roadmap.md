@@ -2278,3 +2278,28 @@ stock at the top.
   worked out in the client from `inventoryWeightGrams` and `frozen`.
 - The old table also showed on the Overview whenever any Beans chart was
   pinned there; as a chart card it only shows when pinned.
+
+## Resizable table columns (built)
+
+Backlog item 41, branch `resizable-columns`. The list tables (Beans,
+Recipes, Grinders, Brewers, Drinks, Ingredients, Water profiles) have
+resizable columns on a wide screen.
+
+- **Resizing:** drag the line at a header's right edge; double-click it to
+  fit the column's widest cell; with the line focused, the arrow keys step
+  16 px (64 with Shift). The last column keeps its width (it's the table's
+  edge). Widths run from 40 to 800 px.
+- **How:** one shared piece, `ColumnResizers.vue` with `useColumnWidths`
+  (`lib/columnWidths.ts`). The handles sit over the header row on the
+  table's own `--cols` grid, so the sort buttons are unchanged. A resized
+  column becomes `minmax(40px, <width>px)` and the flexible ones keep a
+  40 px floor, so on a narrower window the resized ones give way first and
+  no column disappears.
+- **Remembered** per list and workspace on the device, like the sort
+  (`<list>.columns.<workspace>`; Beans shares one set across its tabs). A
+  saved set that no longer matches the table's columns is ignored.
+- **Reset columns:** a link above the table, shown once any column on it
+  has been resized.
+- **Phones:** unchanged; the header row and the handles are hidden there.
+- Hiding and reordering columns were left out: backlog 41.
+

@@ -423,6 +423,7 @@ a {
   background: var(--brand-tint);
 }
 .data-head {
+  position: relative; /* ColumnResizers sits over it */
   font-size: 0.8rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -473,8 +474,15 @@ button.data-th {
   justify-content: flex-end;
   margin: 0 calc(-1 * var(--space-2)) calc(-1 * var(--space-2));
 }
+/* "Reset columns", above a table with resized columns (ColumnResizers). */
+.columns-reset {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0;
+}
 @media (max-width: 560px) {
-  .data-head {
+  .data-head,
+  .columns-reset {
     display: none;
   }
   /* Line 1: name and date; line 2: the other cells, joined by "·". */

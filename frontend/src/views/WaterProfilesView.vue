@@ -11,6 +11,8 @@ import { waterProfilesApi } from '../api/waterProfiles';
 import AppHeader from '../components/AppHeader.vue';
 import ListControls from '../components/ListControls.vue';
 import ListDataBar from '../components/ListDataBar.vue';
+import ColumnResizers from '../components/ColumnResizers.vue';
+import { useColumnWidths } from '../lib/columnWidths';
 import { useSelection } from '../composables/useSelection';
 import SetupTabs from '../components/SetupTabs.vue';
 import { formatAdded } from '../lib/format';
@@ -38,6 +40,8 @@ const error = ref('');
 
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `water.${what}.${workspaces.current?.id ?? ''}`;
+// Column widths, resizable from the header (ColumnResizers).
+const colWidths = useColumnWidths(() => viewKey('columns'), ['minmax(0, 2fr)', 'minmax(0, 0.7fr)', 'minmax(0, 0.7fr)', 'minmax(0, 0.7fr)', '5.5rem']);
 const figureColumn = (label: string, value: (p: WaterProfile) => number | null): SortColumn<WaterProfile> => ({
   label, value, asc: 'Lowest first', desc: 'Highest first',
 });
@@ -153,9 +157,11 @@ const selection = useSelection();
         <ListControls v-model:sort="sort" :sort-columns="sortChoices" id-prefix="water" v-model:show-archived="showArchived" :archived-count="archivedCount" />
         <ListDataBar list="water_profiles" noun="water profiles" :selection="selection" :visible-ids="shown.map((x) => x.id)" @imported="load()" />
         <p v-if="showArchived" class="muted small">Archived water is hidden when brewing; past brews still show it.</p>
+        <p v-if="colWidths.resized && shown.length" class="columns-reset"><button class="btn-link small" type="button" @click="colWidths.reset()">Reset columns</button></p>
         <p v-if="shown.length === 0" class="card empty">No active water profiles.</p>
-        <div v-else class="data-table" style="--cols: minmax(0, 2fr) repeat(3, minmax(0, 0.7fr)) 5.5rem">
+        <div v-else class="data-table" :style="{ '--cols': colWidths.template }">
           <div class="data-row data-head">
+            <ColumnResizers :state="colWidths" :labels="[...['name', 'tds', 'gh', 'kh'].map((c) => columns[c]!.label), 'Added']" />
             <button v-for="c in ['name', 'tds', 'gh', 'kh']" :key="c" class="data-th" type="button" :aria-label="sortLabel(sort, c, columns[c]!.label)" @click="sort = toggleHeader(sort, c, columns)">
               {{ columns[c]!.label }} <span aria-hidden="true">{{ sortArrow(sort, c) }}</span>
             </button>
