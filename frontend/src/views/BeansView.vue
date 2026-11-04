@@ -44,6 +44,7 @@ import { formatAdded, formatDay, formatListDay, localDateInput, toDateInput } fr
 import { isSortKey, recallView, rememberView, sortArrow, sortBy, sortLabel, sortColumnOptions, toggleHeader } from '../lib/listSort';
 import { reviewChange } from '../lib/beanReview';
 import { effectiveRoastAge } from '../lib/roastAge';
+import { formatWeight } from '../lib/stats';
 import { usePreferences } from '../composables/usePreferences';
 import { useAiAvailable } from '../composables/useAiAvailable';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -66,6 +67,12 @@ const error = ref('');
 const tab = computed(() => (props.archived ? 'archived' : 'active'));
 const inTab = computed(() => beans.value.filter((b) => (b.archivedAt !== null) === !!props.archived));
 const archivedCount = computed(() => beans.value.filter((b) => b.archivedAt !== null).length);
+// Active tab: the stock on hand, and how much of it is in the freezer.
+const stock = computed(() => {
+  const grams = (list: Bean[]) => list.reduce((n, b) => n + b.inventoryWeightGrams, 0);
+  const frozen = grams(inTab.value.filter((b) => b.frozen));
+  return { total: grams(inTab.value), frozen, unfrozen: grams(inTab.value) - frozen };
+});
 
 // View choices, remembered per workspace and tab. The default matches the
 // old list (by roaster).
@@ -459,6 +466,12 @@ const selection = useSelection();
       </div>
 
       <template v-else>
+        <dl v-if="!archived" class="stock" aria-label="Coffee in stock">
+          <div><dt>Stock</dt><dd>{{ formatWeight(stock.total) }}</dd></div>
+          <div><dt>Unfrozen</dt><dd>{{ formatWeight(stock.unfrozen) }}</dd></div>
+          <div><dt>Frozen</dt><dd>{{ formatWeight(stock.frozen) }}</dd></div>
+        </dl>
+
         <section v-if="unrated.length && workspaces.canEdit" class="card rate-prompt" aria-labelledby="rate-prompt-title">
           <h2 id="rate-prompt-title">{{ unrated.length === 1 ? '1 archived bean needs' : `${unrated.length} archived beans need` }} a rating</h2>
           <p class="muted small">How it was helps you decide whether to buy it again.</p>
@@ -830,6 +843,25 @@ p {
 .notes {
   font-size: 0.9rem;
   white-space: pre-line;
+}
+.stock {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-2);
+  font-size: 0.9rem;
+}
+.stock div {
+  display: flex;
+  gap: var(--space-1);
+}
+.stock dt {
+  color: var(--text-muted);
+}
+.stock dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 .rate-prompt {
   display: flex;
