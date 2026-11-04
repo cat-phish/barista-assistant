@@ -236,7 +236,8 @@ Sends "Test from Barista-Assistant" to the device, enabled or not.
   that's unknown). It goes to whoever logged the roast, only with
   `restReminders` on and an enabled channel. The reply's `restReminder`
   is `queued`, `off` or `unavailable`, and is left out when it's ready
-  already.
+  already: past 8:00 on its ready day, or `restDays` 0 (ready on its roast
+  date, also when logged before 8:00).
 - **Moving:** an edit to `roastedAt`, `utcOffsetMinutes` or `restDays`
   replaces the waiting job with one for the new day (or drops it when it's
   ready now); deleting the roast drops it.

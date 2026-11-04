@@ -213,6 +213,19 @@ describe("resting roasts", () => {
     expect(await reminderQueue.getJob(restReminderJobId(r.id))).toBeUndefined();
   });
 
+  it("no rest is ready on the roast date, also when logged before 8:00 local", async () => {
+    const { owner, green, roast } = await setup();
+    await owner.agent.put(`${NOTIFY}/ntfy`).send({ config: { topic: "coffee" } });
+    // An offset that puts now at about 00:30 local, whatever the time in UTC.
+    const now = new Date();
+    let offset = 30 - (now.getUTCHours() * 60 + now.getUTCMinutes());
+    if (offset < -720) offset += 1440;
+    const res = await roast({ greenCoffeeId: await green(), greenGrams: 100, roastedGrams: 85, roastType: "filter", roastedAt: now.toISOString(), utcOffsetMinutes: offset, restDays: 0 });
+    expect(res.status).toBe(201);
+    expect(res.body).not.toHaveProperty("restReminder");
+    expect(await reminderQueue.getJob(restReminderJobId(res.body.roast.id))).toBeUndefined();
+  });
+
   it("is off without a channel or with rest reminders off; an old roast is ready already", async () => {
     const { owner, green, roast } = await setup();
     const guji = await green();

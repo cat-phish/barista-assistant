@@ -88,12 +88,14 @@ export function restReadyAt(r: Resting): Date {
 
 // A roast that's still resting: remind its roaster the morning it's ready
 // (docs/api/notifications.md §1b), replacing any reminder already waiting.
-// Undefined when it's ready already (any waiting reminder is dropped); off
-// with rest reminders switched off or no enabled channel.
+// Undefined when it's ready already (any waiting reminder is dropped): past
+// 8:00 on its ready day, or no rest at all, so it was ready on its roast
+// date even when logged before 8:00. Off with rest reminders switched off or
+// no enabled channel.
 export async function remindWhenRested(userId: string | null, roast: Resting & { id: string }): Promise<ReminderOutcome | undefined> {
   const delayMs = restReadyAt(roast).getTime() - Date.now();
   try {
-    if (delayMs <= 0 || !userId) {
+    if (roast.restDays <= 0 || delayMs <= 0 || !userId) {
       await cancelRestReminder(roast.id);
       return undefined;
     }
