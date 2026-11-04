@@ -2042,7 +2042,7 @@ README "Install it on your phone".
 - Decided: one way to run it in Docker, the build; no dev-server container
   or override (live reload was already off in Docker, and `npm run dev` on
   the host still has it). Internal CA over a domain or Tailscale: no
-  account, works offline on the LAN. Web Push was backlog item 30 (built: "Web Push from the installed app"); testing on phones is item 38.
+  account, works offline on the LAN. Web Push was backlog item 30 (built: "Web Push from the installed app"); testing on phones is item 37.
 
 ## Caffeine estimate (built)
 
@@ -2259,3 +2259,22 @@ one more channel beside ntfy and the others (`docs/api/notifications.md`
   notification and, on a tap, has an open window go to the link through the
   router (so a brew in progress asks before leaving), else opens one.
 - Not in a workspace backup (`NOT_BACKED_UP`), like the other channels.
+
+## Coffee used and stock left as a chart card (built)
+
+Backlog item 22, branch `beans-usage-card`. The plain table at the end of
+Insights → Beans is now a chart card (`beans.usage`), so it can be pinned to
+the Overview and attached in chat like the others; the Beans list shows the
+stock at the top.
+
+- **Chart:** a horizontal bar per bean, used and left side by side, the 10
+  most used and the rest as "Other" (as Varieties does). The table view lists
+  every bean in grams; an archived bean says "(archived)" and has "–" left.
+  The table's links to the bean editor went with it.
+- **Sorting:** not added; most used first, as before. ChartCard tables still
+  don't sort.
+- **Beans list:** a compact line above the Active tab's list: the stock in
+  hand, split into unfrozen and frozen (beans with an open freeze period),
+  worked out in the client from `inventoryWeightGrams` and `frozen`.
+- The old table also showed on the Overview whenever any Beans chart was
+  pinned there; as a chart card it only shows when pinned.

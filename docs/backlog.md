@@ -27,13 +27,13 @@ and fix the references.
 - B. Brewing & logging: 4–9
 - C. Recipes: 10–11
 - D. AI suggestions: 12–15
-- E. Insights: 16–22
-- F. Bar & menu: 23–25
-- G. Home roasting: 26–35
-- H. Accounts: 36–37
-- I. Deployment & the app: 38–39
-- J. Backups: 40
-- K. Lists & layout: 41–42
+- E. Insights: 16–21
+- F. Bar & menu: 22–24
+- G. Home roasting: 25–34
+- H. Accounts: 35–36
+- I. Deployment & the app: 37–38
+- J. Backups: 39
+- K. Lists & layout: 40–41
 
 ---
 
@@ -122,7 +122,7 @@ Where the app's choices live, and what you can switch on, off or take out.
   - Move the ones that are wrong, with a data migration, and make Settings
     say which kind each one is.
 - **Size:** S to review; each move S–M.
-- **Depends on:** nothing; do it before 40, since where a setting lives
+- **Depends on:** nothing; do it before 39, since where a setting lives
   decides how it's backed up, and the audit is the same work.
 - **Open questions:**
   - Is "workspace default, person overrides" worth having, or is it one or
@@ -513,7 +513,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Or leave batch styles out of the per-brew average, or say on the tile
     that batches count in full.
 - **Size:** S to review and label; M if it records what was drunk.
-- **Depends on:** nothing; 23 (a finished cold brew as stock, each glass
+- **Depends on:** nothing; 22 (a finished cold brew as stock, each glass
   served taken from it) could answer it.
 - **Open questions:**
   - Is a rough split (servings per batch) enough, or does each glass need
@@ -614,30 +614,11 @@ What the analysis worker sends to the LLM and what comes back.
     fixed to the days it was attached?
   - Other kinds too: the beans opened in a period, or a bean's brews?
 
-### 22. Coffee used and stock left as a chart card
-
-- **Status:** idea
-- **Why:** Insights → Beans ends with **Coffee used and stock left**, a
-  plain table, not a chart card: its headers don't sort (it's always most
-  used first), it has no chart, and it can't be pinned or attached to chat
-  like the cards above it.
-- **Approach:**
-  - Sortable headers (Bean, Used, Left), as the list pages do
-    (`lib/listSort.ts`).
-  - Or make it a `ChartCard` with the table as its table view: a bar chart
-    of used against left per bean, so it can be pinned and picked in the
-    chat's Charts tab.
-- **Size:** S
-- **Depends on:** nothing.
-- **Open questions:**
-  - Sorting only, or the full chart card? How many beans before the chart
-    gets crowded (top 10, as Varieties does)?
-
 ---
 
 ## F. Bar & menu
 
-### 23. Ingredient prep and stock
+### 22. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -654,7 +635,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should a finished cold brew batch (roadmap: cold brew refinements) be
     stock the same way, with each glass served taken from it and rated?
 
-### 24. Public menu: branding and sizes
+### 23. Public menu: branding and sizes
 
 - **Status:** idea
 - **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
@@ -668,7 +649,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:** should the guest page offer "install" as its own app,
   separate from the journal?
 
-### 25. Drink categories: what else they could do
+### 24. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -697,7 +678,7 @@ Home roasting). Paused here; these are what's next.
   whoever logged it?
 - Should freezing a home-roasted bean pause or extend its rest?
 
-### 26. Live roast timer
+### 25. Live roast timer
 
 - **Status:** planned (branch `roast-timer`)
 - **Why:** roast times are typed in after the roast; a timer running while
@@ -711,7 +692,7 @@ Home roasting). Paused here; these are what's next.
   - Note a temperature at each mark?
   - Keep the screen awake while it runs?
 
-### 27. Roast insights
+### 26. Roast insights
 
 - **Status:** idea
 - **Why:** Insights covers brewing only; a home roaster wants to see what
@@ -724,11 +705,11 @@ Home roasting). Paused here; these are what's next.
   - **rest sweet spot:** brew ratings by days off roast for home roasts,
     suggesting rest days per roast type or green coffee.
 - **Size:** M
-- **Depends on:** nothing; 28 and 32 make it richer.
+- **Depends on:** nothing; 27 and 31 make it richer.
 - **Open questions:** should the rest sweet spot offer to change the
   workspace's default rest days?
 
-### 28. Compare roasts
+### 27. Compare roasts
 
 - **Status:** idea
 - **Why:** with several batches of one green coffee, it's hard to see which
@@ -736,9 +717,9 @@ Home roasting). Paused here; these are what's next.
 - **Approach:** the batches of a green coffee side by side: levels, times,
   temperatures, weight loss, development, and how each one's brews rated.
 - **Size:** M
-- **Depends on:** nothing; can share a branch with 27.
+- **Depends on:** nothing; can share a branch with 26.
 
-### 29. Roast again, and roast plans
+### 28. Roast again, and roast plans
 
 - **Status:** idea
 - **Why:** a good roast is worth repeating, and today the form starts empty.
@@ -750,7 +731,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** S–M (plans are the M)
 - **Depends on:** nothing.
 
-### 30. Running low on roasted coffee
+### 29. Running low on roasted coffee
 
 - **Status:** idea
 - **Why:** the low notice covers green coffee; running out of roasted coffee
@@ -760,10 +741,10 @@ Home roasting). Paused here; these are what's next.
   suggesting the next roast, like the `green-low` job
   (`docs/api/notifications.md` §1b).
 - **Size:** S
-- **Depends on:** nothing; pairs with 29's plans.
+- **Depends on:** nothing; pairs with 28's plans.
 - **Open questions:** a threshold per workspace, or per green coffee?
 
-### 31. Green coffee details and restocks
+### 30. Green coffee details and restocks
 
 - **Status:** idea
 - **Why:** buying the same coffee again means editing the weight left by
@@ -776,18 +757,18 @@ Home roasting). Paused here; these are what's next.
 - **Size:** M
 - **Depends on:** nothing.
 
-### 32. Cupping notes per roast
+### 31. Cupping notes per roast
 
 - **Status:** idea
 - **Why:** brew ratings mix the roast with the brewing; cupping judges the
   roast itself.
 - **Approach:** a short cupping form on a roast: aroma, sweetness, acidity,
   body, a score, and roast defects (scorching, tipping, baked,
-  underdeveloped). Shown on the roast's page; feeds 27 and 28.
+  underdeveloped). Shown on the roast's page; feeds 26 and 27.
 - **Size:** S–M
 - **Depends on:** nothing.
 
-### 33. Roast details for the AI
+### 32. Roast details for the AI
 
 - **Status:** idea
 - **Why:** for a home roast, how it was roasted explains a lot about how it
@@ -799,7 +780,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** S
 - **Depends on:** nothing.
 
-### 34. Roast curves
+### 33. Roast curves
 
 - **Status:** idea
 - **Why:** roasting software (Artisan) records the whole curve; the log only
@@ -810,7 +791,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** L
 - **Depends on:** nothing.
 
-### 35. Roasting machine upkeep
+### 34. Roasting machine upkeep
 
 - **Status:** idea
 - **Why:** roasters need regular chaff and cleaning, easy to forget.
@@ -823,7 +804,7 @@ Home roasting). Paused here; these are what's next.
 
 ## H. Accounts
 
-### 36. Account management and password reset
+### 35. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -854,13 +835,13 @@ Home roasting). Paused here; these are what's next.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 37. Email verification
+### 36. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 36), inviting a member by email, or notifications by email.
+  (item 35), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -870,9 +851,9 @@ Home roasting). Paused here; these are what's next.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 36).
+  - Shares the mail and token pieces with password reset (item 35).
 - **Size:** M (mail is new to the stack).
-- **Depends on:** nothing; pairs with 36.
+- **Depends on:** nothing; pairs with 35.
 - **Open questions:**
   - Block unverified accounts, or only remind them?
   - What happens to accounts that existed before verification (treat as
@@ -885,7 +866,7 @@ Home roasting). Paused here; these are what's next.
 
 How the app is served and installed.
 
-### 38. Test the installed app on phones
+### 37. Test the installed app on phones
 
 - **Status:** idea
 - **Why:** the PWA is now served as a build over HTTPS (roadmap:
@@ -912,7 +893,7 @@ How the app is served and installed.
 - **Depends on:** the app running on the home server.
 - **Open questions:** none.
 
-### 39. Protect the testing branch on GitHub
+### 38. Protect the testing branch on GitHub
 
 - **Status:** idea
 - **Why:** the server pulls whatever is pushed to `testing`, and a push can
@@ -929,7 +910,7 @@ How the app is served and installed.
 
 What a backup keeps, so moving to a new server loses nothing.
 
-### 40. Back up every setting
+### 39. Back up every setting
 
 - **Status:** idea
 - **Why:** a workspace backup (`docs/api/backup.md` §2b) leaves out what
@@ -966,7 +947,7 @@ What a backup keeps, so moving to a new server loses nothing.
 
 How pages, lists and tables fit the screen.
 
-### 41. Settings nav scrolls on its own
+### 40. Settings nav scrolls on its own
 
 - **Status:** idea
 - **Why:** on a wide screen the Settings categories sit beside the page,
@@ -982,7 +963,7 @@ How pages, lists and tables fit the screen.
 - **Open questions:**
   - Should the selected category scroll into view when the page opens?
 
-### 42. Resizable table columns
+### 41. Resizable table columns
 
 - **Status:** idea
 - **Why:** list pages like Beans are tables whose columns size themselves.

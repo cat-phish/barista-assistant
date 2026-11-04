@@ -9,16 +9,14 @@ import PinnedCharts from '../../components/charts/PinnedCharts.vue';
 import ChartPeriod from '../../components/charts/ChartPeriod.vue';
 import StatsChart from '../../components/charts/StatsChart.vue';
 import { useStats } from '../../composables/useStats';
-import { useWorkspaceStore } from '../../stores/workspace';
 import { beanLabel, COFFEE_SPECIES, formatPrice } from '../../lib/beans';
 import { ORIGIN_AREAS } from '../../lib/origins';
 import { ROAST_LEVELS } from '../../lib/scale';
 import { useChartKind } from '../../lib/chartKind';
 import { boughtOn, brewRoastAge, bucketOf, countBy, formatWeight, meanBy, splitCountries, spendByCurrency } from '../../lib/stats';
-import { barOf, barsHeight, meansOf, pieOf } from './charts';
+import { barOf, barsHeight, meansOf, pairedBarsHeight, pieOf, usedAndLeftOf } from './charts';
 
 const stats = useStats();
-const workspaces = useWorkspaceStore();
 const brews = computed(() => stats.brews.value);
 const filtered = computed(() => {
   const f = stats.filters.value;
@@ -91,6 +89,8 @@ const usage = computed(() => {
     .map((b) => ({ id: b.id, label: beanLabel(b), used: used.get(b.id) ?? 0, left: b.inventoryWeightGrams, archived: b.archivedAt !== null }))
     .sort((a, b) => b.used - a.used || b.left - a.left);
 });
+const USAGE_BARS = 10;
+const usageChart = computed(() => usedAndLeftOf(usage.value, USAGE_BARS));
 </script>
 
 <template>
@@ -159,29 +159,15 @@ const usage = computed(() => {
       <StatsChart kind="scatter" label="Rating against roast age" :points="[{ label: 'Brews', data: roastAge }]" x-title="Days since roasting" y-title="Rating" :y-min="0" :y-max="5.5" />
     </ChartCard>
 
-    <section class="card usage">
-      <h2>Coffee used and stock left</h2>
-      <p class="muted note">Used in these brews; left on the shelf now</p>
-      <p v-if="usage.length === 0" class="muted">No beans brewed or in stock.</p>
-      <div v-else class="table-wrap">
-        <table>
-          <thead>
-            <tr><th scope="col">Bean</th><th scope="col">Used</th><th scope="col">Left</th></tr>
-          </thead>
-          <tbody>
-            <tr v-for="u in usage" :key="u.id">
-              <td>
-                <RouterLink v-if="workspaces.canEdit" :to="{ name: 'bean-edit', params: { id: u.id } }">{{ u.label }}</RouterLink>
-                <template v-else>{{ u.label }}</template>
-                <span v-if="u.archived" class="badge">Archived</span>
-              </td>
-              <td class="num">{{ formatWeight(u.used) }}</td>
-              <td class="num">{{ u.archived ? '–' : formatWeight(u.left) }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+    <ChartCard chart-id="beans.usage"
+      title="Coffee used and stock left"
+      :note="`Used in these brews, left on the shelf now; the ${USAGE_BARS} most used`"
+      :empty="usage.length === 0"
+      empty-text="No beans brewed or in stock."
+      :table="usageChart.table"
+    >
+      <StatsChart kind="bar" horizontal label="Coffee used and stock left by bean" :labels="usageChart.labels" :series="usageChart.series" :format="formatWeight" :height="pairedBarsHeight(usageChart.labels.length)" />
+    </ChartCard>
     <PinnedCharts tab="beans" />
   </div>
 </template>
@@ -191,48 +177,5 @@ const usage = computed(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
   gap: var(--space-3);
-}
-.usage {
-  grid-column: 1 / -1;
-  padding: var(--space-3);
-}
-.usage h2 {
-  font-size: 1rem;
-  margin: 0;
-}
-.note {
-  margin: 0 0 var(--space-2);
-  font-size: 0.85rem;
-}
-.table-wrap {
-  max-height: 360px;
-  overflow: auto;
-}
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9rem;
-}
-th {
-  text-align: left;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  position: sticky;
-  top: 0;
-  background: var(--surface);
-}
-th,
-td {
-  padding: var(--space-1) var(--space-2);
-  border-bottom: 1px solid var(--border);
-}
-th:not(:first-child),
-.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.badge {
-  margin-left: var(--space-2);
 }
 </style>
