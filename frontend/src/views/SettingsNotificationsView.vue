@@ -52,6 +52,7 @@ onMounted(async () => {
 // per device; this one is recognised by its subscription's endpoint hash.
 const support = pushSupport(currentPushEnv());
 const serverKey = ref<string | null | undefined>(undefined); // null = not set up on the server
+const keyChecked = ref(false); // undefined after the check = it failed
 const thisHash = ref<string | null>(null);
 const staleHash = ref<string | null>(null); // this device's subscription from older server keys
 const pushBusy = ref<string | null>(null); // 'section' (subscribing) or a device id
@@ -62,6 +63,8 @@ async function loadPush(): Promise<void> {
     serverKey.value = (await notificationsApi.pushKey()).publicKey;
   } catch (err) {
     serverKey.value = err instanceof ApiError && err.status === 404 ? null : undefined;
+  } finally {
+    keyChecked.value = true;
   }
   const sub = await currentSubscription();
   if (!sub) return;
@@ -251,6 +254,7 @@ async function setPref(changes: Partial<Pick<UserPreferences, 'rateReminders' | 
       <h2 id="web-push">This app</h2>
       <p class="muted small">Notifications from the app itself on your phone or computer, with no other app needed. Each device is turned on from that device.</p>
       <p v-if="serverKey === null" class="muted small">Web Push isn't set up on this server: whoever runs it adds VAPID keys to turn it on.</p>
+      <p v-else-if="serverKey === undefined && keyChecked" class="form-error" role="alert">Couldn't check whether Web Push is set up on this server. Reload to try again.</p>
       <p v-else-if="support !== 'ok'" class="muted small">{{ SUPPORT_TEXT[support] }}</p>
       <div v-else-if="serverKey && !thisDevice" class="actions">
         <button class="btn btn-primary" type="button" :disabled="pushBusy === 'section'" @click="subscribe">Get notifications on this device</button>
@@ -277,7 +281,7 @@ async function setPref(changes: Partial<Pick<UserPreferences, 'rateReminders' | 
         </li>
       </ul>
     </section>
-    <section v-for="s in SERVICES" v-else :key="s.kind" class="card service" :aria-labelledby="`svc-${s.kind}`">
+    <section v-for="s in (!loading && !loadError ? SERVICES : [])" :key="s.kind" class="card service" :aria-labelledby="`svc-${s.kind}`">
       <button class="service-head" type="button" :aria-expanded="open === s.kind" @click="toggle(s)">
         <h2 :id="`svc-${s.kind}`">{{ s.name }}</h2>
         <span class="badge" :class="{ on: saved(s.kind)?.enabled }">{{ !saved(s.kind) ? 'Not set up' : saved(s.kind)!.enabled ? 'On' : 'Off' }}</span>
