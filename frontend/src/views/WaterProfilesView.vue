@@ -11,8 +11,9 @@ import { waterProfilesApi } from '../api/waterProfiles';
 import AppHeader from '../components/AppHeader.vue';
 import ListControls from '../components/ListControls.vue';
 import ListDataBar from '../components/ListDataBar.vue';
-import ColumnResizers from '../components/ColumnResizers.vue';
-import { useColumnWidths } from '../lib/columnWidths';
+import ColumnsDialog from '../components/ColumnsDialog.vue';
+import TableHead from '../components/TableHead.vue';
+import { useTableColumns, type TableColumn } from '../lib/tableColumns';
 import { useSelection } from '../composables/useSelection';
 import SetupTabs from '../components/SetupTabs.vue';
 import { formatAdded } from '../lib/format';
@@ -22,11 +23,8 @@ import {
   nameColumn,
   recallView,
   rememberView,
-  sortArrow,
   sortBy,
   sortColumnOptions,
-  sortLabel,
-  toggleHeader,
   type SortColumn,
   type SortColumns,
 } from '../lib/listSort';
@@ -40,8 +38,6 @@ const error = ref('');
 
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `water.${what}.${workspaces.current?.id ?? ''}`;
-// Column widths, resizable from the header (ColumnResizers).
-const colWidths = useColumnWidths(() => viewKey('columns'), ['minmax(0, 2fr)', 'minmax(0, 0.7fr)', 'minmax(0, 0.7fr)', 'minmax(0, 0.7fr)', '5.5rem']);
 const figureColumn = (label: string, value: (p: WaterProfile) => number | null): SortColumn<WaterProfile> => ({
   label, value, asc: 'Lowest first', desc: 'Highest first',
 });
@@ -51,6 +47,24 @@ const columns: SortColumns<WaterProfile> = {
   gh: figureColumn('GH', (p) => p.generalHardnessPpm),
   kh: figureColumn('KH', (p) => p.alkalinityPpm),
   added: addedColumn(),
+};
+
+// Table columns: shown, hidden and moved in the Columns dialog, resizable
+// from the header (ColumnResizers). The ones in `columns` sort.
+const TABLE: TableColumn[] = [
+  { id: 'name', label: 'Name', track: 'minmax(0, 2fr)' },
+  { id: 'tds', label: 'TDS', track: 'minmax(0, 0.7fr)' },
+  { id: 'gh', label: 'GH', track: 'minmax(0, 0.7fr)' },
+  { id: 'kh', label: 'KH', track: 'minmax(0, 0.7fr)' },
+  { id: 'added', label: 'Added', title: 'Date added', track: '5.5rem', end: true },
+];
+const table = useTableColumns({ key: 'water', workspace: () => workspaces.current?.id ?? '', columns: TABLE });
+const choosingColumns = ref(false);
+const cell = (p: WaterProfile, id: string): string => {
+  if (id === 'tds') return figure(p.tdsPpm);
+  if (id === 'gh') return figure(p.generalHardnessPpm);
+  if (id === 'kh') return figure(p.alkalinityPpm);
+  return formatAdded(p.createdAt);
 };
 const sortChoices = sortColumnOptions(columns);
 const showArchived = ref(false);
@@ -155,27 +169,21 @@ const selection = useSelection();
           </div>
         </div>
         <ListControls v-model:sort="sort" :sort-columns="sortChoices" id-prefix="water" v-model:show-archived="showArchived" :archived-count="archivedCount" />
-        <ListDataBar list="water_profiles" noun="water profiles" :selection="selection" :visible-ids="shown.map((x) => x.id)" @imported="load()" />
+        <ListDataBar list="water_profiles" noun="water profiles" :selection="selection" :visible-ids="shown.map((x) => x.id)" @imported="load()">
+          <template v-if="shown.length">
+            <button v-if="table.widths.resized" class="btn-link widths-reset" type="button" @click="table.widths.reset()">Reset widths</button>
+            <button class="btn-link" type="button" @click="choosingColumns = true">Columns…</button>
+          </template>
+        </ListDataBar>
+        <ColumnsDialog :open="choosingColumns" :state="table" noun="water profile" @close="choosingColumns = false" />
         <p v-if="showArchived" class="muted small">Archived water is hidden when brewing; past brews still show it.</p>
-        <p v-if="colWidths.resized && shown.length" class="columns-reset"><button class="btn-link small" type="button" @click="colWidths.reset()">Reset columns</button></p>
         <p v-if="shown.length === 0" class="card empty">No active water profiles.</p>
-        <div v-else class="data-table" :style="{ '--cols': colWidths.template }">
-          <div class="data-row data-head">
-            <ColumnResizers :state="colWidths" :labels="[...['name', 'tds', 'gh', 'kh'].map((c) => columns[c]!.label), 'Added']" />
-            <button v-for="c in ['name', 'tds', 'gh', 'kh']" :key="c" class="data-th" type="button" :aria-label="sortLabel(sort, c, columns[c]!.label)" @click="sort = toggleHeader(sort, c, columns)">
-              {{ columns[c]!.label }} <span aria-hidden="true">{{ sortArrow(sort, c) }}</span>
-            </button>
-            <button class="data-th end" type="button" :aria-label="sortLabel(sort, 'added', 'Date added')" @click="sort = toggleHeader(sort, 'added', columns)">
-              Added <span aria-hidden="true">{{ sortArrow(sort, 'added') }}</span>
-            </button>
-          </div>
+        <div v-else class="data-table" :style="{ '--cols': table.widths.template }">
+          <TableHead v-model:sort="sort" :state="table" :sort-columns="columns" />
           <div v-for="p in shown" :key="p.id" class="data-item" :class="{ open: openId === p.id }">
             <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === p.id" :aria-pressed="selection.selecting ? selection.has(p.id) : undefined" @click="selection.selecting ? selection.toggle(p.id) : toggle(p.id)">
               <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(p.id) ? '☑' : '☐' }}</span>{{ p.name }}<span v-if="p.archivedAt" class="muted"> (archived)</span> <span v-if="p.isDefault" class="badge">Default</span></span>
-              <span class="data-td">{{ figure(p.tdsPpm) }}</span>
-              <span class="data-td">{{ figure(p.generalHardnessPpm) }}</span>
-              <span class="data-td">{{ figure(p.alkalinityPpm) }}</span>
-              <span class="data-td end">{{ formatAdded(p.createdAt) }}</span>
+              <span v-for="col in table.shown.slice(1)" :key="col.id" class="data-td" :class="[col.class, { end: table.isEnd(col) }]">{{ cell(p, col.id) }}</span>
             </button>
             <div v-if="openId === p.id" class="data-details">
               <p class="muted">{{ waterSummary(p) ? `${waterSummary(p)} (mg/L)` : 'No figures yet: edit to add TDS, hardness and minerals.' }}</p>

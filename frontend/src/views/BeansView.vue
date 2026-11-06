@@ -18,7 +18,8 @@ import BeanReviewDialog from '../components/BeanReviewDialog.vue';
 import BrewAverageHint from '../components/BrewAverageHint.vue';
 import RatingInput from '../components/RatingInput.vue';
 import RatingStars from '../components/RatingStars.vue';
-import ColumnResizers from '../components/ColumnResizers.vue';
+import ColumnsDialog from '../components/ColumnsDialog.vue';
+import TableHead from '../components/TableHead.vue';
 import {
   beanFilter,
   beanFilterOptions,
@@ -42,8 +43,9 @@ import {
   type BeanSortColumn,
 } from '../lib/beans';
 import { formatAdded, formatDay, formatListDay, localDateInput, toDateInput } from '../lib/format';
-import { useColumnWidths } from '../lib/columnWidths';
-import { isSortKey, recallView, rememberView, sortArrow, sortBy, sortLabel, sortColumnOptions, toggleHeader } from '../lib/listSort';
+import type { FieldKey } from '../lib/fields';
+import { useTableColumns, type TableColumn } from '../lib/tableColumns';
+import { isSortKey, recallView, rememberView, sortBy, sortColumnOptions } from '../lib/listSort';
 import { reviewChange } from '../lib/beanReview';
 import { effectiveRoastAge } from '../lib/roastAge';
 import { formatWeight } from '../lib/stats';
@@ -282,31 +284,58 @@ function openFreeze(bean: Bean) {
 }
 
 
-// Table columns, each a sort column (BEAN_SORT_COLUMNS). On phones the
-// headers hide and the wide-only cells drop out (the frozen mark moves next
-// to the name); the Sort by dropdown still has every column.
-const HEADERS: Array<{ id: BeanSortColumn; text: string; title?: string; class?: string }> = [
-  { id: 'name', text: 'Coffee' },
-  { id: 'frozen', text: '❄', title: 'Frozen', class: 'center' },
-  { id: 'roaster', text: 'Roaster' },
-  { id: 'roast', text: 'Roast' },
-  { id: 'process', text: 'Process' },
-  { id: 'roastDate', text: 'Roasted', title: 'Roast date' },
-  { id: 'age', text: 'Age', title: 'Days off roast (not counting frozen days)' },
-  { id: 'decaf', text: 'Caf', title: 'Caffeinated / decaf' },
-  { id: 'stock', text: 'Stock' },
-  { id: 'added', text: 'Added' },
-  { id: 'rating', text: 'Rating', class: 'end' },
+// Table columns, each a sort column (BEAN_SORT_COLUMNS): shown, hidden and
+// moved in the Columns dialog, resizable from the header (ColumnResizers);
+// the same on every tab. A phone starts from roaster, roast and stock under
+// the name, rating beside it; the frozen mark sits by the name there, so its
+// column is wide-only. A field the workspace hides takes its column along
+// (Age goes with the roast date). The Sort by dropdown still has every column.
+const TABLE: Array<TableColumn & { id: BeanSortColumn }> = [
+  { id: 'name', label: 'Coffee', track: 'minmax(0, 1.6fr)' },
+  { id: 'frozen', label: 'Frozen', header: '❄', title: 'Frozen', class: 'center', track: '1.5rem', wideOnly: true },
+  { id: 'roaster', label: 'Roaster', track: 'minmax(0, 1.2fr)' },
+  { id: 'roast', label: 'Roast', track: 'minmax(0, 1fr)' },
+  { id: 'process', label: 'Process', track: 'minmax(0, 1.1fr)', phone: false },
+  { id: 'roastDate', label: 'Roast date', header: 'Roasted', title: 'Roast date', track: '4.5rem', phone: false },
+  { id: 'age', label: 'Age', title: 'Days off roast (not counting frozen days)', track: '3.25rem', phone: false },
+  { id: 'decaf', label: 'Caf / decaf', header: 'Caf', title: 'Caffeinated / decaf', track: '3.5rem', phone: false },
+  { id: 'stock', label: 'Stock', track: '4rem' },
+  { id: 'added', label: 'Added', title: 'Date added', track: '4.5rem', phone: false },
+  { id: 'rating', label: 'Rating', track: '5.5rem', end: true },
 ];
-const TABLE_COLS = ['minmax(0, 1.6fr)', '1.5rem', 'minmax(0, 1.2fr)', 'minmax(0, 1fr)', 'minmax(0, 1.1fr)', '4.5rem', '3.25rem', '3.5rem', '4rem', '4.5rem', '5.5rem'];
-// Resizable from the header (ColumnResizers); the same widths on every tab.
-const colWidths = useColumnWidths(() => `beans.columns.${workspaces.current?.id ?? ''}`, TABLE_COLS);
+const COLUMN_FIELDS: Partial<Record<BeanSortColumn, FieldKey>> = {
+  roast: 'bean.roastLevel',
+  process: 'bean.process',
+  roastDate: 'bean.roastDate',
+  age: 'bean.roastDate',
+  decaf: 'bean.decaf',
+};
+const table = useTableColumns({
+  key: 'beans',
+  workspace: () => workspaces.current?.id ?? '',
+  columns: TABLE,
+  available: (id) => {
+    const field = COLUMN_FIELDS[id as BeanSortColumn];
+    return !field || show(field);
+  },
+});
+const choosingColumns = ref(false);
 
 // "12 d" off roast, frozen days excluded; "–" without a roast date.
 function ageCell(bean: Bean): string {
   const days = roastAgeDays(bean);
   return days === null ? '–' : `${days} d`;
 }
+const beanCell = (bean: Bean, id: string): string => {
+  if (id === 'roaster') return bean.roasterName;
+  if (id === 'roast') return roastLabel(bean, roastScale.value) ?? '–';
+  if (id === 'process') return processName(bean.processId) ?? '–';
+  if (id === 'roastDate') return bean.roastDate ? formatListDay(bean.roastDate) : '–';
+  if (id === 'age') return ageCell(bean);
+  if (id === 'decaf') return bean.decaf ? 'Decaf' : 'Caf';
+  if (id === 'stock') return `${bean.inventoryWeightGrams} g`;
+  return formatAdded(bean.createdAt);
+};
 
 // "Colombia · Huila · Finca El Paraíso · 1,950 m"
 function originLabel(bean: Bean): string | null {
@@ -488,26 +517,17 @@ const selection = useSelection();
 
         <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" :id-prefix="`beans-${tab}`" filter-label="Show" :filter-options="filterOptions" />
 
-        <ListDataBar list="beans" noun="beans" :selection="selection" :visible-ids="shown.map((x) => x.id)" @imported="load()" />
+        <ListDataBar list="beans" noun="beans" :selection="selection" :visible-ids="shown.map((x) => x.id)" @imported="load()">
+          <template v-if="shown.length">
+            <button v-if="table.widths.resized" class="btn-link widths-reset" type="button" @click="table.widths.reset()">Reset widths</button>
+            <button class="btn-link" type="button" @click="choosingColumns = true">Columns…</button>
+          </template>
+        </ListDataBar>
+        <ColumnsDialog :open="choosingColumns" :state="table" noun="bean" @close="choosingColumns = false" />
         <p v-if="rowError" class="form-error" role="alert">{{ rowError }}</p>
-        <p v-if="colWidths.resized && shown.length" class="columns-reset"><button class="btn-link small" type="button" @click="colWidths.reset()">Reset columns</button></p>
         <p v-if="shown.length === 0" class="card empty">No {{ filterName }} {{ archived ? 'archived ' : '' }}beans.</p>
-        <div v-else class="data-table" :style="{ '--cols': colWidths.template }">
-          <div class="data-row data-head">
-            <ColumnResizers :state="colWidths" :labels="HEADERS.map((h) => h.title ?? h.text)" />
-            <button
-              v-for="h in HEADERS"
-              :key="h.id"
-              class="data-th"
-              :class="h.class"
-              type="button"
-              :title="h.title"
-              :aria-label="sortLabel(sort, h.id, h.title ?? h.text)"
-              @click="sort = toggleHeader(sort, h.id, BEAN_SORT_COLUMNS)"
-            >
-              {{ h.text }} <span aria-hidden="true">{{ sortArrow(sort, h.id) }}</span>
-            </button>
-          </div>
+        <div v-else class="data-table" :style="{ '--cols': table.widths.template }">
+          <TableHead v-model:sort="sort" :state="table" :sort-columns="BEAN_SORT_COLUMNS" />
           <div v-for="bean in shown" :key="bean.id" class="data-item" :class="{ open: openId === bean.id }">
             <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === bean.id" :aria-pressed="selection.selecting ? selection.has(bean.id) : undefined" @click="selection.selecting ? selection.toggle(bean.id) : toggle(bean.id)">
               <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(bean.id) ? '☑' : '☐' }}</span>
@@ -515,20 +535,13 @@ const selection = useSelection();
                 {{ bean.beanName }}{{ batchSuffix(bean) }}<span v-if="openFreeze(bean)" class="frozen-mark phone-only" aria-label="frozen"> ❄</span>
                 <span v-if="restingUntil(bean)" class="badge resting" :title="`Resting until ${formatListDay(restingUntil(bean)!)}`">Resting</span>
               </span>
-              <span class="data-td wide-only center">
-                <span v-if="openFreeze(bean)" class="frozen-mark" title="Frozen" aria-label="Frozen">❄</span>
-              </span>
-              <span class="data-td first-on-phone">{{ bean.roasterName }}</span>
-              <span class="data-td">{{ roastLabel(bean, roastScale) ?? '–' }}</span>
-              <span class="data-td wide-only">{{ processName(bean.processId) ?? '–' }}</span>
-              <span class="data-td wide-only">{{ bean.roastDate ? formatListDay(bean.roastDate) : '–' }}</span>
-              <span class="data-td wide-only">{{ ageCell(bean) }}</span>
-              <span class="data-td wide-only" :title="bean.decaf ? 'Decaf' : 'Caffeinated'">{{ bean.decaf ? 'Decaf' : 'Caf' }}</span>
-              <span class="data-td">{{ bean.inventoryWeightGrams }} g</span>
-              <span class="data-td wide-only">{{ formatAdded(bean.createdAt) }}</span>
-              <span class="data-td end">
-                <RatingStars v-if="bean.rating !== null" :rating="bean.rating" />
-                <span v-else class="muted">{{ archived ? 'Unrated' : '–' }}</span>
+              <span v-for="col in table.shown.slice(1)" :key="col.id" class="data-td" :class="[col.class, { end: table.isEnd(col) }]" :title="col.id === 'decaf' ? (bean.decaf ? 'Decaf' : 'Caffeinated') : undefined">
+                <span v-if="col.id === 'frozen'"><span v-if="openFreeze(bean)" class="frozen-mark" title="Frozen" aria-label="Frozen">❄</span></span>
+                <template v-else-if="col.id === 'rating'">
+                  <RatingStars v-if="bean.rating !== null" :rating="bean.rating" />
+                  <span v-else class="muted">{{ archived ? 'Unrated' : '–' }}</span>
+                </template>
+                <template v-else>{{ beanCell(bean, col.id) }}</template>
               </span>
             </button>
             <div v-if="openId === bean.id" class="data-details">
@@ -785,15 +798,8 @@ p {
   display: none;
 }
 @media (max-width: 560px) {
-  .wide-only {
-    display: none;
-  }
   .phone-only {
     display: inline;
-  }
-  /* The hidden frozen cell comes first, so the roaster would get the "·". */
-  .first-on-phone::before {
-    content: none !important;
   }
 }
 .frozen-mark,

@@ -71,10 +71,14 @@ function openImport(): void {
 </script>
 
 <template>
-  <div v-if="isOwner" class="list-data-bar" role="group" :aria-label="`Export or import ${noun ?? 'items'}`">
+  <div v-if="isOwner || $slots.default" class="list-data-bar" role="group" :aria-label="isOwner ? `Export or import ${noun ?? 'items'}` : `${capitalize(noun ?? 'items')} table`">
     <template v-if="!selection?.selecting">
-      <button v-if="selection" class="btn-link" type="button" :disabled="busy" @click="selection.start()">Select to export…</button>
-      <button class="btn-link" type="button" @click="openImport">Import…</button>
+      <!-- The table's own links (Columns…), before export and import. -->
+      <slot />
+      <template v-if="isOwner">
+        <button v-if="selection" class="btn-link" type="button" :disabled="busy" @click="selection.start()">Select to export…</button>
+        <button class="btn-link" type="button" @click="openImport">Import…</button>
+      </template>
     </template>
     <template v-else>
       <span class="muted small" aria-live="polite">{{ count }} selected · tap rows to pick</span>

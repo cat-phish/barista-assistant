@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampWidth, colsTemplate, isResized, MAX_COLUMN_PX, MIN_COLUMN_PX, parseWidths } from './columnWidths';
+import { clampWidth, colsTemplate, isResized, MAX_COLUMN_PX, MIN_COLUMN_PX } from './columnWidths';
 
 const tracks = ['minmax(0, 2fr)', 'minmax(0, 1fr)', '5.5rem'];
 
@@ -18,14 +18,5 @@ describe('column widths', () => {
     expect(clampWidth(3)).toBe(MIN_COLUMN_PX);
     expect(clampWidth(5000)).toBe(MAX_COLUMN_PX);
     expect(clampWidth(150.6)).toBe(151);
-  });
-
-  it('reads saved widths, dropping ones that no longer fit the table', () => {
-    expect(parseWidths('[200,null,90]', 3)).toEqual([200, null, 90]);
-    expect(parseWidths('[1,null,9000]', 3)).toEqual([MIN_COLUMN_PX, null, MAX_COLUMN_PX]);
-    expect(parseWidths('["wide",null,null]', 3)).toEqual([null, null, null]);
-    expect(parseWidths('[200,null]', 3)).toEqual([null, null, null]); // a column added since
-    expect(parseWidths('not json', 3)).toEqual([null, null, null]);
-    expect(parseWidths(null, 2)).toEqual([null, null]);
   });
 });

@@ -14,8 +14,9 @@ import AppHeader from '../components/AppHeader.vue';
 import SetupTabs from '../components/SetupTabs.vue';
 import ListControls from '../components/ListControls.vue';
 import ListDataBar from '../components/ListDataBar.vue';
-import ColumnResizers from '../components/ColumnResizers.vue';
-import { useColumnWidths } from '../lib/columnWidths';
+import ColumnsDialog from '../components/ColumnsDialog.vue';
+import TableHead from '../components/TableHead.vue';
+import { useTableColumns, type TableColumn } from '../lib/tableColumns';
 import { useSelection } from '../composables/useSelection';
 import { machineSummary, METHOD_KINDS } from '../lib/equipment';
 import { formatAdded } from '../lib/format';
@@ -25,11 +26,8 @@ import {
   nameColumn,
   recallView,
   rememberView,
-  sortArrow,
   sortBy,
-  sortLabel,
   sortColumnOptions,
-  toggleHeader,
   type SortColumns,
 } from '../lib/listSort';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -53,8 +51,6 @@ function recipeSummary(brewerId: string): string {
 
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `brewers.${what}.${workspaces.current?.id ?? ''}`;
-// Column widths, resizable from the header (ColumnResizers).
-const colWidths = useColumnWidths(() => viewKey('columns'), ['minmax(0, 2fr)', 'minmax(0, 1fr)', 'minmax(0, 1.3fr)', '5.5rem']);
 const ALL = 'all';
 const columns: SortColumns<Brewer> = {
   name: nameColumn(),
@@ -70,6 +66,22 @@ const columns: SortColumns<Brewer> = {
   },
   recipes: { label: 'Recipes', value: (b) => recipeCount(b.id), asc: 'Fewest first', desc: 'Most first', firstDir: 'desc' },
   added: addedColumn(),
+};
+
+// Table columns: shown, hidden and moved in the Columns dialog, resizable
+// from the header (ColumnResizers). The ones in `columns` sort.
+const TABLE: TableColumn[] = [
+  { id: 'name', label: 'Name', track: 'minmax(0, 2fr)' },
+  { id: 'kind', label: 'Method', track: 'minmax(0, 1fr)' },
+  { id: 'recipes', label: 'Recipes', track: 'minmax(0, 1.3fr)' },
+  { id: 'added', label: 'Added', title: 'Date added', track: '5.5rem', end: true },
+];
+const table = useTableColumns({ key: 'brewers', workspace: () => workspaces.current?.id ?? '', columns: TABLE });
+const choosingColumns = ref(false);
+const cell = (b: Brewer, id: string): string => {
+  if (id === 'kind') return methodName(b);
+  if (id === 'recipes') return String(recipeCount(b.id));
+  return formatAdded(b.createdAt);
 };
 const sortChoices = sortColumnOptions(columns);
 const filter = ref(ALL);
@@ -159,26 +171,21 @@ const selection = useSelection();
       <div v-if="brewers.length === 0" class="card empty"><p>No brewers yet.</p></div>
       <template v-else>
         <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="brewers" filter-label="Brew method" :filter-options="filterOptions" v-model:show-archived="showArchived" :archived-count="archivedCount" />
-        <ListDataBar list="brewers" noun="brewers" :selection="selection" :visible-ids="shown.map((x) => x.id)" @imported="load()" />
+        <ListDataBar list="brewers" noun="brewers" :selection="selection" :visible-ids="shown.map((x) => x.id)" @imported="load()">
+          <template v-if="shown.length">
+            <button v-if="table.widths.resized" class="btn-link widths-reset" type="button" @click="table.widths.reset()">Reset widths</button>
+            <button class="btn-link" type="button" @click="choosingColumns = true">Columns…</button>
+          </template>
+        </ListDataBar>
+        <ColumnsDialog :open="choosingColumns" :state="table" noun="brewer" @close="choosingColumns = false" />
         <p v-if="showArchived" class="muted small">Archived brewers are hidden when brewing; past brews still show them.</p>
-        <p v-if="colWidths.resized && shown.length" class="columns-reset"><button class="btn-link small" type="button" @click="colWidths.reset()">Reset columns</button></p>
         <p v-if="shown.length === 0" class="card empty">No {{ filter === ALL ? 'brewers' : `${filterName.toLowerCase()} brewers` }} yet.</p>
-        <div v-else class="data-table" :style="{ '--cols': colWidths.template }">
-          <div class="data-row data-head">
-            <ColumnResizers :state="colWidths" :labels="[...['name', 'kind', 'recipes'].map((c) => columns[c]!.label), 'Added']" />
-            <button v-for="c in ['name', 'kind', 'recipes']" :key="c" class="data-th" type="button" :aria-label="sortLabel(sort, c, columns[c]!.label)" @click="sort = toggleHeader(sort, c, columns)">
-              {{ columns[c]!.label }} <span aria-hidden="true">{{ sortArrow(sort, c) }}</span>
-            </button>
-            <button class="data-th end" type="button" :aria-label="sortLabel(sort, 'added', 'Date added')" @click="sort = toggleHeader(sort, 'added', columns)">
-              Added <span aria-hidden="true">{{ sortArrow(sort, 'added') }}</span>
-            </button>
-          </div>
+        <div v-else class="data-table" :style="{ '--cols': table.widths.template }">
+          <TableHead v-model:sort="sort" :state="table" :sort-columns="columns" />
           <div v-for="m in shown" :key="m.id" class="data-item" :class="{ open: openId === m.id }">
             <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === m.id" :aria-pressed="selection.selecting ? selection.has(m.id) : undefined" @click="selection.selecting ? selection.toggle(m.id) : toggle(m.id)">
               <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(m.id) ? '☑' : '☐' }}</span>{{ m.name }}<span v-if="m.archivedAt" class="muted"> (archived)</span></span>
-              <span class="data-td">{{ methodName(m) }}</span>
-              <span class="data-td">{{ recipeCount(m.id) }}</span>
-              <span class="data-td end">{{ formatAdded(m.createdAt) }}</span>
+              <span v-for="col in table.shown.slice(1)" :key="col.id" class="data-td" :class="[col.class, { end: table.isEnd(col) }]">{{ cell(m, col.id) }}</span>
             </button>
             <div v-if="openId === m.id" class="data-details">
               <p v-if="m.kind === 'espresso'" class="muted">{{ machineSummary(m) }}</p>

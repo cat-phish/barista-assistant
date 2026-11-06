@@ -14,14 +14,15 @@ import AppHeader from '../components/AppHeader.vue';
 import DrinkCategoriesPanel from '../components/DrinkCategoriesPanel.vue';
 import ListControls from '../components/ListControls.vue';
 import ListDataBar from '../components/ListDataBar.vue';
-import ColumnResizers from '../components/ColumnResizers.vue';
-import { useColumnWidths } from '../lib/columnWidths';
+import ColumnsDialog from '../components/ColumnsDialog.vue';
+import TableHead from '../components/TableHead.vue';
+import { useTableColumns, type TableColumn } from '../lib/tableColumns';
 import { useSelection } from '../composables/useSelection';
 import MenuTabs from '../components/MenuTabs.vue';
 import { ingredientLine, nestDrinks, type NestedDrink } from '../lib/drinks';
 import { METHOD_KINDS } from '../lib/equipment';
 import { formatAdded } from '../lib/format';
-import { addedColumn, isSortKey, nameColumn, recallView, rememberView, sortArrow, sortBy, sortLabel, sortColumnOptions, sortsByName, toggleHeader, type SortColumns } from '../lib/listSort';
+import { addedColumn, isSortKey, nameColumn, recallView, rememberView, sortBy, sortColumnOptions, sortsByName, type SortColumns } from '../lib/listSort';
 import { defaultSize, formatSize } from '../lib/servings';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -35,10 +36,24 @@ const error = ref('');
 
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `drinks.${what}.${workspaces.current?.id ?? ''}`;
-// Column widths, resizable from the header (ColumnResizers).
-const colWidths = useColumnWidths(() => viewKey('columns'), ['minmax(0, 2fr)', 'minmax(0, 1.3fr)', 'minmax(0, 1.2fr)', '5.5rem']);
 const ALL = 'all';
 const columns: SortColumns<Drink> = { name: nameColumn(), added: addedColumn() };
+
+// Table columns: shown, hidden and moved in the Columns dialog, resizable
+// from the header (ColumnResizers). The ones in `columns` sort.
+const TABLE: TableColumn[] = [
+  { id: 'name', label: 'Name', track: 'minmax(0, 2fr)' },
+  { id: 'category', label: 'Category', track: 'minmax(0, 1.3fr)' },
+  { id: 'method', label: 'Method', track: 'minmax(0, 1.2fr)' },
+  { id: 'added', label: 'Added', title: 'Date added', track: '5.5rem', end: true },
+];
+const table = useTableColumns({ key: 'drinks', workspace: () => workspaces.current?.id ?? '', columns: TABLE });
+const choosingColumns = ref(false);
+const cell = (d: Drink, id: string): string => {
+  if (id === 'category') return d.category?.name ?? 'Uncategorised';
+  if (id === 'method') return METHOD_KINDS[d.kind].label;
+  return formatAdded(d.createdAt);
+};
 const sortChoices = sortColumnOptions(columns);
 const NONE = 'none'; // uncategorised
 const categoryFilter = ref(ALL);
@@ -144,31 +159,24 @@ const selection = useSelection();
 
     <template v-else>
       <ListControls v-model:filter="categoryFilter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="drinks" filter-label="Category" :filter-options="categoryOptions" v-model:show-archived="showArchived" :archived-count="archivedCount" />
-      <ListDataBar list="drinks" noun="drinks" :selection="selection" :visible-ids="shown.map((x) => x.drink.id)" @imported="load()" />
+      <ListDataBar list="drinks" noun="drinks" :selection="selection" :visible-ids="shown.map((x) => x.drink.id)" @imported="load()">
+        <template v-if="shown.length">
+          <button v-if="table.widths.resized" class="btn-link widths-reset" type="button" @click="table.widths.reset()">Reset widths</button>
+          <button class="btn-link" type="button" @click="choosingColumns = true">Columns…</button>
+        </template>
+      </ListDataBar>
+      <ColumnsDialog :open="choosingColumns" :state="table" noun="drink" @close="choosingColumns = false" />
       <p v-if="showArchived" class="muted small">Archived drinks are hidden when brewing; past brews still show them, and so does the public menu if it has them.</p>
-      <p v-if="colWidths.resized && shown.length" class="columns-reset"><button class="btn-link small" type="button" @click="colWidths.reset()">Reset columns</button></p>
       <p v-if="shown.length === 0" class="card empty">No drinks in {{ filterName }} yet.</p>
-      <div v-else class="data-table" :style="{ '--cols': colWidths.template }">
-        <div class="data-row data-head">
-          <ColumnResizers :state="colWidths" :labels="['Name', 'Category', 'Method', 'Added']" />
-          <button class="data-th" type="button" :aria-label="sortLabel(sort, 'name', 'Name')" @click="sort = toggleHeader(sort, 'name', columns)">
-            Name <span aria-hidden="true">{{ sortArrow(sort, 'name') }}</span>
-          </button>
-          <span class="data-th">Category</span>
-          <span class="data-th">Method</span>
-          <button class="data-th end" type="button" :aria-label="sortLabel(sort, 'added', 'Date added')" @click="sort = toggleHeader(sort, 'added', columns)">
-            Added <span aria-hidden="true">{{ sortArrow(sort, 'added') }}</span>
-          </button>
-        </div>
+      <div v-else class="data-table" :style="{ '--cols': table.widths.template }">
+        <TableHead v-model:sort="sort" :state="table" :sort-columns="columns" />
         <div v-for="{ drink: d, depth } in shown" :key="d.id" class="data-item" :class="{ open: openId === d.id }">
           <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === d.id" :aria-pressed="selection.selecting ? selection.has(d.id) : undefined" @click="selection.selecting ? selection.toggle(d.id) : toggle(d.id)">
             <span class="data-td primary" :style="{ paddingLeft: nested ? `calc(${depth} * var(--space-4))` : undefined }"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(d.id) ? '☑' : '☐' }}</span>
               {{ d.name }}<span v-if="d.archivedAt" class="muted"> (archived)</span>
               <span v-if="!nested && d.parent" class="variant-of">variant of {{ d.parent.name }}</span>
             </span>
-            <span class="data-td">{{ d.category?.name ?? 'Uncategorised' }}</span>
-            <span class="data-td">{{ METHOD_KINDS[d.kind].label }}</span>
-            <span class="data-td end">{{ formatAdded(d.createdAt) }}</span>
+            <span v-for="col in table.shown.slice(1)" :key="col.id" class="data-td" :class="[col.class, { end: table.isEnd(col) }]">{{ cell(d, col.id) }}</span>
           </button>
           <div v-if="openId === d.id" class="data-details">
             <div class="badges">
