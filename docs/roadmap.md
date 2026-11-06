@@ -2301,5 +2301,22 @@ resizable columns on a wide screen.
 - **Reset columns:** a link above the table, shown once any column on it
   has been resized.
 - **Phones:** unchanged; the header row and the handles are hidden there.
-- Hiding and reordering columns were left out: backlog 41.
+- Hiding and reordering columns were left out: backlog 40.
 
+## Settings nav scrolls on its own (built)
+
+Backlog item 40, branch `settings-nav-scroll`. On a wide screen the Settings
+categories beside the page (`SettingsLayout.vue`) stay within the window:
+when the list is taller (a short laptop screen, or an admin with the Server
+tabs too) it scrolls on its own, separately from the page, so its last
+entries can always be reached.
+
+- **How:** the sticky nav gets a max height of the window less its top and
+  bottom gap, `overflow-y: auto` and `overscroll-behavior: contain`. A little
+  padding, taken back by a negative margin, keeps focus rings from being
+  clipped.
+- **Selected tab in view:** each tab mounts its own layout, so the nav starts
+  at the top again on every switch. When the selected tab is out of view it's
+  scrolled to the middle of the nav (setting the nav's own scroll, so the
+  page doesn't move).
+- **Phones:** unchanged; the nav is its own page there.

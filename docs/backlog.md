@@ -33,7 +33,7 @@ and fix the references.
 - H. Accounts: 35–36
 - I. Deployment & the app: 37–38
 - J. Backups: 39
-- K. Lists & layout: 40–41
+- K. Lists & layout: 40
 
 ---
 
@@ -947,23 +947,7 @@ What a backup keeps, so moving to a new server loses nothing.
 
 How pages, lists and tables fit the screen.
 
-### 40. Settings nav scrolls on its own
-
-- **Status:** idea
-- **Why:** on a wide screen the Settings categories sit beside the page,
-  sticky (`SettingsLayout.vue`). When the list is taller than the window
-  (a short laptop screen, or an owner seeing the server tabs too), its
-  bottom entries are out of reach until the page itself scrolls far enough,
-  and on a short tab they can't be reached at all.
-- **Approach:** give the nav a max height of the window below its sticky
-  top and its own scroll (`overflow-y: auto`), so the page and the nav
-  scroll separately. Phones are unchanged (the nav is its own page there).
-- **Size:** S
-- **Depends on:** nothing.
-- **Open questions:**
-  - Should the selected category scroll into view when the page opens?
-
-### 41. Hide and reorder table columns
+### 40. Hide and reorder table columns
 
 - **Status:** idea
 - **Why:** list tables can be resized now (roadmap, "Resizable table
