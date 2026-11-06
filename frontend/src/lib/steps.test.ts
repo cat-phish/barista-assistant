@@ -14,8 +14,10 @@ import {
   plannedStarts,
   plannedTimes,
   pourAmounts,
+  prepLeft,
   recipeWarnings,
   setTempLine,
+  splitPrep,
   stepDraft,
   stepInstruction,
   stepsTotalLine,
@@ -45,9 +47,9 @@ describe('scalesWithBatch', () => {
 });
 
 describe('step types per kind', () => {
-  it('pour over and espresso get their own types, both get Other', () => {
-    expect(stepTypesFor('filter')).toEqual(['bloom', 'pour', 'swirl', 'stir', 'wait', 'press', 'other']);
-    expect(stepTypesFor('espresso')).toEqual(['preinfusion', 'soak', 'pressure', 'flow', 'other']);
+  it('pour over and espresso get their own types, both get Prep (first) and Other', () => {
+    expect(stepTypesFor('filter')).toEqual(['prep', 'bloom', 'pour', 'swirl', 'stir', 'wait', 'press', 'other']);
+    expect(stepTypesFor('espresso')).toEqual(['prep', 'preinfusion', 'soak', 'pressure', 'flow', 'other']);
   });
 });
 
@@ -107,6 +109,34 @@ describe('parseSteps', () => {
   });
 });
 
+describe('prep steps', () => {
+  const prep = (label: string, duration = '') => ({ ...stepDraft('k', { stepType: 'prep' }), label, duration });
+  it('a label and an optional countdown; nothing else is kept', () => {
+    const { steps, errors } = parseSteps([{ ...prep('Rinse the filter'), temp: '95', advance: 'tap' }, prep(' Preheat ', '2:00'), draft({ stepType: 'swirl' })], 'filter');
+    expect(errors).toEqual({});
+    expect(steps.slice(0, 2)).toEqual([
+      step({ stepType: 'prep', label: 'Rinse the filter', durationSec: null, scalesWithBatch: false }),
+      step({ stepType: 'prep', label: 'Preheat', durationSec: 120, scalesWithBatch: false }),
+    ]);
+    expect(parseSteps([prep('Warm the cup')], 'espresso').errors).toEqual({});
+  });
+  it('need a label, a valid time, and come before the brew steps', () => {
+    expect(parseSteps([prep('')], 'filter').errors[0]).toMatch(/Say what to do/);
+    expect(parseSteps([prep('Preheat', 'soon')], 'filter').errors[0]).toMatch(/Countdown/);
+    expect(parseSteps([draft({ stepType: 'swirl' }), prep('Rinse')], 'filter').errors[1]).toMatch(/go before the brew steps/);
+  });
+  it('split off from the brew steps', () => {
+    const steps = [step({ stepType: 'prep', label: 'Rinse' }), step({ stepType: 'bloom' })];
+    expect(splitPrep(steps)).toEqual({ prep: [steps[0]], brew: [steps[1]] });
+  });
+  it('count down in whole seconds, to 0', () => {
+    expect(prepLeft(1000, 120, 1000)).toBe(120);
+    expect(prepLeft(1000, 120, 1500)).toBe(120); // 119.5 left shows 2:00
+    expect(prepLeft(1000, 120, 31_000)).toBe(90);
+    expect(prepLeft(1000, 120, 500_000)).toBe(0);
+  });
+});
+
 describe('planned starts', () => {
   it('add up durations; after a tap or first-drop step they are estimates; after an open step unknown', () => {
     expect(plannedStarts([step({ durationSec: 45, advance: 'tap' }), step({ durationSec: 30 }), step({ durationSec: null })])).toEqual([
@@ -115,6 +145,16 @@ describe('planned starts', () => {
       { at: 75, exact: false },
     ]);
     expect(plannedStarts([step({ durationSec: null, advance: 'first_drop' }), step({})])).toEqual([{ at: 0, exact: true }, null]);
+  });
+  it('prep steps are off the clock: the first brew step starts at 0:00', () => {
+    const steps = [step({ stepType: 'prep', durationSec: 120 }), step({ durationSec: 30 }), step({ durationSec: 60 })];
+    expect(plannedTimes(steps)).toEqual([
+      { start: null, end: null },
+      { start: { at: 0, exact: true }, end: { at: 30, exact: true } },
+      { start: { at: 30, exact: true }, end: { at: 90, exact: true } },
+    ]);
+    expect(plannedEnd(steps)).toEqual({ at: 90, exact: true });
+    expect(plannedEnd([step({ stepType: 'prep' })])).toBeNull();
   });
   it("ends too; a tap step's end is an estimate (its time is a guide)", () => {
     expect(plannedTimes([step({ durationSec: 30 }), step({ durationSec: 45, advance: 'tap' })])).toEqual([
@@ -128,9 +168,16 @@ describe('planned starts', () => {
 });
 
 describe("the builder's step times", () => {
-  const steps = [step({ durationSec: 30 }), step({ durationSec: 45, advance: 'tap' }), step({ durationSec: 60 }), step({ durationSec: null })];
+  const steps = [
+    step({ stepType: 'prep', durationSec: 120 }),
+    step({ durationSec: 30 }),
+    step({ durationSec: 45, advance: 'tap' }),
+    step({ durationSec: 60 }),
+    step({ durationSec: null }),
+  ];
   it('start and end under each step', () => {
     expect(steps.map((_s, i) => stepTimeParts(steps, i))).toEqual([
+      ['Before the timer starts'],
       ['Starts at 0:00', 'Ends at 0:30'],
       ['Starts at 0:30', 'Ends ≈ 1:15'],
       ['Starts ≈ 1:15', 'Ends ≈ 2:15'],
@@ -141,12 +188,13 @@ describe("the builder's step times", () => {
     expect(stepTimeParts(unknown, 1)).toEqual(['Starts after step 1']);
   });
   it('the total against the target finish window', () => {
-    const timed = [step({ durationSec: 60 }), step({ durationSec: 135 })];
+    const timed = [step({ stepType: 'prep', durationSec: 120 }), step({ durationSec: 60 }), step({ durationSec: 135 })];
     expect(stepsTotalLine(timed, { min: 180, max: 210 })).toEqual({ parts: ['Steps end at 3:15', 'Target finish 3:00–3:30'], outside: false });
     expect(stepsTotalLine(timed, { min: 120, max: 150 })).toEqual({ parts: ['Steps end at 3:15', 'Target finish 2:00–2:30'], outside: true });
     expect(stepsTotalLine(timed, { min: 240, max: 270 })?.outside).toBe(true);
     expect(stepsTotalLine(timed, null)).toEqual({ parts: ['Steps end at 3:15'], outside: false });
     expect(stepsTotalLine(steps, { min: 180, max: 210 })).toEqual({ parts: ['Steps run until you finish', 'Target finish 3:00–3:30'], outside: false });
+    expect(stepsTotalLine([step({ stepType: 'prep' })], { min: 180, max: 210 })).toBeNull();
     expect(stepsTotalLine([], null)).toBeNull();
   });
 });
@@ -297,6 +345,8 @@ describe('pourAmounts and warnings', () => {
       'The target finish window ends (2:30) before the steps do (3:00).',
     ]);
     expect(recipeWarnings({ waterGrams: 240, finishMaxSec: 200, steps })).toEqual([]);
+    // Prep time isn't brew time.
+    expect(recipeWarnings({ waterGrams: 240, finishMaxSec: 200, steps: [step({ stepType: 'prep', durationSec: 120 }), ...steps] })).toEqual([]);
   });
 });
 

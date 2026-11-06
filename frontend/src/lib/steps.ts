@@ -17,6 +17,8 @@ interface StepTypeInfo {
   waiting: boolean; // nothing to do: plain card instead of the warm "do this" one
 }
 export const STEP_TYPES: Record<StepType, StepTypeInfo> = {
+  // Done before the timer starts: a checklist item, with an optional countdown.
+  prep: { label: 'Prep (before the timer)', espresso: 'both', water: 'none', pressure: 'none', flow: 'none', waiting: false },
   bloom: { label: 'Bloom', espresso: false, water: 'required', pressure: 'none', flow: 'none', waiting: false },
   pour: { label: 'Pour', espresso: false, water: 'required', pressure: 'none', flow: 'none', waiting: false },
   swirl: { label: 'Swirl', espresso: false, water: 'none', pressure: 'none', flow: 'none', waiting: false },
@@ -57,6 +59,13 @@ export const FLOW_UNITS: Record<FlowUnit, string> = { g_s: 'g/s', ml_s: 'ml/s' }
 
 export function stepTitle(step: { stepType: StepType; label: string | null }): string {
   return step.label?.trim() || STEP_TYPES[step.stepType].label;
+}
+
+// Prep steps come first and are done before the timer starts; the timer and
+// every planned time use the brew steps after them.
+export const isPrep = (step: { stepType: StepType }): boolean => step.stepType === 'prep';
+export function splitPrep<T extends { stepType: StepType }>(steps: readonly T[]): { prep: T[]; brew: T[] } {
+  return { prep: steps.filter(isPrep), brew: steps.filter((s) => !isPrep(s)) };
 }
 
 // ---- What a step's card says -----------------------------------------------------
@@ -127,13 +136,15 @@ export function pourAmounts(steps: Array<{ targetWaterGrams: number | null }>): 
 // When each step is planned to start and end (from the durations), and
 // whether that's exact: a tap or first-drop step's time is a guide, so its end
 // and everything after it are estimates; after a step with no duration
-// they're unknown (null).
+// they're unknown (null). Prep steps are off the clock: null, and they don't
+// move it.
 type Planned = { at: number; exact: boolean } | null;
-type Timed = Pick<StepFields, 'durationSec' | 'advance'>;
+type Timed = Pick<StepFields, 'stepType' | 'durationSec' | 'advance'>;
 export function plannedTimes(steps: readonly Timed[]): Array<{ start: Planned; end: Planned }> {
   let at: number | null = 0;
   let exact = true;
   return steps.map((s) => {
+    if (isPrep(s)) return { start: null, end: null };
     const start = at === null ? null : { at, exact };
     if (s.advance === 'tap' || s.advance === 'first_drop') exact = false;
     at = at === null || s.durationSec === null ? null : at + s.durationSec;
@@ -141,8 +152,12 @@ export function plannedTimes(steps: readonly Timed[]): Array<{ start: Planned; e
   });
 }
 export const plannedStarts = (steps: readonly Timed[]): Planned[] => plannedTimes(steps).map((t) => t.start);
-// When the steps are planned to end (null: open-ended, or no steps).
-export const plannedEnd = (steps: readonly Timed[]): Planned => plannedTimes(steps).at(-1)?.end ?? null;
+// When the brew steps are planned to end (null: open-ended, or no brew steps).
+export function plannedEnd(steps: readonly Timed[]): Planned {
+  const times = plannedTimes(steps);
+  for (let i = steps.length - 1; i >= 0; i -= 1) if (!isPrep(steps[i] as Timed)) return times[i]?.end ?? null;
+  return null;
+}
 
 // The recipe builder's line under a step, in parts the form separates with a
 // dot: ["Starts at 0:30", "Ends at 1:15"], ["Starts ≈ 1:00", "Ends ≈ 1:45"]
@@ -151,6 +166,7 @@ export function stepTimeParts(steps: readonly Timed[], i: number): string[] {
   const s = steps[i];
   const times = plannedTimes(steps)[i];
   if (!s || !times) return [];
+  if (isPrep(s)) return ['Before the timer starts'];
   const { start, end } = times;
   const from = start ? `Starts ${start.exact ? 'at' : '≈'} ${formatTime(start.at)}` : `Starts after step ${i}`;
   if (end) return [from, `Ends ${end.exact ? 'at' : '≈'} ${formatTime(end.at)}`];
@@ -160,13 +176,18 @@ export function stepTimeParts(steps: readonly Timed[], i: number): string[] {
 
 // The line under the step list, in parts the form separates with a dot:
 // ["Steps end at 3:15", "Target finish 3:00–3:30"]; outside when the planned
-// end falls outside the window. null without steps.
+// end falls outside the window. null without brew steps.
 export function stepsTotalLine(steps: readonly Timed[], finish: { min: number; max: number } | null): { parts: string[]; outside: boolean } | null {
-  if (!steps.length) return null;
+  if (!steps.some((s) => !isPrep(s))) return null;
   const end = plannedEnd(steps);
   const parts = [end ? `Steps end ${end.exact ? 'at' : '≈'} ${formatTime(end.at)}` : 'Steps run until you finish'];
   if (finish) parts.push(`Target finish ${formatFinishWindow(finish.min, finish.max)}`);
   return { parts, outside: !!(end && finish && (end.at < finish.min || end.at > finish.max)) };
+}
+
+// A prep step's countdown: whole seconds left (0 = done).
+export function prepLeft(startedAtMs: number, durationSec: number, nowMs: number): number {
+  return Math.max(0, Math.ceil(durationSec - (nowMs - startedAtMs) / 1000));
 }
 
 // ---- Editor -----------------------------------------------------------------
@@ -210,6 +231,7 @@ export function parseSteps(drafts: StepDraft[], kind: MethodKind | null, tempUni
   const errors: Record<number, string> = {};
   let lastWater: number | null = null;
   let firstDrops = 0;
+  let brewing = false; // past the prep steps
   const optional = (text: string, opts: Parameters<typeof parseDecimal>[1]) => (text.trim() ? parseDecimal(text, opts) : null);
   const profile = { scale: 1, min: 0, max: 20 };
 
@@ -217,6 +239,26 @@ export function parseSteps(drafts: StepDraft[], kind: MethodKind | null, tempUni
     const rules = stepRules(d.stepType, kind);
     const last = i === drafts.length - 1;
     const duration = d.duration.trim() ? parseTime(d.duration) : null;
+    // Prep: what to do before the timer starts, with an optional countdown.
+    if (d.stepType === 'prep') {
+      const error = brewing
+        ? 'Prep steps go before the brew steps'
+        : !d.label.trim()
+          ? 'Say what to do (the label)'
+          : duration && !duration.ok
+            ? `Countdown: ${duration.error}`
+            : '';
+      if (error) errors[i] = error;
+      else {
+        steps.push({
+          stepType: 'prep', label: d.label.trim(), durationSec: duration?.ok ? duration.value : null, advance: 'auto',
+          targetWaterGrams: null, targetTempC: null, pressureBar: null, pressureEndBar: null, flowRate: null, flowEndRate: null,
+          scalesWithBatch: false, // off the clock: never scales
+        });
+      }
+      return;
+    }
+    brewing = true;
     const water = rules.water === 'none' ? null : optional(d.water, { scale: 2, min: 0, max: 10000, exclusiveMin: true, exclusiveMax: true });
     const temp = d.temp.trim() ? parseTemp(d.temp, tempUnit) : null;
     const pressure = rules.pressure === 'none' ? null : optional(d.pressure, profile);

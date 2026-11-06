@@ -64,6 +64,7 @@ const seconds = z.number().int().min(0).max(MAX_SEC);
 const waterGrams = decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true });
 const isWaterType = (t: string) => (WATER_STEP_TYPES as readonly string[]).includes(t);
 const isEspressoType = (t: string) => (ESPRESSO_STEP_TYPES as readonly string[]).includes(t);
+const ANY_KIND_TYPES = new Set(["other", "prep"]); // allowed on every method
 // Pressure / flow values allowed per type (docs/api/recipes.md §5); "required" = must have it.
 const PRESSURE: Partial<Record<string, "required" | "optional">> = { pressure: "required", preinfusion: "optional", other: "optional" };
 const FLOW: Partial<Record<string, "required" | "optional">> = { flow: "required", preinfusion: "optional", other: "optional" };
@@ -99,6 +100,13 @@ const stepSchema = z
       if (step[end] != null && step[start] == null) issue(end, `needs ${start} (a ramp goes from one to the other)`);
     }
     if (step.pressureBar != null && step.flowRate != null) issue("flowRate", "a step targets pressure or flow, not both");
+    // Prep: what to do before the timer starts, with an optional countdown.
+    if (step.stepType === "prep") {
+      if (!step.label) issue("label", "is required for a prep step (what to do)");
+      if (step.targetTempC != null) issue("targetTempC", "isn't allowed for a prep step");
+      if (step.advance !== "auto") issue("advance", "must be auto for a prep step (it isn't timed with the brew)");
+      return;
+    }
     if ((step.advance === "auto" || step.advance === "auto_log") && step.durationSec === undefined) {
       issue("durationSec", "is required for a step that moves on by itself (null = until you finish, last step only)");
     }
@@ -110,7 +118,13 @@ const stepsSchema = z
   .max(20)
   .superRefine((steps, ctx) => {
     let lastWater: number | null = null;
+    let brewing = false; // past the prep steps
     steps.forEach((step, i) => {
+      if (step.stepType === "prep") {
+        if (brewing) ctx.addIssue({ code: "custom", path: [i, "stepType"], message: "prep steps go before the brew steps" });
+        return;
+      }
+      brewing = true;
       // Open-ended ("until you finish") only makes sense for the last step.
       if (step.advance === "auto" && step.durationSec === null && i < steps.length - 1) {
         ctx.addIssue({ code: "custom", path: [i, "durationSec"], message: "only the last step can run until you finish" });
@@ -304,11 +318,11 @@ function kindError(kind: MethodKind, r: KindCheck): string | null {
     if (r.stepTimeScaling !== null) return "stepTimeScaling: must be null for an espresso recipe";
     if (r.expectedYieldGrams === null) return "expectedYieldGrams: is required for an espresso recipe (the target shot weight)";
     const i = r.steps.findIndex((step) => !isEspressoType(step.stepType) || step.targetWaterGrams != null);
-    if (i >= 0) return `steps.${i}: espresso steps are pre-infusion, soak, pressure, flow or other, without pour-to targets`;
+    if (i >= 0) return `steps.${i}: espresso steps are pre-infusion, soak, pressure, flow, other or prep, without pour-to targets`;
     if (r.steps.filter((step) => step.advance === "first_drop").length > 1) return "steps: at most one step can end at first drop";
     return null;
   }
-  const p = r.steps.findIndex((step) => (isEspressoType(step.stepType) && step.stepType !== "other") || step.pressureBar != null || step.flowRate != null);
+  const p = r.steps.findIndex((step) => (isEspressoType(step.stepType) && !ANY_KIND_TYPES.has(step.stepType)) || step.pressureBar != null || step.flowRate != null);
   if (p >= 0) return `steps.${p}: pre-infusion, soak, pressure and flow steps are for espresso recipes`;
   const d = r.steps.findIndex((step) => step.advance === "first_drop");
   if (d >= 0) return `steps.${d}: only espresso steps can end at first drop`;
@@ -377,7 +391,7 @@ async function insertSteps(tx: Tx, recipeId: string, steps: z.infer<typeof steps
       pressureEndBar: step.pressureEndBar ?? null,
       flowRate: step.flowRate ?? null,
       flowEndRate: step.flowEndRate ?? null,
-      scalesWithBatch: step.scalesWithBatch ?? scalesByDefault(step.stepType),
+      scalesWithBatch: step.stepType === "prep" ? false : (step.scalesWithBatch ?? scalesByDefault(step.stepType)), // prep is off the clock
     }))
   );
 }

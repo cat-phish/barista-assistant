@@ -137,7 +137,9 @@ queue:
      `stepTimeScaling` (recipes.md §5), which also sends each step's
      `scalesWithBatch`, the step durations and the finish
      window are the ones the brew was timed against, scaled to its water
-     (`scaledToBrew`); pour targets stay the recipe's.
+     (`scaledToBrew`); pour targets stay the recipe's. Steps typed
+     `prep` come first and are done before the timer starts, so their time
+     isn't part of the brew time.
 2. It turns that context into the **input** actually sent
    (`toLlmInput`, `worker/src/prompt.ts`), smaller than the context above:
    - **Empty values are dropped:** `null`, `""`, `[]` and `{}` keys are left

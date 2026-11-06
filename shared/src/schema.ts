@@ -1112,14 +1112,16 @@ export const recipePrepTools = mysqlTable(
 // timer moves on. Waiting is a "wait" (pour over) or "soak" (espresso) step.
 // stepType is one of RECIPE_STEP_TYPES; which types a recipe may use depends
 // on its method's kind. The values (water, temperature, pressure, flow) are
-// instructions shown on the step's card.
+// instructions shown on the step's card. "prep" steps (rinse the filter,
+// preheat) come before the rest and are done before the timer starts: a
+// label and an optional countdown, outside the brew's time.
 export const RECIPE_STEP_TYPES = [
   "bloom", "pour", "swirl", "stir", "wait", "press", // filter
   "preinfusion", "soak", "pressure", "flow", // espresso
-  "other", // any
+  "other", "prep", // any
 ] as const;
 export const WATER_STEP_TYPES = ["bloom", "pour"] as const;
-export const ESPRESSO_STEP_TYPES = ["preinfusion", "soak", "pressure", "flow", "other"] as const;
+export const ESPRESSO_STEP_TYPES = ["preinfusion", "soak", "pressure", "flow", "other", "prep"] as const;
 // auto: moves on after durationSec. auto_log: the same, plus a button to log
 // when you really did it. tap: waits for a tap (durationSec is a guide).
 // first_drop: espresso only; ends when First drop is tapped.

@@ -189,6 +189,11 @@ fails.
   1 is linear). Its hint shows what a double and a half batch's 1:00 step
   takes. The target finish window moves by what the steps gain or lose.
   Hideable under Settings → Fields.
+- **Prep steps** (**Add prep step**, any method): what to do before the timer
+  starts, such as rinsing the filter or warming the cup, with an optional
+  countdown. They sit above the other steps and don't count toward the brew
+  time. On the brew page they're a **Before you start** checklist above
+  the Prep checklist; a timed one has its own countdown that doesn't start the timer.
 - **Grind starting points** per grinder, and an optional **default grinder**
   that's selected for you when you brew the recipe (otherwise the last
   grinder you used).

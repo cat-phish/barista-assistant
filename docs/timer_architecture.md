@@ -112,6 +112,14 @@ export default defineConfig({
 > recipe's steps as a checklist and saves the brew as steeping; it's
 > finished later from the journal (docs/api/brew-logs.md §6). Rapid cold brew
 > uses the timer as below.
+
+> **Prep steps** (`prep`, docs/api/recipes.md §5) aren't timed with the
+> brew. Setup shows them above the Prep checklist as **Before you start**
+> (`PrepStepsCard.vue`): a checkbox each, and a small countdown for a timed
+> one that doesn't start the brew clock. The timer gets only the steps after
+> them (with step time scaling and step temps applied to those only), and
+> its step marks are shifted past them (`afterPrep`,
+> `lib/marks.ts`) so they keep the recipe's `stepOrder`.
 *   **Delta-Timestamp Calculation:** Never increment a counter inside `setInterval`. Store `startTime = Date.now() - elapsedMs` and compute `elapsedMs = Date.now() - startTime` inside a `requestAnimationFrame` loop.
 *   **Start delay:** Settings → Brew setup → Timer start sets the person's
     `startDelays` to 0 / 3 / 5 separately for Filter, Espresso, Stovetop

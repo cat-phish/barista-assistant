@@ -498,7 +498,7 @@ export interface FreezePeriod {
 export type StepType =
   | 'bloom' | 'pour' | 'swirl' | 'stir' | 'wait' | 'press' // filter
   | 'preinfusion' | 'soak' | 'pressure' | 'flow' // espresso
-  | 'other';
+  | 'other' | 'prep'; // any; prep: before the timer starts (docs/api/recipes.md §5)
 // How the timer moves on: auto (after the duration), auto_log (plus a "Log it"
 // button), tap (waits for Next), first_drop (espresso: waits for First drop).
 export type StepAdvance = 'auto' | 'auto_log' | 'tap' | 'first_drop';

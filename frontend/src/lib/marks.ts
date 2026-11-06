@@ -41,6 +41,13 @@ export function heldSec(marks: readonly Mark[], stepOrder: number, until: number
   }, 0);
 }
 
+// The timer numbers the brew steps from 1; the recipe's step order also counts
+// the prep steps before them (docs/api/recipes.md §5), so a step mark
+// (step_end, step_hold, step_resume) is moved past them before it's saved.
+export function afterPrep(marks: readonly Mark[], prepCount: number): Mark[] {
+  return marks.map((m) => (m.stepOrder !== null ? { ...m, stepOrder: m.stepOrder + prepCount } : m));
+}
+
 // "0:07.4": seconds with one decimal.
 export function formatMark(sec: number): string {
   const tenths = Math.round(sec * 10); // in tenths, so 7.96 becomes 0:08.0
