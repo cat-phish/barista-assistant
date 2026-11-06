@@ -26,7 +26,7 @@ export interface UserPreferences {
   restReminders: boolean; // remind the morning a home roast is ready to brew
   greenStockAlerts: boolean; // tell when a roast takes a green coffee below its low-stock threshold
 }
-export type RepeatKeep = 'size' | 'doseWater' | 'temp' | 'grinder' | 'grind' | 'waterProfile' | 'dilution' | 'window' | 'prepTools' | 'grinderWeights' | 'vessel' | 'notes';
+export type RepeatKeep = 'bean' | 'recipe' | 'size' | 'doseWater' | 'temp' | 'grinder' | 'grind' | 'waterProfile' | 'dilution' | 'window' | 'prepTools' | 'grinderWeights' | 'vessel' | 'notes';
 export type RememberKey = 'what' | 'brewer' | 'recipe' | 'bean' | 'grinder' | 'grind' | 'waterProfile' | 'vessel' | 'prepTools' | 'size';
 
 // docs/api/notifications.md §1b: a person's own reminder channels.

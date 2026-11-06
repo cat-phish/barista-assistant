@@ -29,7 +29,7 @@ export const VOLUME_UNITS = ["fl_oz", "ml"] as const;
 export const ALTITUDE_UNITS = ["m", "ft"] as const;
 export const TEMPERATURE_UNITS = ["c", "f"] as const;
 export const THEMES = ["system", "light", "dark"] as const;
-export const REPEAT_KEEPS = ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "grinderWeights", "vessel", "notes"] as const; // what a repeat copies
+export const REPEAT_KEEPS = ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "grinderWeights", "vessel", "notes"] as const; // what a repeat copies
 export interface UserPreferences {
   volumeUnit: (typeof VOLUME_UNITS)[number];
   showBothVolumes: boolean;
@@ -40,9 +40,9 @@ export interface UserPreferences {
   rateReminderMinutes: number; // 5–240
   rateLaterDefault: boolean; // the log form's Rate later box starts ticked
   startDelays: Partial<Record<MethodKind, 0 | 3 | 5>>; // timed brew countdown per method, default {} = none (docs/api/auth.md §1)
-  repeatKeeps: (typeof REPEAT_KEEPS)[number][]; // default: size … waterProfile
+  repeatKeeps: (typeof REPEAT_KEEPS)[number][]; // default: bean … window
 }
-export const DEFAULT_PREFERENCES: UserPreferences = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, startDelays: {}, repeatKeeps: ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"] };
+export const DEFAULT_PREFERENCES: UserPreferences = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, startDelays: {}, repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"] };
 export const ROAST_SCALES = ["names", "levels"] as const; // roast names (Cinnamon … French) or light to dark only
 export interface WorkspaceSettings {
   recipeRoastLevel: RoastLevel; // the roast recipes are written for

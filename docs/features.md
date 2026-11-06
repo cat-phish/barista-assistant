@@ -322,8 +322,10 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   results, ratings and notes start blank, and anything archived since is
   skipped and named. The timer starts when you press Start.
   **Settings → Brew setup** (per person) chooses what's copied: each of
-  those but the prep, plus beans in / grounds out, and the earlier tasting
-  notes shown as a reminder on the log form.
+  those but what you're making, the brewer and the prep, plus beans in /
+  grounds out, and the earlier tasting notes shown as a reminder on the log
+  form. With the bean off, setup keeps the bean it had (to repeat with the
+  bag you just opened); with the recipe off, the brewer's last recipe.
 - **Rate later:** the log form has a **Rate later** box. Tick it and save
   without a rating, and a reminder ("How was it? Rate your brew") arrives
   after your delay (15 min by default), unless you've rated it by then.

@@ -72,7 +72,7 @@ units, with defaults filled in. Storage is always grams, °C and metres;
 clients convert what they show and what's typed (roadmap: Units and defaults).
 
 ```json
-{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "startDelays": {}, "steepReminders": true, "restReminders": true, "greenStockAlerts": true }
+{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "startDelays": {}, "steepReminders": true, "restReminders": true, "greenStockAlerts": true }
 ```
 
 - `volumeUnit`: `fl_oz` | `ml`: the brew page's yield estimate, and a new
@@ -104,6 +104,12 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
 - `repeatKeeps`: what repeating a brew copies (Settings → Brew setup, "Copy
   when repeating"), a
   list of `REPEAT_KEEPS`, each once:
+  - `bean`: the brew's bean, or the newest active bag of the same coffee
+    when that one's archived; off, setup keeps the bean it had (remembered,
+    or empty to pick);
+  - `recipe`: the brew's recipe on its brewer; off, the brewer's last
+    recipe, as for a new brew (what you're making and the brewer still come
+    from the brew);
   - `size`: the drink size;
   - `doseWater`: dose and water, and a flash chilled brew's ice;
   - `temp`;
@@ -119,11 +125,14 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
   - `grinderWeights`;
   - `notes`: shown on the log form as a reminder, not copied.
 
-  Default: the first eight. A `PATCH` sends the whole list. The bean, what
-  → brewer → recipe and the prep checklist (the tools that brew used,
+  Default: the first ten. A `PATCH` sends the whole list. What you're
+  making, the brewer and the prep checklist (the tools that brew used,
   rather than the recipe's default prep) always come along; results and
-  ratings never do. `prepTools` was an option until migration 0073, which
-  took it out of saved lists.
+  ratings never do. A note on what couldn't be filled (an archived bean,
+  recipe, grinder, water or vessel) is shown only when its option is on.
+  `prepTools` was an option until migration 0073, which took it out of
+  saved lists. `bean` and `recipe` were always copied until migration 0100
+  made them options and added them to every saved list.
 
   **Parity rule:** the options follow the brew form. Every brew parameter
   (each `brew.*` field in the field registry, `frontend/src/lib/fields.ts`)

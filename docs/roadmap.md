@@ -2374,3 +2374,26 @@ the Oxo Rapid Brewer, not a moka pot).
 - **Brew page and journal** offer problems with `offeredFor`, as prep.
 - **Backups:** version 5 upgrades version 4's `methodKind`; the join table
   restores after brewers, and a problem export brings its brewers along.
+
+## Repeat brews: bean and recipe as choices (built)
+
+Backlog item 7, branch `repeat-bean-recipe`. A repeat always copied the
+bean and what → brewer → recipe, so repeating with the bag you just opened,
+or the same bean on another recipe, meant changing them by hand
+(2026-11-06). Set aside on 2026-10-27 over whether a repeat without them is
+still a repeat; built since the defaults keep it one.
+
+- **Two new options**, `bean` and `recipe`, first in Settings → Brew setup
+  → Copy when repeating and on by default, so nothing changes unless you
+  switch them off (`docs/api/auth.md` §1 repeatKeeps).
+- **Bean off:** setup keeps the bean it had (remembered, or empty to pick).
+  On, the "newest bag of the same coffee" fallback stays.
+- **Recipe off:** what you're making and the brewer still come from the
+  brew (the open question); the brewer picks its last recipe, as for a new
+  brew. Only what → brewer and the prep checklist are always copied now.
+- **Notes on what couldn't be filled** carry the options they're about
+  (`RepeatNote`, `repeatMissing` in `lib/repeatBrew.ts`), so an archived
+  bean or recipe isn't mentioned when it wouldn't have been copied. This
+  replaces matching on the note's wording in `BrewView`.
+- **Migration 0100** adds `bean` and `recipe` to every saved `repeatKeeps`
+  list, so people who had saved their choices keep copying both.

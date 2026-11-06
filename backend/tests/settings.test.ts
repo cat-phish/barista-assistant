@@ -1,6 +1,10 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import request from "supertest";
+import { users } from "@barista/shared/schema";
+import { eq, sql } from "drizzle-orm";
 import { app } from "../src/app.js";
+import { db } from "../src/db.js";
 import { addMember, menuAdd, menuSection, newBean, newUser, newWorkspace } from "./helpers.js";
 
 // Units and defaults (docs/api/workspaces.md §2 settings, docs/api/auth.md §1 preferences).
@@ -114,7 +118,7 @@ describe("roast scale", () => {
 });
 
 describe("preferences", () => {
-  const defaults = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, steepReminders: true, restReminders: true, greenStockAlerts: true };
+  const defaults = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, steepReminders: true, restReminders: true, greenStockAlerts: true };
 
   it("come back on register and /me, defaults filled in", async () => {
     const user = await newUser();
@@ -132,7 +136,7 @@ describe("preferences", () => {
 
     expect((await a.agent.patch(path).send({ temperatureUnit: "f" })).body.preferences).toEqual({ ...defaults, temperatureUnit: "f" });
     const both = await a.agent.patch(path).send({ altitudeUnit: "ft", volumeUnit: "ml", showBothVolumes: true });
-    expect(both.body.preferences).toEqual({ volumeUnit: "ml", showBothVolumes: true, altitudeUnit: "ft", temperatureUnit: "f", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, steepReminders: true, restReminders: true, greenStockAlerts: true });
+    expect(both.body.preferences).toEqual({ volumeUnit: "ml", showBothVolumes: true, altitudeUnit: "ft", temperatureUnit: "f", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, steepReminders: true, restReminders: true, greenStockAlerts: true });
     expect((await a.agent.patch(path).send({ theme: "dark" })).body.preferences.theme).toBe("dark");
     expect((await a.agent.patch(path).send({ theme: "sepia" })).status).toBe(400);
 
@@ -169,12 +173,30 @@ describe("preferences", () => {
   it("repeatKeeps: what a repeat copies, each once, from the known list (docs/api/auth.md §1)", async () => {
     const me = await newUser();
     const path = "/api/auth/me/preferences";
-    const ok = await me.agent.patch(path).send({ repeatKeeps: ["grind", "grinderWeights", "notes"] });
-    expect(ok.body.preferences.repeatKeeps).toEqual(["grind", "grinderWeights", "notes"]);
+    const ok = await me.agent.patch(path).send({ repeatKeeps: ["bean", "grind", "grinderWeights", "notes"] });
+    expect(ok.body.preferences.repeatKeeps).toEqual(["bean", "grind", "grinderWeights", "notes"]);
     expect((await me.agent.patch(path).send({ repeatKeeps: [] })).body.preferences.repeatKeeps).toEqual([]);
     for (const repeatKeeps of [["rating"], ["grind", "grind"], "grind"]) {
       expect((await me.agent.patch(path).send({ repeatKeeps })).status, JSON.stringify(repeatKeeps)).toBe(400);
     }
+  });
+
+  it("migration 0100: saved repeat choices gain the bean and recipe, so a repeat keeps copying them", async () => {
+    const saved = await newUser();
+    const none = await newUser();
+    const otherPrefs = await newUser();
+    const already = await newUser();
+    await db.update(users).set({ preferences: { repeatKeeps: ["grind", "notes"] } }).where(eq(users.id, saved.id));
+    await db.update(users).set({ preferences: { temperatureUnit: "f" } }).where(eq(users.id, otherPrefs.id));
+    await db.update(users).set({ preferences: { repeatKeeps: ["bean", "recipe", "temp"] } }).where(eq(users.id, already.id));
+    const ids = [saved, none, otherPrefs, already].map((u) => `'${u.id}'`).join(", ");
+    const statement = readFileSync(new URL("../drizzle/0100_repeat_bean_recipe.sql", import.meta.url), "utf8").trim().replace(/;$/, ` AND \`id\` IN (${ids})`);
+    await db.execute(sql.raw(statement));
+    const prefs = async (u: { agent: typeof saved.agent }) => (await u.agent.get("/api/auth/me")).body.user.preferences;
+    expect((await prefs(saved)).repeatKeeps).toEqual(["bean", "recipe", "grind", "notes"]);
+    expect((await prefs(none)).repeatKeeps).toEqual(defaults.repeatKeeps);
+    expect(await prefs(otherPrefs)).toMatchObject({ temperatureUnit: "f", repeatKeeps: defaults.repeatKeeps });
+    expect((await prefs(already)).repeatKeeps).toEqual(["bean", "recipe", "temp"]);
   });
 
   it("rememberSetup: what the brew page remembers, each once, from the known list (docs/api/auth.md §1)", async () => {

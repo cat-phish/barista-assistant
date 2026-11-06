@@ -8,10 +8,12 @@ import { batchSuffix } from './beans';
 import { encodeCategory, encodeDrink, encodeMethod, encodePlain, methodKey, NO_RECIPE } from './brewChoice';
 import { formatAdded } from './format';
 
-// What a repeat can copy besides the bean, what → brewer → recipe and the
-// prep checklist, which it always takes (Settings → Brew setup, docs/api/auth.md §1 repeatKeeps).
+// What a repeat can copy besides what → brewer and the prep checklist,
+// which it always takes (Settings → Brew setup, docs/api/auth.md §1 repeatKeeps).
 // The defaults are the backend's (DEFAULT_PREFERENCES).
 export const REPEAT_OPTIONS: Array<{ key: RepeatKeep; label: string; hint?: string }> = [
+  { key: 'bean', label: 'Bean', hint: 'The next bag of the same coffee if that one’s archived. Off: the bean setup starts with' },
+  { key: 'recipe', label: 'Recipe', hint: 'Off: the brewer’s last recipe, as for a new brew' },
   { key: 'size', label: 'Drink size', hint: 'Off: the drink’s default size' },
   { key: 'doseWater', label: 'Dose, water and ice', hint: 'Off: the recipe’s. Espresso keeps the recipe’s ratio either way' },
   { key: 'temp', label: 'Water temperature', hint: 'Off: the recipe’s' },
@@ -63,7 +65,19 @@ export interface RepeatPlan {
   grinderId: string; // '' = none
   waterProfileId: string | null; // null = keep setup's (the default)
   vessel: Vessel | null; // null = none, or it's archived or gone
-  missing: string[]; // what couldn't be filled, one sentence each
+  missing: RepeatNote[]; // what couldn't be filled
+}
+
+// One sentence on what couldn't be filled, and the options it's about: it's
+// only worth saying if one of them is kept (none = always said).
+export interface RepeatNote {
+  text: string;
+  about: RepeatKeep[];
+}
+
+// The notes worth showing when the repeat copies what's kept.
+export function repeatMissing(plan: Pick<RepeatPlan, 'missing'>, kept: ReadonlySet<RepeatKeep>): string[] {
+  return plan.missing.filter((n) => n.about.length === 0 || n.about.some((k) => kept.has(k))).map((n) => n.text);
 }
 
 export interface RepeatSources {
@@ -90,16 +104,17 @@ function repeatBean(log: BrewLog, beans: Bean[]): { id: string; note: string | n
 }
 
 export function repeatPlan(log: BrewLog, s: RepeatSources): RepeatPlan {
-  const missing: string[] = [];
+  const missing: RepeatNote[] = [];
+  const note = (text: string, ...about: RepeatKeep[]) => missing.push({ text, about });
   const bean = repeatBean(log, s.beans);
-  if (bean.note) missing.push(bean.note);
+  if (bean.note) note(bean.note, 'bean');
 
   const brewer = s.brewers.find((b) => b.id === log.brewerId && !b.archivedAt) ?? null;
-  if (log.brewer && !brewer) missing.push(`The brewer ${log.brewer.name} is archived, so the recipe wasn't filled.`);
+  if (log.brewer && !brewer) note(`The brewer ${log.brewer.name} is archived, so the recipe wasn't filled.`);
   const drink = log.drinkId ? (s.drinks.find((d) => d.id === log.drinkId && !d.archivedAt) ?? null) : null;
-  if (log.drink && !drink) missing.push(`${log.drink.name} is archived or deleted, so it's brewed as a plain brew.`);
+  if (log.drink && !drink) note(`${log.drink.name} is archived or deleted, so it's brewed as a plain brew.`);
   const recipe = brewer && log.recipeId ? (s.recipes.find((r) => r.id === log.recipeId && !r.archivedAt && r.brewer.id === brewer.id) ?? null) : null;
-  if (brewer && log.recipe && !recipe) missing.push(`The recipe ${log.recipe.name} is archived or moved, so another of ${brewer.name}'s recipes was picked.`);
+  if (brewer && log.recipe && !recipe) note(`The recipe ${log.recipe.name} is archived or moved, so another of ${brewer.name}'s recipes was picked.`, 'recipe');
 
   let what = NO_RECIPE;
   let item = '';
@@ -112,11 +127,11 @@ export function repeatPlan(log: BrewLog, s: RepeatSources): RepeatPlan {
   }
 
   const grinder = log.grinderId ? s.grinders.find((g) => g.id === log.grinderId && !g.archivedAt) : undefined;
-  if (log.grinder && !grinder) missing.push(`The grinder ${log.grinder.name} is archived, so the grind wasn't filled.`);
+  if (log.grinder && !grinder) note(`The grinder ${log.grinder.name} is archived, so the grind wasn't filled.`, 'grinder', 'grind');
   const water = log.waterProfileId ? s.waterProfiles.find((w) => w.id === log.waterProfileId && !w.archivedAt) : undefined;
-  if (log.waterProfile && !water) missing.push(`The water ${log.waterProfile.name} is archived.`);
+  if (log.waterProfile && !water) note(`The water ${log.waterProfile.name} is archived.`, 'waterProfile');
   const vessel = log.vesselId ? s.vessels.find((v) => v.id === log.vesselId && !v.archivedAt) : undefined;
-  if (log.vessel && !vessel) missing.push(`The vessel ${log.vessel.name} is archived.`);
+  if (log.vessel && !vessel) note(`The vessel ${log.vessel.name} is archived.`, 'vessel');
 
   return {
     beanId: bean.id,
