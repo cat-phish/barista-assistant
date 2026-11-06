@@ -36,8 +36,8 @@ work is in `roadmap.md`.
   workspaces page, as a **new** workspace they own: every brew becomes
   theirs, the public menu starts off, members are invited again.
 - **Export and import by list:** each list page (beans, recipes, drinks,
-  ingredients, brewers, grinders, water, vessels, prep items, the journal; brew
-  problems in Settings → Lists) exports the items picked in "Select to
+  ingredients, brewers, grinders, water, vessels, prep items, brew problems,
+  the journal) exports the items picked in "Select to
   export…" and imports into that list with "Import…". Settings → Data
   exports whole lists, several at once, and imports several at once. What
   items need comes along (a recipe's brewer and grinders, a drink's
@@ -146,9 +146,14 @@ Adding and editing a brewer, grinder, ingredient or prep item happen on their ow
   and brewers ticked on its page (a paper filter sandwich for Espresso and
   the Oxo Rapid Brewer, not the V60); the list shows which.
 
-Brew problems (Settings → Lists) also support drag reordering, handle arrow
-keys and ↑/↓ buttons, including archived entries. Both checklists save their
-order immediately and restore it if saving fails.
+- **Problems:** what can go wrong while brewing, the brew log's checklist,
+  on its own Bar setup tab next to Prep and working the same way: reorder
+  on the list, name, **offered for**, Archive/Restore and Delete on each
+  problem's page ("Paper taste" for filter and the Oxo Rapid Brewer, not a
+  moka pot).
+
+Both checklists save their order immediately and restore it if saving
+fails.
 
 ## Recipes
 - **Style** (optional): how the recipe brews, from its brewer's method:
@@ -382,9 +387,9 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   tasting notes; can also be logged without the timer.
 - **Problems:** a checklist on the log form and journal edit of what went
   wrong while brewing (slow drawdown, channeling, a gushing shot, an untared
-  scale…), for the recipe's method plus the all-method ones. The list is
-  editable in Settings → Lists → Brew problems (add, rename, reorder, set
-  the method, archive or delete). The journal shows them, the AI reads them
+  scale…), the ones offered for the recipe's method or brewer. The list is
+  editable in Bar setup → Problems (add, rename, reorder, choose where it's
+  offered, archive or delete). The journal shows them, the AI reads them
   as the clearest clues, and Repeat brews never copies them.
 - **Flavor wheel:** the coffee's flavors, picked on a wheel next to the
   rating (fruity → berry → blueberry, nine categories including off flavors

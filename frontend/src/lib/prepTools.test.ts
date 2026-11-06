@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BrewProblem, PrepTool } from '../api/types';
-import { methodLabel, offeredLabel, problemsFor, recipePrep, toolsFor } from './prepTools';
+import { offeredError, offeredLabel, problemsFor, recipePrep, toolsFor } from './prepTools';
 
 const at = '2026-10-22T00:00:00.000Z';
 const tool = (id: string, methodKinds: PrepTool['methodKinds'], brewerIds: string[] = [], archived = false): PrepTool => ({
@@ -51,12 +51,14 @@ describe('recipePrep', () => {
 });
 
 describe('problemsFor', () => {
-  const problem = (id: string, methodKind: BrewProblem['methodKind']) => ({ id, methodKind, archivedAt: null });
-  const problems = [problem('channeling', 'espresso'), problem('stalled', 'filter'), problem('tared', null)];
-  it("shows the method's problems and the all-method ones; all without a recipe; keeps ticked ones", () => {
-    expect(ids(problemsFor(problems, 'espresso', []))).toEqual(['channeling', 'tared']);
-    expect(ids(problemsFor(problems, null, []))).toEqual(['channeling', 'stalled', 'tared']);
-    expect(ids(problemsFor(problems, 'filter', ['channeling']))).toEqual(['channeling', 'stalled', 'tared']);
+  const problem = (id: string, methodKinds: BrewProblem['methodKinds'], brewerIds: string[] = []) => ({ id, methodKinds, brewerIds, archivedAt: null });
+  const problems = [problem('channeling', ['espresso']), problem('stalled', ['filter']), problem('paper', ['filter'], ['oxo']), problem('oxo-drip', [], ['oxo']), problem('tared', [])];
+  it("offered like prep: the brew's method or brewer, plus every-brew ones; all without a recipe; keeps ticked ones", () => {
+    expect(ids(problemsFor(problems, { kind: 'espresso', brewerId: 'gaggia' }, []))).toEqual(['channeling', 'tared']);
+    expect(ids(problemsFor(problems, { kind: 'filter', brewerId: 'v60' }, []))).toEqual(['stalled', 'paper', 'tared']);
+    expect(ids(problemsFor(problems, { kind: 'other', brewerId: 'oxo' }, []))).toEqual(['paper', 'oxo-drip', 'tared']);
+    expect(ids(problemsFor(problems, { kind: null, brewerId: null }, []))).toEqual(['channeling', 'stalled', 'paper', 'oxo-drip', 'tared']);
+    expect(ids(problemsFor(problems, { kind: 'filter', brewerId: 'v60' }, ['channeling']))).toEqual(['channeling', 'stalled', 'paper', 'tared']);
   });
 });
 
@@ -69,9 +71,11 @@ describe('offeredLabel', () => {
   });
 });
 
-describe('methodLabel', () => {
-  it('names the method, or all methods', () => {
-    expect(methodLabel('espresso')).toBe('Espresso');
-    expect(methodLabel(null)).toBe('All methods');
+describe('offeredError', () => {
+  it('asks for a method or brewer unless every brew', () => {
+    expect(offeredError(true, [], [])).toBe('');
+    expect(offeredError(false, ['filter'], [])).toBe('');
+    expect(offeredError(false, [], ['oxo'])).toBe('');
+    expect(offeredError(false, [], [])).toMatch(/Pick a method or brewer/);
   });
 });

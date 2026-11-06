@@ -10,7 +10,9 @@ import { prepToolsApi } from '../api/prepTools';
 import type { Brewer, MethodKind } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import DeleteSection from '../components/DeleteSection.vue';
-import { METHOD_KINDS, METHOD_ORDER } from '../lib/equipment';
+import OfferedFor from '../components/OfferedFor.vue';
+import { METHOD_ORDER } from '../lib/equipment';
+import { offeredError } from '../lib/prepTools';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
@@ -34,15 +36,7 @@ const archiving = ref(false);
 const archiveError = ref('');
 const error = ref('');
 
-// Brewers by method, active ones plus any archived one already chosen.
-const brewerGroups = computed(() =>
-  METHOD_ORDER.map((kind) => ({
-    kind,
-    brewers: brewers.value.filter((b) => b.kind === kind && (!b.archivedAt || brewerIds.value.includes(b.id))),
-  })).filter((g) => g.brewers.length),
-);
 const nameError = computed(() => (name.value.trim() ? '' : 'Give it a name.'));
-const offeredError = computed(() => (!everyBrew.value && !methodKinds.value.length && !brewerIds.value.length ? 'Pick a method or brewer, or Every brew.' : ''));
 
 onMounted(async () => {
   const ws = workspaces.current?.id;
@@ -73,7 +67,7 @@ onMounted(async () => {
 async function save(): Promise<void> {
   submitted.value = true;
   const ws = workspaces.current?.id;
-  if (!ws || saving.value || archiving.value || nameError.value || offeredError.value) return;
+  if (!ws || saving.value || archiving.value || nameError.value || offeredError(everyBrew.value, methodKinds.value, brewerIds.value)) return;
   saving.value = true;
   error.value = '';
   const values = {
@@ -119,44 +113,19 @@ async function toggleArchived(): Promise<void> {
     <form v-else class="stack" :inert="archiving" novalidate @submit.prevent="save">
       <section class="card stack">
         <div class="field">
-          <label for="tool-name">Name</label>
+          <label for="tool-name">Name<span class="req" aria-hidden="true">*</span></label>
           <input id="tool-name" v-model="name" aria-required="true" maxlength="100" placeholder="e.g. Melodrip" :aria-invalid="submitted && !!nameError" />
           <p v-if="submitted && nameError" class="field-error">{{ nameError }}</p>
         </div>
       </section>
-      <section class="card stack" aria-labelledby="offered-title">
-        <h2 id="offered-title">Offered for</h2>
-        <p class="muted small">Where it shows on the brew page's prep checklist. A brew without a recipe offers every prep item.</p>
-        <fieldset class="choices">
-          <legend class="visually-hidden">Offered for</legend>
-          <label class="checkbox"><input v-model="everyBrew" type="radio" :value="true" name="offered" /> Every brew</label>
-          <label class="checkbox"><input v-model="everyBrew" type="radio" :value="false" name="offered" /> Only some methods or brewers</label>
-        </fieldset>
-        <template v-if="!everyBrew">
-          <fieldset class="choices">
-            <legend>Methods</legend>
-            <p class="muted small">Every brewer of the method.</p>
-            <label v-for="k in METHOD_ORDER" :key="k" class="checkbox">
-              <input v-model="methodKinds" type="checkbox" :value="k" />
-              {{ METHOD_KINDS[k].label }}
-            </label>
-          </fieldset>
-          <fieldset class="choices">
-            <legend>Brewers</legend>
-            <p class="muted small">Just these, on top of the methods above.</p>
-            <div v-for="g in brewerGroups" :key="g.kind" class="group">
-              <p class="group-name muted">{{ METHOD_KINDS[g.kind].label }}</p>
-              <p v-if="methodKinds.includes(g.kind)" class="muted small">Already offered for all of these.</p>
-              <label v-for="b in g.brewers" :key="b.id" class="checkbox">
-                <input v-model="brewerIds" type="checkbox" :value="b.id" />
-                {{ b.name }}<template v-if="b.archivedAt"> (archived)</template>
-              </label>
-            </div>
-            <p v-if="!brewerGroups.length" class="muted small">No brewers yet.</p>
-          </fieldset>
-          <p v-if="submitted && offeredError" class="field-error" role="alert">{{ offeredError }}</p>
-        </template>
-      </section>
+      <OfferedFor
+        v-model:every-brew="everyBrew"
+        v-model:method-kinds="methodKinds"
+        v-model:brewer-ids="brewerIds"
+        :brewers="brewers"
+        :submitted="submitted"
+        hint="Where it shows on the brew page's prep checklist. A brew without a recipe offers every prep item."
+      />
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
       <div class="buttons">
         <RouterLink class="btn btn-secondary" :to="{ name: 'prep-tools' }">Cancel</RouterLink>
@@ -193,27 +162,6 @@ p {
 }
 .small {
   font-size: 0.85rem;
-}
-.choices {
-  border: 0;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.choices legend {
-  font-weight: 600;
-  margin-bottom: var(--space-1);
-}
-.group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-.group-name {
-  font-size: 0.9rem;
-  margin-top: var(--space-1);
 }
 .buttons {
   display: flex;

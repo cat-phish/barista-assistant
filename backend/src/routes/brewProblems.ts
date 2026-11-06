@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, max, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, max, sql } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
@@ -7,11 +7,12 @@ import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { addUsageRoute, brewProblemUsage } from "../usage.js";
-import { METHOD_KINDS, brewProblems, type BrewProblem } from "@barista/shared/schema";
+import { brewers, brewProblemBrewers, brewProblems, METHOD_KINDS, type BrewProblem } from "@barista/shared/schema";
 import { updateSchema } from "../validation.js";
 
 // docs/api/brew-problems.md §6b
-export type BrewProblemSummary = Omit<BrewProblem, "workspaceId">;
+// Offered for its methodKinds and brewerIds; both empty = every brew.
+export type BrewProblemSummary = Omit<BrewProblem, "workspaceId"> & { brewerIds: string[] };
 
 interface WorkspaceParams {
   workspaceId: string;
@@ -20,11 +21,16 @@ interface ProblemParams extends WorkspaceParams {
   problemId: string;
 }
 
+const eachOnce = <T>(list: T[]) => new Set(list).size === list.length;
 const problemFields = {
   name: z.string().trim().min(1).max(100),
-  methodKind: z.enum(METHOD_KINDS).nullable().optional(), // null = every method
+  // Where it's offered; both empty = every brew. Each replaces its whole list.
+  methodKinds: z.array(z.enum(METHOD_KINDS)).refine(eachOnce, "each method once"),
+  brewerIds: z.array(z.uuid()).max(100).refine(eachOnce, "each brewer once"),
 };
-const createSchema = z.object(problemFields).strict();
+const createSchema = z
+  .object({ ...problemFields, methodKinds: problemFields.methodKinds.optional(), brewerIds: problemFields.brewerIds.optional() })
+  .strict();
 const updateProblemSchema = updateSchema({ ...problemFields, archived: z.boolean() });
 const orderSchema = z
   .object({ problemIds: z.array(z.uuid()).max(200).refine((ids) => new Set(ids).size === ids.length, "each problem once") })
@@ -33,7 +39,7 @@ const orderSchema = z
 const summary = {
   id: brewProblems.id,
   name: brewProblems.name,
-  methodKind: brewProblems.methodKind,
+  methodKinds: brewProblems.methodKinds,
   position: brewProblems.position,
   archivedAt: brewProblems.archivedAt,
   createdAt: brewProblems.createdAt,
@@ -43,12 +49,29 @@ function inWorkspace(p: ProblemParams) {
   return and(eq(brewProblems.id, p.problemId), eq(brewProblems.workspaceId, p.workspaceId));
 }
 
-function listProblems(workspaceId: string): Promise<BrewProblemSummary[]> {
-  return db
-    .select(summary)
-    .from(brewProblems)
-    .where(eq(brewProblems.workspaceId, workspaceId))
-    .orderBy(asc(brewProblems.position), asc(brewProblems.name));
+// The problems (one, or the whole workspace's in checklist order) with their brewers.
+async function withBrewers(problems: Omit<BrewProblemSummary, "brewerIds">[]): Promise<BrewProblemSummary[]> {
+  const ids = problems.map((p) => p.id);
+  const links = ids.length
+    ? await db.select().from(brewProblemBrewers).where(inArray(brewProblemBrewers.brewProblemId, ids)).orderBy(asc(brewProblemBrewers.brewerId))
+    : [];
+  return problems.map((p) => ({ ...p, brewerIds: links.filter((l) => l.brewProblemId === p.id).map((l) => l.brewerId) }));
+}
+async function listProblems(workspaceId: string): Promise<BrewProblemSummary[]> {
+  return withBrewers(
+    await db.select(summary).from(brewProblems).where(eq(brewProblems.workspaceId, workspaceId)).orderBy(asc(brewProblems.position), asc(brewProblems.name)),
+  );
+}
+async function getProblem(p: ProblemParams): Promise<BrewProblemSummary | null> {
+  return (await withBrewers(await db.select(summary).from(brewProblems).where(inWorkspace(p))))[0] ?? null;
+}
+// Brewers must be this workspace's (archived ones too: a problem can keep them).
+async function brewersInWorkspace(res: Response, workspaceId: string, ids: string[] | undefined): Promise<boolean> {
+  if (!ids?.length) return true;
+  const found = await db.select({ id: brewers.id }).from(brewers).where(and(eq(brewers.workspaceId, workspaceId), inArray(brewers.id, ids)));
+  if (found.length === ids.length) return true;
+  sendError(res, 400, "brewerIds: must be brewers of this workspace");
+  return false;
 }
 
 const duplicate = (res: Response, err: unknown): boolean => {
@@ -74,7 +97,7 @@ brewProblemsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response
   const { workspaceId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
   const body = parseBody(createSchema, req, res);
-  if (!body) return;
+  if (!body || !(await brewersInWorkspace(res, workspaceId, body.brewerIds))) return;
   const id = randomUUID();
   try {
     await db.transaction(async (tx) => {
@@ -84,13 +107,14 @@ brewProblemsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response
         .select({ last: max(brewProblems.position) })
         .from(brewProblems)
         .where(eq(brewProblems.workspaceId, workspaceId));
-      await tx.insert(brewProblems).values({ id, workspaceId, name: body.name, methodKind: body.methodKind ?? null, position: (last ?? 0) + 1 });
+      await tx.insert(brewProblems).values({ id, workspaceId, name: body.name, methodKinds: body.methodKinds ?? [], position: (last ?? 0) + 1 });
+      if (body.brewerIds?.length) await tx.insert(brewProblemBrewers).values(body.brewerIds.map((brewerId) => ({ brewProblemId: id, brewerId })));
     });
   } catch (err) {
     if (duplicate(res, err)) return;
     throw err;
   }
-  const [problem] = await db.select(summary).from(brewProblems).where(eq(brewProblems.id, id));
+  const problem = await getProblem({ workspaceId, problemId: id });
   if (!problem) throw new Error(`Brew problem ${id} missing after insert`);
   res.status(201).json({ problem });
 });
@@ -120,23 +144,31 @@ brewProblemsRouter.put("/order", async (req: Request<WorkspaceParams>, res: Resp
 brewProblemsRouter.patch("/:problemId", async (req: Request<ProblemParams>, res: Response<{ problem: BrewProblemSummary }>) => {
   if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId, WRITE_ROLES))) return;
   const body = parseBody(updateProblemSchema, req, res);
-  if (!body) return;
-  const { archived, ...fields } = body;
+  if (!body || !(await brewersInWorkspace(res, req.params.workspaceId, body.brewerIds))) return;
+  const { archived, brewerIds, ...fields } = body;
   try {
-    await db
-      .update(brewProblems)
-      .set({
+    await db.transaction(async (tx) => {
+      const set = {
         ...fields,
         // Keep the original archive date if it's already archived.
         ...(archived === true ? { archivedAt: sql`COALESCE(${brewProblems.archivedAt}, NOW())` } : {}),
         ...(archived === false ? { archivedAt: null } : {}),
-      })
-      .where(inWorkspace(req.params));
+      };
+      // Only brewerIds sent: nothing to set on the problem itself.
+      const found = Object.keys(set).length
+        ? (await tx.update(brewProblems).set(set).where(inWorkspace(req.params)))[0].affectedRows > 0
+        : (await tx.select({ id: brewProblems.id }).from(brewProblems).where(inWorkspace(req.params))).length > 0;
+      if (!found || !brewerIds) return; // 404 below
+      await tx.delete(brewProblemBrewers).where(eq(brewProblemBrewers.brewProblemId, req.params.problemId));
+      if (brewerIds.length) {
+        await tx.insert(brewProblemBrewers).values(brewerIds.map((brewerId) => ({ brewProblemId: req.params.problemId, brewerId })));
+      }
+    });
   } catch (err) {
     if (duplicate(res, err)) return;
     throw err;
   }
-  const [problem] = await db.select(summary).from(brewProblems).where(inWorkspace(req.params));
+  const problem = await getProblem(req.params);
   if (!problem) {
     sendError(res, 404, "Problem not found");
     return;

@@ -9,9 +9,10 @@ export const brewProblemsApi = {
   // In list order, archived ones included.
   list: (workspaceId: string) => api.get<{ problems: BrewProblem[] }>(base(workspaceId)),
   // New ones go last; 409 when the name is taken.
-  create: (workspaceId: string, input: { name: string; methodKind: MethodKind | null }) =>
+  create: (workspaceId: string, input: { name: string; methodKinds: MethodKind[]; brewerIds: string[] }) =>
     api.post<{ problem: BrewProblem }>(base(workspaceId), input),
-  update: (workspaceId: string, id: string, input: { name?: string; methodKind?: MethodKind | null; archived?: boolean }) =>
+  // brewerIds replaces the problem's brewers.
+  update: (workspaceId: string, id: string, input: { name?: string; methodKinds?: MethodKind[]; brewerIds?: string[]; archived?: boolean }) =>
     api.patch<{ problem: BrewProblem }>(`${base(workspaceId)}/${id}`, input),
   // Every problem of the workspace (archived too), in the new order.
   reorder: (workspaceId: string, problemIds: string[]) => api.put<{ problems: BrewProblem[] }>(`${base(workspaceId)}/order`, { problemIds }),

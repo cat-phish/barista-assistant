@@ -892,35 +892,36 @@ export const prepToolBrewers = mysqlTable(
 );
 
 // 5g. Brew problems (docs/api/brew-problems.md §6b): what went wrong while
-// brewing, a per-workspace checklist like prep tools. methodKind limits one
-// to a method's brews (null = every method); position is the checklist
-// order. Seeded with DEFAULT_BREW_PROBLEMS when a workspace is created;
-// archived (kept on old brews) or deleted in Settings → Lists.
+// brewing, a per-workspace checklist like prep tools. methodKinds and
+// brew_problem_brewers say which brews offer it (both empty = every brew);
+// position is the checklist order. Seeded with DEFAULT_BREW_PROBLEMS when a
+// workspace is created; archived (kept on old brews) or deleted in Bar
+// setup → Problems.
 export const DEFAULT_BREW_PROBLEMS = [
-  { name: "Slow drawdown / stalled bed", methodKind: "filter" },
-  { name: "Fast drawdown", methodKind: "filter" },
-  { name: "Uneven or cratered bed", methodKind: "filter" },
-  { name: "Grounds high on the walls", methodKind: "filter" },
-  { name: "Channeling (holes in the bed)", methodKind: "filter" },
-  { name: "Filter clogged or collapsed", methodKind: "filter" },
-  { name: "Poured too fast or uneven", methodKind: "filter" },
-  { name: "Missed a pour target", methodKind: "filter" },
-  { name: "Water too hot or cold (kettle off)", methodKind: "filter" },
-  { name: "Immersion: grounds didn't sink, crust didn't break", methodKind: "filter" },
-  { name: "Channeling / spurting", methodKind: "espresso" },
-  { name: "Shot ran fast (gushed)", methodKind: "espresso" },
-  { name: "Shot choked or dripped slowly", methodKind: "espresso" },
-  { name: "Uneven extraction (one spout first, blonding early)", methodKind: "espresso" },
-  { name: "Puck wet or soupy", methodKind: "espresso" },
-  { name: "Puck cracked or stuck to the screen", methodKind: "espresso" },
-  { name: "Grinder clumping", methodKind: "espresso" },
-  { name: "Dose spilled or uneven tamp", methodKind: "espresso" },
-  { name: "Machine temperature not settled", methodKind: "espresso" },
-  { name: "Stale or old beans", methodKind: null },
-  { name: "Grind setting changed by mistake", methodKind: null },
-  { name: "Scale not tared", methodKind: null },
-  { name: "Distracted / timer missed", methodKind: null },
-] as const satisfies ReadonlyArray<{ name: string; methodKind: MethodKind | null }>;
+  { name: "Slow drawdown / stalled bed", methodKinds: ["filter"] },
+  { name: "Fast drawdown", methodKinds: ["filter"] },
+  { name: "Uneven or cratered bed", methodKinds: ["filter"] },
+  { name: "Grounds high on the walls", methodKinds: ["filter"] },
+  { name: "Channeling (holes in the bed)", methodKinds: ["filter"] },
+  { name: "Filter clogged or collapsed", methodKinds: ["filter"] },
+  { name: "Poured too fast or uneven", methodKinds: ["filter"] },
+  { name: "Missed a pour target", methodKinds: ["filter"] },
+  { name: "Water too hot or cold (kettle off)", methodKinds: ["filter"] },
+  { name: "Immersion: grounds didn't sink, crust didn't break", methodKinds: ["filter"] },
+  { name: "Channeling / spurting", methodKinds: ["espresso"] },
+  { name: "Shot ran fast (gushed)", methodKinds: ["espresso"] },
+  { name: "Shot choked or dripped slowly", methodKinds: ["espresso"] },
+  { name: "Uneven extraction (one spout first, blonding early)", methodKinds: ["espresso"] },
+  { name: "Puck wet or soupy", methodKinds: ["espresso"] },
+  { name: "Puck cracked or stuck to the screen", methodKinds: ["espresso"] },
+  { name: "Grinder clumping", methodKinds: ["espresso"] },
+  { name: "Dose spilled or uneven tamp", methodKinds: ["espresso"] },
+  { name: "Machine temperature not settled", methodKinds: ["espresso"] },
+  { name: "Stale or old beans", methodKinds: [] },
+  { name: "Grind setting changed by mistake", methodKinds: [] },
+  { name: "Scale not tared", methodKinds: [] },
+  { name: "Distracted / timer missed", methodKinds: [] },
+] as const satisfies ReadonlyArray<{ name: string; methodKinds: readonly MethodKind[] }>;
 
 export const brewProblems = mysqlTable(
   "brew_problems",
@@ -930,13 +931,33 @@ export const brewProblems = mysqlTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 100 }).notNull(),
-    methodKind: varchar("method_kind", { length: 20 }).$type<MethodKind>(), // METHOD_KINDS, or null = all
+    // Where it's offered (docs/api/brew-problems.md §6b): these methods, plus
+    // the brewers in brew_problem_brewers. Both empty = every brew.
+    methodKinds: jsonValue<MethodKind[]>("method_kinds").notNull(),
     position: int("position").notNull(), // 1, 2, 3...
     archivedAt: timestamp("archived_at"), // null = active
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
     workspaceNameUnique: unique("brew_problems_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+
+// 5g2. Brew Problem Brewers: the brewers a brew problem is offered for, on
+// top of its methodKinds (docs/api/brew-problems.md §6b). Replaced as a whole
+// when the problem is edited; deleting either side unlinks it.
+export const brewProblemBrewers = mysqlTable(
+  "brew_problem_brewers",
+  {
+    brewProblemId: varchar("brew_problem_id", { length: 36 })
+      .notNull()
+      .references(() => brewProblems.id, { onDelete: "cascade" }),
+    brewerId: varchar("brewer_id", { length: 36 })
+      .notNull()
+      .references(() => brewers.id, { onDelete: "cascade" }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.brewProblemId, table.brewerId] }),
   })
 );
 

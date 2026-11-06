@@ -2350,3 +2350,27 @@ just owners), opening a dialog in the style of Sonarr's table options.
 - **Shared pieces:** `TableHead.vue` (sort buttons, plain headers for
   unsortable columns, the resize handles) and each view's `TABLE` list with
   a cell function, instead of hand-written header and cells.
+
+## Brew problems offered by methods and brewers (built)
+
+Backlog item 8, branch `problems-offered`. A brew problem was for one
+method or every method; now it's offered like a prep item (2026-10-27):
+for every brew, or chosen methods and brewers ("Paper taste" for filter and
+the Oxo Rapid Brewer, not a moka pot).
+
+- **Model:** `brew_problems.method_kinds` (JSON list) plus a
+  `brew_problem_brewers` join table; both empty = every brew. Migration
+  0098 turns each `method_kind` into a one-item list (`null` → `[]`), 0099
+  drops it. The defaults keep their one method, or every brew.
+- **API** (`brew-problems.md` §6b): `methodKinds` and `brewerIds` on the
+  problem, POST and PATCH, brewers checked to be the workspace's; a brew
+  log's problem refs are `{ id, name }`.
+- **Moved to Bar setup → Problems**, next to Prep (the open question):
+  a list page like Prep (reorder, Show archived, select to export, import,
+  a badge saying where each is offered) and an edit page per problem
+  (name, Offered for, Archive/Restore, Delete). Settings → Lists lost the
+  card and points there. The "Offered for" card is one component,
+  `OfferedFor.vue`, on both edit pages.
+- **Brew page and journal** offer problems with `offeredFor`, as prep.
+- **Backups:** version 5 upgrades version 4's `methodKind`; the join table
+  restores after brewers, and a problem export brings its brewers along.

@@ -62,7 +62,7 @@ const props = defineProps<{
   prepTools?: PrepTool[]; // the workspace's, in order (docs/api/prep-tools.md §3d)
   problems?: BrewProblem[]; // the workspace's, in order (docs/api/brew-problems.md §6b)
   methodKind?: MethodKind | null; // the recipe's; null = no recipe (every tool shows)
-  brewerId?: string | null; // the recipe's brewer, for the prep tools offered for it
+  brewerId?: string | null; // the recipe's brewer, for the prep tools and problems offered for it
   expectedYieldGrams?: number | null; // the recipe's estimate (espresso: target), shown for comparison
   espresso?: boolean; // shot weight instead of water (docs/api/brew-logs.md §6)
   drinkTasting?: boolean; // the drink has ingredients: rate the brew and the drink apart
@@ -176,8 +176,8 @@ const rpmPlaceholder = computed(() => {
 });
 // The prep checklist: the tools offered for this method or brewer (lib/prepTools.ts).
 const toolOptions = computed(() => toolsFor(props.prepTools ?? [], { kind: props.methodKind ?? null, brewerId: props.brewerId ?? null }, draft.value.toolIds));
-// What went wrong: the method's and the all-method ones (Settings → Lists → Brew problems).
-const problemOptions = computed(() => problemsFor(props.problems ?? [], props.methodKind ?? null, draft.value.problemIds));
+// What went wrong: the problems offered for this method or brewer (Bar setup → Problems).
+const problemOptions = computed(() => problemsFor(props.problems ?? [], { kind: props.methodKind ?? null, brewerId: props.brewerId ?? null }, draft.value.problemIds));
 // Likewise for water; with none set up, the only choice says so.
 const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w.archivedAt || w.id === draft.value.waterProfileId));
 </script>
