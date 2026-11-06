@@ -95,6 +95,9 @@ export const router = createRouter({
     { path: '/setup/tools', name: 'prep-tools', component: () => import('../views/PrepToolsView.vue'), meta: { requiresWorkspace: true } },
     { path: '/setup/tools/new', name: 'prep-tool-new', component: () => import('../views/PrepToolFormView.vue'), meta: { requiresWorkspace: true, requiresEditor: true } },
     { path: '/setup/tools/:id/edit', name: 'prep-tool-edit', component: () => import('../views/PrepToolFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresEditor: true } },
+    { path: '/setup/problems', name: 'brew-problems', component: () => import('../views/BrewProblemsView.vue'), meta: { requiresWorkspace: true } },
+    { path: '/setup/problems/new', name: 'brew-problem-new', component: () => import('../views/BrewProblemFormView.vue'), meta: { requiresWorkspace: true, requiresEditor: true } },
+    { path: '/setup/problems/:id/edit', name: 'brew-problem-edit', component: () => import('../views/BrewProblemFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresEditor: true } },
     // Categories moved to the Drinks page; old links and bookmarks still land there.
     { path: '/setup/categories', name: 'categories', redirect: { name: 'drinks', hash: '#categories' } },
     { path: '/setup/menu', name: 'menu-builder', component: () => import('../views/MenuBuilderView.vue'), meta: { requiresWorkspace: true } },

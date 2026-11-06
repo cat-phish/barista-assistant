@@ -139,6 +139,7 @@ const TABLE_LABELS: Record<string, string> = {
   menu_items: 'menu items',
   brew_log_marks: 'timer marks',
   prep_tool_brewers: 'prep item brewers',
+  brew_problem_brewers: 'problem brewers',
   brew_log_tools: 'prep ticks',
   brew_log_problems: 'problem ticks',
   brew_log_flavors: 'flavor picks',

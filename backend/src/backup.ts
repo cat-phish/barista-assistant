@@ -56,6 +56,7 @@ import {
   aiChatPhotos,
   brewLogs,
   brewLogTools,
+  brewProblemBrewers,
   brewProblems,
   drinkCategories,
   drinkIngredients,
@@ -93,7 +94,7 @@ import { checkStoredPhoto, removeWorkspacePhotos, writePhotoFile } from "./photo
 export const BACKUP_FORMAT = "barista-backup";
 // Bumped when a backup made before the change can't be restored as is;
 // UPGRADES then turns an older file into the current shape.
-export const BACKUP_VERSION = 4;
+export const BACKUP_VERSION = 5;
 const UPGRADES: Record<number, (file: BackupFile) => BackupFile> = {
   // 2: a prep tool's one methodKind (null = every method) became a list,
   // methodKinds ([] = every method), plus brewers (prep_tool_brewers).
@@ -149,6 +150,25 @@ const UPGRADES: Record<number, (file: BackupFile) => BackupFile> = {
         : {}),
     },
   }),
+  // 5: a brew problem's one methodKind (null = every method) became a list,
+  // methodKinds ([] = every method), plus brewers (brew_problem_brewers), as
+  // prep tools did in 2.
+  4: (file) => ({
+    ...file,
+    version: 5,
+    tables: {
+      ...file.tables,
+      ...(Array.isArray(file.tables?.brew_problems)
+        ? {
+            brew_problems: file.tables.brew_problems.map((r) => {
+              if (!isObject(r)) return r;
+              const { methodKind, ...row } = r;
+              return { ...row, methodKinds: methodKind == null ? [] : [methodKind] };
+            }),
+          }
+        : {}),
+    },
+  }),
 };
 const OLD_BEAN_SOURCES: Record<string, string> = { bean: "bag", beanRecipe: "bagRecipe", beanBrewer: "bagBrewer" };
 const bagSource = (source: unknown): unknown => (typeof source === "string" ? (OLD_BEAN_SOURCES[source] ?? source) : source);
@@ -171,6 +191,7 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
   { table: roastingMachines, scope: "workspace" },
   { table: greenCoffees, scope: "workspace" },
   { table: prepToolBrewers, scope: "prepToolId" },
+  { table: brewProblemBrewers, scope: "brewProblemId" },
   { table: beans, scope: "workspace" },
   { table: beanFreezes, scope: "beanId" },
   { table: beanPhotos, scope: "beanId" },
@@ -215,7 +236,6 @@ const ENUMS: Record<string, readonly string[]> = {
   "grinders.adjustment": GRINDER_ADJUSTMENTS,
   "grinders.burrType": BURR_TYPES,
   "grinders.power": GRINDER_POWER,
-  "brew_problems.methodKind": METHOD_KINDS,
   "beans.roastLevel": ROAST_LEVELS,
   "beans.roastType": ROAST_TYPES,
   "beans.detailedRoastLevel": DETAILED_ROAST_LEVELS,
@@ -254,6 +274,7 @@ const JSON_SCHEMAS: Record<string, z.ZodType> = {
   "green_coffees.species": z.array(z.enum(COFFEE_SPECIES)).nullable(),
   "menu_items.beanFields": z.array(z.enum(BEAN_MENU_FIELDS)).nullable(),
   "prep_tools.methodKinds": z.array(z.enum(METHOD_KINDS)),
+  "brew_problems.methodKinds": z.array(z.enum(METHOD_KINDS)),
   "llm_analyses.request": aiRequest,
   "parameter_suggestions.request": aiRequest,
   "parameter_suggestions.alternativesAsked": z.array(z.enum(SUGGEST_ALTERNATIVES)).nullable(),

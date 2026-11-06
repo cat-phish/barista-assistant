@@ -29,8 +29,7 @@ new workspace).
 | Spreadsheet (CSV) | Settings → Data → Spreadsheet | `GET …/csv/:list` | `backend/src/csv.ts` |
 
 **List pages** (Journal, Beans, Recipes, Drinks, Ingredients, Brewers,
-Grinders, Water profiles, Vessels, Prep, and brew problems on Settings →
-Lists) have one bar, `frontend/src/components/ListDataBar.vue`:
+Grinders, Water profiles, Vessels, Prep, Problems) have one bar, `frontend/src/components/ListDataBar.vue`:
 "Select to export…" (the rows get ticks; "Export selected" downloads them
 with what they need) and "Import…" (a dialog with the import below,
 limited to that list; a file without it is refused with what it does have).
@@ -45,7 +44,7 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
 ```json
 {
   "format": "barista-backup",
-  "version": 4,
+  "version": 5,
   "exportedAt": "2026-10-23T08:00:00.000Z",
   "workspace": { "name": "Home bar", "slug": "home-bar", "settings": { "roastScale": "levels" }, "menuTitle": null, "menuCurrency": "USD", "isPublicMenuEnabled": true, "flavorLexicon": null },
   "tables": {
@@ -62,7 +61,8 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
 - **Tables, in restore order:** `brewer_methods`, `bean_processes`,
   `recipe_styles`, `grinders`, `water_profiles`, `vessels`, `prep_tools`,
   `brew_problems`, `ingredients`, `drink_categories`, `brewers`,
-  `roasting_machines`, `green_coffees`, `prep_tool_brewers`, `beans`,
+  `roasting_machines`, `green_coffees`, `prep_tool_brewers`,
+  `brew_problem_brewers`, `beans`,
   `bean_freezes`, `bean_photos`, `roasts`, `recipes`, `recipe_steps`, `recipe_grind_settings`, `recipe_prep_tools`,
   `drinks`, `drink_ingredients`, `menu_sections`, `menu_items`,
   `brew_logs`, `brew_log_marks`, `brew_log_tools`, `brew_log_problems`,
@@ -101,6 +101,10 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   - **4:** which steps follow the batch became each step's `scalesWithBatch`
     (`recipes.md` §5). A version 3 file's `recipe_steps` get the defaults for
     their types.
+  - **5:** a brew problem's one `methodKind` became `methodKinds`, plus the
+    brewers it's offered for (`brew_problem_brewers`), as prep items did
+    in 2 (`brew-problems.md` §6b). A version 4 file restores with
+    `[methodKind]` or `[]`, and no brewers.
 
 **Bean photos** (`bean-photos.md` §4c): `bean_photos` rows go only with
 their files, so a JSON file has none (`BackupOptions.photos` in
@@ -199,7 +203,8 @@ too. Where the app offers them: "Where it is" above. Code:
   | `ingredients` | ingredients | – |
   | `brewers` | brewers | brewer method |
   | `prep_tools` | prep items, the brewers each is offered for | those brewers (→ as brewers) |
-  | `grinders`, `water_profiles`, `vessels`, `brew_problems` | themselves | – |
+  | `brew_problems` | brew problems, the brewers each is offered for | those brewers (→ as brewers) |
+  | `grinders`, `water_profiles`, `vessels` | themselves | – |
   | `brew_logs` | brews, their marks, prep and problem ticks, AI analyses | bean (→ as beans), recipe (→ as recipes), grinder, water profile, vessel, drink (→ as drinks), brewer, prep items, brew problems |
 - **Matching** (`MATCH_KEYS`): a row is "already here" when the workspace
   has one with the same key, and the import uses that one instead:

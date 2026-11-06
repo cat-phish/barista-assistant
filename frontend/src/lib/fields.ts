@@ -33,7 +33,7 @@ export const FIELDS = [
   brew('grinderWeights', 'Beans in / grounds out', 'Grinder retention'),
   brew('waterProfile', 'Water profile'),
   brew('prepTools', 'Prep checklist'),
-  brew('problems', 'Problems checklist', 'What went wrong while brewing (Settings → Lists)'),
+  brew('problems', 'Problems checklist', 'What went wrong while brewing (Bar setup → Problems)'),
   brew('flavors', 'Flavor wheel', 'The coffee’s flavors, picked on a wheel; tasting notes stay'),
   brew('steepTemp', 'Steep in fridge or room (cold styles)'),
   brew('dilution', 'Dilution served (cold styles, concentrates)'),

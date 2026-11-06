@@ -387,8 +387,8 @@ describe("processBrewAnalysis", () => {
     llm.mockResolvedValue(ANALYSIS);
     const [slow, tared] = [randomUUID(), randomUUID()];
     await db.insert(brewProblems).values([
-      { id: tared, workspaceId, name: "Scale not tared", methodKind: null, position: 2 },
-      { id: slow, workspaceId, name: "Slow drawdown", methodKind: "filter", position: 1, archivedAt: new Date() },
+      { id: tared, workspaceId, name: "Scale not tared", methodKinds: [], position: 2 },
+      { id: slow, workspaceId, name: "Slow drawdown", methodKinds: ["filter"], position: 1, archivedAt: new Date() },
     ]);
     await db.insert(brewLogProblems).values([
       { brewLogId: logIds.day8!, problemId: tared },

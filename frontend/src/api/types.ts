@@ -380,7 +380,7 @@ export interface WaterProfile extends WaterProfileDetails {
   createdAt: string;
 }
 
-// docs/api/prep-tools.md §3d: ordered; methodKind null = every method.
+// docs/api/prep-tools.md §3d: ordered; offered for its methods and brewers.
 export interface PrepTool {
   id: string;
   name: string;
@@ -393,16 +393,17 @@ export interface PrepTool {
 export type PrepToolRef = Pick<PrepTool, 'id' | 'name'>;
 
 // docs/api/brew-problems.md §6b: what went wrong while brewing, a checklist
-// like prep tools (ordered; methodKind null = every method).
+// like prep tools (ordered; offered for its methods and brewers).
 export interface BrewProblem {
   id: string;
   name: string;
-  methodKind: MethodKind | null;
+  methodKinds: MethodKind[]; // offered for these methods…
+  brewerIds: string[]; // …and these brewers; both empty = every brew
   position: number;
   archivedAt: string | null; // set = archived (off the checklist, kept in history)
   createdAt: string;
 }
-export type BrewProblemRef = Pick<BrewProblem, 'id' | 'name' | 'methodKind'>;
+export type BrewProblemRef = Pick<BrewProblem, 'id' | 'name'>;
 
 // docs/api/brewers.md §3: espresso brewers' capabilities.
 export type Preinfusion = 'none' | 'automatic' | 'manual';

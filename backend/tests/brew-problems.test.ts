@@ -1,11 +1,13 @@
+import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_BREW_PROBLEMS } from "@barista/shared/schema";
-import { addMember, newBean, newBrewLog, newUser, newWorkspace } from "./helpers.js";
+import { addMember, brewerId, newBean, newBrewLog, newUser, newWorkspace } from "./helpers.js";
 
 interface Problem {
   id: string;
   name: string;
-  methodKind: string | null;
+  methodKinds: string[];
+  brewerIds: string[];
   position: number;
   archivedAt: string | null;
 }
@@ -23,27 +25,56 @@ describe("brew problems (docs/api/brew-problems.md §6b)", () => {
   it("new workspaces start with the default problems, in order", async () => {
     const { list } = await setup();
     const problems = await list();
-    expect(problems.map((p) => [p.name, p.methodKind])).toEqual(DEFAULT_BREW_PROBLEMS.map((p) => [p.name, p.methodKind]));
+    expect(problems.map((p) => [p.name, p.methodKinds, p.brewerIds])).toEqual(DEFAULT_BREW_PROBLEMS.map((p) => [p.name, p.methodKinds, []]));
     expect(problems.map((p) => p.position)).toEqual(problems.map((_, i) => i + 1));
   });
 
-  it("add goes last; rename and change method; names unique; method values checked", async () => {
+  it("add goes last; rename and change where it's offered; names unique; values checked", async () => {
     const { owner, base, list } = await setup();
-    const created = await owner.agent.post(base).send({ name: " Paper taste ", methodKind: "filter" });
+    const created = await owner.agent.post(base).send({ name: " Paper taste ", methodKinds: ["filter", "other"] });
     expect(created.status).toBe(201);
-    expect(created.body.problem).toMatchObject({ name: "Paper taste", methodKind: "filter", position: DEFAULT_BREW_PROBLEMS.length + 1, archivedAt: null });
+    expect(created.body.problem).toMatchObject({ name: "Paper taste", methodKinds: ["filter", "other"], brewerIds: [], position: DEFAULT_BREW_PROBLEMS.length + 1, archivedAt: null });
     const any = await owner.agent.post(base).send({ name: "Spilled" });
-    expect(any.body.problem.methodKind).toBeNull();
+    expect(any.body.problem).toMatchObject({ methodKinds: [], brewerIds: [] });
 
     expect((await owner.agent.post(base).send({ name: "fast drawdown" })).status).toBe(409);
-    expect((await owner.agent.post(base).send({ name: "X", methodKind: "pour_over" })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ name: "X", methodKinds: ["pour_over"] })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ name: "X", methodKinds: ["filter", "filter"] })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ name: "X", methodKind: "filter" })).status).toBe(400); // the old field is gone
     expect((await owner.agent.post(base).send({ name: "" })).status).toBe(400);
 
     const id = created.body.problem.id as string;
-    const changed = await owner.agent.patch(`${base}/${id}`).send({ name: "Papery", methodKind: null });
-    expect(changed.body.problem).toMatchObject({ name: "Papery", methodKind: null });
+    const changed = await owner.agent.patch(`${base}/${id}`).send({ name: "Papery", methodKinds: [] });
+    expect(changed.body.problem).toMatchObject({ name: "Papery", methodKinds: [] });
     expect((await owner.agent.patch(`${base}/${id}`).send({ name: "Scale not tared" })).status).toBe(409);
     expect((await list()).at(-2)?.name).toBe("Papery");
+  });
+
+  it("offered for chosen brewers: set, replaced, cleared; only this workspace's; a deleted brewer drops off", async () => {
+    const { owner, ws, base, list } = await setup();
+    const [v60, aeropress] = [await brewerId(owner, ws.id, "V60"), await brewerId(owner, ws.id, "Aeropress")];
+    const created = await owner.agent.post(base).send({ name: "Paper taste", methodKinds: ["espresso"], brewerIds: [v60] });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    expect(created.body.problem).toMatchObject({ methodKinds: ["espresso"], brewerIds: [v60] });
+    const id = created.body.problem.id as string;
+
+    const both = await owner.agent.patch(`${base}/${id}`).send({ brewerIds: [v60, aeropress] });
+    expect([...both.body.problem.brewerIds].sort()).toEqual([v60, aeropress].sort());
+    // Other fields leave the brewers alone.
+    expect((await owner.agent.patch(`${base}/${id}`).send({ name: "Papery" })).body.problem.brewerIds).toHaveLength(2);
+    expect((await owner.agent.patch(`${base}/${id}`).send({ brewerIds: [aeropress] })).body.problem.brewerIds).toEqual([aeropress]);
+    expect((await owner.agent.patch(`${base}/${randomUUID()}`).send({ brewerIds: [aeropress] })).status).toBe(404);
+
+    const other = await setup();
+    const theirs = await brewerId(other.owner, other.ws.id, "V60");
+    const foreign = await owner.agent.patch(`${base}/${id}`).send({ brewerIds: [theirs] });
+    expect(foreign.status).toBe(400);
+    expect(foreign.body.error).toMatch(/brewerIds/);
+    expect((await owner.agent.post(base).send({ name: "Y", brewerIds: [v60, v60] })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ name: "Y", brewerIds: ["nope"] })).status).toBe(400);
+
+    expect((await owner.agent.delete(`/api/workspaces/${ws.id}/brewers/${aeropress}`)).status).toBe(204);
+    expect((await list()).find((p) => p.id === id)?.brewerIds).toEqual([]);
   });
 
   it("reorder takes every problem exactly once", async () => {
@@ -96,7 +127,7 @@ describe("brew logs with problems", () => {
     const id = await newBrewLog(owner, ws.id, bean, { problemIds: [tared, slow] });
     const log = (await owner.agent.get(`${logs}/${id}`)).body.brewLog;
     expect(log.problems.map((p: Problem) => p.name)).toEqual(["Slow drawdown / stalled bed", "Scale not tared"]); // list order
-    expect(log.problems[0]).toEqual({ id: slow, name: "Slow drawdown / stalled bed", methodKind: "filter" });
+    expect(log.problems[0]).toEqual({ id: slow, name: "Slow drawdown / stalled bed" });
 
     await owner.agent.patch(`${base}/${walls}`).send({ archived: true });
     const replaced = await owner.agent.patch(`${logs}/${id}`).send({ problemIds: [walls] });

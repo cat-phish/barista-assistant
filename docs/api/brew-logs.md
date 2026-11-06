@@ -62,7 +62,7 @@ created it and can't be changed.
   "servingUnit": null,
   "marks": [],
   "tools": [{ "id": "uuid", "name": "Rinsed paper filter" }],
-  "problems": [{ "id": "uuid", "name": "Slow drawdown / stalled bed", "methodKind": "filter" }],
+  "problems": [{ "id": "uuid", "name": "Slow drawdown / stalled bed" }],
   "flavors": [{ "key": "fruity.citrus.lemon", "label": "Lemon" }, { "key": "sour_fermented.sour", "label": "Sour" }],
   "brewedBy": { "id": "uuid", "email": "barista@example.com" },
   "analyzed": false,
@@ -91,7 +91,7 @@ the timer's marks (`{ "kind", "stepOrder", "atSec" }`, `stepOrder` `null`
 except for `step_end`), earliest first. `tools` lists the prep tools used
 (§3d, `{ "id", "name" }`, archived ones included) in checklist order; `[]`
 when none were recorded. `problems` lists what went wrong (§6b,
-`{ "id", "name", "methodKind" }`, archived ones included) in list order; `[]` when none
+`{ "id", "name" }`, archived ones included) in list order; `[]` when none
 were recorded. `flavors` lists the coffee's flavors picked on the
 workspace's wheel (§2c) as `{ "key", "label" }`, in the wheel's order;
 `label` is the wheel's now, or for a flavor it no longer has, the one saved

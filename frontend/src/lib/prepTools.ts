@@ -1,9 +1,7 @@
-// Prep tools on the brew checklist (docs/api/prep-tools.md §3d). Unit-tested
-// in prepTools.test.ts.
+// Prep tools and brew problems on the brew checklists (docs/api/prep-tools.md
+// §3d, docs/api/brew-problems.md §6b). Unit-tested in prepTools.test.ts.
 import type { BrewProblem, MethodKind, PrepTool } from '../api/types';
 import { METHOD_KINDS, METHOD_ORDER } from './equipment';
-
-export const methodLabel = (kind: MethodKind | null): string => (kind ? METHOD_KINDS[kind].label : 'All methods');
 
 // What a brew is made with: its recipe's method and brewer, both null without
 // a recipe (every item is offered then).
@@ -19,8 +17,8 @@ function checklist<T extends { id: string; archivedAt: string | null }>(items: r
   return items.filter((t) => selected.includes(t.id) || (!t.archivedAt && offered(t)));
 }
 
-// A prep tool is offered for every brew when it names no methods or brewers,
-// else for brews of those methods and with those brewers.
+// A prep tool or brew problem is offered for every brew when it names no
+// methods or brewers, else for brews of those methods and with those brewers.
 type Offered = Pick<PrepTool, 'methodKinds' | 'brewerIds'>;
 export function offeredFor(tool: Offered, brew: BrewMethod): boolean {
   if (brew.kind === null) return true;
@@ -42,9 +40,15 @@ export function recipePrep<T extends Offered & Pick<PrepTool, 'id' | 'archivedAt
     .map((t) => t.id);
 }
 
-// Brew problems (docs/api/brew-problems.md §6b): one method, or null for all.
-export function problemsFor<T extends Pick<BrewProblem, 'id' | 'methodKind' | 'archivedAt'>>(problems: readonly T[], kind: MethodKind | null, selected: readonly string[]): T[] {
-  return checklist(problems, selected, (p) => kind === null || p.methodKind === null || p.methodKind === kind);
+// Brew problems (docs/api/brew-problems.md §6b), offered the same way.
+export function problemsFor<T extends Offered & Pick<BrewProblem, 'id' | 'archivedAt'>>(problems: readonly T[], brew: BrewMethod, selected: readonly string[]): T[] {
+  return checklist(problems, selected, (p) => offeredFor(p, brew));
+}
+
+// The editors' check before saving (components/OfferedFor.vue): some method
+// or brewer, unless it's offered for every brew.
+export function offeredError(everyBrew: boolean, methodKinds: readonly string[], brewerIds: readonly string[]): string {
+  return !everyBrew && !methodKinds.length && !brewerIds.length ? 'Pick a method or brewer, or Every brew.' : '';
 }
 
 // "Every brew", or its methods then its brewers: "Espresso, Oxo Rapid Brewer".

@@ -68,7 +68,7 @@ export interface BrewLogDetails extends BrewLog {
   drink: { id: string; name: string; hasIngredients: boolean } | null;
   marks: Mark[]; // when things actually happened, earliest first
   tools: Array<{ id: string; name: string }>; // prep tools used, in checklist order
-  problems: Array<{ id: string; name: string; methodKind: MethodKind | null }>; // what went wrong, in checklist order
+  problems: Array<{ id: string; name: string }>; // what went wrong, in checklist order
   // Picked on the flavor wheel, in its order; label: the wheel's now, else
   // the one saved when picked (docs/api/brew-logs.md §6).
   flavors: FlavorPick[];
@@ -609,7 +609,7 @@ async function problemsFor(brewLogIds: string[]): Promise<Map<string, BrewLogDet
   const byLog = new Map<string, BrewLogDetails["problems"]>();
   if (brewLogIds.length === 0) return byLog;
   const rows = await db
-    .select({ brewLogId: brewLogProblems.brewLogId, id: brewProblems.id, name: brewProblems.name, methodKind: brewProblems.methodKind })
+    .select({ brewLogId: brewLogProblems.brewLogId, id: brewProblems.id, name: brewProblems.name })
     .from(brewLogProblems)
     .innerJoin(brewProblems, eq(brewLogProblems.problemId, brewProblems.id))
     .where(inArray(brewLogProblems.brewLogId, brewLogIds))

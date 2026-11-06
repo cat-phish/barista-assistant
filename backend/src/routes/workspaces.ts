@@ -80,7 +80,7 @@ workspacesRouter.post("/", async (req: Request, res: Response<WorkspaceResponse>
         DEFAULT_PREP_TOOLS.map(({ name, methodKinds }, i) => ({ id: randomUUID(), workspaceId, name, methodKinds: [...methodKinds], position: i + 1 }))
       );
       await tx.insert(brewProblems).values(
-        DEFAULT_BREW_PROBLEMS.map(({ name, methodKind }, i) => ({ id: randomUUID(), workspaceId, name, methodKind, position: i + 1 }))
+        DEFAULT_BREW_PROBLEMS.map(({ name, methodKinds }, i) => ({ id: randomUUID(), workspaceId, name, methodKinds: [...methodKinds], position: i + 1 }))
       );
       await tx.insert(beanProcesses).values(defaultProcessRows(workspaceId));
       await tx.insert(recipeStyles).values(defaultStyleRows(workspaceId));

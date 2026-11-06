@@ -178,6 +178,23 @@ describe("import by list", () => {
     expect(imported).toMatchObject({ methodKinds: ["espresso"], brewerIds: [await brewerId(other, target.id, "V60")] });
   });
 
+  it("a brew problem brings the brewers it's offered for, matched by name", async () => {
+    const { owner, ws, base } = await source();
+    const v60 = await brewerId(owner, ws.id, "V60");
+    const problem = (await owner.agent.post(`${base}/brew-problems`).send({ name: "Paper taste", methodKinds: ["espresso"], brewerIds: [v60] })).body.problem.id as string;
+    const file = await exportOf(owner, base, { lists: ["brew_problems"], ids: { brew_problems: [problem] } });
+    expect(names(file.tables.brew_problems)).toEqual(["Paper taste"]);
+    expect(names(file.tables.brewers)).toEqual(["V60"]);
+    expect(file.tables.brew_problem_brewers).toHaveLength(1);
+
+    const other = await newUser();
+    const target = await newWorkspace(other);
+    const tbase = `/api/workspaces/${target.id}`;
+    expect((await other.agent.post(`${tbase}/import`).send({ file })).status).toBe(200);
+    const imported = (await other.agent.get(`${tbase}/brew-problems`)).body.problems.find((p: { name: string }) => p.name === "Paper taste");
+    expect(imported).toMatchObject({ methodKinds: ["espresso"], brewerIds: [await brewerId(other, target.id, "V60")] });
+  });
+
   it("a bean copied back into its own workspace gets its bean name numbered, its process reused", async () => {
     const owner = await newUser();
     const ws = await newWorkspace(owner);

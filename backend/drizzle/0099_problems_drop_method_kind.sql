@@ -1,0 +1,1 @@
+ALTER TABLE `brew_problems` DROP COLUMN `method_kind`;
