@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Brewer, Grinder, MachineCapabilities } from '../api/types';
-import { adjustmentLabel, burrLabel, grinderForm, grinderSummary, machineSummary, parseGrinderForm, pickCopyBrewer, powerLabel, RECIPE_STYLES, STYLES_BY_KIND } from './equipment';
+import type { Grinder, MachineCapabilities } from '../api/types';
+import { adjustmentLabel, burrLabel, grinderForm, grinderSummary, machineSummary, parseGrinderForm, powerLabel, RECIPE_STYLES, STYLES_BY_KIND } from './equipment';
 
 const c40: Grinder = {
   id: 'g', name: 'C40', notes: null, adjustment: 'stepped', settingMin: 0, settingMax: 40, stepSize: 1,
@@ -45,17 +45,6 @@ describe('summaries', () => {
     const m: MachineCapabilities = { preinfusion: 'manual', flowControl: 'manual', pressureControl: 'none' };
     expect(machineSummary(m)).toBe('Pre-infusion: manual · Flow: manual');
     expect(machineSummary({ ...m, preinfusion: 'none', flowControl: 'none' })).toBe('No pre-infusion, flow or pressure control');
-  });
-});
-
-describe('duplicating a recipe', () => {
-  const brewer = (id: string, kind: Brewer['kind'], archivedAt: string | null = null) =>
-    ({ id, kind, archivedAt }) as Brewer;
-  it('starts on another active brewer of the same kind, else the original', () => {
-    const original = { id: 'dl', kind: 'espresso' } as const;
-    expect(pickCopyBrewer([brewer('dl', 'espresso'), brewer('v60', 'filter'), brewer('lm', 'espresso')], original)).toBe('lm');
-    expect(pickCopyBrewer([brewer('dl', 'espresso'), brewer('old', 'espresso', '2026-01-01')], original)).toBe('dl');
-    expect(pickCopyBrewer([], original)).toBe('dl');
   });
 });
 

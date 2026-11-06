@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDoseLine, formatListDay, formatRatio, formatTime, localDateInput, parseDecimal, parseTime, toDateInput } from './format';
+import { formatDoseLine, formatListDay, formatRatio, formatTime, localDateInput, maskTime, parseDecimal, parseTime, toDateInput } from './format';
 
 describe('parseDecimal', () => {
   const dose = { scale: 2, min: 0, max: 1000, exclusiveMin: true, exclusiveMax: true };
@@ -20,6 +20,27 @@ describe('parseDecimal', () => {
 });
 
 describe('time', () => {
+  it('fills a time field typed without a colon from the right', () => {
+    expect(maskTime('')).toBe('');
+    expect(maskTime('0')).toBe('0:00');
+    expect(maskTime('3')).toBe('0:03');
+    expect(maskTime('33')).toBe('0:33');
+    expect(maskTime('330')).toBe('3:30');
+    expect(maskTime('1030')).toBe('10:30');
+    expect(maskTime('160000')).toBe('16:00:00');
+    expect(maskTime('1680000')).toBe('168:00:00');
+    expect(maskTime('16800001')).toBe('168:00:00'); // 7 digits at most
+    // Typing on: the next digit shifts in.
+    expect(maskTime('0:033')).toBe('0:33');
+    expect(maskTime('0:330')).toBe('3:30');
+    // Backspace drops the last digit.
+    expect(maskTime('3:3')).toBe('0:33');
+    // A colon typed in full, and saved values, stay as they are.
+    expect(maskTime('3:30')).toBe('3:30');
+    expect(maskTime('0:05')).toBe('0:05');
+    expect(maskTime('16:00:00')).toBe('16:00:00');
+    expect(parseTime(maskTime('330'))).toEqual({ ok: true, value: 210 });
+  });
   it('formats and parses m:ss', () => {
     expect(formatTime(150)).toBe('2:30');
     expect(formatTime(5)).toBe('0:05');

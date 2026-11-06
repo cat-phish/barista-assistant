@@ -79,6 +79,7 @@ import type { ChatBrewProposal } from '../api/chats';
 import { brewRetention, factorText, linkRatio, ratioText as formatRatio, ratioWater, ROAST_LEVELS, SCALE_SLIDER, scaleBatch, scaleShot, scaleSteps, scaleStepTimes, shiftStepTemps, shiftWindow, sliderDose, sliderPosition, waterShare, type MeasuredBrew, type ScaleField } from '../lib/scale';
 import { formatTemp, formatTempChange, parseTemp, tempText, TEMPERATURE_LABELS, VOLUME_LABELS, volumeUnits } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
+import TimeInput from '../components/TimeInput.vue';
 
 // 'steep': starting a long cold brew (a checklist, then it's saved steeping).
 type Stage = 'setup' | 'timing' | 'log' | 'steep' | 'saved';
@@ -1635,12 +1636,12 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <div class="window-row">
             <div class="field">
               <label for="finish-from">From</label>
-              <input id="finish-from" v-model="windowText.finishFrom" inputmode="numeric" placeholder="m:ss" :aria-invalid="!!windowError.finish" @input="finishEdited = true" />
+              <TimeInput id="finish-from" v-model="windowText.finishFrom" placeholder="m:ss" :aria-invalid="!!windowError.finish" @input="finishEdited = true" />
             </div>
             <span class="dash" aria-hidden="true">–</span>
             <div class="field">
               <label for="finish-to">To</label>
-              <input id="finish-to" v-model="windowText.finishTo" inputmode="numeric" placeholder="m:ss" :aria-invalid="!!windowError.finish" @input="finishEdited = true" />
+              <TimeInput id="finish-to" v-model="windowText.finishTo" placeholder="m:ss" :aria-invalid="!!windowError.finish" @input="finishEdited = true" />
             </div>
           </div>
           <span v-if="windowError.finish" class="field-error">{{ windowError.finish }}</span>

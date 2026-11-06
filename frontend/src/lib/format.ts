@@ -35,6 +35,20 @@ export function formatTime(totalSeconds: number): string {
   return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${Math.floor(totalSeconds / 60)}:${ss}`;
 }
 
+// A time field as typed on a number pad (no colon key): the digits fill in
+// from the right, like a microwave. "3" -> "0:03", "330" -> "3:30",
+// "1030" -> "10:30", "160000" -> "16:00:00". Colons and anything else typed
+// are ignored, so "3:30" typed in full stays "3:30". At most 7 digits
+// (168:00:00, the 7 day limit).
+export function maskTime(text: string): string {
+  const digits = text.replace(/\D/g, '').replace(/^0+/, '').slice(0, 7);
+  if (!digits) return /\d/.test(text) ? '0:00' : '';
+  const ss = digits.slice(-2).padStart(2, '0');
+  const rest = digits.slice(0, -2);
+  if (rest.length <= 2) return `${rest || '0'}:${ss}`;
+  return `${rest.slice(0, -2)}:${rest.slice(-2)}:${ss}`;
+}
+
 // "2:30" -> 150, "45" -> 45 (plain seconds), "0:05" -> 5, "16:00:00" -> 57600.
 // Max 7 days, as the API (long cold brews).
 export const MAX_BREW_SEC = 7 * 24 * 60 * 60;
