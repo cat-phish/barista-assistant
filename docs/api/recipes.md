@@ -85,8 +85,8 @@ card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
 **Prep steps** come before every other step (a prep step after a brew step
 is `400`). They're off the brew's clock: the timer runs only the steps after
 them and starts at the first one, planned times and the finish window leave
-them out, and the brew page shows them as a **Before you start** checklist
-on setup, where a timed one has its own countdown. `stepOrder` still counts
+them out, and the timer page shows them before Start, one card each, where
+a timed one has its own countdown. `stepOrder` still counts
 them, so a step mark (`step_end`, `step_hold`, `step_resume`; §6) names the
 recipe's step: with two prep steps, the timer's first step is `stepOrder` 3.
 A prep step's `scalesWithBatch` is always `false`.

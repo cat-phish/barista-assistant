@@ -937,7 +937,7 @@ async function save(): Promise<void> {
                   <option v-for="a in advancesFor(kind)" :key="a" :value="a">{{ ADVANCE[a].label }}</option>
                 </select>
               </div>
-              <p v-if="isPrep(step)" class="step-when muted full">Before the timer starts: ticked off on the brew page. A countdown is optional</p>
+              <p v-if="isPrep(step)" class="step-when muted full">Before the timer starts: shown on the timer page before Start. A countdown is optional</p>
               <p v-else-if="!longStyle" class="step-when muted full">
                 <template v-for="(part, k) in stepTimeParts(timed, i)" :key="k"><span v-if="k" class="time-dot"> · </span>{{ part }}</template>
                 · {{ ADVANCE[step.advance].hint }}

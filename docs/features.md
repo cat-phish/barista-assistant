@@ -192,8 +192,9 @@ fails.
 - **Prep steps** (**Add prep step**, any method): what to do before the timer
   starts, such as rinsing the filter or warming the cup, with an optional
   countdown. They sit above the other steps and don't count toward the brew
-  time. On the brew page they're a **Before you start** checklist above
-  the Prep checklist; a timed one has its own countdown that doesn't start the timer.
+  time. The timer page walks through them before Start, one card each with
+  **Done**; a timed one has its own countdown that beeps at 0 and doesn't
+  start the brew clock.
 - **Grind starting points** per grinder, and an optional **default grinder**
   that's selected for you when you brew the recipe (otherwise the last
   grinder you used).

@@ -114,9 +114,13 @@ export default defineConfig({
 > uses the timer as below.
 
 > **Prep steps** (`prep`, docs/api/recipes.md §5) aren't timed with the
-> brew. Setup shows them above the Prep checklist as **Before you start**
-> (`PrepStepsCard.vue`): a checkbox each, and a small countdown for a timed
-> one that doesn't start the brew clock. The timer gets only the steps after
+> brew. The timer page shows them before Start in the same Previous /
+> Current / Up next cards (`BrewTimer.vue`, `prepSteps`): "Prep 1 of 2",
+> the label, and **Done**; a timed one also has **Start 2:00**, a countdown
+> that beeps and vibrates at 0 (the start delay's cue) and moves on. After
+> the last, Current says "Ready" and Up next is the first brew step. Start
+> skips any prep left; the clock stays 0:00 and nothing is saved. The brew
+> clock gets only the steps after
 > them (with step time scaling and step temps applied to those only), and
 > its step marks are shifted past them (`afterPrep`,
 > `lib/marks.ts`) so they keep the recipe's `stepOrder`.
@@ -148,7 +152,7 @@ export default defineConfig({
     *   A last step with no duration runs until **Finish & Save**; after a timed last step the card shows "All steps done".
     *   **Hold** (`auto` and `auto_log` steps with a duration, while running): for a pour or a drawdown running slow. The step's countdown stops at what was left and the small line says "Held · +0:12"; the brew clock keeps running, and so does the target finish window, so a held brew can finish late. **Resume** carries on with the time left; **Next** ends the step now. A step can be held more than once ("left · held 0:12" after); later steps move by the time held, and the progress bar leaves it out. Recorded as `step_hold` / `step_resume` marks (and a `step_end` for Next), so the schedule stays a function of the steps, the time and the marks. No pause for the whole brew: the coffee is still brewing. The Previous card adds "held 0:12", the log form "Pour held 0:12", and the journal "Step 2 held".
     *   The schedule is a pure function, `brewSchedule(steps, t, marks)` in `lib/steps.ts`, unit-tested.
-*   **Layout, top to bottom:** header, the step cards, the buttons (Start / Finish & Save / First drop), then the clock. Steps come first because they say what to do; before the start there are no cards, so it's the buttons and the clock.
+*   **Layout, top to bottom:** header, the step cards, the buttons (Start / Finish & Save / First drop), then the clock. Steps come first because they say what to do; before the start the cards preview step 1, or show the prep steps; with no steps it's the buttons and the clock.
 *   **Cards:** **Previous** → **Current** → **Up next**, the same structure for every step so the layout doesn't jump. Current shows a label line ("Step 2 of 4 · Pour", with the step's temperature when the big line doesn't say it), a big line, a small line and a progress bar:
     *   Big, left: the instruction ("Pour to 150 g (+100) at 93 °C", "9 bar", "9 → 6 bar", "4 → 2 g/s", "Pump off"); a filter step that changes the temperature without pouring, "Set kettle to 93 °C"; or the step's name when it has neither. The name goes on the small line under it.
     *   Big, right: a countdown ("0:20", small "left"; for a tap step's guide "left (guide)", then "Tap Next"), or "At first drop" / "Until done".

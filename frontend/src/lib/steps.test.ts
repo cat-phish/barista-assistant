@@ -14,7 +14,9 @@ import {
   plannedStarts,
   plannedTimes,
   pourAmounts,
+  prepCountdown,
   prepLeft,
+  prepSide,
   recipeWarnings,
   setTempLine,
   splitPrep,
@@ -134,6 +136,14 @@ describe('prep steps', () => {
     expect(prepLeft(1000, 120, 1500)).toBe(120); // 119.5 left shows 2:00
     expect(prepLeft(1000, 120, 31_000)).toBe(90);
     expect(prepLeft(1000, 120, 500_000)).toBe(0);
+  });
+  it('on the timer page: the side line, and the countdown before and after its start', () => {
+    expect(prepSide(step({ stepType: 'prep', label: 'Preheat', durationSec: 120 }))).toBe('Preheat · 2:00');
+    expect(prepSide(step({ stepType: 'prep', label: 'Rinse the filter', durationSec: null }))).toBe('Rinse the filter');
+    expect(prepCountdown({ durationSec: null }, null, 0)).toEqual({ big: '', small: '', left: null, progress: 0 });
+    expect(prepCountdown({ durationSec: 120 }, null, 5000)).toEqual({ big: '2:00', small: 'countdown', left: 120, progress: 0 });
+    expect(prepCountdown({ durationSec: 120 }, 1000, 31_000)).toEqual({ big: '1:30', small: 'left', left: 90, progress: 0.25 });
+    expect(prepCountdown({ durationSec: 120 }, 1000, 500_000)).toEqual({ big: '0:00', small: 'left', left: 0, progress: 1 });
   });
 });
 

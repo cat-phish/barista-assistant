@@ -2439,10 +2439,13 @@ and what the AI sees. Contract: `api/recipes.md` §5 (prep steps),
   puts it there). They're off the clock: planned times, the timer, the
   finish window and step time scaling leave them out (`scalesWithBatch` is
   always false).
-- **Brew page:** a **Before you start** card above the Prep checklist lists
-  them; a timed one has its own countdown, which ticks it when done and
-  doesn't start the timer. Optional, and nothing is saved. A long steep
-  lists them first in its checklist.
+- **Timer page:** before Start, they run in the same Previous / Current /
+  Up next cards as the brew steps ("Prep 1 of 2"), each with **Done**; a
+  timed one has **Start 2:00**, a countdown that beeps and vibrates at 0 and
+  moves on. Then "Ready", with the first brew step up next. Start skips any
+  left; the clock stays 0:00 and nothing is saved. A long steep lists them
+  first in its checklist. (A checklist card on brew setup was tried first
+  and moved here.)
 - **Marks:** the timer counts its steps from 1, so step marks (`step_end`,
   `step_hold`, `step_resume`) are shifted past the prep steps and keep the
   recipe's `stepOrder`.

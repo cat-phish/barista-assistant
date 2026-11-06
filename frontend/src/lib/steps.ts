@@ -190,6 +190,26 @@ export function prepLeft(startedAtMs: number, durationSec: number, nowMs: number
   return Math.max(0, Math.ceil(durationSec - (nowMs - startedAtMs) / 1000));
 }
 
+// The timer page's prep cards, before Start (docs/timer_architecture.md §3).
+// Previous / Up next: "Preheat · 2:00", or the label alone when untimed.
+export function prepSide(step: { stepType: StepType; label: string | null; durationSec: number | null }): string {
+  return step.durationSec ? `${stepTitle(step)} · ${formatTime(step.durationSec)}` : stepTitle(step);
+}
+// The current prep card's right side: nothing untimed; the full time before
+// its countdown starts; then the time left (left: seconds, 0 = done) and how
+// far along it is (0..1).
+export function prepCountdown(
+  step: { durationSec: number | null },
+  startedAtMs: number | null,
+  nowMs: number,
+): { big: string; small: string; left: number | null; progress: number } {
+  const sec = step.durationSec;
+  if (!sec) return { big: '', small: '', left: null, progress: 0 };
+  if (startedAtMs === null) return { big: formatTime(sec), small: 'countdown', left: sec, progress: 0 };
+  const left = prepLeft(startedAtMs, sec, nowMs);
+  return { big: formatTime(left), small: 'left', left, progress: Math.min(1, Math.max(0, (nowMs - startedAtMs) / 1000 / sec)) };
+}
+
 // ---- Editor -----------------------------------------------------------------
 
 export interface StepDraft {

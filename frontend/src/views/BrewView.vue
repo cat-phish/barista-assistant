@@ -53,7 +53,6 @@ import BrewFields from '../components/BrewFields.vue';
 import BrewTimer from '../components/BrewTimer.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import FinishDrinkCard from '../components/FinishDrinkCard.vue';
-import PrepStepsCard from '../components/PrepStepsCard.vue';
 import { useBrewSessionStore } from '../stores/brewSession';
 import { afterPrep, formatMark, heldSec } from '../lib/marks';
 import { recipePrep, toolsFor } from '../lib/prepTools';
@@ -780,8 +779,8 @@ function heldText(): string {
   return field === 'yieldOz' ? `${text} fl oz cup` : `${text} ml cup`;
 }
 
-// Prep steps are a checklist on setup (docs/api/recipes.md §5); the timer runs
-// the brew steps after them.
+// Prep steps come first on the timer page, before Start (docs/api/recipes.md
+// §5); the brew clock runs the brew steps after them.
 const recipeSteps = computed(() => splitPrep(recipe.value?.steps ?? []));
 // Pour targets follow the water; with the recipe's stepTimeScaling, the times
 // of steps that scale do too, and the finish window moves by what they gain or lose
@@ -1652,8 +1651,6 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         </fieldset>
       </section>
 
-      <PrepStepsCard v-if="recipe && recipeSteps.prep.length" :key="recipe.id" :steps="recipeSteps.prep" />
-
       <section v-if="setupTools.length" class="card stack" aria-labelledby="setup-prep">
         <h2 id="setup-prep">Prep</h2>
         <div class="prep-list">
@@ -1691,6 +1688,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         :recipe-name="recipe?.name ?? 'Brew'"
         :subtitle="timerSubtitle"
         :steps="timerSteps"
+        :prep-steps="recipeSteps.prep"
         :espresso="espresso"
         :method-kind="recipe?.brewer.kind ?? itemKind"
         :flow-unit="recipe?.flowUnit ?? 'g_s'"

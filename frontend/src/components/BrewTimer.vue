@@ -8,6 +8,9 @@
 //    "Log it" and holds become marks, emitted with the time on Finish & Save.
 //  - Previous / Current / Up next cards with the same structure for every
 //    step, so the layout doesn't jump. No steps = plain stopwatch.
+//  - Prep steps (docs/api/recipes.md §5) come first, before Start, in the same
+//    cards: Done moves on, a timed one has a countdown started by a tap. The
+//    brew clock stays at 0:00 and nothing about them is saved.
 import { computed, onUnmounted, ref } from 'vue';
 import type { FlowUnit, MachineCapabilities, Mark, MethodKind, StepFields } from '../api/types';
 import { formatTime } from '../lib/format';
@@ -23,6 +26,8 @@ import {
   machineNote,
   nextTempChange,
   pourAmounts,
+  prepCountdown,
+  prepSide,
   setTempLine,
   stepInstruction,
   stepTitle,
@@ -42,6 +47,7 @@ const props = defineProps<{
   firstDropWindow: { min: number; max: number } | null;
   machine: MachineCapabilities | null; // the espresso brewer's controls
   waterTempC: number | null; // the brew's, until a step sets one
+  prepSteps?: StepFields[]; // done before Start, off the brew clock
 }>();
 
 const emit = defineEmits<{
@@ -62,30 +68,72 @@ function closeCueAudio(): void {
   if (cueAudio && cueAudio.state !== 'closed') void cueAudio.close().catch(() => undefined);
   cueAudio = null;
 }
+// Audio has to be unlocked in a tap, before the countdown that ends in a beep.
+function unlockCue(): void {
+  closeCueAudio();
+  try {
+    cueAudio = new AudioContext();
+    void cueAudio.resume().catch(() => undefined);
+  } catch { /* Vibration is still available on supported devices. */ }
+}
+// A short beep and vibration where allowed; never blocks anything.
+function playCue(): void {
+  try { navigator.vibrate?.(150); } catch { /* Optional device cue. */ }
+  try {
+    if (cueAudio?.state === 'running') {
+      const tone = cueAudio.createOscillator();
+      const volume = cueAudio.createGain();
+      volume.gain.setValueAtTime(0.08, cueAudio.currentTime);
+      volume.gain.exponentialRampToValueAtTime(0.001, cueAudio.currentTime + 0.15);
+      tone.frequency.value = 880;
+      tone.connect(volume).connect(cueAudio.destination);
+      tone.onended = closeCueAudio;
+      tone.start();
+      tone.stop(cueAudio.currentTime + 0.15);
+    } else closeCueAudio();
+  } catch { closeCueAudio(); /* Audio support never blocks starting the brew. */ }
+}
 const startDelay = useStartDelay((at) => {
   startTime.value = at;
   elapsedMs.value = Math.max(0, Date.now() - at);
   isRunning.value = true;
-  if (delayedStart) {
-    try { navigator.vibrate?.(150); } catch { /* Optional device cue. */ }
-    try {
-      if (cueAudio?.state === 'running') {
-        const tone = cueAudio.createOscillator();
-        const volume = cueAudio.createGain();
-        volume.gain.setValueAtTime(0.08, cueAudio.currentTime);
-        volume.gain.exponentialRampToValueAtTime(0.001, cueAudio.currentTime + 0.15);
-        tone.frequency.value = 880;
-        tone.connect(volume).connect(cueAudio.destination);
-        tone.onended = closeCueAudio;
-        tone.start();
-        tone.stop(cueAudio.currentTime + 0.15);
-      } else closeCueAudio();
-    } catch { closeCueAudio(); /* Audio support never blocks starting the brew. */ }
-  }
+  if (delayedStart) playCue();
   animationFrameId = requestAnimationFrame(tick);
 });
 const countingDown = computed(() => startDelay.remaining.value > 0);
 const configuredDelay = computed(() => startDelayFor(prefs.value, props.methodKind));
+
+// ---- Prep steps, before Start ----------------------------------------------
+const prep = computed(() => props.prepSteps ?? []);
+const prepIndex = ref(0); // how many are done; prep.length = all done
+const prepStartedAt = ref<number | null>(null); // the current one's countdown
+const prepNow = ref(Date.now());
+let prepInterval: ReturnType<typeof setInterval> | null = null;
+const showPrep = computed(() => prep.value.length > 0 && !isRunning.value && !countingDown.value && elapsedMs.value === 0);
+const prepStep = computed(() => prep.value[prepIndex.value] ?? null);
+const prepCount = computed(() => (prepStep.value ? prepCountdown(prepStep.value, prepStartedAt.value, prepNow.value) : null));
+function stopPrepCountdown(): void {
+  if (prepInterval) clearInterval(prepInterval);
+  prepInterval = null;
+  prepStartedAt.value = null;
+}
+function prepDone(): void {
+  stopPrepCountdown();
+  prepIndex.value = Math.min(prepIndex.value + 1, prep.value.length);
+}
+function startPrepCountdown(): void {
+  unlockCue();
+  if (!wakeLock && !wantsWakeLock) void requestWakeLock();
+  prepNow.value = Date.now();
+  prepStartedAt.value = prepNow.value;
+  prepInterval = setInterval(() => {
+    prepNow.value = Date.now();
+    if (prepCount.value?.left === 0) {
+      playCue();
+      prepDone();
+    }
+  }, 250);
+}
 
 const elapsedSec = computed(() => elapsedMs.value / 1000);
 const formattedTime = computed(() => formatTime(Math.floor(elapsedSec.value)));
@@ -203,16 +251,12 @@ const releaseWakeLock = async () => {
 
 const startTimer = () => {
   if (isRunning.value) return;
+  stopPrepCountdown(); // Start skips any prep left
   if (!countingDown.value) {
     delayedStart = configuredDelay.value !== 0;
     // Unlock audio in the user's tap, rather than the countdown callback.
-    if (delayedStart) {
-      try {
-        cueAudio = new AudioContext();
-        void cueAudio.resume().catch(() => undefined);
-      } catch { /* Vibration is still available on supported devices. */ }
-    }
-    void requestWakeLock();
+    if (delayedStart) unlockCue();
+    if (!wakeLock && !wantsWakeLock) void requestWakeLock();
   } else {
     // Start now: the tap is the cue, so no beep or vibration.
     delayedStart = false;
@@ -232,6 +276,7 @@ const finishBrew = async () => {
 };
 
 onUnmounted(() => {
+  stopPrepCountdown();
   startDelay.cancel();
   closeCueAudio();
   if (animationFrameId) cancelAnimationFrame(animationFrameId);
@@ -246,7 +291,56 @@ onUnmounted(() => {
       <p class="subtitle">{{ subtitle }}</p>
     </header>
 
-    <template v-if="!countingDown && phase.kind !== 'idle'">
+    <!-- Prep steps before Start, in the same cards as the brew steps. -->
+    <template v-if="showPrep">
+      <div class="step-card side" aria-label="Previous step">
+        <span class="label">Previous</span>
+        <span class="side-text" :class="{ none: prepIndex === 0 }">
+          <template v-if="prepIndex > 0">{{ prepSide(prep[prepIndex - 1]!) }} · done</template>
+          <template v-else>None</template>
+        </span>
+      </div>
+
+      <div class="step-card current" :class="{ 'phase-done': !prepStep }" aria-label="Current step">
+        <template v-if="prepStep">
+          <span class="label">Prep {{ prepIndex + 1 }} of {{ prep.length }} · before the brew</span>
+          <div class="main-row">
+            <h3 :class="{ long: stepTitle(prepStep).length > 22 }" aria-live="polite">{{ stepTitle(prepStep) }}</h3>
+            <span class="count" aria-live="off">{{ prepCount?.big }}</span>
+          </div>
+          <div class="sub-row">
+            <span>The brew clock starts with Start</span>
+            <span>{{ prepCount?.small }}</span>
+          </div>
+          <div class="step-actions">
+            <button v-if="prepStep.durationSec && prepStartedAt === null" class="btn tap due" type="button" @click="startPrepCountdown">
+              Start {{ formatTime(prepStep.durationSec) }}
+            </button>
+            <button class="btn tap" type="button" @click="prepDone">Done</button>
+          </div>
+        </template>
+        <template v-else>
+          <span class="label">Prep done</span>
+          <h3 aria-live="polite">Ready</h3>
+          <div class="step-metrics">
+            <span class="value">Start the brew when you're ready</span>
+          </div>
+        </template>
+        <div class="progress" aria-hidden="true"><span :style="{ width: `${(prepStep ? (prepCount?.progress ?? 0) : 1) * 100}%` }" /></div>
+      </div>
+
+      <div class="step-card side" aria-label="Next step">
+        <span class="label">Up next</span>
+        <span class="side-text" :class="{ none: !prep[prepIndex + 1] && !steps.length }">
+          <template v-if="prep[prepIndex + 1]">{{ prepSide(prep[prepIndex + 1]!) }}</template>
+          <template v-else-if="steps.length">
+            {{ sideParts(0).title }}<template v-if="sideParts(0).instruction"> · <strong>{{ sideParts(0).instruction }}</strong></template> · {{ sideParts(0).how }}
+          </template>
+          <template v-else>None</template>
+        </span>
+      </div>
+    </template>
+    <template v-else-if="!countingDown && phase.kind !== 'idle'">
       <div class="step-card side" aria-label="Previous step">
         <span class="label">Previous</span>
         <span class="side-text" :class="{ none: prevIndex === null }">
