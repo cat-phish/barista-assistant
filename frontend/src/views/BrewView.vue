@@ -54,9 +54,9 @@ import BrewTimer from '../components/BrewTimer.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import FinishDrinkCard from '../components/FinishDrinkCard.vue';
 import { useBrewSessionStore } from '../stores/brewSession';
-import { formatMark, heldSec } from '../lib/marks';
+import { afterPrep, formatMark, heldSec } from '../lib/marks';
 import { recipePrep, toolsFor } from '../lib/prepTools';
-import { formatFinishWindow, parseFinishWindow, stepTitle } from '../lib/steps';
+import { formatFinishWindow, parseFinishWindow, splitPrep, stepTitle } from '../lib/steps';
 import { useAnalysis } from '../composables/useAnalysis';
 import { formatClock } from '../lib/analysisStatus';
 import { emptyDraft, parseBrewDraft, setVessel } from '../lib/brewDraft';
@@ -779,12 +779,15 @@ function heldText(): string {
   return field === 'yieldOz' ? `${text} fl oz cup` : `${text} ml cup`;
 }
 
+// Prep steps come first on the timer page, before Start (docs/api/recipes.md
+// §5); the brew clock runs the brew steps after them.
+const recipeSteps = computed(() => splitPrep(recipe.value?.steps ?? []));
 // Pour targets follow the water; with the recipe's stepTimeScaling, the times
 // of steps that scale do too, and the finish window moves by what they gain or lose
 // (docs/api/recipes.md §5).
 const timed = computed(() => {
   const factor = batch.value?.factor ?? 1;
-  return scaleStepTimes(scaleSteps(recipe.value?.steps ?? [], factor), factor, espresso.value ? null : (recipe.value?.stepTimeScaling ?? null));
+  return scaleStepTimes(scaleSteps(recipeSteps.value.brew, factor), factor, espresso.value ? null : (recipe.value?.stepTimeScaling ?? null));
 });
 const timerSteps = computed(() => shiftStepTemps(timed.value.steps, stepTempShift.value));
 // The temperature set up for this brew, or the recipe's.
@@ -948,7 +951,7 @@ function logWithoutTimer(): void {
 }
 function onTimerComplete(seconds: number, timerMarks: Mark[] = []): void {
   draft.time = formatTime(seconds);
-  marks.value = timerMarks;
+  marks.value = afterPrep(timerMarks, recipeSteps.value.prep.length);
   timerSec.value = seconds;
   // The first drop goes in the log's field, where it can be fixed or typed in.
   const drop = timerMarks.find((m) => m.kind === 'first_drop');
@@ -1685,6 +1688,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         :recipe-name="recipe?.name ?? 'Brew'"
         :subtitle="timerSubtitle"
         :steps="timerSteps"
+        :prep-steps="recipeSteps.prep"
         :espresso="espresso"
         :method-kind="recipe?.brewer.kind ?? itemKind"
         :flow-unit="recipe?.flowUnit ?? 'g_s'"
@@ -1704,9 +1708,9 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       <p class="muted">
         {{ beanLabel }}<template v-if="recipe"> · {{ recipe.name }}</template> · {{ draft.dose }} g : {{ draft.water }} g<template v-if="draft.grind"> · grind {{ draft.grind }}</template>
       </p>
-      <section v-if="timerSteps.length" class="card stack">
+      <section v-if="recipeSteps.prep.length || timerSteps.length" class="card stack">
         <h2>Steps</h2>
-        <label v-for="(st, i) in timerSteps" :key="i" class="checkbox">
+        <label v-for="(st, i) in [...recipeSteps.prep, ...timerSteps]" :key="i" class="checkbox">
           <input type="checkbox" />
           {{ stepTitle(st) }}<template v-if="st.targetWaterGrams !== null"> · to {{ formatGrams(st.targetWaterGrams) }} g</template>
         </label>

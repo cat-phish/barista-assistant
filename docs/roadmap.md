@@ -2423,3 +2423,33 @@ trying a longer drawdown or a shorter shot meant editing the recipe first
   §9). No new context field.
 - **Settings:** the `brew.window` field and the Repeat brews `window`
   option are now "Steep or finish time", for any style.
+
+## Prep steps (built)
+
+Backlog item "Prep steps that don't start the timer", branch
+`prep-steps-2` (the parked `prep-steps` work, brought up to date), no
+migration. Rinsing the filter or preheating, written as steps, started the
+timer and pushed every later step. A `tap` step doesn't help: it still runs
+on the brew clock, so its time counts in the brew time, the target window
+and what the AI sees. Contract: `api/recipes.md` §5 (prep steps),
+`timer_architecture.md`.
+
+- **Prep steps:** a `prep` step type for every method, with what to do and
+  an optional countdown, always before the other steps (**Add prep step**
+  puts it there). They're off the clock: planned times, the timer, the
+  finish window and step time scaling leave them out (`scalesWithBatch` is
+  always false).
+- **Timer page:** before Start, they run in the same Previous / Current /
+  Up next cards as the brew steps ("Prep 1 of 2"), each with **Done**; a
+  timed one has **Start 2:00**, a countdown that beeps and vibrates at 0 and
+  moves on. Then "Ready", with the first brew step up next. Start skips any
+  left; the clock stays 0:00 and nothing is saved. A long steep lists them
+  first in its checklist. (A checklist card on brew setup was tried first
+  and moved here.)
+- **Marks:** the timer counts its steps from 1, so step marks (`step_end`,
+  `step_hold`, `step_resume`) are shifted past the prep steps and keep the
+  recipe's `stepOrder`.
+- **Decided:** prep items (the Prep checklist) stay what was done, tracked
+  for the AI; prep steps are the recipe's instructions, with a countdown
+  when timed. Prep steps go to the AI with the other steps (same switch),
+  typed `prep`; AI chat can propose them in a recipe.

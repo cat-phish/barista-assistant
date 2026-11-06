@@ -18,7 +18,7 @@ import { useSelection } from '../composables/useSelection';
 import MenuTabs from '../components/MenuTabs.vue';
 import { formatAdded, formatDoseLine, formatGrams, formatGrind, formatTime } from '../lib/format';
 import { addedColumn, isSortKey, nameColumn, recallView, rememberView, sortBy, sortColumnOptions, type SortColumns } from '../lib/listSort';
-import { formatFinishWindow, plannedEnd, stepTitle } from '../lib/steps';
+import { formatFinishWindow, plannedEnd, splitPrep, stepTitle } from '../lib/steps';
 import { formatTemp } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -111,13 +111,19 @@ const shown = computed(() =>
 const openId = ref<string | null>(null);
 const toggle = (id: string) => (openId.value = openId.value === id ? null : id);
 
-// "Bloom → Swirl → Main pour → Drawdown · ends ≈ 3:00": the planned end, when
-// the steps have one (≈ when a step waits for a tap or first drop).
+// "Prep: Rinse the filter · Bloom → Swirl → Main pour → Drawdown · ends 3:00":
+// the planned end, when the steps have one (≈ when a step waits for a tap or
+// first drop).
 function stepsSummary(recipe: Recipe): string | null {
   if (!recipe.steps.length) return null;
+  const { prep, brew } = splitPrep(recipe.steps);
   const end = plannedEnd(recipe.steps);
-  const titles = recipe.steps.map(stepTitle).join(' → ');
-  return end === null ? titles : `${titles} · ${end.exact ? 'ends' : 'ends ≈'} ${formatTime(end.at)}`;
+  const parts = [
+    prep.length ? `Prep: ${prep.map(stepTitle).join(', ')}` : '',
+    brew.map(stepTitle).join(' → '),
+    end ? `${end.exact ? 'ends' : 'ends ≈'} ${formatTime(end.at)}` : '',
+  ];
+  return parts.filter(Boolean).join(' · ');
 }
 
 const busyId = ref<string | null>(null);

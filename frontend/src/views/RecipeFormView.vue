@@ -29,6 +29,7 @@ import {
   moveStep,
   newStepKey,
   parseFinishWindow,
+  isPrep,
   parseSteps,
   pourAmounts,
   recipeWarnings,
@@ -162,9 +163,14 @@ const parsed = computed(() => ({
   dilution: dilutionRatio.value.trim() ? parseDecimal(dilutionRatio.value, { scale: 1, min: 0, max: 10, exclusiveMin: true }) : null,
   timeScaling: timesScale.value ? parseDecimal(timeScaling.value, STEP_TIME_SCALING) : null,
 }));
-// A long style's steps are a checklist: no times, each waits for you.
+// A long style's steps are a checklist: no times, each waits for you. Prep
+// steps keep their countdown.
 const stepsParsed = computed(() =>
-  parseSteps(longStyle.value ? steps.value.map((d) => ({ ...d, advance: 'tap' as const, duration: '' })) : steps.value, kind.value, temperatureUnit.value),
+  parseSteps(
+    longStyle.value ? steps.value.map((d) => (isPrep(d) ? d : { ...d, advance: 'tap' as const, duration: '' })) : steps.value,
+    kind.value,
+    temperatureUnit.value,
+  ),
 );
 // "+X g" next to each pour-to, from whatever has been typed so far (even if
 // another field in that row still has an error).
@@ -464,7 +470,7 @@ function addGrindRow(): void {
 // first drop first, then a 10 s soak.
 function addStep(): void {
   const key = newStepKey();
-  const first = steps.value.length === 0;
+  const first = !steps.value.some((d) => !isPrep(d));
   if (espresso.value) {
     steps.value.push(
       first
@@ -482,25 +488,35 @@ function addStep(): void {
   );
 }
 
+// A prep step (before the timer starts) goes after the other prep steps, at the top.
+async function addPrepStep(): Promise<void> {
+  const at = steps.value.findIndex((d) => !isPrep(d));
+  const index = at < 0 ? steps.value.length : at;
+  steps.value.splice(index, 0, stepDraft(newStepKey(), { stepType: 'prep' }));
+  await nextTick();
+  document.getElementById(`step-label-${index}`)?.focus();
+}
+
 // The rows' times as typed so far: when each starts and ends, and where the
 // steps end against the target finish window (docs/api/recipes.md §5).
 const timed = computed(() =>
   steps.value.map((d) => {
     const t = d.duration.trim() ? parseTime(d.duration) : null;
-    return { durationSec: t?.ok ? t.value : null, advance: d.advance };
+    return { stepType: d.stepType, durationSec: t?.ok ? t.value : null, advance: d.advance };
   }),
 );
 const stepsTotal = computed(() =>
   longStyle.value ? null : stepsTotalLine(timed.value, parsed.value.finish.ok ? parsed.value.finish.value : null),
 );
-// The time field means a length, or only a guide for steps that wait.
+// The time field means a length, a guide for steps that wait, or a prep countdown.
 function timeLabel(step: StepDraft): string {
+  if (isPrep(step)) return 'Countdown';
   return step.advance === 'tap' || step.advance === 'first_drop' ? 'About' : 'Time';
 }
-// A step's time is needed unless it's a guide (tap, first drop) or the last
-// auto step ("until done").
+// A step's time is needed unless it's a guide (tap, first drop), the last
+// auto step ("until done") or a prep step.
 function timeRequired(step: StepDraft, i: number): boolean {
-  return !(step.advance === 'tap' || step.advance === 'first_drop' || (step.advance === 'auto' && i === steps.value.length - 1));
+  return !(isPrep(step) || step.advance === 'tap' || step.advance === 'first_drop' || (step.advance === 'auto' && i === steps.value.length - 1));
 }
 
 // "+ Add step here" between steps (nothing needs re-timing: steps run back to back).
@@ -842,7 +858,8 @@ async function save(): Promise<void> {
           <h2>{{ espresso ? 'Shot profile' : 'Recipe steps' }}</h2>
           <span v-if="longStyle" class="muted small">A checklist for starting and finishing the steep (no timer): stir, cover, filter twice…</span>
           <span v-else class="muted small">
-            Steps run one after another. Each moves on by itself after its time, or waits for your tap{{ espresso ? ' or the first drop' : '' }}.
+            Steps run one after another. Each moves on by itself after its time, or waits for your tap{{ espresso ? ' or the first drop' : '' }}. Prep
+            steps (rinse, preheat) come first, before the timer starts.
           </span>
         </div>
         <div v-if="espresso && show('recipe.flowUnit')" class="field flow-unit">
@@ -904,17 +921,24 @@ async function save(): Promise<void> {
                   <option v-if="!stepTypesFor(kind).includes(step.stepType)" :value="step.stepType" disabled>{{ STEP_TYPES[step.stepType].label }}</option>
                 </select>
               </div>
-              <div v-if="!longStyle" class="field">
+              <div v-if="!longStyle || isPrep(step)" class="field">
                 <label :for="`step-time-${i}`">{{ timeLabel(step) }}<span v-if="timeRequired(step, i)" class="req" aria-hidden="true">*</span></label>
-                <input :id="`step-time-${i}`" :aria-required="timeRequired(step, i)" v-model="step.duration" inputmode="numeric" :placeholder="step.advance === 'auto' && i === steps.length - 1 ? 'until done' : 'm:ss'" />
+                <input
+                  :id="`step-time-${i}`"
+                  :aria-required="timeRequired(step, i)"
+                  v-model="step.duration"
+                  inputmode="numeric"
+                  :placeholder="isPrep(step) ? 'none' : step.advance === 'auto' && i === steps.length - 1 ? 'until done' : 'm:ss'"
+                />
               </div>
-              <div v-if="!longStyle" class="field">
+              <div v-if="!longStyle && !isPrep(step)" class="field">
                 <label :for="`step-advance-${i}`">Moves on</label>
                 <select :id="`step-advance-${i}`" v-model="step.advance">
                   <option v-for="a in advancesFor(kind)" :key="a" :value="a">{{ ADVANCE[a].label }}</option>
                 </select>
               </div>
-              <p v-if="!longStyle" class="step-when muted full">
+              <p v-if="isPrep(step)" class="step-when muted full">Before the timer starts: shown on the timer page before Start. A countdown is optional</p>
+              <p v-else-if="!longStyle" class="step-when muted full">
                 <template v-for="(part, k) in stepTimeParts(timed, i)" :key="k"><span v-if="k" class="time-dot"> · </span>{{ part }}</template>
                 · {{ ADVANCE[step.advance].hint }}
               </p>
@@ -948,14 +972,20 @@ async function save(): Promise<void> {
                 </div>
               </template>
               <div class="field">
-                <label :for="`step-label-${i}`">Label</label>
-                <input :id="`step-label-${i}`" v-model="step.label" maxlength="255" :placeholder="STEP_TYPES[step.stepType].label" />
+                <label :for="`step-label-${i}`">{{ isPrep(step) ? 'What to do' : 'Label' }}<span v-if="isPrep(step)" class="req" aria-hidden="true">*</span></label>
+                <input
+                  :id="`step-label-${i}`"
+                  v-model="step.label"
+                  maxlength="255"
+                  :aria-required="isPrep(step)"
+                  :placeholder="isPrep(step) ? 'e.g. Rinse the filter' : STEP_TYPES[step.stepType].label"
+                />
               </div>
-              <div v-if="show('recipe.stepTemp')" class="field">
+              <div v-if="show('recipe.stepTemp') && !isPrep(step)" class="field">
                 <label :for="`step-temp-${i}`">Temp ({{ TEMPERATURE_LABELS[temperatureUnit] }})</label>
                 <input :id="`step-temp-${i}`" v-model="step.temp" inputmode="decimal" :placeholder="temperatureUnit === 'f' ? 'e.g. 199' : 'e.g. 93'" />
               </div>
-              <label v-if="timesScale" class="checkbox full">
+              <label v-if="timesScale && !isPrep(step)" class="checkbox full">
                 <input v-model="step.scalesWithBatch" type="checkbox" />
                 Scales with the batch
               </label>
@@ -978,7 +1008,10 @@ async function save(): Promise<void> {
         <p v-if="stepsTotal" class="steps-total" :class="{ outside: stepsTotal.outside }" aria-live="polite">
           <template v-for="(part, k) in stepsTotal.parts" :key="k"><span v-if="k" class="time-dot"> · </span>{{ part }}</template>
         </p>
-        <button class="btn btn-secondary" type="button" :disabled="steps.length >= 20" @click="addStep">Add step</button>
+        <div class="add-steps">
+          <button class="btn btn-secondary" type="button" :disabled="steps.length >= 20" @click="addStep">Add step</button>
+          <button class="btn btn-secondary" type="button" :disabled="steps.length >= 20" @click="addPrepStep">Add prep step</button>
+        </div>
       </section>
 
       <ul v-if="warnings.length" class="warnings" aria-live="polite">
@@ -1138,6 +1171,11 @@ p {
 }
 .steps-total.outside {
   color: var(--warning);
+}
+.add-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 .full {
   grid-column: 1 / -1;

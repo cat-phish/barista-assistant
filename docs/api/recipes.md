@@ -36,7 +36,7 @@ new kind needs):
 | `expectedYieldGrams` | optional estimate | **required**: target shot weight; ratio is dose:yield (18 g → 36 g = 1:2) |
 | finish window | total brew time | total shot time |
 | `firstDropMinSec`/`MaxSec` | must be absent/`null` | optional window (pair, ±3 s default) |
-| step types | `bloom` `pour` `swirl` `stir` `wait` `press` `other` | `preinfusion` `soak` `pressure` `flow` `other` (`ESPRESSO_STEP_TYPES`) |
+| step types | `prep` `bloom` `pour` `swirl` `stir` `wait` `press` `other` | `prep` `preinfusion` `soak` `pressure` `flow` `other` (`ESPRESSO_STEP_TYPES`) |
 | step `advance` | `auto`, `auto_log`, `tap` | also `first_drop` (at most one step) |
 | `flowUnit` | ignored (default `g_s`) | `g_s` or `ml_s` for flow steps |
 | `stepTimeScaling` | optional | must be absent/`null` |
@@ -80,6 +80,16 @@ card. Waiting is an explicit `wait` (pour over) or `soak` (espresso) step.
 | `pressure` | Espresso: hold or ramp pressure | `pressureBar` required, `pressureEndBar` optional (ramp) |
 | `flow` | Espresso: hold or ramp flow | `flowRate` required, `flowEndRate` optional (ramp) |
 | `other` | Anything else; give it a `label` | pour-over: `targetWaterGrams` optional; espresso: pressure or flow optional |
+| `prep` | Done **before the timer starts** (rinse the filter, preheat, warm the cup) | `label` required; `durationSec` optional (a countdown on the brew page, `null` = none); `advance` must be `auto`; no other values |
+
+**Prep steps** come before every other step (a prep step after a brew step
+is `400`). They're off the brew's clock: the timer runs only the steps after
+them and starts at the first one, planned times and the finish window leave
+them out, and the timer page shows them before Start, one card each, where
+a timed one has its own countdown. `stepOrder` still counts
+them, so a step mark (`step_end`, `step_hold`, `step_resume`; §6) names the
+recipe's step: with two prep steps, the timer's first step is `stepOrder` 3.
+A prep step's `scalesWithBatch` is always `false`.
 
 - `targetWaterGrams`: the cumulative scale weight to **pour to** by the step's
   end (> 0, < 10000, max 2 decimals; never decreasing across steps). Clients

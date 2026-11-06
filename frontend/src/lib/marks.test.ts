@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { firstDropVerdict, formatMark, heldSec, holdsOf, parseMark, withMark } from './marks';
+import { afterPrep, firstDropVerdict, formatMark, heldSec, holdsOf, parseMark, withMark } from './marks';
 
 describe('marks', () => {
   it('re-recording replaces the same mark (per step for step_end), earliest first', () => {
@@ -37,5 +37,23 @@ describe('marks', () => {
     expect(firstDropVerdict(7, { min: 6, max: 9 })).toBe('in the window');
     expect(firstDropVerdict(9.1, { min: 6, max: 9 })).toBe('late');
     expect(firstDropVerdict(7, null)).toBeNull();
+  });
+});
+
+describe('afterPrep', () => {
+  it("moves step marks past the prep steps, so they name the recipe's step", () => {
+    const marks = [
+      { kind: 'step_hold' as const, stepOrder: 1, atSec: 20 },
+      { kind: 'step_resume' as const, stepOrder: 1, atSec: 25 },
+      { kind: 'step_end' as const, stepOrder: 1, atSec: 40 },
+      { kind: 'first_drop' as const, stepOrder: null, atSec: 7.5 },
+    ];
+    expect(afterPrep(marks, 2)).toEqual([
+      { kind: 'step_hold', stepOrder: 3, atSec: 20 },
+      { kind: 'step_resume', stepOrder: 3, atSec: 25 },
+      { kind: 'step_end', stepOrder: 3, atSec: 40 },
+      { kind: 'first_drop', stepOrder: null, atSec: 7.5 },
+    ]);
+    expect(afterPrep(marks, 0)).toEqual(marks);
   });
 });

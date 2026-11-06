@@ -184,6 +184,42 @@ describe("recipe steps", () => {
     const steps = [bloom, { stepType: "stir", durationSec: 5 }, { stepType: "pour", durationSec: 25, targetWaterGrams: 45 }];
     expect((await owner.agent.post(base).send({ ...recipe, steps })).status).toBe(201);
   });
+
+  it("prep steps come first: a label and an optional countdown, on any method (docs/api/recipes.md §5)", async () => {
+    const { owner, ws, base, recipe } = await setup();
+    const prep = [
+      { stepType: "prep", label: "Rinse the filter" }, // no time: a checklist item
+      { stepType: "prep", label: "Preheat", durationSec: 120 },
+    ];
+    const res = await owner.agent.post(base).send({ ...recipe, steps: [...prep, bloom, { stepType: "wait", durationSec: null }] });
+    expect(res.status).toBe(201);
+    const shape = (s: Record<string, unknown>) => [s.stepOrder, s.stepType, s.label, s.durationSec, s.advance];
+    expect(res.body.recipe.steps.map(shape)).toEqual([
+      [1, "prep", "Rinse the filter", null, "auto"],
+      [2, "prep", "Preheat", 120, "auto"],
+      [3, "bloom", null, 10, "auto"],
+      [4, "wait", null, null, "auto"],
+    ]);
+    // Only prep steps is fine too (the timer is then a stopwatch).
+    expect((await owner.agent.post(base).send({ ...recipe, name: "Prep only", steps: prep })).status).toBe(201);
+    const gaggia = (await owner.agent.post(`/api/workspaces/${ws.id}/brewers`).send({ name: "Gaggia", kind: "espresso" })).body.brewer.id;
+    const shot = { name: "Shot", brewerId: gaggia, targetDoseGrams: 18, expectedYieldGrams: 36 };
+    expect((await owner.agent.post(base).send({ ...shot, steps: [{ stepType: "prep", label: "Warm the cup" }, { stepType: "pressure", durationSec: 25, pressureBar: 9 }] })).status).toBe(201);
+  });
+
+  it.each([
+    ["after a brew step", [bloom, { stepType: "prep", label: "Rinse" }], /prep steps go before/],
+    ["without a label", [{ stepType: "prep", durationSec: 30 }], /label/],
+    ["with a temperature", [{ stepType: "prep", label: "Preheat", targetTempC: 95 }], /targetTempC/],
+    ["with water", [{ stepType: "prep", label: "Preheat", targetWaterGrams: 100 }], /targetWaterGrams/],
+    ["with pressure", [{ stepType: "prep", label: "Flush", pressureBar: 9 }], /pressureBar/],
+    ["moving on by tap", [{ stepType: "prep", label: "Rinse", advance: "tap" }], /advance/],
+  ])("rejects a prep step %s", async (_label, steps, error) => {
+    const { owner, base, recipe } = await setup();
+    const res = await owner.agent.post(base).send({ ...recipe, steps });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(error);
+  });
 });
 
 describe("brew logs: water vs measured yield", () => {
