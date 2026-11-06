@@ -220,7 +220,7 @@ says why the last analysis failed or wasn't made (e.g. the daily cap), else
     brew moved the recipe's step temps (`recipes.md` §5); `null` = as written.
     Clients fix it when the brew leaves setup, so changing the log's
     temperature afterwards doesn't change it. The AI doesn't use it yet
-    (`docs/backlog.md` item 32).
+    (`docs/backlog.md` item 11).
   - `actualYieldGrams` is the **measured** beverage weight: optional,
     nullable, same rules as water. Unlike the recipe's rough
     `expectedYieldGrams`, it's a measurement, and clients show it against the

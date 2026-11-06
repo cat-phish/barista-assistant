@@ -20,6 +20,7 @@ import { development, formatStock, parseRoastForm, roastForm, toLocalInput, weig
 import { ROAST_LEVELS } from '../lib/scale';
 import { TEMPERATURE_LABELS } from '../lib/units';
 import { useWorkspaceStore } from '../stores/workspace';
+import TimeInput from '../components/TimeInput.vue';
 
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 const workspaces = useWorkspaceStore();
@@ -210,12 +211,12 @@ async function save(): Promise<void> {
           <div class="form-row">
             <div class="field">
               <label for="roast-crack">First crack (m:ss)</label>
-              <input id="roast-crack" v-model="form.firstCrack" inputmode="numeric" placeholder="e.g. 7:30" :aria-invalid="submitted && !!errors.firstCrack" />
+              <TimeInput id="roast-crack" v-model="form.firstCrack" placeholder="e.g. 7:30" :aria-invalid="submitted && !!errors.firstCrack" />
               <span v-if="submitted && errors.firstCrack" class="field-error">{{ errors.firstCrack }}</span>
             </div>
             <div class="field">
               <label for="roast-total">Drop at (m:ss)</label>
-              <input id="roast-total" v-model="form.total" inputmode="numeric" placeholder="e.g. 9:20" :aria-invalid="submitted && !!errors.total" />
+              <TimeInput id="roast-total" v-model="form.total" placeholder="e.g. 9:20" :aria-invalid="submitted && !!errors.total" />
               <span v-if="submitted && errors.total" class="field-error">{{ errors.total }}</span>
             </div>
           </div>

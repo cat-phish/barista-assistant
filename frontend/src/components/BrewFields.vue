@@ -15,6 +15,7 @@ import { useFieldVisibility } from '../composables/useFieldVisibility';
 import RatingInput from './RatingInput.vue';
 import FlavorWheel from './FlavorWheel.vue';
 import VesselField from './VesselField.vue';
+import TimeInput from './TimeInput.vue';
 
 const draft = defineModel<BrewDraft>({ required: true });
 // Hidden fields (Settings → Fields) that this brew already records stay shown.
@@ -247,7 +248,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
     <div class="form-row">
       <div class="field">
         <label for="brew-time">{{ espresso ? 'Shot time' : 'Total time' }}<span class="req" aria-hidden="true">*</span></label>
-        <input id="brew-time" aria-required="true" v-model="draft.time" inputmode="numeric" placeholder="m:ss" :aria-invalid="showErrors && !!errors.time" />
+        <TimeInput id="brew-time" aria-required="true" v-model="draft.time" placeholder="m:ss" :aria-invalid="showErrors && !!errors.time" />
         <span v-if="showErrors && errors.time" class="field-error">{{ errors.time }}</span>
       </div>
       <div v-if="espresso && show('brew.firstDrop')" class="field">

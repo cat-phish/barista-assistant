@@ -47,9 +47,10 @@ import { DEFAULT_STEP_TIME_SCALING, estimateYield, ratioWater, ROAST_LEVELS, sca
 import { parseTemp, tempText, TEMPERATURE_LABELS } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
-import { METHOD_KINDS, pickCopyBrewer } from '../lib/equipment';
+import { METHOD_KINDS } from '../lib/equipment';
 import { offeredFor, toolsFor } from '../lib/prepTools';
 import { recipeStylesApi } from '../api/recipeStyles';
+import TimeInput from '../components/TimeInput.vue';
 
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 const NEW_METHOD = '__new__';
@@ -404,13 +405,11 @@ onMounted(async () => {
       }
       return;
     }
-    // Duplicate: a copy of that recipe, starting on another brewer of the same
-    // kind if there is one (e.g. a second espresso machine).
+    // Duplicate: a copy of that recipe, on the same brewer.
     const from = recipeList?.recipes.find((r) => r.id === route.query.from);
     if (from) {
       fill(from);
       name.value = `${from.name} (copy)`;
-      brewerId.value = pickCopyBrewer(methods.value, from.brewer);
       copyOf.value = from.name;
     }
     // From brew setup's "add a recipe" for a brewer that has none.
@@ -768,12 +767,12 @@ async function save(): Promise<void> {
           <div class="finish-row">
             <div class="field">
               <label for="finish-from">From</label>
-              <input id="finish-from" v-model="finishFrom" inputmode="numeric" placeholder="m:ss" :aria-invalid="submitted && !!fieldErrors.finish" />
+              <TimeInput id="finish-from" v-model="finishFrom" placeholder="m:ss" :aria-invalid="submitted && !!fieldErrors.finish" />
             </div>
             <span class="dash" aria-hidden="true">–</span>
             <div class="field">
               <label for="finish-to">To</label>
-              <input id="finish-to" v-model="finishTo" inputmode="numeric" placeholder="m:ss" :aria-invalid="submitted && !!fieldErrors.finish" />
+              <TimeInput id="finish-to" v-model="finishTo" placeholder="m:ss" :aria-invalid="submitted && !!fieldErrors.finish" />
             </div>
           </div>
           <!-- Shown live once both ends are filled: a backwards range is unambiguous. -->
@@ -785,12 +784,12 @@ async function save(): Promise<void> {
           <div class="finish-row">
             <div class="field">
               <label for="drop-from">From</label>
-              <input id="drop-from" v-model="firstDropFrom" inputmode="numeric" placeholder="m:ss" :aria-invalid="submitted && !!fieldErrors.firstDrop" />
+              <TimeInput id="drop-from" v-model="firstDropFrom" placeholder="m:ss" :aria-invalid="submitted && !!fieldErrors.firstDrop" />
             </div>
             <span class="dash" aria-hidden="true">–</span>
             <div class="field">
               <label for="drop-to">To</label>
-              <input id="drop-to" v-model="firstDropTo" inputmode="numeric" placeholder="m:ss" :aria-invalid="submitted && !!fieldErrors.firstDrop" />
+              <TimeInput id="drop-to" v-model="firstDropTo" placeholder="m:ss" :aria-invalid="submitted && !!fieldErrors.firstDrop" />
             </div>
           </div>
           <span v-if="fieldErrors.firstDrop && (submitted || (firstDropFrom.trim() && firstDropTo.trim()))" class="field-error">{{ fieldErrors.firstDrop }}</span>
@@ -923,11 +922,10 @@ async function save(): Promise<void> {
               </div>
               <div v-if="!longStyle || isPrep(step)" class="field">
                 <label :for="`step-time-${i}`">{{ timeLabel(step) }}<span v-if="timeRequired(step, i)" class="req" aria-hidden="true">*</span></label>
-                <input
+                <TimeInput
                   :id="`step-time-${i}`"
                   :aria-required="timeRequired(step, i)"
                   v-model="step.duration"
-                  inputmode="numeric"
                   :placeholder="isPrep(step) ? 'none' : step.advance === 'auto' && i === steps.length - 1 ? 'until done' : 'm:ss'"
                 />
               </div>

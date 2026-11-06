@@ -152,13 +152,6 @@ export function parseGrinderForm(f: GrinderForm): { errors: GrinderFormErrors; v
   };
 }
 
-// The brewer a duplicated recipe starts on: another active brewer of the same
-// kind (e.g. a second espresso machine), else the original's.
-export function pickCopyBrewer(brewers: Brewer[], original: Pick<Brewer, 'id' | 'kind'>): string {
-  const other = brewers.find((b) => !b.archivedAt && b.kind === original.kind && b.id !== original.id);
-  return other?.id ?? original.id;
-}
-
 // Grinder table cells (null when not set): "Hand" / "Electric",
 // "Conical 39 mm", "Stepped · 0–40".
 export function powerLabel(g: Grinder): string | null {
