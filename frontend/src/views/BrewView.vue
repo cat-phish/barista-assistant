@@ -13,7 +13,7 @@ import AnalysisCard from '../components/AnalysisCard.vue';
 import AiNoteField from '../components/AiNoteField.vue';
 import AiRequestDialog from '../components/AiRequestDialog.vue';
 import RepeatBrewPicker from '../components/RepeatBrewPicker.vue';
-import { recentByMade, repeatLabel, repeatPlan } from '../lib/repeatBrew';
+import { recentByMade, repeatLabel, repeatMissing, repeatPlan } from '../lib/repeatBrew';
 import { rememberedSize, rememberedTools, rememberKeyFor, stillActive, storedSize, storedTools, type Remembered } from '../lib/rememberSetup';
 import { grindersApi } from '../api/grinders';
 import { vesselsApi } from '../api/vessels';
@@ -1190,22 +1190,21 @@ async function applyRepeat(log: BrewLog): Promise<void> {
   });
   // Only mention what's gone if it would have been copied.
   const kept = new Set(userPrefs.value.repeatKeeps);
-  const missing = plan.missing.filter(
-    (m) => !(m.startsWith('The grinder') && !kept.has('grinder') && !kept.has('grind')) && !(m.startsWith('The water') && !kept.has('waterProfile')) && !(m.startsWith('The vessel') && !kept.has('vessel')),
-  );
-  repeatFrom.value = { log, missing };
+  repeatFrom.value = { log, missing: repeatMissing(plan, kept) };
   repeatGrind.value =
     plan.grinderId && log.actualGrindSetting !== null
       ? { grinderId: plan.grinderId, recipeId: plan.recipeId, grind: formatGrind(log.actualGrindSetting), rpm: log.grindRpm === null ? '' : String(log.grindRpm) }
       : null;
-  if (plan.beanId) beanId.value = plan.beanId;
+  // The bean and recipe are choices too; left out, setup keeps its bean and
+  // the brewer's watcher picks its last recipe, as for a new brew.
+  if (kept.has('bean') && plan.beanId) beanId.value = plan.beanId;
   what.value = plan.what;
   await nextTick();
   if (plan.item) item.value = plan.item;
   await nextTick();
   if (plan.brewerId) brewerId.value = plan.brewerId;
   await nextTick();
-  if (plan.recipeId) recipeId.value = plan.recipeId;
+  if (kept.has('recipe') && plan.recipeId) recipeId.value = plan.recipeId;
   await nextTick();
   if (repeatGrind.value) repeatGrind.value.recipeId = recipeId.value; // another recipe if the brew's is gone
   // What else it copies is yours to choose (Settings → Brew setup,

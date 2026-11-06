@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Bean, BrewLog, Brewer, Drink, Grinder, Recipe, WaterProfile } from '../api/types';
 import { DEFAULT_PREFERENCES } from '../composables/usePreferences';
 import { FIELDS } from './fields';
-import { madeKey, recentByMade, REPEAT_FOR_FIELD, REPEAT_OPTIONS, repeatLabel, repeatPlan, type RepeatSources } from './repeatBrew';
+import type { RepeatKeep } from '../api/types';
+import { madeKey, recentByMade, REPEAT_FOR_FIELD, REPEAT_OPTIONS, repeatLabel, repeatMissing, repeatPlan, type RepeatSources } from './repeatBrew';
 
 const log = (over: Partial<BrewLog> = {}): BrewLog =>
   ({
@@ -14,6 +15,8 @@ const log = (over: Partial<BrewLog> = {}): BrewLog =>
   }) as BrewLog;
 const bean = (id: string, batchNumber: string | null, createdAt: string) =>
   ({ id, roasterName: 'Home', beanName: 'Guji', batchNumber, createdAt }) as Bean;
+const ALL = new Set<RepeatKeep>(REPEAT_OPTIONS.map((o) => o.key));
+const texts = (p: ReturnType<typeof repeatPlan>) => repeatMissing(p, ALL);
 const sources = (over: Partial<RepeatSources> = {}): RepeatSources => ({
   beans: [bean('guji3', '3', '2026-10-01')],
   brewers: [
@@ -37,7 +40,7 @@ describe('repeatPlan: the vessel', () => {
   it('names an archived one', () => {
     const p = repeatPlan(log(inCarafe), sources({ vessels: [{ ...carafe, archivedAt: '2026-10-22' }] }));
     expect(p.vessel).toBeNull();
-    expect(p.missing).toContain('The vessel Carafe is archived.');
+    expect(texts(p)).toContain('The vessel Carafe is archived.');
   });
 });
 
@@ -55,22 +58,49 @@ describe('repeatPlan', () => {
   it('an archived bean falls back to the newest active bag of the same coffee', () => {
     const p = repeatPlan(log(), sources({ beans: [bean('guji4', '4', '2026-10-15'), bean('guji5', '5', '2026-10-20'), { ...bean('other', null, '2026-10-22'), beanName: 'Sidamo' }] }));
     expect(p.beanId).toBe('guji5');
-    expect(p.missing[0]).toMatch(/Guji · Batch 3 is archived.*Batch 5/);
+    expect(texts(p)[0]).toMatch(/Guji · Batch 3 is archived.*Batch 5/);
   });
   it('without another bag, the bean is left to pick', () => {
     const p = repeatPlan(log(), sources({ beans: [] }));
     expect(p.beanId).toBe('');
-    expect(p.missing[0]).toMatch(/pick a bean/);
+    expect(texts(p)[0]).toMatch(/pick a bean/);
   });
   it('skips and names what is archived', () => {
     const p = repeatPlan(log(), sources({ recipes: [{ id: 'house', brewer: { id: 'v60' }, archivedAt: '2026-10-22' } as Recipe], grinders: [], waterProfiles: [] }));
     expect(p).toMatchObject({ recipeId: '', grinderId: '', waterProfileId: null, what: 'method:pour' });
-    expect(p.missing.join(' ')).toMatch(/House V60.*C40.*TWW/);
+    expect(texts(p).join(' ')).toMatch(/House V60.*C40.*TWW/);
     const noBrewer = repeatPlan(log(), sources({ brewers: [] }));
     expect(noBrewer).toMatchObject({ what: 'none', item: '', brewerId: '', recipeId: '' });
   });
   it('a brew without a recipe repeats without one', () => {
     expect(repeatPlan(log({ brewerId: null, brewer: null, recipeId: null, recipe: null }), sources())).toMatchObject({ what: 'none', missing: [] });
+  });
+});
+
+describe('repeatMissing: only what would have been copied', () => {
+  const gone = () =>
+    repeatPlan(
+      log({ vesselId: 'carafe', vessel: { id: 'carafe', name: 'Carafe' } }),
+      sources({ beans: [], recipes: [], grinders: [], waterProfiles: [], drinks: [] }),
+    );
+  it('with everything kept, names everything gone', () => {
+    expect(texts(gone())).toHaveLength(5); // bean, recipe, grinder, water, vessel
+  });
+  it('leaves out the bean and recipe when a repeat doesn’t copy them', () => {
+    const shown = repeatMissing(gone(), new Set<RepeatKeep>(['grinder', 'waterProfile', 'vessel']));
+    expect(shown.join(' ')).not.toMatch(/Guji|House V60/);
+    expect(shown.join(' ')).toMatch(/C40.*TWW.*Carafe/);
+  });
+  it('the grinder note stays while either the grinder or the grind is copied', () => {
+    expect(repeatMissing(gone(), new Set<RepeatKeep>(['grind'])).join(' ')).toMatch(/C40/);
+    expect(repeatMissing(gone(), new Set<RepeatKeep>())).toEqual([]);
+  });
+  it('an archived brewer or drink is always said', () => {
+    const p = repeatPlan(log({ drinkId: 'latte', drink: { id: 'latte', name: 'Latte', hasIngredients: true } }), sources({ brewers: [], drinks: [] }));
+    expect(repeatMissing(p, new Set<RepeatKeep>())).toEqual([
+      "The brewer V60 is archived, so the recipe wasn't filled.",
+      "Latte is archived or deleted, so it's brewed as a plain brew.",
+    ]);
   });
 });
 
@@ -99,6 +129,9 @@ describe('what a repeat keeps', () => {
     const keys = REPEAT_OPTIONS.map((o) => o.key);
     expect(new Set(keys).size).toBe(keys.length);
     for (const k of DEFAULT_PREFERENCES.repeatKeeps) expect(keys).toContain(k);
+  });
+  it('copies the bean and recipe out of the box', () => {
+    expect(DEFAULT_PREFERENCES.repeatKeeps).toEqual(expect.arrayContaining(['bean', 'recipe']));
   });
   it('keeps parity with the brew fields: each says what a repeat does with it', () => {
     const keys = new Set<string>(REPEAT_OPTIONS.map((o) => o.key));

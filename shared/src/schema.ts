@@ -36,7 +36,7 @@ export const TEMPERATURE_UNITS = ["c", "f"] as const;
 export const THEMES = ["system", "light", "dark"] as const; // system = follow the device
 // What "Brew again" / a repeat copies from the earlier brew, besides the bean
 // and what → brewer → recipe, which a repeat always takes (docs/api/auth.md §1).
-export const REPEAT_KEEPS = ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "grinderWeights", "vessel", "notes"] as const;
+export const REPEAT_KEEPS = ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "grinderWeights", "vessel", "notes"] as const;
 export type RepeatKeep = (typeof REPEAT_KEEPS)[number];
 // What the brew page fills in from last time on this device (Settings → Brew
 // setup, docs/api/auth.md §1 rememberSetup).
@@ -72,7 +72,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   rateReminders: true,
   rateReminderMinutes: 15,
   rateLaterDefault: false,
-  repeatKeeps: ["size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"],
+  repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"],
   rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"],
   startDelays: {},
   steepReminders: true,
