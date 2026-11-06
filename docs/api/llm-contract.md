@@ -57,11 +57,15 @@ queue:
      `null`): the speed on a variable-speed grinder, part of the grind, and
      `beanWeightInGrams`, `groundWeightOutGrams` and
      `grinderRetentionGrams` (in − out, or `null` unless both were weighed).
+     And the finish window it was timed against (`expectedFinishMinSec` /
+     `expectedFinishMaxSec`, espresso: the shot time, brew-logs.md §6),
+     which may differ from the recipe's (changed for this brew on setup),
+     or `null` for older brews.
    - **Cold styles** (§5e):
      - the brew has `steeping`, `steepTemp`, `dilutionRatio`,
-       `dilutedWith`, and the window it aimed for (`steepMinHours` /
-       `steepMaxHours`, `expectedFinishMinSec` / `expectedFinishMaxSec`,
-       brew-logs.md §6), which may differ from the recipe's; the recipe has
+       `dilutedWith`, and the steep window it aimed for (`steepMinHours` /
+       `steepMaxHours`, brew-logs.md §6), which may differ from the
+       recipe's; the recipe has
        `steepMinHours`, `steepMaxHours`, `steepTemp`, `dilutionRatio` and
        `dilutionWith`;
      - a brew still steeping isn't analyzed (the job is skipped);
@@ -152,7 +156,7 @@ queue:
 
    | Section | Included when | What it says |
    | --- | --- | --- |
-   | `core` | always | expert barista; judge this one brew against its recipe and the bean; missing = not recorded; equipment by name; change one or two levers |
+   | `core` | always | expert barista; judge this one brew against its recipe and the bean; missing = not recorded; equipment by name; change one or two levers; judge the time against the brew's own finish window |
    | `output` | always | what `reasoning`, `nextStep`, `confidence` and `suggestedRpmDelta` should hold; dose and shot weight null except for espresso |
    | `drink` | a drink or drink tasting is sent | drink notes are weaker evidence of extraction |
    | `style` | a recipe style is sent | judge against `brewsLike` (soup shot, immersion…) |
