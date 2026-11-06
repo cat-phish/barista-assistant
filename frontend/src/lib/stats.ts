@@ -247,8 +247,8 @@ export function ratingWithWithout(brews: readonly StatsBrew[], toolIds: readonly
 
 export type FinishFit = 'early' | 'inside' | 'late';
 type FinishWindow = { expectedFinishMinSec: number | null; expectedFinishMaxSec: number | null };
-// Where the brew's time landed against its finish window: its own (rapid
-// cold), else its recipe's; null without one.
+// Where the brew's time landed against its finish window: its own (set on
+// setup), else its recipe's; null without one.
 export function finishFit(brew: Pick<StatsBrew, 'timeSec'> & FinishWindow, recipe?: FinishWindow): FinishFit | null {
   const own = brew.expectedFinishMinSec !== null && brew.expectedFinishMaxSec !== null;
   const min = own ? brew.expectedFinishMinSec : (recipe?.expectedFinishMinSec ?? null);

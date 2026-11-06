@@ -2397,3 +2397,29 @@ still a repeat; built since the defaults keep it one.
   replaces matching on the note's wording in `BrewView`.
 - **Migration 0100** adds `bean` and `recipe` to every saved `repeatKeeps`
   list, so people who had saved their choices keep copying both.
+
+## Change the brew window for any brew (built)
+
+Backlog item 6, branch `brew-window-any-brew`. Only rapid cold could change
+its target finish on setup; every other brew timed against the recipe's, so
+trying a longer drawdown or a shorter shot meant editing the recipe first
+(2026-11-06).
+
+- **Every timed brew** (all but the long cold styles, which keep "Steep
+  for" in hours) shows the **Target finish** pair on setup; espresso's says
+  **Target shot time**. It starts from the recipe's window for the batch
+  (shifted with `stepTimeScaling`) and follows the batch until it's typed
+  in; "Use it" goes back. The timer uses it.
+- **Always saved** with the brew (`expectedFinishMinSec` / `MaxSec`, no new
+  columns), changed or not, so the journal shows "(target …)" and Insights'
+  early/late judge the window the brew was really timed against, scaled.
+  Older brews without one still fall back to the recipe's.
+- **Setup only:** not during the timer, and `PATCH` still refuses it
+  (`docs/api/brew-logs.md` §6).
+- **Espresso's first-drop window** per brew was left out: it would need its
+  own brew columns.
+- **AI:** the core prompt says to judge the time against the brew's own
+  window, which may differ from the recipe's (`docs/api/llm-contract.md`
+  §9). No new context field.
+- **Settings:** the `brew.window` field and the Repeat brews `window`
+  option are now "Steep or finish time", for any style.

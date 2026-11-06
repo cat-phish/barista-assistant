@@ -245,5 +245,26 @@ describe("cold brew: steeping, finishing and the steep reminder (docs/api/brew-l
     expect((await me.agent.post(url).send(brew)).body.brewLog).toMatchObject({ expectedFinishMinSec: null, expectedFinishMaxSec: null });
     expect((await me.agent.post(url).send({ ...brew, expectedFinishMaxSec: 840 })).status).toBe(400);
   });
+
+  it("stores the finish window set on setup for any timed brew, and PATCH can't change it", async () => {
+    const { me, ws, beanId, url } = await coldBrewSetup(null);
+    const brewers = (await me.agent.get(`/api/workspaces/${ws.id}/brewers`)).body.brewers as Array<{ id: string; kind: string }>;
+    const pourOver = (
+      await me.agent.post(`/api/workspaces/${ws.id}/recipes`).send({
+        name: "V60",
+        brewerId: brewers.find((b) => b.kind === "filter")!.id,
+        targetDoseGrams: 15,
+        targetWaterGrams: 250,
+        expectedFinishMinSec: 165,
+        expectedFinishMaxSec: 195,
+      })
+    ).body.recipe;
+    const saved = await me.agent.post(url).send({ beanId, recipeId: pourOver.id, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 230, expectedFinishMinSec: 210, expectedFinishMaxSec: 240 });
+    expect(saved.status).toBe(201);
+    expect(saved.body.brewLog).toMatchObject({ expectedFinishMinSec: 210, expectedFinishMaxSec: 240, steepMinHours: null });
+    const id = saved.body.brewLog.id as string;
+    expect((await me.agent.patch(`${url}/${id}`).send({ expectedFinishMinSec: 100, expectedFinishMaxSec: 120 })).status).toBe(400);
+    expect((await me.agent.get(`${url}/${id}`)).body.brewLog).toMatchObject({ expectedFinishMinSec: 210, expectedFinishMaxSec: 240 });
+  });
 });
 

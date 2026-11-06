@@ -25,7 +25,9 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
       "bean, and suggest concrete changes for the next brew. A missing field means it wasn't recorded, not that it was " +
       "zero or absent. The brew's grinder and water are named in it and described in equipment. Ratings are 0.5-5 in half steps; " +
       "rating and tastingNotes describe the coffee tasted on its own. Judge mainly from the tasting and how the brew " +
-      "went against the recipe's targets, and change as little as needed: one or two levers at a time.",
+      "went against the recipe's targets, and change as little as needed: one or two levers at a time. The brew's " +
+      "expectedFinishMinSec-expectedFinishMaxSec is the finish (espresso: shot time) window it was timed against, which " +
+      "may differ from the recipe's: judge actualTimeSec against it.",
   },
   {
     key: "output",

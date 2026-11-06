@@ -124,8 +124,8 @@ export interface BrewSummary {
   dilutionRatio: number | null;
   dilutedWith: DilutionWith | null;
   // The window this brew aimed for (the recipe's, or changed for this brew;
-  // docs/api/brew-logs.md §6): a long style's steep in hours, rapid cold's
-  // finish in seconds. Each pair is both or neither.
+  // docs/api/brew-logs.md §6): a long style's steep in hours, any other
+  // timed brew's finish (espresso: shot time) in seconds. Both or neither.
   steepMinHours: number | null;
   steepMaxHours: number | null;
   expectedFinishMinSec: number | null;

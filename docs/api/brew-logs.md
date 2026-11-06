@@ -281,10 +281,14 @@ says why the last analysis failed or wasn't made (e.g. the daily cap), else
       so the steep reminder queued at the start stays right:
       `steepMinHours` / `steepMaxHours` (0.5–72, 1 decimal) for a long
       brew, `expectedFinishMinSec` / `expectedFinishMaxSec` (0–86400 s)
-      for rapid cold. Each pair is both or neither (`null` both for no
-      window), min ≤ max. Clients start from the recipe's and let it be
-      changed before the brew starts. Left out, a steeping brew takes its
-      recipe's steep window; the finish window stays `null`. The steep
+      for any other timed brew (espresso: the shot time). Each pair is
+      both or neither (`null` both for no window), min ≤ max. Clients
+      start from the recipe's (the finish window shifted for the batch
+      with `stepTimeScaling`, recipes.md §5), let it be changed before the
+      brew starts, and send the window the timer used, changed or not.
+      Left out, a steeping brew takes its recipe's steep window; the
+      finish window stays `null` (brews from before this was on every
+      brew, which Insights judges by the recipe's). The steep
       reminder and "ready from" use the brew's `steepMinHours`. Brews from
       before migration 0059 got their recipe's steep window then.
   - `actualTimeSec`: integer 0–604800 (7 days, for long steeps). `rating`: **0.5–5 in steps

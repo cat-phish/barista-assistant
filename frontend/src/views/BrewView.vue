@@ -476,7 +476,7 @@ const setupMissingText = computed(() =>
     noRecipes: !!brewerId.value && !recipeChoices.value.length,
     sizeMissing: !!baseSize.value && !madeSize.value,
     batchInvalid: !!recipe.value && (espresso.value ? !shot.value : !batch.value),
-    finishError: rapidCold.value && !!windowError.value.finish,
+    finishError: !longStyle.value && !!windowError.value.finish,
     steepError: longStyle.value && !!windowError.value.steep,
   }),
 );
@@ -856,15 +856,26 @@ const readyFrom = computed(() => {
 
 // The window this brew aims for (docs/api/brew-logs.md §6): the recipe's,
 // which can be changed before it starts, and is saved with the brew. Long
-// styles steep for hours (the ready reminder comes at its start); rapid cold
-// runs the timer in minutes. Both are set on setup.
-const rapidCold = computed(() => recipe.value?.style?.brewsLike === 'rapid_cold');
+// styles steep for hours (the ready reminder comes at its start); every other
+// brew times against a target finish (espresso: the shot time). Both are set
+// on setup.
 const windowText = reactive({ steepFrom: '', steepTo: '', finishFrom: '', finishTo: '' });
+// The recipe's finish window for this batch: with stepTimeScaling it moves by
+// what the steps gain or lose. Followed until it's changed for this brew.
+const recipeFinish = computed(() => shiftWindow(recipe.value?.expectedFinishMinSec ?? null, recipe.value?.expectedFinishMaxSec ?? null, timed.value.shiftSec));
+const finishEdited = ref(false);
+function setFinishText(min: number | null, max: number | null): void {
+  windowText.finishFrom = min !== null ? formatTime(min) : '';
+  windowText.finishTo = max !== null ? formatTime(max) : '';
+}
+watch(recipeFinish, (w) => {
+  if (!finishEdited.value) setFinishText(w.min, w.max);
+});
 function resetWindow(r: Recipe | null = recipe.value): void {
   windowText.steepFrom = hoursText(r?.steepMinHours ?? null);
   windowText.steepTo = hoursText(r?.steepMaxHours ?? null);
-  windowText.finishFrom = r?.expectedFinishMinSec != null ? formatTime(r.expectedFinishMinSec) : '';
-  windowText.finishTo = r?.expectedFinishMaxSec != null ? formatTime(r.expectedFinishMaxSec) : '';
+  finishEdited.value = false;
+  setFinishText(recipeFinish.value.min, recipeFinish.value.max);
 }
 const steepParsed = computed(() => parseSteepWindow(windowText.steepFrom, windowText.steepTo));
 const finishParsed = computed(() => parseFinishWindow(windowText.finishFrom, windowText.finishTo));
@@ -878,22 +889,19 @@ const recipeSteepNote = computed(() => {
   const changed = (steepRange.value?.min ?? null) !== (r?.steepMinHours ?? null) || (steepRange.value?.max ?? null) !== (r?.steepMaxHours ?? null);
   return changed ? steepWindowText(r?.steepMinHours ?? null, r?.steepMaxHours ?? null) || 'none' : '';
 });
+// "The recipe's: 3:00–3:30", while it's been changed ("for this batch" when scaled).
 const recipeFinishNote = computed(() => {
-  const r = recipe.value;
-  const changed = (finishRange.value?.min ?? null) !== (r?.expectedFinishMinSec ?? null) || (finishRange.value?.max ?? null) !== (r?.expectedFinishMaxSec ?? null);
-  return changed ? (formatFinishWindow(r?.expectedFinishMinSec ?? null, r?.expectedFinishMaxSec ?? null) ?? 'none') : '';
+  const r = recipeFinish.value;
+  const changed = (finishRange.value?.min ?? null) !== r.min || (finishRange.value?.max ?? null) !== r.max;
+  return changed ? (formatFinishWindow(r.min, r.max) ?? 'none') : '';
 });
-// The timer's target: rapid cold's own, else the recipe's.
-const timerFinish = computed(() =>
-  rapidCold.value
-    ? (finishRange.value ?? { min: null, max: null })
-    : shiftWindow(recipe.value?.expectedFinishMinSec ?? null, recipe.value?.expectedFinishMaxSec ?? null, timed.value.shiftSec),
-);
-// What's saved with the brew; other styles leave it out.
+// The timer's target: this brew's (the recipe's for the batch unless changed).
+const timerFinish = computed(() => finishRange.value ?? { min: null, max: null });
+// What's saved with the brew: the steep window for a long style, else the
+// finish window the timer used.
 function windowValues(): Pick<BrewLogInput, 'steepMinHours' | 'steepMaxHours' | 'expectedFinishMinSec' | 'expectedFinishMaxSec'> {
   if (longStyle.value) return { steepMinHours: steepRange.value?.min ?? null, steepMaxHours: steepRange.value?.max ?? null };
-  if (rapidCold.value) return { expectedFinishMinSec: finishRange.value?.min ?? null, expectedFinishMaxSec: finishRange.value?.max ?? null };
-  return {};
+  return { expectedFinishMinSec: timerFinish.value.min, expectedFinishMaxSec: timerFinish.value.max };
 }
 
 async function startSteep(): Promise<void> {
@@ -1250,9 +1258,9 @@ async function applyRepeat(log: BrewLog): Promise<void> {
     windowText.steepFrom = hoursText(log.steepMinHours);
     windowText.steepTo = hoursText(log.steepMaxHours);
   }
-  if (kept.has('window') && rapidCold.value && log.expectedFinishMinSec !== null && log.expectedFinishMaxSec !== null) {
-    windowText.finishFrom = formatTime(log.expectedFinishMinSec);
-    windowText.finishTo = formatTime(log.expectedFinishMaxSec);
+  if (kept.has('window') && !longStyle.value && log.expectedFinishMinSec !== null && log.expectedFinishMaxSec !== null) {
+    setFinishText(log.expectedFinishMinSec, log.expectedFinishMaxSec);
+    finishEdited.value = true;
   }
   const activeTools = new Set(prepTools.value.filter((t) => !t.archivedAt).map((t) => t.id));
   draft.toolIds = log.tools.map((t) => t.id).filter((id) => activeTools.has(id)); // always: that brew's prep, not the recipe's
@@ -1538,7 +1546,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             Yield estimated {{ retentionNote }}.
             <template v-if="scaled">
               Pours scale ×{{ Math.round(batch.factor * 100) / 100 }} with the water;
-              <template v-if="timed.shiftSec">pour and wait times follow ({{ timeShiftText }} in all, and the target finish).</template>
+              <template v-if="timed.shiftSec">pour and wait times follow ({{ timeShiftText }} in all<template v-if="!finishEdited">, and the target finish</template>).</template>
               <template v-else>step times stay the same.</template>
             </template>
           </p>
@@ -1618,23 +1626,23 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           </span>
           <span v-else-if="steepWindow" class="hint">You get a reminder when it opens (Settings → Notifications).</span>
         </fieldset>
-        <!-- Rapid cold: the timer's target for this brew, the recipe's to start with. -->
-        <fieldset v-if="rapidCold && show('brew.window')" class="window">
-          <legend>Target finish</legend>
+        <!-- Every other brew: the timer's target for this brew (espresso: the shot time), the recipe's for the batch to start with. -->
+        <fieldset v-if="!longStyle && show('brew.window')" class="window">
+          <legend>{{ espresso ? 'Target shot time' : 'Target finish' }}</legend>
           <div class="window-row">
             <div class="field">
               <label for="finish-from">From</label>
-              <input id="finish-from" v-model="windowText.finishFrom" inputmode="numeric" placeholder="m:ss" :aria-invalid="!!windowError.finish" />
+              <input id="finish-from" v-model="windowText.finishFrom" inputmode="numeric" placeholder="m:ss" :aria-invalid="!!windowError.finish" @input="finishEdited = true" />
             </div>
             <span class="dash" aria-hidden="true">–</span>
             <div class="field">
               <label for="finish-to">To</label>
-              <input id="finish-to" v-model="windowText.finishTo" inputmode="numeric" placeholder="m:ss" :aria-invalid="!!windowError.finish" />
+              <input id="finish-to" v-model="windowText.finishTo" inputmode="numeric" placeholder="m:ss" :aria-invalid="!!windowError.finish" @input="finishEdited = true" />
             </div>
           </div>
           <span v-if="windowError.finish" class="field-error">{{ windowError.finish }}</span>
           <span v-else-if="recipeFinishNote" class="hint">
-            For this brew. The recipe's: {{ recipeFinishNote }}.
+            For this brew. The recipe's{{ timed.shiftSec ? ', for this batch' : '' }}: {{ recipeFinishNote }}.
             <button class="btn-link small" type="button" @click="resetWindow()">Use it</button>
           </span>
         </fieldset>
