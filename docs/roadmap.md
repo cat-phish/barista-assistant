@@ -2320,3 +2320,33 @@ entries can always be reached.
   scrolled to the middle of the nav (setting the nav's own scroll, so the
   page doesn't move).
 - **Phones:** unchanged; the nav is its own page there.
+
+## Hide and reorder table columns (built)
+
+Backlog item 40, branch `column-options`. Every list table (Beans, Recipes,
+Grinders, Brewers, Drinks, Ingredients, Water profiles) has a **Columns…**
+link in the row with "Select to export… / Import…" (for every member, not
+just owners), opening a dialog in the style of Sonarr's table options.
+
+- **The dialog** (`ColumnsDialog.vue`): a checkbox per column, and its place
+  by dragging the handle, the ↑/↓ keys on it, or the ▲▼ buttons. The table
+  changes as you go. The name column is listed, greyed out, as always shown
+  and first. "Back to the default columns" undoes it all.
+- **Per device, wide and phone apart** (`lib/tableColumns.ts`): remembered
+  per list and workspace on the device (`<list>.columnChoice.<workspace>`),
+  with a separate choice for phone width (≤ 560 px). On a phone the dialog
+  picks what's on the line under each name; the end column (Added, or the
+  rating on Beans) stays beside the name there. Phones start from what they
+  showed before: Beans keeps roaster, roast and stock; its ❄ column is
+  wide-only, since the mark sits by the name on a phone.
+- **Field settings win:** a column whose field the workspace hides under
+  Settings → Fields drops out of the table and the dialog (Recipes: style;
+  Beans: roast level, process, roast date and the age with it, decaf).
+- **Alignment:** the end column stays right-aligned wherever it's moved;
+  the others stay left-aligned, even when last.
+- **Widths by column:** saved by column id now, so a column keeps its width
+  when moved or hidden and shown again; widths saved by position before
+  carry over. "Reset columns" became **Reset widths**, in the same row.
+- **Shared pieces:** `TableHead.vue` (sort buttons, plain headers for
+  unsortable columns, the resize handles) and each view's `TABLE` list with
+  a cell function, instead of hand-written header and cells.

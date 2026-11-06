@@ -474,15 +474,9 @@ button.data-th {
   justify-content: flex-end;
   margin: 0 calc(-1 * var(--space-2)) calc(-1 * var(--space-2));
 }
-/* "Reset columns", above a table with resized columns (ColumnResizers). */
-.columns-reset {
-  display: flex;
-  justify-content: flex-end;
-  margin: 0;
-}
 @media (max-width: 560px) {
   .data-head,
-  .columns-reset,
+  /* "Reset widths" in the table's links: resizing is wide-screen only. */
   .widths-reset {
     display: none;
   }

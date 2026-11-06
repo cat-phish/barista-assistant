@@ -13,8 +13,9 @@ import type { Drink, Ingredient, IngredientType } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ListControls from '../components/ListControls.vue';
 import ListDataBar from '../components/ListDataBar.vue';
-import ColumnResizers from '../components/ColumnResizers.vue';
-import { useColumnWidths } from '../lib/columnWidths';
+import ColumnsDialog from '../components/ColumnsDialog.vue';
+import TableHead from '../components/TableHead.vue';
+import { useTableColumns, type TableColumn } from '../lib/tableColumns';
 import { useSelection } from '../composables/useSelection';
 import MenuTabs from '../components/MenuTabs.vue';
 import { INGREDIENT_TYPES, ingredientUsage } from '../lib/drinks';
@@ -26,11 +27,8 @@ import {
   nameColumn,
   recallView,
   rememberView,
-  sortArrow,
   sortBy,
-  sortLabel,
   sortColumnOptions,
-  toggleHeader,
   type SortColumns,
 } from '../lib/listSort';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -58,8 +56,6 @@ async function load(): Promise<void> {
 
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `ingredients.${what}.${workspaces.current?.id ?? ''}`;
-// Column widths, resizable from the header (ColumnResizers).
-const colWidths = useColumnWidths(() => viewKey('columns'), ['minmax(0, 2fr)', 'minmax(0, 1fr)', 'minmax(0, 1fr)', '5.5rem']);
 const ALL = 'all';
 const UNUSED = 'unused';
 const TYPES = Object.keys(INGREDIENT_TYPES) as IngredientType[];
@@ -68,6 +64,22 @@ const columns: SortColumns<Ingredient> = {
   type: enumColumn('Type', TYPES, (i) => i.ingredientType),
   used: { label: 'Used in', value: (i) => i.drinkCount, asc: 'Least used first', desc: 'Most used first', firstDir: 'desc' },
   added: addedColumn(),
+};
+
+// Table columns: shown, hidden and moved in the Columns dialog, resizable
+// from the header (ColumnResizers). The ones in `columns` sort.
+const TABLE: TableColumn[] = [
+  { id: 'name', label: 'Name', track: 'minmax(0, 2fr)' },
+  { id: 'type', label: 'Type', track: 'minmax(0, 1fr)' },
+  { id: 'used', label: 'Used in', track: 'minmax(0, 1fr)' },
+  { id: 'added', label: 'Added', title: 'Date added', track: '5.5rem', end: true },
+];
+const table = useTableColumns({ key: 'ingredients', workspace: () => workspaces.current?.id ?? '', columns: TABLE });
+const choosingColumns = ref(false);
+const cell = (i: Ingredient, id: string): string => {
+  if (id === 'type') return INGREDIENT_TYPES[i.ingredientType];
+  if (id === 'used') return usedLabel(i.drinkCount);
+  return formatAdded(i.createdAt);
 };
 const sortChoices = sortColumnOptions(columns);
 const filter = ref(ALL);
@@ -142,26 +154,21 @@ const selection = useSelection();
       <div v-if="list.length === 0" class="card empty"><p>No ingredients yet.</p></div>
       <template v-else>
         <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="ingredients" filter-label="Show" :filter-options="filterOptions" v-model:show-archived="showArchived" :archived-count="archivedCount" />
-        <ListDataBar list="ingredients" noun="ingredients" :selection="selection" :visible-ids="shown.map((x) => x.id)" @imported="load()" />
+        <ListDataBar list="ingredients" noun="ingredients" :selection="selection" :visible-ids="shown.map((x) => x.id)" @imported="load()">
+          <template v-if="shown.length">
+            <button v-if="table.widths.resized" class="btn-link widths-reset" type="button" @click="table.widths.reset()">Reset widths</button>
+            <button class="btn-link" type="button" @click="choosingColumns = true">Columns…</button>
+          </template>
+        </ListDataBar>
+        <ColumnsDialog :open="choosingColumns" :state="table" noun="ingredient" @close="choosingColumns = false" />
         <p v-if="showArchived" class="muted small">Archived ingredients can't be added to drinks; drinks that have them keep them.</p>
-        <p v-if="colWidths.resized && shown.length" class="columns-reset"><button class="btn-link small" type="button" @click="colWidths.reset()">Reset columns</button></p>
         <p v-if="shown.length === 0" class="card empty">Nothing here yet.</p>
-        <div v-else class="data-table" :style="{ '--cols': colWidths.template }">
-          <div class="data-row data-head">
-            <ColumnResizers :state="colWidths" :labels="[...['name', 'type', 'used'].map((c) => columns[c]!.label), 'Added']" />
-            <button v-for="c in ['name', 'type', 'used']" :key="c" class="data-th" type="button" :aria-label="sortLabel(sort, c, columns[c]!.label)" @click="sort = toggleHeader(sort, c, columns)">
-              {{ columns[c]!.label }} <span aria-hidden="true">{{ sortArrow(sort, c) }}</span>
-            </button>
-            <button class="data-th end" type="button" :aria-label="sortLabel(sort, 'added', 'Date added')" @click="sort = toggleHeader(sort, 'added', columns)">
-              Added <span aria-hidden="true">{{ sortArrow(sort, 'added') }}</span>
-            </button>
-          </div>
+        <div v-else class="data-table" :style="{ '--cols': table.widths.template }">
+          <TableHead v-model:sort="sort" :state="table" :sort-columns="columns" />
           <div v-for="c in shown" :key="c.id" class="data-item" :class="{ open: openId === c.id }">
             <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === c.id" :aria-pressed="selection.selecting ? selection.has(c.id) : undefined" @click="selection.selecting ? selection.toggle(c.id) : toggle(c.id)">
               <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(c.id) ? '☑' : '☐' }}</span>{{ c.name }}<span v-if="c.archivedAt" class="muted"> (archived)</span></span>
-              <span class="data-td">{{ INGREDIENT_TYPES[c.ingredientType] }}</span>
-              <span class="data-td">{{ usedLabel(c.drinkCount) }}</span>
-              <span class="data-td end">{{ formatAdded(c.createdAt) }}</span>
+              <span v-for="col in table.shown.slice(1)" :key="col.id" class="data-td" :class="[col.class, { end: table.isEnd(col) }]">{{ cell(c, col.id) }}</span>
             </button>
             <div v-if="openId === c.id" class="data-details">
               <p v-if="c.instructions" class="instructions">{{ c.instructions }}</p>

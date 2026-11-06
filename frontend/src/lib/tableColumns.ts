@@ -11,10 +11,14 @@ import { useKeyedColumnWidths } from './columnWidths';
 export interface TableColumn {
   id: string;
   label: string; // in the dialog and the resize handle's name
+  header?: string; // the header's text when it isn't the label ("❄")
+  title?: string; // the header's tooltip and spoken name ("Date added")
+  class?: string; // on the header and cells ("center")
   track: string; // the default grid track on a wide screen
   end?: boolean; // on a phone, beside the name on the first line
   wide?: boolean; // default on wide screens (default true)
   phone?: boolean; // default on phones (default: as on wide screens)
+  wideOnly?: boolean; // never on a phone, nor in its dialog (Beans' ❄: it's beside the name there)
 }
 export type ColumnLayout = 'wide' | 'phone';
 // Every column but the name, in order, and the ones switched off.
@@ -120,7 +124,9 @@ export function useTableColumns(options: {
     save();
   }
 
-  const shown = computed(() => shownColumns(columns, choice.value, available));
+  // What can show here: the workspace's fields, and wide-only columns off phones.
+  const fits = (id: string) => available(id) && !(phone.value && columns.find((c) => c.id === id)?.wideOnly);
+  const shown = computed(() => shownColumns(columns, choice.value, fits));
   const widths = useKeyedColumnWidths(() => `${options.key}.columns.${options.workspace()}`, columns, () => shown.value);
 
   return reactive({
@@ -130,7 +136,7 @@ export function useTableColumns(options: {
     // The dialog's rows: every column but the name that the workspace shows.
     entries: computed(() =>
       choice.value.order
-        .filter((id) => available(id))
+        .filter((id) => fits(id))
         .map((id) => {
           const c = columns.find((col) => col.id === id)!;
           return { id, name: c.label, on: !choice.value.hidden.includes(id), end: c.end === true };

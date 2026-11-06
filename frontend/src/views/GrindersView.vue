@@ -11,7 +11,7 @@ import AppHeader from '../components/AppHeader.vue';
 import SetupTabs from '../components/SetupTabs.vue';
 import ListControls from '../components/ListControls.vue';
 import ListDataBar from '../components/ListDataBar.vue';
-import ColumnResizers from '../components/ColumnResizers.vue';
+import TableHead from '../components/TableHead.vue';
 import ColumnsDialog from '../components/ColumnsDialog.vue';
 import { useTableColumns, type TableColumn } from '../lib/tableColumns';
 import { useSelection } from '../composables/useSelection';
@@ -24,11 +24,8 @@ import {
   nameColumn,
   recallView,
   rememberView,
-  sortArrow,
   sortBy,
-  sortLabel,
   sortColumnOptions,
-  toggleHeader,
   type SortColumns,
 } from '../lib/listSort';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -58,7 +55,7 @@ const TABLE: TableColumn[] = [
   { id: 'power', label: 'Power', track: 'minmax(0, 0.9fr)' },
   { id: 'burrs', label: 'Burrs', track: 'minmax(0, 1.2fr)' },
   { id: 'adjustment', label: 'Adjustment', track: 'minmax(0, 1.3fr)' },
-  { id: 'added', label: 'Added', track: '5.5rem', end: true },
+  { id: 'added', label: 'Added', title: 'Date added', track: '5.5rem', end: true },
 ];
 const table = useTableColumns({ key: 'grinders', workspace: () => workspaces.current?.id ?? '', columns: TABLE });
 const choosingColumns = ref(false);
@@ -165,12 +162,7 @@ const selection = useSelection();
         <ColumnsDialog :open="choosingColumns" :state="table" noun="grinder" @close="choosingColumns = false" />
         <p v-if="shown.length === 0" class="card empty">No {{ filterName.toLowerCase() }} yet.</p>
         <div v-else class="data-table" :style="{ '--cols': table.widths.template }">
-          <div class="data-row data-head">
-            <ColumnResizers :state="table.widths" :labels="table.shown.map((c) => c.label)" />
-            <button v-for="c in table.shown" :key="c.id" class="data-th" :class="{ end: table.isEnd(c) }" type="button" :aria-label="sortLabel(sort, c.id, c.id === 'added' ? 'Date added' : c.label)" @click="sort = toggleHeader(sort, c.id, columns)">
-              {{ c.label }} <span aria-hidden="true">{{ sortArrow(sort, c.id) }}</span>
-            </button>
-          </div>
+          <TableHead v-model:sort="sort" :state="table" :sort-columns="columns" />
           <div v-for="g in shown" :key="g.id" class="data-item" :class="{ open: openId === g.id }">
             <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === g.id" :aria-pressed="selection.selecting ? selection.has(g.id) : undefined" @click="selection.selecting ? selection.toggle(g.id) : toggle(g.id)">
               <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(g.id) ? '☑' : '☐' }}</span>{{ g.name }}<span v-if="g.archivedAt" class="muted"> (archived)</span></span>

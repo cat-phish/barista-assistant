@@ -10,12 +10,14 @@ import type { Brewer, Recipe } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ListControls from '../components/ListControls.vue';
 import ListDataBar from '../components/ListDataBar.vue';
-import ColumnResizers from '../components/ColumnResizers.vue';
-import { useColumnWidths } from '../lib/columnWidths';
+import ColumnsDialog from '../components/ColumnsDialog.vue';
+import TableHead from '../components/TableHead.vue';
+import { useFieldVisibility } from '../composables/useFieldVisibility';
+import { useTableColumns, type TableColumn } from '../lib/tableColumns';
 import { useSelection } from '../composables/useSelection';
 import MenuTabs from '../components/MenuTabs.vue';
 import { formatAdded, formatDoseLine, formatGrams, formatGrind, formatTime } from '../lib/format';
-import { addedColumn, isSortKey, nameColumn, recallView, rememberView, sortArrow, sortBy, sortLabel, sortColumnOptions, toggleHeader, type SortColumns } from '../lib/listSort';
+import { addedColumn, isSortKey, nameColumn, recallView, rememberView, sortBy, sortColumnOptions, type SortColumns } from '../lib/listSort';
 import { formatFinishWindow, plannedEnd, stepTitle } from '../lib/steps';
 import { formatTemp } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
@@ -30,13 +32,30 @@ const error = ref('');
 
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `recipes.${what}.${workspaces.current?.id ?? ''}`;
-// Column widths, resizable from the header (ColumnResizers).
-const colWidths = useColumnWidths(() => viewKey('columns'), ['minmax(0, 2fr)', 'minmax(0, 1.1fr)', 'minmax(0, 0.9fr)', 'minmax(0, 1.2fr)', '5.5rem']);
 const ALL = 'all';
 const columns: SortColumns<Recipe> = {
   name: nameColumn(),
   style: { label: 'Style', value: (r) => r.style?.name ?? null, asc: 'A–Z', desc: 'Z–A' },
   added: addedColumn(),
+};
+
+const { show } = useFieldVisibility();
+// Table columns: shown, hidden and moved in the Columns dialog, resizable
+// from the header (ColumnResizers). The ones in `columns` sort.
+const TABLE: TableColumn[] = [
+  { id: 'name', label: 'Name', track: 'minmax(0, 2fr)' },
+  { id: 'brewer', label: 'Brewer', track: 'minmax(0, 1.1fr)' },
+  { id: 'style', label: 'Style', track: 'minmax(0, 0.9fr)' },
+  { id: 'dose', label: 'Dose', track: 'minmax(0, 1.2fr)' },
+  { id: 'added', label: 'Added', title: 'Date added', track: '5.5rem', end: true },
+];
+const table = useTableColumns({ key: 'recipes', workspace: () => workspaces.current?.id ?? '', available: (id) => id !== 'style' || show('recipe.style'), columns: TABLE });
+const choosingColumns = ref(false);
+const cell = (r: Recipe, id: string): string => {
+  if (id === 'brewer') return r.brewer.name;
+  if (id === 'style') return r.style?.name ?? '–';
+  if (id === 'dose') return formatDoseLine(r.targetDoseGrams, r.targetWaterGrams, r.expectedYieldGrams, r.targetIceGrams);
+  return formatAdded(r.createdAt);
 };
 const sortChoices = sortColumnOptions(columns);
 const brewerFilter = ref(ALL);
@@ -140,32 +159,21 @@ const selection = useSelection();
 
     <template v-else>
       <ListControls v-model:filter="brewerFilter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="recipes" filter-label="Brewer" :filter-options="brewerOptions" v-model:show-archived="showArchived" :archived-count="archivedCount" />
-      <ListDataBar list="recipes" noun="recipes" :selection="selection" :visible-ids="shown.map((x) => x.id)" @imported="load()" />
+      <ListDataBar list="recipes" noun="recipes" :selection="selection" :visible-ids="shown.map((x) => x.id)" @imported="load()">
+        <template v-if="shown.length">
+          <button v-if="table.widths.resized" class="btn-link widths-reset" type="button" @click="table.widths.reset()">Reset widths</button>
+          <button class="btn-link" type="button" @click="choosingColumns = true">Columns…</button>
+        </template>
+      </ListDataBar>
+      <ColumnsDialog :open="choosingColumns" :state="table" noun="recipe" @close="choosingColumns = false" />
       <p v-if="showArchived" class="muted small">Archived recipes are hidden when brewing and in drink forms; past brews still show them.</p>
-      <p v-if="colWidths.resized && shown.length" class="columns-reset"><button class="btn-link small" type="button" @click="colWidths.reset()">Reset columns</button></p>
       <p v-if="shown.length === 0" class="card empty">No recipes for {{ filterName }} yet.</p>
-      <div v-else class="data-table" :style="{ '--cols': colWidths.template }">
-        <div class="data-row data-head">
-          <ColumnResizers :state="colWidths" :labels="['Name', 'Brewer', 'Style', 'Dose', 'Added']" />
-          <button class="data-th" type="button" :aria-label="sortLabel(sort, 'name', 'Name')" @click="sort = toggleHeader(sort, 'name', columns)">
-            Name <span aria-hidden="true">{{ sortArrow(sort, 'name') }}</span>
-          </button>
-          <span class="data-th">Brewer</span>
-          <button class="data-th" type="button" :aria-label="sortLabel(sort, 'style', 'Style')" @click="sort = toggleHeader(sort, 'style', columns)">
-            Style <span aria-hidden="true">{{ sortArrow(sort, 'style') }}</span>
-          </button>
-          <span class="data-th">Dose</span>
-          <button class="data-th end" type="button" :aria-label="sortLabel(sort, 'added', 'Date added')" @click="sort = toggleHeader(sort, 'added', columns)">
-            Added <span aria-hidden="true">{{ sortArrow(sort, 'added') }}</span>
-          </button>
-        </div>
+      <div v-else class="data-table" :style="{ '--cols': table.widths.template }">
+        <TableHead v-model:sort="sort" :state="table" :sort-columns="columns" />
         <div v-for="recipe in shown" :key="recipe.id" class="data-item" :class="{ open: openId === recipe.id }">
           <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === recipe.id" :aria-pressed="selection.selecting ? selection.has(recipe.id) : undefined" @click="selection.selecting ? selection.toggle(recipe.id) : toggle(recipe.id)">
             <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(recipe.id) ? '☑' : '☐' }}</span>{{ recipe.name }}<span v-if="recipe.archivedAt" class="muted"> (archived)</span></span>
-            <span class="data-td">{{ recipe.brewer.name }}</span>
-            <span class="data-td">{{ recipe.style?.name ?? '–' }}</span>
-            <span class="data-td">{{ formatDoseLine(recipe.targetDoseGrams, recipe.targetWaterGrams, recipe.expectedYieldGrams, recipe.targetIceGrams) }}</span>
-            <span class="data-td end">{{ formatAdded(recipe.createdAt) }}</span>
+            <span v-for="col in table.shown.slice(1)" :key="col.id" class="data-td" :class="[col.class, { end: table.isEnd(col) }]">{{ cell(recipe, col.id) }}</span>
           </button>
           <div v-if="openId === recipe.id" class="data-details">
             <p class="facts">

@@ -33,7 +33,6 @@ and fix the references.
 - H. Accounts: 35–36
 - I. Deployment & the app: 37–38
 - J. Backups: 39
-- K. Lists & layout: 40
 
 ---
 
@@ -940,30 +939,3 @@ What a backup keeps, so moving to a new server loses nothing.
     leave them out and restore everything else?
   - Should a test fail when a new setting isn't classified, like the table
     check (`NOT_BACKED_UP`, CLAUDE.md rule 8)?
-
----
-
-## K. Lists & layout
-
-How pages, lists and tables fit the screen.
-
-### 40. Hide and reorder table columns
-
-- **Status:** idea
-- **Why:** list tables can be resized now (roadmap, "Resizable table
-  columns"), but every column always shows in its fixed place. Someone who
-  never looks at a bean's process or caf/decaf can't drop it to make room,
-  or move Stock next to the name.
-- **Approach:**
-  - A column menu on the header (or a "Columns" control beside "Reset
-    columns") with a checkbox per column and a way to move it.
-  - Remembered per list on the device with the widths
-    (`lib/columnWidths.ts`); the name column always shows.
-  - Desktop only, like resizing: phones already drop to fewer columns.
-- **Size:** M (each view's rows are hand-written cells, so hiding or moving
-  one means building the rows from a column list).
-- **Depends on:** nothing.
-- **Open questions:**
-  - Should a column hidden in a workspace's field settings (Settings →
-    Fields) drop out of the table too?
-  - Phones: should hiding also apply to the second line of a row there?
