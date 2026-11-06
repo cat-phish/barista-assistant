@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The Settings screens: the grouped nav beside the tab on wide screens. On a
 // phone, /settings is just the nav (`index`), and each tab has a back link.
-import { onMounted } from 'vue';
+import { nextTick, onMounted, ref } from 'vue';
 import { useWorkspaceStore } from '../stores/workspace';
 import AppHeader from './AppHeader.vue';
 import SettingsNav from './SettingsNav.vue';
@@ -12,12 +12,29 @@ defineProps<{ title?: string; index?: boolean }>();
 // workspace group still should show when there is one.
 const workspaces = useWorkspaceStore();
 onMounted(() => workspaces.ensureLoaded().catch(() => undefined));
+
+// On a wide screen the nav scrolls on its own when it's taller than the
+// window. Each tab mounts its own layout, so the nav starts at the top again:
+// bring the selected tab into view. Set the nav's scrollTop directly, since
+// scrollIntoView would scroll the page as well.
+const aside = ref<HTMLElement | null>(null);
+onMounted(async () => {
+  await nextTick();
+  const nav = aside.value;
+  const active = nav?.querySelector<HTMLElement>('a.active');
+  if (!nav || !active || nav.scrollHeight <= nav.clientHeight) return;
+  const top = active.getBoundingClientRect().top - nav.getBoundingClientRect().top + nav.scrollTop;
+  const bottom = top + active.offsetHeight;
+  if (top < nav.scrollTop || bottom > nav.scrollTop + nav.clientHeight) {
+    nav.scrollTop = top - (nav.clientHeight - active.offsetHeight) / 2;
+  }
+});
 </script>
 
 <template>
   <AppHeader />
   <main class="settings-page" :class="{ index }">
-    <aside class="nav">
+    <aside ref="aside" class="nav">
       <h1 class="nav-title">Settings</h1>
       <SettingsNav />
     </aside>
@@ -43,6 +60,14 @@ onMounted(() => workspaces.ensureLoaded().catch(() => undefined));
   position: sticky;
   top: var(--space-3);
   min-width: 0;
+  /* Taller than the window: scroll the nav, not just the page. The padding
+     (taken back by the margin) keeps the focus ring from being clipped. */
+  max-height: calc(100vh - 2 * var(--space-3));
+  max-height: calc(100dvh - 2 * var(--space-3));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+  margin: -6px;
 }
 .nav-title {
   font-size: 1.5rem;
@@ -71,6 +96,8 @@ onMounted(() => workspaces.ensureLoaded().catch(() => undefined));
   }
   .nav {
     position: static;
+    max-height: none;
+    overflow: visible;
   }
   .back {
     display: inline-flex;
