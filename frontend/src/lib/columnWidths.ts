@@ -74,4 +74,59 @@ export function useColumnWidths(key: () => string, tracks: readonly string[]) {
     },
   });
 }
-export type ColumnWidthsState = ReturnType<typeof useColumnWidths>;
+export type ColumnWidthsState = Pick<ReturnType<typeof useColumnWidths>, 'widths' | 'setWidth' | 'save'>;
+
+// Widths saved by column id, so a column keeps its width when columns are
+// hidden or moved (tableColumns.ts). Widths saved by position before that
+// are read against the table's default order.
+export type KeyedWidths = Record<string, number>;
+export function parseKeyedWidths(raw: string | null, ids: readonly string[]): KeyedWidths {
+  if (!raw) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return {};
+  }
+  const out: KeyedWidths = {};
+  const keep = (id: string, w: unknown) => {
+    if (ids.includes(id) && typeof w === 'number' && Number.isFinite(w)) out[id] = clampWidth(w);
+  };
+  if (Array.isArray(parsed)) {
+    if (parsed.length === ids.length) parsed.forEach((w: unknown, i) => keep(ids[i]!, w));
+  } else if (parsed && typeof parsed === 'object') {
+    for (const [id, w] of Object.entries(parsed)) keep(id, w);
+  }
+  return out;
+}
+
+// `columns`: every column, `shown`: the ones on screen in order. The
+// resize handles work on the shown columns' positions.
+export function useKeyedColumnWidths(key: () => string, columns: ReadonlyArray<{ id: string; track: string }>, shown: () => ReadonlyArray<{ id: string; track: string }>) {
+  const ids = columns.map((c) => c.id);
+  const saved = ref<KeyedWidths>({});
+  watch(key, (k) => (saved.value = parseKeyedWidths(recallView(k), ids)), { immediate: true });
+  const widths = computed<ColumnWidths>(() => shown().map((c) => saved.value[c.id] ?? null));
+
+  function save(): void {
+    if (Object.keys(saved.value).length) rememberView(key(), JSON.stringify(saved.value));
+    else forgetView(key());
+  }
+  return reactive({
+    widths,
+    template: computed(() => colsTemplate(shown().map((c) => c.track), widths.value)),
+    // Only the shown columns count: a hidden one's width waits for it.
+    resized: computed(() => isResized(widths.value)),
+    setWidth(index: number, px: number, persist = true): void {
+      const c = shown()[index];
+      if (!c) return;
+      saved.value = { ...saved.value, [c.id]: clampWidth(px) };
+      if (persist) save();
+    },
+    save,
+    reset(): void {
+      saved.value = {};
+      save();
+    },
+  });
+}

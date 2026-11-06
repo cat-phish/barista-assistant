@@ -12,7 +12,8 @@ import SetupTabs from '../components/SetupTabs.vue';
 import ListControls from '../components/ListControls.vue';
 import ListDataBar from '../components/ListDataBar.vue';
 import ColumnResizers from '../components/ColumnResizers.vue';
-import { useColumnWidths } from '../lib/columnWidths';
+import ColumnsDialog from '../components/ColumnsDialog.vue';
+import { useTableColumns, type TableColumn } from '../lib/tableColumns';
 import { useSelection } from '../composables/useSelection';
 import { adjustmentLabel, burrLabel, grinderSummary, powerLabel } from '../lib/equipment';
 import { formatAdded } from '../lib/format';
@@ -39,8 +40,6 @@ const error = ref('');
 
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `grinders.${what}.${workspaces.current?.id ?? ''}`;
-// Column widths, resizable from the header (ColumnResizers).
-const colWidths = useColumnWidths(() => viewKey('columns'), ['minmax(0, 2fr)', 'minmax(0, 0.9fr)', 'minmax(0, 1.2fr)', 'minmax(0, 1.3fr)', '5.5rem']);
 const ALL = 'all';
 const NOT_SET = 'none';
 const columns: SortColumns<Grinder> = {
@@ -51,6 +50,24 @@ const columns: SortColumns<Grinder> = {
   added: addedColumn(),
 };
 const sortChoices = sortColumnOptions(columns);
+
+// Table columns: shown, hidden and moved in the Columns dialog, resizable
+// from the header (ColumnResizers). Each is also a sort column.
+const TABLE: TableColumn[] = [
+  { id: 'name', label: 'Name', track: 'minmax(0, 2fr)' },
+  { id: 'power', label: 'Power', track: 'minmax(0, 0.9fr)' },
+  { id: 'burrs', label: 'Burrs', track: 'minmax(0, 1.2fr)' },
+  { id: 'adjustment', label: 'Adjustment', track: 'minmax(0, 1.3fr)' },
+  { id: 'added', label: 'Added', track: '5.5rem', end: true },
+];
+const table = useTableColumns({ key: 'grinders', workspace: () => workspaces.current?.id ?? '', columns: TABLE });
+const choosingColumns = ref(false);
+const cell = (g: Grinder, id: string): string => {
+  if (id === 'power') return powerLabel(g) ?? '–';
+  if (id === 'burrs') return burrLabel(g) ?? '–';
+  if (id === 'adjustment') return adjustmentLabel(g) ?? '–';
+  return formatAdded(g.createdAt);
+};
 const filter = ref(ALL);
 const showArchived = ref(false);
 const archivedCount = computed(() => grinders.value.filter((g) => g.archivedAt).length);
@@ -138,27 +155,26 @@ const selection = useSelection();
       <div v-if="grinders.length === 0" class="card empty"><p>No grinders yet.</p></div>
       <template v-else>
         <ListControls v-model:filter="filter" v-model:sort="sort" :sort-columns="sortChoices" id-prefix="grinders" filter-label="Show" :filter-options="filterOptions" v-model:show-archived="showArchived" :archived-count="archivedCount" />
-        <ListDataBar list="grinders" noun="grinders" :selection="selection" :visible-ids="shown.map((x) => x.id)" @imported="load()" />
+        <ListDataBar list="grinders" noun="grinders" :selection="selection" :visible-ids="shown.map((x) => x.id)" @imported="load()">
+          <template v-if="shown.length">
+            <button v-if="table.widths.resized" class="btn-link widths-reset" type="button" @click="table.widths.reset()">Reset widths</button>
+            <button class="btn-link" type="button" @click="choosingColumns = true">Columns…</button>
+          </template>
+        </ListDataBar>
         <p v-if="showArchived" class="muted small">Archived grinders are hidden when brewing; past brews still show them.</p>
-        <p v-if="colWidths.resized && shown.length" class="columns-reset"><button class="btn-link small" type="button" @click="colWidths.reset()">Reset columns</button></p>
+        <ColumnsDialog :open="choosingColumns" :state="table" noun="grinder" @close="choosingColumns = false" />
         <p v-if="shown.length === 0" class="card empty">No {{ filterName.toLowerCase() }} yet.</p>
-        <div v-else class="data-table" :style="{ '--cols': colWidths.template }">
+        <div v-else class="data-table" :style="{ '--cols': table.widths.template }">
           <div class="data-row data-head">
-            <ColumnResizers :state="colWidths" :labels="[...['name', 'power', 'burrs', 'adjustment'].map((c) => columns[c]!.label), 'Added']" />
-            <button v-for="c in ['name', 'power', 'burrs', 'adjustment']" :key="c" class="data-th" type="button" :aria-label="sortLabel(sort, c, columns[c]!.label)" @click="sort = toggleHeader(sort, c, columns)">
-              {{ columns[c]!.label }} <span aria-hidden="true">{{ sortArrow(sort, c) }}</span>
-            </button>
-            <button class="data-th end" type="button" :aria-label="sortLabel(sort, 'added', 'Date added')" @click="sort = toggleHeader(sort, 'added', columns)">
-              Added <span aria-hidden="true">{{ sortArrow(sort, 'added') }}</span>
+            <ColumnResizers :state="table.widths" :labels="table.shown.map((c) => c.label)" />
+            <button v-for="c in table.shown" :key="c.id" class="data-th" :class="{ end: table.isEnd(c) }" type="button" :aria-label="sortLabel(sort, c.id, c.id === 'added' ? 'Date added' : c.label)" @click="sort = toggleHeader(sort, c.id, columns)">
+              {{ c.label }} <span aria-hidden="true">{{ sortArrow(sort, c.id) }}</span>
             </button>
           </div>
           <div v-for="g in shown" :key="g.id" class="data-item" :class="{ open: openId === g.id }">
             <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === g.id" :aria-pressed="selection.selecting ? selection.has(g.id) : undefined" @click="selection.selecting ? selection.toggle(g.id) : toggle(g.id)">
               <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(g.id) ? '☑' : '☐' }}</span>{{ g.name }}<span v-if="g.archivedAt" class="muted"> (archived)</span></span>
-              <span class="data-td">{{ powerLabel(g) ?? '–' }}</span>
-              <span class="data-td">{{ burrLabel(g) ?? '–' }}</span>
-              <span class="data-td">{{ adjustmentLabel(g) ?? '–' }}</span>
-              <span class="data-td end">{{ formatAdded(g.createdAt) }}</span>
+              <span v-for="c in table.shown.slice(1)" :key="c.id" class="data-td" :class="{ end: table.isEnd(c) }">{{ cell(g, c.id) }}</span>
             </button>
             <div v-if="openId === g.id" class="data-details">
               <p class="muted">{{ grinderSummary(g) || 'No details yet: edit to add the range, burrs and power.' }}</p>

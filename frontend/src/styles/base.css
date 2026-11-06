@@ -482,7 +482,8 @@ button.data-th {
 }
 @media (max-width: 560px) {
   .data-head,
-  .columns-reset {
+  .columns-reset,
+  .widths-reset {
     display: none;
   }
   /* Line 1: name and date; line 2: the other cells, joined by "·". */
