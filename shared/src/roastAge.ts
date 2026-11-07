@@ -1,6 +1,7 @@
 // Effective roast age (docs/api/beans.md §4): days since roasting minus days
 // spent frozen, so the age pauses while frozen and resumes after thawing.
-// Dates are calendar dates (YYYY-MM-DD). Twin copy in
+// Dates are calendar dates (YYYY-MM-DD). Used by the worker and the backend
+// (the public menu, docs/api/public-menu.md §7). Twin copy in
 // frontend/src/lib/roastAge.ts; keep both in sync (both have tests).
 
 export interface FreezePeriodLike {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { effectiveRoastAge } from "../src/roastAge.js";
+import { effectiveRoastAge } from "@barista/shared/roastAge";
 
 // Same cases in worker/tests/roastAge.test.ts and frontend/src/lib/roastAge.test.ts.
 describe("effectiveRoastAge", () => {

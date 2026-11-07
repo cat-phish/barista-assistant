@@ -30,7 +30,7 @@ async function setup() {
 describe("menu builder (docs/api/menu.md §7b)", () => {
   it("starts empty, and adds sections last", async () => {
     const { owner, ws, base, get } = await setup();
-    expect(await get()).toEqual({ title: null, currency: null, sections: [] });
+    expect(await get()).toEqual({ title: null, currency: null, showMethod: true, showIngredients: false, sections: [] });
     await menuSection(owner, ws.id, "Espresso");
     const res = await owner.agent.post(`${base}/sections`).send({ name: "Pour over", description: "Brewed to order" });
     expect(res.status).toBe(201);
@@ -315,5 +315,113 @@ describe("menu title (docs/api/menu.md §7b)", () => {
     expect(await publicTitle()).toBe(name);
     expect((await owner.agent.patch(base).send({ title: "x".repeat(256) })).status).toBe(400);
     expect((await owner.agent.patch(base).send({})).status).toBe(400);
+  });
+});
+
+describe("what drinks show under them (docs/api/menu.md §7b)", () => {
+  it("shows how it's made but not ingredients by default; the menu and each item can change that", async () => {
+    const { owner, ws, base, drink, get } = await setup();
+    const section = await menuSection(owner, ws.id, "Milk drinks");
+    const milk = (await owner.agent.post(`/api/workspaces/${ws.id}/ingredients`).send({ name: "Steamed milk", ingredientType: "milk" })).body;
+    const milkId = (milk.ingredient ?? milk).id as string;
+    const latte = await drink("Latte", { ingredients: [{ ingredientId: milkId }] });
+    const mocha = await drink("Mocha", { ingredients: [{ ingredientId: milkId }] });
+    await menuAdd(owner, ws.id, section, { itemType: "drink", drinkId: latte });
+    await menuAdd(owner, ws.id, section, { itemType: "drink", drinkId: mocha, showMethod: false, showIngredients: true });
+    const items = async () => (await owner.agent.get(`${base}/preview`)).body.sections[0].items as Array<{ name: string; method: string | null; ingredients: string[] }>;
+
+    expect((await items()).map((i) => [i.method, i.ingredients])).toEqual([
+      ["Espresso", []],
+      [null, ["Steamed milk"]],
+    ]);
+    const mochaItem = (await get()).sections[0]!.items[1]! as Item & { showMethod: boolean | null; showIngredients: boolean | null };
+    expect(mochaItem).toMatchObject({ showMethod: false, showIngredients: true });
+
+    const patched = await owner.agent.patch(base).send({ showMethod: false, showIngredients: true });
+    expect(patched.body).toMatchObject({ showMethod: false, showIngredients: true });
+    expect((await items()).map((i) => [i.method, i.ingredients])).toEqual([
+      [null, ["Steamed milk"]],
+      [null, ["Steamed milk"]],
+    ]);
+
+    // Back to the menu's default.
+    await owner.agent.patch(`${base}/items/${mochaItem.id}`).send({ showMethod: true, showIngredients: null });
+    await owner.agent.patch(base).send({ showIngredients: false });
+    expect((await items()).map((i) => [i.method, i.ingredients])).toEqual([
+      [null, []],
+      ["Espresso", []],
+    ]);
+  });
+
+  it("keeps variantOf, and the switches are only for drinks and brewers", async () => {
+    const { owner, ws, base, drink, get } = await setup();
+    const section = await menuSection(owner, ws.id, "Milk drinks");
+    const latte = await drink("Latte");
+    await menuAdd(owner, ws.id, section, { itemType: "drink", drinkId: latte });
+    await menuAdd(owner, ws.id, section, { itemType: "drink", drinkId: await drink("Vanilla Latte", { parentDrinkId: latte }) });
+    await menuAdd(owner, ws.id, section, { itemType: "beans" });
+    expect((await owner.agent.get(`${base}/preview`)).body.sections[0].items[1]).toMatchObject({ variantOf: "Latte" });
+
+    const [latteItem, , beansItem] = (await get()).sections[0]!.items;
+    expect((await owner.agent.patch(`${base}/items/${beansItem!.id}`).send({ showMethod: false })).status).toBe(400);
+    expect((await owner.agent.patch(`${base}/items/${latteItem!.id}`).send({ beanBatches: "once" })).status).toBe(400);
+    const mocha = await drink("Mocha");
+    expect((await owner.agent.post(`${base}/sections/${section}/items`).send({ itemType: "drink", drinkId: mocha, beanBatches: "each" })).status).toBe(400);
+    expect((await owner.agent.patch(base).send({ showMethod: "yes" })).status).toBe(400);
+  });
+});
+
+describe("the same coffee more than once (docs/api/public-menu.md §7)", () => {
+  const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+
+  async function twoBatches() {
+    const { owner, ws, base, get } = await setup();
+    const section = await menuSection(owner, ws.id, "Coffee");
+    const older = await newBean(owner, ws.id, { beanName: "Guji", batchNumber: "3", roastDate: daysAgo(20), flavorProfile: "Peach" });
+    const newer = await newBean(owner, ws.id, { beanName: "guji ", batchNumber: "4", roastDate: daysAgo(5), flavorProfile: "Peach" });
+    const other = await newBean(owner, ws.id, { beanName: "Kenya", roastDate: daysAgo(3) });
+    await menuAdd(owner, ws.id, section, { itemType: "beans" });
+    const beansItem = (await get()).sections[0]!.items[0]!;
+    const block = async () => (await owner.agent.get(`${base}/preview`)).body.sections[0].items[0];
+    return { owner, ws, base, beansItem, block, older, newer, other };
+  }
+
+  it("lists each by default, with what tells them apart", async () => {
+    const { owner, base, beansItem, block, older, newer, other } = await twoBatches();
+    const { beans } = await block();
+    const byId = new Map(beans.map((b: { id: string }) => [b.id, b]));
+    expect(beans).toHaveLength(3);
+    expect(byId.get(older)).toMatchObject({ batchNumber: "3", differs: ["roastDate", "batchNumber"], freezes: [] });
+    expect(byId.get(newer)).toMatchObject({ batchNumber: "4", differs: ["roastDate", "batchNumber"] });
+    expect(byId.get(other)).not.toHaveProperty("differs");
+    expect(byId.get(other)).not.toHaveProperty("batchNumber");
+
+    // A difference the block hides is still sent when nothing shown differs.
+    await owner.agent.patch(`${base}/items/${beansItem.id}`).send({ beanFields: ["flavorProfile"] });
+    const hidden = new Map((await block()).beans.map((b: { id: string }) => [b.id, b]));
+    expect(hidden.get(older)).toMatchObject({ differs: ["batchNumber"], batchNumber: "3" });
+    expect(hidden.get(older)).not.toHaveProperty("roastDate");
+  });
+
+  it("shows the freshest unfrozen one once when asked", async () => {
+    const { owner, ws, base, beansItem, block, older, newer, other } = await twoBatches();
+    const patched = await owner.agent.patch(`${base}/items/${beansItem.id}`).send({ beanBatches: "once" });
+    expect(patched.body.sections[0].items[0].beanBatches).toBe("once");
+    let ids = (await block()).beans.map((b: { id: string }) => b.id);
+    expect(ids.sort()).toEqual([newer, other].sort());
+    expect((await block()).beans.find((b: { id: string }) => b.id === newer)).not.toHaveProperty("differs");
+
+    // The newer one goes in the freezer: the older one is what's served.
+    await owner.agent.post(`/api/workspaces/${ws.id}/beans/${newer}/freeze`).send({ date: daysAgo(1) });
+    ids = (await block()).beans.map((b: { id: string }) => b.id);
+    expect(ids.sort()).toEqual([older, other].sort());
+  });
+
+  it("sends a bean's freezes with its roast date, so its age pauses while frozen", async () => {
+    const { owner, ws, base, beansItem, block, newer } = await twoBatches();
+    await owner.agent.post(`/api/workspaces/${ws.id}/beans/${newer}/freeze`).send({ date: daysAgo(2) });
+    expect((await block()).beans.find((b: { id: string }) => b.id === newer).freezes).toEqual([{ frozenOn: daysAgo(2), thawedOn: null }]);
+    await owner.agent.patch(`${base}/items/${beansItem.id}`).send({ beanFields: ["origin"], beanBatches: "once" });
+    expect((await block()).beans[0]).not.toHaveProperty("freezes");
   });
 });

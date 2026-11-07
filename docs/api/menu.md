@@ -31,6 +31,8 @@ off is the workspace's `isPublicMenuEnabled` (§2, owners only).
 {
   "title": "The Brew Bar",
   "currency": "USD",
+  "showMethod": true,
+  "showIngredients": false,
   "sections": [
     {
       "id": "uuid",
@@ -48,12 +50,18 @@ off is the workspace's `isPublicMenuEnabled` (§2, owners only).
           "price": 5.5,
           "available": true,
           "source": { "name": "Latte", "description": "Double shot, steamed milk", "kind": "espresso", "method": "Espresso", "archived": false },
-          "beanFields": null
+          "beanFields": null,
+          "beanBatches": null,
+          "showMethod": null,
+          "showIngredients": true
         },
         {
           "id": "uuid", "itemType": "beans", "drinkId": null, "brewerId": null,
           "name": null, "description": null, "price": null, "available": true, "source": null,
-          "beanFields": ["flavorProfile", "origin", "process", "roastDate"]
+          "beanFields": ["flavorProfile", "origin", "process", "roastDate"],
+          "beanBatches": "once",
+          "showMethod": null,
+          "showIngredients": null
         }
       ]
     }
@@ -71,6 +79,17 @@ about each bean besides its roaster and name: a list of `BEAN_MENU_FIELDS`
 `roastDate`, `decaf`, `blendType`, `roastType`), each once; `null` = all of
 them. The public menu (§7) sends only those.
 
+`beanBatches` (the beans block only; `null` on other items) is what the
+block does with the same coffee more than once (same roaster and bean name,
+e.g. two batches): `"each"` (or `null`) lists each, with what tells them
+apart; `"once"` shows only the freshest that isn't frozen (§7).
+
+`showMethod` and `showIngredients` (the menu's) are what drinks and brewers
+show under them on the public menu by default: how it's made ("Filter",
+"Espresso", on by default) and a drink's ingredients (off by default). An
+item's own `showMethod` / `showIngredients` (`null` on the beans block)
+override them: `true` show, `false` hide, `null` the menu's default.
+
 ## `GET /`
 
 - **Errors:** `404` not a member.
@@ -86,10 +105,12 @@ The builder's Preview shows it.
 ## `PATCH /`
 
 - **Body:** any non-empty subset of `{ "currency": "usd" | null, "title":
-  "The Brew Bar" | null }`. `currency` is an ISO 4217 code (uppercased).
+  "The Brew Bar" | null, "showMethod": true, "showIngredients": false }`.
+  `currency` is an ISO 4217 code (uppercased).
   `title` is the public menu's heading, ≤ 255 chars; blank or `null` uses the
   workspace name. Both are set in Settings → Workspace, with the public
-  menu's on/off switch (§2).
+  menu's on/off switch (§2). `showMethod` and `showIngredients` are the
+  defaults above, switched at the top of the builder.
 - **Errors:** `400` invalid, or a `null` currency while items still have
   prices; `403` viewer.
 
@@ -128,7 +149,9 @@ order. Items can move between sections this way.
   neither. `name` ≤ 255 and `description` ≤ 500 (blank = `null`); `price`
   0–999999.99, at most 2 decimals, and only once the menu has a `currency`;
   `available` defaults to `true`. `beanFields` (optional, nullable) is only
-  for the beans block. It goes last in the section.
+  for the beans block, and so is `beanBatches` (optional, nullable);
+  `showMethod` and `showIngredients` (optional, nullable) only for drinks
+  and brewers. It goes last in the section.
 
   Or several at once: `{ "items": [ { ...item }, ... ] }` (1–100), each with
   the same rules. They go last, in the order sent, and it's **all or
@@ -141,8 +164,9 @@ order. Items can move between sections this way.
 ## `PATCH /items/:itemId`
 
 - **Body:** any non-empty subset of `{ "name", "description", "price",
-  "available", "beanFields" }`, same rules (`beanFields` on a drink or brewer
-  item is a `400`). To move an item, use `PUT /layout`.
+  "available", "beanFields", "beanBatches", "showMethod", "showIngredients" }`,
+  same rules (`beanFields` or `beanBatches` on a drink or brewer item, or
+  `showMethod` or `showIngredients` on the beans block, is a `400`). To move an item, use `PUT /layout`.
 - **Errors:** `400`; `403`; `404`.
 
 ## `DELETE /items/:itemId`

@@ -46,7 +46,7 @@ import { alias } from "drizzle-orm/mysql-core";
 import { db } from "./db.js";
 import { config } from "./config.js";
 import { localBrewDate } from "./localDate.js";
-import { effectiveRoastAge, type FreezePeriodLike } from "./roastAge.js";
+import { effectiveRoastAge, type FreezePeriodLike } from "@barista/shared/roastAge";
 
 // The grinder a grind setting refers to, with whatever details are recorded
 // (range and step size let the LLM talk in clicks; speed is for variable-speed

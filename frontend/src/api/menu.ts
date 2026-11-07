@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { BeanMenuField, Menu, MenuItemType, PublicMenu } from './types';
+import type { BeanBatchMode, BeanMenuField, Menu, MenuItemType, PublicMenu } from './types';
 
 // docs/api/menu.md §7b: the menu builder. Every write returns the whole menu.
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/menu`;
@@ -10,6 +10,9 @@ export interface MenuItemInput {
   price?: number | null; // needs the menu's currency
   available?: boolean;
   beanFields?: BeanMenuField[] | null; // the beans block only; null = all
+  beanBatches?: BeanBatchMode | null; // the beans block only; null = 'each'
+  showMethod?: boolean | null; // drinks and brewers; null = the menu's default
+  showIngredients?: boolean | null;
 }
 
 export type NewMenuItem = MenuItemInput & { itemType: MenuItemType; drinkId?: string; brewerId?: string };
@@ -23,6 +26,8 @@ export const menuApi = {
   setCurrency: (workspaceId: string, currency: string | null) => api.patch<Menu>(base(workspaceId), { currency }),
   // The public menu's heading; null/'' = the workspace name.
   setTitle: (workspaceId: string, title: string | null) => api.patch<Menu>(base(workspaceId), { title }),
+  // What items show under them by default (each item can override it).
+  setDisplay: (workspaceId: string, display: { showMethod?: boolean; showIngredients?: boolean }) => api.patch<Menu>(base(workspaceId), display),
   addSection: (workspaceId: string, name: string, description: string | null = null) =>
     api.post<Menu>(`${base(workspaceId)}/sections`, { name, description }),
   updateSection: (workspaceId: string, id: string, input: { name?: string; description?: string | null }) =>

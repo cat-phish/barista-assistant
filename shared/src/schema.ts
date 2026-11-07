@@ -322,6 +322,10 @@ export const workspaces = mysqlTable("workspaces", {
   menuCurrency: varchar("menu_currency", { length: 3 }),
   // The public menu's title (docs/api/menu.md §7b); null = the workspace name.
   menuTitle: varchar("menu_title", { length: 255 }),
+  // What the public menu shows under each drink or brewer by default; an
+  // item can override either (docs/api/menu.md §7b).
+  menuShowMethod: boolean("menu_show_method").default(true).notNull(), // "Filter", "Espresso"
+  menuShowIngredients: boolean("menu_show_ingredients").default(false).notNull(),
   settings: jsonValue<Partial<WorkspaceSettings>>("settings"), // null = all defaults
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -1277,6 +1281,10 @@ export const BEAN_MENU_FIELDS = [
   "flavorProfile", "origin", "producer", "altitude", "variety", "process", "roastLevel", "roastDate", "decaf", "blendType", "roastType",
 ] as const;
 export type BeanMenuField = (typeof BEAN_MENU_FIELDS)[number];
+// The beans block, when two beans are the same coffee (same roaster and name,
+// e.g. two batches): list each with what differs, or show the freshest once.
+export const BEAN_BATCH_MODES = ["each", "once"] as const;
+export type BeanBatchMode = (typeof BEAN_BATCH_MODES)[number];
 
 export const menuSections = mysqlTable(
   "menu_sections",
@@ -1313,6 +1321,12 @@ export const menuItems = mysqlTable(
     available: boolean("available").default(true).notNull(), // false = shown as unavailable
     // The beans block only: which BEAN_MENU_FIELDS guests see; null = all.
     beanFields: jsonValue<BeanMenuField[]>("bean_fields"),
+    // The beans block only: BEAN_BATCH_MODES; null = "each".
+    beanBatches: varchar("bean_batches", { length: 10 }).$type<BeanBatchMode>(),
+    // Drinks and brewers only: show how it's made / the ingredients on the
+    // public menu; null = the menu's default (workspaces.menuShow*).
+    showMethod: boolean("show_method"),
+    showIngredients: boolean("show_ingredients"),
   },
   (table) => ({
     // A drink or brewer once per section (NULLs don't collide).

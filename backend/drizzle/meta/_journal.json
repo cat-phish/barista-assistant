@@ -708,6 +708,13 @@
       "when": 1793991217209,
       "tag": "0100_repeat_bean_recipe",
       "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "5",
+      "when": 1794011368196,
+      "tag": "0101_menu_display",
+      "breakpoints": true
     }
   ]
 }

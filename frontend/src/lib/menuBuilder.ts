@@ -104,7 +104,12 @@ export function showsAs(i: MenuItem): string {
   const what = i.itemType === 'drink' ? `${i.source.method} drink` : `${i.source.method}, plain brew`;
   const name = i.name && i.name !== i.source.name ? `shows as “${i.name}” (its own name: ${i.source.name})` : 'shows its own name';
   const description = i.description ? 'its menu description' : i.source.description ? 'its own description' : 'no description';
-  return `${what} · ${name}, ${description}`;
+  // Its own choices, where it differs from the menu's (MenuBuilderView's switches).
+  const own = [
+    i.showMethod === true ? "shows how it's made" : i.showMethod === false ? "hides how it's made" : null,
+    i.showIngredients === true ? 'shows ingredients' : i.showIngredients === false ? 'hides ingredients' : null,
+  ].filter(Boolean);
+  return `${what} · ${name}, ${description}${own.length ? ` · ${own.join(', ')}` : ''}`;
 }
 
 // After a drag: the first section that now has a drink or brewer twice, if any.

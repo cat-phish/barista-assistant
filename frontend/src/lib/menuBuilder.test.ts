@@ -12,7 +12,7 @@ const drink = (id: string, category: DrinkCategory | null, over: Partial<Drink> 
 });
 const brewer = (id: string, kind: Brewer['kind'], archivedAt: string | null = null, methodId: string | null = null) => ({ id, name: id, kind, archivedAt, methodId }) as Brewer;
 const item = (id: string, over: Partial<MenuItem>): MenuItem => ({
-  id, itemType: 'drink', drinkId: null, brewerId: null, name: null, description: null, price: null, available: true, source: null, beanFields: null, ...over,
+  id, itemType: 'drink', drinkId: null, brewerId: null, name: null, description: null, price: null, available: true, source: null, beanFields: null, beanBatches: null, showMethod: null, showIngredients: null, ...over,
 });
 
 const latte = drink('Latte', milk);
@@ -24,6 +24,8 @@ const brewers = [brewer('V60', 'filter'), brewer('Linea', 'espresso'), brewer('M
 const menu: Menu = {
   title: null,
   currency: null,
+  showMethod: true,
+  showIngredients: false,
   sections: [
     { id: 's1', name: 'Espresso', description: null, position: 1, items: [item('i1', { drinkId: 'Latte' }), item('i2', { itemType: 'brewer', brewerId: 'Linea' })] },
     { id: 's2', name: 'Coffee', description: null, position: 2, items: [item('i3', { itemType: 'beans' }), item('i4', { drinkId: 'Tonic' })] },
@@ -67,7 +69,7 @@ describe('addOptions', () => {
       { itemType: 'drink', drinkId: 'Tonic' },
       { itemType: 'brewer', brewerId: 'V60' },
     ]);
-    const empty = addOptions({ title: null, currency: null, sections: [{ ...menu.sections[0]!, items: [] }] }, 's1', [], [], []);
+    const empty = addOptions({ title: null, currency: null, showMethod: true, showIngredients: false, sections: [{ ...menu.sections[0]!, items: [] }] }, 's1', [], [], []);
     expect(addRequest(empty, new Set(), true)).toEqual([{ itemType: 'beans' }]);
   });
 });
@@ -88,6 +90,9 @@ describe('showsAs', () => {
     expect(showsAs(item('a', { source }))).toBe('Espresso drink · shows its own name, its own description');
     expect(showsAs(item('b', { source, name: 'House latte', description: 'Oat milk' }))).toBe(
       'Espresso drink · shows as “House latte” (its own name: Latte), its menu description',
+    );
+    expect(showsAs(item('c', { source, showMethod: false, showIngredients: true }))).toBe(
+      "Espresso drink · shows its own name, its own description · hides how it's made, shows ingredients",
     );
   });
 });

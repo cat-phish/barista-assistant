@@ -2,7 +2,8 @@ import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { db } from "../db.js";
 import { sendError } from "../http.js";
-import { BEAN_MENU_FIELDS, beanProcesses, beans, DEFAULT_WORKSPACE_SETTINGS, drinkIngredients, drinks, ingredients, withDefaults, workspaces, type Bean, type BeanMenuField, type MethodKind, type Workspace } from "@barista/shared/schema";
+import { effectiveRoastAge } from "@barista/shared/roastAge";
+import { BEAN_MENU_FIELDS, beanFreezes, beanProcesses, beans, DEFAULT_WORKSPACE_SETTINGS, drinkIngredients, drinks, ingredients, withDefaults, workspaces, type Bean, type BeanBatchMode, type BeanMenuField, type MethodKind, type Workspace } from "@barista/shared/schema";
 import { SLUG_PATTERN } from "../validation.js";
 import { loadMenu } from "./menu.js";
 
@@ -16,7 +17,21 @@ type BeanDetails = { process: string | null } & Pick<
   | "roastDate" | "roastLevel" | "detailedRoastLevel" | "roastType" | "blendType" | "decaf"
   | "flavorProfile" | "originArea" | "country" | "region" | "altitudeMasl" | "producer" | "varieties" | "species"
 >;
-export type PublicBean = Pick<Bean, "id" | "roasterName" | "beanName"> & Partial<BeanDetails>;
+// A freeze period, so the guest page can count days off roast that pause while frozen.
+export interface PublicFreeze {
+  frozenOn: string;
+  thawedOn: string | null;
+}
+// Two or more beans that are the same coffee (same roaster and name), listed
+// each: what tells them apart (BEAN_MENU_FIELDS keys, or "batchNumber").
+export type BeanDifference = BeanMenuField | "batchNumber";
+export type PublicBean = Pick<Bean, "id" | "roasterName" | "beanName"> &
+  Partial<BeanDetails> & {
+    freezes?: PublicFreeze[]; // with roastDate
+    batchNumber?: string | null; // only when it tells the same coffee apart
+    differs?: BeanDifference[]; // only on the same coffee listed more than once
+  };
+type MenuBean = Pick<Bean, "id" | "roasterName" | "beanName" | "batchNumber"> & BeanDetails & { freezes: PublicFreeze[] };
 // The bean columns each menu field shows.
 const FIELD_COLUMNS: Record<BeanMenuField, ReadonlyArray<keyof BeanDetails>> = {
   flavorProfile: ["flavorProfile"],
@@ -31,10 +46,64 @@ const FIELD_COLUMNS: Record<BeanMenuField, ReadonlyArray<keyof BeanDetails>> = {
   blendType: ["blendType"],
   roastType: ["roastType"],
 };
-function publicBean(bean: PublicBean & BeanDetails, fields: readonly BeanMenuField[]): PublicBean {
+function publicBean(bean: MenuBean, fields: readonly BeanMenuField[], differs?: BeanDifference[]): PublicBean {
   const out: PublicBean = { id: bean.id, roasterName: bean.roasterName, beanName: bean.beanName };
-  for (const f of fields) for (const key of FIELD_COLUMNS[f]) Object.assign(out, { [key]: bean[key] });
+  // A difference the block hides is still sent: it's what tells the batches apart.
+  const shown = [...new Set([...fields, ...(differs ?? []).filter((d): d is BeanMenuField => d !== "batchNumber")])];
+  for (const f of shown) for (const key of FIELD_COLUMNS[f]) Object.assign(out, { [key]: bean[key] });
+  if (shown.includes("roastDate") && bean.roastDate) out.freezes = bean.freezes;
+  if (differs) {
+    out.differs = differs;
+    if (differs.includes("batchNumber")) out.batchNumber = bean.batchNumber;
+  }
   return out;
+}
+
+const sameCoffee = (b: MenuBean) => `${b.roasterName.trim().toLowerCase()}\u0000${b.beanName.trim().toLowerCase()}`;
+const today = () => new Date().toISOString().slice(0, 10);
+
+// The beans block's beans (§7): the same coffee more than once (e.g. two
+// batches) is either shown once, the freshest that isn't frozen, or listed
+// each with what differs between them.
+export function menuBeanList(list: MenuBean[], fields: readonly BeanMenuField[], mode: BeanBatchMode, onDate: string = today()): PublicBean[] {
+  const groups = new Map<string, MenuBean[]>();
+  for (const b of list) groups.set(sameCoffee(b), [...(groups.get(sameCoffee(b)) ?? []), b]);
+  const out: PublicBean[] = [];
+  const done = new Set<string>();
+  for (const b of list) {
+    const key = sameCoffee(b);
+    const group = groups.get(key)!;
+    if (group.length === 1) {
+      out.push(publicBean(b, fields));
+      continue;
+    }
+    if (mode === "once") {
+      if (done.has(key)) continue;
+      done.add(key);
+      out.push(publicBean(freshest(group, onDate), fields));
+      continue;
+    }
+    out.push(publicBean(b, fields, differences(group, fields)));
+  }
+  return out;
+}
+
+function freshest(group: MenuBean[], onDate: string): MenuBean {
+  const frozen = (b: MenuBean) => b.freezes.some((f) => f.thawedOn === null && f.frozenOn <= onDate);
+  const age = (b: MenuBean) => (b.roastDate ? effectiveRoastAge(b.roastDate.toISOString(), b.freezes, onDate).ageDays : Infinity);
+  const pool = group.some((b) => !frozen(b)) ? group.filter((b) => !frozen(b)) : group;
+  return pool.reduce((best, b) => (age(b) < age(best) ? b : best));
+}
+
+// What differs within a group: the shown details and batch number that do;
+// if none of those do, any detail that does (even one the block hides).
+function differences(group: MenuBean[], fields: readonly BeanMenuField[]): BeanDifference[] {
+  const value = (b: MenuBean, d: BeanDifference) =>
+    JSON.stringify(d === "batchNumber" ? b.batchNumber : FIELD_COLUMNS[d].map((k) => (k === "roastDate" ? (b.roastDate?.toISOString().slice(0, 10) ?? null) : b[k])));
+  const all: BeanDifference[] = [...BEAN_MENU_FIELDS, "batchNumber"];
+  const differ = all.filter((d) => new Set(group.map((b) => value(b, d))).size > 1);
+  const shown = differ.filter((d) => d === "batchNumber" || fields.includes(d));
+  return shown.length ? shown : differ;
 }
 
 export interface PublicMenuItem {
@@ -42,9 +111,9 @@ export interface PublicMenuItem {
   id: string; // the drink or brewer
   name: string;
   description: string | null;
-  method: string; // how it's made: "Filter", "Espresso"
+  method: string | null; // how it's made: "Filter", "Espresso"; null = not shown
   variantOf: string | null;
-  ingredients: string[];
+  ingredients: string[]; // empty when not shown
   price: number | null;
   available: boolean;
 }
@@ -119,6 +188,7 @@ export async function buildPublicMenu(workspace: Pick<Workspace, "id" | "name" |
       ? db
           .select({
             id: beans.id,
+            batchNumber: beans.batchNumber,
             roasterName: beans.roasterName,
             beanName: beans.beanName,
             process: beanProcesses.name,
@@ -144,6 +214,19 @@ export async function buildPublicMenu(workspace: Pick<Workspace, "id" | "name" |
       : Promise.resolve([]),
   ]);
 
+  const freezeRows = menuBeans.length
+    ? await db
+        .select({ beanId: beanFreezes.beanId, frozenOn: beanFreezes.frozenOn, thawedOn: beanFreezes.thawedOn })
+        .from(beanFreezes)
+        .where(inArray(beanFreezes.beanId, menuBeans.map((b) => b.id)))
+        .orderBy(asc(beanFreezes.frozenOn))
+    : [];
+  const withFreezes: MenuBean[] = menuBeans.map((b) => ({
+    ...b,
+    ...(levelsOnly ? { detailedRoastLevel: null } : {}),
+    freezes: freezeRows.filter((f) => f.beanId === b.id).map(({ frozenOn, thawedOn }) => ({ frozenOn, thawedOn })),
+  }));
+
   // Name a parent drink only if it's on the menu too, so hidden drinks stay hidden.
   const parentOf = new Map(drinkRows.map((d) => [d.id, d.parentDrinkId]));
   const menuNameOf = new Map<string, string>();
@@ -156,7 +239,7 @@ export async function buildPublicMenu(workspace: Pick<Workspace, "id" | "name" |
       items: s.items.flatMap((i): Array<PublicMenuItem | PublicBeansBlock> => {
         if (i.itemType === "beans") {
           const fields = i.beanFields ?? [...BEAN_MENU_FIELDS];
-          return menuBeans.length ? [{ type: "beans", fields, beans: menuBeans.map((b) => publicBean(levelsOnly ? { ...b, detailedRoastLevel: null } : b, fields)) }] : [];
+          return withFreezes.length ? [{ type: "beans", fields, beans: menuBeanList(withFreezes, fields, i.beanBatches ?? "each") }] : [];
         }
         // An archived brewer, or a source that's gone, is left off.
         if (!i.source || i.source.archived) return [];
@@ -168,9 +251,9 @@ export async function buildPublicMenu(workspace: Pick<Workspace, "id" | "name" |
             id,
             name: i.name ?? i.source.name,
             description: i.description ?? i.source.description,
-            method: i.source.method,
+            method: (i.showMethod ?? menu.showMethod) ? i.source.method : null,
             variantOf: (parent && menuNameOf.get(parent)) ?? null,
-            ingredients: i.drinkId ? ingredientRows.filter((r) => r.drinkId === i.drinkId).map((r) => r.name) : [],
+            ingredients: i.drinkId && (i.showIngredients ?? menu.showIngredients) ? ingredientRows.filter((r) => r.drinkId === i.drinkId).map((r) => r.name) : [],
             price: i.price,
             available: i.available,
           },
