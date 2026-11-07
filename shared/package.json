@@ -48,6 +48,10 @@
     "./flavors": {
       "types": "./dist/flavors.d.ts",
       "default": "./dist/flavors.js"
+    },
+    "./roastAge": {
+      "types": "./dist/roastAge.d.ts",
+      "default": "./dist/roastAge.js"
     }
   },
   "scripts": {

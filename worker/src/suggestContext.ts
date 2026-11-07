@@ -38,7 +38,7 @@ import {
 } from "./context.js";
 import { db } from "./db.js";
 import { localBrewDate } from "./localDate.js";
-import { effectiveRoastAge } from "./roastAge.js";
+import { effectiveRoastAge } from "@barista/shared/roastAge";
 
 // The brewer chosen; the controls only matter for an espresso machine.
 export type BrewerInfo = Pick<Brewer, "name" | "kind" | "preinfusion" | "flowControl" | "pressureControl">;

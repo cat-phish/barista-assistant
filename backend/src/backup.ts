@@ -29,6 +29,7 @@ import {
   INGREDIENT_TYPES,
   MARK_KINDS,
   MENU_ITEM_TYPES,
+  BEAN_BATCH_MODES,
   METHOD_KINDS,
   ORIGIN_AREAS,
   PREINFUSION_MODES,
@@ -254,6 +255,7 @@ const ENUMS: Record<string, readonly string[]> = {
   "drinks.kind": METHOD_KINDS,
   "drinks.servingUnit": SERVING_UNITS,
   "menu_items.itemType": MENU_ITEM_TYPES,
+  "menu_items.beanBatches": BEAN_BATCH_MODES,
   "brew_logs.servingUnit": SERVING_UNITS,
   "brew_logs.steepTemp": STEEP_TEMPS,
   "brew_logs.dilutedWith": DILUTION_WITH,
@@ -332,6 +334,10 @@ export interface BackupFile {
     settings: unknown;
     menuTitle: string | null;
     menuCurrency: string | null;
+    // What the menu shows under drinks by default (docs/api/menu.md §7b);
+    // left out (older files) = the defaults.
+    menuShowMethod?: boolean;
+    menuShowIngredients?: boolean;
     isPublicMenuEnabled: boolean;
     // The workspace's own flavor wheel (docs/api/flavor-lexicon.md §2c);
     // null or left out = the built-in one.
@@ -387,6 +393,8 @@ export async function buildBackup(workspaceId: string, options: BackupOptions = 
       settings: ws.settings ?? {},
       menuTitle: ws.menuTitle,
       menuCurrency: ws.menuCurrency,
+      menuShowMethod: ws.menuShowMethod,
+      menuShowIngredients: ws.menuShowIngredients,
       isPublicMenuEnabled: ws.isPublicMenuEnabled,
       flavorLexicon: lexicon.custom ? lexicon.lexicon : null,
     },
@@ -456,6 +464,9 @@ export function checkBackup(input: unknown): Checked {
   if (!settings.success) return { ok: false, error: `backup.workspace.settings: ${settings.error.issues[0]?.message ?? "not valid"}` };
   if (ws.menuTitle != null && (typeof ws.menuTitle !== "string" || ws.menuTitle.length > 255)) return { ok: false, error: "backup.workspace.menuTitle: not valid" };
   if (ws.menuCurrency != null && (typeof ws.menuCurrency !== "string" || !/^[A-Z]{3}$/.test(ws.menuCurrency))) return { ok: false, error: "backup.workspace.menuCurrency: not valid" };
+  for (const key of ["menuShowMethod", "menuShowIngredients"] as const) {
+    if (ws[key] != null && typeof ws[key] !== "boolean") return { ok: false, error: `backup.workspace.${key}: not valid` };
+  }
   let flavorLexicon: FlavorLexicon | null = null;
   if (ws.flavorLexicon != null) {
     const parsed = parseLexicon(ws.flavorLexicon);
@@ -566,6 +577,8 @@ async function insertBackup(
       settings: file.workspace.settings as Record<string, never>,
       menuTitle: file.workspace.menuTitle,
       menuCurrency: file.workspace.menuCurrency,
+      ...(file.workspace.menuShowMethod != null ? { menuShowMethod: file.workspace.menuShowMethod } : {}),
+      ...(file.workspace.menuShowIngredients != null ? { menuShowIngredients: file.workspace.menuShowIngredients } : {}),
       isPublicMenuEnabled: false,
     });
     await tx.insert(workspaceMembers).values({ userId: target.ownerId, workspaceId, role: "owner" });

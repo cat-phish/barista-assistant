@@ -13,7 +13,7 @@ import { errorMessage } from '../api/client';
 import { drinkCategoriesApi } from '../api/drinkCategories';
 import { drinksApi } from '../api/drinks';
 import { menuApi, type NewMenuItem } from '../api/menu';
-import type { BeanMenuField, Brewer, Drink, DrinkCategory, Menu, MenuItem, MenuSection, PublicMenu, BrewerMethod } from '../api/types';
+import type { BeanBatchMode, BeanMenuField, Brewer, Drink, DrinkCategory, Menu, MenuItem, MenuSection, PublicMenu, BrewerMethod } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import MenuAddDialog from '../components/MenuAddDialog.vue';
@@ -26,7 +26,7 @@ import { BEAN_MENU_FIELDS } from '../lib/publicMenu';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
-const menu = ref<Menu>({ title: null, currency: null, sections: [] });
+const menu = ref<Menu>({ title: null, currency: null, showMethod: true, showIngredients: false, sections: [] });
 const drinks = ref<Drink[]>([]);
 const categories = ref<DrinkCategory[]>([]);
 const preview = ref<PublicMenu | null>(null);
@@ -194,6 +194,13 @@ function itemTitle(i: MenuItem): string {
 }
 const formatPrice = (price: number) => `${price.toFixed(2)}${menu.value.currency ? ` ${menu.value.currency}` : ''}`;
 const setAvailable = (i: MenuItem, available: boolean) => run((ws) => menuApi.updateItem(ws, i.id, { available }));
+// What drinks and brews show under them by default; each item can override it.
+const setDisplay = (display: { showMethod?: boolean; showIngredients?: boolean }) => run((ws) => menuApi.setDisplay(ws, display));
+// An item's override as a select value: '' = the menu's default.
+type Override = '' | 'show' | 'hide';
+const toOverride = (v: boolean | null): Override => (v === null ? '' : v ? 'show' : 'hide');
+const fromOverride = (v: Override): boolean | null => (v === '' ? null : v === 'show');
+const defaultLabel = (on: boolean) => `Menu default (${on ? 'shown' : 'hidden'})`;
 
 // Add picker (several at once, one request).
 const addTarget = ref<MenuSection | null>(null);
@@ -217,6 +224,9 @@ const itemAvailable = ref(true);
 // The beans block: which details guests see per bean (null on the API = all).
 const ALL_BEAN_FIELDS = Object.keys(BEAN_MENU_FIELDS) as BeanMenuField[];
 const itemBeanFields = ref<BeanMenuField[]>([]);
+const itemBeanBatches = ref<BeanBatchMode>('each');
+const itemShowMethod = ref<Override>('');
+const itemShowIngredients = ref<Override>('');
 const itemError = ref('');
 const confirmItemDelete = ref(false);
 const sectionOf = (item: MenuItem) => menu.value.sections.find((s) => s.items.some((i) => i.id === item.id)) ?? null;
@@ -240,6 +250,9 @@ function editItem(i: MenuItem): void {
   itemSection.value = sectionOf(i)?.id ?? '';
   itemAvailable.value = i.available;
   itemBeanFields.value = i.beanFields ?? [...ALL_BEAN_FIELDS];
+  itemBeanBatches.value = i.beanBatches ?? 'each';
+  itemShowMethod.value = toOverride(i.showMethod);
+  itemShowIngredients.value = toOverride(i.showIngredients);
   itemError.value = '';
   confirmItemDelete.value = false;
 }
@@ -252,8 +265,15 @@ async function saveItem(): Promise<void> {
   const beanFields = ALL_BEAN_FIELDS.filter((f) => itemBeanFields.value.includes(f));
   const input =
     i.itemType === 'beans'
-      ? { beanFields: beanFields.length === ALL_BEAN_FIELDS.length ? null : beanFields }
-      : { name: itemName.value.trim() || null, description: itemDescription.value.trim() || null, price, available: itemAvailable.value };
+      ? { beanFields: beanFields.length === ALL_BEAN_FIELDS.length ? null : beanFields, beanBatches: itemBeanBatches.value === 'each' ? null : itemBeanBatches.value }
+      : {
+          name: itemName.value.trim() || null,
+          description: itemDescription.value.trim() || null,
+          price,
+          available: itemAvailable.value,
+          showMethod: fromOverride(itemShowMethod.value),
+          ...(i.itemType === 'drink' ? { showIngredients: fromOverride(itemShowIngredients.value) } : {}),
+        };
   const saved = await run((ws) => menuApi.updateItem(ws, i.id, input), onError);
   if (!saved) return;
   // Moved: to the end of the chosen section.
@@ -289,6 +309,19 @@ async function deleteItem(): Promise<void> {
         Public menu is <strong>{{ publicOn ? 'on' : 'off' }}</strong>. Its switch, link, QR code, title and currency are in
         <RouterLink :to="{ name: 'settings-workspace' }">Settings → Workspace</RouterLink>.
       </p>
+
+      <fieldset class="card display">
+        <legend>Under each drink and brew</legend>
+        <label class="checkbox">
+          <input type="checkbox" :checked="menu.showMethod" :disabled="busy || !workspaces.canEdit" @change="setDisplay({ showMethod: !menu.showMethod })" />
+          How it's made (Filter, Espresso)
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" :checked="menu.showIngredients" :disabled="busy || !workspaces.canEdit" @change="setDisplay({ showIngredients: !menu.showIngredients })" />
+          Ingredients
+        </label>
+        <p class="muted small">Each item can show or hide these on its own: Edit it.</p>
+      </fieldset>
 
       <div class="view-toggle" role="group" aria-label="Show">
         <button v-for="v in (['edit', 'preview', 'both'] as const)" :key="v" type="button" class="btn" :class="view === v ? 'btn-primary' : 'btn-secondary'" :aria-pressed="view === v" @click="view = v">
@@ -407,15 +440,45 @@ async function deleteItem(): Promise<void> {
           <input v-model="itemAvailable" type="checkbox" />
           Available (unavailable items stay on the menu, marked as such)
         </label>
+        <div class="field">
+          <label for="item-show-method">How it's made ({{ itemTarget?.source?.method ?? 'Filter, Espresso' }})</label>
+          <select id="item-show-method" v-model="itemShowMethod">
+            <option value="">{{ defaultLabel(menu.showMethod) }}</option>
+            <option value="show">Show</option>
+            <option value="hide">Hide</option>
+          </select>
+        </div>
+        <div v-if="itemTarget?.itemType === 'drink'" class="field">
+          <label for="item-show-ingredients">Ingredients</label>
+          <select id="item-show-ingredients" v-model="itemShowIngredients">
+            <option value="">{{ defaultLabel(menu.showIngredients) }}</option>
+            <option value="show">Show</option>
+            <option value="hide">Hide</option>
+          </select>
+        </div>
       </template>
-      <fieldset v-else class="bean-fields">
-        <legend>Show for each bean</legend>
-        <p class="muted small">The roaster and bean name always show. Beans only appear if "Show on the public menu" is on for them.</p>
-        <label v-for="(label, key) in BEAN_MENU_FIELDS" :key="key" class="checkbox">
-          <input v-model="itemBeanFields" type="checkbox" :value="key" />
-          {{ label }}
-        </label>
-      </fieldset>
+      <template v-else>
+        <fieldset class="bean-fields">
+          <legend>Show for each bean</legend>
+          <p class="muted small">The roaster and bean name always show. Beans only appear if "Show on the public menu" is on for them.</p>
+          <label v-for="(label, key) in BEAN_MENU_FIELDS" :key="key" class="checkbox">
+            <input v-model="itemBeanFields" type="checkbox" :value="key" />
+            {{ label }}
+          </label>
+        </fieldset>
+        <fieldset class="bean-fields">
+          <legend>The same coffee more than once</legend>
+          <p class="muted small">Beans with the same roaster and name, such as two batches.</p>
+          <label class="checkbox">
+            <input v-model="itemBeanBatches" type="radio" value="each" />
+            List each, with what tells them apart (batch number, days off roast…)
+          </label>
+          <label class="checkbox">
+            <input v-model="itemBeanBatches" type="radio" value="once" />
+            Show once: the freshest that isn't frozen
+          </label>
+        </fieldset>
+      </template>
       <div class="field">
         <label for="item-section">Section<span class="req" aria-hidden="true">*</span></label>
         <select id="item-section" aria-required="true" v-model="itemSection">
@@ -572,6 +635,17 @@ h2 {
 }
 .drag-ghost {
   opacity: 0.4;
+}
+.display {
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.display legend {
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: var(--space-1);
 }
 .view-toggle {
   display: flex;

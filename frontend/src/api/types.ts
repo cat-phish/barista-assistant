@@ -140,7 +140,14 @@ export interface MenuItem {
   // What it shows by default; null for the beans block. archived: left off the public menu.
   source: { name: string; description: string | null; kind: MethodKind; method: string; archived: boolean } | null; // method: how it's made (a brewer's method name)
   beanFields: BeanMenuField[] | null; // the beans block: what guests see per bean; null = all
+  beanBatches: BeanBatchMode | null; // the beans block: the same coffee twice; null = 'each'
+  // Drinks and brewers: show how it's made / the ingredients; null = the menu's default.
+  showMethod: boolean | null;
+  showIngredients: boolean | null;
 }
+// The beans block, for the same coffee more than once (e.g. two batches):
+// list each with what differs, or show the freshest once.
+export type BeanBatchMode = 'each' | 'once';
 // docs/api/menu.md §7b BEAN_MENU_FIELDS: what the beans block can show per bean.
 export type BeanMenuField =
   | 'flavorProfile' | 'origin' | 'producer' | 'altitude' | 'variety' | 'process' | 'roastLevel' | 'roastDate' | 'decaf' | 'blendType' | 'roastType';
@@ -154,6 +161,8 @@ export interface MenuSection {
 export interface Menu {
   title: string | null; // the public menu's title; null = the workspace name
   currency: string | null;
+  showMethod: boolean; // items show how it's made ("Filter") unless they say otherwise
+  showIngredients: boolean; // items show their ingredients unless they say otherwise
   sections: MenuSection[];
 }
 
@@ -166,15 +175,19 @@ export type PublicBean = Pick<Bean, 'id' | 'roasterName' | 'beanName'> &
       | 'roastDate' | 'roastLevel' | 'detailedRoastLevel' | 'roastType' | 'blendType' | 'decaf'
       | 'flavorProfile' | 'originArea' | 'country' | 'region' | 'altitudeMasl' | 'producer' | 'varieties' | 'species'
     >
-  >;
+  > & {
+    freezes?: Array<{ frozenOn: string; thawedOn: string | null }>; // with roastDate: days off roast pause while frozen
+    batchNumber?: string | null; // only when it tells the same coffee apart
+    differs?: Array<BeanMenuField | 'batchNumber'>; // the same coffee listed more than once: what tells them apart
+  };
 export interface PublicMenuItem {
   type: 'drink' | 'brewer';
   id: string;
   name: string;
   description: string | null;
-  method: string; // "Espresso", "Filter"
+  method: string | null; // "Espresso", "Filter"; null = not shown
   variantOf: string | null; // the parent's menu name, when it's on the menu too
-  ingredients: string[];
+  ingredients: string[]; // empty when not shown
   price: number | null;
   available: boolean;
 }

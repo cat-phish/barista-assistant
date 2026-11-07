@@ -293,7 +293,7 @@ describe("public menu", () => {
     const atlas = (await owner.agent.post(drinks).send({ name: "The Atlas", description: "V60 with orange cold foam", kind: "filter", ingredients: [{ ingredientId: foamId, amountValue: 40, amountUnit: "g" }] })).body.drink.id;
     await owner.agent.post(drinks).send({ name: "Not placed", kind: "filter" });
     const specialty = await menuSection(owner, ws.id, "Specialty");
-    await menuAdd(owner, ws.id, specialty, { itemType: "drink", drinkId: atlas });
+    await menuAdd(owner, ws.id, specialty, { itemType: "drink", drinkId: atlas, showIngredients: true });
     await menuAdd(owner, ws.id, specialty, { itemType: "beans" });
 
     expect((await request(app).get(menu)).status).toBe(404); // not enabled yet

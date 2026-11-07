@@ -1,11 +1,13 @@
 <script setup lang="ts">
 // The menu as guests see it (docs/api/public-menu.md §7): the builder's
 // Preview and the guest page (views/PublicMenuView.vue).
-import type { PublicMenu } from '../api/types';
+import type { PublicMenu, PublicMenuItem } from '../api/types';
 import { beanLines } from '../lib/publicMenu';
 
 defineProps<{ menu: PublicMenu }>();
 
+// How it's made and the ingredients, whichever the menu shows ("Espresso · Steamed milk").
+const detail = (item: PublicMenuItem) => [item.method, item.ingredients.join(', ')].filter(Boolean).join(' · ');
 const price = (n: number, currency: string | null) => `${n.toFixed(2)}${currency ? ` ${currency}` : ''}`;
 </script>
 
@@ -24,6 +26,7 @@ const price = (n: number, currency: string | null) => `${n.toFixed(2)}${currency
                 <strong class="name">{{ b.beanName }} <span class="roaster muted">· {{ b.roasterName }}</span></strong>
               </div>
               <template v-for="lines in [beanLines(b, item.fields)]" :key="b.id">
+                <span v-if="lines.batch" class="muted small">{{ lines.batch }}</span>
                 <div v-if="lines.badges.length" class="badges">
                   <span v-for="badge in lines.badges" :key="badge" class="badge">{{ badge }}</span>
                 </div>
@@ -40,10 +43,8 @@ const price = (n: number, currency: string | null) => `${n.toFixed(2)}${currency
               <span v-if="!item.available" class="badge">Unavailable</span>
               <span v-if="item.price !== null" class="price">{{ price(item.price, menu.currency) }}</span>
             </div>
-            <span v-if="item.description" class="small">{{ item.description }}</span>
-            <span class="muted small">
-              {{ item.method }}<template v-if="item.variantOf"> · a twist on {{ item.variantOf }}</template><template v-if="item.ingredients.length"> · {{ item.ingredients.join(', ') }}</template>
-            </span>
+            <span v-if="item.description" class="muted small">{{ item.description }}</span>
+            <span v-if="detail(item)" class="muted small">{{ detail(item) }}</span>
           </li>
         </template>
       </ul>

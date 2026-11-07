@@ -8,6 +8,7 @@ import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { buildPublicMenu, type PublicMenuResponse } from "./publicMenu.js";
 import {
+  BEAN_BATCH_MODES,
   BEAN_MENU_FIELDS,
   brewers,
   drinks,
@@ -15,6 +16,7 @@ import {
   menuItems,
   menuSections,
   workspaces,
+  type BeanBatchMode,
   type BeanMenuField,
   type MenuItemType,
   type MethodKind,
@@ -45,6 +47,10 @@ export interface MenuItemView {
   available: boolean;
   source: MenuItemSource | null; // null for the beans block
   beanFields: BeanMenuField[] | null; // the beans block: what guests see per bean; null = all
+  beanBatches: BeanBatchMode | null; // the beans block: same coffee twice; null = "each"
+  // Drinks and brewers: show how it's made / the ingredients; null = the menu's default.
+  showMethod: boolean | null;
+  showIngredients: boolean | null;
 }
 export interface MenuSectionView {
   id: string;
@@ -56,6 +62,8 @@ export interface MenuSectionView {
 export interface MenuResponse {
   title: string | null; // the public menu's title; null = the workspace name
   currency: string | null;
+  showMethod: boolean; // the default for items: show how it's made ("Filter")
+  showIngredients: boolean; // the default for items: show a drink's ingredients
   sections: MenuSectionView[];
 }
 
@@ -79,7 +87,8 @@ const currencySchema = z
   .regex(/^[A-Z]{3}$/, "must be a 3-letter currency code, e.g. USD")
   .nullable();
 // Menu settings: the prices' currency and the menu's title (blank = the workspace name).
-const settingsSchema = updateSchema({ currency: currencySchema, title: optionalText(255) });
+// showMethod / showIngredients: what items show by default.
+const settingsSchema = updateSchema({ currency: currencySchema, title: optionalText(255), showMethod: z.boolean(), showIngredients: z.boolean() });
 
 const sectionFields = { name: z.string().trim().min(1).max(100), description: optionalText(500) };
 const createSectionSchema = z.object(sectionFields).strict();
@@ -92,6 +101,9 @@ const beanFieldsSchema = z
   .optional();
 const itemFields = {
   beanFields: beanFieldsSchema, // the beans block only (checked below)
+  beanBatches: z.enum(BEAN_BATCH_MODES).nullable().optional(), // the beans block only
+  showMethod: z.boolean().nullable().optional(), // drinks and brewers only
+  showIngredients: z.boolean().nullable().optional(),
   name: optionalText(255),
   description: optionalText(500),
   price: decimalSchema({ min: 0, max: 1_000_000, scale: 2, exclusiveMax: true }).nullable().optional(),
@@ -104,7 +116,8 @@ const createItemSchema = z
     (b) => (b.itemType === "drink" ? !!b.drinkId && !b.brewerId : b.itemType === "brewer" ? !!b.brewerId && !b.drinkId : !b.drinkId && !b.brewerId),
     "a drink item needs drinkId, a brewer item brewerId, and the beans block neither"
   )
-  .refine((b) => b.itemType === "beans" || b.beanFields == null, "beanFields: only for the beans block");
+  .refine((b) => b.itemType === "beans" || (b.beanFields == null && b.beanBatches == null), "beanFields, beanBatches: only for the beans block")
+  .refine((b) => b.itemType !== "beans" || (b.showMethod == null && b.showIngredients == null), "showMethod, showIngredients: not for the beans block");
 // One item, or several at once (the add picker): { items: [...] }, all or nothing.
 const addItemsSchema = z.union([
   z.object({ items: z.array(createItemSchema).min(1).max(100) }).strict(),
@@ -125,7 +138,7 @@ const PRICE_NEEDS_CURRENCY = "price: set the menu's currency first";
 
 export async function loadMenu(workspaceId: string, conn: Db = db): Promise<MenuResponse> {
   const [ws] = await conn
-    .select({ currency: workspaces.menuCurrency, title: workspaces.menuTitle })
+    .select({ currency: workspaces.menuCurrency, title: workspaces.menuTitle, showMethod: workspaces.menuShowMethod, showIngredients: workspaces.menuShowIngredients })
     .from(workspaces)
     .where(eq(workspaces.id, workspaceId));
   const sections = await conn
@@ -146,6 +159,9 @@ export async function loadMenu(workspaceId: string, conn: Db = db): Promise<Menu
           price: menuItems.price,
           available: menuItems.available,
           beanFields: menuItems.beanFields,
+          beanBatches: menuItems.beanBatches,
+          showMethod: menuItems.showMethod,
+          showIngredients: menuItems.showIngredients,
           drinkName: drinks.name,
           drinkDescription: drinks.description,
           drinkKind: drinks.kind,
@@ -164,6 +180,8 @@ export async function loadMenu(workspaceId: string, conn: Db = db): Promise<Menu
   return {
     title: ws?.title ?? null,
     currency: ws?.currency ?? null,
+    showMethod: ws?.showMethod ?? true,
+    showIngredients: ws?.showIngredients ?? false,
     sections: sections.map((s) => ({
       ...s,
       items: items
@@ -171,6 +189,9 @@ export async function loadMenu(workspaceId: string, conn: Db = db): Promise<Menu
         .map(({ sectionId: _s, drinkName, drinkDescription, drinkKind, brewerName, brewerKind, brewerMethod, brewerArchivedAt, ...item }) => ({
           ...item,
           beanFields: item.itemType === "beans" ? (item.beanFields ?? null) : null,
+          beanBatches: item.itemType === "beans" ? (item.beanBatches ?? null) : null,
+          showMethod: item.itemType === "beans" ? null : item.showMethod,
+          showIngredients: item.itemType === "beans" ? null : item.showIngredients,
           source:
             item.itemType === "drink" && drinkName !== null && drinkKind !== null
               ? { name: drinkName, description: drinkDescription, kind: drinkKind, method: METHOD_NAMES[drinkKind], archived: false }
@@ -257,6 +278,8 @@ menuRouter.patch("/", async (req: Request<WorkspaceParams>, res: Response<MenuRe
     .set({
       ...(body.currency !== undefined ? { menuCurrency: body.currency } : {}),
       ...(body.title !== undefined ? { menuTitle: body.title } : {}),
+      ...(body.showMethod !== undefined ? { menuShowMethod: body.showMethod } : {}),
+      ...(body.showIngredients !== undefined ? { menuShowIngredients: body.showIngredients } : {}),
     })
     .where(eq(workspaces.id, workspaceId));
   await sendMenu(res, workspaceId);
@@ -426,6 +449,9 @@ async function addItem(tx: Db, workspaceId: string, sectionId: string, body: New
       price: body.price ?? null,
       available: body.available ?? true,
       beanFields: body.beanFields ?? null,
+      beanBatches: body.beanBatches ?? null,
+      showMethod: body.showMethod ?? null,
+      showIngredients: body.showIngredients ?? null,
     });
   } catch (err) {
     if (isDuplicateEntryError(err)) throw new AddRefused(409, "That's already in this section");
@@ -473,8 +499,12 @@ menuRouter.patch("/items/:itemId", async (req: Request<ItemParams>, res: Respons
     sendError(res, 404, "Menu item not found");
     return;
   }
-  if (body.beanFields !== undefined && item.itemType !== "beans") {
-    sendError(res, 400, "beanFields: only for the beans block");
+  if ((body.beanFields !== undefined || body.beanBatches !== undefined) && item.itemType !== "beans") {
+    sendError(res, 400, "beanFields, beanBatches: only for the beans block");
+    return;
+  }
+  if ((body.showMethod !== undefined || body.showIngredients !== undefined) && item.itemType === "beans") {
+    sendError(res, 400, "showMethod, showIngredients: not for the beans block");
     return;
   }
   if (body.price != null && !(await currencyOf(db, workspaceId))) {
