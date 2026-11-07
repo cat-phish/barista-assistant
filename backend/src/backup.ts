@@ -29,6 +29,7 @@ import {
   INGREDIENT_TYPES,
   MARK_KINDS,
   MENU_ITEM_TYPES,
+  MAX_MENU_LOGOS,
   MAX_MENU_SIZES,
   BEAN_BATCH_MODES,
   METHOD_KINDS,
@@ -344,10 +345,12 @@ export interface BackupFile {
     // left out (older files) = the defaults.
     menuShowMethod?: boolean;
     menuShowIngredients?: boolean;
-    // The menu's branding (docs/api/menu.md §7b). The logo, like bean photos,
-    // only goes with its file (a .zip, photos/<menuLogoId>.webp).
+    // The menu's branding (docs/api/menu.md §7b). The logos, like bean
+    // photos, only go with their files (a .zip, photos/<id>.webp), in order.
+    // Older files have one, menuLogoId.
     menuAccentColor?: string | null;
     menuTagline?: string | null;
+    menuLogoIds?: string[] | null;
     menuLogoId?: string | null;
     isPublicMenuEnabled: boolean;
     // The workspace's own flavor wheel (docs/api/flavor-lexicon.md §2c);
@@ -408,7 +411,7 @@ export async function buildBackup(workspaceId: string, options: BackupOptions = 
       menuShowIngredients: ws.menuShowIngredients,
       menuAccentColor: ws.menuAccentColor,
       menuTagline: ws.menuTagline,
-      menuLogoId: options.photos ? ws.menuLogoId : null,
+      menuLogoIds: options.photos ? (ws.menuLogoIds ?? []) : [],
       isPublicMenuEnabled: ws.isPublicMenuEnabled,
       flavorLexicon: lexicon.custom ? lexicon.lexicon : null,
     },
@@ -480,7 +483,13 @@ export function checkBackup(input: unknown): Checked {
   if (ws.menuCurrency != null && (typeof ws.menuCurrency !== "string" || !/^[A-Z]{3}$/.test(ws.menuCurrency))) return { ok: false, error: "backup.workspace.menuCurrency: not valid" };
   if (ws.menuAccentColor != null && (typeof ws.menuAccentColor !== "string" || !/^#[0-9a-f]{6}$/.test(ws.menuAccentColor))) return { ok: false, error: "backup.workspace.menuAccentColor: not valid" };
   if (ws.menuTagline != null && (typeof ws.menuTagline !== "string" || ws.menuTagline.length > 255)) return { ok: false, error: "backup.workspace.menuTagline: not valid" };
-  if (ws.menuLogoId != null && (typeof ws.menuLogoId !== "string" || !/^[0-9a-f-]{36}$/.test(ws.menuLogoId))) return { ok: false, error: "backup.workspace.menuLogoId: not valid" };
+  const isPhotoId = (v: unknown) => typeof v === "string" && /^[0-9a-f-]{36}$/.test(v);
+  if (ws.menuLogoId != null && !isPhotoId(ws.menuLogoId)) return { ok: false, error: "backup.workspace.menuLogoId: not valid" };
+  if (
+    ws.menuLogoIds != null &&
+    (!Array.isArray(ws.menuLogoIds) || ws.menuLogoIds.length > MAX_MENU_LOGOS || !ws.menuLogoIds.every(isPhotoId) || new Set(ws.menuLogoIds).size !== ws.menuLogoIds.length)
+  )
+    return { ok: false, error: "backup.workspace.menuLogoIds: not valid" };
   for (const key of ["menuShowMethod", "menuShowIngredients"] as const) {
     if (ws[key] != null && typeof ws[key] !== "boolean") return { ok: false, error: `backup.workspace.${key}: not valid` };
   }
@@ -570,12 +579,15 @@ export async function restoreBackup(
     const size = data && (await checkStoredPhoto(data));
     if (size) photoRows.push({ ...row, ...size });
   }
-  // The menu logo, likewise only with a valid file.
-  const logo = input.workspace.menuLogoId ? photos.get(input.workspace.menuLogoId) : undefined;
-  const logoOk = !!logo && !!(await checkStoredPhoto(logo));
+  // The menu logos, likewise only with a valid file, in order.
+  const logoIds: string[] = [];
+  for (const id of input.workspace.menuLogoIds ?? (input.workspace.menuLogoId ? [input.workspace.menuLogoId] : [])) {
+    const data = photos.get(id);
+    if (data && (await checkStoredPhoto(data))) logoIds.push(id);
+  }
   const file: BackupFile = {
     ...input,
-    workspace: { ...input.workspace, menuLogoId: logoOk ? input.workspace.menuLogoId : null },
+    workspace: { ...input.workspace, menuLogoIds: logoIds, menuLogoId: null },
     tables: { ...input.tables, bean_photos: photoRows },
   };
   try {
@@ -593,9 +605,8 @@ async function insertBackup(
   workspaceId: string,
   photos: ReadonlyMap<string, Buffer>,
 ): Promise<void> {
-  // A new id, like every restored photo.
-  const oldLogoId = file.workspace.menuLogoId ?? null;
-  const newLogoId = oldLogoId ? randomUUID() : null;
+  // New ids, like every restored photo.
+  const logos = (file.workspace.menuLogoIds ?? []).map((old) => ({ old, id: randomUUID() }));
   await db.transaction(async (tx) => {
     await tx.insert(workspaces).values({
       id: workspaceId,
@@ -608,7 +619,7 @@ async function insertBackup(
       ...(file.workspace.menuShowIngredients != null ? { menuShowIngredients: file.workspace.menuShowIngredients } : {}),
       menuAccentColor: file.workspace.menuAccentColor ?? null,
       menuTagline: file.workspace.menuTagline ?? null,
-      menuLogoId: newLogoId,
+      menuLogoIds: logos.length ? logos.map((l) => l.id) : null,
       isPublicMenuEnabled: false,
     });
     await tx.insert(workspaceMembers).values({ userId: target.ownerId, workspaceId, role: "owner" });
@@ -643,6 +654,6 @@ async function insertBackup(
     for (const row of file.tables.bean_photos ?? []) {
       await writePhotoFile(workspaceId, newIds.get("bean_photos")!.get(row.id as string)!, photos.get(row.id as string)!);
     }
-    if (oldLogoId && newLogoId) await writePhotoFile(workspaceId, newLogoId, photos.get(oldLogoId)!);
+    for (const l of logos) await writePhotoFile(workspaceId, l.id, photos.get(l.old)!);
   });
 }

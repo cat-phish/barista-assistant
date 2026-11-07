@@ -1,7 +1,9 @@
+import { existsSync } from "node:fs";
 import sharp from "sharp";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { app } from "../src/app.js";
+import { photoPath, sweepOrphanPhotos } from "../src/photos.js";
 import { addMember, brewerId, menuAdd, menuSection, newBean, newUser, newWorkspace, processId } from "./helpers.js";
 
 interface Item {
@@ -31,7 +33,7 @@ async function setup() {
 describe("menu builder (docs/api/menu.md §7b)", () => {
   it("starts empty, and adds sections last", async () => {
     const { owner, ws, base, get } = await setup();
-    expect(await get()).toEqual({ title: null, currency: null, showMethod: true, showIngredients: false, accentColor: null, tagline: null, logoId: null, sections: [] });
+    expect(await get()).toEqual({ title: null, currency: null, showMethod: true, showIngredients: false, accentColor: null, tagline: null, logoId: null, logoIds: [], sections: [] });
     await menuSection(owner, ws.id, "Espresso");
     const res = await owner.agent.post(`${base}/sections`).send({ name: "Pour over", description: "Brewed to order" });
     expect(res.status).toBe(201);
@@ -441,10 +443,14 @@ describe("menu branding (docs/api/menu.md §7b)", () => {
     expect((await owner.agent.patch(base).send({ accentColor: null, tagline: "" })).body).toMatchObject({ accentColor: null, tagline: null });
   });
 
-  it("uploads, serves, replaces and removes the logo", async () => {
+  it("keeps several logos in order: the first shows, the others swap in", async () => {
     const { owner, ws, base } = await setup();
-    expect((await owner.agent.put(`${base}/logo`).set("Content-Type", "text/plain").send("not an image")).status).toBe(400);
-    const first = (await owner.agent.put(`${base}/logo`).set("Content-Type", "image/png").send(await png())).body.logoId as string;
+    const add = () => owner.agent.post(`${base}/logos`).set("Content-Type", "image/png");
+    expect((await owner.agent.post(`${base}/logos`).set("Content-Type", "text/plain").send("not an image")).status).toBe(400);
+    const one = await add().send(await png());
+    expect(one.status).toBe(201);
+    const first = one.body.logoId as string;
+    expect(one.body.logoIds).toEqual([first]);
     const { logoUrl } = (await owner.agent.get(`${base}/preview`)).body;
     expect(logoUrl).toBe(`/api/public/menu/${ws.slug}/logo/${first}`);
 
@@ -456,15 +462,44 @@ describe("menu branding (docs/api/menu.md §7b)", () => {
     expect((await sharp(img.body as Buffer).metadata()).hasAlpha).toBe(true); // a transparent logo stays transparent
     expect((await request(app).get(`/api/public/menu/${ws.slug}/logo/${crypto.randomUUID()}`)).status).toBe(404);
 
-    const second = (await owner.agent.put(`${base}/logo`).set("Content-Type", "image/png").send(await png())).body.logoId as string;
-    expect(second).not.toBe(first);
-    expect((await request(app).get(logoUrl)).status).toBe(404); // the old one is gone
-    expect((await owner.agent.delete(`${base}/logo`)).body.logoId).toBeNull();
+    // A second is kept, not shown; it's served too (Settings shows it).
+    const second = ((await add().send(await png())).body.logoIds as string[])[1]!;
+    expect((await owner.agent.get(`${base}/preview`)).body.logoUrl).toBe(logoUrl);
+    expect((await request(app).get(`/api/public/menu/${ws.slug}/logo/${second}`)).status).toBe(200);
+
+    // Reordered: the second shows.
+    expect((await owner.agent.put(`${base}/logos/order`).send({ logoIds: [second] })).status).toBe(400);
+    expect((await owner.agent.put(`${base}/logos/order`).send({ logoIds: [second, first] })).body).toMatchObject({ logoId: second, logoIds: [second, first] });
+
+    // Cropped: a new id in its place, the old file gone.
+    const cropped = await owner.agent.put(`${base}/logos/${second}/image`).set("Content-Type", "image/png").send(await png());
+    const third = cropped.body.logoId as string;
+    expect(cropped.body.logoIds).toEqual([third, first]);
+    expect(third).not.toBe(second);
     expect((await request(app).get(`/api/public/menu/${ws.slug}/logo/${second}`)).status).toBe(404);
+    expect((await owner.agent.put(`${base}/logos/${second}/image`).set("Content-Type", "image/png").send(await png())).status).toBe(404);
+
+    // Removed: the next moves up; then none.
+    expect((await owner.agent.delete(`${base}/logos/${third}`)).body).toMatchObject({ logoId: first, logoIds: [first] });
+    expect((await request(app).get(`/api/public/menu/${ws.slug}/logo/${third}`)).status).toBe(404);
+    expect((await owner.agent.delete(`${base}/logos/${third}`)).status).toBe(404);
+    expect((await owner.agent.delete(`${base}/logos/${first}`)).body).toMatchObject({ logoId: null, logoIds: [] });
 
     const viewer = await newUser();
     await addMember(owner, ws.id, viewer, "viewer");
-    expect((await viewer.agent.put(`${base}/logo`).set("Content-Type", "image/png").send(await png())).status).toBe(403);
+    expect((await viewer.agent.post(`${base}/logos`).set("Content-Type", "image/png").send(await png())).status).toBe(403);
+  });
+
+  it("keeps at most 6 logos", async () => {
+    const { owner, ws, base } = await setup();
+    const image = await png();
+    for (let i = 0; i < 6; i++) expect((await owner.agent.post(`${base}/logos`).set("Content-Type", "image/png").send(image)).status).toBe(201);
+    expect((await owner.agent.post(`${base}/logos`).set("Content-Type", "image/png").send(image)).status).toBe(409);
+    const { logoIds } = (await owner.agent.get(base)).body as { logoIds: string[] };
+    expect(logoIds).toHaveLength(6);
+    // The start-up sweep keeps every one, not only the first.
+    await sweepOrphanPhotos();
+    for (const id of logoIds) expect(existsSync(photoPath(ws.id, id))).toBe(true);
   });
 });
 

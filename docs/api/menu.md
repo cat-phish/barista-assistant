@@ -36,6 +36,7 @@ off is the workspace's `isPublicMenuEnabled` (§2, owners only).
   "accentColor": "#8a4b2a",
   "tagline": "Coffee, slowly",
   "logoId": "uuid",
+  "logoIds": ["uuid", "uuid"],
   "sections": [
     {
       "id": "uuid",
@@ -104,9 +105,13 @@ both (`400`); `null` = one size.
 
 **Branding:** `accentColor` (`"#rrggbb"`, or `null` for the app's brown)
 colours the menu's title, headings and rules; `tagline` is a line under the
-title; `logoId` is the logo's id, `null` for none (the image is the public
-menu's `logoUrl`, §7). Colour and tagline are set with `PATCH /`, the logo
-with `PUT /logo`; all three in Settings → Workspace.
+title. `logoIds` are the menu's logos in order, up to 6 (`MAX_MENU_LOGOS`):
+the first, also sent as `logoId` (`null` for none), is the one guests see
+(the public menu's `logoUrl`, §7); the others are kept to swap in by
+reordering. Each image is `GET /api/public/menu/:slug/logo/:id` (§7).
+Colour and tagline are set with `PATCH /`, the logos with `/logos` below;
+all in Settings → Workspace, where the logos work like a bean's photos
+(drag ⠿ to reorder, crop, remove).
 
 ## `GET /`
 
@@ -135,20 +140,36 @@ The builder's Preview shows it.
 - **Errors:** `400` invalid, or a `null` currency while items still have
   prices (or sizes with prices); `403` viewer.
 
-## `PUT /logo`
+## `POST /logos`
 
-The menu's logo: the image itself as the body (any image type, ≤ 15 MB),
+Adds a logo, last: the image itself as the body (any image type, ≤ 15 MB),
 like a bean photo (`bean-photos.md` §4c): turned upright, fit inside
-1024 px, stored as WebP with no metadata, transparency kept. It replaces
-the old logo and gets a new `logoId` (the image is cached for good).
+1024 px, stored as WebP with no metadata, transparency kept. Each image has
+its own id, never reused (it's cached for good).
 
-- **Errors:** `400` not an image; `403` viewer.
+- **Success (`201 Created`):** the menu.
+- **Errors:** `400` not an image; `403` viewer; `409` already 6.
 
-## `DELETE /logo`
+## `PUT /logos/order`
 
-Removes the logo (none is fine).
+- **Body:** `{ "logoIds": ["uuid", ...] }`: every logo exactly once, in the
+  new order; the first is the one the menu shows.
+- **Errors:** `400` invalid, or not every logo exactly once; `403` viewer.
 
-- **Errors:** `403` viewer.
+## `PUT /logos/:logoId/image`
+
+A new image for a logo (cropped or rotated in the browser, which keeps a
+transparent background: PNG), processed as for `POST`. It takes the logo's
+place under a **new id**, and the old file is removed. Works on a full list.
+
+- **Errors:** `400` not an image; `403` viewer; `404` no such logo.
+
+## `DELETE /logos/:logoId`
+
+Removes a logo; the next one moves up. No confirmation: nothing else uses
+it.
+
+- **Errors:** `403` viewer; `404` no such logo.
 
 ## `POST /sections`
 

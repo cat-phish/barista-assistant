@@ -171,7 +171,8 @@ export interface Menu {
   showIngredients: boolean; // items show their ingredients unless they say otherwise
   accentColor: string | null; // "#rrggbb"; null = the app's brown
   tagline: string | null; // a line under the title
-  logoId: string | null; // the logo; its image is PublicMenu.logoUrl
+  logoId: string | null; // the logo the menu shows (logoIds[0]); its image is PublicMenu.logoUrl
+  logoIds: string[]; // every logo, in order; the others are kept to swap in
   sections: MenuSection[];
 }
 

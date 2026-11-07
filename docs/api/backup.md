@@ -46,7 +46,7 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   "format": "barista-backup",
   "version": 5,
   "exportedAt": "2026-10-23T08:00:00.000Z",
-  "workspace": { "name": "Home bar", "slug": "home-bar", "settings": { "roastScale": "levels" }, "menuTitle": null, "menuCurrency": "USD", "menuShowMethod": true, "menuShowIngredients": false, "menuAccentColor": "#8a4b2a", "menuTagline": null, "menuLogoId": null, "isPublicMenuEnabled": true, "flavorLexicon": null },
+  "workspace": { "name": "Home bar", "slug": "home-bar", "settings": { "roastScale": "levels" }, "menuTitle": null, "menuCurrency": "USD", "menuShowMethod": true, "menuShowIngredients": false, "menuAccentColor": "#8a4b2a", "menuTagline": null, "menuLogoIds": [], "isPublicMenuEnabled": true, "flavorLexicon": null },
   "tables": {
     "brewer_methods": [ { "id": "uuid", "name": "Filter", "builtin": "filter", "...": "…" } ],
     "brew_logs": [ { "id": "uuid", "beanId": "uuid", "brewedBy": "barista@example.com", "...": "…" } ]
@@ -109,10 +109,11 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
 **Bean photos** (`bean-photos.md` §4c): `bean_photos` rows go only with
 their files, so a JSON file has none (`BackupOptions.photos` in
 `backend/src/backup.ts`) and a `.zip` has both (below). Exports and imports
-(By list) don't carry photos. The **menu logo** (`menu.md` §7b) is the
-same: `workspace.menuLogoId` is `null` in a JSON file, and a `.zip` holds
-it as `photos/<menuLogoId>.webp`; it restores under a new id, and only if
-its file is there and valid.
+(By list) don't carry photos. The **menu logos** (`menu.md` §7b) are the
+same: `workspace.menuLogoIds` is `[]` in a JSON file, and a `.zip` holds
+each as `photos/<id>.webp`; they restore in order under new ids, each only
+if its file is there and valid. An older file's single `menuLogoId`
+restores as the one logo.
 
 **What was sent to the AI** (`request` on `llm_analyses` and
 `parameter_suggestions`, `analysis.md` §8c) is large and only for looking

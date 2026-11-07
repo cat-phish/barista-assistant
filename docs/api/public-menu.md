@@ -139,9 +139,10 @@ Retrieves the read-only menu for a workspace, as arranged in the menu builder
 
 ## `GET /api/public/menu/:slug/logo/:logoId`
 
-The menu's logo (`logoUrl` above): WebP, `Cache-Control: public,
-immutable`. Served while the public menu is off too, so the builder's
-preview and Settings can show it: the id is random and changes with each
-upload, so only someone who has seen the menu knows the URL. `404` if the
-slug or id doesn't match the current logo. The service worker caches it
+One of the menu's logos (§7b): the one `logoUrl` above points at, or one
+kept to swap in. WebP, `Cache-Control: public, immutable`. Served while the
+public menu is off too, so the builder's preview and Settings can show
+them: ids are random and change with each upload or crop, so only someone
+who has seen the menu, or a member, knows a URL. `404` if the slug or id
+doesn't match one of the workspace's logos. The service worker caches it
 with the menu, so it shows offline.
