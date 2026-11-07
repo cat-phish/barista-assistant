@@ -13,7 +13,7 @@ import { errorMessage } from '../api/client';
 import { drinkCategoriesApi } from '../api/drinkCategories';
 import { drinksApi } from '../api/drinks';
 import { menuApi, type NewMenuItem } from '../api/menu';
-import type { BeanBatchMode, BeanMenuField, Brewer, Drink, DrinkCategory, Menu, MenuItem, MenuSection, PublicMenu, BrewerMethod } from '../api/types';
+import type { BeanBatchMode, BeanMenuField, MenuSize, Brewer, Drink, DrinkCategory, Menu, MenuItem, MenuSection, PublicMenu, BrewerMethod } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import MenuAddDialog from '../components/MenuAddDialog.vue';
@@ -26,7 +26,7 @@ import { BEAN_MENU_FIELDS } from '../lib/publicMenu';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
-const menu = ref<Menu>({ title: null, currency: null, showMethod: true, showIngredients: false, sections: [] });
+const menu = ref<Menu>({ title: null, currency: null, showMethod: true, showIngredients: false, accentColor: null, tagline: null, logoId: null, sections: [] });
 const drinks = ref<Drink[]>([]);
 const categories = ref<DrinkCategory[]>([]);
 const preview = ref<PublicMenu | null>(null);
@@ -193,6 +193,7 @@ function itemTitle(i: MenuItem): string {
   return i.name ?? i.source?.name ?? '(deleted)';
 }
 const formatPrice = (price: number) => `${price.toFixed(2)}${menu.value.currency ? ` ${menu.value.currency}` : ''}`;
+const formatSizes = (sizes: MenuSize[]) => sizes.map((x) => (x.price === null ? x.label : `${x.label} ${formatPrice(x.price)}`)).join(' · ');
 const setAvailable = (i: MenuItem, available: boolean) => run((ws) => menuApi.updateItem(ws, i.id, { available }));
 // What drinks and brews show under them by default; each item can override it.
 const setDisplay = (display: { showMethod?: boolean; showIngredients?: boolean }) => run((ws) => menuApi.setDisplay(ws, display));
@@ -221,6 +222,15 @@ const itemDescription = ref('');
 const itemPrice = ref('');
 const itemSection = ref('');
 const itemAvailable = ref(true);
+// Several sizes, each with its own price, instead of one price (docs/api/menu.md §7b).
+const MAX_SIZES = 6;
+const itemHasSizes = ref(false);
+const itemSizes = ref<Array<{ label: string; price: string }>>([]);
+function toggleSizes(): void {
+  itemHasSizes.value = !itemHasSizes.value;
+  if (itemHasSizes.value && itemSizes.value.length === 0) itemSizes.value = [{ label: '', price: itemPrice.value }, { label: '', price: '' }];
+}
+const parsePrice = (v: string) => (v.trim() ? parseDecimal(v, { scale: 2, min: 0, max: 1_000_000, exclusiveMax: true }) : null);
 // The beans block: which details guests see per bean (null on the API = all).
 const ALL_BEAN_FIELDS = Object.keys(BEAN_MENU_FIELDS) as BeanMenuField[];
 const itemBeanFields = ref<BeanMenuField[]>([]);
@@ -230,8 +240,25 @@ const itemShowIngredients = ref<Override>('');
 const itemError = ref('');
 const confirmItemDelete = ref(false);
 const sectionOf = (item: MenuItem) => menu.value.sections.find((s) => s.items.some((i) => i.id === item.id)) ?? null;
-const priceParsed = computed(() => (itemPrice.value.trim() ? parseDecimal(itemPrice.value, { scale: 2, min: 0, max: 1_000_000, exclusiveMax: true }) : null));
+const priceParsed = computed(() => (itemHasSizes.value ? null : parsePrice(itemPrice.value)));
+// The sizes as the API takes them, or the first problem with them.
+const sizesParsed = computed((): { ok: true; sizes: MenuSize[] } | { ok: false; error: string } => {
+  const sizes: MenuSize[] = [];
+  for (const row of itemSizes.value) {
+    const label = row.label.trim();
+    if (!label) return { ok: false, error: 'Name each size, e.g. 12 oz.' };
+    if (sizes.some((x) => x.label.toLowerCase() === label.toLowerCase())) return { ok: false, error: `${label} is there twice.` };
+    const price = parsePrice(row.price);
+    if (price && !price.ok) return { ok: false, error: `${label}: ${price.error}` };
+    sizes.push({ label, price: price?.ok ? price.value : null });
+  }
+  return sizes.length ? { ok: true, sizes } : { ok: false, error: 'Add a size, or turn off sizes.' };
+});
 const itemProblem = computed(() => {
+  if (itemHasSizes.value && itemTarget.value?.itemType !== 'beans') {
+    if (!sizesParsed.value.ok) return sizesParsed.value.error;
+    if (sizesParsed.value.sizes.some((x) => x.price !== null) && !menu.value.currency) return 'Set the menu currency in Settings → Workspace before adding prices.';
+  }
   if (priceParsed.value && !priceParsed.value.ok) return priceParsed.value.error;
   if (priceParsed.value && !menu.value.currency) return 'Set the menu currency in Settings → Workspace before adding prices.';
   const target = menu.value.sections.find((s) => s.id === itemSection.value);
@@ -249,6 +276,8 @@ function editItem(i: MenuItem): void {
   itemPrice.value = i.price === null ? '' : i.price.toFixed(2);
   itemSection.value = sectionOf(i)?.id ?? '';
   itemAvailable.value = i.available;
+  itemHasSizes.value = !!i.sizes;
+  itemSizes.value = (i.sizes ?? []).map((x) => ({ label: x.label, price: x.price === null ? '' : x.price.toFixed(2) }));
   itemBeanFields.value = i.beanFields ?? [...ALL_BEAN_FIELDS];
   itemBeanBatches.value = i.beanBatches ?? 'each';
   itemShowMethod.value = toOverride(i.showMethod);
@@ -269,7 +298,8 @@ async function saveItem(): Promise<void> {
       : {
           name: itemName.value.trim() || null,
           description: itemDescription.value.trim() || null,
-          price,
+          price: itemHasSizes.value ? null : price,
+          sizes: itemHasSizes.value && sizesParsed.value.ok ? sizesParsed.value.sizes : null,
           available: itemAvailable.value,
           showMethod: fromOverride(itemShowMethod.value),
           ...(i.itemType === 'drink' ? { showIngredients: fromOverride(itemShowIngredients.value) } : {}),
@@ -370,6 +400,7 @@ async function deleteItem(): Promise<void> {
               <span v-if="i.source?.archived" class="field-error">This brewer is archived, so it's left off the public menu.</span>
             </div>
             <span v-if="i.price !== null" class="price" title="Shown next to its name">{{ formatPrice(i.price) }}</span>
+            <span v-else-if="i.sizes" class="price small" title="A price per size">{{ formatSizes(i.sizes) }}</span>
             <label v-if="workspaces.canEdit && i.itemType !== 'beans'" class="checkbox small" title="Unavailable items stay on the menu, struck through">
               <input type="checkbox" :checked="i.available" :disabled="busy" @change="setAvailable(i, !i.available)" />
               Available
@@ -432,10 +463,23 @@ async function deleteItem(): Promise<void> {
           <label for="item-description">Description</label>
           <input id="item-description" v-model="itemDescription" maxlength="500" :placeholder="itemTarget?.source?.description ?? 'e.g. Double shot, steamed oat milk'" />
         </div>
-        <div class="field">
+        <div v-if="!itemHasSizes" class="field">
           <label for="item-price">Price <span v-if="menu.currency" class="muted">({{ menu.currency }})</span></label>
           <input id="item-price" v-model="itemPrice" inputmode="decimal" placeholder="e.g. 5.50" />
         </div>
+        <fieldset v-else class="bean-fields">
+          <legend>Sizes <span v-if="menu.currency" class="muted">({{ menu.currency }})</span></legend>
+          <div v-for="(row, ri) in itemSizes" :key="ri" class="size-row">
+            <input v-model="row.label" maxlength="30" :aria-label="`Size ${ri + 1}`" placeholder="e.g. 12 oz" />
+            <input v-model="row.price" inputmode="decimal" :aria-label="`Price for size ${ri + 1}`" placeholder="Price" class="size-price" />
+            <button class="btn-link" type="button" :aria-label="`Remove size ${ri + 1}`" @click="itemSizes.splice(ri, 1)">✕</button>
+          </div>
+          <button v-if="itemSizes.length < MAX_SIZES" class="btn-link" type="button" @click="itemSizes.push({ label: '', price: '' })">+ Add a size</button>
+        </fieldset>
+        <label class="checkbox">
+          <input :checked="itemHasSizes" type="checkbox" @change="toggleSizes" />
+          Comes in several sizes, each with its own price
+        </label>
         <label class="checkbox">
           <input v-model="itemAvailable" type="checkbox" />
           Available (unavailable items stay on the menu, marked as such)
@@ -646,6 +690,18 @@ h2 {
   font-weight: 600;
   padding: 0;
   margin-bottom: var(--space-1);
+}
+.size-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+.size-row input:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.size-price {
+  width: 6rem;
 }
 .view-toggle {
   display: flex;

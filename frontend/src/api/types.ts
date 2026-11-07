@@ -144,6 +144,12 @@ export interface MenuItem {
   // Drinks and brewers: show how it's made / the ingredients; null = the menu's default.
   showMethod: boolean | null;
   showIngredients: boolean | null;
+  sizes: MenuSize[] | null; // drinks and brewers: a price per size, instead of price
+}
+// docs/api/menu.md §7b: one size of an item and its price (null = none shown).
+export interface MenuSize {
+  label: string;
+  price: number | null;
 }
 // The beans block, for the same coffee more than once (e.g. two batches):
 // list each with what differs, or show the freshest once.
@@ -163,6 +169,9 @@ export interface Menu {
   currency: string | null;
   showMethod: boolean; // items show how it's made ("Filter") unless they say otherwise
   showIngredients: boolean; // items show their ingredients unless they say otherwise
+  accentColor: string | null; // "#rrggbb"; null = the app's brown
+  tagline: string | null; // a line under the title
+  logoId: string | null; // the logo; its image is PublicMenu.logoUrl
   sections: MenuSection[];
 }
 
@@ -189,6 +198,7 @@ export interface PublicMenuItem {
   variantOf: string | null; // the parent's menu name, when it's on the menu too
   ingredients: string[]; // empty when not shown
   price: number | null;
+  sizes: MenuSize[] | null; // a price per size, instead of price
   available: boolean;
 }
 export interface PublicBeansBlock {
@@ -198,6 +208,9 @@ export interface PublicBeansBlock {
 }
 export interface PublicMenu {
   title: string; // the menu's title, else the workspace name
+  tagline: string | null;
+  accentColor: string | null; // "#rrggbb"
+  logoUrl: string | null; // the logo image
   workspace: { name: string; slug: string };
   currency: string | null;
   sections: Array<{ name: string; description: string | null; items: Array<PublicMenuItem | PublicBeansBlock> }>;

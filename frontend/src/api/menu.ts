@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { BeanBatchMode, BeanMenuField, Menu, MenuItemType, PublicMenu } from './types';
+import type { BeanBatchMode, BeanMenuField, Menu, MenuItemType, MenuSize, PublicMenu } from './types';
 
 // docs/api/menu.md §7b: the menu builder. Every write returns the whole menu.
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/menu`;
@@ -13,6 +13,7 @@ export interface MenuItemInput {
   beanBatches?: BeanBatchMode | null; // the beans block only; null = 'each'
   showMethod?: boolean | null; // drinks and brewers; null = the menu's default
   showIngredients?: boolean | null;
+  sizes?: MenuSize[] | null; // a price per size; never with price
 }
 
 export type NewMenuItem = MenuItemInput & { itemType: MenuItemType; drinkId?: string; brewerId?: string };
@@ -28,6 +29,10 @@ export const menuApi = {
   setTitle: (workspaceId: string, title: string | null) => api.patch<Menu>(base(workspaceId), { title }),
   // What items show under them by default (each item can override it).
   setDisplay: (workspaceId: string, display: { showMethod?: boolean; showIngredients?: boolean }) => api.patch<Menu>(base(workspaceId), display),
+  // Branding: accent colour ("#rrggbb") and a line under the title; null = none.
+  setBranding: (workspaceId: string, branding: { accentColor?: string | null; tagline?: string | null }) => api.patch<Menu>(base(workspaceId), branding),
+  setLogo: (workspaceId: string, image: Blob) => api.put<Menu>(`${base(workspaceId)}/logo`, image),
+  removeLogo: (workspaceId: string) => api.delete<Menu>(`${base(workspaceId)}/logo`),
   addSection: (workspaceId: string, name: string, description: string | null = null) =>
     api.post<Menu>(`${base(workspaceId)}/sections`, { name, description }),
   updateSection: (workspaceId: string, id: string, input: { name?: string; description?: string | null }) =>

@@ -33,6 +33,9 @@ off is the workspace's `isPublicMenuEnabled` (§2, owners only).
   "currency": "USD",
   "showMethod": true,
   "showIngredients": false,
+  "accentColor": "#8a4b2a",
+  "tagline": "Coffee, slowly",
+  "logoId": "uuid",
   "sections": [
     {
       "id": "uuid",
@@ -53,7 +56,8 @@ off is the workspace's `isPublicMenuEnabled` (§2, owners only).
           "beanFields": null,
           "beanBatches": null,
           "showMethod": null,
-          "showIngredients": true
+          "showIngredients": true,
+          "sizes": null
         },
         {
           "id": "uuid", "itemType": "beans", "drinkId": null, "brewerId": null,
@@ -61,7 +65,8 @@ off is the workspace's `isPublicMenuEnabled` (§2, owners only).
           "beanFields": ["flavorProfile", "origin", "process", "roastDate"],
           "beanBatches": "once",
           "showMethod": null,
-          "showIngredients": null
+          "showIngredients": null,
+          "sizes": null
         }
       ]
     }
@@ -90,6 +95,19 @@ show under them on the public menu by default: how it's made ("Filter",
 item's own `showMethod` / `showIngredients` (`null` on the beans block)
 override them: `true` show, `false` hide, `null` the menu's default.
 
+`sizes` (drinks and brewers; `null` on the beans block) is a price per
+size instead of the one `price`: `[{ "label": "8 oz", "price": 4 },
+{ "label": "12 oz", "price": 4.75 }]`, in the order guests see them. 1–6
+sizes, each `label` 1–30 chars and once (case-insensitive), each `price` as
+for `price` or `null` (none shown). An item has a `price` or `sizes`, never
+both (`400`); `null` = one size.
+
+**Branding:** `accentColor` (`"#rrggbb"`, or `null` for the app's brown)
+colours the menu's title, headings and rules; `tagline` is a line under the
+title; `logoId` is the logo's id, `null` for none (the image is the public
+menu's `logoUrl`, §7). Colour and tagline are set with `PATCH /`, the logo
+with `PUT /logo`; all three in Settings → Workspace.
+
 ## `GET /`
 
 - **Errors:** `404` not a member.
@@ -105,14 +123,32 @@ The builder's Preview shows it.
 ## `PATCH /`
 
 - **Body:** any non-empty subset of `{ "currency": "usd" | null, "title":
-  "The Brew Bar" | null, "showMethod": true, "showIngredients": false }`.
-  `currency` is an ISO 4217 code (uppercased).
+  "The Brew Bar" | null, "showMethod": true, "showIngredients": false,
+  "accentColor": "#8a4b2a" | null, "tagline": "Coffee, slowly" | null }`.
+  `currency` is an ISO 4217 code (uppercased). `accentColor` is
+  `#` and 6 hex digits (stored lowercase); `tagline` ≤ 255 chars, blank =
+  `null`.
   `title` is the public menu's heading, ≤ 255 chars; blank or `null` uses the
   workspace name. Both are set in Settings → Workspace, with the public
   menu's on/off switch (§2). `showMethod` and `showIngredients` are the
   defaults above, switched at the top of the builder.
 - **Errors:** `400` invalid, or a `null` currency while items still have
-  prices; `403` viewer.
+  prices (or sizes with prices); `403` viewer.
+
+## `PUT /logo`
+
+The menu's logo: the image itself as the body (any image type, ≤ 15 MB),
+like a bean photo (`bean-photos.md` §4c): turned upright, fit inside
+1024 px, stored as WebP with no metadata, transparency kept. It replaces
+the old logo and gets a new `logoId` (the image is cached for good).
+
+- **Errors:** `400` not an image; `403` viewer.
+
+## `DELETE /logo`
+
+Removes the logo (none is fine).
+
+- **Errors:** `403` viewer.
 
 ## `POST /sections`
 
@@ -150,8 +186,8 @@ order. Items can move between sections this way.
   0–999999.99, at most 2 decimals, and only once the menu has a `currency`;
   `available` defaults to `true`. `beanFields` (optional, nullable) is only
   for the beans block, and so is `beanBatches` (optional, nullable);
-  `showMethod` and `showIngredients` (optional, nullable) only for drinks
-  and brewers. It goes last in the section.
+  `showMethod`, `showIngredients` and `sizes` (optional, nullable) only for
+  drinks and brewers. It goes last in the section.
 
   Or several at once: `{ "items": [ { ...item }, ... ] }` (1–100), each with
   the same rules. They go last, in the order sent, and it's **all or
@@ -164,9 +200,11 @@ order. Items can move between sections this way.
 ## `PATCH /items/:itemId`
 
 - **Body:** any non-empty subset of `{ "name", "description", "price",
-  "available", "beanFields", "beanBatches", "showMethod", "showIngredients" }`,
-  same rules (`beanFields` or `beanBatches` on a drink or brewer item, or
-  `showMethod` or `showIngredients` on the beans block, is a `400`). To move an item, use `PUT /layout`.
+  "available", "beanFields", "beanBatches", "showMethod", "showIngredients",
+  "sizes" }`, same rules (`beanFields` or `beanBatches` on a drink or brewer
+  item, or `showMethod`, `showIngredients` or `sizes` on the beans block, is
+  a `400`; so is a `price` while the item keeps its `sizes`, or the other
+  way round: clear one in the same request). To move an item, use `PUT /layout`.
 - **Errors:** `400`; `403`; `404`.
 
 ## `DELETE /items/:itemId`

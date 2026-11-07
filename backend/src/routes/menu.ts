@@ -1,15 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, inArray, isNotNull, max } from "drizzle-orm";
-import { Router, type Request, type Response } from "express";
+import { and, asc, eq, inArray, isNotNull, max, or } from "drizzle-orm";
+import express, { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
+import { PHOTO_MAX_UPLOAD_BYTES, processPhoto, removePhotoFiles, writePhotoFile } from "../photos.js";
 import { buildPublicMenu, type PublicMenuResponse } from "./publicMenu.js";
 import {
   BEAN_BATCH_MODES,
   BEAN_MENU_FIELDS,
+  MAX_MENU_SIZES,
   brewers,
   drinks,
   MENU_ITEM_TYPES,
@@ -19,6 +21,7 @@ import {
   type BeanBatchMode,
   type BeanMenuField,
   type MenuItemType,
+  type MenuSize,
   type MethodKind,
   brewerMethods,
   METHOD_NAMES,
@@ -51,6 +54,7 @@ export interface MenuItemView {
   // Drinks and brewers: show how it's made / the ingredients; null = the menu's default.
   showMethod: boolean | null;
   showIngredients: boolean | null;
+  sizes: MenuSize[] | null; // drinks and brewers: a price per size, instead of price
 }
 export interface MenuSectionView {
   id: string;
@@ -64,6 +68,11 @@ export interface MenuResponse {
   currency: string | null;
   showMethod: boolean; // the default for items: show how it's made ("Filter")
   showIngredients: boolean; // the default for items: show a drink's ingredients
+  // Branding: an accent colour ("#rrggbb"), a line under the title, and the
+  // logo's id (the image: GET …/menu/logo/:id, and the public menu's logoUrl).
+  accentColor: string | null;
+  tagline: string | null;
+  logoId: string | null;
   sections: MenuSectionView[];
 }
 
@@ -80,6 +89,7 @@ interface ItemParams extends WorkspaceParams {
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Db = typeof db | Tx;
 
+const SIZES_OR_PRICE = "sizes: an item has one price or a price per size, not both";
 const currencySchema = z
   .string()
   .trim()
@@ -88,7 +98,20 @@ const currencySchema = z
   .nullable();
 // Menu settings: the prices' currency and the menu's title (blank = the workspace name).
 // showMethod / showIngredients: what items show by default.
-const settingsSchema = updateSchema({ currency: currencySchema, title: optionalText(255), showMethod: z.boolean(), showIngredients: z.boolean() });
+// accentColor: "#rrggbb" (stored lowercase); tagline: a line under the title.
+const settingsSchema = updateSchema({
+  currency: currencySchema,
+  title: optionalText(255),
+  showMethod: z.boolean(),
+  showIngredients: z.boolean(),
+  accentColor: z
+    .string()
+    .trim()
+    .regex(/^#[0-9a-fA-F]{6}$/, "must be a colour like #8a4b2a")
+    .transform((c) => c.toLowerCase())
+    .nullable(),
+  tagline: optionalText(255),
+});
 
 const sectionFields = { name: z.string().trim().min(1).max(100), description: optionalText(500) };
 const createSectionSchema = z.object(sectionFields).strict();
@@ -99,6 +122,15 @@ const beanFieldsSchema = z
   .refine((list) => new Set(list).size === list.length, "each field once")
   .nullable()
   .optional();
+const priceSchema = decimalSchema({ min: 0, max: 1_000_000, scale: 2, exclusiveMax: true });
+const sizesSchema = z
+  .array(z.object({ label: z.string().trim().min(1).max(30), price: priceSchema.nullable() }).strict())
+  .min(1)
+  .max(MAX_MENU_SIZES)
+  .refine((list) => new Set(list.map((x) => x.label.toLowerCase())).size === list.length, "each size once")
+  .nullable()
+  .optional();
+const sizePriced = (sizes: MenuSize[] | null | undefined) => !!sizes?.some((x) => x.price !== null);
 const itemFields = {
   beanFields: beanFieldsSchema, // the beans block only (checked below)
   beanBatches: z.enum(BEAN_BATCH_MODES).nullable().optional(), // the beans block only
@@ -106,7 +138,8 @@ const itemFields = {
   showIngredients: z.boolean().nullable().optional(),
   name: optionalText(255),
   description: optionalText(500),
-  price: decimalSchema({ min: 0, max: 1_000_000, scale: 2, exclusiveMax: true }).nullable().optional(),
+  price: priceSchema.nullable().optional(),
+  sizes: sizesSchema, // drinks and brewers only; never with a price
   available: z.boolean().optional(),
 };
 const createItemSchema = z
@@ -117,7 +150,8 @@ const createItemSchema = z
     "a drink item needs drinkId, a brewer item brewerId, and the beans block neither"
   )
   .refine((b) => b.itemType === "beans" || (b.beanFields == null && b.beanBatches == null), "beanFields, beanBatches: only for the beans block")
-  .refine((b) => b.itemType !== "beans" || (b.showMethod == null && b.showIngredients == null), "showMethod, showIngredients: not for the beans block");
+  .refine((b) => b.itemType !== "beans" || (b.showMethod == null && b.showIngredients == null && b.sizes == null), "showMethod, showIngredients, sizes: not for the beans block")
+  .refine((b) => b.price == null || b.sizes == null, SIZES_OR_PRICE);
 // One item, or several at once (the add picker): { items: [...] }, all or nothing.
 const addItemsSchema = z.union([
   z.object({ items: z.array(createItemSchema).min(1).max(100) }).strict(),
@@ -138,7 +172,15 @@ const PRICE_NEEDS_CURRENCY = "price: set the menu's currency first";
 
 export async function loadMenu(workspaceId: string, conn: Db = db): Promise<MenuResponse> {
   const [ws] = await conn
-    .select({ currency: workspaces.menuCurrency, title: workspaces.menuTitle, showMethod: workspaces.menuShowMethod, showIngredients: workspaces.menuShowIngredients })
+    .select({
+      currency: workspaces.menuCurrency,
+      title: workspaces.menuTitle,
+      showMethod: workspaces.menuShowMethod,
+      showIngredients: workspaces.menuShowIngredients,
+      accentColor: workspaces.menuAccentColor,
+      tagline: workspaces.menuTagline,
+      logoId: workspaces.menuLogoId,
+    })
     .from(workspaces)
     .where(eq(workspaces.id, workspaceId));
   const sections = await conn
@@ -162,6 +204,7 @@ export async function loadMenu(workspaceId: string, conn: Db = db): Promise<Menu
           beanBatches: menuItems.beanBatches,
           showMethod: menuItems.showMethod,
           showIngredients: menuItems.showIngredients,
+          sizes: menuItems.sizes,
           drinkName: drinks.name,
           drinkDescription: drinks.description,
           drinkKind: drinks.kind,
@@ -182,6 +225,9 @@ export async function loadMenu(workspaceId: string, conn: Db = db): Promise<Menu
     currency: ws?.currency ?? null,
     showMethod: ws?.showMethod ?? true,
     showIngredients: ws?.showIngredients ?? false,
+    accentColor: ws?.accentColor ?? null,
+    tagline: ws?.tagline ?? null,
+    logoId: ws?.logoId ?? null,
     sections: sections.map((s) => ({
       ...s,
       items: items
@@ -192,6 +238,7 @@ export async function loadMenu(workspaceId: string, conn: Db = db): Promise<Menu
           beanBatches: item.itemType === "beans" ? (item.beanBatches ?? null) : null,
           showMethod: item.itemType === "beans" ? null : item.showMethod,
           showIngredients: item.itemType === "beans" ? null : item.showIngredients,
+          sizes: item.itemType === "beans" ? null : (item.sizes ?? null),
           source:
             item.itemType === "drink" && drinkName !== null && drinkKind !== null
               ? { name: drinkName, description: drinkDescription, kind: drinkKind, method: METHOD_NAMES[drinkKind], archived: false }
@@ -218,7 +265,7 @@ async function sectionInWorkspace(conn: Db, sectionId: string, workspaceId: stri
 // The item, if it's in this workspace's menu.
 async function itemInWorkspace(conn: Db, itemId: string, workspaceId: string) {
   const [row] = await conn
-    .select({ id: menuItems.id, price: menuItems.price, itemType: menuItems.itemType })
+    .select({ id: menuItems.id, price: menuItems.price, sizes: menuItems.sizes, itemType: menuItems.itemType })
     .from(menuItems)
     .innerJoin(menuSections, eq(menuSections.id, menuItems.sectionId))
     .where(and(eq(menuItems.id, itemId), eq(menuSections.workspaceId, workspaceId)));
@@ -262,13 +309,12 @@ menuRouter.patch("/", async (req: Request<WorkspaceParams>, res: Response<MenuRe
   const body = parseBody(settingsSchema, req, res);
   if (!body) return;
   if (body.currency === null) {
-    const [priced] = await db
-      .select({ id: menuItems.id })
+    const priced = await db
+      .select({ price: menuItems.price, sizes: menuItems.sizes })
       .from(menuItems)
       .innerJoin(menuSections, eq(menuSections.id, menuItems.sectionId))
-      .where(and(eq(menuSections.workspaceId, workspaceId), isNotNull(menuItems.price)))
-      .limit(1);
-    if (priced) {
+      .where(and(eq(menuSections.workspaceId, workspaceId), or(isNotNull(menuItems.price), isNotNull(menuItems.sizes))));
+    if (priced.some((i) => i.price !== null || sizePriced(i.sizes))) {
       sendError(res, 400, "currency: items have prices; clear them before removing the currency");
       return;
     }
@@ -280,8 +326,43 @@ menuRouter.patch("/", async (req: Request<WorkspaceParams>, res: Response<MenuRe
       ...(body.title !== undefined ? { menuTitle: body.title } : {}),
       ...(body.showMethod !== undefined ? { menuShowMethod: body.showMethod } : {}),
       ...(body.showIngredients !== undefined ? { menuShowIngredients: body.showIngredients } : {}),
+      ...(body.accentColor !== undefined ? { menuAccentColor: body.accentColor } : {}),
+      ...(body.tagline !== undefined ? { menuTagline: body.tagline } : {}),
     })
     .where(eq(workspaces.id, workspaceId));
+  await sendMenu(res, workspaceId);
+});
+
+// --- The logo (docs/api/menu.md §7b): one image, stored like bean photos ---
+const imageBody = express.raw({ type: () => true, limit: PHOTO_MAX_UPLOAD_BYTES });
+const logoOf = async (workspaceId: string) =>
+  (await db.select({ logoId: workspaces.menuLogoId }).from(workspaces).where(eq(workspaces.id, workspaceId)))[0]?.logoId ?? null;
+
+// A new logo replaces the old one. It gets a new id: the image is cached for good.
+menuRouter.put("/logo", imageBody, async (req: Request<WorkspaceParams>, res: Response<MenuResponse>) => {
+  const { workspaceId } = req.params;
+  if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
+  const image = Buffer.isBuffer(req.body) && req.body.length > 0 ? await processPhoto(req.body) : null;
+  if (!image) {
+    sendError(res, 400, "Not an image that can be read (JPEG, PNG, WebP, GIF, AVIF or TIFF)");
+    return;
+  }
+  const id = randomUUID();
+  await writePhotoFile(workspaceId, id, image.data); // the file first: the id never points at a missing file
+  const old = await logoOf(workspaceId);
+  await db.update(workspaces).set({ menuLogoId: id }).where(eq(workspaces.id, workspaceId));
+  if (old) await removePhotoFiles(workspaceId, [old]);
+  await sendMenu(res, workspaceId);
+});
+
+menuRouter.delete("/logo", async (req: Request<WorkspaceParams>, res: Response<MenuResponse>) => {
+  const { workspaceId } = req.params;
+  if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
+  const old = await logoOf(workspaceId);
+  if (old) {
+    await db.update(workspaces).set({ menuLogoId: null }).where(eq(workspaces.id, workspaceId));
+    await removePhotoFiles(workspaceId, [old]);
+  }
   await sendMenu(res, workspaceId);
 });
 
@@ -418,7 +499,7 @@ class AddRefused extends Error {
 
 // Checks one new item and inserts it at `position`.
 async function addItem(tx: Db, workspaceId: string, sectionId: string, body: NewItem, position: number, hasCurrency: boolean): Promise<void> {
-  if (body.price != null && !hasCurrency) throw new AddRefused(400, PRICE_NEEDS_CURRENCY);
+  if ((body.price != null || sizePriced(body.sizes)) && !hasCurrency) throw new AddRefused(400, PRICE_NEEDS_CURRENCY);
   if (body.drinkId) {
     const [d] = await tx.select({ id: drinks.id }).from(drinks).where(and(eq(drinks.id, body.drinkId), eq(drinks.workspaceId, workspaceId)));
     if (!d) throw new AddRefused(400, "drinkId: not a drink in this workspace");
@@ -447,6 +528,7 @@ async function addItem(tx: Db, workspaceId: string, sectionId: string, body: New
       name: body.name ?? null,
       description: body.description ?? null,
       price: body.price ?? null,
+      sizes: body.sizes ?? null,
       available: body.available ?? true,
       beanFields: body.beanFields ?? null,
       beanBatches: body.beanBatches ?? null,
@@ -503,11 +585,17 @@ menuRouter.patch("/items/:itemId", async (req: Request<ItemParams>, res: Respons
     sendError(res, 400, "beanFields, beanBatches: only for the beans block");
     return;
   }
-  if ((body.showMethod !== undefined || body.showIngredients !== undefined) && item.itemType === "beans") {
-    sendError(res, 400, "showMethod, showIngredients: not for the beans block");
+  if ((body.showMethod !== undefined || body.showIngredients !== undefined || body.sizes !== undefined) && item.itemType === "beans") {
+    sendError(res, 400, "showMethod, showIngredients, sizes: not for the beans block");
     return;
   }
-  if (body.price != null && !(await currencyOf(db, workspaceId))) {
+  const price = body.price !== undefined ? body.price : item.price;
+  const sizes = body.sizes !== undefined ? body.sizes : item.sizes;
+  if (price != null && sizes != null) {
+    sendError(res, 400, SIZES_OR_PRICE);
+    return;
+  }
+  if ((body.price != null || sizePriced(body.sizes)) && !(await currencyOf(db, workspaceId))) {
     sendError(res, 400, PRICE_NEEDS_CURRENCY);
     return;
   }

@@ -1,12 +1,12 @@
-// Bean photo files (docs/api/bean-photos.md §4c): one WebP per photo at
+// Bean photo files (docs/api/bean-photos.md §4c), and the menu logo (§7b): one WebP per photo at
 // PHOTO_DIR/<workspaceId>/<photoId>.webp. Rows live in bean_photos; deletes
 // there cascade, so whoever deletes beans or a workspace removes the files
 // after the commit, and sweepOrphanPhotos catches anything left over.
 import { mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import sharp from "sharp";
-import { aiChatPhotos, beanPhotos, beans } from "@barista/shared/schema";
-import { and, eq, inArray, isNull, lt } from "drizzle-orm";
+import { aiChatPhotos, beanPhotos, beans, workspaces } from "@barista/shared/schema";
+import { and, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm";
 import { photoDir } from "./config.js";
 import { db } from "./db.js";
 
@@ -74,10 +74,12 @@ export async function removeWorkspacePhotos(workspaceId: string): Promise<void> 
 }
 
 // Files with no photo row (a cascade nobody cleaned up after, a crash
-// mid-upload): removed. Returns how many.
+// mid-upload): removed. Returns how many. A workspace's menu logo
+// (workspaces.menuLogoId, docs/api/menu.md §7b) lives beside its bean photos.
 export async function sweepOrphanPhotos(): Promise<number> {
   const rows = await db.select({ id: beanPhotos.id, workspaceId: beans.workspaceId }).from(beanPhotos).innerJoin(beans, eq(beanPhotos.beanId, beans.id));
-  const known = new Set(rows.map((r) => `${r.workspaceId}/${r.id}.webp`));
+  const logos = await db.select({ id: workspaces.menuLogoId, workspaceId: workspaces.id }).from(workspaces).where(isNotNull(workspaces.menuLogoId));
+  const known = new Set([...rows, ...logos].map((r) => `${r.workspaceId}/${r.id}.webp`));
   let removed = 0;
   const dirs = await readdir(photoDir(), { withFileTypes: true }).catch(() => []);
   for (const dir of dirs) {

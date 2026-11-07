@@ -564,21 +564,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should a finished cold brew batch (roadmap: cold brew refinements) be
     stock the same way, with each glass served taken from it and rated?
 
-### 20. Public menu: branding and sizes
-
-- **Status:** idea
-- **Why:** the guest page (`/menu/:slug`, roadmap) has one clean look for
-  every bar, and a drink has one price even when it's made in several sizes.
-- **Approach:**
-  - **Branding:** per-workspace accent colour, a tagline under the name, and
-    maybe a logo (uploaded and resized like bean photos, `backend/src/photos.ts`).
-  - **Sizes:** prices per serving size once drinks have more than one size.
-- **Size:** S–M (branding without a logo is S).
-- **Depends on:** nothing; a logo can reuse the bean photos' storage.
-- **Open questions:** should the guest page offer "install" as its own app,
-  separate from the journal?
-
-### 21. Drink categories: what else they could do
+### 20. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -592,6 +578,21 @@ What the analysis worker sends to the LLM and what comes back.
     adding every drink in it to a menu section?
   - Should a category also order the drinks inside it on the brew page
     (today they're sorted by name)?
+
+### 21. The guest menu as its own app
+
+- **Status:** idea
+- **Why:** a regular could add the bar's menu to their home screen and
+  open it straight to `/menu/:slug`, with the bar's name, colour and logo
+  (roadmap: public menu branding and sizes), instead of the journal app.
+- **Approach:** a web app manifest per menu (name, `theme_color` from the
+  accent colour, icons from the logo, `start_url` and `scope` the menu's
+  address), linked from the guest page only.
+- **Size:** S–M
+- **Depends on:** nothing.
+- **Open questions:** does the journal's own manifest and service worker
+  get in the way (one origin, one scope `/`), and is it worth it before
+  testing the installed app on phones (item 34)?
 
 ---
 

@@ -326,6 +326,12 @@ export const workspaces = mysqlTable("workspaces", {
   // item can override either (docs/api/menu.md §7b).
   menuShowMethod: boolean("menu_show_method").default(true).notNull(), // "Filter", "Espresso"
   menuShowIngredients: boolean("menu_show_ingredients").default(false).notNull(),
+  // The public menu's branding (docs/api/menu.md §7b): an accent colour
+  // ("#rrggbb"), a line under the title, and a logo, stored like bean photos
+  // (PHOTO_DIR/<workspaceId>/<menuLogoId>.webp). null = none.
+  menuAccentColor: varchar("menu_accent_color", { length: 7 }),
+  menuTagline: varchar("menu_tagline", { length: 255 }),
+  menuLogoId: varchar("menu_logo_id", { length: 36 }),
   settings: jsonValue<Partial<WorkspaceSettings>>("settings"), // null = all defaults
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -1286,6 +1292,14 @@ export type BeanMenuField = (typeof BEAN_MENU_FIELDS)[number];
 export const BEAN_BATCH_MODES = ["each", "once"] as const;
 export type BeanBatchMode = (typeof BEAN_BATCH_MODES)[number];
 
+// A drink or brew in several sizes, each with its own price (docs/api/menu.md
+// §7b): "12 oz" 4.5. Instead of the item's single price.
+export interface MenuSize {
+  label: string; // 1-30 chars
+  price: number | null; // in workspaces.menuCurrency; null = no price shown
+}
+export const MAX_MENU_SIZES = 6;
+
 export const menuSections = mysqlTable(
   "menu_sections",
   {
@@ -1327,6 +1341,9 @@ export const menuItems = mysqlTable(
     // public menu; null = the menu's default (workspaces.menuShow*).
     showMethod: boolean("show_method"),
     showIngredients: boolean("show_ingredients"),
+    // Drinks and brewers only: sizes with their own prices, in order; null =
+    // one size (price). Never both a price and sizes (the API).
+    sizes: jsonValue<MenuSize[]>("sizes"),
   },
   (table) => ({
     // A drink or brewer once per section (NULLs don't collide).

@@ -715,6 +715,13 @@
       "when": 1794011368196,
       "tag": "0101_menu_display",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "5",
+      "when": 1794012867937,
+      "tag": "0102_menu_branding_sizes",
+      "breakpoints": true
     }
   ]
 }

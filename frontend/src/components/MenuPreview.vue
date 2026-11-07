@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // The menu as guests see it (docs/api/public-menu.md §7): the builder's
 // Preview and the guest page (views/PublicMenuView.vue).
-import type { PublicMenu, PublicMenuItem } from '../api/types';
+import { API_URL } from '../api/client';
+import type { MenuSize, PublicMenu, PublicMenuItem } from '../api/types';
 import { beanLines } from '../lib/publicMenu';
 
 defineProps<{ menu: PublicMenu }>();
@@ -9,11 +10,18 @@ defineProps<{ menu: PublicMenu }>();
 // How it's made and the ingredients, whichever the menu shows ("Espresso · Steamed milk").
 const detail = (item: PublicMenuItem) => [item.method, item.ingredients.join(', ')].filter(Boolean).join(' · ');
 const price = (n: number, currency: string | null) => `${n.toFixed(2)}${currency ? ` ${currency}` : ''}`;
+// "8 oz 4.00 · 12 oz 4.75 USD": the currency once, at the end.
+const sizePrices = (sizes: MenuSize[], currency: string | null) =>
+  sizes.map((x) => (x.price === null ? x.label : `${x.label} ${x.price.toFixed(2)}`)).join(' · ') + (currency && sizes.some((x) => x.price !== null) ? ` ${currency}` : '');
 </script>
 
 <template>
-  <div class="menu-preview">
-    <h2 class="bar">{{ menu.title }}</h2>
+  <div class="menu-preview" :class="{ branded: !!menu.accentColor }" :style="menu.accentColor ? { '--menu-accent': menu.accentColor } : undefined">
+    <header class="masthead">
+      <img v-if="menu.logoUrl" class="logo" :src="`${API_URL}${menu.logoUrl}`" alt="" />
+      <h2 class="bar">{{ menu.title }}</h2>
+      <p v-if="menu.tagline" class="tagline muted">{{ menu.tagline }}</p>
+    </header>
     <p v-if="menu.sections.length === 0" class="muted">Nothing on the menu yet: sections show once they have something in them.</p>
     <section v-for="s in menu.sections" :key="s.name" class="section">
       <h3>{{ s.name }}</h3>
@@ -43,6 +51,7 @@ const price = (n: number, currency: string | null) => `${n.toFixed(2)}${currency
               <span v-if="!item.available" class="badge">Unavailable</span>
               <span v-if="item.price !== null" class="price">{{ price(item.price, menu.currency) }}</span>
             </div>
+            <span v-if="item.sizes" class="sizes small">{{ sizePrices(item.sizes, menu.currency) }}</span>
             <span v-if="item.description" class="muted small">{{ item.description }}</span>
             <span v-if="detail(item)" class="muted small">{{ detail(item) }}</span>
           </li>
@@ -54,6 +63,9 @@ const price = (n: number, currency: string | null) => `${n.toFixed(2)}${currency
 
 <style scoped>
 .menu-preview {
+  /* The bar's accent colour (docs/api/menu.md §7b), lightened on dark so it
+     stays readable; else the app's brown. */
+  --accent: var(--brand);
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -63,18 +75,47 @@ h3,
 p {
   margin: 0;
 }
+.menu-preview.branded {
+  --accent: var(--menu-accent);
+}
+:global(:root[data-theme='dark']) .menu-preview.branded {
+  --accent: color-mix(in oklab, var(--menu-accent) 50%, white);
+}
+@media (prefers-color-scheme: dark) {
+  :global(:root:not([data-theme='light'])) .menu-preview.branded {
+    --accent: color-mix(in oklab, var(--menu-accent) 50%, white);
+  }
+}
+.masthead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  text-align: center;
+}
+.logo {
+  max-width: min(12rem, 60%);
+  max-height: 7rem;
+  object-fit: contain;
+}
+.tagline {
+  font-style: italic;
+}
+.sizes {
+  font-variant-numeric: tabular-nums;
+}
 /* The title, then the sections, then the items, each a step smaller; the
    title and section headings in the brand brown. */
 .bar {
   font-size: 2rem;
   line-height: 1.2;
   text-align: center;
-  color: var(--brand);
+  color: var(--accent);
 }
 h3 {
   font-size: 1.35rem;
-  color: var(--brand);
-  border-bottom: 2px solid var(--brand);
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
   padding-bottom: var(--space-1);
   margin-bottom: var(--space-2);
 }
