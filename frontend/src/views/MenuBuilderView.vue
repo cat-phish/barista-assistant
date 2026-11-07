@@ -26,7 +26,7 @@ import { BEAN_MENU_FIELDS } from '../lib/publicMenu';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
-const menu = ref<Menu>({ title: null, currency: null, showMethod: true, showIngredients: false, accentColor: null, tagline: null, logoId: null, sections: [] });
+const menu = ref<Menu>({ title: null, currency: null, showMethod: true, showIngredients: false, accentColor: null, tagline: null, logoId: null, logoIds: [], sections: [] });
 const drinks = ref<Drink[]>([]);
 const categories = ref<DrinkCategory[]>([]);
 const preview = ref<PublicMenu | null>(null);

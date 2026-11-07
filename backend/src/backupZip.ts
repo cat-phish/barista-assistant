@@ -25,11 +25,15 @@ export async function buildBackupZip(workspaceId: string, options: Omit<BackupOp
     entries[`photos/${row.id as string}.webp`] = [data, { level: 0 }]; // WebP is compressed already
   }
   file.tables.bean_photos = rows;
-  // The menu logo (docs/api/menu.md §7b) beside them; left out if its file is.
-  const logoId = file.workspace.menuLogoId;
-  const logo = logoId ? await readFile(photoPath(workspaceId, logoId)).catch(() => null) : null;
-  if (logoId && logo) entries[`photos/${logoId}.webp`] = [logo, { level: 0 }];
-  else file.workspace.menuLogoId = null;
+  // The menu logos (docs/api/menu.md §7b) beside them; one is left out if its file is.
+  const logoIds: string[] = [];
+  for (const id of file.workspace.menuLogoIds ?? []) {
+    const logo = await readFile(photoPath(workspaceId, id)).catch(() => null);
+    if (!logo) continue;
+    logoIds.push(id);
+    entries[`photos/${id}.webp`] = [logo, { level: 0 }];
+  }
+  file.workspace.menuLogoIds = logoIds;
   entries[ZIP_BACKUP_JSON] = new TextEncoder().encode(JSON.stringify(file));
   return { file, zip: zipSync(entries) };
 }

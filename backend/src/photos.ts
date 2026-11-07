@@ -74,11 +74,13 @@ export async function removeWorkspacePhotos(workspaceId: string): Promise<void> 
 }
 
 // Files with no photo row (a cascade nobody cleaned up after, a crash
-// mid-upload): removed. Returns how many. A workspace's menu logo
-// (workspaces.menuLogoId, docs/api/menu.md §7b) lives beside its bean photos.
+// mid-upload): removed. Returns how many. A workspace's menu logos
+// (workspaces.menuLogoIds, docs/api/menu.md §7b) live beside its bean photos.
 export async function sweepOrphanPhotos(): Promise<number> {
   const rows = await db.select({ id: beanPhotos.id, workspaceId: beans.workspaceId }).from(beanPhotos).innerJoin(beans, eq(beanPhotos.beanId, beans.id));
-  const logos = await db.select({ id: workspaces.menuLogoId, workspaceId: workspaces.id }).from(workspaces).where(isNotNull(workspaces.menuLogoId));
+  const logos = (await db.select({ ids: workspaces.menuLogoIds, workspaceId: workspaces.id }).from(workspaces).where(isNotNull(workspaces.menuLogoIds))).flatMap(
+    (w) => (w.ids ?? []).map((id) => ({ id, workspaceId: w.workspaceId })),
+  );
   const known = new Set([...rows, ...logos].map((r) => `${r.workspaceId}/${r.id}.webp`));
   let removed = 0;
   const dirs = await readdir(photoDir(), { withFileTypes: true }).catch(() => []);

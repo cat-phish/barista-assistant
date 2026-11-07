@@ -145,11 +145,13 @@ export const workspaces = mysqlTable("workspaces", {
   menuShowMethod: boolean("menu_show_method").default(true).notNull(), // "Filter", "Espresso"
   menuShowIngredients: boolean("menu_show_ingredients").default(false).notNull(),
   // The public menu's branding (docs/api/menu.md §7b): an accent colour
-  // ("#rrggbb"), a line under the title, and a logo, stored like bean photos
-  // (PHOTO_DIR/<workspaceId>/<menuLogoId>.webp). null = none.
+  // ("#rrggbb"), a line under the title, and logos, stored like bean photos
+  // (PHOTO_DIR/<workspaceId>/<id>.webp). null = none.
   menuAccentColor: varchar("menu_accent_color", { length: 7 }),
   menuTagline: varchar("menu_tagline", { length: 255 }),
-  menuLogoId: varchar("menu_logo_id", { length: 36 }),
+  // Up to MAX_MENU_LOGOS (6), in order: the first is the one the menu shows,
+  // the others are kept to swap in. null or [] = none.
+  menuLogoIds: jsonValue<string[]>("menu_logo_ids"),
   // Workspace settings (docs/api/workspaces.md §2): JSON, null or missing
   // keys = the defaults (DEFAULT_WORKSPACE_SETTINGS). Owners change them.
   settings: jsonValue<Partial<WorkspaceSettings>>("settings"),

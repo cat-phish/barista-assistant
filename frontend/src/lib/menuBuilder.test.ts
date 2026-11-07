@@ -29,6 +29,7 @@ const menu: Menu = {
   accentColor: null,
   tagline: null,
   logoId: null,
+  logoIds: [],
   sections: [
     { id: 's1', name: 'Espresso', description: null, position: 1, items: [item('i1', { drinkId: 'Latte' }), item('i2', { itemType: 'brewer', brewerId: 'Linea' })] },
     { id: 's2', name: 'Coffee', description: null, position: 2, items: [item('i3', { itemType: 'beans' }), item('i4', { drinkId: 'Tonic' })] },
@@ -72,7 +73,7 @@ describe('addOptions', () => {
       { itemType: 'drink', drinkId: 'Tonic' },
       { itemType: 'brewer', brewerId: 'V60' },
     ]);
-    const empty = addOptions({ title: null, currency: null, showMethod: true, showIngredients: false, accentColor: null, tagline: null, logoId: null, sections: [{ ...menu.sections[0]!, items: [] }] }, 's1', [], [], []);
+    const empty = addOptions({ title: null, currency: null, showMethod: true, showIngredients: false, accentColor: null, tagline: null, logoId: null, logoIds: [], sections: [{ ...menu.sections[0]!, items: [] }] }, 's1', [], [], []);
     expect(addRequest(empty, new Set(), true)).toEqual([{ itemType: 'beans' }]);
   });
 });

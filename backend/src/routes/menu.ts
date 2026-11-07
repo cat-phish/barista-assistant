@@ -11,6 +11,7 @@ import { buildPublicMenu, type PublicMenuResponse } from "./publicMenu.js";
 import {
   BEAN_BATCH_MODES,
   BEAN_MENU_FIELDS,
+  MAX_MENU_LOGOS,
   MAX_MENU_SIZES,
   brewers,
   drinks,
@@ -69,10 +70,12 @@ export interface MenuResponse {
   showMethod: boolean; // the default for items: show how it's made ("Filter")
   showIngredients: boolean; // the default for items: show a drink's ingredients
   // Branding: an accent colour ("#rrggbb"), a line under the title, and the
-  // logo's id (the image: GET …/menu/logo/:id, and the public menu's logoUrl).
+  // logos, in order (each image: GET /api/public/menu/:slug/logo/:id). The
+  // first, logoId, is the one the menu shows; the others are kept to swap in.
   accentColor: string | null;
   tagline: string | null;
   logoId: string | null;
+  logoIds: string[];
   sections: MenuSectionView[];
 }
 
@@ -179,7 +182,7 @@ export async function loadMenu(workspaceId: string, conn: Db = db): Promise<Menu
       showIngredients: workspaces.menuShowIngredients,
       accentColor: workspaces.menuAccentColor,
       tagline: workspaces.menuTagline,
-      logoId: workspaces.menuLogoId,
+      logoIds: workspaces.menuLogoIds,
     })
     .from(workspaces)
     .where(eq(workspaces.id, workspaceId));
@@ -227,7 +230,8 @@ export async function loadMenu(workspaceId: string, conn: Db = db): Promise<Menu
     showIngredients: ws?.showIngredients ?? false,
     accentColor: ws?.accentColor ?? null,
     tagline: ws?.tagline ?? null,
-    logoId: ws?.logoId ?? null,
+    logoId: ws?.logoIds?.[0] ?? null,
+    logoIds: ws?.logoIds ?? [],
     sections: sections.map((s) => ({
       ...s,
       items: items
@@ -333,36 +337,103 @@ menuRouter.patch("/", async (req: Request<WorkspaceParams>, res: Response<MenuRe
   await sendMenu(res, workspaceId);
 });
 
-// --- The logo (docs/api/menu.md §7b): one image, stored like bean photos ---
+// --- The logos (docs/api/menu.md §7b): up to MAX_MENU_LOGOS, stored like
+// bean photos; the first is the one the menu shows ---
 const imageBody = express.raw({ type: () => true, limit: PHOTO_MAX_UPLOAD_BYTES });
-const logoOf = async (workspaceId: string) =>
-  (await db.select({ logoId: workspaces.menuLogoId }).from(workspaces).where(eq(workspaces.id, workspaceId)))[0]?.logoId ?? null;
+const NOT_AN_IMAGE = "Not an image that can be read (JPEG, PNG, WebP, GIF, AVIF or TIFF)";
+const readImage = (req: { body: unknown }) => (Buffer.isBuffer(req.body) && req.body.length > 0 ? processPhoto(req.body) : Promise.resolve(null));
 
-// A new logo replaces the old one. It gets a new id: the image is cached for good.
-menuRouter.put("/logo", imageBody, async (req: Request<WorkspaceParams>, res: Response<MenuResponse>) => {
+// Changes the list with the workspace row locked, so two uploads at once
+// both land. `change` returns the new list, or a status to answer with.
+type LogoChange = (ids: string[]) => string[] | { status: 400 | 404 | 409; error: string };
+async function changeLogos(workspaceId: string, change: LogoChange): Promise<{ status: 400 | 404 | 409; error: string } | null> {
+  return db.transaction(async (tx) => {
+    const [ws] = await tx.select({ ids: workspaces.menuLogoIds }).from(workspaces).where(eq(workspaces.id, workspaceId)).for("update");
+    const next = change(ws?.ids ?? []);
+    if (!Array.isArray(next)) return next;
+    await tx.update(workspaces).set({ menuLogoIds: next.length ? next : null }).where(eq(workspaces.id, workspaceId));
+    return null;
+  });
+}
+
+// Added last. Each image gets its own id, never reused: it's cached for good.
+menuRouter.post("/logos", imageBody, async (req: Request<WorkspaceParams>, res: Response<MenuResponse>) => {
   const { workspaceId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
-  const image = Buffer.isBuffer(req.body) && req.body.length > 0 ? await processPhoto(req.body) : null;
+  const image = await readImage(req);
   if (!image) {
-    sendError(res, 400, "Not an image that can be read (JPEG, PNG, WebP, GIF, AVIF or TIFF)");
+    sendError(res, 400, NOT_AN_IMAGE);
     return;
   }
   const id = randomUUID();
-  await writePhotoFile(workspaceId, id, image.data); // the file first: the id never points at a missing file
-  const old = await logoOf(workspaceId);
-  await db.update(workspaces).set({ menuLogoId: id }).where(eq(workspaces.id, workspaceId));
-  if (old) await removePhotoFiles(workspaceId, [old]);
+  await writePhotoFile(workspaceId, id, image.data); // the file first: the list never points at a missing file
+  const failed = await changeLogos(workspaceId, (ids) =>
+    ids.length >= MAX_MENU_LOGOS ? { status: 409, error: `A menu keeps at most ${MAX_MENU_LOGOS} logos` } : [...ids, id],
+  );
+  if (failed) {
+    await removePhotoFiles(workspaceId, [id]);
+    sendError(res, failed.status, failed.error);
+    return;
+  }
+  await sendMenu(res, workspaceId, 201);
+});
+
+const logoOrderSchema = z
+  .object({ logoIds: z.array(z.uuid()).max(MAX_MENU_LOGOS).refine((ids) => new Set(ids).size === ids.length, "each logo once") })
+  .strict();
+
+// Every logo once, in the new order: the first is the one the menu shows.
+menuRouter.put("/logos/order", async (req: Request<WorkspaceParams>, res: Response<MenuResponse>) => {
+  const { workspaceId } = req.params;
+  if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
+  const body = parseBody(logoOrderSchema, req, res);
+  if (!body) return;
+  const failed = await changeLogos(workspaceId, (ids) =>
+    ids.length === body.logoIds.length && body.logoIds.every((id) => ids.includes(id))
+      ? body.logoIds
+      : { status: 400, error: "logoIds: must list every logo exactly once" },
+  );
+  if (failed) {
+    sendError(res, failed.status, failed.error);
+    return;
+  }
   await sendMenu(res, workspaceId);
 });
 
-menuRouter.delete("/logo", async (req: Request<WorkspaceParams>, res: Response<MenuResponse>) => {
-  const { workspaceId } = req.params;
+// A new image for a logo (cropped or rotated in the browser), in its place,
+// under a new id. Works on a full list.
+menuRouter.put("/logos/:logoId/image", imageBody, async (req: Request<WorkspaceParams & { logoId: string }>, res: Response<MenuResponse>) => {
+  const { workspaceId, logoId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
-  const old = await logoOf(workspaceId);
-  if (old) {
-    await db.update(workspaces).set({ menuLogoId: null }).where(eq(workspaces.id, workspaceId));
-    await removePhotoFiles(workspaceId, [old]);
+  const image = await readImage(req);
+  if (!image) {
+    sendError(res, 400, NOT_AN_IMAGE);
+    return;
   }
+  const id = randomUUID();
+  await writePhotoFile(workspaceId, id, image.data);
+  const failed = await changeLogos(workspaceId, (ids) =>
+    ids.includes(logoId) ? ids.map((x) => (x === logoId ? id : x)) : { status: 404, error: "Logo not found" },
+  );
+  if (failed) {
+    await removePhotoFiles(workspaceId, [id]);
+    sendError(res, failed.status, failed.error);
+    return;
+  }
+  await removePhotoFiles(workspaceId, [logoId]);
+  await sendMenu(res, workspaceId);
+});
+
+// No confirmation: nothing else uses a logo. The next one moves up.
+menuRouter.delete("/logos/:logoId", async (req: Request<WorkspaceParams & { logoId: string }>, res: Response<MenuResponse>) => {
+  const { workspaceId, logoId } = req.params;
+  if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
+  const failed = await changeLogos(workspaceId, (ids) => (ids.includes(logoId) ? ids.filter((x) => x !== logoId) : { status: 404, error: "Logo not found" }));
+  if (failed) {
+    sendError(res, failed.status, failed.error);
+    return;
+  }
+  await removePhotoFiles(workspaceId, [logoId]);
   await sendMenu(res, workspaceId);
 });
 

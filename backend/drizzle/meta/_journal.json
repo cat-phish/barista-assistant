@@ -722,6 +722,20 @@
       "when": 1794012867937,
       "tag": "0102_menu_branding_sizes",
       "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "5",
+      "when": 1794018507059,
+      "tag": "0103_menu_logo_list",
+      "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "5",
+      "when": 1794018512871,
+      "tag": "0104_drop_menu_logo_id",
+      "breakpoints": true
     }
   ]
 }

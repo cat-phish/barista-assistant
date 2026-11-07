@@ -7,12 +7,13 @@
 import QRCode from 'qrcode';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { API_URL, ApiError, errorMessage } from '../api/client';
+import { ApiError, errorMessage } from '../api/client';
 import { menuApi } from '../api/menu';
 import type { Menu } from '../api/types';
 import { workspacesApi } from '../api/workspaces';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import SettingsLayout from '../components/SettingsLayout.vue';
+import MenuLogos from '../components/MenuLogos.vue';
 import { HEX_COLOR, tooLight } from '../lib/menuBranding';
 import { SLUG_PATTERN } from '../lib/slug';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -77,7 +78,7 @@ const title = ref('');
 const currency = ref('');
 const savedTagline = ref<string | null>(null);
 const savedAccent = ref<string | null>(null);
-const logoId = ref<string | null>(null);
+const logoIds = ref<string[]>([]);
 const tagline = ref('');
 const accent = ref('');
 // The app's brown, what the menu uses with no accent colour.
@@ -88,7 +89,7 @@ function showMenu(m: Menu): void {
   savedCurrency.value = m.currency;
   savedTagline.value = m.tagline;
   savedAccent.value = m.accentColor;
-  logoId.value = m.logoId;
+  logoIds.value = m.logoIds;
 }
 
 onMounted(async () => {
@@ -163,7 +164,7 @@ const currencyValid = computed(() => currencyCode.value === '' || /^[A-Z]{3}$/.t
 const currencyChanged = computed(() => currencyCode.value !== (savedCurrency.value ?? ''));
 const saveCurrency = () => saveMenu((ws) => menuApi.setCurrency(ws, currencyCode.value || null));
 
-// Branding: a line under the title, an accent colour and a logo.
+// Branding: a line under the title, an accent colour and logos (MenuLogos.vue).
 const taglineChanged = computed(() => tagline.value.trim() !== (savedTagline.value ?? ''));
 const saveTagline = () => saveMenu((ws) => menuApi.setBranding(ws, { tagline: tagline.value.trim() || null }));
 const accentValid = computed(() => accent.value === '' || HEX_COLOR.test(accent.value.trim()));
@@ -174,15 +175,6 @@ async function resetAccent(): Promise<void> {
   accent.value = '';
   await saveMenu((ws) => menuApi.setBranding(ws, { accentColor: null }));
 }
-const logoUrl = computed(() => (logoId.value ? `${API_URL}/api/public/menu/${encodeURIComponent(workspaces.current?.slug ?? '')}/logo/${logoId.value}` : ''));
-const logoInput = ref<HTMLInputElement | null>(null);
-async function uploadLogo(event: Event): Promise<void> {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
-  input.value = '';
-  if (file) await saveMenu((ws) => menuApi.setLogo(ws, file));
-}
-const removeLogo = () => saveMenu((ws) => menuApi.removeLogo(ws));
 
 // --- Delete (owners): type the web address to confirm (§2) ---
 const deleting = ref(false);
@@ -329,16 +321,14 @@ async function deleteWorkspace(): Promise<void> {
       <p v-else-if="accentTooLight" class="hint">This colour is light: headings may be hard to read on the white menu.</p>
       <div class="logo-setting">
         <span class="label">Logo</span>
-        <div class="logo-row">
-          <img v-if="logoUrl" :src="logoUrl" alt="Your menu's logo" class="logo-preview" />
-          <span v-else class="muted small">No logo.</span>
-          <template v-if="workspaces.canEdit">
-            <input ref="logoInput" type="file" accept="image/*" class="visually-hidden" @change="uploadLogo" />
-            <button class="btn btn-secondary" type="button" :disabled="busy" @click="logoInput?.click()">{{ logoUrl ? 'Replace' : 'Upload' }}</button>
-            <button v-if="logoUrl" class="btn btn-secondary" type="button" :disabled="busy" @click="removeLogo">Remove</button>
-          </template>
-        </div>
-        <span class="hint">Shown above the title. A PNG with a transparent background looks best.</span>
+        <MenuLogos
+          v-if="workspaces.current"
+          :workspace-id="workspaces.current.id"
+          :slug="workspaces.current.slug"
+          :logo-ids="logoIds"
+          :can-edit="workspaces.canEdit"
+          @saved="showMenu"
+        />
       </div>
       <p v-if="menuError" class="form-error" role="alert">{{ menuError }}</p>
       <p class="muted small">Arrange what's on it in <RouterLink :to="{ name: 'menu-builder' }">Bar setup → Menu</RouterLink>.</p>
@@ -440,8 +430,7 @@ p {
 .currency-row .btn {
   margin-top: 1.6rem; /* line up with the input, below its label */
 }
-.accent-row,
-.logo-row {
+.accent-row {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -467,12 +456,6 @@ p {
 }
 .logo-setting .label {
   font-weight: 600;
-}
-.logo-preview {
-  max-height: 4rem;
-  max-width: 10rem;
-  object-fit: contain;
-  background: var(--surface, transparent);
 }
 .currency {
   max-width: 6rem;

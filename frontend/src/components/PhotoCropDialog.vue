@@ -2,7 +2,7 @@
 // Crop and rotate a photo before it's used (docs/api/bean-photos.md §4c):
 // full screen, on Cropper.js, which is loaded the first time it opens. Done
 // hands back the cropped image as a JPEG, full size: the server (or the
-// label read) shrinks it. Parent controls `open`, like ConfirmDialog.
+// label read) shrinks it; with `transparent`, a PNG. Parent controls `open`, like ConfirmDialog.
 import type Cropper from 'cropperjs';
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
@@ -10,6 +10,7 @@ const props = defineProps<{
   open: boolean;
   source: Blob | null; // the photo to crop
   saved?: boolean; // a saved photo: Done replaces it
+  transparent?: boolean; // keep a see-through background (a logo): PNG, not JPEG
 }>();
 const emit = defineEmits<{ (e: 'done', image: Blob): void; (e: 'cancel'): void }>();
 
@@ -90,8 +91,10 @@ async function done(): Promise<void> {
   working.value = true;
   error.value = '';
   try {
-    const canvas = cropper.getCroppedCanvas({ maxWidth: 4096, maxHeight: 4096, imageSmoothingQuality: 'high' });
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+    // A PNG is far larger, so a logo is kept to 2048 px (the server keeps 1024).
+    const max = props.transparent ? 2048 : 4096;
+    const canvas = cropper.getCroppedCanvas({ maxWidth: max, maxHeight: max, imageSmoothingQuality: 'high' });
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, props.transparent ? 'image/png' : 'image/jpeg', 0.92));
     if (!blob) throw new Error('The cropped photo couldn’t be made');
     emit('done', blob);
   } catch (err) {

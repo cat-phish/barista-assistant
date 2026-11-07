@@ -1,0 +1,1 @@
+ALTER TABLE `workspaces` DROP COLUMN `menu_logo_id`;

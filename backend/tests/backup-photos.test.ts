@@ -90,23 +90,41 @@ describe("backups with photos: a .zip (docs/api/backup.md §2b)", () => {
 });
 
 describe("the menu logo in backups (docs/api/menu.md §7b)", () => {
-  it("goes in a .zip with its file and comes back under a new id; a JSON file has none", async () => {
+  it("go in a .zip with their files and come back in order under new ids; a JSON file has none", async () => {
     const { owner, ws } = await withPhotos();
-    const logoId = (await owner.agent.put(`/api/workspaces/${ws.id}/menu/logo`).set("Content-Type", "image/jpeg").send(await jpeg(200, 100))).body.logoId as string;
+    const upload = async () => (await owner.agent.post(`/api/workspaces/${ws.id}/menu/logos`).set("Content-Type", "image/jpeg").send(await jpeg(200, 100))).body.logoIds as string[];
+    await upload();
+    const [logoId, kept] = await upload();
     await owner.agent.patch(`/api/workspaces/${ws.id}/menu`).send({ accentColor: "#8A4B2A", tagline: "Since 2026" });
     const files = unzipSync((await zipBackup(owner, ws.id)).body as Buffer);
-    expect(Object.keys(files)).toContain(`photos/${logoId}.webp`);
+    expect(Object.keys(files)).toEqual(expect.arrayContaining([`photos/${logoId}.webp`, `photos/${kept}.webp`]));
 
     const restored = await restoreZip(owner, zipSync(files), `logo-${ws.slug}`);
     expect(restored.status, JSON.stringify(restored.body)).toBe(201);
     const copyId = restored.body.workspaceId as string;
     const menu = (await owner.agent.get(`/api/workspaces/${copyId}/menu`)).body;
     expect(menu).toMatchObject({ accentColor: "#8a4b2a", tagline: "Since 2026" });
-    expect(menu.logoId).toMatch(/^[0-9a-f-]{36}$/);
-    expect(menu.logoId).not.toBe(logoId);
-    expect(existsSync(join(photoDir(), copyId, `${menu.logoId}.webp`))).toBe(true);
+    expect(menu.logoIds).toHaveLength(2);
+    expect(menu.logoId).toBe(menu.logoIds[0]);
+    expect(menu.logoIds).not.toContain(logoId);
+    for (const id of menu.logoIds) expect(existsSync(join(photoDir(), copyId, `${id}.webp`))).toBe(true);
 
     const json = (await owner.agent.get(`/api/workspaces/${ws.id}/backup`)).body;
-    expect(json.workspace).toMatchObject({ menuLogoId: null, menuTagline: "Since 2026" });
+    expect(json.workspace).toMatchObject({ menuLogoIds: [], menuTagline: "Since 2026" });
+  });
+
+  it("restores an older file's single logo", async () => {
+    const { owner, ws } = await withPhotos();
+    const [logoId] = (await owner.agent.post(`/api/workspaces/${ws.id}/menu/logos`).set("Content-Type", "image/jpeg").send(await jpeg(200, 100))).body.logoIds as string[];
+    const files = unzipSync((await zipBackup(owner, ws.id)).body as Buffer);
+    const file = JSON.parse(new TextDecoder().decode(files["backup.json"]));
+    delete file.workspace.menuLogoIds;
+    file.workspace.menuLogoId = logoId;
+    files["backup.json"] = new TextEncoder().encode(JSON.stringify(file));
+    const restored = await restoreZip(owner, zipSync(files), `old-logo-${ws.slug}`);
+    expect(restored.status, JSON.stringify(restored.body)).toBe(201);
+    const menu = (await owner.agent.get(`/api/workspaces/${restored.body.workspaceId as string}/menu`)).body;
+    expect(menu.logoIds).toHaveLength(1);
+    expect(menu.logoId).not.toBe(logoId);
   });
 });

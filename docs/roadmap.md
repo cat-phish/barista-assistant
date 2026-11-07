@@ -2473,6 +2473,14 @@ page had one look for every bar, and a drink one price whatever its size
   preview and Settings can show it: the id is random, so only someone who
   has seen the menu knows it. The photo sweep keeps it; a `.zip` backup
   carries it (a JSON one doesn't), restored under a new id.
+- **Several logos** (2026-11-06, migrations 0103/0104: `menu_logo_id`
+  became the list `menu_logo_ids`): up to 6, kept like a bean's photos in
+  Settings (`MenuLogos.vue`): drag ⠿ to reorder, crop or rotate
+  (`PhotoCropDialog.vue` with `transparent`, so a logo's background stays
+  see-through: PNG, up to 2048 px), remove. Only the first shows on the
+  menu; the user chose that over a photo strip or a rotating header, so the
+  others are alternatives to swap in. Each is served at the public logo URL
+  (ids unguessable, as before).
 - **Sizes:** a free list per item (the user's choice over a menu-wide size
   list or sizes on the drink): up to 6 `{ label, price }`, in order,
   instead of the single price, never both. Guests see "8 oz 4.00 · 12 oz

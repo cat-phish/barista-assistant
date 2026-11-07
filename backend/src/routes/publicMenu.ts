@@ -167,15 +167,16 @@ publicMenuRouter.get(
   }
 );
 
-// The logo. Served while the menu is off too, so the builder's preview and
-// Settings show it: the id is unguessable and changes with each upload, so
-// only someone who has seen the menu (or its preview) knows the URL.
+// A logo: the one the menu shows, or one kept to swap in. Served while the
+// menu is off too, so the builder's preview and Settings show them: ids are
+// unguessable and change with each upload, so only someone who has seen the
+// menu (or a member) knows the URL.
 publicMenuRouter.get("/:slug/logo/:logoId", async (req: Request<{ slug: string; logoId: string }>, res: Response) => {
   const { slug, logoId } = req.params;
   const [ws] = SLUG_PATTERN.test(slug) && /^[0-9a-f-]{36}$/.test(logoId)
-    ? await db.select({ id: workspaces.id }).from(workspaces).where(and(eq(workspaces.slug, slug), eq(workspaces.menuLogoId, logoId))).limit(1)
+    ? await db.select({ id: workspaces.id, logoIds: workspaces.menuLogoIds }).from(workspaces).where(eq(workspaces.slug, slug)).limit(1)
     : [];
-  const path = ws ? photoPath(ws.id, logoId) : null;
+  const path = ws?.logoIds?.includes(logoId) ? photoPath(ws.id, logoId) : null;
   if (!path || !(await access(path).then(() => true, () => false))) {
     sendError(res, 404, "Logo not found");
     return;
