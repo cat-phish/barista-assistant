@@ -1,16 +1,19 @@
 <script setup lang="ts">
 // Settings → Workspace: the name and web address (docs/api/workspaces.md §2),
-// the public menu's switch, link, title and currency (docs/api/menu.md §7b),
-// and deleting the workspace. Owners change the name, address and switch;
-// baristas the menu's title and currency; viewers only see them.
+// the public menu's switch, link, title, currency and branding (tagline,
+// accent colour, logo; docs/api/menu.md §7b), and deleting the workspace.
+// Owners change the name, address and switch; baristas the menu's title,
+// currency and branding; viewers only see them.
 import QRCode from 'qrcode';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { ApiError, errorMessage } from '../api/client';
+import { API_URL, ApiError, errorMessage } from '../api/client';
 import { menuApi } from '../api/menu';
+import type { Menu } from '../api/types';
 import { workspacesApi } from '../api/workspaces';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import SettingsLayout from '../components/SettingsLayout.vue';
+import { HEX_COLOR, tooLight } from '../lib/menuBranding';
 import { SLUG_PATTERN } from '../lib/slug';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -72,16 +75,32 @@ const savedTitle = ref<string | null>(null);
 const savedCurrency = ref<string | null>(null);
 const title = ref('');
 const currency = ref('');
+const savedTagline = ref<string | null>(null);
+const savedAccent = ref<string | null>(null);
+const logoId = ref<string | null>(null);
+const tagline = ref('');
+const accent = ref('');
+// The app's brown, what the menu uses with no accent colour.
+const DEFAULT_ACCENT = '#3e2723';
+
+function showMenu(m: Menu): void {
+  savedTitle.value = m.title;
+  savedCurrency.value = m.currency;
+  savedTagline.value = m.tagline;
+  savedAccent.value = m.accentColor;
+  logoId.value = m.logoId;
+}
 
 onMounted(async () => {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
     const m = await menuApi.get(ws);
-    savedTitle.value = m.title;
-    savedCurrency.value = m.currency;
+    showMenu(m);
     title.value = m.title ?? '';
     currency.value = m.currency ?? '';
+    tagline.value = m.tagline ?? '';
+    accent.value = m.accentColor ?? '';
   } catch (err) {
     menuError.value = errorMessage(err);
   }
@@ -123,15 +142,13 @@ async function copyLink(): Promise<void> {
   }
 }
 
-async function saveMenu(patch: (ws: string) => Promise<{ title: string | null; currency: string | null }>): Promise<void> {
+async function saveMenu(patch: (ws: string) => Promise<Menu>): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   busy.value = true;
   menuError.value = '';
   try {
-    const m = await patch(ws);
-    savedTitle.value = m.title;
-    savedCurrency.value = m.currency;
+    showMenu(await patch(ws));
   } catch (err) {
     menuError.value = errorMessage(err);
   } finally {
@@ -145,6 +162,27 @@ const currencyCode = computed(() => currency.value.trim().toUpperCase());
 const currencyValid = computed(() => currencyCode.value === '' || /^[A-Z]{3}$/.test(currencyCode.value));
 const currencyChanged = computed(() => currencyCode.value !== (savedCurrency.value ?? ''));
 const saveCurrency = () => saveMenu((ws) => menuApi.setCurrency(ws, currencyCode.value || null));
+
+// Branding: a line under the title, an accent colour and a logo.
+const taglineChanged = computed(() => tagline.value.trim() !== (savedTagline.value ?? ''));
+const saveTagline = () => saveMenu((ws) => menuApi.setBranding(ws, { tagline: tagline.value.trim() || null }));
+const accentValid = computed(() => accent.value === '' || HEX_COLOR.test(accent.value.trim()));
+const accentChanged = computed(() => accent.value.trim().toLowerCase() !== (savedAccent.value ?? ''));
+const accentTooLight = computed(() => tooLight(accent.value.trim()));
+const saveAccent = () => saveMenu((ws) => menuApi.setBranding(ws, { accentColor: accent.value.trim().toLowerCase() || null }));
+async function resetAccent(): Promise<void> {
+  accent.value = '';
+  await saveMenu((ws) => menuApi.setBranding(ws, { accentColor: null }));
+}
+const logoUrl = computed(() => (logoId.value ? `${API_URL}/api/public/menu/${encodeURIComponent(workspaces.current?.slug ?? '')}/logo/${logoId.value}` : ''));
+const logoInput = ref<HTMLInputElement | null>(null);
+async function uploadLogo(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (file) await saveMenu((ws) => menuApi.setLogo(ws, file));
+}
+const removeLogo = () => saveMenu((ws) => menuApi.removeLogo(ws));
 
 // --- Delete (owners): type the web address to confirm (§2) ---
 const deleting = ref(false);
@@ -261,6 +299,47 @@ async function deleteWorkspace(): Promise<void> {
         <button class="btn btn-secondary" type="submit" :disabled="busy || !currencyValid || !currencyChanged">Save</button>
       </form>
       <p v-if="!currencyValid" class="field-error">Use a 3-letter code, e.g. USD.</p>
+      <form v-if="workspaces.canEdit" class="title-row" @submit.prevent="saveTagline">
+        <div class="field">
+          <label for="menu-tagline">Tagline</label>
+          <input id="menu-tagline" v-model="tagline" maxlength="255" placeholder="e.g. Small-batch coffee, brewed to order" />
+          <span class="hint">A line under the title.</span>
+        </div>
+        <button class="btn btn-secondary" type="submit" :disabled="busy || !taglineChanged">Save</button>
+      </form>
+      <form v-if="workspaces.canEdit" class="currency-row" @submit.prevent="saveAccent">
+        <div class="field">
+          <label for="menu-accent">Accent colour</label>
+          <div class="accent-row">
+            <input
+              class="swatch"
+              type="color"
+              :value="HEX_COLOR.test(accent) ? accent : DEFAULT_ACCENT"
+              aria-label="Pick the accent colour"
+              @input="accent = ($event.target as HTMLInputElement).value"
+            />
+            <input id="menu-accent" v-model="accent" maxlength="7" class="hex" placeholder="#3e2723" spellcheck="false" autocapitalize="none" :aria-invalid="!accentValid" />
+          </div>
+          <span class="hint">The title, section headings and lines. Empty uses the app's brown.</span>
+        </div>
+        <button class="btn btn-secondary" type="submit" :disabled="busy || !accentValid || !accentChanged">Save</button>
+        <button v-if="savedAccent" class="btn-link reset" type="button" :disabled="busy" @click="resetAccent">Use the default</button>
+      </form>
+      <p v-if="!accentValid" class="field-error">Use # and 6 hex digits, e.g. #8a4b2a.</p>
+      <p v-else-if="accentTooLight" class="hint">This colour is light: headings may be hard to read on the white menu.</p>
+      <div class="logo-setting">
+        <span class="label">Logo</span>
+        <div class="logo-row">
+          <img v-if="logoUrl" :src="logoUrl" alt="Your menu's logo" class="logo-preview" />
+          <span v-else class="muted small">No logo.</span>
+          <template v-if="workspaces.canEdit">
+            <input ref="logoInput" type="file" accept="image/*" class="visually-hidden" @change="uploadLogo" />
+            <button class="btn btn-secondary" type="button" :disabled="busy" @click="logoInput?.click()">{{ logoUrl ? 'Replace' : 'Upload' }}</button>
+            <button v-if="logoUrl" class="btn btn-secondary" type="button" :disabled="busy" @click="removeLogo">Remove</button>
+          </template>
+        </div>
+        <span class="hint">Shown above the title. A PNG with a transparent background looks best.</span>
+      </div>
       <p v-if="menuError" class="form-error" role="alert">{{ menuError }}</p>
       <p class="muted small">Arrange what's on it in <RouterLink :to="{ name: 'menu-builder' }">Bar setup → Menu</RouterLink>.</p>
     </section>
@@ -360,6 +439,40 @@ p {
 .title-row .btn,
 .currency-row .btn {
   margin-top: 1.6rem; /* line up with the input, below its label */
+}
+.accent-row,
+.logo-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.swatch {
+  width: var(--tap, 44px);
+  height: var(--tap, 44px);
+  padding: 2px;
+  flex: 0 0 auto;
+}
+.hex {
+  max-width: 7rem;
+  font-family: ui-monospace, monospace;
+}
+.reset {
+  margin-top: 1.6rem;
+}
+.logo-setting {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.logo-setting .label {
+  font-weight: 600;
+}
+.logo-preview {
+  max-height: 4rem;
+  max-width: 10rem;
+  object-fit: contain;
+  background: var(--surface, transparent);
 }
 .currency {
   max-width: 6rem;

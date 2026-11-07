@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { app } from "../src/app.js";
@@ -30,7 +31,7 @@ async function setup() {
 describe("menu builder (docs/api/menu.md §7b)", () => {
   it("starts empty, and adds sections last", async () => {
     const { owner, ws, base, get } = await setup();
-    expect(await get()).toEqual({ title: null, currency: null, showMethod: true, showIngredients: false, sections: [] });
+    expect(await get()).toEqual({ title: null, currency: null, showMethod: true, showIngredients: false, accentColor: null, tagline: null, logoId: null, sections: [] });
     await menuSection(owner, ws.id, "Espresso");
     const res = await owner.agent.post(`${base}/sections`).send({ name: "Pour over", description: "Brewed to order" });
     expect(res.status).toBe(201);
@@ -423,5 +424,78 @@ describe("the same coffee more than once (docs/api/public-menu.md §7)", () => {
     expect((await block()).beans.find((b: { id: string }) => b.id === newer).freezes).toEqual([{ frozenOn: daysAgo(2), thawedOn: null }]);
     await owner.agent.patch(`${base}/items/${beansItem.id}`).send({ beanFields: ["origin"], beanBatches: "once" });
     expect((await block()).beans[0]).not.toHaveProperty("freezes");
+  });
+});
+
+describe("menu branding (docs/api/menu.md §7b)", () => {
+  const png = () => sharp({ create: { width: 300, height: 120, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer();
+
+  it("sets an accent colour and tagline that guests see", async () => {
+    const { owner, ws, base } = await setup();
+    expect((await owner.agent.get(base)).body).toMatchObject({ accentColor: null, tagline: null, logoId: null });
+    const set = await owner.agent.patch(base).send({ accentColor: " #8A4B2A ", tagline: "  Coffee, slowly  " });
+    expect(set.body).toMatchObject({ accentColor: "#8a4b2a", tagline: "Coffee, slowly" });
+    expect((await owner.agent.get(`${base}/preview`)).body).toMatchObject({ accentColor: "#8a4b2a", tagline: "Coffee, slowly", logoUrl: null });
+    for (const accentColor of ["red", "#fff", "#12345g"]) expect((await owner.agent.patch(base).send({ accentColor })).status).toBe(400);
+    expect((await owner.agent.patch(base).send({ tagline: "x".repeat(256) })).status).toBe(400);
+    expect((await owner.agent.patch(base).send({ accentColor: null, tagline: "" })).body).toMatchObject({ accentColor: null, tagline: null });
+  });
+
+  it("uploads, serves, replaces and removes the logo", async () => {
+    const { owner, ws, base } = await setup();
+    expect((await owner.agent.put(`${base}/logo`).set("Content-Type", "text/plain").send("not an image")).status).toBe(400);
+    const first = (await owner.agent.put(`${base}/logo`).set("Content-Type", "image/png").send(await png())).body.logoId as string;
+    const { logoUrl } = (await owner.agent.get(`${base}/preview`)).body;
+    expect(logoUrl).toBe(`/api/public/menu/${ws.slug}/logo/${first}`);
+
+    // Anyone with the URL, even while the menu is off; it never changes.
+    const img = await request(app).get(logoUrl);
+    expect(img.status).toBe(200);
+    expect(img.headers["content-type"]).toBe("image/webp");
+    expect(img.headers["cache-control"]).toMatch(/immutable/);
+    expect((await sharp(img.body as Buffer).metadata()).hasAlpha).toBe(true); // a transparent logo stays transparent
+    expect((await request(app).get(`/api/public/menu/${ws.slug}/logo/${crypto.randomUUID()}`)).status).toBe(404);
+
+    const second = (await owner.agent.put(`${base}/logo`).set("Content-Type", "image/png").send(await png())).body.logoId as string;
+    expect(second).not.toBe(first);
+    expect((await request(app).get(logoUrl)).status).toBe(404); // the old one is gone
+    expect((await owner.agent.delete(`${base}/logo`)).body.logoId).toBeNull();
+    expect((await request(app).get(`/api/public/menu/${ws.slug}/logo/${second}`)).status).toBe(404);
+
+    const viewer = await newUser();
+    await addMember(owner, ws.id, viewer, "viewer");
+    expect((await viewer.agent.put(`${base}/logo`).set("Content-Type", "image/png").send(await png())).status).toBe(403);
+  });
+});
+
+describe("sizes (docs/api/menu.md §7b)", () => {
+  it("prices each size instead of one price, shown to guests in order", async () => {
+    const { owner, ws, base, drink, get } = await setup();
+    const section = await menuSection(owner, ws.id, "Milk drinks");
+    const latte = await drink("Latte");
+    const add = (item: Record<string, unknown>) => owner.agent.post(`${base}/sections/${section}/items`).send(item);
+    const sizes = [{ label: "8 oz", price: 4 }, { label: "12 oz", price: 4.75 }];
+    expect((await add({ itemType: "drink", drinkId: latte, sizes })).body.error).toMatch(/currency/);
+    await owner.agent.patch(base).send({ currency: "USD" });
+    expect((await add({ itemType: "drink", drinkId: latte, sizes, price: 4 })).status).toBe(400); // both
+    expect((await add({ itemType: "drink", drinkId: latte, sizes: [] })).status).toBe(400);
+    expect((await add({ itemType: "drink", drinkId: latte, sizes: [{ label: "8 oz", price: 4 }, { label: "8 OZ", price: 5 }] })).status).toBe(400);
+    expect((await add({ itemType: "drink", drinkId: latte, sizes: [{ label: "x", price: 4.555 }] })).status).toBe(400);
+    expect((await add({ itemType: "beans", sizes })).status).toBe(400);
+    expect((await add({ itemType: "drink", drinkId: latte, sizes })).status).toBe(201);
+
+    const item = (await get()).sections[0]!.items[0]! as Item & { sizes: unknown };
+    expect(item).toMatchObject({ price: null, sizes });
+    expect((await owner.agent.get(`${base}/preview`)).body.sections[0].items[0]).toMatchObject({ price: null, sizes });
+
+    // A price while it has sizes is refused; clearing the sizes allows it.
+    expect((await owner.agent.patch(`${base}/items/${item.id}`).send({ price: 5 })).status).toBe(400);
+    expect((await owner.agent.patch(base).send({ currency: null })).status).toBe(400); // size prices need it
+    const back = await owner.agent.patch(`${base}/items/${item.id}`).send({ sizes: null, price: 5 });
+    expect(back.body.sections[0].items[0]).toMatchObject({ price: 5, sizes: null });
+
+    // Sizes without prices don't need a currency.
+    await owner.agent.patch(`${base}/items/${item.id}`).send({ price: null, sizes: [{ label: "Small", price: null }] });
+    expect((await owner.agent.patch(base).send({ currency: null })).status).toBe(200);
   });
 });

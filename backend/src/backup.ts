@@ -29,6 +29,7 @@ import {
   INGREDIENT_TYPES,
   MARK_KINDS,
   MENU_ITEM_TYPES,
+  MAX_MENU_SIZES,
   BEAN_BATCH_MODES,
   METHOD_KINDS,
   ORIGIN_AREAS,
@@ -275,6 +276,11 @@ const JSON_SCHEMAS: Record<string, z.ZodType> = {
   "green_coffees.varieties": z.array(z.string().min(1).max(100)).max(20).nullable(),
   "green_coffees.species": z.array(z.enum(COFFEE_SPECIES)).nullable(),
   "menu_items.beanFields": z.array(z.enum(BEAN_MENU_FIELDS)).nullable(),
+  "menu_items.sizes": z
+    .array(z.object({ label: z.string().min(1).max(30), price: z.number().min(0).max(999999.99).nullable() }).strict())
+    .min(1)
+    .max(MAX_MENU_SIZES)
+    .nullable(),
   "prep_tools.methodKinds": z.array(z.enum(METHOD_KINDS)),
   "brew_problems.methodKinds": z.array(z.enum(METHOD_KINDS)),
   "llm_analyses.request": aiRequest,
@@ -338,6 +344,11 @@ export interface BackupFile {
     // left out (older files) = the defaults.
     menuShowMethod?: boolean;
     menuShowIngredients?: boolean;
+    // The menu's branding (docs/api/menu.md §7b). The logo, like bean photos,
+    // only goes with its file (a .zip, photos/<menuLogoId>.webp).
+    menuAccentColor?: string | null;
+    menuTagline?: string | null;
+    menuLogoId?: string | null;
     isPublicMenuEnabled: boolean;
     // The workspace's own flavor wheel (docs/api/flavor-lexicon.md §2c);
     // null or left out = the built-in one.
@@ -395,6 +406,9 @@ export async function buildBackup(workspaceId: string, options: BackupOptions = 
       menuCurrency: ws.menuCurrency,
       menuShowMethod: ws.menuShowMethod,
       menuShowIngredients: ws.menuShowIngredients,
+      menuAccentColor: ws.menuAccentColor,
+      menuTagline: ws.menuTagline,
+      menuLogoId: options.photos ? ws.menuLogoId : null,
       isPublicMenuEnabled: ws.isPublicMenuEnabled,
       flavorLexicon: lexicon.custom ? lexicon.lexicon : null,
     },
@@ -464,6 +478,9 @@ export function checkBackup(input: unknown): Checked {
   if (!settings.success) return { ok: false, error: `backup.workspace.settings: ${settings.error.issues[0]?.message ?? "not valid"}` };
   if (ws.menuTitle != null && (typeof ws.menuTitle !== "string" || ws.menuTitle.length > 255)) return { ok: false, error: "backup.workspace.menuTitle: not valid" };
   if (ws.menuCurrency != null && (typeof ws.menuCurrency !== "string" || !/^[A-Z]{3}$/.test(ws.menuCurrency))) return { ok: false, error: "backup.workspace.menuCurrency: not valid" };
+  if (ws.menuAccentColor != null && (typeof ws.menuAccentColor !== "string" || !/^#[0-9a-f]{6}$/.test(ws.menuAccentColor))) return { ok: false, error: "backup.workspace.menuAccentColor: not valid" };
+  if (ws.menuTagline != null && (typeof ws.menuTagline !== "string" || ws.menuTagline.length > 255)) return { ok: false, error: "backup.workspace.menuTagline: not valid" };
+  if (ws.menuLogoId != null && (typeof ws.menuLogoId !== "string" || !/^[0-9a-f-]{36}$/.test(ws.menuLogoId))) return { ok: false, error: "backup.workspace.menuLogoId: not valid" };
   for (const key of ["menuShowMethod", "menuShowIngredients"] as const) {
     if (ws[key] != null && typeof ws[key] !== "boolean") return { ok: false, error: `backup.workspace.${key}: not valid` };
   }
@@ -553,7 +570,14 @@ export async function restoreBackup(
     const size = data && (await checkStoredPhoto(data));
     if (size) photoRows.push({ ...row, ...size });
   }
-  const file: BackupFile = { ...input, tables: { ...input.tables, bean_photos: photoRows } };
+  // The menu logo, likewise only with a valid file.
+  const logo = input.workspace.menuLogoId ? photos.get(input.workspace.menuLogoId) : undefined;
+  const logoOk = !!logo && !!(await checkStoredPhoto(logo));
+  const file: BackupFile = {
+    ...input,
+    workspace: { ...input.workspace, menuLogoId: logoOk ? input.workspace.menuLogoId : null },
+    tables: { ...input.tables, bean_photos: photoRows },
+  };
   try {
     await insertBackup(file, target, workspaceId, photos);
   } catch (err) {
@@ -569,6 +593,9 @@ async function insertBackup(
   workspaceId: string,
   photos: ReadonlyMap<string, Buffer>,
 ): Promise<void> {
+  // A new id, like every restored photo.
+  const oldLogoId = file.workspace.menuLogoId ?? null;
+  const newLogoId = oldLogoId ? randomUUID() : null;
   await db.transaction(async (tx) => {
     await tx.insert(workspaces).values({
       id: workspaceId,
@@ -579,6 +606,9 @@ async function insertBackup(
       menuCurrency: file.workspace.menuCurrency,
       ...(file.workspace.menuShowMethod != null ? { menuShowMethod: file.workspace.menuShowMethod } : {}),
       ...(file.workspace.menuShowIngredients != null ? { menuShowIngredients: file.workspace.menuShowIngredients } : {}),
+      menuAccentColor: file.workspace.menuAccentColor ?? null,
+      menuTagline: file.workspace.menuTagline ?? null,
+      menuLogoId: newLogoId,
       isPublicMenuEnabled: false,
     });
     await tx.insert(workspaceMembers).values({ userId: target.ownerId, workspaceId, role: "owner" });
@@ -613,5 +643,6 @@ async function insertBackup(
     for (const row of file.tables.bean_photos ?? []) {
       await writePhotoFile(workspaceId, newIds.get("bean_photos")!.get(row.id as string)!, photos.get(row.id as string)!);
     }
+    if (oldLogoId && newLogoId) await writePhotoFile(workspaceId, newLogoId, photos.get(oldLogoId)!);
   });
 }

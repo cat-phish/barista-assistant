@@ -88,3 +88,25 @@ describe("backups with photos: a .zip (docs/api/backup.md §2b)", () => {
     expect((await restoreZip(owner, zip, ws.slug)).status).toBe(409);
   });
 });
+
+describe("the menu logo in backups (docs/api/menu.md §7b)", () => {
+  it("goes in a .zip with its file and comes back under a new id; a JSON file has none", async () => {
+    const { owner, ws } = await withPhotos();
+    const logoId = (await owner.agent.put(`/api/workspaces/${ws.id}/menu/logo`).set("Content-Type", "image/jpeg").send(await jpeg(200, 100))).body.logoId as string;
+    await owner.agent.patch(`/api/workspaces/${ws.id}/menu`).send({ accentColor: "#8A4B2A", tagline: "Since 2026" });
+    const files = unzipSync((await zipBackup(owner, ws.id)).body as Buffer);
+    expect(Object.keys(files)).toContain(`photos/${logoId}.webp`);
+
+    const restored = await restoreZip(owner, zipSync(files), `logo-${ws.slug}`);
+    expect(restored.status, JSON.stringify(restored.body)).toBe(201);
+    const copyId = restored.body.workspaceId as string;
+    const menu = (await owner.agent.get(`/api/workspaces/${copyId}/menu`)).body;
+    expect(menu).toMatchObject({ accentColor: "#8a4b2a", tagline: "Since 2026" });
+    expect(menu.logoId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(menu.logoId).not.toBe(logoId);
+    expect(existsSync(join(photoDir(), copyId, `${menu.logoId}.webp`))).toBe(true);
+
+    const json = (await owner.agent.get(`/api/workspaces/${ws.id}/backup`)).body;
+    expect(json.workspace).toMatchObject({ menuLogoId: null, menuTagline: "Since 2026" });
+  });
+});

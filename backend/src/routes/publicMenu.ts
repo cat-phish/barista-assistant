@@ -1,9 +1,11 @@
+import { access } from "node:fs/promises";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { db } from "../db.js";
 import { sendError } from "../http.js";
+import { photoPath } from "../photos.js";
 import { effectiveRoastAge } from "@barista/shared/roastAge";
-import { BEAN_MENU_FIELDS, beanFreezes, beanProcesses, beans, DEFAULT_WORKSPACE_SETTINGS, drinkIngredients, drinks, ingredients, withDefaults, workspaces, type Bean, type BeanBatchMode, type BeanMenuField, type MethodKind, type Workspace } from "@barista/shared/schema";
+import { BEAN_MENU_FIELDS, beanFreezes, beanProcesses, beans, DEFAULT_WORKSPACE_SETTINGS, drinkIngredients, drinks, ingredients, withDefaults, workspaces, type Bean, type BeanBatchMode, type BeanMenuField, type MenuSize, type MethodKind, type Workspace } from "@barista/shared/schema";
 import { SLUG_PATTERN } from "../validation.js";
 import { loadMenu } from "./menu.js";
 
@@ -115,6 +117,7 @@ export interface PublicMenuItem {
   variantOf: string | null;
   ingredients: string[]; // empty when not shown
   price: number | null;
+  sizes: MenuSize[] | null; // a price per size, instead of price
   available: boolean;
 }
 export interface PublicBeansBlock {
@@ -129,6 +132,9 @@ export interface PublicMenuSection {
 }
 export interface PublicMenuResponse {
   title: string; // the menu's title, else the workspace name
+  tagline: string | null; // a line under the title
+  accentColor: string | null; // "#rrggbb": headings and rules; null = the app's brown
+  logoUrl: string | null; // the logo image (GET /api/public/menu/:slug/logo/:id)
   workspace: Pick<Workspace, "name" | "slug">;
   currency: string | null;
   sections: PublicMenuSection[];
@@ -160,6 +166,23 @@ publicMenuRouter.get(
     res.json(await buildPublicMenu(workspace));
   }
 );
+
+// The logo. Served while the menu is off too, so the builder's preview and
+// Settings show it: the id is unguessable and changes with each upload, so
+// only someone who has seen the menu (or its preview) knows the URL.
+publicMenuRouter.get("/:slug/logo/:logoId", async (req: Request<{ slug: string; logoId: string }>, res: Response) => {
+  const { slug, logoId } = req.params;
+  const [ws] = SLUG_PATTERN.test(slug) && /^[0-9a-f-]{36}$/.test(logoId)
+    ? await db.select({ id: workspaces.id }).from(workspaces).where(and(eq(workspaces.slug, slug), eq(workspaces.menuLogoId, logoId))).limit(1)
+    : [];
+  const path = ws ? photoPath(ws.id, logoId) : null;
+  if (!path || !(await access(path).then(() => true, () => false))) {
+    sendError(res, 404, "Logo not found");
+    return;
+  }
+  res.set("Cache-Control", "public, max-age=31536000, immutable");
+  res.type("image/webp").sendFile(path);
+});
 
 // The menu as guests see it (§7): also the builder's preview (§7b), which
 // members can see while the public menu is off.
@@ -255,6 +278,7 @@ export async function buildPublicMenu(workspace: Pick<Workspace, "id" | "name" |
             variantOf: (parent && menuNameOf.get(parent)) ?? null,
             ingredients: i.drinkId && (i.showIngredients ?? menu.showIngredients) ? ingredientRows.filter((r) => r.drinkId === i.drinkId).map((r) => r.name) : [],
             price: i.price,
+            sizes: i.sizes,
             available: i.available,
           },
         ];
@@ -262,5 +286,10 @@ export async function buildPublicMenu(workspace: Pick<Workspace, "id" | "name" |
     }))
     .filter((s) => s.items.length > 0);
 
-  return { title: menu.title ?? workspace.name, workspace: { name: workspace.name, slug: workspace.slug }, currency: menu.currency, sections };
+  return {
+    title: menu.title ?? workspace.name,
+    tagline: menu.tagline,
+    accentColor: menu.accentColor,
+    logoUrl: menu.logoId ? `/api/public/menu/${encodeURIComponent(workspace.slug)}/logo/${menu.logoId}` : null,
+    workspace: { name: workspace.name, slug: workspace.slug }, currency: menu.currency, sections };
 }

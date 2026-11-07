@@ -2453,3 +2453,31 @@ and what the AI sees. Contract: `api/recipes.md` §5 (prep steps),
   for the AI; prep steps are the recipe's instructions, with a countdown
   when timed. Prep steps go to the AI with the other steps (same switch),
   typed `prep`; AI chat can propose them in a recipe.
+
+## Public menu: branding and sizes (built)
+
+Backlog item 20, branch `menu-branding-sizes`, migration 0102. The guest
+page had one look for every bar, and a drink one price whatever its size
+(2026-11-06). Contract: `api/menu.md` §7b, `api/public-menu.md` §7.
+
+- **Branding**, in Settings → Workspace beside the title: a **tagline**
+  under the title, an **accent colour** (`#rrggbb`) for the title, section
+  headings and rules, and a **logo** above the title. The colour is
+  lightened in dark mode (mixed with white) and Settings warns when it's
+  too light for headings on white (under 3:1). Empty = the app's brown.
+- **Logo:** stored like bean photos (`backend/src/photos.ts`: upright,
+  inside 1024 px, WebP, transparency kept) at
+  `PHOTO_DIR/<workspaceId>/<menuLogoId>.webp`; a new upload gets a new id
+  and removes the old file. Served unauthenticated at
+  `/api/public/menu/:slug/logo/:id`, also while the menu is off, so the
+  preview and Settings can show it: the id is random, so only someone who
+  has seen the menu knows it. The photo sweep keeps it; a `.zip` backup
+  carries it (a JSON one doesn't), restored under a new id.
+- **Sizes:** a free list per item (the user's choice over a menu-wide size
+  list or sizes on the drink): up to 6 `{ label, price }`, in order,
+  instead of the single price, never both. Guests see "8 oz 4.00 · 12 oz
+  4.75 USD". Drinks still have one serving size for brewing; menu sizes
+  don't touch it.
+- **Not built:** installing the guest menu as its own app stays an open
+  question (it was the item's; not now, per the user).
+
