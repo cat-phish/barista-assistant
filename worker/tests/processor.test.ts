@@ -549,3 +549,20 @@ describe("extractionYield (docs/api/brew-logs.md §6)", () => {
     expect(extractionYield({ ...log, tdsPercent: null }, style("pour_over"))).toBeNull();
   });
 });
+
+describe("step temps (docs/api/llm-contract.md §9)", () => {
+  it("sends the analyzed brew's step temps, moved by its stepTempShiftC", async () => {
+    const day8 = logIds.day8!;
+    const [{ recipeId }] = await db.select({ recipeId: brewLogs.recipeId }).from(brewLogs).where(eq(brewLogs.id, day8)) as [{ recipeId: string }];
+    expect((await loadBrewContext(day8))!.recipe!.steps.map((s) => s.targetTempC)).toEqual([85, null, null]);
+    await db.update(recipes).set({ stepTempsFollowBrew: true }).where(eq(recipes.id, recipeId));
+    await db.update(brewLogs).set({ stepTempShiftC: 2 }).where(eq(brewLogs.id, day8));
+    const context = (await loadBrewContext(day8))!;
+    expect(context.recipe).toMatchObject({ targetTempC: 94, stepTempsFollowBrew: true });
+    expect(context.recipe!.steps.map((s) => s.targetTempC)).toEqual([87, null, null]);
+    expect(context.brew.stepTempShiftC).toBe(2);
+    // The recipe itself doesn't change.
+    const [step] = await db.select({ t: recipeSteps.targetTempC }).from(recipeSteps).where(eq(recipeSteps.recipeId, recipeId));
+    expect(step?.t).toBe(85);
+  });
+});

@@ -219,8 +219,8 @@ says why the last analysis failed or wasn't made (e.g. the daily cap), else
   - `stepTempShiftC` (optional, nullable, −100 to 100, 1 decimal): how far this
     brew moved the recipe's step temps (`recipes.md` §5); `null` = as written.
     Clients fix it when the brew leaves setup, so changing the log's
-    temperature afterwards doesn't change it. The AI doesn't use it yet
-    (`docs/backlog.md` item 11).
+    temperature afterwards doesn't change it. The AI sees the step temps
+    moved by it, and the shift itself (`llm-contract.md` §9).
   - `actualYieldGrams` is the **measured** beverage weight: optional,
     nullable, same rules as water. Unlike the recipe's rough
     `expectedYieldGrams`, it's a measurement, and clients show it against the

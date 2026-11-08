@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AiDetail } from "@barista/shared/aiDetails";
-import type { BrewContext, BrewSummary } from "../src/context.js";
+import { scaledToBrew, type BrewContext, type BrewSummary } from "../src/context.js";
 import { buildCompletionRequest, buildSuggestRequest, onlySuggestionsThatApply, onlyWhatApplies, parseAnalysisMessage, parseSuggestionMessage } from "../src/llm.js";
 import { INSTRUCTIONS_INTRO, NOTE_INTRO, PROMPT_SECTION_TEXTS, PROMPT_TEXT } from "@barista/shared/aiPrompt";
 import { buildSystemPrompt, compact, PROMPT_SECTIONS, promptSections, SUGGEST_SECTIONS, toLlmInput, toSuggestInput } from "../src/prompt.js";
@@ -69,6 +69,7 @@ const summary = (over: Partial<BrewSummary> = {}): BrewSummary => ({
   tdsPercent: null,
   extractionYieldPercent: null,
   actualTempC: 93,
+  stepTempShiftC: null,
   actualGrindSetting: 20,
   grindRpm: null,
   steeping: false,
@@ -106,6 +107,7 @@ const context = (over: { brew?: Partial<BrewSummary>; bean?: Partial<BrewContext
     firstDropMinSec: null,
     firstDropMaxSec: null,
     targetTempC: 94,
+    stepTempsFollowBrew: false,
     steepMinHours: null,
     steepMaxHours: null,
     steepTemp: null,
@@ -271,6 +273,49 @@ describe("what the workspace keeps from the AI (Settings → AI)", () => {
     const hidden = toLlmInput(ctx, without("recipeSteps"));
     expect(hidden.recipe).not.toHaveProperty("stepTimeScaling");
     expect(promptSections(hidden)).not.toContain("stepTimes");
+  });
+
+  it("moves step temps by the brew's shift, with the step times (docs/api/llm-contract.md §9)", () => {
+    const r = context().recipe!;
+    const steps = [
+      { ...r.steps[0]!, targetTempC: 85 },
+      { ...r.steps[0]!, stepOrder: 2, stepType: "pour", targetTempC: null, durationSec: 60 },
+      { ...r.steps[0]!, stepOrder: 3, stepType: "pour", targetTempC: 99, durationSec: 60 },
+    ];
+    const recipe = { ...r, steps };
+    expect(scaledToBrew(recipe, 250, 2).steps.map((s) => s.targetTempC)).toEqual([87, null, 100]); // within 0-100
+    expect(scaledToBrew(recipe, 250, -1.5).steps.map((s) => s.targetTempC)).toEqual([83.5, null, 97.5]);
+    expect(scaledToBrew(recipe, 250, null)).toBe(recipe);
+    expect(scaledToBrew(recipe, 250, 0)).toBe(recipe);
+    // Both at once: a double batch's scaled times, and the shifted temps.
+    const both = scaledToBrew({ ...recipe, stepTimeScaling: 1 }, 500, 2);
+    expect(both.steps.map((s) => [s.durationSec, s.targetTempC])).toEqual([[60, 87], [120, null], [120, 100]]);
+    expect(both.expectedFinishMinSec).toBe(150 + 150);
+  });
+
+  it("explains step temps when they differ from the water's or follow it", () => {
+    const base = context();
+    const withSteps = (over: Partial<NonNullable<BrewContext["recipe"]>>, stepTemp: number | null) => ({
+      ...base,
+      recipe: base.recipe && { ...base.recipe, ...over, steps: base.recipe.steps.map((s) => ({ ...s, targetTempC: stepTemp })) },
+    });
+    expect(promptSections(toLlmInput(context()))).not.toContain("stepTemps"); // the step's 94 is the water's 94
+    expect(promptSections(toLlmInput(withSteps({}, null)))).not.toContain("stepTemps");
+    expect(promptSections(toLlmInput(withSteps({}, 85)))).toContain("stepTemps");
+    const follows = withSteps({ stepTempsFollowBrew: true }, 94);
+    expect(toLlmInput(follows).recipe).toMatchObject({ stepTempsFollowBrew: true });
+    expect(toLlmInput(context()).recipe).not.toHaveProperty("stepTempsFollowBrew"); // only when on
+    expect(promptSections(toLlmInput(follows))).toContain("stepTemps");
+    for (const off of ["temp", "recipeSteps"] as const) {
+      const hidden = toLlmInput(follows, without(off));
+      expect(hidden.recipe, off).not.toHaveProperty("stepTempsFollowBrew");
+      expect(promptSections(hidden), off).not.toContain("stepTemps");
+      expect(promptSections(toLlmInput(withSteps({}, 85), without(off))), off).not.toContain("stepTemps");
+    }
+    const shifted = context({ brew: { stepTempShiftC: 2 } });
+    expect(toLlmInput(shifted).brew).toMatchObject({ stepTempShiftC: 2 });
+    expect(toLlmInput(shifted, without("temp")).brew).not.toHaveProperty("stepTempShiftC");
+    expect(toLlmInput(context()).brew).not.toHaveProperty("stepTempShiftC"); // null: as written
   });
 
   it("explains held steps when a brew has a hold, with the marks", () => {

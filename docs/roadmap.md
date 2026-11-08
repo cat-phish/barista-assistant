@@ -2611,3 +2611,27 @@ day, so the backlog's numbers are as before).
   the adjusted time is what the AI already sees.
 - **Not built:** other ways to mark the end (start the countdown before the
   hiss, a tap-anywhere "done" area). Revisit if a fixed offset isn't enough.
+
+
+## Step temps reach the AI (built)
+
+Branch `step-temps-ai`; was backlog 12. The "brews keep a copy of their
+recipe" question it raised is backlog 12 now.
+
+- **Why:** with `stepTempsFollowBrew` a brew moves the recipe's step temps
+  (`stepTempShiftC`), but the worker read them from the recipe as written.
+  A bloom brewed at 87 °C reached the AI as 85 next to the brew's 96 °C water.
+  The prompt never said how the temps relate.
+- **Analysis:** `scaledToBrew` (`worker/src/context.ts`) now applies the
+  brew's shift with `shiftStepTemps` (`@barista/shared/brew`), on top of
+  the step time scaling. The brew sends `stepTempShiftC`, and the recipe
+  sends `stepTempsFollowBrew` when it's on.
+- **Suggest:** the recipe's step temps go as written, because the next brew
+  hasn't picked a temp yet. Each earlier brew says how far it moved them.
+- **Prompt:** a new `stepTemps` section (editable like the others) is
+  included when a step's temp differs from the recipe's, or when the steps
+  follow the brew. It says what the recipe's, the brew's and each step's
+  temp mean. It also says `suggestedTempDelta` / `tempC` are for the water
+  temp, and step temps follow them only with `stepTempsFollowBrew`.
+- **Hiding it:** both new fields go with the existing `temp` switch
+  (Settings → AI); `stepTempsFollowBrew` also goes with `recipeSteps`.
