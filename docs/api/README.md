@@ -22,6 +22,7 @@ means drinks, wherever you see it (code comments use
 | §3e | [brewer-methods.md](brewer-methods.md) | Brewer Methods |
 | §3f | [roasting-machines.md](roasting-machines.md) | Roasting Machines (home roasting) |
 | §3g | [vessels.md](vessels.md) | Vessels (carafes, mugs and cups a yield is weighed in) |
+| §3h | [notes.md](notes.md) | Notes (titled free text the workspace looks up, pinnable) |
 | §4 | [beans.md](beans.md) | Beans |
 | §4b | [bean-processes.md](bean-processes.md) | Bean Processes |
 | §4c | [bean-photos.md](bean-photos.md) | Bean Photos (the bag or label; cover in the list) |

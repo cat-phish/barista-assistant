@@ -103,7 +103,7 @@ work is in `roadmap.md`.
   (`docs/api/bean-label.md` §4d)
 
 ## Bar setup
-One **Bar setup** section with tabs: Brewers, Grinders, Water, Vessels, Prep and Menu.
+One **Bar setup** section with tabs: Brewers, Grinders, Water, Vessels, Prep, Problems, Notes and Menu.
 Brewers and Grinders are tables like Recipes: filter brewers by type (pour
 over, immersion, espresso) and grinders by hand or electric, with a **Show
 archived** checkbox when there are archived ones (where Restore is); sort by
@@ -114,6 +114,14 @@ recipes, drinks, ingredients and prep items): it says what
 would be unlinked or removed and asks for "I understand" first.
 Adding and editing a brewer, grinder, ingredient or prep item happen on their own page
 (the **Add** button sits at the top of each list, like Recipes and Drinks).
+- **Notes:** what you look up again and again but isn't a brew, bean or
+  recipe: cleaning powder per litre, the citric acid for descaling the
+  kettle, a burr-cleaning routine. Each is a title and text formatted like
+  chat replies (bold, lists, headings, tables), shared with the workspace.
+  Search titles and text; **Pin** keeps a note at the top for everyone. A
+  line like "20 g per 1 L" gets a **Scale for** box that works it out for
+  any volume (1.8 L → 36 g). Notes are in backups and export by list; the
+  AI never sees them.
 - **Vessels:** carafes, mugs and cups, each a name and a weight. On the brew
   log, **Weighed** beside the yield or shot weight says how it was weighed:
   directly, or in a vessel. Pick a vessel and the box takes the total, and

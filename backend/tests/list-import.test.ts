@@ -195,6 +195,30 @@ describe("import by list", () => {
     expect(imported).toMatchObject({ methodKinds: ["espresso"], brewerIds: [await brewerId(other, target.id, "V60")] });
   });
 
+  it("notes export picked ones, import matched by title, and copy with the title numbered", async () => {
+    const owner = await newUser();
+    const ws = await newWorkspace(owner);
+    const base = `/api/workspaces/${ws.id}`;
+    const note = async (title: string, body: string) => (await owner.agent.post(`${base}/notes`).send({ title, body })).body.note.id as string;
+    const descaling = await note("Descaling", "20 g citric acid per 1 L");
+    await note("Burr cleaning", "Every 3 months");
+    const picked = await exportOf(owner, base, { lists: ["notes"], ids: { notes: [descaling] } });
+    expect(picked.tables.notes.map((n: { title: string }) => n.title)).toEqual(["Descaling"]);
+
+    const other = await newUser();
+    const target = await newWorkspace(other);
+    const tbase = `/api/workspaces/${target.id}`;
+    await other.agent.post(`${tbase}/notes`).send({ title: "descaling", body: "theirs" });
+    const done = await other.agent.post(`${tbase}/import`).send({ file: await exportOf(owner, base, { lists: ["notes"] }) });
+    expect(done.status, JSON.stringify(done.body)).toBe(200);
+    expect(done.body.tables.find((t: { table: string }) => t.table === "notes")).toEqual({ table: "notes", added: ["Burr cleaning"], matched: [{ name: "Descaling", existing: "descaling" }] });
+    const listed = (await other.agent.get(`${tbase}/notes`)).body.notes as Array<{ title: string; body: string }>;
+    expect(listed.map((n) => [n.title, n.body]).sort()).toEqual([["Burr cleaning", "Every 3 months"], ["descaling", "theirs"]]);
+
+    const copy = await owner.agent.post(`${base}/import`).send({ file: picked, lists: ["notes"], duplicates: "copy" });
+    expect(copy.body.tables.find((t: { table: string }) => t.table === "notes").added).toEqual(["Descaling (2)"]);
+  });
+
   it("a bean copied back into its own workspace gets its bean name numbered, its process reused", async () => {
     const owner = await newUser();
     const ws = await newWorkspace(owner);

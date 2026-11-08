@@ -761,6 +761,28 @@ export const brewProblemBrewers = mysqlTable(
   })
 );
 
+// 5g3. Notes (docs/api/notes.md §3h): titled free text the workspace looks
+// up again and again, formatted like chat replies (body up to 20 000
+// characters, so MEDIUMTEXT). Pinned ones come first; pinning is the
+// workspace's, not a person's. The AI never sees them. Migration 0105.
+export const notes = mysqlTable(
+  "notes",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    title: varchar("title", { length: 100 }).notNull(),
+    body: mediumtext("body").notNull(),
+    pinnedAt: timestamp("pinned_at"), // null = not pinned
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    workspaceTitleUnique: unique("notes_workspace_title_unique").on(table.workspaceId, table.title),
+  })
+);
+
 // 5e. Recipe styles (docs/api/recipe-styles.md §5e): each workspace's list per
 // brewer method, seeded from STYLES_BY_KIND with STYLE_NAMES. brewsLike is the
 // built-in a style brews like (itself for a built-in); extraction yield and
