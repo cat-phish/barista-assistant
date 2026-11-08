@@ -2489,3 +2489,15 @@ page had one look for every bar, and a drink one price whatever its size
 - **Not built:** installing the guest menu as its own app stays an open
   question (it was the item's; not now, per the user).
 
+
+## Recipes sort by brewer and dose (built)
+
+Backlog item 10, branch `recipe-sort-brewer-dose` (2026-11-07). The Recipes
+table showed Brewer and Dose columns, but only Name, Style and Added sorted.
+
+- **Brewer** sorts by the brewer's name (A–Z / Z–A), **Dose** by the coffee
+  dose in grams (lowest / highest first), the first figure in the Dose
+  cell. Both are in the column headers and the Sort by dropdown; ties fall
+  back to the name, as everywhere else (`sortBy` in `lib/listSort.ts`).
+- **Not done:** checking the other list pages for columns that show but
+  don't sort; ask if one turns up.
