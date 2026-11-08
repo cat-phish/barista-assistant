@@ -2552,3 +2552,35 @@ burr-cleaning routine) lived in a phone note outside the app.
   ("descale every month", maybe on the brew page) and notes on a piece of
   equipment became backlog item 25, "Upkeep tasks and reminders".
 
+
+## Notes: calculators instead of automatic scaling (built)
+
+Branch `notes-calculators` (2026-11-07), right after "Notes page". Scaling
+found automatically in the text ("20 g per 1 L") wasn't intentional enough:
+you should be able to write plain notes, and add something to work out on
+purpose. Inspired by Bar Assistant's calculators (inputs and formulas),
+kept general.
+
+- **Notes are blocks:** text and calculators, in any order, as many as
+  needed (up to 50). `notes.body` became `notes.blocks` (JSON): migration
+  0106 turned each body into one text block, 0107 dropped the column.
+  Notes with a body never left `dev`, so backups have no upgrade for them.
+- **Calculators:** inputs (label, key, unit, default) and results (label,
+  key, formula, unit, decimals), worked out in order, so a result can use
+  the ones above it. Formulas: numbers, keys, `+ − * / % ^`, parentheses,
+  `round floor ceil abs sqrt min max`, parsed and worked out by
+  `lib/calc.ts` (never `eval`). Keys come from labels until changed by hand.
+  Templates: amount per volume, ratio, dilution (percent), blank.
+- **Using one:** anyone who can read the note types into its inputs; the
+  values are remembered on the device (per note and block) with a Reset,
+  never saved to the note.
+- **Checks:** the editor won't save until every formula works out (unknown
+  or later keys, syntax, labels, keys). The API checks shapes, keys
+  (unique per calculator, ignoring case) and limits, not formulas; the page
+  shows an error for one it can't work out. A note's request may be up to
+  1 MB (the default is 100 kB).
+- **Removed:** the automatic "20 g per 1 L" detection (`lib/noteScaling.ts`,
+  `NoteScale.vue`).
+- **Not built:** unit conversion between inputs (an input's unit is a
+  label), and the AI still never sees notes.
+

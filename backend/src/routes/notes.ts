@@ -7,7 +7,7 @@ import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { notes, type Note } from "@barista/shared/schema";
-import { updateSchema } from "../validation.js";
+import { noteBlocksSchema, updateSchema } from "../validation.js";
 
 // docs/api/notes.md §3h
 export type NoteSummary = Omit<Note, "workspaceId">;
@@ -19,19 +19,21 @@ interface NoteParams extends WorkspaceParams {
   noteId: string;
 }
 
-export const MAX_NOTE_BODY = 20_000;
+// Text blocks and calculators can be large: a bigger JSON limit than the
+// default 100 kB (app.ts).
+export const NOTE_BODY_PATH = /^\/api\/workspaces\/[^/]+\/notes(\/[^/]+)?$/;
 const noteFields = {
   title: z.string().trim().min(1).max(100),
-  // Kept as written: line breaks and indentation are the formatting.
-  body: z.string().max(MAX_NOTE_BODY),
+  // In order, replaced as a whole; text kept as written (line breaks are formatting).
+  blocks: noteBlocksSchema,
 };
-const createSchema = z.object({ ...noteFields, body: noteFields.body.optional() }).strict();
+const createSchema = z.object({ ...noteFields, blocks: noteFields.blocks.optional() }).strict();
 const updateNoteSchema = updateSchema({ ...noteFields, pinned: z.boolean() });
 
 const summary = {
   id: notes.id,
   title: notes.title,
-  body: notes.body,
+  blocks: notes.blocks,
   pinnedAt: notes.pinnedAt,
   createdAt: notes.createdAt,
   updatedAt: notes.updatedAt,
@@ -76,7 +78,7 @@ notesRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<{ note
   if (!body) return;
   const id = randomUUID();
   try {
-    await db.insert(notes).values({ id, workspaceId, title: body.title, body: body.body ?? "" });
+    await db.insert(notes).values({ id, workspaceId, title: body.title, blocks: body.blocks ?? [] });
   } catch (err) {
     if (duplicate(res, err)) return;
     throw err;

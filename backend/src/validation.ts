@@ -148,3 +148,35 @@ export function updateSchema<T extends z.ZodRawShape>(shape: T) {
     .strict()
     .refine((body) => Object.keys(body).length > 0, "Provide at least one field to update");
 }
+
+// A note's blocks (docs/api/notes.md §3h): text, and calculators whose
+// results are worked out from their inputs by formula. Formulas are only
+// checked for length here; the page parses them (frontend/src/lib/calc.ts)
+// and shows an error for one it can't work out.
+export const MAX_NOTE_TEXT = 20_000; // all its text blocks together
+const calcKey = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,31}$/, "a key like water or per_litre");
+const calcField = { key: calcKey, label: z.string().trim().min(1).max(60), unit: z.string().trim().max(20) };
+const blockId = z.string().min(1).max(36);
+const textBlock = z.object({ id: blockId, type: z.literal("text"), text: z.string().max(MAX_NOTE_TEXT) }).strict();
+const calculatorBlock = z
+  .object({
+    id: blockId,
+    type: z.literal("calculator"),
+    title: z.string().trim().max(100),
+    inputs: z.array(z.object({ ...calcField, value: z.number().min(-1e9).max(1e9) }).strict()).min(1).max(20),
+    results: z.array(z.object({ ...calcField, formula: z.string().trim().min(1).max(300), decimals: z.number().int().min(0).max(6) }).strict()).min(1).max(20),
+  })
+  .strict();
+export const noteBlocksSchema = z
+  .array(z.discriminatedUnion("type", [textBlock, calculatorBlock]))
+  .max(50)
+  .superRefine((blocks, ctx) => {
+    if (new Set(blocks.map((b) => b.id)).size !== blocks.length) ctx.addIssue({ code: "custom", message: "each block id once" });
+    const text = blocks.reduce((n, b) => n + (b.type === "text" ? b.text.length : 0), 0);
+    if (text > MAX_NOTE_TEXT) ctx.addIssue({ code: "custom", message: `at most ${MAX_NOTE_TEXT} characters of text in all` });
+    blocks.forEach((b, i) => {
+      if (b.type !== "calculator") return;
+      const keys = [...b.inputs, ...b.results].map((f) => f.key.toLowerCase());
+      if (new Set(keys).size !== keys.length) ctx.addIssue({ code: "custom", path: [i], message: "each key once in a calculator" });
+    });
+  });

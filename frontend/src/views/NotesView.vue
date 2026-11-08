@@ -1,9 +1,9 @@
 <script setup lang="ts">
 // Notes (docs/api/notes.md §3h), one tab of Bar setup: what the workspace
 // looks up again and again (cleaning powder per litre, a descaling routine).
-// Search by title and text; pinned ones first; a note opens to its formatted
-// text and, for "20 g per 1 L" lines, a Scale for box (NoteScale). Add,
-// edit and delete on NoteFormView. The AI never sees notes.
+// Search by title, text and calculators; pinned ones first; a note opens to
+// its blocks: formatted text, and calculators to type into (NoteCalculator).
+// Add, edit and delete on NoteFormView. The AI never sees notes.
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { errorMessage } from '../api/client';
@@ -12,11 +12,12 @@ import type { Note } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import ChatMarkdown from '../components/ChatMarkdown.vue';
 import ListDataBar from '../components/ListDataBar.vue';
-import NoteScale from '../components/NoteScale.vue';
+import NoteCalculator from '../components/NoteCalculator.vue';
 import SetupTabs from '../components/SetupTabs.vue';
 import { useSelection } from '../composables/useSelection';
 import { matches } from '../lib/chatAttach';
 import { formatAdded } from '../lib/format';
+import { noteSearchText } from '../lib/noteBlocks';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
@@ -27,7 +28,7 @@ const error = ref('');
 const search = ref('');
 
 // In the API's order: pinned first, then the most recently changed.
-const found = computed(() => notes.value.filter((n) => matches(`${n.title}\n${n.body}`, search.value)));
+const found = computed(() => notes.value.filter((n) => matches(noteSearchText(n), search.value)));
 const pinned = computed(() => found.value.filter((n) => n.pinnedAt));
 const others = computed(() => found.value.filter((n) => !n.pinnedAt));
 const groups = computed(() =>
@@ -87,7 +88,7 @@ const selection = useSelection();
       <h1>Bar setup</h1>
     </div>
     <SetupTabs />
-    <p class="muted intro">What you look up again and again: cleaning powder per litre, a descaling routine. Shared with the workspace; the AI doesn't see them.</p>
+    <p class="muted intro">What you look up again and again: a descaling routine, how much cleaning powder for a full tank. Text and calculators, shared with the workspace; the AI doesn't see them.</p>
 
     <p v-if="loading" class="muted" aria-live="polite">Loading notes…</p>
     <section v-else class="card stack" aria-labelledby="notes-title">
@@ -116,9 +117,11 @@ const selection = useSelection();
               </button>
             </div>
             <div v-if="openId === n.id" :id="`note-${n.id}`" class="body stack">
-              <ChatMarkdown v-if="n.body.trim()" :source="n.body" />
-              <p v-else class="muted small">No text yet.</p>
-              <NoteScale :note-id="n.id" :body="n.body" />
+              <template v-for="b in n.blocks" :key="b.id">
+                <ChatMarkdown v-if="b.type === 'text'" :source="b.text" />
+                <NoteCalculator v-else :block="b" :note-id="n.id" />
+              </template>
+              <p v-if="!n.blocks.length" class="muted small">Nothing in it yet.</p>
               <div v-if="workspaces.canEdit" class="actions">
                 <button class="btn btn-secondary" type="button" :disabled="busyId !== null" @click="setPinned(n, !n.pinnedAt)">
                   {{ busyId === n.id ? 'Saving…' : n.pinnedAt ? 'Unpin' : 'Pin' }}
