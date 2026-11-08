@@ -28,11 +28,11 @@ and fix the references.
 - C. Recipes: 8–9
 - D. AI suggestions: 10–13
 - E. Insights: 14–20
-- F. Bar & menu: 21–25
-- G. Home roasting: 26–35
-- H. Accounts: 36–37
-- I. Deployment & the app: 38–39
-- J. Backups: 40
+- F. Bar & menu: 21–26
+- G. Home roasting: 27–36
+- H. Accounts: 37–38
+- I. Deployment & the app: 39–40
+- J. Backups: 41
 
 ---
 
@@ -121,7 +121,7 @@ Where the app's choices live, and what you can switch on, off or take out.
   - Move the ones that are wrong, with a data migration, and make Settings
     say which kind each one is.
 - **Size:** S to review; each move S–M.
-- **Depends on:** nothing; do it before 40, since where a setting lives
+- **Depends on:** nothing; do it before 41, since where a setting lives
   decides how it's backed up, and the audit is the same work.
 - **Open questions:**
   - Is "workspace default, person overrides" worth having, or is it one or
@@ -643,7 +643,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Depends on:** nothing.
 - **Open questions:** does the journal's own manifest and service worker
   get in the way (one origin, one scope `/`), and is it worth it before
-  testing the installed app on phones (item 38)?
+  testing the installed app on phones (item 39)?
 
 ### 24. Menu entries without a drink or brewer
 
@@ -680,10 +680,36 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:**
   - By time only, or also by use (every 200 shots, every 10 kg ground)?
   - Attach notes and tasks to a piece of equipment (the grinder, the
-    espresso machine) and show them on its page? Overlaps with 35
+    espresso machine) and show them on its page? Overlaps with 36
     (roasting machine upkeep).
   - Who gets the reminder: everyone in the workspace, or whoever opts in?
   - Should the AI ever see notes, or their calculators (CLAUDE.md rule 9)?
+
+### 26. Calculator templates: how many inputs
+
+- **Status:** idea
+- **Why:** "Add calculator" starts from **Amount per volume**, which has two
+  inputs (Water and Amount per litre). For a fixed recipe, like descaling
+  at 20 g per litre where only the tank volume changes, the second input is
+  in the way: you have to remove it and write the strength into the formula
+  (`volume * 20`).
+- **Approach:** to decide; options so far:
+  - Amount per volume asks only for the volume, the strength in the
+    formula (`volume * 20`). Quicker for a fixed recipe; changing the
+    strength means editing the note.
+  - The template dropdown starts on **Blank** (one input), the others a
+    click away.
+  - Both, or a choice in the template ("fixed strength" / "strength you can
+    change").
+  Templates are `CALCULATOR_TEMPLATES` in `frontend/src/lib/noteBlocks.ts`;
+  the test there checks each one works out.
+- **Size:** S
+- **Depends on:** nothing (calculators are built).
+- **Open questions:**
+  - Which template should be the default, and should the other templates
+    keep two inputs (Ratio: coffee and ratio; Dilution: total and strength)?
+  - Should a calculator be able to mark an input as fixed (shown, not
+    typed into on the Notes page) instead of moving it into the formula?
 
 ---
 
@@ -699,7 +725,7 @@ Home roasting). Paused here; these are what's next.
   whoever logged it?
 - Should freezing a home-roasted bean pause or extend its rest?
 
-### 26. Live roast timer
+### 27. Live roast timer
 
 - **Status:** planned (branch `roast-timer`)
 - **Why:** roast times are typed in after the roast; a timer running while
@@ -713,7 +739,7 @@ Home roasting). Paused here; these are what's next.
   - Note a temperature at each mark?
   - Keep the screen awake while it runs?
 
-### 27. Roast insights
+### 28. Roast insights
 
 - **Status:** idea
 - **Why:** Insights covers brewing only; a home roaster wants to see what
@@ -726,11 +752,11 @@ Home roasting). Paused here; these are what's next.
   - **rest sweet spot:** brew ratings by days off roast for home roasts,
     suggesting rest days per roast type or green coffee.
 - **Size:** M
-- **Depends on:** nothing; 28 and 32 make it richer.
+- **Depends on:** nothing; 29 and 33 make it richer.
 - **Open questions:** should the rest sweet spot offer to change the
   workspace's default rest days?
 
-### 28. Compare roasts
+### 29. Compare roasts
 
 - **Status:** idea
 - **Why:** with several batches of one green coffee, it's hard to see which
@@ -738,9 +764,9 @@ Home roasting). Paused here; these are what's next.
 - **Approach:** the batches of a green coffee side by side: levels, times,
   temperatures, weight loss, development, and how each one's brews rated.
 - **Size:** M
-- **Depends on:** nothing; can share a branch with 27.
+- **Depends on:** nothing; can share a branch with 28.
 
-### 29. Roast again, and roast plans
+### 30. Roast again, and roast plans
 
 - **Status:** idea
 - **Why:** a good roast is worth repeating, and today the form starts empty.
@@ -752,7 +778,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** S–M (plans are the M)
 - **Depends on:** nothing.
 
-### 30. Running low on roasted coffee
+### 31. Running low on roasted coffee
 
 - **Status:** idea
 - **Why:** the low notice covers green coffee; running out of roasted coffee
@@ -762,10 +788,10 @@ Home roasting). Paused here; these are what's next.
   suggesting the next roast, like the `green-low` job
   (`docs/api/notifications.md` §1b).
 - **Size:** S
-- **Depends on:** nothing; pairs with 29's plans.
+- **Depends on:** nothing; pairs with 30's plans.
 - **Open questions:** a threshold per workspace, or per green coffee?
 
-### 31. Green coffee details and restocks
+### 32. Green coffee details and restocks
 
 - **Status:** idea
 - **Why:** buying the same coffee again means editing the weight left by
@@ -778,7 +804,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** M
 - **Depends on:** nothing.
 
-### 32. Cupping notes per roast
+### 33. Cupping notes per roast
 
 - **Status:** idea
 - **Why:** brew ratings mix the roast with the brewing; cupping judges the
@@ -789,7 +815,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** S–M
 - **Depends on:** nothing.
 
-### 33. Roast details for the AI
+### 34. Roast details for the AI
 
 - **Status:** idea
 - **Why:** for a home roast, how it was roasted explains a lot about how it
@@ -801,7 +827,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** S
 - **Depends on:** nothing.
 
-### 34. Roast curves
+### 35. Roast curves
 
 - **Status:** idea
 - **Why:** roasting software (Artisan) records the whole curve; the log only
@@ -812,7 +838,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** L
 - **Depends on:** nothing.
 
-### 35. Roasting machine upkeep
+### 36. Roasting machine upkeep
 
 - **Status:** idea
 - **Why:** roasters need regular chaff and cleaning, easy to forget.
@@ -825,7 +851,7 @@ Home roasting). Paused here; these are what's next.
 
 ## H. Accounts
 
-### 36. Account management and password reset
+### 37. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -856,13 +882,13 @@ Home roasting). Paused here; these are what's next.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 37. Email verification
+### 38. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 36), inviting a member by email, or notifications by email.
+  (item 37), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -872,9 +898,9 @@ Home roasting). Paused here; these are what's next.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 36).
+  - Shares the mail and token pieces with password reset (item 37).
 - **Size:** M (mail is new to the stack).
-- **Depends on:** nothing; pairs with 36.
+- **Depends on:** nothing; pairs with 37.
 - **Open questions:**
   - Block unverified accounts, or only remind them?
   - What happens to accounts that existed before verification (treat as
@@ -887,7 +913,7 @@ Home roasting). Paused here; these are what's next.
 
 How the app is served and installed.
 
-### 38. Test the installed app on phones
+### 39. Test the installed app on phones
 
 - **Status:** idea
 - **Why:** the PWA is now served as a build over HTTPS (roadmap:
@@ -914,7 +940,7 @@ How the app is served and installed.
 - **Depends on:** the app running on the home server.
 - **Open questions:** none.
 
-### 39. Protect the testing branch on GitHub
+### 40. Protect the testing branch on GitHub
 
 - **Status:** idea
 - **Why:** the server pulls whatever is pushed to `testing`, and a push can
@@ -931,7 +957,7 @@ How the app is served and installed.
 
 What a backup keeps, so moving to a new server loses nothing.
 
-### 40. Back up every setting
+### 41. Back up every setting
 
 - **Status:** idea
 - **Why:** a workspace backup (`docs/api/backup.md` §2b) leaves out what
