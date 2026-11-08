@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Recipes (docs/api/recipes.md §5) as a table: filter by brewer, sort by name or
-// date added (headers or the dropdown), Show archived; a row expands to its
+// Recipes (docs/api/recipes.md §5) as a table: filter by brewer, sort by name,
+// brewer, style, dose or date added (headers or the dropdown), Show archived; a row expands to its
 // details. Archived recipes leave the brew page and drink forms.
 import { computed, onMounted, ref, watch } from 'vue';
 import { brewersApi } from '../api/brewers';
@@ -35,7 +35,10 @@ const viewKey = (what: string) => `recipes.${what}.${workspaces.current?.id ?? '
 const ALL = 'all';
 const columns: SortColumns<Recipe> = {
   name: nameColumn(),
+  brewer: { label: 'Brewer', value: (r) => r.brewer.name, asc: 'A–Z', desc: 'Z–A' },
   style: { label: 'Style', value: (r) => r.style?.name ?? null, asc: 'A–Z', desc: 'Z–A' },
+  // The coffee dose in grams, the first figure in the Dose cell.
+  dose: { label: 'Dose', value: (r) => r.targetDoseGrams, asc: 'Lowest first', desc: 'Highest first' },
   added: addedColumn(),
 };
 
