@@ -14,6 +14,7 @@ const COUNTED: Array<[table: string, one: string, many: string]> = [
   ['grinders', 'grinder', 'grinders'],
   ['water_profiles', 'water profile', 'water profiles'],
   ['vessels', 'vessel', 'vessels'],
+  ['notes', 'note', 'notes'],
   ['menu_items', 'menu item', 'menu items'],
   ['bean_photos', 'photo', 'photos'],
 ];
@@ -74,6 +75,7 @@ export const COMES_ALONG: Record<ListName, string | null> = {
   vessels: null,
   prep_tools: 'the brewers each is offered for, with their methods',
   brew_problems: null,
+  notes: null,
   brew_logs: 'each brew’s bean, recipe, grinder, water, vessel, drink, prep items and problems',
 };
 
@@ -83,7 +85,7 @@ export function copyExample(file: BackupFile, lists: readonly ListName[]): strin
   for (const list of lists) {
     if (list === 'brew_logs') continue;
     const first = file.tables[list]?.[0] as Record<string, unknown> | undefined;
-    const name = first?.[list === 'beans' ? 'beanName' : 'name'];
+    const name = first?.[list === 'beans' ? 'beanName' : list === 'notes' ? 'title' : 'name'];
     if (typeof name === 'string' && name) return `${name} (2)`;
   }
   return 'Name (2)';
@@ -122,6 +124,7 @@ export const LIST_LABELS: Record<ListName, string> = {
   vessels: 'Vessels',
   prep_tools: 'Prep',
   brew_problems: 'Brew problems',
+  notes: 'Notes',
   brew_logs: 'Journal (brews)',
 };
 const TABLE_LABELS: Record<string, string> = {

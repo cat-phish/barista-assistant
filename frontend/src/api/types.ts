@@ -419,6 +419,16 @@ export interface PrepTool {
 }
 export type PrepToolRef = Pick<PrepTool, 'id' | 'name'>;
 
+// docs/api/notes.md §3h: titled free text, formatted like chat replies.
+export interface Note {
+  id: string;
+  title: string;
+  body: string; // lib/markdown.ts's subset
+  pinnedAt: string | null; // set = pinned, for the whole workspace
+  createdAt: string;
+  updatedAt: string;
+}
+
 // docs/api/brew-problems.md §6b: what went wrong while brewing, a checklist
 // like prep tools (ordered; offered for its methods and brewers).
 export interface BrewProblem {

@@ -33,6 +33,8 @@ async function populated() {
   const carafe = (await post("vessels", { name: "Carafe", weightGrams: 312.5 })).vessel.id as string;
   const v60 = await brewerId(owner, ws.id, "V60");
   const stalled = (await post("brew-problems", { name: "Paper taste", methodKinds: ["espresso"], brewerIds: [v60] })).problem.id as string;
+  const note = (await post("notes", { title: "Descaling", body: "- 20 g citric acid per 1 L\n- Rinse **twice**" })).note.id as string;
+  await owner.agent.patch(`${base}/notes/${note}`).send({ pinned: true });
   const wdt = (await post("prep-tools", { name: "Needle", methodKinds: ["espresso"], brewerIds: [v60] })).tool.id as string;
   const recipe = (
     await post("recipes", {
@@ -83,7 +85,7 @@ async function populated() {
 
 // What the workspace looks like through the API, without IDs (they differ
 // after a restore) and with lists in a stable order.
-const LISTS = ["bean-processes", "brewer-methods", "recipe-styles", "grinders", "roasting-machines", "green-coffees", "roasts", "water-profiles", "prep-tools", "brew-problems", "brewers", "beans", "recipes", "ingredients", "drink-categories", "drinks", "menu", "brew-logs"];
+const LISTS = ["bean-processes", "brewer-methods", "recipe-styles", "grinders", "roasting-machines", "green-coffees", "roasts", "water-profiles", "prep-tools", "brew-problems", "notes", "brewers", "beans", "recipes", "ingredients", "drink-categories", "drinks", "menu", "brew-logs"];
 function strip(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(strip);
   if (typeof value !== "object" || value === null) return value;

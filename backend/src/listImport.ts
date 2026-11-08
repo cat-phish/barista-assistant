@@ -8,7 +8,7 @@ import { buildBackup, TABLE_INFO, type BackupFile, type BackupOptions, type Back
 import { db } from "./db.js";
 
 // What can be exported or imported on its own (table names, as in the file).
-export const LISTS = ["beans", "recipes", "drinks", "ingredients", "brewers", "grinders", "water_profiles", "vessels", "prep_tools", "brew_problems", "brew_logs"] as const;
+export const LISTS = ["beans", "recipes", "drinks", "ingredients", "brewers", "grinders", "water_profiles", "vessels", "prep_tools", "brew_problems", "notes", "brew_logs"] as const;
 export type ListName = (typeof LISTS)[number];
 
 const lower = (v: unknown) => String(v ?? "").trim().toLowerCase();
@@ -29,6 +29,7 @@ export const MATCH_KEYS: Record<string, (row: BackupRow) => string[]> = {
   vessels: (r) => [lower(r.name)],
   prep_tools: (r) => [lower(r.name)],
   brew_problems: (r) => [lower(r.name)],
+  notes: (r) => [lower(r.title)],
   ingredients: (r) => [lower(r.name)],
   drink_categories: (r) => [lower(r.name)],
   brewers: (r) => [lower(r.name)],
@@ -46,8 +47,8 @@ export const MATCH_KEYS: Record<string, (row: BackupRow) => string[]> = {
 };
 
 // The column a copy's "(2)" goes on: its name, or for a bean its bean name
-// (the roaster stays). Brews have none and are never copied.
-const NAME_COLUMN: Record<string, string> = { beans: "beanName" };
+// (the roaster stays), for a note its title. Brews have none and are never copied.
+const NAME_COLUMN: Record<string, string> = { beans: "beanName", notes: "title" };
 const nameColumn = (table: string) => NAME_COLUMN[table] ?? "name";
 
 // How a row is named in a summary.
@@ -57,7 +58,7 @@ export function rowLabel(table: string, r: BackupRow): string {
     return [r.roasterName, r.beanName, extra ? `(${extra})` : ""].filter(Boolean).join(" ");
   }
   if (table === "brew_logs") return `Brew of ${new Date(r.timestamp as string | Date).toISOString().slice(0, 16).replace("T", " ")}`;
-  return String(r.name ?? "");
+  return String(r[nameColumn(table)] ?? "");
 }
 
 // The chosen rows plus everything they need: their child rows (steps,

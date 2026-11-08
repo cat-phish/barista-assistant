@@ -60,7 +60,7 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   `YYYY-MM-DD`, decimals numbers.
 - **Tables, in restore order:** `brewer_methods`, `bean_processes`,
   `recipe_styles`, `grinders`, `water_profiles`, `vessels`, `prep_tools`,
-  `brew_problems`, `ingredients`, `drink_categories`, `brewers`,
+  `brew_problems`, `notes`, `ingredients`, `drink_categories`, `brewers`,
   `roasting_machines`, `green_coffees`, `prep_tool_brewers`,
   `brew_problem_brewers`, `beans`,
   `bean_freezes`, `bean_photos`, `roasts`, `recipes`, `recipe_steps`, `recipe_grind_settings`, `recipe_prep_tools`,
@@ -187,8 +187,8 @@ too. Where the app offers them: "Where it is" above. Code:
 `backend/src/listImport.ts`.
 
 - **Lists:** `beans`, `recipes`, `drinks`, `ingredients`, `brewers`,
-  `grinders`, `water_profiles`, `vessels`, `prep_tools`, `brew_problems`, `brew_logs`
-  (the journal).
+  `grinders`, `water_profiles`, `vessels`, `prep_tools`, `brew_problems`, `notes`,
+  `brew_logs` (the journal).
 - **The file** is the backup format above plus `"scope": "lists"` and
   `"lists": [...]`. Besides the chosen rows it holds their child rows
   (steps, grind starting points, freezes, a drink's ingredients, a brew's
@@ -209,12 +209,13 @@ too. Where the app offers them: "Where it is" above. Code:
   | `prep_tools` | prep items, the brewers each is offered for | those brewers (→ as brewers) |
   | `brew_problems` | brew problems, the brewers each is offered for | those brewers (→ as brewers) |
   | `grinders`, `water_profiles`, `vessels` | themselves | – |
+  | `notes` | themselves | – |
   | `brew_logs` | brews, their marks, prep and problem ticks, AI analyses | bean (→ as beans), recipe (→ as recipes), grinder, water profile, vessel, drink (→ as drinks), brewer, prep items, brew problems |
 - **Matching** (`MATCH_KEYS`): a row is "already here" when the workspace
   has one with the same key, and the import uses that one instead:
   - by name (case-insensitive) for brewers, grinders, water profiles, vessels, prep
     items, brew problems, ingredients, drink categories, menu sections,
-    roasting machines and green coffees;
+    roasting machines and green coffees; notes by title;
   - roasts by when they were roasted and their green coffee;
   - brewer methods and bean processes by built-in key or name; recipe
     styles by method and built-in key or name;
@@ -228,7 +229,8 @@ too. Where the app offers them: "Where it is" above. Code:
   the parent is already here.
 - **Duplicates:** `"existing"` (default) uses what's here; `"copy"` adds the
   chosen lists' items again, renamed `"House V60 (2)"` (a bean's bean name
-  gets the number, the roaster stays: `"Test Bean (2)"`). What they need is
+  gets the number, the roaster stays: `"Test Bean (2)"`; a note's title:
+  `"Descaling (2)"`). What they need is
   still reused, and brews are never copied.
 - Added rows get new IDs, the importer as their brewer, and keep archive
   dates and "date added"; an added water profile is never the default.

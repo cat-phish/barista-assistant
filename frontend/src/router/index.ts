@@ -98,6 +98,9 @@ export const router = createRouter({
     { path: '/setup/problems', name: 'brew-problems', component: () => import('../views/BrewProblemsView.vue'), meta: { requiresWorkspace: true } },
     { path: '/setup/problems/new', name: 'brew-problem-new', component: () => import('../views/BrewProblemFormView.vue'), meta: { requiresWorkspace: true, requiresEditor: true } },
     { path: '/setup/problems/:id/edit', name: 'brew-problem-edit', component: () => import('../views/BrewProblemFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresEditor: true } },
+    { path: '/setup/notes', name: 'notes', component: () => import('../views/NotesView.vue'), meta: { requiresWorkspace: true } },
+    { path: '/setup/notes/new', name: 'note-new', component: () => import('../views/NoteFormView.vue'), meta: { requiresWorkspace: true, requiresEditor: true } },
+    { path: '/setup/notes/:id/edit', name: 'note-edit', component: () => import('../views/NoteFormView.vue'), props: true, meta: { requiresWorkspace: true, requiresEditor: true } },
     // Categories moved to the Drinks page; old links and bookmarks still land there.
     { path: '/setup/categories', name: 'categories', redirect: { name: 'drinks', hash: '#categories' } },
     { path: '/setup/menu', name: 'menu-builder', component: () => import('../views/MenuBuilderView.vue'), meta: { requiresWorkspace: true } },

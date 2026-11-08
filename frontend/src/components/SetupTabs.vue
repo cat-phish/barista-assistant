@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Tabs across the Bar setup screens: brewers, grinders, water, vessels, prep
-// tools, brew problems and the public menu (arranged by hand, §7b). Drink
+// tools, brew problems, notes and the public menu (arranged by hand, §7b). Drink
 // categories live on Drinks.
 import SectionTabs from './SectionTabs.vue';
 
@@ -11,6 +11,7 @@ const tabs = [
   { to: { name: 'vessels' }, text: 'Vessels' },
   { to: { name: 'prep-tools' }, text: 'Prep' },
   { to: { name: 'brew-problems' }, text: 'Problems' },
+  { to: { name: 'notes' }, text: 'Notes' },
   { to: { name: 'menu-builder' }, text: 'Menu' },
 ];
 </script>

@@ -973,6 +973,29 @@ export const brewProblemBrewers = mysqlTable(
   })
 );
 
+// 5g3. Notes (docs/api/notes.md §3h): titled free text the workspace looks
+// up again and again (how much cleaning powder per litre, a descaling
+// routine), formatted like chat replies. Pinned ones come first; pinning is
+// the workspace's, not a person's. The AI never sees them.
+export const notes = mysqlTable(
+  "notes",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    title: varchar("title", { length: 100 }).notNull(),
+    // Up to 20 000 characters: more than TEXT's 64 KB in UTF-8.
+    body: mediumtext("body").notNull(),
+    pinnedAt: timestamp("pinned_at"), // null = not pinned
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    workspaceTitleUnique: unique("notes_workspace_title_unique").on(table.workspaceId, table.title),
+  })
+);
+
 // 5e. Recipe styles (docs/api/recipe-styles.md §5e): each workspace's list of
 // how a recipe brews, per brewer method, seeded with the built-ins below. A
 // style "brews like" a built-in (brewsLike): itself for a built-in, the one
@@ -1841,6 +1864,7 @@ export type NewGrinder = typeof grinders.$inferInsert;
 export type WaterProfile = typeof waterProfiles.$inferSelect;
 export type PrepTool = typeof prepTools.$inferSelect;
 export type BrewProblem = typeof brewProblems.$inferSelect;
+export type Note = typeof notes.$inferSelect;
 export type RecipeGrindSetting = typeof recipeGrindSettings.$inferSelect;
 export type RecipeStepType = (typeof RECIPE_STEP_TYPES)[number];
 export type Recipe = typeof recipes.$inferSelect;

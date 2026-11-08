@@ -662,27 +662,27 @@ What the analysis worker sends to the LLM and what comes back.
   - Can it later be turned into a real drink, keeping its place and price?
   - Check backups and the list import carry the new type.
 
-### 25. Notes page
+### 25. Upkeep tasks and reminders
 
 - **Status:** idea
-- **Why:** some things get looked up again and again but aren't a brew,
-  bean or recipe: how much cleaning powder per litre for the espresso
-  machine, the citric acid for descaling the kettle, a burr-cleaning
-  routine. They end up in a phone note outside the app.
-- **Approach:** a Notes page in the workspace: titled notes with free text
-  (formatted like chat replies), searchable and pinnable, shared with the
-  workspace. A new table, so CLAUDE.md rule 8 (backups and the list
-  import).
+- **Why:** upkeep that comes round again is easy to forget: descaling the
+  kettle every month, backflushing the espresso machine, cleaning the burrs.
+  Notes (built, see the roadmap) hold how to do it, but not when.
+- **Approach:** recurring tasks in the workspace ("Descale the kettle,
+  every 4 weeks"), each with when it was last done and a **Done** button.
+  Due ones remind through the notification channels (§1b, like the rate
+  later reminder) and could show as a nudge on the brew page. A task could
+  link to the note that says how. A new table, so CLAUDE.md rule 8.
 - **Size:** M
-- **Depends on:** nothing.
+- **Depends on:** nothing (Notes is built).
 - **Open questions:**
-  - Free text only, or amount-per-volume lines that scale (20 g per 1 L →
-    for 1.8 L)?
-  - Notes on a piece of equipment (the grinder, the espresso machine) as
-    well as, or instead of, a page? Overlaps with 35 (roasting machine
-    upkeep).
-  - Reminders ("descale every 4 weeks") through notifications?
-  - Where it goes in the navigation; should the AI ever see notes?
+  - By time only, or also by use (every 200 shots, every 10 kg ground)?
+  - Attach notes and tasks to a piece of equipment (the grinder, the
+    espresso machine) and show them on its page? Overlaps with 35
+    (roasting machine upkeep).
+  - Who gets the reminder: everyone in the workspace, or whoever opts in?
+  - Notes left out for now: amounts that scale are built; should the AI
+    ever see notes (CLAUDE.md rule 9)?
 
 ---
 

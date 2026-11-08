@@ -28,7 +28,7 @@ async function deleted(): Promise<void> {
   <section class="card danger-zone">
     <div>
       <h2>Delete this {{ KIND_NAMES[kind] ?? kind }}</h2>
-      <p class="muted small">It's gone for good. You'll see what uses it before anything is deleted.</p>
+      <p class="muted small">It's gone for good.<template v-if="kind !== 'note'"> You'll see what uses it before anything is deleted.</template></p>
     </div>
     <button class="btn btn-danger" type="button" @click="open = true">Delete</button>
   </section>

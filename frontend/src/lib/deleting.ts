@@ -2,7 +2,7 @@
 // (docs/api/README.md, "Archiving and deleting"). Unit-tested in deleting.test.ts.
 
 export type Usage = Record<string, number>;
-export type DeletableKind = 'brewer' | 'grinder' | 'water' | 'tool' | 'recipe' | 'drink' | 'ingredient' | 'process' | 'style' | 'method' | 'problem' | 'roaster' | 'green' | 'vessel';
+export type DeletableKind = 'brewer' | 'grinder' | 'water' | 'tool' | 'recipe' | 'drink' | 'ingredient' | 'process' | 'style' | 'method' | 'problem' | 'roaster' | 'green' | 'vessel' | 'note';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const be = (n: number) => (n === 1 ? 'is' : 'are');
@@ -25,6 +25,7 @@ const WARNINGS: Record<DeletableKind, Record<string, (n: number) => string>> = {
     recipeCount: (n) => `${plural(n, 'recipe')} will no longer start with it ticked.`,
   },
   problem: { brewLogCount: (n) => `${plural(n, 'brew')} will no longer list this problem.` },
+  note: {}, // nothing uses a note (docs/api/notes.md §3h)
   recipe: {
     brewLogCount: (n) => `${plural(n, 'brew')} will lose their recipe. Everything else in them stays.`,
     drinkCount: (n) => `${plural(n, 'drink')} will lose it as their default recipe.`,

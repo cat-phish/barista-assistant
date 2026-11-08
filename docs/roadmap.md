@@ -2522,3 +2522,33 @@ sort (Category, Method); the rest already sorted by every column.
   checked, fails too). The sort columns can have more than the table (Beans:
   date purchased, variety). `TableHead` makes every header a sort button;
   `tableColumns.test.ts` holds the type checks.
+
+
+## Notes page (built)
+
+Backlog item 25, branch `notes-page` (2026-11-07). Things that get looked up
+again and again (cleaning powder per litre, descaling the kettle, a
+burr-cleaning routine) lived in a phone note outside the app.
+
+- **What:** Bar setup → **Notes**, after Problems. Titled notes with text
+  formatted like chat replies (`ChatMarkdown.vue`, `lib/markdown.ts`: drawn as
+  elements, never HTML), shared with the workspace. Search matches every word
+  in the title or text; pinned notes come first, then the most recently
+  changed. A note opens in the list; adding, editing and deleting are on its
+  own page. API `docs/api/notes.md` §3h; table `notes` (migration 0105), the
+  body MEDIUMTEXT for up to 20 000 characters.
+- **Scaling amounts:** a line like "20 g per 1 L", "2 tablets per litre" or
+  "1 tbsp / 500 ml" gets a **Scale for** box under the note (ml, cl, dl, L,
+  fl oz; a decimal comma is fine). It's the page's own
+  (`lib/noteScaling.ts`, `NoteScale.vue`); only the last volume is
+  remembered, per note on the device. The default unit follows the volume
+  preference (L, or fl oz).
+- **Decided:** pinning is the workspace's (`pinnedAt` on the note), not a
+  person's. Deleting a note has no "I understand" (nothing uses it, rule 7).
+  Notes are in backups (no version bump: an older file without the table
+  counts as empty) and export or import by list, matched by title, a copy's
+  title numbered.
+- **Not built:** the AI never sees notes. Reminders and recurring tasks
+  ("descale every month", maybe on the brew page) and notes on a piece of
+  equipment became backlog item 25, "Upkeep tasks and reminders".
+
