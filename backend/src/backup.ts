@@ -92,7 +92,7 @@ import {
   workspaces,
 } from "@barista/shared/schema";
 import { db } from "./db.js";
-import { workspaceSettingsObject } from "./validation.js";
+import { noteBlocksSchema, workspaceSettingsObject } from "./validation.js";
 import { checkStoredPhoto, removeWorkspacePhotos, writePhotoFile } from "./photos.js";
 
 export const BACKUP_FORMAT = "barista-backup";
@@ -286,6 +286,7 @@ const JSON_SCHEMAS: Record<string, z.ZodType> = {
     .nullable(),
   "prep_tools.methodKinds": z.array(z.enum(METHOD_KINDS)),
   "brew_problems.methodKinds": z.array(z.enum(METHOD_KINDS)),
+  "notes.blocks": noteBlocksSchema,
   "llm_analyses.request": aiRequest,
   "parameter_suggestions.request": aiRequest,
   "parameter_suggestions.alternativesAsked": z.array(z.enum(SUGGEST_ALTERNATIVES)).nullable(),

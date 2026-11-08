@@ -761,10 +761,18 @@ export const brewProblemBrewers = mysqlTable(
   })
 );
 
-// 5g3. Notes (docs/api/notes.md §3h): titled free text the workspace looks
-// up again and again, formatted like chat replies (body up to 20 000
-// characters, so MEDIUMTEXT). Pinned ones come first; pinning is the
-// workspace's, not a person's. The AI never sees them. Migration 0105.
+// 5g3. Notes (docs/api/notes.md §3h): what the workspace looks up again and
+// again, made of blocks: text formatted like chat replies, and calculators
+// (inputs, and results worked out from them by formula). Pinned ones come
+// first; pinning is the workspace's, not a person's. The AI never sees them.
+// Migration 0105; 0106–0107 turned the text-only body into blocks.
+export const NOTE_BLOCK_TYPES = ["text", "calculator"] as const;
+export interface NoteTextBlock { id: string; type: "text"; text: string }
+export interface NoteCalcInput { key: string; label: string; unit: string; value: number } // value: the default
+export interface NoteCalcResult { key: string; label: string; unit: string; formula: string; decimals: number }
+export interface NoteCalculatorBlock { id: string; type: "calculator"; title: string; inputs: NoteCalcInput[]; results: NoteCalcResult[] }
+export type NoteBlock = NoteTextBlock | NoteCalculatorBlock;
+
 export const notes = mysqlTable(
   "notes",
   {
@@ -773,7 +781,7 @@ export const notes = mysqlTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     title: varchar("title", { length: 100 }).notNull(),
-    body: mediumtext("body").notNull(),
+    blocks: jsonValue<NoteBlock[]>("blocks").notNull(), // in order; [] = empty (noteBlocksSchema)
     pinnedAt: timestamp("pinned_at"), // null = not pinned
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),

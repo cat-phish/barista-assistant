@@ -228,7 +228,9 @@ Recording a brew: what's measured, and how fast it is to log.
   - Making water from scratch, blending (tap with distilled 1:3), or both?
   - Which minerals and concentrates to offer, and can people add their own
     (ppm added per gram per litre)?
-  - Where it lives: Bar setup → Water, or the notes page (25)?
+  - Where it lives: Bar setup → Water, or as a note's calculator (notes
+    have calculators with inputs and formulas, see the roadmap)? A note
+    can already hold a fixed recipe; the open part is targets and minerals.
 
 ## C. Recipes
 
@@ -681,8 +683,7 @@ What the analysis worker sends to the LLM and what comes back.
     espresso machine) and show them on its page? Overlaps with 35
     (roasting machine upkeep).
   - Who gets the reminder: everyone in the workspace, or whoever opts in?
-  - Notes left out for now: amounts that scale are built; should the AI
-    ever see notes (CLAUDE.md rule 9)?
+  - Should the AI ever see notes, or their calculators (CLAUDE.md rule 9)?
 
 ---
 

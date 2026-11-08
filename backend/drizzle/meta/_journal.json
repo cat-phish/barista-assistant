@@ -743,6 +743,20 @@
       "when": 1794118742367,
       "tag": "0105_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "5",
+      "when": 1794121228331,
+      "tag": "0106_note_blocks",
+      "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "5",
+      "when": 1794121229158,
+      "tag": "0107_drop_note_body",
+      "breakpoints": true
     }
   ]
 }

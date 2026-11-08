@@ -115,13 +115,16 @@ would be unlinked or removed and asks for "I understand" first.
 Adding and editing a brewer, grinder, ingredient or prep item happen on their own page
 (the **Add** button sits at the top of each list, like Recipes and Drinks).
 - **Notes:** what you look up again and again but isn't a brew, bean or
-  recipe: cleaning powder per litre, the citric acid for descaling the
-  kettle, a burr-cleaning routine. Each is a title and text formatted like
-  chat replies (bold, lists, headings, tables), shared with the workspace.
-  Search titles and text; **Pin** keeps a note at the top for everyone. A
-  line like "20 g per 1 L" gets a **Scale for** box that works it out for
-  any volume (1.8 L → 36 g). Notes are in backups and export by list; the
-  AI never sees them.
+  recipe: a descaling routine, how much cleaning powder for a full tank, a
+  burr-cleaning routine. A note has a title and blocks in any order:
+  **text** formatted like chat replies (bold, lists, headings, tables), and
+  **calculators**. A calculator has inputs (Water in tank: 1.8 L) and
+  results worked out by formula (Descaler powder = `water * per_litre`, 36
+  g); start from a template (amount per volume, ratio, dilution) or blank.
+  Anyone can type into a calculator's inputs: it's remembered on that
+  device and doesn't change the note. Search titles, text and calculators;
+  **Pin** keeps a note at the top for everyone. Notes are in backups and
+  export by list; the AI never sees them.
 - **Vessels:** carafes, mugs and cups, each a name and a weight. On the brew
   log, **Weighed** beside the yield or shot weight says how it was weighed:
   directly, or in a vessel. Pick a vessel and the box takes the total, and

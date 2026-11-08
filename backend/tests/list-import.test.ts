@@ -199,7 +199,7 @@ describe("import by list", () => {
     const owner = await newUser();
     const ws = await newWorkspace(owner);
     const base = `/api/workspaces/${ws.id}`;
-    const note = async (title: string, body: string) => (await owner.agent.post(`${base}/notes`).send({ title, body })).body.note.id as string;
+    const note = async (title: string, text: string) => (await owner.agent.post(`${base}/notes`).send({ title, blocks: [{ id: "t1", type: "text", text }] })).body.note.id as string;
     const descaling = await note("Descaling", "20 g citric acid per 1 L");
     await note("Burr cleaning", "Every 3 months");
     const picked = await exportOf(owner, base, { lists: ["notes"], ids: { notes: [descaling] } });
@@ -208,12 +208,12 @@ describe("import by list", () => {
     const other = await newUser();
     const target = await newWorkspace(other);
     const tbase = `/api/workspaces/${target.id}`;
-    await other.agent.post(`${tbase}/notes`).send({ title: "descaling", body: "theirs" });
+    await other.agent.post(`${tbase}/notes`).send({ title: "descaling", blocks: [{ id: "t1", type: "text", text: "theirs" }] });
     const done = await other.agent.post(`${tbase}/import`).send({ file: await exportOf(owner, base, { lists: ["notes"] }) });
     expect(done.status, JSON.stringify(done.body)).toBe(200);
     expect(done.body.tables.find((t: { table: string }) => t.table === "notes")).toEqual({ table: "notes", added: ["Burr cleaning"], matched: [{ name: "Descaling", existing: "descaling" }] });
-    const listed = (await other.agent.get(`${tbase}/notes`)).body.notes as Array<{ title: string; body: string }>;
-    expect(listed.map((n) => [n.title, n.body]).sort()).toEqual([["Burr cleaning", "Every 3 months"], ["descaling", "theirs"]]);
+    const listed = (await other.agent.get(`${tbase}/notes`)).body.notes as Array<{ title: string; blocks: Array<{ text: string }> }>;
+    expect(listed.map((n) => [n.title, n.blocks[0]!.text]).sort()).toEqual([["Burr cleaning", "Every 3 months"], ["descaling", "theirs"]]);
 
     const copy = await owner.agent.post(`${base}/import`).send({ file: picked, lists: ["notes"], duplicates: "copy" });
     expect(copy.body.tables.find((t: { table: string }) => t.table === "notes").added).toEqual(["Descaling (2)"]);

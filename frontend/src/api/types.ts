@@ -419,11 +419,38 @@ export interface PrepTool {
 }
 export type PrepToolRef = Pick<PrepTool, 'id' | 'name'>;
 
-// docs/api/notes.md §3h: titled free text, formatted like chat replies.
+// docs/api/notes.md §3h: a titled note made of blocks, text (lib/markdown.ts's
+// subset) and calculators (lib/calc.ts). Mirrors @barista/shared/schema.
+export interface NoteTextBlock {
+  id: string;
+  type: 'text';
+  text: string;
+}
+export interface NoteCalcInput {
+  key: string; // what formulas call it
+  label: string;
+  unit: string;
+  value: number; // the default
+}
+export interface NoteCalcResult {
+  key: string;
+  label: string;
+  unit: string;
+  formula: string; // over the inputs and earlier results
+  decimals: number;
+}
+export interface NoteCalculatorBlock {
+  id: string;
+  type: 'calculator';
+  title: string;
+  inputs: NoteCalcInput[];
+  results: NoteCalcResult[];
+}
+export type NoteBlock = NoteTextBlock | NoteCalculatorBlock;
 export interface Note {
   id: string;
   title: string;
-  body: string; // lib/markdown.ts's subset
+  blocks: NoteBlock[];
   pinnedAt: string | null; // set = pinned, for the whole workspace
   createdAt: string;
   updatedAt: string;

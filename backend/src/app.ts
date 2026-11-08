@@ -28,7 +28,7 @@ import { prepToolsRouter } from "./routes/prepTools.js";
 import { backupRouter, LARGE_BODY_PATH } from "./routes/backup.js";
 import { serverRouter } from "./routes/server.js";
 import { brewProblemsRouter } from "./routes/brewProblems.js";
-import { notesRouter } from "./routes/notes.js";
+import { NOTE_BODY_PATH, notesRouter } from "./routes/notes.js";
 import { flavorLexiconRouter } from "./routes/flavorLexicon.js";
 import { ingredientsRouter } from "./routes/ingredients.js";
 import { drinkCategoriesRouter } from "./routes/drinkCategories.js";
@@ -58,7 +58,10 @@ app.use(cors({ origin: config.corsOrigin, credentials: true }));
 const jsonBody = express.json();
 const restoreBody = express.json({ limit: "50mb" });
 const labelBody = express.json({ limit: "25mb" }); // up to 6 photos, base64
-app.use((req, res, next) => (LARGE_BODY_PATH.test(req.path) ? restoreBody : LABEL_BODY_PATH.test(req.path) ? labelBody : jsonBody)(req, res, next));
+const noteBody = express.json({ limit: "1mb" }); // a note's blocks (docs/api/notes.md §3h)
+const bodyParser = (path: string) =>
+  LARGE_BODY_PATH.test(path) ? restoreBody : LABEL_BODY_PATH.test(path) ? labelBody : NOTE_BODY_PATH.test(path) ? noteBody : jsonBody;
+app.use((req, res, next) => bodyParser(req.path)(req, res, next));
 app.use(cookieParser());
 
 app.get("/health", async (_req: Request, res: Response<HealthResponse>) => {

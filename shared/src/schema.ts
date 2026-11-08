@@ -973,10 +973,38 @@ export const brewProblemBrewers = mysqlTable(
   })
 );
 
-// 5g3. Notes (docs/api/notes.md §3h): titled free text the workspace looks
-// up again and again (how much cleaning powder per litre, a descaling
-// routine), formatted like chat replies. Pinned ones come first; pinning is
-// the workspace's, not a person's. The AI never sees them.
+// 5g3. Notes (docs/api/notes.md §3h): what the workspace looks up again and
+// again (a descaling routine, how much cleaning powder for a tank), made of
+// blocks: text formatted like chat replies, and calculators (inputs and the
+// results worked out from them by formula). Pinned ones come first; pinning
+// is the workspace's, not a person's. The AI never sees them.
+export const NOTE_BLOCK_TYPES = ["text", "calculator"] as const;
+export interface NoteTextBlock {
+  id: string; // stable within the note: the page remembers a calculator's inputs by it
+  type: "text";
+  text: string;
+}
+interface NoteCalcField {
+  key: string; // what formulas call it: "water", "per_litre"
+  label: string;
+  unit: string; // shown after the number, "" for none
+}
+export interface NoteCalcInput extends NoteCalcField {
+  value: number; // the default, until someone changes it on the page
+}
+export interface NoteCalcResult extends NoteCalcField {
+  formula: string; // over the inputs and earlier results: "water * per_litre"
+  decimals: number;
+}
+export interface NoteCalculatorBlock {
+  id: string;
+  type: "calculator";
+  title: string; // "" for none
+  inputs: NoteCalcInput[];
+  results: NoteCalcResult[];
+}
+export type NoteBlock = NoteTextBlock | NoteCalculatorBlock;
+
 export const notes = mysqlTable(
   "notes",
   {
@@ -985,8 +1013,8 @@ export const notes = mysqlTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     title: varchar("title", { length: 100 }).notNull(),
-    // Up to 20 000 characters: more than TEXT's 64 KB in UTF-8.
-    body: mediumtext("body").notNull(),
+    // In order; [] for an empty note. Checked by the API (noteBlocksSchema).
+    blocks: jsonValue<NoteBlock[]>("blocks").notNull(),
     pinnedAt: timestamp("pinned_at"), // null = not pinned
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),

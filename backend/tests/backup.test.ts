@@ -33,7 +33,15 @@ async function populated() {
   const carafe = (await post("vessels", { name: "Carafe", weightGrams: 312.5 })).vessel.id as string;
   const v60 = await brewerId(owner, ws.id, "V60");
   const stalled = (await post("brew-problems", { name: "Paper taste", methodKinds: ["espresso"], brewerIds: [v60] })).problem.id as string;
-  const note = (await post("notes", { title: "Descaling", body: "- 20 g citric acid per 1 L\n- Rinse **twice**" })).note.id as string;
+  const note = (
+    await post("notes", {
+      title: "Descaling",
+      blocks: [
+        { id: "t1", type: "text", text: "- Portafilter out\n- Rinse **twice**" },
+        { id: "c1", type: "calculator", title: "Descaler", inputs: [{ key: "water", label: "Water", unit: "L", value: 1.8 }], results: [{ key: "powder", label: "Powder", unit: "g", formula: "water * 20", decimals: 0 }] },
+      ],
+    })
+  ).note.id as string;
   await owner.agent.patch(`${base}/notes/${note}`).send({ pinned: true });
   const wdt = (await post("prep-tools", { name: "Needle", methodKinds: ["espresso"], brewerIds: [v60] })).tool.id as string;
   const recipe = (
