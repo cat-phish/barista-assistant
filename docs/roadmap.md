@@ -2605,7 +2605,7 @@ day, so the backlog's numbers are as before).
   emits the time as tapped, and the brew page takes the offset off
   (`lib/finishOffset.ts`), never going back past the last mark or below 0.
 - **On the log form:** under Total time, "−4 s offset" ("+3 s" for a
-  negative one) with Undo to its left until the time is changed by hand. The tapped time is kept in
+  negative one) with Undo beside it until the time is changed by hand. The tapped time is kept in
   memory until the brew is saved or left, never stored.
 - **Not sent to the AI:** the offset itself isn't in the analysis context;
   the adjusted time is what the AI already sees.
