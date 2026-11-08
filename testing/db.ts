@@ -8,13 +8,19 @@ export function testConnectionOptions(): mysql.ConnectionOptions {
 }
 
 // Empties every table except the migration journal, and Redis database 1.
+// DELETE in one transaction, not TRUNCATE: TRUNCATE recreates each table's
+// file, about 200 ms a table on a slow disk (10 s before every test), while
+// a test leaves only a few rows to delete and one commit to write. No table
+// but the journal has an auto-increment counter to reset.
 export async function resetTestData(): Promise<void> {
   const connection = await mysql.createConnection(testConnectionOptions());
   try {
     const [rows] = await connection.query<mysql.RowDataPacket[]>("SHOW TABLES");
     const tables = rows.map((r) => String(Object.values(r)[0])).filter((t) => t !== "__drizzle_migrations");
     await connection.query("SET FOREIGN_KEY_CHECKS = 0");
-    for (const table of tables) await connection.query(`TRUNCATE TABLE \`${table}\``);
+    await connection.beginTransaction();
+    for (const table of tables) await connection.query(`DELETE FROM \`${table}\``);
+    await connection.commit();
     await connection.query("SET FOREIGN_KEY_CHECKS = 1");
   } finally {
     await connection.end();
