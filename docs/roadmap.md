@@ -2649,7 +2649,7 @@ just above). The backlog's later items moved up one.
 - **What's kept:** `brew_logs.recipe_copy` (JSON, migration 0109): what the
   timer and the AI judge a brew against (`RecipeCopy`,
   `@barista/shared/recipeCopy`), as the recipe wrote it. The backend takes
-  it on create, and on `PATCH` whenever `recipeId` is sent
+  it on create, and on `PATCH` when `recipeId` changes to another recipe
   (`backend/src/recipeCopy.ts`). It's never returned by the API.
 - **Who uses it:** only the AI (`recipeAsBrewed` in `worker/src/context.ts`):
   analyses and chat brew attachments. The brew's own scaling (water,

@@ -562,8 +562,8 @@ describe("step temps (docs/api/llm-contract.md §9)", () => {
     expect(context.recipe!.steps.map((s) => s.targetTempC)).toEqual([87, null, null]);
     expect(context.brew.stepTempShiftC).toBe(2);
     // The recipe itself doesn't change.
-    const [step] = await db.select({ t: recipeSteps.targetTempC }).from(recipeSteps).where(eq(recipeSteps.recipeId, recipeId));
-    expect(step?.t).toBe(85);
+    const [bloom] = await db.select({ t: recipeSteps.targetTempC }).from(recipeSteps).where(and(eq(recipeSteps.recipeId, recipeId), eq(recipeSteps.stepOrder, 1)));
+    expect(bloom?.t).toBe(85);
   });
 });
 

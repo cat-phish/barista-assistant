@@ -223,8 +223,9 @@ says why the last analysis failed or wasn't made (e.g. the daily cap), else
     moved by it, and the shift itself (`llm-contract.md` §9).
   - **Recipe copy** (`recipeCopy`, stored, never sent or returned): the API
     keeps a copy of the recipe on the log when it's created, and again
-    whenever `recipeId` is sent on `PATCH` (`null` clears it). Other edits
-    leave it, and so do later edits or deletion of the recipe. It holds what
+    when `PATCH` changes `recipeId` to a different recipe (`null` clears
+    it). Re-sending the same `recipeId`, other edits, and later edits or
+    deletion of the recipe all leave it. It holds what
     the AI judges a brew against: name, brewer, style, kind, targets
     (dose, water, ice, temp, expected yield), finish and first-drop windows,
     cold-style fields, flow unit, step time scaling, `stepTempsFollowBrew`
