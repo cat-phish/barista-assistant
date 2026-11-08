@@ -146,7 +146,11 @@ describe("brew logs", () => {
     await owner.agent.patch(`${base}/${id}`).send({ rating: 4 });
     expect(await copyOf(id)).toEqual(copy);
 
-    // A new recipeId takes a fresh copy; none clears it.
+    // Re-sending the same recipeId keeps the copy as brewed.
+    expect((await owner.agent.patch(`${base}/${id}`).send({ recipeId: house, rating: 5 })).status).toBe(200);
+    expect(await copyOf(id)).toEqual(copy);
+
+    // A different recipeId takes a fresh copy; none clears it.
     await owner.agent.patch(`${base}/${id}`).send({ recipeId: other });
     expect(await copyOf(id)).toMatchObject({ name: "Other", targetDoseGrams: 18, steps: [] });
     await owner.agent.patch(`${base}/${id}`).send({ recipeId: null });

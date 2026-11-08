@@ -856,10 +856,14 @@ brewLogsRouter.patch(
       // Only when the change touches it, so old logs whose recipe later moved
       // to another brewer can still be edited (docs/api/brew-logs.md §6).
       const { marks, toolIds, problemIds, flavors, ...fields } = body;
-      // A new recipe brings its brewer; the old brewer stays otherwise.
-      // A new recipe brings its brewer and a fresh copy (§6, "Recipe copy").
-      const brewerUpdate =
-        "recipeId" in body ? { brewerId: (await recipeBrewer(tx, fields.recipeId))?.brewerId ?? null, recipeCopy: await recipeCopy(tx, fields.recipeId) } : {};
+      // A recipeId sent brings its brewer; the old brewer stays otherwise. Only
+      // a different recipe takes a fresh copy, so re-sending the same one
+      // keeps the recipe as brewed (§6, "Recipe copy").
+      const newRecipe = "recipeId" in body && (fields.recipeId ?? null) !== log.recipeId;
+      const brewerUpdate = {
+        ...("recipeId" in body ? { brewerId: (await recipeBrewer(tx, fields.recipeId))?.brewerId ?? null } : {}),
+        ...(newRecipe ? { recipeCopy: await recipeCopy(tx, fields.recipeId) } : {}),
+      };
       const touched = ["recipeId", "actualWaterGrams", "actualIceGrams", "actualYieldGrams", "marks", "actualTimeSec"];
       if (touched.some((key) => key in body)) {
         const after = { ...log, ...fields };
