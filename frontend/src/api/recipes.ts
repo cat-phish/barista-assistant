@@ -14,6 +14,7 @@ export interface RecipeInput extends ColdFields {
   expectedFinishMaxSec: number | null;
   firstDropMinSec: number | null; // espresso only
   firstDropMaxSec: number | null;
+  finishOffsetSec: number | null; // null = the brewer's, 0 = none
   targetTempC: number | null;
   defaultGrinderId: string | null;
   grindSettings: Array<{ grinderId: string; setting: number }>;

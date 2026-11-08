@@ -18,6 +18,7 @@ import { DILUTION_WITH, isColdStyle, isLongStyle, STEEP_TEMPS } from '../lib/col
 import AppHeader from '../components/AppHeader.vue';
 import DeleteSection from '../components/DeleteSection.vue';
 import { formatGrams, formatGrind, formatRatio, formatTime, GRIND_SETTING, parseDecimal, parseTime, type Parsed } from '../lib/format';
+import { parseFinishOffset } from '../lib/finishOffset';
 import { VueDraggable } from 'vue-draggable-plus';
 import {
   ADVANCE,
@@ -85,6 +86,7 @@ const finishFrom = ref('');
 const finishTo = ref('');
 const firstDropFrom = ref(''); // espresso only
 const firstDropTo = ref('');
+const finishOffset = ref(''); // seconds off (negative: added) at Finish & Save; blank = the brewer's (lib/finishOffset.ts)
 const flowUnit = ref<FlowUnit>('g_s'); // espresso flow steps
 // Filter: the times of the steps ticked to scale follow the batch (lib/scale.ts
 // scaleStepTimes), × factor^timeScaling; unticked, they all stay.
@@ -120,6 +122,7 @@ const submitted = ref(false);
 
 // The chosen brewer's kind decides the fields (docs/api/recipes.md §5).
 const kind = computed<MethodKind | null>(() => methods.value.find((m) => m.id === brewerId.value)?.kind ?? null);
+const brewerOffset = computed(() => methods.value.find((m) => m.id === brewerId.value)?.finishOffsetSec ?? null);
 const espresso = computed(() => kind.value === 'espresso');
 // The workspace's styles for the brewer's method: the visible ones, plus the
 // recipe's own if it's hidden. A style that no longer fits is cleared.
@@ -158,6 +161,7 @@ const parsed = computed(() => ({
       : null,
   finish: parseFinishWindow(finishFrom.value, finishTo.value),
   firstDrop: espresso.value ? parseFinishWindow(firstDropFrom.value, firstDropTo.value, FIRST_DROP_DEFAULT_SPREAD_SEC) : ({ ok: true, value: null } as const),
+  finishOffset: longStyle.value ? ({ ok: true, value: null } as const) : parseFinishOffset(finishOffset.value),
   temp: temp.value.trim() ? parseTemp(temp.value, temperatureUnit.value) : null,
   steepMin: steepFrom.value.trim() ? parseDecimal(steepFrom.value, STEEP_HOURS) : null,
   steepMax: steepTo.value.trim() ? parseDecimal(steepTo.value, STEEP_HOURS) : null,
@@ -207,6 +211,7 @@ const fieldErrors = computed(() => {
     expectedYield: p.expectedYield && !p.expectedYield.ok ? p.expectedYield.error : '',
     finish: p.finish.ok ? '' : p.finish.error,
     firstDrop: p.firstDrop.ok ? '' : p.firstDrop.error,
+    finishOffset: p.finishOffset.ok ? '' : p.finishOffset.error,
     temp: p.temp && !p.temp.ok ? p.temp.error : '',
     steep: steepError(p.steepMin, p.steepMax),
     dilution: p.dilution && !p.dilution.ok && !iced.value ? p.dilution.error : '',
@@ -308,6 +313,7 @@ function fill(recipe: Recipe): void {
   finishTo.value = recipe.expectedFinishMaxSec === null ? '' : formatTime(recipe.expectedFinishMaxSec);
   firstDropFrom.value = recipe.firstDropMinSec === null ? '' : formatTime(recipe.firstDropMinSec);
   firstDropTo.value = recipe.firstDropMaxSec === null ? '' : formatTime(recipe.firstDropMaxSec);
+  finishOffset.value = recipe.finishOffsetSec === null ? '' : String(recipe.finishOffsetSec);
   temp.value = tempText(recipe.targetTempC, temperatureUnit.value);
   defaultGrinderId.value = recipe.defaultGrinderId ?? '';
   grindRows.value = recipe.grindSettings.map((g) => ({ grinderId: g.grinderId, setting: formatGrind(g.setting) }));
@@ -330,6 +336,7 @@ function fill(recipe: Recipe): void {
     'recipe.temp': recipe.targetTempC,
     'recipe.finishWindow': recipe.expectedFinishMinSec,
     'recipe.firstDropWindow': recipe.firstDropMinSec,
+    'recipe.finishOffset': recipe.finishOffsetSec,
     'recipe.defaultGrinder': recipe.defaultGrinderId,
     'recipe.grindSettings': recipe.grindSettings,
     'recipe.prepTools': recipe.prepToolIds,
@@ -585,6 +592,8 @@ async function save(): Promise<void> {
     expectedFinishMaxSec: p.finish.ok ? (p.finish.value?.max ?? null) : null,
     firstDropMinSec: p.firstDrop.ok ? (p.firstDrop.value?.min ?? null) : null,
     firstDropMaxSec: p.firstDrop.ok ? (p.firstDrop.value?.max ?? null) : null,
+    // No timer for a long steep, so no offset (parsed as null there).
+    finishOffsetSec: p.finishOffset.ok ? p.finishOffset.value : null,
     // A long steep has no water temperature or finish in minutes, but a window in hours.
     ...(longStyle.value ? { targetTempC: null, expectedFinishMinSec: null, expectedFinishMaxSec: null } : { targetTempC: p.temp?.ok ? p.temp.value : null }),
     steepMinHours: longStyle.value && p.steepMin?.ok ? p.steepMin.value : null,
@@ -795,6 +804,12 @@ async function save(): Promise<void> {
           <span v-if="fieldErrors.firstDrop && (submitted || (firstDropFrom.trim() && firstDropTo.trim()))" class="field-error">{{ fieldErrors.firstDrop }}</span>
           <span v-else-if="firstDropHint" class="hint">{{ firstDropHint }}</span>
         </fieldset>
+        <div v-if="show('recipe.finishOffset') && !longStyle" class="field finish-offset">
+          <label for="finish-offset">Finish offset (s)</label>
+          <input id="finish-offset" v-model="finishOffset" maxlength="3" :placeholder="brewerOffset !== null ? `Brewer's: ${brewerOffset}` : 'e.g. 4'" :aria-invalid="!!fieldErrors.finishOffset" />
+          <span v-if="fieldErrors.finishOffset" class="field-error">{{ fieldErrors.finishOffset }}</span>
+          <span v-else class="hint">Seconds taken off the time when you tap Finish &amp; Save, for a brew that ends while your hands are busy; a negative number adds them. Blank uses the brewer's; 0 turns it off for this recipe.</span>
+        </div>
       </section>
 
       <section v-if="show('recipe.defaultGrinder') || show('recipe.grindSettings')" class="card stack">
@@ -1205,6 +1220,9 @@ p {
   opacity: 0.4;
   background: var(--brand-tint);
   border-radius: var(--radius);
+}
+.finish-offset input {
+  max-width: 8rem;
 }
 .finish {
   border: none;

@@ -75,6 +75,7 @@ export const FIELDS = [
   recipe('dilution', 'Serving dilution (cold styles, concentrates)', 'A concentrate is any filter recipe served diluted, e.g. poured over ice'),
   recipe('finishWindow', 'Target finish / shot time'),
   recipe('firstDropWindow', 'First drop window (espresso)'),
+  recipe('finishOffset', 'Finish offset', 'Seconds taken off (negative: added to) the time at Finish & Save; blank uses the brewer’s'),
   recipe('defaultGrinder', 'Default grinder'),
   recipe('grindSettings', 'Grind starting points'),
   recipe('flowUnit', 'Flow unit (espresso)'),

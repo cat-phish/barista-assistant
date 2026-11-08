@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Grinder, MachineCapabilities } from '../api/types';
-import { adjustmentLabel, burrLabel, grinderForm, grinderSummary, machineSummary, parseGrinderForm, powerLabel, RECIPE_STYLES, STYLES_BY_KIND } from './equipment';
+import type { Brewer, Grinder, MachineCapabilities } from '../api/types';
+import { adjustmentLabel, brewerForm, brewerInput, burrLabel, grinderForm, grinderSummary, machineSummary, parseGrinderForm, powerLabel, RECIPE_STYLES, STYLES_BY_KIND } from './equipment';
 
 const c40: Grinder = {
   id: 'g', name: 'C40', notes: null, adjustment: 'stepped', settingMin: 0, settingMax: 40, stepSize: 1,
@@ -64,5 +64,19 @@ describe('recipe styles', () => {
     expect(STYLES_BY_KIND.filter).toEqual(['pour_over', 'immersion', 'hybrid', 'cold_brew', 'rapid_cold', 'kyoto_drip', 'other']);
     expect(STYLES_BY_KIND.espresso).toEqual(['standard', 'soup', 'other']);
     for (const st of [...STYLES_BY_KIND.filter, ...STYLES_BY_KIND.espresso]) expect(RECIPE_STYLES[st]).toBeTruthy();
+  });
+});
+
+describe('brewer form', () => {
+  it('the finish offset goes to text and back; blank is none', () => {
+    const oxo: Brewer = {
+      id: 'b', name: 'OXO', kind: 'filter', methodId: 'm', notes: null, finishOffsetSec: 4,
+      preinfusion: 'none', flowControl: 'none', pressureControl: 'none', archivedAt: null, createdAt: '2026-11-08T00:00:00.000Z',
+    };
+    const form = brewerForm(oxo);
+    expect(form.finishOffset).toBe('4');
+    expect(brewerInput(form).finishOffsetSec).toBe(4);
+    expect(brewerInput({ ...form, finishOffset: ' ' }).finishOffsetSec).toBeNull();
+    expect(brewerForm().finishOffset).toBe('');
   });
 });

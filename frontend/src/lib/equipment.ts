@@ -2,6 +2,7 @@
 import type { BrewerInput } from '../api/brewers';
 import type { Brewer, BurrType, Grinder, GrinderAdjustment, GrinderDetails, GrinderPower, MachineCapabilities, MethodKind, Preinfusion, ProfileControl, RecipeStyle } from '../api/types';
 import { formatGrams, parseDecimal } from './format';
+import { parseFinishOffset } from './finishOffset';
 
 // The brew method (docs/api/brewers.md §3): how brewers are grouped, and it
 // decides recipe fields, steps, the timer, and which drinks a brewer can make.
@@ -174,6 +175,7 @@ export interface BrewerForm extends MachineCapabilities {
   methodId: string; // the workspace's method (docs/api/brewer-methods.md §3e); '' = by kind
   kind: MethodKind; // follows the method's behaviour (BrewerFields keeps it in step)
   notes: string;
+  finishOffset: string; // seconds, blank = none (lib/finishOffset.ts)
 }
 
 export function brewerForm(m?: Brewer): BrewerForm {
@@ -182,18 +184,22 @@ export function brewerForm(m?: Brewer): BrewerForm {
     methodId: m?.methodId ?? '',
     kind: m?.kind ?? 'filter',
     notes: m?.notes ?? '',
+    finishOffset: m?.finishOffsetSec == null ? '' : String(m.finishOffsetSec),
     preinfusion: m?.preinfusion ?? 'none',
     flowControl: m?.flowControl ?? 'none',
     pressureControl: m?.pressureControl ?? 'none',
   };
 }
+// The form saves only once the offset parses (BrewerFormView).
 export function brewerInput(f: BrewerForm): BrewerInput & { name: string } {
   const espresso = f.kind === 'espresso';
+  const offset = parseFinishOffset(f.finishOffset);
   return {
     name: f.name.trim(),
     // The method decides the kind on the server; without one, the kind's built-in method.
     ...(f.methodId ? { methodId: f.methodId } : { kind: f.kind }),
     notes: f.notes.trim() || null,
+    finishOffsetSec: offset.ok ? offset.value : null,
     // Capabilities only mean something for espresso.
     preinfusion: espresso ? f.preinfusion : 'none',
     flowControl: espresso ? f.flowControl : 'none',

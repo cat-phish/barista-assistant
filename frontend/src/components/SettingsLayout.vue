@@ -65,7 +65,8 @@ onMounted(async () => {
   max-height: calc(100vh - 2 * var(--space-3));
   max-height: calc(100dvh - 2 * var(--space-3));
   overflow-y: auto;
-  overscroll-behavior: contain;
+  /* No overscroll-behavior: contain. Chrome applies it even when the nav
+     fits, and then a wheel over the nav scrolls nothing at all. */
   padding: 6px;
   margin: -6px;
 }

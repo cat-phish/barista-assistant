@@ -267,6 +267,7 @@ export interface Brewer extends MachineCapabilities {
   kind: MethodKind; // its method's behaviour: recipe fields, timer, drinks, tools
   methodId: string | null; // the workspace's method it's grouped under (docs/api/brewer-methods.md §3e)
   notes: string | null;
+  finishOffsetSec: number | null; // seconds off the time at Finish & Save; null = none (§3)
   archivedAt: string | null; // set = archived (hidden from pickers, kept in history)
   createdAt: string; // date added (ISO)
 }
@@ -614,6 +615,7 @@ export interface Recipe extends ColdFields {
   expectedFinishMaxSec: number | null;
   firstDropMinSec: number | null; // espresso only (both or neither)
   firstDropMaxSec: number | null;
+  finishOffsetSec: number | null; // seconds off the time at Finish & Save; null = the brewer's, 0 = none (§5)
   flowUnit: FlowUnit;
   // Filter: pour and wait times × batch factor^this; null = they stay (§5).
   stepTimeScaling: number | null;

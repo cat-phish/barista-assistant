@@ -43,6 +43,14 @@ recipe. The public menu shows a brewer's plain brew only where the menu
 builder (§7b) places it, under the item's name (e.g. "Espresso" for a Linea
 Mini).
 
+**Finish offset** (`finishOffsetSec`, optional, nullable, whole seconds −60 to
+60): for a brewer whose brew ends while your hands are still busy, such as
+pressing an OXO until the hiss. The timer takes it off the time when Finish &
+Save is tapped, never going back past the last mark or below 0. A negative
+offset adds the seconds instead, for someone who taps early. A recipe can set its own (§5).
+`null` = none. The log form says how much came off (or was added) and can undo it until the
+brew is saved; the time as tapped isn't stored.
+
 Archiving works like grinders (§3b): archived brewers leave the pickers, and
 past brews keep showing them. `createdAt` (read-only) is when the brewer was added.
 
@@ -57,6 +65,7 @@ past brews keep showing them. `createdAt` (read-only) is when the brewer was add
   "preinfusion": "manual",
   "flowControl": "manual",
   "pressureControl": "none",
+  "finishOffsetSec": null,
   "archivedAt": null,
   "createdAt": "2026-10-18T09:00:00.000Z"
 }
@@ -76,7 +85,8 @@ past brews keep showing them. `createdAt` (read-only) is when the brewer was add
   brewer's `kind` is its behaviour. Older clients may send `kind` instead
   (that kind's built-in method; default `filter`); a `kind` sent with a
   `methodId` must match its behaviour (`400`). Optional: `notes`
-  (≤ 255) and the capabilities (default `none`). Blank text becomes `null`.
+  (≤ 255), `finishOffsetSec` (default `null`) and the capabilities
+  (default `none`). Blank text becomes `null`.
   Unknown fields are rejected, including the removed `categoryId`,
   `menuName`, `description` and `showOnPublicMenu`.
 - **Success (`201 Created`):** `{ "brewer": { ...brewer } }`

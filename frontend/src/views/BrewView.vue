@@ -55,6 +55,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import FinishDrinkCard from '../components/FinishDrinkCard.vue';
 import { useBrewSessionStore } from '../stores/brewSession';
 import { afterPrep, formatMark, heldSec } from '../lib/marks';
+import { applyFinishOffset, finishOffsetFor, formatFinishOffset } from '../lib/finishOffset';
 import { recipePrep, toolsFor } from '../lib/prepTools';
 import { formatFinishWindow, parseFinishWindow, splitPrep, stepTitle } from '../lib/steps';
 import { useAnalysis } from '../composables/useAnalysis';
@@ -823,6 +824,11 @@ const firstDropWindow = computed(() => {
   return r && r.firstDropMinSec !== null && r.firstDropMaxSec !== null ? { min: r.firstDropMinSec, max: r.firstDropMaxSec } : null;
 });
 const marks = ref<Mark[]>([]);
+// Finish offset (lib/finishOffset.ts): the recipe's, else its brewer's.
+const finishOffset = computed(() => finishOffsetFor(recipe.value, brewers.value.find((b) => b.id === (recipe.value?.brewer.id ?? brewerId.value)) ?? null));
+// The Finish tap before the offset came off, for the log form's Undo. Kept
+// only until the brew is saved or left; never sent.
+const finishTap = ref<{ seconds: number; marks: Mark[]; adjusted: number; takenOff: number } | null>(null);
 // "Bloom ended 0:52 · Pour held 0:12 · Pour logged 1:30": the steps' real
 // times, shown on the log form; a step's holds as one total, at its first.
 const timerSec = ref(0); // the timer's time, where a hold left open ends
@@ -843,6 +849,7 @@ const stepMarksLine = computed(() =>
 function leaveSetup(next: Stage): void {
   if (draft.grinderId === NEW_GRINDER) draft.grinderId = '';
   marks.value = [];
+  finishTap.value = null;
   // Fixed here: the log form's temperature is what was measured, not this.
   brewTempShift.value = stepTempShift.value;
   stage.value = next;
@@ -950,7 +957,9 @@ function logWithoutTimer(): void {
   draft.time = '';
   leaveSetup('log');
 }
-function onTimerComplete(seconds: number, timerMarks: Mark[] = []): void {
+function onTimerComplete(tapSeconds: number, tapMarks: Mark[] = []): void {
+  const { seconds, marks: timerMarks, takenOff } = applyFinishOffset(tapSeconds, tapMarks, finishOffset.value);
+  finishTap.value = takenOff ? { seconds: tapSeconds, marks: tapMarks, adjusted: seconds, takenOff } : null;
   draft.time = formatTime(seconds);
   marks.value = afterPrep(timerMarks, recipeSteps.value.prep.length);
   timerSec.value = seconds;
@@ -1100,8 +1109,20 @@ function requestAnalysis(): void {
   if (ws && savedLogId.value) void requestAi(ws, savedLogId.value, null, analyzeNote.value.trim() || undefined);
 }
 
+// Back to the time as tapped. The note goes once the time is changed by hand.
+const finishOffsetNote = computed(() => (finishTap.value && draft.time === formatTime(finishTap.value.adjusted) ? finishTap.value : null));
+function undoFinishOffset(): void {
+  const tap = finishTap.value;
+  if (!tap) return;
+  draft.time = formatTime(tap.seconds);
+  marks.value = afterPrep(tap.marks, recipeSteps.value.prep.length);
+  timerSec.value = tap.seconds;
+  finishTap.value = null;
+}
+
 function brewAgain(): void {
   resetAi();
+  finishTap.value = null;
   stage.value = 'setup';
   savedLogId.value = null;
   savedDueAt.value = null;
@@ -1698,6 +1719,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         :first-drop-window="firstDropWindow"
         :machine="machine"
         :water-temp-c="timerWaterTemp"
+        :finish-offset-sec="finishOffset"
         @complete="onTimerComplete"
       />
     </template>
@@ -1742,7 +1764,14 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       </section>
       <section class="card">
         <p v-if="stepMarksLine" class="muted small marks-line">{{ stepMarksLine }}</p>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :vessels="vessels" :prep-tools="prepTools" :problems="problems" :method-kind="recipe?.brewer.kind ?? null" :brewer-id="recipe?.brewer.id ?? null" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="recipe?.style?.brewsLike ?? null" :iced="recipe?.targetIceGrams != null" :concentrate="recipe?.dilutionRatio != null" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :vessels="vessels" :prep-tools="prepTools" :problems="problems" :method-kind="recipe?.brewer.kind ?? null" :brewer-id="recipe?.brewer.id ?? null" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="recipe?.style?.brewsLike ?? null" :iced="recipe?.targetIceGrams != null" :concentrate="recipe?.dilutionRatio != null">
+          <template #time-note>
+            <span v-if="finishOffsetNote" class="hint" aria-live="polite">
+              {{ formatFinishOffset(finishOffsetNote.takenOff) }} offset (tapped {{ formatTime(finishOffsetNote.seconds) }}) ·
+              <button class="btn-link small" type="button" @click="undoFinishOffset">Undo</button>
+            </span>
+          </template>
+        </BrewFields>
       </section>
       <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
       <div v-if="userPrefs.rateReminders" class="rate-later">

@@ -83,6 +83,7 @@ describe("method kinds", () => {
       preinfusion: "none",
       flowControl: "none",
       pressureControl: "none",
+      finishOffsetSec: null,
       archivedAt: null,
       createdAt: expect.any(String),
     });
