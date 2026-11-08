@@ -1766,8 +1766,8 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         <p v-if="stepMarksLine" class="muted small marks-line">{{ stepMarksLine }}</p>
         <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :vessels="vessels" :prep-tools="prepTools" :problems="problems" :method-kind="recipe?.brewer.kind ?? null" :brewer-id="recipe?.brewer.id ?? null" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="recipe?.style?.brewsLike ?? null" :iced="recipe?.targetIceGrams != null" :concentrate="recipe?.dilutionRatio != null">
           <template #time-note>
-            <span v-if="finishOffsetNote" class="hint" aria-live="polite">
-              {{ formatFinishOffset(finishOffsetNote.takenOff) }} offset (tapped {{ formatTime(finishOffsetNote.seconds) }}) ·
+            <span v-if="finishOffsetNote" class="hint offset-note" aria-live="polite">
+              {{ formatFinishOffset(finishOffsetNote.takenOff) }} offset
               <button class="btn-link small" type="button" @click="undoFinishOffset">Undo</button>
             </span>
           </template>
@@ -1851,6 +1851,12 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
 </template>
 
 <style scoped>
+/* Under Total time: the offset, then Undo on its own line. */
+.offset-note {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
 .notes-reminder h2 {
   font-size: 1rem;
   margin: 0 0 var(--space-1);
