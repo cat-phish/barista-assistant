@@ -2501,3 +2501,24 @@ table showed Brewer and Dose columns, but only Name, Style and Added sorted.
   back to the name, as everywhere else (`sortBy` in `lib/listSort.ts`).
 - **Not done:** checking the other list pages for columns that show but
   don't sort; ask if one turns up.
+
+
+## Every table column sorts (built)
+
+Branch `sortable-columns` (2026-11-07), following "Recipes sort by brewer
+and dose". Drinks was the one list left with columns that showed but didn't
+sort (Category, Method); the rest already sorted by every column.
+
+- **Drinks:** Category sorts in the categories' order (the one under the
+  list, drink-categories.md §5d), uncategorised last either way; Method in
+  the built-in order (filter, espresso, stovetop, other). Both are in the
+  headers and the Sort by dropdown and give a flat list, like date added;
+  only Name nests variants under their parent.
+- **From now on:** `useTableColumns` (`lib/tableColumns.ts`) takes the
+  list's sort columns and doesn't compile when a table column has none, so
+  a new column comes with its sort or the build fails. The view declares its
+  `TABLE` as `TableColumn<keyof typeof columns>[]` and its sort columns with
+  `satisfies SortColumns<Item>` (a `: TableColumn[]` table, whose ids can't be
+  checked, fails too). The sort columns can have more than the table (Beans:
+  date purchased, variety). `TableHead` makes every header a sort button;
+  `tableColumns.test.ts` holds the type checks.

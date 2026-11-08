@@ -5,11 +5,11 @@
 // the name (and the end column) on one line and the other columns joined by
 // "·" underneath, so it starts from a shorter set.
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
-import { forgetView, recallView, rememberView } from './listSort';
+import { forgetView, recallView, rememberView, type SortColumn, type SortColumns } from './listSort';
 import { useKeyedColumnWidths } from './columnWidths';
 
-export interface TableColumn {
-  id: string;
+export interface TableColumn<C extends string = string> {
+  id: C;
   label: string; // in the dialog and the resize handle's name
   header?: string; // the header's text when it isn't the label ("❄")
   title?: string; // the header's tooltip and spoken name ("Date added")
@@ -81,16 +81,29 @@ export function usePhoneLayout() {
   return phone;
 }
 
+// Every column sorts, from its header and the Sort by dropdown: `sortColumns`
+// (the list's SortColumns) needs an entry for each column id, or the view
+// doesn't compile. For that the ids must stay literal: declare the table as
+// `TableColumn<keyof typeof columns>[]` and the sort columns with
+// `satisfies SortColumns<Item>` (not a `: SortColumns<Item>` annotation, which
+// widens the keys to string and lands here as `never`). It can have more
+// (Beans sorts by date purchased, which isn't a column).
+export type SortColumnsFor<C extends string> = string extends C
+  ? never
+  : Readonly<Record<C, SortColumn<never>> & Record<string, SortColumn<never>>>;
+
 // One table's columns. `key` is its localStorage key prefix (`beans`), the
 // workspace the suffix; widths live under `<key>.columns.<ws>`, the choice
 // under `<key>.columnChoice.<ws>`.
-export function useTableColumns(options: {
+export function useTableColumns<C extends string>(options: {
   key: string;
   workspace: () => string;
-  columns: readonly TableColumn[];
+  columns: readonly TableColumn<C>[];
+  sortColumns: SortColumnsFor<C>;
   available?: (id: string) => boolean;
 }) {
-  const { columns } = options;
+  const columns: readonly TableColumn[] = options.columns;
+  const sortColumns = options.sortColumns as unknown as SortColumns<never>;
   const available = options.available ?? (() => true);
   const phone = usePhoneLayout();
   const layout = computed<ColumnLayout>(() => (phone.value ? 'phone' : 'wide'));
@@ -133,6 +146,8 @@ export function useTableColumns(options: {
     layout,
     shown,
     widths,
+    // For the header's sort buttons (TableHead): the direction a first click sorts.
+    sortColumns,
     // The dialog's rows: every column but the name that the workspace shows.
     entries: computed(() =>
       choice.value.order

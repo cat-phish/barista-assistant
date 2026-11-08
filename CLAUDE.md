@@ -100,3 +100,7 @@
     push `testing` only once every suite passes. Nothing checks this
     automatically (the workflows only publish images). If a suite fails, fix
     it on a branch off `dev` rather than pushing anyway.
+12. **Every table column sorts:** a column added to a list table (a view's
+    `TABLE`) gets a sort column in the same change, in its header and the
+    Sort by dropdown. `useTableColumns` (`frontend/src/lib/tableColumns.ts`)
+    won't compile until it's there.

@@ -33,26 +33,26 @@ const error = ref('');
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `recipes.${what}.${workspaces.current?.id ?? ''}`;
 const ALL = 'all';
-const columns: SortColumns<Recipe> = {
+const columns = {
   name: nameColumn(),
   brewer: { label: 'Brewer', value: (r) => r.brewer.name, asc: 'A–Z', desc: 'Z–A' },
   style: { label: 'Style', value: (r) => r.style?.name ?? null, asc: 'A–Z', desc: 'Z–A' },
   // The coffee dose in grams, the first figure in the Dose cell.
   dose: { label: 'Dose', value: (r) => r.targetDoseGrams, asc: 'Lowest first', desc: 'Highest first' },
   added: addedColumn(),
-};
+} satisfies SortColumns<Recipe>;
 
 const { show } = useFieldVisibility();
 // Table columns: shown, hidden and moved in the Columns dialog, resizable
-// from the header (ColumnResizers). The ones in `columns` sort.
-const TABLE: TableColumn[] = [
+// from the header (ColumnResizers). Each sorts (`columns`).
+const TABLE: TableColumn<keyof typeof columns>[] = [
   { id: 'name', label: 'Name', track: 'minmax(0, 2fr)' },
   { id: 'brewer', label: 'Brewer', track: 'minmax(0, 1.1fr)' },
   { id: 'style', label: 'Style', track: 'minmax(0, 0.9fr)' },
   { id: 'dose', label: 'Dose', track: 'minmax(0, 1.2fr)' },
   { id: 'added', label: 'Added', title: 'Date added', track: '5.5rem', end: true },
 ];
-const table = useTableColumns({ key: 'recipes', workspace: () => workspaces.current?.id ?? '', available: (id) => id !== 'style' || show('recipe.style'), columns: TABLE });
+const table = useTableColumns({ sortColumns: columns, key: 'recipes', workspace: () => workspaces.current?.id ?? '', available: (id) => id !== 'style' || show('recipe.style'), columns: TABLE });
 const choosingColumns = ref(false);
 const cell = (r: Recipe, id: string): string => {
   if (id === 'brewer') return r.brewer.name;
@@ -178,7 +178,7 @@ const selection = useSelection();
       <p v-if="showArchived" class="muted small">Archived recipes are hidden when brewing and in drink forms; past brews still show them.</p>
       <p v-if="shown.length === 0" class="card empty">No recipes for {{ filterName }} yet.</p>
       <div v-else class="data-table" :style="{ '--cols': table.widths.template }">
-        <TableHead v-model:sort="sort" :state="table" :sort-columns="columns" />
+        <TableHead v-model:sort="sort" :state="table" />
         <div v-for="recipe in shown" :key="recipe.id" class="data-item" :class="{ open: openId === recipe.id }">
           <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === recipe.id" :aria-pressed="selection.selecting ? selection.has(recipe.id) : undefined" @click="selection.selecting ? selection.toggle(recipe.id) : toggle(recipe.id)">
             <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(recipe.id) ? '☑' : '☐' }}</span>{{ recipe.name }}<span v-if="recipe.archivedAt" class="muted"> (archived)</span></span>
