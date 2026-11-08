@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { defaultChoice, normalizeChoice, sameChoice, shownColumns, type TableColumn } from './tableColumns';
+import { defaultChoice, normalizeChoice, sameChoice, shownColumns, useTableColumns, type TableColumn } from './tableColumns';
 import { parseKeyedWidths } from './columnWidths';
+import { addedColumn, nameColumn, type SortColumns } from './listSort';
 
 const columns: TableColumn[] = [
   { id: 'name', label: 'Name', track: '2fr' },
@@ -51,3 +52,25 @@ describe('column widths by id', () => {
     expect(parseKeyedWidths('not json', all)).toEqual({});
   });
 });
+
+// Every column sorts: a table column without a sort column doesn't compile.
+// Checked by the type check (npm run build); never run (it needs a component).
+export function everyColumnSorts(): void {
+  interface Item {
+    name: string;
+    createdAt: string;
+    size: number;
+  }
+  const sorts = { name: nameColumn(), added: addedColumn() } satisfies SortColumns<Item>;
+  const workspace = () => 'ws';
+  useTableColumns({ key: 't', workspace, sortColumns: sorts, columns: [{ id: 'name', label: 'Name', track: '1fr' }, { id: 'added', label: 'Added', track: '1fr' }] });
+  const table: TableColumn<keyof typeof sorts>[] = [{ id: 'name', label: 'Name', track: '1fr' }];
+  useTableColumns({ key: 't', workspace, sortColumns: { ...sorts, size: { label: 'Size', value: (i: Item) => i.size } }, columns: table });
+  // A column with no sort column.
+  // @ts-expect-error 'size' is missing from sortColumns
+  useTableColumns({ key: 't', workspace, sortColumns: sorts, columns: [{ id: 'name', label: 'Name', track: '1fr' }, { id: 'size', label: 'Size', track: '1fr' }] });
+  // Ids widened to string (a `: TableColumn[]` annotation) can't be checked, so they don't compile either.
+  const widened: TableColumn[] = [{ id: 'name', label: 'Name', track: '1fr' }];
+  // @ts-expect-error the column ids must be literal
+  useTableColumns({ key: 't', workspace, sortColumns: sorts, columns: widened });
+}

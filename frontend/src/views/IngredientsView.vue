@@ -59,22 +59,22 @@ const viewKey = (what: string) => `ingredients.${what}.${workspaces.current?.id 
 const ALL = 'all';
 const UNUSED = 'unused';
 const TYPES = Object.keys(INGREDIENT_TYPES) as IngredientType[];
-const columns: SortColumns<Ingredient> = {
+const columns = {
   name: nameColumn(),
   type: enumColumn('Type', TYPES, (i) => i.ingredientType),
   used: { label: 'Used in', value: (i) => i.drinkCount, asc: 'Least used first', desc: 'Most used first', firstDir: 'desc' },
   added: addedColumn(),
-};
+} satisfies SortColumns<Ingredient>;
 
 // Table columns: shown, hidden and moved in the Columns dialog, resizable
-// from the header (ColumnResizers). The ones in `columns` sort.
-const TABLE: TableColumn[] = [
+// from the header (ColumnResizers). Each sorts (`columns`).
+const TABLE: TableColumn<keyof typeof columns>[] = [
   { id: 'name', label: 'Name', track: 'minmax(0, 2fr)' },
   { id: 'type', label: 'Type', track: 'minmax(0, 1fr)' },
   { id: 'used', label: 'Used in', track: 'minmax(0, 1fr)' },
   { id: 'added', label: 'Added', title: 'Date added', track: '5.5rem', end: true },
 ];
-const table = useTableColumns({ key: 'ingredients', workspace: () => workspaces.current?.id ?? '', columns: TABLE });
+const table = useTableColumns({ sortColumns: columns, key: 'ingredients', workspace: () => workspaces.current?.id ?? '', columns: TABLE });
 const choosingColumns = ref(false);
 const cell = (i: Ingredient, id: string): string => {
   if (id === 'type') return INGREDIENT_TYPES[i.ingredientType];
@@ -164,7 +164,7 @@ const selection = useSelection();
         <p v-if="showArchived" class="muted small">Archived ingredients can't be added to drinks; drinks that have them keep them.</p>
         <p v-if="shown.length === 0" class="card empty">Nothing here yet.</p>
         <div v-else class="data-table" :style="{ '--cols': table.widths.template }">
-          <TableHead v-model:sort="sort" :state="table" :sort-columns="columns" />
+          <TableHead v-model:sort="sort" :state="table" />
           <div v-for="c in shown" :key="c.id" class="data-item" :class="{ open: openId === c.id }">
             <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === c.id" :aria-pressed="selection.selecting ? selection.has(c.id) : undefined" @click="selection.selecting ? selection.toggle(c.id) : toggle(c.id)">
               <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(c.id) ? '☑' : '☐' }}</span>{{ c.name }}<span v-if="c.archivedAt" class="muted"> (archived)</span></span>

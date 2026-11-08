@@ -39,25 +39,25 @@ const error = ref('');
 const viewKey = (what: string) => `grinders.${what}.${workspaces.current?.id ?? ''}`;
 const ALL = 'all';
 const NOT_SET = 'none';
-const columns: SortColumns<Grinder> = {
+const columns = {
   name: nameColumn(),
   power: enumColumn('Power', ['manual', 'electric'] as const, (g) => g.power),
   burrs: { label: 'Burrs', value: (g) => burrLabel(g) },
   adjustment: enumColumn('Adjustment', ['stepped', 'stepless'] as const, (g) => g.adjustment),
   added: addedColumn(),
-};
+} satisfies SortColumns<Grinder>;
 const sortChoices = sortColumnOptions(columns);
 
 // Table columns: shown, hidden and moved in the Columns dialog, resizable
 // from the header (ColumnResizers). Each is also a sort column.
-const TABLE: TableColumn[] = [
+const TABLE: TableColumn<keyof typeof columns>[] = [
   { id: 'name', label: 'Name', track: 'minmax(0, 2fr)' },
   { id: 'power', label: 'Power', track: 'minmax(0, 0.9fr)' },
   { id: 'burrs', label: 'Burrs', track: 'minmax(0, 1.2fr)' },
   { id: 'adjustment', label: 'Adjustment', track: 'minmax(0, 1.3fr)' },
   { id: 'added', label: 'Added', title: 'Date added', track: '5.5rem', end: true },
 ];
-const table = useTableColumns({ key: 'grinders', workspace: () => workspaces.current?.id ?? '', columns: TABLE });
+const table = useTableColumns({ sortColumns: columns, key: 'grinders', workspace: () => workspaces.current?.id ?? '', columns: TABLE });
 const choosingColumns = ref(false);
 const cell = (g: Grinder, id: string): string => {
   if (id === 'power') return powerLabel(g) ?? '–';
@@ -162,7 +162,7 @@ const selection = useSelection();
         <ColumnsDialog :open="choosingColumns" :state="table" noun="grinder" @close="choosingColumns = false" />
         <p v-if="shown.length === 0" class="card empty">No {{ filterName.toLowerCase() }} yet.</p>
         <div v-else class="data-table" :style="{ '--cols': table.widths.template }">
-          <TableHead v-model:sort="sort" :state="table" :sort-columns="columns" />
+          <TableHead v-model:sort="sort" :state="table" />
           <div v-for="g in shown" :key="g.id" class="data-item" :class="{ open: openId === g.id }">
             <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === g.id" :aria-pressed="selection.selecting ? selection.has(g.id) : undefined" @click="selection.selecting ? selection.toggle(g.id) : toggle(g.id)">
               <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(g.id) ? '☑' : '☐' }}</span>{{ g.name }}<span v-if="g.archivedAt" class="muted"> (archived)</span></span>

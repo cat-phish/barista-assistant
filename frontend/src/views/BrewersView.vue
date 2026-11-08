@@ -52,7 +52,7 @@ function recipeSummary(brewerId: string): string {
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `brewers.${what}.${workspaces.current?.id ?? ''}`;
 const ALL = 'all';
-const columns: SortColumns<Brewer> = {
+const columns = {
   name: nameColumn(),
   // By the workspace's method order; brewers without one after, by kind.
   kind: {
@@ -66,17 +66,17 @@ const columns: SortColumns<Brewer> = {
   },
   recipes: { label: 'Recipes', value: (b) => recipeCount(b.id), asc: 'Fewest first', desc: 'Most first', firstDir: 'desc' },
   added: addedColumn(),
-};
+} satisfies SortColumns<Brewer>;
 
 // Table columns: shown, hidden and moved in the Columns dialog, resizable
-// from the header (ColumnResizers). The ones in `columns` sort.
-const TABLE: TableColumn[] = [
+// from the header (ColumnResizers). Each sorts (`columns`).
+const TABLE: TableColumn<keyof typeof columns>[] = [
   { id: 'name', label: 'Name', track: 'minmax(0, 2fr)' },
   { id: 'kind', label: 'Method', track: 'minmax(0, 1fr)' },
   { id: 'recipes', label: 'Recipes', track: 'minmax(0, 1.3fr)' },
   { id: 'added', label: 'Added', title: 'Date added', track: '5.5rem', end: true },
 ];
-const table = useTableColumns({ key: 'brewers', workspace: () => workspaces.current?.id ?? '', columns: TABLE });
+const table = useTableColumns({ sortColumns: columns, key: 'brewers', workspace: () => workspaces.current?.id ?? '', columns: TABLE });
 const choosingColumns = ref(false);
 const cell = (b: Brewer, id: string): string => {
   if (id === 'kind') return methodName(b);
@@ -181,7 +181,7 @@ const selection = useSelection();
         <p v-if="showArchived" class="muted small">Archived brewers are hidden when brewing; past brews still show them.</p>
         <p v-if="shown.length === 0" class="card empty">No {{ filter === ALL ? 'brewers' : `${filterName.toLowerCase()} brewers` }} yet.</p>
         <div v-else class="data-table" :style="{ '--cols': table.widths.template }">
-          <TableHead v-model:sort="sort" :state="table" :sort-columns="columns" />
+          <TableHead v-model:sort="sort" :state="table" />
           <div v-for="m in shown" :key="m.id" class="data-item" :class="{ open: openId === m.id }">
             <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === m.id" :aria-pressed="selection.selecting ? selection.has(m.id) : undefined" @click="selection.selecting ? selection.toggle(m.id) : toggle(m.id)">
               <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(m.id) ? '☑' : '☐' }}</span>{{ m.name }}<span v-if="m.archivedAt" class="muted"> (archived)</span></span>

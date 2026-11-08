@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Drinks (docs/api/drinks.md §5c) as a table: filter by category, sort by name
-// (variants stay under their parent) or date added (a flat list); a row
+// (variants stay under their parent) or by category, method or date added (a
+// flat list); a row
 // expands to its details. Show archived adds archived drinks, which leave the
 // brew page. The categories that group drinks are edited below the list.
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
@@ -9,7 +10,7 @@ import { errorMessage } from '../api/client';
 import { drinkCategoriesApi } from '../api/drinkCategories';
 import { drinksApi } from '../api/drinks';
 import { recipesApi } from '../api/recipes';
-import type { Drink, DrinkCategory, Recipe } from '../api/types';
+import type { Drink, DrinkCategory, MethodKind, Recipe } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import DrinkCategoriesPanel from '../components/DrinkCategoriesPanel.vue';
 import ListControls from '../components/ListControls.vue';
@@ -20,9 +21,9 @@ import { useTableColumns, type TableColumn } from '../lib/tableColumns';
 import { useSelection } from '../composables/useSelection';
 import MenuTabs from '../components/MenuTabs.vue';
 import { ingredientLine, nestDrinks, type NestedDrink } from '../lib/drinks';
-import { METHOD_KINDS } from '../lib/equipment';
+import { METHOD_KINDS, METHOD_ORDER } from '../lib/equipment';
 import { formatAdded } from '../lib/format';
-import { addedColumn, isSortKey, nameColumn, recallView, rememberView, sortBy, sortColumnOptions, sortsByName, type SortColumns } from '../lib/listSort';
+import { addedColumn, enumColumn, isSortKey, nameColumn, recallView, rememberView, sortBy, sortColumnOptions, sortsByName, type SortColumns } from '../lib/listSort';
 import { defaultSize, formatSize } from '../lib/servings';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -37,17 +38,32 @@ const error = ref('');
 // View choices, remembered per workspace.
 const viewKey = (what: string) => `drinks.${what}.${workspaces.current?.id ?? ''}`;
 const ALL = 'all';
-const columns: SortColumns<Drink> = { name: nameColumn(), added: addedColumn() };
+const columns = {
+  name: nameColumn(),
+  // By the workspace's category order (docs/api/drink-categories.md §5d); uncategorised last.
+  category: {
+    label: 'Category',
+    value: (d: Drink) => {
+      if (!d.category) return null;
+      const i = categories.value.findIndex((c) => c.id === d.category?.id);
+      return i >= 0 ? i : categories.value.length;
+    },
+    asc: 'In list order',
+    desc: 'Reversed',
+  },
+  method: { ...enumColumn<Drink, MethodKind>('Method', METHOD_ORDER, (d) => d.kind), asc: 'In list order', desc: 'Reversed' },
+  added: addedColumn(),
+} satisfies SortColumns<Drink>;
 
 // Table columns: shown, hidden and moved in the Columns dialog, resizable
-// from the header (ColumnResizers). The ones in `columns` sort.
-const TABLE: TableColumn[] = [
+// from the header (ColumnResizers). Each sorts (`columns`).
+const TABLE: TableColumn<keyof typeof columns>[] = [
   { id: 'name', label: 'Name', track: 'minmax(0, 2fr)' },
   { id: 'category', label: 'Category', track: 'minmax(0, 1.3fr)' },
   { id: 'method', label: 'Method', track: 'minmax(0, 1.2fr)' },
   { id: 'added', label: 'Added', title: 'Date added', track: '5.5rem', end: true },
 ];
-const table = useTableColumns({ key: 'drinks', workspace: () => workspaces.current?.id ?? '', columns: TABLE });
+const table = useTableColumns({ sortColumns: columns, key: 'drinks', workspace: () => workspaces.current?.id ?? '', columns: TABLE });
 const choosingColumns = ref(false);
 const cell = (d: Drink, id: string): string => {
   if (id === 'category') return d.category?.name ?? 'Uncategorised';
@@ -169,7 +185,7 @@ const selection = useSelection();
       <p v-if="showArchived" class="muted small">Archived drinks are hidden when brewing; past brews still show them, and so does the public menu if it has them.</p>
       <p v-if="shown.length === 0" class="card empty">No drinks in {{ filterName }} yet.</p>
       <div v-else class="data-table" :style="{ '--cols': table.widths.template }">
-        <TableHead v-model:sort="sort" :state="table" :sort-columns="columns" />
+        <TableHead v-model:sort="sort" :state="table" />
         <div v-for="{ drink: d, depth } in shown" :key="d.id" class="data-item" :class="{ open: openId === d.id }">
           <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === d.id" :aria-pressed="selection.selecting ? selection.has(d.id) : undefined" @click="selection.selecting ? selection.toggle(d.id) : toggle(d.id)">
             <span class="data-td primary" :style="{ paddingLeft: nested ? `calc(${depth} * var(--space-4))` : undefined }"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(d.id) ? '☑' : '☐' }}</span>

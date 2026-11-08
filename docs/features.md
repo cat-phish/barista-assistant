@@ -237,9 +237,10 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   reorder, delete (its drinks become uncategorised). They group drinks under
   "What are you making?" when brewing, after the brew methods, and filter
   the drinks list. The public menu has its own sections.
-- **Drinks list:** a table (Name, Category, Brewer, Added), filtered by
-  category and sorted by name (variants stay under their parent) or date
-  added, from the headers or the Sort menu; tap a row for its recipe,
+- **Drinks list:** a table (Name, Category, Method, Added), filtered by
+  category and sorted by name (variants stay under their parent), category
+  (in the categories' order), method or date added, from the headers or the
+  Sort menu; tap a row for its recipe,
   ingredients, size and actions. The filter and sort are remembered.
 
 ## Brewing

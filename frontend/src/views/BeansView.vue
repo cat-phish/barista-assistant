@@ -290,7 +290,7 @@ function openFreeze(bean: Bean) {
 // the name, rating beside it; the frozen mark sits by the name there, so its
 // column is wide-only. A field the workspace hides takes its column along
 // (Age goes with the roast date). The Sort by dropdown still has every column.
-const TABLE: Array<TableColumn & { id: BeanSortColumn }> = [
+const TABLE: TableColumn<BeanSortColumn>[] = [
   { id: 'name', label: 'Coffee', track: 'minmax(0, 1.6fr)' },
   { id: 'frozen', label: 'Frozen', header: '❄', title: 'Frozen', class: 'center', track: '1.5rem', wideOnly: true },
   { id: 'roaster', label: 'Roaster', track: 'minmax(0, 1.2fr)' },
@@ -314,6 +314,7 @@ const table = useTableColumns({
   key: 'beans',
   workspace: () => workspaces.current?.id ?? '',
   columns: TABLE,
+  sortColumns: beanSortColumns(), // the headers' first click; the values come from BEAN_SORT_COLUMNS
   available: (id) => {
     const field = COLUMN_FIELDS[id as BeanSortColumn];
     return !field || show(field);
@@ -527,7 +528,7 @@ const selection = useSelection();
         <p v-if="rowError" class="form-error" role="alert">{{ rowError }}</p>
         <p v-if="shown.length === 0" class="card empty">No {{ filterName }} {{ archived ? 'archived ' : '' }}beans.</p>
         <div v-else class="data-table" :style="{ '--cols': table.widths.template }">
-          <TableHead v-model:sort="sort" :state="table" :sort-columns="BEAN_SORT_COLUMNS" />
+          <TableHead v-model:sort="sort" :state="table" />
           <div v-for="bean in shown" :key="bean.id" class="data-item" :class="{ open: openId === bean.id }">
             <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === bean.id" :aria-pressed="selection.selecting ? selection.has(bean.id) : undefined" @click="selection.selecting ? selection.toggle(bean.id) : toggle(bean.id)">
               <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(bean.id) ? '☑' : '☐' }}</span>

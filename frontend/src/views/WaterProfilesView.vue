@@ -41,24 +41,24 @@ const viewKey = (what: string) => `water.${what}.${workspaces.current?.id ?? ''}
 const figureColumn = (label: string, value: (p: WaterProfile) => number | null): SortColumn<WaterProfile> => ({
   label, value, asc: 'Lowest first', desc: 'Highest first',
 });
-const columns: SortColumns<WaterProfile> = {
+const columns = {
   name: nameColumn(),
   tds: figureColumn('TDS', (p) => p.tdsPpm),
   gh: figureColumn('GH', (p) => p.generalHardnessPpm),
   kh: figureColumn('KH', (p) => p.alkalinityPpm),
   added: addedColumn(),
-};
+} satisfies SortColumns<WaterProfile>;
 
 // Table columns: shown, hidden and moved in the Columns dialog, resizable
-// from the header (ColumnResizers). The ones in `columns` sort.
-const TABLE: TableColumn[] = [
+// from the header (ColumnResizers). Each sorts (`columns`).
+const TABLE: TableColumn<keyof typeof columns>[] = [
   { id: 'name', label: 'Name', track: 'minmax(0, 2fr)' },
   { id: 'tds', label: 'TDS', track: 'minmax(0, 0.7fr)' },
   { id: 'gh', label: 'GH', track: 'minmax(0, 0.7fr)' },
   { id: 'kh', label: 'KH', track: 'minmax(0, 0.7fr)' },
   { id: 'added', label: 'Added', title: 'Date added', track: '5.5rem', end: true },
 ];
-const table = useTableColumns({ key: 'water', workspace: () => workspaces.current?.id ?? '', columns: TABLE });
+const table = useTableColumns({ sortColumns: columns, key: 'water', workspace: () => workspaces.current?.id ?? '', columns: TABLE });
 const choosingColumns = ref(false);
 const cell = (p: WaterProfile, id: string): string => {
   if (id === 'tds') return figure(p.tdsPpm);
@@ -179,7 +179,7 @@ const selection = useSelection();
         <p v-if="showArchived" class="muted small">Archived water is hidden when brewing; past brews still show it.</p>
         <p v-if="shown.length === 0" class="card empty">No active water profiles.</p>
         <div v-else class="data-table" :style="{ '--cols': table.widths.template }">
-          <TableHead v-model:sort="sort" :state="table" :sort-columns="columns" />
+          <TableHead v-model:sort="sort" :state="table" />
           <div v-for="p in shown" :key="p.id" class="data-item" :class="{ open: openId === p.id }">
             <button class="data-row" type="button" :aria-expanded="selection.selecting ? undefined : openId === p.id" :aria-pressed="selection.selecting ? selection.has(p.id) : undefined" @click="selection.selecting ? selection.toggle(p.id) : toggle(p.id)">
               <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(p.id) ? '☑' : '☐' }}</span>{{ p.name }}<span v-if="p.archivedAt" class="muted"> (archived)</span> <span v-if="p.isDefault" class="badge">Default</span></span>
