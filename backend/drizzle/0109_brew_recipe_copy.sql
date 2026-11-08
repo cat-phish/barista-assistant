@@ -1,0 +1,1 @@
+ALTER TABLE `brew_logs` ADD `recipe_copy` json;

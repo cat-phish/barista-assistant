@@ -9,6 +9,7 @@ import { eq, getTableColumns, inArray, type Column } from "drizzle-orm";
 import { getTableConfig, type MySqlTable } from "drizzle-orm/mysql-core";
 import { z } from "zod";
 import { scalesByDefault } from "@barista/shared/brew";
+import type { RecipeCopy } from "@barista/shared/recipeCopy";
 import { FLAVORS, parseLexicon, type FlavorLexicon } from "@barista/shared/flavors";
 import { workspaceLexicon } from "./flavorLexicon.js";
 import {
@@ -273,7 +274,58 @@ const ENUMS: Record<string, readonly string[]> = {
 // JSON columns, checked by what the API accepts.
 // What was sent to the AI (docs/api/analysis.md §8c), when the file has it.
 const aiRequest = z.object({ sections: z.array(z.string()), system: z.string(), input: z.record(z.string(), z.unknown()) }).strict().nullable();
+// A brew's copy of its recipe (docs/api/brew-logs.md §6, "Recipe copy"):
+// typed against RecipeCopy so the two can't drift.
+const num = z.number();
+const recipeCopySchema: z.ZodType<RecipeCopy | null> = z
+  .object({
+    name: z.string().max(200),
+    brewer: z.string().max(200),
+    style: z.object({ name: z.string().max(200), brewsLike: z.enum(RECIPE_STYLES) }).strict().nullable(),
+    methodKind: z.enum(METHOD_KINDS),
+    targetDoseGrams: num,
+    targetWaterGrams: num.nullable(),
+    targetIceGrams: num.nullable(),
+    expectedYieldGrams: num.nullable(),
+    expectedFinishMinSec: num.nullable(),
+    expectedFinishMaxSec: num.nullable(),
+    firstDropMinSec: num.nullable(),
+    firstDropMaxSec: num.nullable(),
+    targetTempC: num.nullable(),
+    stepTempsFollowBrew: z.boolean(),
+    steepMinHours: num.nullable(),
+    steepMaxHours: num.nullable(),
+    steepTemp: z.enum(STEEP_TEMPS).nullable(),
+    dilutionRatio: num.nullable(),
+    dilutionWith: z.enum(DILUTION_WITH).nullable(),
+    flowUnit: z.enum(FLOW_UNITS),
+    stepTimeScaling: num.nullable(),
+    steps: z
+      .array(
+        z
+          .object({
+            stepOrder: z.number().int(),
+            stepType: z.enum(RECIPE_STEP_TYPES),
+            label: z.string().max(200).nullable(),
+            durationSec: num.nullable(),
+            advance: z.enum(STEP_ADVANCE),
+            targetWaterGrams: num.nullable(),
+            targetTempC: num.nullable(),
+            pressureBar: num.nullable(),
+            pressureEndBar: num.nullable(),
+            flowRate: num.nullable(),
+            flowEndRate: num.nullable(),
+            scalesWithBatch: z.boolean(),
+          })
+          .strict(),
+      )
+      .max(50),
+  })
+  .strict()
+  .nullable();
+
 const JSON_SCHEMAS: Record<string, z.ZodType> = {
+  "brew_logs.recipeCopy": recipeCopySchema,
   "beans.varieties": z.array(z.string().min(1).max(100)).max(20).nullable(),
   "beans.species": z.array(z.enum(COFFEE_SPECIES)).nullable(),
   "green_coffees.varieties": z.array(z.string().min(1).max(100)).max(20).nullable(),

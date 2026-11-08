@@ -1226,6 +1226,10 @@ export const brewLogs = mysqlTable("brew_logs", {
   // How far this brew moved the recipe's step temps; null = as written
   // (docs/api/brew-logs.md §6).
   stepTempShiftC: decimal("step_temp_shift_c", { precision: 4, scale: 1, mode: "number" }),
+  // The recipe as it was when the brew was logged (or its recipeId last set),
+  // for the AI; null = no recipe, or logged before copies (read the live one).
+  // Not returned by the API (docs/api/brew-logs.md §6, "Recipe copy").
+  recipeCopy: jsonValue<RecipeCopy>("recipe_copy"),
   actualGrindSetting: decimal("actual_grind_setting", { precision: 6, scale: 2, mode: "number" }), // the dial number, like settingMin
   // Grinder speed, only for a variable-speed grinder (docs/api/brew-logs.md §6).
   grindRpm: int("grind_rpm"),

@@ -35,6 +35,16 @@ queue:
 1. It queries the target `brew_log`, the associated `bean` and the `recipe`
    (with its steps). Only that brew is sent: earlier brews aren't, so the
    analysis is a diagnosis of this one brew.
+   - **The recipe as brewed:** the recipe is the brew's own copy
+     (`recipeCopy`, `brew-logs.md` §6), so editing the recipe later, or
+     deleting it, doesn't change what an old brew is judged against
+     (`recipeAsBrewed`, `worker/src/context.ts`). Only its
+     `grindStartingPoints` are read from the live recipe, while the brew
+     still links to it (none after a delete). A brew whose recipe was
+     deleted also takes `recipeName` and `recipeStyle` from the copy. A brew
+     logged before copies (no `recipeCopy`) is read against the live recipe.
+     Chat brew attachments (§9e) load the same way. Suggest (§9b) sends the
+     recipe about to be brewed, so its recipe is the live one.
    - If the brew log no longer exists (deleted after queueing), the job
      completes without calling the LLM.
    - The bean includes its `roastLevel` (or `null` if unknown), which

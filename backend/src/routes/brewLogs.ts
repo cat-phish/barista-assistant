@@ -45,6 +45,7 @@ import { ANALYSIS_COLUMNS, type AnalysisRow } from "../aiRequest.js";
 import { remindToRate, remindWhenSteeped, type ReminderOutcome } from "../reminders.js";
 import { autoAnalyzeOnEdited, autoAnalyzeOnSave } from "../autoAnalyze.js";
 import { cancelWaitingAnalysis } from "../queue.js";
+import { recipeCopy } from "../recipeCopy.js";
 
 // docs/api/brew-logs.md §6: first_drop (espresso), step_end (a step's real end),
 // step_hold / step_resume (a step held on the timer).
@@ -54,7 +55,8 @@ export interface Mark {
   atSec: number;
 }
 
-export interface BrewLogDetails extends BrewLog {
+// The log as clients see it: recipeCopy is the AI's, not returned (§6, "Recipe copy").
+export interface BrewLogDetails extends Omit<BrewLog, "recipeCopy"> {
   // decaf and species: for the caffeine estimate (docs/api/stats.md §11).
   bean: Pick<Bean, "id" | "roasterName" | "beanName" | "batchNumber" | "decaf" | "species">;
   // style: the recipe's (docs/api/recipe-styles.md §5e), for how extraction yield is worked out.
@@ -782,7 +784,9 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Cre
     if (typeof picks === "string") return picks;
     // A steep started without a window takes its recipe's (older clients).
     const steepWindow = fields.steeping && fields.steepMinHours === undefined && fields.steepMaxHours === undefined ? await recipeSteepWindow(tx, fields.recipeId) : {};
-    await tx.insert(brewLogs).values({ id, workspaceId, userId, ...fields, ...steepWindow, brewerId: brewer?.brewerId ?? null });
+    // The recipe as brewed, for the AI (§6, "Recipe copy").
+    const copy = await recipeCopy(tx, fields.recipeId);
+    await tx.insert(brewLogs).values({ id, workspaceId, userId, ...fields, ...steepWindow, brewerId: brewer?.brewerId ?? null, recipeCopy: copy });
     await insertMarks(tx, id, marks);
     await insertTools(tx, id, toolIds);
     await insertProblems(tx, id, problemIds);
@@ -853,7 +857,9 @@ brewLogsRouter.patch(
       // to another brewer can still be edited (docs/api/brew-logs.md §6).
       const { marks, toolIds, problemIds, flavors, ...fields } = body;
       // A new recipe brings its brewer; the old brewer stays otherwise.
-      const brewerUpdate = "recipeId" in body ? { brewerId: (await recipeBrewer(tx, fields.recipeId))?.brewerId ?? null } : {};
+      // A new recipe brings its brewer and a fresh copy (§6, "Recipe copy").
+      const brewerUpdate =
+        "recipeId" in body ? { brewerId: (await recipeBrewer(tx, fields.recipeId))?.brewerId ?? null, recipeCopy: await recipeCopy(tx, fields.recipeId) } : {};
       const touched = ["recipeId", "actualWaterGrams", "actualIceGrams", "actualYieldGrams", "marks", "actualTimeSec"];
       if (touched.some((key) => key in body)) {
         const after = { ...log, ...fields };

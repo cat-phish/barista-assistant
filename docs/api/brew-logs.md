@@ -221,6 +221,19 @@ says why the last analysis failed or wasn't made (e.g. the daily cap), else
     Clients fix it when the brew leaves setup, so changing the log's
     temperature afterwards doesn't change it. The AI sees the step temps
     moved by it, and the shift itself (`llm-contract.md` §9).
+  - **Recipe copy** (`recipeCopy`, stored, never sent or returned): the API
+    keeps a copy of the recipe on the log when it's created, and again
+    whenever `recipeId` is sent on `PATCH` (`null` clears it). Other edits
+    leave it, and so do later edits or deletion of the recipe. It holds what
+    the AI judges a brew against: name, brewer, style, kind, targets
+    (dose, water, ice, temp, expected yield), finish and first-drop windows,
+    cold-style fields, flow unit, step time scaling, `stepTempsFollowBrew`
+    and the steps, all as the recipe wrote them (`RecipeCopy`,
+    `@barista/shared/recipeCopy`). It leaves out grind starting points,
+    notes and the finish offset. The app's screens and Repeat brew use the
+    current recipe; only the AI uses the copy (`llm-contract.md` §9). Logs
+    from before migration 0109 have none and are read against the live
+    recipe.
   - `actualYieldGrams` is the **measured** beverage weight: optional,
     nullable, same rules as water. Unlike the recipe's rough
     `expectedYieldGrams`, it's a measurement, and clients show it against the

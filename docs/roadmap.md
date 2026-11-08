@@ -2635,3 +2635,31 @@ recipe" question it raised is backlog 12 now.
   temp, and step temps follow them only with `stepTempsFollowBrew`.
 - **Hiding it:** both new fields go with the existing `temp` switch
   (Settings → AI); `stepTempsFollowBrew` also goes with `recipeSteps`.
+
+
+## Brews keep a copy of their recipe (built)
+
+Branch `brew-recipe-copy`; was backlog 12 (raised by the step temps review,
+just above). The backlog's later items moved up one.
+
+- **Why:** a brew pointed at the live recipe, so editing a recipe changed
+  what every old brew was judged against: its targets, steps and step temps.
+  Reordering steps also made old `step_end` / `step_hold` marks point at the
+  wrong step. Deleting a recipe left its brews with none.
+- **What's kept:** `brew_logs.recipe_copy` (JSON, migration 0109): what the
+  timer and the AI judge a brew against (`RecipeCopy`,
+  `@barista/shared/recipeCopy`), as the recipe wrote it. The backend takes
+  it on create, and on `PATCH` whenever `recipeId` is sent
+  (`backend/src/recipeCopy.ts`). It's never returned by the API.
+- **Who uses it:** only the AI (`recipeAsBrewed` in `worker/src/context.ts`):
+  analyses and chat brew attachments. The brew's own scaling (water,
+  `stepTempShiftC`) is still applied when it's read. Grind starting points
+  stay live. A deleted recipe's brews keep their copy and its name and style.
+- **Decided against:** showing the copy on brew screens (they and Repeat
+  brew use the current recipe, which is what you want after improving it),
+  copying the whole recipe (notes, grind starting points, finish offset),
+  and backfilling old brews (they'd get the current recipe, which may not be
+  how they were brewed). Brews from before have no copy and use the live
+  recipe as before.
+- **Backups:** the copy goes in every file and is checked against
+  `RecipeCopy`. An older file restores without copies.

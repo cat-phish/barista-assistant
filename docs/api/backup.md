@@ -115,6 +115,11 @@ each as `photos/<id>.webp`; they restore in order under new ids, each only
 if its file is there and valid. An older file's single `menuLogoId`
 restores as the one logo.
 
+**A brew's recipe copy** (`brew_logs.recipeCopy`, `brew-logs.md` §6) goes
+in every file. It's checked against `RecipeCopy` like any JSON column
+(`JSON_SCHEMAS`). A file from before migration 0109 has none, and those
+brews are read against their live recipe, as before.
+
 **What was sent to the AI** (`request` on `llm_analyses` and
 `parameter_suggestions`, `analysis.md` §8c) is large and only for looking
 back at, so a file leaves it out unless asked (`aiRequests`,
