@@ -2570,7 +2570,9 @@ kept general.
   the ones above it. Formulas: numbers, keys, `+ − * / % ^`, parentheses,
   `round floor ceil abs sqrt min max`, parsed and worked out by
   `lib/calc.ts` (never `eval`). Keys come from labels until changed by hand.
-  Templates: amount per volume, ratio, dilution (percent), blank.
+  Templates: blank, amount per volume, ratio, dilution (percent). A new
+  calculator starts from Blank, one input (`DEFAULT_TEMPLATE`, branch
+  `calculator-default-blank`); whether the others keep two is backlog 26.
 - **Using one:** anyone who can read the note types into its inputs; the
   values are remembered on the device (per note and block) with a Reset,
   never saved to the note.

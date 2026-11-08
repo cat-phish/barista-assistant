@@ -120,7 +120,8 @@ Adding and editing a brewer, grinder, ingredient or prep item happen on their ow
   **text** formatted like chat replies (bold, lists, headings, tables), and
   **calculators**. A calculator has inputs (Water in tank: 1.8 L) and
   results worked out by formula (Descaler powder = `water * per_litre`, 36
-  g); start from a template (amount per volume, ratio, dilution) or blank.
+  g); a new one starts blank with one input, or from a template (amount
+  per volume, ratio, dilution).
   Anyone can type into a calculator's inputs: it's remembered on that
   device and doesn't change the note. Search titles, text and calculators;
   **Pin** keeps a note at the top for everyone. Notes are in backups and

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteBlock } from '../api/types';
 import { runCalculator } from './calc';
-import { CALCULATOR_TEMPLATES, calculatorErrors, draftCalculator, fromDraft, keyFromLabel, newCalculator, noteSearchText, toDraft, type DraftCalculator } from './noteBlocks';
+import { CALCULATOR_TEMPLATES, calculatorErrors, DEFAULT_TEMPLATE, draftCalculator, fromDraft, keyFromLabel, newCalculator, noteSearchText, toDraft, type DraftCalculator } from './noteBlocks';
 
 const draft = (fields: Partial<DraftCalculator> = {}): DraftCalculator => ({
   id: 'c1',
@@ -62,6 +62,11 @@ describe('note blocks', () => {
       'results.2.formula': 'Missing “)”',
       'results.3.formula': 'Nothing is called nope.',
     });
+  });
+
+  it('a new calculator starts with one input, Blank first in the list', () => {
+    expect(newCalculator(DEFAULT_TEMPLATE).inputs).toHaveLength(1);
+    expect(Object.keys(CALCULATOR_TEMPLATES)[0]).toBe(DEFAULT_TEMPLATE);
   });
 
   it('every template is a working calculator', () => {
