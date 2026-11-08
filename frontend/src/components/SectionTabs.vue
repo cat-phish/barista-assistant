@@ -1,13 +1,15 @@
 <script setup lang="ts">
 // Tabs across a section's screens (Bar setup; Recipes / Drinks / Ingredients).
-// One row; on a phone, more than four tabs wrap into two even rows (Bar
-// setup's six become 3 + 3) instead of squeezing into each other.
+// One row, each tab its label plus the same padding, the spare room shared
+// out evenly: the gaps between labels match however long each label is
+// (equal columns left "Prep" adrift and "Problems" cramped). If they don't
+// fit they wrap, still filling each row. On a phone, more than four tabs
+// become two even rows (Bar setup's eight: 4 + 4).
 import { computed } from 'vue';
 import type { RouteLocationRaw } from 'vue-router';
 
 const props = defineProps<{ label: string; tabs: Array<{ to: RouteLocationRaw; text: string }> }>();
 const columns = computed(() => ({
-  '--cols': props.tabs.length,
   '--cols-narrow': props.tabs.length > 4 ? Math.ceil(props.tabs.length / 2) : props.tabs.length,
 }));
 </script>
@@ -20,14 +22,15 @@ const columns = computed(() => ({
 
 <style scoped>
 .tabs {
-  display: grid;
-  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-1);
   padding: var(--space-1);
   background: var(--brand-tint);
   border-radius: var(--radius);
 }
 .tabs a {
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -42,6 +45,7 @@ const columns = computed(() => ({
 }
 @media (max-width: 600px) {
   .tabs {
+    display: grid;
     grid-template-columns: repeat(var(--cols-narrow), minmax(0, 1fr));
   }
   .tabs a {
