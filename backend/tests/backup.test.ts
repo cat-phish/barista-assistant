@@ -312,6 +312,25 @@ describe("workspace backup and restore (docs/api/backup.md §2b)", () => {
     expect(after.tables.brew_logs.every((r: { stepTempShiftC: number | null }) => r.stepTempShiftC === null)).toBe(true);
   });
 
+  it("keeps each brew's recipe copy, and restores a file from before copies as none (docs/api/backup.md §2b)", async () => {
+    const { owner, base } = await populated();
+    const backup = (await owner.agent.get(`${base}/backup`)).body;
+    const copies = backup.tables.brew_logs.map((r: { recipeCopy: unknown }) => r.recipeCopy);
+    expect(copies.some((c: unknown) => c !== null)).toBe(true);
+    const restore = (file: unknown) => owner.agent.post("/api/workspaces/restore").send({ name: "Copy", slug: `copy-${randomUUID().slice(0, 8)}`, backup: file });
+    const same = await restore(backup);
+    expect(same.status, JSON.stringify(same.body)).toBe(201);
+    expect((await owner.agent.get(`/api/workspaces/${same.body.workspaceId}/backup`)).body.tables.brew_logs.map((r: { recipeCopy: unknown }) => r.recipeCopy)).toEqual(copies);
+
+    const old = await restore({ ...backup, tables: { ...backup.tables, brew_logs: backup.tables.brew_logs.map(({ recipeCopy: _gone, ...r }: Record<string, unknown>) => r) } });
+    expect(old.status, JSON.stringify(old.body)).toBe(201);
+    const after = (await owner.agent.get(`/api/workspaces/${old.body.workspaceId}/backup`)).body;
+    expect(after.tables.brew_logs.every((r: { recipeCopy: unknown }) => r.recipeCopy === null)).toBe(true);
+
+    const bad = backup.tables.brew_logs.map((r: { recipeCopy: Record<string, unknown> | null }) => (r.recipeCopy ? { ...r, recipeCopy: { ...r.recipeCopy, methodKind: "teapot" } } : r));
+    expect((await restore({ ...backup, tables: { ...backup.tables, brew_logs: bad } })).status).toBe(400);
+  });
+
   it("refuses a bad file or a taken slug, and creates nothing", async () => {
     const { owner, ws, base } = await populated();
     const backup = (await owner.agent.get(`${base}/backup`)).body;

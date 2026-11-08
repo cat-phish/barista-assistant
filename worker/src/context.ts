@@ -1,3 +1,4 @@
+import type { RecipeCopy } from "@barista/shared/recipeCopy";
 import { ratioWater, scaleStepTimes, shiftStepTemps, shiftWindow, extractionYield as sharedExtractionYield } from "@barista/shared/brew";
 import {
   beanProcesses,
@@ -30,12 +31,10 @@ import {
   type CoffeeSpecies,
   type Grinder,
   type Brewer,
-  type FlowUnit,
   type MarkKind,
   type RecipeStyle,
   type MethodKind,
   type ServingUnit,
-  type StepAdvance,
   type WaterProfile,
   type SteepTemp,
   type DilutionWith,
@@ -179,57 +178,12 @@ export interface BrewContext {
     species: CoffeeSpecies[] | null;
     roastWeightLossPercent: number | null; // % of the green weight lost in roasting
   };
-  recipe: {
-    name: string;
-    brewer: string; // e.g. "V60", "Linea Mini"
-    style: StyleInfo | null; // how it brews
-    methodKind: MethodKind;
-    targetDoseGrams: number;
-    targetWaterGrams: number | null; // null for espresso
-    targetIceGrams: number | null; // flash chilled: ice in the server
-    expectedYieldGrams: number | null; // estimate; for espresso the target shot weight
-    // Target window for total brew (or shot) time, seconds (both or neither).
-    expectedFinishMinSec: number | null;
-    expectedFinishMaxSec: number | null;
-    // Espresso: target window for the first drop, seconds (both or neither).
-    firstDropMinSec: number | null;
-    firstDropMaxSec: number | null;
-    targetTempC: number | null;
-    // Step temps move with the brew's water temp (docs/api/recipes.md §5).
-    // For an analysis the steps are already the brew's (scaledToBrew).
-    stepTempsFollowBrew: boolean;
-    // Cold styles (docs/api/recipes.md §5): the steep window in hours, fridge
-    // or room, and the serving dilution the recipe intends.
-    steepMinHours: number | null;
-    steepMaxHours: number | null;
-    steepTemp: SteepTemp | null;
-    dilutionRatio: number | null;
-    dilutionWith: DilutionWith | null;
-    // Approximate starting points, per grinder (the brew's grinder is in grinderName).
-    grindStartingPoints: Array<{ grinderName: string; setting: number }>;
-    flowUnit: FlowUnit; // for flow steps: g/s or ml/s
-    // Filter: the times of steps with scalesWithBatch follow the batch, ×
-    // factor^this (docs/api/recipes.md §5); null = none do. For an analysis the steps
-    // and the finish window are already the brew's (scaledToBrew).
-    stepTimeScaling: number | null;
-    // Back to back: each starts when the previous one actually ended
-    // (step_end marks say when, for tap/logged steps; step_hold/step_resume
-    // when a step was held).
-    steps: Array<{
-      stepOrder: number;
-      stepType: string;
-      label: string | null;
-      durationSec: number | null; // null = until finish; a guide for tap steps
-      advance: StepAdvance;
-      targetWaterGrams: number | null; // cumulative "pour to" weight
-      targetTempC: number | null;
-      pressureBar: number | null;
-      pressureEndBar: number | null; // ramp end
-      flowRate: number | null;
-      flowEndRate: number | null;
-      scalesWithBatch: boolean; // sent only with stepTimeScaling
-    }>;
-  } | null;
+  // The brew's copy of its recipe (RecipeCopy, @barista/shared/recipeCopy),
+  // or the live one for a brew logged before copies; the grind starting
+  // points (per grinder; the brew's grinder is in grinderName) are always
+  // the live recipe's. For an analysis the steps, step temps and finish
+  // window are already the brew's (scaledToBrew).
+  recipe: (RecipeCopy & { grindStartingPoints: Array<{ grinderName: string; setting: number }> }) | null;
   // Only this brew, no earlier ones (docs/api/llm-contract.md §9).
   brew: BrewSummary;
   drink: DrinkInfo | null; // the brew's drink, if any
@@ -442,8 +396,14 @@ export async function flavorsFor(brewLogIds: string[]): Promise<Map<string, stri
   return byLog;
 }
 
+// A brew whose recipe was deleted still names it, from its copy.
 export function withJoins({ brew, ...joins }: { brew: BrewLog } & BrewJoins): BrewRow {
-  return { ...brew, ...joins };
+  return {
+    ...brew,
+    ...joins,
+    recipeName: joins.recipeName ?? brew.recipeCopy?.name ?? null,
+    recipeStyle: joins.recipeStyle ?? brew.recipeCopy?.style ?? null,
+  };
 }
 
 const machineBrewers = alias(brewers, "machine_brewer");
@@ -551,7 +511,7 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
   if (!bean) return null; // Bean deletion cascades, so this means the log is going too.
 
   const [recipe, marks, tools, problems, flavors, servedAs] = await Promise.all([
-    brew.recipeId ? loadRecipe(brew.recipeId) : Promise.resolve(null),
+    recipeAsBrewed(brew),
     marksFor([brew.id]),
     toolsFor([brew.id]),
     problemsFor([brew.id]),
@@ -588,6 +548,23 @@ export function scaledToBrew(
   }
   const steps = shiftStepTemps(out.steps, stepTempShiftC);
   return steps === out.steps ? out : { ...out, steps };
+}
+
+// The recipe the brew was judged against (docs/api/llm-contract.md §9): its
+// copy, with the live recipe's grind starting points while the link lasts;
+// the live recipe for a brew logged before copies.
+async function recipeAsBrewed(brew: BrewLog): Promise<BrewContext["recipe"]> {
+  if (!brew.recipeCopy) return brew.recipeId ? loadRecipe(brew.recipeId) : null;
+  return { ...brew.recipeCopy, grindStartingPoints: brew.recipeId ? await grindStartingPointsOf(brew.recipeId) : [] };
+}
+
+function grindStartingPointsOf(recipeId: string): Promise<Array<{ grinderName: string; setting: number }>> {
+  return db
+    .select({ grinderName: grinders.name, setting: recipeGrindSettings.setting })
+    .from(recipeGrindSettings)
+    .innerJoin(grinders, eq(recipeGrindSettings.grinderId, grinders.id))
+    .where(eq(recipeGrindSettings.recipeId, recipeId))
+    .orderBy(asc(grinders.name));
 }
 
 export async function loadRecipe(recipeId: string): Promise<BrewContext["recipe"]> {
@@ -641,12 +618,7 @@ export async function loadRecipe(recipeId: string): Promise<BrewContext["recipe"
       .from(recipeSteps)
       .where(eq(recipeSteps.recipeId, recipeId))
       .orderBy(asc(recipeSteps.stepOrder)),
-    db
-      .select({ grinderName: grinders.name, setting: recipeGrindSettings.setting })
-      .from(recipeGrindSettings)
-      .innerJoin(grinders, eq(recipeGrindSettings.grinderId, grinders.id))
-      .where(eq(recipeGrindSettings.recipeId, recipeId))
-      .orderBy(asc(grinders.name)),
+    grindStartingPointsOf(recipeId),
   ]);
 
   return { ...row, grindStartingPoints, steps };

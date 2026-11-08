@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { analysisRequests, beanFreezes, beans, brewLogMarks, brewLogs, brewers, ingredients, drinkIngredients, drinks, grinders, llmAnalyses, recipeGrindSettings, recipes, recipeSteps, users, waterProfiles, workspaces, prepTools, brewLogTools, brewProblems, brewLogProblems, brewLogFlavors, flavorLexicons, recipeStyles } from "@barista/shared/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { extractionYield, loadBrewContext, type BrewContext } from "../src/context.js";
 import { db } from "../src/db.js";
@@ -564,5 +564,44 @@ describe("step temps (docs/api/llm-contract.md §9)", () => {
     // The recipe itself doesn't change.
     const [step] = await db.select({ t: recipeSteps.targetTempC }).from(recipeSteps).where(eq(recipeSteps.recipeId, recipeId));
     expect(step?.t).toBe(85);
+  });
+});
+
+describe("the brew's recipe copy (docs/api/llm-contract.md §9)", () => {
+  it("judges a brew against its recipe as brewed, with the live grind starting points", async () => {
+    const day8 = logIds.day8!;
+    const [{ recipeId }] = await db.select({ recipeId: brewLogs.recipeId }).from(brewLogs).where(eq(brewLogs.id, day8)) as [{ recipeId: string }];
+    const asBrewed = (await loadBrewContext(day8))!.recipe!; // no copy yet: the live recipe
+    const { grindStartingPoints: _live, ...copy } = asBrewed;
+    await db.update(brewLogs).set({ recipeCopy: copy }).where(eq(brewLogs.id, day8));
+
+    // The recipe changes afterwards: dose, a step temp, the steps reordered.
+    const grinderId = randomUUID();
+    await db.insert(grinders).values({ id: grinderId, workspaceId, name: "C40" });
+    await db.insert(recipeGrindSettings).values({ id: randomUUID(), recipeId, grinderId, setting: 22 });
+    await db.update(recipes).set({ targetDoseGrams: 20, name: "House V60 v2" }).where(eq(recipes.id, recipeId));
+    await db.update(recipeSteps).set({ targetTempC: 90 }).where(and(eq(recipeSteps.recipeId, recipeId), eq(recipeSteps.stepOrder, 1)));
+    await db.update(recipeSteps).set({ stepOrder: 99 }).where(and(eq(recipeSteps.recipeId, recipeId), eq(recipeSteps.stepOrder, 2)));
+
+    const context = (await loadBrewContext(day8))!;
+    expect(context.recipe).toEqual({ ...copy, grindStartingPoints: [{ grinderName: "C40", setting: 22 }] });
+    expect(context.brew.recipeName).toBe("House V60 v2"); // the brew still names the live recipe
+
+    // The shift applies to the copy, as to the live recipe.
+    await db.update(brewLogs).set({ stepTempShiftC: 2 }).where(eq(brewLogs.id, day8));
+    expect((await loadBrewContext(day8))!.recipe!.steps.map((s) => s.targetTempC)).toEqual([87, null, null]);
+
+    // Deleted: the copy still goes, with its name and style; no starting points.
+    await db.delete(recipes).where(eq(recipes.id, recipeId));
+    const gone = (await loadBrewContext(day8))!;
+    expect(gone.recipe).toMatchObject({ name: "House V60", targetDoseGrams: 15, grindStartingPoints: [] });
+    expect(gone.brew).toMatchObject({ recipeName: "House V60", recipeStyle: { name: "Pour over", brewsLike: "pour_over" } });
+  });
+
+  it("reads the live recipe for a brew logged before copies", async () => {
+    const day8 = logIds.day8!;
+    const [{ recipeId }] = await db.select({ recipeId: brewLogs.recipeId }).from(brewLogs).where(eq(brewLogs.id, day8)) as [{ recipeId: string }];
+    await db.update(recipes).set({ targetDoseGrams: 20 }).where(eq(recipes.id, recipeId));
+    expect((await loadBrewContext(day8))!.recipe).toMatchObject({ targetDoseGrams: 20 });
   });
 });

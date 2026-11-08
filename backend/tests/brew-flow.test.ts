@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import request from "supertest";
 import { brewAnalysisJobId } from "@barista/shared/jobs";
+import { brewLogs } from "@barista/shared/schema";
+import { eq } from "drizzle-orm";
 import { app } from "../src/app.js";
+import { db } from "../src/db.js";
 import { brewAnalysisQueue } from "../src/queue.js";
 import { addMember, brewerId, menuAdd, menuSection, newBean, newBrewLog, newUser, newWorkspace, type TestUser, processId } from "./helpers.js";
 
@@ -114,6 +117,42 @@ describe("brew logs", () => {
     expect((await owner.agent.get(`${base}/${made.body.brewLog.id}`)).body.brewLog.stepTempShiftC).toBe(-1.5);
     expect((await owner.agent.patch(`${base}/${made.body.brewLog.id}`).send({ actualTempC: 90 })).body.brewLog.stepTempShiftC).toBe(-1.5);
     for (const bad of [101, -101, 1.55]) expect((await owner.agent.post(base).send({ ...brew, stepTempShiftC: bad })).status, String(bad)).toBe(400);
+  });
+
+  it("keeps a copy of the recipe as brewed, for the AI only (docs/api/brew-logs.md §6, \"Recipe copy\")", async () => {
+    const { owner, ws, v60 } = await setup();
+    const bean = await newBean(owner, ws.id);
+    const recipes = `/api/workspaces/${ws.id}/recipes`;
+    const base = `/api/workspaces/${ws.id}/brew-logs`;
+    const steps = [
+      { stepType: "bloom", durationSec: 45, targetWaterGrams: 50, targetTempC: 85 },
+      { stepType: "pour", durationSec: 90, targetWaterGrams: 250 },
+    ];
+    const house = (await owner.agent.post(recipes).send({ name: "House", brewerId: v60, targetDoseGrams: 15, targetWaterGrams: 250, targetTempC: 94, steps })).body.recipe.id;
+    const other = (await owner.agent.post(recipes).send({ name: "Other", brewerId: v60, targetDoseGrams: 18, targetWaterGrams: 300 })).body.recipe.id;
+    const copyOf = async (id: string) => (await db.select({ c: brewLogs.recipeCopy }).from(brewLogs).where(eq(brewLogs.id, id)))[0]?.c ?? null;
+
+    const made = await owner.agent.post(base).send({ beanId: bean, recipeId: house, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150 });
+    const id = made.body.brewLog.id as string;
+    expect(made.body.brewLog).not.toHaveProperty("recipeCopy");
+    expect((await owner.agent.get(`${base}/${id}`)).body.brewLog).not.toHaveProperty("recipeCopy");
+    expect((await owner.agent.get(base)).body.brewLogs[0]).not.toHaveProperty("recipeCopy");
+    const copy = await copyOf(id);
+    expect(copy).toMatchObject({ name: "House", brewer: "V60", methodKind: "filter", targetDoseGrams: 15, targetTempC: 94, stepTempsFollowBrew: false });
+    expect(copy?.steps.map((s) => [s.stepOrder, s.stepType, s.targetTempC])).toEqual([[1, "bloom", 85], [2, "pour", null]]);
+
+    // Editing the recipe, or other fields of the brew, leaves the copy as brewed.
+    await owner.agent.patch(`${recipes}/${house}`).send({ targetDoseGrams: 20, steps: [{ stepType: "pour", durationSec: 120, targetWaterGrams: 250, targetTempC: 96 }] });
+    await owner.agent.patch(`${base}/${id}`).send({ rating: 4 });
+    expect(await copyOf(id)).toEqual(copy);
+
+    // A new recipeId takes a fresh copy; none clears it.
+    await owner.agent.patch(`${base}/${id}`).send({ recipeId: other });
+    expect(await copyOf(id)).toMatchObject({ name: "Other", targetDoseGrams: 18, steps: [] });
+    await owner.agent.patch(`${base}/${id}`).send({ recipeId: null });
+    expect(await copyOf(id)).toBeNull();
+    const plain = await owner.agent.post(base).send({ beanId: bean, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150 });
+    expect(await copyOf(plain.body.brewLog.id)).toBeNull();
   });
 
   it("records the device's UTC offset for the local brew date", async () => {
