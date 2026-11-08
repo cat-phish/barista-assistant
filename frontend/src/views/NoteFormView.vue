@@ -14,6 +14,7 @@ import NoteCalculatorEditor from '../components/NoteCalculatorEditor.vue';
 import {
   CALCULATOR_TEMPLATES,
   calculatorErrors,
+  DEFAULT_TEMPLATE,
   fromDraft,
   MAX_NOTE_TEXT,
   newCalculator,
@@ -35,7 +36,7 @@ const noUsage = async () => ({});
 
 const title = ref('');
 const blocks = ref<DraftBlock[]>([newText()]);
-const template = ref<CalculatorTemplate>('perVolume');
+const template = ref<CalculatorTemplate>(DEFAULT_TEMPLATE);
 const loading = ref(true);
 const saving = ref(false);
 const submitted = ref(false);

@@ -688,26 +688,25 @@ What the analysis worker sends to the LLM and what comes back.
 ### 26. Calculator templates: how many inputs
 
 - **Status:** idea
-- **Why:** "Add calculator" starts from **Amount per volume**, which has two
-  inputs (Water and Amount per litre). For a fixed recipe, like descaling
-  at 20 g per litre where only the tank volume changes, the second input is
-  in the way: you have to remove it and write the strength into the formula
-  (`volume * 20`).
+- **Why:** a new calculator now starts from **Blank**, with one input (see
+  the roadmap, "Notes: calculators"). The other templates still have two:
+  **Amount per volume** (Water and Amount per litre), **Ratio** (coffee and
+  ratio) and **Dilution** (total and strength). For a fixed recipe, like
+  descaling at 20 g per litre where only the tank volume changes, the
+  second input is in the way: you remove it and write the strength into the
+  formula (`volume * 20`).
 - **Approach:** to decide; options so far:
   - Amount per volume asks only for the volume, the strength in the
-    formula (`volume * 20`). Quicker for a fixed recipe; changing the
-    strength means editing the note.
-  - The template dropdown starts on **Blank** (one input), the others a
-    click away.
-  - Both, or a choice in the template ("fixed strength" / "strength you can
-    change").
+    formula. Quicker for a fixed recipe; changing the strength means
+    editing the note.
+  - A choice in the template: "fixed strength" or "strength you can
+    change".
   Templates are `CALCULATOR_TEMPLATES` in `frontend/src/lib/noteBlocks.ts`;
   the test there checks each one works out.
 - **Size:** S
 - **Depends on:** nothing (calculators are built).
 - **Open questions:**
-  - Which template should be the default, and should the other templates
-    keep two inputs (Ratio: coffee and ratio; Dilution: total and strength)?
+  - Should Ratio and Dilution keep two inputs?
   - Should a calculator be able to mark an input as fixed (shown, not
     typed into on the Notes page) instead of moving it into the formula?
 

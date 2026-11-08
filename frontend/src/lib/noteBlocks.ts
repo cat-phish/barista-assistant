@@ -112,8 +112,17 @@ export function calculatorErrors(d: DraftCalculator): Record<string, string> {
 
 export const textLength = (drafts: readonly DraftBlock[]): number => drafts.reduce((n, d) => n + (d.type === 'text' ? d.text.length : 0), 0);
 
-// Starting points for a new calculator; everything can be changed after.
+// Starting points for a new calculator, in the dropdown's order; everything
+// can be changed after. A new one starts from Blank: one input.
 export const CALCULATOR_TEMPLATES = {
+  blank: {
+    label: 'Blank',
+    make: () => ({
+      title: '',
+      inputs: [{ key: 'amount', label: 'Amount', unit: '', valueText: '1' }],
+      results: [{ key: 'result', label: 'Result', unit: '', formula: 'amount', decimals: 2 }],
+    }),
+  },
   perVolume: {
     label: 'Amount per volume',
     make: (): Omit<DraftCalculator, 'id' | 'type'> => ({
@@ -150,16 +159,9 @@ export const CALCULATOR_TEMPLATES = {
       ],
     }),
   },
-  blank: {
-    label: 'Blank',
-    make: () => ({
-      title: '',
-      inputs: [{ key: 'amount', label: 'Amount', unit: '', valueText: '1' }],
-      results: [{ key: 'result', label: 'Result', unit: '', formula: 'amount', decimals: 2 }],
-    }),
-  },
 } satisfies Record<string, { label: string; make: () => Omit<DraftCalculator, 'id' | 'type'> }>;
 export type CalculatorTemplate = keyof typeof CALCULATOR_TEMPLATES;
+export const DEFAULT_TEMPLATE: CalculatorTemplate = 'blank';
 
 export const newCalculator = (template: CalculatorTemplate): DraftCalculator => ({ id: newBlockId(), type: 'calculator', ...CALCULATOR_TEMPLATES[template].make() });
 export const newText = (): DraftBlock => ({ id: newBlockId(), type: 'text', text: '' });
