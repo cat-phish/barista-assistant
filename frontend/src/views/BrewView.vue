@@ -1851,11 +1851,11 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
 </template>
 
 <style scoped>
-/* Under Total time: the offset, then Undo on its own line. */
+/* Under Total time: the offset, with Undo beside it. */
 .offset-note {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  align-items: baseline;
+  gap: var(--space-2);
 }
 .notes-reminder h2 {
   font-size: 1rem;
