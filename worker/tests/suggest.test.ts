@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { SuggestionPreview } from "@barista/shared/jobs";
-import { beans, brewers, brewLogs, grinders, llmAnalyses, parameterSuggestions, recipes, users, workspaces, type SuggestSource } from "@barista/shared/schema";
+import { beans, brewers, brewLogs, grinders, llmAnalyses, parameterSuggestions, recipes, recipeSteps, users, workspaces, type SuggestSource } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../src/db.js";
@@ -260,5 +260,17 @@ describe("processParameterSuggestion", () => {
     const failing = await pending();
     await failSuggestion(failing, "The AI service couldn't be reached");
     expect(await row(failing)).toMatchObject({ status: "failed", error: "The AI service couldn't be reached" });
+  });
+});
+
+describe("step temps (docs/api/llm-contract.md §9b)", () => {
+  it("says how far each earlier brew moved its step temps, and keeps the recipe's as written", async () => {
+    await db.insert(recipeSteps).values({ id: randomUUID(), recipeId: id.house, stepOrder: 1, stepType: "bloom", durationSec: 45, advance: "tap", targetWaterGrams: 50, targetTempC: 85 });
+    await db.update(brewLogs).set({ stepTempShiftC: 2 }).where(eq(brewLogs.id, log.day5!));
+    const context = (await loadSuggestContext(request("recipe")))!;
+    expect(context.recipe!.steps.map((s) => s.targetTempC)).toEqual([85]); // the next brew hasn't set a temp yet
+    const [day5, day4] = context.brews;
+    expect(day5?.stepTempShiftC).toBe(2);
+    expect(day4?.stepTempShiftC).toBeNull();
   });
 });

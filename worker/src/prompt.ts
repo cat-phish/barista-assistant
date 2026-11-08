@@ -51,7 +51,10 @@ export function brewInput(b: BrewSummary, hidden: ReadonlySet<AiDetail>): Record
     delete out.tdsPercent;
     delete out.extractionYieldPercent;
   }
-  if (hidden.has("temp")) delete out.actualTempC;
+  if (hidden.has("temp")) {
+    delete out.actualTempC;
+    delete out.stepTempShiftC;
+  }
   if (hidden.has("rpm")) delete out.grindRpm;
   if (hidden.has("grinderWeights")) {
     delete out.beanWeightInGrams;
@@ -106,9 +109,11 @@ export function beanInput(info: BrewContext["bean"], hidden: ReadonlySet<AiDetai
 
 export function recipeInput(r: BrewContext["recipe"], hidden: ReadonlySet<AiDetail>): Record<string, unknown> | null {
   if (!r) return null;
-  const { steps, grindStartingPoints, targetTempC, flowUnit, stepTimeScaling, ...rest } = r;
+  const { steps, grindStartingPoints, targetTempC, stepTempsFollowBrew, flowUnit, stepTimeScaling, ...rest } = r;
   const recipe: Record<string, unknown> = { ...rest };
   if (!hidden.has("temp")) recipe.targetTempC = targetTempC;
+  // Only worth saying when it's on, and only alongside the step temps.
+  if (stepTempsFollowBrew && !hidden.has("temp") && !hidden.has("recipeSteps")) recipe.stepTempsFollowBrew = true;
   if (!hidden.has("grindStartingPoints")) recipe.grindStartingPoints = grindStartingPoints;
   if (!hidden.has("recipeSteps")) {
     const sent = hidden.has("temp") ? steps.map(({ targetTempC: _t, ...s }) => s) : steps;
@@ -266,6 +271,17 @@ export const PROMPT_SECTIONS: PromptSection[] = [
     key: "stepTimes",
     when: (i) => recipe(i).stepTimeScaling !== undefined,
     text: PROMPT_TEXT.stepTimes,
+  },
+  {
+    key: "stepTemps",
+    // Only when a step's temp differs from the water's, or follows it.
+    when: (i) =>
+      recipe(i).stepTempsFollowBrew === true ||
+      ((recipe(i).steps as Json[] | undefined) ?? []).some((s) => {
+        const t = (s as Record<string, Json> | null)?.targetTempC;
+        return t !== undefined && t !== recipe(i).targetTempC;
+      }),
+    text: PROMPT_TEXT.stepTemps,
   },
   {
     key: "heldSteps",

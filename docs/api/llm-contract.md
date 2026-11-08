@@ -137,7 +137,14 @@ queue:
      `stepTimeScaling` (recipes.md §5), which also sends each step's
      `scalesWithBatch`, the step durations and the finish
      window are the ones the brew was timed against, scaled to its water
-     (`scaledToBrew`); pour targets stay the recipe's. Steps typed
+     (`scaledToBrew`); pour targets stay the recipe's. Step temps are the
+     brew's too: when it moved them (`stepTempShiftC`, `brew-logs.md` §6),
+     `scaledToBrew` moves each step's `targetTempC` by that much, within
+     0–100 (`shiftStepTemps`). The brew sends its `stepTempShiftC` (dropped
+     when `null`), and the recipe sends `stepTempsFollowBrew` only when it's
+     on. Suggest (§9b) sends the recipe's step temps as written, since the
+     next brew hasn't set a temp yet; each earlier brew carries its own
+     `stepTempShiftC`. Steps typed
      `prep` come first and are done before the timer starts, so their time
      isn't part of the brew time.
 2. It turns that context into the **input** actually sent
@@ -169,6 +176,7 @@ queue:
    | `flavorProfile` | the bean has one | the cup to aim for |
    | `weightLoss` | `roastWeightLossPercent` | how developed the roast is (11–13% light, 14–16% medium, 17%+ dark); more developed extracts more easily (coarser, cooler); trusted over the roast level |
    | `stepTimes` | the recipe has `stepTimeScaling` | step times and the finish window are already scaled to the batch; a bigger batch taking longer is planned, not a grind problem |
+   | `stepTemps` | a step's temp differs from the recipe's `targetTempC`, or `stepTempsFollowBrew` is on | how the recipe's, the brew's and each step's temps relate; step temps follow the water temp by the same degrees only with `stepTempsFollowBrew`, and `suggestedTempDelta` / `tempC` are for the water temp; a single step's temp problem goes in `nextStep` |
    | `heldSteps` | a brew's `marks` include a `step_hold` | the barista held that step because it ran slow; a `step_end` in a hold ended it; later steps moved but the finish window didn't, so a held brew can finish late; say where it ran slow and what that points to |
    | `altitude` | `altitudeMasl` | denser beans |
    | `variety` | `varieties` or `species` | the cultivar's typical character (Geisha delicate, SL28/SL34 dense and bright); robusta or liberica in a blend extract more easily and add body and bitterness; context, not a rule |
@@ -281,7 +289,8 @@ and the prompt sections about them drop out with them (step 3). Keys
 (`AI_DETAILS`, `@barista/shared/aiDetails`):
 
 - **The brew:** `tds` (`tdsPercent`, `extractionYieldPercent`), `temp` (the
-  brew's, the recipe's and each step's temperature), `marks`, `prepTools`,
+  brew's, the recipe's and each step's temperature, the brew's
+  `stepTempShiftC` and the recipe's `stepTempsFollowBrew`), `marks`, `prepTools`,
   `problems`, `grinderWeights` (beans in, grounds out, retention), `rpm`
   (`grindRpm` and the grinders' speed range; no `suggestedRpmDelta` either),
   `drink` (the drink, its ingredients, `drinkRating` /

@@ -360,26 +360,24 @@ What the analysis worker sends to the LLM and what comes back.
   - Should the brew page say when it changed the shot because of the
     suggestion (like it does for the grind)?
 
-### 12. Review how step temps reach the brew log and the AI
+### 12. Brews keep a copy of their recipe
 
 - **Status:** idea
-- **Why:** recipes can set a temperature per step, and a brew can now move
-  them all (`stepTempsFollowBrew`), but the log and the analysis were built
-  around one water temperature, so the AI can misread a stepped brew.
+- **Why:** a brew points at the live recipe, so editing a recipe changes
+  what every old brew appears to have used: its doses, finish window, steps
+  and step temps, on the brew page and in what the AI sees for analyses and
+  Suggest's earlier brews.
 - **What we found:**
-  - The brew log stores only `actualTempC`, plus `stepTempShiftC`.
-  - The worker reads step temps from the live recipe, and `scaledToBrew`
-    doesn't apply `stepTempShiftC`, so on a shifted brew the AI sees the
-    recipe's step temps next to the brew's real water temp.
-  - `shared/src/aiPrompt.ts` never says how `actualTempC`, the recipe's
-    target and the step temps relate, or what `suggestedTempDelta` and
-    Suggest's `tempC` mean for the steps.
-  - Editing a recipe changes what old brews appear to have used, for every
-    recipe field, not only temps.
+  - The brew log keeps only what it measured (`actualTempC`, …) and
+    `stepTempShiftC`; everything else comes from `recipes` / `recipe_steps`
+    when it's read (`loadRecipe` in `worker/src/context.ts`).
+  - A copy means a new table or JSON column, a place in backups
+    (`BACKUP_TABLES`) and imports, and a choice about brews logged before it.
 - **Open questions:**
-  - Apply the shift in `scaledToBrew` (`shiftStepTemps` is already in
-    `@barista/shared/brew`) and add a prompt section explaining step temps?
-  - Should a brew keep a copy of its recipe, so old brews stay as brewed?
+  - Copy every recipe field, or only what the timer and the AI use (steps,
+    targets, finish window)?
+  - Show an old brew's recipe as brewed, as it is now, or both?
+- **Size:** M
 
 ### 13. Review how flavor wheel inputs reach the AI
 
