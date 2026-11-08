@@ -642,6 +642,11 @@ export const brewers = mysqlTable(
     preinfusion: varchar("preinfusion", { length: 20 }).$type<Preinfusion>().default("none").notNull(),
     flowControl: varchar("flow_control", { length: 20 }).$type<ProfileControl>().default("none").notNull(),
     pressureControl: varchar("pressure_control", { length: 20 }).$type<ProfileControl>().default("none").notNull(),
+    // Seconds taken off the brew time when Finish & Save is tapped, for a
+    // brewer whose brew ends while your hands are busy (pressing an OXO until
+    // the hiss); negative adds them, for tapping early. Null = none. A recipe
+    // can set its own (docs/api/brewers.md §3).
+    finishOffsetSec: int("finish_offset_sec"),
     archivedAt: timestamp("archived_at"), // null = active
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
@@ -1097,6 +1102,9 @@ export const recipes = mysqlTable("recipes", {
   // of the shot. Both or neither (the API fills a missing end with ±3 s).
   firstDropMinSec: int("first_drop_min_sec"),
   firstDropMaxSec: int("first_drop_max_sec"),
+  // The brewer's finishOffsetSec for this recipe: null = the brewer's, 0 =
+  // none. Null for long cold styles, which have no timer (docs/api/recipes.md §5).
+  finishOffsetSec: int("finish_offset_sec"),
   // Unit for espresso flow steps: g/s (a scale) or ml/s (a machine's flow meter).
   flowUnit: varchar("flow_unit", { length: 10 }).$type<FlowUnit>().default("g_s").notNull(),
   // Filter only: pour and wait steps take time × (batch factor)^this when the

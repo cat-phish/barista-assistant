@@ -1,10 +1,11 @@
 <script setup lang="ts">
 // A brewer's fields (docs/api/brewers.md §3): name and brew method (which also
 // groups it when brewing); for espresso, what the machine lets you control;
-// notes. How it shows on the public menu is set in Bar setup → Menu.
+// a finish offset; notes. How it shows on the public menu is set in Bar setup → Menu.
 import { computed, watch } from 'vue';
 import type { BrewerMethod } from '../api/types';
 import { METHOD_KINDS, PREINFUSION_MODES, PROFILE_CONTROLS, type BrewerForm } from '../lib/equipment';
+import { parseFinishOffset } from '../lib/finishOffset';
 
 const form = defineModel<BrewerForm>({ required: true });
 const props = defineProps<{ idPrefix: string; showErrors: boolean; methods: BrewerMethod[] }>();
@@ -12,6 +13,7 @@ const props = defineProps<{ idPrefix: string; showErrors: boolean; methods: Brew
 // The workspace's methods (docs/api/brewer-methods.md §3e): the visible ones,
 // plus the brewer's own if it's hidden. The kind follows the chosen method.
 const methodChoices = computed(() => props.methods.filter((m) => !m.hidden || m.id === form.value.methodId));
+const offset = computed(() => parseFinishOffset(form.value.finishOffset));
 const method = computed(() => props.methods.find((m) => m.id === form.value.methodId) ?? null);
 watch(method, (m) => {
   if (m) form.value.kind = m.behaviour;
@@ -73,6 +75,12 @@ watch(
         </div>
       </div>
     </template>
+    <div class="field offset">
+      <label :for="`${idPrefix}-finish-offset`">Finish offset (s)</label>
+      <input :id="`${idPrefix}-finish-offset`" v-model="form.finishOffset" maxlength="3" placeholder="e.g. 4" :aria-invalid="!offset.ok" />
+      <span v-if="!offset.ok" class="field-error">{{ offset.error }}</span>
+      <span v-else class="hint">Seconds between the brew ending and you tapping Finish &amp; Save, e.g. pressing an OXO until the hiss. They're taken off the brew time; a negative number adds them, if you tap early. A recipe can set its own.</span>
+    </div>
     <div class="field">
       <label :for="`${idPrefix}-notes`">Notes</label>
       <input :id="`${idPrefix}-notes`" v-model="form.notes" maxlength="255" :placeholder="form.kind === 'espresso' ? 'e.g. 18 g VST basket' : 'e.g. 02 size, white ceramic'" />
@@ -86,5 +94,8 @@ p {
 }
 .small {
   font-size: 0.85rem;
+}
+.offset input {
+  max-width: 8rem;
 }
 </style>

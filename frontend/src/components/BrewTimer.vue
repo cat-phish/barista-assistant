@@ -14,6 +14,7 @@
 import { computed, onUnmounted, ref } from 'vue';
 import type { FlowUnit, MachineCapabilities, Mark, MethodKind, StepFields } from '../api/types';
 import { formatTime } from '../lib/format';
+import { formatFinishOffset } from '../lib/finishOffset';
 import { formatTemp } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import { useStartDelay } from '../composables/useStartDelay';
@@ -48,6 +49,7 @@ const props = defineProps<{
   machine: MachineCapabilities | null; // the espresso brewer's controls
   waterTempC: number | null; // the brew's, until a step sets one
   prepSteps?: StepFields[]; // done before Start, off the brew clock
+  finishOffsetSec?: number; // taken off (negative: added to) the time by the brew page at Finish & Save (lib/finishOffset.ts)
 }>();
 
 const emit = defineEmits<{
@@ -412,7 +414,8 @@ onUnmounted(() => {
     <!-- Steps first (they say what to do), then the buttons, then the clock. -->
     <div class="controls">
       <button v-if="!isRunning && elapsedMs === 0" @click="startTimer" class="btn primary">{{ countingDown ? 'Start now' : espresso ? 'Start shot' : 'Start brew' }}</button>
-      <button v-else-if="isRunning" @click="finishBrew" class="btn success">Finish & Save</button>
+      <!-- The offset in the label, not a line of its own, so nothing moves (§3 layout). -->
+      <button v-else-if="isRunning" @click="finishBrew" class="btn success">Finish & Save<span v-if="finishOffsetSec" class="offset"> · {{ formatFinishOffset(finishOffsetSec) }}</span></button>
       <template v-if="espresso">
         <button v-if="isRunning && firstDropAt === null" class="btn tap drop" type="button" @click="record('first_drop')">First drop</button>
         <p v-else-if="firstDropText" class="drop-line" aria-live="polite">
@@ -513,6 +516,9 @@ onUnmounted(() => {
 .btn.tap.due {
   background: var(--brand);
   color: var(--on-brand);
+}
+.offset {
+  font-weight: 400;
 }
 .drop-line {
   margin: 0;

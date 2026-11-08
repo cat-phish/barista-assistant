@@ -2586,3 +2586,28 @@ kept general.
 - **Not built:** unit conversion between inputs (an input's unit is a
   label), and the AI still never sees notes.
 
+
+## Finish offset for hands-busy brewers (built)
+
+Branch `finish-offset`; was backlog 8 for a moment (added and built the same
+day, so the backlog's numbers are as before).
+
+- **Why:** on some brewers the brew ends while your hands are busy. Pressing
+  an OXO until the hiss, then reaching for the phone, put a few seconds on
+  every brew time, so the target window said "late" and the AI saw a slower
+  brew.
+- **Where it's set:** `finishOffsetSec` (whole seconds −60 to 60; negative adds time, for
+  tapping early) on a brewer
+  (Bar setup → Brewers), and on a recipe to override it: blank = the
+  brewer's, 0 = none for this recipe. Migration 0108. Not on long cold
+  styles (no timer). The recipe field is hideable (`recipe.finishOffset`).
+- **On the timer:** the button reads "Finish & Save · −4 s" (or "· +3 s"). The timer still
+  emits the time as tapped, and the brew page takes the offset off
+  (`lib/finishOffset.ts`), never going back past the last mark or below 0.
+- **On the log form:** under Total time, "−4 s offset (tapped 3:16) ·
+  Undo" ("+3 s" for a negative one) until the time is changed by hand. The tapped time is kept in
+  memory until the brew is saved or left, never stored.
+- **Not sent to the AI:** the offset itself isn't in the analysis context;
+  the adjusted time is what the AI already sees.
+- **Not built:** other ways to mark the end (start the countdown before the
+  hiss, a tap-anywhere "done" area). Revisit if a fixed offset isn't enough.

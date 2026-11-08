@@ -757,6 +757,13 @@
       "when": 1794121229158,
       "tag": "0107_drop_note_body",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "5",
+      "when": 1794167934185,
+      "tag": "0108_finish_offset",
+      "breakpoints": true
     }
   ]
 }

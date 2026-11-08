@@ -186,6 +186,8 @@ const recipeFields = {
   expectedFinishMaxSec: seconds.nullable().optional(),
   firstDropMinSec: seconds.nullable().optional(),
   firstDropMaxSec: seconds.nullable().optional(),
+  // Seconds off the time at Finish & Save; null = the brewer's (docs/api/recipes.md §5).
+  finishOffsetSec: z.number().int().min(-60).max(60).nullable().optional(),
   flowUnit: z.enum(FLOW_UNITS),
   // Filter only (kindError): pour and wait times × batch factor^this
   // (docs/api/recipes.md §5); null = step times stay the same.
@@ -419,6 +421,7 @@ async function loadRecipes(workspaceId: string, recipeId?: string): Promise<Reci
       expectedFinishMaxSec: recipes.expectedFinishMaxSec,
       firstDropMinSec: recipes.firstDropMinSec,
       firstDropMaxSec: recipes.firstDropMaxSec,
+      finishOffsetSec: recipes.finishOffsetSec,
       flowUnit: recipes.flowUnit,
       stepTimeScaling: recipes.stepTimeScaling,
       stepTempsFollowBrew: recipes.stepTempsFollowBrew,

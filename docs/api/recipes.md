@@ -138,6 +138,7 @@ A prep step's `scalesWithBatch` is always `false`.
   "expectedFinishMaxSec": 195,
   "firstDropMinSec": null,
   "firstDropMaxSec": null,
+  "finishOffsetSec": null,
   "flowUnit": "g_s",
   "stepTimeScaling": null,
   "stepTempsFollowBrew": false,
@@ -227,6 +228,11 @@ Creates a recipe, its grind starting points and its steps in one transaction.
     (integers 0–86400, optional, nullable, min ≤ max). If only one is given,
     the other defaults to it **±15 s**: min 165 → max 180; max 195 → min 180
     (never below 0). So a stored window always has both ends, or neither.
+  - `finishOffsetSec` (optional, nullable, whole seconds −60 to 60): taken
+    off the brew time when Finish & Save is tapped (negative: added),
+    overriding the brewer's (§3).
+    `null` = the brewer's; `0` = none for this recipe. The client sends
+    `null` for long cold styles, which have no timer.
   - `grindSettings` (default `[]`): each `grinderId` must be a grinder in this
     workspace (archived allowed), at most once; `setting` is the number on
     the grinder's dial, 0 ≤ x < 10000 with at most 2 decimals (like the

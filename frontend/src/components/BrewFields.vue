@@ -250,6 +250,8 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
         <label for="brew-time">{{ espresso ? 'Shot time' : 'Total time' }}<span class="req" aria-hidden="true">*</span></label>
         <TimeInput id="brew-time" aria-required="true" v-model="draft.time" placeholder="m:ss" :aria-invalid="showErrors && !!errors.time" />
         <span v-if="showErrors && errors.time" class="field-error">{{ errors.time }}</span>
+        <!-- The brew page's finish offset note, with its Undo. -->
+        <slot name="time-note" />
       </div>
       <div v-if="espresso && show('brew.firstDrop')" class="field">
         <label for="brew-first-drop">First drop (s)</label>

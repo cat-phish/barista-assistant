@@ -52,6 +52,8 @@ const brewerFields = {
   preinfusion: z.enum(PREINFUSION_MODES),
   flowControl: z.enum(PROFILE_CONTROLS),
   pressureControl: z.enum(PROFILE_CONTROLS),
+  // Seconds taken off the brew time at Finish & Save (docs/api/brewers.md §3).
+  finishOffsetSec: z.number().int().min(-60).max(60).nullable(),
 };
 
 const createBrewerSchema = z.object({
@@ -61,6 +63,7 @@ const createBrewerSchema = z.object({
   preinfusion: brewerFields.preinfusion.default("none"),
   flowControl: brewerFields.flowControl.default("none"),
   pressureControl: brewerFields.pressureControl.default("none"),
+  finishOffsetSec: brewerFields.finishOffsetSec.default(null),
 })
   // Brewers have no category or menu fields any more (the menu builder, §7b):
   // an old client sending them gets a 400 rather than a silent drop.
@@ -77,6 +80,7 @@ const summary = {
   preinfusion: brewers.preinfusion,
   flowControl: brewers.flowControl,
   pressureControl: brewers.pressureControl,
+  finishOffsetSec: brewers.finishOffsetSec,
   archivedAt: brewers.archivedAt,
   createdAt: brewers.createdAt,
 };

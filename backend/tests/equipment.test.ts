@@ -45,6 +45,7 @@ describe("brewers", () => {
       preinfusion: "none",
       flowControl: "none",
       pressureControl: "none",
+      finishOffsetSec: null,
       archivedAt: null,
       createdAt: expect.any(String),
     });
@@ -59,6 +60,22 @@ describe("brewers", () => {
     const list = await owner.agent.get(base);
     expect(list.body.brewers.map((m: { name: string }) => m.name).at(-1)).toBe("Linea Mini"); // archived last
     expect((await owner.agent.patch(url).send({ archived: false })).body.brewer.archivedAt).toBeNull();
+  });
+
+  it("finish offset: optional whole seconds -60 to 60, nullable (docs/api/brewers.md §3)", async () => {
+    const { owner, ws } = await setup();
+    const base = `/api/workspaces/${ws.id}/brewers`;
+    const oxo = await owner.agent.post(base).send({ name: "OXO", finishOffsetSec: 4 });
+    expect(oxo.status).toBe(201);
+    expect(oxo.body.brewer.finishOffsetSec).toBe(4);
+    const url = `${base}/${oxo.body.brewer.id}`;
+    expect((await owner.agent.patch(url).send({ finishOffsetSec: 60 })).body.brewer.finishOffsetSec).toBe(60);
+    expect((await owner.agent.patch(url).send({ finishOffsetSec: -60 })).body.brewer.finishOffsetSec).toBe(-60);
+    expect((await owner.agent.patch(url).send({ finishOffsetSec: null })).body.brewer.finishOffsetSec).toBeNull();
+    for (const bad of [61, -61, 2.5, "4"]) {
+      expect((await owner.agent.post(base).send({ name: `Bad ${bad}`, finishOffsetSec: bad })).status, JSON.stringify(bad)).toBe(400);
+      expect((await owner.agent.patch(url).send({ finishOffsetSec: bad })).status, JSON.stringify(bad)).toBe(400);
+    }
   });
 
   it("viewers can't change brewers", async () => {

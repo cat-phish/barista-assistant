@@ -27,6 +27,24 @@ describe("recipe fields", () => {
   });
 });
 
+describe("finish offset (docs/api/recipes.md §5)", () => {
+  it("optional whole seconds 0-60; null = the brewer's, 0 kept as none", async () => {
+    const { owner, base, recipe } = await setup();
+    expect((await owner.agent.post(base).send(recipe)).body.recipe.finishOffsetSec).toBeNull();
+    const created = await owner.agent.post(base).send({ ...recipe, finishOffsetSec: 0 });
+    expect(created.body.recipe.finishOffsetSec).toBe(0);
+    const url = `${base}/${created.body.recipe.id}`;
+    expect((await owner.agent.patch(url).send({ finishOffsetSec: 5 })).body.recipe.finishOffsetSec).toBe(5);
+    expect((await owner.agent.get(base)).body.recipes.find((r: { id: string }) => r.id === created.body.recipe.id).finishOffsetSec).toBe(5);
+    expect((await owner.agent.patch(url).send({ finishOffsetSec: -3 })).body.recipe.finishOffsetSec).toBe(-3);
+    expect((await owner.agent.patch(url).send({ finishOffsetSec: null })).body.recipe.finishOffsetSec).toBeNull();
+    for (const bad of [61, -61, 2.5, "4"]) {
+      expect((await owner.agent.post(base).send({ ...recipe, finishOffsetSec: bad })).status, JSON.stringify(bad)).toBe(400);
+      expect((await owner.agent.patch(url).send({ finishOffsetSec: bad })).status, JSON.stringify(bad)).toBe(400);
+    }
+  });
+});
+
 describe("date added", () => {
   it("is set on create, returned in the list, and can't be sent", async () => {
     const { owner, base, recipe } = await setup();

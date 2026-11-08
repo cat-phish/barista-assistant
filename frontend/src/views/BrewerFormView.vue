@@ -11,6 +11,7 @@ import AppHeader from '../components/AppHeader.vue';
 import DeleteSection from '../components/DeleteSection.vue';
 import BrewerFields from '../components/BrewerFields.vue';
 import { brewerForm, brewerInput } from '../lib/equipment';
+import { parseFinishOffset } from '../lib/finishOffset';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
@@ -67,7 +68,7 @@ onMounted(async () => {
 async function save(): Promise<void> {
   submitted.value = true;
   const ws = workspaces.current?.id;
-  if (!ws || !form.value.name.trim()) return;
+  if (!ws || !form.value.name.trim() || !parseFinishOffset(form.value.finishOffset).ok) return;
   saving.value = true;
   error.value = '';
   try {
