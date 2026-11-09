@@ -456,7 +456,10 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   banner, the notification and the AI summary. The banner at the top of a
   new brew says when a weekly or monthly recap you brewed in is ready, and
   goes once you open it, dismiss it, or after the days you choose (3 by
-  default). Turned off, a recap still shows when you ask for it.
+  default). Turned off, a recap still shows when you ask for it. With AI, a
+  recap can have a short AI summary (how it went, what changed, one thing
+  to try): written when you ask, or automatically when the week or month
+  ends, or never; it leaves out what Settings → AI hides.
 - **AI analysis:** after a brew, ask for a suggestion; a background worker
   asks the LLM for grind and temperature changes with reasoning, plus one
   next step and how confident it is. For espresso it can also change the

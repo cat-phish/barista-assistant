@@ -2777,3 +2777,38 @@ Branch `recipe-proposal-checks`; the first round of backlog 15.
   final drawdown step, the cold brew stopped putting its 14-hour steep in a
   50,400 s step, and no variation was a copy. An earlier run had 4 of 8
   replies describing a recipe without a card.
+
+## Weekly and monthly recaps (built)
+
+Branches `recaps-insights`, `recaps-banner`, `recaps-notify`, `recaps-ai`
+(and `workspace-timezone`); backlog 18, kept there to review after testing.
+Spec: `docs/api/recaps.md` §11c.
+
+- **Insights → Recap:** a week or month at a glance against the period
+  before (brews, days, average and best ratings, caffeine, volume, coffee
+  used, beans brewed, bought and finished, new recipes, the most used recipe
+  and brewer), worked out in the browser from `/stats`. Steps through
+  periods; yours or everyone's. Weeks start on the person's chosen day, and
+  Insights' weekly charts follow it.
+- **Settings → Recaps** (per person): on or off, weekly / monthly / both,
+  week start, banner and its days (default 3), notification and its time
+  (default 8:00, quarter hours), the AI summary (off / when I ask /
+  automatically, default when I ask). Off, a recap still shows on request.
+- **Brew-page banner:** "Your weekly / monthly / weekly and monthly recap(s)
+  ready", only for periods with your brews; gone when opened, dismissed or
+  after its days (`recapSeen` on the account).
+- **Notification:** a quarter-hourly `recap-tick` on the reminder queue;
+  on the first day of a new period at the person's time in their zone (else
+  the workspace's, else `BREW_TIMEZONE`), one per workspace brewed in,
+  claimed on a `recaps` row (not backed up) so it goes once; retried that
+  day only.
+- **AI summary** (llm-contract.md §9f, `RECAP_PROMPT_VERSION` 2026-11-a):
+  `{ summary, highlights }` from `loadPeriodContext` / `toPeriodInput`
+  (hidden details left out, newest 60 brews), the person's own instructions
+  added. On request (`POST /recaps`, polled) or automatically before the
+  notification, never twice for one row. Eval `recap`: three of the user's
+  weeks on gpt-6-luna, about 2.4–3.5k tokens in, summaries grounded in the
+  brews' notes (grind changes, brewer shift, week-on-week averages).
+- **Workspace time zone** (Settings → Defaults): overrides `BREW_TIMEZONE`
+  for brews logged without an offset, the suggestion's "today", and recap
+  notifications for members without their own.

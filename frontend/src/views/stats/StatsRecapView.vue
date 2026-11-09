@@ -11,6 +11,8 @@ import type { StatsData } from '../../api/types';
 import { errorMessage } from '../../api/client';
 import { usePreferences } from '../../composables/usePreferences';
 import { useStats } from '../../composables/useStats';
+import { useAiAvailable } from '../../composables/useAiAvailable';
+import RecapSummaryCard from '../../components/RecapSummaryCard.vue';
 import { formatCaffeine } from '../../lib/caffeine';
 import { localDateInput } from '../../lib/format';
 import { markSeen, recapFigures } from '../../lib/recap';
@@ -25,6 +27,8 @@ const workspaces = useWorkspaceStore();
 const auth = useAuthStore();
 const stats = useStats();
 const { prefs, recipeRoastLevel } = usePreferences();
+const aiAvailable = useAiAvailable();
+const showSummary = computed(() => aiAvailable.value && prefs.value.recapAi !== 'off');
 
 const today = localDateInput();
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
@@ -171,6 +175,13 @@ const ratingSub = computed(() => {
           <p class="muted sub">{{ plural(figures.topRecipe.brews, 'brew') }}<template v-if="figures.topBrewer"> · mostly on the {{ figures.topBrewer.name }}</template></p>
         </section>
       </div>
+
+      <RecapSummaryCard
+        v-if="showSummary"
+        :recap-key="{ kind, periodStart: period.start, scope: mine ? 'mine' : 'all' }"
+        :in-progress="inProgress"
+        :has-brews="figures.brews > 0"
+      />
 
       <section v-if="figures.best.length" class="card stack-sm">
         <h3>Best {{ figures.best.length === 1 ? 'brew' : 'brews' }}</h3>

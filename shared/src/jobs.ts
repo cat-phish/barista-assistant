@@ -260,6 +260,15 @@ export const RECAP_TICK_SCHEDULER = "recap-tick";
 export const RECAP_TICK_PATTERN = "*/15 * * * *";
 export type RecapTickJobData = Record<string, never>;
 
+// A recap's AI summary (docs/api/llm-contract.md §9f): the recaps row, already
+// marked pending; the result goes back into it.
+export const RECAP_SUMMARY_QUEUE = "recap-summary";
+export const RECAP_SUMMARY_JOB = "summary";
+export interface RecapSummaryJobData {
+  recapId: string;
+}
+export const recapSummaryJobId = (recapId: string): string => `recap-${recapId}`;
+
 // A chat reply (docs/api/llm-contract.md §9e, docs/api/chat.md §12): the
 // pending assistant message. The worker publishes it to a Redis stream the
 // backend passes on to the browser.

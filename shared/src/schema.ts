@@ -1989,6 +1989,7 @@ export const recaps = mysqlTable(
     scope: varchar("scope", { length: 4 }).$type<RecapScope>().notNull(),
     status: varchar("status", { length: 10 }).$type<RecapSummaryStatus>().notNull().default("none"), // the AI summary
     summary: text("summary"),
+    highlights: jsonValue<string[]>("highlights"), // the summary's short points
     error: text("error"),
     model: varchar("model", { length: 120 }),
     promptVersion: varchar("prompt_version", { length: 40 }),

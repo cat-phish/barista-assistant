@@ -5,10 +5,17 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { config } from "../src/config.js";
 import { db } from "../src/db.js";
+import { requestRecapSummary } from "../src/llm.js";
+import { resolveAi } from "../src/ai/resolve.js";
+import type { AiClient } from "../src/ai/client.js";
 import { processRecapTick, recapMessage, recapsDueNow as dueIn, recapZone, zonedNow } from "../src/recaps.js";
 import { DEFAULT_PREFERENCES, type UserPreferences } from "@barista/shared/schema";
 
-// docs/api/notifications.md §1b "Recaps": real database, fake sending.
+// docs/api/notifications.md §1b "Recaps": real database, fake sending (and AI).
+vi.mock("../src/llm.js", async (importOriginal) => ({ ...(await importOriginal<typeof import("../src/llm.js")>()), requestRecapSummary: vi.fn() }));
+vi.mock("../src/ai/resolve.js", async (importOriginal) => ({ ...(await importOriginal<typeof import("../src/ai/resolve.js")>()), resolveAi: vi.fn() }));
+const llm = vi.mocked(requestRecapSummary);
+vi.mocked(resolveAi).mockResolvedValue({ provider: "openai", models: { main: "m", vision: "v", web: "w" } } as unknown as AiClient);
 const prefs = (p: Partial<UserPreferences> = {}): UserPreferences => ({ ...DEFAULT_PREFERENCES, timeZone: "Europe/London", ...p });
 // Due in the person's zone (no workspace zone).
 const recapsDueNow = (p: UserPreferences, now: Date) => dueIn(p, now, recapZone(p, null));
@@ -153,6 +160,32 @@ describe("processRecapTick", () => {
     const send = vi.fn().mockResolvedValue(undefined);
     expect(await processRecapTick(monday, send)).toEqual({ sent: 0, failed: 0 }); // midnight there
     expect(await processRecapTick(new Date("2026-11-09T16:00:00Z"), send)).toEqual({ sent: 1, failed: 0 }); // 8:00 there
+  });
+
+  it("recapAi auto writes the summary first, once, and a failure doesn't stop the notification", async () => {
+    await brew("2026-11-03T08:00:00Z", 4);
+    await db.update(users).set({ preferences: { timeZone: "Europe/London", recapAi: "auto" } }).where(eq(users.id, userId));
+    llm.mockReset();
+    llm.mockRejectedValueOnce(new Error("AI down"));
+    const failing = vi.fn().mockRejectedValue(new NotificationError("answered 503"));
+    expect(await processRecapTick(monday, failing)).toEqual({ sent: 0, failed: 1 });
+    expect((await db.select().from(recaps))[0]).toMatchObject({ status: "failed", error: "AI down", notifiedAt: null });
+    // The retried send doesn't ask the AI again.
+    const send = vi.fn().mockResolvedValue(undefined);
+    expect(await processRecapTick(monday, send)).toEqual({ sent: 1, failed: 0 });
+    expect(llm).toHaveBeenCalledTimes(1);
+  });
+
+  it("recapAi auto: the summary is on the row when the notification goes", async () => {
+    await brew("2026-11-03T08:00:00Z", 4);
+    await db.update(users).set({ preferences: { timeZone: "Europe/London", recapAi: "auto" } }).where(eq(users.id, userId));
+    llm.mockReset();
+    llm.mockResolvedValue({ summary: { summary: "Good week.", highlights: ["Try finer"] }, usage: null });
+    const send = vi.fn(async () => {
+      expect((await db.select().from(recaps))[0]).toMatchObject({ status: "done", summary: "Good week." });
+    });
+    expect(await processRecapTick(monday, send)).toEqual({ sent: 1, failed: 0 });
+    expect(send).toHaveBeenCalledTimes(1);
   });
 
   it("sends nothing with notifications off", async () => {

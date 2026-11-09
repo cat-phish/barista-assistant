@@ -1469,6 +1469,7 @@ export const recaps = mysqlTable(
     scope: varchar("scope", { length: 4 }).notNull(), // RECAP_SCOPES
     status: varchar("status", { length: 10 }).notNull().default("none"), // the AI summary, RECAP_SUMMARY_STATUSES
     summary: text("summary"),
+    highlights: json("highlights"), // string[], the summary's short points
     error: text("error"),
     model: varchar("model", { length: 120 }),
     promptVersion: varchar("prompt_version", { length: 40 }),

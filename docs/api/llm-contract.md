@@ -298,7 +298,9 @@ sent as-is; no `$schema` key, which strict mode does not need):
 
 A workspace's `aiHidden` setting (`docs/api/workspaces.md` §2, Settings →
 **AI**, owners) lists details the worker leaves out of the input (step 2),
-and the prompt sections about them drop out with them (step 3). Keys
+and the prompt sections about them drop out with them (step 3). The same
+keys apply to suggestions (§9b), bean reviews (§9d) and recap summaries
+(§9f). Keys
 (`AI_DETAILS`, `@barista/shared/aiDetails`):
 
 - **The brew:** `tds` (`tdsPercent`, `extractionYieldPercent`), `temp` (the
@@ -601,12 +603,55 @@ doesn't apply:** it's for fine tuning the automatic analysis and suggestions,
 and chat is for exploring deeper, with the person choosing what to attach
 (checked in `worker/tests/chat.test.ts`).
 
+## 9f. A recap's summary
+
+The `recap-summary` queue (recaps.md §11c, "AI summary"): job `summary`,
+data `{ recapId }`, id `recap-<recapId>`, 2 attempts. The `recaps` row is
+already `pending`; the result goes back into it.
+
+1. **Context** (`loadPeriodContext`, `worker/src/periodContext.ts`): the
+   period's finished brews (not steeping) in the row's workspace, the
+   person's (scope `mine`) or everyone's (`all`), a brew's day as Insights
+   counts it; the period from the row's `kind` and `periodStart` with the
+   person's `weekStartsOn`, and the one before. `figures` and
+   `previousFigures`: brews, daysBrewed, ratedBrews, averageRating (coffee
+   rating, one decimal), bestRating, coffeeGrams, and beans, recipes and
+   brewers by name with their counts. The newest 60 brews are sent, each
+   as step 1's brew plus `day`, `bean` ("Roaster – Bean") and `brewer`;
+   `brewsLeftOut` counts the rest. Built to serve a period chat attachment
+   too (backlog 17).
+2. **Input** (`toPeriodInput`): `{ ratingScale, kind, period, figures,
+   previousPeriod, previousFigures, brews, brewsLeftOut, equipment }`,
+   compacted, each brew as `brewInput` makes it, so what the workspace
+   hides (`aiHidden`) is left out as in the analysis.
+3. **Prompt** (`RECAP_SYSTEM`, `worker/src/prompt.ts`): fixed (not editable
+   under Your AI prompt), then the person's own instructions (auth.md §1c).
+   It asks for two to four sentences on how the period went and what
+   changed, then up to four short highlights, the last one thing to try,
+   using only what's in the data. `RECAP_PROMPT_VERSION` (2026-11-a,
+   `+custom` with instructions) is saved on the row.
+4. **Schema** (`RECAP_JSON_SCHEMA`, strict): `summary` (string) and
+   `highlights` (string array), both required. After parsing, `summary` is
+   cut to 1500 characters, each highlight to 200, at most four.
+5. **Saved:** `status` `done`, `summary`, `highlights`, `model`,
+   `promptVersion`, the token counts. A period without brews is `failed`
+   ("No brews in this period"); every attempt failing records why.
+
+**What the AI sees:** classified in `worker/tests/aiDetails.test.ts`; the
+period's own fields, the figures and each brew's `day`, `bean` and
+`brewer` are always sent, everything else goes with its key as in the
+analysis. Notes on beans, people's names and who made each brew aren't
+sent.
+
 ## Evaluating changes
 
 `npm run eval -w worker` (run on the host from the repo root; it reads the
 root `.env`, only reads the database, and writes to the git-ignored
 `eval/`):
 
+- `recap --label <name> [--weeks 4] [--yes]` writes the summary (§9f) for
+  each of the last whole weeks with brews of whoever brewed most, in their
+  busiest workspace, saving `recap-<name>.json` and a `.md` to read;
 - `snapshot [--limit 12] [--with-flavors]` picks recent rated brews
   (with `--with-flavors`, only ones with wheel flavors);
 - `run --label <name> [--yes]` sends each through the input and prompt as

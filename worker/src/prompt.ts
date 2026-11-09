@@ -7,6 +7,7 @@
 import type { AiDetail } from "@barista/shared/aiDetails";
 import { INSTRUCTIONS_INTRO, LOCKED_SECTIONS, NOTE_INTRO, PROMPT_TEXT, type AiPrompt } from "@barista/shared/aiPrompt";
 import type { BeanReviewContext } from "./beanReview.js";
+import type { PeriodContext } from "./periodContext.js";
 import type { BrewContext, BrewSummary, GrinderInfo, WaterInfo } from "./context.js";
 import type { BrewerInfo, SuggestContext } from "./suggestContext.js";
 
@@ -17,6 +18,9 @@ export const PROMPT_VERSION = "2026-11-a";
 // The chat's own prompt (CHAT_SYSTEM, CHAT_PROPOSALS): replies don't store
 // it, the eval's propose runs do (docs/api/llm-contract.md §9e).
 export const CHAT_PROMPT_VERSION = "2026-11-b";
+// A recap's summary (RECAP_SYSTEM, toPeriodInput, the schema), stored on the
+// recaps row (docs/api/llm-contract.md §9f).
+export const RECAP_PROMPT_VERSION = "2026-11-a";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type LlmInput = { [key: string]: Json };
@@ -182,6 +186,24 @@ export function toBeanReviewInput(context: BeanReviewContext, hidden: ReadonlySe
     ratingScale: context.ratingScale,
     bean: beanInput(context.bean, hidden),
     brews: context.brews.map(({ brewer, ...b }) => ({ ...brewInput(b, hidden), brewer })),
+    equipment: equipment(context.brews, hidden),
+  };
+  return (compact(input) ?? {}) as LlmInput;
+}
+
+// A period of brews (docs/api/llm-contract.md §9f): the figures, the period
+// before's, and the brews (each as the analysis sends one, with its day,
+// bean and brewer by name), hiding what the workspace keeps from the AI.
+export function toPeriodInput(context: PeriodContext, hidden: ReadonlySet<AiDetail> = new Set()): LlmInput {
+  const input = {
+    ratingScale: context.ratingScale,
+    kind: context.kind,
+    period: context.period,
+    figures: context.figures,
+    previousPeriod: context.previous,
+    previousFigures: context.previousFigures,
+    brews: context.brews.map(({ day, bean, brewer, ...b }) => ({ day, bean, brewer, ...brewInput(b, hidden) })),
+    brewsLeftOut: context.brewsLeftOut || undefined,
     equipment: equipment(context.brews, hidden),
   };
   return (compact(input) ?? {}) as LlmInput;
@@ -443,6 +465,14 @@ const ATTACHED_INTRO = "They attached these from their journal, as JSON. A missi
 // Proposals (docs/api/llm-contract.md §9e): cards the person opens or dismisses.
 export const CHAT_PROPOSALS =
   'When you recommend something concrete they could set up, you can also offer it as a proposal card: at the very end of your reply, after all your text, add up to 3 fenced blocks, each starting with ```proposal on its own line, holding one JSON object, and closed with ```. Explain it in your text too; the card only opens the right form already filled in, and nothing changes until they save it there. Only propose when it helps, at most one per idea, and use only refs of items they attached; when they ask for a recipe or a change to one, add its block rather than only describing it, and make a variation actually differ from what it\'s based on. Every proposal has "kind", "title" (a few words) and "why" (one or two sentences). Kinds: "brew", their next brew: "from" (a brew\'s ref, whose bean, recipe and grinder it starts from), optional "bean" (a bean or brew ref) and "recipe" (a recipe or brew ref) to use instead, and any of "grindSetting" (on the from brew\'s grinder dial), "tempC" and "ratio" ((water + ice) / dose, or for espresso shot weight / dose). "recipeChange": "recipe" (a recipe ref, or a brew ref for its recipe) and "changes" holding only the recipe fields that change. "newRecipe": "basedOn" (a recipe or brew ref whose brewer it\'s for; omit if none fits) and "recipe" with at least "name" and "targetDoseGrams". Recipe fields: name, targetDoseGrams, targetWaterGrams (hot water; none for espresso), targetIceGrams, expectedYieldGrams (espresso: the shot weight), targetTempC, expectedFinishMinSec, expectedFinishMaxSec, and steps (the whole list, replacing the old one): each with stepType (bloom, pour, swirl, stir, wait, press for filter; preinfusion, soak, pressure, flow for espresso; other for either; prep for either, first in the list, done before the timer starts with a label and optional durationSec as a countdown, such as rinsing the filter or preheating), and optional label, durationSec, targetWaterGrams (the scale weight to reach by the step\'s end), targetTempC, pressureBar, flowRate. Grams and degrees Celsius, times in seconds. Steps run one after another on the timer, each lasting its durationSec: time a pour at a kettle\'s pace (about 3-8 g/s), give waits and the final drawdown realistic times for the brewer, keep targetWaterGrams rising to the recipe\'s water at the last pour, and set the finish window so the steps end inside it. Don\'t invent precise timings you can\'t back: fewer steps and a wider window are better. A steep of hours (cold brew) isn\'t a step: say the steep time in your text instead.';
+// A recap's summary (docs/api/llm-contract.md §9f): fixed, then the
+// person's own instructions. Not editable under Your AI prompt.
+export const RECAP_SYSTEM =
+  "You are a coffee expert writing a short recap of a home barista's week or month of brewing, from their brew journal. You get JSON: the period (kind says weekly or monthly), its figures, the period before's figures for comparison, and the period's brews, newest first (brewsLeftOut says how many older ones weren't sent). A missing key means it wasn't recorded; ratings run 0.5-5 and averageRating is the coffee rating. Write summary: two to four plain sentences on how the period went: what they brewed most, what rated best and what may explain it (grind, ratio, temperature, roast age, recipe, brewer), and what changed from the period before. Then highlights: one to four short points of under 20 words each, the last a single concrete thing to try next period, grounded in their brews. Only use what's in the data: don't invent beans, tasting notes or numbers, and with few rated brews say what you can without overreaching. Warm but not gushing; plain text, no Markdown.";
+export function buildRecapSystem(custom?: PromptCustom): string {
+  return custom?.prompt.instructions ? `${RECAP_SYSTEM} The barista's own instructions: ${custom.prompt.instructions}` : RECAP_SYSTEM;
+}
+
 export function buildChatSystem(custom?: PromptCustom, attached: LlmInput[] = []): string {
   const parts = [CHAT_SYSTEM];
   if (custom?.prompt.instructions) parts.push(`The barista's own instructions: ${custom.prompt.instructions}`);

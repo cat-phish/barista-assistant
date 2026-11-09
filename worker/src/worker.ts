@@ -1,17 +1,18 @@
 import "dotenv/config";
-import { AI_CHECK_QUEUE, AI_PREVIEW_QUEUE, BEAN_REVIEW_QUEUE, BREW_ANALYSIS_QUEUE, CHAT_QUEUE, LABEL_READ_QUEUE, MAINTENANCE_QUEUE, PARAMETER_SUGGESTION_QUEUE, REMINDER_QUEUE, RECAP_TICK_JOB, STEEP_REMINDER_JOB, REST_REMINDER_JOB, GREEN_LOW_JOB, type AiCheckJobData, type AiCheckResult, type AiPreviewJobData, type BeanReviewJobData, type BeanReviewResult, type BrewAnalysisJobData, type ChatJobData, type DbBackupJobData, type LabelReadJobData, type LabelReadResult, type ParameterSuggestionJobData, type GreenLowJobData, type RateReminderJobData, type RecapTickJobData, type RestReminderJobData, type SteepReminderJobData } from "@barista/shared/jobs";
+import { AI_CHECK_QUEUE, AI_PREVIEW_QUEUE, BEAN_REVIEW_QUEUE, BREW_ANALYSIS_QUEUE, CHAT_QUEUE, LABEL_READ_QUEUE, MAINTENANCE_QUEUE, PARAMETER_SUGGESTION_QUEUE, RECAP_SUMMARY_QUEUE, REMINDER_QUEUE, RECAP_TICK_JOB, STEEP_REMINDER_JOB, REST_REMINDER_JOB, GREEN_LOW_JOB, type AiCheckJobData, type AiCheckResult, type AiPreviewJobData, type BeanReviewJobData, type BeanReviewResult, type BrewAnalysisJobData, type ChatJobData, type DbBackupJobData, type LabelReadJobData, type LabelReadResult, type ParameterSuggestionJobData, type RecapSummaryJobData, type GreenLowJobData, type RateReminderJobData, type RecapTickJobData, type RestReminderJobData, type SteepReminderJobData } from "@barista/shared/jobs";
 import { UnrecoverableError, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 import { config } from "./config.js";
 import { pool } from "./db.js";
 import { failSuggestion, failureMessage, processAiPreview, processBeanReview, processBrewAnalysis, processParameterSuggestion, settleRequest, type JobResult } from "./processor.js";
 import { processRecapTick, type RecapTickResult } from "./recaps.js";
+import { failRecapSummary, writeRecapSummary, type RecapSummaryResult } from "./recapSummary.js";
 import { processGreenLow, processRateReminder, processRestReminder, processSteepReminder, type ReminderResult } from "./reminders.js";
 import { runDbBackup, type BackupResult } from "./dbBackup.js";
 import { readLabel } from "./label.js";
 import { runAiCheck } from "./ai/check.js";
 import { processChatReply, redisPublisher, type ChatResult } from "./chat.js";
-import { publishEnvStatus } from "./ai/resolve.js";
+import { NO_AI, publishEnvStatus } from "./ai/resolve.js";
 import type { AiRequest } from "@barista/shared/schema";
 
 // BullMQ workers need maxRetriesPerRequest: null (blocking commands).
@@ -61,6 +62,23 @@ suggestions.on("failed", (job, err) => {
   if (final) void failSuggestion(job.data.suggestionId, failureMessage(err instanceof UnrecoverableError)).catch(() => undefined);
 });
 suggestions.on("error", (err) => console.error("Suggestion worker error:", err.message));
+
+// Recap summaries (docs/api/llm-contract.md §9f): retried; once every
+// attempt fails, the recap says why.
+const recapSummaries = new Worker<RecapSummaryJobData, RecapSummaryResult>(RECAP_SUMMARY_QUEUE, (job: Job<RecapSummaryJobData>) => writeRecapSummary(job.data), {
+  connection,
+  concurrency: config.concurrency,
+});
+recapSummaries.on("completed", (job, result) => {
+  console.log(`Recap summary ${job.id}: ${result.status}${result.status === "skipped" ? ` (${result.reason})` : ""}`);
+});
+recapSummaries.on("failed", (job, err) => {
+  if (!job) return;
+  const final = err instanceof UnrecoverableError || job.attemptsMade >= (job.opts.attempts ?? 1);
+  console.error(`Recap summary ${job.id} failed (${final ? "giving up" : "will retry"}): ${err.message}`);
+  if (final) void failRecapSummary(job.data.recapId, err.message.startsWith(NO_AI) ? NO_AI : failureMessage(err instanceof UnrecoverableError)).catch(() => undefined);
+});
+recapSummaries.on("error", (err) => console.error("Recap summary worker error:", err.message));
 
 // Previews (docs/api/analysis.md §8d): no AI call, so quick; the backend
 // waits for the return value. Not retried.
@@ -155,7 +173,7 @@ publishEnvStatus().catch((err: unknown) => console.error("AI status not saved:",
 async function shutdown(signal: string): Promise<void> {
   console.log(`${signal} received, finishing active jobs`);
   // close() waits for running jobs to finish before resolving.
-  const results = await Promise.allSettled([worker.close(), suggestions.close(), previews.close(), labels.close(), beanReviews.close(), chats.close(), aiChecks.close(), reminders.close(), maintenance.close()]);
+  const results = await Promise.allSettled([worker.close(), suggestions.close(), recapSummaries.close(), previews.close(), labels.close(), beanReviews.close(), chats.close(), aiChecks.close(), reminders.close(), maintenance.close()]);
   results.push(...(await Promise.allSettled([pool.end()])));
   for (const r of results) {
     if (r.status === "rejected") console.error("Error during shutdown:", r.reason);

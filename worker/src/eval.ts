@@ -9,6 +9,7 @@
 //   npm run eval -w worker -- compare baseline after
 //   npm run eval -w worker -- propose --label before [--limit 8] [--yes]
 //   npm run eval -w worker -- compare-propose before after
+//   npm run eval -w worker -- recap --label before [--weeks 4] [--yes]
 //
 // `run` builds each brew's context with the code as it is now and sends it
 // through the prompt as it is now, so run it before and after a change.
@@ -19,6 +20,9 @@
 // `propose` asks the chat, with each recipe attached, for a variation as a new
 // recipe, and keeps the proposals with the step checks they fail
 // (@barista/shared/recipeChecks): the recipes brewed most recently first.
+// `recap` writes the AI summary (§9f) for each of the last whole weeks of
+// whoever brewed most, in their busiest workspace, honouring its hidden
+// details: a JSON file and a Markdown one to read them side by side.
 // --with-flavors picks only brews with wheel flavors; --without flavors
 // sends them with none (and so no flavors section in the prompt), --without
 // places with their labels only, to see what the picks change (backlog 10).
@@ -282,6 +286,66 @@ async function propose(label: string, limit: number, yes: boolean): Promise<void
   console.log(`\nSaved eval/propose-${label}.json: ${out.results.filter((x) => x.proposals.length).length} with a proposal, ${flagged} flagged, ${dropped} block(s) dropped by the checks.`);
 }
 
+async function recap(label: string, weeks: number, yes: boolean): Promise<void> {
+  const { db } = await import("./db.js");
+  const { brewLogs, DEFAULT_PREFERENCES, DEFAULT_WORKSPACE_SETTINGS, users, withDefaults, workspaces } = await import("@barista/shared/schema");
+  const { count, desc, eq } = await import("drizzle-orm");
+  const { justEnded, periodLabel, previousPeriod } = await import("@barista/shared/recapPeriods");
+  const { RECAP_PROMPT_VERSION, toPeriodInput } = await import("./prompt.js");
+  const { requestRecapSummary } = await import("./llm.js");
+  const { resolveAi } = await import("./ai/resolve.js");
+  const { loadPeriodContext } = await import("./periodContext.js");
+  const { promptFor } = await import("./processor.js");
+  const [busiest] = await db
+    .select({ userId: brewLogs.userId, workspaceId: brewLogs.workspaceId, n: count() })
+    .from(brewLogs)
+    .groupBy(brewLogs.userId, brewLogs.workspaceId)
+    .orderBy(desc(count()))
+    .limit(1);
+  if (!busiest?.userId) throw new Error("No brews to summarise");
+  const [person] = await db.select({ preferences: users.preferences }).from(users).where(eq(users.id, busiest.userId));
+  const [ws] = await db.select({ settings: workspaces.settings }).from(workspaces).where(eq(workspaces.id, busiest.workspaceId));
+  const prefs = withDefaults(DEFAULT_PREFERENCES, person?.preferences ?? null);
+  const hidden = new Set(withDefaults(DEFAULT_WORKSPACE_SETTINGS, ws?.settings ?? null).aiHidden);
+  const periods = [justEnded("weekly", new Date().toISOString().slice(0, 10), prefs.weekStartsOn)];
+  while (periods.length < weeks) periods.push(previousPeriod("weekly", periods.at(-1)!, prefs.weekStartsOn));
+  const contexts = [];
+  for (const p of periods) {
+    const ctx = await loadPeriodContext({ workspaceId: busiest.workspaceId, userId: busiest.userId, kind: "weekly", period: p, previous: previousPeriod("weekly", p, prefs.weekStartsOn) });
+    if (ctx.figures.brews) contexts.push(ctx);
+  }
+  const ai = await resolveAi(busiest.workspaceId);
+  console.log(`${contexts.length} weeks with brews (${contexts.map((c) => periodLabel("weekly", c.period)).join(", ")}), recap prompt ${RECAP_PROMPT_VERSION}, model ${ai.models.main}: one call each.`);
+  if (!yes) {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const answer = await rl.question("Send them to the API? [y/N] ");
+    rl.close();
+    if (!/^y/i.test(answer)) return;
+  }
+  const custom = await promptFor(busiest.userId, null);
+  const results = [];
+  for (const ctx of contexts) {
+    const input = toPeriodInput(ctx, hidden);
+    try {
+      const { summary, usage } = await requestRecapSummary(ai, ctx, hidden, custom);
+      results.push({ period: ctx.period, brews: ctx.figures.brews, inputChars: JSON.stringify(input).length, input, output: summary, usage, error: null });
+      process.stdout.write(".");
+    } catch (err) {
+      results.push({ period: ctx.period, brews: ctx.figures.brews, inputChars: JSON.stringify(input).length, input, output: null, usage: null, error: err instanceof Error ? err.message : String(err) });
+      process.stdout.write("x");
+    }
+  }
+  writeJson(`recap-${label}.json`, { label, recapPromptVersion: RECAP_PROMPT_VERSION, model: ai.models.main, at: new Date().toISOString(), results });
+  const md = results
+    .map((r) => {
+      const head = `## ${periodLabel("weekly", r.period)} · ${r.brews} brews · ${r.inputChars} chars in · ${r.usage ? `${r.usage.promptTokens}+${r.usage.completionTokens} tokens` : "no usage"}`;
+      return r.output ? `${head}\n\n${r.output.summary}\n\n${r.output.highlights.map((h) => `- ${h}`).join("\n")}` : `${head}\n\nError: ${r.error}`;
+    })
+    .join("\n\n");
+  writeFileSync(path.join(OUT, `recap-${label}.md`), `# Recap summaries: ${label} (${RECAP_PROMPT_VERSION}, ${ai.models.main})\n\n${md}\n`);
+  console.log(`\nSaved eval/recap-${label}.json and .md`);
+}
+
 function comparePropose(a: string, b: string): void {
   const A = readJson<ProposeResult>(`propose-${a}.json`);
   const B = readJson<ProposeResult>(`propose-${b}.json`);
@@ -412,8 +476,9 @@ async function main(args: string[]): Promise<void> {
   else if (command === "compare" && args[1] && args[2]) compare(args[1], args[2]);
   else if (command === "propose" && flag(args, "label")) await propose(flag(args, "label")!, Number(flag(args, "limit") ?? 8), args.includes("--yes"));
   else if (command === "compare-propose" && args[1] && args[2]) comparePropose(args[1], args[2]);
+  else if (command === "recap" && flag(args, "label")) await recap(flag(args, "label")!, Number(flag(args, "weeks") ?? 4), args.includes("--yes"));
   else {
-    console.error("Usage: snapshot [--limit N] [--with-flavors] | run --label NAME [--suggest [SOURCE]] [--without flavors|places] [--yes] | compare A B | propose --label NAME [--limit N] [--yes] | compare-propose A B");
+    console.error("Usage: snapshot [--limit N] [--with-flavors] | run --label NAME [--suggest [SOURCE]] [--without flavors|places] [--yes] | compare A B | propose --label NAME [--limit N] [--yes] | compare-propose A B | recap --label NAME [--weeks N] [--yes]");
     process.exitCode = 2;
   }
 }
