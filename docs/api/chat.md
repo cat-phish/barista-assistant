@@ -188,7 +188,9 @@ bottom. On a phone the chat list is a drawer behind **Chats**.
 
 - **Attaching** opens a picker (`ChatAttachDialog.vue`) with Brews, Beans,
   Recipes and Charts tabs, a checkbox on each row. Brews narrow through the brew-log
-  list's filters (`brew-logs.md`: a period, bean, recipe, brewer, only mine),
+  list's filters (`brew-logs.md`: a period, bean, recipe, brewer, only mine;
+  **Only mine** starts ticked, as on Insights, and sits outside the folded
+  filters so it's always in view),
   and **Select all** ticks every brew that matches, newest first, up to
   `chatMaxAttachments`. Beans and recipes are searched in the browser. The
   picker edits the whole selection, so unticking removes an item. On the

@@ -58,7 +58,9 @@ const to = ref('');
 const beanId = ref('');
 const recipeId = ref('');
 const brewerId = ref('');
-const mine = ref(false);
+// Only your own to start, as Insights has it; shown outside the folded
+// filters so it's never hidden.
+const mine = ref(true);
 const logs = ref<BrewLog[]>([]);
 const total = ref(0);
 const loading = ref(false);
@@ -87,9 +89,8 @@ const brewSummary = computed(() => {
     beanId.value && nameIn(beans.value, beanId.value, beanLabel),
     recipeId.value && nameIn(recipes.value, recipeId.value, (r) => r.name),
     brewerId.value && nameIn(brewers.value, brewerId.value, (b) => b.name),
-    mine.value && 'Only mine',
   ].filter(Boolean);
-  return parts.length ? parts.join(' · ') : 'All brews, no filters';
+  return parts.length ? parts.join(' · ') : 'No filters';
 });
 
 async function loadBrews(fresh: boolean): Promise<void> {
@@ -319,12 +320,12 @@ watch(tab, (t) => {
               <option v-for="m in brewers" :key="m.id" :value="m.id">{{ m.name }}</option>
             </select>
           </div>
-          <label class="checkbox mine">
-            <input v-model="mine" type="checkbox" />
-            Only mine
-          </label>
         </div>
         </FilterBar>
+        <label class="checkbox mine">
+          <input v-model="mine" type="checkbox" />
+          Only mine
+        </label>
         <div class="bulk">
           <span class="muted small" aria-live="polite">{{ loading && !logs.length ? 'Loading…' : `${total} ${total === 1 ? 'brew matches' : 'brews match'}` }}</span>
           <button v-if="total" type="button" class="btn-link" :disabled="loading || full" @click="selectAllBrews">Select all {{ total }}</button>
