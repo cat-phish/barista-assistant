@@ -2689,3 +2689,26 @@ values are backlog 5 now.
 - **Decided against (for now):** a number per method, and learning it from
   history (backlog 5).
 
+
+## Target finish window under the steps (built)
+
+Branch `finish-window-follows`; was backlog 8.
+
+- **Why:** the window and the steps are typed separately. A recipe could
+  say 3:00–3:30 while its steps ended at 4:10, so the timer marked every
+  brew slow and the AI saw a target the recipe couldn't reach. The form
+  warned, but the window was in the card above, away from the steps.
+- **The box moved:** the Target finish / Target shot time box is now at the
+  end of the steps card, under the line comparing them ("Steps end at 3:15
+  · Target finish 3:00–3:30", warning-coloured when outside). The first
+  drop window and the finish offset stay in the first card.
+- **Espresso warns like filter:** the "window ends before the steps do"
+  warning at the bottom of the form now covers espresso too (only the
+  pour-to-water check is filter-only).
+- **Espresso's default spread:** a shot's window is closer, so typing one
+  end alone gives the other ±3 s (filter stays ±15 s), in the API
+  (`docs/api/recipes.md` §5, by the recipe's brewer after the request) and
+  the recipe and brew forms.
+- **Decided against:** the window following the steps' end (built and
+  tried; it felt worse than setting it yourself), a second window box by
+  the steps, and confirming on save. The server still doesn't enforce it.

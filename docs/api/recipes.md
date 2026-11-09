@@ -34,7 +34,7 @@ new kind needs):
 | `targetWaterGrams` | required | must be absent/`null` |
 | `targetIceGrams` | optional (flash chilled) | must be absent/`null` |
 | `expectedYieldGrams` | optional estimate | **required**: target shot weight; ratio is dose:yield (18 g → 36 g = 1:2) |
-| finish window | total brew time | total shot time |
+| finish window | total brew time (one end alone: ±15 s) | total shot time (one end alone: ±3 s) |
 | `firstDropMinSec`/`MaxSec` | must be absent/`null` | optional window (pair, ±3 s default) |
 | step types | `prep` `bloom` `pour` `swirl` `stir` `wait` `press` `other` | `prep` `preinfusion` `soak` `pressure` `flow` `other` (`ESPRESSO_STEP_TYPES`) |
 | step `advance` | `auto`, `auto_log`, `tap` | also `first_drop` (at most one step) |
@@ -226,8 +226,10 @@ Creates a recipe, its grind starting points and its steps in one transaction.
     same pair rules as the finish window below but with a **±3 s** default.
   - Target finish window: `expectedFinishMinSec` and `expectedFinishMaxSec`
     (integers 0–86400, optional, nullable, min ≤ max). If only one is given,
-    the other defaults to it **±15 s**: min 165 → max 180; max 195 → min 180
-    (never below 0). So a stored window always has both ends, or neither.
+    the other defaults to it **±15 s** (**±3 s** for espresso, a shot's
+    window being closer): min 165 → max 180; max 195 → min 180 (never below
+    0). The kind is the recipe's brewer after the request. So a stored
+    window always has both ends, or neither.
   - `finishOffsetSec` (optional, nullable, whole seconds −60 to 60): taken
     off the brew time when Finish & Save is tapped (negative: added),
     overriding the brewer's (§3).

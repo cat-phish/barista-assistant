@@ -57,7 +57,7 @@ import { useBrewSessionStore } from '../stores/brewSession';
 import { afterPrep, formatMark, heldSec } from '../lib/marks';
 import { applyFinishOffset, finishOffsetFor, formatFinishOffset } from '../lib/finishOffset';
 import { recipePrep, toolsFor } from '../lib/prepTools';
-import { formatFinishWindow, parseFinishWindow, splitPrep, stepTitle } from '../lib/steps';
+import { finishSpread, formatFinishWindow, parseFinishWindow, splitPrep, stepTitle } from '../lib/steps';
 import { useAnalysis } from '../composables/useAnalysis';
 import { formatClock } from '../lib/analysisStatus';
 import { emptyDraft, parseBrewDraft, setVessel } from '../lib/brewDraft';
@@ -889,7 +889,7 @@ function resetWindow(r: Recipe | null = recipe.value): void {
   setFinishText(recipeFinish.value.min, recipeFinish.value.max);
 }
 const steepParsed = computed(() => parseSteepWindow(windowText.steepFrom, windowText.steepTo));
-const finishParsed = computed(() => parseFinishWindow(windowText.finishFrom, windowText.finishTo));
+const finishParsed = computed(() => parseFinishWindow(windowText.finishFrom, windowText.finishTo, finishSpread(recipe.value?.brewer.kind)));
 const windowError = computed(() => ({ steep: steepParsed.value.ok ? '' : steepParsed.value.error, finish: finishParsed.value.ok ? '' : finishParsed.value.error }));
 const steepRange = computed(() => (steepParsed.value.ok ? steepParsed.value.value : null));
 const finishRange = computed(() => (finishParsed.value.ok ? finishParsed.value.value : null));

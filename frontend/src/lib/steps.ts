@@ -367,6 +367,11 @@ export function insertStepAfter(drafts: StepDraft[], afterIndex: number, key: st
 // ---- Target finish window ---------------------------------------------------
 
 export const FINISH_DEFAULT_SPREAD_SEC = 15; // same default as the API
+export const ESPRESSO_FINISH_DEFAULT_SPREAD_SEC = 3; // a shot's window is closer
+// The finish window's default spread for a brewer kind (docs/api/recipes.md §5).
+export function finishSpread(kind: MethodKind | null | undefined): number {
+  return kind === 'espresso' ? ESPRESSO_FINISH_DEFAULT_SPREAD_SEC : FINISH_DEFAULT_SPREAD_SEC;
+}
 // Espresso first-drop window default spread (docs/api/recipes.md §5).
 export const FIRST_DROP_DEFAULT_SPREAD_SEC = 3;
 

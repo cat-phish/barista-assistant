@@ -193,7 +193,11 @@ fails.
   to start and end ("Starts at 0:30 · Ends at 1:15", ≈ after a step that
   waits for a tap), and a line under the steps shows where they end against
   the target finish window ("Steps end at 3:15 · Target finish 3:00–3:30",
-  in the warning colour when outside it). Drag to reorder, or insert between
+  in the warning colour when outside it), with the target finish (shot
+  time) box right under it to fix a mismatch; the form also warns when the
+  window ends before the steps do, espresso included. Typing one end alone
+  gives the other ±15 s (±3 s for an espresso shot). Drag to reorder, or
+  insert between
   steps. The last step can run until you finish.
 - **Step times that scale with the batch** (not espresso or long steeps):
   ticked, pour and wait steps take longer for a bigger batch and less for a

@@ -83,6 +83,20 @@ describe("target finish window", () => {
     expect(await patch({ name: "Renamed" })).toEqual([165, 195]);
     expect(await patch({ expectedFinishMinSec: 200 })).toEqual([200, 215]);
   });
+
+  it("espresso's shot time defaults to ±3 s, on POST and PATCH", async () => {
+    const { owner, ws, base, recipe } = await setup();
+    const gaggia = (await owner.agent.post(`/api/workspaces/${ws.id}/brewers`).send({ name: "Gaggia", kind: "espresso" })).body.brewer.id;
+    const shot = { name: "Shot", brewerId: gaggia, targetDoseGrams: 18, expectedYieldGrams: 36 };
+    const created = (await owner.agent.post(base).send({ ...shot, expectedFinishMinSec: 25 })).body.recipe;
+    expect([created.expectedFinishMinSec, created.expectedFinishMaxSec]).toEqual([25, 28]);
+    const patched = (await owner.agent.patch(`${base}/${created.id}`).send({ expectedFinishMaxSec: 32 })).body.recipe;
+    expect([patched.expectedFinishMinSec, patched.expectedFinishMaxSec]).toEqual([29, 32]);
+    // Moving a filter recipe to the espresso brewer uses the brewer it moves to.
+    const v60 = (await owner.agent.post(base).send(recipe)).body.recipe.id;
+    const moved = (await owner.agent.patch(`${base}/${v60}`).send({ brewerId: gaggia, targetWaterGrams: null, expectedYieldGrams: 36, expectedFinishMinSec: 25 })).body.recipe;
+    expect([moved.expectedFinishMinSec, moved.expectedFinishMaxSec]).toEqual([25, 28]);
+  });
 });
 
 describe("grind starting points", () => {
