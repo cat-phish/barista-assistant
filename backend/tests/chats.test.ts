@@ -228,6 +228,26 @@ describe("summaries", () => {
     expect((await send()).status).toBe(202);
   });
 
+  it("edits a summary, or clears it to send the older messages again", async () => {
+    const chatId = await longChat(12);
+    const path = `${url(workspaceId)}/${chatId}/summary`;
+    expect((await owner.agent.put(path).send({ summary: "Fixed." })).status).toBe(404);
+    await db.update(aiChats).set({ summary: "Wrong: can't see new brews.", summaryThrough: 2 }).where(eq(aiChats.id, chatId));
+    const edited = await owner.agent.put(path).send({ summary: "  Fixed.  " });
+    expect(edited.status, JSON.stringify(edited.body)).toBe(200);
+    expect(edited.body.chat).toMatchObject({ summary: "Fixed.", summaryThrough: 2 });
+    expect((await owner.agent.put(path).send({ summary: "" })).status).toBe(400);
+    expect((await owner.agent.put(path).send({ summary: "x".repeat(6001) })).status).toBe(400);
+    const cleared = await owner.agent.delete(path);
+    expect(cleared.body.chat).toMatchObject({ summary: null, summaryThrough: null, summaryStatus: null });
+    // Not while one is being written, and not someone else's.
+    await summarize(chatId);
+    expect((await owner.agent.delete(path)).status).toBe(409);
+    const other = await newUser();
+    await addMember(owner, workspaceId, other, "barista");
+    expect((await other.agent.delete(path)).status).toBe(404);
+  });
+
   it("refuses a short chat, and one with a reply being written", async () => {
     const short = await longChat(10);
     expect((await summarize(short)).status).toBe(400);

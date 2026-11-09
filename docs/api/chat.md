@@ -133,7 +133,18 @@ long: soon its older messages won't be sent to the AI", with **Summarize and
 continue**. Past 40 it says they aren't sent any more. While the summary is
 written it says so, and the chat is read again every 3 seconds. After it, a
 divider below the last message covered, "Earlier messages summarized for
-the AI ▾", opens the summary.
+the AI ▾", opens the summary, with **Edit** and **Clear summary**.
+
+**Fixing a summary:** the AI can get one wrong, and later summaries fold it
+in, so it can be put right:
+
+| Route | |
+| --- | --- |
+| `PUT /:chatId/summary` | Body `{ summary }`, 1–6000 characters, trimmed. `200` with `{ chat }`. Replies, and the next summary, build on the edited text. `404` without a summary. |
+| `DELETE /:chatId/summary` | Clears `summary` and `summaryThrough`, so the older messages are sent again (the last 40). `200` with `{ chat }`. |
+
+Both need `owner` or `barista`, on your own chat, and answer `409` while a
+summary is being written.
 
 ## Proposals
 

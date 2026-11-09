@@ -70,6 +70,29 @@ function pollSummary() {
     pollSummary();
   }, 3000);
 }
+// The summary can be put right, or dropped so the older messages are sent
+// again (until they fall out of the window).
+const summaryDraft = ref<string | null>(null); // editing when set
+const summaryBusy = ref(false);
+async function changeSummary(change: (ws: string, id: string) => Promise<{ chat: Chat }>) {
+  if (!workspaceId.value || !chatId.value) return;
+  summaryBusy.value = true;
+  error.value = '';
+  try {
+    currentChat.value = (await change(workspaceId.value, chatId.value)).chat;
+    summaryDraft.value = null;
+  } catch (err) {
+    say(err);
+  } finally {
+    summaryBusy.value = false;
+  }
+}
+const saveSummary = () => {
+  const text = summaryDraft.value?.trim();
+  if (text) void changeSummary((ws, id) => chatsApi.editSummary(ws, id, text));
+};
+const clearSummary = () => void changeSummary((ws, id) => chatsApi.clearSummary(ws, id));
+
 async function summarize() {
   if (!workspaceId.value || !chatId.value || summarizing.value) return;
   error.value = '';
@@ -271,6 +294,7 @@ async function open(id: string) {
     chatId.value = id;
     currentChat.value = pair.chat;
     summaryOpen.value = false;
+    summaryDraft.value = null;
     pollSummary();
     messages.value = pair.messages;
     const pending = pair.messages.find((m) => m.status === 'pending');
@@ -481,7 +505,24 @@ onBeforeUnmount(stopSummaryPoll);
           <button type="button" class="btn-link" :aria-expanded="summaryOpen" @click="summaryOpen = !summaryOpen">
             Earlier messages summarized for the AI <span aria-hidden="true">{{ summaryOpen ? '▴' : '▾' }}</span>
           </button>
-          <p v-if="summaryOpen" class="summary-text">{{ currentChat.summary }}</p>
+          <template v-if="summaryOpen">
+            <form v-if="summaryDraft !== null" class="summary-edit" @submit.prevent="saveSummary">
+              <label for="chat-summary" class="visually-hidden">Summary</label>
+              <textarea id="chat-summary" v-model="summaryDraft" rows="8" maxlength="6000"></textarea>
+              <div class="summary-actions">
+                <button type="submit" class="btn btn-primary" :disabled="summaryBusy || !summaryDraft.trim()">Save</button>
+                <button type="button" class="btn btn-secondary" :disabled="summaryBusy" @click="summaryDraft = null">Cancel</button>
+              </div>
+            </form>
+            <template v-else>
+              <p class="summary-text">{{ currentChat.summary }}</p>
+              <p class="muted small">The AI gets this instead of the messages above it. If something in it is wrong, fix it here; clearing it sends the older messages again, the last 40.</p>
+              <div v-if="composing" class="summary-actions">
+                <button type="button" class="btn-link" :disabled="summaryBusy || summarizing" @click="summaryDraft = currentChat.summary">Edit</button>
+                <button type="button" class="btn-link" :disabled="summaryBusy || summarizing" @click="clearSummary">Clear summary</button>
+              </div>
+            </template>
+          </template>
         </div>
         </template>
       </div>
@@ -562,6 +603,20 @@ onBeforeUnmount(stopSummaryPoll);
   border-top: 1px dashed var(--border);
   padding-top: var(--space-1);
   font-size: 0.85rem;
+}
+.summary-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(60ch, 100%);
+}
+.summary-edit textarea {
+  width: 100%;
+  font: inherit;
+}
+.summary-actions {
+  display: flex;
+  gap: var(--space-3);
 }
 .summary-text {
   margin: 0;

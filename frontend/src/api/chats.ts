@@ -160,6 +160,12 @@ export const chatsApi = {
   summarize(workspaceId: string, chatId: string) {
     return api.post<{ chat: Chat }>(`${base(workspaceId)}/${chatId}/summary`, {});
   },
+  editSummary(workspaceId: string, chatId: string, summary: string) {
+    return api.put<{ chat: Chat }>(`${base(workspaceId)}/${chatId}/summary`, { summary });
+  },
+  clearSummary(workspaceId: string, chatId: string) {
+    return api.delete<{ chat: Chat }>(`${base(workspaceId)}/${chatId}/summary`);
+  },
   start(workspaceId: string, body: ChatSend) {
     return api.post<ChatPair>(base(workspaceId), body);
   },

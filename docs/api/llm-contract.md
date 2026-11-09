@@ -621,7 +621,8 @@ has already read, so a failed reply is marked failed and they send again.
    carrying its proposals note. One call, no schema, plain text
    (`CHAT_SUMMARY_SYSTEM`, `CHAT_SUMMARY_PROMPT_VERSION` 2026-11-a): keep
    the facts, numbers, what was discussed by name, proposals and whether
-   they were dismissed, decisions and what's open, in at most about 400
+   they were dismissed, decisions and what's open (leaving out the AI's
+   remarks on what it could see, and anything later corrected), in at most about 400
    words, folding the earlier summary in. Cut to 6000 characters and saved
    with `summaryThrough`; a failure marks it `failed` and keeps the old one.
 

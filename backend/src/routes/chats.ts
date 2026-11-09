@@ -297,6 +297,44 @@ chatsRouter.post("/:chatId/summary", async (req: Request<ChatParams>, res: Respo
   res.status(202).json({ chat: fresh ?? chat });
 });
 
+// Fixing or dropping it (docs/api/chat.md §12, "Long chats"): an edited
+// summary is what later replies and the next summary build on; a cleared one
+// puts the older messages back in the window.
+const SUMMARY_MAX = 6000;
+const summaryEditSchema = z.object({ summary: z.string().trim().min(1).max(SUMMARY_MAX) }).strict();
+async function changeSummary(req: Request<ChatParams>, res: Response<{ chat: AiChat }>, set: (chat: AiChat) => Partial<typeof aiChats.$inferInsert> | null): Promise<void> {
+  const userId = authedUserId(req);
+  const { workspaceId, chatId } = req.params;
+  if (!(await requireMembership(res, userId, workspaceId, WRITE_ROLES))) return;
+  const chat = await ownChat(res, userId, workspaceId, chatId);
+  if (!chat) return;
+  await settleStale(chatId);
+  const [now] = await db.select().from(aiChats).where(eq(aiChats.id, chatId));
+  if (!now) return;
+  if (now.summaryStatus === "pending") {
+    sendError(res, 409, "A summary is still being written");
+    return;
+  }
+  const values = set(now);
+  if (!values) return;
+  await db.update(aiChats).set(values).where(eq(aiChats.id, chatId));
+  const [fresh] = await db.select().from(aiChats).where(eq(aiChats.id, chatId));
+  res.json({ chat: fresh ?? now });
+}
+chatsRouter.put("/:chatId/summary", (req: Request<ChatParams>, res: Response<{ chat: AiChat }>) =>
+  changeSummary(req, res, (chat) => {
+    if (!chat.summary) {
+      sendError(res, 404, "This chat has no summary to edit");
+      return null;
+    }
+    const body = parseBody(summaryEditSchema, req, res);
+    return body ? { summary: body.summary, summaryStatus: null } : null;
+  }),
+);
+chatsRouter.delete("/:chatId/summary", (req: Request<ChatParams>, res: Response<{ chat: AiChat }>) =>
+  changeSummary(req, res, () => ({ summary: null, summaryThrough: null, summaryStatus: null })),
+);
+
 chatsRouter.get("/", async (req: Request<Params>, res: Response<{ chats: AiChat[]; canSend: boolean }>) => {
   const userId = authedUserId(req);
   const { workspaceId } = req.params;

@@ -2846,6 +2846,8 @@ Branch `chat-period`; was backlog 17. Spec: `docs/api/chat.md` §12,
   chat attached, and past 30 messages or about 60k tokens the Chat tab
   offers **Summarize and continue**, Claude Code's compact for chats: the
   AI folds all but the newest 10 messages into a summary sent ahead of the
-  rest (migration 0114, `chat.md` §12 "Long chats").
+  rest (migration 0114, `chat.md` §12 "Long chats"). The summary can be
+  edited or cleared from its divider, since a wrong one would otherwise
+  carry forward; one stuck for 10 minutes is marked failed (0115).
 - Left out: a period gives proposals no ref (it isn't one item); other
   kinds (the beans opened in a period) weren't asked for.
