@@ -9,7 +9,7 @@ and finished, new recipes, and the most used recipe and brewer, each next to
 the period before. Backlog 18 builds it in phases:
 
 1. **Insights → Recap** (done): the figures, worked out in the browser.
-2. A banner on the brew page when one is ready (planned).
+2. A banner on the brew page when one is ready (done).
 3. A notification on the first day of a new period (planned).
 4. An AI summary, off, on request or automatic (planned).
 
@@ -69,3 +69,26 @@ the client counts" does:
 - **Most brewed** recipe, and the brewer used most.
 
 A period without brews says so; beans and recipes added in it still show.
+
+## Banner
+
+A small banner at the top of the brew page (setup, before a brew starts),
+`frontend/src/components/RecapBanner.vue`, with the rule in
+`lib/recap.ts` (`recapsDue`, `bannerFor`, `markSeen`):
+
+- **Which periods:** for each kind in `recapPeriods`, the one just ended,
+  from the day after it ends for `recapBannerDays` days (day 1 = the day
+  after), and only when `recaps` and `recapBanner` are on.
+- **Not once seen:** a period whose start is at or before
+  `recapSeen[kind]` is skipped.
+- **Only with brews:** a due period with none of the person's brews in the
+  current workspace is skipped. One `GET …/stats?mine=1` covering the due
+  periods tells, and only when one is due; the answer is kept until the app
+  reloads.
+- **What it says:** "Your weekly recap is ready.", "Your monthly recap is
+  ready." or "Your weekly and monthly recaps are ready.", with a link to
+  each (`/insights/recap?kind=…&start=…`).
+- **Gone when:** opened (Insights → Recap showing the period just ended
+  sets `recapSeen` for that kind, whichever way it was reached), dismissed
+  (× sets it for every period shown), or past `recapBannerDays`. Seen is
+  per person, across workspaces.

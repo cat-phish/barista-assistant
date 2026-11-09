@@ -448,8 +448,10 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   everyone's in the workspace, and steps back through earlier weeks and
   months. Under Settings → Recaps: weekly, monthly or both, the day weeks
   start (Insights' weekly charts follow it), and switches for the brew-page
-  banner, the notification and the AI summary. Turned off, a recap still
-  shows when you ask for it.
+  banner, the notification and the AI summary. The banner at the top of a
+  new brew says when a weekly or monthly recap you brewed in is ready, and
+  goes once you open it, dismiss it, or after the days you choose (3 by
+  default). Turned off, a recap still shows when you ask for it.
 - **AI analysis:** after a brew, ask for a suggestion; a background worker
   asks the LLM for grind and temperature changes with reasoning, plus one
   next step and how confident it is. For espresso it can also change the
