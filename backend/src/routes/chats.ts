@@ -343,8 +343,25 @@ chatsRouter.get("/", async (req: Request<Params>, res: Response<{ chats: AiChat[
     .select()
     .from(aiChats)
     .where(and(eq(aiChats.workspaceId, workspaceId), eq(aiChats.userId, userId)))
-    .orderBy(desc(aiChats.updatedAt), desc(aiChats.createdAt));
+    // Pinned first, the latest pinned on top; then the latest used.
+    .orderBy(sql`${aiChats.pinnedAt} IS NULL`, desc(aiChats.pinnedAt), desc(aiChats.updatedAt), desc(aiChats.createdAt));
   res.json({ chats, canSend: await chatOn(userId, workspaceId) });
+});
+
+// Pinning (docs/api/chat.md §12): any member, on their own chat; it only
+// orders their list and keeps the chat from the limits (chatData.ts).
+const pinSchema = z.object({ pinned: z.boolean() }).strict();
+chatsRouter.put("/:chatId/pin", async (req: Request<ChatParams>, res: Response<{ chat: AiChat }>) => {
+  const userId = authedUserId(req);
+  const { workspaceId, chatId } = req.params;
+  if (!(await requireMembership(res, userId, workspaceId))) return;
+  const chat = await ownChat(res, userId, workspaceId, chatId);
+  if (!chat) return;
+  const body = parseBody(pinSchema, req, res);
+  if (!body) return;
+  if (body.pinned !== (chat.pinnedAt !== null)) await db.update(aiChats).set({ pinnedAt: body.pinned ? sql`NOW()` : null }).where(eq(aiChats.id, chatId));
+  const [fresh] = await db.select().from(aiChats).where(eq(aiChats.id, chatId));
+  res.json({ chat: fresh ?? chat });
 });
 
 chatsRouter.post("/", async (req: Request<Params>, res: Response<ChatPair>) => {
@@ -391,6 +408,17 @@ chatsRouter.get("/export", async (req: Request<Params>, res: Response) => {
   if (!(await requireMembership(res, userId, workspaceId))) return;
   const zip = await buildChatsZip(workspaceId, userId);
   res.setHeader("Content-Disposition", `attachment; filename="chats-${new Date().toISOString().slice(0, 10)}.zip"`);
+  res.type("application/zip").send(Buffer.from(zip));
+});
+
+// One chat, in the same zip, so Import brings it back.
+chatsRouter.get("/:chatId/export", async (req: Request<ChatParams>, res: Response) => {
+  const userId = authedUserId(req);
+  const { workspaceId, chatId } = req.params;
+  if (!(await requireMembership(res, userId, workspaceId))) return;
+  if (!(await ownChat(res, userId, workspaceId, chatId))) return;
+  const zip = await buildChatsZip(workspaceId, userId, chatId);
+  res.setHeader("Content-Disposition", `attachment; filename="chat-${new Date().toISOString().slice(0, 10)}.zip"`);
   res.type("application/zip").send(Buffer.from(zip));
 });
 

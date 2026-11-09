@@ -813,6 +813,13 @@
       "when": 1794263969211,
       "tag": "0115_chat_summary_requested",
       "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "5",
+      "when": 1794267473832,
+      "tag": "0116_chat_pins",
+      "breakpoints": true
     }
   ]
 }

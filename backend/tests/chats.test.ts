@@ -188,6 +188,42 @@ describe("attachments", () => {
   });
 });
 
+describe("pinning", () => {
+  let made = 0;
+  const start = async (content: string) => {
+    const res = await owner.agent.post(url(workspaceId)).send({ content });
+    await finish(res.body.messages[1].id, "ok");
+    // A minute apart, as times are kept to the second.
+    await db.update(aiChats).set({ updatedAt: new Date(Date.now() - 3_600_000 + ++made * 60_000) }).where(eq(aiChats.id, res.body.chat.id));
+    return res.body.chat.id as string;
+  };
+  const pin = (chatId: string, pinned: boolean) => owner.agent.put(`${url(workspaceId)}/${chatId}/pin`).send({ pinned });
+  const titles = async () => ((await owner.agent.get(url(workspaceId))).body.chats as Array<{ title: string }>).map((c) => c.title);
+
+  it("puts pinned chats first, the latest pinned on top", async () => {
+    const a = await start("A");
+    const b = await start("B");
+    await start("C");
+    expect(await titles()).toEqual(["C", "B", "A"]);
+    const pinned = await pin(a, true);
+    expect(pinned.status).toBe(200);
+    expect(pinned.body.chat.pinnedAt).toEqual(expect.any(String));
+    await db.update(aiChats).set({ pinnedAt: new Date(Date.now() - 60_000) }).where(eq(aiChats.id, a));
+    await pin(b, true);
+    expect(await titles()).toEqual(["B", "A", "C"]);
+    expect((await pin(b, false)).body.chat.pinnedAt).toBeNull();
+    expect(await titles()).toEqual(["A", "C", "B"]);
+    expect((await owner.agent.put(`${url(workspaceId)}/${a}/pin`).send({ pinned: "yes" })).status).toBe(400);
+  });
+
+  it("is only for your own chats", async () => {
+    const a = await start("A");
+    const other = await newUser();
+    await addMember(owner, workspaceId, other, "viewer");
+    expect((await other.agent.put(`${url(workspaceId)}/${a}/pin`).send({ pinned: true })).status).toBe(404);
+  });
+});
+
 describe("summaries", () => {
   // A chat of n finished messages, built as the worker would leave it.
   async function longChat(n: number): Promise<string> {
@@ -353,6 +389,14 @@ describe("limits and purging", () => {
   const day = 24 * 3600_000;
   const now = new Date("2026-11-01T00:00:00Z");
   const chat = (id: string, age: number, bytes: number) => ({ id, userId: "u", updatedAt: new Date(now.getTime() - age * day), bytes });
+
+  it("keeps a pinned chat from the age limit, and takes it last for size", () => {
+    const pinned = { ...chat("pinned", 30, 5), pinned: true };
+    const chats = [chat("new", 0, 5), pinned, chat("mid", 5, 5)];
+    expect(overLimits(chats, { maxBytes: null, maxDays: 6 }, null, now)).toEqual([]);
+    expect(overLimits(chats, { maxBytes: 10, maxDays: null }, null, now)).toEqual(["mid"]);
+    expect(overLimits(chats, { maxBytes: 4, maxDays: null }, null, now)).toEqual(["mid", "new", "pinned"]);
+  });
 
   it("takes the oldest first until the rest fit, never the one in use", () => {
     const chats = [chat("new", 0, 5), chat("old", 9, 5), chat("mid", 5, 5)];
@@ -578,6 +622,21 @@ describe("export and import", () => {
     await imported(owner, other, await exported(owner, workspaceId));
     const [chat] = (await owner.agent.get(url(other))).body.chats as Array<{ summary: string; summaryThrough: number }>;
     expect(chat).toMatchObject({ summary: "They asked first.", summaryThrough: 2 });
+  });
+
+  it("exports one chat, which imports back with its pin", async () => {
+    const one = await owner.agent.post(url(workspaceId)).send({ content: "Keep me" });
+    await finish(one.body.messages[1].id, "Kept");
+    const two = await owner.agent.post(url(workspaceId)).send({ content: "Not this" });
+    await finish(two.body.messages[1].id, "No");
+    await owner.agent.put(`${url(workspaceId)}/${one.body.chat.id}/pin`).send({ pinned: true }).expect(200);
+    const zip = (await owner.agent.get(`${url(workspaceId)}/${one.body.chat.id}/export`).buffer(true).parse(binary as never)).body as Buffer;
+    const other = (await newWorkspace(owner)).id;
+    await withAi(other);
+    expect((await imported(owner, other, zip)).body).toEqual({ imported: 1, skipped: 0 });
+    const chats = (await owner.agent.get(url(other))).body.chats as Array<{ title: string; pinnedAt: string | null }>;
+    expect(chats).toEqual([expect.objectContaining({ title: "Keep me", pinnedAt: expect.any(String) })]);
+    expect((await owner.agent.get(`${url(workspaceId)}/${randomUUID()}/export`)).status).toBe(404);
   });
 
   it("only holds your own, and leaves out a reply still being written", async () => {

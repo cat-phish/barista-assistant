@@ -27,12 +27,13 @@ interface ChatSize {
   userId: string;
   updatedAt: Date;
   bytes: number;
+  pinned?: boolean;
 }
 
 // Each chat with what it takes: its messages, their attachment references,
 // proposals and photos, and its summary.
 async function chatSizes(where?: SQL): Promise<ChatSize[]> {
-  const chats = await db.select({ id: aiChats.id, userId: aiChats.userId, updatedAt: aiChats.updatedAt, summaryBytes: sql<string | null>`OCTET_LENGTH(${aiChats.summary})` }).from(aiChats).where(where);
+  const chats = await db.select({ id: aiChats.id, userId: aiChats.userId, updatedAt: aiChats.updatedAt, pinnedAt: aiChats.pinnedAt, summaryBytes: sql<string | null>`OCTET_LENGTH(${aiChats.summary})` }).from(aiChats).where(where);
   if (!chats.length) return [];
   const ids = chats.map((c) => c.id);
   const [text, photos] = await Promise.all([
@@ -50,7 +51,7 @@ async function chatSizes(where?: SQL): Promise<ChatSize[]> {
   ]);
   const sizes = new Map<string, number>();
   for (const row of [...text, ...photos]) sizes.set(row.chatId, (sizes.get(row.chatId) ?? 0) + Number(row.bytes));
-  return chats.map(({ summaryBytes, ...c }) => ({ ...c, bytes: (sizes.get(c.id) ?? 0) + Number(summaryBytes ?? 0) }));
+  return chats.map(({ summaryBytes, pinnedAt, ...c }) => ({ ...c, pinned: pinnedAt !== null, bytes: (sizes.get(c.id) ?? 0) + Number(summaryBytes ?? 0) }));
 }
 
 const sumBytes = (chats: ChatSize[]): number => chats.reduce((n, c) => n + c.bytes, 0);
@@ -87,13 +88,16 @@ export const deleteMemberChats = (workspaceId: string, userId: string): Promise<
   deleteWhere(and(eq(aiChats.workspaceId, workspaceId), eq(aiChats.userId, userId)), and(eq(aiChatPhotos.workspaceId, workspaceId), eq(aiChatPhotos.userId, userId)));
 
 // Which chats are over the limits, oldest first until the rest fit. Pure, so
-// tests can check it. keep: never removed for size.
+// tests can check it. keep: never removed for size. A pinned chat never
+// expires for age, and goes for size only once every unpinned one has.
 export function overLimits(chats: readonly ChatSize[], limits: ChatLimits, keep: string | null, now = new Date()): string[] {
   const cutoff = limits.maxDays === null ? null : now.getTime() - limits.maxDays * 24 * 3600_000;
-  const expired = new Set(chats.filter((c) => cutoff !== null && c.updatedAt.getTime() < cutoff && c.id !== keep).map((c) => c.id));
+  const expired = new Set(chats.filter((c) => cutoff !== null && !c.pinned && c.updatedAt.getTime() < cutoff && c.id !== keep).map((c) => c.id));
   if (limits.maxBytes === null) return [...expired];
   let total = sumBytes(chats.filter((c) => !expired.has(c.id)));
-  const oldest = chats.filter((c) => !expired.has(c.id) && c.id !== keep).sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime());
+  const oldest = chats
+    .filter((c) => !expired.has(c.id) && c.id !== keep)
+    .sort((a, b) => Number(!!a.pinned) - Number(!!b.pinned) || a.updatedAt.getTime() - b.updatedAt.getTime());
   for (const chat of oldest) {
     if (total <= limits.maxBytes) break;
     expired.add(chat.id);

@@ -1,0 +1,1 @@
+ALTER TABLE `ai_chats` ADD `pinned_at` timestamp;

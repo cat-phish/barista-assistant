@@ -1791,6 +1791,9 @@ export const aiChats = mysqlTable(
     summaryThrough: int("summary_through"),
     summaryStatus: varchar("summary_status", { length: 10 }).$type<ChatSummaryStatus>(),
     summaryRequestedAt: timestamp("summary_requested_at"),
+    // Pinned to the top of the list (docs/api/chat.md §12); safe from the age
+    // limit, and deleted for size only after every unpinned chat. null = not.
+    pinnedAt: timestamp("pinned_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
