@@ -1,7 +1,7 @@
 // What a chat message attaches (docs/api/chat.md §12), as picked in
 // ChatAttachDialog and shown as chips in StatsChatView: up to the
 // workspace's chatMaxAttachments, each item once.
-import type { ChatAttachment, ChatAttachmentKind } from '../api/chats';
+import type { ChatAttachment, ChatAttachmentKind, ChatAttachmentRef } from '../api/chats';
 
 // Chips go in this order; a live period first.
 export const ATTACH_KINDS: readonly ChatAttachmentKind[] = ['period', 'brew', 'bean', 'recipe', 'chart'];
@@ -16,6 +16,9 @@ export const KIND_NAMES: Record<ChatAttachmentKind, { one: string; many: string 
 };
 
 type Ref = Pick<ChatAttachment, 'kind' | 'id'>;
+// What a message sends for one (the server labels it): a chart with its
+// snapshot, a period with its filters.
+export const attachRef = ({ kind, id, chart, period }: ChatAttachment): ChatAttachmentRef => ({ kind, id, ...(chart ? { chart } : {}), ...(period ? { period } : {}) });
 export const attachKey = (a: Ref): string => `${a.kind}:${a.id}`;
 
 export function isPicked(selection: readonly ChatAttachment[], item: Ref): boolean {

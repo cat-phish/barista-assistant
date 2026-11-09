@@ -7,6 +7,11 @@ export interface Chat {
   title: string;
   createdAt: string;
   updatedAt: string;
+  // Summarize and continue (chat.md §12, "Long chats"): the older messages'
+  // summary, through that position; pending while one is written.
+  summary: string | null;
+  summaryThrough: number | null;
+  summaryStatus: 'pending' | 'failed' | null;
 }
 export type ChatAttachmentKind = 'brew' | 'bean' | 'recipe' | 'chart' | 'period';
 // A live Period (chat.md §12, "Periods"): the Brews filters, run again for each reply.
@@ -151,6 +156,9 @@ export const chatsApi = {
   },
   get(workspaceId: string, chatId: string) {
     return api.get<ChatPair>(`${base(workspaceId)}/${chatId}`);
+  },
+  summarize(workspaceId: string, chatId: string) {
+    return api.post<{ chat: Chat }>(`${base(workspaceId)}/${chatId}/summary`, {});
   },
   start(workspaceId: string, body: ChatSend) {
     return api.post<ChatPair>(base(workspaceId), body);
