@@ -130,6 +130,11 @@ describe('time buckets', () => {
     expect(bucketOf('2026-10-19', 'week')).toBe('2026-10-19');
     expect(bucketOf('2026-10-25', 'week')).toBe('2026-10-19');
     expect(bucketOf('2026-10-21', 'month')).toBe('2026-10-01');
+    // Sunday and Saturday weeks (Settings → Recaps → week starts on).
+    expect(bucketOf('2026-10-21', 'week', 0)).toBe('2026-10-18');
+    expect(bucketOf('2026-10-18', 'week', 0)).toBe('2026-10-18');
+    expect(bucketOf('2026-10-21', 'week', 6)).toBe('2026-10-17');
+    expect(bucketRange('2026-10-21', '2026-11-03', 'week', 0)).toEqual(['2026-10-18', '2026-10-25', '2026-11-01']);
   });
   it('lists every bucket so quiet ones show as zero', () => {
     expect(bucketRange('2026-10-30', '2026-11-02', 'day')).toEqual(['2026-10-30', '2026-10-31', '2026-11-01', '2026-11-02']);

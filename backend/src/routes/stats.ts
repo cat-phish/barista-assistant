@@ -103,7 +103,7 @@ export interface StatsResponse {
     brewers: Array<Named & { methodId: string | null }>;
     methods: Named[];
     styles: Array<Named & { brewsLike: RecipeStyle }>;
-    recipes: Array<Named & { expectedFinishMinSec: number | null; expectedFinishMaxSec: number | null }>;
+    recipes: Array<Named & { expectedFinishMinSec: number | null; expectedFinishMaxSec: number | null; createdAt: Date }>; // createdAt: a recap's new recipes
     grinders: Named[];
     tools: Named[];
     problems: Named[];
@@ -278,7 +278,7 @@ async function loadLookups(workspaceId: string): Promise<StatsResponse["lookups"
       .where(eq(recipeStyles.workspaceId, workspaceId))
       .orderBy(asc(recipeStyles.position)),
     db
-      .select({ id: recipes.id, name: recipes.name, expectedFinishMinSec: recipes.expectedFinishMinSec, expectedFinishMaxSec: recipes.expectedFinishMaxSec })
+      .select({ id: recipes.id, name: recipes.name, expectedFinishMinSec: recipes.expectedFinishMinSec, expectedFinishMaxSec: recipes.expectedFinishMaxSec, createdAt: recipes.createdAt })
       .from(recipes)
       .where(eq(recipes.workspaceId, workspaceId)),
     db.select({ id: grinders.id, name: grinders.name }).from(grinders).where(eq(grinders.workspaceId, workspaceId)),

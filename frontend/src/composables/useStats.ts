@@ -37,6 +37,7 @@ export interface StatsAxis {
   to: string;
   granularity: Granularity;
   buckets: string[];
+  weekStartsOn: number; // weekly buckets start on the person's week start (Settings → Recaps)
 }
 
 // One over-time chart: its own period (null = the page's), and the brews and
@@ -291,7 +292,8 @@ export function provideStats(local?: Ref<LocationQuery>): StatsContext {
     const from = r.from ?? (first ? localDay(first) : today);
     const to = r.to ?? today;
     const granularity = filters.value.by === 'auto' ? pickGranularity(from, to) : filters.value.by;
-    return { from, to, granularity, buckets: bucketRange(from, to, granularity) };
+    const weekStartsOn = prefs.value.weekStartsOn;
+    return { from, to, granularity, weekStartsOn, buckets: bucketRange(from, to, granularity, weekStartsOn) };
   }
 
   function bucketLabel(key: string, g: Granularity): string {

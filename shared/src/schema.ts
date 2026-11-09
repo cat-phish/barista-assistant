@@ -44,6 +44,12 @@ export type RepeatKeep = (typeof REPEAT_KEEPS)[number];
 export const REMEMBER_KEYS = ["what", "brewer", "recipe", "bean", "grinder", "grind", "waterProfile", "vessel", "prepTools", "size"] as const;
 export type RememberKey = (typeof REMEMBER_KEYS)[number];
 
+// Recaps (docs/api/recaps.md §11c): which periods, and how the AI summary is written.
+export const RECAP_PERIOD_CHOICES = ["weekly", "monthly", "both"] as const;
+export type RecapPeriodChoice = (typeof RECAP_PERIOD_CHOICES)[number];
+export const RECAP_AI_MODES = ["off", "manual", "auto"] as const; // auto: written when the period ends
+export type RecapAiMode = (typeof RECAP_AI_MODES)[number];
+
 // Per person (docs/api/auth.md §1 preferences).
 export interface UserPreferences {
   volumeUnit: (typeof VOLUME_UNITS)[number]; // yield estimates, new drinks' size
@@ -63,6 +69,18 @@ export interface UserPreferences {
   steepReminders: boolean; // remind when a cold brew's steep window opens (docs/api/notifications.md §1b)
   restReminders: boolean; // remind the morning a home roast is ready to brew
   greenStockAlerts: boolean; // tell when a roast takes a green coffee below its low-stock threshold
+  // Recaps (docs/api/recaps.md §11c). recaps off: no banner, notification or
+  // automatic summary; Insights → Recap still shows one when asked.
+  recaps: boolean;
+  recapPeriods: RecapPeriodChoice;
+  weekStartsOn: number; // 0 = Sunday … 6 = Saturday; also Insights' weekly buckets
+  recapBanner: boolean; // the brew page's "recap is ready" banner
+  recapBannerDays: number; // 1–14: how long after a period ends it shows
+  recapNotify: boolean; // a notification when a period ends
+  recapNotifyTime: string; // "HH:MM", 15-minute steps, in timeZone
+  timeZone: string | null; // IANA name, from the person's device; null = the server's BREW_TIMEZONE
+  recapAi: RecapAiMode;
+  recapSeen: Partial<Record<"weekly" | "monthly", string>>; // the period start last opened or dismissed
 }
 export const DEFAULT_PREFERENCES: UserPreferences = {
   volumeUnit: "fl_oz",
@@ -79,6 +97,16 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   steepReminders: true,
   restReminders: true,
   greenStockAlerts: true,
+  recaps: true,
+  recapPeriods: "both",
+  weekStartsOn: 1,
+  recapBanner: true,
+  recapBannerDays: 3,
+  recapNotify: true,
+  recapNotifyTime: "08:00",
+  timeZone: null,
+  recapAi: "manual",
+  recapSeen: {},
 };
 
 // Per workspace, owners edit (docs/api/workspaces.md §2 settings).

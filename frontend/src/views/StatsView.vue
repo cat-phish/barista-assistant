@@ -15,9 +15,9 @@ const route = useRoute();
 
 // Edit layout, on every tab but Explore; closes on leaving the tab.
 const tab = computed(() => tabOfRoute(route.name));
-// Chat (docs/api/chat.md §12) has no charts, so the filters and the brews they
-// pick don't apply to it.
-const chat = computed(() => route.name === 'stats-chat');
+// Chat (docs/api/chat.md §12) has no charts, and Recap (docs/api/recaps.md §11c)
+// picks its own period, so the filters and the brews they pick don't apply.
+const chat = computed(() => route.name === 'stats-chat' || route.name === 'stats-recap');
 const editing = ref(false);
 watch(tab, () => (editing.value = false));
 const hiddenCount = computed(() => {

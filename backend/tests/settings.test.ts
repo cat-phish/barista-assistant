@@ -118,7 +118,7 @@ describe("roast scale", () => {
 });
 
 describe("preferences", () => {
-  const defaults = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, steepReminders: true, restReminders: true, greenStockAlerts: true };
+  const defaults = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, steepReminders: true, restReminders: true, greenStockAlerts: true, recaps: true, recapPeriods: "both", weekStartsOn: 1, recapBanner: true, recapBannerDays: 3, recapNotify: true, recapNotifyTime: "08:00", timeZone: null, recapAi: "manual", recapSeen: {} };
 
   it("come back on register and /me, defaults filled in", async () => {
     const user = await newUser();
@@ -136,7 +136,7 @@ describe("preferences", () => {
 
     expect((await a.agent.patch(path).send({ temperatureUnit: "f" })).body.preferences).toEqual({ ...defaults, temperatureUnit: "f" });
     const both = await a.agent.patch(path).send({ altitudeUnit: "ft", volumeUnit: "ml", showBothVolumes: true });
-    expect(both.body.preferences).toEqual({ volumeUnit: "ml", showBothVolumes: true, altitudeUnit: "ft", temperatureUnit: "f", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, steepReminders: true, restReminders: true, greenStockAlerts: true });
+    expect(both.body.preferences).toEqual({ volumeUnit: "ml", showBothVolumes: true, altitudeUnit: "ft", temperatureUnit: "f", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, steepReminders: true, restReminders: true, greenStockAlerts: true, recaps: true, recapPeriods: "both", weekStartsOn: 1, recapBanner: true, recapBannerDays: 3, recapNotify: true, recapNotifyTime: "08:00", timeZone: null, recapAi: "manual", recapSeen: {} });
     expect((await a.agent.patch(path).send({ theme: "dark" })).body.preferences.theme).toBe("dark");
     expect((await a.agent.patch(path).send({ theme: "sepia" })).status).toBe(400);
 
@@ -163,6 +163,32 @@ describe("preferences", () => {
     await me.agent.patch(path).send({ temperatureUnit: "f" });
     expect((await me.agent.get("/api/auth/me")).body.user.preferences.startDelays).toEqual({ espresso: 0 });
     expect((await me.agent.patch(path).send({ startDelays: {} })).body.preferences.startDelays).toEqual({});
+  });
+
+  it("recaps: switches, periods, week start, banner days, notify time, time zone, AI mode, seen (docs/api/recaps.md)", async () => {
+    const me = await newUser();
+    const path = "/api/auth/me/preferences";
+    const set = { recaps: false, recapPeriods: "weekly", weekStartsOn: 0, recapBanner: false, recapBannerDays: 14, recapNotify: false, recapNotifyTime: "21:45", timeZone: "America/Los_Angeles", recapAi: "auto", recapSeen: { weekly: "2026-11-02" } };
+    const result = await me.agent.patch(path).send(set);
+    expect(result.status).toBe(200);
+    expect(result.body.preferences).toEqual({ ...defaults, ...set });
+    expect((await me.agent.patch(path).send({ timeZone: null })).body.preferences.timeZone).toBeNull();
+    for (const bad of [
+      { recapPeriods: "daily" },
+      { weekStartsOn: 7 },
+      { weekStartsOn: 1.5 },
+      { recapBannerDays: 0 },
+      { recapBannerDays: 15 },
+      { recapNotifyTime: "8:00" },
+      { recapNotifyTime: "08:10" },
+      { recapNotifyTime: "24:00" },
+      { timeZone: "Mars/Olympus" },
+      { recapAi: "always" },
+      { recapSeen: { yearly: "2026-01-01" } },
+      { recapSeen: { weekly: "2 Nov" } },
+    ]) {
+      expect((await me.agent.patch(path).send(bad)).status, JSON.stringify(bad)).toBe(400);
+    }
   });
 
   it("need a session", async () => {

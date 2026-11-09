@@ -19,6 +19,7 @@ const TABS: Array<{ name: string; text: string; field?: string; chat?: boolean }
   { name: 'stats-tools', text: 'Prep', field: 'brew.prepTools' },
   { name: 'stats-grinders', text: 'Grinders', field: 'brew.grinder' },
   { name: 'stats-explore', text: 'Explore' },
+  { name: 'stats-recap', text: 'Recap' },
   { name: 'stats-chat', text: 'Chat', chat: true },
 ];
 

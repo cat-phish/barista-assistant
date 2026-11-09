@@ -106,20 +106,22 @@ export function pickGranularity(from: string, to: string): Granularity {
   return days <= 92 ? 'day' : days <= 550 ? 'week' : 'month';
 }
 
-// The bucket a day falls in: itself, its week's Monday, or the 1st of its month.
-export function bucketOf(day: string, g: Granularity): string {
+// The bucket a day falls in: itself, the first day of its week (weekStartsOn:
+// 0 = Sunday … 6 = Saturday, the person's Settings → Recaps choice), or the
+// 1st of its month.
+export function bucketOf(day: string, g: Granularity, weekStartsOn = 1): string {
   if (g === 'day') return day;
   if (g === 'month') return `${day.slice(0, 7)}-01`;
   const t = Date.parse(day);
-  const monday = t - ((new Date(t).getUTCDay() + 6) % 7) * DAY_MS;
-  return new Date(monday).toISOString().slice(0, 10);
+  const start = t - ((new Date(t).getUTCDay() - weekStartsOn + 7) % 7) * DAY_MS;
+  return new Date(start).toISOString().slice(0, 10);
 }
 
 // Every bucket from `from` to `to`, so quiet days show as zero rather than a gap.
-export function bucketRange(from: string, to: string, g: Granularity): string[] {
+export function bucketRange(from: string, to: string, g: Granularity, weekStartsOn = 1): string[] {
   const out: string[] = [];
-  let cur = bucketOf(from, g);
-  const last = bucketOf(to, g);
+  let cur = bucketOf(from, g, weekStartsOn);
+  const last = bucketOf(to, g, weekStartsOn);
   while (cur <= last) {
     out.push(cur);
     const d = new Date(Date.parse(cur));
@@ -132,11 +134,11 @@ export function bucketRange(from: string, to: string, g: Granularity): string[] 
 }
 
 // One value per bucket: the sum of `value` over its brews (count when omitted).
-export function sumByBucket(brews: readonly StatsBrew[], buckets: readonly string[], g: Granularity, value: (b: StatsBrew) => number | null = () => 1): number[] {
+export function sumByBucket(brews: readonly StatsBrew[], buckets: readonly string[], g: Granularity, value: (b: StatsBrew) => number | null = () => 1, weekStartsOn = 1): number[] {
   const index = new Map(buckets.map((k, i) => [k, i]));
   const sums = buckets.map(() => 0);
   for (const b of brews) {
-    const i = index.get(bucketOf(localDay(b), g));
+    const i = index.get(bucketOf(localDay(b), g, weekStartsOn));
     const v = value(b);
     if (i !== undefined && v !== null) sums[i]! += v;
   }
@@ -144,9 +146,9 @@ export function sumByBucket(brews: readonly StatsBrew[], buckets: readonly strin
 }
 
 // The mean of `value` per bucket; null where no brew has one.
-export function meanByBucket(brews: readonly StatsBrew[], buckets: readonly string[], g: Granularity, value: (b: StatsBrew) => number | null): Array<number | null> {
-  const totals = sumByBucket(brews, buckets, g, value);
-  const counts = sumByBucket(brews, buckets, g, (b) => (value(b) === null ? null : 1));
+export function meanByBucket(brews: readonly StatsBrew[], buckets: readonly string[], g: Granularity, value: (b: StatsBrew) => number | null, weekStartsOn = 1): Array<number | null> {
+  const totals = sumByBucket(brews, buckets, g, value, weekStartsOn);
+  const counts = sumByBucket(brews, buckets, g, (b) => (value(b) === null ? null : 1), weekStartsOn);
   return totals.map((t, i) => (counts[i] ? Math.round((t / counts[i]!) * 100) / 100 : null));
 }
 
@@ -219,21 +221,21 @@ export function seriesByKey(
   buckets: readonly string[],
   g: Granularity,
   keys: (b: StatsBrew) => string | readonly string[] | null,
-  options: { value?: (b: StatsBrew) => number | null; keep?: number; other?: boolean } = {},
+  options: { value?: (b: StatsBrew) => number | null; keep?: number; other?: boolean; weekStartsOn?: number } = {},
 ): Array<{ key: string; data: number[] }> {
-  const { value = () => 1, keep = 7, other = true } = options;
+  const { value = () => 1, keep = 7, other = true, weekStartsOn = 1 } = options;
   const top = countBy(brews, keys).slice(0, keep).map((c) => c.key);
   const has = (b: StatsBrew, key: string) => {
     const k = keys(b);
     return k === null ? false : typeof k === 'string' ? k === key : k.includes(key);
   };
-  const out = top.map((key) => ({ key, data: sumByBucket(brews.filter((b) => has(b, key)), buckets, g, value) }));
+  const out = top.map((key) => ({ key, data: sumByBucket(brews.filter((b) => has(b, key)), buckets, g, value, weekStartsOn) }));
   if (other) {
     const rest = brews.filter((b) => {
       const k = keys(b);
       return k !== null && (typeof k === 'string' ? [k] : k).length > 0 && !top.some((key) => has(b, key));
     });
-    if (rest.length) out.push({ key: OTHER, data: sumByBucket(rest, buckets, g, value) });
+    if (rest.length) out.push({ key: OTHER, data: sumByBucket(rest, buckets, g, value, weekStartsOn) });
   }
   return out;
 }

@@ -55,6 +55,7 @@ export const router = createRouter({
         { path: 'prep', name: 'stats-tools', component: () => import('../views/stats/StatsToolsView.vue') },
         { path: 'grinders', name: 'stats-grinders', component: () => import('../views/stats/StatsGrindersView.vue') },
         { path: 'explore', name: 'stats-explore', component: () => import('../views/stats/StatsExploreView.vue') },
+        { path: 'recap', name: 'stats-recap', component: () => import('../views/stats/StatsRecapView.vue') },
         { path: 'chat', name: 'stats-chat', component: () => import('../views/stats/StatsChatView.vue') },
       ],
     },
@@ -119,6 +120,7 @@ export const router = createRouter({
     { path: '/settings/repeat', redirect: { name: 'settings-brew-setup' } }, // its old name, Repeat brews
     { path: '/settings/ai-prompt', name: 'settings-ai-prompt', component: () => import('../views/SettingsPromptView.vue'), meta: { requiresAuth: true } },
     { path: '/settings/chats', name: 'settings-chats', component: () => import('../views/SettingsChatsView.vue'), meta: { requiresAuth: true } },
+    { path: '/settings/recaps', name: 'settings-recaps', component: () => import('../views/SettingsRecapsView.vue'), meta: { requiresAuth: true } },
     { path: '/settings/notifications', name: 'settings-notifications', component: () => import('../views/SettingsNotificationsView.vue'), meta: { requiresAuth: true } },
     { path: '/settings/lists', name: 'settings-lists', component: () => import('../views/SettingsListsView.vue'), meta: { requiresWorkspace: true } },
     { path: '/settings/defaults', name: 'settings-defaults', component: () => import('../views/SettingsDefaultsView.vue'), meta: { requiresWorkspace: true } },

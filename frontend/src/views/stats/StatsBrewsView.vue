@@ -26,13 +26,13 @@ const countKind = useChartKind('count');
 const volumeKind = useChartKind('volume');
 const coffeeKind = useChartKind('coffee');
 const per = (v: ChartView) => v.axis.value.granularity;
-const sum = (v: ChartView, value?: (b: StatsBrew) => number | null) => sumByBucket(v.brews.value, v.axis.value.buckets, v.axis.value.granularity, value);
+const sum = (v: ChartView, value?: (b: StatsBrew) => number | null) => sumByBucket(v.brews.value, v.axis.value.buckets, v.axis.value.granularity, value, v.axis.value.weekStartsOn);
 
 const total = computed(() => cumulative(sum(totalView)));
 const perBucket = computed(() => sum(countView));
 const volume = computed(() => sum(volumeView, (b) => stats.volume(b)?.ml ?? null).map(stats.volumeIn));
 const coffee = computed(() => sum(coffeeView, (b) => b.doseGrams).map((g) => Math.round(g * 10) / 10));
-const rating = computed(() => meanByBucket(ratingView.brews.value, ratingView.axis.value.buckets, ratingView.axis.value.granularity, (b) => b.rating));
+const rating = computed(() => meanByBucket(ratingView.brews.value, ratingView.axis.value.buckets, ratingView.axis.value.granularity, (b) => b.rating, ratingView.axis.value.weekStartsOn));
 const anyRated = computed(() => rating.value.some((r) => r !== null));
 
 const table = (v: ChartView, head: string, values: Array<number | null>, fmt: (n: number) => string = String) => ({

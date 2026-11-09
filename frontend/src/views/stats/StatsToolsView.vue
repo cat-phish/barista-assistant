@@ -27,7 +27,7 @@ const overView = stats.chart('tools');
 const labels = computed(() => overView.labels.value);
 // The five most used, as lines: one brew can be under several.
 const overTime = computed(() =>
-  seriesByKey(overView.brews.value, overView.axis.value.buckets, overView.axis.value.granularity, (b) => b.toolIds, { keep: 5, other: false }).map((s) => ({ label: nameOf(s.key), data: s.data })),
+  seriesByKey(overView.brews.value, overView.axis.value.buckets, overView.axis.value.granularity, (b) => b.toolIds, { keep: 5, other: false, weekStartsOn: overView.axis.value.weekStartsOn }).map((s) => ({ label: nameOf(s.key), data: s.data })),
 );
 
 // Tools with rated brews both with and without them.
