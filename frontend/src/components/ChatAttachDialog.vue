@@ -321,6 +321,12 @@ watch(tab, (t) => {
             </select>
           </div>
         </div>
+        <div class="live">
+          <button type="button" class="btn btn-secondary" :disabled="!currentSpec || periodAttached || full" @click="attachPeriod">
+            {{ periodAttached ? 'Attached as a live period' : 'Attach these filters as a live period' }}
+          </button>
+          <span class="muted small">One item, with Only mine as it's set below: brews logged, changed or deleted later are seen by the next reply.</span>
+        </div>
         </FilterBar>
         <label class="checkbox mine">
           <input v-model="mine" type="checkbox" />
@@ -330,12 +336,6 @@ watch(tab, (t) => {
           <span class="muted small" aria-live="polite">{{ loading && !logs.length ? 'Loading…' : `${total} ${total === 1 ? 'brew matches' : 'brews match'}` }}</span>
           <button v-if="total" type="button" class="btn-link" :disabled="loading || full" @click="selectAllBrews">Select all {{ total }}</button>
           <button v-if="countOf('brew')" type="button" class="btn-link" @click="clearTab">Clear</button>
-        </div>
-        <div class="live">
-          <button type="button" class="btn btn-secondary" :disabled="!currentSpec || periodAttached || full" @click="attachPeriod">
-            {{ periodAttached ? 'Attached as a live period' : 'Attach as live period' }}
-          </button>
-          <span class="muted small">One item that keeps up: brews logged, changed or deleted later are seen by the next reply.</span>
         </div>
         <ul v-if="periods.length" class="live-list" aria-label="Live periods attached">
           <li v-for="p in periods" :key="p.id" class="chip">
