@@ -474,9 +474,18 @@ export function buildRecapSystem(custom?: PromptCustom): string {
   return custom?.prompt.instructions ? `${RECAP_SYSTEM} The barista's own instructions: ${custom.prompt.instructions}` : RECAP_SYSTEM;
 }
 
-export function buildChatSystem(custom?: PromptCustom, attached: LlmInput[] = []): string {
+// Summarize and continue (docs/api/chat.md §12, "Long chats";
+// llm-contract.md §9e): the chat's older messages in a few paragraphs, sent
+// ahead of the ones after them. Plain text; replies don't store the version.
+export const CHAT_SUMMARY_PROMPT_VERSION = "2026-11-a";
+export const CHAT_SUMMARY_SYSTEM =
+  "You are summarizing the earlier part of a conversation between a home barista and a coffee expert in their brew journal, so the conversation can go on without it. You get JSON: an earlier summary if there is one, and the messages to cover, oldest first, with the labels of what was attached to each. Write a plain-text summary of at most 400 words that keeps what later replies will need: the questions asked, the facts and numbers given (doses, grind settings, temperatures, ratios, ratings, dates), the beans, brews, recipes and periods discussed by name, what was recommended or proposed and whether it was dismissed, decisions made, and what's still open. Fold the earlier summary in rather than repeating it. Only use what's in the messages; no greeting, no Markdown headings.";
+const SUMMARY_INTRO = "The earlier part of this conversation isn't shown below; this is a summary of it, written then:";
+
+export function buildChatSystem(custom?: PromptCustom, attached: LlmInput[] = [], summary?: string | null): string {
   const parts = [CHAT_SYSTEM];
   if (custom?.prompt.instructions) parts.push(`The barista's own instructions: ${custom.prompt.instructions}`);
+  if (summary) parts.push(`${SUMMARY_INTRO} ${summary}`);
   if (attached.length) parts.push(`${ATTACHED_INTRO} ${JSON.stringify(attached)}`);
   parts.push(CHAT_PROPOSALS);
   return parts.join(" ");

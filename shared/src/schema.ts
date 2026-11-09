@@ -1677,6 +1677,8 @@ export const CHAT_ROLES = ["user", "assistant"] as const;
 export type ChatRole = (typeof CHAT_ROLES)[number];
 export const CHAT_STATUSES = ["pending", "done", "failed"] as const;
 export type ChatStatus = (typeof CHAT_STATUSES)[number];
+export const CHAT_SUMMARY_STATUSES = ["pending", "failed"] as const;
+export type ChatSummaryStatus = (typeof CHAT_SUMMARY_STATUSES)[number];
 export const CHAT_ATTACHMENT_KINDS = ["brew", "bean", "recipe", "chart", "period"] as const;
 export type ChatAttachmentKind = (typeof CHAT_ATTACHMENT_KINDS)[number];
 // An Insights chart as it was when attached (docs/api/chat.md §12): its
@@ -1779,6 +1781,13 @@ export const aiChats = mysqlTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     title: varchar("title", { length: 120 }).notNull(),
+    // Summarize and continue (docs/api/chat.md §12, "Long chats"): the AI's
+    // summary of the messages up to summaryThrough (a position), sent ahead
+    // of the ones after it. summaryStatus: pending while one is written,
+    // failed if the last try did; null otherwise.
+    summary: mediumtext("summary"),
+    summaryThrough: int("summary_through"),
+    summaryStatus: varchar("summary_status", { length: 10 }).$type<ChatSummaryStatus>(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

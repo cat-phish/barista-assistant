@@ -58,6 +58,12 @@ describe("attachedIn", () => {
     expect(attachedIn(messages, 1, 20)).toEqual([]);
     expect(attachedIn(messages, 4, 50)).toHaveLength(25);
   });
+  it("keeps what was attached before the window of turns sent", () => {
+    const period = { kind: "period" as const, id: "p", label: "Brews, last 7 days" };
+    const long = Array.from({ length: 60 }, (_, i) => ({ ...turn(i + 1, i % 2 ? "assistant" : "user"), attachments: i === 0 ? [period] : null }));
+    expect(chatTurns(long, 61).some((t) => t.content === "m1")).toBe(false);
+    expect(attachedIn(long, 61, 20)).toEqual([period]);
+  });
 });
 
 describe("loadAttachments", () => {

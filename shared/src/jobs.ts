@@ -283,6 +283,13 @@ export interface ChatJobData {
   photos: ChatJobPhoto[];
 }
 export const chatJobId = (messageId: string) => `chat-${messageId}`;
+// Summarize and continue (docs/api/chat.md §12, "Long chats"): the chat's
+// older messages summarized, on the same queue.
+export const CHAT_SUMMARY_JOB = "summary";
+export interface ChatSummaryJobData {
+  chatId: string;
+}
+export const chatSummaryJobId = (chatId: string, through: number) => `chat-summary-${chatId}-${through}`;
 export const chatReplyKey = (messageId: string) => `chat-reply:${messageId}`;
 // One entry, as JSON in the field "event".
 export const CHAT_EVENT_FIELD = "event";

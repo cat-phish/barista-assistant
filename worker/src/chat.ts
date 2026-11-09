@@ -44,13 +44,15 @@ interface StoredTurn {
   attachments?: ChatAttachment[] | null;
   proposals?: ChatProposal[] | null;
 }
-function recentTurns<T extends StoredTurn>(messages: readonly T[], before: number): T[] {
-  const recent = messages.filter((m) => m.position < before && m.status === "done").slice(-HISTORY_MESSAGES);
+// after: the last position a summary covers (docs/api/chat.md §12, "Long
+// chats"); those go as the summary instead.
+function recentTurns<T extends StoredTurn>(messages: readonly T[], before: number, after = 0): T[] {
+  const recent = messages.filter((m) => m.position > after && m.position < before && m.status === "done").slice(-HISTORY_MESSAGES);
   const first = recent.findIndex((m) => m.role === "user");
   return first < 0 ? [] : recent.slice(first);
 }
-export function chatTurns(messages: readonly StoredTurn[], before: number, photos: readonly ChatJobPhoto[] = []): ChatTurn[] {
-  return recentTurns(messages, before).map(({ id, role, content, proposals }): ChatTurn => {
+export function chatTurns(messages: readonly StoredTurn[], before: number, photos: readonly ChatJobPhoto[] = [], after = 0): ChatTurn[] {
+  return recentTurns(messages, before, after).map(({ id, role, content, proposals }): ChatTurn => {
     if (role === "assistant") return { role, content: withProposals(content, proposals) };
     const images = photos.filter((p) => p.messageId === id);
     if (!images.length) return { role, content };
@@ -62,16 +64,18 @@ export function chatTurns(messages: readonly StoredTurn[], before: number, photo
 }
 // A reply's proposals were taken out of its text, so the AI is told what it
 // proposed and whether the person dismissed it.
-function withProposals(content: string, proposals: readonly ChatProposal[] | null | undefined): string {
+export function withProposals(content: string, proposals: readonly ChatProposal[] | null | undefined): string {
   if (!proposals?.length) return content;
   const shown = proposals.map(({ state, ...p }) => ({ ...p, dismissed: state === "dismissed" }));
   return `${content}\n\n[Shown as proposal cards with this reply: ${JSON.stringify(shown)}]`;
 }
 
-// What those turns attached: each item once, the latest `max` (the
-// workspace's chatMaxAttachments, docs/api/chat.md §12).
+// What the chat attached before this reply, however far back (an item
+// attached early still counts once the message itself is out of the window):
+// each item once, the latest `max` (the workspace's chatMaxAttachments,
+// docs/api/chat.md §12).
 export function attachedIn(messages: readonly StoredTurn[], before: number, max: number): ChatAttachment[] {
-  const all = recentTurns(messages, before).flatMap((m) => m.attachments ?? []);
+  const all = messages.filter((m) => m.position < before && m.status === "done").flatMap((m) => m.attachments ?? []);
   const unique = [...new Map(all.map((a) => [`${a.kind}:${a.id}`, a])).values()];
   return unique.slice(-max);
 }
@@ -160,9 +164,9 @@ export async function processChatReply({ messageId, photos }: ChatJobData, publi
     const custom = await promptFor(row.chat.userId, null);
     const attachments = attachedIn(messages, row.message.position, await attachmentLimit(row.chat.workspaceId));
     const attached = await loadAttachments(attachments, row.chat.workspaceId, await periodOwner(row.chat.userId));
-    const turns = chatTurns(messages, row.message.position, photos);
+    const turns = chatTurns(messages, row.message.position, photos, row.chat.summary ? (row.chat.summaryThrough ?? 0) : 0);
     const model = turns.some((t) => typeof t.content !== "string") ? ai.models.vision : ai.models.main;
-    const request = buildChatRequest(model, turns, custom, attached);
+    const request = buildChatRequest(model, turns, custom, attached, row.chat.summary);
     const shown = proposalFilter((text) => pieces.add(text));
     const reply = await streamReply(ai, request, (text) => {
       written += text;

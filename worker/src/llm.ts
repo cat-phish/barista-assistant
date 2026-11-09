@@ -190,8 +190,8 @@ export async function complete(ai: AiClient, request: OpenAI.Chat.Completions.Ch
 // schema, since it's read as it's written.
 type UserContent = OpenAI.Chat.Completions.ChatCompletionUserMessageParam["content"];
 export type ChatTurn = { role: "user"; content: UserContent } | { role: "assistant"; content: string };
-export function buildChatRequest(model: string, turns: ChatTurn[], custom?: PromptCustom, attached: LlmInput[] = []): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
-  return { model, messages: [{ role: "system", content: buildChatSystem(custom, attached) }, ...turns] };
+export function buildChatRequest(model: string, turns: ChatTurn[], custom?: PromptCustom, attached: LlmInput[] = [], summary?: string | null): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
+  return { model, messages: [{ role: "system", content: buildChatSystem(custom, attached, summary) }, ...turns] };
 }
 
 export interface StreamedReply {
