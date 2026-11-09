@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Mark, StepFields } from '../api/types';
 import {
   brewSchedule,
+  finishSpread,
   finishStatus,
   formatFinishWindow,
   insertStepAfter,
@@ -357,6 +358,10 @@ describe('pourAmounts and warnings', () => {
     expect(recipeWarnings({ waterGrams: 240, finishMaxSec: 200, steps })).toEqual([]);
     // Prep time isn't brew time.
     expect(recipeWarnings({ waterGrams: 240, finishMaxSec: 200, steps: [step({ stepType: 'prep', durationSec: 120 }), ...steps] })).toEqual([]);
+    // Espresso (no water): only the shot time against the steps.
+    const shot = [step({ stepType: 'preinfusion', durationSec: 8 }), step({ stepType: 'pressure', durationSec: 22, pressureBar: 9 })];
+    expect(recipeWarnings({ waterGrams: null, finishMaxSec: 20, steps: shot })).toEqual(['The target finish window ends (0:20) before the steps do (0:30).']);
+    expect(recipeWarnings({ waterGrams: null, finishMaxSec: 32, steps: shot })).toEqual([]);
   });
 });
 
@@ -369,6 +374,11 @@ describe('finish window', () => {
     expect(parseFinishWindow('3:20', '3:00')).toMatchObject({ ok: false, error: '"From" is after "to"' });
     expect(parseFinishWindow('x', '')).toMatchObject({ ok: false });
     expect(parseFinishWindow('0:06', '', 3)).toEqual({ ok: true, value: { min: 6, max: 9 } });
+  });
+  it('espresso gets a closer default spread', () => {
+    expect(finishSpread('espresso')).toBe(3);
+    expect(finishSpread('filter')).toBe(15);
+    expect(finishSpread(null)).toBe(15);
   });
   it('formats and reports timer status', () => {
     expect(formatFinishWindow(165, 195)).toBe('2:45–3:15');

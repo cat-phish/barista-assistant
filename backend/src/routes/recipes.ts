@@ -231,6 +231,7 @@ interface RecipeParams extends WorkspaceParams {
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 const FINISH_DEFAULT_SPREAD_SEC = 15;
+const ESPRESSO_FINISH_DEFAULT_SPREAD_SEC = 3; // a shot's window is closer
 const FIRST_DROP_DEFAULT_SPREAD_SEC = 3;
 
 // Time windows are pairs (docs/api/recipes.md §5): one end alone gets the other
@@ -258,13 +259,18 @@ type WindowFields = Partial<
 >;
 
 // Both windows from a request body, as recipe columns, or the first error.
-function windows(body: {
-  expectedFinishMinSec?: number | null;
-  expectedFinishMaxSec?: number | null;
-  firstDropMinSec?: number | null;
-  firstDropMaxSec?: number | null;
-}): WindowFields | { error: string } {
-  const finish = timeWindow(body.expectedFinishMinSec, body.expectedFinishMaxSec, FINISH_DEFAULT_SPREAD_SEC, {
+// The finish window's default spread depends on the brewer's kind (§5).
+function windows(
+  body: {
+    expectedFinishMinSec?: number | null;
+    expectedFinishMaxSec?: number | null;
+    firstDropMinSec?: number | null;
+    firstDropMaxSec?: number | null;
+  },
+  kind: MethodKind
+): WindowFields | { error: string } {
+  const spread = kind === "espresso" ? ESPRESSO_FINISH_DEFAULT_SPREAD_SEC : FINISH_DEFAULT_SPREAD_SEC;
+  const finish = timeWindow(body.expectedFinishMinSec, body.expectedFinishMaxSec, spread, {
     min: "expectedFinishMinSec",
     max: "expectedFinishMaxSec",
   });
@@ -503,17 +509,14 @@ recipesRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Reci
   if (!body) return;
 
   const { steps, grindSettings, prepToolIds, expectedFinishMinSec, expectedFinishMaxSec, firstDropMinSec, firstDropMaxSec, ...rest } = body;
-  const window = windows(body);
-  if ("error" in window) {
-    sendError(res, 400, window.error);
-    return;
-  }
-  const recipeFields = { ...rest, ...window };
   const recipeId = randomUUID();
 
   const error = await db.transaction(async (tx) => {
     const kind = await methodKindInWorkspace(tx, body.brewerId, workspaceId);
     if (!kind) return "brewerId: not a brewer in this workspace";
+    const window = windows(body, kind);
+    if ("error" in window) return window.error;
+    const recipeFields = { ...rest, ...window };
     const wrongForKind = kindError(kind, {
       targetWaterGrams: recipeFields.targetWaterGrams ?? null,
       targetIceGrams: recipeFields.targetIceGrams ?? null,
@@ -572,12 +575,6 @@ recipesRouter.patch("/:recipeId", async (req: Request<RecipeParams>, res: Respon
   }
 
   const { steps, grindSettings, prepToolIds, expectedFinishMinSec, expectedFinishMaxSec, firstDropMinSec, firstDropMaxSec, ...rest } = body;
-  const window = windows(body);
-  if ("error" in window) {
-    sendError(res, 400, window.error);
-    return;
-  }
-  const recipeFields = { ...rest, ...window };
 
   const outcome = await db.transaction(async (tx) => {
     const [existing] = await tx
@@ -595,8 +592,11 @@ recipesRouter.patch("/:recipeId", async (req: Request<RecipeParams>, res: Respon
       .for("update");
     if (!existing) return { status: 404, error: "Recipe not found" } as const;
 
-    const kind = await methodKindInWorkspace(tx, recipeFields.brewerId ?? existing.brewerId, workspaceId);
+    const kind = await methodKindInWorkspace(tx, rest.brewerId ?? existing.brewerId, workspaceId);
     if (!kind) return { status: 400, error: "brewerId: not a brewer in this workspace" } as const;
+    const window = windows(body, kind);
+    if ("error" in window) return { status: 400, error: window.error } as const;
+    const recipeFields = { ...rest, ...window };
     // Kind rules apply to the recipe as it will be after this change (fields
     // not sent keep their current values).
     const after = { ...existing, ...recipeFields };

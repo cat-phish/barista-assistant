@@ -24,6 +24,7 @@ import {
   ADVANCE,
   advancesFor,
   FIRST_DROP_DEFAULT_SPREAD_SEC,
+  finishSpread,
   FLOW_UNITS,
   formatFinishWindow,
   insertStepAfter,
@@ -159,7 +160,7 @@ const parsed = computed(() => ({
     : espresso.value
       ? ({ ok: false, error: 'Enter the target shot weight' } as const)
       : null,
-  finish: parseFinishWindow(finishFrom.value, finishTo.value),
+  finish: parseFinishWindow(finishFrom.value, finishTo.value, finishSpread(kind.value)),
   firstDrop: espresso.value ? parseFinishWindow(firstDropFrom.value, firstDropTo.value, FIRST_DROP_DEFAULT_SPREAD_SEC) : ({ ok: true, value: null } as const),
   finishOffset: longStyle.value ? ({ ok: true, value: null } as const) : parseFinishOffset(finishOffset.value),
   temp: temp.value.trim() ? parseTemp(temp.value, temperatureUnit.value) : null,
@@ -261,15 +262,13 @@ watch(yieldEstimate, (est) => {
 watch(yieldCustom, (custom) => {
   if (!custom) expectedYield.value = yieldEstimate.value === null ? '' : formatGrams(yieldEstimate.value);
 });
-// Pour checks don't apply to espresso (no water).
+// Espresso has no water to pour to; its shot time is checked like filter's.
 const warnings = computed(() =>
-  espresso.value
-    ? []
-    : recipeWarnings({
-        waterGrams: parsed.value.water.ok ? parsed.value.water.value : null,
-        finishMaxSec: parsed.value.finish.ok ? (parsed.value.finish.value?.max ?? null) : null,
-        steps: stepsParsed.value.steps,
-      }),
+  recipeWarnings({
+    waterGrams: !espresso.value && parsed.value.water.ok ? parsed.value.water.value : null,
+    finishMaxSec: parsed.value.finish.ok ? (parsed.value.finish.value?.max ?? null) : null,
+    steps: stepsParsed.value.steps,
+  }),
 );
 
 // Grinder choices for a row: active grinders, plus whatever this row already uses.
@@ -567,7 +566,7 @@ const finishHint = computed(() => {
   const w = parsed.value.finish;
   if (!w.ok || !w.value) return '';
   const oneEnd = !finishFrom.value.trim() || !finishTo.value.trim();
-  return oneEnd ? `Saved as ${formatFinishWindow(w.value.min, w.value.max)} (±15 s)` : '';
+  return oneEnd ? `Saved as ${formatFinishWindow(w.value.min, w.value.max)} (±${finishSpread(kind.value)} s)` : '';
 });
 const firstDropHint = computed(() => {
   const w = parsed.value.firstDrop;
@@ -770,23 +769,6 @@ async function save(): Promise<void> {
           <span v-if="fieldErrors.dilution" class="field-error">{{ fieldErrors.dilution }}</span>
           <span v-else-if="coldStyle" class="hint">Parts added per part of concentrate, e.g. 1 for half and half. Leave empty if it's served as it is.</span>
           <span v-else class="hint">For a concentrate, e.g. brewed hot and poured over ice: parts added per part brewed (0.7 for 105 g of ice onto 150 g). Its TDS is taken before diluting. Leave empty if it's served as it is; brewed straight onto ice is Flash chilled, above.</span>
-        </fieldset>
-        <fieldset v-if="show('recipe.finishWindow') && !longStyle" class="finish">
-          <legend>{{ espresso ? 'Target shot time' : 'Target finish' }}</legend>
-          <div class="finish-row">
-            <div class="field">
-              <label for="finish-from">From</label>
-              <TimeInput id="finish-from" v-model="finishFrom" placeholder="m:ss" :aria-invalid="submitted && !!fieldErrors.finish" />
-            </div>
-            <span class="dash" aria-hidden="true">–</span>
-            <div class="field">
-              <label for="finish-to">To</label>
-              <TimeInput id="finish-to" v-model="finishTo" placeholder="m:ss" :aria-invalid="submitted && !!fieldErrors.finish" />
-            </div>
-          </div>
-          <!-- Shown live once both ends are filled: a backwards range is unambiguous. -->
-          <span v-if="fieldErrors.finish && (submitted || (finishFrom.trim() && finishTo.trim()))" class="field-error">{{ fieldErrors.finish }}</span>
-          <span v-else-if="finishHint" class="hint">{{ finishHint }}</span>
         </fieldset>
         <fieldset v-if="espresso && show('recipe.firstDropWindow')" class="finish">
           <legend>First drop</legend>
@@ -1025,6 +1007,24 @@ async function save(): Promise<void> {
           <button class="btn btn-secondary" type="button" :disabled="steps.length >= 20" @click="addStep">Add step</button>
           <button class="btn btn-secondary" type="button" :disabled="steps.length >= 20" @click="addPrepStep">Add prep step</button>
         </div>
+        <!-- Under the steps, by the line comparing them, so a mismatch is fixed here (docs/api/recipes.md §5). -->
+        <fieldset v-if="show('recipe.finishWindow') && !longStyle" class="finish">
+          <legend>{{ espresso ? 'Target shot time' : 'Target finish' }}</legend>
+          <div class="finish-row">
+            <div class="field">
+              <label for="finish-from">From</label>
+              <TimeInput id="finish-from" v-model="finishFrom" placeholder="m:ss" :aria-invalid="submitted && !!fieldErrors.finish" />
+            </div>
+            <span class="dash" aria-hidden="true">–</span>
+            <div class="field">
+              <label for="finish-to">To</label>
+              <TimeInput id="finish-to" v-model="finishTo" placeholder="m:ss" :aria-invalid="submitted && !!fieldErrors.finish" />
+            </div>
+          </div>
+          <!-- Shown live once both ends are filled: a backwards range is unambiguous. -->
+          <span v-if="fieldErrors.finish && (submitted || (finishFrom.trim() && finishTo.trim()))" class="field-error">{{ fieldErrors.finish }}</span>
+          <span v-else-if="finishHint" class="hint">{{ finishHint }}</span>
+        </fieldset>
       </section>
 
       <ul v-if="warnings.length" class="warnings" aria-live="polite">
