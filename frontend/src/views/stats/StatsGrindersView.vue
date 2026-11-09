@@ -23,7 +23,7 @@ const groundView = stats.chart('grinders-coffee');
 const useKind = useChartKind('grinders');
 const groundKind = useChartKind('grinders-coffee');
 const over = (v: ChartView, value?: (b: (typeof brews.value)[number]) => number | null) =>
-  seriesByKey(v.brews.value, v.axis.value.buckets, v.axis.value.granularity, (b) => b.grinderId, { value }).map((s) => ({
+  seriesByKey(v.brews.value, v.axis.value.buckets, v.axis.value.granularity, (b) => b.grinderId, { value, weekStartsOn: v.axis.value.weekStartsOn }).map((s) => ({
     label: nameOf(s.key),
     data: s.data.map((n) => Math.round(n * 10) / 10),
   }));

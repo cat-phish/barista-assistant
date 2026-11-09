@@ -25,7 +25,21 @@ export interface UserPreferences {
   steepReminders: boolean; // remind when a cold brew's steep window opens
   restReminders: boolean; // remind the morning a home roast is ready to brew
   greenStockAlerts: boolean; // tell when a roast takes a green coffee below its low-stock threshold
+  // Recaps (docs/api/recaps.md §11c). recaps off: no banner, notification or
+  // automatic summary; Insights → Recap still shows one when asked.
+  recaps: boolean;
+  recapPeriods: RecapPeriodChoice;
+  weekStartsOn: number; // 0 = Sunday … 6 = Saturday; also Insights' weekly buckets
+  recapBanner: boolean;
+  recapBannerDays: number; // 1–14
+  recapNotify: boolean;
+  recapNotifyTime: string; // "HH:MM", 15-minute steps, in timeZone
+  timeZone: string | null; // IANA name from the device; null = the server's
+  recapAi: RecapAiMode;
+  recapSeen: Partial<Record<'weekly' | 'monthly', string>>; // the period start last opened or dismissed
 }
+export type RecapPeriodChoice = 'weekly' | 'monthly' | 'both';
+export type RecapAiMode = 'off' | 'manual' | 'auto';
 export type RepeatKeep = 'bean' | 'recipe' | 'size' | 'doseWater' | 'temp' | 'grinder' | 'grind' | 'waterProfile' | 'dilution' | 'window' | 'prepTools' | 'grinderWeights' | 'vessel' | 'notes';
 export type RememberKey = 'what' | 'brewer' | 'recipe' | 'bean' | 'grinder' | 'grind' | 'waterProfile' | 'vessel' | 'prepTools' | 'size';
 
@@ -990,7 +1004,7 @@ export interface StatsData {
     brewers: Array<StatsNamed & { methodId: string | null }>;
     methods: StatsNamed[];
     styles: Array<StatsNamed & { brewsLike: RecipeStyle }>;
-    recipes: Array<StatsNamed & { expectedFinishMinSec: number | null; expectedFinishMaxSec: number | null }>; // the recipe's finish window
+    recipes: Array<StatsNamed & { expectedFinishMinSec: number | null; expectedFinishMaxSec: number | null; createdAt: string }>; // the recipe's finish window; createdAt for a recap's new recipes
     grinders: StatsNamed[];
     tools: StatsNamed[];
     problems: StatsNamed[];

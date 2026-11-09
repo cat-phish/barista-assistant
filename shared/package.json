@@ -37,6 +37,10 @@
       "types": "./dist/brew.d.ts",
       "default": "./dist/brew.js"
     },
+    "./recapPeriods": {
+      "types": "./dist/recapPeriods.d.ts",
+      "default": "./dist/recapPeriods.js"
+    },
     "./recipeChecks": {
       "types": "./dist/recipeChecks.d.ts",
       "default": "./dist/recipeChecks.js"

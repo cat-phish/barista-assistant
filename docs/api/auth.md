@@ -72,7 +72,7 @@ units, with defaults filled in. Storage is always grams, °C and metres;
 clients convert what they show and what's typed (roadmap: Units and defaults).
 
 ```json
-{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "startDelays": {}, "steepReminders": true, "restReminders": true, "greenStockAlerts": true }
+{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "startDelays": {}, "steepReminders": true, "restReminders": true, "greenStockAlerts": true, "recaps": true, "recapPeriods": "both", "weekStartsOn": 1, "recapBanner": true, "recapBannerDays": 3, "recapNotify": true, "recapNotifyTime": "08:00", "timeZone": null, "recapAi": "manual", "recapSeen": {} }
 ```
 
 - `volumeUnit`: `fl_oz` | `ml`: the brew page's yield estimate, and a new
@@ -147,6 +147,25 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
   and `applyRepeat`, and into the default only if repeating should copy it
   out of the box. The TypeScript type and `repeatBrew.test.ts` fail until
   it's done.
+- Recaps (Settings → Recaps, recaps.md §11c):
+  - `recaps` (default `true`): tell me when a recap is ready. Off, there's
+    no banner, notification or automatic summary; Insights → Recap still
+    shows one on a "Show recap" button.
+  - `recapPeriods`: `weekly` | `monthly` | `both` (default).
+  - `weekStartsOn`: 0–6, 0 = Sunday (default `1`, Monday). Weeks in recaps
+    and Insights' weekly charts.
+  - `recapBanner` (default `true`) and `recapBannerDays` (1–14, default
+    `3`): the brew-page banner, and how many days after the period it shows.
+  - `recapNotify` (default `true`) and `recapNotifyTime` (`HH:MM` on a
+    quarter hour, default `"08:00"`): the notification, on the first day of
+    the new period at that local time (§1b).
+  - `timeZone`: an IANA name (e.g. `Europe/London`), or `null` (default) for
+    the server's `BREW_TIMEZONE`. The client sends the browser's with each
+    Settings → Recaps change. An unknown name is `400`.
+  - `recapAi`: `off` | `manual` (default) | `auto`: the AI summary.
+  - `recapSeen`: `{ "weekly"?: "YYYY-MM-DD", "monthly"?: "YYYY-MM-DD" }`,
+    the start of the last period whose banner was opened or dismissed.
+    Default `{}`. A `PATCH` sends the whole object.
 - `rememberSetup`: what the brew page starts a new brew with from the last
   brew (Settings → Brew setup, "Remember from last time"), a list of
   `REMEMBER_KEYS`, each once:

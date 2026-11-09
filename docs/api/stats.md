@@ -89,7 +89,7 @@ out to keep the reply small.
     "brewers": [{ "id": "uuid", "name": "V60", "methodId": "uuid" }],
     "methods": [{ "id": "uuid", "name": "Pour over" }],
     "styles": [{ "id": "uuid", "name": "Pour over", "brewsLike": "pour_over" }],
-    "recipes": [{ "id": "uuid", "name": "Daily V60", "expectedFinishMinSec": 165, "expectedFinishMaxSec": 195 }],
+    "recipes": [{ "id": "uuid", "name": "Daily V60", "expectedFinishMinSec": 165, "expectedFinishMaxSec": 195, "createdAt": "2026-10-03T10:00:00.000Z" }],
     "grinders": [{ "id": "uuid", "name": "Comandante C40" }],
     "tools": [{ "id": "uuid", "name": "WDT" }],
     "problems": [{ "id": "uuid", "name": "Channeling" }],
@@ -112,7 +112,8 @@ out to keep the reply small.
   - `freezes`: the bean's freeze periods, oldest first (§4).
   - `photoCount`: how many photos the bean has (§4c).
 - **`lookups`:** names for every id the rows use. A recipe also has its
-  finish window (§5); a brew's own window (rapid cold, §6) wins over it. Archived and hidden ones
+  finish window (§5); a brew's own window (rapid cold, §6) wins over it; and
+  `createdAt`, for a recap's new recipes (`recaps.md`). Archived and hidden ones
   are included, so history keeps its names.
 - **Errors:** `400` an invalid query (a bad date, `from` after `to`, or an
   id that isn't a UUID); `404` the caller isn't a member.
@@ -155,6 +156,9 @@ Recorded here because the numbers aren't stored anywhere:
   bean counts on its `purchaseDate`, else on the date it was added.
 - **Country:** a blend's list ("Colombia, Ethiopia") counts toward each
   country.
+- **Weeks:** charts grouped by week start on the person's `weekStartsOn`
+  (Settings → Recaps, auth.md §1; Monday by default), the same weeks as a
+  recap (recaps.md §11c).
 
 ## 11b. Added charts
 

@@ -20,6 +20,16 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   steepReminders: true,
   restReminders: true,
   greenStockAlerts: true,
+  recaps: true,
+  recapPeriods: 'both',
+  weekStartsOn: 1,
+  recapBanner: true,
+  recapBannerDays: 3,
+  recapNotify: true,
+  recapNotifyTime: '08:00',
+  timeZone: null,
+  recapAi: 'manual',
+  recapSeen: {},
 };
 export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: 'light', roastScale: 'names', ratingStep: 'half', hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: 'beanRecipe', suggestMaxBrews: 5, suggestAlternatives: [], beanReviews: true, beanReviewMaxBrews: 10, beanReviewRatedOnly: true, beanReviewBrewers: 'all', aiChat: true, chatMaxAttachments: 50, readLabels: true, labelWebLookup: false, labelWebContext: 'high', homeRoasting: false, homeRoasterName: 'Home roast', restDays: { filter: 7, espresso: 14, omni: 10 } };
 

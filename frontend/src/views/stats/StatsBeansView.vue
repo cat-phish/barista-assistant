@@ -59,13 +59,13 @@ const spendKind = useChartKind('spend');
 const spendAll = computed(() => spendByCurrency(beans.value, spendView.range.value.from ?? undefined, spendView.range.value.to ?? undefined));
 const spendCurrency = computed(() => spendAll.value[0]?.currency ?? null);
 const spend = computed(() => {
-  const { buckets, granularity, from, to } = spendView.axis.value;
+  const { buckets, granularity, from, to, weekStartsOn } = spendView.axis.value;
   const index = new Map(buckets.map((k, i) => [k, i]));
   const data = buckets.map(() => 0);
   for (const b of beans.value) {
     const day = boughtOn(b);
     if (b.priceCurrency !== spendCurrency.value || b.priceAmount === null || day < from || day > to) continue;
-    const i = index.get(bucketOf(day, granularity));
+    const i = index.get(bucketOf(day, granularity, weekStartsOn));
     if (i !== undefined) data[i] = Math.round((data[i]! + b.priceAmount) * 100) / 100;
   }
   return data;

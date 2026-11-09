@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, LABEL_WEB_CONTEXTS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_CHAT_ATTACHMENTS, MAX_REST_DAYS, MAX_REVIEW_BREWS, MAX_SUGGEST_BREWS, REMEMBER_KEYS, REPEAT_KEEPS, RATING_STEPS, ROAST_LEVELS, ROAST_SCALES, ROAST_TYPES, type RoastType, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
+import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, LABEL_WEB_CONTEXTS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_CHAT_ATTACHMENTS, MAX_REST_DAYS, MAX_REVIEW_BREWS, MAX_SUGGEST_BREWS, RECAP_AI_MODES, RECAP_PERIOD_CHOICES, REMEMBER_KEYS, REPEAT_KEEPS, RATING_STEPS, ROAST_LEVELS, ROAST_SCALES, ROAST_TYPES, type RoastType, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
 import { AI_DETAILS } from "@barista/shared/aiDetails";
 import { ROLES } from "./auth/membership.js";
 
@@ -63,6 +63,17 @@ export const workspaceSettingsObject = z
 // where {} is fine.
 export const workspaceSettingsSchema = workspaceSettingsObject.refine((body) => Object.keys(body).length > 0, "Provide at least one setting");
 
+// "Europe/Paris": a zone this server's Intl knows.
+function isTimeZone(name: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: name });
+    return true;
+  } catch {
+    return false;
+  }
+}
+const localDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD");
+
 export const preferencesSchema = z
   .object({
     volumeUnit: z.enum(VOLUME_UNITS),
@@ -91,6 +102,17 @@ export const preferencesSchema = z
     steepReminders: z.boolean(),
     restReminders: z.boolean(),
     greenStockAlerts: z.boolean(),
+    // Recaps (docs/api/recaps.md §11c).
+    recaps: z.boolean(),
+    recapPeriods: z.enum(RECAP_PERIOD_CHOICES),
+    weekStartsOn: z.number().int().min(0).max(6),
+    recapBanner: z.boolean(),
+    recapBannerDays: z.number().int().min(1).max(14),
+    recapNotify: z.boolean(),
+    recapNotifyTime: z.string().regex(/^([01]\d|2[0-3]):(00|15|30|45)$/, "HH:MM in 15-minute steps"),
+    timeZone: z.string().max(64).refine(isTimeZone, "an IANA time zone").nullable(),
+    recapAi: z.enum(RECAP_AI_MODES),
+    recapSeen: z.object({ weekly: localDate, monthly: localDate }).partial().strict(),
   })
   .partial()
   .strict()

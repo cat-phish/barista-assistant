@@ -54,7 +54,7 @@ describe("stats (docs/api/stats.md §11)", () => {
       }),
     ]);
     expect(res.body.brews[0]).not.toHaveProperty("tastingNotes");
-    expect(res.body.lookups.recipes).toEqual([{ id: recipe, name: "House V60", expectedFinishMinSec: 165, expectedFinishMaxSec: 195 }]);
+    expect(res.body.lookups.recipes).toEqual([{ id: recipe, name: "House V60", expectedFinishMinSec: 165, expectedFinishMaxSec: 195, createdAt: expect.any(String) }]);
     expect(res.body.lookups.methods).toContainEqual({ id: method, name: expect.any(String) });
     expect(res.body.lookups.tools).toContainEqual({ id: rdt, name: "RDT" });
     expect(res.body.lookups.problems).toContainEqual({ id: fast, name: "Fast drawdown" });

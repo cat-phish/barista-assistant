@@ -554,27 +554,31 @@ What the analysis worker sends to the LLM and what comes back.
   - What does the AI do with a period beyond reading its brews: trends,
     comparison with the previous period, the bean or recipe that did best?
 
-### 18. Weekly recaps
+### 18. Weekly and monthly recaps
 
-- **Status:** idea
+- **Status:** in progress: phase 1 (Insights → Recap, Settings → Recaps)
+  built; phases 2–4 planned (`docs/api/recaps.md` §11c).
 - **Why:** Insights shows patterns when you go looking; nothing tells you
-  how the week went: how much you brewed, what rated best, which beans
-  ran out or are coming into their rest window.
-- **Approach:** to work out; a starting sketch:
-  - A recap per person per week: brews logged, average and best rating,
-    beans brewed, opened and finished, caffeine, new recipes.
-  - Sent through the notification channels (`docs/api/notifications.md`
-    §1b) by a scheduled worker job, and/or shown as a card in the app.
-  - Optionally an AI-written summary ("your V60 brews improved after going
-    two clicks finer"), switchable like the other AI features.
+  how the week or month went: how much you brewed, what rated best, which
+  beans were opened or finished.
+- **Approach:**
+  - **Review phase 1 after a testing period:** do the recap's figures match
+    the other Insights tabs for the same dates? Are the right tiles there,
+    and is anything missing (problems logged, grind changes, beans coming
+    into their rest window)? Does the period navigation and the "Only my
+    brews" switch work as expected? Is the Settings → Recaps page clear?
+  - 2. Brew-page banner: "Your weekly / monthly / weekly and monthly recap
+    is ready", gone when opened, dismissed or after `recapBannerDays`
+    (`recapSeen`); not shown for a period with none of your brews.
+  - 3. Notification at `recapNotifyTime` (the person's `timeZone`) on the
+    first day of a new period, once per workspace brewed in; a `recaps`
+    table (not backed up) records it.
+  - 4. AI summary, off / on request / automatic (`recapAi`), honouring
+    Settings → AI hidden details, from a reusable period context
+    (`worker/src/periodContext.ts`) that 17 can use too; an eval mode.
 - **Size:** M; L with the AI summary.
-- **Depends on:** nothing; 12 (saved insights) and 17 (a live period in
-  chat) could feed it.
-- **Open questions:**
-  - Per person, or per workspace (a bar's week)?
-  - Which day and time, and also monthly?
-  - Kept as a history to look back on, or sent and forgotten?
-  - Is a weekly AI summary worth the tokens?
+- **Depends on:** nothing; 17 (a live period in chat) shares its period
+  context.
 
 ---
 

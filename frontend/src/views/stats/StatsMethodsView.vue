@@ -20,7 +20,7 @@ const overView = stats.chart('methods');
 const overKind = useChartKind('methods');
 const labels = computed(() => overView.labels.value);
 const overTime = computed(() =>
-  seriesByKey(overView.brews.value, overView.axis.value.buckets, overView.axis.value.granularity, (b) => b.methodId).map((s) => ({ label: s.key === OTHER ? OTHER : nameOf(s.key), data: s.data })),
+  seriesByKey(overView.brews.value, overView.axis.value.buckets, overView.axis.value.granularity, (b) => b.methodId, { weekStartsOn: overView.axis.value.weekStartsOn }).map((s) => ({ label: s.key === OTHER ? OTHER : nameOf(s.key), data: s.data })),
 );
 const rating = computed(() => meansOf(meanBy(brews.value, (b) => b.methodId, (b) => b.rating), nameOf));
 </script>

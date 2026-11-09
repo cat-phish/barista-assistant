@@ -441,6 +441,15 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
 ## Journal & AI
 - **Journal:** every brew, newest first, filterable by bean; entries can be
   edited or deleted.
+- **Recaps:** Insights → Recap shows a week or month at a glance: brews and
+  days brewed, average rating, the best cups, caffeine, volume, coffee used,
+  beans brewed, bought and finished, new recipes, and the most brewed recipe
+  and brewer, each next to the period before. It's yours by default, or
+  everyone's in the workspace, and steps back through earlier weeks and
+  months. Under Settings → Recaps: weekly, monthly or both, the day weeks
+  start (Insights' weekly charts follow it), and switches for the brew-page
+  banner, the notification and the AI summary. Turned off, a recap still
+  shows when you ask for it.
 - **AI analysis:** after a brew, ask for a suggestion; a background worker
   asks the LLM for grind and temperature changes with reasoning, plus one
   next step and how confident it is. For espresso it can also change the
