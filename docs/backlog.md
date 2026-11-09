@@ -362,30 +362,47 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 12. Review how flavor wheel inputs reach the AI
 
-- **Status:** idea
+- **Status:** idea; the eval can now run with and without picks
 - **Why:** the wheel was built to give the AI a fixed vocabulary, but
   nobody has checked that the picks change its advice for the better, or
   how it weighs them against the tasting notes and the rating.
-- **What we found:**
+- **What we found** (checked 2026-11-08):
   - `flavorsFor` (`worker/src/context.ts`) sends each pick as text with its
-    place on the wheel, e.g. `"Blueberry (Fruity › Berry)"`, in wheel order.
-    Analysis, Suggest parameters and the bean review all use it.
-  - The prompt's `flavors` section (`docs/api/llm-contract.md` §9) says how
-    to read them: go by meaning rather than group names, read them with the
-    tasting notes, and compare them with `flavorProfile`.
+    place on the workspace's own wheel (or the built-in one), e.g.
+    `"Blueberry (Fruity › Berry)"`, in wheel order. Analysis, Suggest
+    parameters (for each brew before) and the bean review all use it.
+  - The prompt's `flavors` section (`docs/api/llm-contract.md` §9) goes
+    further than "read them with the tasting notes": the wheel can be the
+    workspace's own, so go by meaning, not group names; a broader pick is
+    less specific, not weaker; sour, fermented or green picks often mean
+    under-extraction, harsh, ashy or bitter ones over-extraction or the
+    roast, off flavors (papery, musty) the beans or filter; compare with
+    `flavorProfile`. It's only sent when a brew has picks.
   - Flavors are always sent (`worker/tests/aiDetails.test.ts`), with no
     switch under Settings → AI, while the roaster's `flavorProfile` has one.
   - A pick carries no intensity, so one faint note reads the same as a
     dominant one (see 6).
-- **Approach:** run the eval on brews with and without picks
-  (`docs/api/llm-contract.md` §9, "Evaluating changes"), compare the advice,
-  and adjust the prompt if it reads worse (bump `PROMPT_VERSION`).
+  - As of 2026-11-08 only one rated brew has picks, so the eval can't say
+    much yet. It shows two things to check: a pick whose key left the wheel
+    keeps its old saved place, so one brew sent `"Nutty (Nutty/Cocoa)"`
+    beside `"Walnut (Nutty & cocoa › Nutty)"` (same group, two names); and
+    broad picks sit beside narrower ones on the same branch (`Stone fruit`
+    with `Apricot` and `Cherry`), which the prompt reads as "less
+    specific", not as a second note.
+- **Approach:** with the eval (`docs/api/llm-contract.md` §9, "Evaluating
+  changes"): `snapshot --with-flavors`, then `run --label flav` against
+  `run --label noflav --without flavors` (and `--without places` for labels
+  only), each also with `--suggest`; `compare` the pairs and adjust the
+  prompt if picks make the advice worse (bump `PROMPT_VERSION`).
 - **Size:** S
-- **Depends on:** a good number of rated brews with flavors picked.
+- **Depends on:** a good number of rated brews with flavors picked
+  (`snapshot --with-flavors` shows how many; one on 2026-11-08).
 - **Open questions:**
   - Does the place on the wheel help, or would the label alone do?
-  - How does it cope with a workspace's own wheel, whose groups may mean
-    something else?
+    (`--without places`.)
+  - A workspace's own wheel, whose groups may mean something else: the
+    prompt already says to go by meaning, not group names; check it holds
+    on a custom wheel.
   - Should the picks be switchable under Settings → AI (CLAUDE.md rule 9)?
   - Should the picks be compared with `flavorProfile` more directly, as a
     "how close to the roaster's notes" reading?

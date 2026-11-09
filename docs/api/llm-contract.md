@@ -589,7 +589,8 @@ and chat is for exploring deeper, with the person choosing what to attach
 root `.env`, only reads the database, and writes to the git-ignored
 `eval/`):
 
-- `snapshot [--limit 12]` picks recent rated brews;
+- `snapshot [--limit 12] [--with-flavors]` picks recent rated brews
+  (with `--with-flavors`, only ones with wheel flavors);
 - `run --label <name> [--yes]` sends each through the input and prompt as
   the code has them now (real API calls; it shows the token estimate and
   asks first), saving the outputs and token counts;
@@ -597,7 +598,12 @@ root `.env`, only reads the database, and writes to the git-ignored
   instead, as if setting up each picked brew (its bean, recipe, brewer and
   grinder, brews before it from `source`, default `beanRecipe`), so the
   values can be held against how the brew went;
-- `compare <a> <b>` writes a side-by-side report of two runs.
+- `run … --without flavors` sends each brew (and, with `--suggest`, each
+  brew before it) with no flavors, and so without the prompt's `flavors`
+  section; `--without places` sends their labels without the place on the
+  wheel. Only the eval run changes, to see what the picks add;
+- `compare <a> <b>` writes a side-by-side report of two runs, with each
+  brew's rating, notes, problems and flavors.
 
 Run it before and after changing the input, prompt or schema, and bump
 `PROMPT_VERSION`.

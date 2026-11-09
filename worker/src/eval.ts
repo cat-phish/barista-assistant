@@ -3,8 +3,8 @@
 // root .env (database password, OpenAI key and model), only reads the
 // database, and writes to eval/ (git-ignored: it's your brews).
 //
-//   npm run eval -w worker -- snapshot [--limit 12]   choose the brews
-//   npm run eval -w worker -- run --label baseline [--yes]
+//   npm run eval -w worker -- snapshot [--limit 12] [--with-flavors]   choose the brews
+//   npm run eval -w worker -- run --label baseline [--yes] [--without flavors|places]
 //   npm run eval -w worker -- run --label sug --suggest [beanRecipe] [--yes]
 //   npm run eval -w worker -- compare baseline after
 //
@@ -14,6 +14,9 @@
 // brew (its bean, recipe, brewer and grinder; brews before it, from the
 // source given, default beanRecipe), so the values can be held against the
 // brew as it went.
+// --with-flavors picks only brews with wheel flavors; --without flavors
+// sends them with none (and so no flavors section in the prompt), --without
+// places with their labels only, to see what the picks change (backlog 12).
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -43,6 +46,7 @@ interface Picked {
   drinkRating: number | null;
   tastingNotes: string | null;
   problems: string[];
+  flavors?: string[]; // as sent; missing in snapshots from before
   stored: { promptVersion: string | null; helpful: boolean | null; reasoning: string } | null; // the latest saved analysis
 }
 interface RunResult {
@@ -67,16 +71,22 @@ const flag = (args: string[], name: string) => {
 const readJson = <T>(file: string): T => JSON.parse(readFileSync(path.join(OUT, file), "utf8")) as T;
 const writeJson = (file: string, data: unknown) => writeFileSync(path.join(OUT, file), JSON.stringify(data, null, 2));
 
-async function snapshot(limit: number): Promise<void> {
+async function snapshot(limit: number, withFlavors: boolean): Promise<void> {
   const { db } = await import("./db.js");
-  const { brewLogs, brewLogProblems, brewProblems, llmAnalyses } = await import("@barista/shared/schema");
-  const { and, desc, eq, isNotNull, or } = await import("drizzle-orm");
+  const { brewLogs, brewLogFlavors, brewLogProblems, brewProblems, llmAnalyses } = await import("@barista/shared/schema");
+  const { and, desc, eq, inArray, isNotNull, or } = await import("drizzle-orm");
+  const { flavorsFor } = await import("./context.js");
   const rows = await db
     .select({ id: brewLogs.id, timestamp: brewLogs.timestamp, rating: brewLogs.rating, drinkRating: brewLogs.drinkRating, tastingNotes: brewLogs.tastingNotes })
     .from(brewLogs)
-    .where(and(eq(brewLogs.steeping, false), or(isNotNull(brewLogs.rating), isNotNull(brewLogs.drinkRating))))
+    .where(and(
+      eq(brewLogs.steeping, false),
+      or(isNotNull(brewLogs.rating), isNotNull(brewLogs.drinkRating)),
+      withFlavors ? inArray(brewLogs.id, db.selectDistinct({ id: brewLogFlavors.brewLogId }).from(brewLogFlavors)) : undefined,
+    ))
     .orderBy(desc(brewLogs.timestamp))
     .limit(limit);
+  const flavors = await flavorsFor(rows.map((r) => r.id));
   const picked: Picked[] = [];
   for (const r of rows) {
     const problems = await db
@@ -90,10 +100,10 @@ async function snapshot(limit: number): Promise<void> {
       .where(eq(llmAnalyses.brewLogId, r.id))
       .orderBy(desc(llmAnalyses.createdAt))
       .limit(1);
-    picked.push({ brewLogId: r.id, timestamp: r.timestamp.toISOString(), rating: r.rating, drinkRating: r.drinkRating, tastingNotes: r.tastingNotes, problems: problems.map((p) => p.name), stored: stored ?? null });
+    picked.push({ brewLogId: r.id, timestamp: r.timestamp.toISOString(), rating: r.rating, drinkRating: r.drinkRating, tastingNotes: r.tastingNotes, problems: problems.map((p) => p.name), flavors: flavors.get(r.id) ?? [], stored: stored ?? null });
   }
   writeJson("brews.json", picked);
-  console.log(`Picked ${picked.length} rated brews → eval/brews.json`);
+  console.log(`Picked ${picked.length} rated brews${withFlavors ? " with flavors" : ""} → eval/brews.json`);
 }
 
 // A job to send: what goes in (for its size) and the call.
@@ -102,7 +112,15 @@ interface EvalJob {
   send: () => Promise<{ output: unknown; usage: { promptTokens: number; completionTokens: number } | null }>;
 }
 
-async function analysisJobs(brews: Picked[]): Promise<Array<EvalJob | null>> {
+// What --without leaves out of each brew's flavors.
+type Without = "flavors" | "places";
+const WITHOUT: readonly Without[] = ["flavors", "places"];
+// A place is the last "(…)" flavorLabel adds; a label that itself ends in
+// one would lose it too, which is fine for an eval.
+const trimFlavors = (flavors: string[], without: Without | null): string[] =>
+  without === "flavors" ? [] : without === "places" ? flavors.map((f) => f.replace(/ \([^()]*\)$/, "")) : flavors;
+
+async function analysisJobs(brews: Picked[], without: Without | null): Promise<Array<EvalJob | null>> {
   const { loadBrewContext } = await import("./context.js");
   const { requestAnalysis } = await import("./llm.js");
   const { resolveAi } = await import("./ai/resolve.js");
@@ -110,13 +128,14 @@ async function analysisJobs(brews: Picked[]): Promise<Array<EvalJob | null>> {
   return Promise.all(
     brews.map(async (b) => {
       const context = await loadBrewContext(b.brewLogId);
+      if (context) context.brew.flavors = trimFlavors(context.brew.flavors, without);
       // What's actually sent: the compact input (prompt.ts), not the full context.
       return context ? { input: toLlmInput(context), send: async () => { const r = await requestAnalysis(await resolveAi(), context); return { output: r.analysis, usage: r.usage }; } } : null;
     }),
   );
 }
 
-async function suggestJobs(brews: Picked[], source: string): Promise<Array<EvalJob | null>> {
+async function suggestJobs(brews: Picked[], source: string, without: Without | null): Promise<Array<EvalJob | null>> {
   const { db } = await import("./db.js");
   const { brewLogs, SUGGEST_SOURCES } = await import("@barista/shared/schema");
   const { eq } = await import("drizzle-orm");
@@ -146,19 +165,20 @@ async function suggestJobs(brews: Picked[], source: string): Promise<Array<EvalJ
         alternativesAsked: [], // the values only
       };
       const context = await loadSuggestContext(request, { before: brew.timestamp });
+      for (const past of context?.brews ?? []) past.flavors = trimFlavors(past.flavors, without);
       return context ? { input: toSuggestInput(context), send: async () => { const r = await requestSuggestion(await resolveAi(), context); return { output: r.suggestion, usage: r.usage }; } } : null;
     }),
   );
 }
 
-async function run(label: string, yes: boolean, suggest: string | null): Promise<void> {
+async function run(label: string, yes: boolean, suggest: string | null, without: Without | null): Promise<void> {
   const { PROMPT_VERSION } = await import("./llm.js");
   const { config } = await import("./config.js");
   const brews = readJson<Picked[]>("brews.json");
-  const jobs = suggest === null ? await analysisJobs(brews) : await suggestJobs(brews, suggest);
+  const jobs = suggest === null ? await analysisJobs(brews, without) : await suggestJobs(brews, suggest, without);
   const inputs = jobs.map((j) => j?.input ?? null);
   const chars = inputs.reduce<number>((n, c) => n + (c ? JSON.stringify(c).length : 0), 0);
-  console.log(`${brews.length} brews${suggest === null ? "" : ` (Suggest parameters, ${suggest})`}, prompt ${PROMPT_VERSION}, model ${config.openaiModel}: about ${Math.round(chars / 4).toLocaleString()} context tokens plus the prompt each time.`);
+  console.log(`${brews.length} brews${suggest === null ? "" : ` (Suggest parameters, ${suggest})`}${without ? ` without ${without}` : ""}, prompt ${PROMPT_VERSION}, model ${config.openaiModel}: about ${Math.round(chars / 4).toLocaleString()} context tokens plus the prompt each time.`);
   if (!yes) {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     const answer = await rl.question("Send them to the API? [y/N] ");
@@ -232,7 +252,7 @@ function compare(a: string, b: string): void {
     lines.push(
       `## ${brew.timestamp.slice(0, 16).replace("T", " ")}`,
       "",
-      `Rating ${brew.rating ?? "–"}${brew.drinkRating ? ` (drink ${brew.drinkRating})` : ""} · ${cell(brew.tastingNotes)}${brew.problems.length ? ` · problems: ${brew.problems.join(", ")}` : ""}`,
+      `Rating ${brew.rating ?? "–"}${brew.drinkRating ? ` (drink ${brew.drinkRating})` : ""} · ${cell(brew.tastingNotes)}${brew.problems.length ? ` · problems: ${brew.problems.join(", ")}` : ""}${brew.flavors?.length ? ` · flavors: ${brew.flavors.join(", ")}` : ""}`,
       ...batchLine(x?.context, y?.context),
       brew.stored ? `Stored analysis${brew.stored.helpful === null ? "" : brew.stored.helpful ? " (rated 👍)" : " (rated 👎)"}: “${cell(brew.stored.reasoning)}”` : "No stored analysis.",
       "",
@@ -251,15 +271,18 @@ async function main(args: string[]): Promise<void> {
   useRootEnv();
   if (!existsSync(OUT)) mkdirSync(OUT);
   const [command] = args;
-  if (command === "snapshot") await snapshot(Number(flag(args, "limit") ?? 12));
+  if (command === "snapshot") await snapshot(Number(flag(args, "limit") ?? 12), args.includes("--with-flavors"));
   else if (command === "run" && flag(args, "label")) {
     const next = flag(args, "suggest"); // the source, if one follows
     const suggest = !args.includes("--suggest") ? null : next && !next.startsWith("--") ? next : "beanRecipe";
-    await run(flag(args, "label")!, args.includes("--yes"), suggest);
+    const leaveOut = flag(args, "without");
+    const without = WITHOUT.find((w) => w === leaveOut) ?? null;
+    if (leaveOut !== undefined && !without) throw new Error(`--without takes one of ${WITHOUT.join(", ")}`);
+    await run(flag(args, "label")!, args.includes("--yes"), suggest, without);
   }
   else if (command === "compare" && args[1] && args[2]) compare(args[1], args[2]);
   else {
-    console.error("Usage: snapshot [--limit N] | run --label NAME [--suggest [SOURCE]] [--yes] | compare A B");
+    console.error("Usage: snapshot [--limit N] [--with-flavors] | run --label NAME [--suggest [SOURCE]] [--without flavors|places] [--yes] | compare A B");
     process.exitCode = 2;
   }
 }
