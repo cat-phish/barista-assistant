@@ -2841,5 +2841,11 @@ Branch `chat-period`; was backlog 17. Spec: `docs/api/chat.md` §12,
   composer say "≈ 40k tokens, sent again with every reply" (per-kind
   averages measured on the real journal: a brew about 610 tokens, a period
   brew 190).
+- **Long chats** (raised in review: a period attached early fell out of
+  the 40-message window without a word): a reply is now sent what the whole
+  chat attached, and past 30 messages or about 60k tokens the Chat tab
+  offers **Summarize and continue**, Claude Code's compact for chats: the
+  AI folds all but the newest 10 messages into a summary sent ahead of the
+  rest (migration 0114, `chat.md` §12 "Long chats").
 - Left out: a period gives proposals no ref (it isn't one item); other
   kinds (the beans opened in a period) weren't asked for.

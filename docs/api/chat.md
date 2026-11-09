@@ -18,8 +18,9 @@ All under `/api/workspaces/:workspaceId/chats`. `Auth Required: true`. Reading
 your own chats is open to any member; starting one or sending a message needs
 `owner` or `barista`, as an analysis does.
 
-**A chat:** `{ id, title, createdAt, updatedAt }`. `title` is the start of the
-first message; `updatedAt` moves with each message.
+**A chat:** `{ id, title, createdAt, updatedAt, summary, summaryThrough,
+summaryStatus }`. `title` is the start of the first message; `updatedAt` moves
+with each message. The summary fields are under "Long chats", below.
 
 **A message:** `{ id, position, role, content, attachments, proposals, photos,
 status, error, model, createdAt }`. `proposals` is `[]` but on a reply that
@@ -36,7 +37,8 @@ made some (below).
 | `POST /` | Body `{ content, attachments?, photoIds? }`; `content` is 1–4000 characters. Starts a chat with that message. `202` with `{ chat, messages }`: the message and its pending reply. |
 | `GET /:chatId` | `{ chat, messages }`, oldest first. |
 | `DELETE /:chatId` | `204`. |
-| `POST /:chatId/messages` | Body as for `POST /`. `202` with `{ chat, messages }`: only the two new ones. `409` while a reply is still being written. |
+| `POST /:chatId/messages` | Body as for `POST /`. `202` with `{ chat, messages }`: only the two new ones. `409` while a reply or a summary is still being written. |
+| `POST /:chatId/summary` | Summarize and continue (below). `202` with `{ chat }`, `summaryStatus: "pending"`. `409` while a reply or a summary is being written, `400` under 12 finished messages. Needs `owner` or `barista`, chat on and AI set up, and the daily message limit not reached (it doesn't count toward it). |
 | `GET /:chatId/messages/:messageId/stream` | The reply as server-sent events, below. |
 | `PUT /:chatId/messages/:messageId/proposals/:index` | Body `{ state: "open" \| "dismissed" }`. Any member, on their own chat. `200` with `{ proposals }`, the message's, updated. `404` for an index it doesn't have. |
 | `POST /photos` | The image as the body, any type, up to 15 MB. `201` with `{ photo: { id, width, height } }`. `400` if it can't be read. |
@@ -46,8 +48,8 @@ made some (below).
 (§2 of `workspaces.md`: 1–100, default 50) `{ "kind": "brew" | "bean" |
 "recipe", "id": "uuid" }`, each from this workspace, or the request is a `400`.
 Charts and periods (below) carry more.
-Each reply is sent the latest `chatMaxAttachments` items attached across the
-chat's last 40 messages, each once.
+Each reply is sent the latest `chatMaxAttachments` items attached anywhere in
+the chat, each once, even from messages too old to be sent themselves (below).
 A message comes back with `attachments: [{ kind, id, label }]`, where `label`
 is what the item was called when attached, and `[]` when there are none. Only
 the reference is kept: each reply reads the item afresh (§9e), so a change or a
@@ -103,6 +105,32 @@ under `PHOTO_DIR/chats/<workspaceId>/`, and go when it does. One uploaded but
 never sent is removed the next time the server starts, a day later or more. The
 Chat tab uploads a photo as soon as it's picked, pasted into the message box or
 dropped on the conversation (images only; pasted text stays text).
+
+## Long chats
+
+Each reply is sent the chat's last **40** finished messages (after the
+summary, if there is one); older ones aren't sent, though what they attached
+still is (above).
+
+**Summarize and continue:** `POST /:chatId/summary` has the worker
+(`llm-contract.md` §9e) fold every finished message but the newest 10, and any
+earlier summary, into one `summary` of at most about 400 words. It is saved on
+the chat with `summaryThrough`, the position of the last message it covers.
+Later replies get the summary ahead of the messages after `summaryThrough`.
+The messages stay in the chat as they were. `summaryStatus` is `pending`
+while it's written (sending waits, with a `409`), `failed` if that try
+failed (the old summary stays), and `null` otherwise. A summary counts
+toward the chat's size and goes in the export, as `summary` and
+`summaryThrough` on the chat; importing renumbers it with the messages.
+
+**In the Chat tab** (`lib/chatLength.ts`): once 30 messages aren't covered
+by a summary, or the history sent plus the attachments comes to about
+60,000 tokens, a notice above the message box says "This chat is getting
+long: soon its older messages won't be sent to the AI", with **Summarize and
+continue**. Past 40 it says they aren't sent any more. While the summary is
+written it says so, and the chat is read again every 3 seconds. After it, a
+divider below the last message covered, "Earlier messages summarized for
+the AI ▾", opens the summary.
 
 ## Proposals
 

@@ -536,10 +536,14 @@ base64 }]`. One attempt: a retry would repeat text the person
 has already read, so a failed reply is marked failed and they send again.
 
 1. **Conversation** (`worker/src/chat.ts`): the chat's last 40 finished
-   messages, oldest first, starting on one of the person's. Failed replies are
-   left out.
-2. **Attachments** (`loadAttachments`, `worker/src/chat.ts`): what those
-   messages attached, the workspace's `chatMaxAttachments` most recent
+   messages after its `summaryThrough` (all of them without a summary),
+   oldest first, starting on one of the person's. Failed replies are left
+   out. A summary goes in the system prompt, after the person's
+   instructions: "The earlier part of this conversation isn't shown below;
+   this is a summary of it, written then: …".
+2. **Attachments** (`loadAttachments`, `worker/src/chat.ts`): what the
+   chat's finished messages attached, however far back (`attachedIn`), the
+   workspace's `chatMaxAttachments` most recent
    (`workspaces.md` §2, default 50), each read now from the chat's
    workspace. A brew is the analysis input (`toLlmInput`); a bean or a recipe is
    that part of it. One that's been deleted is named as unavailable, by the
@@ -608,6 +612,18 @@ has already read, so a failed reply is marked failed and they send again.
      proposal is an empty reply (failed).
    - **Later turns:** since the blocks are out of the text, an earlier reply
      is sent with a note of what it proposed and whether each was dismissed.
+
+7. **Summaries** (`worker/src/chatSummary.ts`, job `summary` on the same
+   queue, data `{ chatId }`; `chat.md` §12 "Long chats"): every finished
+   message but the newest 10 (`KEEP_RECENT`) after the last summary, as
+   `{ earlierSummary, messages: [{ role, content, attached }] }`, `attached`
+   being the labels of what each message attached and a reply's content
+   carrying its proposals note. One call, no schema, plain text
+   (`CHAT_SUMMARY_SYSTEM`, `CHAT_SUMMARY_PROMPT_VERSION` 2026-11-a): keep
+   the facts, numbers, what was discussed by name, proposals and whether
+   they were dismissed, decisions and what's open, in at most about 400
+   words, folding the earlier summary in. Cut to 6000 characters and saved
+   with `summaryThrough`; a failure marks it `failed` and keeps the old one.
 
 **What the AI sees:** the conversation and what was attached, in full, through
 the same `toLlmInput`, `beanInput` and `recipeInput` as an analysis. **`aiHidden`
