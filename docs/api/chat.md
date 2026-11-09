@@ -72,7 +72,9 @@ spec }`: the Brews filters saved as one item rather than the brews they match
 recipeId, brewerId, mine }`:
 - `range`: `7d`, `30d`, `90d` or `1y` roll with the chat, counted back from
   the day of each reply in the workspace's time zone, so `from` and `to` are
-  `null`. `all` is every brew, also with no dates. `week`, `month` and
+  `null`. (The picker's list counts back from the browser's day, so near
+  midnight it can be a day off what the reply sees; the reply's is the one
+  that counts.) `all` is every brew, also with no dates. `week`, `month` and
   `custom` are fixed days, so `from` and `to` (`YYYY-MM-DD`, `from` first)
   are both set. The picker fixes "This week", "Last week" (on your
   `weekStartsOn`), "This month" and "Last month" to their dates when
@@ -160,7 +162,9 @@ bottom. On a phone the chat list is a drawer behind **Chats**.
   sent again with every reply". It's a rough count from per-kind averages
   measured on a real journal: about 610 tokens for a brew, 100 for a bean,
   320 for a recipe, 10 for each chart row, and 450 for a period plus 190 for
-  each brew it sends in detail.
+  each brew it sends in detail. A period's brews are counted as the picker's
+  list matched them, which includes cold brews still steeping that the
+  period leaves out, so it can run a little high.
 - **Charts** (`ChartPicker.vue`) lists every chart on the Insights tabs the
   workspace shows, the Explore charts the person added included, and
   "Overview totals", under the Insights filter bar. Those filters start as the
