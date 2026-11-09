@@ -10,6 +10,10 @@ import {
   REST_REMINDER_JOB,
   restReminderJobId,
   GREEN_LOW_JOB,
+  RECAP_SUMMARY_JOB,
+  RECAP_SUMMARY_QUEUE,
+  recapSummaryJobId,
+  type RecapSummaryJobData,
   RECAP_TICK_JOB,
   RECAP_TICK_PATTERN,
   RECAP_TICK_SCHEDULER,
@@ -302,6 +306,20 @@ async function enqueueReminder(name: string, jobId: string | undefined, data: Re
   );
 }
 
+// A recap's AI summary (docs/api/llm-contract.md §9f): its row already
+// pending; retried once.
+export const recapSummaryQueue = new Queue<RecapSummaryJobData>(RECAP_SUMMARY_QUEUE, { connection });
+let lastRecapSummaryError = "";
+recapSummaryQueue.on("error", (err: Error) => {
+  if (err.message !== lastRecapSummaryError) console.error("Recap summary queue error:", err.message);
+  lastRecapSummaryError = err.message;
+});
+export async function enqueueRecapSummary(recapId: string): Promise<void> {
+  await withTimeout(() =>
+    recapSummaryQueue.add(RECAP_SUMMARY_JOB, { recapId }, { jobId: recapSummaryJobId(recapId), attempts: 2, backoff: { type: "exponential", delay: 5000 }, removeOnComplete: true, removeOnFail: true })
+  );
+}
+
 // The recap tick (docs/api/notifications.md §1b, "Recaps"): every quarter
 // hour, for whoever's recap time has come. Set (or reset) at start-up.
 export async function syncRecapSchedule(): Promise<void> {
@@ -346,7 +364,7 @@ export async function enqueueBackupNow(): Promise<void> {
 }
 
 export async function closeQueue(): Promise<void> {
-  await Promise.all([brewAnalysisQueue.close(), reminderQueue.close(), maintenanceQueue.close(), parameterSuggestionQueue.close(), aiPreviewQueue.close(), labelReadQueue.close(), chatQueue.close(), ...[...queueEvents.values()].map((e) => e.close())]);
+  await Promise.all([brewAnalysisQueue.close(), reminderQueue.close(), recapSummaryQueue.close(), maintenanceQueue.close(), parameterSuggestionQueue.close(), aiPreviewQueue.close(), labelReadQueue.close(), chatQueue.close(), ...[...queueEvents.values()].map((e) => e.close())]);
   connection.disconnect();
   waitConnection?.disconnect();
 }

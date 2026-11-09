@@ -39,7 +39,7 @@ means drinks, wherever you see it (code comments use
 | §7 | [public-menu.md](public-menu.md) | Public Menu Endpoint |
 | §7b | [menu.md](menu.md) | Menu Builder (sections and items for §7) |
 | §8 | [analysis.md](analysis.md) | LLM Brew Analysis / Parameter Suggestions (§8b), what was sent to the AI (§8c), previews (§8d), a bean's review draft (§8e) |
-| §9 | [llm-contract.md](llm-contract.md) | Worker -> LLM Structured Output Contract |
+| §9 | [llm-contract.md](llm-contract.md) | Worker -> LLM Structured Output Contract (analysis; §9b–§9e suggestions, labels, reviews, chat; §9f recap summaries) |
 | §10 | [server.md](server.md) | Server Administration (admins, scheduled database backups) |
 | §11 | [stats.md](stats.md) | Statistics (brew and bean rows for the Insights page) |
 | §11b | [stats.md](stats.md) | Added Insights charts and each tab's layout (a person's own, per workspace) |

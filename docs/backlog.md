@@ -541,12 +541,18 @@ What the analysis worker sends to the LLM and what comes back.
   picker's Brews filters
   (period, bean, recipe, brewer, only mine) saved as one item, shown as one
   chip ("Brews, 26 Oct – 1 Nov"). The worker runs the query again every
-  turn, so brews logged, edited or deleted since are picked up.
+  turn, so brews logged, edited or deleted since are picked up. Recaps
+  (18) built the worker side: `worker/src/periodContext.ts`
+  (`loadPeriodContext`: one person's or everyone's brews in a range, with
+  figures for it and the period before, capped at the newest 60 with the
+  rest counted) and `toPeriodInput` (hidden details left out), classified
+  in `aiDetails.test.ts` (llm-contract.md §9f). A Period attachment could
+  send that as it is.
 - **Size:** S–M
 - **Depends on:** nothing (the picker and its filters are built).
 - **Open questions:**
-  - Its own cap (the newest N, the AI told how many were left out, as
-    charts are past 200 rows), so a year doesn't blow the prompt.
+  - Its own cap: periodContext.ts caps at the newest 60 and says how many
+    were left out; is that right for chat, where a year might be asked?
   - Does it count as one attachment toward the limit, or as the brews in it?
   - Should a rolling period ("last 7 days") move with the chat, or stay
     fixed to the days it was attached?
@@ -556,9 +562,8 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 18. Weekly and monthly recaps
 
-- **Status:** in progress: phases 1 (Insights → Recap, Settings → Recaps),
-  2 (brew-page banner) and 3 (notification) built; 4 planned
-  (`docs/api/recaps.md` §11c).
+- **Status:** built (roadmap: Weekly and monthly recaps); kept here to
+  review after a testing period (`docs/api/recaps.md` §11c).
 - **Why:** Insights shows patterns when you go looking; nothing tells you
   how the week or month went: how much you brewed, what rated best, which
   beans were opened or finished.
@@ -574,9 +579,11 @@ What the analysis worker sends to the LLM and what comes back.
   - **Review the notification after a testing period:** does it arrive on
     time in your time zone, once, with the right figures, and does its
     link open the right recap? Is the message worth having, or too terse?
-  - 4. AI summary, off / on request / automatic (`recapAi`), honouring
-    Settings → AI hidden details, from a reusable period context
-    (`worker/src/periodContext.ts`) that 17 can use too; an eval mode.
+  - **Review the AI summary after a testing period:** are the summaries
+    right and worth reading (nothing invented, the "one thing to try"
+    useful), is automatic mode worth its tokens, and should the prompt be
+    editable under Your AI prompt? `npm run eval -w worker -- recap` reruns
+    them on your recent weeks (llm-contract.md §9f).
 - **Size:** M; L with the AI summary.
 - **Depends on:** nothing; 17 (a live period in chat) shares its period
   context.

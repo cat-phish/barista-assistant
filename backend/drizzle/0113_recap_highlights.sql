@@ -1,0 +1,1 @@
+ALTER TABLE `recaps` ADD `highlights` json;

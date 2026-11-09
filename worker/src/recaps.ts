@@ -9,6 +9,8 @@ import { db } from "./db.js";
 import { localBrewDate } from "./localDate.js";
 import { deliver } from "./reminders.js";
 import { settingsZone } from "./zone.js";
+import { resolveAi } from "./ai/resolve.js";
+import { failRecapSummary, writeRecapSummary } from "./recapSummary.js";
 
 // Recap notifications (docs/api/notifications.md §1b, "Recaps"). Every
 // quarter hour the tick looks for people whose local time has reached
@@ -96,15 +98,33 @@ export function recapMessage(kind: RecapKind, period: RecapPeriod, brews: readon
   return parts.join(" · ");
 }
 
-// Takes the send for this period and workspace; false if it's already gone.
-async function claim(workspaceId: string, userId: string, kind: RecapKind, periodStart: string): Promise<boolean> {
+// Takes the send for this period and workspace: the row's id, or null if
+// it's already gone.
+async function claim(workspaceId: string, userId: string, kind: RecapKind, periodStart: string): Promise<string | null> {
   await db
     .insert(recaps)
     .values({ id: randomUUID(), workspaceId, userId, kind, periodStart, scope: "mine" })
     .onDuplicateKeyUpdate({ set: { workspaceId } }); // already there: keep it
   const key = and(eq(recaps.workspaceId, workspaceId), eq(recaps.userId, userId), eq(recaps.kind, kind), eq(recaps.periodStart, periodStart), eq(recaps.scope, "mine"));
   const [result] = await db.update(recaps).set({ notifiedAt: new Date(), updatedAt: new Date() }).where(and(key, isNull(recaps.notifiedAt)));
-  return result.affectedRows > 0;
+  if (result.affectedRows === 0) return null;
+  const [row] = await db.select({ id: recaps.id, status: recaps.status }).from(recaps).where(key);
+  // "": claimed, but a summary was already asked for (done, failed or on its way): never twice.
+  return row ? (row.status === "none" ? row.id : "") : null;
+}
+
+// recapAi "auto" (docs/api/recaps.md §11c): the summary is written before
+// the notification goes, when the workspace has AI. A failure is recorded
+// on the row (Try again in the recap) and doesn't stop the notification.
+async function autoSummary(recapId: string, workspaceId: string): Promise<void> {
+  if (!recapId) return;
+  if (!(await resolveAi(workspaceId).then(() => true, () => false))) return;
+  await db.update(recaps).set({ status: "pending", error: null, updatedAt: new Date() }).where(eq(recaps.id, recapId));
+  try {
+    await writeRecapSummary({ recapId });
+  } catch (err) {
+    await failRecapSummary(recapId, err instanceof Error ? err.message.slice(0, 200) : String(err));
+  }
 }
 async function unclaim(workspaceId: string, userId: string, kind: RecapKind, periodStart: string): Promise<void> {
   await db
@@ -145,7 +165,9 @@ export async function processRecapTick(now: Date = new Date(), send: Send = send
         const byWorkspace = new Map<string, RecapBrew[]>();
         for (const b of brews) byWorkspace.set(b.workspaceId, [...(byWorkspace.get(b.workspaceId) ?? []), b]);
         for (const [workspaceId, list] of byWorkspace) {
-          if (!(await claim(workspaceId, person.id, kind, period.start))) continue;
+          const recapId = await claim(workspaceId, person.id, kind, period.start);
+          if (recapId === null) continue;
+          if (prefs.recapAi === "auto") await autoSummary(recapId, workspaceId);
           const text = recapMessage(kind, period, list);
           const query = `kind=${kind}&start=${period.start}&ws=${workspaceId}`;
           try {

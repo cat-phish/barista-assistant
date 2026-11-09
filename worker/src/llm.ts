@@ -8,7 +8,8 @@ import { completeWithAnthropic, respondWithAnthropic, streamWithAnthropic } from
 import { withoutKey, type AiClient } from "./ai/client.js";
 import type { BrewContext } from "./context.js";
 import type { BeanReviewContext } from "./beanReview.js";
-import { BEAN_REVIEW_SECTIONS, buildChatSystem, buildSystemPrompt, PROMPT_SECTIONS, promptSections, SUGGEST_SECTIONS, toBeanReviewInput, toLlmInput, toSuggestInput, type LlmInput, type PromptCustom } from "./prompt.js";
+import type { PeriodContext } from "./periodContext.js";
+import { BEAN_REVIEW_SECTIONS, buildChatSystem, buildRecapSystem, toPeriodInput, buildSystemPrompt, PROMPT_SECTIONS, promptSections, SUGGEST_SECTIONS, toBeanReviewInput, toLlmInput, toSuggestInput, type LlmInput, type PromptCustom } from "./prompt.js";
 import type { SuggestContext } from "./suggestContext.js";
 
 // The input and system prompt are built in prompt.ts; the schema and its
@@ -456,4 +457,42 @@ export function parseBeanReviewMessage(message: LlmMessage): BeanReviewDraft {
 export async function requestBeanReview(ai: AiClient, context: BeanReviewContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): Promise<BeanReviewDraft> {
   const { message } = await complete(ai, buildBeanReviewRequest(ai.models.main, context, hidden, custom));
   return parseBeanReviewMessage(message);
+}
+
+// A recap's summary (docs/api/llm-contract.md §9f).
+export const RECAP_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    summary: { type: "string" },
+    highlights: { type: "array", items: { type: "string" } },
+  },
+  required: ["summary", "highlights"],
+  additionalProperties: false,
+} as const;
+
+// Long answers are cut rather than failed.
+const recapSchema = z.object({
+  summary: z.string().trim().min(1).transform((s) => s.slice(0, 1500).trimEnd()),
+  highlights: z
+    .array(z.string())
+    .transform((list) => list.map((h) => h.trim().slice(0, 200)).filter(Boolean).slice(0, 4)),
+});
+export type RecapSummary = z.infer<typeof recapSchema>;
+
+export function buildRecapRequest(model: string, context: PeriodContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
+  return {
+    model,
+    messages: [
+      { role: "system", content: buildRecapSystem(custom) },
+      { role: "user", content: JSON.stringify(toPeriodInput(context, hidden)) },
+    ],
+    response_format: { type: "json_schema", json_schema: { name: "recap_summary", strict: true, schema: RECAP_JSON_SCHEMA } },
+  };
+}
+export function parseRecapMessage(message: LlmMessage): RecapSummary {
+  return parseMessage(message, recapSchema);
+}
+export async function requestRecapSummary(ai: AiClient, context: PeriodContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): Promise<{ summary: RecapSummary; usage: Usage }> {
+  const { message, usage } = await complete(ai, buildRecapRequest(ai.models.main, context, hidden, custom));
+  return { summary: parseRecapMessage(message), usage };
 }

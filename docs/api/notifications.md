@@ -290,6 +290,9 @@ Weekly and monthly recaps (recaps.md §11c).
     starting with the workspace's name when more than one is sent;
   - link `<APP_URL>/insights/recap?kind=weekly&start=2026-11-02&ws=<id>`,
     which switches to that workspace.
+- **AI summary first:** with `recapAi` `auto` and AI in the workspace, the
+  summary (llm-contract.md §9f) is written on the row before sending, once
+  per row; a failure is recorded there and doesn't stop the notification.
 - **Once only:** a `recaps` row (scope `mine`) claims each send through its
   `notified_at`. A send that fails on every channel, or finds no enabled
   channel, gives the claim back, so a later tick that day tries again. Only

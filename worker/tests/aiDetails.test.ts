@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { AI_DETAILS, type AiDetail } from "@barista/shared/aiDetails";
 import type { BrewContext, BrewSummary, DrinkInfo, GrinderInfo, WaterInfo } from "../src/context.js";
-import { toBeanReviewInput, toLlmInput, toSuggestInput } from "../src/prompt.js";
+import { toBeanReviewInput, toLlmInput, toPeriodInput, toSuggestInput } from "../src/prompt.js";
+import type { PeriodBrew, PeriodContext, PeriodFigures } from "../src/periodContext.js";
 import type { BeanReviewContext, ReviewBrew } from "../src/beanReview.js";
 import type { BeanOption, BrewerInfo, BrewerOption, PastAnalysis, RecipeOption, SuggestBatch, SuggestBrew, SuggestContext } from "../src/suggestContext.js";
 
@@ -380,5 +381,61 @@ describe("what a bean review sends (llm-contract.md §9d)", () => {
     const sent = toBeanReviewInput(context, new Set<AiDetail>(["tds", "problems"])).brews as unknown as Obj[];
     expect(sent[0]!.tdsPercent).toBeUndefined();
     expect(sent[0]!.problems).toBeUndefined();
+  });
+});
+
+// A recap's summary (docs/api/llm-contract.md §9f): each brew as the
+// analysis sends one, so only what the period adds is classified here.
+const PERIOD: Record<keyof PeriodContext, Sees> = {
+  kind: "always",
+  period: "always",
+  previous: "always",
+  figures: "always",
+  previousFigures: "always",
+  brews: "always",
+  brewsLeftOut: "always",
+  ratingScale: "always",
+};
+const PERIOD_BREW: Record<Exclude<keyof PeriodBrew, keyof BrewSummary>, Sees> = { day: "always", bean: "always", brewer: "always" };
+const FIGURES: Record<keyof PeriodFigures, Sees> = {
+  brews: "always",
+  daysBrewed: "always",
+  ratedBrews: "always",
+  averageRating: "always",
+  bestRating: "always",
+  coffeeGrams: "always",
+  beans: "always", // by name
+  recipes: "always",
+  brewers: "always",
+};
+// In the input, previous becomes previousPeriod.
+const PERIOD_INPUT_KEY: Partial<Record<keyof PeriodContext, string>> = { previous: "previousPeriod" };
+
+describe("what a recap summary sends (llm-contract.md §9f)", () => {
+  const figures: PeriodFigures = { brews: 70, daysBrewed: 6, ratedBrews: 5, averageRating: 4.1, bestRating: 4.5, coffeeGrams: 105, beans: [{ bean: "Onyx – Monarch", brews: 7 }], recipes: [{ recipe: "House", brews: 7 }], brewers: [{ brewer: "V60", brews: 7 }] };
+  const context: PeriodContext = {
+    kind: "weekly", period: { start: "2026-10-19", end: "2026-10-25" }, previous: { start: "2026-10-12", end: "2026-10-18" }, figures, previousFigures: figures,
+    brews: [{ ...brew, day: "2026-10-20", bean: "Onyx – Monarch", brewer: "V60" }], brewsLeftOut: 69, ratingScale: "0.5-5",
+  };
+  const everythingOff = new Set<AiDetail>(AI_DETAILS.filter((d) => !NOT_FIELDS.includes(d)));
+
+  it("always sends its own fields, whatever is hidden", () => {
+    for (const hidden of [new Set<AiDetail>(), everythingOff]) {
+      const input = toPeriodInput(context, hidden) as Obj;
+      for (const key of Object.keys(PERIOD) as Array<keyof PeriodContext>) expect(input[PERIOD_INPUT_KEY[key] ?? key], key).toBeDefined();
+      for (const key of Object.keys(PERIOD_BREW)) expect((input.brews as Obj[])[0]![key], key).toBeDefined();
+      for (const key of Object.keys(FIGURES)) expect((input.figures as Obj)[key], key).toBeDefined();
+    }
+  });
+
+  it("drops what the workspace hides from each brew, as the analysis does", () => {
+    const brews = (hidden: AiDetail[]) => toPeriodInput(context, new Set(hidden)).brews as unknown as Obj[];
+    expect(brews([])[0]!.tdsPercent).toBeDefined();
+    expect(brews(["tds"])[0]!.tdsPercent).toBeUndefined();
+    expect(brews(["drink"])[0]!.drinkTastingNotes).toBeUndefined();
+    expect(brews(["problems"])[0]!.problems).toBeUndefined();
+    const equipment = (hidden: AiDetail[]) => toPeriodInput(context, new Set(hidden)).equipment as Obj;
+    expect((equipment([]).grinders as Obj).EK43).toMatchObject({ burrType: "flat" });
+    expect((equipment(["grinderDetails"]).grinders as Obj | undefined)?.EK43).toBeUndefined(); // only its name, on the brew
   });
 });
