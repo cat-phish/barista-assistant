@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CHAT_PERIOD_BREWS_MAX, CHAT_PERIOD_BREWS_MIN } from "@barista/shared/chatPeriod";
 import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, LABEL_WEB_CONTEXTS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_CHAT_ATTACHMENTS, MAX_REST_DAYS, MAX_REVIEW_BREWS, MAX_SUGGEST_BREWS, RECAP_AI_MODES, RECAP_PERIOD_CHOICES, REMEMBER_KEYS, REPEAT_KEEPS, RATING_STEPS, ROAST_LEVELS, ROAST_SCALES, ROAST_TYPES, type RoastType, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
 import { AI_DETAILS } from "@barista/shared/aiDetails";
 import { ROLES } from "./auth/membership.js";
@@ -49,6 +50,7 @@ export const workspaceSettingsObject = z
     beanReviewBrewers: z.union([z.literal("all"), z.array(z.uuid()).max(200).refine((ids) => new Set(ids).size === ids.length, "each brewer once")]),
     aiChat: z.boolean(), // docs/api/chat.md §12
     chatMaxAttachments: z.number().int().min(1).max(MAX_CHAT_ATTACHMENTS),
+    chatPeriodMaxBrews: z.number().int().min(CHAT_PERIOD_BREWS_MIN).max(CHAT_PERIOD_BREWS_MAX),
     readLabels: z.boolean(), // docs/api/bean-label.md §4d
     labelWebLookup: z.boolean(),
     labelWebContext: z.enum(LABEL_WEB_CONTEXTS),

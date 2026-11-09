@@ -8,6 +8,7 @@ import { unzipSync, zipSync, type Zippable } from "fflate";
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 import { chartSnapshotSchema } from "./chatChart.js";
+import { periodSpecSchema } from "./chatPeriod.js";
 import { pruneChatsOf, userChatBytes } from "./chatData.js";
 import { proposalsSchema } from "./chatProposal.js";
 import { db } from "./db.js";
@@ -34,7 +35,7 @@ const fileSchema = z.object({
           position: z.number().int(),
           role: z.enum(["user", "assistant"]),
           content: z.string().max(16_000_000),
-          attachments: z.array(z.object({ kind: z.enum(CHAT_ATTACHMENT_KINDS), id: z.string().max(36), label: z.string().max(200), chart: chartSnapshotSchema.optional() })).nullable(),
+          attachments: z.array(z.object({ kind: z.enum(CHAT_ATTACHMENT_KINDS), id: z.string().max(36), label: z.string().max(200), chart: chartSnapshotSchema.optional(), period: periodSpecSchema.optional() })).nullable(),
           proposals: proposalsSchema.nullable().optional(), // since proposals; older files have none
           status: z.enum(["done", "failed"]),
           error: z.string().max(200).nullable(),

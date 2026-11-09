@@ -3,16 +3,17 @@
 import { randomUUID } from "node:crypto";
 import { access, readFile } from "node:fs/promises";
 import { CHAT_EVENT_FIELD, chatReplyKey, type ChatJobPhoto, type ChatStreamEvent } from "@barista/shared/jobs";
-import { effectiveChatLimits, NO_CHAT_LIMITS, type ChatLimits, type ServerChatLimits } from "@barista/shared/aiConfig";
+import { effectiveChatLimits, NO_CHAT_LIMITS, type ChatLimits, type OwnChatLimits, type ServerChatLimits } from "@barista/shared/aiConfig";
 import { aiChatMessages, aiChatPhotos, aiChats, beans, brewLogs, CHAT_ATTACHMENT_KINDS, DEFAULT_WORKSPACE_SETTINGS, MAX_CHAT_ATTACHMENTS, recipes, users, withDefaults, workspaceMembers, workspaces, type AiChat, type AiChatMessage, type ChatAttachment, CHAT_PROPOSAL_STATES, type ChatProposal } from "@barista/shared/schema";
 import { and, asc, count, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import express, { Router, type Request, type Response } from "express";
 import { Redis } from "ioredis";
 import { z } from "zod";
 import { chartSnapshotSchema } from "../chatChart.js";
+import { labelPeriod, periodSpecSchema } from "../chatPeriod.js";
 import { requireAi } from "../aiConfig.js";
 import { buildChatsZip, importChats } from "../chatExport.js";
-import { chatLimitsSchema, deleteAllChatsOf, deleteChats, pruneChatsOf, userChatBytes } from "../chatData.js";
+import { deleteAllChatsOf, ownChatLimitsSchema, deleteChats, pruneChatsOf, userChatBytes } from "../chatData.js";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { config } from "../config.js";
 import { db } from "../db.js";
@@ -55,10 +56,12 @@ const MESSAGE_COLUMNS = {
   createdAt: aiChatMessages.createdAt,
 };
 
-// A brew, bean or recipe by reference; a chart with its snapshot.
+// A brew, bean or recipe by reference; a chart with its snapshot; a period
+// with its filters.
 const attachmentSchema = z.union([
-  z.object({ kind: z.enum(CHAT_ATTACHMENT_KINDS.filter((k) => k !== "chart") as ["brew", "bean", "recipe"]), id: z.string().uuid() }).strict(),
+  z.object({ kind: z.enum(CHAT_ATTACHMENT_KINDS.filter((k) => k !== "chart" && k !== "period") as ["brew", "bean", "recipe"]), id: z.string().uuid() }).strict(),
   z.object({ kind: z.literal("chart"), id: z.string().uuid(), chart: chartSnapshotSchema }).strict(),
+  z.object({ kind: z.literal("period"), id: z.string().uuid(), period: periodSpecSchema }).strict(),
 ]);
 type AttachmentRef = z.infer<typeof attachmentSchema>;
 const sendSchema = z.object({ content: z.string().trim().min(1).max(CHAT_MESSAGE_MAX), attachments: z.array(attachmentSchema).max(MAX_CHAT_ATTACHMENTS).optional(), photoIds: z.array(z.string().uuid()).max(CHAT_PHOTOS_MAX).optional() }).strict();
@@ -190,8 +193,15 @@ async function labelled(workspaceId: string, refs: AttachmentRef[]): Promise<Cha
     ...recipeRows.map((r): [string, string] => [`recipe:${r.id}`, r.name]),
   ]);
   const unique = [...new Map(refs.map((r) => [`${r.kind}:${r.id}`, r])).values()];
+  const periodLabels = new Map(
+    await Promise.all(unique.flatMap((r) => (r.kind === "period" ? [labelPeriod(workspaceId, r.period).then((label): [string, string | null] => [r.id, label])] : []))),
+  );
   const found = unique.flatMap((r): ChatAttachment[] => {
     if (r.kind === "chart") return [{ kind: r.kind, id: r.id, label: r.chart.title, chart: r.chart }];
+    if (r.kind === "period") {
+      const label = periodLabels.get(r.id);
+      return label ? [{ kind: r.kind, id: r.id, label, period: r.period }] : [];
+    }
     const label = labels.get(`${r.kind}:${r.id}`);
     return label ? [{ ...r, label: label.slice(0, 200) }] : [];
   });
@@ -522,14 +532,14 @@ myChatsRouter.use("/chat-settings", requireAuth);
 myChatsRouter.use("/chats", requireAuth);
 
 interface ChatSettings {
-  own: ChatLimits;
+  own: Required<OwnChatLimits>;
   server: ServerChatLimits;
   effective: ChatLimits;
   usedBytes: number;
 }
 async function settingsOf(userId: string): Promise<ChatSettings> {
   const [row] = await db.select({ chatLimits: users.chatLimits }).from(users).where(eq(users.id, userId));
-  const own = row?.chatLimits ?? NO_CHAT_LIMITS;
+  const own = { ...NO_CHAT_LIMITS, periodMaxBrews: null, ...row?.chatLimits };
   const server = await getChatLimits();
   return { own, server, effective: effectiveChatLimits(server, own), usedBytes: await userChatBytes(userId) };
 }
@@ -541,14 +551,16 @@ myChatsRouter.get("/chat-settings", async (req: Request, res: Response<ChatSetti
 const over = (own: number | null, server: number | null): boolean => server !== null && (own === null ? false : own > server);
 myChatsRouter.put("/chat-settings", async (req: Request, res: Response<ChatSettings>) => {
   const userId = authedUserId(req);
-  const body = parseBody(chatLimitsSchema, req, res);
+  const body = parseBody(ownChatLimitsSchema, req, res);
   if (!body) return;
   const server = await getChatLimits();
   if (over(body.maxBytes, server.maxBytes) || over(body.maxDays, server.maxDays)) {
     sendError(res, 400, "That's more than this server allows");
     return;
   }
-  await db.update(users).set({ chatLimits: body }).where(eq(users.id, userId));
+  const [row] = await db.select({ chatLimits: users.chatLimits }).from(users).where(eq(users.id, userId));
+  const periodMaxBrews = body.periodMaxBrews === undefined ? (row?.chatLimits?.periodMaxBrews ?? null) : body.periodMaxBrews;
+  await db.update(users).set({ chatLimits: { maxBytes: body.maxBytes, maxDays: body.maxDays, periodMaxBrews } }).where(eq(users.id, userId));
   await pruneChatsOf(userId, null);
   res.json(await settingsOf(userId));
 });

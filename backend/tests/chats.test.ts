@@ -126,6 +126,48 @@ describe("attachments", () => {
     expect((await owner.agent.post(url(workspaceId)).send({ content: "Hi", attachments: [{ kind: "bean", id: randomUUID(), chart }] })).status).toBe(400);
   });
 
+  describe("a live period", () => {
+    const period = (fields: Record<string, unknown> = {}) => ({ range: "30d", from: null, to: null, beanId: null, recipeId: null, brewerId: null, mine: false, ...fields });
+    const send = (p: unknown, id: string = randomUUID()) => owner.agent.post(url(workspaceId)).send({ content: "How did it go?", attachments: [{ kind: "period", id, period: p }] });
+
+    it("keeps its filters, labelled with their names", async () => {
+      const bean = await newBean(owner, workspaceId, { roasterName: "Onyx", beanName: "Guji" });
+      const id = randomUUID();
+      const res = await send(period({ beanId: bean, mine: true }), id);
+      expect(res.status, JSON.stringify(res.body)).toBe(202);
+      expect(res.body.messages[0].attachments).toEqual([{ kind: "period", id, label: "Brews, last 30 days · Guji · Only mine", period: period({ beanId: bean, mine: true }) }]);
+      const week = await send(period({ range: "week", from: "2026-10-26", to: "2026-11-01" }));
+      expect(week.body.messages[0].attachments[0].label).toBe("Brews, 26 Oct – 1 Nov");
+    });
+
+    it("refuses dates that don't fit the range, and another workspace's bean", async () => {
+      expect((await send(period({ from: "2026-10-01", to: "2026-10-31" }))).status).toBe(400);
+      expect((await send(period({ range: "custom", from: "2026-10-31", to: "2026-10-01" }))).status).toBe(400);
+      expect((await send(period({ range: "month", from: "2026-10-01", to: null }))).status).toBe(400);
+      expect((await send(period({ range: "custom", from: "2026-13-40", to: "2026-13-41" }))).status).toBe(400);
+      expect((await send(period({ range: "fortnight" }))).status).toBe(400);
+      expect((await send({ ...period(), extra: 1 })).status).toBe(400);
+      const other = await newUser();
+      const theirs = await newBean(other, (await newWorkspace(other)).id);
+      expect((await send(period({ beanId: theirs }))).status).toBe(400);
+    });
+
+    it("counts as one attachment toward the limit", async () => {
+      await owner.agent.patch(`/api/workspaces/${workspaceId}/settings`).send({ chatMaxAttachments: 2 }).expect(200);
+      const bean = await newBean(owner, workspaceId);
+      const res = await owner.agent.post(url(workspaceId)).send({ content: "Hi", attachments: [{ kind: "period", id: randomUUID(), period: period() }, { kind: "bean", id: bean }] });
+      expect(res.status).toBe(202);
+    });
+
+    it("has the workspace's cap on its brews: 60 unless changed, 10 to 300", async () => {
+      const settings = `/api/workspaces/${workspaceId}/settings`;
+      expect((await owner.agent.patch(settings).send({ aiChat: true })).body.settings.chatPeriodMaxBrews).toBe(60);
+      expect((await owner.agent.patch(settings).send({ chatPeriodMaxBrews: 300 })).body.settings.chatPeriodMaxBrews).toBe(300);
+      expect((await owner.agent.patch(settings).send({ chatPeriodMaxBrews: 301 })).status).toBe(400);
+      expect((await owner.agent.patch(settings).send({ chatPeriodMaxBrews: 9 })).status).toBe(400);
+    });
+  });
+
   it("takes up to the workspace's limit: 50 unless changed, at most 100", async () => {
     const bean = await newBean(owner, workspaceId);
     const many = (n: number) => Array.from({ length: n }, () => ({ kind: "bean", id: bean }));
@@ -257,6 +299,15 @@ describe("limits and purging", () => {
     const after = await owner.agent.get(settings);
     expect(after.body.own.maxBytes).toBe(2 * MB);
     expect(after.body.effective.maxBytes).toBe(MB);
+  });
+
+  it("keeps a person's own cap on a period's brews, unchanged when not sent", async () => {
+    const settings = "/api/auth/me/chat-settings";
+    expect((await owner.agent.get(settings)).body.own).toEqual({ maxBytes: null, maxDays: null, periodMaxBrews: null });
+    expect((await owner.agent.put(settings).send({ maxBytes: null, maxDays: null, periodMaxBrews: 20 })).body.own.periodMaxBrews).toBe(20);
+    expect((await owner.agent.put(settings).send({ maxBytes: null, maxDays: 30 })).body.own).toEqual({ maxBytes: null, maxDays: 30, periodMaxBrews: 20 });
+    expect((await owner.agent.put(settings).send({ maxBytes: null, maxDays: null, periodMaxBrews: null })).body.own.periodMaxBrews).toBeNull();
+    expect((await owner.agent.put(settings).send({ maxBytes: null, maxDays: null, periodMaxBrews: 301 })).status).toBe(400);
   });
 
   it("deletes older chats when a limit is lowered, and counts what's kept", async () => {
@@ -425,6 +476,18 @@ describe("export and import", () => {
     expect((await owner.agent.get(`${url(other)}/photos/${messages[0]!.photos[0]!.id}`)).status).toBe(200);
 
     expect((await imported(owner, workspaceId, zip)).body).toEqual({ imported: 0, skipped: 1 });
+  });
+
+  it("brings a period along with its filters", async () => {
+    const period = { range: "7d", from: null, to: null, beanId: null, recipeId: null, brewerId: null, mine: true };
+    const res = await owner.agent.post(url(workspaceId)).send({ content: "The week", attachments: [{ kind: "period", id: randomUUID(), period }] });
+    await finish(res.body.messages[1].id, "Steady");
+    const other = (await newWorkspace(owner)).id;
+    await withAi(other);
+    expect((await imported(owner, other, await exported(owner, workspaceId))).body).toEqual({ imported: 1, skipped: 0 });
+    const [chat] = (await owner.agent.get(url(other))).body.chats as Array<{ id: string }>;
+    const { messages } = (await owner.agent.get(`${url(other)}/${chat!.id}`)).body as { messages: Array<{ attachments: unknown[] }> };
+    expect(messages[0]!.attachments).toEqual([expect.objectContaining({ kind: "period", label: "Brews, last 7 days · Only mine", period })]);
   });
 
   it("only holds your own, and leaves out a reply still being written", async () => {

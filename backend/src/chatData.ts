@@ -1,5 +1,6 @@
 // What AI chats keep, and removing it (docs/api/chat.md §12). A chat's rows
 // cascade, but its photo files don't, so every delete goes through here.
+import { CHAT_PERIOD_BREWS_MAX, CHAT_PERIOD_BREWS_MIN } from "@barista/shared/chatPeriod";
 import { effectiveChatLimits, type ChatLimits } from "@barista/shared/aiConfig";
 import { aiChatMessages, aiChatPhotos, aiChats, users } from "@barista/shared/schema";
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
@@ -14,6 +15,12 @@ export const chatLimitsSchema = z
     maxDays: z.number().int().min(1).max(36500).nullable(),
   })
   .strict();
+
+// A person's own (docs/api/chat.md §12): the size and age limits, and how
+// many brews a live Period sends in detail at most (absent: unchanged).
+export const ownChatLimitsSchema = chatLimitsSchema.extend({
+  periodMaxBrews: z.number().int().min(CHAT_PERIOD_BREWS_MIN).max(CHAT_PERIOD_BREWS_MAX).nullable().optional(),
+});
 
 interface ChatSize {
   id: string;
