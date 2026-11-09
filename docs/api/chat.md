@@ -197,9 +197,10 @@ bottom. On a phone the chat list is a drawer behind **Chats**.
   Brews and Charts tabs the filters fold into one line (what they're set to,
   in words) with a **Filters** button, so the list gets the room. Its
   Period list adds Last 7 days, This and Last week, This and Last month to
-  the brew list's. **Attach as live period** adds the filters as one
-  period (above), once for the same filters, listed under the button with
-  a ×.
+  the brew list's. **Attach these filters as a live period**, in the
+  Filters panel under the fields it saves, adds them as one period (above),
+  once for the same filters. Attached periods are listed outside the panel,
+  each with a ×, so they show with it folded.
 - **Token warning** (`lib/chatTokens.ts`): once what a reply would be sent
   (this message's attachments and the chat's earlier ones) comes to about
   20,000 tokens, the picker's footer and the composer say "≈ 40k tokens,
