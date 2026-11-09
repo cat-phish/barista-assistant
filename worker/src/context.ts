@@ -48,11 +48,12 @@ import { localBrewDate } from "./localDate.js";
 import { effectiveRoastAge, type FreezePeriodLike } from "@barista/shared/roastAge";
 
 // The grinder a grind setting refers to, with whatever details are recorded
-// (range and step size let the LLM talk in clicks; speed is for variable-speed
-// grinders). docs/api/llm-contract.md §9.
+// (range and step size let the LLM talk in clicks, the usual adjustment sizes
+// its grind moves; speed is for variable-speed grinders).
+// docs/api/llm-contract.md §9.
 export type GrinderInfo = Pick<
   Grinder,
-  "name" | "adjustment" | "settingMin" | "settingMax" | "stepSize" | "burrType" | "burrSizeMm" | "power" | "variableSpeed" | "rpmMin" | "rpmMax"
+  "name" | "adjustment" | "settingMin" | "settingMax" | "stepSize" | "usualAdjustment" | "burrType" | "burrSizeMm" | "power" | "variableSpeed" | "rpmMin" | "rpmMax"
 >;
 // The water a brew was made with: its name and whatever figures are recorded
 // (mg/L; GH and KH as CaCO3). docs/api/water-profiles.md §3c.
@@ -421,6 +422,7 @@ export function selectBrews() {
         settingMin: grinders.settingMin,
         settingMax: grinders.settingMax,
         stepSize: grinders.stepSize,
+        usualAdjustment: grinders.usualAdjustment,
         burrType: grinders.burrType,
         burrSizeMm: grinders.burrSizeMm,
         power: grinders.power,

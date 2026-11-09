@@ -45,7 +45,7 @@ describe("parseAnalysisMessage", () => {
 });
 
 // A filter brew on a C40 with Third Wave Water.
-const grinder = { name: "C40", adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, burrType: "conical", burrSizeMm: 39, power: "manual", variableSpeed: false, rpmMin: null, rpmMax: null } as BrewSummary["grinder"];
+const grinder = { name: "C40", adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, usualAdjustment: null, burrType: "conical", burrSizeMm: 39, power: "manual", variableSpeed: false, rpmMin: null, rpmMax: null } as BrewSummary["grinder"];
 const water = { name: "TWW", tdsPpm: 120, generalHardnessPpm: 80, alkalinityPpm: 40, calciumPpm: null, magnesiumPpm: null, sodiumPpm: null, potassiumPpm: null, bicarbonatePpm: null, chloridePpm: null, sulfatePpm: null, ph: null } as BrewSummary["water"];
 const summary = (over: Partial<BrewSummary> = {}): BrewSummary => ({
   timestamp: "2026-10-20T08:00:00.000Z",
@@ -333,6 +333,17 @@ describe("what the workspace keeps from the AI (Settings → AI)", () => {
     expect((input.brew as Record<string, unknown>).flavors).toEqual(["Lemon (Fruity › Citrus)", "Papery (Off flavors › Stale)"]);
     expect(promptSections(input)).toContain("flavors");
     expect(promptSections(toLlmInput(context()))).not.toContain("flavors"); // none picked
+  });
+
+  it("sizes grind moves by the grinder's usual adjustment, under Grinder details", () => {
+    const ctx = context({ brew: { grinder: { ...grinder!, usualAdjustment: 2 } } });
+    const input = toLlmInput(ctx);
+    expect((input.equipment as { grinders: Record<string, unknown> }).grinders.C40).toMatchObject({ stepSize: 1, usualAdjustment: 2 });
+    expect(promptSections(input)).toContain("usualAdjustment");
+    expect(promptSections(toLlmInput(context()))).not.toContain("usualAdjustment"); // none recorded
+    const hidden = toLlmInput(ctx, without("grinderDetails"));
+    expect(hidden.equipment).not.toHaveProperty("grinders");
+    expect(promptSections(hidden)).not.toContain("usualAdjustment");
   });
 
   it("drops brew, bean, recipe and equipment details", () => {

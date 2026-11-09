@@ -300,6 +300,7 @@ export async function loadSuggestContext(r: SuggestRequest, options: { ratedOnly
             settingMin: grinders.settingMin,
             settingMax: grinders.settingMax,
             stepSize: grinders.stepSize,
+            usualAdjustment: grinders.usualAdjustment,
             burrType: grinders.burrType,
             burrSizeMm: grinders.burrSizeMm,
             power: grinders.power,

@@ -2663,3 +2663,29 @@ just above). The backlog's later items moved up one.
   recipe as before.
 - **Backups:** the copy goes in every file and is checked against
   `RecipeCopy`. An older file restores without copies.
+
+
+## Usual grind adjustment per grinder (built)
+
+Branch `grinder-usual-adjustment`; was backlog 5. Per-method or learned
+values are backlog 5 now.
+
+- **Why:** the step size is the smallest move on the dial, so the AI talked
+  in single clicks, while people dial in by a habitual amount (2 clicks on a
+  Comandante, half a number on an Encore), and one click is often too small
+  to taste.
+- **Field:** `grinders.usual_adjustment` (migration 0110), optional, in dial
+  units like the setting (so it works without a step size, stepped or
+  stepless). On the grinder form under the setting range, and in the
+  grinder summary ("0–40, 1 per step, usually 2").
+- **AI:** sent with the grinder in `equipment` for the analysis and Suggest
+  parameters. A new `usualAdjustment` prompt section (editable) appears when
+  a grinder has one: size a grind change by it, more for a big miss, less
+  (down to one step) when the cup is nearly there. It's a hint, not a rule:
+  the grind delta stays the `finer`/`much_finer` enum, so it shapes the
+  wording and Suggest's `grindSetting`. Prompt version `2026-11-a`.
+- **Hiding it:** under the existing Grinder details switch (Settings → AI),
+  with the range and step size; no new switch.
+- **Decided against (for now):** a number per method, and learning it from
+  history (backlog 5).
+

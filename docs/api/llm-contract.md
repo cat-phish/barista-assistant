@@ -61,9 +61,10 @@ queue:
      is the brew's **local** date: its `timestamp` shifted by its
      `utcOffsetMinutes` (§6), else in the `BREW_TIMEZONE` zone, else UTC.
    - The brew includes its `grinder` (or `null`): name plus whatever details
-     are recorded (adjustment, setting range, step size, burr type/size,
-     power, variable speed and its RPM range), so the LLM knows which grinder
-     a grind setting refers to and can talk in steps. It also has `grindRpm` (or
+     are recorded (adjustment, setting range, step size, usual adjustment,
+     burr type/size, power, variable speed and its RPM range), so the LLM
+     knows which grinder a grind setting refers to, can talk in steps, and
+     sizes a grind change by the barista's usual move. It also has `grindRpm` (or
      `null`): the speed on a variable-speed grinder, part of the grind, and
      `beanWeightInGrams`, `groundWeightOutGrams` and
      `grinderRetentionGrams` (in − out, or `null` unless both were weighed).
@@ -197,6 +198,7 @@ queue:
    | `problems` | a brew lists problems | the clearest clues, explained first |
    | `flavors` | a brew has wheel flavors | the wheel can be the workspace's own; a place reads broadest group first and a flavor belongs to every group in it; go by meaning, not group names; read with the tasting notes; a broader pick is less specific, not weaker; sour, fermented or green picks often mean under-extraction, harsh, ashy or bitter ones over-extraction or the roast, off flavors (papery, musty) the beans or filter; compare with `flavorProfile` |
    | `rpm` | a brew has `grindRpm` | speed is part of the grind |
+   | `usualAdjustment` | a grinder in `equipment` has `usualAdjustment` | size a grind change by it: about that for a clear miss, more for a big one, less (down to one step) when nearly there |
    | `retention` | a brew has `grinderRetentionGrams` | retention and stale grounds |
    | `espresso` | an `espresso` method | flow, windows, machine, step size; dose and shot weight as levers, one at a time |
    | `cold` | a style brews like `cold_brew`, `kyoto_drip` or `rapid_cold` | steep windows, dilution, concentrate TDS, levers |
@@ -312,7 +314,8 @@ and the prompt sections about them drop out with them (step 3). Keys
   `variety` (`varieties`, `species`),
   `decafBlend` (`decaf`, `blendType`), `batchNumber`.
 - **Recipe and equipment:** `recipeSteps` (with `stepTimeScaling` and each step's `scalesWithBatch`), `grindStartingPoints`,
-  `grinderDetails` (everything but the grinder's name), `machine`.
+  `grinderDetails` (everything but the grinder's name, usual adjustment
+  included), `machine`.
 - **History:** `unratedHistory` leaves earlier brews without a rating out
   of what "Suggest parameters" sends (an analysis sends no earlier brews);
   `analyzeUnrated` stops unrated brews being analyzed:

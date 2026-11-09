@@ -52,13 +52,16 @@ export const PROFILE_CONTROLS: Record<ProfileControl, { label: string; hint: str
   programmable: { label: 'Programmable', hint: 'Saved profiles' },
 };
 
-// "Stepped · 0–40, 1 per step · Conical 39 mm · Hand grinder"
+// "Stepped · 0–40, 1 per step, usually 2 · Conical 39 mm · Hand grinder"
 export function grinderSummary(g: Grinder): string {
   const parts: string[] = [];
   if (g.adjustment) parts.push(g.adjustment === 'stepped' ? 'Stepped' : 'Stepless');
-  if (g.settingMin !== null && g.settingMax !== null) {
-    parts.push(`${formatGrams(g.settingMin)}–${formatGrams(g.settingMax)}${g.stepSize !== null ? `, ${formatGrams(g.stepSize)} per step` : ''}`);
-  } else if (g.stepSize !== null) parts.push(`${formatGrams(g.stepSize)} per step`);
+  const dial = [
+    g.settingMin !== null && g.settingMax !== null ? `${formatGrams(g.settingMin)}–${formatGrams(g.settingMax)}` : '',
+    g.stepSize !== null ? `${formatGrams(g.stepSize)} per step` : '',
+    g.usualAdjustment !== null ? `usually ${formatGrams(g.usualAdjustment)}` : '',
+  ].filter(Boolean);
+  if (dial.length) parts.push(dial.join(', '));
   if (g.burrType || g.burrSizeMm !== null) parts.push([g.burrType ? BURR_TYPES[g.burrType] : 'Burrs', g.burrSizeMm !== null ? `${g.burrSizeMm} mm` : ''].filter(Boolean).join(' '));
   if (g.power) parts.push(GRINDER_POWER[g.power]);
   if (g.variableSpeed) parts.push(g.rpmMin !== null && g.rpmMax !== null ? `Variable speed ${g.rpmMin}–${g.rpmMax} RPM` : 'Variable speed');
@@ -83,6 +86,7 @@ export interface GrinderForm {
   settingMin: string;
   settingMax: string;
   stepSize: string;
+  usualAdjustment: string;
   burrType: BurrType | '';
   burrSizeMm: string;
   power: GrinderPower | '';
@@ -90,7 +94,7 @@ export interface GrinderForm {
   rpmMin: string;
   rpmMax: string;
 }
-export type GrinderFormErrors = Partial<Record<'name' | 'range' | 'stepSize' | 'burrSizeMm' | 'rpm', string>>;
+export type GrinderFormErrors = Partial<Record<'name' | 'range' | 'stepSize' | 'usualAdjustment' | 'burrSizeMm' | 'rpm', string>>;
 
 export function grinderForm(g?: Grinder): GrinderForm {
   const num = (n: number | null | undefined) => (n == null ? '' : formatGrams(n));
@@ -101,6 +105,7 @@ export function grinderForm(g?: Grinder): GrinderForm {
     settingMin: num(g?.settingMin),
     settingMax: num(g?.settingMax),
     stepSize: num(g?.stepSize),
+    usualAdjustment: num(g?.usualAdjustment),
     burrType: g?.burrType ?? '',
     burrSizeMm: g?.burrSizeMm == null ? '' : String(g.burrSizeMm),
     power: g?.power ?? '',
@@ -118,12 +123,14 @@ export function parseGrinderForm(f: GrinderForm): { errors: GrinderFormErrors; v
   const min = optional(f.settingMin, setting);
   const max = optional(f.settingMax, setting);
   const step = optional(f.stepSize, { scale: 2, min: 0, max: 1000, exclusiveMin: true, exclusiveMax: true });
+  const usual = optional(f.usualAdjustment, { scale: 2, min: 0, max: 10000, exclusiveMin: true, exclusiveMax: true });
   const burr = optional(f.burrSizeMm, { scale: 0, min: 10, max: 200 });
   if (min && !min.ok) errors.range = `From: ${min.error}`;
   else if (max && !max.ok) errors.range = `To: ${max.error}`;
   else if (!min !== !max) errors.range = 'Enter both ends of the range, or neither';
   else if (min?.ok && max?.ok && min.value >= max.value) errors.range = '"To" must be more than "from"';
   if (step && !step.ok) errors.stepSize = step.error;
+  if (usual && !usual.ok) errors.usualAdjustment = usual.error;
   if (burr && !burr.ok) errors.burrSizeMm = burr.error;
   // The speed range only counts for a variable-speed grinder.
   const rpm = { scale: 0, min: 50, max: 5000 };
@@ -143,6 +150,7 @@ export function parseGrinderForm(f: GrinderForm): { errors: GrinderFormErrors; v
       settingMin: min?.ok ? min.value : null,
       settingMax: max?.ok ? max.value : null,
       stepSize: step?.ok ? step.value : null,
+      usualAdjustment: usual?.ok ? usual.value : null,
       burrType: f.burrType || null,
       burrSizeMm: burr?.ok ? burr.value : null,
       power: f.power || null,

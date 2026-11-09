@@ -295,6 +295,7 @@ export interface GrinderDetails {
   settingMin: number | null; // dial range: both or neither
   settingMax: number | null;
   stepSize: number | null;
+  usualAdjustment: number | null; // how far it's usually moved when dialing in (dial units)
   burrType: BurrType | null;
   burrSizeMm: number | null;
   power: GrinderPower | null;

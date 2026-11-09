@@ -298,7 +298,7 @@ describe("processBrewAnalysis", () => {
   it("tells the LLM which grinder each brew used, with its details (archived grinders included)", async () => {
     llm.mockResolvedValue(ANALYSIS);
     const c40 = randomUUID();
-    await db.insert(grinders).values({ id: c40, workspaceId, name: "Comandante C40", adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, archivedAt: new Date() });
+    await db.insert(grinders).values({ id: c40, workspaceId, name: "Comandante C40", adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, usualAdjustment: 2, archivedAt: new Date() });
     await db.update(brewLogs).set({ grinderId: c40, actualGrindSetting: 20 }).where(eq(brewLogs.id, logIds.day8!));
     await db.update(brewLogs).set({ grinderId: c40, actualGrindSetting: 22 }).where(eq(brewLogs.id, logIds.day6!));
     const recipeId = (await db.select({ id: recipes.id }).from(recipes))[0]!.id;
@@ -307,7 +307,7 @@ describe("processBrewAnalysis", () => {
     const context = llm.mock.calls[0]![1] as BrewContext;
     expect(context.brew).toMatchObject({ actualGrindSetting: 20, machine: null });
     expect(context.brew.grinder).toEqual({
-      name: "Comandante C40", adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, burrType: null, burrSizeMm: null, power: null,
+      name: "Comandante C40", adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, usualAdjustment: 2, burrType: null, burrSizeMm: null, power: null,
       variableSpeed: false, rpmMin: null, rpmMax: null,
     });
     expect(context.brew.grindRpm).toBeNull();

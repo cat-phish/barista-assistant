@@ -241,6 +241,16 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
       "more fines, a lower one gives a clearer, more even cup; compare grind settings only at similar speeds.",
   },
   {
+    key: "usualAdjustment",
+    label: "Usual grind adjustment",
+    prompts: ["analysis", "suggest"],
+    locked: false,
+    text:
+      "A grinder's usualAdjustment (in equipment) is how far the barista usually moves its setting while dialing in, " +
+      "in the dial's units; stepSize is the smallest move it allows. Use it to size a grind change: about that amount " +
+      "for a clear miss, more for a big one, and less, down to one step, when the cup is nearly there.",
+  },
+  {
     key: "retention",
     label: "Grinder retention",
     prompts: ["analysis", "suggest"],

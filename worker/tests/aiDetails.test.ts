@@ -138,6 +138,7 @@ const GRINDER: Record<keyof GrinderInfo, Sees> = {
   settingMin: "grinderDetails",
   settingMax: "grinderDetails",
   stepSize: "grinderDetails",
+  usualAdjustment: "grinderDetails",
   burrType: "grinderDetails",
   burrSizeMm: "grinderDetails",
   power: "grinderDetails",
@@ -169,7 +170,7 @@ const DRINK: Record<keyof DrinkInfo, Sees> = { name: "drink", servingSize: "drin
 const NOT_FIELDS: AiDetail[] = ["unratedHistory", "analyzeUnrated"];
 
 // Every field recorded, so nothing is dropped as empty.
-const grinder: GrinderInfo = { name: "EK43", adjustment: "stepless", settingMin: 0, settingMax: 16, stepSize: 0.5, burrType: "flat", burrSizeMm: 98, power: "electric", variableSpeed: true, rpmMin: 300, rpmMax: 1500 } as GrinderInfo;
+const grinder: GrinderInfo = { name: "EK43", adjustment: "stepless", settingMin: 0, settingMax: 16, stepSize: 0.5, usualAdjustment: 1, burrType: "flat", burrSizeMm: 98, power: "electric", variableSpeed: true, rpmMin: 300, rpmMax: 1500 } as GrinderInfo;
 const water: WaterInfo = { name: "TWW", tdsPpm: 120, generalHardnessPpm: 80, alkalinityPpm: 40, calciumPpm: 30, magnesiumPpm: 10, sodiumPpm: 5, potassiumPpm: 2, bicarbonatePpm: 48, chloridePpm: 7, sulfatePpm: 9, ph: 7.2 };
 const brew: BrewSummary = {
   timestamp: "2026-10-20T08:00:00.000Z", roastAgeDays: 10, daysFrozenBeforeBrew: 2, recipeName: "House", recipeStyle: { name: "Cold brew", brewsLike: "cold_brew" }, methodKind: "filter",

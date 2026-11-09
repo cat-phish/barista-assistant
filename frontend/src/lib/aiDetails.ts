@@ -42,7 +42,7 @@ export const AI_DETAIL_LIST: AiDetailInfo[] = [
   d('bean', 'batchNumber', 'Batch number', 'Home-roast batches'),
   d('recipe', 'recipeSteps', 'Recipe steps', 'Pours, waits and their targets'),
   d('recipe', 'grindStartingPoints', 'Recipe grind starting points', ''),
-  d('recipe', 'grinderDetails', 'Grinder details', 'Burrs, range, step size…; the grinder’s name is still sent'),
+  d('recipe', 'grinderDetails', 'Grinder details', 'Burrs, range, step size, usual adjustment…; the grinder’s name is still sent'),
   d('recipe', 'machine', 'Espresso machine', 'Pre-infusion, flow and pressure control'),
   d('history', 'unratedHistory', 'Unrated earlier brews', 'Off: Suggest parameters only sends brews with a rating'),
   d('history', 'analyzeUnrated', 'Analyze unrated brews', 'Off: a brew needs a rating before it can be analyzed'),
