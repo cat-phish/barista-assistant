@@ -436,6 +436,10 @@ export const brewers = mysqlTable(
     // the hiss); negative adds them, for tapping early. Null = none. A recipe
     // can set its own (docs/api/brewers.md §3).
     finishOffsetSec: int("finish_offset_sec"),
+    // Water the spent grounds keep, g per g of coffee, for the yield estimate:
+    // a pressed brewer (OXO, AeroPress) keeps about 1, a drip cone 2+. Null =
+    // learned from measured brews with it (docs/api/brewers.md §3).
+    groundsRetention: decimal("grounds_retention", { precision: 3, scale: 2, mode: "number" }),
     archivedAt: timestamp("archived_at"), // null = active
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },

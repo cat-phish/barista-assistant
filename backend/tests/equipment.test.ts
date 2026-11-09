@@ -50,6 +50,7 @@ describe("brewers", () => {
       flowControl: "none",
       pressureControl: "none",
       finishOffsetSec: null,
+      groundsRetention: null,
       archivedAt: null,
       createdAt: expect.any(String),
     });
@@ -79,6 +80,21 @@ describe("brewers", () => {
     for (const bad of [61, -61, 2.5, "4"]) {
       expect((await owner.agent.post(base).send({ name: `Bad ${bad}`, finishOffsetSec: bad })).status, JSON.stringify(bad)).toBe(400);
       expect((await owner.agent.patch(url).send({ finishOffsetSec: bad })).status, JSON.stringify(bad)).toBe(400);
+    }
+  });
+
+  it("grounds retention: optional g/g 0.3-3.5, 2 decimals, nullable (docs/api/brewers.md §3)", async () => {
+    const { owner, ws } = await setup();
+    const base = `/api/workspaces/${ws.id}/brewers`;
+    const oxo = await owner.agent.post(base).send({ name: "OXO", groundsRetention: 1.1 });
+    expect(oxo.status).toBe(201);
+    expect(oxo.body.brewer.groundsRetention).toBe(1.1);
+    const url = `${base}/${oxo.body.brewer.id}`;
+    expect((await owner.agent.patch(url).send({ groundsRetention: 2.25 })).body.brewer.groundsRetention).toBe(2.25);
+    expect((await owner.agent.patch(url).send({ groundsRetention: null })).body.brewer.groundsRetention).toBeNull();
+    for (const bad of [0.2, 3.6, 1.125, "1"]) {
+      expect((await owner.agent.post(base).send({ name: `Bad ${bad}`, groundsRetention: bad })).status, JSON.stringify(bad)).toBe(400);
+      expect((await owner.agent.patch(url).send({ groundsRetention: bad })).status, JSON.stringify(bad)).toBe(400);
     }
   });
 

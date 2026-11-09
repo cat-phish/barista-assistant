@@ -77,7 +77,8 @@ import { useAiAvailable } from '../composables/useAiAvailable';
 import { useWorkspaceStore } from '../stores/workspace';
 import { useChatProposalStore } from '../stores/chatProposal';
 import type { ChatBrewProposal } from '../api/chats';
-import { brewRetention, factorText, linkRatio, ratioText as formatRatio, ratioWater, ROAST_LEVELS, SCALE_SLIDER, scaleBatch, scaleShot, scaleSteps, scaleStepTimes, shiftStepTemps, shiftWindow, sliderDose, sliderPosition, waterShare, type MeasuredBrew, type ScaleField } from '../lib/scale';
+import { brewerRetention, brewRetention, estimateYield, factorText, linkRatio, ratioText as formatRatio, ratioWater, ROAST_LEVELS, SCALE_SLIDER, scaleBatch, scaleShot, scaleSteps, scaleStepTimes, shiftStepTemps, shiftWindow, sliderDose, sliderPosition, waterShare, yieldMismatch, type MeasuredBrew, type ScaleField } from '../lib/scale';
+import { loadBrewerMeasured, toMeasured } from '../lib/brewerRetention';
 import { formatTemp, formatTempChange, parseTemp, tempText, TEMPERATURE_LABELS, VOLUME_LABELS, volumeUnits } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import TimeInput from '../components/TimeInput.vue';
@@ -426,14 +427,7 @@ async function loadMeasured(): Promise<void> {
   if (ws && beanId.value && recipeId.value) {
     try {
       const { brewLogs } = await brewLogsApi.list(ws, { beanId: beanId.value, limit: 50 });
-      list = brewLogs
-        .filter((l) => l.recipe?.id === recipeId.value)
-        .flatMap((l) =>
-          l.actualWaterGrams !== null && l.actualYieldGrams !== null
-            ? [{ actualDoseGrams: l.actualDoseGrams, actualWaterGrams: l.actualWaterGrams, actualIceGrams: l.actualIceGrams, actualYieldGrams: l.actualYieldGrams }]
-            : [],
-        )
-        .slice(0, 10);
+      list = toMeasured(brewLogs.filter((l) => l.recipe?.id === recipeId.value)).slice(0, 10);
     } catch {
       list = []; // the estimate falls back to roast level
     }
@@ -442,7 +436,39 @@ async function loadMeasured(): Promise<void> {
 }
 watch([beanId, recipeId], () => void loadMeasured());
 
-const retention = computed(() => brewRetention({ roastLevel: bean.value?.roastLevel ?? null, recipeRoastLevel: recipeRoastLevel.value, recipe: filterRecipe.value, measured: measured.value }));
+// Then the brewer's own figure (docs/api/brewers.md §3): typed, or learned
+// from its measured brews with any bean or recipe.
+const retentionBrewer = computed(() => (filterRecipe.value ? (brewers.value.find((b) => b.id === recipe.value?.brewer.id) ?? null) : null));
+const brewerMeasured = ref<MeasuredBrew[]>([]);
+let brewerRequest = 0;
+watch(
+  () => retentionBrewer.value?.id ?? null,
+  async (id) => {
+    const ws = workspaces.current?.id;
+    const request = ++brewerRequest;
+    const list = ws && id ? await loadBrewerMeasured(ws, id) : [];
+    if (request === brewerRequest) brewerMeasured.value = list;
+  },
+  { immediate: true },
+);
+const brewerInput = computed(() => (retentionBrewer.value ? { typed: retentionBrewer.value.groundsRetention, measured: brewerMeasured.value } : null));
+
+// The recipe's yield is the estimate, but the brewer's brews point well away
+// from it (a pressed OXO keeps far less than the roast default the recipe was
+// estimated with): suggest updating the recipe, with its numbers as written.
+const recipeYieldHint = computed(() => {
+  const r = filterRecipe.value;
+  const id = recipe.value?.id;
+  const b = brewerRetention(brewerInput.value);
+  if (retention.value.source.kind !== 'recipe' || !r || !id || r.expectedYieldGrams === null || !b) return null;
+  const brewerYield = estimateYield(r.targetDoseGrams, ratioWater(r.targetWaterGrams, r.targetIceGrams), b.retention);
+  if (!yieldMismatch(r.expectedYieldGrams, brewerYield)) return null;
+  return { more: brewerYield > r.expectedYieldGrams, brewerYield, recipeYield: r.expectedYieldGrams, recipeId: id };
+});
+
+const retention = computed(() =>
+  brewRetention({ roastLevel: bean.value?.roastLevel ?? null, recipeRoastLevel: recipeRoastLevel.value, recipe: filterRecipe.value, measured: measured.value, brewer: brewerInput.value }),
+);
 const customRatio = computed(() => ratio.value?.value);
 const batch = computed(() => {
   if (!filterRecipe.value) return null;
@@ -512,6 +538,9 @@ const scaled = computed(() => {
 const retentionNote = computed(() => {
   const s = retention.value.source;
   if (s.kind === 'measured') return `from ${s.count === 1 ? 'your measured brew' : `${s.count} of your measured brews`} of this bean with this recipe`;
+  const brewerName = retentionBrewer.value?.name ?? 'this brewer';
+  if (s.kind === 'brewer') return `from ${s.count === 1 ? 'your measured brew' : `${s.count} of your measured brews`} with the ${brewerName}`;
+  if (s.kind === 'brewerTyped') return `from the ${brewerName}'s grounds retention`;
   const roast = bean.value?.roastLevel
     ? `a ${ROAST_LEVELS[s.roastLevel].label.toLowerCase()} roast`
     : "a light roast (set the bean's roast level for a closer estimate)";
@@ -1576,6 +1605,11 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             </template>
           </p>
           <button v-if="scaled" class="btn-link small batch-reset" type="button" @click="resetBatch">Reset to recipe</button>
+          <p v-if="recipeYieldHint" class="note small">
+            Your {{ retentionBrewer?.name }} brews yield {{ recipeYieldHint.more ? 'more' : 'less' }} than this recipe expects
+            (≈{{ formatGrams(recipeYieldHint.brewerYield) }} g against {{ formatGrams(recipeYieldHint.recipeYield) }} g).
+            <RouterLink v-if="workspaces.canEdit" :to="{ name: 'recipe-edit', params: { id: recipeYieldHint.recipeId } }">Update the recipe?</RouterLink>
+          </p>
           <p v-if="grindNote" class="note small">{{ grindNote }}</p>
         </div>
         <div v-if="show('brew.temp') || show('brew.grind')" class="form-row">

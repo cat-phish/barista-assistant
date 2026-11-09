@@ -1,0 +1,1 @@
+ALTER TABLE `brewers` ADD `grounds_retention` decimal(3,2);

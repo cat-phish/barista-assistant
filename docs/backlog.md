@@ -25,14 +25,14 @@ and fix the references.
 **Contents**
 - A. Settings & configuration: 1–3
 - B. Brewing & logging: 4–7
-- C. Recipes: 8
-- D. AI suggestions: 9–12
-- E. Insights: 13–19
-- F. Bar & menu: 20–25
-- G. Home roasting: 26–35
-- H. Accounts: 36–37
-- I. Deployment & the app: 38–39
-- J. Backups: 40
+- C. Recipes: none
+- D. AI suggestions: 8–11
+- E. Insights: 12–18
+- F. Bar & menu: 19–24
+- G. Home roasting: 25–34
+- H. Accounts: 35–36
+- I. Deployment & the app: 37–38
+- J. Backups: 39
 
 ---
 
@@ -121,7 +121,7 @@ Where the app's choices live, and what you can switch on, off or take out.
   - Move the ones that are wrong, with a data migration, and make Settings
     say which kind each one is.
 - **Size:** S to review; each move S–M.
-- **Depends on:** nothing; do it before 40, since where a setting lives
+- **Depends on:** nothing; do it before 39, since where a setting lives
   decides how it's backed up, and the audit is the same work.
 - **Open questions:**
   - Is "workspace default, person overrides" worth having, or is it one or
@@ -233,30 +233,7 @@ Recording a brew: what's measured, and how fast it is to log.
 
 Building recipes: their steps, timings, target window and yield.
 
-### 8. Review the yield estimates per brewer
-
-- **Status:** idea
-- **Why:** the expected yield looks off between brewers: an OXO brewer
-  shows a much higher yield than a pour over. The estimate is water minus
-  retention × dose (`estimateYield` in `frontend/src/lib/scale.ts`), with
-  the retention from the roast level, or from the recipe's expected yield,
-  or the median of your measured brews of that bean with that recipe
-  (`brewRetention`). The brewer itself never comes into it, but how much
-  water stays in the grounds and the brewer differs between a drip-through
-  OXO, a cone and an immersion brewer.
-- **Approach:**
-  - Check the estimates against real OXO and pour-over brews (measured
-    yields), and find which one is wrong.
-  - Consider a retention per method or per brewer (a default per method,
-    learned from your measured brews with that brewer), used before the
-    roast-level default.
-  - Show where the estimate came from, as the recipe form does now.
-- **Size:** S–M
-- **Depends on:** nothing.
-- **Open questions:**
-  - Per method (all pour overs alike) or per brewer?
-  - Is the OXO estimate too high, or the pour-over one too low?
-  - Should measured brews with the brewer count across recipes and beans?
+Nothing planned right now.
 
 ---
 
@@ -264,7 +241,7 @@ Building recipes: their steps, timings, target window and yield.
 
 What the analysis worker sends to the LLM and what comes back.
 
-### 9. Build bar items from plain text (AI)
+### 8. Build bar items from plain text (AI)
 
 - **Status:** idea
 - **Why:** recipes, drinks and other bar items often come as text: a
@@ -292,7 +269,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Units and step types the text describes loosely ("pour to about 100 ml,
     wait 30 s"): how sure must the AI be before filling a field?
 
-### 10. Review and test the espresso dose and shot weight suggestions
+### 9. Review and test the espresso dose and shot weight suggestions
 
 - **Status:** planned
 - **Why:** dose and shot weight changes for espresso (roadmap: espresso dose
@@ -328,7 +305,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should the brew page say when it changed the shot because of the
     suggestion (like it does for the grind)?
 
-### 11. Review how flavor wheel inputs reach the AI
+### 10. Review how flavor wheel inputs reach the AI
 
 - **Status:** on hold until the real brews are imported (see Depends on);
   the eval can already run with and without picks
@@ -378,7 +355,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should the picks be compared with `flavorProfile` more directly, as a
     "how close to the roaster's notes" reading?
 
-### 12. Test whether the usual grind adjustment helps
+### 11. Test whether the usual grind adjustment helps
 
 - **Status:** idea
 - **Why:** grinders now have a **Usual adjustment** (roadmap: usual grind
@@ -398,7 +375,7 @@ What the analysis worker sends to the LLM and what comes back.
   `PROMPT_VERSION`).
 - **Size:** S
 - **Depends on:** rated brews on grinders with a usual adjustment set; like
-  12, the real ones are on the hosted instance, so import them first.
+  10, the real ones are on the hosted instance, so import them first.
 - **Open questions:**
   - Does the AI still go down to one step when a brew is close, or does it
     always move the usual amount?
@@ -410,7 +387,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## E. Insights
 
-### 13. Save insights for the AI
+### 12. Save insights for the AI
 
 - **Status:** idea
 - **Why:** the Insights page shows patterns (this bean rates higher past
@@ -443,7 +420,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Does it go in backups (CLAUDE.md rule 8)? It's a new table, so yes or
     a deliberate no.
 
-### 14. Cold brew batches skew the caffeine and volume figures
+### 13. Cold brew batches skew the caffeine and volume figures
 
 - **Status:** idea
 - **Why:** a brew log is one batch, and it doesn't say how much of it was
@@ -459,8 +436,13 @@ What the analysis worker sends to the LLM and what comes back.
   - Or spread a batch over the days it was drunk.
   - Or leave batch styles out of the per-brew average, or say on the tile
     that batches count in full.
+  - Unmeasured brews' volume is estimated with the roast-level retention
+    (`brewVolumeMl` in `frontend/src/lib/stats.ts`), not the brewer's
+    grounds retention the brew page uses (roadmap: yield estimates per
+    brewer), so pressed brews (OXO, AeroPress) count about 1 g of water per
+    g of coffee short. Use the brewer's figure there too.
 - **Size:** S to review and label; M if it records what was drunk.
-- **Depends on:** nothing; 20 (a finished cold brew as stock, each glass
+- **Depends on:** nothing; 19 (a finished cold brew as stock, each glass
   served taken from it) could answer it.
 - **Open questions:**
   - Is a rough split (servings per batch) enough, or does each glass need
@@ -468,7 +450,7 @@ What the analysis worker sends to the LLM and what comes back.
   - What counts as a batch: cold styles only, or any brew over a set dose?
   - Whose intake is it when a batch is shared with other people?
 
-### 15. Test AI chat fully in the browser
+### 14. Test AI chat fully in the browser
 
 - **Status:** planned
 - **Why:** AI chat is built (roadmap, "AI chat in Insights") and covered by
@@ -490,7 +472,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Depends on:** nothing.
 - **Open questions:** none.
 
-### 16. Review and refine parameter and recipe suggestions
+### 15. Review and refine parameter and recipe suggestions
 
 - **Status:** idea
 - **Why:** the AI now suggests brew values in two places: **Suggest
@@ -513,7 +495,7 @@ What the analysis worker sends to the LLM and what comes back.
     both providers before and after; bump `PROMPT_VERSION` for the
     analysis prompts.
 - **Size:** M
-- **Depends on:** nothing; pairs with 10 (espresso dose and shot weight).
+- **Depends on:** nothing; pairs with 9 (espresso dose and shot weight).
 - **Open questions:**
   - Should a "next brew" proposal also set the dose and water, not only
     grind, temperature and ratio?
@@ -521,7 +503,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should the recipe form point out where a proposal differs from the
     saved recipe?
 
-### 17. Ask in chat from a chart card
+### 16. Ask in chat from a chart card
 
 - **Status:** planned
 - **Why:** charts can be attached from the chat's picker (Charts tab), but
@@ -533,11 +515,11 @@ What the analysis worker sends to the LLM and what comes back.
   route and starts with it attached.
 - **Size:** S
 - **Depends on:** nothing (attaching charts is built). Shares its snapshot
-  shape with 13.
+  shape with 12.
 - **Open questions:**
   - Should it go into the chat in use, or always start a new one?
 
-### 18. A live period attachment in chat
+### 17. A live period attachment in chat
 
 - **Status:** idea
 - **Why:** attaching "everything from last week" is done in the picker's
@@ -549,7 +531,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Approach:** workshop it first: what a chat about a stretch of brewing
   should do (summarize the week, compare it with the one before, spot what
   changed), and whether that's an attachment, a kind of chat, or a report
-  (pairs with 19). The sketch so far is a **Period** attachment: the
+  (pairs with 18). The sketch so far is a **Period** attachment: the
   picker's Brews filters
   (period, bean, recipe, brewer, only mine) saved as one item, shown as one
   chip ("Brews, 26 Oct – 1 Nov"). The worker runs the query again every
@@ -566,7 +548,7 @@ What the analysis worker sends to the LLM and what comes back.
   - What does the AI do with a period beyond reading its brews: trends,
     comparison with the previous period, the bean or recipe that did best?
 
-### 19. Weekly recaps
+### 18. Weekly recaps
 
 - **Status:** idea
 - **Why:** Insights shows patterns when you go looking; nothing tells you
@@ -580,7 +562,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Optionally an AI-written summary ("your V60 brews improved after going
     two clicks finer"), switchable like the other AI features.
 - **Size:** M; L with the AI summary.
-- **Depends on:** nothing; 13 (saved insights) and 18 (a live period in
+- **Depends on:** nothing; 12 (saved insights) and 17 (a live period in
   chat) could feed it.
 - **Open questions:**
   - Per person, or per workspace (a bar's week)?
@@ -592,7 +574,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## F. Bar & menu
 
-### 20. Ingredient prep and stock
+### 19. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -609,7 +591,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should a finished cold brew batch (roadmap: cold brew refinements) be
     stock the same way, with each glass served taken from it and rated?
 
-### 21. Drink categories: what else they could do
+### 20. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -624,7 +606,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should a category also order the drinks inside it on the brew page
     (today they're sorted by name)?
 
-### 22. The guest menu as its own app
+### 21. The guest menu as its own app
 
 - **Status:** idea
 - **Why:** a regular could add the bar's menu to their home screen and
@@ -637,9 +619,9 @@ What the analysis worker sends to the LLM and what comes back.
 - **Depends on:** nothing.
 - **Open questions:** does the journal's own manifest and service worker
   get in the way (one origin, one scope `/`), and is it worth it before
-  testing the installed app on phones (item 38)?
+  testing the installed app on phones (item 37)?
 
-### 23. Menu entries without a drink or brewer
+### 22. Menu entries without a drink or brewer
 
 - **Status:** idea
 - **Why:** a menu item is a drink, a brewer or the beans block
@@ -658,7 +640,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Can it later be turned into a real drink, keeping its place and price?
   - Check backups and the list import carry the new type.
 
-### 24. Upkeep tasks and reminders
+### 23. Upkeep tasks and reminders
 
 - **Status:** idea
 - **Why:** upkeep that comes round again is easy to forget: descaling the
@@ -674,12 +656,12 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:**
   - By time only, or also by use (every 200 shots, every 10 kg ground)?
   - Attach notes and tasks to a piece of equipment (the grinder, the
-    espresso machine) and show them on its page? Overlaps with 35
+    espresso machine) and show them on its page? Overlaps with 34
     (roasting machine upkeep).
   - Who gets the reminder: everyone in the workspace, or whoever opts in?
   - Should the AI ever see notes, or their calculators (CLAUDE.md rule 9)?
 
-### 25. Calculator templates: how many inputs
+### 24. Calculator templates: how many inputs
 
 - **Status:** idea
 - **Why:** a new calculator now starts from **Blank**, with one input (see
@@ -718,7 +700,7 @@ Home roasting). Paused here; these are what's next.
   whoever logged it?
 - Should freezing a home-roasted bean pause or extend its rest?
 
-### 26. Live roast timer
+### 25. Live roast timer
 
 - **Status:** planned (branch `roast-timer`)
 - **Why:** roast times are typed in after the roast; a timer running while
@@ -732,7 +714,7 @@ Home roasting). Paused here; these are what's next.
   - Note a temperature at each mark?
   - Keep the screen awake while it runs?
 
-### 27. Roast insights
+### 26. Roast insights
 
 - **Status:** idea
 - **Why:** Insights covers brewing only; a home roaster wants to see what
@@ -745,11 +727,11 @@ Home roasting). Paused here; these are what's next.
   - **rest sweet spot:** brew ratings by days off roast for home roasts,
     suggesting rest days per roast type or green coffee.
 - **Size:** M
-- **Depends on:** nothing; 28 and 32 make it richer.
+- **Depends on:** nothing; 27 and 31 make it richer.
 - **Open questions:** should the rest sweet spot offer to change the
   workspace's default rest days?
 
-### 28. Compare roasts
+### 27. Compare roasts
 
 - **Status:** idea
 - **Why:** with several batches of one green coffee, it's hard to see which
@@ -757,9 +739,9 @@ Home roasting). Paused here; these are what's next.
 - **Approach:** the batches of a green coffee side by side: levels, times,
   temperatures, weight loss, development, and how each one's brews rated.
 - **Size:** M
-- **Depends on:** nothing; can share a branch with 27.
+- **Depends on:** nothing; can share a branch with 26.
 
-### 29. Roast again, and roast plans
+### 28. Roast again, and roast plans
 
 - **Status:** idea
 - **Why:** a good roast is worth repeating, and today the form starts empty.
@@ -771,7 +753,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** S–M (plans are the M)
 - **Depends on:** nothing.
 
-### 30. Running low on roasted coffee
+### 29. Running low on roasted coffee
 
 - **Status:** idea
 - **Why:** the low notice covers green coffee; running out of roasted coffee
@@ -781,10 +763,10 @@ Home roasting). Paused here; these are what's next.
   suggesting the next roast, like the `green-low` job
   (`docs/api/notifications.md` §1b).
 - **Size:** S
-- **Depends on:** nothing; pairs with 29's plans.
+- **Depends on:** nothing; pairs with 28's plans.
 - **Open questions:** a threshold per workspace, or per green coffee?
 
-### 31. Green coffee details and restocks
+### 30. Green coffee details and restocks
 
 - **Status:** idea
 - **Why:** buying the same coffee again means editing the weight left by
@@ -797,7 +779,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** M
 - **Depends on:** nothing.
 
-### 32. Cupping notes per roast
+### 31. Cupping notes per roast
 
 - **Status:** idea
 - **Why:** brew ratings mix the roast with the brewing; cupping judges the
@@ -808,7 +790,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** S–M
 - **Depends on:** nothing.
 
-### 33. Roast details for the AI
+### 32. Roast details for the AI
 
 - **Status:** idea
 - **Why:** for a home roast, how it was roasted explains a lot about how it
@@ -820,7 +802,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** S
 - **Depends on:** nothing.
 
-### 34. Roast curves
+### 33. Roast curves
 
 - **Status:** idea
 - **Why:** roasting software (Artisan) records the whole curve; the log only
@@ -831,7 +813,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** L
 - **Depends on:** nothing.
 
-### 35. Roasting machine upkeep
+### 34. Roasting machine upkeep
 
 - **Status:** idea
 - **Why:** roasters need regular chaff and cleaning, easy to forget.
@@ -844,7 +826,7 @@ Home roasting). Paused here; these are what's next.
 
 ## H. Accounts
 
-### 36. Account management and password reset
+### 35. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -875,13 +857,13 @@ Home roasting). Paused here; these are what's next.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 37. Email verification
+### 36. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 36), inviting a member by email, or notifications by email.
+  (item 35), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -891,9 +873,9 @@ Home roasting). Paused here; these are what's next.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 36).
+  - Shares the mail and token pieces with password reset (item 35).
 - **Size:** M (mail is new to the stack).
-- **Depends on:** nothing; pairs with 36.
+- **Depends on:** nothing; pairs with 35.
 - **Open questions:**
   - Block unverified accounts, or only remind them?
   - What happens to accounts that existed before verification (treat as
@@ -906,7 +888,7 @@ Home roasting). Paused here; these are what's next.
 
 How the app is served and installed.
 
-### 38. Test the installed app on phones
+### 37. Test the installed app on phones
 
 - **Status:** idea
 - **Why:** the PWA is now served as a build over HTTPS (roadmap:
@@ -933,7 +915,7 @@ How the app is served and installed.
 - **Depends on:** the app running on the home server.
 - **Open questions:** none.
 
-### 39. Protect the testing branch on GitHub
+### 38. Protect the testing branch on GitHub
 
 - **Status:** idea
 - **Why:** the server pulls whatever is pushed to `testing`, and a push can
@@ -950,7 +932,7 @@ How the app is served and installed.
 
 What a backup keeps, so moving to a new server loses nothing.
 
-### 40. Back up every setting
+### 39. Back up every setting
 
 - **Status:** idea
 - **Why:** a workspace backup (`docs/api/backup.md` §2b) leaves out what

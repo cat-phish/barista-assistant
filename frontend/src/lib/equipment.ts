@@ -184,6 +184,14 @@ export interface BrewerForm extends MachineCapabilities {
   kind: MethodKind; // follows the method's behaviour (BrewerFields keeps it in step)
   notes: string;
   finishOffset: string; // seconds, blank = none (lib/finishOffset.ts)
+  groundsRetention: string; // g/g, blank = learned (parseGroundsRetention)
+}
+
+// The brewer's grounds retention (docs/api/brewers.md §3): g of water per g
+// of coffee, 0.3–3.5, ≤ 2 decimals; blank = learned from its brews (null).
+export const GROUNDS_RETENTION = { scale: 2, min: 0.3, max: 3.5 } as const;
+export function parseGroundsRetention(text: string): { ok: true; value: number | null } | { ok: false; error: string } {
+  return text.trim() ? parseDecimal(text, GROUNDS_RETENTION) : { ok: true, value: null };
 }
 
 export function brewerForm(m?: Brewer): BrewerForm {
@@ -193,21 +201,25 @@ export function brewerForm(m?: Brewer): BrewerForm {
     kind: m?.kind ?? 'filter',
     notes: m?.notes ?? '',
     finishOffset: m?.finishOffsetSec == null ? '' : String(m.finishOffsetSec),
+    groundsRetention: m?.groundsRetention == null ? '' : formatGrams(m.groundsRetention),
     preinfusion: m?.preinfusion ?? 'none',
     flowControl: m?.flowControl ?? 'none',
     pressureControl: m?.pressureControl ?? 'none',
   };
 }
-// The form saves only once the offset parses (BrewerFormView).
+// The form saves only once the offset and the retention parse (BrewerFormView).
 export function brewerInput(f: BrewerForm): BrewerInput & { name: string } {
   const espresso = f.kind === 'espresso';
   const offset = parseFinishOffset(f.finishOffset);
+  const retention = parseGroundsRetention(f.groundsRetention);
   return {
     name: f.name.trim(),
     // The method decides the kind on the server; without one, the kind's built-in method.
     ...(f.methodId ? { methodId: f.methodId } : { kind: f.kind }),
     notes: f.notes.trim() || null,
     finishOffsetSec: offset.ok ? offset.value : null,
+    // Espresso's yield is the shot weight, measured: no estimate to feed.
+    groundsRetention: !espresso && retention.ok ? retention.value : null,
     // Capabilities only mean something for espresso.
     preinfusion: espresso ? f.preinfusion : 'none',
     flowControl: espresso ? f.flowControl : 'none',

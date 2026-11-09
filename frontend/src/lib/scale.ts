@@ -2,8 +2,10 @@
 //
 // Yield ≈ water − retention × dose, where retention is the water the spent
 // grounds keep, in grams per gram of coffee. Published figures put it around
-// 2–2.5 g/g; there is no measured light/dark split, so the per-roast numbers
-// below are an assumption. Measured brews replace them (brewRetention).
+// 2–2.5 g/g for a drip cone; there is no measured light/dark split, so the
+// per-roast numbers below are an assumption. A pressed brewer (OXO, AeroPress)
+// squeezes most of it out and keeps about 1 g/g, so the brewer's own figure
+// (typed, or learned from its brews) comes before them (brewRetention).
 import type { RecipeStep, RoastLevel } from '../api/types';
 
 export const ROAST_LEVELS: Record<RoastLevel, { label: string; retention: number }> = {
@@ -16,7 +18,8 @@ export const ROAST_LEVELS: Record<RoastLevel, { label: string; retention: number
 
 
 // Retention outside this range is a typo or an unmeasured drip, not data.
-const PLAUSIBLE = { min: 1, max: 3.5 };
+// Pressed brews really do go below 1 g/g (an OXO's Soup: 0.99).
+const PLAUSIBLE = { min: 0.5, max: 3.5 };
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
@@ -39,7 +42,11 @@ function median(values: number[]): number {
 export type RetentionSource =
   | { kind: 'measured'; count: number } // your brews of this bean with this recipe
   | { kind: 'recipe'; roastLevel: RoastLevel } // the recipe's expected yield, adjusted for roast
+  | BrewerRetentionSource
   | { kind: 'roast'; roastLevel: RoastLevel }; // the roast-level default
+export type BrewerRetentionSource =
+  | { kind: 'brewerTyped' } // typed on the brewer (docs/api/brewers.md §3)
+  | { kind: 'brewer'; count: number }; // your brews with this brewer, any bean or recipe
 
 export interface MeasuredBrew {
   actualDoseGrams: number;
@@ -48,7 +55,29 @@ export interface MeasuredBrew {
   actualYieldGrams: number | null;
 }
 
-// Best retention estimate for brewing this bean with this recipe.
+// The median retention of measured brews (plausible ones only), or null.
+export function measuredRetention(brews: MeasuredBrew[]): { retention: number; count: number } | null {
+  const rs = brews
+    .map((b) => (b.actualYieldGrams === null ? null : retentionOf(b.actualDoseGrams, ratioWater(b.actualWaterGrams, b.actualIceGrams), b.actualYieldGrams)))
+    .filter((r): r is number => r !== null);
+  return rs.length ? { retention: median(rs), count: rs.length } : null;
+}
+
+// What a brewer's grounds keep: typed on the brewer, else learned from its
+// measured brews; null when it has neither (the roast default applies).
+export interface BrewerRetentionInput {
+  typed: number | null;
+  measured: MeasuredBrew[];
+}
+export function brewerRetention(brewer: BrewerRetentionInput | null): { retention: number; source: BrewerRetentionSource } | null {
+  if (!brewer) return null;
+  if (brewer.typed !== null) return { retention: brewer.typed, source: { kind: 'brewerTyped' } };
+  const m = measuredRetention(brewer.measured);
+  return m ? { retention: m.retention, source: { kind: 'brewer', count: m.count } } : null;
+}
+
+// Best retention estimate for brewing this bean with this recipe: your brews
+// of both → the recipe's expected yield → the brewer's figure → the roast default.
 // recipeRoastLevel: the roast the workspace's recipes are written for (its
 // "Defaults" setting); also assumed for a bean with no roast level.
 export function brewRetention(input: {
@@ -56,11 +85,10 @@ export function brewRetention(input: {
   recipeRoastLevel: RoastLevel;
   recipe: { targetDoseGrams: number; targetWaterGrams: number; targetIceGrams: number | null; expectedYieldGrams: number | null } | null;
   measured: MeasuredBrew[];
+  brewer?: BrewerRetentionInput | null;
 }): { retention: number; source: RetentionSource } {
-  const measured = input.measured
-    .map((b) => (b.actualYieldGrams === null ? null : retentionOf(b.actualDoseGrams, ratioWater(b.actualWaterGrams, b.actualIceGrams), b.actualYieldGrams)))
-    .filter((r): r is number => r !== null);
-  if (measured.length) return { retention: median(measured), source: { kind: 'measured', count: measured.length } };
+  const measured = measuredRetention(input.measured);
+  if (measured) return { retention: measured.retention, source: { kind: 'measured', count: measured.count } };
 
   const roastLevel = input.roastLevel ?? input.recipeRoastLevel;
   const roast = ROAST_LEVELS[roastLevel].retention;
@@ -70,7 +98,17 @@ export function brewRetention(input: {
     // The recipe's yield is for a recipeRoastLevel bean; shift it by the roast difference.
     return { retention: recipeRetention * (roast / ROAST_LEVELS[input.recipeRoastLevel].retention), source: { kind: 'recipe', roastLevel } };
   }
+  // The brewer's figure as it is: the brewer matters more than the roast.
+  const brewer = brewerRetention(input.brewer ?? null);
+  if (brewer) return brewer;
   return { retention: roast, source: { kind: 'roast', roastLevel } };
+}
+
+// A saved yield that's clearly off from what the brews point to (more than
+// 10% and at least 5 g), worth suggesting a change for; small gaps aren't.
+export function yieldMismatch(saved: number, estimate: number): boolean {
+  const gap = Math.abs(saved - estimate);
+  return gap >= 5 && gap > 0.1 * Math.max(saved, estimate);
 }
 
 // yield (g) is espresso's shot weight; a filter batch's yield is typed as a
