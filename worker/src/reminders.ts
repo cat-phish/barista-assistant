@@ -64,7 +64,7 @@ async function preferencesOf(userId: string) {
 // Sends to each enabled channel and Web Push device; one failing doesn't
 // stop the others, and every one failing throws, so BullMQ retries. A
 // device whose subscription is gone is removed.
-async function deliver(userId: string, message: NotificationMessage, send: Send, push: Push): Promise<ReminderResult> {
+export async function deliver(userId: string, message: NotificationMessage, send: Send, push: Push): Promise<ReminderResult> {
   const channels = await db
     .select({ kind: notificationChannels.kind, config: notificationChannels.config })
     .from(notificationChannels)

@@ -252,6 +252,14 @@ export interface GreenLowJobData {
   userId: string;
 }
 
+// Recap notifications (docs/api/notifications.md §1b, "Recaps"): a job
+// scheduler on the reminder queue runs the tick every quarter hour; it
+// notifies whoever's recap time has come.
+export const RECAP_TICK_JOB = "recap-tick";
+export const RECAP_TICK_SCHEDULER = "recap-tick";
+export const RECAP_TICK_PATTERN = "*/15 * * * *";
+export type RecapTickJobData = Record<string, never>;
+
 // A chat reply (docs/api/llm-contract.md §9e, docs/api/chat.md §12): the
 // pending assistant message. The worker publishes it to a Redis stream the
 // backend passes on to the browser.

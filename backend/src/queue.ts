@@ -10,8 +10,12 @@ import {
   REST_REMINDER_JOB,
   restReminderJobId,
   GREEN_LOW_JOB,
+  RECAP_TICK_JOB,
+  RECAP_TICK_PATTERN,
+  RECAP_TICK_SCHEDULER,
   type BrewAnalysisJobData,
   type GreenLowJobData,
+  type RecapTickJobData,
   type RateReminderJobData,
   type RestReminderJobData,
   type SteepReminderJobData,
@@ -284,7 +288,7 @@ export function enqueueGreenLow(data: GreenLowJobData): Promise<void> {
   return enqueueReminder(GREEN_LOW_JOB, undefined, data, 0);
 }
 
-type ReminderJobData = RateReminderJobData | SteepReminderJobData | RestReminderJobData | GreenLowJobData;
+type ReminderJobData = RateReminderJobData | SteepReminderJobData | RestReminderJobData | GreenLowJobData | RecapTickJobData;
 async function enqueueReminder(name: string, jobId: string | undefined, data: ReminderJobData, delayMs: number): Promise<void> {
   await withTimeout(() =>
     reminderQueue.add(name, data, {
@@ -295,6 +299,14 @@ async function enqueueReminder(name: string, jobId: string | undefined, data: Re
       removeOnComplete: true,
       removeOnFail: true,
     })
+  );
+}
+
+// The recap tick (docs/api/notifications.md §1b, "Recaps"): every quarter
+// hour, for whoever's recap time has come. Set (or reset) at start-up.
+export async function syncRecapSchedule(): Promise<void> {
+  await withTimeout(() =>
+    reminderQueue.upsertJobScheduler(RECAP_TICK_SCHEDULER, { pattern: RECAP_TICK_PATTERN }, { name: RECAP_TICK_JOB, data: {}, opts: { removeOnComplete: true, removeOnFail: 20 } })
   );
 }
 

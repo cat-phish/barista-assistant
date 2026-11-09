@@ -556,8 +556,9 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 18. Weekly and monthly recaps
 
-- **Status:** in progress: phases 1 (Insights → Recap, Settings → Recaps)
-  and 2 (brew-page banner) built; 3–4 planned (`docs/api/recaps.md` §11c).
+- **Status:** in progress: phases 1 (Insights → Recap, Settings → Recaps),
+  2 (brew-page banner) and 3 (notification) built; 4 planned
+  (`docs/api/recaps.md` §11c).
 - **Why:** Insights shows patterns when you go looking; nothing tells you
   how the week or month went: how much you brewed, what rated best, which
   beans were opened or finished.
@@ -570,9 +571,9 @@ What the analysis worker sends to the LLM and what comes back.
   - **Review the banner after a testing period:** does it show when
     expected (and not for an empty week), is it unobtrusive enough, and do
     opening, dismissing and the day limit take it away as they should?
-  - 3. Notification at `recapNotifyTime` (the person's `timeZone`) on the
-    first day of a new period, once per workspace brewed in; a `recaps`
-    table (not backed up) records it.
+  - **Review the notification after a testing period:** does it arrive on
+    time in your time zone, once, with the right figures, and does its
+    link open the right recap? Is the message worth having, or too terse?
   - 4. AI summary, off / on request / automatic (`recapAi`), honouring
     Settings → AI hidden details, from a reusable period context
     (`worker/src/periodContext.ts`) that 17 can use too; an eval mode.

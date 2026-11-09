@@ -53,6 +53,15 @@ function go(change: { kind?: RecapKind; start?: string; mine?: boolean }): void 
 }
 const step = (dir: -1 | 1) => go({ start: (dir < 0 ? previousPeriod : nextPeriod)(kind.value, period.value, weekStartsOn.value).start });
 
+// A notification's link names the workspace it's about (?ws=): switch to it
+// if it's one of yours, then drop it from the address.
+const linkedWs = str(route.query.ws);
+if (linkedWs) {
+  if (linkedWs !== workspaces.current?.id && workspaces.workspaces.some((w) => w.id === linkedWs)) workspaces.select(linkedWs);
+  const { ws: _ws, ...rest } = route.query;
+  void router.replace({ query: rest });
+}
+
 // One request covers the period and the one before it.
 const asked = ref(prefs.value.recaps);
 const data = ref<StatsData | null>(null);
@@ -74,7 +83,7 @@ async function load(): Promise<void> {
     if (n === request) loading.value = false;
   }
 }
-watch([() => period.value.start, kind, mine, asked], () => void load(), { immediate: true });
+watch([() => period.value.start, kind, mine, asked, () => workspaces.current?.id], () => void load(), { immediate: true });
 
 // Opening the period just ended takes its banner off the brew page.
 watch(
