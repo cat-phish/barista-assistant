@@ -10,11 +10,14 @@ import {
   grinders,
   RECIPE_STEP_TYPES,
   recipes,
+  recipeSteps,
+  type MethodKind,
   type ChatAttachment,
   type ChatProposal,
   type ChatProposalRecipe,
 } from "@barista/shared/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { recipeStepWarnings, type CheckedRecipe } from "@barista/shared/recipeChecks";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "./db.js";
 import { RATIO_RANGE } from "./llm.js";
@@ -78,8 +81,9 @@ export interface RefTarget {
   id: string;
   label: string;
   bean?: { id: string; label: string } | null;
-  recipe?: { id: string; label: string } | null;
-  brewer?: { id: string; label: string; kind: string } | null;
+  // current: the recipe as saved, for checking a change to it (recipeStepWarnings).
+  recipe?: { id: string; label: string; current?: CheckedRecipe } | null;
+  brewer?: { id: string; label: string; kind: MethodKind } | null;
   grinder?: { id: string; label: string; min: number | null; max: number | null } | null;
 }
 export type RefTable = Map<string, RefTarget>;
@@ -150,7 +154,35 @@ export async function refTable(attachments: readonly ChatAttachment[], workspace
       if (r) table.set(refOf(i), { ...base, bean: { id: r.id, label: beanLabel(r.roaster, r.beanName) } });
     }
   });
+  await addCurrentRecipes(table, workspaceId);
   return table;
+}
+
+// The saved values and steps of every recipe the refs point to.
+async function addCurrentRecipes(table: RefTable, workspaceId: string): Promise<void> {
+  const ids = [...new Set([...table.values()].flatMap((t) => (t.recipe ? [t.recipe.id] : [])))];
+  if (!ids.length) return;
+  const [rows, steps] = await Promise.all([
+    db
+      .select({ id: recipes.id, targetWaterGrams: recipes.targetWaterGrams, expectedFinishMinSec: recipes.expectedFinishMinSec, expectedFinishMaxSec: recipes.expectedFinishMaxSec })
+      .from(recipes)
+      .where(and(inArray(recipes.id, ids), eq(recipes.workspaceId, workspaceId))),
+    db
+      .select({ recipeId: recipeSteps.recipeId, stepType: recipeSteps.stepType, durationSec: recipeSteps.durationSec, targetWaterGrams: recipeSteps.targetWaterGrams })
+      .from(recipeSteps)
+      .where(inArray(recipeSteps.recipeId, ids))
+      .orderBy(asc(recipeSteps.stepOrder)),
+  ]);
+  for (const t of table.values()) {
+    const r = t.recipe && rows.find((x) => x.id === t.recipe!.id);
+    if (!t.recipe || !r) continue;
+    t.recipe.current = {
+      targetWaterGrams: r.targetWaterGrams,
+      expectedFinishMinSec: r.expectedFinishMinSec,
+      expectedFinishMaxSec: r.expectedFinishMaxSec,
+      steps: steps.filter((s) => s.recipeId === r.id).map((s) => ({ stepType: s.stepType as CheckedRecipe["steps"][number]["stepType"], durationSec: s.durationSec, targetWaterGrams: s.targetWaterGrams })),
+    };
+  }
 }
 
 // What the AI writes in a block. Out-of-range values drop the proposal.
@@ -219,6 +251,25 @@ function recipeValues(r: z.infer<typeof recipeSchema>): ChatProposalRecipe {
   }
   return out;
 }
+// What a proposal's recipe values say against the step checks; a change is
+// checked as the recipe after it, and only when it touches the steps, the
+// water or the window (a recipe's old quirks aren't the proposal's).
+function stepWarnings(values: ChatProposalRecipe, kind: MethodKind, current?: CheckedRecipe): string[] {
+  const touches = values.steps !== undefined || values.targetWaterGrams !== undefined || values.expectedFinishMinSec !== undefined || values.expectedFinishMaxSec !== undefined;
+  if (!touches) return [];
+  const base: CheckedRecipe = current ?? { targetWaterGrams: null, expectedFinishMinSec: null, expectedFinishMaxSec: null, steps: [] };
+  return recipeStepWarnings(
+    {
+      targetWaterGrams: values.targetWaterGrams !== undefined ? values.targetWaterGrams : base.targetWaterGrams,
+      expectedFinishMinSec: values.expectedFinishMinSec !== undefined ? values.expectedFinishMinSec : base.expectedFinishMinSec,
+      expectedFinishMaxSec: values.expectedFinishMaxSec !== undefined ? values.expectedFinishMaxSec : base.expectedFinishMaxSec,
+      steps: values.steps ?? base.steps,
+    },
+    kind,
+  );
+}
+const withWarnings = (warnings: string[]): { warnings?: string[] } => (warnings.length ? { warnings } : {});
+
 const finishOk = (r: ChatProposalRecipe): boolean => r.expectedFinishMinSec == null || r.expectedFinishMaxSec == null || r.expectedFinishMinSec <= r.expectedFinishMaxSec;
 
 // One block as saved, or null when it doesn't hold up: not the shape asked
@@ -262,11 +313,13 @@ export function checkProposal(raw: unknown, refs: RefTable): ChatProposal | null
     };
   }
   if (p.kind === "recipeChange") {
-    const recipe = target(p.recipe)?.recipe;
+    const ref = target(p.recipe);
+    const recipe = ref?.recipe;
     if (!recipe) return null;
     const changes = recipeValues(p.changes);
     if (!Object.keys(changes).length || !finishOk(changes)) return null;
-    return { kind: "recipeChange", ...base, recipeId: recipe.id, recipeLabel: recipe.label, changes };
+    const warnings = stepWarnings(changes, ref.brewer?.kind ?? "filter", recipe.current);
+    return { kind: "recipeChange", ...base, recipeId: recipe.id, recipeLabel: recipe.label, changes, ...withWarnings(warnings) };
   }
   const based = target(p.basedOn);
   if (p.basedOn && !based?.brewer) return null;
@@ -278,6 +331,7 @@ export function checkProposal(raw: unknown, refs: RefTable): ChatProposal | null
     brewerId: based?.brewer?.id ?? null,
     brewerLabel: based?.brewer?.label ?? null,
     recipe: { ...values, name: values.name, targetDoseGrams: values.targetDoseGrams },
+    ...withWarnings(stepWarnings(values, based?.brewer?.kind ?? "filter")),
   };
 }
 

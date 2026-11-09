@@ -2744,3 +2744,36 @@ Branch `brewer-retention`; was backlog 8.
 - **Not sent to the AI;** it's an aid for estimating, not brew data.
 - **Left for later:** Insights volume figures still estimate unmeasured
   brews with the roast default (backlog 13).
+
+## Checks and step guidance for AI recipe proposals (built)
+
+Branch `recipe-proposal-checks`; the first round of backlog 15.
+
+- **Why:** a chat proposal for a V60 once gave two blooms, 11-second pours
+  and 22-second drawdowns. Nothing checked a proposal's steps beyond the
+  value ranges, so a bad plan only showed once opened in the recipe form.
+- **Step checks** (`@barista/shared/recipeChecks`, `recipeStepWarnings`):
+  water targets going back down, the last pour more than 2 g off the
+  recipe's water, a pour faster than 12 g/s or slower than 1 g/s, and the
+  steps ending after the finish window or more than 60 s before it.
+  Espresso: the window only. Loose on purpose: the recipes brewed most
+  (Ramped Bloom with its deliberate double bloom, Soup, Zuppa Lunga,
+  Espresso Pre-Infusion) pass. Soup (100 ml) as saved doesn't: its pour
+  goes to 80 g of its 100 g water, which the recipe form also warns about.
+- **Flagged, not dropped:** a failing `recipeChange` or `newRecipe` keeps
+  `warnings`, listed on its card under "Check the steps before saving". A
+  change is checked as the recipe after it, and only when it touches the
+  steps, the water or the window.
+- **Decided against:** checks on blooms (more than one, or short) and on
+  the final drawdown, since double blooms are deliberate here.
+- **Prompt** (`CHAT_PROMPT_VERSION` 2026-11-b, new): step timing at a
+  kettle's pace, realistic waits and drawdown, water rising to the recipe's,
+  steps ending inside the window, fewer steps over invented precision, a
+  multi-hour steep in the text rather than as a step, the block added when a
+  recipe is asked for, and a variation that differs.
+- **Eval** (`propose`, `compare-propose`): 8 recipes, before and after, on
+  gpt-6-luna. Neither run tripped a check (the V60 case didn't come back);
+  after the change V60 pours slowed from 8-9 g/s to 4-6 g/s, every V60 got a
+  final drawdown step, the cold brew stopped putting its 14-hour steep in a
+  50,400 s step, and no variation was a copy. An earlier run had 4 of 8
+  replies describing a recipe without a card.

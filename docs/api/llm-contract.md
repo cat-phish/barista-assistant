@@ -575,6 +575,20 @@ has already read, so a failed reply is marked failed and they send again.
      ref to nothing attached, a value out of range (as `recipes.md` §5), a
      finish window that ends before it starts, or a proposal with nothing to
      do drops it. Grams round to 0.01, degrees to 0.1.
+   - **Step checks** (`recipeStepWarnings`, `@barista/shared/recipeChecks`):
+     a recipe proposal whose steps don't hold up is kept with `warnings`
+     (`chat.md` §12 "Proposals"), never dropped. Loose on purpose: double
+     blooms, short waits and pressed brewers pass. A `recipeChange` is
+     checked as the recipe after it (`refTable` loads each recipe's water,
+     window and steps), and only when it touches those.
+   - **Step guidance** in the prompt: steps run one after another for their
+     `durationSec`, pours at a kettle's pace (about 3-8 g/s), realistic waits
+     and drawdown, water rising to the recipe's at the last pour, the steps
+     ending inside the window, fewer steps over invented precision, and a
+     steep of hours (cold brew) said in the text, not as a step. Asked for a
+     recipe, the reply adds its block rather than only describing it.
+     `CHAT_PROMPT_VERSION` (`worker/src/prompt.ts`) names this text; replies
+     don't store it, the eval's propose runs do.
    - A reply that is only proposals is fine; one with neither text nor a
      proposal is an empty reply (failed).
    - **Later turns:** since the blocks are out of the text, an earlier reply
@@ -606,7 +620,15 @@ root `.env`, only reads the database, and writes to the git-ignored
   section; `--without places` sends their labels without the place on the
   wheel. Only the eval run changes, to see what the picks add;
 - `compare <a> <b>` writes a side-by-side report of two runs, with each
-  brew's rating, notes, problems and flavors.
+  brew's rating, notes, problems and flavors;
+- `propose --label <name> [--limit 8] [--yes]` asks the chat, with each
+  active recipe attached (the ones brewed most recently first), for a
+  variation as a new recipe, through the same request, `splitProposals`
+  and `checkProposals` as a real reply. It saves the reply, the blocks as
+  written and the proposals with their warnings;
+- `compare-propose <a> <b>` writes a report of two propose runs: blocks
+  written and kept, proposals flagged, warnings by kind, and each recipe's
+  steps side by side.
 
 Run it before and after changing the input, prompt or schema, and bump
-`PROMPT_VERSION`.
+`PROMPT_VERSION` (or `CHAT_PROMPT_VERSION` for the chat's text).

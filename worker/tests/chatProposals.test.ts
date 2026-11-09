@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { aiChatMessages, aiChats, beans, brewers, brewLogs, grinders, recipes, users, workspaces, type ChatProposal } from "@barista/shared/schema";
+import { aiChatMessages, aiChats, beans, brewers, brewLogs, grinders, recipes, recipeSteps, users, workspaces, type ChatProposal } from "@barista/shared/schema";
 import type { ChatStreamEvent } from "@barista/shared/jobs";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -116,6 +116,37 @@ describe("checkProposal", () => {
     expect(checkProposal({ kind: "newRecipe", ...why, recipe: { name: "No dose" } }, refs)).toBeNull();
     expect(checkProposal({ kind: "newRecipe", ...why, basedOn: "a3", recipe: { name: "X", targetDoseGrams: 15 } }, refs)).toBeNull();
   });
+  it("flags steps that don't hold up, without dropping the proposal (@barista/shared/recipeChecks)", () => {
+    // A saved recipe that already pours short of its water: not the proposal's doing.
+    const current = {
+      targetWaterGrams: 300,
+      expectedFinishMinSec: 180,
+      expectedFinishMaxSec: 210,
+      steps: [{ stepType: "bloom" as const, durationSec: 40, targetWaterGrams: 50 }, { stepType: "pour" as const, durationSec: 140, targetWaterGrams: 280 }],
+    };
+    const withCurrent: RefTable = new Map([["a1", { kind: "recipe", id: "rec3", label: "V60", recipe: { id: "rec3", label: "V60", current }, brewer: { id: "v60", label: "V60", kind: "filter" } }]]);
+    const rushed = [
+      { stepType: "bloom", durationSec: 11, targetWaterGrams: 50 },
+      { stepType: "wait", durationSec: 22 },
+      { stepType: "pour", durationSec: 11, targetWaterGrams: 200 },
+      { stepType: "wait", durationSec: 22 },
+      { stepType: "pour", durationSec: 11, targetWaterGrams: 300 },
+      { stepType: "wait", durationSec: 22 },
+    ];
+    expect(checkProposal({ kind: "recipeChange", ...why, recipe: "a1", changes: { targetTempC: 92 } }, withCurrent)).not.toHaveProperty("warnings");
+    expect(checkProposal({ kind: "recipeChange", ...why, recipe: "a1", changes: { steps: rushed } }, withCurrent)).toMatchObject({
+      kind: "recipeChange",
+      warnings: ["Step 3 pours 150 g in 11 s (13.6 g/s), faster than a kettle pours.", "The steps end at 1:39, well before the target finish (3:00–3:30)."],
+    });
+    // The window moved to fit: checked against the recipe's own steps.
+    expect(checkProposal({ kind: "recipeChange", ...why, recipe: "a1", changes: { expectedFinishMinSec: 170, expectedFinishMaxSec: 200 } }, withCurrent)).toMatchObject({
+      warnings: ["The steps pour to 280 g, but the recipe's water is 300 g."],
+    });
+    expect(checkProposal({ kind: "newRecipe", ...why, basedOn: "a1", recipe: { name: "Rushed", targetDoseGrams: 20, targetWaterGrams: 320, steps: rushed } }, withCurrent)).toMatchObject({
+      kind: "newRecipe",
+      warnings: ["Step 3 pours 150 g in 11 s (13.6 g/s), faster than a kettle pours.", "The steps pour to 300 g, but the recipe's water is 320 g."],
+    });
+  });
   it("keeps at most 3", () => {
     expect(checkProposals(Array.from({ length: 5 }, () => ({ kind: "brew", ...why, tempC: 94 })), refs)).toHaveLength(3);
   });
@@ -156,6 +187,23 @@ describe("refTable and processChatReply", () => {
     expect(table.get("a1")).toMatchObject({ bean: { id: ids.bean, label: "Onyx Guji" } });
     expect(table.get("a2")).toMatchObject({ recipe: { id: ids.recipe }, brewer: { id: ids.brewer, kind: "filter" }, grinder: { id: ids.grinder, min: 0, max: 40 } });
     expect((await refTable([{ kind: "brew", id: ids.brew, label: "Brew" }], randomUUID())).size).toBe(0);
+  });
+
+  it("loads the saved recipe and its steps in order, for checking a change", async () => {
+    await db.insert(recipeSteps).values([
+      { id: randomUUID(), recipeId: ids.recipe, stepOrder: 2, stepType: "pour", durationSec: 60, targetWaterGrams: 250 },
+      { id: randomUUID(), recipeId: ids.recipe, stepOrder: 1, stepType: "bloom", durationSec: 40, targetWaterGrams: 45 },
+    ]);
+    const table = await refTable([{ kind: "recipe", id: ids.recipe, label: "R" }], workspaceId);
+    expect(table.get("a1")?.recipe?.current).toEqual({
+      targetWaterGrams: 250,
+      expectedFinishMinSec: null,
+      expectedFinishMaxSec: null,
+      steps: [
+        { stepType: "bloom", durationSec: 40, targetWaterGrams: 45 },
+        { stepType: "pour", durationSec: 60, targetWaterGrams: 250 },
+      ],
+    });
   });
 
   it("streams the text without the blocks and saves the proposals on the reply", async () => {

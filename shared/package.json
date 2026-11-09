@@ -37,6 +37,10 @@
       "types": "./dist/brew.d.ts",
       "default": "./dist/brew.js"
     },
+    "./recipeChecks": {
+      "types": "./dist/recipeChecks.d.ts",
+      "default": "./dist/recipeChecks.js"
+    },
     "./aiDetails": {
       "types": "./dist/aiDetails.d.ts",
       "default": "./dist/aiDetails.js"

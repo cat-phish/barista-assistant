@@ -474,34 +474,40 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 15. Review and refine parameter and recipe suggestions
 
-- **Status:** idea
-- **Why:** the AI now suggests brew values in two places: **Suggest
+- **Status:** idea (recipe step checks and guidance done, see the roadmap:
+  "Checks and step guidance for AI recipe proposals")
+- **Why:** the AI suggests brew values in two places: **Suggest
   parameters** on the brew page (`docs/api/analysis.md` §8b) and chat
-  proposals (roadmap, "AI chat proposals"), which also change and create
-  recipes. Both work, but the advice hasn't been judged: a first chat
-  proposal for a V60 gave two blooms with 11-second pours and 22-second
-  drawdowns, timings no one would brew.
+  proposals. The chat's recipe steps are now checked and flagged; Suggest's
+  values haven't been judged. The 36 local suggestions look plausible but
+  samey: the next step mostly restates the values, the temperature swings
+  between 89 and 93 °C, and the ratio is rarely set.
 - **Approach:**
-  - Collect real cases from both: what was asked, what came back, and
-    whether it was sensible (grind steps, temperatures, ratios, step
-    timings, finish windows).
-  - Tighten the prompts where they go wrong: step guidance for recipes
-    (realistic pour and drawdown times, steps that end inside the finish
-    window, totals that match the water), and when not to propose at all.
-  - Consider checks after parsing for recipe steps (last pour reaching the
-    water, the steps' time against the finish window, 8), dropping or
-    flagging a proposal that fails them.
-  - Run the eval (`docs/api/llm-contract.md` §9, "Evaluating changes") on
-    both providers before and after; bump `PROMPT_VERSION` for the
-    analysis prompts.
+  - **Review the recipe step checks after testing them in use:** do real
+    chat proposals get flagged, and are the warnings right (no false alarms
+    on recipes you'd brew, nothing bad slipping through)? Does the 2026-11-b
+    chat prompt hold up on the hosted instance and the other provider? Tune
+    the thresholds in `@barista/shared/recipeChecks` or the prompt from what
+    turns up.
+  - Run the eval's Suggest mode (`run --suggest`, `docs/api/llm-contract.md`
+    "Evaluating changes") on the current prompt and judge the grind steps,
+    temperatures and ratios against how the brews went; tighten the Suggest
+    prompt where it goes wrong and bump `PROMPT_VERSION`.
+  - Chat proposals for long cold styles: the proposal schema has no steep
+    hours, steep temperature or dilution, so a cold brew proposal can only
+    say the steep in its text. Add them (as `recipes.md` §5 has them) if
+    cold brew proposals come up.
+  - Watch for replies that describe a recipe with no card: one eval run had
+    4 of 8 (before the prompt asked for the block), later runs none.
 - **Size:** M
 - **Depends on:** nothing; pairs with 9 (espresso dose and shot weight).
 - **Open questions:**
   - Should a "next brew" proposal also set the dose and water, not only
     grind, temperature and ratio?
-  - Does the eval need chat cases, or are chat proposals judged by hand?
   - Should the recipe form point out where a proposal differs from the
     saved recipe?
+  - Do the step checks need tuning once real proposals with warnings show
+    up (thresholds in `@barista/shared/recipeChecks`)?
 
 ### 16. Ask in chat from a chart card
 
