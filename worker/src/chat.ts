@@ -2,11 +2,12 @@
 // publishes the reply to a Redis stream as it's written, for the backend to
 // pass on (docs/api/chat.md §12), then saves it on the message.
 import { CHAT_EVENT_FIELD, chatReplyKey, type ChatJobData, type ChatJobPhoto, type ChatStreamEvent } from "@barista/shared/jobs";
-import { aiChatMessages, aiChats, beans, brewLogs, DEFAULT_WORKSPACE_SETTINGS, recipes, withDefaults, workspaces, type ChatAttachment, type ChatProposal } from "@barista/shared/schema";
+import { aiChatMessages, aiChats, beans, brewLogs, DEFAULT_WORKSPACE_SETTINGS, recipes, users, withDefaults, workspaces, type ChatAttachment, type ChatProposal } from "@barista/shared/schema";
 import { UnrecoverableError } from "bullmq";
 import { and, asc, eq } from "drizzle-orm";
 import type { Redis } from "ioredis";
 import { loadBean, loadBrewContext, loadRecipe } from "./context.js";
+import { periodInput, type PeriodOwner } from "./chatPeriodInput.js";
 import { checkProposals, proposalFilter, refOf, refTable, splitProposals } from "./chatProposals.js";
 import { db } from "./db.js";
 import { resolveAi } from "./ai/resolve.js";
@@ -81,7 +82,9 @@ async function attachmentLimit(workspaceId: string): Promise<number> {
 
 // One attachment as the AI sees it, read now and only from this workspace, in
 // full: Settings → AI tunes the analysis and suggestions, not chat. null: it's gone.
-async function attachmentInput(a: ChatAttachment, workspaceId: string): Promise<Record<string, unknown> | null> {
+async function attachmentInput(a: ChatAttachment, workspaceId: string, owner: PeriodOwner): Promise<Record<string, unknown> | null> {
+  // A period is its filters, run again now (docs/api/chat.md §12, "Periods").
+  if (a.kind === "period") return a.period ? periodInput(a.period, workspaceId, owner) : null;
   // A chart is its snapshot, as the person saw it (docs/api/chat.md §12).
   if (a.kind === "chart") {
     if (!a.chart) return null;
@@ -103,13 +106,19 @@ async function attachmentInput(a: ChatAttachment, workspaceId: string): Promise<
   return recipe && recipeInput(recipe, NOTHING_HIDDEN);
 }
 
-export async function loadAttachments(attachments: ChatAttachment[], workspaceId: string): Promise<LlmInput[]> {
+export async function loadAttachments(attachments: ChatAttachment[], workspaceId: string, owner: PeriodOwner = { userId: null }): Promise<LlmInput[]> {
   return Promise.all(
     attachments.map(async (a, i) => {
-      const data = await attachmentInput(a, workspaceId);
+      const data = await attachmentInput(a, workspaceId, owner);
       return (compact({ ref: refOf(i), kind: a.kind, label: a.label, ...(data ? { data } : { unavailable: true }) }) ?? {}) as LlmInput;
     }),
   );
+}
+
+// The chat's owner, for a period's Only mine, with their own cap on its brews.
+async function periodOwner(userId: string): Promise<PeriodOwner> {
+  const [row] = await db.select({ limits: users.chatLimits }).from(users).where(eq(users.id, userId));
+  return { userId, periodMaxBrews: row?.limits?.periodMaxBrews ?? null };
 }
 
 // Collects pieces and publishes them about every FLUSH_MS, so a fast model
@@ -150,7 +159,7 @@ export async function processChatReply({ messageId, photos }: ChatJobData, publi
     const ai = await resolveAi(row.chat.workspaceId);
     const custom = await promptFor(row.chat.userId, null);
     const attachments = attachedIn(messages, row.message.position, await attachmentLimit(row.chat.workspaceId));
-    const attached = await loadAttachments(attachments, row.chat.workspaceId);
+    const attached = await loadAttachments(attachments, row.chat.workspaceId, await periodOwner(row.chat.userId));
     const turns = chatTurns(messages, row.message.position, photos);
     const model = turns.some((t) => typeof t.content !== "string") ? ai.models.vision : ai.models.main;
     const request = buildChatRequest(model, turns, custom, attached);

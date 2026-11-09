@@ -1,4 +1,5 @@
-import type { AiProvider, ChatLimits } from "./aiConfig.js";
+import type { AiProvider, OwnChatLimits } from "./aiConfig.js";
+import { CHAT_PERIOD_BREWS_DEFAULT, type ChatPeriodSpec } from "./chatPeriod.js";
 import {
   mysqlTable,
   varchar,
@@ -160,6 +161,9 @@ export interface WorkspaceSettings {
   // At most how many brews, beans and recipes a chat message attaches, and a
   // reply is sent across the chat (docs/api/chat.md §12): more costs more.
   chatMaxAttachments: number;
+  // At most how many brews a live Period attachment sends in detail (the rest
+  // are counted in its figures); a person can set a lower one of their own.
+  chatPeriodMaxBrews: number;
   readLabels: boolean;
   // With it, "Also look it up on the web" on that card (bean-label.md §4d):
   // the label's text goes to a web search. Off by default.
@@ -227,6 +231,7 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   beanReviewBrewers: "all",
   aiChat: true,
   chatMaxAttachments: 50,
+  chatPeriodMaxBrews: CHAT_PERIOD_BREWS_DEFAULT,
   readLabels: true,
   labelWebLookup: false,
   labelWebContext: "high",
@@ -278,7 +283,7 @@ export const users = mysqlTable("users", {
   // texts, used for their brews' analyses and their suggestions. null = the
   // defaults. Kept apart from preferences, which go with every response.
   aiPrompt: jsonValue<AiPrompt>("ai_prompt"),
-  chatLimits: jsonValue<ChatLimits>("chat_limits"), // docs/api/chat.md §12; null = none of their own
+  chatLimits: jsonValue<OwnChatLimits>("chat_limits"), // docs/api/chat.md §12; null = none of their own
   // A server admin (docs/api/server.md §10). Only granted on the server
   // (`npm run admin -- grant <email>`), never through the API, so it can't
   // be claimed by registering an address.
@@ -1672,7 +1677,7 @@ export const CHAT_ROLES = ["user", "assistant"] as const;
 export type ChatRole = (typeof CHAT_ROLES)[number];
 export const CHAT_STATUSES = ["pending", "done", "failed"] as const;
 export type ChatStatus = (typeof CHAT_STATUSES)[number];
-export const CHAT_ATTACHMENT_KINDS = ["brew", "bean", "recipe", "chart"] as const;
+export const CHAT_ATTACHMENT_KINDS = ["brew", "bean", "recipe", "chart", "period"] as const;
 export type ChatAttachmentKind = (typeof CHAT_ATTACHMENT_KINDS)[number];
 // An Insights chart as it was when attached (docs/api/chat.md §12): its
 // numbers, worked out in the browser, so kept as they are. `cut`: rows left
@@ -1689,12 +1694,14 @@ export interface ChatChartSnapshot {
   cut: number;
 }
 // Brews, beans and recipes are references, not copies: each reply reads the
-// item afresh. A chart carries its snapshot. label: what it was called when
-// attached, to show once it's gone.
+// item afresh. A chart carries its snapshot; a period its filters, run again
+// for each reply (chatPeriod.ts). label: what it was called when attached, to
+// show once it's gone.
 export interface ChatAttachment {
   kind: ChatAttachmentKind;
   id: string;
   chart?: ChatChartSnapshot; // kind "chart" only
+  period?: ChatPeriodSpec; // kind "period" only
   label: string;
 }
 

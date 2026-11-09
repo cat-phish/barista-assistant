@@ -52,6 +52,11 @@ export interface ChatLimits {
 export interface ServerChatLimits extends ChatLimits {
   dailyMessages: number | null; // what one person can send in 24 hours
 }
+// A person's own, which can also lower how many brews a live Period sends in
+// detail (chatPeriodMaxBrews; absent or null: the workspace's).
+export interface OwnChatLimits extends ChatLimits {
+  periodMaxBrews?: number | null;
+}
 export const CHAT_LIMITS_KEY = "chat_limits";
 export const DEFAULT_SERVER_CHAT_LIMITS: ServerChatLimits = { maxBytes: 1024 ** 3, maxDays: null, dailyMessages: 200 };
 export const NO_CHAT_LIMITS: ChatLimits = { maxBytes: null, maxDays: null };
