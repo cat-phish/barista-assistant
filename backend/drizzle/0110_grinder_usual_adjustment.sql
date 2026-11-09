@@ -1,0 +1,1 @@
+ALTER TABLE `grinders` ADD `usual_adjustment` decimal(6,2);

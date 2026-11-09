@@ -49,6 +49,12 @@ defineProps<{ idPrefix: string; errors: GrinderFormErrors; showErrors: boolean }
       <span v-if="showErrors && (errors.range || errors.stepSize)" class="field-error">{{ errors.range ?? errors.stepSize }}</span>
       <span v-else class="hint">Lets the AI suggest changes in steps, e.g. "2 clicks finer".</span>
     </fieldset>
+    <div class="field">
+      <label :for="`${idPrefix}-usual`">Usual adjustment</label>
+      <input :id="`${idPrefix}-usual`" v-model="form.usualAdjustment" inputmode="decimal" placeholder="e.g. 2" :aria-invalid="showErrors && !!errors.usualAdjustment" />
+      <span v-if="showErrors && errors.usualAdjustment" class="field-error">{{ errors.usualAdjustment }}</span>
+      <span v-else class="hint">How far you usually move the dial when dialing in, in its units. The AI sizes its grind suggestions by it.</span>
+    </div>
     <div class="form-row">
       <div class="field">
         <label :for="`${idPrefix}-burr`">Burrs</label>

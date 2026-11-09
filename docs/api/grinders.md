@@ -18,6 +18,7 @@ grinder. Recipes are grinder-neutral.
   "settingMin": 0,
   "settingMax": 40,
   "stepSize": 1,
+  "usualAdjustment": 2,
   "burrType": "conical",
   "burrSizeMm": 39,
   "power": "manual",
@@ -37,6 +38,7 @@ Everything after `name` is optional (`null` when unknown):
 | `adjustment` | `stepped` (clicks/detents) or `stepless` (`GRINDER_ADJUSTMENTS`) |
 | `settingMin`, `settingMax` | the dial's range, numbers 0–9999 with ≤ 2 decimals; both or neither, min < max |
 | `stepSize` | one step/click on the dial, > 0, < 1000, ≤ 2 decimals |
+| `usualAdjustment` | how far the barista usually moves the dial when dialing in, in dial units (e.g. 2 on a C40, 0.5 on an Encore), > 0, < 10000, ≤ 2 decimals |
 | `burrType` | `conical` or `flat` (`BURR_TYPES`) |
 | `burrSizeMm` | integer 10–200 |
 | `power` | `manual` or `electric` (`GRINDER_POWER`) |
@@ -44,8 +46,11 @@ Everything after `name` is optional (`null` when unknown):
 | `rpmMin`, `rpmMax` | the speed range, integers 50–5000; both or neither, min < max, and only when `variableSpeed` is `true` |
 
 The range and step size are sent to the AI analysis so its reasoning can talk
-in steps ("2 clicks finer"), and the speed range so it can suggest a speed;
-the rest is reference.
+in steps ("2 clicks finer"), the usual adjustment so it sizes a grind change
+like the barista does (a hint, not a rule: it goes smaller when a brew is
+nearly there), and the speed range so it can suggest a speed; the rest is
+reference. All go under Settings → AI "Grinder details"
+(`docs/api/llm-contract.md` §9).
 
 `createdAt` (read-only) is when the grinder was added; lists sort by it.
 

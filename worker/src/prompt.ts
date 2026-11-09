@@ -13,7 +13,7 @@ import type { BrewerInfo, SuggestContext } from "./suggestContext.js";
 // Stored with each analysis (llm_analyses.prompt_version), so results can be
 // compared across changes (npm run eval). Bump it whenever the input, the
 // prompt or the schema changes.
-export const PROMPT_VERSION = "2026-10-o";
+export const PROMPT_VERSION = "2026-11-a";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type LlmInput = { [key: string]: Json };
@@ -332,6 +332,11 @@ export const PROMPT_SECTIONS: PromptSection[] = [
     key: "rpm",
     when: (i) => anyBrew(i, "grindRpm"),
     text: PROMPT_TEXT.rpm,
+  },
+  {
+    key: "usualAdjustment",
+    when: (i) => Object.values(((i.equipment as Record<string, Json> | undefined)?.grinders ?? {}) as Record<string, Json>).some((g) => g !== null && typeof g === "object" && !Array.isArray(g) && g.usualAdjustment !== undefined),
+    text: PROMPT_TEXT.usualAdjustment,
   },
   {
     key: "retention",

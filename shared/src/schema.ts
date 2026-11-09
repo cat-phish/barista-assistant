@@ -676,6 +676,9 @@ export const grinders = mysqlTable(
     settingMin: decimal("setting_min", { precision: 6, scale: 2, mode: "number" }), // with settingMax: both or neither
     settingMax: decimal("setting_max", { precision: 6, scale: 2, mode: "number" }),
     stepSize: decimal("step_size", { precision: 5, scale: 2, mode: "number" }), // e.g. 1 click
+    // How far the barista usually moves the dial when dialing in, in dial
+    // units (e.g. 2 on a C40): a hint for the AI's grind suggestions.
+    usualAdjustment: decimal("usual_adjustment", { precision: 6, scale: 2, mode: "number" }),
     burrType: varchar("burr_type", { length: 20 }).$type<BurrType>(), // BURR_TYPES
     burrSizeMm: int("burr_size_mm"),
     power: varchar("power", { length: 20 }).$type<GrinderPower>(), // GRINDER_POWER

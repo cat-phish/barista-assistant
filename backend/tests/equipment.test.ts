@@ -12,22 +12,26 @@ describe("grinder details", () => {
   it("are optional, validated, and the range is a pair", async () => {
     const { owner, ws } = await setup();
     const base = `/api/workspaces/${ws.id}/grinders`;
-    const details = { adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, burrType: "conical", burrSizeMm: 39, power: "manual" };
+    const details = { adjustment: "stepped", settingMin: 0, settingMax: 40, stepSize: 1, usualAdjustment: 2, burrType: "conical", burrSizeMm: 39, power: "manual" };
     const created = await owner.agent.post(base).send({ name: "C40", ...details });
     expect(created.status).toBe(201);
     expect(created.body.grinder).toMatchObject({ name: "C40", notes: null, ...details, archivedAt: null });
-    expect((await owner.agent.post(base).send({ name: "Plain" })).body.grinder).toMatchObject({ adjustment: null, settingMin: null, power: null });
+    expect((await owner.agent.post(base).send({ name: "Plain" })).body.grinder).toMatchObject({ adjustment: null, settingMin: null, usualAdjustment: null, power: null });
 
     expect((await owner.agent.post(base).send({ name: "A", adjustment: "dial" })).status).toBe(400);
     expect((await owner.agent.post(base).send({ name: "B", settingMin: 0 })).status).toBe(400); // one end
     expect((await owner.agent.post(base).send({ name: "C", settingMin: 10, settingMax: 5 })).status).toBe(400);
     expect((await owner.agent.post(base).send({ name: "D", stepSize: 0 })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ name: "D", usualAdjustment: 0 })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ name: "D", usualAdjustment: 0.125 })).status).toBe(400);
     expect((await owner.agent.post(base).send({ name: "E", burrSizeMm: 5 })).status).toBe(400);
 
     const url = `${base}/${created.body.grinder.id}`;
     expect((await owner.agent.patch(url).send({ settingMax: 30 })).status).toBe(400);
     expect((await owner.agent.patch(url).send({ settingMin: 0.5, settingMax: 30.25 })).body.grinder).toMatchObject({ settingMin: 0.5, settingMax: 30.25 });
     expect((await owner.agent.patch(url).send({ settingMin: null })).body.grinder).toMatchObject({ settingMin: null, settingMax: null, stepSize: 1 });
+    expect((await owner.agent.patch(url).send({ usualAdjustment: 0.5 })).body.grinder).toMatchObject({ usualAdjustment: 0.5 });
+    expect((await owner.agent.patch(url).send({ usualAdjustment: null })).body.grinder).toMatchObject({ usualAdjustment: null });
   });
 });
 
