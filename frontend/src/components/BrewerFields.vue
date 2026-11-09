@@ -1,19 +1,24 @@
 <script setup lang="ts">
 // A brewer's fields (docs/api/brewers.md §3): name and brew method (which also
 // groups it when brewing); for espresso, what the machine lets you control;
-// a finish offset; notes. How it shows on the public menu is set in Bar setup → Menu.
+// for the rest, the water its grounds keep (the yield estimate); a finish
+// offset; notes. How it shows on the public menu is set in Bar setup → Menu.
 import { computed, watch } from 'vue';
 import type { BrewerMethod } from '../api/types';
-import { METHOD_KINDS, PREINFUSION_MODES, PROFILE_CONTROLS, type BrewerForm } from '../lib/equipment';
+import { METHOD_KINDS, parseGroundsRetention, PREINFUSION_MODES, PROFILE_CONTROLS, type BrewerForm } from '../lib/equipment';
+import { formatGrams } from '../lib/format';
 import { parseFinishOffset } from '../lib/finishOffset';
 
 const form = defineModel<BrewerForm>({ required: true });
-const props = defineProps<{ idPrefix: string; showErrors: boolean; methods: BrewerMethod[] }>();
+// learned: what its measured brews say (docs/api/brewers.md §3), editing only.
+const props = defineProps<{ idPrefix: string; showErrors: boolean; methods: BrewerMethod[]; learned?: { retention: number; count: number } | null }>();
 
 // The workspace's methods (docs/api/brewer-methods.md §3e): the visible ones,
 // plus the brewer's own if it's hidden. The kind follows the chosen method.
 const methodChoices = computed(() => props.methods.filter((m) => !m.hidden || m.id === form.value.methodId));
 const offset = computed(() => parseFinishOffset(form.value.finishOffset));
+const retention = computed(() => parseGroundsRetention(form.value.groundsRetention));
+const learnedText = computed(() => (props.learned ? formatGrams(Math.round(props.learned.retention * 100) / 100) : null));
 const method = computed(() => props.methods.find((m) => m.id === form.value.methodId) ?? null);
 watch(method, (m) => {
   if (m) form.value.kind = m.behaviour;
@@ -75,6 +80,19 @@ watch(
         </div>
       </div>
     </template>
+    <div v-else class="field offset">
+      <label :for="`${idPrefix}-retention`">Water kept by the grounds (g per g)</label>
+      <input :id="`${idPrefix}-retention`" v-model="form.groundsRetention" inputmode="decimal" maxlength="4" :placeholder="learnedText ?? 'e.g. 1.1'" :aria-invalid="!retention.ok" />
+      <span v-if="!retention.ok" class="field-error">{{ retention.error }}</span>
+      <span v-else class="hint">
+        For the yield estimate: how much water stays in the spent coffee per gram. A pressed brewer (OXO, AeroPress) keeps about 1, a drip cone 2 or more.
+        <template v-if="learned">
+          Your {{ learned.count === 1 ? 'measured brew says' : `${learned.count} measured brews say` }} {{ learnedText }}<template v-if="!form.groundsRetention.trim()">, used while this is blank</template>.
+          <button v-if="form.groundsRetention.trim() !== learnedText" class="btn-link" type="button" @click="form.groundsRetention = learnedText ?? ''">Use {{ learnedText }}</button>
+        </template>
+        <template v-else>Blank: learned from the brews you measure with it.</template>
+      </span>
+    </div>
     <div class="field offset">
       <label :for="`${idPrefix}-finish-offset`">Finish offset (s)</label>
       <input :id="`${idPrefix}-finish-offset`" v-model="form.finishOffset" maxlength="3" placeholder="e.g. 4" :aria-invalid="!offset.ok" />

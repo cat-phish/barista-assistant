@@ -84,6 +84,7 @@ describe("method kinds", () => {
       flowControl: "none",
       pressureControl: "none",
       finishOffsetSec: null,
+      groundsRetention: null,
       archivedAt: null,
       createdAt: expect.any(String),
     });

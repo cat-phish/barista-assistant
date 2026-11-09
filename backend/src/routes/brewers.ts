@@ -18,7 +18,7 @@ import {
   type Brewer,
   type MethodKind,
 } from "@barista/shared/schema";
-import { optionalText, updateSchema } from "../validation.js";
+import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 
 // docs/api/brewers.md §3: what makes the coffee (V60, AeroPress, an espresso
 // machine). Espresso brewers record their capabilities; the menu fields put
@@ -54,6 +54,8 @@ const brewerFields = {
   pressureControl: z.enum(PROFILE_CONTROLS),
   // Seconds taken off the brew time at Finish & Save (docs/api/brewers.md §3).
   finishOffsetSec: z.number().int().min(-60).max(60).nullable(),
+  // Water the grounds keep, g/g, for the yield estimate (docs/api/brewers.md §3).
+  groundsRetention: decimalSchema({ min: 0.3, max: 3.5, scale: 2 }).nullable(),
 };
 
 const createBrewerSchema = z.object({
@@ -64,6 +66,7 @@ const createBrewerSchema = z.object({
   flowControl: brewerFields.flowControl.default("none"),
   pressureControl: brewerFields.pressureControl.default("none"),
   finishOffsetSec: brewerFields.finishOffsetSec.default(null),
+  groundsRetention: brewerFields.groundsRetention.default(null),
 })
   // Brewers have no category or menu fields any more (the menu builder, §7b):
   // an old client sending them gets a 400 rather than a silent drop.
@@ -81,6 +84,7 @@ const summary = {
   flowControl: brewers.flowControl,
   pressureControl: brewers.pressureControl,
   finishOffsetSec: brewers.finishOffsetSec,
+  groundsRetention: brewers.groundsRetention,
   archivedAt: brewers.archivedAt,
   createdAt: brewers.createdAt,
 };

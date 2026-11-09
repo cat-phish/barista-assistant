@@ -181,9 +181,11 @@ fails.
   starting points included) to adapt it, e.g. for a second espresso machine,
   which is preselected when there is one.
 - Dose, water (live coffee:water ratio), temperature, target finish window.
-- **Expected yield** fills in automatically from a light-roast estimate
-  (grounds keep ≈ 2 g of water per g of coffee). Typing your own number
-  keeps it; "Use estimate" switches back.
+- **Expected yield** fills in automatically from an estimate: the brewer's
+  grounds retention (typed on the brewer, or learned from your measured brews
+  with it), else a light-roast default (grounds keep ≈ 2 g of water per g of
+  coffee). Typing your own number keeps it; "Use estimate" switches back, and
+  a saved yield that your brews with the brewer clearly beat says so.
 - **Steps** run one after another, each with a time and how it moves on:
   **automatically**, **automatically with a "Log it" button** (to record when
   you really did it), or **when you tap Next** (the time is a guide; e.g. a
@@ -405,7 +407,13 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   time and an optional **first drop** you can type in if you didn't tap.
 - **Yield estimate:** water − retention × dose. Retention comes from your
   measured brews of this bean with this recipe (median), else the recipe's
-  expected yield adjusted for the bean's roast, else a roast-level default.
+  expected yield adjusted for the bean's roast, else the brewer's grounds
+  retention (typed on the brewer, else the median of your measured brews with
+  it, any bean or recipe), else a roast-level default. A pressed brewer (OXO,
+  AeroPress) keeps about 1 g/g where a drip cone keeps 2+, so the brewer's
+  figure matters. When the recipe's yield is the source but your brews with
+  the brewer point well away from it, the brew page suggests updating the
+  recipe.
   Fluid ounces assume brewed coffee weighs about 1 g per ml.
 - **Finish & Save** is available throughout; the screen stays awake.
 - **Log:** dose, water, measured yield, temperature, grind, time, rating and

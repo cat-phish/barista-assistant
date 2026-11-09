@@ -45,7 +45,8 @@ import {
 } from '../lib/steps';
 import { useChatProposalStore } from '../stores/chatProposal';
 import { useWorkspaceStore } from '../stores/workspace';
-import { DEFAULT_STEP_TIME_SCALING, estimateYield, ratioWater, ROAST_LEVELS, scaledTime, scalesByDefault, STEP_TIME_SCALING } from '../lib/scale';
+import { brewerRetention, DEFAULT_STEP_TIME_SCALING, estimateYield, ratioWater, ROAST_LEVELS, scaledTime, scalesByDefault, STEP_TIME_SCALING, yieldMismatch, type MeasuredBrew } from '../lib/scale';
+import { loadBrewerMeasured } from '../lib/brewerRetention';
 import { parseTemp, tempText, TEMPERATURE_LABELS } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
@@ -81,7 +82,8 @@ const water = ref('');
 const flashChilled = ref(false);
 const ice = ref('');
 const expectedYield = ref('');
-// Expected yield follows a light-roast estimate until typed over.
+// Expected yield follows the estimate (the brewer's grounds retention, else a
+// light-roast default) until typed over.
 const yieldCustom = ref(false);
 const finishFrom = ref('');
 const finishTo = ref('');
@@ -249,13 +251,43 @@ const ratio = computed(() => {
   const out = espresso.value ? (p.expectedYield?.ok ? p.expectedYield.value : null) : liquid.value;
   return out === null ? null : formatRatio(p.dose.value, out);
 });
+// The brewer's measured brews (any bean or recipe), by brewer, for its learned
+// grounds retention (docs/api/brewers.md §3). Loaded before a saved recipe is
+// filled in, so its yield is judged against the brewer's estimate.
+const brewerMeasured = ref<Record<string, MeasuredBrew[]>>({});
+async function ensureBrewerMeasured(id: string): Promise<void> {
+  const ws = workspaces.current?.id;
+  if (!ws || !id || id === NEW_METHOD || brewerMeasured.value[id]) return;
+  const list = await loadBrewerMeasured(ws, id);
+  brewerMeasured.value = { ...brewerMeasured.value, [id]: list };
+}
+watch(brewerId, (id) => void ensureBrewerMeasured(id));
+// What the grounds keep: the brewer's figure, else the recipe roast's default.
+const estimateRetention = computed(() => {
+  const b = methods.value.find((m) => m.id === brewerId.value);
+  const fromBrewer = b ? brewerRetention({ typed: b.groundsRetention, measured: brewerMeasured.value[b.id] ?? [] }) : null;
+  return fromBrewer ? { ...fromBrewer, brewerName: b?.name ?? '' } : null;
+});
+const estimateSource = computed(() => {
+  const e = estimateRetention.value;
+  if (!e) return `for a ${ROAST_LEVELS[recipeRoastLevel.value].label.toLowerCase()} roast`;
+  if (e.source.kind === 'brewerTyped') return `from the ${e.brewerName}'s grounds retention (${formatGrams(Math.round(e.retention * 100) / 100)} g per g)`;
+  return `from ${e.source.count === 1 ? 'your measured brew' : `${e.source.count} of your measured brews`} with the ${e.brewerName} (${formatGrams(Math.round(e.retention * 100) / 100)} g per g kept)`;
+});
 // Filter only: espresso's yield is a target, not an estimate.
 const yieldEstimate = computed(() =>
   !espresso.value && parsed.value.dose.ok && liquid.value !== null
-    ? estimateYield(parsed.value.dose.value, liquid.value, ROAST_LEVELS[recipeRoastLevel.value].retention)
+    ? estimateYield(parsed.value.dose.value, liquid.value, estimateRetention.value?.retention ?? ROAST_LEVELS[recipeRoastLevel.value].retention)
     : null,
 );
 const expectedYieldValue = computed(() => (parsed.value.expectedYield?.ok ? parsed.value.expectedYield.value : null));
+// A typed yield the brewer's own figure clearly disagrees with: say why.
+const yieldOffNote = computed(() => {
+  const est = yieldEstimate.value;
+  const typed = expectedYieldValue.value;
+  if (!yieldCustom.value || !estimateRetention.value || est === null || typed === null || !yieldMismatch(typed, est)) return '';
+  return `${typed < est ? 'Low' : 'High'} for the ${estimateRetention.value.brewerName}: estimated ${estimateSource.value}.`;
+});
 watch(yieldEstimate, (est) => {
   if (!yieldCustom.value) expectedYield.value = est === null ? '' : formatGrams(est);
 }, { immediate: true });
@@ -402,6 +434,7 @@ onMounted(async () => {
         return;
       }
       saved.value = { name: recipe.name, archived: !!recipe.archivedAt };
+      await ensureBrewerMeasured(recipe.brewer.id);
       fill(recipe);
       const change = route.query.proposal !== undefined ? chatProposals.take('recipeChange') : null;
       if (change && change.recipeId === recipe.id) {
@@ -414,6 +447,7 @@ onMounted(async () => {
     // Duplicate: a copy of that recipe, on the same brewer.
     const from = recipeList?.recipes.find((r) => r.id === route.query.from);
     if (from) {
+      await ensureBrewerMeasured(from.brewer.id);
       fill(from);
       name.value = `${from.name} (copy)`;
       copyOf.value = from.name;
@@ -716,10 +750,11 @@ async function save(): Promise<void> {
             <label for="expected-yield">Expected yield (g)</label>
             <input id="expected-yield" v-model="expectedYield" inputmode="decimal" placeholder="e.g. 220" :aria-invalid="submitted && !!fieldErrors.expectedYield" @input="yieldCustom = true" />
             <span v-if="submitted && fieldErrors.expectedYield" class="field-error">{{ fieldErrors.expectedYield }}</span>
-            <span v-else-if="!yieldCustom && yieldEstimate !== null" class="muted small">Estimated for a {{ ROAST_LEVELS[recipeRoastLevel].label.toLowerCase() }} roast</span>
-            <button v-else-if="yieldCustom && yieldEstimate !== null && expectedYieldValue !== yieldEstimate" class="btn-link small yield-reset" type="button" @click="yieldCustom = false">
-              Use estimate ({{ formatGrams(yieldEstimate) }} g)
-            </button>
+            <span v-else-if="!yieldCustom && yieldEstimate !== null" class="muted small">Estimated {{ estimateSource }}</span>
+            <template v-else-if="yieldCustom && yieldEstimate !== null && expectedYieldValue !== yieldEstimate">
+              <span v-if="yieldOffNote" class="note small">{{ yieldOffNote }}</span>
+              <button class="btn-link small yield-reset" type="button" @click="yieldCustom = false">Use estimate ({{ formatGrams(yieldEstimate) }} g)</button>
+            </template>
           </div>
           <div v-if="show('recipe.temp') && !longStyle" class="field">
             <label for="temp">Water temp ({{ TEMPERATURE_LABELS[temperatureUnit] }})</label>

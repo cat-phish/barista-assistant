@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Brewer, Grinder, MachineCapabilities } from '../api/types';
-import { adjustmentLabel, brewerForm, brewerInput, burrLabel, grinderForm, grinderSummary, machineSummary, parseGrinderForm, powerLabel, RECIPE_STYLES, STYLES_BY_KIND } from './equipment';
+import { adjustmentLabel, brewerForm, brewerInput, parseGroundsRetention, burrLabel, grinderForm, grinderSummary, machineSummary, parseGrinderForm, powerLabel, RECIPE_STYLES, STYLES_BY_KIND } from './equipment';
 
 const c40: Grinder = {
   id: 'g', name: 'C40', notes: null, adjustment: 'stepped', settingMin: 0, settingMax: 40, stepSize: 1, usualAdjustment: null,
@@ -74,7 +74,7 @@ describe('recipe styles', () => {
 describe('brewer form', () => {
   it('the finish offset goes to text and back; blank is none', () => {
     const oxo: Brewer = {
-      id: 'b', name: 'OXO', kind: 'filter', methodId: 'm', notes: null, finishOffsetSec: 4,
+      id: 'b', name: 'OXO', kind: 'filter', methodId: 'm', notes: null, finishOffsetSec: 4, groundsRetention: null,
       preinfusion: 'none', flowControl: 'none', pressureControl: 'none', archivedAt: null, createdAt: '2026-11-08T00:00:00.000Z',
     };
     const form = brewerForm(oxo);
@@ -82,5 +82,23 @@ describe('brewer form', () => {
     expect(brewerInput(form).finishOffsetSec).toBe(4);
     expect(brewerInput({ ...form, finishOffset: ' ' }).finishOffsetSec).toBeNull();
     expect(brewerForm().finishOffset).toBe('');
+  });
+
+  it('the grounds retention: blank is learned, decimals to 2, espresso keeps none', () => {
+    const oxo: Brewer = {
+      id: 'b', name: 'OXO', kind: 'filter', methodId: 'm', notes: null, finishOffsetSec: null, groundsRetention: 1.1,
+      preinfusion: 'none', flowControl: 'none', pressureControl: 'none', archivedAt: null, createdAt: '2026-11-08T00:00:00.000Z',
+    };
+    const form = brewerForm(oxo);
+    expect(form.groundsRetention).toBe('1.1');
+    expect(brewerInput(form).groundsRetention).toBe(1.1);
+    expect(brewerInput({ ...form, groundsRetention: '1,05' }).groundsRetention).toBe(1.05);
+    expect(brewerInput({ ...form, groundsRetention: '' }).groundsRetention).toBeNull();
+    expect(brewerInput({ ...form, kind: 'espresso' }).groundsRetention).toBeNull();
+    expect(brewerForm().groundsRetention).toBe('');
+    expect(parseGroundsRetention(' ')).toEqual({ ok: true, value: null });
+    expect(parseGroundsRetention('0.2').ok).toBe(false);
+    expect(parseGroundsRetention('1.125').ok).toBe(false);
+    expect(parseGroundsRetention('4').ok).toBe(false);
   });
 });

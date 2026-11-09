@@ -2712,3 +2712,35 @@ Branch `finish-window-follows`; was backlog 8.
 - **Decided against:** the window following the steps' end (built and
   tried; it felt worse than setting it yourself), a second window box by
   the steps, and confirming on save. The server still doesn't enforce it.
+
+## Yield estimates per brewer (built)
+
+Branch `brewer-retention`; was backlog 8.
+
+- **Why:** the yield estimate (water − retention × dose) never looked at
+  the brewer. The OXO brews of Soup and Zuppa Lunga measured 0.99–1.35 g
+  of water kept per g of coffee against the 2.0–2.05 default, so their
+  estimates came out far too **low** (Soup 80 ml: 36 g estimated, ~68 g
+  measured). Pressing squeezes out water a drip cone leaves in the grounds;
+  an AeroPress behaves the same. V60 brews measured ~2.4.
+- **Bugs fixed:** retention under 1 g/g was thrown out as implausible, so a
+  pressed brew (0.99) and Soup 100 ml's recipe yield (0.9) were ignored and
+  the estimate fell back to the roast default. The floor is now 0.5.
+- **Brewer retention:** `brewers.grounds_retention` (migration 0111), g per
+  g, optional, on the brewer form for non-espresso brewers. Blank = learned:
+  the median of the brewer's latest 20 measured brews, any bean or recipe.
+  The form shows the learned figure with a **Use** button.
+- **Order:** your brews of this bean with this recipe → the recipe's
+  expected yield (roast-adjusted) → the brewer's typed figure → its learned
+  figure → the roast default. The brewer's figure isn't roast-adjusted: the
+  method matters more than the roast.
+- **The recipe's yield stays in charge, with a suggestion:** when the brew
+  page estimates from the recipe's yield but the brewer's figure points
+  more than 10% (and at least 5 g) away, it says so and links to the
+  recipe. The recipe form estimates with the brewer's figure, and a typed
+  yield it clearly disagrees with gets a note next to "Use estimate". The
+  brewer's brews load before a saved recipe is filled in, so a yield saved
+  from the old roast estimate counts as typed and is kept, not overwritten.
+- **Not sent to the AI;** it's an aid for estimating, not brew data.
+- **Left for later:** Insights volume figures still estimate unmeasured
+  brews with the roast default (backlog 13).

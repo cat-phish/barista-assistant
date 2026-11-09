@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RecipeStep } from '../api/types';
-import { brewRetention, estimateYield, factorText, scaledTime, scalesByDefault, scaleStepTimes, shiftStepTemps, shiftWindow, GRAMS_PER_FL_OZ, linkRatio, ratioText, retentionOf, scaleBatch, scaleShot, scaleSteps, sliderDose, sliderPosition, waterShare } from './scale';
+import { brewerRetention, brewRetention, estimateYield, measuredRetention, yieldMismatch, factorText, scaledTime, scalesByDefault, scaleStepTimes, shiftStepTemps, shiftWindow, GRAMS_PER_FL_OZ, linkRatio, ratioText, retentionOf, scaleBatch, scaleShot, scaleSteps, sliderDose, sliderPosition, waterShare } from './scale';
 
 const recipe = { targetDoseGrams: 15, targetWaterGrams: 250, targetIceGrams: null, expectedYieldGrams: null };
 
@@ -14,6 +14,9 @@ describe('yield and retention', () => {
     expect(retentionOf(15, 250, 220)).toBe(2);
     expect(retentionOf(15, 250, 250)).toBeNull();
     expect(retentionOf(15, 250, 100)).toBeNull();
+    // A pressed OXO brew (Soup: 22 g, 90.1 g water, 68.3 g out) keeps under 1 g/g.
+    expect(retentionOf(22, 90.1, 68.3)).toBeCloseTo(0.99);
+    expect(retentionOf(22, 90, 80)).toBeNull(); // 0.45: a typo
   });
 
   it('prefers measured brews (median), then the recipe adjusted for roast, then the roast default', () => {
@@ -238,5 +241,45 @@ describe('step times with the batch', () => {
   it('gives one step\'s time for the form\'s hint', () => {
     expect(scaledTime(60, 2, 0.5)).toBe(85);
     expect(scaledTime(60, 0.5, 0.5)).toBe(42);
+  });
+});
+
+describe('brewer retention', () => {
+  // OXO brews of Soup and Zuppa Lunga (pressed): about 1–1.35 g/g.
+  const oxo = [
+    { actualDoseGrams: 22, actualWaterGrams: 220, actualIceGrams: null, actualYieldGrams: 194.6 }, // 1.15
+    { actualDoseGrams: 22, actualWaterGrams: 220, actualIceGrams: null, actualYieldGrams: 190.2 }, // 1.35
+    { actualDoseGrams: 22, actualWaterGrams: 90.1, actualIceGrams: null, actualYieldGrams: 68.3 }, // 0.99
+    { actualDoseGrams: 22, actualWaterGrams: 91.1, actualIceGrams: null, actualYieldGrams: 68.8 }, // 1.01
+    { actualDoseGrams: 22.2, actualWaterGrams: 102, actualIceGrams: null, actualYieldGrams: 78.6 }, // 1.05
+  ];
+  const soup80 = { targetDoseGrams: 22, targetWaterGrams: 80, targetIceGrams: null, expectedYieldGrams: null };
+
+  it('learns the median of the brewer\'s measured brews; a typed figure wins', () => {
+    expect(measuredRetention(oxo)).toEqual({ retention: expect.closeTo(1.05, 2), count: 5 });
+    expect(measuredRetention([])).toBeNull();
+    expect(brewerRetention({ typed: null, measured: oxo })).toEqual({ retention: expect.closeTo(1.05, 2), source: { kind: 'brewer', count: 5 } });
+    expect(brewerRetention({ typed: 1.2, measured: oxo })).toEqual({ retention: 1.2, source: { kind: 'brewerTyped' } });
+    expect(brewerRetention({ typed: null, measured: [] })).toBeNull();
+    expect(brewerRetention(null)).toBeNull();
+  });
+
+  it('comes after this bean+recipe\'s brews and the recipe\'s yield, before the roast default', () => {
+    const brewer = { typed: null, measured: oxo };
+    const own = [oxo[2]!];
+    expect(brewRetention({ roastLevel: 'medium_light', recipeRoastLevel: 'light', recipe: soup80, measured: own, brewer }).source).toEqual({ kind: 'measured', count: 1 });
+    expect(brewRetention({ roastLevel: 'medium_light', recipeRoastLevel: 'light', recipe: { ...soup80, expectedYieldGrams: 36 }, measured: [], brewer }).source.kind).toBe('recipe');
+    const b = brewRetention({ roastLevel: 'medium_light', recipeRoastLevel: 'light', recipe: soup80, measured: [], brewer });
+    expect(b.source).toEqual({ kind: 'brewer', count: 5 });
+    expect(estimateYield(22, 80, b.retention)).toBe(57); // the roast default said 35
+    expect(brewRetention({ roastLevel: 'medium_light', recipeRoastLevel: 'light', recipe: soup80, measured: [], brewer: { typed: 1.1, measured: [] } }).source).toEqual({ kind: 'brewerTyped' });
+    expect(brewRetention({ roastLevel: 'medium_light', recipeRoastLevel: 'light', recipe: soup80, measured: [], brewer: { typed: null, measured: [] } }).source.kind).toBe('roast');
+  });
+
+  it('flags a saved yield only when it is clearly off', () => {
+    expect(yieldMismatch(36, 57)).toBe(true);
+    expect(yieldMismatch(176, 197)).toBe(true); // Zuppa Lunga: 21 g, 11%
+    expect(yieldMismatch(220, 228)).toBe(false); // 8 g of 228: under 10%
+    expect(yieldMismatch(30, 34)).toBe(false); // under 5 g
   });
 });

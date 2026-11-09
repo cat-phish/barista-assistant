@@ -51,6 +51,16 @@ offset adds the seconds instead, for someone who taps early. A recipe can set it
 `null` = none. The log form says how much came off (or was added) and can undo it until the
 brew is saved; the time as tapped isn't stored.
 
+**Grounds retention** (`groundsRetention`, optional, nullable, g per g of
+coffee, 0.3–3.5 with ≤ 2 decimals): how much water the spent grounds keep,
+for the brew page's and recipe form's yield estimate (`water − retention ×
+dose`). A pressed brewer (OXO, AeroPress) squeezes most of it out and keeps
+about 1 g/g; a drip cone keeps 2 or more. `null` = learned: the median of
+the measured brews with this brewer (any bean or recipe), and the roast-level
+default until there are some. The brewer form shows the learned figure and
+can save it. Where it sits among the other sources: `docs/features.md`,
+"Yield estimate". Not sent to the AI.
+
 Archiving works like grinders (§3b): archived brewers leave the pickers, and
 past brews keep showing them. `createdAt` (read-only) is when the brewer was added.
 
@@ -66,6 +76,7 @@ past brews keep showing them. `createdAt` (read-only) is when the brewer was add
   "flowControl": "manual",
   "pressureControl": "none",
   "finishOffsetSec": null,
+  "groundsRetention": null,
   "archivedAt": null,
   "createdAt": "2026-10-18T09:00:00.000Z"
 }
@@ -85,7 +96,7 @@ past brews keep showing them. `createdAt` (read-only) is when the brewer was add
   brewer's `kind` is its behaviour. Older clients may send `kind` instead
   (that kind's built-in method; default `filter`); a `kind` sent with a
   `methodId` must match its behaviour (`400`). Optional: `notes`
-  (≤ 255), `finishOffsetSec` (default `null`) and the capabilities
+  (≤ 255), `finishOffsetSec` and `groundsRetention` (default `null`) and the capabilities
   (default `none`). Blank text becomes `null`.
   Unknown fields are rejected, including the removed `categoryId`,
   `menuName`, `description` and `showOnPublicMenu`.

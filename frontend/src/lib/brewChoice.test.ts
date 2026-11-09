@@ -31,7 +31,7 @@ const categories = [special, milk];
 
 // No methodId: grouped under their kind, as before custom methods.
 const brewer = (id: string, name: string, kind: MethodKind, archivedAt: string | null = null, methodId: string | null = null): Brewer => ({
-  id, name, kind, methodId, archivedAt, notes: null, finishOffsetSec: null,
+  id, name, kind, methodId, archivedAt, notes: null, finishOffsetSec: null, groundsRetention: null,
   preinfusion: 'none', flowControl: 'none', pressureControl: 'none', createdAt: '2026-10-20T00:00:00.000Z',
 });
 const v60 = brewer('v60', 'V60', 'filter');

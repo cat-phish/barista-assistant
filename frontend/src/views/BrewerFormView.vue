@@ -10,7 +10,9 @@ import { ApiError, errorMessage } from '../api/client';
 import AppHeader from '../components/AppHeader.vue';
 import DeleteSection from '../components/DeleteSection.vue';
 import BrewerFields from '../components/BrewerFields.vue';
-import { brewerForm, brewerInput } from '../lib/equipment';
+import { loadBrewerMeasured } from '../lib/brewerRetention';
+import { brewerForm, brewerInput, parseGroundsRetention } from '../lib/equipment';
+import { measuredRetention } from '../lib/scale';
 import { parseFinishOffset } from '../lib/finishOffset';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -25,6 +27,8 @@ const editing = computed(() => props.id !== undefined);
 
 const form = ref(brewerForm());
 const methods = ref<BrewerMethod[]>([]); // the workspace's (docs/api/brewer-methods.md §3e)
+// What its measured brews say the grounds keep (docs/api/brewers.md §3).
+const learned = ref<{ retention: number; count: number } | null>(null);
 const loading = ref(true);
 const saving = ref(false);
 const submitted = ref(false);
@@ -44,10 +48,12 @@ onMounted(async () => {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [b, bm] = await Promise.all([
+    const [b, bm, measured] = await Promise.all([
       editing.value ? brewersApi.list(ws) : Promise.resolve(null),
       brewerMethodsApi.list(ws).catch(() => ({ methods: [] })), // the form falls back to the kinds
+      props.id ? loadBrewerMeasured(ws, props.id) : Promise.resolve([]),
     ]);
+    learned.value = measuredRetention(measured);
     if (editing.value) {
       const brewer = b?.brewers.find((x) => x.id === props.id);
       if (!brewer) {
@@ -68,7 +74,7 @@ onMounted(async () => {
 async function save(): Promise<void> {
   submitted.value = true;
   const ws = workspaces.current?.id;
-  if (!ws || !form.value.name.trim() || !parseFinishOffset(form.value.finishOffset).ok) return;
+  if (!ws || !form.value.name.trim() || !parseFinishOffset(form.value.finishOffset).ok || !parseGroundsRetention(form.value.groundsRetention).ok) return;
   saving.value = true;
   error.value = '';
   try {
@@ -92,7 +98,7 @@ async function save(): Promise<void> {
     <p v-if="loading" class="muted" aria-live="polite">Loading…</p>
     <form v-else class="stack" novalidate @submit.prevent="save">
       <section class="card stack">
-        <BrewerFields v-model="form" id-prefix="brewer" :show-errors="submitted" :methods="methods" />
+        <BrewerFields v-model="form" id-prefix="brewer" :show-errors="submitted" :methods="methods" :learned="learned" />
       </section>
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
       <div class="buttons">
