@@ -61,6 +61,7 @@ async function load(): Promise<void> {
   try {
     data.value = await chatSettingsApi.get();
     draft.value = data.value.own;
+    periodDraft.value = data.value.own.periodMaxBrews === null ? '' : String(data.value.own.periodMaxBrews);
   } catch (err) {
     error.value = errorMessage(err);
   }
@@ -73,6 +74,32 @@ const serverLine = computed(() => {
   const size = maxBytes === null ? 'no size limit' : `at most ${formatBytes(maxBytes)}`;
   return `This server allows ${size}, ${maxDays === null ? 'kept for any time' : `kept for up to ${maxDays} days`}.`;
 });
+
+// Your own cap on a live period's brews (docs/api/chat.md §12, "Periods"):
+// empty = the workspace's.
+const periodDraft = ref('');
+const periodSaving = ref(false);
+const periodSaved = ref(false);
+const periodInvalid = computed(() => {
+  if (periodDraft.value === '') return false;
+  const n = Number(periodDraft.value);
+  return !Number.isInteger(n) || n < 10 || n > 300;
+});
+async function savePeriod(): Promise<void> {
+  if (!data.value || periodInvalid.value) return;
+  periodSaving.value = true;
+  periodSaved.value = false;
+  error.value = '';
+  try {
+    const { maxBytes, maxDays } = data.value.own;
+    data.value = await chatSettingsApi.save({ maxBytes, maxDays, periodMaxBrews: periodDraft.value === '' ? null : Number(periodDraft.value) });
+    periodSaved.value = true;
+  } catch (err) {
+    error.value = errorMessage(err);
+  } finally {
+    periodSaving.value = false;
+  }
+}
 
 async function save(): Promise<void> {
   if (!draft.value) return;
@@ -100,6 +127,17 @@ async function save(): Promise<void> {
         <ChatLimitsFields id-prefix="own" :limits="data.own" no-limit-text="Only the server's limit applies." @change="draft = $event; saved = false" />
         <div><button class="btn btn-primary" type="button" :disabled="saving || !draft" @click="save">Save</button></div>
         <p v-if="saved" class="muted" aria-live="polite">Saved.</p>
+      </section>
+      <section class="card stack">
+        <h2>Live periods</h2>
+        <p class="muted">A live period, attached from the Brews filters in a chat, sends its newest brews in detail up to the workspace's number. A lower one here sends fewer, so each reply costs less.</p>
+        <div class="field">
+          <label for="own-period-max">Brews in detail, at most</label>
+          <input id="own-period-max" v-model="periodDraft" type="number" inputmode="numeric" min="10" max="300" placeholder="The workspace's" :aria-invalid="periodInvalid" @input="periodSaved = false" />
+          <p v-if="periodInvalid" class="form-error small">A whole number from 10 to 300, or empty for the workspace's.</p>
+        </div>
+        <div><button class="btn btn-primary" type="button" :disabled="periodSaving || periodInvalid" @click="savePeriod">Save</button></div>
+        <p v-if="periodSaved" class="muted" aria-live="polite">Saved.</p>
       </section>
       <section v-if="workspaces.current" class="card stack">
         <h2>Export and import</h2>

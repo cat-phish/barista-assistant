@@ -312,7 +312,7 @@ async function recap(label: string, weeks: number, yes: boolean): Promise<void> 
   const contexts = [];
   for (const p of periods) {
     const ctx = await loadPeriodContext({ workspaceId: busiest.workspaceId, userId: busiest.userId, kind: "weekly", period: p, previous: previousPeriod("weekly", p, prefs.weekStartsOn) });
-    if (ctx.figures.brews) contexts.push(ctx);
+    if (ctx.figures.brews) contexts.push({ ...ctx, period: p });
   }
   const ai = await resolveAi(busiest.workspaceId);
   console.log(`${contexts.length} weeks with brews (${contexts.map((c) => periodLabel("weekly", c.period)).join(", ")}), recap prompt ${RECAP_PROMPT_VERSION}, model ${ai.models.main}: one call each.`);

@@ -3,23 +3,24 @@
 import { randomUUID } from "node:crypto";
 import { access, readFile } from "node:fs/promises";
 import { CHAT_EVENT_FIELD, chatReplyKey, type ChatJobPhoto, type ChatStreamEvent } from "@barista/shared/jobs";
-import { effectiveChatLimits, NO_CHAT_LIMITS, type ChatLimits, type ServerChatLimits } from "@barista/shared/aiConfig";
+import { effectiveChatLimits, NO_CHAT_LIMITS, type ChatLimits, type OwnChatLimits, type ServerChatLimits } from "@barista/shared/aiConfig";
 import { aiChatMessages, aiChatPhotos, aiChats, beans, brewLogs, CHAT_ATTACHMENT_KINDS, DEFAULT_WORKSPACE_SETTINGS, MAX_CHAT_ATTACHMENTS, recipes, users, withDefaults, workspaceMembers, workspaces, type AiChat, type AiChatMessage, type ChatAttachment, CHAT_PROPOSAL_STATES, type ChatProposal } from "@barista/shared/schema";
 import { and, asc, count, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import express, { Router, type Request, type Response } from "express";
 import { Redis } from "ioredis";
 import { z } from "zod";
 import { chartSnapshotSchema } from "../chatChart.js";
+import { labelPeriod, periodSpecSchema } from "../chatPeriod.js";
 import { requireAi } from "../aiConfig.js";
 import { buildChatsZip, importChats } from "../chatExport.js";
-import { chatLimitsSchema, deleteAllChatsOf, deleteChats, pruneChatsOf, userChatBytes } from "../chatData.js";
+import { deleteAllChatsOf, ownChatLimitsSchema, deleteChats, pruneChatsOf, userChatBytes } from "../chatData.js";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { config } from "../config.js";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { chatPhotoPath, PHOTO_MAX_UPLOAD_BYTES, processPhoto, writeChatPhotoFile } from "../photos.js";
-import { enqueueChatReply, QueueUnavailableError } from "../queue.js";
+import { enqueueChatReply, enqueueChatSummary, QueueUnavailableError } from "../queue.js";
 import { getChatLimits } from "../serverSettings.js";
 
 export const CHAT_MESSAGE_MAX = 4000;
@@ -55,10 +56,12 @@ const MESSAGE_COLUMNS = {
   createdAt: aiChatMessages.createdAt,
 };
 
-// A brew, bean or recipe by reference; a chart with its snapshot.
+// A brew, bean or recipe by reference; a chart with its snapshot; a period
+// with its filters.
 const attachmentSchema = z.union([
-  z.object({ kind: z.enum(CHAT_ATTACHMENT_KINDS.filter((k) => k !== "chart") as ["brew", "bean", "recipe"]), id: z.string().uuid() }).strict(),
+  z.object({ kind: z.enum(CHAT_ATTACHMENT_KINDS.filter((k) => k !== "chart" && k !== "period") as ["brew", "bean", "recipe"]), id: z.string().uuid() }).strict(),
   z.object({ kind: z.literal("chart"), id: z.string().uuid(), chart: chartSnapshotSchema }).strict(),
+  z.object({ kind: z.literal("period"), id: z.string().uuid(), period: periodSpecSchema }).strict(),
 ]);
 type AttachmentRef = z.infer<typeof attachmentSchema>;
 const sendSchema = z.object({ content: z.string().trim().min(1).max(CHAT_MESSAGE_MAX), attachments: z.array(attachmentSchema).max(MAX_CHAT_ATTACHMENTS).optional(), photoIds: z.array(z.string().uuid()).max(CHAT_PHOTOS_MAX).optional() }).strict();
@@ -116,11 +119,20 @@ async function ownChat(res: Response, userId: string, workspaceId: string, chatI
 }
 
 const STALE_ERROR = "The reply stopped before it finished";
+// A reply or a summary still pending after STALE_MS: the worker died, so it's
+// marked failed and the chat can be used again (docs/api/chat.md §12).
 function settleStale(chatId: string): Promise<unknown> {
-  return db
-    .update(aiChatMessages)
-    .set({ status: "failed", error: STALE_ERROR })
-    .where(and(eq(aiChatMessages.chatId, chatId), eq(aiChatMessages.status, "pending"), lt(aiChatMessages.createdAt, new Date(Date.now() - STALE_MS))));
+  const cutoff = new Date(Date.now() - STALE_MS);
+  return Promise.all([
+    db
+      .update(aiChatMessages)
+      .set({ status: "failed", error: STALE_ERROR })
+      .where(and(eq(aiChatMessages.chatId, chatId), eq(aiChatMessages.status, "pending"), lt(aiChatMessages.createdAt, cutoff))),
+    db
+      .update(aiChats)
+      .set({ summaryStatus: "failed" })
+      .where(and(eq(aiChats.id, chatId), eq(aiChats.summaryStatus, "pending"), lt(aiChats.summaryRequestedAt, cutoff))),
+  ]);
 }
 
 type MessageRow = Omit<ChatMessage, "attachments" | "proposals" | "photos"> & { attachments: ChatAttachment[] | null; proposals: ChatProposal[] | null };
@@ -190,8 +202,15 @@ async function labelled(workspaceId: string, refs: AttachmentRef[]): Promise<Cha
     ...recipeRows.map((r): [string, string] => [`recipe:${r.id}`, r.name]),
   ]);
   const unique = [...new Map(refs.map((r) => [`${r.kind}:${r.id}`, r])).values()];
+  const periodLabels = new Map(
+    await Promise.all(unique.flatMap((r) => (r.kind === "period" ? [labelPeriod(workspaceId, r.period).then((label): [string, string | null] => [r.id, label])] : []))),
+  );
   const found = unique.flatMap((r): ChatAttachment[] => {
     if (r.kind === "chart") return [{ kind: r.kind, id: r.id, label: r.chart.title, chart: r.chart }];
+    if (r.kind === "period") {
+      const label = periodLabels.get(r.id);
+      return label ? [{ kind: r.kind, id: r.id, label, period: r.period }] : [];
+    }
     const label = labels.get(`${r.kind}:${r.id}`);
     return label ? [{ ...r, label: label.slice(0, 200) }] : [];
   });
@@ -203,7 +222,8 @@ async function labelled(workspaceId: string, refs: AttachmentRef[]): Promise<Cha
 async function addTurn(chatId: string, content: string, attachments: ChatAttachment[], photoIds: string[]): Promise<{ ids: [string, string] } | "busy"> {
   const ids: [string, string] = [randomUUID(), randomUUID()];
   const added = await db.transaction(async (tx) => {
-    await tx.select({ id: aiChats.id }).from(aiChats).where(eq(aiChats.id, chatId)).for("update");
+    const [chat] = await tx.select({ summaryStatus: aiChats.summaryStatus }).from(aiChats).where(eq(aiChats.id, chatId)).for("update");
+    if (chat?.summaryStatus === "pending") return false;
     const [last] = await tx
       .select({ position: aiChatMessages.position, status: aiChatMessages.status })
       .from(aiChatMessages)
@@ -236,6 +256,84 @@ async function theTwo(chat: AiChat, ids: [string, string]): Promise<ChatPair> {
 
 export const chatsRouter = Router({ mergeParams: true });
 chatsRouter.use(requireAuth);
+
+// Summarize and continue (docs/api/chat.md §12, "Long chats"): the worker
+// folds all but the newest 10 finished messages into the chat's summary.
+const SUMMARY_MIN_MESSAGES = 12;
+chatsRouter.post("/:chatId/summary", async (req: Request<ChatParams>, res: Response<{ chat: AiChat }>) => {
+  const userId = authedUserId(req);
+  const { workspaceId, chatId } = req.params;
+  if (!(await requireMembership(res, userId, workspaceId, WRITE_ROLES))) return;
+  if (!(await requireChatOn(res, userId, workspaceId))) return;
+  const chat = await ownChat(res, userId, workspaceId, chatId);
+  if (!chat) return;
+  if (!(await requireAi(res, workspaceId))) return;
+  if (!(await requireUnderDailyLimit(res, userId, await getChatLimits()))) return;
+  await settleStale(chatId);
+  const claimed = await db.transaction(async (tx) => {
+    const [row] = await tx.select({ summaryStatus: aiChats.summaryStatus }).from(aiChats).where(eq(aiChats.id, chatId)).for("update");
+    const messages = await tx.select({ position: aiChatMessages.position, status: aiChatMessages.status }).from(aiChatMessages).where(eq(aiChatMessages.chatId, chatId)).orderBy(asc(aiChatMessages.position));
+    if (row?.summaryStatus === "pending" || messages.some((m) => m.status === "pending")) return "busy" as const;
+    if (messages.filter((m) => m.status === "done").length < SUMMARY_MIN_MESSAGES) return "short" as const;
+    await tx.update(aiChats).set({ summaryStatus: "pending", summaryRequestedAt: sql`NOW()` }).where(eq(aiChats.id, chatId));
+    return messages.at(-1)!.position;
+  });
+  if (claimed === "busy") {
+    sendError(res, 409, "A reply or a summary is still being written");
+    return;
+  }
+  if (claimed === "short") {
+    sendError(res, 400, `A chat needs at least ${SUMMARY_MIN_MESSAGES} messages to summarize`);
+    return;
+  }
+  try {
+    await enqueueChatSummary(chatId, claimed);
+  } catch (err) {
+    await db.update(aiChats).set({ summaryStatus: chat.summaryStatus === "failed" ? "failed" : null }).where(eq(aiChats.id, chatId));
+    sendUnavailable(res, err);
+    return;
+  }
+  const [fresh] = await db.select().from(aiChats).where(eq(aiChats.id, chatId));
+  res.status(202).json({ chat: fresh ?? chat });
+});
+
+// Fixing or dropping it (docs/api/chat.md §12, "Long chats"): an edited
+// summary is what later replies and the next summary build on; a cleared one
+// puts the older messages back in the window.
+const SUMMARY_MAX = 6000;
+const summaryEditSchema = z.object({ summary: z.string().trim().min(1).max(SUMMARY_MAX) }).strict();
+async function changeSummary(req: Request<ChatParams>, res: Response<{ chat: AiChat }>, set: (chat: AiChat) => Partial<typeof aiChats.$inferInsert> | null): Promise<void> {
+  const userId = authedUserId(req);
+  const { workspaceId, chatId } = req.params;
+  if (!(await requireMembership(res, userId, workspaceId, WRITE_ROLES))) return;
+  const chat = await ownChat(res, userId, workspaceId, chatId);
+  if (!chat) return;
+  await settleStale(chatId);
+  const [now] = await db.select().from(aiChats).where(eq(aiChats.id, chatId));
+  if (!now) return;
+  if (now.summaryStatus === "pending") {
+    sendError(res, 409, "A summary is still being written");
+    return;
+  }
+  const values = set(now);
+  if (!values) return;
+  await db.update(aiChats).set(values).where(eq(aiChats.id, chatId));
+  const [fresh] = await db.select().from(aiChats).where(eq(aiChats.id, chatId));
+  res.json({ chat: fresh ?? now });
+}
+chatsRouter.put("/:chatId/summary", (req: Request<ChatParams>, res: Response<{ chat: AiChat }>) =>
+  changeSummary(req, res, (chat) => {
+    if (!chat.summary) {
+      sendError(res, 404, "This chat has no summary to edit");
+      return null;
+    }
+    const body = parseBody(summaryEditSchema, req, res);
+    return body ? { summary: body.summary, summaryStatus: null } : null;
+  }),
+);
+chatsRouter.delete("/:chatId/summary", (req: Request<ChatParams>, res: Response<{ chat: AiChat }>) =>
+  changeSummary(req, res, () => ({ summary: null, summaryThrough: null, summaryStatus: null })),
+);
 
 chatsRouter.get("/", async (req: Request<Params>, res: Response<{ chats: AiChat[]; canSend: boolean }>) => {
   const userId = authedUserId(req);
@@ -355,7 +453,9 @@ chatsRouter.get("/:chatId", async (req: Request<ChatParams>, res: Response<ChatP
   const chat = await ownChat(res, userId, workspaceId, chatId);
   if (!chat) return;
   await settleStale(chatId);
-  res.json({ chat, messages: await messagesOf(chatId) });
+  // Read again: settling may have marked its summary failed.
+  const [fresh] = await db.select().from(aiChats).where(eq(aiChats.id, chatId));
+  res.json({ chat: fresh ?? chat, messages: await messagesOf(chatId) });
 });
 
 chatsRouter.delete("/:chatId", async (req: Request<ChatParams>, res: Response) => {
@@ -393,7 +493,7 @@ chatsRouter.post("/:chatId/messages", async (req: Request<ChatParams>, res: Resp
   await settleStale(chatId);
   const turn = await addTurn(chatId, body.content, attachments, photoIds);
   if (turn === "busy") {
-    sendError(res, 409, "The last reply is still being written");
+    sendError(res, 409, "The last reply or a summary is still being written");
     return;
   }
   try {
@@ -522,14 +622,14 @@ myChatsRouter.use("/chat-settings", requireAuth);
 myChatsRouter.use("/chats", requireAuth);
 
 interface ChatSettings {
-  own: ChatLimits;
+  own: Required<OwnChatLimits>;
   server: ServerChatLimits;
   effective: ChatLimits;
   usedBytes: number;
 }
 async function settingsOf(userId: string): Promise<ChatSettings> {
   const [row] = await db.select({ chatLimits: users.chatLimits }).from(users).where(eq(users.id, userId));
-  const own = row?.chatLimits ?? NO_CHAT_LIMITS;
+  const own = { ...NO_CHAT_LIMITS, periodMaxBrews: null, ...row?.chatLimits };
   const server = await getChatLimits();
   return { own, server, effective: effectiveChatLimits(server, own), usedBytes: await userChatBytes(userId) };
 }
@@ -541,14 +641,16 @@ myChatsRouter.get("/chat-settings", async (req: Request, res: Response<ChatSetti
 const over = (own: number | null, server: number | null): boolean => server !== null && (own === null ? false : own > server);
 myChatsRouter.put("/chat-settings", async (req: Request, res: Response<ChatSettings>) => {
   const userId = authedUserId(req);
-  const body = parseBody(chatLimitsSchema, req, res);
+  const body = parseBody(ownChatLimitsSchema, req, res);
   if (!body) return;
   const server = await getChatLimits();
   if (over(body.maxBytes, server.maxBytes) || over(body.maxDays, server.maxDays)) {
     sendError(res, 400, "That's more than this server allows");
     return;
   }
-  await db.update(users).set({ chatLimits: body }).where(eq(users.id, userId));
+  const [row] = await db.select({ chatLimits: users.chatLimits }).from(users).where(eq(users.id, userId));
+  const periodMaxBrews = body.periodMaxBrews === undefined ? (row?.chatLimits?.periodMaxBrews ?? null) : body.periodMaxBrews;
+  await db.update(users).set({ chatLimits: { maxBytes: body.maxBytes, maxDays: body.maxDays, periodMaxBrews } }).where(eq(users.id, userId));
   await pruneChatsOf(userId, null);
   res.json(await settingsOf(userId));
 });

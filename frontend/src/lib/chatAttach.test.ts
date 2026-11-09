@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatAttachment } from '../api/chats';
-import { beanAttachLabel, brewAttachLabel, countLabel, groupByKind, isPicked, matches, selectAll, toggle, withoutKind } from './chatAttach';
+import { attachRef, beanAttachLabel, brewAttachLabel, countLabel, groupByKind, isPicked, matches, selectAll, toggle, withoutKind } from './chatAttach';
 
 const brew = (id: string): ChatAttachment => ({ kind: 'brew', id, label: id });
 const bean = (id: string): ChatAttachment => ({ kind: 'bean', id, label: id });
@@ -38,6 +38,18 @@ describe('groups and labels', () => {
       { kind: 'bean', items: [bean('x')] },
     ]);
     expect(withoutKind([bean('x'), brew('a')], 'brew')).toEqual([bean('x')]);
+  });
+
+  it('sends a period with its filters, and no label', () => {
+    const period = { range: '7d' as const, from: null, to: null, beanId: null, recipeId: null, brewerId: null, mine: true };
+    expect(attachRef({ kind: 'period', id: 'p', label: 'Brews, last 7 days', period })).toEqual({ kind: 'period', id: 'p', period });
+    expect(attachRef(brew('a'))).toEqual({ kind: 'brew', id: 'a' });
+  });
+
+  it('puts a live period first', () => {
+    const period = { kind: 'period' as const, id: 'p', label: 'Brews, last 7 days' };
+    expect(groupByKind([brew('a'), period]).map((g) => g.kind)).toEqual(['period', 'brew']);
+    expect(countLabel('period', 2)).toBe('2 periods');
   });
 
   it('counts and labels as the server does', () => {

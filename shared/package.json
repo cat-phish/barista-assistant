@@ -64,6 +64,10 @@
     "./recipeCopy": {
       "types": "./dist/recipeCopy.d.ts",
       "default": "./dist/recipeCopy.js"
+    },
+    "./chatPeriod": {
+      "types": "./dist/chatPeriod.d.ts",
+      "default": "./dist/chatPeriod.js"
     }
   },
   "scripts": {

@@ -17,7 +17,7 @@ import type { BrewerInfo, SuggestContext } from "./suggestContext.js";
 export const PROMPT_VERSION = "2026-11-a";
 // The chat's own prompt (CHAT_SYSTEM, CHAT_PROPOSALS): replies don't store
 // it, the eval's propose runs do (docs/api/llm-contract.md §9e).
-export const CHAT_PROMPT_VERSION = "2026-11-b";
+export const CHAT_PROMPT_VERSION = "2026-11-c";
 // A recap's summary (RECAP_SYSTEM, toPeriodInput, the schema), stored on the
 // recaps row (docs/api/llm-contract.md §9f).
 export const RECAP_PROMPT_VERSION = "2026-11-a";
@@ -199,6 +199,7 @@ export function toPeriodInput(context: PeriodContext, hidden: ReadonlySet<AiDeta
     ratingScale: context.ratingScale,
     kind: context.kind,
     period: context.period,
+    filters: context.filters ?? undefined,
     figures: context.figures,
     previousPeriod: context.previous,
     previousFigures: context.previousFigures,
@@ -461,7 +462,7 @@ function customized(sections: PromptSection[], custom: PromptCustom | undefined)
 // then what they attached. Plain text, since the page shows replies as they are.
 export const CHAT_SYSTEM =
   "You are a coffee expert talking with a home barista in their brew journal. Answer what they ask, directly and practically, and ask if you need a detail you weren't given. You see only what they attach from their journal and can't change anything in it yourself; only use what's in this conversation. You can format with Markdown (bold, italics, lists, simple tables, code), which the app shows formatted; keep it light, and no HTML or images.";
-const ATTACHED_INTRO = "They attached these from their journal, as JSON. A missing key means it wasn't recorded; ratings run 0.5-5; an item marked unavailable can't be read, so don't guess at it. A chart is the numbers behind one of their Insights charts as they saw it, with what it covers; rowsLeftOut says how many rows weren't sent. Each item's ref names it in a proposal:";
+const ATTACHED_INTRO = "They attached these from their journal, as JSON. A missing key means it wasn't recorded; ratings run 0.5-5; an item marked unavailable can't be read, so don't guess at it. A chart is the numbers behind one of their Insights charts as they saw it, with what it covers; rowsLeftOut says how many rows weren't sent. A period is their brews over some days (and any filters it names), read from their journal again for every reply, so it already includes anything they logged, changed or deleted since attaching it: never ask them to attach it again or say you can't see a new brew in it. figures covers every brew in it, previousFigures the same filters over the period just before (to compare), brews the newest in detail, and brewsLeftOut how many weren't sent in detail; don't make up brews that weren't sent, and say so when a question needs them. Each item's ref names it in a proposal:";
 // Proposals (docs/api/llm-contract.md §9e): cards the person opens or dismisses.
 export const CHAT_PROPOSALS =
   'When you recommend something concrete they could set up, you can also offer it as a proposal card: at the very end of your reply, after all your text, add up to 3 fenced blocks, each starting with ```proposal on its own line, holding one JSON object, and closed with ```. Explain it in your text too; the card only opens the right form already filled in, and nothing changes until they save it there. Only propose when it helps, at most one per idea, and use only refs of items they attached; when they ask for a recipe or a change to one, add its block rather than only describing it, and make a variation actually differ from what it\'s based on. Every proposal has "kind", "title" (a few words) and "why" (one or two sentences). Kinds: "brew", their next brew: "from" (a brew\'s ref, whose bean, recipe and grinder it starts from), optional "bean" (a bean or brew ref) and "recipe" (a recipe or brew ref) to use instead, and any of "grindSetting" (on the from brew\'s grinder dial), "tempC" and "ratio" ((water + ice) / dose, or for espresso shot weight / dose). "recipeChange": "recipe" (a recipe ref, or a brew ref for its recipe) and "changes" holding only the recipe fields that change. "newRecipe": "basedOn" (a recipe or brew ref whose brewer it\'s for; omit if none fits) and "recipe" with at least "name" and "targetDoseGrams". Recipe fields: name, targetDoseGrams, targetWaterGrams (hot water; none for espresso), targetIceGrams, expectedYieldGrams (espresso: the shot weight), targetTempC, expectedFinishMinSec, expectedFinishMaxSec, and steps (the whole list, replacing the old one): each with stepType (bloom, pour, swirl, stir, wait, press for filter; preinfusion, soak, pressure, flow for espresso; other for either; prep for either, first in the list, done before the timer starts with a label and optional durationSec as a countdown, such as rinsing the filter or preheating), and optional label, durationSec, targetWaterGrams (the scale weight to reach by the step\'s end), targetTempC, pressureBar, flowRate. Grams and degrees Celsius, times in seconds. Steps run one after another on the timer, each lasting its durationSec: time a pour at a kettle\'s pace (about 3-8 g/s), give waits and the final drawdown realistic times for the brewer, keep targetWaterGrams rising to the recipe\'s water at the last pour, and set the finish window so the steps end inside it. Don\'t invent precise timings you can\'t back: fewer steps and a wider window are better. A steep of hours (cold brew) isn\'t a step: say the steep time in your text instead.';
@@ -473,9 +474,18 @@ export function buildRecapSystem(custom?: PromptCustom): string {
   return custom?.prompt.instructions ? `${RECAP_SYSTEM} The barista's own instructions: ${custom.prompt.instructions}` : RECAP_SYSTEM;
 }
 
-export function buildChatSystem(custom?: PromptCustom, attached: LlmInput[] = []): string {
+// Summarize and continue (docs/api/chat.md §12, "Long chats";
+// llm-contract.md §9e): the chat's older messages in a few paragraphs, sent
+// ahead of the ones after them. Plain text; replies don't store the version.
+export const CHAT_SUMMARY_PROMPT_VERSION = "2026-11-a";
+export const CHAT_SUMMARY_SYSTEM =
+  "You are summarizing the earlier part of a conversation between a home barista and a coffee expert in their brew journal, so the conversation can go on without it. You get JSON: an earlier summary if there is one, and the messages to cover, oldest first, with the labels of what was attached to each. Write a plain-text summary of at most 400 words that keeps what later replies will need: the questions asked, the facts and numbers given (doses, grind settings, temperatures, ratios, ratings, dates), the beans, brews, recipes and periods discussed by name, what was recommended or proposed and whether it was dismissed, decisions made, and what's still open. Fold the earlier summary in rather than repeating it. Leave out the expert's remarks about what it could or couldn't see, and anything the conversation later corrected (keep the correction). Only use what's in the messages; no greeting, no Markdown headings.";
+const SUMMARY_INTRO = "The earlier part of this conversation isn't shown below; this is a summary of it, written then:";
+
+export function buildChatSystem(custom?: PromptCustom, attached: LlmInput[] = [], summary?: string | null): string {
   const parts = [CHAT_SYSTEM];
   if (custom?.prompt.instructions) parts.push(`The barista's own instructions: ${custom.prompt.instructions}`);
+  if (summary) parts.push(`${SUMMARY_INTRO} ${summary}`);
   if (attached.length) parts.push(`${ATTACHED_INTRO} ${JSON.stringify(attached)}`);
   parts.push(CHAT_PROPOSALS);
   return parts.join(" ");

@@ -384,11 +384,12 @@ describe("what a bean review sends (llm-contract.md §9d)", () => {
   });
 });
 
-// A recap's summary (docs/api/llm-contract.md §9f): each brew as the
-// analysis sends one, so only what the period adds is classified here.
+// A recap's summary or a chat Period (docs/api/llm-contract.md §9f): each
+// brew as the analysis sends one, so only what the period adds is classified here.
 const PERIOD: Record<keyof PeriodContext, Sees> = {
   kind: "always",
   period: "always",
+  filters: "always", // a chat Period's bean, recipe, brewer and Only mine, by name
   previous: "always",
   figures: "always",
   previousFigures: "always",
@@ -414,7 +415,7 @@ const PERIOD_INPUT_KEY: Partial<Record<keyof PeriodContext, string>> = { previou
 describe("what a recap summary sends (llm-contract.md §9f)", () => {
   const figures: PeriodFigures = { brews: 70, daysBrewed: 6, ratedBrews: 5, averageRating: 4.1, bestRating: 4.5, coffeeGrams: 105, beans: [{ bean: "Onyx – Monarch", brews: 7 }], recipes: [{ recipe: "House", brews: 7 }], brewers: [{ brewer: "V60", brews: 7 }] };
   const context: PeriodContext = {
-    kind: "weekly", period: { start: "2026-10-19", end: "2026-10-25" }, previous: { start: "2026-10-12", end: "2026-10-18" }, figures, previousFigures: figures,
+    kind: "weekly", period: { start: "2026-10-19", end: "2026-10-25" }, previous: { start: "2026-10-12", end: "2026-10-18" }, filters: "Onyx – Monarch · Only mine", figures, previousFigures: figures,
     brews: [{ ...brew, day: "2026-10-20", bean: "Onyx – Monarch", brewer: "V60" }], brewsLeftOut: 69, ratingScale: "0.5-5",
   };
   const everythingOff = new Set<AiDetail>(AI_DETAILS.filter((d) => !NOT_FIELDS.includes(d)));

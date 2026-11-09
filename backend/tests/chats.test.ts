@@ -126,6 +126,48 @@ describe("attachments", () => {
     expect((await owner.agent.post(url(workspaceId)).send({ content: "Hi", attachments: [{ kind: "bean", id: randomUUID(), chart }] })).status).toBe(400);
   });
 
+  describe("a live period", () => {
+    const period = (fields: Record<string, unknown> = {}) => ({ range: "30d", from: null, to: null, beanId: null, recipeId: null, brewerId: null, mine: false, ...fields });
+    const send = (p: unknown, id: string = randomUUID()) => owner.agent.post(url(workspaceId)).send({ content: "How did it go?", attachments: [{ kind: "period", id, period: p }] });
+
+    it("keeps its filters, labelled with their names", async () => {
+      const bean = await newBean(owner, workspaceId, { roasterName: "Onyx", beanName: "Guji" });
+      const id = randomUUID();
+      const res = await send(period({ beanId: bean, mine: true }), id);
+      expect(res.status, JSON.stringify(res.body)).toBe(202);
+      expect(res.body.messages[0].attachments).toEqual([{ kind: "period", id, label: "Brews, last 30 days · Guji · Only mine", period: period({ beanId: bean, mine: true }) }]);
+      const week = await send(period({ range: "week", from: "2026-10-26", to: "2026-11-01" }));
+      expect(week.body.messages[0].attachments[0].label).toBe("Brews, 26 Oct – 1 Nov");
+    });
+
+    it("refuses dates that don't fit the range, and another workspace's bean", async () => {
+      expect((await send(period({ from: "2026-10-01", to: "2026-10-31" }))).status).toBe(400);
+      expect((await send(period({ range: "custom", from: "2026-10-31", to: "2026-10-01" }))).status).toBe(400);
+      expect((await send(period({ range: "month", from: "2026-10-01", to: null }))).status).toBe(400);
+      expect((await send(period({ range: "custom", from: "2026-13-40", to: "2026-13-41" }))).status).toBe(400);
+      expect((await send(period({ range: "fortnight" }))).status).toBe(400);
+      expect((await send({ ...period(), extra: 1 })).status).toBe(400);
+      const other = await newUser();
+      const theirs = await newBean(other, (await newWorkspace(other)).id);
+      expect((await send(period({ beanId: theirs }))).status).toBe(400);
+    });
+
+    it("counts as one attachment toward the limit", async () => {
+      await owner.agent.patch(`/api/workspaces/${workspaceId}/settings`).send({ chatMaxAttachments: 2 }).expect(200);
+      const bean = await newBean(owner, workspaceId);
+      const res = await owner.agent.post(url(workspaceId)).send({ content: "Hi", attachments: [{ kind: "period", id: randomUUID(), period: period() }, { kind: "bean", id: bean }] });
+      expect(res.status).toBe(202);
+    });
+
+    it("has the workspace's cap on its brews: 60 unless changed, 10 to 300", async () => {
+      const settings = `/api/workspaces/${workspaceId}/settings`;
+      expect((await owner.agent.patch(settings).send({ aiChat: true })).body.settings.chatPeriodMaxBrews).toBe(60);
+      expect((await owner.agent.patch(settings).send({ chatPeriodMaxBrews: 300 })).body.settings.chatPeriodMaxBrews).toBe(300);
+      expect((await owner.agent.patch(settings).send({ chatPeriodMaxBrews: 301 })).status).toBe(400);
+      expect((await owner.agent.patch(settings).send({ chatPeriodMaxBrews: 9 })).status).toBe(400);
+    });
+  });
+
   it("takes up to the workspace's limit: 50 unless changed, at most 100", async () => {
     const bean = await newBean(owner, workspaceId);
     const many = (n: number) => Array.from({ length: n }, () => ({ kind: "bean", id: bean }));
@@ -146,6 +188,82 @@ describe("attachments", () => {
   });
 });
 
+describe("summaries", () => {
+  // A chat of n finished messages, built as the worker would leave it.
+  async function longChat(n: number): Promise<string> {
+    const res = await owner.agent.post(url(workspaceId)).send({ content: "m1" });
+    const chatId = res.body.chat.id as string;
+    await finish(res.body.messages[1].id, "m2");
+    for (let i = 3; i <= n; i += 2) {
+      const next = await owner.agent.post(`${url(workspaceId)}/${chatId}/messages`).send({ content: `m${i}` });
+      await finish(next.body.messages[1].id, `m${i + 1}`);
+    }
+    await chatQueue.obliterate({ force: true });
+    return chatId;
+  }
+  const summarize = (chatId: string) => owner.agent.post(`${url(workspaceId)}/${chatId}/summary`);
+
+  it("queues a summary, and holds new messages until it's written", async () => {
+    const chatId = await longChat(12);
+    const res = await summarize(chatId);
+    expect(res.status, JSON.stringify(res.body)).toBe(202);
+    expect(res.body.chat).toMatchObject({ id: chatId, summaryStatus: "pending", summary: null });
+    expect((await chatQueue.getJobs(["waiting"])).map((j) => [j.name, j.data])).toEqual([["summary", { chatId }]]);
+    expect((await summarize(chatId)).status).toBe(409);
+    expect((await owner.agent.post(`${url(workspaceId)}/${chatId}/messages`).send({ content: "Hi" })).status).toBe(409);
+    // Written: sending works again, and the chat says what it covers.
+    await db.update(aiChats).set({ summary: "Earlier.", summaryThrough: 2, summaryStatus: null }).where(eq(aiChats.id, chatId));
+    expect((await owner.agent.post(`${url(workspaceId)}/${chatId}/messages`).send({ content: "Hi" })).status).toBe(202);
+    expect((await owner.agent.get(`${url(workspaceId)}/${chatId}`)).body.chat).toMatchObject({ summary: "Earlier.", summaryThrough: 2 });
+  });
+
+  it("lets go of a summary still pending after 10 minutes: the worker died", async () => {
+    const chatId = await longChat(12);
+    expect((await summarize(chatId)).status).toBe(202);
+    const send = () => owner.agent.post(`${url(workspaceId)}/${chatId}/messages`).send({ content: "Hi" });
+    await db.update(aiChats).set({ summaryRequestedAt: new Date(Date.now() - 9 * 60_000) }).where(eq(aiChats.id, chatId));
+    expect((await send()).status).toBe(409);
+    await db.update(aiChats).set({ summaryRequestedAt: new Date(Date.now() - 11 * 60_000) }).where(eq(aiChats.id, chatId));
+    expect((await owner.agent.get(`${url(workspaceId)}/${chatId}`)).body.chat.summaryStatus).toBe("failed");
+    expect((await send()).status).toBe(202);
+  });
+
+  it("edits a summary, or clears it to send the older messages again", async () => {
+    const chatId = await longChat(12);
+    const path = `${url(workspaceId)}/${chatId}/summary`;
+    expect((await owner.agent.put(path).send({ summary: "Fixed." })).status).toBe(404);
+    await db.update(aiChats).set({ summary: "Wrong: can't see new brews.", summaryThrough: 2 }).where(eq(aiChats.id, chatId));
+    const edited = await owner.agent.put(path).send({ summary: "  Fixed.  " });
+    expect(edited.status, JSON.stringify(edited.body)).toBe(200);
+    expect(edited.body.chat).toMatchObject({ summary: "Fixed.", summaryThrough: 2 });
+    expect((await owner.agent.put(path).send({ summary: "" })).status).toBe(400);
+    expect((await owner.agent.put(path).send({ summary: "x".repeat(6001) })).status).toBe(400);
+    const cleared = await owner.agent.delete(path);
+    expect(cleared.body.chat).toMatchObject({ summary: null, summaryThrough: null, summaryStatus: null });
+    // Not while one is being written, and not someone else's.
+    await summarize(chatId);
+    expect((await owner.agent.delete(path)).status).toBe(409);
+    const other = await newUser();
+    await addMember(owner, workspaceId, other, "barista");
+    expect((await other.agent.delete(path)).status).toBe(404);
+  });
+
+  it("refuses a short chat, and one with a reply being written", async () => {
+    const short = await longChat(10);
+    expect((await summarize(short)).status).toBe(400);
+    const chatId = await longChat(12);
+    await owner.agent.post(`${url(workspaceId)}/${chatId}/messages`).send({ content: "Busy" });
+    expect((await summarize(chatId)).status).toBe(409);
+  });
+
+  it("counts the summary toward the chat's size, and brings it along on import", async () => {
+    const chatId = await longChat(12);
+    const before = await userChatBytes(owner.id);
+    await db.update(aiChats).set({ summary: "x".repeat(1000), summaryThrough: 4 }).where(eq(aiChats.id, chatId));
+    expect(await userChatBytes(owner.id)).toBe(before + 1000);
+  });
+});
+
 describe("photos", () => {
   const png = () => sharp({ create: { width: 2000, height: 1000, channels: 3, background: "#654321" } }).png().toBuffer();
   const upload = async (user: TestUser, ws = workspaceId) => (await user.agent.post(`${url(ws)}/photos`).set("Content-Type", "image/png").send(await png())).body.photo as { id: string; width: number };
@@ -157,7 +275,7 @@ describe("photos", () => {
     expect(res.status, JSON.stringify(res.body)).toBe(202);
     expect(res.body.messages[0].photos).toEqual([{ id: photo.id, width: 1024, height: 512 }]);
     const job = await chatQueue.getJob(`chat-${res.body.messages[1].id}`);
-    expect(job?.data.photos).toEqual([{ messageId: res.body.messages[0].id, base64: expect.any(String) }]);
+    expect(job && "photos" in job.data ? job.data.photos : null).toEqual([{ messageId: res.body.messages[0].id, base64: expect.any(String) }]);
     expect((await owner.agent.get(`${url(workspaceId)}/photos/${photo.id}`)).headers["content-type"]).toMatch(/image\/webp/);
   });
 
@@ -257,6 +375,15 @@ describe("limits and purging", () => {
     const after = await owner.agent.get(settings);
     expect(after.body.own.maxBytes).toBe(2 * MB);
     expect(after.body.effective.maxBytes).toBe(MB);
+  });
+
+  it("keeps a person's own cap on a period's brews, unchanged when not sent", async () => {
+    const settings = "/api/auth/me/chat-settings";
+    expect((await owner.agent.get(settings)).body.own).toEqual({ maxBytes: null, maxDays: null, periodMaxBrews: null });
+    expect((await owner.agent.put(settings).send({ maxBytes: null, maxDays: null, periodMaxBrews: 20 })).body.own.periodMaxBrews).toBe(20);
+    expect((await owner.agent.put(settings).send({ maxBytes: null, maxDays: 30 })).body.own).toEqual({ maxBytes: null, maxDays: 30, periodMaxBrews: 20 });
+    expect((await owner.agent.put(settings).send({ maxBytes: null, maxDays: null, periodMaxBrews: null })).body.own.periodMaxBrews).toBeNull();
+    expect((await owner.agent.put(settings).send({ maxBytes: null, maxDays: null, periodMaxBrews: 301 })).status).toBe(400);
   });
 
   it("deletes older chats when a limit is lowered, and counts what's kept", async () => {
@@ -425,6 +552,32 @@ describe("export and import", () => {
     expect((await owner.agent.get(`${url(other)}/photos/${messages[0]!.photos[0]!.id}`)).status).toBe(200);
 
     expect((await imported(owner, workspaceId, zip)).body).toEqual({ imported: 0, skipped: 1 });
+  });
+
+  it("brings a period along with its filters", async () => {
+    const period = { range: "7d", from: null, to: null, beanId: null, recipeId: null, brewerId: null, mine: true };
+    const res = await owner.agent.post(url(workspaceId)).send({ content: "The week", attachments: [{ kind: "period", id: randomUUID(), period }] });
+    await finish(res.body.messages[1].id, "Steady");
+    const other = (await newWorkspace(owner)).id;
+    await withAi(other);
+    expect((await imported(owner, other, await exported(owner, workspaceId))).body).toEqual({ imported: 1, skipped: 0 });
+    const [chat] = (await owner.agent.get(url(other))).body.chats as Array<{ id: string }>;
+    const { messages } = (await owner.agent.get(`${url(other)}/${chat!.id}`)).body as { messages: Array<{ attachments: unknown[] }> };
+    expect(messages[0]!.attachments).toEqual([expect.objectContaining({ kind: "period", label: "Brews, last 7 days · Only mine", period })]);
+  });
+
+  it("brings a summary along, with its end renumbered", async () => {
+    const res = await owner.agent.post(url(workspaceId)).send({ content: "First" });
+    await finish(res.body.messages[1].id, "Reply");
+    const chatId = res.body.chat.id as string;
+    // A gap in the positions, as a deleted message would leave.
+    await db.update(aiChatMessages).set({ position: 5 }).where(eq(aiChatMessages.id, res.body.messages[1].id));
+    await db.update(aiChats).set({ summary: "They asked first.", summaryThrough: 5 }).where(eq(aiChats.id, chatId));
+    const other = (await newWorkspace(owner)).id;
+    await withAi(other);
+    await imported(owner, other, await exported(owner, workspaceId));
+    const [chat] = (await owner.agent.get(url(other))).body.chats as Array<{ summary: string; summaryThrough: number }>;
+    expect(chat).toMatchObject({ summary: "They asked first.", summaryThrough: 2 });
   });
 
   it("only holds your own, and leaves out a reply still being written", async () => {

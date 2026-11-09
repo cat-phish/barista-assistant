@@ -799,6 +799,20 @@
       "when": 1794216159290,
       "tag": "0113_recap_highlights",
       "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "5",
+      "when": 1794262562725,
+      "tag": "0114_chat_summary",
+      "breakpoints": true
+    },
+    {
+      "idx": 115,
+      "version": "5",
+      "when": 1794263969211,
+      "tag": "0115_chat_summary_requested",
+      "breakpoints": true
     }
   ]
 }

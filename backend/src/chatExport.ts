@@ -8,6 +8,7 @@ import { unzipSync, zipSync, type Zippable } from "fflate";
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 import { chartSnapshotSchema } from "./chatChart.js";
+import { periodSpecSchema } from "./chatPeriod.js";
 import { pruneChatsOf, userChatBytes } from "./chatData.js";
 import { proposalsSchema } from "./chatProposal.js";
 import { db } from "./db.js";
@@ -29,12 +30,15 @@ const fileSchema = z.object({
       title: z.string().min(1).max(120),
       createdAt: date,
       updatedAt: date,
+      // Summarize and continue; older files have neither.
+      summary: z.string().max(100_000).nullable().optional(),
+      summaryThrough: z.number().int().nullable().optional(),
       messages: z.array(
         z.object({
           position: z.number().int(),
           role: z.enum(["user", "assistant"]),
           content: z.string().max(16_000_000),
-          attachments: z.array(z.object({ kind: z.enum(CHAT_ATTACHMENT_KINDS), id: z.string().max(36), label: z.string().max(200), chart: chartSnapshotSchema.optional() })).nullable(),
+          attachments: z.array(z.object({ kind: z.enum(CHAT_ATTACHMENT_KINDS), id: z.string().max(36), label: z.string().max(200), chart: chartSnapshotSchema.optional(), period: periodSpecSchema.optional() })).nullable(),
           proposals: proposalsSchema.nullable().optional(), // since proposals; older files have none
           status: z.enum(["done", "failed"]),
           error: z.string().max(200).nullable(),
@@ -81,6 +85,7 @@ export async function buildChatsZip(workspaceId: string, userId: string): Promis
       title: c.title,
       createdAt: c.createdAt.toISOString(),
       updatedAt: c.updatedAt.toISOString(),
+      ...(c.summary ? { summary: c.summary, summaryThrough: c.summaryThrough } : {}),
       messages: messages
         .filter((m) => m.chatId === c.id)
         .map((m) => ({
@@ -152,7 +157,7 @@ export async function importChats(data: Buffer, workspaceId: string, userId: str
       if (bytes && size) photos.set(id, { id: randomUUID(), data: bytes, ...size });
     }
   }
-  const adding = fresh.flatMap((c) => c.messages).reduce((n, m) => n + textBytes(m), 0) + [...photos.values()].reduce((n, p) => n + p.data.length, 0);
+  const adding = fresh.flatMap((c) => c.messages).reduce((n, m) => n + textBytes(m), 0) + fresh.reduce((n, c) => n + (c.summary ? encoder.encode(c.summary).length : 0), 0) + [...photos.values()].reduce((n, p) => n + p.data.length, 0);
   const [row] = await db.select({ chatLimits: users.chatLimits }).from(users).where(eq(users.id, userId));
   const { maxBytes } = effectiveChatLimits(await getChatLimits(), row?.chatLimits ?? null);
   if (maxBytes !== null && (await userChatBytes(userId)) + adding > maxBytes) {
@@ -166,8 +171,10 @@ export async function importChats(data: Buffer, workspaceId: string, userId: str
     await db.transaction(async (tx) => {
       for (const chat of fresh) {
         const chatId = taken.some((t) => t.id === chat.id) ? randomUUID() : chat.id;
-        await tx.insert(aiChats).values({ id: chatId, workspaceId, userId, title: chat.title, createdAt: new Date(chat.createdAt), updatedAt: new Date(chat.updatedAt) });
         const ordered = [...chat.messages].sort((a, b) => a.position - b.position);
+        // Positions are numbered afresh, so the summary's end is too.
+        const summary = chat.summary && chat.summaryThrough != null ? { summary: chat.summary, summaryThrough: ordered.filter((m) => m.position <= chat.summaryThrough!).length } : {};
+        await tx.insert(aiChats).values({ id: chatId, workspaceId, userId, title: chat.title, ...summary, createdAt: new Date(chat.createdAt), updatedAt: new Date(chat.updatedAt) });
         for (const [i, message] of ordered.entries()) {
           const id = randomUUID();
           const { photos: _photos, createdAt, proposals, ...fields } = message;

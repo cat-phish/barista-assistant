@@ -1,5 +1,6 @@
 // What AI chats keep, and removing it (docs/api/chat.md §12). A chat's rows
 // cascade, but its photo files don't, so every delete goes through here.
+import { CHAT_PERIOD_BREWS_MAX, CHAT_PERIOD_BREWS_MIN } from "@barista/shared/chatPeriod";
 import { effectiveChatLimits, type ChatLimits } from "@barista/shared/aiConfig";
 import { aiChatMessages, aiChatPhotos, aiChats, users } from "@barista/shared/schema";
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
@@ -15,6 +16,12 @@ export const chatLimitsSchema = z
   })
   .strict();
 
+// A person's own (docs/api/chat.md §12): the size and age limits, and how
+// many brews a live Period sends in detail at most (absent: unchanged).
+export const ownChatLimitsSchema = chatLimitsSchema.extend({
+  periodMaxBrews: z.number().int().min(CHAT_PERIOD_BREWS_MIN).max(CHAT_PERIOD_BREWS_MAX).nullable().optional(),
+});
+
 interface ChatSize {
   id: string;
   userId: string;
@@ -23,9 +30,9 @@ interface ChatSize {
 }
 
 // Each chat with what it takes: its messages, their attachment references,
-// proposals and photos.
+// proposals and photos, and its summary.
 async function chatSizes(where?: SQL): Promise<ChatSize[]> {
-  const chats = await db.select({ id: aiChats.id, userId: aiChats.userId, updatedAt: aiChats.updatedAt }).from(aiChats).where(where);
+  const chats = await db.select({ id: aiChats.id, userId: aiChats.userId, updatedAt: aiChats.updatedAt, summaryBytes: sql<string | null>`OCTET_LENGTH(${aiChats.summary})` }).from(aiChats).where(where);
   if (!chats.length) return [];
   const ids = chats.map((c) => c.id);
   const [text, photos] = await Promise.all([
@@ -43,7 +50,7 @@ async function chatSizes(where?: SQL): Promise<ChatSize[]> {
   ]);
   const sizes = new Map<string, number>();
   for (const row of [...text, ...photos]) sizes.set(row.chatId, (sizes.get(row.chatId) ?? 0) + Number(row.bytes));
-  return chats.map((c) => ({ ...c, bytes: sizes.get(c.id) ?? 0 }));
+  return chats.map(({ summaryBytes, ...c }) => ({ ...c, bytes: (sizes.get(c.id) ?? 0) + Number(summaryBytes ?? 0) }));
 }
 
 const sumBytes = (chats: ChatSize[]): number => chats.reduce((n, c) => n + c.bytes, 0);

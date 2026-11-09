@@ -1,8 +1,8 @@
 // A period of brewing as the AI sees it (docs/api/llm-contract.md §9f): the
-// brews in a date range in one workspace (one person's, or everyone's),
-// with the figures for it and the period before. Built for recap summaries
-// (docs/api/recaps.md §11c); written to serve a "period" chat attachment too
-// (docs/backlog.md 17).
+// brews in a date range in one workspace (one person's, or everyone's, and
+// optionally one bean's, recipe's or brewer's), with the figures for it and
+// the period before. Used by recap summaries (docs/api/recaps.md §11c) and
+// live Period attachments in chat (docs/api/chat.md §12).
 import { brewers, brewLogs } from "@barista/shared/schema";
 import { addDays } from "@barista/shared/recapPeriods";
 import { and, desc, eq, gte, inArray, lt } from "drizzle-orm";
@@ -16,6 +16,11 @@ export const PERIOD_MAX_BREWS = 60;
 
 export interface PeriodRange {
   start: string; // YYYY-MM-DD, inclusive
+  end: string;
+}
+// A period may be open at the start: all time.
+export interface OpenRange {
+  start: string | null;
   end: string;
 }
 export interface PeriodBrew extends BrewSummary {
@@ -36,7 +41,8 @@ export interface PeriodFigures {
 }
 export interface PeriodContext {
   kind: "weekly" | "monthly" | "custom";
-  period: PeriodRange;
+  period: OpenRange;
+  filters: string | null; // what else narrows the brews, in words ("Guji · V60 · Only mine")
   previous: PeriodRange | null;
   figures: PeriodFigures;
   previousFigures: PeriodFigures | null;
@@ -49,29 +55,37 @@ export interface PeriodQuery {
   workspaceId: string;
   userId: string | null; // null: everyone's in the workspace
   kind: PeriodContext["kind"];
-  period: PeriodRange;
+  period: OpenRange;
   previous: PeriodRange | null;
+  beanId?: string | null;
+  recipeId?: string | null;
+  brewerId?: string | null;
+  filters?: string | null;
+  maxBrews?: number; // brews sent in detail; default PERIOD_MAX_BREWS
 }
 
 // A brew's day as Insights counts it (its offset, else UTC; docs/api/stats.md §11).
 const dayOf = (b: { timestamp: Date; utcOffsetMinutes: number | null }) => localBrewDate(b.timestamp, b.utcOffsetMinutes, null);
 
 // The finished brews in a range, newest first (a day either side covers any offset).
-async function rowsIn(q: PeriodQuery, range: PeriodRange) {
+async function rowsIn(q: PeriodQuery, range: OpenRange) {
   const rows = await selectBrews()
     .where(
       and(
         eq(brewLogs.workspaceId, q.workspaceId),
         q.userId ? eq(brewLogs.userId, q.userId) : undefined,
+        q.beanId ? eq(brewLogs.beanId, q.beanId) : undefined,
+        q.recipeId ? eq(brewLogs.recipeId, q.recipeId) : undefined,
+        q.brewerId ? eq(brewLogs.brewerId, q.brewerId) : undefined,
         eq(brewLogs.steeping, false),
-        gte(brewLogs.timestamp, new Date(`${addDays(range.start, -1)}T00:00:00Z`)),
+        range.start ? gte(brewLogs.timestamp, new Date(`${addDays(range.start, -1)}T00:00:00Z`)) : undefined,
         lt(brewLogs.timestamp, new Date(`${addDays(range.end, 2)}T00:00:00Z`)),
       ),
     )
     .orderBy(desc(brewLogs.timestamp), desc(brewLogs.id));
   return rows.map(withJoins).filter((b) => {
     const day = dayOf(b);
-    return day >= range.start && day <= range.end;
+    return (range.start === null || day >= range.start) && day <= range.end;
   });
 }
 
@@ -105,7 +119,8 @@ export async function loadPeriodContext(q: PeriodQuery): Promise<PeriodContext> 
   const all = [...rows, ...(previousRows ?? [])];
   const beanIds = [...new Set(all.map((b) => b.beanId))];
   const brewerIds = [...new Set(all.flatMap((b) => (b.brewerId ? [b.brewerId] : [])))];
-  const sent = rows.slice(0, PERIOD_MAX_BREWS);
+  const max = q.maxBrews ?? PERIOD_MAX_BREWS;
+  const sent = rows.slice(0, max);
   const ids = sent.map((b) => b.id);
   const [loaded, names, marks, tools, problems, flavors, servedAs] = await Promise.all([
     Promise.all(beanIds.map(loadBean)),
@@ -131,6 +146,7 @@ export async function loadPeriodContext(q: PeriodQuery): Promise<PeriodContext> 
   return {
     kind: q.kind,
     period: q.period,
+    filters: q.filters || null,
     previous: q.previous,
     figures: figuresOf(rows, beanLabel, brewerName),
     previousFigures: previousRows ? figuresOf(previousRows, beanLabel, brewerName) : null,
@@ -143,7 +159,7 @@ export async function loadPeriodContext(q: PeriodQuery): Promise<PeriodContext> 
         brewer: brewerName(b.brewerId),
       };
     }),
-    brewsLeftOut: Math.max(0, rows.length - PERIOD_MAX_BREWS),
+    brewsLeftOut: Math.max(0, rows.length - max),
     ratingScale: "0.5-5",
   };
 }

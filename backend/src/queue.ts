@@ -42,8 +42,11 @@ import {
   BEAN_REVIEW_QUEUE,
   CHAT_JOB,
   CHAT_QUEUE,
+  CHAT_SUMMARY_JOB,
   chatJobId,
+  chatSummaryJobId,
   type ChatJobData,
+  type ChatSummaryJobData,
   type ChatJobPhoto,
   LABEL_READ_JOB,
   LABEL_READ_QUEUE,
@@ -244,12 +247,16 @@ export function requestBeanReview(data: BeanReviewJobData): Promise<BeanReviewRe
 
 // A chat reply (docs/api/llm-contract.md §9e): one attempt, since a retry
 // would repeat text the person has already read.
-export const chatQueue = new Queue<ChatJobData>(CHAT_QUEUE, { connection });
+export const chatQueue = new Queue<ChatJobData | ChatSummaryJobData>(CHAT_QUEUE, { connection });
 let lastChatError = "";
 chatQueue.on("error", (err: Error) => {
   if (err.message !== lastChatError) console.error("Chat queue error:", err.message);
   lastChatError = err.message;
 });
+// Summarize and continue (docs/api/chat.md §12, "Long chats").
+export async function enqueueChatSummary(chatId: string, through: number): Promise<void> {
+  await withTimeout(() => chatQueue.add(CHAT_SUMMARY_JOB, { chatId }, { jobId: chatSummaryJobId(chatId, through), removeOnComplete: true, removeOnFail: true }));
+}
 export async function enqueueChatReply(messageId: string, photos: ChatJobPhoto[]): Promise<void> {
   await withTimeout(() => chatQueue.add(CHAT_JOB, { messageId, photos }, { jobId: chatJobId(messageId), removeOnComplete: true, removeOnFail: true }));
 }

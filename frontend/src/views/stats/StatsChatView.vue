@@ -5,7 +5,7 @@
 // the bottom. On a phone the chat list is a drawer behind "Chats".
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { chatsApi, type Chat, type ChatAttachment, type ChatMessage, type ChatPhoto, type ChatProposal } from '../../api/chats';
+import { chatSettingsApi, chatsApi, type Chat, type ChatAttachment, type ChatMessage, type ChatPhoto, type ChatProposal } from '../../api/chats';
 import { ApiError, errorMessage } from '../../api/client';
 import ChatAttachChips from '../../components/ChatAttachChips.vue';
 import ChatAttachDialog from '../../components/ChatAttachDialog.vue';
@@ -13,7 +13,9 @@ import ChatList from '../../components/ChatList.vue';
 import ChatMarkdown from '../../components/ChatMarkdown.vue';
 import ChatProposalCard from '../../components/ChatProposalCard.vue';
 import { usePreferences } from '../../composables/usePreferences';
-import { attachKey } from '../../lib/chatAttach';
+import { attachKey, attachRef } from '../../lib/chatAttach';
+import { canSummarize, chatLength, historyTokens } from '../../lib/chatLength';
+import { estimateTokens, tokenWarning } from '../../lib/chatTokens';
 import { proposalRoute } from '../../lib/chatProposal';
 import { formatWhen } from '../../lib/format';
 import { droppedImages, pastedImages } from '../../lib/pastedImages';
@@ -38,17 +40,101 @@ const error = ref('');
 const thread = ref<HTMLElement | null>(null);
 const input = ref<HTMLTextAreaElement | null>(null);
 const composing = computed(() => workspaces.canEdit && canSend.value);
+const currentChat = ref<Chat | null>(null);
 const title = computed(() => chats.value.find((c) => c.id === chatId.value)?.title ?? 'New chat');
+
+// Long chats (docs/api/chat.md §12, "Long chats"): past 30 messages (or a lot
+// of tokens) a notice offers "Summarize and continue"; while the summary is
+// written, the chat is read again every few seconds.
+const length = computed(() => (chatId.value ? chatLength(messages.value, currentChat.value, attachmentTokens.value) : 'ok'));
+const summarizing = computed(() => currentChat.value?.summaryStatus === 'pending');
+const summaryOpen = ref(false);
+let summaryTimer: ReturnType<typeof setTimeout> | null = null;
+function stopSummaryPoll() {
+  if (summaryTimer) clearTimeout(summaryTimer);
+  summaryTimer = null;
+}
+function pollSummary() {
+  stopSummaryPoll();
+  const ws = workspaceId.value;
+  const id = chatId.value;
+  if (!ws || !id || !summarizing.value) return;
+  summaryTimer = setTimeout(async () => {
+    try {
+      const pair = await chatsApi.get(ws, id);
+      if (chatId.value !== id) return;
+      currentChat.value = pair.chat;
+    } catch {
+      // try again next time
+    }
+    pollSummary();
+  }, 3000);
+}
+// The summary can be put right, or dropped so the older messages are sent
+// again (until they fall out of the window).
+const summaryDraft = ref<string | null>(null); // editing when set
+const summaryBusy = ref(false);
+async function changeSummary(change: (ws: string, id: string) => Promise<{ chat: Chat }>) {
+  if (!workspaceId.value || !chatId.value) return;
+  summaryBusy.value = true;
+  error.value = '';
+  try {
+    currentChat.value = (await change(workspaceId.value, chatId.value)).chat;
+    summaryDraft.value = null;
+  } catch (err) {
+    say(err);
+  } finally {
+    summaryBusy.value = false;
+  }
+}
+const saveSummary = () => {
+  const text = summaryDraft.value?.trim();
+  if (text) void changeSummary((ws, id) => chatsApi.editSummary(ws, id, text));
+};
+const clearSummary = () => void changeSummary((ws, id) => chatsApi.clearSummary(ws, id));
+
+async function summarize() {
+  if (!workspaceId.value || !chatId.value || summarizing.value) return;
+  error.value = '';
+  try {
+    currentChat.value = (await chatsApi.summarize(workspaceId.value, chatId.value)).chat;
+    pollSummary();
+  } catch (err) {
+    say(err);
+  }
+}
 
 // What the next message attaches, picked in ChatAttachDialog, up to the
 // workspace's limit (docs/api/chat.md §12).
 const attachments = ref<ChatAttachment[]>([]);
 const picking = ref(false);
 const attachMax = computed(() => settings.value.chatMaxAttachments ?? 50);
-function attachPicked(picked: ChatAttachment[]) {
+// A live period's cap on its brews: the workspace's, or your own lower one.
+const ownPeriodCap = ref<number | null>(null);
+const periodCap = computed(() => {
+  const ws = settings.value.chatPeriodMaxBrews ?? 60;
+  return ownPeriodCap.value ? Math.min(ws, ownPeriodCap.value) : ws;
+});
+void chatSettingsApi
+  .get()
+  .then((s) => (ownPeriodCap.value = s.own.periodMaxBrews))
+  .catch(() => undefined);
+// How many brews each period held when picked, for the token estimate.
+const periodBrews = ref(new Map<string, number>());
+function attachPicked(picked: ChatAttachment[], counts: Map<string, number>) {
   attachments.value = picked;
+  periodBrews.value = counts;
   picking.value = false;
 }
+// What the next reply is sent, as a rough count of tokens: this message's
+// attachments and what the chat attached before, each once (the worker's
+// attachedIn), plus the summary and the messages after it (chatLength.ts).
+const attachmentTokens = computed(() => {
+  const all = [...messages.value.flatMap((m) => m.attachments), ...attachments.value];
+  const unique = [...new Map(all.map((a) => [attachKey(a), a])).values()].slice(-attachMax.value);
+  return estimateTokens(unique, periodBrews.value, periodCap.value);
+});
+const tokenNote = computed(() => tokenWarning(attachmentTokens.value + historyTokens(messages.value, currentChat.value)));
 function detach(item: ChatAttachment) {
   attachments.value = attachments.value.filter((a) => attachKey(a) !== attachKey(item));
 }
@@ -206,6 +292,10 @@ async function open(id: string) {
   try {
     const pair = await chatsApi.get(workspaceId.value, id);
     chatId.value = id;
+    currentChat.value = pair.chat;
+    summaryOpen.value = false;
+    summaryDraft.value = null;
+    pollSummary();
     messages.value = pair.messages;
     const pending = pair.messages.find((m) => m.status === 'pending');
     if (pending) follow(pending);
@@ -217,7 +307,9 @@ async function open(id: string) {
 
 function newChat() {
   stop();
+  stopSummaryPoll();
   chatId.value = null;
+  currentChat.value = null;
   messages.value = [];
   error.value = '';
   listOpen.value = false;
@@ -226,13 +318,14 @@ function newChat() {
 
 async function send() {
   const content = draft.value.trim();
-  if (!content || sending.value || writing.value || uploading.value || !workspaceId.value) return;
+  if (!content || sending.value || writing.value || summarizing.value || uploading.value || !workspaceId.value) return;
   sending.value = true;
   error.value = '';
   try {
-    const body = { content, attachments: attachments.value.map(({ kind, id, chart }) => ({ kind, id, ...(chart ? { chart } : {}) })), photoIds: photos.value.map((p) => p.id) };
+    const body = { content, attachments: attachments.value.map(attachRef), photoIds: photos.value.map((p) => p.id) };
     const pair = chatId.value ? await chatsApi.send(workspaceId.value, chatId.value, body) : await chatsApi.start(workspaceId.value, body);
     chatId.value = pair.chat.id;
+    currentChat.value = pair.chat;
     messages.value = [...messages.value, ...pair.messages];
     draft.value = '';
     attachments.value = [];
@@ -345,6 +438,7 @@ watch(
   { immediate: true },
 );
 onBeforeUnmount(stop);
+onBeforeUnmount(stopSummaryPoll);
 </script>
 
 <template>
@@ -378,7 +472,8 @@ onBeforeUnmount(stop);
             <button v-for="s in SUGGESTIONS" :key="s" type="button" class="suggestion" @click="suggest(s)">{{ s }}</button>
           </div>
         </div>
-        <div v-for="m in messages" :key="m.id" class="message" :class="m.role">
+        <template v-for="m in messages" :key="m.id">
+        <div class="message" :class="m.role">
           <span v-if="m.role === 'assistant'" class="who" aria-hidden="true">AI</span>
           <div class="bubble">
             <ChatAttachChips :attachments="m.attachments" class="message-chips" />
@@ -406,10 +501,43 @@ onBeforeUnmount(stop);
           </div>
           <span class="when">{{ timeOf(m.createdAt) }}</span>
         </div>
+        <div v-if="currentChat?.summary && m.position === currentChat.summaryThrough" class="summary-divider">
+          <button type="button" class="btn-link" :aria-expanded="summaryOpen" @click="summaryOpen = !summaryOpen">
+            Earlier messages summarized for the AI <span aria-hidden="true">{{ summaryOpen ? '▴' : '▾' }}</span>
+          </button>
+          <template v-if="summaryOpen">
+            <form v-if="summaryDraft !== null" class="summary-edit" @submit.prevent="saveSummary">
+              <label for="chat-summary" class="visually-hidden">Summary</label>
+              <textarea id="chat-summary" v-model="summaryDraft" rows="8" maxlength="6000"></textarea>
+              <div class="summary-actions">
+                <button type="submit" class="btn btn-primary" :disabled="summaryBusy || !summaryDraft.trim()">Save</button>
+                <button type="button" class="btn btn-secondary" :disabled="summaryBusy" @click="summaryDraft = null">Cancel</button>
+              </div>
+            </form>
+            <template v-else>
+              <p class="summary-text">{{ currentChat.summary }}</p>
+              <p class="muted small">The AI gets this instead of the messages above it. If something in it is wrong, fix it here; clearing it sends the older messages again, the last 40.</p>
+              <div v-if="composing" class="summary-actions">
+                <button type="button" class="btn-link" :disabled="summaryBusy || summarizing" @click="summaryDraft = currentChat.summary">Edit</button>
+                <button type="button" class="btn-link" :disabled="summaryBusy || summarizing" @click="clearSummary">Clear summary</button>
+              </div>
+            </template>
+          </template>
+        </div>
+        </template>
       </div>
       <button v-if="newBelow" type="button" class="new-below" @click="toBottom(true)">↓ New reply</button>
 
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
+      <div v-if="composing && (summarizing || currentChat?.summaryStatus === 'failed' || (length !== 'ok' && canSummarize(messages)))" class="long-chat" role="status">
+        <span v-if="summarizing">Summarizing the earlier messages…</span>
+        <template v-else>
+          <span v-if="currentChat?.summaryStatus === 'failed'">The summary couldn't be written.</span>
+          <span v-else-if="length === 'dropping'">Older messages in this chat aren't sent to the AI any more. What was attached still is.</span>
+          <span v-else>This chat is getting long: soon its older messages won't be sent to the AI.</span>
+          <button type="button" class="btn btn-secondary" :disabled="writing" @click="summarize">{{ currentChat?.summaryStatus === 'failed' ? 'Try again' : 'Summarize and continue' }}</button>
+        </template>
+      </div>
       <form v-if="composing" class="composer" :class="{ dropping: dragDepth > 0 }" @submit.prevent="send">
         <div v-if="photos.length || attachments.length" class="pending">
           <div v-if="photos.length" class="photos">
@@ -420,6 +548,7 @@ onBeforeUnmount(stop);
           </div>
           <ChatAttachChips :attachments="attachments" removable @remove="detach" />
         </div>
+        <p v-if="tokenNote" class="token-note small" role="status">{{ tokenNote }}</p>
         <label for="chat-message" class="visually-hidden">Message</label>
         <textarea
           id="chat-message"
@@ -450,12 +579,55 @@ onBeforeUnmount(stop);
       </form>
       <p v-else-if="!canSend" class="muted notice">Chat is turned off for you here. You can still read your chats.</p>
       <p v-else class="muted notice">Viewers can read their chats but can't send messages.</p>
-      <ChatAttachDialog :open="picking" :selected="attachments" :max="attachMax" @close="picking = false" @done="attachPicked" />
+      <ChatAttachDialog :open="picking" :selected="attachments" :max="attachMax" :period-cap="periodCap" :period-brews="periodBrews" @close="picking = false" @done="attachPicked" />
     </section>
   </div>
 </template>
 
 <style scoped>
+.long-chat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--warning-tint);
+  font-size: 0.9rem;
+}
+.summary-divider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  border-top: 1px dashed var(--border);
+  padding-top: var(--space-1);
+  font-size: 0.85rem;
+}
+.summary-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(60ch, 100%);
+}
+.summary-edit textarea {
+  width: 100%;
+  font: inherit;
+}
+.summary-actions {
+  display: flex;
+  gap: var(--space-3);
+}
+.summary-text {
+  margin: 0;
+  max-width: 60ch;
+  white-space: pre-wrap;
+  color: var(--text-muted);
+}
+.token-note {
+  margin: 0;
+  color: var(--warning);
+}
 .chat {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);

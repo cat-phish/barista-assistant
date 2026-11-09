@@ -108,6 +108,10 @@ Every workspace in a response carries `settings`, defaults filled in
 - `chatMaxAttachments` (integer 1–100, default `50`): at most how many brews,
   beans and recipes a chat message attaches, and a reply is sent across the
   chat (`docs/api/chat.md` §12), set under Settings → **AI**.
+- `chatPeriodMaxBrews` (integer 10–300, default `60`): at most how many
+  brews a live period attachment sends in detail; its figures still cover
+  every brew in it (`docs/api/chat.md` §12, "Periods"). Set under Settings →
+  **AI**; a person can set a lower one for themselves.
 - `readLabels` (boolean, default `true`): whether the bean form offers
   "Fill in from a photo", which sends label photos to the AI provider
   (`docs/api/bean-label.md` §4d), set under Settings → **AI**. Off, the

@@ -1,10 +1,14 @@
 // What a chat message attaches (docs/api/chat.md §12), as picked in
 // ChatAttachDialog and shown as chips in StatsChatView: up to the
 // workspace's chatMaxAttachments, each item once.
-import type { ChatAttachment, ChatAttachmentKind } from '../api/chats';
+import type { ChatAttachment, ChatAttachmentKind, ChatAttachmentRef } from '../api/chats';
 
-export const ATTACH_KINDS: readonly ChatAttachmentKind[] = ['brew', 'bean', 'recipe', 'chart'];
+// Chips go in this order; a live period first.
+export const ATTACH_KINDS: readonly ChatAttachmentKind[] = ['period', 'brew', 'bean', 'recipe', 'chart'];
+// The picker's tabs: a period is attached from the Brews tab's filters.
+export const PICKER_TABS: readonly Exclude<ChatAttachmentKind, 'period'>[] = ['brew', 'bean', 'recipe', 'chart'];
 export const KIND_NAMES: Record<ChatAttachmentKind, { one: string; many: string }> = {
+  period: { one: 'Period', many: 'periods' },
   brew: { one: 'Brew', many: 'brews' },
   bean: { one: 'Bean', many: 'beans' },
   recipe: { one: 'Recipe', many: 'recipes' },
@@ -12,6 +16,9 @@ export const KIND_NAMES: Record<ChatAttachmentKind, { one: string; many: string 
 };
 
 type Ref = Pick<ChatAttachment, 'kind' | 'id'>;
+// What a message sends for one (the server labels it): a chart with its
+// snapshot, a period with its filters.
+export const attachRef = ({ kind, id, chart, period }: ChatAttachment): ChatAttachmentRef => ({ kind, id, ...(chart ? { chart } : {}), ...(period ? { period } : {}) });
 export const attachKey = (a: Ref): string => `${a.kind}:${a.id}`;
 
 export function isPicked(selection: readonly ChatAttachment[], item: Ref): boolean {
@@ -36,7 +43,7 @@ export function withoutKind(selection: readonly ChatAttachment[], kind: ChatAtta
   return selection.filter((a) => a.kind !== kind);
 }
 
-// Chips by kind, brews first; kinds with nothing are left out.
+// Chips by kind, periods then brews first; kinds with nothing are left out.
 export function groupByKind(selection: readonly ChatAttachment[]): Array<{ kind: ChatAttachmentKind; items: ChatAttachment[] }> {
   return ATTACH_KINDS.map((kind) => ({ kind, items: selection.filter((a) => a.kind === kind) })).filter((g) => g.items.length > 0);
 }

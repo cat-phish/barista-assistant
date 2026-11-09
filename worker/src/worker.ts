@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { AI_CHECK_QUEUE, AI_PREVIEW_QUEUE, BEAN_REVIEW_QUEUE, BREW_ANALYSIS_QUEUE, CHAT_QUEUE, LABEL_READ_QUEUE, MAINTENANCE_QUEUE, PARAMETER_SUGGESTION_QUEUE, RECAP_SUMMARY_QUEUE, REMINDER_QUEUE, RECAP_TICK_JOB, STEEP_REMINDER_JOB, REST_REMINDER_JOB, GREEN_LOW_JOB, type AiCheckJobData, type AiCheckResult, type AiPreviewJobData, type BeanReviewJobData, type BeanReviewResult, type BrewAnalysisJobData, type ChatJobData, type DbBackupJobData, type LabelReadJobData, type LabelReadResult, type ParameterSuggestionJobData, type RecapSummaryJobData, type GreenLowJobData, type RateReminderJobData, type RecapTickJobData, type RestReminderJobData, type SteepReminderJobData } from "@barista/shared/jobs";
+import { AI_CHECK_QUEUE, AI_PREVIEW_QUEUE, BEAN_REVIEW_QUEUE, BREW_ANALYSIS_QUEUE, CHAT_QUEUE, CHAT_SUMMARY_JOB, LABEL_READ_QUEUE, MAINTENANCE_QUEUE, PARAMETER_SUGGESTION_QUEUE, RECAP_SUMMARY_QUEUE, REMINDER_QUEUE, RECAP_TICK_JOB, STEEP_REMINDER_JOB, REST_REMINDER_JOB, GREEN_LOW_JOB, type AiCheckJobData, type AiCheckResult, type AiPreviewJobData, type BeanReviewJobData, type BeanReviewResult, type BrewAnalysisJobData, type ChatJobData, type ChatSummaryJobData, type DbBackupJobData, type LabelReadJobData, type LabelReadResult, type ParameterSuggestionJobData, type RecapSummaryJobData, type GreenLowJobData, type RateReminderJobData, type RecapTickJobData, type RestReminderJobData, type SteepReminderJobData } from "@barista/shared/jobs";
 import { UnrecoverableError, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 import { config } from "./config.js";
@@ -12,6 +12,7 @@ import { runDbBackup, type BackupResult } from "./dbBackup.js";
 import { readLabel } from "./label.js";
 import { runAiCheck } from "./ai/check.js";
 import { processChatReply, redisPublisher, type ChatResult } from "./chat.js";
+import { processChatSummary, type ChatSummaryResult } from "./chatSummary.js";
 import { NO_AI, publishEnvStatus } from "./ai/resolve.js";
 import type { AiRequest } from "@barista/shared/schema";
 
@@ -107,14 +108,18 @@ const beanReviews = new Worker<BeanReviewJobData, BeanReviewResult | null>(BEAN_
 beanReviews.on("failed", (job, err) => console.error(`Bean review ${job?.id ?? "?"} failed: ${err.message}`));
 beanReviews.on("error", (err) => console.error("Bean review worker error:", err.message));
 
-// Chat replies (docs/api/llm-contract.md §9e): one attempt; a failed reply is
-// saved as failed, so only something unexpected ends up here.
+// Chat replies and summaries (docs/api/llm-contract.md §9e): one attempt; a
+// failed one is saved as failed, so only something unexpected ends up here.
 const chatPublisher = redisPublisher(new Redis(config.redis.url, { maxRetriesPerRequest: 1, ...(config.redis.password ? { password: config.redis.password } : {}) }));
-const chats = new Worker<ChatJobData, ChatResult>(CHAT_QUEUE, (job: Job<ChatJobData>) => processChatReply(job.data, chatPublisher), {
-  connection,
-  concurrency: config.concurrency,
-});
-chats.on("failed", (job, err) => console.error(`Chat reply ${job?.id ?? "?"} failed: ${err.message}`));
+const chats = new Worker<ChatJobData | ChatSummaryJobData, ChatResult | ChatSummaryResult>(
+  CHAT_QUEUE,
+  (job: Job<ChatJobData | ChatSummaryJobData>) => (job.name === CHAT_SUMMARY_JOB ? processChatSummary(job.data as ChatSummaryJobData) : processChatReply(job.data as ChatJobData, chatPublisher)),
+  {
+    connection,
+    concurrency: config.concurrency,
+  },
+);
+chats.on("failed", (job, err) => console.error(`Chat job ${job?.id ?? "?"} failed: ${err.message}`));
 chats.on("error", (err) => console.error("Chat worker error:", err.message));
 
 // Settings' model list and Test (docs/api/workspaces.md §2d): the backend

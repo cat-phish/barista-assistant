@@ -1,0 +1,1 @@
+ALTER TABLE `ai_chats` ADD `summary_requested_at` timestamp;
