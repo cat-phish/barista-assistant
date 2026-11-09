@@ -119,11 +119,20 @@ async function ownChat(res: Response, userId: string, workspaceId: string, chatI
 }
 
 const STALE_ERROR = "The reply stopped before it finished";
+// A reply or a summary still pending after STALE_MS: the worker died, so it's
+// marked failed and the chat can be used again (docs/api/chat.md §12).
 function settleStale(chatId: string): Promise<unknown> {
-  return db
-    .update(aiChatMessages)
-    .set({ status: "failed", error: STALE_ERROR })
-    .where(and(eq(aiChatMessages.chatId, chatId), eq(aiChatMessages.status, "pending"), lt(aiChatMessages.createdAt, new Date(Date.now() - STALE_MS))));
+  const cutoff = new Date(Date.now() - STALE_MS);
+  return Promise.all([
+    db
+      .update(aiChatMessages)
+      .set({ status: "failed", error: STALE_ERROR })
+      .where(and(eq(aiChatMessages.chatId, chatId), eq(aiChatMessages.status, "pending"), lt(aiChatMessages.createdAt, cutoff))),
+    db
+      .update(aiChats)
+      .set({ summaryStatus: "failed" })
+      .where(and(eq(aiChats.id, chatId), eq(aiChats.summaryStatus, "pending"), lt(aiChats.summaryRequestedAt, cutoff))),
+  ]);
 }
 
 type MessageRow = Omit<ChatMessage, "attachments" | "proposals" | "photos"> & { attachments: ChatAttachment[] | null; proposals: ChatProposal[] | null };
@@ -266,7 +275,7 @@ chatsRouter.post("/:chatId/summary", async (req: Request<ChatParams>, res: Respo
     const messages = await tx.select({ position: aiChatMessages.position, status: aiChatMessages.status }).from(aiChatMessages).where(eq(aiChatMessages.chatId, chatId)).orderBy(asc(aiChatMessages.position));
     if (row?.summaryStatus === "pending" || messages.some((m) => m.status === "pending")) return "busy" as const;
     if (messages.filter((m) => m.status === "done").length < SUMMARY_MIN_MESSAGES) return "short" as const;
-    await tx.update(aiChats).set({ summaryStatus: "pending" }).where(eq(aiChats.id, chatId));
+    await tx.update(aiChats).set({ summaryStatus: "pending", summaryRequestedAt: sql`NOW()` }).where(eq(aiChats.id, chatId));
     return messages.at(-1)!.position;
   });
   if (claimed === "busy") {
@@ -406,7 +415,9 @@ chatsRouter.get("/:chatId", async (req: Request<ChatParams>, res: Response<ChatP
   const chat = await ownChat(res, userId, workspaceId, chatId);
   if (!chat) return;
   await settleStale(chatId);
-  res.json({ chat, messages: await messagesOf(chatId) });
+  // Read again: settling may have marked its summary failed.
+  const [fresh] = await db.select().from(aiChats).where(eq(aiChats.id, chatId));
+  res.json({ chat: fresh ?? chat, messages: await messagesOf(chatId) });
 });
 
 chatsRouter.delete("/:chatId", async (req: Request<ChatParams>, res: Response) => {

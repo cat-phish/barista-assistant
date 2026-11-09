@@ -1784,10 +1784,13 @@ export const aiChats = mysqlTable(
     // Summarize and continue (docs/api/chat.md §12, "Long chats"): the AI's
     // summary of the messages up to summaryThrough (a position), sent ahead
     // of the ones after it. summaryStatus: pending while one is written,
-    // failed if the last try did; null otherwise.
+    // failed if the last try did; null otherwise. summaryRequestedAt: when
+    // the pending one was asked for; one pending past 10 minutes (the worker
+    // died) is marked failed, as a stuck reply is.
     summary: mediumtext("summary"),
     summaryThrough: int("summary_through"),
     summaryStatus: varchar("summary_status", { length: 10 }).$type<ChatSummaryStatus>(),
+    summaryRequestedAt: timestamp("summary_requested_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

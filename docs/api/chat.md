@@ -119,7 +119,10 @@ the chat with `summaryThrough`, the position of the last message it covers.
 Later replies get the summary ahead of the messages after `summaryThrough`.
 The messages stay in the chat as they were. `summaryStatus` is `pending`
 while it's written (sending waits, with a `409`), `failed` if that try
-failed (the old summary stays), and `null` otherwise. A summary counts
+failed (the old summary stays), and `null` otherwise. One still pending
+10 minutes after it was asked for (`summaryRequestedAt`: the worker died) is
+marked failed the next time the chat is read, sent to or summarized, as a
+stuck reply is, so the chat isn't held for good. A summary counts
 toward the chat's size and goes in the export, as `summary` and
 `summaryThrough` on the chat; importing renumbers it with the messages.
 

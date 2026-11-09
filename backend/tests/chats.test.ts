@@ -217,6 +217,17 @@ describe("summaries", () => {
     expect((await owner.agent.get(`${url(workspaceId)}/${chatId}`)).body.chat).toMatchObject({ summary: "Earlier.", summaryThrough: 2 });
   });
 
+  it("lets go of a summary still pending after 10 minutes: the worker died", async () => {
+    const chatId = await longChat(12);
+    expect((await summarize(chatId)).status).toBe(202);
+    const send = () => owner.agent.post(`${url(workspaceId)}/${chatId}/messages`).send({ content: "Hi" });
+    await db.update(aiChats).set({ summaryRequestedAt: new Date(Date.now() - 9 * 60_000) }).where(eq(aiChats.id, chatId));
+    expect((await send()).status).toBe(409);
+    await db.update(aiChats).set({ summaryRequestedAt: new Date(Date.now() - 11 * 60_000) }).where(eq(aiChats.id, chatId));
+    expect((await owner.agent.get(`${url(workspaceId)}/${chatId}`)).body.chat.summaryStatus).toBe("failed");
+    expect((await send()).status).toBe(202);
+  });
+
   it("refuses a short chat, and one with a reply being written", async () => {
     const short = await longChat(10);
     expect((await summarize(short)).status).toBe(400);
