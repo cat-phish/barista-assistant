@@ -545,14 +545,26 @@ has already read, so a failed reply is marked failed and they send again.
    that part of it. One that's been deleted is named as unavailable, by the
    label saved with the message. A chart is its snapshot as attached
    (`chat.md` §12): `insightsTab`, `note`, `covers` (the filters in words),
-   `columns`, `rows`, and `rowsLeftOut` when rows were cut.
+   `columns`, `rows`, and `rowsLeftOut` when rows were cut. A period
+   (`chat.md` §12, "Periods"; `worker/src/chatPeriodInput.ts`) is run
+   again for this reply: `resolveChatPeriod` turns its range into days (a
+   rolling one ends today in the workspace's zone) and the period before,
+   and §9f's `loadPeriodContext` reads them with its bean, recipe and
+   brewer, and the chat's owner for Only mine. The cap on brews is the
+   lower of the workspace's `chatPeriodMaxBrews` and the person's own
+   `periodMaxBrews`. It's sent as `toPeriodInput` makes it, with `filters`
+   naming what narrows it ("Onyx – Guji · V60 · Only mine"), and in full
+   (`aiHidden` doesn't apply). A filter that's gone makes it unavailable.
 3. **Photos:** the worker can't read the photo files, so the backend puts the
    chat's latest 6 in the job, and they go with the message they came on.
    Earlier ones aren't sent. A chat with photos in the job uses the vision
    model; otherwise the main one.
 4. **Prompt** (`buildChatSystem`, `worker/src/prompt.ts`): fixed, the person's
    own `instructions` (`auth.md` §1c), then the attachments as JSON. Their
-   section texts don't apply.
+   section texts don't apply. The intro to the attachments says what a
+   period holds: `figures` over every brew in it, `previousFigures` to
+   compare with, the newest brews in detail and `brewsLeftOut`, and not to
+   make up brews that weren't sent (`CHAT_PROMPT_VERSION` 2026-11-c).
 5. **Reply:** text, streamed, no schema (`streamReply`, `worker/src/llm.ts`,
    on both providers). The prompt allows light Markdown (bold, italics,
    lists, tables, code), which the chat shows formatted (`chat.md` §12, "The
@@ -618,10 +630,12 @@ already `pending`; the result goes back into it.
    rating, one decimal), bestRating, coffeeGrams, and beans, recipes and
    brewers by name with their counts. The newest 60 brews are sent, each
    as step 1's brew plus `day`, `bean` ("Roaster – Bean") and `brewer`;
-   `brewsLeftOut` counts the rest. Built to serve a period chat attachment
-   too (backlog 17).
-2. **Input** (`toPeriodInput`): `{ ratingScale, kind, period, figures,
-   previousPeriod, previousFigures, brews, brewsLeftOut, equipment }`,
+   `brewsLeftOut` counts the rest. A chat period (§9e) uses it too, with
+   optional `beanId`, `recipeId` and `brewerId`, an open start (all time),
+   its own `maxBrews` and `filters`; a recap has none of them.
+2. **Input** (`toPeriodInput`): `{ ratingScale, kind, period, filters,
+   figures, previousPeriod, previousFigures, brews, brewsLeftOut, equipment
+   }` (`filters` only on a chat period, `period.start` absent for all time),
    compacted, each brew as `brewInput` makes it, so what the workspace
    hides (`aiHidden`) is left out as in the analysis.
 3. **Prompt** (`RECAP_SYSTEM`, `worker/src/prompt.ts`): fixed (not editable
@@ -638,8 +652,8 @@ already `pending`; the result goes back into it.
    ("No brews in this period"); every attempt failing records why.
 
 **What the AI sees:** classified in `worker/tests/aiDetails.test.ts`; the
-period's own fields, the figures and each brew's `day`, `bean` and
-`brewer` are always sent, everything else goes with its key as in the
+period's own fields (`filters` included), the figures and each brew's
+`day`, `bean` and `brewer` are always sent, everything else goes with its key as in the
 analysis. Notes on beans, people's names and who made each brew aren't
 sent.
 

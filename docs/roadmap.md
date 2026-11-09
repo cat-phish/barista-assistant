@@ -2812,3 +2812,34 @@ Spec: `docs/api/recaps.md` §11c.
 - **Workspace time zone** (Settings → Defaults): overrides `BREW_TIMEZONE`
   for brews logged without an offset, the suggestion's "today", and recap
   notifications for members without their own.
+
+## Live periods in chat (built)
+
+Branch `chat-period`; was backlog 17. Spec: `docs/api/chat.md` §12,
+"Periods"; `llm-contract.md` §9e.
+
+- **What it is:** the chat picker's Brews filters (period, bean, recipe,
+  brewer, only mine) saved as one attachment, `{ kind: "period", period }`,
+  and run again for every reply, so a long chat about a stretch of brewing
+  sees brews logged, changed or deleted after attaching. One chip ("Brews,
+  last 30 days · Guji · Only mine"); counts as one toward
+  `chatMaxAttachments`. Select all is still there for a fixed list.
+- **Periods:** rolling (last 7 / 30 / 90 days, last year) move with the
+  chat, counted from each reply's day in the workspace's zone; This / Last
+  week (on the person's week start), This / Last month and custom dates are
+  fixed when attached; All time has no dates.
+- **What the AI gets:** `loadPeriodContext` (built for recaps), now with
+  bean, recipe and brewer filters, an open start and its own cap: figures
+  over every brew, the same filters over the period before (the calendar
+  week or month before, else as many days; none for All time), the newest
+  brews in detail and `brewsLeftOut`, plus `filters` by name. In full, as
+  chat attachments are. Chat prompt 2026-11-c says what a period holds.
+- **Cap:** `chatPeriodMaxBrews` (Settings → AI, owners, 10–300, default 60);
+  a person's own lower `periodMaxBrews` under Settings → AI chats. The
+  lower applies.
+- **Token warning:** past about 20k tokens a reply, the picker and the
+  composer say "≈ 40k tokens, sent again with every reply" (per-kind
+  averages measured on the real journal: a brew about 610 tokens, a period
+  brew 190).
+- Left out: a period gives proposals no ref (it isn't one item); other
+  kinds (the beans opened in a period) weren't asked for.

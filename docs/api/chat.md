@@ -45,6 +45,7 @@ made some (below).
 **Attachments:** `attachments` is up to the workspace's `chatMaxAttachments`
 (§2 of `workspaces.md`: 1–100, default 50) `{ "kind": "brew" | "bean" |
 "recipe", "id": "uuid" }`, each from this workspace, or the request is a `400`.
+Charts and periods (below) carry more.
 Each reply is sent the latest `chatMaxAttachments` items attached across the
 chat's last 40 messages, each once.
 A message comes back with `attachments: [{ kind, id, label }]`, where `label`
@@ -64,6 +65,33 @@ attachment, with the title as its `label`, counts toward the chat's size and
 goes in the export. A chart's `id` is the browser's: the same chart under the
 same filters is the same attachment. The Overview's tiles go as one chart,
 "Overview totals". Settings → AI doesn't apply to it.
+
+**Periods:** a live period is `{ "kind": "period", "id": "uuid", "period":
+spec }`: the Brews filters saved as one item rather than the brews they match
+(`@barista/shared/chatPeriod`). The spec is `{ range, from, to, beanId,
+recipeId, brewerId, mine }`:
+- `range`: `7d`, `30d`, `90d` or `1y` roll with the chat, counted back from
+  the day of each reply in the workspace's time zone, so `from` and `to` are
+  `null`. `all` is every brew, also with no dates. `week`, `month` and
+  `custom` are fixed days, so `from` and `to` (`YYYY-MM-DD`, `from` first)
+  are both set. The picker fixes "This week", "Last week" (on your
+  `weekStartsOn`), "This month" and "Last month" to their dates when
+  attached.
+- `beanId`, `recipeId`, `brewerId`: each `null`, or one in this workspace
+  (else `400`). `mine`: only the brews of the person whose chat it is.
+
+The worker runs it again for every reply (`llm-contract.md` §9e), so brews
+logged, changed or deleted since are seen. It sends figures for every brew in
+the period, the same figures over the period before (the calendar week or
+month before, else as many days before; none for `all`), and the newest brews
+in detail, up to the workspace's `chatPeriodMaxBrews` (`workspaces.md` §2:
+10–300, default 60) or your own lower `periodMaxBrews` (below), with how many
+were left out. A period counts as **one** toward `chatMaxAttachments`. Its
+`label` is made by the server ("Brews, last 30 days · Guji · Only mine",
+"Brews, 26 Oct – 1 Nov", "Brews, October 2026"). It goes in the export as it
+is. In another workspace, a filter that isn't there makes it unavailable to
+the AI. A period has no ref a proposal can use, since it isn't one item.
+Settings → AI's hidden details don't apply to it.
 
 **Photos:** upload each one first, then send up to 4 as `photoIds`; a photo
 that's yours, not yet sent and in this workspace, or the request is a `400`. A
@@ -121,7 +149,18 @@ bottom. On a phone the chat list is a drawer behind **Chats**.
   `chatMaxAttachments`. Beans and recipes are searched in the browser. The
   picker edits the whole selection, so unticking removes an item. On the
   Brews and Charts tabs the filters fold into one line (what they're set to,
-  in words) with a **Filters** button, so the list gets the room.
+  in words) with a **Filters** button, so the list gets the room. Its
+  Period list adds Last 7 days, This and Last week, This and Last month to
+  the brew list's. **Attach as live period** adds the filters as one
+  period (above), once for the same filters, listed under the button with
+  a ×.
+- **Token warning** (`lib/chatTokens.ts`): once what a reply would be sent
+  (this message's attachments and the chat's earlier ones) comes to about
+  20,000 tokens, the picker's footer and the composer say "≈ 40k tokens,
+  sent again with every reply". It's a rough count from per-kind averages
+  measured on a real journal: about 610 tokens for a brew, 100 for a bean,
+  320 for a recipe, 10 for each chart row, and 450 for a period plus 190 for
+  each brew it sends in detail.
 - **Charts** (`ChartPicker.vue`) lists every chart on the Insights tabs the
   workspace shows, the Explore charts the person added included, and
   "Overview totals", under the Insights filter bar. Those filters start as the
@@ -210,8 +249,8 @@ a send is a `429` with `code: "chat_limit"`.
 
 | Route | |
 | --- | --- |
-| `GET /api/auth/me/chat-settings` | `{ own, server, effective, usedBytes }`. `own` and `effective` are `{ maxBytes, maxDays }`; `server` adds `dailyMessages`. |
-| `PUT /api/auth/me/chat-settings` | Body `{ maxBytes, maxDays }`. `400` if either is over the server's. Answers as `GET`. |
+| `GET /api/auth/me/chat-settings` | `{ own, server, effective, usedBytes }`. `own` and `effective` are `{ maxBytes, maxDays }`, and `own` adds `periodMaxBrews`; `server` adds `dailyMessages`. |
+| `PUT /api/auth/me/chat-settings` | Body `{ maxBytes, maxDays, periodMaxBrews? }`. `400` if either limit is over the server's. `periodMaxBrews` (10–300, or `null` for the workspace's) is your own cap on a period's brews; left out, it stays as it was. Answers as `GET`. |
 | `DELETE /api/auth/me/chats` | Purges all your chats and photos, in every workspace. `204`. |
 | `GET /api/server/chat` | Admins. `{ limits, usedBytes }`, `usedBytes` for the whole server. |
 | `PUT /api/server/chat` | Admins. Body as `limits`. Answers as `GET`. Lowering a limit never rewrites a person's own: the lower one applies. |
