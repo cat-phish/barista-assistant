@@ -264,3 +264,32 @@ Sends "Test from Barista-Assistant" to the device, enabled or not.
   - link `<APP_URL>/roast/green`.
 - **In the app:** the Green tab marks it Low or None left, and the roast's
   page says so too (§4f).
+
+## Recaps
+
+Weekly and monthly recaps (recaps.md §11c).
+
+- **Preferences:** `recaps` and `recapNotify` (both default `true`),
+  `recapPeriods`, `weekStartsOn`, `recapNotifyTime` (default `"08:00"`) and
+  `timeZone` (auth.md §1).
+- **Scheduling:** a BullMQ job scheduler on the reminder queue
+  (`recap-tick`, cron `*/15 * * * *`), set when the backend starts. Each
+  tick (`worker/src/recaps.ts`) finds the people with both preferences on
+  whose local time (their `timeZone`, else `BREW_TIMEZONE`, else UTC) has
+  reached `recapNotifyTime` on the **first day** of a new week or month, for
+  each kind in `recapPeriods`.
+- **What's sent:** for the period just ended, one notification per
+  workspace the person brewed in (and still belongs to); none for a period
+  without their brews. A brew's day is its local date, as Insights counts
+  it (§11).
+  - title "Your week in coffee" / "Your month in coffee";
+  - message "2–8 Nov · 12 brews · avg 3.9 · best 4.5, Kenya Nyeri on the
+    V60" (the coffee rating; the best is the newest of the top rated),
+    starting with the workspace's name when more than one is sent;
+  - link `<APP_URL>/insights/recap?kind=weekly&start=2026-11-02&ws=<id>`,
+    which switches to that workspace.
+- **Once only:** a `recaps` row (scope `mine`) claims each send through its
+  `notified_at`. A send that fails on every channel, or finds no enabled
+  channel, gives the claim back, so a later tick that day tries again. Only
+  that day: after a server outage covering it, the banner and Insights →
+  Recap still have the recap, but no notification comes.

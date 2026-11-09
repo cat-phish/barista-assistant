@@ -1449,6 +1449,37 @@ export const aiChatPhotos = mysqlTable("ai_chat_photos", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Recaps (docs/api/recaps.md §11c): one row per person, workspace, period
+// and scope, made when a recap is notified (docs/api/notifications.md §1b)
+// or (phase 4) summarised; the figures are worked out live. Personal and
+// rewritable, so not backed up, like chats. Deleted with the person or the
+// workspace.
+export const RECAP_SCOPES = ["mine", "all"] as const;
+export const RECAP_SUMMARY_STATUSES = ["none", "pending", "done", "failed"] as const;
+
+export const recaps = mysqlTable(
+  "recaps",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 }).notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+    kind: varchar("kind", { length: 10 }).notNull(), // weekly | monthly
+    periodStart: date("period_start", { mode: "string" }).notNull(), // YYYY-MM-DD
+    scope: varchar("scope", { length: 4 }).notNull(), // RECAP_SCOPES
+    status: varchar("status", { length: 10 }).notNull().default("none"), // the AI summary, RECAP_SUMMARY_STATUSES
+    summary: text("summary"),
+    error: text("error"),
+    model: varchar("model", { length: 120 }),
+    promptVersion: varchar("prompt_version", { length: 40 }),
+    promptTokens: int("prompt_tokens"),
+    completionTokens: int("completion_tokens"),
+    notifiedAt: timestamp("notified_at"), // the notification went (or is going) out
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [unique("recaps_period_uq").on(t.workspaceId, t.userId, t.kind, t.periodStart, t.scope)],
+);
+
 // 9. LLM Analyses (AI Parameter Suggestions)
 // What was sent to the AI for an analysis or a suggestion
 // (docs/api/analysis.md §8c): the system prompt, the keys of the sections it

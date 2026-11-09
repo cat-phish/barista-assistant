@@ -10,7 +10,7 @@ the period before. Backlog 18 builds it in phases:
 
 1. **Insights → Recap** (done): the figures, worked out in the browser.
 2. A banner on the brew page when one is ready (done).
-3. A notification on the first day of a new period (planned).
+3. A notification on the first day of a new period (done; notifications.md §1b, "Recaps").
 4. An AI summary, off, on request or automatic (planned).
 
 ## Periods
@@ -49,6 +49,7 @@ Route `/insights/recap` (`stats-recap`), query:
 | `kind` | `weekly` \| `monthly`; default the first in `recapPeriods` |
 | `start` | any day in the period to show (never past today's); default the one just ended |
 | `mine` | `0`: everyone's brews in the workspace; default only the person's own |
+| `ws` | a workspace id (the notification's link): switches to it if it's one of the person's, then leaves the address |
 
 The Insights filters don't apply. One `GET …/stats` (§11) with `from` = the
 previous period's start, `to` = this period's end, and `mine=1` unless

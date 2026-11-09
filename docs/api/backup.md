@@ -77,7 +77,8 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   only. People's own AI prompts (`docs/api/auth.md` §1c) and
   added Insights charts (`docs/api/stats.md` §11b) aren't in it.
   `analysis_requests` (when an automatic analysis is due, why one failed,
-  §8) is queue state and isn't backed up either.
+  §8) is queue state and isn't backed up either, nor are `recaps` (when a
+  recap was notified, its AI summary; personal, like chats, §11c).
 - **The flavor wheel:** a workspace's own lexicon (§2c, `flavor_lexicons`)
   goes in the `workspace` block as `flavorLexicon` (the lexicon file), or
   `null` on the built-in wheel; it's checked like an import on restore

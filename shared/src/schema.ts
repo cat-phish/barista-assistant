@@ -1960,5 +1960,43 @@ export type NewBrewLog = typeof brewLogs.$inferInsert;
 export type LlmAnalysis = typeof llmAnalyses.$inferSelect;
 export type NewLlmAnalysis = typeof llmAnalyses.$inferInsert;
 export type ParameterSuggestion = typeof parameterSuggestions.$inferSelect;
+// Recaps (docs/api/recaps.md §11c): one row per person, workspace, period
+// and scope, made when a recap is sent or (phase 4) summarised; the figures
+// themselves are worked out live. Personal and rewritable, so not backed
+// up, like chats.
+export const RECAP_SCOPES = ["mine", "all"] as const;
+export type RecapScope = (typeof RECAP_SCOPES)[number];
+export const RECAP_SUMMARY_STATUSES = ["none", "pending", "done", "failed"] as const;
+export type RecapSummaryStatus = (typeof RECAP_SUMMARY_STATUSES)[number];
+
+export const recaps = mysqlTable(
+  "recaps",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: varchar("kind", { length: 10 }).$type<RecapKindName>().notNull(), // weekly | monthly
+    periodStart: date("period_start", { mode: "string" }).notNull(), // YYYY-MM-DD
+    scope: varchar("scope", { length: 4 }).$type<RecapScope>().notNull(),
+    status: varchar("status", { length: 10 }).$type<RecapSummaryStatus>().notNull().default("none"), // the AI summary
+    summary: text("summary"),
+    error: text("error"),
+    model: varchar("model", { length: 120 }),
+    promptVersion: varchar("prompt_version", { length: 40 }),
+    promptTokens: int("prompt_tokens"),
+    completionTokens: int("completion_tokens"),
+    notifiedAt: timestamp("notified_at"), // the notification went (or is going) out
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [unique("recaps_period_uq").on(t.workspaceId, t.userId, t.kind, t.periodStart, t.scope)],
+);
+export type RecapRow = typeof recaps.$inferSelect;
+type RecapKindName = "weekly" | "monthly";
+
 export type AiChat = typeof aiChats.$inferSelect;
 export type AiChatMessage = typeof aiChatMessages.$inferSelect;
