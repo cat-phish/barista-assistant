@@ -27,7 +27,29 @@ const STEPS: Array<{ value: RatingStep; label: string; hint: string }> = [
   { value: 'half', label: 'Half stars', hint: 'From ½ to 5 stars: tap the left half of a star for the half below it.' },
   { value: 'whole', label: 'Whole stars', hint: '1 to 5 stars. Half ratings already recorded still show.' },
 ];
-type Where = 'roast' | 'scale' | 'rating' | 'roasting';
+type Where = 'roast' | 'scale' | 'rating' | 'roasting' | 'zone';
+
+// The workspace's time zone (docs/api/workspaces.md §2, timeZone): every
+// zone this browser knows, with the one already saved even if it doesn't.
+function deviceZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
+const device = deviceZone();
+const zones = computed(() => {
+  let all: string[] = [];
+  try {
+    all = (Intl as unknown as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf?.('timeZone') ?? [];
+  } catch {
+    all = [];
+  }
+  const extra = [settings.value.timeZone, device].filter((z): z is string => !!z && !all.includes(z));
+  return [...extra, ...all];
+});
+const zoneValue = (e: Event) => (e.target as HTMLSelectElement).value || null;
 const savedWhere = ref<Where | null>(null);
 
 async function set(changes: Partial<WorkspaceSettings>, where: Where): Promise<boolean> {
@@ -166,6 +188,26 @@ async function saveRoasting(): Promise<void> {
       </form>
       <p v-if="error && savedWhere === 'roasting'" class="form-error" role="alert">{{ error }}</p>
       <p v-if="saved && savedWhere === 'roasting'" class="muted small" aria-live="polite">Saved.</p>
+    </section>
+    <section class="card stack" aria-labelledby="def-zone">
+      <h2 id="def-zone">Time zone</h2>
+      <div class="field">
+        <label for="ws-zone">The workspace's time zone</label>
+        <select v-if="isOwner" id="ws-zone" :value="settings.timeZone ?? ''" :disabled="saving" @change="set({ timeZone: zoneValue($event) }, 'zone')">
+          <option value="">The server's default</option>
+          <option v-for="z in zones" :key="z" :value="z">{{ z.replace(/_/g, ' ') }}</option>
+        </select>
+        <p v-else id="ws-zone" class="value">{{ settings.timeZone?.replace(/_/g, ' ') ?? "The server's default" }}</p>
+      </div>
+      <div v-if="isOwner && device && settings.timeZone !== device">
+        <button class="btn btn-secondary" type="button" :disabled="saving" @click="set({ timeZone: device }, 'zone')">Use this device's ({{ device.replace(/_/g, ' ') }})</button>
+      </div>
+      <p class="muted small">
+        For brews logged without their device's time (older ones): their roast age for the AI and the time in reminders. Also when recap
+        notifications come for anyone who hasn't set their own. The server's default is BREW_TIMEZONE in its settings, else UTC.
+      </p>
+      <p v-if="error && savedWhere === 'zone'" class="form-error" role="alert">{{ error }}</p>
+      <p v-if="saved && savedWhere === 'zone'" class="muted small" aria-live="polite">Saved.</p>
     </section>
     <p v-if="!isOwner" class="muted small">Only owners can change these.</p>
   </SettingsLayout>

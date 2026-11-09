@@ -11,6 +11,11 @@ work is in `roadmap.md`.
   webhook, each with its own on/off and a **Send test**.
 - **Workspaces:** shared spaces (e.g. a household or café) with roles: owner,
   barista (can log and edit), viewer (read-only).
+- **Workspace time zone:** Settings → Defaults lets owners set the
+  workspace's time zone, overriding the server's `BREW_TIMEZONE`. Older brews
+  logged without their device's time use it (roast age for the AI, times in
+  reminders), and so do recap notifications for members who haven't set
+  their own.
 - **Field visibility:** Settings → Fields lets owners hide the optional brew,
   bean and recipe fields the bar doesn't use, for everyone. Hidden fields
   keep what's recorded (shown again when editing something that has a value)

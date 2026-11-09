@@ -99,6 +99,7 @@ export interface WorkspaceSettings {
   homeRoasting: boolean;
   homeRoasterName: string; // the roaster name on beans roasts create
   restDays: Record<RoastType, number>; // days a roast rests, by roast type (0–60)
+  timeZone: string | null; // IANA name; null = the server's BREW_TIMEZONE, else UTC
 }
 export const MAX_REST_DAYS = 60;
 export const AUTO_ANALYZE_DELAYS = [0, 5, 10, 15, 30] as const;

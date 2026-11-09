@@ -6,6 +6,7 @@ import { brewers, brewLogs } from "@barista/shared/schema";
 import { and, desc, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { drinksServed, flavorsFor, loadBean, marksFor, problemsFor, selectBrews, summarize, toolsFor, withJoins, type BrewContext, type BrewSummary } from "./context.js";
 import { db } from "./db.js";
+import { workspaceZone } from "./zone.js";
 
 export interface ReviewBrew extends BrewSummary {
   brewer: string | null; // its name
@@ -36,19 +37,20 @@ export async function loadBeanReviewContext(r: Pick<BeanReviewJobData, "beanId" 
   const brewRows = rows.map(withJoins);
   const ids = brewRows.map((b) => b.id);
   const brewerIds = [...new Set(brewRows.flatMap((b) => (b.brewerId ? [b.brewerId] : [])))];
-  const [marks, tools, problems, flavors, servedAs, names] = await Promise.all([
+  const [marks, tools, problems, flavors, servedAs, names, zone] = await Promise.all([
     marksFor(ids),
     toolsFor(ids),
     problemsFor(ids),
     flavorsFor(ids),
     drinksServed(brewRows.flatMap((b) => (b.drinkId ? [b.drinkId] : []))),
     brewerIds.length ? db.select({ id: brewers.id, name: brewers.name }).from(brewers).where(inArray(brewers.id, brewerIds)) : Promise.resolve([]),
+    brewRows[0] ? workspaceZone(brewRows[0].workspaceId) : Promise.resolve(null), // one bean's brews: one workspace
   ]);
   const brewerName = new Map(names.map((b) => [b.id, b.name]));
   return {
     bean: bean.info,
     brews: brewRows.map((b) => ({
-      ...summarize(b, bean.roastDate, bean.freezes, marks, tools, problems, flavors, servedAs),
+      ...summarize(b, bean.roastDate, bean.freezes, marks, tools, problems, flavors, servedAs, zone),
       brewer: (b.brewerId && brewerName.get(b.brewerId)) ?? null,
     })),
     ratingScale: "0.5-5",

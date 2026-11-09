@@ -160,8 +160,9 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
     quarter hour, default `"08:00"`): the notification, on the first day of
     the new period at that local time (§1b).
   - `timeZone`: an IANA name (e.g. `Europe/London`), or `null` (default) for
-    the server's `BREW_TIMEZONE`. The client sends the browser's with each
-    Settings → Recaps change. An unknown name is `400`.
+    each workspace's `timeZone` (§2), else the server's `BREW_TIMEZONE`. The
+    client sends the browser's with each Settings → Recaps change. An
+    unknown name is `400`.
   - `recapAi`: `off` | `manual` (default) | `auto`: the AI summary.
   - `recapSeen`: `{ "weekly"?: "YYYY-MM-DD", "monthly"?: "YYYY-MM-DD" }`,
     the start of the last period whose banner was opened or dismissed.

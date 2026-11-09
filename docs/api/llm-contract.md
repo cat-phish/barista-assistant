@@ -59,7 +59,8 @@ queue:
      time (`roastAgeDays`, excluding days frozen; see §4) and
      `daysFrozenBeforeBrew`, when the bean has a `roastDate`. "At brew time"
      is the brew's **local** date: its `timestamp` shifted by its
-     `utcOffsetMinutes` (§6), else in the `BREW_TIMEZONE` zone, else UTC.
+     `utcOffsetMinutes` (§6), else in the workspace's `timeZone` (§2), else
+     the `BREW_TIMEZONE` zone, else UTC.
    - The brew includes its `grinder` (or `null`): name plus whatever details
      are recorded (adjustment, setting range, step size, usual adjustment,
      burr type/size, power, variable speed and its RPM range), so the LLM

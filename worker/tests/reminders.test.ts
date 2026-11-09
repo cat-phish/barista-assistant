@@ -45,6 +45,15 @@ describe("processRateReminder", () => {
     });
   });
 
+  it("shows a brew without a UTC offset in the workspace's zone", async () => {
+    await db.update(brewLogs).set({ utcOffsetMinutes: null }).where(eq(brewLogs.id, brewLogId));
+    const [b] = await db.select({ workspaceId: brewLogs.workspaceId }).from(brewLogs).where(eq(brewLogs.id, brewLogId));
+    await db.update(workspaces).set({ settings: { timeZone: "Asia/Tokyo" } }).where(eq(workspaces.id, b!.workspaceId));
+    const send = vi.fn().mockResolvedValue(undefined);
+    await processRateReminder({ brewLogId, userId }, send);
+    expect((send.mock.calls[0]![2] as { message: string }).message).toBe("V60 · Onyx Guji · 0:42"); // 15:42 UTC is 0:42 in Tokyo
+  });
+
   it("skips a brew rated (or deleted) in the meantime, or when reminders are off", async () => {
     const send = vi.fn().mockResolvedValue(undefined);
     await db.update(brewLogs).set({ drinkRating: 4 }).where(eq(brewLogs.id, brewLogId));

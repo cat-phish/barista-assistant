@@ -275,7 +275,9 @@ Weekly and monthly recaps (recaps.md §11c).
 - **Scheduling:** a BullMQ job scheduler on the reminder queue
   (`recap-tick`, cron `*/15 * * * *`), set when the backend starts. Each
   tick (`worker/src/recaps.ts`) finds the people with both preferences on
-  whose local time (their `timeZone`, else `BREW_TIMEZONE`, else UTC) has
+  whose local time (their `timeZone`, else the workspace's `timeZone`
+  (§2), else `BREW_TIMEZONE`, else UTC; a person's workspaces in different
+  zones are checked in each) has
   reached `recapNotifyTime` on the **first day** of a new week or month, for
   each kind in `recapPeriods`.
 - **What's sent:** for the period just ended, one notification per

@@ -15,8 +15,10 @@ import {
   type MethodKind,
   type ParameterSuggestion,
   type SuggestSource,
+  workspaces,
 } from "@barista/shared/schema";
 import { and, asc, desc, eq, getTableColumns, gt, inArray, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
+import { settingsZone } from "./zone.js";
 import { config } from "./config.js";
 import {
   drinksServed,
@@ -345,11 +347,12 @@ export async function loadSuggestContext(r: SuggestRequest, options: { ratedOnly
     if (b) beansById.set(id, b);
   });
 
-  const today = localBrewDate(options.before ?? new Date(), null, config.brewTimezone);
+  const [ws] = await db.select({ workspaceId: beans.workspaceId, settings: workspaces.settings }).from(beans).innerJoin(workspaces, eq(workspaces.id, beans.workspaceId)).where(eq(beans.id, r.beanId));
+  const zone = settingsZone(ws?.settings);
+  const today = localBrewDate(options.before ?? new Date(), null, zone);
   const age = target.roastDate ? effectiveRoastAge(target.roastDate.toISOString(), target.freezes, today) : null;
   const kinds = r.alternativesAsked ?? [];
-  const [ws] = kinds.length ? await db.select({ workspaceId: beans.workspaceId }).from(beans).where(eq(beans.id, r.beanId)) : [];
-  const alternatives = ws ? await loadOptions(r, ws.workspaceId, kinds, today) : {};
+  const alternatives = ws && kinds.length ? await loadOptions(r, ws.workspaceId, kinds, today) : {};
   const batch = batchFor(r, recipe, (recipe?.methodKind ?? brewer?.kind) === "espresso");
   return {
     source: r.source,
@@ -364,7 +367,7 @@ export async function loadSuggestContext(r: SuggestRequest, options: { ratedOnly
     brews: brewRows.map((b) => {
       const bean = beansById.get(b.beanId);
       return {
-        ...summarize(b, bean?.roastDate ?? null, bean?.freezes ?? [], marks, tools, problems, flavors, servedAs),
+        ...summarize(b, bean?.roastDate ?? null, bean?.freezes ?? [], marks, tools, problems, flavors, servedAs, zone),
         sameBag: b.beanId === r.beanId,
         sameBean: coffee.includes(b.beanId),
         sameRecipe: r.recipeId !== null && b.recipeId === r.recipeId,
