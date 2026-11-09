@@ -2,6 +2,7 @@
 // A chat reply's proposal (docs/api/chat.md §12, "Proposals"): what it would
 // set, with Open (fills in the brew page or recipe form, nothing saved until
 // you save there) and Dismiss. A dismissed one folds to a line, with Undo.
+// Recipe steps that fail the step checks are flagged, not hidden.
 import { computed } from 'vue';
 import type { ChatProposal } from '../api/chats';
 import { usePreferences } from '../composables/usePreferences';
@@ -11,6 +12,7 @@ const props = defineProps<{ proposal: ChatProposal; canOpen: boolean; busy: bool
 const emit = defineEmits<{ open: []; state: [state: ChatProposal['state']] }>();
 const { temperatureUnit } = usePreferences();
 const lines = computed(() => proposalLines(props.proposal, temperatureUnit.value));
+const warnings = computed(() => (props.proposal.kind === 'brew' ? [] : (props.proposal.warnings ?? [])));
 const openLabel = computed(() => (props.proposal.kind === 'brew' ? 'Open on brew page' : props.proposal.kind === 'recipeChange' ? 'Open recipe' : 'Open as new recipe'));
 </script>
 
@@ -26,6 +28,12 @@ const openLabel = computed(() => (props.proposal.kind === 'brew' ? 'Open on brew
     <ul v-if="lines.length" class="values">
       <li v-for="l in lines" :key="l">{{ l }}</li>
     </ul>
+    <div v-if="warnings.length" class="warnings small" role="note">
+      <p>Check the steps before saving:</p>
+      <ul>
+        <li v-for="w in warnings" :key="w">{{ w }}</li>
+      </ul>
+    </div>
     <div class="actions">
       <button v-if="canOpen" type="button" class="btn btn-secondary" @click="emit('open')">{{ openLabel }}</button>
       <button type="button" class="btn-link" :disabled="busy" @click="emit('state', 'dismissed')">Dismiss</button>
@@ -58,6 +66,21 @@ h4 {
 }
 .values {
   margin: 0 0 var(--space-3);
+  padding-left: 1.1rem;
+}
+.warnings {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  color: var(--warning);
+  background: var(--warning-tint);
+}
+.warnings p {
+  margin: 0;
+  font-weight: 600;
+}
+.warnings ul {
+  margin: var(--space-1) 0 0;
   padding-left: 1.1rem;
 }
 .actions {

@@ -79,12 +79,14 @@ export interface ChatRecipeChangeProposal extends ProposalBase {
   recipeId: string;
   recipeLabel: string;
   changes: ChatProposalRecipe;
+  warnings?: string[]; // step checks it fails; worth a look before saving (docs/api/chat.md §12)
 }
 export interface ChatNewRecipeProposal extends ProposalBase {
   kind: 'newRecipe';
   brewerId: string | null;
   brewerLabel: string | null;
   recipe: ChatProposalRecipe & { name: string; targetDoseGrams: number };
+  warnings?: string[]; // step checks it fails; worth a look before saving (docs/api/chat.md §12)
 }
 export type ChatProposal = ChatBrewProposal | ChatRecipeChangeProposal | ChatNewRecipeProposal;
 

@@ -1717,12 +1717,14 @@ export interface ChatRecipeChangeProposal extends ChatProposalBase {
   recipeId: string;
   recipeLabel: string;
   changes: ChatProposalRecipe;
+  warnings?: string[]; // step checks it fails (@barista/shared/recipeChecks); none = absent
 }
 export interface ChatNewRecipeProposal extends ChatProposalBase {
   kind: "newRecipe";
   brewerId: string | null; // the brewer of what it's based on; null = the person picks
   brewerLabel: string | null;
   recipe: ChatProposalRecipe & { name: string; targetDoseGrams: number };
+  warnings?: string[]; // step checks it fails (@barista/shared/recipeChecks); none = absent
 }
 export type ChatProposal = ChatBrewProposal | ChatRecipeChangeProposal | ChatNewRecipeProposal;
 

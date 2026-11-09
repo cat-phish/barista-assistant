@@ -96,6 +96,15 @@ durationSec, targetWaterGrams, targetTempC, pressureBar, flowRate }`), as in
 `recipes.md` §5; the form checks them on saving. How the worker reads them is
 `llm-contract.md` §9e. They count toward the chat's size and go in the export.
 
+**Warnings:** a `recipeChange` or `newRecipe` can carry `warnings`, plain
+sentences on steps that don't hold up (`@barista/shared/recipeChecks`): water
+targets going back down, the last pour more than 2 g off the recipe's water,
+a pour faster than 12 g/s or slower than 1 g/s, or the steps ending after the
+finish window or more than 60 s before it. The card lists them under "Check
+the steps before saving"; the proposal is kept and opens as usual. A change
+is checked as the recipe after it, and only when it touches the steps, the
+water or the window. Absent when there are none, and on proposals from before.
+
 `POST`s answer `409` with `code: "ai_not_configured"` when the workspace has no
 AI (§2d), and `503` when the queue can't be reached (nothing is saved).
 

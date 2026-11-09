@@ -7,6 +7,8 @@
 //   npm run eval -w worker -- run --label baseline [--yes] [--without flavors|places]
 //   npm run eval -w worker -- run --label sug --suggest [beanRecipe] [--yes]
 //   npm run eval -w worker -- compare baseline after
+//   npm run eval -w worker -- propose --label before [--limit 8] [--yes]
+//   npm run eval -w worker -- compare-propose before after
 //
 // `run` builds each brew's context with the code as it is now and sends it
 // through the prompt as it is now, so run it before and after a change.
@@ -14,6 +16,9 @@
 // brew (its bean, recipe, brewer and grinder; brews before it, from the
 // source given, default beanRecipe), so the values can be held against the
 // brew as it went.
+// `propose` asks the chat, with each recipe attached, for a variation as a new
+// recipe, and keeps the proposals with the step checks they fail
+// (@barista/shared/recipeChecks): the recipes brewed most recently first.
 // --with-flavors picks only brews with wheel flavors; --without flavors
 // sends them with none (and so no flavors section in the prompt), --without
 // places with their labels only, to see what the picks change (backlog 10).
@@ -206,6 +211,130 @@ async function run(label: string, yes: boolean, suggest: string | null, without:
   console.log(`\nSaved eval/${label}.json (${tokens.toLocaleString()} prompt tokens in all).`);
 }
 
+// ---- Chat recipe proposals ---------------------------------------------------
+
+const PROPOSE_ASK = "Propose a variation of this recipe as a new recipe, with its full steps.";
+interface ProposeResult {
+  label: string;
+  chatPromptVersion: string;
+  model: string;
+  at: string;
+  ask: string;
+  results: Array<{
+    recipeId: string;
+    recipe: string;
+    brewer: string;
+    reply: string | null; // the text, without the blocks
+    blocks: unknown[]; // the proposal blocks as written, before checking
+    proposals: unknown[]; // as saved, warnings included
+    usage: { promptTokens: number; completionTokens: number } | null;
+    error: string | null;
+  }>;
+}
+
+async function propose(label: string, limit: number, yes: boolean): Promise<void> {
+  const { db } = await import("./db.js");
+  const { brewers, brewLogs, recipes } = await import("@barista/shared/schema");
+  const { and, desc, eq, isNull, max } = await import("drizzle-orm");
+  const { CHAT_PROMPT_VERSION } = await import("./prompt.js");
+  const { buildChatRequest, complete } = await import("./llm.js");
+  const { resolveAi } = await import("./ai/resolve.js");
+  const { loadAttachments } = await import("./chat.js");
+  const { checkProposals, refTable, splitProposals } = await import("./chatProposals.js");
+  // Active recipes, the ones brewed most recently first.
+  const picked = await db
+    .select({ id: recipes.id, name: recipes.name, workspaceId: recipes.workspaceId, brewer: brewers.name, last: max(brewLogs.timestamp) })
+    .from(recipes)
+    .innerJoin(brewers, eq(recipes.brewerId, brewers.id))
+    .leftJoin(brewLogs, eq(brewLogs.recipeId, recipes.id))
+    .where(and(isNull(recipes.archivedAt), isNull(brewers.archivedAt)))
+    .groupBy(recipes.id, recipes.name, recipes.workspaceId, brewers.name)
+    .orderBy(desc(max(brewLogs.timestamp)))
+    .limit(limit);
+  const ai = await resolveAi();
+  console.log(`${picked.length} recipes (${picked.map((r) => r.name).join(", ")}), chat prompt ${CHAT_PROMPT_VERSION}, model ${ai.models.main}: one chat reply each.`);
+  if (!yes) {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const answer = await rl.question("Send them to the API? [y/N] ");
+    rl.close();
+    if (!/^y/i.test(answer)) return;
+  }
+  const out: ProposeResult = { label, chatPromptVersion: CHAT_PROMPT_VERSION, model: ai.models.main, at: new Date().toISOString(), ask: PROPOSE_ASK, results: [] };
+  for (const r of picked) {
+    const attachments = [{ kind: "recipe" as const, id: r.id, label: r.name }];
+    const base = { recipeId: r.id, recipe: r.name, brewer: r.brewer };
+    try {
+      const attached = await loadAttachments(attachments, r.workspaceId);
+      const request = buildChatRequest(ai.models.main, [{ role: "user", content: PROPOSE_ASK }], undefined, attached);
+      const { message, usage } = await complete(ai, request);
+      const { text, blocks } = splitProposals(message?.content ?? "");
+      const proposals = checkProposals(blocks, await refTable(attachments, r.workspaceId));
+      out.results.push({ ...base, reply: text, blocks, proposals, usage, error: null });
+      process.stdout.write(".");
+    } catch (err) {
+      out.results.push({ ...base, reply: null, blocks: [], proposals: [], usage: null, error: err instanceof Error ? err.message : String(err) });
+      process.stdout.write("x");
+    }
+  }
+  writeJson(`propose-${label}.json`, out);
+  const flagged = out.results.filter((x) => x.proposals.some((p) => (p as { warnings?: string[] }).warnings?.length)).length;
+  const dropped = out.results.reduce((n, x) => n + Math.max(0, Math.min(x.blocks.length, 3) - x.proposals.length), 0);
+  console.log(`\nSaved eval/propose-${label}.json: ${out.results.filter((x) => x.proposals.length).length} with a proposal, ${flagged} flagged, ${dropped} block(s) dropped by the checks.`);
+}
+
+function comparePropose(a: string, b: string): void {
+  const A = readJson<ProposeResult>(`propose-${a}.json`);
+  const B = readJson<ProposeResult>(`propose-${b}.json`);
+  type Row = ProposeResult["results"][number];
+  type Shown = { kind?: string; recipe?: Record<string, unknown>; changes?: Record<string, unknown>; warnings?: string[] };
+  const warnings = (r: ProposeResult) => r.results.flatMap((x) => (x.proposals as Shown[]).flatMap((p) => p.warnings ?? []));
+  // A warning's kind: its wording without the numbers.
+  const kinds = (ws: string[]) => {
+    const counts = new Map<string, number>();
+    for (const w of ws) {
+      const k = w.replace(/Step \d+/, "Step N").replace(/[\d.:–]+/g, "#");
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    return [...counts].map(([k, n]) => `${n} × ${k}`);
+  };
+  const steps = (p: Shown) => {
+    const r = p.recipe ?? p.changes ?? {};
+    const list = (r.steps as Array<Record<string, unknown>> | undefined) ?? [];
+    const head = `${p.kind ?? "?"}: ${r.name ?? ""} ${r.targetDoseGrams ?? "–"} g → ${r.targetWaterGrams ?? r.expectedYieldGrams ?? "–"} g, window ${r.expectedFinishMinSec ?? "–"}–${r.expectedFinishMaxSec ?? "–"} s`;
+    const body = list.map((s) => `${s.stepType} ${s.durationSec ?? "–"} s${s.targetWaterGrams != null ? ` → ${s.targetWaterGrams} g` : ""}`).join(", ");
+    const flags = p.warnings?.length ? `<br>⚠ ${p.warnings.join("<br>⚠ ")}` : "";
+    return `${head}<br>${body || "no steps"}${flags}`;
+  };
+  const cell = (x: Row | undefined) => (!x ? "–" : x.error ? `error: ${x.error}` : x.proposals.length ? (x.proposals as Shown[]).map(steps).join("<hr>") : "no proposal");
+  const lines = [
+    `# Chat recipe proposals: ${a} vs ${b}`,
+    "",
+    `Asked: “${A.ask}”`,
+    "",
+    `| | ${a} | ${b} |`,
+    "|---|---|---|",
+    `| Chat prompt | ${A.chatPromptVersion} | ${B.chatPromptVersion} |`,
+    `| Model | ${A.model} | ${B.model} |`,
+    `| Recipes with a proposal | ${A.results.filter((x) => x.proposals.length).length}/${A.results.length} | ${B.results.filter((x) => x.proposals.length).length}/${B.results.length} |`,
+    `| Blocks written / kept | ${A.results.reduce((n, x) => n + (x.blocks?.length ?? 0), 0)} / ${A.results.reduce((n, x) => n + x.proposals.length, 0)} | ${B.results.reduce((n, x) => n + (x.blocks?.length ?? 0), 0)} / ${B.results.reduce((n, x) => n + x.proposals.length, 0)} |`,
+    `| Proposals flagged | ${A.results.filter((x) => (x.proposals as Shown[]).some((p) => p.warnings?.length)).length} | ${B.results.filter((x) => (x.proposals as Shown[]).some((p) => p.warnings?.length)).length} |`,
+    `| Warnings | ${warnings(A).length} | ${warnings(B).length} |`,
+    `| Output tokens | ${A.results.reduce((n, x) => n + (x.usage?.completionTokens ?? 0), 0).toLocaleString()} | ${B.results.reduce((n, x) => n + (x.usage?.completionTokens ?? 0), 0).toLocaleString()} |`,
+    "",
+    `**${a}:** ${kinds(warnings(A)).join("; ") || "none"}`,
+    "",
+    `**${b}:** ${kinds(warnings(B)).join("; ") || "none"}`,
+    "",
+  ];
+  for (const x of A.results) {
+    const y = B.results.find((r) => r.recipeId === x.recipeId);
+    lines.push(`## ${x.recipe} (${x.brewer})`, "", `| ${a} | ${b} |`, "|---|---|", `| ${cell(x)} | ${cell(y)} |`, "");
+  }
+  const file = `compare-propose-${a}-${b}.md`;
+  writeFileSync(path.join(OUT, file), lines.join("\n"));
+  console.log(`Wrote eval/${file}`);
+}
+
 function compare(a: string, b: string): void {
   const brews = readJson<Picked[]>("brews.json");
   const A = readJson<RunResult>(`${a}.json`);
@@ -281,8 +410,10 @@ async function main(args: string[]): Promise<void> {
     await run(flag(args, "label")!, args.includes("--yes"), suggest, without);
   }
   else if (command === "compare" && args[1] && args[2]) compare(args[1], args[2]);
+  else if (command === "propose" && flag(args, "label")) await propose(flag(args, "label")!, Number(flag(args, "limit") ?? 8), args.includes("--yes"));
+  else if (command === "compare-propose" && args[1] && args[2]) comparePropose(args[1], args[2]);
   else {
-    console.error("Usage: snapshot [--limit N] [--with-flavors] | run --label NAME [--suggest [SOURCE]] [--without flavors|places] [--yes] | compare A B");
+    console.error("Usage: snapshot [--limit N] [--with-flavors] | run --label NAME [--suggest [SOURCE]] [--without flavors|places] [--yes] | compare A B | propose --label NAME [--limit N] [--yes] | compare-propose A B");
     process.exitCode = 2;
   }
 }
