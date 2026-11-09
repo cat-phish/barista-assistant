@@ -132,6 +132,19 @@ Every workspace in a response carries `settings`, defaults filled in
   roast rests before it's ready, by roast type (`ROAST_TYPES`), each an
   integer 0–60. Sent as the whole map. A roast starts from its type's
   days and can change its own.
+- `timeZone` (an IANA name such as `"America/Los_Angeles"`, or `null`,
+  default): the workspace's time zone, overriding the server's
+  `BREW_TIMEZONE` (`.env`) for this workspace; `null` uses that, else UTC.
+  An unknown name is `400`. Used for:
+  - brews logged without a UTC offset (older ones): their local date for
+    the AI's roast age (llm-contract.md §9) and the time in reminders
+    (§1b);
+  - "today" in Suggest parameters' roast age (§8b);
+  - recap notifications (§1b, "Recaps") for a member without their own
+    `timeZone` (auth.md §1).
+
+  Insights (§11) still counts a brew without an offset on its UTC date.
+  Set under Settings → **Defaults**, with "Use this device's".
 
 ### Field visibility
 

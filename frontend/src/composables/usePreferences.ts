@@ -31,7 +31,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   recapAi: 'manual',
   recapSeen: {},
 };
-export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: 'light', roastScale: 'names', ratingStep: 'half', hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: 'beanRecipe', suggestMaxBrews: 5, suggestAlternatives: [], beanReviews: true, beanReviewMaxBrews: 10, beanReviewRatedOnly: true, beanReviewBrewers: 'all', aiChat: true, chatMaxAttachments: 50, readLabels: true, labelWebLookup: false, labelWebContext: 'high', homeRoasting: false, homeRoasterName: 'Home roast', restDays: { filter: 7, espresso: 14, omni: 10 } };
+export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: 'light', roastScale: 'names', ratingStep: 'half', hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: 'beanRecipe', suggestMaxBrews: 5, suggestAlternatives: [], beanReviews: true, beanReviewMaxBrews: 10, beanReviewRatedOnly: true, beanReviewBrewers: 'all', aiChat: true, chatMaxAttachments: 50, readLabels: true, labelWebLookup: false, labelWebContext: 'high', homeRoasting: false, homeRoasterName: 'Home roast', restDays: { filter: 7, espresso: 14, omni: 10 }, timeZone: null };
 
 // The signed-in person's display units and the current workspace's settings.
 export function usePreferences() {

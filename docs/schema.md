@@ -1208,7 +1208,8 @@ export const brewLogs = mysqlTable("brew_logs", {
   timestamp: timestamp("timestamp").defaultNow().notNull(),
   // The logging device's offset from UTC in minutes (-420 = PDT), so the
   // worker knows the brew's local date for roast age (docs/api/brew-logs.md §6).
-  // null = unknown (older brews): the worker falls back to BREW_TIMEZONE.
+  // null = unknown (older brews): the worker falls back to the workspace's
+  // timeZone setting, else BREW_TIMEZONE.
   utcOffsetMinutes: int("utc_offset_minutes"),
   actualDoseGrams: decimal("actual_dose_grams", { precision: 5, scale: 2, mode: "number" }).notNull(),
   // Required unless the log's recipe is an espresso recipe, where it's null.

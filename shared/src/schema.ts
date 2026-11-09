@@ -176,6 +176,10 @@ export interface WorkspaceSettings {
   // Days a roast rests before it's ready, by roast type; each roast starts
   // from these and can change its own.
   restDays: Record<RoastType, number>;
+  // The workspace's time zone (an IANA name), for brews logged without a
+  // UTC offset (roast age, reminder times) and the recap notification of
+  // anyone without their own; null = the server's BREW_TIMEZONE, else UTC.
+  timeZone: string | null;
 }
 export const MAX_REST_DAYS = 60;
 export const LABEL_WEB_CONTEXTS = ["low", "medium", "high"] as const;
@@ -229,6 +233,7 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   homeRoasting: false,
   homeRoasterName: "Home roast",
   restDays: { filter: 7, espresso: 14, omni: 10 },
+  timeZone: null,
 };
 
 export function withDefaults<T extends object>(defaults: T, stored: Partial<T> | null): T {

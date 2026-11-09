@@ -1,13 +1,14 @@
-import { and, eq, gte, isNull, lt } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { sendNotification } from "@barista/shared/notify";
 import { periodLabel, periodOf, previousPeriod, addDays, type RecapKind, type RecapPeriod } from "@barista/shared/recapPeriods";
-import { beans, brewers, brewLogs, DEFAULT_PREFERENCES, recaps, users, withDefaults, workspaceMembers, workspaces, type UserPreferences } from "@barista/shared/schema";
+import { beans, brewers, brewLogs, DEFAULT_PREFERENCES, recaps, users, withDefaults, workspaceMembers, workspaces, type UserPreferences, type WorkspaceSettings } from "@barista/shared/schema";
 import { sendWebPush } from "@barista/shared/webPush";
 import { config } from "./config.js";
 import { db } from "./db.js";
 import { localBrewDate } from "./localDate.js";
 import { deliver } from "./reminders.js";
+import { settingsZone } from "./zone.js";
 
 // Recap notifications (docs/api/notifications.md §1b, "Recaps"). Every
 // quarter hour the tick looks for people whose local time has reached
@@ -26,13 +27,15 @@ export function zonedNow(now: Date, zone: string): { day: string; time: string }
   return { day: `${get("year")}-${get("month")}-${get("day")}`, time: `${get("hour")}:${get("minute")}` };
 }
 
-const zoneOf = (prefs: UserPreferences): string => prefs.timeZone ?? config.brewTimezone ?? "UTC";
+// The zone a person's recaps follow in a workspace: their own (from their
+// device), else the workspace's, else BREW_TIMEZONE, else UTC.
+export const recapZone = (prefs: UserPreferences, settings: Partial<WorkspaceSettings> | null): string => prefs.timeZone ?? settingsZone(settings) ?? "UTC";
 
-// The periods due now for this person: the one just ended, for each kind
-// they get, when today starts a new one and their time has come.
-export function recapsDueNow(prefs: UserPreferences, now: Date): Array<{ kind: RecapKind; period: RecapPeriod }> {
+// The periods due now for this person in that zone: the one just ended, for
+// each kind they get, when today starts a new one and their time has come.
+export function recapsDueNow(prefs: UserPreferences, now: Date, zone: string): Array<{ kind: RecapKind; period: RecapPeriod }> {
   if (!prefs.recaps || !prefs.recapNotify) return [];
-  const { day, time } = zonedNow(now, zoneOf(prefs));
+  const { day, time } = zonedNow(now, zone);
   if (time < prefs.recapNotifyTime) return [];
   const kinds: RecapKind[] = prefs.recapPeriods === "both" ? ["weekly", "monthly"] : [prefs.recapPeriods];
   return kinds.flatMap((kind) => {
@@ -53,7 +56,7 @@ interface RecapBrew {
 
 // The person's brews in the period, in workspaces they're still in. A brew's
 // day is its local date as Insights counts it (docs/api/stats.md §11).
-async function brewsIn(userId: string, period: RecapPeriod): Promise<RecapBrew[]> {
+async function brewsIn(userId: string, period: RecapPeriod, workspaceIds: readonly string[]): Promise<RecapBrew[]> {
   const rows = await db
     .select({
       id: brewLogs.id,
@@ -71,7 +74,7 @@ async function brewsIn(userId: string, period: RecapPeriod): Promise<RecapBrew[]
     .innerJoin(beans, eq(beans.id, brewLogs.beanId))
     .leftJoin(brewers, eq(brewers.id, brewLogs.brewerId))
     // A day either side covers every UTC offset.
-    .where(and(eq(brewLogs.userId, userId), gte(brewLogs.timestamp, new Date(`${addDays(period.start, -1)}T00:00:00Z`)), lt(brewLogs.timestamp, new Date(`${addDays(period.end, 2)}T00:00:00Z`))));
+    .where(and(eq(brewLogs.userId, userId), inArray(brewLogs.workspaceId, [...workspaceIds]), gte(brewLogs.timestamp, new Date(`${addDays(period.start, -1)}T00:00:00Z`)), lt(brewLogs.timestamp, new Date(`${addDays(period.end, 2)}T00:00:00Z`))));
   return rows
     .map((r) => ({ ...r, rating: r.rating === null ? null : Number(r.rating), day: localBrewDate(r.timestamp, r.utcOffsetMinutes, null) }))
     .filter((r) => r.day >= period.start && r.day <= period.end)
@@ -123,9 +126,22 @@ export async function processRecapTick(now: Date = new Date(), send: Send = send
   let failed = 0;
   for (const person of people) {
     const prefs = withDefaults(DEFAULT_PREFERENCES, person.preferences ?? null);
-    for (const { kind, period } of recapsDueNow(prefs, now)) {
+    if (!prefs.recaps || !prefs.recapNotify) continue;
+    // Their workspaces, grouped by the zone recaps follow in each.
+    const memberships = await db
+      .select({ workspaceId: workspaceMembers.workspaceId, settings: workspaces.settings })
+      .from(workspaceMembers)
+      .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+      .where(eq(workspaceMembers.userId, person.id));
+    const byZone = new Map<string, string[]>();
+    for (const m of memberships) {
+      const zone = recapZone(prefs, m.settings);
+      byZone.set(zone, [...(byZone.get(zone) ?? []), m.workspaceId]);
+    }
+    const due = [...byZone].flatMap(([zone, ids]) => recapsDueNow(prefs, now, zone).map((d) => ({ ...d, ids })));
+    for (const { kind, period, ids } of due) {
       try {
-        const brews = await brewsIn(person.id, period);
+        const brews = await brewsIn(person.id, period, ids);
         const byWorkspace = new Map<string, RecapBrew[]>();
         for (const b of brews) byWorkspace.set(b.workspaceId, [...(byWorkspace.get(b.workspaceId) ?? []), b]);
         for (const [workspaceId, list] of byWorkspace) {

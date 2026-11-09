@@ -5,11 +5,13 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { config } from "../src/config.js";
 import { db } from "../src/db.js";
-import { processRecapTick, recapMessage, recapsDueNow, zonedNow } from "../src/recaps.js";
+import { processRecapTick, recapMessage, recapsDueNow as dueIn, recapZone, zonedNow } from "../src/recaps.js";
 import { DEFAULT_PREFERENCES, type UserPreferences } from "@barista/shared/schema";
 
 // docs/api/notifications.md §1b "Recaps": real database, fake sending.
 const prefs = (p: Partial<UserPreferences> = {}): UserPreferences => ({ ...DEFAULT_PREFERENCES, timeZone: "Europe/London", ...p });
+// Due in the person's zone (no workspace zone).
+const recapsDueNow = (p: UserPreferences, now: Date) => dueIn(p, now, recapZone(p, null));
 
 describe("recapsDueNow", () => {
   // Monday 9 Nov 2026, 08:00 in London (GMT) and 00:00 in Los Angeles.
@@ -36,6 +38,12 @@ describe("recapsDueNow", () => {
     expect(recapsDueNow(prefs({ recapPeriods: "weekly" }), first)).toEqual([]);
     expect(recapsDueNow(prefs({ recaps: false }), mondayEight)).toEqual([]);
     expect(recapsDueNow(prefs({ recapNotify: false }), mondayEight)).toEqual([]);
+  });
+
+  it("uses the workspace's zone for someone without their own, then the server's", () => {
+    expect(recapZone(prefs(), { timeZone: "Asia/Tokyo" })).toBe("Europe/London");
+    expect(recapZone(prefs({ timeZone: null }), { timeZone: "Asia/Tokyo" })).toBe("Asia/Tokyo");
+    expect(recapZone(prefs({ timeZone: null }), {})).toBe(config.brewTimezone ?? "UTC");
   });
 
   it("reads local time with hours past midnight as 00", () => {
@@ -136,6 +144,15 @@ describe("processRecapTick", () => {
     expect(await processRecapTick(monday, send)).toEqual({ sent: 0, failed: 0 });
     await db.insert(notificationChannels).values({ id: randomUUID(), userId, kind: "ntfy", config: { server: "https://ntfy.sh", topic: "t", token: null } });
     expect(await processRecapTick(monday, send)).toEqual({ sent: 1, failed: 0 });
+  });
+
+  it("follows the workspace's zone when the person has none", async () => {
+    await brew("2026-11-03T08:00:00Z", 4);
+    await db.update(users).set({ preferences: {} }).where(eq(users.id, userId));
+    await db.update(workspaces).set({ settings: { timeZone: "America/Los_Angeles" } }).where(eq(workspaces.id, workspaceId));
+    const send = vi.fn().mockResolvedValue(undefined);
+    expect(await processRecapTick(monday, send)).toEqual({ sent: 0, failed: 0 }); // midnight there
+    expect(await processRecapTick(new Date("2026-11-09T16:00:00Z"), send)).toEqual({ sent: 1, failed: 0 }); // 8:00 there
   });
 
   it("sends nothing with notifications off", async () => {

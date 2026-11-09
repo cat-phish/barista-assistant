@@ -134,6 +134,7 @@ services:
       # Looks beans up on the web (Responses API web search); empty = the vision model.
       - OPENAI_WEB_MODEL=${OPENAI_WEB_MODEL:-}
       # Zone for brews logged without a UTC offset (older ones); empty = UTC.
+      # A workspace's own time zone (Settings → Defaults) overrides it.
       - BREW_TIMEZONE=${BREW_TIMEZONE:-}
       # Where the app opens, for the link in rate-later reminders.
       - APP_URL=${APP_URL:-https://localhost:42069}

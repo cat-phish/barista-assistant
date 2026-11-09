@@ -56,6 +56,8 @@ export const workspaceSettingsObject = z
     homeRoasting: z.boolean(),
     homeRoasterName: z.string().trim().min(1).max(255),
     restDays: z.object(restDayShape).strict(),
+    // The workspace's time zone; null = the server's BREW_TIMEZONE.
+    timeZone: z.string().max(64).refine(isTimeZone, "an IANA time zone, like Europe/London").nullable(),
   })
   .partial()
   .strict();

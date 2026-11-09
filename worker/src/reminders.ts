@@ -14,11 +14,13 @@ import {
   roasts,
   users,
   withDefaults,
+  workspaces,
   type NotificationConfigs,
   type NotificationKind,
 } from "@barista/shared/schema";
 import { config } from "./config.js";
 import { db } from "./db.js";
+import { settingsZone } from "./zone.js";
 
 // Rate-later reminders (docs/api/notifications.md §1b): when the delay is
 // up, remind the person through each of their enabled channels, unless the
@@ -28,10 +30,11 @@ export type ReminderResult = { status: "sent"; channels: number; failed: string[
 type Send = typeof sendNotification;
 type Push = typeof sendWebPush;
 
-// "8:42" in the brew's own time zone (its device's offset, else BREW_TIMEZONE).
-function brewTime(timestamp: Date, utcOffsetMinutes: number | null): string {
-  if (utcOffsetMinutes !== null) return new Date(timestamp.getTime() + utcOffsetMinutes * 60_000).toISOString().slice(11, 16).replace(/^0/, "");
-  return timestamp.toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit", timeZone: config.brewTimezone ?? "UTC" }).replace(/^0/, "");
+// "8:42" in the brew's own time zone (its device's offset, else the
+// workspace's zone, else BREW_TIMEZONE; zone.ts).
+function brewTime(timestamp: Date, utcOffsetMinutes: number | null, zone: string | null): string {
+  if (utcOffsetMinutes !== null) return new Date(timestamp.getTime() + utcOffsetMinutes * 60_000).toISOString().slice(11, 16).replace(/^0(?=\d)/, "");
+  return timestamp.toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit", timeZone: zone ?? "UTC" }).replace(/^0(?=\d)/, "");
 }
 
 // The brew a reminder is about, with what's needed for its message.
@@ -47,8 +50,10 @@ async function loadBrew(brewLogId: string) {
       roasterName: beans.roasterName,
       brewerName: brewers.name,
       drinkName: drinks.name,
+      workspaceSettings: workspaces.settings,
     })
     .from(brewLogs)
+    .innerJoin(workspaces, eq(brewLogs.workspaceId, workspaces.id))
     .innerJoin(beans, eq(brewLogs.beanId, beans.id))
     .leftJoin(brewers, eq(brewLogs.brewerId, brewers.id))
     .leftJoin(drinks, eq(brewLogs.drinkId, drinks.id))
@@ -108,7 +113,7 @@ export async function processRateReminder({ brewLogId, userId }: RateReminderJob
     userId,
     {
       title: "How was it? Rate your brew",
-      message: `${made} · ${brew.roasterName} ${brew.beanName} · ${brewTime(brew.timestamp, brew.utcOffsetMinutes)}`,
+      message: `${made} · ${brew.roasterName} ${brew.beanName} · ${brewTime(brew.timestamp, brew.utcOffsetMinutes, settingsZone(brew.workspaceSettings))}`,
       url: entryUrl(brewLogId),
     },
     send,
@@ -130,7 +135,7 @@ export async function processSteepReminder({ brewLogId, userId }: SteepReminderJ
     userId,
     {
       title: "Your cold brew is ready to filter",
-      message: `${made} · ${brew.roasterName} ${brew.beanName} · started ${brewTime(brew.timestamp, brew.utcOffsetMinutes)}`,
+      message: `${made} · ${brew.roasterName} ${brew.beanName} · started ${brewTime(brew.timestamp, brew.utcOffsetMinutes, settingsZone(brew.workspaceSettings))}`,
       url: entryUrl(brewLogId),
     },
     send,

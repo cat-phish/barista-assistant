@@ -43,6 +43,7 @@ import { DEFAULT_LEXICON, LEXICON_FORMAT, LEXICON_VERSION, flavorLabel, resolveP
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { db } from "./db.js";
+import { workspaceZone } from "./zone.js";
 import { config } from "./config.js";
 import { localBrewDate } from "./localDate.js";
 import { effectiveRoastAge, type FreezePeriodLike } from "@barista/shared/roastAge";
@@ -234,10 +235,11 @@ export function summarize(
   tools: ReadonlyMap<string, string[]>,
   problems: ReadonlyMap<string, string[]>,
   flavors: ReadonlyMap<string, string[]>,
-  servedAs: ReadonlyMap<string, NonNullable<BrewSummary["drink"]>>
+  servedAs: ReadonlyMap<string, NonNullable<BrewSummary["drink"]>>,
+  zone: string | null = config.brewTimezone, // the workspace's (zone.ts), for a brew without a UTC offset
 ): BrewSummary {
   const age = roastDate
-    ? effectiveRoastAge(roastDate.toISOString(), freezes, localBrewDate(brew.timestamp, brew.utcOffsetMinutes, config.brewTimezone))
+    ? effectiveRoastAge(roastDate.toISOString(), freezes, localBrewDate(brew.timestamp, brew.utcOffsetMinutes, zone))
     : null;
   return {
     timestamp: brew.timestamp.toISOString(),
@@ -512,19 +514,20 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
   const bean = await loadBean(brew.beanId);
   if (!bean) return null; // Bean deletion cascades, so this means the log is going too.
 
-  const [recipe, marks, tools, problems, flavors, servedAs] = await Promise.all([
+  const [recipe, marks, tools, problems, flavors, servedAs, zone] = await Promise.all([
     recipeAsBrewed(brew),
     marksFor([brew.id]),
     toolsFor([brew.id]),
     problemsFor([brew.id]),
     flavorsFor([brew.id]),
     drinksServed(brew.drinkId ? [brew.drinkId] : []),
+    workspaceZone(brew.workspaceId),
   ]);
 
   return {
     bean: bean.info,
     recipe: recipe && scaledToBrew(recipe, brew.actualWaterGrams, brew.stepTempShiftC),
-    brew: summarize(brew, bean.roastDate, bean.freezes, marks, tools, problems, flavors, servedAs),
+    brew: summarize(brew, bean.roastDate, bean.freezes, marks, tools, problems, flavors, servedAs, zone),
     drink: brew.drinkId ? await loadDrink(brew.drinkId, { size: brew.servingSize, unit: brew.servingUnit }) : null,
     ratingScale: "0.5-5",
   };
