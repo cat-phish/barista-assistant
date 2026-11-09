@@ -20,7 +20,7 @@ import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { chatPhotoPath, PHOTO_MAX_UPLOAD_BYTES, processPhoto, writeChatPhotoFile } from "../photos.js";
-import { enqueueChatReply, QueueUnavailableError } from "../queue.js";
+import { enqueueChatReply, enqueueChatSummary, QueueUnavailableError } from "../queue.js";
 import { getChatLimits } from "../serverSettings.js";
 
 export const CHAT_MESSAGE_MAX = 4000;
@@ -213,7 +213,8 @@ async function labelled(workspaceId: string, refs: AttachmentRef[]): Promise<Cha
 async function addTurn(chatId: string, content: string, attachments: ChatAttachment[], photoIds: string[]): Promise<{ ids: [string, string] } | "busy"> {
   const ids: [string, string] = [randomUUID(), randomUUID()];
   const added = await db.transaction(async (tx) => {
-    await tx.select({ id: aiChats.id }).from(aiChats).where(eq(aiChats.id, chatId)).for("update");
+    const [chat] = await tx.select({ summaryStatus: aiChats.summaryStatus }).from(aiChats).where(eq(aiChats.id, chatId)).for("update");
+    if (chat?.summaryStatus === "pending") return false;
     const [last] = await tx
       .select({ position: aiChatMessages.position, status: aiChatMessages.status })
       .from(aiChatMessages)
@@ -246,6 +247,46 @@ async function theTwo(chat: AiChat, ids: [string, string]): Promise<ChatPair> {
 
 export const chatsRouter = Router({ mergeParams: true });
 chatsRouter.use(requireAuth);
+
+// Summarize and continue (docs/api/chat.md §12, "Long chats"): the worker
+// folds all but the newest 10 finished messages into the chat's summary.
+const SUMMARY_MIN_MESSAGES = 12;
+chatsRouter.post("/:chatId/summary", async (req: Request<ChatParams>, res: Response<{ chat: AiChat }>) => {
+  const userId = authedUserId(req);
+  const { workspaceId, chatId } = req.params;
+  if (!(await requireMembership(res, userId, workspaceId, WRITE_ROLES))) return;
+  if (!(await requireChatOn(res, userId, workspaceId))) return;
+  const chat = await ownChat(res, userId, workspaceId, chatId);
+  if (!chat) return;
+  if (!(await requireAi(res, workspaceId))) return;
+  if (!(await requireUnderDailyLimit(res, userId, await getChatLimits()))) return;
+  await settleStale(chatId);
+  const claimed = await db.transaction(async (tx) => {
+    const [row] = await tx.select({ summaryStatus: aiChats.summaryStatus }).from(aiChats).where(eq(aiChats.id, chatId)).for("update");
+    const messages = await tx.select({ position: aiChatMessages.position, status: aiChatMessages.status }).from(aiChatMessages).where(eq(aiChatMessages.chatId, chatId)).orderBy(asc(aiChatMessages.position));
+    if (row?.summaryStatus === "pending" || messages.some((m) => m.status === "pending")) return "busy" as const;
+    if (messages.filter((m) => m.status === "done").length < SUMMARY_MIN_MESSAGES) return "short" as const;
+    await tx.update(aiChats).set({ summaryStatus: "pending" }).where(eq(aiChats.id, chatId));
+    return messages.at(-1)!.position;
+  });
+  if (claimed === "busy") {
+    sendError(res, 409, "A reply or a summary is still being written");
+    return;
+  }
+  if (claimed === "short") {
+    sendError(res, 400, `A chat needs at least ${SUMMARY_MIN_MESSAGES} messages to summarize`);
+    return;
+  }
+  try {
+    await enqueueChatSummary(chatId, claimed);
+  } catch (err) {
+    await db.update(aiChats).set({ summaryStatus: chat.summaryStatus === "failed" ? "failed" : null }).where(eq(aiChats.id, chatId));
+    sendUnavailable(res, err);
+    return;
+  }
+  const [fresh] = await db.select().from(aiChats).where(eq(aiChats.id, chatId));
+  res.status(202).json({ chat: fresh ?? chat });
+});
 
 chatsRouter.get("/", async (req: Request<Params>, res: Response<{ chats: AiChat[]; canSend: boolean }>) => {
   const userId = authedUserId(req);
@@ -403,7 +444,7 @@ chatsRouter.post("/:chatId/messages", async (req: Request<ChatParams>, res: Resp
   await settleStale(chatId);
   const turn = await addTurn(chatId, body.content, attachments, photoIds);
   if (turn === "busy") {
-    sendError(res, 409, "The last reply is still being written");
+    sendError(res, 409, "The last reply or a summary is still being written");
     return;
   }
   try {

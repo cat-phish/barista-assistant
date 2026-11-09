@@ -30,9 +30,9 @@ interface ChatSize {
 }
 
 // Each chat with what it takes: its messages, their attachment references,
-// proposals and photos.
+// proposals and photos, and its summary.
 async function chatSizes(where?: SQL): Promise<ChatSize[]> {
-  const chats = await db.select({ id: aiChats.id, userId: aiChats.userId, updatedAt: aiChats.updatedAt }).from(aiChats).where(where);
+  const chats = await db.select({ id: aiChats.id, userId: aiChats.userId, updatedAt: aiChats.updatedAt, summaryBytes: sql<string | null>`OCTET_LENGTH(${aiChats.summary})` }).from(aiChats).where(where);
   if (!chats.length) return [];
   const ids = chats.map((c) => c.id);
   const [text, photos] = await Promise.all([
@@ -50,7 +50,7 @@ async function chatSizes(where?: SQL): Promise<ChatSize[]> {
   ]);
   const sizes = new Map<string, number>();
   for (const row of [...text, ...photos]) sizes.set(row.chatId, (sizes.get(row.chatId) ?? 0) + Number(row.bytes));
-  return chats.map((c) => ({ ...c, bytes: sizes.get(c.id) ?? 0 }));
+  return chats.map(({ summaryBytes, ...c }) => ({ ...c, bytes: (sizes.get(c.id) ?? 0) + Number(summaryBytes ?? 0) }));
 }
 
 const sumBytes = (chats: ChatSize[]): number => chats.reduce((n, c) => n + c.bytes, 0);

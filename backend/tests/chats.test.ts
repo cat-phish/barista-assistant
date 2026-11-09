@@ -188,6 +188,51 @@ describe("attachments", () => {
   });
 });
 
+describe("summaries", () => {
+  // A chat of n finished messages, built as the worker would leave it.
+  async function longChat(n: number): Promise<string> {
+    const res = await owner.agent.post(url(workspaceId)).send({ content: "m1" });
+    const chatId = res.body.chat.id as string;
+    await finish(res.body.messages[1].id, "m2");
+    for (let i = 3; i <= n; i += 2) {
+      const next = await owner.agent.post(`${url(workspaceId)}/${chatId}/messages`).send({ content: `m${i}` });
+      await finish(next.body.messages[1].id, `m${i + 1}`);
+    }
+    await chatQueue.obliterate({ force: true });
+    return chatId;
+  }
+  const summarize = (chatId: string) => owner.agent.post(`${url(workspaceId)}/${chatId}/summary`);
+
+  it("queues a summary, and holds new messages until it's written", async () => {
+    const chatId = await longChat(12);
+    const res = await summarize(chatId);
+    expect(res.status, JSON.stringify(res.body)).toBe(202);
+    expect(res.body.chat).toMatchObject({ id: chatId, summaryStatus: "pending", summary: null });
+    expect((await chatQueue.getJobs(["waiting"])).map((j) => [j.name, j.data])).toEqual([["summary", { chatId }]]);
+    expect((await summarize(chatId)).status).toBe(409);
+    expect((await owner.agent.post(`${url(workspaceId)}/${chatId}/messages`).send({ content: "Hi" })).status).toBe(409);
+    // Written: sending works again, and the chat says what it covers.
+    await db.update(aiChats).set({ summary: "Earlier.", summaryThrough: 2, summaryStatus: null }).where(eq(aiChats.id, chatId));
+    expect((await owner.agent.post(`${url(workspaceId)}/${chatId}/messages`).send({ content: "Hi" })).status).toBe(202);
+    expect((await owner.agent.get(`${url(workspaceId)}/${chatId}`)).body.chat).toMatchObject({ summary: "Earlier.", summaryThrough: 2 });
+  });
+
+  it("refuses a short chat, and one with a reply being written", async () => {
+    const short = await longChat(10);
+    expect((await summarize(short)).status).toBe(400);
+    const chatId = await longChat(12);
+    await owner.agent.post(`${url(workspaceId)}/${chatId}/messages`).send({ content: "Busy" });
+    expect((await summarize(chatId)).status).toBe(409);
+  });
+
+  it("counts the summary toward the chat's size, and brings it along on import", async () => {
+    const chatId = await longChat(12);
+    const before = await userChatBytes(owner.id);
+    await db.update(aiChats).set({ summary: "x".repeat(1000), summaryThrough: 4 }).where(eq(aiChats.id, chatId));
+    expect(await userChatBytes(owner.id)).toBe(before + 1000);
+  });
+});
+
 describe("photos", () => {
   const png = () => sharp({ create: { width: 2000, height: 1000, channels: 3, background: "#654321" } }).png().toBuffer();
   const upload = async (user: TestUser, ws = workspaceId) => (await user.agent.post(`${url(ws)}/photos`).set("Content-Type", "image/png").send(await png())).body.photo as { id: string; width: number };
@@ -199,7 +244,7 @@ describe("photos", () => {
     expect(res.status, JSON.stringify(res.body)).toBe(202);
     expect(res.body.messages[0].photos).toEqual([{ id: photo.id, width: 1024, height: 512 }]);
     const job = await chatQueue.getJob(`chat-${res.body.messages[1].id}`);
-    expect(job?.data.photos).toEqual([{ messageId: res.body.messages[0].id, base64: expect.any(String) }]);
+    expect(job && "photos" in job.data ? job.data.photos : null).toEqual([{ messageId: res.body.messages[0].id, base64: expect.any(String) }]);
     expect((await owner.agent.get(`${url(workspaceId)}/photos/${photo.id}`)).headers["content-type"]).toMatch(/image\/webp/);
   });
 
@@ -488,6 +533,20 @@ describe("export and import", () => {
     const [chat] = (await owner.agent.get(url(other))).body.chats as Array<{ id: string }>;
     const { messages } = (await owner.agent.get(`${url(other)}/${chat!.id}`)).body as { messages: Array<{ attachments: unknown[] }> };
     expect(messages[0]!.attachments).toEqual([expect.objectContaining({ kind: "period", label: "Brews, last 7 days · Only mine", period })]);
+  });
+
+  it("brings a summary along, with its end renumbered", async () => {
+    const res = await owner.agent.post(url(workspaceId)).send({ content: "First" });
+    await finish(res.body.messages[1].id, "Reply");
+    const chatId = res.body.chat.id as string;
+    // A gap in the positions, as a deleted message would leave.
+    await db.update(aiChatMessages).set({ position: 5 }).where(eq(aiChatMessages.id, res.body.messages[1].id));
+    await db.update(aiChats).set({ summary: "They asked first.", summaryThrough: 5 }).where(eq(aiChats.id, chatId));
+    const other = (await newWorkspace(owner)).id;
+    await withAi(other);
+    await imported(owner, other, await exported(owner, workspaceId));
+    const [chat] = (await owner.agent.get(url(other))).body.chats as Array<{ summary: string; summaryThrough: number }>;
+    expect(chat).toMatchObject({ summary: "They asked first.", summaryThrough: 2 });
   });
 
   it("only holds your own, and leaves out a reply still being written", async () => {
