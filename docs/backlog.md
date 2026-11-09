@@ -362,7 +362,8 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 12. Review how flavor wheel inputs reach the AI
 
-- **Status:** idea; the eval can now run with and without picks
+- **Status:** on hold until the real brews are imported (see Depends on);
+  the eval can already run with and without picks
 - **Why:** the wheel was built to give the AI a fixed vocabulary, but
   nobody has checked that the picks change its advice for the better, or
   how it weighs them against the tasting notes and the rating.
@@ -396,7 +397,9 @@ What the analysis worker sends to the LLM and what comes back.
   prompt if picks make the advice worse (bump `PROMPT_VERSION`).
 - **Size:** S
 - **Depends on:** a good number of rated brews with flavors picked
-  (`snapshot --with-flavors` shows how many; one on 2026-11-08).
+  (`snapshot --with-flavors` shows how many; one on 2026-11-08). The real
+  ones are on the hosted instance used day to day, so first import those
+  brews and ratings into this database, then run the eval.
 - **Open questions:**
   - Does the place on the wheel help, or would the label alone do?
     (`--without places`.)
