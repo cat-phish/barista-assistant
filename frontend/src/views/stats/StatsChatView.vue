@@ -5,7 +5,7 @@
 // the bottom. On a phone the chat list is a drawer behind "Chats".
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { chatsApi, type Chat, type ChatAttachment, type ChatMessage, type ChatPhoto, type ChatProposal } from '../../api/chats';
+import { chatSettingsApi, chatsApi, type Chat, type ChatAttachment, type ChatMessage, type ChatPhoto, type ChatProposal } from '../../api/chats';
 import { ApiError, errorMessage } from '../../api/client';
 import ChatAttachChips from '../../components/ChatAttachChips.vue';
 import ChatAttachDialog from '../../components/ChatAttachDialog.vue';
@@ -14,6 +14,7 @@ import ChatMarkdown from '../../components/ChatMarkdown.vue';
 import ChatProposalCard from '../../components/ChatProposalCard.vue';
 import { usePreferences } from '../../composables/usePreferences';
 import { attachKey } from '../../lib/chatAttach';
+import { estimateTokens, tokenWarning } from '../../lib/chatTokens';
 import { proposalRoute } from '../../lib/chatProposal';
 import { formatWhen } from '../../lib/format';
 import { droppedImages, pastedImages } from '../../lib/pastedImages';
@@ -45,10 +46,30 @@ const title = computed(() => chats.value.find((c) => c.id === chatId.value)?.tit
 const attachments = ref<ChatAttachment[]>([]);
 const picking = ref(false);
 const attachMax = computed(() => settings.value.chatMaxAttachments ?? 50);
-function attachPicked(picked: ChatAttachment[]) {
+// A live period's cap on its brews: the workspace's, or your own lower one.
+const ownPeriodCap = ref<number | null>(null);
+const periodCap = computed(() => {
+  const ws = settings.value.chatPeriodMaxBrews ?? 60;
+  return ownPeriodCap.value ? Math.min(ws, ownPeriodCap.value) : ws;
+});
+void chatSettingsApi
+  .get()
+  .then((s) => (ownPeriodCap.value = s.own.periodMaxBrews))
+  .catch(() => undefined);
+// How many brews each period held when picked, for the token estimate.
+const periodBrews = ref(new Map<string, number>());
+function attachPicked(picked: ChatAttachment[], counts: Map<string, number>) {
   attachments.value = picked;
+  periodBrews.value = counts;
   picking.value = false;
 }
+// What the next reply is sent: this message's and what the chat attached
+// before, each once (the worker's attachedIn), as a rough count of tokens.
+const tokenNote = computed(() => {
+  const all = [...messages.value.flatMap((m) => m.attachments), ...attachments.value];
+  const unique = [...new Map(all.map((a) => [attachKey(a), a])).values()].slice(-attachMax.value);
+  return tokenWarning(estimateTokens(unique, periodBrews.value, periodCap.value));
+});
 function detach(item: ChatAttachment) {
   attachments.value = attachments.value.filter((a) => attachKey(a) !== attachKey(item));
 }
@@ -420,6 +441,7 @@ onBeforeUnmount(stop);
           </div>
           <ChatAttachChips :attachments="attachments" removable @remove="detach" />
         </div>
+        <p v-if="tokenNote" class="token-note small" role="status">{{ tokenNote }}</p>
         <label for="chat-message" class="visually-hidden">Message</label>
         <textarea
           id="chat-message"
@@ -450,12 +472,16 @@ onBeforeUnmount(stop);
       </form>
       <p v-else-if="!canSend" class="muted notice">Chat is turned off for you here. You can still read your chats.</p>
       <p v-else class="muted notice">Viewers can read their chats but can't send messages.</p>
-      <ChatAttachDialog :open="picking" :selected="attachments" :max="attachMax" @close="picking = false" @done="attachPicked" />
+      <ChatAttachDialog :open="picking" :selected="attachments" :max="attachMax" :period-cap="periodCap" :period-brews="periodBrews" @close="picking = false" @done="attachPicked" />
     </section>
   </div>
 </template>
 
 <style scoped>
+.token-note {
+  margin: 0;
+  color: var(--warning);
+}
 .chat {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);

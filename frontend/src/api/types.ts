@@ -92,6 +92,7 @@ export interface WorkspaceSettings {
   beanReviewBrewers: 'all' | string[]; // ones the bean never used are ignored
   aiChat: boolean; // the Chat tab in Insights (chat.md §12)
   chatMaxAttachments: number; // per message, and sent per reply (1–MAX_CHAT_ATTACHMENTS)
+  chatPeriodMaxBrews: number; // brews a live Period sends in detail (10–300)
   readLabels: boolean; // "Fill in with AI" on the bean form (bean-label.md §4d)
   labelWebLookup: boolean; // its "Also look it up on the web" (off by default)
   labelWebContext: LabelWebContext; // default 'high'

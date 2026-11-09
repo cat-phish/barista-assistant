@@ -40,6 +40,12 @@ describe('groups and labels', () => {
     expect(withoutKind([bean('x'), brew('a')], 'brew')).toEqual([bean('x')]);
   });
 
+  it('puts a live period first', () => {
+    const period = { kind: 'period' as const, id: 'p', label: 'Brews, last 7 days' };
+    expect(groupByKind([brew('a'), period]).map((g) => g.kind)).toEqual(['period', 'brew']);
+    expect(countLabel('period', 2)).toBe('2 periods');
+  });
+
   it('counts and labels as the server does', () => {
     expect(countLabel('brew', 1)).toBe('1 brew');
     expect(countLabel('recipe', 14)).toBe('14 recipes');

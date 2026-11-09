@@ -8,7 +8,10 @@ export interface Chat {
   createdAt: string;
   updatedAt: string;
 }
-export type ChatAttachmentKind = 'brew' | 'bean' | 'recipe' | 'chart';
+export type ChatAttachmentKind = 'brew' | 'bean' | 'recipe' | 'chart' | 'period';
+// A live Period (chat.md §12, "Periods"): the Brews filters, run again for each reply.
+import type { ChatPeriodSpec } from '../lib/chatPeriod';
+export type { ChatPeriodRange, ChatPeriodSpec } from '../lib/chatPeriod';
 // An Insights chart's numbers as they were when attached (lib/chartHarvest.ts).
 export interface ChatChartSnapshot {
   tab: string;
@@ -19,11 +22,12 @@ export interface ChatChartSnapshot {
   rows: Array<Array<string | number>>;
   cut: number; // rows left out
 }
-// A brew, bean or recipe by id; a chart with its snapshot.
+// A brew, bean or recipe by id; a chart with its snapshot; a period with its filters.
 export interface ChatAttachmentRef {
   kind: ChatAttachmentKind;
   id: string;
   chart?: ChatChartSnapshot;
+  period?: ChatPeriodSpec;
 }
 export interface ChatAttachment extends ChatAttachmentRef {
   label: string;
@@ -122,8 +126,12 @@ export interface ChatLimits {
 export interface ServerChatLimits extends ChatLimits {
   dailyMessages: number | null;
 }
+// A person's own also caps a period's brews (null: the workspace's).
+export interface OwnChatLimits extends ChatLimits {
+  periodMaxBrews: number | null;
+}
 export interface ChatSettings {
-  own: ChatLimits;
+  own: OwnChatLimits;
   server: ServerChatLimits;
   effective: ChatLimits;
   usedBytes: number;
@@ -133,7 +141,7 @@ const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/chats`;
 
 export const chatSettingsApi = {
   get: () => api.get<ChatSettings>('/api/auth/me/chat-settings'),
-  save: (limits: ChatLimits) => api.put<ChatSettings>('/api/auth/me/chat-settings', limits),
+  save: (limits: ChatLimits & { periodMaxBrews?: number | null }) => api.put<ChatSettings>('/api/auth/me/chat-settings', limits),
   purge: () => api.delete('/api/auth/me/chats'),
 };
 

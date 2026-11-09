@@ -3,7 +3,9 @@
 // Insights charts to send with the next message, ticked in a list like "Pick
 // a brew…" (RepeatBrewPicker). Brews narrow to a period, bean, recipe, brewer
 // or your own, and "Select all" ticks every brew that matches, up to the
-// workspace's limit. Charts have their own tab and filters (ChartPicker). It edits the whole selection: what's already attached starts ticked.
+// workspace's limit; "Attach as live period" saves the filters instead, as one
+// item the worker runs again for each reply. Charts have their own tab and
+// filters (ChartPicker). It edits the whole selection: what's already attached starts ticked.
 // A native <dialog>: Escape or ✕ closes it; full screen on a phone.
 import { computed, ref, watch } from 'vue';
 import { beansApi } from '../api/beans';
@@ -14,16 +16,21 @@ import { errorMessage } from '../api/client';
 import { recipesApi } from '../api/recipes';
 import type { Bean, Brewer, BrewLog, Recipe } from '../api/types';
 import { beanLabel } from '../lib/beans';
-import { ATTACH_KINDS, beanAttachLabel, brewAttachLabel, countLabel, isPicked, KIND_NAMES, matches, selectAll, toggle, withoutKind } from '../lib/chatAttach';
+import { attachKey, beanAttachLabel, brewAttachLabel, countLabel, isPicked, KIND_NAMES, matches, PICKER_TABS, selectAll, toggle, withoutKind } from '../lib/chatAttach';
+import { choiceDays, choiceSpec, PERIOD_CHOICES, periodLabel, type ChatPeriodSpec, type PeriodChoice } from '../lib/chatPeriod';
+import { estimateTokens, tokenWarning } from '../lib/chatTokens';
 import { formatListDay, localDateInput } from '../lib/format';
-import { RANGES, resolveRange, type RangeKey } from '../lib/statsRange';
+import { usePreferences } from '../composables/usePreferences';
 import { useWorkspaceStore } from '../stores/workspace';
 import BrewLogRow from './BrewLogRow.vue';
 import ChartPicker from './ChartPicker.vue';
 import FilterBar from './FilterBar.vue';
 
-const props = defineProps<{ open: boolean; selected: ChatAttachment[]; max: number }>();
-const emit = defineEmits<{ close: []; done: [attachments: ChatAttachment[]] }>();
+// periodCap: the brews a period sends in detail; periodBrews: how many each
+// attached period held when picked, by id (for the token estimate).
+const props = defineProps<{ open: boolean; selected: ChatAttachment[]; max: number; periodCap: number; periodBrews: ReadonlyMap<string, number> }>();
+const emit = defineEmits<{ close: []; done: [attachments: ChatAttachment[], periodBrews: Map<string, number>] }>();
+const { prefs } = usePreferences();
 const workspaces = useWorkspaceStore();
 const dialog = ref<HTMLDialogElement | null>(null);
 
@@ -31,7 +38,7 @@ const PAGE = 30;
 const FETCH_ALL = 100; // the list route's largest page
 
 const draft = ref<ChatAttachment[]>([]);
-const tab = ref<ChatAttachmentKind>('brew');
+const tab = ref<Exclude<ChatAttachmentKind, 'period'>>('brew');
 const error = ref('');
 const notice = ref('');
 const full = computed(() => draft.value.length >= props.max);
@@ -45,7 +52,7 @@ const activeFirst = <T extends { archivedAt: string | null }>(list: T[], name: (
   [...list].sort((a, b) => Number(a.archivedAt !== null) - Number(b.archivedAt !== null) || name(a).localeCompare(name(b)));
 
 // Brews: newest first, PAGE at a time, through the filters.
-const range = ref<RangeKey>('all');
+const range = ref<PeriodChoice>('all');
 const from = ref('');
 const to = ref('');
 const beanId = ref('');
@@ -57,7 +64,7 @@ const total = ref(0);
 const loading = ref(false);
 
 function query(): BrewLogQuery {
-  const days = resolveRange({ range: range.value, from: from.value, to: to.value }, localDateInput());
+  const days = choiceDays(range.value, { from: from.value, to: to.value }, localDateInput(), prefs.value.weekStartsOn);
   return {
     beanId: beanId.value || undefined,
     recipeId: recipeId.value || undefined,
@@ -74,7 +81,7 @@ const brewSummary = computed(() => {
     const found = list.find((x) => x.id === id);
     return found ? name(found) : null;
   };
-  const period = range.value === 'custom' ? `${from.value ? formatListDay(from.value) : 'the start'} – ${to.value ? formatListDay(to.value) : 'today'}` : range.value === 'all' ? null : RANGES[range.value];
+  const period = range.value === 'custom' ? `${from.value ? formatListDay(from.value) : 'the start'} – ${to.value ? formatListDay(to.value) : 'today'}` : range.value === 'all' ? null : PERIOD_CHOICES[range.value];
   const parts = [
     period,
     beanId.value && nameIn(beans.value, beanId.value, beanLabel),
@@ -131,6 +138,46 @@ async function selectAllBrews(): Promise<void> {
   }
 }
 
+// The filters as one live item (docs/api/chat.md §12, "Periods"): the same
+// filters are the same period, so it's added once.
+const periods = computed(() => draft.value.filter((a) => a.kind === 'period'));
+const periodBrews = ref(new Map<string, number>());
+const sameSpec = (a: ChatPeriodSpec, b: ChatPeriodSpec) => (Object.keys(a) as Array<keyof ChatPeriodSpec>).every((k) => a[k] === b[k]);
+const currentSpec = computed(() =>
+  choiceSpec(range.value, { from: from.value, to: to.value }, localDateInput(), prefs.value.weekStartsOn, {
+    beanId: beanId.value || null,
+    recipeId: recipeId.value || null,
+    brewerId: brewerId.value || null,
+    mine: mine.value,
+  }),
+);
+const periodAttached = computed(() => {
+  const spec = currentSpec.value;
+  return !!spec && periods.value.some((a) => a.period && sameSpec(a.period, spec));
+});
+function attachPeriod(): void {
+  const spec = currentSpec.value;
+  if (!spec || periodAttached.value || full.value) return;
+  const nameOf = <T extends { id: string }>(list: T[], id: string | null, name: (x: T) => string): string | null => {
+    const found = id ? list.find((x) => x.id === id) : undefined;
+    return found ? name(found) : null;
+  };
+  // As the server labels it (backend chatPeriod.ts), which sends its own back.
+  const label = periodLabel(spec, {
+    bean: nameOf(beans.value, spec.beanId, (b) => b.beanName),
+    recipe: nameOf(recipes.value, spec.recipeId, (r) => r.name),
+    brewer: nameOf(brewers.value, spec.brewerId, (b) => b.name),
+  });
+  const id = crypto.randomUUID();
+  draft.value = [...draft.value, { kind: 'period', id, label, period: spec }];
+  periodBrews.value = new Map(periodBrews.value).set(id, total.value);
+  notice.value = '';
+}
+function removePeriod(item: ChatAttachment): void {
+  draft.value = draft.value.filter((a) => attachKey(a) !== attachKey(item));
+}
+const warning = computed(() => tokenWarning(estimateTokens(draft.value, periodBrews.value, props.periodCap)));
+
 // Beans and recipes: all of them, searched here.
 const search = ref('');
 const beanItems = computed(() =>
@@ -186,6 +233,7 @@ watch(
   (open) => {
     if (open && !dialog.value?.open) {
       draft.value = [...props.selected];
+      periodBrews.value = new Map(props.periodBrews);
       notice.value = '';
       search.value = '';
       dialog.value?.showModal();
@@ -214,9 +262,9 @@ watch(tab, (t) => {
       <button class="btn-link close" type="button" aria-label="Close" @click="emit('close')">✕</button>
     </div>
 
-    <div class="tabs" role="tablist" aria-label="What to attach" :style="{ '--tabs': ATTACH_KINDS.length }">
+    <div class="tabs" role="tablist" aria-label="What to attach" :style="{ '--tabs': PICKER_TABS.length }">
       <button
-        v-for="k in ATTACH_KINDS"
+        v-for="k in PICKER_TABS"
         :id="`attach-tab-${k}`"
         :key="k"
         type="button"
@@ -226,7 +274,7 @@ watch(tab, (t) => {
         :class="{ active: tab === k }"
         @click="tab = k"
       >
-        {{ KIND_NAMES[k].one }}s<span v-if="countOf(k)" class="count">{{ countOf(k) }}</span>
+        {{ KIND_NAMES[k].one }}s<span v-if="countOf(k) + (k === 'brew' ? periods.length : 0)" class="count">{{ countOf(k) + (k === 'brew' ? periods.length : 0) }}</span>
       </button>
     </div>
 
@@ -237,7 +285,7 @@ watch(tab, (t) => {
           <div class="field">
             <label for="attach-range">Period</label>
             <select id="attach-range" v-model="range">
-              <option v-for="(text, key) in RANGES" :key="key" :value="key">{{ text }}</option>
+              <option v-for="(text, key) in PERIOD_CHOICES" :key="key" :value="key">{{ text }}</option>
             </select>
           </div>
           <template v-if="range === 'custom'">
@@ -282,6 +330,18 @@ watch(tab, (t) => {
           <button v-if="total" type="button" class="btn-link" :disabled="loading || full" @click="selectAllBrews">Select all {{ total }}</button>
           <button v-if="countOf('brew')" type="button" class="btn-link" @click="clearTab">Clear</button>
         </div>
+        <div class="live">
+          <button type="button" class="btn btn-secondary" :disabled="!currentSpec || periodAttached || full" @click="attachPeriod">
+            {{ periodAttached ? 'Attached as a live period' : 'Attach as live period' }}
+          </button>
+          <span class="muted small">One item that keeps up: brews logged, changed or deleted later are seen by the next reply.</span>
+        </div>
+        <ul v-if="periods.length" class="live-list" aria-label="Live periods attached">
+          <li v-for="p in periods" :key="p.id" class="chip">
+            {{ p.label }}
+            <button type="button" class="btn-link remove" :aria-label="`Remove ${p.label}`" @click="removePeriod(p)">×</button>
+          </li>
+        </ul>
       </template>
       <template v-else-if="tab !== 'chart'">
         <div class="field">
@@ -343,10 +403,13 @@ watch(tab, (t) => {
     </div>
 
     <div class="foot">
-      <span class="muted small" aria-live="polite">{{ draft.length }} selected · up to {{ max }}<template v-if="full">, so nothing more can be ticked</template></span>
+      <span class="muted small" aria-live="polite">
+        {{ draft.length }} selected · up to {{ max }}<template v-if="full">, so nothing more can be ticked</template>
+        <span v-if="warning" class="token-warning">{{ warning }}</span>
+      </span>
       <div class="buttons">
         <button type="button" class="btn btn-secondary" @click="emit('close')">Cancel</button>
-        <button type="button" class="btn btn-primary" @click="emit('done', draft)">Attach</button>
+        <button type="button" class="btn btn-primary" @click="emit('done', draft, periodBrews)">Attach</button>
       </div>
     </div>
   </dialog>
@@ -431,6 +494,37 @@ p {
   min-height: 0;
   /* On a short screen the whole panel scrolls, not a squeezed list. */
   overflow-y: auto;
+}
+.live {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.live-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.live-list .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0.15em 0.6em;
+  border-radius: 999px;
+  background: var(--brand-tint);
+  font-size: 0.85rem;
+}
+.live-list .remove {
+  min-height: var(--tap);
+  min-width: var(--tap);
+}
+.token-warning {
+  display: block;
+  color: var(--warning);
 }
 .filters {
   display: grid;

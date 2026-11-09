@@ -57,6 +57,20 @@ function saveAttachMax(): void {
   if (!attachInvalid.value && Number(attachDraft.value) !== attachMax.value) void save({ chatMaxAttachments: Number(attachDraft.value) }, 'labels');
 }
 
+// Chat: how many brews a live period sends in detail (docs/api/chat.md §12, "Periods").
+const PERIOD_BREWS_MIN = 10;
+const PERIOD_BREWS_MAX = 300;
+const periodMax = computed(() => settings.value.chatPeriodMaxBrews ?? 60);
+const periodDraft = ref('');
+watch(periodMax, (n) => (periodDraft.value = String(n)), { immediate: true });
+const periodInvalid = computed(() => {
+  const n = Number(periodDraft.value);
+  return !Number.isInteger(n) || n < PERIOD_BREWS_MIN || n > PERIOD_BREWS_MAX;
+});
+function savePeriodMax(): void {
+  if (!periodInvalid.value && Number(periodDraft.value) !== periodMax.value) void save({ chatPeriodMaxBrews: Number(periodDraft.value) }, 'labels');
+}
+
 // Who answers, and the workspace's own key.
 const aiConfig = ref<AiConfig | null>(null);
 const AI_SOURCES: Record<NonNullable<AiConfig['source']>, string> = { workspace: "this workspace's key", server: "the server's AI", env: "the server's AI" };
@@ -314,6 +328,26 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
         </label>
         <p v-if="attachInvalid" class="form-error small">A whole number from 1 to {{ MAX_CHAT_ATTACHMENTS }}.</p>
         <p class="muted small">In one message, and sent with each reply across the chat (the latest ones). More gives the AI more to go on, but each reply costs more and takes longer to start.</p>
+      </div>
+      <div class="field">
+        <label class="checkbox cap-line" for="chat-period-max">
+          A live period sends up to
+          <input
+            id="chat-period-max"
+            v-model="periodDraft"
+            class="cap"
+            type="number"
+            inputmode="numeric"
+            :min="PERIOD_BREWS_MIN"
+            :max="PERIOD_BREWS_MAX"
+            :aria-invalid="periodInvalid"
+            :disabled="!isOwner || saving || !settings.aiChat"
+            @change="savePeriodMax"
+          />
+          brews in detail
+        </label>
+        <p v-if="periodInvalid" class="form-error small">A whole number from {{ PERIOD_BREWS_MIN }} to {{ PERIOD_BREWS_MAX }}.</p>
+        <p class="muted small">A live period (attached from the Brews filters) counts as one attachment and is read again for each reply. Its figures cover every brew in it; this many of the newest go in detail. Each brew adds about 190 tokens to every reply. People can set a lower number for themselves under AI chats.</p>
       </div>
       <h2 id="ai-labels">Bean labels</h2>
       <p class="muted">
