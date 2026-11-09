@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { StatsBean, StatsBrew, StatsData } from '../api/types';
-import { recapFigures } from './recap';
+import { bannerFor, markSeen, recapFigures, recapsDue, type RecapBannerPrefs, type RecapDue } from './recap';
 
 const brew = (fields: Partial<StatsBrew> = {}): StatsBrew => ({
   id: 'b', timestamp: '2026-11-03T15:00:00.000Z', utcOffsetMinutes: null, userId: 'u', beanId: 'kenya', recipeId: null, brewerId: null,
@@ -89,5 +89,44 @@ describe('recapFigures', () => {
   it('is empty, not broken, for a quiet week', () => {
     const r = recapFigures({ brews: [], beans: [], lookups: lookups() }, null, week, 'light', '2026-11-09');
     expect(r).toMatchObject({ brews: 0, previousBrews: 0, daysBrewed: 0, rating: null, previousRating: null, best: [], caffeineMg: null, volume: null, topRecipe: null });
+  });
+});
+
+describe('recap banner', () => {
+  const prefs: RecapBannerPrefs = { recaps: true, recapPeriods: 'both', weekStartsOn: 1, recapBanner: true, recapBannerDays: 3, recapSeen: {} };
+  const lastWeek: RecapDue = { kind: 'weekly', period: { start: '2026-11-02', end: '2026-11-08' } };
+  const october: RecapDue = { kind: 'monthly', period: { start: '2026-10-01', end: '2026-10-31' } };
+
+  it('offers the week and month just ended, for the days chosen', () => {
+    expect(recapsDue(prefs, '2026-11-09')).toEqual([lastWeek]); // October ended 9 days ago
+    expect(recapsDue(prefs, '2026-11-02')).toEqual([{ kind: 'weekly', period: { start: '2026-10-26', end: '2026-11-01' } }, october]);
+    expect(recapsDue(prefs, '2026-11-11')).toEqual([lastWeek]); // day 3
+    expect(recapsDue(prefs, '2026-11-12')).toEqual([]); // day 4
+    expect(recapsDue({ ...prefs, recapBannerDays: 10 }, '2026-11-09')).toEqual([lastWeek, october]);
+    expect(recapsDue({ ...prefs, recapPeriods: 'monthly', recapBannerDays: 10 }, '2026-11-09')).toEqual([october]);
+  });
+
+  it('follows the week start', () => {
+    // Sunday weeks: the week of 1–7 Nov ended on Saturday.
+    expect(recapsDue({ ...prefs, weekStartsOn: 0 }, '2026-11-09')).toEqual([{ kind: 'weekly', period: { start: '2026-11-01', end: '2026-11-07' } }]);
+  });
+
+  it('is off with recaps or the banner off, and once seen', () => {
+    expect(recapsDue({ ...prefs, recaps: false }, '2026-11-09')).toEqual([]);
+    expect(recapsDue({ ...prefs, recapBanner: false }, '2026-11-09')).toEqual([]);
+    expect(recapsDue({ ...prefs, recapSeen: { weekly: '2026-11-02' } }, '2026-11-09')).toEqual([]);
+    expect(recapsDue({ ...prefs, recapSeen: { weekly: '2026-10-26' } }, '2026-11-09')).toEqual([lastWeek]);
+  });
+
+  it('says which are ready, skipping periods without brews', () => {
+    expect(bannerFor(prefs, '2026-11-02', () => true)?.text).toBe('Your weekly and monthly recaps are ready.');
+    expect(bannerFor(prefs, '2026-11-02', (d) => d.kind === 'monthly')).toEqual({ due: [october], text: 'Your monthly recap is ready.' });
+    expect(bannerFor(prefs, '2026-11-09', () => true)?.text).toBe('Your weekly recap is ready.');
+    expect(bannerFor(prefs, '2026-11-09', () => false)).toBeNull();
+  });
+
+  it('marks periods seen without going back', () => {
+    expect(markSeen({ monthly: '2026-10-01' }, [lastWeek])).toEqual({ weekly: '2026-11-02', monthly: '2026-10-01' });
+    expect(markSeen({ weekly: '2026-11-09' }, [lastWeek])).toEqual({ weekly: '2026-11-09' });
   });
 });

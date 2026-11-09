@@ -13,14 +13,16 @@ import { usePreferences } from '../../composables/usePreferences';
 import { useStats } from '../../composables/useStats';
 import { formatCaffeine } from '../../lib/caffeine';
 import { localDateInput } from '../../lib/format';
-import { recapFigures } from '../../lib/recap';
+import { markSeen, recapFigures } from '../../lib/recap';
 import { justEnded, nextPeriod, periodLabel, periodOf, previousPeriod, type RecapKind } from '../../lib/recapPeriods';
 import { formatWeight, localDay } from '../../lib/stats';
+import { useAuthStore } from '../../stores/auth';
 import { useWorkspaceStore } from '../../stores/workspace';
 
 const route = useRoute();
 const router = useRouter();
 const workspaces = useWorkspaceStore();
+const auth = useAuthStore();
 const stats = useStats();
 const { prefs, recipeRoastLevel } = usePreferences();
 
@@ -73,6 +75,17 @@ async function load(): Promise<void> {
   }
 }
 watch([() => period.value.start, kind, mine, asked], () => void load(), { immediate: true });
+
+// Opening the period just ended takes its banner off the brew page.
+watch(
+  [() => period.value.start, kind],
+  () => {
+    if (!prefs.value.recaps || period.value.start !== justEnded(kind.value, today, weekStartsOn.value).start) return;
+    const seen = markSeen(prefs.value.recapSeen, [{ kind: kind.value, period: period.value }]);
+    if (seen[kind.value] !== prefs.value.recapSeen[kind.value]) auth.setPreferences({ recapSeen: seen }).catch(() => undefined);
+  },
+  { immediate: true },
+);
 
 const figures = computed(() => {
   const d = data.value;

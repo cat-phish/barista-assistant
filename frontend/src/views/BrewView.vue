@@ -13,6 +13,7 @@ import AnalysisCard from '../components/AnalysisCard.vue';
 import AiNoteField from '../components/AiNoteField.vue';
 import AiRequestDialog from '../components/AiRequestDialog.vue';
 import RepeatBrewPicker from '../components/RepeatBrewPicker.vue';
+import RecapBanner from '../components/RecapBanner.vue';
 import { recentByMade, repeatLabel, repeatMissing, repeatPlan } from '../lib/repeatBrew';
 import { rememberedSize, rememberedTools, rememberKeyFor, stillActive, storedSize, storedTools, type Remembered } from '../lib/rememberSetup';
 import { grindersApi } from '../api/grinders';
@@ -1344,6 +1345,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
 
     <!-- 1. Setup -->
     <template v-else-if="stage === 'setup'">
+      <RecapBanner />
       <h1>New brew</h1>
       <!-- Repeat a brew: fills setup from an earlier one (lib/repeatBrew.ts). -->
       <section v-if="recentLogs.length" class="repeat" aria-labelledby="repeat-label">

@@ -556,8 +556,8 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 18. Weekly and monthly recaps
 
-- **Status:** in progress: phase 1 (Insights → Recap, Settings → Recaps)
-  built; phases 2–4 planned (`docs/api/recaps.md` §11c).
+- **Status:** in progress: phases 1 (Insights → Recap, Settings → Recaps)
+  and 2 (brew-page banner) built; 3–4 planned (`docs/api/recaps.md` §11c).
 - **Why:** Insights shows patterns when you go looking; nothing tells you
   how the week or month went: how much you brewed, what rated best, which
   beans were opened or finished.
@@ -567,9 +567,9 @@ What the analysis worker sends to the LLM and what comes back.
     and is anything missing (problems logged, grind changes, beans coming
     into their rest window)? Does the period navigation and the "Only my
     brews" switch work as expected? Is the Settings → Recaps page clear?
-  - 2. Brew-page banner: "Your weekly / monthly / weekly and monthly recap
-    is ready", gone when opened, dismissed or after `recapBannerDays`
-    (`recapSeen`); not shown for a period with none of your brews.
+  - **Review the banner after a testing period:** does it show when
+    expected (and not for an empty week), is it unobtrusive enough, and do
+    opening, dismissing and the day limit take it away as they should?
   - 3. Notification at `recapNotifyTime` (the person's `timeZone`) on the
     first day of a new period, once per workspace brewed in; a `recaps`
     table (not backed up) records it.

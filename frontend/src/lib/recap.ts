@@ -1,11 +1,11 @@
 // A recap's figures (docs/api/recaps.md §11c): one week or month of brews, from
 // the Insights rows (docs/api/stats.md §11, counted as "How the client
 // counts" says), with the period before it for comparison.
-import type { RoastLevel, StatsData } from '../api/types';
+import type { RoastLevel, StatsData, UserPreferences } from '../api/types';
 import { beanLabel } from './beans';
 import { caffeineSummary } from './caffeine';
 import { brewVolumeMl, countBy, localDay } from './stats';
-import type { RecapPeriod } from './recapPeriods';
+import { daysAfter, justEnded, type RecapKind, type RecapPeriod } from './recapPeriods';
 
 export interface RecapBest {
   brewId: string;
@@ -85,4 +85,34 @@ export function recapFigures(data: StatsData, previous: StatsData | null, period
     topRecipe: top1(countBy(brews, (b) => b.recipeId), data.lookups.recipes),
     topBrewer: top1(countBy(brews, (b) => b.brewerId), data.lookups.brewers),
   };
+}
+
+// The brew-page banner (recaps.md §11c, "Banner"): the periods just ended
+// that it would announce, before checking they had any of your brews. Each
+// shows from the day after it ends for recapBannerDays days, until opened
+// or dismissed (recapSeen holds the last period start seen, per kind).
+export type RecapBannerPrefs = Pick<UserPreferences, 'recaps' | 'recapPeriods' | 'weekStartsOn' | 'recapBanner' | 'recapBannerDays' | 'recapSeen'>;
+export interface RecapDue {
+  kind: RecapKind;
+  period: RecapPeriod;
+}
+export function recapsDue(prefs: RecapBannerPrefs, today: string): RecapDue[] {
+  if (!prefs.recaps || !prefs.recapBanner) return [];
+  const kinds: RecapKind[] = prefs.recapPeriods === 'both' ? ['weekly', 'monthly'] : [prefs.recapPeriods];
+  return kinds
+    .map((kind) => ({ kind, period: justEnded(kind, today, prefs.weekStartsOn) }))
+    .filter(({ kind, period }) => daysAfter(period, today) <= prefs.recapBannerDays && (prefs.recapSeen[kind] ?? '') < period.start);
+}
+// What the banner says, given which due periods had brews; null: no banner.
+export function bannerFor(prefs: RecapBannerPrefs, today: string, hadBrews: (due: RecapDue) => boolean): { due: RecapDue[]; text: string } | null {
+  const due = recapsDue(prefs, today).filter(hadBrews);
+  if (!due.length) return null;
+  const text = due.length > 1 ? 'Your weekly and monthly recaps are ready.' : `Your ${due[0]!.kind} recap is ready.`;
+  return { due, text };
+}
+// recapSeen after opening or dismissing these.
+export function markSeen(seen: UserPreferences['recapSeen'], due: readonly RecapDue[]): UserPreferences['recapSeen'] {
+  const out = { ...seen };
+  for (const d of due) if ((out[d.kind] ?? '') < d.period.start) out[d.kind] = d.period.start;
+  return out;
 }
