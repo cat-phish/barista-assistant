@@ -19,8 +19,9 @@ your own chats is open to any member; starting one or sending a message needs
 `owner` or `barista`, as an analysis does.
 
 **A chat:** `{ id, title, createdAt, updatedAt, summary, summaryThrough,
-summaryStatus }`. `title` is the start of the first message; `updatedAt` moves
-with each message. The summary fields are under "Long chats", below.
+summaryStatus, pinnedAt }`. `title` is the start of the first message;
+`updatedAt` moves with each message. The summary fields are under "Long
+chats", below; `pinnedAt` (null unless pinned) under "Pinned chats".
 
 **A message:** `{ id, position, role, content, attachments, proposals, photos,
 status, error, model, createdAt }`. `proposals` is `[]` but on a reply that
@@ -33,10 +34,12 @@ made some (below).
 
 | Route | |
 | --- | --- |
-| `GET /` | `{ chats }`, yours, latest first. |
+| `GET /` | `{ chats }`, yours: pinned ones first, the latest pinned on top, then the rest latest first. |
 | `POST /` | Body `{ content, attachments?, photoIds? }`; `content` is 1–4000 characters. Starts a chat with that message. `202` with `{ chat, messages }`: the message and its pending reply. |
 | `GET /:chatId` | `{ chat, messages }`, oldest first. |
 | `DELETE /:chatId` | `204`. |
+| `PUT /:chatId/pin` | Body `{ pinned: boolean }`. Any member, on their own chat. `200` with `{ chat }`; pinning again moves it to the top of the pinned ones. |
+| `GET /:chatId/export` | That one chat as the zip under "Export and import". Any member, on their own chat. |
 | `POST /:chatId/messages` | Body as for `POST /`. `202` with `{ chat, messages }`: only the two new ones. `409` while a reply or a summary is still being written. |
 | `POST /:chatId/summary` | Summarize and continue (below). `202` with `{ chat }`, `summaryStatus: "pending"`. `409` while a reply or a summary is being written, `400` under 12 finished messages. Needs `owner` or `barista`, chat on and AI set up, and the daily message limit not reached (it doesn't count toward it). |
 | `GET /:chatId/messages/:messageId/stream` | The reply as server-sent events, below. |
@@ -287,6 +290,17 @@ not looser. `null` means no limit. Chats over a limit are deleted, oldest first
 by `updatedAt`, within seconds of a change to a limit, after each message, and
 hourly. The chat in use is never deleted for size.
 
+**Pinned chats** are kept from the age limit, and over the size limit they go
+only after every unpinned chat has (oldest pinned first). A pin is yours: it
+only orders your own list.
+
+**The warning:** the Chat tab says, in small yellow text under the composer,
+when your chats reach 80% of `effective.maxBytes` ("Your chats use 830 MB of
+1 GB. Past it, your oldest unpinned chats are deleted: pin or export the ones
+to keep."), and, with an age limit, when the open chat is unpinned and within
+7 days of it ("This chat will be deleted on 16 Nov unless you add to it or
+pin it."), with a link to Settings → AI chats (`lib/chatLimitsWarning.ts`).
+
 | Limit | Server default | Range |
 | --- | --- | --- |
 | `maxBytes` | 1 GB (1073741824) | 1 KB to 1 PB |
@@ -312,13 +326,26 @@ Leaving a workspace, or being removed from it, deletes your chats there.
 Your chats in a workspace as one `.zip`, to keep or to bring into another
 workspace or server. Not a workspace backup: it holds only your own chats.
 
+**Exporting a chat:** the chat's **Export ▾** menu, in its header, has three:
+- **Markdown (.md)**, built in the browser (`lib/chatMarkdownExport.ts`): the
+  title and dates, the summary if there is one, then each message as
+  `### You · <date>` or `### AI · <date>` with what it attached, its photos
+  counted, and a reply's proposals by title and why. To read or share; it
+  doesn't import.
+- **PDF (print)**: the browser's print dialog (Save as PDF) on the
+  conversation alone, laid out whole, with the title and dates on top. No PDF
+  library.
+- **Backup (.zip)**: `GET /:chatId/export`, the zip below with that chat only,
+  which `POST /import` brings back, pin and all.
+
 | Route | |
 | --- | --- |
 | `GET /export` | The zip: `chats.json` and `photos/<id>.webp`. Any member. A reply still being written is left out. |
 | `POST /import` | The zip as the body, `application/zip`, up to 250 MB. `owner` or `barista`, with chat on. `200` with `{ imported, skipped }`. |
 
 `chats.json` is `{ version: 1, exportedAt, chats }`; a chat is `{ id, title,
-createdAt, updatedAt, messages }`, and a message as above without its `id`, with
+createdAt, updatedAt, summary?, summaryThrough?, pinnedAt?, messages }` (older
+files have none of the three), and a message as above without its `id`, with
 `photos` as `{ id, width, height }` and `proposals` `null` when there are none
 (a file from before proposals has no `proposals`, and imports as none).
 

@@ -4,8 +4,8 @@
 // Fills the screen below the tabs: the thread scrolls, the composer stays at
 // the bottom. On a phone the chat list is a drawer behind "Chats".
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
-import { chatSettingsApi, chatsApi, type Chat, type ChatAttachment, type ChatMessage, type ChatPhoto, type ChatProposal } from '../../api/chats';
+import { RouterLink, useRouter } from 'vue-router';
+import { chatSettingsApi, chatsApi, type Chat, type ChatAttachment, type ChatMessage, type ChatPhoto, type ChatProposal, type ChatSettings } from '../../api/chats';
 import { ApiError, errorMessage } from '../../api/client';
 import ChatAttachChips from '../../components/ChatAttachChips.vue';
 import ChatAttachDialog from '../../components/ChatAttachDialog.vue';
@@ -13,8 +13,11 @@ import ChatList from '../../components/ChatList.vue';
 import ChatMarkdown from '../../components/ChatMarkdown.vue';
 import ChatProposalCard from '../../components/ChatProposalCard.vue';
 import { usePreferences } from '../../composables/usePreferences';
+import { saveBlob } from '../../lib/backup';
 import { attachKey, attachRef } from '../../lib/chatAttach';
 import { canSummarize, chatLength, historyTokens } from '../../lib/chatLength';
+import { chatLimitsWarning } from '../../lib/chatLimitsWarning';
+import { chatFileName, chatToMarkdown } from '../../lib/chatMarkdownExport';
 import { estimateTokens, tokenWarning } from '../../lib/chatTokens';
 import { proposalRoute } from '../../lib/chatProposal';
 import { formatWhen } from '../../lib/format';
@@ -109,16 +112,23 @@ async function summarize() {
 const attachments = ref<ChatAttachment[]>([]);
 const picking = ref(false);
 const attachMax = computed(() => settings.value.chatMaxAttachments ?? 50);
-// A live period's cap on its brews: the workspace's, or your own lower one.
-const ownPeriodCap = ref<number | null>(null);
+// Your chat settings (Settings → AI chats): a live period's cap on its brews
+// (the workspace's, or your own lower one), and how close your chats are to
+// the limits that delete them, read again after each reply.
+const chatSettings = ref<ChatSettings | null>(null);
+function loadChatSettings() {
+  void chatSettingsApi
+    .get()
+    .then((s) => (chatSettings.value = s))
+    .catch(() => undefined);
+}
+loadChatSettings();
 const periodCap = computed(() => {
   const ws = settings.value.chatPeriodMaxBrews ?? 60;
-  return ownPeriodCap.value ? Math.min(ws, ownPeriodCap.value) : ws;
+  const own = chatSettings.value?.own.periodMaxBrews;
+  return own ? Math.min(ws, own) : ws;
 });
-void chatSettingsApi
-  .get()
-  .then((s) => (ownPeriodCap.value = s.own.periodMaxBrews))
-  .catch(() => undefined);
+const limitNotes = computed(() => chatLimitsWarning(chatSettings.value, currentChat.value));
 // How many brews each period held when picked, for the token estimate.
 const periodBrews = ref(new Map<string, number>());
 function attachPicked(picked: ChatAttachment[], counts: Map<string, number>) {
@@ -276,6 +286,7 @@ function follow(reply: ChatMessage) {
       replace(message);
       void toBottom();
       void refreshList().catch(() => undefined);
+      loadChatSettings();
     },
     closed() {
       stop();
@@ -363,9 +374,64 @@ async function remove(chat: Chat) {
     await chatsApi.remove(workspaceId.value, chat.id);
     if (chatId.value === chat.id) newChat();
     await refreshList();
+    loadChatSettings();
   } catch (err) {
     say(err);
   }
+}
+
+// Pinned chats stay at the top, and are kept from the age limit
+// (docs/api/chat.md §12, "Pinned chats").
+async function pin(chat: Chat) {
+  if (!workspaceId.value) return;
+  try {
+    const { chat: saved } = await chatsApi.pin(workspaceId.value, chat.id, !chat.pinnedAt);
+    if (chatId.value === saved.id) currentChat.value = saved;
+    await refreshList();
+  } catch (err) {
+    say(err);
+  }
+}
+
+// Export this chat (docs/api/chat.md §12, "Exporting a chat"): Markdown to
+// read or share, a PDF through the browser's own print dialog (Save as PDF),
+// or the .zip that Settings → AI chats → Import brings back.
+const exportMenu = ref<HTMLDetailsElement | null>(null);
+const printing = ref(false);
+async function exportAs(format: 'md' | 'pdf' | 'zip') {
+  if (exportMenu.value) exportMenu.value.open = false;
+  const ws = workspaceId.value;
+  const chat = currentChat.value;
+  if (!ws || !chat) return;
+  error.value = '';
+  try {
+    if (format === 'md') {
+      saveBlob(chatFileName(chat.title, 'md'), new Blob([chatToMarkdown(chat, messages.value)], { type: 'text/markdown' }));
+    } else if (format === 'zip') {
+      saveBlob(chatFileName(chat.title, 'zip'), await chatsApi.exportChatZip(ws, chat.id));
+    } else {
+      printChat(chat.title);
+    }
+  } catch (err) {
+    say(err);
+  }
+}
+// While printing, the conversation moves to the top of the page (Teleport)
+// and the print stylesheet leaves the rest of the app out; the tab's title is
+// the file name the dialog suggests.
+function printChat(chatTitle: string) {
+  const before = document.title;
+  const done = () => {
+    printing.value = false;
+    document.title = before;
+    document.body.classList.remove('printing-chat');
+    window.removeEventListener('afterprint', done);
+  };
+  printing.value = true;
+  document.title = chatFileName(chatTitle, 'pdf').replace(/\.pdf$/, '');
+  document.body.classList.add('printing-chat');
+  window.addEventListener('afterprint', done);
+  void nextTick(() => window.print());
 }
 
 // Enter sends; Shift+Enter is a new line.
@@ -444,7 +510,7 @@ onBeforeUnmount(stopSummaryPoll);
 <template>
   <div ref="shell" class="chat" :style="{ height }">
     <aside class="card side" aria-label="Your chats">
-      <ChatList :chats="chats" :current="chatId" @open="open" @remove="remove" @new="newChat" />
+      <ChatList :chats="chats" :current="chatId" @open="open" @remove="remove" @pin="pin" @new="newChat" />
     </aside>
 
     <dialog ref="drawer" class="drawer" aria-label="Your chats" @cancel.prevent="listOpen = false" @click="onDrawerClick">
@@ -453,16 +519,28 @@ onBeforeUnmount(stopSummaryPoll);
           <h2>Chats</h2>
           <button type="button" class="btn-link close" aria-label="Close" @click="listOpen = false">✕</button>
         </div>
-        <ChatList :chats="chats" :current="chatId" @open="open" @remove="remove" @new="newChat" />
+        <ChatList :chats="chats" :current="chatId" @open="open" @remove="remove" @pin="pin" @new="newChat" />
       </div>
     </dialog>
 
-    <section class="card main" aria-label="Conversation" @dragenter="onDragEnter" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
+    <Teleport to="body" :disabled="!printing">
+    <section class="card main" :class="{ 'chat-print': printing }" aria-label="Conversation" @dragenter="onDragEnter" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
       <header class="bar">
         <button type="button" class="btn-link phone-only" @click="listOpen = true">☰ Chats</button>
         <h2 class="title">{{ title }}</h2>
+        <details v-if="currentChat" ref="exportMenu" class="export">
+          <summary class="btn-link">Export <span aria-hidden="true">▾</span></summary>
+          <div class="export-menu card">
+            <button type="button" class="btn-link" @click="exportAs('md')">Markdown (.md)</button>
+            <button type="button" class="btn-link" @click="exportAs('pdf')">PDF (print)</button>
+            <button type="button" class="btn-link" @click="exportAs('zip')">Backup (.zip)</button>
+          </div>
+        </details>
         <button type="button" class="btn-link phone-only" :disabled="chatId === null" @click="newChat">+ New</button>
       </header>
+      <p v-if="printing && currentChat" class="print-only muted small">
+        Started {{ formatWhen(currentChat.createdAt) }} · last message {{ formatWhen(currentChat.updatedAt) }}
+      </p>
 
       <div ref="thread" class="thread" aria-live="polite" @scroll="onScroll">
         <div v-if="!messages.length" class="welcome">
@@ -579,8 +657,12 @@ onBeforeUnmount(stopSummaryPoll);
       </form>
       <p v-else-if="!canSend" class="muted notice">Chat is turned off for you here. You can still read your chats.</p>
       <p v-else class="muted notice">Viewers can read their chats but can't send messages.</p>
+      <p v-for="note in limitNotes" :key="note" class="limits-note small" role="status">
+        {{ note }} <RouterLink :to="{ name: 'settings-chats' }">AI chat settings</RouterLink>
+      </p>
       <ChatAttachDialog :open="picking" :selected="attachments" :max="attachMax" :period-cap="periodCap" :period-brews="periodBrews" @close="picking = false" @done="attachPicked" />
     </section>
+    </Teleport>
   </div>
 </template>
 
@@ -997,6 +1079,84 @@ onBeforeUnmount(stopSummaryPoll);
   min-height: var(--tap);
 }
 
+.limits-note {
+  margin: 0 var(--space-3) var(--space-2);
+  color: var(--warning);
+}
+.export {
+  position: relative;
+  flex: none;
+}
+.export summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  min-height: var(--tap);
+  list-style: none;
+  cursor: pointer;
+}
+.export summary::-webkit-details-marker {
+  display: none;
+}
+.export-menu {
+  position: absolute;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  min-width: 11rem;
+  padding: var(--space-1);
+}
+.export-menu button {
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  text-align: left;
+}
+.print-only {
+  display: none;
+}
+
+/* PDF: the conversation alone, whole (see printChat). */
+@media print {
+  .main {
+    overflow: visible;
+    border: none;
+    box-shadow: none;
+  }
+  .thread {
+    overflow: visible;
+    padding: 0;
+  }
+  .bar {
+    padding: 0 0 var(--space-2);
+  }
+  .bar .title {
+    font-size: 1.3rem;
+    white-space: normal;
+  }
+  .print-only {
+    display: block;
+    margin: 0;
+  }
+  .bar button,
+  .export,
+  .composer,
+  .long-chat,
+  .new-below,
+  .notice,
+  .limits-note,
+  .form-error,
+  .failed button,
+  .summary-divider,
+  .typing {
+    display: none !important;
+  }
+  .message,
+  .bubble img {
+    break-inside: avoid;
+  }
+}
+
 @media (max-width: 720px) {
   .chat {
     grid-template-columns: minmax(0, 1fr);
@@ -1018,6 +1178,15 @@ onBeforeUnmount(stopSummaryPoll);
   }
   .composer {
     margin: 0 var(--space-2) var(--space-2);
+  }
+}
+</style>
+
+<style>
+/* While a chat prints (StatsChatView's printChat), only it is on the page. */
+@media print {
+  body.printing-chat > :not(.chat-print) {
+    display: none !important;
   }
 }
 </style>

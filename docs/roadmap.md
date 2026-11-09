@@ -2851,3 +2851,20 @@ Branch `chat-period`; was backlog 17. Spec: `docs/api/chat.md` §12,
   carry forward; one stuck for 10 minutes is marked failed (0115).
 - Left out: a period gives proposals no ref (it isn't one item); other
   kinds (the beans opened in a period) weren't asked for.
+
+## Pinned chats, one-chat export, chat limit warning (built)
+
+Branch `chat-pins`. Spec: `docs/api/chat.md` §12 ("Pinned chats",
+"Exporting a chat", "The warning").
+
+- **Pins:** `PUT /chats/:chatId/pin` (migration 0116, `pinned_at`). Pinned
+  chats sit in a Pinned group at the top of the chat list, a 📌 on each row
+  to toggle. A pinned chat never expires for age and is deleted for size
+  only after every unpinned one.
+- **Export one chat:** Export ▾ in the chat's header: Markdown built in the
+  browser, PDF through the browser's print dialog (no PDF library, so
+  nothing new to license under the AGPL), and the importable zip from
+  `GET /chats/:chatId/export`, which keeps the pin.
+- **Warning:** small yellow text under the composer at 80% of the size
+  limit, and a week before the age limit would delete the open chat, with
+  a link to Settings → AI chats.

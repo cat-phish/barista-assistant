@@ -12,6 +12,7 @@ export interface Chat {
   summary: string | null;
   summaryThrough: number | null;
   summaryStatus: 'pending' | 'failed' | null;
+  pinnedAt: string | null; // pinned to the top of the list
 }
 export type ChatAttachmentKind = 'brew' | 'bean' | 'recipe' | 'chart' | 'period';
 // A live Period (chat.md §12, "Periods"): the Brews filters, run again for each reply.
@@ -174,6 +175,12 @@ export const chatsApi = {
   },
   exportZip(workspaceId: string) {
     return api.file(`${base(workspaceId)}/export`);
+  },
+  exportChatZip(workspaceId: string, chatId: string) {
+    return api.file(`${base(workspaceId)}/${chatId}/export`);
+  },
+  pin(workspaceId: string, chatId: string, pinned: boolean) {
+    return api.put<{ chat: Chat }>(`${base(workspaceId)}/${chatId}/pin`, { pinned });
   },
   importZip(workspaceId: string, zip: Blob) {
     return api.post<{ imported: number; skipped: number }>(`${base(workspaceId)}/import`, new Blob([zip], { type: 'application/zip' }));
