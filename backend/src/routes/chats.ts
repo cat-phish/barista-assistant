@@ -13,7 +13,7 @@ import { chartSnapshotSchema } from "../chatChart.js";
 import { labelPeriod, periodSpecSchema } from "../chatPeriod.js";
 import { requireAi } from "../aiConfig.js";
 import { buildChatsZip, importChats } from "../chatExport.js";
-import { deleteAllChatsOf, ownChatLimitsSchema, deleteChats, pinnedChatsOf, pruneChatsOf, userChatBytes } from "../chatData.js";
+import { deleteAllChatsOf, ownChatLimitsSchema, deleteChats, pinnedChatsOf, pruneChatsOf, userChatBytes, wouldDelete } from "../chatData.js";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { config } from "../config.js";
 import { db } from "../db.js";
@@ -705,6 +705,20 @@ myChatsRouter.get("/chat-settings", async (req: Request, res: Response<ChatSetti
 });
 
 const over = (own: number | null, server: number | null): boolean => server !== null && (own === null ? false : own > server);
+// What saving these limits would delete of your chats, so the page can ask
+// first (docs/api/chat.md §12, "Saving limits"). Deletes nothing.
+myChatsRouter.post("/chat-settings/preview", async (req: Request, res: Response<{ chats: number; pinned: number }>) => {
+  const body = parseBody(ownChatLimitsSchema, req, res);
+  if (!body) return;
+  const server = await getChatLimits();
+  if (over(body.maxBytes, server.maxBytes) || over(body.maxDays, server.maxDays)) {
+    sendError(res, 400, "That's more than this server allows");
+    return;
+  }
+  const gone = await wouldDelete(authedUserId(req), { maxBytes: body.maxBytes, maxDays: body.maxDays }, server, null);
+  res.json({ chats: gone.ids.length, pinned: gone.pinned });
+});
+
 myChatsRouter.put("/chat-settings", async (req: Request, res: Response<ChatSettings>) => {
   const userId = authedUserId(req);
   const body = parseBody(ownChatLimitsSchema, req, res);

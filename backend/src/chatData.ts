@@ -1,7 +1,7 @@
 // What AI chats keep, and removing it (docs/api/chat.md §12). A chat's rows
 // cascade, but its photo files don't, so every delete goes through here.
 import { CHAT_PERIOD_BREWS_MAX, CHAT_PERIOD_BREWS_MIN } from "@barista/shared/chatPeriod";
-import { effectiveChatLimits, type ChatLimits } from "@barista/shared/aiConfig";
+import { effectiveChatLimits, pinnedExpiry, type ChatLimits, type ServerChatLimits } from "@barista/shared/aiConfig";
 import { aiChatMessages, aiChatPhotos, aiChats, users, workspaces } from "@barista/shared/schema";
 import { and, asc, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
@@ -108,15 +108,16 @@ export const deleteMemberChats = (workspaceId: string, userId: string): Promise<
 
 // Which chats are over the limits, oldest first until the rest fit. Pure, so
 // tests can check it. keep: never removed for size. A pinned chat expires
-// only at the server's age limit (a person's own skips it), and goes for size
-// only once every unpinned one has (docs/api/chat.md §12, "Pinned chats").
-export function overLimits(chats: readonly ChatSize[], limits: ChatLimits, serverMaxDays: number | null, keep: string | null, now = new Date()): string[] {
-  const cutoffOf = (days: number | null): number | null => (days === null ? null : now.getTime() - days * 24 * 3600_000);
-  const cutoff = cutoffOf(limits.maxDays);
-  const pinnedCutoff = cutoffOf(serverMaxDays);
+// only at the server's age limit (a person's own skips it), a week after that
+// limit was set at the earliest, and goes for size only once every unpinned
+// one has (docs/api/chat.md §12, "Pinned chats").
+type ServerAge = Pick<ServerChatLimits, "maxDays" | "maxDaysSetAt">;
+export function overLimits(chats: readonly ChatSize[], limits: ChatLimits, server: ServerAge, keep: string | null, now = new Date()): string[] {
+  const cutoff = limits.maxDays === null ? null : now.getTime() - limits.maxDays * 24 * 3600_000;
   const tooOld = (c: ChatSize): boolean => {
-    const at = c.pinned ? pinnedCutoff : cutoff;
-    return at !== null && c.updatedAt.getTime() < at;
+    if (!c.pinned) return cutoff !== null && c.updatedAt.getTime() < cutoff;
+    const expires = pinnedExpiry(c.updatedAt, server);
+    return expires !== null && expires.getTime() <= now.getTime();
   };
   const expired = new Set(chats.filter((c) => tooOld(c) && c.id !== keep).map((c) => c.id));
   if (limits.maxBytes === null) return [...expired];
@@ -132,16 +133,36 @@ export function overLimits(chats: readonly ChatSize[], limits: ChatLimits, serve
   return [...expired];
 }
 
+// What limits would delete of one person's chats now, and which pinned
+// chats are past the server's age limit but kept by the grace: the prunes and
+// the previews (before a save asks to confirm) share it.
+export interface WouldDelete {
+  ids: string[];
+  pinned: number; // of ids
+  pinnedLater: Date[]; // when each chat in its grace goes
+}
+export async function wouldDelete(userId: string, own: ChatLimits | null, server: ServerChatLimits, keep: string | null, now = new Date()): Promise<WouldDelete> {
+  const chats = await chatSizes(eq(aiChats.userId, userId));
+  const ids = overLimits(chats, effectiveChatLimits(server, own), server, keep, now);
+  const gone = new Set(ids);
+  const ageCutoff = server.maxDays === null ? null : now.getTime() - server.maxDays * 24 * 3600_000;
+  const pinnedLater = chats.flatMap((c) => {
+    const expires = c.pinned && ageCutoff !== null && c.updatedAt.getTime() < ageCutoff && !gone.has(c.id) ? pinnedExpiry(c.updatedAt, server) : null;
+    return expires ? [expires] : [];
+  });
+  return { ids, pinned: chats.filter((c) => c.pinned && gone.has(c.id)).length, pinnedLater };
+}
+const ownLimitsOf = async (userId: string): Promise<ChatLimits | null> => (await db.select({ chatLimits: users.chatLimits }).from(users).where(eq(users.id, userId)))[0]?.chatLimits ?? null;
+export const chatOwners = (): Promise<Array<{ id: string; chatLimits: ChatLimits | null }>> =>
+  db.selectDistinct({ id: aiChats.userId, chatLimits: users.chatLimits }).from(aiChats).innerJoin(users, eq(aiChats.userId, users.id));
+
 export async function pruneChatsOf(userId: string, keep: string | null): Promise<void> {
-  const [row] = await db.select({ chatLimits: users.chatLimits }).from(users).where(eq(users.id, userId));
-  const server = await getChatLimits();
-  await deleteChats(overLimits(await chatSizes(eq(aiChats.userId, userId)), effectiveChatLimits(server, row?.chatLimits ?? null), server.maxDays, keep));
+  await deleteChats((await wouldDelete(userId, await ownLimitsOf(userId), await getChatLimits(), keep)).ids);
 }
 
 export async function pruneAllChats(): Promise<void> {
   const server = await getChatLimits();
-  const people = await db.selectDistinct({ id: aiChats.userId, chatLimits: users.chatLimits }).from(aiChats).innerJoin(users, eq(aiChats.userId, users.id));
-  for (const person of people) {
-    await deleteChats(overLimits(await chatSizes(eq(aiChats.userId, person.id)), effectiveChatLimits(server, person.chatLimits), server.maxDays, null));
+  for (const person of await chatOwners()) {
+    await deleteChats((await wouldDelete(person.id, person.chatLimits, server, null)).ids);
   }
 }

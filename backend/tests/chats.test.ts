@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { access } from "node:fs/promises";
-import { AI_SERVER_KEY, CHAT_LIMITS_KEY, DEFAULT_SERVER_AI, DEFAULT_SERVER_CHAT_LIMITS } from "@barista/shared/aiConfig";
+import { AI_SERVER_KEY, CHAT_LIMITS_KEY, DEFAULT_SERVER_AI, DEFAULT_SERVER_CHAT_LIMITS, nextMaxDaysSetAt } from "@barista/shared/aiConfig";
 import { CHAT_EVENT_FIELD, chatReplyKey, type ChatStreamEvent } from "@barista/shared/jobs";
 import { aiChatMessages, aiChatPhotos, aiChats, serverSettings, workspaceAiConfigs, type ChatProposal } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
@@ -452,26 +452,44 @@ describe("limits and purging", () => {
   const day = 24 * 3600_000;
   const now = new Date("2026-11-01T00:00:00Z");
   const chat = (id: string, age: number, bytes: number) => ({ id, userId: "u", updatedAt: new Date(now.getTime() - age * day), bytes });
+  const srv = (maxDays: number | null, setDaysAgo?: number) => ({ maxDays, maxDaysSetAt: setDaysAgo === undefined ? null : new Date(now.getTime() - setDaysAgo * day).toISOString() });
+
+  it("keeps a pinned chat a week after the server's age limit is set, then lets it go", () => {
+    const chats = [{ ...chat("pinned", 30, 5), pinned: true }, chat("old", 30, 5)];
+    expect(overLimits(chats, { maxBytes: null, maxDays: 20 }, srv(20, 0), null, now)).toEqual(["old"]);
+    expect(overLimits(chats, { maxBytes: null, maxDays: 20 }, srv(20, 6), null, now)).toEqual(["old"]);
+    expect(overLimits(chats, { maxBytes: null, maxDays: 20 }, srv(20, 7), null, now)).toEqual(["pinned", "old"]);
+  });
+
+  it("starts the grace again only when the server's age limit gets stricter", () => {
+    const at = new Date("2026-11-01T00:00:00Z");
+    const before = { maxDays: 30, maxDaysSetAt: "2026-10-01T00:00:00.000Z" };
+    expect(nextMaxDaysSetAt(before, 60, at)).toBe(before.maxDaysSetAt);
+    expect(nextMaxDaysSetAt(before, 30, at)).toBe(before.maxDaysSetAt);
+    expect(nextMaxDaysSetAt(before, null, at)).toBe(before.maxDaysSetAt);
+    expect(nextMaxDaysSetAt(before, 20, at)).toBe(at.toISOString());
+    expect(nextMaxDaysSetAt({ maxDays: null, maxDaysSetAt: null }, 90, at)).toBe(at.toISOString());
+  });
 
   it("keeps a pinned chat from your own age limit, not the server's, and takes it last for size", () => {
     const pinned = { ...chat("pinned", 30, 5), pinned: true };
     const chats = [chat("new", 0, 5), pinned, chat("mid", 5, 5)];
-    expect(overLimits(chats, { maxBytes: null, maxDays: 6 }, null, null, now)).toEqual([]);
+    expect(overLimits(chats, { maxBytes: null, maxDays: 6 }, srv(null), null, now)).toEqual([]);
     // Your own 6 days under the server's 60: the pin keeps it.
-    expect(overLimits(chats, { maxBytes: null, maxDays: 6 }, 60, null, now)).toEqual([]);
+    expect(overLimits(chats, { maxBytes: null, maxDays: 6 }, srv(60), null, now)).toEqual([]);
     // The server's 20 days: pinned or not, it goes.
-    expect(overLimits(chats, { maxBytes: null, maxDays: 20 }, 20, null, now)).toEqual(["pinned"]);
-    expect(overLimits(chats, { maxBytes: null, maxDays: 4 }, 20, null, now)).toEqual(["pinned", "mid"]);
-    expect(overLimits(chats, { maxBytes: 10, maxDays: null }, null, null, now)).toEqual(["mid"]);
-    expect(overLimits(chats, { maxBytes: 4, maxDays: null }, null, null, now)).toEqual(["mid", "new", "pinned"]);
+    expect(overLimits(chats, { maxBytes: null, maxDays: 20 }, srv(20), null, now)).toEqual(["pinned"]);
+    expect(overLimits(chats, { maxBytes: null, maxDays: 4 }, srv(20), null, now)).toEqual(["pinned", "mid"]);
+    expect(overLimits(chats, { maxBytes: 10, maxDays: null }, srv(null), null, now)).toEqual(["mid"]);
+    expect(overLimits(chats, { maxBytes: 4, maxDays: null }, srv(null), null, now)).toEqual(["mid", "new", "pinned"]);
   });
 
   it("takes the oldest first until the rest fit, never the one in use", () => {
     const chats = [chat("new", 0, 5), chat("old", 9, 5), chat("mid", 5, 5)];
-    expect(overLimits(chats, { maxBytes: 10, maxDays: null }, null, null, now)).toEqual(["old"]);
-    expect(overLimits(chats, { maxBytes: 4, maxDays: null }, null, "old", now)).toEqual(["mid", "new"]);
-    expect(overLimits(chats, { maxBytes: null, maxDays: 6 }, null, null, now)).toEqual(["old"]);
-    expect(overLimits(chats, { maxBytes: null, maxDays: null }, null, null, now)).toEqual([]);
+    expect(overLimits(chats, { maxBytes: 10, maxDays: null }, srv(null), null, now)).toEqual(["old"]);
+    expect(overLimits(chats, { maxBytes: 4, maxDays: null }, srv(null), "old", now)).toEqual(["mid", "new"]);
+    expect(overLimits(chats, { maxBytes: null, maxDays: 6 }, srv(null), null, now)).toEqual(["old"]);
+    expect(overLimits(chats, { maxBytes: null, maxDays: null }, srv(null), null, now)).toEqual([]);
   });
 
   it("a person can be stricter than the server, not looser", async () => {
@@ -487,6 +505,41 @@ describe("limits and purging", () => {
     const after = await owner.agent.get(settings);
     expect(after.body.own.maxBytes).toBe(2 * MB);
     expect(after.body.effective.maxBytes).toBe(MB);
+  });
+
+  it("previews what a save would delete, then deletes just that", async () => {
+    const aged = async (content: string, days: number, pinned = false) => {
+      const res = await owner.agent.post(url(workspaceId)).send({ content });
+      await finish(res.body.messages[1].id, "ok".repeat(1000)); // 2 KB, over a 1 KB size limit
+      await db.update(aiChats).set({ updatedAt: new Date(Date.now() - days * day), pinnedAt: pinned ? new Date() : null }).where(eq(aiChats.id, res.body.chat.id));
+      return res.body.chat.id as string;
+    };
+    await aged("Old", 40);
+    await aged("Old and pinned", 40, true);
+    await aged("New", 1);
+    const admin = await newUser();
+    expect(await setAdmin(admin.email, true)).toBe(true);
+    const limits = { maxBytes: null, maxDays: 30, dailyMessages: null };
+    expect((await owner.agent.post("/api/server/chat/preview").send(limits)).status).toBe(403);
+    const preview = await admin.agent.post("/api/server/chat/preview").send(limits);
+    expect(preview.status).toBe(200);
+    expect(preview.body).toEqual({ chats: 1, people: 1, pinned: 0, pinnedLater: 1, pinnedLaterOn: expect.any(String) });
+    expect(Date.parse(preview.body.pinnedLaterOn) - Date.now()).toBeGreaterThan(6.9 * day);
+    expect((await owner.agent.get(url(workspaceId))).body.chats).toHaveLength(3); // a preview deletes nothing
+    await admin.agent.put("/api/server/chat").send(limits).expect(200);
+    const left = ((await owner.agent.get(url(workspaceId))).body.chats as Array<{ title: string }>).map((c) => c.title);
+    expect(left.sort()).toEqual(["New", "Old and pinned"]);
+    // Saving the same limit again doesn't restart the week.
+    const setAt = (await admin.agent.get("/api/server/chat")).body.limits.maxDaysSetAt;
+    await admin.agent.put("/api/server/chat").send(limits).expect(200);
+    expect((await admin.agent.get("/api/server/chat")).body.limits.maxDaysSetAt).toBe(setAt);
+
+    // Your own: a pin keeps a chat from your age limit, not from size.
+    const own = "/api/auth/me/chat-settings";
+    expect((await owner.agent.post(`${own}/preview`).send({ maxBytes: null, maxDays: 2 })).body).toEqual({ chats: 0, pinned: 0 });
+    expect((await owner.agent.post(`${own}/preview`).send({ maxBytes: 1024, maxDays: null })).body).toEqual({ chats: 2, pinned: 1 });
+    expect((await owner.agent.post(`${own}/preview`).send({ maxBytes: null, maxDays: 31 })).status).toBe(400);
+    expect((await owner.agent.get(url(workspaceId))).body.chats).toHaveLength(2);
   });
 
   it("keeps a person's own cap on a period's brews, unchanged when not sent", async () => {
@@ -535,7 +588,7 @@ describe("limits and purging", () => {
   it("lets an admin set the server's limits, which prune, and purge everyone's chats", async () => {
     const admin = await newUser();
     expect(await setAdmin(admin.email, true)).toBe(true);
-    expect((await admin.agent.get("/api/server/chat")).body.limits).toEqual({ maxBytes: 1024 ** 3, maxDays: null, dailyMessages: 200, maxPinned: 20 });
+    expect((await admin.agent.get("/api/server/chat")).body.limits).toEqual({ maxBytes: 1024 ** 3, maxDays: null, dailyMessages: 200, maxPinned: 20, maxDaysSetAt: null });
     const old = await owner.agent.post(url(workspaceId)).send({ content: "Old" });
     await finish(old.body.messages[1].id, "Reply");
     await db.update(aiChats).set({ updatedAt: new Date(Date.now() - 40 * day) }).where(eq(aiChats.id, old.body.chat.id));
@@ -544,11 +597,12 @@ describe("limits and purging", () => {
     const limits = { maxBytes: 5 * MB, maxDays: 30, dailyMessages: 50 };
     const saved = await admin.agent.put("/api/server/chat").send(limits);
     expect(saved.status, JSON.stringify(saved.body)).toBe(200);
-    expect(saved.body.limits).toEqual({ ...limits, maxPinned: 20 }); // left out: as it was
+    expect(saved.body.limits).toEqual({ ...limits, maxPinned: 20, maxDaysSetAt: expect.any(String) }); // left out: as it was
     expect(saved.body.usedBytes).toBe(3);
     expect((await admin.agent.put("/api/server/chat").send({ ...limits, maxPinned: 5 })).body.limits.maxPinned).toBe(5);
     expect((await admin.agent.put("/api/server/chat").send({ ...limits, maxPinned: null })).body.limits.maxPinned).toBeNull();
     expect((await admin.agent.put("/api/server/chat").send({ ...limits, maxPinned: 0 })).status).toBe(400);
+    expect((await admin.agent.put("/api/server/chat").send({ ...limits, maxDaysSetAt: null })).status).toBe(400); // the server's own
     expect((await owner.agent.get(url(workspaceId))).body.chats).toHaveLength(1);
     expect((await admin.agent.put("/api/server/chat").send({ ...limits, maxDays: 0 })).status).toBe(400);
 
