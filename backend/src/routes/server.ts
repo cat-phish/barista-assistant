@@ -1,4 +1,4 @@
-import { AI_PROVIDERS, DEFAULT_SERVER_AI, lastFour, type AiEnvStatus, type ServerAiConfig, type ServerChatLimits } from "@barista/shared/aiConfig";
+import { AI_PROVIDERS, CHAT_PINNED_MAX, DEFAULT_SERVER_AI, lastFour, type AiEnvStatus, type ServerAiConfig, type ServerChatLimits } from "@barista/shared/aiConfig";
 import { encryptSecret } from "@barista/shared/secrets";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
@@ -154,7 +154,8 @@ for (const action of ["models", "test"] as const) {
 }
 
 // AI chat limits and purging (docs/api/chat.md §12).
-const serverChatSchema = chatLimitsSchema.extend({ dailyMessages: z.number().int().min(1).max(100_000).nullable() }).strict();
+// maxPinned left out stays as it was.
+const serverChatSchema = chatLimitsSchema.extend({ dailyMessages: z.number().int().min(1).max(100_000).nullable(), maxPinned: z.number().int().min(1).max(CHAT_PINNED_MAX).nullable().optional() }).strict();
 interface ServerChatResponse {
   limits: ServerChatLimits;
   usedBytes: number;
@@ -166,7 +167,9 @@ serverRouter.get("/chat", async (_req: Request, res: Response<ServerChatResponse
 serverRouter.put("/chat", async (req: Request, res: Response<ServerChatResponse>) => {
   const body = parseBody(serverChatSchema, req, res);
   if (!body) return;
-  await saveChatLimits(body);
+  const { maxPinned, ...limits } = body;
+  // Lowering maxPinned unpins nothing: people over it just can't pin more.
+  await saveChatLimits({ ...limits, maxPinned: maxPinned === undefined ? (await getChatLimits()).maxPinned : maxPinned });
   await pruneAllChats();
   res.json(await chatView());
 });

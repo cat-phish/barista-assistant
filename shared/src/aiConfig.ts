@@ -51,6 +51,7 @@ export interface ChatLimits {
 }
 export interface ServerChatLimits extends ChatLimits {
   dailyMessages: number | null; // what one person can send in 24 hours
+  maxPinned: number | null; // pinned chats one person can have, all workspaces
 }
 // A person's own, which can also lower how many brews a live Period sends in
 // detail (chatPeriodMaxBrews; absent or null: the workspace's).
@@ -58,7 +59,8 @@ export interface OwnChatLimits extends ChatLimits {
   periodMaxBrews?: number | null;
 }
 export const CHAT_LIMITS_KEY = "chat_limits";
-export const DEFAULT_SERVER_CHAT_LIMITS: ServerChatLimits = { maxBytes: 1024 ** 3, maxDays: null, dailyMessages: 200 };
+export const DEFAULT_SERVER_CHAT_LIMITS: ServerChatLimits = { maxBytes: 1024 ** 3, maxDays: null, dailyMessages: 200, maxPinned: 20 };
+export const CHAT_PINNED_MAX = 1000; // the most an admin can allow
 export const NO_CHAT_LIMITS: ChatLimits = { maxBytes: null, maxDays: null };
 
 const stricter = (a: number | null, b: number | null): number | null => (a === null ? b : b === null ? a : Math.min(a, b));
