@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gte, inArray, lt, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, lt, type SQL } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireMembership } from "../auth/membership.js";
@@ -96,11 +96,22 @@ interface Named {
   name: string;
 }
 
+// A brewer's latest measured brews (any bean, recipe or filter), for the
+// grounds retention it's learned from, as the brew page does
+// (docs/api/brewers.md §3, "Grounds retention").
+export const BREWER_RETENTION_SAMPLE = 20;
+export interface StatsMeasuredBrew {
+  doseGrams: number;
+  waterGrams: number;
+  iceGrams: number | null;
+  yieldGrams: number;
+}
+
 export interface StatsResponse {
   brews: StatsBrew[];
   beans: StatsBean[];
   lookups: {
-    brewers: Array<Named & { methodId: string | null }>;
+    brewers: Array<Named & { methodId: string | null; groundsRetention: number | null; measured: StatsMeasuredBrew[] }>;
     methods: Named[];
     styles: Array<Named & { brewsLike: RecipeStyle }>;
     recipes: Array<Named & { expectedFinishMinSec: number | null; expectedFinishMaxSec: number | null; createdAt: Date }>; // createdAt: a recap's new recipes
@@ -270,7 +281,10 @@ async function loadBeans(workspaceId: string): Promise<StatsBean[]> {
 
 async function loadLookups(workspaceId: string): Promise<StatsResponse["lookups"]> {
   const [brewerRows, methods, styles, recipeRows, grinderRows, tools, problems, processes, drinkRows] = await Promise.all([
-    db.select({ id: brewers.id, name: brewers.name, methodId: brewers.methodId }).from(brewers).where(eq(brewers.workspaceId, workspaceId)),
+    db
+      .select({ id: brewers.id, name: brewers.name, methodId: brewers.methodId, groundsRetention: brewers.groundsRetention })
+      .from(brewers)
+      .where(eq(brewers.workspaceId, workspaceId)),
     db.select({ id: brewerMethods.id, name: brewerMethods.name }).from(brewerMethods).where(eq(brewerMethods.workspaceId, workspaceId)).orderBy(asc(brewerMethods.position)),
     db
       .select({ id: recipeStyles.id, name: recipeStyles.name, brewsLike: recipeStyles.brewsLike })
@@ -287,7 +301,33 @@ async function loadLookups(workspaceId: string): Promise<StatsResponse["lookups"
     db.select({ id: beanProcesses.id, name: beanProcesses.name }).from(beanProcesses).where(eq(beanProcesses.workspaceId, workspaceId)).orderBy(asc(beanProcesses.position)),
     db.select({ id: drinks.id, name: drinks.name }).from(drinks).where(eq(drinks.workspaceId, workspaceId)),
   ]);
-  return { brewers: brewerRows, methods, styles, recipes: recipeRows, grinders: grinderRows, tools, problems, processes, drinks: drinkRows };
+  const measured = await loadMeasured(workspaceId);
+  const brewerList = brewerRows.map((b) => ({ ...b, measured: measured.get(b.id) ?? [] }));
+  return { brewers: brewerList, methods, styles, recipes: recipeRows, grinders: grinderRows, tools, problems, processes, drinks: drinkRows };
+}
+
+// Each brewer's latest BREWER_RETENTION_SAMPLE brews with a water weight and a
+// measured yield (so no shots, and no steeping batch), newest first.
+async function loadMeasured(workspaceId: string): Promise<Map<string, StatsMeasuredBrew[]>> {
+  const rows = await db
+    .select({
+      brewerId: brewLogs.brewerId,
+      doseGrams: brewLogs.actualDoseGrams,
+      waterGrams: brewLogs.actualWaterGrams,
+      iceGrams: brewLogs.actualIceGrams,
+      yieldGrams: brewLogs.actualYieldGrams,
+    })
+    .from(brewLogs)
+    .where(and(eq(brewLogs.workspaceId, workspaceId), isNotNull(brewLogs.brewerId), isNotNull(brewLogs.actualWaterGrams), isNotNull(brewLogs.actualYieldGrams), eq(brewLogs.steeping, false)))
+    .orderBy(desc(brewLogs.timestamp), desc(brewLogs.id));
+  const out = new Map<string, StatsMeasuredBrew[]>();
+  for (const r of rows) {
+    if (r.brewerId === null || r.waterGrams === null || r.yieldGrams === null) continue;
+    const list = out.get(r.brewerId) ?? [];
+    if (list.length < BREWER_RETENTION_SAMPLE) list.push({ doseGrams: r.doseGrams, waterGrams: r.waterGrams, iceGrams: r.iceGrams, yieldGrams: r.yieldGrams });
+    out.set(r.brewerId, list);
+  }
+  return out;
 }
 
 // Mounted at /api/workspaces/:workspaceId/stats

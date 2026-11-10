@@ -6,7 +6,7 @@ import { errorMessage } from '../api/client';
 import { statsApi, type StatsQuery } from '../api/stats';
 import type { InsightChart, InsightLayout, InsightTab, StatsBean, StatsBrew, StatsData, VolumeUnit } from '../api/types';
 import { formatDay, localDateInput } from '../lib/format';
-import { bucketRange, brewVolumeMl, localDay, pickGranularity, type Granularity, type VolumeSource } from '../lib/stats';
+import { brewerRetentions, bucketRange, brewVolumeMl, localDay, pickGranularity, type Granularity, type VolumeSource } from '../lib/stats';
 import { canAdd, isTileId, layoutOrder, newUuid, pinLayoutId, toggleOverview, withoutPin, type LaidOutChart } from '../lib/insightCharts';
 import { CHART_PERIOD_PREFIX, formatChartPeriod, inRange, parseChartPeriod, RANGES, resolveRange, widestRange, type DayRange, type Period, type RangeKey } from '../lib/statsRange';
 import { GRAMS_PER_FL_OZ } from '../lib/scale';
@@ -323,9 +323,13 @@ export function provideStats(local?: Ref<LocationQuery>): StatsContext {
     };
   }
 
+  const retentions = computed(() => brewerRetentions(data.value?.lookups.brewers ?? []));
   const volumes = computed(() => {
     const out = new Map<string, { ml: number; source: VolumeSource } | null>();
-    for (const b of brews.value) out.set(b.id, brewVolumeMl(b, beanById.value.get(b.beanId)?.roastLevel ?? null, recipeRoastLevel.value));
+    for (const b of brews.value) {
+      const brewer = b.brewerId ? (retentions.value.get(b.brewerId) ?? null) : null;
+      out.set(b.id, brewVolumeMl(b, beanById.value.get(b.beanId)?.roastLevel ?? null, recipeRoastLevel.value, brewer));
+    }
     return out;
   });
 

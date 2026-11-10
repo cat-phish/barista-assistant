@@ -60,6 +60,31 @@ describe("stats (docs/api/stats.md §11)", () => {
     expect(res.body.lookups.problems).toContainEqual({ id: fast, name: "Fast drawdown" });
   });
 
+  it("sends each brewer's typed retention and its latest measured brews, whatever the filters", async () => {
+    const owner = await newUser();
+    const ws = await newWorkspace(owner);
+    const base = `/api/workspaces/${ws.id}`;
+    const [v60, press] = [await brewerId(owner, ws.id, "V60"), await brewerId(owner, ws.id, "Aeropress")];
+    expect((await owner.agent.patch(`${base}/brewers/${v60}`).send({ groundsRetention: 2.2 })).status).toBe(200);
+    const pressRecipe = (await owner.agent.post(`${base}/recipes`).send({ name: "Pressed", brewerId: press, targetDoseGrams: 22, targetWaterGrams: 100 })).body.recipe.id as string;
+    const bean = await newBean(owner, ws.id);
+    await newBrewLog(owner, ws.id, bean, { recipeId: pressRecipe, timestamp: "2026-10-01T08:00:00.000Z", actualDoseGrams: 22, actualWaterGrams: 100, actualYieldGrams: 78 });
+    await newBrewLog(owner, ws.id, bean, { recipeId: pressRecipe, timestamp: "2026-10-02T08:00:00.000Z", actualDoseGrams: 22, actualWaterGrams: 100, actualYieldGrams: 80 });
+    await newBrewLog(owner, ws.id, bean, { recipeId: pressRecipe, timestamp: "2026-10-03T08:00:00.000Z", actualDoseGrams: 22, actualWaterGrams: 100 }); // not measured
+
+    const res = await owner.agent.get(`${base}/stats?from=2026-10-03`);
+    expect(res.status).toBe(200);
+    const list = res.body.lookups.brewers as Array<{ id: string; groundsRetention: number | null; measured: unknown[] }>;
+    expect(list.find((b) => b.id === v60)).toMatchObject({ groundsRetention: 2.2, measured: [] });
+    expect(list.find((b) => b.id === press)).toMatchObject({
+      groundsRetention: null,
+      measured: [
+        { doseGrams: 22, waterGrams: 100, iceGrams: null, yieldGrams: 80 },
+        { doseGrams: 22, waterGrams: 100, iceGrams: null, yieldGrams: 78 },
+      ],
+    });
+  });
+
   it("filters by local date, bean, recipe, brewer and mine; leaves steeping brews out", async () => {
     const owner = await newUser("owner");
     const barista = await newUser("barista");

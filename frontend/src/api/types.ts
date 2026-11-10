@@ -999,11 +999,20 @@ export const MAX_INSIGHT_CHARTS = 50;
 // its charts.
 export type InsightLayout = Partial<Record<InsightTab, { order?: string[]; hidden?: string[]; tilesBelow?: boolean }>>;
 
+// A brewer's measured brew, for the grounds retention it's learned from.
+export interface StatsMeasuredBrew {
+  doseGrams: number;
+  waterGrams: number;
+  iceGrams: number | null;
+  yieldGrams: number;
+}
+
 export interface StatsData {
   brews: StatsBrew[];
   beans: StatsBean[];
   lookups: {
-    brewers: Array<StatsNamed & { methodId: string | null }>;
+    // groundsRetention as typed (docs/api/brewers.md §3); measured: its latest measured brews, newest first
+    brewers: Array<StatsNamed & { methodId: string | null; groundsRetention: number | null; measured: StatsMeasuredBrew[] }>;
     methods: StatsNamed[];
     styles: Array<StatsNamed & { brewsLike: RecipeStyle }>;
     recipes: Array<StatsNamed & { expectedFinishMinSec: number | null; expectedFinishMaxSec: number | null; createdAt: string }>; // the recipe's finish window; createdAt for a recap's new recipes

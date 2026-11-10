@@ -1,9 +1,9 @@
 // The Insights page's sums, worked out from the rows of docs/api/stats.md §11
 // ("How the client counts" there is the rule this file follows).
-import type { RoastLevel, StatsBean, StatsBrew } from '../api/types';
+import type { RoastLevel, StatsBean, StatsBrew, StatsData } from '../api/types';
 import { extractionYield } from './extraction';
 import { effectiveRoastAge } from './roastAge';
-import { estimateYield, ratioWater, ROAST_LEVELS } from './scale';
+import { brewerRetention, estimateYield, ratioWater, ROAST_LEVELS } from './scale';
 import { toMl } from './servings';
 
 const DAY_MS = 86_400_000;
@@ -19,12 +19,27 @@ export const localWeekday = (brew: Pick<StatsBrew, 'timestamp' | 'utcOffsetMinut
 
 export type VolumeSource = 'serving' | 'measured' | 'estimate';
 
+// Each brewer's grounds retention, as the brew page works it out: typed on
+// the brewer, else learned from its latest measured brews. Brewers with
+// neither are left out (the roast level applies).
+export function brewerRetentions(brewers: StatsData['lookups']['brewers']): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const b of brewers) {
+    const measured = b.measured.map((m) => ({ actualDoseGrams: m.doseGrams, actualWaterGrams: m.waterGrams, actualIceGrams: m.iceGrams, actualYieldGrams: m.yieldGrams }));
+    const r = brewerRetention({ typed: b.groundsRetention, measured });
+    if (r) out.set(b.id, r.retention);
+  }
+  return out;
+}
+
 // What was drunk, in ml (1 g ≈ 1 ml): a drink's size, else the measured
-// yield, else the estimate from the roast-level retention; diluted if served so.
+// yield, else the estimate from the brewer's retention (brewerRetentions),
+// else the roast level's; diluted if served so.
 export function brewVolumeMl(
   brew: StatsBrew,
   roastLevel: RoastLevel | null,
   recipeRoastLevel: RoastLevel,
+  brewerRetention: number | null = null,
 ): { ml: number; source: VolumeSource } | null {
   const size = brew.servingSize !== null && brew.servingUnit ? { size: brew.servingSize, unit: brew.servingUnit } : null;
   const drinkSize = brew.drinkId && brew.drinkServingSize !== null && brew.drinkServingUnit ? { size: brew.drinkServingSize, unit: brew.drinkServingUnit } : null;
@@ -35,7 +50,7 @@ export function brewVolumeMl(
   if (brew.yieldGrams !== null) return { ml: dilute(brew.yieldGrams), source: 'measured' };
   const water = ratioWater(brew.waterGrams ?? 0, brew.iceGrams);
   if (!(water > 0)) return null;
-  const retention = ROAST_LEVELS[roastLevel ?? recipeRoastLevel].retention;
+  const retention = brewerRetention ?? ROAST_LEVELS[roastLevel ?? recipeRoastLevel].retention;
   return { ml: dilute(estimateYield(brew.doseGrams, water, retention)), source: 'estimate' };
 }
 

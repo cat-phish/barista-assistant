@@ -4,7 +4,7 @@
 import type { RoastLevel, StatsData, UserPreferences } from '../api/types';
 import { beanLabel } from './beans';
 import { caffeineSummary } from './caffeine';
-import { brewVolumeMl, countBy, localDay } from './stats';
+import { brewerRetentions, brewVolumeMl, countBy, localDay } from './stats';
 import { daysAfter, justEnded, type RecapKind, type RecapPeriod } from './recapPeriods';
 
 export interface RecapBest {
@@ -57,7 +57,8 @@ export function recapFigures(data: StatsData, previous: StatsData | null, period
     .reverse()
     .map((b) => ({ brewId: b.id, rating: b.rating!, day: localDay(b), bean: label(b.beanId), recipe: name(data.lookups.recipes, b.recipeId), brewer: name(data.lookups.brewers, b.brewerId) }));
 
-  const volumes = brews.flatMap((b) => brewVolumeMl(b, bean(b.beanId)?.roastLevel ?? null, recipeRoastLevel) ?? []);
+  const retentions = brewerRetentions(data.lookups.brewers);
+  const volumes = brews.flatMap((b) => brewVolumeMl(b, bean(b.beanId)?.roastLevel ?? null, recipeRoastLevel, b.brewerId ? (retentions.get(b.brewerId) ?? null) : null) ?? []);
   const volume = volumes.length ? { ml: volumes.reduce((n, v) => n + v.ml, 0), estimated: volumes.some((v) => v.source === 'estimate') } : null;
   const caffeine = caffeineSummary(brews, bean, { from: period.start, to: period.end }, today);
 
