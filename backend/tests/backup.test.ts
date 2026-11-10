@@ -85,6 +85,10 @@ async function populated() {
     rating: 3.5, // a half step survives the round trip
     tastingNotes: "Sweet",
   });
+  // A cold brew batch with a serving (docs/api/brew-servings.md §6c).
+  const fridge = (await post("recipes", { name: "Fridge", brewerId: v60, styleId: await styleId(owner, ws.id, "filter", "cold_brew"), targetDoseGrams: 40, targetWaterGrams: 400 })).recipe.id as string;
+  const batch = await newBrewLog(owner, ws.id, bean, { recipeId: fridge, timestamp: "2026-10-02T08:00:00.000Z", actualDoseGrams: 40, actualWaterGrams: 400, actualYieldGrams: 310 });
+  await post(`brew-logs/${batch}/servings`, { concentrateGrams: 120, diluentGrams: 90, dilutedWith: "milk", rating: 4.5, tastingNotes: "Rich", flavors: ["sweet"] });
   await db.insert(schema.llmAnalyses).values({ id: randomUUID(), brewLogId: log, reasoning: "Fine", suggestedGrindDelta: "finer", suggestedTempDelta: 1, request: SENT });
   await db.insert(schema.parameterSuggestions).values({ id: randomUUID(), beanId: bean, recipeId: recipe, brewerId: v60, grinderId: c40, source: "beanRecipe", maxBrews: 5, status: "done", reasoning: "Stay", batchDoseGrams: 15, batchWaterGrams: 250, grindSetting: 20, tempC: 94, ratio: 16.5, confidence: "low", request: SENT });
   await owner.agent.patch(`${base}/grinders/${c40}`).send({ archived: true });
@@ -117,6 +121,7 @@ async function snapshot(user: TestUser, workspaceId: string) {
     out[list] = Object.fromEntries(Object.entries(res.body as Record<string, unknown>).map(([k, v]) => [k, sorted(strip(v))]));
   }
   const logs = (await user.agent.get(`/api/workspaces/${workspaceId}/brew-logs`)).body.brewLogs as Array<{ id: string }>;
+  out.servings = await Promise.all(logs.map(async (l) => sorted(strip((await user.agent.get(`/api/workspaces/${workspaceId}/brew-logs/${l.id}/servings`)).body.servings))));
   out.analyses = await Promise.all(logs.map(async (l) => strip((await user.agent.get(`/api/workspaces/${workspaceId}/brew-logs/${l.id}`)).body.brewLog.latestAnalysis)));
   const ws = await workspaceOf(user, workspaceId);
   out.workspace = { settings: ws.settings, menuTitle: ws.menuTitle, menuCurrency: ws.menuCurrency };
@@ -150,7 +155,7 @@ describe("workspace backup and restore (docs/api/backup.md §2b)", () => {
     expect(needle.brewerIds).toEqual([await brewerId(owner, copyId, "V60")]);
     const paper = (await owner.agent.get(`/api/workspaces/${copyId}/brew-problems`)).body.problems.find((p: { name: string }) => p.name === "Paper taste");
     expect(paper.brewerIds).toEqual([await brewerId(owner, copyId, "V60")]);
-    const copyRecipe = (await owner.agent.get(`/api/workspaces/${copyId}/recipes`)).body.recipes[0];
+    const copyRecipe = (await owner.agent.get(`/api/workspaces/${copyId}/recipes`)).body.recipes.find((r: { name: string }) => r.name !== "Fridge");
     expect(copyRecipe.prepToolIds).toEqual([needle.id]);
     const copy = await workspaceOf(owner, copyId);
     expect(copy).toMatchObject({ name: "Copy", slug: `copy-${ws.slug}`, isPublicMenuEnabled: false });
@@ -320,7 +325,8 @@ describe("workspace backup and restore (docs/api/backup.md §2b)", () => {
     const restore = (file: unknown) => owner.agent.post("/api/workspaces/restore").send({ name: "Copy", slug: `copy-${randomUUID().slice(0, 8)}`, backup: file });
     const same = await restore(backup);
     expect(same.status, JSON.stringify(same.body)).toBe(201);
-    expect((await owner.agent.get(`/api/workspaces/${same.body.workspaceId}/backup`)).body.tables.brew_logs.map((r: { recipeCopy: unknown }) => r.recipeCopy)).toEqual(copies);
+    const restoredCopies = (await owner.agent.get(`/api/workspaces/${same.body.workspaceId}/backup`)).body.tables.brew_logs.map((r: { recipeCopy: unknown }) => r.recipeCopy);
+    expect(sorted(restoredCopies)).toEqual(sorted(copies));
 
     const old = await restore({ ...backup, tables: { ...backup.tables, brew_logs: backup.tables.brew_logs.map(({ recipeCopy: _gone, ...r }: Record<string, unknown>) => r) } });
     expect(old.status, JSON.stringify(old.body)).toBe(201);

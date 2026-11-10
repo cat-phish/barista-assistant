@@ -66,7 +66,8 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   `bean_freezes`, `bean_photos`, `roasts`, `recipes`, `recipe_steps`, `recipe_grind_settings`, `recipe_prep_tools`,
   `drinks`, `drink_ingredients`, `menu_sections`, `menu_items`,
   `brew_logs`, `brew_log_marks`, `brew_log_tools`, `brew_log_problems`,
-  `brew_log_flavors`, `llm_analyses`, `parameter_suggestions` (`BACKUP_TABLES`). A table left out of a file counts as
+  `brew_log_flavors`, `brew_servings`, `brew_serving_flavors` (`brew-servings.md`
+  §6c; who logged one is its `brewedBy`), `llm_analyses`, `parameter_suggestions` (`BACKUP_TABLES`). A table left out of a file counts as
   empty.
 - **Not in a backup:** people, members, notification channels, Web Push
   devices and preferences belong to the server, not the workspace. A brew says who made
@@ -216,7 +217,7 @@ too. Where the app offers them: "Where it is" above. Code:
   | `brew_problems` | brew problems, the brewers each is offered for | those brewers (→ as brewers) |
   | `grinders`, `water_profiles`, `vessels` | themselves | – |
   | `notes` | themselves | – |
-  | `brew_logs` | brews, their marks, prep and problem ticks, AI analyses | bean (→ as beans), recipe (→ as recipes), grinder, water profile, vessel, drink (→ as drinks), brewer, prep items, brew problems |
+  | `brew_logs` | brews, their marks, prep and problem ticks, servings, AI analyses | bean (→ as beans), recipe (→ as recipes), grinder, water profile, vessel, drink (→ as drinks), brewer, prep items, brew problems |
 - **Matching** (`MATCH_KEYS`): a row is "already here" when the workspace
   has one with the same key, and the import uses that one instead:
   - by name (case-insensitive) for brewers, grinders, water profiles, vessels, prep

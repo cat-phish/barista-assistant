@@ -36,6 +36,7 @@ means drinks, wherever you see it (code comments use
 | §5e | [recipe-styles.md](recipe-styles.md) | Recipe Styles |
 | §6 | [brew-logs.md](brew-logs.md) | Brew Logs |
 | §6b | [brew-problems.md](brew-problems.md) | Brew Problems (what went wrong, a checklist on §6) |
+| §6c | [brew-servings.md](brew-servings.md) | Brew Servings (glasses taken from a cold brew batch, and Batch finished) |
 | §7 | [public-menu.md](public-menu.md) | Public Menu Endpoint |
 | §7b | [menu.md](menu.md) | Menu Builder (sections and items for §7) |
 | §8 | [analysis.md](analysis.md) | LLM Brew Analysis / Parameter Suggestions (§8b), what was sent to the AI (§8c), previews (§8d), a bean's review draft (§8e) |
