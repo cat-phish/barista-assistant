@@ -64,6 +64,9 @@ describe("brew log list filters", () => {
     expect(await list(`styleId=${coldBrew}`)).toEqual([ids.coldDone, ids.coldSteeping].sort());
     const log = (await owner.agent.get(`${base}/brew-logs/${ids.coldDone}`)).body.brewLog;
     expect(log.style).toMatchObject({ id: coldBrew, brewsLike: "cold_brew" });
+    // Re-sending the same recipe with an edit keeps the style as brewed.
+    expect((await owner.agent.patch(`${base}/brew-logs/${ids.coldDone}`).send({ recipeId: cold, actualYieldGrams: 300 })).status).toBe(200);
+    expect((await owner.agent.get(`${base}/brew-logs/${ids.coldDone}`)).body.brewLog.style).toMatchObject({ id: coldBrew });
     expect((await owner.agent.delete(`${base}/recipes/${cold}`)).status).toBe(204);
     expect(await list(`styleId=${coldBrew}`)).toEqual([ids.coldDone, ids.coldSteeping].sort());
     // Moved to another recipe, a brew takes that recipe's style.

@@ -91,7 +91,8 @@ archived ones still appear. `brewerId` / `brewer` (`{ "id", "name",
 API from the recipe, kept if the recipe later moves or is deleted, and `null`
 for a brew without a recipe. `style` (`{ "id", "name", "brewsLike" }`, §5e,
 or `null`) is the style it was **brewed as**, the same way: set from the
-recipe, follows a change of this brew's `recipeId`, and kept when the recipe
+recipe, follows a change of this brew's `recipeId` (re-sending the same
+recipe keeps it), and kept when the recipe
 is later restyled or deleted (`recipe.style` is the recipe's style now).
 It's `null` when the recipe had none, or a custom style was deleted. It
 decides whether the brew is a cold brew batch (§6c), and the list's

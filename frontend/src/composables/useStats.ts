@@ -132,7 +132,8 @@ export function provideStats(local?: Ref<LocationQuery>): StatsContext {
 
   // A plain /insights: all of my brews, grouped automatically, in my unit.
   const defaults = computed<StatsFilters>(() => ({ range: 'all', from: '', to: '', bean: '', recipe: '', brewer: '', mine: true, unit: prefs.value.volumeUnit, by: 'auto' }));
-  const filtered = computed(() => (Object.keys(defaults.value) as Array<keyof StatsFilters>).some((k) => filters.value[k] !== defaults.value[k]));
+  // Only mine isn't one Reset puts back (CLAUDE.md rule 13).
+  const filtered = computed(() => (Object.keys(defaults.value) as Array<keyof StatsFilters>).some((k) => k !== 'mine' && filters.value[k] !== defaults.value[k]));
 
   const range = computed(() => resolveRange(filters.value, localDateInput()));
 
@@ -344,7 +345,7 @@ export function provideStats(local?: Ref<LocationQuery>): StatsContext {
     filters,
     setFilters,
     filtered,
-    resetFilters: () => setFilters(defaults.value),
+    resetFilters: () => setFilters({ ...defaults.value, mine: filters.value.mine }),
     loading,
     error,
     data,

@@ -883,7 +883,8 @@ brewLogsRouter.patch(
       const brewerUpdate = {
         ...("recipeId" in body ? await (async () => {
           const r = await recipeBrewer(tx, fields.recipeId);
-          return { brewerId: r?.brewerId ?? null, styleId: r?.styleId ?? null };
+          // The style as brewed is kept unless the recipe really changes (§6).
+          return { brewerId: r?.brewerId ?? null, ...(newRecipe ? { styleId: r?.styleId ?? null } : {}) };
         })() : {}),
         ...(newRecipe ? { recipeCopy: await recipeCopy(tx, fields.recipeId) } : {}),
       };

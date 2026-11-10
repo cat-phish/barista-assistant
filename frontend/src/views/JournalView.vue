@@ -56,7 +56,8 @@ const filtered = computed(() => hasFilters(filters.value));
 function setFilter<K extends keyof JournalFilters>(key: K, value: JournalFilters[K]): void {
   void router.replace({ query: toJournalQuery({ ...filters.value, [key]: value }) });
 }
-const clearFilters = () => void router.replace({ query: {} });
+// Only mine isn't a folded filter, so clearing leaves it (CLAUDE.md rule 13).
+const clearFilters = () => void router.replace({ query: filters.value.mine ? {} : { mine: '0' } });
 // A v-model for each filter.
 const model = <K extends keyof JournalFilters>(key: K) => computed({ get: () => filters.value[key], set: (v: JournalFilters[K]) => setFilter(key, v) });
 const beanFilter = model('bean');
@@ -131,6 +132,10 @@ const cardProps = (id: string) =>
       <RouterLink v-if="workspaces.canEdit" class="btn btn-primary" :to="{ name: 'brew' }">New brew</RouterLink>
     </div>
 
+    <label class="checkbox mine">
+      <input v-model="mineFilter" type="checkbox" />
+      Only mine
+    </label>
     <FilterBar :summary="summary" describe="Showing">
       <div class="filters">
         <div v-if="styleOptions.length > 1" class="field">
@@ -184,10 +189,6 @@ const cardProps = (id: string) =>
             <option v-for="(label, key) in STATUSES" :key="key" :value="key">{{ label }}</option>
           </select>
         </div>
-        <label class="checkbox mine">
-          <input v-model="mineFilter" type="checkbox" />
-          Only my brews
-        </label>
         <button v-if="filtered" class="btn-link clear" type="button" @click="clearFilters">Clear filters</button>
       </div>
     </FilterBar>
@@ -195,8 +196,9 @@ const cardProps = (id: string) =>
     <p v-if="loading" class="muted" aria-live="polite">Loading brews…</p>
     <p v-else-if="error" class="form-error" role="alert">{{ error }}</p>
     <div v-else-if="logs.length === 0" class="card empty">
-      <p>{{ filtered ? 'No brews match these filters.' : 'No brews logged yet.' }}</p>
+      <p>{{ filtered ? 'No brews match these filters.' : filters.mine ? 'No brews of yours yet.' : 'No brews logged yet.' }}</p>
       <button v-if="filtered" class="btn-link" type="button" @click="clearFilters">Clear filters</button>
+      <button v-if="filters.mine" class="btn-link" type="button" @click="mineFilter = false">Show everyone's</button>
     </div>
 
     <template v-else>
@@ -252,6 +254,9 @@ const cardProps = (id: string) =>
 .filters input[type='date'] {
   width: 100%;
   min-width: 0;
+}
+.mine {
+  align-self: flex-start;
 }
 .mine,
 .clear {

@@ -2892,6 +2892,8 @@ way to find, say, every cold brew. Contract: `api/brew-logs.md` §6 (GET list).
   custom from–to), status (Steeping, Not rated, Not analyzed) and Only my
   brews, in a folded Filters bar (`FilterBar.vue`, as the chat attach
   picker) whose line says what's applied, with Clear filters.
+- **Only mine** sits beside the bar, not in it, and starts on (`mine=0` in
+  the URL when off); Clear filters leaves it. Made a rule (CLAUDE.md 13).
 - **API:** the list takes `styleId` (the recipe's style) and `status`;
   not rated and not analyzed count finished brews only.
 - **In the URL** (`lib/journalFilters.ts`), defaults left out, so Back and

@@ -105,3 +105,10 @@
     `TABLE`) gets a sort column in the same change, in its header and the
     Sort by dropdown. `useTableColumns` (`frontend/src/lib/tableColumns.ts`)
     won't compile until it's there.
+13. **"Only mine" stays out of the filters and starts on:** a list or page
+    that can show only the signed-in person's own records has an **Only
+    mine** checkbox, on by default, outside any folded Filters panel
+    (`FilterBar.vue`). A Clear/Reset filters button leaves it as it is. In
+    the URL it's written only when off (`mine=0`), as Insights
+    (`useStats.ts`), the Journal (`lib/journalFilters.ts`) and the chat
+    attach picker do.
