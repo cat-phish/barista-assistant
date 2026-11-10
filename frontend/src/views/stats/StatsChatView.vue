@@ -5,11 +5,13 @@
 // the bottom. On a phone the chat list is a drawer behind "Chats".
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
-import { chatSettingsApi, chatsApi, type Chat, type ChatAttachment, type ChatMessage, type ChatPhoto, type ChatProposal, type ChatSettings } from '../../api/chats';
+import { chatSettingsApi, chatsApi, isPinLimit, type Chat, type ChatAttachment, type ChatMessage, type ChatPhoto, type ChatProposal, type ChatSettings, type PinLimit, type PinnedChatRef } from '../../api/chats';
 import { ApiError, errorMessage } from '../../api/client';
 import ChatAttachChips from '../../components/ChatAttachChips.vue';
 import ChatAttachDialog from '../../components/ChatAttachDialog.vue';
+import ChatExportMenu, { type ChatExportFormat } from '../../components/ChatExportMenu.vue';
 import ChatList from '../../components/ChatList.vue';
+import ChatPinLimitDialog from '../../components/ChatPinLimitDialog.vue';
 import ChatMarkdown from '../../components/ChatMarkdown.vue';
 import ChatProposalCard from '../../components/ChatProposalCard.vue';
 import { usePreferences } from '../../composables/usePreferences';
@@ -380,26 +382,44 @@ async function remove(chat: Chat) {
   }
 }
 
-// Pinned chats stay at the top, and are kept from the age limit
-// (docs/api/chat.md §12, "Pinned chats").
+// Pinned chats stay at the top, and are kept from your own age limit
+// (docs/api/chat.md §12, "Pinned chats"). At the server's pin limit, a dialog
+// offers to unpin one in its place.
+const pinLimit = ref<{ chat: Chat; limit: PinLimit } | null>(null);
+async function pinned(saved: Chat) {
+  if (chatId.value === saved.id) currentChat.value = saved;
+  await refreshList();
+  loadChatSettings();
+}
 async function pin(chat: Chat) {
   if (!workspaceId.value) return;
   try {
-    const { chat: saved } = await chatsApi.pin(workspaceId.value, chat.id, !chat.pinnedAt);
-    if (chatId.value === saved.id) currentChat.value = saved;
-    await refreshList();
+    await pinned((await chatsApi.pin(workspaceId.value, chat.id, !chat.pinnedAt)).chat);
   } catch (err) {
-    say(err);
+    if (err instanceof ApiError && err.status === 409 && isPinLimit(err.body)) pinLimit.value = { chat, limit: err.body };
+    else say(err);
   }
+}
+async function swapPin(unpin: PinnedChatRef) {
+  const ws = workspaceId.value;
+  const target = pinLimit.value?.chat;
+  if (!ws || !target) return;
+  await pinned((await chatsApi.pin(ws, target.id, true, unpin.id)).chat);
 }
 
 // Export this chat (docs/api/chat.md §12, "Exporting a chat"): Markdown to
 // read or share, a PDF through the browser's own print dialog (Save as PDF),
 // or the .zip that Settings → AI chats → Import brings back.
-const exportMenu = ref<HTMLDetailsElement | null>(null);
 const printing = ref(false);
-async function exportAs(format: 'md' | 'pdf' | 'zip') {
-  if (exportMenu.value) exportMenu.value.open = false;
+// A chat that isn't open (the pin-limit dialog's), maybe in another workspace.
+async function exportOther(target: PinnedChatRef, format: ChatExportFormat) {
+  if (format === 'zip') saveBlob(chatFileName(target.title, 'zip'), await chatsApi.exportChatZip(target.workspaceId, target.id));
+  else if (format === 'md') {
+    const pair = await chatsApi.get(target.workspaceId, target.id);
+    saveBlob(chatFileName(target.title, 'md'), new Blob([chatToMarkdown(pair.chat, pair.messages)], { type: 'text/markdown' }));
+  }
+}
+async function exportAs(format: ChatExportFormat) {
   const ws = workspaceId.value;
   const chat = currentChat.value;
   if (!ws || !chat) return;
@@ -510,7 +530,7 @@ onBeforeUnmount(stopSummaryPoll);
 <template>
   <div ref="shell" class="chat" :style="{ height }">
     <aside class="card side" aria-label="Your chats">
-      <ChatList :chats="chats" :current="chatId" @open="open" @remove="remove" @pin="pin" @new="newChat" />
+      <ChatList :chats="chats" :current="chatId" @open="open" @remove="remove" @pin="pin" @new="newChat" :max-pinned="chatSettings?.server.maxPinned ?? null" :pinned-count="chatSettings?.pinnedCount ?? null" />
     </aside>
 
     <dialog ref="drawer" class="drawer" aria-label="Your chats" @cancel.prevent="listOpen = false" @click="onDrawerClick">
@@ -519,7 +539,7 @@ onBeforeUnmount(stopSummaryPoll);
           <h2>Chats</h2>
           <button type="button" class="btn-link close" aria-label="Close" @click="listOpen = false">✕</button>
         </div>
-        <ChatList :chats="chats" :current="chatId" @open="open" @remove="remove" @pin="pin" @new="newChat" />
+        <ChatList :chats="chats" :current="chatId" @open="open" @remove="remove" @pin="pin" @new="newChat" :max-pinned="chatSettings?.server.maxPinned ?? null" :pinned-count="chatSettings?.pinnedCount ?? null" />
       </div>
     </dialog>
 
@@ -528,14 +548,7 @@ onBeforeUnmount(stopSummaryPoll);
       <header class="bar">
         <button type="button" class="btn-link phone-only" @click="listOpen = true">☰ Chats</button>
         <h2 class="title">{{ title }}</h2>
-        <details v-if="currentChat" ref="exportMenu" class="export">
-          <summary class="btn-link">Export <span aria-hidden="true">▾</span></summary>
-          <div class="export-menu card">
-            <button type="button" class="btn-link" @click="exportAs('md')">Markdown (.md)</button>
-            <button type="button" class="btn-link" @click="exportAs('pdf')">PDF (print)</button>
-            <button type="button" class="btn-link" @click="exportAs('zip')">Backup (.zip)</button>
-          </div>
-        </details>
+        <ChatExportMenu v-if="currentChat" @pick="exportAs" />
         <button type="button" class="btn-link phone-only" :disabled="chatId === null" @click="newChat">+ New</button>
       </header>
       <p v-if="printing && currentChat" class="print-only muted small">
@@ -660,6 +673,16 @@ onBeforeUnmount(stopSummaryPoll);
       <p v-for="note in limitNotes" :key="note" class="limits-note small" role="status">
         {{ note }} <RouterLink :to="{ name: 'settings-chats' }">AI chat settings</RouterLink>
       </p>
+      <ChatPinLimitDialog
+        :open="pinLimit !== null"
+        :limit="pinLimit?.limit ?? null"
+        :title="pinLimit?.chat.title ?? ''"
+        :workspace-id="workspaceId"
+        :swap="swapPin"
+        :export-chat="exportOther"
+        @cancel="pinLimit = null"
+        @done="pinLimit = null"
+      />
       <ChatAttachDialog :open="picking" :selected="attachments" :max="attachMax" :period-cap="periodCap" :period-brews="periodBrews" @close="picking = false" @done="attachPicked" />
     </section>
     </Teleport>
@@ -1083,35 +1106,6 @@ onBeforeUnmount(stopSummaryPoll);
   margin: 0 var(--space-3) var(--space-2);
   color: var(--warning);
 }
-.export {
-  position: relative;
-  flex: none;
-}
-.export summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25em;
-  min-height: var(--tap);
-  list-style: none;
-  cursor: pointer;
-}
-.export summary::-webkit-details-marker {
-  display: none;
-}
-.export-menu {
-  position: absolute;
-  right: 0;
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-  min-width: 11rem;
-  padding: var(--space-1);
-}
-.export-menu button {
-  min-height: var(--tap);
-  padding: 0 var(--space-2);
-  text-align: left;
-}
 .print-only {
   display: none;
 }
@@ -1139,7 +1133,6 @@ onBeforeUnmount(stopSummaryPoll);
     margin: 0;
   }
   .bar button,
-  .export,
   .composer,
   .long-chat,
   .new-below,

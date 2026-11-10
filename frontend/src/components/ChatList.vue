@@ -6,7 +6,14 @@ import { computed } from 'vue';
 import type { Chat } from '../api/chats';
 import { formatAdded } from '../lib/format';
 
-const props = defineProps<{ chats: Chat[]; current: string | null }>();
+// maxPinned / pinnedCount: the server's pin limit and your pins in every
+// workspace; near or over it, the Pinned heading says so.
+const props = defineProps<{ chats: Chat[]; current: string | null; maxPinned?: number | null; pinnedCount?: number | null }>();
+const PIN_NEAR = 3;
+const pinnedName = computed(() => {
+  const { maxPinned, pinnedCount } = props;
+  return maxPinned != null && pinnedCount != null && pinnedCount >= maxPinned - PIN_NEAR ? `Pinned · ${pinnedCount} of ${maxPinned}` : 'Pinned';
+});
 const emit = defineEmits<{ open: [id: string]; remove: [chat: Chat]; pin: [chat: Chat]; new: [] }>();
 
 const groups = computed(() => {
@@ -14,7 +21,7 @@ const groups = computed(() => {
   const rest = props.chats.filter((c) => !c.pinnedAt);
   return pinned.length
     ? [
-        { name: 'Pinned', chats: pinned },
+        { name: pinnedName.value, chats: pinned },
         { name: 'Chats', chats: rest },
       ].filter((g) => g.chats.length)
     : [{ name: null, chats: rest }];

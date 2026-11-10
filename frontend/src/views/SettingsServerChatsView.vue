@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Settings → Server → AI chats (docs/api/chat.md §12): the most anyone on this
 // server can keep, the daily message limit, and purging everyone's chats.
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import type { ChatLimits } from '../api/chats';
 import { errorMessage } from '../api/client';
 import { serverApi, type ServerChat } from '../api/server';
@@ -14,6 +14,11 @@ const data = ref<ServerChat | null>(null);
 const draft = ref<ChatLimits | null>(null);
 const capped = ref(true);
 const daily = ref(200);
+// Pinned chats per person (docs/api/chat.md §12, "Pinned chats"). Lowering
+// it unpins nothing.
+const pinCapped = ref(true);
+const maxPinned = ref(20);
+const pinLowered = computed(() => pinCapped.value && data.value !== null && (data.value.limits.maxPinned === null || maxPinned.value < data.value.limits.maxPinned));
 const error = ref('');
 const saving = ref(false);
 const saved = ref(false);
@@ -23,6 +28,8 @@ function show(view: ServerChat): void {
   draft.value = view.limits;
   capped.value = view.limits.dailyMessages !== null;
   if (view.limits.dailyMessages !== null) daily.value = view.limits.dailyMessages;
+  pinCapped.value = view.limits.maxPinned !== null;
+  if (view.limits.maxPinned !== null) maxPinned.value = view.limits.maxPinned;
 }
 async function load(): Promise<void> {
   try {
@@ -39,7 +46,7 @@ async function save(): Promise<void> {
   saved.value = false;
   error.value = '';
   try {
-    show(await serverApi.saveChat({ maxBytes: draft.value.maxBytes, maxDays: draft.value.maxDays, dailyMessages: capped.value ? daily.value : null }));
+    show(await serverApi.saveChat({ maxBytes: draft.value.maxBytes, maxDays: draft.value.maxDays, dailyMessages: capped.value ? daily.value : null, maxPinned: pinCapped.value ? maxPinned.value : null }));
     saved.value = true;
   } catch (err) {
     error.value = errorMessage(err);
@@ -65,7 +72,17 @@ async function save(): Promise<void> {
             <input id="server-daily" v-model.number="daily" type="number" min="1" max="100000" step="1" inputmode="numeric" />
           </div>
         </fieldset>
-        <div><button class="btn btn-primary" type="button" :disabled="saving || !draft || (capped && !(daily >= 1))" @click="save">Save</button></div>
+        <p class="muted small">Pinned chats stay at the top of a person's list and are kept from their own age limit, but not from this one: an age limit set here deletes pinned chats too. For size, pinned chats go only after every unpinned one.</p>
+        <fieldset class="daily">
+          <legend>Pinned chats</legend>
+          <label class="checkbox"><input v-model="pinCapped" type="checkbox" @change="saved = false" /> Limit pinned chats per person</label>
+          <div v-if="pinCapped" class="row">
+            <label for="server-pinned">Pinned chats, across all their workspaces</label>
+            <input id="server-pinned" v-model.number="maxPinned" type="number" min="1" max="1000" step="1" inputmode="numeric" @input="saved = false" />
+          </div>
+          <p v-if="pinLowered" class="muted small">People with more pinned chats keep them, but can't pin more until they're under it.</p>
+        </fieldset>
+        <div><button class="btn btn-primary" type="button" :disabled="saving || !draft || (capped && !(daily >= 1)) || (pinCapped && !(maxPinned >= 1 && maxPinned <= 1000))" @click="save">Save</button></div>
         <p v-if="saved" class="muted" aria-live="polite">Saved.</p>
       </section>
       <ChatPurgeCard title="Purge all chats" text="Deletes everyone's chats and their photos, on the whole server." warning="Every person's chats and photos are deleted for good, in every workspace on this server. This can't be undone." :purge="serverApi.purgeChats" @purged="load" />

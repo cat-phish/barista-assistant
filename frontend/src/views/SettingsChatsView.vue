@@ -41,8 +41,8 @@ async function importChats(e: Event): Promise<void> {
   moved.value = '';
   moveError.value = '';
   try {
-    const { imported, skipped } = await chatsApi.importZip(ws, file);
-    moved.value = `${imported} imported${skipped ? `, ${skipped} you already had` : ''}.`;
+    const { imported, skipped, unpinned } = await chatsApi.importZip(ws, file);
+    moved.value = `${imported} imported${skipped ? `, ${skipped} you already had` : ''}.${unpinned ? ` ${unpinned} came in unpinned: you're at the pin limit.` : ''}`;
     await load();
   } catch (err) {
     moveError.value = errorMessage(err);
@@ -70,9 +70,12 @@ onMounted(load);
 
 const serverLine = computed(() => {
   if (!data.value) return '';
-  const { maxBytes, maxDays } = data.value.server;
+  const { maxBytes, maxDays, maxPinned } = data.value.server;
   const size = maxBytes === null ? 'no size limit' : `at most ${formatBytes(maxBytes)}`;
-  return `This server allows ${size}, ${maxDays === null ? 'kept for any time' : `kept for up to ${maxDays} days`}.`;
+  const pins = maxPinned === null ? '' : `, and up to ${maxPinned} pinned chats`;
+  // Pinned chats skip your own age limit, not the server's (docs/api/chat.md §12, "Pinned chats").
+  const pinnedAge = maxDays === null ? '' : " Pinned chats are kept from your own age limit, not the server's.";
+  return `This server allows ${size}, ${maxDays === null ? 'kept for any time' : `kept for up to ${maxDays} days`}${pins}.${pinnedAge}`;
 });
 
 // Your own cap on a live period's brews (docs/api/chat.md §12, "Periods"):

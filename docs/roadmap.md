@@ -2859,12 +2859,21 @@ Branch `chat-pins`. Spec: `docs/api/chat.md` §12 ("Pinned chats",
 
 - **Pins:** `PUT /chats/:chatId/pin` (migration 0116, `pinned_at`). Pinned
   chats sit in a Pinned group at the top of the chat list, a 📌 on each row
-  to toggle. A pinned chat never expires for age and is deleted for size
-  only after every unpinned one.
+  to toggle. A pinned chat is kept from the person's own age limit (not
+  the server's) and is deleted for size only after every unpinned one.
 - **Export one chat:** Export ▾ in the chat's header: Markdown built in the
   browser, PDF through the browser's print dialog (no PDF library, so
   nothing new to license under the AGPL), and the importable zip from
   `GET /chats/:chatId/export`, which keeps the pin.
 - **Warning:** small yellow text under the composer at 80% of the size
-  limit, and a week before the age limit would delete the open chat, with
+  limit, and a week before an age limit would delete the open chat, with
   a link to Settings → AI chats.
+- **The server's age limit still applies** (raised in review: pinning
+  skipped every age limit, so anyone could keep a chat past an admin's):
+  a pin keeps a chat only from the person's own age limit, and the admin
+  page says so.
+- **Pin limit:** `maxPinned` (server, per person across workspaces,
+  default 20). Pinning past it opens a dialog: unpin the longest pinned
+  chat or one you pick (a swap, `unpin` on the pin route), with Export on
+  each. Lowering it unpins nothing. An import over it brings the extra
+  chats in unpinned.

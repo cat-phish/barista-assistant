@@ -131,6 +131,7 @@ export interface ChatLimits {
 }
 export interface ServerChatLimits extends ChatLimits {
   dailyMessages: number | null;
+  maxPinned: number | null; // pinned chats per person, all workspaces
 }
 // A person's own also caps a period's brews (null: the workspace's).
 export interface OwnChatLimits extends ChatLimits {
@@ -141,7 +142,27 @@ export interface ChatSettings {
   server: ServerChatLimits;
   effective: ChatLimits;
   usedBytes: number;
+  pinnedCount: number; // in every workspace
 }
+
+// A pin refused at the limit (409, code "pin_limit"; docs/api/chat.md §12,
+// "Pinned chats"): your pinned chats, longest pinned first.
+export interface PinnedChatRef {
+  id: string;
+  title: string;
+  workspaceId: string;
+  workspaceName: string;
+  pinnedAt: string;
+}
+export interface PinLimit {
+  error: string;
+  code: 'pin_limit';
+  maxPinned: number;
+  pinnedCount: number;
+  pinned: PinnedChatRef[];
+}
+export const isPinLimit = (body: unknown): body is PinLimit =>
+  typeof body === 'object' && body !== null && (body as { code?: unknown }).code === 'pin_limit' && Array.isArray((body as { pinned?: unknown }).pinned);
 
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/chats`;
 
@@ -179,11 +200,12 @@ export const chatsApi = {
   exportChatZip(workspaceId: string, chatId: string) {
     return api.file(`${base(workspaceId)}/${chatId}/export`);
   },
-  pin(workspaceId: string, chatId: string, pinned: boolean) {
-    return api.put<{ chat: Chat }>(`${base(workspaceId)}/${chatId}/pin`, { pinned });
+  // unpin: a pinned chat (any workspace) to unpin in its place at the limit.
+  pin(workspaceId: string, chatId: string, pinned: boolean, unpin?: string) {
+    return api.put<{ chat: Chat }>(`${base(workspaceId)}/${chatId}/pin`, unpin ? { pinned, unpin } : { pinned });
   },
   importZip(workspaceId: string, zip: Blob) {
-    return api.post<{ imported: number; skipped: number }>(`${base(workspaceId)}/import`, new Blob([zip], { type: 'application/zip' }));
+    return api.post<{ imported: number; skipped: number; unpinned: number }>(`${base(workspaceId)}/import`, new Blob([zip], { type: 'application/zip' }));
   },
   addPhoto(workspaceId: string, image: Blob) {
     return api.post<{ photo: ChatPhoto }>(`${base(workspaceId)}/photos`, image);
