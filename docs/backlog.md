@@ -466,6 +466,10 @@ What the analysis worker sends to the LLM and what comes back.
   each, 80 of 1,149 g) were about 7% of the caffeine; the average dose per
   brew went 23.5 g → 22.6 g without them. Built anyway, because servings
   are worth logging for their own sake (dilution vs. rating).
+- **Done:** Finish on a long batch asks for the concentrate made, and a
+  finished batch without one shows the estimate with "≈" and an Add yield
+  nudge; `lib/batch.ts` has the yield, share and stock math (branch
+  `batch-yield`).
 - **Done:** unmeasured brews' volume in Insights and recaps is estimated
   with the brewer's grounds retention (typed, else learned from its latest
   measured brews), else the roast level's (branch `stats-brewer-retention`).
@@ -478,8 +482,14 @@ What the analysis worker sends to the LLM and what comes back.
     ratio is worked out from them), diluted with, rating, tasting notes and
     flavor-wheel picks.
   - **Stock:** the batch's yield (measured, else estimated) minus its
-    servings' concentrate. **Batch finished** marks it empty (poured out or
-    done); it then leaves the in-stock list.
+    servings' concentrate, never below 0. **Batch finished** marks it empty
+    (poured out or done); it then leaves the in-stock list.
+  - **The yield matters:** a serving's share is its concentrate ÷ the larger
+    of the yield and everything poured (`servingShare`, `lib/batch.ts`), so
+    shares never add up past the whole batch. An unweighed yield is
+    estimated (brewer's retention, else roast) and shown with "≈". Finish
+    asks for the **concentrate made** (skippable), and so does the first
+    serving on a batch without one.
   - **Counting:** once a batch has a serving, only its servings count, each
     with its share of the batch's dose (caffeine) and its diluted volume, on
     the day and under the person who logged it. The unlogged rest never

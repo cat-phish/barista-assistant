@@ -28,7 +28,11 @@ import { grinderRetention } from '../lib/grinderRetention';
 import { batchSuffix } from '../lib/beans';
 import { formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen, MAX_BREW_SEC } from '../lib/format';
 import { formatFinishWindow } from '../lib/steps';
-import { dilutionText, isColdStyle, STEEP_TEMPS, steepWindowText } from '../lib/coldBrew';
+import { dilutionText, isColdStyle, isLongStyle, STEEP_TEMPS, steepWindowText } from '../lib/coldBrew';
+import { batchYield } from '../lib/batch';
+import { brewersApi } from '../api/brewers';
+import { loadBrewerMeasured } from '../lib/brewerRetention';
+import type { BrewerRetentionInput } from '../lib/scale';
 import { formatSize } from '../lib/servings';
 import { formatTemp } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
@@ -45,7 +49,7 @@ const props = defineProps<{ id: string }>();
 const workspaces = useWorkspaceStore();
 const aiAvailable = useAiAvailable();
 const auth = useAuthStore();
-const { temperatureUnit } = usePreferences();
+const { temperatureUnit, recipeRoastLevel } = usePreferences();
 const router = useRouter();
 
 const log = ref<BrewLog | null>(null);
@@ -90,6 +94,33 @@ function yieldText(l: BrewLog): string {
 }
 
 const canModify = computed(() => !!log.value && canModifyBrewLog(log.value, workspaces.current?.role, auth.user?.id));
+
+// A long cold brew (cold brew, Kyoto drip) is a batch: servings are taken
+// from it, so its yield (the concentrate made) matters (docs/backlog.md item
+// 14). Unweighed, it's estimated from the brewer's retention, else the roast's.
+const isBatch = computed(() => isLongStyle(log.value?.recipe?.style?.brewsLike));
+const batchBrewer = ref<BrewerRetentionInput | null>(null);
+watch(
+  () => (isBatch.value ? (log.value?.brewer?.id ?? null) : null),
+  async (id) => {
+    const ws = workspaces.current?.id;
+    if (!ws || !id) {
+      batchBrewer.value = null;
+      return;
+    }
+    const [brewers, measured] = await Promise.all([brewersApi.list(ws).then((r) => r.brewers).catch(() => []), loadBrewerMeasured(ws, id)]);
+    batchBrewer.value = { typed: brewers.find((b) => b.id === id)?.groundsRetention ?? null, measured };
+  },
+  { immediate: true },
+);
+const batchEstimate = computed(() => {
+  const l = log.value;
+  if (!l || !isBatch.value) return null;
+  const y = batchYield({ ...l, actualYieldGrams: null }, { roastLevel: l.bean.roastLevel, recipeRoastLevel: recipeRoastLevel.value }, batchBrewer.value);
+  return y?.grams ?? null;
+});
+// A finished batch nobody weighed: ask for its yield.
+const batchUnweighed = computed(() => !!log.value && isBatch.value && !log.value.steeping && log.value.actualYieldGrams === null);
 
 async function load(): Promise<void> {
   const ws = workspaces.current?.id;
@@ -347,7 +378,8 @@ const markRows = computed(() => {
       <section v-if="!editing" class="card stack">
         <dl class="details">
           <div><dt>{{ espresso ? 'Dose → shot' : log.actualIceGrams !== null ? 'Dose : water + ice' : 'Dose : water' }}</dt><dd>{{ formatDoseLine(log.actualDoseGrams, log.actualWaterGrams, log.actualYieldGrams, log.actualIceGrams) }}</dd></div>
-          <div><dt>{{ espresso ? 'Shot weight' : 'Yield' }}</dt><dd>{{ yieldText(log) }}</dd></div>
+          <div v-if="isBatch && !log.steeping"><dt>Concentrate made</dt><dd>{{ log.actualYieldGrams !== null ? `${formatGrams(log.actualYieldGrams)} g` : batchEstimate !== null ? `≈ ${formatGrams(batchEstimate)} g (estimated)` : '–' }}</dd></div>
+          <div v-else><dt>{{ espresso ? 'Shot weight' : 'Yield' }}</dt><dd>{{ yieldText(log) }}</dd></div>
           <div v-if="log.vessel && log.vesselWeightGrams !== null"><dt>Weighed in</dt><dd>{{ log.vessel.name }} ({{ formatGrams(log.vesselWeightGrams) }} g)</dd></div>
           <div v-if="log.tdsPercent !== null"><dt>{{ log.dilutionRatio !== null && !isColdStyle(log.recipe?.style?.brewsLike) ? 'Concentrate TDS' : 'TDS' }}</dt><dd>{{ tdsText(log) }}</dd></div>
           <div v-if="!log.steeping"><dt>Caffeine</dt><dd>{{ formatCaffeine(brewCaffeineMg({ doseGrams: log.actualDoseGrams, waterGrams: log.actualWaterGrams }, log.bean)) }}</dd></div>
@@ -384,6 +416,10 @@ const markRows = computed(() => {
           <h2>The drink</h2>
           <p>{{ log.drinkTastingNotes }}</p>
         </div>
+        <p v-if="batchUnweighed && canModify" class="batch-note">
+          Not weighed: weigh the concentrate after straining, so its servings and what's left are right.
+          <button class="btn-link" type="button" @click="startEdit">Add yield</button>
+        </p>
         <div v-if="workspaces.canEdit" class="actions">
           <button v-if="log.steeping && canModify" class="btn btn-primary" type="button" @click="startFinish">Finish</button>
           <RouterLink class="btn-link" :to="{ name: 'brew', query: { repeat: log.id } }">Brew again</RouterLink>
@@ -397,7 +433,7 @@ const markRows = computed(() => {
       <!-- Edit -->
       <form v-else class="card stack" novalidate @submit.prevent="saveEdit">
         <h2>Edit brew</h2>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :vessels="vessels" :prep-tools="prepTools" :problems="problems" :method-kind="log.recipe?.methodKind ?? null" :brewer-id="log.brewer?.id ?? null" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="log.recipe?.style?.brewsLike ?? null" :iced="log.actualIceGrams !== null" :saved-flavors="log.flavors" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :vessels="vessels" :prep-tools="prepTools" :problems="problems" :method-kind="log.recipe?.methodKind ?? null" :brewer-id="log.brewer?.id ?? null" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="log.recipe?.style?.brewsLike ?? null" :iced="log.actualIceGrams !== null" :saved-flavors="log.flavors" :batch="isBatch && (finishing || !log.steeping)" :batch-estimate-grams="batchEstimate" />
         <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
         <div class="buttons">
           <button class="btn btn-secondary" type="button" :disabled="saving" @click="editing = false">Cancel</button>
@@ -457,6 +493,10 @@ const markRows = computed(() => {
 }
 .steeping-note {
   margin: var(--space-1) 0 0;
+  color: var(--brand);
+}
+.batch-note {
+  margin: 0;
   color: var(--brand);
 }
 .flavor-chips {

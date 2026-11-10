@@ -71,6 +71,11 @@ const props = defineProps<{
   iced?: boolean; // the recipe is flash chilled (has ice), so the ice is asked for
   concentrate?: boolean; // the recipe is served diluted, so the dilution is asked for
   savedFlavors?: readonly FlavorPick[]; // editing: the brew's picks as stored (labels of ones the wheel no longer has)
+  // A long cold brew batch (cold brew, Kyoto drip): its yield is the
+  // concentrate made, which its servings and stock are worked out from
+  // (docs/backlog.md item 14), so it's always asked for.
+  batch?: boolean;
+  batchEstimateGrams?: number | null; // the estimate when it isn't weighed
 }>();
 
 // Measured yield vs the recipe's estimate, e.g. "+6 g vs expected 220 g".
@@ -89,6 +94,19 @@ const yieldHint = computed(() => {
   const made = net === null ? '' : `Yield ${formatGrams(net)} g`;
   return [made, yieldComparison.value].filter(Boolean).join(' · ');
 });
+// A batch shows its yield even when it's hidden under Settings → Fields.
+watch(
+  () => props.batch,
+  (batch) => {
+    if (batch) reveal({ 'brew.yield': 'batch' });
+  },
+  { immediate: true },
+);
+const batchHint = computed(() =>
+  props.batch && !draft.value.yieldGrams.trim()
+    ? `Servings and what's left are worked out from it${props.batchEstimateGrams != null ? `; without it, ≈ ${formatGrams(props.batchEstimateGrams)} g is assumed` : ''}`
+    : '',
+);
 // The vessel picker shows while the brew has one, even if hidden under
 // Settings → Fields: its weight is being subtracted.
 watch(
@@ -142,6 +160,7 @@ watch(
 // clearing the ice brings a typed one back).
 const onIce = computed(() => !props.espresso && num(draft.value.ice) !== null);
 const yieldNote = computed(() => {
+  if (props.batch) return draft.value.vesselId ? 'vessel and concentrate, after straining' : 'weigh it after straining';
   if (draft.value.vesselId) return onIce.value ? 'vessel, coffee and ice' : 'vessel and coffee';
   return onIce.value ? 'weigh the server with the ice' : 'weigh the brewed coffee';
 });
@@ -218,16 +237,17 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
     </div>
     <div v-if="!espresso && show('brew.yield')" class="form-row">
       <div class="field">
-        <label for="brew-yield">{{ draft.vesselId ? 'Total weight (g)' : 'Yield (g)' }} <span class="muted">({{ yieldNote }})</span></label>
+        <label for="brew-yield">{{ draft.vesselId ? 'Total weight (g)' : batch ? 'Concentrate made (g)' : 'Yield (g)' }} <span class="muted">({{ yieldNote }})</span></label>
         <input
           id="brew-yield"
           v-model="draft.yieldGrams"
           inputmode="decimal"
-          :placeholder="expectedYieldGrams != null && !draft.vesselId ? `Expected ~${formatGrams(expectedYieldGrams)}` : ''"
+          :placeholder="draft.vesselId ? '' : batch && batchEstimateGrams != null ? `≈ ${formatGrams(batchEstimateGrams)}` : expectedYieldGrams != null ? `Expected ~${formatGrams(expectedYieldGrams)}` : ''"
           :aria-invalid="showErrors && !!errors.yieldGrams"
         />
         <span v-if="showErrors && errors.yieldGrams" class="field-error">{{ errors.yieldGrams }}</span>
         <span v-else-if="yieldHint" class="hint">{{ yieldHint }}</span>
+        <span v-else-if="batchHint" class="hint">{{ batchHint }}</span>
       </div>
       <VesselField v-if="show('brew.vessel')" v-model="draft" :vessels="vessels ?? []" />
     </div>

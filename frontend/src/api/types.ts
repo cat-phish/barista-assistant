@@ -742,7 +742,7 @@ export interface BrewLog {
   tastingNotes: string | null;
   drinkRating: number | null; // the finished drink (drink brews only)
   drinkTastingNotes: string | null;
-  bean: { id: string; roasterName: string; beanName: string; batchNumber: string | null; decaf: boolean; species: CoffeeSpecies[] | null };
+  bean: { id: string; roasterName: string; beanName: string; batchNumber: string | null; decaf: boolean; species: CoffeeSpecies[] | null; roastLevel: RoastLevel | null };
   recipe: { id: string; name: string; expectedYieldGrams: number | null; style: StyleRef | null; methodKind: MethodKind } | null;
   grinder: { id: string; name: string } | null;
   waterProfile: { id: string; name: string } | null; // archived ones included
