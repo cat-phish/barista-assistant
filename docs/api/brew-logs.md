@@ -67,7 +67,10 @@ created it and can't be changed.
   "brewedBy": { "id": "uuid", "email": "barista@example.com" },
   "analyzed": false,
   "analysisDueAt": "2026-10-23T09:15:00.000Z",
-  "analysisError": null
+  "analysisError": null,
+  "batchFinishedAt": null,
+  "servingCount": 0,
+  "pouredGrams": 0
 }
 ```
 
@@ -101,7 +104,10 @@ account. Such logs can only be edited or deleted by owners. `analyzed` says
 whether it has at least one AI suggestion; `analysisDueAt` is when an
 automatic analysis is due (auto-analyze, §8), else `null`; `analysisError`
 says why the last analysis failed or wasn't made (e.g. the daily cap), else
-`null`, cleared when it's asked for again.
+`null`, cleared when it's asked for again. `batchFinishedAt`, `servingCount` and `pouredGrams`
+are a long cold brew batch's (§6c): when it was marked finished (else
+`null`), how many servings were logged from it, and the concentrate they
+took in grams; `0` for any other brew.
 
 ## `GET /api/workspaces/:workspaceId/brew-logs`
 
@@ -357,7 +363,8 @@ says why the last analysis failed or wasn't made (e.g. the daily cap), else
 
 ## `DELETE /api/workspaces/:workspaceId/brew-logs/:brewLogId`
 
-Deletes the log and its `llm_analyses` (cascade).
+Deletes the log, its `llm_analyses` and its servings (§6c), by cascade.
+Clients confirm first when it has servings (`servingCount`).
 
 - **Auth Required:** `true` (owner, or the barista who created it)
 - **Success (`204 No Content`)**

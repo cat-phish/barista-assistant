@@ -14,6 +14,7 @@ import { beansRouter } from "./routes/beans.js";
 import { beanPhotosRouter } from "./routes/beanPhotos.js";
 import { beanLabelRouter, LABEL_BODY_PATH } from "./routes/beanLabel.js";
 import { brewLogsRouter } from "./routes/brewLogs.js";
+import { brewServingsRouter } from "./routes/brewServings.js";
 import { statsRouter } from "./routes/stats.js";
 import { recapsRouter } from "./routes/recaps.js";
 import { chatsRouter, myChatsRouter } from "./routes/chats.js";
@@ -105,6 +106,7 @@ app.use("/api/workspaces/:workspaceId/beans/:beanId/review-draft", beanReviewRou
 app.use("/api/workspaces/:workspaceId/bean-label", beanLabelRouter);
 app.use("/api/workspaces/:workspaceId/beans", beansRouter);
 app.use("/api/workspaces/:workspaceId/recipes", recipesRouter);
+app.use("/api/workspaces/:workspaceId/brew-logs/:brewLogId", brewServingsRouter); // docs/api/brew-servings.md §6c
 app.use("/api/workspaces/:workspaceId/brew-logs", brewLogsRouter);
 app.use("/api/workspaces/:workspaceId/stats", statsRouter); // docs/api/stats.md §11
 app.use("/api/workspaces/:workspaceId/recaps", recapsRouter); // docs/api/recaps.md §11c

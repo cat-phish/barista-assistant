@@ -466,6 +466,12 @@ What the analysis worker sends to the LLM and what comes back.
   each, 80 of 1,149 g) were about 7% of the caffeine; the average dose per
   brew went 23.5 g → 22.6 g without them. Built anyway, because servings
   are worth logging for their own sake (dilution vs. rating).
+- **Done:** the servings API (branch `brew-servings`, migration 0117,
+  `api/brew-servings.md` §6c): `brew_servings` and their flavors, Batch
+  finished (`PUT …/batch`), `servingCount`/`pouredGrams` on a brew log, in
+  backups. Any owner or barista pours from any batch; a serving is changed by
+  its logger or an owner. Deleting a batch with servings will confirm with
+  "I understand" (rule 7, agreed; built with the UI).
 - **Done:** Finish on a long batch asks for the concentrate made, and a
   finished batch without one shows the estimate with "≈" and an Add yield
   nudge; `lib/batch.ts` has the yield, share and stock math (branch

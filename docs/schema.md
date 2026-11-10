@@ -1270,6 +1270,9 @@ export const brewLogs = mysqlTable("brew_logs", {
   // §6). Milk and syrup change the taste, so the AI weighs these apart.
   drinkRating: decimal("drink_rating", { precision: 2, scale: 1, mode: "number" }), // 0.5-5 in 0.5 steps
   drinkTastingNotes: text("drink_tasting_notes"),
+  // A long cold brew batch marked empty (docs/api/brew-servings.md §6c): no
+  // more servings are taken from it. Null = still in stock (or not a batch).
+  batchFinishedAt: timestamp("batch_finished_at"),
 });
 
 // 8b. Brew Log Marks (Tapped Events During a Brew)
@@ -1349,6 +1352,48 @@ export const brewLogFlavors = mysqlTable(
   },
   (table) => ({
     pk: primaryKey({ columns: [table.brewLogId, table.flavorKey] }),
+  })
+);
+
+// 8g. Brew Servings (Glasses Taken From a Cold Brew Batch)
+// A finished long cold brew (LONG_STYLES) is stock; each glass is logged
+// here (docs/api/brew-servings.md §6c): the concentrate taken and what it
+// was diluted with (the ratio is worked out), and how it tasted. Insights
+// counts a batch's servings instead of the batch once it has any.
+export const brewServings = mysqlTable(
+  "brew_servings",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    brewLogId: varchar("brew_log_id", { length: 36 })
+      .notNull()
+      .references(() => brewLogs.id, { onDelete: "cascade" }),
+    // Who logged it; null once they delete their account, as on brew logs.
+    userId: varchar("user_id", { length: 36 }).references(() => users.id, { onDelete: "set null" }),
+    timestamp: timestamp("timestamp").defaultNow().notNull(),
+    utcOffsetMinutes: int("utc_offset_minutes"), // the logging device's, as on brew logs
+    concentrateGrams: decimal("concentrate_grams", { precision: 6, scale: 1, mode: "number" }).notNull(),
+    diluentGrams: decimal("diluent_grams", { precision: 6, scale: 1, mode: "number" }), // null or 0 = neat
+    dilutedWith: varchar("diluted_with", { length: 10 }).$type<DilutionWith>(), // DILUTION_WITH
+    rating: decimal("rating", { precision: 2, scale: 1, mode: "number" }), // 0.5-5 in 0.5 steps
+    tastingNotes: text("tasting_notes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [index("brew_servings_log_idx").on(t.brewLogId, t.timestamp)]
+);
+
+// 8h. Brew Serving Flavors: a serving's picks on the wheel, as brew_log_flavors.
+export const brewServingFlavors = mysqlTable(
+  "brew_serving_flavors",
+  {
+    servingId: varchar("serving_id", { length: 36 })
+      .notNull()
+      .references(() => brewServings.id, { onDelete: "cascade" }),
+    flavorKey: varchar("flavor_key", { length: 64 }).notNull(),
+    label: varchar("label", { length: 60 }).notNull(),
+    place: varchar("place", { length: 130 }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.servingId, table.flavorKey] }),
   })
 );
 

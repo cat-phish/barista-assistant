@@ -23,6 +23,7 @@ import {
   brewProblems,
   brewLogProblems,
   brewLogFlavors,
+  brewServings,
   llmAnalyses,
   analysisRequests,
   recipes,
@@ -38,8 +39,8 @@ import {
   type Recipe,
   recipeStyles,
 } from "@barista/shared/schema";
-import { LEXICON_KEY, LEXICON_LIMITS, flavorPlace, resolvePicks, type FlavorPick } from "@barista/shared/flavors";
-import { lexiconsFor, workspaceLexicon } from "../flavorLexicon.js";
+import { LEXICON_KEY, LEXICON_LIMITS, type FlavorPick } from "@barista/shared/flavors";
+import { flavorPicks, resolveSaved, type SavedPick } from "../flavorPicks.js";
 import { decimalSchema, grindSettingSchema, optionalText, ratingSchema, updateSchema } from "../validation.js";
 import { ANALYSIS_COLUMNS, type AnalysisRow } from "../aiRequest.js";
 import { remindToRate, remindWhenSteeped, type ReminderOutcome } from "../reminders.js";
@@ -83,6 +84,10 @@ export interface BrewLogDetails extends Omit<BrewLog, "recipeCopy"> {
   analyzed: boolean;
   analysisDueAt: Date | null;
   analysisError: string | null;
+  // A long cold brew batch's servings (docs/api/brew-servings.md §6c): how
+  // many, and the concentrate they took. 0 for any other brew.
+  servingCount: number;
+  pouredGrams: number;
 }
 
 export interface BrewLogListResponse {
@@ -548,6 +553,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       tastingNotes: brewLogs.tastingNotes,
       drinkRating: brewLogs.drinkRating,
       drinkTastingNotes: brewLogs.drinkTastingNotes,
+      batchFinishedAt: brewLogs.batchFinishedAt,
       bean: { id: beans.id, roasterName: beans.roasterName, beanName: beans.beanName, batchNumber: beans.batchNumber, decaf: beans.decaf, species: beans.species, roastLevel: beans.roastLevel },
       recipe: { id: recipes.id, name: recipes.name, expectedYieldGrams: recipes.expectedYieldGrams },
       // Separate columns: a nested object spanning two left joins isn't nulled as a whole.
@@ -585,7 +591,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
     .limit(limit)
     .offset(offset);
   const ids = rows.map((r) => r.id);
-  const [marks, tools, problems, flavors] = await Promise.all([marksFor(ids), toolsFor(ids), problemsFor(ids), flavorsFor(rows)]);
+  const [marks, tools, problems, flavors, poured] = await Promise.all([marksFor(ids), toolsFor(ids), problemsFor(ids), flavorsFor(rows), servingTotals(ids)]);
   // A recipe always has a method (inner FK), so its kind is set whenever recipe is.
   return rows.map(({ recipeMethodKind, styleId, styleName, styleBrewsLike, recipe, drink, drinkHasIngredients, analyzedFlag, ...row }) => ({
     ...row,
@@ -599,7 +605,21 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
     tools: tools.get(row.id) ?? [],
     problems: problems.get(row.id) ?? [],
     flavors: flavors.get(row.id) ?? [],
+    servingCount: poured.get(row.id)?.count ?? 0,
+    pouredGrams: poured.get(row.id)?.grams ?? 0,
   }));
+}
+
+async function servingTotals(brewLogIds: string[]): Promise<Map<string, { count: number; grams: number }>> {
+  const out = new Map<string, { count: number; grams: number }>();
+  if (brewLogIds.length === 0) return out;
+  const rows = await db
+    .select({ brewLogId: brewServings.brewLogId, n: count(), grams: sql<string>`SUM(${brewServings.concentrateGrams})` })
+    .from(brewServings)
+    .where(inArray(brewServings.brewLogId, brewLogIds))
+    .groupBy(brewServings.brewLogId);
+  for (const r of rows) out.set(r.brewLogId, { count: Number(r.n), grams: Math.round(Number(r.grams) * 10) / 10 });
+  return out;
 }
 
 async function toolsFor(brewLogIds: string[]): Promise<Map<string, BrewLogDetails["tools"]>> {
@@ -640,38 +660,15 @@ async function insertProblems(tx: Tx, brewLogId: string, problemIds: readonly st
 
 // In each workspace's wheel order, whatever order they were picked in.
 async function flavorsFor(logs: ReadonlyArray<{ id: string; workspaceId: string }>): Promise<Map<string, FlavorPick[]>> {
-  const byLog = new Map<string, FlavorPick[]>();
-  if (logs.length === 0) return byLog;
+  if (logs.length === 0) return new Map();
   const rows = await db.select().from(brewLogFlavors).where(inArray(brewLogFlavors.brewLogId, logs.map((l) => l.id)));
-  if (rows.length === 0) return byLog;
-  const lexicons = await lexiconsFor(logs.map((l) => l.workspaceId));
-  const saved = new Map<string, FlavorPick[]>();
-  for (const { brewLogId, flavorKey, label } of rows) saved.set(brewLogId, [...(saved.get(brewLogId) ?? []), { key: flavorKey, label }]);
-  for (const { id, workspaceId } of logs) {
-    const picks = saved.get(id);
-    if (picks) byLog.set(id, resolvePicks(lexicons.get(workspaceId)!, picks));
-  }
-  return byLog;
+  return resolveSaved(logs, rows.map(({ brewLogId, ...r }) => ({ ownerId: brewLogId, ...r })));
 }
 
-// The keys sent, with their labels and places: each must be on the
-// workspace's wheel, or (editing) already on this brew, kept as saved after
-// the wheel changed (docs/api/flavor-lexicon.md §2c).
-async function flavorPicks(tx: Tx, workspaceId: string, keys: readonly string[], brewLogId: string | null): Promise<FlavorPick[] | string> {
-  if (keys.length === 0) return [];
-  const { lexicon } = await workspaceLexicon(workspaceId, tx);
-  const allowed = new Map(lexicon.flavors.map((f): [string, FlavorPick] => [f.key, { key: f.key, label: f.label, place: flavorPlace(lexicon, f.key) }]));
-  if (brewLogId) {
-    const had = await tx.select().from(brewLogFlavors).where(eq(brewLogFlavors.brewLogId, brewLogId));
-    for (const { flavorKey, label, place } of had) if (!allowed.has(flavorKey)) allowed.set(flavorKey, { key: flavorKey, label, place });
-  }
-  const picks: FlavorPick[] = [];
-  for (const key of keys) {
-    const pick = allowed.get(key);
-    if (!pick) return `flavors: "${key}" isn't on this workspace's flavor wheel`;
-    picks.push(pick);
-  }
-  return picks;
+// Editing keeps picks the wheel no longer has (flavorPicks).
+async function savedPicks(tx: Tx, brewLogId: string): Promise<SavedPick[]> {
+  const rows = await tx.select().from(brewLogFlavors).where(eq(brewLogFlavors.brewLogId, brewLogId));
+  return rows.map(({ brewLogId: ownerId, ...r }) => ({ ownerId, ...r }));
 }
 
 async function insertFlavors(tx: Tx, brewLogId: string, picks: readonly FlavorPick[]): Promise<void> {
@@ -796,7 +793,7 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Cre
     if (wrongRpm) return wrongRpm;
     const wrongWeights = weightsError(fields);
     if (wrongWeights) return wrongWeights;
-    const picks = await flavorPicks(tx, workspaceId, flavors, null);
+    const picks = await flavorPicks(tx, workspaceId, flavors);
     if (typeof picks === "string") return picks;
     // A steep started without a window takes its recipe's (older clients).
     const steepWindow = fields.steeping && fields.steepMinHours === undefined && fields.steepMaxHours === undefined ? await recipeSteepWindow(tx, fields.recipeId) : {};
@@ -924,7 +921,7 @@ brewLogsRouter.patch(
         const wrongWeights = weightsError({ ...log, ...fields });
         if (wrongWeights) return { status: "bad_ref", error: wrongWeights } as const;
       }
-      const picks = flavors ? await flavorPicks(tx, workspaceId, flavors, brewLogId) : null;
+      const picks = flavors ? await flavorPicks(tx, workspaceId, flavors, await savedPicks(tx, brewLogId)) : null;
       if (typeof picks === "string") return { status: "bad_ref", error: picks } as const;
       if (Object.keys(fields).length > 0) await tx.update(brewLogs).set({ ...fields, ...brewerUpdate }).where(eq(brewLogs.id, brewLogId));
       // A sent list replaces the old one entirely.
