@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { batchYield, servingShare, stockLeft } from './batch';
+import { batchStock, batchYield, servingShare, stockLeft, stockText } from './batch';
 
 const log = (fields: Partial<Parameters<typeof batchYield>[0]> = {}) => ({ actualDoseGrams: 40, actualWaterGrams: 400, actualIceGrams: null, actualYieldGrams: null, ...fields });
 const roast = { roastLevel: null, recipeRoastLevel: 'light' as const };
@@ -34,5 +34,31 @@ describe('servingShare and stockLeft', () => {
   it('gives nothing from an empty batch', () => {
     expect(servingShare(50, 0, 0)).toBe(0);
     expect(stockLeft(0, 0)).toBe(0);
+  });
+});
+
+describe('batchStock', () => {
+  const cold = { id: 's', name: 'Cold brew', brewsLike: 'cold_brew' as const };
+  const batch = (fields: Partial<Parameters<typeof batchStock>[0]> = {}) => ({
+    ...log(),
+    style: cold,
+    steeping: false,
+    servingCount: 1,
+    pouredGrams: 200,
+    jarWaterGrams: null,
+    batchFinishedAt: null,
+    bean: { roastLevel: null },
+    ...fields,
+  });
+  it("is what's left in the jar, estimated or weighed", () => {
+    expect(batchStock(batch(), 'light')).toEqual({ leftGrams: 120, estimated: true, finished: false });
+    expect(stockText(batchStock(batch(), 'light')!)).toBe('≈ 120 g left');
+    expect(stockText(batchStock(batch({ actualYieldGrams: 310, jarWaterGrams: 310 }), 'light')!)).toBe('420 g left');
+    expect(stockText(batchStock(batch({ batchFinishedAt: '2026-11-10T00:00:00Z' }), 'light')!)).toBe('Finished');
+  });
+  it('is null for a brew that is not a batch yet', () => {
+    expect(batchStock(batch({ steeping: true }), 'light')).toBeNull();
+    expect(batchStock(batch({ style: null, servingCount: 0 }), 'light')).toBeNull();
+    expect(batchStock(batch({ style: null }), 'light')).not.toBeNull(); // it has servings
   });
 });

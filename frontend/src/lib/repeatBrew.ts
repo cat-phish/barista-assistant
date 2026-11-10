@@ -53,6 +53,7 @@ export const REPEAT_FOR_FIELD: Record<BrewFieldKey, RepeatKeep | 'always' | 'res
   'brew.firstDrop': 'result',
   'brew.steepTemp': 'temp', // where it steeps goes with the temperature
   'brew.dilution': 'dilution',
+  'brew.jarWater': 'result', // follows the batch's yield, so weighed each time
   'brew.window': 'window',
 };
 

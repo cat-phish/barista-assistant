@@ -731,6 +731,7 @@ export interface BrewLog {
   steepTemp: SteepTemp | null; // where a long cold brew steeped
   dilutionRatio: number | null; // served 1 : dilutionRatio
   dilutedWith: DilutionWith | null;
+  jarWaterGrams: number | null; // water added to a long batch's whole jar (§6c); null = none
   // The window it aimed for, set at the start (docs/api/brew-logs.md §6):
   // a long style's steep in hours, rapid cold's finish in seconds.
   steepMinHours: number | null;
@@ -1053,4 +1054,22 @@ export interface WorkspaceLexicon {
 export interface FlavorPick {
   key: string;
   label: string;
+}
+
+// docs/api/brew-servings.md §6c: a glass taken from a cold brew batch.
+export interface BrewServing {
+  id: string;
+  brewLogId: string;
+  userId: string | null;
+  loggedBy: { id: string; email: string } | null;
+  timestamp: string;
+  utcOffsetMinutes: number | null;
+  concentrateGrams: number; // poured from the jar (diluted coffee, from a jar with water added)
+  diluentGrams: number | null; // the glass's water (or milk…); null/0 = neat
+  dilutedWith: DilutionWith | null;
+  dilutionRatio: number | null; // the glass's own, 1 : this
+  rating: number | null;
+  tastingNotes: string | null;
+  flavors: FlavorPick[];
+  createdAt: string;
 }

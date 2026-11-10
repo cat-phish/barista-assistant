@@ -65,12 +65,14 @@
    action button and an **"I understand"** checkbox that must be ticked
    before the button works (the pattern in `DeleteDialog.vue`). Used today
    by: deleting anything something else uses (`DeleteDialog.vue`), deleting
-   a bean with its brew history, deleting a drink category, changing the
+   a bean with its brew history, deleting a cold brew batch with servings,
+   deleting a drink category, changing the
    workspace's web address, deleting or leaving a workspace, removing a
    member, demoting yourself from owner, replacing the flavor wheel or
    going back to the built-in one, saving server chat limits that delete
    people's chats, and deleting your account.
-   Deliberately without it: deleting a brew log, deleting a menu section,
+   Deliberately without it: deleting a brew log with no servings, deleting
+   a serving, Batch finished (Reopen undoes it), deleting a menu section,
    abandoning a brew, and deleting things nothing uses. When building or
    changing an action that seems to qualify, **ask the user before adding
    the checkbox** to it; don't add it unasked.

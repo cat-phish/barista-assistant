@@ -42,6 +42,7 @@ created it and can't be changed.
   "steepTemp": null,
   "dilutionRatio": null,
   "dilutedWith": null,
+  "jarWaterGrams": null,
   "steepMinHours": null,
   "steepMaxHours": null,
   "expectedFinishMinSec": null,
@@ -113,7 +114,9 @@ account. Such logs can only be edited or deleted by owners. `analyzed` says
 whether it has at least one AI suggestion; `analysisDueAt` is when an
 automatic analysis is due (auto-analyze, §8), else `null`; `analysisError`
 says why the last analysis failed or wasn't made (e.g. the daily cap), else
-`null`, cleared when it's asked for again. `batchFinishedAt`, `servingCount` and `pouredGrams`
+`null`, cleared when it's asked for again. `jarWaterGrams` (≥ 0, one decimal, or `null`) is water
+added to a long cold brew batch's whole jar (§6c); dilution normally happens
+in each glass. `batchFinishedAt`, `servingCount` and `pouredGrams`
 are a long cold brew batch's (§6c): when it was marked finished (else
 `null`), how many servings were logged from it, and the concentrate they
 took in grams; `0` for any other brew.

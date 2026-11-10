@@ -28,6 +28,7 @@ export interface BrewDraft {
   steepTemp: SteepTemp | ''; // cold styles: fridge or room ('' = not recorded)
   dilution: string; // cold styles: served 1 : this ('' = neat / not recorded)
   dilutedWith: DilutionWith | '';
+  jarWater: string; // a long batch diluted in the jar: water added, g ('' = none)
   time: string; // m:ss
   rating: number | null; // the coffee tasted on its own
   notes: string;
@@ -53,13 +54,13 @@ export function setVessel(d: Pick<BrewDraft, 'vesselId' | 'vesselGrams'>, vessel
 }
 
 export type BrewValues = Omit<BrewLogInput, 'beanId' | 'recipeId'>;
-export type BrewDraftErrors = Partial<Record<'dose' | 'water' | 'ice' | 'yieldGrams' | 'tds' | 'temp' | 'time' | 'firstDrop' | 'rpm' | 'beanIn' | 'groundOut' | 'grind' | 'dilution', string>>;
+export type BrewDraftErrors = Partial<Record<'dose' | 'water' | 'ice' | 'yieldGrams' | 'tds' | 'temp' | 'time' | 'firstDrop' | 'rpm' | 'beanIn' | 'groundOut' | 'grind' | 'dilution' | 'jarWater', string>>;
 
 // What the RPM is checked against: the brew's grinder (null = none chosen).
 export type RpmGrinder = Pick<Grinder, 'variableSpeed' | 'rpmMin' | 'rpmMax'> | null;
 
 export function emptyDraft(): BrewDraft {
-  return { dose: '', water: '', ice: '', yieldGrams: '', vesselId: '', vesselGrams: null, tds: '', temp: '', grinderId: '', waterProfileId: '', toolIds: [], problemIds: [], flavors: [], firstDrop: '', grind: '', rpm: '', beanIn: '', groundOut: '', steepTemp: '', dilution: '', dilutedWith: '', time: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
+  return { dose: '', water: '', ice: '', yieldGrams: '', vesselId: '', vesselGrams: null, tds: '', temp: '', grinderId: '', waterProfileId: '', toolIds: [], problemIds: [], flavors: [], firstDrop: '', grind: '', rpm: '', beanIn: '', groundOut: '', steepTemp: '', dilution: '', dilutedWith: '', jarWater: '', time: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
 }
 
 // temp is text in the person's unit (°C stored); see lib/units.ts.
@@ -89,6 +90,7 @@ export function draftFromLog(log: BrewLog, tempUnit: TemperatureUnit = 'c'): Bre
     steepTemp: log.steepTemp ?? '',
     dilution: log.dilutionRatio === null ? '' : String(log.dilutionRatio),
     dilutedWith: log.dilutedWith ?? '',
+    jarWater: log.jarWaterGrams === null ? '' : formatGrams(log.jarWaterGrams),
     time: formatTime(log.actualTimeSec),
     rating: log.rating,
     notes: log.tastingNotes ?? '',
@@ -153,6 +155,8 @@ export function parseBrewDraft(
   else if (firstDrop?.ok && time.ok && firstDrop.value > time.value) errors.firstDrop = 'After the end of the shot';
   if (grind && !grind.ok) errors.grind = grind.error;
   if (dilution && !dilution.ok) errors.dilution = dilution.error;
+  const jarWater = d.jarWater.trim() ? parseDecimal(d.jarWater, { scale: 1, min: 0, max: 10000, exclusiveMax: true }) : null;
+  if (jarWater && !jarWater.ok) errors.jarWater = jarWater.error;
   if (beanIn && !beanIn.ok) errors.beanIn = beanIn.error;
   if (groundOut && !groundOut.ok) errors.groundOut = groundOut.error;
   else if (groundOut?.ok && beanIn?.ok && groundOut.value > beanIn.value) errors.groundOut = 'More than the beans weighed in';
@@ -160,7 +164,7 @@ export function parseBrewDraft(
   else if (rpm?.ok && grinder?.rpmMin != null && grinder.rpmMax != null && (rpm.value < grinder.rpmMin || rpm.value > grinder.rpmMax)) {
     errors.rpm = `Outside the grinder's range (${grinder.rpmMin}–${grinder.rpmMax})`;
   }
-  if (Object.keys(errors).length > 0 || !dose.ok || !water.ok || (ice && !ice.ok) || (yieldGrams && !yieldGrams.ok) || !time.ok || (tds && !tds.ok) || (temp && !temp.ok) || (rpm && !rpm.ok) || (beanIn && !beanIn.ok) || (groundOut && !groundOut.ok) || (grind && !grind.ok) || (dilution && !dilution.ok)) {
+  if (Object.keys(errors).length > 0 || !dose.ok || !water.ok || (ice && !ice.ok) || (yieldGrams && !yieldGrams.ok) || !time.ok || (tds && !tds.ok) || (temp && !temp.ok) || (rpm && !rpm.ok) || (beanIn && !beanIn.ok) || (groundOut && !groundOut.ok) || (grind && !grind.ok) || (dilution && !dilution.ok) || (jarWater && !jarWater.ok)) {
     return { errors, values: null, firstDropSec: null };
   }
 
@@ -188,6 +192,7 @@ export function parseBrewDraft(
       steepTemp: d.steepTemp || null,
       dilutionRatio: dilution?.ok ? dilution.value : null,
       dilutedWith: dilution?.ok ? d.dilutedWith || null : null,
+      jarWaterGrams: jarWater?.ok ? jarWater.value : null,
       actualTimeSec: time.value,
       rating: d.rating,
       tastingNotes: d.notes.trim() || null,

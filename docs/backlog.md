@@ -472,6 +472,16 @@ What the analysis worker sends to the LLM and what comes back.
   backups. Any owner or barista pours from any batch; a serving is changed by
   its logger or an owner. Deleting a batch with servings will confirm with
   "I understand" (rule 7, agreed; built with the UI).
+- **Done:** the batch's journal entry (branch `servings-ui`, migration
+  0119): stock line, Log a serving (water pre-filled from the batch's served
+  dilution, Concentrate made first on an unweighed batch), the servings with
+  edit/delete, Batch finished / Reopen; "≈ … left" / "Finished" on Journal
+  cards; deleting a batch with servings lists them and asks for "I
+  understand". A batch can be **diluted in the jar** (`jarWaterGrams`):
+  servings then pour ready to drink and share the jar (yield + water).
+- **On trial:** "In the fridge" on the Brew page (`FridgeCard.vue`): open
+  batches with what's left, Log a serving and Finished. Kept or dropped
+  after using it for a while.
 - **Done:** Finish on a long batch asks for the concentrate made, and a
   finished batch without one shows the estimate with "≈" and an Add yield
   nudge; `lib/batch.ts` has the yield, share and stock math (branch
@@ -512,10 +522,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Depends on:** nothing. 19 (ingredient stock) may later share the stock
   idea.
 - **Open questions:**
-  - Should the brew page list batches in stock ("Cold brew in the fridge:
-    ≈ 620 ml left"), with a quick Log a serving?
-  - Default diluent for a serving: the batch's or recipe's dilution, scaled
-    to the concentrate typed?
+  - Keep the Brew page's "In the fridge" card? (on trial, see above)
 
 ### 15. Test AI chat fully in the browser
 
