@@ -86,7 +86,7 @@ out to keep the reply small.
     }
   ],
   "lookups": {
-    "brewers": [{ "id": "uuid", "name": "V60", "methodId": "uuid" }],
+    "brewers": [{ "id": "uuid", "name": "V60", "methodId": "uuid", "groundsRetention": null, "measured": [{ "doseGrams": 15, "waterGrams": 250, "iceGrams": null, "yieldGrams": 218 }] }],
     "methods": [{ "id": "uuid", "name": "Pour over" }],
     "styles": [{ "id": "uuid", "name": "Pour over", "brewsLike": "pour_over" }],
     "recipes": [{ "id": "uuid", "name": "Daily V60", "expectedFinishMinSec": 165, "expectedFinishMaxSec": 195, "createdAt": "2026-10-03T10:00:00.000Z" }],
@@ -111,7 +111,10 @@ out to keep the reply small.
   the filters are. Bean totals (stock, spend) cover all of them.
   - `freezes`: the bean's freeze periods, oldest first (§4).
   - `photoCount`: how many photos the bean has (§4c).
-- **`lookups`:** names for every id the rows use. A recipe also has its
+- **`lookups`:** names for every id the rows use. A brewer also has its
+  typed `groundsRetention` (§3) and `measured`: its latest 20 brews with a
+  water weight and a measured yield, newest first, whatever the filters,
+  for the retention it's learned from (as the brew page works it out). A recipe also has its
   finish window (§5); a brew's own window (rapid cold, §6) wins over it; and
   `createdAt`, for a recap's new recipes (`recaps.md`). Archived and hidden ones
   are included, so history keeps its names.
@@ -126,7 +129,10 @@ Recorded here because the numbers aren't stored anywhere:
   1. a drink's serving size: the brew's own, else the drink's default;
   2. the measured yield;
   3. the estimated yield: water + ice − retention × dose, where retention
-     is the bean's roast-level figure (`frontend/src/lib/scale.ts`).
+     is the brewer's grounds retention (typed on the brewer, else the median
+     of its `measured` brews), else the bean's roast-level figure
+     (`frontend/src/lib/scale.ts`). So a pressed brew (OXO, AeroPress) isn't
+     counted about 1 g per g of coffee short.
 
   A brew served diluted (`dilutionRatio`, served 1 : ratio) counts the
   diluted volume, yield × (1 + ratio). 1 g counts as 1 ml. Totals that

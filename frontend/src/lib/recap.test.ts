@@ -15,7 +15,7 @@ const bean = (fields: Partial<StatsBean> = {}): StatsBean => ({
   inventoryWeightGrams: 100, purchaseDate: null, createdAt: '2026-10-01T09:00:00.000Z', archivedAt: null, freezes: [], photoCount: 0, ...fields,
 });
 const lookups = (): StatsData['lookups'] => ({
-  brewers: [{ id: 'v60', name: 'V60', methodId: null }, { id: 'oxo', name: 'OXO', methodId: null }],
+  brewers: [{ id: 'v60', name: 'V60', methodId: null, groundsRetention: null, measured: [] }, { id: 'oxo', name: 'OXO', methodId: null, groundsRetention: null, measured: [] }],
   methods: [],
   styles: [],
   recipes: [

@@ -4,6 +4,7 @@ import {
   boughtOn,
   brewEY,
   brewRoastAge,
+  brewerRetentions,
   brewVolumeMl,
   bucketOf,
   bucketRange,
@@ -67,9 +68,27 @@ describe('brewVolumeMl', () => {
     expect(brewVolumeMl(brew(), null, 'light')).toEqual({ ml: 220, source: 'estimate' }); // 250 − 2.0 × 15
     expect(brewVolumeMl(brew({ waterGrams: 150, iceGrams: 100 }), null, 'light')).toEqual({ ml: 220, source: 'estimate' });
   });
+  it("estimates with the brewer's retention when it has one", () => {
+    expect(brewVolumeMl(brew({ waterGrams: 100, doseGrams: 22 }), 'light', 'light', 1)).toEqual({ ml: 78, source: 'estimate' }); // 100 − 1 × 22
+    expect(brewVolumeMl(brew({ yieldGrams: 90 }), 'light', 'light', 1)).toEqual({ ml: 90, source: 'measured' });
+  });
   it('counts a dilution, and is null with nothing to go on', () => {
     expect(brewVolumeMl(brew({ yieldGrams: 200, dilutionRatio: 1.5 }), null, 'light')).toEqual({ ml: 500, source: 'measured' });
     expect(brewVolumeMl(brew({ waterGrams: null }), null, 'light')).toBeNull();
+  });
+});
+
+describe('brewerRetentions', () => {
+  const m = (doseGrams: number, waterGrams: number, yieldGrams: number) => ({ doseGrams, waterGrams, iceGrams: null, yieldGrams });
+  it('takes the typed figure, else the median of measured brews, else leaves the brewer out', () => {
+    const r = brewerRetentions([
+      { id: 'typed', name: 'T', methodId: null, groundsRetention: 1.2, measured: [m(20, 300, 240)] },
+      { id: 'oxo', name: 'OXO', methodId: null, groundsRetention: null, measured: [m(22, 100, 79), m(22, 100, 78), m(20, 100, 80)] },
+      { id: 'none', name: 'N', methodId: null, groundsRetention: null, measured: [] },
+    ]);
+    expect(r.get('typed')).toBe(1.2);
+    expect(r.get('oxo')).toBeCloseTo(1); // (100−79)/22 = 0.95, 1.0, 1.0 → median 1.0
+    expect(r.has('none')).toBe(false);
   });
 });
 

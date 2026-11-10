@@ -456,33 +456,50 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 14. Cold brew batches skew the caffeine and volume figures
 
-- **Status:** idea
+- **Status:** in progress
 - **Why:** a brew log is one batch, and it doesn't say how much of it was
   drunk or when. A big cold brew counts its whole dose on the day it's
   logged, so one 1 L batch shows as a huge day and a huge "brew", and pulls
   up Caffeine Total, Caffeine/Brew and Caffeine/Day (`docs/api/stats.md` §11,
-  "How the client counts"). Volume drunk has the same problem, and any
-  batch brewed to share or kept for later does too.
-- **Approach:** to review; a starting sketch:
-  - Look at how far real batches move the figures before picking a fix.
-  - Record servings or the portion drunk on a batch, and count each brew's
-    share of its dose and volume.
-  - Or spread a batch over the days it was drunk.
-  - Or leave batch styles out of the per-brew average, or say on the tile
-    that batches count in full.
-  - Unmeasured brews' volume is estimated with the roast-level retention
-    (`brewVolumeMl` in `frontend/src/lib/stats.ts`), not the brewer's
-    grounds retention the brew page uses (roadmap: yield estimates per
-    brewer), so pressed brews (OXO, AeroPress) count about 1 g of water per
-    g of coffee short. Use the brewer's figure there too.
-- **Size:** S to review and label; M if it records what was drunk.
-- **Depends on:** nothing; 18 (a finished cold brew as stock, each glass
-  served taken from it) could answer it.
+  "How the client counts"). Volume drunk has the same problem.
+- **Measured (2026-11-09):** small so far. 2 cold brews of 49 brews (40 g
+  each, 80 of 1,149 g) were about 7% of the caffeine; the average dose per
+  brew went 23.5 g → 22.6 g without them. Built anyway, because servings
+  are worth logging for their own sake (dilution vs. rating).
+- **Done:** unmeasured brews' volume in Insights and recaps is estimated
+  with the brewer's grounds retention (typed, else learned from its latest
+  measured brews), else the roast level's (branch `stats-brewer-retention`).
+- **Approach (agreed):** a finished cold brew batch is stock, and each glass
+  is logged as a serving taken from it.
+  - **Which batches:** long styles only (`LONG_STYLES`: cold brew, Kyoto
+    drip), once finished (not steeping).
+  - **A serving:** new table `brew_servings`, child of the batch's brew
+    log: who logged it, when, **concentrate** and **diluent** amounts (the
+    ratio is worked out from them), diluted with, rating, tasting notes and
+    flavor-wheel picks.
+  - **Stock:** the batch's yield (measured, else estimated) minus its
+    servings' concentrate. **Batch finished** marks it empty (poured out or
+    done); it then leaves the in-stock list.
+  - **Counting:** once a batch has a serving, only its servings count, each
+    with its share of the batch's dose (caffeine) and its diluted volume, on
+    the day and under the person who logged it. The unlogged rest never
+    counts. A batch with no servings counts in full on its brew day, as now.
+  - **AI:** a batch's servings reach its analysis and the brew history, as
+    a new switchable detail under Settings → AI (CLAUDE.md rule 9).
+  - **Also:** backups (rule 8: a child table, in `BACKUP_TABLES`); deleting
+    a batch that has servings may need the confirm dialog (rule 7: ask
+    first).
+  - **Branches:** servings API (schema, routes, backup, tests) → the batch's
+    journal entry (stock, Log a serving, Batch finished) → Insights and
+    recaps counting servings → the AI.
+- **Size:** L
+- **Depends on:** nothing. 19 (ingredient stock) may later share the stock
+  idea.
 - **Open questions:**
-  - Is a rough split (servings per batch) enough, or does each glass need
-    logging?
-  - What counts as a batch: cold styles only, or any brew over a set dose?
-  - Whose intake is it when a batch is shared with other people?
+  - Should the brew page list batches in stock ("Cold brew in the fridge:
+    ≈ 620 ml left"), with a quick Log a serving?
+  - Default diluent for a serving: the batch's or recipe's dilution, scaled
+    to the concentrate typed?
 
 ### 15. Test AI chat fully in the browser
 
@@ -605,8 +622,8 @@ What the analysis worker sends to the LLM and what comes back.
 - **Depends on:** nothing.
 - **Open questions:**
   - How precise does stock need to be (exact grams, or "about half left")?
-  - Should a finished cold brew batch (roadmap: cold brew refinements) be
-    stock the same way, with each glass served taken from it and rated?
+  - A finished cold brew batch as stock, each glass taken from it and
+    rated, is being built under 14; ingredient stock could reuse its idea.
 
 ### 20. Drink categories: what else they could do
 
