@@ -75,7 +75,8 @@ queue:
      or `null` for older brews.
    - **Cold styles** (§5e):
      - the brew has `steeping`, `steepTemp`, `dilutionRatio`,
-       `dilutedWith`, and the steep window it aimed for (`steepMinHours` /
+       `dilutedWith`, `jarWaterGrams` (water added to a long batch's jar,
+       brew-servings.md §6c; `null` when kept as concentrate), and the steep window it aimed for (`steepMinHours` /
        `steepMaxHours`, brew-logs.md §6), which may differ from the
        recipe's; the recipe has
        `steepMinHours`, `steepMaxHours`, `steepTemp`, `dilutionRatio` and
@@ -325,7 +326,7 @@ keys apply to suggestions (§9b), bean reviews (§9d) and recap summaries
   `POST /analyze` is a `409` (§8), and a job already queued is skipped.
 
 Always sent: the bean and roaster names, roast date and age, dose, water,
-ice (flash chilled), yield, time, grind setting, ratio, rating, tasting notes and
+ice (flash chilled), yield, a cold batch's jar water (`jarWaterGrams`), time, grind setting, ratio, rating, tasting notes and
 wheel flavors (`flavors`, part of the tasting), and the recipe's targets. Ratings are sent as stored, 0.5–5 in half steps (`ratingScale`
 `"0.5-5"`).
 

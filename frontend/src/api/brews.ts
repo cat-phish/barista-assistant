@@ -40,6 +40,7 @@ export interface BrewLogInput {
   steepTemp?: SteepTemp | null;
   dilutionRatio?: number | null; // served 1 : dilutionRatio
   dilutedWith?: DilutionWith | null;
+  jarWaterGrams?: number | null; // a long batch diluted in the jar (brew-servings.md §6c)
   // POST only: the window it aims for, both ends or neither (left out, a
   // steep takes its recipe's).
   steepMinHours?: number | null;

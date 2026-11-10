@@ -2,7 +2,8 @@
 // item 14): how much concentrate it made, what's left, and each serving's
 // share of it. The share decides a serving's caffeine, so the yield should be
 // weighed after straining; without it, it's estimated and shown with "≈".
-import type { RoastLevel } from '../api/types';
+import type { BrewLog, RoastLevel } from '../api/types';
+import { isLongStyle } from './coldBrew';
 import { brewerRetention, estimateYield, ratioWater, ROAST_LEVELS, type BrewerRetentionInput } from './scale';
 
 export interface BatchYield {
@@ -44,4 +45,46 @@ export function servingShare(concentrateGrams: number, yieldGrams: number, total
 // What's left, never below zero.
 export function stockLeft(yieldGrams: number, totalPouredGrams: number): number {
   return Math.max(0, yieldGrams - totalPouredGrams);
+}
+
+// What's in the jar: the batch's yield plus any water added to the whole
+// batch (jarWaterGrams, docs/api/brew-servings.md §6c).
+export function jarGrams(yieldGrams: number, jarWaterGrams: number | null): number {
+  return yieldGrams + (jarWaterGrams ?? 0);
+}
+
+// The jar's own dilution, water per gram of concentrate (0 when kept as concentrate).
+export function jarRatio(yieldGrams: number, jarWaterGrams: number | null): number {
+  return yieldGrams > 0 && jarWaterGrams ? jarWaterGrams / yieldGrams : 0;
+}
+
+// A glass's strength as drunk, 1 : this: what was poured from a jar diluted
+// 1 : jar, topped up with glassWater. null when it's all concentrate.
+export function overallRatio(pouredGrams: number, glassWaterGrams: number | null, jar: number): number | null {
+  if (!(pouredGrams > 0)) return null;
+  const r = jar + ((glassWaterGrams ?? 0) * (1 + jar)) / pouredGrams;
+  return r > 0 ? Math.round(r * 100) / 100 : null;
+}
+
+// A batch's stock for a list (the Journal badge, the Brew page's fridge
+// card): the jar minus what's poured. The estimate uses the roast level
+// unless a brewer's retention is given (no brewer lookup per card). null for
+// a brew that isn't a batch, or is still steeping.
+export interface BatchStock {
+  leftGrams: number;
+  estimated: boolean;
+  finished: boolean;
+}
+export type BatchStockLog = BatchLog & Pick<BrewLog, 'style' | 'steeping' | 'servingCount' | 'pouredGrams' | 'jarWaterGrams' | 'batchFinishedAt'> & { bean: { roastLevel: RoastLevel | null } };
+export function batchStock(log: BatchStockLog, recipeRoastLevel: RoastLevel, brewer: BrewerRetentionInput | null = null): BatchStock | null {
+  if (log.steeping || !(isLongStyle(log.style?.brewsLike) || log.servingCount > 0)) return null;
+  const y = batchYield(log, { roastLevel: log.bean.roastLevel, recipeRoastLevel }, brewer);
+  if (!y) return null;
+  return { leftGrams: stockLeft(jarGrams(y.grams, log.jarWaterGrams), log.pouredGrams), estimated: y.estimated, finished: log.batchFinishedAt !== null };
+}
+
+// "≈ 110 g left", "110 g left", or "Finished".
+export function stockText(s: BatchStock): string {
+  if (s.finished) return 'Finished';
+  return `${s.estimated ? '≈ ' : ''}${Number(s.leftGrams.toFixed(1))} g left`;
 }

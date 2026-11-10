@@ -37,6 +37,7 @@ export const FIELDS = [
   brew('flavors', 'Flavor wheel', 'The coffee’s flavors, picked on a wheel; tasting notes stay'),
   brew('steepTemp', 'Steep in fridge or room (cold styles)'),
   brew('dilution', 'Dilution served (cold styles, concentrates)'),
+  brew('jarWater', 'Water added to the jar (cold brew batches)', 'For a batch diluted as a whole; usually each glass is diluted when served'),
   brew('window', 'Steep or finish time', 'Change the recipe’s for one brew, before it starts. Hidden: the recipe’s is used'),
   brew('firstDrop', 'First drop (espresso)', 'The box in the log; the timer keeps its button, which first-drop steps need'),
 

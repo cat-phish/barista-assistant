@@ -192,6 +192,8 @@ const brewLogFields = {
   steepTemp: z.enum(STEEP_TEMPS).nullable().optional(),
   dilutionRatio: decimalSchema({ min: 0, max: 10, scale: 1, exclusiveMin: true }).nullable().optional(),
   dilutedWith: z.enum(DILUTION_WITH).nullable().optional(),
+  // Water added to a cold brew batch's jar (§6c); null = none.
+  jarWaterGrams: decimalSchema({ min: 0, max: 10000, scale: 1, exclusiveMax: true }).nullable().optional(),
   // The coffee tasted on its own (for a milk drink, only if tasted straight).
   rating: ratingSchema.nullable().optional(),
   tastingNotes: optionalText(5000),
@@ -549,6 +551,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       steepTemp: brewLogs.steepTemp,
       dilutionRatio: brewLogs.dilutionRatio,
       dilutedWith: brewLogs.dilutedWith,
+      jarWaterGrams: brewLogs.jarWaterGrams,
       steepMinHours: brewLogs.steepMinHours,
       steepMaxHours: brewLogs.steepMaxHours,
       expectedFinishMinSec: brewLogs.expectedFinishMinSec,

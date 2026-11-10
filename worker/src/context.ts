@@ -127,6 +127,9 @@ export interface BrewSummary {
   steepTemp: SteepTemp | null;
   dilutionRatio: number | null;
   dilutedWith: DilutionWith | null;
+  // A long batch diluted in the jar: the water added to the whole batch, g
+  // (docs/api/brew-servings.md §6c); null when kept as concentrate.
+  jarWaterGrams: number | null;
   // The window this brew aimed for (the recipe's, or changed for this brew;
   // docs/api/brew-logs.md §6): a long style's steep in hours, any other
   // timed brew's finish (espresso: shot time) in seconds. Both or neither.
@@ -279,6 +282,7 @@ export function summarize(
     steepTemp: brew.steepTemp,
     dilutionRatio: brew.dilutionRatio,
     dilutedWith: brew.dilutedWith,
+    jarWaterGrams: brew.jarWaterGrams,
     steepMinHours: brew.steepMinHours,
     steepMaxHours: brew.steepMaxHours,
     expectedFinishMinSec: brew.expectedFinishMinSec,

@@ -38,14 +38,16 @@ by an owner (`403` otherwise). Viewers are read-only.
 }
 ```
 
-- `concentrateGrams`: the concentrate poured, > 0, one decimal. 1 g counts
-  as 1 ml.
+- `concentrateGrams`: what was poured from the jar, > 0, one decimal: the
+  concentrate, or, from a batch diluted in the jar (`jarWaterGrams`), the
+  diluted coffee. 1 g counts as 1 ml.
 - `diluentGrams`: what it was topped up with, ≥ 0, or `null`. `null` or `0`
   is served neat.
 - `dilutedWith`: one of `DILUTION_WITH` (`water`, `milk`, `ice`, `other`);
   `water` when a diluent is sent without it, `null` when neat.
-- `dilutionRatio` (read-only): 1 : this, diluent ÷ concentrate, rounded to
-  2 decimals; `null` when neat.
+- `dilutionRatio` (read-only): the glass's own, 1 : this, diluent ÷ what was
+  poured, rounded to 2 decimals; `null` when neat. A jar's dilution isn't
+  in it: clients work out the overall strength with the batch's yield.
 - `timestamp` (default now, at most 5 minutes ahead) and `utcOffsetMinutes`
   give the serving's local day, as on brew logs (§6).
 - `rating` (0.5–5 in 0.5 steps), `tastingNotes` (≤ 5000 chars) and
@@ -53,8 +55,14 @@ by an owner (`403` otherwise). Viewers are read-only.
   in wheel order) are optional.
 - `userId` / `loggedBy` are `null` once the person deleted their account.
 
-The batch's stock is worked out by clients: its yield (measured, else
-estimated, `frontend/src/lib/batch.ts`) minus the brew log's `pouredGrams`.
+**Diluted in the jar:** dilution normally happens in each glass. A batch
+diluted as a whole records the water added in the brew log's
+`jarWaterGrams` (§6). The jar then holds yield + that water.
+
+The batch's stock is worked out by clients: the jar (its yield, measured or
+else estimated, `frontend/src/lib/batch.ts`, plus `jarWaterGrams`) minus the
+brew log's `pouredGrams`. A serving's share of the batch's caffeine is what it
+poured ÷ the jar (never past the whole batch, `servingShare`).
 
 ## `GET /api/workspaces/:workspaceId/brew-logs/:brewLogId/servings`
 

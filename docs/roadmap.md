@@ -2913,3 +2913,23 @@ out of Cold brew, and would lock a batch's servings. Contract: `api/brew-logs.md
   rows, and the journal entry's batch rows.
 - **Backups:** an older file's brews take their recipe's style on restore.
 
+## Cold brew servings on the journal entry (built)
+
+Branch `servings-ui`, migration 0119. The servings API had no screens.
+Contract: `api/brew-servings.md` §6c; plan in backlog item 14.
+
+- **The batch card** on a finished long cold brew's entry: "Made ≈ 320 g ·
+  poured 200 g · ≈ 120 g left", the servings (when, who, amounts and the
+  strength as drunk, rating, flavors, notes), Log a serving, Batch finished
+  / Reopen. Viewers read it only.
+- **Dilution happens in the glass:** the glass's water starts at the
+  batch's "Served diluted" × what's poured and stops following once typed.
+  **Diluted in the jar** (`brew_logs.jar_water_grams`, on the batch's form)
+  is for a batch diluted as a whole: servings pour ready to drink, a
+  serving's share is poured ÷ jar (yield + water).
+- **Unweighed batch:** the first serving's form asks for the concentrate
+  made (saved on the brew); otherwise the stock shows "≈".
+- **Deleting:** a batch with servings lists them and who logged them and
+  asks for "I understand" (rule 7); a serving deletes with a plain confirm.
+- **Lists:** Journal cards show "≈ 120 g left" or "Finished"; the Brew page
+  has an "In the fridge" card of open batches (on trial).

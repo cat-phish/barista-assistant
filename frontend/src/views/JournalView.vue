@@ -19,6 +19,7 @@ import { formatDoseLine, formatGrams, formatGrind, formatListDay, formatTime, fo
 import { hasFilters, journalSummary, parseJournalQuery, STATUSES, toApiQuery, toJournalQuery, type JournalFilters } from '../lib/journalFilters';
 import { RANGES } from '../lib/statsRange';
 import { formatSize } from '../lib/servings';
+import { batchStock, stockText } from '../lib/batch';
 import { formatTemp } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -35,7 +36,12 @@ function aiBadge(log: BrewLog): { kind: 'due' | 'none'; label: string; title: st
 }
 
 const workspaces = useWorkspaceStore();
-const { temperatureUnit } = usePreferences();
+const { temperatureUnit, recipeRoastLevel } = usePreferences();
+// A cold brew batch's stock on its card (docs/api/brew-servings.md §6c).
+const stock = (log: BrewLog) => {
+  const st = batchStock(log, recipeRoastLevel.value);
+  return st ? { text: stockText(st), finished: st.finished } : null;
+};
 const route = useRoute();
 const router = useRouter();
 
@@ -216,6 +222,7 @@ const cardProps = (id: string) =>
               <span class="when"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(log.id) ? '☑' : '☐' }}</span>{{ formatWhen(log.timestamp) }}</span>
               <span v-if="log.steeping" class="badge steeping">Steeping</span>
               <span v-else class="right">
+                <span v-if="stock(log)" class="badge stock" :class="{ finished: stock(log)!.finished }">{{ stock(log)!.text }}</span>
                 <span v-if="aiBadge(log)" class="badge ai" :class="aiBadge(log)!.kind" :title="aiBadge(log)!.title">{{ aiBadge(log)!.label }}</span>
                 <RatingStars :rating="log.rating ?? log.drinkRating" />
               </span>
@@ -271,6 +278,17 @@ const cardProps = (id: string) =>
   border-radius: 999px;
   border: 1px solid var(--brand);
   color: var(--brand);
+}
+.badge.stock {
+  font-size: 0.8rem;
+  padding: 1px var(--space-2);
+  border-radius: 999px;
+  border: 1px solid var(--brand);
+  color: var(--brand);
+}
+.badge.stock.finished {
+  border-color: var(--border);
+  color: var(--text-muted);
 }
 .right {
   display: inline-flex;

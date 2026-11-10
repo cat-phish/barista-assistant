@@ -1,0 +1,1 @@
+ALTER TABLE `brew_logs` ADD `jar_water_grams` decimal(6,1);

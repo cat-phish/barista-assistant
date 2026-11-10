@@ -1259,6 +1259,10 @@ export const brewLogs = mysqlTable("brew_logs", {
   steepTemp: varchar("steep_temp", { length: 10 }).$type<SteepTemp>(), // STEEP_TEMPS
   dilutionRatio: decimal("dilution_ratio", { precision: 3, scale: 1, mode: "number" }),
   dilutedWith: varchar("diluted_with", { length: 10 }).$type<DilutionWith>(), // DILUTION_WITH
+  // A long cold brew batch diluted in the jar (docs/api/brew-servings.md
+  // §6c): water added to the whole batch, in grams. Null = kept as
+  // concentrate (dilution then happens in each glass).
+  jarWaterGrams: decimal("jar_water_grams", { precision: 6, scale: 1, mode: "number" }),
   // The window this brew aimed for, set when it starts (the recipe's, or
   // changed for this brew; docs/api/brew-logs.md §6). Each pair is both or
   // neither: a long style's steep in hours (the ready reminder comes at its

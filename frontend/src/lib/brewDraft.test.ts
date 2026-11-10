@@ -4,11 +4,11 @@ import { draftFromLog, emptyDraft, netYield, parseBrewDraft, setVessel } from '.
 
 describe('parseBrewDraft', () => {
   it('parses a complete draft, trimming text and blanking empty optionals', () => {
-    const draft = { dose: '18,5', water: '250', ice: '', yieldGrams: '', vesselId: '', vesselGrams: null, tds: '', temp: '', grinderId: '', waterProfileId: '', toolIds: [], problemIds: [], flavors: [], firstDrop: '', grind: '  ', rpm: '', beanIn: '', groundOut: '', steepTemp: '' as const, dilution: '', dilutedWith: '' as const, time: '0:28', rating: 4, notes: ' Bright ', drinkRating: 5, drinkNotes: ' Sweet ' };
+    const draft = { dose: '18,5', water: '250', ice: '', yieldGrams: '', vesselId: '', vesselGrams: null, tds: '', temp: '', grinderId: '', waterProfileId: '', toolIds: [], problemIds: [], flavors: [], firstDrop: '', grind: '  ', rpm: '', beanIn: '', groundOut: '', steepTemp: '' as const, dilution: '', dilutedWith: '' as const, jarWater: '', time: '0:28', rating: 4, notes: ' Bright ', drinkRating: 5, drinkNotes: ' Sweet ' };
     expect(parseBrewDraft(draft)).toEqual({
       errors: {},
       firstDropSec: null,
-      values: { actualDoseGrams: 18.5, actualWaterGrams: 250, actualIceGrams: null, actualYieldGrams: null, vesselId: null, vesselWeightGrams: null, tdsPercent: null, actualTempC: null, grinderId: null, waterProfileId: null, toolIds: [], problemIds: [], flavors: [], actualGrindSetting: null, grindRpm: null, beanWeightInGrams: null, groundWeightOutGrams: null, steepTemp: null, dilutionRatio: null, dilutedWith: null, actualTimeSec: 28, rating: 4, tastingNotes: 'Bright', drinkRating: null, drinkTastingNotes: null },
+      values: { actualDoseGrams: 18.5, actualWaterGrams: 250, actualIceGrams: null, actualYieldGrams: null, vesselId: null, vesselWeightGrams: null, tdsPercent: null, actualTempC: null, grinderId: null, waterProfileId: null, toolIds: [], problemIds: [], flavors: [], actualGrindSetting: null, grindRpm: null, beanWeightInGrams: null, groundWeightOutGrams: null, steepTemp: null, dilutionRatio: null, dilutedWith: null, jarWaterGrams: null, actualTimeSec: 28, rating: 4, tastingNotes: 'Bright', drinkRating: null, drinkTastingNotes: null },
     });
   });
   it("sends the drink's own rating and notes only for a drink with ingredients", () => {
@@ -146,16 +146,16 @@ describe('weighing in a vessel', () => {
     expect(d).toMatchObject({ vesselId: '', vesselGrams: null });
   });
   it('editing a brew shows the total, from the weight it saved', () => {
-    const log = { actualDoseGrams: 15, actualWaterGrams: 250, actualIceGrams: null, actualYieldGrams: 225.1, vesselId: 'carafe', vesselWeightGrams: 312.5, tdsPercent: null, actualTempC: null, grinderId: null, waterProfileId: null, tools: [], problems: [], flavors: [], marks: [], actualGrindSetting: null, grindRpm: null, beanWeightInGrams: null, groundWeightOutGrams: null, steepTemp: null, dilutionRatio: null, dilutedWith: null, actualTimeSec: 180, rating: null, tastingNotes: null, drinkRating: null, drinkTastingNotes: null } as unknown as BrewLog;
+    const log = { actualDoseGrams: 15, actualWaterGrams: 250, actualIceGrams: null, actualYieldGrams: 225.1, vesselId: 'carafe', vesselWeightGrams: 312.5, tdsPercent: null, actualTempC: null, grinderId: null, waterProfileId: null, tools: [], problems: [], flavors: [], marks: [], actualGrindSetting: null, grindRpm: null, beanWeightInGrams: null, groundWeightOutGrams: null, steepTemp: null, dilutionRatio: null, dilutedWith: null, jarWaterGrams: null, actualTimeSec: 180, rating: null, tastingNotes: null, drinkRating: null, drinkTastingNotes: null } as unknown as BrewLog;
     expect(draftFromLog(log)).toMatchObject({ yieldGrams: '537.6', vesselId: 'carafe', vesselGrams: 312.5 });
   });
 });
 
 describe('draftFromLog', () => {
   it('round-trips a stored brew log', () => {
-    const log = { actualDoseGrams: 15, actualWaterGrams: 250.5, actualIceGrams: null, actualYieldGrams: null, tdsPercent: 1.38, actualTempC: 93.5, grinderId: 'g1', waterProfileId: 'w1', tools: [{ id: 't1', name: 'WDT' }], problems: [{ id: 'p1', name: 'Fast drawdown' }], flavors: [{ key: 'fruity.citrus.lemon', label: 'Lemon' }], actualGrindSetting: 20.5, grindRpm: 1100, beanWeightInGrams: 18.2, groundWeightOutGrams: null, steepTemp: 'fridge', dilutionRatio: 1, dilutedWith: 'milk', actualTimeSec: 150, rating: null, tastingNotes: null, drinkRating: 3, drinkTastingNotes: 'milky' } as BrewLog;
+    const log = { actualDoseGrams: 15, actualWaterGrams: 250.5, actualIceGrams: null, actualYieldGrams: null, tdsPercent: 1.38, actualTempC: 93.5, grinderId: 'g1', waterProfileId: 'w1', tools: [{ id: 't1', name: 'WDT' }], problems: [{ id: 'p1', name: 'Fast drawdown' }], flavors: [{ key: 'fruity.citrus.lemon', label: 'Lemon' }], actualGrindSetting: 20.5, grindRpm: 1100, beanWeightInGrams: 18.2, groundWeightOutGrams: null, steepTemp: 'fridge', dilutionRatio: 1, dilutedWith: 'milk', jarWaterGrams: 310, actualTimeSec: 150, rating: null, tastingNotes: null, drinkRating: 3, drinkTastingNotes: 'milky' } as BrewLog;
     const draft = draftFromLog(log);
-    expect(draft).toEqual({ dose: '15', water: '250.5', ice: '', yieldGrams: '', vesselId: '', vesselGrams: null, tds: '1.38', temp: '93.5', grinderId: 'g1', waterProfileId: 'w1', toolIds: ['t1'], problemIds: ['p1'], flavors: ['fruity.citrus.lemon'], firstDrop: '', grind: '20.5', rpm: '1100', beanIn: '18.2', groundOut: '', steepTemp: 'fridge', dilution: '1', dilutedWith: 'milk', time: '2:30', rating: null, notes: '', drinkRating: 3, drinkNotes: 'milky' });
+    expect(draft).toEqual({ dose: '15', water: '250.5', ice: '', yieldGrams: '', vesselId: '', vesselGrams: null, tds: '1.38', temp: '93.5', grinderId: 'g1', waterProfileId: 'w1', toolIds: ['t1'], problemIds: ['p1'], flavors: ['fruity.citrus.lemon'], firstDrop: '', grind: '20.5', rpm: '1100', beanIn: '18.2', groundOut: '', steepTemp: 'fridge', dilution: '1', dilutedWith: 'milk', jarWater: '310', time: '2:30', rating: null, notes: '', drinkRating: 3, drinkNotes: 'milky' });
     expect(parseBrewDraft(draft, null, false, 'c', { variableSpeed: true, rpmMin: null, rpmMax: null }).values).toMatchObject({ actualDoseGrams: 15, actualWaterGrams: 250.5, actualYieldGrams: null, tdsPercent: 1.38, actualTempC: 93.5, grinderId: 'g1', waterProfileId: 'w1', toolIds: ['t1'], problemIds: ['p1'], flavors: ['fruity.citrus.lemon'], grindRpm: 1100, beanWeightInGrams: 18.2, groundWeightOutGrams: null, actualTimeSec: 150 });
   });
 });

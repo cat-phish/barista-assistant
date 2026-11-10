@@ -63,6 +63,7 @@ const BREW: Record<keyof BrewSummary, Sees> = {
   steepTemp: "always",
   dilutionRatio: "always",
   dilutedWith: "always",
+  jarWaterGrams: "always", // goes with the dilution: how strong the jar is
   steepMinHours: "always",
   steepMaxHours: "always",
   expectedFinishMinSec: "always",
@@ -179,7 +180,7 @@ const brew: BrewSummary = {
   prepTools: ["WDT"], problems: ["Channeling"], flavors: ["Blueberry (Fruity › Berry)"], actualDoseGrams: 60, actualWaterGrams: 500, actualIceGrams: 100, actualYieldGrams: 420, brewRatio: 8.33, tdsPercent: 4.2, extractionYieldPercent: 19.5,
   actualTempC: 20, stepTempShiftC: 1, actualGrindSetting: 12, grindRpm: 900, steeping: true, beanWeightInGrams: 60.3, groundWeightOutGrams: 60, grinderRetentionGrams: 0.3, actualTimeSec: 57600,
   drink: { name: "Iced latte", ingredientTypes: ["milk"] }, rating: 4, tastingNotes: "Chocolate", drinkRating: 5, drinkTastingNotes: "Sweet", steepTemp: "fridge", dilutionRatio: 1,
-  dilutedWith: "milk", steepMinHours: 14, steepMaxHours: 20, expectedFinishMinSec: 100, expectedFinishMaxSec: 200,
+  dilutedWith: "milk", jarWaterGrams: 100, steepMinHours: 14, steepMaxHours: 20, expectedFinishMinSec: 100, expectedFinishMaxSec: 200,
 } as BrewSummary;
 const full: BrewContext = {
   bean: { roasterName: "Onyx", beanName: "Monarch", batchNumber: "7", process: "Washed", roastLevel: "light", detailedRoastLevel: "city", roastType: "filter", blendType: "blend", decaf: true, roastDate: "2026-10-10", flavorProfile: "Peach", originArea: "africa", country: "Ethiopia", region: "Guji", altitudeMasl: 2000, varieties: ["Heirloom"], species: ["arabica"], roastWeightLossPercent: 15 },

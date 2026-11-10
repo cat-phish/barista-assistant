@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { analysisApi, brewLogsApi } from '../api/brews';
 import { ApiError, errorMessage } from '../api/client';
-import type { BrewLog, LlmAnalysis, Mark } from '../api/types';
+import type { BrewLog, BrewServing, LlmAnalysis, Mark } from '../api/types';
 import AiNoteField from '../components/AiNoteField.vue';
 import AiRequestDialog from '../components/AiRequestDialog.vue';
 import AnalysisCard from '../components/AnalysisCard.vue';
@@ -16,7 +16,9 @@ import { brewProblemsApi } from '../api/brewProblems';
 import AppHeader from '../components/AppHeader.vue';
 import BrewFields from '../components/BrewFields.vue';
 import FlavorWheel from '../components/FlavorWheel.vue';
+import BatchServings from '../components/BatchServings.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
+import { servingsApi } from '../api/servings';
 import RatingInput from '../components/RatingInput.vue';
 import RatingStars from '../components/RatingStars.vue';
 import { useAnalysis } from '../composables/useAnalysis';
@@ -51,6 +53,7 @@ const aiAvailable = useAiAvailable();
 const auth = useAuthStore();
 const { temperatureUnit, recipeRoastLevel } = usePreferences();
 const router = useRouter();
+const route = useRoute();
 
 const log = ref<BrewLog | null>(null);
 const storedAnalysis = ref<LlmAnalysis | null>(null);
@@ -283,6 +286,34 @@ async function saveRating(): Promise<void> {
 const confirmingDelete = ref(false);
 const deleting = ref(false);
 const deleteError = ref('');
+// A batch with servings deletes them too, others' included: list them and
+// ask for "I understand" (CLAUDE.md rule 7).
+const deleteServings = ref<BrewServing[] | null>(null);
+const understood = ref(false);
+const hasServings = computed(() => (log.value?.servingCount ?? 0) > 0);
+watch(confirmingDelete, async (open) => {
+  const ws = workspaces.current?.id;
+  understood.value = false;
+  deleteServings.value = null;
+  deleteError.value = '';
+  if (!open || !ws || !log.value || !hasServings.value) return;
+  try {
+    deleteServings.value = (await servingsApi.list(ws, log.value.id)).servings;
+  } catch (err) {
+    deleteError.value = errorMessage(err);
+  }
+});
+// "3 servings: 2 by you, 1 by sam@example.com"
+const servingsWarning = computed(() => {
+  const list = deleteServings.value ?? [];
+  const by = new Map<string, number>();
+  for (const s of list) {
+    const who = s.loggedBy?.id === auth.user?.id ? 'you' : (s.loggedBy?.email ?? 'a deleted user');
+    by.set(who, (by.get(who) ?? 0) + 1);
+  }
+  return `${list.length} serving${list.length === 1 ? '' : 's'} poured from it: ${[...by].map(([who, n]) => `${n} by ${who}`).join(', ')}`;
+});
+const deleteReady = computed(() => !hasServings.value || (deleteServings.value !== null && understood.value));
 async function remove(): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws || !log.value) return;
@@ -443,6 +474,8 @@ const markRows = computed(() => {
         </div>
       </form>
 
+      <BatchServings v-if="isBatch && !log.steeping && !editing" :log="log" :can-modify-batch="canModify" :yield-estimate="batchEstimate" :start-serving="route.query.serve === '1'" @updated="(l) => (log = l)" />
+
       <!-- AI analysis -->
       <section class="card stack">
         <h2>AI suggestion</h2>
@@ -480,16 +513,34 @@ const markRows = computed(() => {
   </main>
 
   <ConfirmDialog :open="confirmingDelete" title="Delete this brew?" @cancel="confirmingDelete = false">
-    <p>This brew log and its AI suggestions will be permanently deleted.</p>
+    <p v-if="!hasServings">This brew log and its AI suggestions will be permanently deleted.</p>
+    <template v-else>
+      <p>This batch, its AI suggestions and every serving poured from it will be permanently deleted:</p>
+      <p v-if="deleteServings === null && !deleteError" class="muted" aria-live="polite">Checking its servings…</p>
+      <ul v-else-if="deleteServings" class="warnings">
+        <li>{{ servingsWarning }}</li>
+      </ul>
+      <label class="checkbox">
+        <input v-model="understood" type="checkbox" />
+        I understand
+      </label>
+    </template>
     <p v-if="deleteError" class="form-error" role="alert">{{ deleteError }}</p>
     <template #actions>
-      <button class="btn btn-danger" type="button" :disabled="deleting" @click="remove">Delete brew</button>
+      <button class="btn btn-danger" type="button" :disabled="deleting || !deleteReady" @click="remove">Delete brew</button>
       <button class="btn btn-secondary" type="button" :disabled="deleting" @click="confirmingDelete = false">Cancel</button>
     </template>
   </ConfirmDialog>
 </template>
 
 <style scoped>
+.warnings {
+  margin: var(--space-2) 0;
+  padding-left: var(--space-4);
+}
+.checkbox {
+  margin-top: var(--space-2);
+}
 .preview-link {
   align-self: flex-start;
 }

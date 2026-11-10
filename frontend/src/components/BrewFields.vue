@@ -22,6 +22,7 @@ const draft = defineModel<BrewDraft>({ required: true });
 const { show, reveal } = useFieldVisibility();
 reveal({
   'brew.yield': draft.value.yieldGrams,
+  'brew.jarWater': draft.value.jarWater,
   'brew.tds': draft.value.tds,
   'brew.temp': draft.value.temp,
   'brew.grinder': draft.value.grinderId,
@@ -250,6 +251,14 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
         <span v-else-if="batchHint" class="hint">{{ batchHint }}</span>
       </div>
       <VesselField v-if="show('brew.vessel')" v-model="draft" :vessels="vessels ?? []" />
+    </div>
+    <div v-if="batch && show('brew.jarWater')" class="form-row">
+      <div class="field">
+        <label for="brew-jar-water">Water added to the jar (g)</label>
+        <input id="brew-jar-water" v-model="draft.jarWater" inputmode="decimal" placeholder="none" :aria-invalid="showErrors && !!errors.jarWater" />
+        <span v-if="showErrors && errors.jarWater" class="field-error">{{ errors.jarWater }}</span>
+        <span v-else class="hint">Only if you diluted the whole batch. Usually each glass is diluted when it's poured</span>
+      </div>
     </div>
     <div v-if="show('brew.tds')" class="form-row">
       <div class="field">

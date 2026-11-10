@@ -138,4 +138,13 @@ describe("brew servings", () => {
     expect((await owner.agent.patch(`${url}/${id}`).send({ rating: 3 })).status).toBe(200);
     expect((await owner.agent.put(`${base}/brew-logs/${batch}/batch`).send({ finished: true })).status).toBe(200);
   });
+
+  it("records water added to the jar on the batch", async () => {
+    const { owner, base, batch } = await setup();
+    const res = await owner.agent.patch(`${base}/brew-logs/${batch}`).send({ jarWaterGrams: 310 });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.brewLog.jarWaterGrams).toBe(310);
+    expect((await owner.agent.patch(`${base}/brew-logs/${batch}`).send({ jarWaterGrams: -1 })).status).toBe(400);
+    expect((await owner.agent.patch(`${base}/brew-logs/${batch}`).send({ jarWaterGrams: null })).body.brewLog.jarWaterGrams).toBeNull();
+  });
 });
