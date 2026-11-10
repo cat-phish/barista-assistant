@@ -68,6 +68,8 @@ export interface BrewLogDetails extends Omit<BrewLog, "recipeCopy"> {
   vessel: { id: string; name: string } | null; // what it was weighed in; archived included
   // The brewer it was made with (the recipe's at the time); archived included.
   brewer: { id: string; name: string; kind: MethodKind } | null;
+  // The style it was brewed as (set from the recipe and kept, like brewer).
+  style: RecipeStyleSummary | null;
   // The drink it was for; hasIngredients = the shot and the drink are tasted apart.
   drink: { id: string; name: string; hasIngredients: boolean } | null;
   marks: Mark[]; // when things actually happened, earliest first
@@ -402,10 +404,10 @@ async function drinkError(tx: Tx, drinkId: string | null, recipeId: string | nul
 }
 
 // The recipe's brewer and its kind: a log records the brewer it was made with.
-async function recipeBrewer(tx: Tx, recipeId: string | null | undefined): Promise<{ brewerId: string; kind: MethodKind } | null> {
+async function recipeBrewer(tx: Tx, recipeId: string | null | undefined): Promise<{ brewerId: string; kind: MethodKind; styleId: string | null } | null> {
   if (!recipeId) return null;
   const [row] = await tx
-    .select({ brewerId: brewers.id, kind: brewers.kind })
+    .select({ brewerId: brewers.id, kind: brewers.kind, styleId: recipes.styleId })
     .from(recipes)
     .innerJoin(brewers, eq(recipes.brewerId, brewers.id))
     .where(eq(recipes.id, recipeId));
@@ -510,6 +512,8 @@ async function referencesInWorkspace(
 
 // The log's own brewer, joined apart from the recipe's (which gives its kind).
 const logBrewers = alias(brewers, "log_brewer");
+// …and its own style (brewLogs.styleId), kept when the recipe changes.
+const logStyles = alias(recipeStyles, "log_style");
 
 export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0): Promise<BrewLogDetails[]> {
   const rows = await db
@@ -558,9 +562,11 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       recipe: { id: recipes.id, name: recipes.name, expectedYieldGrams: recipes.expectedYieldGrams },
       // Separate columns: a nested object spanning two left joins isn't nulled as a whole.
       recipeMethodKind: brewers.kind,
-      styleId: recipeStyles.id,
-      styleName: recipeStyles.name,
-      styleBrewsLike: recipeStyles.brewsLike,
+      recipeStyleId: recipeStyles.id,
+      recipeStyleName: recipeStyles.name,
+      recipeStyleBrewsLike: recipeStyles.brewsLike,
+      styleId: brewLogs.styleId,
+      style: { id: logStyles.id, name: logStyles.name, brewsLike: logStyles.brewsLike },
       grinder: { id: grinders.id, name: grinders.name },
       waterProfile: { id: waterProfiles.id, name: waterProfiles.name },
       vessel: { id: vessels.id, name: vessels.name },
@@ -582,6 +588,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
     .leftJoin(waterProfiles, eq(brewLogs.waterProfileId, waterProfiles.id))
     .leftJoin(vessels, eq(brewLogs.vesselId, vessels.id))
     .leftJoin(logBrewers, eq(brewLogs.brewerId, logBrewers.id))
+    .leftJoin(logStyles, eq(brewLogs.styleId, logStyles.id))
     .leftJoin(drinks, eq(brewLogs.drinkId, drinks.id))
     // Left join: logs of deleted accounts (userId null) must still be listed.
     .leftJoin(users, eq(brewLogs.userId, users.id))
@@ -593,7 +600,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
   const ids = rows.map((r) => r.id);
   const [marks, tools, problems, flavors, poured] = await Promise.all([marksFor(ids), toolsFor(ids), problemsFor(ids), flavorsFor(rows), servingTotals(ids)]);
   // A recipe always has a method (inner FK), so its kind is set whenever recipe is.
-  return rows.map(({ recipeMethodKind, styleId, styleName, styleBrewsLike, recipe, drink, drinkHasIngredients, analyzedFlag, ...row }) => ({
+  return rows.map(({ recipeMethodKind, recipeStyleId: styleId, recipeStyleName: styleName, recipeStyleBrewsLike: styleBrewsLike, recipe, drink, drinkHasIngredients, analyzedFlag, ...row }) => ({
     ...row,
     analyzed: Number(analyzedFlag) === 1,
     recipe:
@@ -724,8 +731,8 @@ brewLogsRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<Brew
   if (query.recipeId) conditions.push(eq(brewLogs.recipeId, query.recipeId));
   if (query.brewerId) conditions.push(eq(brewLogs.brewerId, query.brewerId));
   if (query.mine) conditions.push(eq(brewLogs.userId, userId));
-  // The log's style is its recipe's (§5e).
-  if (query.styleId) conditions.push(inArray(brewLogs.recipeId, db.select({ id: recipes.id }).from(recipes).where(eq(recipes.styleId, query.styleId))));
+  // The style it was brewed as, kept when the recipe changes (§6).
+  if (query.styleId) conditions.push(eq(brewLogs.styleId, query.styleId));
   if (query.status) conditions.push(statusCondition(query.status));
   if (query.from) conditions.push(localFrom(Date.parse(query.from)));
   if (query.to) conditions.push(not(localFrom(Date.parse(query.to) + DAY_MS)));
@@ -799,7 +806,7 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Cre
     const steepWindow = fields.steeping && fields.steepMinHours === undefined && fields.steepMaxHours === undefined ? await recipeSteepWindow(tx, fields.recipeId) : {};
     // The recipe as brewed, for the AI (§6, "Recipe copy").
     const copy = await recipeCopy(tx, fields.recipeId);
-    await tx.insert(brewLogs).values({ id, workspaceId, userId, ...fields, ...steepWindow, brewerId: brewer?.brewerId ?? null, recipeCopy: copy });
+    await tx.insert(brewLogs).values({ id, workspaceId, userId, ...fields, ...steepWindow, brewerId: brewer?.brewerId ?? null, styleId: brewer?.styleId ?? null, recipeCopy: copy });
     await insertMarks(tx, id, marks);
     await insertTools(tx, id, toolIds);
     await insertProblems(tx, id, problemIds);
@@ -874,7 +881,11 @@ brewLogsRouter.patch(
       // keeps the recipe as brewed (§6, "Recipe copy").
       const newRecipe = "recipeId" in body && (fields.recipeId ?? null) !== log.recipeId;
       const brewerUpdate = {
-        ...("recipeId" in body ? { brewerId: (await recipeBrewer(tx, fields.recipeId))?.brewerId ?? null } : {}),
+        ...("recipeId" in body ? await (async () => {
+          const r = await recipeBrewer(tx, fields.recipeId);
+          // The style as brewed is kept unless the recipe really changes (§6).
+          return { brewerId: r?.brewerId ?? null, ...(newRecipe ? { styleId: r?.styleId ?? null } : {}) };
+        })() : {}),
         ...(newRecipe ? { recipeCopy: await recipeCopy(tx, fields.recipeId) } : {}),
       };
       const touched = ["recipeId", "actualWaterGrams", "actualIceGrams", "actualYieldGrams", "marks", "actualTimeSec"];

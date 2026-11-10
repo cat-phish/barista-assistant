@@ -1182,6 +1182,10 @@ export const brewLogs = mysqlTable("brew_logs", {
   recipeId: varchar("recipe_id", { length: 36 }).references(() => recipes.id, {
     onDelete: "set null",
   }),
+  // The recipe's style when brewed (docs/api/brew-logs.md §6): set from the
+  // recipe like brewerId, follows a change of this brew's recipe, and kept
+  // when the recipe is later restyled or deleted. Decides a cold brew batch.
+  styleId: varchar("style_id", { length: 36 }).references(() => recipeStyles.id, { onDelete: "set null" }),
   // Which grinder actualGrindSetting refers to. Optional. Grinders in use are
   // archived, not deleted, so this normally survives; set null as a backstop.
   grinderId: varchar("grinder_id", { length: 36 }).references(() => grinders.id, {

@@ -317,6 +317,19 @@ describe("workspace backup and restore (docs/api/backup.md §2b)", () => {
     expect(after.tables.brew_logs.every((r: { stepTempShiftC: number | null }) => r.stepTempShiftC === null)).toBe(true);
   });
 
+  it("restores brews from a file before brews kept their style with their recipe's", async () => {
+    const { owner, base } = await populated();
+    const backup = (await owner.agent.get(`${base}/backup`)).body;
+    const styles = new Map(backup.tables.recipes.map((r: { id: string; styleId: string | null }) => [r.id, r.styleId]));
+    expect(backup.tables.brew_logs.every((r: { recipeId: string; styleId: string | null }) => r.styleId === styles.get(r.recipeId))).toBe(true);
+    const old = { ...backup, tables: { ...backup.tables, brew_logs: backup.tables.brew_logs.map(({ styleId: _gone, ...r }: Record<string, unknown>) => r) } };
+    const res = await owner.agent.post("/api/workspaces/restore").send({ name: "Old", slug: `old-${randomUUID().slice(0, 8)}`, backup: old });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    const logs = (await owner.agent.get(`/api/workspaces/${res.body.workspaceId}/brew-logs`)).body.brewLogs as Array<{ style: { brewsLike: string } | null; recipe: { style: { brewsLike: string } | null } | null }>;
+    expect(logs.map((l) => l.style?.brewsLike).sort()).toEqual(logs.map((l) => l.recipe?.style?.brewsLike).sort());
+    expect(logs.some((l) => l.style?.brewsLike === "cold_brew")).toBe(true);
+  });
+
   it("keeps each brew's recipe copy, and restores a file from before copies as none (docs/api/backup.md §2b)", async () => {
     const { owner, base } = await populated();
     const backup = (await owner.agent.get(`${base}/backup`)).body;

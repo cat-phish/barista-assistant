@@ -2892,7 +2892,24 @@ way to find, say, every cold brew. Contract: `api/brew-logs.md` §6 (GET list).
   custom from–to), status (Steeping, Not rated, Not analyzed) and Only my
   brews, in a folded Filters bar (`FilterBar.vue`, as the chat attach
   picker) whose line says what's applied, with Clear filters.
+- **Only mine** sits beside the bar, not in it, and starts on (`mine=0` in
+  the URL when off); Clear filters leaves it. Made a rule (CLAUDE.md 13).
 - **API:** the list takes `styleId` (the recipe's style) and `status`;
   not rated and not analyzed count finished brews only.
 - **In the URL** (`lib/journalFilters.ts`), defaults left out, so Back and
   reloads keep them and old `?bean=` links still work.
+
+## Brews keep their style (built)
+
+Branch `brew-style`, migration 0118. Whether a brew was a cold brew came from
+the recipe it links to now, so restyling or deleting a recipe moved old brews
+out of Cold brew, and would lock a batch's servings. Contract: `api/brew-logs.md` §6.
+
+- **`brew_logs.style_id`**, like `brewerId`: set from the recipe, follows a
+  change of the brew's recipe, kept otherwise. Backfilled from each brew's
+  recipe (none of the existing brews had a recipe copy to go on).
+- **Uses it:** the Journal's Style filter, the batch check (`isBatchStyle`:
+  the brew's style, else its recipe copy's, else having servings), Insights
+  rows, and the journal entry's batch rows.
+- **Backups:** an older file's brews take their recipe's style on restore.
+

@@ -3,8 +3,11 @@
 > Part of the API spec. Conventions, auth rules and the section index are in
 > [README.md](README.md); a bare `§N` refers to that index.
 
-A finished long cold brew (a recipe style that brews like `cold_brew` or
-`kyoto_drip`, `LONG_STYLES`) is a **batch**: stock in the fridge. Each glass
+A finished long cold brew is a **batch**: stock in the fridge. A brew is
+one when the style it was brewed as (its own `style`, §6, kept when the
+recipe changes) brews like `cold_brew` or `kyoto_drip` (`LONG_STYLES`, `isBatchStyle`).
+Without that style, its recipe copy's style decides. A brew that already
+has servings stays a batch, whatever its style. Each glass
 taken from it is a **serving**, with how much concentrate was poured, what
 it was diluted with, and how it tasted. Insights counts a batch's servings
 instead of the batch once it has any (`stats.md` §11, backlog item 14).

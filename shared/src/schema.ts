@@ -620,6 +620,9 @@ export type RecipeStyle = (typeof RECIPE_STYLES)[number];
 // diluted. Kyoto drip is percolation; cold brew and rapid cold (an OXO Rapid
 // Brewer) are immersion for extraction yield.
 export const LONG_STYLES: readonly RecipeStyle[] = ["cold_brew", "kyoto_drip"];
+// A long style's finished brew is a batch servings are taken from
+// (docs/api/brew-servings.md §6c).
+export const isBatchStyle = (brewsLike: RecipeStyle | null | undefined): boolean => !!brewsLike && LONG_STYLES.includes(brewsLike);
 export const COLD_STYLES: readonly RecipeStyle[] = ["cold_brew", "kyoto_drip", "rapid_cold"];
 export const STEEP_TEMPS = ["fridge", "room"] as const;
 export type SteepTemp = (typeof STEEP_TEMPS)[number];
@@ -1476,6 +1479,10 @@ export const brewLogs = mysqlTable("brew_logs", {
   recipeId: varchar("recipe_id", { length: 36 }).references(() => recipes.id, {
     onDelete: "set null",
   }),
+  // The recipe's style when brewed (docs/api/brew-logs.md §6): set from the
+  // recipe like brewerId, follows a change of this brew's recipe, and kept
+  // when the recipe is later restyled or deleted. Decides a cold brew batch.
+  styleId: varchar("style_id", { length: 36 }).references(() => recipeStyles.id, { onDelete: "set null" }),
   // Which grinder actualGrindSetting refers to. Optional. Grinders in use are
   // archived, not deleted, so this normally survives; set null as a backstop.
   grinderId: varchar("grinder_id", { length: 36 }).references(() => grinders.id, {

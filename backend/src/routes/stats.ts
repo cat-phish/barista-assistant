@@ -168,7 +168,7 @@ async function loadBrews(workspaceId: string, callerId: string, q: z.infer<typeo
       recipeId: brewLogs.recipeId,
       brewerId: brewLogs.brewerId,
       methodId: brewers.methodId,
-      styleId: recipeStyles.id,
+      styleId: brewLogs.styleId, // the style it was brewed as (brew-logs.md §6)
       brewsLike: recipeStyles.brewsLike,
       grinderId: brewLogs.grinderId,
       drinkId: brewLogs.drinkId,
@@ -193,7 +193,7 @@ async function loadBrews(workspaceId: string, callerId: string, q: z.infer<typeo
     .from(brewLogs)
     .leftJoin(brewers, eq(brewLogs.brewerId, brewers.id))
     .leftJoin(recipes, eq(brewLogs.recipeId, recipes.id))
-    .leftJoin(recipeStyles, eq(recipes.styleId, recipeStyles.id))
+    .leftJoin(recipeStyles, eq(brewLogs.styleId, recipeStyles.id))
     .leftJoin(drinks, eq(brewLogs.drinkId, drinks.id))
     .where(and(...conditions))
     .orderBy(asc(brewLogs.timestamp), asc(brewLogs.id));

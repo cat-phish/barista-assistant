@@ -7,7 +7,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { LEXICON_KEY, LEXICON_LIMITS, type FlavorPick } from "@barista/shared/flavors";
-import { brewLogs, brewServingFlavors, brewServings, DILUTION_WITH, LONG_STYLES, recipes, recipeStyles, users, type DilutionWith } from "@barista/shared/schema";
+import { brewLogs, brewServingFlavors, brewServings, DILUTION_WITH, isBatchStyle, recipeStyles, users, type DilutionWith } from "@barista/shared/schema";
 import { requireMembership, WRITE_ROLES, type Role } from "../auth/membership.js";
 import { db } from "../db.js";
 import { flavorPicks, resolveSaved, type SavedPick } from "../flavorPicks.js";
@@ -72,15 +72,20 @@ function dilution(diluentGrams: number | null | undefined, dilutedWith: Dilution
 }
 
 type BatchState = "not_found" | "not_batch" | "steeping" | { finishedAt: Date | null };
+// A batch by the style it was brewed as (brewLogs.styleId, kept when the
+// recipe changes), else its recipe copy's (a deleted custom style), else
+// because it already has servings.
 async function batchState(params: BatchParams): Promise<BatchState> {
   const [row] = await db
-    .select({ steeping: brewLogs.steeping, finishedAt: brewLogs.batchFinishedAt, brewsLike: recipeStyles.brewsLike })
+    .select({ steeping: brewLogs.steeping, finishedAt: brewLogs.batchFinishedAt, brewsLike: recipeStyles.brewsLike, copy: brewLogs.recipeCopy })
     .from(brewLogs)
-    .leftJoin(recipes, eq(brewLogs.recipeId, recipes.id))
-    .leftJoin(recipeStyles, eq(recipes.styleId, recipeStyles.id))
+    .leftJoin(recipeStyles, eq(brewLogs.styleId, recipeStyles.id))
     .where(and(eq(brewLogs.id, params.brewLogId), eq(brewLogs.workspaceId, params.workspaceId)));
   if (!row) return "not_found";
-  if (!row.brewsLike || !LONG_STYLES.includes(row.brewsLike)) return "not_batch";
+  const batch =
+    isBatchStyle(row.brewsLike ?? row.copy?.style?.brewsLike) ||
+    (await db.select({ id: brewServings.id }).from(brewServings).where(eq(brewServings.brewLogId, params.brewLogId)).limit(1)).length > 0;
+  if (!batch) return "not_batch";
   if (row.steeping) return "steeping";
   return { finishedAt: row.finishedAt };
 }

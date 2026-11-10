@@ -98,7 +98,9 @@ const canModify = computed(() => !!log.value && canModifyBrewLog(log.value, work
 // A long cold brew (cold brew, Kyoto drip) is a batch: servings are taken
 // from it, so its yield (the concentrate made) matters (docs/backlog.md item
 // 14). Unweighed, it's estimated from the brewer's retention, else the roast's.
-const isBatch = computed(() => isLongStyle(log.value?.recipe?.style?.brewsLike));
+// By the style it was brewed as (kept when the recipe changes), or because
+// it already has servings.
+const isBatch = computed(() => !!log.value && (isLongStyle(log.value.style?.brewsLike) || log.value.servingCount > 0));
 const batchBrewer = ref<BrewerRetentionInput | null>(null);
 watch(
   () => (isBatch.value ? (log.value?.brewer?.id ?? null) : null),
