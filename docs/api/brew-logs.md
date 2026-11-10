@@ -107,6 +107,9 @@ says why the last analysis failed or wasn't made (e.g. the daily cap), else
 
 - **Auth Required:** `true` (any member)
 - **Query (all optional):** `beanId`, `recipeId`, `brewerId` (filters);
+  `styleId` (brews whose recipe has that style, §5e: a log's style is its
+  recipe's); `status`: `steeping`, `unrated` (finished, with no rating and
+  no drink rating) or `unanalyzed` (finished, with no AI analysis);
   `mine=1` (only the caller's brews); `from`, `to` (ISO dates, inclusive, on
   the brew's own local date as Insights counts it: UTC when its
   `utcOffsetMinutes` is unknown; `from` after `to` is a `400`); `limit`

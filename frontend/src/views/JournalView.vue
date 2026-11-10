@@ -4,14 +4,20 @@ import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { beansApi } from '../api/beans';
 import { brewLogsApi } from '../api/brews';
 import { errorMessage } from '../api/client';
-import type { Bean, BrewLog } from '../api/types';
+import { brewersApi } from '../api/brewers';
+import { recipesApi } from '../api/recipes';
+import { recipeStylesApi } from '../api/recipeStyles';
+import type { Bean, Brewer, BrewLog, Recipe, RecipeStyleItem } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
+import FilterBar from '../components/FilterBar.vue';
 import ListDataBar from '../components/ListDataBar.vue';
 import RatingStars from '../components/RatingStars.vue';
 import { useSelection } from '../composables/useSelection';
 import { batchSuffix, beanLabel } from '../lib/beans';
 import { analysisStatus, formatClock } from '../lib/analysisStatus';
-import { formatDoseLine, formatGrams, formatGrind, formatTime, formatWhen } from '../lib/format';
+import { formatDoseLine, formatGrams, formatGrind, formatListDay, formatTime, formatWhen, localDateInput } from '../lib/format';
+import { hasFilters, journalSummary, parseJournalQuery, STATUSES, toApiQuery, toJournalQuery, type JournalFilters } from '../lib/journalFilters';
+import { RANGES } from '../lib/statsRange';
 import { formatSize } from '../lib/servings';
 import { formatTemp } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
@@ -40,11 +46,40 @@ const loading = ref(true);
 const loadingMore = ref(false);
 const error = ref('');
 
-// The bean filter lives in the URL (?bean=), so Back and reloads keep it.
-const beanFilter = computed({
-  get: () => (typeof route.query.bean === 'string' ? route.query.bean : ''),
-  set: (id: string) => void router.replace({ query: id ? { bean: id } : {} }),
+const styles = ref<RecipeStyleItem[]>([]);
+const brewers = ref<Brewer[]>([]);
+const recipes = ref<Recipe[]>([]);
+
+// The filters live in the URL (lib/journalFilters.ts), so Back and reloads keep them.
+const filters = computed(() => parseJournalQuery(route.query));
+const filtered = computed(() => hasFilters(filters.value));
+function setFilter<K extends keyof JournalFilters>(key: K, value: JournalFilters[K]): void {
+  void router.replace({ query: toJournalQuery({ ...filters.value, [key]: value }) });
+}
+const clearFilters = () => void router.replace({ query: {} });
+// A v-model for each filter.
+const model = <K extends keyof JournalFilters>(key: K) => computed({ get: () => filters.value[key], set: (v: JournalFilters[K]) => setFilter(key, v) });
+const beanFilter = model('bean');
+const styleFilter = model('style');
+const brewerFilter = model('brewer');
+const recipeFilter = model('recipe');
+const rangeFilter = model('range');
+const fromFilter = model('from');
+const toFilter = model('to');
+const mineFilter = model('mine');
+const statusFilter = model('status');
+
+// Archived ones last; a hidden style only while it's picked.
+const activeFirst = <T extends { archivedAt: string | null; name: string }>(list: T[]): T[] =>
+  [...list].sort((a, b) => Number(a.archivedAt !== null) - Number(b.archivedAt !== null) || a.name.localeCompare(b.name));
+const styleOptions = computed(() => styles.value.filter((st) => !st.hidden || st.id === filters.value.style));
+const names = computed(() => {
+  const out = new Map<string, string>();
+  for (const b of beans.value) out.set(b.id, beanLabel(b));
+  for (const x of [...styles.value, ...brewers.value, ...recipes.value]) out.set(x.id, x.name);
+  return out;
 });
+const summary = computed(() => journalSummary(filters.value, (id) => names.value.get(id), (d) => formatListDay(d)));
 
 async function load(reset: boolean): Promise<void> {
   const ws = workspaces.current?.id;
@@ -54,7 +89,7 @@ async function load(reset: boolean): Promise<void> {
   error.value = '';
   try {
     const page = await brewLogsApi.list(ws, {
-      beanId: beanFilter.value || undefined,
+      ...toApiQuery(filters.value, localDateInput()),
       limit: PAGE_SIZE,
       offset: reset ? 0 : logs.value.length,
     });
@@ -70,10 +105,15 @@ async function load(reset: boolean): Promise<void> {
 
 onMounted(async () => {
   const ws = workspaces.current?.id;
-  if (ws) beansApi.list(ws).then((r) => (beans.value = r.beans)).catch(() => undefined);
+  if (ws) {
+    beansApi.list(ws).then((r) => (beans.value = r.beans)).catch(() => undefined);
+    recipeStylesApi.list(ws).then((r) => (styles.value = r.styles)).catch(() => undefined);
+    brewersApi.list(ws).then((r) => (brewers.value = activeFirst(r.brewers))).catch(() => undefined);
+    recipesApi.list(ws).then((r) => (recipes.value = activeFirst(r.recipes))).catch(() => undefined);
+  }
   await load(true);
 });
-watch(beanFilter, () => load(true));
+watch(() => JSON.stringify(toJournalQuery(filters.value)), () => load(true));
 // Select mode for exporting some brews (components/ExportBar.vue): a card
 // is then a button that ticks it, not a link.
 const selection = useSelection();
@@ -91,18 +131,72 @@ const cardProps = (id: string) =>
       <RouterLink v-if="workspaces.canEdit" class="btn btn-primary" :to="{ name: 'brew' }">New brew</RouterLink>
     </div>
 
-    <div v-if="beans.length > 1" class="field">
-      <label for="filter">Bean</label>
-      <select id="filter" v-model="beanFilter">
-        <option value="">All beans</option>
-        <option v-for="b in beans" :key="b.id" :value="b.id">{{ beanLabel(b) }}</option>
-      </select>
-    </div>
+    <FilterBar :summary="summary" describe="Showing">
+      <div class="filters">
+        <div v-if="styleOptions.length > 1" class="field">
+          <label for="filter-style">Style</label>
+          <select id="filter-style" v-model="styleFilter">
+            <option value="">All styles</option>
+            <option v-for="st in styleOptions" :key="st.id" :value="st.id">{{ st.name }}</option>
+          </select>
+        </div>
+        <div v-if="brewers.length > 1" class="field">
+          <label for="filter-brewer">Brewer</label>
+          <select id="filter-brewer" v-model="brewerFilter">
+            <option value="">All brewers</option>
+            <option v-for="b in brewers" :key="b.id" :value="b.id">{{ b.name }}{{ b.archivedAt ? ' (archived)' : '' }}</option>
+          </select>
+        </div>
+        <div v-if="recipes.length > 1" class="field">
+          <label for="filter-recipe">Recipe</label>
+          <select id="filter-recipe" v-model="recipeFilter">
+            <option value="">All recipes</option>
+            <option v-for="r in recipes" :key="r.id" :value="r.id">{{ r.name }}{{ r.archivedAt ? ' (archived)' : '' }}</option>
+          </select>
+        </div>
+        <div v-if="beans.length > 1" class="field">
+          <label for="filter-bean">Bean</label>
+          <select id="filter-bean" v-model="beanFilter">
+            <option value="">All beans</option>
+            <option v-for="b in beans" :key="b.id" :value="b.id">{{ beanLabel(b) }}</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="filter-range">Period</label>
+          <select id="filter-range" v-model="rangeFilter">
+            <option v-for="(label, key) in RANGES" :key="key" :value="key">{{ label }}</option>
+          </select>
+        </div>
+        <template v-if="filters.range === 'custom'">
+          <div class="field">
+            <label for="filter-from">From</label>
+            <input id="filter-from" v-model="fromFilter" type="date" />
+          </div>
+          <div class="field">
+            <label for="filter-to">To</label>
+            <input id="filter-to" v-model="toFilter" type="date" />
+          </div>
+        </template>
+        <div class="field">
+          <label for="filter-status">Status</label>
+          <select id="filter-status" v-model="statusFilter">
+            <option value="">Any</option>
+            <option v-for="(label, key) in STATUSES" :key="key" :value="key">{{ label }}</option>
+          </select>
+        </div>
+        <label class="checkbox mine">
+          <input v-model="mineFilter" type="checkbox" />
+          Only my brews
+        </label>
+        <button v-if="filtered" class="btn-link clear" type="button" @click="clearFilters">Clear filters</button>
+      </div>
+    </FilterBar>
 
     <p v-if="loading" class="muted" aria-live="polite">Loading brews…</p>
     <p v-else-if="error" class="form-error" role="alert">{{ error }}</p>
     <div v-else-if="logs.length === 0" class="card empty">
-      <p>{{ beanFilter ? 'No brews with this bean yet.' : 'No brews logged yet.' }}</p>
+      <p>{{ filtered ? 'No brews match these filters.' : 'No brews logged yet.' }}</p>
+      <button v-if="filtered" class="btn-link" type="button" @click="clearFilters">Clear filters</button>
     </div>
 
     <template v-else>
@@ -148,6 +242,24 @@ const cardProps = (id: string) =>
 </template>
 
 <style scoped>
+.filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-2);
+  align-items: end;
+}
+.filters select,
+.filters input[type='date'] {
+  width: 100%;
+  min-width: 0;
+}
+.mine,
+.clear {
+  min-height: var(--tap);
+}
+.clear {
+  justify-self: start;
+}
 .badge.steeping {
   font-size: 0.8rem;
   padding: 1px var(--space-2);

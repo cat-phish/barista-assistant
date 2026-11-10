@@ -50,11 +50,15 @@ export interface BrewLogInput {
 
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/brew-logs`;
 
+// The Journal's status filter (docs/api/brew-logs.md §6, GET list).
+export type BrewLogStatus = 'steeping' | 'unrated' | 'unanalyzed';
 export interface BrewLogQuery {
   beanId?: string;
   recipeId?: string;
   brewerId?: string;
   mine?: boolean;
+  styleId?: string; // the recipe's style
+  status?: BrewLogStatus;
   from?: string;
   to?: string;
   limit?: number;
@@ -74,6 +78,8 @@ export const brewLogsApi = {
     if (query.recipeId) params.set('recipeId', query.recipeId);
     if (query.brewerId) params.set('brewerId', query.brewerId);
     if (query.mine) params.set('mine', '1');
+    if (query.styleId) params.set('styleId', query.styleId);
+    if (query.status) params.set('status', query.status);
     if (query.from) params.set('from', query.from);
     if (query.to) params.set('to', query.to);
     if (query.limit !== undefined) params.set('limit', String(query.limit));
