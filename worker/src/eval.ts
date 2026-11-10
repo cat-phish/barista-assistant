@@ -25,7 +25,7 @@
 // details: a JSON file and a Markdown one to read them side by side.
 // --with-flavors picks only brews with wheel flavors; --without flavors
 // sends them with none (and so no flavors section in the prompt), --without
-// places with their labels only, to see what the picks change (backlog 10).
+// places with their labels only, to see what the picks change (backlog 11).
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
