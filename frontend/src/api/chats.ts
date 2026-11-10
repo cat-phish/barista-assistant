@@ -12,6 +12,7 @@ export interface Chat {
   summary: string | null;
   summaryThrough: number | null;
   summaryStatus: 'pending' | 'failed' | null;
+  pinnedAt: string | null; // pinned to the top of the list
 }
 export type ChatAttachmentKind = 'brew' | 'bean' | 'recipe' | 'chart' | 'period';
 // A live Period (chat.md §12, "Periods"): the Brews filters, run again for each reply.
@@ -130,6 +131,10 @@ export interface ChatLimits {
 }
 export interface ServerChatLimits extends ChatLimits {
   dailyMessages: number | null;
+  maxPinned: number | null; // pinned chats per person, all workspaces
+  // Set by the server when maxDays gets stricter: pinned chats it catches get
+  // a week more from then.
+  maxDaysSetAt?: string | null;
 }
 // A person's own also caps a period's brews (null: the workspace's).
 export interface OwnChatLimits extends ChatLimits {
@@ -140,13 +145,35 @@ export interface ChatSettings {
   server: ServerChatLimits;
   effective: ChatLimits;
   usedBytes: number;
+  pinnedCount: number; // in every workspace
 }
+
+// A pin refused at the limit (409, code "pin_limit"; docs/api/chat.md §12,
+// "Pinned chats"): your pinned chats, longest pinned first.
+export interface PinnedChatRef {
+  id: string;
+  title: string;
+  workspaceId: string;
+  workspaceName: string;
+  pinnedAt: string;
+}
+export interface PinLimit {
+  error: string;
+  code: 'pin_limit';
+  maxPinned: number;
+  pinnedCount: number;
+  pinned: PinnedChatRef[];
+}
+export const isPinLimit = (body: unknown): body is PinLimit =>
+  typeof body === 'object' && body !== null && (body as { code?: unknown }).code === 'pin_limit' && Array.isArray((body as { pinned?: unknown }).pinned);
 
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/chats`;
 
 export const chatSettingsApi = {
   get: () => api.get<ChatSettings>('/api/auth/me/chat-settings'),
   save: (limits: ChatLimits & { periodMaxBrews?: number | null }) => api.put<ChatSettings>('/api/auth/me/chat-settings', limits),
+  // What saving these would delete of your chats (docs/api/chat.md §12, "Saving limits").
+  preview: (limits: ChatLimits) => api.post<{ chats: number; pinned: number }>('/api/auth/me/chat-settings/preview', limits),
   purge: () => api.delete('/api/auth/me/chats'),
 };
 
@@ -175,8 +202,15 @@ export const chatsApi = {
   exportZip(workspaceId: string) {
     return api.file(`${base(workspaceId)}/export`);
   },
+  exportChatZip(workspaceId: string, chatId: string) {
+    return api.file(`${base(workspaceId)}/${chatId}/export`);
+  },
+  // unpin: a pinned chat (any workspace) to unpin in its place at the limit.
+  pin(workspaceId: string, chatId: string, pinned: boolean, unpin?: string) {
+    return api.put<{ chat: Chat }>(`${base(workspaceId)}/${chatId}/pin`, unpin ? { pinned, unpin } : { pinned });
+  },
   importZip(workspaceId: string, zip: Blob) {
-    return api.post<{ imported: number; skipped: number }>(`${base(workspaceId)}/import`, new Blob([zip], { type: 'application/zip' }));
+    return api.post<{ imported: number; skipped: number; unpinned: number }>(`${base(workspaceId)}/import`, new Blob([zip], { type: 'application/zip' }));
   },
   addPhoto(workspaceId: string, image: Blob) {
     return api.post<{ photo: ChatPhoto }>(`${base(workspaceId)}/photos`, image);

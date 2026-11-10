@@ -19,8 +19,9 @@ your own chats is open to any member; starting one or sending a message needs
 `owner` or `barista`, as an analysis does.
 
 **A chat:** `{ id, title, createdAt, updatedAt, summary, summaryThrough,
-summaryStatus }`. `title` is the start of the first message; `updatedAt` moves
-with each message. The summary fields are under "Long chats", below.
+summaryStatus, pinnedAt }`. `title` is the start of the first message;
+`updatedAt` moves with each message. The summary fields are under "Long
+chats", below; `pinnedAt` (null unless pinned) under "Pinned chats".
 
 **A message:** `{ id, position, role, content, attachments, proposals, photos,
 status, error, model, createdAt }`. `proposals` is `[]` but on a reply that
@@ -33,10 +34,12 @@ made some (below).
 
 | Route | |
 | --- | --- |
-| `GET /` | `{ chats }`, yours, latest first. |
+| `GET /` | `{ chats }`, yours: pinned ones first, the latest pinned on top, then the rest latest first. |
 | `POST /` | Body `{ content, attachments?, photoIds? }`; `content` is 1–4000 characters. Starts a chat with that message. `202` with `{ chat, messages }`: the message and its pending reply. |
 | `GET /:chatId` | `{ chat, messages }`, oldest first. |
 | `DELETE /:chatId` | `204`. |
+| `PUT /:chatId/pin` | Body `{ pinned: boolean, unpin? }`. Any member, on their own chat. `200` with `{ chat }`; pinning one already pinned changes nothing. At the pin limit, `409` (below) unless `unpin` names one of your pinned chats, in any workspace, to unpin in its place (`404` if it isn't). |
+| `GET /:chatId/export` | That one chat as the zip under "Export and import". Any member, on their own chat. |
 | `POST /:chatId/messages` | Body as for `POST /`. `202` with `{ chat, messages }`: only the two new ones. `409` while a reply or a summary is still being written. |
 | `POST /:chatId/summary` | Summarize and continue (below). `202` with `{ chat }`, `summaryStatus: "pending"`. `409` while a reply or a summary is being written, `400` under 12 finished messages. Needs `owner` or `barista`, chat on and AI set up, and the daily message limit not reached (it doesn't count toward it). |
 | `GET /:chatId/messages/:messageId/stream` | The reply as server-sent events, below. |
@@ -287,11 +290,43 @@ not looser. `null` means no limit. Chats over a limit are deleted, oldest first
 by `updatedAt`, within seconds of a change to a limit, after each message, and
 hourly. The chat in use is never deleted for size.
 
+**Pinned chats** are kept from your own age limit but not the server's: an
+admin's age limit deletes pinned chats too, though never within a week
+(`PIN_GRACE_DAYS`) of the save that made it stricter. `maxDaysSetAt` in the
+server's limits records that save (new, or lower; set by the server, never
+sent), so a pinned chat a new limit catches shows the warning for that week
+and its owner can export it. Over the size limit they go only
+after every unpinned chat has (oldest pinned first). A pin is yours: it only
+orders your own list.
+
+**The pin limit:** `maxPinned` is how many pinned chats one person can have,
+across all their workspaces (server only; there's no personal one). Pinning
+past it is a `409` with `{ error, code: "pin_limit", maxPinned, pinnedCount,
+pinned }`, `pinned` being your pinned chats longest pinned first, each `{ id,
+title, workspaceId, workspaceName, pinnedAt }`. The Chat tab answers it with a
+dialog (`ChatPinLimitDialog.vue`): unpin the longest pinned chat, or one you
+pick, and pin this one in its place, with Export (Markdown or zip) on each to
+keep a copy first. A swap never raises the count, so it works even over the
+limit. Lowering the limit unpins nothing: people over it keep their pins but
+can't add one until they're under it. Unpinning is never limited. Near the
+limit (within 3) or over it, the list's heading reads "Pinned · 18 of 20".
+
+**The warning:** the Chat tab says, in small yellow text under the composer,
+when your chats reach 80% of `effective.maxBytes` ("Your chats use 830 MB of
+1 GB. Past it, your oldest unpinned chats are deleted: pin or export the ones
+to keep."), and, with an age limit, when the open chat is unpinned and within
+7 days of it ("This chat will be deleted on 16 Nov unless you add to it or
+pin it."; a pinned chat only of the server's: "This pinned chat will be
+deleted on 16 Nov: the server keeps chats for 90 days. Export it to keep a
+copy, or add to it."), with a link to Settings → AI chats
+(`lib/chatLimitsWarning.ts`).
+
 | Limit | Server default | Range |
 | --- | --- | --- |
 | `maxBytes` | 1 GB (1073741824) | 1 KB to 1 PB |
 | `maxDays` | none | 1 to 36500 |
 | `dailyMessages` (server only) | 200 | 1 to 100000 |
+| `maxPinned` (server only) | 20 | 1 to 1000; left out of a `PUT`, it stays as it was |
 
 `dailyMessages` is how many messages one person can send in 24 hours; over it,
 a send is a `429` with `code: "chat_limit"`.
@@ -300,10 +335,22 @@ a send is a `429` with `code: "chat_limit"`.
 | --- | --- |
 | `GET /api/auth/me/chat-settings` | `{ own, server, effective, usedBytes }`. `own` and `effective` are `{ maxBytes, maxDays }`, and `own` adds `periodMaxBrews`; `server` adds `dailyMessages`. |
 | `PUT /api/auth/me/chat-settings` | Body `{ maxBytes, maxDays, periodMaxBrews? }`. `400` if either limit is over the server's. `periodMaxBrews` (10–300, or `null` for the workspace's) is your own cap on a period's brews; left out, it stays as it was. Answers as `GET`. |
+| `POST /api/auth/me/chat-settings/preview` | Body as `PUT`. What saving it would delete, deleting nothing: `{ chats, pinned }`. `400` as `PUT`. |
 | `DELETE /api/auth/me/chats` | Purges all your chats and photos, in every workspace. `204`. |
 | `GET /api/server/chat` | Admins. `{ limits, usedBytes }`, `usedBytes` for the whole server. |
-| `PUT /api/server/chat` | Admins. Body as `limits`. Answers as `GET`. Lowering a limit never rewrites a person's own: the lower one applies. |
+| `PUT /api/server/chat` | Admins. Body as `limits`, without `maxDaysSetAt`. Answers as `GET`. Lowering a limit never rewrites a person's own: the lower one applies. |
+| `POST /api/server/chat/preview` | Admins. Body as `PUT`. What saving it would delete, deleting nothing: `{ chats, people, pinned, pinnedLater, pinnedLaterOn }`, `pinned` counting those of `chats` that are pinned (size only), and `pinnedLater` the pinned chats past the new age limit kept for the week, the first going on `pinnedLaterOn`. |
 | `DELETE /api/server/chats` | Admins. Purges everyone's chats and photos. `204`. |
+
+**Saving limits:** a save deletes at once what's over the new limits, so
+both settings pages preview it first (the routes above, through the same
+`wouldDelete` the prunes use). Under Settings → AI chats, if anything would
+go: "Saving deletes 6 of your chats for good (1 pinned, over the size
+limit)…" with a red **Save and delete**; only your own, so no "I
+understand". Under Settings → Server → AI chats: "Saving deletes 37 chats
+from 5 people for good…" with **I understand** before the red **Save and
+delete** (CLAUDE.md rule 7); when only pinned chats in their week would go, a
+plain confirm says when.
 
 Leaving a workspace, or being removed from it, deletes your chats there.
 
@@ -312,13 +359,26 @@ Leaving a workspace, or being removed from it, deletes your chats there.
 Your chats in a workspace as one `.zip`, to keep or to bring into another
 workspace or server. Not a workspace backup: it holds only your own chats.
 
+**Exporting a chat:** the chat's **Export ▾** menu, in its header, has three:
+- **Markdown (.md)**, built in the browser (`lib/chatMarkdownExport.ts`): the
+  title and dates, the summary if there is one, then each message as
+  `### You · <date>` or `### AI · <date>` with what it attached, its photos
+  counted, and a reply's proposals by title and why. To read or share; it
+  doesn't import.
+- **PDF (print)**: the browser's print dialog (Save as PDF) on the
+  conversation alone, laid out whole, with the title and dates on top. No PDF
+  library.
+- **Backup (.zip)**: `GET /:chatId/export`, the zip below with that chat only,
+  which `POST /import` brings back, pin and all.
+
 | Route | |
 | --- | --- |
 | `GET /export` | The zip: `chats.json` and `photos/<id>.webp`. Any member. A reply still being written is left out. |
-| `POST /import` | The zip as the body, `application/zip`, up to 250 MB. `owner` or `barista`, with chat on. `200` with `{ imported, skipped }`. |
+| `POST /import` | The zip as the body, `application/zip`, up to 250 MB. `owner` or `barista`, with chat on. `200` with `{ imported, skipped, unpinned }`: pins come in while there's room under the pin limit, the latest pinned first, and `unpinned` counts the rest, brought in unpinned. |
 
 `chats.json` is `{ version: 1, exportedAt, chats }`; a chat is `{ id, title,
-createdAt, updatedAt, messages }`, and a message as above without its `id`, with
+createdAt, updatedAt, summary?, summaryThrough?, pinnedAt?, messages }` (older
+files have none of the three), and a message as above without its `id`, with
 `photos` as `{ id, width, height }` and `proposals` `null` when there are none
 (a file from before proposals has no `proposals`, and imports as none).
 

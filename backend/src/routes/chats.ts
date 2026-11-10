@@ -13,7 +13,7 @@ import { chartSnapshotSchema } from "../chatChart.js";
 import { labelPeriod, periodSpecSchema } from "../chatPeriod.js";
 import { requireAi } from "../aiConfig.js";
 import { buildChatsZip, importChats } from "../chatExport.js";
-import { deleteAllChatsOf, ownChatLimitsSchema, deleteChats, pruneChatsOf, userChatBytes } from "../chatData.js";
+import { deleteAllChatsOf, ownChatLimitsSchema, deleteChats, pinnedChatsOf, pruneChatsOf, userChatBytes, wouldDelete } from "../chatData.js";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { config } from "../config.js";
 import { db } from "../db.js";
@@ -343,8 +343,62 @@ chatsRouter.get("/", async (req: Request<Params>, res: Response<{ chats: AiChat[
     .select()
     .from(aiChats)
     .where(and(eq(aiChats.workspaceId, workspaceId), eq(aiChats.userId, userId)))
-    .orderBy(desc(aiChats.updatedAt), desc(aiChats.createdAt));
+    // Pinned first, the latest pinned on top; then the latest used.
+    .orderBy(sql`${aiChats.pinnedAt} IS NULL`, desc(aiChats.pinnedAt), desc(aiChats.updatedAt), desc(aiChats.createdAt));
   res.json({ chats, canSend: await chatOn(userId, workspaceId) });
+});
+
+// Pinning (docs/api/chat.md §12): any member, on their own chat; it only
+// orders their list and keeps the chat from the limits (chatData.ts).
+// unpin: one of your pinned chats, in any workspace, to unpin in its place
+// when you're at the pin limit (docs/api/chat.md §12, "Pinned chats").
+const pinSchema = z.object({ pinned: z.boolean(), unpin: z.uuid().optional() }).strict();
+interface PinLimitBody {
+  error: string;
+  code: "pin_limit";
+  maxPinned: number;
+  pinnedCount: number;
+  pinned: Array<{ id: string; title: string; workspaceId: string; workspaceName: string; pinnedAt: string }>;
+}
+chatsRouter.put("/:chatId/pin", async (req: Request<ChatParams>, res: Response<{ chat: AiChat } | PinLimitBody>) => {
+  const userId = authedUserId(req);
+  const { workspaceId, chatId } = req.params;
+  if (!(await requireMembership(res, userId, workspaceId))) return;
+  const chat = await ownChat(res, userId, workspaceId, chatId);
+  if (!chat) return;
+  const body = parseBody(pinSchema, req, res);
+  if (!body) return;
+  if (body.pinned && chat.pinnedAt === null) {
+    const pinned = await pinnedChatsOf(userId);
+    if (body.unpin !== undefined) {
+      // A swap: the count doesn't rise, so it's allowed even over the limit.
+      if (!pinned.some((p) => p.id === body.unpin)) {
+        sendError(res, 404, "That chat isn't one of your pinned chats");
+        return;
+      }
+      await db.transaction(async (tx) => {
+        await tx.update(aiChats).set({ pinnedAt: null }).where(and(eq(aiChats.id, body.unpin!), eq(aiChats.userId, userId)));
+        await tx.update(aiChats).set({ pinnedAt: sql`NOW()` }).where(eq(aiChats.id, chatId));
+      });
+    } else {
+      const { maxPinned } = await getChatLimits();
+      if (maxPinned !== null && pinned.length >= maxPinned) {
+        res.status(409).json({
+          error: `You can pin up to ${maxPinned} chats`,
+          code: "pin_limit",
+          maxPinned,
+          pinnedCount: pinned.length,
+          pinned: pinned.map((p) => ({ ...p, pinnedAt: p.pinnedAt.toISOString() })),
+        });
+        return;
+      }
+      await db.update(aiChats).set({ pinnedAt: sql`NOW()` }).where(eq(aiChats.id, chatId));
+    }
+  } else if (!body.pinned && chat.pinnedAt !== null) {
+    await db.update(aiChats).set({ pinnedAt: null }).where(eq(aiChats.id, chatId));
+  }
+  const [fresh] = await db.select().from(aiChats).where(eq(aiChats.id, chatId));
+  res.json({ chat: fresh ?? chat });
 });
 
 chatsRouter.post("/", async (req: Request<Params>, res: Response<ChatPair>) => {
@@ -394,8 +448,19 @@ chatsRouter.get("/export", async (req: Request<Params>, res: Response) => {
   res.type("application/zip").send(Buffer.from(zip));
 });
 
+// One chat, in the same zip, so Import brings it back.
+chatsRouter.get("/:chatId/export", async (req: Request<ChatParams>, res: Response) => {
+  const userId = authedUserId(req);
+  const { workspaceId, chatId } = req.params;
+  if (!(await requireMembership(res, userId, workspaceId))) return;
+  if (!(await ownChat(res, userId, workspaceId, chatId))) return;
+  const zip = await buildChatsZip(workspaceId, userId, chatId);
+  res.setHeader("Content-Disposition", `attachment; filename="chat-${new Date().toISOString().slice(0, 10)}.zip"`);
+  res.type("application/zip").send(Buffer.from(zip));
+});
+
 const zipBody = express.raw({ type: ["application/zip", "application/x-zip-compressed"], limit: "250mb" });
-chatsRouter.post("/import", zipBody, async (req: Request<Params>, res: Response<{ imported: number; skipped: number }>) => {
+chatsRouter.post("/import", zipBody, async (req: Request<Params>, res: Response<{ imported: number; skipped: number; unpinned: number }>) => {
   const userId = authedUserId(req);
   const { workspaceId } = req.params;
   if (!(await requireMembership(res, userId, workspaceId, WRITE_ROLES))) return;
@@ -409,7 +474,7 @@ chatsRouter.post("/import", zipBody, async (req: Request<Params>, res: Response<
     sendError(res, result.status, result.error);
     return;
   }
-  res.json({ imported: result.imported, skipped: result.skipped });
+  res.json({ imported: result.imported, skipped: result.skipped, unpinned: result.unpinned });
 });
 
 // The image itself, whatever its type: sharp decides whether it is one.
@@ -626,12 +691,13 @@ interface ChatSettings {
   server: ServerChatLimits;
   effective: ChatLimits;
   usedBytes: number;
+  pinnedCount: number; // in every workspace, against server.maxPinned
 }
 async function settingsOf(userId: string): Promise<ChatSettings> {
   const [row] = await db.select({ chatLimits: users.chatLimits }).from(users).where(eq(users.id, userId));
   const own = { ...NO_CHAT_LIMITS, periodMaxBrews: null, ...row?.chatLimits };
   const server = await getChatLimits();
-  return { own, server, effective: effectiveChatLimits(server, own), usedBytes: await userChatBytes(userId) };
+  return { own, server, effective: effectiveChatLimits(server, own), usedBytes: await userChatBytes(userId), pinnedCount: (await pinnedChatsOf(userId)).length };
 }
 
 myChatsRouter.get("/chat-settings", async (req: Request, res: Response<ChatSettings>) => {
@@ -639,6 +705,20 @@ myChatsRouter.get("/chat-settings", async (req: Request, res: Response<ChatSetti
 });
 
 const over = (own: number | null, server: number | null): boolean => server !== null && (own === null ? false : own > server);
+// What saving these limits would delete of your chats, so the page can ask
+// first (docs/api/chat.md §12, "Saving limits"). Deletes nothing.
+myChatsRouter.post("/chat-settings/preview", async (req: Request, res: Response<{ chats: number; pinned: number }>) => {
+  const body = parseBody(ownChatLimitsSchema, req, res);
+  if (!body) return;
+  const server = await getChatLimits();
+  if (over(body.maxBytes, server.maxBytes) || over(body.maxDays, server.maxDays)) {
+    sendError(res, 400, "That's more than this server allows");
+    return;
+  }
+  const gone = await wouldDelete(authedUserId(req), { maxBytes: body.maxBytes, maxDays: body.maxDays }, server, null);
+  res.json({ chats: gone.ids.length, pinned: gone.pinned });
+});
+
 myChatsRouter.put("/chat-settings", async (req: Request, res: Response<ChatSettings>) => {
   const userId = authedUserId(req);
   const body = parseBody(ownChatLimitsSchema, req, res);

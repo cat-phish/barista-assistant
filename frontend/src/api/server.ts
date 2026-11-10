@@ -19,6 +19,14 @@ export interface ServerBackups {
 }
 
 // docs/api/chat.md §12.
+export type ServerChatInput = Omit<ServerChatLimits, 'maxDaysSetAt'>;
+export interface ServerChatPreview {
+  chats: number;
+  people: number;
+  pinned: number; // of chats
+  pinnedLater: number; // pinned chats past the age limit, kept a week
+  pinnedLaterOn: string | null;
+}
 export interface ServerChat {
   limits: ServerChatLimits;
   usedBytes: number;
@@ -55,7 +63,9 @@ export interface ServerAiInput {
 
 export const serverApi = {
   chat: () => api.get<ServerChat>('/api/server/chat'),
-  saveChat: (limits: ServerChatLimits) => api.put<ServerChat>('/api/server/chat', limits),
+  saveChat: (limits: ServerChatInput) => api.put<ServerChat>('/api/server/chat', limits),
+  // What saving these would delete (docs/api/chat.md §12, "Saving limits").
+  previewChat: (limits: ServerChatInput) => api.post<ServerChatPreview>('/api/server/chat/preview', limits),
   purgeChats: () => api.delete('/api/server/chats'),
   ai: () => api.get<ServerAi>('/api/server/ai'),
   saveAi: (input: ServerAiInput) => api.put<ServerAi>('/api/server/ai', input),

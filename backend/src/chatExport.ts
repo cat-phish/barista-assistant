@@ -9,7 +9,7 @@ import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 import { chartSnapshotSchema } from "./chatChart.js";
 import { periodSpecSchema } from "./chatPeriod.js";
-import { pruneChatsOf, userChatBytes } from "./chatData.js";
+import { pinnedChatsOf, pruneChatsOf, userChatBytes } from "./chatData.js";
 import { proposalsSchema } from "./chatProposal.js";
 import { db } from "./db.js";
 import { chatPhotoPath, checkStoredPhoto, removeChatPhotoFiles, writeChatPhotoFile } from "./photos.js";
@@ -33,6 +33,7 @@ const fileSchema = z.object({
       // Summarize and continue; older files have neither.
       summary: z.string().max(100_000).nullable().optional(),
       summaryThrough: z.number().int().nullable().optional(),
+      pinnedAt: date.nullable().optional(), // since pinning
       messages: z.array(
         z.object({
           position: z.number().int(),
@@ -52,11 +53,12 @@ const fileSchema = z.object({
 });
 type ChatsFile = z.infer<typeof fileSchema>;
 
-export async function buildChatsZip(workspaceId: string, userId: string): Promise<Uint8Array> {
+// chatId: only that chat (the chat page's Export), else all of them.
+export async function buildChatsZip(workspaceId: string, userId: string, chatId?: string): Promise<Uint8Array> {
   const chats = await db
     .select()
     .from(aiChats)
-    .where(and(eq(aiChats.workspaceId, workspaceId), eq(aiChats.userId, userId)))
+    .where(and(eq(aiChats.workspaceId, workspaceId), eq(aiChats.userId, userId), chatId ? eq(aiChats.id, chatId) : undefined))
     .orderBy(asc(aiChats.createdAt));
   const ids = chats.map((c) => c.id);
   const messages = ids.length
@@ -86,6 +88,7 @@ export async function buildChatsZip(workspaceId: string, userId: string): Promis
       createdAt: c.createdAt.toISOString(),
       updatedAt: c.updatedAt.toISOString(),
       ...(c.summary ? { summary: c.summary, summaryThrough: c.summaryThrough } : {}),
+      ...(c.pinnedAt ? { pinnedAt: c.pinnedAt.toISOString() } : {}),
       messages: messages
         .filter((m) => m.chatId === c.id)
         .map((m) => ({
@@ -135,7 +138,8 @@ function readChatsZip(data: Buffer): ReadChats {
   return { ok: true, file: file.data, photos };
 }
 
-export type ImportResult = { ok: true; imported: number; skipped: number } | { ok: false; status: 400 | 409; error: string };
+// unpinned: pinned in the file, but brought in unpinned (the pin limit).
+export type ImportResult = { ok: true; imported: number; skipped: number; unpinned: number } | { ok: false; status: 400 | 409; error: string };
 
 const encoder = new TextEncoder();
 const jsonBytes = (value: unknown): number => (value ? encoder.encode(JSON.stringify(value)).length : 0);
@@ -159,10 +163,22 @@ export async function importChats(data: Buffer, workspaceId: string, userId: str
   }
   const adding = fresh.flatMap((c) => c.messages).reduce((n, m) => n + textBytes(m), 0) + fresh.reduce((n, c) => n + (c.summary ? encoder.encode(c.summary).length : 0), 0) + [...photos.values()].reduce((n, p) => n + p.data.length, 0);
   const [row] = await db.select({ chatLimits: users.chatLimits }).from(users).where(eq(users.id, userId));
-  const { maxBytes } = effectiveChatLimits(await getChatLimits(), row?.chatLimits ?? null);
+  const server = await getChatLimits();
+  const { maxBytes } = effectiveChatLimits(server, row?.chatLimits ?? null);
   if (maxBytes !== null && (await userChatBytes(userId)) + adding > maxBytes) {
     return { ok: false, status: 409, error: "These chats would take you past your size limit" };
   }
+  // Pins come in while there's room under the pin limit, the latest pinned
+  // first; the rest come in unpinned (docs/api/chat.md §12, "Pinned chats").
+  const room = server.maxPinned === null ? Infinity : Math.max(0, server.maxPinned - (await pinnedChatsOf(userId)).length);
+  const keepPin = new Set(
+    fresh
+      .filter((c) => c.pinnedAt)
+      .sort((a, b) => Date.parse(b.pinnedAt!) - Date.parse(a.pinnedAt!))
+      .slice(0, room === Infinity ? undefined : room)
+      .map((c) => c.id),
+  );
+  const unpinned = fresh.filter((c) => c.pinnedAt && !keepPin.has(c.id)).length;
 
   // The files go first: a row never points at a missing file.
   const written = [...photos.values()];
@@ -174,7 +190,7 @@ export async function importChats(data: Buffer, workspaceId: string, userId: str
         const ordered = [...chat.messages].sort((a, b) => a.position - b.position);
         // Positions are numbered afresh, so the summary's end is too.
         const summary = chat.summary && chat.summaryThrough != null ? { summary: chat.summary, summaryThrough: ordered.filter((m) => m.position <= chat.summaryThrough!).length } : {};
-        await tx.insert(aiChats).values({ id: chatId, workspaceId, userId, title: chat.title, ...summary, createdAt: new Date(chat.createdAt), updatedAt: new Date(chat.updatedAt) });
+        await tx.insert(aiChats).values({ id: chatId, workspaceId, userId, title: chat.title, ...summary, pinnedAt: chat.pinnedAt && keepPin.has(chat.id) ? new Date(chat.pinnedAt) : null, createdAt: new Date(chat.createdAt), updatedAt: new Date(chat.updatedAt) });
         for (const [i, message] of ordered.entries()) {
           const id = randomUUID();
           const { photos: _photos, createdAt, proposals, ...fields } = message;
@@ -191,5 +207,5 @@ export async function importChats(data: Buffer, workspaceId: string, userId: str
     throw err;
   }
   await pruneChatsOf(userId, null);
-  return { ok: true, imported: fresh.length, skipped: read.file.chats.length - fresh.length };
+  return { ok: true, imported: fresh.length, skipped: read.file.chats.length - fresh.length, unpinned };
 }

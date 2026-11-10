@@ -1,4 +1,4 @@
-import { AI_PROVIDERS, DEFAULT_SERVER_AI, lastFour, type AiEnvStatus, type ServerAiConfig, type ServerChatLimits } from "@barista/shared/aiConfig";
+import { AI_PROVIDERS, CHAT_PINNED_MAX, DEFAULT_SERVER_AI, nextMaxDaysSetAt, lastFour, type AiEnvStatus, type ServerAiConfig, type ServerChatLimits } from "@barista/shared/aiConfig";
 import { encryptSecret } from "@barista/shared/secrets";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
@@ -11,7 +11,7 @@ import { DB_BACKUP_FILE } from "@barista/shared/jobs";
 import { BACKUP_FREQUENCIES, users, type BackupSettings, type BackupStatus } from "@barista/shared/schema";
 import { verifyPassword } from "../auth/password.js";
 import { backupDir, backupDownloadsEnabled, backupTimezone, config } from "../config.js";
-import { chatLimitsSchema, deleteAllChats, pruneAllChats, totalChatBytes } from "../chatData.js";
+import { chatLimitsSchema, chatOwners, deleteAllChats, pruneAllChats, totalChatBytes, wouldDelete } from "../chatData.js";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
@@ -154,7 +154,8 @@ for (const action of ["models", "test"] as const) {
 }
 
 // AI chat limits and purging (docs/api/chat.md §12).
-const serverChatSchema = chatLimitsSchema.extend({ dailyMessages: z.number().int().min(1).max(100_000).nullable() }).strict();
+// maxPinned left out stays as it was.
+const serverChatSchema = chatLimitsSchema.extend({ dailyMessages: z.number().int().min(1).max(100_000).nullable(), maxPinned: z.number().int().min(1).max(CHAT_PINNED_MAX).nullable().optional() }).strict();
 interface ServerChatResponse {
   limits: ServerChatLimits;
   usedBytes: number;
@@ -163,12 +164,46 @@ const chatView = async (): Promise<ServerChatResponse> => ({ limits: await getCh
 serverRouter.get("/chat", async (_req: Request, res: Response<ServerChatResponse>) => {
   res.json(await chatView());
 });
+// The limits a save would store. Lowering maxPinned unpins nothing: people
+// over it just can't pin more. maxDaysSetAt is the server's own.
+async function nextLimits(body: z.infer<typeof serverChatSchema>, now: Date): Promise<ServerChatLimits> {
+  const before = await getChatLimits();
+  const { maxPinned, ...limits } = body;
+  return { ...limits, maxPinned: maxPinned === undefined ? before.maxPinned : maxPinned, maxDaysSetAt: nextMaxDaysSetAt(before, limits.maxDays, now) };
+}
 serverRouter.put("/chat", async (req: Request, res: Response<ServerChatResponse>) => {
   const body = parseBody(serverChatSchema, req, res);
   if (!body) return;
-  await saveChatLimits(body);
+  await saveChatLimits(await nextLimits(body, new Date()));
   await pruneAllChats();
   res.json(await chatView());
+});
+// What saving these limits would delete, so the page can ask first
+// (docs/api/chat.md §12, "Saving limits"). Deletes nothing.
+export interface ServerChatPreview {
+  chats: number;
+  people: number;
+  pinned: number; // of chats
+  pinnedLater: number; // past the age limit, kept by the grace
+  pinnedLaterOn: string | null; // when the first of those goes
+}
+serverRouter.post("/chat/preview", async (req: Request, res: Response<ServerChatPreview>) => {
+  const body = parseBody(serverChatSchema, req, res);
+  if (!body) return;
+  const now = new Date();
+  const limits = await nextLimits(body, now);
+  const preview: ServerChatPreview = { chats: 0, people: 0, pinned: 0, pinnedLater: 0, pinnedLaterOn: null };
+  let first: number | null = null;
+  for (const person of await chatOwners()) {
+    const gone = await wouldDelete(person.id, person.chatLimits, limits, null, now);
+    if (gone.ids.length) preview.people++;
+    preview.chats += gone.ids.length;
+    preview.pinned += gone.pinned;
+    preview.pinnedLater += gone.pinnedLater.length;
+    for (const at of gone.pinnedLater) first = first === null ? at.getTime() : Math.min(first, at.getTime());
+  }
+  preview.pinnedLaterOn = first === null ? null : new Date(first).toISOString();
+  res.json(preview);
 });
 serverRouter.delete("/chats", async (_req: Request, res: Response) => {
   await deleteAllChats();

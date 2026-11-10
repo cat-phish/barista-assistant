@@ -51,6 +51,10 @@ export interface ChatLimits {
 }
 export interface ServerChatLimits extends ChatLimits {
   dailyMessages: number | null; // what one person can send in 24 hours
+  maxPinned: number | null; // pinned chats one person can have, all workspaces
+  // When maxDays was last made stricter (ISO), set by the server: pinned chats
+  // it catches are kept PIN_GRACE_DAYS more from then (docs/api/chat.md §12).
+  maxDaysSetAt: string | null;
 }
 // A person's own, which can also lower how many brews a live Period sends in
 // detail (chatPeriodMaxBrews; absent or null: the workspace's).
@@ -58,7 +62,22 @@ export interface OwnChatLimits extends ChatLimits {
   periodMaxBrews?: number | null;
 }
 export const CHAT_LIMITS_KEY = "chat_limits";
-export const DEFAULT_SERVER_CHAT_LIMITS: ServerChatLimits = { maxBytes: 1024 ** 3, maxDays: null, dailyMessages: 200 };
+export const DEFAULT_SERVER_CHAT_LIMITS: ServerChatLimits = { maxBytes: 1024 ** 3, maxDays: null, dailyMessages: 200, maxPinned: 20, maxDaysSetAt: null };
+export const PIN_GRACE_DAYS = 7;
+// A save that makes maxDays stricter (new, or lower) starts the grace again.
+export function nextMaxDaysSetAt(before: Pick<ServerChatLimits, "maxDays" | "maxDaysSetAt">, maxDays: number | null, now: Date): string | null {
+  const stricter = maxDays !== null && (before.maxDays === null || maxDays < before.maxDays);
+  return stricter ? now.toISOString() : before.maxDaysSetAt;
+}
+// When a pinned chat goes under the server's age limit: maxDays after its
+// last message, but never within the grace after the limit was set.
+export function pinnedExpiry(updatedAt: Date, server: Pick<ServerChatLimits, "maxDays" | "maxDaysSetAt">): Date | null {
+  if (server.maxDays === null) return null;
+  const byAge = updatedAt.getTime() + server.maxDays * 86_400_000;
+  const grace = server.maxDaysSetAt ? Date.parse(server.maxDaysSetAt) + PIN_GRACE_DAYS * 86_400_000 : 0;
+  return new Date(Math.max(byAge, grace));
+}
+export const CHAT_PINNED_MAX = 1000; // the most an admin can allow
 export const NO_CHAT_LIMITS: ChatLimits = { maxBytes: null, maxDays: null };
 
 const stricter = (a: number | null, b: number | null): number | null => (a === null ? b : b === null ? a : Math.min(a, b));
