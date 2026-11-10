@@ -132,6 +132,9 @@ export interface ChatLimits {
 export interface ServerChatLimits extends ChatLimits {
   dailyMessages: number | null;
   maxPinned: number | null; // pinned chats per person, all workspaces
+  // Set by the server when maxDays gets stricter: pinned chats it catches get
+  // a week more from then.
+  maxDaysSetAt?: string | null;
 }
 // A person's own also caps a period's brews (null: the workspace's).
 export interface OwnChatLimits extends ChatLimits {
@@ -169,6 +172,8 @@ const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/chats`;
 export const chatSettingsApi = {
   get: () => api.get<ChatSettings>('/api/auth/me/chat-settings'),
   save: (limits: ChatLimits & { periodMaxBrews?: number | null }) => api.put<ChatSettings>('/api/auth/me/chat-settings', limits),
+  // What saving these would delete of your chats (docs/api/chat.md §12, "Saving limits").
+  preview: (limits: ChatLimits) => api.post<{ chats: number; pinned: number }>('/api/auth/me/chat-settings/preview', limits),
   purge: () => api.delete('/api/auth/me/chats'),
 };
 

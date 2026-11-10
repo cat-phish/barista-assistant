@@ -6,6 +6,7 @@ import { chatsApi, chatSettingsApi, type ChatLimits, type ChatSettings } from '.
 import { errorMessage } from '../api/client';
 import ChatLimitsFields from '../components/ChatLimitsFields.vue';
 import ChatPurgeCard from '../components/ChatPurgeCard.vue';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 import SettingsLayout from '../components/SettingsLayout.vue';
 import { saveBlob } from '../lib/backup';
 import { formatBytes } from '../lib/chatSize';
@@ -104,12 +105,23 @@ async function savePeriod(): Promise<void> {
   }
 }
 
-async function save(): Promise<void> {
+// A save that would delete chats asks first, with how many
+// (docs/api/chat.md §12, "Saving limits"). Only yours, so no "I understand".
+const deleting = ref<{ chats: number; pinned: number } | null>(null);
+async function save(confirmed = false): Promise<void> {
   if (!draft.value) return;
   saving.value = true;
   saved.value = false;
   error.value = '';
   try {
+    if (!confirmed) {
+      const preview = await chatSettingsApi.preview(draft.value);
+      if (preview.chats > 0) {
+        deleting.value = preview;
+        return;
+      }
+    }
+    deleting.value = null;
     data.value = await chatSettingsApi.save(draft.value);
     saved.value = true;
   } catch (err) {
@@ -118,6 +130,12 @@ async function save(): Promise<void> {
     saving.value = false;
   }
 }
+const deletingText = computed(() => {
+  const d = deleting.value;
+  if (!d) return '';
+  const chats = d.chats === 1 ? '1 of your chats' : `${d.chats} of your chats`;
+  return `Saving deletes ${chats} for good${d.pinned ? ` (${d.pinned} pinned, over the size limit)` : ''}, in all your workspaces. To keep a copy, export them first.`;
+});
 </script>
 
 <template>
@@ -128,9 +146,16 @@ async function save(): Promise<void> {
         <h2>What to keep</h2>
         <p class="muted">Your chats take {{ formatBytes(data.usedBytes) }}, messages and photos together, across your workspaces. Past a limit, your oldest chats are deleted. {{ serverLine }}</p>
         <ChatLimitsFields id-prefix="own" :limits="data.own" no-limit-text="Only the server's limit applies." @change="draft = $event; saved = false" />
-        <div><button class="btn btn-primary" type="button" :disabled="saving || !draft" @click="save">Save</button></div>
+        <div><button class="btn btn-primary" type="button" :disabled="saving || !draft" @click="save()">Save</button></div>
         <p v-if="saved" class="muted" aria-live="polite">Saved.</p>
       </section>
+      <ConfirmDialog :open="deleting !== null" title="Delete chats?" @cancel="deleting = null">
+        <p>{{ deletingText }}</p>
+        <template #actions>
+          <button class="btn btn-danger" type="button" :disabled="saving" @click="save(true)">{{ saving ? 'Saving…' : 'Save and delete' }}</button>
+          <button class="btn btn-secondary" type="button" :disabled="saving" @click="deleting = null">Cancel</button>
+        </template>
+      </ConfirmDialog>
       <section class="card stack">
         <h2>Live periods</h2>
         <p class="muted">A live period, attached from the Brews filters in a chat, sends its newest brews in detail up to the workspace's number. A lower one here sends fewer, so each reply costs less.</p>

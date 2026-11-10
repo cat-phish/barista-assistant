@@ -7,9 +7,10 @@ import { formatBytes } from './chatSize';
 
 export const SIZE_WARN_AT = 0.8; // of the limit
 export const AGE_WARN_DAYS = 7; // before a chat expires
+export const PIN_GRACE_DAYS = 7; // after the server's age limit is set (shared/src/aiConfig.ts)
 const DAY = 86_400_000;
 
-export function chatLimitsWarning(settings: (Pick<ChatSettings, 'usedBytes' | 'effective'> & { server: Pick<ChatSettings['server'], 'maxDays'> }) | null, chat: Pick<Chat, 'updatedAt' | 'pinnedAt'> | null, now = new Date()): string[] {
+export function chatLimitsWarning(settings: (Pick<ChatSettings, 'usedBytes' | 'effective'> & { server: Pick<ChatSettings['server'], 'maxDays' | 'maxDaysSetAt'> }) | null, chat: Pick<Chat, 'updatedAt' | 'pinnedAt'> | null, now = new Date()): string[] {
   if (!settings) return [];
   const notes: string[] = [];
   const { maxBytes, maxDays } = settings.effective;
@@ -18,7 +19,9 @@ export function chatLimitsWarning(settings: (Pick<ChatSettings, 'usedBytes' | 'e
   }
   const days = chat?.pinnedAt ? settings.server.maxDays : maxDays;
   if (days !== null && chat) {
-    const expires = new Date(new Date(chat.updatedAt).getTime() + days * DAY);
+    // A pinned chat a new server limit catches is kept a week from then.
+    const setAt = chat.pinnedAt && settings.server.maxDaysSetAt ? Date.parse(settings.server.maxDaysSetAt) + PIN_GRACE_DAYS * DAY : 0;
+    const expires = new Date(Math.max(new Date(chat.updatedAt).getTime() + days * DAY, setAt));
     if (expires.getTime() - now.getTime() <= AGE_WARN_DAYS * DAY) {
       const on = expires.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
       notes.push(

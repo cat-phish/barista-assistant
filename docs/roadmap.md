@@ -2877,3 +2877,8 @@ Branch `chat-pins`. Spec: `docs/api/chat.md` §12 ("Pinned chats",
   chat or one you pick (a swap, `unpin` on the pin route), with Export on
   each. Lowering it unpins nothing. An import over it brings the extra
   chats in unpinned.
+- **Saving limits asks first** (raised in review: an admin's Save deleted
+  everyone's chats past a new age limit on the spot, pinned ones too, before
+  any warning): both settings pages preview what a save deletes and
+  confirm with the count (the admin's with "I understand"), and pinned
+  chats a new server age limit catches get a week (`maxDaysSetAt`).

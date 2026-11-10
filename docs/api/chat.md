@@ -291,7 +291,11 @@ by `updatedAt`, within seconds of a change to a limit, after each message, and
 hourly. The chat in use is never deleted for size.
 
 **Pinned chats** are kept from your own age limit but not the server's: an
-admin's age limit deletes pinned chats too. Over the size limit they go only
+admin's age limit deletes pinned chats too, though never within a week
+(`PIN_GRACE_DAYS`) of the save that made it stricter. `maxDaysSetAt` in the
+server's limits records that save (new, or lower; set by the server, never
+sent), so a pinned chat a new limit catches shows the warning for that week
+and its owner can export it. Over the size limit they go only
 after every unpinned chat has (oldest pinned first). A pin is yours: it only
 orders your own list.
 
@@ -331,10 +335,22 @@ a send is a `429` with `code: "chat_limit"`.
 | --- | --- |
 | `GET /api/auth/me/chat-settings` | `{ own, server, effective, usedBytes }`. `own` and `effective` are `{ maxBytes, maxDays }`, and `own` adds `periodMaxBrews`; `server` adds `dailyMessages`. |
 | `PUT /api/auth/me/chat-settings` | Body `{ maxBytes, maxDays, periodMaxBrews? }`. `400` if either limit is over the server's. `periodMaxBrews` (10–300, or `null` for the workspace's) is your own cap on a period's brews; left out, it stays as it was. Answers as `GET`. |
+| `POST /api/auth/me/chat-settings/preview` | Body as `PUT`. What saving it would delete, deleting nothing: `{ chats, pinned }`. `400` as `PUT`. |
 | `DELETE /api/auth/me/chats` | Purges all your chats and photos, in every workspace. `204`. |
 | `GET /api/server/chat` | Admins. `{ limits, usedBytes }`, `usedBytes` for the whole server. |
-| `PUT /api/server/chat` | Admins. Body as `limits`. Answers as `GET`. Lowering a limit never rewrites a person's own: the lower one applies. |
+| `PUT /api/server/chat` | Admins. Body as `limits`, without `maxDaysSetAt`. Answers as `GET`. Lowering a limit never rewrites a person's own: the lower one applies. |
+| `POST /api/server/chat/preview` | Admins. Body as `PUT`. What saving it would delete, deleting nothing: `{ chats, people, pinned, pinnedLater, pinnedLaterOn }`, `pinned` counting those of `chats` that are pinned (size only), and `pinnedLater` the pinned chats past the new age limit kept for the week, the first going on `pinnedLaterOn`. |
 | `DELETE /api/server/chats` | Admins. Purges everyone's chats and photos. `204`. |
+
+**Saving limits:** a save deletes at once what's over the new limits, so
+both settings pages preview it first (the routes above, through the same
+`wouldDelete` the prunes use). Under Settings → AI chats, if anything would
+go: "Saving deletes 6 of your chats for good (1 pinned, over the size
+limit)…" with a red **Save and delete**; only your own, so no "I
+understand". Under Settings → Server → AI chats: "Saving deletes 37 chats
+from 5 people for good…" with **I understand** before the red **Save and
+delete** (CLAUDE.md rule 7); when only pinned chats in their week would go, a
+plain confirm says when.
 
 Leaving a workspace, or being removed from it, deletes your chats there.
 
