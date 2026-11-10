@@ -280,6 +280,11 @@ a {
   flex-direction: column;
   gap: var(--space-3);
 }
+/* List screens with tables (Beans, Recipes, Bar setup) use a desktop
+   screen's width; below 640px it makes no difference. */
+.page.wide {
+  max-width: 1150px;
+}
 .page-header {
   display: flex;
   align-items: center;

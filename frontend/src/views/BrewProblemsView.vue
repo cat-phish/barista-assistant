@@ -72,7 +72,7 @@ const selection = useSelection();
 
 <template>
   <AppHeader />
-  <main class="page">
+  <main class="page wide">
     <div class="page-header">
       <h1>Bar setup</h1>
     </div>

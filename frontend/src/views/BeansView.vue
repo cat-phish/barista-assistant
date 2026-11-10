@@ -788,10 +788,6 @@ p {
 .small {
   font-size: 0.9rem;
 }
-/* Eleven columns need more than the usual 640px page. */
-.page.wide {
-  max-width: 1150px;
-}
 .center {
   text-align: center;
 }
