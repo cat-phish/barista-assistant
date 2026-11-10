@@ -108,8 +108,12 @@ const err = (k: keyof typeof parsed.value.errors) => (submitted.value ? parsed.v
   gap: var(--space-2);
 }
 .dilution input {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 0;
+  min-width: 4rem;
+}
+.dilution select {
+  flex: 0 0 auto;
+  width: auto;
 }
 .buttons {
   display: flex;
