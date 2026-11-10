@@ -2882,3 +2882,17 @@ Branch `chat-pins`. Spec: `docs/api/chat.md` §12 ("Pinned chats",
   any warning): both settings pages preview what a save deletes and
   confirm with the count (the admin's with "I understand"), and pinned
   chats a new server age limit catches get a week (`maxDaysSetAt`).
+
+## Journal filters (built)
+
+Branch `journal-filters`. The Journal only filtered by bean, so there was no
+way to find, say, every cold brew. Contract: `api/brew-logs.md` §6 (GET list).
+
+- **Filters:** style, brewer, recipe, bean, period (Insights' ranges, with
+  custom from–to), status (Steeping, Not rated, Not analyzed) and Only my
+  brews, in a folded Filters bar (`FilterBar.vue`, as the chat attach
+  picker) whose line says what's applied, with Clear filters.
+- **API:** the list takes `styleId` (the recipe's style) and `status`;
+  not rated and not analyzed count finished brews only.
+- **In the URL** (`lib/journalFilters.ts`), defaults left out, so Back and
+  reloads keep them and old `?bean=` links still work.

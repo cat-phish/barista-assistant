@@ -1,6 +1,6 @@
 import type { RecipeStyleSummary } from "./recipes.js";
 import { randomUUID } from "node:crypto";
-import { and, asc, count, desc, eq, inArray, not, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, not, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
@@ -265,6 +265,16 @@ function windowPairIssue(body: WindowBody, ctx: z.RefinementCtx): void {
 const createBrewLogSchema = z.object({ ...brewLogFields, ...windowFields, remindToRate: z.boolean().optional() }).strict().superRefine(windowPairIssue);
 const updateBrewLogSchema = updateSchema(brewLogFields);
 
+// The Journal's status filter (docs/api/brew-logs.md §6, GET list).
+const BREW_LOG_STATUSES = ["steeping", "unrated", "unanalyzed"] as const;
+type BrewLogStatus = (typeof BREW_LOG_STATUSES)[number];
+function statusCondition(status: BrewLogStatus): SQL {
+  if (status === "steeping") return eq(brewLogs.steeping, true);
+  const finished = eq(brewLogs.steeping, false);
+  if (status === "unrated") return and(finished, isNull(brewLogs.rating), isNull(brewLogs.drinkRating))!;
+  return and(finished, sql`NOT EXISTS (SELECT 1 FROM ${llmAnalyses} la WHERE la.brew_log_id = ${brewLogs.id})`)!;
+}
+
 // from/to: the brew's own local date, as Insights counts it (stats.md).
 const listQuerySchema = z
   .object({
@@ -272,6 +282,8 @@ const listQuerySchema = z
     recipeId: z.uuid().optional(),
     brewerId: z.uuid().optional(),
     mine: z.literal("1").optional(),
+    styleId: z.uuid().optional(),
+    status: z.enum(BREW_LOG_STATUSES).optional(),
     from: z.iso.date().optional(),
     to: z.iso.date().optional(),
     limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -714,6 +726,9 @@ brewLogsRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<Brew
   if (query.recipeId) conditions.push(eq(brewLogs.recipeId, query.recipeId));
   if (query.brewerId) conditions.push(eq(brewLogs.brewerId, query.brewerId));
   if (query.mine) conditions.push(eq(brewLogs.userId, userId));
+  // The log's style is its recipe's (§5e).
+  if (query.styleId) conditions.push(inArray(brewLogs.recipeId, db.select({ id: recipes.id }).from(recipes).where(eq(recipes.styleId, query.styleId))));
+  if (query.status) conditions.push(statusCondition(query.status));
   if (query.from) conditions.push(localFrom(Date.parse(query.from)));
   if (query.to) conditions.push(not(localFrom(Date.parse(query.to) + DAY_MS)));
   const where = and(...conditions);
