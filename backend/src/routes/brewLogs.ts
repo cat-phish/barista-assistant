@@ -57,8 +57,9 @@ export interface Mark {
 
 // The log as clients see it: recipeCopy is the AI's, not returned (§6, "Recipe copy").
 export interface BrewLogDetails extends Omit<BrewLog, "recipeCopy"> {
-  // decaf and species: for the caffeine estimate (docs/api/stats.md §11).
-  bean: Pick<Bean, "id" | "roasterName" | "beanName" | "batchNumber" | "decaf" | "species">;
+  // decaf and species: for the caffeine estimate (docs/api/stats.md §11);
+  // roastLevel: for a yield estimate when none was measured.
+  bean: Pick<Bean, "id" | "roasterName" | "beanName" | "batchNumber" | "decaf" | "species" | "roastLevel">;
   // style: the recipe's (docs/api/recipe-styles.md §5e), for how extraction yield is worked out.
   recipe: (Pick<Recipe, "id" | "name" | "expectedYieldGrams"> & { methodKind: MethodKind; style: RecipeStyleSummary | null }) | null;
   grinder: { id: string; name: string } | null; // archived grinders included
@@ -535,7 +536,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       tastingNotes: brewLogs.tastingNotes,
       drinkRating: brewLogs.drinkRating,
       drinkTastingNotes: brewLogs.drinkTastingNotes,
-      bean: { id: beans.id, roasterName: beans.roasterName, beanName: beans.beanName, batchNumber: beans.batchNumber, decaf: beans.decaf, species: beans.species },
+      bean: { id: beans.id, roasterName: beans.roasterName, beanName: beans.beanName, batchNumber: beans.batchNumber, decaf: beans.decaf, species: beans.species, roastLevel: beans.roastLevel },
       recipe: { id: recipes.id, name: recipes.name, expectedYieldGrams: recipes.expectedYieldGrams },
       // Separate columns: a nested object spanning two left joins isn't nulled as a whole.
       recipeMethodKind: brewers.kind,

@@ -50,7 +50,7 @@ created it and can't be changed.
   "tastingNotes": "Sour, thin body",
   "drinkRating": null,
   "drinkTastingNotes": null,
-  "bean": { "id": "uuid", "roasterName": "Onyx Coffee Lab", "beanName": "Southern Weather", "batchNumber": null, "decaf": false, "species": ["arabica"] },
+  "bean": { "id": "uuid", "roasterName": "Onyx Coffee Lab", "beanName": "Southern Weather", "batchNumber": null, "decaf": false, "species": ["arabica"], "roastLevel": "light" },
   "recipe": { "id": "uuid", "name": "House V60", "expectedYieldGrams": 220, "style": { "id": "uuid", "name": "Pour over", "brewsLike": "pour_over" }, "methodKind": "filter" },
   "grinder": { "id": "uuid", "name": "Comandante C40" },
   "waterProfile": { "id": "uuid", "name": "Third Wave Water (classic)" },
@@ -72,7 +72,8 @@ created it and can't be changed.
 ```
 
 `bean`'s `decaf` and `species` are for the caffeine estimate, worked out by
-clients (§11, "How the client counts"). `recipe` is `null` when `recipeId` is
+clients (§11, "How the client counts"), and `roastLevel` (or `null`) for a
+yield estimate when none was measured. `recipe` is `null` when `recipeId` is
 `null` (no recipe used, or the recipe was deleted later); its `expectedYieldGrams` is the recipe's current estimate (or
 target, for espresso), for comparing with the measured `actualYieldGrams`,
 `style` is its style (`{ id, name, brewsLike }`, §5e, or `null`), whose
@@ -280,7 +281,11 @@ says why the last analysis failed or wasn't made (e.g. the daily cap), else
       `timestamp` is the start, `actualTimeSec` is usually `0`, and there's
       no rating yet. It's **finished** with a `PATCH` sending
       `steeping: false` plus its steep time, yield, TDS, dilution and
-      rating.
+      rating. The yield is the **concentrate made**, weighed after
+      straining. It stays optional, but clients ask for it on Finish and on
+      a finished batch without one, since a batch's servings and stock are
+      worked out from it (backlog item 14). Unweighed, clients estimate it
+      (`frontend/src/lib/batch.ts`) and show it with "≈".
     - A steeping brew can't be analyzed (§8 `409`), and the AI leaves it
       out of other brews' history (§9). `POST` with `steeping: true` also
       queues the **steep reminder** when the recipe has a window (§1b). The
