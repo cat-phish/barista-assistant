@@ -748,6 +748,7 @@ export interface BrewLog {
   waterProfile: { id: string; name: string } | null; // archived ones included
   vessel: { id: string; name: string } | null; // archived ones included
   brewer: BrewerRef | null; // archived ones included
+  style: StyleRef | null; // the style it was brewed as: set from the recipe and kept (§6)
   drink: { id: string; name: string; hasIngredients: boolean } | null; // hasIngredients: shot and drink tasted apart
   marks: Mark[]; // earliest first
   tools: PrepToolRef[]; // prep tools used, in checklist order (§3d)
@@ -761,6 +762,11 @@ export interface BrewLog {
   analyzed: boolean;
   analysisDueAt: string | null;
   analysisError: string | null;
+  // A long cold brew batch (docs/api/brew-servings.md §6c): when it was
+  // marked finished, its servings and the concentrate they took.
+  batchFinishedAt: string | null;
+  servingCount: number;
+  pouredGrams: number;
 }
 
 // docs/api/analysis.md §8b: starting values for a brew about to be made.

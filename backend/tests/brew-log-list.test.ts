@@ -30,7 +30,7 @@ describe("brew log list filters", () => {
       expect(res.status).toBe(200);
       return (res.body.brewLogs as Array<{ id: string }>).map((l) => l.id).sort();
     };
-    return { owner, base, coldBrew, pourOver, ids, list };
+    return { owner, base, coldBrew, pourOver, ids, list, cold, daily, bean, ws };
   }
 
   it("filters by the recipe's style", async () => {
@@ -56,5 +56,19 @@ describe("brew log list filters", () => {
     const { owner, base } = await setup();
     expect((await owner.agent.get(`${base}/brew-logs?styleId=nope`)).status).toBe(400);
     expect((await owner.agent.get(`${base}/brew-logs?status=done`)).status).toBe(400);
+  });
+
+  it("keeps the style a brew was brewed as when its recipe is restyled or deleted", async () => {
+    const { owner, base, coldBrew, pourOver, ids, list, cold, daily } = await setup();
+    expect((await owner.agent.patch(`${base}/recipes/${cold}`).send({ styleId: pourOver })).status).toBe(200);
+    expect(await list(`styleId=${coldBrew}`)).toEqual([ids.coldDone, ids.coldSteeping].sort());
+    const log = (await owner.agent.get(`${base}/brew-logs/${ids.coldDone}`)).body.brewLog;
+    expect(log.style).toMatchObject({ id: coldBrew, brewsLike: "cold_brew" });
+    expect((await owner.agent.delete(`${base}/recipes/${cold}`)).status).toBe(204);
+    expect(await list(`styleId=${coldBrew}`)).toEqual([ids.coldDone, ids.coldSteeping].sort());
+    // Moved to another recipe, a brew takes that recipe's style.
+    expect((await owner.agent.patch(`${base}/brew-logs/${ids.coldDone}`).send({ recipeId: daily })).status).toBe(200);
+    expect(await list(`styleId=${coldBrew}`)).toEqual([ids.coldSteeping]);
+    expect(await list(`styleId=${pourOver}`)).toContain(ids.coldDone);
   });
 });

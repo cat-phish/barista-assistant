@@ -85,6 +85,19 @@ describe("stats (docs/api/stats.md §11)", () => {
     });
   });
 
+  it("gives each brew the style it was brewed as, kept when its recipe is restyled", async () => {
+    const owner = await newUser();
+    const ws = await newWorkspace(owner);
+    const base = `/api/workspaces/${ws.id}`;
+    const v60 = await brewerId(owner, ws.id, "V60");
+    const [cold, pourOver] = [await styleId(owner, ws.id, "filter", "cold_brew"), await styleId(owner, ws.id, "filter", "pour_over")];
+    const recipe = (await owner.agent.post(`${base}/recipes`).send({ name: "Fridge", brewerId: v60, styleId: cold, targetDoseGrams: 40, targetWaterGrams: 400 })).body.recipe.id as string;
+    await newBrewLog(owner, ws.id, await newBean(owner, ws.id), { recipeId: recipe, actualDoseGrams: 40, actualWaterGrams: 400 });
+    expect((await owner.agent.patch(`${base}/recipes/${recipe}`).send({ styleId: pourOver })).status).toBe(200);
+    const res = await owner.agent.get(`${base}/stats`);
+    expect(res.body.brews[0]).toMatchObject({ styleId: cold, brewsLike: "cold_brew" });
+  });
+
   it("filters by local date, bean, recipe, brewer and mine; leaves steeping brews out", async () => {
     const owner = await newUser("owner");
     const barista = await newUser("barista");

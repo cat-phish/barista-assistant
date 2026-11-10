@@ -102,7 +102,8 @@ out to keep the reply small.
 - **`brews`:** the matching brews, oldest first. Each field is the log's
   own (§6), renamed without the `actual` prefix. In addition:
   - `methodId`: the brewer's method (§3e).
-  - `styleId` and `brewsLike`: the recipe's style (§5e). Extraction yield
+  - `styleId` and `brewsLike`: the style it was brewed as (§5e; the log's
+    own `style`, §6, kept when the recipe changes). Extraction yield
     needs `brewsLike`.
   - `drinkServingSize` and `drinkServingUnit`: the drink's default size
     (§5c), used when the brew didn't record its own.

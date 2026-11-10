@@ -120,4 +120,22 @@ describe("brew servings", () => {
     expect((await owner.agent.get(url)).status).toBe(404);
     expect((await owner.agent.get(`${base}/backup`)).body.tables.brew_servings).toEqual([]);
   });
+
+  it("a batch stays one when its recipe is restyled or deleted", async () => {
+    const { owner, ws, base, cold, url } = await setup();
+    const pourOverStyle = await styleId(owner, ws.id, "filter", "pour_over");
+    expect((await owner.agent.patch(`${base}/recipes/${cold}`).send({ styleId: pourOverStyle })).status).toBe(200);
+    expect((await owner.agent.post(url).send({ concentrateGrams: 100 })).status).toBe(201);
+    expect((await owner.agent.delete(`${base}/recipes/${cold}`)).status).toBe(204);
+    expect((await owner.agent.post(url).send({ concentrateGrams: 50 })).status).toBe(201);
+  });
+
+  it("a brew with servings stays a batch, even moved to a pour-over recipe", async () => {
+    const { owner, base, pourOver, url, batch } = await setup();
+    const id = (await owner.agent.post(url).send({ concentrateGrams: 100 })).body.serving.id as string;
+    expect((await owner.agent.patch(`${base}/brew-logs/${batch}`).send({ recipeId: pourOver })).status).toBe(200);
+    expect((await owner.agent.get(url)).body.servings).toHaveLength(1);
+    expect((await owner.agent.patch(`${url}/${id}`).send({ rating: 3 })).status).toBe(200);
+    expect((await owner.agent.put(`${base}/brew-logs/${batch}/batch`).send({ finished: true })).status).toBe(200);
+  });
 });

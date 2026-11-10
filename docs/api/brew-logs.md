@@ -57,6 +57,7 @@ created it and can't be changed.
   "vessel": { "id": "uuid", "name": "Glass carafe" },
   "brewerId": "uuid",
   "brewer": { "id": "uuid", "name": "V60", "kind": "filter" },
+  "style": { "id": "uuid", "name": "Pour over", "brewsLike": "pour_over" },
   "drink": { "id": "uuid", "name": "The Atlas", "hasIngredients": true },
   "servingSize": null,
   "servingUnit": null,
@@ -88,7 +89,14 @@ water used, or `null`; archived ones still appear. `vessel`
 archived ones still appear. `brewerId` / `brewer` (`{ "id", "name",
 "kind" }`, archived ones included) is the brewer it was made with: set by the
 API from the recipe, kept if the recipe later moves or is deleted, and `null`
-for a brew without a recipe. `drink`
+for a brew without a recipe. `style` (`{ "id", "name", "brewsLike" }`, §5e,
+or `null`) is the style it was **brewed as**, the same way: set from the
+recipe, follows a change of this brew's `recipeId`, and kept when the recipe
+is later restyled or deleted (`recipe.style` is the recipe's style now).
+It's `null` when the recipe had none, or a custom style was deleted. It
+decides whether the brew is a cold brew batch (§6c), and the list's
+`styleId` filter. Brews from before it was kept (migration 0118) took
+their recipe's style at the time. `drink`
 (`{ "id", "name", "hasIngredients" }`) is the drink it was for, or `null`;
 `hasIngredients` tells clients to show the shot and the drink tasting apart. `marks` lists
 the timer's marks (`{ "kind", "stepOrder", "atSec" }`, `stepOrder` `null`
@@ -113,8 +121,7 @@ took in grams; `0` for any other brew.
 
 - **Auth Required:** `true` (any member)
 - **Query (all optional):** `beanId`, `recipeId`, `brewerId` (filters);
-  `styleId` (brews whose recipe has that style, §5e: a log's style is its
-  recipe's); `status`: `steeping`, `unrated` (finished, with no rating and
+  `styleId` (brews brewed as that style: the log's own `style`); `status`: `steeping`, `unrated` (finished, with no rating and
   no drink rating) or `unanalyzed` (finished, with no AI analysis);
   `mine=1` (only the caller's brews); `from`, `to` (ISO dates, inclusive, on
   the brew's own local date as Insights counts it: UTC when its

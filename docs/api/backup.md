@@ -117,6 +117,9 @@ each as `photos/<id>.webp`; they restore in order under new ids, each only
 if its file is there and valid. An older file's single `menuLogoId`
 restores as the one logo.
 
+**A brew's style** (`brew_logs.styleId`, `brew-logs.md` §6): a file from
+before brews kept it restores each brew with its recipe's style in the file.
+
 **A brew's recipe copy** (`brew_logs.recipeCopy`, `brew-logs.md` §6) goes
 in every file. It's checked against `RecipeCopy` like any JSON column
 (`JSON_SCHEMAS`). A file from before migration 0109 has none, and those

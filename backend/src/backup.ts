@@ -565,6 +565,10 @@ export function checkBackup(input: unknown): Checked {
 
   const ids = new Map<string, Set<string>>();
   const tables: Record<string, BackupRow[]> = {};
+  const fileRecipes: unknown = file.tables.recipes;
+  const recipeStyleOf = new Map<string, string | null>();
+  if (Array.isArray(fileRecipes))
+    for (const r of fileRecipes) if (isObject(r) && typeof r.id === "string") recipeStyleOf.set(r.id, typeof r.styleId === "string" ? r.styleId : null);
   for (const t of TABLE_INFO) {
     const rows = file.tables[t.name] ?? [];
     if (!Array.isArray(rows)) return { ok: false, error: `tables.${t.name}: must be a list` };
@@ -573,6 +577,9 @@ export function checkBackup(input: unknown): Checked {
     for (const [i, raw] of rows.entries()) {
       const at = `tables.${t.name}[${i}]`;
       if (!isObject(raw)) return { ok: false, error: `${at}: must be an object` };
+      // Brews from before they kept their style (migration 0118) take their
+      // recipe's, as the migration did (docs/api/brew-logs.md §6).
+      if (t.name === "brew_logs" && !("styleId" in raw)) raw.styleId = typeof raw.recipeId === "string" ? (recipeStyleOf.get(raw.recipeId) ?? null) : null;
       // Picks saved before labels were (migration 0085) take the built-in wheel's.
       if (t.name === "brew_log_flavors" && raw.label === undefined && typeof raw.flavorKey === "string") {
         raw.label = (FLAVORS as Record<string, string>)[raw.flavorKey] ?? raw.flavorKey;
