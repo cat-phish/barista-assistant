@@ -25,6 +25,12 @@ grinder. Recipes are grinder-neutral.
   "variableSpeed": false,
   "rpmMin": null,
   "rpmMax": null,
+  "startingSetting": 20,
+  "startingPoints": [
+    { "method": "espresso", "style": null, "setting": 8 },
+    { "method": "filter", "style": "cold_brew", "setting": 30 }
+  ],
+  "unavailableMethods": ["stovetop"],
   "archivedAt": null,
   "createdAt": "2026-10-18T09:00:00.000Z"
 }
@@ -44,6 +50,9 @@ Everything after `name` is optional (`null` when unknown):
 | `power` | `manual` or `electric` (`GRINDER_POWER`) |
 | `variableSpeed` | boolean, default `false` (never `null`): the motor's speed can be set, so brews record it (`grindRpm`, §6) |
 | `rpmMin`, `rpmMax` | the speed range, integers 50–5000; both or neither, min < max, and only when `variableSpeed` is `true` |
+| `startingSetting` | the general starting point, on the dial like a grind setting (0 ≤ n < 10000, ≤ 2 decimals) |
+| `startingPoints` | up to 20 `{ method, style, setting }`: `method` one of `METHOD_KINDS`, `style` `null` (every style of the method) or one of that method's styles (`STYLES_BY_KIND`, not `other`), `setting` like `startingSetting`; each (method, style) once. `[]` is stored as `null` |
+| `unavailableMethods` | the methods it can't grind for, each of `METHOD_KINDS` once; `[]` is stored as `null` |
 
 The range and step size are sent to the AI analysis so its reasoning can talk
 in steps ("2 clicks finer"), the usual adjustment so it sizes a grind change
@@ -51,6 +60,17 @@ like the barista does (a hint, not a rule: it goes smaller when a brew is
 nearly there), and the speed range so it can suggest a speed; the rest is
 reference. All go under Settings → AI "Grinder details"
 (`docs/api/llm-contract.md` §9).
+
+**Starting points.** What a recipe's grind for this grinder starts at
+(clients only; the server stores them). When a grinder is added to a
+recipe's starting points (§5) with no setting typed, the recipe form fills
+in the row for the recipe's style, else the row for its method, else
+`startingSetting`; the recipe then keeps its own number. Brew setup uses the
+same fallback after the last setting and the recipe's own starting point
+(§6). A grinder whose `unavailableMethods` includes a method is left out of
+the grinder pickers for recipes and brews of that method; a recipe or brew
+that already uses it keeps it, and the server doesn't refuse it. Neither is
+sent to the AI: the recipe's own starting points are (`docs/api/llm-contract.md` §9).
 
 `createdAt` (read-only) is when the grinder was added; lists sort by it.
 

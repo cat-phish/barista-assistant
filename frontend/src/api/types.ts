@@ -329,6 +329,17 @@ export interface GrinderDetails {
   variableSpeed: boolean; // brews record grindRpm
   rpmMin: number | null; // speed range: both or neither, only when variableSpeed
   rpmMax: number | null;
+  // Starting points (§3b "Starting points"): pre-fill a recipe's grind. A
+  // style's row beats its method's, which beats startingSetting.
+  startingSetting: number | null;
+  startingPoints: GrinderStartingPoint[] | null;
+  unavailableMethods: MethodKind[] | null; // hidden from these methods' pickers
+}
+// style null = every style of the method; never 'other'.
+export interface GrinderStartingPoint {
+  method: MethodKind;
+  style: RecipeStyle | null;
+  setting: number;
 }
 export interface Grinder extends GrinderDetails {
   id: string;

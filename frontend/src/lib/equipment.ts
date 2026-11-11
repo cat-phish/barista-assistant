@@ -1,6 +1,6 @@
 // Labels and one-line summaries for equipment (docs/api/README.md §3, §3b).
 import type { BrewerInput } from '../api/brewers';
-import type { Brewer, BurrType, Grinder, GrinderAdjustment, GrinderDetails, GrinderPower, MachineCapabilities, MethodKind, Preinfusion, ProfileControl, RecipeStyle } from '../api/types';
+import type { Brewer, BurrType, Grinder, GrinderAdjustment, GrinderDetails, GrinderPower, GrinderStartingPoint, MachineCapabilities, MethodKind, Preinfusion, ProfileControl, RecipeStyle } from '../api/types';
 import { formatGrams, parseDecimal } from './format';
 import { parseFinishOffset } from './finishOffset';
 
@@ -65,6 +65,7 @@ export function grinderSummary(g: Grinder): string {
   if (g.burrType || g.burrSizeMm !== null) parts.push([g.burrType ? BURR_TYPES[g.burrType] : 'Burrs', g.burrSizeMm !== null ? `${g.burrSizeMm} mm` : ''].filter(Boolean).join(' '));
   if (g.power) parts.push(GRINDER_POWER[g.power]);
   if (g.variableSpeed) parts.push(g.rpmMin !== null && g.rpmMax !== null ? `Variable speed ${g.rpmMin}–${g.rpmMax} RPM` : 'Variable speed');
+  if (g.unavailableMethods?.length) parts.push(`Not for ${g.unavailableMethods.map((k) => METHOD_KINDS[k].label.toLowerCase()).join(', ')}`);
   return parts.join(' · ');
 }
 
@@ -93,8 +94,15 @@ export interface GrinderForm {
   variableSpeed: boolean;
   rpmMin: string;
   rpmMax: string;
+  startingSetting: string;
+  // Method or style starting points; target is "espresso" or "filter/cold_brew"
+  // (lib/grinderStart.ts startKey).
+  startRows: Array<{ target: string; setting: string }>;
+  unavailableMethods: MethodKind[];
 }
-export type GrinderFormErrors = Partial<Record<'name' | 'range' | 'stepSize' | 'usualAdjustment' | 'burrSizeMm' | 'rpm', string>>;
+export type GrinderFormErrors = Partial<Record<'name' | 'range' | 'stepSize' | 'usualAdjustment' | 'burrSizeMm' | 'rpm' | 'startingSetting', string>> & {
+  startRows?: Record<number, string>; // by row index
+};
 
 export function grinderForm(g?: Grinder): GrinderForm {
   const num = (n: number | null | undefined) => (n == null ? '' : formatGrams(n));
@@ -112,6 +120,9 @@ export function grinderForm(g?: Grinder): GrinderForm {
     variableSpeed: g?.variableSpeed ?? false,
     rpmMin: g?.rpmMin == null ? '' : String(g.rpmMin),
     rpmMax: g?.rpmMax == null ? '' : String(g.rpmMax),
+    startingSetting: num(g?.startingSetting),
+    startRows: (g?.startingPoints ?? []).map((p) => ({ target: p.style ? `${p.method}/${p.style}` : p.method, setting: formatGrams(p.setting) })),
+    unavailableMethods: [...(g?.unavailableMethods ?? [])],
   };
 }
 
@@ -140,6 +151,22 @@ export function parseGrinderForm(f: GrinderForm): { errors: GrinderFormErrors; v
   else if (rpmMax && !rpmMax.ok) errors.rpm = `To: ${rpmMax.error}`;
   else if (!rpmMin !== !rpmMax) errors.rpm = 'Enter both ends of the range, or neither';
   else if (rpmMin?.ok && rpmMax?.ok && rpmMin.value >= rpmMax.value) errors.rpm = '"To" must be more than "from"';
+  // Starting points, on the dial like a grind setting.
+  const starting = optional(f.startingSetting, setting);
+  if (starting && !starting.ok) errors.startingSetting = starting.error;
+  const rowErrors: Record<number, string> = {};
+  const points: GrinderStartingPoint[] = [];
+  f.startRows.forEach((row, i) => {
+    const [method, style] = row.target.split('/') as [MethodKind | '', RecipeStyle | undefined];
+    const value = parseDecimal(row.setting, setting);
+    if (!method) rowErrors[i] = 'Choose a method or style';
+    else if (f.startRows.findIndex((o) => o.target === row.target) !== i) rowErrors[i] = 'Already listed';
+    else if (f.unavailableMethods.includes(method)) rowErrors[i] = `Marked as not for ${METHOD_KINDS[method].label.toLowerCase()} below`;
+    else if (!row.setting.trim()) rowErrors[i] = 'Enter a setting';
+    else if (!value.ok) rowErrors[i] = value.error;
+    else points.push({ method, style: style ?? null, setting: value.value });
+  });
+  if (Object.keys(rowErrors).length) errors.startRows = rowErrors;
   if (Object.keys(errors).length) return { errors, values: null };
   return {
     errors,
@@ -157,6 +184,9 @@ export function parseGrinderForm(f: GrinderForm): { errors: GrinderFormErrors; v
       variableSpeed: f.variableSpeed,
       rpmMin: rpmMin?.ok ? rpmMin.value : null,
       rpmMax: rpmMax?.ok ? rpmMax.value : null,
+      startingSetting: starting?.ok ? starting.value : null,
+      startingPoints: points.length ? points : null,
+      unavailableMethods: f.unavailableMethods.length ? METHOD_ORDER.filter((k) => f.unavailableMethods.includes(k)) : null,
     },
   };
 }

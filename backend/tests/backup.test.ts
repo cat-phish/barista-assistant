@@ -25,7 +25,7 @@ async function populated() {
 
   const yeast = (await post("bean-processes", { name: "Yeast inoculated" })).process.id as string;
   await post("brewer-methods", { name: "Siphon", behaviour: "filter" });
-  const c40 = (await post("grinders", { name: "C40" })).grinder.id as string;
+  const c40 = (await post("grinders", { name: "C40", startingSetting: 22, startingPoints: [{ method: "filter", style: "cold_brew", setting: 30 }], unavailableMethods: ["espresso"] })).grinder.id as string;
   const nano = (await post("roasting-machines", { name: "Nano 7", capacityGrams: 120 })).machine.id as string;
   const guji = (await post("green-coffees", { name: "Guji", processId: yeast, varieties: ["74110"], species: ["arabica"], originArea: "africa", weightBoughtGrams: 1000 })).greenCoffee.id as string;
   await post("roasts", { greenCoffeeId: guji, machineId: nano, greenGrams: 120, roastedGrams: 103, roastType: "filter", detailedRoastLevel: "city", firstCrackSec: 420, totalSec: 540 });

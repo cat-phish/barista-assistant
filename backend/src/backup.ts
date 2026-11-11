@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { eq, getTableColumns, inArray, type Column } from "drizzle-orm";
 import { getTableConfig, type MySqlTable } from "drizzle-orm/mysql-core";
 import { z } from "zod";
+import { startingPointsSchema, unavailableMethodsSchema } from "./grinderStart.js";
 import { scalesByDefault } from "@barista/shared/brew";
 import type { RecipeCopy } from "@barista/shared/recipeCopy";
 import { FLAVORS, parseLexicon, type FlavorLexicon } from "@barista/shared/flavors";
@@ -334,6 +335,8 @@ const recipeCopySchema: z.ZodType<RecipeCopy | null> = z
 
 const JSON_SCHEMAS: Record<string, z.ZodType> = {
   "brew_logs.recipeCopy": recipeCopySchema,
+  "grinders.startingPoints": startingPointsSchema.nullable(),
+  "grinders.unavailableMethods": unavailableMethodsSchema.nullable(),
   "beans.varieties": z.array(z.string().min(1).max(100)).max(20).nullable(),
   "beans.species": z.array(z.enum(COFFEE_SPECIES)).nullable(),
   "green_coffees.varieties": z.array(z.string().min(1).max(100)).max(20).nullable(),

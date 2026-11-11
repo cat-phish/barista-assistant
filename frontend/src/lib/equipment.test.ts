@@ -2,12 +2,28 @@ import { describe, expect, it } from 'vitest';
 import type { Brewer, Grinder, MachineCapabilities } from '../api/types';
 import { adjustmentLabel, brewerForm, brewerInput, parseGroundsRetention, burrLabel, grinderForm, grinderSummary, machineSummary, parseGrinderForm, powerLabel, RECIPE_STYLES, STYLES_BY_KIND } from './equipment';
 
-const c40: Grinder = {
+const c40WithStart: Grinder = {
   id: 'g', name: 'C40', notes: null, adjustment: 'stepped', settingMin: 0, settingMax: 40, stepSize: 1, usualAdjustment: null,
-  burrType: 'conical', burrSizeMm: 39, power: 'manual', variableSpeed: false, rpmMin: null, rpmMax: null, archivedAt: null, createdAt: '2026-10-20T00:00:00.000Z',
+  burrType: 'conical', burrSizeMm: 39, power: 'manual', variableSpeed: false, rpmMin: null, rpmMax: null,
+  startingSetting: 22, startingPoints: [{ method: 'espresso', style: null, setting: 8 }, { method: 'filter', style: 'cold_brew', setting: 30.5 }], unavailableMethods: ['stovetop'],
+  archivedAt: null, createdAt: '2026-10-20T00:00:00.000Z',
 };
 
+const c40 = c40WithStart;
+
 describe('grinder form', () => {
+  it('starting points: rows need a target and a setting, once each, not for a method it cannot do', () => {
+    const base = { ...grinderForm(), name: 'G' };
+    const rows = (startRows: Array<{ target: string; setting: string }>, unavailableMethods: Grinder['unavailableMethods'] & object = []) =>
+      parseGrinderForm({ ...base, startRows, unavailableMethods }).errors.startRows;
+    expect(rows([{ target: '', setting: '8' }])).toEqual({ 0: 'Choose a method or style' });
+    expect(rows([{ target: 'espresso', setting: '' }])).toEqual({ 0: 'Enter a setting' });
+    expect(rows([{ target: 'espresso', setting: '8' }, { target: 'espresso', setting: '9' }])).toEqual({ 1: 'Already listed' });
+    expect(rows([{ target: 'espresso/soup', setting: '8' }], ['espresso'])?.[0]).toMatch(/not for espresso/);
+    expect(parseGrinderForm({ ...base, startingSetting: 'x' }).errors.startingSetting).toBeTruthy();
+    expect(parseGrinderForm(base).values).toMatchObject({ startingSetting: null, startingPoints: null, unavailableMethods: null });
+  });
+
   it('round-trips a grinder and blanks become null', () => {
     const { id: _id, archivedAt: _archived, createdAt: _added, ...fields } = c40;
     expect(parseGrinderForm(grinderForm(c40)).values).toEqual(fields);
@@ -40,11 +56,13 @@ describe('grinder form', () => {
 
 describe('summaries', () => {
   it('describe what is recorded', () => {
+    const c40 = { ...c40WithStart, unavailableMethods: null };
     expect(grinderSummary(c40)).toBe('Stepped · 0–40, 1 per step · Conical 39 mm · Hand grinder');
     expect(grinderSummary({ ...c40, usualAdjustment: 2 })).toBe('Stepped · 0–40, 1 per step, usually 2 · Conical 39 mm · Hand grinder');
     expect(grinderSummary({ ...c40, settingMin: null, settingMax: null, stepSize: null, usualAdjustment: 0.5 })).toMatch(/^Stepped · usually 0\.5 ·/);
     expect(grinderSummary({ ...c40, power: 'electric', variableSpeed: true, rpmMin: 300, rpmMax: 1500 })).toMatch(/Variable speed 300–1500 RPM$/);
     expect(grinderSummary({ ...c40, variableSpeed: true })).toMatch(/· Variable speed$/);
+    expect(grinderSummary({ ...c40, unavailableMethods: ['espresso', 'stovetop'] })).toMatch(/· Not for espresso, stovetop$/);
     expect(grinderSummary({ ...c40, adjustment: null, settingMin: null, settingMax: null, stepSize: null, usualAdjustment: null, burrType: null, burrSizeMm: null, power: null })).toBe('');
     const m: MachineCapabilities = { preinfusion: 'manual', flowControl: 'manual', pressureControl: 'none' };
     expect(machineSummary(m)).toBe('Pre-infusion: manual · Flow: manual');

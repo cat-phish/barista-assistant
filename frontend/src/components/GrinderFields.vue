@@ -1,10 +1,21 @@
 <script setup lang="ts">
 // Grinder name + optional details (docs/api/grinders.md §3b). Validate with
 // parseGrinderForm (lib/equipment.ts) and pass its errors in.
-import { BURR_TYPES, GRINDER_ADJUSTMENTS, GRINDER_POWER, type GrinderForm, type GrinderFormErrors } from '../lib/equipment';
+import { computed } from 'vue';
+import { BURR_TYPES, GRINDER_ADJUSTMENTS, GRINDER_POWER, METHOD_KINDS, METHOD_ORDER, type GrinderForm, type GrinderFormErrors } from '../lib/equipment';
+import { START_TARGETS } from '../lib/grinderStart';
 
 const form = defineModel<GrinderForm>({ required: true });
 defineProps<{ idPrefix: string; errors: GrinderFormErrors; showErrors: boolean }>();
+
+// Method/style starting points: each target once, none for a method it can't do.
+const usedTargets = computed(() => new Set(form.value.startRows.map((r) => r.target)));
+const freeTargets = computed(() =>
+  START_TARGETS.filter((m) => !form.value.unavailableMethods.includes(m.method)).flatMap((m) => m.targets).filter((t) => !usedTargets.value.has(t.key)),
+);
+function addStartRow(): void {
+  form.value.startRows.push({ target: freeTargets.value[0]?.key ?? '', setting: '' });
+}
 </script>
 
 <template>
@@ -55,6 +66,48 @@ defineProps<{ idPrefix: string; errors: GrinderFormErrors; showErrors: boolean }
       <span v-if="showErrors && errors.usualAdjustment" class="field-error">{{ errors.usualAdjustment }}</span>
       <span v-else class="hint">How far you usually move the dial when dialing in, in its units. The AI sizes its grind suggestions by it.</span>
     </div>
+    <fieldset class="range">
+      <legend>Starting points</legend>
+      <div class="field">
+        <label :for="`${idPrefix}-starting`">Starting point</label>
+        <input :id="`${idPrefix}-starting`" v-model="form.startingSetting" inputmode="decimal" placeholder="e.g. 20" :aria-invalid="showErrors && !!errors.startingSetting" />
+        <span v-if="showErrors && errors.startingSetting" class="field-error">{{ errors.startingSetting }}</span>
+        <span v-else class="hint">Fills in a recipe's grind for this grinder, for every method unless you add one below.</span>
+      </div>
+      <ul v-if="form.startRows.length" class="start-rows">
+        <li v-for="(row, i) in form.startRows" :key="i" class="start-row">
+          <div class="start-row-inputs">
+            <select v-model="row.target" :aria-label="`Starting point ${i + 1}: method or style`" :aria-invalid="showErrors && !!errors.startRows?.[i]">
+              <option value="" disabled>Method or style…</option>
+              <optgroup v-for="m in START_TARGETS" :key="m.method" :label="m.label">
+                <option
+                  v-for="t in m.targets"
+                  :key="t.key"
+                  :value="t.key"
+                  :disabled="t.key !== row.target && (usedTargets.has(t.key) || form.unavailableMethods.includes(t.method))"
+                >{{ t.label }}</option>
+              </optgroup>
+            </select>
+            <input v-model="row.setting" inputmode="decimal" placeholder="Setting" :aria-label="`Starting point ${i + 1}: setting`" :aria-invalid="showErrors && !!errors.startRows?.[i]" />
+            <button type="button" class="btn-link danger" :aria-label="`Remove starting point ${i + 1}`" @click="form.startRows.splice(i, 1)">✕</button>
+          </div>
+          <span v-if="showErrors && errors.startRows?.[i]" class="field-error">{{ errors.startRows[i] }}</span>
+        </li>
+      </ul>
+      <div>
+        <button type="button" class="btn btn-secondary" :disabled="!freeTargets.length" @click="addStartRow">Add method/style starting point</button>
+      </div>
+    </fieldset>
+    <fieldset class="range">
+      <legend>Can't grind for</legend>
+      <div class="method-checks">
+        <label v-for="k in METHOD_ORDER" :key="k" class="checkbox">
+          <input v-model="form.unavailableMethods" type="checkbox" :value="k" />
+          {{ METHOD_KINDS[k].label }}
+        </label>
+      </div>
+      <span class="hint">Hidden from the grinder pickers for these methods.</span>
+    </fieldset>
     <div class="form-row">
       <div class="field">
         <label :for="`${idPrefix}-burr`">Burrs</label>
@@ -120,6 +173,30 @@ defineProps<{ idPrefix: string; errors: GrinderFormErrors; showErrors: boolean }
 .range .hint {
   font-size: 0.85rem;
   color: var(--text-muted);
+}
+.start-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.start-row-inputs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 6rem auto;
+  gap: var(--space-2);
+  align-items: center;
+}
+.start-row-inputs select,
+.start-row-inputs input {
+  width: 100%;
+  min-width: 0;
+}
+.method-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
 }
 .range-row input {
   width: 100%;
