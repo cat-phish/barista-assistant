@@ -47,6 +47,18 @@ Retrieves the read-only menu for a workspace, as arranged in the menu builder
             "price": 3.5,
             "sizes": null,
             "available": false
+          },
+          {
+            "type": "other",
+            "id": "uuid",
+            "name": "Almond croissant",
+            "description": "Baked daily",
+            "method": null,
+            "variantOf": null,
+            "ingredients": [],
+            "price": 3.5,
+            "sizes": null,
+            "available": true
           }
         ]
       },
@@ -106,6 +118,9 @@ Retrieves the read-only menu for a workspace, as arranged in the menu builder
     menu's `currency` (`null` = no price); `sizes` is a price per size
     instead (§7b), `null` for one size; `available: false` items are still
     listed, for the page to mark.
+  - An `other` item (§7b "Other items") has its `id`, name and description
+    like a drink; `method` and `variantOf` are always `null` and
+    `ingredients` `[]`. The page shows it like a drink.
   - Archived brewers, and items whose drink or brewer is gone, are left out.
   - The beans block lists active (not archived, §4) beans with
     `showOnPublicMenu`, by roaster then name. Each has its `id`,

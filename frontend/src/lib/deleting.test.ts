@@ -22,6 +22,7 @@ describe('usageWarnings', () => {
     expect(usageWarnings('style', { recipeCount: 1 })).toEqual(['1 recipe will lose their style.']);
     expect(usageWarnings('roaster', { roastCount: 0 })).toEqual([]);
     expect(usageWarnings('green', { roastCount: 2 })).toEqual(['2 roasts will no longer say which green coffee they were. Their beans stay.']);
+    expect(usageWarnings('menuOtherItem', { menuItemCount: 2 })).toEqual(['It will be taken off the menu (2 sections).']);
     expect(usageWarnings('method', { brewerCount: 2 })).toEqual(["2 brewers will move to the built-in method it works like. Their recipes and brews don't change."]);
   });
 });

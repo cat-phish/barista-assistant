@@ -2933,3 +2933,24 @@ Contract: `api/brew-servings.md` §6c; plan in backlog item 14.
   asks for "I understand" (rule 7); a serving deletes with a plain confirm.
 - **Lists:** Journal cards show "≈ 120 g left" or "Finished"; the Brew page
   has an "In the fridge" card of open batches (on trial).
+
+## Other items on the menu (built)
+
+Branch `menu-custom-items`, migration 0120. A menu item could only be a
+drink, a brewer or the beans block, so a pastry or "ask about our decaf"
+couldn't go on the menu. Contract: `api/menu.md` §7b "Other items",
+`api/public-menu.md` §7; was backlog item 23.
+
+- **Their own list** (`menu_other_items`: name, description), managed in an
+  "Other items" dialog in the builder and offered in the add picker beside
+  drinks and plain brews. A first take kept them inline on the menu item;
+  deleting a section would have erased them, so they became a list.
+- **Placed like drinks** (`itemType: "other"`, `menu_items.other_item_id`):
+  each placement can rename it and has its own price or sizes and
+  Available tick; once per section. No method or ingredients switches.
+- **Deleting:** a section only takes them off it. Deleting an other item
+  takes it off every section, with the usage and "I understand" (rule 7,
+  something else uses it) when it's on the menu.
+- **Left out for now:** a photo, and turning one into a real drink (backlog 23).
+- **Backups and imports:** in `BACKUP_TABLES` above the menu, match key by
+  name.

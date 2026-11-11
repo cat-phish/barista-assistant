@@ -1,4 +1,5 @@
 import { api, API_URL } from './client';
+import type { Usage } from '../lib/deleting';
 import type { BeanBatchMode, BeanMenuField, Menu, MenuItemType, MenuSize, PublicMenu } from './types';
 
 // docs/api/menu.md §7b: the menu builder. Every write returns the whole menu.
@@ -16,7 +17,7 @@ export interface MenuItemInput {
   sizes?: MenuSize[] | null; // a price per size; never with price
 }
 
-export type NewMenuItem = MenuItemInput & { itemType: MenuItemType; drinkId?: string; brewerId?: string };
+export type NewMenuItem = MenuItemInput & { itemType: MenuItemType; drinkId?: string; brewerId?: string; otherItemId?: string };
 
 export const menuApi = {
   get: (workspaceId: string) => api.get<Menu>(base(workspaceId)),
@@ -54,4 +55,10 @@ export const menuApi = {
     api.post<Menu>(`${base(workspaceId)}/sections/${sectionId}/items`, { items }),
   updateItem: (workspaceId: string, id: string, input: MenuItemInput) => api.patch<Menu>(`${base(workspaceId)}/items/${id}`, input),
   removeItem: (workspaceId: string, id: string) => api.delete<Menu>(`${base(workspaceId)}/items/${id}`),
+  // Other items (the list comes with the menu); deleting one takes it off every section.
+  addOtherItem: (workspaceId: string, input: { name: string; description: string | null }) => api.post<Menu>(`${base(workspaceId)}/other-items`, input),
+  updateOtherItem: (workspaceId: string, id: string, input: { name?: string; description?: string | null }) =>
+    api.patch<Menu>(`${base(workspaceId)}/other-items/${id}`, input),
+  removeOtherItem: (workspaceId: string, id: string) => api.delete<Menu>(`${base(workspaceId)}/other-items/${id}`),
+  otherItemUsage: (workspaceId: string, id: string) => api.get<Usage>(`${base(workspaceId)}/other-items/${id}/usage`),
 };

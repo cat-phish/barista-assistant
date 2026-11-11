@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, inArray, isNotNull, max, or } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNotNull, max, or } from "drizzle-orm";
 import express, { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
+import { addUsageRoute, otherItemUsage } from "../usage.js";
 import { PHOTO_MAX_UPLOAD_BYTES, processPhoto, removePhotoFiles, writePhotoFile } from "../photos.js";
 import { buildPublicMenu, type PublicMenuResponse } from "./publicMenu.js";
 import {
@@ -17,6 +18,7 @@ import {
   drinks,
   MENU_ITEM_TYPES,
   menuItems,
+  menuOtherItems,
   menuSections,
   workspaces,
   type BeanBatchMode,
@@ -36,15 +38,24 @@ import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 export interface MenuItemSource {
   name: string;
   description: string | null;
-  kind: MethodKind;
+  kind: MethodKind | null; // null for an other item
   archived: boolean; // an archived brewer is left off the public menu
-  method: string; // how it's made: a brewer's method name ("Siphon"), or a drink's ("Filter")
+  method: string | null; // how it's made: a brewer's method name ("Siphon"), or a drink's ("Filter"); null for an other item
+}
+// docs/api/menu.md §7b "Other items": things on the menu that aren't a drink
+// or brewer, placed in sections like drinks.
+export interface MenuOtherItemView {
+  id: string;
+  name: string;
+  description: string | null;
+  menuItemCount: number; // how many sections show it
 }
 export interface MenuItemView {
   id: string;
   itemType: MenuItemType;
   drinkId: string | null;
   brewerId: string | null;
+  otherItemId: string | null;
   name: string | null; // override; null = the source's
   description: string | null;
   price: number | null;
@@ -52,10 +63,11 @@ export interface MenuItemView {
   source: MenuItemSource | null; // null for the beans block
   beanFields: BeanMenuField[] | null; // the beans block: what guests see per bean; null = all
   beanBatches: BeanBatchMode | null; // the beans block: same coffee twice; null = "each"
-  // Drinks and brewers: show how it's made / the ingredients; null = the menu's default.
+  // Drinks and brewers: show how it's made / the ingredients; null = the menu's default
+  // (always null on the beans block and other items).
   showMethod: boolean | null;
   showIngredients: boolean | null;
-  sizes: MenuSize[] | null; // drinks and brewers: a price per size, instead of price
+  sizes: MenuSize[] | null; // not the beans block: a price per size, instead of price
 }
 export interface MenuSectionView {
   id: string;
@@ -77,6 +89,7 @@ export interface MenuResponse {
   logoId: string | null;
   logoIds: string[];
   sections: MenuSectionView[];
+  otherItems: MenuOtherItemView[]; // by name
 }
 
 interface WorkspaceParams {
@@ -142,16 +155,19 @@ const itemFields = {
   name: optionalText(255),
   description: optionalText(500),
   price: priceSchema.nullable().optional(),
-  sizes: sizesSchema, // drinks and brewers only; never with a price
+  sizes: sizesSchema, // not for the beans block; never with a price
   available: z.boolean().optional(),
 };
+// The source id each type needs (and the others it mustn't have).
+const SOURCE_ID = { drink: "drinkId", brewer: "brewerId", other: "otherItemId", beans: null } as const;
 const createItemSchema = z
-  .object({ itemType: z.enum(MENU_ITEM_TYPES), drinkId: z.uuid().optional(), brewerId: z.uuid().optional(), ...itemFields })
+  .object({ itemType: z.enum(MENU_ITEM_TYPES), drinkId: z.uuid().optional(), brewerId: z.uuid().optional(), otherItemId: z.uuid().optional(), ...itemFields })
   .strict()
   .refine(
-    (b) => (b.itemType === "drink" ? !!b.drinkId && !b.brewerId : b.itemType === "brewer" ? !!b.brewerId && !b.drinkId : !b.drinkId && !b.brewerId),
-    "a drink item needs drinkId, a brewer item brewerId, and the beans block neither"
+    (b) => (["drinkId", "brewerId", "otherItemId"] as const).every((k) => !!b[k] === (SOURCE_ID[b.itemType] === k)),
+    "a drink item needs drinkId, a brewer item brewerId, an other item otherItemId, and the beans block none"
   )
+  .refine((b) => b.itemType !== "other" || (b.showMethod == null && b.showIngredients == null), "showMethod, showIngredients: not for other items")
   .refine((b) => b.itemType === "beans" || (b.beanFields == null && b.beanBatches == null), "beanFields, beanBatches: only for the beans block")
   .refine((b) => b.itemType !== "beans" || (b.showMethod == null && b.showIngredients == null && b.sizes == null), "showMethod, showIngredients, sizes: not for the beans block")
   .refine((b) => b.price == null || b.sizes == null, SIZES_OR_PRICE);
@@ -162,6 +178,10 @@ const addItemsSchema = z.union([
 ]);
 type NewItem = z.infer<typeof createItemSchema>;
 const updateItemSchema = updateSchema(itemFields);
+
+const otherItemFields = { name: z.string().trim().min(1).max(100), description: optionalText(500) };
+const createOtherItemSchema = z.object(otherItemFields).strict();
+const updateOtherItemSchema = updateSchema(otherItemFields);
 
 const layoutSchema = z
   .object({
@@ -199,6 +219,7 @@ export async function loadMenu(workspaceId: string, conn: Db = db): Promise<Menu
           itemType: menuItems.itemType,
           drinkId: menuItems.drinkId,
           brewerId: menuItems.brewerId,
+          otherItemId: menuItems.otherItemId,
           name: menuItems.name,
           description: menuItems.description,
           price: menuItems.price,
@@ -215,14 +236,24 @@ export async function loadMenu(workspaceId: string, conn: Db = db): Promise<Menu
           brewerKind: brewers.kind,
           brewerMethod: brewerMethods.name,
           brewerArchivedAt: brewers.archivedAt,
+          otherName: menuOtherItems.name,
+          otherDescription: menuOtherItems.description,
         })
         .from(menuItems)
         .leftJoin(drinks, eq(drinks.id, menuItems.drinkId))
+        .leftJoin(menuOtherItems, eq(menuOtherItems.id, menuItems.otherItemId))
         .leftJoin(brewers, eq(brewers.id, menuItems.brewerId))
         .leftJoin(brewerMethods, eq(brewerMethods.id, brewers.methodId))
         .where(inArray(menuItems.sectionId, sections.map((s) => s.id)))
         .orderBy(asc(menuItems.position))
     : [];
+  const otherItems = await conn
+    .select({ id: menuOtherItems.id, name: menuOtherItems.name, description: menuOtherItems.description, menuItemCount: count(menuItems.id) })
+    .from(menuOtherItems)
+    .leftJoin(menuItems, eq(menuItems.otherItemId, menuOtherItems.id))
+    .where(eq(menuOtherItems.workspaceId, workspaceId))
+    .groupBy(menuOtherItems.id)
+    .orderBy(asc(menuOtherItems.name));
   return {
     title: ws?.title ?? null,
     currency: ws?.currency ?? null,
@@ -236,21 +267,24 @@ export async function loadMenu(workspaceId: string, conn: Db = db): Promise<Menu
       ...s,
       items: items
         .filter((i) => i.sectionId === s.id)
-        .map(({ sectionId: _s, drinkName, drinkDescription, drinkKind, brewerName, brewerKind, brewerMethod, brewerArchivedAt, ...item }) => ({
+        .map(({ sectionId: _s, drinkName, drinkDescription, drinkKind, brewerName, brewerKind, brewerMethod, brewerArchivedAt, otherName, otherDescription, ...item }) => ({
           ...item,
           beanFields: item.itemType === "beans" ? (item.beanFields ?? null) : null,
           beanBatches: item.itemType === "beans" ? (item.beanBatches ?? null) : null,
-          showMethod: item.itemType === "beans" ? null : item.showMethod,
-          showIngredients: item.itemType === "beans" ? null : item.showIngredients,
+          showMethod: item.itemType === "beans" || item.itemType === "other" ? null : item.showMethod,
+          showIngredients: item.itemType === "beans" || item.itemType === "other" ? null : item.showIngredients,
           sizes: item.itemType === "beans" ? null : (item.sizes ?? null),
           source:
             item.itemType === "drink" && drinkName !== null && drinkKind !== null
               ? { name: drinkName, description: drinkDescription, kind: drinkKind, method: METHOD_NAMES[drinkKind], archived: false }
               : item.itemType === "brewer" && brewerName !== null && brewerKind !== null
                 ? { name: brewerName, description: null, kind: brewerKind, method: brewerMethod ?? METHOD_NAMES[brewerKind], archived: brewerArchivedAt !== null }
-                : null,
+                : item.itemType === "other" && otherName !== null
+                  ? { name: otherName, description: otherDescription, kind: null, method: null, archived: false }
+                  : null,
         })),
     })),
+    otherItems,
   };
 }
 
@@ -284,6 +318,61 @@ async function currencyOf(conn: Db, workspaceId: string): Promise<string | null>
 // Mounted at /api/workspaces/:workspaceId/menu
 export const menuRouter = Router({ mergeParams: true });
 menuRouter.use(requireAuth);
+
+// docs/api/menu.md §7b "Other items". The list itself comes with the menu
+// (otherItems); every write returns the whole menu.
+interface OtherItemParams extends WorkspaceParams {
+  otherItemId: string;
+}
+const otherItemInWorkspace = (p: OtherItemParams) => and(eq(menuOtherItems.id, p.otherItemId), eq(menuOtherItems.workspaceId, p.workspaceId));
+const OTHER_ITEM_TAKEN = "An other item with that name already exists";
+// GET /other-items/:otherItemId/usage: how many sections show it (DeleteDialog).
+const otherItemsUsageRouter = Router({ mergeParams: true });
+addUsageRoute(otherItemsUsageRouter, "otherItemId", "menuOtherItems", otherItemUsage, "Other item not found");
+menuRouter.use("/other-items", otherItemsUsageRouter);
+menuRouter.post("/other-items", async (req: Request<WorkspaceParams>, res: Response<MenuResponse>) => {
+  const { workspaceId } = req.params;
+  if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
+  const body = parseBody(createOtherItemSchema, req, res);
+  if (!body) return;
+  try {
+    await db.insert(menuOtherItems).values({ id: randomUUID(), workspaceId, name: body.name, description: body.description ?? null });
+  } catch (err) {
+    if (!isDuplicateEntryError(err)) throw err;
+    sendError(res, 409, OTHER_ITEM_TAKEN);
+    return;
+  }
+  await sendMenu(res, workspaceId, 201);
+});
+menuRouter.patch("/other-items/:otherItemId", async (req: Request<OtherItemParams>, res: Response<MenuResponse>) => {
+  const { workspaceId } = req.params;
+  if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
+  const body = parseBody(updateOtherItemSchema, req, res);
+  if (!body) return;
+  try {
+    const [result] = await db.update(menuOtherItems).set(body).where(otherItemInWorkspace(req.params));
+    if (result.affectedRows === 0) {
+      sendError(res, 404, "Other item not found");
+      return;
+    }
+  } catch (err) {
+    if (!isDuplicateEntryError(err)) throw err;
+    sendError(res, 409, OTHER_ITEM_TAKEN);
+    return;
+  }
+  await sendMenu(res, workspaceId);
+});
+// Deletes it and takes it off every section (FK cascade).
+menuRouter.delete("/other-items/:otherItemId", async (req: Request<OtherItemParams>, res: Response<MenuResponse>) => {
+  const { workspaceId } = req.params;
+  if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
+  const [result] = await db.delete(menuOtherItems).where(otherItemInWorkspace(req.params));
+  if (result.affectedRows === 0) {
+    sendError(res, 404, "Other item not found");
+    return;
+  }
+  await sendMenu(res, workspaceId);
+});
 
 menuRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<MenuResponse>) => {
   const { workspaceId } = req.params;
@@ -526,7 +615,7 @@ menuRouter.put("/layout", async (req: Request<WorkspaceParams>, res: Response<Me
       }
       const items = sections.length
         ? await tx
-            .select({ id: menuItems.id, drinkId: menuItems.drinkId, brewerId: menuItems.brewerId })
+            .select({ id: menuItems.id, drinkId: menuItems.drinkId, brewerId: menuItems.brewerId, otherItemId: menuItems.otherItemId })
             .from(menuItems)
             .where(inArray(menuItems.sectionId, [...sectionIds]))
             .for("update")
@@ -536,10 +625,12 @@ menuRouter.put("/layout", async (req: Request<WorkspaceParams>, res: Response<Me
       if (placed.length !== byId.size || new Set(placed).size !== placed.length || !placed.every((id) => byId.has(id))) {
         return "sections: must place every item of this menu exactly once";
       }
-      // A drink or brewer once per section, after the moves.
+      // A drink, brewer or other item once per section, after the moves.
       for (const s of body.sections) {
-        const refs = s.itemIds.map((id) => byId.get(id)!).flatMap((i) => (i.drinkId ? [`d:${i.drinkId}`] : i.brewerId ? [`b:${i.brewerId}`] : []));
-        if (new Set(refs).size !== refs.length) return "sections: a drink or brewer can only be in a section once";
+        const refs = s.itemIds
+          .map((id) => byId.get(id)!)
+          .flatMap((i) => (i.drinkId ? [`d:${i.drinkId}`] : i.brewerId ? [`b:${i.brewerId}`] : i.otherItemId ? [`o:${i.otherItemId}`] : []));
+        if (new Set(refs).size !== refs.length) return "sections: a drink, brewer or other item can only be in a section once";
       }
       for (const [i, s] of body.sections.entries()) {
         await tx.update(menuSections).set({ position: i + 1 }).where(eq(menuSections.id, s.id));
@@ -579,6 +670,13 @@ async function addItem(tx: Db, workspaceId: string, sectionId: string, body: New
     const [b] = await tx.select({ id: brewers.id }).from(brewers).where(and(eq(brewers.id, body.brewerId), eq(brewers.workspaceId, workspaceId)));
     if (!b) throw new AddRefused(400, "brewerId: not a brewer in this workspace");
   }
+  if (body.otherItemId) {
+    const [o] = await tx
+      .select({ id: menuOtherItems.id })
+      .from(menuOtherItems)
+      .where(and(eq(menuOtherItems.id, body.otherItemId), eq(menuOtherItems.workspaceId, workspaceId)));
+    if (!o) throw new AddRefused(400, "otherItemId: not an other item in this workspace");
+  }
   if (body.itemType === "beans") {
     const [existing] = await tx
       .select({ id: menuItems.id })
@@ -596,6 +694,7 @@ async function addItem(tx: Db, workspaceId: string, sectionId: string, body: New
       itemType: body.itemType,
       drinkId: body.drinkId ?? null,
       brewerId: body.brewerId ?? null,
+      otherItemId: body.otherItemId ?? null,
       name: body.name ?? null,
       description: body.description ?? null,
       price: body.price ?? null,
@@ -668,6 +767,11 @@ menuRouter.patch("/items/:itemId", async (req: Request<ItemParams>, res: Respons
   }
   if ((body.price != null || sizePriced(body.sizes)) && !(await currencyOf(db, workspaceId))) {
     sendError(res, 400, PRICE_NEEDS_CURRENCY);
+    return;
+  }
+  // An other item has nothing to show under it (docs/api/menu.md §7b).
+  if (item.itemType === "other" && (body.showMethod !== undefined || body.showIngredients !== undefined)) {
+    sendError(res, 400, "showMethod, showIngredients: not for other items");
     return;
   }
   await db.update(menuItems).set(body).where(eq(menuItems.id, itemId));

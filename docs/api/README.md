@@ -73,6 +73,7 @@ and `public-menu.md` if brews or the menu show it.
   pickers for new brews and drinks, and history keeps them. **Deleting**
   never refuses because something uses the item: what used it is unlinked
   (or, for a brewer, its recipes are deleted too). Each of these (except
-  beans, §4) has `GET …/:id/usage` with the counts a delete would affect,
+  beans, §4) has `GET …/:id/usage` with the counts a delete would affect
+  (so do the menu's other items, §7b, which aren't archived),
   and clients show them in a warning with an "I understand" checkbox before
   deleting.

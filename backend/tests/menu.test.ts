@@ -4,7 +4,7 @@ import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { app } from "../src/app.js";
 import { photoPath, sweepOrphanPhotos } from "../src/photos.js";
-import { addMember, brewerId, menuAdd, menuSection, newBean, newUser, newWorkspace, processId } from "./helpers.js";
+import { addMember, brewerId, menuAdd, menuOtherItem, menuSection, newBean, newUser, newWorkspace, processId } from "./helpers.js";
 
 interface Item {
   id: string;
@@ -26,14 +26,14 @@ async function setup() {
   const base = `/api/workspaces/${ws.id}/menu`;
   const drink = async (name: string, extra: Record<string, unknown> = {}) =>
     (await owner.agent.post(`/api/workspaces/${ws.id}/drinks`).send({ name, kind: "espresso", ...extra })).body.drink.id as string;
-  const get = async () => (await owner.agent.get(base)).body as { currency: string | null; sections: Section[] };
+  const get = async () => (await owner.agent.get(base)).body as { currency: string | null; sections: Section[]; otherItems: Array<{ id: string; menuItemCount: number }> };
   return { owner, ws, base, drink, get };
 }
 
 describe("menu builder (docs/api/menu.md §7b)", () => {
   it("starts empty, and adds sections last", async () => {
     const { owner, ws, base, get } = await setup();
-    expect(await get()).toEqual({ title: null, currency: null, showMethod: true, showIngredients: false, accentColor: null, tagline: null, logoId: null, logoIds: [], sections: [] });
+    expect(await get()).toEqual({ title: null, currency: null, showMethod: true, showIngredients: false, accentColor: null, tagline: null, logoId: null, logoIds: [], sections: [], otherItems: [] });
     await menuSection(owner, ws.id, "Espresso");
     const res = await owner.agent.post(`${base}/sections`).send({ name: "Pour over", description: "Brewed to order" });
     expect(res.status).toBe(201);
@@ -171,6 +171,101 @@ describe("menu builder (docs/api/menu.md §7b)", () => {
     // Another workspace's section or item isn't reachable through this one.
     const other = await newWorkspace(owner);
     expect((await owner.agent.patch(`/api/workspaces/${other.id}/menu/sections/${section}`).send({ name: "Mine" })).status).toBe(404);
+  });
+});
+
+describe("other items (docs/api/menu.md §7b)", () => {
+  it("keeps a list of other items, names unique, writes for baristas", async () => {
+    const { owner, ws, base, get } = await setup();
+    const scone = await menuOtherItem(owner, ws.id, "Scone", "Baked daily");
+    await menuOtherItem(owner, ws.id, "Almond croissant");
+    expect((await get()).otherItems).toEqual([
+      { id: expect.any(String), name: "Almond croissant", description: null, menuItemCount: 0 },
+      { id: scone, name: "Scone", description: "Baked daily", menuItemCount: 0 },
+    ]);
+    expect((await owner.agent.post(`${base}/other-items`).send({ name: "scone" })).status).toBe(409);
+    expect((await owner.agent.post(`${base}/other-items`).send({ name: " " })).status).toBe(400);
+    expect((await owner.agent.patch(`${base}/other-items/${scone}`).send({ name: "Cheese scone", description: "" })).body.otherItems[1]).toMatchObject({ name: "Cheese scone", description: null });
+    expect((await owner.agent.patch(`${base}/other-items/${scone}`).send({ name: "Almond croissant" })).status).toBe(409);
+
+    const viewer = await newUser();
+    await addMember(owner, ws.id, viewer, "viewer");
+    expect((await viewer.agent.get(base)).body.otherItems).toHaveLength(2);
+    expect((await viewer.agent.post(`${base}/other-items`).send({ name: "Mine" })).status).toBe(403);
+    expect((await viewer.agent.delete(`${base}/other-items/${scone}`)).status).toBe(403);
+
+    const otherWs = await newWorkspace(owner);
+    expect((await owner.agent.patch(`/api/workspaces/${otherWs.id}/menu/other-items/${scone}`).send({ name: "X" })).status).toBe(404);
+    expect((await owner.agent.delete(`/api/workspaces/${otherWs.id}/menu/other-items/${scone}`)).status).toBe(404);
+    expect((await owner.agent.get(`/api/workspaces/${otherWs.id}/menu/other-items/${scone}/usage`)).status).toBe(404);
+  });
+
+  it("places an other item like a drink, with its own price per section", async () => {
+    const { owner, ws, base, drink, get } = await setup();
+    await owner.agent.patch(base).send({ currency: "USD" });
+    const food = await menuSection(owner, ws.id, "Food");
+    const happy = await menuSection(owner, ws.id, "Happy hour");
+    const croissant = await menuOtherItem(owner, ws.id, "Almond croissant", "Baked daily");
+    await menuAdd(owner, ws.id, food, { itemType: "other", otherItemId: croissant, price: 3.5 });
+    await menuAdd(owner, ws.id, happy, { itemType: "other", otherItemId: croissant, name: "Croissant", sizes: [{ label: "One", price: 2 }, { label: "Two", price: 3.5 }] });
+    const menu = await get();
+    expect(menu.sections[0]!.items[0]).toMatchObject({ itemType: "other", otherItemId: croissant, name: null, price: 3.5, showMethod: null, showIngredients: null, source: { name: "Almond croissant", description: "Baked daily", kind: null, method: null, archived: false } });
+    expect(menu.sections[1]!.items[0]).toMatchObject({ name: "Croissant", price: null, sizes: [{ label: "One", price: 2 }, { label: "Two", price: 3.5 }] });
+    expect(menu.otherItems[0]).toMatchObject({ menuItemCount: 2 });
+    expect((await owner.agent.get(`${base}/other-items/${croissant}/usage`)).body).toEqual({ menuItemCount: 2 });
+
+    const add = (item: Record<string, unknown>) => owner.agent.post(`${base}/sections/${food}/items`).send(item);
+    expect((await add({ itemType: "other", otherItemId: croissant })).status).toBe(409); // once per section
+    expect((await add({ itemType: "other" })).status).toBe(400);
+    expect((await add({ itemType: "other", otherItemId: croissant, drinkId: await drink("Latte") })).status).toBe(400);
+    expect((await add({ itemType: "drink", otherItemId: croissant })).status).toBe(400);
+    expect((await add({ itemType: "beans", otherItemId: croissant })).status).toBe(400);
+    expect((await add({ itemType: "other", otherItemId: croissant, showMethod: true })).status).toBe(400);
+    const theirs = await menuOtherItem(owner, (await newWorkspace(owner)).id, "Theirs");
+    expect((await add({ itemType: "other", otherItemId: theirs })).body.error).toMatch(/not an other item in this workspace/);
+
+    const id = menu.sections[0]!.items[0]!.id;
+    expect((await owner.agent.patch(`${base}/items/${id}`).send({ name: "Croissant", available: false })).status).toBe(200);
+    expect((await owner.agent.patch(`${base}/items/${id}`).send({ name: null })).status).toBe(200); // back to its own name
+    expect((await owner.agent.patch(`${base}/items/${id}`).send({ showIngredients: true })).status).toBe(400);
+    expect((await owner.agent.patch(`${base}/items/${id}`).send({ beanFields: null })).status).toBe(400);
+  });
+
+  it("keeps the other item when its section goes, and its entries go with it", async () => {
+    const { owner, ws, base, get } = await setup();
+    const food = await menuSection(owner, ws.id, "Food");
+    const happy = await menuSection(owner, ws.id, "Happy hour");
+    const scone = await menuOtherItem(owner, ws.id, "Scone");
+    await menuAdd(owner, ws.id, food, { itemType: "other", otherItemId: scone });
+    await menuAdd(owner, ws.id, happy, { itemType: "other", otherItemId: scone });
+    // Not twice in one section by dragging either.
+    const [f, h] = (await get()).sections;
+    const both = await owner.agent.put(`${base}/layout`).send({ sections: [{ id: food, itemIds: [f!.items[0]!.id, h!.items[0]!.id] }, { id: happy, itemIds: [] }] });
+    expect(both.body.error).toMatch(/only be in a section once/);
+
+    expect((await owner.agent.delete(`${base}/sections/${food}`)).status).toBe(200);
+    expect((await get()).otherItems).toEqual([{ id: scone, name: "Scone", description: null, menuItemCount: 1 }]);
+    const res = await owner.agent.delete(`${base}/other-items/${scone}`);
+    expect(res.body.otherItems).toEqual([]);
+    expect(res.body.sections[0].items).toEqual([]);
+    expect((await owner.agent.delete(`${base}/other-items/${scone}`)).status).toBe(404);
+  });
+
+  it("shows on the public menu and the preview with nothing under it", async () => {
+    const { owner, ws, base } = await setup();
+    await owner.agent.patch(base).send({ currency: "USD" });
+    const food = await menuSection(owner, ws.id, "Food");
+    const croissant = await menuOtherItem(owner, ws.id, "Almond croissant", "Baked daily");
+    const decaf = await menuOtherItem(owner, ws.id, "Ask about our decaf");
+    await menuAdd(owner, ws.id, food, { itemType: "other", otherItemId: croissant, price: 3.5 });
+    await menuAdd(owner, ws.id, food, { itemType: "other", otherItemId: decaf, name: "Decaf?", description: "Just ask", available: false });
+    const expected = [
+      { type: "other", id: croissant, name: "Almond croissant", description: "Baked daily", method: null, variantOf: null, ingredients: [], price: 3.5, sizes: null, available: true },
+      { type: "other", id: decaf, name: "Decaf?", description: "Just ask", method: null, variantOf: null, ingredients: [], price: null, sizes: null, available: false },
+    ];
+    expect((await owner.agent.get(`${base}/preview`)).body.sections[0].items).toEqual(expected);
+    await owner.agent.patch(`/api/workspaces/${ws.id}`).send({ isPublicMenuEnabled: true });
+    expect((await request(app).get(`/api/public/menu/${ws.slug}`)).body.sections[0].items).toEqual(expected);
   });
 });
 

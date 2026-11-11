@@ -841,6 +841,13 @@
       "when": 1794284821990,
       "tag": "0119_jar_water",
       "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "5",
+      "when": 1794371797622,
+      "tag": "0120_menu_other_items",
+      "breakpoints": true
     }
   ]
 }

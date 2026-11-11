@@ -18,6 +18,7 @@ import {
   greenCoffees,
   grinders,
   ingredients,
+  menuOtherItems,
   menuItems,
   prepTools,
   recipeGrindSettings,
@@ -129,6 +130,11 @@ export async function vesselUsage(id: string): Promise<Counts> {
   return { brewLogCount: await countWhere(brewLogs, eq(brewLogs.vesselId, id)) };
 }
 
+// docs/api/menu.md §7b: the sections that show it lose it.
+export async function otherItemUsage(id: string): Promise<Counts> {
+  return { menuItemCount: await countWhere(menuItems, eq(menuItems.otherItemId, id)) };
+}
+
 export async function roastingMachineUsage(id: string): Promise<Counts> {
   return { roastCount: await countWhere(roasts, eq(roasts.machineId, id)) };
 }
@@ -136,7 +142,7 @@ export async function greenCoffeeUsage(id: string): Promise<Counts> {
   return { roastCount: await countWhere(roasts, eq(roasts.greenCoffeeId, id)) };
 }
 
-const tables = { roastingMachines, greenCoffees, brewers, grinders, waterProfiles, vessels, prepTools, brewProblems, recipes, drinks, ingredients, beanProcesses, recipeStyles, brewerMethods } as const;
+const tables = { roastingMachines, greenCoffees, brewers, grinders, waterProfiles, vessels, prepTools, brewProblems, recipes, drinks, ingredients, beanProcesses, recipeStyles, brewerMethods, menuOtherItems } as const;
 
 // GET /:<param>/usage on a resource router: the counts above, for any member.
 export function addUsageRoute(

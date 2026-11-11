@@ -41,6 +41,7 @@ export const MATCH_KEYS: Record<string, (row: BackupRow) => string[]> = {
   beans: (r) => [`${lower(r.roasterName)}|${lower(r.beanName)}|${lower(r.batchNumber)}|${roastDay(r.roastDate)}`],
   recipes: (r) => [`${lower(r.name)}|${r.brewerId}`],
   drinks: (r) => [`${lower(r.name)}|${r.kind}`],
+  menu_other_items: (r) => [lower(r.name)],
   menu_sections: (r) => [lower(r.name)],
   // The same brew imported twice: same moment, bean and dose.
   brew_logs: (r) => [`${new Date(r.timestamp as string | Date).toISOString()}|${r.beanId}|${Number(r.actualDoseGrams)}`],

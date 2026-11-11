@@ -6,7 +6,7 @@ import { nestDrinks } from './drinks';
 import { METHOD_KINDS, METHOD_ORDER } from './equipment';
 
 export interface AddOption {
-  id: string; // the drink or brewer
+  id: string; // the drink, brewer or other item
   name: string;
   depth: number; // variants nest under their parent
   here: boolean; // already in this section (shown ticked, can't be added again)
@@ -20,13 +20,14 @@ export interface AddGroup {
 export interface AddOptions {
   drinks: AddGroup[]; // by drink category in order, then "Other drinks"
   brewers: AddGroup[]; // plain brews, by method
+  other: AddOption[]; // other items, by name
   beans: { here: boolean; elsewhere: string | null }; // the menu's one beans block
 }
 
-const sourceOf = (i: MenuItem) => i.drinkId ?? i.brewerId;
+const sourceOf = (i: MenuItem) => i.drinkId ?? i.brewerId ?? i.otherItemId;
 
-// What can be added to a section: active drinks and brewers, grouped, with
-// what's already on the menu marked.
+// What can be added to a section: active drinks and brewers, grouped, and
+// the other items, with what's already on the menu marked.
 export function addOptions(menu: Menu, sectionId: string, drinks: Drink[], categories: DrinkCategory[], brewers: Brewer[], methods: BrewerMethod[] = []): AddOptions {
   const where = new Map<string, string[]>(); // source id -> section names
   for (const s of menu.sections) for (const i of s.items) {
@@ -72,17 +73,19 @@ export function addOptions(menu: Menu, sectionId: string, drinks: Drink[], categ
   return {
     drinks: drinkGroups,
     brewers: brewerGroups,
+    other: menu.otherItems.map((o) => option(o.id, o.name)),
     beans: { here: beansIn?.id === sectionId, elsewhere: beansIn && beansIn.id !== sectionId ? beansIn.name : null },
   };
 }
 
-// The batch to send, in the picker's order: drinks, then plain brews, then
-// the beans block.
+// The batch to send, in the picker's order: drinks, plain brews, other
+// items, then the beans block.
 export function addRequest(options: AddOptions, picked: ReadonlySet<string>, beans: boolean): NewMenuItem[] {
   const take = (groups: AddGroup[]) => groups.flatMap((g) => g.options.filter((o) => !o.here && picked.has(o.id)).map((o) => o.id));
   return [
     ...take(options.drinks).map((drinkId) => ({ itemType: 'drink' as const, drinkId })),
     ...take(options.brewers).map((brewerId) => ({ itemType: 'brewer' as const, brewerId })),
+    ...options.other.filter((o) => !o.here && picked.has(o.id)).map((o) => ({ itemType: 'other' as const, otherItemId: o.id })),
     ...(beans && !options.beans.here && !options.beans.elsewhere ? [{ itemType: 'beans' as const }] : []),
   ];
 }
@@ -101,7 +104,7 @@ export function canMoveTo(menu: Menu, itemId: string, sectionId: string): boolea
 export function showsAs(i: MenuItem): string {
   if (i.itemType === 'beans') return 'Lists your active beans that have "Show on the public menu" on';
   if (!i.source) return 'Its drink or brewer is gone';
-  const what = i.itemType === 'drink' ? `${i.source.method} drink` : `${i.source.method}, plain brew`;
+  const what = i.itemType === 'other' ? 'Other item' : i.itemType === 'drink' ? `${i.source.method} drink` : `${i.source.method}, plain brew`;
   const name = i.name && i.name !== i.source.name ? `shows as “${i.name}” (its own name: ${i.source.name})` : 'shows its own name';
   const description = i.description ? 'its menu description' : i.source.description ? 'its own description' : 'no description';
   // Its own choices, where it differs from the menu's (MenuBuilderView's switches).

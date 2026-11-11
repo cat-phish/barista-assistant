@@ -24,15 +24,16 @@ and fix the references.
 
 **Contents**
 - A. Settings & configuration: 1–4
-- B. Brewing & logging: 5–8
+- B. Brewing & logging: 5–9
 - C. Recipes: none
-- D. AI suggestions: 9–12
-- E. Insights: 13–18
-- F. Bar & menu: 19–24
-- G. Home roasting: 25–34
-- H. Accounts: 35–36
-- I. Deployment & the app: 37–38
-- J. Backups: 39
+- D. AI suggestions: 10–13
+- E. Insights: 14–19
+- F. Bar & menu: 20–25
+- G. Home roasting: 26–36
+- H. Accounts: 37–38
+- I. Deployment & the app: 39–41
+- J. Backups: 42
+- K. Look & feel: 43
 
 ---
 
@@ -121,7 +122,7 @@ Where the app's choices live, and what you can switch on, off or take out.
   - Move the ones that are wrong, with a data migration, and make Settings
     say which kind each one is.
 - **Size:** S to review; each move S–M.
-- **Depends on:** nothing; do it before 39, since where a setting lives
+- **Depends on:** nothing; do it before 42, since where a setting lives
   decides how it's backed up, and the audit is the same work.
 - **Open questions:**
   - Is "workspace default, person overrides" worth having, or is it one or
@@ -255,6 +256,43 @@ Recording a brew: what's measured, and how fast it is to log.
   - Plain arithmetic in the client; no AI.
 - **Size:** M
 - **Depends on:** nothing (water profiles are built).
+
+### 9. Bluetooth scales
+
+- **Status:** idea
+- **Why:** weights are typed in by hand during and after a brew. A
+  connected scale could fill them in while you pour, and show how fast the
+  water goes in.
+- **Approach:** Web Bluetooth (`navigator.bluetooth`) from the PWA, no
+  native app:
+  - **Connect scale** on the brew timer, shown only where the browser has
+    Web Bluetooth: Chrome/Edge on Android and desktop. iOS (every browser
+    there) and Firefox have none; iOS is 41. Pairing opens the browser's
+    device chooser and has to start from a tap; a scale granted before
+    reconnects without it where the browser allows (`getDevices()`).
+  - One adapter per brand behind a common interface (connect, weight
+    updates, tare, start/stop the scale's own timer, disconnect). Each
+    brand has its own, mostly undocumented, protocol (some drop the
+    connection without a regular heartbeat), so start with one brand and
+    add others as adapters.
+  - On the timer: start the clock on the first weight change, take the
+    water weight at each pour mark, draw a live flow rate, and fill in the
+    dose (from tare) and the final beverage weight.
+  - Add a section on the scale stream to `docs/timer_architecture.md`.
+- **Size:** L (M for the first brand).
+- **Depends on:** a scale to test with. HTTPS on the server (Web
+  Bluetooth needs a secure context; the PWA already has it).
+- **Open questions:**
+  - Which brand first? One with a well-understood protocol.
+  - Keep the weight curve with the brew (a new column or table: backups,
+    rule 8; the AI context, rule 9), or only fill in the totals?
+  - The connection drops when the screen locks: keep the screen awake
+    while a scale is connected (Wake Lock)? Same question as 26.
+  - The paired scale belongs to the device (browser storage), not the
+    workspace?
+  - Write adapters from published protocol notes and our own captures
+    rather than copied code, so nothing blocks an App Store build (41,
+    licensing).
 - **Open questions:**
   - Making water from scratch, blending (tap with distilled 1:3), or both?
   - Which minerals and concentrates to offer, and can people add their own
@@ -275,7 +313,7 @@ Nothing planned right now.
 
 What the analysis worker sends to the LLM and what comes back.
 
-### 9. Build bar items from plain text (AI)
+### 10. Build bar items from plain text (AI)
 
 - **Status:** idea
 - **Why:** recipes, drinks and other bar items often come as text: a
@@ -303,7 +341,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Units and step types the text describes loosely ("pour to about 100 ml,
     wait 30 s"): how sure must the AI be before filling a field?
 
-### 10. Review and test the espresso dose and shot weight suggestions
+### 11. Review and test the espresso dose and shot weight suggestions
 
 - **Status:** planned
 - **Why:** dose and shot weight changes for espresso (roadmap: espresso dose
@@ -339,7 +377,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should the brew page say when it changed the shot because of the
     suggestion (like it does for the grind)?
 
-### 11. Review how flavor wheel inputs reach the AI
+### 12. Review how flavor wheel inputs reach the AI
 
 - **Status:** on hold until the real brews are imported (see Depends on);
   the eval can already run with and without picks
@@ -389,7 +427,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should the picks be compared with `flavorProfile` more directly, as a
     "how close to the roaster's notes" reading?
 
-### 12. Test whether the usual grind adjustment helps
+### 13. Test whether the usual grind adjustment helps
 
 - **Status:** idea
 - **Why:** grinders now have a **Usual adjustment** (roadmap: usual grind
@@ -421,7 +459,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## E. Insights
 
-### 13. Save insights for the AI
+### 14. Save insights for the AI
 
 - **Status:** idea
 - **Why:** the Insights page shows patterns (this bean rates higher past
@@ -454,7 +492,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Does it go in backups (CLAUDE.md rule 8)? It's a new table, so yes or
     a deliberate no.
 
-### 14. Cold brew batches skew the caffeine and volume figures
+### 15. Cold brew batches skew the caffeine and volume figures
 
 - **Status:** in progress
 - **Why:** a brew log is one batch, and it doesn't say how much of it was
@@ -519,12 +557,12 @@ What the analysis worker sends to the LLM and what comes back.
     journal entry (stock, Log a serving, Batch finished) → Insights and
     recaps counting servings → the AI.
 - **Size:** L
-- **Depends on:** nothing. 19 (ingredient stock) may later share the stock
+- **Depends on:** nothing. 20 (ingredient stock) may later share the stock
   idea.
 - **Open questions:**
   - Keep the Brew page's "In the fridge" card? (on trial, see above)
 
-### 15. Test AI chat fully in the browser
+### 16. Test AI chat fully in the browser
 
 - **Status:** planned
 - **Why:** AI chat is built (roadmap, "AI chat in Insights") and covered by
@@ -546,7 +584,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Depends on:** nothing.
 - **Open questions:** none.
 
-### 16. Review and refine parameter and recipe suggestions
+### 17. Review and refine parameter and recipe suggestions
 
 - **Status:** idea (recipe step checks and guidance done, see the roadmap:
   "Checks and step guidance for AI recipe proposals")
@@ -574,7 +612,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Watch for replies that describe a recipe with no card: one eval run had
     4 of 8 (before the prompt asked for the block), later runs none.
 - **Size:** M
-- **Depends on:** nothing; pairs with 10 (espresso dose and shot weight).
+- **Depends on:** nothing; pairs with 11 (espresso dose and shot weight).
 - **Open questions:**
   - Should a "next brew" proposal also set the dose and water, not only
     grind, temperature and ratio?
@@ -583,7 +621,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Do the step checks need tuning once real proposals with warnings show
     up (thresholds in `@barista/shared/recipeChecks`)?
 
-### 17. Ask in chat from a chart card
+### 18. Ask in chat from a chart card
 
 - **Status:** planned
 - **Why:** charts can be attached from the chat's picker (Charts tab), but
@@ -595,11 +633,11 @@ What the analysis worker sends to the LLM and what comes back.
   route and starts with it attached.
 - **Size:** S
 - **Depends on:** nothing (attaching charts is built). Shares its snapshot
-  shape with 13.
+  shape with 14.
 - **Open questions:**
   - Should it go into the chat in use, or always start a new one?
 
-### 18. Review weekly and monthly recaps after testing (built)
+### 19. Review weekly and monthly recaps after testing (built)
 
 - **Status:** built (roadmap: Weekly and monthly recaps); kept here to
   review after a testing period (`docs/api/recaps.md` §11c).
@@ -631,7 +669,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ## F. Bar & menu
 
-### 19. Ingredient prep and stock
+### 20. Ingredient prep and stock
 
 - **Status:** idea
 - **Why:** ingredients like orange cold foam are made in batches, and it
@@ -648,7 +686,7 @@ What the analysis worker sends to the LLM and what comes back.
   - A finished cold brew batch as stock, each glass taken from it and
     rated, is being built under 14; ingredient stock could reuse its idea.
 
-### 20. Drink categories: what else they could do
+### 21. Drink categories: what else they could do
 
 - **Status:** idea
 - **Why:** categories now live on the Drinks page and only group drinks when
@@ -663,7 +701,7 @@ What the analysis worker sends to the LLM and what comes back.
   - Should a category also order the drinks inside it on the brew page
     (today they're sorted by name)?
 
-### 21. The guest menu as its own app
+### 22. The guest menu as its own app
 
 - **Status:** idea
 - **Why:** a regular could add the bar's menu to their home screen and
@@ -676,28 +714,24 @@ What the analysis worker sends to the LLM and what comes back.
 - **Depends on:** nothing.
 - **Open questions:** does the journal's own manifest and service worker
   get in the way (one origin, one scope `/`), and is it worth it before
-  testing the installed app on phones (item 37)?
+  testing the installed app on phones (item 39)?
 
-### 22. Menu entries without a drink or brewer
+### 23. Other menu items: a photo, and becoming a drink
 
 - **Status:** idea
-- **Why:** a menu item is a drink, a brewer or the beans block
-  (`docs/api/menu.md`, `POST /sections/:sectionId/items`), so anything not
-  set up as a drink or recipe can't go on the menu: a pastry, a bag of
-  beans for sale, a special not written up yet, "ask about our decaf".
-- **Approach:** a fourth `itemType` (e.g. `custom`) with neither `drinkId`
-  nor `brewerId`: a required name (there's no source to fall back on), and
-  the description, price or sizes and available flag the others have. The
-  menu builder gets "Add an item"; the guest menu shows it like a drink
-  without method or ingredients.
-- **Size:** S–M
+- **Why:** the menu's other items (a pastry, "ask about our decaf";
+  roadmap: other items on the menu) were built without these two.
+- **Approach:**
+  - A photo of its own, uploaded and cropped like a menu logo, shown on
+    the guest menu.
+  - "Turn into a drink": once the drink is set up, its menu entries become
+    drink entries, keeping their place, price and name override.
+- **Size:** S each.
 - **Depends on:** nothing.
-- **Open questions:**
-  - A photo of its own?
-  - Can it later be turned into a real drink, keeping its place and price?
-  - Check backups and the list import carry the new type.
+- **Open questions:** should drinks and brewers get photos on the menu too,
+  if other items have them?
 
-### 23. Upkeep tasks and reminders
+### 24. Upkeep tasks and reminders
 
 - **Status:** idea
 - **Why:** upkeep that comes round again is easy to forget: descaling the
@@ -713,12 +747,12 @@ What the analysis worker sends to the LLM and what comes back.
 - **Open questions:**
   - By time only, or also by use (every 200 shots, every 10 kg ground)?
   - Attach notes and tasks to a piece of equipment (the grinder, the
-    espresso machine) and show them on its page? Overlaps with 34
+    espresso machine) and show them on its page? Overlaps with 35
     (roasting machine upkeep).
   - Who gets the reminder: everyone in the workspace, or whoever opts in?
   - Should the AI ever see notes, or their calculators (CLAUDE.md rule 9)?
 
-### 24. Calculator templates: how many inputs
+### 25. Calculator templates: how many inputs
 
 - **Status:** idea
 - **Why:** a new calculator now starts from **Blank**, with one input (see
@@ -757,7 +791,7 @@ Home roasting). Paused here; these are what's next.
   whoever logged it?
 - Should freezing a home-roasted bean pause or extend its rest?
 
-### 25. Live roast timer
+### 26. Live roast timer
 
 - **Status:** planned (branch `roast-timer`)
 - **Why:** roast times are typed in after the roast; a timer running while
@@ -771,7 +805,7 @@ Home roasting). Paused here; these are what's next.
   - Note a temperature at each mark?
   - Keep the screen awake while it runs?
 
-### 26. Roast insights
+### 27. Roast insights
 
 - **Status:** idea
 - **Why:** Insights covers brewing only; a home roaster wants to see what
@@ -784,11 +818,11 @@ Home roasting). Paused here; these are what's next.
   - **rest sweet spot:** brew ratings by days off roast for home roasts,
     suggesting rest days per roast type or green coffee.
 - **Size:** M
-- **Depends on:** nothing; 26 and 30 make it richer.
+- **Depends on:** nothing; 27 and 31 make it richer.
 - **Open questions:** should the rest sweet spot offer to change the
   workspace's default rest days?
 
-### 27. Compare roasts
+### 28. Compare roasts
 
 - **Status:** idea
 - **Why:** with several batches of one green coffee, it's hard to see which
@@ -796,9 +830,9 @@ Home roasting). Paused here; these are what's next.
 - **Approach:** the batches of a green coffee side by side: levels, times,
   temperatures, weight loss, development, and how each one's brews rated.
 - **Size:** M
-- **Depends on:** nothing; can share a branch with 26.
+- **Depends on:** nothing; can share a branch with 27.
 
-### 28. Roast again, and roast plans
+### 29. Roast again, and roast plans
 
 - **Status:** idea
 - **Why:** a good roast is worth repeating, and today the form starts empty.
@@ -810,7 +844,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** S–M (plans are the M)
 - **Depends on:** nothing.
 
-### 29. Running low on roasted coffee
+### 30. Running low on roasted coffee
 
 - **Status:** idea
 - **Why:** the low notice covers green coffee; running out of roasted coffee
@@ -820,10 +854,10 @@ Home roasting). Paused here; these are what's next.
   suggesting the next roast, like the `green-low` job
   (`docs/api/notifications.md` §1b).
 - **Size:** S
-- **Depends on:** nothing; pairs with 28's plans.
+- **Depends on:** nothing; pairs with 29's plans.
 - **Open questions:** a threshold per workspace, or per green coffee?
 
-### 30. Green coffee details and restocks
+### 31. Green coffee details and restocks
 
 - **Status:** idea
 - **Why:** buying the same coffee again means editing the weight left by
@@ -836,18 +870,18 @@ Home roasting). Paused here; these are what's next.
 - **Size:** M
 - **Depends on:** nothing.
 
-### 31. Cupping notes per roast
+### 32. Cupping notes per roast
 
 - **Status:** idea
 - **Why:** brew ratings mix the roast with the brewing; cupping judges the
   roast itself.
 - **Approach:** a short cupping form on a roast: aroma, sweetness, acidity,
   body, a score, and roast defects (scorching, tipping, baked,
-  underdeveloped). Shown on the roast's page; feeds 25 and 26.
+  underdeveloped). Shown on the roast's page; feeds 26 and 27.
 - **Size:** S–M
 - **Depends on:** nothing.
 
-### 32. Roast details for the AI
+### 33. Roast details for the AI
 
 - **Status:** idea
 - **Why:** for a home roast, how it was roasted explains a lot about how it
@@ -859,7 +893,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** S
 - **Depends on:** nothing.
 
-### 33. Roast curves
+### 34. Roast curves
 
 - **Status:** idea
 - **Why:** roasting software (Artisan) records the whole curve; the log only
@@ -870,7 +904,7 @@ Home roasting). Paused here; these are what's next.
 - **Size:** L
 - **Depends on:** nothing.
 
-### 34. Roasting machine upkeep
+### 35. Roasting machine upkeep
 
 - **Status:** idea
 - **Why:** roasters need regular chaff and cleaning, easy to forget.
@@ -879,11 +913,37 @@ Home roasting). Paused here; these are what's next.
 - **Size:** S
 - **Depends on:** nothing.
 
+### 36. Temperature probes and roaster connections
+
+- **Status:** idea
+- **Why:** temperatures are read off a display and typed in afterwards. A
+  connected probe could record the whole curve while you roast.
+- **Approach:** in the live roast timer (26), read bean temperature (BT)
+  and, with a second probe, environment temperature (ET) live; keep the
+  curve with the roast like an imported one (34): rate of rise, and the
+  temperature at each mark filled in.
+  - **Bluetooth thermometers and thermocouple meters:** Web Bluetooth,
+    with the same per-device adapters as the scales (9).
+  - **USB thermocouple readers** (Arduino-style MAX31855/MAX6675 boards,
+    meters with a serial port): Web Serial, or WebHID for some. Desktop
+    Chrome/Edge, which suits a laptop beside the roaster.
+  - **Roasting machines** with their own connection (USB or the maker's
+    app): per machine and the biggest piece; leave until probes work.
+- **Size:** L
+- **Depends on:** 26 (live roast timer); 34 (storing and showing a
+  curve); shares the device adapters with 9.
+- **Open questions:**
+  - Which probe or meter first?
+  - How often to sample, and how much of the curve to store?
+  - Only read from a machine, or ever drive it (heat, fan)? Read-only is
+    far safer.
+  - Web Serial on Android: check what Chrome supports when it's picked.
+
 ---
 
 ## H. Accounts
 
-### 35. Account management and password reset
+### 37. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -914,13 +974,13 @@ Home roasting). Paused here; these are what's next.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 36. Email verification
+### 38. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 35), inviting a member by email, or notifications by email.
+  (item 37), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -930,9 +990,9 @@ Home roasting). Paused here; these are what's next.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 35).
+  - Shares the mail and token pieces with password reset (item 37).
 - **Size:** M (mail is new to the stack).
-- **Depends on:** nothing; pairs with 35.
+- **Depends on:** nothing; pairs with 37.
 - **Open questions:**
   - Block unverified accounts, or only remind them?
   - What happens to accounts that existed before verification (treat as
@@ -945,7 +1005,7 @@ Home roasting). Paused here; these are what's next.
 
 How the app is served and installed.
 
-### 37. Test the installed app on phones
+### 39. Test the installed app on phones
 
 - **Status:** idea
 - **Why:** the PWA is now served as a build over HTTPS (roadmap:
@@ -972,7 +1032,7 @@ How the app is served and installed.
 - **Depends on:** the app running on the home server.
 - **Open questions:** none.
 
-### 38. Protect the testing branch on GitHub
+### 40. Protect the testing branch on GitHub
 
 - **Status:** idea
 - **Why:** the server pulls whatever is pushed to `testing`, and a push can
@@ -983,13 +1043,68 @@ How the app is served and installed.
 - **What:** a GitHub rule on `testing` that blocks force-pushes and deletion,
   with no PR requirement. Pushes stay as they are.
 
+### 41. iOS app with Capacitor (Bluetooth on iPhone)
+
+- **Status:** idea
+- **Why:** iOS browsers have no Web Bluetooth, so scales and probes (9,
+  36) can't connect from the PWA on an iPhone or iPad. A native shell
+  around the same Vue app gets Bluetooth there.
+- **Approach:**
+  1. **Shell:** add Capacitor to `/frontend` (`@capacitor/core`,
+     `@capacitor/ios`) on top of the Vite build, plus a BLE plugin behind
+     the same adapter interface as 9, so the adapters run in both.
+  2. **Server address and login:** the app holds only the frontend; the
+     backend, worker and databases stay on the server, and the app calls
+     its API like the PWA does. The app's pages are served from its own
+     bundled files (`capacitor://localhost`, nothing runs on the phone), a
+     different origin from the API, so it asks for the server's address at
+     first launch, the backend allows that origin (CORS), and login is
+     rethought: WebKit blocks the session cookie across origins, so likely
+     a token for the app. (Loading the hosted site in the shell
+     instead is simpler, but App Review often rejects a thin web wrapper,
+     guideline 4.2, and it breaks offline.)
+  3. **Offline and updates:** the bundled build is the offline copy (no
+     service worker); updates arrive as new builds.
+  4. **Native bits:** Bluetooth permission text
+     (`NSBluetoothAlwaysUsageDescription`), icons, splash, keep-awake.
+  5. **Building:** a Mac with Xcode (or a cloud Mac build service) and
+     the Apple Developer Program ($99/year). A free Apple ID only
+     installs on your own phone, re-signed every 7 days.
+  6. **Getting it onto phones:**
+     - **Yourself:** install from Xcode with the paid account.
+     - **Testers:** TestFlight. Up to 100 internal testers (on your team)
+       with no review; up to 10,000 external ones after a light Beta App
+       Review. Builds expire after 90 days.
+     - **Public:** App Store review. Needs a privacy policy URL, the
+       privacy labels, a demo account on a server reviewers can reach,
+       and account deletion in the app (there already). An individual
+       account shows your legal name as the seller.
+     - **Certificate:** the phone has to trust the server's certificate:
+       the self-made CA installed and fully trusted in Settings, or a
+       public certificate (Let's Encrypt), which reviewers need anyway.
+  7. **Android:** the same shell could ship there too, but the PWA
+     already has Web Bluetooth on Android, so it's optional.
+- **Licensing:** the App Store's terms add restrictions the GPL family
+  forbids. As the copyright holder you can publish your own AGPL code
+  there, but GPL/AGPL code from others (contributions, copied code)
+  needs their permission. Check dependencies and contributions before
+  the first build.
+- **Size:** L
+- **Depends on:** 9 (a scale working in the PWA first); 39 (the
+  installed app checked on an iPhone).
+- **Open questions:**
+  - TestFlight only, or the public App Store?
+  - Login from the app: a token, or keep cookies some other way?
+  - Ship the Android shell too, or keep Android on the PWA?
+  - Ask contributors to agree to App Store distribution (a CLA)?
+
 ---
 
 ## J. Backups
 
 What a backup keeps, so moving to a new server loses nothing.
 
-### 39. Back up every setting
+### 42. Back up every setting
 
 - **Status:** idea
 - **Why:** a workspace backup (`docs/api/backup.md` §2b) leaves out what
@@ -1019,3 +1134,48 @@ What a backup keeps, so moving to a new server loses nothing.
     leave them out and restore everything else?
   - Should a test fail when a new setting isn't classified, like the table
     check (`NOT_BACKED_UP`, CLAUDE.md rule 8)?
+
+---
+
+## K. Look & feel
+
+How the app looks, and what each person can change about it.
+
+### 43. A visual refresh, and themes to choose from
+
+- **Status:** idea
+- **Why:** the app has grown screen by screen, and only light and dark
+  exist. A pass over the whole look, plus themes and colour choices,
+  would make it feel like one app and let people make it their own.
+- **Approach:**
+  - **Tokens first:** colours already come from tokens in
+    `frontend/src/styles/base.css` (light, plus a dark set for
+    `data-theme` and the device setting). Move the hardcoded colours
+    still in about 16 components and views onto tokens, and check that
+    chart colours (`components/charts/chartTheme.ts`) follow them, so a
+    theme is just a set of token values.
+  - **Visual refresh:** decide type, spacing, corner radii, cards, buttons
+    and form fields as one system, then apply it a section at a time
+    (small diffs) rather than in one big branch.
+  - **Themes:** a few built-in themes (e.g. the current espresso brown, a
+    lighter one, a high-contrast one), each with light and dark versions.
+    Settings → Preferences keeps Light / Dark / System and adds the theme.
+  - **Colour choices:** an accent colour picked from a set (or any
+    colour), with the app working out its hover, tint and text-on-accent
+    shades and rejecting ones that fail contrast (WCAG AA).
+  - **Where it's saved:** with the person's preferences (where Light /
+    Dark / System lives today, `lib/theme.ts`), and applied before the
+    first paint so the app doesn't flash the default theme.
+- **Size:** L (tokens and themes M; the refresh is several branches).
+- **Depends on:** nothing.
+- **Open questions:**
+  - Personal only, or can a workspace set a default (or brand colours)
+    its members start from?
+  - Does the guest menu follow the workspace's colours, or keep its own?
+  - Free colour picker, or only a curated set that's known to pass
+    contrast?
+  - The installed app's bar and splash colours (`theme_color`,
+    `background_color` in `vite.config.ts`) are fixed in the manifest:
+    keep the brand brown there, or set the bar colour at runtime as it
+    already is for dark?
+  - Include it in backups with the other preferences (42)?

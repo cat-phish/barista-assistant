@@ -67,6 +67,8 @@ async function populated() {
   const section = await menuSection(owner, ws.id, "Coffee");
   await menuAdd(owner, ws.id, section, { itemType: "drink", drinkId: drink });
   await menuAdd(owner, ws.id, section, { itemType: "beans", beanFields: ["origin"] });
+  const croissant = (await post("menu/other-items", { name: "Almond croissant", description: "Baked daily" })).otherItems[0].id as string;
+  await menuAdd(owner, ws.id, section, { itemType: "other", otherItemId: croissant, sizes: [{ label: "One", price: 3.5 }, { label: "Two", price: 6 }] });
 
   const bean = await newBean(owner, ws.id, { roastDate: "2026-10-01", varieties: ["Geisha"], species: ["arabica"], review: "Floral, would buy again" });
   await owner.agent.post(`${base}/beans/${bean}/freeze`).send({ date: "2026-10-05" });

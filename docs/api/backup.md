@@ -64,7 +64,7 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   `roasting_machines`, `green_coffees`, `prep_tool_brewers`,
   `brew_problem_brewers`, `beans`,
   `bean_freezes`, `bean_photos`, `roasts`, `recipes`, `recipe_steps`, `recipe_grind_settings`, `recipe_prep_tools`,
-  `drinks`, `drink_ingredients`, `menu_sections`, `menu_items`,
+  `drinks`, `drink_ingredients`, `menu_other_items`, `menu_sections`, `menu_items`,
   `brew_logs`, `brew_log_marks`, `brew_log_tools`, `brew_log_problems`,
   `brew_log_flavors`, `brew_servings`, `brew_serving_flavors` (`brew-servings.md`
   §6c; who logged one is its `brewedBy`), `llm_analyses`, `parameter_suggestions` (`BACKUP_TABLES`). A table left out of a file counts as

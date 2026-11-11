@@ -12,7 +12,7 @@ const drink = (id: string, category: DrinkCategory | null, over: Partial<Drink> 
 });
 const brewer = (id: string, kind: Brewer['kind'], archivedAt: string | null = null, methodId: string | null = null) => ({ id, name: id, kind, archivedAt, methodId }) as Brewer;
 const item = (id: string, over: Partial<MenuItem>): MenuItem => ({
-  id, itemType: 'drink', drinkId: null, brewerId: null, name: null, description: null, price: null, available: true, source: null, beanFields: null, beanBatches: null, showMethod: null, showIngredients: null, sizes: null, ...over,
+  id, itemType: 'drink', drinkId: null, brewerId: null, otherItemId: null, name: null, description: null, price: null, available: true, source: null, beanFields: null, beanBatches: null, showMethod: null, showIngredients: null, sizes: null, ...over,
 });
 
 const latte = drink('Latte', milk);
@@ -32,7 +32,11 @@ const menu: Menu = {
   logoIds: [],
   sections: [
     { id: 's1', name: 'Espresso', description: null, position: 1, items: [item('i1', { drinkId: 'Latte' }), item('i2', { itemType: 'brewer', brewerId: 'Linea' })] },
-    { id: 's2', name: 'Coffee', description: null, position: 2, items: [item('i3', { itemType: 'beans' }), item('i4', { drinkId: 'Tonic' })] },
+    { id: 's2', name: 'Coffee', description: null, position: 2, items: [item('i3', { itemType: 'beans' }), item('i4', { drinkId: 'Tonic' }), item('i6', { itemType: 'other', otherItemId: 'scone' })] },
+  ],
+  otherItems: [
+    { id: 'croissant', name: 'Croissant', description: null, menuItemCount: 0 },
+    { id: 'scone', name: 'Scone', description: null, menuItemCount: 1 },
   ],
 };
 
@@ -66,6 +70,18 @@ describe('addOptions', () => {
     expect(showsAs(item('s', { itemType: 'brewer', source }))).toBe('Siphon, plain brew · shows its own name, no description');
   });
 
+  it('offers the other items by name, marking where they are', () => {
+    expect(o.other).toEqual([
+      { id: 'croissant', name: 'Croissant', depth: 0, here: false, elsewhere: [] },
+      { id: 'scone', name: 'Scone', depth: 0, here: false, elsewhere: ['Coffee'] },
+    ]);
+    const inCoffee = addOptions(menu, 's2', drinks, [milk, special], brewers);
+    expect(addRequest(inCoffee, new Set(['scone', 'croissant', 'V60']), false)).toEqual([
+      { itemType: 'brewer', brewerId: 'V60' },
+      { itemType: 'other', otherItemId: 'croissant' }, // the scone is already here
+    ]);
+  });
+
   it('builds the batch in picker order, skipping what is already here and a beans block placed elsewhere', () => {
     const picked = new Set(['Linea', 'V60', 'Tonic', 'Vanilla Latte', 'Latte']);
     expect(addRequest(o, picked, true)).toEqual([
@@ -73,7 +89,7 @@ describe('addOptions', () => {
       { itemType: 'drink', drinkId: 'Tonic' },
       { itemType: 'brewer', brewerId: 'V60' },
     ]);
-    const empty = addOptions({ title: null, currency: null, showMethod: true, showIngredients: false, accentColor: null, tagline: null, logoId: null, logoIds: [], sections: [{ ...menu.sections[0]!, items: [] }] }, 's1', [], [], []);
+    const empty = addOptions({ title: null, currency: null, showMethod: true, showIngredients: false, accentColor: null, tagline: null, logoId: null, logoIds: [], sections: [{ ...menu.sections[0]!, items: [] }], otherItems: [] }, 's1', [], [], []);
     expect(addRequest(empty, new Set(), true)).toEqual([{ itemType: 'beans' }]);
   });
 });
@@ -98,6 +114,11 @@ describe('showsAs', () => {
     expect(showsAs(item('c', { source, showMethod: false, showIngredients: true }))).toBe(
       "Espresso drink · shows its own name, its own description · hides how it's made, shows ingredients",
     );
+  });  it('says what an other item shows', () => {
+    const source = { name: 'Scone', description: 'Baked daily', kind: null, method: null, archived: false };
+    expect(showsAs(item('d', { itemType: 'other', otherItemId: 'scone', source, name: 'Cheese scone' }))).toBe(
+      'Other item · shows as “Cheese scone” (its own name: Scone), its own description',
+    );
   });
 });
 
@@ -106,5 +127,9 @@ describe('duplicateSection', () => {
     expect(duplicateSection(menu.sections)).toBeNull();
     const dragged = [{ ...menu.sections[0]!, items: [...menu.sections[0]!.items, item('i9', { drinkId: 'Latte' })] }];
     expect(duplicateSection(dragged)).toBe('Espresso');
+  });
+  it('names the section a drag left with an other item twice', () => {
+    const scone = item('o1', { itemType: 'other', otherItemId: 'scone' });
+    expect(duplicateSection([{ name: 'Food', items: [scone, { ...scone, id: 'o2' }] }])).toBe('Food');
   });
 });
