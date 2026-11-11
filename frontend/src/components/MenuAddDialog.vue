@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The menu builder's add picker (docs/api/menu.md §7b): drinks by category
-// (with "Select all"), plain brews by method and the beans block, side by
-// side; what's on the menu already is marked. Adds the ticked ones in one go.
+// (with "Select all"), plain brews by method, other items and the beans
+// block, side by side; what's on the menu already is marked. Adds the ticked ones in one go.
 import { computed, ref, watch } from 'vue';
 import type { NewMenuItem } from '../api/menu';
 import type { Brewer, Drink, DrinkCategory, Menu, MenuSection, BrewerMethod } from '../api/types';
@@ -18,7 +18,7 @@ const props = defineProps<{
   busy: boolean;
   error: string;
 }>();
-const emit = defineEmits<{ cancel: []; add: [items: NewMenuItem[]] }>();
+const emit = defineEmits<{ cancel: []; add: [items: NewMenuItem[]]; manageOther: [] }>();
 
 const picked = ref(new Set<string>());
 const beans = ref(false);
@@ -80,6 +80,18 @@ const note = (o: AddOption) => (o.here ? 'in this section' : o.elsewhere.length 
             <span>{{ o.name }} <span class="muted small">({{ g.name }})</span><span v-if="note(o)" class="muted small"> · {{ note(o) }}</span></span>
           </label>
         </template>
+      </fieldset>
+
+      <fieldset class="group">
+        <legend>
+          Other items
+          <button class="btn-link all" type="button" @click="emit('manageOther')">{{ options.other.length ? 'Manage' : 'Add other items…' }}</button>
+        </legend>
+        <label v-for="o in options.other" :key="o.id" class="checkbox option">
+          <input type="checkbox" :checked="o.here || picked.has(o.id)" :disabled="o.here" @change="toggle(o, ($event.target as HTMLInputElement).checked)" />
+          <span>{{ o.name }}<span v-if="note(o)" class="muted small"> · {{ note(o) }}</span></span>
+        </label>
+        <p v-if="!options.other.length" class="muted small">A pastry, a bag of beans, "ask about our decaf": anything that isn't a drink or brewer.</p>
       </fieldset>
 
       <fieldset class="group">

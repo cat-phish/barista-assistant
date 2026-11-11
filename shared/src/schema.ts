@@ -1384,11 +1384,13 @@ export const drinkIngredients = mysqlTable("drink_ingredients", {
 
 // 7e. Menu Builder (The Public Menu, Arranged by Hand)
 // docs/api/menu.md §7b. The menu is its own thing: sections you name and
-// order, holding items you place: a drink, a brewer (its plain brew), or the
-// beans block (the bar's active beans that are switched on for the menu).
+// order, holding items you place: a drink, a brewer (its plain brew), the
+// beans block (the bar's active beans that are switched on for the menu), or
+// an other item (menuOtherItems: a pastry, "ask about our decaf").
 // Items can rename and describe their source for the menu, carry a price
-// and be marked unavailable. Deleting a drink or brewer removes its items.
-export const MENU_ITEM_TYPES = ["drink", "brewer", "beans"] as const;
+// and be marked unavailable. Deleting a drink, brewer or other item removes
+// its items.
+export const MENU_ITEM_TYPES = ["drink", "brewer", "beans", "other"] as const;
 export type MenuItemType = (typeof MENU_ITEM_TYPES)[number];
 // What the beans block shows guests about each bean, besides the roaster and
 // name (docs/api/menu.md §7b). origin = area, country and region; roastLevel =
@@ -1411,6 +1413,25 @@ export interface MenuSize {
 export const MAX_MENU_SIZES = 6;
 // Logos a menu keeps (workspaces.menuLogoIds, docs/api/menu.md §7b).
 export const MAX_MENU_LOGOS = 6;
+
+// Things on the menu that aren't a drink or brewer (docs/api/menu.md §7b
+// "Other items"): a pastry, a bag of beans for sale, "ask about our decaf".
+// Placed in sections like drinks; each placement has its own price.
+export const menuOtherItems = mysqlTable(
+  "menu_other_items",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(),
+    description: varchar("description", { length: 500 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("menu_other_items_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
 
 export const menuSections = mysqlTable(
   "menu_sections",
@@ -1438,9 +1459,10 @@ export const menuItems = mysqlTable(
       .references(() => menuSections.id, { onDelete: "cascade" }),
     position: int("position").notNull(), // 1, 2, 3... within the section
     itemType: varchar("item_type", { length: 20 }).$type<MenuItemType>().notNull(), // MENU_ITEM_TYPES
-    // Exactly the one matching itemType (the API); neither for "beans".
+    // Exactly the one matching itemType (the API); none for "beans".
     drinkId: varchar("drink_id", { length: 36 }).references(() => drinks.id, { onDelete: "cascade" }),
     brewerId: varchar("brewer_id", { length: 36 }).references(() => brewers.id, { onDelete: "cascade" }),
+    otherItemId: varchar("other_item_id", { length: 36 }).references(() => menuOtherItems.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 255 }), // null = the source's name
     description: varchar("description", { length: 500 }), // null = the source's
     price: decimal("price", { precision: 8, scale: 2, mode: "number" }), // in workspaces.menuCurrency
@@ -1453,14 +1475,15 @@ export const menuItems = mysqlTable(
     // public menu; null = the menu's default (workspaces.menuShow*).
     showMethod: boolean("show_method"),
     showIngredients: boolean("show_ingredients"),
-    // Drinks and brewers only: sizes with their own prices, in order; null =
+    // Drinks, brewers and other items: sizes with their own prices, in order; null =
     // one size (price). Never both a price and sizes (the API).
     sizes: jsonValue<MenuSize[]>("sizes"),
   },
   (table) => ({
-    // A drink or brewer once per section (NULLs don't collide).
+    // A drink, brewer or other item once per section (NULLs don't collide).
     sectionDrinkUnique: unique("menu_items_section_drink_unique").on(table.sectionId, table.drinkId),
     sectionBrewerUnique: unique("menu_items_section_brewer_unique").on(table.sectionId, table.brewerId),
+    sectionOtherUnique: unique("menu_items_section_other_unique").on(table.sectionId, table.otherItemId),
   })
 );
 
@@ -2038,6 +2061,7 @@ export type Drink = typeof drinks.$inferSelect;
 export type DrinkCategory = typeof drinkCategories.$inferSelect;
 export type MenuSectionRow = typeof menuSections.$inferSelect;
 export type MenuItemRow = typeof menuItems.$inferSelect;
+export type MenuOtherItemRow = typeof menuOtherItems.$inferSelect;
 export type BrewLogMark = typeof brewLogMarks.$inferSelect;
 export type BrewServing = typeof brewServings.$inferSelect;
 export type NewBrewLog = typeof brewLogs.$inferInsert;

@@ -11,13 +11,17 @@ The public menu (§7), arranged by hand. It's separate from drink categories
 - a **brewer** (§3): its plain brew, e.g. "Espresso" for a Linea Mini;
 - the **beans block**: the bar's active (not archived) beans whose
   `showOnPublicMenu` is on (§4), listed where you place it. At most one per
-  menu.
+  menu;
+- an **other item** (see "Other items" below): a pastry, a bag of beans for
+  sale, a special not written up yet, "ask about our decaf". Placed like a
+  drink; it shows nothing under it (no method or ingredients).
 
 An item can rename and describe its source for the menu (`name`,
 `description`; `null` = the source's own), carry a `price` (in the menu's
 `currency`), and be marked unavailable (`available: false`: still listed,
-shown as unavailable). Each drink or brewer can be in a section once (it may
-be in several sections). Deleting a drink or brewer removes its items; a
+shown as unavailable). Each drink, brewer or other item can be in a section once (it may
+be in several sections). Deleting a drink, brewer or other item removes its
+items; a
 archived brewer stays in the builder (flagged) but is left off the public
 menu.
 
@@ -68,16 +72,31 @@ off is the workspace's `isPublicMenuEnabled` (§2, owners only).
           "showMethod": null,
           "showIngredients": null,
           "sizes": null
+        },
+        {
+          "id": "uuid", "itemType": "other", "drinkId": null, "brewerId": null, "otherItemId": "uuid",
+          "name": null, "description": null, "price": 3.5, "available": true,
+          "source": { "name": "Almond croissant", "description": "Baked daily", "kind": null, "method": null, "archived": false },
+          "beanFields": null, "beanBatches": null, "showMethod": null, "showIngredients": null, "sizes": null
         }
       ]
     }
+  ],
+  "otherItems": [
+    { "id": "uuid", "name": "Almond croissant", "description": "Baked daily", "menuItemCount": 1 }
   ]
 }
 ```
 
+Every item has `drinkId`, `brewerId` and `otherItemId`, the one matching its
+`itemType` set (none for the beans block). `otherItems` is the menu's list of
+other items, by name, each with how many sections show it.
+
 `source` is what the item shows by default (`method`: how it's made, the
 brewer's method name for a plain brew, §3e, or the drink's kind): a drink's name and description,
-or a brewer's name (brewers have no menu description; set one on the item).
+or a brewer's name (brewers have no menu description; set one on the item),
+or an other item's name and description (`kind` and `method` `null`); `null`
+for the beans block.
 
 `beanFields` (the beans block only; `null` on other items) is what guests see
 about each bean besides its roaster and name: a list of `BEAN_MENU_FIELDS`
@@ -95,8 +114,9 @@ show under them on the public menu by default: how it's made ("Filter",
 "Espresso", on by default) and a drink's ingredients (off by default). An
 item's own `showMethod` / `showIngredients` (`null` on the beans block)
 override them: `true` show, `false` hide, `null` the menu's default.
+Always `null` on other items, which show neither.
 
-`sizes` (drinks and brewers; `null` on the beans block) is a price per
+`sizes` (drinks, brewers and other items; `null` on the beans block) is a price per
 size instead of the one `price`: `[{ "label": "8 oz", "price": 4 },
 { "label": "12 oz", "price": 4.75 }]`, in the order guests see them. 1–6
 sizes, each `label` 1–30 chars and once (case-insensitive), each `price` as
@@ -171,6 +191,41 @@ it.
 
 - **Errors:** `403` viewer; `404` no such logo.
 
+## Other items
+
+Things on the menu that aren't a drink or brewer, kept in their own list
+(the menu's `otherItems`) and placed in sections with `POST
+/sections/:sectionId/items` like a drink, so each placement has its own
+name override, price or sizes and availability. Deleting a section only
+takes them off it. The builder manages them in an "Other items" dialog and
+offers them in its add picker.
+
+### `POST /other-items`
+
+- **Body:** `{ "name": "Almond croissant", "description"?: "Baked daily" }`:
+  name 1–100 chars, unique per workspace (case-insensitive); description ≤
+  500 (blank = `null`).
+- **Errors:** `400`; `403` viewer; `409` name taken.
+
+### `PATCH /other-items/:otherItemId`
+
+- **Body:** any non-empty subset of `{ "name", "description" }`.
+- **Errors:** `400`; `403`; `404` not in this workspace; `409` name taken.
+
+### `GET /other-items/:otherItemId/usage`
+
+`{ "menuItemCount": 2 }`: the sections that would lose it (README,
+"Archiving and deleting"). Any member.
+
+- **Errors:** `404`.
+
+### `DELETE /other-items/:otherItemId`
+
+Deletes it and takes it off every section. The builder shows the usage
+first and asks for "I understand" when it's on the menu.
+
+- **Errors:** `403`; `404`.
+
 ## `POST /sections`
 
 - **Body:** `{ "name": "Pour over", "description"?: "..." }`: name 1–100
@@ -184,7 +239,7 @@ it.
 
 ## `DELETE /sections/:sectionId`
 
-Deletes the section and its items (not the drinks or brewers).
+Deletes the section and its items (not the drinks, brewers or other items).
 
 - **Errors:** `403`; `404`.
 
@@ -196,24 +251,25 @@ order. Items can move between sections this way.
 
 - **Body:** `{ "sections": [ { "id": "uuid", "itemIds": ["uuid", ...] } ] }`
 - **Errors:** `400` a section or item missing, unknown or listed twice, or a
-  drink or brewer twice in one section; `403`.
+  drink, brewer or other item twice in one section; `403`.
 
 ## `POST /sections/:sectionId/items`
 
-- **Body:** `{ "itemType": "drink" | "brewer" | "beans", "drinkId"?, "brewerId"?,
-  "name"?, "description"?, "price"?, "available"? }`. A drink item needs
-  `drinkId` (and no `brewerId`), a brewer item `brewerId`, the beans block
-  neither. `name` ≤ 255 and `description` ≤ 500 (blank = `null`); `price`
+- **Body:** `{ "itemType": "drink" | "brewer" | "beans" | "other", "drinkId"?,
+  "brewerId"?, "otherItemId"?, "name"?, "description"?, "price"?,
+  "available"? }`. A drink item needs `drinkId` (and no other id), a brewer
+  item `brewerId`, an other item `otherItemId`, the beans block none. `name` ≤ 255 and `description` ≤ 500 (blank = `null`); `price`
   0–999999.99, at most 2 decimals, and only once the menu has a `currency`;
   `available` defaults to `true`. `beanFields` (optional, nullable) is only
   for the beans block, and so is `beanBatches` (optional, nullable);
-  `showMethod`, `showIngredients` and `sizes` (optional, nullable) only for
-  drinks and brewers. It goes last in the section.
+  `showMethod` and `showIngredients` (optional, nullable) only for drinks
+  and brewers, and `sizes` (optional, nullable) for drinks, brewers and
+  other items. It goes last in the section.
 
   Or several at once: `{ "items": [ { ...item }, ... ] }` (1–100), each with
   the same rules. They go last, in the order sent, and it's **all or
   nothing**: if any is refused, none are added.
-- **Errors:** `400` invalid body, a drink or brewer not in this workspace, or
+- **Errors:** `400` invalid body, a drink, brewer or other item not in this workspace, or
   a price without a currency; `403`; `404` section not in this menu; `409`
   already in this section (or sent twice), or the menu already has the beans
   block.
@@ -224,7 +280,8 @@ order. Items can move between sections this way.
   "available", "beanFields", "beanBatches", "showMethod", "showIngredients",
   "sizes" }`, same rules (`beanFields` or `beanBatches` on a drink or brewer
   item, or `showMethod`, `showIngredients` or `sizes` on the beans block, is
-  a `400`; so is a `price` while the item keeps its `sizes`, or the other
+  a `400`, and so are `showMethod` or `showIngredients` on an other item;
+  so is a `price` while the item keeps its `sizes`, or the other
   way round: clear one in the same request). To move an item, use `PUT /layout`.
 - **Errors:** `400`; `403`; `404`.
 

@@ -143,24 +143,26 @@ export interface Workspace {
 }
 
 // docs/api/menu.md §7b: the menu builder.
-export type MenuItemType = 'drink' | 'brewer' | 'beans';
+export type MenuItemType = 'drink' | 'brewer' | 'beans' | 'other'; // other: one of Menu.otherItems
 export interface MenuItem {
   id: string;
   itemType: MenuItemType;
   drinkId: string | null;
   brewerId: string | null;
+  otherItemId: string | null;
   name: string | null; // override; null = the source's
   description: string | null;
   price: number | null; // in Menu.currency
   available: boolean;
   // What it shows by default; null for the beans block. archived: left off the public menu.
-  source: { name: string; description: string | null; kind: MethodKind; method: string; archived: boolean } | null; // method: how it's made (a brewer's method name)
+  // method: how it's made (a brewer's method name); kind and method are null for an other item.
+  source: { name: string; description: string | null; kind: MethodKind | null; method: string | null; archived: boolean } | null;
   beanFields: BeanMenuField[] | null; // the beans block: what guests see per bean; null = all
   beanBatches: BeanBatchMode | null; // the beans block: the same coffee twice; null = 'each'
   // Drinks and brewers: show how it's made / the ingredients; null = the menu's default.
   showMethod: boolean | null;
   showIngredients: boolean | null;
-  sizes: MenuSize[] | null; // drinks and brewers: a price per size, instead of price
+  sizes: MenuSize[] | null; // not the beans block: a price per size, instead of price
 }
 // docs/api/menu.md §7b: one size of an item and its price (null = none shown).
 export interface MenuSize {
@@ -190,6 +192,14 @@ export interface Menu {
   logoId: string | null; // the logo the menu shows (logoIds[0]); its image is PublicMenu.logoUrl
   logoIds: string[]; // every logo, in order; the others are kept to swap in
   sections: MenuSection[];
+  otherItems: MenuOtherItem[]; // by name
+}
+// docs/api/menu.md §7b "Other items": on the menu without being a drink or brewer.
+export interface MenuOtherItem {
+  id: string;
+  name: string;
+  description: string | null;
+  menuItemCount: number; // how many sections show it
 }
 
 // docs/api/public-menu.md §7: the menu as guests see it (also the builder's preview).
@@ -207,8 +217,8 @@ export type PublicBean = Pick<Bean, 'id' | 'roasterName' | 'beanName'> &
     differs?: Array<BeanMenuField | 'batchNumber'>; // the same coffee listed more than once: what tells them apart
   };
 export interface PublicMenuItem {
-  type: 'drink' | 'brewer';
-  id: string;
+  type: 'drink' | 'brewer' | 'other';
+  id: string; // the drink, brewer or other item
   name: string;
   description: string | null;
   method: string | null; // "Espresso", "Filter"; null = not shown

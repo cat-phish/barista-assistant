@@ -74,6 +74,13 @@ export async function menuAdd(user: TestUser, workspaceId: string, sectionId: st
   expect(res.status).toBe(201);
 }
 
+// An other item (docs/api/menu.md §7b), returning its id.
+export async function menuOtherItem(user: TestUser, workspaceId: string, name: string, description?: string): Promise<string> {
+  const res = await user.agent.post(`/api/workspaces/${workspaceId}/menu/other-items`).send({ name, description });
+  expect(res.status).toBe(201);
+  return (res.body.otherItems as Array<{ id: string; name: string }>).find((o) => o.name === name)!.id;
+}
+
 // Turns the menu on with a "Coffee" section holding the beans block.
 export async function menuWithBeans(user: TestUser, workspaceId: string): Promise<void> {
   await user.agent.patch(`/api/workspaces/${workspaceId}`).send({ isPublicMenuEnabled: true });

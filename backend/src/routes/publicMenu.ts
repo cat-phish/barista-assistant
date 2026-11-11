@@ -109,8 +109,8 @@ function differences(group: MenuBean[], fields: readonly BeanMenuField[]): BeanD
 }
 
 export interface PublicMenuItem {
-  type: "drink" | "brewer";
-  id: string; // the drink or brewer
+  type: "drink" | "brewer" | "other";
+  id: string; // the drink, brewer or other item (docs/api/menu.md §7b)
   name: string;
   description: string | null;
   method: string | null; // how it's made: "Filter", "Espresso"; null = not shown
@@ -267,7 +267,7 @@ export async function buildPublicMenu(workspace: Pick<Workspace, "id" | "name" |
         }
         // An archived brewer, or a source that's gone, is left off.
         if (!i.source || i.source.archived) return [];
-        const id = (i.drinkId ?? i.brewerId)!;
+        const id = (i.drinkId ?? i.brewerId ?? i.otherItemId)!;
         const parent = i.drinkId ? parentOf.get(i.drinkId) : null;
         return [
           {
@@ -275,7 +275,7 @@ export async function buildPublicMenu(workspace: Pick<Workspace, "id" | "name" |
             id,
             name: i.name ?? i.source.name,
             description: i.description ?? i.source.description,
-            method: (i.showMethod ?? menu.showMethod) ? i.source.method : null,
+            method: (i.showMethod ?? menu.showMethod) ? i.source.method : null, // an other item has none
             variantOf: (parent && menuNameOf.get(parent)) ?? null,
             ingredients: i.drinkId && (i.showIngredients ?? menu.showIngredients) ? ingredientRows.filter((r) => r.drinkId === i.drinkId).map((r) => r.name) : [],
             price: i.price,

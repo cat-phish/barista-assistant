@@ -133,6 +133,7 @@ const TABLE_LABELS: Record<string, string> = {
   bean_processes: 'Bean processes',
   recipe_styles: 'Recipe styles',
   drink_categories: 'Drink categories',
+  menu_other_items: 'Other menu items',
   menu_sections: 'Menu sections',
   bean_freezes: 'freeze periods',
   recipe_steps: 'recipe steps',

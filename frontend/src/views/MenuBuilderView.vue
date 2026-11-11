@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // The menu builder (docs/api/menu.md §7b), one tab of Bar setup: the public
 // menu's sections and items, arranged by hand. Items are a drink, a brewer's
-// plain brew, or the beans block; each can be renamed, described, priced and
-// marked unavailable for the menu. Sections and items move by dragging their
+// plain brew, the beans block, or one of the menu's other items (a pastry,
+// "ask about our decaf", kept in their own list); each can be renamed,
+// described, priced and marked unavailable for the menu. Sections and items move by dragging their
 // ⠿ handle (items between sections too) or with ↑/↓; the add picker adds
 // several at once. Preview shows the menu as guests see it (§7).
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
@@ -17,6 +18,7 @@ import type { BeanBatchMode, BeanMenuField, MenuSize, Brewer, Drink, DrinkCatego
 import AppHeader from '../components/AppHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import MenuAddDialog from '../components/MenuAddDialog.vue';
+import MenuOtherItemsDialog from '../components/MenuOtherItemsDialog.vue';
 import MenuPreview from '../components/MenuPreview.vue';
 import SetupTabs from '../components/SetupTabs.vue';
 import { parseDecimal } from '../lib/format';
@@ -26,7 +28,7 @@ import { BEAN_MENU_FIELDS } from '../lib/publicMenu';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
-const menu = ref<Menu>({ title: null, currency: null, showMethod: true, showIngredients: false, accentColor: null, tagline: null, logoId: null, logoIds: [], sections: [] });
+const menu = ref<Menu>({ title: null, currency: null, showMethod: true, showIngredients: false, accentColor: null, tagline: null, logoId: null, logoIds: [], sections: [], otherItems: [] });
 const drinks = ref<Drink[]>([]);
 const categories = ref<DrinkCategory[]>([]);
 const preview = ref<PublicMenu | null>(null);
@@ -203,6 +205,17 @@ const toOverride = (v: boolean | null): Override => (v === null ? '' : v ? 'show
 const fromOverride = (v: Override): boolean | null => (v === '' ? null : v === 'show');
 const defaultLabel = (on: boolean) => `Menu default (${on ? 'shown' : 'hidden'})`;
 
+// Other items: their own list, in a dialog (docs/api/menu.md §7b).
+const otherItemsOpen = ref(false);
+function otherItemsChanged(m: Menu): void {
+  menu.value = m;
+}
+// From the add picker: close it, manage the list, then pick again.
+function manageOtherItems(): void {
+  addTarget.value = null;
+  otherItemsOpen.value = true;
+}
+
 // Add picker (several at once, one request).
 const addTarget = ref<MenuSection | null>(null);
 const addError = ref('');
@@ -301,7 +314,7 @@ async function saveItem(): Promise<void> {
           price: itemHasSizes.value ? null : price,
           sizes: itemHasSizes.value && sizesParsed.value.ok ? sizesParsed.value.sizes : null,
           available: itemAvailable.value,
-          showMethod: fromOverride(itemShowMethod.value),
+          ...(i.itemType === 'other' ? {} : { showMethod: fromOverride(itemShowMethod.value) }),
           ...(i.itemType === 'drink' ? { showIngredients: fromOverride(itemShowIngredients.value) } : {}),
         };
   const saved = await run((ws) => menuApi.updateItem(ws, i.id, input), onError);
@@ -330,7 +343,7 @@ async function deleteItem(): Promise<void> {
       <h1>Bar setup</h1>
     </div>
     <SetupTabs />
-    <p class="muted intro">The public menu, arranged by hand: name your sections, then add drinks, plain brews and your beans in the order guests should see them.</p>
+    <p class="muted intro">The public menu, arranged by hand: name your sections, then add drinks, plain brews, your beans and other items in the order guests should see them.</p>
     <p v-if="loading" class="muted" aria-live="polite">Loading the menu…</p>
     <p v-else-if="error" class="form-error" role="alert">{{ error }}</p>
 
@@ -352,6 +365,14 @@ async function deleteItem(): Promise<void> {
         </label>
         <p class="muted small">Each item can show or hide these on its own: Edit it.</p>
       </fieldset>
+
+      <div class="card other-items">
+        <p class="muted small">
+          <strong>Other items</strong>: things that aren't a drink or brewer, like a pastry or "ask about our decaf"
+          ({{ menu.otherItems.length }}).
+        </p>
+        <button class="btn btn-secondary" type="button" @click="otherItemsOpen = true">{{ workspaces.canEdit ? 'Manage other items' : 'See other items' }}</button>
+      </div>
 
       <div class="view-toggle" role="group" aria-label="Show">
         <button v-for="v in (['edit', 'preview', 'both'] as const)" :key="v" type="button" class="btn" :class="view === v ? 'btn-primary' : 'btn-secondary'" :aria-pressed="view === v" @click="view = v">
@@ -449,7 +470,10 @@ async function deleteItem(): Promise<void> {
     :error="addError"
     @cancel="addTarget = null"
     @add="confirmAdd"
+    @manage-other="manageOtherItems"
   />
+
+  <MenuOtherItemsDialog :open="otherItemsOpen" :items="menu.otherItems" @close="otherItemsOpen = false" @changed="otherItemsChanged" />
 
   <ConfirmDialog :open="itemTarget !== null" :title="itemTarget ? `Edit ${itemTitle(itemTarget)}` : ''" @cancel="itemTarget = null">
     <form id="menu-item-form" class="stack" @submit.prevent="saveItem">
@@ -484,7 +508,7 @@ async function deleteItem(): Promise<void> {
           <input v-model="itemAvailable" type="checkbox" />
           Available (unavailable items stay on the menu, marked as such)
         </label>
-        <div class="field">
+        <div v-if="itemTarget?.itemType !== 'other'" class="field">
           <label for="item-show-method">How it's made ({{ itemTarget?.source?.method ?? 'Filter, Espresso' }})</label>
           <select id="item-show-method" v-model="itemShowMethod">
             <option value="">{{ defaultLabel(menu.showMethod) }}</option>
@@ -530,7 +554,7 @@ async function deleteItem(): Promise<void> {
         </select>
       </div>
       <p v-if="itemProblem" class="field-error">{{ itemProblem }}</p>
-      <p v-if="confirmItemDelete" class="form-error" role="alert">Remove it from the menu? The {{ itemTarget?.itemType === 'beans' ? 'beans' : itemTarget?.itemType }} itself stays.</p>
+      <p v-if="confirmItemDelete" class="form-error" role="alert">Remove it from the menu? The {{ itemTarget?.itemType === 'beans' ? 'beans' : itemTarget?.itemType === 'other' ? 'other item' : itemTarget?.itemType }} itself stays.</p>
       <p v-if="itemError" class="form-error" role="alert">{{ itemError }}</p>
     </form>
     <template #actions>
@@ -557,7 +581,7 @@ async function deleteItem(): Promise<void> {
         <input id="section-description" v-model="sectionDescription" maxlength="500" placeholder="e.g. Made with our house espresso" />
       </div>
       <p v-if="confirmSectionDelete" class="form-error" role="alert">
-        Delete {{ sectionTarget?.name }} and its {{ sectionTarget?.items.length }} item{{ sectionTarget?.items.length === 1 ? '' : 's' }} from the menu? The drinks and brewers themselves stay.
+        Delete {{ sectionTarget?.name }} and its {{ sectionTarget?.items.length }} item{{ sectionTarget?.items.length === 1 ? '' : 's' }} from the menu? The drinks, brewers and other items themselves stay.
       </p>
       <p v-if="sectionError" class="form-error" role="alert">{{ sectionError }}</p>
     </form>
@@ -576,6 +600,16 @@ async function deleteItem(): Promise<void> {
 </template>
 
 <style scoped>
+.other-items {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.other-items p {
+  flex: 1 1 16rem;
+}
 p {
   margin: 0;
 }
