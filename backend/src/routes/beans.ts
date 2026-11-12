@@ -20,7 +20,6 @@ import {
   ORIGIN_AREAS,
   ROAST_LEVELS,
   ROAST_TYPES,
-  roasts,
   type Bean,
   type BeanFreeze,
   type DetailedRoastLevel,
@@ -28,7 +27,7 @@ import {
 } from "@barista/shared/schema";
 import { decimalSchema, optionalText, ratingSchema, updateSchema } from "../validation.js";
 import { removePhotoFiles } from "../photos.js";
-import { restReadyOn } from "../reminders.js";
+import { preferencesOf } from "../reminders.js";
 import type { PhotoInfo } from "./beanPhotos.js";
 
 export type FreezePeriod = Pick<BeanFreeze, "id" | "frozenOn" | "thawedOn">;
@@ -37,8 +36,7 @@ export type FreezePeriod = Pick<BeanFreeze, "id" | "frozenOn" | "thawedOn">;
 // frozen: whether a period is still open (frozen now), worked out from the
 // history so the two can't disagree.
 // photos: cover first (docs/api/bean-photos.md §4c).
-// roastReadyOn: the day the home roast that made it is rested (docs/api/roasts.md §4f), else null.
-export type BeanWithFreezes = Bean & { freezePeriods: FreezePeriod[]; frozen: boolean; photos: PhotoInfo[]; roastReadyOn: string | null };
+export type BeanWithFreezes = Bean & { freezePeriods: FreezePeriod[]; frozen: boolean; photos: PhotoInfo[] };
 
 export interface BeanListResponse {
   beans: BeanWithFreezes[];
@@ -138,6 +136,9 @@ const beanFields = {
   batchNumber: optionalText(50),
   rating: ratingSchema.nullable().optional(),
   review: optionalText(2000),
+  // Resting (docs/api/beans.md §4, "Resting"): ready on this day; null = not resting.
+  restingUntil: z.iso.date().nullable().optional(),
+  restInBrewPicker: z.boolean().optional(),
 };
 
 function isHttpUrl(s: string): boolean {
@@ -201,7 +202,7 @@ async function loadBeans(where: SQL | undefined): Promise<BeanWithFreezes[]> {
   const rows = await db.select().from(beans).where(where).orderBy(asc(beans.roasterName), asc(beans.beanName));
   if (rows.length === 0) return [];
   const ids = rows.map((b) => b.id);
-  const [periods, photoRows, roastRows] = await Promise.all([
+  const [periods, photoRows] = await Promise.all([
     db
       .select({ id: beanFreezes.id, beanId: beanFreezes.beanId, frozenOn: beanFreezes.frozenOn, thawedOn: beanFreezes.thawedOn })
       .from(beanFreezes)
@@ -212,12 +213,7 @@ async function loadBeans(where: SQL | undefined): Promise<BeanWithFreezes[]> {
       .from(beanPhotos)
       .where(inArray(beanPhotos.beanId, ids))
       .orderBy(asc(beanPhotos.position), asc(beanPhotos.createdAt)),
-    db
-      .select({ beanId: roasts.beanId, roastedAt: roasts.roastedAt, utcOffsetMinutes: roasts.utcOffsetMinutes, restDays: roasts.restDays })
-      .from(roasts)
-      .where(inArray(roasts.beanId, ids)),
   ]);
-  const readyByBean = new Map(roastRows.map((r) => [r.beanId, restReadyOn(r)]));
   const byBean = new Map<string, FreezePeriod[]>();
   for (const { beanId, ...period } of periods) {
     byBean.set(beanId, [...(byBean.get(beanId) ?? []), period]);
@@ -228,7 +224,7 @@ async function loadBeans(where: SQL | undefined): Promise<BeanWithFreezes[]> {
   }
   return rows.map((bean) => {
     const freezePeriods = byBean.get(bean.id) ?? [];
-    return { ...bean, freezePeriods, frozen: freezePeriods.some((p) => p.thawedOn === null), photos: photosByBean.get(bean.id) ?? [], roastReadyOn: readyByBean.get(bean.id) ?? null };
+    return { ...bean, freezePeriods, frozen: freezePeriods.some((p) => p.thawedOn === null), photos: photosByBean.get(bean.id) ?? [] };
   });
 }
 
@@ -281,13 +277,46 @@ beansRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<BeanRe
   }
 
   const id = randomUUID();
-  await db.insert(beans).values({ id, workspaceId, ...body, roastLevel: roast.roastLevel ?? null });
+  const userId = authedUserId(req);
+  // A new resting bean shows in the brew picker per its adder's preference
+  // unless the body says (docs/api/auth.md §1 restingInBrewPickerDefault).
+  const restInBrewPicker = body.restInBrewPicker ?? (body.restingUntil ? ((await preferencesOf(userId))?.restingInBrewPickerDefault ?? true) : false);
+  await db.insert(beans).values({ id, workspaceId, ...body, restInBrewPicker, restingBy: body.restingUntil ? userId : null, roastLevel: roast.roastLevel ?? null });
   const [bean] = await loadBeans(eq(beans.id, id));
   if (!bean) {
     throw new Error(`Bean ${id} missing after insert`);
   }
   res.status(201).json({ bean });
 });
+
+// Resting (docs/api/beans.md §4, "Resting"): only an active, unfrozen bean
+// rests, and archiving ends it. A new ready day (or starting to rest) makes
+// the editor the one reminded and starts the reminders over; saving the same
+// day changes nothing.
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+async function resolveResting(
+  tx: Tx,
+  existing: { id: string; archivedAt: Date | null; restingUntil: string | null },
+  body: { restingUntil?: string | null; archived?: boolean },
+  userId: string,
+): Promise<{ set: Partial<Pick<Bean, "restingUntil" | "restingBy" | "restLastRemindedOn">> } | { status: 400 | 409; error: string }> {
+  const archived = body.archived ?? existing.archivedAt !== null;
+  if (body.restingUntil) {
+    if (archived) return { status: 400, error: "restingUntil: an archived bean can't rest" };
+    const [open] = await tx
+      .select({ id: beanFreezes.id })
+      .from(beanFreezes)
+      .where(and(eq(beanFreezes.beanId, existing.id), isNull(beanFreezes.thawedOn)))
+      .limit(1);
+    if (open) return { status: 409, error: "A frozen bean is active: thaw it before it rests" };
+    if (body.restingUntil === existing.restingUntil) return { set: {} };
+    return { set: { restingUntil: body.restingUntil, restingBy: userId, restLastRemindedOn: null } };
+  }
+  if (body.restingUntil === null || (body.archived === true && existing.restingUntil !== null)) {
+    return { set: { restingUntil: null, restingBy: null, restLastRemindedOn: null } };
+  }
+  return { set: {} };
+}
 
 beansRouter.patch("/:beanId", async (req: Request<BeanParams>, res: Response<BeanResponse>) => {
   if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId, WRITE_ROLES))) return;
@@ -300,22 +329,25 @@ beansRouter.patch("/:beanId", async (req: Request<BeanParams>, res: Response<Bea
   const outcome = await db.transaction(async (tx) => {
     // Scoped to the workspace, so a bean ID from another workspace is not found.
     const [existing] = await tx
-      .select({ priceAmount: beans.priceAmount, priceCurrency: beans.priceCurrency, detailedRoastLevel: beans.detailedRoastLevel })
+      .select({ id: beans.id, priceAmount: beans.priceAmount, priceCurrency: beans.priceCurrency, detailedRoastLevel: beans.detailedRoastLevel, archivedAt: beans.archivedAt, restingUntil: beans.restingUntil })
       .from(beans)
       .where(beanInWorkspace(req.params))
       .for("update");
     if (!existing) return { status: "not_found" } as const;
+    const rest = await resolveResting(tx, existing, body, authedUserId(req));
+    if ("error" in rest) return { status: rest.status, error: rest.error } as const;
     const amount = body.priceAmount === undefined ? existing.priceAmount : body.priceAmount;
     const currency = body.priceCurrency === undefined ? existing.priceCurrency : body.priceCurrency;
-    if (priceMismatch(amount, currency)) return { status: "invalid", error: PRICE_ERROR } as const;
+    if (priceMismatch(amount, currency)) return { status: 400, error: PRICE_ERROR } as const;
     const roast = resolveRoastLevel(body, existing.detailedRoastLevel);
-    if ("error" in roast) return { status: "invalid", error: roast.error } as const;
-    if (!(await processInWorkspace(body.processId, req.params.workspaceId))) return { status: "invalid", error: PROCESS_ERROR } as const;
-    const { archived, ...fields } = body;
+    if ("error" in roast) return { status: 400, error: roast.error } as const;
+    if (!(await processInWorkspace(body.processId, req.params.workspaceId))) return { status: 400, error: PROCESS_ERROR } as const;
+    const { archived, restingUntil: _restingUntil, ...fields } = body;
     await tx
       .update(beans)
       .set({
         ...fields,
+        ...rest.set,
         roastLevel: roast.roastLevel,
         ...(archived === true ? { archivedAt: sql`COALESCE(${beans.archivedAt}, NOW())` } : {}),
         ...(archived === false ? { archivedAt: null } : {}),
@@ -323,8 +355,8 @@ beansRouter.patch("/:beanId", async (req: Request<BeanParams>, res: Response<Bea
       .where(beanInWorkspace(req.params));
     return { status: "updated" } as const;
   });
-  if (outcome.status === "invalid") {
-    sendError(res, 400, outcome.error);
+  if (outcome.status === 400 || outcome.status === 409) {
+    sendError(res, outcome.status, outcome.error);
     return;
   }
   const [bean] = outcome.status === "updated" ? await loadBeans(beanInWorkspace(req.params)) : [];
@@ -421,6 +453,8 @@ async function changeFreezeState(req: Request<BeanParams>, res: Response<BeanRes
         return { status: 400, error: `date: can't be before the last thaw (${last.thawedOn})` } as const;
       }
       await tx.insert(beanFreezes).values({ id: randomUUID(), beanId: bean.id, frozenOn: date });
+      // A frozen bean is active: freezing ends a rest (docs/api/beans.md §4, "Resting").
+      await tx.update(beans).set({ restingUntil: null, restingBy: null, restLastRemindedOn: null }).where(eq(beans.id, bean.id));
     } else {
       if (!open) return { status: 409, error: "This bean isn't frozen" } as const;
       if (date < open.frozenOn) return { status: 400, error: `date: can't be before it was frozen (${open.frozenOn})` } as const;
@@ -460,7 +494,6 @@ function byLatest(a: FreezeRow, b: FreezeRow): number {
   return b.thawedOn.localeCompare(a.thawedOn) || b.frozenOn.localeCompare(a.frozenOn);
 }
 
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 async function lockedPeriods(tx: Tx, params: BeanParams) {
   const [bean] = await tx
     .select({ id: beans.id, roastDate: beans.roastDate })

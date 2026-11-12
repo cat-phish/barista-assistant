@@ -19,17 +19,39 @@
   (boolean): `true` while a period is open (`thawedOn: null`). `frozen` is
   worked out from the periods, not stored, so the two always agree; clients
   read it instead of looking at the order of the periods. It also includes
-  `photos`, cover first (`[{ id, width, height }]`, `bean-photos.md` §4c),
-  and `roastReadyOn`: for a bean a home roast made (§4f), the day that roast
-  has rested (`YYYY-MM-DD`, its local roast date + `restDays`), else `null`.
-  Until then clients show it as **Resting until …** in Beans and the brew
-  picker; it can still be brewed.
+  `photos`, cover first (`[{ id, width, height }]`, `bean-photos.md` §4c).
 
-  The list includes archived beans: `archivedAt` is when the bean was
-  archived, or `null` while it's active. `createdAt` is when it was added
+  The list includes resting and archived beans: `archivedAt` is when the
+  bean was archived, or `null` while it's not; `restingUntil` is set while
+  it rests (see **Resting** below). `createdAt` is when it was added
   (beans from before migration 0031 have that migration's time). Clients
-  show active and archived beans apart, and leave archived ones out of the
-  brew picker; past brews and the AI keep them.
+  show active, resting and archived beans apart (the **Active**, **Resting**
+  and **Archived** tabs), and leave archived ones out of the brew picker;
+  past brews and the AI keep them.
+
+**Resting:** a bean that's aging before it's ready to brew, e.g. a fresh
+roast. Freezing stops aging, so a frozen bean is always active.
+- `restingUntil` (`YYYY-MM-DD` or `null`): the day it's ready; `null` = not
+  resting. It doesn't become active by itself: someone makes it active
+  (`PATCH` `restingUntil: null`), or freezes it (`POST …/freeze`), which
+  also ends the rest. From that day its reminders go out
+  (`notifications.md` §1b, "Resting beans").
+- `restInBrewPicker` (boolean): offered in the brew picker while resting,
+  marked **Resting until …**; otherwise left out of it until it's active.
+  Left out on `POST`, the adder's `restingInBrewPickerDefault`
+  (`auth.md` §1) for a resting bean, else `false`.
+- Read-only: `restingBy`, who set the current ready day (they get the
+  reminders; `null` when not resting or once they're deleted), and
+  `restLastRemindedOn`, the local day the last reminder went (`null` until
+  the first).
+- Rules: an archived bean can't rest (`400`), nor a frozen one (`409`, thaw
+  it first); archiving ends a rest. A new `restingUntil` makes the editor
+  `restingBy` and starts the reminders over; sending the day it already has
+  changes nothing.
+- A home roast (§4f) adds its bean resting until its local roast date +
+  the roast's rest days, unless that's not after today or it's added as
+  active.
+- On the public menu (§7) a resting bean shows like an active one.
 
   The bean form suggests roaster, coffee, producer and supplier names from
   this list, archived beans included (no separate names endpoint).
@@ -165,7 +187,13 @@ is no age.
   sets `archivedAt` to now (unchanged if already archived); `false` restores
   the bean. It can go with other fields, e.g.
   `{ "archived": true, "rating": 4 }` when a bean is rated as it's archived.
-  Archived beans leave the public menu (§7).
+  Archived beans leave the public menu (§7). `archived: true` ends a rest
+  (**Resting** above).
+
+  > **Frontend (Resting):** an active, unfrozen bean has **Rest…** (the
+  > ready day and the brew picker box); a resting one has **Make active…**,
+  > which asks **Make active** or **Freeze and make active** (`POST …/freeze`).
+  > The bean form has a **Resting** box with the same two fields.
 
   > **Frontend (rating prompt):** archiving a bean with no `rating` first asks
   > for one (stars, **Rate and archive** or **Skip rating**) and offers the
@@ -173,8 +201,9 @@ is no age.
   > Archived beans that are still unrated are listed on the Archived tab with
   > a **Rate** button until they're rated.
 - **Success (`200 OK`):** `{ "bean": { ...bean } }`
-- **Errors:** `400` invalid or empty body; `403` viewer; `404` bean not in this
-  workspace.
+- **Errors:** `400` invalid or empty body, or resting an archived bean;
+  `403` viewer; `404` bean not in this workspace; `409` resting a frozen
+  bean.
 
 ## `GET /api/workspaces/:workspaceId/beans/:beanId/brew-summary`
 
@@ -222,7 +251,8 @@ The schema cascades a bean's deletion to its `brew_logs` and their
 
 ## `POST /api/workspaces/:workspaceId/beans/:beanId/freeze`
 
-Starts a freeze period.
+Starts a freeze period. A frozen bean is active, so this ends a rest
+(**Resting** above).
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Body:** `{ "date": "2026-10-15" }` (optional; defaults to the server's

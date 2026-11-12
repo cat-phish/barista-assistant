@@ -62,6 +62,7 @@ export const FIELDS = [
   bean('purchaseDate', 'Purchase date'),
   bean('greenSupplier', 'Green bean supplier'),
   bean('website', 'Website'),
+  bean('resting', 'Resting', 'Aging before it’s ready to brew; Beans → Resting, with a reminder when it’s time'),
   bean('rating', 'Rating'),
   bean('review', 'Review'),
   bean('notes', 'Notes'),
@@ -106,7 +107,7 @@ export const FIELDS = [
   roast('roastLevel', 'Roast level'),
   roast('temps', 'Charge and drop temperatures'),
   roast('times', 'First crack and total time', 'And the development time worked out from them'),
-  roast('restDays', 'Rest days', 'Hidden: the workspace’s default for the roast type'),
+  roast('restDays', 'Rest days and Add as active (new roasts)', 'Hidden: its bean rests the workspace’s default for the roast type'),
   roast('notes', 'Notes'),
 ] as const satisfies readonly FieldInfo[];
 

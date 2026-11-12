@@ -2,7 +2,7 @@ import "dotenv/config";
 import { app } from "./app.js";
 import { config } from "./config.js";
 import { pool } from "./db.js";
-import { closeQueue, syncBackupSchedule, syncRecapSchedule } from "./queue.js";
+import { closeQueue, syncBackupSchedule, syncBeanRestSchedule, syncRecapSchedule } from "./queue.js";
 import { getBackupSettings } from "./serverSettings.js";
 import { sweepChatPhotos, sweepOrphanPhotos } from "./photos.js";
 import { pruneAllChats } from "./chatData.js";
@@ -30,6 +30,7 @@ getBackupSettings()
 
 // Recap notifications (docs/api/notifications.md §1b, "Recaps").
 syncRecapSchedule().catch((err: unknown) => console.error("Recap schedule not set:", err instanceof Error ? err.message : err));
+syncBeanRestSchedule().catch((err: unknown) => console.error("Resting beans schedule not set:", err instanceof Error ? err.message : err));
 
 function shutdown(signal: string): void {
   console.log(`${signal} received, shutting down`);

@@ -14,7 +14,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { usePreferences } from '../composables/usePreferences';
 import { ROAST_TYPES } from '../lib/beans';
 import { formatListDay, formatTime, formatWhen, localDateInput } from '../lib/format';
-import { development, formatStock, greenStock, readyOn, roastLevelLabel, roastTempText, weightLoss } from '../lib/roasting';
+import { development, formatStock, greenStock, roastLevelLabel, roastTempText, weightLoss } from '../lib/roasting';
 import { TEMPERATURE_LABELS } from '../lib/units';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -41,10 +41,8 @@ onMounted(async () => {
 
 const temp = (c: number | null) => (c === null ? null : `${roastTempText(c, temperatureUnit.value)} ${TEMPERATURE_LABELS[temperatureUnit.value]}`);
 const dev = computed(() => (roast.value ? development(roast.value.firstCrackSec, roast.value.totalSec) : null));
-const ready = computed(() => (roast.value ? readyOn(roast.value) : null));
+const ready = computed(() => roast.value?.bean?.restingUntil ?? null); // its bean's rest (docs/api/beans.md §4)
 const greenState = computed(() => (roast.value?.greenCoffee ? greenStock({ ...roast.value.greenCoffee, weightBoughtGrams: null }).state : 'ok'));
-// From the form, after a save (history state, so a reload doesn't repeat it).
-const savedReminder = typeof history.state?.restReminder === 'string' ? (history.state.restReminder as string) : null;
 const shortStock = computed(() => (roast.value && roast.value.greenCoffeeId && roast.value.greenStockTakenGrams < roast.value.greenGrams ? roast.value.greenStockTakenGrams : null));
 
 const confirming = ref(false);
@@ -117,12 +115,10 @@ async function remove(): Promise<void> {
             <dd>{{ formatTime(dev.sec) }} ({{ dev.percent }}%)</dd>
           </div>
           <div v-if="ready">
-            <dt>Rest</dt>
-            <dd>{{ roast.restDays }} {{ roast.restDays === 1 ? 'day' : 'days' }}: {{ ready <= today ? 'ready' : `ready ${formatListDay(ready)}` }}</dd>
+            <dt>Resting</dt>
+            <dd>{{ ready <= today ? 'Ready: make it active in' : `Until ${formatListDay(ready)}, in` }} <RouterLink :to="{ name: 'beans-resting' }">Beans → Resting</RouterLink></dd>
           </div>
         </dl>
-        <p v-if="ready && ready > today && savedReminder === 'queued'" class="muted small">You'll get a reminder the morning it's ready.</p>
-        <p v-else-if="ready && ready > today && savedReminder === 'unavailable'" class="muted small">The ready reminder couldn't be scheduled right now.</p>
         <p v-if="roast.notes" class="notes">{{ roast.notes }}</p>
         <p v-if="shortStock !== null" class="muted small">Took {{ formatStock(shortStock) }} off the green stock: that was all there was.</p>
       </section>

@@ -72,7 +72,7 @@ units, with defaults filled in. Storage is always grams, °C and metres;
 clients convert what they show and what's typed (roadmap: Units and defaults).
 
 ```json
-{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "startDelays": {}, "steepReminders": true, "restReminders": true, "greenStockAlerts": true, "recaps": true, "recapPeriods": "both", "weekStartsOn": 1, "recapBanner": true, "recapBannerDays": 3, "recapNotify": true, "recapNotifyTime": "08:00", "timeZone": null, "recapAi": "manual", "recapSeen": {} }
+{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "startDelays": {}, "steepReminders": true, "restReminders": true, "restReminderRepeatDays": null, "restingInBrewPickerDefault": true, "greenStockAlerts": true, "recaps": true, "recapPeriods": "both", "weekStartsOn": 1, "recapBanner": true, "recapBannerDays": 3, "recapNotify": true, "recapNotifyTime": "08:00", "timeZone": null, "recapAi": "manual", "recapSeen": {} }
 ```
 
 - `volumeUnit`: `fl_oz` | `ml`: the brew page's yield estimate, and a new
@@ -98,7 +98,14 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
 - `steepReminders` (default `true`): remind when a cold brew's steep window
   opens (§1b).
 - `restReminders` (default `true`): remind, the morning it's ready, when a
-  roast you logged has rested (§1b).
+  bean you set resting (or a home roast you logged) is ready (§1b, "Resting
+  beans").
+- `restReminderRepeatDays` (integer 1–60 or `null`, default `null`): remind
+  again every that many days until the bean is made active; `null` = once.
+  It applies to all your resting beans.
+- `restingInBrewPickerDefault` (default `true`): whether a bean you add
+  resting is offered in the brew picker while it rests
+  (`beans.md` §4 `restInBrewPicker`), unless the form says.
 - `greenStockAlerts` (default `true`): tell when a roast you save takes a
   green coffee below its `lowStockGrams` (§1b).
 - `repeatKeeps`: what repeating a brew copies (Settings → Brew setup, "Copy

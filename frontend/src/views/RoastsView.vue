@@ -7,7 +7,7 @@ import { roastsApi } from '../api/roasts';
 import type { Roast } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
 import { formatListDay, localDateInput } from '../lib/format';
-import { readyOn, roastDay, roastLevelLabel, weightLoss } from '../lib/roasting';
+import { roastDay, roastLevelLabel, weightLoss } from '../lib/roasting';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
@@ -28,10 +28,9 @@ onMounted(async () => {
   }
 });
 
-const ready = (r: Roast) => {
-  const day = readyOn(r);
-  return day <= today ? 'Ready' : `Ready ${formatListDay(day)}`;
-};
+// Its bean's rest (docs/api/beans.md §4, "Resting"), while it rests.
+const resting = (r: Roast) => r.bean?.restingUntil ?? null;
+const restText = (day: string) => (day <= today ? 'Ready' : `Ready ${formatListDay(day)}`);
 </script>
 
 <template>
@@ -50,7 +49,7 @@ const ready = (r: Roast) => {
         <RouterLink class="card item" :to="{ name: 'roast', params: { id: r.id } }">
           <span class="head">
             <strong>{{ r.greenCoffee?.name ?? 'Deleted green coffee' }}<template v-if="r.batchNumber"> · batch {{ r.batchNumber }}</template></strong>
-            <span class="badge" :class="{ resting: readyOn(r) > today }">{{ ready(r) }}</span>
+            <span v-if="resting(r)" class="badge" :class="{ resting: resting(r)! > today }">{{ restText(resting(r)!) }}</span>
           </span>
           <span class="muted small">
             {{ formatListDay(roastDay(r)) }} · {{ r.greenGrams }} g → {{ r.roastedGrams }} g ({{ weightLoss(r.greenGrams, r.roastedGrams) }}% loss)<template v-if="roastLevelLabel(r)"> · {{ roastLevelLabel(r) }}</template><template v-if="r.machine"> · {{ r.machine.name }}</template>

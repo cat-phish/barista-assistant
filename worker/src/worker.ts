@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { AI_CHECK_QUEUE, AI_PREVIEW_QUEUE, BEAN_REVIEW_QUEUE, BREW_ANALYSIS_QUEUE, CHAT_QUEUE, CHAT_SUMMARY_JOB, LABEL_READ_QUEUE, MAINTENANCE_QUEUE, PARAMETER_SUGGESTION_QUEUE, RECAP_SUMMARY_QUEUE, REMINDER_QUEUE, RECAP_TICK_JOB, STEEP_REMINDER_JOB, REST_REMINDER_JOB, GREEN_LOW_JOB, type AiCheckJobData, type AiCheckResult, type AiPreviewJobData, type BeanReviewJobData, type BeanReviewResult, type BrewAnalysisJobData, type ChatJobData, type ChatSummaryJobData, type DbBackupJobData, type LabelReadJobData, type LabelReadResult, type ParameterSuggestionJobData, type RecapSummaryJobData, type GreenLowJobData, type RateReminderJobData, type RecapTickJobData, type RestReminderJobData, type SteepReminderJobData } from "@barista/shared/jobs";
+import { AI_CHECK_QUEUE, AI_PREVIEW_QUEUE, BEAN_REVIEW_QUEUE, BREW_ANALYSIS_QUEUE, CHAT_QUEUE, CHAT_SUMMARY_JOB, LABEL_READ_QUEUE, MAINTENANCE_QUEUE, PARAMETER_SUGGESTION_QUEUE, RECAP_SUMMARY_QUEUE, REMINDER_QUEUE, RECAP_TICK_JOB, STEEP_REMINDER_JOB, BEAN_REST_TICK_JOB, LEGACY_REST_REMINDER_JOB, GREEN_LOW_JOB, type AiCheckJobData, type AiCheckResult, type AiPreviewJobData, type BeanReviewJobData, type BeanReviewResult, type BrewAnalysisJobData, type ChatJobData, type ChatSummaryJobData, type DbBackupJobData, type LabelReadJobData, type LabelReadResult, type ParameterSuggestionJobData, type RecapSummaryJobData, type GreenLowJobData, type RateReminderJobData, type RecapTickJobData, type BeanRestTickJobData, type SteepReminderJobData } from "@barista/shared/jobs";
 import { UnrecoverableError, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 import { config } from "./config.js";
@@ -7,7 +7,8 @@ import { pool } from "./db.js";
 import { failSuggestion, failureMessage, processAiPreview, processBeanReview, processBrewAnalysis, processParameterSuggestion, settleRequest, type JobResult } from "./processor.js";
 import { processRecapTick, type RecapTickResult } from "./recaps.js";
 import { failRecapSummary, writeRecapSummary, type RecapSummaryResult } from "./recapSummary.js";
-import { processGreenLow, processRateReminder, processRestReminder, processSteepReminder, type ReminderResult } from "./reminders.js";
+import { processGreenLow, processRateReminder, processSteepReminder, type ReminderResult } from "./reminders.js";
+import { processBeanRestTick, type BeanRestTickResult } from "./beanRest.js";
 import { runDbBackup, type BackupResult } from "./dbBackup.js";
 import { readLabel } from "./label.js";
 import { runAiCheck } from "./ai/check.js";
@@ -132,18 +133,20 @@ aiChecks.on("failed", (job, err) => console.error(`AI check ${job?.id ?? "?"} fa
 aiChecks.on("error", (err) => console.error("AI check worker error:", err.message));
 
 // Reminders (docs/api/notifications.md §1b): delayed jobs, sent once due.
-// The job name says which: rate later, a cold brew's steep done, a roast
-// rested, a green coffee running low, or the quarter-hourly recap tick.
-type ReminderData = RateReminderJobData | SteepReminderJobData | RestReminderJobData | GreenLowJobData | RecapTickJobData;
-type ReminderOutcome = ReminderResult | RecapTickResult;
+// The job name says which: rate later, a cold brew's steep done, a green
+// coffee running low, or the quarter-hourly recap and resting-bean ticks.
+type ReminderData = RateReminderJobData | SteepReminderJobData | GreenLowJobData | RecapTickJobData | BeanRestTickJobData;
+type ReminderOutcome = ReminderResult | RecapTickResult | BeanRestTickResult;
 function runReminder(job: Job<ReminderData>): Promise<ReminderOutcome> {
   switch (job.name) {
     case RECAP_TICK_JOB:
       return processRecapTick();
     case STEEP_REMINDER_JOB:
       return processSteepReminder(job.data as SteepReminderJobData);
-    case REST_REMINDER_JOB:
-      return processRestReminder(job.data as RestReminderJobData);
+    case BEAN_REST_TICK_JOB:
+      return processBeanRestTick();
+    case LEGACY_REST_REMINDER_JOB:
+      return Promise.resolve({ status: "skipped", reason: "resting moved to beans" });
     case GREEN_LOW_JOB:
       return processGreenLow(job.data as GreenLowJobData);
     default:
@@ -156,7 +159,8 @@ const reminders = new Worker<ReminderData, ReminderOutcome>(REMINDER_QUEUE, runR
 });
 reminders.on("completed", (job, result) => {
   if (!("status" in result)) {
-    if (result.sent || result.failed) console.log(`Recaps: ${result.sent} sent${result.failed ? `, ${result.failed} failed` : ""}`);
+    const what = job.name === BEAN_REST_TICK_JOB ? "Resting beans" : "Recaps";
+    if (result.sent || result.failed) console.log(`${what}: ${result.sent} sent${result.failed ? `, ${result.failed} failed` : ""}`);
     return;
   }
   const detail = result.status === "sent" ? `sent to ${result.channels}${result.failed.length ? `, failed: ${result.failed.join("; ")}` : ""}` : `skipped (${result.reason})`;

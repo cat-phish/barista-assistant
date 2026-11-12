@@ -275,6 +275,19 @@ describe("workspace backup and restore (docs/api/backup.md §2b)", () => {
     expect(problems.find((p) => p.name === "Scale not tared")).toMatchObject({ methodKinds: [] });
   });
 
+  it("restores a version 5 file, where a roast had restDays, and keeps a resting bean resting", async () => {
+    const { owner, base } = await populated();
+    const backup = (await owner.agent.get(`${base}/backup`)).body;
+    // The roast in populated() rests 7 days (filter), so its bean is resting.
+    const resting = backup.tables.beans.find((b: { restingUntil: string | null }) => b.restingUntil !== null);
+    expect(resting).toBeDefined();
+    const v5 = { ...backup, version: 5, tables: { ...backup.tables, roasts: backup.tables.roasts.map((r: Record<string, unknown>) => ({ ...r, restDays: 7 })) } };
+    const restored = await owner.agent.post("/api/workspaces/restore").send({ name: "Old", slug: `old-${randomUUID().slice(0, 8)}`, backup: v5 });
+    expect(restored.status, JSON.stringify(restored.body)).toBe(201);
+    const beans = (await owner.agent.get(`/api/workspaces/${restored.body.workspaceId}/beans`)).body.beans as Array<{ beanName: string; restingUntil: string | null; restingBy: string | null }>;
+    expect(beans.find((b) => b.beanName === resting.beanName)).toMatchObject({ restingUntil: resting.restingUntil, restingBy: owner.id });
+  });
+
   it("restores a version 2 file, where the bean sources meant this bag (docs/api/backup.md §2b)", async () => {
     const { owner, base } = await populated();
     const backup = (await owner.agent.get(`${base}/backup`)).body;

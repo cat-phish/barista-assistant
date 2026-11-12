@@ -176,7 +176,8 @@ export interface RoastForm {
   dropTemp: string;
   firstCrack: string; // m:ss from the charge
   total: string; // m:ss, charge to drop
-  restDays: string;
+  restDays: string; // a new roast only: how long its bean rests
+  addActive: boolean; // a new roast only: its bean skips resting
   notes: string;
 }
 
@@ -213,7 +214,8 @@ export function roastForm(unit: TemperatureUnit, r?: Roast, defaults: { now?: Da
     dropTemp: roastTempText(r?.dropTempC ?? null, unit),
     firstCrack: r?.firstCrackSec != null ? formatTime(r.firstCrackSec) : '',
     total: r?.totalSec != null ? formatTime(r.totalSec) : '',
-    restDays: String(r?.restDays ?? defaults.restDays ?? ''),
+    restDays: String(defaults.restDays ?? ''),
+    addActive: false,
     notes: r?.notes ?? '',
   };
 }
@@ -221,7 +223,8 @@ export function roastForm(unit: TemperatureUnit, r?: Roast, defaults: { now?: Da
 export function parseRoastForm(
   f: RoastForm,
   // greenOptional: editing a roast whose green coffee was deleted ('' = leave it).
-  opts: { unit: TemperatureUnit; scale: RoastScale; now?: Date; greenOptional?: boolean },
+  // creating: a new roast, which sends restDays.
+  opts: { unit: TemperatureUnit; scale: RoastScale; now?: Date; greenOptional?: boolean; creating?: boolean },
 ): { errors: Errors; values: RoastInput | null } {
   const errors: Errors = {};
   if (!f.greenCoffeeId && !opts.greenOptional) errors.greenCoffeeId = 'Pick the green coffee';
@@ -251,9 +254,11 @@ export function parseRoastForm(
   if (crack && !crack.ok) errors.firstCrack = crack.error;
   if (total && !total.ok) errors.total = total.error;
   else if (crack?.ok && total?.ok && crack.value >= total.value) errors.firstCrack = 'Before the end of the roast';
-  const rest = parseDecimal(f.restDays, { scale: 0, min: 0, max: 60 });
-  if (!rest.ok) errors.restDays = rest.error;
-  if (Object.keys(errors).length || !at || !green?.ok || !roasted?.ok || !rest.ok) return { errors, values: null };
+  // A new roast says how long its bean rests (docs/api/roasts.md §4f); after
+  // that the rest is the bean's.
+  const rest = opts.creating && !f.addActive ? parseDecimal(f.restDays, { scale: 0, min: 0, max: 60 }) : null;
+  if (rest && !rest.ok) errors.restDays = rest.error;
+  if (Object.keys(errors).length || !at || !green?.ok || !roasted?.ok || (rest && !rest.ok)) return { errors, values: null };
 
   // Light to dark keeps a roast name already recorded while its level stays chosen.
   const detailed = opts.scale === 'names' ? f.detailed || null : f.detailed && f.level === DETAILED_ROAST_LEVELS[f.detailed].roastLevel ? f.detailed : null;
@@ -275,7 +280,7 @@ export function parseRoastForm(
       dropTempC: drop?.ok ? drop.value : null,
       firstCrackSec: crack?.ok ? crack.value : null,
       totalSec: total?.ok ? total.value : null,
-      restDays: rest.value,
+      ...(opts.creating ? { restDays: f.addActive ? 0 : rest?.ok ? rest.value : 0 } : {}),
       notes: text(f.notes),
     },
   };
@@ -293,29 +298,12 @@ export function development(firstCrackSec: number | null, totalSec: number | nul
   return { sec, percent: Math.round((sec / totalSec) * 1000) / 10 };
 }
 
-// The local roast date (YYYY-MM-DD) and the day it's ready: that + its rest days.
+// The local roast date (YYYY-MM-DD).
 export function roastDay(r: Pick<Roast, 'roastedAt' | 'utcOffsetMinutes'>): string {
   const at = new Date(r.roastedAt);
   const offset = r.utcOffsetMinutes ?? -at.getTimezoneOffset();
   return new Date(at.getTime() + offset * 60_000).toISOString().slice(0, 10);
 }
-export function readyOn(r: Pick<Roast, 'roastedAt' | 'utcOffsetMinutes' | 'restDays'>): string {
-  const [y, m, d] = roastDay(r).split('-').map(Number);
-  return new Date(Date.UTC(y!, m! - 1, d! + r.restDays)).toISOString().slice(0, 10);
-}
-
-// Roast mode → Resting (docs/roadmap.md, Home roasting): roasts still resting,
-// soonest ready first; then ready ones whose bean is still in use (there,
-// not archived, some left), most recently ready first.
-export function restingRoasts(roasts: Roast[], today = localDateInput()): { resting: Roast[]; ready: Roast[] } {
-  const dated = roasts.map((r) => ({ r, on: readyOn(r) }));
-  const resting = dated.filter((d) => d.on > today).sort((a, b) => a.on.localeCompare(b.on));
-  const ready = dated
-    .filter((d) => d.on <= today && d.r.bean && !d.r.bean.archived && d.r.bean.inventoryWeightGrams > 0)
-    .sort((a, b) => b.on.localeCompare(a.on));
-  return { resting: resting.map((d) => d.r), ready: ready.map((d) => d.r) };
-}
-
 // "City+" (roast names) or "Medium" (light to dark), or null.
 export function roastLevelLabel(r: Pick<Roast, 'detailedRoastLevel' | 'roastLevel'>): string | null {
   if (r.detailedRoastLevel) return DETAILED_ROAST_LEVELS[r.detailedRoastLevel].label;

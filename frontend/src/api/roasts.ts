@@ -1,13 +1,11 @@
-import type { Reminder } from './brews';
 import { api } from './client';
 import type { Roast, RoastInput } from './types';
 
 // docs/api/roasts.md §4f. Listing is for any member; changes are for owners
 // and baristas. Saving a roast creates its bean.
-// A saved roast, and its rest reminder while it's still resting (docs/api/notifications.md §1b).
+// A saved roast; its bean rests as a bean does (docs/api/beans.md §4, "Resting").
 export interface SavedRoast {
   roast: Roast;
-  restReminder?: Reminder;
 }
 
 const base = (workspaceId: string) => `/api/workspaces/${workspaceId}/roasts`;

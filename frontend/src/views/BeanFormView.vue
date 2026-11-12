@@ -44,7 +44,7 @@ import {
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
 
 const workspaces = useWorkspaceStore();
-const { altitudeUnit, roastScale, settings } = usePreferences();
+const { altitudeUnit, roastScale, settings, prefs } = usePreferences();
 const route = useRoute();
 const router = useRouter();
 const editing = computed(() => props.id !== undefined);
@@ -83,6 +83,23 @@ const batchNumber = ref('');
 const weightLoss = ref(''); // roast weight loss, %
 const website = ref('');
 const showOnPublicMenu = ref(true);
+// Resting (docs/api/beans.md §4, "Resting"): aging until restingOn. A frozen
+// or archived bean can't rest (frozen beans are active).
+const resting = ref(false);
+const restingOn = ref('');
+const restInPicker = ref(prefs.value.restingInBrewPickerDefault);
+const savedFrozen = ref(false);
+const savedArchived = ref(false);
+const canRest = computed(() => !savedFrozen.value && !savedArchived.value);
+// Ticking it suggests the roast date (or today) + the workspace's rest days for its roast type.
+watch(resting, (on) => {
+  if (!on || restingOn.value) return;
+  const from = roastDate.value || today;
+  const [y, m, d] = from.split('-').map(Number);
+  const days = settings.value.restDays[roastType.value || 'omni'];
+  const ready = new Date(Date.UTC(y!, m! - 1, d! + days)).toISOString().slice(0, 10);
+  restingOn.value = ready > today ? ready : today;
+});
 const rating = ref<number | null>(null);
 const review = ref('');
 // How its brews went: the hint under the rating. A new bean has none.
@@ -196,6 +213,7 @@ const fieldErrors = computed(() => ({
   weightLoss: weightLossParsed.value && !weightLossParsed.value.ok ? weightLossParsed.value.error : '',
   purchaseDate: purchaseDate.value > today ? "Can't be in the future" : '',
   website: websiteTrimmed.value && !isHttpUrl(websiteTrimmed.value) ? 'Enter a web address starting with https://' : '',
+  restingOn: resting.value && show('bean.resting') && !restingOn.value ? 'Pick the day it’s ready' : '',
 }));
 const valid = computed(() => Object.values(fieldErrors.value).every((e) => !e));
 
@@ -334,8 +352,14 @@ function fill(bean: Bean): void {
     'bean.review': bean.review,
     'bean.notes': bean.notes,
     'bean.photos': bean.photos,
+    'bean.resting': bean.restingUntil,
   });
   photos.value = bean.photos;
+  resting.value = bean.restingUntil !== null;
+  restingOn.value = bean.restingUntil ?? '';
+  restInPicker.value = bean.restingUntil !== null ? bean.restInBrewPicker : prefs.value.restingInBrewPickerDefault;
+  savedFrozen.value = bean.frozen;
+  savedArchived.value = bean.archivedAt !== null;
   roasterName.value = bean.roasterName;
   beanName.value = bean.beanName;
   process.value = bean.processId ?? '';
@@ -383,6 +407,12 @@ function fillCopy(bean: Bean): void {
   rating.value = null;
   review.value = '';
   photos.value = []; // a new bag: its own photos
+  // A new bag isn't frozen, archived or resting yet.
+  savedFrozen.value = false;
+  savedArchived.value = false;
+  resting.value = false;
+  restingOn.value = '';
+  restInPicker.value = prefs.value.restingInBrewPickerDefault;
   inventory.value = bean.bagWeightGrams === null ? '0' : String(bean.bagWeightGrams);
   // Nothing is stored for the copy yet: an older bean's 5-step level (no
   // roast name) is sent explicitly, else the API derives it from the name.
@@ -426,7 +456,7 @@ const drafts = useBeanDraftStore();
 const draftRefs: Record<string, Ref<unknown>> = {
   roasterName, beanName, process, originArea, country, region, producer, altitude, varieties, species, flavorProfile, blendType, decaf, roastType,
   roastDate, detailedRoastLevel, inventory, price, currency, bagWeight, purchaseDate, greenSupplier, batchNumber, weightLoss,
-  website, showOnPublicMenu, rating, review, notes, level, sourceDetailed, savedDetailed, savedRoastLevel, copyOf, suggestions, labelSummary, webSources,
+  website, showOnPublicMenu, resting, restingOn, restInPicker, rating, review, notes, level, sourceDetailed, savedDetailed, savedRoastLevel, copyOf, suggestions, labelSummary, webSources,
 };
 const snapshot = () => Object.fromEntries(Object.entries(draftRefs).map(([name, r]) => [name, r.value]));
 let blank = ''; // the form as it opened, to tell whether anything was entered
@@ -458,6 +488,7 @@ function revealEntered(): void {
     'bean.price': price.value, 'bean.bagWeight': bagWeight.value, 'bean.purchaseDate': purchaseDate.value,
     'bean.greenSupplier': greenSupplier.value, 'bean.website': website.value, 'bean.rating': rating.value, 'bean.review': review.value, 'bean.notes': notes.value,
     'bean.photos': draftPhotos.value.length ? draftPhotos.value : null,
+    'bean.resting': resting.value || null,
   });
 }
 function keepDraft(): void {
@@ -583,6 +614,10 @@ async function save(): Promise<void> {
     rating: rating.value,
     review: review.value.trim() || null,
     notes: notes.value.trim() || null,
+    // Hidden, or one that can't rest: left as it is.
+    ...(show('bean.resting') && canRest.value
+      ? { restingUntil: resting.value ? restingOn.value : null, ...(resting.value ? { restInBrewPicker: restInPicker.value } : {}) }
+      : {}),
   };
   saving.value = true;
   error.value = '';
@@ -605,7 +640,7 @@ async function save(): Promise<void> {
     }
     if (input.priceCurrency) rememberCurrency(input.priceCurrency);
     finished = true;
-    await router.push({ name: 'beans' });
+    await router.push({ name: input.restingUntil ? 'beans-resting' : 'beans' });
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -888,6 +923,29 @@ async function save(): Promise<void> {
           <input v-model="showOnPublicMenu" type="checkbox" />
           Show on the public menu
         </label>
+      </section>
+
+      <!-- Resting (docs/api/beans.md §4, "Resting"): aging before it's ready to brew. -->
+      <section v-if="show('bean.resting')" class="card stack" aria-labelledby="resting-title">
+        <h2 id="resting-title">Resting</h2>
+        <label class="checkbox">
+          <input v-model="resting" type="checkbox" :disabled="!canRest" aria-describedby="resting-hint" />
+          Resting: not ready to brew yet
+        </label>
+        <span id="resting-hint" class="muted small">
+          {{ savedFrozen ? 'A frozen bean is active: thaw it to rest it.' : savedArchived ? 'Unarchive it to rest it.' : 'It waits under Beans → Resting until you make it active. You can get a reminder the morning it’s ready (Settings → Notifications).' }}
+        </span>
+        <template v-if="resting && canRest">
+          <div class="field short">
+            <label for="resting-on">Ready on<span class="req" aria-hidden="true">*</span></label>
+            <input id="resting-on" v-model="restingOn" type="date" aria-required="true" :aria-invalid="submitted && !!fieldErrors.restingOn" />
+            <span v-if="submitted && fieldErrors.restingOn" class="field-error">{{ fieldErrors.restingOn }}</span>
+          </div>
+          <label class="checkbox">
+            <input v-model="restInPicker" type="checkbox" />
+            Show in the brew picker while resting
+          </label>
+        </template>
       </section>
 
       <section v-if="show('bean.rating') || show('bean.review') || show('bean.notes')" class="card stack review-card">

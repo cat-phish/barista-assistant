@@ -7,21 +7,22 @@ import {
   REMINDER_QUEUE,
   STEEP_REMINDER_JOB,
   steepReminderJobId,
-  REST_REMINDER_JOB,
-  restReminderJobId,
   GREEN_LOW_JOB,
   RECAP_SUMMARY_JOB,
   RECAP_SUMMARY_QUEUE,
   recapSummaryJobId,
   type RecapSummaryJobData,
   RECAP_TICK_JOB,
+  BEAN_REST_TICK_JOB,
+  BEAN_REST_TICK_PATTERN,
+  BEAN_REST_TICK_SCHEDULER,
+  type BeanRestTickJobData,
   RECAP_TICK_PATTERN,
   RECAP_TICK_SCHEDULER,
   type BrewAnalysisJobData,
   type GreenLowJobData,
   type RecapTickJobData,
   type RateReminderJobData,
-  type RestReminderJobData,
   type SteepReminderJobData,
   backupCron,
   DB_BACKUP_JOB,
@@ -280,26 +281,12 @@ export function enqueueSteepReminder(data: SteepReminderJobData, delayMs: number
   return enqueueReminder(STEEP_REMINDER_JOB, steepReminderJobId(data.brewLogId), data, delayMs);
 }
 
-// A roast's rest reminder: replaces one still waiting, so an edited roast
-// reminds on its new ready day.
-export async function enqueueRestReminder(data: RestReminderJobData, delayMs: number): Promise<void> {
-  await cancelRestReminder(data.roastId);
-  await enqueueReminder(REST_REMINDER_JOB, restReminderJobId(data.roastId), data, delayMs);
-}
-// A deleted roast, or one that's no longer resting.
-export function cancelRestReminder(roastId: string): Promise<void> {
-  return withTimeout(() => removeWaiting(restReminderJobId(roastId)));
-}
-async function removeWaiting(jobId: string): Promise<void> {
-  const job = await reminderQueue.getJob(jobId);
-  if (job && (await job.isDelayed())) await job.remove();
-}
 // Sent right away; each crossing below the threshold is its own job.
 export function enqueueGreenLow(data: GreenLowJobData): Promise<void> {
   return enqueueReminder(GREEN_LOW_JOB, undefined, data, 0);
 }
 
-type ReminderJobData = RateReminderJobData | SteepReminderJobData | RestReminderJobData | GreenLowJobData | RecapTickJobData;
+type ReminderJobData = RateReminderJobData | SteepReminderJobData | GreenLowJobData | RecapTickJobData | BeanRestTickJobData;
 async function enqueueReminder(name: string, jobId: string | undefined, data: ReminderJobData, delayMs: number): Promise<void> {
   await withTimeout(() =>
     reminderQueue.add(name, data, {
@@ -332,6 +319,12 @@ export async function enqueueRecapSummary(recapId: string): Promise<void> {
 export async function syncRecapSchedule(): Promise<void> {
   await withTimeout(() =>
     reminderQueue.upsertJobScheduler(RECAP_TICK_SCHEDULER, { pattern: RECAP_TICK_PATTERN }, { name: RECAP_TICK_JOB, data: {}, opts: { removeOnComplete: true, removeOnFail: 20 } })
+  );
+}
+// Resting beans' reminders (docs/api/notifications.md §1b): the same kind of tick.
+export async function syncBeanRestSchedule(): Promise<void> {
+  await withTimeout(() =>
+    reminderQueue.upsertJobScheduler(BEAN_REST_TICK_SCHEDULER, { pattern: BEAN_REST_TICK_PATTERN }, { name: BEAN_REST_TICK_JOB, data: {}, opts: { removeOnComplete: true, removeOnFail: 20 } })
   );
 }
 

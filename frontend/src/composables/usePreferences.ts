@@ -19,6 +19,8 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   startDelays: {},
   steepReminders: true,
   restReminders: true,
+  restReminderRepeatDays: null,
+  restingInBrewPickerDefault: true,
   greenStockAlerts: true,
   recaps: true,
   recapPeriods: 'both',

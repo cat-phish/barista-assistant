@@ -306,6 +306,14 @@ export const beans = mysqlTable("beans", {
   // Archived beans (docs/api/beans.md §4) leave the brew picker and the public
   // menu; past brews keep them. null = active.
   archivedAt: timestamp("archived_at"),
+  // Resting (docs/api/beans.md §4, "Resting"): aging before it's ready, ready
+  // on restingUntil (YYYY-MM-DD); null = not resting. A frozen bean is never
+  // resting. restingBy (who set it) gets the reminders; restLastRemindedOn is
+  // the local day the last one went, cleared when the rest changes.
+  restingUntil: date("resting_until", { mode: "string" }),
+  restInBrewPicker: boolean("rest_in_brew_picker").default(false).notNull(),
+  restingBy: varchar("resting_by", { length: 36 }).references((): AnyMySqlColumn => users.id, { onDelete: "set null" }),
+  restLastRemindedOn: date("rest_last_reminded_on", { mode: "string" }),
   createdAt: timestamp("created_at").defaultNow().notNull(), // "date added"
 });
 
@@ -600,7 +608,6 @@ export const roasts = mysqlTable(
     dropTempC: decimal("drop_temp_c", { precision: 4, scale: 1, mode: "number" }),
     firstCrackSec: int("first_crack_sec"), // from charge; development time = totalSec - firstCrackSec
     totalSec: int("total_sec"), // charge to drop
-    restDays: int("rest_days").notNull(), // ready on the local roast date + restDays
     notes: text("notes"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },

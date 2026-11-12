@@ -33,7 +33,7 @@ const restFor = (type: RoastType | '') => settings.value.restDays[type || 'omni'
 const form = ref(roastForm(temperatureUnit.value, undefined, { restDays: restFor('') }));
 // A roast whose green coffee was deleted can still be edited without one.
 const parsed = computed(() =>
-  parseRoastForm(form.value, { unit: temperatureUnit.value, scale: roastScale.value, greenOptional: editing.value && !!saved.value && !saved.value.greenCoffeeId }),
+  parseRoastForm(form.value, { unit: temperatureUnit.value, scale: roastScale.value, greenOptional: editing.value && !!saved.value && !saved.value.greenCoffeeId, creating: !editing.value }),
 );
 const errors = computed(() => parsed.value.errors);
 const saved = ref<Roast | null>(null);
@@ -121,9 +121,8 @@ async function save(): Promise<void> {
   error.value = '';
   try {
     const { greenCoffeeId, ...rest } = values;
-    const { roast, restReminder } = props.id ? await roastsApi.update(ws, props.id, greenCoffeeId ? values : rest) : await roastsApi.create(ws, values);
-    // The roast page says whether the rest reminder was queued.
-    await router.push({ name: 'roast', params: { id: roast.id }, state: restReminder ? { restReminder } : {} });
+    const { roast } = props.id ? await roastsApi.update(ws, props.id, greenCoffeeId ? values : rest) : await roastsApi.create(ws, values);
+    await router.push({ name: 'roast', params: { id: roast.id } });
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -227,7 +226,7 @@ async function save(): Promise<void> {
         </template>
       </section>
 
-      <section v-if="show('roast.roastType') || show('roast.roastLevel') || show('roast.restDays')" class="card stack" aria-labelledby="roast-result">
+      <section v-if="show('roast.roastType') || show('roast.roastLevel') || (!editing && show('roast.restDays'))" class="card stack" aria-labelledby="roast-result">
         <h2 id="roast-result">The roast</h2>
         <div class="form-row">
           <div v-if="show('roast.roastType')" class="field">
@@ -254,12 +253,19 @@ async function save(): Promise<void> {
             </div>
           </template>
         </div>
-        <div v-if="show('roast.restDays')" class="field short">
-          <label for="roast-rest">Rest (days)</label>
-          <input id="roast-rest" v-model="form.restDays" inputmode="numeric" aria-describedby="roast-rest-hint" :aria-invalid="submitted && !!errors.restDays" @input="restTouched = true" />
-          <span id="roast-rest-hint" class="muted small">Before it's ready to brew. Defaults per roast type are in Settings → Defaults.</span>
-          <span v-if="submitted && errors.restDays" class="field-error">{{ errors.restDays }}</span>
-        </div>
+        <!-- A new roast's bean rests in Beans → Resting (docs/api/roasts.md §4f); after that the rest is the bean's. -->
+        <template v-if="!editing && show('roast.restDays')">
+          <label class="checkbox">
+            <input v-model="form.addActive" type="checkbox" />
+            Add to Beans as active (skip resting)
+          </label>
+          <div v-if="!form.addActive" class="field short">
+            <label for="roast-rest">Rest (days)</label>
+            <input id="roast-rest" v-model="form.restDays" inputmode="numeric" aria-describedby="roast-rest-hint" :aria-invalid="submitted && !!errors.restDays" @input="restTouched = true" />
+            <span id="roast-rest-hint" class="muted small">Its bean waits in Beans → Resting until then. Defaults per roast type are in Settings → Defaults.</span>
+            <span v-if="submitted && errors.restDays" class="field-error">{{ errors.restDays }}</span>
+          </div>
+        </template>
       </section>
 
       <section v-if="show('roast.notes')" class="card stack">
