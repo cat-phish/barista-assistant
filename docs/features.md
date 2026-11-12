@@ -49,6 +49,9 @@ work is in `roadmap.md`.
   ingredients, a brew's bean). An import previews what's new and what's
   already here by name, and either uses what's here or adds copies
   ("House V60 (2)"); the same brew is never imported twice. Owners only.
+- **Cut-off table text:** list tables keep each cell to one line. Hover a
+  cell that's cut off for its full text; tap a row (on a phone too) and
+  its cells show in full while it's open.
 - **Spreadsheets (CSV):** the journal (one row per brew, names instead of
   IDs, with the worked-out ratio and extraction) or the beans, from
   Settings → Data. Owners only.
