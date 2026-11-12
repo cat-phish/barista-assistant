@@ -5,13 +5,16 @@
 // spelled differently (while typing too, unless the list already offers it).
 // The input's own attributes (maxlength, placeholder, aria-*, listeners) pass
 // through. pick: a suggestion was chosen (NamesInput adds it to its list).
+// empty: what to offer before anything is typed (the website field: the
+// roaster's site).
 import { computed, ref } from 'vue';
 import LabelHint from './LabelHint.vue';
 import { closeMatch, rankNames } from '../lib/nameSuggest';
 
 defineOptions({ inheritAttrs: false });
-const props = withDefaults(defineProps<{ id: string; names: readonly string[]; prefer?: readonly string[]; hint?: boolean }>(), {
+const props = withDefaults(defineProps<{ id: string; names: readonly string[]; prefer?: readonly string[]; empty?: readonly string[]; hint?: boolean }>(), {
   prefer: () => [],
+  empty: () => [],
   hint: true,
 });
 const model = defineModel<string>({ required: true });
@@ -22,7 +25,7 @@ const dismissed = ref(false); // Escape: closed until the next keystroke
 const active = ref(-1);
 const listId = computed(() => `${props.id}-names`);
 
-const options = computed(() => rankNames(model.value, props.names, { prefer: props.prefer }));
+const options = computed(() => (model.value.trim() ? rankNames(model.value, props.names, { prefer: props.prefer }) : [...props.empty]));
 const open = computed(() => focused.value && !dismissed.value && options.value.length > 0);
 const close = computed(() => {
   const match = props.hint ? closeMatch(model.value, props.names) : null;
