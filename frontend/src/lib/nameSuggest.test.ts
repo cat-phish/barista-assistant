@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { closeMatch, distinctNames, foldName, lastBag, normalizeName, rankNames } from './nameSuggest';
+import { closeMatch, distinctNames, foldName, lastBag, normalizeName, rankNames, websiteSuggestions } from './nameSuggest';
 
 describe('normalizeName', () => {
   it('folds case, accents and punctuation', () => {
@@ -80,5 +80,32 @@ describe('lastBag', () => {
   it('is null when the coffee is new or a name is empty', () => {
     expect(lastBag(beans, 'Onyx', 'Southern Weather')).toBeNull();
     expect(lastBag(beans, '', 'Geometry')).toBeNull();
+  });
+});
+
+describe('websiteSuggestions', () => {
+  const beans = [
+    { roasterName: 'Onyx Coffee Lab', website: 'https://onyxcoffeelab.com/products/geometry' },
+    { roasterName: 'Onyx', website: 'https://onyxcoffeelab.com/products/monarch' },
+    { roasterName: 'Sey', website: 'https://www.seycoffee.com/x' },
+    { roasterName: 'Sey', website: null },
+    { roasterName: 'Odd', website: 'not a url' },
+  ];
+  it('offers each address and its home page once', () => {
+    expect(websiteSuggestions(beans, '').names).toEqual([
+      'https://onyxcoffeelab.com/',
+      'https://onyxcoffeelab.com/products/geometry',
+      'https://onyxcoffeelab.com/products/monarch',
+      'https://www.seycoffee.com/',
+      'https://www.seycoffee.com/x',
+      'not a url',
+    ]);
+  });
+  it("puts the roaster's first, and its home page when nothing is typed", () => {
+    const s = websiteSuggestions(beans, 'Onyx Coffee');
+    expect(s.empty).toEqual(['https://onyxcoffeelab.com/']);
+    expect(s.prefer).toContain('https://onyxcoffeelab.com/products/monarch');
+    expect(rankNames('https://', s.names, { prefer: s.prefer })[0]).toBe('https://onyxcoffeelab.com/');
+    expect(websiteSuggestions(beans, '').empty).toEqual([]);
   });
 });

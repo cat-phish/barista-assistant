@@ -78,7 +78,10 @@ work is in `roadmap.md`.
   differently from one you have ("Proud Mary" for "Proud Mary Coffee
   Roasters" or the other way round, a typo, extra words) gets "You have:
   X · Use", as you type. A new bean of a coffee
-  you've had offers **Start from your last bag**, like Duplicate.
+  you've had offers **Start from your last bag**, like Duplicate. The
+  website field suggests the web addresses your beans have and their home
+  pages, the roaster's first; with nothing typed it offers the roaster's
+  site.
 - **Freezing:** freeze/thaw periods pause the bean's roast age, so "days off
   roast" stays meaningful for frozen coffee.
 - **Photos:** up to 6 per bean (the bag, the label), taken with the phone's

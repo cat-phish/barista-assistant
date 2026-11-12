@@ -137,3 +137,35 @@ export function lastBag<B extends { roasterName: string; beanName: string; roast
     .filter((b) => normalizeName(b.roasterName) === r && foldName(b.beanName) === c)
     .reduce<B | null>((latest, b) => (!latest || when(b) > when(latest) ? b : latest), null);
 }
+
+// The bean form's website suggestions: every web address the workspace's
+// beans have, plus each one's home page (bean pages differ, the roaster's
+// site doesn't), and the roaster's own (normalizeName) first. With nothing
+// typed yet, the roaster's home pages, for one tap.
+export interface WebsiteSuggestions {
+  names: string[];
+  prefer: string[];
+  empty: string[];
+}
+function homePage(url: string): string | null {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'http:' || u.protocol === 'https:' ? `${u.origin}/` : null;
+  } catch {
+    return null;
+  }
+}
+export function websiteSuggestions(
+  beans: readonly { roasterName: string; website: string | null }[],
+  roaster: string,
+): WebsiteSuggestions {
+  const withHomes = (urls: string[]): string[] => urls.flatMap((url) => [url, homePage(url)]).filter((u): u is string => !!u);
+  const urls = beans.map((b) => b.website?.trim() ?? '').filter(Boolean);
+  const r = normalizeName(roaster);
+  const own = r ? beans.filter((b) => normalizeName(b.roasterName) === r).map((b) => b.website?.trim() ?? '').filter(Boolean) : [];
+  return {
+    names: distinctNames(withHomes(urls)),
+    prefer: distinctNames(withHomes(own)),
+    empty: distinctNames(own.map(homePage).filter((u): u is string => !!u)),
+  };
+}

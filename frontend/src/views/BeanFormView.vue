@@ -27,7 +27,7 @@ import { ROAST_LEVELS } from '../lib/scale';
 import { LABEL_FIELD_KEYS, labelFill, lookUpFields, pageLabel, type LabelForm, type LabelSuggestion, type TextKey } from '../lib/labelFill';
 import type { FieldKey } from '../lib/fields';
 import { undoChanges, type FormSnapshot } from '../lib/undoFill';
-import { distinctNames, lastBag, normalizeName } from '../lib/nameSuggest';
+import { distinctNames, lastBag, normalizeName, websiteSuggestions } from '../lib/nameSuggest';
 import { COMMON_VARIETIES } from '../lib/varieties';
 import {
   BLEND_TYPES,
@@ -98,13 +98,15 @@ const photos = ref<BeanPhoto[]>([]);
 const photoPicker = ref<InstanceType<typeof BeanPhotos> | null>(null);
 
 // The workspace's other beans, archived ones too: the names the roaster,
-// coffee, producer and supplier fields suggest, and the last bag of a coffee
-// you've had before.
+// coffee, producer and supplier fields suggest, the websites, and the last
+// bag of a coffee you've had before.
 const otherBeans = ref<Bean[]>([]);
 const roasterNames = computed(() => distinctNames(otherBeans.value.map((b) => b.roasterName)));
 const coffeeNames = computed(() => distinctNames(otherBeans.value.map((b) => b.beanName)));
 const producerNames = computed(() => distinctNames(otherBeans.value.map((b) => b.producer)));
 const supplierNames = computed(() => distinctNames(otherBeans.value.map((b) => b.greenSupplier)));
+// Web addresses already used, this roaster's first (its site when empty).
+const websites = computed(() => websiteSuggestions(otherBeans.value, roasterName.value));
 // The workspace's spellings first, so they win over the built-in ones.
 const varietyNames = computed(() => distinctNames([...otherBeans.value.flatMap((b) => b.varieties ?? []), ...COMMON_VARIETIES]));
 const SPECIES_KEYS = Object.keys(COFFEE_SPECIES) as CoffeeSpecies[];
@@ -878,7 +880,7 @@ async function save(): Promise<void> {
         </div>
         <div v-if="show('bean.website')" class="field">
           <label for="website">Website</label>
-          <input id="website" v-model="website" type="url" inputmode="url" maxlength="500" placeholder="https://" :aria-invalid="submitted && !!fieldErrors.website" />
+          <NameInput id="website" v-model="website" :names="websites.names" :prefer="websites.prefer" :empty="websites.empty" :hint="false" type="url" inputmode="url" maxlength="500" placeholder="https://" :aria-invalid="submitted && !!fieldErrors.website" />
           <LabelHint v-if="suggestions.website" :text="suggestions.website.text" :source="suggestions.website.source" @use="useSuggestion('website')" />
           <span v-if="submitted && fieldErrors.website" class="field-error">{{ fieldErrors.website }}</span>
         </div>
