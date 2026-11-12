@@ -103,7 +103,7 @@ import { checkStoredPhoto, removeWorkspacePhotos, writePhotoFile } from "./photo
 export const BACKUP_FORMAT = "barista-backup";
 // Bumped when a backup made before the change can't be restored as is;
 // UPGRADES then turns an older file into the current shape.
-export const BACKUP_VERSION = 5;
+export const BACKUP_VERSION = 6;
 const UPGRADES: Record<number, (file: BackupFile) => BackupFile> = {
   // 2: a prep tool's one methodKind (null = every method) became a list,
   // methodKinds ([] = every method), plus brewers (prep_tool_brewers).
@@ -173,6 +173,24 @@ const UPGRADES: Record<number, (file: BackupFile) => BackupFile> = {
               if (!isObject(r)) return r;
               const { methodKind, ...row } = r;
               return { ...row, methodKinds: methodKind == null ? [] : [methodKind] };
+            }),
+          }
+        : {}),
+    },
+  }),
+  // 6: resting moved from roasts to beans (migration 0121): a roast's
+  // restDays is gone; the beans a file has rest or not as they were saved.
+  5: (file) => ({
+    ...file,
+    version: 6,
+    tables: {
+      ...file.tables,
+      ...(Array.isArray(file.tables?.roasts)
+        ? {
+            roasts: file.tables.roasts.map((r) => {
+              if (!isObject(r)) return r;
+              const { restDays: _restDays, ...row } = r;
+              return row;
             }),
           }
         : {}),
@@ -708,6 +726,8 @@ async function insertBackup(
         if (t.hasId) out.id = map.get(row.id as string);
         if ("workspaceId" in t.columns) out.workspaceId = workspaceId;
         for (const key of t.userColumns) out[key] = target.ownerId;
+        // Only a resting bean has someone to remind (docs/api/beans.md §4, "Resting").
+        if (t.table === beans && out.restingUntil == null) out.restingBy = null;
         for (const [key, refTable] of Object.entries(t.refs)) {
           const old = row[key] as string | null | undefined;
           if (old == null) continue;

@@ -21,8 +21,7 @@ import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
-import { cancelRestReminder } from "../queue.js";
-import { alertGreenLow, remindWhenRested, type ReminderOutcome } from "../reminders.js";
+import { alertGreenLow, preferencesOf } from "../reminders.js";
 import { decimalSchema, optionalText, updateSchema } from "../validation.js";
 import { resolveRoastLevel } from "./beans.js";
 
@@ -30,12 +29,10 @@ import { resolveRoastLevel } from "./beans.js";
 export type RoastSummary = Omit<Roast, "workspaceId"> & {
   greenCoffee: Pick<GreenCoffee, "id" | "name" | "weightLeftGrams" | "lowStockGrams"> | null;
   machine: { id: string; name: string } | null;
-  bean: { id: string; inventoryWeightGrams: number; archived: boolean } | null;
+  bean: { id: string; inventoryWeightGrams: number; archived: boolean; restingUntil: string | null } | null;
 };
-// A saved roast, and its rest reminder when it's still resting (§1b).
 interface SavedRoast {
   roast: RoastSummary;
-  restReminder?: ReminderOutcome;
 }
 
 interface WorkspaceParams {
@@ -71,13 +68,14 @@ const roastFields = {
   dropTempC: temp,
   firstCrackSec: seconds,
   totalSec: seconds,
-  restDays: z.number().int().min(0).max(MAX_REST_DAYS),
   notes: optionalText(2000),
 };
+// restDays is create-only: how long the bean it makes rests (docs/api/roasts.md
+// §4f); 0 adds the bean as active. After that the rest is the bean's (§4).
 const createSchema = z.object({
   ...roastFields,
   roastedAt: roastFields.roastedAt.optional(),
-  restDays: roastFields.restDays.optional(),
+  restDays: z.number().int().min(0).max(MAX_REST_DAYS).optional(),
 });
 const updateRoastSchema = updateSchema(roastFields);
 
@@ -170,7 +168,7 @@ async function loadRoasts(where: SQL | undefined): Promise<RoastSummary[]> {
       roast: roasts,
       green: { name: greenCoffees.name, weightLeftGrams: greenCoffees.weightLeftGrams, lowStockGrams: greenCoffees.lowStockGrams },
       machineName: roastingMachines.name,
-      bean: { inventoryWeightGrams: beans.inventoryWeightGrams, archivedAt: beans.archivedAt },
+      bean: { inventoryWeightGrams: beans.inventoryWeightGrams, archivedAt: beans.archivedAt, restingUntil: beans.restingUntil },
     })
     .from(roasts)
     .leftJoin(greenCoffees, eq(roasts.greenCoffeeId, greenCoffees.id))
@@ -182,12 +180,12 @@ async function loadRoasts(where: SQL | undefined): Promise<RoastSummary[]> {
     ...r,
     greenCoffee: r.greenCoffeeId && green ? { id: r.greenCoffeeId, ...green } : null,
     machine: r.machineId && machineName !== null ? { id: r.machineId, name: machineName } : null,
-    bean: r.beanId && bean ? { id: r.beanId, inventoryWeightGrams: bean.inventoryWeightGrams, archived: bean.archivedAt !== null } : null,
+    bean: r.beanId && bean ? { id: r.beanId, inventoryWeightGrams: bean.inventoryWeightGrams, archived: bean.archivedAt !== null, restingUntil: bean.restingUntil } : null,
   }));
 }
 const inWorkspace = (p: RoastParams) => and(eq(roasts.id, p.roastId), eq(roasts.workspaceId, p.workspaceId));
 
-type Outcome = { status: "ok"; id: string; lowGreenId: string | null; restChanged: boolean } | { status: "not_found" } | { status: "invalid"; error: string };
+type Outcome = { status: "ok"; id: string; lowGreenId: string | null } | { status: "not_found" } | { status: "invalid"; error: string };
 const invalid = (error: string): Outcome => ({ status: "invalid", error });
 
 function send(res: Response, outcome: Exclude<Outcome, { status: "ok" }>): void {
@@ -195,13 +193,22 @@ function send(res: Response, outcome: Exclude<Outcome, { status: "ok" }>): void 
   else sendError(res, 400, outcome.error);
 }
 
-// After a save (docs/api/notifications.md §1b): the rest reminder, for whoever
-// logged the roast, when its ready day may have moved; and a low-stock notice
-// for whoever saved it, when it took the green coffee below its threshold.
+// After a save (docs/api/notifications.md §1b): a low-stock notice for
+// whoever saved it, when it took the green coffee below its threshold.
 async function afterSave(userId: string, roast: RoastSummary, outcome: Extract<Outcome, { status: "ok" }>): Promise<SavedRoast> {
   if (outcome.lowGreenId) await alertGreenLow(userId, outcome.lowGreenId);
-  const restReminder = outcome.restChanged ? await remindWhenRested(roast.userId, roast) : undefined;
-  return { roast, ...(restReminder ? { restReminder } : {}) };
+  return { roast };
+}
+
+// The day a roast's bean is ready (docs/api/roasts.md §4f): its local roast
+// date + restDays. Null when that's not after the local today, so the bean
+// is active straight away.
+export function restingUntilFor(roastedAt: Date, offsetMinutes: number | null, restDays: number, now = new Date()): string | null {
+  if (restDays <= 0) return null;
+  const local = (d: Date) => new Date(d.getTime() + (offsetMinutes ?? 0) * 60_000);
+  const day = local(roastedAt);
+  const ready = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate() + restDays)).toISOString().slice(0, 10);
+  return ready > local(now).toISOString().slice(0, 10) ? ready : null;
 }
 
 // Mounted at /api/workspaces/:workspaceId/roasts
@@ -254,10 +261,11 @@ roastsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Saved
       dropTempC: body.dropTempC ?? null,
       firstCrackSec: body.firstCrackSec ?? null,
       totalSec: body.totalSec ?? null,
-      // An unknown roast type rests like an omni roast.
-      restDays: body.restDays ?? settings.restDays[body.roastType ?? "omni"],
       notes: body.notes ?? null,
     };
+    // An unknown roast type rests like an omni roast.
+    const { restDays: _rest, ...stored } = roast;
+    const restingUntil = restingUntilFor(roast.roastedAt, roast.utcOffsetMinutes, body.restDays ?? settings.restDays[body.roastType ?? "omni"]);
     const issue = roastIssue(roast);
     if (issue) return invalid(issue);
 
@@ -269,12 +277,13 @@ roastsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Saved
       ...fromGreen(green, roast.greenGrams),
       ...fromRoast(roast),
       inventoryWeightGrams: roast.roastedGrams,
+      ...(restingUntil ? { restingUntil, restingBy: userId, restInBrewPicker: (await preferencesOf(userId))?.restingInBrewPickerDefault ?? true } : {}),
     });
     const id = randomUUID();
     const greenStockTakenGrams = await takeStock(tx, green, roast.greenGrams);
-    await tx.insert(roasts).values({ id, workspaceId, userId, beanId, greenStockTakenGrams, ...roast });
+    await tx.insert(roasts).values({ id, workspaceId, userId, beanId, greenStockTakenGrams, ...stored });
     const low = wentLow(green.lowStockGrams, green.weightLeftGrams, green.weightLeftGrams - greenStockTakenGrams);
-    return { status: "ok", id, lowGreenId: low ? green.id : null, restChanged: true };
+    return { status: "ok", id, lowGreenId: low ? green.id : null };
   });
   if (outcome.status !== "ok") {
     send(res, outcome);
@@ -340,8 +349,7 @@ roastsRouter.patch("/:roastId", async (req: Request<RoastParams>, res: Response<
         })
         .where(eq(beans.id, old.beanId));
     }
-    const restChanged = next.roastedAt.getTime() !== old.roastedAt.getTime() || next.utcOffsetMinutes !== old.utcOffsetMinutes || next.restDays !== old.restDays;
-    return { status: "ok", id: old.id, lowGreenId: low && green ? green.id : null, restChanged };
+    return { status: "ok", id: old.id, lowGreenId: low && green ? green.id : null };
   });
   if (outcome.status !== "ok") {
     send(res, outcome);
@@ -366,6 +374,5 @@ roastsRouter.delete("/:roastId", async (req: Request<RoastParams>, res: Response
     sendError(res, 404, "Roast not found");
     return;
   }
-  await cancelRestReminder(req.params.roastId).catch(() => undefined); // the worker skips deleted roasts anyway
   res.status(204).end();
 });

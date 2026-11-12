@@ -851,9 +851,8 @@ Home roasting). Paused here; these are what's next.
 **Open questions (home roasting):**
 - Should deleting a roast get the "I understand" checkbox (CLAUDE.md
   rule 7)? It uses the plain confirm dialog today.
-- Should other members be able to get a roast's rest reminder, not only
-  whoever logged it?
-- Should freezing a home-roasted bean pause or extend its rest?
+- Should other members be able to get a resting bean's reminder, not only
+  whoever set it resting (roadmap: Resting beans)?
 
 ### 28. Live roast timer
 

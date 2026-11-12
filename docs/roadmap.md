@@ -1857,15 +1857,9 @@ Home roasting section.
   deleting it gives the green weight back and keeps the bean. Times are
   typed in; a live timer comes later.
 - **Rest:** a workspace default per roast type, which each roast starts from
-  and can change. A roast is ready on its local roast date + its rest days.
-  The **Resting** tab lists roasts still resting, then ready ones whose bean
-  is still in use (there, not archived, some left). The bean shows
-  **Resting until …** in Beans and the brew picker (`roastReadyOn`); it can
-  still be brewed.
-- **Rest reminder** (`rest-done`, preference `restReminders`): to whoever
-  logged the roast, at 8:00 local on the ready day (chosen over the exact
-  rest time, since "ready" is a calendar day). An edit to its date or rest
-  moves it; deleting the roast drops it.
+  and can change. Since "Resting beans" (below) the rest is the bean's: a
+  new roast adds its bean to Beans → Resting, and Roast mode's Resting tab
+  and the one-off `rest-done` reminder are gone.
 - **Low green stock** (`green-low`, preference `greenStockAlerts`): a push to
   whoever saved the roast, once each time a roast takes a green coffee
   below its threshold, plus a notice on the roast's page and the Green
@@ -2954,3 +2948,31 @@ couldn't go on the menu. Contract: `api/menu.md` §7b "Other items",
 - **Left out for now:** a photo, and turning one into a real drink (backlog 23).
 - **Backups and imports:** in `BACKUP_TABLES` above the menu, match key by
   name.
+
+## Resting beans (built)
+
+Branch `bean-resting`, migration 0121. Resting was a home-roasting idea (a
+roast's `restDays`, Roast mode's Resting tab, a one-off reminder); any bag
+can need to age before it's ready. Contract: `api/beans.md` §4 "Resting",
+`api/notifications.md` §1b "Resting beans", `api/roasts.md` §4f.
+
+- **A third state:** Beans has **Active | Resting | Archived** tabs. A
+  resting bean has `restingUntil` (its ready day) and stays resting past it
+  until someone makes it active; the Resting tab sorts by ready day.
+- **Resting is aging:** freezing stops aging, so a frozen bean is always
+  active. **Make active…** asks **Make active** or **Freeze and make
+  active**; freezing a resting bean ends its rest; a frozen one can't rest.
+- **Brew picker:** a resting bean is offered only with its **Show in the
+  brew picker while resting** box (`restInBrewPicker`), which starts from
+  the person's `restingInBrewPickerDefault` (Settings → Preferences).
+- **Reminders:** to whoever set it resting (`restingBy`), from 8:00 local
+  on its ready day, then every `restReminderRepeatDays` (a per-person
+  setting for all beans, Settings → Notifications; none = once). A tick
+  every 15 minutes (`bean-rest-tick`), like recaps; one message per person
+  and workspace.
+- **Home roasts:** a new roast adds its bean resting for its rest days, or
+  active with **Add to Beans as active**. `restDays` is create-only and no
+  longer stored; editing a roast leaves the bean's rest alone. The
+  migration moved roasts still resting onto their beans.
+- **Backups:** version 6 drops `roasts.restDays` from older files; the
+  bean columns ride along (a restored resting bean reminds the restorer).

@@ -105,6 +105,8 @@ export const preferencesSchema = z
     }).partial().strict(),
     steepReminders: z.boolean(),
     restReminders: z.boolean(),
+    restReminderRepeatDays: z.number().int().min(1).max(60).nullable(),
+    restingInBrewPickerDefault: z.boolean(),
     greenStockAlerts: z.boolean(),
     // Recaps (docs/api/recaps.md §11c).
     recaps: z.boolean(),

@@ -229,19 +229,17 @@ export function steepReminderJobId(brewLogId: string): string {
   return `steep-${brewLogId}`;
 }
 
-// Rest reminders (docs/api/notifications.md §1b): the morning a home roast
-// is ready to brew, on the same queue. Moved when the roast's date or rest
-// changes; skipped if it's been deleted or isn't ready by then.
-export const REST_REMINDER_JOB = "rest-done";
-
-export interface RestReminderJobData {
-  roastId: string;
-  userId: string;
-}
-
-export function restReminderJobId(roastId: string): string {
-  return `rest-${roastId}`;
-}
+// Resting beans (docs/api/notifications.md §1b, "Resting beans"): a job
+// scheduler on the reminder queue runs the tick every quarter hour; it tells
+// whoever set a bean resting, the morning it's ready, and again every
+// restReminderRepeatDays until it's made active.
+export const BEAN_REST_TICK_JOB = "bean-rest-tick";
+export const BEAN_REST_TICK_SCHEDULER = "bean-rest-tick";
+export const BEAN_REST_TICK_PATTERN = "*/15 * * * *";
+export type BeanRestTickJobData = Record<string, never>;
+// What roasts' one-off rest reminders were called before resting moved to
+// beans (migration 0121); any still waiting in Redis are skipped.
+export const LEGACY_REST_REMINDER_JOB = "rest-done";
 
 // Low green stock (docs/api/notifications.md §1b): sent right away when a
 // roast takes a green coffee below its lowStockGrams.

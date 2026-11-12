@@ -44,7 +44,7 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
 ```json
 {
   "format": "barista-backup",
-  "version": 5,
+  "version": 6,
   "exportedAt": "2026-10-23T08:00:00.000Z",
   "workspace": { "name": "Home bar", "slug": "home-bar", "settings": { "roastScale": "levels" }, "menuTitle": null, "menuCurrency": "USD", "menuShowMethod": true, "menuShowIngredients": false, "menuAccentColor": "#8a4b2a", "menuTagline": null, "menuLogoIds": [], "isPublicMenuEnabled": true, "flavorLexicon": null },
   "tables": {
@@ -107,6 +107,9 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
     brewers it's offered for (`brew_problem_brewers`), as prep items did
     in 2 (`brew-problems.md` §6b). A version 4 file restores with
     `[methodKind]` or `[]`, and no brewers.
+  - **6:** resting moved from roasts to beans (`beans.md` §4, "Resting"):
+    a roast's `restDays` is gone. A version 5 file's `roasts` lose it; its
+    beans restore active.
 
 **Bean photos** (`bean-photos.md` §4c): `bean_photos` rows go only with
 their files, so a JSON file has none (`BackupOptions.photos` in

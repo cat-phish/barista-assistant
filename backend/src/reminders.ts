@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { DEFAULT_PREFERENCES, notificationChannels, pushSubscriptions, users, withDefaults } from "@barista/shared/schema";
 import { webPushSettings } from "./config.js";
 import { db } from "./db.js";
-import { cancelRestReminder, enqueueGreenLow, enqueueRateReminder, enqueueRestReminder, enqueueSteepReminder } from "./queue.js";
+import { enqueueGreenLow, enqueueRateReminder, enqueueSteepReminder } from "./queue.js";
 
 // Rate later (docs/api/notifications.md §1b): the delay in minutes if the
 // person has reminders on and at least one enabled channel, else null.
@@ -14,7 +14,7 @@ export async function reminderDelayMinutes(userId: string): Promise<number | nul
   return (await hasEnabledChannel(userId)) ? prefs.rateReminderMinutes : null;
 }
 
-async function preferencesOf(userId: string) {
+export async function preferencesOf(userId: string) {
   const [user] = await db.select({ preferences: users.preferences }).from(users).where(eq(users.id, userId));
   return user ? withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null) : null;
 }
@@ -66,47 +66,6 @@ export async function remindWhenSteeped(userId: string, brewLogId: string, steep
     return "queued";
   } catch (err) {
     console.error(`Steep reminder for ${brewLogId} not queued:`, err instanceof Error ? err.message : err);
-    return "unavailable";
-  }
-}
-
-const READY_HOUR = 8; // a rested roast's reminder goes out at 8:00 local time
-
-type Resting = { roastedAt: Date; utcOffsetMinutes: number | null; restDays: number };
-
-// The day a roast is ready (YYYY-MM-DD): its local roast date + its rest
-// days, UTC when the offset is unknown, as its bean's roast date
-// (docs/api/roasts.md §4f).
-export function restReadyOn(r: Resting): string {
-  const day = new Date(r.roastedAt.getTime() + (r.utcOffsetMinutes ?? 0) * 60_000);
-  return new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate() + r.restDays)).toISOString().slice(0, 10);
-}
-// The reminder's moment: 8:00 local time that day.
-export function restReadyAt(r: Resting): Date {
-  return new Date(Date.parse(`${restReadyOn(r)}T00:00:00Z`) + READY_HOUR * 3_600_000 - (r.utcOffsetMinutes ?? 0) * 60_000);
-}
-
-// A roast that's still resting: remind its roaster the morning it's ready
-// (docs/api/notifications.md §1b), replacing any reminder already waiting.
-// Undefined when it's ready already (any waiting reminder is dropped): past
-// 8:00 on its ready day, or no rest at all, so it was ready on its roast
-// date even when logged before 8:00. Off with rest reminders switched off or
-// no enabled channel.
-export async function remindWhenRested(userId: string | null, roast: Resting & { id: string }): Promise<ReminderOutcome | undefined> {
-  const delayMs = restReadyAt(roast).getTime() - Date.now();
-  try {
-    if (roast.restDays <= 0 || delayMs <= 0 || !userId) {
-      await cancelRestReminder(roast.id);
-      return undefined;
-    }
-    if (!(await preferencesOf(userId))?.restReminders || !(await hasEnabledChannel(userId))) {
-      await cancelRestReminder(roast.id);
-      return "off";
-    }
-    await enqueueRestReminder({ roastId: roast.id, userId }, delayMs);
-    return "queued";
-  } catch (err) {
-    console.error(`Rest reminder for ${roast.id} not queued:`, err instanceof Error ? err.message : err);
     return "unavailable";
   }
 }

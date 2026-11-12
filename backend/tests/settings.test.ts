@@ -122,7 +122,7 @@ describe("roast scale", () => {
 });
 
 describe("preferences", () => {
-  const defaults = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, steepReminders: true, restReminders: true, greenStockAlerts: true, recaps: true, recapPeriods: "both", weekStartsOn: 1, recapBanner: true, recapBannerDays: 3, recapNotify: true, recapNotifyTime: "08:00", timeZone: null, recapAi: "manual", recapSeen: {} };
+  const defaults = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, steepReminders: true, restReminders: true, restReminderRepeatDays: null, restingInBrewPickerDefault: true, greenStockAlerts: true, recaps: true, recapPeriods: "both", weekStartsOn: 1, recapBanner: true, recapBannerDays: 3, recapNotify: true, recapNotifyTime: "08:00", timeZone: null, recapAi: "manual", recapSeen: {} };
 
   it("come back on register and /me, defaults filled in", async () => {
     const user = await newUser();
@@ -140,7 +140,7 @@ describe("preferences", () => {
 
     expect((await a.agent.patch(path).send({ temperatureUnit: "f" })).body.preferences).toEqual({ ...defaults, temperatureUnit: "f" });
     const both = await a.agent.patch(path).send({ altitudeUnit: "ft", volumeUnit: "ml", showBothVolumes: true });
-    expect(both.body.preferences).toEqual({ volumeUnit: "ml", showBothVolumes: true, altitudeUnit: "ft", temperatureUnit: "f", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, steepReminders: true, restReminders: true, greenStockAlerts: true, recaps: true, recapPeriods: "both", weekStartsOn: 1, recapBanner: true, recapBannerDays: 3, recapNotify: true, recapNotifyTime: "08:00", timeZone: null, recapAi: "manual", recapSeen: {} });
+    expect(both.body.preferences).toEqual({ volumeUnit: "ml", showBothVolumes: true, altitudeUnit: "ft", temperatureUnit: "f", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, steepReminders: true, restReminders: true, restReminderRepeatDays: null, restingInBrewPickerDefault: true, greenStockAlerts: true, recaps: true, recapPeriods: "both", weekStartsOn: 1, recapBanner: true, recapBannerDays: 3, recapNotify: true, recapNotifyTime: "08:00", timeZone: null, recapAi: "manual", recapSeen: {} });
     expect((await a.agent.patch(path).send({ theme: "dark" })).body.preferences.theme).toBe("dark");
     expect((await a.agent.patch(path).send({ theme: "sepia" })).status).toBe(400);
 
@@ -167,6 +167,17 @@ describe("preferences", () => {
     await me.agent.patch(path).send({ temperatureUnit: "f" });
     expect((await me.agent.get("/api/auth/me")).body.user.preferences.startDelays).toEqual({ espresso: 0 });
     expect((await me.agent.patch(path).send({ startDelays: {} })).body.preferences.startDelays).toEqual({});
+  });
+
+  it("resting beans: the repeat (1–60 days or null) and the brew picker default (docs/api/auth.md §1)", async () => {
+    const me = await newUser();
+    const path = "/api/auth/me/preferences";
+    const set = await me.agent.patch(path).send({ restReminderRepeatDays: 3, restingInBrewPickerDefault: false });
+    expect(set.body.preferences).toEqual({ ...defaults, restReminderRepeatDays: 3, restingInBrewPickerDefault: false });
+    expect((await me.agent.patch(path).send({ restReminderRepeatDays: null })).body.preferences.restReminderRepeatDays).toBeNull();
+    for (const restReminderRepeatDays of [0, 61, 1.5, "3"]) {
+      expect((await me.agent.patch(path).send({ restReminderRepeatDays })).status, String(restReminderRepeatDays)).toBe(400);
+    }
   });
 
   it("recaps: switches, periods, week start, banner days, notify time, time zone, AI mode, seen (docs/api/recaps.md)", async () => {

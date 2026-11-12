@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GREEN_LOW_JOB, restReminderJobId } from "@barista/shared/jobs";
+import { GREEN_LOW_JOB } from "@barista/shared/jobs";
 import { reminderQueue } from "../src/queue.js";
 import { addMember, newUser, newWorkspace } from "./helpers.js";
 
@@ -46,7 +46,6 @@ describe("roasts", () => {
       batchNumber: "1",
       greenStockTakenGrams: 120,
       roastLevel: "medium", // city_plus
-      restDays: 5, // the workspace's for filter
       notes: "Even",
     });
     expect((await greenOf(guji)).weightLeftGrams).toBe(880);
@@ -74,11 +73,16 @@ describe("roasts", () => {
       priceAmount: 2.4, // 120 g of 1000 g for 20
       priceCurrency: "USD",
       batchNumber: "1",
+      restingUntil: null, // rested long ago
     });
+    expect(r).not.toHaveProperty("restDays");
 
     // The next one is batch 2; an unknown roast type rests like omni.
     const second = (await roast({ greenCoffeeId: guji, greenGrams: 100, roastedGrams: 85 })).body.roast;
-    expect(second).toMatchObject({ batchNumber: "2", restDays: 9, machine: null, roastType: null });
+    expect(second).toMatchObject({ batchNumber: "2", machine: null, roastType: null });
+    const today = new Date();
+    const in9 = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 9)).toISOString().slice(0, 10);
+    expect((await beanOf(second.beanId)).restingUntil).toBe(in9);
     expect((await (await newUser()).agent.get(`${base}/roasts`)).status).toBe(404); // not a member
   });
 
@@ -176,73 +180,38 @@ describe("resting roasts", () => {
   const lowJobs = async (greenCoffeeId: string) =>
     (await reminderQueue.getJobs(["waiting", "delayed"])).filter((j) => j.name === GREEN_LOW_JOB && (j.data as { greenCoffeeId?: string }).greenCoffeeId === greenCoffeeId);
 
-  it("queues the rest reminder for 8:00 local on the ready day, and moves or drops it with the roast", async () => {
+  it("adds its bean resting until the local roast date + restDays, or active with restDays 0", async () => {
     const { owner, base, green, roast, beanOf } = await setup();
-    await owner.agent.put(`${NOTIFY}/ntfy`).send({ config: { topic: "coffee" } });
-    const now = new Date();
-    const res = await roast({ greenCoffeeId: await green(), greenGrams: 100, roastedGrams: 85, roastType: "filter", roastedAt: now.toISOString(), utcOffsetMinutes: 0 });
-    expect(res.body.restReminder).toBe("queued");
-    const r = res.body.roast;
-    const readyOn = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 5)).toISOString().slice(0, 10);
-    // When it's due, to the second (the delay is counted from when it was queued).
-    const dueAt = (job: Awaited<ReturnType<typeof reminderQueue.getJob>>) => (job ? Math.round((job.timestamp + (job.opts.delay ?? 0)) / 1000) * 1000 : null);
-    let job = await reminderQueue.getJob(restReminderJobId(r.id));
-    expect(job?.name).toBe("rest-done");
-    expect(job?.data).toEqual({ roastId: r.id, userId: r.userId });
-    expect(dueAt(job)).toBe(Date.parse(`${readyOn}T08:00:00Z`));
-    expect((await beanOf(r.beanId)).roastReadyOn).toBe(readyOn);
-
-    // A longer rest, in UTC-7: moved to 8:00 there (15:00 UTC).
-    const moved = await owner.agent.patch(`${base}/roasts/${r.id}`).send({ restDays: 9, utcOffsetMinutes: -420, roastedAt: new Date(now.getTime() - 3_600_000).toISOString() });
-    expect(moved.body.restReminder).toBe("queued");
-    job = await reminderQueue.getJob(restReminderJobId(r.id));
-    const localDay = new Date(now.getTime() - 3_600_000 - 420 * 60_000);
-    const movedOn = new Date(Date.UTC(localDay.getUTCFullYear(), localDay.getUTCMonth(), localDay.getUTCDate() + 9)).toISOString().slice(0, 10);
-    expect(dueAt(job)).toBe(Date.parse(`${movedOn}T15:00:00Z`));
-    // Editing something else leaves it be.
-    expect((await owner.agent.patch(`${base}/roasts/${r.id}`).send({ notes: "Sweet" })).body).not.toHaveProperty("restReminder");
-
-    // No rest: ready now, no reminder.
-    const none = await owner.agent.patch(`${base}/roasts/${r.id}`).send({ restDays: 0 });
-    expect(none.body).not.toHaveProperty("restReminder");
-    expect(await reminderQueue.getJob(restReminderJobId(r.id))).toBeUndefined();
-
-    await owner.agent.patch(`${base}/roasts/${r.id}`).send({ restDays: 3 });
-    expect(await reminderQueue.getJob(restReminderJobId(r.id))).toBeDefined();
-    await owner.agent.delete(`${base}/roasts/${r.id}`);
-    expect(await reminderQueue.getJob(restReminderJobId(r.id))).toBeUndefined();
-  });
-
-  it("no rest is ready on the roast date, also when logged before 8:00 local", async () => {
-    const { owner, green, roast } = await setup();
-    await owner.agent.put(`${NOTIFY}/ntfy`).send({ config: { topic: "coffee" } });
-    // An offset that puts now at about 00:30 local, whatever the time in UTC.
-    const now = new Date();
-    let offset = 30 - (now.getUTCHours() * 60 + now.getUTCMinutes());
-    if (offset < -720) offset += 1440;
-    const res = await roast({ greenCoffeeId: await green(), greenGrams: 100, roastedGrams: 85, roastType: "filter", roastedAt: now.toISOString(), utcOffsetMinutes: offset, restDays: 0 });
-    expect(res.status).toBe(201);
-    expect(res.body).not.toHaveProperty("restReminder");
-    expect(await reminderQueue.getJob(restReminderJobId(res.body.roast.id))).toBeUndefined();
-  });
-
-  it("is off without a channel or with rest reminders off; an old roast is ready already", async () => {
-    const { owner, green, roast } = await setup();
     const guji = await green();
-    const fresh = { greenCoffeeId: guji, greenGrams: 100, roastedGrams: 85 };
-    expect((await roast(fresh)).body.restReminder).toBe("off");
-    await owner.agent.put(`${NOTIFY}/ntfy`).send({ config: { topic: "coffee" } });
-    await owner.agent.patch("/api/auth/me/preferences").send({ restReminders: false });
-    expect((await roast(fresh)).body.restReminder).toBe("off");
-    await owner.agent.patch("/api/auth/me/preferences").send({ restReminders: true });
-    expect((await roast({ ...fresh, roastedAt: "2026-01-02T08:00:00Z" })).body).not.toHaveProperty("restReminder");
+    const now = new Date();
+    const res = await roast({ greenCoffeeId: guji, greenGrams: 100, roastedGrams: 85, roastType: "filter", roastedAt: now.toISOString(), utcOffsetMinutes: -420 });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    expect(res.body).not.toHaveProperty("restReminder");
+    const localDay = new Date(now.getTime() - 420 * 60_000);
+    const readyOn = new Date(Date.UTC(localDay.getUTCFullYear(), localDay.getUTCMonth(), localDay.getUTCDate() + 5)).toISOString().slice(0, 10);
+    const bean = await beanOf(res.body.roast.beanId);
+    expect(bean).toMatchObject({ restingUntil: readyOn, restingBy: owner.id, restInBrewPicker: true, restLastRemindedOn: null });
+    expect(bean).not.toHaveProperty("roastReadyOn");
+    expect((await reminderQueue.getJobs(["delayed"])).filter((j) => j.name === "rest-done")).toEqual([]);
+
+    // Add as active; and the roaster's preference sets the brew picker box.
+    const active = (await roast({ greenCoffeeId: guji, greenGrams: 100, roastedGrams: 85, restDays: 0 })).body.roast;
+    expect((await beanOf(active.beanId)).restingUntil).toBeNull();
+    await owner.agent.patch("/api/auth/me/preferences").send({ restingInBrewPickerDefault: false });
+    const hidden = (await roast({ greenCoffeeId: guji, greenGrams: 100, roastedGrams: 85 })).body.roast;
+    expect(await beanOf(hidden.beanId)).toMatchObject({ restInBrewPicker: false });
+
+    // Editing the roast leaves the bean's rest alone; restDays is create-only.
+    expect((await owner.agent.patch(`${base}/roasts/${res.body.roast.id}`).send({ restDays: 2 })).status).toBe(400);
+    await owner.agent.patch(`${base}/roasts/${res.body.roast.id}`).send({ roastedAt: new Date(now.getTime() - 86_400_000).toISOString() });
+    expect((await beanOf(res.body.roast.beanId)).restingUntil).toBe(readyOn);
   });
 
   it("says what its bean and green coffee have left", async () => {
     const { owner, base, green, roast } = await setup();
     const r = (await roast({ greenCoffeeId: await green({ lowStockGrams: 500 }), greenGrams: 100, roastedGrams: 85 })).body.roast;
     expect(r.greenCoffee).toMatchObject({ weightLeftGrams: 900, lowStockGrams: 500 });
-    expect(r.bean).toEqual({ id: r.beanId, inventoryWeightGrams: 85, archived: false });
+    expect(r.bean).toEqual({ id: r.beanId, inventoryWeightGrams: 85, archived: false, restingUntil: expect.any(String) });
     await owner.agent.patch(`${base}/beans/${r.beanId}`).send({ archived: true });
     expect((await owner.agent.get(`${base}/roasts/${r.id}`)).body.roast.bean.archived).toBe(true);
   });

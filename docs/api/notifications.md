@@ -7,8 +7,8 @@ Each person sets up where their reminders go: one **channel** per service,
 each with its own on/off. Today they deliver **rate-later reminders**: a
 brew saved with "Rate later" (§6 `remindToRate`) gets a reminder after the
 person's delay, unless it has been rated by then; **steep reminders** for
-cold brews; and, for home roasting, **rest reminders** and **low green
-stock** notices.
+cold brews; **resting beans** that are ready; and, for home roasting,
+**low green stock** notices.
 
 Channels belong to a person, not a workspace: they're under
 `/api/auth/me/…` like preferences (§1), and nobody else can see them.
@@ -226,27 +226,32 @@ Sends "Test from Barista-Assistant" to the device, enabled or not.
   - Saving with it ticked and no rating sends `remindToRate`.
   - Clients don't offer the AI analysis until the brew is rated.
 
-## Rest reminders
+## Resting beans
 
-- **Preference:** `restReminders` (boolean, default `true`).
-- **Queuing:** saving a roast (§4f) that's still resting queues a delayed
-  job on the same queue (job `rest-done`, id `rest-<roastId>`, data
-  `{ roastId, userId }`) for **8:00 local time on its ready day** (its local
-  roast date + `restDays`, in the roast's `utcOffsetMinutes`, UTC when
-  that's unknown). It goes to whoever logged the roast, only with
-  `restReminders` on and an enabled channel. The reply's `restReminder`
-  is `queued`, `off` or `unavailable`, and is left out when it's ready
-  already: past 8:00 on its ready day, or `restDays` 0 (ready on its roast
-  date, also when logged before 8:00).
-- **Moving:** an edit to `roastedAt`, `utcOffsetMinutes` or `restDays`
-  replaces the waiting job with one for the new day (or drops it when it's
-  ready now); deleting the roast drops it.
-- **Sending:** skipped if the roast was deleted, isn't ready yet (moved
-  later), or rest reminders were turned off. Otherwise:
-  - title "Your roast is ready to brew";
-  - message "Ethiopia Guji · batch 3 · roasted 20 Oct" (the local roast
-    day);
-  - link `<APP_URL>/roast/roasts/<roastId>`.
+- **Preferences:** `restReminders` (boolean, default `true`) and
+  `restReminderRepeatDays` (1–60 or `null`, default `null`), auth.md §1.
+- **Scheduling:** a BullMQ job scheduler on the reminder queue
+  (`bean-rest-tick`, cron `*/15 * * * *`), set when the backend starts. Each
+  tick (`worker/src/beanRest.ts`) finds the resting beans (`beans.md` §4,
+  "Resting"; not archived) whose `restingBy` is still a member, and works
+  out that person's local day and time: their `timeZone`, else the
+  workspace's, else `BREW_TIMEZONE`, else UTC.
+- **Due:** from **8:00** on or after its `restingUntil` day, with
+  `restReminders` on: the first time (`restLastRemindedOn` is `null`), then,
+  with `restReminderRepeatDays` set, every that many days after the last
+  one, until the bean is made active, frozen or archived. A new ready day
+  starts over.
+- **What's sent:** one notification per person and workspace for the beans
+  due then; each bean's `restLastRemindedOn` becomes that local day.
+  - title "Your beans are ready to brew" ("3 beans are ready to brew" for
+    several);
+  - message "Onyx · Geometry" (roaster · bean · batch), or "3 beans:
+    Geometry, Guji (batch 3), …";
+  - link `<APP_URL>/beans/resting`.
+- With no enabled channel nothing is marked, so adding one later still
+  reminds; if every channel fails, the next tick tries again.
+- Before migration 0121 a home roast queued a one-off `rest-done` job; any
+  still waiting are skipped.
 
 ## Low green stock
 
