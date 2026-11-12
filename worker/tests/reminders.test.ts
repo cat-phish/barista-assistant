@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { config } from "../src/config.js";
 import { db } from "../src/db.js";
-import { processGreenLow, processRateReminder, processRestReminder, processSteepReminder } from "../src/reminders.js";
+import { processGreenLow, processRateReminder, processSteepReminder } from "../src/reminders.js";
 
 // docs/api/notifications.md §1b: real database, fake sending.
 let userId: string;
@@ -89,7 +89,7 @@ describe("processSteepReminder", () => {
 
 
 // Home roasting: a green coffee and one roast of it, in their own workspace.
-async function roasting(roast: { roastedAt: Date; restDays: number }) {
+async function roasting(roast: { roastedAt: Date }) {
   const workspaceId = randomUUID();
   const greenCoffeeId = randomUUID();
   const roastId = randomUUID();
@@ -99,34 +99,9 @@ async function roasting(roast: { roastedAt: Date; restDays: number }) {
   return { greenCoffeeId, roastId };
 }
 
-describe("processRestReminder", () => {
-  it("says a rested roast is ready, with its coffee, batch and local roast day", async () => {
-    // 23:30 on 20 Oct in UTC-7 is the 21st in UTC: the local day counts.
-    const { roastId } = await roasting({ roastedAt: new Date("2026-10-21T06:30:00Z"), restDays: 2 });
-    const send = vi.fn().mockResolvedValue(undefined);
-    expect(await processRestReminder({ roastId, userId }, send)).toMatchObject({ status: "sent", channels: 2 });
-    expect(send.mock.calls[0]![2]).toEqual({
-      title: "Your roast is ready to brew",
-      message: "Ethiopia Guji · batch 3 · roasted 20 Oct",
-      url: config.appUrl ? `${config.appUrl}/roast/roasts/${roastId}` : null,
-    });
-  });
-
-  it("skips a roast deleted, moved later, or with rest reminders off", async () => {
-    const send = vi.fn().mockResolvedValue(undefined);
-    expect(await processRestReminder({ roastId: randomUUID(), userId }, send)).toEqual({ status: "skipped", reason: "roast deleted" });
-    const later = await roasting({ roastedAt: new Date(), restDays: 5 });
-    expect(await processRestReminder({ roastId: later.roastId, userId }, send)).toEqual({ status: "skipped", reason: "not ready yet" });
-    const ready = await roasting({ roastedAt: new Date("2026-10-01T12:00:00Z"), restDays: 7 });
-    await db.update(users).set({ preferences: { restReminders: false } }).where(eq(users.id, userId));
-    expect(await processRestReminder({ roastId: ready.roastId, userId }, send)).toEqual({ status: "skipped", reason: "rest reminders off" });
-    expect(send).not.toHaveBeenCalled();
-  });
-});
-
 describe("processGreenLow", () => {
   it("says how much is left; skips it once restocked, or with stock alerts off", async () => {
-    const { greenCoffeeId } = await roasting({ roastedAt: new Date("2026-10-01T12:00:00Z"), restDays: 7 });
+    const { greenCoffeeId } = await roasting({ roastedAt: new Date("2026-10-01T12:00:00Z") });
     const send = vi.fn().mockResolvedValue(undefined);
     expect(await processGreenLow({ greenCoffeeId, userId }, send)).toMatchObject({ status: "sent", channels: 2 });
     expect(send.mock.calls[0]![2]).toEqual({
