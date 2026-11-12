@@ -344,7 +344,8 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
     text:
       "review is 2-4 plain sentences in the barista's own voice, as a note they'd keep, in the first person or " +
       "with no subject, under 1500 characters. suggestedRating is the coffee overall, 0.5-5 in half steps, from " +
-      "the brews' ratings and notes; with no ratings, judge it from the notes.",
+      "the brews' ratings and notes; with no ratings, judge it from the notes. Use a half step (3.5, 4.5) when the " +
+      "coffee sits between two whole stars, as an average of the brews' ratings often will.",
   },
   {
     key: "suggestCore",
