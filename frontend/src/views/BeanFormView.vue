@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { beanProcessesApi } from '../api/beanProcesses';
 import { beansApi, type BeanBrewSummary, type BeanInput } from '../api/beans';
@@ -26,6 +26,7 @@ import { COUNTRY_AREAS, ORIGIN_AREAS, areaForCountry } from '../lib/origins';
 import { ROAST_LEVELS } from '../lib/scale';
 import { LABEL_FIELD_KEYS, labelFill, lookUpFields, pageLabel, type LabelForm, type LabelSuggestion, type TextKey } from '../lib/labelFill';
 import type { FieldKey } from '../lib/fields';
+import { undoChanges, type FormSnapshot } from '../lib/undoFill';
 import { distinctNames, lastBag, normalizeName } from '../lib/nameSuggest';
 import { COMMON_VARIETIES } from '../lib/varieties';
 import {
@@ -395,12 +396,24 @@ const labelReads = useLabelReadStore();
 const readKey = labelReadKey(props.id);
 const readName = computed(() => `${roasterName.value} ${beanName.value}`.trim() || (editing.value ? 'this bean' : 'the new bean'));
 const ready = ref(false); // loaded, or a kept draft restored: answers apply from then
+// The form either side of the last fill, for Undo (lib/undoFill.ts).
+const undo = ref<{ before: FormSnapshot; after: FormSnapshot } | null>(null);
+function undoFill(): void {
+  if (!undo.value) return;
+  const { before, after } = undo.value;
+  for (const [name, value] of Object.entries(undoChanges(before, after, snapshot()))) draftRefs[name]!.value = value;
+  undo.value = null;
+}
 watch(
   [() => labelReads.current?.status, ready],
-  () => {
+  async () => {
     if (!ready.value) return;
     const result = labelReads.take(readKey);
-    if (result) applyLabel(result);
+    if (!result) return;
+    const before = snapshot();
+    applyLabel(result);
+    await nextTick(); // the country → growing area watcher has run
+    undo.value = { before, after: snapshot() };
   },
   { immediate: true },
 );
@@ -464,6 +477,7 @@ function startOver(): void {
   draftLabelPhotos.value = [];
   restored.value = false;
   submitted.value = false;
+  undo.value = null;
   resetKey.value++;
 }
 function cancel(): void {
@@ -575,6 +589,7 @@ async function save(): Promise<void> {
     else {
       const { bean } = await beansApi.create(ws, input);
       finished = true;
+      undo.value = null;
       drafts.clear();
       const photoError = (await photoPicker.value?.uploadPending(bean.id)) ?? '';
       if (photoError) {
@@ -638,7 +653,10 @@ async function save(): Promise<void> {
           :name="readName"
           :initial-extras="draftLabelPhotos"
         >
-          <p v-if="labelSummary" class="small" role="status">{{ labelSummary }}</p>
+          <p v-if="labelSummary || undo" class="small" role="status">
+            {{ labelSummary }}
+            <button v-if="undo" type="button" class="btn-link small" @click="undoFill">Undo</button>
+          </p>
           <div v-if="webSources.length" class="web-sources small">
             <p class="muted">Pages the web lookup looked at, for anything it missed:</p>
             <ul>
