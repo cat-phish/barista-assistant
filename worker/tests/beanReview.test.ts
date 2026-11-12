@@ -21,6 +21,8 @@ describe("parseBeanReviewMessage (docs/api/llm-contract.md §9d)", () => {
     expect(parseBeanReviewMessage(reply({ review: " Lovely. ", suggestedRating: 3.8 }))).toEqual({ review: "Lovely.", suggestedRating: 4 });
     expect(parseBeanReviewMessage(reply({ review: "Bad.", suggestedRating: 0 })).suggestedRating).toBe(0.5);
     expect(parseBeanReviewMessage(reply({ review: "Good.", suggestedRating: 9 })).suggestedRating).toBe(5);
+    expect(parseBeanReviewMessage(reply({ review: "Bright.", suggestedRating: 4.5 })).suggestedRating).toBe(4.5);
+    expect(parseBeanReviewMessage(reply({ review: "Fine.", suggestedRating: 3.7 })).suggestedRating).toBe(3.5);
   });
   it("cuts a long review, and refuses an empty one", () => {
     expect(parseBeanReviewMessage(reply({ review: "x".repeat(2500), suggestedRating: 4 })).review).toHaveLength(2000);
