@@ -15,6 +15,9 @@ could read. Those taken here go first, then the bean's, at most **8** in
 all (`LABEL_MAX_IMAGES`). The form fills
 the **empty** fields and, under each one that already says something else,
 shows **"Label says: X · Use"**. Nothing is saved until the bean is.
+**Undo**, next to the summary of what was filled, puts back what that fill
+changed (fields, suggestions, summary), except fields edited since; it goes
+back one fill and isn't kept with a draft (`frontend/src/lib/undoFill.ts`).
 
 Photos taken for the read are **only read, then thrown away**: they never
 become the bean's photos, so a back-of-the-bag shot doesn't have to be
