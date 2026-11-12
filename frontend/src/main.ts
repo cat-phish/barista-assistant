@@ -3,6 +3,7 @@ import { createApp, watch } from 'vue';
 import { registerSW } from 'virtual:pwa-register';
 import App from './App.vue';
 import { setUnauthorizedHandler } from './api/client';
+import { installOverflowTitles } from './lib/overflowTitle';
 import { createUpdateGate } from './lib/swUpdate';
 import { applyTheme } from './lib/theme';
 import { router } from './router';
@@ -14,6 +15,7 @@ import './styles/base.css';
 const app = createApp(App);
 app.use(createPinia()); // before the router, whose guards use the stores
 app.use(router);
+installOverflowTitles(); // a clipped table cell's full text on hover
 
 // Session revoked or expired mid-use (e.g. password changed on another
 // device): forget local state and go to login, then come back afterwards.

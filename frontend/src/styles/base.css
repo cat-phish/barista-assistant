@@ -454,6 +454,12 @@ button.data-th {
   color: var(--text-muted);
   font-size: 0.9rem;
 }
+/* An open row shows its cells in full (lib/overflowTitle.ts: hover on
+   desktop; on phones, the tap that opens it). */
+.data-item.open > .data-row > .data-td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .data-td.primary {
   color: var(--text);
   font-size: 1rem;
