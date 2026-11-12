@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Beans (docs/api/beans.md §4) as a table, split into Active and Archived
-// tabs: filter, sort by any of BEAN_SORT_COLUMNS (headers or the dropdown); a
+// Beans (docs/api/beans.md §4) as a table, split into Active, Resting and
+// Archived tabs: filter, sort by any of BEAN_SORT_COLUMNS (headers or the dropdown); a
 // row expands to its details and actions. Archiving an unrated bean asks for a
 // rating, and unrated archived beans keep asking until rated.
 import { computed, onMounted, ref, watch } from 'vue';
@@ -35,6 +35,8 @@ import {
   periodsLatestFirst,
   pricePerGram,
   roastAgeDays,
+  beanState,
+  restReady,
   restingUntil,
   roastLabel,
   varietyLabel,
@@ -54,10 +56,10 @@ import { useAiAvailable } from '../composables/useAiAvailable';
 import { useWorkspaceStore } from '../stores/workspace';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
 
-const props = defineProps<{ archived?: boolean }>(); // the Archived tab (route prop)
+const props = defineProps<{ state?: 'resting' | 'archived' }>(); // the Resting or Archived tab (route prop)
 
 const workspaces = useWorkspaceStore();
-const { altitudeUnit, roastScale, settings } = usePreferences();
+const { altitudeUnit, roastScale, settings, prefs } = usePreferences();
 const beans = ref<Bean[]>([]);
 const processes = ref<BeanProcess[]>([]); // the workspace's list, for names
 // Photos (docs/api/bean-photos.md §4c): the cover in the row, all of them in
@@ -68,9 +70,10 @@ const viewing = ref<{ bean: Bean; photoId: string } | null>(null);
 const loading = ref(true);
 const error = ref('');
 
-const tab = computed(() => (props.archived ? 'archived' : 'active'));
-const inTab = computed(() => beans.value.filter((b) => (b.archivedAt !== null) === !!props.archived));
-const archivedCount = computed(() => beans.value.filter((b) => b.archivedAt !== null).length);
+const tab = computed(() => props.state ?? 'active');
+const archived = computed(() => tab.value === 'archived');
+const resting = computed(() => tab.value === 'resting');
+const inTab = computed(() => beans.value.filter((b) => beanState(b) === tab.value));
 // Active tab: the stock on hand, and how much of it is in the freezer.
 const stock = computed(() => {
   const grams = (list: Bean[]) => list.reduce((n, b) => n + b.inventoryWeightGrams, 0);
@@ -82,16 +85,17 @@ const stock = computed(() => {
 // old list (by roaster).
 const viewKey = (what: string) => `beans.${tab.value}.${what}.${workspaces.current?.id ?? ''}`;
 const DEFAULT_SORT = 'roaster_asc';
+const defaultSort = () => (resting.value ? 'ready_asc' : DEFAULT_SORT); // soonest ready first
 const processName = (id: string | null) => (id ? (processes.value.find((p) => p.id === id)?.name ?? null) : null);
 const BEAN_SORT_COLUMNS = computed(() => beanSortColumns(processName));
 const sortChoices = sortColumnOptions(beanSortColumns());
 const filter = ref<BeanFilter>('all');
 const filterOptions = computed(() => beanFilterOptions(inTab.value, filter.value));
-const sort = ref(DEFAULT_SORT);
+const sort = ref(defaultSort());
 // The view is reused across tabs, so restore that tab's choices when it changes.
 function restoreView(): void {
   const savedSort = recallView(viewKey('sort'));
-  sort.value = isSortKey(savedSort, BEAN_SORT_COLUMNS.value) ? savedSort : DEFAULT_SORT;
+  sort.value = isSortKey(savedSort, BEAN_SORT_COLUMNS.value) ? savedSort : defaultSort();
   const savedFilter = recallView(viewKey('filter'));
   filter.value = isBeanFilter(savedFilter) ? savedFilter : 'all';
   openId.value = null;
@@ -105,7 +109,7 @@ const filterName = computed(() => {
   return filter.value.includes(':') ? label : label.toLowerCase(); // a variety keeps its spelling
 });
 const shown = computed(() => sortBy(inTab.value.filter(beanFilter(filter.value).test), sort.value, BEAN_SORT_COLUMNS.value, (b) => b.beanName));
-const unrated = computed(() => (props.archived ? inTab.value.filter((b) => b.rating === null) : []));
+const unrated = computed(() => (archived.value ? inTab.value.filter((b) => b.rating === null) : []));
 
 async function load(): Promise<void> {
   const id = workspaces.current?.id;
@@ -471,6 +475,66 @@ async function confirmFreeze(): Promise<void> {
     freezing.value = false;
   }
 }
+// Resting (docs/api/beans.md §4, "Resting"): an active, unfrozen bean rests
+// until a day; a resting one is made active, or frozen, which makes it active.
+const restTarget = ref<Bean | null>(null);
+const restOn = ref('');
+const restInPicker = ref(true);
+const restError = ref('');
+const restSaving = ref(false);
+const plusDays = (n: number) => {
+  const [y, m, d] = localDateInput().split('-').map(Number);
+  return new Date(Date.UTC(y!, m! - 1, d! + n)).toISOString().slice(0, 10);
+};
+function askRest(bean: Bean): void {
+  restTarget.value = bean;
+  restOn.value = bean.restingUntil ?? plusDays(7);
+  restInPicker.value = bean.restingUntil ? bean.restInBrewPicker : prefs.value.restingInBrewPickerDefault;
+  restError.value = '';
+}
+async function saveRest(): Promise<void> {
+  const ws = workspaces.current?.id;
+  const bean = restTarget.value;
+  if (!ws || !bean || !restOn.value) return;
+  restSaving.value = true;
+  restError.value = '';
+  try {
+    replace((await beansApi.update(ws, bean.id, { restingUntil: restOn.value, restInBrewPicker: restInPicker.value })).bean);
+    restTarget.value = null;
+    openId.value = null;
+  } catch (err) {
+    restError.value = errorMessage(err);
+  } finally {
+    restSaving.value = false;
+  }
+}
+const activateTarget = ref<Bean | null>(null);
+const activateError = ref('');
+const activating = ref(false);
+function askActivate(bean: Bean): void {
+  activateTarget.value = bean;
+  activateError.value = '';
+}
+async function activate(freeze: boolean): Promise<void> {
+  const ws = workspaces.current?.id;
+  const bean = activateTarget.value;
+  if (!ws || !bean) return;
+  activating.value = true;
+  activateError.value = '';
+  try {
+    // Freezing ends the rest by itself (a frozen bean is active).
+    const { bean: updated } = freeze ? await beansApi.freeze(ws, bean.id, localDateInput()) : await beansApi.update(ws, bean.id, { restingUntil: null });
+    replace(updated);
+    activateTarget.value = null;
+    openId.value = null;
+  } catch (err) {
+    activateError.value = errorMessage(err);
+  } finally {
+    activating.value = false;
+  }
+}
+const restBadge = (bean: Bean) => (restReady(bean) ? 'Ready' : 'Resting');
+
 // Select mode for exporting some items (components/ExportBar.vue).
 const selection = useSelection();
 </script>
@@ -492,8 +556,12 @@ const selection = useSelection();
           <p>No archived beans.</p>
           <p>Archive a bean when it's finished: it leaves the brew picker and the menu, and its brews stay in the journal.</p>
         </template>
+        <template v-else-if="resting">
+          <p>No resting beans.</p>
+          <p>Rest a fresh bag until it's ready to brew: you can get a reminder that morning (Settings → Notifications). Home roasts rest here too.</p>
+        </template>
         <template v-else>
-          <p>{{ archivedCount ? 'No active beans.' : 'No beans yet.' }}</p>
+          <p>{{ beans.length ? 'No active beans.' : 'No beans yet.' }}</p>
           <p v-if="workspaces.canEdit">Add the coffee you're brewing to start logging brews.</p>
         </template>
       </div>
@@ -526,7 +594,7 @@ const selection = useSelection();
         </ListDataBar>
         <ColumnsDialog :open="choosingColumns" :state="table" noun="bean" @close="choosingColumns = false" />
         <p v-if="rowError" class="form-error" role="alert">{{ rowError }}</p>
-        <p v-if="shown.length === 0" class="card empty">No {{ filterName }} {{ archived ? 'archived ' : '' }}beans.</p>
+        <p v-if="shown.length === 0" class="card empty">No {{ filterName }} {{ archived ? 'archived ' : resting ? 'resting ' : '' }}beans.</p>
         <div v-else class="data-table" :style="{ '--cols': table.widths.template }">
           <TableHead v-model:sort="sort" :state="table" />
           <div v-for="bean in shown" :key="bean.id" class="data-item" :class="{ open: openId === bean.id }">
@@ -534,7 +602,7 @@ const selection = useSelection();
               <span class="data-td primary"><span v-if="selection.selecting" class="tick" aria-hidden="true">{{ selection.has(bean.id) ? '☑' : '☐' }}</span>
                 <img v-if="show('bean.photos') && bean.photos[0]" class="cover-thumb" :src="photoSrc(bean, bean.photos[0].id)" alt="" loading="lazy" />
                 {{ bean.beanName }}{{ batchSuffix(bean) }}<span v-if="openFreeze(bean)" class="frozen-mark phone-only" aria-label="frozen"> ❄</span>
-                <span v-if="restingUntil(bean)" class="badge resting" :title="`Resting until ${formatListDay(restingUntil(bean)!)}`">Resting</span>
+                <span v-if="restingUntil(bean)" class="badge resting" :class="{ ready: restReady(bean) }" :title="`Ready ${formatListDay(restingUntil(bean)!)}`">{{ restBadge(bean) }}</span>
               </span>
               <span v-for="col in table.shown.slice(1)" :key="col.id" class="data-td" :class="[col.class, { end: table.isEnd(col) }]" :title="col.id === 'decaf' ? (bean.decaf ? 'Decaf' : 'Caffeinated') : undefined">
                 <span v-if="col.id === 'frozen'"><span v-if="openFreeze(bean)" class="frozen-mark" title="Frozen" aria-label="Frozen">❄</span></span>
@@ -548,7 +616,8 @@ const selection = useSelection();
             <div v-if="openId === bean.id" class="data-details">
               <div class="badges">
                 <span v-if="openFreeze(bean)" class="badge frozen">Frozen</span>
-                <span v-if="restingUntil(bean)" class="badge resting">Resting until {{ formatListDay(restingUntil(bean)!) }}</span>
+                <span v-if="restingUntil(bean)" class="badge resting">{{ restReady(bean) ? `Ready since ${formatListDay(restingUntil(bean)!)}` : `Resting until ${formatListDay(restingUntil(bean)!)}` }}</span>
+                <span v-if="restingUntil(bean)" class="badge">{{ bean.restInBrewPicker ? 'In the brew picker' : 'Not in the brew picker' }}</span>
                 <span v-if="bean.decaf" class="badge">Decaf</span>
                 <span v-if="bean.roastType" class="badge">{{ ROAST_TYPES[bean.roastType].label }} roast</span>
                 <span v-if="bean.blendType" class="badge">{{ BLEND_TYPES[bean.blendType].label }}</span>
@@ -593,8 +662,14 @@ const selection = useSelection();
                   <button v-if="bean.rating === null" class="btn-link" type="button" @click="openRating(bean, 'rate')">Rate</button>
                   <button class="btn-link" type="button" :disabled="busyId === bean.id" @click="setArchived(bean, false)">Unarchive</button>
                 </template>
+                <template v-else-if="restingUntil(bean)">
+                  <button class="btn-link" type="button" @click="askActivate(bean)">Make active…</button>
+                  <button class="btn-link" type="button" @click="askRest(bean)">Change rest…</button>
+                  <button class="btn-link" type="button" :disabled="busyId === bean.id" @click="askArchive(bean)">Archive</button>
+                </template>
                 <template v-else>
                   <button class="btn-link" type="button" @click="askFreeze(bean)">{{ openFreeze(bean) ? 'Thaw' : 'Freeze' }}</button>
+                  <button v-if="!openFreeze(bean)" class="btn-link" type="button" @click="askRest(bean)">Rest…</button>
                   <button class="btn-link" type="button" :disabled="busyId === bean.id" @click="askArchive(bean)">Archive</button>
                 </template>
                 <RouterLink class="btn-link" :to="{ name: 'bean-new', query: { from: bean.id } }">Duplicate</RouterLink>
@@ -731,6 +806,39 @@ const selection = useSelection();
         {{ freezeAction === 'freeze' ? 'Freeze' : 'Thaw' }}
       </button>
       <button class="btn btn-secondary" type="button" :disabled="freezing" @click="freezeTarget = null">Cancel</button>
+    </template>
+  </ConfirmDialog>
+
+  <ConfirmDialog :open="restTarget !== null" :title="restTarget?.restingUntil ? 'Change the rest' : 'Rest this bean?'" @cancel="restTarget = null">
+    <form id="rest-form" class="stack" @submit.prevent="saveRest">
+      <p>{{ restTarget && beanTitle(restTarget) }} moves to Resting while it ages. It stays there until you make it active.</p>
+      <div class="field">
+        <label for="rest-on">Ready on<span class="req" aria-hidden="true">*</span></label>
+        <input id="rest-on" v-model="restOn" aria-required="true" type="date" required />
+      </div>
+      <label class="checkbox">
+        <input v-model="restInPicker" type="checkbox" />
+        Show in the brew picker while resting
+      </label>
+      <p class="muted small">You get a reminder the morning it's ready, if rest reminders are on in Settings → Notifications.</p>
+      <p v-if="restError" class="form-error" role="alert">{{ restError }}</p>
+    </form>
+    <template #actions>
+      <button class="btn btn-primary" type="submit" form="rest-form" :disabled="restSaving || !restOn">{{ restTarget?.restingUntil ? 'Save' : 'Rest' }}</button>
+      <button class="btn btn-secondary" type="button" :disabled="restSaving" @click="restTarget = null">Cancel</button>
+    </template>
+  </ConfirmDialog>
+
+  <ConfirmDialog :open="activateTarget !== null" title="Make this bean active?" @cancel="activateTarget = null">
+    <p>
+      {{ activateTarget && beanTitle(activateTarget) }} moves to Active.
+      Freeze it to stop its roast age here; it stays active while frozen.
+    </p>
+    <p v-if="activateError" class="form-error" role="alert">{{ activateError }}</p>
+    <template #actions>
+      <button class="btn btn-primary" type="button" :disabled="activating" @click="activate(false)">Make active</button>
+      <button class="btn btn-secondary" type="button" :disabled="activating" @click="activate(true)">Freeze and make active</button>
+      <button class="btn btn-secondary" type="button" :disabled="activating" @click="activateTarget = null">Cancel</button>
     </template>
   </ConfirmDialog>
 

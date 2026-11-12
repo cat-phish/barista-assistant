@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Bean } from '../api/types';
-import { batchSuffix, beanFilter, beanFilterOptions, beanLabel, beanSortColumns, isBeanFilter, varietyLabel, DETAILED_ROAST_LEVELS, nextBatch, formatAltitude, roastLabel, formatPricePerGram, freezeState, latestThaw, periodsLatestFirst, pricePerGram, restingUntil } from './beans';
+import { batchSuffix, beanFilter, beanFilterOptions, beanLabel, beanSortColumns, isBeanFilter, varietyLabel, DETAILED_ROAST_LEVELS, nextBatch, formatAltitude, roastLabel, formatPricePerGram, freezeState, latestThaw, periodsLatestFirst, pricePerGram, restingUntil, beanState, inBrewPicker, restReady } from './beans';
 import { sortBy, sortColumnOptions } from './listSort';
 import { ROAST_LEVELS } from './scale';
 
@@ -71,7 +71,10 @@ const bean = (over: Partial<Bean>): Bean => ({
   freezePeriods: [],
   frozen: false,
   photos: [],
-  roastReadyOn: null,
+  restingUntil: null,
+  restInBrewPicker: false,
+  restingBy: null,
+  restLastRemindedOn: null,
   ...over,
 });
 // The workspace's process names, by id (editable, so the list passes them in).
@@ -134,7 +137,7 @@ describe('bean sorting', () => {
 
   it('offers every column in the Sort by dropdown', () => {
     expect(sortColumnOptions(BEAN_SORT_COLUMNS).map((c) => c.value)).toEqual([
-      'name', 'roaster', 'added', 'purchased', 'roastDate', 'age', 'roast', 'process', 'variety', 'frozen', 'decaf', 'rating', 'stock',
+      'name', 'roaster', 'added', 'purchased', 'roastDate', 'age', 'roast', 'process', 'variety', 'frozen', 'decaf', 'rating', 'stock', 'ready',
     ]);
     expect(sortColumnOptions(BEAN_SORT_COLUMNS).find((c) => c.value === 'name')).toMatchObject({ asc: 'Ascending (A–Z)' });
     expect(sortColumnOptions(BEAN_SORT_COLUMNS).find((c) => c.value === 'roast')).toMatchObject({ asc: 'Ascending (lightest first)', desc: 'Descending (darkest first)' });
@@ -218,10 +221,23 @@ describe('varieties and species', () => {
   });
 });
 
-describe('restingUntil', () => {
-  it('is the ready day while a home roast rests, else null', () => {
-    expect(restingUntil({ roastReadyOn: '2026-11-02' }, '2026-10-29')).toBe('2026-11-02');
-    expect(restingUntil({ roastReadyOn: '2026-10-29' }, '2026-10-29')).toBeNull(); // ready today
-    expect(restingUntil({ roastReadyOn: null }, '2026-10-29')).toBeNull();
+describe('resting (docs/api/beans.md §4)', () => {
+  it('is the ready day while resting, past it too, until made active', () => {
+    expect(restingUntil({ restingUntil: '2026-11-02' })).toBe('2026-11-02');
+    expect(restingUntil({ restingUntil: null })).toBeNull();
+    expect(restReady({ restingUntil: '2026-11-02' }, '2026-10-29')).toBe(false);
+    expect(restReady({ restingUntil: '2026-10-29' }, '2026-10-29')).toBe(true);
+    expect(restReady({ restingUntil: null }, '2026-10-29')).toBe(false);
+  });
+  it('puts a bean on the Active, Resting or Archived tab', () => {
+    expect(beanState(bean({}))).toBe('active');
+    expect(beanState(bean({ restingUntil: '2026-11-02' }))).toBe('resting');
+    expect(beanState(bean({ archivedAt: '2026-11-01T00:00:00Z' }))).toBe('archived');
+  });
+  it('offers a resting bean in the brew picker only with its box ticked', () => {
+    expect(inBrewPicker(bean({}))).toBe(true);
+    expect(inBrewPicker(bean({ restingUntil: '2026-11-02' }))).toBe(false);
+    expect(inBrewPicker(bean({ restingUntil: '2026-11-02', restInBrewPicker: true }))).toBe(true);
+    expect(inBrewPicker(bean({ archivedAt: '2026-11-01T00:00:00Z' }))).toBe(false);
   });
 });

@@ -112,6 +112,16 @@ async function setTheme(theme: Theme): Promise<void> {
       <p class="muted small">Where a bean was grown, in the bean form and lists. The guest menu always shows metres.</p>
     </section>
 
+    <!-- docs/api/auth.md §1 restingInBrewPickerDefault -->
+    <section class="card stack" aria-labelledby="pref-resting">
+      <h2 id="pref-resting">Resting beans</h2>
+      <label class="checkbox">
+        <input type="checkbox" :checked="prefs.restingInBrewPickerDefault" :disabled="saving" @change="set({ restingInBrewPickerDefault: ($event.target as HTMLInputElement).checked })" />
+        Show beans I add resting in the brew picker
+      </label>
+      <p class="muted small">Where a new resting bean starts, home roasts too; each bean can change it. Reminders are in Notifications.</p>
+    </section>
+
     <p v-if="error" class="form-error" role="alert">{{ error }}</p>
     <p class="visually-hidden" aria-live="polite">{{ saved ? 'Saved.' : '' }}</p>
   </SettingsLayout>

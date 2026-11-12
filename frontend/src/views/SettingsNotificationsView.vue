@@ -185,10 +185,14 @@ function remove(service: Service): Promise<void> {
 const DELAYS = [5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240];
 const delays = computed(() => [...new Set([...DELAYS, prefs.value.rateReminderMinutes])].sort((a, b) => a - b));
 const prefSaving = ref(false);
+// Resting beans' reminder repeats (docs/api/notifications.md §1b): '' = once.
+const REPEATS = [1, 2, 3, 5, 7, 14];
+const repeats = computed(() => [...new Set([...REPEATS, ...(prefs.value.restReminderRepeatDays ? [prefs.value.restReminderRepeatDays] : [])])].sort((a, b) => a - b));
+const setRepeat = (value: string) => setPref({ restReminderRepeatDays: value ? Number(value) : null });
 const prefError = ref('');
 // Home roasting's reminders show while the current workspace roasts.
 const roasting = computed(() => !!useWorkspaceStore().current?.settings.homeRoasting);
-async function setPref(changes: Partial<Pick<UserPreferences, 'rateReminders' | 'rateReminderMinutes' | 'rateLaterDefault' | 'steepReminders' | 'restReminders' | 'greenStockAlerts'>>): Promise<void> {
+async function setPref(changes: Partial<Pick<UserPreferences, 'rateReminders' | 'rateReminderMinutes' | 'rateLaterDefault' | 'steepReminders' | 'restReminders' | 'restReminderRepeatDays' | 'greenStockAlerts'>>): Promise<void> {
   prefSaving.value = true;
   prefError.value = '';
   try {
@@ -235,17 +239,28 @@ async function setPref(changes: Partial<Pick<UserPreferences, 'rateReminders' | 
       <p class="muted small">Sent when its recipe's steep time opens (e.g. after 12 h of a 12–18 h steep), unless you've finished it already.</p>
     </section>
 
-    <section v-if="roasting" class="card stack" aria-labelledby="roast-reminders">
-      <h2 id="roast-reminders">Home roasting</h2>
+    <section class="card stack" aria-labelledby="rest-reminders">
+      <h2 id="rest-reminders">Resting beans</h2>
       <label class="checkbox">
         <input type="checkbox" :checked="prefs.restReminders" :disabled="prefSaving" @change="setPref({ restReminders: ($event.target as HTMLInputElement).checked })" />
-        Remind me when a roast I logged has rested
+        Remind me when a bean I set resting is ready
       </label>
+      <div class="field short">
+        <label for="rest-repeat">Remind again</label>
+        <select id="rest-repeat" :value="prefs.restReminderRepeatDays ?? ''" :disabled="prefSaving || !prefs.restReminders" @change="setRepeat(($event.target as HTMLSelectElement).value)">
+          <option value="">No, just once</option>
+          <option v-for="n in repeats" :key="n" :value="n">Every {{ n === 1 ? 'day' : `${n} days` }} until it's active</option>
+        </select>
+      </div>
+      <p class="muted small">At 8:00 on its ready day, for every bean you set resting (home roasts too), until you make it active or freeze it.</p>
+    </section>
+
+    <section v-if="roasting" class="card stack" aria-labelledby="roast-reminders">
+      <h2 id="roast-reminders">Home roasting</h2>
       <label class="checkbox">
         <input type="checkbox" :checked="prefs.greenStockAlerts" :disabled="prefSaving" @change="setPref({ greenStockAlerts: ($event.target as HTMLInputElement).checked })" />
         Tell me when a roast takes a green coffee below its low-stock amount
       </label>
-      <p class="muted small">The rest reminder comes at 8:00 on the day it's ready (its roast date plus its rest days).</p>
     </section>
 
     <p v-if="loading" class="muted" aria-live="polite">Loading…</p>

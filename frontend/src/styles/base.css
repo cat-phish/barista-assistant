@@ -314,10 +314,14 @@ a {
   color: var(--brand);
   white-space: nowrap;
 }
-/* A home roast still resting (docs/api/roasts.md §4f). */
+/* A bean still resting (docs/api/beans.md §4, "Resting"); ready once its day comes. */
 .badge.resting {
   background: var(--warning-tint);
   color: var(--warning);
+}
+.badge.resting.ready {
+  background: color-mix(in srgb, var(--success) 14%, transparent);
+  color: var(--success);
 }
 .btn-danger {
   background: var(--danger-solid);

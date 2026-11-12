@@ -36,6 +36,9 @@ export interface BeanInput {
   batchNumber: string | null;
   rating: number | null;
   review: string | null;
+  // Resting (docs/api/beans.md §4): the ready day, null = active.
+  restingUntil?: string | null;
+  restInBrewPicker?: boolean;
 }
 
 // How a bean's brews went (§4 brew-summary).

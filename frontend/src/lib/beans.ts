@@ -128,11 +128,24 @@ export function latestThaw(periods: readonly Period[]): string {
 // Whole days between two YYYY-MM-DD dates.
 export const daysBetween = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
 
-// The day a home-roasted bean is ready, while it's still resting
-// (docs/api/roasts.md §4f), else null.
-export function restingUntil(bean: Pick<Bean, 'roastReadyOn'>, today = localDateInput()): string | null {
-  return bean.roastReadyOn && bean.roastReadyOn > today ? bean.roastReadyOn : null;
+// Resting (docs/api/beans.md §4, "Resting"): the day a resting bean is ready,
+// else null. It stays resting past that day until it's made active.
+export function restingUntil(bean: Pick<Bean, 'restingUntil'>): string | null {
+  return bean.restingUntil;
 }
+// Which tab of Beans a bean is on.
+export type BeanState = 'active' | 'resting' | 'archived';
+export function beanState(bean: Pick<Bean, 'archivedAt' | 'restingUntil'>): BeanState {
+  if (bean.archivedAt !== null) return 'archived';
+  return bean.restingUntil !== null ? 'resting' : 'active';
+}
+// Offered in the brew picker: active, or resting with its box ticked.
+export function inBrewPicker(bean: Pick<Bean, 'archivedAt' | 'restingUntil' | 'restInBrewPicker'>): boolean {
+  const state = beanState(bean);
+  return state === 'active' || (state === 'resting' && bean.restInBrewPicker);
+}
+// Resting and its day has come: ready to be made active.
+export const restReady = (bean: Pick<Bean, 'restingUntil'>, today = localDateInput()) => bean.restingUntil !== null && bean.restingUntil <= today;
 
 // How a list shows a bean's roast: the name when the workspace records roast
 // names and the bean has one ("City+"), else the 5-step level ("Medium").
@@ -161,7 +174,7 @@ export function roastAgeDays(bean: Pick<Bean, 'roastDate' | 'freezePeriods'>, to
 // lib/listSort.ts), in the dropdown's order. Unset values sort last either way.
 export type BeanSortColumn =
   | 'name' | 'roaster' | 'added' | 'purchased' | 'roastDate' | 'age' | 'roast'
-  | 'process' | 'variety' | 'frozen' | 'decaf' | 'rating' | 'stock';
+  | 'process' | 'variety' | 'frozen' | 'decaf' | 'rating' | 'stock' | 'ready';
 // processName: the workspace's name for a processId (they're editable,
 // docs/api/bean-processes.md §4b); labels don't depend on it.
 export const beanSortColumns = (processName: (id: string) => string | null = () => null): SortColumns<Bean, BeanSortColumn> => ({
@@ -178,6 +191,8 @@ export const beanSortColumns = (processName: (id: string) => string | null = () 
   decaf: { label: 'Caffeinated / decaf', value: (b) => (b.decaf ? 1 : 0), asc: 'Caffeinated first', desc: 'Decaf first' },
   rating: { label: 'Rating', value: (b) => b.rating, asc: 'Lowest first', desc: 'Highest first', firstDir: 'desc' },
   stock: { label: 'In stock', value: (b) => b.inventoryWeightGrams, asc: 'Least first', desc: 'Most first', firstDir: 'desc' },
+  // Resting beans' ready day (docs/api/beans.md §4); the Resting tab's default.
+  ready: { label: 'Ready on', value: (b) => b.restingUntil, asc: 'Soonest first', desc: 'Latest first' },
 });
 
 // The list's Filter dropdown: these, then each variety and species the
