@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDoseLine, formatListDay, formatRatio, formatTime, localDateInput, maskTime, parseDecimal, parseTime, toDateInput } from './format';
+import { formatDoseLine, formatListDay, formatRatio, formatTime, localDateInput, maskTime, nudgeGrams, parseDecimal, parseTime, toDateInput } from './format';
 
 describe('parseDecimal', () => {
   const dose = { scale: 2, min: 0, max: 1000, exclusiveMin: true, exclusiveMax: true };
@@ -81,5 +81,19 @@ describe('formatListDay', () => {
     expect(formatListDay('2026-10-01T00:00:00.000Z', now)).not.toMatch(/2026|30/);
     expect(formatListDay('2025-12-31', now)).toMatch(/2025/);
     expect(formatListDay('2025-12-31', now)).toMatch(/31/);
+  });
+});
+
+describe('nudgeGrams', () => {
+  it('adds and removes grams', () => {
+    expect(nudgeGrams('250', 1)).toBe('251');
+    expect(nudgeGrams('250', -5)).toBe('245');
+    expect(nudgeGrams('250,5', -1)).toBe('249.5');
+    expect(nudgeGrams('0.1', 0.2)).toBe('0.3');
+  });
+  it('starts an empty box from 0 and empties it at 0', () => {
+    expect(nudgeGrams('', 5)).toBe('5');
+    expect(nudgeGrams('3', -5)).toBe('');
+    expect(nudgeGrams('5', -5)).toBe('');
   });
 });

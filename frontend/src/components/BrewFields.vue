@@ -6,7 +6,7 @@ import type { BrewProblem, FlavorPick, Grinder, MethodKind, PrepTool, RecipeStyl
 import { netYield, type BrewDraft, type BrewDraftErrors } from '../lib/brewDraft';
 import { brixToTds, extractionYield, usesWater } from '../lib/extraction';
 import { DILUTION_WITH, isColdStyle, STEEP_TEMPS } from '../lib/coldBrew';
-import { formatGrams } from '../lib/format';
+import { formatGrams, nudgeGrams } from '../lib/format';
 import { grinderRetentionText } from '../lib/grinderRetention';
 import { problemsFor, toolsFor } from '../lib/prepTools';
 import { TEMPERATURE_LABELS } from '../lib/units';
@@ -201,6 +201,9 @@ const toolOptions = computed(() => toolsFor(props.prepTools ?? [], { kind: props
 const problemOptions = computed(() => problemsFor(props.problems ?? [], { kind: props.methodKind ?? null, brewerId: props.brewerId ?? null }, draft.value.problemIds));
 // Likewise for water; with none set up, the only choice says so.
 const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w.archivedAt || w.id === draft.value.waterProfileId));
+// Over- or undershot the pour: a tap fixes the water instead of retyping it.
+const WATER_NUDGES = [-5, -1, 1, 5] as const;
+const hasWater = computed(() => num(draft.value.water) !== null);
 </script>
 
 <template>
@@ -227,6 +230,17 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
       <div v-if="!espresso" class="field">
         <label for="brew-water">{{ onIce ? 'Hot water (g)' : 'Water (g)' }}<span class="req" aria-hidden="true">*</span></label>
         <input id="brew-water" aria-required="true" v-model="draft.water" inputmode="decimal" :aria-invalid="showErrors && !!errors.water" />
+        <div class="nudge" role="group" aria-label="Adjust the water">
+          <button
+            v-for="d in WATER_NUDGES"
+            :key="d"
+            class="btn btn-secondary"
+            type="button"
+            :aria-label="`${d < 0 ? 'Remove' : 'Add'} ${Math.abs(d)} g`"
+            :disabled="d < 0 && !hasWater"
+            @click="draft.water = nudgeGrams(draft.water, d)"
+          >{{ d < 0 ? '−' : '+' }}{{ Math.abs(d) }}</button>
+        </div>
         <span v-if="showErrors && errors.water" class="field-error">{{ errors.water }}</span>
       </div>
       <div v-if="!espresso && show('brew.ice') && (iced || hadIce)" class="field">
@@ -404,6 +418,16 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
 </template>
 
 <style scoped>
+.nudge {
+  display: flex;
+  gap: var(--space-1);
+}
+.nudge .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 var(--space-1);
+  font-variant-numeric: tabular-nums;
+}
 .dilution {
   display: flex;
   gap: var(--space-2);

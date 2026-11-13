@@ -102,6 +102,15 @@ export function formatGrams(value: number): string {
   return `${Number(value.toFixed(2))}`;
 }
 
+// A weight box nudged by a few grams (the brew form's −5 −1 +1 +5 under
+// Water): "250" + 1 → "251", "250,5" − 1 → "249.5". Empty counts as 0, and
+// nothing left (0 or less) empties the box so the required error shows.
+export function nudgeGrams(text: string, delta: number): string {
+  const n = Number(text.replace(',', '.'));
+  const next = (text.trim() && Number.isFinite(n) ? n : 0) + delta;
+  return next > 0 ? formatGrams(next) : '';
+}
+
 // A grind setting, the number on the grinder's dial: "20", "4.25".
 export function formatGrind(value: number): string {
   return formatGrams(value);
