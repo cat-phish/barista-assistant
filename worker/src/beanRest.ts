@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull } from "drizzle-orm";
 import { sendNotification } from "@barista/shared/notify";
 import { addDays } from "@barista/shared/recapPeriods";
 import { beans, DEFAULT_PREFERENCES, users, withDefaults, workspaceMembers, workspaces, type UserPreferences } from "@barista/shared/schema";
@@ -63,7 +63,9 @@ export async function processBeanRestTick(now: Date = new Date(), send: Send = s
     .innerJoin(users, eq(users.id, beans.restingBy))
     .innerJoin(workspaces, eq(workspaces.id, beans.workspaceId))
     .innerJoin(workspaceMembers, and(eq(workspaceMembers.workspaceId, beans.workspaceId), eq(workspaceMembers.userId, users.id)))
-    .where(and(isNotNull(beans.restingUntil), isNull(beans.archivedAt)));
+    .where(and(isNotNull(beans.restingUntil), isNull(beans.archivedAt)))
+    // A steady order for the "2 beans: …" list.
+    .orderBy(asc(beans.beanName), asc(beans.batchNumber), asc(beans.id));
 
   const due = new Map<string, { userId: string; workspaceId: string; day: string; beans: typeof rows }>();
   for (const row of rows) {
