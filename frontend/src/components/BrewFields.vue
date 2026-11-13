@@ -6,7 +6,7 @@ import type { BrewProblem, FlavorPick, Grinder, MethodKind, PrepTool, RecipeStyl
 import { netYield, type BrewDraft, type BrewDraftErrors } from '../lib/brewDraft';
 import { brixToTds, extractionYield, usesWater } from '../lib/extraction';
 import { DILUTION_WITH, isColdStyle, STEEP_TEMPS } from '../lib/coldBrew';
-import { formatGrams, nudgeGrams } from '../lib/format';
+import { formatGrams } from '../lib/format';
 import { grinderRetentionText } from '../lib/grinderRetention';
 import { problemsFor, toolsFor } from '../lib/prepTools';
 import { TEMPERATURE_LABELS } from '../lib/units';
@@ -15,6 +15,7 @@ import { useFieldVisibility } from '../composables/useFieldVisibility';
 import RatingInput from './RatingInput.vue';
 import FlavorWheel from './FlavorWheel.vue';
 import VesselField from './VesselField.vue';
+import NudgeButtons from './NudgeButtons.vue';
 import TimeInput from './TimeInput.vue';
 
 const draft = defineModel<BrewDraft>({ required: true });
@@ -163,7 +164,7 @@ const onIce = computed(() => !props.espresso && num(draft.value.ice) !== null);
 const yieldNote = computed(() => {
   if (props.batch) return draft.value.vesselId ? 'vessel and concentrate, after straining' : 'weigh it after straining';
   if (draft.value.vesselId) return onIce.value ? 'vessel, coffee and ice' : 'vessel and coffee';
-  return onIce.value ? 'weigh the server with the ice' : 'weigh the brewed coffee';
+  return '';
 });
 // The Ice field shows for a recipe with ice, and from the moment the brew has
 // some (a repeat, the recipe loading, an old log): it then stays, even if the
@@ -201,9 +202,6 @@ const toolOptions = computed(() => toolsFor(props.prepTools ?? [], { kind: props
 const problemOptions = computed(() => problemsFor(props.problems ?? [], { kind: props.methodKind ?? null, brewerId: props.brewerId ?? null }, draft.value.problemIds));
 // Likewise for water; with none set up, the only choice says so.
 const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w.archivedAt || w.id === draft.value.waterProfileId));
-// Over- or undershot the pour: a tap fixes the water instead of retyping it.
-const WATER_NUDGES = [-5, -1, 1, 5] as const;
-const hasWater = computed(() => num(draft.value.water) !== null);
 </script>
 
 <template>
@@ -212,6 +210,7 @@ const hasWater = computed(() => num(draft.value.water) !== null);
       <div class="field">
         <label for="brew-dose">Dose (g)<span class="req" aria-hidden="true">*</span></label>
         <input id="brew-dose" aria-required="true" v-model="draft.dose" inputmode="decimal" :aria-invalid="showErrors && !!errors.dose" />
+        <NudgeButtons v-model="draft.dose" :steps="[0.1, 0.5]" label="Adjust the dose" />
         <span v-if="showErrors && errors.dose" class="field-error">{{ errors.dose }}</span>
       </div>
       <div v-if="espresso" class="field">
@@ -230,17 +229,7 @@ const hasWater = computed(() => num(draft.value.water) !== null);
       <div v-if="!espresso" class="field">
         <label for="brew-water">{{ onIce ? 'Hot water (g)' : 'Water (g)' }}<span class="req" aria-hidden="true">*</span></label>
         <input id="brew-water" aria-required="true" v-model="draft.water" inputmode="decimal" :aria-invalid="showErrors && !!errors.water" />
-        <div class="nudge" role="group" aria-label="Adjust the water">
-          <button
-            v-for="d in WATER_NUDGES"
-            :key="d"
-            class="btn btn-secondary"
-            type="button"
-            :aria-label="`${d < 0 ? 'Remove' : 'Add'} ${Math.abs(d)} g`"
-            :disabled="d < 0 && !hasWater"
-            @click="draft.water = nudgeGrams(draft.water, d)"
-          >{{ d < 0 ? '−' : '+' }}{{ Math.abs(d) }}</button>
-        </div>
+        <NudgeButtons v-model="draft.water" :steps="[1, 5]" label="Adjust the water" />
         <span v-if="showErrors && errors.water" class="field-error">{{ errors.water }}</span>
       </div>
       <div v-if="!espresso && show('brew.ice') && (iced || hadIce)" class="field">
@@ -252,7 +241,7 @@ const hasWater = computed(() => num(draft.value.water) !== null);
     </div>
     <div v-if="!espresso && show('brew.yield')" class="form-row">
       <div class="field">
-        <label for="brew-yield">{{ draft.vesselId ? 'Total weight (g)' : batch ? 'Concentrate made (g)' : 'Yield (g)' }} <span class="muted">({{ yieldNote }})</span></label>
+        <label for="brew-yield">{{ draft.vesselId ? 'Total weight (g)' : batch ? 'Concentrate made (g)' : 'Yield (g)' }}<span v-if="yieldNote" class="muted"> ({{ yieldNote }})</span></label>
         <input
           id="brew-yield"
           v-model="draft.yieldGrams"
@@ -418,16 +407,6 @@ const hasWater = computed(() => num(draft.value.water) !== null);
 </template>
 
 <style scoped>
-.nudge {
-  display: flex;
-  gap: var(--space-1);
-}
-.nudge .btn {
-  flex: 1 1 0;
-  min-width: 0;
-  padding: 0 var(--space-1);
-  font-variant-numeric: tabular-nums;
-}
 .dilution {
   display: flex;
   gap: var(--space-2);
