@@ -1,6 +1,7 @@
 // Response shapes from docs/api/README.md. Dates arrive as ISO strings;
 // decimals as numbers (§0).
 import type { AiDetail } from '../lib/aiDetails';
+import type { BeanCarryKey } from '../lib/beanCarry';
 
 export type Role = 'owner' | 'barista' | 'viewer';
 
@@ -104,6 +105,8 @@ export interface WorkspaceSettings {
   homeRoasting: boolean;
   homeRoasterName: string; // the roaster name on beans roasts create
   restDays: Record<RoastType, number>; // days a roast rests, by roast type (0–60)
+  batchAddBeans: boolean; // the Add bean page's "Add several batches" (beans.md §4)
+  beanCarryOver: BeanCarryKey[]; // its "Carry over" boxes that start ticked
   timeZone: string | null; // IANA name; null = the server's BREW_TIMEZONE, else UTC
 }
 export const MAX_REST_DAYS = 60;

@@ -17,6 +17,7 @@ import {
   type AnyMySqlColumn,
 } from "drizzle-orm/mysql-core";
 import type { AiDetail } from "./aiDetails.js";
+import { DEFAULT_BEAN_CARRY, type BeanCarryKey } from "./beanCarry.js";
 import type { AiPrompt } from "./aiPrompt.js";
 import type { LexiconFlavor } from "./flavors.js";
 import type { RecipeCopy } from "./recipeCopy.js";
@@ -187,6 +188,11 @@ export interface WorkspaceSettings {
   // Days a roast rests before it's ready, by roast type; each roast starts
   // from these and can change its own.
   restDays: Record<RoastType, number>;
+  // Batch add (docs/api/workspaces.md §2): the Add bean page offers "Add
+  // several batches", one bean after another (docs/api/beans.md §4). Off by
+  // default. beanCarryOver: the "Carry over" boxes that start ticked.
+  batchAddBeans: boolean;
+  beanCarryOver: BeanCarryKey[];
   // The workspace's time zone (an IANA name), for brews logged without a
   // UTC offset (roast age, reminder times) and the recap notification of
   // anyone without their own; null = the server's BREW_TIMEZONE, else UTC.
@@ -245,6 +251,8 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   homeRoasting: false,
   homeRoasterName: "Home roast",
   restDays: { filter: 7, espresso: 14, omni: 10 },
+  batchAddBeans: false,
+  beanCarryOver: DEFAULT_BEAN_CARRY,
   timeZone: null,
 };
 

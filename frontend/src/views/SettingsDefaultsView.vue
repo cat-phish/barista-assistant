@@ -8,6 +8,7 @@ import { workspacesApi } from '../api/workspaces';
 import SettingsLayout from '../components/SettingsLayout.vue';
 import { usePreferences } from '../composables/usePreferences';
 import { ROAST_TYPES } from '../lib/beans';
+import { CARRY_LIST, type BeanCarryKey } from '../lib/beanCarry';
 import { parseDecimal } from '../lib/format';
 import { ROAST_LEVELS } from '../lib/scale';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -27,7 +28,7 @@ const STEPS: Array<{ value: RatingStep; label: string; hint: string }> = [
   { value: 'half', label: 'Half stars', hint: 'From ½ to 5 stars: tap the left half of a star for the half below it.' },
   { value: 'whole', label: 'Whole stars', hint: '1 to 5 stars. Half ratings already recorded still show.' },
 ];
-type Where = 'roast' | 'scale' | 'rating' | 'roasting' | 'zone';
+type Where = 'roast' | 'scale' | 'rating' | 'roasting' | 'beans' | 'zone';
 
 // The workspace's time zone (docs/api/workspaces.md §2, timeZone): every
 // zone this browser knows, with the one already saved even if it doesn't.
@@ -94,6 +95,12 @@ const roastingErrors = computed(() => {
 const roastingChanged = computed(
   () => roasterName.value.trim() !== settings.value.homeRoasterName || ROAST_TYPE_KEYS.some((t) => restDays.value[t].trim() !== String(settings.value.restDays[t])),
 );
+// Batch add's carry-over boxes (docs/api/workspaces.md §2, beanCarryOver),
+// kept in the shared order.
+function setCarry(key: BeanCarryKey, on: boolean): void {
+  const next = CARRY_LIST.map((c) => c.key).filter((k) => (k === key ? on : settings.value.beanCarryOver.includes(k)));
+  void set({ beanCarryOver: next }, 'beans');
+}
 async function saveRoasting(): Promise<void> {
   if (Object.keys(roastingErrors.value).length) return;
   const days = Object.fromEntries(ROAST_TYPE_KEYS.map((t) => [t, Number(restDays.value[t])])) as Record<RoastType, number>;
@@ -189,6 +196,28 @@ async function saveRoasting(): Promise<void> {
       <p v-if="error && savedWhere === 'roasting'" class="form-error" role="alert">{{ error }}</p>
       <p v-if="saved && savedWhere === 'roasting'" class="muted small" aria-live="polite">Saved.</p>
     </section>
+    <section class="card stack" aria-labelledby="def-beans">
+      <h2 id="def-beans">Beans</h2>
+      <label class="checkbox">
+        <input type="checkbox" :checked="settings.batchAddBeans" :disabled="!isOwner || saving" @change="set({ batchAddBeans: ($event.target as HTMLInputElement).checked }, 'beans')" />
+        <span>
+          Add several batches at once
+          <span class="muted small hint">The Add bean page gets an Add several batches button. Each field gets a Carry over box, and Next batch saves the bean and starts the next one with what's ticked. Handy for home roasts.</span>
+        </span>
+      </label>
+      <fieldset v-if="settings.batchAddBeans" class="carry" :disabled="!isOwner || saving">
+        <legend>Carried over to the next batch</legend>
+        <p class="muted small">What starts ticked; each batch can change it. The batch number always moves on to the next.</p>
+        <div class="carry-list">
+          <label v-for="c in CARRY_LIST" :key="c.key" class="checkbox">
+            <input type="checkbox" :checked="settings.beanCarryOver.includes(c.key)" @change="setCarry(c.key, ($event.target as HTMLInputElement).checked)" />
+            {{ c.label }}
+          </label>
+        </div>
+      </fieldset>
+      <p v-if="error && savedWhere === 'beans'" class="form-error" role="alert">{{ error }}</p>
+      <p v-if="saved && savedWhere === 'beans'" class="muted small" aria-live="polite">Saved.</p>
+    </section>
     <section class="card stack" aria-labelledby="def-zone">
       <h2 id="def-zone">Time zone</h2>
       <div class="field">
@@ -259,7 +288,8 @@ p {
 .hint {
   display: block;
 }
-.rest {
+.rest,
+.carry {
   border: 0;
   margin: 0;
   padding: 0;
@@ -267,7 +297,13 @@ p {
   flex-direction: column;
   gap: var(--space-2);
 }
-.rest legend {
+.carry-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: var(--space-1) var(--space-3);
+}
+.rest legend,
+.carry legend {
   padding: 0;
   margin-bottom: var(--space-1);
   font-weight: 600;

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BEAN_CARRY_KEYS } from "@barista/shared/beanCarry";
 import { CHAT_PERIOD_BREWS_MAX, CHAT_PERIOD_BREWS_MIN } from "@barista/shared/chatPeriod";
 import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, LABEL_WEB_CONTEXTS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_CHAT_ATTACHMENTS, MAX_REST_DAYS, MAX_REVIEW_BREWS, MAX_SUGGEST_BREWS, RECAP_AI_MODES, RECAP_PERIOD_CHOICES, REMEMBER_KEYS, REPEAT_KEEPS, RATING_STEPS, ROAST_LEVELS, ROAST_SCALES, ROAST_TYPES, type RoastType, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
 import { AI_DETAILS } from "@barista/shared/aiDetails";
@@ -58,6 +59,10 @@ export const workspaceSettingsObject = z
     homeRoasting: z.boolean(),
     homeRoasterName: z.string().trim().min(1).max(255),
     restDays: z.object(restDayShape).strict(),
+    batchAddBeans: z.boolean(), // the Add bean page's batch mode
+    beanCarryOver: z
+      .array(z.enum(BEAN_CARRY_KEYS))
+      .refine((keys) => new Set(keys).size === keys.length, "each field once"),
     // The workspace's time zone; null = the server's BREW_TIMEZONE.
     timeZone: z.string().max(64).refine(isTimeZone, "an IANA time zone, like Europe/London").nullable(),
   })

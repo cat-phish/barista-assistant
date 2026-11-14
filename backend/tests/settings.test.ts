@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { DEFAULT_BEAN_CARRY } from "@barista/shared/beanCarry";
 import request from "supertest";
 import { users } from "@barista/shared/schema";
 import { eq, sql } from "drizzle-orm";
@@ -12,9 +13,9 @@ describe("workspace settings", () => {
   it("come with every workspace, defaults filled in", async () => {
     const owner = await newUser();
     const created = await owner.agent.post("/api/workspaces").send({ name: "Bar", slug: "settings-bar" });
-    expect(created.body.workspace.settings).toEqual({ recipeRoastLevel: "light", roastScale: "names", ratingStep: "half", hiddenFields: [], aiChat: true, chatMaxAttachments: 50, chatPeriodMaxBrews: 60, aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5, suggestAlternatives: [], beanReviews: true, beanReviewMaxBrews: 10, beanReviewRatedOnly: true, beanReviewBrewers: "all", readLabels: true, labelWebLookup: false, labelWebContext: "high", homeRoasting: false, homeRoasterName: "Home roast", restDays: { filter: 7, espresso: 14, omni: 10 }, timeZone: null });
+    expect(created.body.workspace.settings).toEqual({ recipeRoastLevel: "light", roastScale: "names", ratingStep: "half", hiddenFields: [], aiChat: true, chatMaxAttachments: 50, chatPeriodMaxBrews: 60, aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5, suggestAlternatives: [], beanReviews: true, beanReviewMaxBrews: 10, beanReviewRatedOnly: true, beanReviewBrewers: "all", readLabels: true, labelWebLookup: false, labelWebContext: "high", homeRoasting: false, homeRoasterName: "Home roast", restDays: { filter: 7, espresso: 14, omni: 10 }, batchAddBeans: false, beanCarryOver: DEFAULT_BEAN_CARRY, timeZone: null });
     const list = await owner.agent.get("/api/workspaces");
-    expect(list.body.workspaces[0].settings).toEqual({ recipeRoastLevel: "light", roastScale: "names", ratingStep: "half", hiddenFields: [], aiChat: true, chatMaxAttachments: 50, chatPeriodMaxBrews: 60, aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5, suggestAlternatives: [], beanReviews: true, beanReviewMaxBrews: 10, beanReviewRatedOnly: true, beanReviewBrewers: "all", readLabels: true, labelWebLookup: false, labelWebContext: "high", homeRoasting: false, homeRoasterName: "Home roast", restDays: { filter: 7, espresso: 14, omni: 10 }, timeZone: null });
+    expect(list.body.workspaces[0].settings).toEqual({ recipeRoastLevel: "light", roastScale: "names", ratingStep: "half", hiddenFields: [], aiChat: true, chatMaxAttachments: 50, chatPeriodMaxBrews: 60, aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5, suggestAlternatives: [], beanReviews: true, beanReviewMaxBrews: 10, beanReviewRatedOnly: true, beanReviewBrewers: "all", readLabels: true, labelWebLookup: false, labelWebContext: "high", homeRoasting: false, homeRoasterName: "Home roast", restDays: { filter: 7, espresso: 14, omni: 10 }, batchAddBeans: false, beanCarryOver: DEFAULT_BEAN_CARRY, timeZone: null });
   });
 
   it("owners change them; others get 403; bad values 400", async () => {
@@ -31,8 +32,8 @@ describe("workspace settings", () => {
 
     const ok = await owner.agent.patch(path).send({ recipeRoastLevel: "medium" });
     expect(ok.status).toBe(200);
-    expect(ok.body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "names", ratingStep: "half", hiddenFields: [], aiChat: true, chatMaxAttachments: 50, chatPeriodMaxBrews: 60, aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5, suggestAlternatives: [], beanReviews: true, beanReviewMaxBrews: 10, beanReviewRatedOnly: true, beanReviewBrewers: "all", readLabels: true, labelWebLookup: false, labelWebContext: "high", homeRoasting: false, homeRoasterName: "Home roast", restDays: { filter: 7, espresso: 14, omni: 10 }, timeZone: null });
-    expect((await owner.agent.patch(path).send({ roastScale: "levels" })).body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "levels", ratingStep: "half", hiddenFields: [], aiChat: true, chatMaxAttachments: 50, chatPeriodMaxBrews: 60, aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5, suggestAlternatives: [], beanReviews: true, beanReviewMaxBrews: 10, beanReviewRatedOnly: true, beanReviewBrewers: "all", readLabels: true, labelWebLookup: false, labelWebContext: "high", homeRoasting: false, homeRoasterName: "Home roast", restDays: { filter: 7, espresso: 14, omni: 10 }, timeZone: null });
+    expect(ok.body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "names", ratingStep: "half", hiddenFields: [], aiChat: true, chatMaxAttachments: 50, chatPeriodMaxBrews: 60, aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5, suggestAlternatives: [], beanReviews: true, beanReviewMaxBrews: 10, beanReviewRatedOnly: true, beanReviewBrewers: "all", readLabels: true, labelWebLookup: false, labelWebContext: "high", homeRoasting: false, homeRoasterName: "Home roast", restDays: { filter: 7, espresso: 14, omni: 10 }, batchAddBeans: false, beanCarryOver: DEFAULT_BEAN_CARRY, timeZone: null });
+    expect((await owner.agent.patch(path).send({ roastScale: "levels" })).body.settings).toEqual({ recipeRoastLevel: "medium", roastScale: "levels", ratingStep: "half", hiddenFields: [], aiChat: true, chatMaxAttachments: 50, chatPeriodMaxBrews: 60, aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: "beanRecipe", suggestMaxBrews: 5, suggestAlternatives: [], beanReviews: true, beanReviewMaxBrews: 10, beanReviewRatedOnly: true, beanReviewBrewers: "all", readLabels: true, labelWebLookup: false, labelWebContext: "high", homeRoasting: false, homeRoasterName: "Home roast", restDays: { filter: 7, espresso: 14, omni: 10 }, batchAddBeans: false, beanCarryOver: DEFAULT_BEAN_CARRY, timeZone: null });
     expect((await owner.agent.patch(path).send({ roastScale: "agtron" })).status).toBe(400);
     expect((await owner.agent.patch(path).send({ ratingStep: "whole" })).body.settings.ratingStep).toBe("whole");
     expect((await owner.agent.patch(path).send({ ratingStep: "quarter" })).status).toBe(400);
@@ -47,6 +48,17 @@ describe("workspace settings", () => {
     expect(roasting.body.settings).toMatchObject({ homeRoasting: true, homeRoasterName: "Garage roast", restDays: { filter: 5, espresso: 12, omni: 8 } });
     for (const bad of [{ homeRoasterName: " " }, { restDays: { filter: 5 } }, { restDays: { filter: 5, espresso: 61, omni: 8 } }, { restDays: { filter: 5, espresso: 12, omni: 8, cold: 1 } }, { homeRoasting: "on" }]) {
       expect((await owner.agent.patch(path).send(bad)).status, JSON.stringify(bad)).toBe(400);
+    }
+    // Batch add on the Add bean page: off by default, a boolean.
+    expect((await owner.agent.patch(path).send({ batchAddBeans: true })).body.settings.batchAddBeans).toBe(true);
+    expect((await owner.agent.patch(path).send({ batchAddBeans: "on" })).status).toBe(400);
+    // Its carry-over boxes: the whole list, known keys, each once.
+    expect(DEFAULT_BEAN_CARRY).toContain("beanName");
+    expect(DEFAULT_BEAN_CARRY).not.toContain("inventory");
+    expect((await owner.agent.patch(path).send({ beanCarryOver: ["roasterName", "photos"] })).body.settings.beanCarryOver).toEqual(["roasterName", "photos"]);
+    expect((await owner.agent.patch(path).send({ beanCarryOver: [] })).body.settings.beanCarryOver).toEqual([]);
+    for (const bad of [["roasterName", "roasterName"], ["batchNumber"], "photos"]) {
+      expect((await owner.agent.patch(path).send({ beanCarryOver: bad })).status, JSON.stringify(bad)).toBe(400);
     }
     // The workspace's time zone: an IANA name, or null for the server's.
     expect((await owner.agent.patch(path).send({ timeZone: "America/Los_Angeles" })).body.settings.timeZone).toBe("America/Los_Angeles");

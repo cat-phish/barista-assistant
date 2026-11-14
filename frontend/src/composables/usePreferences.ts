@@ -2,6 +2,7 @@ import { computed } from 'vue';
 import type { UserPreferences, WorkspaceSettings } from '../api/types';
 import { useAuthStore } from '../stores/auth';
 import { useWorkspaceStore } from '../stores/workspace';
+import { DEFAULT_BEAN_CARRY } from '../lib/beanCarry';
 
 // The defaults match the API's (DEFAULT_PREFERENCES / DEFAULT_WORKSPACE_SETTINGS
 // in @barista/shared), for the moment before /me or the workspace has loaded.
@@ -33,7 +34,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   recapAi: 'manual',
   recapSeen: {},
 };
-export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: 'light', roastScale: 'names', ratingStep: 'half', hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: 'beanRecipe', suggestMaxBrews: 5, suggestAlternatives: [], beanReviews: true, beanReviewMaxBrews: 10, beanReviewRatedOnly: true, beanReviewBrewers: 'all', aiChat: true, chatMaxAttachments: 50, chatPeriodMaxBrews: 60, readLabels: true, labelWebLookup: false, labelWebContext: 'high', homeRoasting: false, homeRoasterName: 'Home roast', restDays: { filter: 7, espresso: 14, omni: 10 }, timeZone: null };
+export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: 'light', roastScale: 'names', ratingStep: 'half', hiddenFields: [], aiHidden: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: 'beanRecipe', suggestMaxBrews: 5, suggestAlternatives: [], beanReviews: true, beanReviewMaxBrews: 10, beanReviewRatedOnly: true, beanReviewBrewers: 'all', aiChat: true, chatMaxAttachments: 50, chatPeriodMaxBrews: 60, readLabels: true, labelWebLookup: false, labelWebContext: 'high', homeRoasting: false, homeRoasterName: 'Home roast', restDays: { filter: 7, espresso: 14, omni: 10 }, batchAddBeans: false, beanCarryOver: DEFAULT_BEAN_CARRY, timeZone: null };
 
 // The signed-in person's display units and the current workspace's settings.
 export function usePreferences() {
