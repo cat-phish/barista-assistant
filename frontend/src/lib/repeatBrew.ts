@@ -2,7 +2,7 @@
 // earlier brew log. This works out the setup choices; BrewView applies them
 // and fills dose, water, size, temperature and grind from the log itself.
 // What's no longer available (archived or deleted) is skipped and named.
-import type { Bean, BrewLog, Brewer, Drink, Grinder, Recipe, RepeatKeep, Vessel, WaterProfile } from '../api/types';
+import type { Bean, BrewLog, Brewer, Drink, Grinder, Recipe, RepeatButtonGroup, RepeatKeep, Vessel, WaterProfile } from '../api/types';
 import type { FieldKey } from './fields';
 import { batchSuffix } from './beans';
 import { encodeCategory, encodeDrink, encodeMethod, encodePlain, methodKey, NO_RECIPE } from './brewChoice';
@@ -147,29 +147,15 @@ export function repeatPlan(log: BrewLog, s: RepeatSources): RepeatPlan {
   };
 }
 
-// What a brew made, for grouping the quick repeat buttons: a drink, or a
-// plain brew of the brewer's method (a Latte and a straight shot differ).
-export function madeKey(log: BrewLog, brewers: Brewer[]): string {
-  if (log.drinkId) return `drink:${log.drinkId}`;
-  const brewer = brewers.find((b) => b.id === log.brewerId);
-  if (brewer) return `plain:${methodKey(brewer)}`;
-  return log.brewer ? `plain:${log.brewer.kind}` : NO_RECIPE;
-}
-
-// The newest brew of each of the last n different things made, newest first.
-// logs: newest first, as the API lists them.
-export function recentByMade(logs: BrewLog[], brewers: Brewer[], n = 3): BrewLog[] {
-  const seen = new Set<string>();
-  const out: BrewLog[] = [];
-  for (const log of logs) {
-    const key = madeKey(log, brewers);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(log);
-    if (out.length === n) break;
-  }
-  return out;
-}
+// What the brew page's quick repeat buttons tell apart (Settings → Brew
+// setup, docs/api/auth.md §1 repeatButtonsBy). The server picks the brews
+// (docs/api/brew-logs.md, GET …/brew-logs/repeats).
+export const REPEAT_GROUP_OPTIONS: Array<{ key: RepeatButtonGroup; label: string; hint: string }> = [
+  { key: 'made', label: 'Each drink or brew method', hint: 'A Latte, a straight shot and a pour-over each get a button.' },
+  { key: 'brewer', label: 'Each brewer', hint: 'A V60 and a Kalita each get a button.' },
+  { key: 'recipe', label: 'Each brewer and recipe', hint: 'Two recipes on the V60 each get a button.' },
+  { key: 'coffee', label: 'Each brewer, recipe and coffee', hint: 'Batches of one coffee count as one.' },
+];
 
 // "The Atlas" / "V60" / "No recipe", its recipe ("House V60", or null),
 // "Guji · Batch 3", "Oct 21".

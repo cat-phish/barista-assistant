@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { BEAN_CARRY_KEYS } from "@barista/shared/beanCarry";
 import { CHAT_PERIOD_BREWS_MAX, CHAT_PERIOD_BREWS_MIN } from "@barista/shared/chatPeriod";
-import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, LABEL_WEB_CONTEXTS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_CHAT_ATTACHMENTS, MAX_REST_DAYS, MAX_REVIEW_BREWS, MAX_SUGGEST_BREWS, RECAP_AI_MODES, RECAP_PERIOD_CHOICES, REMEMBER_KEYS, REPEAT_KEEPS, RATING_STEPS, ROAST_LEVELS, ROAST_SCALES, ROAST_TYPES, type RoastType, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
+import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, LABEL_WEB_CONTEXTS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_CHAT_ATTACHMENTS, MAX_REST_DAYS, MAX_REVIEW_BREWS, MAX_SUGGEST_BREWS, RECAP_AI_MODES, RECAP_PERIOD_CHOICES, REMEMBER_KEYS, REPEAT_BUTTON_GROUPS, REPEAT_KEEPS, RATING_STEPS, ROAST_LEVELS, ROAST_SCALES, ROAST_TYPES, type RoastType, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
 import { AI_DETAILS } from "@barista/shared/aiDetails";
 import { ROLES } from "./auth/membership.js";
 
@@ -97,6 +97,7 @@ export const preferencesSchema = z
     repeatKeeps: z
       .array(z.enum(REPEAT_KEEPS))
       .refine((keys) => new Set(keys).size === keys.length, "each once"),
+    repeatButtonsBy: z.enum(REPEAT_BUTTON_GROUPS),
     rememberSetup: z
       .array(z.enum(REMEMBER_KEYS))
       .refine((keys) => new Set(keys).size === keys.length, "each once"),

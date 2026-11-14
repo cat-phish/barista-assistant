@@ -21,6 +21,7 @@ export interface UserPreferences {
   rateReminderMinutes: number; // 5–240
   rateLaterDefault: boolean; // the log form's Rate later box starts ticked
   repeatKeeps: RepeatKeep[]; // what a repeat copies (lib/repeatBrew.ts REPEAT_OPTIONS)
+  repeatButtonsBy: RepeatButtonGroup; // what the quick repeat buttons tell apart (lib/repeatBrew.ts REPEAT_GROUP_OPTIONS)
   rememberSetup: RememberKey[]; // what the brew page remembers from last time (lib/rememberSetup.ts)
   startDelays: Partial<Record<MethodKind, 0 | 3 | 5>>; // countdown before a timed brew, per method; missing = none (docs/api/auth.md §1)
   steepReminders: boolean; // remind when a cold brew's steep window opens
@@ -45,6 +46,8 @@ export interface UserPreferences {
 }
 export type RecapPeriodChoice = 'weekly' | 'monthly' | 'both';
 export type RecapAiMode = 'off' | 'manual' | 'auto';
+// docs/api/auth.md §1 repeatButtonsBy.
+export type RepeatButtonGroup = 'made' | 'brewer' | 'recipe' | 'coffee';
 export type RepeatKeep = 'bean' | 'recipe' | 'size' | 'doseWater' | 'temp' | 'grinder' | 'grind' | 'waterProfile' | 'dilution' | 'window' | 'prepTools' | 'grinderWeights' | 'vessel' | 'notes';
 export type RememberKey = 'what' | 'brewer' | 'recipe' | 'bean' | 'grinder' | 'grind' | 'waterProfile' | 'vessel' | 'prepTools' | 'size';
 

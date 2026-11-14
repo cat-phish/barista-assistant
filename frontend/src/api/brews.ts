@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { AiRequest, BrewLog, DilutionWith, LlmAnalysis, Mark, ParameterSuggestion, ServingUnit, SteepTemp, SuggestionRequest } from './types';
+import type { AiRequest, BrewLog, DilutionWith, LlmAnalysis, Mark, ParameterSuggestion, RepeatButtonGroup, ServingUnit, SteepTemp, SuggestionRequest } from './types';
 
 // What happened to a reminder asked for when saving (docs/api/notifications.md §1b).
 export type Reminder = 'queued' | 'off' | 'unavailable';
@@ -72,6 +72,10 @@ export const brewLogsApi = {
     api.post<{ brewLog: BrewLog; reminder?: Reminder; steepReminder?: Reminder }>(base(workspaceId), input),
   get: (workspaceId: string, id: string) =>
     api.get<{ brewLog: BrewLog & { latestAnalysis: LlmAnalysis | null } }>(`${base(workspaceId)}/${id}`),
+  // The quick repeat buttons: the newest brew of each of the last n different
+  // things brewed, over every brew (docs/api/brew-logs.md, GET …/repeats).
+  repeats: (workspaceId: string, by: RepeatButtonGroup, n = 3) =>
+    api.get<{ brewLogs: BrewLog[] }>(`${base(workspaceId)}/repeats?${new URLSearchParams({ by, n: String(n) })}`),
   // from/to: ISO dates, the brews' own local dates (brew-logs.md).
   list: (workspaceId: string, query: BrewLogQuery = {}) => {
     const params = new URLSearchParams();

@@ -135,6 +135,28 @@ took in grams; `0` for any other brew.
   `timestamp` first. `total` counts all matches, ignoring `limit`/`offset`.
 - **Errors:** `400` invalid query.
 
+## `GET /api/workspaces/:workspaceId/brew-logs/repeats`
+
+The brew page's quick repeat buttons: the newest brew of each of the last
+`n` different things brewed, searched over **every** brew in the workspace
+(everyone's, like the unfiltered list) and grouped in SQL, so only the
+picked brews are sent.
+
+- **Auth Required:** `true` (any member)
+- **Query (all optional):** `by`, what makes two brews different (the
+  caller's `repeatButtonsBy`, `auth.md` §1; default `made`):
+  - `made`: a drink brew by its drink; a plain brew by its brewer's method
+    (the brewer's `methodId`, else its `kind`); no brewer is one group;
+  - `brewer`: the drink (or plain) and the brewer;
+  - `recipe`: as `brewer`, and the recipe;
+  - `coffee`: as `recipe`, and the bean's roaster + name (trimmed, case
+    ignored), so batches of one coffee are one group.
+
+  `n`: how many (1–6, default 3).
+- **Success (`200 OK`):** `{ "brewLogs": [ ...brewLog ] }`, each the newest
+  of its group, newest `timestamp` first.
+- **Errors:** `400` invalid query.
+
 ## `GET /api/workspaces/:workspaceId/brew-logs/:brewLogId`
 
 - **Auth Required:** `true` (any member)
