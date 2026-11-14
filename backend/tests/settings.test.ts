@@ -134,7 +134,7 @@ describe("roast scale", () => {
 });
 
 describe("preferences", () => {
-  const defaults = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, steepReminders: true, restReminders: true, restReminderRepeatDays: null, restingInBrewPickerDefault: true, greenStockAlerts: true, recaps: true, recapPeriods: "both", weekStartsOn: 1, recapBanner: true, recapBannerDays: 3, recapNotify: true, recapNotifyTime: "08:00", timeZone: null, recapAi: "manual", recapSeen: {} };
+  const defaults = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], repeatButtonsBy: "made", rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, steepReminders: true, restReminders: true, restReminderRepeatDays: null, restingInBrewPickerDefault: true, greenStockAlerts: true, recaps: true, recapPeriods: "both", weekStartsOn: 1, recapBanner: true, recapBannerDays: 3, recapNotify: true, recapNotifyTime: "08:00", timeZone: null, recapAi: "manual", recapSeen: {} };
 
   it("come back on register and /me, defaults filled in", async () => {
     const user = await newUser();
@@ -152,7 +152,7 @@ describe("preferences", () => {
 
     expect((await a.agent.patch(path).send({ temperatureUnit: "f" })).body.preferences).toEqual({ ...defaults, temperatureUnit: "f" });
     const both = await a.agent.patch(path).send({ altitudeUnit: "ft", volumeUnit: "ml", showBothVolumes: true });
-    expect(both.body.preferences).toEqual({ volumeUnit: "ml", showBothVolumes: true, altitudeUnit: "ft", temperatureUnit: "f", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, steepReminders: true, restReminders: true, restReminderRepeatDays: null, restingInBrewPickerDefault: true, greenStockAlerts: true, recaps: true, recapPeriods: "both", weekStartsOn: 1, recapBanner: true, recapBannerDays: 3, recapNotify: true, recapNotifyTime: "08:00", timeZone: null, recapAi: "manual", recapSeen: {} });
+    expect(both.body.preferences).toEqual({ volumeUnit: "ml", showBothVolumes: true, altitudeUnit: "ft", temperatureUnit: "f", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], repeatButtonsBy: "made", rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, steepReminders: true, restReminders: true, restReminderRepeatDays: null, restingInBrewPickerDefault: true, greenStockAlerts: true, recaps: true, recapPeriods: "both", weekStartsOn: 1, recapBanner: true, recapBannerDays: 3, recapNotify: true, recapNotifyTime: "08:00", timeZone: null, recapAi: "manual", recapSeen: {} });
     expect((await a.agent.patch(path).send({ theme: "dark" })).body.preferences.theme).toBe("dark");
     expect((await a.agent.patch(path).send({ theme: "sepia" })).status).toBe(400);
 
@@ -231,6 +231,15 @@ describe("preferences", () => {
     expect((await me.agent.patch(path).send({ repeatKeeps: [] })).body.preferences.repeatKeeps).toEqual([]);
     for (const repeatKeeps of [["rating"], ["grind", "grind"], "grind"]) {
       expect((await me.agent.patch(path).send({ repeatKeeps })).status, JSON.stringify(repeatKeeps)).toBe(400);
+    }
+  });
+
+  it("repeatButtonsBy: what the quick repeat buttons tell apart (docs/api/auth.md §1)", async () => {
+    const me = await newUser();
+    const path = "/api/auth/me/preferences";
+    expect((await me.agent.patch(path).send({ repeatButtonsBy: "recipe" })).body.preferences.repeatButtonsBy).toBe("recipe");
+    for (const repeatButtonsBy of ["bean", null, 1]) {
+      expect((await me.agent.patch(path).send({ repeatButtonsBy })).status, JSON.stringify(repeatButtonsBy)).toBe(400);
     }
   });
 

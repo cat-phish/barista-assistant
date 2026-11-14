@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Bean, BrewLog, Brewer, Drink, Grinder, Recipe, WaterProfile } from '../api/types';
 import { DEFAULT_PREFERENCES } from '../composables/usePreferences';
 import { FIELDS } from './fields';
-import type { RepeatKeep } from '../api/types';
-import { madeKey, recentByMade, REPEAT_FOR_FIELD, REPEAT_OPTIONS, repeatLabel, repeatMissing, repeatPlan, type RepeatSources } from './repeatBrew';
+import type { RepeatButtonGroup, RepeatKeep } from '../api/types';
+import { REPEAT_FOR_FIELD, REPEAT_GROUP_OPTIONS, REPEAT_OPTIONS, repeatLabel, repeatMissing, repeatPlan, type RepeatSources } from './repeatBrew';
 
 const log = (over: Partial<BrewLog> = {}): BrewLog =>
   ({
@@ -105,17 +105,9 @@ describe('repeatMissing: only what would have been copied', () => {
 });
 
 describe('quick repeats', () => {
-  const brewers = sources().brewers;
-  const at = (id: string, over: Partial<BrewLog>) => log({ id, ...over });
-  const espresso = { brewerId: 'lm', brewer: { id: 'lm', name: 'Linea', kind: 'espresso' as const } };
-  it('one per thing made: a drink, or a plain brew of a method', () => {
-    expect(madeKey(log(), brewers)).toBe('plain:pour');
-    expect(madeKey(at('x', { ...espresso, drinkId: 'latte' }), brewers)).toBe('drink:latte');
-    expect(madeKey(at('x', espresso), brewers)).toBe('plain:espresso');
-  });
-  it('the newest of each of the last 3, newest first', () => {
-    const logs = [at('a', {}), at('b', { ...espresso, drinkId: 'latte' }), at('c', {}), at('d', espresso), at('e', { brewerId: null, brewer: null }), at('f', espresso)];
-    expect(recentByMade(logs, brewers).map((l) => l.id)).toEqual(['a', 'b', 'd']);
+  it('offers every grouping the server knows, once', () => {
+    const keys: RepeatButtonGroup[] = ['made', 'brewer', 'recipe', 'coffee'];
+    expect(REPEAT_GROUP_OPTIONS.map((o) => o.key)).toEqual(keys);
   });
   it('labels a brew by what it made, its bean and day', () => {
     expect(repeatLabel(log(), new Date('2026-10-23T12:00:00Z'))).toMatchObject({ made: 'V60', recipe: 'House V60', bean: 'Guji · Batch 3' });

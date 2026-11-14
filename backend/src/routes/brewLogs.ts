@@ -38,6 +38,8 @@ import {
   type MethodKind,
   type Recipe,
   recipeStyles,
+  REPEAT_BUTTON_GROUPS,
+  type RepeatButtonGroup,
 } from "@barista/shared/schema";
 import { LEXICON_KEY, LEXICON_LIMITS, type FlavorPick } from "@barista/shared/flavors";
 import { flavorPicks, resolveSaved, type SavedPick } from "../flavorPicks.js";
@@ -747,6 +749,53 @@ brewLogsRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<Brew
   ]);
 
   res.json({ brewLogs: rows, total: totals?.total ?? 0 });
+});
+
+// The newest brew of each of the last n different things brewed, over every
+// brew in the workspace (docs/api/brew-logs.md, GET …/brew-logs/repeats).
+const repeatsQuerySchema = z.object({
+  by: z.enum(REPEAT_BUTTON_GROUPS).default("made"),
+  n: z.coerce.number().int().min(1).max(6).default(3),
+});
+// What makes two brews different, per `by`. COALESCE keeps CONCAT from
+// going NULL on a missing part.
+function repeatGroupKey(by: RepeatButtonGroup): SQL {
+  const made = sql`CASE WHEN ${brewLogs.drinkId} IS NOT NULL THEN CONCAT('drink:', ${brewLogs.drinkId})
+    WHEN ${brewers.id} IS NOT NULL THEN CONCAT('plain:', COALESCE(${brewers.methodId}, ${brewers.kind}))
+    ELSE 'none' END`;
+  if (by === "made") return made;
+  const brewer = sql`CONCAT(COALESCE(CONCAT('drink:', ${brewLogs.drinkId}), 'plain'), '|', COALESCE(${brewLogs.brewerId}, ''))`;
+  if (by === "brewer") return brewer;
+  const recipe = sql`CONCAT(${brewer}, '|', COALESCE(${brewLogs.recipeId}, ''))`;
+  if (by === "recipe") return recipe;
+  return sql`CONCAT(${recipe}, '|', LOWER(TRIM(${beans.roasterName})), '|', LOWER(TRIM(${beans.beanName})))`;
+}
+
+brewLogsRouter.get("/repeats", async (req: Request<WorkspaceParams>, res: Response<{ brewLogs: BrewLogDetails[] }>) => {
+  const { workspaceId } = req.params;
+  if (!(await requireMembership(res, authedUserId(req), workspaceId))) return;
+  const query = parseQuery(repeatsQuerySchema, req, res);
+  if (!query) return;
+
+  const ranked = db
+    .select({
+      id: brewLogs.id,
+      timestamp: brewLogs.timestamp,
+      rn: sql<number>`ROW_NUMBER() OVER (PARTITION BY ${repeatGroupKey(query.by)} ORDER BY ${brewLogs.timestamp} DESC, ${brewLogs.id} DESC)`.as("rn"),
+    })
+    .from(brewLogs)
+    .leftJoin(brewers, eq(brewers.id, brewLogs.brewerId))
+    .leftJoin(beans, eq(beans.id, brewLogs.beanId))
+    .where(eq(brewLogs.workspaceId, workspaceId))
+    .as("ranked");
+  const picked = await db
+    .select({ id: ranked.id })
+    .from(ranked)
+    .where(eq(ranked.rn, 1))
+    .orderBy(desc(ranked.timestamp), desc(ranked.id))
+    .limit(query.n);
+  const ids = picked.map((r) => r.id);
+  res.json({ brewLogs: ids.length ? await loadBrewLogs(inArray(brewLogs.id, ids), query.n) : [] });
 });
 
 brewLogsRouter.get(

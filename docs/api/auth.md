@@ -72,7 +72,7 @@ units, with defaults filled in. Storage is always grams, °C and metres;
 clients convert what they show and what's typed (roadmap: Units and defaults).
 
 ```json
-{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "startDelays": {}, "steepReminders": true, "restReminders": true, "restReminderRepeatDays": null, "restingInBrewPickerDefault": true, "greenStockAlerts": true, "recaps": true, "recapPeriods": "both", "weekStartsOn": 1, "recapBanner": true, "recapBannerDays": 3, "recapNotify": true, "recapNotifyTime": "08:00", "timeZone": null, "recapAi": "manual", "recapSeen": {} }
+{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], "repeatButtonsBy": "made", "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "startDelays": {}, "steepReminders": true, "restReminders": true, "restReminderRepeatDays": null, "restingInBrewPickerDefault": true, "greenStockAlerts": true, "recaps": true, "recapPeriods": "both", "weekStartsOn": 1, "recapBanner": true, "recapBannerDays": 3, "recapNotify": true, "recapNotifyTime": "08:00", "timeZone": null, "recapAi": "manual", "recapSeen": {} }
 ```
 
 - `volumeUnit`: `fl_oz` | `ml`: the brew page's yield estimate, and a new
@@ -174,6 +174,14 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
   - `recapSeen`: `{ "weekly"?: "YYYY-MM-DD", "monthly"?: "YYYY-MM-DD" }`,
     the start of the last period whose banner was opened or dismissed.
     Default `{}`. A `PATCH` sends the whole object.
+- `repeatButtonsBy` (default `"made"`): what the brew page's quick repeat
+  buttons (Settings → Brew setup, "Repeat buttons") count as different
+  brews, one button each for the last 3, over every brew
+  (`brew-logs.md`, `GET …/brew-logs/repeats`):
+  - `made`: the drink, or a plain brew's brewer method;
+  - `brewer`: also the brewer;
+  - `recipe`: also the recipe;
+  - `coffee`: also the coffee (roaster + name, so batches count as one).
 - `rememberSetup`: what the brew page starts a new brew with from the last
   brew (Settings → Brew setup, "Remember from last time"), a list of
   `REMEMBER_KEYS`, each once:

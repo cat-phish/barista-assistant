@@ -41,6 +41,10 @@ export const THEMES = ["system", "light", "dark"] as const; // system = follow t
 // and what → brewer → recipe, which a repeat always takes (docs/api/auth.md §1).
 export const REPEAT_KEEPS = ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "grinderWeights", "vessel", "notes"] as const;
 export type RepeatKeep = (typeof REPEAT_KEEPS)[number];
+// What makes two brews different for the brew page's quick repeat buttons
+// (docs/api/auth.md §1 repeatButtonsBy, docs/api/brew-logs.md "repeats").
+export const REPEAT_BUTTON_GROUPS = ["made", "brewer", "recipe", "coffee"] as const;
+export type RepeatButtonGroup = (typeof REPEAT_BUTTON_GROUPS)[number];
 // What the brew page fills in from last time on this device (Settings → Brew
 // setup, docs/api/auth.md §1 rememberSetup).
 export const REMEMBER_KEYS = ["what", "brewer", "recipe", "bean", "grinder", "grind", "waterProfile", "vessel", "prepTools", "size"] as const;
@@ -66,6 +70,7 @@ export interface UserPreferences {
   rateReminderMinutes: number; // 5–240
   rateLaterDefault: boolean; // the log form's Rate later box starts ticked
   repeatKeeps: RepeatKeep[]; // what a repeat copies (notes: shown as a reminder, not copied)
+  repeatButtonsBy: RepeatButtonGroup; // what the quick repeat buttons tell apart
   rememberSetup: RememberKey[]; // what the brew page remembers from last time
   startDelays: Partial<Record<MethodKind, 0 | 3 | 5>>; // countdown before a timed brew, per method; missing = none (docs/api/auth.md §1)
   steepReminders: boolean; // remind when a cold brew's steep window opens (docs/api/notifications.md §1b)
@@ -99,6 +104,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   rateReminderMinutes: 15,
   rateLaterDefault: false,
   repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"],
+  repeatButtonsBy: "made",
   rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"],
   startDelays: {},
   steepReminders: true,

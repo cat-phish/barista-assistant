@@ -2,6 +2,8 @@
 // Settings → Brew setup: how the brew page fills itself in.
 // - Remember from last time (docs/api/auth.md §1 rememberSetup): the choices
 //   a new brew starts with, from the last brew on this device.
+// - Repeat buttons (§1 repeatButtonsBy): what the brew page's quick repeat
+//   buttons tell apart, newest first over every brew.
 // - Copy when repeating (§1 repeatKeeps): what "Brew again" and the brew
 //   page's repeat buttons copy from the earlier brew.
 // Yours only; saved as soon as a box changes.
@@ -11,12 +13,12 @@ import type { MethodKind, RememberKey, RepeatKeep, UserPreferences } from '../ap
 import SettingsLayout from '../components/SettingsLayout.vue';
 import { DEFAULT_PREFERENCES, usePreferences } from '../composables/usePreferences';
 import { REMEMBER_OPTIONS } from '../lib/rememberSetup';
-import { REPEAT_OPTIONS } from '../lib/repeatBrew';
+import { REPEAT_GROUP_OPTIONS, REPEAT_OPTIONS } from '../lib/repeatBrew';
 import { METHOD_KINDS, METHOD_ORDER } from '../lib/equipment';
 import { startDelayFor } from '../lib/startDelay';
 import { useAuthStore } from '../stores/auth';
 
-type Section = 'remember' | 'repeat' | 'timer';
+type Section = 'remember' | 'repeat' | 'buttons' | 'timer';
 const auth = useAuthStore();
 const { prefs } = usePreferences();
 const remembers = computed(() => new Set(prefs.value.rememberSetup));
@@ -25,7 +27,7 @@ const saving = ref(false);
 const error = ref<{ in: Section; text: string } | null>(null);
 const saved = ref<Section | null>(null);
 
-async function save(section: Section, patch: Partial<Pick<UserPreferences, 'rememberSetup' | 'repeatKeeps' | 'startDelays'>>): Promise<void> {
+async function save(section: Section, patch: Partial<Pick<UserPreferences, 'rememberSetup' | 'repeatKeeps' | 'repeatButtonsBy' | 'startDelays'>>): Promise<void> {
   saving.value = true;
   error.value = null;
   saved.value = null;
@@ -97,6 +99,28 @@ const repeatDefault = computed(() => sameSet(DEFAULT_PREFERENCES.repeatKeeps, pr
       </button>
       <p v-if="error?.in === 'remember'" class="form-error" role="alert">{{ error.text }}</p>
       <p v-else-if="saved === 'remember'" class="muted small" aria-live="polite">Saved.</p>
+    </section>
+    <section class="card stack" aria-labelledby="repeat-buttons">
+      <h2 id="repeat-buttons">Repeat buttons</h2>
+      <p class="muted small">The brew page shows a button for each of your last 3 different brews. Pick what counts as different.</p>
+      <fieldset class="keeps" :disabled="saving">
+        <legend class="visually-hidden">What the repeat buttons tell apart</legend>
+        <label v-for="o in REPEAT_GROUP_OPTIONS" :key="o.key" class="checkbox keep">
+          <input
+            type="radio"
+            name="repeat-buttons-by"
+            :value="o.key"
+            :checked="prefs.repeatButtonsBy === o.key"
+            @change="save('buttons', { repeatButtonsBy: o.key })"
+          />
+          <span>
+            {{ o.label }}
+            <span class="muted small hint">{{ o.hint }}</span>
+          </span>
+        </label>
+      </fieldset>
+      <p v-if="error?.in === 'buttons'" class="form-error" role="alert">{{ error.text }}</p>
+      <p v-else-if="saved === 'buttons'" class="muted small" aria-live="polite">Saved.</p>
     </section>
     <section class="card stack" aria-labelledby="repeat-keeps">
       <h2 id="repeat-keeps">Copy when repeating</h2>

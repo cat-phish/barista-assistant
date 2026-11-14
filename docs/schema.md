@@ -41,8 +41,9 @@ export interface UserPreferences {
   rateLaterDefault: boolean; // the log form's Rate later box starts ticked
   startDelays: Partial<Record<MethodKind, 0 | 3 | 5>>; // timed brew countdown per method, default {} = none (docs/api/auth.md §1)
   repeatKeeps: (typeof REPEAT_KEEPS)[number][]; // default: bean … window
+  repeatButtonsBy: (typeof REPEAT_BUTTON_GROUPS)[number]; // made | brewer | recipe | coffee; default made
 }
-export const DEFAULT_PREFERENCES: UserPreferences = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, startDelays: {}, repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"] };
+export const DEFAULT_PREFERENCES: UserPreferences = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, startDelays: {}, repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], repeatButtonsBy: "made" };
 export const ROAST_SCALES = ["names", "levels"] as const; // roast names (Cinnamon … French) or light to dark only
 export interface WorkspaceSettings {
   recipeRoastLevel: RoastLevel; // the roast recipes are written for

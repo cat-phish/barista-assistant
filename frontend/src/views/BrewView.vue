@@ -15,7 +15,7 @@ import AiRequestDialog from '../components/AiRequestDialog.vue';
 import RepeatBrewPicker from '../components/RepeatBrewPicker.vue';
 import FridgeCard from '../components/FridgeCard.vue';
 import RecapBanner from '../components/RecapBanner.vue';
-import { recentByMade, repeatLabel, repeatMissing, repeatPlan } from '../lib/repeatBrew';
+import { repeatLabel, repeatMissing, repeatPlan } from '../lib/repeatBrew';
 import { rememberedSize, rememberedTools, rememberKeyFor, stillActive, storedSize, storedTools, type Remembered } from '../lib/rememberSetup';
 import { grindersApi } from '../api/grinders';
 import { vesselsApi } from '../api/vessels';
@@ -1218,8 +1218,9 @@ async function applyProposal(p: ChatBrewProposal): Promise<void> {
 // each of the last 3 things made, "Pick a brew…" for any other, and
 // /brew?repeat=<id> from the journal. Setup is filled from the brew; the
 // timer starts as usual.
-const recentLogs = ref<BrewLog[]>([]);
-const quickRepeats = computed(() => recentByMade(recentLogs.value, brewers.value));
+// The quick repeat buttons, picked by the server over every brew
+// (docs/api/brew-logs.md, GET …/repeats), grouped as Settings → Brew setup says.
+const quickRepeats = ref<BrewLog[]>([]);
 const pickerOpen = ref(false);
 const repeatFrom = ref<{ log: BrewLog; missing: string[] } | null>(null);
 const repeatError = ref('');
@@ -1231,11 +1232,12 @@ async function loadRecent(): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    recentLogs.value = (await brewLogsApi.list(ws, { limit: 30 })).brewLogs;
+    quickRepeats.value = (await brewLogsApi.repeats(ws, userPrefs.value.repeatButtonsBy)).brewLogs;
   } catch {
-    recentLogs.value = []; // the buttons are a shortcut; the picker still loads
+    quickRepeats.value = []; // the buttons are a shortcut; the picker still loads
   }
 }
+watch(() => userPrefs.value.repeatButtonsBy, () => void loadRecent());
 // Each choice is set once the previous one's watcher has run (a drink picks
 // its default brewer and recipe, a recipe resets the batch), so the brew's
 // own choices win. Then its amounts, after the recipe has set its own.
@@ -1351,7 +1353,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       <h1>New brew</h1>
       <FridgeCard />
       <!-- Repeat a brew: fills setup from an earlier one (lib/repeatBrew.ts). -->
-      <section v-if="recentLogs.length" class="repeat" aria-labelledby="repeat-label">
+      <section v-if="quickRepeats.length" class="repeat" aria-labelledby="repeat-label">
         <span id="repeat-label" class="batch-label">Repeat a brew</span>
         <div class="repeat-row">
           <button v-for="l in quickRepeats" :key="l.id" class="btn btn-secondary repeat-btn" type="button" @click="applyRepeat(l)">
