@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Batch add's "Carry over" box (docs/api/beans.md §4, "Frontend (batch
-// add)"): ticked, Next batch keeps this field for the next bean. Sits in
-// the top right of its field or card (the parent is position: relative).
+// add)"): ticked, Next batch keeps this field for the next bean. Sits on
+// its field's label row, or its card's heading row.
 import { computed } from 'vue';
 import { CARRY, type BeanCarryKey } from '../lib/beanCarry';
 
@@ -24,19 +24,26 @@ const on = computed({
 </template>
 
 <style scoped>
+/* A small control on its field's label row (BeanFormView lays the row out). */
 .carry-toggle {
-  position: absolute;
-  top: 0;
-  right: 0;
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
+  white-space: nowrap;
   font-size: 0.8rem;
   font-weight: normal;
   color: var(--text-muted);
   cursor: pointer;
 }
+/* Not a text box: undo .field input's width, height, padding and border. */
 .carry-toggle input {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  min-height: 0;
   margin: 0;
+  padding: 0;
+  border: 0;
+  accent-color: var(--brand);
 }
 </style>

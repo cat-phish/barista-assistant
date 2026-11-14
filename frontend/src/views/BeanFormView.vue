@@ -1108,22 +1108,39 @@ const leaveTo = computed(() => ({ name: batchResting.value ? 'beans-resting' : '
 p {
   margin: 0;
 }
-/* Batch add: each field's Carry over box sits in its top right. */
-.batch .field,
-.batch .card,
-.carry-row {
+/* Batch add: each field's Carry over box sits at the end of its label row;
+   the input and everything after it take the full width below. */
+.batch .field:has(> .carry-toggle) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-2);
+  row-gap: var(--space-1);
+  align-items: center;
+}
+.batch .field:has(> .carry-toggle) > * {
+  grid-column: 1 / -1;
+}
+.batch .field:has(> .carry-toggle) > label:first-child {
+  grid-column: 1;
+}
+.batch .field:has(> .carry-toggle) > .carry-toggle {
+  grid-column: 2;
+  grid-row: 1;
+}
+/* On a card's heading (Photos, Resting) and beside a checkbox or the stars. */
+.batch .card:has(> .carry-toggle) {
   position: relative;
 }
-.batch .field:has(> .carry-toggle) > label,
-.batch .field:has(> .carry-toggle) > legend {
-  padding-right: 6.5rem;
-}
-.carry-row {
-  min-height: 1.5rem;
-}
 .batch .card > .carry-toggle {
+  position: absolute;
   top: var(--space-4);
   right: var(--space-4);
+}
+.carry-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 h2 {
   font-size: 1.05rem;
