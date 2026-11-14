@@ -176,6 +176,15 @@ is no age.
   reverse), or a `roastLevel` that contradicts the detailed level; `403`
   viewer.
 
+  > **Frontend (batch add):** with the workspace's `batchAddBeans` on
+  > (`workspaces.md` §2), Add bean has **Add several batches**: the same
+  > form, with a **Carry over** box by each field (and on Photos), starting
+  > from `beanCarryOver`. **Next batch** saves the bean (this `POST`, then
+  > its photos) and starts the next with the ticked fields kept, the rest
+  > blank and the batch number moved on; the ticks stay as set. **Done**
+  > saves the last one; once some are saved, **Finish** leaves without
+  > saving the one open.
+
 ## `PATCH /api/workspaces/:workspaceId/beans/:beanId`
 
 - **Auth Required:** `true` (role `owner` or `barista`)

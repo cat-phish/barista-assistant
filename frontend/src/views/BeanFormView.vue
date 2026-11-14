@@ -7,6 +7,7 @@ import { errorMessage } from '../api/client';
 import AppHeader from '../components/AppHeader.vue';
 import BeanPhotos from '../components/BeanPhotos.vue';
 import BeanReviewDialog from '../components/BeanReviewDialog.vue';
+import CarryToggle from '../components/CarryToggle.vue';
 import BrewAverageHint from '../components/BrewAverageHint.vue';
 import LabelCard from '../components/LabelCard.vue';
 import LabelHint from '../components/LabelHint.vue';
@@ -29,6 +30,7 @@ import type { FieldKey } from '../lib/fields';
 import { undoChanges, type FormSnapshot } from '../lib/undoFill';
 import { distinctNames, lastBag, normalizeName, websiteSuggestions } from '../lib/nameSuggest';
 import { COMMON_VARIETIES } from '../lib/varieties';
+import { nextBatchValues, type BeanCarryKey } from '../lib/beanCarry';
 import {
   BLEND_TYPES,
   COFFEE_SPECIES,
@@ -100,6 +102,18 @@ watch(resting, (on) => {
   const ready = new Date(Date.UTC(y!, m! - 1, d! + days)).toISOString().slice(0, 10);
   restingOn.value = ready > today ? ready : today;
 });
+// Batch add (docs/api/beans.md §4, "Frontend (batch add)"; the workspace's
+// batchAddBeans): Next batch saves the bean and starts the next with the
+// ticked fields kept. Only on Add bean, not when editing or duplicating.
+const canBatch = computed(() => !editing.value && !copyFrom && settings.value.batchAddBeans);
+const batchMode = ref(false);
+const carry = ref<BeanCarryKey[]>([]); // the ticked boxes; they stay from batch to batch
+const batchCount = ref(0); // saved so far
+const batchResting = ref(false); // one saved so far rests: Finish goes to Beans → Resting
+function startBatches(): void {
+  carry.value = [...settings.value.beanCarryOver];
+  batchMode.value = true;
+}
 const rating = ref<number | null>(null);
 const review = ref('');
 // How its brews went: the hint under the rating. A new bean has none.
@@ -457,6 +471,7 @@ const draftRefs: Record<string, Ref<unknown>> = {
   roasterName, beanName, process, originArea, country, region, producer, altitude, varieties, species, flavorProfile, blendType, decaf, roastType,
   roastDate, detailedRoastLevel, inventory, price, currency, bagWeight, purchaseDate, greenSupplier, batchNumber, weightLoss,
   website, showOnPublicMenu, resting, restingOn, restInPicker, rating, review, notes, level, sourceDetailed, savedDetailed, savedRoastLevel, copyOf, suggestions, labelSummary, webSources,
+  batchMode, carry, batchCount, batchResting,
 };
 const snapshot = () => Object.fromEntries(Object.entries(draftRefs).map(([name, r]) => [name, r.value]));
 let blank = ''; // the form as it opened, to tell whether anything was entered
@@ -536,6 +551,7 @@ onMounted(async () => {
   await load();
   blank = JSON.stringify(snapshot());
   restoreDraft();
+  if (batchMode.value && !canBatch.value) batchMode.value = false; // switched off since
   ready.value = true;
 });
 
@@ -567,10 +583,8 @@ async function load(): Promise<void> {
   }
 }
 
-async function save(): Promise<void> {
-  submitted.value = true;
-  const ws = workspaces.current?.id;
-  if (!valid.value || !ws || !inventoryParsed.value.ok) return;
+// What the form sends (docs/api/beans.md §4).
+function buildInput(): BeanInput {
   const priceAmount = priceParsed.value?.ok ? priceParsed.value.value : null;
   // docs/api/beans.md §4: a roast name sets the 5-step level; without one,
   // roastLevel is sent on its own (a null name first clears a stored one).
@@ -584,7 +598,7 @@ async function save(): Promise<void> {
           // Only a copy of a bean with a 5-step level and no roast name.
           ...(!editing.value && !detailedRoastLevel.value && savedRoastLevel.value ? { roastLevel: savedRoastLevel.value } : {}),
         };
-  const input: BeanInput = {
+  return {
     roasterName: roasterName.value.trim(),
     beanName: beanName.value.trim(),
     processId: process.value || null,
@@ -601,7 +615,7 @@ async function save(): Promise<void> {
     roastType: roastType.value || null,
     roastDate: roastDate.value || null,
     ...roast,
-    inventoryWeightGrams: inventoryParsed.value.value,
+    inventoryWeightGrams: inventoryParsed.value.ok ? inventoryParsed.value.value : 0,
     priceAmount,
     priceCurrency: priceAmount === null ? null : currencyCode.value,
     bagWeightGrams: bagParsed.value?.ok ? bagParsed.value.value : null,
@@ -619,6 +633,17 @@ async function save(): Promise<void> {
       ? { restingUntil: resting.value ? restingOn.value : null, ...(resting.value ? { restInBrewPicker: restInPicker.value } : {}) }
       : {}),
   };
+}
+
+async function save(): Promise<void> {
+  submitted.value = true;
+  const ws = workspaces.current?.id;
+  if (!valid.value || !ws || !inventoryParsed.value.ok) return;
+  if (batchMode.value) {
+    await saveBatch(ws, false);
+    return;
+  }
+  const input = buildInput();
   saving.value = true;
   error.value = '';
   try {
@@ -647,15 +672,75 @@ async function save(): Promise<void> {
     saving.value = false;
   }
 }
+
+// Batch add: saves this batch's bean and its photos. next: then the form
+// for the next batch, with what's ticked kept (lib/beanCarry.ts); else
+// that was the last one.
+async function saveBatch(ws: string, next: boolean): Promise<void> {
+  const input = buildInput();
+  const files = photoPicker.value?.pendingFiles() ?? [];
+  saving.value = true;
+  error.value = '';
+  try {
+    const { bean } = await beansApi.create(ws, input);
+    batchCount.value++;
+    if (input.restingUntil) batchResting.value = true;
+    if (input.priceCurrency) rememberCurrency(input.priceCurrency);
+    const photoError = (await photoPicker.value?.uploadPending(bean.id)) ?? '';
+    if (!next) {
+      finished = true;
+      drafts.clear();
+      if (photoError) {
+        // As with one bean: carry on editing the one that's saved.
+        await router.replace({ name: 'bean-edit', params: { id: bean.id } });
+        error.value = `Bean saved, but ${photoError}`;
+        return;
+      }
+      await router.push({ name: batchResting.value ? 'beans-resting' : 'beans' });
+      return;
+    }
+    const values = nextBatchValues(snapshot(), JSON.parse(blank) as Record<string, unknown>, carry.value);
+    for (const [name, value] of Object.entries(values)) draftRefs[name]!.value = value;
+    draftPhotos.value = carry.value.includes('photos') ? files : [];
+    draftLabelPhotos.value = [];
+    if (labelReads.current?.key === readKey) labelReads.dismiss();
+    undo.value = null;
+    submitted.value = false;
+    restored.value = false;
+    resetKey.value++;
+    error.value = photoError ? `Batch ${batchCount.value} saved, but ${photoError}` : '';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (err) {
+    error.value = errorMessage(err);
+  } finally {
+    saving.value = false;
+  }
+}
+async function goNextBatch(): Promise<void> {
+  submitted.value = true;
+  const ws = workspaces.current?.id;
+  if (!valid.value || !ws || !inventoryParsed.value.ok) return;
+  await saveBatch(ws, true);
+}
+// Once some are saved, Cancel is Finish: it leaves the open one unsaved.
+const leaveTo = computed(() => ({ name: batchResting.value ? 'beans-resting' : 'beans' }));
 </script>
 
 <template>
   <AppHeader />
   <main class="page">
     <div class="page-header">
-      <h1>{{ editing ? 'Edit bean' : copyOf ? 'Duplicate bean' : 'Add bean' }}</h1>
+      <h1>{{ editing ? 'Edit bean' : batchMode ? `Add batches · Batch ${batchCount + 1}` : copyOf ? 'Duplicate bean' : 'Add bean' }}</h1>
     </div>
-    <p v-if="copyOf && !loading" class="muted small">
+    <p v-if="canBatch && !loading && !batchMode" class="small">
+      <button type="button" class="btn btn-secondary" @click="startBatches">Add several batches</button>
+    </p>
+    <p v-else-if="batchMode && !loading" class="muted small" role="status">
+      <template v-if="batchCount">{{ batchCount }} added so far. </template>
+      Tick Carry over on what the next batch keeps; Next batch saves this one.
+      <button v-if="!batchCount" type="button" class="btn-link small" @click="batchMode = false">Add one bean</button>
+    </p>
+    <p v-if="copyOf && !loading && !batchMode" class="muted small">
       A copy of {{ copyOf }}, for a new bag: set its roast date and stock. The original stays as it is.
     </p>
     <p v-if="loading" class="muted" aria-live="polite">Loading…</p>
@@ -664,9 +749,10 @@ async function save(): Promise<void> {
       <button type="button" class="btn-link small" @click="startOver">Start over</button>
     </p>
 
-    <form v-else class="stack" novalidate @submit.prevent="save">
+    <form v-else class="stack" :class="{ batch: batchMode }" novalidate @submit.prevent="save">
       <section v-if="show('bean.photos') && workspaces.current" class="card stack">
         <h2>Photos</h2>
+        <CarryToggle v-if="batchMode" v-model="carry" item="photos" />
         <BeanPhotos
           :key="resetKey"
           ref="photoPicker"
@@ -707,12 +793,14 @@ async function save(): Promise<void> {
       <section class="card stack">
         <div class="field">
           <label for="roaster">Roaster<span class="req" aria-hidden="true">*</span></label>
+          <CarryToggle v-if="batchMode" v-model="carry" item="roasterName" />
           <NameInput id="roaster" v-model="roasterName" :names="roasterNames" aria-required="true" maxlength="255" placeholder="e.g. Onyx Coffee Lab" :aria-invalid="submitted && !!fieldErrors.roasterName" />
           <LabelHint v-if="suggestions.roasterName" :text="suggestions.roasterName.text" :source="suggestions.roasterName.source" @use="useSuggestion('roasterName')" />
           <span v-if="submitted && fieldErrors.roasterName" class="field-error">{{ fieldErrors.roasterName }}</span>
         </div>
         <div class="field">
           <label for="bean">Coffee<span class="req" aria-hidden="true">*</span></label>
+          <CarryToggle v-if="batchMode" v-model="carry" item="beanName" />
           <NameInput id="bean" v-model="beanName" :names="coffeeNames" :prefer="roasterCoffees" :hint="false" aria-required="true" maxlength="255" placeholder="e.g. Ethiopia Guji" :aria-invalid="submitted && !!fieldErrors.beanName" />
           <span v-if="previousBag" class="small muted">
             You've had this coffee.
@@ -724,6 +812,7 @@ async function save(): Promise<void> {
         <div v-if="show('bean.process') || show('bean.blendType')" class="form-row">
           <div v-if="show('bean.process')" class="field">
             <label for="process">Process</label>
+            <CarryToggle v-if="batchMode" v-model="carry" item="process" />
             <select id="process" v-model="process">
               <option value="">Not sure</option>
               <option v-for="p in processChoices" :key="p.id" :value="p.id">{{ p.name }}</option>
@@ -732,6 +821,7 @@ async function save(): Promise<void> {
           </div>
           <div v-if="show('bean.blendType')" class="field">
             <label for="blend-type">Type</label>
+            <CarryToggle v-if="batchMode" v-model="carry" item="blendType" />
             <select id="blend-type" v-model="blendType">
               <option value="">Not sure</option>
               <option v-for="(b, key) in BLEND_TYPES" :key="key" :value="key">{{ b.label }}</option>
@@ -742,6 +832,7 @@ async function save(): Promise<void> {
         <div v-if="show('bean.origin')" class="form-row">
           <div class="field">
             <label for="origin-area">Growing area</label>
+            <CarryToggle v-if="batchMode" v-model="carry" item="origin" />
             <select id="origin-area" v-model="originArea">
               <option value="">Not sure</option>
               <option v-for="(a, key) in ORIGIN_AREAS" :key="key" :value="key">{{ a.label }}</option>
@@ -759,28 +850,33 @@ async function save(): Promise<void> {
         <div v-if="show('bean.region') || show('bean.producer')" class="form-row">
           <div v-if="show('bean.region')" class="field">
             <label for="region">Region</label>
+            <CarryToggle v-if="batchMode" v-model="carry" item="region" />
             <input id="region" v-model="region" maxlength="255" placeholder="e.g. Yirgacheffe" />
             <LabelHint v-if="suggestions.region" :text="suggestions.region.text" :source="suggestions.region.source" @use="useSuggestion('region')" />
           </div>
           <div v-if="show('bean.producer')" class="field">
             <label for="producer">Producer</label>
+            <CarryToggle v-if="batchMode" v-model="carry" item="producer" />
             <NameInput id="producer" v-model="producer" :names="producerNames" maxlength="255" placeholder="e.g. a farm, co-op or washing station" />
             <LabelHint v-if="suggestions.producer" :text="suggestions.producer.text" :source="suggestions.producer.source" @use="useSuggestion('producer')" />
           </div>
         </div>
         <div v-if="show('bean.altitude')" class="field altitude">
           <label for="altitude">Altitude ({{ ALTITUDE_LABELS[altitudeUnit] }})</label>
+          <CarryToggle v-if="batchMode" v-model="carry" item="altitude" />
           <input id="altitude" v-model="altitude" inputmode="numeric" :placeholder="altitudeUnit === 'ft' ? 'e.g. 6400' : 'e.g. 1950'" :aria-invalid="submitted && !!fieldErrors.altitude" />
           <LabelHint v-if="suggestions.altitude" :text="suggestions.altitude.text" :source="suggestions.altitude.source" @use="useSuggestion('altitude')" />
           <span v-if="submitted && fieldErrors.altitude" class="field-error">{{ fieldErrors.altitude }}</span>
         </div>
         <div v-if="show('bean.varieties')" class="field">
           <label for="varieties">Variety</label>
+          <CarryToggle v-if="batchMode" v-model="carry" item="varieties" />
           <NamesInput id="varieties" v-model="varieties" :names="varietyNames" placeholder="e.g. Bourbon, SL28" />
           <LabelHint v-if="suggestions.varieties" :text="suggestions.varieties.text" :source="suggestions.varieties.source" @use="useSuggestion('varieties')" />
         </div>
         <fieldset v-if="show('bean.species')" class="field species">
           <legend>Species</legend>
+          <CarryToggle v-if="batchMode" v-model="carry" item="species" />
           <div class="species-choices">
             <button
               v-for="s in SPECIES_KEYS"
@@ -797,13 +893,17 @@ async function save(): Promise<void> {
         </fieldset>
         <div v-if="show('bean.flavorProfile')" class="field">
           <label for="flavor-profile">Flavor profile</label>
+          <CarryToggle v-if="batchMode" v-model="carry" item="flavorProfile" />
           <textarea id="flavor-profile" v-model="flavorProfile" rows="2" maxlength="500" placeholder="e.g. Milk chocolate, plum, cane sugar" />
           <LabelHint v-if="suggestions.flavorProfile" :text="suggestions.flavorProfile.text" :source="suggestions.flavorProfile.source" @use="useSuggestion('flavorProfile')" />
         </div>
-        <label v-if="show('bean.decaf')" class="checkbox">
-          <input v-model="decaf" type="checkbox" />
-          Decaf
-        </label>
+        <div v-if="show('bean.decaf')" class="carry-row">
+          <label class="checkbox">
+            <input v-model="decaf" type="checkbox" />
+            Decaf
+          </label>
+          <CarryToggle v-if="batchMode" v-model="carry" item="decaf" />
+        </div>
       </section>
 
       <section class="card stack">
@@ -811,6 +911,7 @@ async function save(): Promise<void> {
         <div v-if="show('bean.roastType') || show('bean.roastDate')" class="form-row">
           <div v-if="show('bean.roastType')" class="field">
             <label for="roast-type">Roasted for</label>
+            <CarryToggle v-if="batchMode" v-model="carry" item="roastType" />
             <select id="roast-type" v-model="roastType">
               <option value="">Not sure</option>
               <option v-for="(r, key) in ROAST_TYPES" :key="key" :value="key">{{ r.label }}</option>
@@ -819,6 +920,7 @@ async function save(): Promise<void> {
           </div>
           <div v-if="show('bean.roastDate')" class="field">
             <label for="roast-date">Roast date</label>
+            <CarryToggle v-if="batchMode" v-model="carry" item="roastDate" />
             <input id="roast-date" v-model="roastDate" type="date" :max="today" />
             <LabelHint v-if="suggestions.roastDate" :text="suggestions.roastDate.text" :source="suggestions.roastDate.source" @use="useSuggestion('roastDate')" />
           </div>
@@ -831,6 +933,7 @@ async function save(): Promise<void> {
         <template v-if="show('bean.roastLevel')">
           <div v-if="roastScale === 'levels'" class="field">
             <label for="roast-level">Roast level</label>
+            <CarryToggle v-if="batchMode" v-model="carry" item="roastLevel" />
             <select id="roast-level" v-model="level" aria-describedby="roast-level-note">
               <option value="">Not sure</option>
               <option v-for="(r, key) in ROAST_LEVELS" :key="key" :value="key">{{ r.label }}</option>
@@ -842,6 +945,7 @@ async function save(): Promise<void> {
           <div v-else class="form-row">
             <div class="field">
               <label for="detailed-roast">Roast Level</label>
+              <CarryToggle v-if="batchMode" v-model="carry" item="roastLevel" />
               <select id="detailed-roast" v-model="detailedRoastLevel">
                 <option value="">Not sure</option>
                 <option v-for="(d, key) in DETAILED_ROAST_LEVELS" :key="key" :value="key">{{ d.label }}</option>
@@ -859,6 +963,7 @@ async function save(): Promise<void> {
         </template>
         <div v-if="show('bean.weightLoss')" class="field">
           <label for="weight-loss">Roast weight loss (%)</label>
+          <CarryToggle v-if="batchMode" v-model="carry" item="weightLoss" />
           <input id="weight-loss" v-model="weightLoss" inputmode="decimal" placeholder="e.g. 14.5" aria-describedby="weight-loss-hint" :aria-invalid="submitted && !!fieldErrors.weightLoss" />
           <span id="weight-loss-hint" class="hint">The green weight lost in roasting, if the roaster gives it: about 11–13% light, 14–16% medium, 17%+ dark.</span>
           <span v-if="submitted && fieldErrors.weightLoss" class="field-error">{{ fieldErrors.weightLoss }}</span>
@@ -869,6 +974,7 @@ async function save(): Promise<void> {
         <h2>Stock and buying</h2>
         <div class="field">
           <label for="inventory">In stock (grams)<span class="req" aria-hidden="true">*</span></label>
+          <CarryToggle v-if="batchMode" v-model="carry" item="inventory" />
           <input id="inventory" aria-required="true" v-model="inventory" inputmode="numeric" :aria-invalid="submitted && !!fieldErrors.inventory" />
           <span v-if="submitted && fieldErrors.inventory" class="field-error">{{ fieldErrors.inventory }}</span>
         </div>
@@ -876,6 +982,7 @@ async function save(): Promise<void> {
           <template v-if="show('bean.price')">
             <div class="field">
               <label for="price">Bag price</label>
+              <CarryToggle v-if="batchMode" v-model="carry" item="price" />
               <input id="price" v-model="price" inputmode="decimal" placeholder="e.g. 21.50" :aria-invalid="submitted && !!fieldErrors.price" />
               <span v-if="submitted && fieldErrors.price" class="field-error">{{ fieldErrors.price }}</span>
             </div>
@@ -896,6 +1003,7 @@ async function save(): Promise<void> {
           </template>
           <div v-if="show('bean.bagWeight')" class="field">
             <label for="bag-weight">Bag Weight (g)</label>
+            <CarryToggle v-if="batchMode" v-model="carry" item="bagWeight" />
             <input id="bag-weight" v-model="bagWeight" inputmode="numeric" placeholder="e.g. 340" :aria-invalid="submitted && !!fieldErrors.bagWeight" />
             <LabelHint v-if="suggestions.bagWeight" :text="suggestions.bagWeight.text" :source="suggestions.bagWeight.source" @use="useSuggestion('bagWeight')" />
             <span v-if="submitted && fieldErrors.bagWeight" class="field-error">{{ fieldErrors.bagWeight }}</span>
@@ -905,29 +1013,36 @@ async function save(): Promise<void> {
         <div v-if="show('bean.purchaseDate') || show('bean.greenSupplier')" class="form-row">
           <div v-if="show('bean.purchaseDate')" class="field">
             <label for="purchase-date">Purchase date</label>
+            <CarryToggle v-if="batchMode" v-model="carry" item="purchaseDate" />
             <input id="purchase-date" v-model="purchaseDate" type="date" :max="today" :aria-invalid="submitted && !!fieldErrors.purchaseDate" />
             <span v-if="submitted && fieldErrors.purchaseDate" class="field-error">{{ fieldErrors.purchaseDate }}</span>
           </div>
           <div v-if="show('bean.greenSupplier')" class="field">
             <label for="green-supplier">Green bean supplier</label>
+            <CarryToggle v-if="batchMode" v-model="carry" item="greenSupplier" />
             <NameInput id="green-supplier" v-model="greenSupplier" :names="supplierNames" maxlength="255" />
           </div>
         </div>
         <div v-if="show('bean.website')" class="field">
           <label for="website">Website</label>
+          <CarryToggle v-if="batchMode" v-model="carry" item="website" />
           <NameInput id="website" v-model="website" :names="websites.names" :prefer="websites.prefer" :empty="websites.empty" :hint="false" type="url" inputmode="url" maxlength="500" placeholder="https://" :aria-invalid="submitted && !!fieldErrors.website" />
           <LabelHint v-if="suggestions.website" :text="suggestions.website.text" :source="suggestions.website.source" @use="useSuggestion('website')" />
           <span v-if="submitted && fieldErrors.website" class="field-error">{{ fieldErrors.website }}</span>
         </div>
-        <label class="checkbox">
-          <input v-model="showOnPublicMenu" type="checkbox" />
-          Show on the public menu
-        </label>
+        <div class="carry-row">
+          <label class="checkbox">
+            <input v-model="showOnPublicMenu" type="checkbox" />
+            Show on the public menu
+          </label>
+          <CarryToggle v-if="batchMode" v-model="carry" item="publicMenu" />
+        </div>
       </section>
 
       <!-- Resting (docs/api/beans.md §4, "Resting"): aging before it's ready to brew. -->
       <section v-if="show('bean.resting')" class="card stack" aria-labelledby="resting-title">
         <h2 id="resting-title">Resting</h2>
+        <CarryToggle v-if="batchMode" v-model="carry" item="resting" />
         <label class="checkbox">
           <input v-model="resting" type="checkbox" :disabled="!canRest" aria-describedby="resting-hint" />
           Resting: not ready to brew yet
@@ -950,14 +1065,19 @@ async function save(): Promise<void> {
 
       <section v-if="show('bean.rating') || show('bean.review') || show('bean.notes')" class="card stack review-card">
         <button v-if="canSuggestReview && show('bean.review')" class="btn-link small suggest-review" type="button" @click="suggestingReview = true">Suggest with AI</button>
-        <RatingInput v-if="show('bean.rating')" v-model="rating" name="bean-rating" label="Rating" />
+        <div v-if="show('bean.rating')" class="carry-row">
+          <RatingInput v-model="rating" name="bean-rating" label="Rating" />
+          <CarryToggle v-if="batchMode" v-model="carry" item="rating" />
+        </div>
         <BrewAverageHint v-if="show('bean.rating')" :summary="brewSummary" />
         <div v-if="show('bean.review')" class="field">
           <label for="review">Review</label>
+          <CarryToggle v-if="batchMode" v-model="carry" item="review" />
           <textarea id="review" v-model="review" rows="4" maxlength="2000" placeholder="e.g. Bright and juicy on the V60, a bit thin as espresso. Would buy again." />
         </div>
         <div v-if="show('bean.notes')" class="field">
           <label for="notes">Notes</label>
+          <CarryToggle v-if="batchMode" v-model="carry" item="notes" />
           <textarea id="notes" v-model="notes" rows="4" maxlength="2000" placeholder="e.g. Roaster suggests 1:16. Best after 10 days." />
           <LabelHint v-if="suggestions.notes" :text="suggestions.notes.text" :source="suggestions.notes.source" @use="useSuggestion('notes')" />
         </div>
@@ -966,8 +1086,9 @@ async function save(): Promise<void> {
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
       <p v-else-if="submitted && !valid" class="form-error" role="alert">Fix the highlighted fields to save.</p>
       <div class="buttons">
-        <RouterLink class="btn btn-secondary" :to="{ name: 'beans' }" @click="cancel">Cancel</RouterLink>
-        <button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? 'Saving…' : 'Save bean' }}</button>
+        <RouterLink class="btn btn-secondary" :to="leaveTo" @click="cancel">{{ batchCount ? 'Finish' : 'Cancel' }}</RouterLink>
+        <button v-if="batchMode" class="btn btn-secondary" type="button" :disabled="saving" @click="goNextBatch">Next batch</button>
+        <button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? 'Saving…' : batchMode ? 'Done' : 'Save bean' }}</button>
       </div>
     </form>
     <BeanReviewDialog
@@ -986,6 +1107,40 @@ async function save(): Promise<void> {
 <style scoped>
 p {
   margin: 0;
+}
+/* Batch add: each field's Carry over box sits at the end of its label row;
+   the input and everything after it take the full width below. */
+.batch .field:has(> .carry-toggle) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-2);
+  row-gap: var(--space-1);
+  align-items: center;
+}
+.batch .field:has(> .carry-toggle) > * {
+  grid-column: 1 / -1;
+}
+.batch .field:has(> .carry-toggle) > label:first-child {
+  grid-column: 1;
+}
+.batch .field:has(> .carry-toggle) > .carry-toggle {
+  grid-column: 2;
+  grid-row: 1;
+}
+/* On a card's heading (Photos, Resting) and beside a checkbox or the stars. */
+.batch .card:has(> .carry-toggle) {
+  position: relative;
+}
+.batch .card > .carry-toggle {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+}
+.carry-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 h2 {
   font-size: 1.05rem;

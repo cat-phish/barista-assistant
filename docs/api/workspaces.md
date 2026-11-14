@@ -136,6 +136,16 @@ Every workspace in a response carries `settings`, defaults filled in
   roast rests before it's ready, by roast type (`ROAST_TYPES`), each an
   integer 0–60. Sent as the whole map. A roast starts from its type's
   days and can change its own.
+- `batchAddBeans` (boolean, default `false`): whether the Add bean page
+  offers **Add several batches**: one bean after another, with **Carry
+  over** boxes for what the next batch keeps (`beans.md` §4, "Frontend
+  (batch add)"). Each is an ordinary `POST …/beans`. Set under Settings →
+  **Defaults**.
+- `beanCarryOver` (list of `BEAN_CARRY_KEYS`, `@barista/shared/beanCarry`,
+  each once): the boxes that start ticked. Default: the coffee's details;
+  not the roast date, roast loss, stock, bag weight, resting, rating or
+  review. Sent as the whole list; set under Settings → **Defaults** while
+  batch add is on.
 - `timeZone` (an IANA name such as `"America/Los_Angeles"`, or `null`,
   default): the workspace's time zone, overriding the server's
   `BREW_TIMEZONE` (`.env`) for this workspace; `null` uses that, else UTC.

@@ -29,11 +29,11 @@ and fix the references.
 - D. AI suggestions: 11–15
 - E. Insights: 16–21
 - F. Bar & menu: 22–27
-- G. Home roasting: 28–38
-- H. Accounts: 39–40
-- I. Deployment & the app: 41–43
-- J. Backups: 44
-- K. Look & feel: 45
+- G. Home roasting: 28–39
+- H. Accounts: 40–41
+- I. Deployment & the app: 42–44
+- J. Backups: 45
+- K. Look & feel: 46
 
 ---
 
@@ -122,7 +122,7 @@ Where the app's choices live, and what you can switch on, off or take out.
   - Move the ones that are wrong, with a data migration, and make Settings
     say which kind each one is.
 - **Size:** S to review; each move S–M.
-- **Depends on:** nothing; do it before 44, since where a setting lives
+- **Depends on:** nothing; do it before 45, since where a setting lives
   decides how it's backed up, and the audit is the same work.
 - **Open questions:**
   - Is "workspace default, person overrides" worth having, or is it one or
@@ -267,7 +267,7 @@ Recording a brew: what's measured, and how fast it is to log.
   native app:
   - **Connect scale** on the brew timer, shown only where the browser has
     Web Bluetooth: Chrome/Edge on Android and desktop. iOS (every browser
-    there) and Firefox have none; iOS is 43. Pairing opens the browser's
+    there) and Firefox have none; iOS is 44. Pairing opens the browser's
     device chooser and has to start from a tap; a scale granted before
     reconnects without it where the browser allows (`getDevices()`).
   - One adapter per brand behind a common interface (connect, weight
@@ -291,7 +291,7 @@ Recording a brew: what's measured, and how fast it is to log.
   - The paired scale belongs to the device (browser storage), not the
     workspace?
   - Write adapters from published protocol notes and our own captures
-    rather than copied code, so nothing blocks an App Store build (43,
+    rather than copied code, so nothing blocks an App Store build (44,
     licensing).
 - **Open questions:**
   - Making water from scratch, blending (tap with distilled 1:3), or both?
@@ -778,7 +778,7 @@ What the analysis worker sends to the LLM and what comes back.
 - **Depends on:** nothing.
 - **Open questions:** does the journal's own manifest and service worker
   get in the way (one origin, one scope `/`), and is it worth it before
-  testing the installed app on phones (item 41)?
+  testing the installed app on phones (item 42)?
 
 ### 25. Other menu items: a photo, and becoming a drink
 
@@ -1002,11 +1002,32 @@ Home roasting). Paused here; these are what's next.
     far safer.
   - Web Serial on Android: check what Chrome supports when it's picked.
 
+### 39. Log several roasts at once
+
+- **Status:** idea
+- **Why:** a roast day is often several batches of one green coffee, each
+  logged on its own in the Roast form. Beans already have batch add
+  (Settings → Defaults, "Add several batches at once"; `api/beans.md` §4,
+  "Frontend (batch add)"): the Add bean form with a Carry over box by each
+  field and **Next batch**. But a bean added that way takes nothing off the
+  green stock and has no roast record.
+- **Approach:** the same in the Roast form: **Log several roasts**, Carry
+  over boxes (green coffee, machine, roast type and level, temperatures)
+  and **Next roast**, which saves the roast (and its bean, taking the green
+  stock) and starts the next with the batch number moved on. Reuse
+  `CarryToggle.vue` and the `nextBatchValues` idea (`lib/beanCarry.ts`).
+- **Size:** M
+- **Depends on:** bean batch add (built).
+- **Open questions:**
+  - Behind the same `batchAddBeans` setting, or its own, with its own
+    default boxes?
+  - Say when the next roast would use more green than is left?
+
 ---
 
 ## H. Accounts
 
-### 39. Account management and password reset
+### 40. Account management and password reset
 
 - **Status:** idea. Settings → Account (change password, delete account)
   is built (roadmap, Settings); the rest is left.
@@ -1037,13 +1058,13 @@ Home roasting). Paused here; these are what's next.
     home server?
   - Must new passwords meet rules beyond 8 characters?
 
-### 40. Email verification
+### 41. Email verification
 
 - **Status:** idea
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
-  (item 39), inviting a member by email, or notifications by email.
+  (item 40), inviting a member by email, or notifications by email.
 - **Approach:**
   - On registering (and on any later email change), send a link with a
     short-lived, single-use token; the account is marked verified when it's
@@ -1053,9 +1074,9 @@ Home roasting). Paused here; these are what's next.
     password, from); without them, verification is off and the app says so.
   - Optionally `REQUIRE_VERIFIED_EMAIL=true` to block an unverified account
     from workspaces until it's verified.
-  - Shares the mail and token pieces with password reset (item 39).
+  - Shares the mail and token pieces with password reset (item 40).
 - **Size:** M (mail is new to the stack).
-- **Depends on:** nothing; pairs with 39.
+- **Depends on:** nothing; pairs with 40.
 - **Open questions:**
   - Block unverified accounts, or only remind them?
   - What happens to accounts that existed before verification (treat as
@@ -1068,7 +1089,7 @@ Home roasting). Paused here; these are what's next.
 
 How the app is served and installed.
 
-### 41. Test the installed app on phones
+### 42. Test the installed app on phones
 
 - **Status:** idea
 - **Why:** the PWA is now served as a build over HTTPS (roadmap:
@@ -1095,7 +1116,7 @@ How the app is served and installed.
 - **Depends on:** the app running on the home server.
 - **Open questions:** none.
 
-### 42. Protect the testing branch on GitHub
+### 43. Protect the testing branch on GitHub
 
 - **Status:** idea
 - **Why:** the server pulls whatever is pushed to `testing`, and a push can
@@ -1106,7 +1127,7 @@ How the app is served and installed.
 - **What:** a GitHub rule on `testing` that blocks force-pushes and deletion,
   with no PR requirement. Pushes stay as they are.
 
-### 43. iOS app with Capacitor (Bluetooth on iPhone)
+### 44. iOS app with Capacitor (Bluetooth on iPhone)
 
 - **Status:** idea
 - **Why:** iOS browsers have no Web Bluetooth, so scales and probes (9,
@@ -1153,7 +1174,7 @@ How the app is served and installed.
   needs their permission. Check dependencies and contributions before
   the first build.
 - **Size:** L
-- **Depends on:** 9 (a scale working in the PWA first); 41 (the
+- **Depends on:** 9 (a scale working in the PWA first); 42 (the
   installed app checked on an iPhone).
 - **Open questions:**
   - TestFlight only, or the public App Store?
@@ -1167,7 +1188,7 @@ How the app is served and installed.
 
 What a backup keeps, so moving to a new server loses nothing.
 
-### 44. Back up every setting
+### 45. Back up every setting
 
 - **Status:** idea
 - **Why:** a workspace backup (`docs/api/backup.md` §2b) leaves out what
@@ -1204,7 +1225,7 @@ What a backup keeps, so moving to a new server loses nothing.
 
 How the app looks, and what each person can change about it.
 
-### 45. A visual refresh, and themes to choose from
+### 46. A visual refresh, and themes to choose from
 
 - **Status:** idea
 - **Why:** the app has grown screen by screen, and only light and dark
@@ -1241,4 +1262,4 @@ How the app looks, and what each person can change about it.
     `background_color` in `vite.config.ts`) are fixed in the manifest:
     keep the brand brown there, or set the bar colour at runtime as it
     already is for dark?
-  - Include it in backups with the other preferences (44)?
+  - Include it in backups with the other preferences (45)?

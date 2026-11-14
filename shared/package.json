@@ -45,6 +45,10 @@
       "types": "./dist/recipeChecks.d.ts",
       "default": "./dist/recipeChecks.js"
     },
+    "./beanCarry": {
+      "types": "./dist/beanCarry.d.ts",
+      "default": "./dist/beanCarry.js"
+    },
     "./aiDetails": {
       "types": "./dist/aiDetails.d.ts",
       "default": "./dist/aiDetails.js"
