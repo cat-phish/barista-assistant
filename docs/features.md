@@ -301,10 +301,12 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   their own keep one rating and notes.
 - **Setup:** three cards. **What you're brewing** picks the bean, recipe and
   grinder; **AI suggestion** (Suggest parameters) sits above the batch, so a
-  suggested ratio shows up right below it; **Batch and starting point**
+  suggested ratio shows up right below it (its grind, temperature and ratio
+  go into the brew only when **Use these values** is tapped; **Dismiss**
+  drops it); **Batch and starting point**
   holds the batch, temperature, grind and the rest, shown from the start
   (not only once a bean is picked). The grind pre-fills from your last brew
-  of that recipe on that grinder, else the AI suggestion, else the recipe's
+  of that recipe on that grinder, else the AI suggestion (once used), else the recipe's
   starting point. Start and Log stay disabled until the bean and the batch
   are set, with a line saying what's still missing ("Choose a bean.",
   "Enter a size.").
