@@ -211,6 +211,9 @@ const recipe = computed(() => recipes.value.find((r) => r.id === recipeId.value)
 // the earlier brews picked (which, and how many), filled in when they come.
 const suggester = useParameterSuggestion();
 const suggestion = computed(() => (suggester.suggestion.value ? startingParameters(suggester.suggestion.value) : null));
+// Its values go into the brew only once "Use these values" is tapped.
+const suggestionUsed = ref(false);
+const usedSuggestion = computed(() => (suggestionUsed.value ? suggestion.value : null));
 
 // Espresso recipes record dose → shot weight instead of water (docs/api/brew-logs.md §6).
 const espresso = computed(() => recipe.value?.brewer.kind === 'espresso');
@@ -650,11 +653,11 @@ async function refreshGrind(): Promise<void> {
     grindSource.value = 'proposal';
     return;
   }
-  const choice = chooseGrind({ lastSetting: remembering('grind') ? (last?.grindSetting ?? null) : null, suggestion: suggestion.value, grinderId, recipe: recipe.value });
+  const choice = chooseGrind({ lastSetting: remembering('grind') ? (last?.grindSetting ?? null) : null, suggestion: usedSuggestion.value, grinderId, recipe: recipe.value });
   draft.grind = choice.value;
   grindSource.value = choice.source;
   // The speed goes with the setting it came with (variable-speed grinders).
-  const rpm = choice.source === 'last' ? last?.grindRpm : choice.source === 'suggestion' ? suggestion.value?.grindRpm : null;
+  const rpm = choice.source === 'last' ? last?.grindRpm : choice.source === 'suggestion' ? usedSuggestion.value?.grindRpm : null;
   draft.rpm = rpm != null ? String(rpm) : '';
 }
 watch([recipeId, () => draft.grinderId], () => {
@@ -768,12 +771,28 @@ async function loadSent() {
   const s = suggester.suggestion.value;
   return ws && s ? (await suggestionsApi.sent(ws, s.id)).request : null;
 }
+// The suggested grind and temperature, shown before they're used.
+const suggestedValues = computed(() => {
+  const p = suggestion.value;
+  if (!p) return '';
+  const parts: string[] = [];
+  if (p.grindSetting !== null) parts.push(`Grind ${formatGrind(p.grindSetting)}${p.grindRpm !== null ? ` at ${p.grindRpm} rpm` : ''}`);
+  if (p.tempC !== null) parts.push(formatTemp(p.tempC, temperatureUnit.value));
+  return parts.join(' · ');
+});
 // What the suggested ratio kept, for the card ("your 300 g of water").
 const ratioKept = ref('');
-watch(suggestion, (p) => {
-  if (p) applySuggestion(p);
-  else ratioKept.value = '';
+// A new suggestion (or none) waits to be used; filling the brew in is a tap.
+watch(suggestion, () => {
+  suggestionUsed.value = false;
+  ratioKept.value = '';
 });
+function useSuggestion(): void {
+  const p = suggestion.value;
+  if (!p) return;
+  suggestionUsed.value = true;
+  applySuggestion(p);
+}
 
 function applySuggestion(p: StartingParameters): void {
   if (p.tempC !== null) draft.temp = tempText(p.tempC, temperatureUnit.value);
@@ -1501,10 +1520,15 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             <span v-if="suggestion.confidence" class="badge" :class="`conf-${suggestion.confidence}`">{{ CONFIDENCE_LABELS[suggestion.confidence] }}</span>
           </p>
           <p class="reasoning">“{{ suggestion.reasoning }}”</p>
+          <p v-if="suggestedValues" class="small">{{ suggestedValues }}</p>
           <p v-if="suggestion.ratio !== null" class="small">
             Ratio 1:{{ formatRatio(suggestion.ratio) }}<template v-if="ratioKept">, keeping your {{ ratioKept }}</template>.
           </p>
           <p v-else class="muted small">Your batch and its ratio stay as they are.</p>
+          <div v-if="!suggestionUsed" class="suggest-use">
+            <button class="btn btn-primary" type="button" @click="useSuggestion">Use these values</button>
+            <button class="btn btn-secondary" type="button" @click="suggester.reset()">Dismiss</button>
+          </div>
           <div v-if="suggestion.alternatives.length" class="alternatives">
             <p class="small"><strong>Or try</strong></p>
             <ul>
@@ -1518,12 +1542,13 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           </div>
           <p v-else-if="suggester.suggestion.value?.alternativesAsked?.length" class="muted small">Nothing else stood out to try.</p>
           <p v-if="suggestedFor" class="note small">
-            The grind was suggested for {{ suggestedFor }}, so it isn't filled in for {{ grinder?.name ?? 'no grinder' }}.
+            The grind was suggested for {{ suggestedFor }}, so it {{ suggestionUsed ? "isn't" : "won't be" }} filled in for {{ grinder?.name ?? 'no grinder' }}.
           </p>
           <p class="muted small">
             <template v-if="suggestion.brewCount">Based on {{ suggestion.brewCount }} earlier {{ suggestion.brewCount === 1 ? 'brew' : 'brews' }} ({{ SUGGEST_SOURCE_LABELS[suggestion.source].toLowerCase() }}).</template>
             <template v-else>No earlier brews to compare yet, so it's from the recipe and the bean alone.</template>
-            Filled in below; change anything you like.
+            <template v-if="suggestionUsed">Filled in below; change anything you like.</template>
+            <template v-else>Nothing below changes until you use these values.</template>
           </p>
           <button v-if="suggester.suggestion.value?.hasRequest" class="btn-link small" type="button" @click="showSent = true">What was sent to the AI</button>
           <AiRequestDialog :open="showSent" :load="loadSent" @close="showSent = false" />
@@ -1986,6 +2011,11 @@ p {
 }
 .suggest-pick .suggest-max {
   flex: 0 1 7rem;
+}
+.suggest-use {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 .suggest-alts {
   display: flex;
