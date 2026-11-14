@@ -81,6 +81,29 @@ the analysis and Suggest parameters (source beanRecipe).
   repeated each time, plus a Suggest that rarely moves anything but the
   temperature.
 
+### Eval p2 (2026-11-14, prompt 2026-11-b.r1, gpt-6-luna)
+
+`eval/p2.json` and `eval/p2-sug.json`: the same 20 brews, with the
+research findings in the prompt (`@barista/shared/research`) and the
+lever-order rewrite.
+
+- **The upward temperature push is gone.** 1 of 20 analyses changed the
+  temperature (−1 °C, a kettle trim), against 11 of 20, all upwards, before.
+- **High ratings are kept.** All 7 brews at 4.5–5 were told to keep the
+  recipe; one also got a gentler pour. Before, 3 got a temperature change
+  and 2 a grind change.
+- **Other levers now come up.** Of the 4-and-below brews, five changes
+  were to the ratio (more water), one to a bloom wait, one to the first
+  pour; grind changes fell from 5 to 2.
+- **Suggest parameters hardly moved.** Temperatures 92 °C in 11 of 20
+  (13 before), equal to the last brew's in 10 of 16 (11 before), ratio
+  kept in 19 of 20 (18 before). The locked `suggestOutput` text still says
+  to keep the ratio unless there's a strength problem, and the stored
+  analyses it reads are the old ones. That's for the routes work
+  (backlog item 17), which gives the ratio its own route.
+- **Watch:** a 3.5-star brew was told to repeat unchanged; "keep a
+  well-rated brew" shouldn't reach the middle ratings.
+
 ## Synthesis
 
 Drawn from the five topic files (94 findings, researched November 2026).

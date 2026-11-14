@@ -24,8 +24,9 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
       "You are an expert specialty coffee roaster and barista. Analyze this one brew (brew) against its recipe and the " +
       "bean, and suggest concrete changes for the next brew. A missing field means it wasn't recorded, not that it was " +
       "zero or absent. The brew's grinder and water are named in it and described in equipment. Ratings are 0.5-5 in half steps; " +
-      "rating and tastingNotes describe the coffee tasted on its own. Judge mainly from the tasting and how the brew " +
-      "went against the recipe's targets, and change as little as needed: one or two levers at a time. The brew's " +
+      "rating and tastingNotes describe the coffee tasted on its own. Judge mainly from the tasting; the recipe's " +
+      "targets are where it started, not a number to pull the brew back to. Change as little as needed: one or two " +
+      "levers at a time, chosen as the research findings say. The brew's " +
       "expectedFinishMinSec-expectedFinishMaxSec is the finish (espresso: shot time) window it was timed against, which " +
       "may differ from the recipe's: judge actualTimeSec against it.",
   },
@@ -36,7 +37,7 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
     locked: true,
     text:
       "reasoning is a concise 1-2 sentence diagnosis. nextStep is the one concrete thing to do on the next brew, in " +
-      "plain words a barista can act on (e.g. 'Grind 2 clicks coarser and keep 93 °C'). confidence is low when the " +
+      "plain words a barista can act on (e.g. 'Grind 2 clicks coarser, keep the rest'). confidence is low when the " +
       "notes are vague, the brew has no recipe to judge it against, or the measurements look wrong; high only when " +
       "the taste and the numbers agree. suggestedRpmDelta is a change in grinder speed for a variable-speed grinder, " +
       "null otherwise or when the speed should stay. suggestedDoseDelta and suggestedYieldDelta are null except for " +
@@ -109,7 +110,7 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
     text:
       "roastWeightLossPercent is the green weight lost in roasting, which measures how developed the roast is more " +
       "exactly than a roast name: around 11-13% is a light roast, 14-16% medium and 17% or more dark. A more developed " +
-      "roast is more soluble and extracts more easily, so it takes a coarser grind or cooler water; a less developed " +
+      "roast is more porous and extracts faster, so it takes a coarser grind or cooler water; a less developed " +
       "one needs more extraction. Trust it over the roast level when they disagree.",
   },
   {
@@ -154,7 +155,7 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
     label: "Growing altitude",
     prompts: ["analysis", "suggest"],
     locked: false,
-    text: "A higher altitudeMasl usually means denser beans that take a finer grind or hotter water.",
+    text: "altitudeMasl is context only: no study ties growing altitude to brew temperature or grind.",
   },
   {
     key: "variety",
@@ -192,9 +193,7 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
     prompts: ["analysis", "suggest"],
     locked: false,
     text:
-      "A water's figures (mg/L; GH and KH as CaCO3) matter: harder water with more magnesium and calcium tends to " +
-      "extract more, while high alkalinity (KH) buffers acidity and can flatten the cup; only the figures given are " +
-      "known.",
+      "A water's figures are in mg/L, GH and KH as CaCO3; only the figures given are known.",
   },
   {
     key: "prepTools",
@@ -366,7 +365,8 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
       "described once in equipment and named where used. Ratings are 0.5-5 in half steps; rating and tastingNotes describe the coffee " +
       "tasted on its own. batch is the amount about to be brewed, chosen by the barista for the cup size or the beans " +
       "left: never change it, even when it differs from the recipe's or earlier brews' amounts. Start from the " +
-      "recipe's targets and move only where the brews give a reason. A pour over batch a quarter or more bigger or " +
+      "best-rated comparable brews (else the recipe's targets) and move only where the brews give a reason, " +
+      "choosing levers as the research findings say. A pour over batch a quarter or more bigger or " +
       "smaller than the brews' drains slower or faster: allow for it with one small grind step at most, and not at all " +
       "for a smaller difference.",
   },

@@ -6,6 +6,7 @@
 // input has what they talk about.
 import type { AiDetail } from "@barista/shared/aiDetails";
 import { INSTRUCTIONS_INTRO, LOCKED_SECTIONS, NOTE_INTRO, PROMPT_TEXT, type AiPrompt } from "@barista/shared/aiPrompt";
+import { RESEARCH_FINDINGS, RESEARCH_VERSION, type ResearchFinding } from "@barista/shared/research";
 import type { BeanReviewContext } from "./beanReview.js";
 import type { PeriodContext } from "./periodContext.js";
 import type { BrewContext, BrewSummary, GrinderInfo, WaterInfo } from "./context.js";
@@ -14,7 +15,8 @@ import type { BrewerInfo, SuggestContext } from "./suggestContext.js";
 // Stored with each analysis (llm_analyses.prompt_version), so results can be
 // compared across changes (npm run eval). Bump it whenever the input, the
 // prompt or the schema changes.
-export const PROMPT_VERSION = "2026-11-a";
+// It carries the research version (@barista/shared/research) after the dot.
+export const PROMPT_VERSION = `2026-11-b.${RESEARCH_VERSION}`;
 // The chat's own prompt (CHAT_SYSTEM, CHAT_PROPOSALS): replies don't store
 // it, the eval's propose runs do (docs/api/llm-contract.md §9e).
 export const CHAT_PROMPT_VERSION = "2026-11-c";
@@ -236,6 +238,48 @@ const brewsLike = (input: LlmInput) =>
 const methodKinds = (input: LlmInput) => brews(input).map((b) => b.methodKind).concat(recipe(input).methodKind);
 const isCold = (style: Json | undefined) => style === "cold_brew" || style === "kyoto_drip" || style === "rapid_cold";
 
+// Research findings (docs/api/llm-contract.md §9, "Research findings"): each
+// one sent only for the brews it's about and when the input has what it
+// needs. Experiments wait for the research settings (docs/backlog.md item 21).
+const HOT_FILTER = new Set<Json | undefined>(["pour_over", "immersion", "hybrid"]);
+// The brews' own styles; the recipe's only when no brew recorded one.
+const styles = (i: LlmInput): Json[] => {
+  const own = brews(i).map((b) => (b.recipeStyle as Record<string, Json> | undefined)?.brewsLike).filter((s): s is Json => s !== undefined);
+  const fromRecipe = (recipe(i).style as Record<string, Json> | undefined)?.brewsLike;
+  return own.length > 0 || fromRecipe === undefined ? own : [fromRecipe];
+};
+const kinds = (i: LlmInput): Json[] => {
+  const own = brews(i).map((b) => b.methodKind).filter((k): k is Json => k !== undefined);
+  return own.length > 0 || recipe(i).methodKind === undefined ? own : [recipe(i).methodKind!];
+};
+const isFilter = (i: LlmInput) =>
+  styles(i).some((s) => HOT_FILTER.has(s)) || (kinds(i).includes("filter") && !styles(i).some(isCold));
+// A filter brew with no style recorded counts as a pour over, the common case.
+const isPourOver = (i: LlmInput) =>
+  styles(i).some((s) => s === "pour_over" || s === "hybrid") || (kinds(i).includes("filter") && styles(i).length === 0);
+const hasWater = (i: LlmInput) =>
+  Object.values(((i.equipment as Record<string, Json> | undefined)?.waters ?? {}) as Record<string, Json>).some((w) => w && typeof w === "object" && Object.keys(w).length > 0);
+const SCOPE: Record<ResearchFinding["scope"], (i: LlmInput) => boolean> = {
+  any: () => true,
+  filter: isFilter,
+  pourOver: isPourOver,
+  immersion: (i) => styles(i).includes("immersion"),
+  espresso: (i) => kinds(i).includes("espresso"),
+};
+const NEEDS: Record<NonNullable<ResearchFinding["needs"]>, (i: LlmInput) => boolean> = {
+  water: hasWater,
+  roastAge: (i) => i.roastAgeDays !== undefined || anyBrew(i, "roastAgeDays"),
+  roastWeightLoss: (i) => bean(i).roastWeightLossPercent !== undefined,
+};
+export const RESEARCH_PREFIX = "Research finding:";
+function researchSections(kind: "analysis" | "suggest"): PromptSection[] {
+  return RESEARCH_FINDINGS.filter((f) => !f.experiment && f.prompts.includes(kind)).map((f) => ({
+    key: `research.${f.key}`,
+    when: (i: LlmInput) => SCOPE[f.scope](i) && (!f.needs || NEEDS[f.needs](i)),
+    text: `${RESEARCH_PREFIX} ${f.text}`,
+  }));
+}
+
 export interface PromptSection {
   key: string;
   when: (input: LlmInput) => boolean;
@@ -391,6 +435,7 @@ export const PROMPT_SECTIONS: PromptSection[] = [
     when: (i) => anyBrew(i, "actualIceGrams") || recipe(i).targetIceGrams !== undefined,
     text: PROMPT_TEXT.flashChilled,
   },
+  ...researchSections("analysis"),
   {
     key: "end",
     when: () => true,
@@ -426,8 +471,9 @@ const ownSection = (key: string) => SUGGEST_OWN.find((s) => s.key === key)!;
 export const SUGGEST_SECTIONS: PromptSection[] = [
   ownSection("suggestCore"),
   ownSection("suggestOutput"),
-  ...PROMPT_SECTIONS.filter((s) => s.key !== "core" && s.key !== "output" && s.key !== "end").map((s) => (s.key === "espresso" ? ownSection("suggestEspresso") : s)),
+  ...PROMPT_SECTIONS.filter((s) => s.key !== "core" && s.key !== "output" && s.key !== "end" && !s.key.startsWith("research.")).map((s) => (s.key === "espresso" ? ownSection("suggestEspresso") : s)),
   ownSection("suggestAlternatives"),
+  ...researchSections("suggest"),
   PROMPT_SECTIONS.find((s) => s.key === "end")!,
 ];
 

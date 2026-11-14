@@ -53,6 +53,10 @@
       "types": "./dist/aiDetails.d.ts",
       "default": "./dist/aiDetails.js"
     },
+    "./research": {
+      "types": "./dist/research.d.ts",
+      "default": "./dist/research.js"
+    },
     "./aiPrompt": {
       "types": "./dist/aiPrompt.d.ts",
       "default": "./dist/aiPrompt.js"

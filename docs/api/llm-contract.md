@@ -178,7 +178,7 @@ queue:
 
    | Section | Included when | What it says |
    | --- | --- | --- |
-   | `core` | always | expert barista; judge this one brew against its recipe and the bean; missing = not recorded; equipment by name; change one or two levers; judge the time against the brew's own finish window |
+   | `core` | always | expert barista; judge this one brew from its tasting (the recipe's targets are where it started, not a number to pull it back to); missing = not recorded; equipment by name; change one or two levers, chosen as the research findings say; judge the time against the brew's own finish window |
    | `output` | always | what `reasoning`, `nextStep`, `confidence` and `suggestedRpmDelta` should hold; dose and shot weight null except for espresso |
    | `drink` | a drink or drink tasting is sent | drink notes are weaker evidence of extraction |
    | `style` | a recipe style is sent | judge against `brewsLike` (soup shot, immersion…) |
@@ -187,15 +187,15 @@ queue:
    | `roastType` | the bean has `roastType` | espresso roast as filter may need a different approach |
    | `decafBlend` | decaf or blend | extracts differently |
    | `flavorProfile` | the bean has one | the cup to aim for |
-   | `weightLoss` | `roastWeightLossPercent` | how developed the roast is (11–13% light, 14–16% medium, 17%+ dark); more developed extracts more easily (coarser, cooler); trusted over the roast level |
+   | `weightLoss` | `roastWeightLossPercent` | how developed the roast is (11–13% light, 14–16% medium, 17%+ dark); more developed is more porous and extracts faster (coarser, cooler); trusted over the roast level |
    | `stepTimes` | the recipe has `stepTimeScaling` | step times and the finish window are already scaled to the batch; a bigger batch taking longer is planned, not a grind problem |
    | `stepTemps` | a step's temp differs from the recipe's `targetTempC`, or `stepTempsFollowBrew` is on | how the recipe's, the brew's and each step's temps relate; step temps follow the water temp by the same degrees only with `stepTempsFollowBrew`, and `suggestedTempDelta` / `tempC` are for the water temp; a single step's temp problem goes in `nextStep` |
    | `heldSteps` | a brew's `marks` include a `step_hold` | the barista held that step because it ran slow; a `step_end` in a hold ended it; later steps moved but the finish window didn't, so a held brew can finish late; say where it ran slow and what that points to |
-   | `altitude` | `altitudeMasl` | denser beans |
+   | `altitude` | `altitudeMasl` | context only: no study ties it to temperature or grind |
    | `variety` | `varieties` or `species` | the cultivar's typical character (Geisha delicate, SL28/SL34 dense and bright); robusta or liberica in a blend extract more easily and add body and bitterness; context, not a rule |
    | `origin` | origin area, country or region | context, not a rule |
    | `tds` | a brew has `tdsPercent` | judge strength and extraction from TDS and EY |
-   | `water` | a water with figures | hardness and alkalinity effects |
+   | `water` | a water with figures | the units; only the figures given are known (alkalinity is the `alkalinity` finding's) |
    | `prepTools` | the brew lists prep tools | a tool not listed may still have been used |
    | `problems` | a brew lists problems | the clearest clues, explained first |
    | `flavors` | a brew has wheel flavors | the wheel can be the workspace's own; a place reads broadest group first and a flavor belongs to every group in it; go by meaning, not group names; read with the tasting notes; a broader pick is less specific, not weaker; sour, fermented or green picks often mean under-extraction, harsh, ashy or bitter ones over-extraction or the roast, off flavors (papery, musty) the beans or filter; compare with `flavorProfile` |
@@ -205,6 +205,7 @@ queue:
    | `espresso` | an `espresso` method | flow, windows, machine, step size; dose and shot weight as levers, one at a time |
    | `cold` | a style brews like `cold_brew`, `kyoto_drip` or `rapid_cold` | steep windows, dilution, concentrate TDS, levers |
    | `concentrate` | a brew or the recipe that isn't a cold style has a `dilutionRatio` | TDS and EY are the concentrate's; judge strength as served, over ice as an iced drink; dilution or ratio before grind |
+   | `research.<key>` | the finding applies (see below) | one research finding each, after `Research finding:` |
    | `instructions` | the barista has their own instructions | `INSTRUCTIONS_INTRO` and their text |
    | `note` | a one-off note came with the request | `NOTE_INTRO` and the note |
    | `end` | always | respond strictly matching the schema |
@@ -217,6 +218,35 @@ queue:
    then the request's `note`, before `end`. The locked sections (`output`,
    `suggestOutput`, `end`) are never replaced. A customized prompt's result
    is saved with `promptVersion` `PROMPT_VERSION + "+custom"`.
+
+   **Research findings** (`RESEARCH_FINDINGS` in `@barista/shared/research`,
+   from `docs/research/README.md` "Synthesis"): each is one rule with its
+   levers, evidence (`peerReviewed`, `controlledTest`, `expert`) and source
+   file. A finding is sent when its `scope` fits the brew and the input has
+   what it `needs`:
+
+   | Scope | Brews |
+   | --- | --- |
+   | `any` | all |
+   | `filter` | a `pour_over`, `immersion` or `hybrid` style, or a `filter` method that isn't a cold style |
+   | `pourOver` | a `pour_over` or `hybrid` style, or a `filter` method with no style |
+   | `immersion` | an `immersion` style |
+   | `espresso` | an `espresso` method |
+
+   The brews' own style and method count; the recipe's only when no brew
+   has one (so an immersion brew of a pour over recipe is an immersion
+   brew). `needs`: `water` (a water with figures), `roastAge`
+   (`roastAgeDays`), `roastWeightLoss`. Today's findings: `leverOrder`
+   (ratio for strength, grind/flow/agitation for extraction, temperature
+   last), `tasteNotTemp`, `sourStrong`, `ownPattern` (no universal ideal;
+   a 4.5+ brew without a named fault is kept), `kettleNotSlurry`,
+   `roastTemp` (filter); `immersionRatio`; `finesFlow`, `bloom`
+   (pourOver); `espressoFinest`; `coldBeansFiner`, `alkalinity`,
+   `degassing`, `naturalsWeightLoss` (any). **Experiments** (`coldBloom`,
+   `firstPours`) are never sent yet; they wait for the research settings
+   (`docs/backlog.md` item 21). The findings can't be overridden in Your AI
+   prompt. `PROMPT_VERSION` carries `RESEARCH_VERSION` after a dot
+   (`2026-11-b.r1`), bumped whenever a finding changes.
 
    Tests check which sections appear for given inputs and snapshot the
    assembled prompt for a fixed brew (`worker/tests/llm.test.ts`), so a
@@ -384,13 +414,14 @@ deleted with its bean) is skipped.
    (`aiHidden`) is left out the same way, other beans' details too.
 3. **Prompt** (`SUGGEST_SECTIONS`): its own opening and output sections,
    then the analysis's topic sections (drink … flashChilled), with
-   `suggestEspresso` in place of `espresso` (no change fields here), the
+   `suggestEspresso` in place of `espresso` (no change fields here), then
+   `suggestAlternatives`, the research findings (step 3 above), the
    asker's `instructions` and `note` (step 3 above, `requestedBy`), and
    `end`:
 
    | Section | Included when | What it says |
    | --- | --- | --- |
-   | `suggestCore` | always | values for a brew about to be made; what each source picks (bag: this exact bag; bean: every bag of the coffee); the batch is the barista's, never changed, and a different batch size drains differently (grind); `sameBag`/`sameBean`/`sameRecipe`/`sameGrinder`, and an earlier analysis judged by the brew after it; another bag of this coffee carries over, allowing for its roast age; another bean's brews show the recipe, brewer or grinder, not this bean; start from the recipe's targets |
+   | `suggestCore` | always | values for a brew about to be made; what each source picks (bag: this exact bag; bean: every bag of the coffee); the batch is the barista's, never changed, and a different batch size drains differently (grind); `sameBag`/`sameBean`/`sameRecipe`/`sameGrinder`, and an earlier analysis judged by the brew after it; another bag of this coffee carries over, allowing for its roast age; another bean's brews show the recipe, brewer or grinder, not this bean; start from the best-rated comparable brews (else the recipe's targets), levers as the research findings say |
    | `suggestOutput` | always | what each field holds; grind on the named grinder's dial from brews on it or its starting point, else null; a ratio for the batch, kept (or null) unless the brews show a strength problem |
    | `suggestEspresso` | the recipe or a brew is espresso | windows and ratio as targets; the ratio sets the shot weight for the batch's dose; pre-infusion and profile in `nextStep` |
    | `suggestAlternatives` | `options` are sent | what each kind of option is; at most one of each, only with a reason (style or ratio for the roast or flavor profile, a brewer or bean that suits better); `option` is its ref, `why` in plain words; empty when nothing stands out; the values stay for this setup |

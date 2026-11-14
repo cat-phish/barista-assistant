@@ -3,7 +3,8 @@ import type { AiDetail } from "@barista/shared/aiDetails";
 import { scaledToBrew, type BrewContext, type BrewSummary } from "../src/context.js";
 import { buildCompletionRequest, buildSuggestRequest, onlySuggestionsThatApply, onlyWhatApplies, parseAnalysisMessage, parseSuggestionMessage } from "../src/llm.js";
 import { INSTRUCTIONS_INTRO, NOTE_INTRO, PROMPT_SECTION_TEXTS, PROMPT_TEXT } from "@barista/shared/aiPrompt";
-import { buildSystemPrompt, compact, PROMPT_SECTIONS, promptSections, SUGGEST_SECTIONS, toLlmInput, toSuggestInput } from "../src/prompt.js";
+import { RESEARCH_FINDINGS } from "@barista/shared/research";
+import { buildSystemPrompt, compact, PROMPT_SECTIONS, RESEARCH_PREFIX, promptSections, SUGGEST_SECTIONS, toLlmInput, toSuggestInput } from "../src/prompt.js";
 import type { SuggestBrew, SuggestContext } from "../src/suggestContext.js";
 
 const reply = (body: unknown) => ({ content: JSON.stringify(body), refusal: null });
@@ -123,6 +124,9 @@ const context = (over: { brew?: Partial<BrewSummary>; bean?: Partial<BrewContext
   ratingScale: "0.5-5",
 });
 const without = (...keys: AiDetail[]) => new Set<AiDetail>(keys);
+// The sections other than the research findings, which have their own test.
+const topics = (keys: string[]) => keys.filter((k) => !k.startsWith("research."));
+const research = (keys: string[]) => keys.filter((k) => k.startsWith("research.")).map((k) => k.slice("research.".length));
 
 describe("onlyWhatApplies: changes that don't fit the brew are dropped", () => {
   const said = parseAnalysisMessage(reply({ ...valid, suggestedRpmDelta: 100, suggestedDoseDelta: 0.5, suggestedYieldDelta: 4 }));
@@ -162,14 +166,14 @@ describe("what the AI is sent (docs/api/llm-contract.md §9)", () => {
   });
 
   it("only adds the prompt sections the brew needs", () => {
-    expect(promptSections(toLlmInput(context()))).toEqual(["core", "output", "style", "altitude", "origin", "water", "end"]);
+    expect(topics(promptSections(toLlmInput(context())))).toEqual(["core", "output", "style", "altitude", "origin", "water", "end"]);
     const espresso = toLlmInput(
       context({
         brew: { methodKind: "espresso", recipeStyle: { name: "Standard", brewsLike: "standard" }, tdsPercent: 9, problems: ["Channeling / spurting"], prepTools: ["WDT"], grindRpm: 900, grinderRetentionGrams: 0.3 },
         bean: { batchNumber: "7", roastType: "espresso", decaf: true, flavorProfile: "Chocolate", originArea: null, country: null, altitudeMasl: null },
       }),
     );
-    expect(promptSections(espresso)).toEqual(["core", "output", "style", "batch", "roastType", "decafBlend", "flavorProfile", "tds", "water", "prepTools", "problems", "rpm", "retention", "espresso", "end"]);
+    expect(topics(promptSections(espresso))).toEqual(["core", "output", "style", "batch", "roastType", "decafBlend", "flavorProfile", "tds", "water", "prepTools", "problems", "rpm", "retention", "espresso", "end"]);
     const cold = toLlmInput(context({ brew: { recipeStyle: { name: "Cold brew", brewsLike: "cold_brew" }, drink: { name: "Iced latte", ingredientTypes: ["milk"] } } }));
     expect(promptSections(cold)).toEqual(expect.arrayContaining(["drink", "cold"]));
     expect(promptSections(cold)).not.toContain("flashChilled");
@@ -183,17 +187,33 @@ describe("what the AI is sent (docs/api/llm-contract.md §9)", () => {
     expect(promptSections(dilutedCold)).not.toContain("concentrate");
   });
 
+  it("adds the research findings that apply to the brew, never an experiment (docs/api/llm-contract.md §9)", () => {
+    const filter = ["leverOrder", "tasteNotTemp", "sourStrong", "ownPattern", "kettleNotSlurry", "roastTemp"];
+    expect(research(promptSections(toLlmInput(context())))).toEqual([...filter, "finesFlow", "bloom", "coldBeansFiner", "alkalinity", "degassing"]);
+    const steeped = toLlmInput(context({ brew: { recipeStyle: { name: "Immersion", brewsLike: "immersion" }, water: null, roastAgeDays: null } }));
+    expect(research(promptSections(steeped))).toEqual([...filter.slice(0, 3), "immersionRatio", ...filter.slice(3), "coldBeansFiner"]);
+    const shot = toLlmInput(context({ brew: { methodKind: "espresso", recipeStyle: { name: "Standard", brewsLike: "standard" } }, bean: { roastWeightLossPercent: 15 } }));
+    expect(research(promptSections(shot))).toEqual(["leverOrder", "ownPattern", "espressoFinest", "coldBeansFiner", "alkalinity", "degassing", "naturalsWeightLoss"]);
+    const cold = toLlmInput(context({ brew: { recipeStyle: { name: "Cold brew", brewsLike: "cold_brew" } } }));
+    expect(research(promptSections(cold))).not.toContain("tasteNotTemp");
+    const all = [...PROMPT_SECTIONS, ...SUGGEST_SECTIONS].map((x) => x.key);
+    expect(all).not.toContain("research.coldBloom");
+    expect(all).not.toContain("research.firstPours");
+    expect(research(promptSections(toSuggestInput(suggestContext()), SUGGEST_SECTIONS))).toEqual(research(promptSections(toLlmInput(context()))));
+    expect(buildSystemPrompt(toLlmInput(context()))).toContain(`${RESEARCH_PREFIX} ${RESEARCH_FINDINGS[0]!.text}`);
+  });
+
   it("every section's text comes from @barista/shared/aiPrompt, each prompt's in it (docs/api/auth.md §1c)", () => {
     const keys = (kind: "analysis" | "suggest") => PROMPT_SECTION_TEXTS.filter((t) => t.prompts.includes(kind)).map((t) => t.key).sort();
-    expect(PROMPT_SECTIONS.map((x) => x.key).sort()).toEqual(keys("analysis"));
-    expect(SUGGEST_SECTIONS.map((x) => x.key).sort()).toEqual(keys("suggest"));
-    for (const x of [...PROMPT_SECTIONS, ...SUGGEST_SECTIONS]) expect(x.text, x.key).toBe(PROMPT_TEXT[x.key]);
+    expect(topics(PROMPT_SECTIONS.map((x) => x.key)).sort()).toEqual(keys("analysis"));
+    expect(topics(SUGGEST_SECTIONS.map((x) => x.key)).sort()).toEqual(keys("suggest"));
+    for (const x of [...PROMPT_SECTIONS, ...SUGGEST_SECTIONS].filter((x) => !x.key.startsWith("research."))) expect(x.text, x.key).toBe(PROMPT_TEXT[x.key]);
   });
 
   it("a barista's own prompt: their section texts, but never a locked one, then their instructions and a note before end", () => {
     const input = toLlmInput(context());
     const custom = { prompt: { instructions: "I like it light.", overrides: { core: "Be brief.", output: "Answer in prose.", origin: "Ignore origin." } }, note: "Tasted cold." };
-    expect(promptSections(input, PROMPT_SECTIONS, custom)).toEqual(["core", "output", "style", "altitude", "origin", "water", "instructions", "note", "end"]);
+    expect(topics(promptSections(input, PROMPT_SECTIONS, custom))).toEqual(["core", "output", "style", "altitude", "origin", "water", "instructions", "note", "end"]);
     const system = buildSystemPrompt(input, PROMPT_SECTIONS, custom);
     expect(system.startsWith("Be brief. " + PROMPT_TEXT.output)).toBe(true); // output is locked
     expect(system).toContain("Ignore origin.");
@@ -429,7 +449,7 @@ describe("what Suggest parameters sends (docs/api/llm-contract.md §9b)", () => 
 
   it("its own opening, output and espresso sections; the topic sections as an analysis has them", () => {
     const input = toSuggestInput(suggestContext());
-    expect(promptSections(input, SUGGEST_SECTIONS)).toEqual(["suggestCore", "suggestOutput", "style", "altitude", "origin", "water", "end"]);
+    expect(topics(promptSections(input, SUGGEST_SECTIONS))).toEqual(["suggestCore", "suggestOutput", "style", "altitude", "origin", "water", "end"]);
     const shot = toSuggestInput(suggestContext({ recipe: { ...context().recipe!, methodKind: "espresso" }, brews: [] }));
     expect(promptSections(shot, SUGGEST_SECTIONS)).toContain("suggestEspresso"); // from the recipe, with no brews
     expect(promptSections(shot, SUGGEST_SECTIONS)).not.toContain("espresso");
@@ -442,7 +462,7 @@ describe("what Suggest parameters sends (docs/api/llm-contract.md §9b)", () => 
     expect(JSON.stringify(input.options)).not.toMatch(/recipe-2|brewer-2|bean-2/); // ids stay here
     expect((input.options as { recipes: object[] }).recipes[0]).not.toHaveProperty("targetTempC");
     expect((input.options as { beans: Array<{ bean: object }> }).beans[0]?.bean).not.toHaveProperty("country");
-    expect(promptSections(input, SUGGEST_SECTIONS).slice(-2)).toEqual(["suggestAlternatives", "end"]);
+    expect(topics(promptSections(input, SUGGEST_SECTIONS)).slice(-2)).toEqual(["suggestAlternatives", "end"]);
     expect(promptSections(toSuggestInput(suggestContext()), SUGGEST_SECTIONS)).not.toContain("suggestAlternatives");
   });
 
