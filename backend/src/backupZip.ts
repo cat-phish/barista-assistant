@@ -2,7 +2,8 @@
 // backup.json (the usual file, with bean_photos rows) and photos/<id>.webp
 // for each row. Without the zip, a JSON file has no photos.
 import { readFile } from "node:fs/promises";
-import { unzipSync, zipSync, type Zippable } from "fflate";
+import { zipSync, type Zippable } from "fflate";
+import { unzipBounded } from "./safeUnzip.js";
 import { buildBackup, type BackupFile, type BackupOptions, type BackupRow } from "./backup.js";
 import { photoPath } from "./photos.js";
 
@@ -45,12 +46,12 @@ export type ReadZip = { ok: true; backup: unknown; photos: Map<string, Buffer> }
 export function readBackupZip(data: Buffer): ReadZip {
   let files: Record<string, Uint8Array>;
   try {
-    files = unzipSync(data, {
-      filter: (f) =>
-        (f.name === ZIP_BACKUP_JSON && f.originalSize <= MAX_JSON_BYTES) || (PHOTO_ENTRY.test(f.name) && f.originalSize <= MAX_PHOTO_BYTES),
-    });
-  } catch {
-    return { ok: false, error: "Not a zip file that can be read" };
+    files = unzipBounded(
+      data,
+      (f) => (f.name === ZIP_BACKUP_JSON && f.originalSize <= MAX_JSON_BYTES) || (PHOTO_ENTRY.test(f.name) && f.originalSize <= MAX_PHOTO_BYTES),
+    );
+  } catch (err) {
+    return { ok: false, error: err instanceof Error && err.message.startsWith("Not a zip") ? err.message : "The zip is too large or malformed to restore" };
   }
   const json = files[ZIP_BACKUP_JSON];
   if (!json) return { ok: false, error: `The zip has no ${ZIP_BACKUP_JSON}` };

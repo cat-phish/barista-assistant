@@ -4,7 +4,8 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { effectiveChatLimits } from "@barista/shared/aiConfig";
 import { aiChatMessages, aiChatPhotos, aiChats, CHAT_ATTACHMENT_KINDS, users } from "@barista/shared/schema";
-import { unzipSync, zipSync, type Zippable } from "fflate";
+import { zipSync, type Zippable } from "fflate";
+import { unzipBounded } from "./safeUnzip.js";
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 import { chartSnapshotSchema } from "./chatChart.js";
@@ -116,9 +117,9 @@ type ReadChats = { ok: true; file: ChatsFile; photos: Map<string, Buffer> } | { 
 function readChatsZip(data: Buffer): ReadChats {
   let files: Record<string, Uint8Array>;
   try {
-    files = unzipSync(data, { filter: (f) => (f.name === CHATS_JSON && f.originalSize <= MAX_JSON_BYTES) || (PHOTO_ENTRY.test(f.name) && f.originalSize <= MAX_PHOTO_BYTES) });
-  } catch {
-    return { ok: false, error: "Not a zip file that can be read" };
+    files = unzipBounded(data, (f) => (f.name === CHATS_JSON && f.originalSize <= MAX_JSON_BYTES) || (PHOTO_ENTRY.test(f.name) && f.originalSize <= MAX_PHOTO_BYTES));
+  } catch (err) {
+    return { ok: false, error: err instanceof Error && err.message.startsWith("Not a zip") ? err.message : "The zip is too large or malformed to import" };
   }
   const json = files[CHATS_JSON];
   if (!json) return { ok: false, error: `The zip has no ${CHATS_JSON}` };
