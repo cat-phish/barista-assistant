@@ -163,6 +163,8 @@ publicMenuRouter.get(
       return;
     }
 
+    // SEC-92: anonymous and rebuilt per request, so a short shared cache (browser, proxy, Caddy) absorbs bursts.
+    res.setHeader("Cache-Control", "public, max-age=30");
     res.json(await buildPublicMenu(workspace));
   }
 );

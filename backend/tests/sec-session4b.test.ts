@@ -1,7 +1,7 @@
 // Security audit session 4, second batch: SEC-04, SEC-63 (backup half), SEC-64, SEC-91, SEC-92.
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import sharp from "sharp";
 import { eq } from "drizzle-orm";
@@ -13,6 +13,10 @@ import { photoDir } from "../src/config.js";
 import { db } from "../src/db.js";
 import { chatQueue } from "../src/queue.js";
 import { newBean, newBrewLog, newUser, newWorkspace } from "./helpers.js";
+
+vi.hoisted(() => {
+  process.env.PHOTO_UPLOAD_LIMIT_PER_HOUR = "60";
+});
 
 const binary = (r: { on(e: string, f: (c?: Buffer) => void): void }, done: (err: Error | null, body: Buffer) => void) => {
   const parts: Buffer[] = [];

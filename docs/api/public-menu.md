@@ -161,3 +161,8 @@ them: ids are random and change with each upload or crop, so only someone
 who has seen the menu, or a member, knows a URL. `404` if the slug or id
 doesn't match one of the workspace's logos. The service worker caches it
 with the menu, so it shows offline.
+
+## Caching
+
+A `200` carries `Cache-Control: public, max-age=30`; a menu edit shows within
+half a minute. The 404 is not cached.

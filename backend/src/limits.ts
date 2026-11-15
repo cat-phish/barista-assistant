@@ -44,3 +44,16 @@ export const testSendLimiter = rateLimit({
     sendError(res, 429, "Too many test notifications. Try again later.");
   },
 });
+
+// SEC-91: every upload is decoded and re-encoded by the server, so uploads
+// are limited per person. PHOTO_UPLOAD_LIMIT_PER_HOUR (default 60).
+export const photoUploadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: () => num("PHOTO_UPLOAD_LIMIT_PER_HOUR", 60),
+  keyGenerator: (req: Request) => `photoup:${req.userId ?? ipKeyGenerator(req.ip ?? "unknown")}`,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  handler: (_req: Request, res: Response) => {
+    sendError(res, 429, "Too many photo uploads. Try again later.");
+  },
+});
