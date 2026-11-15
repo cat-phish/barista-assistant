@@ -17,7 +17,7 @@ import type { BrewerInfo, SuggestContext } from "./suggestContext.js";
 // compared across changes (npm run eval). Bump it whenever the input, the
 // prompt or the schema changes.
 // It carries the research version (@barista/shared/research) after the dot.
-export const PROMPT_VERSION = `2026-11-e.${RESEARCH_VERSION}`;
+export const PROMPT_VERSION = `2026-11-f.${RESEARCH_VERSION}`;
 // The chat's own prompt (CHAT_SYSTEM, CHAT_PROPOSALS): replies don't store
 // it, the eval's propose runs do (docs/api/llm-contract.md §9e).
 export const CHAT_PROMPT_VERSION = "2026-11-c";

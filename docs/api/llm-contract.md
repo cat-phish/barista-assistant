@@ -393,8 +393,9 @@ share); nothing is stored, so it's always current and needs no backup.
   who asked (a suggestion), in this workspace, with a coffee rating, not
   still steeping; the latest 500. An analysis counts only the brews before
   the one analyzed. Nobody (a deleted account) means no profile.
-- **What,** each part only when enough brews back it (4 in all, and two
-  buckets for a rating-by line):
+- **What,** each part only when enough brews back it (4 in all, and for a
+  rating-by line two buckets of at least 2 brews each; a temperature or
+  roast-age week with one brew is left out, eval p6):
   - the number of rated brews and their mean rating;
   - the TDS and EY range of this method's brews rated 4.5 or more (all of
     them, or the middle 80% once there are 8);
@@ -410,7 +411,8 @@ share); nothing is stored, so it's always current and needs no backup.
   `n=` the brews behind each figure, in the analysis and Suggest
   parameters input alike. The `profile` prompt section says how to use
   it: the barista's patterns from it, weighed by `n`, with the tasting
-  notes still deciding what a brew needs.
+  notes still deciding what a brew needs, and a rating gap between
+  temperatures not, on its own, a reason to change the temperature.
 
 ```json
 "profile": [

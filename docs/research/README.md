@@ -149,6 +149,20 @@ change worth exploring).
   Routes otherwise match the run without it. The temperature buckets with
   n=1 invite a lever the research calls small (`tasteNotTemp`).
 
+### Eval p7 (2026-11-14, prompt 2026-11-f.r2, gpt-6-luna)
+
+`eval/p7-sug.json`: Suggest parameters after p6, with temperature and
+roast-age buckets of one brew left out of the profile, and the `profile`
+section saying a rating gap between temperatures isn't a reason on its own
+to change the temperature.
+
+- **Main picks are back to the run without the profile:** the main route's
+  temperature differs from `p6-sug-noprof` in 2 of 20 (5 of 20 in p6).
+- **Cited in 3 of 20** (6 in p6), each time for a second route or with the
+  caveat ("doesn't show that temperature caused the rating difference").
+- Second routes that try a temperature: 13 of 20 (10 in p6, 11 without
+  the profile). They're offered as experiments, which is what routes are for.
+
 ## Synthesis
 
 Drawn from the five topic files (94 findings, researched November 2026).

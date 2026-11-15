@@ -51,8 +51,9 @@ describe("buildBrewProfile", () => {
   it("rates temperatures on this brewer for the roast level, or any roast when that's too few", () => {
     const level = [b({ tempC: 92, rating: 3 }), b({ tempC: 92.4, rating: 4 }), b({ tempC: 95, rating: 5 }), b({ tempC: 95, rating: 4 }), b({ brewerId: "chemex", tempC: 80 })];
     expect(buildBrewProfile(level, focus)!.temp).toEqual({ brewer: "V60", roastLevel: "light", byTempC: [{ at: 92, brews: 2, rating: 3.5 }, { at: 95, brews: 2, rating: 4.5 }] });
-    const mixed = [b({ tempC: 92 }), b({ tempC: 93 }), b({ tempC: 90, roastLevel: "dark" }), b({ tempC: 90, roastLevel: "dark" })];
-    expect(buildBrewProfile(mixed, focus)!.temp).toMatchObject({ roastLevel: null, byTempC: [{ at: 90, brews: 2 }, { at: 92, brews: 1 }, { at: 93, brews: 1 }] });
+    const mixed = [b({ tempC: 92 }), b({ tempC: 92 }), b({ tempC: 93 }), b({ tempC: 90, roastLevel: "dark" }), b({ tempC: 90, roastLevel: "dark" })];
+    // A temperature with one brew is left out (93 °C), so light alone is one bucket: too few.
+    expect(buildBrewProfile(mixed, focus)!.temp).toEqual({ brewer: "V60", roastLevel: null, byTempC: [{ at: 90, brews: 2, rating: 4 }, { at: 92, brews: 2, rating: 4 }] });
     // One temperature only says nothing about temperature.
     expect(buildBrewProfile([b({ tempC: 93 }), b({ tempC: 93 }), b({ tempC: 93 }), b({ tempC: 93 })], focus)!.temp).toBeNull();
   });
@@ -133,7 +134,7 @@ describe("loadBrewProfile", () => {
       [5, id.guji, userId, 4.5, 94],
       [6, id.guji, userId, null, 94],
       [7, id.guji, otherId, 1, 90],
-      [9, id.guji, userId, 4, 96],
+      [9, id.guji, userId, 4, 94],
     ];
     for (const [d, beanId, by, rating, tempC] of rows) {
       const logId = randomUUID();
@@ -155,8 +156,9 @@ describe("loadBrewProfile", () => {
     expect(p.brews).toBe(5);
     expect(p.routes).toEqual({ brews: 1, rating: 4.5, otherRating: 4, recent: [{ label: "More water", rating: 4.5 }] });
     expect(p.time).toEqual({ recipe: "House V60", byDose: [{ doseGrams: 15, brews: 5, medianSec: 180 }] });
-    // Roast age: the Guji brews only (days 1, 2, 4 and 8 off roast).
-    expect(p.roastAge).toEqual({ byWeek: [{ at: 0, brews: 3, rating: 3.8 }, { at: 7, brews: 1, rating: 4 }] });
+    // Roast age: the Guji brews only (days 1, 2, 4 and 8 off roast); the
+    // second week has one brew, so there's nothing to compare.
+    expect(p.roastAge).toBeNull();
   });
 
   it("stops before a date and skips the brew analyzed; nothing when hidden or nobody", async () => {
@@ -169,7 +171,7 @@ describe("loadBrewProfile", () => {
   it("groups temperatures by roast level only when the AI may see it", async () => {
     expect((await loadBrewProfile(request(), new Set()))!.temp).toMatchObject({ roastLevel: "light" });
     expect((await loadBrewProfile(request(), new Set(["roastLevel"])))!.temp).toEqual({
-      brewer: "V60", roastLevel: null, byTempC: [{ at: 92, brews: 2, rating: 3.5 }, { at: 94, brews: 2, rating: 4.8 }, { at: 96, brews: 1, rating: 4 }],
+      brewer: "V60", roastLevel: null, byTempC: [{ at: 92, brews: 2, rating: 3.5 }, { at: 94, brews: 3, rating: 4.5 }],
     });
   });
 

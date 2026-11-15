@@ -590,7 +590,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 19. Brew profile: running figures for the AI
 
-- **Status:** done (branch `brew-profile`, prompt `2026-11-e`): sent as
+- **Status:** done (branch `brew-profile`, prompt `2026-11-f`): sent as
   `profile` lines with the analysis and Suggest parameters
   (`docs/api/llm-contract.md` §9, "Brew profile"), switchable as
   `brewProfile`. Not yet: the Insights charts sharing

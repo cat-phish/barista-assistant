@@ -56,6 +56,7 @@ export const PROFILE_MAX_BREWS = 500; // the most recent, so a long history stay
 export const BEST_RATING = 4.5; // as the ownPattern finding (@barista/shared/research)
 const MIN_BREWS = 4; // a figure resting on fewer isn't shown
 const RECENT_ROUTES = 5;
+const MIN_BUCKET = 2; // brews behind each rating-by figure
 
 const round = (n: number, step: number): number => Math.round(n / step) * step;
 const tenth = (n: number): number => Math.round(n * 10) / 10;
@@ -78,7 +79,11 @@ function buckets(brews: readonly ProfileBrew[], at: (b: ProfileBrew) => number |
     const k = at(b);
     if (k !== null) by.set(k, [...(by.get(k) ?? []), b.rating]);
   }
-  return [...by].sort(([a], [b]) => a - b).map(([k, rs]) => ({ at: k, brews: rs.length, rating: mean(rs) }));
+  // A bucket of one brew is noise, and invites chasing it (eval p6).
+  return [...by]
+    .filter(([, rs]) => rs.length >= MIN_BUCKET)
+    .sort(([a], [b]) => a - b)
+    .map(([k, rs]) => ({ at: k, brews: rs.length, rating: mean(rs) }));
 }
 // Worth sending: enough brews, spread over at least two buckets.
 const telling = (bs: readonly RatingBucket[]): boolean => bs.length >= 2 && bs.reduce((n, b) => n + b.brews, 0) >= MIN_BREWS;
