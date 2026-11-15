@@ -69,7 +69,7 @@ backupRouter.post("/restore", heavyImportLimiter, zipBody, async (req: Request, 
   if (Buffer.isBuffer(req.body)) {
     const query = parseQuery(restoreQuery, req, res);
     if (!query) return;
-    const zip = readBackupZip(req.body);
+    const zip = await readBackupZip(req.body);
     if (!zip.ok) {
       sendError(res, 400, zip.error);
       return;

@@ -18,7 +18,7 @@ import { getChatLimits } from "./serverSettings.js";
 
 const CHATS_JSON = "chats.json";
 const PHOTO_ENTRY = /^photos\/([0-9a-f-]{36})\.webp$/;
-const MAX_JSON_BYTES = 200 * 1024 * 1024;
+const MAX_JSON_BYTES = 50 * 1024 * 1024;
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
 const date = z.iso.datetime();
@@ -114,10 +114,10 @@ type ReadChats = { ok: true; file: ChatsFile; photos: Map<string, Buffer> } | { 
 
 // Only chats.json and photos/<id>.webp are read; anything else, or larger
 // than they can be, is skipped before it's unpacked.
-function readChatsZip(data: Buffer): ReadChats {
+async function readChatsZip(data: Buffer): Promise<ReadChats> {
   let files: Record<string, Uint8Array>;
   try {
-    files = unzipBounded(data, (f) => (f.name === CHATS_JSON && f.originalSize <= MAX_JSON_BYTES) || (PHOTO_ENTRY.test(f.name) && f.originalSize <= MAX_PHOTO_BYTES));
+    files = await unzipBounded(data, (f) => (f.name === CHATS_JSON && f.originalSize <= MAX_JSON_BYTES) || (PHOTO_ENTRY.test(f.name) && f.originalSize <= MAX_PHOTO_BYTES));
   } catch (err) {
     return { ok: false, error: err instanceof Error && err.message.startsWith("Not a zip") ? err.message : "The zip is too large or malformed to import" };
   }
@@ -134,7 +134,7 @@ function readChatsZip(data: Buffer): ReadChats {
   const photos = new Map<string, Buffer>();
   for (const [name, bytes] of Object.entries(files)) {
     const id = PHOTO_ENTRY.exec(name)?.[1];
-    if (id) photos.set(id, Buffer.from(bytes));
+    if (id) photos.set(id, Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes));
   }
   return { ok: true, file: file.data, photos };
 }
@@ -147,7 +147,7 @@ const jsonBytes = (value: unknown): number => (value ? encoder.encode(JSON.strin
 const textBytes = (m: ChatsFile["chats"][number]["messages"][number]): number => encoder.encode(m.content).length + jsonBytes(m.attachments) + jsonBytes(m.proposals);
 
 export async function importChats(data: Buffer, workspaceId: string, userId: string): Promise<ImportResult> {
-  const read = readChatsZip(data);
+  const read = await readChatsZip(data);
   if (!read.ok) return { ok: false, status: 400, error: read.error };
 
   const taken = read.file.chats.length ? await db.select({ id: aiChats.id, userId: aiChats.userId, workspaceId: aiChats.workspaceId }).from(aiChats).where(inArray(aiChats.id, read.file.chats.map((c) => c.id))) : [];

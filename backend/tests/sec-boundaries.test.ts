@@ -40,10 +40,10 @@ describe("SEC-50 notification URLs reach internal hosts", () => {
 });
 
 describe("SEC-60 zip restore has no bounds", () => {
-  it("rejects a zip with more than 3,000 photo entries", () => {
+  it("rejects a zip with more than 3,000 photo entries", async () => {
     const files: Record<string, Uint8Array> = { "backup.json": strToU8("{}") };
     for (let i = 0; i < 3500; i++) files[`photos/${crypto.randomUUID()}.webp`] = new Uint8Array(8);
-    const res = readBackupZip(Buffer.from(zipSync(files)));
+    const res = await readBackupZip(Buffer.from(zipSync(files)));
     expect(res.ok).toBe(false);
   });
 });
@@ -105,7 +105,7 @@ describe("SEC-60 lying zip entry", () => {
     end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(1, 8); end.writeUInt16LE(1, 10);
     end.writeUInt32LE(dir.length, 12); end.writeUInt32LE(local.length, 16);
     const t = Date.now();
-    const res = readBackupZip(Buffer.concat([local, dir, end]));
+    const res = await readBackupZip(Buffer.concat([local, dir, end]));
     expect(res.ok).toBe(false);
     expect(Date.now() - t).toBeLessThan(2000);
   });

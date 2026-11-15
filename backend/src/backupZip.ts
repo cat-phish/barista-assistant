@@ -43,10 +43,10 @@ export type ReadZip = { ok: true; backup: unknown; photos: Map<string, Buffer> }
 
 // Only backup.json and photos/<id>.webp are read; anything else, or larger
 // than they can be, is skipped before it's unpacked.
-export function readBackupZip(data: Buffer): ReadZip {
+export async function readBackupZip(data: Buffer): Promise<ReadZip> {
   let files: Record<string, Uint8Array>;
   try {
-    files = unzipBounded(
+    files = await unzipBounded(
       data,
       (f) => (f.name === ZIP_BACKUP_JSON && f.originalSize <= MAX_JSON_BYTES) || (PHOTO_ENTRY.test(f.name) && f.originalSize <= MAX_PHOTO_BYTES),
     );
@@ -64,7 +64,7 @@ export function readBackupZip(data: Buffer): ReadZip {
   const photos = new Map<string, Buffer>();
   for (const [name, bytes] of Object.entries(files)) {
     const id = PHOTO_ENTRY.exec(name)?.[1];
-    if (id) photos.set(id, Buffer.from(bytes));
+    if (id) photos.set(id, Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes));
   }
   return { ok: true, backup, photos };
 }
