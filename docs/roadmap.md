@@ -2976,3 +2976,40 @@ can need to age before it's ready. Contract: `api/beans.md` §4 "Resting",
   migration moved roasts still resting onto their beans.
 - **Backups:** version 6 drops `roasts.restDays` from older files; the
   bean columns ride along (a restored resting bean reminds the restorer).
+
+## Security audit fixes (built)
+
+A defensive audit of the code (2026-11-15) found 47 issues; the confirmed
+ones are fixed, each with a test that failed first. What changed, and the
+decisions behind it:
+
+- **Sign-up and login:** 5 sign-ups per IP per hour (`REGISTER_LIMIT_PER_HOUR`);
+  login limited per account (10 failures per 15 minutes) as well as per IP;
+  behind a tunnel or CDN set Caddy's `trusted_proxies` first or every
+  visitor counts as one. Common passwords refused; the scrypt cost is stored
+  in each hash. Logout revokes its own token (Redis), other devices stay in.
+  `nosniff` on every API response.
+- **Members:** adding by email is now an **invite the person accepts**
+  (`workspace_invites`, 14 days, 50 pending, 30 sent per hour), always the
+  same `202` reply so addresses can't be probed. Decision: invite + accept,
+  with no "I understand" dialog.
+- **Optional email verification** (`EMAIL_VERIFICATION=true`, off by
+  default so self-hosters without a mail server are unaffected): needs
+  `SMTP_HOST`, `MAIL_FROM`, `APP_URL`; an unconfirmed address can't accept an
+  invite.
+- **Webhooks and push:** loopback, link-local/metadata and this stack's own
+  services are always refused; private LAN addresses are refused unless
+  `ALLOW_PRIVATE_WEBHOOKS=true` (decision: blocked by default, with a hint on
+  the settings page). "Send a test" limited to 10 per hour.
+- **Restore and import:** zip entries read by a bounded reader
+  (`safeUnzip.ts`, no zip bombs); 10 restores/imports per person per hour; 20
+  workspaces per person; restored photos cut to their WebP data; websites must
+  be http(s); future-dated brews refused; imported chat timestamps clamped.
+- **AI spend:** a daily budget per person (100) and per workspace (1000),
+  429 `ai_limit` when spent (`AI_DAILY_USER_UNITS`, `AI_DAILY_WORKSPACE_UNITS`).
+- **Photos and menu:** 100 MP decode cap, 60 uploads per person per hour,
+  `Cache-Control: public, max-age=30` on the public menu.
+
+Left, with the reasons, in `backlog.md` section L (items 54–58). Two need an
+owner decision: a duplicate-email sign-up still answers differently (SEC-32),
+and a push endpoint can still move between accounts (SEC-05).
