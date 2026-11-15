@@ -71,7 +71,7 @@ beforeEach(async () => {
 
 const request = (source: SuggestSource, over: Partial<SuggestRequest> = {}): SuggestRequest => ({
   beanId: id.guji, recipeId: id.house, brewerId: id.v60, grinderId: id.c40, source, maxBrews: 5,
-  batchDoseGrams: null, batchWaterGrams: null, batchIceGrams: null, batchYieldGrams: null, alternativesAsked: null, ...over,
+  batchDoseGrams: null, batchWaterGrams: null, batchIceGrams: null, batchYieldGrams: null, alternativesAsked: null, requestedBy: userId, ...over,
 });
 const previewJob = (source: SuggestSource, over: Partial<SuggestRequest> = {}): SuggestionPreview => ({ ...request(source, over), note: null, requestedBy: userId });
 const notes = async (r: SuggestRequest, options = {}) => (await loadSuggestContext(r, options))!.brews.map((b) => b.tastingNotes);
@@ -207,8 +207,9 @@ describe("processAiPreview for a suggestion (docs/api/analysis.md §8d)", () => 
     await db.update(workspaces).set({ settings: { aiHidden: ["unratedHistory"] } }).where(eq(workspaces.id, workspaceId));
     await db.update(brewLogs).set({ rating: null }).where(eq(brewLogs.id, log.day5!));
     const preview = await processAiPreview({ kind: "suggest", suggestion: previewJob("beanRecipe") });
-    const context = (await loadSuggestContext(request("beanRecipe"), { ratedOnly: true }))!;
+    const context = (await loadSuggestContext(request("beanRecipe"), { ratedOnly: true, profile: new Set(["unratedHistory"]) }))!;
     expect(preview).toEqual(suggestionSent(context, new Set(["unratedHistory"])));
+    expect(preview!.input.profile).toEqual(expect.arrayContaining([expect.stringContaining("Rated brews by this barista")]));
     expect((preview!.input.brews as Array<{ tastingNotes: string }>).map((b) => b.tastingNotes)).toEqual(["day1"]); // the unrated one left out
     expect(llm).not.toHaveBeenCalled();
     expect(await processAiPreview({ kind: "suggest", suggestion: previewJob("bean", { beanId: randomUUID() }) })).toBeNull();

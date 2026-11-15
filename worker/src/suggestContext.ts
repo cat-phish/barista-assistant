@@ -25,6 +25,7 @@ import {
   loadBean,
   loadRecipe,
   marksFor,
+  sameCoffeeIds,
   problemsFor,
   flavorsFor,
   scaledToBrew,
@@ -41,6 +42,9 @@ import {
 import { db } from "./db.js";
 import { localBrewDate } from "./localDate.js";
 import { effectiveRoastAge } from "@barista/shared/roastAge";
+import type { AiDetail } from "@barista/shared/aiDetails";
+import type { BrewProfile } from "@barista/shared/brewProfile";
+import { loadBrewProfile } from "./brewProfile.js";
 
 // The brewer chosen; the controls only matter for an espresso machine.
 export type BrewerInfo = Pick<Brewer, "name" | "kind" | "preinfusion" | "flowControl" | "pressureControl">;
@@ -128,12 +132,13 @@ export interface SuggestContext {
   grinder: GrinderInfo | null;
   brews: SuggestBrew[];
   options: SuggestOptions; // empty when no alternatives were asked for
+  profile: BrewProfile | null; // the asker's running figures (worker/src/brewProfile.ts)
   ratingScale: "0.5-5";
 }
 
 export type SuggestRequest = Pick<
   ParameterSuggestion,
-  "beanId" | "recipeId" | "brewerId" | "grinderId" | "source" | "maxBrews" | "batchDoseGrams" | "batchWaterGrams" | "batchIceGrams" | "batchYieldGrams" | "alternativesAsked"
+  "beanId" | "recipeId" | "brewerId" | "grinderId" | "requestedBy" | "source" | "maxBrews" | "batchDoseGrams" | "batchWaterGrams" | "batchIceGrams" | "batchYieldGrams" | "alternativesAsked"
 >;
 
 // The batch asked with, else (none sent) the recipe's targets.
@@ -151,24 +156,6 @@ function batchFor(r: SuggestRequest, recipe: BrewContext["recipe"], espresso: bo
     yieldGrams: shot,
     ratio: dose && out ? Math.round((out / dose) * 100) / 100 : null,
   };
-}
-
-// The workspace's bags of this bean's coffee: the same roaster and name,
-// ignoring case and spaces at the ends (as the brew page's repeat does).
-async function sameCoffeeIds(beanId: string): Promise<string[]> {
-  const [b] = await db.select({ workspaceId: beans.workspaceId, roasterName: beans.roasterName, beanName: beans.beanName }).from(beans).where(eq(beans.id, beanId));
-  if (!b) return [beanId];
-  const rows = await db
-    .select({ id: beans.id })
-    .from(beans)
-    .where(
-      and(
-        eq(beans.workspaceId, b.workspaceId),
-        sql`LOWER(TRIM(${beans.roasterName})) = ${b.roasterName.trim().toLowerCase()}`,
-        sql`LOWER(TRIM(${beans.beanName})) = ${b.beanName.trim().toLowerCase()}`,
-      ),
-    );
-  return rows.map((x) => x.id);
 }
 
 // Which earlier brews each source picks, or null when it can't (its recipe
@@ -279,7 +266,12 @@ async function loadOptions(r: SuggestRequest, workspaceId: string, kinds: readon
 // options.ratedOnly: leave out brews without a rating (aiHidden
 // "unratedHistory"). options.before: only brews before then (npm run eval
 // rebuilds a past brew's suggestion).
-export async function loadSuggestContext(r: SuggestRequest, options: { ratedOnly?: boolean; before?: Date } = {}): Promise<SuggestContext | null> {
+// profile: what the workspace keeps from the AI, to add the asker's brew
+// profile; without it there's none.
+export async function loadSuggestContext(
+  r: SuggestRequest,
+  options: { ratedOnly?: boolean; before?: Date; profile?: ReadonlySet<AiDetail> } = {},
+): Promise<SuggestContext | null> {
   const target = await loadBean(r.beanId);
   if (!target) return null; // the bean was deleted: so is the suggestion
 
@@ -354,6 +346,19 @@ export async function loadSuggestContext(r: SuggestRequest, options: { ratedOnly
   const kinds = r.alternativesAsked ?? [];
   const alternatives = ws && kinds.length ? await loadOptions(r, ws.workspaceId, kinds, today) : {};
   const batch = batchFor(r, recipe, (recipe?.methodKind ?? brewer?.kind) === "espresso");
+  const profile =
+    ws && options.profile
+      ? await loadBrewProfile(
+          {
+            personId: r.requestedBy,
+            workspaceId: ws.workspaceId,
+            beanId: r.beanId,
+            focus: { methodKind: recipe?.methodKind ?? brewer?.kind ?? null, brewerId: r.brewerId, brewer: brewer?.name ?? null, recipeId: r.recipeId, recipe: recipe?.name ?? null, roastLevel: target.info.roastLevel },
+            before: options.before,
+          },
+          options.profile,
+        )
+      : null;
   return {
     source: r.source,
     batch,
@@ -377,6 +382,7 @@ export async function loadSuggestContext(r: SuggestRequest, options: { ratedOnly
       };
     }),
     options: alternatives,
+    profile,
     ratingScale: "0.5-5",
   };
 }

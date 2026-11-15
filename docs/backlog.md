@@ -590,7 +590,11 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 19. Brew profile: running figures for the AI
 
-- **Status:** planned
+- **Status:** done (branch `brew-profile`, prompt `2026-11-e`): sent as
+  `profile` lines with the analysis and Suggest parameters
+  (`docs/api/llm-contract.md` §9, "Brew profile"), switchable as
+  `brewProfile`. Not yet: the Insights charts sharing
+  `@barista/shared/brewProfile`, and the taste summary
 - **Why:** to tell the AI as much as possible in as few tokens as
   possible. Figures that can be worked out from the database shouldn't be
   left for the AI to work out from raw brews.
@@ -615,8 +619,9 @@ What the analysis worker sends to the LLM and what comes back.
 - **Size:** M–L
 - **Depends on:** 16; the route outcomes need 17. Overlaps with 23 (save
   insights for the AI).
-- **Open questions:** store the running figures in a table, or compute
-  them when a job runs? How often to refresh the taste summary?
+- **Decided:** computed when a job runs, from the latest 500 rated brews:
+  no table to keep in step or back up, and cheap at that size. The taste
+  summary needs an AI call of its own, so it waits (maybe with 23).
 
 ### 20. Learned preferences
 

@@ -121,6 +121,7 @@ const context = (over: { brew?: Partial<BrewSummary>; bean?: Partial<BrewContext
   },
   brew: summary(over.brew),
   drink: null,
+  profile: null,
   ratingScale: "0.5-5",
 });
 const without = (...keys: AiDetail[]) => new Set<AiDetail>(keys);
@@ -405,6 +406,7 @@ const suggestContext = (over: Partial<SuggestContext> = {}): SuggestContext => {
       earlier({ timestamp: "2026-10-18T08:00:00.000Z", sameBag: false, sameBean: false, bean: { ...base.bean, beanName: "Kenya", country: "Kenya" }, tastingNotes: "Bright", water: null }),
     ],
     options: {},
+    profile: null,
     ratingScale: "0.5-5",
     ...over,
   };

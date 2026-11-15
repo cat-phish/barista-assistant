@@ -5,7 +5,7 @@ export type AiDetail =
   | 'tds' | 'temp' | 'marks' | 'prepTools' | 'problems' | 'grinderWeights' | 'rpm' | 'drink' | 'water' | 'waterMinerals'
   | 'origin' | 'altitude' | 'variety' | 'process' | 'flavorProfile' | 'roastType' | 'roastLevel' | 'weightLoss' | 'decafBlend' | 'batchNumber'
   | 'recipeSteps' | 'grindStartingPoints' | 'grinderDetails' | 'machine'
-  | 'unratedHistory' | 'analyzeUnrated';
+  | 'unratedHistory' | 'analyzeUnrated' | 'brewProfile';
 
 export const AI_GROUPS = { brew: 'The brew', bean: 'The bean', recipe: 'Recipe and equipment', history: 'History' } as const;
 export type AiGroup = keyof typeof AI_GROUPS;
@@ -46,6 +46,7 @@ export const AI_DETAIL_LIST: AiDetailInfo[] = [
   d('recipe', 'machine', 'Espresso machine', 'Pre-infusion, flow and pressure control'),
   d('history', 'unratedHistory', 'Unrated earlier brews', 'Off: Suggest parameters only sends brews with a rating'),
   d('history', 'analyzeUnrated', 'Analyze unrated brews', 'Off: a brew needs a rating before it can be analyzed'),
+  d('history', 'brewProfile', 'Brew profile', 'Figures from all your rated brews: best TDS and EY, rating by temperature and roast age, usual times, how suggested routes went'),
 ];
 
 export const aiDetailsFor = (group: AiGroup): AiDetailInfo[] => AI_DETAIL_LIST.filter((x) => x.group === group);

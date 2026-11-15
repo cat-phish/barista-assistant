@@ -316,6 +316,19 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
       "hot water as well as under-extraction.",
   },
   {
+    key: "profile",
+    label: "Brew profile",
+    prompts: ["analysis", "suggest"],
+    locked: false,
+    text:
+      "profile holds figures worked out from all of this barista's own rated brews, far more than the brews you're " +
+      "sent; n is how many brews a figure rests on. Use them for this barista's patterns (what their best-rated brews " +
+      "had, which temperatures and roast ages they rate higher, the usual time for a dose) instead of working those " +
+      "out from the few brews sent, and weigh them by n: a figure on 2-3 brews is a hint, not a rule. The routes line " +
+      "tells how earlier suggestions went when brewed. The profile has no taste: the tasting notes still decide what " +
+      "a brew needs.",
+  },
+  {
     key: "end",
     label: "Answer in the JSON schema",
     prompts: ["analysis", "suggest", "label", "review"],

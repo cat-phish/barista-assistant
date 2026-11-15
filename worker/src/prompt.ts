@@ -7,6 +7,7 @@
 import type { AiDetail } from "@barista/shared/aiDetails";
 import { INSTRUCTIONS_INTRO, LOCKED_SECTIONS, NOTE_INTRO, PROMPT_TEXT, type AiPrompt } from "@barista/shared/aiPrompt";
 import { RESEARCH_FINDINGS, RESEARCH_VERSION, type ResearchFinding } from "@barista/shared/research";
+import { profileLines, type BrewProfile } from "@barista/shared/brewProfile";
 import type { BeanReviewContext } from "./beanReview.js";
 import type { PeriodContext } from "./periodContext.js";
 import type { BrewContext, BrewSummary, GrinderInfo, WaterInfo } from "./context.js";
@@ -16,7 +17,7 @@ import type { BrewerInfo, SuggestContext } from "./suggestContext.js";
 // compared across changes (npm run eval). Bump it whenever the input, the
 // prompt or the schema changes.
 // It carries the research version (@barista/shared/research) after the dot.
-export const PROMPT_VERSION = `2026-11-d.${RESEARCH_VERSION}`;
+export const PROMPT_VERSION = `2026-11-e.${RESEARCH_VERSION}`;
 // The chat's own prompt (CHAT_SYSTEM, CHAT_PROPOSALS): replies don't store
 // it, the eval's propose runs do (docs/api/llm-contract.md §9e).
 export const CHAT_PROMPT_VERSION = "2026-11-c";
@@ -142,8 +143,17 @@ export function toLlmInput(context: BrewContext, hidden: ReadonlySet<AiDetail> =
     brew: brewInput(context.brew, hidden),
     drink: hidden.has("drink") ? null : context.drink,
     equipment: equipment([context.brew], hidden),
+    profile: profileInput(context.profile, hidden),
   };
   return (compact(input) ?? {}) as LlmInput;
+}
+
+// The brew profile (docs/api/llm-contract.md §9, "Brew profile") as a few
+// lines, without the parts the workspace keeps from the AI. The roast level
+// was already left out of its grouping when it was worked out.
+export function profileInput(p: BrewProfile | null, hidden: ReadonlySet<AiDetail>): string[] | null {
+  if (!p || hidden.has("brewProfile")) return null;
+  return profileLines({ ...p, best: hidden.has("tds") ? null : p.best, temp: hidden.has("temp") ? null : p.temp });
 }
 
 // The brewer chosen: its controls only for an espresso machine the AI may see.
@@ -177,6 +187,7 @@ export function toSuggestInput(context: SuggestContext, hidden: ReadonlySet<AiDe
     })),
     equipment: equipment([{ grinder: context.grinder, water: null }, ...context.brews], hidden),
     options: optionsInput(context.options, hidden),
+    profile: profileInput(context.profile, hidden),
   };
   return (compact(input) ?? {}) as LlmInput;
 }
@@ -434,6 +445,11 @@ export const PROMPT_SECTIONS: PromptSection[] = [
     key: "flashChilled",
     when: (i) => anyBrew(i, "actualIceGrams") || recipe(i).targetIceGrams !== undefined,
     text: PROMPT_TEXT.flashChilled,
+  },
+  {
+    key: "profile",
+    when: (i) => i.profile !== undefined,
+    text: PROMPT_TEXT.profile,
   },
   ...researchSections("analysis"),
   {

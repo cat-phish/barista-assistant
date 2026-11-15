@@ -353,7 +353,10 @@ keys apply to suggestions (§9b), bean reviews (§9d) and recap summaries
 - **History:** `unratedHistory` leaves earlier brews without a rating out
   of what "Suggest parameters" sends (an analysis sends no earlier brews);
   `analyzeUnrated` stops unrated brews being analyzed:
-  `POST /analyze` is a `409` (§8), and a job already queued is skipped.
+  `POST /analyze` is a `409` (§8), and a job already queued is skipped;
+  `brewProfile` leaves out the brew profile (below). With the profile on,
+  `tds` still drops its TDS/EY line, `temp` its temperature line, and
+  `roastLevel` its grouping by roast level.
 
 Always sent: the bean and roaster names, roast date and age, dose, water,
 ice (flash chilled), yield, a cold batch's jar water (`jarWaterGrams`), time, grind setting, ratio, rating, tasting notes and
@@ -376,6 +379,52 @@ removed, decide which it is and update, in the same change:
   group in `frontend/src/lib/aiDetails.ts` (`aiDetails.test.ts` there
   checks the two lists match);
 - this section: the key's line above, or the "Always sent" list.
+
+## Brew profile
+
+Running figures worked out from the barista's own rated brews, so the AI
+gets in a few lines what it would otherwise have to work out (badly) from
+the handful of brews it's sent (docs/backlog.md item 19). Worked out each
+time a job runs (`worker/src/brewProfile.ts`, from the pure
+`buildBrewProfile` in `@barista/shared/brewProfile`, which Insights can
+share); nothing is stored, so it's always current and needs no backup.
+
+- **Whose:** the brews logged by the barista (an analysis) or the person
+  who asked (a suggestion), in this workspace, with a coffee rating, not
+  still steeping; the latest 500. An analysis counts only the brews before
+  the one analyzed. Nobody (a deleted account) means no profile.
+- **What,** each part only when enough brews back it (4 in all, and two
+  buckets for a rating-by line):
+  - the number of rated brews and their mean rating;
+  - the TDS and EY range of this method's brews rated 4.5 or more (all of
+    them, or the middle 80% once there are 8);
+  - the rating by kettle temperature (whole °C) on this brewer, for this
+    roast level when that alone is enough, else any roast;
+  - the median total time on this recipe, by dose (whole grams);
+  - the rating by effective roast age, in weeks, for this coffee (any
+    bag);
+  - brews made from suggested routes (§9b, `suggestionRoute`): how many,
+    their mean rating against the barista's other brews since the first,
+    and the latest five route labels with their ratings.
+- **Sent** as `profile`, an array of short lines (`profileLines`), with
+  `n=` the brews behind each figure, in the analysis and Suggest
+  parameters input alike. The `profile` prompt section says how to use
+  it: the barista's patterns from it, weighed by `n`, with the tasting
+  notes still deciding what a brew needs.
+
+```json
+"profile": [
+  "Rated brews by this barista: 42, mean rating 3.9.",
+  "Their filter brews rated 4.5+ (n=9): TDS 1.32-1.41%, EY 19.6-21.2%.",
+  "Rating by kettle temperature on V60, light roasts: 92 °C 3.6 (n=4); 94 °C 4.2 (n=6); 96 °C 4 (n=3).",
+  "Usual total time on House V60, by dose: 15 g 3:05 (n=8); 20 g 3:40 (n=3).",
+  "Rating by roast age, this coffee: 7-13 d 3.5 (n=3); 14-20 d 4.3 (n=5).",
+  "Brews made from earlier suggested routes: n=6, mean rating 4.1 (their other brews since: 3.7). Latest: \"More water\" 4.5; \"A touch finer\" 3.5."
+]
+```
+
+Not in it yet: likes and dislikes (§8b "Feedback"; they feed learned
+preferences, backlog item 20) and a taste summary of older notes.
 
 ## 9b. Suggest parameters
 
@@ -413,7 +462,7 @@ deleted with its bean) is skipped.
    described once in `equipment`. What the workspace keeps from the AI
    (`aiHidden`) is left out the same way, other beans' details too.
 3. **Prompt** (`SUGGEST_SECTIONS`): its own opening and output sections,
-   then the analysis's topic sections (drink … flashChilled), with
+   then the analysis's topic sections (drink … flashChilled, then `profile`), with
    `suggestEspresso` in place of `espresso` (no change fields here), then
    `suggestAlternatives`, the research findings (step 3 above), the
    asker's `instructions` and `note` (step 3 above, `requestedBy`), and

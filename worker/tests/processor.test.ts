@@ -91,8 +91,9 @@ describe("processBrewAnalysis", () => {
       species: ["arabica"],
       roastWeightLossPercent: 15.5,
     });
-    // Only this brew: history goes to "Suggest parameters" (docs/api/llm-contract.md §9).
-    expect(Object.keys(context).sort()).toEqual(["bean", "brew", "drink", "ratingScale", "recipe"]);
+    // Only this brew: history goes to "Suggest parameters", and the barista's
+    // earlier brews only as the brew profile (docs/api/llm-contract.md §9).
+    expect(Object.keys(context).sort()).toEqual(["bean", "brew", "drink", "profile", "ratingScale", "recipe"]);
     expect(context.ratingScale).toBe("0.5-5");
 
     const saved = await db.select().from(llmAnalyses).where(eq(llmAnalyses.brewLogId, logIds.day8!));
@@ -128,7 +129,7 @@ describe("processBrewAnalysis", () => {
   it("a preview is what the analysis would send, without calling the AI (docs/api/analysis.md §8d)", async () => {
     await db.update(workspaces).set({ settings: { aiHidden: ["water"] } }).where(eq(workspaces.id, workspaceId));
     const preview = await processAiPreview({ kind: "analysis", brewLogId: logIds.day8! });
-    expect(preview).toEqual(analysisSent((await loadBrewContext(logIds.day8!))!, new Set(["water"])));
+    expect(preview).toEqual(analysisSent((await loadBrewContext(logIds.day8!, { profile: new Set(["water"]) }))!, new Set(["water"])));
     expect(llm).not.toHaveBeenCalled();
     expect(await processAiPreview({ kind: "analysis", brewLogId: randomUUID() })).toBeNull();
   });

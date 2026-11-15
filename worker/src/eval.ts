@@ -4,7 +4,7 @@
 // database, and writes to eval/ (git-ignored: it's your brews).
 //
 //   npm run eval -w worker -- snapshot [--limit 12] [--with-flavors]   choose the brews
-//   npm run eval -w worker -- run --label baseline [--yes] [--without flavors|places]
+//   npm run eval -w worker -- run --label baseline [--yes] [--without flavors|places|profile]
 //   npm run eval -w worker -- run --label sug --suggest [beanRecipe] [--yes]
 //   npm run eval -w worker -- compare baseline after
 //   npm run eval -w worker -- propose --label before [--limit 8] [--yes]
@@ -122,8 +122,10 @@ interface EvalJob {
 }
 
 // What --without leaves out of each brew's flavors.
-type Without = "flavors" | "places";
-const WITHOUT: readonly Without[] = ["flavors", "places"];
+// "profile": no brew profile (docs/api/llm-contract.md §9, "Brew profile").
+type Without = "flavors" | "places" | "profile";
+const WITHOUT: readonly Without[] = ["flavors", "places", "profile"];
+const profileOf = (without: Without | null) => (without === "profile" ? {} : { profile: new Set<never>() });
 // A place is the last "(…)" flavorLabel adds; a label that itself ends in
 // one would lose it too, which is fine for an eval.
 const trimFlavors = (flavors: string[], without: Without | null): string[] =>
@@ -136,7 +138,7 @@ async function analysisJobs(brews: Picked[], without: Without | null): Promise<A
   const { toLlmInput } = await import("./prompt.js");
   return Promise.all(
     brews.map(async (b) => {
-      const context = await loadBrewContext(b.brewLogId);
+      const context = await loadBrewContext(b.brewLogId, profileOf(without));
       if (context) context.brew.flavors = trimFlavors(context.brew.flavors, without);
       // What's actually sent: the compact input (prompt.ts), not the full context.
       return context ? { input: toLlmInput(context), send: async () => { const r = await requestAnalysis(await resolveAi(), context); return { output: r.analysis, usage: r.usage }; } } : null;
@@ -165,6 +167,7 @@ async function suggestJobs(brews: Picked[], source: string, without: Without | n
         recipeId: brew.recipeId,
         brewerId: brew.brewerId,
         grinderId: brew.grinderId,
+        requestedBy: brew.userId,
         source: picked,
         maxBrews: 5,
         batchDoseGrams: brew.actualDoseGrams,
@@ -173,7 +176,7 @@ async function suggestJobs(brews: Picked[], source: string, without: Without | n
         batchYieldGrams: espresso ? brew.actualYieldGrams : null,
         alternativesAsked: [], // the values only
       };
-      const context = await loadSuggestContext(request, { before: brew.timestamp });
+      const context = await loadSuggestContext(request, { before: brew.timestamp, ...profileOf(without) });
       for (const past of context?.brews ?? []) past.flavors = trimFlavors(past.flavors, without);
       return context ? { input: toSuggestInput(context), send: async () => { const r = await requestSuggestion(await resolveAi(), context); return { output: r.suggestion, usage: r.usage }; } } : null;
     }),

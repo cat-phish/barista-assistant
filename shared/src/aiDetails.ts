@@ -33,5 +33,6 @@ export const AI_DETAILS = [
   // History
   "unratedHistory", // earlier brews without a rating, in what "Suggest parameters" sends
   "analyzeUnrated", // analyzing a brew that isn't rated yet
+  "brewProfile", // running figures from all of the barista's rated brews
 ] as const;
 export type AiDetail = (typeof AI_DETAILS)[number];

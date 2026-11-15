@@ -133,6 +133,22 @@ change worth exploring).
 - Second routes read as real experiments ("Lengthen ratio: more water may
   soften the high TDS"), citing `leverOrder`, `ownPattern`, `tasteNotTemp`.
 
+### Eval p6 (2026-11-14, prompt 2026-11-e.r2, gpt-6-luna)
+
+`eval/p6*.json`: the brew profile (backlog item 19) on and off
+(`--without profile`), for the analysis and Suggest parameters.
+
+- **Cost:** about 265 more prompt tokens a job (the lines plus the
+  `profile` section): 60.9k against 55.6k for 20 analyses, 92.2k against
+  86.9k for 20 suggestions.
+- **The analysis barely uses it:** cited once. It moved the grind in 1 of
+  20 with it on, 4 with it off, and changed the ratio more often instead.
+  Hard to tell from noise.
+- **Suggestions cite it in 6 of 20,** nearly all for temperature (93 °C or
+  90 °C "better rated on this V60"), once from a bucket of one brew.
+  Routes otherwise match the run without it. The temperature buckets with
+  n=1 invite a lever the research calls small (`tasteNotTemp`).
+
 ## Synthesis
 
 Drawn from the five topic files (94 findings, researched November 2026).
