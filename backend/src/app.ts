@@ -55,6 +55,11 @@ interface HealthResponse {
 // The Express app without a listening server, so tests can drive it directly.
 export const app = express();
 app.set("trust proxy", config.trustProxy);
+// SEC-34: no response is ever type-sniffed (photos, backups and CSVs come from user content).
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  next();
+});
 
 app.use(cors({ origin: config.corsOrigin, credentials: true }));
 // A restore or import uploads a backup file (docs/api/backup.md §2b);

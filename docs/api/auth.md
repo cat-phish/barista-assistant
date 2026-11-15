@@ -68,7 +68,12 @@ below is `403`, so a typo doesn't look like a logout.
 ## `POST /api/auth/logout`
 
 - **Auth Required:** `false`
-- **Success (`204 No Content`):** clears the `session` cookie.
+- **Success (`204 No Content`):** clears the `session` cookie and revokes that
+  token (its id is kept in Redis until it would expire), so a copy of the cookie
+  stops working; other devices stay signed in. If Redis is down the cookie is
+  still cleared but the token is not revoked.
+
+Every API response carries `X-Content-Type-Options: nosniff`.
 
 ## `GET /api/auth/me`
 

@@ -4,7 +4,7 @@ import { Router, type Request, type Response } from "express";
 import { ipKeyGenerator, rateLimit } from "express-rate-limit";
 import { z } from "zod";
 import { DUMMY_PASSWORD_HASH, hashPassword, verifyPassword } from "../auth/password.js";
-import { clearSessionCookie, setSessionCookie } from "../auth/session.js";
+import { clearSessionCookie, revokeSession, SESSION_COOKIE, setSessionCookie, verifySessionToken } from "../auth/session.js";
 import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
@@ -173,7 +173,10 @@ authRouter.post("/login", loginLimiter, async (req: Request, res: Response<UserR
   res.json({ user: toPublicUser(user) });
 });
 
-authRouter.post("/logout", (_req: Request, res: Response) => {
+authRouter.post("/logout", async (req: Request, res: Response) => {
+  const token: unknown = req.cookies?.[SESSION_COOKIE];
+  const claims = typeof token === "string" ? verifySessionToken(token) : null;
+  if (claims) await revokeSession(claims); // SEC-33
   clearSessionCookie(res);
   res.status(204).end();
 });
