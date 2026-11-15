@@ -521,8 +521,8 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 16. Research-based suggestions: a living research list
 
-- **Status:** in progress (branch `research-suggestions`; research notes
-  done in `docs/research/`)
+- **Status:** done (branch `research-suggestions`; eval p2 in
+  `docs/research/README.md`)
 - **Why:** the analysis and Suggest parameters treat temperature as the
   main dial and the recipe's number as a target (item 15, and the baseline
   in `docs/research/README.md`). The research says strength (ratio) and
@@ -554,7 +554,9 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 17. Several routes per suggestion, and recording which was used
 
-- **Status:** planned
+- **Status:** in progress (branch `suggest-routes`): Suggest parameters
+  returns 1–3 routes and brews record the one used (prompt `2026-11-c`).
+  Next: eval run `p3` against p2
 - **Why:** the research disagrees in places, and the disagreements often
   match personal taste (some people like a lower extraction yield, some
   higher). Offering one answer picks a side for the person.
@@ -568,8 +570,9 @@ What the analysis worker sends to the LLM and what comes back.
     its rating tells how that route went.
 - **Size:** M
 - **Depends on:** 16.
-- **Open questions:** do the analysis's next steps also get routes, or
-  only Suggest parameters?
+- **Decided:** only Suggest parameters for now; the analysis keeps one
+  next step. Its `alternatives` (another recipe, brewer or bean) stay
+  separate from routes, which are values for this setup.
 
 ### 18. Like or dislike a suggestion
 

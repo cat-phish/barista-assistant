@@ -200,7 +200,7 @@ describe("what the AI is sent (docs/api/llm-contract.md §9)", () => {
     expect(all).not.toContain("research.coldBloom");
     expect(all).not.toContain("research.firstPours");
     expect(research(promptSections(toSuggestInput(suggestContext()), SUGGEST_SECTIONS))).toEqual(research(promptSections(toLlmInput(context()))));
-    expect(buildSystemPrompt(toLlmInput(context()))).toContain(`${RESEARCH_PREFIX} ${RESEARCH_FINDINGS[0]!.text}`);
+    expect(buildSystemPrompt(toLlmInput(context()))).toContain(`${RESEARCH_PREFIX} (${RESEARCH_FINDINGS[0]!.key}) ${RESEARCH_FINDINGS[0]!.text}`);
   });
 
   it("every section's text comes from @barista/shared/aiPrompt, each prompt's in it (docs/api/auth.md §1c)", () => {
@@ -409,7 +409,10 @@ const suggestContext = (over: Partial<SuggestContext> = {}): SuggestContext => {
     ...over,
   };
 };
-const said = { reasoning: "Your last cup was sour.", nextStep: "Watch the drawdown.", confidence: "medium", grindSetting: 19, grindRpm: 900, tempC: 94, ratio: 16, alternatives: [] };
+const route = { label: "One step finer", why: "Sour and thin: extract more.", findings: ["sourStrong"], grindSetting: 19, grindRpm: 900, tempC: 94, ratio: 16 };
+const said = { reasoning: "Your last cup was sour.", nextStep: "Watch the drawdown.", confidence: "medium", routes: [route], alternatives: [] };
+// The reply with its one route changed.
+const saidWith = (r: Record<string, unknown>) => ({ ...said, routes: [{ ...route, ...r }] });
 // Something else to try: one of each kind.
 const options: SuggestContext["options"] = {
   recipes: [
@@ -477,21 +480,25 @@ describe("what Suggest parameters sends (docs/api/llm-contract.md §9b)", () => 
     expect(JSON.parse(String(req.messages[1]?.content))).toEqual(toSuggestInput(ctx));
     expect(req.response_format).toMatchObject({
       type: "json_schema",
-      json_schema: { name: "parameter_suggestion", strict: true, schema: { additionalProperties: false, required: ["reasoning", "nextStep", "confidence", "grindSetting", "grindRpm", "tempC", "ratio", "alternatives"] } },
+      json_schema: { name: "parameter_suggestion", strict: true, schema: { additionalProperties: false, required: ["reasoning", "nextStep", "confidence", "routes", "alternatives"] } },
     });
   });
 });
 
 describe("parseSuggestionMessage and onlySuggestionsThatApply", () => {
+  type Parsed = ReturnType<typeof parseSuggestionMessage>;
+  const withRoute = (p: Parsed, r: Partial<Parsed["routes"][number]>): Parsed => ({ ...p, routes: [{ ...p.routes[0]!, ...r }] });
+
   it("rounds to the columns", () => {
-    expect(parseSuggestionMessage(reply({ ...said, grindSetting: 19.256, tempC: 93.44, ratio: 16.666 }))).toMatchObject({ grindSetting: 19.26, tempC: 93.4, ratio: 16.67 });
+    expect(parseSuggestionMessage(reply(saidWith({ grindSetting: 19.256, tempC: 93.44, ratio: 16.666 }))).routes[0]).toMatchObject({ grindSetting: 19.26, tempC: 93.4, ratio: 16.67 });
   });
 
   it.each([
-    ["a temperature over 100 °C", { ...said, tempC: 120 }, /tempC/],
-    ["a ratio of 0", { ...said, ratio: 0 }, /ratio/],
-    ["a fractional RPM", { ...said, grindRpm: 900.5 }, /grindRpm/],
-    ["a missing field", { ...said, ratio: undefined }, /ratio/],
+    ["a temperature over 100 °C", saidWith({ tempC: 120 }), /tempC/],
+    ["a ratio of 0", saidWith({ ratio: 0 }), /ratio/],
+    ["a fractional RPM", saidWith({ grindRpm: 900.5 }), /grindRpm/],
+    ["a missing field", saidWith({ ratio: undefined }), /ratio/],
+    ["no route", { ...said, routes: [] }, /routes/],
   ])("rejects %s (so BullMQ retries)", (_label, body, error) => {
     expect(() => parseSuggestionMessage(reply(body))).toThrow(error);
   });
@@ -499,18 +506,18 @@ describe("parseSuggestionMessage and onlySuggestionsThatApply", () => {
   it("only a ratio the method brews at, and not the batch's own (kept either way)", () => {
     const parsed = parseSuggestionMessage(reply(said));
     expect(onlySuggestionsThatApply(parsed, suggestContext(), new Set()).ratio).toBe(16);
-    expect(onlySuggestionsThatApply({ ...parsed, ratio: 2.2 }, suggestContext(), new Set()).ratio).toBe(2.2); // a concentrate
-    expect(onlySuggestionsThatApply({ ...parsed, ratio: 1.5 }, suggestContext(), new Set()).ratio).toBeNull();
-    expect(onlySuggestionsThatApply({ ...parsed, ratio: 16.67 }, suggestContext(), new Set()).ratio).toBeNull();
+    expect(onlySuggestionsThatApply(withRoute(parsed, { ratio: 2.2 }), suggestContext(), new Set()).ratio).toBe(2.2); // a concentrate
+    expect(onlySuggestionsThatApply(withRoute(parsed, { ratio: 1.5 }), suggestContext(), new Set()).ratio).toBeNull();
+    expect(onlySuggestionsThatApply(withRoute(parsed, { ratio: 16.67 }), suggestContext(), new Set()).ratio).toBeNull();
     const shot = suggestContext({ recipe: { ...context().recipe!, methodKind: "espresso" } });
-    expect(onlySuggestionsThatApply({ ...parsed, ratio: 2.2 }, shot, new Set()).ratio).toBe(2.2);
+    expect(onlySuggestionsThatApply(withRoute(parsed, { ratio: 2.2 }), shot, new Set()).ratio).toBe(2.2);
     expect(onlySuggestionsThatApply(parsed, shot, new Set()).ratio).toBeNull(); // 1:16 isn't a shot
   });
 
   it("only a setting on the grinder's dial, a speed on a variable-speed one, a temperature the AI may see", () => {
     const parsed = parseSuggestionMessage(reply(said));
     expect(onlySuggestionsThatApply(parsed, suggestContext(), new Set())).toMatchObject({ grindSetting: 19, grindRpm: null, tempC: 94 }); // the C40 is fixed speed
-    expect(onlySuggestionsThatApply({ ...parsed, grindSetting: 55 }, suggestContext(), new Set()).grindSetting).toBeNull(); // the C40 goes to 40
+    expect(onlySuggestionsThatApply(withRoute(parsed, { grindSetting: 55 }), suggestContext(), new Set()).grindSetting).toBeNull(); // the C40 goes to 40
     expect(onlySuggestionsThatApply(parsed, suggestContext({ grinder: null }), new Set()).grindSetting).toBeNull();
     const ek = suggestContext({ grinder: { ...grinder!, variableSpeed: true, rpmMin: 300, rpmMax: 1500 } });
     expect(onlySuggestionsThatApply(parsed, ek, new Set()).grindRpm).toBe(900);
@@ -535,5 +542,20 @@ describe("parseSuggestionMessage and onlySuggestionsThatApply", () => {
       { kind: "bean", id: "bean-2", name: "Onyx Kenya", why: "Brighter, suits this recipe." },
     ]);
     expect(onlySuggestionsThatApply(parsed, suggestContext(), new Set()).alternatives).toEqual([]); // none asked for
+  });
+
+  it("routes: at most 3, the first one's values as the suggestion's, findings that exist, no repeats", () => {
+    const routes = [
+      { ...route, findings: ["sourStrong", "noSuchFinding", "sourStrong", "coldBloom"] },
+      { ...route, label: "Same values", grindSetting: 19.001 }, // rounds to the first's
+      { ...route, label: "Longer ratio", grindSetting: 20, ratio: 17 },
+      { ...route, label: "Off the dial", grindSetting: 55 }, // drops to null: a new route
+      { ...route, label: "Fifth" },
+    ];
+    const out = onlySuggestionsThatApply(parseSuggestionMessage(reply({ ...said, routes })), suggestContext(), new Set());
+    expect(out).toMatchObject({ grindSetting: 19, grindRpm: null, tempC: 94, ratio: 16 });
+    expect(out.routes.map((r) => r.label)).toEqual(["One step finer", "Longer ratio"]); // the 4th and 5th were cut first
+    expect(out.routes[0]!.findings).toEqual(["sourStrong"]); // not an experiment, not unknown
+    expect(out.routes[1]).toMatchObject({ grindSetting: 20, ratio: 17, findings: ["sourStrong"] });
   });
 });

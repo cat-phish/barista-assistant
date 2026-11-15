@@ -205,7 +205,7 @@ queue:
    | `espresso` | an `espresso` method | flow, windows, machine, step size; dose and shot weight as levers, one at a time |
    | `cold` | a style brews like `cold_brew`, `kyoto_drip` or `rapid_cold` | steep windows, dilution, concentrate TDS, levers |
    | `concentrate` | a brew or the recipe that isn't a cold style has a `dilutionRatio` | TDS and EY are the concentrate's; judge strength as served, over ice as an iced drink; dilution or ratio before grind |
-   | `research.<key>` | the finding applies (see below) | one research finding each, after `Research finding:` |
+   | `research.<key>` | the finding applies (see below) | one research finding each, after `Research finding:` and its key in parentheses (`(sourStrong)`), which a suggestion's routes cite |
    | `instructions` | the barista has their own instructions | `INSTRUCTIONS_INTRO` and their text |
    | `note` | a one-off note came with the request | `NOTE_INTRO` and the note |
    | `end` | always | respond strictly matching the schema |
@@ -246,7 +246,7 @@ queue:
    `firstPours`) are never sent yet; they wait for the research settings
    (`docs/backlog.md` item 21). The findings can't be overridden in Your AI
    prompt. `PROMPT_VERSION` carries `RESEARCH_VERSION` after a dot
-   (`2026-11-b.r1`), bumped whenever a finding changes.
+   (`2026-11-d.r2`), bumped whenever a finding changes.
 
    Tests check which sections appear for given inputs and snapshot the
    assembled prompt for a fixed brew (`worker/tests/llm.test.ts`), so a
@@ -422,18 +422,21 @@ deleted with its bean) is skipped.
    | Section | Included when | What it says |
    | --- | --- | --- |
    | `suggestCore` | always | values for a brew about to be made; what each source picks (bag: this exact bag; bean: every bag of the coffee); the batch is the barista's, never changed, and a different batch size drains differently (grind); `sameBag`/`sameBean`/`sameRecipe`/`sameGrinder`, and an earlier analysis judged by the brew after it; another bag of this coffee carries over, allowing for its roast age; another bean's brews show the recipe, brewer or grinder, not this bean; start from the best-rated comparable brews (else the recipe's targets), levers as the research findings say |
-   | `suggestOutput` | always | what each field holds; grind on the named grinder's dial from brews on it or its starting point, else null; a ratio for the batch, kept (or null) unless the brews show a strength problem |
+   | `suggestOutput` | always | what each field holds: 2-3 routes, the main pick first; the second moves a different lever (after a kept well-rated brew, one change worth exploring), a third only for another real choice (never a rounding step), each with a label, why, the finding keys it follows and its values; grind on the named grinder's dial from brews on it or its starting point, else null; a ratio for the batch, null to keep it |
    | `suggestEspresso` | the recipe or a brew is espresso | windows and ratio as targets; the ratio sets the shot weight for the batch's dose; pre-infusion and profile in `nextStep` |
    | `suggestAlternatives` | `options` are sent | what each kind of option is; at most one of each, only with a reason (style or ratio for the roast or flavor profile, a brewer or bean that suits better); `option` is its ref, `why` in plain words; empty when nothing stands out; the values stay for this setup |
 
 4. **Schema** (`PARAMETER_SUGGESTION_JSON_SCHEMA`, `worker/src/llm.ts`,
    strict): `reasoning`, `nextStep`, `confidence` (low / medium / high),
-   `grindSetting` (number or null), `grindRpm` (integer or null), `tempC`
-   (number or null), `ratio` (number or null) and `alternatives` (an array
-   of `{ kind, option, why }`, empty when none), all required.
+   `routes` (1–3 of `{ label, why, findings, grindSetting, grindRpm, tempC,
+   ratio }`: a few words, at most 140 characters, research finding keys,
+   number or null, integer or null, number or null, number or null) and
+   `alternatives` (an array of `{ kind, option, why }`, empty when none),
+   all required.
    - Checked after parsing: the grind rounded to 0.01 and 0–10000, the
      temperature to 0.1 °C and 0–100, the ratio to 0.01 and above 0, the speed
-     an integer 50–5000; anything else fails the attempt.
+     an integer 50–5000, at least one route (more than 3 are cut, a long
+     label or why is cut); anything else fails the attempt.
    - What doesn't apply is set to `null` (`onlySuggestionsThatApply`): the
      grind without a grinder or off its dial (`settingMin`–`settingMax`),
      the speed unless the grinder is variable speed (and `rpm` is sent),
@@ -442,7 +445,12 @@ deleted with its bean) is skipped.
      batch's own. Alternatives keep only those naming an option sent, of
      its kind, the first of each kind, saved as `{ kind, id, name, why }`
      (`alternativesThatApply`).
-5. The worker saves the values with `status: "done"`, `brewCount`, `model`,
+   - Each route's values are checked that way; its `findings` keep only
+     keys of findings a suggest prompt can hold (no experiments, no
+     unknown keys), once each; a route left with the same values as an
+     earlier one is dropped. The first route's values are also saved as the
+     suggestion's own `grindSetting`, `grindRpm`, `tempC` and `ratio`.
+5. The worker saves the values and `routes` with `status: "done"`, `brewCount`, `model`,
    `promptVersion`, what was sent (`request`, `analysis.md` §8c) and
    `completedAt`.
 

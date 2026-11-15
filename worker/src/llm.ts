@@ -1,6 +1,7 @@
 import type { AiDetail } from "@barista/shared/aiDetails";
 import { GRIND_DELTAS } from "@barista/shared/jobs";
-import { ANALYSIS_CONFIDENCE, SUGGEST_ALTERNATIVES, type AiRequest, type AlternativeKind, type SuggestedAlternative } from "@barista/shared/schema";
+import { RESEARCH_FINDINGS } from "@barista/shared/research";
+import { ANALYSIS_CONFIDENCE, MAX_SUGGESTED_ROUTES, SUGGEST_ALTERNATIVES, type AiRequest, type AlternativeKind, type SuggestedAlternative, type SuggestedRoute } from "@barista/shared/schema";
 import { UnrecoverableError } from "bullmq";
 import OpenAI from "openai";
 import { z } from "zod";
@@ -278,16 +279,14 @@ export function onlyWhatApplies(analysis: BrewAnalysis, context: BrewContext, hi
 
 // ---- "Suggest parameters" (docs/api/llm-contract.md §9b) -------------------------
 
-export const PARAMETER_SUGGESTION_JSON_SCHEMA = {
+// One route's values (docs/api/analysis.md §8b): each is a different way to
+// brew it, the first the main pick.
+const ROUTE_JSON_SCHEMA = {
   type: "object",
   properties: {
-    reasoning: { type: "string", description: "A concise 1-2 sentence explanation of the values." },
-    nextStep: { type: "string", description: "The one thing to do or watch on this brew, in plain words (at most 140 characters)." },
-    confidence: {
-      type: "string",
-      enum: [...ANALYSIS_CONFIDENCE],
-      description: "How sure the values are: low with no comparable brews, vague notes or measurements that look wrong.",
-    },
+    label: { type: "string", description: "A few words naming the route, e.g. Longer ratio." },
+    why: { type: "string", description: "Why this route, in plain words (at most 140 characters)." },
+    findings: { type: "array", items: { type: "string" }, description: "The keys of the research findings it follows, e.g. sourStrong; empty for none." },
     grindSetting: { type: ["number", "null"], description: "The setting on the named grinder's dial; null without one to go on." },
     grindRpm: { type: ["integer", "null"], description: "Grinder speed for a variable-speed grinder; null otherwise." },
     tempC: { type: ["number", "null"], description: "Water temperature in Celsius." },
@@ -295,6 +294,22 @@ export const PARAMETER_SUGGESTION_JSON_SCHEMA = {
       type: ["number", "null"],
       description: "The brew ratio for the batch: (water + ice) / dose, or for espresso shot weight / dose; null to keep the batch's.",
     },
+  },
+  required: ["label", "why", "findings", "grindSetting", "grindRpm", "tempC", "ratio"],
+  additionalProperties: false,
+} as const;
+
+export const PARAMETER_SUGGESTION_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    reasoning: { type: "string", description: "A concise 1-2 sentence explanation of the routes." },
+    nextStep: { type: "string", description: "The one thing to do or watch on this brew, in plain words (at most 140 characters)." },
+    confidence: {
+      type: "string",
+      enum: [...ANALYSIS_CONFIDENCE],
+      description: "How sure the values are: low with no comparable brews, vague notes or measurements that look wrong.",
+    },
+    routes: { type: "array", description: `2-${MAX_SUGGESTED_ROUTES} ways to brew it, the main pick first.`, items: ROUTE_JSON_SCHEMA },
     alternatives: {
       type: "array",
       description: "Something else to try from options, at most one of each kind; empty when there are no options or nothing stands out.",
@@ -310,14 +325,14 @@ export const PARAMETER_SUGGESTION_JSON_SCHEMA = {
       },
     },
   },
-  required: ["reasoning", "nextStep", "confidence", "grindSetting", "grindRpm", "tempC", "ratio", "alternatives"],
+  required: ["reasoning", "nextStep", "confidence", "routes", "alternatives"],
   additionalProperties: false,
 } as const;
 
-const suggestionSchema = z.object({
-  reasoning: z.string().trim().min(1).max(2000),
-  nextStep: z.string().trim().min(1).max(200),
-  confidence: z.enum(ANALYSIS_CONFIDENCE),
+const routeSchema = z.object({
+  label: z.string().trim().min(1).transform((s) => s.slice(0, 60).trimEnd()),
+  why: z.string().trim().min(1).transform((s) => s.slice(0, 300).trimEnd()),
+  findings: z.array(z.string().trim()).max(20),
   grindSetting: z
     .number()
     .transform((n) => Math.round(n * 100) / 100)
@@ -334,6 +349,13 @@ const suggestionSchema = z.object({
     .transform((n) => Math.round(n * 100) / 100)
     .refine((n) => n > 0 && n < 1000, "must be over 0 and under 1000")
     .nullable(),
+});
+const suggestionSchema = z.object({
+  reasoning: z.string().trim().min(1).max(2000),
+  nextStep: z.string().trim().min(1).max(200),
+  confidence: z.enum(ANALYSIS_CONFIDENCE),
+  // More than asked for is cut, not failed.
+  routes: z.array(routeSchema).min(1).transform((r) => r.slice(0, MAX_SUGGESTED_ROUTES)),
   alternatives: z.array(z.object({ kind: z.enum(SUGGEST_ALTERNATIVES), option: z.string().trim(), why: z.string().trim().min(1).max(300) })).max(10),
 });
 export type ParameterSuggestionResult = z.infer<typeof suggestionSchema>;
@@ -366,8 +388,11 @@ export function parseSuggestionMessage(message: LlmMessage): ParameterSuggestion
 // beyond; filter from a cold brew concentrate to a very light pour over.
 export const RATIO_RANGE = { espresso: [0.75, 5], filter: [2, 25] } as const;
 
-// What's saved: the alternatives as the rows they name.
-export type SuggestionValues = Omit<ParameterSuggestionResult, "alternatives"> & { alternatives: SuggestedAlternative[] };
+// What's saved: the routes that apply, the first one's values also as the
+// suggestion's own (what older readers use), and the alternatives as the
+// rows they name.
+export type SuggestionValues = Omit<ParameterSuggestionResult, "alternatives" | "routes"> &
+  Pick<SuggestedRoute, "grindSetting" | "grindRpm" | "tempC" | "ratio"> & { routes: SuggestedRoute[]; alternatives: SuggestedAlternative[] };
 
 // The alternatives that name an option sent, of a kind asked, one of each
 // kind (the first), with the row's id and name.
@@ -385,21 +410,42 @@ export function alternativesThatApply(given: ParameterSuggestionResult["alternat
   return out;
 }
 
-// Drops the values that don't fit the brew being set up, whatever the model said.
+// The research findings a route may name: those a suggest prompt can hold.
+const SUGGEST_FINDINGS = new Set(RESEARCH_FINDINGS.filter((f) => !f.experiment && f.prompts.includes("suggest")).map((f) => f.key));
+
+// Drops the values that don't fit the brew being set up, whatever the model
+// said, then the routes left the same as an earlier one.
 export function onlySuggestionsThatApply(s: ParameterSuggestionResult, context: SuggestContext, hidden: ReadonlySet<AiDetail>): SuggestionValues {
-  const out: SuggestionValues = { ...s, alternatives: alternativesThatApply(s.alternatives, context.options) };
   const g = context.grinder;
-  // A setting only means something on the grinder chosen, within its dial.
-  const offDial = out.grindSetting !== null && g !== null && ((g.settingMin !== null && out.grindSetting < g.settingMin) || (g.settingMax !== null && out.grindSetting > g.settingMax));
-  if (!g || offDial) out.grindSetting = null;
-  if (!g?.variableSpeed || hidden.has("rpm")) out.grindRpm = null;
-  if (hidden.has("temp")) out.tempC = null;
-  // A ratio outside what the method brews at is a slip (e.g. 1:2 for a pour
-  // over), as is the batch's own: either way the batch keeps its ratio.
   const espresso = (context.recipe?.methodKind ?? context.brewer?.kind) === "espresso";
   const [min, max] = espresso ? RATIO_RANGE.espresso : RATIO_RANGE.filter;
-  if (out.ratio !== null && (out.ratio < min || out.ratio > max || out.ratio === context.batch.ratio)) out.ratio = null;
-  return out;
+  const fit = (r: ParameterSuggestionResult["routes"][number]): SuggestedRoute => {
+    const out: SuggestedRoute = { ...r, findings: [...new Set(r.findings)].filter((k) => SUGGEST_FINDINGS.has(k)) };
+    // A setting only means something on the grinder chosen, within its dial.
+    const offDial = out.grindSetting !== null && g !== null && ((g.settingMin !== null && out.grindSetting < g.settingMin) || (g.settingMax !== null && out.grindSetting > g.settingMax));
+    if (!g || offDial) out.grindSetting = null;
+    if (!g?.variableSpeed || hidden.has("rpm")) out.grindRpm = null;
+    if (hidden.has("temp")) out.tempC = null;
+    // A ratio outside what the method brews at is a slip (e.g. 1:2 for a pour
+    // over), as is the batch's own: either way the batch keeps its ratio.
+    if (out.ratio !== null && (out.ratio < min || out.ratio > max || out.ratio === context.batch.ratio)) out.ratio = null;
+    return out;
+  };
+  const same = (a: SuggestedRoute, b: SuggestedRoute) => a.grindSetting === b.grindSetting && a.grindRpm === b.grindRpm && a.tempC === b.tempC && a.ratio === b.ratio;
+  const routes: SuggestedRoute[] = [];
+  for (const r of s.routes.map(fit)) if (!routes.some((x) => same(x, r))) routes.push(r);
+  const { grindSetting, grindRpm, tempC, ratio } = routes[0]!;
+  return {
+    reasoning: s.reasoning,
+    nextStep: s.nextStep,
+    confidence: s.confidence,
+    grindSetting,
+    grindRpm,
+    tempC,
+    ratio,
+    routes,
+    alternatives: alternativesThatApply(s.alternatives, context.options),
+  };
 }
 
 export interface SuggestionRun {

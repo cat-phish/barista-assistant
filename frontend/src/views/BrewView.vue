@@ -73,7 +73,7 @@ import { grinderRetentionText } from '../lib/grinderRetention';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
 import { batchSuffix, beanLabel as pickerLabel, inBrewPicker, restReady, restingUntil } from '../lib/beans';
 import { formatDay, formatDoseLine, formatGrams, formatGrind, formatListDay, formatTime, formatWhen } from '../lib/format';
-import { ALTERNATIVE_LABELS, CONFIDENCE_LABELS, chooseGrind, heldForRatio, rememberedSource, SUGGEST_SOURCE_LABELS, sourceNeeds, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
+import { ALTERNATIVE_LABELS, CONFIDENCE_LABELS, chooseGrind, findingTitles, heldForRatio, rememberedSource, SUGGEST_SOURCE_LABELS, sourceNeeds, startingParameters, suggestionFitsGrinder, withRoute, type GrindSource, type RouteValues, type StartingParameters } from '../lib/suggest';
 import { useParameterSuggestion } from '../composables/useParameterSuggestion';
 import { useAiAvailable } from '../composables/useAiAvailable';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -211,9 +211,15 @@ const recipe = computed(() => recipes.value.find((r) => r.id === recipeId.value)
 // the earlier brews picked (which, and how many), filled in when they come.
 const suggester = useParameterSuggestion();
 const suggestion = computed(() => (suggester.suggestion.value ? startingParameters(suggester.suggestion.value) : null));
-// Its values go into the brew only once "Use these values" is tapped.
-const suggestionUsed = ref(false);
-const usedSuggestion = computed(() => (suggestionUsed.value ? suggestion.value : null));
+// A route's values go into the brew only once its "Use these values" is
+// tapped; the brew then records the suggestion and route it came from.
+const usedRoute = ref<number | null>(null);
+const suggestionUsed = computed(() => usedRoute.value !== null);
+const usedSuggestion = computed(() => (suggestion.value && usedRoute.value !== null ? withRoute(suggestion.value, usedRoute.value) : null));
+function suggestionLink(): { suggestionId: string; suggestionRoute: number } | Record<string, never> {
+  const p = usedSuggestion.value;
+  return p && usedRoute.value !== null ? { suggestionId: p.id, suggestionRoute: usedRoute.value } : {};
+}
 
 // Espresso recipes record dose → shot weight instead of water (docs/api/brew-logs.md §6).
 const espresso = computed(() => recipe.value?.brewer.kind === 'espresso');
@@ -771,27 +777,25 @@ async function loadSent() {
   const s = suggester.suggestion.value;
   return ws && s ? (await suggestionsApi.sent(ws, s.id)).request : null;
 }
-// The suggested grind and temperature, shown before they're used.
-const suggestedValues = computed(() => {
-  const p = suggestion.value;
-  if (!p) return '';
+// A route's grind and temperature, shown before they're used.
+function routeValues(p: RouteValues): string {
   const parts: string[] = [];
   if (p.grindSetting !== null) parts.push(`Grind ${formatGrind(p.grindSetting)}${p.grindRpm !== null ? ` at ${p.grindRpm} rpm` : ''}`);
   if (p.tempC !== null) parts.push(formatTemp(p.tempC, temperatureUnit.value));
   return parts.join(' · ');
-});
+}
 // What the suggested ratio kept, for the card ("your 300 g of water").
 const ratioKept = ref('');
 // A new suggestion (or none) waits to be used; filling the brew in is a tap.
 watch(suggestion, () => {
-  suggestionUsed.value = false;
+  usedRoute.value = null;
   ratioKept.value = '';
 });
-function useSuggestion(): void {
+function useSuggestion(route: number): void {
   const p = suggestion.value;
   if (!p) return;
-  suggestionUsed.value = true;
-  applySuggestion(p);
+  usedRoute.value = route;
+  applySuggestion(withRoute(p, route));
 }
 
 function applySuggestion(p: StartingParameters): void {
@@ -986,6 +990,7 @@ async function startSteep(): Promise<void> {
       utcOffsetMinutes: -new Date().getTimezoneOffset(),
       ...values,
       ...windowValues(),
+      ...suggestionLink(),
       steeping: true,
     });
     rememberBrew(values);
@@ -1130,6 +1135,7 @@ async function save(): Promise<void> {
       ...values,
       stepTempShiftC: brewTempShift.value,
       ...windowValues(),
+      ...suggestionLink(),
       ...(remind ? { remindToRate: true } : {}),
       // The steps' real times, plus the first drop from the log's field. A time
       // typed shorter than a tap drops that tap.
@@ -1520,13 +1526,25 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             <span v-if="suggestion.confidence" class="badge" :class="`conf-${suggestion.confidence}`">{{ CONFIDENCE_LABELS[suggestion.confidence] }}</span>
           </p>
           <p class="reasoning">“{{ suggestion.reasoning }}”</p>
-          <p v-if="suggestedValues" class="small">{{ suggestedValues }}</p>
-          <p v-if="suggestion.ratio !== null" class="small">
-            Ratio 1:{{ formatRatio(suggestion.ratio) }}<template v-if="ratioKept">, keeping your {{ ratioKept }}</template>.
-          </p>
-          <p v-else class="muted small">Your batch and its ratio stay as they are.</p>
+          <ul class="routes">
+            <template v-for="(r, i) in suggestion.routes" :key="i">
+              <li v-if="usedRoute === null || usedRoute === i" class="route">
+                <p v-if="suggestion.routes.length > 1" class="small">
+                  <strong>{{ r.label }}</strong>
+                  <span v-if="i === 0" class="muted"> · main pick</span>
+                </p>
+                <p v-if="r.why" class="small">{{ r.why }}</p>
+                <p v-if="routeValues(r)" class="small">{{ routeValues(r) }}</p>
+                <p v-if="r.ratio !== null" class="small">
+                  Ratio 1:{{ formatRatio(r.ratio) }}<template v-if="usedRoute === i && ratioKept">, keeping your {{ ratioKept }}</template>.
+                </p>
+                <p v-else class="muted small">Your batch and its ratio stay as they are.</p>
+                <p v-if="findingTitles(r.findings).length" class="muted small">Follows: {{ findingTitles(r.findings).join('; ') }}</p>
+                <button v-if="usedRoute === null" class="btn btn-primary" type="button" @click="useSuggestion(i)">Use these values</button>
+              </li>
+            </template>
+          </ul>
           <div v-if="!suggestionUsed" class="suggest-use">
-            <button class="btn btn-primary" type="button" @click="useSuggestion">Use these values</button>
             <button class="btn btn-secondary" type="button" @click="suggester.reset()">Dismiss</button>
           </div>
           <div v-if="suggestion.alternatives.length" class="alternatives">
@@ -2011,6 +2029,25 @@ p {
 }
 .suggest-pick .suggest-max {
   flex: 0 1 7rem;
+}
+.routes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+.route {
+  display: grid;
+  gap: var(--space-1);
+  justify-items: start;
+}
+.route + .route {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-3);
+}
+.route p {
+  margin: 0;
 }
 .suggest-use {
   display: flex;

@@ -855,6 +855,13 @@
       "when": 1794452667442,
       "tag": "0121_bean_resting",
       "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "5",
+      "when": 1794699925298,
+      "tag": "0122_suggestion_routes",
+      "breakpoints": true
     }
   ]
 }

@@ -232,6 +232,19 @@ export interface SuggestedAlternative {
   name: string;
   why: string;
 }
+// One way to brew it (docs/api/analysis.md §8b): its values for the brew
+// being set up, the research findings it follows (@barista/shared/research
+// keys) and why. A suggestion has 1-3; the first is the main pick.
+export const MAX_SUGGESTED_ROUTES = 3;
+export interface SuggestedRoute {
+  label: string;
+  why: string;
+  findings: string[];
+  grindSetting: number | null;
+  grindRpm: number | null;
+  tempC: number | null;
+  ratio: number | null;
+}
 export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   recipeRoastLevel: "light",
   roastScale: "names",
@@ -1628,6 +1641,12 @@ export const brewLogs = mysqlTable("brew_logs", {
   // A long cold brew batch marked empty (docs/api/brew-servings.md §6c): no
   // more servings are taken from it. Null = still in stock (or not a batch).
   batchFinishedAt: timestamp("batch_finished_at"),
+  // The Suggest parameters result and route whose values this brew used
+  // (Use these values; docs/api/brew-logs.md §6), so its rating tells how
+  // that route went. Route is the index in the suggestion's routes. Null:
+  // none used, or the suggestion is gone.
+  suggestionId: varchar("suggestion_id", { length: 36 }).references(() => parameterSuggestions.id, { onDelete: "set null" }),
+  suggestionRoute: int("suggestion_route"),
 });
 
 // 8b. Brew Log Marks (Tapped Events During a Brew)
@@ -2031,6 +2050,9 @@ export const parameterSuggestions = mysqlTable("parameter_suggestions", {
   tempC: decimal("temp_c", { precision: 4, scale: 1, mode: "number" }),
   // Filter: (water + ice) / dose; espresso: shot weight / dose.
   ratio: decimal("ratio", { precision: 5, scale: 2, mode: "number" }),
+  // The ways to brew it, the first matching the values above; null on
+  // suggestions from before routes (their values are the only route).
+  routes: jsonValue<SuggestedRoute[]>("routes"),
   // What else to try, of the kinds asked: at most one of each; [] = none.
   alternatives: jsonValue<SuggestedAlternative[]>("alternatives"),
   model: varchar("model", { length: 100 }),

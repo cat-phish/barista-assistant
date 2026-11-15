@@ -792,12 +792,26 @@ export interface BrewLog {
   // A long cold brew batch (docs/api/brew-servings.md §6c): when it was
   // marked finished, its servings and the concentrate they took.
   batchFinishedAt: string | null;
+  // The Suggest parameters route whose values it used (docs/api/brew-logs.md §6).
+  suggestionId: string | null;
+  suggestionRoute: number | null;
   servingCount: number;
   pouredGrams: number;
 }
 
 // docs/api/analysis.md §8b: starting values for a brew about to be made.
 // Pending until the AI answers; the values are for the grinder chosen.
+// One way to brew it (docs/api/analysis.md §8b), with the research findings
+// it follows (keys of @barista/shared/research).
+export interface SuggestedRoute {
+  label: string;
+  why: string;
+  findings: string[];
+  grindSetting: number | null;
+  grindRpm: number | null;
+  tempC: number | null;
+  ratio: number | null;
+}
 export interface ParameterSuggestion {
   id: string;
   beanId: string;
@@ -824,6 +838,9 @@ export interface ParameterSuggestion {
   grindRpm: number | null;
   tempC: number | null;
   ratio: number | null; // filter (water + ice) / dose, espresso shot / dose; null: keep the batch's
+  // The ways to brew it, the first matching the values above; null while
+  // pending and on suggestions from before routes.
+  routes: SuggestedRoute[] | null;
   alternatives: SuggestedAlternative[] | null; // what else to try; null while pending
   model: string | null;
   promptVersion: string | null;

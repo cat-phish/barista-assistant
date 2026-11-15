@@ -16,7 +16,7 @@ import type { BrewerInfo, SuggestContext } from "./suggestContext.js";
 // compared across changes (npm run eval). Bump it whenever the input, the
 // prompt or the schema changes.
 // It carries the research version (@barista/shared/research) after the dot.
-export const PROMPT_VERSION = `2026-11-b.${RESEARCH_VERSION}`;
+export const PROMPT_VERSION = `2026-11-d.${RESEARCH_VERSION}`;
 // The chat's own prompt (CHAT_SYSTEM, CHAT_PROPOSALS): replies don't store
 // it, the eval's propose runs do (docs/api/llm-contract.md §9e).
 export const CHAT_PROMPT_VERSION = "2026-11-c";
@@ -276,7 +276,7 @@ function researchSections(kind: "analysis" | "suggest"): PromptSection[] {
   return RESEARCH_FINDINGS.filter((f) => !f.experiment && f.prompts.includes(kind)).map((f) => ({
     key: `research.${f.key}`,
     when: (i: LlmInput) => SCOPE[f.scope](i) && (!f.needs || NEEDS[f.needs](i)),
-    text: `${RESEARCH_PREFIX} ${f.text}`,
+    text: `${RESEARCH_PREFIX} (${f.key}) ${f.text}`,
   }));
 }
 

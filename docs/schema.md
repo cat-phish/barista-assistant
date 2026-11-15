@@ -1309,6 +1309,12 @@ export const brewLogs = mysqlTable("brew_logs", {
   // A long cold brew batch marked empty (docs/api/brew-servings.md §6c): no
   // more servings are taken from it. Null = still in stock (or not a batch).
   batchFinishedAt: timestamp("batch_finished_at"),
+  // The Suggest parameters result and route whose values this brew used
+  // (Use these values; docs/api/brew-logs.md §6), so its rating tells how
+  // that route went. Route is the index in the suggestion's routes. Null:
+  // none used, or the suggestion is gone (migration 0122).
+  suggestionId: varchar("suggestion_id", { length: 36 }).references(() => parameterSuggestions.id, { onDelete: "set null" }),
+  suggestionRoute: int("suggestion_route"),
 });
 
 // 8b. Brew Log Marks (Tapped Events During a Brew)
@@ -1648,6 +1654,11 @@ export const parameterSuggestions = mysqlTable("parameter_suggestions", {
   tempC: decimal("temp_c", { precision: 4, scale: 1, mode: "number" }),
   // Filter: (water + ice) / dose; espresso: shot weight / dose.
   ratio: decimal("ratio", { precision: 5, scale: 2, mode: "number" }),
+  // The ways to brew it (1-3, MAX_SUGGESTED_ROUTES), the first matching the
+  // values above; null on suggestions from before routes (migration 0122).
+  // SuggestedRoute { label, why, findings (research keys), grindSetting,
+  // grindRpm, tempC, ratio } (docs/api/analysis.md §8b).
+  routes: jsonValue<SuggestedRoute[]>("routes"),
   // What else to try, of the kinds asked: at most one of each; [] = none.
   // SuggestedAlternative { kind, id, name, why } (SUGGEST_ALTERNATIVES).
   alternatives: jsonValue<SuggestedAlternative[]>("alternatives"),

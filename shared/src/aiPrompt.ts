@@ -376,15 +376,20 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
     prompts: ["suggest"],
     locked: true,
     text:
-      "reasoning is a concise 1-2 sentence explanation of the values. nextStep is the one thing to do or watch on this " +
-      "brew, in plain words a barista can act on. confidence is low with no comparable brews, vague notes or " +
-      "measurements that look wrong; high only when several comparable brews agree. grindSetting is a number on the " +
-      "named grinder's dial, within its range, from brews on that grinder (sameGrinder) or the recipe's " +
-      "grindStartingPoints for it; null when neither gives one or no grinder is named. grindRpm is for a variable-speed " +
-      "grinder only, else null. tempC is the water temperature. ratio is the brew ratio to use with the batch, as " +
-      "batch.ratio and brewRatio count it ((water + ice) / dose; for espresso shot weight / dose); the batch's amounts " +
-      "follow from it. Keep batch.ratio (or return null) unless the brews show a strength problem, such as a weak or " +
-      "strong cup or a TDS off target, that a ratio change fixes.",
+      "routes are 2-3 different ways to brew it, the main pick first. The second moves a different lever from the " +
+      "main pick, as the brews or the research findings allow (more water against a finer grind for a sour cup); " +
+      "when the main pick keeps a well-rated brew, the second is one change worth exploring. A third only when " +
+      "there's another real choice; never routes that differ by a rounding step. " +
+      "Each route has a label of a few words, why it suits in plain words (at most 140 characters) and findings, " +
+      "the keys of the research findings it follows (the word in parentheses after \"Research finding:\"), empty for " +
+      "none. A route's grindSetting is a number on the named grinder's dial, within its range, from brews on that " +
+      "grinder (sameGrinder) or the recipe's grindStartingPoints for it; null when neither gives one or no grinder is " +
+      "named. grindRpm is for a variable-speed grinder only, else null. tempC is the water temperature. ratio is the " +
+      "brew ratio to use with the batch, as batch.ratio and brewRatio count it ((water + ice) / dose; for espresso " +
+      "shot weight / dose); the batch's amounts follow from it; null keeps batch.ratio. reasoning is a concise 1-2 " +
+      "sentence explanation of the routes. nextStep is the one thing to do or watch on this brew, in plain words a " +
+      "barista can act on. confidence is low with no comparable brews, vague notes or measurements that look wrong; " +
+      "high only when several comparable brews agree.",
   },
   {
     key: "suggestEspresso",

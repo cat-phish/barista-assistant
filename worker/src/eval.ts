@@ -415,7 +415,11 @@ function compare(a: string, b: string): void {
     const values = "ratio" in x || "doseGrams" in x
       ? [`grind ${x.grindSetting ?? "–"}${x.grindRpm ? ` at ${x.grindRpm} rpm` : ""}, ${x.tempC ?? "–"} °C, ${amounts}`]
       : [`grind ${x.suggestedGrindDelta}, temp ${x.suggestedTempDelta}`];
-    return [x.nextStep ? `**Next:** ${x.nextStep}` : null, ...values, x.suggestedRpmDelta ? `rpm ${x.suggestedRpmDelta}` : null, x.suggestedDoseDelta ? `dose ${x.suggestedDoseDelta} g` : null, x.suggestedYieldDelta ? `shot weight ${x.suggestedYieldDelta} g` : null, x.confidence ? `(${x.confidence})` : null, `“${x.reasoning}”`]
+    // A suggestion's other routes (docs/api/analysis.md §8b).
+    const others = Array.isArray(x.routes)
+      ? (x.routes as Array<Record<string, unknown>>).slice(1).map((r) => `**Or ${r.label}:** grind ${r.grindSetting ?? "–"}, ${r.tempC ?? "–"} °C, ratio ${r.ratio ?? "kept"} [${(r.findings as string[]).join(", ")}]`)
+      : [];
+    return [x.nextStep ? `**Next:** ${x.nextStep}` : null, ...values, ...others, x.suggestedRpmDelta ? `rpm ${x.suggestedRpmDelta}` : null, x.suggestedDoseDelta ? `dose ${x.suggestedDoseDelta} g` : null, x.suggestedYieldDelta ? `shot weight ${x.suggestedYieldDelta} g` : null, x.confidence ? `(${x.confidence})` : null, `“${x.reasoning}”`]
       .filter(Boolean)
       .join("<br>");
   };

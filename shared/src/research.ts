@@ -10,7 +10,7 @@
 // Bump it whenever a finding is added, removed or reworded.
 import type { PromptKind } from "./aiPrompt.js";
 
-export const RESEARCH_VERSION = "r1";
+export const RESEARCH_VERSION = "r2";
 
 export type ResearchLever = "ratio" | "grind" | "temperature" | "agitation" | "bloom" | "time" | "water" | "rest";
 // peerReviewed: consistent across published studies; controlledTest: a
@@ -105,8 +105,9 @@ export const RESEARCH_FINDINGS: readonly ResearchFinding[] = [
     source: "strength-water-rest.md",
     text:
       "Preferences differ: there's no single ideal strength and extraction. Go by this barista's own ratings (what " +
-      "their best-rated brews had in common) rather than textbook targets. A brew rated 4.5 or more needs no change " +
-      "unless its notes name a fault: say to keep it.",
+      "their best-rated brews had in common) rather than textbook targets. Only a brew rated 4.5 or more may be " +
+      "kept unchanged, and only when its notes name no fault; anything rated below 4.5 gets at least one change, " +
+      "the one most likely to help.",
   },
   {
     key: "kettleNotSlurry",

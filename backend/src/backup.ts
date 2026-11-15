@@ -15,6 +15,7 @@ import { workspaceLexicon } from "./flavorLexicon.js";
 import {
   ANALYSIS_CONFIDENCE,
   SUGGEST_ALTERNATIVES,
+  MAX_SUGGESTED_ROUTES,
   SUGGEST_SOURCES,
   SUGGESTION_STATUSES,
   BEAN_MENU_FIELDS,
@@ -233,6 +234,8 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
   { table: menuOtherItems, scope: "workspace" },
   { table: menuSections, scope: "workspace" },
   { table: menuItems, scope: "sectionId" },
+  // Before the brews, which name the suggestion they used.
+  { table: parameterSuggestions, scope: "beanId" },
   { table: brewLogs, scope: "workspace" },
   { table: brewLogMarks, scope: "brewLogId" },
   { table: brewLogTools, scope: "brewLogId" },
@@ -241,7 +244,6 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
   { table: brewServings, scope: "brewLogId" },
   { table: brewServingFlavors, scope: "servingId" },
   { table: llmAnalyses, scope: "brewLogId" },
-  { table: parameterSuggestions, scope: "beanId" },
 ];
 // Not in a backup: people (with their notification channels and Web Push
 // devices), their memberships and the server's own settings
@@ -368,6 +370,22 @@ const JSON_SCHEMAS: Record<string, z.ZodType> = {
   "llm_analyses.request": aiRequest,
   "parameter_suggestions.request": aiRequest,
   "parameter_suggestions.alternativesAsked": z.array(z.enum(SUGGEST_ALTERNATIVES)).nullable(),
+  "parameter_suggestions.routes": z
+    .array(
+      z
+        .object({
+          label: z.string().max(60),
+          why: z.string().max(300),
+          findings: z.array(z.string()).max(20),
+          grindSetting: z.number().nullable(),
+          grindRpm: z.number().int().nullable(),
+          tempC: z.number().nullable(),
+          ratio: z.number().nullable(),
+        })
+        .strict(),
+    )
+    .max(MAX_SUGGESTED_ROUTES)
+    .nullable(),
   // The ids are the source workspace's, not rewritten: a restored one shows the name.
   "parameter_suggestions.alternatives": z
     .array(z.object({ kind: z.enum(SUGGEST_ALTERNATIVES), id: z.string(), name: z.string(), why: z.string() }).strict())

@@ -40,6 +40,8 @@ import {
   recipeStyles,
   REPEAT_BUTTON_GROUPS,
   type RepeatButtonGroup,
+  MAX_SUGGESTED_ROUTES,
+  parameterSuggestions,
 } from "@barista/shared/schema";
 import { LEXICON_KEY, LEXICON_LIMITS, type FlavorPick } from "@barista/shared/flavors";
 import { flavorPicks, resolveSaved, type SavedPick } from "../flavorPicks.js";
@@ -202,6 +204,10 @@ const brewLogFields = {
   // The finished drink: only for a brew made for a drink (drinkOnlyError).
   drinkRating: ratingSchema.nullable().optional(),
   drinkTastingNotes: optionalText(5000),
+  // The Suggest parameters route whose values it used: both or neither,
+  // sent together (suggestionError).
+  suggestionId: z.uuid().nullable().optional(),
+  suggestionRoute: z.number().int().min(0).max(MAX_SUGGESTED_ROUTES - 1).nullable().optional(),
   // Timer marks: one first_drop (espresso), one step_end per step, and
   // step_hold / step_resume pairs (holdsError).
   marks: z
@@ -428,6 +434,27 @@ async function recipeSteepWindow(tx: Tx, recipeId: string | null | undefined): P
   return r && r.min !== null && r.max !== null ? { steepMinHours: r.min, steepMaxHours: r.max } : {};
 }
 
+// The suggestion a brew used (docs/api/brew-logs.md §6): one of this
+// workspace's, finished, with that route (one from before routes has only 0).
+async function suggestionError(tx: Tx, workspaceId: string, body: { suggestionId?: string | null; suggestionRoute?: number | null }): Promise<string | null> {
+  const hasId = "suggestionId" in body;
+  if (hasId !== "suggestionRoute" in body) return "send suggestionId and suggestionRoute together";
+  if (!hasId) return null;
+  const id = body.suggestionId ?? null;
+  const route = body.suggestionRoute ?? null;
+  if ((id === null) !== (route === null)) return "send both suggestionId and suggestionRoute, or neither";
+  if (id === null || route === null) return null;
+  const [found] = await tx
+    .select({ status: parameterSuggestions.status, routes: parameterSuggestions.routes })
+    .from(parameterSuggestions)
+    .innerJoin(beans, eq(parameterSuggestions.beanId, beans.id))
+    .where(and(eq(parameterSuggestions.id, id), eq(beans.workspaceId, workspaceId)));
+  if (!found) return "suggestionId: not a suggestion in this workspace";
+  if (found.status !== "done") return "suggestionId: that suggestion has no values";
+  if (route >= (found.routes?.length ?? 1)) return "suggestionRoute: the suggestion has no such route";
+  return null;
+}
+
 async function referencesInWorkspace(
   tx: Tx,
   workspaceId: string,
@@ -563,6 +590,8 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       drinkRating: brewLogs.drinkRating,
       drinkTastingNotes: brewLogs.drinkTastingNotes,
       batchFinishedAt: brewLogs.batchFinishedAt,
+      suggestionId: brewLogs.suggestionId,
+      suggestionRoute: brewLogs.suggestionRoute,
       bean: { id: beans.id, roasterName: beans.roasterName, beanName: beans.beanName, batchNumber: beans.batchNumber, decaf: beans.decaf, species: beans.species, roastLevel: beans.roastLevel },
       recipe: { id: recipes.id, name: recipes.name, expectedYieldGrams: recipes.expectedYieldGrams },
       // Separate columns: a nested object spanning two left joins isn't nulled as a whole.
@@ -830,7 +859,7 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Cre
 
   const id = randomUUID();
   const refError = await db.transaction(async (tx) => {
-    const error = await referencesInWorkspace(tx, workspaceId, body);
+    const error = (await referencesInWorkspace(tx, workspaceId, body)) ?? (await suggestionError(tx, workspaceId, body));
     if (error) return error;
     const { marks = [], toolIds = [], problemIds = [], flavors = [], remindToRate: _remind, ...fields } = body;
     const brewer = await recipeBrewer(tx, fields.recipeId);
@@ -922,7 +951,7 @@ brewLogsRouter.patch(
       if (!log) return { status: "not_found" } as const;
       if (!canModify(role, callerId, log.userId)) return { status: "forbidden" } as const;
 
-      const error = await referencesInWorkspace(tx, workspaceId, body);
+      const error = (await referencesInWorkspace(tx, workspaceId, body)) ?? (await suggestionError(tx, workspaceId, body));
       if (error) return { status: "bad_ref", error } as const;
 
       // Only when the change touches it, so old logs whose recipe later moved

@@ -14,7 +14,10 @@ vi.mock("../src/llm.js", async (importOriginal) => ({
   requestSuggestion: vi.fn(),
 }));
 const llm = vi.mocked(requestSuggestion);
-const RESULT = { reasoning: "Last cup was sour: a touch finer.", nextStep: "Watch the drawdown.", confidence: "medium" as const, grindSetting: 19, grindRpm: null, tempC: 94, ratio: 16, alternatives: [] };
+const RESULT = { reasoning: "Last cup was sour: a touch finer.", nextStep: "Watch the drawdown.", confidence: "medium" as const, grindSetting: 19, grindRpm: null, tempC: 94, ratio: 16,
+  routes: [{ label: "A touch finer", why: "Sour.", findings: [], grindSetting: 19, grindRpm: null, tempC: 94, ratio: 16 }],
+  alternatives: [],
+};
 
 let workspaceId: string;
 let userId: string;

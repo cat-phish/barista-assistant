@@ -163,6 +163,10 @@ Any member. The frontend polls it until `status` is `done` or `failed`.
       "nextStep": "Watch the drawdown: aim to finish by 3:00.",
       "confidence": "medium",
       "grindSetting": 19, "grindRpm": null, "tempC": 95, "ratio": 16,
+      "routes": [
+        { "label": "One step finer", "why": "Sour and thin: extract more.", "findings": ["sourStrong"], "grindSetting": 19, "grindRpm": null, "tempC": 95, "ratio": 16 },
+        { "label": "Longer ratio", "why": "If it was heavy too, more water first.", "findings": ["sourStrong", "leverOrder"], "grindSetting": 20, "grindRpm": null, "tempC": 95, "ratio": 17 }
+      ],
       "alternatives": [{ "kind": "recipe", "id": "uuid", "name": "Tetsu 4:6 (V60)", "why": "A lighter, more even pour for this washed Ethiopian." }],
       "model": "gpt-…", "promptVersion": "2026-10-f",
       "createdAt": "2026-10-26T08:00:00.000Z", "completedAt": "2026-10-26T08:00:06.000Z"
@@ -181,7 +185,18 @@ Any member. The frontend polls it until `status` is `done` or `failed`.
     brewers) and active brewers with an active recipe, other than this
     one; for `bean`, its other active beans with weight left
     (`inventoryWeightGrams` over 0).
-  - The values are for the grinder named (`grindSetting` `null` without one,
+  - `routes`: 1–3 ways to brew it (`MAX_SUGGESTED_ROUTES`; the AI is asked
+    for 2–3, and one left the same as another is dropped), the main pick
+    first, so where the research or the brews leave a real choice (more
+    water or a finer grind for a sour cup) the barista picks rather than the
+    AI. Each has a `label`, `why`, the research findings it follows
+    (`findings`, keys of `@barista/shared/research`, `docs/api/llm-contract.md`
+    §9; unknown keys and experiments are dropped) and its values. The top-level
+    `grindSetting`, `grindRpm`, `tempC` and `ratio` are the first route's.
+    Routes left the same as an earlier one once the values are checked are
+    dropped. `null` while pending, and on suggestions from before routes
+    (prompt `2026-11-c`), whose values are their only route.
+  - The values (each route's) are for the grinder named (`grindSetting` `null` without one,
     or without a brew or starting point on it to go on); `ratio` is for the
     batch, `(water + ice) / dose` or for espresso shot weight / dose, `null`
     to keep the batch's; `grindRpm` only on a variable-speed grinder.
@@ -191,8 +206,14 @@ Any member. The frontend polls it until `status` is `done` or `failed`.
 - **Errors:** `404` not a member, or not a suggestion of this workspace's
   beans (same message).
 
-The brew page fills the values in (temperature, the ratio, and the grind
-when it's for the grinder chosen) and they can be changed as usual. The
+The brew page shows each route with its values, why, the findings it
+follows (by title) and **Use these values**; with one route, it shows no
+label. Using one fills its values in (temperature, the ratio, and the grind
+when it's for the grinder chosen), hides the other routes, and they can be
+changed as usual. **Dismiss** clears the suggestion. The brew saved then
+records the suggestion and route it came from (`suggestionId`,
+`suggestionRoute`, `docs/api/brew-logs.md` §6), so its rating tells how that
+route went. The
 ratio moves the batch around what it holds (`heldForRatio`,
 `frontend/src/lib/suggest.ts`): espresso keeps the dose, which the basket
 fixes, so the shot weight moves; a filter batch keeps what was typed last

@@ -102,7 +102,36 @@ lever-order rewrite.
   analyses it reads are the old ones. That's for the routes work
   (backlog item 17), which gives the ratio its own route.
 - **Watch:** a 3.5-star brew was told to repeat unchanged; "keep a
-  well-rated brew" shouldn't reach the middle ratings.
+  well-rated brew" shouldn't reach the middle ratings. Fixed in `r2`:
+  `ownPattern` now says anything below 4.5 gets at least one change.
+
+### Eval p3 and p4 (2026-11-14, prompt 2026-11-c, gpt-6-luna)
+
+`eval/p3.json`: Suggest parameters with routes (backlog item 17, research
+`r1`). `eval/p4.json`: the analysis with `ownPattern` tightened (`r2`).
+
+- **Routes rarely branch:** 3 of 20 suggestions gave a second route, each
+  moving the grind (two also the temperature); none moved the ratio. The
+  main pick kept the ratio in all 20 and is 92 °C in 12. Most labels say
+  "repeat the best brew"; `ownPattern` is cited in 12.
+- **The 3.5-star brew now gets a change** (more water, 368 g), where p2
+  said to repeat it unchanged. No analysis changed the temperature.
+- **Top ratings:** of the 7 at 4.5–5, 4 were kept, 1 got a gentler shake
+  and 2 more water (one a 5-star). p2 kept all 7, so the tighter wording
+  may have nudged changes upward; watch it.
+
+### Eval p5 (2026-11-14, prompt 2026-11-d.r2, gpt-6-luna)
+
+`eval/p5.json`: Suggest parameters asked for 2–3 routes, whatever the
+rating (the second moves a different lever; after a kept top brew, one
+change worth exploring).
+
+- **Every suggestion has 2 routes** (3 of 20 in p3). The second moves the
+  ratio in 11, the grind in 11 and the temperature in 8, against the
+  main pick.
+- **The main pick moved the ratio in 6 of 20** (0 in p3), still 92 °C in 12.
+- Second routes read as real experiments ("Lengthen ratio: more water may
+  soften the high TDS"), citing `leverOrder`, `ownPattern`, `tasteNotTemp`.
 
 ## Synthesis
 

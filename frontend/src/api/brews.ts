@@ -35,6 +35,9 @@ export interface BrewLogInput {
   tastingNotes: string | null;
   drinkRating?: number | null; // the finished drink: only with a drinkId
   drinkTastingNotes?: string | null;
+  // The Suggest parameters route whose values it used: both or neither (docs/api/brew-logs.md §6).
+  suggestionId?: string | null;
+  suggestionRoute?: number | null;
   remindToRate?: boolean; // POST only: Rate later (docs/api/notifications.md §1b)
   steeping?: boolean; // a long cold brew: true when started, false to finish it
   steepTemp?: SteepTemp | null;
