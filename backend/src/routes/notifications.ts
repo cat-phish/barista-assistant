@@ -16,6 +16,7 @@ import {
 } from "@barista/shared/schema";
 import { webPushSettings } from "../config.js";
 import { db } from "../db.js";
+import { testSendLimiter } from "../limits.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 
@@ -198,6 +199,7 @@ notificationsRouter.delete("/push/:id", async (req: Request<IdParams>, res: Resp
 });
 
 // A test to the device, enabled or not. A gone subscription removes it.
+notificationsRouter.post("/push/:id/test", testSendLimiter);
 notificationsRouter.post("/push/:id/test", async (req: Request<IdParams>, res: Response) => {
   const vapid = webPushSettings();
   if (!vapid) {
@@ -267,6 +269,7 @@ notificationsRouter.delete("/:kind", async (req: Request<KindParams>, res: Respo
 
 // Sends a test through the saved channel (enabled or not) and reports only
 // whether it worked, with the service's status, never its response body.
+notificationsRouter.post("/:kind/test", testSendLimiter);
 notificationsRouter.post("/:kind/test", async (req: Request<KindParams>, res: Response) => {
   const { kind } = req.params;
   if (!isKind(kind)) {

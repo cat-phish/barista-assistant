@@ -31,3 +31,16 @@ export async function underWorkspaceCap(res: Response, userId: string): Promise<
   }
   return true;
 }
+
+// SEC-51: test sends go to a URL the person chose, so they're limited per
+// person. TEST_SEND_LIMIT_PER_HOUR (default 10).
+export const testSendLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: () => num("TEST_SEND_LIMIT_PER_HOUR", 10),
+  keyGenerator: (req: Request) => `testsend:${req.userId ?? ipKeyGenerator(req.ip ?? "unknown")}`,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  handler: (_req: Request, res: Response) => {
+    sendError(res, 429, "Too many test notifications. Try again later.");
+  },
+});

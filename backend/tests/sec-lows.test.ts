@@ -7,6 +7,9 @@ import { decryptSecret, encryptSecret } from "@barista/shared/secrets";
 import { checkBackup } from "../src/backup.js";
 import { newBean, newUser, newWorkspace } from "./helpers.js";
 
+vi.hoisted(() => {
+  process.env.TEST_SEND_LIMIT_PER_HOUR = "10";
+});
 vi.mock("@barista/shared/webPush", async (importOriginal) => {
   const real = await importOriginal<typeof import("@barista/shared/webPush")>();
   return { ...real, sendWebPush: vi.fn().mockResolvedValue(undefined) };

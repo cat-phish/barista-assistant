@@ -319,3 +319,10 @@ Weekly and monthly recaps (recaps.md §11c).
   channel, gives the claim back, so a later tick that day tries again. Only
   that day: after a server outage covering it, the banner and Insights →
   Recap still have the recap, but no notification comes.
+
+## Test sends are limited
+
+"Send a test" (`POST /api/auth/me/notifications/:kind/test` and
+`/push/:id/test`) is limited to 10 per person per hour
+(`TEST_SEND_LIMIT_PER_HOUR`); the 11th answers 429. Each one makes the server
+call a URL the person chose.
