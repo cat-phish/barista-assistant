@@ -166,7 +166,7 @@ above it.
   `name` and `slug` follow §2's rules. **Or a `.zip` backup** as it is
   (`Content-Type: application/zip`, up to 250 MB), with `?name=…&slug=…`. A zip (here and in the chat import)
   is checked before anything is unpacked and refused with `400` when it has more
-  than 1,100 entries, repeats a name, declares more than 300 MB unpacked, or an
+  than 3,000 files to unpack (or 10,000 headers), repeats a name, declares more than 300 MB unpacked, an entry unpacks bigger than it declares, or an
   entry's stored size exceeds its declared size.
   Only `backup.json` (≤ 50 MB) and `photos/<id>.webp` (≤ 5 MB each) are
   unpacked; anything else in the zip is ignored. A photo row restores only

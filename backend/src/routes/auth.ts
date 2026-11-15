@@ -95,9 +95,14 @@ export const loginLimiter = [
 
 // SEC-30: sign-ups per IP. Each one costs a scrypt hash and a users row, so
 // open registration needs a cap. In-memory store, like loginLimiter.
+function registerLimit(): number {
+  const n = Number(process.env.REGISTER_LIMIT_PER_HOUR);
+  return Number.isFinite(n) && n > 0 ? n : 5;
+}
+
 export const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  limit: Number(process.env.REGISTER_LIMIT_PER_HOUR ?? 5),
+  limit: registerLimit(),
   standardHeaders: "draft-8",
   legacyHeaders: false,
   handler: (_req: Request, res: Response) => {

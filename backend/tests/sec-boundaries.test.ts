@@ -34,9 +34,9 @@ describe("SEC-50 notification URLs reach internal hosts", () => {
 });
 
 describe("SEC-60 zip restore has no bounds", () => {
-  it("rejects a zip with more than 1,000 photo entries", () => {
+  it("rejects a zip with more than 3,000 photo entries", () => {
     const files: Record<string, Uint8Array> = { "backup.json": strToU8("{}") };
-    for (let i = 0; i < 1500; i++) files[`photos/${crypto.randomUUID()}.webp`] = new Uint8Array(8);
+    for (let i = 0; i < 3500; i++) files[`photos/${crypto.randomUUID()}.webp`] = new Uint8Array(8);
     const res = readBackupZip(Buffer.from(zipSync(files)));
     expect(res.ok).toBe(false);
   });
@@ -78,4 +78,29 @@ describe("SEC-90 image decode has no pixel cap", () => {
     const big = await sharp(Buffer.alloc(16000 * 16000), { raw: { width: 16000, height: 16000, channels: 1 } }).png({ compressionLevel: 9 }).toBuffer();
     expect(await processPhoto(big)).toBeNull();
   }, 60_000);
+});
+
+// SEC-60 (review): an entry that declares 1 MB but inflates to 200 MB is cut off, not inflated.
+describe("SEC-60 lying zip entry", () => {
+  it("refuses a photo entry whose stream is far bigger than it declares", async () => {
+    const { deflateRawSync } = await import("node:zlib");
+    const raw = deflateRawSync(Buffer.alloc(200 * 1024 * 1024));
+    const name = Buffer.from(`photos/${crypto.randomUUID()}.webp`);
+    const declared = 1024 * 1024;
+    const lh = Buffer.alloc(30);
+    lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt16LE(8, 8);
+    lh.writeUInt32LE(raw.length, 18); lh.writeUInt32LE(declared, 22); lh.writeUInt16LE(name.length, 26);
+    const cd = Buffer.alloc(46);
+    cd.writeUInt32LE(0x02014b50, 0); cd.writeUInt16LE(20, 4); cd.writeUInt16LE(20, 6); cd.writeUInt16LE(8, 10);
+    cd.writeUInt32LE(raw.length, 20); cd.writeUInt32LE(declared, 24); cd.writeUInt16LE(name.length, 28);
+    const local = Buffer.concat([lh, name, raw]);
+    const dir = Buffer.concat([cd, name]);
+    const end = Buffer.alloc(22);
+    end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(1, 8); end.writeUInt16LE(1, 10);
+    end.writeUInt32LE(dir.length, 12); end.writeUInt32LE(local.length, 16);
+    const t = Date.now();
+    const res = readBackupZip(Buffer.concat([local, dir, end]));
+    expect(res.ok).toBe(false);
+    expect(Date.now() - t).toBeLessThan(2000);
+  });
 });
