@@ -191,11 +191,11 @@ export async function importChats(data: Buffer, workspaceId: string, userId: str
         const ordered = [...chat.messages].sort((a, b) => a.position - b.position);
         // Positions are numbered afresh, so the summary's end is too.
         const summary = chat.summary && chat.summaryThrough != null ? { summary: chat.summary, summaryThrough: ordered.filter((m) => m.position <= chat.summaryThrough!).length } : {};
-        await tx.insert(aiChats).values({ id: chatId, workspaceId, userId, title: chat.title, ...summary, pinnedAt: chat.pinnedAt && keepPin.has(chat.id) ? new Date(chat.pinnedAt) : null, createdAt: new Date(chat.createdAt), updatedAt: new Date(chat.updatedAt) });
+        await tx.insert(aiChats).values({ id: chatId, workspaceId, userId, title: chat.title, ...summary, pinnedAt: chat.pinnedAt && keepPin.has(chat.id) ? notAfterNow(chat.pinnedAt) : null, createdAt: notAfterNow(chat.createdAt), updatedAt: notAfterNow(chat.updatedAt) });
         for (const [i, message] of ordered.entries()) {
           const id = randomUUID();
           const { photos: _photos, createdAt, proposals, ...fields } = message;
-          await tx.insert(aiChatMessages).values({ ...fields, proposals: proposals?.length ? proposals : null, id, chatId, position: i + 1, createdAt: new Date(createdAt) });
+          await tx.insert(aiChatMessages).values({ ...fields, proposals: proposals?.length ? proposals : null, id, chatId, position: i + 1, createdAt: notAfterNow(createdAt) });
           for (const photo of message.photos) {
             const stored = photos.get(photo.id);
             if (stored) await tx.insert(aiChatPhotos).values({ id: stored.id, workspaceId, userId, messageId: id, width: stored.width, height: stored.height, sizeBytes: stored.data.length });
@@ -209,4 +209,11 @@ export async function importChats(data: Buffer, workspaceId: string, userId: str
   }
   await pruneChatsOf(userId, null);
   return { ok: true, imported: fresh.length, skipped: read.file.chats.length - fresh.length, unpinned };
+}
+
+// SEC-04: an imported timestamp is never later than now, or a chat could sit on
+// top of the list for ever and never age out.
+function notAfterNow(value: string): Date {
+  const date = new Date(value);
+  return date.getTime() > Date.now() ? new Date() : date;
 }
