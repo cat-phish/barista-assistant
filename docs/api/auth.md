@@ -12,7 +12,10 @@ cookie named `session` with `HttpOnly`, `SameSite=Lax`, `Path=/`, and
 credentials enabled.
 
 Passwords are hashed with `scrypt` (Node `crypto`, random 16-byte salt) and
-compared in constant time.
+compared in constant time. Stored as `scrypt$<N>$<salt>$<hash>` (N = 32768, kept in
+the string so the cost can be raised later; older `scrypt$<salt>$<hash>` values
+still verify at N = 16384). A short list of the most common passwords (e.g.
+`password1`) is refused with 400 on register and change-password.
 
 **Session invalidation:** every authenticated request compares the token's
 `sv` with `users.session_version`. Changing the password increments it, so all

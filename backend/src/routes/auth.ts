@@ -38,9 +38,16 @@ export interface UserResponse {
   user: PublicUser;
 }
 
+// SEC-36: the most-guessed passwords that pass the 8-character minimum.
+const COMMON_PASSWORDS = new Set([
+  "password", "password1", "password12", "password123", "passw0rd", "p@ssw0rd", "12345678", "123456789", "1234567890", "qwerty123", "qwertyuiop",
+  "11111111", "00000000", "iloveyou", "letmein1", "welcome1", "admin123", "abc12345", "monkey123", "dragon123", "football1", "baseball1", "coffee123",
+]);
+const strongPassword = z.string().min(8).max(256).refine((p) => !COMMON_PASSWORDS.has(p.toLowerCase()), "is too common; pick another");
+
 const registerSchema = z.object({
   email: emailSchema,
-  password: z.string().min(8).max(256),
+  password: strongPassword,
 });
 
 const loginSchema = z.object({
@@ -50,7 +57,7 @@ const loginSchema = z.object({
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1).max(256),
-  newPassword: z.string().min(8).max(256),
+  newPassword: strongPassword,
 });
 
 const deleteAccountSchema = z.object({
