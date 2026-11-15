@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { AI_CHECK_QUEUE, AI_PREVIEW_QUEUE, BEAN_REVIEW_QUEUE, BREW_ANALYSIS_QUEUE, CHAT_QUEUE, CHAT_SUMMARY_JOB, LABEL_READ_QUEUE, MAINTENANCE_QUEUE, PARAMETER_SUGGESTION_QUEUE, RECAP_SUMMARY_QUEUE, REMINDER_QUEUE, RECAP_TICK_JOB, STEEP_REMINDER_JOB, BEAN_REST_TICK_JOB, LEGACY_REST_REMINDER_JOB, GREEN_LOW_JOB, type AiCheckJobData, type AiCheckResult, type AiPreviewJobData, type BeanReviewJobData, type BeanReviewResult, type BrewAnalysisJobData, type ChatJobData, type ChatSummaryJobData, type DbBackupJobData, type LabelReadJobData, type LabelReadResult, type ParameterSuggestionJobData, type RecapSummaryJobData, type GreenLowJobData, type RateReminderJobData, type RecapTickJobData, type BeanRestTickJobData, type SteepReminderJobData } from "@barista/shared/jobs";
+import { PREFERENCES_QUEUE, type PreferencesJobData, AI_CHECK_QUEUE, AI_PREVIEW_QUEUE, BEAN_REVIEW_QUEUE, BREW_ANALYSIS_QUEUE, CHAT_QUEUE, CHAT_SUMMARY_JOB, LABEL_READ_QUEUE, MAINTENANCE_QUEUE, PARAMETER_SUGGESTION_QUEUE, RECAP_SUMMARY_QUEUE, REMINDER_QUEUE, RECAP_TICK_JOB, STEEP_REMINDER_JOB, BEAN_REST_TICK_JOB, LEGACY_REST_REMINDER_JOB, GREEN_LOW_JOB, type AiCheckJobData, type AiCheckResult, type AiPreviewJobData, type BeanReviewJobData, type BeanReviewResult, type BrewAnalysisJobData, type ChatJobData, type ChatSummaryJobData, type DbBackupJobData, type LabelReadJobData, type LabelReadResult, type ParameterSuggestionJobData, type RecapSummaryJobData, type GreenLowJobData, type RateReminderJobData, type RecapTickJobData, type BeanRestTickJobData, type SteepReminderJobData } from "@barista/shared/jobs";
 import { UnrecoverableError, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 import { config } from "./config.js";
@@ -7,6 +7,8 @@ import { pool } from "./db.js";
 import { failSuggestion, failureMessage, processAiPreview, processBeanReview, processBrewAnalysis, processParameterSuggestion, settleRequest, type JobResult } from "./processor.js";
 import { processRecapTick, type RecapTickResult } from "./recaps.js";
 import { failRecapSummary, writeRecapSummary, type RecapSummaryResult } from "./recapSummary.js";
+import { learnPreferences, type LearnResult } from "./learnPreferences.js";
+import { closeLearnQueue } from "./learnQueue.js";
 import { processGreenLow, processRateReminder, processSteepReminder, type ReminderResult } from "./reminders.js";
 import { processBeanRestTick, type BeanRestTickResult } from "./beanRest.js";
 import { runDbBackup, type BackupResult } from "./dbBackup.js";
@@ -81,6 +83,18 @@ recapSummaries.on("failed", (job, err) => {
   if (final) void failRecapSummary(job.data.recapId, err.message.startsWith(NO_AI) ? NO_AI : failureMessage(err instanceof UnrecoverableError)).catch(() => undefined);
 });
 recapSummaries.on("error", (err) => console.error("Recap summary worker error:", err.message));
+
+// Learning preferences (docs/api/llm-contract.md §9g): retried once, then
+// dropped; the next like, dislike or analysis tries again.
+const learning = new Worker<PreferencesJobData, LearnResult>(PREFERENCES_QUEUE, (job: Job<PreferencesJobData>) => learnPreferences(job.data), {
+  connection,
+  concurrency: config.concurrency,
+});
+learning.on("completed", (job, result) => {
+  console.log(`Learning ${job.id}: ${result.status}${result.status === "skipped" ? ` (${result.reason})` : ` (${result.changes} changes)`}`);
+});
+learning.on("failed", (job, err) => console.error(`Learning ${job?.id} failed: ${err.message}`));
+learning.on("error", (err) => console.error("Learning worker error:", err.message));
 
 // Previews (docs/api/analysis.md §8d): no AI call, so quick; the backend
 // waits for the return value. Not retried.
@@ -182,7 +196,7 @@ publishEnvStatus().catch((err: unknown) => console.error("AI status not saved:",
 async function shutdown(signal: string): Promise<void> {
   console.log(`${signal} received, finishing active jobs`);
   // close() waits for running jobs to finish before resolving.
-  const results = await Promise.allSettled([worker.close(), suggestions.close(), recapSummaries.close(), previews.close(), labels.close(), beanReviews.close(), chats.close(), aiChecks.close(), reminders.close(), maintenance.close()]);
+  const results = await Promise.allSettled([worker.close(), suggestions.close(), recapSummaries.close(), learning.close(), closeLearnQueue(), previews.close(), labels.close(), beanReviews.close(), chats.close(), aiChecks.close(), reminders.close(), maintenance.close()]);
   results.push(...(await Promise.allSettled([pool.end()])));
   for (const r of results) {
     if (r.status === "rejected") console.error("Error during shutdown:", r.reason);

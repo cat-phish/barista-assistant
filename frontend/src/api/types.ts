@@ -43,6 +43,7 @@ export interface UserPreferences {
   timeZone: string | null; // IANA name from the device; null = the server's
   recapAi: RecapAiMode;
   recapSeen: Partial<Record<'weekly' | 'monthly', string>>; // the period start last opened or dismissed
+  learnAboutMe: boolean; // docs/api/auth.md §1d
 }
 export type RecapPeriodChoice = 'weekly' | 'monthly' | 'both';
 export type RecapAiMode = 'off' | 'manual' | 'auto';
@@ -93,6 +94,7 @@ export interface WorkspaceSettings {
   suggestSource: SuggestSource;
   suggestMaxBrews: number;
   suggestAlternatives: AlternativeKind[]; // what else it suggests by default
+  aiPreferences: string[]; // the workspace's own lines for the AI (docs/api/auth.md §1d)
   // "Suggest with AI" on a bean's Review (analysis.md §8e), and what its dialog starts with.
   beanReviews: boolean;
   beanReviewMaxBrews: number;
@@ -691,6 +693,8 @@ export interface LlmAnalysis {
   model: string | null;
   promptVersion: string | null;
   helpful: boolean | null; // 👍 / 👎 (docs/api/analysis.md §8)
+  feedbackBy: string | null; // who gave it
+  feedbackReason: string | null;
   ratedAt: string | null;
   hasRequest: boolean; // what was sent is saved (§8c)
   createdAt: string;
@@ -716,6 +720,36 @@ export interface AiPromptSettings {
   labelInstructionsIntro: string;
   noteIntro: string;
   limits: { instructions: number; section: number; note: number };
+}
+
+// Learned preferences (docs/api/auth.md §1d).
+export interface AiPreference {
+  id: string;
+  text: string;
+  basis: number; // brews or votes behind it; 0 for one you wrote
+  source: 'ai' | 'person';
+  updatedAt: string;
+}
+export interface PreferenceProposal {
+  id: string;
+  change: 'add' | 'edit' | 'remove';
+  targetId: string | null;
+  text: string | null;
+  basis: number;
+  why: string;
+  createdAt: string;
+}
+export interface AiPreferences {
+  learn: 'auto' | 'manual';
+  apply: 'propose' | 'apply';
+  items: AiPreference[];
+  proposals: PreferenceProposal[];
+  through: Record<string, string>;
+  usage: { runs: number; promptTokens: number; completionTokens: number };
+}
+export interface AiPreferencesSettings {
+  aiPreferences: AiPreferences;
+  limits: { items: number; text: number };
 }
 
 // What was sent to the AI (docs/api/analysis.md §8c).

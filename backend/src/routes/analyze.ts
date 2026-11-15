@@ -5,12 +5,13 @@ import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { analysisRequests, brewLogs, DEFAULT_WORKSPACE_SETTINGS, llmAnalyses, withDefaults, workspaces } from "@barista/shared/schema";
+import { analysisRequests, brewLogs, DEFAULT_WORKSPACE_SETTINGS, llmAnalyses, MAX_FEEDBACK_REASON, withDefaults, workspaces } from "@barista/shared/schema";
 import { requireAi } from "../aiConfig.js";
 import { db } from "../db.js";
 import { enqueueBrewAnalysis, QueueUnavailableError } from "../queue.js";
 import { sendPreview } from "../preview.js";
 import { noteSchema } from "./aiPrompt.js";
+import { LEARN_OFF, learnAfterSignal, learnsAboutMe } from "./aiPreferences.js";
 
 export interface AnalyzeResponse {
   status: "queued";
@@ -85,24 +86,34 @@ analyzeRouter.post(
 );
 
 // Was a suggestion useful? (docs/api/analysis.md §8): 👍 true, 👎 false, null
-// takes it back. Who can analyze a brew can rate its suggestions.
-const feedbackSchema = z.object({ helpful: z.boolean().nullable() }).strict();
+// takes it back, with an optional reason. Who can analyze a brew can rate its
+// suggestions; it teaches the AI about whoever rates it, so it needs their
+// Learn about me (docs/api/auth.md §1d).
+const feedbackSchema = z.object({ helpful: z.boolean().nullable(), reason: z.string().trim().max(MAX_FEEDBACK_REASON).nullable().optional() }).strict();
 analyzeRouter.put(
   "/:brewLogId/analyses/:analysisId/feedback",
-  async (req: Request<{ brewLogId: string; analysisId: string }>, res: Response<{ helpful: boolean | null }>) => {
+  async (req: Request<{ brewLogId: string; analysisId: string }>, res: Response<{ helpful: boolean | null; feedbackReason: string | null }>) => {
     const { brewLogId, analysisId } = req.params;
-    if (!(await requireResourceMembership(res, authedUserId(req), "brewLog", brewLogId, WRITE_ROLES))) return;
+    const userId = authedUserId(req);
+    const access = await requireResourceMembership(res, userId, "brewLog", brewLogId, WRITE_ROLES);
+    if (!access) return;
     const body = parseBody(feedbackSchema, req, res);
     if (!body) return;
+    if (body.helpful !== null && !(await learnsAboutMe(userId))) {
+      sendError(res, 409, LEARN_OFF);
+      return;
+    }
+    const rated = body.helpful !== null;
     const [result] = await db
       .update(llmAnalyses)
-      .set({ helpful: body.helpful, ratedAt: body.helpful === null ? null : sql`NOW()` })
+      .set({ helpful: body.helpful, ratedAt: rated ? sql`NOW()` : null, feedbackBy: rated ? userId : null, feedbackReason: rated ? body.reason || null : null })
       .where(and(eq(llmAnalyses.id, analysisId), eq(llmAnalyses.brewLogId, brewLogId)));
     if (result.affectedRows === 0) {
       sendError(res, 404, "Analysis not found");
       return;
     }
-    res.json({ helpful: body.helpful });
+    if (rated) await learnAfterSignal(userId, access.workspaceId); // docs/api/llm-contract.md §9g
+    res.json({ helpful: body.helpful, feedbackReason: rated ? body.reason || null : null });
   }
 );
 

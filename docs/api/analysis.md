@@ -43,6 +43,19 @@ the next brew.
   `latestAnalysis` is newer than when it requested the analysis (by
   `createdAt`).
 
+## `PUT /api/brew-logs/:brewLogId/analyses/:analysisId/feedback`
+
+Was the advice useful? An owner or barista of the brew's workspace rates it.
+- **Body:** `{ "helpful": true | false | null, "reason"?: "..." | null }`;
+  `null` takes it back; `reason` up to 300 characters, trimmed.
+- Saved with who gave it (`feedbackBy`, `feedbackReason`, `ratedAt`); it
+  feeds that person's learned preferences (docs/api/llm-contract.md §9g)
+  and, with `learn: "auto"`, queues learning.
+- **Success (`200 OK`):** `{ "helpful": …, "feedbackReason": … }`.
+- **Errors:** `400` bad body; `403` a viewer; `404` no such analysis on
+  this brew; `409` the person's Learn about me is off (docs/api/auth.md §1d)
+  and it isn't taking one back.
+
 ## Auto-analyze
 
 Owners switch it on under Settings → **AI** (`autoAnalyze`,
@@ -213,7 +226,10 @@ Any member. The frontend polls it until `status` is `done` or `failed`.
 **Feedback:** whether the person who asked liked the advice, on the whole
 suggestion or one route, apart from how a brew made with it rated: some
 advice is wrong for them before they brew it ("I never want cooler water").
-Kept with the suggestion for learned preferences (`docs/backlog.md` item 20).
+Kept with the suggestion (`feedback`, and `feedbackAt` when it last
+changed); the asker's latest votes go with their next suggestions, and with
+`learn: "auto"` a vote queues the learning job (docs/api/llm-contract.md
+§9g, docs/api/auth.md §1d).
 
 - **Request Body:** `{ "route": 1, "vote": "down", "reason": "I never want cooler water" }`
   - `route`: the route's index, or `null` for the whole suggestion. A
@@ -226,11 +242,15 @@ Kept with the suggestion for learned preferences (`docs/backlog.md` item 20).
   `null`, the list ending at the last one with a vote; `feedback` is `null`
   once nothing is left.
 - **Errors:** `400` bad body or no such route; `403` not the person who
-  asked; `404` as GET; `409` not done yet.
+  asked; `404` as GET; `409` not done yet, or a vote with the person's Learn
+  about me off (docs/api/auth.md §1d; taking one back is fine).
 
-The brew page shows 👍/👎 on each route when there's more than one, and on
-the suggestion as a whole; tapping the chosen one again takes it back. Once
-voted, a **Why?** field saves the reason.
+**On the brew page** a small **Feedback** link sits under the suggestion
+(and under an analysis), with Learn about me on, showing the votes given
+(👍👎). It opens a dialog (`FeedbackDialog.vue`) with 👍/👎 and a reason
+for the whole suggestion and each route (when there's more than one), and
+a few quick reasons to tap; tapping the chosen thumb again takes it back.
+Nothing shows inline, so it stays out of the way.
 
 The brew page shows each route with its values, why, the findings it
 follows (by title) and **Use these values**; with one route, it shows no

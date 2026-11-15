@@ -357,6 +357,8 @@ keys apply to suggestions (§9b), bean reviews (§9d) and recap summaries
   `brewProfile` leaves out the brew profile (below). With the profile on,
   `tds` still drops its TDS/EY line, `temp` its temperature line, and
   `roastLevel` its grouping by roast level.
+  `learnedPreferences` leaves out learned preferences and recent likes and
+  dislikes (below), and stops the learning job (§9g) in that workspace.
 
 Always sent: the bean and roaster names, roast date and age, dose, water,
 ice (flash chilled), yield, a cold batch's jar water (`jarWaterGrams`), time, grind setting, ratio, rating, tasting notes and
@@ -425,8 +427,29 @@ share); nothing is stored, so it's always current and needs no backup.
 ]
 ```
 
-Not in it yet: likes and dislikes (§8b "Feedback"; they feed learned
-preferences, backlog item 20) and a taste summary of older notes.
+Not in it yet: a taste summary of older notes.
+
+## Learned preferences
+
+What this barista likes and turns down (docs/backlog.md item 20,
+docs/api/auth.md §1d), sent with every analysis and suggestion as
+`preferences` (`worker/src/preferences.ts`), unless `learnedPreferences` is
+hidden. With the person's Learn about me off (docs/api/auth.md §1d) only
+`workspace` goes:
+
+- `mine`: the person's items (the barista's for an analysis, the asker's
+  for a suggestion), as `"text (n=basis)"`, or just the text for one they
+  wrote;
+- `workspace`: the workspace's own lines (`WorkspaceSettings.aiPreferences`);
+- `recentVotes` (suggestions only): their latest 5 likes and dislikes on
+  suggestions in this workspace, newest first, as `{ vote, on, reason }`,
+  `on` the route's label (or "the whole suggestion: <summary>"), so a
+  dislike counts at once, before the list catches up.
+
+The `preferences` section says to follow them, the person's over the
+workspace's where they conflict, and not to offer again what they turned
+down unless the tasting notes give a clear reason, saying so. An empty
+`preferences` (nothing learned, no votes) isn't sent.
 
 ## 9b. Suggest parameters
 
@@ -464,7 +487,7 @@ deleted with its bean) is skipped.
    described once in `equipment`. What the workspace keeps from the AI
    (`aiHidden`) is left out the same way, other beans' details too.
 3. **Prompt** (`SUGGEST_SECTIONS`): its own opening and output sections,
-   then the analysis's topic sections (drink … flashChilled, then `profile`), with
+   then the analysis's topic sections (drink … flashChilled, then `profile` and `preferences`), with
    `suggestEspresso` in place of `espresso` (no change fields here), then
    `suggestAlternatives`, the research findings (step 3 above), the
    asker's `instructions` and `note` (step 3 above, `requestedBy`), and
@@ -764,6 +787,45 @@ period's own fields (`filters` included), the figures and each brew's
 `day`, `bean` and `brewer` are always sent, everything else goes with its key as in the
 analysis. Notes on beans, people's names and who made each brew aren't
 sent.
+
+## 9g. Learning preferences
+
+A small job (`ai-preferences` queue, `worker/src/learnPreferences.ts`) that
+keeps a person's learned preferences (docs/api/auth.md §1d) up to date
+from what they did in one workspace.
+
+- **When:** with `learn: "auto"`, 20 seconds after a like or dislike
+  (§8b "Feedback") and after each analysis of their brew (§8); always on
+  **Update now**. One job per person and workspace at a time (job id
+  `prefs-<userId>-<workspaceId>`), so several votes in a row make one call.
+  Skipped when `learnedPreferences` is hidden, the person's Learn about me
+  is off, or nothing is new. Tokens used go into `usage`.
+- **Sent** (`PREFERENCES_PROMPT_VERSION`), signals since `through` for that
+  workspace (or the last 30 days the first time), with the workspace's
+  hidden details left out as in the analysis:
+  - `votes`: up to 10 likes and dislikes (each dislike with a `ref`), with the suggestion's summary,
+    the route's label and changes, and the reason;
+  - `analysisVotes`: up to 10 👍/👎 they gave analyses (`feedbackBy`), with
+    the advice (next step) and the reason;
+  - `brews`: up to 10 of their rated brews made or analyzed since, with
+    rating, method, recipe, dose, water, temperature, grind, time, tasting
+    notes, the route it came from and the analysis's summary;
+  - `profile`: the brew profile lines (as above) for their latest brew;
+  - `current`: their items with ids, the pending proposals, and the
+    workspace's lines (so they aren't repeated).
+- **Answer:** `{ changes: [{ change: "add" | "edit" | "remove", id, text,
+  basis, why, dislikeRef }] }`, at most 5, `id` an item's for an edit or
+  removal. Each dislike sent carries a `ref` (`d1`, `d2`, …); a change
+  citing one as `dislikeRef` applies even with `propose` (the dislike is
+  the accepting), but only when that ref is a dislike sent in this run
+  (`checkedDislikes`): the AI's word alone never skips the person. A
+  change that names no item, or adds what's already there, is dropped.
+  With `apply: "propose"` they become proposals (replacing an older
+  proposal for the same item); with `"apply"` they apply, except to items
+  the person wrote. The list is capped at 20 (an add past that is a
+  proposal) and `through` moves to the job's start.
+- Failures are retried and then dropped: nothing is shown, the next signal
+  tries again.
 
 ## Evaluating changes
 

@@ -81,6 +81,10 @@ Every workspace in a response carries `settings`, defaults filled in
   `AI_DETAILS` (`@barista/shared/aiDetails`), each at most once; an unknown
   key is a `400`. A `PATCH` sends the whole list. What each key does is in
   `docs/api/llm-contract.md` §9, "What the AI sees". AI chat ignores it (§12).
+- `aiPreferences` (array of up to 20 strings of 1–200 characters, trimmed,
+  default `[]`): the workspace's own preferences for the AI, sent with every
+  analysis and suggestion (`docs/api/auth.md` §1d); owners edit them under
+  Settings → **AI**, "Workspace preferences". In backups with the settings.
 - `autoAnalyze` (boolean, default `false`), `autoAnalyzeDelayMinutes` (`0`,
   `5`, `10`, `15` or `30`, default `10`; `0` analyzes right away), `autoAnalyzeDailyCap` (integer 1–500,
   or `null` for no cap, default `null`): auto-analyze (`docs/api/analysis.md`

@@ -72,7 +72,7 @@ units, with defaults filled in. Storage is always grams, °C and metres;
 clients convert what they show and what's typed (roadmap: Units and defaults).
 
 ```json
-{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], "repeatButtonsBy": "made", "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "startDelays": {}, "steepReminders": true, "restReminders": true, "restReminderRepeatDays": null, "restingInBrewPickerDefault": true, "greenStockAlerts": true, "recaps": true, "recapPeriods": "both", "weekStartsOn": 1, "recapBanner": true, "recapBannerDays": 3, "recapNotify": true, "recapNotifyTime": "08:00", "timeZone": null, "recapAi": "manual", "recapSeen": {} }
+{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], "repeatButtonsBy": "made", "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "startDelays": {}, "steepReminders": true, "restReminders": true, "restReminderRepeatDays": null, "restingInBrewPickerDefault": true, "greenStockAlerts": true, "recaps": true, "recapPeriods": "both", "weekStartsOn": 1, "recapBanner": true, "recapBannerDays": 3, "recapNotify": true, "recapNotifyTime": "08:00", "timeZone": null, "recapAi": "manual", "recapSeen": {}, "learnAboutMe": true }
 ```
 
 - `volumeUnit`: `fl_oz` | `ml`: the brew page's yield estimate, and a new
@@ -174,6 +174,9 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
   - `recapSeen`: `{ "weekly"?: "YYYY-MM-DD", "monthly"?: "YYYY-MM-DD" }`,
     the start of the last period whose banner was opened or dismissed.
     Default `{}`. A `PATCH` sends the whole object.
+- `learnAboutMe` (default `true`): Learn about me (§1d). Off, nothing is
+  learned, likes and dislikes are refused (`409`) and hidden, and neither
+  their learned list nor their votes go to the AI; the list is kept.
 - `repeatButtonsBy` (default `"made"`): what the brew page's quick repeat
   buttons (Settings → Brew setup, "Repeat buttons") count as different
   brews, one button each for the last 3, over every brew
@@ -287,6 +290,86 @@ its own text box, an "Edited" mark and "Reset to default" (locked ones
 shown read-only). The switch is on while there are overrides, otherwise
 remembered per viewer in the browser. "Add a note for the AI"
 (`AiNoteField.vue`) sits by Suggest parameters and Get AI suggestion.
+
+## 1d. Learned preferences
+
+What the AI has learned each person likes and turns down
+(docs/api/llm-contract.md §9g, docs/backlog.md item 20), like "prefers
+19-20% EY" or "turns down cooler-water ideas", each with how many brews or
+votes back it. It belongs to the person, like Your AI prompt (§1c): the same
+in every workspace, stored as `users.ai_preferences` (`AiPreferences` in
+`@barista/shared/aiPreferences`), so it isn't in workspace backups. A
+workspace's own list (`WorkspaceSettings.aiPreferences`, up to 20 lines of
+up to 200 characters, set by owners in Settings → AI) is in its backups; the
+person's list wins where they conflict.
+
+- **items** (up to 20): `{ id, text, basis, source, updatedAt }`; `text` up to
+  200 characters, `basis` the brews or votes behind it (0 for one the person
+  wrote), `source` `"ai"` or `"person"`.
+- **proposals** (up to 10): changes the AI suggested and the person hasn't
+  accepted or dismissed: `{ id, change: "add" | "edit" | "remove", targetId,
+  text, basis, why, createdAt }` (`targetId` the item an edit or removal is
+  for, `text` null for a removal). Accepting applies it; only items go to the
+  AI.
+- **learn** (`"auto"` default, or `"manual"`): auto updates the list after
+  every like or dislike (§8b "Feedback") and every analysis of their brews
+  (§8); manual only when they press **Update now**.
+- **apply** (`"propose"` default, or `"apply"`): whether the AI's changes wait
+  as proposals or apply right away. Even with apply, a change to an item the
+  person wrote stays a proposal.
+- **through** (workspace id → ISO time): when each workspace's signals were
+  last learned from.
+- **usage** (`{ runs, promptTokens, completionTokens }`): the learning
+  calls made so far, for the average Settings shows.
+
+**Learn about me** (`learnAboutMe`, §1 preferences) switches all of it for
+the person: off, nothing is learned, the Feedback links are hidden and
+votes refused, and only the workspace's lines go to the AI. **A dislike
+counts as accepting:** a change the AI learns from a 👎 applies at once even
+with `propose` (still a proposal for a line the person wrote), so a
+disliked idea stops coming back.
+
+Settings → **Learned preferences** (`SettingsLearnedView.vue`, under
+"You") has the switch, with what it costs (an update sends about
+800–1,500 tokens and gets about 100 back, measured on real brews; the list
+adds about 200–400 to each analysis and suggestion; and the person's own
+average from `usage`) and that it's stored on the server, sent only to a
+hosted AI; then Learn and Changes, Update now, the proposals with
+Accept/Dismiss and the list to edit.
+
+### `GET /api/auth/me/ai-preferences`
+
+- **Auth Required:** `true`
+- **Success (`200 OK`):** `{ "aiPreferences": AiPreferences, "limits": { "items": 20, "text": 200 } }`,
+  with an empty list and the defaults when nothing is stored.
+
+### `PUT /api/auth/me/ai-preferences`
+
+- **Auth Required:** `true`
+- **Body:** `{ "learn": "auto" | "manual", "apply": "propose" | "apply", "items": [{ "id"?: "...", "text": "..." }] }`,
+  replacing the items in that order. An item with an existing id and the
+  same text keeps its basis and source; a changed or new one becomes
+  `source: "person"`. Proposals for removed items are dropped.
+- **Success (`200 OK`):** the same as `GET`.
+- **Errors:** `400` too many, too long or empty text, an unknown id, an
+  unknown body key.
+
+### `POST /api/auth/me/ai-preferences/proposals/:proposalId/accept` and `…/dismiss`
+
+- **Auth Required:** `true`
+- Accept applies the change (an edit or removal whose item is gone just
+  goes); dismiss drops it. Either way the proposal is removed.
+- **Success (`200 OK`):** the same as `GET`. **Errors:** `404` no such
+  proposal; `409` accepting an add with 20 items already.
+
+### `POST /api/workspaces/:workspaceId/ai-preferences/update`
+
+- **Auth Required:** `true`, an owner or barista of the workspace.
+- Queues the learning job (§9g) for the signed-in person in this workspace
+  now, whatever `learn` is. **Success (`202 Accepted`):** `{ "queued": true }`.
+- **Errors:** `403` a viewer; `409` Learn about me is off, the workspace keeps learned preferences
+  from the AI (`learnedPreferences` in `aiHidden`), or no AI is set up
+  (`ai_not_configured`); `503` the queue is down.
 
 ## `POST /api/auth/password`
 

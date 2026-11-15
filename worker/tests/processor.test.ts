@@ -93,7 +93,7 @@ describe("processBrewAnalysis", () => {
     });
     // Only this brew: history goes to "Suggest parameters", and the barista's
     // earlier brews only as the brew profile (docs/api/llm-contract.md §9).
-    expect(Object.keys(context).sort()).toEqual(["bean", "brew", "drink", "profile", "ratingScale", "recipe"]);
+    expect(Object.keys(context).sort()).toEqual(["bean", "brew", "drink", "preferences", "profile", "ratingScale", "recipe"]);
     expect(context.ratingScale).toBe("0.5-5");
 
     const saved = await db.select().from(llmAnalyses).where(eq(llmAnalyses.brewLogId, logIds.day8!));

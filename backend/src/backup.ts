@@ -404,6 +404,10 @@ const JSON_SCHEMAS: Record<string, z.ZodType> = {
 // Large, and only for looking back at: in a file only when asked for
 // (docs/api/backup.md §2b, "What was sent to the AI").
 export const AI_REQUEST_COLUMNS: Record<string, string> = { llm_analyses: "request", parameter_suggestions: "request" };
+// Columns left out of backups: who gave an analysis feedback, and why, only
+// teaches that person's learned preferences (docs/api/auth.md §1d), which
+// aren't in backups either.
+export const PERSONAL_COLUMNS: Record<string, readonly string[]> = { llm_analyses: ["feedbackBy", "feedbackReason"] };
 export interface BackupOptions {
   aiRequests?: boolean;
   // bean_photos rows only go with their files (a .zip, §2b); a JSON file
@@ -423,13 +427,15 @@ export interface TableInfo {
 }
 export const TABLE_INFO: TableInfo[] = BACKUP_TABLES.map(({ table, scope }) => {
   const config = getTableConfig(table);
-  const columns = getTableColumns(table) as Record<string, Column>;
+  const personal = PERSONAL_COLUMNS[config.name] ?? [];
+  const columns = Object.fromEntries(Object.entries(getTableColumns(table) as Record<string, Column>).filter(([key]) => !personal.includes(key)));
   const keyOf = new Map(Object.entries(columns).map(([key, col]) => [col.name, key]));
   const refs: Record<string, string> = {};
   const userColumns: string[] = [];
   for (const fk of config.foreignKeys) {
     const ref = fk.reference();
-    const key = keyOf.get(ref.columns[0]!.name)!;
+    const key = keyOf.get(ref.columns[0]!.name);
+    if (!key) continue; // a personal column
     const target = getTableConfig(ref.foreignTable).name;
     if (target === "workspaces") continue;
     if (target === "users") userColumns.push(key);
@@ -496,8 +502,10 @@ export async function buildBackup(workspaceId: string, options: BackupOptions = 
       }
     }
     const aiColumn = options.aiRequests ? undefined : AI_REQUEST_COLUMNS[t.name];
+    const personal = PERSONAL_COLUMNS[t.name] ?? [];
     tables[t.name] = rows.map(({ workspaceId: _ws, ...row }) => {
       if (aiColumn) delete row[aiColumn];
+      for (const key of personal) delete row[key];
       for (const key of t.userColumns) {
         const id = row[key] as string | null;
         delete row[key];

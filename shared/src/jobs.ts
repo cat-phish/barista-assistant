@@ -267,6 +267,18 @@ export interface RecapSummaryJobData {
 }
 export const recapSummaryJobId = (recapId: string): string => `recap-${recapId}`;
 
+// Learning a person's preferences (docs/api/llm-contract.md §9g) from what
+// they did in one workspace. One job per person and workspace at a time;
+// LEARN_DELAY_MS lets several votes in a row make one call.
+export const PREFERENCES_QUEUE = "ai-preferences";
+export const PREFERENCES_JOB = "learn";
+export const LEARN_DELAY_MS = 20_000;
+export interface PreferencesJobData {
+  userId: string;
+  workspaceId: string;
+}
+export const preferencesJobId = (userId: string, workspaceId: string): string => `prefs-${userId}-${workspaceId}`;
+
 // A chat reply (docs/api/llm-contract.md §9e, docs/api/chat.md §12): the
 // pending assistant message. The worker publishes it to a Redis stream the
 // backend passes on to the browser.

@@ -53,6 +53,10 @@
       "types": "./dist/aiDetails.d.ts",
       "default": "./dist/aiDetails.js"
     },
+    "./aiPreferences": {
+      "types": "./dist/aiPreferences.d.ts",
+      "default": "./dist/aiPreferences.js"
+    },
     "./brewProfile": {
       "types": "./dist/brewProfile.d.ts",
       "default": "./dist/brewProfile.js"

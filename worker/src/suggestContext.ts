@@ -44,6 +44,7 @@ import { localBrewDate } from "./localDate.js";
 import { effectiveRoastAge } from "@barista/shared/roastAge";
 import type { AiDetail } from "@barista/shared/aiDetails";
 import type { BrewProfile } from "@barista/shared/brewProfile";
+import { loadPreferences, type PreferencesInput } from "./preferences.js";
 import { loadBrewProfile } from "./brewProfile.js";
 
 // The brewer chosen; the controls only matter for an espresso machine.
@@ -133,6 +134,7 @@ export interface SuggestContext {
   brews: SuggestBrew[];
   options: SuggestOptions; // empty when no alternatives were asked for
   profile: BrewProfile | null; // the asker's running figures (worker/src/brewProfile.ts)
+  preferences: PreferencesInput | null; // the asker's learned ones and latest votes (worker/src/preferences.ts)
   ratingScale: "0.5-5";
 }
 
@@ -267,7 +269,7 @@ async function loadOptions(r: SuggestRequest, workspaceId: string, kinds: readon
 // "unratedHistory"). options.before: only brews before then (npm run eval
 // rebuilds a past brew's suggestion).
 // profile: what the workspace keeps from the AI, to add the asker's brew
-// profile; without it there's none.
+// profile and learned preferences; without it there are none.
 export async function loadSuggestContext(
   r: SuggestRequest,
   options: { ratedOnly?: boolean; before?: Date; profile?: ReadonlySet<AiDetail> } = {},
@@ -359,6 +361,7 @@ export async function loadSuggestContext(
           options.profile,
         )
       : null;
+  const preferences = ws && options.profile ? await loadPreferences({ personId: r.requestedBy, workspaceId: ws.workspaceId }, options.profile, { votes: true }) : null;
   return {
     source: r.source,
     batch,
@@ -383,6 +386,7 @@ export async function loadSuggestContext(
     }),
     options: alternatives,
     profile,
+    preferences,
     ratingScale: "0.5-5",
   };
 }

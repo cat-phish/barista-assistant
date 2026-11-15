@@ -10,8 +10,10 @@ import { withoutKey, type AiClient } from "./ai/client.js";
 import type { BrewContext } from "./context.js";
 import type { BeanReviewContext } from "./beanReview.js";
 import type { PeriodContext } from "./periodContext.js";
-import { BEAN_REVIEW_SECTIONS, buildChatSystem, buildRecapSystem, toPeriodInput, buildSystemPrompt, PROMPT_SECTIONS, promptSections, SUGGEST_SECTIONS, toBeanReviewInput, toLlmInput, toSuggestInput, type LlmInput, type PromptCustom } from "./prompt.js";
+import { PREFERENCES_SYSTEM, BEAN_REVIEW_SECTIONS, buildChatSystem, buildRecapSystem, toPeriodInput, buildSystemPrompt, PROMPT_SECTIONS, promptSections, SUGGEST_SECTIONS, toBeanReviewInput, toLlmInput, toSuggestInput, type LlmInput, type PromptCustom } from "./prompt.js";
 import type { SuggestContext } from "./suggestContext.js";
+import type { LearnInput } from "./learnPreferences.js";
+import { MAX_LEARNED_CHANGES, MAX_PREFERENCE_TEXT, PREFERENCE_CHANGES } from "@barista/shared/aiPreferences";
 
 // The input and system prompt are built in prompt.ts; the schema and its
 // checks are here (docs/api/llm-contract.md §9). PROMPT_VERSION (prompt.ts)
@@ -541,4 +543,64 @@ export function parseRecapMessage(message: LlmMessage): RecapSummary {
 export async function requestRecapSummary(ai: AiClient, context: PeriodContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): Promise<{ summary: RecapSummary; usage: Usage }> {
   const { message, usage } = await complete(ai, buildRecapRequest(ai.models.main, context, hidden, custom));
   return { summary: parseRecapMessage(message), usage };
+}
+
+// Learning preferences (docs/api/llm-contract.md §9g).
+export const PREFERENCES_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    changes: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          change: { type: "string", enum: [...PREFERENCE_CHANGES] },
+          id: { type: ["string", "null"], description: "The line's id from current.mine, for an edit or removal; null for an add." },
+          text: { type: ["string", "null"], description: "The line, for an add or edit; null for a removal." },
+          basis: { type: "integer", description: "How many brews or votes back it." },
+          why: { type: "string" },
+          dislikeRef: { type: ["string", "null"], description: "The ref of the dislike (votes or analysisVotes) it comes from; null otherwise." },
+        },
+        required: ["change", "id", "text", "basis", "why", "dislikeRef"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["changes"],
+  additionalProperties: false,
+} as const;
+
+// Long text is cut rather than failed; too many changes are cut to the first.
+const learnedSchema = z.object({
+  changes: z
+    .array(
+      z.object({
+        change: z.enum(PREFERENCE_CHANGES),
+        id: z.string().nullable(),
+        text: z.string().nullable().transform((t) => (t === null ? null : t.trim().slice(0, MAX_PREFERENCE_TEXT) || null)),
+        basis: z.number().transform((n) => Math.max(0, Math.min(999, Math.round(n)))),
+        why: z.string().transform((w) => w.trim().slice(0, 200)),
+        dislikeRef: z.string().nullable(),
+      }),
+    )
+    .transform((list) => list.slice(0, MAX_LEARNED_CHANGES)),
+});
+export type LearnedPreferences = z.infer<typeof learnedSchema>;
+
+export function buildPreferencesRequest(model: string, input: LearnInput): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
+  return {
+    model,
+    messages: [
+      { role: "system", content: PREFERENCES_SYSTEM },
+      { role: "user", content: JSON.stringify(input) },
+    ],
+    response_format: { type: "json_schema", json_schema: { name: "learned_preferences", strict: true, schema: PREFERENCES_JSON_SCHEMA } },
+  };
+}
+export function parsePreferencesMessage(message: LlmMessage): LearnedPreferences {
+  return parseMessage(message, learnedSchema);
+}
+export async function requestLearnedPreferences(ai: AiClient, input: LearnInput): Promise<LearnedPreferences & { usage: Usage }> {
+  const { message, usage } = await complete(ai, buildPreferencesRequest(ai.models.main, input));
+  return { ...parsePreferencesMessage(message), usage };
 }

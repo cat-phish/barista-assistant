@@ -124,8 +124,8 @@ export const analysisApi = {
   request: (brewLogId: string, note?: string) =>
     api.post<{ status: 'queued'; jobId: string; message: string }>(`/api/brew-logs/${brewLogId}/analyze`, note ? { note } : undefined),
   // Was the suggestion useful? null takes the answer back (docs/api/analysis.md §8).
-  rateAnalysis: (brewLogId: string, analysisId: string, helpful: boolean | null) =>
-    api.put<{ helpful: boolean | null }>(`/api/brew-logs/${brewLogId}/analyses/${analysisId}/feedback`, { helpful }),
+  rateAnalysis: (brewLogId: string, analysisId: string, helpful: boolean | null, reason: string | null = null) =>
+    api.put<{ helpful: boolean | null; feedbackReason: string | null }>(`/api/brew-logs/${brewLogId}/analyses/${analysisId}/feedback`, { helpful, reason }),
   // What was sent to the AI (docs/api/analysis.md §8c).
   sent: (brewLogId: string, analysisId: string) =>
     api.get<{ request: AiRequest | null }>(`/api/brew-logs/${brewLogId}/analyses/${analysisId}/request`),

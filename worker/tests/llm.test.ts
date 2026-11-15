@@ -122,6 +122,7 @@ const context = (over: { brew?: Partial<BrewSummary>; bean?: Partial<BrewContext
   brew: summary(over.brew),
   drink: null,
   profile: null,
+  preferences: null,
   ratingScale: "0.5-5",
 });
 const without = (...keys: AiDetail[]) => new Set<AiDetail>(keys);
@@ -407,6 +408,7 @@ const suggestContext = (over: Partial<SuggestContext> = {}): SuggestContext => {
     ],
     options: {},
     profile: null,
+    preferences: null,
     ratingScale: "0.5-5",
     ...over,
   };

@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { AiPrompt, AiPromptSettings, User, UserPreferences } from './types';
+import type { AiPreferences, AiPreferencesSettings, AiPrompt, AiPromptSettings, User, UserPreferences } from './types';
 
 export const authApi = {
   me: () => api.get<{ user: User }>('/api/auth/me'),
@@ -17,4 +17,10 @@ export const authApi = {
   // Your own AI prompt (§1c), with the default sections to show.
   aiPrompt: () => api.get<AiPromptSettings>('/api/auth/me/ai-prompt'),
   setAiPrompt: (prompt: AiPrompt) => api.put<AiPromptSettings>('/api/auth/me/ai-prompt', prompt),
+  // Learned preferences (docs/api/auth.md §1d).
+  aiPreferences: () => api.get<AiPreferencesSettings>('/api/auth/me/ai-preferences'),
+  setAiPreferences: (body: { learn: AiPreferences['learn']; apply: AiPreferences['apply']; items: Array<{ id?: string; text: string }> }) =>
+    api.put<AiPreferencesSettings>('/api/auth/me/ai-preferences', body),
+  answerProposal: (id: string, action: 'accept' | 'dismiss') => api.post<AiPreferencesSettings>(`/api/auth/me/ai-preferences/proposals/${encodeURIComponent(id)}/${action}`),
+  learnNow: (workspaceId: string) => api.post<{ queued: true }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/ai-preferences/update`),
 };

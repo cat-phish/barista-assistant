@@ -7,6 +7,7 @@
 import type { AiDetail } from "@barista/shared/aiDetails";
 import { INSTRUCTIONS_INTRO, LOCKED_SECTIONS, NOTE_INTRO, PROMPT_TEXT, type AiPrompt } from "@barista/shared/aiPrompt";
 import { RESEARCH_FINDINGS, RESEARCH_VERSION, type ResearchFinding } from "@barista/shared/research";
+import type { PreferencesInput } from "./preferences.js";
 import { profileLines, type BrewProfile } from "@barista/shared/brewProfile";
 import type { BeanReviewContext } from "./beanReview.js";
 import type { PeriodContext } from "./periodContext.js";
@@ -17,13 +18,15 @@ import type { BrewerInfo, SuggestContext } from "./suggestContext.js";
 // compared across changes (npm run eval). Bump it whenever the input, the
 // prompt or the schema changes.
 // It carries the research version (@barista/shared/research) after the dot.
-export const PROMPT_VERSION = `2026-11-f.${RESEARCH_VERSION}`;
+export const PROMPT_VERSION = `2026-11-g.${RESEARCH_VERSION}`;
 // The chat's own prompt (CHAT_SYSTEM, CHAT_PROPOSALS): replies don't store
 // it, the eval's propose runs do (docs/api/llm-contract.md §9e).
 export const CHAT_PROMPT_VERSION = "2026-11-c";
 // A recap's summary (RECAP_SYSTEM, toPeriodInput, the schema), stored on the
 // recaps row (docs/api/llm-contract.md §9f).
 export const RECAP_PROMPT_VERSION = "2026-11-a";
+// Learning preferences (docs/api/llm-contract.md §9g).
+export const PREFERENCES_PROMPT_VERSION = "2026-11-c";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type LlmInput = { [key: string]: Json };
@@ -144,8 +147,15 @@ export function toLlmInput(context: BrewContext, hidden: ReadonlySet<AiDetail> =
     drink: hidden.has("drink") ? null : context.drink,
     equipment: equipment([context.brew], hidden),
     profile: profileInput(context.profile, hidden),
+    preferences: preferencesInput(context.preferences, hidden),
   };
   return (compact(input) ?? {}) as LlmInput;
+}
+
+// Learned preferences (docs/api/llm-contract.md §9, "Learned preferences"):
+// already left out when the workspace keeps them from the AI.
+export function preferencesInput(p: PreferencesInput | null, hidden: ReadonlySet<AiDetail>): PreferencesInput | null {
+  return p && !hidden.has("learnedPreferences") ? p : null;
 }
 
 // The brew profile (docs/api/llm-contract.md §9, "Brew profile") as a few
@@ -188,6 +198,7 @@ export function toSuggestInput(context: SuggestContext, hidden: ReadonlySet<AiDe
     equipment: equipment([{ grinder: context.grinder, water: null }, ...context.brews], hidden),
     options: optionsInput(context.options, hidden),
     profile: profileInput(context.profile, hidden),
+    preferences: preferencesInput(context.preferences, hidden),
   };
   return (compact(input) ?? {}) as LlmInput;
 }
@@ -451,6 +462,11 @@ export const PROMPT_SECTIONS: PromptSection[] = [
     when: (i) => i.profile !== undefined,
     text: PROMPT_TEXT.profile,
   },
+  {
+    key: "preferences",
+    when: (i) => i.preferences !== undefined,
+    text: PROMPT_TEXT.preferences,
+  },
   ...researchSections("analysis"),
   {
     key: "end",
@@ -565,3 +581,24 @@ export function buildSystemPrompt(input: LlmInput, sections: PromptSection[] = P
     .map((s) => s.text)
     .join(" ");
 }
+
+// Learning preferences (docs/api/llm-contract.md §9g): fixed, not one of
+// Your AI prompt's sections.
+export const PREFERENCES_SYSTEM =
+  "You keep a home barista's list of coffee preferences up to date, so later advice fits them. The input has " +
+  "current (mine: their list with ids, basis = brews or votes behind a line, source person = they wrote it; " +
+  "proposals: changes already waiting for them; workspace: the household's own lines), what they did since you " +
+  "last looked (votes: likes and dislikes on suggested routes, with what the route changed and their reason; " +
+  "analysisVotes: likes and dislikes on analyses' advice, with their reason; brews: rated brews, with tasting notes, " +
+  "the route they came from and the analysis given), and profile: figures " +
+  "from all their rated brews (n = brews behind a figure). " +
+  "Answer with changes: add a line for a preference the signals show, edit one (by id) they refine or update its " +
+  "basis, remove one (by id) they now contradict. A line is short and concrete, about taste or what they want " +
+  "suggested (\"prefers 19-20% EY on filter\", \"turns down cooler-water ideas\", \"likes a longer bloom on light " +
+  "roasts\"), never about one brew. Learn only what several signals agree on, or one vote whose reason states a " +
+  "rule (\"I never want cooler water\"); basis is how many brews or votes back it. Don't repeat a line already in " +
+  "mine, proposals or workspace. Change a person-written line only when the signals clearly contradict it. Most " +
+  "runs need no change: answer an empty list then. At most 5 changes; why is one short sentence for the barista. " +
+  "dislikeRef is the ref of the dislike a change comes from (it's applied at once, so the advice stops coming back), " +
+  "null for a change from anything else; " +
+  "a dislike usually means a line about what they don't want suggested.";

@@ -24,6 +24,7 @@ const CONTEXT: Record<keyof BrewContext, Sees> = {
   brew: "always",
   drink: "drink",
   profile: "brewProfile", // line by line in PROFILE
+  preferences: "learnedPreferences",
   ratingScale: "always",
 };
 
@@ -215,6 +216,7 @@ const full: BrewContext = {
   brew,
   drink: { name: "Iced latte", servingSize: "12 fl oz", ingredients: [{ name: "Milk", ingredientType: "milk", amount: "200 g", note: null }] },
   profile,
+  preferences: { mine: ["Prefers 19-20% EY (n=6)"], workspace: ["Decaf after 3pm"] },
   ratingScale: "0.5-5",
 } as BrewContext;
 
@@ -291,6 +293,7 @@ const SUGGEST: Record<keyof SuggestContext, Sees> = {
   brews: "always", // each like brew; unrated ones: unratedHistory
   options: "always", // only the kinds asked; field by field below
   profile: "brewProfile", // line by line in PROFILE
+  preferences: "learnedPreferences",
   ratingScale: "always",
 };
 // What else it may suggest. The ids are matched back from ref, not sent.
@@ -368,6 +371,7 @@ const suggest: SuggestContext = {
     beans: [{ ref: "n1", id: "bean-2", bean: full.bean, roastAgeDays: 9, gramsLeft: 120 }],
   },
   profile,
+  preferences: { mine: ["Prefers 19-20% EY (n=6)"], workspace: [], recentVotes: [{ vote: "down", on: "Cooler water", changes: "90 °C", reason: "never cooler" }] },
   ratingScale: "0.5-5",
 };
 const SUGGEST_PLACES: Array<[string, Record<string, Sees>, (input: Obj) => Obj | undefined]> = [

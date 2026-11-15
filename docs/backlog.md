@@ -625,7 +625,22 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 20. Learned preferences
 
-- **Status:** planned
+- **Status:** done (branch `learned-preferences`, prompt `2026-11-g`;
+  docs/api/auth.md §1d, llm-contract.md §9g)
+- **Decided:** a small AI job learns the list (it can read vote reasons);
+  it runs after each like or dislike and each analysis (a person setting,
+  default on) and on Update now, skipping the call when nothing is new.
+  Changes wait as proposals by default (a person setting can apply them).
+  Personal lists live on the user like Your AI prompt (not in workspace
+  backups); the workspace's own lines are a setting owners edit, in
+  backups. The latest 5 votes also go straight into suggestions, so a
+  dislike counts before the list catches up. One switch,
+  `learnedPreferences`, covers it all and stops learning there.
+  Then: a per-person **Learn about me** switch (on by default; off hides
+  feedback and sends nothing about them); a 👎 counts as accepting what's
+  learned from it; feedback lives in a small dialog behind a Feedback link
+  under analyses and suggestions, and analysis feedback (with a reason and
+  who gave it) feeds learning too.
 - **Why:** over time the app should learn what each person likes and stop
   re-proposing what they turn down.
 - **Approach:**

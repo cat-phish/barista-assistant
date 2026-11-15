@@ -68,6 +68,10 @@ export const users = mysqlTable("users", {
   // texts, used for their brews' analyses and their suggestions. null = the
   // defaults. Kept apart from preferences, which go with every response.
   aiPrompt: jsonValue<AiPrompt>("ai_prompt"),
+  // Learned preferences (docs/api/auth.md §1d, migration 0124): items,
+  // proposals, the learn/apply settings and each workspace's "through".
+  // null = none and the defaults. Not in workspace backups, like aiPrompt.
+  aiPreferences: jsonValue<AiPreferences>("ai_preferences"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -1604,6 +1608,9 @@ export const llmAnalyses = mysqlTable("llm_analyses", {
   // Was it useful? Set by the brew's people (docs/api/analysis.md §8).
   helpful: boolean("helpful"),
   ratedAt: timestamp("rated_at"),
+  // Who rated it and why (migration 0125), for learned preferences.
+  feedbackBy: varchar("feedback_by", { length: 36 }).references(() => users.id, { onDelete: "set null" }),
+  feedbackReason: varchar("feedback_reason", { length: 300 }),
   // Made by auto-analyze (docs/api/analysis.md §8), not asked for: these
   // count toward the workspace's daily cap.
   auto: boolean("auto").notNull().default(false),
@@ -1667,6 +1674,7 @@ export const parameterSuggestions = mysqlTable("parameter_suggestions", {
   // null)[] by route index }, vote { vote: "up" | "down" (SUGGESTION_VOTES),
   // reason (max 300) | null } (docs/api/analysis.md §8b, "Feedback").
   feedback: jsonValue<SuggestionFeedback>("feedback"),
+  feedbackAt: timestamp("feedback_at"), // when feedback last changed (migration 0124)
   model: varchar("model", { length: 100 }),
   promptVersion: varchar("prompt_version", { length: 30 }),
   request: jsonValue<AiRequest>("request"), // what was sent; null until done

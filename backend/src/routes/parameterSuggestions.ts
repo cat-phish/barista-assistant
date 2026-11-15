@@ -11,6 +11,7 @@ import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { enqueueParameterSuggestion, QueueUnavailableError } from "../queue.js";
 import { sendPreview } from "../preview.js";
 import { noteSchema } from "./aiPrompt.js";
+import { LEARN_OFF, learnAfterSignal, learnsAboutMe } from "./aiPreferences.js";
 import type { SuggestionPreview } from "@barista/shared/jobs";
 import { SUGGESTION_COLUMNS, type SuggestionRow } from "../aiRequest.js";
 import {
@@ -247,6 +248,11 @@ parameterSuggestionsRouter.put("/:suggestionId/feedback", async (req: Request<Su
   if (!(await requireMembership(res, userId, workspaceId))) return;
   const body = parseBody(feedbackSchema, req, res);
   if (!body) return;
+  // Votes only teach the AI, so they need Learn about me (docs/api/auth.md §1d).
+  if (body.vote && !(await learnsAboutMe(userId))) {
+    sendError(res, 409, LEARN_OFF);
+    return;
+  }
   const error = await db.transaction(async (tx) => {
     const [row] = await tx
       .select({
@@ -267,7 +273,7 @@ parameterSuggestionsRouter.put("/:suggestionId/feedback", async (req: Request<Su
     const vote = body.vote ? { vote: body.vote, reason: body.reason || null } : null;
     await tx
       .update(parameterSuggestions)
-      .set({ feedback: withVote(row.feedback, body.route, vote) })
+      .set({ feedback: withVote(row.feedback, body.route, vote), feedbackAt: new Date() })
       .where(eq(parameterSuggestions.id, suggestionId));
     return null;
   });
@@ -275,6 +281,7 @@ parameterSuggestionsRouter.put("/:suggestionId/feedback", async (req: Request<Su
     sendError(res, error[0], error[1]);
     return;
   }
+  if (body.vote) await learnAfterSignal(userId, workspaceId); // docs/api/llm-contract.md §9g
   const [suggestion] = await db.select(SUGGESTION_COLUMNS).from(parameterSuggestions).where(eq(parameterSuggestions.id, suggestionId));
   if (!suggestion) throw new Error(`Parameter suggestion ${suggestionId} missing after feedback`);
   res.json({ suggestion });

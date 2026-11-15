@@ -331,6 +331,19 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
       "a brew needs.",
   },
   {
+    key: "preferences",
+    label: "Learned preferences",
+    prompts: ["analysis", "suggest"],
+    locked: false,
+    text:
+      "preferences holds what this barista likes and turns down: mine is their own list (n = brews or votes behind " +
+      "a line), workspace the workspace's, and recentVotes their latest likes and dislikes on suggestions (on: what " +
+      "they rated, changes: its values, reason: why). Follow them; where mine and workspace conflict, mine wins. " +
+      "Don't offer again what they turned down (a disliked route, or a line saying they don't want it) unless the " +
+      "tasting notes give a clear reason, and then say so in why. A liked route is a fair place to start from, not " +
+      "a rule. They don't override what the tasting notes say the brew needs.",
+  },
+  {
     key: "end",
     label: "Answer in the JSON schema",
     prompts: ["analysis", "suggest", "label", "review"],

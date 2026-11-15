@@ -1,3 +1,4 @@
+import { learnAfterAnalysis } from "./learnQueue.js";
 import { randomUUID } from "node:crypto";
 import type { AiPreviewJobData, BeanReviewJobData, BeanReviewResult, BrewAnalysisJobData, ParameterSuggestionJobData } from "@barista/shared/jobs";
 import { EMPTY_AI_PROMPT, isCustomPrompt } from "@barista/shared/aiPrompt";
@@ -116,6 +117,7 @@ export async function processBrewAnalysis({ brewLogId, auto = false, note }: Bre
     throw err;
   }
   await settleRequest(brewLogId, null);
+  if (ws) await learnAfterAnalysis(ws.baristaId, ws.workspaceId, hidden); // docs/api/llm-contract.md §9g
   return { status: "saved", id: analysisId };
 }
 

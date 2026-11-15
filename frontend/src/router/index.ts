@@ -119,6 +119,7 @@ export const router = createRouter({
     { path: '/settings/preferences', name: 'settings-preferences', component: () => import('../views/SettingsPreferencesView.vue'), meta: { requiresAuth: true } },
     { path: '/settings/brew-setup', name: 'settings-brew-setup', component: () => import('../views/SettingsBrewSetupView.vue'), meta: { requiresAuth: true } },
     { path: '/settings/repeat', redirect: { name: 'settings-brew-setup' } }, // its old name, Repeat brews
+    { path: '/settings/ai-preferences', name: 'settings-ai-preferences', component: () => import('../views/SettingsLearnedView.vue'), meta: { requiresAuth: true } },
     { path: '/settings/ai-prompt', name: 'settings-ai-prompt', component: () => import('../views/SettingsPromptView.vue'), meta: { requiresAuth: true } },
     { path: '/settings/chats', name: 'settings-chats', component: () => import('../views/SettingsChatsView.vue'), meta: { requiresAuth: true } },
     { path: '/settings/recaps', name: 'settings-recaps', component: () => import('../views/SettingsRecapsView.vue'), meta: { requiresAuth: true } },

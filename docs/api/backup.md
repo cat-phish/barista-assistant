@@ -134,6 +134,12 @@ in every file. It's checked against `RecipeCopy` like any JSON column
 (`JSON_SCHEMAS`). A file from before migration 0109 has none, and those
 brews are read against their live recipe, as before.
 
+**Who gave an analysis feedback, and why** (`feedbackBy`,
+`feedbackReason` on `llm_analyses`) is never in a file
+(`PERSONAL_COLUMNS`): it only teaches that person's learned preferences,
+which belong to them, not the workspace (`auth.md` §1d). The 👍/👎 itself
+(`helpful`) is kept.
+
 **What was sent to the AI** (`request` on `llm_analyses` and
 `parameter_suggestions`, `analysis.md` §8c) is large and only for looking
 back at, so a file leaves it out unless asked (`aiRequests`,

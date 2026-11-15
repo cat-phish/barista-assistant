@@ -49,6 +49,7 @@ import { localBrewDate } from "./localDate.js";
 import { effectiveRoastAge, type FreezePeriodLike } from "@barista/shared/roastAge";
 import type { AiDetail } from "@barista/shared/aiDetails";
 import type { BrewProfile } from "@barista/shared/brewProfile";
+import { loadPreferences, type PreferencesInput } from "./preferences.js";
 import { loadBrewProfile } from "./brewProfile.js";
 
 // The grinder a grind setting refers to, with whatever details are recorded
@@ -198,6 +199,7 @@ export interface BrewContext {
   // The barista's running figures (worker/src/brewProfile.ts), from their
   // brews before this one; null unless asked for, or too few brews.
   profile: BrewProfile | null;
+  preferences: PreferencesInput | null; // the barista's learned ones (worker/src/preferences.ts)
   ratingScale: "0.5-5";
 }
 
@@ -535,7 +537,8 @@ export async function sameCoffeeIds(beanId: string): Promise<string[]> {
 
 // Returns null if the brew log was deleted after the job was queued.
 // profile: what the workspace keeps from the AI, to add the brew profile
-// (an analysis); without it there's none (chat, checks).
+// and learned preferences (an analysis); without it there are none (chat,
+// checks).
 export async function loadBrewContext(brewLogId: string, options: { profile?: ReadonlySet<AiDetail> } = {}): Promise<BrewContext | null> {
   const [target] = await selectBrews().where(eq(brewLogs.id, brewLogId)).limit(1);
   if (!target) return null;
@@ -544,7 +547,7 @@ export async function loadBrewContext(brewLogId: string, options: { profile?: Re
   const bean = await loadBean(brew.beanId);
   if (!bean) return null; // Bean deletion cascades, so this means the log is going too.
 
-  const [recipe, marks, tools, problems, flavors, servedAs, zone, profile] = await Promise.all([
+  const [recipe, marks, tools, problems, flavors, servedAs, zone, profile, preferences] = await Promise.all([
     recipeAsBrewed(brew),
     marksFor([brew.id]),
     toolsFor([brew.id]),
@@ -553,6 +556,7 @@ export async function loadBrewContext(brewLogId: string, options: { profile?: Re
     drinksServed(brew.drinkId ? [brew.drinkId] : []),
     workspaceZone(brew.workspaceId),
     options.profile ? profileFor(brew, bean.info.roastLevel, options.profile) : Promise.resolve(null),
+    options.profile ? loadPreferences({ personId: brew.userId, workspaceId: brew.workspaceId }, options.profile) : Promise.resolve(null),
   ]);
 
   return {
@@ -561,6 +565,7 @@ export async function loadBrewContext(brewLogId: string, options: { profile?: Re
     brew: summarize(brew, bean.roastDate, bean.freezes, marks, tools, problems, flavors, servedAs, zone),
     drink: brew.drinkId ? await loadDrink(brew.drinkId, { size: brew.servingSize, unit: brew.servingUnit }) : null,
     profile,
+    preferences,
     ratingScale: "0.5-5",
   };
 }
