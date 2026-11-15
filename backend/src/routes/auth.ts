@@ -79,6 +79,18 @@ export const loginLimiter = rateLimit({
   },
 });
 
+// SEC-30: sign-ups per IP. Each one costs a scrypt hash and a users row, so
+// open registration needs a cap. In-memory store, like loginLimiter.
+export const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: Number(process.env.REGISTER_LIMIT_PER_HOUR ?? 5),
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  handler: (_req: Request, res: Response) => {
+    sendError(res, 429, "Too many sign-ups from this address. Try again later.");
+  },
+});
+
 export const authRouter = Router();
 
 // Whether anyone can create an account here (ALLOW_REGISTRATION), so the
@@ -87,7 +99,7 @@ authRouter.get("/registration", (_req: Request, res: Response<{ open: boolean }>
   res.json({ open: registrationOpen() });
 });
 
-authRouter.post("/register", async (req: Request, res: Response<UserResponse>) => {
+authRouter.post("/register", registerLimiter, async (req: Request, res: Response<UserResponse>) => {
   if (!registrationOpen()) {
     sendError(res, 403, "Registration is closed on this server");
     return;

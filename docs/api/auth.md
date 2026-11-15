@@ -32,7 +32,9 @@ below is `403`, so a typo doesn't look like a logout.
   `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... }, "isAdmin": false } }`
   (`isAdmin`: a server admin, granted on the server; §10)
 - **Errors:** `400` invalid body; `403` registration is closed
-  (`ALLOW_REGISTRATION=false`); `409` email already registered.
+  (`ALLOW_REGISTRATION=false`); `409` email already registered; `429` too many sign-ups.
+- **Rate limit:** 5 sign-ups per IP per hour (`REGISTER_LIMIT_PER_HOUR`), counted
+  whether or not they succeed; `429` carries `Retry-After`.
 
 ## `GET /api/auth/registration`
 

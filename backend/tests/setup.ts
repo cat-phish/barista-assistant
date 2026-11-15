@@ -5,6 +5,8 @@ import { resetTestData } from "../../testing/db.js";
 import { applyTestEnv } from "../../testing/test-env.js";
 
 applyTestEnv();
+// Tests register many users from one IP; sec-register-rate.test.ts sets the real cap.
+process.env.REGISTER_LIMIT_PER_HOUR ??= "10000";
 
 beforeEach(async () => {
   await resetTestData();
