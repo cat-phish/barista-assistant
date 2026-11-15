@@ -56,7 +56,7 @@ export async function spendAi(res: Response, workspaceId: string, userId: string
   const day = new Date().toISOString().slice(0, 10);
   const keys: Array<[string, number]> = [
     [`aibudget:${day}:u:${userId}`, limit("AI_DAILY_USER_UNITS", 100)],
-    [`aibudget:${day}:w:${workspaceId}`, limit("AI_DAILY_WORKSPACE_UNITS", 300)],
+    [`aibudget:${day}:w:${workspaceId}`, limit("AI_DAILY_WORKSPACE_UNITS", 1000)],
   ];
   try {
     const used: Array<[string, number]> = [];

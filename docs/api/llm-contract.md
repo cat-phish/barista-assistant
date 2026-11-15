@@ -352,7 +352,7 @@ removed, decide which it is and update, in the same change:
 Every request that starts a paid AI job counts against the caller's and the
 workspace's budget for the UTC day: analysis 1, suggestion 2, bean review 2,
 label read 3, web lookup 5, recap 2. Over `AI_DAILY_USER_UNITS` (default 100
-per person) or `AI_DAILY_WORKSPACE_UNITS` (default 300): `429` with
+per person) or `AI_DAILY_WORKSPACE_UNITS` (default 1000, ten people's worth): `429` with
 `code: "ai_limit"`, and the refused call costs nothing. Chat has its own
 per-message cap (`dailyMessages`, §9e). Counters live in Redis; if Redis can't
 be reached the request goes through.
