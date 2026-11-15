@@ -14,6 +14,8 @@ import { db } from "./db.js";
 export const PHOTO_MAX_EDGE = 1024;
 export const PHOTO_MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 const WEBP_QUALITY = 80;
+// Decoded size cap (SEC-90): a small file can claim 268 MP and need ~1 GB. 100 MP covers any phone.
+const PHOTO_MAX_PIXELS = 100_000_000;
 
 export interface ProcessedPhoto {
   data: Buffer;
@@ -26,7 +28,7 @@ export interface ProcessedPhoto {
 // null if it isn't an image sharp can read.
 export async function processPhoto(input: Buffer): Promise<ProcessedPhoto | null> {
   try {
-    const { data, info } = await sharp(input, { failOn: "error" })
+    const { data, info } = await sharp(input, { failOn: "error", limitInputPixels: PHOTO_MAX_PIXELS })
       .rotate()
       .resize({ width: PHOTO_MAX_EDGE, height: PHOTO_MAX_EDGE, fit: "inside", withoutEnlargement: true })
       .webp({ quality: WEBP_QUALITY })

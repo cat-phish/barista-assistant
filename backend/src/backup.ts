@@ -622,6 +622,9 @@ export function checkBackup(input: unknown): Checked {
         if (key === "workspaceId" || t.userColumns.includes(key) || key in row) continue;
         if (col.notNull && !col.hasDefault) return { ok: false, error: `${at}.${key}: is required` };
       }
+      // SEC-62: a bean's website is a link people click. SEC-63: a brew in the future would always count as "recent".
+      if (t.name === "beans" && typeof row.website === "string" && !/^https?:\/\//i.test(row.website)) return { ok: false, error: `${at}.website: must start with http:// or https://` };
+      if (t.name === "brew_logs" && row.timestamp instanceof Date && row.timestamp.getTime() > Date.now() + 86_400_000) return { ok: false, error: `${at}.timestamp: is in the future` };
       if (t.hasId) {
         const id = row.id as string;
         if (seen.has(id)) return { ok: false, error: `${at}.id: appears twice` };
