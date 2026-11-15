@@ -1,7 +1,7 @@
 import { users } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import type { NextFunction, Request, Response } from "express";
-import { clearSessionCookie, SESSION_COOKIE, verifySessionToken } from "../auth/session.js";
+import { clearSessionCookie, isSessionRevoked, SESSION_COOKIE, verifySessionToken } from "../auth/session.js";
 import { db } from "../db.js";
 import { sendError } from "../http.js";
 
@@ -17,7 +17,7 @@ declare module "express-serve-static-core" {
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const token: unknown = req.cookies?.[SESSION_COOKIE];
   const claims = typeof token === "string" ? verifySessionToken(token) : null;
-  if (!claims) {
+  if (!claims || (await isSessionRevoked(claims))) {
     sendError(res, 401, "Not authenticated");
     return;
   }

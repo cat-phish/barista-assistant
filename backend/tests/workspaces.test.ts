@@ -120,11 +120,10 @@ describe("members and roles", () => {
     const ws = await newWorkspace(owner);
     const base = `/api/workspaces/${ws.id}/members`;
 
-    const added = await owner.agent.post(base).send({ email: barista.email, role: "barista" });
-    expect(added.status).toBe(201);
-    expect(added.body.member).toEqual({ userId: barista.id, email: barista.email, role: "barista" });
-    expect((await owner.agent.post(base).send({ email: barista.email, role: "viewer" })).status).toBe(409);
-    expect((await owner.agent.post(base).send({ email: "nobody-here@example.com", role: "viewer" })).status).toBe(404);
+    await addMember(owner, ws.id, barista, "barista");
+    // Inviting someone already in, or no one, answers the same and changes nothing.
+    expect((await owner.agent.post(base).send({ email: barista.email, role: "viewer" })).status).toBe(202);
+    expect((await owner.agent.post(base).send({ email: "nobody-here@example.com", role: "viewer" })).status).toBe(202);
 
     const list = await barista.agent.get(base);
     expect(list.body.members.map((m: { email: string }) => m.email)).toEqual([barista.email, owner.email]);

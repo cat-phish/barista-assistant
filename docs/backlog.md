@@ -34,6 +34,7 @@ and fix the references.
 - I. Deployment & the app: 42–44
 - J. Backups: 45
 - K. Look & feel: 46
+- L. Security: 54–58
 
 ---
 
@@ -1060,7 +1061,7 @@ Home roasting). Paused here; these are what's next.
 
 ### 41. Email verification
 
-- **Status:** idea
+- **Status:** partly built (optional `EMAIL_VERIFICATION=true`, gates accepting an invite; see `docs/api/auth.md` §1d). Left: a banner and resend for unverified accounts, `REQUIRE_VERIFIED_EMAIL`, changing email, and the rules in item 54.
 - **Why:** anyone can register any address today, and nothing checks it's
   theirs. That's why server admin is granted on the server rather than by
   email, and it limits what an email can be trusted for: password reset
@@ -1263,3 +1264,115 @@ How the app looks, and what each person can change about it.
     keep the brand brown there, or set the bar colour at runtime as it
     already is for dark?
   - Include it in backups with the other preferences (45)?
+
+---
+
+## L. Security
+
+From the security audit (2026-11-15). Finding ids (SEC-NN) refer to the
+audit notes; the fixed ones are listed in `roadmap.md`.
+
+### 54. Password reset, email change and verified-email trust
+
+- **Status:** planned (requirements only; nothing built)
+- **Why:** items 40 and 41 touch the most sensitive paths in the app. The
+  audit set rules so they aren't built wrong.
+- **Approach:**
+  - **No owner-set passwords** (SEC-100): an owner must never reset another
+    account's password; accounts belong to more than one workspace. Offer
+    "send a reset link" at most, and the operator script below.
+  - **Tokens** (SEC-101): 32 random bytes, only the SHA-256 stored, short
+    expiry, single use through an atomic update, tied to the account and
+    the address it was sent to; a reset bumps `session_version`. The
+    verification tokens already follow this (`email_tokens`).
+  - **Mail** (SEC-102, 109): "forgot" answers the same for any address,
+    per-address and per-IP send limits, fixed templates (no user text in
+    headers), `APP_URL` https, SMTP password not in plain env if possible.
+  - **Change email** (SEC-103): verify the new address first, notify the
+    old one, no 409 that reveals who is registered.
+  - **Unverified addresses** (SEC-104): never trusted for invites or
+    recovery; squatting a colleague's address must not collect their
+    invitations.
+  - **Operator reset script** (SEC-105): one-time credential, never passed
+    as an argument, bumps `session_version`.
+- **Size:** M
+- **Depends on:** 40, 41.
+- **Open questions:** whether registration with mail stays optional for
+  self-hosters (it must, as verification is today).
+
+### 55. Beanconqueror import safeguards
+
+- **Status:** planned (requirements for item 1)
+- **Why:** SEC-106 to 108. An import reads a file from anyone.
+- **Approach:** bounded size and entry counts, inflated with the same
+  bounded reader as restore (`safeUnzip.ts`), off the event loop, per-person
+  quota (`heavyImportLimiter`), preview bound to the owner who made it;
+  every foreign value treated as untrusted, notes never promoted into AI
+  context as instructions; photos re-encoded, entry names never used as
+  file paths.
+- **Size:** part of item 1.
+- **Depends on:** 1.
+- **Open questions:** none.
+
+### 56. Harden the remaining limits and edges
+
+- **Status:** idea
+- **Why:** smaller gaps found or left by the audit fixes.
+- **Approach:**
+  - Restore and import: stream the 250 MB upload to disk rather than
+    buffering it; parse and `checkBackup` off the event loop; cap rows per
+    table; one restore at a time per person.
+  - Chat: per-token limits.
+  - Webhooks: resolve the address once and connect to it (closes DNS
+    rebinding between the check and the fetch; SEC-50).
+  - Rate limits: move the limiter stores to Redis (they reset on restart
+    and don't span replicas); a count of sign-ups per account as well as
+    per IP; a real-Caddy test with two visitors to check `trusted_proxies`.
+  - Sign-up (SEC-32): the duplicate-email answer differs from a new one.
+    Fixing it needs a "check your email" sign-up (SMTP), so it is an
+    owner decision.
+  - Push (SEC-05): a second account posting a known endpoint takes it
+    over; a 409 would break shared browsers. Owner decision.
+- **Size:** M
+- **Depends on:** nothing.
+- **Open questions:** the two owner decisions above.
+
+### 57. Deployment hardening
+
+- **Status:** idea
+- **Why:** SEC-34 (rest), 35, 37, 38, 40, found in config the tests can't
+  reach.
+- **Approach:**
+  - Caddy: CSP, HSTS, Referrer-Policy and frame-ancestors; run as a
+    non-root user; pin image tags and GitHub Actions to digests.
+  - TLS: the `tls internal` root CA is fetched over plain HTTP and trusted
+    by devices (SEC-35); for a public host use a real certificate or a
+    tunnel/proxy, and set `trusted_proxies` and `TRUST_PROXY=1` first.
+  - Clear the bean-photo service-worker cache on logout (SEC-38).
+  - Secrets as Docker secret files, not plain env; the backend port stays
+    on loopback (SEC-40).
+- **Size:** M
+- **Depends on:** the TLS and registration decisions.
+- **Open questions:** is registration open in production, and what sits in
+  front of Caddy?
+
+### 58. Membership changes and the AI's context
+
+- **Status:** idea
+- **Why:** SEC-02, 03, 20, 21, 22, 53, 80, 81, 83, 93, 94 are checks that
+  need the worker, SSE or an AI key to confirm.
+- **Approach:**
+  - Removing or demoting a member also stops their open streams, queued
+    jobs and reminders (SEC-03, 20, 21).
+  - Decide whether the saved `request.system` shows a person's private AI
+    prompt to every member (SEC-02, 22).
+  - One dislike must not let the model auto-apply any learned-preference
+    change; chat attachments and the rolling summary shouldn't carry
+    instruction-level standing (SEC-80, 81); a web-lookup link should match
+    the roaster's site (SEC-83).
+  - Admin AI base URL: https only, with an SDK timeout (SEC-53).
+  - Public menu: no hidden bean fields when batches differ only in them
+    (SEC-93); logos while the menu is off (SEC-94; deliberate today).
+- **Size:** M
+- **Depends on:** nothing.
+- **Open questions:** the private-prompt decision.

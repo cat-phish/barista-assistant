@@ -21,6 +21,7 @@ export function encryptSecret(plain: string, secret: string): string {
 export function decryptSecret(stored: string, secret: string): string {
   const [iv, tag, data] = stored.split(".").map((p) => Buffer.from(p, "base64"));
   if (!iv || !tag || !data) throw new Error("Not an encrypted secret");
+  if (tag.length !== 16) throw new Error("Not an encrypted secret"); // a shortened tag is easier to forge
   const decipher = createDecipheriv("aes-256-gcm", keyFrom(secret), iv);
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(data), decipher.final()]).toString("utf8");

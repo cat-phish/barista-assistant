@@ -38,6 +38,8 @@ import { beanProcessesRouter } from "./routes/beanProcesses.js";
 import { recipeStylesRouter } from "./routes/recipeStyles.js";
 import { brewerMethodsRouter } from "./routes/brewerMethods.js";
 import { drinksRouter } from "./routes/drinks.js";
+import { emailVerifyRouter } from "./routes/emailVerification.js";
+import { myInvitesRouter, workspaceInvitesRouter } from "./routes/invites.js";
 import { membersRouter } from "./routes/members.js";
 import { menuRouter } from "./routes/menu.js";
 import { publicMenuRouter } from "./routes/publicMenu.js";
@@ -53,6 +55,11 @@ interface HealthResponse {
 // The Express app without a listening server, so tests can drive it directly.
 export const app = express();
 app.set("trust proxy", config.trustProxy);
+// SEC-34: no response is ever type-sniffed (photos, backups and CSVs come from user content).
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  next();
+});
 
 app.use(cors({ origin: config.corsOrigin, credentials: true }));
 // A restore or import uploads a backup file (docs/api/backup.md §2b);
@@ -79,6 +86,7 @@ app.get("/health", async (_req: Request, res: Response<HealthResponse>) => {
 app.use("/api/auth/me/notifications", notificationsRouter);
 app.use("/api/auth/me/ai-prompt", aiPromptRouter);
 app.use("/api/auth/me", myChatsRouter); // docs/api/chat.md §12
+app.use("/api/auth", emailVerifyRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/public/menu", publicMenuRouter);
 app.use("/api/workspaces/:workspaceId/ai-config", aiConfigRouter); // docs/api/workspaces.md §2d
@@ -100,6 +108,8 @@ app.use("/api/workspaces/:workspaceId/recipe-styles", recipeStylesRouter);
 app.use("/api/workspaces/:workspaceId/brewer-methods", brewerMethodsRouter);
 app.use("/api/workspaces/:workspaceId/drinks", drinksRouter);
 app.use("/api/workspaces/:workspaceId/members", membersRouter);
+app.use("/api/workspaces/:workspaceId/invites", workspaceInvitesRouter); // docs/api/workspaces.md §2 "Invites"
+app.use("/api/invites", myInvitesRouter);
 app.use("/api/workspaces/:workspaceId/menu", menuRouter);
 app.use("/api/workspaces/:workspaceId/beans/:beanId/photos", beanPhotosRouter);
 app.use("/api/workspaces/:workspaceId/beans/:beanId/review-draft", beanReviewRouter);

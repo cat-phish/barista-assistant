@@ -12,7 +12,10 @@ cookie named `session` with `HttpOnly`, `SameSite=Lax`, `Path=/`, and
 credentials enabled.
 
 Passwords are hashed with `scrypt` (Node `crypto`, random 16-byte salt) and
-compared in constant time.
+compared in constant time. Stored as `scrypt$<N>$<salt>$<hash>` (N = 32768, kept in
+the string so the cost can be raised later; older `scrypt$<salt>$<hash>` values
+still verify at N = 16384). A short list of the most common passwords (e.g.
+`password1`) is refused with 400 on register and change-password.
 
 **Session invalidation:** every authenticated request compares the token's
 `sv` with `users.session_version`. Changing the password increments it, so all
@@ -29,18 +32,20 @@ below is `403`, so a typo doesn't look like a logout.
 - **Auth Required:** `false`
 - **Body:** `{ "email": "a@b.com", "password": "min 8 chars" }`
 - **Success (`201 Created`):** sets the `session` cookie and returns
-  `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... }, "isAdmin": false } }`
-  (`isAdmin`: a server admin, granted on the server; §10)
+  `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... }, "emailVerified": false, "isAdmin": false } }`
+  (`isAdmin`: a server admin, granted on the server; §10; `emailVerified`: §1d)
 - **Errors:** `400` invalid body; `403` registration is closed
-  (`ALLOW_REGISTRATION=false`); `409` email already registered.
+  (`ALLOW_REGISTRATION=false`); `409` email already registered; `429` too many sign-ups.
+- **Rate limit:** 5 sign-ups per IP per hour (`REGISTER_LIMIT_PER_HOUR`), counted
+  whether or not they succeed; `429` carries `Retry-After`.
 
 ## `GET /api/auth/registration`
 
 - **Auth Required:** `false`
-- **Success (`200 OK`):** `{ "open": true }`: whether this server takes new
+- **Success (`200 OK`):** `{ "open": true, "emailVerification": false }`: whether this server takes new
   accounts. `ALLOW_REGISTRATION=false` closes it (e.g. a server open to the
   internet; §10); existing accounts still log in. The app hides "Create an
-  account" when it's closed.
+  account" when it's closed.  `emailVerification` says whether §1d is on.
 
 ## `POST /api/auth/login`
 
@@ -50,15 +55,25 @@ below is `403`, so a typo doesn't look like a logout.
   `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... }, "isAdmin": false } }`
 - **Errors:** `400` invalid body; `401` wrong email or password. The message is
   the same for both so it doesn't reveal which emails are registered.
-- **Rate limit:** 10 failed attempts per IP per 15 minutes; successful logins
-  don't count. Further attempts get `429 Too Many Requests` with a
+- **Rate limit:** 10 failed attempts per account (the email, or the signed-in
+  user on password/delete/backup checks) per 15 minutes, and 60 per IP; successful
+  logins don't count. Further attempts get `429 Too Many Requests` with a
   `Retry-After` header (seconds) and `{ "error": "Too many login attempts. Try again later." }`.
   Counters are in-memory, so they reset when the backend restarts.
+  **Behind a tunnel or CDN** in front of Caddy, set `trusted_proxies <ranges>` in
+  the Caddyfile and leave `TRUST_PROXY=1`; otherwise every visitor shares one IP
+  and the per-IP limits here and on sign-up (5/hour) count everyone together.
+  Never raise `TRUST_PROXY` without that.
 
 ## `POST /api/auth/logout`
 
 - **Auth Required:** `false`
-- **Success (`204 No Content`):** clears the `session` cookie.
+- **Success (`204 No Content`):** clears the `session` cookie and revokes that
+  token (its id is kept in Redis until it would expire), so a copy of the cookie
+  stops working; other devices stay signed in. If Redis is down the cookie is
+  still cleared but the token is not revoked.
+
+Every API response carries `X-Content-Type-Options: nosniff`.
 
 ## `GET /api/auth/me`
 
@@ -287,6 +302,39 @@ its own text box, an "Edited" mark and "Reset to default" (locked ones
 shown read-only). The switch is on while there are overrides, otherwise
 remembered per viewer in the browser. "Add a note for the AI"
 (`AiNoteField.vue`) sits by Suggest parameters and Get AI suggestion.
+
+## 1d. Email verification
+
+Optional, **off by default** (`EMAIL_VERIFICATION=true` turns it on; it needs
+`SMTP_HOST`, `MAIL_FROM` and `APP_URL`, and the server refuses to start with
+it on and any of them missing). Servers with no mail account leave it off and
+nothing below applies: `users.emailVerifiedAt` stays null, no mail is sent,
+and the endpoints answer `404`.
+
+With it on:
+
+- Registering mails a link to the address; `user.emailVerified` (in every
+  `user` object) is `false` until it's opened. `GET /registration` also
+  returns `emailVerification: true`, so the app can say so.
+- The one thing an unconfirmed address can't do is **accept a workspace
+  invite** (`403`): invites go to an email, and without this anyone could
+  register an address first and claim it. Everything else works as before.
+- The link is `APP_URL/verify-email#<token>`, built from `APP_URL`, never
+  from the request's Host. The token is 256 random bits in the fragment (so it
+  isn't in server logs or a Referer); only its SHA-256 is stored
+  (`email_tokens`, with the address it was sent to), it works once and lasts 24
+  hours, and a new mail cancels the older link. Existing accounts start
+  unconfirmed and can ask for a link.
+
+### `POST /api/auth/verify-email/send`
+- **Auth Required:** `true`. Mails a new link (`204`, also when already
+  confirmed). `404` when verification is off; `429` after 5 an hour.
+
+### `POST /api/auth/verify-email`
+- **Body:** `{ "token": "..." }`. `204` confirms the address the mail went to,
+  if the account still has it. `400 "This link is no longer valid"` for an
+  unknown, used, replaced or expired token (all the same). `404` when off.
+  `429` after 30 tries in 15 minutes per IP.
 
 ## `POST /api/auth/password`
 

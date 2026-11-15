@@ -6,7 +6,7 @@ import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { analysisRequests, brewLogs, DEFAULT_WORKSPACE_SETTINGS, llmAnalyses, withDefaults, workspaces } from "@barista/shared/schema";
-import { requireAi } from "../aiConfig.js";
+import { AI_COST, spendAi } from "../aiConfig.js";
 import { db } from "../db.js";
 import { enqueueBrewAnalysis, QueueUnavailableError } from "../queue.js";
 import { sendPreview } from "../preview.js";
@@ -51,7 +51,7 @@ analyzeRouter.post(
       return;
     }
 
-    if (!(await requireAi(res, access.workspaceId))) return;
+    if (!(await spendAi(res, access.workspaceId, authedUserId(req), AI_COST.analysis))) return;
 
     let jobId: string;
     try {

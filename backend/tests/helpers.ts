@@ -34,8 +34,13 @@ export async function newWorkspace(owner: TestUser, slug = `ws-${++counter}`): P
 }
 
 export async function addMember(owner: TestUser, workspaceId: string, user: TestUser, role: string): Promise<void> {
+  // Invite, then the person accepts (docs/api/workspaces.md §2 "Invites").
   const res = await owner.agent.post(`/api/workspaces/${workspaceId}/members`).send({ email: user.email, role });
-  expect(res.status).toBe(201);
+  expect(res.status).toBe(202);
+  const mine = await user.agent.get("/api/invites");
+  const invite = (mine.body.invites as Array<{ id: string; workspace: { slug: string } }>).at(-1);
+  if (!invite) throw new Error("No invite arrived");
+  expect((await user.agent.post(`/api/invites/${invite.id}/accept`)).status).toBe(200);
 }
 
 export async function brewerId(user: TestUser, workspaceId: string, name: string): Promise<string> {

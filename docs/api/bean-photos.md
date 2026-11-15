@@ -108,3 +108,10 @@ No confirmation: nothing else uses a photo.
 - **Auth Required:** `true` (role `owner` or `barista`)
 - **Success (`204 No Content`)**; the next one becomes the cover if it was.
 - **Errors:** `403` viewer; `404` no such photo.
+
+## Upload limit
+
+Photo uploads (bean photos, menu logos, chat photos) are limited to 60 per
+person per hour (`PHOTO_UPLOAD_LIMIT_PER_HOUR`); beyond that: 429. Images are
+refused above 100 megapixels once decoded. A photo restored from a backup zip
+is cut at the end of its WebP data (or re-encoded if still over 1.5 MB).

@@ -62,7 +62,7 @@ import { Redis } from "ioredis";
 import { backupTimezone, beanReviewTimeoutMs, config, labelReadTimeoutMs, labelWebTimeoutMs, previewTimeoutMs } from "./config.js";
 
 // Producer side of the brew-analysis queue (docs/api/llm-contract.md §9).
-const connection = new Redis(config.redis.url, {
+export const connection = new Redis(config.redis.url, {
   maxRetriesPerRequest: 1,
   ...(config.redis.password ? { password: config.redis.password } : {}),
 });

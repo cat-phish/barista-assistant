@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { heavyImportLimiter, underWorkspaceCap } from "../limits.js";
 import express, { Router, type Request, type Response } from "express";
 import { workspaces } from "@barista/shared/schema";
 import { z } from "zod";
@@ -61,13 +62,14 @@ const restoreQuery = restoreSchema.omit({ backup: true });
 
 // A backup into a new workspace, owned by the caller (any signed-in person).
 // Nothing is written unless the whole file checks out.
-backupRouter.post("/restore", zipBody, async (req: Request, res: Response<{ workspaceId: string }>) => {
+backupRouter.post("/restore", heavyImportLimiter, zipBody, async (req: Request, res: Response<{ workspaceId: string }>) => {
+  if (!(await underWorkspaceCap(res, authedUserId(req)))) return;
   let body: z.infer<typeof restoreSchema>;
   let photos = new Map<string, Buffer>();
   if (Buffer.isBuffer(req.body)) {
     const query = parseQuery(restoreQuery, req, res);
     if (!query) return;
-    const zip = readBackupZip(req.body);
+    const zip = await readBackupZip(req.body);
     if (!zip.ok) {
       sendError(res, 400, zip.error);
       return;
@@ -137,6 +139,7 @@ backupRouter.post("/:workspaceId/import/preview", async (req: Request<WorkspaceP
   res.json({ ...(await previewImport(parsed.workspaceId, parsed.userId, parsed.file, parsed.lists, parsed.duplicates)), lists: parsed.lists });
 });
 
+backupRouter.post("/:workspaceId/import", heavyImportLimiter);
 backupRouter.post("/:workspaceId/import", async (req: Request<WorkspaceParams>, res: Response<ImportSummary & { lists: string[] }>) => {
   const parsed = await importRequest(req, res);
   if (!parsed) return;

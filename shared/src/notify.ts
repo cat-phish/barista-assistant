@@ -2,6 +2,7 @@
 // (docs/api/notifications.md §1b). Used by the backend (Send test) and the
 // worker (rate reminders). Plain HTTP requests: each service's documented
 // JSON API, 10 s timeout, http(s) only, redirects not followed.
+import { assertOutboundAllowed, OutboundBlockedError } from "./outbound.js";
 import type { NotificationConfigs, NotificationKind } from "./schema.js";
 
 export interface NotificationMessage {
@@ -80,6 +81,12 @@ export async function sendNotification<K extends NotificationKind>(
   fetchImpl: Fetch = fetch
 ): Promise<void> {
   const r = request(kind, config, message);
+  try {
+    await assertOutboundAllowed(r.url);
+  } catch (err) {
+    if (err instanceof OutboundBlockedError) throw new NotificationError(err.message);
+    throw err;
+  }
   let res: Response;
   try {
     res = await fetchImpl(r.url, {

@@ -59,6 +59,22 @@ retyping it.
 { "kind": "ntfy", "enabled": true, "config": { "server": "https://ntfy.sh", "topic": "my-coffee", "token": "••••1234" }, "createdAt": "…" }
 ```
 
+## Where requests may go
+
+A saved server or webhook URL (ntfy, Gotify, Discord, Slack, webhook) and a
+Web Push endpoint are checked on save (`400`) and again on every send, after
+resolving the name, so the server can't be aimed at its own network:
+
+- **Always refused:** loopback, link-local (including the cloud metadata
+  address `169.254.169.254`), unspecified and multicast addresses, IPv4 hidden
+  in IPv6 forms, and this stack's own service names (`localhost`, `redis`,
+  `db`, `backend`, `worker`, `frontend`).
+- **Refused unless `ALLOW_PRIVATE_WEBHOOKS=true`** (default `false`, set in
+  `.env`): private addresses (10/8, 172.16/12, 192.168/16, 100.64/10, fc00::/7),
+  `host.docker.internal`, names without a dot and `.local`/`.lan`/`.internal`
+  names. The error says so, and the Notifications settings page shows it under
+  the form.
+
 ## `GET /api/auth/me/notifications`
 
 - **Auth Required:** `true`
@@ -303,3 +319,10 @@ Weekly and monthly recaps (recaps.md §11c).
   channel, gives the claim back, so a later tick that day tries again. Only
   that day: after a server outage covering it, the banner and Insights →
   Recap still have the recap, but no notification comes.
+
+## Test sends are limited
+
+"Send a test" (`POST /api/auth/me/notifications/:kind/test` and
+`/push/:id/test`) is limited to 10 per person per hour
+(`TEST_SEND_LIMIT_PER_HOUR`); the 11th answers 429. Each one makes the server
+call a URL the person chose.

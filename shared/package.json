@@ -25,6 +25,10 @@
       "types": "./dist/env.d.ts",
       "default": "./dist/env.js"
     },
+    "./outbound": {
+      "types": "./dist/outbound.d.ts",
+      "default": "./dist/outbound.js"
+    },
     "./notify": {
       "types": "./dist/notify.d.ts",
       "default": "./dist/notify.js"

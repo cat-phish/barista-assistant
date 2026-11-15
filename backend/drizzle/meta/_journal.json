@@ -855,6 +855,20 @@
       "when": 1794452667442,
       "tag": "0121_bean_resting",
       "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "5",
+      "when": 1794780104383,
+      "tag": "0122_workspace_invites",
+      "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "5",
+      "when": 1794780602008,
+      "tag": "0123_email_verification",
+      "breakpoints": true
     }
   ]
 }

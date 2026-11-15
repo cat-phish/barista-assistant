@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { brewerId, menuAdd, menuSection, newBean, newUser, newWorkspace, type TestUser } from "./helpers.js";
+import { brewerId, menuAdd, menuSection, newBean, newUser, newWorkspace, type TestUser, addMember } from "./helpers.js";
 
 // Grinder details (§3b), brewers (§3) and brewers on brew logs (§6).
 
@@ -101,7 +101,7 @@ describe("brewers", () => {
   it("viewers can't change brewers", async () => {
     const { owner, ws } = await setup();
     const viewer = await newUser();
-    await owner.agent.post(`/api/workspaces/${ws.id}/members`).send({ email: viewer.email, role: "viewer" });
+    await addMember(owner, ws.id, viewer, "viewer");
     expect((await viewer.agent.get(`/api/workspaces/${ws.id}/brewers`)).status).toBe(200);
     expect((await viewer.agent.post(`/api/workspaces/${ws.id}/brewers`).send({ name: "M" })).status).toBe(403);
   });

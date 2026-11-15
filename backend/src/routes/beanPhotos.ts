@@ -6,6 +6,7 @@ import { z } from "zod";
 import { beanPhotos, beans, MAX_BEAN_PHOTOS } from "@barista/shared/schema";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
+import { photoUploadLimiter } from "../limits.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { photoPath, PHOTO_MAX_UPLOAD_BYTES, processPhoto, removePhotoFiles, writePhotoFile } from "../photos.js";
@@ -57,7 +58,7 @@ beanPhotosRouter.use(requireAuth);
 // The image itself, whatever its type: sharp decides whether it is one.
 const imageBody = express.raw({ type: () => true, limit: PHOTO_MAX_UPLOAD_BYTES });
 
-beanPhotosRouter.post("/", imageBody, async (req: Request<BeanParams>, res: Response<{ photo: PhotoInfo }>) => {
+beanPhotosRouter.post("/", photoUploadLimiter, imageBody, async (req: Request<BeanParams>, res: Response<{ photo: PhotoInfo }>) => {
   const { workspaceId, beanId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
   const [bean] = await db
@@ -164,6 +165,7 @@ beanPhotosRouter.patch("/:photoId", async (req: Request<PhotoParams>, res: Respo
 
 // A new image for a photo (cropped or rotated in the browser), in its place.
 // It gets a new id: images are cached for good, so the old URL must not change.
+beanPhotosRouter.put("/:photoId/image", photoUploadLimiter);
 beanPhotosRouter.put("/:photoId/image", imageBody, async (req: Request<PhotoParams>, res: Response<{ photo: PhotoInfo; photos: PhotoInfo[] }>) => {
   const { workspaceId, beanId, photoId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;

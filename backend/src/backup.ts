@@ -94,6 +94,8 @@ import {
   waterProfiles,
   vessels,
   workspaceMembers,
+  workspaceInvites,
+  emailTokens,
   workspaces,
 } from "@barista/shared/schema";
 import { db } from "./db.js";
@@ -250,7 +252,7 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
 // analysis_requests is queue state (when an automatic analysis is due, why
 // one failed), meaningless without the queue. AI chats are private to the
 // person (docs/api/chat.md §12), and whoever has a backup could read them.
-export const NOT_BACKED_UP: readonly MySqlTable[] = [users, notificationChannels, pushSubscriptions, workspaces, workspaceMembers, serverSettings, analysisRequests, flavorLexicons, workspaceAiConfigs, aiChats, aiChatMessages, aiChatPhotos, recaps];
+export const NOT_BACKED_UP: readonly MySqlTable[] = [users, notificationChannels, pushSubscriptions, workspaces, workspaceMembers, workspaceInvites, emailTokens, serverSettings, analysisRequests, flavorLexicons, workspaceAiConfigs, aiChats, aiChatMessages, aiChatPhotos, recaps];
 
 // Columns that only hold one of a list (varchar in the database).
 const ENUMS: Record<string, readonly string[]> = {
@@ -620,6 +622,9 @@ export function checkBackup(input: unknown): Checked {
         if (key === "workspaceId" || t.userColumns.includes(key) || key in row) continue;
         if (col.notNull && !col.hasDefault) return { ok: false, error: `${at}.${key}: is required` };
       }
+      // SEC-62: a bean's website is a link people click. SEC-63: a brew in the future would always count as "recent".
+      if (t.name === "beans" && typeof row.website === "string" && !/^https?:\/\//i.test(row.website)) return { ok: false, error: `${at}.website: must start with http:// or https://` };
+      if (t.name === "brew_logs" && row.timestamp instanceof Date && row.timestamp.getTime() > Date.now() + 86_400_000) return { ok: false, error: `${at}.timestamp: is in the future` };
       if (t.hasId) {
         const id = row.id as string;
         if (seen.has(id)) return { ok: false, error: `${at}.id: appears twice` };
@@ -662,16 +667,24 @@ export async function restoreBackup(
 ): Promise<string> {
   const workspaceId = randomUUID();
   const photoRows: BackupRow[] = [];
+  const clean = new Map<string, Buffer>(); // what is stored: the checked bytes, not the entry as given
   for (const row of input.tables.bean_photos ?? []) {
     const data = photos.get(row.id as string);
-    const size = data && (await checkStoredPhoto(data));
-    if (size) photoRows.push({ ...row, ...size });
+    const checked = data && (await checkStoredPhoto(data));
+    if (checked) {
+      clean.set(row.id as string, checked.data);
+      photoRows.push({ ...row, width: checked.width, height: checked.height });
+    }
   }
   // The menu logos, likewise only with a valid file, in order.
   const logoIds: string[] = [];
   for (const id of input.workspace.menuLogoIds ?? (input.workspace.menuLogoId ? [input.workspace.menuLogoId] : [])) {
     const data = photos.get(id);
-    if (data && (await checkStoredPhoto(data))) logoIds.push(id);
+    const checked = data && (await checkStoredPhoto(data));
+    if (checked) {
+      clean.set(id, checked.data);
+      logoIds.push(id);
+    }
   }
   const file: BackupFile = {
     ...input,
@@ -679,7 +692,7 @@ export async function restoreBackup(
     tables: { ...input.tables, bean_photos: photoRows },
   };
   try {
-    await insertBackup(file, target, workspaceId, photos);
+    await insertBackup(file, target, workspaceId, clean);
   } catch (err) {
     await removeWorkspacePhotos(workspaceId);
     throw err;

@@ -14,6 +14,8 @@ import { db } from "./db.js";
 export const PHOTO_MAX_EDGE = 1024;
 export const PHOTO_MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 const WEBP_QUALITY = 80;
+// Decoded size cap (SEC-90): a small file can claim 268 MP and need ~1 GB. 100 MP covers any phone.
+const PHOTO_MAX_PIXELS = 100_000_000;
 
 export interface ProcessedPhoto {
   data: Buffer;
@@ -26,7 +28,7 @@ export interface ProcessedPhoto {
 // null if it isn't an image sharp can read.
 export async function processPhoto(input: Buffer): Promise<ProcessedPhoto | null> {
   try {
-    const { data, info } = await sharp(input, { failOn: "error" })
+    const { data, info } = await sharp(input, { failOn: "error", limitInputPixels: PHOTO_MAX_PIXELS })
       .rotate()
       .resize({ width: PHOTO_MAX_EDGE, height: PHOTO_MAX_EDGE, fit: "inside", withoutEnlargement: true })
       .webp({ quality: WEBP_QUALITY })
@@ -121,14 +123,24 @@ export async function sweepChatPhotos(): Promise<number> {
 }
 
 // A photo from a backup zip (docs/api/backup.md §2b) as the server would have
-// stored it: a WebP inside
-// PHOTO_MAX_EDGE. Its real size, or null to leave it out.
-export async function checkStoredPhoto(data: Buffer): Promise<{ width: number; height: number } | null> {
+// stored it: a WebP inside PHOTO_MAX_EDGE. Its real size and the bytes to
+// store, or null to leave it out. Anything after the RIFF data is cut off
+// (SEC-64), and a file still far bigger than a stored photo is re-encoded.
+const STORED_PHOTO_REENCODE_OVER = 1_500_000;
+export async function checkStoredPhoto(data: Buffer): Promise<{ width: number; height: number; data: Buffer } | null> {
   try {
     const meta = await sharp(data, { failOn: "error" }).metadata();
     if (meta.format !== "webp" || !meta.width || !meta.height) return null;
     if (meta.width > PHOTO_MAX_EDGE || meta.height > PHOTO_MAX_EDGE) return null;
-    return { width: meta.width, height: meta.height };
+    let clean = data;
+    const riff = data.length >= 12 && data.toString("latin1", 0, 4) === "RIFF" ? data.readUInt32LE(4) + 8 : 0;
+    if (riff > 0 && riff < data.length) clean = data.subarray(0, riff);
+    if (clean.length > STORED_PHOTO_REENCODE_OVER) {
+      const again = await processPhoto(clean);
+      if (!again) return null;
+      return { width: again.width, height: again.height, data: again.data };
+    }
+    return { width: meta.width, height: meta.height, data: Buffer.from(clean) };
   } catch {
     return null;
   }

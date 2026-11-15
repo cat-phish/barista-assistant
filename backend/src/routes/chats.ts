@@ -1,6 +1,7 @@
 // AI chat (docs/api/chat.md §12): a person's own conversations. Every query
 // is scoped to the caller, so someone else's chat is a 404.
 import { randomUUID } from "node:crypto";
+import { heavyImportLimiter, photoUploadLimiter } from "../limits.js";
 import { access, readFile } from "node:fs/promises";
 import { CHAT_EVENT_FIELD, chatReplyKey, type ChatJobPhoto, type ChatStreamEvent } from "@barista/shared/jobs";
 import { effectiveChatLimits, NO_CHAT_LIMITS, type ChatLimits, type OwnChatLimits, type ServerChatLimits } from "@barista/shared/aiConfig";
@@ -460,7 +461,7 @@ chatsRouter.get("/:chatId/export", async (req: Request<ChatParams>, res: Respons
 });
 
 const zipBody = express.raw({ type: ["application/zip", "application/x-zip-compressed"], limit: "250mb" });
-chatsRouter.post("/import", zipBody, async (req: Request<Params>, res: Response<{ imported: number; skipped: number; unpinned: number }>) => {
+chatsRouter.post("/import", heavyImportLimiter, zipBody, async (req: Request<Params>, res: Response<{ imported: number; skipped: number; unpinned: number }>) => {
   const userId = authedUserId(req);
   const { workspaceId } = req.params;
   if (!(await requireMembership(res, userId, workspaceId, WRITE_ROLES))) return;
@@ -478,7 +479,7 @@ chatsRouter.post("/import", zipBody, async (req: Request<Params>, res: Response<
 });
 
 // The image itself, whatever its type: sharp decides whether it is one.
-chatsRouter.post("/photos", express.raw({ type: () => true, limit: PHOTO_MAX_UPLOAD_BYTES }), async (req: Request<Params>, res: Response<{ photo: ChatPhoto }>) => {
+chatsRouter.post("/photos", photoUploadLimiter, express.raw({ type: () => true, limit: PHOTO_MAX_UPLOAD_BYTES }), async (req: Request<Params>, res: Response<{ photo: ChatPhoto }>) => {
   const userId = authedUserId(req);
   const { workspaceId } = req.params;
   if (!(await requireMembership(res, userId, workspaceId, WRITE_ROLES))) return;

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { underWorkspaceCap } from "../limits.js";
 import { eq } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
@@ -63,6 +64,7 @@ workspacesRouter.post("/", async (req: Request, res: Response<WorkspaceResponse>
   if (!body) return;
 
   const userId = authedUserId(req);
+  if (!(await underWorkspaceCap(res, userId))) return;
   const workspaceId = randomUUID();
 
   let workspace: Workspace | undefined;

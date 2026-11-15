@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { ipKeyGenerator, rateLimit } from "express-rate-limit";
 import { z } from "zod";
 import { DUMMY_PASSWORD_HASH, hashPassword, verifyPassword } from "../auth/password.js";
-import { clearSessionCookie, setSessionCookie } from "../auth/session.js";
+import { clearSessionCookie, revokeSession, SESSION_COOKIE, setSessionCookie, verifySessionToken } from "../auth/session.js";
 import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
@@ -19,12 +19,14 @@ import {
   type Workspace,
 } from "@barista/shared/schema";
 import { emailSchema, preferencesSchema } from "../validation.js";
-import { registrationOpen } from "../config.js";
+import { emailVerificationOn, registrationOpen } from "../config.js";
+import { sendVerification } from "./emailVerification.js";
 
 export interface PublicUser {
   id: string;
   email: string;
   preferences: UserPreferences; // defaults filled in
+  emailVerified: boolean; // docs/api/auth.md §1d; always false while the server has verification off
   isAdmin: boolean; // a server admin, granted on the server (docs/api/server.md §10)
 }
 
@@ -36,9 +38,16 @@ export interface UserResponse {
   user: PublicUser;
 }
 
+// SEC-36: the most-guessed passwords that pass the 8-character minimum.
+const COMMON_PASSWORDS = new Set([
+  "password", "password1", "password12", "password123", "passw0rd", "p@ssw0rd", "12345678", "123456789", "1234567890", "qwerty123", "qwertyuiop",
+  "11111111", "00000000", "iloveyou", "letmein1", "welcome1", "admin123", "abc12345", "monkey123", "dragon123", "football1", "baseball1", "coffee123",
+]);
+const strongPassword = z.string().min(8).max(256).refine((p) => !COMMON_PASSWORDS.has(p.toLowerCase()), "is too common; pick another");
+
 const registerSchema = z.object({
   email: emailSchema,
-  password: z.string().min(8).max(256),
+  password: strongPassword,
 });
 
 const loginSchema = z.object({
@@ -48,7 +57,7 @@ const loginSchema = z.object({
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1).max(256),
-  newPassword: z.string().min(8).max(256),
+  newPassword: strongPassword,
 });
 
 const deleteAccountSchema = z.object({
@@ -60,22 +69,60 @@ export interface SoleOwnerConflict {
   workspaces: Array<Pick<Workspace, "id" | "name" | "slug">>;
 }
 
-function toPublicUser(user: Pick<User, "id" | "email"> & { preferences?: User["preferences"]; isAdmin?: boolean }): PublicUser {
-  return { id: user.id, email: user.email, preferences: withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null), isAdmin: user.isAdmin ?? false };
+function toPublicUser(user: Pick<User, "id" | "email"> & { preferences?: User["preferences"]; isAdmin?: boolean; emailVerifiedAt?: Date | null }): PublicUser {
+  return { id: user.id, email: user.email, preferences: withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null), emailVerified: Boolean(user.emailVerifiedAt), isAdmin: user.isAdmin ?? false };
 }
 
-// Per-IP brute-force protection, shared by every endpoint that checks a
-// password (login, change password, delete account), so guesses across them
-// count together. In-memory store: fine for a single backend instance; move
-// to a Redis store if the backend is ever scaled out.
-export const loginLimiter = rateLimit({
+// Brute-force protection, shared by every endpoint that checks a password
+// (login, change password, delete account, backup download), so guesses
+// across them count together. Two buckets (SEC-31): one per account (the
+// email in the body, else the signed-in user), so a guesser on any number of
+// IPs is capped and one account's failures never lock out another; and a
+// looser one per IP, for a client trying many accounts. In-memory stores:
+// fine for a single backend instance; move to Redis if it's scaled out.
+const limiterOptions = {
   windowMs: 15 * 60 * 1000,
-  limit: 10,
   skipSuccessfulRequests: true,
-  standardHeaders: "draft-8",
+  standardHeaders: "draft-8" as const,
   legacyHeaders: false,
   handler: (_req: Request, res: Response) => {
     sendError(res, 429, "Too many login attempts. Try again later.");
+  },
+};
+
+// The same key whether the email comes in the body (login) or from the
+// signed-in user (password change, delete, backup download), so guesses
+// across them count together.
+async function accountKey(req: Request): Promise<string> {
+  const email = (req.body as { email?: unknown } | undefined)?.email;
+  if (typeof email === "string" && email) return `email:${email.trim().toLowerCase()}`;
+  if (req.userId) {
+    const [me] = await db.select({ email: users.email }).from(users).where(eq(users.id, req.userId));
+    if (me) return `email:${me.email}`;
+  }
+  return `ip:${ipKeyGenerator(req.ip ?? "unknown")}`;
+}
+
+export const loginLimiter = [
+  rateLimit({ ...limiterOptions, limit: 10, keyGenerator: accountKey }),
+  rateLimit({ ...limiterOptions, limit: 60 }),
+];
+
+
+// SEC-30: sign-ups per IP. Each one costs a scrypt hash and a users row, so
+// open registration needs a cap. In-memory store, like loginLimiter.
+function registerLimit(): number {
+  const n = Number(process.env.REGISTER_LIMIT_PER_HOUR);
+  return Number.isFinite(n) && n > 0 ? n : 5;
+}
+
+export const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: registerLimit(),
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  handler: (_req: Request, res: Response) => {
+    sendError(res, 429, "Too many sign-ups from this address. Try again later.");
   },
 });
 
@@ -83,11 +130,11 @@ export const authRouter = Router();
 
 // Whether anyone can create an account here (ALLOW_REGISTRATION), so the
 // app can say so before the form is filled in.
-authRouter.get("/registration", (_req: Request, res: Response<{ open: boolean }>) => {
-  res.json({ open: registrationOpen() });
+authRouter.get("/registration", (_req: Request, res: Response<{ open: boolean; emailVerification: boolean }>) => {
+  res.json({ open: registrationOpen(), emailVerification: emailVerificationOn() });
 });
 
-authRouter.post("/register", async (req: Request, res: Response<UserResponse>) => {
+authRouter.post("/register", registerLimiter, async (req: Request, res: Response<UserResponse>) => {
   if (!registrationOpen()) {
     sendError(res, 403, "Registration is closed on this server");
     return;
@@ -106,6 +153,7 @@ authRouter.post("/register", async (req: Request, res: Response<UserResponse>) =
     throw err;
   }
 
+  void sendVerification(user); // no-op unless the server has verification on
   setSessionCookie(res, user.id, 0); // new users start at session_version 0
   res.status(201).json({ user: toPublicUser(user) });
 });
@@ -125,14 +173,17 @@ authRouter.post("/login", loginLimiter, async (req: Request, res: Response<UserR
   res.json({ user: toPublicUser(user) });
 });
 
-authRouter.post("/logout", (_req: Request, res: Response) => {
+authRouter.post("/logout", async (req: Request, res: Response) => {
+  const token: unknown = req.cookies?.[SESSION_COOKIE];
+  const claims = typeof token === "string" ? verifySessionToken(token) : null;
+  if (claims) await revokeSession(claims); // SEC-33
   clearSessionCookie(res);
   res.status(204).end();
 });
 
 authRouter.get("/me", requireAuth, async (req: Request, res: Response<UserResponse>) => {
   const [user] = await db
-    .select({ id: users.id, email: users.email, preferences: users.preferences, isAdmin: users.isAdmin })
+    .select({ id: users.id, email: users.email, preferences: users.preferences, isAdmin: users.isAdmin, emailVerifiedAt: users.emailVerifiedAt })
     .from(users)
     .where(eq(users.id, authedUserId(req)))
     .limit(1);

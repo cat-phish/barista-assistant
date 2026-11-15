@@ -68,6 +68,9 @@ services:
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
       - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
       - VAPID_SUBJECT=${VAPID_SUBJECT:-}
+      # true lets people send webhooks to addresses on a private network
+      # (ntfy or Gotify on your LAN). See .env.example.
+      - ALLOW_PRIVATE_WEBHOOKS=${ALLOW_PRIVATE_WEBHOOKS:-false}
       - CORS_ORIGIN=${APP_URL:-https://localhost:42069}
       # Requests arrive through the frontend's Caddy: trust it for the
       # client IP, so the login rate limit is per device.
@@ -76,6 +79,22 @@ services:
       # (HTTPS only): the app is served over HTTPS.
       # false closes sign-ups (a public server); existing accounts still log in.
       - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-true}
+      # Caps on one person's use (see .env.example); empty = the default.
+      - REGISTER_LIMIT_PER_HOUR=${REGISTER_LIMIT_PER_HOUR:-}
+      - HEAVY_IMPORT_LIMIT_PER_HOUR=${HEAVY_IMPORT_LIMIT_PER_HOUR:-}
+      - PHOTO_UPLOAD_LIMIT_PER_HOUR=${PHOTO_UPLOAD_LIMIT_PER_HOUR:-}
+      - TEST_SEND_LIMIT_PER_HOUR=${TEST_SEND_LIMIT_PER_HOUR:-}
+      - MAX_OWNED_WORKSPACES=${MAX_OWNED_WORKSPACES:-}
+      - AI_DAILY_USER_UNITS=${AI_DAILY_USER_UNITS:-}
+      - AI_DAILY_WORKSPACE_UNITS=${AI_DAILY_WORKSPACE_UNITS:-}
+      # Email verification (docs/api/auth.md §1d); off unless EMAIL_VERIFICATION=true.
+      - EMAIL_VERIFICATION=${EMAIL_VERIFICATION:-false}
+      - APP_URL=${APP_URL:-https://localhost:42069}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - MAIL_FROM=${MAIL_FROM:-}
       # The zone scheduled backups' hour is in (e.g. America/Los_Angeles).
       - BACKUP_TIMEZONE=${BACKUP_TIMEZONE:-UTC}
       # false keeps database dumps on the server (no downloads in the app).
@@ -128,6 +147,9 @@ services:
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
       - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
       - VAPID_SUBJECT=${VAPID_SUBJECT:-}
+      # true lets people send webhooks to addresses on a private network
+      # (ntfy or Gotify on your LAN). See .env.example.
+      - ALLOW_PRIVATE_WEBHOOKS=${ALLOW_PRIVATE_WEBHOOKS:-false}
       - OPENAI_MODEL=${OPENAI_MODEL}
       # Reads bean labels from photos (docs/api/bean-label.md §4d); empty = OPENAI_MODEL.
       - OPENAI_VISION_MODEL=${OPENAI_VISION_MODEL:-}

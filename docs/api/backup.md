@@ -158,13 +158,23 @@ above it.
   Back up has "Include bean photos (a .zip instead of .json)".
 - **Errors:** `403` not an owner; `404` not a member.
 
+## Limits on restores and imports (SEC-61)
+
+A restore (`POST /api/workspaces/restore`), a list import (`POST /:workspaceId/import`)
+and a chat import (`POST /:workspaceId/chats/import`) are each limited to 10 an hour
+per signed-in person (`HEAVY_IMPORT_LIMIT_PER_HOUR`): `429`. A restore also needs
+room under the workspace cap (`workspaces.md`: `409 workspace_limit`).
+
 ## `POST /api/workspaces/restore`
 
 - **Auth Required:** `true` (anyone signed in; they own the new workspace)
 - **Body** (up to 50 MB, unlike the usual 100 kB):
   `{ "name": "Home bar", "slug": "home-bar", "backup": { ...file } }`.
   `name` and `slug` follow §2's rules. **Or a `.zip` backup** as it is
-  (`Content-Type: application/zip`, up to 250 MB), with `?name=…&slug=…`.
+  (`Content-Type: application/zip`, up to 250 MB), with `?name=…&slug=…`. A zip (here and in the chat import)
+  is checked before anything is unpacked and refused with `400` when it has more
+  than 3,000 files to unpack (or 10,000 headers), repeats a name, declares more than 128 MB unpacked in total, has entries that share data, an entry unpacks bigger than it declares, or an
+  entry's stored size exceeds its declared size.
   Only `backup.json` (≤ 50 MB) and `photos/<id>.webp` (≤ 5 MB each) are
   unpacked; anything else in the zip is ignored. A photo row restores only
   with a file that's a WebP inside 1024 px (its real size is used); others

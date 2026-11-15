@@ -72,6 +72,7 @@ export interface User {
   id: string;
   email: string;
   preferences: UserPreferences;
+  emailVerified: boolean; // confirmed by the mailed link (docs/api/auth.md §1d)
   isAdmin: boolean; // a server admin: sees Settings → Server (docs/api/server.md §10)
 }
 

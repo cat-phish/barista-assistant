@@ -4,6 +4,7 @@ import express, { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
+import { photoUploadLimiter } from "../limits.js";
 import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { addUsageRoute, otherItemUsage } from "../usage.js";
@@ -446,6 +447,7 @@ async function changeLogos(workspaceId: string, change: LogoChange): Promise<{ s
 }
 
 // Added last. Each image gets its own id, never reused: it's cached for good.
+menuRouter.post("/logos", photoUploadLimiter);
 menuRouter.post("/logos", imageBody, async (req: Request<WorkspaceParams>, res: Response<MenuResponse>) => {
   const { workspaceId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;
@@ -491,6 +493,7 @@ menuRouter.put("/logos/order", async (req: Request<WorkspaceParams>, res: Respon
 
 // A new image for a logo (cropped or rotated in the browser), in its place,
 // under a new id. Works on a full list.
+menuRouter.put("/logos/:logoId/image", photoUploadLimiter);
 menuRouter.put("/logos/:logoId/image", imageBody, async (req: Request<WorkspaceParams & { logoId: string }>, res: Response<MenuResponse>) => {
   const { workspaceId, logoId } = req.params;
   if (!(await requireMembership(res, authedUserId(req), workspaceId, WRITE_ROLES))) return;

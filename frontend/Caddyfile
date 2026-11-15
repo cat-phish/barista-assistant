@@ -31,7 +31,9 @@ localhost, {$APP_HOST} {
 	encode zstd gzip
 
 	# Passes the client IP on (X-Forwarded-For): the backend trusts one
-	# proxy (TRUST_PROXY=1), so the login rate limit is per device.
+	# proxy (TRUST_PROXY=1), so the IP rate limits are per device. Behind a tunnel/CDN add
+	# `servers { trusted_proxies static <its ranges> }` (global options) or
+	# every visitor shares the tunnel's IP (SEC-31).
 	handle /api/* {
 		reverse_proxy {$API_UPSTREAM}
 	}

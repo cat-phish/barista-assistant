@@ -309,8 +309,33 @@ export const users = mysqlTable("users", {
   // (`npm run admin -- grant <email>`), never through the API, so it can't
   // be claimed by registering an address.
   isAdmin: boolean("is_admin").default(false).notNull(),
+  // When they proved they read mail sent to `email` (docs/api/auth.md §1d);
+  // null = not verified. Only matters when the server has email verification on.
+  emailVerifiedAt: timestamp("email_verified_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// One-time links mailed to a person (docs/api/auth.md §1d). Only the SHA-256
+// of the token is kept, with the address it was sent to. Not in backups.
+export const emailTokens = mysqlTable(
+  "email_tokens",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    purpose: varchar("purpose", { length: 20 }).notNull(), // 'verify'
+    email: varchar("email", { length: 255 }).notNull(),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    byHash: unique("email_tokens_hash").on(table.tokenHash),
+    byUser: index("email_tokens_user").on(table.userId),
+  })
+);
 
 // 1c. Server settings (docs/api/server.md §10): what server admins set for
 // the whole server, one row per key. "backups" holds BackupSettings;
@@ -432,6 +457,28 @@ export const workspaceMembers = mysqlTable(
     pk: primaryKey({ columns: [table.userId, table.workspaceId] }),
   })
 );
+
+// A pending offer to join a workspace (docs/api/workspaces.md §2, "Invites").
+// By email, so it can exist before the person has an account; accepting is
+// the person's own act. Not in backups (NOT_BACKED_UP): it's about people.
+export const workspaceInvites = mysqlTable(
+  "workspace_invites",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    email: varchar("email", { length: 255 }).notNull(), // lower-case
+    role: varchar("role", { length: 50 }).notNull(), // 'owner' | 'barista' | 'viewer'
+    invitedBy: varchar("invited_by", { length: 36 }).references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    oncePerEmail: unique("workspace_invites_workspace_email").on(table.workspaceId, table.email),
+    byEmail: index("workspace_invites_email").on(table.email),
+  })
+);
+export type WorkspaceInvite = typeof workspaceInvites.$inferSelect;
 
 // 4. Beans & Inventory
 export const ROAST_LEVELS = ["light", "medium_light", "medium", "medium_dark", "dark"] as const;
