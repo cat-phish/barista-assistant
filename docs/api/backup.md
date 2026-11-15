@@ -158,6 +158,13 @@ above it.
   Back up has "Include bean photos (a .zip instead of .json)".
 - **Errors:** `403` not an owner; `404` not a member.
 
+## Limits on restores and imports (SEC-61)
+
+A restore (`POST /api/workspaces/restore`), a list import (`POST /:workspaceId/import`)
+and a chat import (`POST /:workspaceId/chats/import`) are each limited to 10 an hour
+per signed-in person (`HEAVY_IMPORT_LIMIT_PER_HOUR`): `429`. A restore also needs
+room under the workspace cap (`workspaces.md`: `409 workspace_limit`).
+
 ## `POST /api/workspaces/restore`
 
 - **Auth Required:** `true` (anyone signed in; they own the new workspace)

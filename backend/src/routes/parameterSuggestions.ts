@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
-import { requireAi } from "../aiConfig.js";
+import { AI_COST, spendAi } from "../aiConfig.js";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { alternativeKinds } from "../validation.js";
@@ -147,7 +147,7 @@ async function resolveRequest(req: Request<WorkspaceParams>, res: Response): Pro
 parameterSuggestionsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<ParameterSuggestionResponse>) => {
   const values = await resolveRequest(req, res);
   if (!values) return;
-  if (!(await requireAi(res, req.params.workspaceId))) return;
+  if (!(await spendAi(res, req.params.workspaceId, authedUserId(req), AI_COST.suggestion))) return;
   const id = randomUUID();
   await db.insert(parameterSuggestions).values({ id, ...values });
   try {

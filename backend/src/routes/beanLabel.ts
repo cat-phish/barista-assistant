@@ -4,7 +4,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
-import { requireAi } from "../aiConfig.js";
+import { AI_COST, spendAi } from "../aiConfig.js";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
@@ -87,7 +87,7 @@ async function labelContext(
     sendError(res, 403, "Looking beans up on the web is turned off for this workspace (Settings → AI)");
     return null;
   }
-  if (!(await requireAi(res, workspaceId))) return null;
+  if (!(await spendAi(res, workspaceId, authedUserId(req), web ? AI_COST.labelWeb : AI_COST.label))) return null;
   const processes = (
     await db
       .select({ name: beanProcesses.name })

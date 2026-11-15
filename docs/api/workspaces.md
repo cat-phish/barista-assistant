@@ -8,7 +8,9 @@
 Creates a workspace, adds the caller as `owner`, and seeds the default brew
 brewers (`DEFAULT_BREWERS` in `docs/schema.md`) in one transaction.
 
-- **Auth Required:** `true`
+- **Auth Required:** `true`. A person can be in up to 20 workspaces
+  (`MAX_OWNED_WORKSPACES`); past that `409` with `code: "workspace_limit"`
+  (also for a restore).
 - **Body:** `{ "name": "Jordan's Coffee Bar", "slug": "jordans-coffee-bar" }`
   (slug: lowercase letters, digits and hyphens, 3–64 chars)
 - **Success (`201 Created`):**

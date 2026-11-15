@@ -8,6 +8,10 @@ applyTestEnv();
 // Tests register many users from one IP; sec-register-rate.test.ts sets the real cap.
 process.env.REGISTER_LIMIT_PER_HOUR ??= "10000";
 process.env.INVITE_LIMIT_PER_HOUR ??= "10000";
+process.env.HEAVY_IMPORT_LIMIT_PER_HOUR ??= "10000";
+process.env.MAX_OWNED_WORKSPACES ??= "10000";
+process.env.AI_DAILY_USER_UNITS ??= "100000";
+process.env.AI_DAILY_WORKSPACE_UNITS ??= "100000";
 
 beforeEach(async () => {
   await resetTestData();

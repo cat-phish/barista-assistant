@@ -7,6 +7,12 @@ import { processPhoto } from "../src/photos.js";
 import { readBackupZip } from "../src/backupZip.js";
 import { brewerId, newBean, newUser, newWorkspace } from "./helpers.js";
 
+// The real caps (tests/setup.ts raises them for every other file).
+vi.hoisted(() => {
+  process.env.HEAVY_IMPORT_LIMIT_PER_HOUR = "10";
+  process.env.AI_DAILY_USER_UNITS = "100";
+});
+
 afterEach(() => vi.unstubAllGlobals());
 
 const NOTIFY = "/api/auth/me/notifications";

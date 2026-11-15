@@ -79,6 +79,12 @@ services:
       # (HTTPS only): the app is served over HTTPS.
       # false closes sign-ups (a public server); existing accounts still log in.
       - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-true}
+      # Caps on one person's use (see .env.example); empty = the default.
+      - REGISTER_LIMIT_PER_HOUR=${REGISTER_LIMIT_PER_HOUR:-}
+      - HEAVY_IMPORT_LIMIT_PER_HOUR=${HEAVY_IMPORT_LIMIT_PER_HOUR:-}
+      - MAX_OWNED_WORKSPACES=${MAX_OWNED_WORKSPACES:-}
+      - AI_DAILY_USER_UNITS=${AI_DAILY_USER_UNITS:-}
+      - AI_DAILY_WORKSPACE_UNITS=${AI_DAILY_WORKSPACE_UNITS:-}
       # Email verification (docs/api/auth.md §1d); off unless EMAIL_VERIFICATION=true.
       - EMAIL_VERIFICATION=${EMAIL_VERIFICATION:-false}
       - APP_URL=${APP_URL:-https://localhost:42069}

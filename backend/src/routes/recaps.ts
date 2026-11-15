@@ -4,7 +4,7 @@ import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { periodOf, RECAP_KINDS, type RecapKind } from "@barista/shared/recapPeriods";
 import { DEFAULT_PREFERENCES, DEFAULT_WORKSPACE_SETTINGS, RECAP_SCOPES, recaps, users, withDefaults, workspaces, type RecapRow, type RecapScope } from "@barista/shared/schema";
-import { requireAi } from "../aiConfig.js";
+import { AI_COST, spendAi } from "../aiConfig.js";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
@@ -104,7 +104,7 @@ recapsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Recap
     sendError(res, 409, "This period hasn't ended yet", { code: "recap_in_progress" });
     return;
   }
-  if (!(await requireAi(res, workspaceId))) return;
+  if (!(await spendAi(res, workspaceId, userId, AI_COST.recap))) return;
 
   const key = keyOf(workspaceId, userId, body);
   const [existing] = await db.select({ id: recaps.id, status: recaps.status }).from(recaps).where(key);

@@ -347,6 +347,16 @@ removed, decide which it is and update, in the same change:
   checks the two lists match);
 - this section: the key's line above, or the "Always sent" list.
 
+## 9a. Daily AI budget (SEC-82)
+
+Every request that starts a paid AI job counts against the caller's and the
+workspace's budget for the UTC day: analysis 1, suggestion 2, bean review 2,
+label read 3, web lookup 5, recap 2. Over `AI_DAILY_USER_UNITS` (default 100
+per person) or `AI_DAILY_WORKSPACE_UNITS` (default 300): `429` with
+`code: "ai_limit"`, and the refused call costs nothing. Chat has its own
+per-message cap (`dailyMessages`, §9e). Counters live in Redis; if Redis can't
+be reached the request goes through.
+
 ## 9b. Suggest parameters
 
 The `parameter-suggestion` queue (`analysis.md` §8b): job `suggest`, data
