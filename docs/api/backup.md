@@ -125,8 +125,9 @@ before brews kept it restores each brew with its recipe's style in the file.
 
 **A brew's suggestion** (`brew_logs.suggestionId` and `suggestionRoute`,
 `brew-logs.md` §6) points at a suggestion in the file, like any reference;
-a suggestion's `routes` is checked like any JSON column. A file from before
-migration 0122 has neither.
+a suggestion's `routes` and `feedback` are checked like any JSON column. A
+file from before migration 0122 has none of them, and one from before 0123
+no `feedback`.
 
 **A brew's recipe copy** (`brew_logs.recipeCopy`, `brew-logs.md` §6) goes
 in every file. It's checked against `RecipeCopy` like any JSON column

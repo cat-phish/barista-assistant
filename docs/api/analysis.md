@@ -168,6 +168,7 @@ Any member. The frontend polls it until `status` is `done` or `failed`.
         { "label": "Longer ratio", "why": "If it was heavy too, more water first.", "findings": ["sourStrong", "leverOrder"], "grindSetting": 20, "grindRpm": null, "tempC": 95, "ratio": 17 }
       ],
       "alternatives": [{ "kind": "recipe", "id": "uuid", "name": "Tetsu 4:6 (V60)", "why": "A lighter, more even pour for this washed Ethiopian." }],
+      "feedback": { "suggestion": null, "routes": [null, { "vote": "down", "reason": "I never want cooler water" }] },
       "model": "gpt-…", "promptVersion": "2026-10-f",
       "createdAt": "2026-10-26T08:00:00.000Z", "completedAt": "2026-10-26T08:00:06.000Z"
     }
@@ -203,8 +204,33 @@ Any member. The frontend polls it until `status` is `done` or `failed`.
     Results are `null` while pending.
   - `failed`: `error` says why ("The AI service couldn't be reached", or
     "… refused the request"), shown with Try again.
+  - `feedback`: likes and dislikes (below); `null` when none.
 - **Errors:** `404` not a member, or not a suggestion of this workspace's
   beans (same message).
+
+### `PUT /api/workspaces/:workspaceId/parameter-suggestions/:suggestionId/feedback`
+
+**Feedback:** whether the person who asked liked the advice, on the whole
+suggestion or one route, apart from how a brew made with it rated: some
+advice is wrong for them before they brew it ("I never want cooler water").
+Kept with the suggestion for learned preferences (`docs/backlog.md` item 20).
+
+- **Request Body:** `{ "route": 1, "vote": "down", "reason": "I never want cooler water" }`
+  - `route`: the route's index, or `null` for the whole suggestion. A
+    suggestion from before routes has route `0` only.
+  - `vote`: `"up"`, `"down"` (`SUGGESTION_VOTES`), or `null` to take it
+    back. `reason`: up to 300 characters (`MAX_FEEDBACK_REASON`), trimmed;
+    empty or left out is `null`. Sending a vote replaces that one.
+- **Success Response (`200 OK`):** `{ "suggestion": … }` as GET, with
+  `feedback` `{ suggestion, routes }`: `routes[i]` is route `i`'s vote or
+  `null`, the list ending at the last one with a vote; `feedback` is `null`
+  once nothing is left.
+- **Errors:** `400` bad body or no such route; `403` not the person who
+  asked; `404` as GET; `409` not done yet.
+
+The brew page shows 👍/👎 on each route when there's more than one, and on
+the suggestion as a whole; tapping the chosen one again takes it back. Once
+voted, a **Why?** field saves the reason.
 
 The brew page shows each route with its values, why, the findings it
 follows (by title) and **Use these values**; with one route, it shows no

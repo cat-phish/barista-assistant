@@ -1,0 +1,1 @@
+ALTER TABLE `parameter_suggestions` ADD `feedback` json;

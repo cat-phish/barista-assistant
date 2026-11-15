@@ -15,9 +15,11 @@ import { workspaceLexicon } from "./flavorLexicon.js";
 import {
   ANALYSIS_CONFIDENCE,
   SUGGEST_ALTERNATIVES,
+  MAX_FEEDBACK_REASON,
   MAX_SUGGESTED_ROUTES,
   SUGGEST_SOURCES,
   SUGGESTION_STATUSES,
+  SUGGESTION_VOTES,
   BEAN_MENU_FIELDS,
   BEAN_PROCESSES,
   BLEND_TYPES,
@@ -301,6 +303,7 @@ const ENUMS: Record<string, readonly string[]> = {
 };
 // JSON columns, checked by what the API accepts.
 // What was sent to the AI (docs/api/analysis.md §8c), when the file has it.
+const suggestionVote = z.object({ vote: z.enum(SUGGESTION_VOTES), reason: z.string().max(MAX_FEEDBACK_REASON).nullable() }).strict();
 const aiRequest = z.object({ sections: z.array(z.string()), system: z.string(), input: z.record(z.string(), z.unknown()) }).strict().nullable();
 // A brew's copy of its recipe (docs/api/brew-logs.md §6, "Recipe copy"):
 // typed against RecipeCopy so the two can't drift.
@@ -385,6 +388,13 @@ const JSON_SCHEMAS: Record<string, z.ZodType> = {
         .strict(),
     )
     .max(MAX_SUGGESTED_ROUTES)
+    .nullable(),
+  "parameter_suggestions.feedback": z
+    .object({
+      suggestion: suggestionVote.nullable(),
+      routes: z.array(suggestionVote.nullable()).max(MAX_SUGGESTED_ROUTES),
+    })
+    .strict()
     .nullable(),
   // The ids are the source workspace's, not rewritten: a restored one shows the name.
   "parameter_suggestions.alternatives": z

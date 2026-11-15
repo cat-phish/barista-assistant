@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { AiRequest, BrewLog, DilutionWith, LlmAnalysis, Mark, ParameterSuggestion, RepeatButtonGroup, ServingUnit, SteepTemp, SuggestionRequest } from './types';
+import type { AiRequest, BrewLog, DilutionWith, LlmAnalysis, Mark, ParameterSuggestion, RepeatButtonGroup, ServingUnit, SteepTemp, SuggestionRequest, SuggestionVoteKind } from './types';
 
 // What happened to a reminder asked for when saving (docs/api/notifications.md §1b).
 export type Reminder = 'queued' | 'off' | 'unavailable';
@@ -107,6 +107,9 @@ export const suggestionsApi = {
     api.post<{ suggestion: ParameterSuggestion }>(`/api/workspaces/${workspaceId}/parameter-suggestions`, body),
   get: (workspaceId: string, id: string) =>
     api.get<{ suggestion: ParameterSuggestion }>(`/api/workspaces/${workspaceId}/parameter-suggestions/${id}`),
+  // Like or dislike it, or one route (route null: the whole suggestion); vote null takes it back.
+  vote: (workspaceId: string, id: string, body: { route: number | null; vote: SuggestionVoteKind | null; reason?: string | null }) =>
+    api.put<{ suggestion: ParameterSuggestion }>(`/api/workspaces/${workspaceId}/parameter-suggestions/${id}/feedback`, body),
   // What was sent to the AI (docs/api/analysis.md §8c).
   sent: (workspaceId: string, id: string) =>
     api.get<{ request: AiRequest | null }>(`/api/workspaces/${workspaceId}/parameter-suggestions/${id}/request`),

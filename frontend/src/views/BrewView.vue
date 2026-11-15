@@ -8,9 +8,10 @@ import { beansApi } from '../api/beans';
 import { analysisApi, brewLogsApi, suggestionsApi } from '../api/brews';
 import { ApiError, errorMessage } from '../api/client';
 import { recipesApi } from '../api/recipes';
-import { MAX_SUGGEST_BREWS, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, type AlternativeKind, type Bean, type BrewLog, type Recipe, type BrewerMethod, type SuggestionBatch, type SuggestionRequest, type SuggestSource, type SuggestedAlternative } from '../api/types';
+import { MAX_SUGGEST_BREWS, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, type AlternativeKind, type Bean, type BrewLog, type ParameterSuggestion, type Recipe, type BrewerMethod, type SuggestionBatch, type SuggestionRequest, type SuggestSource, type SuggestedAlternative } from '../api/types';
 import AnalysisCard from '../components/AnalysisCard.vue';
 import AiNoteField from '../components/AiNoteField.vue';
+import SuggestionVote from '../components/SuggestionVote.vue';
 import AiRequestDialog from '../components/AiRequestDialog.vue';
 import RepeatBrewPicker from '../components/RepeatBrewPicker.vue';
 import FridgeCard from '../components/FridgeCard.vue';
@@ -787,10 +788,15 @@ function routeValues(p: RouteValues): string {
 // What the suggested ratio kept, for the card ("your 300 g of water").
 const ratioKept = ref('');
 // A new suggestion (or none) waits to be used; filling the brew in is a tap.
-watch(suggestion, () => {
+// By id: a vote saved on this one returns it again, and keeps the route used.
+watch(() => suggestion.value?.id, () => {
   usedRoute.value = null;
   ratioKept.value = '';
 });
+// A like or dislike saved (§8b Feedback) returns the suggestion with it.
+function voted(s: ParameterSuggestion): void {
+  if (suggester.suggestion.value?.id === s.id) suggester.suggestion.value = s;
+}
 function useSuggestion(route: number): void {
   const p = suggestion.value;
   if (!p) return;
@@ -1541,9 +1547,27 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
                 <p v-else class="muted small">Your batch and its ratio stay as they are.</p>
                 <p v-if="findingTitles(r.findings).length" class="muted small">Follows: {{ findingTitles(r.findings).join('; ') }}</p>
                 <button v-if="usedRoute === null" class="btn btn-primary" type="button" @click="useSuggestion(i)">Use these values</button>
+                <SuggestionVote
+                  v-if="suggestion.routes.length > 1 && suggester.suggestion.value && workspaces.current"
+                  :workspace-id="workspaces.current.id"
+                  :suggestion="suggester.suggestion.value"
+                  :route="i"
+                  :what="r.label"
+                  @saved="voted"
+                />
               </li>
             </template>
           </ul>
+          <div v-if="suggester.suggestion.value && workspaces.current" class="suggest-vote">
+            <span class="muted small">{{ suggestion.routes.length > 1 ? 'The suggestion as a whole:' : 'Was this a good suggestion?' }}</span>
+            <SuggestionVote
+              :workspace-id="workspaces.current.id"
+              :suggestion="suggester.suggestion.value"
+              :route="null"
+              what="the suggestion"
+              @saved="voted"
+            />
+          </div>
           <div v-if="!suggestionUsed" class="suggest-use">
             <button class="btn btn-secondary" type="button" @click="suggester.reset()">Dismiss</button>
           </div>
@@ -2029,6 +2053,12 @@ p {
 }
 .suggest-pick .suggest-max {
   flex: 0 1 7rem;
+}
+.suggest-vote {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
 }
 .routes {
   list-style: none;

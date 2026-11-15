@@ -1662,6 +1662,11 @@ export const parameterSuggestions = mysqlTable("parameter_suggestions", {
   // What else to try, of the kinds asked: at most one of each; [] = none.
   // SuggestedAlternative { kind, id, name, why } (SUGGEST_ALTERNATIVES).
   alternatives: jsonValue<SuggestedAlternative[]>("alternatives"),
+  // Likes and dislikes from the person who asked (migration 0123); null =
+  // none. SuggestionFeedback { suggestion: vote | null, routes: (vote |
+  // null)[] by route index }, vote { vote: "up" | "down" (SUGGESTION_VOTES),
+  // reason (max 300) | null } (docs/api/analysis.md §8b, "Feedback").
+  feedback: jsonValue<SuggestionFeedback>("feedback"),
   model: varchar("model", { length: 100 }),
   promptVersion: varchar("prompt_version", { length: 30 }),
   request: jsonValue<AiRequest>("request"), // what was sent; null until done

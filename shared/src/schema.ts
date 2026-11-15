@@ -245,6 +245,22 @@ export interface SuggestedRoute {
   tempC: number | null;
   ratio: number | null;
 }
+// Whether the person who asked liked the advice (docs/api/analysis.md §8b,
+// "Feedback"), on the whole suggestion or one route, with an optional
+// reason. Separate from the brew's rating: it can come before any brew.
+export const SUGGESTION_VOTES = ["up", "down"] as const;
+export type SuggestionVoteKind = (typeof SUGGESTION_VOTES)[number];
+export const MAX_FEEDBACK_REASON = 300;
+export interface SuggestionVote {
+  vote: SuggestionVoteKind;
+  reason: string | null;
+}
+// routes[i] is route i's vote (null: none); shorter than routes when the
+// last ones have none.
+export interface SuggestionFeedback {
+  suggestion: SuggestionVote | null;
+  routes: (SuggestionVote | null)[];
+}
 export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   recipeRoastLevel: "light",
   roastScale: "names",
@@ -2055,6 +2071,8 @@ export const parameterSuggestions = mysqlTable("parameter_suggestions", {
   routes: jsonValue<SuggestedRoute[]>("routes"),
   // What else to try, of the kinds asked: at most one of each; [] = none.
   alternatives: jsonValue<SuggestedAlternative[]>("alternatives"),
+  // Likes and dislikes from the person who asked; null = none given.
+  feedback: jsonValue<SuggestionFeedback>("feedback"),
   model: varchar("model", { length: 100 }),
   promptVersion: varchar("prompt_version", { length: 30 }),
   request: jsonValue<AiRequest>("request"), // what was sent; null until done

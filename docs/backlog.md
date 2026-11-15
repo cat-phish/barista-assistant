@@ -554,9 +554,9 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 17. Several routes per suggestion, and recording which was used
 
-- **Status:** in progress (branch `suggest-routes`): Suggest parameters
-  returns 1–3 routes and brews record the one used (prompt `2026-11-c`).
-  Next: eval run `p3` against p2
+- **Status:** done (branch `suggest-routes`, prompt `2026-11-d`): Suggest
+  parameters returns 2–3 routes and brews record the one used (evals p3,
+  p5 in `docs/research/README.md`)
 - **Why:** the research disagrees in places, and the disagreements often
   match personal taste (some people like a lower extraction yield, some
   higher). Offering one answer picks a side for the person.
@@ -576,7 +576,9 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 18. Like or dislike a suggestion
 
-- **Status:** idea
+- **Status:** done (branch `suggest-feedback`): 👍/👎 and a reason on the
+  suggestion or a route (`docs/api/analysis.md` §8b, "Feedback"), stored
+  in `parameter_suggestions.feedback`. Not sent to the AI yet: that's 20
 - **Why:** a rating tells how a brew went, not whether the person liked
   the advice. Some advice is wrong for them before they ever brew it
   ("I never want cooler water").

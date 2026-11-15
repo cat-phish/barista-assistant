@@ -812,6 +812,16 @@ export interface SuggestedRoute {
   tempC: number | null;
   ratio: number | null;
 }
+// Whether the person who asked liked it (docs/api/analysis.md §8b, "Feedback").
+export type SuggestionVoteKind = 'up' | 'down';
+export interface SuggestionVote {
+  vote: SuggestionVoteKind;
+  reason: string | null;
+}
+export interface SuggestionFeedback {
+  suggestion: SuggestionVote | null;
+  routes: (SuggestionVote | null)[]; // by route; shorter when the last have none
+}
 export interface ParameterSuggestion {
   id: string;
   beanId: string;
@@ -842,6 +852,7 @@ export interface ParameterSuggestion {
   // pending and on suggestions from before routes.
   routes: SuggestedRoute[] | null;
   alternatives: SuggestedAlternative[] | null; // what else to try; null while pending
+  feedback: SuggestionFeedback | null; // likes and dislikes; null: none
   model: string | null;
   promptVersion: string | null;
   hasRequest: boolean; // what was sent is saved (§8c)
