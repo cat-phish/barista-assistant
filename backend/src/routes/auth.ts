@@ -19,12 +19,14 @@ import {
   type Workspace,
 } from "@barista/shared/schema";
 import { emailSchema, preferencesSchema } from "../validation.js";
-import { registrationOpen } from "../config.js";
+import { emailVerificationOn, registrationOpen } from "../config.js";
+import { sendVerification } from "./emailVerification.js";
 
 export interface PublicUser {
   id: string;
   email: string;
   preferences: UserPreferences; // defaults filled in
+  emailVerified: boolean; // docs/api/auth.md §1d; always false while the server has verification off
   isAdmin: boolean; // a server admin, granted on the server (docs/api/server.md §10)
 }
 
@@ -60,8 +62,8 @@ export interface SoleOwnerConflict {
   workspaces: Array<Pick<Workspace, "id" | "name" | "slug">>;
 }
 
-function toPublicUser(user: Pick<User, "id" | "email"> & { preferences?: User["preferences"]; isAdmin?: boolean }): PublicUser {
-  return { id: user.id, email: user.email, preferences: withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null), isAdmin: user.isAdmin ?? false };
+function toPublicUser(user: Pick<User, "id" | "email"> & { preferences?: User["preferences"]; isAdmin?: boolean; emailVerifiedAt?: Date | null }): PublicUser {
+  return { id: user.id, email: user.email, preferences: withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null), emailVerified: Boolean(user.emailVerifiedAt), isAdmin: user.isAdmin ?? false };
 }
 
 // Brute-force protection, shared by every endpoint that checks a password
@@ -121,8 +123,8 @@ export const authRouter = Router();
 
 // Whether anyone can create an account here (ALLOW_REGISTRATION), so the
 // app can say so before the form is filled in.
-authRouter.get("/registration", (_req: Request, res: Response<{ open: boolean }>) => {
-  res.json({ open: registrationOpen() });
+authRouter.get("/registration", (_req: Request, res: Response<{ open: boolean; emailVerification: boolean }>) => {
+  res.json({ open: registrationOpen(), emailVerification: emailVerificationOn() });
 });
 
 authRouter.post("/register", registerLimiter, async (req: Request, res: Response<UserResponse>) => {
@@ -144,6 +146,7 @@ authRouter.post("/register", registerLimiter, async (req: Request, res: Response
     throw err;
   }
 
+  void sendVerification(user); // no-op unless the server has verification on
   setSessionCookie(res, user.id, 0); // new users start at session_version 0
   res.status(201).json({ user: toPublicUser(user) });
 });
@@ -170,7 +173,7 @@ authRouter.post("/logout", (_req: Request, res: Response) => {
 
 authRouter.get("/me", requireAuth, async (req: Request, res: Response<UserResponse>) => {
   const [user] = await db
-    .select({ id: users.id, email: users.email, preferences: users.preferences, isAdmin: users.isAdmin })
+    .select({ id: users.id, email: users.email, preferences: users.preferences, isAdmin: users.isAdmin, emailVerifiedAt: users.emailVerifiedAt })
     .from(users)
     .where(eq(users.id, authedUserId(req)))
     .limit(1);

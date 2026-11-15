@@ -38,6 +38,7 @@ import { beanProcessesRouter } from "./routes/beanProcesses.js";
 import { recipeStylesRouter } from "./routes/recipeStyles.js";
 import { brewerMethodsRouter } from "./routes/brewerMethods.js";
 import { drinksRouter } from "./routes/drinks.js";
+import { emailVerifyRouter } from "./routes/emailVerification.js";
 import { myInvitesRouter, workspaceInvitesRouter } from "./routes/invites.js";
 import { membersRouter } from "./routes/members.js";
 import { menuRouter } from "./routes/menu.js";
@@ -80,6 +81,7 @@ app.get("/health", async (_req: Request, res: Response<HealthResponse>) => {
 app.use("/api/auth/me/notifications", notificationsRouter);
 app.use("/api/auth/me/ai-prompt", aiPromptRouter);
 app.use("/api/auth/me", myChatsRouter); // docs/api/chat.md §12
+app.use("/api/auth", emailVerifyRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/public/menu", publicMenuRouter);
 app.use("/api/workspaces/:workspaceId/ai-config", aiConfigRouter); // docs/api/workspaces.md §2d

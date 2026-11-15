@@ -7,6 +7,7 @@ import { Router, type Request, type Response } from "express";
 import { ipKeyGenerator, rateLimit } from "express-rate-limit";
 import { users, workspaceInvites, workspaceMembers, workspaces } from "@barista/shared/schema";
 import { isRole, requireMembership, type Role } from "../auth/membership.js";
+import { emailVerificationOn } from "../config.js";
 import { db } from "../db.js";
 import { isDuplicateEntryError, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
@@ -131,6 +132,15 @@ myInvitesRouter.get("/", async (req: Request, res: Response<{ invites: MyInvite[
 myInvitesRouter.post("/:inviteId/accept", async (req: Request<{ inviteId: string }>, res: Response<{ workspace: { id: string; name: string; slug: string }; role: Role }>) => {
   const userId = authedUserId(req);
   const email = await myEmail(userId);
+  // With verification on, only an address the person has confirmed can claim
+  // an invite sent to it (docs/api/workspaces.md §2 "Invites").
+  if (emailVerificationOn()) {
+    const [me] = await db.select({ verifiedAt: users.emailVerifiedAt }).from(users).where(eq(users.id, userId));
+    if (!me?.verifiedAt) {
+      sendError(res, 403, "Confirm your email address first: we sent you a link.");
+      return;
+    }
+  }
   const [invite] = await db
     .select({ id: workspaceInvites.id, workspaceId: workspaceInvites.workspaceId, role: workspaceInvites.role })
     .from(workspaceInvites)

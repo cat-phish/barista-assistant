@@ -79,6 +79,14 @@ services:
       # (HTTPS only): the app is served over HTTPS.
       # false closes sign-ups (a public server); existing accounts still log in.
       - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-true}
+      # Email verification (docs/api/auth.md §1d); off unless EMAIL_VERIFICATION=true.
+      - EMAIL_VERIFICATION=${EMAIL_VERIFICATION:-false}
+      - APP_URL=${APP_URL:-https://localhost:42069}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - MAIL_FROM=${MAIL_FROM:-}
       # The zone scheduled backups' hour is in (e.g. America/Los_Angeles).
       - BACKUP_TIMEZONE=${BACKUP_TIMEZONE:-UTC}
       # false keeps database dumps on the server (no downloads in the app).

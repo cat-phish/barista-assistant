@@ -34,6 +34,7 @@ export const router = createRouter({
       },
     },
     { path: '/menu/:slug', name: 'public-menu', component: () => import('../views/PublicMenuView.vue'), props: true, meta: { public: true } },
+    { path: '/verify-email', name: 'verify-email', component: () => import('../views/VerifyEmailView.vue'), meta: { public: true } },
     { path: '/login', name: 'login', component: () => import('../views/LoginView.vue'), meta: { guestOnly: true } },
     { path: '/register', name: 'register', component: () => import('../views/RegisterView.vue'), meta: { guestOnly: true } },
     { path: '/workspaces', name: 'workspaces', component: () => import('../views/WorkspacesView.vue'), meta: { requiresAuth: true } },

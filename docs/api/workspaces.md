@@ -316,7 +316,8 @@ The signed-in person's pending invites:
 `200 { "invites": [ { "id", "workspace": { "name", "slug" }, "role", "invitedBy": "owner@email", "createdAt" } ] }`.
 
 #### `POST /api/invites/:inviteId/accept`
-Joins with the invited role and removes the invite:
+Joins with the invited role and removes the invite. With email verification on
+(`docs/api/auth.md` §1d) the caller's address must be confirmed first (`403`):
 `200 { "workspace": { "id", "name", "slug" }, "role" }`. `404` if it isn't
 theirs, has expired or is gone.
 

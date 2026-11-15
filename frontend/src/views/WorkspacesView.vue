@@ -2,6 +2,8 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ApiError, errorMessage } from '../api/client';
+import { authApi } from '../api/auth';
+import { useAuthStore } from '../stores/auth';
 import { invitesApi, type MyInvite } from '../api/invites';
 import AppHeader from '../components/AppHeader.vue';
 import RestoreBackup from '../components/RestoreBackup.vue';
@@ -10,6 +12,7 @@ import { SLUG_PATTERN, slugify } from '../lib/slug';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
+const auth = useAuthStore();
 const router = useRouter();
 
 const loading = ref(true);
@@ -28,6 +31,18 @@ const slugInvalid = computed(() => slug.value.length > 0 && !SLUG_PATTERN.test(s
 const canCreate = computed(() => name.value.trim().length > 0 && SLUG_PATTERN.test(slug.value) && !creating.value);
 
 const myInvites = ref<MyInvite[]>([]);
+// On servers with email verification, an invite can only be accepted from a confirmed address.
+const mustVerify = ref(false);
+const mailSent = ref(false);
+async function resend(): Promise<void> {
+  inviteError.value = '';
+  try {
+    await authApi.sendVerification();
+    mailSent.value = true;
+  } catch (err) {
+    inviteError.value = errorMessage(err);
+  }
+}
 const inviteError = ref('');
 async function answer(invite: MyInvite, accept: boolean): Promise<void> {
   inviteError.value = '';
@@ -47,6 +62,7 @@ async function answer(invite: MyInvite, accept: boolean): Promise<void> {
 onMounted(async () => {
   try {
     myInvites.value = (await invitesApi.mine()).invites;
+    if (myInvites.value.length && auth.user && !auth.user.emailVerified) mustVerify.value = (await authApi.registration()).emailVerification;
     await workspaces.load();
   } catch (err) {
     loadError.value = errorMessage(err);
@@ -94,6 +110,10 @@ async function create(): Promise<void> {
           </span>
         </li>
       </ul>
+      <div v-if="mustVerify" class="stack">
+        <p class="muted small">Confirm your email address ({{ auth.user?.email }}) before you can join: use the link we mailed you.</p>
+        <button class="btn btn-secondary" type="button" :disabled="mailSent" @click="resend">{{ mailSent ? 'Link sent' : 'Send the link again' }}</button>
+      </div>
       <p v-if="inviteError" class="form-error" role="alert">{{ inviteError }}</p>
     </section>
 

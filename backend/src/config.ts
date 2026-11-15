@@ -26,12 +26,22 @@ export const config = {
 
 // Refuse to start with Web Push half set up.
 vapidFromEnv();
+// ...or with email verification on but nowhere to send the mail from.
+if (process.env.EMAIL_VERIFICATION?.trim().toLowerCase() === "true" && (!process.env.SMTP_HOST?.trim() || !process.env.MAIL_FROM?.trim() || !process.env.APP_URL?.trim())) {
+  throw new Error("EMAIL_VERIFICATION=true needs SMTP_HOST, MAIL_FROM and APP_URL (see .env.example)");
+}
 
 // Switches read on each call, so tests can change them.
 // Web Push (docs/api/notifications.md §1b): the VAPID keys, or null = off.
 export const webPushSettings = (): VapidSettings | null => vapidFromEnv();
 // ALLOW_REGISTRATION=false closes sign-ups (docs/api/auth.md §1).
 export const registrationOpen = (): boolean => process.env.ALLOW_REGISTRATION?.trim().toLowerCase() !== "false";
+// EMAIL_VERIFICATION=true: people confirm their address by a mailed link, and
+// only a confirmed address can accept a workspace invite (docs/api/auth.md
+// §1d). Off by default, so a server with no mail account works as before.
+export const emailVerificationOn = (): boolean => process.env.EMAIL_VERIFICATION?.trim().toLowerCase() === "true";
+// Where mailed links point; never taken from the request's Host header.
+export const appUrl = (): string | null => (process.env.APP_URL ? process.env.APP_URL.replace(/\/+$/, "") : null);
 // BACKUP_DOWNLOADS=false keeps database dumps on the server: admins can't
 // download them through the app (docs/api/server.md §10).
 export const backupDownloadsEnabled = (): boolean => process.env.BACKUP_DOWNLOADS?.trim().toLowerCase() !== "false";

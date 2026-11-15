@@ -182,6 +182,9 @@ export const workspaceMembers = mysqlTable(
   })
 );
 
+// 1d. users.email_verified_at (null = not confirmed) and email_tokens: one-time
+// mailed links, only a SHA-256 of the token kept (docs/api/auth.md §1d). Not backed up.
+
 // 3b. Workspace Invites (docs/api/workspaces.md §2 "Invites"): an owner's offer
 // to an email; the person joins by accepting. Not backed up. Expires after 14 days.
 export const workspaceInvites = mysqlTable(
