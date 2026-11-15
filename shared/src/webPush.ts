@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import webpush from "web-push";
 import { secretIfSet } from "./env.js";
 import { NotificationError, type NotificationMessage } from "./notify.js";
+import { assertOutboundAllowed, OutboundBlockedError } from "./outbound.js";
 
 export interface VapidSettings {
   publicKey: string;
@@ -44,6 +45,12 @@ export class PushGoneError extends NotificationError {}
 
 // Throws PushGoneError for 404/410, NotificationError otherwise.
 export async function sendWebPush(target: PushTarget, vapid: VapidSettings, message: NotificationMessage): Promise<void> {
+  try {
+    await assertOutboundAllowed(target.endpoint);
+  } catch (err) {
+    if (err instanceof OutboundBlockedError) throw new NotificationError(err.message);
+    throw err;
+  }
   try {
     await webpush.sendNotification(
       { endpoint: target.endpoint, keys: { p256dh: target.p256dh, auth: target.auth } },

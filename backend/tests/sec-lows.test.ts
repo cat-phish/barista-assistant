@@ -81,3 +81,22 @@ describe("SEC-62 bean website scheme", () => {
     expect(checked.ok).toBe(false);
   });
 });
+
+describe("SEC-50 ALLOW_PRIVATE_WEBHOOKS", () => {
+  const save = (me: Awaited<ReturnType<typeof newUser>>, url: string) => me.agent.put(`${NOTIFY}/webhook`).send({ enabled: true, config: { url } });
+  it("says how to allow a private address when the flag is off", async () => {
+    const me = await newUser();
+    const res = await save(me, "http://192.168.1.20:8080/hook");
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("ALLOW_PRIVATE_WEBHOOKS=true");
+  });
+  it("allows a private address when on, but never loopback, metadata or this stack's services", async () => {
+    vi.stubEnv("ALLOW_PRIVATE_WEBHOOKS", "true");
+    const me = await newUser();
+    expect((await save(me, "http://192.168.1.20:8080/hook")).status).toBe(200);
+    expect((await save(me, "http://host.docker.internal:8080/hook")).status).toBe(200);
+    for (const url of ["http://127.0.0.1/", "http://169.254.169.254/", "http://[::ffff:7f00:1]/", "http://redis:6379/"]) {
+      expect((await save(me, url)).status, url).toBe(400);
+    }
+  });
+});

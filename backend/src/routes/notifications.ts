@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { NotificationError, sendNotification } from "@barista/shared/notify";
+import { assertOutboundAllowed, OutboundBlockedError } from "@barista/shared/outbound";
 import { endpointHash, PushGoneError, sendWebPush } from "@barista/shared/webPush";
 import {
   NOTIFICATION_KINDS,
@@ -44,6 +45,20 @@ export interface PushDeviceSummary {
 
 interface IdParams {
   id: string;
+}
+
+// SEC-50/52: a saved URL must not aim the server at its own network
+// (docs/api/notifications.md §1b "Where requests may go"). Answers 400 and
+// returns false when it does.
+async function outboundOk(rawUrl: string, res: Response): Promise<boolean> {
+  try {
+    await assertOutboundAllowed(rawUrl);
+    return true;
+  } catch (err) {
+    if (!(err instanceof OutboundBlockedError)) throw err;
+    sendError(res, 400, err.message);
+    return false;
+  }
 }
 
 const MASK = "••••";
@@ -147,6 +162,7 @@ notificationsRouter.post("/push", async (req: Request, res: Response<{ device: P
   }
   const body = parseBody(subscribeBody, req, res);
   if (!body) return;
+  if (!(await outboundOk(body.endpoint, res))) return;
   const userId = authedUserId(req);
   const hash = endpointHash(body.endpoint);
   const values = { userId, endpoint: body.endpoint, p256dh: body.keys.p256dh, auth: body.keys.auth, label: body.label, enabled: true };
@@ -223,6 +239,8 @@ notificationsRouter.put("/:kind", async (req: Request<KindParams>, res: Response
     sendError(res, 400, `config.${issue?.path.join(".") ?? ""}: ${issue?.message ?? "invalid"}`);
     return;
   }
+  const target = "server" in parsed.data ? parsed.data.server : "url" in parsed.data ? parsed.data.url : null;
+  if (target && !(await outboundOk(target, res))) return;
   if (existing) {
     await db.update(notificationChannels).set({ enabled: body.enabled, config: parsed.data }).where(eq(notificationChannels.id, existing.id));
   } else {

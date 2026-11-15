@@ -68,6 +68,9 @@ services:
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
       - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
       - VAPID_SUBJECT=${VAPID_SUBJECT:-}
+      # true lets people send webhooks to addresses on a private network
+      # (ntfy or Gotify on your LAN). See .env.example.
+      - ALLOW_PRIVATE_WEBHOOKS=${ALLOW_PRIVATE_WEBHOOKS:-false}
       - CORS_ORIGIN=${APP_URL:-https://localhost:42069}
       # Requests arrive through the frontend's Caddy: trust it for the
       # client IP, so the login rate limit is per device.
@@ -128,6 +131,9 @@ services:
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
       - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
       - VAPID_SUBJECT=${VAPID_SUBJECT:-}
+      # true lets people send webhooks to addresses on a private network
+      # (ntfy or Gotify on your LAN). See .env.example.
+      - ALLOW_PRIVATE_WEBHOOKS=${ALLOW_PRIVATE_WEBHOOKS:-false}
       - OPENAI_MODEL=${OPENAI_MODEL}
       # Reads bean labels from photos (docs/api/bean-label.md §4d); empty = OPENAI_MODEL.
       - OPENAI_VISION_MODEL=${OPENAI_VISION_MODEL:-}
