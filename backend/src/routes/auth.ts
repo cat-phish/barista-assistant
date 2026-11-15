@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
-import { rateLimit } from "express-rate-limit";
+import { ipKeyGenerator, rateLimit } from "express-rate-limit";
 import { z } from "zod";
 import { DUMMY_PASSWORD_HASH, hashPassword, verifyPassword } from "../auth/password.js";
 import { clearSessionCookie, setSessionCookie } from "../auth/session.js";
@@ -81,10 +81,17 @@ const limiterOptions = {
   },
 };
 
-function accountKey(req: Request): string {
+// The same key whether the email comes in the body (login) or from the
+// signed-in user (password change, delete, backup download), so guesses
+// across them count together.
+async function accountKey(req: Request): Promise<string> {
   const email = (req.body as { email?: unknown } | undefined)?.email;
   if (typeof email === "string" && email) return `email:${email.trim().toLowerCase()}`;
-  return `user:${req.userId ?? req.ip ?? "unknown"}`;
+  if (req.userId) {
+    const [me] = await db.select({ email: users.email }).from(users).where(eq(users.id, req.userId));
+    if (me) return `email:${me.email}`;
+  }
+  return `ip:${ipKeyGenerator(req.ip ?? "unknown")}`;
 }
 
 export const loginLimiter = [

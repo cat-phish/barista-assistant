@@ -94,6 +94,7 @@ import {
   waterProfiles,
   vessels,
   workspaceMembers,
+  workspaceInvites,
   workspaces,
 } from "@barista/shared/schema";
 import { db } from "./db.js";
@@ -250,7 +251,7 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
 // analysis_requests is queue state (when an automatic analysis is due, why
 // one failed), meaningless without the queue. AI chats are private to the
 // person (docs/api/chat.md §12), and whoever has a backup could read them.
-export const NOT_BACKED_UP: readonly MySqlTable[] = [users, notificationChannels, pushSubscriptions, workspaces, workspaceMembers, serverSettings, analysisRequests, flavorLexicons, workspaceAiConfigs, aiChats, aiChatMessages, aiChatPhotos, recaps];
+export const NOT_BACKED_UP: readonly MySqlTable[] = [users, notificationChannels, pushSubscriptions, workspaces, workspaceMembers, workspaceInvites, serverSettings, analysisRequests, flavorLexicons, workspaceAiConfigs, aiChats, aiChatMessages, aiChatPhotos, recaps];
 
 // Columns that only hold one of a list (varchar in the database).
 const ENUMS: Record<string, readonly string[]> = {

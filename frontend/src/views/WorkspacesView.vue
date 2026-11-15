@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ApiError, errorMessage } from '../api/client';
+import { invitesApi, type MyInvite } from '../api/invites';
 import AppHeader from '../components/AppHeader.vue';
 import RestoreBackup from '../components/RestoreBackup.vue';
 import { ROLE_LABELS } from '../lib/roles';
@@ -26,8 +27,26 @@ watch(name, (value) => {
 const slugInvalid = computed(() => slug.value.length > 0 && !SLUG_PATTERN.test(slug.value));
 const canCreate = computed(() => name.value.trim().length > 0 && SLUG_PATTERN.test(slug.value) && !creating.value);
 
+const myInvites = ref<MyInvite[]>([]);
+const inviteError = ref('');
+async function answer(invite: MyInvite, accept: boolean): Promise<void> {
+  inviteError.value = '';
+  try {
+    if (accept) {
+      await invitesApi.accept(invite.id);
+      await workspaces.load();
+    } else {
+      await invitesApi.decline(invite.id);
+    }
+    myInvites.value = myInvites.value.filter((i) => i.id !== invite.id);
+  } catch (err) {
+    inviteError.value = errorMessage(err);
+  }
+}
+
 onMounted(async () => {
   try {
+    myInvites.value = (await invitesApi.mine()).invites;
     await workspaces.load();
   } catch (err) {
     loadError.value = errorMessage(err);
@@ -63,7 +82,22 @@ async function create(): Promise<void> {
     <section v-if="loading" class="muted" aria-live="polite">Loading your workspaces…</section>
     <p v-else-if="loadError" class="form-error" role="alert">{{ loadError }}</p>
 
-    <section v-else-if="workspaces.workspaces.length > 0" class="stack">
+    <section v-if="!loading && !loadError && myInvites.length" class="card stack" aria-labelledby="invites-h">
+      <h2 id="invites-h">Invitations</h2>
+      <ul class="list">
+        <li v-for="i in myInvites" :key="i.id" class="invite">
+          <span class="name">{{ i.workspace.name }}</span>
+          <span class="muted small">{{ i.invitedBy ?? 'Someone' }} invites you as {{ ROLE_LABELS[i.role].toLowerCase() }}</span>
+          <span class="actions">
+            <button class="btn btn-primary" type="button" @click="answer(i, true)">Join</button>
+            <button class="btn btn-secondary" type="button" @click="answer(i, false)">Decline</button>
+          </span>
+        </li>
+      </ul>
+      <p v-if="inviteError" class="form-error" role="alert">{{ inviteError }}</p>
+    </section>
+
+    <section v-if="!loading && !loadError && workspaces.workspaces.length > 0" class="stack">
       <h1>Your workspaces</h1>
       <ul class="list">
         <li v-for="w in workspaces.workspaces" :key="w.id">
@@ -75,7 +109,7 @@ async function create(): Promise<void> {
       </ul>
     </section>
 
-    <section v-else class="stack">
+    <section v-else-if="!loading && !loadError" class="stack">
       <h1>Welcome!</h1>
       <p class="muted">
         A workspace holds your beans, recipes and brew journal, like a coffee bar you can share with others.
@@ -153,6 +187,14 @@ p {
   padding: 0;
   display: flex;
   flex-direction: column;
+  gap: var(--space-2);
+}
+.invite {
+  display: grid;
+  gap: var(--space-2);
+}
+.invite .actions {
+  display: flex;
   gap: var(--space-2);
 }
 .workspace {

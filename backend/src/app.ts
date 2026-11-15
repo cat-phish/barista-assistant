@@ -38,6 +38,7 @@ import { beanProcessesRouter } from "./routes/beanProcesses.js";
 import { recipeStylesRouter } from "./routes/recipeStyles.js";
 import { brewerMethodsRouter } from "./routes/brewerMethods.js";
 import { drinksRouter } from "./routes/drinks.js";
+import { myInvitesRouter, workspaceInvitesRouter } from "./routes/invites.js";
 import { membersRouter } from "./routes/members.js";
 import { menuRouter } from "./routes/menu.js";
 import { publicMenuRouter } from "./routes/publicMenu.js";
@@ -100,6 +101,8 @@ app.use("/api/workspaces/:workspaceId/recipe-styles", recipeStylesRouter);
 app.use("/api/workspaces/:workspaceId/brewer-methods", brewerMethodsRouter);
 app.use("/api/workspaces/:workspaceId/drinks", drinksRouter);
 app.use("/api/workspaces/:workspaceId/members", membersRouter);
+app.use("/api/workspaces/:workspaceId/invites", workspaceInvitesRouter); // docs/api/workspaces.md §2 "Invites"
+app.use("/api/invites", myInvitesRouter);
 app.use("/api/workspaces/:workspaceId/menu", menuRouter);
 app.use("/api/workspaces/:workspaceId/beans/:beanId/photos", beanPhotosRouter);
 app.use("/api/workspaces/:workspaceId/beans/:beanId/review-draft", beanReviewRouter);

@@ -433,6 +433,28 @@ export const workspaceMembers = mysqlTable(
   })
 );
 
+// A pending offer to join a workspace (docs/api/workspaces.md §2, "Invites").
+// By email, so it can exist before the person has an account; accepting is
+// the person's own act. Not in backups (NOT_BACKED_UP): it's about people.
+export const workspaceInvites = mysqlTable(
+  "workspace_invites",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    email: varchar("email", { length: 255 }).notNull(), // lower-case
+    role: varchar("role", { length: 50 }).notNull(), // 'owner' | 'barista' | 'viewer'
+    invitedBy: varchar("invited_by", { length: 36 }).references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    oncePerEmail: unique("workspace_invites_workspace_email").on(table.workspaceId, table.email),
+    byEmail: index("workspace_invites_email").on(table.email),
+  })
+);
+export type WorkspaceInvite = typeof workspaceInvites.$inferSelect;
+
 // 4. Beans & Inventory
 export const ROAST_LEVELS = ["light", "medium_light", "medium", "medium_dark", "dark"] as const;
 export type RoastLevel = (typeof ROAST_LEVELS)[number];

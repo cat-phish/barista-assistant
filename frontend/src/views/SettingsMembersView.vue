@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // Settings → Members (docs/api/workspaces.md §2 Members): everyone sees who's
-// in the workspace; owners add people by email (they must have registered,
-// there's no email delivery), change roles and remove members; anyone can
+// in the workspace; owners invite people by email (they accept in their own
+// app; there's no email delivery), change roles and remove members; anyone can
 // leave. A workspace always keeps at least one owner (the API answers 409).
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ApiError, errorMessage } from '../api/client';
+import { invitesApi, type PendingInvite } from '../api/invites';
 import { membersApi } from '../api/members';
 import type { Member, Role } from '../api/types';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
@@ -21,6 +22,7 @@ const isOwner = computed(() => workspaces.current?.role === 'owner');
 const myId = computed(() => auth.user?.id ?? '');
 
 const members = ref<Member[]>([]);
+const pendingInvites = ref<PendingInvite[]>([]);
 const loading = ref(true);
 const error = ref('');
 const busy = ref(false);
@@ -33,6 +35,7 @@ async function load(): Promise<void> {
   if (!ws) return;
   try {
     members.value = (await membersApi.list(ws)).members;
+    if (isOwner.value) pendingInvites.value = (await invitesApi.forWorkspace(ws)).invites;
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
@@ -41,7 +44,17 @@ async function load(): Promise<void> {
 }
 onMounted(load);
 
-// --- Add (owners) ---
+// --- Invite (owners) ---
+async function cancelInvite(invite: PendingInvite): Promise<void> {
+  const ws = workspaces.current?.id;
+  if (!ws) return;
+  try {
+    await invitesApi.cancel(ws, invite.id);
+    pendingInvites.value = pendingInvites.value.filter((i) => i.id !== invite.id);
+  } catch (err) {
+    addError.value = errorMessage(err);
+  }
+}
 const email = ref('');
 const role = ref<Role>('barista');
 const addError = ref('');
@@ -54,17 +67,12 @@ async function add(): Promise<void> {
   addError.value = '';
   added.value = '';
   try {
-    const { member } = await membersApi.add(ws, address, role.value);
-    members.value = [...members.value, member].sort((a, b) => a.email.localeCompare(b.email));
-    added.value = `${member.email} added as ${ROLE_LABELS[member.role].toLowerCase()}.`;
+    await membersApi.invite(ws, address, role.value);
+    pendingInvites.value = (await invitesApi.forWorkspace(ws)).invites;
+    added.value = `Invited ${address.toLowerCase()} as ${ROLE_LABELS[role.value].toLowerCase()}. They join when they accept, in their own app.`;
     email.value = '';
   } catch (err) {
-    addError.value =
-      err instanceof ApiError && err.status === 404
-        ? 'No account with that email. They need to register first, then you can add them.'
-        : err instanceof ApiError && err.status === 409
-          ? "They're already a member."
-          : errorMessage(err);
+    addError.value = errorMessage(err);
   } finally {
     busy.value = false;
   }
@@ -198,8 +206,8 @@ async function confirmPending(): Promise<void> {
     </section>
 
     <section v-if="!loading && isOwner" class="card stack" aria-labelledby="members-add">
-      <h2 id="members-add">Add someone</h2>
-      <p class="muted small">They need an account first: ask them to register, then add the email they used.</p>
+      <h2 id="members-add">Invite someone</h2>
+      <p class="muted small">Use the email they sign in with, or will register with. They see the invite in their app and join when they accept. It lasts 14 days.</p>
       <form class="add" novalidate @submit.prevent="add">
         <div class="field email-field">
           <label for="member-email">Email<span class="req" aria-hidden="true">*</span></label>
@@ -211,10 +219,20 @@ async function confirmPending(): Promise<void> {
             <option v-for="r in ROLES" :key="r" :value="r">{{ ROLE_LABELS[r] }}</option>
           </select>
         </div>
-        <button class="btn btn-primary" type="submit" :disabled="busy || !email.trim()">Add</button>
+        <button class="btn btn-primary" type="submit" :disabled="busy || !email.trim()">Invite</button>
       </form>
       <p v-if="addError" class="form-error" role="alert">{{ addError }}</p>
       <p v-if="added" class="muted small" aria-live="polite">{{ added }}</p>
+      <template v-if="pendingInvites.length">
+        <h3>Waiting to accept</h3>
+        <ul class="pending">
+          <li v-for="i in pendingInvites" :key="i.id">
+            <span class="email" :title="i.email">{{ i.email }}</span>
+            <span class="muted small">{{ ROLE_LABELS[i.role] }}</span>
+            <button class="btn-link danger" type="button" @click="cancelInvite(i)">Cancel<span class="visually-hidden"> invite for {{ i.email }}</span></button>
+          </li>
+        </ul>
+      </template>
     </section>
 
     <section v-if="!loading" class="card leave">
@@ -228,8 +246,8 @@ async function confirmPending(): Promise<void> {
 
   <ConfirmDialog :open="pending !== null" :title="dialogTitle" @cancel="pending = null">
     <p v-if="pending?.kind === 'demote'">You won't be able to change settings or members any more, and only another owner can make you owner again.</p>
-    <p v-else-if="pending?.kind === 'remove'">They lose access to this workspace and their AI chats in it are deleted. Brews they logged stay in it. You can add them again later.</p>
-    <p v-else-if="pending?.kind === 'leave'">Your AI chats in this workspace are deleted, and you'll need an owner to add you again to get back in.</p>
+    <p v-else-if="pending?.kind === 'remove'">They lose access to this workspace and their AI chats in it are deleted. Brews they logged stay in it. You can invite them again later.</p>
+    <p v-else-if="pending?.kind === 'leave'">Your AI chats in this workspace are deleted, and you'll need an owner to invite you again to get back in.</p>
     <label class="checkbox">
       <input v-model="understood" type="checkbox" />
       I understand
@@ -311,6 +329,18 @@ p {
 }
 .roles dd {
   margin: 0;
+}
+.pending {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+.pending li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
 }
 .add {
   display: flex;

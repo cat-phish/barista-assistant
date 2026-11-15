@@ -267,12 +267,17 @@ directly by email.
 
 ### `POST /api/workspaces/:workspaceId/members`
 
+Invites an email to the workspace. Nothing changes for that person until they
+accept (see "Invites" below).
+
 - **Auth Required:** `true` (role `owner`)
 - **Body:** `{ "email": "barista@example.com", "role": "barista" }` (role is
   `owner`, `barista` or `viewer`)
-- **Success (`201 Created`):** `{ "member": { "userId": "uuid", "email": "...", "role": "barista" } }`
-- **Errors:** `400` invalid body; `403` not an owner; `404` no registered user
-  with that email; `409` already a member.
+- **Success (`202 Accepted`):** `{ "invited": true }`: the same whether the
+  email has an account, has none yet, or is already a member (nothing is
+  created then). Inviting an email again replaces its pending role.
+- **Errors:** `400` invalid body; `403` not an owner; `409` 50 invites are
+  already pending; `429` more than 30 invites in an hour (per person).
 
 ### `PATCH /api/workspaces/:workspaceId/members/:userId`
 
@@ -291,3 +296,29 @@ Removes a member. Owners can remove anyone. Any member can remove themselves
 - **Success (`204 No Content`)**
 - **Errors:** `403` not an owner and not removing yourself; `404` that user is
   not a member; `409` would leave the workspace with no owner.
+
+### Invites
+
+A pending invite is a row in `workspace_invites` (`workspaceId`, lower-case
+`email`, `role`, `invitedBy`, `createdAt`; one per workspace and email). It
+expires after 14 days and isn't part of a backup. The person sees it under
+their own account once signed in with that email, including an account made
+after the invite was sent.
+
+#### `GET /api/workspaces/:workspaceId/invites` (owner)
+`200 { "invites": [ { "id", "email", "role", "createdAt" } ] }`, by email.
+
+#### `DELETE /api/workspaces/:workspaceId/invites/:inviteId` (owner)
+Cancels it: `204`; `404` no such invite.
+
+#### `GET /api/invites`
+The signed-in person's pending invites:
+`200 { "invites": [ { "id", "workspace": { "name", "slug" }, "role", "invitedBy": "owner@email", "createdAt" } ] }`.
+
+#### `POST /api/invites/:inviteId/accept`
+Joins with the invited role and removes the invite:
+`200 { "workspace": { "id", "name", "slug" }, "role" }`. `404` if it isn't
+theirs, has expired or is gone.
+
+#### `DELETE /api/invites/:inviteId`
+Declines it: `204`; `404` as above.

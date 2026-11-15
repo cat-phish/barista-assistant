@@ -4,7 +4,8 @@ import { z } from "zod";
 import { isRole, requireMembership, type Role } from "../auth/membership.js";
 import { deleteMemberChats } from "../chatData.js";
 import { db } from "../db.js";
-import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
+import { parseBody, sendError } from "../http.js";
+import { createInvite, inviteLimiter, MAX_PENDING_INVITES } from "./invites.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { users, workspaceMembers } from "@barista/shared/schema";
 import { emailSchema, roleSchema } from "../validation.js";
@@ -52,34 +53,21 @@ membersRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<Membe
   res.json({ members: rows.flatMap((m) => (isRole(m.role) ? [{ ...m, role: m.role }] : [])) });
 });
 
-membersRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<MemberResponse>) => {
-  const { workspaceId } = req.params;
-  if (!(await requireMembership(res, authedUserId(req), workspaceId, ["owner"]))) return;
+// Invites the email; it joins only when that person accepts (docs/api/workspaces.md
+// §2 "Invites"). The same 202 whether or not the email has an account.
+membersRouter.post("/", inviteLimiter, async (req: Request, res: Response<{ invited: true }>) => {
+  const workspaceId = String(req.params.workspaceId);
+  const userId = authedUserId(req);
+  if (!(await requireMembership(res, userId, workspaceId, ["owner"]))) return;
 
   const body = parseBody(addMemberSchema, req, res);
   if (!body) return;
 
-  const [user] = await db
-    .select({ id: users.id, email: users.email })
-    .from(users)
-    .where(eq(users.email, body.email))
-    .limit(1);
-  if (!user) {
-    sendError(res, 404, "No registered user with that email");
+  if ((await createInvite(workspaceId, body.email, body.role, userId)) === "too_many") {
+    sendError(res, 409, `Too many pending invites (up to ${MAX_PENDING_INVITES}). Cancel some first.`);
     return;
   }
-
-  try {
-    await db.insert(workspaceMembers).values({ userId: user.id, workspaceId, role: body.role });
-  } catch (err) {
-    if (isDuplicateEntryError(err)) {
-      sendError(res, 409, "That user is already a member");
-      return;
-    }
-    throw err;
-  }
-
-  res.status(201).json({ member: { userId: user.id, email: user.email, role: body.role } });
+  res.status(202).json({ invited: true });
 });
 
 membersRouter.patch("/:userId", async (req: Request<MemberParams>, res: Response<MemberResponse>) => {
