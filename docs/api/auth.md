@@ -52,10 +52,15 @@ below is `403`, so a typo doesn't look like a logout.
   `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... }, "isAdmin": false } }`
 - **Errors:** `400` invalid body; `401` wrong email or password. The message is
   the same for both so it doesn't reveal which emails are registered.
-- **Rate limit:** 10 failed attempts per IP per 15 minutes; successful logins
-  don't count. Further attempts get `429 Too Many Requests` with a
+- **Rate limit:** 10 failed attempts per account (the email, or the signed-in
+  user on password/delete/backup checks) per 15 minutes, and 60 per IP; successful
+  logins don't count. Further attempts get `429 Too Many Requests` with a
   `Retry-After` header (seconds) and `{ "error": "Too many login attempts. Try again later." }`.
   Counters are in-memory, so they reset when the backend restarts.
+  **Behind a tunnel or CDN** in front of Caddy, set `trusted_proxies <ranges>` in
+  the Caddyfile and leave `TRUST_PROXY=1`; otherwise every visitor shares one IP
+  and the per-IP limits here and on sign-up (5/hour) count everyone together.
+  Never raise `TRUST_PROXY` without that.
 
 ## `POST /api/auth/logout`
 

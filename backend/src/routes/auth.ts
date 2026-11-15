@@ -64,20 +64,34 @@ function toPublicUser(user: Pick<User, "id" | "email"> & { preferences?: User["p
   return { id: user.id, email: user.email, preferences: withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null), isAdmin: user.isAdmin ?? false };
 }
 
-// Per-IP brute-force protection, shared by every endpoint that checks a
-// password (login, change password, delete account), so guesses across them
-// count together. In-memory store: fine for a single backend instance; move
-// to a Redis store if the backend is ever scaled out.
-export const loginLimiter = rateLimit({
+// Brute-force protection, shared by every endpoint that checks a password
+// (login, change password, delete account, backup download), so guesses
+// across them count together. Two buckets (SEC-31): one per account (the
+// email in the body, else the signed-in user), so a guesser on any number of
+// IPs is capped and one account's failures never lock out another; and a
+// looser one per IP, for a client trying many accounts. In-memory stores:
+// fine for a single backend instance; move to Redis if it's scaled out.
+const limiterOptions = {
   windowMs: 15 * 60 * 1000,
-  limit: 10,
   skipSuccessfulRequests: true,
-  standardHeaders: "draft-8",
+  standardHeaders: "draft-8" as const,
   legacyHeaders: false,
   handler: (_req: Request, res: Response) => {
     sendError(res, 429, "Too many login attempts. Try again later.");
   },
-});
+};
+
+function accountKey(req: Request): string {
+  const email = (req.body as { email?: unknown } | undefined)?.email;
+  if (typeof email === "string" && email) return `email:${email.trim().toLowerCase()}`;
+  return `user:${req.userId ?? req.ip ?? "unknown"}`;
+}
+
+export const loginLimiter = [
+  rateLimit({ ...limiterOptions, limit: 10, keyGenerator: accountKey }),
+  rateLimit({ ...limiterOptions, limit: 60 }),
+];
+
 
 // SEC-30: sign-ups per IP. Each one costs a scrypt hash and a users row, so
 // open registration needs a cap. In-memory store, like loginLimiter.
