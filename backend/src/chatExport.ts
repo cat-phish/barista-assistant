@@ -159,7 +159,7 @@ export async function importChats(data: Buffer, workspaceId: string, userId: str
     for (const { id } of message.photos) {
       const bytes = read.photos.get(id);
       const size = bytes ? await checkStoredPhoto(bytes) : null;
-      if (bytes && size) photos.set(id, { id: randomUUID(), data: bytes, ...size });
+      if (size) photos.set(id, { id: randomUUID(), ...size });
     }
   }
   const adding = fresh.flatMap((c) => c.messages).reduce((n, m) => n + textBytes(m), 0) + fresh.reduce((n, c) => n + (c.summary ? encoder.encode(c.summary).length : 0), 0) + [...photos.values()].reduce((n, p) => n + p.data.length, 0);

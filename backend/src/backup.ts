@@ -667,16 +667,24 @@ export async function restoreBackup(
 ): Promise<string> {
   const workspaceId = randomUUID();
   const photoRows: BackupRow[] = [];
+  const clean = new Map<string, Buffer>(); // what is stored: the checked bytes, not the entry as given
   for (const row of input.tables.bean_photos ?? []) {
     const data = photos.get(row.id as string);
-    const size = data && (await checkStoredPhoto(data));
-    if (size) photoRows.push({ ...row, ...size });
+    const checked = data && (await checkStoredPhoto(data));
+    if (checked) {
+      clean.set(row.id as string, checked.data);
+      photoRows.push({ ...row, width: checked.width, height: checked.height });
+    }
   }
   // The menu logos, likewise only with a valid file, in order.
   const logoIds: string[] = [];
   for (const id of input.workspace.menuLogoIds ?? (input.workspace.menuLogoId ? [input.workspace.menuLogoId] : [])) {
     const data = photos.get(id);
-    if (data && (await checkStoredPhoto(data))) logoIds.push(id);
+    const checked = data && (await checkStoredPhoto(data));
+    if (checked) {
+      clean.set(id, checked.data);
+      logoIds.push(id);
+    }
   }
   const file: BackupFile = {
     ...input,
@@ -684,7 +692,7 @@ export async function restoreBackup(
     tables: { ...input.tables, bean_photos: photoRows },
   };
   try {
-    await insertBackup(file, target, workspaceId, photos);
+    await insertBackup(file, target, workspaceId, clean);
   } catch (err) {
     await removeWorkspacePhotos(workspaceId);
     throw err;
