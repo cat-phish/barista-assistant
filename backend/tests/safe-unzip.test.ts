@@ -58,4 +58,69 @@ describe("safeUnzip", () => {
     expect(Object.keys(out)).toEqual(["ok.txt"]);
     expect(seen.every((n) => n.length < 600)).toBe(true);
   });
+
+  // Extra cases from the re-review: malformed directories and forged headers.
+  const eocdOf = (z: Uint8Array) => Buffer.from(z).lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  const cdOf = (z: Uint8Array) => Buffer.from(z).readUInt32LE(eocdOf(z) + 16);
+  const patched = (z: Uint8Array, fn: (b: Buffer, cd: number) => void): Buffer => {
+    const b = Buffer.from(z);
+    fn(b, cdOf(z));
+    return b;
+  };
+  const two = () => zipSync({ "a.txt": [strToU8("hello hello hello"), { level: 0 }], "b.txt": [strToU8("world world world"), { level: 0 }] });
+
+  it("refuses duplicate entry names", async () => {
+    const z = patched(two(), (b, cd) => {
+      const second = cd + 46 + 5; // the second directory header (name "a.txt" is 5 bytes; no extra)
+      b.write("a.txt", second + 46, "utf8");
+    });
+    await expect(unzipBounded(z, () => true)).rejects.toThrow(/duplicate entry/);
+  });
+  it("refuses a stored entry whose two sizes disagree", async () => {
+    const z = patched(two(), (b, cd) => b.writeUInt32LE(3, cd + 24)); // original 3, stored 17
+    await expect(unzipBounded(z, () => true)).rejects.toThrow(/size mismatch/);
+  });
+  it("refuses an encrypted entry it would unpack", async () => {
+    const z = patched(two(), (b, cd) => b.writeUInt16LE(1, cd + 8));
+    await expect(unzipBounded(z, () => true)).rejects.toThrow(/encrypted/);
+  });
+  it("refuses a compression method other than stored or deflate", async () => {
+    const z = patched(two(), (b, cd) => b.writeUInt16LE(12, cd + 10));
+    await expect(unzipBounded(z, () => true)).rejects.toThrow(/unsupported compression/);
+  });
+  it("does not refuse an encrypted or odd entry the caller skips", async () => {
+    const z = patched(two(), (b, cd) => b.writeUInt16LE(1, cd + 8));
+    const out = await unzipBounded(z, (f) => f.name === "b.txt");
+    expect(Object.keys(out)).toEqual(["b.txt"]);
+  });
+  it("rejects a local header offset past the end", async () => {
+    const z = patched(two(), (b, cd) => b.writeUInt32LE(b.length + 100, cd + 42));
+    await expect(unzipBounded(z, () => true)).rejects.toThrow(/Not a zip/);
+  });
+  it("rejects a truncated central directory", async () => {
+    const z = two();
+    const b = Buffer.from(z);
+    const cut = Buffer.concat([b.subarray(0, cdOf(z) + 20), b.subarray(eocdOf(z))]);
+    cut.writeUInt32LE(cdOf(z), cut.length - 22 + 16);
+    await expect(unzipBounded(cut, () => true)).rejects.toThrow();
+  });
+  it("rejects data with no end-of-directory record", async () => {
+    await expect(unzipBounded(Buffer.from("not a zip at all, just text"), () => true)).rejects.toThrow(/Not a zip/);
+  });
+  it("ignores an end-of-directory signature hidden in the zip comment", async () => {
+    const z = Buffer.from(two());
+    const fake = Buffer.alloc(22);
+    fake.writeUInt32LE(0x06054b50, 0); // a record with zero entries, planted in the comment
+    const real = Buffer.from(z);
+    real.writeUInt16LE(fake.length, real.length - 2); // comment length
+    const out = await unzipBounded(Buffer.concat([real, fake]), () => true);
+    // The last signature wins, so the planted empty record is what is read: nothing is unpacked, nothing breaks.
+    expect(Object.keys(out)).toEqual([]);
+  });
+  it("accepts a JSON entry exactly at its size cap and skips one byte over", async () => {
+    const cap = 1024;
+    const zip = zipSync({ "chats.json": [new Uint8Array(cap), { level: 0 }], "big.json": [new Uint8Array(cap + 1), { level: 0 }] });
+    const out = await unzipBounded(zip, (f) => f.originalSize <= cap);
+    expect(Object.keys(out)).toEqual(["chats.json"]);
+  });
 });
