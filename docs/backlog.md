@@ -390,13 +390,21 @@ Recording a brew: what's measured, and how fast it is to log.
 ### 64. Plan a possible Jev model integration
 
 - **Status:** idea (numbered last to avoid renumbering; belongs in D)
-- **Why:** noted as something to plan; what the integration would be is
-  not yet written down.
-- **Approach:** a planning step first: what the Jev model is, what it
-  would do for the app, and how it would fit the worker's LLM contract.
+- **Why:** Jev is a decision model that may be more efficient than an LLM
+  for some tasks (cheaper, faster, more predictable), so some of the
+  worker's jobs might not need an LLM call.
+- **Approach:** a planning step first: list the worker's jobs and pick
+  the ones that are really decisions (classifying, choosing between
+  options, scoring) rather than writing; compare Jev with the LLM on
+  those; then decide how it would sit beside the LLM in the worker
+  (`docs/api/llm-contract.md`), with a fallback to the LLM.
 - **Size:** unknown until planned.
 - **Depends on:** nothing.
-- **Open questions:** what is the Jev model, and what should it do here?
+- **Open questions:**
+  - Which jobs are decisions Jev could take over?
+  - How is it run (hosted, or self-hosted next to the worker), and what
+    does it cost self-hosters?
+  - How do we measure it against the LLM (the chat eval, for example)?
 
 ## C. Recipes
 
