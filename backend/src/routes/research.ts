@@ -20,7 +20,8 @@ import {
 import { users, workspaces } from "@barista/shared/schema";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
-import { AI_COST, spendAi } from "../aiConfig.js";
+import { AI_COST, holdAiSlot, refundAi, spendAi } from "../aiConfig.js";
+import { researchDraftTimeoutMs } from "../config.js";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { JobTimeoutError, QueueUnavailableError, requestResearchDrafts } from "../queue.js";
@@ -155,20 +156,29 @@ workspaceResearchRouter.post("/draft", async (req: Request<WorkspaceParams>, res
   if (!(await requireMembership(res, userId, workspaceId, WRITE_ROLES))) return;
   const body = parseBody(draftSchema, req, res);
   if (!body) return;
-  if (!(await spendAi(res, workspaceId, userId, AI_COST.researchDraft))) return;
+  // One at a time per person, and the budget fails closed (SEC-05).
+  const release = await holdAiSlot(res, "researchDraft", userId, Math.ceil(researchDraftTimeoutMs() / 1000) + 5);
+  if (!release) return;
   try {
-    res.json(await requestResearchDrafts({ text: body.text, requestedBy: userId, workspaceId }));
-  } catch (err) {
-    if (err instanceof QueueUnavailableError) {
-      console.error("Could not queue research drafts:", err.message);
-      sendError(res, 503, "Drafting is temporarily unavailable. Try again shortly.");
-      return;
+    if (!(await spendAi(res, workspaceId, userId, AI_COST.researchDraft, { failClosed: true }))) return;
+    try {
+      res.json(await requestResearchDrafts({ text: body.text, requestedBy: userId, workspaceId }));
+    } catch (err) {
+      if (err instanceof QueueUnavailableError) {
+        console.error("Could not queue research drafts:", err.message);
+        sendError(res, 503, "Drafting is temporarily unavailable. Try again shortly.");
+        return;
+      }
+      if (err instanceof JobTimeoutError) {
+        // Nothing was asked of the AI: the unit goes back.
+        if (err.removedBeforeStart) await refundAi(workspaceId, userId, AI_COST.researchDraft);
+        sendError(res, 504, "The drafts weren't written in time. Try again shortly.");
+        return;
+      }
+      console.error("Research draft failed:", err instanceof Error ? err.message : err);
+      sendError(res, 502, "The AI couldn't draft the findings. Try again shortly.");
     }
-    if (err instanceof JobTimeoutError) {
-      sendError(res, 504, "The drafts weren't written in time. Try again shortly.");
-      return;
-    }
-    console.error("Research draft failed:", err instanceof Error ? err.message : err);
-    sendError(res, 502, "The AI couldn't draft the findings. Try again shortly.");
+  } finally {
+    await release();
   }
 });

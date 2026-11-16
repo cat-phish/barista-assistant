@@ -3,6 +3,7 @@ import { aiSource, type AiSource } from "@barista/shared/aiConfig";
 import type { AiCheckJobData } from "@barista/shared/jobs";
 import { workspaceAiConfigs } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import type { Response } from "express";
 import { db } from "./db.js";
 import { sendError } from "./http.js";
@@ -51,13 +52,18 @@ const limit = (name: string, fallback: number): number => (Number(process.env[na
 // Before queueing a (paid) AI job: requireAi, then counts `cost` against the
 // person's and the workspace's daily budget (UTC day; AI_DAILY_USER_UNITS,
 // AI_DAILY_WORKSPACE_UNITS). Sends 429 `ai_limit` and returns false when spent.
-export async function spendAi(res: Response, workspaceId: string, userId: string, cost: number): Promise<boolean> {
-  if (!(await requireAi(res, workspaceId))) return false;
+// failClosed (the research draft route, SEC-05): when Redis can't count it,
+// refuse with 503 rather than let it through.
+const budgetKeys = (workspaceId: string, userId: string): Array<[string, number]> => {
   const day = new Date().toISOString().slice(0, 10);
-  const keys: Array<[string, number]> = [
+  return [
     [`aibudget:${day}:u:${userId}`, limit("AI_DAILY_USER_UNITS", 100)],
     [`aibudget:${day}:w:${workspaceId}`, limit("AI_DAILY_WORKSPACE_UNITS", 1000)],
   ];
+};
+export async function spendAi(res: Response, workspaceId: string, userId: string, cost: number, opts: { failClosed?: boolean } = {}): Promise<boolean> {
+  if (!(await requireAi(res, workspaceId))) return false;
+  const keys = budgetKeys(workspaceId, userId);
   try {
     const used: Array<[string, number]> = [];
     for (const [key, cap] of keys) {
@@ -71,9 +77,48 @@ export async function spendAi(res: Response, workspaceId: string, userId: string
       }
     }
   } catch (err) {
+    if (opts.failClosed) {
+      console.error("AI budget check failed, refusing the request:", err instanceof Error ? err.message : err);
+      sendError(res, 503, "This is temporarily unavailable. Try again shortly.");
+      return false;
+    }
     console.error("AI budget check failed, letting the request through:", err instanceof Error ? err.message : err);
   }
   return true;
+}
+// Gives `cost` back when no AI call was made for it after all (SEC-05).
+export async function refundAi(workspaceId: string, userId: string, cost: number): Promise<void> {
+  try {
+    for (const [key] of budgetKeys(workspaceId, userId)) await connection.decrby(key, cost);
+  } catch (err) {
+    console.error("AI budget refund failed:", err instanceof Error ? err.message : err);
+  }
+}
+
+// One call at a time per person for a route the request waits on (SEC-05):
+// a Redis key with a TTL past the route's wait, released when it finishes.
+// Sends 429 `ai_busy` when one is already running, 503 when Redis can't say.
+// Returns the release function, or null when refused.
+export async function holdAiSlot(res: Response, name: string, userId: string, ttlSeconds: number): Promise<(() => Promise<void>) | null> {
+  const key = `aiinflight:${name}:u:${userId}`;
+  const token = randomUUID();
+  try {
+    if ((await connection.set(key, token, "EX", ttlSeconds, "NX")) !== "OK") {
+      sendError(res, 429, "This is already running for you. Wait for it to finish.", { code: "ai_busy" });
+      return null;
+    }
+  } catch (err) {
+    console.error("AI in-flight check failed, refusing the request:", err instanceof Error ? err.message : err);
+    sendError(res, 503, "This is temporarily unavailable. Try again shortly.");
+    return null;
+  }
+  return async () => {
+    try {
+      if ((await connection.get(key)) === token) await connection.del(key);
+    } catch (err) {
+      console.error("AI in-flight release failed (it expires on its own):", err instanceof Error ? err.message : err);
+    }
+  };
 }
 
 // Before queueing an AI job: sends 409 and returns false when nothing would answer it.

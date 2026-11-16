@@ -173,9 +173,16 @@ The worker then holds the AI to the text (`worker/src/researchDraft.ts`):
 - Needs the workspace's AI (`409`, `code: "ai_not_configured"`) and counts
   1 against the daily budget (§9a; `429 ai_limit`). The request waits for
   the job (`RESEARCH_DRAFT_QUEUE`, `RESEARCH_DRAFT_TIMEOUT_MS`, 60 s).
+- One at a time per person (SEC-05): a Redis key (`aiinflight:researchDraft:u:<id>`,
+  `SET NX` with a TTL just past the wait) is held while it runs and released
+  when it ends; a second request meanwhile is `429`, `code: "ai_busy"`.
+  Unlike other AI routes, the budget check **fails closed**: when Redis can't
+  hold the key or count the unit, it's `503`. On a timeout the unit is given
+  back only when the job was still waiting and was removed before it started
+  (`JobTimeoutError.removedBeforeStart`).
 - **Success (`200 OK`):** `{ "drafts": [{ "title", "text", "levers", "evidence", "scope", "source", "mode": "on" }] }`,
   possibly empty when nothing in the text read as a finding.
-- **Errors:** `400` empty or too long; `503` the queue is down; `504` not
+- **Errors:** `400` empty or too long; `429` `ai_busy` or `ai_limit`; `503` the queue or Redis is down; `504` not
   answered in time; `502` the AI's reply couldn't be used.
 
 **Settings → AI → Research** (`SettingsResearchView.vue`, `/settings/ai/research`,

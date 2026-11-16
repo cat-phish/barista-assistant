@@ -396,7 +396,8 @@ label read 3, web lookup 5, recap 2, research draft 1 (§9h). Over `AI_DAILY_USE
 per person) or `AI_DAILY_WORKSPACE_UNITS` (default 1000, ten people's worth): `429` with
 `code: "ai_limit"`, and the refused call costs nothing. Chat has its own
 per-message cap (`dailyMessages`, §9e). Counters live in Redis; if Redis can't
-be reached the request goes through.
+be reached the request goes through, except a research draft, which is refused
+(`503`) and also runs one at a time per person (research.md §1f "Drafts", SEC-05).
 
 ## Brew profile
 

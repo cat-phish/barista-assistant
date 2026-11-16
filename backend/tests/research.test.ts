@@ -8,7 +8,7 @@ import { EMPTY_USER_RESEARCH, type OwnFinding, type UserResearch } from "@barist
 import { AI_SERVER_KEY, DEFAULT_SERVER_AI } from "@barista/shared/aiConfig";
 import { serverSettings, users, workspaceAiConfigs, workspaces } from "@barista/shared/schema";
 import { db } from "../src/db.js";
-import { researchDraftQueue } from "../src/queue.js";
+import { connection, researchDraftQueue } from "../src/queue.js";
 import { cleanText } from "../src/research.js";
 import { addMember, newUser, newWorkspace } from "./helpers.js";
 
@@ -207,5 +207,65 @@ describe("research drafts from text", () => {
     }
     expect((await owner.agent.get(URL)).body.research.own).toEqual([]);
     expect((await owner.agent.get(`/api/workspaces/${ws}/research`)).body.research.own).toEqual([]);
+  });
+
+  // SEC-05: one draft at a time per person, the budget fails closed, and a
+  // timed-out job that never started costs nothing.
+  const budget = async (userId: string) => Number((await connection.get(`aibudget:${new Date().toISOString().slice(0, 10)}:u:${userId}`)) ?? 0);
+
+  it("one draft at a time per person: a second while the first runs is a 429", async () => {
+    const owner = await newUser("owner");
+    const ws = (await newWorkspace(owner)).id;
+    await withAi(ws);
+    const url = `/api/workspaces/${ws}/research/draft`;
+    let started!: () => void;
+    const running = new Promise<void>((r) => (started = r));
+    let finish!: () => void;
+    const gate = new Promise<void>((r) => (finish = r));
+    const worker = new Worker<ResearchDraftJobData, ResearchDraftResult>(
+      RESEARCH_DRAFT_QUEUE,
+      async () => {
+        started();
+        await gate;
+        return { drafts: [] };
+      },
+      { connection: new Redis(process.env.REDIS_URL ?? "", { password: process.env.REDIS_PASSWORD, maxRetriesPerRequest: null }) },
+    );
+    try {
+      await worker.waitUntilReady();
+      const first = owner.agent.post(url).send({ text: "Slower pours." }).then((r) => r);
+      await running;
+      const second = await owner.agent.post(url).send({ text: "Slower pours." });
+      expect(second.status).toBe(429);
+      expect(second.body.code).toBe("ai_busy");
+      finish();
+      expect((await first).status).toBe(200);
+      // Released once it finished.
+      expect((await owner.agent.post(url).send({ text: "Again." })).status).toBe(200);
+    } finally {
+      finish();
+      await worker.close();
+    }
+  });
+
+  it("refuses when the budget can't be counted, and gives the unit back when the job never started", async () => {
+    const owner = await newUser("owner");
+    const ws = (await newWorkspace(owner)).id;
+    await withAi(ws);
+    const url = `/api/workspaces/${ws}/research/draft`;
+    const incr = vi.spyOn(connection, "incrby").mockRejectedValueOnce(new Error("redis down"));
+    expect((await owner.agent.post(url).send({ text: "Slower pours." })).status).toBe(503);
+    incr.mockRestore();
+    // No worker: the job waits, times out and is removed before it starts.
+    await researchDraftQueue.pause();
+    vi.stubEnv("RESEARCH_DRAFT_TIMEOUT_MS", "300");
+    try {
+      const res = await owner.agent.post(url).send({ text: "Slower pours." });
+      expect(res.status).toBe(504);
+      expect(await budget(owner.id)).toBe(0);
+    } finally {
+      vi.unstubAllEnvs();
+      await researchDraftQueue.resume();
+    }
   });
 });
