@@ -1343,7 +1343,9 @@ audit notes; the fixed ones are listed in `roadmap.md`.
 - **Why:** SEC-34 (rest), 35, 37, 38, 40, found in config the tests can't
   reach.
 - **Approach:**
-  - Caddy: CSP, HSTS, Referrer-Policy and frame-ancestors; run as a
+  - Caddy: CSP, HSTS, Referrer-Policy and frame-ancestors are set
+    (`frontend/Caddyfile`, SEC-34; the theme snippet moved to
+    `public/theme-init.js` so scripts need no inline allowance); run as a
     non-root user; pin image tags and GitHub Actions to digests.
   - TLS: the `tls internal` root CA is fetched over plain HTTP and trusted
     by devices (SEC-35); for a public host use a real certificate or a

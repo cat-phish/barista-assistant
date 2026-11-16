@@ -30,6 +30,17 @@ localhost, {$APP_HOST} {
 	tls internal
 	encode zstd gzip
 
+	# SEC-34. Scripts only from this origin (the theme snippet is a file for
+	# that reason); inline styles stay because Vue sets style attributes.
+	# HSTS is sent only over HTTPS; behind a tunnel set it there as well.
+	header {
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		Strict-Transport-Security "max-age=31536000"
+		Referrer-Policy "same-origin"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+
 	# Passes the client IP on (X-Forwarded-For): the backend trusts one
 	# proxy (TRUST_PROXY=1), so the IP rate limits are per device. Behind a tunnel/CDN add
 	# `servers { trusted_proxies static <its ranges> }` (global options) or
