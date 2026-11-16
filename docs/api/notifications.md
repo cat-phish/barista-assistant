@@ -160,10 +160,11 @@ Saves this device's subscription (from `PushSubscription.toJSON()`).
   `endpoint` an `https` URL (≤ 1000), keys as base64url (≤ 200), `label`
   1–60 characters.
 - **Success (`200 OK`):** `{ "device": { ...device } }`. The same endpoint
-  sent again updates that device (keys and label, switched on), also when
-  it was another person's: whoever subscribes a device last gets its
-  notifications.
-- **Errors:** `400` invalid body; `404` Web Push isn't set up.
+  sent again by the same person updates that device (keys and label,
+  switched on).
+- **Errors:** `400` invalid body; `404` Web Push isn't set up; `409` the
+  endpoint is registered to another account (SEC-05): that person removes
+  the device first, e.g. on a shared browser, before the next one signs in.
 
 ### `PATCH /api/auth/me/notifications/push/:id`
 

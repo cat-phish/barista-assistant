@@ -154,8 +154,9 @@ notificationsRouter.get("/push/key", (_req: Request, res: Response<{ publicKey: 
   res.json({ publicKey: vapid.publicKey });
 });
 
-// Saves this device's subscription. The same endpoint again (re-subscribed,
-// or now signed in as someone else) updates that device instead.
+// Saves this device's subscription. The same endpoint again by the same person
+// updates that device; one that belongs to someone else is refused (SEC-05):
+// they remove it from their own list first (docs/api/notifications.md).
 notificationsRouter.post("/push", async (req: Request, res: Response<{ device: PushDeviceSummary }>) => {
   if (!webPushSettings()) {
     sendError(res, 404, NOT_SET_UP);
@@ -166,6 +167,11 @@ notificationsRouter.post("/push", async (req: Request, res: Response<{ device: P
   if (!(await outboundOk(body.endpoint, res))) return;
   const userId = authedUserId(req);
   const hash = endpointHash(body.endpoint);
+  const [owned] = await db.select({ userId: pushSubscriptions.userId }).from(pushSubscriptions).where(eq(pushSubscriptions.endpointHash, hash));
+  if (owned && owned.userId !== userId) {
+    sendError(res, 409, "This device is already registered to another account. Sign in there and remove it first.");
+    return;
+  }
   const values = { userId, endpoint: body.endpoint, p256dh: body.keys.p256dh, auth: body.keys.auth, label: body.label, enabled: true };
   await db
     .insert(pushSubscriptions)

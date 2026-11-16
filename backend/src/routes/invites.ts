@@ -14,7 +14,7 @@ import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 
 export const INVITE_DAYS = 14;
 export const MAX_PENDING_INVITES = 50;
-const fresh = () => gt(workspaceInvites.createdAt, sql`(now() - interval ${sql.raw(String(INVITE_DAYS))} day)`);
+export const fresh = () => gt(workspaceInvites.createdAt, sql`(now() - interval ${sql.raw(String(INVITE_DAYS))} day)`);
 
 export interface WorkspaceInviteSummary {
   id: string;

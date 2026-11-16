@@ -20,9 +20,15 @@ const submitting = ref(false);
 const error = ref('');
 // A server can close sign-ups (ALLOW_REGISTRATION=false).
 const closed = ref(false);
+// Verification is on: the server doesn't sign them in or say if the address is taken.
+const checkMail = ref(false);
+// ALLOW_REGISTRATION=invite: only an email that has been invited to a workspace.
+const inviteOnly = ref(false);
 onMounted(async () => {
   try {
-    closed.value = !(await authApi.registration()).open;
+    const status = await authApi.registration();
+    closed.value = !status.open;
+    inviteOnly.value = status.inviteOnly;
   } catch {
     // Unknown: show the form; the server still refuses if it's closed.
   }
@@ -39,7 +45,10 @@ async function submit(): Promise<void> {
   error.value = '';
   submitting.value = true;
   try {
-    await auth.register(email.value, password.value);
+    if (!(await auth.register(email.value, password.value))) {
+      checkMail.value = true;
+      return;
+    }
     // New accounts have no workspace yet; the guard sends them to create one.
     await router.replace(safeRedirect(route.query.redirect));
   } catch (err) {
@@ -56,7 +65,12 @@ async function submit(): Promise<void> {
 <template>
   <AuthCard title="Create an account">
     <p v-if="closed" class="muted">This server isn't taking new accounts. Ask whoever runs it to create one for you.</p>
+    <div v-else-if="checkMail" role="status">
+      <p>Check your email. If the address can take a new account, there's a link to confirm it; then you can log in.</p>
+      <RouterLink :to="{ name: 'login' }">Go to log in</RouterLink>
+    </div>
     <form v-else class="form" novalidate @submit.prevent="submit">
+      <p v-if="inviteOnly" class="muted">This server is invite-only. Sign up with the email address a workspace owner invited.</p>
       <div class="field">
         <label for="email">Email</label>
         <input id="email" v-model.trim="email" type="email" autocomplete="email" required />

@@ -24,8 +24,15 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = (await authApi.login(email, password)).user;
   }
 
-  async function register(email: string, password: string): Promise<void> {
-    user.value = (await authApi.register(email, password)).user;
+  // true: signed in; false: the server wants the email confirmed first and
+  // answers the same for a taken address (docs/api/auth.md §1, 202).
+  async function register(email: string, password: string): Promise<boolean> {
+    const res = await authApi.register(email, password);
+    if ('user' in res) {
+      user.value = res.user;
+      return true;
+    }
+    return false;
   }
 
   async function logout(): Promise<void> {

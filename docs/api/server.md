@@ -24,8 +24,13 @@ takes effect on the next request; nobody is an admin until one is granted.
 
 ## On a server open to the internet
 
-- `ALLOW_REGISTRATION=false` closes sign-ups (§1): create the accounts
-  first, then close it. Existing accounts still log in.
+- `ALLOW_REGISTRATION=invite` takes sign-ups only from an email a workspace
+  owner has invited; `false` closes them: create the accounts first, then
+  close it. Existing accounts still log in (§1).
+- TLS: put a tunnel or proxy in front that ends TLS and sets HSTS (the
+  `tls internal` certificate is for a LAN test server only). Behind one, set
+  `TRUST_PROXY=1` and Caddy's `trusted_proxies`, or every visitor shares one
+  login and sign-up rate limit.
 - `BACKUP_DOWNLOADS=false` keeps dumps on the server: admins see and run
   backups but copy the files from `./backups` themselves.
 - Downloading a dump always asks for the admin's password again.

@@ -7,10 +7,9 @@ vi.hoisted(() => {
 import request from "supertest";
 import { app } from "../src/app.js";
 
-// SEC-32 (register half), parked for an owner decision: sign-up signs the new
-// person in, so a duplicate can't answer the same without a "check your email"
-// step (needs SMTP). The 5 per hour per IP cap (SEC-30) slows enumeration.
-it.todo("SEC-32 register answers a duplicate email the same way as a new one");
+// SEC-32 (register half): covered in email-verification.test.ts. With mail
+// verification on, a taken address gets the same 202 as a new one; without it
+// (no SMTP) it's still a 409 and the cap below (SEC-30) slows enumeration.
 
 // SEC-30: POST /register has no rate limit.
 it("SEC-30 rate-limits register: the 6th sign-up from one IP in a minute is 429", async () => {

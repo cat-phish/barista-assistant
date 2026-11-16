@@ -34,8 +34,14 @@ if (process.env.EMAIL_VERIFICATION?.trim().toLowerCase() === "true" && (!process
 // Switches read on each call, so tests can change them.
 // Web Push (docs/api/notifications.md §1b): the VAPID keys, or null = off.
 export const webPushSettings = (): VapidSettings | null => vapidFromEnv();
-// ALLOW_REGISTRATION=false closes sign-ups (docs/api/auth.md §1).
-export const registrationOpen = (): boolean => process.env.ALLOW_REGISTRATION?.trim().toLowerCase() !== "false";
+// ALLOW_REGISTRATION: true (default) open, "invite" only an email with a
+// pending workspace invite, false closed (docs/api/auth.md §1).
+export type RegistrationMode = "open" | "invite" | "closed";
+export function registrationMode(): RegistrationMode {
+  const v = process.env.ALLOW_REGISTRATION?.trim().toLowerCase();
+  return v === "false" ? "closed" : v === "invite" ? "invite" : "open";
+}
+export const registrationOpen = (): boolean => registrationMode() !== "closed";
 // EMAIL_VERIFICATION=true: people confirm their address by a mailed link, and
 // only a confirmed address can accept a workspace invite (docs/api/auth.md
 // §1d). Off by default, so a server with no mail account works as before.
