@@ -693,7 +693,12 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 22. Step changes in a recipe (cold bloom, staged temperatures)
 
-- **Status:** idea
+- **Status:** done on branch `experiment-cards` (not merged); move to
+  `roadmap.md` once it is. Decided approach: experiment cards in the AI
+  chat. A `recipeChange` or `newRecipe` proposal carries `experiment: true`
+  and the card shows an "Experiment" badge; the chat prompt gets the
+  experiment research findings as ideas (`CHAT_EXPERIMENTS`). No new brew
+  fields, no migration (`docs/api/chat.md` §12, `llm-contract.md` §9e).
 - **Why:** the research has ideas that change single steps: a cold or
   cool bloom, hot-then-cool staging, bloom size and length, pour count.
   Most are expert opinion only (`docs/research/cold-bloom-low-temp.md`,

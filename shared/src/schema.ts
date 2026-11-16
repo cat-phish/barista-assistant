@@ -1961,6 +1961,7 @@ export interface ChatRecipeChangeProposal extends ChatProposalBase {
   recipeLabel: string;
   changes: ChatProposalRecipe;
   warnings?: string[]; // step checks it fails (@barista/shared/recipeChecks); none = absent
+  experiment?: true; // a step-level experiment, expert opinion only (chat.md §12); absent = not one
 }
 export interface ChatNewRecipeProposal extends ChatProposalBase {
   kind: "newRecipe";
@@ -1968,6 +1969,7 @@ export interface ChatNewRecipeProposal extends ChatProposalBase {
   brewerLabel: string | null;
   recipe: ChatProposalRecipe & { name: string; targetDoseGrams: number };
   warnings?: string[]; // step checks it fails (@barista/shared/recipeChecks); none = absent
+  experiment?: true; // a step-level experiment, expert opinion only (chat.md §12); absent = not one
 }
 export type ChatProposal = ChatBrewProposal | ChatRecipeChangeProposal | ChatNewRecipeProposal;
 

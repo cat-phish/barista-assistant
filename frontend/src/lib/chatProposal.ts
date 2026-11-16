@@ -59,3 +59,7 @@ export function proposalRoute(p: ChatProposal): { name: string; params?: Record<
   if (p.kind === 'recipeChange') return { name: 'recipe-edit', params: { id: p.recipeId }, query: { proposal: '1' } };
   return { name: 'recipe-new', query: { proposal: '1' } };
 }
+
+// Whether the card carries the Experiment badge (docs/api/chat.md §12): only a
+// recipe proposal can, and only when the flag is exactly true.
+export const isExperiment = (p: ChatProposal): boolean => p.kind !== 'brew' && p.experiment === true;

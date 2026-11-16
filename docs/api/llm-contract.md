@@ -702,7 +702,7 @@ has already read, so a failed reply is marked failed and they send again.
    sees is unchanged, only where. The intro to the attachments says what a
    period holds: `figures` over every brew in it, `previousFigures` to
    compare with, the newest brews in detail and `brewsLeftOut`, and not to
-   make up brews that weren't sent (`CHAT_PROMPT_VERSION` 2026-11-d).
+   make up brews that weren't sent (`CHAT_PROMPT_VERSION` 2026-11-e adds the experiments paragraph).
 5. **Reply:** text, streamed, no schema (`streamReply`, `worker/src/llm.ts`,
    on both providers). The prompt allows light Markdown (bold, italics,
    lists, tables, code), which the chat shows formatted (`chat.md` §12, "The
@@ -740,7 +740,18 @@ has already read, so a failed reply is marked failed and they send again.
      ending inside the window, fewer steps over invented precision, and a
      steep of hours (cold brew) said in the text, not as a step. Asked for a
      recipe, the reply adds its block rather than only describing it.
-     `CHAT_PROMPT_VERSION` (`worker/src/prompt.ts`) names this text; replies
+   - **Experiments** (`CHAT_EXPERIMENTS`, after the proposal text): for a
+     step-level experiment the person asks for or the talk points to, the
+     reply may propose a `recipeChange` or `newRecipe` with per-step
+     `targetTempC`, `durationSec` and `targetWaterGrams` and `"experiment":
+     true`, say it is expert opinion only, change one thing at a time, keep
+     the recipe's water and dose, and suggest brewing the usual recipe back
+     to back. The text of the `experiment` research findings (`coldBloom`,
+     `firstPours` in `shared/src/research.ts`) follows as "Experiment
+     ideas"; they stay out of the analysis and Suggest prompts.
+     `checkProposal` keeps `experiment` only as `true` on those two kinds
+     (`chat.md` §12).
+   - `CHAT_PROMPT_VERSION` (`worker/src/prompt.ts`) names this text; replies
      don't store it, the eval's propose runs do.
    - A reply that is only proposals is fine; one with neither text nor a
      proposal is an empty reply (failed).

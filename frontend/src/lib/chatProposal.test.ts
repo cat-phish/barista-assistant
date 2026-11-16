@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatBrewProposal, ChatNewRecipeProposal, ChatRecipeChangeProposal } from '../api/chats';
-import { proposalLines, proposalRoute } from './chatProposal';
+import { isExperiment, proposalLines, proposalRoute } from './chatProposal';
 
 const base = { title: 'T', why: 'W', state: 'open' as const };
 const brew: ChatBrewProposal = { kind: 'brew', ...base, beanId: 'b', beanLabel: 'Onyx Guji', recipeId: 'r', recipeLabel: 'House V60', grinderId: 'g', grinderLabel: 'C40', grindSetting: 18.5, tempC: 94, ratio: 16.666 };
@@ -24,5 +24,15 @@ describe('proposalRoute', () => {
   it('opens the brew page or the recipe form', () => {
     expect(proposalRoute(brew)).toEqual({ name: 'brew', query: { proposal: '1' } });
     expect(proposalRoute({ kind: 'recipeChange', ...base, recipeId: 'r', recipeLabel: 'R', changes: {} })).toMatchObject({ name: 'recipe-edit', params: { id: 'r' } });
+  });
+});
+
+describe('isExperiment', () => {
+  it('badges only a recipe proposal flagged as an experiment', () => {
+    const change: ChatRecipeChangeProposal = { kind: 'recipeChange', ...base, recipeId: 'r', recipeLabel: 'R', changes: {} };
+    expect(isExperiment(change)).toBe(false);
+    expect(isExperiment({ ...change, experiment: true })).toBe(true);
+    expect(isExperiment({ kind: 'newRecipe', ...base, brewerId: null, brewerLabel: null, recipe: { name: 'N', targetDoseGrams: 20 }, experiment: true })).toBe(true);
+    expect(isExperiment(brew)).toBe(false);
   });
 });

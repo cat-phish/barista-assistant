@@ -223,8 +223,8 @@ const blockSchema = z.discriminatedUnion("kind", [
     tempC: temp.nullish(),
     ratio: z.number().gt(0).max(100).nullish(),
   }),
-  z.object({ kind: z.literal("recipeChange"), ...common, recipe: ref, changes: recipeSchema }),
-  z.object({ kind: z.literal("newRecipe"), ...common, basedOn: ref.nullish(), recipe: recipeSchema }),
+  z.object({ kind: z.literal("recipeChange"), ...common, recipe: ref, changes: recipeSchema, experiment: z.unknown().optional() }),
+  z.object({ kind: z.literal("newRecipe"), ...common, basedOn: ref.nullish(), recipe: recipeSchema, experiment: z.unknown().optional() }),
 ]);
 
 const round = (n: number, places: number): number => Number(n.toFixed(places));
@@ -268,6 +268,8 @@ function stepWarnings(values: ChatProposalRecipe, kind: MethodKind, current?: Ch
     kind,
   );
 }
+// Only a literal true counts; anything else is not an experiment (chat.md §12).
+const withExperiment = (flag: unknown): { experiment?: true } => (flag === true ? { experiment: true } : {});
 const withWarnings = (warnings: string[]): { warnings?: string[] } => (warnings.length ? { warnings } : {});
 
 const finishOk = (r: ChatProposalRecipe): boolean => r.expectedFinishMinSec == null || r.expectedFinishMaxSec == null || r.expectedFinishMinSec <= r.expectedFinishMaxSec;
@@ -319,7 +321,7 @@ export function checkProposal(raw: unknown, refs: RefTable): ChatProposal | null
     const changes = recipeValues(p.changes);
     if (!Object.keys(changes).length || !finishOk(changes)) return null;
     const warnings = stepWarnings(changes, ref.brewer?.kind ?? "filter", recipe.current);
-    return { kind: "recipeChange", ...base, recipeId: recipe.id, recipeLabel: recipe.label, changes, ...withWarnings(warnings) };
+    return { kind: "recipeChange", ...base, recipeId: recipe.id, recipeLabel: recipe.label, changes, ...withWarnings(warnings), ...withExperiment(p.experiment) };
   }
   const based = target(p.basedOn);
   if (p.basedOn && !based?.brewer) return null;
@@ -332,6 +334,7 @@ export function checkProposal(raw: unknown, refs: RefTable): ChatProposal | null
     brewerLabel: based?.brewer?.label ?? null,
     recipe: { ...values, name: values.name, targetDoseGrams: values.targetDoseGrams },
     ...withWarnings(stepWarnings(values, based?.brewer?.kind ?? "filter")),
+    ...withExperiment(p.experiment),
   };
 }
 
