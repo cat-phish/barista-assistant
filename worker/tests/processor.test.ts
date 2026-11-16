@@ -119,6 +119,20 @@ describe("processBrewAnalysis", () => {
     expect((await processAiPreview({ kind: "analysis", brewLogId: logIds.day8!, note: "Tasted it cold." }))?.system).toBe(saved!.request?.system);
   });
 
+  it("the preview shows the barista's and the workspace's research as the analysis sends it, theirs redacted (SEC-03)", async () => {
+    llm.mockResolvedValue(ANALYSIS);
+    const finding = (id: string, text: string) => ({ id, title: "T", text, levers: ["agitation" as const], evidence: "own" as const, scope: "any" as const, source: null, mode: "on" as const, createdAt: "2026-11-01T00:00:00.000Z" });
+    await db.update(users).set({ research: { settings: { sourStrong: { mode: "off", note: null } }, own: [finding("a1b2c3d4", "My secret pour.")], seenVersion: null } }).where(eq(users.id, userId));
+    await db.update(workspaces).set({ research: { settings: {}, own: [finding("ffffffff", "The kettle runs hot.")] } }).where(eq(workspaces.id, workspaceId));
+    await processBrewAnalysis({ brewLogId: logIds.day8! });
+    const [saved] = await db.select().from(llmAnalyses).where(eq(llmAnalyses.brewLogId, logIds.day8!));
+    const preview = await processAiPreview({ kind: "analysis", brewLogId: logIds.day8! });
+    expect(preview?.system).toBe(saved!.request?.system);
+    expect(preview?.system).toContain("The kettle runs hot.");
+    expect(preview?.system).not.toContain("My secret pour.");
+    expect(preview?.sections).not.toContain("research.sourStrong");
+  });
+
   it("without a prompt of their own or a note: the defaults, and the plain version", async () => {
     llm.mockResolvedValue(ANALYSIS);
     await processBrewAnalysis({ brewLogId: logIds.day8! });

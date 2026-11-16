@@ -211,7 +211,17 @@ aiPreviewQueue.on("error", (err: Error) => {
   if (err.message !== lastPreviewError) console.error("AI preview queue error:", err.message);
   lastPreviewError = err.message;
 });
-export class JobTimeoutError extends Error {}
+// removedBeforeStart: the job was still waiting and was taken off the queue,
+// so no AI call was made for it (SEC-05: only then is the budget given back).
+export class JobTimeoutError extends Error {
+  constructor(
+    message: string,
+    readonly removedBeforeStart = false,
+  ) {
+    super(message);
+  }
+}
+const NOT_STARTED = new Set(["waiting", "wait", "delayed", "prioritized", "waiting-children"]);
 
 // Waiting for a job's answer needs a blocking connection of its own, and a
 // QueueEvents per queue; made on first use.
@@ -238,8 +248,13 @@ async function addAndWait<D, R>(queue: Queue<D, R>, name: string, data: D, timeo
     return (await job.waitUntilFinished(events, timeoutMs)) as R;
   } catch (err) {
     if (err instanceof Error && /timed out/i.test(err.message)) {
-      await job.remove().catch(() => undefined); // nobody's waiting for it any more
-      throw new JobTimeoutError(err.message);
+      // Nobody's waiting for it any more. An active job is locked and can't be removed.
+      const state = await job.getState().catch(() => "unknown");
+      const removed = await job.remove().then(
+        () => true,
+        () => false,
+      );
+      throw new JobTimeoutError(err.message, removed && NOT_STARTED.has(state));
     }
     throw err;
   }

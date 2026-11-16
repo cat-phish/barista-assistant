@@ -8,6 +8,7 @@ import { beansApi } from '../api/beans';
 import { analysisApi, brewLogsApi, suggestionsApi } from '../api/brews';
 import { ApiError, errorMessage } from '../api/client';
 import { recipesApi } from '../api/recipes';
+import { workspacesApi } from '../api/workspaces';
 import { MAX_SUGGEST_BREWS, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, type AlternativeKind, type Bean, type BrewLog, type Recipe, type BrewerMethod, type SuggestionBatch, type SuggestionRequest, type SuggestSource, type SuggestedAlternative } from '../api/types';
 import AnalysisCard from '../components/AnalysisCard.vue';
 import AiNoteField from '../components/AiNoteField.vue';
@@ -212,6 +213,19 @@ const recipe = computed(() => recipes.value.find((r) => r.id === recipeId.value)
 // the earlier brews picked (which, and how many), filled in when they come.
 const suggester = useParameterSuggestion();
 const suggestion = computed(() => (suggester.suggestion.value ? startingParameters(suggester.suggestion.value) : null));
+// "Follows …" names a workspace finding by its title; another person's own
+// finding isn't called yours (docs/api/research.md §1f, SEC-04).
+const wsFindingTitles = ref<Record<string, string>>({});
+watch(suggestion, async (s) => {
+  const ws = workspaces.current?.id;
+  if (!ws || !s?.routes.some((r) => r.findings.some((k) => k.startsWith('own.')))) return;
+  try {
+    wsFindingTitles.value = Object.fromEntries((await workspacesApi.research(ws)).research.own.map((f) => [f.id, f.title]));
+  } catch {
+    // The labels fall back to the generic ones.
+  }
+});
+const routeFindings = (keys: readonly string[]) => findingTitles(keys, { workspace: wsFindingTitles.value, mine: !!auth.user && suggester.suggestion.value?.requestedBy === auth.user.id });
 // A route's values go into the brew only once its "Use these values" is
 // tapped; the brew then records the suggestion and route it came from.
 const usedRoute = ref<number | null>(null);
@@ -1582,7 +1596,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
                   Ratio 1:{{ formatRatio(r.ratio) }}<template v-if="usedRoute === i && ratioKept">, keeping your {{ ratioKept }}</template>.
                 </p>
                 <p v-else class="muted small">Your batch and its ratio stay as they are.</p>
-                <p v-if="findingTitles(r.findings).length" class="muted small">Follows: {{ findingTitles(r.findings).join('; ') }}</p>
+                <p v-if="routeFindings(r.findings).length" class="muted small">Follows: {{ routeFindings(r.findings).join('; ') }}</p>
                 <button v-if="usedRoute === null" class="btn btn-primary" type="button" @click="useSuggestion(i)">Use these values</button>
               </li>
             </template>

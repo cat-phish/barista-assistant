@@ -186,17 +186,19 @@ export async function processAiPreview(data: AiPreviewJobData): Promise<AiReques
     const hidden = new Set((ws?.settings ?? DEFAULT_WORKSPACE_SETTINGS).aiHidden);
     const context = await loadBrewContext(data.brewLogId, { profile: hidden });
     if (!context) return null;
-    return analysisSent(context, hidden, await promptFor(ws?.baristaId ?? null, data.note));
+    // With the research the job would use (docs/api/research.md §1f, SEC-03).
+    return analysisSent(context, hidden, await promptFor(ws?.baristaId ?? null, data.note, ws?.workspaceId));
   }
   if (data.kind === "beanReview") {
     const hidden = await hiddenFor(data.review.beanId);
     const context = hidden && (await loadBeanReviewContext(data.review));
     return context ? beanReviewSent(context, hidden!, await promptFor(data.review.requestedBy, data.review.note)) : null;
   }
-  const hidden = await hiddenFor(data.suggestion.beanId);
-  if (!hidden) return null;
+  const sws = await beanWorkspace(data.suggestion.beanId);
+  if (!sws) return null;
+  const { hidden } = sws;
   const context = await loadSuggestContext(data.suggestion, { ratedOnly: hidden.has("unratedHistory"), profile: hidden });
-  return context ? suggestionSent(context, hidden, await promptFor(data.suggestion.requestedBy, data.suggestion.note)) : null;
+  return context ? suggestionSent(context, hidden, await promptFor(data.suggestion.requestedBy, data.suggestion.note, sws.workspaceId)) : null;
 }
 
 // Every attempt failed: the brew page shows why, with "Try again".
