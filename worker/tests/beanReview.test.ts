@@ -84,7 +84,8 @@ describe("a bean review's brews", () => {
   it("previews the same request, with the note, without asking the AI", async () => {
     const preview = await processAiPreview({ kind: "beanReview", review: job({ note: "Mostly with milk." }) });
     expect(preview?.sections).toEqual(["reviewCore", "reviewOutput", "note", "end"]);
-    expect(preview?.system).toContain("Mostly with milk.");
+    expect(preview?.system).not.toContain("Mostly with milk."); // SEC-22
+    expect(preview?.system).toContain("not shown to other members");
     expect(llm).not.toHaveBeenCalled();
     const context = await loadBeanReviewContext(job());
     expect(beanReviewSent(context!).input).toMatchObject({ ratingScale: "0.5-5", brews: expect.any(Array) });

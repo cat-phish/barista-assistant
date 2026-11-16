@@ -243,7 +243,8 @@ describe("processParameterSuggestion", () => {
     await processParameterSuggestion({ suggestionId });
     expect(llm.mock.calls[0]![3]).toEqual({ prompt, note: "For iced coffee" });
     expect((await row(suggestionId))!.promptVersion).toMatch(/\+custom$/);
-    expect((await row(suggestionId))!.request?.system).toContain("Our guests like it strong.");
+    expect((await row(suggestionId))!.request?.system).not.toContain("Our guests like it strong."); // SEC-22: saved without the person's own text
+    expect((await row(suggestionId))!.request?.system).toContain("not shown to other members");
   });
 
   it("leaves out unrated brews and passes on what the workspace keeps from the AI", async () => {

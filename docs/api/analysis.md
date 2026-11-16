@@ -288,6 +288,9 @@ built from the request itself (`analysisSent` / `suggestionSent`,
 - `sections`: the prompt sections it was built from (`docs/api/llm-contract.md`
   §9 and §9b), in order; `system`: the system prompt as sent; `input`: the
   user message, as JSON.
+- The person's own instructions and a request's note (`docs/api/auth.md` §1c)
+  are saved as `[written by the person who asked; not shown to other members]`,
+  since any member can read this (SEC-22).
 - `null` on analyses made before it was saved, on a suggestion until it's
   done, and after a restore or import of a file without it.
 - It's large (often 10-30 KB), so rows are returned without it: an

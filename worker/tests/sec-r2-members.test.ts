@@ -58,8 +58,7 @@ describe("SEC-21 reminders for a removed member", () => {
 // SEC-02 / SEC-22: the saved request (served to any member by GET .../request,
 // docs/api/analysis.md §8c) carries the barista's private instructions verbatim.
 describe("SEC-22 private AI prompt in the saved request", () => {
-  // Parked for an owner decision (who may read a person's AI instructions).
-  it.skip("keeps the barista's own instructions out of the request saved for every member", async () => {
+  it("keeps the barista's own instructions out of the request saved for every member", async () => {
     const request = await processAiPreview({ kind: "analysis", brewLogId });
     expect(request).not.toBeNull();
     expect(JSON.stringify(request)).not.toContain("SECRET-A");

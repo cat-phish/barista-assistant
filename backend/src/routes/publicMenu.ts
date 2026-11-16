@@ -50,8 +50,8 @@ const FIELD_COLUMNS: Record<BeanMenuField, ReadonlyArray<keyof BeanDetails>> = {
 };
 function publicBean(bean: MenuBean, fields: readonly BeanMenuField[], differs?: BeanDifference[]): PublicBean {
   const out: PublicBean = { id: bean.id, roasterName: bean.roasterName, beanName: bean.beanName };
-  // A difference the block hides is still sent: it's what tells the batches apart.
-  const shown = [...new Set([...fields, ...(differs ?? []).filter((d): d is BeanMenuField => d !== "batchNumber")])];
+  // SEC-93: a field the block hides stays hidden, even when it's what tells batches apart.
+  const shown = [...fields];
   for (const f of shown) for (const key of FIELD_COLUMNS[f]) Object.assign(out, { [key]: bean[key] });
   if (shown.includes("roastDate") && bean.roastDate) out.freezes = bean.freezes;
   if (differs) {
@@ -97,15 +97,15 @@ function freshest(group: MenuBean[], onDate: string): MenuBean {
   return pool.reduce((best, b) => (age(b) < age(best) ? b : best));
 }
 
-// What differs within a group: the shown details and batch number that do;
-// if none of those do, any detail that does (even one the block hides).
+// What differs within a group: the shown details and batch number that do.
+// A hidden detail never counts (SEC-93), so batches that differ only in one
+// are listed alike.
 function differences(group: MenuBean[], fields: readonly BeanMenuField[]): BeanDifference[] {
   const value = (b: MenuBean, d: BeanDifference) =>
     JSON.stringify(d === "batchNumber" ? b.batchNumber : FIELD_COLUMNS[d].map((k) => (k === "roastDate" ? (b.roastDate?.toISOString().slice(0, 10) ?? null) : b[k])));
   const all: BeanDifference[] = [...BEAN_MENU_FIELDS, "batchNumber"];
   const differ = all.filter((d) => new Set(group.map((b) => value(b, d))).size > 1);
-  const shown = differ.filter((d) => d === "batchNumber" || fields.includes(d));
-  return shown.length ? shown : differ;
+  return differ.filter((d) => d === "batchNumber" || fields.includes(d));
 }
 
 export interface PublicMenuItem {
