@@ -109,9 +109,12 @@ describe("buildChatRequest", () => {
     expect(request.messages[0]).toEqual({ role: "system", content: `${CHAT_SYSTEM} The barista's own instructions: Be brief. ${CHAT_PROPOSALS}` });
     expect(request.messages[1]).toEqual({ role: "user", content: "Hi" });
   });
-  it("puts attachments in the system prompt", () => {
+  it("puts attachments in a user turn ahead of the conversation, not the system prompt", () => {
     const request = buildChatRequest("m", [{ role: "user", content: "Hi" }], undefined, [{ kind: "bean", label: "Guji", data: { beanName: "Guji" } }]);
-    expect(String(request.messages[0]!.content)).toContain('[{"kind":"bean","label":"Guji","data":{"beanName":"Guji"}}]');
+    expect(String(request.messages[0]!.content)).not.toContain("Guji");
+    expect(request.messages[1]!.role).toBe("user");
+    expect(String(request.messages[1]!.content)).toContain('[{"kind":"bean","label":"Guji","data":{"beanName":"Guji"}}]');
+    expect(request.messages[2]).toEqual({ role: "user", content: "Hi" });
   });
 });
 
@@ -171,10 +174,10 @@ describe("processChatReply", () => {
     await db.update(aiChatMessages).set({ attachments }).where(and(eq(aiChatMessages.chatId, chatId), eq(aiChatMessages.position, 1)));
     stream.mockResolvedValueOnce({ refusal: null, usage: null });
     await processChatReply({ messageId: replyId, photos: [] }, publisher);
-    const system = JSON.stringify(stream.mock.calls[0]![1].messages[0]);
-    expect(system).not.toContain("Bean0");
-    expect(system).toContain("Bean1");
-    expect(system).toContain("Bean2");
+    const data = JSON.stringify(stream.mock.calls[0]![1].messages[1]);
+    expect(data).not.toContain("Bean0");
+    expect(data).toContain("Bean1");
+    expect(data).toContain("Bean2");
   });
 
   it("keeps what was written when the AI fails part way, and still ends", async () => {

@@ -490,9 +490,13 @@ is written to the database, and it isn't retried. `worker/src/label.ts`:
      `LABEL_WEB_FIELDS` (`@barista/shared/jobs`), `null` or
      `{ value, url }`, the value typed as in step 2.
    - **Checking** (`parseWebReply`): each value as in step 3; its `url`
-     must be http(s), on a host the search visited or cited (its
-     `sources` and `url_citation`s), and on the roaster's site when the
-     search was limited to it; otherwise dropped. A matched `processName`
+     must be http(s) and the same page as one the search visited or cited
+     (its `sources` and `url_citation`s), compared without `www.`,
+     trailing slashes, `utm_` parameters or a #fragment, as `webSources`
+     normalizes; the host alone isn't enough. It must be on the roaster's
+     site when the search was limited to it; otherwise dropped. A
+     `website` value's host must be on the roaster's site, or without one
+     on the host of the page it was read from. A matched `processName`
      drops `processText`.
    - **Sources** (`webSources`): the pages to list for the person, those a
      kept value came from first, then the rest of what it visited or cited,
@@ -549,9 +553,9 @@ has already read, so a failed reply is marked failed and they send again.
 1. **Conversation** (`worker/src/chat.ts`): the chat's last 40 finished
    messages after its `summaryThrough` (all of them without a summary),
    oldest first, starting on one of the person's. Failed replies are left
-   out. A summary goes in the system prompt, after the person's
-   instructions: "The earlier part of this conversation isn't shown below;
-   this is a summary of it, written then: …".
+   out. A summary goes in the data turn (item 4), not the system prompt:
+   "The earlier part of this conversation isn't shown below; this is a
+   summary of it, written then: …".
 2. **Attachments** (`loadAttachments`, `worker/src/chat.ts`): what the
    chat's finished messages attached, however far back (`attachedIn`), the
    workspace's `chatMaxAttachments` most recent
@@ -574,12 +578,18 @@ has already read, so a failed reply is marked failed and they send again.
    chat's latest 6 in the job, and they go with the message they came on.
    Earlier ones aren't sent. A chat with photos in the job uses the vision
    model; otherwise the main one.
-4. **Prompt** (`buildChatSystem`, `worker/src/prompt.ts`): fixed, the person's
-   own `instructions` (`auth.md` §1c), then the attachments as JSON. Their
-   section texts don't apply. The intro to the attachments says what a
+4. **Prompt** (`buildChatSystem`, `worker/src/prompt.ts`): fixed and the
+   person's own `instructions` (`auth.md` §1c); their section texts don't
+   apply. The summary (item 1) and the attachments as JSON are **not** in
+   the system prompt: `buildChatData` sends them as one `user` turn ahead
+   of the conversation, opened by a line saying it's data, never
+   instructions (they hold other members' text and model-written text,
+   which get no instruction standing; `messages` is system, that turn when
+   there's a summary or an attachment, then the conversation). What the AI
+   sees is unchanged, only where. The intro to the attachments says what a
    period holds: `figures` over every brew in it, `previousFigures` to
    compare with, the newest brews in detail and `brewsLeftOut`, and not to
-   make up brews that weren't sent (`CHAT_PROMPT_VERSION` 2026-11-c).
+   make up brews that weren't sent (`CHAT_PROMPT_VERSION` 2026-11-d).
 5. **Reply:** text, streamed, no schema (`streamReply`, `worker/src/llm.ts`,
    on both providers). The prompt allows light Markdown (bold, italics,
    lists, tables, code), which the chat shows formatted (`chat.md` §12, "The
