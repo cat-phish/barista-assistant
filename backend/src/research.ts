@@ -13,6 +13,7 @@ import {
   MAX_OWN_FINDINGS,
   MAX_RESEARCH_NOTE,
   OWN_EVIDENCE,
+  neutralizeFindingText,
   OWN_FINDING_ID,
   RESEARCH_MODES,
   type OwnFinding,
@@ -44,7 +45,8 @@ export const findingInputSchema = z
   .object({
     id: z.string().regex(OWN_FINDING_ID).optional(),
     title: text(MAX_FINDING_TITLE),
-    text: text(MAX_FINDING_TEXT),
+    // Neutralized so it can't pose as another finding in the prompt (SEC-01).
+    text: text(MAX_FINDING_TEXT).transform(neutralizeFindingText),
     levers: z
       .array(z.enum(RESEARCH_LEVERS))
       .min(1, "pick at least one lever")
@@ -87,6 +89,13 @@ export const researchPutSchema = z
   })
   .strict();
 export type ResearchPut = z.infer<typeof researchPutSchema>;
+// A person's PUT may also switch a workspace's finding for themselves
+// ("own.<id>", SEC-02). The id isn't checked against any workspace (theirs
+// are many, and a finding may go); an unknown one is ignored when resolved.
+export const OWN_SETTING_KEY = /^own\.[0-9a-f]{8}$/;
+export const personResearchPutSchema = researchPutSchema.extend({
+  settings: z.record(z.string(), settingSchema).refine((s) => Object.keys(s).every((k) => BUILT_IN_KEYS.has(k) || OWN_SETTING_KEY.test(k)), "settings: not a research finding"),
+});
 
 // The stored findings merged with what was sent: a known id keeps its
 // createdAt, a new one gets an id. null when an id isn't one of the stored.

@@ -24,7 +24,7 @@ import { AI_COST, spendAi } from "../aiConfig.js";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { JobTimeoutError, QueueUnavailableError, requestResearchDrafts } from "../queue.js";
-import { cleanDraftText, mergeFindings, researchPutSchema } from "../research.js";
+import { cleanDraftText, mergeFindings, personResearchPutSchema, researchPutSchema } from "../research.js";
 
 // Research settings (docs/api/research.md §1f): the person's own, and the
 // workspace's defaults and shared findings.
@@ -60,7 +60,7 @@ researchRouter.get("/", async (req: Request, res: Response<MyResearchResponse>) 
 });
 
 researchRouter.put("/", async (req: Request, res: Response<MyResearchResponse>) => {
-  const body = parseBody(researchPutSchema, req, res);
+  const body = parseBody(personResearchPutSchema, req, res);
   if (!body) return;
   const userId = authedUserId(req);
   const stored = await loadMine(userId);

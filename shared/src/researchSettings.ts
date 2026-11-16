@@ -24,6 +24,18 @@ export const MAX_RESEARCH_DRAFT_TEXT = 4000; // free text turned into findings (
 export const MAX_RESEARCH_DRAFTS = 5; // per draft call
 export const OWN_FINDING_ID = /^[0-9a-f]{8}$/;
 
+// An own finding's text can't pose as another finding or a built-in rule in
+// the prompt (SEC-01): "Research finding:" loses its colon, a finding's key in
+// brackets "(leverOrder)" / "(own.<id>)" gets square ones, and double quotes
+// become single, since the prompt quotes the text. Used when saving and again
+// when the worker builds the prompt.
+const FINDING_KEY_IN_PARENS = new RegExp(`\\(\\s*((?:${RESEARCH_FINDINGS.map((f) => f.key).join("|")})|own\\.[0-9a-f]{8})\\s*\\)`, "gi");
+export const neutralizeFindingText = (s: string): string =>
+  s
+    .replace(/research\s*finding\s*:/gi, "research finding -")
+    .replace(FINDING_KEY_IN_PARENS, "[$1]")
+    .replace(/["“”]/g, "'");
+
 // How one built-in finding is treated: null = no choice of their own (the
 // workspace's default, or the finding's). The note is the person's own memo
 // (why it's off, say); it never goes to the AI.
@@ -86,7 +98,9 @@ export function resolveResearch(person: ResearchSettings | null, workspace: Rese
   }
   const own: SentFinding[] = [
     ...(person?.own ?? []).map((o) => ({ ...o, private: true })),
-    ...(workspace?.own ?? []).map((o) => ({ ...o, private: false })),
+    // A workspace's finding: the person's own choice for it ("own.<id>",
+    // SEC-02), else the mode the workspace gave it.
+    ...(workspace?.own ?? []).map((o) => ({ ...o, mode: person?.settings[`own.${o.id}`]?.mode ?? o.mode, private: false })),
   ].filter((o) => o.mode !== "off");
   return { builtIn, own, customized: customized || own.length > 0 };
 }
