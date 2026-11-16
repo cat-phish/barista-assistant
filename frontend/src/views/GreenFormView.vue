@@ -21,7 +21,7 @@ import { distinctNames } from '../lib/nameSuggest';
 import { areaForCountry, COUNTRY_AREAS, ORIGIN_AREAS } from '../lib/origins';
 import { greenForm, greenPrice, parseGreenForm } from '../lib/roasting';
 import { ALTITUDE_LABELS } from '../lib/units';
-import { COMMON_VARIETIES } from '../lib/varieties';
+import { COMMON_VARIETIES, canonicalVariety } from '../lib/varieties';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const props = defineProps<{ id?: string }>(); // set when editing (route param)
@@ -183,7 +183,7 @@ async function save(): Promise<void> {
         </div>
         <div v-if="show('green.varieties')" class="field">
           <label for="green-varieties">Variety</label>
-          <NamesInput id="green-varieties" v-model="form.varieties" :names="varietyNames" placeholder="e.g. 74110, Heirloom" />
+          <NamesInput id="green-varieties" :normalize="canonicalVariety" v-model="form.varieties" :names="varietyNames" placeholder="e.g. 74110, Heirloom" />
         </div>
         <fieldset v-if="show('green.species')" class="field species">
           <legend>Species</legend>

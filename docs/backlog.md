@@ -349,16 +349,10 @@ Recording a brew: what's measured, and how fast it is to log.
 
 ### 61. More than one species on a bean
 
-- **Status:** idea (numbered last to avoid renumbering; belongs with the
-  bean items in G)
-- **Why:** a blend or lot can mix species (arabica and robusta, say), but
-  a bean holds one.
-- **Approach:** let the species field take several values; check the
-  schema, the backup, the AI context and the list filters.
-- **Size:** M
-- **Depends on:** nothing.
-- **Open questions:** how it migrates from the single value; should
-  percentages be allowed?
+- **Status:** done (migration 0078: `varieties` and `species` are lists,
+  `docs/api/beans.md` §4). Percentages: not planned, roasters rarely give
+  them. The suggestion list grew with World Coffee Research and national
+  selections, and the form rewrites known spellings ("SL-28" to "SL28").
 
 ### 62. Bean stock count that includes resting coffees
 

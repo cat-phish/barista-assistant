@@ -29,7 +29,7 @@ import { LABEL_FIELD_KEYS, labelFill, lookUpFields, pageLabel, type LabelForm, t
 import type { FieldKey } from '../lib/fields';
 import { undoChanges, type FormSnapshot } from '../lib/undoFill';
 import { distinctNames, lastBag, normalizeName, websiteSuggestions } from '../lib/nameSuggest';
-import { COMMON_VARIETIES } from '../lib/varieties';
+import { COMMON_VARIETIES, canonicalVariety } from '../lib/varieties';
 import { nextBatchValues, type BeanCarryKey } from '../lib/beanCarry';
 import {
   BLEND_TYPES,
@@ -871,7 +871,7 @@ const leaveTo = computed(() => ({ name: batchResting.value ? 'beans-resting' : '
         <div v-if="show('bean.varieties')" class="field">
           <label for="varieties">Variety</label>
           <CarryToggle v-if="batchMode" v-model="carry" item="varieties" />
-          <NamesInput id="varieties" v-model="varieties" :names="varietyNames" placeholder="e.g. Bourbon, SL28" />
+          <NamesInput id="varieties" :normalize="canonicalVariety" v-model="varieties" :names="varietyNames" placeholder="e.g. Bourbon, SL28" />
           <LabelHint v-if="suggestions.varieties" :text="suggestions.varieties.text" :source="suggestions.varieties.source" @use="useSuggestion('varieties')" />
         </div>
         <fieldset v-if="show('bean.species')" class="field species">

@@ -148,7 +148,9 @@ is no age.
     them, a list of 1–20 names, each trimmed and 1–100 chars
     (`["SL28", "SL34"]`, `["Pink Bourbon"]`). Each is kept once, ignoring
     case (the first spelling wins). Clients suggest common varieties and the
-    workspace's own while typing.
+    workspace's own while typing, and rewrite a known variety written another
+    way ("SL-28", "Ruiru-11") to the suggested spelling when it's added
+    (client only; the API stores what it's sent).
   - `species`: a list of `COFFEE_SPECIES` (`arabica`, `robusta`, `liberica`,
     `excelsa`, `eugenioides`); a blend may have several. Stored once each,
     in that order.

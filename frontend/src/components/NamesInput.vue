@@ -6,10 +6,11 @@
 import { computed, ref } from 'vue';
 import NameInput from './NameInput.vue';
 
-const props = withDefaults(defineProps<{ id: string; names: readonly string[]; max?: number; maxlength?: number; placeholder?: string }>(), {
+const props = withDefaults(defineProps<{ id: string; names: readonly string[]; max?: number; maxlength?: number; placeholder?: string; normalize?: (name: string) => string }>(), {
   max: 20,
   maxlength: 100,
   placeholder: undefined,
+  normalize: (name: string) => name,
 });
 const model = defineModel<string[]>({ required: true });
 
@@ -19,7 +20,7 @@ const offered = computed(() => props.names.filter((n) => !has(n)));
 const full = computed(() => model.value.length >= props.max);
 
 function add(text: string): void {
-  const names = text.split(',').map((s) => s.trim().replace(/\s+/g, ' ').slice(0, props.maxlength)).filter(Boolean);
+  const names = text.split(',').map((s) => s.trim().replace(/\s+/g, ' ').slice(0, props.maxlength)).filter(Boolean).map(props.normalize);
   const next = [...model.value];
   for (const name of names) if (next.length < props.max && !next.some((n) => n.toLowerCase() === name.toLowerCase())) next.push(name);
   if (next.length !== model.value.length) model.value = next;
