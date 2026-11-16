@@ -29,8 +29,7 @@ const bean = (id: string, producer: string): MenuBean => ({
 });
 
 describe("SEC-93: a bean field the builder hides stays off the public menu", () => {
-  // Parked for an owner decision (hide, or a builder switch).
-  it.skip("doesn't publish a hidden field just because two batches differ only in it", () => {
+  it("doesn't publish a hidden field just because two batches differ only in it", () => {
     const out = menuBeanList([bean("a", "Finca Uno"), bean("b", "Finca Dos")], ["flavorProfile"], "each");
     expect(out).toHaveLength(2);
     for (const b of out) expect(b).not.toHaveProperty("producer");

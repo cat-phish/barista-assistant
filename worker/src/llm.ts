@@ -10,6 +10,7 @@ import { withoutKey, type AiClient } from "./ai/client.js";
 import type { BrewContext } from "./context.js";
 import type { BeanReviewContext } from "./beanReview.js";
 import type { PeriodContext } from "./periodContext.js";
+import { INSTRUCTIONS_INTRO, NOTE_INTRO } from "@barista/shared/aiPrompt";
 import { PREFERENCES_SYSTEM, BEAN_REVIEW_SECTIONS, buildChatData, buildChatSystem, buildRecapSystem, toPeriodInput, buildSystemPrompt, PROMPT_SECTIONS, promptSections, SUGGEST_SECTIONS, toBeanReviewInput, toLlmInput, toSuggestInput, type LlmInput, type PromptCustom } from "./prompt.js";
 import type { SuggestContext } from "./suggestContext.js";
 import type { LearnInput } from "./learnPreferences.js";
@@ -120,15 +121,25 @@ export function buildCompletionRequest(
 // back from the request itself, so it can't drift from it. The model isn't
 // part of it (it's saved beside it, or has no answer yet in a preview).
 const ANY_MODEL = "";
-function sent(request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming, sections: string[]): AiRequest {
+// SEC-22: what one person wrote for themselves (their instructions, this
+// request's note) is shown to every member as a placeholder, not verbatim.
+const PRIVATE_SHOWN = "[written by the person who asked; not shown to other members]";
+function redacted(system: string, custom: PromptCustom | undefined): string {
+  let out = system;
+  for (const [intro, text] of [[INSTRUCTIONS_INTRO, custom?.prompt.instructions], [NOTE_INTRO, custom?.note]] as const) {
+    if (text) out = out.split(`${intro} ${text}`).join(`${intro} ${PRIVATE_SHOWN}`);
+  }
+  return out;
+}
+function sent(request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming, sections: string[], custom?: PromptCustom): AiRequest {
   const [system, user] = request.messages;
-  return { sections, system: String(system?.content ?? ""), input: JSON.parse(String(user?.content ?? "{}")) as Record<string, unknown> };
+  return { sections, system: redacted(String(system?.content ?? ""), custom), input: JSON.parse(String(user?.content ?? "{}")) as Record<string, unknown> };
 }
 export function analysisSent(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): AiRequest {
-  return sent(buildCompletionRequest(ANY_MODEL, context, hidden, custom), promptSections(toLlmInput(context, hidden), PROMPT_SECTIONS, custom));
+  return sent(buildCompletionRequest(ANY_MODEL, context, hidden, custom), promptSections(toLlmInput(context, hidden), PROMPT_SECTIONS, custom), custom);
 }
 export function suggestionSent(context: SuggestContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): AiRequest {
-  return sent(buildSuggestRequest(ANY_MODEL, context, hidden, custom), promptSections(toSuggestInput(context, hidden), SUGGEST_SECTIONS, custom));
+  return sent(buildSuggestRequest(ANY_MODEL, context, hidden, custom), promptSections(toSuggestInput(context, hidden), SUGGEST_SECTIONS, custom), custom);
 }
 
 export type LlmMessage = { content?: string | null; refusal?: string | null } | undefined;
@@ -500,7 +511,7 @@ export function buildBeanReviewRequest(
   };
 }
 export function beanReviewSent(context: BeanReviewContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): AiRequest {
-  return sent(buildBeanReviewRequest(ANY_MODEL, context, hidden, custom), promptSections(toBeanReviewInput(context, hidden), BEAN_REVIEW_SECTIONS, custom));
+  return sent(buildBeanReviewRequest(ANY_MODEL, context, hidden, custom), promptSections(toBeanReviewInput(context, hidden), BEAN_REVIEW_SECTIONS, custom), custom);
 }
 export function parseBeanReviewMessage(message: LlmMessage): BeanReviewDraft {
   return parseMessage(message, beanReviewSchema);

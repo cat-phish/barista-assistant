@@ -143,9 +143,9 @@ Retrieves the read-only menu for a workspace, as arranged in the menu builder
     `"once"`, only the freshest is listed (the youngest by days off roast
     among those not frozen now, or among all if every one is frozen). With
     `"each"` (the default), each is listed and carries `differs`: what tells
-    them apart, from the fields in `fields` plus `"batchNumber"`. If none of
-    those differ, it's every field that does, and those fields are sent even
-    though the block hides them. `batchNumber` is sent only when `differs`
+    them apart, from the fields in `fields` plus `"batchNumber"`. A field the block
+    hides is never sent or counted, so batches that differ only in one are
+    listed alike (SEC-93). `batchNumber` is sent only when `differs`
     has it; the page shows "Batch 3".
 - **Error Responses:**
   - `404 Not Found`: Workspace slug does not exist or `isPublicMenuEnabled` is
