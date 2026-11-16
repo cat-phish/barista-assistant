@@ -4,9 +4,9 @@ import type { AiPrompt, AiPromptSettings, User, UserPreferences } from './types'
 export const authApi = {
   me: () => api.get<{ user: User }>('/api/auth/me'),
   login: (email: string, password: string) => api.post<{ user: User }>('/api/auth/login', { email, password }),
-  register: (email: string, password: string) => api.post<{ user: User }>('/api/auth/register', { email, password }),
+  register: (email: string, password: string) => api.post<{ user: User } | { pending: true }>('/api/auth/register', { email, password }),
   // Whether this server takes new accounts (ALLOW_REGISTRATION, §1).
-  registration: () => api.get<{ open: boolean; emailVerification: boolean }>('/api/auth/registration'),
+  registration: () => api.get<{ open: boolean; inviteOnly: boolean; emailVerification: boolean }>('/api/auth/registration'),
   // §1d, only on servers with EMAIL_VERIFICATION on: mail me a link / redeem the link's token.
   sendVerification: () => api.post<void>('/api/auth/verify-email/send'),
   verifyEmail: (token: string) => api.post<void>('/api/auth/verify-email', { token }),

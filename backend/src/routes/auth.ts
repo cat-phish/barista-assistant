@@ -12,6 +12,7 @@ import {
   DEFAULT_PREFERENCES,
   users,
   withDefaults,
+  workspaceInvites,
   workspaceMembers,
   workspaces,
   type User,
@@ -19,7 +20,9 @@ import {
   type Workspace,
 } from "@barista/shared/schema";
 import { emailSchema, preferencesSchema } from "../validation.js";
-import { emailVerificationOn, registrationOpen } from "../config.js";
+import { emailVerificationOn, registrationMode, registrationOpen } from "../config.js";
+import { fresh } from "./invites.js";
+import { sendMail } from "../mail.js";
 import { sendVerification } from "./emailVerification.js";
 
 export interface PublicUser {
@@ -130,30 +133,47 @@ export const authRouter = Router();
 
 // Whether anyone can create an account here (ALLOW_REGISTRATION), so the
 // app can say so before the form is filled in.
-authRouter.get("/registration", (_req: Request, res: Response<{ open: boolean; emailVerification: boolean }>) => {
-  res.json({ open: registrationOpen(), emailVerification: emailVerificationOn() });
+authRouter.get("/registration", (_req: Request, res: Response<{ open: boolean; inviteOnly: boolean; emailVerification: boolean }>) => {
+  res.json({ open: registrationOpen(), inviteOnly: registrationMode() === "invite", emailVerification: emailVerificationOn() });
 });
 
-authRouter.post("/register", registerLimiter, async (req: Request, res: Response<UserResponse>) => {
+authRouter.post("/register", registerLimiter, async (req: Request, res: Response<UserResponse | { pending: true }>) => {
   if (!registrationOpen()) {
     sendError(res, 403, "Registration is closed on this server");
     return;
   }
   const body = parseBody(registerSchema, req, res);
   if (!body) return;
-
-  const user = { id: randomUUID(), email: body.email };
-  try {
-    await db.insert(users).values({ ...user, passwordHash: await hashPassword(body.password) });
-  } catch (err) {
-    if (isDuplicateEntryError(err)) {
-      sendError(res, 409, "Email already registered");
+  if (registrationMode() === "invite") {
+    const [invite] = await db.select({ id: workspaceInvites.id }).from(workspaceInvites).where(and(eq(workspaceInvites.email, body.email.toLowerCase()), fresh())).limit(1);
+    if (!invite) {
+      sendError(res, 403, "Sign-up on this server needs an invitation to a workspace, sent to this email");
       return;
     }
-    throw err;
+  }
+
+  const user = { id: randomUUID(), email: body.email };
+  const passwordHash = await hashPassword(body.password);
+  try {
+    await db.insert(users).values({ ...user, passwordHash });
+  } catch (err) {
+    if (!isDuplicateEntryError(err)) throw err;
+    // With verification on (so mail works) the reply doesn't say whether the
+    // address is taken (SEC-32); the owner of it gets a mail instead.
+    if (emailVerificationOn()) {
+      void sendMail({ to: body.email, subject: "Someone tried to sign up with your email", text: "Someone tried to create a Barista-Assistant account with this address, which already has one. If it was you, sign in, or reset your password if you've forgotten it. If not, ignore this mail." }).catch(() => undefined);
+      res.status(202).json({ pending: true });
+      return;
+    }
+    sendError(res, 409, "Email already registered");
+    return;
   }
 
   void sendVerification(user); // no-op unless the server has verification on
+  if (emailVerificationOn()) {
+    res.status(202).json({ pending: true }); // no session until they sign in (after confirming)
+    return;
+  }
   setSessionCookie(res, user.id, 0); // new users start at session_version 0
   res.status(201).json({ user: toPublicUser(user) });
 });

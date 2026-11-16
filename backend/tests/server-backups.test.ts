@@ -119,9 +119,9 @@ describe("who is a server admin (docs/api/server.md §10)", () => {
 describe("closing registration (docs/api/auth.md §1)", () => {
   it("refuses new accounts but keeps signing in", async () => {
     const guest = anonymous();
-    expect((await guest.get("/api/auth/registration")).body).toEqual({ open: true, emailVerification: false });
+    expect((await guest.get("/api/auth/registration")).body).toEqual({ open: true, inviteOnly: false, emailVerification: false });
     process.env.ALLOW_REGISTRATION = "false";
-    expect((await guest.get("/api/auth/registration")).body).toEqual({ open: false, emailVerification: false });
+    expect((await guest.get("/api/auth/registration")).body).toEqual({ open: false, inviteOnly: false, emailVerification: false });
     const refused = await guest.post("/api/auth/register").send({ email: "late@example.com", password: "long-enough-password" });
     expect(refused.status).toBe(403);
     expect(refused.body.error).toMatch(/closed/);

@@ -41,7 +41,8 @@ images are built on the server).
    - optionally, where data is kept (`DB_DATA_DIR` and the rest, under
      "Where data is kept"). The defaults are Docker volumes and the
      `photos/` and `backups/` folders here;
-   - `ALLOW_REGISTRATION=false` once the accounts exist, if the server is
+   - `ALLOW_REGISTRATION=invite` (only invited emails can sign up) or
+     `false` (nobody, once the accounts exist), if the server is
      reachable by people who shouldn't sign up; `BREW_TIMEZONE` and
      `BACKUP_TIMEZONE`.
    - optionally, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and
@@ -221,4 +222,4 @@ HTTPS, so the proxy talks HTTPS to it, unlike most self-hosted apps.
 
 With a proxy in front, the backend sees every request as coming from the
 proxy, so all devices share one login rate limit. Keep the proxy on your own
-network or VPN unless you've closed sign-ups (`ALLOW_REGISTRATION=false`).
+network or VPN unless you've limited sign-ups (`ALLOW_REGISTRATION=invite` or `false`).

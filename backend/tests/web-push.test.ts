@@ -69,14 +69,14 @@ describe("Web Push devices", () => {
     expect((await me.agent.delete(`${BASE}/push/${id}`)).status).toBe(404);
   });
 
-  it("a device signed in as someone else moves to them", async () => {
+  it("a device registered to someone else is refused until they remove it (SEC-05)", async () => {
     vapidOn();
     const me = await newUser();
     const other = await newUser();
     await me.agent.post(`${BASE}/push`).send(device());
-    await other.agent.post(`${BASE}/push`).send(device());
-    expect((await me.agent.get(BASE)).body.pushDevices).toEqual([]);
-    expect((await other.agent.get(BASE)).body.pushDevices).toHaveLength(1);
+    expect((await other.agent.post(`${BASE}/push`).send(device())).status).toBe(409);
+    expect((await me.agent.get(BASE)).body.pushDevices).toHaveLength(1);
+    expect((await other.agent.get(BASE)).body.pushDevices).toEqual([]);
   });
 
   it("validates the subscription", async () => {

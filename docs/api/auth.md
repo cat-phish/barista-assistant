@@ -34,18 +34,26 @@ below is `403`, so a typo doesn't look like a logout.
 - **Success (`201 Created`):** sets the `session` cookie and returns
   `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... }, "emailVerified": false, "isAdmin": false } }`
   (`isAdmin`: a server admin, granted on the server; §10; `emailVerified`: §1d)
+- **Success with email verification on (`202 Accepted`, §1d):** `{ "pending": true }`,
+  no cookie, and the same reply whether the address is new or taken (SEC-32).
+  A new address gets the confirmation link; a taken one gets a mail saying
+  someone tried to sign up. The person then logs in.
 - **Errors:** `400` invalid body; `403` registration is closed
-  (`ALLOW_REGISTRATION=false`); `409` email already registered; `429` too many sign-ups.
+  (`ALLOW_REGISTRATION=false`); `409` email already registered (only with
+  verification off, i.e. a server with no mail); `429` too many sign-ups.
 - **Rate limit:** 5 sign-ups per IP per hour (`REGISTER_LIMIT_PER_HOUR`), counted
   whether or not they succeed; `429` carries `Retry-After`.
 
 ## `GET /api/auth/registration`
 
 - **Auth Required:** `false`
-- **Success (`200 OK`):** `{ "open": true, "emailVerification": false }`: whether this server takes new
-  accounts. `ALLOW_REGISTRATION=false` closes it (e.g. a server open to the
-  internet; §10); existing accounts still log in. The app hides "Create an
-  account" when it's closed.  `emailVerification` says whether §1d is on.
+- **Success (`200 OK`):** `{ "open": true, "inviteOnly": false, "emailVerification": false }`: whether this
+  server takes new accounts. `ALLOW_REGISTRATION=false` closes it;
+  `ALLOW_REGISTRATION=invite` takes only an email with a pending workspace
+  invite (`403` otherwise on `POST /register`); anything else is open.
+  Existing accounts still log in. The app hides "Create an account" when
+  it's closed and says so when it's invite-only. `emailVerification` says
+  whether §1d is on.
 
 ## `POST /api/auth/login`
 
