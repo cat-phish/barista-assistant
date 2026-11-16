@@ -137,8 +137,10 @@ describe('bean sorting', () => {
 
   it('offers every column in the Sort by dropdown', () => {
     expect(sortColumnOptions(BEAN_SORT_COLUMNS).map((c) => c.value)).toEqual([
-      'name', 'roaster', 'added', 'purchased', 'roastDate', 'age', 'roast', 'process', 'variety', 'frozen', 'decaf', 'rating', 'stock', 'ready',
+      'name', 'roaster', 'added', 'purchased', 'roastDate', 'age', 'batch', 'roast', 'process', 'variety', 'frozen', 'decaf', 'rating', 'stock', 'ready',
     ]);
+    const b = (batchNumber: string | null) => ({ batchNumber }) as Bean;
+    expect(BEAN_SORT_COLUMNS.batch.value(b('3'))! < BEAN_SORT_COLUMNS.batch.value(b('12'))!).toBe(true);
     expect(sortColumnOptions(BEAN_SORT_COLUMNS).find((c) => c.value === 'name')).toMatchObject({ asc: 'Ascending (A–Z)' });
     expect(sortColumnOptions(BEAN_SORT_COLUMNS).find((c) => c.value === 'roast')).toMatchObject({ asc: 'Ascending (lightest first)', desc: 'Descending (darkest first)' });
   });

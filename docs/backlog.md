@@ -375,8 +375,10 @@ Recording a brew: what's measured, and how fast it is to log.
 
 ### 63. Batch number as its own optional column on beans
 
-- **Status:** idea (numbered last to avoid renumbering; belongs with the
-  bean items in G)
+- **Status:** partly done: the field, form input, picker label and AI
+  switch already existed; the table column, its sort and the numeric
+  keypad are in. Stays text (not an integer, by choice). Left: moving
+  batch numbers out of existing names.
 - **Why:** the batch number is typed into the bean's name today, which
   mixes two things in one field.
 - **Approach:** an optional batch number field and table column (rules 6

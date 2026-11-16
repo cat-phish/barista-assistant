@@ -174,7 +174,7 @@ export function roastAgeDays(bean: Pick<Bean, 'roastDate' | 'freezePeriods'>, to
 // lib/listSort.ts), in the dropdown's order. Unset values sort last either way.
 export type BeanSortColumn =
   | 'name' | 'roaster' | 'added' | 'purchased' | 'roastDate' | 'age' | 'roast'
-  | 'process' | 'variety' | 'frozen' | 'decaf' | 'rating' | 'stock' | 'ready';
+  | 'batch' | 'process' | 'variety' | 'frozen' | 'decaf' | 'rating' | 'stock' | 'ready';
 // processName: the workspace's name for a processId (they're editable,
 // docs/api/bean-processes.md §4b); labels don't depend on it.
 export const beanSortColumns = (processName: (id: string) => string | null = () => null): SortColumns<Bean, BeanSortColumn> => ({
@@ -184,6 +184,8 @@ export const beanSortColumns = (processName: (id: string) => string | null = () 
   purchased: { label: 'Date purchased', value: (b) => b.purchaseDate, asc: 'Oldest first', desc: 'Newest first', firstDir: 'desc' },
   roastDate: { label: 'Roast date', value: (b) => b.roastDate, asc: 'Oldest first', desc: 'Newest first', firstDir: 'desc' },
   age: { label: 'Age', value: (b) => roastAgeDays(b), asc: 'Freshest first', desc: 'Oldest first' },
+  // Numbers in a batch no. compare by value, so 3 comes before 12.
+  batch: { label: 'Batch no.', value: (b) => b.batchNumber?.replace(/\d+/g, (d) => d.padStart(12, '0')) ?? null, asc: 'Lowest first', desc: 'Highest first' },
   roast: { label: 'Roast level', value: roastRank, asc: 'Lightest first', desc: 'Darkest first' },
   process: { label: 'Process', value: (b) => (b.processId ? processName(b.processId) : null), asc: 'A–Z', desc: 'Z–A' },
   variety: { label: 'Variety', value: (b) => b.varieties?.[0] ?? null, asc: 'A–Z', desc: 'Z–A' },

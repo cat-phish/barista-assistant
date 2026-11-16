@@ -299,6 +299,7 @@ const TABLE: TableColumn<BeanSortColumn>[] = [
   { id: 'frozen', label: 'Frozen', header: '❄', title: 'Frozen', class: 'center', track: '1.5rem', wideOnly: true },
   { id: 'roaster', label: 'Roaster', track: 'minmax(0, 1.2fr)' },
   { id: 'roast', label: 'Roast', track: 'minmax(0, 1fr)' },
+  { id: 'batch', label: 'Batch no.', header: 'Batch', track: '3.5rem', phone: false },
   { id: 'process', label: 'Process', track: 'minmax(0, 1.1fr)', phone: false },
   { id: 'roastDate', label: 'Roast date', header: 'Roasted', title: 'Roast date', track: '4.5rem', phone: false },
   { id: 'age', label: 'Age', title: 'Days off roast (not counting frozen days)', track: '3.25rem', phone: false },
@@ -309,6 +310,7 @@ const TABLE: TableColumn<BeanSortColumn>[] = [
 ];
 const COLUMN_FIELDS: Partial<Record<BeanSortColumn, FieldKey>> = {
   roast: 'bean.roastLevel',
+  batch: 'bean.batchNumber',
   process: 'bean.process',
   roastDate: 'bean.roastDate',
   age: 'bean.roastDate',
@@ -334,6 +336,7 @@ function ageCell(bean: Bean): string {
 const beanCell = (bean: Bean, id: string): string => {
   if (id === 'roaster') return bean.roasterName;
   if (id === 'roast') return roastLabel(bean, roastScale.value) ?? '–';
+  if (id === 'batch') return bean.batchNumber ?? '–';
   if (id === 'process') return processName(bean.processId) ?? '–';
   if (id === 'roastDate') return bean.roastDate ? formatListDay(bean.roastDate) : '–';
   if (id === 'age') return ageCell(bean);

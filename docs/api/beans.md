@@ -165,7 +165,8 @@ is no age.
   - `batchNumber`: which roast of this coffee, free text, ≤50 chars (`"3"`,
     `"R-12"`). Home roasters roast a little at a time and log each batch as
     its own bean. Clients show it after the bean's name ("· Batch 3"), and
-    copying a bean suggests the next whole number. Not on the public menu.
+    copying a bean suggests the next whole number. The beans table has a **Batch**
+    column, sorted with numbers by value (3 before 12). Not on the public menu.
   - `rating`: the bean overall, 0.5–5 in steps of 0.5 (as a brew's,
     `docs/api/brew-logs.md` §6).
   - `review`: what the coffee was like overall, ≤2000 chars (`notes` hold the
