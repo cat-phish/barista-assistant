@@ -1,6 +1,6 @@
 import { api } from './client';
 import type { AiCheck, AiProvider } from './server';
-import type { ResearchPut, Workspace, WorkspaceResearch, WorkspaceSettings, WorkspaceWithRole } from './types';
+import type { ResearchDraft, ResearchPut, Workspace, WorkspaceResearch, WorkspaceSettings, WorkspaceWithRole } from './types';
 
 // docs/api/workspaces.md §2d: who answers the workspace's AI jobs.
 export interface AiConfig {
@@ -25,6 +25,8 @@ export const workspacesApi = {
   // Research settings (docs/api/research.md §1f): the workspace's defaults and shared findings.
   research: (id: string) => api.get<WorkspaceResearch>(`/api/workspaces/${id}/research`),
   setResearch: (id: string, body: ResearchPut) => api.put<WorkspaceResearch>(`/api/workspaces/${id}/research`, body),
+  // Pasted text turned into draft findings by the workspace's AI (§1f, "Drafts"); nothing saved. 409 ai_not_configured, 429 ai_limit.
+  researchDrafts: (id: string, text: string) => api.post<{ drafts: ResearchDraft[] }>(`/api/workspaces/${id}/research/draft`, { text }),
   aiModels: (id: string) => api.post<AiCheck>(`/api/workspaces/${id}/ai-config/models`),
   testAi: (id: string) => api.post<AiCheck>(`/api/workspaces/${id}/ai-config/test`),
   list: () => api.get<{ workspaces: WorkspaceWithRole[] }>('/api/workspaces'),

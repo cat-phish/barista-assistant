@@ -678,8 +678,13 @@ What the analysis worker sends to the LLM and what comes back.
   are listed by `experimentFindings` for the chat's experiment cards, not
   yet wired there.
 - **Decided:** own research is a fixed schema (title, text, levers,
-  evidence incl. "own", scope, source, mode), not free text; free text is
-  turned into draft cards by an AI job the person confirms (phase B).
+  evidence incl. "own", scope, source, mode), not free text; pasted free
+  text is turned into draft cards by an AI job (llm-contract.md §9h) the
+  person confirms card by card, with the evidence level capped by what the
+  text claims and a source kept only when the text names it. The
+  "ready-made prompt to copy into any chatbot" was dropped in favour of
+  that: the workspace's own AI does it, and the server checks the schema
+  either way.
 - **Why:** an advanced user may want to leave out a finding that skews
   their results, now or after a later research update, and add research
   the app doesn't have.

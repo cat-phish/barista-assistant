@@ -24,6 +24,16 @@ export const BUILT_IN_KEYS = new Set(RESEARCH_FINDINGS.map((f) => f.key));
 // Control characters (tabs and newlines included) become spaces, runs of
 // whitespace one space; then trimmed. Lengths are checked after that.
 export const cleanText = (s: string): string => s.replace(/[\p{Cc}\u2028\u2029]/gu, " ").replace(/\s+/g, " ").trim();
+// Pasted text for drafting keeps its line breaks (paragraphs mean something
+// to the reader); other control characters go, blank runs are squeezed.
+export const cleanDraftText = (s: string): string =>
+  s
+    .replace(/\r\n?/g, "\n")
+    .replace(/[^\P{Cc}\n]|[\u2028\u2029]/gu, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/ ?\n ?/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 const text = (max: number) => z.string().max(max * 4).transform(cleanText).pipe(z.string().min(1, "can't be empty").max(max, `at most ${max} characters`));
 
 export const newFindingId = (): string => randomBytes(4).toString("hex");

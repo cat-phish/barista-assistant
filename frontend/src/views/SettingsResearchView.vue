@@ -7,14 +7,17 @@
 import { computed, onMounted, ref } from 'vue';
 import { authApi } from '../api/auth';
 import { errorMessage } from '../api/client';
-import type { BuiltInFinding, MyResearch, OwnFinding, OwnFindingInput, ResearchLever, ResearchMode, ResearchSetting, ResearchSettings, WorkspaceResearch } from '../api/types';
+import type { BuiltInFinding, MyResearch, OwnFinding, OwnFindingInput, ResearchDraft, ResearchLever, ResearchMode, ResearchSetting, ResearchSettings, WorkspaceResearch } from '../api/types';
 import { workspacesApi } from '../api/workspaces';
 import SettingsLayout from '../components/SettingsLayout.vue';
+import { useAiAvailable } from '../composables/useAiAvailable';
 import { defaultMode, effectiveMode, emptyFinding, EVIDENCE_LABELS, findingProblem, LEVER_LABELS, MODE_LABELS, OWN_EVIDENCE, RESEARCH_LEVERS, RESEARCH_MODES, RESEARCH_SCOPES, SCOPE_LABELS } from '../lib/research';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const workspaces = useWorkspaceStore();
+const aiAvailable = useAiAvailable();
 const isOwner = computed(() => workspaces.current?.role === 'owner');
+const canWrite = computed(() => workspaces.canEdit);
 const workspaceId = computed(() => workspaces.current?.id ?? null);
 
 const mine = ref<MyResearch | null>(null);
@@ -38,7 +41,7 @@ onMounted(load);
 
 const builtIn = computed(() => mine.value?.builtIn ?? []);
 const updated = computed(() => new Set(mine.value?.updated ?? []));
-const limits = computed(() => mine.value?.limits ?? { findings: 20, title: 80, text: 600, source: 300, note: 200 });
+const limits = computed(() => mine.value?.limits ?? { findings: 20, title: 80, text: 600, source: 300, note: 200, draftText: 4000, drafts: 5 });
 
 async function run(work: () => Promise<void>, done = 'Saved.'): Promise<void> {
   busy.value = true;
@@ -136,6 +139,46 @@ function setOwnMode(scope: Scope, f: OwnFinding, mode: ResearchMode): void {
   else if (ws.value) void saveWs(ws.value.research.settings, own);
 }
 const canEditScope = (scope: Scope) => scope === 'mine' || isOwner.value;
+
+// ---- Drafts from text (docs/api/research.md §1f, "Drafts") -----------------
+// The AI turns pasted text into cards; each is edited and saved, or
+// discarded, by hand. Nothing is saved until Save.
+const pasted = ref('');
+const drafting = ref(false);
+const draftError = ref('');
+const drafts = ref<OwnFindingInput[]>([]);
+const draftedFrom = ref('');
+async function makeDrafts(): Promise<void> {
+  const id = workspaceId.value;
+  if (!id || !pasted.value.trim()) return;
+  drafting.value = true;
+  draftError.value = '';
+  try {
+    const { drafts: made } = await workspacesApi.researchDrafts(id, pasted.value.trim());
+    drafts.value = made.map((d: ResearchDraft) => ({ ...d, levers: [...d.levers] }));
+    draftedFrom.value = made.length ? '' : 'Nothing in that text read as a finding about brewing.';
+  } catch (err) {
+    draftError.value = errorMessage(err);
+  } finally {
+    drafting.value = false;
+  }
+}
+const draftProblem = (d: OwnFindingInput) => findingProblem(d, limits.value);
+function toggleDraftLever(d: OwnFindingInput, lever: ResearchLever): void {
+  d.levers = d.levers.includes(lever) ? d.levers.filter((l) => l !== lever) : [...d.levers, lever];
+}
+async function saveDraft(i: number, scope: Scope): Promise<void> {
+  const d = drafts.value[i];
+  if (!d || draftProblem(d) || full(scope)) return;
+  const sent = { ...d, title: d.title.trim(), text: d.text.trim(), source: d.source?.trim() || null };
+  const own = [...listOf(scope).map(({ id, createdAt: _c, ...o }) => ({ id, ...o })), sent];
+  await run(async () => {
+    if (scope === 'mine' && mine.value) mine.value = await authApi.setResearch({ settings: mine.value.research.settings, own });
+    else if (ws.value && workspaceId.value) ws.value = await workspacesApi.setResearch(workspaceId.value, { settings: ws.value.research.settings, own });
+    drafts.value.splice(i, 1);
+  }, scope === 'mine' ? 'Saved to your findings.' : "Saved to the workspace's findings.");
+}
+const discardDraft = (i: number) => drafts.value.splice(i, 1);
 const full = (scope: Scope) => listOf(scope).length >= limits.value.findings;
 const leverNames = (f: { levers: ResearchLever[] }): string => f.levers.map((l) => LEVER_LABELS[l]).join(', ');
 </script>
@@ -283,6 +326,75 @@ const leverNames = (f: { levers: ResearchLever[] }): string => f.levers.map((l) 
             {{ full(scope) ? `At most ${limits.findings} findings` : 'Add a finding' }}
           </button>
         </template>
+      </section>
+
+      <section v-if="ws && canWrite" class="card stack" aria-labelledby="research-drafts">
+        <h2 id="research-drafts">From text</h2>
+        <p class="muted small">
+          Paste what you read (a paper's abstract, a video's notes, a forum post, your own test notes) and the workspace's AI turns it into up to
+          {{ limits.drafts }} draft findings in the form above. The text is sent as data only, without web access; the evidence level can't go
+          beyond what the text itself says, and a source is only kept when the text names it. Check each card, then save or discard it: nothing
+          is saved until you do.
+        </p>
+        <label for="research-paste" class="visually-hidden">Text to turn into findings</label>
+        <textarea id="research-paste" v-model="pasted" rows="6" :maxlength="limits.draftText" :disabled="drafting || !aiAvailable" />
+        <div class="row">
+          <button class="btn" type="button" :disabled="drafting || !aiAvailable || !pasted.trim()" @click="makeDrafts">{{ drafting ? 'Drafting…' : 'Turn into findings' }}</button>
+          <span class="muted small">{{ pasted.length }}/{{ limits.draftText }}</span>
+        </div>
+        <p v-if="!aiAvailable" class="muted small">No AI is set up for this workspace (Settings → AI).</p>
+        <p v-if="draftError" class="form-error" role="alert">{{ draftError }}</p>
+        <p v-else-if="draftedFrom" class="muted small" aria-live="polite">{{ draftedFrom }}</p>
+        <div v-for="(d, i) in drafts" :key="i" class="stack draft">
+          <h3>Draft {{ i + 1 }} <span class="badge">Not saved</span></h3>
+          <div class="field">
+            <label :for="`d-title-${i}`">Title <span class="req" aria-hidden="true">*</span></label>
+            <input :id="`d-title-${i}`" v-model="d.title" type="text" :maxlength="limits.title" aria-required="true" />
+          </div>
+          <div class="field">
+            <label :for="`d-text-${i}`">Finding <span class="req" aria-hidden="true">*</span></label>
+            <textarea :id="`d-text-${i}`" v-model="d.text" rows="3" :maxlength="limits.text" aria-required="true" />
+          </div>
+          <fieldset class="field">
+            <legend>Levers <span class="req" aria-hidden="true">*</span></legend>
+            <div class="levers">
+              <label v-for="l in RESEARCH_LEVERS" :key="l" class="checkbox">
+                <input type="checkbox" :checked="d.levers.includes(l)" @change="toggleDraftLever(d, l)" />
+                {{ LEVER_LABELS[l] }}
+              </label>
+            </div>
+          </fieldset>
+          <div class="controls">
+            <div class="field">
+              <label :for="`d-evidence-${i}`">Evidence</label>
+              <select :id="`d-evidence-${i}`" v-model="d.evidence">
+                <option v-for="e in OWN_EVIDENCE" :key="e" :value="e">{{ EVIDENCE_LABELS[e] }}</option>
+              </select>
+            </div>
+            <div class="field">
+              <label :for="`d-scope-${i}`">Brews</label>
+              <select :id="`d-scope-${i}`" v-model="d.scope">
+                <option v-for="s in RESEARCH_SCOPES" :key="s" :value="s">{{ SCOPE_LABELS[s] }}</option>
+              </select>
+            </div>
+            <div class="field">
+              <label :for="`d-mode-${i}`">Mode</label>
+              <select :id="`d-mode-${i}`" v-model="d.mode">
+                <option v-for="m in RESEARCH_MODES" :key="m" :value="m">{{ MODE_LABELS[m] }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label :for="`d-source-${i}`">Source</label>
+            <input :id="`d-source-${i}`" :value="d.source ?? ''" type="text" :maxlength="limits.source" placeholder="Not given" @input="d.source = ($event.target as HTMLInputElement).value" />
+          </div>
+          <p v-if="draftProblem(d)" class="muted small">{{ draftProblem(d) }}</p>
+          <div class="row">
+            <button class="btn btn-primary" type="button" :disabled="busy || !!draftProblem(d) || full('mine')" @click="saveDraft(i, 'mine')">Save to my findings</button>
+            <button v-if="isOwner" class="btn" type="button" :disabled="busy || !!draftProblem(d) || full('workspace')" @click="saveDraft(i, 'workspace')">Save to the workspace</button>
+            <button class="btn" type="button" :disabled="busy" @click="discardDraft(i)">Discard</button>
+          </div>
+        </div>
       </section>
 
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>

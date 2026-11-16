@@ -1,6 +1,8 @@
 import type { AiDetail } from "@barista/shared/aiDetails";
 import { GRIND_DELTAS } from "@barista/shared/jobs";
-import { ownFindingText, RESEARCH_PREFIX, ownFindingKey } from "./prompt.js";
+import { ownFindingText, RESEARCH_PREFIX, ownFindingKey, RESEARCH_DRAFT_SYSTEM } from "./prompt.js";
+import { RESEARCH_LEVERS, RESEARCH_SCOPES } from "@barista/shared/research";
+import { MAX_FINDING_SOURCE, MAX_FINDING_TEXT, MAX_FINDING_TITLE, MAX_RESEARCH_DRAFTS, OWN_EVIDENCE } from "@barista/shared/researchSettings";
 import { ANALYSIS_CONFIDENCE, MAX_SUGGESTED_ROUTES, SUGGEST_ALTERNATIVES, type AiRequest, type AlternativeKind, type SuggestedAlternative, type SuggestedRoute } from "@barista/shared/schema";
 import { UnrecoverableError } from "bullmq";
 import OpenAI from "openai";
@@ -630,4 +632,65 @@ export function parsePreferencesMessage(message: LlmMessage): LearnedPreferences
 export async function requestLearnedPreferences(ai: AiClient, input: LearnInput): Promise<LearnedPreferences & { usage: Usage }> {
   const { message, usage } = await complete(ai, buildPreferencesRequest(ai.models.main, input));
   return { ...parsePreferencesMessage(message), usage };
+}
+
+// Research drafts from text (docs/api/llm-contract.md §9h, research.md §1f).
+export const RESEARCH_DRAFT_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    drafts: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "A few words naming the finding." },
+          text: { type: "string", description: "The finding as a rule a barista can follow, in plain words; only what the text supports." },
+          levers: { type: "array", items: { type: "string", enum: [...RESEARCH_LEVERS] }, description: "What it's about." },
+          evidence: { type: "string", enum: [...OWN_EVIDENCE], description: "Only as strong as the text itself claims." },
+          scope: { type: "string", enum: [...RESEARCH_SCOPES] },
+          source: { type: ["string", "null"], description: "The source as the text names it; null when it names none." },
+        },
+        required: ["title", "text", "levers", "evidence", "scope", "source"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["drafts"],
+  additionalProperties: false,
+} as const;
+
+// Long text is cut rather than failed (the person edits the card anyway);
+// too many drafts are cut to the first.
+const researchDraftSchema = z.object({
+  drafts: z
+    .array(
+      z.object({
+        title: z.string().transform((t) => t.trim().slice(0, MAX_FINDING_TITLE)),
+        text: z.string().transform((t) => t.trim().slice(0, MAX_FINDING_TEXT)),
+        levers: z.array(z.enum(RESEARCH_LEVERS)),
+        evidence: z.enum(OWN_EVIDENCE),
+        scope: z.enum(RESEARCH_SCOPES),
+        source: z.string().nullable().transform((s) => (s === null ? null : s.trim().slice(0, MAX_FINDING_SOURCE) || null)),
+      }),
+    )
+    .transform((list) => list.slice(0, MAX_RESEARCH_DRAFTS)),
+});
+export type ResearchDraftAnswer = z.infer<typeof researchDraftSchema>;
+
+export function buildResearchDraftRequest(model: string, text: string): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
+  return {
+    model,
+    messages: [
+      { role: "system", content: RESEARCH_DRAFT_SYSTEM },
+      { role: "user", content: text },
+    ],
+    response_format: { type: "json_schema", json_schema: { name: "research_drafts", strict: true, schema: RESEARCH_DRAFT_JSON_SCHEMA } },
+  };
+}
+export function parseResearchDraftMessage(message: LlmMessage): ResearchDraftAnswer {
+  return parseMessage(message, researchDraftSchema);
+}
+export async function requestResearchDrafts(ai: AiClient, text: string): Promise<ResearchDraftAnswer & { usage: Usage }> {
+  const { message, usage } = await complete(ai, buildResearchDraftRequest(ai.models.main, text));
+  return { ...parseResearchDraftMessage(message), usage };
 }

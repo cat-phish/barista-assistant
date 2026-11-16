@@ -60,11 +60,15 @@ import {
   type LabelReadJobData,
   type BeanReviewJobData,
   type BeanReviewResult,
+  RESEARCH_DRAFT_JOB,
+  RESEARCH_DRAFT_QUEUE,
+  type ResearchDraftJobData,
+  type ResearchDraftResult,
 } from "@barista/shared/jobs";
 import type { AiRequest, BackupSettings } from "@barista/shared/schema";
 import { Queue, QueueEvents } from "bullmq";
 import { Redis } from "ioredis";
-import { backupTimezone, beanReviewTimeoutMs, config, labelReadTimeoutMs, labelWebTimeoutMs, previewTimeoutMs } from "./config.js";
+import { backupTimezone, beanReviewTimeoutMs, config, labelReadTimeoutMs, labelWebTimeoutMs, previewTimeoutMs, researchDraftTimeoutMs } from "./config.js";
 
 // Producer side of the brew-analysis queue (docs/api/llm-contract.md §9).
 export const connection = new Redis(config.redis.url, {
@@ -267,6 +271,18 @@ beanReviewQueue.on("error", (err: Error) => {
 });
 export function requestBeanReview(data: BeanReviewJobData): Promise<BeanReviewResult | null> {
   return addAndWait(beanReviewQueue, BEAN_REVIEW_JOB, data, beanReviewTimeoutMs());
+}
+
+// Research drafts from text (docs/api/research.md §1f, "Drafts"): the same,
+// an AI call the request waits for; nothing stored.
+export const researchDraftQueue = new Queue<ResearchDraftJobData, ResearchDraftResult>(RESEARCH_DRAFT_QUEUE, { connection });
+let lastResearchDraftError = "";
+researchDraftQueue.on("error", (err: Error) => {
+  if (err.message !== lastResearchDraftError) console.error("Research draft queue error:", err.message);
+  lastResearchDraftError = err.message;
+});
+export function requestResearchDrafts(data: ResearchDraftJobData): Promise<ResearchDraftResult> {
+  return addAndWait(researchDraftQueue, RESEARCH_DRAFT_JOB, data, researchDraftTimeoutMs());
 }
 
 // A chat reply (docs/api/llm-contract.md §9e): one attempt, since a retry

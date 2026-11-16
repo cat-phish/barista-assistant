@@ -1,9 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { Worker } from "bullmq";
 import { eq } from "drizzle-orm";
+import { Redis } from "ioredis";
+import { RESEARCH_DRAFT_QUEUE, type ResearchDraftJobData, type ResearchDraftResult } from "@barista/shared/jobs";
 import { RESEARCH_FINDINGS, RESEARCH_VERSION } from "@barista/shared/research";
 import { EMPTY_USER_RESEARCH, type OwnFinding, type UserResearch } from "@barista/shared/researchSettings";
-import { users, workspaces } from "@barista/shared/schema";
+import { AI_SERVER_KEY, DEFAULT_SERVER_AI } from "@barista/shared/aiConfig";
+import { serverSettings, users, workspaceAiConfigs, workspaces } from "@barista/shared/schema";
 import { db } from "../src/db.js";
+import { researchDraftQueue } from "../src/queue.js";
 import { cleanText } from "../src/research.js";
 import { addMember, newUser, newWorkspace } from "./helpers.js";
 
@@ -17,7 +22,7 @@ describe("research settings: mine", () => {
     const me = await newUser();
     let res = await me.agent.get(URL);
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ research: EMPTY_USER_RESEARCH, version: RESEARCH_VERSION, updated: [], limits: { findings: 20, title: 80, text: 600, source: 300, note: 200 } });
+    expect(res.body).toMatchObject({ research: EMPTY_USER_RESEARCH, version: RESEARCH_VERSION, updated: [], limits: { findings: 20, title: 80, text: 600, source: 300, note: 200, draftText: 4000, drafts: 5 } });
     expect(res.body.builtIn.map((f: { key: string }) => f.key)).toEqual(RESEARCH_FINDINGS.map((f) => f.key));
     expect(res.body.builtIn[0]).toMatchObject({ key: "leverOrder", title: "Which lever to move", experiment: false, evidence: "peerReviewed", since: "r2" });
 
@@ -92,7 +97,7 @@ describe("research settings: the workspace's", () => {
     const barista = await newUser("barista");
     await addMember(owner, ws, barista, "barista");
     const url = `/api/workspaces/${ws}/research`;
-    expect((await barista.agent.get(url)).body).toEqual({ research: { settings: {}, own: [] }, limits: { findings: 20, title: 80, text: 600, source: 300, note: 200 } });
+    expect((await barista.agent.get(url)).body).toEqual({ research: { settings: {}, own: [] }, limits: { findings: 20, title: 80, text: 600, source: 300, note: 200, draftText: 4000, drafts: 5 } });
     expect((await barista.agent.put(url).send({ settings: {}, own: [finding] })).status).toBe(403);
     expect((await (await newUser("stranger")).agent.get(url)).status).toBe(404);
 
@@ -131,5 +136,54 @@ describe("research settings: the workspace's", () => {
       expect(res.status, JSON.stringify(bad).slice(0, 60)).toBe(400);
       expect(res.body.error).toMatch(/research/);
     }
+  });
+});
+
+// Drafts from text (docs/api/research.md §1f, "Drafts"): the route queues the
+// job and waits; the worker (its own tests) answers the AI's drafts.
+describe("research drafts from text", () => {
+  const withAi = (workspaceId: string) => db.insert(workspaceAiConfigs).values({ workspaceId, provider: "openai", apiKeyEncrypted: "x", apiKeyLast4: "1234", model: "m" });
+
+  it("needs a writer, text within its cap and the workspace's AI, then queues the text as data", async () => {
+    const owner = await newUser("owner");
+    const ws = (await newWorkspace(owner)).id;
+    const viewer = await newUser("viewer");
+    await addMember(owner, ws, viewer, "viewer");
+    const url = `/api/workspaces/${ws}/research/draft`;
+    expect((await viewer.agent.post(url).send({ text: "Slower pours." })).status).toBe(403);
+    expect((await (await newUser("stranger")).agent.post(url).send({ text: "Slower pours." })).status).toBe(404);
+    for (const bad of [{}, { text: "" }, { text: "\u0000 \n" }, { text: "x".repeat(4001) }, { text: "ok", more: 1 }]) {
+      expect((await owner.agent.post(url).send(bad)).status, JSON.stringify(bad).slice(0, 40)).toBe(400);
+    }
+    // The test server may have an AI of its own: turn it off for the check.
+    await db.insert(serverSettings).values({ key: AI_SERVER_KEY, value: { ...DEFAULT_SERVER_AI, enabled: false } }).onDuplicateKeyUpdate({ set: { value: { ...DEFAULT_SERVER_AI, enabled: false } } });
+    let res = await owner.agent.post(url).send({ text: "Slower pours." });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("ai_not_configured");
+
+    await withAi(ws);
+    const add = vi.spyOn(researchDraftQueue, "add").mockRejectedValue(new Error("stop here"));
+    res = await owner.agent.post(url).send({ text: "  Slower pours\r\ngave\u0007 more   sweetness.\n\n\n\nFrom my notes.  " });
+    expect(res.status).toBe(503);
+    expect(add.mock.calls[0]![1]).toEqual({ text: "Slower pours\ngave more sweetness.\n\nFrom my notes.", requestedBy: owner.id, workspaceId: ws });
+    add.mockRestore();
+  });
+
+  it("answers with the worker's drafts, and nothing is saved", async () => {
+    const owner = await newUser("owner");
+    const ws = (await newWorkspace(owner)).id;
+    await withAi(ws);
+    const drafts: ResearchDraftResult["drafts"] = [{ ...finding, levers: ["agitation", "bloom"], evidence: "own", scope: "pourOver", mode: "on" }];
+    const worker = new Worker<ResearchDraftJobData, ResearchDraftResult>(RESEARCH_DRAFT_QUEUE, async () => ({ drafts }), { connection: new Redis(process.env.REDIS_URL ?? "", { password: process.env.REDIS_PASSWORD, maxRetriesPerRequest: null }) });
+    try {
+      await worker.waitUntilReady();
+      const res = await owner.agent.post(`/api/workspaces/${ws}/research/draft`).send({ text: "Slower pours gave more sweetness." });
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      expect(res.body).toEqual({ drafts });
+    } finally {
+      await worker.close();
+    }
+    expect((await owner.agent.get(URL)).body.research.own).toEqual([]);
+    expect((await owner.agent.get(`/api/workspaces/${ws}/research`)).body.research.own).toEqual([]);
   });
 });

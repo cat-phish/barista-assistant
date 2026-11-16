@@ -120,6 +120,42 @@ added since as `updated`, and Settings shows a notice with **Dismiss**
 - **Body** and **errors:** as the person's `PUT`.
 - **Success (`200 OK`):** the same as its `GET`.
 
+## Drafts: your own research from pasted text
+
+Rather than filling the form by hand, a person pastes what they read (a
+paper's abstract, a video's notes, a forum post, their own test notes) and
+the workspace's AI turns it into draft findings in the schema above
+(llm-contract.md §9h). The drafts come back as cards to check, edit and
+**Save** (to their own findings, or, for an owner, the workspace's) or
+**Discard**; the route saves nothing, and a saved card goes through the
+`PUT` above with its checks. The text is the user turn, framed as data
+(it can't instruct the model or change the format), with no web access.
+The worker then holds the AI to the text (`worker/src/researchDraft.ts`):
+
+- **evidence** can't exceed what the text itself claims: `peerReviewed`
+  only when it names a study, paper, journal or published research;
+  `controlledTest` when it describes a test, trial or measurement; `own`
+  only when it's written in the first person; otherwise `expert`
+  (`cappedEvidence`);
+- **source** is kept only when every word of it (3+ letters or digits) is
+  in the text (`sourceInText`); otherwise `null`, shown as "not given". The
+  AI never supplies one of its own;
+- at most 5 drafts, each with a title, a text and a lever, cleaned and
+  capped like the form's; `mode` starts `on`.
+
+### `POST /api/workspaces/:workspaceId/research/draft`
+
+- **Auth Required:** `true`, an owner or barista (`403` a viewer).
+- **Body:** `{ "text": "..." }`, 1–4000 characters once cleaned (control
+  characters other than line breaks become spaces; blank runs squeezed).
+- Needs the workspace's AI (`409`, `code: "ai_not_configured"`) and counts
+  1 against the daily budget (§9a; `429 ai_limit`). The request waits for
+  the job (`RESEARCH_DRAFT_QUEUE`, `RESEARCH_DRAFT_TIMEOUT_MS`, 60 s).
+- **Success (`200 OK`):** `{ "drafts": [{ "title", "text", "levers", "evidence", "scope", "source", "mode": "on" }] }`,
+  possibly empty when nothing in the text read as a finding.
+- **Errors:** `400` empty or too long; `503` the queue is down; `504` not
+  answered in time; `502` the AI's reply couldn't be used.
+
 **Settings → AI → Research** (`SettingsResearchView.vue`, `/settings/ai/research`,
 linked from Settings → AI and the nav under the workspace): the update
 notice; every built-in finding with its text, evidence, scope and levers, a
@@ -127,6 +163,9 @@ notice; every built-in finding with its text, evidence, scope and levers, a
 experiment), for owners a **Workspace default** select, a note, and what it
 comes to; then **Your findings** and **Workspace findings** (owners edit
 the latter), each marked Yours or Workspace, with an add/edit form (title,
-finding, levers, evidence, brews, mode, source) and Remove. A route's
+finding, levers, evidence, brews, mode, source) and Remove; then **From
+text** (owners and baristas, with the workspace's AI): the paste box,
+**Turn into findings**, and the draft cards with the same fields, each with
+Save to my findings, Save to the workspace (owners) and Discard. A route's
 "Follows …" (lib/suggest.ts) names a built-in finding; an own one shows as
 "Your research".

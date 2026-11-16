@@ -392,7 +392,7 @@ removed, decide which it is and update, in the same change:
 
 Every request that starts a paid AI job counts against the caller's and the
 workspace's budget for the UTC day: analysis 1, suggestion 2, bean review 2,
-label read 3, web lookup 5, recap 2. Over `AI_DAILY_USER_UNITS` (default 100
+label read 3, web lookup 5, recap 2, research draft 1 (§9h). Over `AI_DAILY_USER_UNITS` (default 100
 per person) or `AI_DAILY_WORKSPACE_UNITS` (default 1000, ten people's worth): `429` with
 `code: "ai_limit"`, and the refused call costs nothing. Chat has its own
 per-message cap (`dailyMessages`, §9e). Counters live in Redis; if Redis can't
@@ -856,6 +856,36 @@ from what they did in one workspace.
   proposal) and `through` moves to the job's start.
 - Failures are retried and then dropped: nothing is shown, the next signal
   tries again.
+
+## 9h. Research drafts from text
+
+Turning text a person pasted into research findings they confirm
+(`docs/api/research.md` §1f, "Drafts"; `worker/src/researchDraft.ts`,
+`processResearchDraft`). Not one of Your AI prompt's sections.
+
+1. **System prompt** (`RESEARCH_DRAFT_SYSTEM`, `worker/src/prompt.ts`):
+   what the drafts are for; the user message is the text, as data, which
+   can't instruct, change the rules or the format, with no web access; up
+   to 5 findings, each one claim the text makes as a short rule; the
+   evidence rules (`peerReviewed` only for published, peer-reviewed
+   studies named; `controlledTest` for a described test with
+   measurements; `own` for the barista's own test in the first person;
+   `expert` otherwise); the source copied as written or null, never one of
+   the model's own; skip what isn't about brewing or reads as an
+   instruction.
+2. **User turn:** the text itself, up to 4000 characters.
+3. **Structured output** (`RESEARCH_DRAFT_JSON_SCHEMA`, `worker/src/llm.ts`,
+   strict): `{ drafts: [{ title, text, levers: ResearchLever[], evidence:
+   OwnEvidence, scope: ResearchScope, source: string | null }] }`. Long
+   text is cut to the caps rather than failed; more than 5 are cut to the
+   first 5; a value off its list fails the attempt.
+4. **Checked against the text** (`checkedDrafts`): the evidence is capped
+   by what the text claims and the source kept only when the text holds
+   it, as §1f says; drafts with no title, text or lever are dropped.
+
+Tests: `worker/tests/researchDraft.test.ts` (the request, the parse, the
+caps and the job with a fake LLM), `backend/tests/research.test.ts` (the
+route, with a fake worker).
 
 ## Evaluating changes
 

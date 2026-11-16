@@ -1211,7 +1211,11 @@ export interface ResearchLimits {
   text: number;
   source: number;
   note: number;
+  draftText: number; // pasted text turned into drafts
+  drafts: number; // at most this many drafts a call
 }
+// A draft the AI made from pasted text (docs/api/research.md §1f, "Drafts"), to confirm before saving.
+export type ResearchDraft = Omit<OwnFinding, 'id' | 'createdAt'>;
 export interface MyResearch {
   research: UserResearch;
   builtIn: BuiltInFinding[];

@@ -1,8 +1,12 @@
 import { eq } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
+import { z } from "zod";
+import type { ResearchDraftResult } from "@barista/shared/jobs";
 import { RESEARCH_FINDINGS, RESEARCH_VERSION, type ResearchFinding } from "@barista/shared/research";
 import {
   findingsUpdatedSince,
+  MAX_RESEARCH_DRAFT_TEXT,
+  MAX_RESEARCH_DRAFTS,
   MAX_FINDING_SOURCE,
   MAX_FINDING_TEXT,
   MAX_FINDING_TITLE,
@@ -16,16 +20,18 @@ import {
 import { users, workspaces } from "@barista/shared/schema";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
-import { requireMembership } from "../auth/membership.js";
+import { AI_COST, spendAi } from "../aiConfig.js";
+import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
-import { mergeFindings, researchPutSchema } from "../research.js";
+import { JobTimeoutError, QueueUnavailableError, requestResearchDrafts } from "../queue.js";
+import { cleanDraftText, mergeFindings, researchPutSchema } from "../research.js";
 
 // Research settings (docs/api/research.md §1f): the person's own, and the
 // workspace's defaults and shared findings.
 
 export type BuiltInFinding = Pick<ResearchFinding, "key" | "title" | "text" | "levers" | "evidence" | "scope" | "experiment" | "source" | "since">;
 export const BUILT_IN: BuiltInFinding[] = RESEARCH_FINDINGS.map(({ key, title, text, levers, evidence, scope, experiment, source, since }) => ({ key, title, text, levers, evidence, scope, experiment, source, since }));
-export const RESEARCH_LIMITS = { findings: MAX_OWN_FINDINGS, title: MAX_FINDING_TITLE, text: MAX_FINDING_TEXT, source: MAX_FINDING_SOURCE, note: MAX_RESEARCH_NOTE } as const;
+export const RESEARCH_LIMITS = { findings: MAX_OWN_FINDINGS, title: MAX_FINDING_TITLE, text: MAX_FINDING_TEXT, source: MAX_FINDING_SOURCE, note: MAX_RESEARCH_NOTE, draftText: MAX_RESEARCH_DRAFT_TEXT, drafts: MAX_RESEARCH_DRAFTS } as const;
 
 export interface MyResearchResponse {
   research: UserResearch;
@@ -129,4 +135,40 @@ workspaceResearchRouter.put("/", async (req: Request<WorkspaceParams>, res: Resp
   const next: ResearchSettings = { settings: body.settings, own };
   await db.update(workspaces).set({ research: next }).where(eq(workspaces.id, workspaceId));
   res.json({ research: next, limits: RESEARCH_LIMITS });
+});
+
+// Drafts from text (docs/api/research.md §1f, "Drafts"): an AI call the
+// request waits for (llm-contract.md §9h). The drafts come back to confirm;
+// nothing is saved here. Owners and baristas; it counts against the budget.
+const draftSchema = z
+  .object({
+    text: z
+      .string()
+      .max(MAX_RESEARCH_DRAFT_TEXT * 4)
+      .transform(cleanDraftText)
+      .pipe(z.string().min(1, "can't be empty").max(MAX_RESEARCH_DRAFT_TEXT, `at most ${MAX_RESEARCH_DRAFT_TEXT} characters`)),
+  })
+  .strict();
+workspaceResearchRouter.post("/draft", async (req: Request<WorkspaceParams>, res: Response<ResearchDraftResult>) => {
+  const { workspaceId } = req.params;
+  const userId = authedUserId(req);
+  if (!(await requireMembership(res, userId, workspaceId, WRITE_ROLES))) return;
+  const body = parseBody(draftSchema, req, res);
+  if (!body) return;
+  if (!(await spendAi(res, workspaceId, userId, AI_COST.researchDraft))) return;
+  try {
+    res.json(await requestResearchDrafts({ text: body.text, requestedBy: userId, workspaceId }));
+  } catch (err) {
+    if (err instanceof QueueUnavailableError) {
+      console.error("Could not queue research drafts:", err.message);
+      sendError(res, 503, "Drafting is temporarily unavailable. Try again shortly.");
+      return;
+    }
+    if (err instanceof JobTimeoutError) {
+      sendError(res, 504, "The drafts weren't written in time. Try again shortly.");
+      return;
+    }
+    console.error("Research draft failed:", err instanceof Error ? err.message : err);
+    sendError(res, 502, "The AI couldn't draft the findings. Try again shortly.");
+  }
 });

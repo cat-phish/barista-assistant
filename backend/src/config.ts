@@ -57,6 +57,8 @@ export const previewTimeoutMs = (): number => Number(process.env.AI_PREVIEW_TIME
 export const labelReadTimeoutMs = (): number => Number(process.env.LABEL_READ_TIMEOUT_MS ?? 60_000);
 // A draft of a bean's Review (docs/api/analysis.md §8e).
 export const beanReviewTimeoutMs = (): number => Number(process.env.BEAN_REVIEW_TIMEOUT_MS ?? 60_000);
+// Turning text into research findings (docs/api/research.md §1f, "Drafts").
+export const researchDraftTimeoutMs = (): number => Number(process.env.RESEARCH_DRAFT_TIMEOUT_MS ?? 60_000);
 // A web lookup, its own request (§4d): searches take longer.
 export const labelWebTimeoutMs = (): number => Number(process.env.LABEL_WEB_TIMEOUT_MS ?? 120_000);
 // Where scheduled database dumps are written (the worker) and listed from.
