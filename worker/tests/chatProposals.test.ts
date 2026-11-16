@@ -208,7 +208,7 @@ describe("refTable and processChatReply", () => {
 
   it("streams the text without the blocks and saves the proposals on the reply", async () => {
     stream.mockImplementation(async (_ai, request, onText) => {
-      expect(JSON.stringify(request.messages[0])).toContain('\\"ref\\":\\"a1\\"');
+      expect(JSON.stringify(request.messages[1])).toContain('\\"ref\\":\\"a1\\"');
       onText("Go one finer.\n\n");
       onText(block({ kind: "brew", title: "One finer", why: "Sour.", from: "a1", grindSetting: 17 }));
       onText("\n" + block({ kind: "brew", title: "Bad", why: "x", from: "a7", tempC: 90 }));

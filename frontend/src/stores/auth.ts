@@ -35,11 +35,22 @@ export const useAuthStore = defineStore('auth', () => {
     return false;
   }
 
+  // SEC-38: bean photos are cached for a year by the service worker; the next
+  // person on this browser mustn't get the last one's.
+  function forgetPhotos(): void {
+    try {
+      void globalThis.caches?.delete('bean-photos').catch(() => undefined);
+    } catch {
+      // no Cache API here
+    }
+  }
+
   async function logout(): Promise<void> {
     try {
       await authApi.logout();
     } finally {
       user.value = null;
+      forgetPhotos();
     }
   }
 
@@ -51,6 +62,7 @@ export const useAuthStore = defineStore('auth', () => {
   // The server said the session is gone (401 on some request).
   function sessionEnded(): void {
     user.value = null;
+    forgetPhotos();
   }
 
   return { user, checked, fetchMe, login, register, logout, setPreferences, sessionEnded };

@@ -26,10 +26,13 @@ describe("chatTurns after a summary", () => {
     expect(turns[0]).toEqual({ role: "user", content: "m21" });
     expect(turns).toHaveLength(10);
   });
-  it("puts the summary in the system prompt", () => {
+  it("puts the summary in a data turn ahead of the conversation, not the system prompt", () => {
     const request = buildChatRequest("m", [{ role: "user", content: "Hi" }], undefined, [], "They dialed in a Guji at 18 clicks.");
-    expect(request.messages[0]!.content).toContain("summary of it, written then: They dialed in a Guji at 18 clicks.");
-    expect(buildChatRequest("m", [{ role: "user", content: "Hi" }]).messages[0]!.content).not.toContain("summary of it");
+    expect(request.messages[0]!.content).not.toContain("summary of it");
+    expect(request.messages[1]!.role).toBe("user");
+    expect(request.messages[1]!.content).toContain("summary of it, written then: They dialed in a Guji at 18 clicks.");
+    expect(request.messages[2]).toEqual({ role: "user", content: "Hi" });
+    expect(buildChatRequest("m", [{ role: "user", content: "Hi" }]).messages).toHaveLength(2);
   });
 });
 

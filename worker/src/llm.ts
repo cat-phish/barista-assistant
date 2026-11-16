@@ -9,7 +9,7 @@ import { withoutKey, type AiClient } from "./ai/client.js";
 import type { BrewContext } from "./context.js";
 import type { BeanReviewContext } from "./beanReview.js";
 import type { PeriodContext } from "./periodContext.js";
-import { BEAN_REVIEW_SECTIONS, buildChatSystem, buildRecapSystem, toPeriodInput, buildSystemPrompt, PROMPT_SECTIONS, promptSections, SUGGEST_SECTIONS, toBeanReviewInput, toLlmInput, toSuggestInput, type LlmInput, type PromptCustom } from "./prompt.js";
+import { BEAN_REVIEW_SECTIONS, buildChatData, buildChatSystem, buildRecapSystem, toPeriodInput, buildSystemPrompt, PROMPT_SECTIONS, promptSections, SUGGEST_SECTIONS, toBeanReviewInput, toLlmInput, toSuggestInput, type LlmInput, type PromptCustom } from "./prompt.js";
 import type { SuggestContext } from "./suggestContext.js";
 
 // The input and system prompt are built in prompt.ts; the schema and its
@@ -186,12 +186,15 @@ export async function complete(ai: AiClient, request: OpenAI.Chat.Completions.Ch
   return { message: completion.choices[0]?.message, usage };
 }
 
-// A chat reply (docs/api/llm-contract.md §9e): the conversation so far, and no
-// schema, since it's read as it's written.
+// A chat reply (docs/api/llm-contract.md §9e): the system prompt, a user turn
+// with the summary and attachments when there are any (data, not
+// instructions: SEC-81), then the conversation so far; no schema, since it's
+// read as it's written.
 type UserContent = OpenAI.Chat.Completions.ChatCompletionUserMessageParam["content"];
 export type ChatTurn = { role: "user"; content: UserContent } | { role: "assistant"; content: string };
 export function buildChatRequest(model: string, turns: ChatTurn[], custom?: PromptCustom, attached: LlmInput[] = [], summary?: string | null): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
-  return { model, messages: [{ role: "system", content: buildChatSystem(custom, attached, summary) }, ...turns] };
+  const data = buildChatData(attached, summary);
+  return { model, messages: [{ role: "system", content: buildChatSystem(custom) }, ...(data ? [{ role: "user" as const, content: data }] : []), ...turns] };
 }
 
 export interface StreamedReply {

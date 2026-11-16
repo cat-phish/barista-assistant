@@ -643,6 +643,7 @@ chatsRouter.get("/:chatId/messages/:messageId/stream", async (req: Request<Strea
 
   const key = chatReplyKey(messageId);
   let lastId = req.header("last-event-id") ?? "0";
+  let checkedAt = Date.now();
   try {
     while (open) {
       const read = await redis.xread("BLOCK", STREAM_BLOCK_MS, "STREAMS", key, lastId);
@@ -663,6 +664,14 @@ chatsRouter.get("/:chatId/messages/:messageId/stream", async (req: Request<Strea
         lastId = id;
         const event = JSON.parse(fields[fields.indexOf(CHAT_EVENT_FIELD) + 1]!) as ChatStreamEvent;
         if (event.type === "text") {
+          // SEC-03: a removed member's chat is gone; look every second, not every token.
+          if (Date.now() - checkedAt > 1000) {
+            checkedAt = Date.now();
+            if (!(await finished(chatId, messageId))) {
+              res.end();
+              return;
+            }
+          }
           res.write(`id: ${id}\nevent: text\ndata: ${JSON.stringify({ text: event.text })}\n\n`);
           continue;
         }

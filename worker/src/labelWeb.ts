@@ -24,6 +24,23 @@ export function hostOf(address: string | null | undefined): string | null {
 }
 const onSite = (host: string, site: string) => host === site || host.endsWith(`.${site}`);
 
+// One page, however it was written: `key` is host (no www.), path without
+// trailing slashes and query without tracking parameters; `href` the address
+// without them or a #fragment. Null if not an http(s) address.
+function normalizePage(address: string): { host: string; key: string; href: string } | null {
+  let url: URL;
+  try {
+    url = new URL(address);
+  } catch {
+    return null;
+  }
+  const host = hostOf(url.href);
+  if (!host || !/^https?:$/.test(url.protocol)) return null;
+  url.hash = "";
+  for (const param of [...url.searchParams.keys()]) if (param.startsWith("utm_")) url.searchParams.delete(param);
+  return { host, key: `${host}${url.pathname.replace(/\/+$/, "")}${url.search}`, href: url.href };
+}
+
 // The answer: each field null, or { value, url }; value as the label's schema has it.
 export function labelWebJsonSchema(processes: readonly string[]): Record<string, unknown> {
   const label = labelJsonSchema(processes) as { properties: Record<string, { anyOf?: unknown[] }> };
@@ -76,7 +93,9 @@ export function buildWebRequest(model: string, fields: LabelFields, data: LabelR
 }
 
 // Each value checked as a label value is; the page must be one the search
-// visited, and on the roaster's site when the search was limited to it.
+// visited (the same page, not just the same host), and on the roaster's site
+// when the search was limited to it. A website must be on the roaster's site,
+// else on the host of the page it was read from (SEC-83).
 export function parseWebReply(reply: WebReply, processes: readonly string[], site: string | null): LabelWebFinds {
   if (reply.refusal) throw new Error(`LLM refused: ${reply.refusal}`);
   let parsed: unknown;
@@ -86,17 +105,22 @@ export function parseWebReply(reply: WebReply, processes: readonly string[], sit
     throw new Error("LLM returned invalid JSON");
   }
   if (typeof parsed !== "object" || parsed === null) throw new Error("LLM returned invalid JSON");
-  const visited = new Set(reply.visited.map(hostOf).filter((h): h is string => h !== null));
+  const visited = new Set(reply.visited.flatMap((address) => normalizePage(address)?.key ?? []));
   const shape = labelSchema(processes).shape;
   const finds: Record<string, { value: unknown; url: string }> = {};
   for (const field of LABEL_WEB_FIELDS) {
     const found = (parsed as Record<string, unknown>)[field];
     if (typeof found !== "object" || found === null) continue;
     const { value, url } = found as { value?: unknown; url?: unknown };
-    const host = typeof url === "string" ? hostOf(url) : null;
-    if (!host || !/^https?:\/\//i.test(url as string) || !visited.has(host) || (site && !onSite(host, site))) continue;
+    if (typeof url !== "string") continue;
+    const page = normalizePage(url);
+    if (!page || !visited.has(page.key) || (site && !onSite(page.host, site))) continue;
     const checked: unknown = shape[field].parse(value ?? null);
-    if (checked !== null) finds[field] = { value: checked, url: url as string };
+    if (field === "website") {
+      const own = typeof checked === "string" ? hostOf(checked) : null;
+      if (!own || !onSite(own, site ?? page.host)) continue;
+    }
+    if (checked !== null) finds[field] = { value: checked, url };
   }
   // A process that matched isn't repeated as text.
   if (finds.processName) delete finds.processText;
@@ -112,18 +136,9 @@ export function webSources(visited: readonly string[], finds: LabelWebFinds, sit
   const found = Object.values(finds).flatMap((f) => (f ? [f.url] : []));
   const pages = new Map<string, string>();
   for (const address of [...found, ...visited]) {
-    let url: URL;
-    try {
-      url = new URL(address);
-    } catch {
-      continue;
-    }
-    const host = hostOf(url.href);
-    if (!host || (site && !onSite(host, site))) continue;
-    url.hash = "";
-    for (const key of [...url.searchParams.keys()]) if (key.startsWith("utm_")) url.searchParams.delete(key);
-    const key = `${host}${url.pathname.replace(/\/+$/, "")}${url.search}`;
-    if (!pages.has(key)) pages.set(key, url.href);
+    const page = normalizePage(address);
+    if (!page || (site && !onSite(page.host, site))) continue;
+    if (!pages.has(page.key)) pages.set(page.key, page.href);
     if (pages.size === WEB_SOURCES_MAX) break;
   }
   return [...pages.values()];

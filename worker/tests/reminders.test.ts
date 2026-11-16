@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { beans, brewers, brewLogs, greenCoffees, notificationChannels, pushSubscriptions, roasts, users, workspaces } from "@barista/shared/schema";
+import { beans, brewers, brewLogs, greenCoffees, notificationChannels, pushSubscriptions, roasts, users, workspaceMembers, workspaces } from "@barista/shared/schema";
 import { NotificationError } from "@barista/shared/notify";
 import { endpointHash, PushGoneError } from "@barista/shared/webPush";
 import { eq } from "drizzle-orm";
@@ -20,6 +20,7 @@ beforeEach(async () => {
   const brewerId = randomUUID();
   await db.insert(users).values({ id: userId, email: "r@example.com", passwordHash: "x" });
   await db.insert(workspaces).values({ id: workspaceId, name: "W", slug: "w" });
+  await db.insert(workspaceMembers).values({ userId, workspaceId, role: "barista" }); // SEC-21: reminders need a membership
   await db.insert(brewers).values({ id: brewerId, workspaceId, name: "V60" });
   await db.insert(beans).values({ id: beanId, workspaceId, roasterName: "Onyx", beanName: "Guji" });
   await db.insert(brewLogs).values({
@@ -94,6 +95,7 @@ async function roasting(roast: { roastedAt: Date }) {
   const greenCoffeeId = randomUUID();
   const roastId = randomUUID();
   await db.insert(workspaces).values({ id: workspaceId, name: "R", slug: `r-${workspaceId.slice(0, 8)}` });
+  await db.insert(workspaceMembers).values({ userId, workspaceId, role: "barista" });
   await db.insert(greenCoffees).values({ id: greenCoffeeId, workspaceId, name: "Ethiopia Guji", weightLeftGrams: 80, lowStockGrams: 500 });
   await db.insert(roasts).values({ id: roastId, workspaceId, greenCoffeeId, userId, utcOffsetMinutes: -420, batchNumber: "3", greenGrams: 120, roastedGrams: 102, ...roast });
   return { greenCoffeeId, roastId };

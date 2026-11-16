@@ -77,10 +77,12 @@ describe("looking a bean up on the web (docs/api/llm-contract.md §9c)", () => {
       altitudeMasl: { value: 1900, url: page },
       processName: { value: "Natural", url: page },
     });
-    // Unlimited search: any page it visited.
-    expect(parseWebReply(reply({ ...none, region: { value: "Boquete", url: "https://shop.example.com/elida" } }, ["https://shop.example.com/"]), PROCESSES, null)).toEqual({
+    // Unlimited search: any page it visited, but that page (however written), not just its host.
+    const cited = "https://www.shop.example.com/elida/?utm_source=openai#:~:text=Boquete";
+    expect(parseWebReply(reply({ ...none, region: { value: "Boquete", url: "https://shop.example.com/elida" } }, [cited]), PROCESSES, null)).toEqual({
       region: { value: "Boquete", url: "https://shop.example.com/elida" },
     });
+    expect(parseWebReply(reply({ ...none, region: { value: "Boquete", url: "https://shop.example.com/elida" } }, ["https://shop.example.com/"]), PROCESSES, null)).toEqual({});
   });
 
   it("fails on a refusal or a reply that isn't JSON", () => {
