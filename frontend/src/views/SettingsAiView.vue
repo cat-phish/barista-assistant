@@ -446,6 +446,14 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
       <p v-if="error && activeSection === 'preferences'" class="form-error" role="alert">{{ error }}</p>
       <p v-if="saved && activeSection === 'preferences'" class="muted small" aria-live="polite">Saved.</p>
     </section>
+    <section class="card stack" aria-labelledby="ai-research">
+      <h2 id="ai-research">Research</h2>
+      <p class="muted">
+        The research findings the analyses and suggestions build on: each on, off or only as an experiment, the workspace's defaults and
+        everyone's own choice above them, and research people add themselves.
+        <RouterLink :to="{ name: 'settings-research' }">Research settings</RouterLink>
+      </p>
+    </section>
     <p v-if="!isOwner" class="muted small">Only owners can change these.</p>
   </SettingsLayout>
 </template>

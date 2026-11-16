@@ -669,7 +669,17 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 21. Research settings, and adding your own research
 
-- **Status:** planned
+- **Status:** done (branch `research-settings`; `docs/api/research.md`
+  §1f, migration 0128). Settings → AI → Research: every built-in finding
+  on, off or only as an experiment, per person over the workspace's
+  default, with a note; own findings per person (private) and per
+  workspace (shared, owners), in a fixed schema the server checks;
+  "Research updated" notice per `since` version. Experiment-mode findings
+  are listed by `experimentFindings` for the chat's experiment cards, not
+  yet wired there.
+- **Decided:** own research is a fixed schema (title, text, levers,
+  evidence incl. "own", scope, source, mode), not free text; free text is
+  turned into draft cards by an AI job the person confirms (phase B).
 - **Why:** an advanced user may want to leave out a finding that skews
   their results, now or after a later research update, and add research
   the app doesn't have.

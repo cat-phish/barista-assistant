@@ -1,6 +1,6 @@
 import { api } from './client';
 import type { AiCheck, AiProvider } from './server';
-import type { Workspace, WorkspaceSettings, WorkspaceWithRole } from './types';
+import type { ResearchPut, Workspace, WorkspaceResearch, WorkspaceSettings, WorkspaceWithRole } from './types';
 
 // docs/api/workspaces.md §2d: who answers the workspace's AI jobs.
 export interface AiConfig {
@@ -22,6 +22,9 @@ export const workspacesApi = {
   aiConfig: (id: string) => api.get<AiConfig>(`/api/workspaces/${id}/ai-config`),
   saveAiConfig: (id: string, input: AiConfigInput) => api.put<AiConfig>(`/api/workspaces/${id}/ai-config`, input),
   removeAiConfig: (id: string) => api.delete<AiConfig>(`/api/workspaces/${id}/ai-config`),
+  // Research settings (docs/api/research.md §1f): the workspace's defaults and shared findings.
+  research: (id: string) => api.get<WorkspaceResearch>(`/api/workspaces/${id}/research`),
+  setResearch: (id: string, body: ResearchPut) => api.put<WorkspaceResearch>(`/api/workspaces/${id}/research`, body),
   aiModels: (id: string) => api.post<AiCheck>(`/api/workspaces/${id}/ai-config/models`),
   testAi: (id: string) => api.post<AiCheck>(`/api/workspaces/${id}/ai-config/test`),
   list: () => api.get<{ workspaces: WorkspaceWithRole[] }>('/api/workspaces'),

@@ -26,6 +26,7 @@ const auth = useAuthStore();
       <RouterLink :to="{ name: 'settings-defaults' }" active-class="active">Defaults</RouterLink>
       <RouterLink :to="{ name: 'settings-fields' }" active-class="active">Fields</RouterLink>
       <RouterLink :to="{ name: 'settings-ai' }" active-class="active">AI</RouterLink>
+      <RouterLink :to="{ name: 'settings-research' }" active-class="active" class="sub">Research</RouterLink>
       <RouterLink :to="{ name: 'settings-lists' }" active-class="active">Lists</RouterLink>
       <RouterLink :to="{ name: 'settings-data' }" active-class="active">Data</RouterLink>
     </template>
@@ -68,6 +69,10 @@ a {
   color: var(--text);
   font-weight: 600;
   text-decoration: none;
+}
+a.sub {
+  padding-left: var(--space-4);
+  font-weight: 500;
 }
 a:hover {
   background: var(--brand-tint);

@@ -11,6 +11,7 @@ import { z } from "zod";
 import { scalesByDefault } from "@barista/shared/brew";
 import type { RecipeCopy } from "@barista/shared/recipeCopy";
 import { FLAVORS, parseLexicon, type FlavorLexicon } from "@barista/shared/flavors";
+import type { ResearchSettings } from "@barista/shared/researchSettings";
 import { workspaceLexicon } from "./flavorLexicon.js";
 import {
   ANALYSIS_CONFIDENCE,
@@ -103,6 +104,7 @@ import {
 } from "@barista/shared/schema";
 import { db } from "./db.js";
 import { noteBlocksSchema, workspaceSettingsObject } from "./validation.js";
+import { checkStoredResearch } from "./research.js";
 import { checkStoredPhoto, removeWorkspacePhotos, writePhotoFile } from "./photos.js";
 
 export const BACKUP_FORMAT = "barista-backup";
@@ -473,6 +475,9 @@ export interface BackupFile {
     // The workspace's own flavor wheel (docs/api/flavor-lexicon.md §2c);
     // null or left out = the built-in one.
     flavorLexicon?: FlavorLexicon | null;
+    // Its research defaults and shared findings (docs/api/research.md §1f);
+    // null or left out (older files) = none. People's own stay with them.
+    research?: ResearchSettings | null;
   };
   tables: Record<string, BackupRow[]>;
 }
@@ -533,6 +538,7 @@ export async function buildBackup(workspaceId: string, options: BackupOptions = 
       menuLogoIds: options.photos ? (ws.menuLogoIds ?? []) : [],
       isPublicMenuEnabled: ws.isPublicMenuEnabled,
       flavorLexicon: lexicon.custom ? lexicon.lexicon : null,
+      research: ws.research,
     },
     tables,
   };
@@ -683,7 +689,12 @@ export function checkBackup(input: unknown): Checked {
     if (t.hasId) ids.set(t.name, seen);
     tables[t.name] = checked;
   }
-  return { ok: true, file: { ...file, workspace: { ...ws, settings: settings.data, flavorLexicon }, tables } };
+  let research: ResearchSettings | null = null;
+  if (ws.research != null) {
+    research = checkStoredResearch(ws.research);
+    if (!research) return { ok: false, error: "backup.workspace.research: not valid" };
+  }
+  return { ok: true, file: { ...file, workspace: { ...ws, settings: settings.data, flavorLexicon, research }, tables } };
 }
 
 // ---- Restoring -------------------------------------------------------------
@@ -758,6 +769,7 @@ async function insertBackup(
       menuTagline: file.workspace.menuTagline ?? null,
       menuLogoIds: logos.length ? logos.map((l) => l.id) : null,
       isPublicMenuEnabled: false,
+      research: file.workspace.research ?? null,
     });
     await tx.insert(workspaceMembers).values({ userId: target.ownerId, workspaceId, role: "owner" });
     const lexicon = file.workspace.flavorLexicon;

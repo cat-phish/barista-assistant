@@ -69,6 +69,10 @@
       "types": "./dist/research.d.ts",
       "default": "./dist/research.js"
     },
+    "./researchSettings": {
+      "types": "./dist/researchSettings.d.ts",
+      "default": "./dist/researchSettings.js"
+    },
     "./aiPrompt": {
       "types": "./dist/aiPrompt.d.ts",
       "default": "./dist/aiPrompt.js"

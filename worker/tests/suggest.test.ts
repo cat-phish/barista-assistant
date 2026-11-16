@@ -1,3 +1,4 @@
+import { DEFAULT_RESEARCH } from "@barista/shared/researchSettings";
 import { randomUUID } from "node:crypto";
 import type { SuggestionPreview } from "@barista/shared/jobs";
 import { beans, brewers, brewLogs, grinders, llmAnalyses, parameterSuggestions, recipes, recipeSteps, users, workspaces, type SuggestSource } from "@barista/shared/schema";
@@ -241,7 +242,7 @@ describe("processParameterSuggestion", () => {
     await db.update(users).set({ aiPrompt: prompt }).where(eq(users.id, userId));
     const suggestionId = await pending({ requestedBy: userId, note: "For iced coffee" });
     await processParameterSuggestion({ suggestionId });
-    expect(llm.mock.calls[0]![3]).toEqual({ prompt, note: "For iced coffee" });
+    expect(llm.mock.calls[0]![3]).toEqual({ prompt, note: "For iced coffee", research: DEFAULT_RESEARCH });
     expect((await row(suggestionId))!.promptVersion).toMatch(/\+custom$/);
     expect((await row(suggestionId))!.request?.system).not.toContain("Our guests like it strong."); // SEC-22: saved without the person's own text
     expect((await row(suggestionId))!.request?.system).toContain("not shown to other members");

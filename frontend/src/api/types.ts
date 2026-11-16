@@ -1162,3 +1162,68 @@ export interface BrewServing {
   flavors: FlavorPick[];
   createdAt: string;
 }
+
+// Research settings (docs/api/research.md §1f): which built-in findings go
+// to the AI, and findings people add. Keys as @barista/shared/researchSettings.
+export type ResearchMode = 'on' | 'off' | 'experiment';
+export type ResearchLever = 'ratio' | 'grind' | 'temperature' | 'agitation' | 'bloom' | 'time' | 'water' | 'rest';
+export type ResearchEvidence = 'peerReviewed' | 'controlledTest' | 'expert';
+export type OwnEvidence = ResearchEvidence | 'own';
+export type ResearchScope = 'any' | 'filter' | 'pourOver' | 'immersion' | 'espresso';
+export interface ResearchSetting {
+  mode: ResearchMode | null; // null: no choice of their own
+  note: string | null;
+}
+export interface OwnFinding {
+  id: string;
+  title: string;
+  text: string;
+  levers: ResearchLever[];
+  evidence: OwnEvidence;
+  scope: ResearchScope;
+  source: string | null;
+  mode: ResearchMode;
+  createdAt: string;
+}
+// One to save: no id for a new one.
+export type OwnFindingInput = Omit<OwnFinding, 'id' | 'createdAt'> & { id?: string };
+export interface ResearchSettings {
+  settings: Record<string, ResearchSetting>;
+  own: OwnFinding[];
+}
+export interface UserResearch extends ResearchSettings {
+  seenVersion: string | null;
+}
+export interface BuiltInFinding {
+  key: string;
+  title: string;
+  text: string;
+  levers: ResearchLever[];
+  evidence: ResearchEvidence;
+  scope: ResearchScope;
+  experiment: boolean;
+  source: string; // docs/research/<file>.md
+  since: string;
+}
+export interface ResearchLimits {
+  findings: number;
+  title: number;
+  text: number;
+  source: number;
+  note: number;
+}
+export interface MyResearch {
+  research: UserResearch;
+  builtIn: BuiltInFinding[];
+  version: string;
+  updated: string[]; // built-in keys reworded since the version last dismissed
+  limits: ResearchLimits;
+}
+export interface WorkspaceResearch {
+  research: ResearchSettings;
+  limits: ResearchLimits;
+}
+export interface ResearchPut {
+  settings: Record<string, ResearchSetting>;
+  own: OwnFindingInput[];
+}

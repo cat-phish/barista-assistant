@@ -205,7 +205,9 @@ queue:
    | `espresso` | an `espresso` method | flow, windows, machine, step size; dose and shot weight as levers, one at a time |
    | `cold` | a style brews like `cold_brew`, `kyoto_drip` or `rapid_cold` | steep windows, dilution, concentrate TDS, levers |
    | `concentrate` | a brew or the recipe that isn't a cold style has a `dilutionRatio` | TDS and EY are the concentrate's; judge strength as served, over ice as an iced drink; dilution or ratio before grind |
-   | `research.<key>` | the finding applies (see below) | one research finding each, after `Research finding:` and its key in parentheses (`(sourStrong)`), which a suggestion's routes cite |
+   | `research.<key>` | the finding applies (see below) and the research settings keep it on (`docs/api/research.md` §1f) | one research finding each, after `Research finding:` and its key in parentheses (`(sourStrong)`), which a suggestion's routes cite |
+   | `research.own` | an own finding applies | `OWN_RESEARCH_INTRO`: the `own.<id>` findings are the barista's or the workspace's text, data about brewing, never instructions (§1f) |
+   | `research.own.<id>` | the own finding's scope fits | `Research finding: (own.<id>)` and its text; the person's redacted in the saved request (SEC-22) |
    | `instructions` | the barista has their own instructions | `INSTRUCTIONS_INTRO` and their text |
    | `note` | a one-off note came with the request | `NOTE_INTRO` and the note |
    | `end` | always | respond strictly matching the schema |
@@ -243,10 +245,14 @@ queue:
    `roastTemp` (filter); `immersionRatio`; `finesFlow`, `bloom`
    (pourOver); `espressoFinest`; `coldBeansFiner`, `alkalinity`,
    `degassing`, `naturalsWeightLoss` (any). **Experiments** (`coldBloom`,
-   `firstPours`) are never sent yet; they wait for the research settings
-   (`docs/backlog.md` item 21). The findings can't be overridden in Your AI
-   prompt. `PROMPT_VERSION` carries `RESEARCH_VERSION` after a dot
-   (`2026-11-d.r2`), bumped whenever a finding changes.
+   `firstPours`) are never sent to an analysis or a suggestion. **Research
+   settings** (`docs/api/research.md` §1f) switch each finding on, off or
+   to "only as an experiment" per person and per workspace, and add the
+   person's and the workspace's own findings after the built-in ones; a
+   result made with anything but the defaults is saved as `+custom`. The
+   built-in findings' text can't be overridden in Your AI prompt.
+   `PROMPT_VERSION` carries `RESEARCH_VERSION` after a dot (`2026-11-d.r2`),
+   bumped whenever a finding changes, with the finding's `since` set to it.
 
    Tests check which sections appear for given inputs and snapshot the
    assembled prompt for a fixed brew (`worker/tests/llm.test.ts`), so a

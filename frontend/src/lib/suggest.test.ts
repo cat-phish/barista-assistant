@@ -19,7 +19,7 @@ describe('Suggest parameters routes (docs/api/analysis.md §8b)', () => {
     const found = [...research.matchAll(/key: "(\w+)",\s*title: "([^"]+)"/g)].map((m) => [m[1], m[2]]);
     expect(found.length).toBeGreaterThan(10);
     expect(Object.entries(RESEARCH_TITLES)).toEqual(found);
-    expect(findingTitles(['sourStrong', 'fromANewerWorker'])).toEqual(['Sour can mean too strong']);
+    expect(findingTitles(['sourStrong', 'fromANewerWorker', 'own.a1b2c3d4'])).toEqual(['Sour can mean too strong', 'Your research']);
   });
   it('one from before routes has its values as the only route; a route chosen takes the place of the first', () => {
     expect(startingParameters(suggestion())!.routes).toEqual([{ label: 'Suggested', why: '', findings: [], grindSetting: 22, grindRpm: null, tempC: 95, ratio: 16 }]);

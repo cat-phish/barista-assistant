@@ -2,23 +2,30 @@
 // "Synthesis"; docs/api/llm-contract.md §9, "Research findings"). Each
 // finding is one rule in our own words, with the research file behind it.
 // The worker sends a finding only when it applies to the brew (its scope and
-// what it needs) and, for now, never an experiment: those wait for the
-// research settings (docs/backlog.md item 21).
+// what it needs) and the research settings keep it on (researchSettings.ts,
+// docs/api/research.md §1f): an experiment is never sent to an analysis or
+// a suggestion, only kept for chat-style experiment ideas.
 //
 // RESEARCH_VERSION is stored inside each result's promptVersion
 // ("2026-11-b.r1"), so results can be compared across research changes.
-// Bump it whenever a finding is added, removed or reworded.
+// Bump it whenever a finding is added, removed or reworded, and set the
+// finding's `since` to the new version so people are told (§1f).
 import type { PromptKind } from "./aiPrompt.js";
 
 export const RESEARCH_VERSION = "r2";
+// "r12" -> 12, for comparing versions.
+export const researchVersionNumber = (v: string): number => Number(v.replace(/^r/, "")) || 0;
 
-export type ResearchLever = "ratio" | "grind" | "temperature" | "agitation" | "bloom" | "time" | "water" | "rest";
+export const RESEARCH_LEVERS = ["ratio", "grind", "temperature", "agitation", "bloom", "time", "water", "rest"] as const;
+export type ResearchLever = (typeof RESEARCH_LEVERS)[number];
 // peerReviewed: consistent across published studies; controlledTest: a
 // controlled hobbyist test; expert: expert opinion or consensus only.
-export type ResearchEvidence = "peerReviewed" | "controlledTest" | "expert";
+export const RESEARCH_EVIDENCE = ["peerReviewed", "controlledTest", "expert"] as const;
+export type ResearchEvidence = (typeof RESEARCH_EVIDENCE)[number];
 // Which brews it's about: filter = hot filter of any style; pourOver also
 // covers hybrid; immersion = steeped; espresso by method; any = all of them.
-export type ResearchScope = "any" | "filter" | "pourOver" | "immersion" | "espresso";
+export const RESEARCH_SCOPES = ["any", "filter", "pourOver", "immersion", "espresso"] as const;
+export type ResearchScope = (typeof RESEARCH_SCOPES)[number];
 // What the input must carry for the finding to be worth sending.
 export type ResearchNeed = "water" | "roastAge" | "roastWeightLoss";
 
@@ -33,6 +40,7 @@ export interface ResearchFinding {
   prompts: readonly PromptKind[];
   source: string; // docs/research/<file>.md
   text: string;
+  since: string; // the RESEARCH_VERSION its text is from (added or last reworded)
 }
 
 const BOTH: readonly PromptKind[] = ["analysis", "suggest"];
@@ -47,6 +55,7 @@ export const RESEARCH_FINDINGS: readonly ResearchFinding[] = [
     experiment: false,
     prompts: BOTH,
     source: "strength-water-rest.md",
+    since: "r2",
     text:
       "Pick levers in this order: the ratio for strength (weak or strong, thin or heavy); the grind, flow and " +
       "agitation for extraction (sour and hollow, or bitter and drying); the water temperature last, as a trim " +
@@ -61,6 +70,7 @@ export const RESEARCH_FINDINGS: readonly ResearchFinding[] = [
     experiment: false,
     prompts: BOTH,
     source: "temperature-roast-solubility.md",
+    since: "r2",
     text:
       "In blind tests, filter brews made at 87, 90 and 93 °C tasted alike once their strength and extraction " +
       "matched: in the normal hot range, temperature mostly changes how fast coffee extracts. Don't make a 1-3 °C " +
@@ -75,6 +85,7 @@ export const RESEARCH_FINDINGS: readonly ResearchFinding[] = [
     experiment: false,
     prompts: BOTH,
     source: "strength-water-rest.md",
+    since: "r2",
     text:
       "Sourness rises with strength and falls with extraction; bitterness rises with both. A sour cup that is also " +
       "strong, heavy or high in TDS wants a longer ratio (more water) before a finer grind; sour and thin or weak " +
@@ -89,6 +100,7 @@ export const RESEARCH_FINDINGS: readonly ResearchFinding[] = [
     experiment: false,
     prompts: BOTH,
     source: "agitation-pour-structure.md",
+    since: "r2",
     text:
       "Steeped coffee settles near the same extraction (about 21%) whatever the grind, temperature (80-99 °C) or " +
       "roast; those mostly change how fast it gets there. Change the ratio and the steep time first; the grind " +
@@ -103,6 +115,7 @@ export const RESEARCH_FINDINGS: readonly ResearchFinding[] = [
     experiment: false,
     prompts: BOTH,
     source: "strength-water-rest.md",
+    since: "r2",
     text:
       "Preferences differ: there's no single ideal strength and extraction. Go by this barista's own ratings (what " +
       "their best-rated brews had in common) rather than textbook targets. Only a brew rated 4.5 or more may be " +
@@ -118,6 +131,7 @@ export const RESEARCH_FINDINGS: readonly ResearchFinding[] = [
     experiment: false,
     prompts: BOTH,
     source: "cold-bloom-low-temp.md",
+    since: "r2",
     text:
       "tempC is the kettle setting, not the coffee's: a pour over's slurry runs about 5-8 °C below it, more in thin " +
       "or plastic brewers. A temperature only means something for its own brewer, so don't carry one over from " +
@@ -132,6 +146,7 @@ export const RESEARCH_FINDINGS: readonly ResearchFinding[] = [
     experiment: false,
     prompts: BOTH,
     source: "temperature-roast-solubility.md",
+    since: "r2",
     text:
       "Darker roasts suit cooler water (hot brings out bitter, burnt and smoky notes); light roasts are usually " +
       "brewed hotter, though that's consensus rather than tested at small steps. Move the temperature from there " +
@@ -146,6 +161,7 @@ export const RESEARCH_FINDINGS: readonly ResearchFinding[] = [
     experiment: false,
     prompts: BOTH,
     source: "grind-fines-burrs.md",
+    since: "r2",
     text:
       "A slow drawdown points to fines or late, heavy agitation as much as to the grind number. Agitation helps " +
       "extraction until it carries fines into the filter: after heavy swirling or stirring, try less agitation " +
@@ -160,6 +176,7 @@ export const RESEARCH_FINDINGS: readonly ResearchFinding[] = [
     experiment: false,
     prompts: BOTH,
     source: "agitation-pour-structure.md",
+    since: "r2",
     text:
       "Bloom with about 2-3 times the dose in water. Bloom length is a flavour lever: longer gives more body and " +
       "extraction, shorter keeps more aroma.",
@@ -173,6 +190,7 @@ export const RESEARCH_FINDINGS: readonly ResearchFinding[] = [
     experiment: false,
     prompts: BOTH,
     source: "grind-fines-burrs.md",
+    since: "r2",
     text:
       "At the finest settings an espresso's flow goes uneven and extraction drops again. A shot that is sour or " +
       "harsh and thin at an already fine setting, especially one that runs unevenly, may want better puck prep or " +
@@ -187,6 +205,7 @@ export const RESEARCH_FINDINGS: readonly ResearchFinding[] = [
     experiment: false,
     prompts: BOTH,
     source: "grind-fines-burrs.md",
+    since: "r2",
     text:
       "Beans ground cold from the freezer, and darker roasts, come out finer at the same setting: allow for it when " +
       "carrying a grind setting over from another bag or roast.",
@@ -201,6 +220,7 @@ export const RESEARCH_FINDINGS: readonly ResearchFinding[] = [
     experiment: false,
     prompts: BOTH,
     source: "strength-water-rest.md",
+    since: "r2",
     text:
       "Of a water's figures, alkalinity (KH, bicarbonate) matters most, far more than hardness or pH: it " +
       "neutralizes the coffee's acids, so a high KH makes a filter cup flat and dull; suspect the water before the " +
@@ -216,6 +236,7 @@ export const RESEARCH_FINDINGS: readonly ResearchFinding[] = [
     experiment: false,
     prompts: BOTH,
     source: "strength-water-rest.md",
+    since: "r2",
     text:
       "Beans a few days off roast hold a lot of CO2: they bloom hard and can drain or extract unevenly, which a " +
       "longer bloom helps. How long a coffee wants to rest varies from about a day (dark) to weeks (light) with no " +
@@ -231,6 +252,7 @@ export const RESEARCH_FINDINGS: readonly ResearchFinding[] = [
     experiment: false,
     prompts: BOTH,
     source: "temperature-roast-solubility.md",
+    since: "r2",
     text:
       "Natural and other dried-in-the-fruit coffees lose about 2-3% more weight in roasting than washed ones at the " +
       "same development: read their roastWeightLossPercent a step lighter.",
@@ -244,6 +266,7 @@ export const RESEARCH_FINDINGS: readonly ResearchFinding[] = [
     experiment: true,
     prompts: BOTH,
     source: "cold-bloom-low-temp.md",
+    since: "r2",
     text:
       "As an experiment only (no controlled data): a cool bloom (about 50-62 °C) before hot pours, or hot first " +
       "pours then cooler ones, can soften harshness in a light roast.",
@@ -257,6 +280,7 @@ export const RESEARCH_FINDINGS: readonly ResearchFinding[] = [
     experiment: true,
     prompts: BOTH,
     source: "agitation-pour-structure.md",
+    since: "r2",
     text:
       "As an experiment only (experts disagree): a bigger share of the water in the first pours tends to bring " +
       "more acidity, and more later pours more strength; fewer, bigger pours or more, smaller ones are a lever to " +

@@ -14,6 +14,7 @@ means drinks, wherever you see it (code comments use
 | §1c | [auth.md](auth.md) | Your AI prompt (per person) and the one-off note |
 | §1d | [auth.md](auth.md) | Learned preferences (per person, and the workspace's) |
 | §1e | [auth.md](auth.md) | Email verification (optional, `EMAIL_VERIFICATION`) |
+| §1f | [research.md](research.md) | Research settings (which findings the AI gets, per person and workspace) and your own research |
 | §2 | [workspaces.md](workspaces.md) | Workspaces |
 | §2b | [backup.md](backup.md) | Backup and Restore (a workspace as one file) |
 | §2c | [flavor-lexicon.md](flavor-lexicon.md) | Flavor Lexicon (a workspace's own flavor wheel, as a JSON file) |
