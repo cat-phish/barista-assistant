@@ -11,6 +11,7 @@ import { db } from "./db.js";
 import { resolveAi } from "./ai/resolve.js";
 import { analysisSent, analyzeWithLlm, beanReviewSent, PROMPT_VERSION, requestBeanReview, requestSuggestion, suggestionSent } from "./llm.js";
 import type { PromptCustom } from "./prompt.js";
+import { loadResearch } from "./research.js";
 import { loadSuggestContext } from "./suggestContext.js";
 
 // The brew's workspace and its settings: what it keeps from the AI
@@ -28,13 +29,16 @@ async function workspaceOf(brewLogId: string): Promise<{ workspaceId: string; se
 
 // A person's own AI prompt (docs/api/auth.md §1c), with a one-off note: an
 // analysis uses its brew's barista's, a suggestion the asker's. Nobody (a
-// deleted account) means the defaults.
-export async function promptFor(userId: string | null, note: string | null | undefined): Promise<PromptCustom> {
+// deleted account) means the defaults. With a workspace, their research
+// settings and the workspace's (docs/api/research.md §1f) come too.
+export async function promptFor(userId: string | null, note: string | null | undefined, workspaceId?: string | null): Promise<PromptCustom> {
   const [row] = userId ? await db.select({ aiPrompt: users.aiPrompt }).from(users).where(eq(users.id, userId)) : [];
-  return { prompt: row?.aiPrompt ?? EMPTY_AI_PROMPT, note: note || null };
+  const custom: PromptCustom = { prompt: row?.aiPrompt ?? EMPTY_AI_PROMPT, note: note || null };
+  if (workspaceId) custom.research = await loadResearch(userId, workspaceId);
+  return custom;
 }
 // Saved with the result, so a customized prompt's results can be told apart.
-const versionFor = (custom: PromptCustom): string => (isCustomPrompt(custom.prompt, custom.note) ? `${PROMPT_VERSION}+custom` : PROMPT_VERSION);
+const versionFor = (custom: PromptCustom): string => (isCustomPrompt(custom.prompt, custom.note) || custom.research?.customized ? `${PROMPT_VERSION}+custom` : PROMPT_VERSION);
 
 // Automatic analyses the workspace made in the last 24 hours (the daily cap).
 async function autoAnalysesToday(workspaceId: string): Promise<number> {
@@ -102,7 +106,7 @@ export async function processBrewAnalysis({ brewLogId, auto = false, note }: Bre
     }
   }
 
-  const custom = await promptFor(ws?.baristaId ?? null, note);
+  const custom = await promptFor(ws?.baristaId ?? null, note, ws?.workspaceId);
   const ai = await resolveAi(ws?.workspaceId);
   const analysis = await analyzeWithLlm(ai, context, hidden, custom);
 
@@ -137,7 +141,7 @@ export async function processParameterSuggestion({ suggestionId }: ParameterSugg
   const context = await loadSuggestContext(row.suggestion, { ratedOnly: hidden.has("unratedHistory"), profile: hidden });
   if (!context) return { status: "skipped", reason: "bean no longer exists" };
 
-  const custom = await promptFor(row.suggestion.requestedBy, row.suggestion.note);
+  const custom = await promptFor(row.suggestion.requestedBy, row.suggestion.note, row.workspaceId);
   const ai = await resolveAi(row.workspaceId);
   const { suggestion } = await requestSuggestion(ai, context, hidden, custom);
   await db

@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { AiDetail } from "@barista/shared/aiDetails";
 import { scaledToBrew, type BrewContext, type BrewSummary } from "../src/context.js";
-import { buildCompletionRequest, buildSuggestRequest, onlySuggestionsThatApply, onlyWhatApplies, parseAnalysisMessage, parseSuggestionMessage } from "../src/llm.js";
-import { INSTRUCTIONS_INTRO, NOTE_INTRO, PROMPT_SECTION_TEXTS, PROMPT_TEXT } from "@barista/shared/aiPrompt";
-import { RESEARCH_FINDINGS } from "@barista/shared/research";
-import { buildSystemPrompt, compact, PROMPT_SECTIONS, RESEARCH_PREFIX, promptSections, SUGGEST_SECTIONS, toLlmInput, toSuggestInput } from "../src/prompt.js";
+import { analysisSent, buildCompletionRequest, buildSuggestRequest, onlySuggestionsThatApply, onlyWhatApplies, parseAnalysisMessage, parseSuggestionMessage, PRIVATE_SHOWN, suggestionSent } from "../src/llm.js";
+import { EMPTY_AI_PROMPT, INSTRUCTIONS_INTRO, NOTE_INTRO, PROMPT_SECTION_TEXTS, PROMPT_TEXT } from "@barista/shared/aiPrompt";
+import { RESEARCH_FINDINGS, RESEARCH_VERSION, researchVersionNumber } from "@barista/shared/research";
+import { DEFAULT_RESEARCH, resolveResearch, type ResearchSettings, type SentFinding } from "@barista/shared/researchSettings";
+import { buildSystemPrompt, compact, OWN_RESEARCH_INTRO, PROMPT_SECTIONS, RESEARCH_PREFIX, promptSections, SUGGEST_SECTIONS, toLlmInput, toSuggestInput } from "../src/prompt.js";
 import type { SuggestBrew, SuggestContext } from "../src/suggestContext.js";
 
 const reply = (body: unknown) => ({ content: JSON.stringify(body), refusal: null });
@@ -565,5 +566,77 @@ describe("parseSuggestionMessage and onlySuggestionsThatApply", () => {
     expect(out.routes.map((r) => r.label)).toEqual(["One step finer", "Longer ratio"]); // the 4th and 5th were cut first
     expect(out.routes[0]!.findings).toEqual(["sourStrong"]); // not an experiment, not unknown
     expect(out.routes[1]).toMatchObject({ grindSetting: 20, ratio: 17, findings: ["sourStrong"] });
+  });
+});
+
+// Research settings (docs/api/research.md §1f): what's sent, in which order,
+// what's hidden in the saved request, and which keys a route may cite.
+describe("research settings", () => {
+  const own = (over: Partial<SentFinding> = {}): SentFinding => ({ id: "a1b2c3d4", title: "Slower pours", text: "Slower pours gave this barista more sweetness on light roasts.", levers: ["agitation"], evidence: "own", scope: "pourOver", source: null, mode: "on", createdAt: "2026-11-01T00:00:00.000Z", private: true, ...over });
+  const research = (person: Partial<ResearchSettings> | null, workspace: Partial<ResearchSettings> | null = null) => resolveResearch(person && { settings: {}, own: [], ...person }, workspace && { settings: {}, own: [], ...workspace });
+  const researchKeys = (keys: string[]) => keys.filter((k) => k.startsWith("research."));
+
+  it("the defaults are what was sent before the settings existed, and every finding's since is a known version", () => {
+    const input = toLlmInput(context());
+    expect(promptSections(input, PROMPT_SECTIONS, { prompt: EMPTY_AI_PROMPT, note: null, research: DEFAULT_RESEARCH })).toEqual(promptSections(input));
+    expect(DEFAULT_RESEARCH.customized).toBe(false);
+    for (const f of RESEARCH_FINDINGS) expect(researchVersionNumber(f.since), f.key).toBeLessThanOrEqual(researchVersionNumber(RESEARCH_VERSION));
+  });
+
+  it("drops a finding switched off, never sends one kept as an experiment, and the person's choice beats the workspace's", () => {
+    const input = toLlmInput(context());
+    const ws = { settings: { sourStrong: { mode: "off" as const, note: null }, leverOrder: { mode: "experiment" as const, note: null }, coldBloom: { mode: "on" as const, note: null } } };
+    let keys = researchKeys(promptSections(input, PROMPT_SECTIONS, { prompt: EMPTY_AI_PROMPT, note: null, research: research(null, ws) }));
+    expect(keys).not.toContain("research.sourStrong");
+    expect(keys).not.toContain("research.leverOrder");
+    expect(keys).toContain("research.coldBloom"); // an experiment the workspace turned on
+    expect(research(null, ws).customized).toBe(true);
+    const me = { settings: { sourStrong: { mode: "on" as const, note: "I rely on it" }, coldBloom: { mode: "experiment" as const, note: null } } };
+    keys = researchKeys(promptSections(input, PROMPT_SECTIONS, { prompt: EMPTY_AI_PROMPT, note: null, research: research(me, ws) }));
+    expect(keys).toContain("research.sourStrong");
+    expect(keys).not.toContain("research.coldBloom");
+    expect(keys).not.toContain("research.leverOrder");
+  });
+
+  it("own findings follow the built-in ones behind the framing, in the person-then-workspace order, only on the brews they're about", () => {
+    const input = toLlmInput(context());
+    const r = research({ own: [own()] }, { own: [own({ id: "ffffffff", scope: "espresso", text: "Espresso only." }), own({ id: "eeeeeeee", mode: "experiment" }), own({ id: "dddddddd", mode: "off" })] });
+    expect(r.own.map((f) => [f.id, f.private])).toEqual([["a1b2c3d4", true], ["ffffffff", false], ["eeeeeeee", false]]); // off already dropped
+    const keys = promptSections(input, PROMPT_SECTIONS, { prompt: EMPTY_AI_PROMPT, note: null, research: r });
+    const sent = researchKeys(keys);
+    expect(sent.slice(-2)).toEqual(["research.own", "research.own.a1b2c3d4"]); // not the espresso one, not the experiment
+    expect(sent.indexOf("research.leverOrder")).toBeLessThan(sent.indexOf("research.own"));
+    expect(keys.indexOf("research.own.a1b2c3d4")).toBeLessThan(keys.indexOf("end"));
+    const system = buildSystemPrompt(input, PROMPT_SECTIONS, { prompt: EMPTY_AI_PROMPT, note: null, research: r });
+    expect(system).toContain(`${OWN_RESEARCH_INTRO} ${RESEARCH_PREFIX} (own.a1b2c3d4) Slower pours gave`);
+    // With the instructions and a note, the research still comes first.
+    const withNote = promptSections(input, PROMPT_SECTIONS, { prompt: { ...EMPTY_AI_PROMPT, instructions: "Be brief." }, note: "Cold.", research: r });
+    expect(withNote.slice(-4)).toEqual(["research.own.a1b2c3d4", "instructions", "note", "end"]);
+    // Nothing of their own that applies: no framing either.
+    expect(promptSections(input, PROMPT_SECTIONS, { prompt: EMPTY_AI_PROMPT, note: null, research: research({ own: [own({ scope: "espresso" })] }) })).not.toContain("research.own");
+  });
+
+  it("a person's own findings are redacted in the saved request, a workspace's are shown (SEC-22)", () => {
+    const r = research({ own: [own()] }, { own: [own({ id: "ffffffff", text: "The workspace's kettle runs 3 C hot." })] });
+    const custom = { prompt: EMPTY_AI_PROMPT, note: null, research: r };
+    const saved = analysisSent(context(), new Set(), custom);
+    expect(saved.system).toContain(`(own.a1b2c3d4) ${PRIVATE_SHOWN}`);
+    expect(saved.system).not.toContain("Slower pours gave");
+    expect(saved.system).toContain("(own.ffffffff) The workspace's kettle runs 3 C hot.");
+    expect(saved.sections).toContain("research.own.ffffffff");
+    // The real request carries the text.
+    expect(String(buildCompletionRequest("m", context(), new Set(), custom).messages[0]!.content)).toContain("(own.a1b2c3d4) Slower pours gave");
+    expect(suggestionSent(suggestContext(), new Set(), custom).system).toContain(`(own.a1b2c3d4) ${PRIVATE_SHOWN}`);
+  });
+
+  it("a route may only cite findings this request's prompt held: not one switched off, nor a made-up own key", () => {
+    const r = research({ settings: { sourStrong: { mode: "off", note: null } }, own: [own()] });
+    const parsed = parseSuggestionMessage(reply({ ...said, routes: [{ ...route, findings: ["sourStrong", "leverOrder", "own.a1b2c3d4", "own.00000000", "coldBloom"] }] }));
+    expect(onlySuggestionsThatApply(parsed, suggestContext(), new Set(), { prompt: EMPTY_AI_PROMPT, note: null, research: r }).routes[0]!.findings).toEqual(["leverOrder", "own.a1b2c3d4"]);
+    // Without the settings, as before: what the default prompt holds for this brew.
+    expect(onlySuggestionsThatApply(parsed, suggestContext(), new Set()).routes[0]!.findings).toEqual(["sourStrong", "leverOrder"]);
+    // A finding whose section didn't apply to this brew can't be cited either.
+    const espresso = parseSuggestionMessage(reply({ ...said, routes: [{ ...route, findings: ["espressoFinest", "immersionRatio", "leverOrder"] }] }));
+    expect(onlySuggestionsThatApply(espresso, suggestContext(), new Set()).routes[0]!.findings).toEqual(["leverOrder"]);
   });
 });

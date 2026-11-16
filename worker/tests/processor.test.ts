@@ -1,3 +1,4 @@
+import { DEFAULT_RESEARCH } from "@barista/shared/researchSettings";
 import { randomUUID } from "node:crypto";
 import { analysisRequests, beanFreezes, beans, brewLogMarks, brewLogs, brewers, ingredients, drinkIngredients, drinks, grinders, llmAnalyses, recipeGrindSettings, recipes, recipeSteps, users, waterProfiles, workspaces, prepTools, brewLogTools, brewProblems, brewLogProblems, brewLogFlavors, flavorLexicons, recipeStyles } from "@barista/shared/schema";
 import { and, eq } from "drizzle-orm";
@@ -109,7 +110,7 @@ describe("processBrewAnalysis", () => {
     const prompt = { instructions: "I like it light.", overrides: { core: "Be brief." } };
     await db.update(users).set({ aiPrompt: prompt }).where(eq(users.id, userId));
     await processBrewAnalysis({ brewLogId: logIds.day8!, note: "Tasted it cold." });
-    expect(llm.mock.calls[0]![3]).toEqual({ prompt, note: "Tasted it cold." });
+    expect(llm.mock.calls[0]![3]).toEqual({ prompt, note: "Tasted it cold.", research: DEFAULT_RESEARCH });
     const [saved] = await db.select().from(llmAnalyses).where(eq(llmAnalyses.brewLogId, logIds.day8!));
     expect(saved!.promptVersion).toBe(`${PROMPT_VERSION}+custom`);
     expect(saved!.request?.sections).toEqual(expect.arrayContaining(["instructions", "note"]));
@@ -121,7 +122,7 @@ describe("processBrewAnalysis", () => {
   it("without a prompt of their own or a note: the defaults, and the plain version", async () => {
     llm.mockResolvedValue(ANALYSIS);
     await processBrewAnalysis({ brewLogId: logIds.day8! });
-    expect(llm.mock.calls[0]![3]).toEqual({ prompt: { instructions: null, labelInstructions: null, overrides: {} }, note: null });
+    expect(llm.mock.calls[0]![3]).toEqual({ prompt: { instructions: null, labelInstructions: null, overrides: {} }, note: null, research: DEFAULT_RESEARCH });
     const [saved] = await db.select().from(llmAnalyses).where(eq(llmAnalyses.brewLogId, logIds.day8!));
     expect(saved!.promptVersion).toBe(PROMPT_VERSION);
   });

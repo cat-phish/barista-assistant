@@ -1,3 +1,4 @@
+import type { OwnFinding } from "./researchSettings.js";
 import type { BackupSettings, BlendType, CoffeeSpecies, DetailedRoastLevel, LabelWebContext, ParameterSuggestion, RoastLevel, RoastType } from "./schema.js";
 
 // BullMQ contract between the backend (producer) and the worker (consumer).
@@ -195,6 +196,21 @@ export interface BeanReviewResult {
   review: string;
   suggestedRating: number; // 0.5-5 in half steps
   brewCount: number; // how many brews were sent
+}
+
+// Turning pasted text into research findings (docs/api/research.md §1f,
+// "Drafts"; llm-contract.md §9h): an AI call the backend waits for; nothing
+// is saved until the person confirms each draft.
+export const RESEARCH_DRAFT_QUEUE = "research-draft";
+export const RESEARCH_DRAFT_JOB = "draft";
+export interface ResearchDraftJobData {
+  text: string; // up to MAX_RESEARCH_DRAFT_TEXT characters, data for the AI
+  requestedBy: string;
+  workspaceId: string; // whose AI answers
+}
+export type ResearchDraft = Omit<OwnFinding, "id" | "createdAt">;
+export interface ResearchDraftResult {
+  drafts: ResearchDraft[]; // up to MAX_RESEARCH_DRAFTS
 }
 
 export const GRIND_DELTAS = ["much_finer", "finer", "no_change", "coarser", "much_coarser"] as const;

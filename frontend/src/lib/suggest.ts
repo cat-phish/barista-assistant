@@ -119,7 +119,7 @@ export const RESEARCH_TITLES: Record<string, string> = {
   firstPours: 'First pours and pour count',
 };
 export function findingTitles(keys: readonly string[]): string[] {
-  return keys.flatMap((k) => (RESEARCH_TITLES[k] ? [RESEARCH_TITLES[k]] : []));
+  return keys.flatMap((k) => (RESEARCH_TITLES[k] ? [RESEARCH_TITLES[k]] : k.startsWith('own.') ? ['Your research'] : []));
 }
 
 // What a suggested ratio keeps as it is (docs/api/analysis.md §8b), the rest

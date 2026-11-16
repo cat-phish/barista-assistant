@@ -9,6 +9,7 @@ import { analyzeRouter } from "./routes/analyze.js";
 import { authRouter } from "./routes/auth.js";
 import { aiPromptRouter } from "./routes/aiPrompt.js";
 import { aiPreferencesRouter, workspaceAiPreferencesRouter } from "./routes/aiPreferences.js";
+import { researchRouter, workspaceResearchRouter } from "./routes/research.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { beanReviewRouter } from "./routes/beanReview.js";
 import { beansRouter } from "./routes/beans.js";
@@ -87,6 +88,7 @@ app.get("/health", async (_req: Request, res: Response<HealthResponse>) => {
 app.use("/api/auth/me/notifications", notificationsRouter);
 app.use("/api/auth/me/ai-prompt", aiPromptRouter);
 app.use("/api/auth/me/ai-preferences", aiPreferencesRouter);
+app.use("/api/auth/me/research", researchRouter); // docs/api/research.md §1f
 app.use("/api/auth/me", myChatsRouter); // docs/api/chat.md §12
 app.use("/api/auth", emailVerifyRouter);
 app.use("/api/auth", authRouter);
@@ -125,6 +127,7 @@ app.use("/api/workspaces/:workspaceId/recaps", recapsRouter); // docs/api/recaps
 app.use("/api/workspaces/:workspaceId/chats", chatsRouter); // docs/api/chat.md §12
 app.use("/api/workspaces/:workspaceId/parameter-suggestions", parameterSuggestionsRouter);
 app.use("/api/workspaces/:workspaceId/ai-preferences", workspaceAiPreferencesRouter);
+app.use("/api/workspaces/:workspaceId/research", workspaceResearchRouter); // docs/api/research.md §1f
 app.use("/api/brew-logs", analyzeRouter);
 app.use("/api/server", serverRouter); // server admins (docs/api/server.md §10)
 app.use("/api/workspaces", backupRouter); // GET /:workspaceId/backup, POST /restore

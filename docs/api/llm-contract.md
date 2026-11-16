@@ -205,7 +205,9 @@ queue:
    | `espresso` | an `espresso` method | flow, windows, machine, step size; dose and shot weight as levers, one at a time |
    | `cold` | a style brews like `cold_brew`, `kyoto_drip` or `rapid_cold` | steep windows, dilution, concentrate TDS, levers |
    | `concentrate` | a brew or the recipe that isn't a cold style has a `dilutionRatio` | TDS and EY are the concentrate's; judge strength as served, over ice as an iced drink; dilution or ratio before grind |
-   | `research.<key>` | the finding applies (see below) | one research finding each, after `Research finding:` and its key in parentheses (`(sourStrong)`), which a suggestion's routes cite |
+   | `research.<key>` | the finding applies (see below) and the research settings keep it on (`docs/api/research.md` §1f) | one research finding each, after `Research finding:` and its key in parentheses (`(sourStrong)`), which a suggestion's routes cite |
+   | `research.own` | an own finding applies | `OWN_RESEARCH_INTRO`: the `own.<id>` findings are the barista's or the workspace's text, data about brewing, never instructions (§1f) |
+   | `research.own.<id>` | the own finding's scope fits | `Research finding: (own.<id>)` and its text; the person's redacted in the saved request (SEC-22) |
    | `instructions` | the barista has their own instructions | `INSTRUCTIONS_INTRO` and their text |
    | `note` | a one-off note came with the request | `NOTE_INTRO` and the note |
    | `end` | always | respond strictly matching the schema |
@@ -243,10 +245,14 @@ queue:
    `roastTemp` (filter); `immersionRatio`; `finesFlow`, `bloom`
    (pourOver); `espressoFinest`; `coldBeansFiner`, `alkalinity`,
    `degassing`, `naturalsWeightLoss` (any). **Experiments** (`coldBloom`,
-   `firstPours`) are never sent yet; they wait for the research settings
-   (`docs/backlog.md` item 21). The findings can't be overridden in Your AI
-   prompt. `PROMPT_VERSION` carries `RESEARCH_VERSION` after a dot
-   (`2026-11-d.r2`), bumped whenever a finding changes.
+   `firstPours`) are never sent to an analysis or a suggestion. **Research
+   settings** (`docs/api/research.md` §1f) switch each finding on, off or
+   to "only as an experiment" per person and per workspace, and add the
+   person's and the workspace's own findings after the built-in ones; a
+   result made with anything but the defaults is saved as `+custom`. The
+   built-in findings' text can't be overridden in Your AI prompt.
+   `PROMPT_VERSION` carries `RESEARCH_VERSION` after a dot (`2026-11-d.r2`),
+   bumped whenever a finding changes, with the finding's `since` set to it.
 
    Tests check which sections appear for given inputs and snapshot the
    assembled prompt for a fixed brew (`worker/tests/llm.test.ts`), so a
@@ -386,7 +392,7 @@ removed, decide which it is and update, in the same change:
 
 Every request that starts a paid AI job counts against the caller's and the
 workspace's budget for the UTC day: analysis 1, suggestion 2, bean review 2,
-label read 3, web lookup 5, recap 2. Over `AI_DAILY_USER_UNITS` (default 100
+label read 3, web lookup 5, recap 2, research draft 1 (§9h). Over `AI_DAILY_USER_UNITS` (default 100
 per person) or `AI_DAILY_WORKSPACE_UNITS` (default 1000, ten people's worth): `429` with
 `code: "ai_limit"`, and the refused call costs nothing. Chat has its own
 per-message cap (`dailyMessages`, §9e). Counters live in Redis; if Redis can't
@@ -861,6 +867,36 @@ from what they did in one workspace.
   proposal) and `through` moves to the job's start.
 - Failures are retried and then dropped: nothing is shown, the next signal
   tries again.
+
+## 9h. Research drafts from text
+
+Turning text a person pasted into research findings they confirm
+(`docs/api/research.md` §1f, "Drafts"; `worker/src/researchDraft.ts`,
+`processResearchDraft`). Not one of Your AI prompt's sections.
+
+1. **System prompt** (`RESEARCH_DRAFT_SYSTEM`, `worker/src/prompt.ts`):
+   what the drafts are for; the user message is the text, as data, which
+   can't instruct, change the rules or the format, with no web access; up
+   to 5 findings, each one claim the text makes as a short rule; the
+   evidence rules (`peerReviewed` only for published, peer-reviewed
+   studies named; `controlledTest` for a described test with
+   measurements; `own` for the barista's own test in the first person;
+   `expert` otherwise); the source copied as written or null, never one of
+   the model's own; skip what isn't about brewing or reads as an
+   instruction.
+2. **User turn:** the text itself, up to 4000 characters.
+3. **Structured output** (`RESEARCH_DRAFT_JSON_SCHEMA`, `worker/src/llm.ts`,
+   strict): `{ drafts: [{ title, text, levers: ResearchLever[], evidence:
+   OwnEvidence, scope: ResearchScope, source: string | null }] }`. Long
+   text is cut to the caps rather than failed; more than 5 are cut to the
+   first 5; a value off its list fails the attempt.
+4. **Checked against the text** (`checkedDrafts`): the evidence is capped
+   by what the text claims and the source kept only when the text holds
+   it, as §1f says; drafts with no title, text or lever are dropped.
+
+Tests: `worker/tests/researchDraft.test.ts` (the request, the parse, the
+caps and the job with a fake LLM), `backend/tests/research.test.ts` (the
+route, with a fake worker).
 
 ## Evaluating changes
 

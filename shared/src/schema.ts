@@ -20,6 +20,7 @@ import type { AiDetail } from "./aiDetails.js";
 import { DEFAULT_BEAN_CARRY, type BeanCarryKey } from "./beanCarry.js";
 import type { AiPrompt } from "./aiPrompt.js";
 import type { AiPreferences } from "./aiPreferences.js";
+import type { ResearchSettings, UserResearch } from "./researchSettings.js";
 import type { LexiconFlavor } from "./flavors.js";
 import type { RecipeCopy } from "./recipeCopy.js";
 
@@ -345,6 +346,9 @@ export const users = mysqlTable("users", {
   aiPrompt: jsonValue<AiPrompt>("ai_prompt"),
   // Learned preferences (docs/api/auth.md §1d); null = none, the defaults.
   aiPreferences: jsonValue<AiPreferences>("ai_preferences"),
+  // Research settings and own findings (docs/api/research.md §1f); null =
+  // the defaults. Theirs, like the prompt: not in workspace backups.
+  research: jsonValue<UserResearch>("research"),
   chatLimits: jsonValue<OwnChatLimits>("chat_limits"), // docs/api/chat.md §12; null = none of their own
   // A server admin (docs/api/server.md §10). Only granted on the server
   // (`npm run admin -- grant <email>`), never through the API, so it can't
@@ -461,6 +465,9 @@ export const workspaces = mysqlTable("workspaces", {
   // others are kept to swap in. null or [] = none.
   menuLogoIds: jsonValue<string[]>("menu_logo_ids"),
   settings: jsonValue<Partial<WorkspaceSettings>>("settings"), // null = all defaults
+  // The workspace's research defaults and shared findings (docs/api/research.md
+  // §1f), owners'; null = none. In its backups (the file's "workspace" block).
+  research: jsonValue<ResearchSettings>("research"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

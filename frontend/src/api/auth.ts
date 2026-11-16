@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { AiPreferences, AiPreferencesSettings, AiPrompt, AiPromptSettings, User, UserPreferences } from './types';
+import type { AiPreferences, AiPreferencesSettings, AiPrompt, AiPromptSettings, MyResearch, ResearchPut, User, UserPreferences } from './types';
 
 export const authApi = {
   me: () => api.get<{ user: User }>('/api/auth/me'),
@@ -25,5 +25,9 @@ export const authApi = {
   setAiPreferences: (body: { learn: AiPreferences['learn']; apply: AiPreferences['apply']; items: Array<{ id?: string; text: string }> }) =>
     api.put<AiPreferencesSettings>('/api/auth/me/ai-preferences', body),
   answerProposal: (id: string, action: 'accept' | 'dismiss') => api.post<AiPreferencesSettings>(`/api/auth/me/ai-preferences/proposals/${encodeURIComponent(id)}/${action}`),
+  // Research settings (docs/api/research.md §1f): yours.
+  research: () => api.get<MyResearch>('/api/auth/me/research'),
+  setResearch: (body: ResearchPut) => api.put<MyResearch>('/api/auth/me/research', body),
+  researchSeen: () => api.post<MyResearch>('/api/auth/me/research/seen'),
   learnNow: (workspaceId: string) => api.post<{ queued: true }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/ai-preferences/update`),
 };

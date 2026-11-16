@@ -1,6 +1,8 @@
 import type { AiDetail } from "@barista/shared/aiDetails";
 import { GRIND_DELTAS } from "@barista/shared/jobs";
-import { RESEARCH_FINDINGS } from "@barista/shared/research";
+import { ownFindingText, RESEARCH_PREFIX, ownFindingKey, RESEARCH_DRAFT_SYSTEM } from "./prompt.js";
+import { RESEARCH_LEVERS, RESEARCH_SCOPES } from "@barista/shared/research";
+import { MAX_FINDING_SOURCE, MAX_FINDING_TEXT, MAX_FINDING_TITLE, MAX_RESEARCH_DRAFTS, OWN_EVIDENCE } from "@barista/shared/researchSettings";
 import { ANALYSIS_CONFIDENCE, MAX_SUGGESTED_ROUTES, SUGGEST_ALTERNATIVES, type AiRequest, type AlternativeKind, type SuggestedAlternative, type SuggestedRoute } from "@barista/shared/schema";
 import { UnrecoverableError } from "bullmq";
 import OpenAI from "openai";
@@ -122,12 +124,16 @@ export function buildCompletionRequest(
 // part of it (it's saved beside it, or has no answer yet in a preview).
 const ANY_MODEL = "";
 // SEC-22: what one person wrote for themselves (their instructions, this
-// request's note) is shown to every member as a placeholder, not verbatim.
-const PRIVATE_SHOWN = "[written by the person who asked; not shown to other members]";
+// request's note, their own research findings) is shown to every member as a
+// placeholder, not verbatim. A workspace's findings are every member's.
+export const PRIVATE_SHOWN = "[written by the person who asked; not shown to other members]";
 function redacted(system: string, custom: PromptCustom | undefined): string {
   let out = system;
   for (const [intro, text] of [[INSTRUCTIONS_INTRO, custom?.prompt.instructions], [NOTE_INTRO, custom?.note]] as const) {
     if (text) out = out.split(`${intro} ${text}`).join(`${intro} ${PRIVATE_SHOWN}`);
+  }
+  for (const f of custom?.research?.own ?? []) {
+    if (f.private) out = out.split(ownFindingText(f)).join(`${RESEARCH_PREFIX} (${ownFindingKey(f)}) ${PRIVATE_SHOWN}`);
   }
   return out;
 }
@@ -426,17 +432,26 @@ export function alternativesThatApply(given: ParameterSuggestionResult["alternat
   return out;
 }
 
-// The research findings a route may name: those a suggest prompt can hold.
-const SUGGEST_FINDINGS = new Set(RESEARCH_FINDINGS.filter((f) => !f.experiment && f.prompts.includes("suggest")).map((f) => f.key));
+// The research findings a route may name: only those this request's prompt
+// held (docs/api/research.md §1f), so a key can't be made up or forged.
+export function researchKeysSent(context: SuggestContext, hidden: ReadonlySet<AiDetail>, custom?: PromptCustom): Set<string> {
+  const prefix = "research.";
+  return new Set(
+    promptSections(toSuggestInput(context, hidden), SUGGEST_SECTIONS, custom)
+      .filter((k) => k.startsWith(prefix) && k !== "research.own")
+      .map((k) => k.slice(prefix.length)),
+  );
+}
 
 // Drops the values that don't fit the brew being set up, whatever the model
 // said, then the routes left the same as an earlier one.
-export function onlySuggestionsThatApply(s: ParameterSuggestionResult, context: SuggestContext, hidden: ReadonlySet<AiDetail>): SuggestionValues {
+export function onlySuggestionsThatApply(s: ParameterSuggestionResult, context: SuggestContext, hidden: ReadonlySet<AiDetail>, custom?: PromptCustom): SuggestionValues {
   const g = context.grinder;
   const espresso = (context.recipe?.methodKind ?? context.brewer?.kind) === "espresso";
   const [min, max] = espresso ? RATIO_RANGE.espresso : RATIO_RANGE.filter;
+  const allowed = researchKeysSent(context, hidden, custom);
   const fit = (r: ParameterSuggestionResult["routes"][number]): SuggestedRoute => {
-    const out: SuggestedRoute = { ...r, findings: [...new Set(r.findings)].filter((k) => SUGGEST_FINDINGS.has(k)) };
+    const out: SuggestedRoute = { ...r, findings: [...new Set(r.findings)].filter((k) => allowed.has(k)) };
     // A setting only means something on the grinder chosen, within its dial.
     const offDial = out.grindSetting !== null && g !== null && ((g.settingMin !== null && out.grindSetting < g.settingMin) || (g.settingMax !== null && out.grindSetting > g.settingMax));
     if (!g || offDial) out.grindSetting = null;
@@ -470,7 +485,7 @@ export interface SuggestionRun {
 }
 export async function requestSuggestion(ai: AiClient, context: SuggestContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): Promise<SuggestionRun> {
   const { message, usage } = await complete(ai, buildSuggestRequest(ai.models.main, context, hidden, custom));
-  return { suggestion: onlySuggestionsThatApply(parseSuggestionMessage(message), context, hidden), usage };
+  return { suggestion: onlySuggestionsThatApply(parseSuggestionMessage(message), context, hidden, custom), usage };
 }
 
 // A draft of a bean's Review (docs/api/llm-contract.md §9d).
@@ -617,4 +632,65 @@ export function parsePreferencesMessage(message: LlmMessage): LearnedPreferences
 export async function requestLearnedPreferences(ai: AiClient, input: LearnInput): Promise<LearnedPreferences & { usage: Usage }> {
   const { message, usage } = await complete(ai, buildPreferencesRequest(ai.models.main, input));
   return { ...parsePreferencesMessage(message), usage };
+}
+
+// Research drafts from text (docs/api/llm-contract.md §9h, research.md §1f).
+export const RESEARCH_DRAFT_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    drafts: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "A few words naming the finding." },
+          text: { type: "string", description: "The finding as a rule a barista can follow, in plain words; only what the text supports." },
+          levers: { type: "array", items: { type: "string", enum: [...RESEARCH_LEVERS] }, description: "What it's about." },
+          evidence: { type: "string", enum: [...OWN_EVIDENCE], description: "Only as strong as the text itself claims." },
+          scope: { type: "string", enum: [...RESEARCH_SCOPES] },
+          source: { type: ["string", "null"], description: "The source as the text names it; null when it names none." },
+        },
+        required: ["title", "text", "levers", "evidence", "scope", "source"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["drafts"],
+  additionalProperties: false,
+} as const;
+
+// Long text is cut rather than failed (the person edits the card anyway);
+// too many drafts are cut to the first.
+const researchDraftSchema = z.object({
+  drafts: z
+    .array(
+      z.object({
+        title: z.string().transform((t) => t.trim().slice(0, MAX_FINDING_TITLE)),
+        text: z.string().transform((t) => t.trim().slice(0, MAX_FINDING_TEXT)),
+        levers: z.array(z.enum(RESEARCH_LEVERS)),
+        evidence: z.enum(OWN_EVIDENCE),
+        scope: z.enum(RESEARCH_SCOPES),
+        source: z.string().nullable().transform((s) => (s === null ? null : s.trim().slice(0, MAX_FINDING_SOURCE) || null)),
+      }),
+    )
+    .transform((list) => list.slice(0, MAX_RESEARCH_DRAFTS)),
+});
+export type ResearchDraftAnswer = z.infer<typeof researchDraftSchema>;
+
+export function buildResearchDraftRequest(model: string, text: string): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
+  return {
+    model,
+    messages: [
+      { role: "system", content: RESEARCH_DRAFT_SYSTEM },
+      { role: "user", content: text },
+    ],
+    response_format: { type: "json_schema", json_schema: { name: "research_drafts", strict: true, schema: RESEARCH_DRAFT_JSON_SCHEMA } },
+  };
+}
+export function parseResearchDraftMessage(message: LlmMessage): ResearchDraftAnswer {
+  return parseMessage(message, researchDraftSchema);
+}
+export async function requestResearchDrafts(ai: AiClient, text: string): Promise<ResearchDraftAnswer & { usage: Usage }> {
+  const { message, usage } = await complete(ai, buildResearchDraftRequest(ai.models.main, text));
+  return { ...parseResearchDraftMessage(message), usage };
 }

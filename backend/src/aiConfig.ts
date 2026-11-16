@@ -45,7 +45,7 @@ export async function sendAiCheck(res: Response, data: AiCheckJobData): Promise<
 
 // What a request costs against the daily budget (SEC-82): web lookups and
 // photo reads are the dearest.
-export const AI_COST = { analysis: 1, suggestion: 2, review: 2, label: 3, labelWeb: 5, recap: 2 } as const;
+export const AI_COST = { analysis: 1, suggestion: 2, review: 2, label: 3, labelWeb: 5, recap: 2, researchDraft: 1 } as const;
 const limit = (name: string, fallback: number): number => (Number(process.env[name]) > 0 ? Number(process.env[name]) : fallback);
 
 // Before queueing a (paid) AI job: requireAi, then counts `cost` against the

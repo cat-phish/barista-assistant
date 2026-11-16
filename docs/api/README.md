@@ -14,6 +14,7 @@ means drinks, wherever you see it (code comments use
 | §1c | [auth.md](auth.md) | Your AI prompt (per person) and the one-off note |
 | §1d | [auth.md](auth.md) | Learned preferences (per person, and the workspace's) |
 | §1e | [auth.md](auth.md) | Email verification (optional, `EMAIL_VERIFICATION`) |
+| §1f | [research.md](research.md) | Research settings (which findings the AI gets, per person and workspace) and your own research |
 | §2 | [workspaces.md](workspaces.md) | Workspaces |
 | §2b | [backup.md](backup.md) | Backup and Restore (a workspace as one file) |
 | §2c | [flavor-lexicon.md](flavor-lexicon.md) | Flavor Lexicon (a workspace's own flavor wheel, as a JSON file) |
@@ -42,7 +43,7 @@ means drinks, wherever you see it (code comments use
 | §7 | [public-menu.md](public-menu.md) | Public Menu Endpoint |
 | §7b | [menu.md](menu.md) | Menu Builder (sections and items for §7) |
 | §8 | [analysis.md](analysis.md) | LLM Brew Analysis / Parameter Suggestions (§8b), what was sent to the AI (§8c), previews (§8d), a bean's review draft (§8e) |
-| §9 | [llm-contract.md](llm-contract.md) | Worker -> LLM Structured Output Contract (analysis; §9b–§9e suggestions, labels, reviews, chat; §9f recap summaries; §9g learning preferences) |
+| §9 | [llm-contract.md](llm-contract.md) | Worker -> LLM Structured Output Contract (analysis; §9b–§9e suggestions, labels, reviews, chat; §9f recap summaries; §9g learning preferences; §9h research drafts from text) |
 | §10 | [server.md](server.md) | Server Administration (admins, scheduled database backups) |
 | §11 | [stats.md](stats.md) | Statistics (brew and bean rows for the Insights page) |
 | §11b | [stats.md](stats.md) | Added Insights charts and each tab's layout (a person's own, per workspace) |

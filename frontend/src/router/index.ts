@@ -129,6 +129,7 @@ export const router = createRouter({
     { path: '/settings/defaults', name: 'settings-defaults', component: () => import('../views/SettingsDefaultsView.vue'), meta: { requiresWorkspace: true } },
     { path: '/settings/fields', name: 'settings-fields', component: () => import('../views/SettingsFieldsView.vue'), meta: { requiresWorkspace: true } },
     { path: '/settings/ai', name: 'settings-ai', component: () => import('../views/SettingsAiView.vue'), meta: { requiresWorkspace: true } },
+    { path: '/settings/ai/research', name: 'settings-research', component: () => import('../views/SettingsResearchView.vue'), meta: { requiresWorkspace: true } },
     { path: '/settings/workspace', name: 'settings-workspace', component: () => import('../views/SettingsWorkspaceView.vue'), meta: { requiresWorkspace: true } },
     { path: '/settings/members', name: 'settings-members', component: () => import('../views/SettingsMembersView.vue'), meta: { requiresWorkspace: true } },
     { path: '/settings/server/chats', name: 'settings-server-chats', component: () => import('../views/SettingsServerChatsView.vue'), meta: { requiresAdmin: true } },

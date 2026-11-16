@@ -72,6 +72,9 @@ export const users = mysqlTable("users", {
   // proposals, the learn/apply settings and each workspace's "through".
   // null = none and the defaults. Not in workspace backups, like aiPrompt.
   aiPreferences: jsonValue<AiPreferences>("ai_preferences"),
+  // Research settings and own findings (docs/api/research.md §1f, migration
+  // 0128): UserResearch. null = the defaults. Not in workspace backups.
+  research: jsonValue<UserResearch>("research"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -160,6 +163,10 @@ export const workspaces = mysqlTable("workspaces", {
   // Workspace settings (docs/api/workspaces.md §2): JSON, null or missing
   // keys = the defaults (DEFAULT_WORKSPACE_SETTINGS). Owners change them.
   settings: jsonValue<Partial<WorkspaceSettings>>("settings"),
+  // The workspace's research defaults and shared findings
+  // (docs/api/research.md §1f, migration 0128): ResearchSettings, owners'.
+  // null = none. In its backups.
+  research: jsonValue<ResearchSettings>("research"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

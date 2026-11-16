@@ -46,7 +46,7 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   "format": "barista-backup",
   "version": 6,
   "exportedAt": "2026-10-23T08:00:00.000Z",
-  "workspace": { "name": "Home bar", "slug": "home-bar", "settings": { "roastScale": "levels" }, "menuTitle": null, "menuCurrency": "USD", "menuShowMethod": true, "menuShowIngredients": false, "menuAccentColor": "#8a4b2a", "menuTagline": null, "menuLogoIds": [], "isPublicMenuEnabled": true, "flavorLexicon": null },
+  "workspace": { "name": "Home bar", "slug": "home-bar", "settings": { "roastScale": "levels" }, "menuTitle": null, "menuCurrency": "USD", "menuShowMethod": true, "menuShowIngredients": false, "menuAccentColor": "#8a4b2a", "menuTagline": null, "menuLogoIds": [], "isPublicMenuEnabled": true, "flavorLexicon": null, "research": null },
   "tables": {
     "brewer_methods": [ { "id": "uuid", "name": "Filter", "builtin": "filter", "...": "…" } ],
     "brew_logs": [ { "id": "uuid", "beanId": "uuid", "brewedBy": "barista@example.com", "...": "…" } ]
@@ -75,8 +75,12 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   parameter suggestion who asked the same way (`brewedBy` for
   `requestedBy`). A suggestion's `alternatives` keep the ids they named,
   which aren't rewritten: once restored, the brew page shows them by name
-  only. People's own AI prompts (`docs/api/auth.md` §1c) and
-  added Insights charts (`docs/api/stats.md` §11b) aren't in it.
+  only. People's own AI prompts (`docs/api/auth.md` §1c), their research
+  settings and own findings (`docs/api/research.md` §1f) and
+  added Insights charts (`docs/api/stats.md` §11b) aren't in it. The
+  workspace's research defaults and shared findings are the `workspace`
+  block's `research` (`null` or left out, as in older files, = none; a block
+  that doesn't check out is `backup.workspace.research: not valid`).
   `analysis_requests` (when an automatic analysis is due, why one failed,
   §8) is queue state and isn't backed up either, nor are `recaps` (when a
   recap was notified, its AI summary; personal, like chats, §11c).
