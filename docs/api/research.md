@@ -45,7 +45,10 @@ analysis the brew's barista's, a suggestion the asker's; plus the
 workspace's. A result made with anything other than the defaults (a
 built-in switched, or any own finding sent) is saved with `promptVersion`
 `PROMPT_VERSION + "+custom"`, like a customized prompt. `promptFor` in
-`worker/src/processor.ts` loads both (`loadResearch`).
+`worker/src/processor.ts` loads both (`loadResearch`), for the jobs and for
+their "What the AI sees" preview (analysis.md §8d), which shows the same
+research with the person's own findings redacted as in a saved request
+(SEC-03).
 
 **Own findings** (`OwnFinding`, at most 20 per person and 20 per workspace):
 
