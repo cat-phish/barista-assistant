@@ -25,6 +25,7 @@ and fix the references.
 **Contents**
 - A. Settings & configuration: 1–4
 - B. Brewing & logging: 5–9, 59
+- Added last, not yet sorted into groups: 60–64 (60–63 beans, 64 AI)
 - C. Recipes: 10
 - D. AI suggestions: 11–15
 - E. Insights: 16–21
@@ -332,6 +333,70 @@ Recording a brew: what's measured, and how fast it is to log.
 - **Depends on:** nothing.
 - **Open questions:** a per-recipe setting, a tolerance, or one global
   option? What about brews with no recipe?
+
+### 60. Supplier's received date on beans
+
+- **Status:** idea (numbered last to avoid renumbering; belongs with the
+  bean items in G)
+- **Why:** for green coffee, when the supplier delivered it matters for
+  age and resting; today there is no field for it.
+- **Approach:** an optional received date on the bean (rules 6 and 8 for
+  the field registry and backup), shown on the bean page.
+- **Size:** S
+- **Depends on:** nothing.
+- **Open questions:** green coffee only, or any bean? Does it feed the
+  bean's age or the AI's context (rule 9)?
+
+### 61. More than one species on a bean
+
+- **Status:** idea (numbered last to avoid renumbering; belongs with the
+  bean items in G)
+- **Why:** a blend or lot can mix species (arabica and robusta, say), but
+  a bean holds one.
+- **Approach:** let the species field take several values; check the
+  schema, the backup, the AI context and the list filters.
+- **Size:** M
+- **Depends on:** nothing.
+- **Open questions:** how it migrates from the single value; should
+  percentages be allowed?
+
+### 62. Bean stock count that includes resting coffees
+
+- **Status:** idea (numbered last to avoid renumbering; belongs with the
+  bean items in G)
+- **Why:** the stock count should include coffee that is still resting,
+  not only what is ready to brew.
+- **Approach:** count resting beans in the stock figure, perhaps with the
+  resting part shown on its own.
+- **Size:** S
+- **Depends on:** nothing.
+- **Open questions:** one number or two (ready and resting)? Where is it
+  shown?
+
+### 63. Batch number as its own optional column on beans
+
+- **Status:** idea (numbered last to avoid renumbering; belongs with the
+  bean items in G)
+- **Why:** the batch number is typed into the bean's name today, which
+  mixes two things in one field.
+- **Approach:** an optional batch number field and table column (rules 6
+  and 12), with a migration that offers to move the existing batch numbers
+  out of the names.
+- **Size:** S
+- **Depends on:** nothing.
+- **Open questions:** how to detect batch numbers already in names; does
+  the batch-add flow's `nextBatchValues` use it?
+
+### 64. Plan a possible Jev model integration
+
+- **Status:** idea (numbered last to avoid renumbering; belongs in D)
+- **Why:** noted as something to plan; what the integration would be is
+  not yet written down.
+- **Approach:** a planning step first: what the Jev model is, what it
+  would do for the app, and how it would fit the worker's LLM contract.
+- **Size:** unknown until planned.
+- **Depends on:** nothing.
+- **Open questions:** what is the Jev model, and what should it do here?
 
 ## C. Recipes
 
