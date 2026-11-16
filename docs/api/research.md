@@ -13,7 +13,9 @@ split is person versus workspace:
   research version they last dismissed the update notice for. The same in
   every workspace; **not in workspace backups** (like §1c). Their own
   findings are private: a saved request (analysis.md §8c) shows the §1c
-  placeholder in their place (SEC-22).
+  placeholder in their place (SEC-22), keyed `own.private` in its text and
+  `research.own.private` in its `sections` (once, however many were sent), so
+  other members can't tell which were used (SEC-04).
 - **A workspace's** (`workspaces.research`, `ResearchSettings`), set by
   owners: a default per built-in finding, and shared findings everyone in
   the workspace gets and can read. In its backups (backup.md §2b, the
@@ -183,9 +185,13 @@ notice; every built-in finding with its text, evidence, scope and levers, a
 experiment), for owners a **Workspace default** select, a note, and what it
 comes to; then **Your findings** and **Workspace findings** (owners edit
 the latter), each marked Yours or Workspace, with an add/edit form (title,
-finding, levers, evidence, brews, mode, source) and Remove; then **From
+finding, levers, evidence, brews, mode, source) and Remove, and on each
+workspace finding a **You** select (the workspace's mode, or On / Off / Only
+as an experiment; `own.<id>`, see Precedence); then **From
 text** (owners and baristas, with the workspace's AI): the paste box,
 **Turn into findings**, and the draft cards with the same fields, each with
 Save to my findings, Save to the workspace (owners) and Discard. A route's
-"Follows …" (lib/suggest.ts) names a built-in finding; an own one shows as
-"Your research".
+"Follows …" (lib/suggest.ts `findingTitles`) names a built-in finding, and a
+workspace's own finding by its title (the Brew page reads the workspace's
+list); any other own finding is the asker's private one: "Your research" to
+the asker, "The asker's research" to other members (SEC-04).

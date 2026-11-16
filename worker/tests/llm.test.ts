@@ -620,13 +620,18 @@ describe("research settings", () => {
     const r = research({ own: [own()] }, { own: [own({ id: "ffffffff", text: "The workspace's kettle runs 3 C hot." })] });
     const custom = { prompt: EMPTY_AI_PROMPT, note: null, research: r };
     const saved = analysisSent(context(), new Set(), custom);
-    expect(saved.system).toContain(`(own.a1b2c3d4) ${PRIVATE_SHOWN}`);
+    expect(saved.system).toContain(`(own.private) ${PRIVATE_SHOWN}`);
     expect(saved.system).not.toContain("Slower pours gave");
+    // Nor which of theirs it was (SEC-04): the key is the same for all of them.
+    expect(saved.system).not.toContain("a1b2c3d4");
+    expect(saved.sections).not.toContain("research.own.a1b2c3d4");
+    expect(saved.sections).toContain("research.own.private");
     expect(saved.system).toContain(`(own.ffffffff) "The workspace's kettle runs 3 C hot."`);
     expect(saved.sections).toContain("research.own.ffffffff");
     // The real request carries the text.
     expect(String(buildCompletionRequest("m", context(), new Set(), custom).messages[0]!.content)).toContain('(own.a1b2c3d4) "Slower pours gave');
-    expect(suggestionSent(suggestContext(), new Set(), custom).system).toContain(`(own.a1b2c3d4) ${PRIVATE_SHOWN}`);
+    expect(suggestionSent(suggestContext(), new Set(), custom).system).toContain(`(own.private) ${PRIVATE_SHOWN}`);
+    expect(suggestionSent(suggestContext(), new Set(), custom).sections).not.toContain("research.own.a1b2c3d4");
   });
 
   it("a member's own choice for a workspace finding beats the workspace's mode; an unknown id is ignored (SEC-02)", () => {

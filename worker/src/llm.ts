@@ -133,13 +133,20 @@ function redacted(system: string, custom: PromptCustom | undefined): string {
     if (text) out = out.split(`${intro} ${text}`).join(`${intro} ${PRIVATE_SHOWN}`);
   }
   for (const f of custom?.research?.own ?? []) {
-    if (f.private) out = out.split(ownFindingText(f)).join(`${RESEARCH_PREFIX} (${ownFindingKey(f)}) ${PRIVATE_SHOWN}`);
+    if (f.private) out = out.split(ownFindingText(f)).join(`${RESEARCH_PREFIX} (own.private) ${PRIVATE_SHOWN}`);
   }
   return out;
 }
+// A person's own finding's key in the saved sections is the same for all of
+// them, so other members can't tell which (or how many) were used (SEC-04).
+export const PRIVATE_FINDING_SECTION = "research.own.private";
+function redactedSections(sections: string[], custom: PromptCustom | undefined): string[] {
+  const privateKeys = new Set((custom?.research?.own ?? []).filter((f) => f.private).map((f) => `research.${ownFindingKey(f)}`));
+  return [...new Set(sections.map((k) => (privateKeys.has(k) ? PRIVATE_FINDING_SECTION : k)))];
+}
 function sent(request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming, sections: string[], custom?: PromptCustom): AiRequest {
   const [system, user] = request.messages;
-  return { sections, system: redacted(String(system?.content ?? ""), custom), input: JSON.parse(String(user?.content ?? "{}")) as Record<string, unknown> };
+  return { sections: redactedSections(sections, custom), system: redacted(String(system?.content ?? ""), custom), input: JSON.parse(String(user?.content ?? "{}")) as Record<string, unknown> };
 }
 export function analysisSent(context: BrewContext, hidden: ReadonlySet<AiDetail> = new Set(), custom?: PromptCustom): AiRequest {
   return sent(buildCompletionRequest(ANY_MODEL, context, hidden, custom), promptSections(toLlmInput(context, hidden), PROMPT_SECTIONS, custom), custom);

@@ -118,8 +118,17 @@ export const RESEARCH_TITLES: Record<string, string> = {
   coldBloom: 'Cold or cool bloom',
   firstPours: 'First pours and pour count',
 };
-export function findingTitles(keys: readonly string[]): string[] {
-  return keys.flatMap((k) => (RESEARCH_TITLES[k] ? [RESEARCH_TITLES[k]] : k.startsWith('own.') ? ['Your research'] : []));
+// An own finding (docs/api/research.md §1f, SEC-04): a workspace's by its
+// title, when known (`workspace`, id → title); any other is the asker's
+// private one, "Your research" only when you asked (`mine`).
+export function findingTitles(keys: readonly string[], own: { workspace?: Readonly<Record<string, string>>; mine?: boolean } = {}): string[] {
+  const titles = keys.flatMap((k) => {
+    if (RESEARCH_TITLES[k]) return [RESEARCH_TITLES[k]];
+    if (!k.startsWith('own.')) return [];
+    const title = own.workspace?.[k.slice('own.'.length)];
+    return [title ?? (own.mine ? 'Your research' : "The asker's research")];
+  });
+  return [...new Set(titles)];
 }
 
 // What a suggested ratio keeps as it is (docs/api/analysis.md §8b), the rest
