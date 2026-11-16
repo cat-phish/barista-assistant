@@ -144,6 +144,7 @@ services:
       # Optional, so not a secret file: Compose won't start if a secret's
       # variable is missing, which would stop installs that don't set it.
       - AI_CONFIG_SECRET=${AI_CONFIG_SECRET:-}
+      - AI_REQUEST_TIMEOUT_MS=${AI_REQUEST_TIMEOUT_MS:-}
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
       - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
       - VAPID_SUBJECT=${VAPID_SUBJECT:-}

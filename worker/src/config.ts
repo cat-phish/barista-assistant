@@ -4,6 +4,8 @@ import { parseTimeZone } from "./localDate.js";
 
 // Secrets accept NAME or NAME_FILE (Docker secrets); see shared/src/env.ts.
 // OPENAI_BASE_URL (optional) is read by the OpenAI SDK itself.
+// SEC-53: how long one AI request may take; the SDK's own default is 10 minutes with 2 retries.
+const aiTimeoutMs = Number(process.env.AI_REQUEST_TIMEOUT_MS) > 0 ? Number(process.env.AI_REQUEST_TIMEOUT_MS) : 180_000;
 const openaiModel = process.env.OPENAI_MODEL?.trim() || null;
 const openaiVisionModel = process.env.OPENAI_VISION_MODEL?.trim() || openaiModel;
 
@@ -13,6 +15,7 @@ export const config = {
   // The AI is optional: without these, AI jobs fail and the rest still runs.
   openaiApiKey: secretIfSet("OPENAI_API_KEY") ?? null,
   // No default: valid model names change over time.
+  aiTimeoutMs,
   openaiModel,
   // Reading bean labels from photos (docs/api/llm-contract.md §9c) needs a
   // model that takes images; unset = OPENAI_MODEL.

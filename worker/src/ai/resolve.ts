@@ -27,9 +27,9 @@ function readKey(stored: string): string {
 // the server's address.
 function client(provider: AiProvider, apiKey: string, baseURL: string | undefined, models: AiModels): AiClient {
   if (provider === "anthropic") {
-    return { provider, apiKey, models, official: baseURL === OFFICIAL_URLS.anthropic, anthropic: new Anthropic({ apiKey, baseURL }) };
+    return { provider, apiKey, models, official: baseURL === OFFICIAL_URLS.anthropic, anthropic: new Anthropic({ apiKey, baseURL, timeout: config.aiTimeoutMs, maxRetries: 1 }) };
   }
-  return { provider, apiKey, models, openai: new OpenAI({ apiKey, baseURL }) };
+  return { provider, apiKey, models, openai: new OpenAI({ apiKey, baseURL, timeout: config.aiTimeoutMs, maxRetries: 1 }) };
 }
 
 async function serverConfig(): Promise<ServerAiConfig> {

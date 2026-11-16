@@ -26,17 +26,24 @@ it("SEC-03 removing a member ends their open reply stream before the next piece"
   const chatId = start.body.chat.id as string;
   const reply = start.body.messages[1].id as string;
 
-  // The member's stream is open and waiting on Redis when they are removed.
-  const stream = member.agent.get(`/api/workspaces/${workspaceId}/chats/${chatId}/messages/${reply}/stream`).buffer(true).parse((r, done) => {
-    let body = "";
-    r.on("data", (c: Buffer) => (body += c.toString()));
-    r.on("end", () => done(null, body));
-  });
+  // The member's stream is open and waiting on Redis when they are removed
+  // (.then() sends the request now; a supertest request is otherwise lazy).
+  const stream = member.agent
+    .get(`/api/workspaces/${workspaceId}/chats/${chatId}/messages/${reply}/stream`)
+    .buffer(true)
+    .parse((r, done) => {
+      let body = "";
+      r.on("data", (c: Buffer) => (body += c.toString()));
+      r.on("end", () => done(null, body));
+    })
+    .then((r) => r);
   await sleep(300);
   expect((await owner.agent.delete(`/api/workspaces/${workspaceId}/members/${member.id}`)).status).toBe(204);
+  await sleep(1100); // the stream looks for removal about once a second
   await publish(reply, { type: "text", text: "AFTER-REMOVAL" });
   await publish(reply, { type: "end" });
 
   const res = await stream;
+  expect(res.status).toBe(200);
   expect(res.body as string).not.toContain("AFTER-REMOVAL");
 });

@@ -13,6 +13,7 @@ import {
   pushSubscriptions,
   users,
   withDefaults,
+  workspaceMembers,
   workspaces,
   type NotificationConfigs,
   type NotificationKind,
@@ -49,6 +50,7 @@ async function loadBrew(brewLogId: string) {
       roasterName: beans.roasterName,
       brewerName: brewers.name,
       drinkName: drinks.name,
+      workspaceId: brewLogs.workspaceId,
       workspaceSettings: workspaces.settings,
     })
     .from(brewLogs)
@@ -58,6 +60,13 @@ async function loadBrew(brewLogId: string) {
     .leftJoin(drinks, eq(brewLogs.drinkId, drinks.id))
     .where(eq(brewLogs.id, brewLogId));
   return brew ?? null;
+}
+
+// SEC-21: a person who has left or been removed gets nothing from that
+// workspace, even from a job queued before.
+async function isMember(userId: string, workspaceId: string): Promise<boolean> {
+  const [row] = await db.select({ userId: workspaceMembers.userId }).from(workspaceMembers).where(and(eq(workspaceMembers.userId, userId), eq(workspaceMembers.workspaceId, workspaceId)));
+  return Boolean(row);
 }
 
 async function preferencesOf(userId: string) {
@@ -104,6 +113,7 @@ export async function processRateReminder({ brewLogId, userId }: RateReminderJob
   const brew = await loadBrew(brewLogId);
   if (!brew) return { status: "skipped", reason: "brew deleted" };
   if (brew.rating !== null || brew.drinkRating !== null) return { status: "skipped", reason: "already rated" };
+  if (!(await isMember(userId, brew.workspaceId))) return { status: "skipped", reason: "no longer a member" };
   const prefs = await preferencesOf(userId);
   if (!prefs) return { status: "skipped", reason: "user deleted" };
   if (!prefs.rateReminders) return { status: "skipped", reason: "reminders off" };
@@ -126,6 +136,7 @@ export async function processSteepReminder({ brewLogId, userId }: SteepReminderJ
   const brew = await loadBrew(brewLogId);
   if (!brew) return { status: "skipped", reason: "brew deleted" };
   if (!brew.steeping) return { status: "skipped", reason: "already finished" };
+  if (!(await isMember(userId, brew.workspaceId))) return { status: "skipped", reason: "no longer a member" };
   const prefs = await preferencesOf(userId);
   if (!prefs) return { status: "skipped", reason: "user deleted" };
   if (!prefs.steepReminders) return { status: "skipped", reason: "steep reminders off" };
@@ -146,11 +157,12 @@ export async function processSteepReminder({ brewLogId, userId }: SteepReminderJ
 // been restocked (or deleted) since.
 export async function processGreenLow({ greenCoffeeId, userId }: GreenLowJobData, send: Send = sendNotification, push: Push = sendWebPush): Promise<ReminderResult> {
   const [green] = await db
-    .select({ name: greenCoffees.name, weightLeftGrams: greenCoffees.weightLeftGrams, lowStockGrams: greenCoffees.lowStockGrams })
+    .select({ workspaceId: greenCoffees.workspaceId, name: greenCoffees.name, weightLeftGrams: greenCoffees.weightLeftGrams, lowStockGrams: greenCoffees.lowStockGrams })
     .from(greenCoffees)
     .where(eq(greenCoffees.id, greenCoffeeId));
   if (!green) return { status: "skipped", reason: "green coffee deleted" };
   if (green.lowStockGrams === null || green.weightLeftGrams >= green.lowStockGrams) return { status: "skipped", reason: "not low any more" };
+  if (!(await isMember(userId, green.workspaceId))) return { status: "skipped", reason: "no longer a member" };
   const prefs = await preferencesOf(userId);
   if (!prefs) return { status: "skipped", reason: "user deleted" };
   if (!prefs.greenStockAlerts) return { status: "skipped", reason: "stock alerts off" };
