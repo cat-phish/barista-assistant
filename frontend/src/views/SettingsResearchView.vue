@@ -139,6 +139,12 @@ function setOwnMode(scope: Scope, f: OwnFinding, mode: ResearchMode): void {
   else if (ws.value) void saveWs(ws.value.research.settings, own);
 }
 const canEditScope = (scope: Scope) => scope === 'mine' || isOwner.value;
+// Your own choice for a workspace finding (docs/api/research.md §1f, SEC-02):
+// "own.<id>" in your settings, beating the mode the workspace gave it.
+const myOwnChoice = (f: OwnFinding): ResearchMode | '' => mine.value?.research.settings[`own.${f.id}`]?.mode ?? INHERIT;
+function setMyOwn(f: OwnFinding, value: string): void {
+  if (mine.value) void saveMine(withSetting(mine.value.research, `own.${f.id}`, { mode: asMode(value) }));
+}
 
 // ---- Drafts from text (docs/api/research.md §1f, "Drafts") -----------------
 // The AI turns pasted text into cards; each is edited and saved, or
@@ -260,8 +266,15 @@ const leverNames = (f: { levers: ResearchLever[] }): string => f.levers.map((l) 
             <p v-if="f.source" class="muted small">Source: {{ f.source }}</p>
             <div class="controls">
               <div class="field">
-                <label :for="`own-${f.id}`">Mode</label>
+                <label :for="`own-${f.id}`">{{ scope === 'mine' ? 'Mode' : 'Workspace' }}</label>
                 <select :id="`own-${f.id}`" :value="f.mode" :disabled="busy || !canEditScope(scope)" @change="setOwnMode(scope, f, ($event.target as HTMLSelectElement).value as ResearchMode)">
+                  <option v-for="m in RESEARCH_MODES" :key="m" :value="m">{{ MODE_LABELS[m] }}</option>
+                </select>
+              </div>
+              <div v-if="scope === 'workspace' && mine" class="field">
+                <label :for="`own-mine-${f.id}`">You</label>
+                <select :id="`own-mine-${f.id}`" :value="myOwnChoice(f)" :disabled="busy" @change="setMyOwn(f, ($event.target as HTMLSelectElement).value)">
+                  <option :value="INHERIT">Workspace ({{ MODE_LABELS[f.mode] }})</option>
                   <option v-for="m in RESEARCH_MODES" :key="m" :value="m">{{ MODE_LABELS[m] }}</option>
                 </select>
               </div>
