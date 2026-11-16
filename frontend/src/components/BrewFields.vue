@@ -4,13 +4,14 @@
 import { computed, ref, watch } from 'vue';
 import type { BrewProblem, FlavorPick, Grinder, MethodKind, PrepTool, RecipeStyle, Vessel, WaterProfile } from '../api/types';
 import { netYield, type BrewDraft, type BrewDraftErrors } from '../lib/brewDraft';
-import { brixToTds, extractionYield, usesWater } from '../lib/extraction';
+import { brixToTds, DEFAULT_EY_ESPRESSO, DEFAULT_EY_FILTER, expectedBrix, expectedTds, extractionYield, usesWater } from '../lib/extraction';
 import { DILUTION_WITH, isColdStyle, STEEP_TEMPS } from '../lib/coldBrew';
 import { formatGrams } from '../lib/format';
 import { grinderRetentionText } from '../lib/grinderRetention';
 import { problemsFor, toolsFor } from '../lib/prepTools';
-import { TEMPERATURE_LABELS } from '../lib/units';
-import { usePreferences } from '../composables/usePreferences';
+import { nudgeSpec } from '../lib/nudge';
+import { TEMPERATURE_LABELS, tempText } from '../lib/units';
+import { DEFAULT_PREFERENCES, usePreferences } from '../composables/usePreferences';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
 import RatingInput from './RatingInput.vue';
 import FlavorWheel from './FlavorWheel.vue';
@@ -55,7 +56,7 @@ watch(
 );
 const dilutionShown = computed(() => !props.espresso && (coldStyle.value || props.concentrate || hadDilution.value) && show('brew.dilution'));
 const concentrateNow = computed(() => !coldStyle.value && dilutionShown.value && draft.value.dilution.trim() !== '');
-const { temperatureUnit } = usePreferences();
+const { prefs, temperatureUnit } = usePreferences();
 const props = defineProps<{
   errors: BrewDraftErrors;
   showErrors: boolean;
@@ -78,6 +79,10 @@ const props = defineProps<{
   // (docs/backlog.md item 14), so it's always asked for.
   batch?: boolean;
   batchEstimateGrams?: number | null; // the estimate when it isn't weighed
+  // What the nudge buttons fill in on an empty box (lib/nudge.ts):
+  expectedEy?: number | null; // extraction % to expect TDS and Brix from; missing = the default
+  expectedTimeSec?: number | null; // the recipe's target, else your last brew of it
+  expectedTempC?: number | null;
 }>();
 
 // Measured yield vs the recipe's estimate, e.g. "+6 g vs expected 220 g".
@@ -157,6 +162,33 @@ watch(
   },
 );
 
+// Nudge buttons (Settings → Brew setup, docs/api/auth.md §1 nudgeButtons):
+// which fields have them, and what an empty box's first tap fills in.
+const nudges = computed(() => new Set(prefs.value.nudgeButtons ?? DEFAULT_PREFERENCES.nudgeButtons));
+const specs = computed(() => ({
+  dose: nudgeSpec('dose'),
+  water: nudgeSpec('water'),
+  yield: nudgeSpec('yield'),
+  brix: nudgeSpec('brix'),
+  tds: nudgeSpec('tds'),
+  time: nudgeSpec('time'),
+  temp: nudgeSpec('temp', TEMPERATURE_LABELS[temperatureUnit.value]),
+  grind: nudgeSpec('grind'),
+}));
+// In a vessel the box holds the total, so there's no estimate for it.
+const expectedYieldBox = computed(() => (draft.value.vesselId ? null : props.batch ? (props.batchEstimateGrams ?? null) : (props.expectedYieldGrams ?? null)));
+const expectedTdsBox = computed(() => {
+  const beverage = usesWater(props.recipeStyle ?? null) ? num(draft.value.water) : (netYield(draft.value) ?? expectedYieldBox.value);
+  const ey = props.expectedEy ?? (props.espresso ? DEFAULT_EY_ESPRESSO : DEFAULT_EY_FILTER);
+  return expectedTds(num(draft.value.dose), beverage, ey);
+});
+// From the TDS as typed, else the expected one.
+const expectedBrixBox = computed(() => expectedBrix(num(draft.value.tds) ?? expectedTdsBox.value));
+const expectedTempBox = computed(() => {
+  const t = tempText(props.expectedTempC, temperatureUnit.value);
+  return t ? Number(t) : null;
+});
+
 // Flash chilled (docs/api/brew-logs.md §6): brewed onto ice, weighed with it,
 // and no TDS reading, so TDS and Brix are greyed out (and TDS isn't sent;
 // clearing the ice brings a typed one back).
@@ -210,7 +242,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
       <div class="field">
         <label for="brew-dose">Dose (g)<span class="req" aria-hidden="true">*</span></label>
         <input id="brew-dose" aria-required="true" v-model="draft.dose" inputmode="decimal" :aria-invalid="showErrors && !!errors.dose" />
-        <NudgeButtons v-model="draft.dose" :steps="[0.1, 0.5]" label="Adjust the dose" />
+        <NudgeButtons v-if="nudges.has('dose')" v-model="draft.dose" :spec="specs.dose" label="Adjust the dose" />
         <span v-if="showErrors && errors.dose" class="field-error">{{ errors.dose }}</span>
       </div>
       <div v-if="espresso" class="field">
@@ -222,6 +254,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
           :placeholder="expectedYieldGrams != null && !draft.vesselId ? `Target ${formatGrams(expectedYieldGrams)}` : ''"
           :aria-invalid="showErrors && !!errors.yieldGrams"
         />
+        <NudgeButtons v-if="nudges.has('yield')" v-model="draft.yieldGrams" :spec="specs.yield" :expected="expectedYieldBox" label="Adjust the shot weight" />
         <span v-if="showErrors && errors.yieldGrams" class="field-error">{{ errors.yieldGrams }}</span>
         <span v-else-if="yieldHint" class="hint">{{ yieldHint }}</span>
       </div>
@@ -229,7 +262,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
       <div v-if="!espresso" class="field">
         <label for="brew-water">{{ onIce ? 'Hot water (g)' : 'Water (g)' }}<span class="req" aria-hidden="true">*</span></label>
         <input id="brew-water" aria-required="true" v-model="draft.water" inputmode="decimal" :aria-invalid="showErrors && !!errors.water" />
-        <NudgeButtons v-model="draft.water" :steps="[1, 5]" label="Adjust the water" />
+        <NudgeButtons v-if="nudges.has('water')" v-model="draft.water" :spec="specs.water" label="Adjust the water" />
         <span v-if="showErrors && errors.water" class="field-error">{{ errors.water }}</span>
       </div>
       <div v-if="!espresso && show('brew.ice') && (iced || hadIce)" class="field">
@@ -249,6 +282,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
           :placeholder="draft.vesselId ? '' : batch && batchEstimateGrams != null ? `≈ ${formatGrams(batchEstimateGrams)}` : expectedYieldGrams != null ? `Expected ~${formatGrams(expectedYieldGrams)}` : ''"
           :aria-invalid="showErrors && !!errors.yieldGrams"
         />
+        <NudgeButtons v-if="nudges.has('yield')" v-model="draft.yieldGrams" :spec="specs.yield" :expected="expectedYieldBox" label="Adjust the yield" />
         <span v-if="showErrors && errors.yieldGrams" class="field-error">{{ errors.yieldGrams }}</span>
         <span v-else-if="yieldHint" class="hint">{{ yieldHint }}</span>
         <span v-else-if="batchHint" class="hint">{{ batchHint }}</span>
@@ -267,11 +301,13 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
       <div class="field">
         <label for="brew-brix">Brix (°Bx)</label>
         <input id="brew-brix" v-model="brix" inputmode="decimal" :placeholder="espresso ? 'e.g. 11' : 'e.g. 1.6'" :disabled="onIce" />
+        <NudgeButtons v-if="nudges.has('brix') && !onIce" v-model="brix" :spec="specs.brix" :expected="expectedBrixBox" label="Adjust the Brix" />
         <span class="hint">{{ onIce ? 'Not taken when brewed onto ice' : 'Fills in TDS' }}</span>
       </div>
       <div class="field">
         <label for="brew-tds">{{ concentrateNow ? 'Concentrate TDS (%)' : 'TDS (%)' }}</label>
         <input id="brew-tds" v-model="draft.tds" inputmode="decimal" :placeholder="espresso ? 'e.g. 9.5' : 'e.g. 1.38'" :disabled="onIce" :aria-invalid="showErrors && !!errors.tds" />
+        <NudgeButtons v-if="nudges.has('tds') && !onIce" v-model="draft.tds" :spec="specs.tds" :expected="expectedTdsBox" label="Adjust the TDS" />
         <span v-if="onIce && draft.tds.trim()" class="hint">Not saved while there's ice</span>
         <span v-else-if="showErrors && errors.tds" class="field-error">{{ errors.tds }}</span>
         <span v-else-if="extractionHint && !onIce" class="hint">{{ extractionHint }}</span>
@@ -281,6 +317,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
       <div class="field">
         <label for="brew-time">{{ espresso ? 'Shot time' : 'Total time' }}<span class="req" aria-hidden="true">*</span></label>
         <TimeInput id="brew-time" aria-required="true" v-model="draft.time" placeholder="m:ss" :aria-invalid="showErrors && !!errors.time" />
+        <NudgeButtons v-if="nudges.has('time')" v-model="draft.time" :spec="specs.time" :expected="expectedTimeSec ?? null" label="Adjust the time" />
         <span v-if="showErrors && errors.time" class="field-error">{{ errors.time }}</span>
         <!-- The brew page's finish offset note, with its Undo. -->
         <slot name="time-note" />
@@ -293,6 +330,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
       <div v-if="show('brew.temp')" class="field">
         <label for="brew-temp">Water temp ({{ TEMPERATURE_LABELS[temperatureUnit] }})</label>
         <input id="brew-temp" v-model="draft.temp" inputmode="decimal" :aria-invalid="showErrors && !!errors.temp" />
+        <NudgeButtons v-if="nudges.has('temp')" v-model="draft.temp" :spec="specs.temp" :expected="expectedTempBox" label="Adjust the water temp" />
         <span v-if="showErrors && errors.temp" class="field-error">{{ errors.temp }}</span>
       </div>
     </div>
@@ -307,6 +345,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
       <div v-if="show('brew.grind')" class="field">
         <label for="brew-grind">Grind setting</label>
         <input id="brew-grind" v-model="draft.grind" inputmode="decimal" placeholder="e.g. 20" :aria-invalid="showErrors && !!errors.grind" />
+        <NudgeButtons v-if="nudges.has('grind')" v-model="draft.grind" :spec="specs.grind" label="Adjust the grind setting" />
         <span v-if="showErrors && errors.grind" class="field-error">{{ errors.grind }}</span>
       </div>
       <div v-if="speedGrinder && show('brew.rpm')" class="field">

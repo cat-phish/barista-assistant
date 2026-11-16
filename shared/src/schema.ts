@@ -51,6 +51,10 @@ export type RepeatButtonGroup = (typeof REPEAT_BUTTON_GROUPS)[number];
 // setup, docs/api/auth.md §1 rememberSetup).
 export const REMEMBER_KEYS = ["what", "brewer", "recipe", "bean", "grinder", "grind", "waterProfile", "vessel", "prepTools", "size"] as const;
 export type RememberKey = (typeof REMEMBER_KEYS)[number];
+// Brew-log fields that get -/+ nudge buttons (Settings → Brew setup,
+// docs/api/auth.md §1 nudgeButtons).
+export const NUDGE_KEYS = ["dose", "water", "yield", "brix", "tds", "time", "temp", "grind"] as const;
+export type NudgeKey = (typeof NUDGE_KEYS)[number];
 
 // Recaps (docs/api/recaps.md §11c): which periods, and how the AI summary is written.
 export const RECAP_PERIOD_CHOICES = ["weekly", "monthly", "both"] as const;
@@ -75,6 +79,7 @@ export interface UserPreferences {
   repeatButtonsBy: RepeatButtonGroup; // what the quick repeat buttons tell apart
   rememberSetup: RememberKey[]; // what the brew page remembers from last time
   startDelays: Partial<Record<MethodKind, 0 | 3 | 5>>; // countdown before a timed brew, per method; missing = none (docs/api/auth.md §1)
+  nudgeButtons: NudgeKey[]; // brew-log fields with -/+ buttons (docs/api/auth.md §1)
   steepReminders: boolean; // remind when a cold brew's steep window opens (docs/api/notifications.md §1b)
   // Resting beans (docs/api/notifications.md §1b): remind the morning a bean
   // you set resting is ready, then again every restReminderRepeatDays days
@@ -112,6 +117,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   repeatButtonsBy: "made",
   rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"],
   startDelays: {},
+  nudgeButtons: ["dose", "water"],
   steepReminders: true,
   restReminders: true,
   restReminderRepeatDays: null,

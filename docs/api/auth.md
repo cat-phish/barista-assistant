@@ -95,7 +95,7 @@ units, with defaults filled in. Storage is always grams, °C and metres;
 clients convert what they show and what's typed (roadmap: Units and defaults).
 
 ```json
-{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], "repeatButtonsBy": "made", "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "startDelays": {}, "steepReminders": true, "restReminders": true, "restReminderRepeatDays": null, "restingInBrewPickerDefault": true, "greenStockAlerts": true, "recaps": true, "recapPeriods": "both", "weekStartsOn": 1, "recapBanner": true, "recapBannerDays": 3, "recapNotify": true, "recapNotifyTime": "08:00", "timeZone": null, "recapAi": "manual", "recapSeen": {}, "learnAboutMe": true }
+{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], "repeatButtonsBy": "made", "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "startDelays": {}, "nudgeButtons": ["dose", "water"], "steepReminders": true, "restReminders": true, "restReminderRepeatDays": null, "restingInBrewPickerDefault": true, "greenStockAlerts": true, "recaps": true, "recapPeriods": "both", "weekStartsOn": 1, "recapBanner": true, "recapBannerDays": 3, "recapNotify": true, "recapNotifyTime": "08:00", "timeZone": null, "recapAi": "manual", "recapSeen": {}, "learnAboutMe": true }
 ```
 
 - `volumeUnit`: `fl_oz` | `ml`: the brew page's yield estimate, and a new
@@ -118,6 +118,26 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
   Start counts down before a timed brew; Start now skips it. Long cold
   brews and logging without a timer do not use it. See
   `docs/timer_architecture.md` §3.
+- `nudgeButtons` (default `["dose", "water"]`): the brew-log fields that
+  show -/+ "nudge" buttons under them (Settings → Brew setup, "Nudge
+  buttons"), a list of `NUDGE_KEYS`, each once: `dose`, `water`, `yield`,
+  `brix`, `tds`, `time`, `temp`, `grind`. PATCH replaces the whole list;
+  unknown or repeated keys are refused. A field hidden under Settings →
+  Fields shows no buttons. Dose and water count an empty box as 0. On
+  any other empty field the buttons are greyed where an expected value is
+  known, and the first tap fills it in and applies the step (never below
+  0); with none they stay off until the field has a value:
+  - `yield`: the recipe's expected yield (espresso: target shot weight);
+  - `tds`: EY × dose ÷ beverage weight (the water for immersion styles,
+    else the yield or its expected value), with EY your average for the
+    recipe (at least 2 of your brews with a TDS), else for its method,
+    else 20 % (filter) / 19 % (espresso); `brix`: that TDS (or the one
+    typed) on the Brix curve. Your brews come from `GET …/brew-logs`
+    (`mine=1`), loaded on the brew page only; editing a journal entry uses
+    the default EY;
+  - `time`: the middle of the recipe's finish window, else your last brew
+    of the recipe; `temp`: the recipe's target, else your last brew of it;
+  - `grind`: none (the brew page fills the setting in).
 - `steepReminders` (default `true`): remind when a cold brew's steep window
   opens (§1b).
 - `restReminders` (default `true`): remind, the morning it's ready, when a

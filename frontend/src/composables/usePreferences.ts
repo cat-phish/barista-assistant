@@ -19,6 +19,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   repeatButtonsBy: 'made',
   rememberSetup: ['what', 'brewer', 'recipe', 'bean', 'grinder', 'grind'],
   startDelays: {},
+  nudgeButtons: ['dose', 'water'],
   steepReminders: true,
   restReminders: true,
   restReminderRepeatDays: null,

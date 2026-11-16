@@ -24,6 +24,7 @@ export interface UserPreferences {
   repeatButtonsBy: RepeatButtonGroup; // what the quick repeat buttons tell apart (lib/repeatBrew.ts REPEAT_GROUP_OPTIONS)
   rememberSetup: RememberKey[]; // what the brew page remembers from last time (lib/rememberSetup.ts)
   startDelays: Partial<Record<MethodKind, 0 | 3 | 5>>; // countdown before a timed brew, per method; missing = none (docs/api/auth.md §1)
+  nudgeButtons: NudgeKey[]; // brew-log fields with -/+ buttons (Settings → Brew setup, lib/nudge.ts)
   steepReminders: boolean; // remind when a cold brew's steep window opens
   // Resting beans (docs/api/notifications.md §1b): the morning one you set
   // resting is ready, then every restReminderRepeatDays (null = once).
@@ -50,6 +51,7 @@ export type RecapAiMode = 'off' | 'manual' | 'auto';
 // docs/api/auth.md §1 repeatButtonsBy.
 export type RepeatButtonGroup = 'made' | 'brewer' | 'recipe' | 'coffee';
 export type RepeatKeep = 'bean' | 'recipe' | 'size' | 'doseWater' | 'temp' | 'grinder' | 'grind' | 'waterProfile' | 'dilution' | 'window' | 'prepTools' | 'grinderWeights' | 'vessel' | 'notes';
+export type NudgeKey = 'dose' | 'water' | 'yield' | 'brix' | 'tds' | 'time' | 'temp' | 'grind';
 export type RememberKey = 'what' | 'brewer' | 'recipe' | 'bean' | 'grinder' | 'grind' | 'waterProfile' | 'vessel' | 'prepTools' | 'size';
 
 // docs/api/notifications.md §1b: a person's own reminder channels.

@@ -6,19 +6,21 @@
 //   buttons tell apart, newest first over every brew.
 // - Copy when repeating (§1 repeatKeeps): what "Brew again" and the brew
 //   page's repeat buttons copy from the earlier brew.
+// - Nudge buttons (§1 nudgeButtons): the brew-log fields with −/+ buttons.
 // Yours only; saved as soon as a box changes.
 import { computed, ref } from 'vue';
 import { errorMessage } from '../api/client';
-import type { MethodKind, RememberKey, RepeatKeep, UserPreferences } from '../api/types';
+import type { MethodKind, NudgeKey, RememberKey, RepeatKeep, UserPreferences } from '../api/types';
 import SettingsLayout from '../components/SettingsLayout.vue';
 import { DEFAULT_PREFERENCES, usePreferences } from '../composables/usePreferences';
+import { NUDGE_OPTIONS, nudgeAllState, withNudge } from '../lib/nudge';
 import { REMEMBER_OPTIONS } from '../lib/rememberSetup';
 import { REPEAT_GROUP_OPTIONS, REPEAT_OPTIONS } from '../lib/repeatBrew';
 import { METHOD_KINDS, METHOD_ORDER } from '../lib/equipment';
 import { startDelayFor } from '../lib/startDelay';
 import { useAuthStore } from '../stores/auth';
 
-type Section = 'remember' | 'repeat' | 'buttons' | 'timer';
+type Section = 'remember' | 'repeat' | 'buttons' | 'timer' | 'nudge';
 const auth = useAuthStore();
 const { prefs } = usePreferences();
 const remembers = computed(() => new Set(prefs.value.rememberSetup));
@@ -27,7 +29,7 @@ const saving = ref(false);
 const error = ref<{ in: Section; text: string } | null>(null);
 const saved = ref<Section | null>(null);
 
-async function save(section: Section, patch: Partial<Pick<UserPreferences, 'rememberSetup' | 'repeatKeeps' | 'repeatButtonsBy' | 'startDelays'>>): Promise<void> {
+async function save(section: Section, patch: Partial<Pick<UserPreferences, 'rememberSetup' | 'repeatKeeps' | 'repeatButtonsBy' | 'startDelays' | 'nudgeButtons'>>): Promise<void> {
   saving.value = true;
   error.value = null;
   saved.value = null;
@@ -53,9 +55,19 @@ function toggleRemember(key: RememberKey, on: boolean): Promise<void> {
 function toggleKeep(key: RepeatKeep, on: boolean): Promise<void> {
   return save('repeat', { repeatKeeps: REPEAT_OPTIONS.map((o) => o.key).filter((k) => (k === key ? on : keeps.value.has(k))) });
 }
+const nudgesOn = computed(() => prefs.value.nudgeButtons ?? DEFAULT_PREFERENCES.nudgeButtons);
+const nudgeAll = computed(() => nudgeAllState(nudgesOn.value));
+function toggleNudge(key: NudgeKey, on: boolean): Promise<void> {
+  return save('nudge', { nudgeButtons: withNudge(nudgesOn.value, key, on) });
+}
+// The master box: on turns every field on, off turns them all off.
+function toggleAllNudges(on: boolean): Promise<void> {
+  return save('nudge', { nudgeButtons: on ? NUDGE_OPTIONS.map((o) => o.key) : [] });
+}
 const sameSet = (a: readonly string[], b: readonly string[]) => [...a].sort().join() === [...b].sort().join();
 const rememberDefault = computed(() => sameSet(DEFAULT_PREFERENCES.rememberSetup, prefs.value.rememberSetup));
 const repeatDefault = computed(() => sameSet(DEFAULT_PREFERENCES.repeatKeeps, prefs.value.repeatKeeps));
+const nudgeDefault = computed(() => sameSet(DEFAULT_PREFERENCES.nudgeButtons, nudgesOn.value));
 </script>
 
 <template>
@@ -145,6 +157,35 @@ const repeatDefault = computed(() => sameSet(DEFAULT_PREFERENCES.repeatKeeps, pr
       <p v-if="error?.in === 'repeat'" class="form-error" role="alert">{{ error.text }}</p>
       <p v-else-if="saved === 'repeat'" class="muted small" aria-live="polite">Saved.</p>
     </section>
+    <section class="card stack" aria-labelledby="nudge-buttons">
+      <h2 id="nudge-buttons">Nudge buttons</h2>
+      <p class="muted small">
+        −/+ buttons under a field on the log form, to fix a reading without retyping it. On an empty field they show greyed; where there's an expected
+        value (the target shot weight, a TDS from your usual extraction, the recipe's time or temperature) the first tap fills it in.
+      </p>
+      <fieldset class="keeps" :disabled="saving">
+        <legend class="visually-hidden">Fields with nudge buttons</legend>
+        <label class="checkbox keep">
+          <input
+            type="checkbox"
+            :checked="nudgeAll === 'all'"
+            :indeterminate="nudgeAll === 'some'"
+            @change="toggleAllNudges(($event.target as HTMLInputElement).checked)"
+          />
+          <span>All</span>
+        </label>
+        <label v-for="o in NUDGE_OPTIONS" :key="o.key" class="checkbox keep nudge-field">
+          <input type="checkbox" :checked="nudgesOn.includes(o.key)" @change="toggleNudge(o.key, ($event.target as HTMLInputElement).checked)" />
+          <span>{{ o.label }}</span>
+        </label>
+      </fieldset>
+      <p class="muted small">A field hidden under Settings → Fields has no buttons.</p>
+      <button v-if="!nudgeDefault" class="btn-link small reset" type="button" :disabled="saving" @click="save('nudge', { nudgeButtons: [...DEFAULT_PREFERENCES.nudgeButtons] })">
+        Back to the defaults
+      </button>
+      <p v-if="error?.in === 'nudge'" class="form-error" role="alert">{{ error.text }}</p>
+      <p v-else-if="saved === 'nudge'" class="muted small" aria-live="polite">Saved.</p>
+    </section>
   </SettingsLayout>
 </template>
 
@@ -173,6 +214,9 @@ p {
 }
 .hint {
   font-weight: 400;
+}
+.nudge-field {
+  padding-left: var(--space-4);
 }
 .reset {
   align-self: flex-start;

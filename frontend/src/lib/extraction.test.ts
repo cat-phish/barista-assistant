@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { brixToTds, extractionYield } from './extraction';
+import { brixToTds, DEFAULT_EY_ESPRESSO, DEFAULT_EY_FILTER, expectedBrix, expectedEy, expectedTds, extractionYield, type EyBrew } from './extraction';
 
 const brew = { tdsPercent: 1.38, doseGrams: 15, yieldGrams: 220, waterGrams: 250 };
 
@@ -36,5 +36,36 @@ describe('brixToTds', () => {
   it('never goes below 0', () => {
     expect(brixToTds(0)).toBe(0);
     expect(brixToTds(0.005)).toBe(0);
+  });
+});
+
+describe('expected readings', () => {
+  it('expectedTds is EY × dose / beverage, 0.01', () => {
+    expect(expectedTds(15, 250, 20)).toBe(1.2);
+    expect(expectedTds(18, 36, 19)).toBe(9.5);
+    expect(expectedTds(null, 250, 20)).toBeNull();
+    expect(expectedTds(15, 0, 20)).toBeNull();
+  });
+  it('expectedBrix inverts brixToTds, 0.1', () => {
+    for (const brix of [1.6, 11, 12.4]) expect(expectedBrix(brixToTds(brix))).toBe(brix);
+    expect(expectedBrix(null)).toBeNull();
+    expect(expectedBrix(0)).toBeNull();
+  });
+  const log = (recipeId: string, kind: string, ey: number): EyBrew => ({
+    recipeId,
+    actualDoseGrams: 15,
+    actualWaterGrams: 250,
+    actualYieldGrams: 200,
+    tdsPercent: (ey * 15) / 200,
+    style: null,
+    recipe: { methodKind: kind, style: null },
+  });
+  it('expectedEy: your recipe average, else the method kind, else the default', () => {
+    const opts = { recipeId: 'r1', methodKind: 'filter', espresso: false };
+    expect(expectedEy([log('r1', 'filter', 21), log('r1', 'filter', 22), log('r2', 'filter', 18)], opts)).toBe(21.5);
+    expect(expectedEy([log('r1', 'filter', 21), log('r2', 'filter', 18), log('r3', 'espresso', 30)], opts)).toBe(19.5);
+    expect(expectedEy([log('r1', 'filter', 21)], opts)).toBe(DEFAULT_EY_FILTER);
+    expect(expectedEy([], { ...opts, espresso: true })).toBe(DEFAULT_EY_ESPRESSO);
+    expect(expectedEy([{ ...log('r1', 'filter', 21), tdsPercent: null }, log('r1', 'filter', 22)], opts)).toBe(DEFAULT_EY_FILTER);
   });
 });

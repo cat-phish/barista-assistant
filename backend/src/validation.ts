@@ -2,7 +2,7 @@ import { MAX_PREFERENCE_TEXT, MAX_PREFERENCES } from "@barista/shared/aiPreferen
 import { z } from "zod";
 import { BEAN_CARRY_KEYS } from "@barista/shared/beanCarry";
 import { CHAT_PERIOD_BREWS_MAX, CHAT_PERIOD_BREWS_MIN } from "@barista/shared/chatPeriod";
-import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, LABEL_WEB_CONTEXTS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_CHAT_ATTACHMENTS, MAX_REST_DAYS, MAX_REVIEW_BREWS, MAX_SUGGEST_BREWS, RECAP_AI_MODES, RECAP_PERIOD_CHOICES, REMEMBER_KEYS, REPEAT_BUTTON_GROUPS, REPEAT_KEEPS, RATING_STEPS, ROAST_LEVELS, ROAST_SCALES, ROAST_TYPES, type RoastType, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
+import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, LABEL_WEB_CONTEXTS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_CHAT_ATTACHMENTS, MAX_REST_DAYS, MAX_REVIEW_BREWS, MAX_SUGGEST_BREWS, NUDGE_KEYS, RECAP_AI_MODES, RECAP_PERIOD_CHOICES, REMEMBER_KEYS, REPEAT_BUTTON_GROUPS, REPEAT_KEEPS, RATING_STEPS, ROAST_LEVELS, ROAST_SCALES, ROAST_TYPES, type RoastType, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
 import { AI_DETAILS } from "@barista/shared/aiDetails";
 import { ROLES } from "./auth/membership.js";
 
@@ -112,6 +112,10 @@ export const preferencesSchema = z
       stovetop: z.literal([0, 3, 5]),
       other: z.literal([0, 3, 5]),
     }).partial().strict(),
+    // The whole list of fields with -/+ buttons; each once.
+    nudgeButtons: z
+      .array(z.enum(NUDGE_KEYS))
+      .refine((keys) => new Set(keys).size === keys.length, "each once"),
     steepReminders: z.boolean(),
     restReminders: z.boolean(),
     restReminderRepeatDays: z.number().int().min(1).max(60).nullable(),

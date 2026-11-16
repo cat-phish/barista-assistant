@@ -25,6 +25,7 @@ import { waterProfilesApi } from '../api/waterProfiles';
 import { prepToolsApi } from '../api/prepTools';
 import { brewProblemsApi } from '../api/brewProblems';
 import { defaultWaterProfileId } from '../lib/water';
+import { expectedEy } from '../lib/extraction';
 import { brewerMethodsApi } from '../api/brewerMethods';
 import { brewersApi } from '../api/brewers';
 import { drinksApi } from '../api/drinks';
@@ -462,6 +463,51 @@ async function loadMeasured(): Promise<void> {
   if (request === measuredRequest) measured.value = list;
 }
 watch([beanId, recipeId], () => void loadMeasured());
+
+// What the log form's nudge buttons fill in on an empty box (lib/nudge.ts,
+// docs/api/auth.md §1 nudgeButtons): your past brews give the extraction to
+// expect TDS and Brix from, and this recipe's last time and temperature
+// when it has no target. Only loaded when one of those buttons is on.
+const myBrews = ref<BrewLog[]>([]);
+const myRecipeBrews = ref<BrewLog[]>([]);
+let myBrewsRequest = 0;
+const nudgesNeedHistory = computed(() => (prefs.value.nudgeButtons ?? []).some((k) => k === 'tds' || k === 'brix' || k === 'time' || k === 'temp'));
+async function loadMyBrews(): Promise<void> {
+  const ws = workspaces.current?.id;
+  const request = ++myBrewsRequest;
+  let all: BrewLog[] = [];
+  let forRecipe: BrewLog[] = [];
+  if (ws && recipeId.value && nudgesNeedHistory.value) {
+    try {
+      [all, forRecipe] = await Promise.all([
+        brewLogsApi.list(ws, { mine: true, limit: 100 }).then((r) => r.brewLogs),
+        brewLogsApi.list(ws, { mine: true, recipeId: recipeId.value, limit: 50 }).then((r) => r.brewLogs),
+      ]);
+    } catch {
+      all = []; // the buttons fall back to the defaults
+      forRecipe = [];
+    }
+  }
+  if (request === myBrewsRequest) {
+    myBrews.value = all;
+    myRecipeBrews.value = forRecipe;
+  }
+}
+watch([recipeId, nudgesNeedHistory], () => void loadMyBrews());
+const nudgeEy = computed(() =>
+  expectedEy([...myRecipeBrews.value, ...myBrews.value.filter((l) => l.recipeId !== recipeId.value)], {
+    recipeId: recipeId.value || null,
+    methodKind: recipe.value?.brewer.kind ?? null,
+    espresso: espresso.value,
+  }),
+);
+const lastRecipeBrew = computed(() => myRecipeBrews.value.find((l) => !l.steeping) ?? null);
+const nudgeTimeSec = computed(() => {
+  const r = recipe.value;
+  if (r?.expectedFinishMinSec != null && r.expectedFinishMaxSec != null) return Math.round((r.expectedFinishMinSec + r.expectedFinishMaxSec) / 2);
+  return lastRecipeBrew.value?.actualTimeSec ?? null;
+});
+const nudgeTempC = computed(() => recipe.value?.targetTempC ?? lastRecipeBrew.value?.actualTempC ?? null);
 
 // Then the brewer's own figure (docs/api/brewers.md §3): typed, or learned
 // from its measured brews with any bean or recipe.
@@ -1917,7 +1963,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       </section>
       <section class="card">
         <p v-if="stepMarksLine" class="muted small marks-line">{{ stepMarksLine }}</p>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :vessels="vessels" :prep-tools="prepTools" :problems="problems" :method-kind="recipe?.brewer.kind ?? null" :brewer-id="recipe?.brewer.id ?? null" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="recipe?.style?.brewsLike ?? null" :iced="recipe?.targetIceGrams != null" :concentrate="recipe?.dilutionRatio != null">
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :vessels="vessels" :prep-tools="prepTools" :problems="problems" :method-kind="recipe?.brewer.kind ?? null" :brewer-id="recipe?.brewer.id ?? null" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="recipe?.style?.brewsLike ?? null" :iced="recipe?.targetIceGrams != null" :concentrate="recipe?.dilutionRatio != null" :expected-ey="nudgeEy" :expected-time-sec="nudgeTimeSec" :expected-temp-c="nudgeTempC">
           <template #time-note>
             <span v-if="finishOffsetNote" class="hint offset-note" aria-live="polite">
               {{ formatFinishOffset(finishOffsetNote.takenOff) }} offset
