@@ -1,3 +1,4 @@
+import { learnAfterAnalysis } from "./learnQueue.js";
 import { randomUUID } from "node:crypto";
 import type { AiPreviewJobData, BeanReviewJobData, BeanReviewResult, BrewAnalysisJobData, ParameterSuggestionJobData } from "@barista/shared/jobs";
 import { EMPTY_AI_PROMPT, isCustomPrompt } from "@barista/shared/aiPrompt";
@@ -67,7 +68,10 @@ export type JobResult = { status: "saved"; id: string } | { status: "skipped"; r
 
 // One brew-analysis job. Throwing makes BullMQ retry (docs/api/llm-contract.md §9).
 export async function processBrewAnalysis({ brewLogId, auto = false, note }: BrewAnalysisJobData): Promise<JobResult> {
-  const context = await loadBrewContext(brewLogId);
+  const ws = await workspaceOf(brewLogId);
+  const settings = ws?.settings ?? DEFAULT_WORKSPACE_SETTINGS;
+  const hidden = new Set(settings.aiHidden);
+  const context = await loadBrewContext(brewLogId, { profile: hidden });
   if (!context) {
     // Deleted after queueing: nothing to analyze, and retrying won't change that.
     return { status: "skipped", reason: "brew log no longer exists" };
@@ -79,9 +83,6 @@ export async function processBrewAnalysis({ brewLogId, auto = false, note }: Bre
     return { status: "skipped", reason: "still steeping" };
   }
 
-  const ws = await workspaceOf(brewLogId);
-  const settings = ws?.settings ?? DEFAULT_WORKSPACE_SETTINGS;
-  const hidden = new Set(settings.aiHidden);
   // The workspace only analyzes rated brews (the API refuses to queue an
   // unrated one; this covers a job queued before the switch).
   if (hidden.has("analyzeUnrated") && context.brew.rating === null && context.brew.drinkRating === null) {
@@ -116,6 +117,7 @@ export async function processBrewAnalysis({ brewLogId, auto = false, note }: Bre
     throw err;
   }
   await settleRequest(brewLogId, null);
+  if (ws) await learnAfterAnalysis(ws.baristaId, ws.workspaceId, hidden); // docs/api/llm-contract.md §9g
   return { status: "saved", id: analysisId };
 }
 
@@ -132,7 +134,7 @@ export async function processParameterSuggestion({ suggestionId }: ParameterSugg
   if (row.suggestion.status !== "pending") return { status: "skipped", reason: `already ${row.suggestion.status}` };
 
   const hidden = new Set(withDefaults(DEFAULT_WORKSPACE_SETTINGS, row.settings ?? null).aiHidden);
-  const context = await loadSuggestContext(row.suggestion, { ratedOnly: hidden.has("unratedHistory") });
+  const context = await loadSuggestContext(row.suggestion, { ratedOnly: hidden.has("unratedHistory"), profile: hidden });
   if (!context) return { status: "skipped", reason: "bean no longer exists" };
 
   const custom = await promptFor(row.suggestion.requestedBy, row.suggestion.note);
@@ -176,10 +178,11 @@ export async function processBeanReview(data: BeanReviewJobData): Promise<BeanRe
 // when the brew or bean is gone.
 export async function processAiPreview(data: AiPreviewJobData): Promise<AiRequest | null> {
   if (data.kind === "analysis") {
-    const context = await loadBrewContext(data.brewLogId);
-    if (!context) return null;
     const ws = await workspaceOf(data.brewLogId);
-    return analysisSent(context, new Set((ws?.settings ?? DEFAULT_WORKSPACE_SETTINGS).aiHidden), await promptFor(ws?.baristaId ?? null, data.note));
+    const hidden = new Set((ws?.settings ?? DEFAULT_WORKSPACE_SETTINGS).aiHidden);
+    const context = await loadBrewContext(data.brewLogId, { profile: hidden });
+    if (!context) return null;
+    return analysisSent(context, hidden, await promptFor(ws?.baristaId ?? null, data.note));
   }
   if (data.kind === "beanReview") {
     const hidden = await hiddenFor(data.review.beanId);
@@ -188,7 +191,7 @@ export async function processAiPreview(data: AiPreviewJobData): Promise<AiReques
   }
   const hidden = await hiddenFor(data.suggestion.beanId);
   if (!hidden) return null;
-  const context = await loadSuggestContext(data.suggestion, { ratedOnly: hidden.has("unratedHistory") });
+  const context = await loadSuggestContext(data.suggestion, { ratedOnly: hidden.has("unratedHistory"), profile: hidden });
   return context ? suggestionSent(context, hidden, await promptFor(data.suggestion.requestedBy, data.suggestion.note)) : null;
 }
 

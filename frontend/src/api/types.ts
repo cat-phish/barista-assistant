@@ -43,6 +43,7 @@ export interface UserPreferences {
   timeZone: string | null; // IANA name from the device; null = the server's
   recapAi: RecapAiMode;
   recapSeen: Partial<Record<'weekly' | 'monthly', string>>; // the period start last opened or dismissed
+  learnAboutMe: boolean; // docs/api/auth.md §1d
 }
 export type RecapPeriodChoice = 'weekly' | 'monthly' | 'both';
 export type RecapAiMode = 'off' | 'manual' | 'auto';
@@ -94,6 +95,7 @@ export interface WorkspaceSettings {
   suggestSource: SuggestSource;
   suggestMaxBrews: number;
   suggestAlternatives: AlternativeKind[]; // what else it suggests by default
+  aiPreferences: string[]; // the workspace's own lines for the AI (docs/api/auth.md §1d)
   // "Suggest with AI" on a bean's Review (analysis.md §8e), and what its dialog starts with.
   beanReviews: boolean;
   beanReviewMaxBrews: number;
@@ -692,6 +694,8 @@ export interface LlmAnalysis {
   model: string | null;
   promptVersion: string | null;
   helpful: boolean | null; // 👍 / 👎 (docs/api/analysis.md §8)
+  feedbackBy: string | null; // who gave it
+  feedbackReason: string | null;
   ratedAt: string | null;
   hasRequest: boolean; // what was sent is saved (§8c)
   createdAt: string;
@@ -717,6 +721,36 @@ export interface AiPromptSettings {
   labelInstructionsIntro: string;
   noteIntro: string;
   limits: { instructions: number; section: number; note: number };
+}
+
+// Learned preferences (docs/api/auth.md §1d).
+export interface AiPreference {
+  id: string;
+  text: string;
+  basis: number; // brews or votes behind it; 0 for one you wrote
+  source: 'ai' | 'person';
+  updatedAt: string;
+}
+export interface PreferenceProposal {
+  id: string;
+  change: 'add' | 'edit' | 'remove';
+  targetId: string | null;
+  text: string | null;
+  basis: number;
+  why: string;
+  createdAt: string;
+}
+export interface AiPreferences {
+  learn: 'auto' | 'manual';
+  apply: 'propose' | 'apply';
+  items: AiPreference[];
+  proposals: PreferenceProposal[];
+  through: Record<string, string>;
+  usage: { runs: number; promptTokens: number; completionTokens: number };
+}
+export interface AiPreferencesSettings {
+  aiPreferences: AiPreferences;
+  limits: { items: number; text: number };
 }
 
 // What was sent to the AI (docs/api/analysis.md §8c).
@@ -793,12 +827,36 @@ export interface BrewLog {
   // A long cold brew batch (docs/api/brew-servings.md §6c): when it was
   // marked finished, its servings and the concentrate they took.
   batchFinishedAt: string | null;
+  // The Suggest parameters route whose values it used (docs/api/brew-logs.md §6).
+  suggestionId: string | null;
+  suggestionRoute: number | null;
   servingCount: number;
   pouredGrams: number;
 }
 
 // docs/api/analysis.md §8b: starting values for a brew about to be made.
 // Pending until the AI answers; the values are for the grinder chosen.
+// One way to brew it (docs/api/analysis.md §8b), with the research findings
+// it follows (keys of @barista/shared/research).
+export interface SuggestedRoute {
+  label: string;
+  why: string;
+  findings: string[];
+  grindSetting: number | null;
+  grindRpm: number | null;
+  tempC: number | null;
+  ratio: number | null;
+}
+// Whether the person who asked liked it (docs/api/analysis.md §8b, "Feedback").
+export type SuggestionVoteKind = 'up' | 'down';
+export interface SuggestionVote {
+  vote: SuggestionVoteKind;
+  reason: string | null;
+}
+export interface SuggestionFeedback {
+  suggestion: SuggestionVote | null;
+  routes: (SuggestionVote | null)[]; // by route; shorter when the last have none
+}
 export interface ParameterSuggestion {
   id: string;
   beanId: string;
@@ -825,7 +883,11 @@ export interface ParameterSuggestion {
   grindRpm: number | null;
   tempC: number | null;
   ratio: number | null; // filter (water + ice) / dose, espresso shot / dose; null: keep the batch's
+  // The ways to brew it, the first matching the values above; null while
+  // pending and on suggestions from before routes.
+  routes: SuggestedRoute[] | null;
   alternatives: SuggestedAlternative[] | null; // what else to try; null while pending
+  feedback: SuggestionFeedback | null; // likes and dislikes; null: none
   model: string | null;
   promptVersion: string | null;
   hasRequest: boolean; // what was sent is saved (§8c)

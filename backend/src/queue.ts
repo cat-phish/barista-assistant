@@ -1,4 +1,9 @@
 import {
+  LEARN_DELAY_MS,
+  PREFERENCES_JOB,
+  PREFERENCES_QUEUE,
+  preferencesJobId,
+  type PreferencesJobData,
   BREW_ANALYSIS_JOB,
   BREW_ANALYSIS_QUEUE,
   brewAnalysisJobId,
@@ -169,6 +174,24 @@ export async function enqueueParameterSuggestion(suggestionId: string): Promise<
       jobId: `suggest-${suggestionId}`,
       attempts: 3,
       backoff: { type: "exponential", delay: 5000 },
+      removeOnComplete: true,
+      removeOnFail: true,
+    })
+  );
+}
+
+// Learning preferences (docs/api/llm-contract.md §9g): one job per person
+// and workspace; while one waits, more signals join it. Not shown, so
+// failures are just dropped after the retries.
+export const preferencesQueue = new Queue<PreferencesJobData>(PREFERENCES_QUEUE, { connection });
+preferencesQueue.on("error", () => undefined);
+export async function enqueueLearnPreferences(data: PreferencesJobData, delayMs = LEARN_DELAY_MS): Promise<void> {
+  await withTimeout(() =>
+    preferencesQueue.add(PREFERENCES_JOB, data, {
+      jobId: preferencesJobId(data.userId, data.workspaceId),
+      delay: delayMs,
+      attempts: 2,
+      backoff: { type: "exponential", delay: 10_000 },
       removeOnComplete: true,
       removeOnFail: true,
     })
@@ -364,7 +387,7 @@ export async function enqueueBackupNow(): Promise<void> {
 }
 
 export async function closeQueue(): Promise<void> {
-  await Promise.all([brewAnalysisQueue.close(), reminderQueue.close(), recapSummaryQueue.close(), maintenanceQueue.close(), parameterSuggestionQueue.close(), aiPreviewQueue.close(), labelReadQueue.close(), chatQueue.close(), ...[...queueEvents.values()].map((e) => e.close())]);
+  await Promise.all([brewAnalysisQueue.close(), reminderQueue.close(), recapSummaryQueue.close(), maintenanceQueue.close(), parameterSuggestionQueue.close(), preferencesQueue.close(), aiPreviewQueue.close(), labelReadQueue.close(), chatQueue.close(), ...[...queueEvents.values()].map((e) => e.close())]);
   connection.disconnect();
   waitConnection?.disconnect();
 }

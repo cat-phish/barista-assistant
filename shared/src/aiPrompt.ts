@@ -24,8 +24,9 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
       "You are an expert specialty coffee roaster and barista. Analyze this one brew (brew) against its recipe and the " +
       "bean, and suggest concrete changes for the next brew. A missing field means it wasn't recorded, not that it was " +
       "zero or absent. The brew's grinder and water are named in it and described in equipment. Ratings are 0.5-5 in half steps; " +
-      "rating and tastingNotes describe the coffee tasted on its own. Judge mainly from the tasting and how the brew " +
-      "went against the recipe's targets, and change as little as needed: one or two levers at a time. The brew's " +
+      "rating and tastingNotes describe the coffee tasted on its own. Judge mainly from the tasting; the recipe's " +
+      "targets are where it started, not a number to pull the brew back to. Change as little as needed: one or two " +
+      "levers at a time, chosen as the research findings say. The brew's " +
       "expectedFinishMinSec-expectedFinishMaxSec is the finish (espresso: shot time) window it was timed against, which " +
       "may differ from the recipe's: judge actualTimeSec against it.",
   },
@@ -36,7 +37,7 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
     locked: true,
     text:
       "reasoning is a concise 1-2 sentence diagnosis. nextStep is the one concrete thing to do on the next brew, in " +
-      "plain words a barista can act on (e.g. 'Grind 2 clicks coarser and keep 93 °C'). confidence is low when the " +
+      "plain words a barista can act on (e.g. 'Grind 2 clicks coarser, keep the rest'). confidence is low when the " +
       "notes are vague, the brew has no recipe to judge it against, or the measurements look wrong; high only when " +
       "the taste and the numbers agree. suggestedRpmDelta is a change in grinder speed for a variable-speed grinder, " +
       "null otherwise or when the speed should stay. suggestedDoseDelta and suggestedYieldDelta are null except for " +
@@ -109,7 +110,7 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
     text:
       "roastWeightLossPercent is the green weight lost in roasting, which measures how developed the roast is more " +
       "exactly than a roast name: around 11-13% is a light roast, 14-16% medium and 17% or more dark. A more developed " +
-      "roast is more soluble and extracts more easily, so it takes a coarser grind or cooler water; a less developed " +
+      "roast is more porous and extracts faster, so it takes a coarser grind or cooler water; a less developed " +
       "one needs more extraction. Trust it over the roast level when they disagree.",
   },
   {
@@ -154,7 +155,7 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
     label: "Growing altitude",
     prompts: ["analysis", "suggest"],
     locked: false,
-    text: "A higher altitudeMasl usually means denser beans that take a finer grind or hotter water.",
+    text: "altitudeMasl is context only: no study ties growing altitude to brew temperature or grind.",
   },
   {
     key: "variety",
@@ -192,9 +193,7 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
     prompts: ["analysis", "suggest"],
     locked: false,
     text:
-      "A water's figures (mg/L; GH and KH as CaCO3) matter: harder water with more magnesium and calcium tends to " +
-      "extract more, while high alkalinity (KH) buffers acidity and can flatten the cup; only the figures given are " +
-      "known.",
+      "A water's figures are in mg/L, GH and KH as CaCO3; only the figures given are known.",
   },
   {
     key: "prepTools",
@@ -317,6 +316,34 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
       "hot water as well as under-extraction.",
   },
   {
+    key: "profile",
+    label: "Brew profile",
+    prompts: ["analysis", "suggest"],
+    locked: false,
+    text:
+      "profile holds figures worked out from all of this barista's own rated brews, far more than the brews you're " +
+      "sent; n is how many brews a figure rests on. Use them for this barista's patterns (what their best-rated brews " +
+      "had, which temperatures and roast ages they rate higher, the usual time for a dose) instead of working those " +
+      "out from the few brews sent, and weigh them by n: a figure on 2-3 brews is a hint, not a rule. A rating gap " +
+      "between temperatures says what this barista has liked, not that temperature caused it: don't make it the main " +
+      "change unless the tasting notes point to temperature too (tasteNotTemp). The routes line " +
+      "tells how earlier suggestions went when brewed. The profile has no taste: the tasting notes still decide what " +
+      "a brew needs.",
+  },
+  {
+    key: "preferences",
+    label: "Learned preferences",
+    prompts: ["analysis", "suggest"],
+    locked: false,
+    text:
+      "preferences holds what this barista likes and turns down: mine is their own list (n = brews or votes behind " +
+      "a line), workspace the workspace's, and recentVotes their latest likes and dislikes on suggestions (on: what " +
+      "they rated, changes: its values, reason: why). Follow them; where mine and workspace conflict, mine wins. " +
+      "Don't offer again what they turned down (a disliked route, or a line saying they don't want it) unless the " +
+      "tasting notes give a clear reason, and then say so in why. A liked route is a fair place to start from, not " +
+      "a rule. They don't override what the tasting notes say the brew needs.",
+  },
+  {
     key: "end",
     label: "Answer in the JSON schema",
     prompts: ["analysis", "suggest", "label", "review"],
@@ -366,7 +393,8 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
       "described once in equipment and named where used. Ratings are 0.5-5 in half steps; rating and tastingNotes describe the coffee " +
       "tasted on its own. batch is the amount about to be brewed, chosen by the barista for the cup size or the beans " +
       "left: never change it, even when it differs from the recipe's or earlier brews' amounts. Start from the " +
-      "recipe's targets and move only where the brews give a reason. A pour over batch a quarter or more bigger or " +
+      "best-rated comparable brews (else the recipe's targets) and move only where the brews give a reason, " +
+      "choosing levers as the research findings say. A pour over batch a quarter or more bigger or " +
       "smaller than the brews' drains slower or faster: allow for it with one small grind step at most, and not at all " +
       "for a smaller difference.",
   },
@@ -376,15 +404,20 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
     prompts: ["suggest"],
     locked: true,
     text:
-      "reasoning is a concise 1-2 sentence explanation of the values. nextStep is the one thing to do or watch on this " +
-      "brew, in plain words a barista can act on. confidence is low with no comparable brews, vague notes or " +
-      "measurements that look wrong; high only when several comparable brews agree. grindSetting is a number on the " +
-      "named grinder's dial, within its range, from brews on that grinder (sameGrinder) or the recipe's " +
-      "grindStartingPoints for it; null when neither gives one or no grinder is named. grindRpm is for a variable-speed " +
-      "grinder only, else null. tempC is the water temperature. ratio is the brew ratio to use with the batch, as " +
-      "batch.ratio and brewRatio count it ((water + ice) / dose; for espresso shot weight / dose); the batch's amounts " +
-      "follow from it. Keep batch.ratio (or return null) unless the brews show a strength problem, such as a weak or " +
-      "strong cup or a TDS off target, that a ratio change fixes.",
+      "routes are 2-3 different ways to brew it, the main pick first. The second moves a different lever from the " +
+      "main pick, as the brews or the research findings allow (more water against a finer grind for a sour cup); " +
+      "when the main pick keeps a well-rated brew, the second is one change worth exploring. A third only when " +
+      "there's another real choice; never routes that differ by a rounding step. " +
+      "Each route has a label of a few words, why it suits in plain words (at most 140 characters) and findings, " +
+      "the keys of the research findings it follows (the word in parentheses after \"Research finding:\"), empty for " +
+      "none. A route's grindSetting is a number on the named grinder's dial, within its range, from brews on that " +
+      "grinder (sameGrinder) or the recipe's grindStartingPoints for it; null when neither gives one or no grinder is " +
+      "named. grindRpm is for a variable-speed grinder only, else null. tempC is the water temperature. ratio is the " +
+      "brew ratio to use with the batch, as batch.ratio and brewRatio count it ((water + ice) / dose; for espresso " +
+      "shot weight / dose); the batch's amounts follow from it; null keeps batch.ratio. reasoning is a concise 1-2 " +
+      "sentence explanation of the routes. nextStep is the one thing to do or watch on this brew, in plain words a " +
+      "barista can act on. confidence is low with no comparable brews, vague notes or measurements that look wrong; " +
+      "high only when several comparable brews agree.",
   },
   {
     key: "suggestEspresso",

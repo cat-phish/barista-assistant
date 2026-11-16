@@ -6,6 +6,9 @@
 // input has what they talk about.
 import type { AiDetail } from "@barista/shared/aiDetails";
 import { INSTRUCTIONS_INTRO, LOCKED_SECTIONS, NOTE_INTRO, PROMPT_TEXT, type AiPrompt } from "@barista/shared/aiPrompt";
+import { RESEARCH_FINDINGS, RESEARCH_VERSION, type ResearchFinding } from "@barista/shared/research";
+import type { PreferencesInput } from "./preferences.js";
+import { profileLines, type BrewProfile } from "@barista/shared/brewProfile";
 import type { BeanReviewContext } from "./beanReview.js";
 import type { PeriodContext } from "./periodContext.js";
 import type { BrewContext, BrewSummary, GrinderInfo, WaterInfo } from "./context.js";
@@ -14,13 +17,16 @@ import type { BrewerInfo, SuggestContext } from "./suggestContext.js";
 // Stored with each analysis (llm_analyses.prompt_version), so results can be
 // compared across changes (npm run eval). Bump it whenever the input, the
 // prompt or the schema changes.
-export const PROMPT_VERSION = "2026-11-a";
+// It carries the research version (@barista/shared/research) after the dot.
+export const PROMPT_VERSION = `2026-11-g.${RESEARCH_VERSION}`;
 // The chat's own prompt (CHAT_SYSTEM, CHAT_PROPOSALS): replies don't store
 // it, the eval's propose runs do (docs/api/llm-contract.md §9e).
 export const CHAT_PROMPT_VERSION = "2026-11-d";
 // A recap's summary (RECAP_SYSTEM, toPeriodInput, the schema), stored on the
 // recaps row (docs/api/llm-contract.md §9f).
 export const RECAP_PROMPT_VERSION = "2026-11-a";
+// Learning preferences (docs/api/llm-contract.md §9g).
+export const PREFERENCES_PROMPT_VERSION = "2026-11-c";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type LlmInput = { [key: string]: Json };
@@ -140,8 +146,24 @@ export function toLlmInput(context: BrewContext, hidden: ReadonlySet<AiDetail> =
     brew: brewInput(context.brew, hidden),
     drink: hidden.has("drink") ? null : context.drink,
     equipment: equipment([context.brew], hidden),
+    profile: profileInput(context.profile, hidden),
+    preferences: preferencesInput(context.preferences, hidden),
   };
   return (compact(input) ?? {}) as LlmInput;
+}
+
+// Learned preferences (docs/api/llm-contract.md §9, "Learned preferences"):
+// already left out when the workspace keeps them from the AI.
+export function preferencesInput(p: PreferencesInput | null, hidden: ReadonlySet<AiDetail>): PreferencesInput | null {
+  return p && !hidden.has("learnedPreferences") ? p : null;
+}
+
+// The brew profile (docs/api/llm-contract.md §9, "Brew profile") as a few
+// lines, without the parts the workspace keeps from the AI. The roast level
+// was already left out of its grouping when it was worked out.
+export function profileInput(p: BrewProfile | null, hidden: ReadonlySet<AiDetail>): string[] | null {
+  if (!p || hidden.has("brewProfile")) return null;
+  return profileLines({ ...p, best: hidden.has("tds") ? null : p.best, temp: hidden.has("temp") ? null : p.temp });
 }
 
 // The brewer chosen: its controls only for an espresso machine the AI may see.
@@ -175,6 +197,8 @@ export function toSuggestInput(context: SuggestContext, hidden: ReadonlySet<AiDe
     })),
     equipment: equipment([{ grinder: context.grinder, water: null }, ...context.brews], hidden),
     options: optionsInput(context.options, hidden),
+    profile: profileInput(context.profile, hidden),
+    preferences: preferencesInput(context.preferences, hidden),
   };
   return (compact(input) ?? {}) as LlmInput;
 }
@@ -235,6 +259,48 @@ const brewsLike = (input: LlmInput) =>
     .concat((recipe(input).style as Record<string, Json> | undefined)?.brewsLike);
 const methodKinds = (input: LlmInput) => brews(input).map((b) => b.methodKind).concat(recipe(input).methodKind);
 const isCold = (style: Json | undefined) => style === "cold_brew" || style === "kyoto_drip" || style === "rapid_cold";
+
+// Research findings (docs/api/llm-contract.md §9, "Research findings"): each
+// one sent only for the brews it's about and when the input has what it
+// needs. Experiments wait for the research settings (docs/backlog.md item 21).
+const HOT_FILTER = new Set<Json | undefined>(["pour_over", "immersion", "hybrid"]);
+// The brews' own styles; the recipe's only when no brew recorded one.
+const styles = (i: LlmInput): Json[] => {
+  const own = brews(i).map((b) => (b.recipeStyle as Record<string, Json> | undefined)?.brewsLike).filter((s): s is Json => s !== undefined);
+  const fromRecipe = (recipe(i).style as Record<string, Json> | undefined)?.brewsLike;
+  return own.length > 0 || fromRecipe === undefined ? own : [fromRecipe];
+};
+const kinds = (i: LlmInput): Json[] => {
+  const own = brews(i).map((b) => b.methodKind).filter((k): k is Json => k !== undefined);
+  return own.length > 0 || recipe(i).methodKind === undefined ? own : [recipe(i).methodKind!];
+};
+const isFilter = (i: LlmInput) =>
+  styles(i).some((s) => HOT_FILTER.has(s)) || (kinds(i).includes("filter") && !styles(i).some(isCold));
+// A filter brew with no style recorded counts as a pour over, the common case.
+const isPourOver = (i: LlmInput) =>
+  styles(i).some((s) => s === "pour_over" || s === "hybrid") || (kinds(i).includes("filter") && styles(i).length === 0);
+const hasWater = (i: LlmInput) =>
+  Object.values(((i.equipment as Record<string, Json> | undefined)?.waters ?? {}) as Record<string, Json>).some((w) => w && typeof w === "object" && Object.keys(w).length > 0);
+const SCOPE: Record<ResearchFinding["scope"], (i: LlmInput) => boolean> = {
+  any: () => true,
+  filter: isFilter,
+  pourOver: isPourOver,
+  immersion: (i) => styles(i).includes("immersion"),
+  espresso: (i) => kinds(i).includes("espresso"),
+};
+const NEEDS: Record<NonNullable<ResearchFinding["needs"]>, (i: LlmInput) => boolean> = {
+  water: hasWater,
+  roastAge: (i) => i.roastAgeDays !== undefined || anyBrew(i, "roastAgeDays"),
+  roastWeightLoss: (i) => bean(i).roastWeightLossPercent !== undefined,
+};
+export const RESEARCH_PREFIX = "Research finding:";
+function researchSections(kind: "analysis" | "suggest"): PromptSection[] {
+  return RESEARCH_FINDINGS.filter((f) => !f.experiment && f.prompts.includes(kind)).map((f) => ({
+    key: `research.${f.key}`,
+    when: (i: LlmInput) => SCOPE[f.scope](i) && (!f.needs || NEEDS[f.needs](i)),
+    text: `${RESEARCH_PREFIX} (${f.key}) ${f.text}`,
+  }));
+}
 
 export interface PromptSection {
   key: string;
@@ -392,6 +458,17 @@ export const PROMPT_SECTIONS: PromptSection[] = [
     text: PROMPT_TEXT.flashChilled,
   },
   {
+    key: "profile",
+    when: (i) => i.profile !== undefined,
+    text: PROMPT_TEXT.profile,
+  },
+  {
+    key: "preferences",
+    when: (i) => i.preferences !== undefined,
+    text: PROMPT_TEXT.preferences,
+  },
+  ...researchSections("analysis"),
+  {
     key: "end",
     when: () => true,
     text: PROMPT_TEXT.end,
@@ -426,8 +503,9 @@ const ownSection = (key: string) => SUGGEST_OWN.find((s) => s.key === key)!;
 export const SUGGEST_SECTIONS: PromptSection[] = [
   ownSection("suggestCore"),
   ownSection("suggestOutput"),
-  ...PROMPT_SECTIONS.filter((s) => s.key !== "core" && s.key !== "output" && s.key !== "end").map((s) => (s.key === "espresso" ? ownSection("suggestEspresso") : s)),
+  ...PROMPT_SECTIONS.filter((s) => s.key !== "core" && s.key !== "output" && s.key !== "end" && !s.key.startsWith("research.")).map((s) => (s.key === "espresso" ? ownSection("suggestEspresso") : s)),
   ownSection("suggestAlternatives"),
+  ...researchSections("suggest"),
   PROMPT_SECTIONS.find((s) => s.key === "end")!,
 ];
 
@@ -514,3 +592,24 @@ export function buildSystemPrompt(input: LlmInput, sections: PromptSection[] = P
     .map((s) => s.text)
     .join(" ");
 }
+
+// Learning preferences (docs/api/llm-contract.md §9g): fixed, not one of
+// Your AI prompt's sections.
+export const PREFERENCES_SYSTEM =
+  "You keep a home barista's list of coffee preferences up to date, so later advice fits them. The input has " +
+  "current (mine: their list with ids, basis = brews or votes behind a line, source person = they wrote it; " +
+  "proposals: changes already waiting for them; workspace: the household's own lines), what they did since you " +
+  "last looked (votes: likes and dislikes on suggested routes, with what the route changed and their reason; " +
+  "analysisVotes: likes and dislikes on analyses' advice, with their reason; brews: rated brews, with tasting notes, " +
+  "the route they came from and the analysis given), and profile: figures " +
+  "from all their rated brews (n = brews behind a figure). " +
+  "Answer with changes: add a line for a preference the signals show, edit one (by id) they refine or update its " +
+  "basis, remove one (by id) they now contradict. A line is short and concrete, about taste or what they want " +
+  "suggested (\"prefers 19-20% EY on filter\", \"turns down cooler-water ideas\", \"likes a longer bloom on light " +
+  "roasts\"), never about one brew. Learn only what several signals agree on, or one vote whose reason states a " +
+  "rule (\"I never want cooler water\"); basis is how many brews or votes back it. Don't repeat a line already in " +
+  "mine, proposals or workspace. Change a person-written line only when the signals clearly contradict it. Most " +
+  "runs need no change: answer an empty list then. At most 5 changes; why is one short sentence for the barista. " +
+  "dislikeRef is the ref of the dislike a change comes from (it's applied at once, so the advice stops coming back), " +
+  "null for a change from anything else; " +
+  "a dislike usually means a line about what they don't want suggested.";

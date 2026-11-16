@@ -40,13 +40,17 @@ import {
   type DilutionWith,
 } from "@barista/shared/schema";
 import { DEFAULT_LEXICON, LEXICON_FORMAT, LEXICON_VERSION, flavorLabel, resolvePicks, type FlavorLexicon, type FlavorPick } from "@barista/shared/flavors";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { db } from "./db.js";
 import { workspaceZone } from "./zone.js";
 import { config } from "./config.js";
 import { localBrewDate } from "./localDate.js";
 import { effectiveRoastAge, type FreezePeriodLike } from "@barista/shared/roastAge";
+import type { AiDetail } from "@barista/shared/aiDetails";
+import type { BrewProfile } from "@barista/shared/brewProfile";
+import { loadPreferences, type PreferencesInput } from "./preferences.js";
+import { loadBrewProfile } from "./brewProfile.js";
 
 // The grinder a grind setting refers to, with whatever details are recorded
 // (range and step size let the LLM talk in clicks, the usual adjustment sizes
@@ -192,6 +196,10 @@ export interface BrewContext {
   // Only this brew, no earlier ones (docs/api/llm-contract.md §9).
   brew: BrewSummary;
   drink: DrinkInfo | null; // the brew's drink, if any
+  // The barista's running figures (worker/src/brewProfile.ts), from their
+  // brews before this one; null unless asked for, or too few brews.
+  profile: BrewProfile | null;
+  preferences: PreferencesInput | null; // the barista's learned ones (worker/src/preferences.ts)
   ratingScale: "0.5-5";
 }
 
@@ -509,8 +517,29 @@ export async function loadBean(beanId: string): Promise<LoadedBean | null> {
   };
 }
 
+// The workspace's bags of this bean's coffee: the same roaster and name,
+// ignoring case and spaces at the ends (as the brew page's repeat does).
+export async function sameCoffeeIds(beanId: string): Promise<string[]> {
+  const [b] = await db.select({ workspaceId: beans.workspaceId, roasterName: beans.roasterName, beanName: beans.beanName }).from(beans).where(eq(beans.id, beanId));
+  if (!b) return [beanId];
+  const rows = await db
+    .select({ id: beans.id })
+    .from(beans)
+    .where(
+      and(
+        eq(beans.workspaceId, b.workspaceId),
+        sql`LOWER(TRIM(${beans.roasterName})) = ${b.roasterName.trim().toLowerCase()}`,
+        sql`LOWER(TRIM(${beans.beanName})) = ${b.beanName.trim().toLowerCase()}`,
+      ),
+    );
+  return rows.map((x) => x.id);
+}
+
 // Returns null if the brew log was deleted after the job was queued.
-export async function loadBrewContext(brewLogId: string): Promise<BrewContext | null> {
+// profile: what the workspace keeps from the AI, to add the brew profile
+// and learned preferences (an analysis); without it there are none (chat,
+// checks).
+export async function loadBrewContext(brewLogId: string, options: { profile?: ReadonlySet<AiDetail> } = {}): Promise<BrewContext | null> {
   const [target] = await selectBrews().where(eq(brewLogs.id, brewLogId)).limit(1);
   if (!target) return null;
   const brew = withJoins(target);
@@ -518,7 +547,7 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
   const bean = await loadBean(brew.beanId);
   if (!bean) return null; // Bean deletion cascades, so this means the log is going too.
 
-  const [recipe, marks, tools, problems, flavors, servedAs, zone] = await Promise.all([
+  const [recipe, marks, tools, problems, flavors, servedAs, zone, profile, preferences] = await Promise.all([
     recipeAsBrewed(brew),
     marksFor([brew.id]),
     toolsFor([brew.id]),
@@ -526,6 +555,8 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
     flavorsFor([brew.id]),
     drinksServed(brew.drinkId ? [brew.drinkId] : []),
     workspaceZone(brew.workspaceId),
+    options.profile ? profileFor(brew, bean.info.roastLevel, options.profile) : Promise.resolve(null),
+    options.profile ? loadPreferences({ personId: brew.userId, workspaceId: brew.workspaceId }, options.profile) : Promise.resolve(null),
   ]);
 
   return {
@@ -533,8 +564,27 @@ export async function loadBrewContext(brewLogId: string): Promise<BrewContext | 
     recipe: recipe && scaledToBrew(recipe, brew.actualWaterGrams, brew.stepTempShiftC),
     brew: summarize(brew, bean.roastDate, bean.freezes, marks, tools, problems, flavors, servedAs, zone),
     drink: brew.drinkId ? await loadDrink(brew.drinkId, { size: brew.servingSize, unit: brew.servingUnit }) : null,
+    profile,
+    preferences,
     ratingScale: "0.5-5",
   };
+}
+
+// An analysis's profile: the barista's brews before this one, narrowed to
+// its brewer, recipe and bean.
+async function profileFor(brew: BrewRow, roastLevel: string | null, hidden: ReadonlySet<AiDetail>): Promise<BrewProfile | null> {
+  const [brewer] = brew.brewerId ? await db.select({ name: brewers.name, kind: brewers.kind }).from(brewers).where(eq(brewers.id, brew.brewerId)) : [];
+  return loadBrewProfile(
+    {
+      personId: brew.userId,
+      workspaceId: brew.workspaceId,
+      beanId: brew.beanId,
+      focus: { methodKind: brewer?.kind ?? brew.methodKind, brewerId: brew.brewerId, brewer: brewer?.name ?? null, recipeId: brew.recipeId, recipe: brew.recipeName, roastLevel },
+      before: brew.timestamp,
+      exceptBrewId: brew.id,
+    },
+    hidden,
+  );
 }
 
 // The steps and finish window the brew was timed against: with

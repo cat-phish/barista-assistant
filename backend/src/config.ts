@@ -44,7 +44,7 @@ export function registrationMode(): RegistrationMode {
 export const registrationOpen = (): boolean => registrationMode() !== "closed";
 // EMAIL_VERIFICATION=true: people confirm their address by a mailed link, and
 // only a confirmed address can accept a workspace invite (docs/api/auth.md
-// §1d). Off by default, so a server with no mail account works as before.
+// §1e). Off by default, so a server with no mail account works as before.
 export const emailVerificationOn = (): boolean => process.env.EMAIL_VERIFICATION?.trim().toLowerCase() === "true";
 // Where mailed links point; never taken from the request's Host header.
 export const appUrl = (): string | null => (process.env.APP_URL ? process.env.APP_URL.replace(/\/+$/, "") : null);

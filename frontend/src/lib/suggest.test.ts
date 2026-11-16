@@ -1,17 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import { SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, type ParameterSuggestion, type Recipe } from '../api/types';
-import { ALTERNATIVE_LABELS, chooseGrind, gramsAdvice, heldForRatio, rememberedSource, rpmAdvice, SUGGEST_SOURCE_LABELS, sourceNeeds, startingParameters, suggestionFitsGrinder } from './suggest';
+import { ALTERNATIVE_LABELS, chooseGrind, findingTitles, RESEARCH_TITLES, withRoute, gramsAdvice, heldForRatio, rememberedSource, rpmAdvice, SUGGEST_SOURCE_LABELS, sourceNeeds, startingParameters, suggestionFitsGrinder } from './suggest';
 
 const recipe = { targetTempC: 94, grindSettings: [{ grinderId: 'c40', grinderName: 'Comandante C40', setting: 19 }] } as unknown as Recipe;
 const suggestion = (over: Partial<ParameterSuggestion> = {}): ParameterSuggestion => ({
   id: 's', beanId: 'bean', recipeId: 'r', brewerId: 'v60', grinderId: 'c40', source: 'beanRecipe', maxBrews: 5, requestedBy: 'u', note: null, alternativesAsked: [], brewCount: 3, batchDoseGrams: 15, batchWaterGrams: 250, batchIceGrams: null, batchYieldGrams: null, status: 'done', error: null,
-  reasoning: 'The last cup was sour.', nextStep: 'Watch the drawdown.', confidence: 'medium', grindSetting: 22, grindRpm: null, tempC: 95, ratio: 16, alternatives: [],
+  reasoning: 'The last cup was sour.', nextStep: 'Watch the drawdown.', confidence: 'medium', grindSetting: 22, grindRpm: null, tempC: 95, ratio: 16, routes: null, alternatives: [], feedback: null,
   model: 'm', promptVersion: 'v', hasRequest: false, createdAt: '', completedAt: '', ...over,
 });
 
 // The shared list, read as text: the frontend doesn't import @barista/shared.
 const shared = Object.values(import.meta.glob('../../../shared/src/schema.ts', { query: '?raw', import: 'default', eager: true }))[0] as string;
 const sharedSources = JSON.parse((/SUGGEST_SOURCES = (\[[^\]]*\])/.exec(shared)?.[1] ?? '[]')) as string[];
+
+describe('Suggest parameters routes (docs/api/analysis.md §8b)', () => {
+  const research = Object.values(import.meta.glob('../../../shared/src/research.ts', { query: '?raw', import: 'default', eager: true }))[0] as string;
+  it("research titles match the worker's findings", () => {
+    const found = [...research.matchAll(/key: "(\w+)",\s*title: "([^"]+)"/g)].map((m) => [m[1], m[2]]);
+    expect(found.length).toBeGreaterThan(10);
+    expect(Object.entries(RESEARCH_TITLES)).toEqual(found);
+    expect(findingTitles(['sourStrong', 'fromANewerWorker'])).toEqual(['Sour can mean too strong']);
+  });
+  it('one from before routes has its values as the only route; a route chosen takes the place of the first', () => {
+    expect(startingParameters(suggestion())!.routes).toEqual([{ label: 'Suggested', why: '', findings: [], grindSetting: 22, grindRpm: null, tempC: 95, ratio: 16 }]);
+    const route = { label: 'Longer ratio', why: 'Sour and heavy.', findings: ['sourStrong'], grindSetting: 22, grindRpm: null, tempC: 95, ratio: 17 };
+    const p = startingParameters(suggestion({ routes: [{ ...route, label: 'Finer', ratio: 16 }, route] }))!;
+    expect(withRoute(p, 1)).toMatchObject({ id: 's', ratio: 17, grindSetting: 22 });
+    expect(withRoute(p, 5)).toBe(p);
+  });
+});
 
 describe('Suggest parameters sources (docs/api/analysis.md §8b)', () => {
   it("match the worker's, each with a label", () => {

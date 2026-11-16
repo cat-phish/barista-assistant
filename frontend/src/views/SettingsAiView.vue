@@ -28,7 +28,7 @@ const WEB_CONTEXTS: Record<LabelWebContext, string> = { low: 'Low: quickest, che
 const isOwner = computed(() => workspaces.current?.role === 'owner');
 const saving = ref(false);
 const error = ref('');
-type Section = AiGroup | 'auto' | 'suggest' | 'reviews' | 'labels';
+type Section = AiGroup | 'auto' | 'suggest' | 'reviews' | 'labels' | 'preferences';
 const activeSection = ref<Section | null>(null); // the section last changed
 const saved = ref(false);
 const GROUPS = Object.keys(AI_GROUPS) as AiGroup[];
@@ -69,6 +69,20 @@ const periodInvalid = computed(() => {
 });
 function savePeriodMax(): void {
   if (!periodInvalid.value && Number(periodDraft.value) !== periodMax.value) void save({ chatPeriodMaxBrews: Number(periodDraft.value) }, 'labels');
+}
+
+// The workspace's own preferences for the AI (docs/api/auth.md §1d), one a line.
+const MAX_WS_PREFERENCES = 20;
+const MAX_PREFERENCE_TEXT = 200;
+const wsPrefs = computed(() => settings.value.aiPreferences ?? []);
+const wsPrefsDraft = ref('');
+watch(wsPrefs, (lines) => (wsPrefsDraft.value = lines.join('\n')), { immediate: true });
+const wsPrefLines = computed(() => wsPrefsDraft.value.split('\n').map((l) => l.trim()).filter(Boolean));
+const wsPrefsInvalid = computed(() =>
+  wsPrefLines.value.length > MAX_WS_PREFERENCES ? `Up to ${MAX_WS_PREFERENCES} lines.` : wsPrefLines.value.some((l) => l.length > MAX_PREFERENCE_TEXT) ? `Each line can be up to ${MAX_PREFERENCE_TEXT} characters.` : '',
+);
+function saveWsPrefs(): void {
+  if (!wsPrefsInvalid.value && wsPrefLines.value.join('\n') !== wsPrefs.value.join('\n')) void save({ aiPreferences: wsPrefLines.value }, 'preferences');
 }
 
 // Who answers, and the workspace's own key.
@@ -420,11 +434,26 @@ function toggle(key: AiDetail, group: AiGroup, sent: boolean): void {
       <p v-if="error && activeSection === group" class="form-error" role="alert">{{ error }}</p>
       <p v-if="saved && activeSection === group" class="muted small" aria-live="polite">Saved.</p>
     </section>
+    <section class="card stack" aria-labelledby="ai-preferences">
+      <h2 id="ai-preferences">Workspace preferences</h2>
+      <p class="muted">
+        Lines sent with every analysis and suggestion in this workspace, one a line, like “We only have a 1.2 L kettle”. Each person's own
+        learned preferences (Settings → Learned preferences) win where they disagree.
+      </p>
+      <label for="ws-preferences" class="visually-hidden">Workspace preferences, one a line</label>
+      <textarea id="ws-preferences" v-model="wsPrefsDraft" rows="4" :disabled="!isOwner || saving" @blur="saveWsPrefs" />
+      <p v-if="wsPrefsInvalid" class="form-error" role="alert">{{ wsPrefsInvalid }}</p>
+      <p v-if="error && activeSection === 'preferences'" class="form-error" role="alert">{{ error }}</p>
+      <p v-if="saved && activeSection === 'preferences'" class="muted small" aria-live="polite">Saved.</p>
+    </section>
     <p v-if="!isOwner" class="muted small">Only owners can change these.</p>
   </SettingsLayout>
 </template>
 
 <style scoped>
+#ws-preferences {
+  width: 100%;
+}
 .web-hint {
   display: block;
 }

@@ -1,4 +1,4 @@
-// Email verification (docs/api/auth.md §1d). Only when EMAIL_VERIFICATION=true.
+// Email verification (docs/api/auth.md §1e). Only when EMAIL_VERIFICATION=true.
 // A token is 256 random bits; only its SHA-256 is stored, with the address it
 // was sent to. The link carries it in the URL fragment, so it isn't sent to
 // the server in a GET, logged, or passed on in a Referer; the page posts it.

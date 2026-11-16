@@ -269,11 +269,18 @@ describe("suggestions and analysis", () => {
     await db.insert(llmAnalyses).values({ id, brewLogId: log, reasoning: "r", suggestedGrindDelta: "finer", suggestedTempDelta: 0, model: "m", promptVersion: "v" });
     const url = `/api/brew-logs/${log}/analyses/${id}/feedback`;
 
-    expect((await owner.agent.put(url).send({ helpful: true })).body).toEqual({ helpful: true });
+    expect((await owner.agent.put(url).send({ helpful: true })).body).toEqual({ helpful: true, feedbackReason: null });
     const stored = (await owner.agent.get(`/api/workspaces/${ws.id}/brew-logs/${log}`)).body.brewLog.latestAnalysis;
-    expect(stored).toMatchObject({ helpful: true, ratedAt: expect.any(String), model: "m", promptVersion: "v" });
+    expect(stored).toMatchObject({ helpful: true, ratedAt: expect.any(String), model: "m", promptVersion: "v", feedbackBy: owner.id });
+    // A reason, for learned preferences (docs/api/auth.md §1d).
+    expect((await owner.agent.put(url).send({ helpful: false, reason: " Finer never helps " })).body).toEqual({ helpful: false, feedbackReason: "Finer never helps" });
+    expect((await owner.agent.put(url).send({ helpful: false, reason: "x".repeat(301) })).status).toBe(400);
     expect((await owner.agent.put(url).send({ helpful: null })).status).toBe(200);
-    expect((await owner.agent.get(`/api/workspaces/${ws.id}/brew-logs/${log}`)).body.brewLog.latestAnalysis).toMatchObject({ helpful: null, ratedAt: null });
+    expect((await owner.agent.get(`/api/workspaces/${ws.id}/brew-logs/${log}`)).body.brewLog.latestAnalysis).toMatchObject({ helpful: null, ratedAt: null, feedbackBy: null, feedbackReason: null });
+    // Learn about me off: no new ratings.
+    await owner.agent.patch("/api/auth/me/preferences").send({ learnAboutMe: false });
+    expect((await owner.agent.put(url).send({ helpful: true })).status).toBe(409);
+    await owner.agent.patch("/api/auth/me/preferences").send({ learnAboutMe: true });
 
     expect((await owner.agent.put(url).send({ helpful: "yes" })).status).toBe(400);
     expect((await viewer.agent.put(url).send({ helpful: false })).status).toBe(403);

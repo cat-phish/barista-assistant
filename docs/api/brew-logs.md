@@ -71,6 +71,8 @@ created it and can't be changed.
   "analysisDueAt": "2026-10-23T09:15:00.000Z",
   "analysisError": null,
   "batchFinishedAt": null,
+  "suggestionId": "uuid",
+  "suggestionRoute": 1,
   "servingCount": 0,
   "pouredGrams": 0
 }
@@ -120,6 +122,16 @@ in each glass. `batchFinishedAt`, `servingCount` and `pouredGrams`
 are a long cold brew batch's (§6c): when it was marked finished (else
 `null`), how many servings were logged from it, and the concentrate they
 took in grams; `0` for any other brew.
+
+`suggestionId` and `suggestionRoute` are the Suggest parameters result and
+route (its index in `routes`) whose values the brew used (**Use these
+values**, `docs/api/analysis.md` §8b), so its rating tells how that route
+went; `null` when none was used. Sent on create or update, both together,
+both set or both `null`: the suggestion must be one of this workspace's
+beans', `done`, and have that route (one from before routes has only `0`),
+else `400`. Deleting the suggestion clears `suggestionId`
+(`suggestionRoute` is then meaningless). Not sent to the AI yet: learned
+preferences (`docs/backlog.md` items 19–20) will use it.
 
 ## `GET /api/workspaces/:workspaceId/brew-logs`
 

@@ -178,7 +178,7 @@ queue:
 
    | Section | Included when | What it says |
    | --- | --- | --- |
-   | `core` | always | expert barista; judge this one brew against its recipe and the bean; missing = not recorded; equipment by name; change one or two levers; judge the time against the brew's own finish window |
+   | `core` | always | expert barista; judge this one brew from its tasting (the recipe's targets are where it started, not a number to pull it back to); missing = not recorded; equipment by name; change one or two levers, chosen as the research findings say; judge the time against the brew's own finish window |
    | `output` | always | what `reasoning`, `nextStep`, `confidence` and `suggestedRpmDelta` should hold; dose and shot weight null except for espresso |
    | `drink` | a drink or drink tasting is sent | drink notes are weaker evidence of extraction |
    | `style` | a recipe style is sent | judge against `brewsLike` (soup shot, immersion…) |
@@ -187,15 +187,15 @@ queue:
    | `roastType` | the bean has `roastType` | espresso roast as filter may need a different approach |
    | `decafBlend` | decaf or blend | extracts differently |
    | `flavorProfile` | the bean has one | the cup to aim for |
-   | `weightLoss` | `roastWeightLossPercent` | how developed the roast is (11–13% light, 14–16% medium, 17%+ dark); more developed extracts more easily (coarser, cooler); trusted over the roast level |
+   | `weightLoss` | `roastWeightLossPercent` | how developed the roast is (11–13% light, 14–16% medium, 17%+ dark); more developed is more porous and extracts faster (coarser, cooler); trusted over the roast level |
    | `stepTimes` | the recipe has `stepTimeScaling` | step times and the finish window are already scaled to the batch; a bigger batch taking longer is planned, not a grind problem |
    | `stepTemps` | a step's temp differs from the recipe's `targetTempC`, or `stepTempsFollowBrew` is on | how the recipe's, the brew's and each step's temps relate; step temps follow the water temp by the same degrees only with `stepTempsFollowBrew`, and `suggestedTempDelta` / `tempC` are for the water temp; a single step's temp problem goes in `nextStep` |
    | `heldSteps` | a brew's `marks` include a `step_hold` | the barista held that step because it ran slow; a `step_end` in a hold ended it; later steps moved but the finish window didn't, so a held brew can finish late; say where it ran slow and what that points to |
-   | `altitude` | `altitudeMasl` | denser beans |
+   | `altitude` | `altitudeMasl` | context only: no study ties it to temperature or grind |
    | `variety` | `varieties` or `species` | the cultivar's typical character (Geisha delicate, SL28/SL34 dense and bright); robusta or liberica in a blend extract more easily and add body and bitterness; context, not a rule |
    | `origin` | origin area, country or region | context, not a rule |
    | `tds` | a brew has `tdsPercent` | judge strength and extraction from TDS and EY |
-   | `water` | a water with figures | hardness and alkalinity effects |
+   | `water` | a water with figures | the units; only the figures given are known (alkalinity is the `alkalinity` finding's) |
    | `prepTools` | the brew lists prep tools | a tool not listed may still have been used |
    | `problems` | a brew lists problems | the clearest clues, explained first |
    | `flavors` | a brew has wheel flavors | the wheel can be the workspace's own; a place reads broadest group first and a flavor belongs to every group in it; go by meaning, not group names; read with the tasting notes; a broader pick is less specific, not weaker; sour, fermented or green picks often mean under-extraction, harsh, ashy or bitter ones over-extraction or the roast, off flavors (papery, musty) the beans or filter; compare with `flavorProfile` |
@@ -205,6 +205,7 @@ queue:
    | `espresso` | an `espresso` method | flow, windows, machine, step size; dose and shot weight as levers, one at a time |
    | `cold` | a style brews like `cold_brew`, `kyoto_drip` or `rapid_cold` | steep windows, dilution, concentrate TDS, levers |
    | `concentrate` | a brew or the recipe that isn't a cold style has a `dilutionRatio` | TDS and EY are the concentrate's; judge strength as served, over ice as an iced drink; dilution or ratio before grind |
+   | `research.<key>` | the finding applies (see below) | one research finding each, after `Research finding:` and its key in parentheses (`(sourStrong)`), which a suggestion's routes cite |
    | `instructions` | the barista has their own instructions | `INSTRUCTIONS_INTRO` and their text |
    | `note` | a one-off note came with the request | `NOTE_INTRO` and the note |
    | `end` | always | respond strictly matching the schema |
@@ -217,6 +218,35 @@ queue:
    then the request's `note`, before `end`. The locked sections (`output`,
    `suggestOutput`, `end`) are never replaced. A customized prompt's result
    is saved with `promptVersion` `PROMPT_VERSION + "+custom"`.
+
+   **Research findings** (`RESEARCH_FINDINGS` in `@barista/shared/research`,
+   from `docs/research/README.md` "Synthesis"): each is one rule with its
+   levers, evidence (`peerReviewed`, `controlledTest`, `expert`) and source
+   file. A finding is sent when its `scope` fits the brew and the input has
+   what it `needs`:
+
+   | Scope | Brews |
+   | --- | --- |
+   | `any` | all |
+   | `filter` | a `pour_over`, `immersion` or `hybrid` style, or a `filter` method that isn't a cold style |
+   | `pourOver` | a `pour_over` or `hybrid` style, or a `filter` method with no style |
+   | `immersion` | an `immersion` style |
+   | `espresso` | an `espresso` method |
+
+   The brews' own style and method count; the recipe's only when no brew
+   has one (so an immersion brew of a pour over recipe is an immersion
+   brew). `needs`: `water` (a water with figures), `roastAge`
+   (`roastAgeDays`), `roastWeightLoss`. Today's findings: `leverOrder`
+   (ratio for strength, grind/flow/agitation for extraction, temperature
+   last), `tasteNotTemp`, `sourStrong`, `ownPattern` (no universal ideal;
+   a 4.5+ brew without a named fault is kept), `kettleNotSlurry`,
+   `roastTemp` (filter); `immersionRatio`; `finesFlow`, `bloom`
+   (pourOver); `espressoFinest`; `coldBeansFiner`, `alkalinity`,
+   `degassing`, `naturalsWeightLoss` (any). **Experiments** (`coldBloom`,
+   `firstPours`) are never sent yet; they wait for the research settings
+   (`docs/backlog.md` item 21). The findings can't be overridden in Your AI
+   prompt. `PROMPT_VERSION` carries `RESEARCH_VERSION` after a dot
+   (`2026-11-d.r2`), bumped whenever a finding changes.
 
    Tests check which sections appear for given inputs and snapshot the
    assembled prompt for a fixed brew (`worker/tests/llm.test.ts`), so a
@@ -323,7 +353,12 @@ keys apply to suggestions (§9b), bean reviews (§9d) and recap summaries
 - **History:** `unratedHistory` leaves earlier brews without a rating out
   of what "Suggest parameters" sends (an analysis sends no earlier brews);
   `analyzeUnrated` stops unrated brews being analyzed:
-  `POST /analyze` is a `409` (§8), and a job already queued is skipped.
+  `POST /analyze` is a `409` (§8), and a job already queued is skipped;
+  `brewProfile` leaves out the brew profile (below). With the profile on,
+  `tds` still drops its TDS/EY line, `temp` its temperature line, and
+  `roastLevel` its grouping by roast level.
+  `learnedPreferences` leaves out learned preferences and recent likes and
+  dislikes (below), and stops the learning job (§9g) in that workspace.
 
 Always sent: the bean and roaster names, roast date and age, dose, water,
 ice (flash chilled), yield, a cold batch's jar water (`jarWaterGrams`), time, grind setting, ratio, rating, tasting notes and
@@ -356,6 +391,75 @@ per person) or `AI_DAILY_WORKSPACE_UNITS` (default 1000, ten people's worth): `4
 `code: "ai_limit"`, and the refused call costs nothing. Chat has its own
 per-message cap (`dailyMessages`, §9e). Counters live in Redis; if Redis can't
 be reached the request goes through.
+
+## Brew profile
+
+Running figures worked out from the barista's own rated brews, so the AI
+gets in a few lines what it would otherwise have to work out (badly) from
+the handful of brews it's sent (docs/backlog.md item 19). Worked out each
+time a job runs (`worker/src/brewProfile.ts`, from the pure
+`buildBrewProfile` in `@barista/shared/brewProfile`, which Insights can
+share); nothing is stored, so it's always current and needs no backup.
+
+- **Whose:** the brews logged by the barista (an analysis) or the person
+  who asked (a suggestion), in this workspace, with a coffee rating, not
+  still steeping; the latest 500. An analysis counts only the brews before
+  the one analyzed. Nobody (a deleted account) means no profile.
+- **What,** each part only when enough brews back it (4 in all, and for a
+  rating-by line two buckets of at least 2 brews each; a temperature or
+  roast-age week with one brew is left out, eval p6):
+  - the number of rated brews and their mean rating;
+  - the TDS and EY range of this method's brews rated 4.5 or more (all of
+    them, or the middle 80% once there are 8);
+  - the rating by kettle temperature (whole °C) on this brewer, for this
+    roast level when that alone is enough, else any roast;
+  - the median total time on this recipe, by dose (whole grams);
+  - the rating by effective roast age, in weeks, for this coffee (any
+    bag);
+  - brews made from suggested routes (§9b, `suggestionRoute`): how many,
+    their mean rating against the barista's other brews since the first,
+    and the latest five route labels with their ratings.
+- **Sent** as `profile`, an array of short lines (`profileLines`), with
+  `n=` the brews behind each figure, in the analysis and Suggest
+  parameters input alike. The `profile` prompt section says how to use
+  it: the barista's patterns from it, weighed by `n`, with the tasting
+  notes still deciding what a brew needs, and a rating gap between
+  temperatures not, on its own, a reason to change the temperature.
+
+```json
+"profile": [
+  "Rated brews by this barista: 42, mean rating 3.9.",
+  "Their filter brews rated 4.5+ (n=9): TDS 1.32-1.41%, EY 19.6-21.2%.",
+  "Rating by kettle temperature on V60, light roasts: 92 °C 3.6 (n=4); 94 °C 4.2 (n=6); 96 °C 4 (n=3).",
+  "Usual total time on House V60, by dose: 15 g 3:05 (n=8); 20 g 3:40 (n=3).",
+  "Rating by roast age, this coffee: 7-13 d 3.5 (n=3); 14-20 d 4.3 (n=5).",
+  "Brews made from earlier suggested routes: n=6, mean rating 4.1 (their other brews since: 3.7). Latest: \"More water\" 4.5; \"A touch finer\" 3.5."
+]
+```
+
+Not in it yet: a taste summary of older notes.
+
+## Learned preferences
+
+What this barista likes and turns down (docs/backlog.md item 20,
+docs/api/auth.md §1d), sent with every analysis and suggestion as
+`preferences` (`worker/src/preferences.ts`), unless `learnedPreferences` is
+hidden. With the person's Learn about me off (docs/api/auth.md §1d) only
+`workspace` goes:
+
+- `mine`: the person's items (the barista's for an analysis, the asker's
+  for a suggestion), as `"text (n=basis)"`, or just the text for one they
+  wrote;
+- `workspace`: the workspace's own lines (`WorkspaceSettings.aiPreferences`);
+- `recentVotes` (suggestions only): their latest 5 likes and dislikes on
+  suggestions in this workspace, newest first, as `{ vote, on, reason }`,
+  `on` the route's label (or "the whole suggestion: <summary>"), so a
+  dislike counts at once, before the list catches up.
+
+The `preferences` section says to follow them, the person's over the
+workspace's where they conflict, and not to offer again what they turned
+down unless the tasting notes give a clear reason, saying so. An empty
+`preferences` (nothing learned, no votes) isn't sent.
 
 ## 9b. Suggest parameters
 
@@ -393,26 +497,30 @@ deleted with its bean) is skipped.
    described once in `equipment`. What the workspace keeps from the AI
    (`aiHidden`) is left out the same way, other beans' details too.
 3. **Prompt** (`SUGGEST_SECTIONS`): its own opening and output sections,
-   then the analysis's topic sections (drink … flashChilled), with
-   `suggestEspresso` in place of `espresso` (no change fields here), the
+   then the analysis's topic sections (drink … flashChilled, then `profile` and `preferences`), with
+   `suggestEspresso` in place of `espresso` (no change fields here), then
+   `suggestAlternatives`, the research findings (step 3 above), the
    asker's `instructions` and `note` (step 3 above, `requestedBy`), and
    `end`:
 
    | Section | Included when | What it says |
    | --- | --- | --- |
-   | `suggestCore` | always | values for a brew about to be made; what each source picks (bag: this exact bag; bean: every bag of the coffee); the batch is the barista's, never changed, and a different batch size drains differently (grind); `sameBag`/`sameBean`/`sameRecipe`/`sameGrinder`, and an earlier analysis judged by the brew after it; another bag of this coffee carries over, allowing for its roast age; another bean's brews show the recipe, brewer or grinder, not this bean; start from the recipe's targets |
-   | `suggestOutput` | always | what each field holds; grind on the named grinder's dial from brews on it or its starting point, else null; a ratio for the batch, kept (or null) unless the brews show a strength problem |
+   | `suggestCore` | always | values for a brew about to be made; what each source picks (bag: this exact bag; bean: every bag of the coffee); the batch is the barista's, never changed, and a different batch size drains differently (grind); `sameBag`/`sameBean`/`sameRecipe`/`sameGrinder`, and an earlier analysis judged by the brew after it; another bag of this coffee carries over, allowing for its roast age; another bean's brews show the recipe, brewer or grinder, not this bean; start from the best-rated comparable brews (else the recipe's targets), levers as the research findings say |
+   | `suggestOutput` | always | what each field holds: 2-3 routes, the main pick first; the second moves a different lever (after a kept well-rated brew, one change worth exploring), a third only for another real choice (never a rounding step), each with a label, why, the finding keys it follows and its values; grind on the named grinder's dial from brews on it or its starting point, else null; a ratio for the batch, null to keep it |
    | `suggestEspresso` | the recipe or a brew is espresso | windows and ratio as targets; the ratio sets the shot weight for the batch's dose; pre-infusion and profile in `nextStep` |
    | `suggestAlternatives` | `options` are sent | what each kind of option is; at most one of each, only with a reason (style or ratio for the roast or flavor profile, a brewer or bean that suits better); `option` is its ref, `why` in plain words; empty when nothing stands out; the values stay for this setup |
 
 4. **Schema** (`PARAMETER_SUGGESTION_JSON_SCHEMA`, `worker/src/llm.ts`,
    strict): `reasoning`, `nextStep`, `confidence` (low / medium / high),
-   `grindSetting` (number or null), `grindRpm` (integer or null), `tempC`
-   (number or null), `ratio` (number or null) and `alternatives` (an array
-   of `{ kind, option, why }`, empty when none), all required.
+   `routes` (1–3 of `{ label, why, findings, grindSetting, grindRpm, tempC,
+   ratio }`: a few words, at most 140 characters, research finding keys,
+   number or null, integer or null, number or null, number or null) and
+   `alternatives` (an array of `{ kind, option, why }`, empty when none),
+   all required.
    - Checked after parsing: the grind rounded to 0.01 and 0–10000, the
      temperature to 0.1 °C and 0–100, the ratio to 0.01 and above 0, the speed
-     an integer 50–5000; anything else fails the attempt.
+     an integer 50–5000, at least one route (more than 3 are cut, a long
+     label or why is cut); anything else fails the attempt.
    - What doesn't apply is set to `null` (`onlySuggestionsThatApply`): the
      grind without a grinder or off its dial (`settingMin`–`settingMax`),
      the speed unless the grinder is variable speed (and `rpm` is sent),
@@ -421,7 +529,12 @@ deleted with its bean) is skipped.
      batch's own. Alternatives keep only those naming an option sent, of
      its kind, the first of each kind, saved as `{ kind, id, name, why }`
      (`alternativesThatApply`).
-5. The worker saves the values with `status: "done"`, `brewCount`, `model`,
+   - Each route's values are checked that way; its `findings` keep only
+     keys of findings a suggest prompt can hold (no experiments, no
+     unknown keys), once each; a route left with the same values as an
+     earlier one is dropped. The first route's values are also saved as the
+     suggestion's own `grindSetting`, `grindRpm`, `tempC` and `ratio`.
+5. The worker saves the values and `routes` with `status: "done"`, `brewCount`, `model`,
    `promptVersion`, what was sent (`request`, `analysis.md` §8c) and
    `completedAt`.
 
@@ -694,6 +807,45 @@ period's own fields (`filters` included), the figures and each brew's
 `day`, `bean` and `brewer` are always sent, everything else goes with its key as in the
 analysis. Notes on beans, people's names and who made each brew aren't
 sent.
+
+## 9g. Learning preferences
+
+A small job (`ai-preferences` queue, `worker/src/learnPreferences.ts`) that
+keeps a person's learned preferences (docs/api/auth.md §1d) up to date
+from what they did in one workspace.
+
+- **When:** with `learn: "auto"`, 20 seconds after a like or dislike
+  (§8b "Feedback") and after each analysis of their brew (§8); always on
+  **Update now**. One job per person and workspace at a time (job id
+  `prefs-<userId>-<workspaceId>`), so several votes in a row make one call.
+  Skipped when `learnedPreferences` is hidden, the person's Learn about me
+  is off, or nothing is new. Tokens used go into `usage`.
+- **Sent** (`PREFERENCES_PROMPT_VERSION`), signals since `through` for that
+  workspace (or the last 30 days the first time), with the workspace's
+  hidden details left out as in the analysis:
+  - `votes`: up to 10 likes and dislikes (each dislike with a `ref`), with the suggestion's summary,
+    the route's label and changes, and the reason;
+  - `analysisVotes`: up to 10 👍/👎 they gave analyses (`feedbackBy`), with
+    the advice (next step) and the reason;
+  - `brews`: up to 10 of their rated brews made or analyzed since, with
+    rating, method, recipe, dose, water, temperature, grind, time, tasting
+    notes, the route it came from and the analysis's summary;
+  - `profile`: the brew profile lines (as above) for their latest brew;
+  - `current`: their items with ids, the pending proposals, and the
+    workspace's lines (so they aren't repeated).
+- **Answer:** `{ changes: [{ change: "add" | "edit" | "remove", id, text,
+  basis, why, dislikeRef }] }`, at most 5, `id` an item's for an edit or
+  removal. Each dislike sent carries a `ref` (`d1`, `d2`, …); a change
+  citing one as `dislikeRef` applies even with `propose` (the dislike is
+  the accepting), but only when that ref is a dislike sent in this run
+  (`checkedDislikes`): the AI's word alone never skips the person. A
+  change that names no item, or adds what's already there, is dropped.
+  With `apply: "propose"` they become proposals (replacing an older
+  proposal for the same item); with `"apply"` they apply, except to items
+  the person wrote. The list is capped at 20 (an add past that is a
+  proposal) and `through` moves to the job's start.
+- Failures are retried and then dropped: nothing is shown, the next signal
+  tries again.
 
 ## Evaluating changes
 

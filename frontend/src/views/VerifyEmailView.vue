@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// The page a verification mail links to (docs/api/auth.md §1d). The token is
+// The page a verification mail links to (docs/api/auth.md §1e). The token is
 // in the URL fragment, so it never reaches a server log or a Referer; it's
 // posted from here, then removed from the address bar.
 import { onMounted, ref } from 'vue';

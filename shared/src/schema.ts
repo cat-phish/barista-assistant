@@ -19,6 +19,7 @@ import {
 import type { AiDetail } from "./aiDetails.js";
 import { DEFAULT_BEAN_CARRY, type BeanCarryKey } from "./beanCarry.js";
 import type { AiPrompt } from "./aiPrompt.js";
+import type { AiPreferences } from "./aiPreferences.js";
 import type { LexiconFlavor } from "./flavors.js";
 import type { RecipeCopy } from "./recipeCopy.js";
 
@@ -93,6 +94,9 @@ export interface UserPreferences {
   timeZone: string | null; // IANA name, from the person's device; null = the server's BREW_TIMEZONE
   recapAi: RecapAiMode;
   recapSeen: Partial<Record<"weekly" | "monthly", string>>; // the period start last opened or dismissed
+  // Learn about me (docs/api/auth.md §1d): off, nothing is learned, the
+  // feedback buttons are hidden and their learned list and votes aren't sent.
+  learnAboutMe: boolean;
 }
 export const DEFAULT_PREFERENCES: UserPreferences = {
   volumeUnit: "fl_oz",
@@ -122,6 +126,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   timeZone: null,
   recapAi: "manual",
   recapSeen: {},
+  learnAboutMe: true,
 };
 
 // Per workspace, owners edit (docs/api/workspaces.md §2 settings).
@@ -149,6 +154,10 @@ export interface WorkspaceSettings {
   // sees"): AI_DETAILS keys (aiDetails.ts). The worker leaves them out of the
   // analysis input and its prompt; "analyzeUnrated" refuses unrated brews.
   aiHidden: AiDetail[];
+  // The workspace's own preferences for the AI (docs/api/auth.md §1d),
+  // owners' lines sent with every analysis and suggestion; a person's
+  // learned ones win where they conflict.
+  aiPreferences: string[];
   // Auto-analyze (docs/api/analysis.md §8): analyze each rated brew this many
   // minutes after it's saved (an unrated one once it's first rated), at most
   // autoAnalyzeDailyCap a day (null: no cap). Manual requests aren't capped.
@@ -232,12 +241,42 @@ export interface SuggestedAlternative {
   name: string;
   why: string;
 }
+// One way to brew it (docs/api/analysis.md §8b): its values for the brew
+// being set up, the research findings it follows (@barista/shared/research
+// keys) and why. A suggestion has 1-3; the first is the main pick.
+export const MAX_SUGGESTED_ROUTES = 3;
+export interface SuggestedRoute {
+  label: string;
+  why: string;
+  findings: string[];
+  grindSetting: number | null;
+  grindRpm: number | null;
+  tempC: number | null;
+  ratio: number | null;
+}
+// Whether the person who asked liked the advice (docs/api/analysis.md §8b,
+// "Feedback"), on the whole suggestion or one route, with an optional
+// reason. Separate from the brew's rating: it can come before any brew.
+export const SUGGESTION_VOTES = ["up", "down"] as const;
+export type SuggestionVoteKind = (typeof SUGGESTION_VOTES)[number];
+export const MAX_FEEDBACK_REASON = 300;
+export interface SuggestionVote {
+  vote: SuggestionVoteKind;
+  reason: string | null;
+}
+// routes[i] is route i's vote (null: none); shorter than routes when the
+// last ones have none.
+export interface SuggestionFeedback {
+  suggestion: SuggestionVote | null;
+  routes: (SuggestionVote | null)[];
+}
 export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   recipeRoastLevel: "light",
   roastScale: "names",
   ratingStep: "half",
   hiddenFields: [],
   aiHidden: [],
+  aiPreferences: [],
   autoAnalyze: false,
   autoAnalyzeDelayMinutes: 10,
   autoAnalyzeDailyCap: null,
@@ -304,18 +343,20 @@ export const users = mysqlTable("users", {
   // texts, used for their brews' analyses and their suggestions. null = the
   // defaults. Kept apart from preferences, which go with every response.
   aiPrompt: jsonValue<AiPrompt>("ai_prompt"),
+  // Learned preferences (docs/api/auth.md §1d); null = none, the defaults.
+  aiPreferences: jsonValue<AiPreferences>("ai_preferences"),
   chatLimits: jsonValue<OwnChatLimits>("chat_limits"), // docs/api/chat.md §12; null = none of their own
   // A server admin (docs/api/server.md §10). Only granted on the server
   // (`npm run admin -- grant <email>`), never through the API, so it can't
   // be claimed by registering an address.
   isAdmin: boolean("is_admin").default(false).notNull(),
-  // When they proved they read mail sent to `email` (docs/api/auth.md §1d);
+  // When they proved they read mail sent to `email` (docs/api/auth.md §1e);
   // null = not verified. Only matters when the server has email verification on.
   emailVerifiedAt: timestamp("email_verified_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// One-time links mailed to a person (docs/api/auth.md §1d). Only the SHA-256
+// One-time links mailed to a person (docs/api/auth.md §1e). Only the SHA-256
 // of the token is kept, with the address it was sent to. Not in backups.
 export const emailTokens = mysqlTable(
   "email_tokens",
@@ -1675,6 +1716,12 @@ export const brewLogs = mysqlTable("brew_logs", {
   // A long cold brew batch marked empty (docs/api/brew-servings.md §6c): no
   // more servings are taken from it. Null = still in stock (or not a batch).
   batchFinishedAt: timestamp("batch_finished_at"),
+  // The Suggest parameters result and route whose values this brew used
+  // (Use these values; docs/api/brew-logs.md §6), so its rating tells how
+  // that route went. Route is the index in the suggestion's routes. Null:
+  // none used, or the suggestion is gone.
+  suggestionId: varchar("suggestion_id", { length: 36 }).references(() => parameterSuggestions.id, { onDelete: "set null" }),
+  suggestionRoute: int("suggestion_route"),
 });
 
 // 8b. Brew Log Marks (Tapped Events During a Brew)
@@ -2028,6 +2075,10 @@ export const llmAnalyses = mysqlTable("llm_analyses", {
   // Was it useful? Set by the brew's people (docs/api/analysis.md §8).
   helpful: boolean("helpful"),
   ratedAt: timestamp("rated_at"),
+  // Who gave the 👍/👎 and why (docs/api/analysis.md §8, migration 0125),
+  // for learned preferences (docs/api/llm-contract.md §9g).
+  feedbackBy: varchar("feedback_by", { length: 36 }).references(() => users.id, { onDelete: "set null" }),
+  feedbackReason: varchar("feedback_reason", { length: 300 }),
   // Made by auto-analyze (docs/api/analysis.md §8), not asked for: these
   // count toward the workspace's daily cap.
   auto: boolean("auto").notNull().default(false),
@@ -2078,8 +2129,14 @@ export const parameterSuggestions = mysqlTable("parameter_suggestions", {
   tempC: decimal("temp_c", { precision: 4, scale: 1, mode: "number" }),
   // Filter: (water + ice) / dose; espresso: shot weight / dose.
   ratio: decimal("ratio", { precision: 5, scale: 2, mode: "number" }),
+  // The ways to brew it, the first matching the values above; null on
+  // suggestions from before routes (their values are the only route).
+  routes: jsonValue<SuggestedRoute[]>("routes"),
   // What else to try, of the kinds asked: at most one of each; [] = none.
   alternatives: jsonValue<SuggestedAlternative[]>("alternatives"),
+  // Likes and dislikes from the person who asked; null = none given.
+  feedback: jsonValue<SuggestionFeedback>("feedback"),
+  feedbackAt: timestamp("feedback_at"), // when feedback last changed
   model: varchar("model", { length: 100 }),
   promptVersion: varchar("prompt_version", { length: 30 }),
   request: jsonValue<AiRequest>("request"), // what was sent; null until done

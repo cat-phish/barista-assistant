@@ -11,6 +11,7 @@ import { recipesApi } from '../api/recipes';
 import { MAX_SUGGEST_BREWS, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, type AlternativeKind, type Bean, type BrewLog, type Recipe, type BrewerMethod, type SuggestionBatch, type SuggestionRequest, type SuggestSource, type SuggestedAlternative } from '../api/types';
 import AnalysisCard from '../components/AnalysisCard.vue';
 import AiNoteField from '../components/AiNoteField.vue';
+import FeedbackDialog, { type FeedbackPart } from '../components/FeedbackDialog.vue';
 import AiRequestDialog from '../components/AiRequestDialog.vue';
 import RepeatBrewPicker from '../components/RepeatBrewPicker.vue';
 import FridgeCard from '../components/FridgeCard.vue';
@@ -73,7 +74,7 @@ import { grinderRetentionText } from '../lib/grinderRetention';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
 import { batchSuffix, beanLabel as pickerLabel, inBrewPicker, restReady, restingUntil } from '../lib/beans';
 import { formatDay, formatDoseLine, formatGrams, formatGrind, formatListDay, formatTime, formatWhen } from '../lib/format';
-import { ALTERNATIVE_LABELS, CONFIDENCE_LABELS, chooseGrind, heldForRatio, rememberedSource, SUGGEST_SOURCE_LABELS, sourceNeeds, startingParameters, suggestionFitsGrinder, type GrindSource, type StartingParameters } from '../lib/suggest';
+import { ALTERNATIVE_LABELS, CONFIDENCE_LABELS, chooseGrind, findingTitles, heldForRatio, rememberedSource, SUGGEST_SOURCE_LABELS, sourceNeeds, startingParameters, suggestionFitsGrinder, withRoute, type GrindSource, type RouteValues, type StartingParameters } from '../lib/suggest';
 import { useParameterSuggestion } from '../composables/useParameterSuggestion';
 import { useAiAvailable } from '../composables/useAiAvailable';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -211,6 +212,15 @@ const recipe = computed(() => recipes.value.find((r) => r.id === recipeId.value)
 // the earlier brews picked (which, and how many), filled in when they come.
 const suggester = useParameterSuggestion();
 const suggestion = computed(() => (suggester.suggestion.value ? startingParameters(suggester.suggestion.value) : null));
+// A route's values go into the brew only once its "Use these values" is
+// tapped; the brew then records the suggestion and route it came from.
+const usedRoute = ref<number | null>(null);
+const suggestionUsed = computed(() => usedRoute.value !== null);
+const usedSuggestion = computed(() => (suggestion.value && usedRoute.value !== null ? withRoute(suggestion.value, usedRoute.value) : null));
+function suggestionLink(): { suggestionId: string; suggestionRoute: number } | Record<string, never> {
+  const p = usedSuggestion.value;
+  return p && usedRoute.value !== null ? { suggestionId: p.id, suggestionRoute: usedRoute.value } : {};
+}
 
 // Espresso recipes record dose → shot weight instead of water (docs/api/brew-logs.md §6).
 const espresso = computed(() => recipe.value?.brewer.kind === 'espresso');
@@ -650,11 +660,11 @@ async function refreshGrind(): Promise<void> {
     grindSource.value = 'proposal';
     return;
   }
-  const choice = chooseGrind({ lastSetting: remembering('grind') ? (last?.grindSetting ?? null) : null, suggestion: suggestion.value, grinderId, recipe: recipe.value });
+  const choice = chooseGrind({ lastSetting: remembering('grind') ? (last?.grindSetting ?? null) : null, suggestion: usedSuggestion.value, grinderId, recipe: recipe.value });
   draft.grind = choice.value;
   grindSource.value = choice.source;
   // The speed goes with the setting it came with (variable-speed grinders).
-  const rpm = choice.source === 'last' ? last?.grindRpm : choice.source === 'suggestion' ? suggestion.value?.grindRpm : null;
+  const rpm = choice.source === 'last' ? last?.grindRpm : choice.source === 'suggestion' ? usedSuggestion.value?.grindRpm : null;
   draft.rpm = rpm != null ? String(rpm) : '';
 }
 watch([recipeId, () => draft.grinderId], () => {
@@ -768,12 +778,68 @@ async function loadSent() {
   const s = suggester.suggestion.value;
   return ws && s ? (await suggestionsApi.sent(ws, s.id)).request : null;
 }
+// A route's grind and temperature, shown before they're used.
+function routeValues(p: RouteValues): string {
+  const parts: string[] = [];
+  if (p.grindSetting !== null) parts.push(`Grind ${formatGrind(p.grindSetting)}${p.grindRpm !== null ? ` at ${p.grindRpm} rpm` : ''}`);
+  if (p.tempC !== null) parts.push(formatTemp(p.tempC, temperatureUnit.value));
+  return parts.join(' · ');
+}
 // What the suggested ratio kept, for the card ("your 300 g of water").
 const ratioKept = ref('');
-watch(suggestion, (p) => {
-  if (p) applySuggestion(p);
-  else ratioKept.value = '';
+// A new suggestion (or none) waits to be used; filling the brew in is a tap.
+// By id: a vote saved on this one returns it again, and keeps the route used.
+watch(() => suggestion.value?.id, () => {
+  usedRoute.value = null;
+  ratioKept.value = '';
 });
+// Likes and dislikes (§8b Feedback), in a dialog behind a small link, with
+// Learn about me on (docs/api/auth.md §1d). Each saved vote returns the
+// suggestion with it.
+const canFeedback = computed(() => !!suggester.suggestion.value && !!workspaces.current && prefs.value.learnAboutMe);
+const feedbackOpen = ref(false);
+const feedbackSaving = ref(false);
+const feedbackError = ref('');
+const feedbackParts = computed((): FeedbackPart[] => {
+  const s = suggester.suggestion.value;
+  if (!s) return [];
+  const routes = s.routes ?? [];
+  const whole: FeedbackPart = { key: 'all', label: routes.length > 1 ? 'The suggestion as a whole' : 'This suggestion', vote: s.feedback?.suggestion?.vote ?? null, reason: s.feedback?.suggestion?.reason ?? '' };
+  if (routes.length < 2) return [whole];
+  return [whole, ...routes.map((r, i): FeedbackPart => ({ key: String(i), label: r.label, vote: s.feedback?.routes[i]?.vote ?? null, reason: s.feedback?.routes[i]?.reason ?? '' }))];
+});
+const feedbackMark = computed(() => {
+  const f = suggester.suggestion.value?.feedback;
+  const votes = [f?.suggestion, ...(f?.routes ?? [])].filter((v) => v);
+  return votes.length ? votes.map((v) => (v!.vote === 'up' ? '👍' : '👎')).join('') : '';
+});
+async function saveFeedback(parts: FeedbackPart[]): Promise<void> {
+  const s = suggester.suggestion.value;
+  const ws = workspaces.current?.id;
+  if (!s || !ws) return;
+  feedbackSaving.value = true;
+  feedbackError.value = '';
+  const before = feedbackParts.value; // each save replaces the suggestion
+  try {
+    for (const [i, p] of parts.entries()) {
+      const was = before[i];
+      if (was && was.vote === p.vote && was.reason === p.reason.trim()) continue;
+      const { suggestion: saved } = await suggestionsApi.vote(ws, s.id, { route: p.key === 'all' ? null : Number(p.key), vote: p.vote, reason: p.vote ? p.reason.trim() || null : null });
+      if (suggester.suggestion.value?.id === saved.id) suggester.suggestion.value = saved;
+    }
+    feedbackOpen.value = false;
+  } catch (e) {
+    feedbackError.value = errorMessage(e);
+  } finally {
+    feedbackSaving.value = false;
+  }
+}
+function useSuggestion(route: number): void {
+  const p = suggestion.value;
+  if (!p) return;
+  usedRoute.value = route;
+  applySuggestion(withRoute(p, route));
+}
 
 function applySuggestion(p: StartingParameters): void {
   if (p.tempC !== null) draft.temp = tempText(p.tempC, temperatureUnit.value);
@@ -967,6 +1033,7 @@ async function startSteep(): Promise<void> {
       utcOffsetMinutes: -new Date().getTimezoneOffset(),
       ...values,
       ...windowValues(),
+      ...suggestionLink(),
       steeping: true,
     });
     rememberBrew(values);
@@ -1111,6 +1178,7 @@ async function save(): Promise<void> {
       ...values,
       stepTempShiftC: brewTempShift.value,
       ...windowValues(),
+      ...suggestionLink(),
       ...(remind ? { remindToRate: true } : {}),
       // The steps' real times, plus the first drop from the log's field. A time
       // typed shorter than a tap drops that tap.
@@ -1501,10 +1569,39 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
             <span v-if="suggestion.confidence" class="badge" :class="`conf-${suggestion.confidence}`">{{ CONFIDENCE_LABELS[suggestion.confidence] }}</span>
           </p>
           <p class="reasoning">“{{ suggestion.reasoning }}”</p>
-          <p v-if="suggestion.ratio !== null" class="small">
-            Ratio 1:{{ formatRatio(suggestion.ratio) }}<template v-if="ratioKept">, keeping your {{ ratioKept }}</template>.
-          </p>
-          <p v-else class="muted small">Your batch and its ratio stay as they are.</p>
+          <ul class="routes">
+            <template v-for="(r, i) in suggestion.routes" :key="i">
+              <li v-if="usedRoute === null || usedRoute === i" class="route">
+                <p v-if="suggestion.routes.length > 1" class="small">
+                  <strong>{{ r.label }}</strong>
+                  <span v-if="i === 0" class="muted"> · main pick</span>
+                </p>
+                <p v-if="r.why" class="small">{{ r.why }}</p>
+                <p v-if="routeValues(r)" class="small">{{ routeValues(r) }}</p>
+                <p v-if="r.ratio !== null" class="small">
+                  Ratio 1:{{ formatRatio(r.ratio) }}<template v-if="usedRoute === i && ratioKept">, keeping your {{ ratioKept }}</template>.
+                </p>
+                <p v-else class="muted small">Your batch and its ratio stay as they are.</p>
+                <p v-if="findingTitles(r.findings).length" class="muted small">Follows: {{ findingTitles(r.findings).join('; ') }}</p>
+                <button v-if="usedRoute === null" class="btn btn-primary" type="button" @click="useSuggestion(i)">Use these values</button>
+              </li>
+            </template>
+          </ul>
+          <button v-if="canFeedback" class="btn-link small suggest-vote" type="button" @click="feedbackOpen = true">
+            Feedback<template v-if="feedbackMark"> · {{ feedbackMark }}</template>
+          </button>
+          <FeedbackDialog
+            :open="feedbackOpen"
+            title="Feedback on this suggestion"
+            :parts="feedbackParts"
+            :saving="feedbackSaving"
+            :error="feedbackError"
+            @close="feedbackOpen = false"
+            @save="saveFeedback"
+          />
+          <div v-if="!suggestionUsed" class="suggest-use">
+            <button class="btn btn-secondary" type="button" @click="suggester.reset()">Dismiss</button>
+          </div>
           <div v-if="suggestion.alternatives.length" class="alternatives">
             <p class="small"><strong>Or try</strong></p>
             <ul>
@@ -1518,12 +1615,13 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           </div>
           <p v-else-if="suggester.suggestion.value?.alternativesAsked?.length" class="muted small">Nothing else stood out to try.</p>
           <p v-if="suggestedFor" class="note small">
-            The grind was suggested for {{ suggestedFor }}, so it isn't filled in for {{ grinder?.name ?? 'no grinder' }}.
+            The grind was suggested for {{ suggestedFor }}, so it {{ suggestionUsed ? "isn't" : "won't be" }} filled in for {{ grinder?.name ?? 'no grinder' }}.
           </p>
           <p class="muted small">
             <template v-if="suggestion.brewCount">Based on {{ suggestion.brewCount }} earlier {{ suggestion.brewCount === 1 ? 'brew' : 'brews' }} ({{ SUGGEST_SOURCE_LABELS[suggestion.source].toLowerCase() }}).</template>
             <template v-else>No earlier brews to compare yet, so it's from the recipe and the bean alone.</template>
-            Filled in below; change anything you like.
+            <template v-if="suggestionUsed">Filled in below; change anything you like.</template>
+            <template v-else>Nothing below changes until you use these values.</template>
           </p>
           <button v-if="suggester.suggestion.value?.hasRequest" class="btn-link small" type="button" @click="showSent = true">What was sent to the AI</button>
           <AiRequestDialog :open="showSent" :load="loadSent" @close="showSent = false" />
@@ -1986,6 +2084,33 @@ p {
 }
 .suggest-pick .suggest-max {
   flex: 0 1 7rem;
+}
+.suggest-vote {
+  align-self: flex-start;
+}
+.routes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+.route {
+  display: grid;
+  gap: var(--space-1);
+  justify-items: start;
+}
+.route + .route {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-3);
+}
+.route p {
+  margin: 0;
+}
+.suggest-use {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 .suggest-alts {
   display: flex;

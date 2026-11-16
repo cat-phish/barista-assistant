@@ -1,4 +1,4 @@
-// Email verification (docs/api/auth.md §1d). Off by default.
+// Email verification (docs/api/auth.md §1e). Off by default.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import { app } from "../src/app.js";

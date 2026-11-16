@@ -1,7 +1,7 @@
 // AI suggestions as the app shows them: an analysis's changes (AnalysisCard,
 // docs/api/analysis.md §8), and "Suggest parameters"' starting values for the
 // brew being set up (§8b).
-import { SUGGEST_SOURCES, type AlternativeKind, type GrindDelta, type ParameterSuggestion, type Recipe, type SuggestedAlternative, type SuggestSource } from '../api/types';
+import { SUGGEST_SOURCES, type AlternativeKind, type GrindDelta, type ParameterSuggestion, type Recipe, type SuggestedAlternative, type SuggestedRoute, type SuggestSource } from '../api/types';
 import { formatGrind } from './format';
 import type { ScaleField } from './scale';
 
@@ -56,36 +56,70 @@ export function rememberedSource(compareWith: string | null, oldSuggestSource: s
   return oldSuggestSource === null ? null : (OLD_SOURCES[oldSuggestSource] ?? null);
 }
 
-// A finished suggestion's values, for the brew being set up.
-export interface StartingParameters {
+// One route's values (docs/api/analysis.md §8b).
+export type RouteValues = Pick<SuggestedRoute, 'grindSetting' | 'grindRpm' | 'tempC' | 'ratio'>;
+
+// A finished suggestion, for the brew being set up: its routes, and the
+// first one's values as its own.
+export interface StartingParameters extends RouteValues {
+  id: string;
   grinderId: string | null; // the grinder the setting is for
-  grindSetting: number | null;
-  grindRpm: number | null;
-  tempC: number | null;
-  ratio: number | null; // for the batch as it is; null: keep its ratio
   reasoning: string;
   nextStep: string | null;
   confidence: 'low' | 'medium' | 'high' | null;
   brewCount: number; // earlier brews it was based on
   source: SuggestSource;
+  routes: SuggestedRoute[]; // at least one
   alternatives: SuggestedAlternative[];
 }
 
 export function startingParameters(s: ParameterSuggestion): StartingParameters | null {
   if (s.status !== 'done' || s.reasoning === null) return null;
+  const values = { grindSetting: s.grindSetting, grindRpm: s.grindRpm, tempC: s.tempC, ratio: s.ratio };
   return {
+    id: s.id,
     grinderId: s.grinderId,
-    grindSetting: s.grindSetting,
-    grindRpm: s.grindRpm,
-    tempC: s.tempC,
-    ratio: s.ratio,
+    ...values,
     reasoning: s.reasoning,
     nextStep: s.nextStep,
     confidence: s.confidence,
     brewCount: s.brewCount ?? 0,
     source: s.source,
+    // One from before routes: its values are the only route.
+    routes: s.routes?.length ? s.routes : [{ label: 'Suggested', why: '', findings: [], ...values }],
     alternatives: s.alternatives ?? [],
   };
+}
+
+// The suggestion with one route's values in place of the first's.
+export function withRoute(p: StartingParameters, route: number): StartingParameters {
+  const r = p.routes[route];
+  return r ? { ...p, grindSetting: r.grindSetting, grindRpm: r.grindRpm, tempC: r.tempC, ratio: r.ratio } : p;
+}
+
+// What each research finding is called, for "Follows …" on a route: the same
+// keys as @barista/shared/research (lib/suggest.test.ts checks). A key not
+// here (a newer worker's) is left out.
+export const RESEARCH_TITLES: Record<string, string> = {
+  leverOrder: 'Which lever to move',
+  tasteNotTemp: 'Taste follows strength and extraction, not temperature',
+  sourStrong: 'Sour can mean too strong',
+  immersionRatio: 'In immersion, the ratio sets the cup',
+  ownPattern: 'No universal ideal',
+  kettleNotSlurry: "The kettle isn't the slurry",
+  roastTemp: 'Roast sets the temperature band',
+  finesFlow: 'Fines and agitation set the drawdown',
+  bloom: 'Bloom size and length',
+  espressoFinest: "Finer isn't always more extraction",
+  coldBeansFiner: 'Frozen beans and dark roasts grind finer',
+  alkalinity: 'Alkalinity matters more than hardness',
+  degassing: 'Fresh beans and rest',
+  naturalsWeightLoss: 'Naturals lose more weight',
+  coldBloom: 'Cold or cool bloom',
+  firstPours: 'First pours and pour count',
+};
+export function findingTitles(keys: readonly string[]): string[] {
+  return keys.flatMap((k) => (RESEARCH_TITLES[k] ? [RESEARCH_TITLES[k]] : []));
 }
 
 // What a suggested ratio keeps as it is (docs/api/analysis.md §8b), the rest

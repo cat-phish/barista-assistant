@@ -15,8 +15,11 @@ import { workspaceLexicon } from "./flavorLexicon.js";
 import {
   ANALYSIS_CONFIDENCE,
   SUGGEST_ALTERNATIVES,
+  MAX_FEEDBACK_REASON,
+  MAX_SUGGESTED_ROUTES,
   SUGGEST_SOURCES,
   SUGGESTION_STATUSES,
+  SUGGESTION_VOTES,
   BEAN_MENU_FIELDS,
   BEAN_PROCESSES,
   BLEND_TYPES,
@@ -235,6 +238,8 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
   { table: menuOtherItems, scope: "workspace" },
   { table: menuSections, scope: "workspace" },
   { table: menuItems, scope: "sectionId" },
+  // Before the brews, which name the suggestion they used.
+  { table: parameterSuggestions, scope: "beanId" },
   { table: brewLogs, scope: "workspace" },
   { table: brewLogMarks, scope: "brewLogId" },
   { table: brewLogTools, scope: "brewLogId" },
@@ -243,7 +248,6 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
   { table: brewServings, scope: "brewLogId" },
   { table: brewServingFlavors, scope: "servingId" },
   { table: llmAnalyses, scope: "brewLogId" },
-  { table: parameterSuggestions, scope: "beanId" },
 ];
 // Not in a backup: people (with their notification channels and Web Push
 // devices), their memberships and the server's own settings
@@ -301,6 +305,7 @@ const ENUMS: Record<string, readonly string[]> = {
 };
 // JSON columns, checked by what the API accepts.
 // What was sent to the AI (docs/api/analysis.md §8c), when the file has it.
+const suggestionVote = z.object({ vote: z.enum(SUGGESTION_VOTES), reason: z.string().max(MAX_FEEDBACK_REASON).nullable() }).strict();
 const aiRequest = z.object({ sections: z.array(z.string()), system: z.string(), input: z.record(z.string(), z.unknown()) }).strict().nullable();
 // A brew's copy of its recipe (docs/api/brew-logs.md §6, "Recipe copy"):
 // typed against RecipeCopy so the two can't drift.
@@ -370,6 +375,29 @@ const JSON_SCHEMAS: Record<string, z.ZodType> = {
   "llm_analyses.request": aiRequest,
   "parameter_suggestions.request": aiRequest,
   "parameter_suggestions.alternativesAsked": z.array(z.enum(SUGGEST_ALTERNATIVES)).nullable(),
+  "parameter_suggestions.routes": z
+    .array(
+      z
+        .object({
+          label: z.string().max(60),
+          why: z.string().max(300),
+          findings: z.array(z.string()).max(20),
+          grindSetting: z.number().nullable(),
+          grindRpm: z.number().int().nullable(),
+          tempC: z.number().nullable(),
+          ratio: z.number().nullable(),
+        })
+        .strict(),
+    )
+    .max(MAX_SUGGESTED_ROUTES)
+    .nullable(),
+  "parameter_suggestions.feedback": z
+    .object({
+      suggestion: suggestionVote.nullable(),
+      routes: z.array(suggestionVote.nullable()).max(MAX_SUGGESTED_ROUTES),
+    })
+    .strict()
+    .nullable(),
   // The ids are the source workspace's, not rewritten: a restored one shows the name.
   "parameter_suggestions.alternatives": z
     .array(z.object({ kind: z.enum(SUGGEST_ALTERNATIVES), id: z.string(), name: z.string(), why: z.string() }).strict())
@@ -378,6 +406,10 @@ const JSON_SCHEMAS: Record<string, z.ZodType> = {
 // Large, and only for looking back at: in a file only when asked for
 // (docs/api/backup.md §2b, "What was sent to the AI").
 export const AI_REQUEST_COLUMNS: Record<string, string> = { llm_analyses: "request", parameter_suggestions: "request" };
+// Columns left out of backups: who gave an analysis feedback, and why, only
+// teaches that person's learned preferences (docs/api/auth.md §1d), which
+// aren't in backups either.
+export const PERSONAL_COLUMNS: Record<string, readonly string[]> = { llm_analyses: ["feedbackBy", "feedbackReason"] };
 export interface BackupOptions {
   aiRequests?: boolean;
   // bean_photos rows only go with their files (a .zip, §2b); a JSON file
@@ -397,13 +429,15 @@ export interface TableInfo {
 }
 export const TABLE_INFO: TableInfo[] = BACKUP_TABLES.map(({ table, scope }) => {
   const config = getTableConfig(table);
-  const columns = getTableColumns(table) as Record<string, Column>;
+  const personal = PERSONAL_COLUMNS[config.name] ?? [];
+  const columns = Object.fromEntries(Object.entries(getTableColumns(table) as Record<string, Column>).filter(([key]) => !personal.includes(key)));
   const keyOf = new Map(Object.entries(columns).map(([key, col]) => [col.name, key]));
   const refs: Record<string, string> = {};
   const userColumns: string[] = [];
   for (const fk of config.foreignKeys) {
     const ref = fk.reference();
-    const key = keyOf.get(ref.columns[0]!.name)!;
+    const key = keyOf.get(ref.columns[0]!.name);
+    if (!key) continue; // a personal column
     const target = getTableConfig(ref.foreignTable).name;
     if (target === "workspaces") continue;
     if (target === "users") userColumns.push(key);
@@ -470,8 +504,10 @@ export async function buildBackup(workspaceId: string, options: BackupOptions = 
       }
     }
     const aiColumn = options.aiRequests ? undefined : AI_REQUEST_COLUMNS[t.name];
+    const personal = PERSONAL_COLUMNS[t.name] ?? [];
     tables[t.name] = rows.map(({ workspaceId: _ws, ...row }) => {
       if (aiColumn) delete row[aiColumn];
+      for (const key of personal) delete row[key];
       for (const key of t.userColumns) {
         const id = row[key] as string | null;
         delete row[key];

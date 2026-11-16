@@ -65,9 +65,9 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   `brew_problem_brewers`, `beans`,
   `bean_freezes`, `bean_photos`, `roasts`, `recipes`, `recipe_steps`, `recipe_grind_settings`, `recipe_prep_tools`,
   `drinks`, `drink_ingredients`, `menu_other_items`, `menu_sections`, `menu_items`,
-  `brew_logs`, `brew_log_marks`, `brew_log_tools`, `brew_log_problems`,
+  `parameter_suggestions` (before the brews, which name the one they used), `brew_logs`, `brew_log_marks`, `brew_log_tools`, `brew_log_problems`,
   `brew_log_flavors`, `brew_servings`, `brew_serving_flavors` (`brew-servings.md`
-  §6c; who logged one is its `brewedBy`), `llm_analyses`, `parameter_suggestions` (`BACKUP_TABLES`). A table left out of a file counts as
+  §6c; who logged one is its `brewedBy`), `llm_analyses` (`BACKUP_TABLES`). A table left out of a file counts as
   empty.
 - **Not in a backup:** people, members, notification channels, Web Push
   devices and preferences belong to the server, not the workspace. A brew says who made
@@ -123,10 +123,22 @@ restores as the one logo.
 **A brew's style** (`brew_logs.styleId`, `brew-logs.md` §6): a file from
 before brews kept it restores each brew with its recipe's style in the file.
 
+**A brew's suggestion** (`brew_logs.suggestionId` and `suggestionRoute`,
+`brew-logs.md` §6) points at a suggestion in the file, like any reference;
+a suggestion's `routes` and `feedback` are checked like any JSON column. A
+file from before migration 0122 has none of them, and one from before 0123
+no `feedback`.
+
 **A brew's recipe copy** (`brew_logs.recipeCopy`, `brew-logs.md` §6) goes
 in every file. It's checked against `RecipeCopy` like any JSON column
 (`JSON_SCHEMAS`). A file from before migration 0109 has none, and those
 brews are read against their live recipe, as before.
+
+**Who gave an analysis feedback, and why** (`feedbackBy`,
+`feedbackReason` on `llm_analyses`) is never in a file
+(`PERSONAL_COLUMNS`): it only teaches that person's learned preferences,
+which belong to them, not the workspace (`auth.md` §1d). The 👍/👎 itself
+(`helpful`) is kept.
 
 **What was sent to the AI** (`request` on `llm_analyses` and
 `parameter_suggestions`, `analysis.md` §8c) is large and only for looking

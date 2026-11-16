@@ -15,6 +15,7 @@ const auth = useAuthStore();
     <RouterLink :to="{ name: 'settings-preferences' }" active-class="active">Preferences</RouterLink>
     <RouterLink :to="{ name: 'settings-brew-setup' }" active-class="active">Brew setup</RouterLink>
     <RouterLink :to="{ name: 'settings-ai-prompt' }" active-class="active">Your AI prompt</RouterLink>
+    <RouterLink :to="{ name: 'settings-ai-preferences' }" active-class="active">Learned preferences</RouterLink>
     <RouterLink :to="{ name: 'settings-chats' }" active-class="active">AI chats</RouterLink>
     <RouterLink :to="{ name: 'settings-recaps' }" active-class="active">Recaps</RouterLink>
     <RouterLink :to="{ name: 'settings-notifications' }" active-class="active">Notifications</RouterLink>

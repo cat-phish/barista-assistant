@@ -68,6 +68,10 @@ export const users = mysqlTable("users", {
   // texts, used for their brews' analyses and their suggestions. null = the
   // defaults. Kept apart from preferences, which go with every response.
   aiPrompt: jsonValue<AiPrompt>("ai_prompt"),
+  // Learned preferences (docs/api/auth.md §1d, migration 0124): items,
+  // proposals, the learn/apply settings and each workspace's "through".
+  // null = none and the defaults. Not in workspace backups, like aiPrompt.
+  aiPreferences: jsonValue<AiPreferences>("ai_preferences"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -183,7 +187,7 @@ export const workspaceMembers = mysqlTable(
 );
 
 // 1d. users.email_verified_at (null = not confirmed) and email_tokens: one-time
-// mailed links, only a SHA-256 of the token kept (docs/api/auth.md §1d). Not backed up.
+// mailed links, only a SHA-256 of the token kept (docs/api/auth.md §1e). Not backed up.
 
 // 3b. Workspace Invites (docs/api/workspaces.md §2 "Invites"): an owner's offer
 // to an email; the person joins by accepting. Not backed up. Expires after 14 days.
@@ -1330,6 +1334,12 @@ export const brewLogs = mysqlTable("brew_logs", {
   // A long cold brew batch marked empty (docs/api/brew-servings.md §6c): no
   // more servings are taken from it. Null = still in stock (or not a batch).
   batchFinishedAt: timestamp("batch_finished_at"),
+  // The Suggest parameters result and route whose values this brew used
+  // (Use these values; docs/api/brew-logs.md §6), so its rating tells how
+  // that route went. Route is the index in the suggestion's routes. Null:
+  // none used, or the suggestion is gone (migration 0122).
+  suggestionId: varchar("suggestion_id", { length: 36 }).references(() => parameterSuggestions.id, { onDelete: "set null" }),
+  suggestionRoute: int("suggestion_route"),
 });
 
 // 8b. Brew Log Marks (Tapped Events During a Brew)
@@ -1619,6 +1629,9 @@ export const llmAnalyses = mysqlTable("llm_analyses", {
   // Was it useful? Set by the brew's people (docs/api/analysis.md §8).
   helpful: boolean("helpful"),
   ratedAt: timestamp("rated_at"),
+  // Who rated it and why (migration 0125), for learned preferences.
+  feedbackBy: varchar("feedback_by", { length: 36 }).references(() => users.id, { onDelete: "set null" }),
+  feedbackReason: varchar("feedback_reason", { length: 300 }),
   // Made by auto-analyze (docs/api/analysis.md §8), not asked for: these
   // count toward the workspace's daily cap.
   auto: boolean("auto").notNull().default(false),
@@ -1669,9 +1682,20 @@ export const parameterSuggestions = mysqlTable("parameter_suggestions", {
   tempC: decimal("temp_c", { precision: 4, scale: 1, mode: "number" }),
   // Filter: (water + ice) / dose; espresso: shot weight / dose.
   ratio: decimal("ratio", { precision: 5, scale: 2, mode: "number" }),
+  // The ways to brew it (1-3, MAX_SUGGESTED_ROUTES), the first matching the
+  // values above; null on suggestions from before routes (migration 0122).
+  // SuggestedRoute { label, why, findings (research keys), grindSetting,
+  // grindRpm, tempC, ratio } (docs/api/analysis.md §8b).
+  routes: jsonValue<SuggestedRoute[]>("routes"),
   // What else to try, of the kinds asked: at most one of each; [] = none.
   // SuggestedAlternative { kind, id, name, why } (SUGGEST_ALTERNATIVES).
   alternatives: jsonValue<SuggestedAlternative[]>("alternatives"),
+  // Likes and dislikes from the person who asked (migration 0123); null =
+  // none. SuggestionFeedback { suggestion: vote | null, routes: (vote |
+  // null)[] by route index }, vote { vote: "up" | "down" (SUGGESTION_VOTES),
+  // reason (max 300) | null } (docs/api/analysis.md §8b, "Feedback").
+  feedback: jsonValue<SuggestionFeedback>("feedback"),
+  feedbackAt: timestamp("feedback_at"), // when feedback last changed (migration 0124)
   model: varchar("model", { length: 100 }),
   promptVersion: varchar("prompt_version", { length: 30 }),
   request: jsonValue<AiRequest>("request"), // what was sent; null until done

@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { AiRequest, BrewLog, DilutionWith, LlmAnalysis, Mark, ParameterSuggestion, RepeatButtonGroup, ServingUnit, SteepTemp, SuggestionRequest } from './types';
+import type { AiRequest, BrewLog, DilutionWith, LlmAnalysis, Mark, ParameterSuggestion, RepeatButtonGroup, ServingUnit, SteepTemp, SuggestionRequest, SuggestionVoteKind } from './types';
 
 // What happened to a reminder asked for when saving (docs/api/notifications.md §1b).
 export type Reminder = 'queued' | 'off' | 'unavailable';
@@ -35,6 +35,9 @@ export interface BrewLogInput {
   tastingNotes: string | null;
   drinkRating?: number | null; // the finished drink: only with a drinkId
   drinkTastingNotes?: string | null;
+  // The Suggest parameters route whose values it used: both or neither (docs/api/brew-logs.md §6).
+  suggestionId?: string | null;
+  suggestionRoute?: number | null;
   remindToRate?: boolean; // POST only: Rate later (docs/api/notifications.md §1b)
   steeping?: boolean; // a long cold brew: true when started, false to finish it
   steepTemp?: SteepTemp | null;
@@ -104,6 +107,9 @@ export const suggestionsApi = {
     api.post<{ suggestion: ParameterSuggestion }>(`/api/workspaces/${workspaceId}/parameter-suggestions`, body),
   get: (workspaceId: string, id: string) =>
     api.get<{ suggestion: ParameterSuggestion }>(`/api/workspaces/${workspaceId}/parameter-suggestions/${id}`),
+  // Like or dislike it, or one route (route null: the whole suggestion); vote null takes it back.
+  vote: (workspaceId: string, id: string, body: { route: number | null; vote: SuggestionVoteKind | null; reason?: string | null }) =>
+    api.put<{ suggestion: ParameterSuggestion }>(`/api/workspaces/${workspaceId}/parameter-suggestions/${id}/feedback`, body),
   // What was sent to the AI (docs/api/analysis.md §8c).
   sent: (workspaceId: string, id: string) =>
     api.get<{ request: AiRequest | null }>(`/api/workspaces/${workspaceId}/parameter-suggestions/${id}/request`),
@@ -118,8 +124,8 @@ export const analysisApi = {
   request: (brewLogId: string, note?: string) =>
     api.post<{ status: 'queued'; jobId: string; message: string }>(`/api/brew-logs/${brewLogId}/analyze`, note ? { note } : undefined),
   // Was the suggestion useful? null takes the answer back (docs/api/analysis.md §8).
-  rateAnalysis: (brewLogId: string, analysisId: string, helpful: boolean | null) =>
-    api.put<{ helpful: boolean | null }>(`/api/brew-logs/${brewLogId}/analyses/${analysisId}/feedback`, { helpful }),
+  rateAnalysis: (brewLogId: string, analysisId: string, helpful: boolean | null, reason: string | null = null) =>
+    api.put<{ helpful: boolean | null; feedbackReason: string | null }>(`/api/brew-logs/${brewLogId}/analyses/${analysisId}/feedback`, { helpful, reason }),
   // What was sent to the AI (docs/api/analysis.md §8c).
   sent: (brewLogId: string, analysisId: string) =>
     api.get<{ request: AiRequest | null }>(`/api/brew-logs/${brewLogId}/analyses/${analysisId}/request`),

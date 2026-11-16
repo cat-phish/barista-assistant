@@ -43,6 +43,19 @@ the next brew.
   `latestAnalysis` is newer than when it requested the analysis (by
   `createdAt`).
 
+## `PUT /api/brew-logs/:brewLogId/analyses/:analysisId/feedback`
+
+Was the advice useful? An owner or barista of the brew's workspace rates it.
+- **Body:** `{ "helpful": true | false | null, "reason"?: "..." | null }`;
+  `null` takes it back; `reason` up to 300 characters, trimmed.
+- Saved with who gave it (`feedbackBy`, `feedbackReason`, `ratedAt`); it
+  feeds that person's learned preferences (docs/api/llm-contract.md §9g)
+  and, with `learn: "auto"`, queues learning.
+- **Success (`200 OK`):** `{ "helpful": …, "feedbackReason": … }`.
+- **Errors:** `400` bad body; `403` a viewer; `404` no such analysis on
+  this brew; `409` the person's Learn about me is off (docs/api/auth.md §1d)
+  and it isn't taking one back.
+
 ## Auto-analyze
 
 Owners switch it on under Settings → **AI** (`autoAnalyze`,
@@ -163,7 +176,12 @@ Any member. The frontend polls it until `status` is `done` or `failed`.
       "nextStep": "Watch the drawdown: aim to finish by 3:00.",
       "confidence": "medium",
       "grindSetting": 19, "grindRpm": null, "tempC": 95, "ratio": 16,
+      "routes": [
+        { "label": "One step finer", "why": "Sour and thin: extract more.", "findings": ["sourStrong"], "grindSetting": 19, "grindRpm": null, "tempC": 95, "ratio": 16 },
+        { "label": "Longer ratio", "why": "If it was heavy too, more water first.", "findings": ["sourStrong", "leverOrder"], "grindSetting": 20, "grindRpm": null, "tempC": 95, "ratio": 17 }
+      ],
       "alternatives": [{ "kind": "recipe", "id": "uuid", "name": "Tetsu 4:6 (V60)", "why": "A lighter, more even pour for this washed Ethiopian." }],
+      "feedback": { "suggestion": null, "routes": [null, { "vote": "down", "reason": "I never want cooler water" }] },
       "model": "gpt-…", "promptVersion": "2026-10-f",
       "createdAt": "2026-10-26T08:00:00.000Z", "completedAt": "2026-10-26T08:00:06.000Z"
     }
@@ -181,18 +199,67 @@ Any member. The frontend polls it until `status` is `done` or `failed`.
     brewers) and active brewers with an active recipe, other than this
     one; for `bean`, its other active beans with weight left
     (`inventoryWeightGrams` over 0).
-  - The values are for the grinder named (`grindSetting` `null` without one,
+  - `routes`: 1–3 ways to brew it (`MAX_SUGGESTED_ROUTES`; the AI is asked
+    for 2–3, and one left the same as another is dropped), the main pick
+    first, so where the research or the brews leave a real choice (more
+    water or a finer grind for a sour cup) the barista picks rather than the
+    AI. Each has a `label`, `why`, the research findings it follows
+    (`findings`, keys of `@barista/shared/research`, `docs/api/llm-contract.md`
+    §9; unknown keys and experiments are dropped) and its values. The top-level
+    `grindSetting`, `grindRpm`, `tempC` and `ratio` are the first route's.
+    Routes left the same as an earlier one once the values are checked are
+    dropped. `null` while pending, and on suggestions from before routes
+    (prompt `2026-11-c`), whose values are their only route.
+  - The values (each route's) are for the grinder named (`grindSetting` `null` without one,
     or without a brew or starting point on it to go on); `ratio` is for the
     batch, `(water + ice) / dose` or for espresso shot weight / dose, `null`
     to keep the batch's; `grindRpm` only on a variable-speed grinder.
     Results are `null` while pending.
   - `failed`: `error` says why ("The AI service couldn't be reached", or
     "… refused the request"), shown with Try again.
+  - `feedback`: likes and dislikes (below); `null` when none.
 - **Errors:** `404` not a member, or not a suggestion of this workspace's
   beans (same message).
 
-The brew page fills the values in (temperature, the ratio, and the grind
-when it's for the grinder chosen) and they can be changed as usual. The
+### `PUT /api/workspaces/:workspaceId/parameter-suggestions/:suggestionId/feedback`
+
+**Feedback:** whether the person who asked liked the advice, on the whole
+suggestion or one route, apart from how a brew made with it rated: some
+advice is wrong for them before they brew it ("I never want cooler water").
+Kept with the suggestion (`feedback`, and `feedbackAt` when it last
+changed); the asker's latest votes go with their next suggestions, and with
+`learn: "auto"` a vote queues the learning job (docs/api/llm-contract.md
+§9g, docs/api/auth.md §1d).
+
+- **Request Body:** `{ "route": 1, "vote": "down", "reason": "I never want cooler water" }`
+  - `route`: the route's index, or `null` for the whole suggestion. A
+    suggestion from before routes has route `0` only.
+  - `vote`: `"up"`, `"down"` (`SUGGESTION_VOTES`), or `null` to take it
+    back. `reason`: up to 300 characters (`MAX_FEEDBACK_REASON`), trimmed;
+    empty or left out is `null`. Sending a vote replaces that one.
+- **Success Response (`200 OK`):** `{ "suggestion": … }` as GET, with
+  `feedback` `{ suggestion, routes }`: `routes[i]` is route `i`'s vote or
+  `null`, the list ending at the last one with a vote; `feedback` is `null`
+  once nothing is left.
+- **Errors:** `400` bad body or no such route; `403` not the person who
+  asked; `404` as GET; `409` not done yet, or a vote with the person's Learn
+  about me off (docs/api/auth.md §1d; taking one back is fine).
+
+**On the brew page** a small **Feedback** link sits under the suggestion
+(and under an analysis), with Learn about me on, showing the votes given
+(👍👎). It opens a dialog (`FeedbackDialog.vue`) with 👍/👎 and a reason
+for the whole suggestion and each route (when there's more than one), and
+a few quick reasons to tap; tapping the chosen thumb again takes it back.
+Nothing shows inline, so it stays out of the way.
+
+The brew page shows each route with its values, why, the findings it
+follows (by title) and **Use these values**; with one route, it shows no
+label. Using one fills its values in (temperature, the ratio, and the grind
+when it's for the grinder chosen), hides the other routes, and they can be
+changed as usual. **Dismiss** clears the suggestion. The brew saved then
+records the suggestion and route it came from (`suggestionId`,
+`suggestionRoute`, `docs/api/brew-logs.md` §6), so its rating tells how that
+route went. The
 ratio moves the batch around what it holds (`heldForRatio`,
 `frontend/src/lib/suggest.ts`): espresso keeps the dose, which the basket
 fixes, so the shot weight moves; a filter batch keeps what was typed last

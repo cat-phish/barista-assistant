@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMember, brewerId, newBean, newUser, newWorkspace, type TestUser } from "./helpers.js";
+import { addMember, brewerId, newBean, newBrewLog, newUser, newWorkspace, type TestUser } from "./helpers.js";
 import { eq } from "drizzle-orm";
 import { parameterSuggestions } from "@barista/shared/schema";
 import { db } from "../src/db.js";
@@ -97,6 +97,76 @@ describe("parameter suggestions", () => {
     expect(done).not.toHaveProperty("request");
     expect((await viewer.agent.get(`${base}/${id}/request`)).body).toEqual({ request: sent });
     expect((await outsider.agent.get(`${base}/${id}/request`)).status).toBe(404);
+  });
+
+  it("a brew records the suggestion and route it used (docs/api/brew-logs.md §6)", async () => {
+    const { owner, ws, bean, recipe, base } = await setup();
+    const id = (await owner.agent.post(base).send({ beanId: bean, recipeId: recipe })).body.suggestion.id as string;
+    const logs = `/api/workspaces/${ws}/brew-logs`;
+    const brew = { beanId: bean, recipeId: recipe, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150 };
+    expect((await owner.agent.post(logs).send({ ...brew, suggestionId: id, suggestionRoute: 0 })).body.error).toMatch(/no values/); // still pending
+    const route = { label: "Finer", why: "Sour.", findings: [], grindSetting: 19, grindRpm: null, tempC: 94, ratio: null };
+    await db.update(parameterSuggestions).set({ status: "done", routes: [route, { ...route, label: "Longer ratio", ratio: 17 }] }).where(eq(parameterSuggestions.id, id));
+    expect((await owner.agent.get(`${base}/${id}`)).body.suggestion.routes).toHaveLength(2);
+
+    const logId = await newBrewLog(owner, ws, bean, { recipeId: recipe, suggestionId: id, suggestionRoute: 1 });
+    expect((await owner.agent.get(`${logs}/${logId}`)).body.brewLog).toMatchObject({ suggestionId: id, suggestionRoute: 1 });
+    for (const [bad, error] of [
+      [{ suggestionId: id }, /together/],
+      [{ suggestionId: id, suggestionRoute: null }, /or neither/],
+      [{ suggestionId: id, suggestionRoute: 2 }, /no such route/],
+      [{ suggestionId: "00000000-0000-4000-8000-000000000000", suggestionRoute: 0 }, /not a suggestion/],
+    ] as const) {
+      const res = await owner.agent.post(logs).send({ ...brew, ...bad });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(error);
+    }
+    // Another workspace's suggestion isn't this one's.
+    const other = await setup();
+    const theirs = (await other.owner.agent.post(other.base).send({ beanId: other.bean, recipeId: other.recipe })).body.suggestion.id as string;
+    await db.update(parameterSuggestions).set({ status: "done" }).where(eq(parameterSuggestions.id, theirs));
+    expect((await owner.agent.post(logs).send({ ...brew, suggestionId: theirs, suggestionRoute: 0 })).body.error).toMatch(/not a suggestion/);
+    // Cleared by an edit; a suggestion from before routes has route 0 only.
+    expect((await owner.agent.patch(`${logs}/${logId}`).send({ suggestionId: null, suggestionRoute: null })).status).toBe(200);
+    await db.update(parameterSuggestions).set({ routes: null }).where(eq(parameterSuggestions.id, id));
+    expect((await owner.agent.patch(`${logs}/${logId}`).send({ suggestionId: id, suggestionRoute: 1 })).body.error).toMatch(/no such route/);
+    expect((await owner.agent.patch(`${logs}/${logId}`).send({ suggestionId: id, suggestionRoute: 0 })).status).toBe(200);
+    // A deleted suggestion leaves the brew, without the link (the route alone means nothing).
+    await db.delete(parameterSuggestions).where(eq(parameterSuggestions.id, id));
+    expect((await owner.agent.get(`${logs}/${logId}`)).body.brewLog).toMatchObject({ suggestionId: null, suggestionRoute: 0 });
+  });
+
+  it("the person who asked likes or dislikes it, or one route (§8b Feedback)", async () => {
+    const { owner, ws, bean, recipe, base } = await setup();
+    const id = (await owner.agent.post(base).send({ beanId: bean, recipeId: recipe })).body.suggestion.id as string;
+    const url = `${base}/${id}/feedback`;
+    expect((await owner.agent.put(url).send({ route: null, vote: "up" })).status).toBe(409); // still pending
+    const route = { label: "Finer", why: "Sour.", findings: [], grindSetting: 19, grindRpm: null, tempC: 94, ratio: null };
+    await db.update(parameterSuggestions).set({ status: "done", routes: [route, { ...route, label: "Cooler", tempC: 90 }] }).where(eq(parameterSuggestions.id, id));
+
+    let res = await owner.agent.put(url).send({ route: 1, vote: "down", reason: "  I never want cooler water " });
+    expect(res.status).toBe(200);
+    expect(res.body.suggestion.feedback).toEqual({ suggestion: null, routes: [null, { vote: "down", reason: "I never want cooler water" }] });
+    res = await owner.agent.put(url).send({ route: null, vote: "up" });
+    expect(res.body.suggestion.feedback).toEqual({ suggestion: { vote: "up", reason: null }, routes: [null, { vote: "down", reason: "I never want cooler water" }] });
+    // Taking both back leaves nothing.
+    await owner.agent.put(url).send({ route: 1, vote: null });
+    res = await owner.agent.put(url).send({ route: null, vote: null });
+    expect(res.body.suggestion.feedback).toBeNull();
+
+    for (const bad of [{ route: 2, vote: "up" }, { route: 3, vote: "up" }, { route: null, vote: "meh" }, { vote: "up" }, { route: 0, vote: "up", reason: "x".repeat(301) }]) {
+      expect((await owner.agent.put(url).send(bad)).status).toBe(400);
+    }
+    // A suggestion from before routes has route 0 only.
+    await db.update(parameterSuggestions).set({ routes: null }).where(eq(parameterSuggestions.id, id));
+    expect((await owner.agent.put(url).send({ route: 1, vote: "up" })).body.error).toMatch(/no such route/);
+    expect((await owner.agent.put(url).send({ route: 0, vote: "up" })).status).toBe(200);
+
+    // Other members can read it but not rate it; outsiders don't find it.
+    const member = await newUser();
+    await addMember(owner, ws, member, "barista");
+    expect((await member.agent.put(url).send({ route: null, vote: "down" })).status).toBe(403);
+    expect((await (await newUser()).agent.put(url).send({ route: null, vote: "down" })).status).toBe(404);
   });
 
   it("viewers can read one but not ask; outsiders get a 404 either way", async () => {

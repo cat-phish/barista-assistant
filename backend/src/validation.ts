@@ -1,3 +1,4 @@
+import { MAX_PREFERENCE_TEXT, MAX_PREFERENCES } from "@barista/shared/aiPreferences";
 import { z } from "zod";
 import { BEAN_CARRY_KEYS } from "@barista/shared/beanCarry";
 import { CHAT_PERIOD_BREWS_MAX, CHAT_PERIOD_BREWS_MIN } from "@barista/shared/chatPeriod";
@@ -36,6 +37,8 @@ export const workspaceSettingsObject = z
     aiHidden: z
       .array(z.enum(AI_DETAILS))
       .refine((keys) => new Set(keys).size === keys.length, "each detail once"),
+    // The workspace's own preferences for the AI (docs/api/auth.md §1d).
+    aiPreferences: z.array(z.string().trim().min(1).max(MAX_PREFERENCE_TEXT)).max(MAX_PREFERENCES),
     // Auto-analyze (docs/api/analysis.md §8).
     autoAnalyze: z.boolean(),
     autoAnalyzeDelayMinutes: z.literal(AUTO_ANALYZE_DELAYS),
@@ -125,6 +128,7 @@ export const preferencesSchema = z
     timeZone: z.string().max(64).refine(isTimeZone, "an IANA time zone").nullable(),
     recapAi: z.enum(RECAP_AI_MODES),
     recapSeen: z.object({ weekly: localDate, monthly: localDate }).partial().strict(),
+    learnAboutMe: z.boolean(), // docs/api/auth.md §1d
   })
   .partial()
   .strict()

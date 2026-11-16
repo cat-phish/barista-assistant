@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AI_DETAILS, type AiDetail } from "@barista/shared/aiDetails";
+import type { BrewProfile } from "@barista/shared/brewProfile";
 import type { BrewContext, BrewSummary, DrinkInfo, GrinderInfo, WaterInfo } from "../src/context.js";
 import { toBeanReviewInput, toLlmInput, toPeriodInput, toSuggestInput } from "../src/prompt.js";
 import type { PeriodBrew, PeriodContext, PeriodFigures } from "../src/periodContext.js";
@@ -22,6 +23,8 @@ const CONTEXT: Record<keyof BrewContext, Sees> = {
   recipe: "always",
   brew: "always",
   drink: "drink",
+  profile: "brewProfile", // line by line in PROFILE
+  preferences: "learnedPreferences",
   ratingScale: "always",
 };
 
@@ -182,6 +185,26 @@ const brew: BrewSummary = {
   drink: { name: "Iced latte", ingredientTypes: ["milk"] }, rating: 4, tastingNotes: "Chocolate", drinkRating: 5, drinkTastingNotes: "Sweet", steepTemp: "fridge", dilutionRatio: 1,
   dilutedWith: "milk", jarWaterGrams: 100, steepMinHours: 14, steepMaxHours: 20, expectedFinishMinSec: 100, expectedFinishMaxSec: 200,
 } as BrewSummary;
+// The brew profile (llm-contract.md §9, "Brew profile") goes as lines: each
+// part, and the words its line is found by.
+const PROFILE: Record<keyof BrewProfile, [Sees, string]> = {
+  brews: ["always", "Rated brews by this barista"],
+  rating: ["always", "mean rating 3.9."],
+  best: ["tds", "rated 4.5+"],
+  temp: ["temp", "kettle temperature"],
+  time: ["always", "Usual total time"],
+  roastAge: ["always", "by roast age"],
+  routes: ["always", "suggested routes"],
+};
+const profile: BrewProfile = {
+  brews: 40,
+  rating: 3.9,
+  best: { methodKind: "filter", brews: 6, tdsPercent: [1.3, 1.42], extractionYieldPercent: [19.5, 21] },
+  temp: { brewer: "V60", roastLevel: "light", byTempC: [{ at: 92, brews: 3, rating: 3.6 }, { at: 94, brews: 4, rating: 4.2 }] },
+  time: { recipe: "House", byDose: [{ doseGrams: 15, brews: 5, medianSec: 185 }] },
+  roastAge: { byWeek: [{ at: 7, brews: 2, rating: 3.5 }, { at: 14, brews: 3, rating: 4.3 }] },
+  routes: { brews: 3, rating: 4.1, otherRating: 3.7, recent: [{ label: "More water", rating: 4.5 }] },
+};
 const full: BrewContext = {
   bean: { roasterName: "Onyx", beanName: "Monarch", batchNumber: "7", process: "Washed", roastLevel: "light", detailedRoastLevel: "city", roastType: "filter", blendType: "blend", decaf: true, roastDate: "2026-10-10", flavorProfile: "Peach", originArea: "africa", country: "Ethiopia", region: "Guji", altitudeMasl: 2000, varieties: ["Heirloom"], species: ["arabica"], roastWeightLossPercent: 15 },
   recipe: {
@@ -192,6 +215,8 @@ const full: BrewContext = {
   },
   brew,
   drink: { name: "Iced latte", servingSize: "12 fl oz", ingredients: [{ name: "Milk", ingredientType: "milk", amount: "200 g", note: null }] },
+  profile,
+  preferences: { mine: ["Prefers 19-20% EY (n=6)"], workspace: ["Decaf after 3pm"] },
   ratingScale: "0.5-5",
 } as BrewContext;
 
@@ -235,6 +260,24 @@ describe("what the AI sees: every field always sent or switchable (llm-contract.
   });
 });
 
+describe("the brew profile: each line always sent or switchable (llm-contract.md §9)", () => {
+  const lines = (hidden: AiDetail[]) => (toLlmInput(full, new Set(hidden)) as Obj).profile as string[] | undefined;
+  const has = (hidden: AiDetail[], words: string) => (lines(hidden) ?? []).some((l) => l.includes(words));
+  const everythingOff = AI_DETAILS.filter((d) => !NOT_FIELDS.includes(d) && d !== "brewProfile");
+
+  it.each(Object.entries(PROFILE))("%s", (_key, [sees, words]) => {
+    expect(has([], words)).toBe(true);
+    if (sees === "always") expect(has(everythingOff, words)).toBe(true);
+    else expect(has([sees as AiDetail], words)).toBe(false);
+  });
+
+  it("goes in the suggestion's input too, and brewProfile drops all of it", () => {
+    expect(lines(["brewProfile"])).toBeUndefined();
+    expect((toSuggestInput(suggest) as Obj).profile).toEqual(lines([]));
+    expect((toSuggestInput(suggest, new Set(["brewProfile"])) as Obj).profile).toBeUndefined();
+  });
+});
+
 // "Suggest parameters" (§9b) sends the brew about to be made and earlier
 // brews: these fields on top of the maps above (each earlier brew is a BREW,
 // another bean's a BEAN, the recipe a RECIPE).
@@ -249,6 +292,8 @@ const SUGGEST: Record<keyof SuggestContext, Sees> = {
   grinder: "always", // its name; details in GRINDER
   brews: "always", // each like brew; unrated ones: unratedHistory
   options: "always", // only the kinds asked; field by field below
+  profile: "brewProfile", // line by line in PROFILE
+  preferences: "learnedPreferences",
   ratingScale: "always",
 };
 // What else it may suggest. The ids are matched back from ref, not sent.
@@ -325,6 +370,8 @@ const suggest: SuggestContext = {
     brewers: [{ ref: "b1", id: "brewer-2", name: "Origami", kind: "filter" }],
     beans: [{ ref: "n1", id: "bean-2", bean: full.bean, roastAgeDays: 9, gramsLeft: 120 }],
   },
+  profile,
+  preferences: { mine: ["Prefers 19-20% EY (n=6)"], workspace: [], recentVotes: [{ vote: "down", on: "Cooler water", changes: "90 °C", reason: "never cooler" }] },
   ratingScale: "0.5-5",
 };
 const SUGGEST_PLACES: Array<[string, Record<string, Sees>, (input: Obj) => Obj | undefined]> = [
