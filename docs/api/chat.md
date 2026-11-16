@@ -180,6 +180,16 @@ the steps before saving"; the proposal is kept and opens as usual. A change
 is checked as the recipe after it, and only when it touches the steps, the
 water or the window. Absent when there are none, and on proposals from before.
 
+**Experiment:** a `recipeChange` or `newRecipe` can carry `experiment: true`
+when it tries one step-level idea (a cool or cold bloom, hot-then-cooler
+staging, the first pours' share of the water, the pour count) that rests on
+expert opinion, not controlled data. The card shows an "Experiment" badge;
+nothing else differs, and no confirmation is added. Absent when it isn't one,
+on a `brew`, and on proposals from before; the worker keeps only a literal
+`true` and drops it on a `brew`, and an imported chat is rejected if a `brew`
+carries it or the value isn't `true`. No brew field records it: to compare,
+the person brews the usual recipe back to back.
+
 `POST`s answer `409` with `code: "ai_not_configured"` when the workspace has no
 AI (§2d), and `503` when the queue can't be reached (nothing is saved).
 

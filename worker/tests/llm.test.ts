@@ -201,6 +201,10 @@ describe("what the AI is sent (docs/api/llm-contract.md §9)", () => {
     const all = [...PROMPT_SECTIONS, ...SUGGEST_SECTIONS].map((x) => x.key);
     expect(all).not.toContain("research.coldBloom");
     expect(all).not.toContain("research.firstPours");
+    for (const f of RESEARCH_FINDINGS.filter((x) => x.experiment)) {
+      expect(buildSystemPrompt(toLlmInput(context()))).not.toContain(f.text);
+      expect(buildSystemPrompt(toSuggestInput(suggestContext()), SUGGEST_SECTIONS)).not.toContain(f.text);
+    }
     expect(research(promptSections(toSuggestInput(suggestContext()), SUGGEST_SECTIONS))).toEqual(research(promptSections(toLlmInput(context()))));
     expect(buildSystemPrompt(toLlmInput(context()))).toContain(`${RESEARCH_PREFIX} (${RESEARCH_FINDINGS[0]!.key}) ${RESEARCH_FINDINGS[0]!.text}`);
   });

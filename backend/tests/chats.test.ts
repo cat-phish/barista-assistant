@@ -13,6 +13,7 @@ import { app } from "../src/app.js";
 import { overLimits, userChatBytes } from "../src/chatData.js";
 import { config } from "../src/config.js";
 import { db } from "../src/db.js";
+import { proposalsSchema } from "../src/chatProposal.js";
 import { chatPhotoPath, sweepChatPhotos, sweepOrphanPhotos, writeChatPhotoFile } from "../src/photos.js";
 import { chatQueue } from "../src/queue.js";
 import { saveChatLimits } from "../src/serverSettings.js";
@@ -626,6 +627,16 @@ describe("proposals", () => {
     { kind: "brew", title: "One finer", why: "Sour.", state: "open", beanId: null, beanLabel: null, recipeId: null, recipeLabel: null, grinderId: null, grinderLabel: null, grindSetting: null, tempC: 95, ratio: null },
     { kind: "newRecipe", title: "Iced V60", why: "Hot day.", state: "open", brewerId: null, brewerLabel: null, recipe: { name: "Iced V60", targetDoseGrams: 20, targetIceGrams: 100 } },
   ];
+  it("checks the experiment flag on an imported proposal: true on recipe kinds only", () => {
+    const recipe = { name: "Cool bloom", targetDoseGrams: 20 };
+    const card = { title: "T", why: "W", state: "open" as const };
+    const change = { kind: "recipeChange" as const, ...card, recipeId: "r", recipeLabel: "R", changes: {} };
+    const fresh = { kind: "newRecipe" as const, ...card, brewerId: null, brewerLabel: null, recipe };
+    expect(proposalsSchema.safeParse([{ ...change, experiment: true }, { ...fresh, experiment: true }, change]).success).toBe(true);
+    expect(proposalsSchema.safeParse([{ ...change, experiment: false }]).success).toBe(false);
+    expect(proposalsSchema.safeParse([{ ...fresh, experiment: "yes" }]).success).toBe(false);
+    expect(proposalsSchema.safeParse([{ ...proposals[0], experiment: true }]).success).toBe(false);
+  });
   async function chatWithProposals(): Promise<{ chat: string; reply: string }> {
     const start = await owner.agent.post(url(workspaceId)).send({ content: "Sour?" });
     const reply = start.body.messages[1].id as string;

@@ -301,7 +301,9 @@ Sources checked November 2026.
 - **For the app:** new suggestion output: a separate bloom temperature
   (the bloom step's own `targetTempC`). Offer it as an experiment for
   aroma-focused light roasts, presented as a practitioner technique rather
-  than a proven fix.
+  than a proven fix. In the chat, the cold bloom and hot-then-cooler staging
+  ideas are sent as "Experiment ideas" and offered as `experiment: true`
+  recipe cards (`docs/api/chat.md` §12), never in analysis or Suggest.
 
 ### Room-temperature bloom variants are reported as sweeter
 

@@ -47,7 +47,7 @@ const proposal = z.discriminatedUnion("kind", [
       ratio: num.nullable(),
     })
     .strict(),
-  z.object({ kind: z.literal("recipeChange"), ...base, recipeId: id, recipeLabel: label, changes: recipe }).strict(),
-  z.object({ kind: z.literal("newRecipe"), ...base, brewerId: id.nullable(), brewerLabel: label.nullable(), recipe: recipe.extend({ name: z.string().min(1).max(255), targetDoseGrams: num }) }).strict(),
+  z.object({ kind: z.literal("recipeChange"), ...base, recipeId: id, recipeLabel: label, changes: recipe, experiment: z.literal(true).optional() }).strict(),
+  z.object({ kind: z.literal("newRecipe"), ...base, brewerId: id.nullable(), brewerLabel: label.nullable(), recipe: recipe.extend({ name: z.string().min(1).max(255), targetDoseGrams: num }), experiment: z.literal(true).optional() }).strict(),
 ]);
 export const proposalsSchema = z.array(proposal).max(CHAT_PROPOSALS_MAX) satisfies z.ZodType<ChatProposal[]>;

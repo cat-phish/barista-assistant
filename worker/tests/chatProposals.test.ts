@@ -147,6 +147,16 @@ describe("checkProposal", () => {
       warnings: ["Step 3 pours 150 g in 11 s (13.6 g/s), faster than a kettle pours.", "The steps pour to 300 g, but the recipe's water is 320 g."],
     });
   });
+  it("keeps experiment: true on recipe proposals only (chat.md §12)", () => {
+    const refs: RefTable = new Map([["a1", { kind: "recipe", id: "rec3", label: "V60", recipe: { id: "rec3", label: "V60", current: null }, brewer: { id: "v60", label: "V60", kind: "filter" } }]]);
+    const steps = [{ stepType: "bloom", durationSec: 40, targetWaterGrams: 50, targetTempC: 55 }];
+    const change = { kind: "recipeChange", ...why, recipe: "a1", changes: { steps } };
+    expect(checkProposal({ ...change, experiment: true }, refs)).toMatchObject({ kind: "recipeChange", experiment: true });
+    expect(checkProposal({ kind: "newRecipe", ...why, recipe: { name: "Cool bloom", targetDoseGrams: 20 }, experiment: true }, refs)).toMatchObject({ kind: "newRecipe", experiment: true });
+    for (const flag of [false, "true", 1, null]) expect(checkProposal({ ...change, experiment: flag }, refs)).not.toHaveProperty("experiment");
+    expect(checkProposal(change, refs)).not.toHaveProperty("experiment");
+    expect(checkProposal({ kind: "brew", ...why, tempC: 92, experiment: true }, refs)).not.toHaveProperty("experiment");
+  });
   it("keeps at most 3", () => {
     expect(checkProposals(Array.from({ length: 5 }, () => ({ kind: "brew", ...why, tempC: 94 })), refs)).toHaveLength(3);
   });

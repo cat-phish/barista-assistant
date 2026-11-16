@@ -9,7 +9,8 @@ import { resolveAi } from "../src/ai/resolve.js";
 import { attachedIn, chatTurns, loadAttachments, processChatReply, type ChatPublisher } from "../src/chat.js";
 import { db } from "../src/db.js";
 import { buildChatRequest, streamReply } from "../src/llm.js";
-import { CHAT_PROPOSALS, CHAT_SYSTEM } from "../src/prompt.js";
+import { RESEARCH_FINDINGS } from "@barista/shared/research";
+import { CHAT_EXPERIMENTS, CHAT_PROPOSALS, CHAT_SYSTEM } from "../src/prompt.js";
 
 // Real database, fake LLM.
 vi.mock("../src/llm.js", async (importOriginal) => ({ ...(await importOriginal<typeof import("../src/llm.js")>()), streamReply: vi.fn() }));
@@ -106,8 +107,13 @@ describe("buildChatRequest", () => {
   it("is the conversation, with no schema, and the person's instructions", () => {
     const request = buildChatRequest("m", [{ role: "user", content: "Hi" }], { prompt: { instructions: "Be brief.", labelInstructions: null, overrides: {} }, note: null });
     expect(request.response_format).toBeUndefined();
-    expect(request.messages[0]).toEqual({ role: "system", content: `${CHAT_SYSTEM} The barista's own instructions: Be brief. ${CHAT_PROPOSALS}` });
+    expect(request.messages[0]).toEqual({ role: "system", content: `${CHAT_SYSTEM} The barista's own instructions: Be brief. ${CHAT_PROPOSALS} ${CHAT_EXPERIMENTS}` });
     expect(request.messages[1]).toEqual({ role: "user", content: "Hi" });
+  });
+  it("gives the chat the experiment findings, as ideas (llm-contract.md §9e)", () => {
+    const system = String(buildChatRequest("m", [{ role: "user", content: "Hi" }]).messages[0]!.content);
+    for (const f of RESEARCH_FINDINGS.filter((x) => x.experiment)) expect(system).toContain(f.text);
+    expect(system).toContain('"experiment": true');
   });
   it("puts attachments in a user turn ahead of the conversation, not the system prompt", () => {
     const request = buildChatRequest("m", [{ role: "user", content: "Hi" }], undefined, [{ kind: "bean", label: "Guji", data: { beanName: "Guji" } }]);

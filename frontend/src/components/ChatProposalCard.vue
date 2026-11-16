@@ -2,17 +2,19 @@
 // A chat reply's proposal (docs/api/chat.md §12, "Proposals"): what it would
 // set, with Open (fills in the brew page or recipe form, nothing saved until
 // you save there) and Dismiss. A dismissed one folds to a line, with Undo.
+// An experiment (step-level, expert opinion only) carries a badge.
 // Recipe steps that fail the step checks are flagged, not hidden.
 import { computed } from 'vue';
 import type { ChatProposal } from '../api/chats';
 import { usePreferences } from '../composables/usePreferences';
-import { PROPOSAL_KIND_LABELS, proposalLines } from '../lib/chatProposal';
+import { isExperiment, PROPOSAL_KIND_LABELS, proposalLines } from '../lib/chatProposal';
 
 const props = defineProps<{ proposal: ChatProposal; canOpen: boolean; busy: boolean }>();
 const emit = defineEmits<{ open: []; state: [state: ChatProposal['state']] }>();
 const { temperatureUnit } = usePreferences();
 const lines = computed(() => proposalLines(props.proposal, temperatureUnit.value));
 const warnings = computed(() => (props.proposal.kind === 'brew' ? [] : (props.proposal.warnings ?? [])));
+const experiment = computed(() => isExperiment(props.proposal));
 const openLabel = computed(() => (props.proposal.kind === 'brew' ? 'Open on brew page' : props.proposal.kind === 'recipeChange' ? 'Open recipe' : 'Open as new recipe'));
 </script>
 
@@ -22,7 +24,10 @@ const openLabel = computed(() => (props.proposal.kind === 'brew' ? 'Open on brew
     <button type="button" class="btn-link" :disabled="busy" @click="emit('state', 'open')">Undo</button>
   </p>
   <article v-else class="proposal" :aria-label="`${PROPOSAL_KIND_LABELS[proposal.kind]}: ${proposal.title}`">
-    <p class="kind">{{ PROPOSAL_KIND_LABELS[proposal.kind] }}</p>
+    <p class="kind">
+      {{ PROPOSAL_KIND_LABELS[proposal.kind] }}
+      <span v-if="experiment" class="badge experiment">Experiment</span>
+    </p>
     <h4>{{ proposal.title }}</h4>
     <p class="why">{{ proposal.why }}</p>
     <ul v-if="lines.length" class="values">
@@ -57,6 +62,12 @@ const openLabel = computed(() => (props.proposal.kind === 'brew' ? 'Open on brew
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
+}
+/* Not uppercase like the kind line. */
+.badge.experiment {
+  margin-left: var(--space-1);
+  text-transform: none;
+  letter-spacing: 0;
 }
 h4 {
   margin: var(--space-1) 0;

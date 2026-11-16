@@ -90,6 +90,7 @@ export interface ChatRecipeChangeProposal extends ProposalBase {
   recipeLabel: string;
   changes: ChatProposalRecipe;
   warnings?: string[]; // step checks it fails; worth a look before saving (docs/api/chat.md §12)
+  experiment?: true; // a step-level experiment, expert opinion only (docs/api/chat.md §12)
 }
 export interface ChatNewRecipeProposal extends ProposalBase {
   kind: 'newRecipe';
@@ -97,6 +98,7 @@ export interface ChatNewRecipeProposal extends ProposalBase {
   brewerLabel: string | null;
   recipe: ChatProposalRecipe & { name: string; targetDoseGrams: number };
   warnings?: string[]; // step checks it fails; worth a look before saving (docs/api/chat.md §12)
+  experiment?: true; // a step-level experiment, expert opinion only (docs/api/chat.md §12)
 }
 export type ChatProposal = ChatBrewProposal | ChatRecipeChangeProposal | ChatNewRecipeProposal;
 
