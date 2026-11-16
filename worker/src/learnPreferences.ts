@@ -15,7 +15,7 @@ import { loadBrewProfile } from "./brewProfile.js";
 import { db } from "./db.js";
 import { requestLearnedPreferences } from "./llm.js";
 import { profileInput } from "./prompt.js";
-import { votesFor, type VoteSignal } from "./preferences.js";
+import { isWorkspaceMember, votesFor, type VoteSignal } from "./preferences.js";
 
 export const LEARN_MAX_SIGNALS = 10;
 const FIRST_LOOKBACK_MS = 30 * 24 * 3600_000;
@@ -164,9 +164,16 @@ export async function learnInput(
 
 // A change skips the person's accepting only when it cites a dislike sent in
 // this run (docs/api/llm-contract.md §9g); the AI's word alone isn't enough.
+// SEC-80: one dislike is one accepting for one change, and never for a
+// removal; any other change that cites it becomes a proposal.
 export function checkedDislikes(changes: ReadonlyArray<Omit<LearnedChange, "fromDislike"> & { dislikeRef: string | null }>, input: LearnInput): LearnedChange[] {
   const refs = new Set([...input.votes, ...input.analysisVotes].flatMap((v) => (v.vote === "down" && v.ref ? [v.ref] : [])));
-  return changes.map(({ dislikeRef, ...c }) => ({ ...c, fromDislike: dislikeRef !== null && refs.has(dislikeRef) }));
+  const used = new Set<string>();
+  return changes.map(({ dislikeRef, ...c }) => {
+    const accepted = dislikeRef !== null && refs.has(dislikeRef) && c.change !== "remove" && !used.has(dislikeRef);
+    if (accepted) used.add(dislikeRef);
+    return { ...c, fromDislike: accepted };
+  });
 }
 
 export async function learnPreferences({ userId, workspaceId }: PreferencesJobData): Promise<LearnResult> {
@@ -176,6 +183,7 @@ export async function learnPreferences({ userId, workspaceId }: PreferencesJobDa
     db.select({ settings: workspaces.settings }).from(workspaces).where(eq(workspaces.id, workspaceId)),
   ]);
   if (!person || !ws) return { status: "skipped", reason: "person or workspace gone" };
+  if (!(await isWorkspaceMember(userId, workspaceId))) return { status: "skipped", reason: "not a member" }; // SEC-20
   const settings = withDefaults(DEFAULT_WORKSPACE_SETTINGS, ws.settings ?? null);
   const hidden = new Set<AiDetail>(settings.aiHidden);
   if (hidden.has("learnedPreferences")) return { status: "skipped", reason: "kept from the AI" };

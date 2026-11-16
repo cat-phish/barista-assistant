@@ -838,7 +838,11 @@ from what they did in one workspace.
   removal. Each dislike sent carries a `ref` (`d1`, `d2`, …); a change
   citing one as `dislikeRef` applies even with `propose` (the dislike is
   the accepting), but only when that ref is a dislike sent in this run
-  (`checkedDislikes`): the AI's word alone never skips the person. A
+  (`checkedDislikes`): the AI's word alone never skips the person. One
+  dislike accepts one change, the first citing it, and never a removal
+  (SEC-80); other changes citing it are proposals. The job also runs only
+  for someone who is a member of the workspace when it fires (SEC-20,
+  checked when it's queued and again in the job). A
   change that names no item, or adds what's already there, is dropped.
   With `apply: "propose"` they become proposals (replacing an older
   proposal for the same item); with `"apply"` they apply, except to items

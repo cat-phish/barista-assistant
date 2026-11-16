@@ -10,6 +10,7 @@ import { DEFAULT_PREFERENCES, users, withDefaults } from "@barista/shared/schema
 import type { AiDetail } from "@barista/shared/aiDetails";
 import { config } from "./config.js";
 import { db } from "./db.js";
+import { isWorkspaceMember } from "./preferences.js";
 
 let queue: Queue<PreferencesJobData> | null = null;
 function preferencesQueue(): Queue<PreferencesJobData> {
@@ -27,6 +28,7 @@ export async function learnAfterAnalysis(userId: string | null, workspaceId: str
   try {
     const [row] = await db.select({ p: users.aiPreferences, preferences: users.preferences }).from(users).where(eq(users.id, userId));
     if (!row || withPreferenceDefaults(row.p).learn !== "auto" || !withDefaults(DEFAULT_PREFERENCES, row.preferences ?? null).learnAboutMe) return;
+    if (!(await isWorkspaceMember(userId, workspaceId))) return; // SEC-20
     await preferencesQueue().add(PREFERENCES_JOB, { userId, workspaceId }, {
       jobId: preferencesJobId(userId, workspaceId),
       delay: LEARN_DELAY_MS,

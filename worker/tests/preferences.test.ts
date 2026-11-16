@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { beans, brewers, brewLogs, llmAnalyses, parameterSuggestions, recipes, users, workspaces } from "@barista/shared/schema";
+import { beans, brewers, brewLogs, llmAnalyses, parameterSuggestions, recipes, users, workspaceMembers, workspaces } from "@barista/shared/schema";
 import { EMPTY_AI_PREFERENCES, mergeLearned, MAX_PREFERENCES, type AiPreference, type AiPreferences } from "@barista/shared/aiPreferences";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../src/db.js";
 import { requestLearnedPreferences } from "../src/llm.js";
-import { learnPreferences } from "../src/learnPreferences.js";
+import { checkedDislikes, learnPreferences, type LearnInput } from "../src/learnPreferences.js";
 import { loadPreferences, votesFor } from "../src/preferences.js";
 import { loadBrewContext } from "../src/context.js";
 
@@ -110,6 +110,7 @@ describe("loading and learning", () => {
     const recipeId = randomUUID();
     await db.insert(users).values({ id: userId, email: `l-${userId}@example.com`, passwordHash: "x" });
     await db.insert(workspaces).values({ id: workspaceId, name: "W", slug: `w-${workspaceId}`, settings: { aiPreferences: ["Decaf after 3pm"] } });
+    await db.insert(workspaceMembers).values({ userId, workspaceId, role: "barista" }); // SEC-20: learning needs a membership
     await db.insert(brewers).values({ id: brewerId, workspaceId, name: "V60" });
     await db.insert(beans).values({ id: beanId, workspaceId, roasterName: "Onyx", beanName: "Guji", roastLevel: "light", roastDate: new Date("2026-11-01T00:00:00Z") });
     await db.insert(recipes).values({ id: recipeId, workspaceId, name: "House V60", brewerId, targetDoseGrams: 15, targetWaterGrams: 250 });
@@ -195,5 +196,25 @@ describe("loading and learning", () => {
     expect((await prefsNow()).items.map((i) => [i.text, i.source])).toEqual([["Likes finer grinds", "ai"]]);
     await db.update(workspaces).set({ settings: { aiHidden: ["learnedPreferences"] } }).where(eq(workspaces.id, workspaceId));
     expect(await learnPreferences({ userId, workspaceId })).toEqual({ status: "skipped", reason: "kept from the AI" });
+  });
+
+  // SEC-20: someone who has left (or was removed) is no longer learned about from that workspace.
+  it("skips a person who is no longer a member, without calling the AI", async () => {
+    await db.delete(workspaceMembers).where(eq(workspaceMembers.userId, userId));
+    llm.mockClear();
+    expect(await learnPreferences({ userId, workspaceId })).toEqual({ status: "skipped", reason: "not a member" });
+    expect(llm).not.toHaveBeenCalled();
+  });
+
+  // SEC-80: a dislike is one accepting for one change, and never a removal.
+  it("a dislike applies at most one change, never a removal; the rest become proposals", async () => {
+    const input = { votes: [{ vote: "down", on: "x", changes: null, reason: null, ref: "d1" }], analysisVotes: [] } as unknown as LearnInput;
+    const change = (c: "add" | "remove", text: string | null, id: string | null) => ({ change: c, id, text, basis: 1, why: "w", dislikeRef: "d1" });
+    const checked = checkedDislikes([change("add", "one", null), change("add", "two", null), change("add", "three", null), change("remove", null, "a"), change("add", "four", null)], input);
+    expect(checked.map((c) => c.fromDislike)).toEqual([true, false, false, false, false]);
+    const base = { ...EMPTY_AI_PREFERENCES, items: [item("a", "Prefers 19-20% EY")] };
+    const merged = mergeLearned(base, checked, new Date().toISOString(), randomUUID);
+    expect(merged.items.map((i) => i.text).sort()).toEqual(["Prefers 19-20% EY", "one"]);
+    expect(merged.proposals.map((p) => p.change).sort()).toEqual(["add", "add", "add", "remove"]);
   });
 });

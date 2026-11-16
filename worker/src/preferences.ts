@@ -3,7 +3,7 @@
 // the person's items, the workspace's lines and, for suggestions, their
 // latest likes and dislikes, so a dislike counts before the list catches up.
 import { and, desc, eq, gt, isNotNull } from "drizzle-orm";
-import { beans, DEFAULT_PREFERENCES, DEFAULT_WORKSPACE_SETTINGS, parameterSuggestions, users, withDefaults, workspaces, type SuggestedRoute, type SuggestionFeedback } from "@barista/shared/schema";
+import { beans, DEFAULT_PREFERENCES, DEFAULT_WORKSPACE_SETTINGS, parameterSuggestions, users, withDefaults, workspaceMembers, workspaces, type SuggestedRoute, type SuggestionFeedback } from "@barista/shared/schema";
 import type { AiDetail } from "@barista/shared/aiDetails";
 import { preferenceLine, withPreferenceDefaults } from "@barista/shared/aiPreferences";
 import { db } from "./db.js";
@@ -95,4 +95,10 @@ export async function loadPreferences(
   };
   if (options.votes && learns) input.recentVotes = votes.map((v) => ({ vote: v.vote, on: v.on, changes: v.changes, reason: v.reason }));
   return input.mine.length || input.workspace.length || input.recentVotes?.length ? input : null;
+}
+
+// SEC-20: learning runs only for someone who is in the workspace now.
+export async function isWorkspaceMember(userId: string, workspaceId: string): Promise<boolean> {
+  const [row] = await db.select({ userId: workspaceMembers.userId }).from(workspaceMembers).where(and(eq(workspaceMembers.userId, userId), eq(workspaceMembers.workspaceId, workspaceId)));
+  return Boolean(row);
 }
