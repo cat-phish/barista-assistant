@@ -25,7 +25,7 @@ and fix the references.
 **Contents**
 - A. Settings & configuration: 1–4
 - B. Brewing & logging: 5–9, 59
-- Added last, not yet sorted into groups: 60–64 (60–63 beans, 64 AI)
+- Added last, not yet sorted into groups: 60–67 (60–63 beans, 64 AI, 65 Insights, 66 accounts, 67 brewing)
 - C. Recipes: 10
 - D. AI suggestions: 11–15
 - E. Insights: 16–21
@@ -401,6 +401,117 @@ Recording a brew: what's measured, and how fast it is to log.
   - How is it run (hosted, or self-hosted next to the worker), and what
     does it cost self-hosters?
   - How do we measure it against the LLM (the chat eval, for example)?
+
+### 65. Coffee Wrapped: a year in review
+
+- **Status:** idea (numbered last to avoid renumbering; belongs in E)
+- **Why:** recaps (backlog 18, `docs/api/recaps.md` §11c) cover a week
+  or a month; a year of brewing deserves its own moment, something fun
+  to open in late December and worth sharing.
+- **Approach:**
+  - **Period:** a third recap kind, `yearly` (calendar year), in
+    `recapPeriods.ts` (shared and frontend copies), offered from
+    1 January, with a preview of the year so far from 1 December.
+  - **Figures:** one `GET …/stats` for the year (and the year before,
+    for "vs last year"), counted in the browser like `recapFigures`:
+    total brews and days brewed, longest daily streak, busiest month
+    and weekday, favourite hour, coffee used (kg), caffeine and volume
+    drunk, top beans, origins, roasters, processes and varieties, most
+    brewed recipe and brewer, best-rated brew, the most improved recipe
+    or bean (rating early vs late in the year), new beans and recipes,
+    top flavors picked.
+  - **Story slides:** a full-screen route (`/insights/wrapped?year=&mine=`)
+    with swipeable cards (tap/swipe, keyboard arrows, progress bar,
+    `prefers-reduced-motion` respected), one figure each, ending on a
+    summary card.
+  - **AI summary:** the recap job with kind `yearly`, built from the
+    year's figures (plus the monthly summaries already written, when
+    there are some); a `recaps` row like the others, so it's kept and
+    backed up. Follows `recapAi` and the Settings → AI switches
+    (`llm-contract.md` §9).
+  - **Shareable image:** the summary card drawn to a canvas and saved as
+    a PNG (Web Share API where there is one, else a download). Nothing
+    leaves the device unless the person shares it.
+  - **Workspace-wide:** "Only mine" on by default (CLAUDE.md rule 13);
+    off gives the bar's year (everyone's brews, who brewed most only
+    if we decide to show names).
+  - **Reaching it:** the recap banner and a notification on 1 January
+    (notifications.md §1b), and an Insights → Wrapped entry.
+- **Size:** L (figures + slides; AI summary; image; notification).
+- **Depends on:** nothing; reuses recaps (18).
+- **Open questions:**
+  - The name: "Coffee Wrapped", "Brew Year", "Your Year in Coffee"?
+  - Should the year's figures be frozen when it ends, so later edits to
+    brews or beans don't change it (recaps today are worked out live)?
+  - The bar's year: show members by name (most brews, best cup), or
+    keep it anonymous?
+  - Which figures need a minimum number of brews to be worth a card
+    (skip a card rather than show "1 origin")?
+  - Does a viewer get the workspace-wide version?
+
+### 66. Review per-person privacy inside a workspace
+
+- **Status:** idea (numbered last to avoid renumbering; belongs in H)
+- **Why:** some things are private to each member even from the
+  workspace's owner, who runs the workspace and pays for its AI key. That
+  privacy can hold features back (an owner can't see members' recaps;
+  backups leave things out). The rule we want: **an owner sees
+  everything in their workspace; only the server admin sees across
+  workspaces.**
+- **Approach:** list every per-person restriction, then for each decide:
+  owner can see it (in the app, in backups, or both), or it stays
+  private for a real reason. Candidates:
+  - Recap AI summaries (`docs/api/recaps.md` §11c): the owner can't
+    view a member's in the app (backups have them since backlog 18's
+    follow-up); restore keeps only the restorer's own.
+  - AI chats (`docs/api/chat.md` §12): private, not in backups.
+  - People's own AI prompts (`auth.md` §1c), research settings and own
+    findings (`research.md` §1f), added Insights charts (`stats.md` §11b):
+    not in backups.
+  - AI suggestion feedback (`feedbackBy`, `feedbackReason`,
+    `PERSONAL_COLUMNS` in `backend/src/backup.ts`): dropped from backups.
+  - Anything else per-person found on the way ("Only mine" defaults are
+    a filter, not privacy, and stay as they are).
+- **Size:** S for the review; each change it leads to is its own item.
+- **Depends on:** nothing.
+- **Open questions:**
+  - Should members be told what the owner can see (a line in Settings
+    or on the chat page)?
+  - Do baristas or viewers get any of it, or only owners?
+  - Restore: give other members' rows to the restorer, or match them
+    back to people by email when they're on the server?
+
+### 67. Guest brews: who a brew is for
+
+- **Status:** planned (numbered last to avoid renumbering; belongs in B)
+- **Why:** every brew counts as drunk by whoever logged it, so brewing for
+  a partner or friends inflates volume drunk and caffeine in Insights,
+  recaps and Coffee Wrapped (65), and there's no way to see how much you
+  brew for whom.
+- **Approach (agreed):**
+  - A `guests` list per workspace (name, notes, archive), each optionally
+    linked to a **member of this workspace** (never another workspace's
+    user); a linked member's share counts in their own stats and recaps.
+  - Brew page: **For a guest** checkbox opens a drinkers picker, **Me**
+    (on by default) plus named or unnamed guests. Volume and caffeine split
+    equally among drinkers. Ticking it unticks Rate later; automatic AI
+    analysis is unchanged.
+  - A cold-brew serving says who drank it, and servings decide the split
+    when a batch has them.
+  - Figures: **volume brewed** (the whole brew) apart from **volume drunk**
+    and caffeine (your share only). Brews, ratings and best brew stay with
+    whoever logged it, guest brews included. New: brewed for guests, and a
+    per-guest breakdown. Recaps gain "brewed for others".
+  - Schema: `guests`, `brew_log_guests`, `brew_logs.forMe` and
+    `unnamedGuests`, `brew_servings.forGuest` and `guestId`. Stats `mine=1`
+    also matches brews made for the caller's linked guest. Backups carry
+    guests without handing `linkedUserId` to the restorer.
+  - CLAUDE.md rules touched: field registry and Repeat option "Who it's
+    for" (6), DeleteDialog for a guest in use (7), backups and match keys
+    (8), recap AI figures (9), sortable For column (12), Only mine (13).
+- **Size:** L, in phases: guests list; brew drinkers; serving "For";
+  counting in Insights and recaps; docs.
+- **Depends on:** nothing; 65 (Wrapped) should use its shares.
 
 ## C. Recipes
 
