@@ -93,7 +93,7 @@ async function populated() {
   // A cold brew batch with a serving (docs/api/brew-servings.md §6c).
   const fridge = (await post("recipes", { name: "Fridge", brewerId: v60, styleId: await styleId(owner, ws.id, "filter", "cold_brew"), targetDoseGrams: 40, targetWaterGrams: 400 })).recipe.id as string;
   const batch = await newBrewLog(owner, ws.id, bean, { recipeId: fridge, timestamp: "2026-10-02T08:00:00.000Z", actualDoseGrams: 40, actualWaterGrams: 400, actualYieldGrams: 310 });
-  await post(`brew-logs/${batch}/servings`, { concentrateGrams: 120, diluentGrams: 90, dilutedWith: "milk", rating: 4.5, tastingNotes: "Rich", flavors: ["sweet"] });
+  await post(`brew-logs/${batch}/servings`, { concentrateGrams: 120, diluentGrams: 90, dilutedWith: "milk", rating: 4.5, tastingNotes: "Rich", flavors: ["sweet"], guestId: sam });
   await db.insert(schema.llmAnalyses).values({ id: randomUUID(), brewLogId: log, reasoning: "Fine", suggestedGrindDelta: "finer", suggestedTempDelta: 1, request: SENT });
   await db.insert(schema.parameterSuggestions).values({ id: randomUUID(), beanId: bean, recipeId: recipe, brewerId: v60, grinderId: c40, source: "beanRecipe", maxBrews: 5, status: "done", reasoning: "Stay", batchDoseGrams: 15, batchWaterGrams: 250, grindSetting: 20, tempC: 94, ratio: 16.5, confidence: "low", request: SENT });
   await db.insert(schema.recaps).values({ id: randomUUID(), workspaceId: ws.id, userId: owner.id, kind: "monthly", periodStart: "2026-10-01", scope: "mine", status: "done", summary: "A steady month.", highlights: ["Try a finer grind"] });

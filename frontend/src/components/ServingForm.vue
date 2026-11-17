@@ -5,11 +5,11 @@
 // what's poured is ready to drink, so no water is suggested.
 import { computed, ref, watch } from 'vue';
 import type { BrewServingInput } from '../api/servings';
-import type { FlavorPick } from '../api/types';
+import type { FlavorPick, Guest } from '../api/types';
 import { overallRatio } from '../lib/batch';
 import { DILUTION_WITH } from '../lib/coldBrew';
 import { formatGrams } from '../lib/format';
-import { parseServingDraft, ratioText, suggestWater, type ServingDraft } from '../lib/servingDraft';
+import { FOR_ME, FOR_UNNAMED, parseServingDraft, ratioText, suggestWater, type ServingDraft } from '../lib/servingDraft';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
 import FlavorWheel from './FlavorWheel.vue';
 import RatingInput from './RatingInput.vue';
@@ -22,6 +22,7 @@ const props = defineProps<{
   askYield: boolean; // an unweighed batch its person can edit
   yieldEstimate: number | null;
   savedFlavors?: readonly FlavorPick[];
+  guests?: Guest[]; // the workspace's, for who drank it
   busy: boolean;
   error: string;
 }>();
@@ -30,6 +31,9 @@ const emit = defineEmits<{ save: [values: BrewServingInput, batchYieldGrams: num
 const { show } = useFieldVisibility();
 const draft = ref<ServingDraft>({ ...props.initial, flavors: [...props.initial.flavors] });
 const submitted = ref(false);
+// Active guests, plus an archived one this serving already names.
+const guestOptions = computed(() => (props.guests ?? []).filter((g) => !g.archivedAt || g.id === draft.value.forWho));
+const showFor = computed(() => show('brew.forWho') || draft.value.forWho !== FOR_ME);
 const waterTyped = ref(props.editing);
 const jarDiluted = computed(() => props.jarRatio > 0);
 const parsed = computed(() => parseServingDraft(draft.value));
@@ -87,6 +91,15 @@ const err = (k: keyof typeof parsed.value.errors) => (submitted.value ? parsed.v
       <label for="serving-when">Poured</label>
       <input id="serving-when" v-model="draft.when" type="datetime-local" :aria-invalid="!!err('when')" />
       <span v-if="err('when')" class="field-error">{{ err('when') }}</span>
+    </div>
+    <div v-if="showFor" class="field">
+      <label for="serving-for">Who drank it</label>
+      <select id="serving-for" v-model="draft.forWho">
+        <option :value="FOR_ME">Me</option>
+        <option v-for="g in guestOptions" :key="g.id" :value="g.id">{{ g.name }}{{ g.archivedAt ? ' (archived)' : '' }}</option>
+        <option :value="FOR_UNNAMED">{{ guestOptions.length ? 'Another guest' : 'A guest' }}</option>
+      </select>
+      <span class="hint">A guest’s glass isn’t counted as yours.</span>
     </div>
     <RatingInput v-model="draft.rating" name="serving-rating" />
     <FlavorWheel v-if="show('brew.flavors') || draft.flavors.length" v-model="draft.flavors" :saved="savedFlavors" />

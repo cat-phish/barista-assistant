@@ -7,7 +7,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { LEXICON_KEY, LEXICON_LIMITS, type FlavorPick } from "@barista/shared/flavors";
-import { brewLogs, brewServingFlavors, brewServings, DILUTION_WITH, isBatchStyle, recipeStyles, users, type DilutionWith } from "@barista/shared/schema";
+import { brewLogs, brewServingFlavors, brewServings, DILUTION_WITH, guests, isBatchStyle, recipeStyles, users, type DilutionWith } from "@barista/shared/schema";
 import { requireMembership, WRITE_ROLES, type Role } from "../auth/membership.js";
 import { db } from "../db.js";
 import { flavorPicks, resolveSaved, type SavedPick } from "../flavorPicks.js";
@@ -30,6 +30,9 @@ export interface BrewServingDetails {
   rating: number | null;
   tastingNotes: string | null;
   flavors: FlavorPick[];
+  forGuest: boolean; // false: drunk by whoever logged it
+  guestId: string | null;
+  guest: { id: string; name: string } | null; // null for an unnamed guest
   createdAt: Date;
 }
 
@@ -60,6 +63,8 @@ const servingFields = {
     .max(LEXICON_LIMITS.flavors)
     .refine((keys) => new Set(keys).size === keys.length, "each flavor once")
     .optional(),
+  forGuest: z.boolean().optional(),
+  guestId: z.uuid().nullable().optional(),
 };
 const createSchema = z.object(servingFields).strict();
 const updateServingSchema = updateSchema(servingFields);
@@ -69,6 +74,23 @@ const batchSchema = z.object({ finished: z.boolean() }).strict();
 function dilution(diluentGrams: number | null | undefined, dilutedWith: DilutionWith | null | undefined): { diluentGrams: number | null; dilutedWith: DilutionWith | null } {
   const g = diluentGrams ?? null;
   return g ? { diluentGrams: g, dilutedWith: dilutedWith ?? "water" } : { diluentGrams: g, dilutedWith: null };
+}
+
+// Who drank it: a named guest implies forGuest; a serving for whoever
+// logged it names no guest. The guest must be the workspace's (archived is fine).
+async function forWho(
+  workspaceId: string,
+  body: { forGuest?: boolean; guestId?: string | null },
+  existing: { forGuest: boolean; guestId: string | null } = { forGuest: false, guestId: null },
+): Promise<{ forGuest: boolean; guestId: string | null } | string> {
+  if (body.forGuest === false && body.guestId) return "guestId: only on a serving for a guest";
+  const forGuest = body.forGuest ?? (body.guestId ? true : existing.forGuest);
+  const guestId = !forGuest ? null : "guestId" in body ? (body.guestId ?? null) : existing.guestId;
+  if (guestId && body.guestId) {
+    const [g] = await db.select({ id: guests.id }).from(guests).where(and(eq(guests.id, guestId), eq(guests.workspaceId, workspaceId)));
+    if (!g) return "guestId: not a guest in this workspace";
+  }
+  return { forGuest, guestId };
 }
 
 type BatchState = "not_found" | "not_batch" | "steeping" | { finishedAt: Date | null };
@@ -102,17 +124,19 @@ function batchOk(res: Response, state: BatchState, needOpen: boolean): state is 
 
 async function loadServings(brewLogId: string, workspaceId: string, servingId?: string): Promise<BrewServingDetails[]> {
   const rows = await db
-    .select({ serving: brewServings, email: users.email })
+    .select({ serving: brewServings, email: users.email, guestName: guests.name })
     .from(brewServings)
     .leftJoin(users, eq(brewServings.userId, users.id))
+    .leftJoin(guests, eq(brewServings.guestId, guests.id))
     .where(and(eq(brewServings.brewLogId, brewLogId), servingId ? eq(brewServings.id, servingId) : undefined))
     .orderBy(asc(brewServings.timestamp), asc(brewServings.createdAt));
   const ids = rows.map((r) => r.serving.id);
   const picks: SavedPick[] =
     ids.length === 0 ? [] : (await db.select().from(brewServingFlavors).where(inArray(brewServingFlavors.servingId, ids))).map(({ servingId: ownerId, ...r }) => ({ ownerId, ...r }));
   const flavors = await resolveSaved(ids.map((id) => ({ id, workspaceId })), picks);
-  return rows.map(({ serving: s, email }) => ({
+  return rows.map(({ serving: s, email, guestName }) => ({
     ...s,
+    guest: s.guestId && guestName !== null ? { id: s.guestId, name: guestName } : null,
     loggedBy: s.userId && email ? { id: s.userId, email } : null,
     dilutionRatio: s.diluentGrams ? Math.round((s.diluentGrams / s.concentrateGrams) * 100) / 100 : null,
     flavors: flavors.get(s.id) ?? [],
@@ -140,12 +164,14 @@ brewServingsRouter.post("/servings", async (req: Request<BatchParams>, res: Resp
   if (!body) return;
   if (!batchOk(res, await batchState(req.params), true)) return;
 
-  const { flavors = [], diluentGrams, dilutedWith, ...fields } = body;
+  const { flavors = [], diluentGrams, dilutedWith, forGuest: _f, guestId: _g, ...fields } = body;
+  const who = await forWho(workspaceId, body);
+  if (typeof who === "string") return sendError(res, 400, who);
   const id = randomUUID();
   const error = await db.transaction(async (tx) => {
     const picks = await flavorPicks(tx, workspaceId, flavors);
     if (typeof picks === "string") return picks;
-    await tx.insert(brewServings).values({ id, brewLogId, userId, ...fields, ...dilution(diluentGrams, dilutedWith) });
+    await tx.insert(brewServings).values({ id, brewLogId, userId, ...fields, ...who, ...dilution(diluentGrams, dilutedWith) });
     if (picks.length) await tx.insert(brewServingFlavors).values(picks.map((p) => ({ servingId: id, flavorKey: p.key, label: p.label, place: p.place ?? null })));
     return null;
   });
@@ -166,7 +192,13 @@ brewServingsRouter.patch("/servings/:servingId", async (req: Request<ServingPara
   if (!existing) return sendError(res, 404, "Serving not found");
   if (!canChange(role, userId, existing.userId)) return sendError(res, 403, "Baristas can only change servings they logged");
 
-  const { flavors, diluentGrams, dilutedWith, ...fields } = body;
+  const { flavors, diluentGrams, dilutedWith, forGuest: _f, guestId: _g, ...fields } = body;
+  let who = {};
+  if ("forGuest" in body || "guestId" in body) {
+    const result = await forWho(workspaceId, body, existing);
+    if (typeof result === "string") return sendError(res, 400, result);
+    who = result;
+  }
   const diluted = "diluentGrams" in body || "dilutedWith" in body ? dilution("diluentGrams" in body ? diluentGrams : existing.diluentGrams, "dilutedWith" in body ? dilutedWith : existing.dilutedWith) : {};
   const error = await db.transaction(async (tx) => {
     let picks: FlavorPick[] | null = null;
@@ -176,7 +208,7 @@ brewServingsRouter.patch("/servings/:servingId", async (req: Request<ServingPara
       if (typeof result === "string") return result;
       picks = result;
     }
-    const set = { ...fields, ...diluted };
+    const set = { ...fields, ...who, ...diluted };
     if (Object.keys(set).length) await tx.update(brewServings).set(set).where(eq(brewServings.id, servingId));
     if (picks) {
       await tx.delete(brewServingFlavors).where(eq(brewServingFlavors.servingId, servingId));

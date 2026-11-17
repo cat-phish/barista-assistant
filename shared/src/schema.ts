@@ -1881,6 +1881,11 @@ export const brewServings = mysqlTable(
     dilutedWith: varchar("diluted_with", { length: 10 }).$type<DilutionWith>(), // DILUTION_WITH
     rating: decimal("rating", { precision: 2, scale: 1, mode: "number" }), // 0.5-5 in 0.5 steps
     tastingNotes: text("tasting_notes"),
+    // Who drank it (docs/api/brew-servings.md §6c, backlog 67): the one who
+    // logged it, or a guest, named (guestId) or not. A deleted guest leaves
+    // an unnamed one. A batch's servings decide how it splits.
+    forGuest: boolean("for_guest").default(false).notNull(),
+    guestId: varchar("guest_id", { length: 36 }).references(() => guests.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [index("brew_servings_log_idx").on(t.brewLogId, t.timestamp)]

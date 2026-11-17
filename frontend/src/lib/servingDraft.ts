@@ -2,7 +2,7 @@
 // the API's values out. Dilution normally happens in the glass; a jar
 // diluted as a whole (jarWaterGrams) is poured ready to drink.
 import type { BrewServingInput } from '../api/servings';
-import type { BrewServing, DilutionWith } from '../api/types';
+import type { BrewLog, BrewServing, DilutionWith } from '../api/types';
 import { DILUTION_WITH } from './coldBrew';
 import { formatGrams, parseDecimal } from './format';
 import { toLocalInput } from './roasting';
@@ -16,11 +16,20 @@ export interface ServingDraft {
   flavors: string[];
   notes: string;
   batchYield: string; // an unweighed batch's concentrate made, g ('' = leave it)
+  forWho: string; // FOR_ME, FOR_UNNAMED, or a guest's id
 }
+
+// Who drank it (backlog 67): whoever logs it, an unnamed guest, or a named one.
+export const FOR_ME = 'me';
+export const FOR_UNNAMED = 'guest';
 export type ServingDraftErrors = Partial<Record<'poured' | 'water' | 'when' | 'batchYield', string>>;
 
-export function emptyServingDraft(now: Date = new Date()): ServingDraft {
-  return { poured: '', water: '', dilutedWith: 'water', when: toLocalInput(now), rating: null, flavors: [], notes: '', batchYield: '' };
+// A new serving is for whoever logs it, unless the batch wasn't: then its
+// only named guest, or a guest.
+export function emptyServingDraft(now: Date = new Date(), batch?: Pick<BrewLog, 'forMe' | 'guests' | 'unnamedGuests'>): ServingDraft {
+  let forWho = FOR_ME;
+  if (batch && !batch.forMe) forWho = batch.guests.length === 1 && batch.unnamedGuests === 0 ? batch.guests[0]!.id : FOR_UNNAMED;
+  return { poured: '', water: '', dilutedWith: 'water', when: toLocalInput(now), rating: null, flavors: [], notes: '', batchYield: '', forWho };
 }
 
 export function servingDraftFrom(s: BrewServing): ServingDraft {
@@ -33,6 +42,7 @@ export function servingDraftFrom(s: BrewServing): ServingDraft {
     flavors: s.flavors.map((f) => f.key),
     notes: s.tastingNotes ?? '',
     batchYield: '',
+    forWho: !s.forGuest ? FOR_ME : (s.guestId ?? FOR_UNNAMED),
   };
 }
 
@@ -66,6 +76,8 @@ export function parseServingDraft(
       rating: d.rating,
       tastingNotes: d.notes.trim() || null,
       flavors: [...d.flavors],
+      forGuest: d.forWho !== FOR_ME,
+      guestId: d.forWho === FOR_ME || d.forWho === FOR_UNNAMED ? null : d.forWho,
     },
     batchYieldGrams: batchYield?.ok ? batchYield.value : null,
     errors,
@@ -77,6 +89,12 @@ export function parseServingDraft(
 export function suggestWater(pouredGrams: number | null, servedRatio: number | null, jarDiluted: boolean): string {
   if (jarDiluted || !servedRatio || !pouredGrams || !(pouredGrams > 0)) return '';
   return formatGrams(Math.round(pouredGrams * servedRatio));
+}
+
+// "For Sam", "For a guest", or null for whoever logged it.
+export function servingForText(s: Pick<BrewServing, 'forGuest' | 'guest'>): string | null {
+  if (!s.forGuest) return null;
+  return s.guest ? `For ${s.guest.name}` : 'For a guest';
 }
 
 // "1 : 1.5", or "neat".

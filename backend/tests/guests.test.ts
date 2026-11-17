@@ -49,7 +49,7 @@ describe("guests (docs/api/guests.md §2d)", () => {
   it("usage is zero while unused, and delete removes it", async () => {
     const { owner, base } = await setup();
     const id = (await owner.agent.post(base).send({ name: "Sam" })).body.guest.id as string;
-    expect((await owner.agent.get(`${base}/${id}/usage`)).body).toEqual({ brewLogCount: 0 });
+    expect((await owner.agent.get(`${base}/${id}/usage`)).body).toEqual({ brewLogCount: 0, servingCount: 0 });
     expect((await owner.agent.delete(`${base}/${id}`)).status).toBe(204);
     expect((await owner.agent.delete(`${base}/${id}`)).status).toBe(404);
     expect((await owner.agent.get(`${base}/${id}/usage`)).status).toBe(404);
@@ -71,7 +71,7 @@ describe("brews made for guests (docs/api/brew-logs.md §6, \"Who it's for\")", 
     const id = await newBrewLog(owner, ws.id, bean, { forMe: false, guestIds: [sam, ana], unnamedGuests: 2 });
     const log = (await owner.agent.get(`${logs}/${id}`)).body.brewLog;
     expect(log).toMatchObject({ forMe: false, unnamedGuests: 2, guests: [{ id: ana, name: "Ana" }, { id: sam, name: "Sam" }] });
-    expect((await owner.agent.get(`${base}/${sam}/usage`)).body).toEqual({ brewLogCount: 1 });
+    expect((await owner.agent.get(`${base}/${sam}/usage`)).body).toEqual({ brewLogCount: 1, servingCount: 0 });
 
     // For nobody: refused on create, and on a change that would leave nobody.
     const bad = { beanId: bean, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150, forMe: false };

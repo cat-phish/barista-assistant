@@ -14,6 +14,7 @@ import {
   brewLogGuests,
   brewLogTools,
   brewProblems,
+  brewServings,
   drinkIngredients,
   drinks,
   greenCoffees,
@@ -132,9 +133,14 @@ export async function vesselUsage(id: string): Promise<Counts> {
   return { brewLogCount: await countWhere(brewLogs, eq(brewLogs.vesselId, id)) };
 }
 
-// Brews made for them keep them as an unnamed guest (docs/api/guests.md §2d).
+// Brews and cold brew servings made for them keep them as an unnamed guest
+// (docs/api/guests.md §2d).
 export async function guestUsage(id: string): Promise<Counts> {
-  return { brewLogCount: await countWhere(brewLogGuests, eq(brewLogGuests.guestId, id)) };
+  const [brewLogCount, servingCount] = await Promise.all([
+    countWhere(brewLogGuests, eq(brewLogGuests.guestId, id)),
+    countWhere(brewServings, eq(brewServings.guestId, id)),
+  ]);
+  return { brewLogCount, servingCount };
 }
 
 // docs/api/menu.md §7b: the sections that show it lose it.

@@ -147,4 +147,35 @@ describe("brew servings", () => {
     expect((await owner.agent.patch(`${base}/brew-logs/${batch}`).send({ jarWaterGrams: -1 })).status).toBe(400);
     expect((await owner.agent.patch(`${base}/brew-logs/${batch}`).send({ jarWaterGrams: null })).body.brewLog.jarWaterGrams).toBeNull();
   });
+  it("says who drank a serving: whoever logged it, or a guest, named or not", async () => {
+    const { owner, base, url } = await setup();
+    const sam = (await owner.agent.post(`${base}/guests`).send({ name: "Sam" })).body.guest.id as string;
+    const mine = await owner.agent.post(url).send({ concentrateGrams: 100 });
+    expect(mine.body.serving).toMatchObject({ forGuest: false, guestId: null, guest: null });
+
+    const named = await owner.agent.post(url).send({ concentrateGrams: 100, guestId: sam });
+    expect(named.body.serving).toMatchObject({ forGuest: true, guestId: sam, guest: { id: sam, name: "Sam" } });
+    const unnamed = await owner.agent.post(url).send({ concentrateGrams: 100, forGuest: true });
+    expect(unnamed.body.serving).toMatchObject({ forGuest: true, guestId: null, guest: null });
+
+    expect((await owner.agent.post(url).send({ concentrateGrams: 100, forGuest: false, guestId: sam })).status).toBe(400);
+    expect((await owner.agent.post(url).send({ concentrateGrams: 100, guestId: randomUUID() })).status).toBe(400);
+    const elsewhere = await newWorkspace(owner);
+    const stranger = (await owner.agent.post(`/api/workspaces/${elsewhere.id}/guests`).send({ name: "Lee" })).body.guest.id as string;
+    expect((await owner.agent.post(url).send({ concentrateGrams: 100, guestId: stranger })).status).toBe(400);
+
+    // Back to whoever logged it clears the guest; an archived guest can still be named.
+    const back = await owner.agent.patch(`${url}/${named.body.serving.id}`).send({ forGuest: false });
+    expect(back.body.serving).toMatchObject({ forGuest: false, guestId: null });
+    await owner.agent.patch(`${base}/guests/${sam}`).send({ archived: true });
+    const again = await owner.agent.patch(`${url}/${mine.body.serving.id}`).send({ guestId: sam });
+    expect(again.body.serving).toMatchObject({ forGuest: true, guestId: sam });
+    expect((await owner.agent.patch(`${url}/${mine.body.serving.id}`).send({ rating: 4 })).body.serving.guestId).toBe(sam);
+
+    // Deleting the guest leaves an unnamed one.
+    expect((await owner.agent.get(`${base}/guests/${sam}/usage`)).body).toEqual({ brewLogCount: 0, servingCount: 1 });
+    expect((await owner.agent.delete(`${base}/guests/${sam}`)).status).toBe(204);
+    const after = (await owner.agent.get(url)).body.servings.find((s: { id: string }) => s.id === mine.body.serving.id);
+    expect(after).toMatchObject({ forGuest: true, guestId: null, guest: null });
+  });
 });

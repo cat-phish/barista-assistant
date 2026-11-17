@@ -480,7 +480,7 @@ const markRows = computed(() => {
         </div>
       </form>
 
-      <BatchServings v-if="isBatch && !log.steeping && !editing" :log="log" :can-modify-batch="canModify" :yield-estimate="batchEstimate" :start-serving="route.query.serve === '1'" @updated="(l) => (log = l)" />
+      <BatchServings v-if="isBatch && !log.steeping && !editing" :log="log" :can-modify-batch="canModify" :yield-estimate="batchEstimate" :start-serving="route.query.serve === '1'" :guests="guests" @updated="(l) => (log = l)" />
 
       <!-- AI analysis -->
       <section class="card stack">

@@ -1177,6 +1177,9 @@ export interface BrewServing {
   rating: number | null;
   tastingNotes: string | null;
   flavors: FlavorPick[];
+  forGuest: boolean; // false: drunk by whoever logged it (backlog 67)
+  guestId: string | null;
+  guest: { id: string; name: string } | null; // null for an unnamed guest
   createdAt: string;
 }
 

@@ -19,7 +19,10 @@ const WARNINGS: Record<DeletableKind, Record<string, (n: number) => string>> = {
     recipeCount: (n) => `${plural(n, 'recipe')} will lose their grind starting point for it.`,
   },
   water: { brewLogCount: (n) => `${plural(n, 'brew')} will lose their water profile.` },
-  guest: { brewLogCount: (n) => `${plural(n, 'brew')} made for them will count them as an unnamed guest.` },
+  guest: {
+    brewLogCount: (n) => `${plural(n, 'brew')} made for them will count them as an unnamed guest.`,
+    servingCount: (n) => `${plural(n, 'cold brew serving')} poured for them will say “a guest” instead.`,
+  },
   vessel: { brewLogCount: (n) => `${plural(n, 'brew')} will no longer say what they were weighed in. Their yields stay.` },
   tool: {
     brewLogCount: (n) => `${plural(n, 'brew')} will no longer list this prep item.`,

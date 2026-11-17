@@ -11,6 +11,8 @@ export interface BrewServingInput {
   rating?: number | null;
   tastingNotes?: string | null;
   flavors?: string[];
+  forGuest?: boolean;
+  guestId?: string | null;
 }
 
 const base = (workspaceId: string, brewLogId: string) => `/api/workspaces/${workspaceId}/brew-logs/${brewLogId}`;

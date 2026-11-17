@@ -6,10 +6,10 @@ import { computed, onMounted, ref } from 'vue';
 import { brewLogsApi } from '../api/brews';
 import { errorMessage } from '../api/client';
 import { servingsApi, type BrewServingInput } from '../api/servings';
-import type { BrewLog, BrewServing } from '../api/types';
+import type { BrewLog, BrewServing, Guest } from '../api/types';
 import { jarGrams, jarRatio, overallRatio, stockLeft } from '../lib/batch';
 import { formatGrams, formatWhen } from '../lib/format';
-import { emptyServingDraft, ratioText, servingAmounts, servingDraftFrom, type ServingDraft } from '../lib/servingDraft';
+import { emptyServingDraft, ratioText, servingAmounts, servingDraftFrom, servingForText, type ServingDraft } from '../lib/servingDraft';
 import { useFlavorWheel } from '../composables/useFlavorWheel';
 import { useAuthStore } from '../stores/auth';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -22,6 +22,7 @@ const props = defineProps<{
   canModifyBatch: boolean; // may edit the brew itself (to weigh its yield)
   yieldEstimate: number | null;
   startServing?: boolean; // open Log a serving straight away (from the Brew page's fridge card)
+  guests?: Guest[]; // the workspace's, for who drank a serving
 }>();
 const emit = defineEmits<{ updated: [log: BrewLog] }>();
 
@@ -68,7 +69,7 @@ const busy = ref(false);
 const formError = ref('');
 const actionError = ref('');
 function startNew(): void {
-  const draft = emptyServingDraft();
+  const draft = emptyServingDraft(new Date(), props.log);
   if (props.log.dilutedWith) draft.dilutedWith = props.log.dilutedWith;
   form.value = { id: null, draft };
   formError.value = '';
@@ -166,6 +167,7 @@ async function setFinished(value: boolean): Promise<void> {
       :ask-yield="form.id === null && estimated && canModifyBatch"
       :yield-estimate="yieldEstimate"
       :saved-flavors="editingServing?.flavors"
+      :guests="guests"
       :busy="busy"
       :error="formError"
       @save="save"
@@ -180,7 +182,7 @@ async function setFinished(value: boolean): Promise<void> {
           <span class="when">{{ formatWhen(s.timestamp) }}</span>
           <span v-if="s.loggedBy?.id !== auth.user?.id" class="muted small">{{ s.loggedBy?.email ?? 'Deleted user' }}</span>
         </div>
-        <p>{{ glassText(s) }}</p>
+        <p>{{ glassText(s) }}<span v-if="servingForText(s)" class="muted"> · {{ servingForText(s) }}</span></p>
         <RatingStars v-if="s.rating !== null" :rating="s.rating" />
         <ul v-if="s.flavors.length" class="flavor-chips">
           <li v-for="f in s.flavors" :key="f.key" class="badge"><span class="swatch" :style="{ background: flavorColor(f.key) }" aria-hidden="true" />{{ f.label }}</li>

@@ -5,7 +5,7 @@
 
 The people a workspace brews for besides whoever logs the brew (Settings →
 Guests; backlog 67). A guest is a name and notes. A brew names who it was
-for (§6, "Who it's for"); their share of volume and caffeine counts in
+for (§6, "Who it's for"), and so does a cold brew serving (§6c); their share of volume and caffeine counts in
 Insights and recaps in a later phase of backlog 67.
 
 A guest is **not linked** to a user: linking one to a member, so their share
@@ -59,13 +59,15 @@ it, like vessels (§3g).
 What deleting it would affect (see README, "Deleting").
 
 - **Auth Required:** `true` (any member)
-- **Success (`200 OK`):** `{ "brewLogCount": 3 }`, the brews made for them.
+- **Success (`200 OK`):** `{ "brewLogCount": 3, "servingCount": 1 }`, the
+  brews made for them and the cold brew servings poured for them (§6c).
 - **Errors:** `404` not in this workspace.
 
 ## `DELETE /api/workspaces/:workspaceId/guests/:guestId`
 
 - **Auth Required:** `true` (role `owner` or `barista`)
 - Brews made for them keep a drinker in their place: each counts one more
-  unnamed guest (§6), so the volume split doesn't change.
+  unnamed guest (§6), so the volume split doesn't change; servings poured
+  for them become an unnamed guest's (§6c).
 - **Success (`204 No Content`)**
 - **Errors:** `403` viewer; `404` not in this workspace.

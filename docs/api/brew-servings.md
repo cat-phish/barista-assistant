@@ -34,6 +34,9 @@ by an owner (`403` otherwise). Viewers are read-only.
   "rating": 4,
   "tastingNotes": "Chocolatey, a little flat",
   "flavors": [{ "key": "cocoa.chocolate", "label": "Chocolate" }],
+  "forGuest": true,
+  "guestId": "uuid",
+  "guest": { "id": "uuid", "name": "Sam" },
   "createdAt": "2026-11-10T15:30:05.000Z"
 }
 ```
@@ -54,6 +57,14 @@ by an owner (`403` otherwise). Viewers are read-only.
   `flavors` (keys on the workspace's wheel, §2c; the same rules as a brew's,
   in wheel order) are optional.
 - `userId` / `loggedBy` are `null` once the person deleted their account.
+- **Who drank it** (backlog 67): `forGuest` `false` (the default) is
+  whoever logged it. `true` is a guest: a named one (`guestId`, one of the
+  workspace's guests, §2d, archived ones included; `guest` gives its name)
+  or an unnamed one (`guestId` `null`). Sending a `guestId` alone sets
+  `forGuest`; `forGuest: false` clears the guest, and sending both
+  contradicting each other is a `400`. Deleting a guest leaves its servings
+  for an unnamed guest. A batch's servings, once it has any, decide how its
+  volume and caffeine split, instead of the brew's own "Who it's for" (§6).
 
 **Diluted in the jar:** dilution normally happens in each glass. A batch
 diluted as a whole records the water added in the brew log's
@@ -76,9 +87,10 @@ poured ÷ the jar (never past the whole batch, `servingShare`).
 - **Auth Required:** `true` (owner or barista)
 - **Body:** `concentrateGrams` (required), and optionally `diluentGrams`,
   `dilutedWith`, `timestamp`, `utcOffsetMinutes`, `rating`, `tastingNotes`,
-  `flavors` (keys).
+  `flavors` (keys), `forGuest`, `guestId`.
 - **Success (`201 Created`):** `{ "serving": { ...serving } }`
-- **Errors:** `400` invalid body or a flavor not on the wheel; `403` viewer;
+- **Errors:** `400` invalid body, a flavor not on the wheel, or a guest not
+  in this workspace; `403` viewer;
   `404` brew log not in this workspace; `409` the brew isn't a long cold
   brew batch, is still steeping, or the batch is finished.
 
