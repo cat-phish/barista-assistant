@@ -3013,3 +3013,35 @@ decisions behind it:
 Left, with the reasons, in `backlog.md` section L (items 54–58). Two need an
 owner decision: a duplicate-email sign-up still answers differently (SEC-32),
 and a push endpoint can still move between accounts (SEC-05).
+
+## Guest brews (built)
+
+Backlog item 67, branch `guest-brews`, migrations 0129–0131, in four
+phases. Every brew used to count as drunk by whoever logged it, so brewing
+for a partner or friends inflated volume and caffeine in Insights and
+recaps.
+
+- **Guests list:** Settings → Guests (`docs/api/guests.md` §2d), per
+  workspace: name, notes, archive. Owners and baristas edit; a guest in use
+  deletes through DeleteDialog. In backups, with a match key for imports.
+- **Who a brew is for** (`docs/api/brew-logs.md` §6, "Who it's for"): the
+  log form's For a guest picker, Me plus named and unnamed guests
+  (`brew_logs.forMe`, `unnamedGuests`, `brew_log_guests`). A hideable field
+  (`brew.forWho`) and a Repeat option (`forWho`). Ticking it unticks Rate
+  later; auto-analyze is unchanged.
+- **Who drank a serving** (`docs/api/brew-servings.md` §6c): Me, a guest
+  or another guest (`brew_servings.forGuest`, `guestId`), starting from the
+  batch's.
+- **Counting** (`docs/api/stats.md` §11, "Who drank it"), on the client in
+  `lib/shares.ts`: equal shares among whoever it was for, or, for a batch
+  with servings, by concentrate poured. Decision: **only logged servings
+  count**, so one glass logged for Sam makes the whole batch Sam's. Volume
+  drunk and caffeine are your share; volume brewed, Brewed for guests and
+  the Brews tab's Who drank it chart are new. Brews, ratings, best brew and
+  coffee used stay with whoever logged it. Recaps gain Brewed for others;
+  the AI summary gets only a count (`brewsForOthers`, always sent), never
+  guest names. Journal cards and the CSV say who it was for.
+- **Decision: no linking yet.** Linking a guest to a member would fill that
+  member's Insights and recaps unasked, so it waits for an invite they
+  accept. Until then Only mine still means brews you logged. Left in
+  `backlog.md` item 67.

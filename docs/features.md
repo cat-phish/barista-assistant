@@ -53,8 +53,12 @@ work is in `roadmap.md`.
   cell that's cut off for its full text; tap a row (on a phone too) and
   its cells show in full while it's open.
 - **Spreadsheets (CSV):** the journal (one row per brew, names instead of
-  IDs, with the worked-out ratio and extraction) or the beans, from
+  IDs, with the worked-out ratio and extraction, and who it was for) or the beans, from
   Settings → Data. Owners only.
+- **Guests:** Settings → Guests keeps the people you brew for besides
+  yourself (a partner, friends, café regulars): a name and notes, archived
+  when they stop coming (history keeps them). Owners and baristas edit it.
+  Not linked to accounts yet: that waits for an invite the member accepts.
 - **Scheduled server backups:** server admins (granted on the server with
   `npm run admin -- grant <email>`) get
   Settings → Server → Backups: a dump of the whole database every day or
@@ -374,6 +378,10 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   - Settings → Notifications sets the delay and whether the box starts
     ticked. Turning reminders off hides the box; with no service on it's
     greyed out.
+- **For a guest:** the log form's **For a guest** box opens who it's for:
+  **Me** (on by default) plus named guests and a count of unnamed ones. The
+  journal entry and card say "For Me and Sam". Ticking it unticks Rate
+  later. A brew field (Settings → Fields) and a repeat option.
 - **Abandoning a brew:** during the timer or before the log is saved,
   leaving the page, reloading, or tapping **Brew** again asks "Abandon this
   brew?" first; abandoning goes back to setup with your choices kept. After
@@ -395,6 +403,8 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
     option (Settings → Brew setup).
   - All three ask on setup whether it's steeping in the fridge or at room
     temperature (the recipe's, for cold brew and Kyoto drip).
+  - Each serving of a batch says **who drank it** (Me, a guest or another
+    guest), starting from who the batch was for.
   - All three ask for the dilution served. The AI judges them as served,
     and knows a concentrate's TDS runs high.
 - **Iced, brewed hot:** two ways.
@@ -456,9 +466,16 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
 ## Journal & AI
 - **Journal:** every brew, newest first, filterable by bean; entries can be
   edited or deleted.
+- **Who drank it (Insights):** a brew's volume and caffeine are split
+  among who it was for, equally, or by the concentrate poured when a cold
+  brew batch has logged servings (only logged servings count). Volume
+  drunk and caffeine are your share; **Volume brewed** is the whole lot,
+  and **Brewed for guests** the guests' share. The Brews tab's **Who drank
+  it** chart lists each drinker's brews, volume and caffeine. Brews,
+  ratings and the best brew stay with whoever logged it.
 - **Recaps:** Insights → Recap shows a week or month at a glance: brews and
-  days brewed, average rating, the best cups, caffeine, volume, coffee used,
-  beans brewed, bought and finished, new recipes, and the most brewed recipe
+  days brewed, average rating, the best cups, caffeine and volume (your share),
+  brewed for others (and who), coffee used, beans brewed, bought and finished, new recipes, and the most brewed recipe
   and brewer, each next to the period before. It's yours by default, or
   everyone's in the workspace, and steps back through earlier weeks and
   months. Under Settings → Recaps: weekly, monthly or both, the day weeks
