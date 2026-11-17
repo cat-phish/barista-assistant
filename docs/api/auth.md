@@ -216,7 +216,7 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
     client sends the browser's with each Settings → Recaps change. An
     unknown name is `400`.
   - `recapAi`: `off` | `manual` (default) | `auto`: the AI summary.
-  - `recapSeen`: `{ "weekly"?: "YYYY-MM-DD", "monthly"?: "YYYY-MM-DD" }`,
+  - `recapSeen`: `{ "weekly"?: "YYYY-MM-DD", "monthly"?: "YYYY-MM-DD", "yearly"?: "YYYY-MM-DD" }`,
     the start of the last period whose banner was opened or dismissed.
     Default `{}`. A `PATCH` sends the whole object.
 - `learnAboutMe` (default `true`): Learn about me (§1d). Off, nothing is

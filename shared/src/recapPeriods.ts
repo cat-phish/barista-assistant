@@ -1,9 +1,9 @@
 // Recap periods (docs/api/recaps.md §11c): weeks starting on the person's chosen
-// day, and calendar months, as local dates "YYYY-MM-DD" (inclusive ends).
+// day, calendar months and calendar years, as local dates "YYYY-MM-DD" (inclusive ends).
 // No imports: the frontend keeps the same code in lib/recapPeriods.ts, and a
 // test there runs both on the same cases.
 
-export const RECAP_KINDS = ["weekly", "monthly"] as const;
+export const RECAP_KINDS = ["weekly", "monthly", "yearly"] as const;
 export type RecapKind = (typeof RECAP_KINDS)[number];
 export interface RecapPeriod {
   start: string;
@@ -24,6 +24,7 @@ export function periodOf(kind: RecapKind, day: string, weekStartsOn: number): Re
     const start = addDays(day, -back);
     return { start, end: addDays(start, 6) };
   }
+  if (kind === "yearly") return { start: `${day.slice(0, 4)}-01-01`, end: `${day.slice(0, 4)}-12-31` };
   const d = toDate(day);
   const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
   return { start: `${day.slice(0, 7)}-01`, end: iso(last) };
@@ -39,6 +40,7 @@ export const daysAfter = (p: RecapPeriod, day: string): number => Math.round((to
 export function periodLabel(kind: RecapKind, p: RecapPeriod): string {
   const [sy, sm, sd] = p.start.split("-").map(Number) as [number, number, number];
   const [ey, em, ed] = p.end.split("-").map(Number) as [number, number, number];
+  if (kind === "yearly") return String(sy);
   if (kind === "monthly") return `${MONTH_NAMES[sm - 1]} ${sy}`;
   if (sy !== ey) return `${sd} ${MONTHS[sm - 1]} ${sy} – ${ed} ${MONTHS[em - 1]} ${ey}`;
   if (sm !== em) return `${sd} ${MONTHS[sm - 1]} – ${ed} ${MONTHS[em - 1]}`;

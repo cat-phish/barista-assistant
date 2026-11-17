@@ -99,7 +99,7 @@ export interface UserPreferences {
   recapNotifyTime: string; // "HH:MM", 15-minute steps, in timeZone
   timeZone: string | null; // IANA name, from the person's device; null = the server's BREW_TIMEZONE
   recapAi: RecapAiMode;
-  recapSeen: Partial<Record<"weekly" | "monthly", string>>; // the period start last opened or dismissed
+  recapSeen: Partial<Record<"weekly" | "monthly" | "yearly", string>>; // the period start last opened or dismissed
   // Learn about me (docs/api/auth.md §1d): off, nothing is learned, the
   // feedback buttons are hidden and their learned list and votes aren't sent.
   learnAboutMe: boolean;
@@ -2285,7 +2285,7 @@ export const recaps = mysqlTable(
     userId: varchar("user_id", { length: 36 })
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    kind: varchar("kind", { length: 10 }).$type<RecapKindName>().notNull(), // weekly | monthly
+    kind: varchar("kind", { length: 10 }).$type<RecapKindName>().notNull(), // weekly | monthly | yearly
     periodStart: date("period_start", { mode: "string" }).notNull(), // YYYY-MM-DD
     scope: varchar("scope", { length: 4 }).$type<RecapScope>().notNull(),
     status: varchar("status", { length: 10 }).$type<RecapSummaryStatus>().notNull().default("none"), // the AI summary
@@ -2303,7 +2303,7 @@ export const recaps = mysqlTable(
   (t) => [unique("recaps_period_uq").on(t.workspaceId, t.userId, t.kind, t.periodStart, t.scope)],
 );
 export type RecapRow = typeof recaps.$inferSelect;
-type RecapKindName = "weekly" | "monthly";
+type RecapKindName = "weekly" | "monthly" | "yearly";
 
 export type AiChat = typeof aiChats.$inferSelect;
 export type AiChatMessage = typeof aiChatMessages.$inferSelect;

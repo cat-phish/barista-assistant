@@ -12,6 +12,7 @@ import {
   beans,
   brewerMethods,
   brewers,
+  brewLogFlavors,
   brewLogGuests,
   brewLogProblems,
   brewLogs,
@@ -58,6 +59,7 @@ export interface StatsBrew {
   guestIds: string[];
   unnamedGuests: number;
   servings: StatsServing[];
+  flavors: string[]; // the flavors picked on the wheel, by label (backlog 65)
   doseGrams: number;
   waterGrams: number | null;
   iceGrams: number | null;
@@ -223,14 +225,24 @@ async function loadBrews(workspaceId: string, callerId: string, q: z.infer<typeo
     return (!q.from || d >= q.from) && (!q.to || d <= q.to);
   });
   const ids = inRange.map((r) => r.id);
-  const [tools, problems, guestIds, servings] = await Promise.all([toolIdsFor(ids), problemIdsFor(ids), guestIdsFor(ids), servingsFor(ids)]);
+  const [tools, problems, guestIds, servings, flavors] = await Promise.all([toolIdsFor(ids), problemIdsFor(ids), guestIdsFor(ids), servingsFor(ids), flavorsFor(ids)]);
   return inRange.map((r) => ({
     ...r,
     toolIds: tools.get(r.id) ?? [],
     problemIds: problems.get(r.id) ?? [],
     guestIds: guestIds.get(r.id) ?? [],
     servings: servings.get(r.id) ?? [],
+    flavors: flavors.get(r.id) ?? [],
   }));
+}
+
+async function flavorsFor(brewLogIds: string[]): Promise<Map<string, string[]>> {
+  if (brewLogIds.length === 0) return new Map();
+  const rows = await db
+    .select({ brewLogId: brewLogFlavors.brewLogId, id: brewLogFlavors.label })
+    .from(brewLogFlavors)
+    .where(inArray(brewLogFlavors.brewLogId, brewLogIds));
+  return groupIds(rows);
 }
 
 async function guestIdsFor(brewLogIds: string[]): Promise<Map<string, string[]>> {
@@ -249,7 +261,7 @@ async function servingsFor(brewLogIds: string[]): Promise<Map<string, StatsServi
     .select({ brewLogId: brewServings.brewLogId, guestId: brewServings.guestId, forGuest: brewServings.forGuest, concentrateGrams: brewServings.concentrateGrams })
     .from(brewServings)
     .where(inArray(brewServings.brewLogId, brewLogIds))
-    .orderBy(asc(brewServings.timestamp), asc(brewServings.id));
+    .orderBy(asc(brewServings.timestamp), asc(brewServings.createdAt), asc(brewServings.id));
   for (const { brewLogId, ...s } of rows) byLog.set(brewLogId, [...(byLog.get(brewLogId) ?? []), s]);
   return byLog;
 }

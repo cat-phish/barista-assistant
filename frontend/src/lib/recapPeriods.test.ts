@@ -41,5 +41,13 @@ describe.each([
     expect(p.periodLabel('weekly', { start: '2026-10-26', end: '2026-11-01' })).toBe('26 Oct – 1 Nov');
     expect(p.periodLabel('weekly', { start: '2026-12-28', end: '2027-01-03' })).toBe('28 Dec 2026 – 3 Jan 2027');
     expect(p.periodLabel('monthly', { start: '2026-11-01', end: '2026-11-30' })).toBe('November 2026');
+    expect(p.periodLabel('yearly', { start: '2026-01-01', end: '2026-12-31' })).toBe('2026');
+  });
+
+  it('years are calendar years (backlog 65)', () => {
+    expect(p.periodOf('yearly', '2026-11-17', 1)).toEqual({ start: '2026-01-01', end: '2026-12-31' });
+    expect(p.justEnded('yearly', '2027-01-01', 1)).toEqual({ start: '2026-01-01', end: '2026-12-31' });
+    expect(p.previousPeriod('yearly', { start: '2024-01-01', end: '2024-12-31' }, 1)).toEqual({ start: '2023-01-01', end: '2023-12-31' });
+    expect(p.nextPeriod('yearly', { start: '2026-01-01', end: '2026-12-31' }, 1).start).toBe('2027-01-01');
   });
 });

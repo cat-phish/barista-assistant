@@ -72,8 +72,8 @@ describe("stats (docs/api/stats.md §11)", () => {
     const mine = await newBrewLog(owner, ws.id, bean);
     const shared = await newBrewLog(owner, ws.id, bean, { guestIds: [sam], unnamedGuests: 1 });
     const batch = await newBrewLog(owner, ws.id, bean, { recipeId: cold, actualDoseGrams: 40, actualWaterGrams: 400, actualYieldGrams: 310 });
-    await owner.agent.post(`${base}/brew-logs/${batch}/servings`).send({ concentrateGrams: 100 });
-    await owner.agent.post(`${base}/brew-logs/${batch}/servings`).send({ concentrateGrams: 50, guestId: sam });
+    await owner.agent.post(`${base}/brew-logs/${batch}/servings`).send({ concentrateGrams: 100, timestamp: "2026-11-01T10:00:00.000Z" });
+    await owner.agent.post(`${base}/brew-logs/${batch}/servings`).send({ concentrateGrams: 50, guestId: sam, timestamp: "2026-11-01T11:00:00.000Z" });
 
     const res = await owner.agent.get(`${base}/stats`);
     const row = (id: string) => (res.body.brews as Array<{ id: string }>).find((b) => b.id === id);
@@ -86,6 +86,18 @@ describe("stats (docs/api/stats.md §11)", () => {
       ],
     });
     expect(res.body.lookups.guests).toEqual([{ id: sam, name: "Sam" }]);
+  });
+
+  it("sends the flavors picked on each brew, by label (backlog 65)", async () => {
+    const owner = await newUser();
+    const ws = await newWorkspace(owner);
+    const bean = await newBean(owner, ws.id);
+    const picked = await newBrewLog(owner, ws.id, bean, { flavors: ["fruity.citrus.lemon", "sweet"] });
+    const plain = await newBrewLog(owner, ws.id, bean);
+    const res = await owner.agent.get(`/api/workspaces/${ws.id}/stats`);
+    const row = (id: string) => (res.body.brews as Array<{ id: string; flavors: string[] }>).find((b) => b.id === id)!;
+    expect([...row(picked).flavors].sort()).toEqual(["Lemon", "Sweet"]);
+    expect(row(plain).flavors).toEqual([]);
   });
 
   it("sends each brewer's typed retention and its latest measured brews, whatever the filters", async () => {

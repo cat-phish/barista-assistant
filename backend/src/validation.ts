@@ -131,7 +131,7 @@ export const preferencesSchema = z
     recapNotifyTime: z.string().regex(/^([01]\d|2[0-3]):(00|15|30|45)$/, "HH:MM in 15-minute steps"),
     timeZone: z.string().max(64).refine(isTimeZone, "an IANA time zone").nullable(),
     recapAi: z.enum(RECAP_AI_MODES),
-    recapSeen: z.object({ weekly: localDate, monthly: localDate }).partial().strict(),
+    recapSeen: z.object({ weekly: localDate, monthly: localDate, yearly: localDate }).partial().strict(),
     learnAboutMe: z.boolean(), // docs/api/auth.md §1d
   })
   .partial()

@@ -34,7 +34,10 @@ interface WorkspaceParams {
 }
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "a date YYYY-MM-DD");
-const keySchema = z.object({ kind: z.enum(RECAP_KINDS), periodStart: day, scope: z.enum(RECAP_SCOPES) }).strict();
+// The yearly recap's AI summary comes in a later phase of backlog 65; until
+// then only weeks and months are accepted here.
+const SUMMARY_KINDS = RECAP_KINDS.filter((k): k is Exclude<RecapKind, "yearly"> => k !== "yearly") as [Exclude<RecapKind, "yearly">, ...Exclude<RecapKind, "yearly">[]];
+const keySchema = z.object({ kind: z.enum(SUMMARY_KINDS), periodStart: day, scope: z.enum(RECAP_SCOPES) }).strict();
 
 const COLUMNS = {
   kind: recaps.kind,

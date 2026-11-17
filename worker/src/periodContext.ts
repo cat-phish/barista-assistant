@@ -43,7 +43,7 @@ export interface PeriodFigures {
   brewers: Array<{ brewer: string; brews: number }>;
 }
 export interface PeriodContext {
-  kind: "weekly" | "monthly" | "custom";
+  kind: "weekly" | "monthly" | "yearly" | "custom";
   period: OpenRange;
   filters: string | null; // what else narrows the brews, in words ("Guji · V60 · Only mine")
   previous: PeriodRange | null;

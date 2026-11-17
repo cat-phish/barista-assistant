@@ -7,7 +7,7 @@ const brew = (fields: Partial<StatsBrew> = {}): StatsBrew => ({
   methodId: null, styleId: null, brewsLike: null, grinderId: null, drinkId: null, toolIds: [], problemIds: [], doseGrams: 15,
   waterGrams: 250, iceGrams: null, yieldGrams: null, servingSize: null, servingUnit: null, drinkServingSize: null, drinkServingUnit: null,
   dilutionRatio: null, timeSec: 150, expectedFinishMinSec: null, expectedFinishMaxSec: null, grindSetting: null, tempC: null,
-  tdsPercent: null, rating: null, drinkRating: null, forMe: true, guestIds: [], unnamedGuests: 0, servings: [], ...fields,
+  tdsPercent: null, rating: null, drinkRating: null, forMe: true, guestIds: [], unnamedGuests: 0, servings: [], flavors: [], ...fields,
 });
 const bean = { id: 'bean', roasterName: ' Onyx ', country: 'Kenya, Rwanda', processId: 'p1', roastLevel: 'light', altitudeMasl: 1800, roastDate: '2026-10-10T00:00:00.000Z', freezes: [] } as unknown as StatsBean;
 const ctx: ExploreContext = {

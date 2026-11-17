@@ -211,7 +211,7 @@ describe("preferences", () => {
       { recapNotifyTime: "24:00" },
       { timeZone: "Mars/Olympus" },
       { recapAi: "always" },
-      { recapSeen: { yearly: "2026-01-01" } },
+      { recapSeen: { daily: "2026-01-01" } },
       { recapSeen: { weekly: "2 Nov" } },
     ]) {
       expect((await me.agent.patch(path).send(bad)).status, JSON.stringify(bad)).toBe(400);

@@ -60,7 +60,8 @@ out to keep the reply small.
       "forMe": true,
       "guestIds": ["uuid"],
       "unnamedGuests": 0,
-      "servings": []
+      "servings": [],
+      "flavors": ["Lemon", "Sweet"]
     }
   ],
   "beans": [
@@ -117,6 +118,8 @@ out to keep the reply small.
   - `servings`: a cold brew batch's servings, oldest first, as
     `{ guestId, forGuest, concentrateGrams }` (§6c, "Who drank it");
     empty for any other brew.
+  - `flavors`: the coffee's flavors picked on the wheel (§6), by label, for
+    Your Year in Coffee's top flavors (recaps.md §11c).
   - **Left out:** steeping brews (`steeping: true`). They aren't finished.
 - **`beans`:** every bean in the workspace, archived ones included, whatever
   the filters are. Bean totals (stock, spend) cover all of them.

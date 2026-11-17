@@ -43,7 +43,7 @@ export interface UserPreferences {
   recapNotifyTime: string; // "HH:MM", 15-minute steps, in timeZone
   timeZone: string | null; // IANA name from the device; null = the server's
   recapAi: RecapAiMode;
-  recapSeen: Partial<Record<'weekly' | 'monthly', string>>; // the period start last opened or dismissed
+  recapSeen: Partial<Record<'weekly' | 'monthly' | 'yearly', string>>; // the period start last opened or dismissed
   learnAboutMe: boolean; // docs/api/auth.md §1d
 }
 export type RecapPeriodChoice = 'weekly' | 'monthly' | 'both';
@@ -1057,6 +1057,7 @@ export interface StatsBrew {
   guestIds: string[];
   unnamedGuests: number;
   servings: StatsServing[];
+  flavors: string[]; // picked on the wheel, by label
 }
 export interface StatsServing {
   guestId: string | null;

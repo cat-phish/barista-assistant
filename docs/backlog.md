@@ -404,7 +404,12 @@ Recording a brew: what's measured, and how fast it is to log.
 
 ### 65. Coffee Wrapped: a year in review
 
-- **Status:** idea (numbered last to avoid renumbering; belongs in E)
+- **Status:** in progress (numbered last to avoid renumbering; belongs in E),
+  branch `coffee-wrapped`. Decided: the name **Your Year in Coffee**;
+  figures live, like other recaps; the bar's year names members. Phase 1,
+  the year's figures, is built (`docs/api/recaps.md` §11c, "Your Year in
+  Coffee"; `lib/yearInCoffee.ts`, stats brews' `flavors`). Card minimums:
+  5 brews for busiest times, 2 entries for a ranked list.
 - **Why:** recaps (backlog 18, `docs/api/recaps.md` §11c) cover a week
   or a month; a year of brewing deserves its own moment, something fun
   to open in late December and worth sharing.

@@ -24,6 +24,8 @@ inclusive:
   Monday by default). Insights' weekly charts use the same weeks (§11, "How
   the client counts").
 - **monthly:** a calendar month.
+- **yearly:** a calendar year, for Your Year in Coffee (below). Not a
+  `recapPeriods` choice: weekly and monthly recaps are unaffected.
 
 The recap a person is offered is the one **just ended**: the last whole
 period before today's. Insights → Recap can step back to any earlier one,
@@ -75,6 +77,42 @@ the client counts" does:
 - **Most brewed** recipe, and the brewer used most.
 
 A period without brews says so; beans and recipes added in it still show.
+
+## Your Year in Coffee
+
+Backlog 65: one calendar year of brewing, as story slides. Built in phases:
+
+1. **The year's figures** (done): `frontend/src/lib/yearInCoffee.ts`
+   (`yearFigures`), worked out in the browser from one `GET …/stats` for the
+   year and one for the year before. Live, like other recaps: later edits
+   to brews or beans change them.
+2. The story slides, and an Insights entry.
+3. A shareable image of the summary card.
+4. An AI summary (kind `yearly`; until then `…/recaps` accepts only
+   `weekly` and `monthly`).
+5. The banner and a notification on 1 January.
+
+**Figures:** everything a recap counts for the year, next to the year
+before (above, including your share of volume and caffeine and Brewed for
+others), plus:
+
+- **Brews per month**, January first.
+- **Longest streak:** the longest run of days brewed in a row (2 or more).
+- **Busiest month, weekday and favourite hour** (local time), from 5
+  brews; the busiest month needs brews in 2 months or more. Ties go to the
+  earliest.
+- **Top origins** (a bean's countries, a blend's each counted), **roasters,
+  processes, varieties and flavors** (picked on the wheel, by label), most
+  brewed first, at most 5 each. A list needs 2 different entries or it's
+  left out.
+- **Most improved:** the recipe or bean whose rating rose most from the
+  first half of its rated brews to the last half, with 4 rated brews or
+  more and a rise of half a star or more.
+- **Who brewed** (the bar's year, with "Only my brews" off): each person's
+  brews, most first, and whose brew was the best cup. Named, as recaps'
+  top brewer is; left out when only one person brewed.
+
+A figure without enough behind it is left out, so its slide is skipped.
 
 ## Banner
 

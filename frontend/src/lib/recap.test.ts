@@ -7,7 +7,7 @@ const brew = (fields: Partial<StatsBrew> = {}): StatsBrew => ({
   methodId: null, styleId: null, brewsLike: null, grinderId: null, drinkId: null, toolIds: [], problemIds: [], doseGrams: 20,
   waterGrams: 300, iceGrams: null, yieldGrams: null, servingSize: null, servingUnit: null, drinkServingSize: null, drinkServingUnit: null,
   dilutionRatio: null, timeSec: 150, expectedFinishMinSec: null, expectedFinishMaxSec: null, grindSetting: null, tempC: null,
-  tdsPercent: null, rating: null, drinkRating: null, forMe: true, guestIds: [], unnamedGuests: 0, servings: [], ...fields,
+  tdsPercent: null, rating: null, drinkRating: null, forMe: true, guestIds: [], unnamedGuests: 0, servings: [], flavors: [], ...fields,
 });
 const bean = (fields: Partial<StatsBean> = {}): StatsBean => ({
   id: 'kenya', roasterName: 'House', beanName: 'Kenya Nyeri', batchNumber: null, country: null, originArea: null, altitudeMasl: null, processId: null,
