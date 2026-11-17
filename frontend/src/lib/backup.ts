@@ -149,6 +149,7 @@ const TABLE_LABELS: Record<string, string> = {
   brew_log_flavors: 'flavor picks',
   llm_analyses: 'AI suggestions',
   parameter_suggestions: 'suggested parameters',
+  recaps: 'recap summaries',
 };
 export const tableLabel = (table: string): string => TABLE_LABELS[table] ?? table.replace(/_/g, ' ');
 

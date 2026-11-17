@@ -67,7 +67,9 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   `drinks`, `drink_ingredients`, `menu_other_items`, `menu_sections`, `menu_items`,
   `parameter_suggestions` (before the brews, which name the one they used), `brew_logs`, `brew_log_marks`, `brew_log_tools`, `brew_log_problems`,
   `brew_log_flavors`, `brew_servings`, `brew_serving_flavors` (`brew-servings.md`
-  §6c; who logged one is its `brewedBy`), `llm_analyses` (`BACKUP_TABLES`). A table left out of a file counts as
+  §6c; who logged one is its `brewedBy`), `llm_analyses`, `recaps` (written AI
+  recap summaries only, `status` `done`, each with its writer's `brewedBy`;
+  a restore keeps only the restorer's own, `recaps.md` §11c) (`BACKUP_TABLES`). A table left out of a file counts as
   empty.
 - **Not in a backup:** people, members, notification channels, Web Push
   devices and preferences belong to the server, not the workspace. A brew says who made
@@ -82,8 +84,7 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   block's `research` (`null` or left out, as in older files, = none; a block
   that doesn't check out is `backup.workspace.research: not valid`).
   `analysis_requests` (when an automatic analysis is due, why one failed,
-  §8) is queue state and isn't backed up either, nor are `recaps` (when a
-  recap was notified, its AI summary; personal, like chats, §11c).
+  §8) is queue state and isn't backed up either.
 - **The flavor wheel:** a workspace's own lexicon (§2c, `flavor_lexicons`)
   goes in the `workspace` block as `flavorLexicon` (the lexicon file), or
   `null` on the built-in wheel; it's checked like an import on restore

@@ -45,6 +45,8 @@ export const MATCH_KEYS: Record<string, (row: BackupRow) => string[]> = {
   menu_sections: (r) => [lower(r.name)],
   // The same brew imported twice: same moment, bean and dose.
   brew_logs: (r) => [`${new Date(r.timestamp as string | Date).toISOString()}|${r.beanId}|${Number(r.actualDoseGrams)}`],
+  // Never a list, nor needed by one; a person's period and scope.
+  recaps: (r) => [`${r.kind}|${r.periodStart}|${r.scope}`],
 };
 
 // The column a copy's "(2)" goes on: its name, or for a bean its bean name

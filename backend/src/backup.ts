@@ -9,6 +9,7 @@ import { eq, getTableColumns, inArray, type Column } from "drizzle-orm";
 import { getTableConfig, type MySqlTable } from "drizzle-orm/mysql-core";
 import { z } from "zod";
 import { scalesByDefault } from "@barista/shared/brew";
+import { RECAP_KINDS } from "@barista/shared/recapPeriods";
 import type { RecipeCopy } from "@barista/shared/recipeCopy";
 import { FLAVORS, parseLexicon, type FlavorLexicon } from "@barista/shared/flavors";
 import type { ResearchSettings } from "@barista/shared/researchSettings";
@@ -42,6 +43,8 @@ import {
   PREINFUSION_MODES,
   PROFILE_CONTROLS,
   RECIPE_STEP_TYPES,
+  RECAP_SCOPES,
+  RECAP_SUMMARY_STATUSES,
   RECIPE_STYLES,
   ROAST_LEVELS,
   ROAST_TYPES,
@@ -250,6 +253,8 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
   { table: brewServings, scope: "brewLogId" },
   { table: brewServingFlavors, scope: "servingId" },
   { table: llmAnalyses, scope: "brewLogId" },
+  // Written AI recap summaries (docs/api/recaps.md §11c), only done ones.
+  { table: recaps, scope: "workspace" },
 ];
 // Not in a backup: people (with their notification channels and Web Push
 // devices), their memberships and the server's own settings
@@ -258,7 +263,7 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
 // analysis_requests is queue state (when an automatic analysis is due, why
 // one failed), meaningless without the queue. AI chats are private to the
 // person (docs/api/chat.md §12), and whoever has a backup could read them.
-export const NOT_BACKED_UP: readonly MySqlTable[] = [users, notificationChannels, pushSubscriptions, workspaces, workspaceMembers, workspaceInvites, emailTokens, serverSettings, analysisRequests, flavorLexicons, workspaceAiConfigs, aiChats, aiChatMessages, aiChatPhotos, recaps];
+export const NOT_BACKED_UP: readonly MySqlTable[] = [users, notificationChannels, pushSubscriptions, workspaces, workspaceMembers, workspaceInvites, emailTokens, serverSettings, analysisRequests, flavorLexicons, workspaceAiConfigs, aiChats, aiChatMessages, aiChatPhotos];
 
 // Columns that only hold one of a list (varchar in the database).
 const ENUMS: Record<string, readonly string[]> = {
@@ -304,6 +309,9 @@ const ENUMS: Record<string, readonly string[]> = {
   "parameter_suggestions.source": SUGGEST_SOURCES,
   "parameter_suggestions.status": SUGGESTION_STATUSES,
   "parameter_suggestions.confidence": ANALYSIS_CONFIDENCE,
+  "recaps.kind": RECAP_KINDS,
+  "recaps.scope": RECAP_SCOPES,
+  "recaps.status": RECAP_SUMMARY_STATUSES,
 };
 // JSON columns, checked by what the API accepts.
 // What was sent to the AI (docs/api/analysis.md §8c), when the file has it.
@@ -401,6 +409,7 @@ const JSON_SCHEMAS: Record<string, z.ZodType> = {
     .strict()
     .nullable(),
   // The ids are the source workspace's, not rewritten: a restored one shows the name.
+  "recaps.highlights": z.array(z.string().max(200)).max(4).nullable(),
   "parameter_suggestions.alternatives": z
     .array(z.object({ kind: z.enum(SUGGEST_ALTERNATIVES), id: z.string(), name: z.string(), why: z.string() }).strict())
     .nullable(),
@@ -501,6 +510,8 @@ export async function buildBackup(workspaceId: string, options: BackupOptions = 
       const parentIds = ids.get(t.refs[t.scope]!) ?? [];
       if (parentIds.length > 0) rows = (await db.select().from(t.table).where(inArray(t.columns[t.scope]!, parentIds))) as BackupRow[];
     }
+    // Only a written summary is worth keeping: the others are a notification's mark, or a job's state.
+    if (t.table === recaps) rows = rows.filter((r) => r.status === "done");
     if (t.hasId) ids.set(t.name, rows.map((r) => r.id as string));
     for (const key of t.userColumns) {
       const missing = [...new Set(rows.map((r) => r[key] as string | null).filter((id): id is string => !!id && !emails.has(id)))];
@@ -652,6 +663,8 @@ export function checkBackup(input: unknown): Checked {
       for (const [key, value] of Object.entries(raw)) {
         if (key === "brewedBy" && t.userColumns.length > 0) {
           if (value !== null && typeof value !== "string") return { ok: false, error: `${at}.brewedBy: must be an email or null` };
+          // A recap is personal: restore keeps only the restorer's own (insertBackup).
+          if (t.table === recaps) row.brewedBy = value;
           continue; // kept in the file only; restored brews are the restorer's
         }
         const col = t.columns[key];
@@ -775,9 +788,19 @@ async function insertBackup(
     const lexicon = file.workspace.flavorLexicon;
     if (lexicon) await tx.insert(flavorLexicons).values({ workspaceId, name: lexicon.name, flavors: lexicon.flavors });
 
+    // A recap summary is the restorer's own (docs/api/recaps.md §11c):
+    // other people's are left out, as everything restored becomes the owner's.
+    const [owner] = await tx.select({ email: users.email }).from(users).where(eq(users.id, target.ownerId));
+    const ownEmail = owner?.email.toLowerCase();
+
     const newIds = new Map<string, Map<string, string>>();
     for (const t of TABLE_INFO) {
-      const rows = file.tables[t.name] ?? [];
+      let rows = file.tables[t.name] ?? [];
+      if (t.table === recaps) {
+        rows = rows
+          .filter((r) => typeof r.brewedBy === "string" && r.brewedBy.toLowerCase() === ownEmail)
+          .map(({ brewedBy: _by, ...r }) => r);
+      }
       const map = new Map<string, string>();
       if (t.hasId) for (const row of rows) map.set(row.id as string, randomUUID());
       newIds.set(t.name, map);

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { is } from "drizzle-orm";
+import { eq, is } from "drizzle-orm";
 import { getTableConfig, MySqlTable } from "drizzle-orm/mysql-core";
 import { describe, expect, it } from "vitest";
 import * as schema from "@barista/shared/schema";
@@ -93,6 +93,7 @@ async function populated() {
   await post(`brew-logs/${batch}/servings`, { concentrateGrams: 120, diluentGrams: 90, dilutedWith: "milk", rating: 4.5, tastingNotes: "Rich", flavors: ["sweet"] });
   await db.insert(schema.llmAnalyses).values({ id: randomUUID(), brewLogId: log, reasoning: "Fine", suggestedGrindDelta: "finer", suggestedTempDelta: 1, request: SENT });
   await db.insert(schema.parameterSuggestions).values({ id: randomUUID(), beanId: bean, recipeId: recipe, brewerId: v60, grinderId: c40, source: "beanRecipe", maxBrews: 5, status: "done", reasoning: "Stay", batchDoseGrams: 15, batchWaterGrams: 250, grindSetting: 20, tempC: 94, ratio: 16.5, confidence: "low", request: SENT });
+  await db.insert(schema.recaps).values({ id: randomUUID(), workspaceId: ws.id, userId: owner.id, kind: "monthly", periodStart: "2026-10-01", scope: "mine", status: "done", summary: "A steady month.", highlights: ["Try a finer grind"] });
   await owner.agent.patch(`${base}/grinders/${c40}`).send({ archived: true });
   return { owner, ws, base };
 }
@@ -203,6 +204,32 @@ describe("workspace backup and restore (docs/api/backup.md §2b)", () => {
     expect(logs[0].brewedBy.email).toBe(other.email);
     const members = (await other.agent.get(`/api/workspaces/${restored.body.workspaceId}/members`)).body.members as Array<{ email: string; role: string }>;
     expect(members.map((m) => [m.email, m.role])).toEqual([[other.email, "owner"]]);
+  });
+
+  it("keeps written recap summaries, and restores only the restorer's own (docs/api/recaps.md §11c)", async () => {
+    const owner = await newUser();
+    const ws = await newWorkspace(owner);
+    const barista = await newUser();
+    await addMember(owner, ws.id, barista, "barista");
+    const recap = (userId: string, status: "done" | "failed" | "none", summary: string | null) => ({
+      id: randomUUID(), workspaceId: ws.id, userId, kind: "monthly" as const, periodStart: "2026-10-01", scope: "mine" as const,
+      status, summary, highlights: summary ? ["Try a finer grind"] : null,
+    });
+    await db.insert(schema.recaps).values([
+      recap(owner.id, "done", "A steady month."),
+      recap(barista.id, "done", "The barista's month."),
+      { ...recap(owner.id, "failed", null), kind: "weekly" as const, periodStart: "2026-11-02" },
+    ]);
+    const backup = (await owner.agent.get(`/api/workspaces/${ws.id}/backup`)).body;
+    expect(backup.tables.recaps.map((r: { summary: string; brewedBy: string }) => [r.brewedBy, r.summary]).sort()).toEqual(
+      [[owner.email, "A steady month."], [barista.email, "The barista's month."]].sort(),
+    );
+
+    const restored = await owner.agent.post("/api/workspaces/restore").send({ name: "Recaps", slug: `recaps-${ws.slug}`, backup });
+    expect(restored.status, JSON.stringify(restored.body)).toBe(201);
+    const got = await owner.agent.get(`/api/workspaces/${restored.body.workspaceId}/recaps?kind=monthly&periodStart=2026-10-01&scope=mine`);
+    expect(got.body.recap).toMatchObject({ status: "done", summary: "A steady month.", highlights: ["Try a finer grind"] });
+    expect(await db.select().from(schema.recaps).where(eq(schema.recaps.workspaceId, restored.body.workspaceId))).toHaveLength(1);
   });
 
   it("is for owners only", async () => {

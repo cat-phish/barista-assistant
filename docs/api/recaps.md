@@ -99,7 +99,11 @@ A small banner at the top of the brew page (setup, before a brew starts),
 Shown in Insights → Recap under the figures, when the workspace has AI
 and `recapAi` isn't `off`, for a period that has ended. The summary is
 the caller's own, per workspace, period and scope (`mine`, or `all` with
-"Only my brews" off), stored on a `recaps` row (schema.md; not backed up).
+"Only my brews" off), stored on a `recaps` row (schema.md). Rows are kept for good (gone only
+with the person or the workspace), and a written (`done`) one is in the
+workspace backup (backup.md §2b) with whose it is; a restore keeps only the
+restorer's own, as everything restored becomes theirs. The figures aren't
+stored: they're worked out from the brews each time.
 
 - `recapAi: "manual"`: a **Write summary** button; **Rewrite** once written.
 - `recapAi: "auto"`: the notification's tick (notifications.md §1b,
