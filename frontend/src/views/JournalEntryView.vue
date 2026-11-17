@@ -490,7 +490,7 @@ const markRows = computed(() => {
         <p v-if="aiState === 'error'" class="form-error" role="alert">{{ aiError }}</p>
         <p v-if="log.steeping" class="muted small">Still steeping: finish it first.</p>
         <p v-else-if="unrated && !analysis" class="muted small">Rate the brew first: the suggestion works from how it tasted.</p>
-        <AiNoteField v-if="workspaces.canEdit && aiAvailable && aiState !== 'waiting' && !unrated && !log.steeping" id="analysis-note" v-model="aiNote" />
+        <AiNoteField v-if="workspaces.canEdit && log.brewedBy?.id === auth.user?.id && aiAvailable && aiState !== 'waiting' && !unrated && !log.steeping" id="analysis-note" v-model="aiNote" />
         <button
           v-if="workspaces.canEdit && aiAvailable && aiState !== 'waiting' && !unrated && !log.steeping"
           class="btn btn-secondary"

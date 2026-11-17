@@ -13,7 +13,8 @@ the next brew.
   workspace)
 - **Body (optional):** `{ "note": "Tasted papery today." }`, a one-off note
   for the AI (up to 500 characters, `docs/api/auth.md` §1c). The prompt is
-  the brew's barista's own (§1c), whoever asks.
+  the brew's barista's own (§1c), whoever asks, so only the brew's barista
+  can add a note (SEC-120); anyone else gets `400`.
 - **Success Response (`202 Accepted`):**
   ```json
   {
@@ -22,7 +23,7 @@ the next brew.
     "message": "Brew analysis queued."
   }
   ```
-- **Errors:** `404` brew log not found or not in a workspace the caller
+- **Errors:** `400` a note on someone else's brew; `404` brew log not found or not in a workspace the caller
   belongs to (same message, and the same single query, for both, so neither
   body nor timing reveals whether the log exists); `403` viewer; `409` the
   brew is a cold brew still steeping (§6: finish it first), or it has no
@@ -334,7 +335,7 @@ nothing is saved.
 ### `POST /api/workspaces/:workspaceId/parameter-suggestions/preview`
 
 - **Auth Required:** `true` (role `owner` or `barista`, as for asking)
-- **Body:** for an analysis optional `{ "note": "..." }`; for a suggestion
+- **Body:** for an analysis optional `{ "note": "..." }` (your own brew only, §8); for a suggestion
   the same body as its POST (§8b), checked the same way (`resolveRequest`).
 - **Success Response (`200 OK`):** `{ "request": { ... } }`, or
   `{ "request": null }` when there's nothing to preview.

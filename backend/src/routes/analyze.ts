@@ -26,6 +26,16 @@ analyzeRouter.use(requireAuth);
 // Optional: a one-off note for the AI (docs/api/auth.md §1c).
 const analyzeSchema = z.object({ note: noteSchema }).strict();
 
+// SEC-120: the note goes into the brew's barista's own prompt, so only that
+// barista can add one (docs/api/analysis.md §8). Sends the 400 and returns false.
+async function noteAllowed(res: Response, brewLogId: string, userId: string, note: string | undefined): Promise<boolean> {
+  if (!note) return true;
+  const [log] = await db.select({ userId: brewLogs.userId }).from(brewLogs).where(eq(brewLogs.id, brewLogId));
+  if (log?.userId === userId) return true;
+  sendError(res, 400, "A note can only be added to your own brew");
+  return false;
+}
+
 analyzeRouter.post(
   "/:brewLogId/analyze",
   async (req: Request<{ brewLogId: string }>, res: Response<AnalyzeResponse>) => {
@@ -34,6 +44,7 @@ analyzeRouter.post(
     if (!access) return;
     const body = parseBody(analyzeSchema, { body: req.body ?? {} }, res);
     if (!body) return;
+    if (!(await noteAllowed(res, brewLogId, authedUserId(req), body.note))) return;
 
     // A cold brew still steeping has nothing to judge yet (docs/api/analysis.md §8).
     const [log] = await db
@@ -81,6 +92,7 @@ analyzeRouter.post(
     if (!(await requireResourceMembership(res, authedUserId(req), "brewLog", brewLogId, WRITE_ROLES))) return;
     const body = parseBody(analyzeSchema, { body: req.body ?? {} }, res);
     if (!body) return;
+    if (!(await noteAllowed(res, brewLogId, authedUserId(req), body.note))) return;
     await sendPreview(res, { kind: "analysis", brewLogId, ...(body.note ? { note: body.note } : {}) });
   }
 );
