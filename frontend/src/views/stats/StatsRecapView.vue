@@ -18,6 +18,7 @@ import { localDateInput } from '../../lib/format';
 import { markSeen, recapFigures } from '../../lib/recap';
 import { justEnded, nextPeriod, periodLabel, periodOf, previousPeriod, type RecapKind } from '../../lib/recapPeriods';
 import { formatWeight, localDay } from '../../lib/stats';
+import { latestYear } from '../../lib/yearInCoffee';
 import { useAuthStore } from '../../stores/auth';
 import { useWorkspaceStore } from '../../stores/workspace';
 
@@ -31,6 +32,7 @@ const aiAvailable = useAiAvailable();
 const showSummary = computed(() => aiAvailable.value && prefs.value.recapAi !== 'off');
 
 const today = localDateInput();
+const yearOnOffer = latestYear(today);
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 // The periods the person gets recaps for; both are always viewable here.
 const kinds = computed<RecapKind[]>(() => (prefs.value.recapPeriods === 'monthly' ? ['monthly', 'weekly'] : ['weekly', 'monthly']));
@@ -137,6 +139,10 @@ const ratingSub = computed(() => {
       </div>
       <label class="mine"><input type="checkbox" :checked="mine" @change="go({ mine: ($event.target as HTMLInputElement).checked })" /> Only my brews</label>
     </div>
+    <RouterLink class="card year-link" :to="{ name: 'stats-year', query: { year: String(yearOnOffer), ...(mine ? {} : { mine: '0' }) } }">
+      <strong>{{ mine ? 'Your' : 'The bar’s' }} {{ yearOnOffer }} in coffee</strong>
+      <span class="muted">{{ yearOnOffer === Number(today.slice(0, 4)) ? 'The year so far, as story slides' : 'The year in review, as story slides' }} ›</span>
+    </RouterLink>
 
     <div v-if="!asked" class="card ask">
       <p>Recaps are off in <RouterLink :to="{ name: 'settings-recaps' }">Settings → Recaps</RouterLink>, so nothing loads until you ask.</p>
@@ -212,6 +218,15 @@ const ratingSub = computed(() => {
 </template>
 
 <style scoped>
+.year-link {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  text-decoration: none;
+  color: var(--text);
+  background: var(--brand-tint);
+}
 .recap-bar {
   display: flex;
   flex-wrap: wrap;

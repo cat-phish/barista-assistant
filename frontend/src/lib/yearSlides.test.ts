@@ -1,0 +1,81 @@
+import { describe, expect, it } from 'vitest';
+import type { RecapFigures } from './recap';
+import type { YearFigures } from './yearInCoffee';
+import { hourLabel, personLabels, summaryLines, yearSlides, type SlideContext } from './yearSlides';
+
+const recap = (over: Partial<RecapFigures> = {}): RecapFigures => ({
+  brews: 0, previousBrews: 0, daysBrewed: 0, rating: null, previousRating: null, best: [], caffeineMg: null, volume: null, forOthers: null,
+  coffeeGrams: 0, beansBrewed: [], beansAdded: [], beansFinished: [], newRecipes: [], topRecipe: null, topBrewer: null, ...over,
+});
+const figures = (over: Partial<YearFigures> = {}): YearFigures => ({
+  year: 2026, recap: recap(), months: Array(12).fill(0), streak: null, busiestMonth: null, busiestWeekday: null, favouriteHour: null,
+  origins: [], roasters: [], processes: [], varieties: [], flavors: [], mostImproved: null, people: [], bestCupBy: null, ...over,
+});
+const ctx: SlideContext = { mine: true, inProgress: false, volume: (ml) => `${ml} ml`, weight: (g) => `${g} g`, person: (id) => (id === 'u' ? 'You' : `${id}@example.com`) };
+
+describe('Your Year in Coffee slides (backlog 65)', () => {
+  it('a year without brews says so, and nothing else', () => {
+    const slides = yearSlides(figures(), { ...ctx, inProgress: true });
+    expect(slides.map((s) => s.key)).toEqual(['intro', 'empty']);
+    expect(slides[0]).toMatchObject({ kicker: 'Your year in coffee', value: '2026', sub: 'So far' });
+  });
+
+  it('skips the figures left out, and ends on the summary', () => {
+    const f = figures({ recap: recap({ brews: 3, daysBrewed: 2, coffeeGrams: 60 }) });
+    expect(yearSlides(f, ctx).map((s) => s.key)).toEqual(['intro', 'brews', 'coffee', 'summary']);
+  });
+
+  it('shows every figure a full year has, in order', () => {
+    const f = figures({
+      recap: recap({
+        brews: 120, previousBrews: 80, daysBrewed: 90, rating: { mean: 4.1, n: 100 }, caffeineMg: 15000, volume: { ml: 30000, estimated: true },
+        forOthers: { brews: 10, ml: 2000, estimated: false, guests: [{ name: 'Sam', brews: 8 }] }, coffeeGrams: 2400,
+        beansBrewed: [{ id: 'k', label: 'House Kenya', brews: 50 }], beansAdded: [{ id: 'k', label: 'House Kenya' }], beansFinished: [{ id: 'k', label: 'House Kenya' }],
+        newRecipes: [{ id: 'r', name: 'V60 Daily' }], topRecipe: { name: 'V60 Daily', brews: 70 }, topBrewer: { name: 'V60', brews: 90 },
+        best: [{ brewId: 'b1', rating: 5, day: '2026-06-01', bean: 'House Kenya', recipe: 'V60 Daily', brewer: 'V60' }],
+      }),
+      streak: { days: 12, start: '2026-03-01', end: '2026-03-12' },
+      busiestMonth: { month: 2, brews: 20 },
+      busiestWeekday: { weekday: 5, brews: 30 },
+      favouriteHour: { hour: 7, brews: 40 },
+      origins: [{ name: 'Kenya', brews: 50 }, { name: 'Ethiopia', brews: 30 }],
+      roasters: [{ name: 'House', brews: 50 }, { name: 'Atlas', brews: 20 }],
+      processes: [{ name: 'Washed', brews: 60 }, { name: 'Natural', brews: 30 }],
+      varieties: [{ name: 'SL28', brews: 50 }, { name: 'Heirloom', brews: 30 }],
+      flavors: [{ name: 'Sweet', brews: 40 }, { name: 'Lemon', brews: 20 }],
+      mostImproved: { kind: 'recipe', name: 'V60 Daily', from: 3.25, to: 4.5, brews: 20 },
+    });
+    const slides = yearSlides(f, ctx);
+    expect(slides.map((s) => s.key)).toEqual(['intro', 'brews', 'streak', 'month', 'when', 'coffee', 'volume', 'others', 'beans', 'origins', 'roasters', 'processes', 'varieties', 'flavors', 'recipe', 'best', 'improved', 'new', 'summary']);
+    const by = (k: string) => slides.find((s) => s.key === k)!;
+    expect(by('brews')).toMatchObject({ value: '120 brews', sub: 'on 90 days · 80 brews in 2025' });
+    expect(by('streak')).toMatchObject({ value: '12 days in a row', sub: '1 Mar – 12 Mar' });
+    expect(by('when').value).toBe('Saturdays, 7 am');
+    expect(by('volume')).toMatchObject({ value: '≈ 30000 ml', sub: 'and ≈ 15.0 g of caffeine' });
+    expect(by('best')).toMatchObject({ value: '5 ★ House Kenya', sub: '1 Jun · V60 Daily', link: { name: 'journal-entry', params: { id: 'b1' } } });
+    expect(by('improved').sub).toBe('3.3 → 4.5 ★ over 20 rated brews');
+    expect(by('new')).toMatchObject({ value: '1 new bean, 1 new recipe', sub: 'and 1 bag finished' });
+    expect(summaryLines(f, ctx).map((l) => l.name)).toEqual(['Days brewed', 'Coffee used', 'You drank', 'Longest streak', 'Top bean', 'Top origin', 'Top recipe', 'Best cup']);
+  });
+
+  it("the bar's year names who brewed, and whose was the best cup", () => {
+    const f = figures({
+      recap: recap({ brews: 5, daysBrewed: 5, coffeeGrams: 100, best: [{ brewId: 'b', rating: 4.5, day: '2026-02-02', bean: 'Kenya', recipe: null, brewer: null }] }),
+      people: [{ userId: 'v', brews: 3 }, { userId: 'u', brews: 2 }],
+      bestCupBy: 'v',
+    });
+    const slides = yearSlides(f, { ...ctx, mine: false });
+    expect(slides[0]!.kicker).toBe("The bar's year in coffee");
+    expect(slides.find((s) => s.key === 'best')!.sub).toBe('2 Feb · by v@example.com');
+    expect(slides.find((s) => s.key === 'people')).toMatchObject({ value: 'v@example.com', list: [{ name: 'v@example.com', detail: '3 brews' }, { name: 'You', detail: '2 brews' }] });
+  });
+
+  it('names you "You", and others by a numbered stand-in', () => {
+    const name = personLabels([{ userId: 'v' }, { userId: 'u' }, { userId: 'w' }], 'u');
+    expect(['u', 'v', 'w'].map(name)).toEqual(['You', 'Member 1', 'Member 2']);
+  });
+
+  it('labels hours on a 12-hour clock', () => {
+    expect([0, 7, 12, 17].map(hourLabel)).toEqual(['12 am', '7 am', '12 pm', '5 pm']);
+  });
+});

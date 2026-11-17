@@ -406,7 +406,9 @@ Recording a brew: what's measured, and how fast it is to log.
 
 - **Status:** in progress (numbered last to avoid renumbering; belongs in E),
   branch `coffee-wrapped`. Decided: the name **Your Year in Coffee**;
-  figures live, like other recaps; the bar's year names members. Phase 1,
+  figures live, like other recaps; the bar's year names members, as a
+  stand-in ("Member 1") until accounts get a name field (email stays the
+  login). Phase 2, the slides at `/insights/year`, is built. Phase 1,
   the year's figures, is built (`docs/api/recaps.md` §11c, "Your Year in
   Coffee"; `lib/yearInCoffee.ts`, stats brews' `flavors`). Card minimums:
   5 brews for busiest times, 2 entries for a ranked list.

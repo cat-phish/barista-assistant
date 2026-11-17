@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { StatsBean, StatsBrew, StatsData } from '../api/types';
-import { longestStreak, yearFigures } from './yearInCoffee';
+import { latestYear, longestStreak, yearFigures } from './yearInCoffee';
 
 const brew = (fields: Partial<StatsBrew> = {}): StatsBrew => ({
   id: 'b', timestamp: '2026-03-03T08:00:00.000Z', utcOffsetMinutes: 0, userId: 'u', beanId: 'kenya', recipeId: null, brewerId: null,
@@ -102,5 +102,13 @@ describe('longestStreak', () => {
     expect(longestStreak(['2026-01-05', '2026-01-01', '2026-01-02', '2026-01-02', '2026-01-06'])).toEqual({ days: 2, start: '2026-01-01', end: '2026-01-02' });
     expect(longestStreak(['2026-12-31'])).toBeNull();
     expect(longestStreak([])).toBeNull();
+  });
+});
+
+describe('latestYear', () => {
+  it('offers this year from 1 December, else the one just ended', () => {
+    expect(latestYear('2026-11-30')).toBe(2025);
+    expect(latestYear('2026-12-01')).toBe(2026);
+    expect(latestYear('2027-01-01')).toBe(2026);
   });
 });

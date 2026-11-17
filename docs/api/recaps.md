@@ -86,7 +86,7 @@ Backlog 65: one calendar year of brewing, as story slides. Built in phases:
    (`yearFigures`), worked out in the browser from one `GET …/stats` for the
    year and one for the year before. Live, like other recaps: later edits
    to brews or beans change them.
-2. The story slides, and an Insights entry.
+2. **The story slides** (done), and an entry on Insights → Recap.
 3. A shareable image of the summary card.
 4. An AI summary (kind `yearly`; until then `…/recaps` accepts only
    `weekly` and `monthly`).
@@ -109,10 +109,33 @@ others), plus:
   first half of its rated brews to the last half, with 4 rated brews or
   more and a rise of half a star or more.
 - **Who brewed** (the bar's year, with "Only my brews" off): each person's
-  brews, most first, and whose brew was the best cup. Named, as recaps'
-  top brewer is; left out when only one person brewed.
+  brews, most first, and whose brew was the best cup; left out when only
+  one person brewed. The first place that names members: "You", and the
+  others "Member 1", "Member 2"… by most brews, a stand-in until accounts
+  have a name.
 
 A figure without enough behind it is left out, so its slide is skipped.
+
+**Slides:** route `/insights/year` (`stats-year`), full screen outside the
+Insights tabs, linked from the top of Insights → Recap ("Your 2025 in
+coffee"). Query: `year` (default and latest: this year "so far" from 1
+December, else the one just ended) and `mine=0` for the bar's year (an
+**Only my brews** box on the slides, on by default). One `GET …/stats`
+with `from` = the year before's start, `to` = the year's end. With
+`recaps` off it waits for **Show my year**.
+
+- One figure per slide (`frontend/src/lib/yearSlides.ts`): the year;
+  brews; longest streak; busiest month (with brews per month); the usual
+  weekday and hour; coffee used; volume drunk and caffeine; brewed for
+  others; top beans, origins, roasters, processes, varieties and flavors;
+  most brewed recipe; best cup (with a link to it); most improved; new
+  beans and recipes; who brewed; then a **summary** with the year's key
+  lines and the years before and after. A year without brews has only
+  the first slide and "No brews".
+- Next: tap the right two-thirds, swipe left, → or Page Down, or the ›
+  button. Back: the left third, swipe right, ← or Page Up, ‹. Escape or
+  ✕ closes. A progress bar shows where you are. Slides slide in, except
+  with `prefers-reduced-motion`.
 
 ## Banner
 

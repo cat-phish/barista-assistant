@@ -38,6 +38,9 @@ export const MIN_DISTINCT = 2; // a ranked list needs this many different entrie
 export const MIN_IMPROVE_BREWS = 4; // rated brews of a recipe or bean to compare its halves
 export const MIN_IMPROVEMENT = 0.5; // half a star, early half to late half
 
+// The latest year on offer: this one "so far" from 1 December, else the one
+// just ended. It's also the year shown when none is asked for.
+export const latestYear = (today: string): number => Number(today.slice(0, 4)) - (today.slice(5, 7) === '12' ? 0 : 1);
 export const yearPeriod = (year: number): RecapPeriod => ({ start: `${year}-01-01`, end: `${year}-12-31` });
 
 // data: the year's rows (and the year before's in previous, for "vs last

@@ -42,6 +42,8 @@ export const router = createRouter({
     { path: '/journal', name: 'journal', component: () => import('../views/JournalView.vue'), meta: { requiresWorkspace: true } },
     { path: '/journal/:id', name: 'journal-entry', component: () => import('../views/JournalEntryView.vue'), props: true, meta: { requiresWorkspace: true } },
     // Insights (Stats in code): one view holding the filters and data, a child route per tab (components/StatsTabs.vue).
+    // Your Year in Coffee (docs/api/recaps.md §11c): full-screen slides, outside the Insights tabs.
+    { path: '/insights/year', name: 'stats-year', component: () => import('../views/stats/YearInCoffeeView.vue'), meta: { requiresWorkspace: true } },
     {
       path: '/insights',
       component: () => import('../views/StatsView.vue'),
