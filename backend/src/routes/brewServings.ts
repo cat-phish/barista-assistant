@@ -20,7 +20,7 @@ export interface BrewServingDetails {
   id: string;
   brewLogId: string;
   userId: string | null;
-  loggedBy: { id: string; email: string } | null; // null once they deleted their account
+  loggedBy: { id: string; email: string; name: string | null } | null; // null once they deleted their account
   timestamp: Date;
   utcOffsetMinutes: number | null;
   concentrateGrams: number;
@@ -124,7 +124,7 @@ function batchOk(res: Response, state: BatchState, needOpen: boolean): state is 
 
 async function loadServings(brewLogId: string, workspaceId: string, servingId?: string): Promise<BrewServingDetails[]> {
   const rows = await db
-    .select({ serving: brewServings, email: users.email, guestName: guests.name })
+    .select({ serving: brewServings, email: users.email, userName: users.name, guestName: guests.name })
     .from(brewServings)
     .leftJoin(users, eq(brewServings.userId, users.id))
     .leftJoin(guests, eq(brewServings.guestId, guests.id))
@@ -134,10 +134,10 @@ async function loadServings(brewLogId: string, workspaceId: string, servingId?: 
   const picks: SavedPick[] =
     ids.length === 0 ? [] : (await db.select().from(brewServingFlavors).where(inArray(brewServingFlavors.servingId, ids))).map(({ servingId: ownerId, ...r }) => ({ ownerId, ...r }));
   const flavors = await resolveSaved(ids.map((id) => ({ id, workspaceId })), picks);
-  return rows.map(({ serving: s, email, guestName }) => ({
+  return rows.map(({ serving: s, email, userName, guestName }) => ({
     ...s,
     guest: s.guestId && guestName !== null ? { id: s.guestId, name: guestName } : null,
-    loggedBy: s.userId && email ? { id: s.userId, email } : null,
+    loggedBy: s.userId && email ? { id: s.userId, email, name: userName } : null,
     dilutionRatio: s.diluentGrams ? Math.round((s.diluentGrams / s.concentrateGrams) * 100) / 100 : null,
     flavors: flavors.get(s.id) ?? [],
   }));

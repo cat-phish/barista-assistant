@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { personLabel } from '../lib/people';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { analysisApi, brewLogsApi } from '../api/brews';
@@ -313,7 +314,7 @@ const servingsWarning = computed(() => {
   const list = deleteServings.value ?? [];
   const by = new Map<string, number>();
   for (const s of list) {
-    const who = s.loggedBy?.id === auth.user?.id ? 'you' : (s.loggedBy?.email ?? 'a deleted user');
+    const who = s.loggedBy?.id === auth.user?.id ? 'you' : (s.loggedBy ? personLabel(s.loggedBy) : 'a deleted user');
     by.set(who, (by.get(who) ?? 0) + 1);
   }
   return `${list.length} serving${list.length === 1 ? '' : 's'} poured from it: ${[...by].map(([who, n]) => `${n} by ${who}`).join(', ')}`;
@@ -445,7 +446,7 @@ const markRows = computed(() => {
               </ul>
             </dd>
           </div>
-          <div><dt>Brewed by</dt><dd>{{ log.brewedBy?.email ?? 'Deleted user' }}</dd></div>
+          <div><dt>Brewed by</dt><dd>{{ log.brewedBy ? personLabel(log.brewedBy) : 'Deleted user' }}</dd></div>
         </dl>
         <div v-if="log.tastingNotes" class="notes">
           <h2>{{ drinkTasting ? 'The brew, tasted on its own' : 'Tasting notes' }}</h2>

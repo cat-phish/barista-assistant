@@ -70,9 +70,9 @@ describe('Your Year in Coffee slides (backlog 65)', () => {
     expect(slides.find((s) => s.key === 'people')).toMatchObject({ value: 'v@example.com', list: [{ name: 'v@example.com', detail: '3 brews' }, { name: 'You', detail: '2 brews' }] });
   });
 
-  it('names you "You", and others by a numbered stand-in', () => {
-    const name = personLabels([{ userId: 'v' }, { userId: 'u' }, { userId: 'w' }], 'u');
-    expect(['u', 'v', 'w'].map(name)).toEqual(['You', 'Member 1', 'Member 2']);
+  it('names you "You", others by name, and the unnamed by a numbered stand-in', () => {
+    const name = personLabels([{ userId: 'v' }, { userId: 'u' }, { userId: 'w' }, { userId: 'x' }], 'u', (id) => (id === 'w' ? 'Sam' : null));
+    expect(['u', 'v', 'w', 'x'].map(name)).toEqual(['You', 'Member 1', 'Sam', 'Member 2']);
   });
 
   it('labels hours on a 12-hour clock', () => {

@@ -28,6 +28,7 @@ import { sendVerification } from "./emailVerification.js";
 export interface PublicUser {
   id: string;
   email: string;
+  name: string | null; // what others see; null: not set (auth.md §1, "Name")
   preferences: UserPreferences; // defaults filled in
   emailVerified: boolean; // docs/api/auth.md §1d; always false while the server has verification off
   isAdmin: boolean; // a server admin, granted on the server (docs/api/server.md §10)
@@ -72,8 +73,8 @@ export interface SoleOwnerConflict {
   workspaces: Array<Pick<Workspace, "id" | "name" | "slug">>;
 }
 
-function toPublicUser(user: Pick<User, "id" | "email"> & { preferences?: User["preferences"]; isAdmin?: boolean; emailVerifiedAt?: Date | null }): PublicUser {
-  return { id: user.id, email: user.email, preferences: withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null), emailVerified: Boolean(user.emailVerifiedAt), isAdmin: user.isAdmin ?? false };
+function toPublicUser(user: Pick<User, "id" | "email"> & { name?: string | null; preferences?: User["preferences"]; isAdmin?: boolean; emailVerifiedAt?: Date | null }): PublicUser {
+  return { id: user.id, email: user.email, name: user.name ?? null, preferences: withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null), emailVerified: Boolean(user.emailVerifiedAt), isAdmin: user.isAdmin ?? false };
 }
 
 // Brute-force protection, shared by every endpoint that checks a password
@@ -203,12 +204,34 @@ authRouter.post("/logout", async (req: Request, res: Response) => {
 
 authRouter.get("/me", requireAuth, async (req: Request, res: Response<UserResponse>) => {
   const [user] = await db
-    .select({ id: users.id, email: users.email, preferences: users.preferences, isAdmin: users.isAdmin, emailVerifiedAt: users.emailVerifiedAt })
+    .select({ id: users.id, email: users.email, name: users.name, preferences: users.preferences, isAdmin: users.isAdmin, emailVerifiedAt: users.emailVerifiedAt })
     .from(users)
     .where(eq(users.id, authedUserId(req)))
     .limit(1);
   if (!user) {
     // Deleted between requireAuth's check and this query
+    clearSessionCookie(res);
+    sendError(res, 401, "Not authenticated");
+    return;
+  }
+  res.json({ user: toPublicUser(user) });
+});
+
+// The caller's name, shown to others instead of their email (docs/api/auth.md
+// §1, "Name"). Blank or null clears it. The email stays the login.
+const profileSchema = z.object({ name: z.string().max(100).nullable() }).strict();
+authRouter.patch("/me", requireAuth, async (req: Request, res: Response<UserResponse>) => {
+  const body = parseBody(profileSchema, req, res);
+  if (!body) return;
+  const userId = authedUserId(req);
+  const name = body.name?.trim().replace(/\s+/g, " ") || null;
+  await db.update(users).set({ name }).where(eq(users.id, userId));
+  const [user] = await db
+    .select({ id: users.id, email: users.email, name: users.name, preferences: users.preferences, isAdmin: users.isAdmin, emailVerifiedAt: users.emailVerifiedAt })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  if (!user) {
     clearSessionCookie(res);
     sendError(res, 401, "Not authenticated");
     return;

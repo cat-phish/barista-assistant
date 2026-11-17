@@ -32,7 +32,7 @@ below is `403`, so a typo doesn't look like a logout.
 - **Auth Required:** `false`
 - **Body:** `{ "email": "a@b.com", "password": "min 8 chars" }`
 - **Success (`201 Created`):** sets the `session` cookie and returns
-  `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... }, "emailVerified": false, "isAdmin": false } }`
+  `{ "user": { "id": "uuid", "email": "a@b.com", "name": null, "preferences": { ... }, "emailVerified": false, "isAdmin": false } }`
   (`isAdmin`: a server admin, granted on the server; §10; `emailVerified`: §1e)
 - **Success with email verification on (`202 Accepted`, §1e):** `{ "pending": true }`,
   no cookie, and the same reply whether the address is new or taken (SEC-32).
@@ -86,7 +86,26 @@ Every API response carries `X-Content-Type-Options: nosniff`.
 ## `GET /api/auth/me`
 
 - **Auth Required:** `true`
-- **Success (`200 OK`):** `{ "user": { "id": "uuid", "email": "a@b.com", "preferences": { ... }, "isAdmin": false } }`
+- **Success (`200 OK`):** `{ "user": { "id": "uuid", "email": "a@b.com", "name": "Jo", "preferences": { ... }, "isAdmin": false } }`
+
+## Name
+
+A person's `name` (`users.name`, up to 100 characters) is what others in
+their workspaces see: who brewed a brew (`brewedBy`, §6), who logged a
+serving (`loggedBy`, §6c), the members list (§2) and Your Year in Coffee's
+bar's year (recaps.md §11c). `null` until set, and then the email shows
+instead, except on Your Year in Coffee, which says "Member 1", "Member 2"…
+and never shows emails. The email stays the login, and the journal CSV
+(backup.md) keeps the email in "Brewed by". Set under Settings → Account.
+Not in a backup, like the rest of the account.
+
+### `PATCH /api/auth/me`
+
+- **Auth Required:** `true`
+- **Body:** `{ "name": "Jo" }` or `{ "name": null }`. Trimmed, inner runs of
+  spaces made one; blank clears it. Other keys are refused.
+- **Success (`200 OK`):** `{ "user": { ... } }`, as `GET /api/auth/me`.
+- **Errors:** `400` invalid body or longer than 100 characters.
 
 ## Preferences
 

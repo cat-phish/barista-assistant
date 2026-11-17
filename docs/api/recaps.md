@@ -110,9 +110,9 @@ others), plus:
   more and a rise of half a star or more.
 - **Who brewed** (the bar's year, with "Only my brews" off): each person's
   brews, most first, and whose brew was the best cup; left out when only
-  one person brewed. The first place that names members: "You", and the
-  others "Member 1", "Member 2"… by most brews, a stand-in until accounts
-  have a name.
+  one person brewed. "You", others by their name (auth.md §1, "Name"),
+  and anyone without one "Member 1", "Member 2"… by most brews; never an
+  email.
 
 A figure without enough behind it is left out, so its slide is skipped.
 

@@ -5,7 +5,10 @@ are in `schema.md`, `api/` (index in `api/README.md`) and `timer_architecture.md
 work is in `roadmap.md`.
 
 ## Accounts & workspaces
-- **Accounts:** email + password; the session is an httpOnly cookie.
+- **Accounts:** email + password; the session is an httpOnly cookie. A
+  **name** (Settings → Account) is what others see on brews and servings
+  and in the members list; without one they see the email. Logging in
+  stays by email.
 - **Notifications:** each person sets up where their reminders go (Settings
   → Notifications): ntfy, Gotify, Pushover, Discord, Telegram, Slack or any
   webhook, each with its own on/off and a **Send test**.

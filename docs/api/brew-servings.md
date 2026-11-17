@@ -24,7 +24,7 @@ by an owner (`403` otherwise). Viewers are read-only.
   "id": "uuid",
   "brewLogId": "uuid",
   "userId": "uuid",
-  "loggedBy": { "id": "uuid", "email": "barista@example.com" },
+  "loggedBy": { "id": "uuid", "email": "barista@example.com", "name": "Jo" },
   "timestamp": "2026-11-10T15:30:00.000Z",
   "utcOffsetMinutes": -420,
   "concentrateGrams": 120,

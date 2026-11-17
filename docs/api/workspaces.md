@@ -267,7 +267,7 @@ directly by email.
 - **Auth Required:** `true` (any member)
 - **Success (`200 OK`):**
   ```json
-  { "members": [ { "userId": "uuid", "email": "a@b.com", "role": "owner" } ] }
+  { "members": [ { "userId": "uuid", "email": "a@b.com", "name": "Jo", "role": "owner" } ] }
   ```
   Sorted by email.
 
@@ -289,7 +289,7 @@ accept (see "Invites" below).
 
 - **Auth Required:** `true` (role `owner`)
 - **Body:** `{ "role": "viewer" }`
-- **Success (`200 OK`):** `{ "member": { "userId": "uuid", "email": "...", "role": "viewer" } }`
+- **Success (`200 OK`):** `{ "member": { "userId": "uuid", "email": "...", "name": null, "role": "viewer" } }`
 - **Errors:** `400` invalid body; `403` not an owner; `404` that user is not a
   member; `409` the change would leave the workspace with no owner.
 

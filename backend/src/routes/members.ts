@@ -13,6 +13,7 @@ import { emailSchema, roleSchema } from "../validation.js";
 export interface Member {
   userId: string;
   email: string;
+  name: string | null; // auth.md §1, "Name"
   role: Role;
 }
 
@@ -44,7 +45,7 @@ membersRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<Membe
   if (!(await requireMembership(res, authedUserId(req), workspaceId))) return;
 
   const rows = await db
-    .select({ userId: users.id, email: users.email, role: workspaceMembers.role, chatEnabled: workspaceMembers.chatEnabled })
+    .select({ userId: users.id, email: users.email, name: users.name, role: workspaceMembers.role, chatEnabled: workspaceMembers.chatEnabled })
     .from(workspaceMembers)
     .innerJoin(users, eq(workspaceMembers.userId, users.id))
     .where(eq(workspaceMembers.workspaceId, workspaceId))
@@ -110,8 +111,8 @@ membersRouter.patch("/:userId", async (req: Request<MemberParams>, res: Response
     return;
   }
 
-  const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId));
-  res.json({ member: { userId, email: user?.email ?? "", role: body.role } });
+  const [user] = await db.select({ email: users.email, name: users.name }).from(users).where(eq(users.id, userId));
+  res.json({ member: { userId, email: user?.email ?? "", name: user?.name ?? null, role: body.role } });
 });
 
 // AI chat for this member (docs/api/chat.md §12).

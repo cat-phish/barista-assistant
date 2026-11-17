@@ -17,6 +17,27 @@ const auth = useAuthStore();
 const workspaces = useWorkspaceStore();
 const router = useRouter();
 
+// Name (docs/api/auth.md §1, "Name"): what others in your workspaces see.
+const name = ref(auth.user?.name ?? '');
+const savingName = ref(false);
+const nameError = ref('');
+const nameSaved = ref(false);
+const nameChanged = computed(() => name.value.trim() !== (auth.user?.name ?? ''));
+async function saveName(): Promise<void> {
+  savingName.value = true;
+  nameError.value = '';
+  nameSaved.value = false;
+  try {
+    await auth.setName(name.value.trim() || null);
+    name.value = auth.user?.name ?? '';
+    nameSaved.value = true;
+  } catch (err) {
+    nameError.value = errorMessage(err);
+  } finally {
+    savingName.value = false;
+  }
+}
+
 const TOO_MANY = 'Too many wrong passwords. Wait a few minutes and try again.';
 
 // --- Change password ---
@@ -107,6 +128,22 @@ async function openMembers(id: string): Promise<void> {
 
 <template>
   <SettingsLayout title="Account">
+    <section class="card stack" aria-labelledby="account-name">
+      <h2 id="account-name">Name</h2>
+      <form class="stack" novalidate @submit.prevent="saveName">
+        <div class="field">
+          <label for="account-name-input">Your name</label>
+          <input id="account-name-input" v-model="name" type="text" maxlength="100" autocomplete="name" aria-describedby="account-name-hint" @input="nameSaved = false" />
+          <span id="account-name-hint" class="hint">What others in your workspaces see, on brews and in Your Year in Coffee. Without one they see your email. You still log in with your email.</span>
+        </div>
+        <p v-if="nameError" class="form-error" role="alert">{{ nameError }}</p>
+        <div class="actions">
+          <button class="btn btn-primary" type="submit" :disabled="!nameChanged || savingName">{{ savingName ? 'Saving…' : 'Save name' }}</button>
+          <span v-if="nameSaved" class="muted small" aria-live="polite">Saved.</span>
+        </div>
+      </form>
+    </section>
+
     <section class="card stack" aria-labelledby="account-email">
       <h2 id="account-email">Email</h2>
       <p class="email">{{ auth.user?.email }}</p>

@@ -18,7 +18,7 @@ export interface SlideContext {
   inProgress: boolean; // the year isn't over ("so far")
   volume: (ml: number) => string;
   weight: (grams: number) => string;
-  person: (userId: string) => string; // "You", or a stand-in like "Member 2"
+  person: (userId: string) => string; // "You", a name, or a stand-in like "Member 2"
 }
 
 export const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -103,10 +103,10 @@ export function summaryLines(f: YearFigures, ctx: SlideContext): Array<{ name: s
   return lines.filter((l): l is { name: string; detail: string } => l !== null);
 }
 
-// How people are named on the bar's year: "You", and everyone else
-// "Member 1", "Member 2"… in the order they brewed most. A stand-in until
-// accounts have names.
-export function personLabels(people: ReadonlyArray<{ userId: string }>, me: string | null): (userId: string) => string {
-  const others = people.map((p) => p.userId).filter((id) => id !== me);
-  return (userId) => (userId === me ? 'You' : `Member ${others.indexOf(userId) + 1 || others.length + 1}`);
+// How people are named on the bar's year: "You", others by their name
+// (auth.md §1, "Name"), and anyone without one "Member 1", "Member 2"… in
+// the order they brewed most. Emails are never shown here.
+export function personLabels(people: ReadonlyArray<{ userId: string }>, me: string | null, nameOf: (userId: string) => string | null = () => null): (userId: string) => string {
+  const unnamed = people.map((p) => p.userId).filter((id) => id !== me && !nameOf(id));
+  return (userId) => (userId === me ? 'You' : (nameOf(userId) ?? `Member ${unnamed.indexOf(userId) + 1 || unnamed.length + 1}`));
 }

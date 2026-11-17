@@ -7,7 +7,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { statsApi } from '../../api/stats';
-import type { StatsData } from '../../api/types';
+import { membersApi } from '../../api/members';
+import type { Member, StatsData } from '../../api/types';
 import { errorMessage } from '../../api/client';
 import { usePreferences } from '../../composables/usePreferences';
 import { useStats } from '../../composables/useStats';
@@ -48,6 +49,7 @@ function close(): void {
 // One request covers the year and the one before it.
 const asked = ref(prefs.value.recaps);
 const data = ref<StatsData | null>(null);
+const members = ref<Member[]>([]); // for names on the bar's year
 const loading = ref(false);
 const error = ref('');
 let request = 0;
@@ -58,8 +60,13 @@ async function load(): Promise<void> {
   loading.value = true;
   error.value = '';
   try {
-    const res = await statsApi.get(ws, { from: yearPeriod(year.value - 1).start, to: yearPeriod(year.value).end, mine: mine.value });
-    if (n === request) data.value = res;
+    const [res, list] = await Promise.all([
+      statsApi.get(ws, { from: yearPeriod(year.value - 1).start, to: yearPeriod(year.value).end, mine: mine.value }),
+      mine.value ? Promise.resolve(members.value) : membersApi.list(ws).then((r) => r.members),
+    ]);
+    if (n !== request) return;
+    data.value = res;
+    members.value = list;
   } catch (err) {
     if (n === request) error.value = errorMessage(err);
   } finally {
@@ -74,7 +81,7 @@ const slides = computed(() => {
   const before = yearPeriod(year.value - 1);
   const prev = { ...d, brews: d.brews.filter((b) => localDay(b) >= before.start && localDay(b) <= before.end) };
   const f = yearFigures(d, prev, year.value, recipeRoastLevel.value, today);
-  const person = personLabels(f.people, auth.user?.id ?? null);
+  const person = personLabels(f.people, auth.user?.id ?? null, (id) => members.value.find((m) => m.userId === id)?.name ?? null);
   return yearSlides(f, { mine: mine.value, inProgress: inProgress.value, volume: (ml) => stats.formatVolume(ml), weight: formatWeight, person });
 });
 

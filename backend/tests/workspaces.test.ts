@@ -129,7 +129,7 @@ describe("members and roles", () => {
     expect(list.body.members.map((m: { email: string }) => m.email)).toEqual([barista.email, owner.email]);
 
     const changed = await owner.agent.patch(`${base}/${barista.id}`).send({ role: "viewer" });
-    expect(changed.body.member).toEqual({ userId: barista.id, email: barista.email, role: "viewer" });
+    expect(changed.body.member).toEqual({ userId: barista.id, email: barista.email, name: null, role: "viewer" });
     expect((await owner.agent.delete(`${base}/${barista.id}`)).status).toBe(204);
     expect((await owner.agent.get(base)).body.members).toHaveLength(1);
   });

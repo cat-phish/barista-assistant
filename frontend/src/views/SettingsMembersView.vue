@@ -178,7 +178,7 @@ async function confirmPending(): Promise<void> {
       <ul class="members">
         <li v-for="m in members" :key="m.userId">
           <div class="who">
-            <span class="email" :title="m.email">{{ m.email }}</span>
+            <span class="email" :title="m.email"><template v-if="m.name"><strong>{{ m.name }}</strong> · </template>{{ m.email }}</span>
             <span v-if="m.userId === myId" class="muted small">You</span>
           </div>
           <template v-if="isOwner">

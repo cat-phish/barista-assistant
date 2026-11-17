@@ -57,6 +57,7 @@ export function withDefaults<T extends object>(defaults: T, stored: Partial<T> |
 export const users = mysqlTable("users", {
   id: varchar("id", { length: 36 }).primaryKey(),
   email: varchar("email", { length: 255 }).unique().notNull(),
+  name: varchar("name", { length: 100 }), // shown to others; null = the email (api/auth.md §1, "Name"; migration 0132)
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
   // Embedded in session tokens; bumping it (e.g. on password change) makes
   // every older session invalid.

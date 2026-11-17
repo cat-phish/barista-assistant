@@ -74,6 +74,7 @@ export interface PushDevice {
 export interface User {
   id: string;
   email: string;
+  name: string | null; // shown to others instead of the email (docs/api/auth.md §1, "Name")
   preferences: UserPreferences;
   emailVerified: boolean; // confirmed by the mailed link (docs/api/auth.md §1d)
   isAdmin: boolean; // a server admin: sees Settings → Server (docs/api/server.md §10)
@@ -144,6 +145,7 @@ export interface SuggestedAlternative {
 export interface Member {
   userId: string;
   email: string;
+  name: string | null;
   role: Role;
   chatEnabled?: boolean; // in the members list (docs/api/chat.md §12)
 }
@@ -835,7 +837,7 @@ export interface BrewLog {
   // The coffee's flavors from the wheel, in its order; label: the wheel's
   // now, else the one saved when picked (§6).
   flavors: FlavorPick[];
-  brewedBy: { id: string; email: string } | null;
+  brewedBy: { id: string; email: string; name: string | null } | null;
   // Its AI suggestion (§8): one exists; an automatic one is due then; why the
   // last one failed or wasn't made.
   analyzed: boolean;
@@ -1179,7 +1181,7 @@ export interface BrewServing {
   id: string;
   brewLogId: string;
   userId: string | null;
-  loggedBy: { id: string; email: string } | null;
+  loggedBy: { id: string; email: string; name: string | null } | null;
   timestamp: string;
   utcOffsetMinutes: number | null;
   concentrateGrams: number; // poured from the jar (diluted coffee, from a jar with water added)

@@ -39,6 +39,32 @@ describe("register / login / me / logout", () => {
   });
 });
 
+describe("name (auth.md §1, \"Name\")", () => {
+  it("is null until set, shows to others, and clears when blank", async () => {
+    const owner = await newUser();
+    const other = await newUser();
+    const ws = await newWorkspace(owner);
+    await addMember(owner, ws.id, other, "barista");
+    expect((await owner.agent.get("/api/auth/me")).body.user.name).toBeNull();
+
+    const set = await owner.agent.patch("/api/auth/me").send({ name: "  Jo   Barista " });
+    expect(set.status).toBe(200);
+    expect(set.body.user).toMatchObject({ id: owner.id, email: owner.email, name: "Jo Barista" });
+
+    const bean = await newBean(owner, ws.id);
+    const log = await newBrewLog(owner, ws.id, bean);
+    expect((await other.agent.get(`/api/workspaces/${ws.id}/brew-logs/${log}`)).body.brewLog.brewedBy).toEqual({ id: owner.id, email: owner.email, name: "Jo Barista" });
+    const members = (await other.agent.get(`/api/workspaces/${ws.id}/members`)).body.members as Array<{ userId: string; name: string | null }>;
+    expect(members.find((m) => m.userId === owner.id)?.name).toBe("Jo Barista");
+    expect(members.find((m) => m.userId === other.id)?.name).toBeNull();
+
+    expect((await owner.agent.patch("/api/auth/me").send({ name: " " })).body.user.name).toBeNull();
+    expect((await owner.agent.patch("/api/auth/me").send({ name: "x".repeat(101) })).status).toBe(400);
+    expect((await owner.agent.patch("/api/auth/me").send({ email: "new@example.com" })).status).toBe(400);
+    expect((await anonymous().patch("/api/auth/me").send({ name: "Jo" })).status).toBe(401);
+  });
+});
+
 describe("change password", () => {
   it("revokes other sessions but keeps this one", async () => {
     const user = await newUser();

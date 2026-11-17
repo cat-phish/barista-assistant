@@ -2,6 +2,7 @@
 // A cold brew batch's stock and servings on its journal entry
 // (docs/api/brew-servings.md §6c): what's left in the jar, Log a serving,
 // the servings poured so far, and Batch finished / Reopen.
+import { personLabel } from '../lib/people';
 import { computed, onMounted, ref } from 'vue';
 import { brewLogsApi } from '../api/brews';
 import { errorMessage } from '../api/client';
@@ -180,7 +181,7 @@ async function setFinished(value: boolean): Promise<void> {
       <li v-for="s in servings" :key="s.id" class="serving">
         <div class="serving-head">
           <span class="when">{{ formatWhen(s.timestamp) }}</span>
-          <span v-if="s.loggedBy?.id !== auth.user?.id" class="muted small">{{ s.loggedBy?.email ?? 'Deleted user' }}</span>
+          <span v-if="s.loggedBy?.id !== auth.user?.id" class="muted small">{{ s.loggedBy ? personLabel(s.loggedBy) : 'Deleted user' }}</span>
         </div>
         <p>{{ glassText(s) }}<span v-if="servingForText(s)" class="muted"> · {{ servingForText(s) }}</span></p>
         <RatingStars v-if="s.rating !== null" :rating="s.rating" />

@@ -66,7 +66,7 @@ created it and can't be changed.
   "tools": [{ "id": "uuid", "name": "Rinsed paper filter" }],
   "problems": [{ "id": "uuid", "name": "Slow drawdown / stalled bed" }],
   "flavors": [{ "key": "fruity.citrus.lemon", "label": "Lemon" }, { "key": "sour_fermented.sour", "label": "Sour" }],
-  "brewedBy": { "id": "uuid", "email": "barista@example.com" },
+  "brewedBy": { "id": "uuid", "email": "barista@example.com", "name": "Jo" },
   "analyzed": false,
   "analysisDueAt": "2026-10-23T09:15:00.000Z",
   "analysisError": null,

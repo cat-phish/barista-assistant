@@ -59,11 +59,15 @@ export const useAuthStore = defineStore('auth', () => {
     if (user.value) user.value = { ...user.value, preferences };
   }
 
+  async function setName(name: string | null): Promise<void> {
+    user.value = (await authApi.setName(name)).user;
+  }
+
   // The server said the session is gone (401 on some request).
   function sessionEnded(): void {
     user.value = null;
     forgetPhotos();
   }
 
-  return { user, checked, fetchMe, login, register, logout, setPreferences, sessionEnded };
+  return { user, checked, fetchMe, login, register, logout, setPreferences, setName, sessionEnded };
 });

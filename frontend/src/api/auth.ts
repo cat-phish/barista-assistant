@@ -3,6 +3,7 @@ import type { AiPreferences, AiPreferencesSettings, AiPrompt, AiPromptSettings, 
 
 export const authApi = {
   me: () => api.get<{ user: User }>('/api/auth/me'),
+  setName: (name: string | null) => api.patch<{ user: User }>('/api/auth/me', { name }),
   login: (email: string, password: string) => api.post<{ user: User }>('/api/auth/login', { email, password }),
   register: (email: string, password: string) => api.post<{ user: User } | { pending: true }>('/api/auth/register', { email, password }),
   // Whether this server takes new accounts (ALLOW_REGISTRATION, §1).

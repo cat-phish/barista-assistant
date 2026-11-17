@@ -87,7 +87,7 @@ export interface BrewLogDetails extends Omit<BrewLog, "recipeCopy"> {
   // the one saved when picked (docs/api/brew-logs.md §6).
   flavors: FlavorPick[];
   // Null when the brewer deleted their account (the log is kept).
-  brewedBy: { id: string; email: string } | null;
+  brewedBy: { id: string; email: string; name: string | null } | null;
   // Where its AI suggestion stands (docs/api/analysis.md §8): analyzed at
   // least once; an automatic analysis due then; why the last one failed or
   // was skipped.
@@ -638,7 +638,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       drink: { id: drinks.id, name: drinks.name },
       // Separate column, like recipeMethodKind: whether the drink has ingredients.
       drinkHasIngredients: sql<number>`EXISTS (SELECT 1 FROM ${drinkIngredients} di WHERE di.drink_id = ${brewLogs.drinkId})`,
-      brewedBy: { id: users.id, email: users.email },
+      brewedBy: { id: users.id, email: users.email, name: users.name },
       analyzedFlag: sql<number>`EXISTS (SELECT 1 FROM ${llmAnalyses} la WHERE la.brew_log_id = ${brewLogs.id})`,
       analysisDueAt: analysisRequests.dueAt,
       analysisError: analysisRequests.error,

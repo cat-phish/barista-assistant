@@ -341,6 +341,9 @@ export const SECRET_FIELDS: { [K in NotificationKind]: ReadonlyArray<keyof Notif
 export const users = mysqlTable("users", {
   id: varchar("id", { length: 36 }).primaryKey(),
   email: varchar("email", { length: 255 }).unique().notNull(),
+  // What others see (docs/api/auth.md §1, "Name"); null = not set, shown as
+  // the email. Logging in still uses the email.
+  name: varchar("name", { length: 100 }),
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
   // Embedded in session tokens; bumping it (e.g. on password change) makes
   // every older session invalid.
