@@ -53,6 +53,15 @@ describe('caffeineSummary', () => {
     expect(s.perBrewMg).toBeCloseTo(108);
   });
 
+  it('counts only your share, per brew you had a share of (backlog 67)', () => {
+    const three = [...brews, brew('2026-10-05T08:00:00.000Z')];
+    const shares = [0.5, 1, 0];
+    const s = caffeineSummary(three, beanOf, open, '2026-10-10', (b) => shares[three.indexOf(b)]!)!;
+    expect(s.totalMg).toBeCloseTo(162);
+    expect(s.brews).toBe(2);
+    expect(s.perBrewMg).toBeCloseTo(81);
+  });
+
   it('an open period runs from the first brew to today, quiet days included', () => {
     const s = caffeineSummary(brews, beanOf, open, '2026-10-20')!;
     expect(s.days).toBe(20);

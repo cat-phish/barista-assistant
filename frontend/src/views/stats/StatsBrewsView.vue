@@ -11,6 +11,8 @@ import { VOLUME_LABELS } from '../../lib/units';
 import { useChartKind } from '../../lib/chartKind';
 import { brewEY, countBy, cumulative, localHour, localWeekday, meanByBucket, sumByBucket } from '../../lib/stats';
 import type { RecipeStyle, StatsBrew } from '../../api/types';
+import { brewCaffeineMg, formatCaffeine } from '../../lib/caffeine';
+import { drinkerTotals, forOthers, ME, myShare, UNNAMED } from '../../lib/shares';
 
 const stats = useStats();
 const brews = computed(() => stats.brews.value);
@@ -30,7 +32,8 @@ const sum = (v: ChartView, value?: (b: StatsBrew) => number | null) => sumByBuck
 
 const total = computed(() => cumulative(sum(totalView)));
 const perBucket = computed(() => sum(countView));
-const volume = computed(() => sum(volumeView, (b) => stats.volume(b)?.ml ?? null).map(stats.volumeIn));
+// Your share of each brew (lib/shares.ts): a guest's isn't drunk by you.
+const volume = computed(() => sum(volumeView, (b) => { const v = stats.volume(b); return v && myShare(b) > 0 ? v.ml * myShare(b) : null; }).map(stats.volumeIn));
 const coffee = computed(() => sum(coffeeView, (b) => b.doseGrams).map((g) => Math.round(g * 10) / 10));
 const rating = computed(() => meanByBucket(ratingView.brews.value, ratingView.axis.value.buckets, ratingView.axis.value.granularity, (b) => b.rating, ratingView.axis.value.weekStartsOn));
 const anyRated = computed(() => rating.value.some((r) => r !== null));
@@ -82,6 +85,16 @@ const eyRatingNote = computed(() => {
 
 const showProblems = computed(() => !stats.hidden.value.has('brew.problems'));
 const problems = computed(() => countBy(brews.value, (b) => b.problemIds).map((c) => ({ name: stats.name(c.key) ?? 'Removed problem', n: c.n })));
+// Who drank it (backlog 67): each drinker's share of the volume and caffeine.
+const showForWho = computed(() => !stats.hidden.value.has('brew.forWho') || brews.value.some(forOthers));
+const drinkers = computed(() => {
+  const guestName = (id: string) => stats.data.value?.lookups.guests.find((g) => g.id === id)?.name ?? 'Removed guest';
+  return drinkerTotals(brews.value, stats.volume, (b) => brewCaffeineMg(b, stats.bean(b.beanId))).map((t) => ({
+    ...t,
+    name: t.key === ME ? (stats.filters.value.mine ? 'You' : 'Whoever brewed') : t.key === UNNAMED ? 'Other guests' : guestName(t.key),
+    volume: `${t.estimated ? '≈ ' : ''}${stats.formatVolume(t.ml)}`,
+  }));
+});
 const pct = (n: number) => `${Math.round((n / Math.max(1, brews.value.length)) * 100)}%`;
 </script>
 
@@ -99,7 +112,7 @@ const pct = (n: number) => `${Math.round((n / Math.max(1, brews.value.length)) *
 
     <ChartCard chart-id="brews.volume"
       title="Volume drunk"
-      :note="`${unit} per ${per(volumeView)}; a drink's size, else the yield (weighed or estimated)`"
+      :note="`${unit} per ${per(volumeView)}; a drink's size, else the yield (weighed or estimated); your share of brews for guests`"
       :empty="volumeView.brews.value.length === 0"
       :table="table(volumeView, unit, volume)"
       v-model:kind="volumeKind"
@@ -122,6 +135,24 @@ const pct = (n: number) => `${Math.round((n / Math.max(1, brews.value.length)) *
     >
       <template #period><ChartPeriod :view="ratingView" label="Average rating" /></template>
       <StatsChart kind="line" label="Average rating over time" :labels="ratingView.labels.value" :series="[{ label: 'Rating', data: rating }]" :y-min="0.5" :y-max="5" />
+    </ChartCard>
+
+    <ChartCard chart-id="brews.forWho"
+      v-if="showForWho"
+      title="Who drank it"
+      :note="`${unit}, each drinker's share of the brews they were for`"
+      :empty="!brews.some(forOthers)"
+      empty-text="No brews for guests in this period."
+      :table="{ head: ['Who', 'Brews', 'Volume', 'Caffeine'], rows: drinkers.map((d) => [d.name, d.brews, d.volume, formatCaffeine(d.mg)]) }"
+    >
+      <StatsChart
+        kind="bar"
+        horizontal
+        label="Volume by who drank it"
+        :labels="drinkers.map((d) => d.name)"
+        :series="[{ label: unit, data: drinkers.map((d) => stats.volumeIn(d.ml)) }]"
+        :height="Math.max(120, drinkers.length * 32 + 40)"
+      />
     </ChartCard>
 
     <ChartCard chart-id="brews.weekday" title="By day of the week" :empty="brews.length === 0" :table="{ head: ['Day', 'Brews'], rows: WEEKDAYS.map((d, i) => [d, byWeekday[i]!]) }">

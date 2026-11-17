@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { beans, brewers, brewLogs, recaps, users, workspaceMembers, workspaces } from "@barista/shared/schema";
+import { beans, brewers, brewLogGuests, brewLogs, brewServings, guests, recaps, users, workspaceMembers, workspaces } from "@barista/shared/schema";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../src/db.js";
@@ -61,7 +61,7 @@ describe("loadPeriodContext", () => {
     expect(ctx.brews.map((b) => b.day)).toEqual(["2026-11-07", "2026-11-03"]);
     expect(ctx.brews[0]).toMatchObject({ bean: "Onyx – Guji", brewer: "V60", rating: 4.5 });
     expect(ctx.figures).toEqual({
-      brews: 2, daysBrewed: 2, ratedBrews: 2, averageRating: 4.3, bestRating: 4.5, coffeeGrams: 30,
+      brews: 2, daysBrewed: 2, ratedBrews: 2, averageRating: 4.3, bestRating: 4.5, coffeeGrams: 30, brewsForOthers: 0,
       beans: [{ bean: "Onyx – Guji", brews: 2 }], recipes: [], brewers: [{ brewer: "V60", brews: 2 }],
     });
     expect(ctx.previousFigures).toMatchObject({ brews: 1, averageRating: 3 });
@@ -70,6 +70,24 @@ describe("loadPeriodContext", () => {
     const everyone = await loadPeriodContext({ workspaceId, userId: null, kind: "weekly", period: week, previous: null });
     expect(everyone.figures.brews).toBe(3);
     expect(everyone.previousFigures).toBeNull();
+  });
+
+  it("counts the brews made for guests, without naming them (backlog 67)", async () => {
+    const id = () => randomUUID();
+    const [named, unnamed, notMine, batch] = [id(), id(), id(), id()];
+    const sam = id();
+    await db.insert(guests).values({ id: sam, workspaceId, name: "Sam" });
+    await brew("2026-11-03T08:00:00Z");
+    await brew("2026-11-03T09:00:00Z", { id: named });
+    await brew("2026-11-03T10:00:00Z", { id: unnamed, unnamedGuests: 2 });
+    await brew("2026-11-03T11:00:00Z", { id: notMine, forMe: false, unnamedGuests: 1 });
+    await brew("2026-11-03T12:00:00Z", { id: batch });
+    await db.insert(brewLogGuests).values({ brewLogId: named, guestId: sam });
+    await db.insert(brewServings).values({ id: id(), brewLogId: batch, userId, concentrateGrams: 100, forGuest: true });
+
+    const ctx = await loadPeriodContext({ workspaceId, userId, kind: "weekly", period: week, previous: null });
+    expect(ctx.figures.brewsForOthers).toBe(4);
+    expect(JSON.stringify(toPeriodInput(ctx, new Set()))).not.toContain("Sam");
   });
 
   it("sends the newest brews up to the cap and counts the rest", async () => {

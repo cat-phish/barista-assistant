@@ -1052,6 +1052,16 @@ export interface StatsBrew {
   tdsPercent: number | null;
   rating: number | null;
   drinkRating: number | null;
+  // Who it was for, and a batch's servings by who drank them (stats.md §11).
+  forMe: boolean;
+  guestIds: string[];
+  unnamedGuests: number;
+  servings: StatsServing[];
+}
+export interface StatsServing {
+  guestId: string | null;
+  forGuest: boolean;
+  concentrateGrams: number;
 }
 
 export interface StatsBean {
@@ -1134,6 +1144,7 @@ export interface StatsData {
     problems: StatsNamed[];
     processes: StatsNamed[];
     drinks: StatsNamed[];
+    guests: StatsNamed[]; // archived ones too
   };
 }
 

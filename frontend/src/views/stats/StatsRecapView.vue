@@ -165,6 +165,13 @@ const ratingSub = computed(() => {
           <h3>Volume drunk</h3>
           <p class="value">{{ figures.volume.estimated ? '≈ ' : '' }}{{ stats.formatVolume(figures.volume.ml) }}</p>
         </section>
+        <section v-if="figures.forOthers" class="card tile">
+          <h3>Brewed for others</h3>
+          <p class="value">{{ figures.forOthers.estimated ? '≈ ' : '' }}{{ stats.formatVolume(figures.forOthers.ml) }}</p>
+          <p class="muted sub">
+            {{ plural(figures.forOthers.brews, 'brew') }}<template v-if="figures.forOthers.guests.length">, for {{ figures.forOthers.guests.slice(0, 3).map((g) => g.name).join(', ') }}{{ figures.forOthers.guests.length > 3 ? ' and more' : '' }}</template>
+          </p>
+        </section>
         <section v-if="figures.brews" class="card tile">
           <h3>Coffee used</h3>
           <p class="value">{{ formatWeight(figures.coffeeGrams) }}</p>

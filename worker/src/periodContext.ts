@@ -3,7 +3,7 @@
 // optionally one bean's, recipe's or brewer's), with the figures for it and
 // the period before. Used by recap summaries (docs/api/recaps.md §11c) and
 // live Period attachments in chat (docs/api/chat.md §12).
-import { brewers, brewLogs } from "@barista/shared/schema";
+import { brewers, brewLogGuests, brewLogs, brewServings } from "@barista/shared/schema";
 import { addDays } from "@barista/shared/recapPeriods";
 import { and, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { drinksServed, flavorsFor, loadBean, marksFor, problemsFor, selectBrews, summarize, toolsFor, withJoins, type BrewSummary, type LoadedBean } from "./context.js";
@@ -35,6 +35,9 @@ export interface PeriodFigures {
   averageRating: number | null; // the coffee rating, one decimal
   bestRating: number | null;
   coffeeGrams: number;
+  // Brews made at least partly for guests (backlog 67): for named or unnamed
+  // guests, or a batch with a serving poured for one. A count only: no names.
+  brewsForOthers: number;
   beans: Array<{ bean: string; brews: number }>; // most brewed first
   recipes: Array<{ recipe: string; brews: number }>;
   brewers: Array<{ brewer: string; brews: number }>;
@@ -99,7 +102,17 @@ function countBy<T>(items: readonly T[], key: (t: T) => string | null): Array<{ 
 }
 
 type Row = Awaited<ReturnType<typeof rowsIn>>[number];
-function figuresOf(rows: readonly Row[], beanLabel: (id: string) => string, brewerName: (id: string | null) => string | null): PeriodFigures {
+// The brews among these that had a guest: named ones, or a serving for one.
+async function withGuests(ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const [named, served] = await Promise.all([
+    db.selectDistinct({ id: brewLogGuests.brewLogId }).from(brewLogGuests).where(inArray(brewLogGuests.brewLogId, ids)),
+    db.selectDistinct({ id: brewServings.brewLogId }).from(brewServings).where(and(inArray(brewServings.brewLogId, ids), eq(brewServings.forGuest, true))),
+  ]);
+  return new Set([...named, ...served].map((r) => r.id));
+}
+
+function figuresOf(rows: readonly Row[], beanLabel: (id: string) => string, brewerName: (id: string | null) => string | null, guested: ReadonlySet<string>): PeriodFigures {
   const rated = rows.flatMap((b) => (b.rating === null ? [] : [Number(b.rating)]));
   return {
     brews: rows.length,
@@ -108,6 +121,7 @@ function figuresOf(rows: readonly Row[], beanLabel: (id: string) => string, brew
     averageRating: rated.length ? Math.round((rated.reduce((n, r) => n + r, 0) / rated.length) * 10) / 10 : null,
     bestRating: rated.length ? Math.max(...rated) : null,
     coffeeGrams: Math.round(rows.reduce((n, b) => n + Number(b.actualDoseGrams), 0) * 10) / 10,
+    brewsForOthers: rows.filter((b) => !b.forMe || b.unnamedGuests > 0 || guested.has(b.id)).length,
     beans: countBy(rows, (b) => b.beanId).map((c) => ({ bean: beanLabel(c.key), brews: c.n })),
     recipes: countBy(rows, (b) => b.recipeName ?? null).map((c) => ({ recipe: c.key, brews: c.n })),
     brewers: countBy(rows, (b) => brewerName(b.brewerId)).map((c) => ({ brewer: c.key, brews: c.n })),
@@ -122,7 +136,7 @@ export async function loadPeriodContext(q: PeriodQuery): Promise<PeriodContext> 
   const max = q.maxBrews ?? PERIOD_MAX_BREWS;
   const sent = rows.slice(0, max);
   const ids = sent.map((b) => b.id);
-  const [loaded, names, marks, tools, problems, flavors, servedAs] = await Promise.all([
+  const [loaded, names, marks, tools, problems, flavors, servedAs, guested] = await Promise.all([
     Promise.all(beanIds.map(loadBean)),
     brewerIds.length ? db.select({ id: brewers.id, name: brewers.name }).from(brewers).where(inArray(brewers.id, brewerIds)) : Promise.resolve([]),
     marksFor(ids),
@@ -130,6 +144,7 @@ export async function loadPeriodContext(q: PeriodQuery): Promise<PeriodContext> 
     problemsFor(ids),
     flavorsFor(ids),
     drinksServed(sent.flatMap((b) => (b.drinkId ? [b.drinkId] : []))),
+    withGuests(all.map((b) => b.id)),
   ]);
   const beans = new Map<string, LoadedBean>();
   beanIds.forEach((id, i) => {
@@ -148,8 +163,8 @@ export async function loadPeriodContext(q: PeriodQuery): Promise<PeriodContext> 
     period: q.period,
     filters: q.filters || null,
     previous: q.previous,
-    figures: figuresOf(rows, beanLabel, brewerName),
-    previousFigures: previousRows ? figuresOf(previousRows, beanLabel, brewerName) : null,
+    figures: figuresOf(rows, beanLabel, brewerName, guested),
+    previousFigures: previousRows ? figuresOf(previousRows, beanLabel, brewerName, guested) : null,
     brews: sent.map((b) => {
       const bean = beans.get(b.beanId);
       return {

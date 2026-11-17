@@ -491,7 +491,11 @@ Recording a brew: what's measured, and how fast it is to log.
   Repeat option `forWho`, the For line on a journal entry. Phase 3,
   serving "For", too (migration 0131, `docs/api/brew-servings.md` §6c):
   a serving's Who drank it (Me, a guest or another guest), starting from
-  the batch's. Not counted in Insights or recaps yet.
+  the batch's. Phase 4, counting, too (`docs/api/stats.md` §11, "Who
+  drank it"): volume brewed apart from volume drunk, caffeine your share
+  only, Brewed for guests tile, the Brews tab's Who drank it chart, a
+  recap's Brewed for others (the AI gets a count, `brewsForOthers`), For
+  on journal cards and in the CSV. Only mine is unchanged until linking.
 - **Why:** every brew counts as drunk by whoever logged it, so brewing for
   a partner or friends inflates volume drunk and caffeine in Insights,
   recaps and Coffee Wrapped (65), and there's no way to see how much you
@@ -521,7 +525,7 @@ Recording a brew: what's measured, and how fast it is to log.
     for" (6), DeleteDialog for a guest in use (7), backups and match keys
     (8), recap AI figures (9), sortable For column (12), Only mine (13).
 - **Size:** L, in phases: guests list (done); brew drinkers (done); serving
-  "For" (done); counting in Insights and recaps; docs. Linking comes after, with
+  "For" (done); counting in Insights and recaps (done); docs. Linking comes after, with
   its invites.
 - **Depends on:** nothing; 65 (Wrapped) should use its shares.
 

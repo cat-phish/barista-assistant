@@ -13,6 +13,7 @@ import FilterBar from '../components/FilterBar.vue';
 import ListDataBar from '../components/ListDataBar.vue';
 import RatingStars from '../components/RatingStars.vue';
 import { useSelection } from '../composables/useSelection';
+import { forWhoText } from '../lib/forWho';
 import { batchSuffix, beanLabel } from '../lib/beans';
 import { analysisStatus, formatClock } from '../lib/analysisStatus';
 import { formatDoseLine, formatGrams, formatGrind, formatListDay, formatTime, formatWhen, localDateInput } from '../lib/format';
@@ -237,6 +238,7 @@ const cardProps = (id: string) =>
               <span v-if="log.actualTempC !== null">{{ formatTemp(log.actualTempC, temperatureUnit) }}</span>
               <span v-if="log.actualGrindSetting !== null || log.grinder">{{ [log.actualGrindSetting !== null ? formatGrind(log.actualGrindSetting) : null, log.grindRpm !== null ? `${log.grindRpm} RPM` : null, log.grinder?.name].filter(Boolean).join(' · ') }}</span>
             </span>
+            <span v-if="forWhoText(log)" class="muted">For {{ forWhoText(log) }}</span>
             <span v-if="log.tastingNotes || log.drinkTastingNotes" class="notes">{{ log.tastingNotes ?? log.drinkTastingNotes }}</span>
           </component>
           <!-- Beside the card link, not inside it: links can't nest. -->

@@ -332,7 +332,9 @@ Offered on Settings → Data only. Code: `backend/src/csv.ts`.
   spreadsheet would run as a formula (starting `=`, `+`, `-` or `@`) gets a
   leading `'`. Yes/no columns are `yes` / `no`; empty means not recorded.
   - **Journal**, newest first: date (the brewing device's local time) and
-    UTC, brewed by (email), roaster, bean, batch, recipe, style, brewer,
+    UTC, brewed by (email), for (who else it was for, `; ` between:
+    "Brewer; Sam; 2 other guests", empty when it was the brewer's alone;
+    brew-logs.md §6, "Who it's for"), roaster, bean, batch, recipe, style, brewer,
     drink, size, grinder, grind setting, RPM, water profile, dose, water,
     yield, vessel, ratio, TDS, extraction (worked out as in §6), water temperature,
     time (seconds and m:ss), beans in / grounds out, steeping, steeped in,

@@ -56,7 +56,11 @@ out to keep the reply small.
       "tempC": 94,
       "tdsPercent": 1.38,
       "rating": 4,
-      "drinkRating": null
+      "drinkRating": null,
+      "forMe": true,
+      "guestIds": ["uuid"],
+      "unnamedGuests": 0,
+      "servings": []
     }
   ],
   "beans": [
@@ -94,7 +98,8 @@ out to keep the reply small.
     "tools": [{ "id": "uuid", "name": "WDT" }],
     "problems": [{ "id": "uuid", "name": "Channeling" }],
     "processes": [{ "id": "uuid", "name": "Washed" }],
-    "drinks": [{ "id": "uuid", "name": "Latte" }]
+    "drinks": [{ "id": "uuid", "name": "Latte" }],
+    "guests": [{ "id": "uuid", "name": "Sam" }]
   }
 }
 ```
@@ -107,6 +112,11 @@ out to keep the reply small.
     needs `brewsLike`.
   - `drinkServingSize` and `drinkServingUnit`: the drink's default size
     (§5c), used when the brew didn't record its own.
+  - `forMe`, `guestIds` and `unnamedGuests`: who it was for (§6, "Who
+    it's for"; guests, §2d).
+  - `servings`: a cold brew batch's servings, oldest first, as
+    `{ guestId, forGuest, concentrateGrams }` (§6c, "Who drank it");
+    empty for any other brew.
   - **Left out:** steeping brews (`steeping: true`). They aren't finished.
 - **`beans`:** every bean in the workspace, archived ones included, whatever
   the filters are. Bean totals (stock, spend) cover all of them.
@@ -118,7 +128,8 @@ out to keep the reply small.
   for the retention it's learned from (as the brew page works it out). A recipe also has its
   finish window (§5); a brew's own window (rapid cold, §6) wins over it; and
   `createdAt`, for a recap's new recipes (`recaps.md`). Archived and hidden ones
-  are included, so history keeps its names.
+  are included, so history keeps its names; `guests` too (named by `guestIds`
+and servings).
 - **Errors:** `400` an invalid query (a bad date, `from` after `to`, or an
   id that isn't a UUID); `404` the caller isn't a member.
 
@@ -138,6 +149,21 @@ Recorded here because the numbers aren't stored anywhere:
   A brew served diluted (`dilutionRatio`, served 1 : ratio) counts the
   diluted volume, yield × (1 + ratio). 1 g counts as 1 ml. Totals that
   include an estimate are shown with "≈".
+- **Who drank it** (`frontend/src/lib/shares.ts`, backlog 67): each brew
+  splits among its drinkers. A batch with servings splits by the
+  concentrate poured to each (a serving not for a guest is whoever logged
+  it's), logged servings only: what wasn't logged goes to no one in
+  particular, so one glass logged for Sam makes the batch all Sam's; any other brew splits equally among whoever it was for, you
+  (`forMe`) and each named or unnamed guest. Whoever logged the brew is
+  "you": with Only mine off, every member's share together.
+  - **Volume brewed** is every brew's whole volume. **Volume drunk** (the
+    tile, the Brews chart, Explore) and **caffeine** count your share only;
+    Caffeine/Brew divides by the brews you had a share of.
+  - **Brewed for guests:** the guests' share of the volume, and how many
+    brews had one. The Brews tab's **Who drank it** chart gives each
+    drinker's brews, volume and caffeine.
+  - Brews, ratings, best brew and coffee used stay whole, with whoever
+    logged it.
 - **Coffee used:** the sum of `doseGrams`. Logging a brew doesn't change a
   bean's stock (§6).
 - **Caffeine** (`frontend/src/lib/caffeine.ts`), also shown on a brew's
@@ -149,8 +175,9 @@ Recorded here because the numbers aren't stored anywhere:
   - Decaf: × 0.03.
   - Share extracted: 0.8 for espresso (the brew with no `waterGrams`), else
     0.9.
-  - A brew counts its whole dose, on the day it's logged: the log doesn't say
-    how much of a batch was drunk.
+  - A brew counts its whole dose times your share of it ("Who drank it"
+    below), on the day it's logged: a batch's servings split it but don't
+    say how much of it was drunk, or when.
   - Caffeine/Day divides the total by the calendar days in the period, quiet
     days included: from the period's start (the first brew when open) to its
     end, never past today.

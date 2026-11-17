@@ -4,6 +4,7 @@
 import type { RoastLevel, StatsData, UserPreferences } from '../api/types';
 import { beanLabel } from './beans';
 import { caffeineSummary } from './caffeine';
+import { brewShares, forOthers, ME, myShare, UNNAMED } from './shares';
 import { brewerRetentions, brewVolumeMl, countBy, localDay } from './stats';
 import { daysAfter, justEnded, type RecapKind, type RecapPeriod } from './recapPeriods';
 
@@ -23,7 +24,10 @@ export interface RecapFigures {
   previousRating: number | null;
   best: RecapBest[]; // the top-rated brews, ties kept, up to 3
   caffeineMg: number | null;
-  volume: { ml: number; estimated: boolean } | null; // estimated: some brews' volume is an estimate (shown with ≈)
+  volume: { ml: number; estimated: boolean } | null; // your share (lib/shares.ts); estimated: some of it is an estimate (shown with ≈)
+  // Brews made at least partly for guests, their share of the volume, and
+  // who they were (named guests most brewed for first, unnamed ones last).
+  forOthers: { brews: number; ml: number; estimated: boolean; guests: Array<{ name: string; brews: number }> } | null;
   coffeeGrams: number;
   beansBrewed: Array<{ id: string; label: string; brews: number }>; // most brewed first
   beansAdded: Array<{ id: string; label: string }>; // bought (or added) in the period
@@ -58,9 +62,30 @@ export function recapFigures(data: StatsData, previous: StatsData | null, period
     .map((b) => ({ brewId: b.id, rating: b.rating!, day: localDay(b), bean: label(b.beanId), recipe: name(data.lookups.recipes, b.recipeId), brewer: name(data.lookups.brewers, b.brewerId) }));
 
   const retentions = brewerRetentions(data.lookups.brewers);
-  const volumes = brews.flatMap((b) => brewVolumeMl(b, bean(b.beanId)?.roastLevel ?? null, recipeRoastLevel, b.brewerId ? (retentions.get(b.brewerId) ?? null) : null) ?? []);
-  const volume = volumes.length ? { ml: volumes.reduce((n, v) => n + v.ml, 0), estimated: volumes.some((v) => v.source === 'estimate') } : null;
-  const caffeine = caffeineSummary(brews, bean, { from: period.start, to: period.end }, today);
+  const volumeOf = (b: (typeof brews)[number]) => brewVolumeMl(b, bean(b.beanId)?.roastLevel ?? null, recipeRoastLevel, b.brewerId ? (retentions.get(b.brewerId) ?? null) : null);
+  const volumes = brews.flatMap((b) => {
+    const v = volumeOf(b);
+    return v ? [{ ...v, share: myShare(b) }] : [];
+  });
+  const drunk = volumes.filter((v) => v.share > 0);
+  const volume = drunk.length ? { ml: drunk.reduce((n, v) => n + v.ml * v.share, 0), estimated: drunk.some((v) => v.source === 'estimate') } : null;
+  const caffeine = caffeineSummary(brews, bean, { from: period.start, to: period.end }, today, myShare);
+
+  const guestBrews = brews.filter(forOthers);
+  const guestVolumes = guestBrews.flatMap((b) => {
+    const v = volumeOf(b);
+    return v ? [{ ...v, share: 1 - myShare(b) }] : [];
+  });
+  const guestName = (id: string) => data.lookups.guests.find((g) => g.id === id)?.name ?? 'Removed guest';
+  const guestCounts = countBy(guestBrews, (b) => [...brewShares(b).keys()].filter((k) => k !== ME));
+  const forOthersFigures = guestBrews.length
+    ? {
+        brews: guestBrews.length,
+        ml: guestVolumes.reduce((n, v) => n + v.ml * v.share, 0),
+        estimated: guestVolumes.some((v) => v.source === 'estimate'),
+        guests: [...guestCounts.filter((c) => c.key !== UNNAMED).map((c) => ({ name: guestName(c.key), brews: c.n })), ...guestCounts.filter((c) => c.key === UNNAMED).map((c) => ({ name: 'Other guests', brews: c.n }))],
+      }
+    : null;
 
   const top1 = (counts: Array<{ key: string; n: number }>, list: ReadonlyArray<{ id: string; name: string }>) => {
     const c = counts[0];
@@ -78,6 +103,7 @@ export function recapFigures(data: StatsData, previous: StatsData | null, period
     best,
     caffeineMg: caffeine?.totalMg ?? null,
     volume,
+    forOthers: forOthersFigures,
     coffeeGrams: brews.reduce((n, b) => n + b.doseGrams, 0),
     beansBrewed: beanCounts.map((c) => ({ id: c.key, label: label(c.key), brews: c.n })),
     beansAdded: data.beans.filter((b) => within(b.purchaseDate ?? day(b.createdAt), period)).map((b) => ({ id: b.id, label: beanLabel(b) })),

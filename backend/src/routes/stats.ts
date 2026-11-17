@@ -12,12 +12,15 @@ import {
   beans,
   brewerMethods,
   brewers,
+  brewLogGuests,
   brewLogProblems,
   brewLogs,
+  brewServings,
   brewLogTools,
   brewProblems,
   drinks,
   grinders,
+  guests,
   INSIGHT_TABS,
   MAX_INSIGHT_CHARTS,
   MAX_LAYOUT_IDS,
@@ -48,6 +51,13 @@ export interface StatsBrew {
   drinkId: string | null;
   toolIds: string[];
   problemIds: string[];
+  // Who it was for (brew-logs.md §6, "Who it's for"), and a cold brew batch's
+  // servings by who drank them (brew-servings.md §6c), which decide its split
+  // once it has any (§11, "How the client counts").
+  forMe: boolean;
+  guestIds: string[];
+  unnamedGuests: number;
+  servings: StatsServing[];
   doseGrams: number;
   waterGrams: number | null;
   iceGrams: number | null;
@@ -96,6 +106,13 @@ interface Named {
   name: string;
 }
 
+// One serving of a batch: a guest's (named or not) or whoever logged it's.
+export interface StatsServing {
+  guestId: string | null;
+  forGuest: boolean;
+  concentrateGrams: number;
+}
+
 // A brewer's latest measured brews (any bean, recipe or filter), for the
 // grounds retention it's learned from, as the brew page does
 // (docs/api/brewers.md §3, "Grounds retention").
@@ -120,6 +137,7 @@ export interface StatsResponse {
     problems: Named[];
     processes: Named[];
     drinks: Named[];
+    guests: Named[]; // archived ones too
   };
 }
 
@@ -189,6 +207,8 @@ async function loadBrews(workspaceId: string, callerId: string, q: z.infer<typeo
       tdsPercent: brewLogs.tdsPercent,
       rating: brewLogs.rating,
       drinkRating: brewLogs.drinkRating,
+      forMe: brewLogs.forMe,
+      unnamedGuests: brewLogs.unnamedGuests,
     })
     .from(brewLogs)
     .leftJoin(brewers, eq(brewLogs.brewerId, brewers.id))
@@ -203,8 +223,35 @@ async function loadBrews(workspaceId: string, callerId: string, q: z.infer<typeo
     return (!q.from || d >= q.from) && (!q.to || d <= q.to);
   });
   const ids = inRange.map((r) => r.id);
-  const [tools, problems] = await Promise.all([toolIdsFor(ids), problemIdsFor(ids)]);
-  return inRange.map((r) => ({ ...r, toolIds: tools.get(r.id) ?? [], problemIds: problems.get(r.id) ?? [] }));
+  const [tools, problems, guestIds, servings] = await Promise.all([toolIdsFor(ids), problemIdsFor(ids), guestIdsFor(ids), servingsFor(ids)]);
+  return inRange.map((r) => ({
+    ...r,
+    toolIds: tools.get(r.id) ?? [],
+    problemIds: problems.get(r.id) ?? [],
+    guestIds: guestIds.get(r.id) ?? [],
+    servings: servings.get(r.id) ?? [],
+  }));
+}
+
+async function guestIdsFor(brewLogIds: string[]): Promise<Map<string, string[]>> {
+  if (brewLogIds.length === 0) return new Map();
+  const rows = await db
+    .select({ brewLogId: brewLogGuests.brewLogId, id: brewLogGuests.guestId })
+    .from(brewLogGuests)
+    .where(inArray(brewLogGuests.brewLogId, brewLogIds));
+  return groupIds(rows);
+}
+
+async function servingsFor(brewLogIds: string[]): Promise<Map<string, StatsServing[]>> {
+  const byLog = new Map<string, StatsServing[]>();
+  if (brewLogIds.length === 0) return byLog;
+  const rows = await db
+    .select({ brewLogId: brewServings.brewLogId, guestId: brewServings.guestId, forGuest: brewServings.forGuest, concentrateGrams: brewServings.concentrateGrams })
+    .from(brewServings)
+    .where(inArray(brewServings.brewLogId, brewLogIds))
+    .orderBy(asc(brewServings.timestamp), asc(brewServings.id));
+  for (const { brewLogId, ...s } of rows) byLog.set(brewLogId, [...(byLog.get(brewLogId) ?? []), s]);
+  return byLog;
 }
 
 function groupIds(rows: Array<{ brewLogId: string; id: string }>): Map<string, string[]> {
@@ -280,7 +327,7 @@ async function loadBeans(workspaceId: string): Promise<StatsBean[]> {
 }
 
 async function loadLookups(workspaceId: string): Promise<StatsResponse["lookups"]> {
-  const [brewerRows, methods, styles, recipeRows, grinderRows, tools, problems, processes, drinkRows] = await Promise.all([
+  const [brewerRows, methods, styles, recipeRows, grinderRows, tools, problems, processes, drinkRows, guestRows] = await Promise.all([
     db
       .select({ id: brewers.id, name: brewers.name, methodId: brewers.methodId, groundsRetention: brewers.groundsRetention })
       .from(brewers)
@@ -300,10 +347,11 @@ async function loadLookups(workspaceId: string): Promise<StatsResponse["lookups"
     db.select({ id: brewProblems.id, name: brewProblems.name }).from(brewProblems).where(eq(brewProblems.workspaceId, workspaceId)).orderBy(asc(brewProblems.position)),
     db.select({ id: beanProcesses.id, name: beanProcesses.name }).from(beanProcesses).where(eq(beanProcesses.workspaceId, workspaceId)).orderBy(asc(beanProcesses.position)),
     db.select({ id: drinks.id, name: drinks.name }).from(drinks).where(eq(drinks.workspaceId, workspaceId)),
+    db.select({ id: guests.id, name: guests.name }).from(guests).where(eq(guests.workspaceId, workspaceId)).orderBy(asc(guests.name)),
   ]);
   const measured = await loadMeasured(workspaceId);
   const brewerList = brewerRows.map((b) => ({ ...b, measured: measured.get(b.id) ?? [] }));
-  return { brewers: brewerList, methods, styles, recipes: recipeRows, grinders: grinderRows, tools, problems, processes, drinks: drinkRows };
+  return { brewers: brewerList, methods, styles, recipes: recipeRows, grinders: grinderRows, tools, problems, processes, drinks: drinkRows, guests: guestRows };
 }
 
 // Each brewer's latest BREWER_RETENTION_SAMPLE brews with a water weight and a

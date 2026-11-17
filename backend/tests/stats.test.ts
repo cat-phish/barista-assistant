@@ -60,6 +60,34 @@ describe("stats (docs/api/stats.md §11)", () => {
     expect(res.body.lookups.problems).toContainEqual({ id: fast, name: "Fast drawdown" });
   });
 
+  it("says who each brew was for, and who drank a batch's servings (backlog 67)", async () => {
+    const owner = await newUser();
+    const ws = await newWorkspace(owner);
+    const base = `/api/workspaces/${ws.id}`;
+    const sam = (await owner.agent.post(`${base}/guests`).send({ name: "Sam" })).body.guest.id as string;
+    const v60 = await brewerId(owner, ws.id, "V60");
+    const coldStyle = await styleId(owner, ws.id, "filter", "cold_brew");
+    const cold = (await owner.agent.post(`${base}/recipes`).send({ name: "Fridge", brewerId: v60, styleId: coldStyle, targetDoseGrams: 40, targetWaterGrams: 400 })).body.recipe.id as string;
+    const bean = await newBean(owner, ws.id);
+    const mine = await newBrewLog(owner, ws.id, bean);
+    const shared = await newBrewLog(owner, ws.id, bean, { guestIds: [sam], unnamedGuests: 1 });
+    const batch = await newBrewLog(owner, ws.id, bean, { recipeId: cold, actualDoseGrams: 40, actualWaterGrams: 400, actualYieldGrams: 310 });
+    await owner.agent.post(`${base}/brew-logs/${batch}/servings`).send({ concentrateGrams: 100 });
+    await owner.agent.post(`${base}/brew-logs/${batch}/servings`).send({ concentrateGrams: 50, guestId: sam });
+
+    const res = await owner.agent.get(`${base}/stats`);
+    const row = (id: string) => (res.body.brews as Array<{ id: string }>).find((b) => b.id === id);
+    expect(row(mine)).toMatchObject({ forMe: true, guestIds: [], unnamedGuests: 0, servings: [] });
+    expect(row(shared)).toMatchObject({ forMe: true, guestIds: [sam], unnamedGuests: 1, servings: [] });
+    expect(row(batch)).toMatchObject({
+      servings: [
+        { guestId: null, forGuest: false, concentrateGrams: 100 },
+        { guestId: sam, forGuest: true, concentrateGrams: 50 },
+      ],
+    });
+    expect(res.body.lookups.guests).toEqual([{ id: sam, name: "Sam" }]);
+  });
+
   it("sends each brewer's typed retention and its latest measured brews, whatever the filters", async () => {
     const owner = await newUser();
     const ws = await newWorkspace(owner);

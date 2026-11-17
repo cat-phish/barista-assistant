@@ -100,6 +100,18 @@ describe("CSV export (docs/api/backup.md §2b, CSV)", () => {
     });
   });
 
+  it("says who a brew was for beyond whoever brewed it (backlog 67)", async () => {
+    const owner = await newUser();
+    const ws = await newWorkspace(owner);
+    const sam = (await owner.agent.post(`/api/workspaces/${ws.id}/guests`).send({ name: "Sam" })).body.guest.id;
+    const bean = await newBean(owner, ws.id);
+    await newBrewLog(owner, ws.id, bean, { timestamp: "2026-10-20T08:00:00.000Z" });
+    await newBrewLog(owner, ws.id, bean, { timestamp: "2026-10-21T08:00:00.000Z", guestIds: [sam], unnamedGuests: 2 });
+    await newBrewLog(owner, ws.id, bean, { timestamp: "2026-10-22T08:00:00.000Z", forMe: false, unnamedGuests: 1 });
+    const rows = asObjects((await owner.agent.get(`/api/workspaces/${ws.id}/csv/brew_logs`)).text);
+    expect(rows.map((r) => r.For)).toEqual(["1 guest", "Brewer; Sam; 2 other guests", ""]);
+  });
+
   it("counts the ice of a flash chilled brew in its ratio (docs/api/recipes.md §5)", async () => {
     const owner = await newUser();
     const ws = await newWorkspace(owner);

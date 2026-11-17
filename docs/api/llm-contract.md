@@ -796,7 +796,9 @@ already `pending`; the result goes back into it.
    counts it; the period from the row's `kind` and `periodStart` with the
    person's `weekStartsOn`, and the one before. `figures` and
    `previousFigures`: brews, daysBrewed, ratedBrews, averageRating (coffee
-   rating, one decimal), bestRating, coffeeGrams, and beans, recipes and
+   rating, one decimal), bestRating, coffeeGrams, brewsForOthers (brews
+   for named or unnamed guests, or a batch with a serving poured for one;
+   a count, never guest names; backlog 67), and beans, recipes and
    brewers by name with their counts. The newest 60 brews are sent, each
    as step 1's brew plus `day`, `bean` ("Roaster – Bean") and `brewer`;
    `brewsLeftOut` counts the rest. A chat period (§9e) uses it too, with

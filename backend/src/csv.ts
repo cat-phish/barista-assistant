@@ -36,10 +36,18 @@ function localTime(at: Date, offsetMinutes: number | null): string {
 const minutesSeconds = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 const window = (min: number | null, max: number | null, unit = "") => (min === null || max === null ? null : `${min}–${max}${unit}`);
 
+// Who a brew was for, beyond whoever brewed it (brew-logs.md §6, "Who it's
+// for"): "Brewer; Sam; 2 other guests". Empty for a brew that's theirs alone.
+function forWho(l: { forMe: boolean; guests: Array<{ name: string }>; unnamedGuests: number }): string | null {
+  if (l.forMe && l.guests.length === 0 && l.unnamedGuests === 0) return null;
+  const others = l.unnamedGuests ? [`${l.unnamedGuests} ${l.forMe || l.guests.length ? "other " : ""}guest${l.unnamedGuests === 1 ? "" : "s"}`] : [];
+  return [...(l.forMe ? ["Brewer"] : []), ...l.guests.map((g) => g.name), ...others].join("; ");
+}
+
 export async function brewLogsCsv(workspaceId: string): Promise<string> {
   const logs = await loadBrewLogs(eq(brewLogs.workspaceId, workspaceId), 1_000_000);
   const header = [
-    "Date", "Date (UTC)", "Brewed by", "Roaster", "Bean", "Batch", "Recipe", "Style", "Brewer", "Drink", "Size",
+    "Date", "Date (UTC)", "Brewed by", "For", "Roaster", "Bean", "Batch", "Recipe", "Style", "Brewer", "Drink", "Size",
     "Grinder", "Grind setting", "Grind RPM", "Water profile", "Dose (g)", "Water (g)", "Ice (g)", "Yield (g)", "Vessel", "Ratio", "TDS (%)",
     "Extraction (%)", "Water temp (°C)", "Time (s)", "Time", "Beans in (g)", "Grounds out (g)", "Steeping", "Steeped in",
     "Steep window (h)", "Target finish (s)", "Served diluted 1:", "Diluted with", "Prep", "Problems", "Rating",
@@ -49,6 +57,7 @@ export async function brewLogsCsv(workspaceId: string): Promise<string> {
     localTime(l.timestamp, l.utcOffsetMinutes),
     l.timestamp.toISOString(),
     l.brewedBy?.email,
+    forWho(l),
     l.bean.roasterName,
     l.bean.beanName,
     l.bean.batchNumber,

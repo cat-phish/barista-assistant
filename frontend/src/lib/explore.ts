@@ -2,6 +2,7 @@
 // how they move together (docs/roadmap.md, "Insights"). The fields here are
 // what can be picked.
 import type { CoffeeSpecies, OriginArea, RoastLevel, StatsBean, StatsBrew } from '../api/types';
+import { myShare } from './shares';
 import { COFFEE_SPECIES } from './beans';
 import { ORIGIN_AREAS } from './origins';
 import { ROAST_LEVELS } from './scale';
@@ -64,9 +65,11 @@ export const NUMBERS: readonly NumberField[] = [
     kind: 'number',
     group: 'result',
     labelFor: (ctx) => `Volume drunk (${ctx.volumeLabel})`,
+    // Your share of it (lib/shares.ts); null for a brew only guests drank.
     value: (b, ctx) => {
       const v = ctx.volume(b);
-      return v ? ctx.volumeIn(v.ml) : null;
+      const share = myShare(b);
+      return v && share > 0 ? ctx.volumeIn(v.ml * share) : null;
     },
   },
   { key: 'dose', label: 'Dose (g)', kind: 'number', group: 'brew', value: (b) => b.doseGrams },

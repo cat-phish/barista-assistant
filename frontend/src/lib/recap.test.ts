@@ -7,7 +7,7 @@ const brew = (fields: Partial<StatsBrew> = {}): StatsBrew => ({
   methodId: null, styleId: null, brewsLike: null, grinderId: null, drinkId: null, toolIds: [], problemIds: [], doseGrams: 20,
   waterGrams: 300, iceGrams: null, yieldGrams: null, servingSize: null, servingUnit: null, drinkServingSize: null, drinkServingUnit: null,
   dilutionRatio: null, timeSec: 150, expectedFinishMinSec: null, expectedFinishMaxSec: null, grindSetting: null, tempC: null,
-  tdsPercent: null, rating: null, drinkRating: null, ...fields,
+  tdsPercent: null, rating: null, drinkRating: null, forMe: true, guestIds: [], unnamedGuests: 0, servings: [], ...fields,
 });
 const bean = (fields: Partial<StatsBean> = {}): StatsBean => ({
   id: 'kenya', roasterName: 'House', beanName: 'Kenya Nyeri', batchNumber: null, country: null, originArea: null, altitudeMasl: null, processId: null,
@@ -27,6 +27,7 @@ const lookups = (): StatsData['lookups'] => ({
   problems: [],
   processes: [],
   drinks: [],
+  guests: [{ id: 'sam', name: 'Sam' }],
 });
 const week = { start: '2026-11-02', end: '2026-11-08' };
 
@@ -71,6 +72,23 @@ describe('recapFigures', () => {
     // 260 + 79 measured; two estimated at 300 − 2.05 × 20 = 259.
     expect(r.volume).toEqual({ ml: 260 + 79 + 259 + 259, estimated: true });
     expect(r.caffeineMg).toBeCloseTo(82 * 1000 * 0.012 * 0.9);
+  });
+
+  it('counts only your share of brews for guests, and what was brewed for them (backlog 67)', () => {
+    const shared: StatsData = {
+      ...data,
+      brews: [
+        brew({ id: 'g1', timestamp: '2026-11-02T08:00:00.000Z', yieldGrams: 300, guestIds: ['sam'] }), // half yours
+        brew({ id: 'g2', timestamp: '2026-11-03T08:00:00.000Z', yieldGrams: 200, forMe: false, unnamedGuests: 2 }), // none yours
+        brew({ id: 'g3', timestamp: '2026-11-04T08:00:00.000Z', yieldGrams: 100 }),
+      ],
+    };
+    const r = recapFigures(shared, null, week, 'light', '2026-11-09');
+    expect(r.brews).toBe(3);
+    expect(r.volume).toEqual({ ml: 150 + 100, estimated: false });
+    expect(r.caffeineMg).toBeCloseTo(30 * 1000 * 0.012 * 0.9);
+    expect(r.forOthers).toEqual({ brews: 2, ml: 150 + 200, estimated: false, guests: [{ name: 'Sam', brews: 1 }, { name: 'Other guests', brews: 1 }] });
+    expect(recapFigures(data, null, week, 'light', '2026-11-09').forOthers).toBeNull();
   });
 
   it('lists beans brewed, added and finished, new recipes and the most used', () => {

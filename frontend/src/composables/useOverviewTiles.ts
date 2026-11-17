@@ -5,6 +5,7 @@ import { computed, type ComputedRef } from 'vue';
 import { beanLabel, formatPrice } from '../lib/beans';
 import { caffeineSummary, formatCaffeine } from '../lib/caffeine';
 import { localDateInput } from '../lib/format';
+import { forOthers, myShare } from '../lib/shares';
 import { countBy, formatDuration, formatWeight, freezeState, isAvailable, localDay, longestStreak, spendByCurrency } from '../lib/stats';
 import { useStats } from './useStats';
 
@@ -26,13 +27,24 @@ export function useOverviewTiles(): ComputedRef<Tile[]> {
     const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
     const dose = brews.reduce((sum, b) => sum + b.doseGrams, 0);
-    const volumes = brews.map((b) => stats.volume(b)).filter((v) => v !== null);
-    const ml = volumes.reduce((sum, v) => sum + v.ml, 0);
-    const estimated = volumes.filter((v) => v.source === 'estimate').length;
+    // Volume brewed is every brew's whole; volume drunk, and caffeine, only
+    // the share of it whoever logged it drank (lib/shares.ts).
+    const measured = brews.flatMap((b) => {
+      const v = stats.volume(b);
+      return v ? [{ ...v, share: myShare(b) }] : [];
+    });
+    const sumMl = (list: typeof measured, weight: (v: (typeof measured)[number]) => number) => list.reduce((sum, v) => sum + v.ml * weight(v), 0);
+    const drunk = measured.filter((v) => v.share > 0);
+    const ml = sumMl(drunk, (v) => v.share);
+    const estimated = drunk.filter((v) => v.source === 'estimate').length;
+    const brewedMl = sumMl(measured, () => 1);
+    const brewedEstimated = measured.some((v) => v.source === 'estimate');
+    const guestMl = sumMl(measured, (v) => 1 - v.share);
+    const guestBrews = brews.filter(forOthers).length;
     const rated = brews.filter((b) => b.rating !== null);
     const meanRating = rated.length ? rated.reduce((sum, b) => sum + b.rating!, 0) / rated.length : null;
 
-    const caffeine = caffeineSummary(brews, stats.bean, stats.range.value, localDateInput());
+    const caffeine = caffeineSummary(brews, stats.bean, stats.range.value, localDateInput(), myShare);
 
     const available = beans.filter(isAvailable);
     const states = countBy(available, freezeState);
@@ -48,9 +60,15 @@ export function useOverviewTiles(): ComputedRef<Tile[]> {
     return [
       { key: 'brews', label: 'Brews', value: String(brews.length), sub: rated.length ? `${rated.length} rated` : undefined },
       { key: 'coffee', label: 'Coffee used', value: formatWeight(dose), sub: brews.length ? `${formatWeight(dose / brews.length)} a brew` : undefined },
-      { key: 'volume', label: 'Volume drunk', value: `${estimated ? '≈ ' : ''}${stats.formatVolume(ml)}`, sub: estimated ? `${Math.round((estimated / volumes.length) * 100)}% estimated` : undefined },
+      { key: 'volume', label: 'Volume drunk', value: `${estimated ? '≈ ' : ''}${stats.formatVolume(ml)}`, sub: estimated ? `${Math.round((estimated / drunk.length) * 100)}% estimated` : undefined },
+      { key: 'volumeBrewed', label: 'Volume brewed', value: `${brewedEstimated ? '≈ ' : ''}${stats.formatVolume(brewedMl)}`, sub: guestBrews ? 'guests’ share included' : undefined },
+      {
+        key: 'forGuests', label: 'Brewed for guests',
+        value: guestBrews ? `${brewedEstimated ? '≈ ' : ''}${stats.formatVolume(guestMl)}` : '–',
+        sub: guestBrews ? `their share of ${plural(guestBrews, 'brew')}` : 'none in this period',
+      },
       { key: 'caffeineTotal', label: 'Caffeine Total', value: caffeine ? formatCaffeine(caffeine.totalMg) : '–' },
-      { key: 'caffeinePerBrew', label: 'Caffeine/Brew', value: caffeine ? formatCaffeine(caffeine.perBrewMg) : '–', sub: caffeine ? `from ${plural(brews.length, 'brew')}` : undefined },
+      { key: 'caffeinePerBrew', label: 'Caffeine/Brew', value: caffeine ? formatCaffeine(caffeine.perBrewMg) : '–', sub: caffeine ? `from ${plural(caffeine.brews, 'brew')}` : undefined },
       { key: 'caffeinePerDay', label: 'Caffeine/Day', value: caffeine ? formatCaffeine(caffeine.perDayMg) : '–', sub: caffeine ? `over ${plural(caffeine.days, 'day')}` : undefined },
       { key: 'time', label: 'Total brew time', value: formatDuration(brews.reduce((sum, b) => sum + b.timeSec, 0)) },
       { key: 'rating', label: 'Average rating', value: meanRating === null ? '–' : `${meanRating.toFixed(1)} / 5`, sub: rated.length ? `from ${plural(rated.length, 'brew')}` : undefined },

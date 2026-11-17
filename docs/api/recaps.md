@@ -62,7 +62,12 @@ the client counts" does:
 - **Best brews:** the top coffee rating, ties kept (newest first, at most
   three), with bean, recipe and brewer.
 - **Caffeine ≈** (the period's total) and **volume drunk** (≈ when any brew's
-  volume is estimated).
+  volume is estimated): your share only, as Insights counts it (stats.md
+  §11, "Who drank it").
+- **Brewed for others:** brews made at least partly for guests, their share
+  of the volume, and who they were (named guests most brewed for first,
+  then other guests). Left out when there were none. The AI summary gets
+  only the count (`brewsForOthers`, llm-contract.md §9f), no names.
 - **Coffee used:** the sum of doses.
 - **Beans brewed** (most brewed first); **new beans**: bought (`purchaseDate`,
   else the day added) in the period; **finished**: archived in the period.

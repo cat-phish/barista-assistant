@@ -42,16 +42,26 @@ export interface CaffeineSummary {
   perBrewMg: number;
   perDayMg: number;
   days: number;
+  brews: number; // the brews counted: those you had a share of
 }
 
-// `days` counts quiet days too: from the period's start (the first brew when
-// open, as the charts' axis does) to its end, never past today.
-export function caffeineSummary(brews: readonly StatsBrew[], beanOf: (id: string) => CaffeineBean | undefined, range: DayRange, today: string): CaffeineSummary | null {
+// Your share only (lib/shares.ts): a brew for guests counts what you drank of
+// it, per brew over the brews you had a share of. `days` counts quiet days
+// too: from the period's start (the first brew when open, as the charts' axis
+// does) to its end, never past today.
+export function caffeineSummary(
+  brews: readonly StatsBrew[],
+  beanOf: (id: string) => CaffeineBean | undefined,
+  range: DayRange,
+  today: string,
+  share: (b: StatsBrew) => number = () => 1,
+): CaffeineSummary | null {
   const first = brews[0];
   if (!first) return null;
-  const totalMg = brews.reduce((sum, b) => sum + brewCaffeineMg(b, beanOf(b.beanId)), 0);
+  const drunk = brews.filter((b) => share(b) > 0);
+  const totalMg = drunk.reduce((sum, b) => sum + brewCaffeineMg(b, beanOf(b.beanId)) * share(b), 0);
   const from = range.from ?? localDay(first);
   const to = range.to !== null && range.to < today ? range.to : today;
   const days = Math.max(1, (Date.parse(to) - Date.parse(from)) / DAY_MS + 1);
-  return { totalMg, perBrewMg: totalMg / brews.length, perDayMg: totalMg / days, days };
+  return { totalMg, perBrewMg: drunk.length ? totalMg / drunk.length : 0, perDayMg: totalMg / days, days, brews: drunk.length };
 }
