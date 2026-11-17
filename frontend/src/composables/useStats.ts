@@ -10,7 +10,7 @@ import { brewerRetentions, bucketRange, brewVolumeMl, localDay, pickGranularity,
 import { canAdd, isTileId, layoutOrder, newUuid, pinLayoutId, toggleOverview, withoutPin, type LaidOutChart } from '../lib/insightCharts';
 import { CHART_PERIOD_PREFIX, formatChartPeriod, inRange, parseChartPeriod, RANGES, resolveRange, widestRange, type DayRange, type Period, type RangeKey } from '../lib/statsRange';
 import { GRAMS_PER_FL_OZ } from '../lib/scale';
-import { VOLUME_LABELS } from '../lib/units';
+import { formatVolumeIn } from '../lib/units';
 import { useWorkspaceStore } from '../stores/workspace';
 import { usePreferences } from './usePreferences';
 
@@ -335,11 +335,7 @@ export function provideStats(local?: Ref<LocationQuery>): StatsContext {
   });
 
   const volumeIn = (ml: number) => (filters.value.unit === 'ml' ? Math.round(ml) : Math.round((ml / GRAMS_PER_FL_OZ) * 10) / 10);
-  function formatVolume(ml: number): string {
-    if (filters.value.unit === 'ml') return ml >= 1000 ? `${(ml / 1000).toFixed(1)} L` : `${Math.round(ml)} ml`;
-    const oz = ml / GRAMS_PER_FL_OZ;
-    return oz >= 128 ? `${(oz / 128).toFixed(1)} gal` : `${oz.toFixed(oz < 10 ? 1 : 0)} ${VOLUME_LABELS.fl_oz}`;
-  }
+  const formatVolume = (ml: number): string => formatVolumeIn(ml, filters.value.unit);
 
   const ctx: StatsContext = {
     filters,

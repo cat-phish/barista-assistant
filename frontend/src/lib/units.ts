@@ -75,3 +75,11 @@ export function volumeUnits(unit: VolumeUnit, showBoth: boolean): VolumeUnit[] {
 export function gramsToVolume(grams: number, unit: VolumeUnit): number {
   return unit === 'ml' ? Math.round(grams) : round1(grams / GRAMS_PER_FL_OZ);
 }
+
+// A total volume for Insights and recaps: ml up to 1 L, then litres; fl oz up
+// to a gallon, then gallons.
+export function formatVolumeIn(ml: number, unit: VolumeUnit): string {
+  if (unit === 'ml') return ml >= 1000 ? `${(ml / 1000).toFixed(1)} L` : `${Math.round(ml)} ml`;
+  const oz = ml / GRAMS_PER_FL_OZ;
+  return oz >= 128 ? `${(oz / 128).toFixed(1)} gal` : `${oz.toFixed(oz < 10 ? 1 : 0)} ${VOLUME_LABELS.fl_oz}`;
+}

@@ -3,7 +3,8 @@
 // as full-screen story slides, one figure each. Tap the right of a slide or
 // swipe left for the next, the left or a swipe right to go back; arrow keys
 // too, Escape closes. Query: year (default the one just ended, or this one
-// "so far" from 1 December) and mine=0 for the bar's year.
+// "so far" from 1 December) and mine=0 for the bar's year. Outside the
+// Insights layout, so it can't use useStats().
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { statsApi } from '../../api/stats';
@@ -11,9 +12,9 @@ import { membersApi } from '../../api/members';
 import type { Member, StatsData } from '../../api/types';
 import { errorMessage } from '../../api/client';
 import { usePreferences } from '../../composables/usePreferences';
-import { useStats } from '../../composables/useStats';
 import { localDateInput } from '../../lib/format';
 import { formatWeight, localDay } from '../../lib/stats';
+import { formatVolumeIn } from '../../lib/units';
 import { latestYear, yearFigures, yearPeriod } from '../../lib/yearInCoffee';
 import { MONTH_NAMES, personLabels, yearSlides } from '../../lib/yearSlides';
 import { useAuthStore } from '../../stores/auth';
@@ -23,7 +24,6 @@ const route = useRoute();
 const router = useRouter();
 const workspaces = useWorkspaceStore();
 const auth = useAuthStore();
-const stats = useStats();
 const { prefs, recipeRoastLevel } = usePreferences();
 
 const today = localDateInput();
@@ -82,7 +82,7 @@ const slides = computed(() => {
   const prev = { ...d, brews: d.brews.filter((b) => localDay(b) >= before.start && localDay(b) <= before.end) };
   const f = yearFigures(d, prev, year.value, recipeRoastLevel.value, today);
   const person = personLabels(f.people, auth.user?.id ?? null, (id) => members.value.find((m) => m.userId === id)?.name ?? null);
-  return yearSlides(f, { mine: mine.value, inProgress: inProgress.value, volume: (ml) => stats.formatVolume(ml), weight: formatWeight, person });
+  return yearSlides(f, { mine: mine.value, inProgress: inProgress.value, volume: (ml) => formatVolumeIn(ml, prefs.value.volumeUnit), weight: formatWeight, person });
 });
 
 const index = ref(0);

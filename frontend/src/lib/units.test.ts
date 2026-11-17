@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { altitudeText, formatAltitude, formatTemp, formatTempChange, gramsToVolume, parseAltitude, parseTemp, tempText, volumeUnits } from './units';
+import { altitudeText, formatAltitude, formatTemp, formatTempChange, formatVolumeIn, gramsToVolume, parseAltitude, parseTemp, tempText, volumeUnits } from './units';
+import { GRAMS_PER_FL_OZ } from './scale';
 
 describe('temperature', () => {
   it('shows °C as stored and °F rounded', () => {
@@ -47,5 +48,14 @@ describe('volume', () => {
     expect(volumeUnits('ml', true)).toEqual(['ml', 'fl_oz']);
     expect(gramsToVolume(355, 'fl_oz')).toBe(12);
     expect(gramsToVolume(354.6, 'ml')).toBe(355);
+  });
+});
+
+describe('formatVolumeIn', () => {
+  it('shows ml up to a litre, and fl oz up to a gallon', () => {
+    expect(formatVolumeIn(250, 'ml')).toBe('250 ml');
+    expect(formatVolumeIn(30000, 'ml')).toBe('30.0 L');
+    expect(formatVolumeIn(GRAMS_PER_FL_OZ * 8, 'fl_oz')).toBe('8.0 fl oz');
+    expect(formatVolumeIn(GRAMS_PER_FL_OZ * 256, 'fl_oz')).toBe('2.0 gal');
   });
 });
