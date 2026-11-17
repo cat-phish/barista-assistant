@@ -373,6 +373,16 @@ export interface Vessel {
 }
 export type VesselInput = Pick<Vessel, 'name' | 'weightGrams'>;
 
+// docs/api/guests.md §2d: someone a workspace brews for besides whoever logs it.
+export interface Guest {
+  id: string;
+  name: string;
+  notes: string | null;
+  archivedAt: string | null; // set = archived (hidden from pickers, kept in history)
+  createdAt: string;
+}
+export type GuestInput = Pick<Guest, 'name' | 'notes'>;
+
 // docs/api/green-coffees.md §4e: green stock. The origin fields are a bean's.
 export interface GreenCoffeeDetails {
   originArea: OriginArea | null;

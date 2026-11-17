@@ -31,6 +31,7 @@ async function populated() {
   await post("roasts", { greenCoffeeId: guji, machineId: nano, greenGrams: 120, roastedGrams: 103, roastType: "filter", detailedRoastLevel: "city", firstCrackSec: 420, totalSec: 540 });
   const water = (await post("water-profiles", { name: "TWW", tdsPpm: 120 })).waterProfile.id as string;
   const carafe = (await post("vessels", { name: "Carafe", weightGrams: 312.5 })).vessel.id as string;
+  await post("guests", { name: "Sam", notes: "oat milk" });
   const v60 = await brewerId(owner, ws.id, "V60");
   const stalled = (await post("brew-problems", { name: "Paper taste", methodKinds: ["espresso"], brewerIds: [v60] })).problem.id as string;
   const note = (
@@ -100,7 +101,7 @@ async function populated() {
 
 // What the workspace looks like through the API, without IDs (they differ
 // after a restore) and with lists in a stable order.
-const LISTS = ["bean-processes", "brewer-methods", "recipe-styles", "grinders", "roasting-machines", "green-coffees", "roasts", "water-profiles", "prep-tools", "brew-problems", "notes", "brewers", "beans", "recipes", "ingredients", "drink-categories", "drinks", "menu", "brew-logs"];
+const LISTS = ["bean-processes", "brewer-methods", "recipe-styles", "grinders", "roasting-machines", "green-coffees", "roasts", "water-profiles", "guests", "prep-tools", "brew-problems", "notes", "brewers", "beans", "recipes", "ingredients", "drink-categories", "drinks", "menu", "brew-logs"];
 function strip(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(strip);
   if (typeof value !== "object" || value === null) return value;

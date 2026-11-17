@@ -100,6 +100,7 @@ import {
   users,
   waterProfiles,
   vessels,
+  guests,
   workspaceMembers,
   workspaceInvites,
   emailTokens,
@@ -220,6 +221,7 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
   { table: grinders, scope: "workspace" },
   { table: waterProfiles, scope: "workspace" },
   { table: vessels, scope: "workspace" },
+  { table: guests, scope: "workspace" }, // docs/api/guests.md §2d
   { table: prepTools, scope: "workspace" },
   { table: brewProblems, scope: "workspace" },
   { table: notes, scope: "workspace" },

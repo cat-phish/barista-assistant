@@ -27,6 +27,7 @@ import { roastingMachinesRouter } from "./routes/roastingMachines.js";
 import { greenCoffeesRouter } from "./routes/greenCoffees.js";
 import { roastsRouter } from "./routes/roasts.js";
 import { vesselsRouter } from "./routes/vessels.js";
+import { guestsRouter } from "./routes/guests.js";
 import { waterProfilesRouter } from "./routes/waterProfiles.js";
 import { prepToolsRouter } from "./routes/prepTools.js";
 import { backupRouter, LARGE_BODY_PATH } from "./routes/backup.js";
@@ -101,6 +102,7 @@ app.use("/api/workspaces/:workspaceId/green-coffees", greenCoffeesRouter); // do
 app.use("/api/workspaces/:workspaceId/roasts", roastsRouter); // docs/api/roasts.md §4f
 app.use("/api/workspaces/:workspaceId/water-profiles", waterProfilesRouter);
 app.use("/api/workspaces/:workspaceId/vessels", vesselsRouter); // docs/api/vessels.md §3g
+app.use("/api/workspaces/:workspaceId/guests", guestsRouter); // docs/api/guests.md §2d
 app.use("/api/workspaces/:workspaceId/prep-tools", prepToolsRouter);
 app.use("/api/workspaces/:workspaceId/brew-problems", brewProblemsRouter);
 app.use("/api/workspaces/:workspaceId/notes", notesRouter);

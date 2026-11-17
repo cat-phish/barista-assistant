@@ -18,6 +18,7 @@ means drinks, wherever you see it (code comments use
 | §2 | [workspaces.md](workspaces.md) | Workspaces |
 | §2b | [backup.md](backup.md) | Backup and Restore (a workspace as one file) |
 | §2c | [flavor-lexicon.md](flavor-lexicon.md) | Flavor Lexicon (a workspace's own flavor wheel, as a JSON file) |
+| §2d | [guests.md](guests.md) | Guests (who a brew is made for besides you) |
 | §3 | [brewers.md](brewers.md) | Brewers |
 | §3b | [grinders.md](grinders.md) | Grinders |
 | §3c | [water-profiles.md](water-profiles.md) | Water Profiles |

@@ -27,6 +27,7 @@ export const MATCH_KEYS: Record<string, (row: BackupRow) => string[]> = {
   grinders: (r) => [lower(r.name)],
   water_profiles: (r) => [lower(r.name)],
   vessels: (r) => [lower(r.name)],
+  guests: (r) => [lower(r.name)],
   prep_tools: (r) => [lower(r.name)],
   brew_problems: (r) => [lower(r.name)],
   notes: (r) => [lower(r.title)],

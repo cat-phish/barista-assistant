@@ -23,6 +23,7 @@ const auth = useAuthStore();
       <h2 :title="workspaces.current.name">{{ workspaces.current.name }}</h2>
       <RouterLink :to="{ name: 'settings-workspace' }" active-class="active">Workspace</RouterLink>
       <RouterLink :to="{ name: 'settings-members' }" active-class="active">Members</RouterLink>
+      <RouterLink :to="{ name: 'settings-guests' }" active-class="active">Guests</RouterLink>
       <RouterLink :to="{ name: 'settings-defaults' }" active-class="active">Defaults</RouterLink>
       <RouterLink :to="{ name: 'settings-fields' }" active-class="active">Fields</RouterLink>
       <RouterLink :to="{ name: 'settings-ai' }" active-class="active">AI</RouterLink>

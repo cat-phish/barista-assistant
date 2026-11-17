@@ -214,6 +214,27 @@ export const workspaceInvites = mysqlTable(
   })
 );
 
+// 3b. Guests (docs/api/guests.md §2d): who a brew is made for besides the
+// person logging it (backlog 67). Just a name: linking one to a member waits
+// for an invite they accept (backlog 67, "Later"). Archived like vessels.
+export const guests = mysqlTable(
+  "guests",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspace_id", { length: 36 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(), // e.g. "Sam"
+    notes: varchar("notes", { length: 1000 }), // e.g. "oat milk, no sugar"
+    archivedAt: timestamp("archived_at"), // null = active
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    workspaceNameUnique: unique("guests_workspace_name_unique").on(table.workspaceId, table.name),
+  })
+);
+export type Guest = typeof guests.$inferSelect;
+
 // 4. Beans & Inventory
 export const ROAST_LEVELS = ["light", "medium_light", "medium", "medium_dark", "dark"] as const;
 export type RoastLevel = (typeof ROAST_LEVELS)[number];

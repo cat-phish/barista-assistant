@@ -28,6 +28,7 @@ import {
   roasts,
   waterProfiles,
   vessels,
+  guests,
 } from "@barista/shared/schema";
 import { db } from "./db.js";
 
@@ -130,6 +131,12 @@ export async function vesselUsage(id: string): Promise<Counts> {
   return { brewLogCount: await countWhere(brewLogs, eq(brewLogs.vesselId, id)) };
 }
 
+// docs/api/guests.md §2d: nothing points at a guest yet; brews made for one
+// (backlog 67, phase 2) will count here.
+export async function guestUsage(_id: string): Promise<Counts> {
+  return {};
+}
+
 // docs/api/menu.md §7b: the sections that show it lose it.
 export async function otherItemUsage(id: string): Promise<Counts> {
   return { menuItemCount: await countWhere(menuItems, eq(menuItems.otherItemId, id)) };
@@ -142,7 +149,7 @@ export async function greenCoffeeUsage(id: string): Promise<Counts> {
   return { roastCount: await countWhere(roasts, eq(roasts.greenCoffeeId, id)) };
 }
 
-const tables = { roastingMachines, greenCoffees, brewers, grinders, waterProfiles, vessels, prepTools, brewProblems, recipes, drinks, ingredients, beanProcesses, recipeStyles, brewerMethods, menuOtherItems } as const;
+const tables = { roastingMachines, greenCoffees, brewers, grinders, waterProfiles, vessels, guests, prepTools, brewProblems, recipes, drinks, ingredients, beanProcesses, recipeStyles, brewerMethods, menuOtherItems } as const;
 
 // GET /:<param>/usage on a resource router: the counts above, for any member.
 export function addUsageRoute(

@@ -483,15 +483,16 @@ Recording a brew: what's measured, and how fast it is to log.
 
 ### 67. Guest brews: who a brew is for
 
-- **Status:** planned (numbered last to avoid renumbering; belongs in B)
+- **Status:** in progress (numbered last to avoid renumbering; belongs in B).
+  Phase 1, the guests list, is built on branch `guest-brews` (migration
+  0129, `docs/api/guests.md` §2d, Settings → Guests), without linking.
 - **Why:** every brew counts as drunk by whoever logged it, so brewing for
   a partner or friends inflates volume drunk and caffeine in Insights,
   recaps and Coffee Wrapped (65), and there's no way to see how much you
   brew for whom.
 - **Approach (agreed):**
-  - A `guests` list per workspace (name, notes, archive), each optionally
-    linked to a **member of this workspace** (never another workspace's
-    user); a linked member's share counts in their own stats and recaps.
+  - A `guests` list per workspace (name, notes, archive). Not linked to
+    users for now (see "Later").
   - Brew page: **For a guest** checkbox opens a drinkers picker, **Me**
     (on by default) plus named or unnamed guests. Volume and caffeine split
     equally among drinkers. Ticking it unticks Rate later; automatic AI
@@ -503,14 +504,19 @@ Recording a brew: what's measured, and how fast it is to log.
     whoever logged it, guest brews included. New: brewed for guests, and a
     per-guest breakdown. Recaps gain "brewed for others".
   - Schema: `guests`, `brew_log_guests`, `brew_logs.forMe` and
-    `unnamedGuests`, `brew_servings.forGuest` and `guestId`. Stats `mine=1`
-    also matches brews made for the caller's linked guest. Backups carry
-    guests without handing `linkedUserId` to the restorer.
+    `unnamedGuests`, `brew_servings.forGuest` and `guestId`.
+  - **Later: linking a guest to a member**, so that member's share counts
+    in their own stats and recaps (and Stats `mine=1` matches brews made
+    for them). Deferred: letting a barista link anyone would fill another
+    member's Insights and recaps unasked, so it needs an invite the member
+    accepts (or makes themselves) before it counts. Only a member of this
+    workspace; backups would leave the link out.
   - CLAUDE.md rules touched: field registry and Repeat option "Who it's
     for" (6), DeleteDialog for a guest in use (7), backups and match keys
     (8), recap AI figures (9), sortable For column (12), Only mine (13).
-- **Size:** L, in phases: guests list; brew drinkers; serving "For";
-  counting in Insights and recaps; docs.
+- **Size:** L, in phases: guests list (done); brew drinkers; serving
+  "For"; counting in Insights and recaps; docs. Linking comes after, with
+  its invites.
 - **Depends on:** nothing; 65 (Wrapped) should use its shares.
 
 ## C. Recipes

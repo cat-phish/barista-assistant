@@ -2,7 +2,7 @@
 // (docs/api/README.md, "Archiving and deleting"). Unit-tested in deleting.test.ts.
 
 export type Usage = Record<string, number>;
-export type DeletableKind = 'brewer' | 'grinder' | 'water' | 'tool' | 'recipe' | 'drink' | 'ingredient' | 'process' | 'style' | 'method' | 'problem' | 'roaster' | 'green' | 'vessel' | 'note' | 'menuOtherItem';
+export type DeletableKind = 'brewer' | 'grinder' | 'water' | 'tool' | 'recipe' | 'drink' | 'ingredient' | 'process' | 'style' | 'method' | 'problem' | 'roaster' | 'green' | 'vessel' | 'guest' | 'note' | 'menuOtherItem';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const be = (n: number) => (n === 1 ? 'is' : 'are');
@@ -19,6 +19,7 @@ const WARNINGS: Record<DeletableKind, Record<string, (n: number) => string>> = {
     recipeCount: (n) => `${plural(n, 'recipe')} will lose their grind starting point for it.`,
   },
   water: { brewLogCount: (n) => `${plural(n, 'brew')} will lose their water profile.` },
+  guest: {}, // nothing uses a guest yet (backlog 67, phase 2)
   vessel: { brewLogCount: (n) => `${plural(n, 'brew')} will no longer say what they were weighed in. Their yields stay.` },
   tool: {
     brewLogCount: (n) => `${plural(n, 'brew')} will no longer list this prep item.`,

@@ -59,7 +59,7 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   only link rows inside the file. Timestamps are ISO strings, dates
   `YYYY-MM-DD`, decimals numbers.
 - **Tables, in restore order:** `brewer_methods`, `bean_processes`,
-  `recipe_styles`, `grinders`, `water_profiles`, `vessels`, `prep_tools`,
+  `recipe_styles`, `grinders`, `water_profiles`, `vessels`, `guests` (§2d), `prep_tools`,
   `brew_problems`, `notes`, `ingredients`, `drink_categories`, `brewers`,
   `roasting_machines`, `green_coffees`, `prep_tool_brewers`,
   `brew_problem_brewers`, `beans`,
@@ -253,7 +253,7 @@ too. Where the app offers them: "Where it is" above. Code:
   | `brew_logs` | brews, their marks, prep and problem ticks, servings, AI analyses | bean (→ as beans), recipe (→ as recipes), grinder, water profile, vessel, drink (→ as drinks), brewer, prep items, brew problems |
 - **Matching** (`MATCH_KEYS`): a row is "already here" when the workspace
   has one with the same key, and the import uses that one instead:
-  - by name (case-insensitive) for brewers, grinders, water profiles, vessels, prep
+  - by name (case-insensitive) for brewers, grinders, water profiles, vessels, guests, prep
     items, brew problems, ingredients, drink categories, menu sections,
     roasting machines and green coffees; notes by title;
   - roasts by when they were roasted and their green coffee;
