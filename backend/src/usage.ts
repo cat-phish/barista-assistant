@@ -11,6 +11,7 @@ import {
   brewers,
   brewLogs,
   brewLogProblems,
+  brewLogGuests,
   brewLogTools,
   brewProblems,
   drinkIngredients,
@@ -131,10 +132,9 @@ export async function vesselUsage(id: string): Promise<Counts> {
   return { brewLogCount: await countWhere(brewLogs, eq(brewLogs.vesselId, id)) };
 }
 
-// docs/api/guests.md §2d: nothing points at a guest yet; brews made for one
-// (backlog 67, phase 2) will count here.
-export async function guestUsage(_id: string): Promise<Counts> {
-  return {};
+// Brews made for them keep them as an unnamed guest (docs/api/guests.md §2d).
+export async function guestUsage(id: string): Promise<Counts> {
+  return { brewLogCount: await countWhere(brewLogGuests, eq(brewLogGuests.guestId, id)) };
 }
 
 // docs/api/menu.md §7b: the sections that show it lose it.

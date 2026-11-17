@@ -34,6 +34,7 @@ export const FIELDS = [
   brew('waterProfile', 'Water profile'),
   brew('prepTools', 'Prep checklist'),
   brew('problems', 'Problems checklist', 'What went wrong while brewing (Bar setup → Problems)'),
+  brew('forWho', 'Who it’s for', 'Brews made for guests (Settings → Guests), so their share isn’t counted as yours'),
   brew('flavors', 'Flavor wheel', 'The coffee’s flavors, picked on a wheel; tasting notes stay'),
   brew('steepTemp', 'Steep in fridge or room (cold styles)'),
   brew('dilution', 'Dilution served (cold styles, concentrates)'),

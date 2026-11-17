@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
@@ -7,7 +7,7 @@ import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { addUsageRoute, guestUsage } from "../usage.js";
-import { guests, type Guest } from "@barista/shared/schema";
+import { brewLogGuests, brewLogs, guests, type Guest } from "@barista/shared/schema";
 import { optionalText, updateSchema } from "../validation.js";
 
 // docs/api/guests.md §2d
@@ -111,8 +111,19 @@ guestsRouter.patch("/:guestId", async (req: Request<GuestParams>, res: Response<
 // GET /usage says what deleting it would affect (docs/api/README.md, "Deleting").
 guestsRouter.delete("/:guestId", async (req: Request<GuestParams>, res: Response) => {
   if (!(await requireMembership(res, authedUserId(req), req.params.workspaceId, WRITE_ROLES))) return;
-  const [result] = await db.delete(guests).where(inWorkspace(req.params));
-  if (result.affectedRows === 0) {
+  // Their brews keep a drinker: each one counts them as unnamed instead, so
+  // the split stays the same (docs/api/guests.md §2d).
+  const found = await db.transaction(async (tx) => {
+    const [guest] = await tx.select({ id: guests.id }).from(guests).where(inWorkspace(req.params)).for("update");
+    if (!guest) return false;
+    await tx
+      .update(brewLogs)
+      .set({ unnamedGuests: sql`${brewLogs.unnamedGuests} + 1` })
+      .where(inArray(brewLogs.id, tx.select({ id: brewLogGuests.brewLogId }).from(brewLogGuests).where(eq(brewLogGuests.guestId, guest.id))));
+    await tx.delete(guests).where(eq(guests.id, guest.id));
+    return true;
+  });
+  if (!found) {
     sendError(res, 404, "Guest not found");
     return;
   }

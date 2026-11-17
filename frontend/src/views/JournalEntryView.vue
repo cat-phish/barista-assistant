@@ -8,11 +8,13 @@ import AiNoteField from '../components/AiNoteField.vue';
 import AiRequestDialog from '../components/AiRequestDialog.vue';
 import AnalysisCard from '../components/AnalysisCard.vue';
 import { grindersApi } from '../api/grinders';
-import type { BrewProblem, Grinder, PrepTool, Vessel, WaterProfile } from '../api/types';
+import type { BrewProblem, Grinder, Guest, PrepTool, Vessel, WaterProfile } from '../api/types';
 import { vesselsApi } from '../api/vessels';
 import { waterProfilesApi } from '../api/waterProfiles';
 import { prepToolsApi } from '../api/prepTools';
 import { brewProblemsApi } from '../api/brewProblems';
+import { guestsApi } from '../api/guests';
+import { forWhoText } from '../lib/forWho';
 import AppHeader from '../components/AppHeader.vue';
 import BrewFields from '../components/BrewFields.vue';
 import FlavorWheel from '../components/FlavorWheel.vue';
@@ -62,6 +64,7 @@ const waterProfiles = ref<WaterProfile[]>([]);
 const vessels = ref<Vessel[]>([]);
 const prepTools = ref<PrepTool[]>([]);
 const problems = ref<BrewProblem[]>([]);
+const guests = ref<Guest[]>([]); // who it can be for (docs/api/guests.md §2d)
 const loading = ref(true);
 const loadError = ref('');
 
@@ -131,15 +134,17 @@ async function load(): Promise<void> {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [{ brewLog }, g, w, t, bp, v] = await Promise.all([
+    const [{ brewLog }, g, w, t, bp, v, gu] = await Promise.all([
       brewLogsApi.get(ws, props.id),
       grindersApi.list(ws),
       waterProfilesApi.list(ws),
       prepToolsApi.list(ws),
       brewProblemsApi.list(ws).catch(() => ({ problems: [] })),
       vesselsApi.list(ws),
+      guestsApi.list(ws).catch(() => ({ guests: [] as Guest[] })),
     ]);
     prepTools.value = t.tools;
+    guests.value = gu.guests;
     vessels.value = v.vessels;
     problems.value = bp.problems;
     grinders.value = g.grinders;
@@ -426,6 +431,7 @@ const markRows = computed(() => {
           <div v-if="log.waterProfile"><dt>Water profile</dt><dd>{{ log.waterProfile.name }}</dd></div>
           <div v-if="log.tools.length"><dt>Prep</dt><dd>{{ log.tools.map((t) => t.name).join(' · ') }}</dd></div>
           <div v-if="log.problems.length"><dt>Problems</dt><dd>{{ log.problems.map((p) => p.name).join(' · ') }}</dd></div>
+          <div v-if="forWhoText(log)"><dt>For</dt><dd>{{ forWhoText(log) }}</dd></div>
           <div v-for="row in markRows" :key="row.key"><dt>{{ row.label }}</dt><dd>{{ row.value }}</dd></div>
           <div><dt>{{ drinkTasting ? 'Brew rating' : 'Rating' }}</dt><dd><RatingStars :rating="log.rating" /></dd></div>
           <div v-if="drinkTasting"><dt>Drink rating</dt><dd><RatingStars :rating="log.drinkRating" /></dd></div>
@@ -466,7 +472,7 @@ const markRows = computed(() => {
       <!-- Edit -->
       <form v-else class="card stack" novalidate @submit.prevent="saveEdit">
         <h2>Edit brew</h2>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :vessels="vessels" :prep-tools="prepTools" :problems="problems" :method-kind="log.recipe?.methodKind ?? null" :brewer-id="log.brewer?.id ?? null" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="log.recipe?.style?.brewsLike ?? null" :iced="log.actualIceGrams !== null" :saved-flavors="log.flavors" :batch="isBatch && (finishing || !log.steeping)" :batch-estimate-grams="batchEstimate" />
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :vessels="vessels" :prep-tools="prepTools" :problems="problems" :guests="guests" :method-kind="log.recipe?.methodKind ?? null" :brewer-id="log.brewer?.id ?? null" :expected-yield-grams="log.recipe?.expectedYieldGrams ?? null" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="log.recipe?.style?.brewsLike ?? null" :iced="log.actualIceGrams !== null" :saved-flavors="log.flavors" :batch="isBatch && (finishing || !log.steeping)" :batch-estimate-grams="batchEstimate" />
         <p v-if="saveError" class="form-error" role="alert">{{ saveError }}</p>
         <div class="buttons">
           <button class="btn btn-secondary" type="button" :disabled="saving" @click="editing = false">Cancel</button>

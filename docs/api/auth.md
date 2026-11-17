@@ -95,7 +95,7 @@ units, with defaults filled in. Storage is always grams, °C and metres;
 clients convert what they show and what's typed (roadmap: Units and defaults).
 
 ```json
-{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"], "repeatButtonsBy": "made", "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "startDelays": {}, "nudgeButtons": ["dose", "water"], "steepReminders": true, "restReminders": true, "restReminderRepeatDays": null, "restingInBrewPickerDefault": true, "greenStockAlerts": true, "recaps": true, "recapPeriods": "both", "weekStartsOn": 1, "recapBanner": true, "recapBannerDays": 3, "recapNotify": true, "recapNotifyTime": "08:00", "timeZone": null, "recapAi": "manual", "recapSeen": {}, "learnAboutMe": true }
+{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "forWho"], "repeatButtonsBy": "made", "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "startDelays": {}, "nudgeButtons": ["dose", "water"], "steepReminders": true, "restReminders": true, "restReminderRepeatDays": null, "restingInBrewPickerDefault": true, "greenStockAlerts": true, "recaps": true, "recapPeriods": "both", "weekStartsOn": 1, "recapBanner": true, "recapBannerDays": 3, "recapNotify": true, "recapNotifyTime": "08:00", "timeZone": null, "recapAi": "manual", "recapSeen": {}, "learnAboutMe": true }
 ```
 
 - `volumeUnit`: `fl_oz` | `ml`: the brew page's yield estimate, and a new
@@ -173,9 +173,11 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
   - `window`: the window the brew aimed for (cold styles: a long brew's
     steep window, rapid cold's target finish, brew-logs.md §6);
   - `grinderWeights`;
-  - `notes`: shown on the log form as a reminder, not copied.
+  - `notes`: shown on the log form as a reminder, not copied;
+  - `forWho`: who it was for (brew-logs.md §6, "Who it's for"), leaving out
+    archived guests; off, a repeat is for you alone.
 
-  Default: the first ten. A `PATCH` sends the whole list. What you're
+  Default: the first ten and `forWho`. A `PATCH` sends the whole list. What you're
   making, the brewer and the prep checklist (the tools that brew used,
   rather than the recipe's default prep) always come along; results and
   ratings never do. A note on what couldn't be filled (an archived bean,

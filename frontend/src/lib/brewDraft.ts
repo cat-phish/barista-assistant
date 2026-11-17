@@ -19,6 +19,11 @@ export interface BrewDraft {
   waterProfileId: string; // '' = none recorded
   toolIds: string[]; // prep tools ticked (§3d); unticked to start
   problemIds: string[]; // what went wrong (§6b); unticked to start
+  // Who it's for (§6): forGuests is the "For a guest" box; off, it's yours alone.
+  forGuests: boolean;
+  forMe: boolean; // with forGuests: you drank some too (on to start)
+  guestIds: string[]; // named guests (§2d)
+  unnamedGuests: number; // 0-50
   flavors: string[]; // the coffee's flavors: keys from the wheel (§6), in wheel order
   firstDrop: string; // espresso: seconds, e.g. "7.4" ('' = not recorded); from the timer's tap or typed
   grind: string;
@@ -54,13 +59,13 @@ export function setVessel(d: Pick<BrewDraft, 'vesselId' | 'vesselGrams'>, vessel
 }
 
 export type BrewValues = Omit<BrewLogInput, 'beanId' | 'recipeId'>;
-export type BrewDraftErrors = Partial<Record<'dose' | 'water' | 'ice' | 'yieldGrams' | 'tds' | 'temp' | 'time' | 'firstDrop' | 'rpm' | 'beanIn' | 'groundOut' | 'grind' | 'dilution' | 'jarWater', string>>;
+export type BrewDraftErrors = Partial<Record<'dose' | 'water' | 'ice' | 'yieldGrams' | 'tds' | 'temp' | 'time' | 'firstDrop' | 'rpm' | 'beanIn' | 'groundOut' | 'grind' | 'dilution' | 'jarWater' | 'forWho', string>>;
 
 // What the RPM is checked against: the brew's grinder (null = none chosen).
 export type RpmGrinder = Pick<Grinder, 'variableSpeed' | 'rpmMin' | 'rpmMax'> | null;
 
 export function emptyDraft(): BrewDraft {
-  return { dose: '', water: '', ice: '', yieldGrams: '', vesselId: '', vesselGrams: null, tds: '', temp: '', grinderId: '', waterProfileId: '', toolIds: [], problemIds: [], flavors: [], firstDrop: '', grind: '', rpm: '', beanIn: '', groundOut: '', steepTemp: '', dilution: '', dilutedWith: '', jarWater: '', time: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
+  return { dose: '', water: '', ice: '', yieldGrams: '', vesselId: '', vesselGrams: null, tds: '', temp: '', grinderId: '', waterProfileId: '', toolIds: [], problemIds: [], forGuests: false, forMe: true, guestIds: [], unnamedGuests: 0, flavors: [], firstDrop: '', grind: '', rpm: '', beanIn: '', groundOut: '', steepTemp: '', dilution: '', dilutedWith: '', jarWater: '', time: '', rating: null, notes: '', drinkRating: null, drinkNotes: '' };
 }
 
 // temp is text in the person's unit (°C stored); see lib/units.ts.
@@ -81,6 +86,10 @@ export function draftFromLog(log: BrewLog, tempUnit: TemperatureUnit = 'c'): Bre
     waterProfileId: log.waterProfileId ?? '',
     toolIds: log.tools.map((t) => t.id),
     problemIds: log.problems.map((p) => p.id),
+    forGuests: !log.forMe || log.guests.length > 0 || log.unnamedGuests > 0,
+    forMe: log.forMe,
+    guestIds: log.guests.map((g) => g.id),
+    unnamedGuests: log.unnamedGuests,
     flavors: log.flavors.map((f) => f.key),
     firstDrop: firstDropOf(log.marks),
     grind: log.actualGrindSetting === null ? '' : formatGrind(log.actualGrindSetting),
@@ -161,6 +170,8 @@ export function parseBrewDraft(
   if (groundOut && !groundOut.ok) errors.groundOut = groundOut.error;
   else if (groundOut?.ok && beanIn?.ok && groundOut.value > beanIn.value) errors.groundOut = 'More than the beans weighed in';
   if (rpm && !rpm.ok) errors.rpm = rpm.error;
+  const forOthers = d.forGuests ? d.guestIds.length + d.unnamedGuests : 0;
+  if (d.forGuests && !d.forMe && forOthers === 0) errors.forWho = 'Pick who it was for';
   else if (rpm?.ok && grinder?.rpmMin != null && grinder.rpmMax != null && (rpm.value < grinder.rpmMin || rpm.value > grinder.rpmMax)) {
     errors.rpm = `Outside the grinder's range (${grinder.rpmMin}–${grinder.rpmMax})`;
   }
@@ -184,6 +195,9 @@ export function parseBrewDraft(
       waterProfileId: d.waterProfileId || null,
       toolIds: [...d.toolIds],
       problemIds: [...d.problemIds],
+      forMe: !d.forGuests || d.forMe,
+      guestIds: d.forGuests ? [...d.guestIds] : [],
+      unnamedGuests: d.forGuests ? d.unnamedGuests : 0,
       flavors: [...d.flavors],
       actualGrindSetting: grind?.ok ? grind.value : null,
       grindRpm: rpm?.ok ? rpm.value : null,

@@ -15,6 +15,11 @@ export interface BrewLogInput {
   marks?: Mark[]; // espresso only; PATCH replaces the list
   toolIds?: string[]; // prep tools used (§3d); PATCH replaces the list
   problemIds?: string[]; // what went wrong (§6b); PATCH replaces the list
+  // Who it's for (§6, "Who it's for"): you, named guests (§2d; PATCH replaces
+  // the list) and unnamed ones. Someone, always.
+  forMe?: boolean;
+  guestIds?: string[];
+  unnamedGuests?: number;
   flavors?: string[]; // the coffee's flavors, keys from the wheel (§6); PATCH replaces the list
   utcOffsetMinutes?: number | null; // this device's offset, for the local brew date (§6)
   actualDoseGrams: number;

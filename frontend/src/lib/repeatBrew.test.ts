@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Bean, BrewLog, Brewer, Drink, Grinder, Recipe, WaterProfile } from '../api/types';
+import type { Bean, BrewLog, Brewer, Drink, Grinder, Guest, Recipe, WaterProfile } from '../api/types';
 import { DEFAULT_PREFERENCES } from '../composables/usePreferences';
 import { FIELDS } from './fields';
 import type { RepeatButtonGroup, RepeatKeep } from '../api/types';
@@ -11,6 +11,7 @@ const log = (over: Partial<BrewLog> = {}): BrewLog =>
     timestamp: '2026-10-21T08:00:00.000Z', brewerId: 'v60', brewer: { id: 'v60', name: 'V60', kind: 'filter' },
     recipeId: 'house', recipe: { id: 'house', name: 'House V60' }, drinkId: null, drink: null,
     grinderId: 'c40', grinder: { id: 'c40', name: 'C40' }, waterProfileId: 'tww', waterProfile: { id: 'tww', name: 'TWW' },
+    forMe: true, guests: [], unnamedGuests: 0,
     ...over,
   }) as BrewLog;
 const bean = (id: string, batchNumber: string | null, createdAt: string) =>
@@ -28,6 +29,7 @@ const sources = (over: Partial<RepeatSources> = {}): RepeatSources => ({
   grinders: [{ id: 'c40', archivedAt: null }] as Grinder[],
   waterProfiles: [{ id: 'tww', archivedAt: null }] as WaterProfile[],
   vessels: [],
+  guests: [],
   ...over,
 });
 
@@ -48,7 +50,7 @@ describe('repeatPlan', () => {
   it('a plain brew: its method, brewer, recipe, grinder and water', () => {
     expect(repeatPlan(log(), sources())).toEqual({
       beanId: 'guji3', what: 'method:pour', item: 'plain:pour', brewerId: 'v60', recipeId: 'house',
-      grinderId: 'c40', waterProfileId: 'tww', vessel: null, missing: [],
+      grinderId: 'c40', waterProfileId: 'tww', vessel: null, guestIds: [], missing: [],
     });
   });
   it("a drink: its category and the drink, on the log's brewer", () => {
@@ -132,5 +134,15 @@ describe('what a repeat keeps', () => {
     for (const [field, repeat] of Object.entries(REPEAT_FOR_FIELD) as Array<[string, string]>) {
       expect(repeat === 'result' || repeat === 'always' || keys.has(repeat), field).toBe(true);
     }
+  });
+});
+
+describe('repeatPlan: who it was for', () => {
+  it('keeps the active guests and names an archived one', () => {
+    const guests = [{ id: 'sam', name: 'Sam', archivedAt: null }, { id: 'ana', name: 'Ana', archivedAt: '2026-10-22' }] as Guest[];
+    const p = repeatPlan(log({ guests: [{ id: 'ana', name: 'Ana' }, { id: 'sam', name: 'Sam' }] }), sources({ guests }));
+    expect(p.guestIds).toEqual(['sam']);
+    expect(repeatMissing(p, new Set(['forWho']))).toEqual(["Ana is archived, so left out of who it's for."]);
+    expect(repeatMissing(p, new Set())).toEqual([]);
   });
 });

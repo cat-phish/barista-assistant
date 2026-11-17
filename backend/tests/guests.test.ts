@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMember, newUser, newWorkspace } from "./helpers.js";
+import { addMember, newBean, newBrewLog, newUser, newWorkspace } from "./helpers.js";
 
 async function setup() {
   const owner = await newUser();
@@ -46,12 +46,61 @@ describe("guests (docs/api/guests.md §2d)", () => {
     expect((await stranger.agent.delete(`/api/workspaces/${theirs.id}/guests/${id}`)).status).toBe(404);
   });
 
-  it("usage is empty for now, and delete removes it", async () => {
+  it("usage is zero while unused, and delete removes it", async () => {
     const { owner, base } = await setup();
     const id = (await owner.agent.post(base).send({ name: "Sam" })).body.guest.id as string;
-    expect((await owner.agent.get(`${base}/${id}/usage`)).body).toEqual({});
+    expect((await owner.agent.get(`${base}/${id}/usage`)).body).toEqual({ brewLogCount: 0 });
     expect((await owner.agent.delete(`${base}/${id}`)).status).toBe(204);
     expect((await owner.agent.delete(`${base}/${id}`)).status).toBe(404);
     expect((await owner.agent.get(`${base}/${id}/usage`)).status).toBe(404);
+  });
+});
+
+describe("brews made for guests (docs/api/brew-logs.md §6, \"Who it's for\")", () => {
+  it("names who a brew was for, replaces the list, and needs someone", async () => {
+    const { owner, ws, base } = await setup();
+    const sam = (await owner.agent.post(base).send({ name: "Sam" })).body.guest.id as string;
+    const ana = (await owner.agent.post(base).send({ name: "Ana" })).body.guest.id as string;
+    const bean = await newBean(owner, ws.id);
+    const logs = `/api/workspaces/${ws.id}/brew-logs`;
+
+    const plain = await newBrewLog(owner, ws.id, bean);
+    const mine = (await owner.agent.get(`${logs}/${plain}`)).body.brewLog;
+    expect(mine).toMatchObject({ forMe: true, guests: [], unnamedGuests: 0 });
+
+    const id = await newBrewLog(owner, ws.id, bean, { forMe: false, guestIds: [sam, ana], unnamedGuests: 2 });
+    const log = (await owner.agent.get(`${logs}/${id}`)).body.brewLog;
+    expect(log).toMatchObject({ forMe: false, unnamedGuests: 2, guests: [{ id: ana, name: "Ana" }, { id: sam, name: "Sam" }] });
+    expect((await owner.agent.get(`${base}/${sam}/usage`)).body).toEqual({ brewLogCount: 1 });
+
+    // For nobody: refused on create, and on a change that would leave nobody.
+    const bad = { beanId: bean, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150, forMe: false };
+    expect((await owner.agent.post(logs).send(bad)).status).toBe(400);
+    expect((await owner.agent.patch(`${logs}/${id}`).send({ guestIds: [], unnamedGuests: 0 })).status).toBe(400);
+    expect((await owner.agent.patch(`${logs}/${plain}`).send({ forMe: false })).status).toBe(400);
+    const patched = await owner.agent.patch(`${logs}/${id}`).send({ guestIds: [sam] });
+    expect(patched.status).toBe(200);
+    expect(patched.body.brewLog.guests).toEqual([{ id: sam, name: "Sam" }]);
+    expect((await owner.agent.patch(`${logs}/${id}`).send({ guestIds: [sam, sam] })).status).toBe(400);
+    expect((await owner.agent.patch(`${logs}/${id}`).send({ unnamedGuests: 51 })).status).toBe(400);
+
+    // An archived guest is accepted; another workspace's isn't.
+    await owner.agent.patch(`${base}/${ana}`).send({ archived: true });
+    expect((await owner.agent.patch(`${logs}/${id}`).send({ guestIds: [sam, ana] })).status).toBe(200);
+    const other = await newWorkspace(owner);
+    const theirs = (await owner.agent.post(`/api/workspaces/${other.id}/guests`).send({ name: "Lee" })).body.guest.id as string;
+    expect((await owner.agent.patch(`${logs}/${id}`).send({ guestIds: [theirs] })).status).toBe(400);
+  });
+
+  it("deleting a guest keeps them as an unnamed one, so the split stays", async () => {
+    const { owner, ws, base } = await setup();
+    const sam = (await owner.agent.post(base).send({ name: "Sam" })).body.guest.id as string;
+    const bean = await newBean(owner, ws.id);
+    const id = await newBrewLog(owner, ws.id, bean, { forMe: false, guestIds: [sam], unnamedGuests: 1 });
+    const other = await newBrewLog(owner, ws.id, bean);
+    expect((await owner.agent.delete(`${base}/${sam}`)).status).toBe(204);
+    const logs = `/api/workspaces/${ws.id}/brew-logs`;
+    expect((await owner.agent.get(`${logs}/${id}`)).body.brewLog).toMatchObject({ forMe: false, guests: [], unnamedGuests: 2 });
+    expect((await owner.agent.get(`${logs}/${other}`)).body.brewLog.unnamedGuests).toBe(0);
   });
 });

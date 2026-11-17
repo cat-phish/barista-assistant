@@ -2,7 +2,7 @@
 // Brew detail inputs shared by the brew flow's log form and journal editing.
 // Validate with parseBrewDraft (lib/brewDraft.ts); pass its errors in.
 import { computed, ref, watch } from 'vue';
-import type { BrewProblem, FlavorPick, Grinder, MethodKind, PrepTool, RecipeStyle, Vessel, WaterProfile } from '../api/types';
+import type { BrewProblem, FlavorPick, Grinder, Guest, MethodKind, PrepTool, RecipeStyle, Vessel, WaterProfile } from '../api/types';
 import { netYield, type BrewDraft, type BrewDraftErrors } from '../lib/brewDraft';
 import { brixToTds, DEFAULT_EY_ESPRESSO, DEFAULT_EY_FILTER, expectedBrix, expectedTds, extractionYield, usesWater } from '../lib/extraction';
 import { DILUTION_WITH, isColdStyle, STEEP_TEMPS } from '../lib/coldBrew';
@@ -17,6 +17,7 @@ import RatingInput from './RatingInput.vue';
 import FlavorWheel from './FlavorWheel.vue';
 import VesselField from './VesselField.vue';
 import NudgeButtons from './NudgeButtons.vue';
+import BrewForWho from './BrewForWho.vue';
 import TimeInput from './TimeInput.vue';
 
 const draft = defineModel<BrewDraft>({ required: true });
@@ -34,6 +35,7 @@ reveal({
   'brew.waterProfile': draft.value.waterProfileId,
   'brew.prepTools': draft.value.toolIds,
   'brew.problems': draft.value.problemIds,
+  'brew.forWho': draft.value.forGuests,
   'brew.flavors': draft.value.flavors,
   'brew.firstDrop': draft.value.firstDrop,
   'brew.steepTemp': draft.value.steepTemp,
@@ -65,6 +67,7 @@ const props = defineProps<{
   vessels?: Vessel[]; // the workspace's (docs/api/vessels.md §3g)
   prepTools?: PrepTool[]; // the workspace's, in order (docs/api/prep-tools.md §3d)
   problems?: BrewProblem[]; // the workspace's, in order (docs/api/brew-problems.md §6b)
+  guests?: Guest[]; // the workspace's (docs/api/guests.md §2d); missing = who it's for isn't asked
   methodKind?: MethodKind | null; // the recipe's; null = no recipe (every tool shows)
   brewerId?: string | null; // the recipe's brewer, for the prep tools and problems offered for it
   expectedYieldGrams?: number | null; // the recipe's estimate (espresso: target), shown for comparison
@@ -413,6 +416,7 @@ const waterOptions = computed(() => (props.waterProfiles ?? []).filter((w) => !w
         </label>
       </div>
     </fieldset>
+    <BrewForWho v-if="guests && show('brew.forWho')" v-model="draft" :guests="guests" :error="showErrors ? errors.forWho : undefined" />
     <!-- A drink with ingredients is tasted twice: the brew on its own (if you
          tried it) and the finished drink, which milk and syrup change. -->
     <fieldset v-if="drinkTasting" class="tasting">

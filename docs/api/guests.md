@@ -4,8 +4,9 @@
 > [README.md](README.md); a bare `§N` refers to that index.
 
 The people a workspace brews for besides whoever logs the brew (Settings →
-Guests; backlog 67). A guest is a name and notes. Brews made for one, and
-their share of volume and caffeine, come in later phases of backlog 67.
+Guests; backlog 67). A guest is a name and notes. A brew names who it was
+for (§6, "Who it's for"); their share of volume and caffeine counts in
+Insights and recaps in a later phase of backlog 67.
 
 A guest is **not linked** to a user: linking one to a member, so their share
 counts in their own stats, waits for an invite that member accepts (backlog
@@ -58,12 +59,13 @@ it, like vessels (§3g).
 What deleting it would affect (see README, "Deleting").
 
 - **Auth Required:** `true` (any member)
-- **Success (`200 OK`):** `{}` for now: nothing points at a guest yet. The
-  brews made for one join it in backlog 67's phase 2.
+- **Success (`200 OK`):** `{ "brewLogCount": 3 }`, the brews made for them.
 - **Errors:** `404` not in this workspace.
 
 ## `DELETE /api/workspaces/:workspaceId/guests/:guestId`
 
 - **Auth Required:** `true` (role `owner` or `barista`)
+- Brews made for them keep a drinker in their place: each counts one more
+  unnamed guest (§6), so the volume split doesn't change.
 - **Success (`204 No Content`)**
 - **Errors:** `403` viewer; `404` not in this workspace.

@@ -24,6 +24,7 @@ import { vesselsApi } from '../api/vessels';
 import { waterProfilesApi } from '../api/waterProfiles';
 import { prepToolsApi } from '../api/prepTools';
 import { brewProblemsApi } from '../api/brewProblems';
+import { guestsApi } from '../api/guests';
 import { defaultWaterProfileId } from '../lib/water';
 import { expectedEy } from '../lib/extraction';
 import { brewerMethodsApi } from '../api/brewerMethods';
@@ -50,7 +51,7 @@ import {
   setupMissing,
   switchPlan,
 } from '../lib/brewChoice';
-import type { Brewer, BrewProblem, Drink, DrinkCategory, Grinder, Mark, MethodKind, PrepTool, RememberKey, ServingUnit, Vessel, WaterProfile } from '../api/types';
+import type { Brewer, BrewProblem, Drink, DrinkCategory, Grinder, Guest, Mark, MethodKind, PrepTool, RememberKey, ServingUnit, Vessel, WaterProfile } from '../api/types';
 import { METHOD_KINDS } from '../lib/equipment';
 import { convertSize, defaultSize, formatSize, SERVING_UNITS, sizeFactor, type Size } from '../lib/servings';
 import AppHeader from '../components/AppHeader.vue';
@@ -108,6 +109,7 @@ const waterProfiles = ref<WaterProfile[]>([]);
 const vessels = ref<Vessel[]>([]);
 const prepTools = ref<PrepTool[]>([]);
 const problems = ref<BrewProblem[]>([]);
+const guests = ref<Guest[]>([]); // who a brew can be for (docs/api/guests.md §2d)
 const brewers = ref<Brewer[]>([]);
 
 // Setup
@@ -266,7 +268,7 @@ onMounted(async () => {
   const ws = workspaces.current?.id;
   if (!ws) return;
   try {
-    const [b, r, g, m, d, c, w, t, bm, bp, ve] = await Promise.all([
+    const [b, r, g, m, d, c, w, t, bm, bp, ve, gu] = await Promise.all([
       beansApi.list(ws),
       recipesApi.list(ws),
       grindersApi.list(ws),
@@ -278,8 +280,10 @@ onMounted(async () => {
       brewerMethodsApi.list(ws).catch(() => ({ methods: [] })), // brewers then group by kind
       brewProblemsApi.list(ws).catch(() => ({ problems: [] })), // without it, no problems checklist
       vesselsApi.list(ws),
+      guestsApi.list(ws).catch(() => ({ guests: [] as Guest[] })), // without it, who it's for isn't asked
     ]);
     vessels.value = ve.vessels;
+    guests.value = gu.guests;
     problems.value = bp.problems;
     methods.value = bm.methods;
     drinks.value = d.drinks;
@@ -1184,8 +1188,15 @@ const notifyChannels = ref<{ enabled: boolean }[]>([]); // channels and Web Push
 const userPrefs = computed(() => auth.user?.preferences ?? DEFAULT_PREFERENCES);
 const deliverable = computed(() => canRemind(userPrefs.value, notifyChannels.value));
 const rateLater = ref(false);
+// A brew for guests is usually rated by them, later or not at all (backlog 67).
+watch(
+  () => draft.forGuests,
+  (on) => {
+    if (on) rateLater.value = false;
+  },
+);
 watch(stage, (s) => {
-  if (s === 'log') rateLater.value = userPrefs.value.rateLaterDefault;
+  if (s === 'log') rateLater.value = userPrefs.value.rateLaterDefault && !draft.forGuests;
 });
 const reminder = ref<'queued' | 'off' | 'unavailable' | null>(null); // for the brew just saved
 notificationsApi
@@ -1382,6 +1393,7 @@ async function applyRepeat(log: BrewLog): Promise<void> {
     grinders: grinders.value,
     waterProfiles: waterProfiles.value,
     vessels: vessels.value,
+    guests: guests.value,
   });
   // Only mention what's gone if it would have been copied.
   const kept = new Set(userPrefs.value.repeatKeeps);
@@ -1453,6 +1465,9 @@ async function applyRepeat(log: BrewLog): Promise<void> {
   draft.toolIds = log.tools.map((t) => t.id).filter((id) => activeTools.has(id)); // always: that brew's prep, not the recipe's
   draft.problemIds = []; // what went wrong is noted for each brew
   draft.flavors = []; // tasted each brew
+  // Who it's for; off, just you (as a new brew).
+  const forWho = kept.has('forWho') ? { forMe: log.forMe, guestIds: plan.guestIds, unnamedGuests: log.unnamedGuests } : { forMe: true, guestIds: [], unnamedGuests: 0 };
+  Object.assign(draft, forWho, { forGuests: !forWho.forMe || forWho.guestIds.length > 0 || forWho.unnamedGuests > 0 });
   draft.beanIn = kept.has('grinderWeights') && log.beanWeightInGrams !== null ? formatGrams(log.beanWeightInGrams) : '';
   draft.groundOut = kept.has('grinderWeights') && log.groundWeightOutGrams !== null ? formatGrams(log.groundWeightOutGrams) : '';
   await nextTick();
@@ -1963,7 +1978,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
       </section>
       <section class="card">
         <p v-if="stepMarksLine" class="muted small marks-line">{{ stepMarksLine }}</p>
-        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :vessels="vessels" :prep-tools="prepTools" :problems="problems" :method-kind="recipe?.brewer.kind ?? null" :brewer-id="recipe?.brewer.id ?? null" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="recipe?.style?.brewsLike ?? null" :iced="recipe?.targetIceGrams != null" :concentrate="recipe?.dilutionRatio != null" :expected-ey="nudgeEy" :expected-time-sec="nudgeTimeSec" :expected-temp-c="nudgeTempC">
+        <BrewFields v-model="draft" :errors="parsed.errors" :show-errors="submitted" :grinders="grinders" :water-profiles="waterProfiles" :vessels="vessels" :prep-tools="prepTools" :problems="problems" :guests="guests" :method-kind="recipe?.brewer.kind ?? null" :brewer-id="recipe?.brewer.id ?? null" :expected-yield-grams="expectedYield" :espresso="espresso" :drink-tasting="drinkTasting" :recipe-style="recipe?.style?.brewsLike ?? null" :iced="recipe?.targetIceGrams != null" :concentrate="recipe?.dilutionRatio != null" :expected-ey="nudgeEy" :expected-time-sec="nudgeTimeSec" :expected-temp-c="nudgeTempC">
           <template #time-note>
             <span v-if="finishOffsetNote" class="hint offset-note" aria-live="polite">
               {{ formatFinishOffset(finishOffsetNote.takenOff) }} offset

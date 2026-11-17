@@ -65,7 +65,7 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   `brew_problem_brewers`, `beans`,
   `bean_freezes`, `bean_photos`, `roasts`, `recipes`, `recipe_steps`, `recipe_grind_settings`, `recipe_prep_tools`,
   `drinks`, `drink_ingredients`, `menu_other_items`, `menu_sections`, `menu_items`,
-  `parameter_suggestions` (before the brews, which name the one they used), `brew_logs`, `brew_log_marks`, `brew_log_tools`, `brew_log_problems`,
+  `parameter_suggestions` (before the brews, which name the one they used), `brew_logs`, `brew_log_marks`, `brew_log_tools`, `brew_log_problems`, `brew_log_guests`,
   `brew_log_flavors`, `brew_servings`, `brew_serving_flavors` (`brew-servings.md`
   §6c; who logged one is its `brewedBy`), `llm_analyses`, `recaps` (written AI
   recap summaries only, `status` `done`, each with its writer's `brewedBy`;
@@ -235,7 +235,7 @@ too. Where the app offers them: "Where it is" above. Code:
   marks, prep and problem ticks, AI analyses) and, repeatedly, every row
   they point at: a recipe's brewer, style and grinders, the brewer's method,
   a drink's recipe and ingredients, a brew's bean, recipe, grinder, water, vessel,
-  drink, prep items and problems. Nothing else (no menu, no other lists). It's
+  drink, prep items, problems and guests. Nothing else (no menu, no other lists). It's
   worked out from each table's references (`TABLE_INFO`), so a new
   reference comes along by itself:
 
@@ -250,7 +250,7 @@ too. Where the app offers them: "Where it is" above. Code:
   | `brew_problems` | brew problems, the brewers each is offered for | those brewers (→ as brewers) |
   | `grinders`, `water_profiles`, `vessels` | themselves | – |
   | `notes` | themselves | – |
-  | `brew_logs` | brews, their marks, prep and problem ticks, servings, AI analyses | bean (→ as beans), recipe (→ as recipes), grinder, water profile, vessel, drink (→ as drinks), brewer, prep items, brew problems |
+  | `brew_logs` | brews, their marks, prep and problem ticks, guests brewed for, servings, AI analyses | bean (→ as beans), recipe (→ as recipes), grinder, water profile, vessel, drink (→ as drinks), brewer, prep items, brew problems, guests |
 - **Matching** (`MATCH_KEYS`): a row is "already here" when the workspace
   has one with the same key, and the import uses that one instead:
   - by name (case-insensitive) for brewers, grinders, water profiles, vessels, guests, prep

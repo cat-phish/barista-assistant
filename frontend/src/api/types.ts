@@ -50,7 +50,7 @@ export type RecapPeriodChoice = 'weekly' | 'monthly' | 'both';
 export type RecapAiMode = 'off' | 'manual' | 'auto';
 // docs/api/auth.md §1 repeatButtonsBy.
 export type RepeatButtonGroup = 'made' | 'brewer' | 'recipe' | 'coffee';
-export type RepeatKeep = 'bean' | 'recipe' | 'size' | 'doseWater' | 'temp' | 'grinder' | 'grind' | 'waterProfile' | 'dilution' | 'window' | 'prepTools' | 'grinderWeights' | 'vessel' | 'notes';
+export type RepeatKeep = 'bean' | 'recipe' | 'size' | 'doseWater' | 'temp' | 'grinder' | 'grind' | 'waterProfile' | 'dilution' | 'window' | 'prepTools' | 'grinderWeights' | 'vessel' | 'notes' | 'forWho';
 export type NudgeKey = 'dose' | 'water' | 'yield' | 'brix' | 'tds' | 'time' | 'temp' | 'grind';
 export type RememberKey = 'what' | 'brewer' | 'recipe' | 'bean' | 'grinder' | 'grind' | 'waterProfile' | 'vessel' | 'prepTools' | 'size';
 
@@ -827,6 +827,11 @@ export interface BrewLog {
   marks: Mark[]; // earliest first
   tools: PrepToolRef[]; // prep tools used, in checklist order (§3d)
   problems: BrewProblemRef[]; // what went wrong, in list order (§6b)
+  // Who it's for (§6, "Who it's for"): you, named guests by name (archived
+  // included) and unnamed ones; volume and caffeine split equally among them.
+  forMe: boolean;
+  guests: Array<{ id: string; name: string }>;
+  unnamedGuests: number;
   // The coffee's flavors from the wheel, in its order; label: the wheel's
   // now, else the one saved when picked (§6).
   flavors: FlavorPick[];

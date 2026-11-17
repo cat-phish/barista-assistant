@@ -73,6 +73,9 @@ created it and can't be changed.
   "batchFinishedAt": null,
   "suggestionId": "uuid",
   "suggestionRoute": 1,
+  "forMe": true,
+  "guests": [{ "id": "uuid", "name": "Sam" }],
+  "unnamedGuests": 0,
   "servingCount": 0,
   "pouredGrams": 0
 }
@@ -132,6 +135,16 @@ beans', `done`, and have that route (one from before routes has only `0`),
 else `400`. Deleting the suggestion clears `suggestionId`
 (`suggestionRoute` is then meaningless). Not sent to the AI yet: learned
 preferences (`docs/backlog.md` items 19–20) will use it.
+
+**Who it's for** (backlog 67): `forMe` (default `true`) says whoever logged
+it drank some; `guests` lists the named guests it was for (§2d,
+`{ "id", "name" }`, archived ones included) by name, `[]` when none;
+`unnamedGuests` (0–50, default `0`) counts the others. Its volume and
+caffeine split equally among them, so a brew for you and Sam counts half as
+drunk by you (Insights and recaps, in a later phase). Rating, best brew and
+brew counts stay with whoever logged it. A brew is always for someone:
+`forMe: false` with no guests is a `400`. Deleting a guest makes them one of
+the brew's unnamed guests, so the split stays the same. Not sent to the AI.
 
 ## `GET /api/workspaces/:workspaceId/brew-logs`
 
@@ -240,6 +253,12 @@ picked brews are sent.
   - `problemIds` (optional): what went wrong (§6b), with the same rules as
     `toolIds`: each once, all from this workspace (archived accepted), the
     method not checked, replaced on `PATCH`.
+  - `forMe` (optional boolean), `guestIds` (optional, up to 50) and
+    `unnamedGuests` (optional integer 0–50): **who it's for** (above).
+    `guestIds` are guests of this workspace (§2d, archived accepted), each
+    once, replaced on `PATCH`. Leaving `forMe` off and naming nobody is a
+    `400`; on `PATCH`, checked against the log after the change when any of
+    the three is sent.
   - `flavors` (optional): **the coffee's flavors**, picked on the
     workspace's flavor wheel (§2c: the built-in `FLAVORS`,
     `@barista/shared/flavors`, or its own lexicon), as keys, each once. A
@@ -386,7 +405,8 @@ picked brews are sent.
 - **Success (`201 Created`):** `{ "brewLog": { ...brewLog } }` (plus
   `reminder` when `remindToRate` was sent)
 - **Errors:** `400` invalid body, or `beanId`/`recipeId`/`grinderId`/
-  `waterProfileId`/`vesselId`/`toolIds`/`problemIds` not in this workspace; `403` viewer.
+  `waterProfileId`/`vesselId`/`toolIds`/`problemIds`/`guestIds` not in this
+  workspace, or the brew is for nobody; `403` viewer.
 - Logging a brew does **not** change the bean's `inventoryWeightGrams`.
 
 ## `PATCH /api/workspaces/:workspaceId/brew-logs/:brewLogId`

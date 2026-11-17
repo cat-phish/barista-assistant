@@ -31,7 +31,7 @@ async function populated() {
   await post("roasts", { greenCoffeeId: guji, machineId: nano, greenGrams: 120, roastedGrams: 103, roastType: "filter", detailedRoastLevel: "city", firstCrackSec: 420, totalSec: 540 });
   const water = (await post("water-profiles", { name: "TWW", tdsPpm: 120 })).waterProfile.id as string;
   const carafe = (await post("vessels", { name: "Carafe", weightGrams: 312.5 })).vessel.id as string;
-  await post("guests", { name: "Sam", notes: "oat milk" });
+  const sam = (await post("guests", { name: "Sam", notes: "oat milk" })).guest.id as string;
   const v60 = await brewerId(owner, ws.id, "V60");
   const stalled = (await post("brew-problems", { name: "Paper taste", methodKinds: ["espresso"], brewerIds: [v60] })).problem.id as string;
   const note = (
@@ -83,6 +83,8 @@ async function populated() {
     drinkId: drink,
     toolIds: [wdt],
     problemIds: [stalled],
+    guestIds: [sam], // who it was for (backlog 67)
+    unnamedGuests: 1,
     flavors: ["fruity.citrus.lemon", "sweet"],
     marks: [{ kind: "step_end", stepOrder: 1, atSec: 31.5 }],
     rating: 3.5, // a half step survives the round trip

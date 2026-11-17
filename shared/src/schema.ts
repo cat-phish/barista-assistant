@@ -41,7 +41,7 @@ export const TEMPERATURE_UNITS = ["c", "f"] as const;
 export const THEMES = ["system", "light", "dark"] as const; // system = follow the device
 // What "Brew again" / a repeat copies from the earlier brew, besides the bean
 // and what → brewer → recipe, which a repeat always takes (docs/api/auth.md §1).
-export const REPEAT_KEEPS = ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "grinderWeights", "vessel", "notes"] as const;
+export const REPEAT_KEEPS = ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "grinderWeights", "vessel", "notes", "forWho"] as const;
 export type RepeatKeep = (typeof REPEAT_KEEPS)[number];
 // What makes two brews different for the brew page's quick repeat buttons
 // (docs/api/auth.md §1 repeatButtonsBy, docs/api/brew-logs.md "repeats").
@@ -113,7 +113,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   rateReminders: true,
   rateReminderMinutes: 15,
   rateLaterDefault: false,
-  repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window"],
+  repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "forWho"],
   repeatButtonsBy: "made",
   rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"],
   startDelays: {},
@@ -1756,6 +1756,12 @@ export const brewLogs = mysqlTable("brew_logs", {
   // none used, or the suggestion is gone.
   suggestionId: varchar("suggestion_id", { length: 36 }).references(() => parameterSuggestions.id, { onDelete: "set null" }),
   suggestionRoute: int("suggestion_route"),
+  // Who drank it (backlog 67, docs/api/brew-logs.md §6, "Who it's for"):
+  // whoever logged it unless forMe is off, plus the named guests in
+  // brew_log_guests and this many unnamed ones. Volume and caffeine split
+  // equally among them; a brew is always for someone.
+  forMe: boolean("for_me").default(true).notNull(),
+  unnamedGuests: int("unnamed_guests").default(0).notNull(), // 0-50
 });
 
 // 8b. Brew Log Marks (Tapped Events During a Brew)
@@ -1808,6 +1814,25 @@ export const brewLogProblems = mysqlTable(
   },
   (table) => ({
     pk: primaryKey({ columns: [table.brewLogId, table.problemId] }),
+  })
+);
+
+// 8i. Brew Log Guests (The Named Guests a Brew Was For)
+// Replaced as a whole when a log is edited (docs/api/brew-logs.md §6).
+// Deleting a guest turns it into one of the brew's unnamed guests (the route
+// does that before the cascade); archiving keeps it.
+export const brewLogGuests = mysqlTable(
+  "brew_log_guests",
+  {
+    brewLogId: varchar("brew_log_id", { length: 36 })
+      .notNull()
+      .references(() => brewLogs.id, { onDelete: "cascade" }),
+    guestId: varchar("guest_id", { length: 36 })
+      .notNull()
+      .references(() => guests.id, { onDelete: "cascade" }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.brewLogId, table.guestId] }),
   })
 );
 

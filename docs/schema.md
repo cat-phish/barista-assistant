@@ -1368,6 +1368,12 @@ export const brewLogs = mysqlTable("brew_logs", {
   // none used, or the suggestion is gone (migration 0122).
   suggestionId: varchar("suggestion_id", { length: 36 }).references(() => parameterSuggestions.id, { onDelete: "set null" }),
   suggestionRoute: int("suggestion_route"),
+  // Who drank it (backlog 67, docs/api/brew-logs.md §6, "Who it's for"):
+  // whoever logged it unless forMe is off, plus the named guests in
+  // brew_log_guests and this many unnamed ones. Volume and caffeine split
+  // equally among them; a brew is always for someone (migration 0130).
+  forMe: boolean("for_me").default(true).notNull(),
+  unnamedGuests: int("unnamed_guests").default(0).notNull(), // 0-50
 });
 
 // 8b. Brew Log Marks (Tapped Events During a Brew)
@@ -1420,6 +1426,25 @@ export const brewLogProblems = mysqlTable(
   },
   (table) => ({
     pk: primaryKey({ columns: [table.brewLogId, table.problemId] }),
+  })
+);
+
+// 8i. Brew Log Guests (The Named Guests a Brew Was For)
+// Replaced as a whole when a log is edited (docs/api/brew-logs.md §6).
+// Deleting a guest turns it into one of the brew's unnamed guests (the route
+// does that before the cascade); archiving keeps it (migration 0130).
+export const brewLogGuests = mysqlTable(
+  "brew_log_guests",
+  {
+    brewLogId: varchar("brew_log_id", { length: 36 })
+      .notNull()
+      .references(() => brewLogs.id, { onDelete: "cascade" }),
+    guestId: varchar("guest_id", { length: 36 })
+      .notNull()
+      .references(() => guests.id, { onDelete: "cascade" }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.brewLogId, table.guestId] }),
   })
 );
 

@@ -15,7 +15,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   rateReminders: true,
   rateReminderMinutes: 15,
   rateLaterDefault: false,
-  repeatKeeps: ['bean', 'recipe', 'size', 'doseWater', 'temp', 'grinder', 'grind', 'waterProfile', 'dilution', 'window'],
+  repeatKeeps: ['bean', 'recipe', 'size', 'doseWater', 'temp', 'grinder', 'grind', 'waterProfile', 'dilution', 'window', 'forWho'],
   repeatButtonsBy: 'made',
   rememberSetup: ['what', 'brewer', 'recipe', 'bean', 'grinder', 'grind'],
   startDelays: {},

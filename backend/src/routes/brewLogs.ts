@@ -22,6 +22,8 @@ import {
   brewLogTools,
   brewProblems,
   brewLogProblems,
+  brewLogGuests,
+  guests,
   brewLogFlavors,
   brewServings,
   llmAnalyses,
@@ -79,6 +81,8 @@ export interface BrewLogDetails extends Omit<BrewLog, "recipeCopy"> {
   marks: Mark[]; // when things actually happened, earliest first
   tools: Array<{ id: string; name: string }>; // prep tools used, in checklist order
   problems: Array<{ id: string; name: string }>; // what went wrong, in checklist order
+  // The named guests it was for, by name; archived included (§6, "Who it's for").
+  guests: Array<{ id: string; name: string }>;
   // Picked on the flavor wheel, in its order; label: the wheel's now, else
   // the one saved when picked (docs/api/brew-logs.md §6).
   flavors: FlavorPick[];
@@ -246,6 +250,15 @@ const brewLogFields = {
     .max(100)
     .refine((ids) => new Set(ids).size === ids.length, "each problem once")
     .optional(),
+  // Who it's for (§6, "Who it's for"): you, named guests (docs/api/guests.md
+  // §2d; PATCH replaces the list) and unnamed ones. Someone, always (forError).
+  forMe: z.boolean().optional(),
+  guestIds: z
+    .array(z.uuid())
+    .max(50)
+    .refine((ids) => new Set(ids).size === ids.length, "each guest once")
+    .optional(),
+  unnamedGuests: z.int().min(0).max(50).optional(),
   // The coffee's flavors: keys from the workspace's wheel (checked in the
   // transaction, flavorPicks), any ring; PATCH replaces the list.
   flavors: z
@@ -394,6 +407,11 @@ async function rpmError(tx: Tx, grinderId: string | null, grindRpm: number | nul
 
 // What comes out of the grinder can't weigh more than what went in
 // (docs/api/brew-logs.md §6).
+// A brew is for someone: you, or at least one guest (§6, "Who it's for").
+function forError(log: { forMe: boolean; guestCount: number; unnamedGuests: number }): string | null {
+  return log.forMe || log.guestCount + log.unnamedGuests > 0 ? null : "forMe: a brew is for you or at least one guest";
+}
+
 function weightsError(log: { beanWeightInGrams?: number | null; groundWeightOutGrams?: number | null }): string | null {
   const into = log.beanWeightInGrams ?? null;
   const out = log.groundWeightOutGrams ?? null;
@@ -467,6 +485,7 @@ async function referencesInWorkspace(
     drinkId?: string | null;
     toolIds?: string[];
     problemIds?: string[];
+    guestIds?: string[];
   }
 ): Promise<string | null> {
   if (refs.drinkId) {
@@ -519,6 +538,15 @@ async function referencesInWorkspace(
       .where(and(inArray(brewProblems.id, refs.problemIds), eq(brewProblems.workspaceId, workspaceId)))
       .for("update");
     if (found.length !== refs.problemIds.length) return "problemIds: not all problems in this workspace";
+  }
+  if (refs.guestIds && refs.guestIds.length > 0) {
+    // Archived guests are accepted, like tools.
+    const found = await tx
+      .select({ id: guests.id })
+      .from(guests)
+      .where(and(inArray(guests.id, refs.guestIds), eq(guests.workspaceId, workspaceId)))
+      .for("update");
+    if (found.length !== refs.guestIds.length) return "guestIds: not all guests in this workspace";
   }
   if (refs.waterProfileId) {
     // Archived profiles are accepted, like grinders.
@@ -592,6 +620,8 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       batchFinishedAt: brewLogs.batchFinishedAt,
       suggestionId: brewLogs.suggestionId,
       suggestionRoute: brewLogs.suggestionRoute,
+      forMe: brewLogs.forMe,
+      unnamedGuests: brewLogs.unnamedGuests,
       bean: { id: beans.id, roasterName: beans.roasterName, beanName: beans.beanName, batchNumber: beans.batchNumber, decaf: beans.decaf, species: beans.species, roastLevel: beans.roastLevel },
       recipe: { id: recipes.id, name: recipes.name, expectedYieldGrams: recipes.expectedYieldGrams },
       // Separate columns: a nested object spanning two left joins isn't nulled as a whole.
@@ -632,7 +662,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
     .limit(limit)
     .offset(offset);
   const ids = rows.map((r) => r.id);
-  const [marks, tools, problems, flavors, poured] = await Promise.all([marksFor(ids), toolsFor(ids), problemsFor(ids), flavorsFor(rows), servingTotals(ids)]);
+  const [marks, tools, problems, guestsOf, flavors, poured] = await Promise.all([marksFor(ids), toolsFor(ids), problemsFor(ids), guestsFor(ids), flavorsFor(rows), servingTotals(ids)]);
   // A recipe always has a method (inner FK), so its kind is set whenever recipe is.
   return rows.map(({ recipeMethodKind, recipeStyleId: styleId, recipeStyleName: styleName, recipeStyleBrewsLike: styleBrewsLike, recipe, drink, drinkHasIngredients, analyzedFlag, ...row }) => ({
     ...row,
@@ -645,6 +675,7 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
     marks: marks.get(row.id) ?? [],
     tools: tools.get(row.id) ?? [],
     problems: problems.get(row.id) ?? [],
+    guests: guestsOf.get(row.id) ?? [],
     flavors: flavors.get(row.id) ?? [],
     servingCount: poured.get(row.id)?.count ?? 0,
     pouredGrams: poured.get(row.id)?.grams ?? 0,
@@ -700,6 +731,24 @@ async function insertProblems(tx: Tx, brewLogId: string, problemIds: readonly st
 }
 
 // In each workspace's wheel order, whatever order they were picked in.
+async function guestsFor(brewLogIds: string[]): Promise<Map<string, BrewLogDetails["guests"]>> {
+  const byLog = new Map<string, BrewLogDetails["guests"]>();
+  if (brewLogIds.length === 0) return byLog;
+  const rows = await db
+    .select({ brewLogId: brewLogGuests.brewLogId, id: guests.id, name: guests.name })
+    .from(brewLogGuests)
+    .innerJoin(guests, eq(brewLogGuests.guestId, guests.id))
+    .where(inArray(brewLogGuests.brewLogId, brewLogIds))
+    .orderBy(asc(guests.name));
+  for (const { brewLogId, ...guest } of rows) byLog.set(brewLogId, [...(byLog.get(brewLogId) ?? []), guest]);
+  return byLog;
+}
+
+async function insertGuests(tx: Tx, brewLogId: string, guestIds: readonly string[]): Promise<void> {
+  if (guestIds.length === 0) return;
+  await tx.insert(brewLogGuests).values(guestIds.map((guestId) => ({ brewLogId, guestId })));
+}
+
 async function flavorsFor(logs: ReadonlyArray<{ id: string; workspaceId: string }>): Promise<Map<string, FlavorPick[]>> {
   if (logs.length === 0) return new Map();
   const rows = await db.select().from(brewLogFlavors).where(inArray(brewLogFlavors.brewLogId, logs.map((l) => l.id)));
@@ -861,7 +910,9 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Cre
   const refError = await db.transaction(async (tx) => {
     const error = (await referencesInWorkspace(tx, workspaceId, body)) ?? (await suggestionError(tx, workspaceId, body));
     if (error) return error;
-    const { marks = [], toolIds = [], problemIds = [], flavors = [], remindToRate: _remind, ...fields } = body;
+    const { marks = [], toolIds = [], problemIds = [], guestIds = [], flavors = [], remindToRate: _remind, ...fields } = body;
+    const wrongFor = forError({ forMe: fields.forMe ?? true, guestCount: guestIds.length, unnamedGuests: fields.unnamedGuests ?? 0 });
+    if (wrongFor) return wrongFor;
     const brewer = await recipeBrewer(tx, fields.recipeId);
     const wrongForKind = espressoError(brewer?.kind ?? null, {
       actualWaterGrams: fields.actualWaterGrams ?? null,
@@ -891,6 +942,7 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Cre
     await insertMarks(tx, id, marks);
     await insertTools(tx, id, toolIds);
     await insertProblems(tx, id, problemIds);
+    await insertGuests(tx, id, guestIds);
     await insertFlavors(tx, id, picks);
     return null;
   });
@@ -944,6 +996,8 @@ brewLogsRouter.patch(
           actualTimeSec: brewLogs.actualTimeSec,
           rating: brewLogs.rating,
           steeping: brewLogs.steeping,
+          forMe: brewLogs.forMe,
+          unnamedGuests: brewLogs.unnamedGuests,
         })
         .from(brewLogs)
         .where(logInWorkspace(req.params))
@@ -956,7 +1010,7 @@ brewLogsRouter.patch(
 
       // Only when the change touches it, so old logs whose recipe later moved
       // to another brewer can still be edited (docs/api/brew-logs.md §6).
-      const { marks, toolIds, problemIds, flavors, ...fields } = body;
+      const { marks, toolIds, problemIds, guestIds, flavors, ...fields } = body;
       // A recipeId sent brings its brewer; the old brewer stays otherwise. Only
       // a different recipe takes a fresh copy, so re-sending the same one
       // keeps the recipe as brewed (§6, "Recipe copy").
@@ -1013,6 +1067,11 @@ brewLogsRouter.patch(
         const wrongWeights = weightsError({ ...log, ...fields });
         if (wrongWeights) return { status: "bad_ref", error: wrongWeights } as const;
       }
+      if ("forMe" in body || "unnamedGuests" in body || guestIds) {
+        const guestCount = guestIds?.length ?? (await tx.select({ n: count() }).from(brewLogGuests).where(eq(brewLogGuests.brewLogId, brewLogId)))[0]?.n ?? 0;
+        const wrongFor = forError({ ...log, ...fields, guestCount });
+        if (wrongFor) return { status: "bad_ref", error: wrongFor } as const;
+      }
       const picks = flavors ? await flavorPicks(tx, workspaceId, flavors, await savedPicks(tx, brewLogId)) : null;
       if (typeof picks === "string") return { status: "bad_ref", error: picks } as const;
       if (Object.keys(fields).length > 0) await tx.update(brewLogs).set({ ...fields, ...brewerUpdate }).where(eq(brewLogs.id, brewLogId));
@@ -1028,6 +1087,10 @@ brewLogsRouter.patch(
       if (problemIds) {
         await tx.delete(brewLogProblems).where(eq(brewLogProblems.brewLogId, brewLogId));
         await insertProblems(tx, brewLogId, problemIds);
+      }
+      if (guestIds) {
+        await tx.delete(brewLogGuests).where(eq(brewLogGuests.brewLogId, brewLogId));
+        await insertGuests(tx, brewLogId, guestIds);
       }
       if (picks) {
         await tx.delete(brewLogFlavors).where(eq(brewLogFlavors.brewLogId, brewLogId));

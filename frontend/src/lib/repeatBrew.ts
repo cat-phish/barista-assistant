@@ -2,7 +2,7 @@
 // earlier brew log. This works out the setup choices; BrewView applies them
 // and fills dose, water, size, temperature and grind from the log itself.
 // What's no longer available (archived or deleted) is skipped and named.
-import type { Bean, BrewLog, Brewer, Drink, Grinder, Recipe, RepeatButtonGroup, RepeatKeep, Vessel, WaterProfile } from '../api/types';
+import type { Bean, BrewLog, Brewer, Drink, Grinder, Guest, Recipe, RepeatButtonGroup, RepeatKeep, Vessel, WaterProfile } from '../api/types';
 import type { FieldKey } from './fields';
 import { batchSuffix } from './beans';
 import { encodeCategory, encodeDrink, encodeMethod, encodePlain, methodKey, NO_RECIPE } from './brewChoice';
@@ -25,6 +25,7 @@ export const REPEAT_OPTIONS: Array<{ key: RepeatKeep; label: string; hint?: stri
   { key: 'grinderWeights', label: 'Beans in / grounds out' },
   { key: 'vessel', label: 'Vessel', hint: 'What the yield is weighed in. Off: weighed directly, unless remembered' },
   { key: 'notes', label: 'Tasting notes, as a reminder', hint: 'Shown on the log form, not copied into the new brew' },
+  { key: 'forWho', label: 'Who it’s for', hint: 'The guests it was made for. Off: just you' },
 ];
 
 // Parity with the brew form (docs/api/auth.md §1 repeatKeeps): every optional
@@ -49,6 +50,7 @@ export const REPEAT_FOR_FIELD: Record<BrewFieldKey, RepeatKeep | 'always' | 'res
   'brew.waterProfile': 'waterProfile',
   'brew.prepTools': 'always', // the earlier brew's ticks, whatever the recipe starts with
   'brew.problems': 'result', // what went wrong is noted each brew, never copied
+  'brew.forWho': 'forWho',
   'brew.flavors': 'result', // tasted each brew, never copied
   'brew.firstDrop': 'result',
   'brew.steepTemp': 'temp', // where it steeps goes with the temperature
@@ -66,6 +68,7 @@ export interface RepeatPlan {
   grinderId: string; // '' = none
   waterProfileId: string | null; // null = keep setup's (the default)
   vessel: Vessel | null; // null = none, or it's archived or gone
+  guestIds: string[]; // its named guests that aren't archived
   missing: RepeatNote[]; // what couldn't be filled
 }
 
@@ -89,6 +92,7 @@ export interface RepeatSources {
   grinders: Grinder[];
   waterProfiles: WaterProfile[];
   vessels: Vessel[];
+  guests: Guest[];
 }
 
 const sameCoffee = (a: Pick<Bean, 'roasterName' | 'beanName'>, b: Pick<Bean, 'roasterName' | 'beanName'>) =>
@@ -133,6 +137,9 @@ export function repeatPlan(log: BrewLog, s: RepeatSources): RepeatPlan {
   if (log.waterProfile && !water) note(`The water ${log.waterProfile.name} is archived.`, 'waterProfile');
   const vessel = log.vesselId ? s.vessels.find((v) => v.id === log.vesselId && !v.archivedAt) : undefined;
   if (log.vessel && !vessel) note(`The vessel ${log.vessel.name} is archived.`, 'vessel');
+  const active = new Set(s.guests.filter((g) => !g.archivedAt).map((g) => g.id));
+  const gone = log.guests.filter((g) => !active.has(g.id)).map((g) => g.name);
+  if (gone.length) note(`${gone.join(' and ')} ${gone.length === 1 ? 'is' : 'are'} archived, so left out of who it's for.`, 'forWho');
 
   return {
     beanId: bean.id,
@@ -143,6 +150,7 @@ export function repeatPlan(log: BrewLog, s: RepeatSources): RepeatPlan {
     grinderId: grinder?.id ?? '',
     waterProfileId: water?.id ?? null,
     vessel: vessel ?? null,
+    guestIds: log.guests.filter((g) => active.has(g.id)).map((g) => g.id),
     missing,
   };
 }

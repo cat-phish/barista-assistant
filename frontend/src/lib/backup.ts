@@ -77,7 +77,7 @@ export const COMES_ALONG: Record<ListName, string | null> = {
   prep_tools: 'the brewers each is offered for, with their methods',
   brew_problems: null,
   notes: null,
-  brew_logs: 'each brew’s bean, recipe, grinder, water, vessel, drink, prep items and problems',
+  brew_logs: 'each brew’s bean, recipe, grinder, water, vessel, drink, prep items, problems and guests',
 };
 
 // The "add as a copy" example, from the file's own items: "Test Bean (2)"
@@ -148,6 +148,7 @@ const TABLE_LABELS: Record<string, string> = {
   brew_problem_brewers: 'problem brewers',
   brew_log_tools: 'prep ticks',
   brew_log_problems: 'problem ticks',
+  brew_log_guests: 'guests brewed for',
   brew_log_flavors: 'flavor picks',
   llm_analyses: 'AI suggestions',
   parameter_suggestions: 'suggested parameters',
