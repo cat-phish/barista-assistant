@@ -146,6 +146,15 @@ Month bars grow in, list rows step in 60 ms apart, and the summary drops
 confetti (CSS only). With `prefers-reduced-motion`, nothing moves or
 counts: every slide shows as it ends.
 
+Music: a ♪ picker in the top bar sets `yearSong` (`auth.md` §1): No music
+(default), Built-in song, or My song (only where the server allows uploads,
+`auth.md` §1 "Year song"). The built-in song is a CC0 (public domain)
+track, `frontend/public/music/year-in-coffee.mp3`, its source in
+`CREDITS.md` beside it; CC0 waives all rights, so it sits fine in this AGPL
+app. It loops at 60% volume, starts on the first tap or key (browsers
+allow sound only then), pauses while the tab is hidden, and fades out over
+0.6 s on close (`frontend/src/lib/yearSong.ts`).
+
 ## Banner
 
 A small banner at the top of the brew page (setup, before a brew starts),

@@ -5,7 +5,7 @@
 // too, Escape closes. Query: year (default the one just ended, or this one
 // "so far" from 1 December) and mine=0 for the bar's year. Outside the
 // Insights layout, so it can't use useStats().
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { statsApi } from '../../api/stats';
 import { membersApi } from '../../api/members';
@@ -16,6 +16,7 @@ import { localDateInput } from '../../lib/format';
 import { formatWeight, localDay } from '../../lib/stats';
 import { countFrame, splitNumber } from '../../lib/countUp';
 import { formatVolumeIn } from '../../lib/units';
+import { SONG_VOLUME, songSource } from '../../lib/yearSong';
 import { latestYear, yearFigures, yearPeriod } from '../../lib/yearInCoffee';
 import { MONTH_NAMES, personLabels, yearSlides } from '../../lib/yearSlides';
 import { useAuthStore } from '../../stores/auth';
@@ -42,9 +43,50 @@ function go(change: { year?: number; mine?: boolean }): void {
   index.value = 0;
   void router.replace({ query });
 }
-function close(): void {
+function leave(): void {
   if (window.history.state?.back) router.back();
   else void router.push({ name: 'stats-recap' });
+}
+// The song fades out rather than cutting off.
+const FADE_MS = 600;
+function close(): void {
+  const a = audio.value;
+  if (!a || a.paused) return leave();
+  const from = a.volume;
+  const started = performance.now();
+  const step = (now: number) => {
+    const t = Math.min(1, (now - started) / FADE_MS);
+    a.volume = from * (1 - t);
+    if (t < 1) requestAnimationFrame(step);
+    else leave();
+  };
+  requestAnimationFrame(step);
+}
+
+// Music (docs/api/recaps.md §11c "Motion and sound"): off until picked. A
+// browser plays sound only after a tap, so a remembered choice starts on the
+// first tap or key; it pauses while the tab is hidden.
+const audio = ref<HTMLAudioElement | null>(null);
+const song = computed(() => prefs.value.yearSong);
+const songUrl = computed(() => songSource(song.value, false, false));
+function play(): void {
+  const a = audio.value;
+  if (!a || !songUrl.value || !a.paused || document.hidden) return;
+  a.volume = SONG_VOLUME;
+  void a.play().catch(() => undefined); // still locked: the next tap tries again
+}
+async function pickSong(e: Event): Promise<void> {
+  const value = (e.target as HTMLSelectElement).value as typeof song.value;
+  await auth.setPreferences({ yearSong: value }).catch(() => undefined);
+  await nextTick(); // the new src first
+  play();
+}
+watch(songUrl, (url) => {
+  if (!url) audio.value?.pause();
+});
+function onVisibility(): void {
+  if (document.hidden) audio.value?.pause();
+  else play();
 }
 
 // One request covers the year and the one before it.
@@ -120,14 +162,23 @@ function onUp(e: PointerEvent): void {
   }
 }
 function onKey(e: KeyboardEvent): void {
+  play();
   if (e.key === 'ArrowRight' || e.key === 'PageDown') move(1);
   else if (e.key === 'ArrowLeft' || e.key === 'PageUp') move(-1);
   else if (e.key === 'Escape') close();
   else return;
   e.preventDefault();
 }
-onMounted(() => window.addEventListener('keydown', onKey));
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
+onMounted(() => {
+  window.addEventListener('keydown', onKey);
+  window.addEventListener('pointerdown', play);
+  document.addEventListener('visibilitychange', onVisibility);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey);
+  window.removeEventListener('pointerdown', play);
+  document.removeEventListener('visibilitychange', onVisibility);
+});
 
 // Motion (docs/api/recaps.md §11c "Motion and sound"): the slide's number
 // counts up; bars, list rows and confetti are CSS. Reduced motion: none.
@@ -177,10 +228,20 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
       </div>
       <div class="bar">
         <label class="mine"><input type="checkbox" :checked="mine" @change="go({ mine: ($event.target as HTMLInputElement).checked })" /> Only my brews</label>
-        <button type="button" class="icon" aria-label="Close" @click="close">✕</button>
+        <span class="tools">
+          <label class="music">
+            <span aria-hidden="true">♪</span>
+            <select :value="song" aria-label="Music" @change="pickSong">
+              <option value="off">No music</option>
+              <option value="builtin">Built-in song</option>
+            </select>
+          </label>
+          <button type="button" class="icon" aria-label="Close" @click="close">✕</button>
+        </span>
       </div>
     </div>
 
+    <audio ref="audio" :src="songUrl ?? undefined" loop preload="none" />
     <div v-if="!asked" class="stage center">
       <p>Recaps are off in <RouterLink :to="{ name: 'settings-recaps' }">Settings → Recaps</RouterLink>, so nothing loads until you ask.</p>
       <button type="button" class="btn btn-primary" @click="asked = true">Show my year</button>
@@ -270,6 +331,15 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
   display: flex;
   gap: 6px;
   align-items: center;
+}
+.tools,
+.music {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.music select {
+  min-height: var(--tap, 44px);
 }
 .icon {
   border: 0;
