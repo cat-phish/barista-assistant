@@ -260,7 +260,8 @@ app. It loops at 60% volume on one player shared by the app
 tap: tapping the banner's link or the Insights "in coffee" card starts it
 from the beginning in that tap, then opens the slides. Opened any other way
 (a push, a shared link, a reload) with the music on, the slides wait on a
-"Tap to start" cover (Enter or Space too); muting skips it. It pauses while
+"Tap to start" cover (Enter or Space too); muting skips it, and unmuting
+starts the song straight away. It pauses while
 the tab is hidden, the slide is held or paused, fades out over 0.6 s on
 close and stops when the slides do.
 

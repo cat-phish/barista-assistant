@@ -94,7 +94,7 @@ function close(): void {
 // changes it for this viewing only. A browser plays sound only inside a tap:
 // the banner and the Insights link start it in theirs; opened any other way
 // (a push, a shared link, a reload) the slides wait on a "Tap to start"
-// cover. It pauses while the tab is hidden, the slide is held or paused.
+// cover, unless muted (unmuting starts it). It pauses while the tab is hidden, the slide is held or paused.
 const songUrl = computed(() => songFor(auth.user));
 const audio = shallowRef<HTMLAudioElement>(setSong(songUrl.value));
 watch(songUrl, (url) => (audio.value = setSong(url)));
@@ -117,7 +117,10 @@ function play(): void {
 function toggleMute(): void {
   muted.value = !muted.value;
   if (muted.value) audio.value.pause();
-  else play();
+  else {
+    tapped.value = true; // the unmute press is the tap: no cover after it
+    play();
+  }
 }
 function onVisibility(): void {
   if (document.hidden) audio.value.pause();
