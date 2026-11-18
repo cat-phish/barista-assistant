@@ -5,12 +5,17 @@
 // "all" for every member of a workspace someone brewed in. A few per tick, so
 // a busy server spreads them out. Opening a year never freezes it. With
 // Your Year in Coffee's AI switch on (recapAutoSummaries), its summary is
-// written straight after, when the workspace has AI (recapSummary.ts).
-import { and, eq, gte, inArray, isNotNull, lt } from "drizzle-orm";
+// written straight after, when the workspace has AI (recapSummary.ts). Its
+// push goes on 7 December (processYearInCoffeePush, below).
+import { and, eq, gte, inArray, isNotNull, isNull, lt } from "drizzle-orm";
+import { sendNotification } from "@barista/shared/notify";
+import { sendWebPush } from "@barista/shared/webPush";
 import { brewLogs, recaps, userPreferences, users, workspaceMembers, workspaces, type RecapScope } from "@barista/shared/schema";
 import { freezeYearInCoffee, YEAR_IN_COFFEE_KIND } from "@barista/shared/yearFreeze";
 import { YEAR_OUT_ON, yearInCoffeePeriod } from "@barista/shared/yearInCoffee";
+import { config } from "./config.js";
 import { db } from "./db.js";
+import { deliver } from "./reminders.js";
 import { autoSummary, recapZone, zonedNow } from "./recaps.js";
 
 export const FREEZES_PER_TICK = 50;
@@ -66,6 +71,61 @@ export async function processYearFreeze(now: Date = new Date()): Promise<{ froze
         out.failed++;
         console.error(`Year in Coffee for ${m.userId} failed: ${err instanceof Error ? err.message : String(err)}`);
       }
+    }
+  }
+  return out;
+}
+
+type Send = typeof sendNotification;
+type Push = typeof sendWebPush;
+
+// Its push (docs/api/notifications.md §1b, "Recaps"): on 7 December, once
+// the person's time reaches recapNotifyTime, one per workspace whose "mine"
+// copy is frozen with brews in it, with Your Year in Coffee's push on. The
+// row's notifiedAt claims it, so none goes twice. Only that day, as the
+// other recaps: the banner stays through December.
+export async function processYearInCoffeePush(now: Date = new Date(), send: Send = sendNotification, push: Push = sendWebPush): Promise<{ sent: number; failed: number }> {
+  const year = now.getUTCFullYear();
+  const out = { sent: 0, failed: 0 };
+  const outOn = `${year}-${YEAR_OUT_ON}`;
+  // 7 December somewhere: from UTC+14's midnight to UTC−12's end of the day.
+  if (now.getTime() + EARLIEST_OFFSET_MS < Date.parse(`${outOn}T00:00:00Z`) || now.getTime() >= Date.parse(`${outOn}T00:00:00Z`) + 36 * 3_600_000) return out;
+  const rows = await db
+    .select({ id: recaps.id, workspaceId: recaps.workspaceId, userId: recaps.userId, figures: recaps.figures, preferences: users.preferences, settings: workspaces.settings, workspaceName: workspaces.name })
+    .from(recaps)
+    .innerJoin(workspaceMembers, and(eq(workspaceMembers.workspaceId, recaps.workspaceId), eq(workspaceMembers.userId, recaps.userId)))
+    .innerJoin(users, eq(users.id, recaps.userId))
+    .innerJoin(workspaces, eq(workspaces.id, recaps.workspaceId))
+    .where(and(eq(recaps.kind, YEAR_IN_COFFEE_KIND), eq(recaps.periodStart, `${year}-01-01`), eq(recaps.scope, "mine"), isNotNull(recaps.figures), isNull(recaps.notifiedAt)));
+  const perPerson = new Map<string, number>();
+  for (const r of rows) perPerson.set(r.userId, (perPerson.get(r.userId) ?? 0) + 1);
+  for (const r of rows) {
+    const prefs = userPreferences(r.preferences ?? null);
+    const brews = r.figures?.figures.recap.brews ?? 0;
+    if (!prefs.recapPushes.yearInCoffee || brews === 0) continue;
+    const local = zonedNow(now, recapZone(prefs, r.settings));
+    if (local.day !== outOn || local.time < prefs.recapNotifyTime) continue;
+    const [claimed] = await db.update(recaps).set({ notifiedAt: new Date() }).where(and(eq(recaps.id, r.id), isNull(recaps.notifiedAt)));
+    if (claimed.affectedRows === 0) continue;
+    const text = `Your Year in Coffee is ready: ${brews} ${brews === 1 ? "brew" : "brews"} from 1 January to 6 December.`;
+    const unclaim = () => db.update(recaps).set({ notifiedAt: null }).where(eq(recaps.id, r.id));
+    try {
+      const result = await deliver(
+        r.userId,
+        {
+          title: `Your ${year} in coffee`,
+          message: (perPerson.get(r.userId) ?? 0) > 1 ? `${r.workspaceName} · ${text}` : text,
+          url: config.appUrl ? `${config.appUrl}/insights/year?year=${year}&ws=${r.workspaceId}` : null,
+        },
+        send,
+        push,
+      );
+      if (result.status === "sent") out.sent++;
+      else await unclaim(); // no channel yet: a later tick that day may have one
+    } catch (err) {
+      out.failed++;
+      await unclaim();
+      console.error(`Year in Coffee push for ${r.userId} not sent: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
   return out;

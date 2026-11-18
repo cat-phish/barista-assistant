@@ -283,7 +283,8 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
   - `recapBannerDays` (1–14, default `3`): how many days after the period
     a banner shows.
   - `recapNotifyTime` (`HH:MM` on a quarter hour, default `"08:00"`): the
-    notification, on the first day of the new period at that local time.
+    notification, on the first day of the new period at that local time
+    (Your Year in Coffee's on 7 December).
   - `timeZone`: an IANA name (e.g. `Europe/London`), or `null` (default) for
     each workspace's `timeZone` (§2), else the server's `BREW_TIMEZONE`. The
     client sends the browser's with each Settings → Recaps change. An
@@ -295,8 +296,9 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
     (`"monthly"` the weekly ones); `recapBanner: false` / `recapNotify:
     false` turn every banner / push off; `recapAi: "auto"` turns every
     automatic summary on.
-  - `recapSeen`: `{ "weekly"?: "YYYY-MM-DD", "monthly"?: "YYYY-MM-DD", "yearly"?: "YYYY-MM-DD" }`,
-    the start of the last period whose banner was opened or dismissed.
+  - `recapSeen`: `{ "weekly"?, "monthly"?, "yearly"?, "yearInCoffee"?: "YYYY-MM-DD" }`,
+    the start of the last period whose banner was opened or dismissed
+    (`yearInCoffee`: the year's 1 January).
     Default `{}`. A `PATCH` sends the whole object.
   - `yearMusic` (default `false`): Your Year in Coffee starts with its
     music on (`recaps.md` §11c, "Motion and sound"); its mute button

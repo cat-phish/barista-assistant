@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // The brew page's recap banner (docs/api/recaps.md §11c, "Banner"): a
-// weekly or monthly recap just ended and had your brews. Gone once opened
+// weekly, monthly or yearly recap just ended and had your brews, or Your
+// Year in Coffee is out (7 December to the year's end). Gone once opened
 // (Insights → Recap marks it seen), dismissed, or recapBannerDays after the
 // period ends. One /stats?mine=1 request, only when a period is due, and
 // remembered for this page load.
@@ -54,7 +55,11 @@ const banner = computed(() => {
   if (!d || hidden.value) return null;
   return bannerFor(prefs.value, today, (x) => d.some((day) => day >= x.period.start && day <= x.period.end));
 });
-const linkText = (d: RecapDue, both: boolean) => (both ? (d.kind === 'weekly' ? 'The week' : 'The month') : 'See it');
+const SHORT = { weekly: 'The week', monthly: 'The month', yearly: 'The year' } as const;
+const linkText = (d: RecapDue, several: boolean) => (!several ? 'See it' : d.kind === 'yearInCoffee' ? `Your ${d.period.start.slice(0, 4)}` : SHORT[d.kind]);
+const linkTo = (d: RecapDue) =>
+  d.kind === 'yearInCoffee' ? { name: 'stats-year', query: { year: d.period.start.slice(0, 4) } } : { name: 'stats-recap', query: { kind: d.kind, start: d.period.start } };
+const linkTitle = (d: RecapDue) => (d.kind === 'yearInCoffee' ? `Your Year in Coffee: 1 January – 6 December ${d.period.start.slice(0, 4)}` : periodLabel(d.kind, d.period));
 
 async function dismiss(): Promise<void> {
   const b = banner.value;
@@ -74,7 +79,7 @@ async function dismiss(): Promise<void> {
       {{ banner.text }}
       <template v-for="(d, i) in banner.due" :key="d.kind">
         <template v-if="i"> · </template>
-        <RouterLink :to="{ name: 'stats-recap', query: { kind: d.kind, start: d.period.start } }" :title="periodLabel(d.kind, d.period)">{{ linkText(d, banner.due.length > 1) }}</RouterLink>
+        <RouterLink :to="linkTo(d)" :title="linkTitle(d)">{{ linkText(d, banner.due.length > 1) }}</RouterLink>
       </template>
     </p>
     <button type="button" class="close" aria-label="Dismiss the recap banner" @click="dismiss">×</button>

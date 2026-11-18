@@ -144,6 +144,32 @@ describe('recap banner', () => {
     expect(bannerFor(prefs, '2026-11-09', () => false)).toBeNull();
   });
 
+  it('offers the year on 1 January, with the month', () => {
+    const year2025: RecapDue = { kind: 'yearly', period: { start: '2025-01-01', end: '2025-12-31' } };
+    const due = recapsDue(prefs, '2026-01-01');
+    expect(due.map((d) => d.kind)).toEqual(['monthly', 'yearly']); // 29 Dec–4 Jan hasn't ended
+    expect(due[1]).toEqual(year2025);
+    expect(bannerFor(prefs, '2026-01-01', () => true)?.text).toBe('Your monthly and yearly recaps are ready.');
+    expect(recapsDue({ ...prefs, recapBanners: { ...on, yearly: false } }, '2026-01-01').map((d) => d.kind)).toEqual(['monthly']);
+    expect(recapsDue({ ...prefs, recapSeen: { yearly: '2025-01-01' } }, '2026-01-02').map((d) => d.kind)).toEqual(['monthly']);
+  });
+
+  it('offers Your Year in Coffee from 7 December to the year\'s end, until seen', () => {
+    const p = { ...prefs, recapBanners: { ...on, weekly: false } }; // 7 Dec 2026 is a Monday
+    const year: RecapDue = { kind: 'yearInCoffee', period: { start: '2026-01-01', end: '2026-12-06' } };
+    expect(recapsDue(p, '2026-12-06')).toEqual([]);
+    expect(recapsDue(p, '2026-12-07')).toEqual([year]);
+    expect(recapsDue(p, '2026-12-31')).toEqual([year]); // past recapBannerDays: it stays through December
+    expect(recapsDue(p, '2027-01-02').some((d) => d.kind === 'yearInCoffee')).toBe(false);
+    expect(recapsDue({ ...p, recapSeen: { yearInCoffee: '2026-01-01' } }, '2026-12-08')).toEqual([]);
+    expect(recapsDue({ ...p, recapSeen: { yearInCoffee: '2025-01-01' } }, '2026-12-08')).toEqual([year]);
+    expect(recapsDue({ ...p, recapBanners: { ...on, weekly: false, yearInCoffee: false } }, '2026-12-08')).toEqual([]);
+    expect(bannerFor(p, '2026-12-08', () => true)?.text).toBe('Your 2026 in coffee is ready.');
+    // With the week just ended (Monday 14 Dec), weekly on.
+    expect(bannerFor(prefs, '2026-12-14', () => true)?.text).toBe('Your weekly recap and 2026 in coffee are ready.');
+    expect(markSeen({}, [year])).toEqual({ yearInCoffee: '2026-01-01' });
+  });
+
   it('marks periods seen without going back', () => {
     expect(markSeen({ monthly: '2026-10-01' }, [lastWeek])).toEqual({ weekly: '2026-11-02', monthly: '2026-10-01' });
     expect(markSeen({ weekly: '2026-11-09' }, [lastWeek])).toEqual({ weekly: '2026-11-09' });

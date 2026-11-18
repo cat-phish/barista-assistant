@@ -14,7 +14,7 @@ import { failRecapSummary, writeRecapSummary } from "./recapSummary.js";
 
 // Recap notifications (docs/api/notifications.md §1b, "Recaps"). Every
 // quarter hour the tick looks for people whose local time has reached
-// recapNotifyTime on the first day of a new week or month, and sends one
+// recapNotifyTime on the first day of a new week, month or year, and sends one
 // notification per workspace they brewed in during the period just ended.
 // A recaps row (scope "mine") claims each, so none goes twice. Only that
 // day: a server down all day skips it (the banner and Insights still have it).
@@ -34,10 +34,11 @@ export function zonedNow(now: Date, zone: string): { day: string; time: string }
 export const recapZone = (prefs: UserPreferences, settings: Partial<WorkspaceSettings> | null): string => prefs.timeZone ?? settingsZone(settings) ?? "UTC";
 
 // What the tick does for a kind: send it (recapPushes) and/or write its
-// summary first (recapAutoSummaries). Neither: nothing.
-// Yearly: only its summary for now; its push comes with backlog 65, plan step 4.
+// summary first (recapAutoSummaries). Neither: nothing. On 1 January the
+// monthly and yearly pushes go as one ("Your monthly and yearly recaps are ready.").
 const TICK_KINDS = ["weekly", "monthly", "yearly"] as const satisfies readonly RecapKind[];
-const pushes = (prefs: UserPreferences, kind: RecapKind) => kind !== "yearly" && prefs.recapPushes[kind];
+const pushes = (prefs: UserPreferences, kind: RecapKind) => prefs.recapPushes[kind];
+const TITLES: Record<RecapKind, string> = { weekly: "Your week in coffee", monthly: "Your month in coffee", yearly: "Your year in coffee" };
 const tickWants = (prefs: UserPreferences, kind: RecapKind) => pushes(prefs, kind) || prefs.recapAutoSummaries[kind];
 
 // The periods due now for this person in that zone: the one just ended, for
@@ -166,6 +167,8 @@ export async function processRecapTick(now: Date = new Date(), send: Send = send
       byZone.set(zone, [...(byZone.get(zone) ?? []), m.workspaceId]);
     }
     const due = [...byZone].flatMap(([zone, ids]) => recapsDueNow(prefs, now, zone).map((d) => ({ ...d, ids })));
+    // Claimed and summarised first; then the pushes, per workspace.
+    const toSend = new Map<string, Array<{ kind: RecapKind; period: RecapPeriod; list: RecapBrew[]; many: boolean }>>();
     for (const { kind, period, ids } of due) {
       try {
         const brews = await brewsIn(person.id, period, ids);
@@ -176,30 +179,41 @@ export async function processRecapTick(now: Date = new Date(), send: Send = send
           if (recapId === null) continue;
           if (prefs.recapAutoSummaries[kind]) await autoSummary(recapId, workspaceId);
           if (!pushes(prefs, kind)) continue; // summary only: claimed, nothing sent
-          const text = recapMessage(kind, period, list);
-          const query = `kind=${kind}&start=${period.start}&ws=${workspaceId}`;
-          try {
-            const result = await deliver(
-              person.id,
-              {
-                title: kind === "weekly" ? "Your week in coffee" : "Your month in coffee",
-                message: byWorkspace.size > 1 ? `${list[0]!.workspaceName} · ${text}` : text,
-                url: config.appUrl ? `${config.appUrl}/insights/recap?${query}` : null,
-              },
-              send,
-              push,
-            );
-            if (result.status === "sent") sent++;
-            else await unclaim(workspaceId, person.id, kind, period.start); // no channel yet: a later tick may have one
-          } catch (err) {
-            failed++;
-            await unclaim(workspaceId, person.id, kind, period.start);
-            console.error(`Recap for ${person.id} (${kind} ${period.start}) not sent: ${err instanceof Error ? err.message : String(err)}`);
-          }
+          toSend.set(workspaceId, [...(toSend.get(workspaceId) ?? []), { kind, period, list, many: byWorkspace.size > 1 }]);
         }
       } catch (err) {
         failed++;
         console.error(`Recap for ${person.id} failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    for (const [workspaceId, items] of toSend) {
+      // The month and the year together as one; anything else (a week) on its own.
+      const year = items.find((i) => i.kind === "yearly");
+      const month = items.find((i) => i.kind === "monthly");
+      const groups = year && month ? [[month, year], ...items.filter((i) => i !== year && i !== month).map((i) => [i])] : items.map((i) => [i]);
+      for (const group of groups) {
+        const lead = group.at(-1)!; // the year when together
+        const text = group.length > 1 ? "Your monthly and yearly recaps are ready." : recapMessage(lead.kind, lead.period, lead.list);
+        const query = `kind=${lead.kind}&start=${lead.period.start}&ws=${workspaceId}`;
+        const undo = () => Promise.all(group.map((g) => unclaim(workspaceId, person.id, g.kind, g.period.start)));
+        try {
+          const result = await deliver(
+            person.id,
+            {
+              title: group.length > 1 ? "Your month and year in coffee" : TITLES[lead.kind],
+              message: group.some((g) => g.many) ? `${lead.list[0]!.workspaceName} · ${text}` : text,
+              url: config.appUrl ? `${config.appUrl}/insights/recap?${query}` : null,
+            },
+            send,
+            push,
+          );
+          if (result.status === "sent") sent++;
+          else await undo(); // no channel yet: a later tick may have one
+        } catch (err) {
+          failed++;
+          await undo();
+          console.error(`Recap for ${person.id} (${group.map((g) => `${g.kind} ${g.period.start}`).join(", ")}) not sent: ${err instanceof Error ? err.message : String(err)}`);
+        }
       }
     }
   }

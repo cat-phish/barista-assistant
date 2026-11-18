@@ -41,7 +41,7 @@ export interface UserPreferences {
   recapNotifyTime: string; // "HH:MM", 15-minute steps, in timeZone
   timeZone: string | null; // IANA name from the device; null = the server's
   recapAutoSummaries: RecapSwitches; // off: a Write summary button only
-  recapSeen: Partial<Record<'weekly' | 'monthly' | 'yearly', string>>; // the period start last opened or dismissed
+  recapSeen: Partial<Record<'weekly' | 'monthly' | 'yearly' | 'yearInCoffee', string>>; // the period start last opened or dismissed (yearInCoffee: 1 January)
   yearMusic: boolean; // Your Year in Coffee starts with its music on
   learnAboutMe: boolean; // docs/api/auth.md §1d
 }

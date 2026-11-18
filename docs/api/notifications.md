@@ -289,7 +289,7 @@ Sends "Test from Barista-Assistant" to the device, enabled or not.
 
 ## Recaps
 
-Weekly and monthly recaps (recaps.md §11c).
+Weekly, monthly and yearly recaps, and Your Year in Coffee (recaps.md §11c).
 
 - **Preferences:** `recapPushes` and `recapAutoSummaries` (per kind),
   `weekStartsOn`, `recapNotifyTime` (default `"08:00"`) and `timeZone`
@@ -300,18 +300,23 @@ Weekly and monthly recaps (recaps.md §11c).
   automatic summary on whose local time (their `timeZone`, else the workspace's `timeZone`
   (§2), else `BREW_TIMEZONE`, else UTC; a person's workspaces in different
   zones are checked in each) has
-  reached `recapNotifyTime` on the **first day** of a new week or month, for
-  each such kind (weekly and monthly; yearly joins with backlog 65 step 4).
+  reached `recapNotifyTime` on the **first day** of a new week, month or
+  year, for each such kind.
 - **What's sent:** for the period just ended, one notification per
   workspace the person brewed in (and still belongs to); none for a period
   without their brews. A brew's day is its local date, as Insights counts
   it (§11).
-  - title "Your week in coffee" / "Your month in coffee";
+  - title "Your week in coffee" / "Your month in coffee" / "Your year in
+    coffee";
   - message "2–8 Nov · 12 brews · avg 3.9 · best 4.5, Kenya Nyeri on the
     V60" (the coffee rating; the best is the newest of the top rated),
     starting with the workspace's name when more than one is sent;
   - link `<APP_URL>/insights/recap?kind=weekly&start=2026-11-02&ws=<id>`,
     which switches to that workspace.
+  - On 1 January, with both pushes on and brews in both, the month and the
+    year go as one per workspace: title "Your month and year in coffee",
+    message "Your monthly and yearly recaps are ready.", linking to the
+    year. A week ending that day still goes on its own.
 - **AI summary first:** with that kind's `recapAutoSummaries` on and AI in
   the workspace, the summary (llm-contract.md §9f) is written on the row
   before sending, once per row; a failure is recorded there and doesn't
@@ -322,6 +327,15 @@ Weekly and monthly recaps (recaps.md §11c).
   channel, gives the claim back, so a later tick that day tries again. Only
   that day: after a server outage covering it, the banner and Insights →
   Recap still have the recap, but no notification comes.
+- **Your Year in Coffee** (`processYearInCoffeePush` in
+  `worker/src/yearFreeze.ts`, on the same tick after the freeze): on
+  **7 December** at `recapNotifyTime`, with `recapPushes.yearInCoffee` on,
+  one per workspace whose frozen `mine` copy has brews: title "Your 2026 in
+  coffee", message "Your Year in Coffee is ready: 340 brews from 1 January
+  to 6 December." (the workspace's name first when more than one), link
+  `<APP_URL>/insights/year?year=2026&ws=<id>`. The copy's row claims it
+  through `notified_at` the same way; only that day (the banner stays
+  through December).
 
 ## Test sends are limited
 

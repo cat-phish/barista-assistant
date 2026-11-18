@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
-import { beans, brewLogs, recaps, users, workspaceMembers, workspaces } from "@barista/shared/schema";
+import { beans, brewLogs, notificationChannels, recaps, users, workspaceMembers, workspaces } from "@barista/shared/schema";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AiClient } from "../src/ai/client.js";
 import { resolveAi } from "../src/ai/resolve.js";
 import { db } from "../src/db.js";
 import { requestRecapSummary } from "../src/llm.js";
-import { processYearFreeze } from "../src/yearFreeze.js";
+import { config } from "../src/config.js";
+import { processYearFreeze, processYearInCoffeePush } from "../src/yearFreeze.js";
 
 vi.mock("../src/llm.js", async (importOriginal) => ({ ...(await importOriginal<typeof import("../src/llm.js")>()), requestRecapSummary: vi.fn() }));
 vi.mock("../src/ai/resolve.js", async (importOriginal) => ({ ...(await importOriginal<typeof import("../src/ai/resolve.js")>()), resolveAi: vi.fn() }));
@@ -74,5 +75,31 @@ describe("freezing Your Year in Coffee", () => {
     expect(of(on)).toEqual([["all", "done", "A year of Guji."], ["mine", "done", "A year of Guji."]]);
     expect(of(off)).toEqual([["all", "none", null], ["mine", "none", null]]);
     expect(llm.mock.calls[0]![1].kind).toBe("yearInCoffee");
+  });
+
+  it("pushes on 7 December at the person's time, once, with its push on and brews in it", async () => {
+    const london = await person("Europe/London");
+    const quiet = await person("Europe/London"); // only the bar's copy: no push
+    const off = await person("Europe/London");
+    await db.update(users).set({ preferences: { timeZone: "Europe/London", recapPushes: { weekly: true, monthly: true, yearly: true, yearInCoffee: false } } }).where(eq(users.id, off));
+    for (const id of [london, quiet, off]) await db.insert(notificationChannels).values({ id: randomUUID(), userId: id, kind: "ntfy", config: { server: "https://ntfy.sh", topic: "t", token: null } });
+    await brew(london, "2026-02-01T08:00:00Z");
+    await brew(london, "2026-03-01T08:00:00Z");
+    await brew(off, "2026-03-01T08:00:00Z");
+    const send = vi.fn().mockResolvedValue(undefined);
+
+    await processYearFreeze(new Date("2026-12-07T00:30:00Z"));
+    expect(await processYearInCoffeePush(new Date("2026-12-07T07:45:00Z"), send)).toEqual({ sent: 0, failed: 0 }); // before 08:00
+    expect(await processYearInCoffeePush(new Date("2026-12-07T08:00:00Z"), send)).toEqual({ sent: 1, failed: 0 });
+    expect(send.mock.calls[0]![2]).toEqual({
+      title: "Your 2026 in coffee",
+      message: "Your Year in Coffee is ready: 2 brews from 1 January to 6 December.",
+      url: config.appUrl ? `${config.appUrl}/insights/year?year=2026&ws=${ws}` : null,
+    });
+    expect(await processYearInCoffeePush(new Date("2026-12-07T08:15:00Z"), send)).toEqual({ sent: 0, failed: 0 });
+    expect(send).toHaveBeenCalledTimes(1);
+    // Only that day.
+    await db.update(recaps).set({ notifiedAt: null });
+    expect(await processYearInCoffeePush(new Date("2026-12-08T08:00:00Z"), send)).toEqual({ sent: 0, failed: 0 });
   });
 });

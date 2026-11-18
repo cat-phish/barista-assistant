@@ -44,12 +44,12 @@ The three switch objects are per kind: `weekly`, `monthly`, `yearly` and
 **Push** and **AI summary** column. Banner days and push time are shared.
 The AI summary column shows only when the workspace has AI. Off, a recap
 still has its **Write summary** button; with no AI set up, neither the
-column nor the button shows (the rule for every AI button). Today the
-banner and the push cover weekly and monthly, and the automatic summary
-all four (Your Year in Coffee's is written by the worker right after it
-freezes the year on 7 December); the `yearly` banner and push and the
-`yearInCoffee` banner and push are saved and take effect with backlog 65,
-plan step 4.
+column nor the button shows (the rule for every AI button). All four
+kinds have a banner (below), a push (notifications.md §1b, "Recaps") and
+an automatic summary (Your Year in Coffee's is written by the worker right
+after it freezes the year on 7 December). The yearly push goes on
+1 January together with the monthly one; Your Year in Coffee's on
+7 December.
 Your Year in Coffee is frozen on 7 December whatever they say.
 
 ## Insights → Recap
@@ -118,7 +118,8 @@ live; Your Year in Coffee is a **frozen copy**. Built in phases:
    On the slides it's an "in a few words" slide before the summary card,
    shown once written, or to someone who can write it (Write summary);
    only with a model.
-5. The banner and a notification on 1 January.
+5. The banner from 7 December to the year's end (until opened or
+   dismissed) and a push on 7 December (notifications.md §1b, "Recaps").
 
 **Figures:** everything a recap counts for 1 January–6 December, next to
 the year before's same dates (above, including your share of volume and
@@ -265,20 +266,25 @@ A small banner at the top of the brew page (setup, before a brew starts),
 `frontend/src/components/RecapBanner.vue`, with the rule in
 `lib/recap.ts` (`recapsDue`, `bannerFor`, `markSeen`):
 
-- **Which periods:** for each kind whose `recapBanners` switch is on
-  (weekly and monthly for now), the one just ended, from the day after it
-  ends for `recapBannerDays` days (day 1 = the day after).
+- **Which periods:** for each recap kind whose `recapBanners` switch is
+  on (weekly, monthly, yearly), the one just ended, from the day after it
+  ends for `recapBannerDays` days (day 1 = the day after). Your Year in
+  Coffee (its switch on) from 7 December to 31 December, whatever
+  `recapBannerDays` says, for 1 January–6 December.
 - **Not once seen:** a period whose start is at or before
   `recapSeen[kind]` is skipped.
 - **Only with brews:** a due period with none of the person's brews in the
   current workspace is skipped. One `GET …/stats?mine=1` covering the due
   periods tells, and only when one is due; the answer is kept until the app
   reloads.
-- **What it says:** "Your weekly recap is ready.", "Your monthly recap is
-  ready." or "Your weekly and monthly recaps are ready.", with a link to
-  each (`/insights/recap?kind=…&start=…`).
+- **What it says:** "Your weekly recap is ready.", "Your monthly and
+  yearly recaps are ready.", "Your 2026 in coffee is ready." or "Your
+  weekly recap and 2026 in coffee are ready.", with a link to each
+  (`/insights/recap?kind=…&start=…`; Your Year in Coffee's
+  `/insights/year?year=…`).
 - **Gone when:** opened (Insights → Recap showing the period just ended
-  sets `recapSeen` for that kind, whichever way it was reached), dismissed
+  sets `recapSeen` for that kind, whichever way it was reached; the slides
+  of the year just out set `recapSeen.yearInCoffee`), dismissed
   (× sets it for every period shown), or past `recapBannerDays`. Seen is
   per person, across workspaces.
 

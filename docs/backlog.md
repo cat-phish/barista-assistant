@@ -507,7 +507,7 @@ Recording a brew: what's measured, and how fast it is to log.
      brew from 1 January to 6 December, written on 7 December when its AI switch is on;
      kept with the frozen copy. Separate from the Yearly tab's: this one
      is for sharing.
-  4. **Banner and push on 7 December** under Your Year in Coffee's own
+  4. **(Done)** **Banner and push on 7 December** under Your Year in Coffee's own
      switches; the banner stays through December until opened or
      dismissed. The yearly recap's push is on 1 January (with the
      monthly one: "Your monthly and yearly recaps are ready.").

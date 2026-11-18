@@ -99,7 +99,7 @@ export interface UserPreferences {
   recapNotifyTime: string; // "HH:MM", 15-minute steps, in timeZone
   timeZone: string | null; // IANA name, from the person's device; null = the server's BREW_TIMEZONE
   recapAutoSummaries: RecapSwitches; // off: a Write summary button only
-  recapSeen: Partial<Record<"weekly" | "monthly" | "yearly", string>>; // the period start last opened or dismissed
+  recapSeen: Partial<Record<"weekly" | "monthly" | "yearly" | "yearInCoffee", string>>; // the period start last opened or dismissed (yearInCoffee: 1 January)
   yearMusic: boolean; // Your Year in Coffee starts with its music on (recaps.md §11c "Motion and sound")
   // Learn about me (docs/api/auth.md §1d): off, nothing is learned, the
   // feedback buttons are hidden and their learned list and votes aren't sent.

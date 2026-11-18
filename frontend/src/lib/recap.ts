@@ -6,7 +6,8 @@ import { beanLabel } from './beans';
 import { caffeineSummary } from './caffeine';
 import { brewShares, forOthers, ME, myShare, UNNAMED } from './shares';
 import { brewerRetentions, brewVolumeMl, countBy, localDay } from './stats';
-import { daysAfter, justEnded, type RecapKind, type RecapPeriod } from './recapPeriods';
+import { daysAfter, justEnded, RECAP_KINDS, type RecapKind, type RecapPeriod } from './recapPeriods';
+import { OUT_ON } from './yearInCoffee';
 
 export interface RecapBest {
   brewId: string;
@@ -117,25 +118,34 @@ export function recapFigures(data: StatsData, previous: StatsData | null, period
 // The brew-page banner (recaps.md §11c, "Banner"): the periods just ended
 // that it would announce, before checking they had any of your brews. Each
 // shows from the day after it ends for recapBannerDays days, until opened
-// or dismissed (recapSeen holds the last period start seen, per kind).
+// or dismissed (recapSeen holds the last period start seen, per kind). Your
+// Year in Coffee (1 January–6 December) shows from 7 December to the year's
+// end instead, until opened or dismissed.
 export type RecapBannerPrefs = Pick<UserPreferences, 'weekStartsOn' | 'recapBanners' | 'recapBannerDays' | 'recapSeen'>;
+export type BannerKind = RecapKind | 'yearInCoffee';
 export interface RecapDue {
-  kind: RecapKind;
+  kind: BannerKind;
   period: RecapPeriod;
 }
 export function recapsDue(prefs: RecapBannerPrefs, today: string): RecapDue[] {
-  // Yearly joins with its banner (backlog 65, plan step 4).
-  const kinds = (['weekly', 'monthly'] as const).filter((kind) => prefs.recapBanners[kind]);
-  return kinds
+  const out: RecapDue[] = RECAP_KINDS.filter((kind) => prefs.recapBanners[kind])
     .map((kind) => ({ kind, period: justEnded(kind, today, prefs.weekStartsOn) }))
     .filter(({ kind, period }) => daysAfter(period, today) <= prefs.recapBannerDays && (prefs.recapSeen[kind] ?? '') < period.start);
+  const year = today.slice(0, 4);
+  if (prefs.recapBanners.yearInCoffee && today.slice(5) >= OUT_ON && (prefs.recapSeen.yearInCoffee ?? '') < `${year}-01-01`)
+    out.push({ kind: 'yearInCoffee', period: { start: `${year}-01-01`, end: `${year}-12-06` } });
+  return out;
 }
+const andList = (xs: readonly string[]): string => (xs.length < 2 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`);
 // What the banner says, given which due periods had brews; null: no banner.
 export function bannerFor(prefs: RecapBannerPrefs, today: string, hadBrews: (due: RecapDue) => boolean): { due: RecapDue[]; text: string } | null {
   const due = recapsDue(prefs, today).filter(hadBrews);
   if (!due.length) return null;
-  const text = due.length > 1 ? 'Your weekly and monthly recaps are ready.' : `Your ${due[0]!.kind} recap is ready.`;
-  return { due, text };
+  const recapKinds = due.filter((d) => d.kind !== 'yearInCoffee').map((d) => d.kind);
+  const parts = recapKinds.length ? [`${andList(recapKinds)} ${recapKinds.length > 1 ? 'recaps' : 'recap'}`] : [];
+  const year = due.find((d) => d.kind === 'yearInCoffee');
+  if (year) parts.push(`${year.period.start.slice(0, 4)} in coffee`);
+  return { due, text: `Your ${andList(parts)} ${due.length > 1 ? 'are' : 'is'} ready.` };
 }
 // recapSeen after opening or dismissing these.
 export function markSeen(seen: UserPreferences['recapSeen'], due: readonly RecapDue[]): UserPreferences['recapSeen'] {

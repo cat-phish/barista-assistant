@@ -6,7 +6,7 @@ import { config } from "./config.js";
 import { pool } from "./db.js";
 import { failSuggestion, failureMessage, processAiPreview, processBeanReview, processBrewAnalysis, processParameterSuggestion, settleRequest, type JobResult } from "./processor.js";
 import { processRecapTick, type RecapTickResult } from "./recaps.js";
-import { processYearFreeze } from "./yearFreeze.js";
+import { processYearFreeze, processYearInCoffeePush } from "./yearFreeze.js";
 import { failRecapSummary, writeRecapSummary, type RecapSummaryResult } from "./recapSummary.js";
 import { learnPreferences, type LearnResult } from "./learnPreferences.js";
 import { processResearchDraft } from "./researchDraft.js";
@@ -169,7 +169,8 @@ function runReminder(job: Job<ReminderData>): Promise<ReminderOutcome> {
         // Your Year in Coffee frozen from 7 December (docs/api/recaps.md §11c).
         const year = await processYearFreeze();
         if (year.frozen || year.failed) console.log(`Year in Coffee: ${year.frozen} frozen${year.failed ? `, ${year.failed} failed` : ""}`);
-        return result;
+        const pushed = await processYearInCoffeePush();
+        return { sent: result.sent + pushed.sent, failed: result.failed + pushed.failed };
       });
     case STEEP_REMINDER_JOB:
       return processSteepReminder(job.data as SteepReminderJobData);

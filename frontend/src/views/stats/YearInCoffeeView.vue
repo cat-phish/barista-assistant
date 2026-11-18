@@ -19,6 +19,7 @@ import { formatVolumeIn } from '../../lib/units';
 import { SONG_VOLUME, songSource } from '../../lib/yearSong';
 import type { Chip } from '../../lib/yearCompare';
 import { completeFigures, latestYear, type FrozenYear } from '../../lib/yearInCoffee';
+import { markSeen } from '../../lib/recap';
 import { MONTH_NAMES, personLabels, slideDuration, yearSlides } from '../../lib/yearSlides';
 import AppIcon from '../../components/icons/AppIcon.vue';
 import RecapSummaryCard from '../../components/RecapSummaryCard.vue';
@@ -39,6 +40,25 @@ const year = computed(() => {
   return Number.isInteger(y) && y >= 2000 && y <= latest ? y : latest;
 });
 const mine = computed(() => route.query.mine !== '0');
+
+// A push's link names the workspace it's about (?ws=): switch to it if it's
+// one of yours, then drop it from the address (as Insights → Recap does).
+const linkedWs = typeof route.query.ws === 'string' ? route.query.ws : null;
+if (linkedWs) {
+  if (linkedWs !== workspaces.current?.id && workspaces.workspaces.some((w) => w.id === linkedWs)) workspaces.select(linkedWs);
+  const { ws: _ws, ...rest } = route.query;
+  void router.replace({ query: rest });
+}
+// Opening the year just out takes its banner off the brew page (recaps.md §11c "Banner").
+watch(
+  year,
+  (y) => {
+    if (y !== latest) return;
+    const seen = markSeen(prefs.value.recapSeen, [{ kind: 'yearInCoffee', period: { start: `${y}-01-01`, end: `${y}-12-06` } }]);
+    if (seen.yearInCoffee !== prefs.value.recapSeen.yearInCoffee) auth.setPreferences({ recapSeen: seen }).catch(() => undefined);
+  },
+  { immediate: true },
+);
 
 function go(change: { year?: number; mine?: boolean }): void {
   const query: Record<string, string> = { year: String(change.year ?? year.value) };

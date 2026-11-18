@@ -50,10 +50,13 @@ describe("recapsDueNow", () => {
     expect(recapsDueNow(prefs({ recapPushes: off, recapAutoSummaries: { ...off, weekly: true } }), mondayEight)).toHaveLength(1);
   });
 
-  it("yearly on 1 January, for its automatic summary only (its push comes later)", () => {
+  it("yearly on 1 January, with its push or its automatic summary", () => {
     const newYear = new Date("2027-01-01T08:00:00Z"); // a Friday
     const off = { weekly: false, monthly: false, yearly: false, yearInCoffee: false };
-    expect(recapsDueNow(prefs(), newYear)).toEqual([{ kind: "monthly", period: { start: "2026-12-01", end: "2026-12-31" } }]);
+    expect(recapsDueNow(prefs(), newYear)).toEqual([
+      { kind: "monthly", period: { start: "2026-12-01", end: "2026-12-31" } },
+      { kind: "yearly", period: { start: "2026-01-01", end: "2026-12-31" } },
+    ]);
     expect(recapsDueNow(prefs({ recapPushes: off, recapAutoSummaries: { ...off, yearly: true } }), newYear)).toEqual([{ kind: "yearly", period: { start: "2026-01-01", end: "2026-12-31" } }]);
   });
 
@@ -121,6 +124,30 @@ describe("processRecapTick", () => {
     const [row] = await db.select().from(recaps);
     expect(row).toMatchObject({ workspaceId, userId, kind: "weekly", periodStart: "2026-11-02", scope: "mine", status: "none" });
     expect(row!.notifiedAt).toBeInstanceOf(Date);
+  });
+
+  it("on 1 January the month and the year go as one push, linking to the year", async () => {
+    await brew("2026-03-03T08:00:00Z", 4);
+    await brew("2026-12-10T08:00:00Z", 5);
+    const send = vi.fn().mockResolvedValue(undefined);
+    const newYear = new Date("2027-01-01T08:00:00Z");
+    expect(await processRecapTick(newYear, send)).toEqual({ sent: 1, failed: 0 });
+    expect(send.mock.calls[0]![2]).toEqual({
+      title: "Your month and year in coffee",
+      message: "Your monthly and yearly recaps are ready.",
+      url: config.appUrl ? `${config.appUrl}/insights/recap?kind=yearly&start=2026-01-01&ws=${workspaceId}` : null,
+    });
+    const rows = await db.select().from(recaps);
+    expect(rows.map((r) => r.kind).sort()).toEqual(["monthly", "yearly"]);
+    expect(rows.every((r) => r.notifiedAt instanceof Date)).toBe(true);
+    expect(await processRecapTick(new Date("2027-01-01T08:15:00Z"), send)).toEqual({ sent: 0, failed: 0 });
+  });
+
+  it("the year on its own when December had no brews", async () => {
+    await brew("2026-03-03T08:00:00Z", 4);
+    const send = vi.fn().mockResolvedValue(undefined);
+    expect(await processRecapTick(new Date("2027-01-01T08:00:00Z"), send)).toEqual({ sent: 1, failed: 0 });
+    expect(send.mock.calls[0]![2]).toMatchObject({ title: "Your year in coffee", message: "2026 · 1 brew · avg 4.0 · best 4, Guji on the V60" });
   });
 
   it("skips a week without brews, and workspaces the person has left", async () => {
