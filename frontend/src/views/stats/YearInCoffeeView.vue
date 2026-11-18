@@ -5,7 +5,7 @@
 // the left or a swipe right to go back; arrow keys too, Escape closes.
 // Query: year (default this one from 7 December, else last year) and mine=0
 // for the bar's year.
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { recapsApi } from '../../api/recaps';
 import { membersApi } from '../../api/members';
@@ -16,7 +16,7 @@ import { localDateInput } from '../../lib/format';
 import { formatWeight } from '../../lib/stats';
 import { countFrame, splitNumber } from '../../lib/countUp';
 import { formatVolumeIn } from '../../lib/units';
-import { SONG_VOLUME, songSource } from '../../lib/yearSong';
+import { SONG_VOLUME, setSong, songPlaying, songUrl as songFor, stopSong } from '../../lib/yearSong';
 import type { Chip } from '../../lib/yearCompare';
 import { completeFigures, latestYear, type FrozenYear } from '../../lib/yearInCoffee';
 import { markSeen } from '../../lib/recap';
@@ -74,7 +74,7 @@ function leave(): void {
 const FADE_MS = 600;
 function close(): void {
   const a = audio.value;
-  if (!a || a.paused) return leave();
+  if (a.paused) return leave();
   const from = a.volume;
   const started = performance.now();
   const step = (now: number) => {
@@ -87,32 +87,38 @@ function close(): void {
 }
 
 // Music (docs/api/recaps.md §11c "Motion and sound"): one song, your own if
-// you have one, else the built-in. It starts unmuted when Settings → Recaps
-// says so (yearMusic); the mute button changes it for this viewing only. A
-// browser plays sound only after a tap, so it starts on the first tap or
-// key; it pauses while the tab is hidden, the slide is held or paused.
-const audio = ref<HTMLAudioElement | null>(null);
+// you have one, else the built-in, on the shared player (lib/yearSong.ts). It
+// starts unmuted when Settings → Recaps says so (yearMusic); the mute button
+// changes it for this viewing only. A browser plays sound only inside a tap:
+// the banner and the Insights link start it in theirs; opened any other way
+// (a push, a shared link, a reload) the slides wait on a "Tap to start"
+// cover. It pauses while the tab is hidden, the slide is held or paused.
+const songUrl = computed(() => songFor(auth.user));
+const audio = shallowRef<HTMLAudioElement>(setSong(songUrl.value));
+watch(songUrl, (url) => (audio.value = setSong(url)));
 const muted = ref(!prefs.value.yearMusic);
-const uploadsOn = computed(() => auth.user?.features.yearSongUploads ?? false);
-const ownSong = computed(() => auth.user?.song ?? null);
-const songUrl = computed(() => {
-  const url = songSource(uploadsOn.value, Boolean(ownSong.value));
-  // A replaced song has the same address, so the upload time tells them apart.
-  return ownSong.value && uploadsOn.value ? `${url}?v=${encodeURIComponent(ownSong.value.uploadedAt)}` : url;
-});
+const tapped = ref(songPlaying()); // started by the tap that opened the slides
+const cover = computed(() => !muted.value && !tapped.value);
+const coverButton = ref<HTMLButtonElement | null>(null);
+watch(coverButton, (b) => b?.focus()); // so Enter or Space starts it too
+function begin(): void {
+  tapped.value = true;
+  audio.value.currentTime = 0;
+  play();
+}
 function play(): void {
   const a = audio.value;
-  if (!a || muted.value || held.value || paused.value || !a.paused || document.hidden) return;
+  if (cover.value || muted.value || held.value || paused.value || !a.paused || document.hidden) return;
   a.volume = SONG_VOLUME;
   void a.play().catch(() => undefined); // still locked: the next tap tries again
 }
 function toggleMute(): void {
   muted.value = !muted.value;
-  if (muted.value) audio.value?.pause();
+  if (muted.value) audio.value.pause();
   else play();
 }
 function onVisibility(): void {
-  if (document.hidden) audio.value?.pause();
+  if (document.hidden) audio.value.pause();
   else play();
 }
 
@@ -218,16 +224,15 @@ function onUp(e: PointerEvent): void {
   }
 }
 function onKey(e: KeyboardEvent): void {
-  play();
-  if (e.key === 'ArrowRight' || e.key === 'PageDown') move(1);
+  if (e.key === 'Escape') close();
+  else if (cover.value) return; // Enter or Space on the cover's button starts it
+  else if (e.key === 'ArrowRight' || e.key === 'PageDown') move(1);
   else if (e.key === 'ArrowLeft' || e.key === 'PageUp') move(-1);
-  else if (e.key === 'Escape') close();
   else return;
   e.preventDefault();
 }
 onMounted(() => {
   window.addEventListener('keydown', onKey);
-  window.addEventListener('pointerdown', play);
   document.addEventListener('visibilitychange', onVisibility);
 });
 // Moving on by itself (docs/api/recaps.md §11c "Moving on"): each slide
@@ -237,14 +242,15 @@ onMounted(() => {
 // the last slide. Moving by hand starts the new slide's time afresh.
 const HOLD_MS = 300;
 const paused = ref(false);
+
 const held = ref(false);
 const elapsed = ref(0);
 const duration = computed(() => (slide.value ? slideDuration(slide.value) : 0));
 const progress = computed(() => (duration.value ? Math.min(1, elapsed.value / duration.value) : 0));
-const running = computed(() => !!slide.value && !last.value && !paused.value && !held.value && !loading.value);
+const running = computed(() => !!slide.value && !last.value && !cover.value && !paused.value && !held.value && !loading.value);
 watch(index, () => (elapsed.value = 0));
 watch([held, paused], ([h, p]) => {
-  if (h || p) audio.value?.pause();
+  if (h || p) audio.value.pause();
   else play();
 });
 let clock = 0;
@@ -265,7 +271,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   cancelAnimationFrame(clock);
   window.removeEventListener('keydown', onKey);
-  window.removeEventListener('pointerdown', play);
+  stopSong(); // the player is shared: it doesn't stop with the slides
   document.removeEventListener('visibilitychange', onVisibility);
 });
 
@@ -326,7 +332,10 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
       </div>
     </div>
 
-    <audio ref="audio" :src="songUrl" loop preload="none" />
+    <button v-if="cover && !error" ref="coverButton" type="button" class="cover" @click="begin">
+      <strong>{{ mine ? 'Your' : 'The bar’s' }} {{ year }} in coffee</strong>
+      <span class="tap"><AppIcon name="play" /> Tap to start</span>
+    </button>
     <p v-if="error" class="stage center form-error" role="alert">{{ error }}</p>
     <p v-else-if="!slide" class="stage center" aria-live="polite">Loading your year…</p>
     <div v-else class="stage" :class="{ stale: loading }" @pointerdown="onDown" @pointerup="onUp" @pointercancel="held = false" @pointerleave="held = false" @contextmenu.prevent>
@@ -393,6 +402,8 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
   padding: max(12px, env(safe-area-inset-top)) 16px max(12px, env(safe-area-inset-bottom));
 }
 .top {
+  position: relative;
+  z-index: 2;
   display: grid;
   gap: 8px;
 }
@@ -442,6 +453,35 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
   min-width: var(--tap, 44px);
   min-height: var(--tap, 44px);
   cursor: pointer;
+}
+/* "Tap to start": over the slides, under the top bar (mute and close stay). */
+.cover {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  border: 0;
+  background: linear-gradient(160deg, var(--brand-tint), var(--bg) 60%);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.cover strong {
+  font-size: 1.6rem;
+}
+.cover .tap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: var(--on-brand);
+  font-weight: 600;
 }
 .stage {
   flex: 1;

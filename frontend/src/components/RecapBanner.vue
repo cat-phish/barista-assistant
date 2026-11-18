@@ -12,6 +12,7 @@ import { localDateInput } from '../lib/format';
 import { bannerFor, markSeen, recapsDue, type RecapDue } from '../lib/recap';
 import { periodLabel } from '../lib/recapPeriods';
 import { localDay } from '../lib/stats';
+import { startYearSong } from '../lib/yearSong';
 import { useAuthStore } from '../stores/auth';
 import { useWorkspaceStore } from '../stores/workspace';
 
@@ -79,7 +80,7 @@ async function dismiss(): Promise<void> {
       {{ banner.text }}
       <template v-for="(d, i) in banner.due" :key="d.kind">
         <template v-if="i"> · </template>
-        <RouterLink :to="linkTo(d)" :title="linkTitle(d)">{{ linkText(d, banner.due.length > 1) }}</RouterLink>
+        <RouterLink :to="linkTo(d)" :title="linkTitle(d)" @click="d.kind === 'yearInCoffee' && startYearSong(auth.user)">{{ linkText(d, banner.due.length > 1) }}</RouterLink>
       </template>
     </p>
     <button type="button" class="close" aria-label="Dismiss the recap banner" @click="dismiss">×</button>

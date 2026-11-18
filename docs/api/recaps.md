@@ -255,10 +255,14 @@ Play music is on (`yearMusic`, `auth.md` §1; off by default); the mute
 button in the top bar mutes it for that viewing only. The built-in song is a CC0 (public domain)
 track, `frontend/public/music/year-in-coffee.mp3`, its source in
 `CREDITS.md` beside it; CC0 waives all rights, so it sits fine in this AGPL
-app. It loops at 60% volume, starts on the first tap or key (browsers
-allow sound only then), pauses while the tab is hidden, the slide is held
-or paused, and fades out over
-0.6 s on close (`frontend/src/lib/yearSong.ts`).
+app. It loops at 60% volume on one player shared by the app
+(`frontend/src/lib/yearSong.ts`), since browsers allow sound only inside a
+tap: tapping the banner's link or the Insights "in coffee" card starts it
+from the beginning in that tap, then opens the slides. Opened any other way
+(a push, a shared link, a reload) with the music on, the slides wait on a
+"Tap to start" cover (Enter or Space too); muting skips it. It pauses while
+the tab is hidden, the slide is held or paused, fades out over 0.6 s on
+close and stops when the slides do.
 
 ## Banner
 

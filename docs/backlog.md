@@ -511,7 +511,7 @@ Recording a brew: what's measured, and how fast it is to log.
      switches; the banner stays through December until opened or
      dismissed. The yearly recap's push is on 1 January (with the
      monthly one: "Your monthly and yearly recaps are ready.").
-  5. **Music on a tap**: the audio player moves into a shared module
+  5. **(Done)** **Music on a tap**: the audio player moves into a shared module
      (`lib/yearSong.ts`); tapping the banner or the Insights link starts
      the song inside that tap, then opens the slides. Opened any other way
      (push, shared link, reload) the slides start on a "Tap to start"

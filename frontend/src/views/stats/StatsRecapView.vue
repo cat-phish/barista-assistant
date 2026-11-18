@@ -18,6 +18,7 @@ import { markSeen, recapFigures } from '../../lib/recap';
 import { justEnded, nextPeriod, periodLabel, periodOf, previousPeriod, type RecapKind } from '../../lib/recapPeriods';
 import { formatWeight, localDay } from '../../lib/stats';
 import { latestYear } from '../../lib/yearInCoffee';
+import { startYearSong } from '../../lib/yearSong';
 import { useAuthStore } from '../../stores/auth';
 import { useWorkspaceStore } from '../../stores/workspace';
 
@@ -142,7 +143,7 @@ const ratingSub = computed(() => {
       </div>
       <label class="mine"><input type="checkbox" :checked="mine" @change="go({ mine: ($event.target as HTMLInputElement).checked })" /> Only my brews</label>
     </div>
-    <RouterLink class="card year-link" :to="{ name: 'stats-year', query: { year: String(yearOnOffer), ...(mine ? {} : { mine: '0' }) } }">
+    <RouterLink class="card year-link" @click="startYearSong(auth.user)" :to="{ name: 'stats-year', query: { year: String(yearOnOffer), ...(mine ? {} : { mine: '0' }) } }">
       <strong>{{ mine ? 'Your' : 'The bar’s' }} {{ yearOnOffer }} in coffee</strong>
       <span class="muted">1 January to 6 December, as story slides ›</span>
     </RouterLink>
