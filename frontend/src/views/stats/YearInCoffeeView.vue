@@ -18,7 +18,7 @@ import { countFrame, splitNumber } from '../../lib/countUp';
 import { formatVolumeIn } from '../../lib/units';
 import { SONG_VOLUME, songSource } from '../../lib/yearSong';
 import { latestYear, yearFigures, yearPeriod } from '../../lib/yearInCoffee';
-import { MONTH_NAMES, personLabels, yearSlides } from '../../lib/yearSlides';
+import { MONTH_NAMES, personLabels, slideDuration, yearSlides } from '../../lib/yearSlides';
 import { useAuthStore } from '../../stores/auth';
 import { useWorkspaceStore } from '../../stores/workspace';
 
@@ -187,16 +187,21 @@ function move(by: 1 | -1): void {
 // Taps and swipes on the slide.
 let downX: number | null = null;
 let downY = 0;
+let downAt = 0;
 function onDown(e: PointerEvent): void {
   downX = e.clientX;
   downY = e.clientY;
+  downAt = performance.now();
+  held.value = true;
 }
 function onUp(e: PointerEvent): void {
+  held.value = false;
   if (downX === null) return;
   const dx = e.clientX - downX;
   const dy = e.clientY - downY;
   downX = null;
   if ((e.target as HTMLElement).closest('a, button, label, input')) return;
+  if (performance.now() - downAt > HOLD_MS) return; // a hold pauses; letting go isn't a tap
   if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) return move(dx < 0 ? 1 : -1);
   if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
     const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -216,7 +221,35 @@ onMounted(() => {
   window.addEventListener('pointerdown', play);
   document.addEventListener('visibilitychange', onVisibility);
 });
+// Moving on by itself (docs/api/recaps.md §11c "Moving on"): each slide
+// stays for slideDuration, then the next starts. The pause button, holding
+// the slide, a hidden tab, loading or a song upload pauses it; it stops on
+// the last slide. Moving by hand starts the new slide's time afresh.
+const HOLD_MS = 300;
+const paused = ref(false);
+const held = ref(false);
+const elapsed = ref(0);
+const duration = computed(() => (slide.value ? slideDuration(slide.value) : 0));
+const progress = computed(() => (duration.value ? Math.min(1, elapsed.value / duration.value) : 0));
+const running = computed(() => !!slide.value && !last.value && !paused.value && !held.value && !loading.value && !songBusy.value && !songError.value);
+watch(index, () => (elapsed.value = 0));
+let clock = 0;
+let before = 0;
+function tick(now: number): void {
+  const dt = Math.min(100, now - before); // a throttled or hidden tab doesn't jump ahead
+  before = now;
+  if (running.value && !document.hidden) {
+    elapsed.value += dt;
+    if (elapsed.value >= duration.value) move(1);
+  }
+  clock = requestAnimationFrame(tick);
+}
+onMounted(() => {
+  before = performance.now();
+  clock = requestAnimationFrame(tick);
+});
 onBeforeUnmount(() => {
+  cancelAnimationFrame(clock);
   window.removeEventListener('keydown', onKey);
   window.removeEventListener('pointerdown', play);
   document.removeEventListener('visibilitychange', onVisibility);
@@ -266,7 +299,7 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
   <div class="year" role="dialog" aria-modal="true" :aria-label="`${mine ? 'Your' : 'The bar\'s'} ${year} in coffee`">
     <div class="top">
       <div class="progress" aria-hidden="true">
-        <span v-for="(s, i) in slides" :key="s.key" class="seg" :class="{ done: i < index, now: i === index }" />
+        <span v-for="(s, i) in slides" :key="s.key" class="seg" :class="{ done: i < index }"><i v-if="i === index" :style="{ width: `${(last ? 1 : progress) * 100}%` }" /></span>
       </div>
       <div class="bar">
         <label class="mine"><input type="checkbox" :checked="mine" @change="go({ mine: ($event.target as HTMLInputElement).checked })" /> Only my brews</label>
@@ -300,7 +333,7 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
     </div>
     <p v-else-if="error" class="stage center form-error" role="alert">{{ error }}</p>
     <p v-else-if="!slide" class="stage center" aria-live="polite">Loading your year…</p>
-    <div v-else class="stage" :class="{ stale: loading }" @pointerdown="onDown" @pointerup="onUp">
+    <div v-else class="stage" :class="{ stale: loading }" @pointerdown="onDown" @pointerup="onUp" @pointercancel="held = false" @pointerleave="held = false">
       <Transition :name="direction" mode="out-in">
         <section :key="`${year}-${mine}-${slide.key}`" class="slide" :class="`slide-${slide.key}`" aria-live="polite">
           <p class="kicker">{{ slide.kicker }}</p>
@@ -338,6 +371,7 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
 
     <div v-if="slide" class="foot">
       <button type="button" class="btn btn-secondary" :disabled="index === 0" aria-label="Previous slide" @click="move(-1)">‹</button>
+      <button v-if="!last" type="button" class="btn btn-secondary" :aria-label="paused ? 'Play slides' : 'Pause slides'" @click="paused = !paused">{{ paused ? '▶' : '⏸' }}</button>
       <span class="count" aria-live="polite">{{ index + 1 }} / {{ slides.length }}</span>
       <button v-if="!last" type="button" class="btn btn-primary" aria-label="Next slide" @click="move(1)">›</button>
       <button v-else type="button" class="btn btn-primary" @click="close">Done</button>
@@ -369,10 +403,15 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
   height: 4px;
   border-radius: 2px;
   background: var(--border);
+  overflow: hidden;
 }
 .seg.done,
-.seg.now {
+.seg i {
   background: var(--brand);
+}
+.seg i {
+  display: block;
+  height: 100%;
 }
 .bar {
   display: flex;

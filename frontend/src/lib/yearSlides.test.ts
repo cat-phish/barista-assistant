@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RecapFigures } from './recap';
 import type { YearFigures } from './yearInCoffee';
-import { hourLabel, personLabels, summaryLines, yearSlides, type SlideContext } from './yearSlides';
+import { hourLabel, personLabels, slideDuration, SLIDE_MS, summaryLines, yearSlides, type SlideContext } from './yearSlides';
 
 const recap = (over: Partial<RecapFigures> = {}): RecapFigures => ({
   brews: 0, previousBrews: 0, daysBrewed: 0, rating: null, previousRating: null, best: [], caffeineMg: null, volume: null, forOthers: null,
@@ -77,5 +77,17 @@ describe('Your Year in Coffee slides (backlog 65)', () => {
 
   it('labels hours on a 12-hour clock', () => {
     expect([0, 7, 12, 17].map(hourLabel)).toEqual(['12 am', '7 am', '12 pm', '5 pm']);
+  });
+
+  it('gives each slide time to be read before moving on', () => {
+    expect(slideDuration({ key: 'intro', kicker: '', value: '2026', sub: 'So far' })).toBe(SLIDE_MS.intro);
+    const plain = slideDuration({ key: 'brews', kicker: '', value: '7 brews' });
+    const withSub = slideDuration({ key: 'brews', kicker: '', value: '7 brews', sub: 'on 5 days' });
+    const withList = slideDuration({ key: 'origins', kicker: '', value: 'Kenya', list: [{ name: 'a', detail: '' }, { name: 'b', detail: '' }] });
+    expect(plain).toBe(SLIDE_MS.base);
+    expect(withSub).toBeGreaterThan(plain);
+    expect(withList).toBe(SLIDE_MS.base + 2 * SLIDE_MS.row);
+    const long = slideDuration({ key: 'people', kicker: '', value: 'x', sub: 'y', list: Array(20).fill({ name: 'a', detail: '' }) });
+    expect(long).toBe(SLIDE_MS.max);
   });
 });

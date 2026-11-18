@@ -110,3 +110,12 @@ export function personLabels(people: ReadonlyArray<{ userId: string }>, me: stri
   const unnamed = people.map((p) => p.userId).filter((id) => id !== me && !nameOf(id));
   return (userId) => (userId === me ? 'You' : (nameOf(userId) ?? `Member ${unnamed.indexOf(userId) + 1 || unnamed.length + 1}`));
 }
+
+// How long a slide stays before the next one starts by itself
+// (docs/api/recaps.md §11c "Moving on"): long enough to read it.
+export const SLIDE_MS = { intro: 4000, base: 5000, sub: 1500, row: 700, max: 12000 };
+export function slideDuration(slide: Slide): number {
+  if (slide.key === 'intro') return SLIDE_MS.intro;
+  const ms = SLIDE_MS.base + (slide.sub ? SLIDE_MS.sub : 0) + (slide.list?.length ?? 0) * SLIDE_MS.row;
+  return Math.min(SLIDE_MS.max, ms);
+}

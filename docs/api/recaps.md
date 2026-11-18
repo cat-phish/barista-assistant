@@ -147,6 +147,15 @@ Month bars grow in, list rows step in 60 ms apart, and the summary drops
 confetti (CSS only). With `prefers-reduced-motion`, nothing moves or
 counts: every slide shows as it ends.
 
+**Moving on:** each slide moves on by itself once it has had time to be
+read (`slideDuration` in `frontend/src/lib/yearSlides.ts`: 4 s for the
+first, 5 s for the others, plus 1.5 s with a line under the figure and
+0.7 s per list row, at most 12 s); its bar in the progress strip fills as
+it runs. It stops on the summary. The ⏸ button pauses it (▶ goes on),
+and so does holding a finger or the mouse on the slide, a hidden tab,
+loading, or a song upload. Taps, swipes and arrow keys still move at
+once, and the new slide's time starts afresh.
+
 Music: a ♪ picker in the top bar sets `yearSong` (`auth.md` §1): No music
 (default), Built-in song, or My song (only where the server allows uploads,
 `auth.md` §1 "Year song"). The built-in song is a CC0 (public domain)
