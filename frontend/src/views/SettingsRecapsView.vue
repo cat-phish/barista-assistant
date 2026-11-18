@@ -60,6 +60,45 @@ const aiHint = computed(() => aiModes.find((m) => m.value === prefs.value.recapA
 const times = Array.from({ length: 96 }, (_, i) => `${String(Math.floor(i / 4)).padStart(2, '0')}:${String((i % 4) * 15).padStart(2, '0')}`);
 const timeLabel = (t: string) => new Date(`2000-01-01T${t}:00`).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 const zone = computed(() => prefs.value.timeZone ?? browserTimeZone());
+
+// Your Year in Coffee's music (recaps.md §11c "Motion and sound") and your
+// own song (auth.md §1 "Year song"): 10 MB, checked again by the server.
+const uploadsOn = computed(() => auth.user?.features.yearSongUploads ?? false);
+const ownSong = computed(() => auth.user?.song ?? null);
+const SONG_MAX_MB = 10;
+const songInput = ref<HTMLInputElement | null>(null);
+const songBusy = ref(false);
+const songError = ref('');
+async function onSongFile(e: Event): Promise<void> {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  songError.value = '';
+  if (file.size > SONG_MAX_MB * 1024 * 1024) {
+    songError.value = `That file is over ${SONG_MAX_MB} MB.`;
+    return;
+  }
+  songBusy.value = true;
+  try {
+    await auth.uploadSong(file);
+  } catch (err) {
+    songError.value = errorMessage(err);
+  } finally {
+    songBusy.value = false;
+  }
+}
+async function removeOwnSong(): Promise<void> {
+  songError.value = '';
+  songBusy.value = true;
+  try {
+    await auth.removeSong();
+  } catch (err) {
+    songError.value = errorMessage(err);
+  } finally {
+    songBusy.value = false;
+  }
+}
 </script>
 
 <template>
@@ -135,12 +174,42 @@ const zone = computed(() => prefs.value.timeZone ?? browserTimeZone());
       <p class="muted small">{{ aiHint }} It leaves out the details hidden under Settings → AI.<template v-if="!prefs.recaps && prefs.recapAi === 'auto'"> With recaps off, nothing is written automatically.</template></p>
     </section>
 
+    <section class="card stack" aria-labelledby="recap-year">
+      <h2 id="recap-year">Your Year in Coffee</h2>
+      <label class="checkbox">
+        <input type="checkbox" :checked="prefs.yearMusic" :disabled="saving" @change="set({ yearMusic: checked($event) })" />
+        Play music
+      </label>
+      <p class="muted small">It starts on your first tap. The 🔊 button on the slides mutes it for that viewing.</p>
+      <div v-if="uploadsOn" class="field">
+        <span class="label">Your song</span>
+        <div class="song-row">
+          <span v-if="ownSong" class="song-name">♪ {{ ownSong.name ?? 'Your song' }}</span>
+          <span v-else class="muted">None: the built-in song plays.</span>
+          <button type="button" class="btn btn-secondary" :disabled="songBusy" @click="songInput?.click()">{{ songBusy ? 'Saving…' : ownSong ? 'Replace' : 'Upload a song' }}</button>
+          <button v-if="ownSong" type="button" class="btn btn-secondary" :disabled="songBusy" @click="removeOwnSong">Remove</button>
+          <input ref="songInput" type="file" accept="audio/*" hidden @change="onSongFile" />
+        </div>
+        <p v-if="songError" class="form-error" role="alert">{{ songError }}</p>
+        <p v-else class="muted small">Plays instead of the built-in song. Up to {{ SONG_MAX_MB }} MB: MP3, M4A, Ogg, WebM, FLAC or WAV. Only you can play it.</p>
+      </div>
+    </section>
+
     <p v-if="error" class="form-error" role="alert">{{ error }}</p>
     <p class="visually-hidden" aria-live="polite">{{ saved ? 'Saved.' : '' }}</p>
   </SettingsLayout>
 </template>
 
 <style scoped>
+.song-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.song-name {
+  overflow-wrap: anywhere;
+}
 h2 {
   font-size: 1.15rem;
 }

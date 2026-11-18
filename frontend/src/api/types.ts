@@ -44,7 +44,7 @@ export interface UserPreferences {
   timeZone: string | null; // IANA name from the device; null = the server's
   recapAi: RecapAiMode;
   recapSeen: Partial<Record<'weekly' | 'monthly' | 'yearly', string>>; // the period start last opened or dismissed
-  yearSong: 'off' | 'builtin' | 'own'; // music on Your Year in Coffee
+  yearMusic: boolean; // Your Year in Coffee starts with its music on
   learnAboutMe: boolean; // docs/api/auth.md §1d
 }
 export type RecapPeriodChoice = 'weekly' | 'monthly' | 'both';

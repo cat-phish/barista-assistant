@@ -112,7 +112,7 @@ Not in a backup, like the rest of the account.
 ## Year song
 
 Your own song for Your Year in Coffee (recaps.md §11c, "Motion and sound"),
-one per account, played when `yearSong` is `own`. Only where the server
+one per account, played instead of the built-in song when there is one. Only where the server
 has `YEAR_SONG_UPLOADS=true` (server.md); off by default.
 
 - **Storage:** `PHOTO_DIR/songs/<userId>` (the name never comes from the
@@ -166,7 +166,7 @@ units, with defaults filled in. Storage is always grams, °C and metres;
 clients convert what they show and what's typed (roadmap: Units and defaults).
 
 ```json
-{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "forWho"], "repeatButtonsBy": "made", "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "startDelays": {}, "nudgeButtons": ["dose", "water"], "steepReminders": true, "restReminders": true, "restReminderRepeatDays": null, "restingInBrewPickerDefault": true, "greenStockAlerts": true, "recaps": true, "recapPeriods": "both", "weekStartsOn": 1, "recapBanner": true, "recapBannerDays": 3, "recapNotify": true, "recapNotifyTime": "08:00", "timeZone": null, "recapAi": "manual", "recapSeen": {}, "yearSong": "off", "learnAboutMe": true }
+{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "forWho"], "repeatButtonsBy": "made", "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "startDelays": {}, "nudgeButtons": ["dose", "water"], "steepReminders": true, "restReminders": true, "restReminderRepeatDays": null, "restingInBrewPickerDefault": true, "greenStockAlerts": true, "recaps": true, "recapPeriods": "both", "weekStartsOn": 1, "recapBanner": true, "recapBannerDays": 3, "recapNotify": true, "recapNotifyTime": "08:00", "timeZone": null, "recapAi": "manual", "recapSeen": {}, "yearMusic": false, "learnAboutMe": true }
 ```
 
 - `volumeUnit`: `fl_oz` | `ml`: the brew page's yield estimate, and a new
@@ -290,9 +290,11 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
   - `recapSeen`: `{ "weekly"?: "YYYY-MM-DD", "monthly"?: "YYYY-MM-DD", "yearly"?: "YYYY-MM-DD" }`,
     the start of the last period whose banner was opened or dismissed.
     Default `{}`. A `PATCH` sends the whole object.
-  - `yearSong`: `off` (default) | `builtin` | `own`: music on Your Year in
-    Coffee (`recaps.md` §11c, "Motion and sound"). `own` plays your
-    uploaded song ("Year song" below) and falls back to `off` without one.
+  - `yearMusic` (default `false`): Your Year in Coffee starts with its
+    music on (`recaps.md` §11c, "Motion and sound"); its mute button
+    changes it for that viewing only. It plays your own song ("Year
+    song" below) when you have one and the server allows uploads, else the
+    built-in one.
 - `learnAboutMe` (default `true`): Learn about me (§1d). Off, nothing is
   learned, likes and dislikes are refused (`409`) and hidden, and neither
   their learned list nor their votes go to the AI; the list is kept.

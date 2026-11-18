@@ -61,9 +61,6 @@ export const RECAP_PERIOD_CHOICES = ["weekly", "monthly", "both"] as const;
 export type RecapPeriodChoice = (typeof RECAP_PERIOD_CHOICES)[number];
 export const RECAP_AI_MODES = ["off", "manual", "auto"] as const; // auto: written when the period ends
 export type RecapAiMode = (typeof RECAP_AI_MODES)[number];
-// Music on Your Year in Coffee (docs/api/recaps.md §11c "Motion and sound"); own = the uploaded song.
-export const YEAR_SONGS = ["off", "builtin", "own"] as const;
-export type YearSong = (typeof YEAR_SONGS)[number];
 
 // Per person (docs/api/auth.md §1 preferences).
 export interface UserPreferences {
@@ -103,7 +100,7 @@ export interface UserPreferences {
   timeZone: string | null; // IANA name, from the person's device; null = the server's BREW_TIMEZONE
   recapAi: RecapAiMode;
   recapSeen: Partial<Record<"weekly" | "monthly" | "yearly", string>>; // the period start last opened or dismissed
-  yearSong: YearSong; // music on Your Year in Coffee, off until picked
+  yearMusic: boolean; // Your Year in Coffee starts with its music on (recaps.md §11c "Motion and sound")
   // Learn about me (docs/api/auth.md §1d): off, nothing is learned, the
   // feedback buttons are hidden and their learned list and votes aren't sent.
   learnAboutMe: boolean;
@@ -137,7 +134,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   timeZone: null,
   recapAi: "manual",
   recapSeen: {},
-  yearSong: "off",
+  yearMusic: false,
   learnAboutMe: true,
 };
 

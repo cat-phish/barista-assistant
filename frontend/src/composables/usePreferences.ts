@@ -35,7 +35,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   timeZone: null,
   recapAi: 'manual',
   recapSeen: {},
-  yearSong: 'off',
+  yearMusic: false,
   learnAboutMe: true,
 };
 export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { recipeRoastLevel: 'light', roastScale: 'names', ratingStep: 'half', hiddenFields: [], aiHidden: [], aiPreferences: [], autoAnalyze: false, autoAnalyzeDelayMinutes: 10, autoAnalyzeDailyCap: null, suggestSource: 'beanRecipe', suggestMaxBrews: 5, suggestAlternatives: [], beanReviews: true, beanReviewMaxBrews: 10, beanReviewRatedOnly: true, beanReviewBrewers: 'all', aiChat: true, chatMaxAttachments: 50, chatPeriodMaxBrews: 60, readLabels: true, labelWebLookup: false, labelWebContext: 'high', homeRoasting: false, homeRoasterName: 'Home roast', restDays: { filter: 7, espresso: 14, omni: 10 }, batchAddBeans: false, beanCarryOver: DEFAULT_BEAN_CARRY, timeZone: null };

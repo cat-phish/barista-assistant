@@ -5,7 +5,7 @@
 // too, Escape closes. Query: year (default the one just ended, or this one
 // "so far" from 1 December) and mine=0 for the bar's year. Outside the
 // Insights layout, so it can't use useStats().
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { statsApi } from '../../api/stats';
 import { membersApi } from '../../api/members';
@@ -63,69 +63,31 @@ function close(): void {
   requestAnimationFrame(step);
 }
 
-// Music (docs/api/recaps.md §11c "Motion and sound"): off until picked. A
-// browser plays sound only after a tap, so a remembered choice starts on the
-// first tap or key; it pauses while the tab is hidden.
+// Music (docs/api/recaps.md §11c "Motion and sound"): one song, your own if
+// you have one, else the built-in. It starts unmuted when Settings → Recaps
+// says so (yearMusic); the mute button changes it for this viewing only. A
+// browser plays sound only after a tap, so it starts on the first tap or
+// key; it pauses while the tab is hidden, the slide is held or paused.
 const audio = ref<HTMLAudioElement | null>(null);
-const song = computed(() => prefs.value.yearSong);
+const muted = ref(!prefs.value.yearMusic);
 const uploadsOn = computed(() => auth.user?.features.yearSongUploads ?? false);
 const ownSong = computed(() => auth.user?.song ?? null);
 const songUrl = computed(() => {
-  const url = songSource(song.value, uploadsOn.value, Boolean(ownSong.value));
+  const url = songSource(uploadsOn.value, Boolean(ownSong.value));
   // A replaced song has the same address, so the upload time tells them apart.
-  return url && song.value === 'own' ? `${url}?v=${encodeURIComponent(ownSong.value!.uploadedAt)}` : url;
+  return ownSong.value && uploadsOn.value ? `${url}?v=${encodeURIComponent(ownSong.value.uploadedAt)}` : url;
 });
-
-// Your own song (docs/api/auth.md §1, "Year song"): 10 MB, checked again by the server.
-const SONG_MAX_MB = 10;
-const songInput = ref<HTMLInputElement | null>(null);
-const songBusy = ref(false);
-const songError = ref('');
-async function onSongFile(e: Event): Promise<void> {
-  const input = e.target as HTMLInputElement;
-  const file = input.files?.[0];
-  input.value = '';
-  if (!file) return;
-  songError.value = '';
-  if (file.size > SONG_MAX_MB * 1024 * 1024) {
-    songError.value = `That file is over ${SONG_MAX_MB} MB.`;
-    return;
-  }
-  songBusy.value = true;
-  try {
-    audio.value?.pause();
-    await auth.uploadSong(file);
-    await nextTick();
-    play();
-  } catch (err) {
-    songError.value = errorMessage(err);
-  } finally {
-    songBusy.value = false;
-  }
-}
-async function removeOwnSong(): Promise<void> {
-  songError.value = '';
-  try {
-    await auth.removeSong();
-  } catch (err) {
-    songError.value = errorMessage(err);
-  }
-}
 function play(): void {
   const a = audio.value;
-  if (!a || !songUrl.value || !a.paused || document.hidden) return;
+  if (!a || muted.value || held.value || paused.value || !a.paused || document.hidden) return;
   a.volume = SONG_VOLUME;
   void a.play().catch(() => undefined); // still locked: the next tap tries again
 }
-async function pickSong(e: Event): Promise<void> {
-  const value = (e.target as HTMLSelectElement).value as typeof song.value;
-  await auth.setPreferences({ yearSong: value }).catch(() => undefined);
-  await nextTick(); // the new src first
-  play();
+function toggleMute(): void {
+  muted.value = !muted.value;
+  if (muted.value) audio.value?.pause();
+  else play();
 }
-watch(songUrl, (url) => {
-  if (!url) audio.value?.pause();
-});
 function onVisibility(): void {
   if (document.hidden) audio.value?.pause();
   else play();
@@ -223,7 +185,8 @@ onMounted(() => {
 });
 // Moving on by itself (docs/api/recaps.md §11c "Moving on"): each slide
 // stays for slideDuration, then the next starts. The pause button, holding
-// the slide, a hidden tab, loading or a song upload pauses it; it stops on
+// the slide (as in stories: the bars hide until you let go), a hidden tab
+// or loading pauses it; it stops on
 // the last slide. Moving by hand starts the new slide's time afresh.
 const HOLD_MS = 300;
 const paused = ref(false);
@@ -231,8 +194,12 @@ const held = ref(false);
 const elapsed = ref(0);
 const duration = computed(() => (slide.value ? slideDuration(slide.value) : 0));
 const progress = computed(() => (duration.value ? Math.min(1, elapsed.value / duration.value) : 0));
-const running = computed(() => !!slide.value && !last.value && !paused.value && !held.value && !loading.value && !songBusy.value && !songError.value);
+const running = computed(() => !!slide.value && !last.value && !paused.value && !held.value && !loading.value);
 watch(index, () => (elapsed.value = 0));
+watch([held, paused], ([h, p]) => {
+  if (h || p) audio.value?.pause();
+  else play();
+});
 let clock = 0;
 let before = 0;
 function tick(now: number): void {
@@ -296,7 +263,7 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
 </script>
 
 <template>
-  <div class="year" role="dialog" aria-modal="true" :aria-label="`${mine ? 'Your' : 'The bar\'s'} ${year} in coffee`">
+  <div class="year" :class="{ holding: held }" role="dialog" aria-modal="true" :aria-label="`${mine ? 'Your' : 'The bar\'s'} ${year} in coffee`">
     <div class="top">
       <div class="progress" aria-hidden="true">
         <span v-for="(s, i) in slides" :key="s.key" class="seg" :class="{ done: i < index }"><i v-if="i === index" :style="{ width: `${(last ? 1 : progress) * 100}%` }" /></span>
@@ -304,36 +271,20 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
       <div class="bar">
         <label class="mine"><input type="checkbox" :checked="mine" @change="go({ mine: ($event.target as HTMLInputElement).checked })" /> Only my brews</label>
         <span class="tools">
-          <label class="music">
-            <span aria-hidden="true">♪</span>
-            <select :value="song" aria-label="Music" @change="pickSong">
-              <option value="off">No music</option>
-              <option value="builtin">Built-in song</option>
-              <option v-if="uploadsOn" value="own">My song</option>
-            </select>
-          </label>
+          <button type="button" class="icon" :aria-label="muted ? 'Unmute music' : 'Mute music'" :aria-pressed="!muted" @click="toggleMute">{{ muted ? '🔇' : '🔊' }}</button>
           <button type="button" class="icon" aria-label="Close" @click="close">✕</button>
         </span>
       </div>
     </div>
 
-    <div v-if="uploadsOn && song === 'own' && (index === 0 || !ownSong || songError)" class="own-song">
-      <span v-if="ownSong" class="song-name">♪ {{ ownSong.name ?? 'Your song' }}</span>
-      <span v-else>No song uploaded yet.</span>
-      <button type="button" class="btn btn-secondary" :disabled="songBusy" @click="songInput?.click()">{{ songBusy ? 'Uploading…' : ownSong ? 'Replace' : 'Upload a song' }}</button>
-      <button v-if="ownSong" type="button" class="btn btn-secondary" :disabled="songBusy" @click="removeOwnSong">Remove</button>
-      <input ref="songInput" type="file" accept="audio/*" hidden @change="onSongFile" />
-      <p v-if="songError" class="form-error" role="alert">{{ songError }}</p>
-      <p v-else class="hint">Up to {{ SONG_MAX_MB }} MB: MP3, M4A, Ogg, WebM, FLAC or WAV. Only you can play it.</p>
-    </div>
-    <audio ref="audio" :src="songUrl ?? undefined" loop preload="none" />
+    <audio ref="audio" :src="songUrl" loop preload="none" />
     <div v-if="!asked" class="stage center">
       <p>Recaps are off in <RouterLink :to="{ name: 'settings-recaps' }">Settings → Recaps</RouterLink>, so nothing loads until you ask.</p>
       <button type="button" class="btn btn-primary" @click="asked = true">Show my year</button>
     </div>
     <p v-else-if="error" class="stage center form-error" role="alert">{{ error }}</p>
     <p v-else-if="!slide" class="stage center" aria-live="polite">Loading your year…</p>
-    <div v-else class="stage" :class="{ stale: loading }" @pointerdown="onDown" @pointerup="onUp" @pointercancel="held = false" @pointerleave="held = false">
+    <div v-else class="stage" :class="{ stale: loading }" @pointerdown="onDown" @pointerup="onUp" @pointercancel="held = false" @pointerleave="held = false" @contextmenu.prevent>
       <Transition :name="direction" mode="out-in">
         <section :key="`${year}-${mine}-${slide.key}`" class="slide" :class="`slide-${slide.key}`" aria-live="polite">
           <p class="kicker">{{ slide.kicker }}</p>
@@ -423,30 +374,10 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
   gap: 6px;
   align-items: center;
 }
-.tools,
-.music {
+.tools {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-.music select {
-  min-height: var(--tap, 44px);
-}
-.own-song {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding-top: 8px;
-  text-align: center;
-}
-.own-song p {
-  flex-basis: 100%;
-  margin: 0;
-}
-.song-name {
-  overflow-wrap: anywhere;
 }
 .icon {
   border: 0;
@@ -464,7 +395,24 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
   justify-content: center;
   overflow: hidden;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none; /* a long press holds, not a menu */
   touch-action: pan-y;
+}
+/* Holding the slide, as in stories: everything stops, and the bars fade
+   once it's clearly a hold rather than a tap. */
+.top,
+.foot {
+  transition: opacity 0.15s;
+}
+.holding .top,
+.holding .foot {
+  opacity: 0;
+  transition: opacity 0.2s 0.25s;
+}
+.holding .slide *,
+.holding .confetti span {
+  animation-play-state: paused;
 }
 .stage.center {
   flex-direction: column;
