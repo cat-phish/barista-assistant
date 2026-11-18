@@ -32,23 +32,21 @@ export interface UserPreferences {
   restReminderRepeatDays: number | null; // 1–60
   restingInBrewPickerDefault: boolean; // a bean added resting is offered in the brew picker
   greenStockAlerts: boolean; // tell when a roast takes a green coffee below its low-stock threshold
-  // Recaps (docs/api/recaps.md §11c). recaps off: no banner, notification or
-  // automatic summary; Insights → Recap still shows one when asked.
-  recaps: boolean;
-  recapPeriods: RecapPeriodChoice;
+  // Recaps (docs/api/recaps.md §11c): always there; per kind, what
+  // announces one and whether its AI summary is written for you.
   weekStartsOn: number; // 0 = Sunday … 6 = Saturday; also Insights' weekly buckets
-  recapBanner: boolean;
+  recapBanners: RecapSwitches;
   recapBannerDays: number; // 1–14
-  recapNotify: boolean;
+  recapPushes: RecapSwitches;
   recapNotifyTime: string; // "HH:MM", 15-minute steps, in timeZone
   timeZone: string | null; // IANA name from the device; null = the server's
-  recapAi: RecapAiMode;
+  recapAutoSummaries: RecapSwitches; // off: a Write summary button only
   recapSeen: Partial<Record<'weekly' | 'monthly' | 'yearly', string>>; // the period start last opened or dismissed
   yearMusic: boolean; // Your Year in Coffee starts with its music on
   learnAboutMe: boolean; // docs/api/auth.md §1d
 }
-export type RecapPeriodChoice = 'weekly' | 'monthly' | 'both';
-export type RecapAiMode = 'off' | 'manual' | 'auto';
+export type RecapSwitchKind = 'weekly' | 'monthly' | 'yearly' | 'yearInCoffee';
+export type RecapSwitches = Record<RecapSwitchKind, boolean>;
 // docs/api/auth.md §1 repeatButtonsBy.
 export type RepeatButtonGroup = 'made' | 'brewer' | 'recipe' | 'coffee';
 export type RepeatKeep = 'bean' | 'recipe' | 'size' | 'doseWater' | 'temp' | 'grinder' | 'grind' | 'waterProfile' | 'dilution' | 'window' | 'prepTools' | 'grinderWeights' | 'vessel' | 'notes' | 'forWho';

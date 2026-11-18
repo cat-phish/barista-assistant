@@ -1,6 +1,6 @@
 import type { RecapSummaryJobData } from "@barista/shared/jobs";
 import { periodOf, previousPeriod } from "@barista/shared/recapPeriods";
-import { DEFAULT_PREFERENCES, DEFAULT_WORKSPACE_SETTINGS, recaps, users, withDefaults, workspaces } from "@barista/shared/schema";
+import { userPreferences, DEFAULT_WORKSPACE_SETTINGS, recaps, users, withDefaults, workspaces } from "@barista/shared/schema";
 import { isCustomPrompt } from "@barista/shared/aiPrompt";
 import { eq } from "drizzle-orm";
 import { resolveAi } from "./ai/resolve.js";
@@ -27,7 +27,7 @@ export async function writeRecapSummary({ recapId }: RecapSummaryJobData): Promi
     .where(eq(recaps.id, recapId));
   if (!row) return { status: "skipped", reason: "recap no longer exists" };
   const { recap } = row;
-  const prefs = withDefaults(DEFAULT_PREFERENCES, row.preferences ?? null);
+  const prefs = userPreferences(row.preferences ?? null);
   const hidden = new Set(withDefaults(DEFAULT_WORKSPACE_SETTINGS, row.settings ?? null).aiHidden);
   const period = periodOf(recap.kind, recap.periodStart, prefs.weekStartsOn);
   const context = await loadPeriodContext({

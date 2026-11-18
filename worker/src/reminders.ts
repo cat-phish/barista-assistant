@@ -6,7 +6,7 @@ import {
   beans,
   brewers,
   brewLogs,
-  DEFAULT_PREFERENCES,
+  userPreferences,
   drinks,
   greenCoffees,
   notificationChannels,
@@ -71,7 +71,7 @@ async function isMember(userId: string, workspaceId: string): Promise<boolean> {
 
 async function preferencesOf(userId: string) {
   const [user] = await db.select({ preferences: users.preferences }).from(users).where(eq(users.id, userId));
-  return user ? withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null) : null;
+  return user ? userPreferences(user.preferences ?? null) : null;
 }
 
 // Sends to each enabled channel and Web Push device; one failing doesn't

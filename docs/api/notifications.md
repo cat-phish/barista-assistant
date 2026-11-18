@@ -291,17 +291,17 @@ Sends "Test from Barista-Assistant" to the device, enabled or not.
 
 Weekly and monthly recaps (recaps.md §11c).
 
-- **Preferences:** `recaps` and `recapNotify` (both default `true`),
-  `recapPeriods`, `weekStartsOn`, `recapNotifyTime` (default `"08:00"`) and
-  `timeZone` (auth.md §1).
+- **Preferences:** `recapPushes` and `recapAutoSummaries` (per kind),
+  `weekStartsOn`, `recapNotifyTime` (default `"08:00"`) and `timeZone`
+  (auth.md §1).
 - **Scheduling:** a BullMQ job scheduler on the reminder queue
   (`recap-tick`, cron `*/15 * * * *`), set when the backend starts. Each
-  tick (`worker/src/recaps.ts`) finds the people with both preferences on
-  whose local time (their `timeZone`, else the workspace's `timeZone`
+  tick (`worker/src/recaps.ts`) finds the people with a kind's push or
+  automatic summary on whose local time (their `timeZone`, else the workspace's `timeZone`
   (§2), else `BREW_TIMEZONE`, else UTC; a person's workspaces in different
   zones are checked in each) has
   reached `recapNotifyTime` on the **first day** of a new week or month, for
-  each kind in `recapPeriods`.
+  each such kind (weekly and monthly; yearly joins with backlog 65 step 4).
 - **What's sent:** for the period just ended, one notification per
   workspace the person brewed in (and still belongs to); none for a period
   without their brews. A brew's day is its local date, as Insights counts
@@ -312,9 +312,11 @@ Weekly and monthly recaps (recaps.md §11c).
     starting with the workspace's name when more than one is sent;
   - link `<APP_URL>/insights/recap?kind=weekly&start=2026-11-02&ws=<id>`,
     which switches to that workspace.
-- **AI summary first:** with `recapAi` `auto` and AI in the workspace, the
-  summary (llm-contract.md §9f) is written on the row before sending, once
-  per row; a failure is recorded there and doesn't stop the notification.
+- **AI summary first:** with that kind's `recapAutoSummaries` on and AI in
+  the workspace, the summary (llm-contract.md §9f) is written on the row
+  before sending, once per row; a failure is recorded there and doesn't
+  stop the notification. With the push off it's written all the same and
+  the row is claimed with nothing sent.
 - **Once only:** a `recaps` row (scope `mine`) claims each send through its
   `notified_at`. A send that fails on every channel, or finds no enabled
   channel, gives the claim back, so a later tick that day tries again. Only

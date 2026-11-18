@@ -9,7 +9,8 @@ import { db } from "../db.js";
 import { isDuplicateEntryError, parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import {
-  DEFAULT_PREFERENCES,
+  migratePreferences,
+  userPreferences,
   users,
   withDefaults,
   workspaceInvites,
@@ -79,7 +80,7 @@ export interface SoleOwnerConflict {
 type SongColumns = Partial<Pick<User, "songMime" | "songBytes" | "songName" | "songUploadedAt">>;
 function toPublicUser(user: Pick<User, "id" | "email"> & SongColumns & { name?: string | null; preferences?: User["preferences"]; isAdmin?: boolean; emailVerifiedAt?: Date | null }): PublicUser {
   const song = user.songMime && user.songUploadedAt ? { name: user.songName ?? null, bytes: user.songBytes ?? 0, uploadedAt: user.songUploadedAt.toISOString() } : null;
-  return { id: user.id, email: user.email, name: user.name ?? null, preferences: withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null), emailVerified: Boolean(user.emailVerifiedAt), isAdmin: user.isAdmin ?? false, song, features: { yearSongUploads: yearSongUploadsOn() } };
+  return { id: user.id, email: user.email, name: user.name ?? null, preferences: userPreferences(user.preferences ?? null), emailVerified: Boolean(user.emailVerifiedAt), isAdmin: user.isAdmin ?? false, song, features: { yearSongUploads: yearSongUploadsOn() } };
 }
 
 // Brute-force protection, shared by every endpoint that checks a password
@@ -254,7 +255,7 @@ authRouter.patch("/me/preferences", requireAuth, async (req: Request, res: Respo
   const preferences = await db.transaction(async (tx) => {
     const [row] = await tx.select({ preferences: users.preferences }).from(users).where(eq(users.id, userId)).for("update");
     if (!row) return null;
-    const merged = { ...(row.preferences ?? {}), ...body };
+    const merged = { ...migratePreferences(row.preferences ?? null), ...body }; // old recap keys go
     await tx.update(users).set({ preferences: merged }).where(eq(users.id, userId));
     return merged;
   });
@@ -263,7 +264,7 @@ authRouter.patch("/me/preferences", requireAuth, async (req: Request, res: Respo
     sendError(res, 401, "Not authenticated");
     return;
   }
-  res.json({ preferences: withDefaults(DEFAULT_PREFERENCES, preferences) });
+  res.json({ preferences: userPreferences(preferences) });
 });
 
 // Changing the password bumps session_version, which revokes every other

@@ -1,7 +1,7 @@
 import { and, asc, eq, isNotNull, isNull } from "drizzle-orm";
 import { sendNotification } from "@barista/shared/notify";
 import { addDays } from "@barista/shared/recapPeriods";
-import { beans, DEFAULT_PREFERENCES, users, withDefaults, workspaceMembers, workspaces, type UserPreferences } from "@barista/shared/schema";
+import { beans, userPreferences, users, workspaceMembers, workspaces, type UserPreferences } from "@barista/shared/schema";
 import { sendWebPush } from "@barista/shared/webPush";
 import { config } from "./config.js";
 import { db } from "./db.js";
@@ -70,7 +70,7 @@ export async function processBeanRestTick(now: Date = new Date(), send: Send = s
   const due = new Map<string, { userId: string; workspaceId: string; day: string; beans: typeof rows }>();
   for (const row of rows) {
     if (row.restingUntil === null) continue;
-    const prefs = withDefaults(DEFAULT_PREFERENCES, row.preferences ?? null);
+    const prefs = userPreferences(row.preferences ?? null);
     const { day, time } = zonedNow(now, recapZone(prefs, row.settings));
     if (!restReminderDue({ restingUntil: row.restingUntil, restLastRemindedOn: row.restLastRemindedOn }, prefs, day, time)) continue;
     const key = `${row.userId}:${row.workspaceId}`;

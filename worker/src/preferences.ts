@@ -3,7 +3,7 @@
 // the person's items, the workspace's lines and, for suggestions, their
 // latest likes and dislikes, so a dislike counts before the list catches up.
 import { and, desc, eq, gt, isNotNull } from "drizzle-orm";
-import { beans, DEFAULT_PREFERENCES, DEFAULT_WORKSPACE_SETTINGS, parameterSuggestions, users, withDefaults, workspaceMembers, workspaces, type SuggestedRoute, type SuggestionFeedback } from "@barista/shared/schema";
+import { beans, userPreferences, DEFAULT_WORKSPACE_SETTINGS, parameterSuggestions, users, withDefaults, workspaceMembers, workspaces, type SuggestedRoute, type SuggestionFeedback } from "@barista/shared/schema";
 import type { AiDetail } from "@barista/shared/aiDetails";
 import { preferenceLine, withPreferenceDefaults } from "@barista/shared/aiPreferences";
 import { db } from "./db.js";
@@ -88,7 +88,7 @@ export async function loadPreferences(
     r.personId && options.votes ? votesFor(r.personId, r.workspaceId, hidden, RECENT_VOTES) : Promise.resolve([]),
   ]);
   // Learn about me off (docs/api/auth.md §1d): only the workspace's lines.
-  const learns = !!person && withDefaults(DEFAULT_PREFERENCES, person.preferences ?? null).learnAboutMe;
+  const learns = !!person && userPreferences(person.preferences ?? null).learnAboutMe;
   const input: PreferencesInput = {
     mine: learns ? withPreferenceDefaults(person.p).items.map(preferenceLine) : [],
     workspace: withDefaults(DEFAULT_WORKSPACE_SETTINGS, ws?.settings ?? null).aiPreferences,

@@ -25,7 +25,7 @@ and fix the references.
 **Contents**
 - A. Settings & configuration: 1–4
 - B. Brewing & logging: 5–9, 59
-- Added last, not yet sorted into groups: 60–67 (60–63 beans, 64 AI, 65 Insights, 66 accounts, 67 brewing)
+- Added last, not yet sorted into groups: 60–69 (60–63 beans, 64 AI, 65 Insights, 66 accounts, 67 brewing, 68–69 Insights)
 - C. Recipes: 10
 - D. AI suggestions: 11–15
 - E. Insights: 16–21
@@ -406,7 +406,7 @@ Recording a brew: what's measured, and how fast it is to log.
 
 - **Status:** in progress (numbered last to avoid renumbering; belongs in E),
   branch `coffee-wrapped`. Decided: the name **Your Year in Coffee**;
-  figures live, like other recaps; the bar's year names members, as a
+  figures live while being built, frozen from 7 December once the plan below is done; the bar's year names members, as a
   name set under Settings → Account (`auth.md` §1, "Name"; email stays the
   login), else a stand-in ("Member 1"); the journal shows the name too,
   the CSV keeps the email. Phase 2, the slides at `/insights/year`, is built, with motion and music (the music picker, and uploads of your own song behind `YEAR_SONG_UPLOADS`); the built-in CC0 track is still to be picked. Phase 1,
@@ -443,8 +443,7 @@ Recording a brew: what's measured, and how fast it is to log.
   - **Workspace-wide:** "Only mine" on by default (CLAUDE.md rule 13);
     off gives the bar's year (everyone's brews, who brewed most only
     if we decide to show names).
-  - **Reaching it:** the recap banner and a notification on 1 January
-    (notifications.md §1b), and an Insights → Wrapped entry.
+  - **Reaching it:** see plan step 4 (7 December) and the Insights link.
   - **Motion and sound** (planned next): slides animate (numbers count up,
     bars grow, lists step in, confetti on the summary; still under
     reduced motion). Slides move on by themselves; hold to pause, as in
@@ -468,17 +467,59 @@ Recording a brew: what's measured, and how fast it is to log.
     Or drop the Play music setting altogether, since it can't start the
     music on its own: the slides could always open muted, with the mute
     button as the only switch.
+- **Plan for what's left** (decided 2026-11-17, in this order; one diff
+  each; update `recaps.md` §11c and `auth.md` §1 with each):
+  0. **Settings → Recaps rework.** `recaps` and `recapPeriods` go: weekly,
+     monthly and yearly recaps always exist. Four kinds (weekly, monthly,
+     yearly, Your Year in Coffee), each with its own **Banner**, **Push**
+     and **AI summary** switch (banner and push on by default). AI on:
+     written automatically when the period is out; off: a **Write
+     summary** button only. `recapBanner`, `recapNotify` and `recapAi`
+     become per-kind; old values carry over (`recapAi: auto` → all AI
+     on; `recapPeriods: weekly` → monthly banner and push off; `recaps:
+     false` → all banners and pushes off). `recapBannerDays` and
+     `recapNotifyTime` stay shared. **Any AI button or choice anywhere
+     shows only when the workspace has a model set up**: audit the
+     others and add it as a CLAUDE.md rule.
+  1. **Yearly tab** on Insights → Recap, beside weekly and monthly: always
+     1 January–31 December, live like them, ready on 1 January, with its
+     own AI summary (kind `yearly`).
+  2. **Your Year in Coffee frozen on 7 December**: covers 1 January–
+     6 December, out on 7 December (Spotify-style; Spotify doesn't count
+     December either). The worker freezes everyone's figures on
+     7 December, so the year-figure counting (`lib/yearInCoffee.ts` and
+     what it uses from `recap.ts` and `stats.ts`) moves into
+     `@barista/shared` for both worker and browser. Stored per person,
+     workspace, year and scope (mine, and the bar's), in a backup
+     (CLAUDE.md rule 8). Only these are frozen; the Yearly tab stays live.
+     Earlier years with no frozen copy are frozen on first open, same
+     dates. Not shown before 7 December (the Yearly tab is there for the
+     year so far). The "Compared with earlier years" chips use the same
+     1 January–6 December window.
+  3. **Its own AI summary**, built from the frozen figures (plus the
+     monthly summaries), written on 7 December when its AI switch is on;
+     kept with the frozen copy. Separate from the Yearly tab's: this one
+     is for sharing.
+  4. **Banner and push on 7 December** under Your Year in Coffee's own
+     switches; the banner stays through December until opened or
+     dismissed. The yearly recap's push is on 1 January (with the
+     monthly one: "Your monthly and yearly recaps are ready.").
+  5. **Music on a tap**: the audio player moves into a shared module
+     (`lib/yearSong.ts`); tapping the banner or the Insights link starts
+     the song inside that tap, then opens the slides. Opened any other way
+     (push, shared link, reload) the slides start on a "Tap to start"
+     cover that starts the song. Play music stays.
+  6. **Shareable image**: the summary card drawn to a story-size canvas
+     (1080×1920, reusing `lib/chartImage.ts`), shared via the Web Share
+     API or downloaded; drawn so 68 (video) can reuse it.
+  - Built-in CC0 track still to be picked (Free Music Archive, OpenGameArt
+    or Freesound, CC0 filter; not Pixabay or incompetech).
 - **Size:** L (figures + slides; AI summary; image; notification).
 - **Depends on:** nothing; reuses recaps (18).
 - **Open questions:**
-  - The name: "Coffee Wrapped", "Brew Year", "Your Year in Coffee"?
-  - Should the year's figures be frozen when it ends, so later edits to
-    brews or beans don't change it (recaps today are worked out live)?
-  - The bar's year: show members by name (most brews, best cup), or
-    keep it anonymous?
-  - Which figures need a minimum number of brews to be worth a card
-    (skip a card rather than show "1 origin")?
   - Does a viewer get the workspace-wide version?
+  - Settled: the name, card minimums and members by name (Status above);
+    only Your Year in Coffee is frozen (7 December); recaps stay live.
 
 ### 66. Review per-person privacy inside a workspace
 
@@ -546,6 +587,28 @@ Recording a brew: what's measured, and how fast it is to log.
   queue, storage, decoding untrusted files).
 - **Size:** M.
 - **Depends on:** 65 (slides, song).
+
+### 69. Year in Coffee: richer slide animations
+
+- **Status:** idea (numbered last to avoid renumbering; belongs in E).
+- **Why:** the slides (65) animate today with a count-up, growing bars,
+  rows stepping in and confetti on the summary. Fine, but every slide
+  moves the same way; more varied motion would make the year feel like
+  a show rather than a list.
+- **Approach:** ideas to pick from, each slide its own:
+  - Transitions between slides that differ by card, not one fade.
+  - Busiest month and weekday as charts that draw themselves; favourite
+    hour on a clock face whose hand sweeps round.
+  - Origins on a map that lights up country by country.
+  - Top flavors blooming out of the flavor wheel.
+  - Coffee used and volume drunk as a jar or cup that fills.
+  - The summary card assembling from the earlier slides' figures.
+  - Timed to the song's beat where the built-in track allows.
+  - Still CSS (or the Web Animations API) with no new library unless one
+    earns it; `prefers-reduced-motion` keeps everything still, as now.
+- **Size:** M (per slide, S each).
+- **Depends on:** 65 (slides). Worth doing before 68 (video), so the
+  video records the richer motion.
 
 ## C. Recipes
 

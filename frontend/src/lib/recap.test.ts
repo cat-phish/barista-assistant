@@ -111,7 +111,8 @@ describe('recapFigures', () => {
 });
 
 describe('recap banner', () => {
-  const prefs: RecapBannerPrefs = { recaps: true, recapPeriods: 'both', weekStartsOn: 1, recapBanner: true, recapBannerDays: 3, recapSeen: {} };
+  const on = { weekly: true, monthly: true, yearly: true, yearInCoffee: true };
+  const prefs: RecapBannerPrefs = { weekStartsOn: 1, recapBanners: on, recapBannerDays: 3, recapSeen: {} };
   const lastWeek: RecapDue = { kind: 'weekly', period: { start: '2026-11-02', end: '2026-11-08' } };
   const october: RecapDue = { kind: 'monthly', period: { start: '2026-10-01', end: '2026-10-31' } };
 
@@ -121,7 +122,7 @@ describe('recap banner', () => {
     expect(recapsDue(prefs, '2026-11-11')).toEqual([lastWeek]); // day 3
     expect(recapsDue(prefs, '2026-11-12')).toEqual([]); // day 4
     expect(recapsDue({ ...prefs, recapBannerDays: 10 }, '2026-11-09')).toEqual([lastWeek, october]);
-    expect(recapsDue({ ...prefs, recapPeriods: 'monthly', recapBannerDays: 10 }, '2026-11-09')).toEqual([october]);
+    expect(recapsDue({ ...prefs, recapBanners: { ...on, weekly: false }, recapBannerDays: 10 }, '2026-11-09')).toEqual([october]);
   });
 
   it('follows the week start', () => {
@@ -129,9 +130,9 @@ describe('recap banner', () => {
     expect(recapsDue({ ...prefs, weekStartsOn: 0 }, '2026-11-09')).toEqual([{ kind: 'weekly', period: { start: '2026-11-01', end: '2026-11-07' } }]);
   });
 
-  it('is off with recaps or the banner off, and once seen', () => {
-    expect(recapsDue({ ...prefs, recaps: false }, '2026-11-09')).toEqual([]);
-    expect(recapsDue({ ...prefs, recapBanner: false }, '2026-11-09')).toEqual([]);
+  it('is off with that kind\'s banner off, and once seen', () => {
+    expect(recapsDue({ ...prefs, recapBanners: { ...on, weekly: false, monthly: false } }, '2026-11-09')).toEqual([]);
+    expect(recapsDue({ ...prefs, recapBanners: { ...on, weekly: false } }, '2026-11-09')).toEqual([]); // only a week just ended
     expect(recapsDue({ ...prefs, recapSeen: { weekly: '2026-11-02' } }, '2026-11-09')).toEqual([]);
     expect(recapsDue({ ...prefs, recapSeen: { weekly: '2026-10-26' } }, '2026-11-09')).toEqual([lastWeek]);
   });

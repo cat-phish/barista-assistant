@@ -1,8 +1,9 @@
 import { MAX_PREFERENCE_TEXT, MAX_PREFERENCES } from "@barista/shared/aiPreferences";
 import { z } from "zod";
+import type { RecapSwitches } from "@barista/shared/schema";
 import { BEAN_CARRY_KEYS } from "@barista/shared/beanCarry";
 import { CHAT_PERIOD_BREWS_MAX, CHAT_PERIOD_BREWS_MIN } from "@barista/shared/chatPeriod";
-import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, LABEL_WEB_CONTEXTS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_CHAT_ATTACHMENTS, MAX_REST_DAYS, MAX_REVIEW_BREWS, MAX_SUGGEST_BREWS, NUDGE_KEYS, RECAP_AI_MODES, RECAP_PERIOD_CHOICES, REMEMBER_KEYS, REPEAT_BUTTON_GROUPS, REPEAT_KEEPS, RATING_STEPS, ROAST_LEVELS, ROAST_SCALES, ROAST_TYPES, type RoastType, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
+import { ALTITUDE_UNITS, AUTO_ANALYZE_DELAYS, LABEL_WEB_CONTEXTS, MAX_AUTO_ANALYZE_DAILY_CAP, MAX_CHAT_ATTACHMENTS, MAX_REST_DAYS, MAX_REVIEW_BREWS, MAX_SUGGEST_BREWS, NUDGE_KEYS, REMEMBER_KEYS, REPEAT_BUTTON_GROUPS, REPEAT_KEEPS, RATING_STEPS, ROAST_LEVELS, ROAST_SCALES, ROAST_TYPES, type RoastType, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, TEMPERATURE_UNITS, THEMES, VOLUME_UNITS } from "@barista/shared/schema";
 import { AI_DETAILS } from "@barista/shared/aiDetails";
 import { ROLES } from "./auth/membership.js";
 
@@ -86,6 +87,9 @@ function isTimeZone(name: string): boolean {
 }
 const localDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD");
 
+// Per-kind recap switches: the whole object, every kind (docs/api/auth.md §1).
+const recapSwitches = z.object({ weekly: z.boolean(), monthly: z.boolean(), yearly: z.boolean(), yearInCoffee: z.boolean() }).strict() satisfies z.ZodType<RecapSwitches>;
+
 export const preferencesSchema = z
   .object({
     volumeUnit: z.enum(VOLUME_UNITS),
@@ -122,15 +126,13 @@ export const preferencesSchema = z
     restingInBrewPickerDefault: z.boolean(),
     greenStockAlerts: z.boolean(),
     // Recaps (docs/api/recaps.md §11c).
-    recaps: z.boolean(),
-    recapPeriods: z.enum(RECAP_PERIOD_CHOICES),
     weekStartsOn: z.number().int().min(0).max(6),
-    recapBanner: z.boolean(),
+    recapBanners: recapSwitches,
     recapBannerDays: z.number().int().min(1).max(14),
-    recapNotify: z.boolean(),
+    recapPushes: recapSwitches,
     recapNotifyTime: z.string().regex(/^([01]\d|2[0-3]):(00|15|30|45)$/, "HH:MM in 15-minute steps"),
     timeZone: z.string().max(64).refine(isTimeZone, "an IANA time zone").nullable(),
-    recapAi: z.enum(RECAP_AI_MODES),
+    recapAutoSummaries: recapSwitches,
     recapSeen: z.object({ weekly: localDate, monthly: localDate, yearly: localDate }).partial().strict(),
     yearMusic: z.boolean(),
     learnAboutMe: z.boolean(), // docs/api/auth.md §1d

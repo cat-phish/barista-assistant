@@ -35,10 +35,9 @@ describe("recap summaries", () => {
     // Sunday weeks: 1 Nov is a start.
     await owner.agent.patch("/api/auth/me/preferences").send({ weekStartsOn: 0 });
     expect((await owner.agent.post(base).send({ ...week, periodStart: "2026-11-01" })).status).toBe(202);
-    await owner.agent.patch("/api/auth/me/preferences").send({ recapAi: "off" });
-    const off = await owner.agent.post(base).send({ kind: "monthly", periodStart: "2026-10-01", scope: "all" });
-    expect(off.status).toBe(409);
-    expect(off.body.code).toBe("recap_ai_off");
+    // Automatic summaries off still leaves Write summary (docs/api/recaps.md §11c).
+    await owner.agent.patch("/api/auth/me/preferences").send({ recapAutoSummaries: { weekly: false, monthly: false, yearly: false, yearInCoffee: false } });
+    expect((await owner.agent.post(base).send({ kind: "monthly", periodStart: "2026-10-01", scope: "all" })).status).toBe(202);
   });
 
   it("viewers can read but not ask; others' workspaces are off limits", async () => {

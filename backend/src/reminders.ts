@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { DEFAULT_PREFERENCES, notificationChannels, pushSubscriptions, users, withDefaults } from "@barista/shared/schema";
+import { userPreferences, notificationChannels, pushSubscriptions, users } from "@barista/shared/schema";
 import { webPushSettings } from "./config.js";
 import { db } from "./db.js";
 import { enqueueGreenLow, enqueueRateReminder, enqueueSteepReminder } from "./queue.js";
@@ -9,14 +9,14 @@ import { enqueueGreenLow, enqueueRateReminder, enqueueSteepReminder } from "./qu
 export async function reminderDelayMinutes(userId: string): Promise<number | null> {
   const [user] = await db.select({ preferences: users.preferences }).from(users).where(eq(users.id, userId));
   if (!user) return null;
-  const prefs = withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null);
+  const prefs = userPreferences(user.preferences ?? null);
   if (!prefs.rateReminders) return null;
   return (await hasEnabledChannel(userId)) ? prefs.rateReminderMinutes : null;
 }
 
 export async function preferencesOf(userId: string) {
   const [user] = await db.select({ preferences: users.preferences }).from(users).where(eq(users.id, userId));
-  return user ? withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null) : null;
+  return user ? userPreferences(user.preferences ?? null) : null;
 }
 
 // An enabled channel, or an enabled Web Push device while the server has

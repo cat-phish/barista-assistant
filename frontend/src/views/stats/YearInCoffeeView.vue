@@ -96,7 +96,6 @@ function onVisibility(): void {
 }
 
 // One request covers the year and the one before it.
-const asked = ref(prefs.value.recaps);
 const data = ref<StatsData | null>(null);
 const members = ref<Member[]>([]); // for names on the bar's year
 const loading = ref(false);
@@ -104,7 +103,7 @@ const error = ref('');
 let request = 0;
 async function load(): Promise<void> {
   const ws = workspaces.current?.id;
-  if (!ws || !asked.value) return;
+  if (!ws) return;
   const n = ++request;
   loading.value = true;
   error.value = '';
@@ -123,7 +122,7 @@ async function load(): Promise<void> {
     if (n === request) loading.value = false;
   }
 }
-watch([year, mine, asked, () => workspaces.current?.id], () => void load(), { immediate: true });
+watch([year, mine, () => workspaces.current?.id], () => void load(), { immediate: true });
 
 const slides = computed(() => {
   const d = data.value;
@@ -284,11 +283,7 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
     </div>
 
     <audio ref="audio" :src="songUrl" loop preload="none" />
-    <div v-if="!asked" class="stage center">
-      <p>Recaps are off in <RouterLink :to="{ name: 'settings-recaps' }">Settings → Recaps</RouterLink>, so nothing loads until you ask.</p>
-      <button type="button" class="btn btn-primary" @click="asked = true">Show my year</button>
-    </div>
-    <p v-else-if="error" class="stage center form-error" role="alert">{{ error }}</p>
+    <p v-if="error" class="stage center form-error" role="alert">{{ error }}</p>
     <p v-else-if="!slide" class="stage center" aria-live="polite">Loading your year…</p>
     <div v-else class="stage" :class="{ stale: loading }" @pointerdown="onDown" @pointerup="onUp" @pointercancel="held = false" @pointerleave="held = false" @contextmenu.prevent>
       <Transition :name="direction" mode="out-in">

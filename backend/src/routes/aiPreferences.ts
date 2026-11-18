@@ -12,7 +12,7 @@ import {
   type AiPreference,
   type AiPreferences,
 } from "@barista/shared/aiPreferences";
-import { DEFAULT_PREFERENCES, DEFAULT_WORKSPACE_SETTINGS, users, withDefaults, workspaces } from "@barista/shared/schema";
+import { userPreferences, DEFAULT_WORKSPACE_SETTINGS, users, withDefaults, workspaces } from "@barista/shared/schema";
 import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { requireAi } from "../aiConfig.js";
@@ -131,7 +131,7 @@ async function learningOff(workspaceId: string): Promise<boolean> {
 // Learn about me (docs/api/auth.md §1d): the person's own switch.
 export async function learnsAboutMe(userId: string): Promise<boolean> {
   const [row] = await db.select({ preferences: users.preferences }).from(users).where(eq(users.id, userId));
-  return withDefaults(DEFAULT_PREFERENCES, row?.preferences ?? null).learnAboutMe;
+  return userPreferences(row?.preferences ?? null).learnAboutMe;
 }
 export const LEARN_OFF = "Learn about me is off (Settings → Learned preferences)";
 

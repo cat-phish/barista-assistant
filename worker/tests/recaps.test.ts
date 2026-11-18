@@ -39,12 +39,13 @@ describe("recapsDueNow", () => {
     expect(recapsDueNow(prefs({ weekStartsOn: 0 }), new Date("2026-11-08T08:00:00Z"))).toEqual([{ kind: "weekly", period: { start: "2026-11-01", end: "2026-11-07" } }]);
   });
 
-  it("monthly on the 1st; nothing with recaps or notifications off", () => {
+  it("monthly on the 1st; a kind is due while its push or its automatic summary is on", () => {
     const first = new Date("2026-12-01T08:00:00Z"); // a Tuesday
+    const off = { weekly: false, monthly: false, yearly: false, yearInCoffee: false };
     expect(recapsDueNow(prefs(), first)).toEqual([{ kind: "monthly", period: { start: "2026-11-01", end: "2026-11-30" } }]);
-    expect(recapsDueNow(prefs({ recapPeriods: "weekly" }), first)).toEqual([]);
-    expect(recapsDueNow(prefs({ recaps: false }), mondayEight)).toEqual([]);
-    expect(recapsDueNow(prefs({ recapNotify: false }), mondayEight)).toEqual([]);
+    expect(recapsDueNow(prefs({ recapPushes: { ...off, weekly: true } }), first)).toEqual([]);
+    expect(recapsDueNow(prefs({ recapPushes: off }), mondayEight)).toEqual([]);
+    expect(recapsDueNow(prefs({ recapPushes: off, recapAutoSummaries: { ...off, weekly: true } }), mondayEight)).toHaveLength(1);
   });
 
   it("uses the workspace's zone for someone without their own, then the server's", () => {
@@ -162,9 +163,9 @@ describe("processRecapTick", () => {
     expect(await processRecapTick(new Date("2026-11-09T16:00:00Z"), send)).toEqual({ sent: 1, failed: 0 }); // 8:00 there
   });
 
-  it("recapAi auto writes the summary first, once, and a failure doesn't stop the notification", async () => {
+  it("an automatic summary is written first, once, and a failure doesn't stop the notification", async () => {
     await brew("2026-11-03T08:00:00Z", 4);
-    await db.update(users).set({ preferences: { timeZone: "Europe/London", recapAi: "auto" } }).where(eq(users.id, userId));
+    await db.update(users).set({ preferences: { timeZone: "Europe/London", recapAutoSummaries: { weekly: true, monthly: true, yearly: true, yearInCoffee: true } } }).where(eq(users.id, userId));
     llm.mockReset();
     llm.mockRejectedValueOnce(new Error("AI down"));
     const failing = vi.fn().mockRejectedValue(new NotificationError("answered 503"));
@@ -176,7 +177,7 @@ describe("processRecapTick", () => {
     expect(llm).toHaveBeenCalledTimes(1);
   });
 
-  it("recapAi auto: the summary is on the row when the notification goes", async () => {
+  it("an old stored recapAi auto still writes it: the summary is on the row when the notification goes", async () => {
     await brew("2026-11-03T08:00:00Z", 4);
     await db.update(users).set({ preferences: { timeZone: "Europe/London", recapAi: "auto" } }).where(eq(users.id, userId));
     llm.mockReset();
@@ -188,10 +189,27 @@ describe("processRecapTick", () => {
     expect(send).toHaveBeenCalledTimes(1);
   });
 
-  it("sends nothing with notifications off", async () => {
+  it("sends nothing with notifications off (an old stored recapNotify false too)", async () => {
     await brew("2026-11-03T08:00:00Z", 4);
     await db.update(users).set({ preferences: { timeZone: "Europe/London", recapNotify: false } }).where(eq(users.id, userId));
     const send = vi.fn().mockResolvedValue(undefined);
     expect(await processRecapTick(monday, send)).toEqual({ sent: 0, failed: 0 });
+    await db.update(users).set({ preferences: { timeZone: "Europe/London", recapPushes: { weekly: false, monthly: true, yearly: true, yearInCoffee: true } } }).where(eq(users.id, userId));
+    expect(await processRecapTick(monday, send)).toEqual({ sent: 0, failed: 0 });
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("push off, automatic summary on: the summary is written and nothing is sent", async () => {
+    await brew("2026-11-03T08:00:00Z", 4);
+    const off = { weekly: false, monthly: false, yearly: false, yearInCoffee: false };
+    await db.update(users).set({ preferences: { timeZone: "Europe/London", recapPushes: off, recapAutoSummaries: { ...off, weekly: true } } }).where(eq(users.id, userId));
+    llm.mockReset();
+    llm.mockResolvedValue({ summary: { summary: "Quiet week.", highlights: [] }, usage: null });
+    const send = vi.fn().mockResolvedValue(undefined);
+    expect(await processRecapTick(monday, send)).toEqual({ sent: 0, failed: 0 });
+    expect(await processRecapTick(monday, send)).toEqual({ sent: 0, failed: 0 });
+    expect(send).not.toHaveBeenCalled();
+    expect(llm).toHaveBeenCalledTimes(1);
+    expect(await db.select().from(recaps)).toMatchObject([{ status: "done", summary: "Quiet week." }]);
   });
 });

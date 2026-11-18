@@ -134,7 +134,9 @@ describe("roast scale", () => {
 });
 
 describe("preferences", () => {
-  const defaults = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "forWho"], repeatButtonsBy: "made", rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, nudgeButtons: ["dose", "water"], steepReminders: true, restReminders: true, restReminderRepeatDays: null, restingInBrewPickerDefault: true, greenStockAlerts: true, recaps: true, recapPeriods: "both", weekStartsOn: 1, recapBanner: true, recapBannerDays: 3, recapNotify: true, recapNotifyTime: "08:00", timeZone: null, recapAi: "manual", recapSeen: {}, yearMusic: false, learnAboutMe: true };
+  const ON = { weekly: true, monthly: true, yearly: true, yearInCoffee: true };
+  const OFF = { weekly: false, monthly: false, yearly: false, yearInCoffee: false };
+  const defaults = { volumeUnit: "fl_oz", showBothVolumes: false, altitudeUnit: "m", temperatureUnit: "c", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "forWho"], repeatButtonsBy: "made", rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, nudgeButtons: ["dose", "water"], steepReminders: true, restReminders: true, restReminderRepeatDays: null, restingInBrewPickerDefault: true, greenStockAlerts: true, weekStartsOn: 1, recapBanners: ON, recapBannerDays: 3, recapPushes: ON, recapNotifyTime: "08:00", timeZone: null, recapAutoSummaries: OFF, recapSeen: {}, yearMusic: false, learnAboutMe: true };
 
   it("come back on register and /me, defaults filled in", async () => {
     const user = await newUser();
@@ -152,7 +154,7 @@ describe("preferences", () => {
 
     expect((await a.agent.patch(path).send({ temperatureUnit: "f" })).body.preferences).toEqual({ ...defaults, temperatureUnit: "f" });
     const both = await a.agent.patch(path).send({ altitudeUnit: "ft", volumeUnit: "ml", showBothVolumes: true });
-    expect(both.body.preferences).toEqual({ volumeUnit: "ml", showBothVolumes: true, altitudeUnit: "ft", temperatureUnit: "f", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "forWho"], repeatButtonsBy: "made", rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, nudgeButtons: ["dose", "water"], steepReminders: true, restReminders: true, restReminderRepeatDays: null, restingInBrewPickerDefault: true, greenStockAlerts: true, recaps: true, recapPeriods: "both", weekStartsOn: 1, recapBanner: true, recapBannerDays: 3, recapNotify: true, recapNotifyTime: "08:00", timeZone: null, recapAi: "manual", recapSeen: {}, yearMusic: false, learnAboutMe: true });
+    expect(both.body.preferences).toEqual({ volumeUnit: "ml", showBothVolumes: true, altitudeUnit: "ft", temperatureUnit: "f", theme: "system", rateReminders: true, rateReminderMinutes: 15, rateLaterDefault: false, repeatKeeps: ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "forWho"], repeatButtonsBy: "made", rememberSetup: ["what", "brewer", "recipe", "bean", "grinder", "grind"], startDelays: {}, nudgeButtons: ["dose", "water"], steepReminders: true, restReminders: true, restReminderRepeatDays: null, restingInBrewPickerDefault: true, greenStockAlerts: true, weekStartsOn: 1, recapBanners: ON, recapBannerDays: 3, recapPushes: ON, recapNotifyTime: "08:00", timeZone: null, recapAutoSummaries: OFF, recapSeen: {}, yearMusic: false, learnAboutMe: true });
     expect((await a.agent.patch(path).send({ theme: "dark" })).body.preferences.theme).toBe("dark");
     expect((await a.agent.patch(path).send({ theme: "sepia" })).status).toBe(400);
 
@@ -192,16 +194,21 @@ describe("preferences", () => {
     }
   });
 
-  it("recaps: switches, periods, week start, banner days, notify time, time zone, AI mode, seen (docs/api/recaps.md)", async () => {
+  it("recaps: per-kind switches, week start, banner days, notify time, time zone, seen (docs/api/recaps.md)", async () => {
     const me = await newUser();
     const path = "/api/auth/me/preferences";
-    const set = { recaps: false, recapPeriods: "weekly", weekStartsOn: 0, recapBanner: false, recapBannerDays: 14, recapNotify: false, recapNotifyTime: "21:45", timeZone: "America/Los_Angeles", recapAi: "auto", recapSeen: { weekly: "2026-11-02" }, yearMusic: true };
+    const set = { weekStartsOn: 0, recapBanners: { ...ON, weekly: false }, recapBannerDays: 14, recapPushes: OFF, recapNotifyTime: "21:45", timeZone: "America/Los_Angeles", recapAutoSummaries: { ...OFF, yearInCoffee: true }, recapSeen: { weekly: "2026-11-02" }, yearMusic: true };
     const result = await me.agent.patch(path).send(set);
     expect(result.status).toBe(200);
     expect(result.body.preferences).toEqual({ ...defaults, ...set });
     expect((await me.agent.patch(path).send({ timeZone: null })).body.preferences.timeZone).toBeNull();
     for (const bad of [
-      { recapPeriods: "daily" },
+      { recaps: false },
+      { recapPeriods: "weekly" },
+      { recapAi: "auto" },
+      { recapBanners: { weekly: false } }, // the whole object
+      { recapPushes: { ...ON, daily: true } },
+      { recapAutoSummaries: { ...ON, weekly: "yes" } },
       { weekStartsOn: 7 },
       { weekStartsOn: 1.5 },
       { recapBannerDays: 0 },
@@ -210,12 +217,32 @@ describe("preferences", () => {
       { recapNotifyTime: "08:10" },
       { recapNotifyTime: "24:00" },
       { timeZone: "Mars/Olympus" },
-      { recapAi: "always" },
       { recapSeen: { daily: "2026-01-01" } },
       { recapSeen: { weekly: "2 Nov" } },
       { yearMusic: "loud" },
     ]) {
       expect((await me.agent.patch(path).send(bad)).status, JSON.stringify(bad)).toBe(400);
+    }
+  });
+
+  it("recaps: old stored settings carry over to the per-kind switches, and go on the next save", async () => {
+    const cases: Array<[Record<string, unknown>, Record<string, unknown>]> = [
+      [{ recapAi: "auto" }, { recapBanners: ON, recapPushes: ON, recapAutoSummaries: ON }],
+      [{ recapAi: "off" }, { recapBanners: ON, recapPushes: ON, recapAutoSummaries: OFF }],
+      [{ recapPeriods: "weekly" }, { recapBanners: { ...ON, monthly: false }, recapPushes: { ...ON, monthly: false } }],
+      [{ recapPeriods: "monthly", recapNotify: false }, { recapBanners: { ...ON, weekly: false }, recapPushes: OFF }],
+      [{ recaps: false, recapAi: "auto" }, { recapBanners: OFF, recapPushes: OFF, recapAutoSummaries: OFF }],
+      [{ recapBanner: false, recapPushes: { ...OFF, yearly: true } }, { recapBanners: OFF, recapPushes: { ...OFF, yearly: true } }],
+    ];
+    for (const [stored, expected] of cases) {
+      const me = await newUser();
+      await db.update(users).set({ preferences: stored as never }).where(eq(users.id, me.id));
+      const prefs = (await me.agent.get("/api/auth/me")).body.user.preferences;
+      expect(prefs, JSON.stringify(stored)).toMatchObject(expected);
+      for (const gone of ["recaps", "recapPeriods", "recapBanner", "recapNotify", "recapAi"]) expect(prefs).not.toHaveProperty(gone);
+      await me.agent.patch("/api/auth/me/preferences").send({ theme: "dark" });
+      const [row] = await db.select({ preferences: users.preferences }).from(users).where(eq(users.id, me.id));
+      expect(Object.keys(row!.preferences ?? {}).sort(), JSON.stringify(stored)).toEqual(["recapAutoSummaries", "recapBanners", "recapPushes", "theme"]);
     }
   });
 

@@ -5,6 +5,7 @@
 // Fields) is left out.
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
+import { useAiAvailable } from '../composables/useAiAvailable';
 import { usePreferences } from '../composables/usePreferences';
 import { useStats } from '../composables/useStats';
 import { CHART_PERIOD_PREFIX } from '../lib/statsRange';
@@ -26,9 +27,10 @@ const TABS: Array<{ name: string; text: string; field?: string; chat?: boolean }
 const route = useRoute();
 const stats = useStats();
 const { settings } = usePreferences();
+const aiAvailable = useAiAvailable(); // AI tabs and buttons only with a model set up
 const query = computed(() => Object.fromEntries(Object.entries(route.query).filter(([k]) => !k.startsWith(CHART_PERIOD_PREFIX))));
 const tabs = computed(() =>
-  TABS.filter((t) => (!t.field || !stats.hidden.value.has(t.field)) && (!t.chat || settings.value.aiChat)).map((t) => ({ to: { name: t.name, query: query.value }, text: t.text })),
+  TABS.filter((t) => (!t.field || !stats.hidden.value.has(t.field)) && (!t.chat || (settings.value.aiChat && aiAvailable.value))).map((t) => ({ to: { name: t.name, query: query.value }, text: t.text })),
 );
 </script>
 

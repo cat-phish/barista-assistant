@@ -2,8 +2,7 @@
 // Insights → Recap (docs/api/recaps.md §11c): a week or month of brewing at a
 // glance, with the period before for comparison. Its own period and
 // Mine / Everyone switch, in the query (kind, start, mine=0), so a
-// notification can link to one; the Insights filters don't apply. With
-// recaps off (Settings → Recaps) it waits for "Show recap".
+// notification can link to one; the Insights filters don't apply.
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { statsApi } from '../../api/stats';
@@ -29,14 +28,14 @@ const auth = useAuthStore();
 const stats = useStats();
 const { prefs, recipeRoastLevel } = usePreferences();
 const aiAvailable = useAiAvailable();
-const showSummary = computed(() => aiAvailable.value && prefs.value.recapAi !== 'off');
+// Write summary only with a model set up (docs/api/recaps.md §11c).
+const showSummary = aiAvailable;
 
 const today = localDateInput();
 const yearOnOffer = latestYear(today);
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
-// The periods the person gets recaps for; both are always viewable here.
-const kinds = computed<RecapKind[]>(() => (prefs.value.recapPeriods === 'monthly' ? ['monthly', 'weekly'] : ['weekly', 'monthly']));
-const kind = computed<RecapKind>(() => (str(route.query.kind) === 'monthly' || str(route.query.kind) === 'weekly' ? (str(route.query.kind) as RecapKind) : kinds.value[0]!));
+const kinds: RecapKind[] = ['weekly', 'monthly'];
+const kind = computed<RecapKind>(() => (str(route.query.kind) === 'monthly' || str(route.query.kind) === 'weekly' ? (str(route.query.kind) as RecapKind) : kinds[0]!));
 const weekStartsOn = computed(() => prefs.value.weekStartsOn);
 const current = computed(() => periodOf(kind.value, today, weekStartsOn.value));
 // The period shown: the one ?start falls in, else the last whole one; never past this one.
@@ -69,14 +68,13 @@ if (linkedWs) {
 }
 
 // One request covers the period and the one before it.
-const asked = ref(prefs.value.recaps);
 const data = ref<StatsData | null>(null);
 const loading = ref(false);
 const error = ref('');
 let request = 0;
 async function load(): Promise<void> {
   const ws = workspaces.current?.id;
-  if (!ws || !asked.value) return;
+  if (!ws) return;
   const n = ++request;
   loading.value = true;
   error.value = '';
@@ -89,13 +87,13 @@ async function load(): Promise<void> {
     if (n === request) loading.value = false;
   }
 }
-watch([() => period.value.start, kind, mine, asked, () => workspaces.current?.id], () => void load(), { immediate: true });
+watch([() => period.value.start, kind, mine, () => workspaces.current?.id], () => void load(), { immediate: true });
 
 // Opening the period just ended takes its banner off the brew page.
 watch(
   [() => period.value.start, kind],
   () => {
-    if (!prefs.value.recaps || period.value.start !== justEnded(kind.value, today, weekStartsOn.value).start) return;
+    if (period.value.start !== justEnded(kind.value, today, weekStartsOn.value).start) return;
     const seen = markSeen(prefs.value.recapSeen, [{ kind: kind.value, period: period.value }]);
     if (seen[kind.value] !== prefs.value.recapSeen[kind.value]) auth.setPreferences({ recapSeen: seen }).catch(() => undefined);
   },
@@ -144,11 +142,7 @@ const ratingSub = computed(() => {
       <span class="muted">{{ yearOnOffer === Number(today.slice(0, 4)) ? 'The year so far, as story slides' : 'The year in review, as story slides' }} ›</span>
     </RouterLink>
 
-    <div v-if="!asked" class="card ask">
-      <p>Recaps are off in <RouterLink :to="{ name: 'settings-recaps' }">Settings → Recaps</RouterLink>, so nothing loads until you ask.</p>
-      <button type="button" class="btn btn-primary" @click="asked = true">Show recap</button>
-    </div>
-    <p v-else-if="error" class="form-error" role="alert">{{ error }}</p>
+    <p v-if="error" class="form-error" role="alert">{{ error }}</p>
     <p v-else-if="loading && !figures" class="muted" aria-live="polite">Loading the recap…</p>
     <template v-else-if="figures">
       <p v-if="!figures.brews" class="card empty">No brews {{ inProgress ? `this ${noun} yet` : `in this ${noun}` }}{{ mine ? ' by you' : '' }}.</p>
@@ -253,12 +247,8 @@ const ratingSub = computed(() => {
   align-items: center;
   gap: var(--space-1);
 }
-.ask,
 .empty {
   margin: 0;
-}
-.ask p {
-  margin: 0 0 var(--space-2);
 }
 .tiles {
   display: grid;

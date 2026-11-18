@@ -57,10 +57,11 @@ export const NUDGE_KEYS = ["dose", "water", "yield", "brix", "tds", "time", "tem
 export type NudgeKey = (typeof NUDGE_KEYS)[number];
 
 // Recaps (docs/api/recaps.md §11c): which periods, and how the AI summary is written.
-export const RECAP_PERIOD_CHOICES = ["weekly", "monthly", "both"] as const;
-export type RecapPeriodChoice = (typeof RECAP_PERIOD_CHOICES)[number];
-export const RECAP_AI_MODES = ["off", "manual", "auto"] as const; // auto: written when the period ends
-export type RecapAiMode = (typeof RECAP_AI_MODES)[number];
+// The kinds with their own Settings → Recaps switches (docs/api/recaps.md
+// §11c "Settings"): the three recaps and Your Year in Coffee.
+export const RECAP_SWITCH_KINDS = ["weekly", "monthly", "yearly", "yearInCoffee"] as const;
+export type RecapSwitchKind = (typeof RECAP_SWITCH_KINDS)[number];
+export type RecapSwitches = Record<RecapSwitchKind, boolean>;
 
 // Per person (docs/api/auth.md §1 preferences).
 export interface UserPreferences {
@@ -88,17 +89,15 @@ export interface UserPreferences {
   restReminderRepeatDays: number | null; // 1–60
   restingInBrewPickerDefault: boolean; // a new resting bean's restInBrewPicker
   greenStockAlerts: boolean; // tell when a roast takes a green coffee below its low-stock threshold
-  // Recaps (docs/api/recaps.md §11c). recaps off: no banner, notification or
-  // automatic summary; Insights → Recap still shows one when asked.
-  recaps: boolean;
-  recapPeriods: RecapPeriodChoice;
+  // Recaps (docs/api/recaps.md §11c). Recaps always exist; these say, per
+  // kind, what announces one and whether its AI summary is written for you.
   weekStartsOn: number; // 0 = Sunday … 6 = Saturday; also Insights' weekly buckets
-  recapBanner: boolean; // the brew page's "recap is ready" banner
+  recapBanners: RecapSwitches; // the brew page's "recap is ready" banner
   recapBannerDays: number; // 1–14: how long after a period ends it shows
-  recapNotify: boolean; // a notification when a period ends
+  recapPushes: RecapSwitches; // a notification when a period ends
   recapNotifyTime: string; // "HH:MM", 15-minute steps, in timeZone
   timeZone: string | null; // IANA name, from the person's device; null = the server's BREW_TIMEZONE
-  recapAi: RecapAiMode;
+  recapAutoSummaries: RecapSwitches; // off: a Write summary button only
   recapSeen: Partial<Record<"weekly" | "monthly" | "yearly", string>>; // the period start last opened or dismissed
   yearMusic: boolean; // Your Year in Coffee starts with its music on (recaps.md §11c "Motion and sound")
   // Learn about me (docs/api/auth.md §1d): off, nothing is learned, the
@@ -124,15 +123,13 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   restReminderRepeatDays: null,
   restingInBrewPickerDefault: true,
   greenStockAlerts: true,
-  recaps: true,
-  recapPeriods: "both",
   weekStartsOn: 1,
-  recapBanner: true,
+  recapBanners: { weekly: true, monthly: true, yearly: true, yearInCoffee: true },
   recapBannerDays: 3,
-  recapNotify: true,
+  recapPushes: { weekly: true, monthly: true, yearly: true, yearInCoffee: true },
   recapNotifyTime: "08:00",
   timeZone: null,
-  recapAi: "manual",
+  recapAutoSummaries: { weekly: false, monthly: false, yearly: false, yearInCoffee: false },
   recapSeen: {},
   yearMusic: false,
   learnAboutMe: true,
@@ -312,6 +309,40 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
 
 export function withDefaults<T extends object>(defaults: T, stored: Partial<T> | null): T {
   return { ...defaults, ...(stored ?? {}) };
+}
+
+// Recap settings stored before the per-kind switches (docs/api/auth.md §1).
+interface LegacyRecapPreferences {
+  recaps?: boolean; // false: no banner, notification or automatic summary
+  recapPeriods?: "weekly" | "monthly" | "both";
+  recapBanner?: boolean;
+  recapNotify?: boolean;
+  recapAi?: "off" | "manual" | "auto";
+}
+const SWITCH_KEYS = ["recapBanners", "recapPushes", "recapAutoSummaries"] as const;
+
+// Stored preferences with the old recap keys turned into the per-kind
+// switches they meant, and dropped. A switch object already stored wins.
+export function migratePreferences(stored: Partial<UserPreferences> | null): Partial<UserPreferences> {
+  const { recaps, recapPeriods, recapBanner, recapNotify, recapAi, ...rest } = (stored ?? {}) as Partial<UserPreferences> & LegacyRecapPreferences;
+  if ([recaps, recapPeriods, recapBanner, recapNotify, recapAi].every((v) => v === undefined)) return rest;
+  const announced = (kind: RecapSwitchKind) =>
+    recaps !== false && !(kind === "weekly" && recapPeriods === "monthly") && !(kind === "monthly" && recapPeriods === "weekly");
+  const each = (on: (kind: RecapSwitchKind) => boolean) => Object.fromEntries(RECAP_SWITCH_KINDS.map((k) => [k, on(k)])) as RecapSwitches;
+  return {
+    recapBanners: each((k) => recapBanner !== false && announced(k)),
+    recapPushes: each((k) => recapNotify !== false && announced(k)),
+    recapAutoSummaries: each(() => recaps !== false && recapAi === "auto"),
+    ...rest,
+  };
+}
+
+// A person's preferences with defaults filled in, old recap keys migrated,
+// and each switch object complete (a kind added later starts at its default).
+export function userPreferences(stored: Partial<UserPreferences> | null): UserPreferences {
+  const prefs = withDefaults(DEFAULT_PREFERENCES, migratePreferences(stored));
+  for (const key of SWITCH_KEYS) prefs[key] = { ...DEFAULT_PREFERENCES[key], ...prefs[key] };
+  return prefs;
 }
 
 // Notification channels (docs/api/notifications.md §1b): where a person's

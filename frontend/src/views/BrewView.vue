@@ -763,7 +763,6 @@ watch(
 );
 // A source that needs a recipe or brewer can't run without one.
 const suggestBlocked = computed(() => {
-  if (!aiAvailable.value) return 'No AI is set up for this workspace (Settings → AI).';
   if (!bean.value) return 'Choose a bean to ask the AI.';
   const needs = sourceNeeds(suggestSource.value);
   if (needs === 'recipe' && !recipe.value) return 'Pick a recipe to compare its brews.';
@@ -1607,7 +1606,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         </div>
       </section>
 
-      <section class="card stack" aria-labelledby="ai-suggestion">
+      <section v-if="aiAvailable" class="card stack" aria-labelledby="ai-suggestion">
         <h2 id="ai-suggestion">AI suggestion</h2>
         <div class="suggest-pick">
           <div class="field">
@@ -2017,14 +2016,14 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         <!-- Rate later: the AI waits for the rating, offered with it on the entry. -->
         <template v-else-if="reminder">
           <p v-if="reminder === 'queued'" class="muted">
-            We'll remind you to rate it in {{ formatDelay(userPrefs.rateReminderMinutes) }}. The AI suggestion comes with the rating.
+            We'll remind you to rate it in {{ formatDelay(userPrefs.rateReminderMinutes) }}.<template v-if="aiAvailable"> The AI suggestion comes with the rating.</template>
           </p>
           <p v-else class="form-error" role="alert">
             The reminder couldn't be set{{ reminder === 'off' ? ': no notification service is on (Settings → Notifications)' : '' }}. Rate it from the journal when you're ready.
           </p>
         </template>
-        <p v-else-if="aiNeedsRating" class="muted">Rate it in the journal to get an AI suggestion: this workspace only analyzes rated brews.</p>
-        <template v-else>
+        <p v-else-if="aiNeedsRating && aiAvailable" class="muted">Rate it in the journal to get an AI suggestion: this workspace only analyzes rated brews.</p>
+        <template v-else-if="aiAvailable">
           <p v-if="aiState === 'queued' && savedDueAt" class="muted" aria-live="polite">
             An AI suggestion for your next brew of {{ beanLabel }} is on its way at {{ formatClock(savedDueAt) }}. It'll show here and in the journal.
           </p>

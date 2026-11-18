@@ -8,7 +8,7 @@ import { and, desc, eq, gt, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { mergeLearned, withPreferenceDefaults, type AiPreferences, type LearnedChange } from "@barista/shared/aiPreferences";
 import type { AiDetail } from "@barista/shared/aiDetails";
 import type { PreferencesJobData } from "@barista/shared/jobs";
-import { brewers, brewLogs, DEFAULT_PREFERENCES, DEFAULT_WORKSPACE_SETTINGS, llmAnalyses, parameterSuggestions, users, withDefaults, workspaces } from "@barista/shared/schema";
+import { brewers, brewLogs, userPreferences, DEFAULT_WORKSPACE_SETTINGS, llmAnalyses, parameterSuggestions, users, withDefaults, workspaces } from "@barista/shared/schema";
 import { resolveAi } from "./ai/resolve.js";
 import { loadBean, selectBrews, withJoins } from "./context.js";
 import { loadBrewProfile } from "./brewProfile.js";
@@ -187,7 +187,7 @@ export async function learnPreferences({ userId, workspaceId }: PreferencesJobDa
   const settings = withDefaults(DEFAULT_WORKSPACE_SETTINGS, ws.settings ?? null);
   const hidden = new Set<AiDetail>(settings.aiHidden);
   if (hidden.has("learnedPreferences")) return { status: "skipped", reason: "kept from the AI" };
-  if (!withDefaults(DEFAULT_PREFERENCES, person.preferences ?? null).learnAboutMe) return { status: "skipped", reason: "Learn about me is off" };
+  if (!userPreferences(person.preferences ?? null).learnAboutMe) return { status: "skipped", reason: "Learn about me is off" };
   const prefs = withPreferenceDefaults(person.p);
   const through = prefs.through[workspaceId];
   const since = through ? new Date(through) : new Date(started.getTime() - FIRST_LOOKBACK_MS);

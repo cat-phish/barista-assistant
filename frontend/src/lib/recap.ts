@@ -118,14 +118,14 @@ export function recapFigures(data: StatsData, previous: StatsData | null, period
 // that it would announce, before checking they had any of your brews. Each
 // shows from the day after it ends for recapBannerDays days, until opened
 // or dismissed (recapSeen holds the last period start seen, per kind).
-export type RecapBannerPrefs = Pick<UserPreferences, 'recaps' | 'recapPeriods' | 'weekStartsOn' | 'recapBanner' | 'recapBannerDays' | 'recapSeen'>;
+export type RecapBannerPrefs = Pick<UserPreferences, 'weekStartsOn' | 'recapBanners' | 'recapBannerDays' | 'recapSeen'>;
 export interface RecapDue {
   kind: RecapKind;
   period: RecapPeriod;
 }
 export function recapsDue(prefs: RecapBannerPrefs, today: string): RecapDue[] {
-  if (!prefs.recaps || !prefs.recapBanner) return [];
-  const kinds: RecapKind[] = prefs.recapPeriods === 'both' ? ['weekly', 'monthly'] : [prefs.recapPeriods];
+  // Yearly joins with its banner (backlog 65, plan step 4).
+  const kinds = (['weekly', 'monthly'] as const).filter((kind) => prefs.recapBanners[kind]);
   return kinds
     .map((kind) => ({ kind, period: justEnded(kind, today, prefs.weekStartsOn) }))
     .filter(({ kind, period }) => daysAfter(period, today) <= prefs.recapBannerDays && (prefs.recapSeen[kind] ?? '') < period.start);

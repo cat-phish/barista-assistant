@@ -24,8 +24,7 @@ inclusive:
   Monday by default). Insights' weekly charts use the same weeks (§11, "How
   the client counts").
 - **monthly:** a calendar month.
-- **yearly:** a calendar year, for Your Year in Coffee (below). Not a
-  `recapPeriods` choice: weekly and monthly recaps are unaffected.
+- **yearly:** a calendar year, for Your Year in Coffee (below).
 
 The recap a person is offered is the one **just ended**: the last whole
 period before today's. Insights → Recap can step back to any earlier one,
@@ -33,14 +32,22 @@ and forward to the period in progress ("so far").
 
 ## Settings
 
-Per person, in `users.preferences` (auth.md §1): `recaps`, `recapPeriods`,
-`weekStartsOn`, `recapBanner`, `recapBannerDays`, `recapNotify`,
-`recapNotifyTime`, `timeZone`, `recapAi`, `recapSeen`. Settings → Recaps
-saves them as they change, with the browser's time zone. The AI summary's
-choice is shown only when the workspace has AI.
+Weekly, monthly and yearly recaps always exist; nothing turns them off.
+Per person, in `users.preferences` (auth.md §1): `weekStartsOn`,
+`recapBanners`, `recapBannerDays`, `recapPushes`, `recapNotifyTime`,
+`timeZone`, `recapAutoSummaries`, `recapSeen`. Settings → Recaps saves them
+as they change, with the browser's time zone.
 
-With `recaps` off there's no banner, notification or automatic summary, and
-Insights → Recap waits for a **Show recap** button before it loads.
+The three switch objects are per kind: `weekly`, `monthly`, `yearly` and
+`yearInCoffee` (Your Year in Coffee), shown as a grid with a **Banner**,
+**Push** and **AI summary** column. Banner days and push time are shared.
+The AI summary column shows only when the workspace has AI. Off, a recap
+still has its **Write summary** button; with no AI set up, neither the
+column nor the button shows (the rule for every AI button). Today the
+banner, the push and the automatic summary cover weekly and monthly; the
+`yearly` and `yearInCoffee` switches are saved and take effect with the
+yearly tab, Your Year in Coffee's own summary and its banner and push
+(backlog 65, plan steps 1–4).
 
 ## Insights → Recap
 
@@ -48,7 +55,7 @@ Route `/insights/recap` (`stats-recap`), query:
 
 | Param | Meaning |
 |---|---|
-| `kind` | `weekly` \| `monthly`; default the first in `recapPeriods` |
+| `kind` | `weekly` \| `monthly`; default `weekly` |
 | `start` | any day in the period to show (never past today's); default the one just ended |
 | `mine` | `0`: everyone's brews in the workspace; default only the person's own |
 | `ws` | a workspace id (the notification's link): switches to it if it's one of the person's, then leaves the address |
@@ -124,8 +131,7 @@ Insights tabs, linked from the top of Insights → Recap ("Your 2025 in
 coffee"). Query: `year` (default and latest: this year "so far" from 1
 December, else the one just ended) and `mine=0` for the bar's year (an
 **Only my brews** box on the slides, on by default). One `GET …/stats`
-with `from` = the year before's start, `to` = the year's end. With
-`recaps` off it waits for **Show my year**.
+with `from` = the year before's start, `to` = the year's end.
 
 - One figure per slide (`frontend/src/lib/yearSlides.ts`): the year;
   brews; longest streak; busiest month (with brews per month); the usual
@@ -202,9 +208,9 @@ A small banner at the top of the brew page (setup, before a brew starts),
 `frontend/src/components/RecapBanner.vue`, with the rule in
 `lib/recap.ts` (`recapsDue`, `bannerFor`, `markSeen`):
 
-- **Which periods:** for each kind in `recapPeriods`, the one just ended,
-  from the day after it ends for `recapBannerDays` days (day 1 = the day
-  after), and only when `recaps` and `recapBanner` are on.
+- **Which periods:** for each kind whose `recapBanners` switch is on
+  (weekly and monthly for now), the one just ended, from the day after it
+  ends for `recapBannerDays` days (day 1 = the day after).
 - **Not once seen:** a period whose start is at or before
   `recapSeen[kind]` is skipped.
 - **Only with brews:** a due period with none of the person's brews in the
@@ -221,8 +227,8 @@ A small banner at the top of the brew page (setup, before a brew starts),
 
 ## AI summary
 
-Shown in Insights → Recap under the figures, when the workspace has AI
-and `recapAi` isn't `off`, for a period that has ended. The summary is
+Shown in Insights → Recap under the figures, when the workspace has AI,
+for a period that has ended. The summary is
 the caller's own, per workspace, period and scope (`mine`, or `all` with
 "Only my brews" off), stored on a `recaps` row (schema.md). Rows are kept for good (gone only
 with the person or the workspace), and a written (`done`) one is in the
@@ -230,9 +236,10 @@ workspace backup (backup.md §2b) with whose it is; a restore keeps only the
 restorer's own, as everything restored becomes theirs. The figures aren't
 stored: they're worked out from the brews each time.
 
-- `recapAi: "manual"`: a **Write summary** button; **Rewrite** once written.
-- `recapAi: "auto"`: the notification's tick (notifications.md §1b,
-  "Recaps") writes the summary for the person's own brews before sending,
+- Always: a **Write summary** button; **Rewrite** once written.
+- `recapAutoSummaries[kind]` on: the notification's tick (notifications.md §1b,
+  "Recaps") writes the summary for the person's own brews before sending
+  (or on its own, with that kind's push off),
   when the workspace has AI, once per row (a failure isn't retried
   automatically; Try again is). Other periods and scope `all` use the
   button.
@@ -264,6 +271,6 @@ stored: they're worked out from the brews each time.
   one is written again.
 - **Errors:** `400` for a `periodStart` that doesn't start a period (weeks
   start on the caller's `weekStartsOn`); `409` with `code`
-  `recap_ai_off` (`recapAi` is `off`), `recap_in_progress` (the period
+  `recap_in_progress` (the period
   hasn't ended in the caller's time zone, else the workspace's, else UTC)
   or `ai_not_configured`; `503` when the queue can't be reached.

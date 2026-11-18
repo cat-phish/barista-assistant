@@ -291,7 +291,7 @@ async function propose(label: string, limit: number, yes: boolean): Promise<void
 
 async function recap(label: string, weeks: number, yes: boolean): Promise<void> {
   const { db } = await import("./db.js");
-  const { brewLogs, DEFAULT_PREFERENCES, DEFAULT_WORKSPACE_SETTINGS, users, withDefaults, workspaces } = await import("@barista/shared/schema");
+  const { brewLogs, userPreferences, DEFAULT_WORKSPACE_SETTINGS, users, withDefaults, workspaces } = await import("@barista/shared/schema");
   const { count, desc, eq } = await import("drizzle-orm");
   const { justEnded, periodLabel, previousPeriod } = await import("@barista/shared/recapPeriods");
   const { RECAP_PROMPT_VERSION, toPeriodInput } = await import("./prompt.js");
@@ -308,7 +308,7 @@ async function recap(label: string, weeks: number, yes: boolean): Promise<void> 
   if (!busiest?.userId) throw new Error("No brews to summarise");
   const [person] = await db.select({ preferences: users.preferences }).from(users).where(eq(users.id, busiest.userId));
   const [ws] = await db.select({ settings: workspaces.settings }).from(workspaces).where(eq(workspaces.id, busiest.workspaceId));
-  const prefs = withDefaults(DEFAULT_PREFERENCES, person?.preferences ?? null);
+  const prefs = userPreferences(person?.preferences ?? null);
   const hidden = new Set(withDefaults(DEFAULT_WORKSPACE_SETTINGS, ws?.settings ?? null).aiHidden);
   const periods = [justEnded("weekly", new Date().toISOString().slice(0, 10), prefs.weekStartsOn)];
   while (periods.length < weeks) periods.push(previousPeriod("weekly", periods.at(-1)!, prefs.weekStartsOn));

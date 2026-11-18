@@ -114,3 +114,11 @@
     the URL it's written only when off (`mine=0`), as Insights
     (`useStats.ts`), the Journal (`lib/journalFilters.ts`) and the chat
     attach picker do.
+14. **AI buttons only with a model:** anything that asks the AI (a button,
+    a tab, a section such as Suggest parameters, Write summary, Fill in
+    with AI, the Chat tab, a "Preview what's sent" link) shows only when
+    the workspace has a model configured: gate it on `useAiAvailable()`
+    (`frontend/src/composables/useAiAvailable.ts`), hiding it rather than
+    disabling it, along with text that promises an AI result. A setting
+    that only tunes an AI feature (like Settings → Recaps' AI summary
+    column) hides with it.

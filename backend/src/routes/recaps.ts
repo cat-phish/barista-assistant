@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { periodOf, RECAP_KINDS, type RecapKind } from "@barista/shared/recapPeriods";
-import { DEFAULT_PREFERENCES, DEFAULT_WORKSPACE_SETTINGS, RECAP_SCOPES, recaps, users, withDefaults, workspaces, type RecapRow, type RecapScope } from "@barista/shared/schema";
+import { userPreferences, DEFAULT_WORKSPACE_SETTINGS, RECAP_SCOPES, recaps, users, withDefaults, workspaces, type RecapRow, type RecapScope } from "@barista/shared/schema";
 import { AI_COST, spendAi } from "../aiConfig.js";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
@@ -92,11 +92,7 @@ recapsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Recap
     db.select({ preferences: users.preferences }).from(users).where(eq(users.id, userId)),
     db.select({ settings: workspaces.settings }).from(workspaces).where(eq(workspaces.id, workspaceId)),
   ]);
-  const prefs = withDefaults(DEFAULT_PREFERENCES, user?.preferences ?? null);
-  if (prefs.recapAi === "off") {
-    sendError(res, 409, "AI summaries are off (Settings → Recaps)", { code: "recap_ai_off" });
-    return;
-  }
+  const prefs = userPreferences(user?.preferences ?? null);
   const period = periodOf(body.kind, body.periodStart, prefs.weekStartsOn);
   if (period.start !== body.periodStart) {
     sendError(res, 400, `periodStart: not the start of a ${body.kind === "weekly" ? "week" : "month"} (weeks start on your chosen day)`);

@@ -2,7 +2,7 @@ import { and, eq, gte, inArray, isNull, lt } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { sendNotification } from "@barista/shared/notify";
 import { periodLabel, periodOf, previousPeriod, addDays, type RecapKind, type RecapPeriod } from "@barista/shared/recapPeriods";
-import { beans, brewers, brewLogs, DEFAULT_PREFERENCES, recaps, users, withDefaults, workspaceMembers, workspaces, type UserPreferences, type WorkspaceSettings } from "@barista/shared/schema";
+import { beans, brewers, brewLogs, userPreferences, recaps, users, workspaceMembers, workspaces, type UserPreferences, type WorkspaceSettings } from "@barista/shared/schema";
 import { sendWebPush } from "@barista/shared/webPush";
 import { config } from "./config.js";
 import { db } from "./db.js";
@@ -33,13 +33,19 @@ export function zonedNow(now: Date, zone: string): { day: string; time: string }
 // device), else the workspace's, else BREW_TIMEZONE, else UTC.
 export const recapZone = (prefs: UserPreferences, settings: Partial<WorkspaceSettings> | null): string => prefs.timeZone ?? settingsZone(settings) ?? "UTC";
 
+// What the tick does for a kind: send it (recapPushes) and/or write its
+// summary first (recapAutoSummaries). Neither: nothing.
+// Yearly joins in with its push (backlog 65, plan step 4).
+const TICK_KINDS = ["weekly", "monthly"] as const satisfies readonly RecapKind[];
+const tickWants = (prefs: UserPreferences, kind: RecapKind) => prefs.recapPushes[kind] || prefs.recapAutoSummaries[kind];
+
 // The periods due now for this person in that zone: the one just ended, for
-// each kind they get, when today starts a new one and their time has come.
+// each kind the tick handles, when today starts a new one and their time has come.
 export function recapsDueNow(prefs: UserPreferences, now: Date, zone: string): Array<{ kind: RecapKind; period: RecapPeriod }> {
-  if (!prefs.recaps || !prefs.recapNotify) return [];
+  const kinds = TICK_KINDS.filter((kind) => tickWants(prefs, kind));
+  if (kinds.length === 0) return [];
   const { day, time } = zonedNow(now, zone);
   if (time < prefs.recapNotifyTime) return [];
-  const kinds: RecapKind[] = prefs.recapPeriods === "both" ? ["weekly", "monthly"] : [prefs.recapPeriods];
   return kinds.flatMap((kind) => {
     const current = periodOf(kind, day, prefs.weekStartsOn);
     return current.start === day ? [{ kind, period: previousPeriod(kind, current, prefs.weekStartsOn) }] : [];
@@ -113,7 +119,7 @@ async function claim(workspaceId: string, userId: string, kind: RecapKind, perio
   return row ? (row.status === "none" ? row.id : "") : null;
 }
 
-// recapAi "auto" (docs/api/recaps.md §11c): the summary is written before
+// recapAutoSummaries (docs/api/recaps.md §11c): the summary is written before
 // the notification goes, when the workspace has AI. A failure is recorded
 // on the row (Try again in the recap) and doesn't stop the notification.
 async function autoSummary(recapId: string, workspaceId: string): Promise<void> {
@@ -145,8 +151,8 @@ export async function processRecapTick(now: Date = new Date(), send: Send = send
   let sent = 0;
   let failed = 0;
   for (const person of people) {
-    const prefs = withDefaults(DEFAULT_PREFERENCES, person.preferences ?? null);
-    if (!prefs.recaps || !prefs.recapNotify) continue;
+    const prefs = userPreferences(person.preferences ?? null);
+    if (!TICK_KINDS.some((kind) => tickWants(prefs, kind))) continue;
     // Their workspaces, grouped by the zone recaps follow in each.
     const memberships = await db
       .select({ workspaceId: workspaceMembers.workspaceId, settings: workspaces.settings })
@@ -167,7 +173,8 @@ export async function processRecapTick(now: Date = new Date(), send: Send = send
         for (const [workspaceId, list] of byWorkspace) {
           const recapId = await claim(workspaceId, person.id, kind, period.start);
           if (recapId === null) continue;
-          if (prefs.recapAi === "auto") await autoSummary(recapId, workspaceId);
+          if (prefs.recapAutoSummaries[kind]) await autoSummary(recapId, workspaceId);
+          if (!prefs.recapPushes[kind]) continue; // summary only: claimed, nothing sent
           const text = recapMessage(kind, period, list);
           const query = `kind=${kind}&start=${period.start}&ws=${workspaceId}`;
           try {
