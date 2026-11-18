@@ -134,11 +134,17 @@ caffeine and Brewed for others), plus:
   processes, varieties and flavors** (picked on the wheel, by label), most
   brewed first, at most 5 each. A list needs 2 different entries or it's
   left out.
+- **Top-rated cups** (`topCups`, version 2; replaces `bestCupBy`): how
+  many brews got the year's top coffee rating, the bean and the recipe
+  behind most of them (each shown when 2 or more share it), and who
+  brewed most of them on the bar's year (only with a clear leader).
+  Null when nothing was rated.
 - **Most improved:** the recipe or bean whose rating rose most from the
   first half of its rated brews to the last half, with 4 rated brews or
   more and a rise of half a star or more.
 - **Who brewed** (the bar's year, with "Only my brews" off): each person's
-  brews, most first, and whose brew was the best cup; left out when only
+  brews, most first, and who brewed most of the top-rated cups (when one
+  person did); left out when only
   one person brewed. "You", others by their name (auth.md §1, "Name"),
   and anyone without one "Member 1", "Member 2"… by most brews; never an
   email.
@@ -196,7 +202,9 @@ default). One `GET …/recaps/year-in-coffee/:year`.
   brews; longest streak; busiest month (with brews per month); the usual
   weekday and hour; coffee used; volume drunk and caffeine; brewed for
   others; top beans, origins, roasters, processes, varieties and flavors;
-  most brewed recipe; best cup (with a link to it); most improved; new
+  most brewed recipe; best cups (a single top-rated cup is shown with a
+  link to it; several are counted, e.g. "14 cups at 5 ★", with the bean
+  and recipe behind most of them); most improved; new
   beans and recipes; who brewed; then a **summary** with the year's key
   lines and the years before and after. A year without brews has only
   the first slide and "No brews".

@@ -12,6 +12,15 @@ export interface Ranked {
   name: string;
   brews: number;
 }
+// How many cups got the year's top rating, the bean and recipe behind most
+// of them (2 or more), and who brewed most of them (when people is shown).
+export interface TopCups {
+  rating: number;
+  brews: number;
+  bean: Ranked | null;
+  recipe: Ranked | null;
+  by: string | null;
+}
 export interface YearFigures {
   year: number;
   recap: RecapFigures; // the year as a recap counts it, next to the year before
@@ -29,7 +38,7 @@ export interface YearFigures {
   flavors: Ranked[];
   mostImproved: { kind: 'recipe' | 'bean'; name: string; from: number; to: number; brews: number } | null;
   people: Array<{ userId: string; brews: number }>; // most brews first; empty unless 2 or more people brewed
-  bestCupBy: string | null; // whose brew the newest best cup was, when people is shown
+  topCups: TopCups | null; // the cups at the year's top rating; null when none was rated (version 2)
 }
 // A first year someone joined partway through: compared at its pace, its
 // totals scaled to the full period (docs/api/recaps.md §11c).
@@ -70,7 +79,7 @@ const EMPTY: Omit<YearFigures, 'year' | 'recap'> = {
   flavors: [],
   mostImproved: null,
   people: [],
-  bestCupBy: null,
+  topCups: null,
 };
 const EMPTY_RECAP: RecapFigures = {
   brews: 0,

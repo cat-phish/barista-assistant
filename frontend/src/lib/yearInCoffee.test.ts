@@ -80,12 +80,19 @@ describe('Your Year in Coffee figures (backlog 65)', () => {
     expect(f.mostImproved).toEqual({ kind: 'recipe', name: 'V60 Daily', from: 3, to: 4.5, brews: 4 });
   });
 
-  it("names who brewed on the bar's year, and whose was the best cup", () => {
+  it("names who brewed on the bar's year, and counts the top-rated cups", () => {
     expect(f.people).toEqual([
       { userId: 'u', brews: 4 },
       { userId: 'v', brews: 1 },
     ]);
-    expect(f.bestCupBy).toBe('u'); // the newest of the 4.5s
+    // c and d are the 4.5s (last year's 5 is outside the year): both the blend on V60 Daily, one each by v and u, so nobody brewed most
+    expect(f.topCups).toEqual({ rating: 4.5, brews: 2, bean: { name: 'Atlas – Blend', brews: 2 }, recipe: { name: 'V60 Daily', brews: 2 }, by: null });
+  });
+
+  it('names who brewed most of the top-rated cups only when one person did', () => {
+    const cups = [brew({ id: 'a', rating: 5, userId: 'v' }), brew({ id: 'b', rating: 5, userId: 'v' }), brew({ id: 'c', rating: 5, userId: 'u', beanId: 'blend' }), brew({ id: 'd', rating: 3, userId: 'u' })];
+    const g = shared.yearFigures(data(cups), null, Y2026, 'medium', '2026-12-31');
+    expect(g.topCups).toEqual({ rating: 5, brews: 3, bean: { name: 'House – Kenya Nyeri', brews: 2 }, recipe: null, by: 'v' });
   });
 
   it('skips a figure without enough behind it', () => {
@@ -96,7 +103,7 @@ describe('Your Year in Coffee figures (backlog 65)', () => {
     expect(small.origins).toEqual([]); // one origin isn't a ranking
     expect(small.mostImproved).toBeNull();
     expect(small.people).toEqual([]); // only one person brewed
-    expect(small.bestCupBy).toBeNull();
+    expect(small.topCups).toEqual({ rating: 5, brews: 1, bean: null, recipe: null, by: null }); // one cup: nothing behind most of them
   });
 });
 

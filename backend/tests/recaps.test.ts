@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { addMember, newBean, newBrewLog, newUser, newWorkspace } from "./helpers.js";
 import * as schema from "@barista/shared/schema";
 import { freezeYearInCoffee } from "@barista/shared/yearFreeze";
+import { YEAR_FIGURES_VERSION } from "@barista/shared/yearInCoffee";
 import { db } from "../src/db.js";
 import { recapSummaryQueue } from "../src/queue.js";
 
@@ -89,7 +90,7 @@ describe("Your Year in Coffee, frozen", () => {
 
     const mine = await owner.agent.get(url(2025, "mine"));
     expect(mine.status).toBe(200);
-    expect(mine.body.year).toMatchObject({ version: 1, period: { start: "2025-01-01", end: "2025-12-06" } });
+    expect(mine.body.year).toMatchObject({ version: YEAR_FIGURES_VERSION, period: { start: "2025-01-01", end: "2025-12-06" } });
     expect(mine.body.year.figures).toMatchObject({ year: 2025, recap: { brews: 2, previousBrews: 1 }, origins: [] });
     expect(mine.body.year.history.map((h: { year: number }) => h.year)).toEqual([2024]);
     expect((await owner.agent.get(url(2025, "all"))).body.year.figures.recap.brews).toBe(3);

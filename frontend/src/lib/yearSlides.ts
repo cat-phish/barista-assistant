@@ -100,15 +100,20 @@ export function yearSlides(f: YearFigures, ctx: SlideContext): Slide[] {
   add(f.varieties.length > 0 && { key: 'varieties', kicker: 'Top varieties', value: f.varieties[0]!.name, list: rankedList(f.varieties) });
   add(f.flavors.length > 0 && { key: 'flavors', kicker: ctx.mine ? 'Flavors you picked most' : 'Flavors picked most', value: f.flavors[0]!.name, list: rankedList(f.flavors) });
   add(r.topRecipe && { key: 'recipe', kicker: 'Most brewed recipe', value: r.topRecipe.name, sub: [plural(r.topRecipe.brews, 'brew'), r.topBrewer ? `mostly on the ${r.topBrewer.name}` : null].filter(Boolean).join(' · '), ...chips(again(r.topRecipe.name, lastYear?.recap.topRecipe?.name, 'recipe')) });
+  // One top-rated cup is shown as itself; several are counted (backlog 65).
+  const cups = f.topCups;
   const best = r.best[0];
+  const by = cups?.by ? `by ${ctx.person(cups.by)}` : null;
   add(
-    best && {
-      key: 'best',
-      kicker: 'Best cup',
-      value: `${stars(best.rating)} ${best.bean}`,
-      sub: [shortDay(best.day), best.recipe, f.bestCupBy ? `by ${ctx.person(f.bestCupBy)}` : null].filter(Boolean).join(' · '),
-      link: { name: 'journal-entry', params: { id: best.brewId } },
-    },
+    cups &&
+      (cups.brews === 1 && best
+        ? { key: 'best', kicker: 'Best cup', value: `${stars(best.rating)} ${best.bean}`, sub: [shortDay(best.day), best.recipe, by].filter(Boolean).join(' · '), link: { name: 'journal-entry', params: { id: best.brewId } } }
+        : {
+            key: 'best',
+            kicker: 'Best cups',
+            value: `${cups.brews} cups at ${stars(cups.rating)}`,
+            sub: [cups.bean && `${cups.bean.brews} with ${cups.bean.name}`, cups.recipe && `${cups.recipe.brews} on ${cups.recipe.name}`, by && `mostly ${by}`].filter(Boolean).join(' · ') || undefined,
+          }),
   );
   add(f.mostImproved && { key: 'improved', kicker: `Most improved ${f.mostImproved.kind}`, value: f.mostImproved.name, sub: `${f.mostImproved.from.toFixed(1)} → ${f.mostImproved.to.toFixed(1)} ★ over ${plural(f.mostImproved.brews, 'rated brew')}` });
   const newBits = [r.beansAdded.length ? plural(r.beansAdded.length, 'new bean') : null, r.newRecipes.length ? plural(r.newRecipes.length, 'new recipe') : null].filter((x): x is string => x !== null);
@@ -139,7 +144,7 @@ export function summaryLines(f: YearFigures, ctx: SlideContext): SummaryLine[] {
     r.beansBrewed[0] ? { name: 'Top bean', detail: r.beansBrewed[0].label } : null,
     f.origins[0] ? { name: 'Top origin', detail: f.origins[0].name } : null,
     r.topRecipe && { name: 'Top recipe', detail: r.topRecipe.name },
-    r.best[0] ? { name: 'Best cup', detail: stars(r.best[0].rating) } : null,
+    f.topCups && { name: f.topCups.brews === 1 ? 'Best cup' : 'Best cups', detail: f.topCups.brews === 1 ? stars(f.topCups.rating) : `${f.topCups.brews} at ${stars(f.topCups.rating)}` },
   ];
   return lines.filter((l): l is SummaryLine => l !== null);
 }

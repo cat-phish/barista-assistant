@@ -11,7 +11,7 @@ import { addDays, type RecapPeriod } from "./recapPeriods.js";
 
 // Bump when a figure is added or changes meaning; the page skips a figure
 // an older frozen copy doesn't have.
-export const YEAR_FIGURES_VERSION = 1;
+export const YEAR_FIGURES_VERSION = 2; // 2: topCups replaces bestCupBy
 // Out on 7 December, covering 1 January to 6 December.
 export const YEAR_OUT_ON = "12-07";
 export const YEAR_ENDS_ON = "12-06";
@@ -128,7 +128,17 @@ export interface YearFigures {
   flavors: Ranked[];
   mostImproved: { kind: "recipe" | "bean"; name: string; from: number; to: number; brews: number } | null;
   people: Array<{ userId: string; brews: number }>;
-  bestCupBy: string | null;
+  topCups: TopCups | null;
+}
+// The cups at the year's top rating: how many, the bean and recipe behind
+// most of them (when 2 or more share one), and who brewed most of them
+// (when people is shown and one person brewed more than anyone else).
+export interface TopCups {
+  rating: number;
+  brews: number;
+  bean: Ranked | null;
+  recipe: Ranked | null;
+  by: string | null;
 }
 // A first year someone joined partway through: compared at its pace.
 export interface Covered {
@@ -332,7 +342,34 @@ export function yearFigures(data: YearRows, previous: YearRows | null, period: R
   const hour = countBy(brews, (b) => String(localHour(b)).padStart(2, "0"))[0];
   const userCounts = countBy(brews, (b) => b.userId);
   const people = userCounts.length >= 2 ? userCounts.map((c) => ({ userId: c.key, brews: c.n })) : [];
-  const bestId = recap.best[0]?.brewId;
+  const ratings = brews.flatMap((b) => (b.rating === null ? [] : [b.rating]));
+  const top = ratings.length ? Math.max(...ratings) : null;
+  const cups = brews.filter((b) => b.rating === top);
+  const most = (keys: (b: YearRowsBrew) => string | null, name: (key: string) => string | null): Ranked | null => {
+    const c = countBy(cups, keys)[0];
+    const n = c && c.n >= 2 ? name(c.key) : null;
+    return n && c ? { name: n, brews: c.n } : null;
+  };
+  const leader = (counts: Array<{ key: string; n: number }>) => (counts[0] && counts[0].n > (counts[1]?.n ?? 0) ? counts[0].key : null);
+  const topCups: TopCups | null =
+    top === null
+      ? null
+      : {
+          rating: top,
+          brews: cups.length,
+          bean: most(
+            (b) => b.beanId,
+            (id) => {
+              const b = bean(id);
+              return b ? beanLabel(b) : null;
+            },
+          ),
+          recipe: most(
+            (b) => b.recipeId,
+            (id) => named(data.lookups.recipes, id),
+          ),
+          by: people.length ? leader(countBy(cups, (b) => b.userId)) : null,
+        };
 
   return {
     year,
@@ -354,7 +391,7 @@ export function yearFigures(data: YearRows, previous: YearRows | null, period: R
     flavors: ranked((b) => folded(b.flavors)),
     mostImproved: mostImproved(brews, data),
     people,
-    bestCupBy: people.length && bestId ? (brews.find((b) => b.id === bestId)?.userId ?? null) : null,
+    topCups,
   };
 }
 
