@@ -53,6 +53,14 @@ roast. Freezing stops aging, so a frozen bean is always active.
   active.
 - On the public menu (§7) a resting bean shows like an active one.
 
+**Stock** (frontend): the Active and Resting tabs show one row for every
+bean not archived: **Stock** (the total of `inventoryWeightGrams`), split
+into **Ready** (active, with the frozen part in brackets after a ❄,
+shown when there is one) and **Resting**. With
+home roasting on and the viewer's `showGreenStock` (`auth.md` §1),
+**Green** adds the `weightLeftGrams` of green coffees not archived
+(`green-coffees.md`).
+
   The bean form suggests roaster, coffee, producer and supplier names from
   this list, archived beans included (no separate names endpoint).
 

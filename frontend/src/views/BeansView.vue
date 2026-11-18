@@ -6,6 +6,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { beanProcessesApi } from '../api/beanProcesses';
 import { beansApi, type BeanBrewSummary } from '../api/beans';
+import { greenCoffeesApi } from '../api/greenCoffees';
 import { ApiError, errorMessage } from '../api/client';
 import type { Bean, BeanProcess } from '../api/types';
 import AppHeader from '../components/AppHeader.vue';
@@ -36,6 +37,7 @@ import {
   pricePerGram,
   roastAgeDays,
   beanState,
+  beanStock,
   restReady,
   restingUntil,
   roastLabel,
@@ -51,6 +53,7 @@ import { isSortKey, recallView, rememberView, sortBy, sortColumnOptions } from '
 import { reviewChange } from '../lib/beanReview';
 import { effectiveRoastAge } from '../lib/roastAge';
 import { formatWeight } from '../lib/stats';
+import { formatStock, greenStockTotal } from '../lib/roasting';
 import { usePreferences } from '../composables/usePreferences';
 import { useAiAvailable } from '../composables/useAiAvailable';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -74,12 +77,22 @@ const tab = computed(() => props.state ?? 'active');
 const archived = computed(() => tab.value === 'archived');
 const resting = computed(() => tab.value === 'resting');
 const inTab = computed(() => beans.value.filter((b) => beanState(b) === tab.value));
-// Active tab: the stock on hand, and how much of it is in the freezer.
-const stock = computed(() => {
-  const grams = (list: Bean[]) => list.reduce((n, b) => n + b.inventoryWeightGrams, 0);
-  const frozen = grams(inTab.value.filter((b) => b.frozen));
-  return { total: grams(inTab.value), frozen, unfrozen: grams(inTab.value) - frozen };
-});
+// Active and Resting tabs: the stock on hand, resting coffee included
+// (docs/api/beans.md §4, "Stock"), and with home roasting and the
+// showGreenStock preference on, the green coffee left (docs/api/auth.md §1).
+const stock = computed(() => beanStock(beans.value));
+const showGreen = computed(() => settings.value.homeRoasting && prefs.value.showGreenStock);
+const greenGrams = ref<number | null>(null); // null = not loaded (or failed): no figure
+async function loadGreen(): Promise<void> {
+  const id = workspaces.current?.id;
+  if (!id || !showGreen.value) return;
+  try {
+    greenGrams.value = greenStockTotal((await greenCoffeesApi.list(id)).greenCoffees);
+  } catch {
+    greenGrams.value = null; // the bean figures still show
+  }
+}
+watch(showGreen, () => void loadGreen());
 
 // View choices, remembered per workspace and tab. The default matches the
 // old list (by roaster).
@@ -126,6 +139,7 @@ async function load(): Promise<void> {
 }
 onMounted(async () => {
   restoreView();
+  void loadGreen();
   await load();
 });
 
@@ -572,8 +586,14 @@ const selection = useSelection();
       <template v-else>
         <dl v-if="!archived" class="stock" aria-label="Coffee in stock">
           <div><dt>Stock</dt><dd>{{ formatWeight(stock.total) }}</dd></div>
-          <div><dt>Unfrozen</dt><dd>{{ formatWeight(stock.unfrozen) }}</dd></div>
-          <div><dt>Frozen</dt><dd>{{ formatWeight(stock.frozen) }}</dd></div>
+          <div>
+            <dt>Ready</dt>
+            <dd>
+              {{ formatWeight(stock.ready) }}<span v-if="stock.frozen" class="stock-frozen" :title="`${formatWeight(stock.frozen)} frozen`"> (<span aria-hidden="true">❄ </span><span class="visually-hidden">frozen </span>{{ formatWeight(stock.frozen) }})</span>
+            </dd>
+          </div>
+          <div><dt>Resting</dt><dd>{{ formatWeight(stock.resting) }}</dd></div>
+          <div v-if="showGreen && greenGrams !== null"><dt>Green</dt><dd>{{ formatStock(greenGrams) }}</dd></div>
         </dl>
 
         <section v-if="unrated.length && workspaces.canEdit" class="card rate-prompt" aria-labelledby="rate-prompt-title">
@@ -981,6 +1001,10 @@ p {
   margin: 0;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+.stock-frozen {
+  font-weight: 400;
+  color: var(--text-muted);
 }
 .rate-prompt {
   display: flex;

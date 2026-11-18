@@ -166,7 +166,7 @@ units, with defaults filled in. Storage is always grams, °C and metres;
 clients convert what they show and what's typed (roadmap: Units and defaults).
 
 ```json
-{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "forWho"], "repeatButtonsBy": "made", "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "startDelays": {}, "nudgeButtons": ["dose", "water"], "steepReminders": true, "restReminders": true, "restReminderRepeatDays": null, "restingInBrewPickerDefault": true, "greenStockAlerts": true, "weekStartsOn": 1, "recapBanners": { "weekly": true, "monthly": true, "yearly": true, "yearInCoffee": true }, "recapBannerDays": 3, "recapPushes": { "weekly": true, "monthly": true, "yearly": true, "yearInCoffee": true }, "recapNotifyTime": "08:00", "timeZone": null, "recapAutoSummaries": { "weekly": false, "monthly": false, "yearly": false, "yearInCoffee": false }, "recapSeen": {}, "yearMusic": false, "learnAboutMe": true }
+{ "volumeUnit": "fl_oz", "showBothVolumes": false, "altitudeUnit": "m", "temperatureUnit": "c", "theme": "system", "rateReminders": true, "rateReminderMinutes": 15, "rateLaterDefault": false, "repeatKeeps": ["bean", "recipe", "size", "doseWater", "temp", "grinder", "grind", "waterProfile", "dilution", "window", "forWho"], "repeatButtonsBy": "made", "rememberSetup": ["what", "brewer", "recipe", "bean", "grinder", "grind"], "startDelays": {}, "nudgeButtons": ["dose", "water"], "steepReminders": true, "restReminders": true, "restReminderRepeatDays": null, "restingInBrewPickerDefault": true, "greenStockAlerts": true, "showGreenStock": false, "weekStartsOn": 1, "recapBanners": { "weekly": true, "monthly": true, "yearly": true, "yearInCoffee": true }, "recapBannerDays": 3, "recapPushes": { "weekly": true, "monthly": true, "yearly": true, "yearInCoffee": true }, "recapNotifyTime": "08:00", "timeZone": null, "recapAutoSummaries": { "weekly": false, "monthly": false, "yearly": false, "yearInCoffee": false }, "recapSeen": {}, "yearMusic": false, "learnAboutMe": true }
 ```
 
 - `volumeUnit`: `fl_oz` | `ml`: the brew page's yield estimate, and a new
@@ -222,6 +222,9 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
   (`beans.md` §4 `restInBrewPicker`), unless the form says.
 - `greenStockAlerts` (default `true`): tell when a roast you save takes a
   green coffee below its `lowStockGrams` (§1b).
+- `showGreenStock` (default `false`): when the workspace has home roasting
+  on, the stock row on Beans also shows the green coffee left (the
+  `weightLeftGrams` of green coffees not archived; `beans.md` §4, "Stock").
 - `repeatKeeps`: what repeating a brew copies (Settings → Brew setup, "Copy
   when repeating"), a
   list of `REPEAT_KEEPS`, each once:

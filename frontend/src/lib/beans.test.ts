@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Bean } from '../api/types';
-import { batchSuffix, beanFilter, beanFilterOptions, beanLabel, beanSortColumns, isBeanFilter, varietyLabel, DETAILED_ROAST_LEVELS, nextBatch, formatAltitude, roastLabel, formatPricePerGram, freezeState, latestThaw, periodsLatestFirst, pricePerGram, restingUntil, beanState, inBrewPicker, restReady } from './beans';
+import { batchSuffix, beanFilter, beanFilterOptions, beanLabel, beanSortColumns, isBeanFilter, varietyLabel, DETAILED_ROAST_LEVELS, nextBatch, formatAltitude, roastLabel, formatPricePerGram, freezeState, latestThaw, periodsLatestFirst, pricePerGram, restingUntil, beanState, inBrewPicker, restReady, beanStock } from './beans';
 import { sortBy, sortColumnOptions } from './listSort';
 import { ROAST_LEVELS } from './scale';
 
@@ -241,5 +241,20 @@ describe('resting (docs/api/beans.md §4)', () => {
     expect(inBrewPicker(bean({ restingUntil: '2026-11-02' }))).toBe(false);
     expect(inBrewPicker(bean({ restingUntil: '2026-11-02', restInBrewPicker: true }))).toBe(true);
     expect(inBrewPicker(bean({ archivedAt: '2026-11-01T00:00:00Z' }))).toBe(false);
+  });
+});
+
+describe('beanStock', () => {
+  it('counts active and resting beans, splitting out resting, with the frozen part of ready, and leaves archived out', () => {
+    const beans = [
+      bean({ inventoryWeightGrams: 200 }),
+      bean({ inventoryWeightGrams: 250, frozen: true }),
+      bean({ inventoryWeightGrams: 300, restingUntil: '2026-11-25' }),
+      bean({ inventoryWeightGrams: 1000, archivedAt: '2026-10-01T00:00:00Z' }),
+    ];
+    expect(beanStock(beans)).toEqual({ total: 750, ready: 450, resting: 300, frozen: 250 });
+  });
+  it('is all zero with no beans', () => {
+    expect(beanStock([])).toEqual({ total: 0, ready: 0, resting: 0, frozen: 0 });
   });
 });

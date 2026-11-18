@@ -144,6 +144,23 @@ export function inBrewPicker(bean: Pick<Bean, 'archivedAt' | 'restingUntil' | 'r
   const state = beanState(bean);
   return state === 'active' || (state === 'resting' && bean.restInBrewPicker);
 }
+// The stock on the Beans page (docs/api/beans.md §4, "Stock"): every bean
+// not archived, split into ready (active, frozen or not) and resting, with
+// how much of ready is frozen.
+export function beanStock(beans: Pick<Bean, 'archivedAt' | 'restingUntil' | 'frozen' | 'inventoryWeightGrams'>[]): { total: number; ready: number; resting: number; frozen: number } {
+  const out = { total: 0, ready: 0, resting: 0, frozen: 0 };
+  for (const b of beans) {
+    const state = beanState(b);
+    if (state === 'archived') continue;
+    out.total += b.inventoryWeightGrams;
+    if (state === 'resting') out.resting += b.inventoryWeightGrams;
+    else {
+      out.ready += b.inventoryWeightGrams;
+      if (b.frozen) out.frozen += b.inventoryWeightGrams;
+    }
+  }
+  return out;
+}
 // Resting and its day has come: ready to be made active.
 export const restReady = (bean: Pick<Bean, 'restingUntil'>, today = localDateInput()) => bean.restingUntil !== null && bean.restingUntil <= today;
 

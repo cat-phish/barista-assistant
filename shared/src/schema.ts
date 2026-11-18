@@ -90,6 +90,7 @@ export interface UserPreferences {
   restReminderRepeatDays: number | null; // 1–60
   restingInBrewPickerDefault: boolean; // a new resting bean's restInBrewPicker
   greenStockAlerts: boolean; // tell when a roast takes a green coffee below its low-stock threshold
+  showGreenStock: boolean; // with home roasting on, the Beans page stock also shows green coffee left
   // Recaps (docs/api/recaps.md §11c). Recaps always exist; these say, per
   // kind, what announces one and whether its AI summary is written for you.
   weekStartsOn: number; // 0 = Sunday … 6 = Saturday; also Insights' weekly buckets
@@ -124,6 +125,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   restReminderRepeatDays: null,
   restingInBrewPickerDefault: true,
   greenStockAlerts: true,
+  showGreenStock: false,
   weekStartsOn: 1,
   recapBanners: { weekly: true, monthly: true, yearly: true, yearInCoffee: true },
   recapBannerDays: 3,

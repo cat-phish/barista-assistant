@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GreenCoffee, Roast } from '../api/types';
-import { development, formatStock, greenForm, greenPrice, greenStock, machineForm, parseGreenForm, parseMachineForm, parseRoastForm, roastDay, roastForm, weightLoss } from './roasting';
+import { development, formatStock, greenForm, greenPrice, greenStock, greenStockTotal, machineForm, parseGreenForm, parseMachineForm, parseRoastForm, roastDay, roastForm, weightLoss } from './roasting';
 
 describe('roasting machine form', () => {
   it('needs a name; capacity is whole grams', () => {
@@ -104,5 +104,16 @@ describe('roast numbers', () => {
     // 23:30 PDT on the 20th is the 21st in UTC: the local day counts.
     const r = { roastedAt: '2026-10-21T06:30:00.000Z', utcOffsetMinutes: -420 };
     expect(roastDay(r)).toBe('2026-10-20');
+  });
+});
+
+describe('greenStockTotal', () => {
+  it('adds what is left of green coffees not archived', () => {
+    expect(greenStockTotal([
+      { weightLeftGrams: 1200, archivedAt: null },
+      { weightLeftGrams: 800, archivedAt: null },
+      { weightLeftGrams: 500, archivedAt: '2026-10-01T00:00:00Z' },
+    ])).toBe(2000);
+    expect(greenStockTotal([])).toBe(0);
   });
 });

@@ -147,6 +147,12 @@ export function greenStock(g: Pick<GreenCoffee, 'weightLeftGrams' | 'weightBough
 }
 
 // "1.8 kg" from a kilo, else grams: green coffee comes by the kilo or pound.
+// The green coffee still in stock (docs/api/auth.md §1 showGreenStock): what's
+// left of every green coffee not archived.
+export function greenStockTotal(list: Pick<GreenCoffee, 'weightLeftGrams' | 'archivedAt'>[]): number {
+  return list.reduce((n, g) => (g.archivedAt === null ? n + Math.max(0, g.weightLeftGrams) : n), 0);
+}
+
 export function formatStock(grams: number): string {
   return grams >= 1000 ? `${Number((grams / 1000).toFixed(2))} kg` : `${grams} g`;
 }

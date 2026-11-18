@@ -125,6 +125,7 @@ export const preferencesSchema = z
     restReminderRepeatDays: z.number().int().min(1).max(60).nullable(),
     restingInBrewPickerDefault: z.boolean(),
     greenStockAlerts: z.boolean(),
+    showGreenStock: z.boolean(),
     // Recaps (docs/api/recaps.md §11c).
     weekStartsOn: z.number().int().min(0).max(6),
     recapBanners: recapSwitches,

@@ -25,6 +25,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   restReminderRepeatDays: null,
   restingInBrewPickerDefault: true,
   greenStockAlerts: true,
+  showGreenStock: false,
   weekStartsOn: 1,
   recapBanners: { weekly: true, monthly: true, yearly: true, yearInCoffee: true },
   recapBannerDays: 3,

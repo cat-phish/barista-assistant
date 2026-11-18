@@ -356,8 +356,11 @@ Recording a brew: what's measured, and how fast it is to log.
 
 ### 62. Bean stock count that includes resting coffees
 
-- **Status:** idea (numbered last to avoid renumbering; belongs with the
-  bean items in G)
+- **Status:** done: the Beans stock row counts active and resting beans
+  (Stock, split into Ready, with its frozen part as "(❄ …)", and Resting, on the Active and Resting
+  tabs), and with home roasting on the `showGreenStock` preference
+  (Settings → Preferences) adds the green coffee left (`beans.md` §4,
+  "Stock").
 - **Why:** the stock count should include coffee that is still resting,
   not only what is ready to brew.
 - **Approach:** count resting beans in the stock figure, perhaps with the

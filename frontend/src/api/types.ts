@@ -32,6 +32,7 @@ export interface UserPreferences {
   restReminderRepeatDays: number | null; // 1–60
   restingInBrewPickerDefault: boolean; // a bean added resting is offered in the brew picker
   greenStockAlerts: boolean; // tell when a roast takes a green coffee below its low-stock threshold
+  showGreenStock: boolean; // with home roasting on, the Beans page stock also shows green coffee left
   // Recaps (docs/api/recaps.md §11c): always there; per kind, what
   // announces one and whether its AI summary is written for you.
   weekStartsOn: number; // 0 = Sunday … 6 = Saturday; also Insights' weekly buckets

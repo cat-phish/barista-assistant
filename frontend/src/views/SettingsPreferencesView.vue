@@ -11,7 +11,7 @@ import { usePreferences } from '../composables/usePreferences';
 import { useAuthStore } from '../stores/auth';
 
 const auth = useAuthStore();
-const { prefs } = usePreferences();
+const { prefs, settings } = usePreferences();
 const saving = ref(false);
 const error = ref('');
 const saved = ref(false);
@@ -120,6 +120,16 @@ async function setTheme(theme: Theme): Promise<void> {
         Show beans I add resting in the brew picker
       </label>
       <p class="muted small">Where a new resting bean starts, home roasts too; each bean can change it. Reminders are in Notifications.</p>
+    </section>
+
+    <!-- docs/api/auth.md §1 showGreenStock -->
+    <section v-if="settings.homeRoasting" class="card stack" aria-labelledby="pref-green-stock">
+      <h2 id="pref-green-stock">Green coffee</h2>
+      <label class="checkbox">
+        <input type="checkbox" :checked="prefs.showGreenStock" :disabled="saving" @change="set({ showGreenStock: ($event.target as HTMLInputElement).checked })" />
+        Show green coffee in the bean stock
+      </label>
+      <p class="muted small">Adds the green coffee left to the stock figures on Beans.</p>
     </section>
 
     <p v-if="error" class="form-error" role="alert">{{ error }}</p>
