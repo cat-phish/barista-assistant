@@ -151,7 +151,7 @@ counts: every slide shows as it ends.
 read (`slideDuration` in `frontend/src/lib/yearSlides.ts`: 4 s for the
 first, 5 s for the others, plus 1.5 s with a line under the figure and
 0.7 s per list row, at most 12 s); its bar in the progress strip fills as
-it runs. It stops on the summary. The ⏸ button in the top bar, beside mute, pauses it (▶ goes on),
+it runs. It stops on the summary. The pause button in the top bar, beside mute, pauses it (play goes on),
 and so does holding a finger or the mouse on the slide, as in stories:
 the slide, its animation and the music stop, and the top and bottom bars
 fade out after a moment, until you let go (letting go isn't a tap). A
@@ -161,7 +161,7 @@ once, and the new slide's time starts afresh.
 Music: one song, your own where the server allows uploads and you have
 one (`auth.md` §1 "Year song", uploaded under Settings → Recaps), else the
 built-in. It starts unmuted when Settings → Recaps → Your Year in Coffee →
-Play music is on (`yearMusic`, `auth.md` §1; off by default); the 🔊/🔇
+Play music is on (`yearMusic`, `auth.md` §1; off by default); the mute
 button in the top bar mutes it for that viewing only. The built-in song is a CC0 (public domain)
 track, `frontend/public/music/year-in-coffee.mp3`, its source in
 `CREDITS.md` beside it; CC0 waives all rights, so it sits fine in this AGPL

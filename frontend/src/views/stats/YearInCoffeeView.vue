@@ -19,6 +19,7 @@ import { formatVolumeIn } from '../../lib/units';
 import { SONG_VOLUME, songSource } from '../../lib/yearSong';
 import { latestYear, yearFigures, yearPeriod } from '../../lib/yearInCoffee';
 import { MONTH_NAMES, personLabels, slideDuration, yearSlides } from '../../lib/yearSlides';
+import AppIcon from '../../components/icons/AppIcon.vue';
 import { useAuthStore } from '../../stores/auth';
 import { useWorkspaceStore } from '../../stores/workspace';
 
@@ -271,9 +272,9 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
       <div class="bar">
         <label class="mine"><input type="checkbox" :checked="mine" @change="go({ mine: ($event.target as HTMLInputElement).checked })" /> Only my brews</label>
         <span class="tools">
-          <button v-if="slide && !last" type="button" class="icon" :aria-label="paused ? 'Play slides' : 'Pause slides'" :aria-pressed="paused" @click="paused = !paused">{{ paused ? '▶' : '⏸' }}</button>
-          <button type="button" class="icon" :aria-label="muted ? 'Unmute music' : 'Mute music'" :aria-pressed="!muted" @click="toggleMute">{{ muted ? '🔇' : '🔊' }}</button>
-          <button type="button" class="icon" aria-label="Close" @click="close">✕</button>
+          <button v-if="slide && !last" type="button" class="icon" :aria-label="paused ? 'Play slides' : 'Pause slides'" :aria-pressed="paused" @click="paused = !paused"><AppIcon :name="paused ? 'play' : 'pause'" /></button>
+          <button type="button" class="icon" :aria-label="muted ? 'Unmute music' : 'Mute music'" :aria-pressed="!muted" @click="toggleMute"><AppIcon :name="muted ? 'volume-x' : 'volume-2'" /></button>
+          <button type="button" class="icon" aria-label="Close" @click="close"><AppIcon name="x" /></button>
         </span>
       </div>
     </div>
@@ -380,6 +381,10 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
   gap: 6px;
 }
 .icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border: 0;
   background: none;
   color: var(--text);

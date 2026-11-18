@@ -180,7 +180,7 @@ async function removeOwnSong(): Promise<void> {
         <input type="checkbox" :checked="prefs.yearMusic" :disabled="saving" @change="set({ yearMusic: checked($event) })" />
         Play music
       </label>
-      <p class="muted small">It starts on your first tap. The 🔊 button on the slides mutes it for that viewing.</p>
+      <p class="muted small">It starts on your first tap. The mute button on the slides mutes it for that viewing.</p>
       <div v-if="uploadsOn" class="field">
         <span class="label">Your song</span>
         <div class="song-row">
