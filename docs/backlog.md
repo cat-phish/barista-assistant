@@ -447,12 +447,22 @@ Recording a brew: what's measured, and how fast it is to log.
     (notifications.md §1b), and an Insights → Wrapped entry.
   - **Motion and sound** (planned next): slides animate (numbers count up,
     bars grow, lists step in, confetti on the summary; still under
-    reduced motion). A built-in CC0 song (no clash with the AGPL: CC0
-    waives all rights), off until picked under a speaker button. Your own
+    reduced motion). Slides move on by themselves; hold to pause, as in
+    stories. A built-in CC0 song (no clash with the AGPL: CC0 waives all
+    rights), off by default (Settings → Recaps → Play music), with a mute
+    button on the slides. Your own
     song, uploaded per account when the server has `YEAR_SONG_UPLOADS=true`:
     10 MB, type checked from the file's bytes, served only to its owner
     so it can't run as a page, never re-encoded on the server.
   - **Video:** deferred to backlog 68.
+  - **Music waits for a first tap:** browsers (Chrome, Safari, phones
+    too) block sound until the person taps, clicks or presses a key on
+    the page, so even with Play music on the slides open silent and the
+    song starts on the first tap, often the one that moves to the next
+    slide. A browser rule the app can't get around (the Instagram app
+    isn't a web page). A silent first slide when testing is expected, not
+    a broken setting. Idea: a "Tap for sound" hint on the first slide
+    while the music is on but not yet playing.
 - **Size:** L (figures + slides; AI summary; image; notification).
 - **Depends on:** nothing; reuses recaps (18).
 - **Open questions:**
