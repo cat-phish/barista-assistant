@@ -1,6 +1,38 @@
 import { describe, expect, it } from 'vitest';
-import { compareChips, deltaChip, newToYou } from './yearCompare';
+import type { StatsBean, StatsBrew, StatsData } from '../api/types';
+import { compareChips, deltaChip, newToYou, yearHistory } from './yearCompare';
 import type { YearFigures } from './yearInCoffee';
+
+const brew = (fields: Partial<StatsBrew> = {}): StatsBrew => ({
+  id: 'b', timestamp: '2026-03-03T08:00:00.000Z', utcOffsetMinutes: 0, userId: 'u', beanId: 'kenya', recipeId: null, brewerId: null,
+  methodId: null, styleId: null, brewsLike: null, grinderId: null, drinkId: null, toolIds: [], problemIds: [], doseGrams: 20,
+  waterGrams: 300, iceGrams: null, yieldGrams: null, servingSize: null, servingUnit: null, drinkServingSize: null, drinkServingUnit: null,
+  dilutionRatio: null, timeSec: 150, expectedFinishMinSec: null, expectedFinishMaxSec: null, grindSetting: null, tempC: null,
+  tdsPercent: null, rating: null, drinkRating: null, forMe: true, guestIds: [], unnamedGuests: 0, servings: [], flavors: [], ...fields,
+});
+const bean = (fields: Partial<StatsBean> = {}): StatsBean => ({
+  id: 'kenya', roasterName: 'House', beanName: 'Kenya Nyeri', batchNumber: null, country: 'Kenya', originArea: null, altitudeMasl: null, processId: 'washed',
+  roastLevel: 'medium_light', roastDate: null, varieties: ['SL28'], species: null, decaf: false, priceAmount: null, priceCurrency: null, bagWeightGrams: null,
+  inventoryWeightGrams: 100, purchaseDate: null, createdAt: '2026-01-01T09:00:00.000Z', archivedAt: null, freezes: [], photoCount: 0, ...fields,
+});
+const data = (brews: StatsBrew[]): StatsData => ({
+  brews,
+  beans: [bean(), bean({ id: 'blend', roasterName: 'Atlas', beanName: 'Blend', country: 'Ethiopia, Colombia', processId: 'natural', varieties: ['Heirloom', 'SL28'] })],
+  lookups: {
+    brewers: [],
+    methods: [],
+    styles: [],
+    recipes: [{ id: 'v60', name: 'V60 Daily', expectedFinishMinSec: null, expectedFinishMaxSec: null, createdAt: '2026-01-01T00:00:00.000Z' }],
+    grinders: [],
+    tools: [],
+    problems: [],
+    processes: [{ id: 'washed', name: 'Washed' }, { id: 'natural', name: 'Natural' }],
+    drinks: [],
+    guests: [],
+  },
+});
+
+const at = (day: string, hour = 8) => `${day}T${String(hour).padStart(2, '0')}:00:00.000Z`;
 
 describe('Your Year in Coffee compared with earlier years (backlog 65)', () => {
   it('words a change: percent, about the same, a multiple, days, stars', () => {
@@ -30,5 +62,30 @@ describe('Your Year in Coffee compared with earlier years (backlog 65)', () => {
   it('finds names never brewed before, ignoring case', () => {
     const h = [{ originNames: ['kenya'] }, { originNames: ['Peru'] }] as unknown as YearFigures[];
     expect(newToYou(['Kenya', 'Peru', 'Laos'], h, (y) => y.originNames)).toEqual(['Laos']);
+  });
+
+  it('marks a first year joined after January as partial, scaled to a full year', () => {
+    const days = (from: string, n: number) => Array.from({ length: n }, (_, i) => brew({ id: `${from}-${i}`, timestamp: at(new Date(Date.parse(from) + i * 86_400_000).toISOString().slice(0, 10)) }));
+    const all = data([...days('2024-10-01', 10), ...days('2025-03-01', 10), ...days('2026-02-01', 10)]);
+    const h = yearHistory(all, 2026, 'medium', '2026-11-17', null);
+    expect(h.map((y) => y.year)).toEqual([2025, 2024]);
+    expect(h[0]!.covered).toBeUndefined(); // a later year is whole, gaps and all
+    expect(h[1]!.covered).toMatchObject({ from: '2024-10-01', days: 92, tooShort: false });
+    expect(h[1]!.covered!.scale).toBeCloseTo(366 / 92);
+    // From 15 January: whole.
+    expect(yearHistory(data(days('2025-01-15', 10)), 2026, 'medium', '2026-11-17', null)[0]!.covered).toBeUndefined();
+    // Under 30 days: too short.
+    expect(yearHistory(data(days('2025-12-10', 10)), 2026, 'medium', '2026-11-17', null)[0]!.covered!.tooShort).toBe(true);
+    // In progress, cut to 17 Nov: 1 Oct – 17 Nov is 48 days of 322.
+    const soFar = yearHistory(all, 2026, 'medium', '2026-11-17', '11-17').find((y) => y.year === 2024)!;
+    expect(soFar.covered).toMatchObject({ days: 48 });
+    expect(soFar.covered!.scale).toBeCloseTo(322 / 48);
+  });
+
+  it("compares with a partial year at its pace", () => {
+    const chips = compareChips(2025, 112, [{ year: 2024, value: 25, brews: 25, scale: 4, note: '(n)' }], 'percent');
+    expect(chips).toEqual([{ dir: 'up', text: "+12% on 2024's pace", note: '(n)' }]);
+    const avg = compareChips(2026, 110, [{ year: 2025, value: 100, brews: 100 }, { year: 2024, value: 30, brews: 30, scale: 4 }], 'percent');
+    expect(avg[1]!.text).toBe('About the same as an average year'); // (100 + 120) / 2
   });
 });

@@ -164,6 +164,15 @@ years are cut to the same date ("+5% on 2025 by this date"). Up is in the
 brand colour, down stays muted. Only my brews compares you with you, the
 bar with the bar. A slide with chips stays 1 s longer.
 
+A first year someone joined after January is **partial**: its covered days
+run from its first brew to the period's end. Totals (brews, coffee, volume,
+brews for others, days brewed) are scaled to the full period and its
+last-year chip says so: "+12% on 2024's pace" (screen readers hear "2024
+started on 1 Oct, scaled to a full year"). The streak and how many origins
+and roasters can't be scaled, so a partial year isn't compared on them; the
+rating and the top bean or recipe compare as they are. Under 30 covered
+days it isn't compared at all. Its names still count for "new to you".
+
 **Moving on:** each slide moves on by itself once it has had time to be
 read (`slideDuration` in `frontend/src/lib/yearSlides.ts`: 4 s for the
 first, 5 s for the others, plus 1.5 s with a line under the figure and

@@ -300,7 +300,7 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
           <p v-if="slide.sub" class="sub">{{ slide.sub }}</p>
           <ul v-if="slide.compare" class="chips">
             <li v-for="(c, i) in slide.compare" :key="c.text" :class="[`dir-${c.dir}`, { record: c.record }]" :style="{ '--i': i }">
-              <AppIcon :name="chipIcon(c)" :size="16" />{{ c.text }}
+              <AppIcon :name="chipIcon(c)" :size="16" />{{ c.text }}<span v-if="c.note" class="visually-hidden"> {{ c.note }}</span>
             </li>
           </ul>
           <div v-if="slide.bars" class="bars" role="img" :aria-label="barsLabel">
@@ -312,7 +312,7 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
           <ol v-if="slide.list?.length" class="list" :class="{ summary: slide.key === 'summary' }">
             <li v-for="(item, i) in slide.list" :key="item.name" :style="{ '--i': i }">
               <span class="name">{{ item.name }}</span>
-              <span class="detail">{{ item.detail }}<small v-if="item.change" class="change" :class="`dir-${item.change.dir}`">{{ item.change.text }}<span class="visually-hidden"> on {{ year - 1 }}</span></small></span>
+              <span class="detail">{{ item.detail }}<small v-if="item.change" class="change" :class="`dir-${item.change.dir}`">{{ item.change.text }}<span class="visually-hidden"> on {{ year - 1 }}{{ item.change.note ? ` ${item.change.note}` : '' }}</span></small></span>
             </li>
           </ol>
           <div v-if="slide.key === 'summary'" class="confetti" aria-hidden="true">

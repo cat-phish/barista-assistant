@@ -114,4 +114,31 @@ describe('Your Year in Coffee slides (backlog 65)', () => {
     expect(summaryLines(now, { ...ctx, history: [year(2025, 50)] })[0]).toMatchObject({ name: 'Days brewed', change: { dir: 'up', text: '2.1×' } });
     expect(slideDuration(one.find((s) => s.key === 'brews')!)).toBe(SLIDE_MS.base + SLIDE_MS.sub + SLIDE_MS.compare);
   });
+
+  it('a partial last year: totals at its pace, streak and origins left out, rating as it is', () => {
+    const now = figures({
+      year: 2025,
+      recap: recap({ brews: 112, daysBrewed: 100, coffeeGrams: 1680, rating: { mean: 4.2, n: 50 } }),
+      streak: { days: 10, start: '2025-03-01', end: '2025-03-10' },
+      origins: [{ name: 'Kenya', brews: 60 }, { name: 'Peru', brews: 52 }],
+      originNames: ['Kenya', 'Peru'],
+    });
+    const partial = figures({
+      year: 2024,
+      recap: recap({ brews: 28, daysBrewed: 25, coffeeGrams: 420, rating: { mean: 4.0, n: 20 } }),
+      streak: { days: 5, start: '2024-10-02', end: '2024-10-06' },
+      originNames: ['Kenya'],
+    });
+    const history = [{ ...partial, covered: { from: '2024-10-01', days: 92, scale: 4, tooShort: false } }];
+    const slides = yearSlides(now, { ...ctx, history });
+    const by = (k: string) => slides.find((s) => s.key === k)!;
+    expect(by('brews').compare).toEqual([{ dir: 'same', text: "About the same as 2024's pace", note: '(2024 started on 1 Oct, scaled to a full year)' }]);
+    expect(by('coffee').compare!.map((c) => c.text)).toEqual(["About the same as 2024's pace", '+0.2 ★ on 2024']);
+    expect(by('streak').compare).toBeUndefined();
+    expect(by('origins').compare).toEqual([{ dir: 'up', text: '1 new to you' }]);
+    expect(summaryLines(now, { ...ctx, history })[0]!.change).toMatchObject({ dir: 'same', text: '=' });
+    // Too short: no comparison at all.
+    const short = yearSlides(now, { ...ctx, history: [{ ...partial, covered: { from: '2024-12-10', days: 22, scale: 16.6, tooShort: true } }] });
+    expect(short.find((s) => s.key === 'coffee')!.compare).toBeUndefined();
+  });
 });
