@@ -144,6 +144,13 @@ export type ShareResult = 'shared' | 'saved' | 'cancelled';
 
 // The share sheet where it takes files (most phones), else a download.
 // Closing the sheet isn't an error.
+// Whether this browser's share sheet takes image files; without it Share
+// would only download, so the slides offer Save image alone.
+export function canShareImages(): boolean {
+  if (typeof navigator === 'undefined' || !navigator.canShare) return false;
+  return navigator.canShare({ files: [new File([''], 'a.png', { type: 'image/png' })] });
+}
+
 export async function shareImage(blob: Blob, fileName: string, title: string, save: (name: string, blob: Blob) => void): Promise<ShareResult> {
   const file = new File([blob], fileName, { type: 'image/png' });
   if (typeof navigator !== 'undefined' && navigator.canShare?.({ files: [file] })) {

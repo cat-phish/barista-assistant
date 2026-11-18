@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { STORY, cardLayout, drawYearCard, fitText, shareImage, yearImageName, type YearCard } from './yearImage';
+import { STORY, canShareImages, cardLayout, drawYearCard, fitText, shareImage, yearImageName, type YearCard } from './yearImage';
 
 // 10px a character, whatever the font.
 const measure = { measureText: (t: string) => ({ width: t.length * 10 }) };
@@ -75,6 +75,18 @@ describe('shareImage', () => {
     vi.stubGlobal('navigator', {});
     expect(await shareImage(blob, 'a.png', 'A', save)).toBe('saved');
     expect(save).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('canShareImages', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it('only where the share sheet takes files', () => {
+    vi.stubGlobal('navigator', { canShare: () => true });
+    expect(canShareImages()).toBe(true);
+    vi.stubGlobal('navigator', { canShare: () => false });
+    expect(canShareImages()).toBe(false);
+    vi.stubGlobal('navigator', {});
+    expect(canShareImages()).toBe(false);
   });
 });
 

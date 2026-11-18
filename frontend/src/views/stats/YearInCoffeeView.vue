@@ -21,7 +21,7 @@ import type { Chip } from '../../lib/yearCompare';
 import { completeFigures, latestYear, type FrozenYear } from '../../lib/yearInCoffee';
 import { markSeen } from '../../lib/recap';
 import { saveBlob } from '../../lib/backup';
-import { readCardColors, shareImage, yearCardPng, yearImageName, type YearCard } from '../../lib/yearImage';
+import { canShareImages, readCardColors, shareImage, yearCardPng, yearImageName, type YearCard } from '../../lib/yearImage';
 import { MONTH_NAMES, personLabels, slideDuration, yearSlides } from '../../lib/yearSlides';
 import AppIcon from '../../components/icons/AppIcon.vue';
 import RecapSummaryCard from '../../components/RecapSummaryCard.vue';
@@ -264,6 +264,18 @@ watch(shareCard, (card) => {
   sharePng = card ? yearCardPng(card, readCardColors()) : null;
   sharePng?.catch(() => undefined); // reported on the tap
 });
+const canShare = canShareImages();
+// Save image: always a download, for when the share sheet has no way to keep it.
+async function saveImage(): Promise<void> {
+  const card = shareCard.value;
+  if (!card || !sharePng) return;
+  try {
+    saveBlob(yearImageName(card), await sharePng);
+    shareNote.value = 'Image saved';
+  } catch {
+    shareNote.value = "Couldn't make the image";
+  }
+}
 async function share(): Promise<void> {
   const card = shareCard.value;
   if (!card || !sharePng) return;
@@ -275,11 +287,17 @@ async function share(): Promise<void> {
   }
 }
 const held = ref(false);
+// Its AI summary being written holds the slides; the full time starts once it's in.
+const writing = ref(false);
+watch(writing, (w) => !w && (elapsed.value = 0));
 const elapsed = ref(0);
 const duration = computed(() => (slide.value ? slideDuration(slide.value) : 0));
 const progress = computed(() => (duration.value ? Math.min(1, elapsed.value / duration.value) : 0));
-const running = computed(() => !!slide.value && !last.value && !cover.value && !paused.value && !held.value && !loading.value);
-watch(index, () => (elapsed.value = 0));
+const running = computed(() => !!slide.value && !last.value && !cover.value && !paused.value && !held.value && !writing.value && !loading.value);
+watch(index, () => {
+  elapsed.value = 0;
+  writing.value = false; // the card's gone with the slide
+});
 watch([held, paused], ([h, p]) => {
   if (h || p) audio.value.pause();
   else play();
@@ -373,7 +391,7 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
       <Transition :name="direction" mode="out-in">
         <section :key="`${year}-${mine}-${slide.key}`" class="slide" :class="`slide-${slide.key}`" aria-live="polite">
           <p class="kicker">{{ slide.kicker }}</p>
-          <RecapSummaryCard v-if="slide.key === 'words'" class="words" :recap-key="summaryKey" :in-progress="false" :has-brews="true" @pointerdown.stop @pointerup.stop />
+          <RecapSummaryCard v-if="slide.key === 'words'" class="words" :recap-key="summaryKey" :in-progress="false" :has-brews="true" @busy="writing = $event" />
           <p v-else class="value" :class="{ long: slide.value.length > 18 }">
             <span aria-hidden="true">{{ shownValue }}</span><span class="visually-hidden">{{ slide.value }}</span>
           </p>
@@ -407,7 +425,8 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
           <div v-if="slide.key === 'summary'" class="years">
             <button type="button" class="btn btn-secondary" @click="go({ year: year - 1 })">‹ {{ year - 1 }}</button>
             <button v-if="year < latest" type="button" class="btn btn-secondary" @click="go({ year: year + 1 })">{{ year + 1 }} ›</button>
-            <button type="button" class="btn btn-primary" @click="share"><AppIcon name="share" :size="16" /> Share</button>
+            <button v-if="canShare" type="button" class="btn btn-primary" @click="share"><AppIcon name="share" :size="16" /> Share</button>
+            <button type="button" class="btn" :class="canShare ? 'btn-secondary' : 'btn-primary'" @click="saveImage"><AppIcon name="download" :size="16" /> Save image</button>
           </div>
           <p v-if="slide.key === 'summary' && shareNote" class="sub" role="status">{{ shareNote }}</p>
         </section>

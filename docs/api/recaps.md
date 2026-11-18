@@ -245,8 +245,9 @@ it runs. It stops on the summary. The pause button in the top bar, beside mute, 
 and so does holding a finger or the mouse on the slide, as in stories:
 the slide, its animation and the music stop, and the top and bottom bars
 fade out after a moment, until you let go (letting go isn't a tap). A
-hidden tab or loading pauses it too. Taps, swipes and arrow keys still move at
-once, and the new slide's time starts afresh.
+hidden tab or loading pauses it too, and so does the AI summary while it's
+being written (its full time starts once it's in). Taps, swipes and arrow
+keys still move at once (on the AI summary's text too), and the new slide's time starts afresh.
 
 Music: one song, your own where the server allows uploads and you have
 one (`auth.md` §1 "Year song", uploaded under Settings → Recaps), else the
@@ -265,7 +266,9 @@ starts the song straight away. It pauses while
 the tab is hidden, the slide is held or paused, fades out over 0.6 s on
 close and stops when the slides do.
 
-**Sharing.** The summary slide has a **Share** button: the summary card
+**Sharing.** The summary slide has a **Share** button and a **Save image**
+one (always a download, for a share sheet with no way to keep it; alone
+where the share sheet can't take files): the summary card
 (kicker, brews, its lines with the change on last year, and a footer with
 the app's name, the workspace's too on the bar's year) drawn on a 1080×1920
 story-size canvas (`frontend/src/lib/yearImage.ts`, reusing

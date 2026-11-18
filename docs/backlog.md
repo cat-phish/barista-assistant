@@ -521,6 +521,11 @@ Recording a brew: what's measured, and how fast it is to log.
      API or downloaded; drawn so 68 (video) can reuse it.
   - **(Done)** Built-in CC0 track: "Poor But Happy" (Holizna, OpenGameArt),
     credited in `frontend/public/music/CREDITS.md`.
+  - **To reconsider: the Best cup slide.** It shows one top-rated brew
+    (`best[0]`), but a year will likely have several 5★ cups, so which one
+    shows is close to arbitrary. Options: count them ("14 five-star cups",
+    with the bean or recipe behind most of them), show a few, or drop the
+    slide. A changed figure is changed on both sides (CLAUDE.md rule 15).
 - **Size:** L (figures + slides; AI summary; image; notification).
 - **Depends on:** nothing; reuses recaps (18).
 - **Open questions:**

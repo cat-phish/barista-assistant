@@ -10,6 +10,8 @@ import { formatWhen } from '../lib/format';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const props = defineProps<{ recapKey: RecapKey; inProgress: boolean; hasBrews: boolean }>();
+// True while it's being asked for or written, so the slides can wait for it.
+const emit = defineEmits<{ busy: [boolean] }>();
 const workspaces = useWorkspaceStore();
 
 const recap = ref<RecapSummary | null>(null);
@@ -86,6 +88,7 @@ async function write(): Promise<void> {
 }
 
 const status = computed(() => recap.value?.status ?? 'none');
+watch(() => asking.value || status.value === 'pending', (b) => emit('busy', b), { immediate: true });
 const canWrite = computed(() => workspaces.canEdit && props.hasBrews && status.value !== 'pending');
 </script>
 
