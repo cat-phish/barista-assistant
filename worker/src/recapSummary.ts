@@ -2,15 +2,16 @@ import type { RecapSummaryJobData } from "@barista/shared/jobs";
 import { periodOf, previousPeriod } from "@barista/shared/recapPeriods";
 import { userPreferences, DEFAULT_WORKSPACE_SETTINGS, recaps, users, withDefaults, workspaces } from "@barista/shared/schema";
 import { isCustomPrompt } from "@barista/shared/aiPrompt";
-import { and, asc, eq, gte, lte } from "drizzle-orm";
+import { yearInCoffeePeriod, type YearFigures } from "@barista/shared/yearInCoffee";
+import { and, asc, eq, gte, lt, lte } from "drizzle-orm";
 import { resolveAi } from "./ai/resolve.js";
 import { db } from "./db.js";
 import { requestRecapSummary } from "./llm.js";
-import { loadPeriodContext } from "./periodContext.js";
+import { loadPeriodContext, type YearHighlights } from "./periodContext.js";
 import { promptFor } from "./processor.js";
 import { RECAP_PROMPT_VERSION } from "./prompt.js";
 
-// A recap's AI summary (docs/api/llm-contract.md §9f, docs/api/recaps.md
+// A recap's (or Your Year in Coffee's) AI summary (docs/api/llm-contract.md §9f, docs/api/recaps.md
 // §11c): the period of the row's person (scope "mine") or everyone's in its
 // workspace ("all"), with the workspace's hidden details left out and the
 // person's own instructions added. Saved on the row; throwing makes BullMQ
@@ -27,24 +28,38 @@ export async function writeRecapSummary({ recapId }: RecapSummaryJobData): Promi
     .where(eq(recaps.id, recapId));
   if (!row) return { status: "skipped", reason: "recap no longer exists" };
   const { recap } = row;
-  // Your Year in Coffee's own summary comes with backlog 65, plan step 3.
-  if (recap.kind === "yearInCoffee") return { status: "skipped", reason: "not a recap kind" };
   const prefs = userPreferences(row.preferences ?? null);
   const hidden = new Set(withDefaults(DEFAULT_WORKSPACE_SETTINGS, row.settings ?? null).aiHidden);
-  const period = periodOf(recap.kind, recap.periodStart, prefs.weekStartsOn);
+  // Your Year in Coffee: 1 January–6 December against the same dates a year
+  // before, with the highlights of its frozen copy when it has one.
+  const yearInCoffee = recap.kind === "yearInCoffee";
+  const year = Number(recap.periodStart.slice(0, 4));
+  const period = recap.kind === "yearInCoffee" ? yearInCoffeePeriod(year) : periodOf(recap.kind, recap.periodStart, prefs.weekStartsOn);
   const context = await loadPeriodContext({
     workspaceId: recap.workspaceId,
     userId: recap.scope === "mine" ? recap.userId : null,
     kind: recap.kind,
     period,
-    previous: previousPeriod(recap.kind, period, prefs.weekStartsOn),
+    previous: recap.kind === "yearInCoffee" ? yearInCoffeePeriod(year - 1) : previousPeriod(recap.kind, period, prefs.weekStartsOn),
   });
-  // A year also gets its months' written summaries, same scope (llm-contract.md §9f).
-  if (recap.kind === "yearly") {
+  if (yearInCoffee && recap.figures) context.yearHighlights = yearHighlights(recap.figures.figures);
+  // A year also gets its months' written summaries, same scope (llm-contract.md §9f);
+  // Your Year in Coffee only the months it covers whole (January to November).
+  if (recap.kind === "yearly" || yearInCoffee) {
     const monthly = await db
       .select({ periodStart: recaps.periodStart, summary: recaps.summary, highlights: recaps.highlights })
       .from(recaps)
-      .where(and(eq(recaps.workspaceId, recap.workspaceId), eq(recaps.userId, recap.userId), eq(recaps.scope, recap.scope), eq(recaps.kind, "monthly"), eq(recaps.status, "done"), gte(recaps.periodStart, period.start), lte(recaps.periodStart, period.end)))
+      .where(
+        and(
+          eq(recaps.workspaceId, recap.workspaceId),
+          eq(recaps.userId, recap.userId),
+          eq(recaps.scope, recap.scope),
+          eq(recaps.kind, "monthly"),
+          eq(recaps.status, "done"),
+          gte(recaps.periodStart, period.start),
+          yearInCoffee ? lt(recaps.periodStart, `${year}-12-01`) : lte(recaps.periodStart, period.end),
+        ),
+      )
       .orderBy(asc(recaps.periodStart));
     const written = monthly.flatMap((m) => (m.summary ? [{ month: m.periodStart.slice(0, 7), summary: m.summary, highlights: m.highlights ?? [] }] : []));
     if (written.length) context.monthlySummaries = written;
@@ -71,6 +86,24 @@ export async function writeRecapSummary({ recapId }: RecapSummaryJobData): Promi
     })
     .where(eq(recaps.id, recapId));
   return { status: "saved", id: recapId };
+}
+
+const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const TOP = 5;
+// The frozen figures as the AI gets them (periodContext.ts YearHighlights): names, no people.
+export function yearHighlights(f: YearFigures): YearHighlights {
+  return {
+    longestStreak: f.streak ?? null,
+    busiestMonth: f.busiestMonth ? { month: `${f.year}-${String(f.busiestMonth.month + 1).padStart(2, "0")}`, brews: f.busiestMonth.brews } : null,
+    busiestWeekday: f.busiestWeekday ? { weekday: WEEKDAYS[f.busiestWeekday.weekday] ?? "", brews: f.busiestWeekday.brews } : null,
+    favouriteHour: f.favouriteHour ?? null,
+    origins: (f.origins ?? []).slice(0, TOP),
+    roasters: (f.roasters ?? []).slice(0, TOP),
+    processes: (f.processes ?? []).slice(0, TOP),
+    varieties: (f.varieties ?? []).slice(0, TOP),
+    flavors: (f.flavors ?? []).slice(0, TOP),
+    mostImproved: f.mostImproved ?? null,
+  };
 }
 
 // Every attempt failed: the recap shows why, with Try again.

@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
-import { periodOf, RECAP_KINDS } from "@barista/shared/recapPeriods";
-import { userPreferences, DEFAULT_WORKSPACE_SETTINGS, RECAP_SCOPES, recaps, users, withDefaults, workspaces, type RecapRow, type RecapScope } from "@barista/shared/schema";
+import { periodOf } from "@barista/shared/recapPeriods";
+import { userPreferences, DEFAULT_WORKSPACE_SETTINGS, RECAP_ROW_KINDS, RECAP_SCOPES, recaps, users, withDefaults, workspaces, type RecapRow, type RecapScope } from "@barista/shared/schema";
 import { AI_COST, spendAi } from "../aiConfig.js";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
 import { db } from "../db.js";
@@ -18,7 +18,7 @@ import { latestYearInCoffee, type FrozenYear } from "@barista/shared/yearInCoffe
 // client; only the summary is stored.
 
 export interface RecapView {
-  kind: RecapRow["kind"]; // one of RECAP_KINDS: the routes take no other
+  kind: RecapRow["kind"]; // a recap's, or yearInCoffee: Your Year in Coffee's summary, on its frozen copy's row
   periodStart: string;
   scope: RecapScope;
   status: "none" | "pending" | "done" | "failed";
@@ -36,7 +36,7 @@ interface WorkspaceParams {
 }
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "a date YYYY-MM-DD");
-const keySchema = z.object({ kind: z.enum(RECAP_KINDS), periodStart: day, scope: z.enum(RECAP_SCOPES) }).strict();
+const keySchema = z.object({ kind: z.enum(RECAP_ROW_KINDS), periodStart: day, scope: z.enum(RECAP_SCOPES) }).strict();
 
 const COLUMNS = {
   kind: recaps.kind,
@@ -92,15 +92,28 @@ recapsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Recap
     db.select({ settings: workspaces.settings }).from(workspaces).where(eq(workspaces.id, workspaceId)),
   ]);
   const prefs = userPreferences(user?.preferences ?? null);
-  const period = periodOf(body.kind, body.periodStart, prefs.weekStartsOn);
-  if (period.start !== body.periodStart) {
-    sendError(res, 400, `periodStart: not the start of a ${body.kind === "weekly" ? "week" : body.kind === "monthly" ? "month" : "year"} (weeks start on your chosen day)`);
-    return;
-  }
   const zone = prefs.timeZone ?? withDefaults(DEFAULT_WORKSPACE_SETTINGS, ws?.settings ?? null).timeZone;
-  if (period.end >= todayIn(zone)) {
-    sendError(res, 409, "This period hasn't ended yet", { code: "recap_in_progress" });
-    return;
+  if (body.kind === "yearInCoffee") {
+    // Your Year in Coffee's summary: keyed by 1 January, once the year is out (7 December).
+    const year = Number(body.periodStart.slice(0, 4));
+    if (body.periodStart !== `${year}-01-01`) {
+      sendError(res, 400, "periodStart: Your Year in Coffee starts on 1 January");
+      return;
+    }
+    if (year > latestYearInCoffee(todayIn(zone))) {
+      sendError(res, 409, "Your Year in Coffee isn't out yet (7 December)", { code: "year_not_out" });
+      return;
+    }
+  } else {
+    const period = periodOf(body.kind, body.periodStart, prefs.weekStartsOn);
+    if (period.start !== body.periodStart) {
+      sendError(res, 400, `periodStart: not the start of a ${body.kind === "weekly" ? "week" : body.kind === "monthly" ? "month" : "year"} (weeks start on your chosen day)`);
+      return;
+    }
+    if (period.end >= todayIn(zone)) {
+      sendError(res, 409, "This period hasn't ended yet", { code: "recap_in_progress" });
+      return;
+    }
   }
   if (!(await spendAi(res, workspaceId, userId, AI_COST.recap))) return;
 

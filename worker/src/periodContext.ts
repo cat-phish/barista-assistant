@@ -45,8 +45,23 @@ export interface PeriodFigures {
   recipes: Array<{ recipe: string; brews: number }>;
   brewers: Array<{ brewer: string; brews: number }>;
 }
+// Your Year in Coffee's own figures (docs/api/recaps.md §11c), as its slides
+// show them: by name, no people. Origins, processes and varieties follow
+// their AI switches (toPeriodInput).
+export interface YearHighlights {
+  longestStreak: { days: number; start: string; end: string } | null;
+  busiestMonth: { month: string; brews: number } | null; // "YYYY-MM"
+  busiestWeekday: { weekday: string; brews: number } | null;
+  favouriteHour: { hour: number; brews: number } | null; // local, 0–23
+  origins: Array<{ name: string; brews: number }>; // the top few, most first
+  roasters: Array<{ name: string; brews: number }>;
+  processes: Array<{ name: string; brews: number }>;
+  varieties: Array<{ name: string; brews: number }>;
+  flavors: Array<{ name: string; brews: number }>;
+  mostImproved: { kind: "recipe" | "bean"; name: string; from: number; to: number; brews: number } | null;
+}
 export interface PeriodContext {
-  kind: "weekly" | "monthly" | "yearly" | "custom";
+  kind: "weekly" | "monthly" | "yearly" | "yearInCoffee" | "custom"; // yearInCoffee: 1 January–6 December, to share
   period: OpenRange;
   filters: string | null; // what else narrows the brews, in words ("Guji · V60 · Only mine")
   previous: PeriodRange | null;
@@ -57,6 +72,7 @@ export interface PeriodContext {
   brewsChosen: "newest" | "spreadAcrossMonths"; // which ones are sent when there are more
   months?: Array<{ month: string } & PeriodFigures>; // yearly: each month with brews, "YYYY-MM", oldest first
   monthlySummaries?: Array<{ month: string; summary: string; highlights: string[] }>; // yearly: the ones written (recapSummary.ts)
+  yearHighlights?: YearHighlights; // yearInCoffee: from its frozen figures (recapSummary.ts)
   ratingScale: "0.5-5";
 }
 
@@ -140,7 +156,7 @@ export async function loadPeriodContext(q: PeriodQuery): Promise<PeriodContext> 
   const beanIds = [...new Set(all.map((b) => b.beanId))];
   const brewerIds = [...new Set(all.flatMap((b) => (b.brewerId ? [b.brewerId] : [])))];
   const max = q.maxBrews ?? PERIOD_MAX_BREWS;
-  const spread = q.kind === "yearly" && rows.length > max;
+  const spread = (q.kind === "yearly" || q.kind === "yearInCoffee") && rows.length > max;
   const sent = spread ? spreadAcrossMonths(rows, max) : rows.slice(0, max);
   const ids = sent.map((b) => b.id);
   const [loaded, names, marks, tools, problems, flavors, servedAs, guested] = await Promise.all([
@@ -184,7 +200,7 @@ export async function loadPeriodContext(q: PeriodQuery): Promise<PeriodContext> 
     brewsLeftOut: Math.max(0, rows.length - max),
     brewsChosen: spread ? "spreadAcrossMonths" : "newest",
     months:
-      q.kind === "yearly"
+      (q.kind === "yearly" || q.kind === "yearInCoffee")
         ? byMonth(rows).map(([month, list]) => {
             const f = figuresOf(list, beanLabel, brewerName, guested);
             return { month, ...f, beans: f.beans.slice(0, MONTH_TOP), recipes: f.recipes.slice(0, MONTH_TOP), brewers: f.brewers.slice(0, MONTH_TOP) };

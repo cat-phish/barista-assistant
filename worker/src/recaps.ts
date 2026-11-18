@@ -123,7 +123,7 @@ async function claim(workspaceId: string, userId: string, kind: RecapKind, perio
 // recapAutoSummaries (docs/api/recaps.md §11c): the summary is written before
 // the notification goes, when the workspace has AI. A failure is recorded
 // on the row (Try again in the recap) and doesn't stop the notification.
-async function autoSummary(recapId: string, workspaceId: string): Promise<void> {
+export async function autoSummary(recapId: string, workspaceId: string): Promise<void> {
   if (!recapId) return;
   if (!(await resolveAi(workspaceId).then(() => true, () => false))) return;
   await db.update(recaps).set({ status: "pending", error: null, updatedAt: new Date() }).where(eq(recaps.id, recapId));

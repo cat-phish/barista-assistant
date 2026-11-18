@@ -7,7 +7,7 @@ import type { FrozenYear } from '../lib/yearInCoffee';
 // Coffee is the exception: frozen on the server, read with yearInCoffee.
 export type RecapScope = 'mine' | 'all';
 export interface RecapKey {
-  kind: RecapKind;
+  kind: RecapKind | 'yearInCoffee'; // yearInCoffee: Your Year in Coffee's own summary, periodStart 1 January
   periodStart: string;
   scope: RecapScope;
 }

@@ -44,6 +44,21 @@ describe("recap summaries", () => {
     expect((await owner.agent.post(base).send({ kind: "monthly", periodStart: "2026-10-01", scope: "all" })).status).toBe(202);
   });
 
+  it("Your Year in Coffee's own summary: keyed by 1 January, once the year is out", async () => {
+    const owner = await newUser("owner");
+    const ws = (await newWorkspace(owner)).id;
+    const base = `/api/workspaces/${ws}/recaps`;
+    const year = { kind: "yearInCoffee", periodStart: "2025-01-01", scope: "all" } as const;
+    expect((await owner.agent.post(base).send({ ...year, periodStart: "2025-03-01" })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ ...year, periodStart: "2999-01-01" })).body.code).toBe("year_not_out");
+    const res = await owner.agent.post(base).send(year);
+    expect(res.status).toBe(202);
+    expect(res.body.recap).toMatchObject({ ...year, status: "pending" });
+    expect((await owner.agent.get(`${base}?kind=yearInCoffee&periodStart=2025-01-01&scope=all`)).body.recap).toMatchObject({ status: "pending" });
+    // Not the Yearly tab's.
+    expect((await owner.agent.get(`${base}?kind=yearly&periodStart=2025-01-01&scope=all`)).body.recap).toBeNull();
+  });
+
   it("viewers can read but not ask; others' workspaces are off limits", async () => {
     const owner = await newUser("owner");
     const viewer = await newUser("viewer");

@@ -171,6 +171,7 @@ export function personLabels(people: ReadonlyArray<{ userId: string }>, me: stri
 export const SLIDE_MS = { intro: 4000, base: 5000, sub: 1500, row: 700, compare: 1000, max: 12000 };
 export function slideDuration(slide: Slide): number {
   if (slide.key === 'intro') return SLIDE_MS.intro;
+  if (slide.key === 'words') return SLIDE_MS.max; // the AI summary: a paragraph to read
   const ms = SLIDE_MS.base + (slide.sub ? SLIDE_MS.sub : 0) + (slide.list?.length ?? 0) * SLIDE_MS.row + (slide.compare?.length ? SLIDE_MS.compare : 0);
   return Math.min(SLIDE_MS.max, ms);
 }

@@ -9,6 +9,7 @@ import type { AiClient } from "../src/ai/client.js";
 import { loadPeriodContext, PERIOD_MAX_BREWS, spreadAcrossMonths } from "../src/periodContext.js";
 import { toPeriodInput } from "../src/prompt.js";
 import { writeRecapSummary } from "../src/recapSummary.js";
+import { freezeYearInCoffee } from "@barista/shared/yearFreeze";
 
 // docs/api/llm-contract.md §9f: real database, fake AI.
 vi.mock("../src/llm.js", async (importOriginal) => ({ ...(await importOriginal<typeof import("../src/llm.js")>()), requestRecapSummary: vi.fn() }));
@@ -164,6 +165,29 @@ describe("writeRecapSummary", () => {
       { month: "2026-01", summary: "Summary 2026-01-01", highlights: ["One"] },
       { month: "2026-03", summary: "Summary 2026-03-01", highlights: ["One"] },
     ]);
+  });
+
+  it("Your Year in Coffee: 1 January–6 December, its months to November, the frozen highlights", async () => {
+    await brew("2026-03-03T08:00:00Z", { rating: 4 });
+    await brew("2026-03-04T08:00:00Z", { rating: 3 });
+    await brew("2026-12-10T08:00:00Z", { rating: 5 }); // after the window
+    for (const periodStart of ["2026-11-01", "2026-12-01"])
+      await db.insert(recaps).values({ id: randomUUID(), workspaceId, userId, kind: "monthly", periodStart, scope: "mine", status: "done", summary: `Summary ${periodStart}`, highlights: [] });
+    await freezeYearInCoffee(db, workspaceId, userId, 2026, "mine", "2026-12-07");
+    await db.update(workspaces).set({ settings: { aiHidden: ["origin"] } }).where(eq(workspaces.id, workspaceId));
+    const [row] = await db.select({ id: recaps.id }).from(recaps).where(eq(recaps.kind, "yearInCoffee"));
+    llm.mockResolvedValue({ summary: ANSWER, usage: null });
+    expect(await writeRecapSummary({ recapId: row!.id })).toEqual({ status: "saved", id: row!.id });
+    const [, context, hidden] = llm.mock.calls[0]!;
+    expect(context).toMatchObject({ kind: "yearInCoffee", period: { start: "2026-01-01", end: "2026-12-06" }, previous: { start: "2025-01-01", end: "2025-12-06" } });
+    expect(context.figures.brews).toBe(2);
+    expect(context.monthlySummaries?.map((m) => m.month)).toEqual(["2026-11"]); // December's runs past 6 December
+    expect(context.yearHighlights).toMatchObject({ longestStreak: { days: 2, start: "2026-03-03", end: "2026-03-04" }, busiestMonth: null }); // too few brews for that card
+    // Origins follow their switch, as on a brew.
+    const input = toPeriodInput(context, hidden) as { yearHighlights: Record<string, unknown> };
+    expect(input.yearHighlights.origins).toBeUndefined();
+    expect(input.yearHighlights.longestStreak).toBeDefined();
+    expect((await db.select().from(recaps).where(eq(recaps.id, row!.id)))[0]).toMatchObject({ status: "done", summary: ANSWER.summary, figures: expect.anything() });
   });
 
   it("everyone's brews for scope all; fails a period without brews", async () => {

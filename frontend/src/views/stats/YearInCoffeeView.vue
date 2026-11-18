@@ -21,6 +21,8 @@ import type { Chip } from '../../lib/yearCompare';
 import { completeFigures, latestYear, type FrozenYear } from '../../lib/yearInCoffee';
 import { MONTH_NAMES, personLabels, slideDuration, yearSlides } from '../../lib/yearSlides';
 import AppIcon from '../../components/icons/AppIcon.vue';
+import RecapSummaryCard from '../../components/RecapSummaryCard.vue';
+import { useAiAvailable } from '../../composables/useAiAvailable';
 import { useAuthStore } from '../../stores/auth';
 import { useWorkspaceStore } from '../../stores/workspace';
 
@@ -123,18 +125,43 @@ async function load(): Promise<void> {
 }
 watch([year, mine, () => workspaces.current?.id], () => void load(), { immediate: true });
 
+const aiAvailable = useAiAvailable();
+const summaryKey = computed(() => ({ kind: 'yearInCoffee' as const, periodStart: `${year.value}-01-01`, scope: mine.value ? ('mine' as const) : ('all' as const) }));
+const summaryDone = ref(false); // its AI summary is written: shown to anyone, Write summary or not
+watch(
+  [summaryKey, aiAvailable, () => workspaces.current?.id],
+  async ([key, ai, ws]) => {
+    summaryDone.value = false;
+    if (!ai || !ws) return;
+    try {
+      const r = await recapsApi.get(ws, key);
+      if (key === summaryKey.value) summaryDone.value = r.recap?.status === 'done';
+    } catch {
+      // no summary slide for a viewer, as if none were written
+    }
+  },
+  { immediate: true },
+);
 const slides = computed(() => {
   const d = data.value;
   if (!d) return [];
   const f = completeFigures(d.figures);
   const history = d.history.map(completeFigures);
   const person = personLabels(f.people, auth.user?.id ?? null, (id) => members.value.find((m) => m.userId === id)?.name ?? null);
-  return yearSlides(f, { mine: mine.value, inProgress: false, volume: (ml) => formatVolumeIn(ml, prefs.value.volumeUnit), weight: formatWeight, person, history });
+  const out = yearSlides(f, { mine: mine.value, inProgress: false, volume: (ml) => formatVolumeIn(ml, prefs.value.volumeUnit), weight: formatWeight, person, history });
+  // Its own AI summary (recaps.md §11c), just before the summary card: once
+  // written, or for someone who can write it (CLAUDE.md rule 14: only with a model).
+  if (aiAvailable.value && f.recap.brews > 0 && (summaryDone.value || workspaces.canEdit))
+    out.splice(out.length - 1, 0, { key: 'words', kicker: `${mine.value ? 'Your' : "The bar's"} ${f.year} in a few words`, value: '' });
+  return out;
 });
 
 const index = ref(0);
-watch(slides, (s) => {
-  if (index.value >= s.length) index.value = Math.max(0, s.length - 1);
+// The slides can change while open (the summary slide appears once its
+// status loads): stay on the same slide rather than the same position.
+watch(slides, (s, before) => {
+  const at = s.findIndex((x) => x.key === before?.[index.value]?.key);
+  index.value = at >= 0 ? at : Math.min(index.value, Math.max(0, s.length - 1));
 });
 const slide = computed(() => slides.value[index.value] ?? null);
 const last = computed(() => index.value >= slides.value.length - 1);
@@ -286,7 +313,8 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
       <Transition :name="direction" mode="out-in">
         <section :key="`${year}-${mine}-${slide.key}`" class="slide" :class="`slide-${slide.key}`" aria-live="polite">
           <p class="kicker">{{ slide.kicker }}</p>
-          <p class="value" :class="{ long: slide.value.length > 18 }">
+          <RecapSummaryCard v-if="slide.key === 'words'" class="words" :recap-key="summaryKey" :in-progress="false" :has-brews="true" @pointerdown.stop @pointerup.stop />
+          <p v-else class="value" :class="{ long: slide.value.length > 18 }">
             <span aria-hidden="true">{{ shownValue }}</span><span class="visually-hidden">{{ slide.value }}</span>
           </p>
           <p v-if="slide.sub" class="sub">{{ slide.sub }}</p>
@@ -596,6 +624,13 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
 .list .detail {
   color: var(--text-muted);
   white-space: nowrap;
+}
+/* Its AI summary, as the Yearly tab shows one: a card to read on the slide. */
+.words {
+  width: min(100%, 32rem);
+  max-height: 60vh;
+  overflow-y: auto;
+  text-align: left;
 }
 .list.summary .detail {
   color: var(--text);

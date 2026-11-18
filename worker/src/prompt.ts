@@ -25,7 +25,7 @@ export const PROMPT_VERSION = `2026-11-g.${RESEARCH_VERSION}`;
 export const CHAT_PROMPT_VERSION = "2026-11-e";
 // A recap's summary (RECAP_SYSTEM, toPeriodInput, the schema), stored on the
 // recaps row (docs/api/llm-contract.md §9f).
-export const RECAP_PROMPT_VERSION = "2026-11-b";
+export const RECAP_PROMPT_VERSION = "2026-11-c";
 // Learning preferences (docs/api/llm-contract.md §9g).
 export const PREFERENCES_PROMPT_VERSION = "2026-11-c";
 
@@ -233,6 +233,12 @@ export function toPeriodInput(context: PeriodContext, hidden: ReadonlySet<AiDeta
     brewsChosen: context.brewsLeftOut ? context.brewsChosen : undefined,
     months: context.months,
     monthlySummaries: context.monthlySummaries,
+    yearHighlights: context.yearHighlights && {
+      ...context.yearHighlights,
+      origins: hidden.has("origin") ? undefined : context.yearHighlights.origins,
+      processes: hidden.has("process") ? undefined : context.yearHighlights.processes,
+      varieties: hidden.has("variety") ? undefined : context.yearHighlights.varieties,
+    },
     equipment: equipment(context.brews, hidden),
   };
   return (compact(input) ?? {}) as LlmInput;
@@ -586,7 +592,7 @@ export const CHAT_PROPOSALS =
 // A recap's summary (docs/api/llm-contract.md §9f): fixed, then the
 // person's own instructions. Not editable under Your AI prompt.
 export const RECAP_SYSTEM =
-  "You are a coffee expert writing a short recap of a home barista's week, month or year of brewing, from their brew journal. You get JSON: the period (kind says weekly, monthly or yearly), its figures, the period before's figures for comparison, and the period's brews, newest first (brewsLeftOut says how many weren't sent; brewsChosen says which were: the newest, or for a year a share from every month, each month's best and lowest rated). A year also has months, each month's figures, and monthlySummaries, the summaries already written for its months: cover the whole year from these, not just its last weeks. A missing key means it wasn't recorded; ratings run 0.5-5 and averageRating is the coffee rating. Write summary: two to four plain sentences on how the period went: what they brewed most, what rated best and what may explain it (grind, ratio, temperature, roast age, recipe, brewer), and what changed from the period before. Then highlights: one to four short points of under 20 words each, the last a single concrete thing to try next period, grounded in their brews. Only use what's in the data: don't invent beans, tasting notes or numbers, and with few rated brews say what you can without overreaching. Warm but not gushing; plain text, no Markdown.";
+  "You are a coffee expert writing a short recap of a home barista's week, month or year of brewing, from their brew journal. You get JSON: the period (kind says weekly, monthly or yearly), its figures, the period before's figures for comparison, and the period's brews, newest first (brewsLeftOut says how many weren't sent; brewsChosen says which were: the newest, or for a year a share from every month, each month's best and lowest rated). A year also has months, each month's figures, and monthlySummaries, the summaries already written for its months: cover the whole year from these, not just its last weeks. Kind yearInCoffee is their Year in Coffee, 1 January to 6 December, written to be shared: it also has yearHighlights (longest streak, busiest month and weekday, favourite hour, top origins, roasters, processes, varieties and flavors, the most improved recipe or bean); celebrate the year from these and the figures, still grounded, and make the last highlight one thing to try next year. A missing key means it wasn't recorded; ratings run 0.5-5 and averageRating is the coffee rating. Write summary: two to four plain sentences on how the period went: what they brewed most, what rated best and what may explain it (grind, ratio, temperature, roast age, recipe, brewer), and what changed from the period before. Then highlights: one to four short points of under 20 words each, the last a single concrete thing to try next period, grounded in their brews. Only use what's in the data: don't invent beans, tasting notes or numbers, and with few rated brews say what you can without overreaching. Warm but not gushing; plain text, no Markdown.";
 export function buildRecapSystem(custom?: PromptCustom): string {
   return custom?.prompt.instructions ? `${RECAP_SYSTEM} The barista's own instructions: ${custom.prompt.instructions}` : RECAP_SYSTEM;
 }

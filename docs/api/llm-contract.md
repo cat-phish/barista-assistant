@@ -809,21 +809,33 @@ already `pending`; the result goes back into it.
    (a quiet month's spare goes to the others), within a month its best and
    lowest rated in turn, then its newest unrated; and `monthlySummaries`,
    the year's monthly summaries already written for the same person and
-   scope (`{ month, summary, highlights }`, `writeRecapSummary`). A chat period (§9e) uses it too, with
+   scope (`{ month, summary, highlights }`, `writeRecapSummary`). **Your
+   Year in Coffee** (kind `yearInCoffee`, recaps.md §11c) is sent as a
+   year over 1 January–6 December, the previous period the same dates a
+   year before, `monthlySummaries` January to November only, and
+   `yearHighlights` from its frozen copy: `longestStreak`, `busiestMonth`
+   (`YYYY-MM`), `busiestWeekday` (by name), `favouriteHour`, the top five
+   `origins`, `roasters`, `processes`, `varieties` and `flavors` (by name,
+   with brew counts), and `mostImproved`; never who brewed. `origins`,
+   `processes` and `varieties` are left out with the `origin`, `process`
+   and `variety` switches. A chat period (§9e) uses it too, with
    optional `beanId`, `recipeId` and `brewerId`, an open start (all time),
    its own `maxBrews` and `filters`; a recap has none of them.
 2. **Input** (`toPeriodInput`): `{ ratingScale, kind, period, filters,
    figures, previousPeriod, previousFigures, brews, brewsLeftOut,
-   brewsChosen, months, monthlySummaries, equipment }` (`filters` only on a
+   brewsChosen, months, monthlySummaries, yearHighlights, equipment }` (`filters` only on a
    chat period; `brewsChosen` only with some left out; `months` and
-   `monthlySummaries` only for a year; `period.start` absent for all time),
+   `monthlySummaries` only for a year, `yearHighlights` only for Your Year
+   in Coffee; `period.start` absent for all time),
    compacted, each brew as `brewInput` makes it, so what the workspace
    hides (`aiHidden`) is left out as in the analysis.
 3. **Prompt** (`RECAP_SYSTEM`, `worker/src/prompt.ts`): fixed (not editable
    under Your AI prompt), then the person's own instructions (auth.md §1c).
    It asks for two to four sentences on how the period went and what
    changed, then up to four short highlights, the last one thing to try,
-   using only what's in the data. `RECAP_PROMPT_VERSION` (2026-11-b, a week, month or year;
+   using only what's in the data; for Your Year in Coffee, a celebration
+   of the year from its highlights, the last highlight one thing to try
+   next year. `RECAP_PROMPT_VERSION` (2026-11-c, a week, month or year;
    `+custom` with instructions) is saved on the row.
 4. **Schema** (`RECAP_JSON_SCHEMA`, strict): `summary` (string) and
    `highlights` (string array), both required. After parsing, `summary` is
@@ -834,7 +846,8 @@ already `pending`; the result goes back into it.
 
 **What the AI sees:** classified in `worker/tests/aiDetails.test.ts`; the
 period's own fields (`filters` included), the figures and each brew's
-`day`, `bean` and `brewer` are always sent, everything else goes with its key as in the
+`day`, `bean` and `brewer` are always sent (`yearHighlights` too, except
+its origins, processes and varieties, which follow their keys), everything else goes with its key as in the
 analysis. Notes on beans, people's names and who made each brew aren't
 sent.
 

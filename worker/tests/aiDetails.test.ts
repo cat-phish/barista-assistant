@@ -446,6 +446,7 @@ const PERIOD: Record<keyof PeriodContext, Sees> = {
   brewsChosen: "always",
   months: "always", // a year's month figures, same as figures
   monthlySummaries: "always", // a year's own earlier summaries, written under the same switches
+  yearHighlights: "always", // Your Year in Coffee's frozen figures; its origins, processes and varieties follow origin, process and variety (below)
   ratingScale: "always",
 };
 const PERIOD_BREW: Record<Exclude<keyof PeriodBrew, keyof BrewSummary>, Sees> = { day: "always", bean: "always", brewer: "always" };
@@ -470,6 +471,7 @@ describe("what a recap summary sends (llm-contract.md §9f)", () => {
     kind: "weekly", period: { start: "2026-10-19", end: "2026-10-25" }, previous: { start: "2026-10-12", end: "2026-10-18" }, filters: "Onyx – Monarch · Only mine", figures, previousFigures: figures,
     brews: [{ ...brew, day: "2026-10-20", bean: "Onyx – Monarch", brewer: "V60" }], brewsLeftOut: 69, brewsChosen: "newest", ratingScale: "0.5-5",
     months: [{ month: "2026-10", ...figures }], monthlySummaries: [{ month: "2026-09", summary: "A good month.", highlights: [] }],
+    yearHighlights: { longestStreak: { days: 3, start: "2026-10-19", end: "2026-10-21" }, busiestMonth: { month: "2026-10", brews: 9 }, busiestWeekday: { weekday: "Monday", brews: 4 }, favouriteHour: { hour: 8, brews: 5 }, origins: [{ name: "Kenya", brews: 3 }], roasters: [{ name: "Onyx", brews: 3 }], processes: [{ name: "Washed", brews: 3 }], varieties: [{ name: "SL28", brews: 3 }], flavors: [{ name: "Lemon", brews: 2 }], mostImproved: null },
   };
   const everythingOff = new Set<AiDetail>(AI_DETAILS.filter((d) => !NOT_FIELDS.includes(d)));
 
@@ -491,5 +493,9 @@ describe("what a recap summary sends (llm-contract.md §9f)", () => {
     const equipment = (hidden: AiDetail[]) => toPeriodInput(context, new Set(hidden)).equipment as Obj;
     expect((equipment([]).grinders as Obj).EK43).toMatchObject({ burrType: "flat" });
     expect((equipment(["grinderDetails"]).grinders as Obj | undefined)?.EK43).toBeUndefined(); // only its name, on the brew
+    const year = (hidden: AiDetail[]) => toPeriodInput(context, new Set(hidden)).yearHighlights as Obj;
+    expect(year([])).toMatchObject({ origins: expect.any(Array), processes: expect.any(Array), varieties: expect.any(Array) });
+    const off = year(["origin", "process", "variety"]);
+    expect([off.origins, off.processes, off.varieties, off.roasters === undefined]).toEqual([undefined, undefined, undefined, false]);
   });
 });

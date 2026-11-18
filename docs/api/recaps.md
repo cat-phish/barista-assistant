@@ -46,9 +46,10 @@ The AI summary column shows only when the workspace has AI. Off, a recap
 still has its **Write summary** button; with no AI set up, neither the
 column nor the button shows (the rule for every AI button). Today the
 banner and the push cover weekly and monthly, and the automatic summary
-weekly, monthly and yearly; the `yearly` banner and push and the
-`yearInCoffee` switches are saved and take effect with Your Year in
-Coffee's own summary and its banner and push (backlog 65, plan steps 3–4).
+all four (Your Year in Coffee's is written by the worker right after it
+freezes the year on 7 December); the `yearly` banner and push and the
+`yearInCoffee` banner and push are saved and take effect with backlog 65,
+plan step 4.
 Your Year in Coffee is frozen on 7 December whatever they say.
 
 ## Insights → Recap
@@ -103,8 +104,20 @@ live; Your Year in Coffee is a **frozen copy**. Built in phases:
    be picked): animation, the music picker, and your own song where the
    server allows uploads (`auth.md` §1, "Year song").
 3. A shareable image of the summary card.
-4. Its own AI summary, from the frozen figures (plan step 3). The Yearly
-   tab's summary (kind `yearly`, done) is a separate one.
+4. **Its own AI summary**, written to be shared; the Yearly tab's (kind
+   `yearly`) is a separate one. It sits on the frozen copy's row (kind
+   `yearInCoffee`, `periodStart` 1 January, per scope) and uses the same
+   routes as a recap's: `GET`/`POST …/recaps` with `kind: "yearInCoffee"`
+   (400 unless `periodStart` is 1 January; 409 `year_not_out` before
+   7 December; any past year, frozen or not). It covers 1 January–
+   6 December against the same dates a year before, sends the months'
+   summaries for January to November, and, with a frozen copy, its
+   highlights (llm-contract.md §9f). With the `yearInCoffee` AI summary
+   switch on and AI set up, the worker writes it straight after freezing
+   (`processYearFreeze`), once per row: one written by hand first stands.
+   On the slides it's an "in a few words" slide before the summary card,
+   shown once written, or to someone who can write it (Write summary);
+   only with a model.
 5. The banner and a notification on 1 January.
 
 **Figures:** everything a recap counts for 1 January–6 December, next to

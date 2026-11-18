@@ -501,7 +501,7 @@ Recording a brew: what's measured, and how fast it is to log.
      `shared/src/statsRows.ts`, frozen copies on `recaps` rows (kind
      `yearInCoffee`, a `figures` column), and a parity test and CLAUDE.md
      rule 15 holding the Yearly tab and it to the same figures.
-  3. **Its own AI summary**, built from the frozen figures (plus the
+  3. **(Done)** **Its own AI summary**, built from the frozen figures (plus the
      monthly summaries and brews spread across its months, as the Yearly
      tab's summary already sends: llm-contract.md §9f), covering every
      brew from 1 January to 6 December, written on 7 December when its AI switch is on;
