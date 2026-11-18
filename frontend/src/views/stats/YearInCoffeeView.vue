@@ -271,6 +271,7 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
       <div class="bar">
         <label class="mine"><input type="checkbox" :checked="mine" @change="go({ mine: ($event.target as HTMLInputElement).checked })" /> Only my brews</label>
         <span class="tools">
+          <button v-if="slide && !last" type="button" class="icon" :aria-label="paused ? 'Play slides' : 'Pause slides'" :aria-pressed="paused" @click="paused = !paused">{{ paused ? '▶' : '⏸' }}</button>
           <button type="button" class="icon" :aria-label="muted ? 'Unmute music' : 'Mute music'" :aria-pressed="!muted" @click="toggleMute">{{ muted ? '🔇' : '🔊' }}</button>
           <button type="button" class="icon" aria-label="Close" @click="close">✕</button>
         </span>
@@ -322,7 +323,6 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
 
     <div v-if="slide" class="foot">
       <button type="button" class="btn btn-secondary" :disabled="index === 0" aria-label="Previous slide" @click="move(-1)">‹</button>
-      <button v-if="!last" type="button" class="btn btn-secondary" :aria-label="paused ? 'Play slides' : 'Pause slides'" @click="paused = !paused">{{ paused ? '▶' : '⏸' }}</button>
       <span class="count" aria-live="polite">{{ index + 1 }} / {{ slides.length }}</span>
       <button v-if="!last" type="button" class="btn btn-primary" aria-label="Next slide" @click="move(1)">›</button>
       <button v-else type="button" class="btn btn-primary" @click="close">Done</button>

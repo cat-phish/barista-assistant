@@ -151,7 +151,7 @@ counts: every slide shows as it ends.
 read (`slideDuration` in `frontend/src/lib/yearSlides.ts`: 4 s for the
 first, 5 s for the others, plus 1.5 s with a line under the figure and
 0.7 s per list row, at most 12 s); its bar in the progress strip fills as
-it runs. It stops on the summary. The ⏸ button pauses it (▶ goes on),
+it runs. It stops on the summary. The ⏸ button in the top bar, beside mute, pauses it (▶ goes on),
 and so does holding a finger or the mouse on the slide, as in stories:
 the slide, its animation and the music stop, and the top and bottom bars
 fade out after a moment, until you let go (letting go isn't a tap). A

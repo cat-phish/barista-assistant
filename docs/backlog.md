@@ -463,6 +463,9 @@ Recording a brew: what's measured, and how fast it is to log.
     isn't a web page). A silent first slide when testing is expected, not
     a broken setting. Idea: a "Tap for sound" hint on the first slide
     while the music is on but not yet playing.
+    Or drop the Play music setting altogether, since it can't start the
+    music on its own: the slides could always open muted, with the mute
+    button as the only switch.
 - **Size:** L (figures + slides; AI summary; image; notification).
 - **Depends on:** nothing; reuses recaps (18).
 - **Open questions:**
