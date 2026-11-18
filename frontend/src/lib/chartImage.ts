@@ -66,7 +66,12 @@ export function chartPng(chart: HTMLCanvasElement, title: string, colors: ImageC
   ctx.textBaseline = 'top';
   ctx.fillText(title, box.pad, box.pad, box.width - box.pad * 2);
   ctx.drawImage(chart, box.pad, box.chartTop);
+  return canvasPng(out);
+}
+
+// A drawn canvas as a PNG (also Your Year in Coffee's image, yearImage.ts).
+export function canvasPng(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) =>
-    out.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('No image'))), 'image/png'),
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('No image'))), 'image/png'),
   );
 }

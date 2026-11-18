@@ -7,6 +7,7 @@ export type IconName = keyof typeof ICONS;
 
 const ICONS = {
   play: ['<path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z" />'],
+  share: ['<path d="M12 2v13" />', '<path d="m16 6-4-4-4 4" />', '<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />'],
   pause: ['<rect x="14" y="3" width="5" height="18" rx="1" />', '<rect x="5" y="3" width="5" height="18" rx="1" />'],
   'volume-2': [
     '<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z" />',

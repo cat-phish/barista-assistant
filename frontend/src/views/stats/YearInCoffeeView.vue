@@ -20,6 +20,8 @@ import { SONG_VOLUME, setSong, songPlaying, songUrl as songFor, stopSong } from 
 import type { Chip } from '../../lib/yearCompare';
 import { completeFigures, latestYear, type FrozenYear } from '../../lib/yearInCoffee';
 import { markSeen } from '../../lib/recap';
+import { saveBlob } from '../../lib/backup';
+import { readCardColors, shareImage, yearCardPng, yearImageName, type YearCard } from '../../lib/yearImage';
 import { MONTH_NAMES, personLabels, slideDuration, yearSlides } from '../../lib/yearSlides';
 import AppIcon from '../../components/icons/AppIcon.vue';
 import RecapSummaryCard from '../../components/RecapSummaryCard.vue';
@@ -243,6 +245,32 @@ onMounted(() => {
 const HOLD_MS = 300;
 const paused = ref(false);
 
+// Share (recaps.md §11c "Sharing"): the summary card as a story-size image,
+// drawn when the summary slide shows so the tap goes straight to the share
+// sheet (it only opens from a tap, and drawing first could use that up).
+const shareCard = computed<YearCard | null>(() => {
+  const s = slide.value;
+  if (s?.key !== 'summary') return null;
+  const app = 'Barista-Assistant';
+  return { kicker: s.kicker, value: s.value, lines: s.list ?? [], footer: mine.value || !workspaces.current ? app : `${workspaces.current.name} · ${app}` };
+});
+const shareNote = ref('');
+let sharePng: Promise<Blob> | null = null;
+watch(shareCard, (card) => {
+  shareNote.value = '';
+  sharePng = card ? yearCardPng(card, readCardColors()) : null;
+  sharePng?.catch(() => undefined); // reported on the tap
+});
+async function share(): Promise<void> {
+  const card = shareCard.value;
+  if (!card || !sharePng) return;
+  try {
+    const result = await shareImage(await sharePng, yearImageName(card), card.kicker, saveBlob);
+    shareNote.value = result === 'saved' ? 'Image saved' : '';
+  } catch {
+    shareNote.value = "Couldn't make the image";
+  }
+}
 const held = ref(false);
 const elapsed = ref(0);
 const duration = computed(() => (slide.value ? slideDuration(slide.value) : 0));
@@ -376,7 +404,9 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
           <div v-if="slide.key === 'summary'" class="years">
             <button type="button" class="btn btn-secondary" @click="go({ year: year - 1 })">‹ {{ year - 1 }}</button>
             <button v-if="year < latest" type="button" class="btn btn-secondary" @click="go({ year: year + 1 })">{{ year + 1 }} ›</button>
+            <button type="button" class="btn btn-primary" @click="share"><AppIcon name="share" :size="16" /> Share</button>
           </div>
+          <p v-if="slide.key === 'summary' && shareNote" class="sub" role="status">{{ shareNote }}</p>
         </section>
       </Transition>
     </div>

@@ -516,7 +516,7 @@ Recording a brew: what's measured, and how fast it is to log.
      the song inside that tap, then opens the slides. Opened any other way
      (push, shared link, reload) the slides start on a "Tap to start"
      cover that starts the song. Play music stays.
-  6. **Shareable image**: the summary card drawn to a story-size canvas
+  6. **(Done)** **Shareable image**: the summary card drawn to a story-size canvas
      (1080×1920, reusing `lib/chartImage.ts`), shared via the Web Share
      API or downloaded; drawn so 68 (video) can reuse it.
   - Built-in CC0 track still to be picked (Free Music Archive, OpenGameArt

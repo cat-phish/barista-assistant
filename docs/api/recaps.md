@@ -264,6 +264,17 @@ from the beginning in that tap, then opens the slides. Opened any other way
 the tab is hidden, the slide is held or paused, fades out over 0.6 s on
 close and stops when the slides do.
 
+**Sharing.** The summary slide has a **Share** button: the summary card
+(kicker, brews, its lines with the change on last year, and a footer with
+the app's name, the workspace's too on the bar's year) drawn on a 1080×1920
+story-size canvas (`frontend/src/lib/yearImage.ts`, reusing
+`lib/chartImage.ts`) in the page's colours. It's drawn as the summary slide
+shows, so the tap goes straight to the share sheet (Web Share API with a
+file, most phones); where files can't be shared, or the sheet refuses, it
+downloads as `your-2025-in-coffee.png` ("Image saved"). Closing the sheet
+does nothing. `drawYearCard` draws on any 2D context and size, for the
+video (backlog 68). The AI summary isn't on it.
+
 ## Banner
 
 A small banner at the top of the brew page (setup, before a brew starts),
