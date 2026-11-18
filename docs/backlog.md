@@ -445,6 +445,14 @@ Recording a brew: what's measured, and how fast it is to log.
     if we decide to show names).
   - **Reaching it:** the recap banner and a notification on 1 January
     (notifications.md §1b), and an Insights → Wrapped entry.
+  - **Motion and sound** (planned next): slides animate (numbers count up,
+    bars grow, lists step in, confetti on the summary; still under
+    reduced motion). A built-in CC0 song (no clash with the AGPL: CC0
+    waives all rights), off until picked under a speaker button. Your own
+    song, uploaded per account when the server has `YEAR_SONG_UPLOADS=true`:
+    10 MB, type checked from the file's bytes, served only to its owner
+    so it can't run as a page, never re-encoded on the server.
+  - **Video:** deferred to backlog 68.
 - **Size:** L (figures + slides; AI summary; image; notification).
 - **Depends on:** nothing; reuses recaps (18).
 - **Open questions:**
@@ -508,6 +516,21 @@ Recording a brew: what's measured, and how fast it is to log.
     meaning here.
 - **Size:** M.
 - **Depends on:** nothing; 65 (Wrapped) should use its shares.
+
+### 68. Year in Coffee video
+
+- **Status:** idea, deferred (numbered last to avoid renumbering; belongs
+  in E).
+- **Why:** the slides (65) are fun to watch, but can't be sent on; a short
+  video with the song can.
+- **Approach:** recorded in the browser, so the server does nothing: each
+  slide drawn to a canvas, `canvas.captureStream()` plus the song's audio
+  track into `MediaRecorder`, saved as WebM (MP4 on Safari) and shared
+  with the Web Share API where there is one. Drawing slides to a canvas
+  also gives 65's shareable PNG. Server-side ffmpeg was ruled out (CPU,
+  queue, storage, decoding untrusted files).
+- **Size:** M.
+- **Depends on:** 65 (slides, song).
 
 ## C. Recipes
 

@@ -87,6 +87,8 @@ Backlog 65: one calendar year of brewing, as story slides. Built in phases:
    year and one for the year before. Live, like other recaps: later edits
    to brews or beans change them.
 2. **The story slides** (done), and an entry on Insights → Recap.
+2b. **Motion and sound:** animation (done); a built-in song; your own
+   song where the server allows uploads (`auth.md` §1, "Year song").
 3. A shareable image of the summary card.
 4. An AI summary (kind `yearly`; until then `…/recaps` accepts only
    `weekly` and `monthly`).
@@ -136,6 +138,13 @@ with `from` = the year before's start, `to` = the year's end. With
   button. Back: the left third, swipe right, ← or Page Up, ‹. Escape or
   ✕ closes. A progress bar shows where you are. Slides slide in, except
   with `prefers-reduced-motion`.
+
+**Motion and sound:** each slide's number counts up over 0.9 s when it
+starts with one ("120 brews", "≈ 30 l"; not the year on the first slide),
+`frontend/src/lib/countUp.ts`; screen readers get the final value only.
+Month bars grow in, list rows step in 60 ms apart, and the summary drops
+confetti (CSS only). With `prefers-reduced-motion`, nothing moves or
+counts: every slide shows as it ends.
 
 ## Banner
 

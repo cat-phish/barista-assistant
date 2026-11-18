@@ -14,6 +14,7 @@ import { errorMessage } from '../../api/client';
 import { usePreferences } from '../../composables/usePreferences';
 import { localDateInput } from '../../lib/format';
 import { formatWeight, localDay } from '../../lib/stats';
+import { countFrame, splitNumber } from '../../lib/countUp';
 import { formatVolumeIn } from '../../lib/units';
 import { latestYear, yearFigures, yearPeriod } from '../../lib/yearInCoffee';
 import { MONTH_NAMES, personLabels, yearSlides } from '../../lib/yearSlides';
@@ -128,6 +129,42 @@ function onKey(e: KeyboardEvent): void {
 onMounted(() => window.addEventListener('keydown', onKey));
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 
+// Motion (docs/api/recaps.md §11c "Motion and sound"): the slide's number
+// counts up; bars, list rows and confetti are CSS. Reduced motion: none.
+const COUNT_MS = 900;
+const still = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+const shownValue = ref('');
+let frame = 0;
+watch(
+  slide,
+  (s) => {
+    cancelAnimationFrame(frame);
+    const parts = s && s.key !== 'intro' && !still ? splitNumber(s.value) : null;
+    if (!s || !parts) {
+      shownValue.value = s?.value ?? '';
+      return;
+    }
+    const started = performance.now();
+    const tick = (now: number) => {
+      const t = (now - started) / COUNT_MS;
+      shownValue.value = parts.before + countFrame(parts.token, t) + parts.after;
+      if (t < 1) frame = requestAnimationFrame(tick);
+    };
+    tick(started);
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => cancelAnimationFrame(frame));
+
+// The same scatter every time, so it doesn't change on re-render.
+const confetti = Array.from({ length: 30 }, (_, i) => ({
+  x: (i * 37) % 100,
+  delay: ((i * 53) % 20) * 60,
+  drift: ((i * 29) % 40) - 20,
+  spin: ((i * 71) % 360) - 180,
+  tone: i % 3,
+}));
+
 const maxBar = computed(() => Math.max(1, ...(slide.value?.bars ?? [])));
 const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONTH_NAMES[i]}: ${n}`).join(', '));
 </script>
@@ -154,19 +191,29 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
       <Transition :name="direction" mode="out-in">
         <section :key="`${year}-${mine}-${slide.key}`" class="slide" :class="`slide-${slide.key}`" aria-live="polite">
           <p class="kicker">{{ slide.kicker }}</p>
-          <p class="value" :class="{ long: slide.value.length > 18 }">{{ slide.value }}</p>
+          <p class="value" :class="{ long: slide.value.length > 18 }">
+            <span aria-hidden="true">{{ shownValue }}</span><span class="visually-hidden">{{ slide.value }}</span>
+          </p>
           <p v-if="slide.sub" class="sub">{{ slide.sub }}</p>
           <div v-if="slide.bars" class="bars" role="img" :aria-label="barsLabel">
             <span v-for="(n, i) in slide.bars" :key="i" class="col">
-              <span class="fill" :style="{ height: `${(n / maxBar) * 100}%` }" />
+              <span class="fill" :style="{ height: `${(n / maxBar) * 100}%`, '--i': i }" />
               <span class="m">{{ MONTH_NAMES[i]!.charAt(0) }}</span>
             </span>
           </div>
           <ol v-if="slide.list?.length" class="list" :class="{ summary: slide.key === 'summary' }">
-            <li v-for="item in slide.list" :key="item.name">
+            <li v-for="(item, i) in slide.list" :key="item.name" :style="{ '--i': i }">
               <span class="name">{{ item.name }}</span><span class="detail">{{ item.detail }}</span>
             </li>
           </ol>
+          <div v-if="slide.key === 'summary'" class="confetti" aria-hidden="true">
+            <span
+              v-for="(c, i) in confetti"
+              :key="i"
+              :class="`tone-${c.tone}`"
+              :style="{ left: `${c.x}%`, animationDelay: `${c.delay}ms`, '--drift': `${c.drift}vw`, '--spin': `${c.spin}deg` }"
+            />
+          </div>
           <RouterLink v-if="slide.link" :to="slide.link" class="btn btn-secondary">Open the brew</RouterLink>
           <div v-if="slide.key === 'summary'" class="years">
             <button type="button" class="btn btn-secondary" @click="go({ year: year - 1 })">‹ {{ year - 1 }}</button>
@@ -300,6 +347,14 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
   min-height: 2px;
   border-radius: 3px 3px 0 0;
   background: var(--brand);
+  transform-origin: bottom;
+  animation: grow 0.6s ease-out both;
+  animation-delay: calc(var(--i, 0) * 40ms + 150ms);
+}
+@keyframes grow {
+  from {
+    transform: scaleY(0);
+  }
 }
 .m {
   font-size: 0.75rem;
@@ -322,6 +377,52 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
   background: var(--surface);
   border: 1px solid var(--border);
   text-align: left;
+}
+.list li {
+  animation: rise 0.35s ease-out both;
+  animation-delay: calc(var(--i, 0) * 60ms + 200ms);
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+.slide {
+  position: relative;
+}
+.confetti {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.confetti span {
+  position: absolute;
+  top: -12px;
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--brand);
+  opacity: 0;
+  animation: fall 2.4s ease-in forwards;
+}
+.confetti .tone-1 {
+  background: var(--text-muted);
+}
+.confetti .tone-2 {
+  background: var(--brand-tint);
+  outline: 1px solid var(--brand);
+}
+@keyframes fall {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--drift), 105vh) rotate(var(--spin));
+  }
 }
 .list .detail {
   color: var(--text-muted);
@@ -370,6 +471,13 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
   .back-enter-active,
   .back-leave-active {
     transition: none;
+  }
+  .fill,
+  .list li {
+    animation: none;
+  }
+  .confetti {
+    display: none;
   }
 }
 </style>
