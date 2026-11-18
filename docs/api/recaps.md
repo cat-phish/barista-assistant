@@ -252,7 +252,7 @@ Music: one song, your own where the server allows uploads and you have
 one (`auth.md` §1 "Year song", uploaded under Settings → Recaps), else the
 built-in. It starts unmuted when Settings → Recaps → Your Year in Coffee →
 Play music is on (`yearMusic`, `auth.md` §1; off by default); the mute
-button in the top bar mutes it for that viewing only. The built-in song is a CC0 (public domain)
+button in the top bar mutes it for that viewing only. The built-in song is "Poor But Happy" by Holizna, a CC0 (public domain)
 track, `frontend/public/music/year-in-coffee.mp3`, its source in
 `CREDITS.md` beside it; CC0 waives all rights, so it sits fine in this AGPL
 app. It loops at 60% volume on one player shared by the app

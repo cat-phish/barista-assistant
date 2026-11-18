@@ -409,7 +409,7 @@ Recording a brew: what's measured, and how fast it is to log.
   figures live while being built, frozen from 7 December once the plan below is done; the bar's year names members, as a
   name set under Settings → Account (`auth.md` §1, "Name"; email stays the
   login), else a stand-in ("Member 1"); the journal shows the name too,
-  the CSV keeps the email. Phase 2, the slides at `/insights/year`, is built, with motion and music (the music picker, and uploads of your own song behind `YEAR_SONG_UPLOADS`); the built-in CC0 track is still to be picked. Phase 1,
+  the CSV keeps the email. Phase 2, the slides at `/insights/year`, is built, with motion and music (the music picker, and uploads of your own song behind `YEAR_SONG_UPLOADS`); the built-in CC0 track is "Poor But Happy" by Holizna (`frontend/public/music/CREDITS.md`). Phase 1,
   the year's figures, is built (`docs/api/recaps.md` §11c, "Your Year in
   Coffee"; `lib/yearInCoffee.ts`, stats brews' `flavors`). Card minimums:
   5 brews for busiest times, 2 entries for a ranked list.
@@ -519,8 +519,8 @@ Recording a brew: what's measured, and how fast it is to log.
   6. **(Done)** **Shareable image**: the summary card drawn to a story-size canvas
      (1080×1920, reusing `lib/chartImage.ts`), shared via the Web Share
      API or downloaded; drawn so 68 (video) can reuse it.
-  - Built-in CC0 track still to be picked (Free Music Archive, OpenGameArt
-    or Freesound, CC0 filter; not Pixabay or incompetech).
+  - **(Done)** Built-in CC0 track: "Poor But Happy" (Holizna, OpenGameArt),
+    credited in `frontend/public/music/CREDITS.md`.
 - **Size:** L (figures + slides; AI summary; image; notification).
 - **Depends on:** nothing; reuses recaps (18).
 - **Open questions:**
