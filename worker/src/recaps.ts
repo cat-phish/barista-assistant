@@ -35,9 +35,10 @@ export const recapZone = (prefs: UserPreferences, settings: Partial<WorkspaceSet
 
 // What the tick does for a kind: send it (recapPushes) and/or write its
 // summary first (recapAutoSummaries). Neither: nothing.
-// Yearly joins in with its push (backlog 65, plan step 4).
-const TICK_KINDS = ["weekly", "monthly"] as const satisfies readonly RecapKind[];
-const tickWants = (prefs: UserPreferences, kind: RecapKind) => prefs.recapPushes[kind] || prefs.recapAutoSummaries[kind];
+// Yearly: only its summary for now; its push comes with backlog 65, plan step 4.
+const TICK_KINDS = ["weekly", "monthly", "yearly"] as const satisfies readonly RecapKind[];
+const pushes = (prefs: UserPreferences, kind: RecapKind) => kind !== "yearly" && prefs.recapPushes[kind];
+const tickWants = (prefs: UserPreferences, kind: RecapKind) => pushes(prefs, kind) || prefs.recapAutoSummaries[kind];
 
 // The periods due now for this person in that zone: the one just ended, for
 // each kind the tick handles, when today starts a new one and their time has come.
@@ -174,7 +175,7 @@ export async function processRecapTick(now: Date = new Date(), send: Send = send
           const recapId = await claim(workspaceId, person.id, kind, period.start);
           if (recapId === null) continue;
           if (prefs.recapAutoSummaries[kind]) await autoSummary(recapId, workspaceId);
-          if (!prefs.recapPushes[kind]) continue; // summary only: claimed, nothing sent
+          if (!pushes(prefs, kind)) continue; // summary only: claimed, nothing sent
           const text = recapMessage(kind, period, list);
           const query = `kind=${kind}&start=${period.start}&ws=${workspaceId}`;
           try {

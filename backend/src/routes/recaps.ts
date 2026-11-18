@@ -34,10 +34,7 @@ interface WorkspaceParams {
 }
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "a date YYYY-MM-DD");
-// The yearly recap's AI summary comes in a later phase of backlog 65; until
-// then only weeks and months are accepted here.
-const SUMMARY_KINDS = RECAP_KINDS.filter((k): k is Exclude<RecapKind, "yearly"> => k !== "yearly") as [Exclude<RecapKind, "yearly">, ...Exclude<RecapKind, "yearly">[]];
-const keySchema = z.object({ kind: z.enum(SUMMARY_KINDS), periodStart: day, scope: z.enum(RECAP_SCOPES) }).strict();
+const keySchema = z.object({ kind: z.enum(RECAP_KINDS), periodStart: day, scope: z.enum(RECAP_SCOPES) }).strict();
 
 const COLUMNS = {
   kind: recaps.kind,
@@ -95,7 +92,7 @@ recapsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Recap
   const prefs = userPreferences(user?.preferences ?? null);
   const period = periodOf(body.kind, body.periodStart, prefs.weekStartsOn);
   if (period.start !== body.periodStart) {
-    sendError(res, 400, `periodStart: not the start of a ${body.kind === "weekly" ? "week" : "month"} (weeks start on your chosen day)`);
+    sendError(res, 400, `periodStart: not the start of a ${body.kind === "weekly" ? "week" : body.kind === "monthly" ? "month" : "year"} (weeks start on your chosen day)`);
     return;
   }
   const zone = prefs.timeZone ?? withDefaults(DEFAULT_WORKSPACE_SETTINGS, ws?.settings ?? null).timeZone;

@@ -3,7 +3,7 @@
 > Part of the API spec. Conventions, auth rules and the section index are in
 > [README.md](README.md); a bare `§N` refers to that index.
 
-A recap is one week or month of brewing at a glance: how much you brewed and
+A recap is one week, month or year of brewing at a glance: how much you brewed and
 how it rated, the best cup, caffeine and volume, coffee used, beans opened
 and finished, new recipes, and the most used recipe and brewer, each next to
 the period before. Backlog 18 builds it in phases:
@@ -24,7 +24,8 @@ inclusive:
   Monday by default). Insights' weekly charts use the same weeks (§11, "How
   the client counts").
 - **monthly:** a calendar month.
-- **yearly:** a calendar year, for Your Year in Coffee (below).
+- **yearly:** a calendar year, 1 January to 31 December: the Yearly tab
+  (below). Your Year in Coffee has its own window (below).
 
 The recap a person is offered is the one **just ended**: the last whole
 period before today's. Insights → Recap can step back to any earlier one,
@@ -44,10 +45,10 @@ The three switch objects are per kind: `weekly`, `monthly`, `yearly` and
 The AI summary column shows only when the workspace has AI. Off, a recap
 still has its **Write summary** button; with no AI set up, neither the
 column nor the button shows (the rule for every AI button). Today the
-banner, the push and the automatic summary cover weekly and monthly; the
-`yearly` and `yearInCoffee` switches are saved and take effect with the
-yearly tab, Your Year in Coffee's own summary and its banner and push
-(backlog 65, plan steps 1–4).
+banner and the push cover weekly and monthly, and the automatic summary
+weekly, monthly and yearly; the `yearly` banner and push and the
+`yearInCoffee` switches are saved and take effect with Your Year in
+Coffee's own summary and its banner and push (backlog 65, plan steps 2–4).
 
 ## Insights → Recap
 
@@ -55,7 +56,7 @@ Route `/insights/recap` (`stats-recap`), query:
 
 | Param | Meaning |
 |---|---|
-| `kind` | `weekly` \| `monthly`; default `weekly` |
+| `kind` | `weekly` \| `monthly` \| `yearly` (tabs Weekly, Monthly, Yearly); default `weekly` |
 | `start` | any day in the period to show (never past today's); default the one just ended |
 | `mine` | `0`: everyone's brews in the workspace; default only the person's own |
 | `ws` | a workspace id (the notification's link): switches to it if it's one of the person's, then leaves the address |
@@ -98,8 +99,8 @@ Backlog 65: one calendar year of brewing, as story slides. Built in phases:
    be picked): animation, the music picker, and your own song where the
    server allows uploads (`auth.md` §1, "Year song").
 3. A shareable image of the summary card.
-4. An AI summary (kind `yearly`; until then `…/recaps` accepts only
-   `weekly` and `monthly`).
+4. Its own AI summary, from the frozen figures (plan step 3). The Yearly
+   tab's summary (kind `yearly`, done) is a separate one.
 5. The banner and a notification on 1 January.
 
 **Figures:** everything a recap counts for the year, next to the year

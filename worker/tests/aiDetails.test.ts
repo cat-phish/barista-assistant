@@ -443,6 +443,9 @@ const PERIOD: Record<keyof PeriodContext, Sees> = {
   previousFigures: "always",
   brews: "always",
   brewsLeftOut: "always",
+  brewsChosen: "always",
+  months: "always", // a year's month figures, same as figures
+  monthlySummaries: "always", // a year's own earlier summaries, written under the same switches
   ratingScale: "always",
 };
 const PERIOD_BREW: Record<Exclude<keyof PeriodBrew, keyof BrewSummary>, Sees> = { day: "always", bean: "always", brewer: "always" };
@@ -465,7 +468,8 @@ describe("what a recap summary sends (llm-contract.md §9f)", () => {
   const figures: PeriodFigures = { brews: 70, daysBrewed: 6, ratedBrews: 5, averageRating: 4.1, bestRating: 4.5, coffeeGrams: 105, brewsForOthers: 2, beans: [{ bean: "Onyx – Monarch", brews: 7 }], recipes: [{ recipe: "House", brews: 7 }], brewers: [{ brewer: "V60", brews: 7 }] };
   const context: PeriodContext = {
     kind: "weekly", period: { start: "2026-10-19", end: "2026-10-25" }, previous: { start: "2026-10-12", end: "2026-10-18" }, filters: "Onyx – Monarch · Only mine", figures, previousFigures: figures,
-    brews: [{ ...brew, day: "2026-10-20", bean: "Onyx – Monarch", brewer: "V60" }], brewsLeftOut: 69, ratingScale: "0.5-5",
+    brews: [{ ...brew, day: "2026-10-20", bean: "Onyx – Monarch", brewer: "V60" }], brewsLeftOut: 69, brewsChosen: "newest", ratingScale: "0.5-5",
+    months: [{ month: "2026-10", ...figures }], monthlySummaries: [{ month: "2026-09", summary: "A good month.", highlights: [] }],
   };
   const everythingOff = new Set<AiDetail>(AI_DETAILS.filter((d) => !NOT_FIELDS.includes(d)));
 

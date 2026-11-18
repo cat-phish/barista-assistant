@@ -497,7 +497,9 @@ Recording a brew: what's measured, and how fast it is to log.
      year so far). The "Compared with earlier years" chips use the same
      1 January–6 December window.
   3. **Its own AI summary**, built from the frozen figures (plus the
-     monthly summaries), written on 7 December when its AI switch is on;
+     monthly summaries and brews spread across its months, as the Yearly
+     tab's summary already sends: llm-contract.md §9f), covering every
+     brew from 1 January to 6 December, written on 7 December when its AI switch is on;
      kept with the frozen copy. Separate from the Yearly tab's: this one
      is for sharing.
   4. **Banner and push on 7 December** under Your Year in Coffee's own

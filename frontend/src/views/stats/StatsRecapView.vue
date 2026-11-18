@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Insights → Recap (docs/api/recaps.md §11c): a week or month of brewing at a
+// Insights → Recap (docs/api/recaps.md §11c): a week, month or year of brewing at a
 // glance, with the period before for comparison. Its own period and
 // Mine / Everyone switch, in the query (kind, start, mine=0), so a
 // notification can link to one; the Insights filters don't apply.
@@ -34,8 +34,13 @@ const showSummary = aiAvailable;
 const today = localDateInput();
 const yearOnOffer = latestYear(today);
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
-const kinds: RecapKind[] = ['weekly', 'monthly'];
-const kind = computed<RecapKind>(() => (str(route.query.kind) === 'monthly' || str(route.query.kind) === 'weekly' ? (str(route.query.kind) as RecapKind) : kinds[0]!));
+const KINDS: Record<RecapKind, { label: string; noun: string }> = {
+  weekly: { label: 'Weekly', noun: 'week' },
+  monthly: { label: 'Monthly', noun: 'month' },
+  yearly: { label: 'Yearly', noun: 'year' },
+};
+const kinds = Object.keys(KINDS) as RecapKind[];
+const kind = computed<RecapKind>(() => (kinds as string[]).includes(str(route.query.kind)) ? (str(route.query.kind) as RecapKind) : kinds[0]!);
 const weekStartsOn = computed(() => prefs.value.weekStartsOn);
 const current = computed(() => periodOf(kind.value, today, weekStartsOn.value));
 // The period shown: the one ?start falls in, else the last whole one; never past this one.
@@ -47,7 +52,7 @@ const period = computed(() => {
 const previous = computed(() => previousPeriod(kind.value, period.value, weekStartsOn.value));
 const inProgress = computed(() => period.value.start === current.value.start);
 const mine = computed(() => route.query.mine !== '0');
-const noun = computed(() => (kind.value === 'weekly' ? 'week' : 'month'));
+const noun = computed(() => KINDS[kind.value].noun);
 
 function go(change: { kind?: RecapKind; start?: string; mine?: boolean }): void {
   const k = change.kind ?? kind.value;
@@ -127,7 +132,7 @@ const ratingSub = computed(() => {
     <div class="recap-bar">
       <div class="seg" role="group" aria-label="Recap period">
         <button v-for="k in kinds" :key="k" type="button" class="btn" :class="k === kind ? 'btn-primary' : 'btn-secondary'" :aria-pressed="k === kind" @click="go({ kind: k })">
-          {{ k === 'weekly' ? 'Weekly' : 'Monthly' }}
+          {{ KINDS[k].label }}
         </button>
       </div>
       <div class="nav">

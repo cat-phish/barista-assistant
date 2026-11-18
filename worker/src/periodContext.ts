@@ -11,8 +11,11 @@ import { db } from "./db.js";
 import { localBrewDate } from "./localDate.js";
 import { workspaceZone } from "./zone.js";
 
-// At most this many brews go to the AI, the newest; the rest are counted.
+// At most this many brews go to the AI, the newest (a year: spread across
+// its months, below); the rest are counted.
 export const PERIOD_MAX_BREWS = 60;
+// A year's month lines name this many beans, recipes and brewers each.
+const MONTH_TOP = 3;
 
 export interface PeriodRange {
   start: string; // YYYY-MM-DD, inclusive
@@ -51,6 +54,9 @@ export interface PeriodContext {
   previousFigures: PeriodFigures | null;
   brews: PeriodBrew[]; // newest first, at most PERIOD_MAX_BREWS
   brewsLeftOut: number;
+  brewsChosen: "newest" | "spreadAcrossMonths"; // which ones are sent when there are more
+  months?: Array<{ month: string } & PeriodFigures>; // yearly: each month with brews, "YYYY-MM", oldest first
+  monthlySummaries?: Array<{ month: string; summary: string; highlights: string[] }>; // yearly: the ones written (recapSummary.ts)
   ratingScale: "0.5-5";
 }
 
@@ -134,7 +140,8 @@ export async function loadPeriodContext(q: PeriodQuery): Promise<PeriodContext> 
   const beanIds = [...new Set(all.map((b) => b.beanId))];
   const brewerIds = [...new Set(all.flatMap((b) => (b.brewerId ? [b.brewerId] : [])))];
   const max = q.maxBrews ?? PERIOD_MAX_BREWS;
-  const sent = rows.slice(0, max);
+  const spread = q.kind === "yearly" && rows.length > max;
+  const sent = spread ? spreadAcrossMonths(rows, max) : rows.slice(0, max);
   const ids = sent.map((b) => b.id);
   const [loaded, names, marks, tools, problems, flavors, servedAs, guested] = await Promise.all([
     Promise.all(beanIds.map(loadBean)),
@@ -175,6 +182,59 @@ export async function loadPeriodContext(q: PeriodQuery): Promise<PeriodContext> 
       };
     }),
     brewsLeftOut: Math.max(0, rows.length - max),
+    brewsChosen: spread ? "spreadAcrossMonths" : "newest",
+    months:
+      q.kind === "yearly"
+        ? byMonth(rows).map(([month, list]) => {
+            const f = figuresOf(list, beanLabel, brewerName, guested);
+            return { month, ...f, beans: f.beans.slice(0, MONTH_TOP), recipes: f.recipes.slice(0, MONTH_TOP), brewers: f.brewers.slice(0, MONTH_TOP) };
+          })
+        : undefined,
     ratingScale: "0.5-5",
   };
+}
+
+// Rows (newest first) by local month, oldest month first.
+function byMonth<T extends { timestamp: Date; utcOffsetMinutes: number | null }>(rows: readonly T[]): Array<[string, T[]]> {
+  const months = new Map<string, T[]>();
+  for (const b of rows) {
+    const m = dayOf(b).slice(0, 7);
+    months.set(m, [...(months.get(m) ?? []), b]);
+  }
+  return [...months].sort(([a], [b]) => a.localeCompare(b));
+}
+
+// A year's brews for the AI when there are more than it gets: an even share
+// from each month with brews (a quiet month's spare share goes to the
+// others), within a month its best and lowest rated in turn, then the
+// newest unrated. Newest first, like the rest.
+export function spreadAcrossMonths<T extends { id: string; timestamp: Date; utcOffsetMinutes: number | null; rating: string | number | null }>(rows: readonly T[], max: number): T[] {
+  const months = byMonth(rows).map(([, list]) => list);
+  const share = new Map<T[], number>(months.map((m) => [m, 0]));
+  let left = max;
+  // Hand out one at a time round the months until they're full or it's spent.
+  while (left > 0) {
+    let gave = false;
+    for (const m of months) {
+      if (left > 0 && share.get(m)! < m.length) {
+        share.set(m, share.get(m)! + 1);
+        left--;
+        gave = true;
+      }
+    }
+    if (!gave) break;
+  }
+  const chosen = new Set<string>();
+  for (const m of months) {
+    const n = share.get(m)!;
+    const rated = m.filter((b) => b.rating !== null).sort((a, b) => Number(b.rating) - Number(a.rating));
+    const picked: T[] = [];
+    for (let i = 0, j = rated.length - 1; picked.length < n && i <= j; ) {
+      picked.push(rated[i++]!);
+      if (picked.length < n && i <= j) picked.push(rated[j--]!);
+    }
+    for (const b of m) if (picked.length < n && b.rating === null) picked.push(b);
+    for (const b of picked) chosen.add(b.id);
+  }
+  return rows.filter((b) => chosen.has(b.id));
 }

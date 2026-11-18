@@ -16,7 +16,7 @@ const recap = ref<RecapSummary | null>(null);
 const loading = ref(false);
 const asking = ref(false);
 const error = ref('');
-const noun = computed(() => (props.recapKey.kind === 'weekly' ? 'week' : 'month'));
+const noun = computed(() => ({ weekly: 'week', monthly: 'month', yearly: 'year' })[props.recapKey.kind]);
 const keyText = computed(() => `${props.recapKey.kind}|${props.recapKey.periodStart}|${props.recapKey.scope}`);
 
 let timer: ReturnType<typeof setTimeout> | undefined;

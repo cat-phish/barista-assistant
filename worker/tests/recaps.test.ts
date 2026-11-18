@@ -17,6 +17,8 @@ vi.mock("../src/ai/resolve.js", async (importOriginal) => ({ ...(await importOri
 const llm = vi.mocked(requestRecapSummary);
 vi.mocked(resolveAi).mockResolvedValue({ provider: "openai", models: { main: "m", vision: "v", web: "w" } } as unknown as AiClient);
 const prefs = (p: Partial<UserPreferences> = {}): UserPreferences => ({ ...DEFAULT_PREFERENCES, timeZone: "Europe/London", ...p });
+// Recap settings stored before the per-kind switches (docs/api/auth.md §1), as an older row has them.
+const legacy = (p: Record<string, unknown>) => p as Partial<UserPreferences>;
 // Due in the person's zone (no workspace zone).
 const recapsDueNow = (p: UserPreferences, now: Date) => dueIn(p, now, recapZone(p, null));
 
@@ -46,6 +48,13 @@ describe("recapsDueNow", () => {
     expect(recapsDueNow(prefs({ recapPushes: { ...off, weekly: true } }), first)).toEqual([]);
     expect(recapsDueNow(prefs({ recapPushes: off }), mondayEight)).toEqual([]);
     expect(recapsDueNow(prefs({ recapPushes: off, recapAutoSummaries: { ...off, weekly: true } }), mondayEight)).toHaveLength(1);
+  });
+
+  it("yearly on 1 January, for its automatic summary only (its push comes later)", () => {
+    const newYear = new Date("2027-01-01T08:00:00Z"); // a Friday
+    const off = { weekly: false, monthly: false, yearly: false, yearInCoffee: false };
+    expect(recapsDueNow(prefs(), newYear)).toEqual([{ kind: "monthly", period: { start: "2026-12-01", end: "2026-12-31" } }]);
+    expect(recapsDueNow(prefs({ recapPushes: off, recapAutoSummaries: { ...off, yearly: true } }), newYear)).toEqual([{ kind: "yearly", period: { start: "2026-01-01", end: "2026-12-31" } }]);
   });
 
   it("uses the workspace's zone for someone without their own, then the server's", () => {
@@ -179,7 +188,7 @@ describe("processRecapTick", () => {
 
   it("an old stored recapAi auto still writes it: the summary is on the row when the notification goes", async () => {
     await brew("2026-11-03T08:00:00Z", 4);
-    await db.update(users).set({ preferences: { timeZone: "Europe/London", recapAi: "auto" } }).where(eq(users.id, userId));
+    await db.update(users).set({ preferences: legacy({ timeZone: "Europe/London", recapAi: "auto" }) }).where(eq(users.id, userId));
     llm.mockReset();
     llm.mockResolvedValue({ summary: { summary: "Good week.", highlights: ["Try finer"] }, usage: null });
     const send = vi.fn(async () => {
@@ -191,7 +200,7 @@ describe("processRecapTick", () => {
 
   it("sends nothing with notifications off (an old stored recapNotify false too)", async () => {
     await brew("2026-11-03T08:00:00Z", 4);
-    await db.update(users).set({ preferences: { timeZone: "Europe/London", recapNotify: false } }).where(eq(users.id, userId));
+    await db.update(users).set({ preferences: legacy({ timeZone: "Europe/London", recapNotify: false }) }).where(eq(users.id, userId));
     const send = vi.fn().mockResolvedValue(undefined);
     expect(await processRecapTick(monday, send)).toEqual({ sent: 0, failed: 0 });
     await db.update(users).set({ preferences: { timeZone: "Europe/London", recapPushes: { weekly: false, monthly: true, yearly: true, yearInCoffee: true } } }).where(eq(users.id, userId));

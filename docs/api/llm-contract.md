@@ -801,19 +801,29 @@ already `pending`; the result goes back into it.
    a count, never guest names; backlog 67), and beans, recipes and
    brewers by name with their counts. The newest 60 brews are sent, each
    as step 1's brew plus `day`, `bean` ("Roaster – Bean") and `brewer`;
-   `brewsLeftOut` counts the rest. A chat period (§9e) uses it too, with
+   `brewsLeftOut` counts the rest. **A year** (kind `yearly`) covers all
+   of it rather than its last weeks: `months`, each month with brews
+   (`YYYY-MM`, oldest first) with the same figures (top three beans,
+   recipes and brewers); past 60 brews, the 60 sent are
+   `spreadAcrossMonths` (`brewsChosen` says so): an even share per month
+   (a quiet month's spare goes to the others), within a month its best and
+   lowest rated in turn, then its newest unrated; and `monthlySummaries`,
+   the year's monthly summaries already written for the same person and
+   scope (`{ month, summary, highlights }`, `writeRecapSummary`). A chat period (§9e) uses it too, with
    optional `beanId`, `recipeId` and `brewerId`, an open start (all time),
    its own `maxBrews` and `filters`; a recap has none of them.
 2. **Input** (`toPeriodInput`): `{ ratingScale, kind, period, filters,
-   figures, previousPeriod, previousFigures, brews, brewsLeftOut, equipment
-   }` (`filters` only on a chat period, `period.start` absent for all time),
+   figures, previousPeriod, previousFigures, brews, brewsLeftOut,
+   brewsChosen, months, monthlySummaries, equipment }` (`filters` only on a
+   chat period; `brewsChosen` only with some left out; `months` and
+   `monthlySummaries` only for a year; `period.start` absent for all time),
    compacted, each brew as `brewInput` makes it, so what the workspace
    hides (`aiHidden`) is left out as in the analysis.
 3. **Prompt** (`RECAP_SYSTEM`, `worker/src/prompt.ts`): fixed (not editable
    under Your AI prompt), then the person's own instructions (auth.md §1c).
    It asks for two to four sentences on how the period went and what
    changed, then up to four short highlights, the last one thing to try,
-   using only what's in the data. `RECAP_PROMPT_VERSION` (2026-11-a,
+   using only what's in the data. `RECAP_PROMPT_VERSION` (2026-11-b, a week, month or year;
    `+custom` with instructions) is saved on the row.
 4. **Schema** (`RECAP_JSON_SCHEMA`, strict): `summary` (string) and
    `highlights` (string array), both required. After parsing, `summary` is

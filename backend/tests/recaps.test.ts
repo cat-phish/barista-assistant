@@ -30,7 +30,8 @@ describe("recap summaries", () => {
     const ws = (await newWorkspace(owner)).id;
     const base = `/api/workspaces/${ws}/recaps`;
     expect((await owner.agent.post(base).send({ ...week, periodStart: "2026-11-03" })).status).toBe(400); // a Tuesday
-    expect((await owner.agent.post(base).send({ ...week, kind: "yearly" })).status).toBe(400);
+    expect((await owner.agent.post(base).send({ ...week, kind: "yearly" })).status).toBe(400); // not 1 January
+    expect((await owner.agent.post(base).send({ kind: "yearly", periodStart: "2999-01-01", scope: "mine" })).body.code).toBe("recap_in_progress");
     expect((await owner.agent.post(base).send({ kind: "monthly", periodStart: "2999-01-01", scope: "mine" })).body.code).toBe("recap_in_progress");
     // Sunday weeks: 1 Nov is a start.
     await owner.agent.patch("/api/auth/me/preferences").send({ weekStartsOn: 0 });

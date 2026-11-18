@@ -2,7 +2,7 @@ import type { RecapSummaryJobData } from "@barista/shared/jobs";
 import { periodOf, previousPeriod } from "@barista/shared/recapPeriods";
 import { userPreferences, DEFAULT_WORKSPACE_SETTINGS, recaps, users, withDefaults, workspaces } from "@barista/shared/schema";
 import { isCustomPrompt } from "@barista/shared/aiPrompt";
-import { eq } from "drizzle-orm";
+import { and, asc, eq, gte, lte } from "drizzle-orm";
 import { resolveAi } from "./ai/resolve.js";
 import { db } from "./db.js";
 import { requestRecapSummary } from "./llm.js";
@@ -37,6 +37,16 @@ export async function writeRecapSummary({ recapId }: RecapSummaryJobData): Promi
     period,
     previous: previousPeriod(recap.kind, period, prefs.weekStartsOn),
   });
+  // A year also gets its months' written summaries, same scope (llm-contract.md §9f).
+  if (recap.kind === "yearly") {
+    const monthly = await db
+      .select({ periodStart: recaps.periodStart, summary: recaps.summary, highlights: recaps.highlights })
+      .from(recaps)
+      .where(and(eq(recaps.workspaceId, recap.workspaceId), eq(recaps.userId, recap.userId), eq(recaps.scope, recap.scope), eq(recaps.kind, "monthly"), eq(recaps.status, "done"), gte(recaps.periodStart, period.start), lte(recaps.periodStart, period.end)))
+      .orderBy(asc(recaps.periodStart));
+    const written = monthly.flatMap((m) => (m.summary ? [{ month: m.periodStart.slice(0, 7), summary: m.summary, highlights: m.highlights ?? [] }] : []));
+    if (written.length) context.monthlySummaries = written;
+  }
   if (context.figures.brews === 0) {
     await db.update(recaps).set({ status: "failed", error: "No brews in this period", updatedAt: new Date() }).where(eq(recaps.id, recapId));
     return { status: "skipped", reason: "no brews" };

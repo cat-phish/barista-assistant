@@ -6,7 +6,7 @@ import { db } from "../src/db.js";
 import { requestRecapSummary, type RecapSummary } from "../src/llm.js";
 import { resolveAi } from "../src/ai/resolve.js";
 import type { AiClient } from "../src/ai/client.js";
-import { loadPeriodContext, PERIOD_MAX_BREWS } from "../src/periodContext.js";
+import { loadPeriodContext, PERIOD_MAX_BREWS, spreadAcrossMonths } from "../src/periodContext.js";
 import { toPeriodInput } from "../src/prompt.js";
 import { writeRecapSummary } from "../src/recapSummary.js";
 
@@ -97,6 +97,33 @@ describe("loadPeriodContext", () => {
     expect(ctx.brewsLeftOut).toBe(2);
     expect(ctx.figures.brews).toBe(PERIOD_MAX_BREWS + 2);
     expect(toPeriodInput(ctx).brewsLeftOut).toBe(2);
+    expect(ctx.brewsChosen).toBe("newest");
+    expect(ctx.months).toBeUndefined();
+  });
+
+  it("a year: every month's figures, and brews spread across its months when there are too many", async () => {
+    for (let i = 0; i < 20; i++) await brew(new Date(Date.UTC(2026, 0, 2, 6) + i * 3_600_000).toISOString(), { rating: 2 + (i % 4) }); // January
+    for (let i = 0; i < 70; i++) await brew(new Date(Date.UTC(2026, 11, 2, 6) + i * 3_600_000).toISOString()); // December, unrated
+    await brew("2026-06-10T08:00:00Z", { rating: 5 });
+    const ctx = await loadPeriodContext({ workspaceId, userId, kind: "yearly", period: { start: "2026-01-01", end: "2026-12-31" }, previous: null });
+    expect(ctx.figures.brews).toBe(91);
+    expect(ctx.months!.map((m) => [m.month, m.brews])).toEqual([["2026-01", 20], ["2026-06", 1], ["2026-12", 70]]);
+    expect(ctx.brewsChosen).toBe("spreadAcrossMonths");
+    expect(ctx.brews).toHaveLength(PERIOD_MAX_BREWS);
+    const perMonth = (m: string) => ctx.brews.filter((b) => b.day.startsWith(m)).length;
+    expect([perMonth("2026-01"), perMonth("2026-06"), perMonth("2026-12")]).toEqual([20, 1, 39]);
+    expect(ctx.brewsLeftOut).toBe(31);
+    expect(toPeriodInput(ctx)).toMatchObject({ brewsChosen: "spreadAcrossMonths", months: expect.any(Array) });
+  });
+});
+
+describe("spreadAcrossMonths", () => {
+  const at = (month: number, day: number, rating: number | null) => ({ id: `${month}-${day}`, timestamp: new Date(Date.UTC(2026, month, day, 12)), utcOffsetMinutes: 0, rating });
+  it("shares evenly, a month's best and lowest rated in turn, then the newest unrated", () => {
+    const rows = [at(1, 9, null), at(1, 8, null), at(1, 5, 3), at(1, 4, 5), at(1, 3, 1), at(1, 2, 4), at(0, 3, 4), at(0, 2, 2), at(0, 1, 3)];
+    expect(spreadAcrossMonths(rows, 4).map((b) => b.id)).toEqual(["1-4", "1-3", "0-3", "0-2"]);
+    expect(spreadAcrossMonths(rows, 7).map((b) => b.id)).toEqual(["1-5", "1-4", "1-3", "1-2", "0-3", "0-2", "0-1"]);
+    expect(spreadAcrossMonths(rows, 8).map((b) => b.id)).toEqual(["1-9", "1-5", "1-4", "1-3", "1-2", "0-3", "0-2", "0-1"]);
   });
 });
 
@@ -120,6 +147,23 @@ describe("writeRecapSummary", () => {
     expect(context.period).toEqual(week);
     expect(context.previous).toEqual(before);
     expect([...(hidden ?? [])]).toEqual(["tds"]);
+  });
+
+  it("a year gets its months' written summaries, same scope", async () => {
+    await brew("2026-03-03T08:00:00Z", { rating: 4 });
+    const month = (periodStart: string, fields: Partial<typeof recaps.$inferInsert> = {}) =>
+      db.insert(recaps).values({ id: randomUUID(), workspaceId, userId, kind: "monthly", periodStart, scope: "mine", status: "done", summary: `Summary ${periodStart}`, highlights: ["One"], ...fields });
+    await month("2026-03-01");
+    await month("2026-01-01");
+    await month("2026-02-01", { status: "failed", summary: null });
+    await month("2026-04-01", { scope: "all" });
+    await month("2025-12-01");
+    llm.mockResolvedValue({ summary: ANSWER, usage: null });
+    await writeRecapSummary({ recapId: await recap({ kind: "yearly", periodStart: "2026-01-01" }) });
+    expect(llm.mock.calls[0]![1].monthlySummaries).toEqual([
+      { month: "2026-01", summary: "Summary 2026-01-01", highlights: ["One"] },
+      { month: "2026-03", summary: "Summary 2026-03-01", highlights: ["One"] },
+    ]);
   });
 
   it("everyone's brews for scope all; fails a period without brews", async () => {
