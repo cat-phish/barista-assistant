@@ -86,7 +86,9 @@ Every API response carries `X-Content-Type-Options: nosniff`.
 ## `GET /api/auth/me`
 
 - **Auth Required:** `true`
-- **Success (`200 OK`):** `{ "user": { "id": "uuid", "email": "a@b.com", "name": "Jo", "preferences": { ... }, "isAdmin": false } }`
+- **Success (`200 OK`):** `{ "user": { "id": "uuid", "email": "a@b.com", "name": "Jo", "preferences": { ... }, "isAdmin": false, "song": null, "features": { "yearSongUploads": false } } }`.
+  `song` is your Year song (below) or `null`; `features` is what this
+  server allows. Every reply with a `user` has both.
 
 ## Name
 
@@ -106,6 +108,56 @@ Not in a backup, like the rest of the account.
   spaces made one; blank clears it. Other keys are refused.
 - **Success (`200 OK`):** `{ "user": { ... } }`, as `GET /api/auth/me`.
 - **Errors:** `400` invalid body or longer than 100 characters.
+
+## Year song
+
+Your own song for Your Year in Coffee (recaps.md §11c, "Motion and sound"),
+one per account, played when `yearSong` is `own`. Only where the server
+has `YEAR_SONG_UPLOADS=true` (server.md); off by default.
+
+- **Storage:** `PHOTO_DIR/songs/<userId>` (the name never comes from the
+  upload) and four `users` columns (schema.md). Not in workspace backups:
+  it's the account's, like the name. Deleting the account deletes it, and
+  files with no account are swept when the backend starts.
+- **Limits:** 10 MB a file (`SONG_MAX_BYTES`), so at most 10 MB per
+  account; 10 uploads per person per hour (`SONG_UPLOAD_LIMIT_PER_HOUR`).
+  No length limit: it loops.
+- **Security:**
+  - The type comes from the file's first bytes (`backend/src/audioSniff.ts`):
+    MP3, AAC (ADTS), M4A/MP4 audio, Ogg, WebM, FLAC or WAV. Anything else,
+    whatever its name or `Content-Type`, is `415`.
+  - Served only to its owner, with the saved type, `nosniff`,
+    `Content-Disposition: inline`, `Content-Security-Policy: sandbox` (the
+    backend's; Caddy sends its own CSP on every reply) and `Cache-Control:
+    private, no-store`, so it's only ever played as audio.
+  - Never decoded or re-encoded on the server: only the owner's browser
+    plays it. Its tags (cover art and so on) stay in the file, which only
+    its owner can fetch.
+  - Its name: control characters removed, spaces collapsed, up to 100
+    characters, shown as plain text.
+- **Uploads turned off later:** no uploads, and `GET` is `404`, so the
+  slides play nothing; `DELETE` still works. Files stay until removed or
+  the account is deleted.
+
+### `PUT /api/auth/me/song?name=`
+
+- **Auth Required:** `true`
+- **Body:** the file itself (not JSON). `name`: what to call it (the file
+  name without its extension, from the app).
+- **Success (`200 OK`):** `{ "song": { "name": "Morning tune", "bytes": 123456, "uploadedAt": "ISO" } }`. Replaces any song before.
+- **Errors:** `403` uploads off on this server; `413` over 10 MB; `415` not
+  a song file we play; `429` too many uploads.
+
+### `GET /api/auth/me/song`
+
+- **Auth Required:** `true`
+- **Success (`200 OK`):** the file, headers as above.
+- **Errors:** `404` none, or uploads off.
+
+### `DELETE /api/auth/me/song`
+
+- **Auth Required:** `true`
+- **Success (`204 No Content`)**, also with none or with uploads off.
 
 ## Preferences
 

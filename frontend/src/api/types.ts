@@ -79,6 +79,13 @@ export interface User {
   preferences: UserPreferences;
   emailVerified: boolean; // confirmed by the mailed link (docs/api/auth.md §1d)
   isAdmin: boolean; // a server admin: sees Settings → Server (docs/api/server.md §10)
+  song: SongInfo | null; // your own Year in Coffee song (docs/api/auth.md §1, "Year song")
+  features: { yearSongUploads: boolean }; // what this server allows
+}
+export interface SongInfo {
+  name: string | null;
+  bytes: number;
+  uploadedAt: string;
 }
 
 // Per workspace, owners edit (docs/api/workspaces.md §2 settings).

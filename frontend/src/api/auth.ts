@@ -1,9 +1,12 @@
 import { api } from './client';
-import type { AiPreferences, AiPreferencesSettings, AiPrompt, AiPromptSettings, MyResearch, ResearchPut, User, UserPreferences } from './types';
+import type { AiPreferences, AiPreferencesSettings, AiPrompt, AiPromptSettings, MyResearch, ResearchPut, SongInfo, User, UserPreferences } from './types';
 
 export const authApi = {
   me: () => api.get<{ user: User }>('/api/auth/me'),
   setName: (name: string | null) => api.patch<{ user: User }>('/api/auth/me', { name }),
+  // Your own Year in Coffee song (§1, "Year song"): the file itself, up to 10 MB.
+  uploadSong: (file: File) => api.put<{ song: SongInfo }>(`/api/auth/me/song?name=${encodeURIComponent(file.name.replace(/\.[^.]+$/, ''))}`, file),
+  removeSong: () => api.delete('/api/auth/me/song'),
   login: (email: string, password: string) => api.post<{ user: User }>('/api/auth/login', { email, password }),
   register: (email: string, password: string) => api.post<{ user: User } | { pending: true }>('/api/auth/register', { email, password }),
   // Whether this server takes new accounts (ALLOW_REGISTRATION, §1).

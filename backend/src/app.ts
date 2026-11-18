@@ -7,6 +7,7 @@ import { db } from "./db.js";
 import { sendError } from "./http.js";
 import { analyzeRouter } from "./routes/analyze.js";
 import { authRouter } from "./routes/auth.js";
+import { yearSongRouter } from "./routes/yearSong.js";
 import { aiPromptRouter } from "./routes/aiPrompt.js";
 import { aiPreferencesRouter, workspaceAiPreferencesRouter } from "./routes/aiPreferences.js";
 import { researchRouter, workspaceResearchRouter } from "./routes/research.js";
@@ -86,6 +87,7 @@ app.get("/health", async (_req: Request, res: Response<HealthResponse>) => {
   }
 });
 
+app.use("/api/auth/me/song", yearSongRouter); // docs/api/auth.md §1, "Year song"
 app.use("/api/auth/me/notifications", notificationsRouter);
 app.use("/api/auth/me/ai-prompt", aiPromptRouter);
 app.use("/api/auth/me/ai-preferences", aiPreferencesRouter);

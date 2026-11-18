@@ -5,6 +5,7 @@ import { pool } from "./db.js";
 import { closeQueue, syncBackupSchedule, syncBeanRestSchedule, syncRecapSchedule } from "./queue.js";
 import { getBackupSettings } from "./serverSettings.js";
 import { sweepChatPhotos, sweepOrphanPhotos } from "./photos.js";
+import { sweepOrphanSongs } from "./routes/yearSong.js";
 import { pruneAllChats } from "./chatData.js";
 
 const server = app.listen(config.port, () => {
@@ -18,8 +19,8 @@ prune();
 setInterval(prune, 3600_000).unref();
 
 // Photo files whose rows are gone (docs/api/bean-photos.md §4c).
-Promise.all([sweepOrphanPhotos(), sweepChatPhotos()])
-  .then(([beans, chats]) => beans + chats > 0 && console.log(`Removed ${beans + chats} orphaned photo file(s)`))
+Promise.all([sweepOrphanPhotos(), sweepChatPhotos(), sweepOrphanSongs()])
+  .then(([beans, chats, songs]) => beans + chats + songs > 0 && console.log(`Removed ${beans + chats + songs} orphaned photo or song file(s)`))
   .catch((err: unknown) => console.error("Photo sweep failed:", err instanceof Error ? err.message : err));
 
 // The backup schedule follows the saved settings (docs/api/server.md §10),

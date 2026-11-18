@@ -58,6 +58,13 @@ export const users = mysqlTable("users", {
   id: varchar("id", { length: 36 }).primaryKey(),
   email: varchar("email", { length: 255 }).unique().notNull(),
   name: varchar("name", { length: 100 }), // shown to others; null = the email (api/auth.md §1, "Name"; migration 0132)
+  // Your own Year in Coffee song (api/auth.md §1, "Year song"; migration
+  // 0133): the sniffed type, size, display name and when; the file is
+  // PHOTO_DIR/songs/<id>. All null = none.
+  songMime: varchar("song_mime", { length: 32 }),
+  songBytes: int("song_bytes"),
+  songName: varchar("song_name", { length: 100 }),
+  songUploadedAt: timestamp("song_uploaded_at"),
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
   // Embedded in session tokens; bumping it (e.g. on password change) makes
   // every older session invalid.

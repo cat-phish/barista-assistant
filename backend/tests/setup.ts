@@ -11,6 +11,7 @@ process.env.INVITE_LIMIT_PER_HOUR ??= "10000";
 process.env.HEAVY_IMPORT_LIMIT_PER_HOUR ??= "10000";
 process.env.TEST_SEND_LIMIT_PER_HOUR ??= "10000";
 process.env.PHOTO_UPLOAD_LIMIT_PER_HOUR ??= "10000";
+process.env.SONG_UPLOAD_LIMIT_PER_HOUR ??= "10000";
 process.env.MAX_OWNED_WORKSPACES ??= "10000";
 process.env.AI_DAILY_USER_UNITS ??= "100000";
 process.env.AI_DAILY_WORKSPACE_UNITS ??= "100000";

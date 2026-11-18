@@ -349,6 +349,12 @@ export const users = mysqlTable("users", {
   // What others see (docs/api/auth.md §1, "Name"); null = not set, shown as
   // the email. Logging in still uses the email.
   name: varchar("name", { length: 100 }),
+  // Your own Year in Coffee song (docs/api/auth.md §1, "Year song"); the file
+  // is PHOTO_DIR/songs/<id>. null = none.
+  songMime: varchar("song_mime", { length: 32 }),
+  songBytes: int("song_bytes"),
+  songName: varchar("song_name", { length: 100 }),
+  songUploadedAt: timestamp("song_uploaded_at"),
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
   // Embedded in session tokens; bumping it (e.g. on password change) makes
   // every older session invalid.

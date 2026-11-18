@@ -65,6 +65,10 @@ export const labelWebTimeoutMs = (): number => Number(process.env.LABEL_WEB_TIME
 export const backupDir = (): string => process.env.BACKUP_DIR ?? "/backups";
 // Where bean photos are kept (docs/api/bean-photos.md §4c).
 export const photoDir = (): string => process.env.PHOTO_DIR ?? "/photos";
+
+// Your own Year in Coffee song (docs/api/auth.md §1, "Year song"): off unless
+// YEAR_SONG_UPLOADS=true. Read per request, so tests can switch it.
+export const yearSongUploadsOn = (): boolean => process.env.YEAR_SONG_UPLOADS?.trim().toLowerCase() === "true";
 // The zone the backup hour is in; an unknown zone falls back to UTC.
 export function backupTimezone(): string {
   const tz = process.env.BACKUP_TIMEZONE?.trim() || "UTC";

@@ -34,6 +34,11 @@ takes effect on the next request; nobody is an admin until one is granted.
 - `BACKUP_DOWNLOADS=false` keeps dumps on the server: admins see and run
   backups but copy the files from `./backups` themselves.
 - Downloading a dump always asks for the admin's password again.
+- `YEAR_SONG_UPLOADS=true` lets each account upload a song for Your Year in
+  Coffee (auth.md §1, "Year song"). Off by default. Each takes up to 10 MB
+  in `./photos/songs`, so allow 10 MB × accounts of disk. Songs are
+  people's own music, kept private to them; turning it off later stops
+  uploads and playback but leaves the files until removed.
 
 ## Scheduled database backups
 

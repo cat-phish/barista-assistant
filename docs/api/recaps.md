@@ -87,8 +87,9 @@ Backlog 65: one calendar year of brewing, as story slides. Built in phases:
    year and one for the year before. Live, like other recaps: later edits
    to brews or beans change them.
 2. **The story slides** (done), and an entry on Insights → Recap.
-2b. **Motion and sound:** animation (done); a built-in song; your own
-   song where the server allows uploads (`auth.md` §1, "Year song").
+2b. **Motion and sound** (done, but the built-in track itself is still to
+   be picked): animation, the music picker, and your own song where the
+   server allows uploads (`auth.md` §1, "Year song").
 3. A shareable image of the summary card.
 4. An AI summary (kind `yearly`; until then `…/recaps` accepts only
    `weekly` and `monthly`).

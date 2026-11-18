@@ -9,6 +9,7 @@ import { aiChatPhotos, beanPhotos, beans, workspaces } from "@barista/shared/sch
 import { and, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm";
 import { photoDir } from "./config.js";
 import { db } from "./db.js";
+import { SONG_DIR } from "./routes/yearSong.js";
 
 // One size only, big enough for the edit page; the list shows it smaller.
 export const PHOTO_MAX_EDGE = 1024;
@@ -87,7 +88,7 @@ export async function sweepOrphanPhotos(): Promise<number> {
   let removed = 0;
   const dirs = await readdir(photoDir(), { withFileTypes: true }).catch(() => []);
   for (const dir of dirs) {
-    if (!dir.isDirectory() || dir.name === CHAT_DIR) continue;
+    if (!dir.isDirectory() || dir.name === CHAT_DIR || dir.name === SONG_DIR) continue;
     const files = await readdir(join(photoDir(), dir.name));
     for (const file of files) {
       if (known.has(`${dir.name}/${file}`)) continue;

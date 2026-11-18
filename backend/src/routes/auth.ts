@@ -20,7 +20,8 @@ import {
   type Workspace,
 } from "@barista/shared/schema";
 import { emailSchema, preferencesSchema } from "../validation.js";
-import { emailVerificationOn, registrationMode, registrationOpen } from "../config.js";
+import { emailVerificationOn, registrationMode, registrationOpen, yearSongUploadsOn } from "../config.js";
+import { removeSongFile, type SongInfo } from "./yearSong.js";
 import { fresh } from "./invites.js";
 import { sendMail } from "../mail.js";
 import { sendVerification } from "./emailVerification.js";
@@ -32,6 +33,8 @@ export interface PublicUser {
   preferences: UserPreferences; // defaults filled in
   emailVerified: boolean; // docs/api/auth.md §1d; always false while the server has verification off
   isAdmin: boolean; // a server admin, granted on the server (docs/api/server.md §10)
+  song: SongInfo | null; // your own Year in Coffee song (auth.md §1, "Year song")
+  features: { yearSongUploads: boolean }; // what this server allows (YEAR_SONG_UPLOADS)
 }
 
 export interface PreferencesResponse {
@@ -73,8 +76,10 @@ export interface SoleOwnerConflict {
   workspaces: Array<Pick<Workspace, "id" | "name" | "slug">>;
 }
 
-function toPublicUser(user: Pick<User, "id" | "email"> & { name?: string | null; preferences?: User["preferences"]; isAdmin?: boolean; emailVerifiedAt?: Date | null }): PublicUser {
-  return { id: user.id, email: user.email, name: user.name ?? null, preferences: withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null), emailVerified: Boolean(user.emailVerifiedAt), isAdmin: user.isAdmin ?? false };
+type SongColumns = Partial<Pick<User, "songMime" | "songBytes" | "songName" | "songUploadedAt">>;
+function toPublicUser(user: Pick<User, "id" | "email"> & SongColumns & { name?: string | null; preferences?: User["preferences"]; isAdmin?: boolean; emailVerifiedAt?: Date | null }): PublicUser {
+  const song = user.songMime && user.songUploadedAt ? { name: user.songName ?? null, bytes: user.songBytes ?? 0, uploadedAt: user.songUploadedAt.toISOString() } : null;
+  return { id: user.id, email: user.email, name: user.name ?? null, preferences: withDefaults(DEFAULT_PREFERENCES, user.preferences ?? null), emailVerified: Boolean(user.emailVerifiedAt), isAdmin: user.isAdmin ?? false, song, features: { yearSongUploads: yearSongUploadsOn() } };
 }
 
 // Brute-force protection, shared by every endpoint that checks a password
@@ -204,7 +209,7 @@ authRouter.post("/logout", async (req: Request, res: Response) => {
 
 authRouter.get("/me", requireAuth, async (req: Request, res: Response<UserResponse>) => {
   const [user] = await db
-    .select({ id: users.id, email: users.email, name: users.name, preferences: users.preferences, isAdmin: users.isAdmin, emailVerifiedAt: users.emailVerifiedAt })
+    .select({ id: users.id, email: users.email, name: users.name, preferences: users.preferences, isAdmin: users.isAdmin, emailVerifiedAt: users.emailVerifiedAt, songMime: users.songMime, songBytes: users.songBytes, songName: users.songName, songUploadedAt: users.songUploadedAt })
     .from(users)
     .where(eq(users.id, authedUserId(req)))
     .limit(1);
@@ -227,7 +232,7 @@ authRouter.patch("/me", requireAuth, async (req: Request, res: Response<UserResp
   const name = body.name?.trim().replace(/\s+/g, " ") || null;
   await db.update(users).set({ name }).where(eq(users.id, userId));
   const [user] = await db
-    .select({ id: users.id, email: users.email, name: users.name, preferences: users.preferences, isAdmin: users.isAdmin, emailVerifiedAt: users.emailVerifiedAt })
+    .select({ id: users.id, email: users.email, name: users.name, preferences: users.preferences, isAdmin: users.isAdmin, emailVerifiedAt: users.emailVerifiedAt, songMime: users.songMime, songBytes: users.songBytes, songName: users.songName, songUploadedAt: users.songUploadedAt })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
@@ -362,6 +367,7 @@ authRouter.delete("/me", requireAuth, loginLimiter, async (req: Request, res: Re
     });
     return;
   }
+  await removeSongFile(userId);
   clearSessionCookie(res);
   res.status(204).end();
 });

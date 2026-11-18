@@ -99,6 +99,8 @@ services:
       - BACKUP_TIMEZONE=${BACKUP_TIMEZONE:-UTC}
       # false keeps database dumps on the server (no downloads in the app).
       - BACKUP_DOWNLOADS=${BACKUP_DOWNLOADS:-true}
+      # true: each account can upload a song for Your Year in Coffee (10 MB each).
+      - YEAR_SONG_UPLOADS=${YEAR_SONG_UPLOADS:-false}
     # Lists and serves the dumps the worker writes (read-only here). Bean
     # photos (docs/api/bean-photos.md §4c) live in ./photos: back it up with
     # the database.

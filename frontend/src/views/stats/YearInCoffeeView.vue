@@ -68,7 +68,49 @@ function close(): void {
 // first tap or key; it pauses while the tab is hidden.
 const audio = ref<HTMLAudioElement | null>(null);
 const song = computed(() => prefs.value.yearSong);
-const songUrl = computed(() => songSource(song.value, false, false));
+const uploadsOn = computed(() => auth.user?.features.yearSongUploads ?? false);
+const ownSong = computed(() => auth.user?.song ?? null);
+const songUrl = computed(() => {
+  const url = songSource(song.value, uploadsOn.value, Boolean(ownSong.value));
+  // A replaced song has the same address, so the upload time tells them apart.
+  return url && song.value === 'own' ? `${url}?v=${encodeURIComponent(ownSong.value!.uploadedAt)}` : url;
+});
+
+// Your own song (docs/api/auth.md §1, "Year song"): 10 MB, checked again by the server.
+const SONG_MAX_MB = 10;
+const songInput = ref<HTMLInputElement | null>(null);
+const songBusy = ref(false);
+const songError = ref('');
+async function onSongFile(e: Event): Promise<void> {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  songError.value = '';
+  if (file.size > SONG_MAX_MB * 1024 * 1024) {
+    songError.value = `That file is over ${SONG_MAX_MB} MB.`;
+    return;
+  }
+  songBusy.value = true;
+  try {
+    audio.value?.pause();
+    await auth.uploadSong(file);
+    await nextTick();
+    play();
+  } catch (err) {
+    songError.value = errorMessage(err);
+  } finally {
+    songBusy.value = false;
+  }
+}
+async function removeOwnSong(): Promise<void> {
+  songError.value = '';
+  try {
+    await auth.removeSong();
+  } catch (err) {
+    songError.value = errorMessage(err);
+  }
+}
 function play(): void {
   const a = audio.value;
   if (!a || !songUrl.value || !a.paused || document.hidden) return;
@@ -234,6 +276,7 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
             <select :value="song" aria-label="Music" @change="pickSong">
               <option value="off">No music</option>
               <option value="builtin">Built-in song</option>
+              <option v-if="uploadsOn" value="own">My song</option>
             </select>
           </label>
           <button type="button" class="icon" aria-label="Close" @click="close">✕</button>
@@ -241,6 +284,15 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
       </div>
     </div>
 
+    <div v-if="uploadsOn && song === 'own' && (index === 0 || !ownSong || songError)" class="own-song">
+      <span v-if="ownSong" class="song-name">♪ {{ ownSong.name ?? 'Your song' }}</span>
+      <span v-else>No song uploaded yet.</span>
+      <button type="button" class="btn btn-secondary" :disabled="songBusy" @click="songInput?.click()">{{ songBusy ? 'Uploading…' : ownSong ? 'Replace' : 'Upload a song' }}</button>
+      <button v-if="ownSong" type="button" class="btn btn-secondary" :disabled="songBusy" @click="removeOwnSong">Remove</button>
+      <input ref="songInput" type="file" accept="audio/*" hidden @change="onSongFile" />
+      <p v-if="songError" class="form-error" role="alert">{{ songError }}</p>
+      <p v-else class="hint">Up to {{ SONG_MAX_MB }} MB: MP3, M4A, Ogg, WebM, FLAC or WAV. Only you can play it.</p>
+    </div>
     <audio ref="audio" :src="songUrl ?? undefined" loop preload="none" />
     <div v-if="!asked" class="stage center">
       <p>Recaps are off in <RouterLink :to="{ name: 'settings-recaps' }">Settings → Recaps</RouterLink>, so nothing loads until you ask.</p>
@@ -340,6 +392,22 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
 }
 .music select {
   min-height: var(--tap, 44px);
+}
+.own-song {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding-top: 8px;
+  text-align: center;
+}
+.own-song p {
+  flex-basis: 100%;
+  margin: 0;
+}
+.song-name {
+  overflow-wrap: anywhere;
 }
 .icon {
   border: 0;
