@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { addMember, newUser, newWorkspace } from "./helpers.js";
+import { addMember, newBean, newBrewLog, newUser, newWorkspace } from "./helpers.js";
+import * as schema from "@barista/shared/schema";
+import { freezeYearInCoffee } from "@barista/shared/yearFreeze";
+import { db } from "../src/db.js";
 import { recapSummaryQueue } from "../src/queue.js";
 
 // A recap's AI summary (docs/api/recaps.md §11c, "AI summary").
@@ -51,5 +54,54 @@ describe("recap summaries", () => {
     expect((await viewer.agent.post(base).send(week)).status).toBe(403);
     expect((await viewer.agent.get(`${base}?kind=weekly&periodStart=2026-11-02&scope=mine`)).status).toBe(200);
     expect((await stranger.agent.get(`${base}?kind=weekly&periodStart=2026-11-02&scope=mine`)).status).toBe(404);
+  });
+});
+
+// Your Year in Coffee's frozen copy (docs/api/recaps.md §11c "Your Year in Coffee").
+describe("Your Year in Coffee, frozen", () => {
+  it("counts 1 January–6 December per scope, live until the worker freezes it", async () => {
+    const owner = await newUser("owner");
+    const other = await newUser("other");
+    const ws = (await newWorkspace(owner)).id;
+    await addMember(owner, ws, other, "barista");
+    const bean = await newBean(owner, ws, { country: "Kenya" });
+    await newBrewLog(owner, ws, bean, { timestamp: "2024-06-01T08:00:00.000Z", utcOffsetMinutes: 0 });
+    await newBrewLog(owner, ws, bean, { timestamp: "2025-03-01T08:00:00.000Z", utcOffsetMinutes: 0, rating: 4 });
+    await newBrewLog(owner, ws, bean, { timestamp: "2025-12-06T20:00:00.000Z", utcOffsetMinutes: 0 });
+    await newBrewLog(owner, ws, bean, { timestamp: "2025-12-07T08:00:00.000Z", utcOffsetMinutes: 0 }); // after the window
+    await newBrewLog(other, ws, bean, { timestamp: "2025-05-01T08:00:00.000Z", utcOffsetMinutes: 0 });
+    const url = (year: number, scope: string) => `/api/workspaces/${ws}/recaps/year-in-coffee/${year}?scope=${scope}`;
+
+    const mine = await owner.agent.get(url(2025, "mine"));
+    expect(mine.status).toBe(200);
+    expect(mine.body.year).toMatchObject({ version: 1, period: { start: "2025-01-01", end: "2025-12-06" } });
+    expect(mine.body.year.figures).toMatchObject({ year: 2025, recap: { brews: 2, previousBrews: 1 }, origins: [] });
+    expect(mine.body.year.history.map((h: { year: number }) => h.year)).toEqual([2024]);
+    expect((await owner.agent.get(url(2025, "all"))).body.year.figures.recap.brews).toBe(3);
+
+    // Not frozen by opening it: counted live, nothing saved.
+    expect(mine.body.frozen).toBe(false);
+    expect(await db.select().from(schema.recaps)).toHaveLength(0);
+    await newBrewLog(owner, ws, bean, { timestamp: "2025-04-01T08:00:00.000Z", utcOffsetMinutes: 0 });
+    expect((await owner.agent.get(url(2025, "mine"))).body.year.figures.recap.brews).toBe(3);
+
+    // Frozen (by the worker, from 7 December): a brew added later doesn't change it.
+    await freezeYearInCoffee(db, ws, owner.id, 2025, "mine", "2025-12-07");
+    await newBrewLog(owner, ws, bean, { timestamp: "2025-04-02T08:00:00.000Z", utcOffsetMinutes: 0 });
+    const frozen = (await owner.agent.get(url(2025, "mine"))).body;
+    expect(frozen).toMatchObject({ frozen: true, year: { figures: { recap: { brews: 3 } } } });
+    // Someone else's is their own.
+    expect((await other.agent.get(url(2025, "mine"))).body.year.figures.recap.brews).toBe(1);
+  });
+
+  it("isn't out before 7 December, and checks what it's asked", async () => {
+    const owner = await newUser("owner");
+    const stranger = await newUser("stranger");
+    const ws = (await newWorkspace(owner)).id;
+    const url = (rest: string) => `/api/workspaces/${ws}/recaps/year-in-coffee/${rest}`;
+    expect((await owner.agent.get(url("2999?scope=mine"))).body.code).toBe("year_not_out");
+    expect((await owner.agent.get(url("2025?scope=both"))).status).toBe(400);
+    expect((await owner.agent.get(url("twenty?scope=mine"))).status).toBe(400);
+    expect((await stranger.agent.get(url("2025?scope=mine"))).status).toBe(404);
   });
 });

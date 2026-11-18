@@ -68,8 +68,9 @@ Settings → Data. The frontend's pieces: `api/backup.ts` (calls and types),
   `parameter_suggestions` (before the brews, which name the one they used), `brew_logs`, `brew_log_marks`, `brew_log_tools`, `brew_log_problems`, `brew_log_guests`,
   `brew_log_flavors`, `brew_servings`, `brew_serving_flavors` (`brew-servings.md`
   §6c; who logged one is its `brewedBy`), `llm_analyses`, `recaps` (written AI
-  recap summaries only, `status` `done`, each with its writer's `brewedBy`;
-  a restore keeps only the restorer's own, `recaps.md` §11c) (`BACKUP_TABLES`). A table left out of a file counts as
+  recap summaries, `status` `done`, and Your Year in Coffee's frozen copies,
+  with `figures`; each with its writer's `brewedBy`; a restore keeps only
+  the restorer's own, as it was, `recaps.md` §11c) (`BACKUP_TABLES`). A table left out of a file counts as
   empty.
 - **Not in a backup:** people, members, notification channels, Web Push
   devices and preferences belong to the server, not the workspace. A brew says who made

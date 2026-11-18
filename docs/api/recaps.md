@@ -48,7 +48,8 @@ column nor the button shows (the rule for every AI button). Today the
 banner and the push cover weekly and monthly, and the automatic summary
 weekly, monthly and yearly; the `yearly` banner and push and the
 `yearInCoffee` switches are saved and take effect with Your Year in
-Coffee's own summary and its banner and push (backlog 65, plan steps 2–4).
+Coffee's own summary and its banner and push (backlog 65, plan steps 3–4).
+Your Year in Coffee is frozen on 7 December whatever they say.
 
 ## Insights → Recap
 
@@ -88,12 +89,15 @@ A period without brews says so; beans and recipes added in it still show.
 
 ## Your Year in Coffee
 
-Backlog 65: one calendar year of brewing, as story slides. Built in phases:
+Backlog 65: the year's brewing from **1 January to 6 December**, as story
+slides, out on **7 December** (December's last weeks aren't counted, as
+Spotify Wrapped doesn't). The Yearly tab (above) is the whole calendar year,
+live; Your Year in Coffee is a **frozen copy**. Built in phases:
 
-1. **The year's figures** (done): `frontend/src/lib/yearInCoffee.ts`
-   (`yearFigures`), worked out in the browser from one `GET …/stats` for the
-   year and one for the year before. Live, like other recaps: later edits
-   to brews or beans change them.
+1. **The year's figures** (done): counted on the server by
+   `@barista/shared/yearInCoffee` (`freezeYear`) from the Insights rows
+   (`@barista/shared/statsRows`, exactly what `GET …/stats` sends) and
+   frozen (below). Later edits to brews or beans don't change a frozen year.
 2. **The story slides** (done), and an entry on Insights → Recap.
 2b. **Motion and sound** (done, but the built-in track itself is still to
    be picked): animation, the music picker, and your own song where the
@@ -103,9 +107,9 @@ Backlog 65: one calendar year of brewing, as story slides. Built in phases:
    tab's summary (kind `yearly`, done) is a separate one.
 5. The banner and a notification on 1 January.
 
-**Figures:** everything a recap counts for the year, next to the year
-before (above, including your share of volume and caffeine and Brewed for
-others), plus:
+**Figures:** everything a recap counts for 1 January–6 December, next to
+the year before's same dates (above, including your share of volume and
+caffeine and Brewed for others), plus:
 
 - **Brews per month**, January first.
 - **Longest streak:** the longest run of days brewed in a row (2 or more).
@@ -127,12 +131,52 @@ others), plus:
 
 A figure without enough behind it is left out, so its slide is skipped.
 
+**Frozen** (`@barista/shared/yearFreeze`): kept on a `recaps` row, kind
+`yearInCoffee`, `periodStart` 1 January, per person, workspace, year and
+scope (`mine`, and `all` for the bar's), in its `figures` column: `{ version,
+period, figures, history }`, with the earlier years to compare with
+(`history`) frozen alongside. The worker's quarter-hourly recap tick
+freezes them once a person's own day (their time zone, as recaps follow)
+reaches 7 December: `mine` for everyone who brewed from 1 January to
+6 December, `all` for every member of a workspace someone brewed in, at most
+50 a tick, through 31 December (so a member who joins later gets theirs).
+Only the worker freezes: opening a year with no frozen copy (a year from
+before this existed, or before the tick got to you) counts it then, same
+dates, and saves nothing, so it follows later edits. Once frozen it is
+never counted again. In a backup (`backup.md` §2b) and restored as it
+was; only the restorer's own, like summaries. A bar's copy frozen in a zone
+that reaches 7 December first can miss a colleague's brew from late on
+6 December in a zone behind it.
+
+`version` (`YEAR_FIGURES_VERSION`) goes up when a figure is added or changes
+meaning. A copy frozen before a figure existed doesn't have it: the page
+reads a missing figure as empty (`completeFigures` in
+`frontend/src/lib/yearInCoffee.ts`) and skips its slide; old years aren't
+counted again.
+
+**Parity with the Yearly tab:** the Yearly tab counts live in the browser
+(`frontend/src/lib/recap.ts`); Your Year in Coffee's `recap` part is the
+server's copy of that counting. **They must match: a figure added to,
+changed in or removed from one is done in the other in the same change**,
+with `YEAR_FIGURES_VERSION` bumped (CLAUDE.md rule 15).
+`frontend/src/lib/yearInCoffee.parity.test.ts` runs both on the same rows
+and fails when they differ or one has a figure the other lacks. What only a
+year has (streak, origins, most improved, …) is counted on the server only.
+
+### `GET /api/workspaces/:workspaceId/recaps/year-in-coffee/:year?scope`
+
+Any member. `scope`: `mine` or `all`. Returns `{ year: { version, period,
+figures, history }, frozen }`: the frozen copy (`frozen: true`), or with
+none the year counted now and not saved (`frozen: false`).
+`409 year_not_out` for this year before 7 December in the caller's time
+zone (or a later year); `400` for a bad year or scope.
+
 **Slides:** route `/insights/year` (`stats-year`), full screen outside the
 Insights tabs, linked from the top of Insights → Recap ("Your 2025 in
-coffee"). Query: `year` (default and latest: this year "so far" from 1
-December, else the one just ended) and `mine=0` for the bar's year (an
-**Only my brews** box on the slides, on by default). One `GET …/stats`
-with `from` = the year before's start, `to` = the year's end.
+coffee", "1 January to 6 December"). Query: `year` (default and latest:
+this year from 7 December, else last year; never one in progress) and
+`mine=0` for the bar's year (an **Only my brews** box on the slides, on by
+default). One `GET …/recaps/year-in-coffee/:year`.
 
 - One figure per slide (`frontend/src/lib/yearSlides.ts`): the year;
   brews; longest streak; busiest month (with brews per month); the usual
@@ -154,9 +198,9 @@ Month bars grow in, list rows step in 60 ms apart, and the summary drops
 confetti (CSS only). With `prefers-reduced-motion`, nothing moves or
 counts: every slide shows as it ends.
 
-**Compared with earlier years** (`frontend/src/lib/yearCompare.ts`): the
-slides load all history up to the year's end (one `GET …/stats` with no
-`from`) and work out each earlier year the same way. Chips under a figure
+**Compared with earlier years** (`frontend/src/lib/yearCompare.ts` words
+the chips): the frozen copy's `history` has every earlier year with brews,
+each counted the same way over the same dates, 1 January–6 December. Chips under a figure
 compare it with last year ("+5% on 2025"), and with an average year or, when
 the year beats every earlier one, a record ("Your biggest year yet"):
 brews, longest streak, coffee used, average rating (in stars, last year or
@@ -166,8 +210,7 @@ bean or recipe was last year's too. The summary shows last year's change
 beside days brewed, coffee used, volume and streak. Rules: an earlier year
 counts with 5 or more brews (rated brews for the rating); an average or a
 record needs 2 such years; within ±2% is "About the same"; 2× or more is
-written as a multiple; ratings to 0.1 ★. For the year in progress, earlier
-years are cut to the same date ("+5% on 2025 by this date"). Up is in the
+written as a multiple; ratings to 0.1 ★. Up is in the
 brand colour, down stays muted. Only my brews compares you with you, the
 bar with the bar. A slide with chips stays 1 s longer.
 

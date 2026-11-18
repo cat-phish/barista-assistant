@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { StatsBean, StatsBrew, StatsData } from '../api/types';
-import { latestYear, longestStreak, yearFigures } from './yearInCoffee';
+import { completeFigures, latestYear, type YearFigures } from './yearInCoffee';
+import { shared } from './yearShared.testing';
+// The counting is the server's (@barista/shared/yearInCoffee), loaded as it is.
+const Y2026 = { start: '2026-01-01', end: '2026-12-31' };
 
 const brew = (fields: Partial<StatsBrew> = {}): StatsBrew => ({
   id: 'b', timestamp: '2026-03-03T08:00:00.000Z', utcOffsetMinutes: 0, userId: 'u', beanId: 'kenya', recipeId: null, brewerId: null,
@@ -41,7 +44,7 @@ describe('Your Year in Coffee figures (backlog 65)', () => {
     brew({ id: 'e', timestamp: at('2026-07-11', 17), beanId: 'blend', flavors: ['Sweet'] }),
     brew({ id: 'last-year', timestamp: at('2025-12-31'), rating: 5 }),
   ];
-  const f = yearFigures(data(brews), data([brew({ id: 'x', timestamp: at('2025-05-01') })]), 2026, 'medium', '2026-12-31');
+  const f = shared.yearFigures(data(brews), data([brew({ id: 'x', timestamp: at('2025-05-01') })]), Y2026, 'medium', '2026-12-31');
 
   it('counts the year as a recap does, next to the year before', () => {
     expect(f.recap.brews).toBe(5);
@@ -86,7 +89,7 @@ describe('Your Year in Coffee figures (backlog 65)', () => {
   });
 
   it('skips a figure without enough behind it', () => {
-    const small = yearFigures(data([brew({ id: 'a', rating: 4 }), brew({ id: 'b', timestamp: at('2026-03-05'), rating: 5 })]), null, 2026, 'medium', '2026-12-31');
+    const small = shared.yearFigures(data([brew({ id: 'a', rating: 4 }), brew({ id: 'b', timestamp: at('2026-03-05'), rating: 5 })]), null, Y2026, 'medium', '2026-12-31');
     expect(small.streak).toBeNull();
     expect(small.busiestMonth).toBeNull();
     expect(small.favouriteHour).toBeNull();
@@ -99,16 +102,27 @@ describe('Your Year in Coffee figures (backlog 65)', () => {
 
 describe('longestStreak', () => {
   it('keeps the first of equal runs, and counts a day once', () => {
-    expect(longestStreak(['2026-01-05', '2026-01-01', '2026-01-02', '2026-01-02', '2026-01-06'])).toEqual({ days: 2, start: '2026-01-01', end: '2026-01-02' });
-    expect(longestStreak(['2026-12-31'])).toBeNull();
-    expect(longestStreak([])).toBeNull();
+    expect(shared.longestStreak(['2026-01-05', '2026-01-01', '2026-01-02', '2026-01-02', '2026-01-06'])).toEqual({ days: 2, start: '2026-01-01', end: '2026-01-02' });
+    expect(shared.longestStreak(['2026-12-31'])).toBeNull();
+    expect(shared.longestStreak([])).toBeNull();
   });
 });
 
 describe('latestYear', () => {
-  it('offers this year from 1 December, else the one just ended', () => {
-    expect(latestYear('2026-11-30')).toBe(2025);
-    expect(latestYear('2026-12-01')).toBe(2026);
-    expect(latestYear('2027-01-01')).toBe(2026);
+  it('offers this year from 7 December, else the one before, as the server does', () => {
+    for (const [today, year] of [['2026-12-06', 2025], ['2026-12-07', 2026], ['2027-01-01', 2026]] as const) {
+      expect(latestYear(today)).toBe(year);
+      expect(shared.latestYearInCoffee(today)).toBe(year);
+    }
+  });
+});
+
+describe('a frozen copy from before a figure was added', () => {
+  it('reads the missing figures as empty, so their cards are skipped', () => {
+    const old = { year: 2026, recap: { brews: 3 } } as unknown as YearFigures;
+    const f = completeFigures(old);
+    expect(f.origins).toEqual([]);
+    expect(f.streak).toBeNull();
+    expect(f.recap).toMatchObject({ brews: 3, best: [], forOthers: null });
   });
 });

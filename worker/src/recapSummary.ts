@@ -27,6 +27,8 @@ export async function writeRecapSummary({ recapId }: RecapSummaryJobData): Promi
     .where(eq(recaps.id, recapId));
   if (!row) return { status: "skipped", reason: "recap no longer exists" };
   const { recap } = row;
+  // Your Year in Coffee's own summary comes with backlog 65, plan step 3.
+  if (recap.kind === "yearInCoffee") return { status: "skipped", reason: "not a recap kind" };
   const prefs = userPreferences(row.preferences ?? null);
   const hidden = new Set(withDefaults(DEFAULT_WORKSPACE_SETTINGS, row.settings ?? null).aiHidden);
   const period = periodOf(recap.kind, recap.periodStart, prefs.weekStartsOn);

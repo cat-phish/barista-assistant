@@ -144,7 +144,7 @@ const ratingSub = computed(() => {
     </div>
     <RouterLink class="card year-link" :to="{ name: 'stats-year', query: { year: String(yearOnOffer), ...(mine ? {} : { mine: '0' }) } }">
       <strong>{{ mine ? 'Your' : 'The bar’s' }} {{ yearOnOffer }} in coffee</strong>
-      <span class="muted">{{ yearOnOffer === Number(today.slice(0, 4)) ? 'The year so far, as story slides' : 'The year in review, as story slides' }} ›</span>
+      <span class="muted">1 January to 6 December, as story slides ›</span>
     </RouterLink>
 
     <p v-if="error" class="form-error" role="alert">{{ error }}</p>

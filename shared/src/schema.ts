@@ -23,6 +23,7 @@ import type { AiPreferences } from "./aiPreferences.js";
 import type { ResearchSettings, UserResearch } from "./researchSettings.js";
 import type { LexiconFlavor } from "./flavors.js";
 import type { RecipeCopy } from "./recipeCopy.js";
+import type { FrozenYear } from "./yearInCoffee.js";
 
 // A JSON column read back as a value: MariaDB stores JSON as text, so the
 // driver returns a string that drizzle's json() would leave unparsed.
@@ -2327,12 +2328,14 @@ export const recaps = mysqlTable(
     userId: varchar("user_id", { length: 36 })
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    kind: varchar("kind", { length: 10 }).$type<RecapKindName>().notNull(), // weekly | monthly | yearly
+    kind: varchar("kind", { length: 16 }).$type<RecapKindName>().notNull(), // weekly | monthly | yearly | yearInCoffee
     periodStart: date("period_start", { mode: "string" }).notNull(), // YYYY-MM-DD
     scope: varchar("scope", { length: 4 }).$type<RecapScope>().notNull(),
     status: varchar("status", { length: 10 }).$type<RecapSummaryStatus>().notNull().default("none"), // the AI summary
     summary: text("summary"),
     highlights: jsonValue<string[]>("highlights"), // the summary's short points
+    // Your Year in Coffee's figures, frozen on 7 December (recaps.md §11c): kind yearInCoffee only.
+    figures: jsonValue<FrozenYear>("figures"),
     error: text("error"),
     model: varchar("model", { length: 120 }),
     promptVersion: varchar("prompt_version", { length: 40 }),
@@ -2345,7 +2348,9 @@ export const recaps = mysqlTable(
   (t) => [unique("recaps_period_uq").on(t.workspaceId, t.userId, t.kind, t.periodStart, t.scope)],
 );
 export type RecapRow = typeof recaps.$inferSelect;
-type RecapKindName = "weekly" | "monthly" | "yearly";
+// yearInCoffee: Your Year in Coffee's frozen copy (periodStart 1 January), not a recap kind of the routes.
+export const RECAP_ROW_KINDS = ["weekly", "monthly", "yearly", "yearInCoffee"] as const;
+type RecapKindName = (typeof RECAP_ROW_KINDS)[number];
 
 export type AiChat = typeof aiChats.$inferSelect;
 export type AiChatMessage = typeof aiChatMessages.$inferSelect;

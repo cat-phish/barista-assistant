@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
-import { periodOf, RECAP_KINDS, type RecapKind } from "@barista/shared/recapPeriods";
+import { periodOf, RECAP_KINDS } from "@barista/shared/recapPeriods";
 import { userPreferences, DEFAULT_WORKSPACE_SETTINGS, RECAP_SCOPES, recaps, users, withDefaults, workspaces, type RecapRow, type RecapScope } from "@barista/shared/schema";
 import { AI_COST, spendAi } from "../aiConfig.js";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
@@ -10,13 +10,15 @@ import { db } from "../db.js";
 import { parseBody, sendError } from "../http.js";
 import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { enqueueRecapSummary, QueueUnavailableError } from "../queue.js";
+import { countYearInCoffee, storedYear } from "@barista/shared/yearFreeze";
+import { latestYearInCoffee, type FrozenYear } from "@barista/shared/yearInCoffee";
 
 // A recap's AI summary (docs/api/recaps.md §11c, "AI summary"): asked for
 // with POST, polled with GET. The figures themselves are worked out by the
 // client; only the summary is stored.
 
 export interface RecapView {
-  kind: RecapKind;
+  kind: RecapRow["kind"]; // one of RECAP_KINDS: the routes take no other
   periodStart: string;
   scope: RecapScope;
   status: "none" | "pending" | "done" | "failed";
@@ -124,4 +126,37 @@ recapsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Recap
   }
   const [row] = await db.select(COLUMNS).from(recaps).where(eq(recaps.id, id));
   res.status(202).json({ recap: row ? view(row) : null });
+});
+
+// Your Year in Coffee (docs/api/recaps.md §11c): the caller's frozen copy of
+// a year, 1 January–6 December. With none (the worker freezes them from
+// 7 December), the year counted now and not saved: frozen false. Out from
+// 7 December in their time zone; 409 year_not_out before.
+export interface YearInCoffeeResponse {
+  year: FrozenYear;
+  frozen: boolean;
+}
+const yearQuery = z.object({ scope: z.enum(RECAP_SCOPES) }).strict();
+recapsRouter.get("/year-in-coffee/:year", async (req: Request<WorkspaceParams & { year: string }>, res: Response<YearInCoffeeResponse>) => {
+  const { workspaceId } = req.params;
+  const userId = authedUserId(req);
+  if (!(await requireMembership(res, userId, workspaceId))) return;
+  const year = Number(req.params.year);
+  const parsed = yearQuery.safeParse(req.query);
+  if (!Number.isInteger(year) || year < 2000 || year > 9999 || !parsed.success) {
+    sendError(res, 400, "year: a year from 2000; scope: mine or all");
+    return;
+  }
+  const [[user], [ws]] = await Promise.all([
+    db.select({ preferences: users.preferences }).from(users).where(eq(users.id, userId)),
+    db.select({ settings: workspaces.settings }).from(workspaces).where(eq(workspaces.id, workspaceId)),
+  ]);
+  const prefs = userPreferences(user?.preferences ?? null);
+  const today = todayIn(prefs.timeZone ?? withDefaults(DEFAULT_WORKSPACE_SETTINGS, ws?.settings ?? null).timeZone);
+  if (year > latestYearInCoffee(today)) {
+    sendError(res, 409, "Your Year in Coffee comes out on 7 December", { code: "year_not_out" });
+    return;
+  }
+  const stored = await storedYear(db, workspaceId, userId, year, parsed.data.scope);
+  res.json(stored ? { year: stored, frozen: true } : { year: await countYearInCoffee(db, workspaceId, userId, year, parsed.data.scope, today), frozen: false });
 });

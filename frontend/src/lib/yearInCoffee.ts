@@ -1,14 +1,12 @@
 // Your Year in Coffee (backlog 65, docs/api/recaps.md §11c "Your Year in
-// Coffee"): one calendar year of brews, counted from the Insights rows as a
-// recap counts them, plus what only a year has: streaks, busiest times, top
-// origins and flavors, the most improved recipe or bean, and, for the bar's
-// year, who brewed. A figure without enough behind it is null or empty, so
-// the slides skip its card rather than show "1 origin".
-import type { RoastLevel, StatsBrew, StatsData } from '../api/types';
-import { beanLabel } from './beans';
-import { recapFigures, type RecapFigures } from './recap';
-import { addDays, type RecapPeriod } from './recapPeriods';
-import { countBy, localDay, localHour, localWeekday, splitCountries } from './stats';
+// Coffee"): 1 January to 6 December, counted and frozen on the server
+// (@barista/shared/yearInCoffee) and read from GET …/recaps/year-in-coffee/:year.
+// These are its types, as the API sends them; the Yearly tab counts live
+// (lib/recap.ts), and yearInCoffee.parity.test.ts holds the two to the same
+// results. A figure without enough behind it is null or empty, so the slides
+// skip its card rather than show "1 origin".
+import type { RecapFigures } from './recap';
+import type { RecapPeriod } from './recapPeriods';
 
 export interface Ranked {
   name: string;
@@ -33,122 +31,65 @@ export interface YearFigures {
   people: Array<{ userId: string; brews: number }>; // most brews first; empty unless 2 or more people brewed
   bestCupBy: string | null; // whose brew the newest best cup was, when people is shown
 }
-
-export const TOP = 5; // entries per ranked list
-export const MIN_PATTERN_BREWS = 5; // busiest month, weekday and hour need this many brews
-export const MIN_DISTINCT = 2; // a ranked list needs this many different entries
-export const MIN_IMPROVE_BREWS = 4; // rated brews of a recipe or bean to compare its halves
-export const MIN_IMPROVEMENT = 0.5; // half a star, early half to late half
-
-// The latest year on offer: this one "so far" from 1 December, else the one
-// just ended. It's also the year shown when none is asked for.
-export const latestYear = (today: string): number => Number(today.slice(0, 4)) - (today.slice(5, 7) === '12' ? 0 : 1);
-export const yearPeriod = (year: number): RecapPeriod => ({ start: `${year}-01-01`, end: `${year}-12-31` });
-
-// data: the year's rows (and the year before's in previous, for "vs last
-// year"); today caps the caffeine's days, as Insights does.
-export function yearFigures(data: StatsData, previous: StatsData | null, year: number, recipeRoastLevel: RoastLevel, today: string): YearFigures {
-  const period = yearPeriod(year);
-  const recap = recapFigures(data, previous, period, recipeRoastLevel, today);
-  const brews = data.brews.filter((b) => {
-    const d = localDay(b);
-    return d >= period.start && d <= period.end;
-  });
-  const bean = (id: string) => data.beans.find((b) => b.id === id);
-  const named = (list: ReadonlyArray<{ id: string; name: string }>, id: string) => list.find((x) => x.id === id)?.name ?? null;
-  const ranked = (keys: (b: StatsBrew) => string | readonly string[] | null, name: (key: string) => string | null = (k) => k): Ranked[] => {
-    const counts = countBy(brews, keys).flatMap((c) => {
-      const n = name(c.key);
-      return n ? [{ name: n, brews: c.n }] : [];
-    });
-    return counts.length >= MIN_DISTINCT ? counts.slice(0, TOP) : [];
-  };
-  // Free-text names (roasters, varieties, flavors): trimmed, each once per brew.
-  const folded = (values: readonly string[]) => [...new Set(values.map((v) => v.trim()).filter(Boolean))];
-
-  const months = Array.from({ length: 12 }, () => 0);
-  for (const b of brews) months[Number(localDay(b).slice(5, 7)) - 1]! += 1;
-  const patterns = brews.length >= MIN_PATTERN_BREWS;
-  const month = months.reduce((best, n, i) => (n > months[best]! ? i : best), 0);
-  const weekday = countBy(brews, (b) => String(localWeekday(b)))[0];
-  const hour = countBy(brews, (b) => String(localHour(b)).padStart(2, '0'))[0];
-
-  const userCounts = countBy(brews, (b) => b.userId);
-  const people = userCounts.length >= 2 ? userCounts.map((c) => ({ userId: c.key, brews: c.n })) : [];
-  const bestId = recap.best[0]?.brewId;
-
-  return {
-    year,
-    recap,
-    months,
-    streak: longestStreak(brews.map(localDay)),
-    busiestMonth: patterns && months.filter((n) => n > 0).length >= 2 ? { month, brews: months[month]! } : null,
-    busiestWeekday: patterns && weekday ? { weekday: Number(weekday.key), brews: weekday.n } : null,
-    favouriteHour: patterns && hour ? { hour: Number(hour.key), brews: hour.n } : null,
-    origins: ranked((b) => splitCountries(bean(b.beanId)?.country ?? null)),
-    originNames: countBy(brews, (b) => splitCountries(bean(b.beanId)?.country ?? null)).map((c) => c.key),
-    roasterNames: countBy(brews, (b) => folded([bean(b.beanId)?.roasterName ?? ''])).map((c) => c.key),
-    roasters: ranked((b) => folded([bean(b.beanId)?.roasterName ?? ''])),
-    processes: ranked(
-      (b) => bean(b.beanId)?.processId ?? null,
-      (id) => named(data.lookups.processes, id),
-    ),
-    varieties: ranked((b) => folded(bean(b.beanId)?.varieties ?? [])),
-    flavors: ranked((b) => folded(b.flavors)),
-    mostImproved: mostImproved(brews, data),
-    people,
-    bestCupBy: people.length && bestId ? (brews.find((b) => b.id === bestId)?.userId ?? null) : null,
-  };
+// A first year someone joined partway through: compared at its pace, its
+// totals scaled to the full period (docs/api/recaps.md §11c).
+export interface Covered {
+  from: string; // the first brew's day
+  days: number; // from then to the period's end
+  scale: number; // the period's days ÷ days
+  tooShort: boolean; // under 30 days: left out of comparisons
+}
+export type HistoryYear = YearFigures & { covered?: Covered };
+// What GET …/year-in-coffee/:year returns: the year and the earlier years
+// to compare with, all cut to 1 January–6 December.
+export interface FrozenYear {
+  version: number;
+  period: RecapPeriod;
+  figures: YearFigures;
+  history: HistoryYear[];
 }
 
-// The longest run of consecutive days in a list of local days.
-export function longestStreak(days: readonly string[]): YearFigures['streak'] {
-  const sorted = [...new Set(days)].sort();
-  let best: YearFigures['streak'] = null;
-  let start = 0;
-  for (let i = 1; i <= sorted.length; i++) {
-    if (i < sorted.length && sorted[i] === addDays(sorted[i - 1]!, 1)) continue;
-    const days = i - start;
-    if (days >= 2 && (!best || days > best.days)) best = { days, start: sorted[start]!, end: sorted[i - 1]! };
-    start = i;
-  }
-  return best;
-}
+// Out on 7 December: the latest year on offer, and the one shown when none is asked for.
+export const OUT_ON = '12-07';
+export const latestYear = (today: string): number => Number(today.slice(0, 4)) - (today.slice(5) >= OUT_ON ? 0 : 1);
 
-// The recipe or bean whose rating rose most from its early brews to its
-// late ones (the first half of its rated brews against the last half).
-function mostImproved(brews: readonly StatsBrew[], data: StatsData): YearFigures['mostImproved'] {
-  const rated = brews.filter((b) => b.rating !== null).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-  const mean = (list: readonly StatsBrew[]) => list.reduce((n, b) => n + b.rating!, 0) / list.length;
-  let best: YearFigures['mostImproved'] = null;
-  const consider = (kind: 'recipe' | 'bean', key: (b: StatsBrew) => string | null, name: (id: string) => string | null) => {
-    const groups = new Map<string, StatsBrew[]>();
-    for (const b of rated) {
-      const k = key(b);
-      if (k) groups.set(k, [...(groups.get(k) ?? []), b]);
-    }
-    for (const [id, list] of groups) {
-      if (list.length < MIN_IMPROVE_BREWS) continue;
-      const half = Math.floor(list.length / 2);
-      const from = mean(list.slice(0, half));
-      const to = mean(list.slice(list.length - half));
-      const label = name(id);
-      if (!label || to - from < MIN_IMPROVEMENT) continue;
-      if (!best || to - from > best.to - best.from || (to - from === best.to - best.from && list.length > best.brews)) best = { kind, name: label, from, to, brews: list.length };
-    }
-  };
-  consider(
-    'recipe',
-    (b) => b.recipeId,
-    (id) => data.lookups.recipes.find((r) => r.id === id)?.name ?? null,
-  );
-  consider(
-    'bean',
-    (b) => b.beanId,
-    (id) => {
-      const b = data.beans.find((x) => x.id === id);
-      return b ? beanLabel(b) : null;
-    },
-  );
-  return best;
+// An older frozen copy lacks the figures added since (its version is lower):
+// each missing one reads as "not enough behind it", so its card is skipped.
+const EMPTY: Omit<YearFigures, 'year' | 'recap'> = {
+  months: Array.from({ length: 12 }, () => 0),
+  streak: null,
+  busiestMonth: null,
+  busiestWeekday: null,
+  favouriteHour: null,
+  origins: [],
+  originNames: [],
+  roasterNames: [],
+  roasters: [],
+  processes: [],
+  varieties: [],
+  flavors: [],
+  mostImproved: null,
+  people: [],
+  bestCupBy: null,
+};
+const EMPTY_RECAP: RecapFigures = {
+  brews: 0,
+  previousBrews: 0,
+  daysBrewed: 0,
+  rating: null,
+  previousRating: null,
+  best: [],
+  caffeineMg: null,
+  volume: null,
+  forOthers: null,
+  coffeeGrams: 0,
+  beansBrewed: [],
+  beansAdded: [],
+  beansFinished: [],
+  newRecipes: [],
+  topRecipe: null,
+  topBrewer: null,
+};
+export function completeFigures<T extends YearFigures>(f: T): T {
+  return { ...EMPTY, ...f, recap: { ...EMPTY_RECAP, ...f.recap } };
 }

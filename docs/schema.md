@@ -1630,9 +1630,11 @@ export const aiChatPhotos = mysqlTable("ai_chat_photos", {
 
 // Recaps (docs/api/recaps.md §11c): one row per person, workspace, period
 // and scope, made when a recap is notified (docs/api/notifications.md §1b)
-// or (phase 4) summarised; the figures are worked out live. Personal and
-// rewritable, so not backed up, like chats. Deleted with the person or the
-// workspace.
+// or summarised; the figures are worked out live, except Your Year in
+// Coffee's (kind yearInCoffee, periodStart 1 January), frozen in figures on
+// 7 December. Personal: a backup keeps written summaries and frozen years,
+// a restore only the restorer's own (backup.md §2b). Deleted with the
+// person or the workspace.
 export const RECAP_SCOPES = ["mine", "all"] as const;
 export const RECAP_SUMMARY_STATUSES = ["none", "pending", "done", "failed"] as const;
 
@@ -1642,12 +1644,13 @@ export const recaps = mysqlTable(
     id: varchar("id", { length: 36 }).primaryKey(),
     workspaceId: varchar("workspace_id", { length: 36 }).notNull().references(() => workspaces.id, { onDelete: "cascade" }),
     userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id, { onDelete: "cascade" }),
-    kind: varchar("kind", { length: 10 }).notNull(), // weekly | monthly
+    kind: varchar("kind", { length: 16 }).notNull(), // RECAP_ROW_KINDS: weekly | monthly | yearly | yearInCoffee
     periodStart: date("period_start", { mode: "string" }).notNull(), // YYYY-MM-DD
     scope: varchar("scope", { length: 4 }).notNull(), // RECAP_SCOPES
     status: varchar("status", { length: 10 }).notNull().default("none"), // the AI summary, RECAP_SUMMARY_STATUSES
     summary: text("summary"),
     highlights: json("highlights"), // string[], the summary's short points
+    figures: json("figures"), // yearInCoffee only: { version, period, figures, history } (@barista/shared/yearInCoffee FrozenYear)
     error: text("error"),
     model: varchar("model", { length: 120 }),
     promptVersion: varchar("prompt_version", { length: 40 }),

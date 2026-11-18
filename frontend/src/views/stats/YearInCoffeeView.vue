@@ -1,24 +1,24 @@
 <script setup lang="ts">
-// Your Year in Coffee (backlog 65, docs/api/recaps.md §11c): a calendar year
-// as full-screen story slides, one figure each. Tap the right of a slide or
-// swipe left for the next, the left or a swipe right to go back; arrow keys
-// too, Escape closes. Query: year (default the one just ended, or this one
-// "so far" from 1 December) and mine=0 for the bar's year. Outside the
-// Insights layout, so it can't use useStats().
+// Your Year in Coffee (backlog 65, docs/api/recaps.md §11c): 1 January to
+// 6 December as full-screen story slides, one figure each, from the copy
+// frozen on 7 December. Tap the right of a slide or swipe left for the next,
+// the left or a swipe right to go back; arrow keys too, Escape closes.
+// Query: year (default this one from 7 December, else last year) and mine=0
+// for the bar's year.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { statsApi } from '../../api/stats';
+import { recapsApi } from '../../api/recaps';
 import { membersApi } from '../../api/members';
-import type { Member, StatsData } from '../../api/types';
+import type { Member } from '../../api/types';
 import { errorMessage } from '../../api/client';
 import { usePreferences } from '../../composables/usePreferences';
 import { localDateInput } from '../../lib/format';
-import { formatWeight, localDay } from '../../lib/stats';
+import { formatWeight } from '../../lib/stats';
 import { countFrame, splitNumber } from '../../lib/countUp';
 import { formatVolumeIn } from '../../lib/units';
 import { SONG_VOLUME, songSource } from '../../lib/yearSong';
-import { yearHistory, type Chip } from '../../lib/yearCompare';
-import { latestYear, yearFigures, yearPeriod } from '../../lib/yearInCoffee';
+import type { Chip } from '../../lib/yearCompare';
+import { completeFigures, latestYear, type FrozenYear } from '../../lib/yearInCoffee';
 import { MONTH_NAMES, personLabels, slideDuration, yearSlides } from '../../lib/yearSlides';
 import AppIcon from '../../components/icons/AppIcon.vue';
 import { useAuthStore } from '../../stores/auth';
@@ -28,7 +28,7 @@ const route = useRoute();
 const router = useRouter();
 const workspaces = useWorkspaceStore();
 const auth = useAuthStore();
-const { prefs, recipeRoastLevel } = usePreferences();
+const { prefs } = usePreferences();
 
 const today = localDateInput();
 const latest = latestYear(today);
@@ -37,7 +37,6 @@ const year = computed(() => {
   return Number.isInteger(y) && y >= 2000 && y <= latest ? y : latest;
 });
 const mine = computed(() => route.query.mine !== '0');
-const inProgress = computed(() => year.value === Number(today.slice(0, 4)));
 
 function go(change: { year?: number; mine?: boolean }): void {
   const query: Record<string, string> = { year: String(change.year ?? year.value) };
@@ -95,8 +94,9 @@ function onVisibility(): void {
   else play();
 }
 
-// One request covers the year and the one before it.
-const data = ref<StatsData | null>(null);
+// The frozen copy (docs/api/recaps.md §11c): 1 January–6 December, with the
+// earlier years cut to the same dates; counted live (unsaved) when not frozen.
+const data = ref<FrozenYear | null>(null);
 const members = ref<Member[]>([]); // for names on the bar's year
 const loading = ref(false);
 const error = ref('');
@@ -109,12 +109,11 @@ async function load(): Promise<void> {
   error.value = '';
   try {
     const [res, list] = await Promise.all([
-      // All history up to the year's end: earlier years are compared with (§11c "Compared with earlier years").
-      statsApi.get(ws, { to: yearPeriod(year.value).end, mine: mine.value }),
+      recapsApi.yearInCoffee(ws, year.value, mine.value ? 'mine' : 'all'),
       mine.value ? Promise.resolve(members.value) : membersApi.list(ws).then((r) => r.members),
     ]);
     if (n !== request) return;
-    data.value = res;
+    data.value = res.year;
     members.value = list;
   } catch (err) {
     if (n === request) error.value = errorMessage(err);
@@ -127,12 +126,10 @@ watch([year, mine, () => workspaces.current?.id], () => void load(), { immediate
 const slides = computed(() => {
   const d = data.value;
   if (!d) return [];
-  const before = yearPeriod(year.value - 1);
-  const prev = { ...d, brews: d.brews.filter((b) => localDay(b) >= before.start && localDay(b) <= before.end) };
-  const f = yearFigures(d, prev, year.value, recipeRoastLevel.value, today);
-  const history = yearHistory(d, year.value, recipeRoastLevel.value, today, inProgress.value ? today.slice(5) : null);
+  const f = completeFigures(d.figures);
+  const history = d.history.map(completeFigures);
   const person = personLabels(f.people, auth.user?.id ?? null, (id) => members.value.find((m) => m.userId === id)?.name ?? null);
-  return yearSlides(f, { mine: mine.value, inProgress: inProgress.value, volume: (ml) => formatVolumeIn(ml, prefs.value.volumeUnit), weight: formatWeight, person, history });
+  return yearSlides(f, { mine: mine.value, inProgress: false, volume: (ml) => formatVolumeIn(ml, prefs.value.volumeUnit), weight: formatWeight, person, history });
 });
 
 const index = ref(0);

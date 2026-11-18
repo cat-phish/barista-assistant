@@ -3,6 +3,7 @@ import { eq, is } from "drizzle-orm";
 import { getTableConfig, MySqlTable } from "drizzle-orm/mysql-core";
 import { describe, expect, it } from "vitest";
 import * as schema from "@barista/shared/schema";
+import { freezeYearInCoffee } from "@barista/shared/yearFreeze";
 import { BACKUP_TABLES, BACKUP_VERSION, COLUMN_TYPES, NOT_BACKED_UP, TABLE_INFO } from "../src/backup.js";
 import { db } from "../src/db.js";
 import { addMember, brewerId, menuAdd, menuSection, newBean, newBrewLog, newUser, newWorkspace, styleId, type TestUser } from "./helpers.js";
@@ -233,6 +234,23 @@ describe("workspace backup and restore (docs/api/backup.md §2b)", () => {
     const got = await owner.agent.get(`/api/workspaces/${restored.body.workspaceId}/recaps?kind=monthly&periodStart=2026-10-01&scope=mine`);
     expect(got.body.recap).toMatchObject({ status: "done", summary: "A steady month.", highlights: ["Try a finer grind"] });
     expect(await db.select().from(schema.recaps).where(eq(schema.recaps.workspaceId, restored.body.workspaceId))).toHaveLength(1);
+  });
+
+  it("keeps Your Year in Coffee's frozen copies, and restores them as they were (docs/api/recaps.md §11c)", async () => {
+    const owner = await newUser();
+    const ws = await newWorkspace(owner);
+    const bean = await newBean(owner, ws.id);
+    await newBrewLog(owner, ws.id, bean, { timestamp: "2025-03-01T08:00:00.000Z", utcOffsetMinutes: 0 });
+    const year = (wsId: string) => owner.agent.get(`/api/workspaces/${wsId}/recaps/year-in-coffee/2025?scope=mine`);
+    const frozen = await freezeYearInCoffee(db, ws.id, owner.id, 2025, "mine", "2025-12-07"); // as the worker does
+    expect(frozen.figures.recap.brews).toBe(1);
+    await newBrewLog(owner, ws.id, bean, { timestamp: "2025-04-01T08:00:00.000Z", utcOffsetMinutes: 0 }); // after it froze
+
+    const backup = (await owner.agent.get(`/api/workspaces/${ws.id}/backup`)).body;
+    expect(backup.tables.recaps).toHaveLength(1);
+    const restored = await owner.agent.post("/api/workspaces/restore").send({ name: "Year", slug: `year-${ws.slug}`, backup });
+    expect(restored.status, JSON.stringify(restored.body)).toBe(201);
+    expect((await year(restored.body.workspaceId)).body).toEqual({ year: frozen, frozen: true });
   });
 
   it("is for owners only", async () => {

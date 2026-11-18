@@ -484,7 +484,7 @@ Recording a brew: what's measured, and how fast it is to log.
   1. **Yearly tab** on Insights → Recap, beside weekly and monthly: always
      1 January–31 December, live like them, ready on 1 January, with its
      own AI summary (kind `yearly`).
-  2. **Your Year in Coffee frozen on 7 December**: covers 1 January–
+  2. **(Done)** **Your Year in Coffee frozen on 7 December**: covers 1 January–
      6 December, out on 7 December (Spotify-style; Spotify doesn't count
      December either). The worker freezes everyone's figures on
      7 December, so the year-figure counting (`lib/yearInCoffee.ts` and
@@ -492,10 +492,15 @@ Recording a brew: what's measured, and how fast it is to log.
      `@barista/shared` for both worker and browser. Stored per person,
      workspace, year and scope (mine, and the bar's), in a backup
      (CLAUDE.md rule 8). Only these are frozen; the Yearly tab stays live.
-     Earlier years with no frozen copy are frozen on first open, same
-     dates. Not shown before 7 December (the Yearly tab is there for the
+     Only the worker freezes; a year with no frozen copy (e.g. 2025) is
+     counted live when opened, same dates, and not saved. Not shown before 7 December (the Yearly tab is there for the
      year so far). The "Compared with earlier years" chips use the same
      1 January–6 December window.
+     Built as: the counting in `shared/src/yearInCoffee.ts` (the server
+     only; the browser's copy went), the Insights loader moved to
+     `shared/src/statsRows.ts`, frozen copies on `recaps` rows (kind
+     `yearInCoffee`, a `figures` column), and a parity test and CLAUDE.md
+     rule 15 holding the Yearly tab and it to the same figures.
   3. **Its own AI summary**, built from the frozen figures (plus the
      monthly summaries and brews spread across its months, as the Yearly
      tab's summary already sends: llm-contract.md §9f), covering every

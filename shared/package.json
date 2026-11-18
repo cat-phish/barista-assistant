@@ -92,6 +92,18 @@
     "./chatPeriod": {
       "types": "./dist/chatPeriod.d.ts",
       "default": "./dist/chatPeriod.js"
+    },
+    "./yearInCoffee": {
+      "types": "./dist/yearInCoffee.d.ts",
+      "default": "./dist/yearInCoffee.js"
+    },
+    "./statsRows": {
+      "types": "./dist/statsRows.d.ts",
+      "default": "./dist/statsRows.js"
+    },
+    "./yearFreeze": {
+      "types": "./dist/yearFreeze.d.ts",
+      "default": "./dist/yearFreeze.js"
     }
   },
   "scripts": {

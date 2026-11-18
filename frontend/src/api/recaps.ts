@@ -1,8 +1,10 @@
 import { api } from './client';
 import type { RecapKind } from '../lib/recapPeriods';
+import type { FrozenYear } from '../lib/yearInCoffee';
 
 // A recap's AI summary (docs/api/recaps.md §11c, "AI summary"). The figures
-// are worked out in the browser; only the summary is stored.
+// are worked out in the browser; only the summary is stored. Your Year in
+// Coffee is the exception: frozen on the server, read with yearInCoffee.
 export type RecapScope = 'mine' | 'all';
 export interface RecapKey {
   kind: RecapKind;
@@ -24,5 +26,9 @@ export const recapsApi = {
   },
   write(workspaceId: string, key: RecapKey) {
     return api.post<{ recap: RecapSummary | null }>(`/api/workspaces/${workspaceId}/recaps`, key);
+  },
+  // 409 year_not_out before 7 December. frozen false: no frozen copy yet, counted live.
+  yearInCoffee(workspaceId: string, year: number, scope: RecapScope) {
+    return api.get<{ year: FrozenYear; frozen: boolean }>(`/api/workspaces/${workspaceId}/recaps/year-in-coffee/${year}?scope=${scope}`);
   },
 };

@@ -9,7 +9,6 @@ import { eq, getTableColumns, inArray, type Column } from "drizzle-orm";
 import { getTableConfig, type MySqlTable } from "drizzle-orm/mysql-core";
 import { z } from "zod";
 import { scalesByDefault } from "@barista/shared/brew";
-import { RECAP_KINDS } from "@barista/shared/recapPeriods";
 import type { RecipeCopy } from "@barista/shared/recipeCopy";
 import { FLAVORS, parseLexicon, type FlavorLexicon } from "@barista/shared/flavors";
 import type { ResearchSettings } from "@barista/shared/researchSettings";
@@ -43,6 +42,7 @@ import {
   PREINFUSION_MODES,
   PROFILE_CONTROLS,
   RECIPE_STEP_TYPES,
+  RECAP_ROW_KINDS,
   RECAP_SCOPES,
   RECAP_SUMMARY_STATUSES,
   RECIPE_STYLES,
@@ -257,7 +257,7 @@ export const BACKUP_TABLES: ReadonlyArray<{ table: MySqlTable; scope: "workspace
   { table: brewServings, scope: "brewLogId" },
   { table: brewServingFlavors, scope: "servingId" },
   { table: llmAnalyses, scope: "brewLogId" },
-  // Written AI recap summaries (docs/api/recaps.md §11c), only done ones.
+  // Written AI recap summaries and Your Year in Coffee's frozen copies (docs/api/recaps.md §11c).
   { table: recaps, scope: "workspace" },
 ];
 // Not in a backup: people (with their notification channels and Web Push
@@ -313,7 +313,7 @@ const ENUMS: Record<string, readonly string[]> = {
   "parameter_suggestions.source": SUGGEST_SOURCES,
   "parameter_suggestions.status": SUGGESTION_STATUSES,
   "parameter_suggestions.confidence": ANALYSIS_CONFIDENCE,
-  "recaps.kind": RECAP_KINDS,
+  "recaps.kind": RECAP_ROW_KINDS,
   "recaps.scope": RECAP_SCOPES,
   "recaps.status": RECAP_SUMMARY_STATUSES,
 };
@@ -414,6 +414,17 @@ const JSON_SCHEMAS: Record<string, z.ZodType> = {
     .nullable(),
   // The ids are the source workspace's, not rewritten: a restored one shows the name.
   "recaps.highlights": z.array(z.string().max(200)).max(4).nullable(),
+  // Your Year in Coffee's frozen copy (recaps.md §11c): its shape is the
+  // counting code's (@barista/shared/yearInCoffee); the page skips what it lacks.
+  "recaps.figures": z
+    .object({
+      version: z.number().int().min(1),
+      period: z.object({ start: z.iso.date(), end: z.iso.date() }).strict(),
+      figures: z.looseObject({ year: z.number().int() }),
+      history: z.array(z.looseObject({ year: z.number().int() })).max(200),
+    })
+    .strict()
+    .nullable(),
   "parameter_suggestions.alternatives": z
     .array(z.object({ kind: z.enum(SUGGEST_ALTERNATIVES), id: z.string(), name: z.string(), why: z.string() }).strict())
     .nullable(),
@@ -514,8 +525,8 @@ export async function buildBackup(workspaceId: string, options: BackupOptions = 
       const parentIds = ids.get(t.refs[t.scope]!) ?? [];
       if (parentIds.length > 0) rows = (await db.select().from(t.table).where(inArray(t.columns[t.scope]!, parentIds))) as BackupRow[];
     }
-    // Only a written summary is worth keeping: the others are a notification's mark, or a job's state.
-    if (t.table === recaps) rows = rows.filter((r) => r.status === "done");
+    // Only a written summary or a frozen year is worth keeping: the others are a notification's mark, or a job's state.
+    if (t.table === recaps) rows = rows.filter((r) => r.status === "done" || r.figures != null);
     if (t.hasId) ids.set(t.name, rows.map((r) => r.id as string));
     for (const key of t.userColumns) {
       const missing = [...new Set(rows.map((r) => r[key] as string | null).filter((id): id is string => !!id && !emails.has(id)))];

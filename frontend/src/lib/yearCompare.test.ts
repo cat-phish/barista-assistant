@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { StatsBean, StatsBrew, StatsData } from '../api/types';
-import { compareChips, deltaChip, newToYou, yearHistory } from './yearCompare';
+import { compareChips, deltaChip, newToYou } from './yearCompare';
+import { shared } from './yearShared.testing';
 import type { YearFigures } from './yearInCoffee';
 
 const brew = (fields: Partial<StatsBrew> = {}): StatsBrew => ({
@@ -67,19 +68,18 @@ describe('Your Year in Coffee compared with earlier years (backlog 65)', () => {
   it('marks a first year joined after January as partial, scaled to a full year', () => {
     const days = (from: string, n: number) => Array.from({ length: n }, (_, i) => brew({ id: `${from}-${i}`, timestamp: at(new Date(Date.parse(from) + i * 86_400_000).toISOString().slice(0, 10)) }));
     const all = data([...days('2024-10-01', 10), ...days('2025-03-01', 10), ...days('2026-02-01', 10)]);
-    const h = yearHistory(all, 2026, 'medium', '2026-11-17', null);
+    // Counted on the server (@barista/shared/yearInCoffee): each year 1 January–6 December.
+    const h = shared.yearHistory(all, 2026, 'medium', '2026-12-08');
     expect(h.map((y) => y.year)).toEqual([2025, 2024]);
     expect(h[0]!.covered).toBeUndefined(); // a later year is whole, gaps and all
-    expect(h[1]!.covered).toMatchObject({ from: '2024-10-01', days: 92, tooShort: false });
-    expect(h[1]!.covered!.scale).toBeCloseTo(366 / 92);
+    expect(h[1]!.covered).toMatchObject({ from: '2024-10-01', days: 67, tooShort: false }); // to 6 December
+    expect(h[1]!.covered!.scale).toBeCloseTo(341 / 67);
     // From 15 January: whole.
-    expect(yearHistory(data(days('2025-01-15', 10)), 2026, 'medium', '2026-11-17', null)[0]!.covered).toBeUndefined();
+    expect(shared.yearHistory(data(days('2025-01-15', 10)), 2026, 'medium', '2026-12-08')[0]!.covered).toBeUndefined();
     // Under 30 days: too short.
-    expect(yearHistory(data(days('2025-12-10', 10)), 2026, 'medium', '2026-11-17', null)[0]!.covered!.tooShort).toBe(true);
-    // In progress, cut to 17 Nov: 1 Oct – 17 Nov is 48 days of 322.
-    const soFar = yearHistory(all, 2026, 'medium', '2026-11-17', '11-17').find((y) => y.year === 2024)!;
-    expect(soFar.covered).toMatchObject({ days: 48 });
-    expect(soFar.covered!.scale).toBeCloseTo(322 / 48);
+    expect(shared.yearHistory(data(days('2025-11-20', 10)), 2026, 'medium', '2026-12-08')[0]!.covered!.tooShort).toBe(true);
+    // After 6 December: not in that year at all.
+    expect(shared.yearHistory(data(days('2025-12-10', 10)), 2026, 'medium', '2026-12-08')).toEqual([]);
   });
 
   it("compares with a partial year at its pace", () => {

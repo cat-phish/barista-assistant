@@ -122,3 +122,11 @@
     disabling it, along with text that promises an AI result. A setting
     that only tunes an AI feature (like Settings → Recaps' AI summary
     column) hides with it.
+15. **The Yearly tab and Your Year in Coffee count alike:** the Yearly
+    recap counts live in the browser (`frontend/src/lib/recap.ts`); Your
+    Year in Coffee is counted and frozen on the server
+    (`shared/src/yearInCoffee.ts`). A figure added to, changed in or
+    removed from either is done in the other in the same change, with
+    `YEAR_FIGURES_VERSION` bumped so older frozen copies are known to lack
+    it (`docs/api/recaps.md` §11c "Parity with the Yearly tab").
+    `frontend/src/lib/yearInCoffee.parity.test.ts` fails until they match.
