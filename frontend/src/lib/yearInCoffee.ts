@@ -23,6 +23,8 @@ export interface YearFigures {
   busiestWeekday: { weekday: number; brews: number } | null; // 0 = Monday
   favouriteHour: { hour: number; brews: number } | null; // local, 0–23
   origins: Ranked[];
+  originNames: string[]; // every origin brewed, for "new to you" (yearCompare.ts)
+  roasterNames: string[];
   roasters: Ranked[];
   processes: Ranked[];
   varieties: Ranked[];
@@ -84,6 +86,8 @@ export function yearFigures(data: StatsData, previous: StatsData | null, year: n
     busiestWeekday: patterns && weekday ? { weekday: Number(weekday.key), brews: weekday.n } : null,
     favouriteHour: patterns && hour ? { hour: Number(hour.key), brews: hour.n } : null,
     origins: ranked((b) => splitCountries(bean(b.beanId)?.country ?? null)),
+    originNames: countBy(brews, (b) => splitCountries(bean(b.beanId)?.country ?? null)).map((c) => c.key),
+    roasterNames: countBy(brews, (b) => folded([bean(b.beanId)?.roasterName ?? ''])).map((c) => c.key),
     roasters: ranked((b) => folded([bean(b.beanId)?.roasterName ?? ''])),
     processes: ranked(
       (b) => bean(b.beanId)?.processId ?? null,

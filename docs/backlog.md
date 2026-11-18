@@ -454,6 +454,8 @@ Recording a brew: what's measured, and how fast it is to log.
     song, uploaded per account when the server has `YEAR_SONG_UPLOADS=true`:
     10 MB, type checked from the file's bytes, served only to its owner
     so it can't run as a page, never re-encoded on the server.
+  - **Compared with earlier years** (built): chips for last year, the
+    average year and records (recaps.md §11c).
   - **Video:** deferred to backlog 68.
   - **Music waits for a first tap:** browsers (Chrome, Safari, phones
     too) block sound until the person taps, clicks or presses a key on

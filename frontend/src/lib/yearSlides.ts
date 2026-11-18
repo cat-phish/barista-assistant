@@ -2,6 +2,7 @@
 // one figure each, in order, skipping any the year's figures left out, and
 // ending on a summary card. Unit-tested in yearSlides.test.ts.
 import { formatCaffeine } from './caffeine';
+import { compareChips, deltaChip, MIN_COMPARE_BREWS, newToYou, type Chip, type CompareKind } from './yearCompare';
 import type { Ranked, YearFigures } from './yearInCoffee';
 
 export interface Slide {
@@ -9,9 +10,15 @@ export interface Slide {
   kicker: string; // the line above the figure
   value: string; // the figure
   sub?: string; // a line under it
-  list?: Array<{ name: string; detail: string }>;
+  list?: Array<{ name: string; detail: string; change?: Chip }>;
   bars?: number[]; // brews per month, for the month slide
   link?: { name: string; params: Record<string, string> }; // a route to the brew
+  compare?: Chip[]; // against earlier years (yearCompare.ts)
+}
+export interface SummaryLine {
+  name: string;
+  detail: string;
+  change?: Chip; // against last year, short: "+5%"
 }
 export interface SlideContext {
   mine: boolean; // only the person's own brews, or the bar's year
@@ -19,6 +26,7 @@ export interface SlideContext {
   volume: (ml: number) => string;
   weight: (grams: number) => string;
   person: (userId: string) => string; // "You", a name, or a stand-in like "Member 2"
+  history?: YearFigures[]; // earlier years, newest first, cut to the same dates while in progress
 }
 
 export const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -44,14 +52,37 @@ export function yearSlides(f: YearFigures, ctx: SlideContext): Slide[] {
   const add = (s: Slide | null | false) => {
     if (s) out.push(s);
   };
+  // Against earlier years (docs/api/recaps.md §11c "Compared with earlier years").
+  const history = ctx.history ?? [];
+  const soFar = ctx.inProgress;
+  const vs = (pick: (y: YearFigures) => number | null | undefined, kind: CompareKind, opts: { record?: string; average?: boolean } = {}, now = pick(f)) =>
+    compareChips(f.year, now ?? null, history.map((h) => ({ year: h.year, value: pick(h) ?? null, brews: h.recap.brews })), kind, { ...opts, soFar });
+  const ours = ctx.mine ? 'Your' : "The bar's";
+  const lastYear = history.find((h) => h.year === f.year - 1);
+  const again = (now: string | undefined, then: string | undefined, what: string): Chip[] =>
+    now && then && lastYear && lastYear.recap.brews >= MIN_COMPARE_BREWS && now === then ? [{ dir: 'same', text: `Also the top ${what} in ${lastYear.year}` }] : [];
+  const fresh = (names: string[], pick: (y: YearFigures) => readonly string[]): Chip[] => {
+    if (!history.length) return [];
+    const n = newToYou(names, history, pick).length;
+    return n ? [{ dir: 'up', text: `${n.toLocaleString()} new to ${ctx.mine ? 'you' : 'the bar'}` }] : [];
+  };
+  const chips = (list: Chip[]) => (list.length ? { compare: list.slice(0, 3) } : {});
 
-  const was = r.previousBrews ? `${plural(r.previousBrews, 'brew')} in ${f.year - 1}` : null;
-  add({ key: 'brews', kicker: ctx.mine ? 'You brewed' : 'The bar brewed', value: plural(r.brews, 'brew'), sub: [`on ${plural(r.daysBrewed, 'day')}`, was].filter(Boolean).join(' · ') });
-  add(f.streak && { key: 'streak', kicker: 'Longest streak', value: `${f.streak.days} days in a row`, sub: `${shortDay(f.streak.start)} – ${shortDay(f.streak.end)}` });
+  add({ key: 'brews', kicker: ctx.mine ? 'You brewed' : 'The bar brewed', value: plural(r.brews, 'brew'), sub: `on ${plural(r.daysBrewed, 'day')}`, ...chips(vs((y) => y.recap.brews, 'percent', { record: `${ours} biggest year yet` })) });
+  add(f.streak && { key: 'streak', kicker: 'Longest streak', value: `${f.streak.days} days in a row`, sub: `${shortDay(f.streak.start)} – ${shortDay(f.streak.end)}`, ...chips(vs((y) => y.streak?.days, 'days', { record: `${ours} longest streak yet` })) });
   add(f.busiestMonth && { key: 'month', kicker: 'Busiest month', value: MONTH_NAMES[f.busiestMonth.month]!, sub: plural(f.busiestMonth.brews, 'brew'), bars: f.months });
   add(f.busiestWeekday && f.favouriteHour && { key: 'when', kicker: ctx.mine ? 'Your usual' : "The bar's usual", value: `${WEEKDAYS[f.busiestWeekday.weekday]}s, ${hourLabel(f.favouriteHour.hour)}`, sub: 'the busiest day, and the favourite hour' });
-  add({ key: 'coffee', kicker: 'Coffee used', value: ctx.weight(r.coffeeGrams), sub: r.rating ? `rated ${r.rating.mean.toFixed(1)} / 5 on average` : undefined });
-  add(r.volume && { key: 'volume', kicker: ctx.mine ? 'You drank' : 'Drunk', value: `${approx(r.volume.estimated)}${ctx.volume(r.volume.ml)}`, sub: r.caffeineMg !== null ? `and ${formatCaffeine(r.caffeineMg)} of caffeine` : undefined });
+  const rated = (y: YearFigures) => (y.recap.rating && y.recap.rating.n >= MIN_COMPARE_BREWS ? y.recap.rating.mean : null);
+  const rating = vs(rated, 'stars', { record: `${ours} best-rated year yet`, average: false });
+  const ratingChip = rating.find((c) => c.record) ?? rating[0]; // one: the record, else last year
+  add({
+    key: 'coffee',
+    kicker: 'Coffee used',
+    value: ctx.weight(r.coffeeGrams),
+    sub: r.rating ? `rated ${r.rating.mean.toFixed(1)} / 5 on average` : undefined,
+    ...chips([...vs((y) => y.recap.coffeeGrams, 'percent', { record: 'Most coffee in a year' }), ...(ratingChip ? [ratingChip] : [])]),
+  });
+  add(r.volume && { key: 'volume', kicker: ctx.mine ? 'You drank' : 'Drunk', value: `${approx(r.volume.estimated)}${ctx.volume(r.volume.ml)}`, sub: r.caffeineMg !== null ? `and ${formatCaffeine(r.caffeineMg)} of caffeine` : undefined, ...chips(vs((y) => y.recap.volume?.ml, 'percent')) });
   add(
     r.forOthers && {
       key: 'others',
@@ -59,15 +90,16 @@ export function yearSlides(f: YearFigures, ctx: SlideContext): Slide[] {
       value: `${approx(r.forOthers.estimated)}${ctx.volume(r.forOthers.ml)}`,
       sub: plural(r.forOthers.brews, 'brew'),
       list: r.forOthers.guests.slice(0, 5).map((g) => ({ name: g.name, detail: plural(g.brews, 'brew') })),
+      ...chips(vs((y) => y.recap.forOthers?.brews, 'percent', { record: 'Most brews for others yet' })),
     },
   );
-  add(r.beansBrewed.length > 0 && { key: 'beans', kicker: 'Top beans', value: r.beansBrewed[0]!.label, list: r.beansBrewed.slice(0, 5).map((b) => ({ name: b.label, detail: plural(b.brews, 'brew') })) });
-  add(f.origins.length > 0 && { key: 'origins', kicker: 'Where it came from', value: f.origins[0]!.name, list: rankedList(f.origins) });
-  add(f.roasters.length > 0 && { key: 'roasters', kicker: 'Top roasters', value: f.roasters[0]!.name, list: rankedList(f.roasters) });
+  add(r.beansBrewed.length > 0 && { key: 'beans', kicker: 'Top beans', value: r.beansBrewed[0]!.label, list: r.beansBrewed.slice(0, 5).map((b) => ({ name: b.label, detail: plural(b.brews, 'brew') })), ...chips(again(r.beansBrewed[0]?.label, lastYear?.recap.beansBrewed[0]?.label, 'bean')) });
+  add(f.origins.length > 0 && { key: 'origins', kicker: 'Where it came from', value: f.origins[0]!.name, list: rankedList(f.origins), ...chips([...vs((y) => y.originNames.length, 'count', { record: 'Most origins in a year' }, f.originNames.length).slice(0, 2), ...fresh(f.originNames, (y) => y.originNames)]) });
+  add(f.roasters.length > 0 && { key: 'roasters', kicker: 'Top roasters', value: f.roasters[0]!.name, list: rankedList(f.roasters), ...chips([...vs((y) => y.roasterNames.length, 'count', { average: false }, f.roasterNames.length), ...fresh(f.roasterNames, (y) => y.roasterNames)]) });
   add(f.processes.length > 0 && { key: 'processes', kicker: 'Top processes', value: f.processes[0]!.name, list: rankedList(f.processes) });
   add(f.varieties.length > 0 && { key: 'varieties', kicker: 'Top varieties', value: f.varieties[0]!.name, list: rankedList(f.varieties) });
   add(f.flavors.length > 0 && { key: 'flavors', kicker: ctx.mine ? 'Flavors you picked most' : 'Flavors picked most', value: f.flavors[0]!.name, list: rankedList(f.flavors) });
-  add(r.topRecipe && { key: 'recipe', kicker: 'Most brewed recipe', value: r.topRecipe.name, sub: [plural(r.topRecipe.brews, 'brew'), r.topBrewer ? `mostly on the ${r.topBrewer.name}` : null].filter(Boolean).join(' · ') });
+  add(r.topRecipe && { key: 'recipe', kicker: 'Most brewed recipe', value: r.topRecipe.name, sub: [plural(r.topRecipe.brews, 'brew'), r.topBrewer ? `mostly on the ${r.topBrewer.name}` : null].filter(Boolean).join(' · '), ...chips(again(r.topRecipe.name, lastYear?.recap.topRecipe?.name, 'recipe')) });
   const best = r.best[0];
   add(
     best && {
@@ -88,19 +120,28 @@ export function yearSlides(f: YearFigures, ctx: SlideContext): Slide[] {
 }
 
 // The summary card's lines (and, later, its shareable image).
-export function summaryLines(f: YearFigures, ctx: SlideContext): Array<{ name: string; detail: string }> {
+export function summaryLines(f: YearFigures, ctx: SlideContext): SummaryLine[] {
   const r = f.recap;
-  const lines: Array<{ name: string; detail: string } | null> = [
-    { name: 'Days brewed', detail: r.daysBrewed.toLocaleString() },
-    { name: 'Coffee used', detail: ctx.weight(r.coffeeGrams) },
-    r.volume && { name: ctx.mine ? 'You drank' : 'Drunk', detail: `${approx(r.volume.estimated)}${ctx.volume(r.volume.ml)}` },
-    f.streak && { name: 'Longest streak', detail: plural(f.streak.days, 'day') },
+  // Last year only, short: "+5%", "+3 days".
+  const last = ctx.history?.find((h) => h.year === f.year - 1);
+  const change = (pick: (y: YearFigures) => number | null | undefined, kind: CompareKind) => {
+    const now = pick(f);
+    const then = last && last.recap.brews >= MIN_COMPARE_BREWS ? pick(last) : null;
+    if (!now || !then) return {};
+    const chip = deltaChip(kind, now, then, '');
+    return { change: { dir: chip.dir, text: chip.dir === 'same' ? '=' : chip.text.replace(/\s+(on\s*)?$/, '') } };
+  };
+  const lines: Array<SummaryLine | null> = [
+    { name: 'Days brewed', detail: r.daysBrewed.toLocaleString(), ...change((y) => y.recap.daysBrewed, 'percent') },
+    { name: 'Coffee used', detail: ctx.weight(r.coffeeGrams), ...change((y) => y.recap.coffeeGrams, 'percent') },
+    r.volume && { name: ctx.mine ? 'You drank' : 'Drunk', detail: `${approx(r.volume.estimated)}${ctx.volume(r.volume.ml)}`, ...change((y) => y.recap.volume?.ml, 'percent') },
+    f.streak && { name: 'Longest streak', detail: plural(f.streak.days, 'day'), ...change((y) => y.streak?.days, 'days') },
     r.beansBrewed[0] ? { name: 'Top bean', detail: r.beansBrewed[0].label } : null,
     f.origins[0] ? { name: 'Top origin', detail: f.origins[0].name } : null,
     r.topRecipe && { name: 'Top recipe', detail: r.topRecipe.name },
     r.best[0] ? { name: 'Best cup', detail: stars(r.best[0].rating) } : null,
   ];
-  return lines.filter((l): l is { name: string; detail: string } => l !== null);
+  return lines.filter((l): l is SummaryLine => l !== null);
 }
 
 // How people are named on the bar's year: "You", others by their name
@@ -113,9 +154,9 @@ export function personLabels(people: ReadonlyArray<{ userId: string }>, me: stri
 
 // How long a slide stays before the next one starts by itself
 // (docs/api/recaps.md §11c "Moving on"): long enough to read it.
-export const SLIDE_MS = { intro: 4000, base: 5000, sub: 1500, row: 700, max: 12000 };
+export const SLIDE_MS = { intro: 4000, base: 5000, sub: 1500, row: 700, compare: 1000, max: 12000 };
 export function slideDuration(slide: Slide): number {
   if (slide.key === 'intro') return SLIDE_MS.intro;
-  const ms = SLIDE_MS.base + (slide.sub ? SLIDE_MS.sub : 0) + (slide.list?.length ?? 0) * SLIDE_MS.row;
+  const ms = SLIDE_MS.base + (slide.sub ? SLIDE_MS.sub : 0) + (slide.list?.length ?? 0) * SLIDE_MS.row + (slide.compare?.length ? SLIDE_MS.compare : 0);
   return Math.min(SLIDE_MS.max, ms);
 }

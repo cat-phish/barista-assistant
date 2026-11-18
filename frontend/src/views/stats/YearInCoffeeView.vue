@@ -17,6 +17,7 @@ import { formatWeight, localDay } from '../../lib/stats';
 import { countFrame, splitNumber } from '../../lib/countUp';
 import { formatVolumeIn } from '../../lib/units';
 import { SONG_VOLUME, songSource } from '../../lib/yearSong';
+import { yearHistory, type Chip } from '../../lib/yearCompare';
 import { latestYear, yearFigures, yearPeriod } from '../../lib/yearInCoffee';
 import { MONTH_NAMES, personLabels, slideDuration, yearSlides } from '../../lib/yearSlides';
 import AppIcon from '../../components/icons/AppIcon.vue';
@@ -109,7 +110,8 @@ async function load(): Promise<void> {
   error.value = '';
   try {
     const [res, list] = await Promise.all([
-      statsApi.get(ws, { from: yearPeriod(year.value - 1).start, to: yearPeriod(year.value).end, mine: mine.value }),
+      // All history up to the year's end: earlier years are compared with (§11c "Compared with earlier years").
+      statsApi.get(ws, { to: yearPeriod(year.value).end, mine: mine.value }),
       mine.value ? Promise.resolve(members.value) : membersApi.list(ws).then((r) => r.members),
     ]);
     if (n !== request) return;
@@ -129,8 +131,9 @@ const slides = computed(() => {
   const before = yearPeriod(year.value - 1);
   const prev = { ...d, brews: d.brews.filter((b) => localDay(b) >= before.start && localDay(b) <= before.end) };
   const f = yearFigures(d, prev, year.value, recipeRoastLevel.value, today);
+  const history = yearHistory(d, year.value, recipeRoastLevel.value, today, inProgress.value ? today.slice(5) : null);
   const person = personLabels(f.people, auth.user?.id ?? null, (id) => members.value.find((m) => m.userId === id)?.name ?? null);
-  return yearSlides(f, { mine: mine.value, inProgress: inProgress.value, volume: (ml) => formatVolumeIn(ml, prefs.value.volumeUnit), weight: formatWeight, person });
+  return yearSlides(f, { mine: mine.value, inProgress: inProgress.value, volume: (ml) => formatVolumeIn(ml, prefs.value.volumeUnit), weight: formatWeight, person, history });
 });
 
 const index = ref(0);
@@ -260,6 +263,7 @@ const confetti = Array.from({ length: 30 }, (_, i) => ({
 }));
 
 const maxBar = computed(() => Math.max(1, ...(slide.value?.bars ?? [])));
+const chipIcon = (c: Chip) => (c.record ? 'trophy' : c.dir === 'up' ? 'trending-up' : c.dir === 'down' ? 'trending-down' : 'minus');
 const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONTH_NAMES[i]}: ${n}`).join(', '));
 </script>
 
@@ -294,6 +298,11 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
             <span aria-hidden="true">{{ shownValue }}</span><span class="visually-hidden">{{ slide.value }}</span>
           </p>
           <p v-if="slide.sub" class="sub">{{ slide.sub }}</p>
+          <ul v-if="slide.compare" class="chips">
+            <li v-for="(c, i) in slide.compare" :key="c.text" :class="[`dir-${c.dir}`, { record: c.record }]" :style="{ '--i': i }">
+              <AppIcon :name="chipIcon(c)" :size="16" />{{ c.text }}
+            </li>
+          </ul>
           <div v-if="slide.bars" class="bars" role="img" :aria-label="barsLabel">
             <span v-for="(n, i) in slide.bars" :key="i" class="col">
               <span class="fill" :style="{ height: `${(n / maxBar) * 100}%`, '--i': i }" />
@@ -302,7 +311,8 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
           </div>
           <ol v-if="slide.list?.length" class="list" :class="{ summary: slide.key === 'summary' }">
             <li v-for="(item, i) in slide.list" :key="item.name" :style="{ '--i': i }">
-              <span class="name">{{ item.name }}</span><span class="detail">{{ item.detail }}</span>
+              <span class="name">{{ item.name }}</span>
+              <span class="detail">{{ item.detail }}<small v-if="item.change" class="change" :class="`dir-${item.change.dir}`">{{ item.change.text }}<span class="visually-hidden"> on {{ year - 1 }}</span></small></span>
             </li>
           </ol>
           <div v-if="slide.key === 'summary'" class="confetti" aria-hidden="true">
@@ -512,6 +522,43 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
   animation: rise 0.35s ease-out both;
   animation-delay: calc(var(--i, 0) * 60ms + 200ms);
 }
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  animation: rise 0.35s ease-out both;
+  animation-delay: calc(var(--i, 0) * 80ms + 500ms);
+}
+/* Up in the brand colour; down stays muted (fewer brews isn't bad). */
+.chips li.dir-up,
+.chips li.record,
+.change.dir-up {
+  color: var(--brand);
+}
+.chips li.record {
+  border-color: var(--brand);
+  font-weight: 600;
+}
+.change {
+  margin-left: 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
 @keyframes rise {
   from {
     opacity: 0;
@@ -603,7 +650,8 @@ const barsLabel = computed(() => (slide.value?.bars ?? []).map((n, i) => `${MONT
     transition: none;
   }
   .fill,
-  .list li {
+  .list li,
+  .chips li {
     animation: none;
   }
   .confetti {

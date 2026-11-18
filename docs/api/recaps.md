@@ -147,6 +147,23 @@ Month bars grow in, list rows step in 60 ms apart, and the summary drops
 confetti (CSS only). With `prefers-reduced-motion`, nothing moves or
 counts: every slide shows as it ends.
 
+**Compared with earlier years** (`frontend/src/lib/yearCompare.ts`): the
+slides load all history up to the year's end (one `GET …/stats` with no
+`from`) and work out each earlier year the same way. Chips under a figure
+compare it with last year ("+5% on 2025"), and with an average year or, when
+the year beats every earlier one, a record ("Your biggest year yet"):
+brews, longest streak, coffee used, average rating (in stars, last year or
+a record only), volume drunk, brews for others, how many origins and
+roasters (with "2 new to you": never brewed before), and whether the top
+bean or recipe was last year's too. The summary shows last year's change
+beside days brewed, coffee used, volume and streak. Rules: an earlier year
+counts with 5 or more brews (rated brews for the rating); an average or a
+record needs 2 such years; within ±2% is "About the same"; 2× or more is
+written as a multiple; ratings to 0.1 ★. For the year in progress, earlier
+years are cut to the same date ("+5% on 2025 by this date"). Up is in the
+brand colour, down stays muted. Only my brews compares you with you, the
+bar with the bar. A slide with chips stays 1 s longer.
+
 **Moving on:** each slide moves on by itself once it has had time to be
 read (`slideDuration` in `frontend/src/lib/yearSlides.ts`: 4 s for the
 first, 5 s for the others, plus 1.5 s with a line under the figure and

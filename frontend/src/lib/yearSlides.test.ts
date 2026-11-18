@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RecapFigures } from './recap';
 import type { YearFigures } from './yearInCoffee';
+import type { YearFigures as Fig } from './yearInCoffee';
 import { hourLabel, personLabels, slideDuration, SLIDE_MS, summaryLines, yearSlides, type SlideContext } from './yearSlides';
 
 const recap = (over: Partial<RecapFigures> = {}): RecapFigures => ({
@@ -9,7 +10,7 @@ const recap = (over: Partial<RecapFigures> = {}): RecapFigures => ({
 });
 const figures = (over: Partial<YearFigures> = {}): YearFigures => ({
   year: 2026, recap: recap(), months: Array(12).fill(0), streak: null, busiestMonth: null, busiestWeekday: null, favouriteHour: null,
-  origins: [], roasters: [], processes: [], varieties: [], flavors: [], mostImproved: null, people: [], bestCupBy: null, ...over,
+  origins: [], originNames: [], roasters: [], roasterNames: [], processes: [], varieties: [], flavors: [], mostImproved: null, people: [], bestCupBy: null, ...over,
 });
 const ctx: SlideContext = { mine: true, inProgress: false, volume: (ml) => `${ml} ml`, weight: (g) => `${g} g`, person: (id) => (id === 'u' ? 'You' : `${id}@example.com`) };
 
@@ -48,7 +49,7 @@ describe('Your Year in Coffee slides (backlog 65)', () => {
     const slides = yearSlides(f, ctx);
     expect(slides.map((s) => s.key)).toEqual(['intro', 'brews', 'streak', 'month', 'when', 'coffee', 'volume', 'others', 'beans', 'origins', 'roasters', 'processes', 'varieties', 'flavors', 'recipe', 'best', 'improved', 'new', 'summary']);
     const by = (k: string) => slides.find((s) => s.key === k)!;
-    expect(by('brews')).toMatchObject({ value: '120 brews', sub: 'on 90 days · 80 brews in 2025' });
+    expect(by('brews')).toMatchObject({ value: '120 brews', sub: 'on 90 days' });
     expect(by('streak')).toMatchObject({ value: '12 days in a row', sub: '1 Mar – 12 Mar' });
     expect(by('when').value).toBe('Saturdays, 7 am');
     expect(by('volume')).toMatchObject({ value: '≈ 30000 ml', sub: 'and ≈ 15.0 g of caffeine' });
@@ -89,5 +90,28 @@ describe('Your Year in Coffee slides (backlog 65)', () => {
     expect(withList).toBe(SLIDE_MS.base + 2 * SLIDE_MS.row);
     const long = slideDuration({ key: 'people', kicker: '', value: 'x', sub: 'y', list: Array(20).fill({ name: 'a', detail: '' }) });
     expect(long).toBe(SLIDE_MS.max);
+  });
+
+  it('compares with earlier years: last year, the average year, a record', () => {
+    const year = (y: number, brews: number, over: Partial<Fig> = {}) => figures({ year: y, recap: recap({ brews, daysBrewed: brews, coffeeGrams: brews * 15 }), ...over });
+    const now = year(2026, 105, { origins: [{ name: 'Kenya', brews: 50 }, { name: 'Peru', brews: 5 }], originNames: ['Kenya', 'Peru', 'Laos'] });
+    // A first year: nothing to compare with.
+    expect(yearSlides(now, ctx).find((s) => s.key === 'brews')!.compare).toBeUndefined();
+    // One earlier year: last year only, no average.
+    const one = yearSlides(now, { ...ctx, history: [year(2025, 100, { originNames: ['Kenya'] })] });
+    expect(one.find((s) => s.key === 'brews')!.compare).toEqual([{ dir: 'up', text: '+5% on 2025' }]);
+    expect(one.find((s) => s.key === 'origins')!.compare).toEqual([{ dir: 'up', text: '+2 on 2025' }, { dir: 'up', text: '2 new to you' }]);
+    // Two earlier years, beaten both: a record instead of the average.
+    const two = yearSlides(now, { ...ctx, history: [year(2025, 100), year(2024, 60)] });
+    expect(two.find((s) => s.key === 'brews')!.compare).toEqual([{ dir: 'up', text: '+5% on 2025' }, { dir: 'up', text: 'Your biggest year yet', record: true }]);
+    // Not a record: the average year (100 and 120 → 110; 105 is −5%).
+    const avg = yearSlides(now, { ...ctx, history: [year(2025, 100), year(2024, 120)] });
+    expect(avg.find((s) => s.key === 'brews')!.compare![1]).toEqual({ dir: 'down', text: '−5% on an average year' });
+    // In progress: the same dates.
+    const soFar = yearSlides(now, { ...ctx, inProgress: true, history: [year(2025, 100)] });
+    expect(soFar.find((s) => s.key === 'brews')!.compare).toEqual([{ dir: 'up', text: '+5% on 2025 by this date' }]);
+    // The summary: last year, short.
+    expect(summaryLines(now, { ...ctx, history: [year(2025, 50)] })[0]).toMatchObject({ name: 'Days brewed', change: { dir: 'up', text: '2.1×' } });
+    expect(slideDuration(one.find((s) => s.key === 'brews')!)).toBe(SLIDE_MS.base + SLIDE_MS.sub + SLIDE_MS.compare);
   });
 });
