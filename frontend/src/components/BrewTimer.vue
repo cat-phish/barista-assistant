@@ -111,6 +111,8 @@ const prepIndex = ref(0); // how many are done; prep.length = all done
 const prepStartedAt = ref<number | null>(null); // the current one's countdown
 const prepNow = ref(Date.now());
 let prepInterval: ReturnType<typeof setInterval> | null = null;
+// Counting down or brewing: the header gives its room to the current step.
+const started = computed(() => isRunning.value || countingDown.value || elapsedMs.value > 0);
 const showPrep = computed(() => prep.value.length > 0 && !isRunning.value && !countingDown.value && elapsedMs.value === 0);
 const prepStep = computed(() => prep.value[prepIndex.value] ?? null);
 const prepCount = computed(() => (prepStep.value ? prepCountdown(prepStep.value, prepStartedAt.value, prepNow.value) : null));
@@ -287,8 +289,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="timer-container">
-    <header class="timer-header">
+  <div class="timer-container" :class="{ started }">
+    <!-- Gone once the brew starts: the current step gets the room (§3 layout). -->
+    <header v-if="!started" class="timer-header">
       <h2>{{ recipeName }}</h2>
       <p class="subtitle">{{ subtitle }}</p>
     </header>
@@ -548,6 +551,24 @@ onUnmounted(() => {
   background: var(--brand-tint);
   border-color: var(--brand-line);
   border-left: 4px solid var(--brand);
+}
+/* Started: the header's room goes to the current card. */
+.started .current {
+  min-height: 14rem;
+  padding: 1rem 1.1rem;
+  gap: 0.35rem;
+}
+.started .current .main-row h3 {
+  font-size: 2.2rem;
+}
+.started .current .main-row h3.long {
+  font-size: 1.7rem;
+}
+.started .current .count {
+  font-size: 2.6rem;
+}
+.started .current .sub-row {
+  font-size: 1.15rem;
 }
 .current.waiting {
   background: var(--surface);
