@@ -130,7 +130,7 @@ export function recipeInput(r: BrewContext["recipe"], hidden: ReadonlySet<AiDeta
   if (stepTempsFollowBrew && !hidden.has("temp") && !hidden.has("recipeSteps")) recipe.stepTempsFollowBrew = true;
   if (!hidden.has("grindStartingPoints")) recipe.grindStartingPoints = grindStartingPoints;
   if (!hidden.has("recipeSteps")) {
-    const sent = hidden.has("temp") ? steps.map(({ targetTempC: _t, ...s }) => s) : steps;
+    const sent = hidden.has("temp") ? steps.map(({ targetTempC: _t, kettleSetC: _k, ...s }) => s) : steps;
     // Only worth saying on a recipe that scales.
     recipe.steps = stepTimeScaling === null ? sent.map(({ scalesWithBatch: _s, ...s }) => s) : sent;
     recipe.stepTimeScaling = stepTimeScaling;
@@ -395,12 +395,14 @@ export const PROMPT_SECTIONS: PromptSection[] = [
   },
   {
     key: "stepTemps",
-    // Only when a step's temp differs from the water's, or follows it.
+    // Only when a step's temp differs from the water's, or follows it, or a step sets the kettle.
     when: (i) =>
       recipe(i).stepTempsFollowBrew === true ||
       ((recipe(i).steps as Json[] | undefined) ?? []).some((s) => {
-        const t = (s as Record<string, Json> | null)?.targetTempC;
-        return t !== undefined && t !== recipe(i).targetTempC;
+        const step = s as Record<string, Json> | null;
+        const t = step?.targetTempC;
+        // A kettle setting needs the same explaining (it isn't a pour temp).
+        return (t !== undefined && t !== recipe(i).targetTempC) || (step?.kettleSetC ?? null) !== null;
       }),
     text: PROMPT_TEXT.stepTemps,
   },

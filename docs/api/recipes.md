@@ -106,12 +106,25 @@ A prep step's `scalesWithBatch` is always `false`.
   window moves by the seconds the steps gained or lost (both ends, never
   below 0). `null` (the default): step times stay the same. Clients and the
   worker (§9) work it out the same way; nothing scaled is stored.
-- `targetTempC` (any step, optional, 0–100, 1 decimal): e.g. bloom at 85 °C,
-  pour at 93 °C.
+- `targetTempC` (any step, optional, 0–100, 1 decimal): the water's temp as
+  it's poured, e.g. bloom at 85 °C, pour at 93 °C.
+- `kettleSetC` (filter steps, prep included, optional, 0–100, 1 decimal):
+  what to set the kettle to at the step's start. A kettle lags, so the
+  setting runs ahead of the pours: set 92 °C after an 86 °C bloom to pour
+  the second bloom at ~89 °C. Moves with the step temps (below). `400` on an
+  espresso recipe. Migration 0135 moved each wait step's `targetTempC`
+  (which the timer showed as "Set kettle to") here.
+- `pourStyle` (bloom and pour steps, optional): `center`, `spiral`,
+  `pulse`, `laminar` (gentle, close to the bed) or `high_flow` (fast, to
+  stir the bed); `pourRateGs` (bloom and pour steps, optional, 0–50 g/s, 1
+  decimal) how fast. `400` on other step types.
+- `noteBefore` / `noteAfter` (any step, optional, up to 255 characters):
+  what to do before and after the step's main line, e.g. "Open switch" /
+  pour to 145 g / "Close switch". The timer shows them above and below it.
 - **Step temps with the brew** (`stepTempsFollowBrew`, boolean, default
   `false`): the brew page loads it and can change it for one brew. When it's
   on and the brew's water temp differs from the recipe's `targetTempC`, each
-  step's temp moves by the same degrees, within 0–100: recipe 94 °C with
+  step's temp (and `kettleSetC`) moves by the same degrees, within 0–100: recipe 94 °C with
   bloom 85 and pour 93, brewed at 96 °C, gives bloom 87 and pour 95. Steps
   with no temp stay without one. Clients offer it only with a `targetTempC`
   and a step temp. The brew keeps the shift as `stepTempShiftC`

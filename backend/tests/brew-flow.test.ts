@@ -126,7 +126,7 @@ describe("brew logs", () => {
     const base = `/api/workspaces/${ws.id}/brew-logs`;
     const steps = [
       { stepType: "bloom", durationSec: 45, targetWaterGrams: 50, targetTempC: 85 },
-      { stepType: "pour", durationSec: 90, targetWaterGrams: 250 },
+      { stepType: "pour", durationSec: 90, targetWaterGrams: 250, kettleSetC: 92, pourStyle: "laminar", noteAfter: "Close switch" },
     ];
     const house = (await owner.agent.post(recipes).send({ name: "House", brewerId: v60, targetDoseGrams: 15, targetWaterGrams: 250, targetTempC: 94, steps })).body.recipe.id;
     const other = (await owner.agent.post(recipes).send({ name: "Other", brewerId: v60, targetDoseGrams: 18, targetWaterGrams: 300 })).body.recipe.id;
@@ -140,6 +140,7 @@ describe("brew logs", () => {
     const copy = await copyOf(id);
     expect(copy).toMatchObject({ name: "House", brewer: "V60", methodKind: "filter", targetDoseGrams: 15, targetTempC: 94, stepTempsFollowBrew: false });
     expect(copy?.steps.map((s) => [s.stepOrder, s.stepType, s.targetTempC])).toEqual([[1, "bloom", 85], [2, "pour", null]]);
+    expect(copy?.steps[1]).toMatchObject({ kettleSetC: 92, pourStyle: "laminar", pourRateGs: null, noteBefore: null, noteAfter: "Close switch" });
 
     // Editing the recipe, or other fields of the brew, leaves the copy as brewed.
     await owner.agent.patch(`${recipes}/${house}`).send({ targetDoseGrams: 20, steps: [{ stepType: "pour", durationSec: 120, targetWaterGrams: 250, targetTempC: 96 }] });

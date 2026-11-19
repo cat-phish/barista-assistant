@@ -189,7 +189,7 @@ queue:
    | `flavorProfile` | the bean has one | the cup to aim for |
    | `weightLoss` | `roastWeightLossPercent` | how developed the roast is (11–13% light, 14–16% medium, 17%+ dark); more developed is more porous and extracts faster (coarser, cooler); trusted over the roast level |
    | `stepTimes` | the recipe has `stepTimeScaling` | step times and the finish window are already scaled to the batch; a bigger batch taking longer is planned, not a grind problem |
-   | `stepTemps` | a step's temp differs from the recipe's `targetTempC`, or `stepTempsFollowBrew` is on | how the recipe's, the brew's and each step's temps relate; step temps follow the water temp by the same degrees only with `stepTempsFollowBrew`, and `suggestedTempDelta` / `tempC` are for the water temp; a single step's temp problem goes in `nextStep` |
+   | `stepTemps` | a step's temp differs from the recipe's `targetTempC`, or `stepTempsFollowBrew` is on | how the recipe's, the brew's and each step's temps relate, and that a step's `kettleSetC` is the kettle setting, set ahead of the pours; step temps follow the water temp by the same degrees only with `stepTempsFollowBrew`, and `suggestedTempDelta` / `tempC` are for the water temp; a single step's temp problem goes in `nextStep` |
    | `heldSteps` | a brew's `marks` include a `step_hold` | the barista held that step because it ran slow; a `step_end` in a hold ended it; later steps moved but the finish window didn't, so a held brew can finish late; say where it ran slow and what that points to |
    | `altitude` | `altitudeMasl` | context only: no study ties it to temperature or grind |
    | `variety` | `varieties` or `species` | the cultivar's typical character (Geisha delicate, SL28/SL34 dense and bright); robusta or liberica in a blend extract more easily and add body and bitterness; context, not a rule |
@@ -353,7 +353,7 @@ keys apply to suggestions (§9b), bean reviews (§9d) and recap summaries
   `detailedRoastLevel`), `weightLoss` (`roastWeightLossPercent`),
   `variety` (`varieties`, `species`),
   `decafBlend` (`decaf`, `blendType`), `batchNumber`.
-- **Recipe and equipment:** `recipeSteps` (with `stepTimeScaling` and each step's `scalesWithBatch`), `grindStartingPoints`,
+- **Recipe and equipment:** `recipeSteps` (with `stepTimeScaling` and each step's `scalesWithBatch`, `pourStyle`, `pourRateGs`, `noteBefore` and `noteAfter`; a step's `kettleSetC` goes with `temp`, like its `targetTempC`), `grindStartingPoints`,
   `grinderDetails` (everything but the grinder's name, usual adjustment
   included), `machine`.
 - **History:** `unratedHistory` leaves earlier brews without a rating out

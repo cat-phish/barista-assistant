@@ -57,9 +57,16 @@ export function scaleStepTimes<S extends { scalesWithBatch: boolean; durationSec
 // Step temps with the brew's water temp (docs/api/recipes.md §5): moved by the
 // same degrees, within 0-100; a step with none stays without. The frontend has
 // the same rule in lib/scale.ts.
-export function shiftStepTemps<S extends { targetTempC: number | null }>(steps: S[], shiftC: number | null): S[] {
+// The kettle setting (kettleSetC) moves with them.
+export function shiftStepTemps<S extends { targetTempC: number | null; kettleSetC?: number | null }>(steps: S[], shiftC: number | null): S[] {
   if (!shiftC) return steps;
-  return steps.map((s) => (s.targetTempC === null ? s : { ...s, targetTempC: Math.min(100, Math.max(0, Math.round((s.targetTempC + shiftC) * 10) / 10)) }));
+  const move = (c: number) => Math.min(100, Math.max(0, Math.round((c + shiftC) * 10) / 10));
+  return steps.map((s) => {
+    const kettle = s.kettleSetC ?? null;
+    if (s.targetTempC === null && kettle === null) return s;
+    const out = { ...s, targetTempC: s.targetTempC === null ? null : move(s.targetTempC) };
+    return kettle === null ? out : { ...out, kettleSetC: move(kettle) };
+  });
 }
 
 // A finish window moved by shiftSec, never below 0.

@@ -673,6 +673,11 @@ export async function loadRecipe(recipeId: string): Promise<BrewContext["recipe"
         flowRate: recipeSteps.flowRate,
         flowEndRate: recipeSteps.flowEndRate,
         scalesWithBatch: recipeSteps.scalesWithBatch,
+        kettleSetC: recipeSteps.kettleSetC,
+        pourStyle: recipeSteps.pourStyle,
+        pourRateGs: recipeSteps.pourRateGs,
+        noteBefore: recipeSteps.noteBefore,
+        noteAfter: recipeSteps.noteAfter,
       })
       .from(recipeSteps)
       .where(eq(recipeSteps.recipeId, recipeId))

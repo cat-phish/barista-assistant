@@ -131,8 +131,10 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
     locked: false,
     text:
       "Some recipe steps have their own targetTempC. The recipe's targetTempC is its water temperature, a brew's " +
-      "actualTempC the water it actually used, and a step's targetTempC the temperature for that step only. With " +
-      "stepTempsFollowBrew, the step temps move with the water temperature by the same degrees; a brew's " +
+      "actualTempC the water it actually used, and a step's targetTempC the temperature for that step only. A step's " +
+      "kettleSetC is what the kettle is set to at that step's start, not a pour temperature: a kettle lags, so it is " +
+      "set ahead of the pours that follow. With " +
+      "stepTempsFollowBrew, the step temps (and kettleSetC) move with the water temperature by the same degrees; a brew's " +
       "stepTempShiftC says how far its steps moved. In an analysis the steps given are already this brew's. " +
       "suggestedTempDelta and tempC are for the water temperature: the step temps follow them only with " +
       "stepTempsFollowBrew, otherwise they stay as the recipe writes them. If one step's temperature is the problem, " +

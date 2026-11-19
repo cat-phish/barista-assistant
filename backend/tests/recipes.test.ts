@@ -211,6 +211,44 @@ describe("recipe steps", () => {
     expect(res.body.error).toMatch(error);
   });
 
+  it("stores the kettle setting, pour style and rate, and the notes before and after (docs/api/recipes.md §5)", async () => {
+    const { owner, ws, base, recipe } = await setup();
+    const steps = [
+      { stepType: "prep", label: "Heat the kettle", kettleSetC: 86 },
+      { ...bloom, targetTempC: 86, pourStyle: "spiral", pourRateGs: 4, noteBefore: "Close switch" },
+      { stepType: "wait", durationSec: 20, kettleSetC: 92, noteBefore: " Open switch ", noteAfter: "Close switch" },
+      { stepType: "pour", durationSec: 30, targetWaterGrams: 145, targetTempC: 89, pourStyle: "laminar" },
+    ];
+    const res = await owner.agent.post(base).send({ ...recipe, steps });
+    expect(res.status).toBe(201);
+    const shape = (s: Record<string, unknown>) => [s.kettleSetC, s.pourStyle, s.pourRateGs, s.noteBefore, s.noteAfter];
+    expect(res.body.recipe.steps.map(shape)).toEqual([
+      [86, null, null, null, null],
+      [null, "spiral", 4, "Close switch", null],
+      [92, null, null, "Open switch", "Close switch"],
+      [null, "laminar", null, null, null],
+    ]);
+    const id = res.body.recipe.id;
+    expect((await owner.agent.get(base)).body.recipes.find((r: { id: string }) => r.id === id).steps[2]).toMatchObject({ kettleSetC: 92, noteAfter: "Close switch" });
+    // No kettle on an espresso recipe.
+    const gaggia = (await owner.agent.post(`/api/workspaces/${ws.id}/brewers`).send({ name: "Gaggia", kind: "espresso" })).body.brewer.id;
+    const shot = { name: "Shot", brewerId: gaggia, targetDoseGrams: 18, expectedYieldGrams: 36 };
+    const bad = await owner.agent.post(base).send({ ...shot, steps: [{ stepType: "pressure", durationSec: 25, pressureBar: 9, kettleSetC: 93 }] });
+    expect(bad.status).toBe(400);
+    expect(bad.body.error).toMatch(/kettleSetC/);
+  });
+
+  it.each([
+    ["a pour style on a wait", [{ stepType: "wait", durationSec: 20, pourStyle: "laminar" }], /pourStyle/],
+    ["a pour rate on a stir", [{ stepType: "stir", durationSec: 5, pourRateGs: 3 }], /pourRateGs/],
+    ["an unknown pour style", [{ ...bloom, pourStyle: "waterfall" }], /pourStyle/],
+  ])("rejects %s", async (_label, steps, error) => {
+    const { owner, base, recipe } = await setup();
+    const res = await owner.agent.post(base).send({ ...recipe, steps });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(error);
+  });
+
   it("pour-to is compared across water steps only (non-water steps in between are fine)", async () => {
     const { owner, base, recipe } = await setup();
     const steps = [bloom, { stepType: "stir", durationSec: 5 }, { stepType: "pour", durationSec: 25, targetWaterGrams: 45 }];

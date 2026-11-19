@@ -314,6 +314,9 @@ describe("what the workspace keeps from the AI (Settings → AI)", () => {
     expect(scaledToBrew(recipe, 250, -1.5).steps.map((s) => s.targetTempC)).toEqual([83.5, null, 97.5]);
     expect(scaledToBrew(recipe, 250, null)).toBe(recipe);
     expect(scaledToBrew(recipe, 250, 0)).toBe(recipe);
+    // The kettle setting moves too, even on a step with no pour temp.
+    const kettle = { ...r, steps: [{ ...r.steps[0]!, stepType: "wait", targetTempC: null, kettleSetC: 92 }] };
+    expect(scaledToBrew(kettle, 250, -3).steps[0]).toMatchObject({ targetTempC: null, kettleSetC: 89 });
     // Both at once: a double batch's scaled times, and the shifted temps.
     const both = scaledToBrew({ ...recipe, stepTimeScaling: 1 }, 500, 2);
     expect(both.steps.map((s) => [s.durationSec, s.targetTempC])).toEqual([[60, 87], [120, null], [120, 100]]);

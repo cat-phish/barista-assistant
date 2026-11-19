@@ -13,6 +13,7 @@ import {
   ESPRESSO_STEP_TYPES,
   DILUTION_WITH,
   FLOW_UNITS,
+  POUR_STYLES,
   STEEP_TEMPS,
   grinders,
   prepTools,
@@ -83,6 +84,13 @@ const stepSchema = z
     pressureEndBar: profileValue,
     flowRate: profileValue,
     flowEndRate: profileValue,
+    // Filter: what to set the kettle to at the step's start (docs/api/recipes.md §5).
+    kettleSetC: decimalSchema({ min: 0, max: 100, scale: 1 }).nullable().optional(),
+    // Water steps only: how to pour and how fast (g/s).
+    pourStyle: z.enum(POUR_STYLES).nullable().optional(),
+    pourRateGs: decimalSchema({ min: 0, max: 50, scale: 1 }).nullable().optional(),
+    noteBefore: optionalText(255),
+    noteAfter: optionalText(255),
     // Left out: the default for its type (scalesByDefault).
     scalesWithBatch: z.boolean().optional(),
   })
@@ -100,6 +108,10 @@ const stepSchema = z
       if (step[end] != null && step[start] == null) issue(end, `needs ${start} (a ramp goes from one to the other)`);
     }
     if (step.pressureBar != null && step.flowRate != null) issue("flowRate", "a step targets pressure or flow, not both");
+    if (!isWaterType(step.stepType)) {
+      if (step.pourStyle != null) issue("pourStyle", `isn't allowed for a ${step.stepType} step (bloom and pour only)`);
+      if (step.pourRateGs != null) issue("pourRateGs", `isn't allowed for a ${step.stepType} step (bloom and pour only)`);
+    }
     // Prep: what to do before the timer starts, with an optional countdown.
     if (step.stepType === "prep") {
       if (!step.label) issue("label", "is required for a prep step (what to do)");
@@ -317,6 +329,7 @@ interface KindCheck {
     targetWaterGrams?: number | null;
     pressureBar?: number | null;
     flowRate?: number | null;
+    kettleSetC?: number | null;
   }>;
 }
 function kindError(kind: MethodKind, r: KindCheck): string | null {
@@ -327,6 +340,8 @@ function kindError(kind: MethodKind, r: KindCheck): string | null {
     if (r.expectedYieldGrams === null) return "expectedYieldGrams: is required for an espresso recipe (the target shot weight)";
     const i = r.steps.findIndex((step) => !isEspressoType(step.stepType) || step.targetWaterGrams != null);
     if (i >= 0) return `steps.${i}: espresso steps are pre-infusion, soak, pressure, flow, other or prep, without pour-to targets`;
+    const k = r.steps.findIndex((step) => step.kettleSetC != null);
+    if (k >= 0) return `steps.${k}: kettleSetC is for filter recipes`;
     if (r.steps.filter((step) => step.advance === "first_drop").length > 1) return "steps: at most one step can end at first drop";
     return null;
   }
@@ -399,6 +414,11 @@ async function insertSteps(tx: Tx, recipeId: string, steps: z.infer<typeof steps
       pressureEndBar: step.pressureEndBar ?? null,
       flowRate: step.flowRate ?? null,
       flowEndRate: step.flowEndRate ?? null,
+      kettleSetC: step.kettleSetC ?? null,
+      pourStyle: step.pourStyle ?? null,
+      pourRateGs: step.pourRateGs ?? null,
+      noteBefore: step.noteBefore ?? null,
+      noteAfter: step.noteAfter ?? null,
       scalesWithBatch: step.stepType === "prep" ? false : (step.scalesWithBatch ?? scalesByDefault(step.stepType)), // prep is off the clock
     }))
   );
@@ -615,6 +635,7 @@ recipesRouter.patch("/:recipeId", async (req: Request<RecipeParams>, res: Respon
             targetWaterGrams: recipeSteps.targetWaterGrams,
             pressureBar: recipeSteps.pressureBar,
             flowRate: recipeSteps.flowRate,
+            kettleSetC: recipeSteps.kettleSetC,
           })
           .from(recipeSteps)
           .where(eq(recipeSteps.recipeId, recipeId))),

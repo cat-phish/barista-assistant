@@ -51,6 +51,7 @@ import {
   SERVING_UNITS,
   STEEP_TEMPS,
   STEP_ADVANCE,
+  POUR_STYLES,
   beanFreezes,
   beanPhotos,
   beanProcesses,
@@ -298,6 +299,7 @@ const ENUMS: Record<string, readonly string[]> = {
   "recipes.dilutionWith": DILUTION_WITH,
   "recipe_steps.stepType": RECIPE_STEP_TYPES,
   "recipe_steps.advance": STEP_ADVANCE,
+  "recipe_steps.pourStyle": POUR_STYLES,
   "ingredients.ingredientType": INGREDIENT_TYPES,
   "drinks.kind": METHOD_KINDS,
   "drinks.servingUnit": SERVING_UNITS,
@@ -363,6 +365,12 @@ const recipeCopySchema: z.ZodType<RecipeCopy | null> = z
             flowRate: num.nullable(),
             flowEndRate: num.nullable(),
             scalesWithBatch: z.boolean(),
+            // Copies made before migration 0135 lack these.
+            kettleSetC: num.nullable().optional(),
+            pourStyle: z.enum(POUR_STYLES).nullable().optional(),
+            pourRateGs: num.nullable().optional(),
+            noteBefore: z.string().max(255).nullable().optional(),
+            noteAfter: z.string().max(255).nullable().optional(),
           })
           .strict(),
       )

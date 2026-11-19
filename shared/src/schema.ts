@@ -1442,6 +1442,11 @@ export const ESPRESSO_STEP_TYPES = ["preinfusion", "soak", "pressure", "flow", "
 // first_drop: espresso only; ends when First drop is tapped.
 export const STEP_ADVANCE = ["auto", "auto_log", "tap", "first_drop"] as const;
 export type StepAdvance = (typeof STEP_ADVANCE)[number];
+// How a water step is poured (docs/api/recipes.md §5): where the stream goes
+// (center, spiral), in pulses, gently close to the bed (laminar) or fast to
+// stir the bed (high_flow).
+export const POUR_STYLES = ["center", "spiral", "pulse", "laminar", "high_flow"] as const;
+export type PourStyle = (typeof POUR_STYLES)[number];
 export const FLOW_UNITS = ["g_s", "ml_s"] as const;
 export type FlowUnit = (typeof FLOW_UNITS)[number];
 
@@ -1459,7 +1464,19 @@ export const recipeSteps = mysqlTable("recipe_steps", {
   // Cumulative scale weight to pour to by the step's end; only for water step
   // types (and optional for 'other' on filter recipes).
   targetWaterGrams: decimal("target_water_grams", { precision: 6, scale: 2, mode: "number" }),
-  targetTempC: decimal("target_temp_c", { precision: 4, scale: 1, mode: "number" }), // e.g. bloom at 85, pour at 93
+  // The water's temperature as it's poured: bloom at 85, pour at 93.
+  targetTempC: decimal("target_temp_c", { precision: 4, scale: 1, mode: "number" }),
+  // Filter: what to set the kettle to at this step's start. It can differ from
+  // the pour temps (a kettle lags, so you set 92 to pour the next at ~89).
+  // Migration 0135.
+  kettleSetC: decimal("kettle_set_c", { precision: 4, scale: 1, mode: "number" }),
+  // Water steps (bloom, pour): how to pour, and at what rate (g/s).
+  pourStyle: varchar("pour_style", { length: 20 }).$type<PourStyle>(),
+  pourRateGs: decimal("pour_rate_gs", { precision: 4, scale: 1, mode: "number" }),
+  // What to do before and after the step's main line, e.g. "Open switch" /
+  // "Pour to 145 g" / "Close switch".
+  noteBefore: varchar("note_before", { length: 255 }),
+  noteAfter: varchar("note_after", { length: 255 }),
   // Espresso: target pressure (bar) or flow (recipes.flowUnit); an end value
   // makes it a ramp shown as "9 → 6 bar".
   pressureBar: decimal("pressure_bar", { precision: 4, scale: 1, mode: "number" }),

@@ -1,4 +1,4 @@
-import type { DilutionWith, FlowUnit, MethodKind, RecipeStyle, SteepTemp, StepAdvance } from "./schema.js";
+import type { DilutionWith, FlowUnit, MethodKind, PourStyle, RecipeStyle, SteepTemp, StepAdvance } from "./schema.js";
 
 // A brew's copy of its recipe, as it was when the brew was logged
 // (docs/api/brew-logs.md §6, "Recipe copy"): what the AI judges the brew
@@ -51,5 +51,11 @@ export interface RecipeCopy {
     flowRate: number | null;
     flowEndRate: number | null;
     scalesWithBatch: boolean; // sent to the AI only with stepTimeScaling
+    // Migration 0135; copies made before it lack them.
+    kettleSetC?: number | null; // "set kettle to", apart from the pour temp
+    pourStyle?: PourStyle | null;
+    pourRateGs?: number | null;
+    noteBefore?: string | null;
+    noteAfter?: string | null;
   }>;
 }

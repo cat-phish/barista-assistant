@@ -55,6 +55,11 @@ export async function recipeCopy(tx: Tx, recipeId: string | null | undefined): P
       flowRate: recipeSteps.flowRate,
       flowEndRate: recipeSteps.flowEndRate,
       scalesWithBatch: recipeSteps.scalesWithBatch,
+      kettleSetC: recipeSteps.kettleSetC,
+      pourStyle: recipeSteps.pourStyle,
+      pourRateGs: recipeSteps.pourRateGs,
+      noteBefore: recipeSteps.noteBefore,
+      noteAfter: recipeSteps.noteAfter,
     })
     .from(recipeSteps)
     .where(eq(recipeSteps.recipeId, recipeId))
