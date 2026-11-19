@@ -19,7 +19,8 @@ import {
   prepLeft,
   prepSide,
   recipeWarnings,
-  setTempLine,
+  kettleLine,
+  pourStyleLine,
   splitPrep,
   stepDraft,
   stepInstruction,
@@ -31,7 +32,8 @@ import {
 
 const step = (s: Partial<StepFields>): StepFields => ({
   stepType: 'pour', label: null, durationSec: 10, advance: 'auto', targetWaterGrams: null, targetTempC: null,
-  pressureBar: null, pressureEndBar: null, flowRate: null, flowEndRate: null, scalesWithBatch: true, ...s,
+  pressureBar: null, pressureEndBar: null, flowRate: null, flowEndRate: null, scalesWithBatch: true,
+  kettleSetC: null, pourStyle: null, pourRateGs: null, noteBefore: null, noteAfter: null, ...s,
 });
 const draft = (s: Partial<StepFields> & { water?: string }) => ({ ...stepDraft('k', { durationSec: 10, ...s }), ...(s.water !== undefined ? { water: s.water } : {}) });
 const mark = (kind: Mark['kind'], atSec: number, stepOrder: number | null = null): Mark => ({ kind, stepOrder, atSec });
@@ -222,17 +224,36 @@ describe('what a card says', () => {
     expect(stepInstruction(step({ stepType: 'bloom', targetWaterGrams: 50, targetTempC: 85 }), 50, 'g_s', 'f')).toBe('Pour to 50 g (+50) at 185 °F');
     expect(stepInstruction(step({ stepType: 'pressure', pressureBar: 9, targetTempC: 93 }), null, 'g_s', 'c')).toBe('9 bar');
   });
+  it('the kettle setting and the pour style, apart from the pour temp', () => {
+    expect(kettleLine(step({ stepType: 'wait', kettleSetC: 92 }), 'c')).toBe('Set kettle to 92 °C');
+    expect(kettleLine(step({ stepType: 'wait', kettleSetC: 92 }), 'f')).toBe('Set kettle to 198 °F');
+    expect(kettleLine(step({ targetTempC: 93 }), 'c')).toBeNull(); // a pour temp isn't a kettle setting
+    expect(pourStyleLine(step({ pourStyle: 'laminar', pourRateGs: 3 }))).toBe('Laminar · ~3 g/s');
+    expect(pourStyleLine(step({ pourStyle: 'high_flow' }))).toBe('High flow');
+    expect(pourStyleLine(step({ pourRateGs: 4.5 }))).toBe('~4.5 g/s');
+    expect(pourStyleLine(step({}))).toBeNull();
+  });
+  it('parses the kettle, pour style, rate and notes; pour style only on water steps, no kettle on espresso', () => {
+    const drafts = [
+      { ...draft({ stepType: 'bloom', targetWaterGrams: 50 }), pourStyle: 'spiral' as const, pourRate: '4', noteBefore: ' Close switch ' },
+      { ...draft({ stepType: 'wait' }), kettle: '92', noteBefore: 'Open switch', noteAfter: 'Close switch', pourStyle: 'laminar' as const },
+    ];
+    const { steps, errors } = parseSteps(drafts, 'filter');
+    expect(errors).toEqual({});
+    expect(steps.map((s) => [s.kettleSetC, s.pourStyle, s.pourRateGs, s.noteBefore, s.noteAfter])).toEqual([
+      [null, 'spiral', 4, 'Close switch', null],
+      [92, null, null, 'Open switch', 'Close switch'], // a wait isn't poured
+    ]);
+    expect(parseSteps([{ ...draft({ stepType: 'wait' }), kettle: '120' }], 'filter').errors[0]).toMatch(/Set kettle to/);
+    expect(parseSteps([{ ...draft({ stepType: 'pressure', pressureBar: 9 }), kettle: '93' }], 'espresso').steps[0]?.kettleSetC).toBeNull();
+    // A draft keeps them as written.
+    expect(stepDraft('k', { kettleSetC: 92, pourStyle: 'pulse', pourRateGs: 3.5, noteAfter: 'Close switch' })).toMatchObject({ kettle: '92', pourStyle: 'pulse', pourRate: '3.5', noteAfter: 'Close switch' });
+  });
   it('a change of temperature, on a step that only sets it and on the step before', () => {
     const bloom = step({ stepType: 'bloom', targetWaterGrams: 50, targetTempC: 85 });
     const wait = (targetTempC: number | null) => step({ stepType: 'wait', targetTempC });
     const pour = step({ targetWaterGrams: 250, targetTempC: 93 });
     const set = [bloom, wait(93), pour];
-    expect(setTempLine(set, 1, 94, 'c')).toBe('Set kettle to 93 °C');
-    expect(setTempLine(set, 0, 94, 'c')).toBeNull(); // pours, so its line says it
-    expect(setTempLine([bloom, wait(85)], 1, 94, 'c')).toBeNull();
-    expect(setTempLine([bloom, wait(null)], 1, 94, 'c')).toBeNull();
-    expect(setTempLine([wait(90)], 0, null, 'c')).toBe('Set kettle to 90 °C');
-    expect(setTempLine([wait(94)], 0, 94, 'c')).toBeNull(); // the brew's already
     expect(nextTempChange(set, 0, 94, 'c')).toEqual({ next: '93 °C', now: '85 °C' });
     expect(nextTempChange([pour, bloom], 0, 94, 'c')).toEqual({ next: '85 °C', now: '93 °C' });
     expect(nextTempChange(set, 1, 94, 'c')).toBeNull(); // same again

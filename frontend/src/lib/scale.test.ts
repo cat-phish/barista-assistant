@@ -128,6 +128,10 @@ describe('shiftStepTemps', () => {
     expect(shiftStepTemps(steps, 2).map((s) => s.targetTempC)).toEqual([87, null, 95]);
     expect(shiftStepTemps(steps, -1.5).map((s) => s.targetTempC)).toEqual([83.5, null, 91.5]);
   });
+  it('moves the kettle setting too, on a step with no pour temp', () => {
+    const ramped = [{ targetTempC: 86 }, { targetTempC: null, kettleSetC: 92 }, { targetTempC: 89 }];
+    expect(shiftStepTemps(ramped, -3)).toEqual([{ targetTempC: 83 }, { targetTempC: null, kettleSetC: 89 }, { targetTempC: 86 }]);
+  });
   it('stays within 0-100', () => {
     expect(shiftStepTemps(steps, 10).map((s) => s.targetTempC)).toEqual([95, null, 100]);
     expect(shiftStepTemps(steps, -90).map((s) => s.targetTempC)).toEqual([0, null, 3]);
@@ -139,7 +143,7 @@ describe('shiftStepTemps', () => {
 });
 
 describe('scaleSteps', () => {
-  const base = { label: null, advance: 'auto', targetTempC: null, pressureBar: null, pressureEndBar: null, flowRate: null, flowEndRate: null, scalesWithBatch: true } as const;
+  const base = { label: null, advance: 'auto', targetTempC: null, kettleSetC: null, pourStyle: null, pourRateGs: null, noteBefore: null, noteAfter: null, pressureBar: null, pressureEndBar: null, flowRate: null, flowEndRate: null, scalesWithBatch: true } as const;
   const steps: RecipeStep[] = [
     { ...base, id: 'a', stepOrder: 1, stepType: 'bloom', durationSec: 45, targetWaterGrams: 50 },
     { ...base, id: 'b', stepOrder: 2, stepType: 'swirl', durationSec: 0, targetWaterGrams: null },

@@ -636,6 +636,8 @@ export type StepType =
 // button), tap (waits for Next), first_drop (espresso: waits for First drop).
 export type StepAdvance = 'auto' | 'auto_log' | 'tap' | 'first_drop';
 export type FlowUnit = 'g_s' | 'ml_s';
+// docs/api/recipes.md §5: how a bloom or pour step is poured.
+export type PourStyle = 'center' | 'spiral' | 'pulse' | 'laminar' | 'high_flow';
 
 // docs/api/brew-logs.md §6: when things actually happened.
 export type MarkKind = 'first_drop' | 'step_end' | 'step_hold' | 'step_resume';
@@ -658,6 +660,11 @@ export interface StepFields {
   flowRate: number | null; // in the recipe's flowUnit
   flowEndRate: number | null;
   scalesWithBatch: boolean; // filter: its time follows the batch, with the recipe's stepTimeScaling
+  kettleSetC: number | null; // filter: "Set kettle to" at the step's start, apart from the pour temp
+  pourStyle: PourStyle | null; // bloom and pour steps
+  pourRateGs: number | null; // bloom and pour steps, g/s
+  noteBefore: string | null; // shown above the step's main line
+  noteAfter: string | null; // and below it
 }
 export interface RecipeStep extends StepFields {
   id: string;

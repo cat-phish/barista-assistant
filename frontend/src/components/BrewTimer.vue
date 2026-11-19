@@ -28,8 +28,9 @@ import {
   nextTempChange,
   pourAmounts,
   prepCountdown,
+  kettleLine,
+  pourStyleLine,
   prepSide,
-  setTempLine,
   stepInstruction,
   stepTitle,
   STEP_TYPES,
@@ -168,10 +169,13 @@ const holdable = computed(() => {
 
 // Previous / Up next: the instruction (shown bold) between the step's name and
 // its length: "Pour · **Pour to 210 g (+90)** · 0:30", "Soak · **Pump off** · 0:10".
-function sideParts(index: number): { title: string; instruction: string | null; how: string } {
+// The pour style joins the instruction ("Pour to 145 g (+25) · Laminar"); Up
+// next starts with the step's note before, so you get ready for it.
+function sideParts(index: number): { before: string | null; title: string; instruction: string | null; how: string } {
   const step = props.steps[index]!;
   const how = step.advance === 'first_drop' ? 'until first drop' : step.advance === 'tap' ? 'until you tap' : step.durationSec === null ? 'until done' : formatTime(step.durationSec);
-  return { title: stepTitle(step), instruction: stepInstruction(step, amounts.value[index] ?? null, props.flowUnit, temperatureUnit.value), how };
+  const parts = [stepInstruction(step, amounts.value[index] ?? null, props.flowUnit, temperatureUnit.value), pourStyleLine(step)].filter((p): p is string => p !== null);
+  return { before: step.noteBefore, title: stepTitle(step), instruction: parts.length ? parts.join(' · ') : null, how };
 }
 // The current card's big line: what to do, or for a step that only changes the
 // temperature, that. The step's name goes under it. tempShown: it says the
@@ -180,14 +184,28 @@ const currentLine = computed(() => {
   const p = phase.value;
   if (p.kind !== 'step') return null;
   const instruction = stepInstruction(p.step, p.amount, props.flowUnit, temperatureUnit.value);
-  const line = instruction ?? (props.espresso ? null : setTempLine(props.steps, p.index, props.waterTempC, temperatureUnit.value));
-  return { big: line ?? stepTitle(p.step), small: line ? stepTitle(p.step) : '', tempShown: p.step.targetWaterGrams !== null || (instruction === null && line !== null) };
+  // A step with nothing else to do but set the kettle says that big.
+  const kettle = kettleLine(p.step, temperatureUnit.value);
+  const line = instruction ?? kettle;
+  return {
+    big: line ?? stepTitle(p.step),
+    small: line ? stepTitle(p.step) : '',
+    tempShown: p.step.targetWaterGrams !== null,
+    kettle: instruction !== null ? kettle : null, // its own row, under the big line
+    pour: pourStyleLine(p.step),
+  };
 });
 // Up next's callout. A recipe that ever changes temperature keeps its space,
 // so the cards don't jump when it comes and goes.
 const tempChange = (index: number) => nextTempChange(props.steps, index, props.waterTempC, temperatureUnit.value);
+// The next step's kettle setting goes in the same callout: "set kettle to 92 °C".
+const nextKettle = (index: number) => {
+  const next = props.steps[index + 1];
+  return next ? kettleLine(next, temperatureUnit.value) : null;
+};
 const nextTemp = computed(() => (phase.value.kind === 'step' ? tempChange(phase.value.index) : null));
-const tempChanges = computed(() => props.steps.some((_, i) => tempChange(i) !== null));
+const nextKettleText = computed(() => (phase.value.kind === 'step' ? nextKettle(phase.value.index) : null));
+const tempChanges = computed(() => props.steps.some((_, i) => tempChange(i) !== null || nextKettle(i) !== null));
 // "1:22", or "≈ 1:22" when the current step has no fixed end (it waits for a tap).
 const nextStarts = computed(() => {
   const p = phase.value;
@@ -309,6 +327,7 @@ onUnmounted(() => {
       <div class="step-card current" :class="{ 'phase-done': !prepStep }" aria-label="Current step">
         <template v-if="prepStep">
           <span class="label">Prep {{ prepIndex + 1 }} of {{ prep.length }} · before the brew</span>
+          <p v-if="prepStep.noteBefore" class="step-note before">{{ prepStep.noteBefore }}</p>
           <div class="main-row">
             <h3 :class="{ long: stepTitle(prepStep).length > 22 }" aria-live="polite">{{ stepTitle(prepStep) }}</h3>
             <span class="count" aria-live="off">{{ prepCount?.big }}</span>
@@ -317,6 +336,8 @@ onUnmounted(() => {
             <span>The brew clock starts with Start</span>
             <span>{{ prepCount?.small }}</span>
           </div>
+          <p v-if="prepStep.kettleSetC !== null" class="kettle-row">{{ kettleLine(prepStep, temperatureUnit) }}</p>
+          <p v-if="prepStep.noteAfter" class="step-note after">Then: {{ prepStep.noteAfter }}</p>
           <div class="step-actions">
             <button v-if="prepStep.durationSec && prepStartedAt === null" class="btn tap due" type="button" @click="startPrepCountdown">
               Start {{ formatTime(prepStep.durationSec) }}
@@ -339,7 +360,7 @@ onUnmounted(() => {
         <span class="side-text" :class="{ none: !prep[prepIndex + 1] && !steps.length }">
           <template v-if="prep[prepIndex + 1]">{{ prepSide(prep[prepIndex + 1]!) }}</template>
           <template v-else-if="steps.length">
-            {{ sideParts(0).title }}<template v-if="sideParts(0).instruction"> · <strong>{{ sideParts(0).instruction }}</strong></template> · {{ sideParts(0).how }}
+            <template v-if="sideParts(0).before">{{ sideParts(0).before }} → </template>{{ sideParts(0).title }}<template v-if="sideParts(0).instruction"> · <strong>{{ sideParts(0).instruction }}</strong></template> · {{ sideParts(0).how }}
           </template>
           <template v-else>None</template>
         </span>
@@ -366,7 +387,9 @@ onUnmounted(() => {
           <span class="label">
             Step {{ phase.index + 1 }} of {{ steps.length }} · {{ STEP_TYPES[phase.step.stepType].label }}<template v-if="phase.step.targetTempC !== null && !currentLine?.tempShown"> · {{ formatTemp(phase.step.targetTempC, temperatureUnit) }}</template>
           </span>
-          <!-- What to do is the big line; the step's name is the small one under it. -->
+          <!-- What to do is the big line; the step's name is the small one under it.
+               The notes go above and below it: "Open switch" / pour / "Close switch". -->
+          <p v-if="phase.step.noteBefore" class="step-note before">{{ phase.step.noteBefore }}</p>
           <div class="main-row">
             <h3 :class="{ long: (currentLine?.big.length ?? 0) > 22 }" aria-live="polite">{{ currentLine?.big }}</h3>
             <span class="count" :class="{ text: !/^\d/.test(countdown.big) }" aria-live="off">{{ countdown.big }}</span>
@@ -375,6 +398,9 @@ onUnmounted(() => {
             <span>{{ currentLine?.small }}</span>
             <span>{{ countdown.small }}</span>
           </div>
+          <p v-if="currentLine?.kettle" class="kettle-row">{{ currentLine.kettle }}</p>
+          <p v-if="currentLine?.pour" class="pour-row">{{ currentLine.pour }}</p>
+          <p v-if="phase.step.noteAfter" class="step-note after">Then: {{ phase.step.noteAfter }}</p>
           <p v-if="machineNote(phase.step, machine)" class="machine-note">{{ machineNote(phase.step, machine) }}</p>
           <button v-if="isRunning && phase.step.advance === 'tap'" class="btn tap" :class="{ due: phase.due }" type="button" @click="record('step_end', phase.index + 1)">
             Next
@@ -405,12 +431,14 @@ onUnmounted(() => {
         <span class="label">Up next</span>
         <span class="side-text" :class="{ none: nextIndex === null }">
           <template v-if="nextIndex !== null">
-            {{ sideParts(nextIndex).title }}<template v-if="sideParts(nextIndex).instruction"> · <strong>{{ sideParts(nextIndex).instruction }}</strong></template> · {{ sideParts(nextIndex).how }}<template v-if="nextStarts"> · at {{ nextStarts }}</template>
+            <template v-if="sideParts(nextIndex).before">{{ sideParts(nextIndex).before }} → </template>{{ sideParts(nextIndex).title }}<template v-if="sideParts(nextIndex).instruction"> · <strong>{{ sideParts(nextIndex).instruction }}</strong></template> · {{ sideParts(nextIndex).how }}<template v-if="nextStarts"> · at {{ nextStarts }}</template>
           </template>
           <template v-else>None</template>
         </span>
-        <p v-if="tempChanges" class="temp-change" :class="{ off: !nextTemp }" aria-live="polite">
+        <p v-if="tempChanges" class="temp-change" :class="{ off: !nextTemp && !nextKettleText }" aria-live="polite">
           <template v-if="nextTemp">Next step {{ nextTemp.next }}<template v-if="nextTemp.now"> (now {{ nextTemp.now }})</template></template>
+          <template v-if="nextTemp && nextKettleText"> · </template>
+          <template v-if="nextKettleText">Next: {{ nextKettleText.charAt(0).toLowerCase() + nextKettleText.slice(1) }}</template>
         </p>
       </div>
     </template>
@@ -592,6 +620,32 @@ onUnmounted(() => {
   gap: 0.5rem;
   min-height: 2.75rem;
   background: var(--bg);
+}
+/* The step's notes, kettle setting and pour style (docs/timer_architecture.md §3). */
+.step-note {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+.step-note.after {
+  color: var(--text-muted);
+}
+.kettle-row,
+.pour-row {
+  margin: 0;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.kettle-row {
+  border: 1px solid var(--brand-line);
+  background: var(--surface);
+  color: var(--brand);
+}
+.pour-row {
+  border: 1px solid var(--border);
+  background: var(--surface);
 }
 .temp-change {
   flex-basis: 100%;

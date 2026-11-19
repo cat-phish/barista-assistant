@@ -1,7 +1,7 @@
 // Recipe steps: the types, editor validation (mirrors the API, docs/api/README.md
 // §5), what each step's card says, and the timer's schedule. Steps run back to
 // back: each starts when the previous one actually ended. Tested in steps.test.ts.
-import type { FlowUnit, MachineCapabilities, Mark, MethodKind, StepAdvance, StepFields, StepType, TemperatureUnit } from '../api/types';
+import type { FlowUnit, MachineCapabilities, Mark, MethodKind, PourStyle, StepAdvance, StepFields, StepType, TemperatureUnit } from '../api/types';
 import { formatGrams, formatTime, parseDecimal, parseTime, type Parsed } from './format';
 import { holdsOf } from './marks';
 import { scalesByDefault } from './scale';
@@ -85,6 +85,25 @@ export function stepInstruction(step: StepFields, amount: number | null, flowUni
   return null;
 }
 
+// docs/api/recipes.md §5: how a bloom or pour step is poured.
+export const POUR_STYLES: Record<PourStyle, string> = {
+  center: 'Center',
+  spiral: 'Spiral',
+  pulse: 'Pulse',
+  laminar: 'Laminar',
+  high_flow: 'High flow',
+};
+export const isWaterStep = (stepType: StepType): boolean => stepType === 'bloom' || stepType === 'pour';
+// "Laminar · ~3 g/s", "Spiral", "~3 g/s".
+export function pourStyleLine(step: Pick<StepFields, 'pourStyle' | 'pourRateGs'>): string | null {
+  const parts = [step.pourStyle ? POUR_STYLES[step.pourStyle] : null, step.pourRateGs !== null ? `~${formatGrams(step.pourRateGs)} g/s` : null].filter(Boolean);
+  return parts.length ? parts.join(' · ') : null;
+}
+// The kettle setting at the step's start, apart from the pour temp: "Set kettle to 92 °C".
+export function kettleLine(step: Pick<StepFields, 'kettleSetC'>, tempUnit: TemperatureUnit): string | null {
+  return step.kettleSetC === null ? null : `Set kettle to ${formatTemp(step.kettleSetC, tempUnit)}`;
+}
+
 // The water's temperature going into step `index`: the latest step before it
 // that set one, or the brew's. Compared as shown, so a difference that rounds
 // away in °F isn't a change.
@@ -106,12 +125,6 @@ function tempChange(steps: readonly StepFields[], index: number, waterTempC: num
 // Up next's callout: the step after `index` changes the temperature.
 export const nextTempChange = (steps: readonly StepFields[], index: number, waterTempC: number | null, tempUnit: TemperatureUnit) =>
   tempChange(steps, index + 1, waterTempC, tempUnit);
-// A step that changes the temperature without pouring: "Set kettle to 93 °C".
-export function setTempLine(steps: readonly StepFields[], index: number, waterTempC: number | null, tempUnit: TemperatureUnit): string | null {
-  if (steps[index]?.targetWaterGrams !== null) return null;
-  const change = tempChange(steps, index, waterTempC, tempUnit);
-  return change && `Set kettle to ${change.next}`;
-}
 
 // What the chosen machine can't do for this step (the step still runs on time).
 export function machineNote(step: StepFields, machine: MachineCapabilities | null): string | null {
@@ -225,6 +238,11 @@ export interface StepDraft {
   flow: string; // recipe's flow unit
   flowEnd: string;
   scalesWithBatch: boolean; // kept while the recipe's scaling is off
+  kettle: string; // "Set kettle to", in the person's temperature unit
+  pourStyle: PourStyle | '';
+  pourRate: string; // g/s
+  noteBefore: string;
+  noteAfter: string;
 }
 
 export function stepDraft(key: string, s?: Partial<StepFields>, tempUnit: TemperatureUnit = 'c'): StepDraft {
@@ -243,6 +261,11 @@ export function stepDraft(key: string, s?: Partial<StepFields>, tempUnit: Temper
     flow: text(s?.flowRate),
     flowEnd: text(s?.flowEndRate),
     scalesWithBatch: s?.scalesWithBatch ?? scalesByDefault(stepType),
+    kettle: tempText(s?.kettleSetC, tempUnit),
+    pourStyle: s?.pourStyle ?? '',
+    pourRate: text(s?.pourRateGs),
+    noteBefore: s?.noteBefore ?? '',
+    noteAfter: s?.noteAfter ?? '',
   };
 }
 
@@ -259,6 +282,18 @@ export function parseSteps(drafts: StepDraft[], kind: MethodKind | null, tempUni
     const rules = stepRules(d.stepType, kind);
     const last = i === drafts.length - 1;
     const duration = d.duration.trim() ? parseTime(d.duration) : null;
+    // No kettle on espresso; pour style and rate on bloom and pour steps only.
+    const kettle = kind !== 'espresso' && d.kettle.trim() ? parseTemp(d.kettle, tempUnit) : null;
+    const pours = isWaterStep(d.stepType);
+    const pourRate = pours ? optional(d.pourRate, { scale: 1, min: 0, max: 50, exclusiveMin: true }) : null;
+    const extras = {
+      kettleSetC: kettle?.ok ? kettle.value : null,
+      pourStyle: pours && d.pourStyle ? d.pourStyle : null,
+      pourRateGs: pourRate?.ok ? pourRate.value : null,
+      noteBefore: d.noteBefore.trim() || null,
+      noteAfter: d.noteAfter.trim() || null,
+    };
+    const extrasError = kettle && !kettle.ok ? `Set kettle to: ${kettle.error}` : pourRate && !pourRate.ok ? `Pour rate: ${pourRate.error}` : '';
     // Prep: what to do before the timer starts, with an optional countdown.
     if (d.stepType === 'prep') {
       const error = brewing
@@ -267,13 +302,14 @@ export function parseSteps(drafts: StepDraft[], kind: MethodKind | null, tempUni
           ? 'Say what to do (the label)'
           : duration && !duration.ok
             ? `Countdown: ${duration.error}`
-            : '';
+            : extrasError;
       if (error) errors[i] = error;
       else {
         steps.push({
           stepType: 'prep', label: d.label.trim(), durationSec: duration?.ok ? duration.value : null, advance: 'auto',
           targetWaterGrams: null, targetTempC: null, pressureBar: null, pressureEndBar: null, flowRate: null, flowEndRate: null,
           scalesWithBatch: false, // off the clock: never scales
+          ...extras,
         });
       }
       return;
@@ -304,6 +340,7 @@ export function parseSteps(drafts: StepDraft[], kind: MethodKind | null, tempUni
     else if ([pressure, pressureEnd, flow, flowEnd].some((p) => p && !p.ok)) error = 'Pressure and flow: 0–20, one decimal';
     else if ((pressureEnd && !pressure) || (flowEnd && !flow)) error = 'A ramp needs a starting value';
     else if (pressure && flow) error = 'Set pressure or flow, not both';
+    else if (extrasError) error = extrasError;
 
     if (error) {
       errors[i] = error;
@@ -323,6 +360,7 @@ export function parseSteps(drafts: StepDraft[], kind: MethodKind | null, tempUni
       flowRate: value(flow),
       flowEndRate: value(flowEnd),
       scalesWithBatch: d.scalesWithBatch,
+      ...extras,
     });
     if (targetWaterGrams !== null) lastWater = targetWaterGrams;
   });

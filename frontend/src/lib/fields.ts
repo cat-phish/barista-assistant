@@ -83,7 +83,10 @@ export const FIELDS = [
   recipe('grindSettings', 'Grind starting points'),
   recipe('flowUnit', 'Flow unit (espresso)'),
   recipe('stepTimeScaling', 'Step times that scale with the batch (filter)', 'The steps you pick take longer for a bigger batch, less for a smaller one'),
-  recipe('stepTemp', 'Step temperatures'),
+  recipe('stepTemp', 'Step temperatures', 'The water’s temp as each step pours it'),
+  recipe('stepKettleSet', 'Set kettle to (filter steps)', 'What to set the kettle to at a step’s start, apart from the pour temp, since a kettle takes a while to change'),
+  recipe('pourStyle', 'Pour style and rate (bloom and pour steps)', 'Center, spiral, pulse, laminar or high flow, and the g/s'),
+  recipe('stepNotes', 'Step notes before and after', 'What to do before and after a step, e.g. open the switch, then close it'),
   recipe('stepTempsFollowBrew', 'Step temps that follow the brew’s water temp', 'Changing the water temp on the brew page moves the step temps by the same degrees'),
 
   // Home roasting's green stock (docs/api/green-coffees.md §4e).

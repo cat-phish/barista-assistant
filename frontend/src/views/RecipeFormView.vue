@@ -33,7 +33,9 @@ import {
   parseFinishWindow,
   isPrep,
   parseSteps,
+  isWaterStep,
   pourAmounts,
+  POUR_STYLES,
   recipeWarnings,
   stepDraft,
   stepRules,
@@ -952,6 +954,10 @@ async function save(): Promise<void> {
                   <option v-if="!stepTypesFor(kind).includes(step.stepType)" :value="step.stepType" disabled>{{ STEP_TYPES[step.stepType].label }}</option>
                 </select>
               </div>
+              <div v-if="show('recipe.stepNotes')" class="field full">
+                <label :for="`step-before-${i}`">Before</label>
+                <input :id="`step-before-${i}`" v-model="step.noteBefore" maxlength="255" placeholder="e.g. Open switch" />
+              </div>
               <div v-if="!longStyle || isPrep(step)" class="field">
                 <label :for="`step-time-${i}`">{{ timeLabel(step) }}<span v-if="timeRequired(step, i)" class="req" aria-hidden="true">*</span></label>
                 <TimeInput
@@ -1012,13 +1018,34 @@ async function save(): Promise<void> {
                 />
               </div>
               <div v-if="show('recipe.stepTemp') && !isPrep(step)" class="field">
-                <label :for="`step-temp-${i}`">Temp ({{ TEMPERATURE_LABELS[temperatureUnit] }})</label>
+                <label :for="`step-temp-${i}`">Pour temp ({{ TEMPERATURE_LABELS[temperatureUnit] }})</label>
                 <input :id="`step-temp-${i}`" v-model="step.temp" inputmode="decimal" :placeholder="temperatureUnit === 'f' ? 'e.g. 199' : 'e.g. 93'" />
               </div>
+              <div v-if="show('recipe.stepKettleSet') && kind !== 'espresso'" class="field">
+                <label :for="`step-kettle-${i}`">Set kettle to ({{ TEMPERATURE_LABELS[temperatureUnit] }})</label>
+                <input :id="`step-kettle-${i}`" v-model="step.kettle" inputmode="decimal" :placeholder="temperatureUnit === 'f' ? 'e.g. 198' : 'e.g. 92'" />
+              </div>
+              <template v-if="show('recipe.pourStyle') && isWaterStep(step.stepType)">
+                <div class="field">
+                  <label :for="`step-pour-style-${i}`">Pour style</label>
+                  <select :id="`step-pour-style-${i}`" v-model="step.pourStyle">
+                    <option value="">—</option>
+                    <option v-for="(name, key) in POUR_STYLES" :key="key" :value="key">{{ name }}</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label :for="`step-pour-rate-${i}`">Pour rate (g/s)</label>
+                  <input :id="`step-pour-rate-${i}`" v-model="step.pourRate" inputmode="decimal" placeholder="e.g. 3" />
+                </div>
+              </template>
               <label v-if="timesScale && !isPrep(step)" class="checkbox full">
                 <input v-model="step.scalesWithBatch" type="checkbox" />
                 Scales with the batch
               </label>
+              <div v-if="show('recipe.stepNotes')" class="field full">
+                <label :for="`step-after-${i}`">After</label>
+                <input :id="`step-after-${i}`" v-model="step.noteAfter" maxlength="255" placeholder="e.g. Close switch" />
+              </div>
               <span v-if="stepsParsed.errors[i]" class="field-error full">{{ stepsParsed.errors[i] }}</span>
             </div>
             <button class="btn-link danger" type="button" :aria-label="`Remove step ${i + 1}`" @click="removeStep(i)">✕</button>
