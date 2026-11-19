@@ -389,7 +389,8 @@ function fill(recipe: Recipe): void {
 // is still yours; a reload loses it.
 const chatProposals = useChatProposalStore();
 const fromChat = ref<{ title: string; note: string } | null>(null);
-function applyProposal(v: ChatProposalRecipe): void {
+// Returns the steps that kept the recipe's kettle settings, pour style or notes.
+function applyProposal(v: ChatProposalRecipe): number[] {
   const grams = (n: number | null | undefined) => (n == null ? '' : formatGrams(n));
   if (v.name !== undefined) name.value = v.name;
   if (v.targetDoseGrams !== undefined) dose.value = formatGrams(v.targetDoseGrams);
@@ -405,7 +406,12 @@ function applyProposal(v: ChatProposalRecipe): void {
   if (v.targetTempC !== undefined) temp.value = tempText(v.targetTempC, temperatureUnit.value);
   if (v.expectedFinishMinSec !== undefined) finishFrom.value = v.expectedFinishMinSec === null ? '' : formatTime(v.expectedFinishMinSec);
   if (v.expectedFinishMaxSec !== undefined) finishTo.value = v.expectedFinishMaxSec === null ? '' : formatTime(v.expectedFinishMaxSec);
-  if (v.steps !== undefined) steps.value = proposedStepDrafts(v.steps, steps.value, temperatureUnit.value, newStepKey);
+  let kept: number[] = [];
+  if (v.steps !== undefined) {
+    const merged = proposedStepDrafts(v.steps, steps.value, temperatureUnit.value, newStepKey);
+    steps.value = merged.drafts;
+    kept = merged.kept;
+  }
   reveal({
     'recipe.ice': v.targetIceGrams,
     'recipe.expectedYield': v.expectedYieldGrams,
@@ -413,6 +419,7 @@ function applyProposal(v: ChatProposalRecipe): void {
     'recipe.finishWindow': v.expectedFinishMinSec ?? v.expectedFinishMaxSec,
     'recipe.stepTemp': v.steps?.some((x) => x.targetTempC !== null),
   });
+  return kept;
 }
 
 onMounted(async () => {
@@ -442,8 +449,10 @@ onMounted(async () => {
       const change = route.query.proposal !== undefined ? chatProposals.take('recipeChange') : null;
       if (change && change.recipeId === recipe.id) {
         await nextTick();
-        applyProposal(change.changes);
-        fromChat.value = { title: change.title, note: 'Only what it changes is filled in; the rest is the recipe as saved.' };
+        const kept = applyProposal(change.changes);
+        // Matched by type and order: worth a look when steps were added or removed.
+        const keptNote = kept.length ? ` Step${kept.length > 1 ? 's' : ''} ${kept.join(', ')} kept ${kept.length > 1 ? 'their' : 'its'} kettle setting, pour style or notes from the recipe: check they're on the right steps.` : '';
+        fromChat.value = { title: change.title, note: `Only what it changes is filled in; the rest is the recipe as saved.${keptNote}` };
       }
       return;
     }

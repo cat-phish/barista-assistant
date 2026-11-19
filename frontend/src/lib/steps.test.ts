@@ -24,6 +24,7 @@ import {
   proposedStepDrafts,
   splitPrep,
   stepDraft,
+  type StepDraft,
   stepInstruction,
   stepsTotalLine,
   stepTimeParts,
@@ -250,31 +251,75 @@ describe('what a card says', () => {
     // A draft keeps them as written.
     expect(stepDraft('k', { kettleSetC: 92, pourStyle: 'pulse', pourRateGs: 3.5, noteAfter: 'Close switch' })).toMatchObject({ kettle: '92', pourStyle: 'pulse', pourRate: '3.5', noteAfter: 'Close switch' });
   });
-  it("a chat proposal's steps keep the kettle, pour style and notes it leaves out, from the same place and type", () => {
-    const current = [
-      stepDraft('a', { stepType: 'bloom', targetWaterGrams: 60, kettleSetC: 86, noteBefore: 'Close switch' }),
+  it("a chat proposal's steps keep the kettle, pour style and notes it leaves out, from the matching step", () => {
+    const ramped = [
+      stepDraft('a', { stepType: 'bloom', label: 'First bloom', targetWaterGrams: 60, durationSec: 10, noteBefore: 'Close switch' }),
       stepDraft('b', { stepType: 'wait', durationSec: 20, kettleSetC: 92, noteBefore: 'Open switch', noteAfter: 'Close switch' }),
-      stepDraft('c', { stepType: 'pour', targetWaterGrams: 210, pourStyle: 'laminar', pourRateGs: 3 }),
+      stepDraft('c', { stepType: 'bloom', label: 'Second bloom', targetWaterGrams: 120, durationSec: 10 }),
+      stepDraft('d', { stepType: 'wait', durationSec: 20, noteBefore: 'Open switch' }),
+      stepDraft('e', { stepType: 'pour', targetWaterGrams: 210, durationSec: 10, pourStyle: 'laminar', pourRateGs: 3 }),
     ];
     let n = 0;
-    const out = proposedStepDrafts(
+    const key = () => `k${++n}`;
+    const shape = (r: { drafts: StepDraft[] }) => r.drafts.map((d) => [d.stepType, d.kettle, d.pourStyle, d.noteBefore, d.noteAfter]);
+    // Numbers changed, and a kettle setting and a note written: those win (null clears).
+    const tweaked = proposedStepDrafts(
       [
-        { stepType: 'bloom', durationSec: 15, targetWaterGrams: 50 }, // left out: kept
-        { stepType: 'wait', durationSec: 25, kettleSetC: 91, noteAfter: null }, // written: changed or cleared
-        { stepType: 'stir', durationSec: 5 }, // another type at that place: nothing kept
-        { stepType: 'pour', durationSec: 30, targetWaterGrams: 300 }, // past the old list
+        { stepType: 'bloom', label: 'First bloom', durationSec: 15, targetWaterGrams: 50 },
+        { stepType: 'wait', durationSec: 25, kettleSetC: 91, noteAfter: null },
+        { stepType: 'bloom', label: 'Second bloom', durationSec: 10, targetWaterGrams: 110 },
+        { stepType: 'wait', durationSec: 20 },
+        { stepType: 'pour', durationSec: 10, targetWaterGrams: 210 },
       ],
-      current,
-      'c',
-      () => `k${++n}`,
+      ramped, 'c', key,
     );
-    expect(out.map((d) => [d.kettle, d.pourStyle, d.pourRate, d.noteBefore, d.noteAfter])).toEqual([
-      ['86', '', '', 'Close switch', ''],
-      ['91', '', '', 'Open switch', ''],
-      ['', '', '', '', ''],
-      ['', '', '', '', ''],
+    expect(shape(tweaked)).toEqual([
+      ['bloom', '', '', 'Close switch', ''],
+      ['wait', '91', '', 'Open switch', ''],
+      ['bloom', '', '', '', ''],
+      ['wait', '', '', 'Open switch', ''],
+      ['pour', '', 'laminar', '', ''],
     ]);
-    expect(out.map((d) => d.water)).toEqual(['50', '', '', '300']); // the rest is the proposal's
+    expect(tweaked.kept).toEqual([1, 2, 4, 5]);
+    expect(tweaked.drafts.map((d) => d.water)).toEqual(['50', '', '110', '', '210']); // the rest is the proposal's
+    // A bloom and wait added up front: the old steps' values stay on their own steps, not shifted.
+    const added = proposedStepDrafts(
+      [
+        { stepType: 'bloom', label: 'Pre-wet', durationSec: 5, targetWaterGrams: 20 },
+        { stepType: 'wait', durationSec: 10 },
+        { stepType: 'bloom', label: 'First bloom', durationSec: 10, targetWaterGrams: 60 },
+        { stepType: 'wait', durationSec: 20 },
+        { stepType: 'bloom', label: 'Second bloom', durationSec: 10, targetWaterGrams: 120 },
+        { stepType: 'wait', durationSec: 20 },
+        { stepType: 'pour', durationSec: 10, targetWaterGrams: 210 },
+      ],
+      ramped, 'c', key,
+    );
+    expect(shape(added)).toEqual([
+      ['bloom', '', '', '', ''],
+      ['wait', '', '', '', ''],
+      ['bloom', '', '', 'Close switch', ''],
+      ['wait', '92', '', 'Open switch', 'Close switch'],
+      ['bloom', '', '', '', ''],
+      ['wait', '', '', 'Open switch', ''],
+      ['pour', '', 'laminar', '', ''],
+    ]);
+    // The second wait taken out: the first keeps the kettle, the pour keeps its style.
+    const removed = proposedStepDrafts(
+      [
+        { stepType: 'bloom', label: 'First bloom', durationSec: 10, targetWaterGrams: 60 },
+        { stepType: 'wait', durationSec: 20 },
+        { stepType: 'bloom', label: 'Second bloom', durationSec: 10, targetWaterGrams: 120 },
+        { stepType: 'pour', durationSec: 10, targetWaterGrams: 210 },
+      ],
+      ramped, 'c', key,
+    );
+    expect(shape(removed)).toEqual([
+      ['bloom', '', '', 'Close switch', ''],
+      ['wait', '92', '', 'Open switch', 'Close switch'],
+      ['bloom', '', '', '', ''],
+      ['pour', '', 'laminar', '', ''],
+    ]);
   });
   it('a change of temperature, on a step that only sets it and on the step before', () => {
     const bloom = step({ stepType: 'bloom', targetWaterGrams: 50, targetTempC: 85 });

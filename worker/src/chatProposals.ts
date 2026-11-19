@@ -201,7 +201,7 @@ const stepSchema = z.object({
   targetTempC: temp.nullish(),
   pressureBar: z.number().min(0).max(20).nullish(),
   flowRate: z.number().min(0).max(20).nullish(),
-  // Left out: the old step's at the same place (docs/api/chat.md §12).
+  // Left out: the matching old step's (docs/api/chat.md §12).
   kettleSetC: temp.nullish(),
   pourStyle: z.enum(POUR_STYLES).nullish(),
   pourRateGs: z.number().gt(0).max(50).nullish(),

@@ -2051,7 +2051,7 @@ export interface ChatProposalStep {
   targetTempC: number | null;
   pressureBar: number | null;
   flowRate: number | null;
-  // Absent = the old step's at the same place, when of the same type
+  // Absent = the matching old step's, matched in order by type
   // (docs/api/chat.md §12); null clears it. Proposals from before lack them.
   kettleSetC?: number | null;
   pourStyle?: PourStyle | null;

@@ -170,9 +170,13 @@ Recipe fields are `name`, `targetDoseGrams`, `targetWaterGrams`,
 durationSec, targetWaterGrams, targetTempC, pressureBar, flowRate }`, and
 any of `kettleSetC`, `pourStyle`, `pourRateGs`, `noteBefore`, `noteAfter`), as in
 `recipes.md` §5; the form checks them on saving. Those five are written only
-when the AI gives them: one left out keeps what the recipe's step at the same
-place has, when that step is of the same type, so a change to the times or
-weights doesn't wipe the kettle settings and notes; `null` clears one.
+when the AI gives them: one left out keeps what the matching step of the
+recipe has, so a change to the times or weights doesn't wipe the kettle
+settings and notes; `null` clears one. The form matches the proposed steps to
+the recipe's in order and only by type, preferring the same label, weight
+and time (`proposedStepDrafts`, `frontend/src/lib/steps.ts`), so a step added
+or removed doesn't move them onto the wrong step, and its note names the
+steps that kept something, to check.
 Proposals from before them lack them, and open the same way. How the worker reads them is
 `llm-contract.md` §9e. They count toward the chat's size and go in the export.
 

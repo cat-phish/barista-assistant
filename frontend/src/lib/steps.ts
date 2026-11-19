@@ -270,8 +270,11 @@ export function stepDraft(key: string, s?: Partial<StepFields>, tempUnit: Temper
 }
 
 // A chat proposal's steps over the form's (docs/api/chat.md §12): a kettle
-// setting, pour style or rate, or note it leaves out keeps the old step's at
-// the same place, when of the same type; null clears it.
+// setting, pour style or rate, or note it leaves out keeps the matching old
+// step's; null clears it. Steps are matched in order and only to one of the
+// same type, preferring the same label, weight and time, so a step added or
+// removed doesn't move them onto the wrong step. kept: the step numbers
+// (1-based) that kept something, for the form to point out.
 const KEPT = [
   ['kettleSetC', 'kettle'],
   ['pourStyle', 'pourStyle'],
@@ -279,20 +282,65 @@ const KEPT = [
   ['noteBefore', 'noteBefore'],
   ['noteAfter', 'noteAfter'],
 ] as const;
+// How alike two steps of the same type are; 0 for different types.
+function likeness(a: StepDraft, b: StepDraft): number {
+  if (a.stepType !== b.stepType) return 0;
+  let score = 1;
+  if (a.label.trim() && a.label.trim().toLowerCase() === b.label.trim().toLowerCase()) score += 2;
+  if (a.water && a.water === b.water) score += 1;
+  if (a.duration && a.duration === b.duration) score += 0.5;
+  return score;
+}
+// The best in-order matching (proposed index → old index): the most alike
+// pairs, never crossing, so the steps either side of an added one stay matched.
+export function matchSteps(proposed: readonly StepDraft[], old: readonly StepDraft[]): Array<number | null> {
+  const n = proposed.length;
+  const m = old.length;
+  const best = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      const pair = likeness(proposed[i]!, old[j]!);
+      best[i]![j] = Math.max(best[i + 1]![j]!, best[i]![j + 1]!, pair > 0 ? pair + best[i + 1]![j + 1]! : 0);
+    }
+  }
+  const match: Array<number | null> = new Array(n).fill(null);
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    const pair = likeness(proposed[i]!, old[j]!);
+    if (pair > 0 && best[i]![j] === pair + best[i + 1]![j + 1]!) {
+      match[i] = j;
+      i += 1;
+      j += 1;
+    } else if (best[i]![j] === best[i + 1]![j]) i += 1;
+    else j += 1;
+  }
+  return match;
+}
 export function proposedStepDrafts(
   proposed: ReadonlyArray<Partial<StepFields> & { stepType: StepType }>,
   current: readonly StepDraft[],
   tempUnit: TemperatureUnit,
   key: () => string,
-): StepDraft[] {
-  return proposed.map((p, i) => {
-    const draft = stepDraft(key(), p, tempUnit);
-    const old = current[i];
-    if (!old || old.stepType !== p.stepType) return draft;
-    const out: StepDraft = { ...draft };
-    for (const [field, text] of KEPT) if (p[field] === undefined) (out[text] as string) = old[text];
-    return out;
+): { drafts: StepDraft[]; kept: number[] } {
+  const drafts = proposed.map((p) => stepDraft(key(), p, tempUnit));
+  const match = matchSteps(drafts, current);
+  const kept: number[] = [];
+  const out = drafts.map((draft, i) => {
+    const j = match[i];
+    if (j == null) return draft;
+    const old = current[j]!;
+    const next: StepDraft = { ...draft };
+    let any = false;
+    for (const [field, text] of KEPT) {
+      if (proposed[i]![field] !== undefined || !old[text]) continue;
+      Object.assign(next, { [text]: old[text] });
+      any = true;
+    }
+    if (any) kept.push(i + 1);
+    return next;
   });
+  return { drafts: out, kept };
 }
 
 export function parseSteps(drafts: StepDraft[], kind: MethodKind | null, tempUnit: TemperatureUnit = 'c'): { steps: StepFields[]; errors: Record<number, string> } {
