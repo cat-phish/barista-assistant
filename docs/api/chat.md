@@ -167,8 +167,13 @@ label is what it was called then.
 Recipe fields are `name`, `targetDoseGrams`, `targetWaterGrams`,
 `targetIceGrams`, `expectedYieldGrams`, `targetTempC`, `expectedFinishMinSec`,
 `expectedFinishMaxSec` and `steps` (the whole list, each `{ stepType, label,
-durationSec, targetWaterGrams, targetTempC, pressureBar, flowRate }`), as in
-`recipes.md` §5; the form checks them on saving. How the worker reads them is
+durationSec, targetWaterGrams, targetTempC, pressureBar, flowRate }`, and
+any of `kettleSetC`, `pourStyle`, `pourRateGs`, `noteBefore`, `noteAfter`), as in
+`recipes.md` §5; the form checks them on saving. Those five are written only
+when the AI gives them: one left out keeps what the recipe's step at the same
+place has, when that step is of the same type, so a change to the times or
+weights doesn't wipe the kettle settings and notes; `null` clears one.
+Proposals from before them lack them, and open the same way. How the worker reads them is
 `llm-contract.md` §9e. They count toward the chat's size and go in the export.
 
 **Warnings:** a `recipeChange` or `newRecipe` can carry `warnings`, plain

@@ -1,5 +1,5 @@
 import { API_URL, api } from './client';
-import type { StepType } from './types';
+import type { PourStyle, StepType } from './types';
 
 // docs/api/chat.md §12: a person's own chats.
 export interface Chat {
@@ -54,6 +54,12 @@ export interface ChatProposalStep {
   targetTempC: number | null;
   pressureBar: number | null;
   flowRate: number | null;
+  // Absent = the old step's at the same place, when of the same type; null clears it.
+  kettleSetC?: number | null;
+  pourStyle?: PourStyle | null;
+  pourRateGs?: number | null;
+  noteBefore?: string | null;
+  noteAfter?: string | null;
 }
 // Only what the AI set.
 export interface ChatProposalRecipe {

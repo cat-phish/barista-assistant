@@ -101,6 +101,16 @@ describe("checkProposal", () => {
       recipeLabel: "House V60",
       changes: { targetTempC: 93.3, steps: [{ stepType: "bloom", label: null, durationSec: 45, targetWaterGrams: 45, targetTempC: null, pressureBar: null, flowRate: null }] },
     });
+    // The kettle, pour style and notes only when written: left out keeps the old step's.
+    const kettle = checkProposal({ kind: "recipeChange", ...why, recipe: "a1", changes: { steps: [
+      { stepType: "wait", durationSec: 20, kettleSetC: 91.96, noteBefore: " Open switch ", noteAfter: null },
+      { stepType: "pour", durationSec: 30, targetWaterGrams: 145, pourStyle: "laminar", pourRateGs: 3 },
+    ] } }, refs);
+    expect(kettle?.kind === "recipeChange" && kettle.changes.steps).toEqual([
+      { stepType: "wait", label: null, durationSec: 20, targetWaterGrams: null, targetTempC: null, pressureBar: null, flowRate: null, kettleSetC: 92, noteBefore: "Open switch", noteAfter: null },
+      { stepType: "pour", label: null, durationSec: 30, targetWaterGrams: 145, targetTempC: null, pressureBar: null, flowRate: null, pourStyle: "laminar", pourRateGs: 3 },
+    ]);
+    expect(checkProposal({ kind: "recipeChange", ...why, recipe: "a1", changes: { steps: [{ stepType: "pour", durationSec: 30, targetWaterGrams: 145, pourStyle: "waterfall" }] } }, refs)).toBeNull();
     expect(checkProposal({ kind: "recipeChange", ...why, recipe: "a3", changes: { targetTempC: 93 } }, refs)).toBeNull();
     expect(checkProposal({ kind: "recipeChange", ...why, recipe: "a2", changes: {} }, refs)).toBeNull();
     expect(checkProposal({ kind: "recipeChange", ...why, recipe: "a2", changes: { expectedFinishMinSec: 40, expectedFinishMaxSec: 30 } }, refs)).toBeNull();

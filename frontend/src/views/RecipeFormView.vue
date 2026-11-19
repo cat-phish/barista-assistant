@@ -36,6 +36,7 @@ import {
   isWaterStep,
   pourAmounts,
   POUR_STYLES,
+  proposedStepDrafts,
   recipeWarnings,
   stepDraft,
   stepRules,
@@ -404,7 +405,7 @@ function applyProposal(v: ChatProposalRecipe): void {
   if (v.targetTempC !== undefined) temp.value = tempText(v.targetTempC, temperatureUnit.value);
   if (v.expectedFinishMinSec !== undefined) finishFrom.value = v.expectedFinishMinSec === null ? '' : formatTime(v.expectedFinishMinSec);
   if (v.expectedFinishMaxSec !== undefined) finishTo.value = v.expectedFinishMaxSec === null ? '' : formatTime(v.expectedFinishMaxSec);
-  if (v.steps !== undefined) steps.value = v.steps.map((x) => stepDraft(newStepKey(), x, temperatureUnit.value));
+  if (v.steps !== undefined) steps.value = proposedStepDrafts(v.steps, steps.value, temperatureUnit.value, newStepKey);
   reveal({
     'recipe.ice': v.targetIceGrams,
     'recipe.expectedYield': v.expectedYieldGrams,

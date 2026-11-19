@@ -21,6 +21,7 @@ import {
   recipeWarnings,
   kettleLine,
   pourStyleLine,
+  proposedStepDrafts,
   splitPrep,
   stepDraft,
   stepInstruction,
@@ -248,6 +249,32 @@ describe('what a card says', () => {
     expect(parseSteps([{ ...draft({ stepType: 'pressure', pressureBar: 9 }), kettle: '93' }], 'espresso').steps[0]?.kettleSetC).toBeNull();
     // A draft keeps them as written.
     expect(stepDraft('k', { kettleSetC: 92, pourStyle: 'pulse', pourRateGs: 3.5, noteAfter: 'Close switch' })).toMatchObject({ kettle: '92', pourStyle: 'pulse', pourRate: '3.5', noteAfter: 'Close switch' });
+  });
+  it("a chat proposal's steps keep the kettle, pour style and notes it leaves out, from the same place and type", () => {
+    const current = [
+      stepDraft('a', { stepType: 'bloom', targetWaterGrams: 60, kettleSetC: 86, noteBefore: 'Close switch' }),
+      stepDraft('b', { stepType: 'wait', durationSec: 20, kettleSetC: 92, noteBefore: 'Open switch', noteAfter: 'Close switch' }),
+      stepDraft('c', { stepType: 'pour', targetWaterGrams: 210, pourStyle: 'laminar', pourRateGs: 3 }),
+    ];
+    let n = 0;
+    const out = proposedStepDrafts(
+      [
+        { stepType: 'bloom', durationSec: 15, targetWaterGrams: 50 }, // left out: kept
+        { stepType: 'wait', durationSec: 25, kettleSetC: 91, noteAfter: null }, // written: changed or cleared
+        { stepType: 'stir', durationSec: 5 }, // another type at that place: nothing kept
+        { stepType: 'pour', durationSec: 30, targetWaterGrams: 300 }, // past the old list
+      ],
+      current,
+      'c',
+      () => `k${++n}`,
+    );
+    expect(out.map((d) => [d.kettle, d.pourStyle, d.pourRate, d.noteBefore, d.noteAfter])).toEqual([
+      ['86', '', '', 'Close switch', ''],
+      ['91', '', '', 'Open switch', ''],
+      ['', '', '', '', ''],
+      ['', '', '', '', ''],
+    ]);
+    expect(out.map((d) => d.water)).toEqual(['50', '', '', '300']); // the rest is the proposal's
   });
   it('a change of temperature, on a step that only sets it and on the step before', () => {
     const bloom = step({ stepType: 'bloom', targetWaterGrams: 50, targetTempC: 85 });

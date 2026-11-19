@@ -8,6 +8,7 @@ import {
   brewLogs,
   CHAT_PROPOSALS_MAX,
   grinders,
+  POUR_STYLES,
   RECIPE_STEP_TYPES,
   recipes,
   recipeSteps,
@@ -15,6 +16,7 @@ import {
   type ChatAttachment,
   type ChatProposal,
   type ChatProposalRecipe,
+  type ChatProposalStep,
 } from "@barista/shared/schema";
 import { recipeStepWarnings, type CheckedRecipe } from "@barista/shared/recipeChecks";
 import { and, asc, eq, inArray } from "drizzle-orm";
@@ -199,6 +201,12 @@ const stepSchema = z.object({
   targetTempC: temp.nullish(),
   pressureBar: z.number().min(0).max(20).nullish(),
   flowRate: z.number().min(0).max(20).nullish(),
+  // Left out: the old step's at the same place (docs/api/chat.md §12).
+  kettleSetC: temp.nullish(),
+  pourStyle: z.enum(POUR_STYLES).nullish(),
+  pourRateGs: z.number().gt(0).max(50).nullish(),
+  noteBefore: z.string().trim().max(255).nullish(),
+  noteAfter: z.string().trim().max(255).nullish(),
 });
 const recipeSchema = z.object({
   name: text(255).optional(),
@@ -239,15 +247,24 @@ function recipeValues(r: z.infer<typeof recipeSchema>): ChatProposalRecipe {
   if (r.expectedFinishMinSec !== undefined) out.expectedFinishMinSec = r.expectedFinishMinSec ?? null;
   if (r.expectedFinishMaxSec !== undefined) out.expectedFinishMaxSec = r.expectedFinishMaxSec ?? null;
   if (r.steps !== undefined) {
-    out.steps = r.steps.map((s) => ({
-      stepType: s.stepType,
-      label: s.label || null,
-      durationSec: s.durationSec ?? null,
-      targetWaterGrams: roundOr(s.targetWaterGrams, 2),
-      targetTempC: roundOr(s.targetTempC, 1),
-      pressureBar: roundOr(s.pressureBar, 1),
-      flowRate: roundOr(s.flowRate, 1),
-    }));
+    out.steps = r.steps.map((s) => {
+      const step: ChatProposalStep = {
+        stepType: s.stepType,
+        label: s.label || null,
+        durationSec: s.durationSec ?? null,
+        targetWaterGrams: roundOr(s.targetWaterGrams, 2),
+        targetTempC: roundOr(s.targetTempC, 1),
+        pressureBar: roundOr(s.pressureBar, 1),
+        flowRate: roundOr(s.flowRate, 1),
+      };
+      // Only the ones it wrote: a missing one keeps the old step's.
+      if (s.kettleSetC !== undefined) step.kettleSetC = roundOr(s.kettleSetC, 1);
+      if (s.pourStyle !== undefined) step.pourStyle = s.pourStyle ?? null;
+      if (s.pourRateGs !== undefined) step.pourRateGs = roundOr(s.pourRateGs, 1);
+      if (s.noteBefore !== undefined) step.noteBefore = s.noteBefore || null;
+      if (s.noteAfter !== undefined) step.noteAfter = s.noteAfter || null;
+      return step;
+    });
   }
   return out;
 }

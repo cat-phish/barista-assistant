@@ -1,6 +1,6 @@
 // A chat reply's proposals as stored (docs/api/chat.md §12, "Proposals"), for
 // checking an imported chats.json. The worker checks what the AI writes.
-import { CHAT_PROPOSAL_STATES, CHAT_PROPOSALS_MAX, RECIPE_STEP_TYPES, type ChatProposal } from "@barista/shared/schema";
+import { CHAT_PROPOSAL_STATES, CHAT_PROPOSALS_MAX, POUR_STYLES, RECIPE_STEP_TYPES, type ChatProposal } from "@barista/shared/schema";
 import { z } from "zod";
 
 const id = z.string().max(36);
@@ -15,6 +15,11 @@ const step = z
     targetTempC: num.nullable(),
     pressureBar: num.nullable(),
     flowRate: num.nullable(),
+    kettleSetC: num.nullable().optional(),
+    pourStyle: z.enum(POUR_STYLES).nullable().optional(),
+    pourRateGs: num.nullable().optional(),
+    noteBefore: z.string().max(255).nullable().optional(),
+    noteAfter: z.string().max(255).nullable().optional(),
   })
   .strict();
 const recipe = z

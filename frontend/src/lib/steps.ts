@@ -269,6 +269,32 @@ export function stepDraft(key: string, s?: Partial<StepFields>, tempUnit: Temper
   };
 }
 
+// A chat proposal's steps over the form's (docs/api/chat.md §12): a kettle
+// setting, pour style or rate, or note it leaves out keeps the old step's at
+// the same place, when of the same type; null clears it.
+const KEPT = [
+  ['kettleSetC', 'kettle'],
+  ['pourStyle', 'pourStyle'],
+  ['pourRateGs', 'pourRate'],
+  ['noteBefore', 'noteBefore'],
+  ['noteAfter', 'noteAfter'],
+] as const;
+export function proposedStepDrafts(
+  proposed: ReadonlyArray<Partial<StepFields> & { stepType: StepType }>,
+  current: readonly StepDraft[],
+  tempUnit: TemperatureUnit,
+  key: () => string,
+): StepDraft[] {
+  return proposed.map((p, i) => {
+    const draft = stepDraft(key(), p, tempUnit);
+    const old = current[i];
+    if (!old || old.stepType !== p.stepType) return draft;
+    const out: StepDraft = { ...draft };
+    for (const [field, text] of KEPT) if (p[field] === undefined) (out[text] as string) = old[text];
+    return out;
+  });
+}
+
 export function parseSteps(drafts: StepDraft[], kind: MethodKind | null, tempUnit: TemperatureUnit = 'c'): { steps: StepFields[]; errors: Record<number, string> } {
   const steps: StepFields[] = [];
   const errors: Record<number, string> = {};

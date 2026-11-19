@@ -2051,6 +2051,13 @@ export interface ChatProposalStep {
   targetTempC: number | null;
   pressureBar: number | null;
   flowRate: number | null;
+  // Absent = the old step's at the same place, when of the same type
+  // (docs/api/chat.md §12); null clears it. Proposals from before lack them.
+  kettleSetC?: number | null;
+  pourStyle?: PourStyle | null;
+  pourRateGs?: number | null;
+  noteBefore?: string | null;
+  noteAfter?: string | null;
 }
 // A recipe's values as proposed: only what the AI set.
 export interface ChatProposalRecipe {
