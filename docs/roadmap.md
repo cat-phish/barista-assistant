@@ -3045,3 +3045,52 @@ recaps.
   member's Insights and recaps unasked, so it waits for an invite they
   accept. Until then Only mine still means brews you logged. Left in
   `backlog.md` item 67.
+
+## Grinder starting points and methods it can't do (built)
+
+Branch `grinder-starting-points`, migration 0136. A recipe's grind starting
+point was typed by hand for every recipe and grinder, and every grinder
+showed in every picker, an espresso-only grinder included. Contract:
+`api/grinders.md` §3b "Starting points"; was backlog item 10.
+
+- **On the grinder** (three nullable columns on `grinders`): one general
+  **Starting point** (`startingSetting`), used for every method unless a
+  more specific one is added with **Add method/style starting point**
+  (`startingPoints`, JSON: a method's row, style `null`, or one of its
+  styles, never "other"). A style's row beats its method's, which beats the
+  general one. JSON rather than a table, since the keys are fixed enums.
+- **Can't grind for** (`unavailableMethods`, JSON): the grinder is hidden
+  from the grinder pickers of recipes and brews of that method (recipe
+  rows and default grinder, brew setup, brew log edit). Whatever already
+  uses it keeps it, and the server doesn't refuse it. A grinder picked
+  earlier is let go when the method changes, unless it's a repeat's.
+- **Recipes:** adding a grinder to a recipe (or picking another in an empty
+  row) fills in the grinder's starting point for the recipe's style or
+  method; a typed setting is never replaced, and the recipe keeps its own
+  number after that.
+- **Brew setup:** the grinder's starting point is the last fallback, after
+  the suggestion, the last setting and the recipe's own starting point,
+  with its own hint ("Ode's starting point for cold brew").
+- **AI:** unchanged (rule 9 not involved); the recipe's starting points
+  already go to it.
+- **Backups and imports:** the grinders table was already in both; the two
+  JSON columns are in `JSON_SCHEMAS`, checked like the API.
+- **Left out for now:** typical starting points for well-known grinders
+  (pairs with backlog 4, starter data), and offering to update recipes
+  still on an old filled-in value when a grinder's starting point changes.
+
+## Experiment cards in AI chat (built)
+
+Branch `experiment-cards`, no migration (backlog item 22). Research ideas
+that change single steps (a cold or cool bloom, hot-then-cool staging,
+bloom size and length, pour count) come up in a conversation rather than
+as a Suggest output. Contract: `api/chat.md` §12, `api/llm-contract.md`
+§9e.
+
+- **Experiment flag:** a `recipeChange` or `newRecipe` proposal can carry
+  `experiment: true`; its card shows an **Experiment** badge.
+- **Ideas in the prompt:** the chat prompt gets the experiment research
+  findings (`CHAT_EXPERIMENTS`), mostly expert opinion
+  (`docs/research/cold-bloom-low-temp.md`, `agitation-pour-structure.md`).
+- **No new brew fields:** per-step values on a brew stay limited to
+  `stepTempShiftC`.

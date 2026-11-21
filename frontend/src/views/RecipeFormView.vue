@@ -54,6 +54,7 @@ import { parseTemp, tempText, TEMPERATURE_LABELS } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import { useFieldVisibility } from '../composables/useFieldVisibility';
 import { METHOD_KINDS } from '../lib/equipment';
+import { grinderCanDo, grinderStartingPoint } from '../lib/grinderStart';
 import { offeredFor, toolsFor } from '../lib/prepTools';
 import { recipeStylesApi } from '../api/recipeStyles';
 import TimeInput from '../components/TimeInput.vue';
@@ -306,13 +307,25 @@ const warnings = computed(() =>
   }),
 );
 
-// Grinder choices for a row: active grinders, plus whatever this row already uses.
+// Grinders for this recipe's method: active ones that can grind for it
+// (docs/api/grinders.md §3b), plus whatever a row or the default already uses.
+const usableGrinder = (g: Grinder) => !g.archivedAt && grinderCanDo(g, kind.value);
+// Grinder choices for a row: usable grinders, plus whatever this row already uses.
 function grinderOptions(rowIndex: number): Grinder[] {
   const used = new Set(grindRows.value.filter((_, i) => i !== rowIndex).map((r) => r.grinderId));
   const current = grindRows.value[rowIndex]?.grinderId;
-  return grinders.value.filter((g) => (!g.archivedAt || g.id === current) && !used.has(g.id));
+  return grinders.value.filter((g) => (usableGrinder(g) || g.id === current) && !used.has(g.id));
 }
-const canAddGrindRow = computed(() => grinders.value.some((g) => !g.archivedAt && !grindRows.value.some((r) => r.grinderId === g.id)));
+const canAddGrindRow = computed(() => grinders.value.some((g) => usableGrinder(g) && !grindRows.value.some((r) => r.grinderId === g.id)));
+const defaultGrinderChoices = computed(() => grinders.value.filter((g) => usableGrinder(g) || g.id === defaultGrinderId.value));
+// A row with no setting yet starts at the grinder's own starting point for
+// this method or style; a typed setting is never replaced.
+function fillGrindFromGrinder(row: { grinderId: string; setting: string }): void {
+  if (row.setting.trim()) return;
+  const g = grinders.value.find((x) => x.id === row.grinderId);
+  const start = g ? grinderStartingPoint(g, kind.value, brewsLike.value) : null;
+  if (start) row.setting = formatGrind(start.setting);
+}
 
 // Duplicating: the original's name, for the heading.
 const copyOf = ref<string | null>(null);
@@ -512,8 +525,10 @@ async function addMethod(): Promise<void> {
 }
 
 function addGrindRow(): void {
-  const next = grinders.value.find((g) => !g.archivedAt && !grindRows.value.some((r) => r.grinderId === g.id));
-  grindRows.value.push({ grinderId: next?.id ?? '', setting: '' });
+  const next = grinders.value.find((g) => usableGrinder(g) && !grindRows.value.some((r) => r.grinderId === g.id));
+  const row = { grinderId: next?.id ?? '', setting: '' };
+  fillGrindFromGrinder(row);
+  grindRows.value.push(row);
 }
 
 // New steps at the end. Pour over: a 30 s bloom first (2-3x the dose in
@@ -855,7 +870,7 @@ async function save(): Promise<void> {
           <label for="default-grinder">Default grinder</label>
           <select id="default-grinder" v-model="defaultGrinderId">
             <option value="">None: use the last grinder</option>
-            <option v-for="g in grinders.filter((x) => !x.archivedAt || x.id === defaultGrinderId)" :key="g.id" :value="g.id">
+            <option v-for="g in defaultGrinderChoices" :key="g.id" :value="g.id">
               {{ g.name }}{{ g.archivedAt ? ' (archived)' : '' }}
             </option>
           </select>
@@ -865,7 +880,7 @@ async function save(): Promise<void> {
           <li v-for="(row, i) in grindRows" :key="i" class="grind-row">
             <div class="field">
               <label :for="`grind-grinder-${i}`" class="visually-hidden">Grinder {{ i + 1 }}</label>
-              <select :id="`grind-grinder-${i}`" v-model="row.grinderId">
+              <select :id="`grind-grinder-${i}`" v-model="row.grinderId" @change="fillGrindFromGrinder(row)">
                 <option value="" disabled>Grinder…</option>
                 <option v-for="g in grinderOptions(i)" :key="g.id" :value="g.id">{{ g.name }}{{ g.archivedAt ? ' (archived)' : '' }}</option>
               </select>

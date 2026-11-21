@@ -953,6 +953,13 @@
       "when": 1795119138223,
       "tag": "0135_step_kettle_pour_note",
       "breakpoints": true
+    },
+    {
+      "idx": 136,
+      "version": "5",
+      "when": 1795227635864,
+      "tag": "0136_grinder_starting_points",
+      "breakpoints": true
     }
   ]
 }

@@ -9,6 +9,7 @@ import { authedUserId, requireAuth } from "../middleware/requireAuth.js";
 import { addUsageRoute, grinderUsage } from "../usage.js";
 import { BURR_TYPES, brewLogs, GRINDER_ADJUSTMENTS, GRINDER_POWER, grinders, type Grinder } from "@barista/shared/schema";
 import { decimalSchema, grindSettingSchema, optionalText, updateSchema } from "../validation.js";
+import { emptyAsNull, startingPointsSchema, unavailableMethodsSchema } from "../grinderStart.js";
 
 // docs/api/grinders.md §3b
 export type GrinderSummary = Omit<Grinder, "workspaceId">;
@@ -40,8 +41,12 @@ const grinderFields = {
   variableSpeed: z.boolean().optional(),
   rpmMin: rpmSchema,
   rpmMax: rpmSchema,
+  startingSetting: settingSchema,
+  startingPoints: startingPointsSchema.nullable().optional(),
+  unavailableMethods: unavailableMethodsSchema.nullable().optional(),
 };
 
+type GrinderBody = { [K in keyof typeof grinderFields]?: z.infer<(typeof grinderFields)[K]> };
 type RangeBody = { settingMin?: number | null; settingMax?: number | null; rpmMin?: number | null; rpmMax?: number | null; variableSpeed?: boolean };
 
 // A range is a pair: both ends (min < max), or null on either clears both.
@@ -62,8 +67,9 @@ function rangeIssue(body: RangeBody, ctx: z.RefinementCtx): void {
   }
 }
 // Clearing either end clears both; a grinder that isn't variable speed has no RPM range.
-function clearRangeTogether<T extends RangeBody>(body: T): T {
-  const out = { ...body };
+// Empty starting-point and method lists are stored as null.
+function clearRangeTogether<T extends RangeBody & Pick<GrinderBody, "startingPoints" | "unavailableMethods">>(body: T): T {
+  const out = { ...body, startingPoints: emptyAsNull(body.startingPoints), unavailableMethods: emptyAsNull(body.unavailableMethods) };
   if (out.settingMin === null || out.settingMax === null) Object.assign(out, { settingMin: null, settingMax: null });
   if (out.rpmMin === null || out.rpmMax === null || out.variableSpeed === false) Object.assign(out, { rpmMin: null, rpmMax: null });
   return out;
@@ -92,6 +98,9 @@ const summary = {
   variableSpeed: grinders.variableSpeed,
   rpmMin: grinders.rpmMin,
   rpmMax: grinders.rpmMax,
+  startingSetting: grinders.startingSetting,
+  startingPoints: grinders.startingPoints,
+  unavailableMethods: grinders.unavailableMethods,
   archivedAt: grinders.archivedAt,
   createdAt: grinders.createdAt,
 };

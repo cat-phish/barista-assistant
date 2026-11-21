@@ -8,6 +8,7 @@ import { brixToTds, DEFAULT_EY_ESPRESSO, DEFAULT_EY_FILTER, expectedBrix, expect
 import { DILUTION_WITH, isColdStyle, STEEP_TEMPS } from '../lib/coldBrew';
 import { formatGrams } from '../lib/format';
 import { grinderRetentionText } from '../lib/grinderRetention';
+import { grinderChoices } from '../lib/grinderStart';
 import { problemsFor, toolsFor } from '../lib/prepTools';
 import { nudgeSpec } from '../lib/nudge';
 import { TEMPERATURE_LABELS, tempText } from '../lib/units';
@@ -215,8 +216,9 @@ watch(
   { immediate: true },
 );
 
-// Active grinders, plus the brew's own even if it's since been archived.
-const grinderOptions = computed(() => props.grinders.filter((g) => !g.archivedAt || g.id === draft.value.grinderId));
+// Active grinders that can grind for the recipe's method, plus the brew's own
+// even if it's since been archived or marked as not for it.
+const grinderOptions = computed(() => grinderChoices(props.grinders, props.methodKind, draft.value.grinderId));
 // Grounds out are what goes into the brew, so they fill in the dose.
 function setGroundOut(event: Event): void {
   const text = (event.target as HTMLInputElement).value;

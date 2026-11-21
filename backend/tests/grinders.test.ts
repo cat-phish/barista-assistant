@@ -60,6 +60,38 @@ describe("grinders", () => {
     expect((await owner.agent.get(`${base}/${used}/usage`)).status).toBe(404);
   });
 
+  it("starting points: general, per method or style; methods it can't do (docs/api/grinders.md §3b)", async () => {
+    const { owner, base } = await setup();
+    const fresh = (await owner.agent.post(base).send({ name: "Fresh" })).body.grinder;
+    expect(fresh).toMatchObject({ startingSetting: null, startingPoints: null, unavailableMethods: null });
+
+    const points = [
+      { method: "espresso", style: null, setting: 8 },
+      { method: "filter", style: "cold_brew", setting: 30.5 },
+    ];
+    const res = await owner.agent.post(base).send({ name: "Niche", startingSetting: 20, startingPoints: points, unavailableMethods: ["stovetop"] });
+    expect(res.status).toBe(201);
+    expect(res.body.grinder).toMatchObject({ startingSetting: 20, startingPoints: points, unavailableMethods: ["stovetop"] });
+    const id = res.body.grinder.id as string;
+
+    // Empty lists are stored as null; a patch leaves fields it doesn't send.
+    const cleared = await owner.agent.patch(`${base}/${id}`).send({ startingPoints: [], unavailableMethods: [] });
+    expect(cleared.body.grinder).toMatchObject({ startingSetting: 20, startingPoints: null, unavailableMethods: null });
+
+    for (const bad of [
+      { startingPoints: [{ method: "espresso", style: "cold_brew", setting: 8 }] }, // not an espresso style
+      { startingPoints: [{ method: "filter", style: "other", setting: 8 }] }, // "other" is the method's row
+      { startingPoints: [{ method: "espresso", style: null, setting: 8 }, { method: "espresso", style: null, setting: 9 }] }, // twice
+      { startingPoints: [{ method: "espresso", style: null, setting: -1 }] },
+      { startingPoints: [{ method: "espresso", style: null }] },
+      { unavailableMethods: ["espresso", "espresso"] },
+      { unavailableMethods: ["siphon"] },
+      { startingSetting: 10000 },
+    ]) {
+      expect((await owner.agent.patch(`${base}/${id}`).send(bad)).status, JSON.stringify(bad)).toBe(400);
+    }
+  });
+
   it("viewers read only; outsiders get 404", async () => {
     const { owner, ws, base, grinder } = await setup();
     const id = await grinder("Shared");

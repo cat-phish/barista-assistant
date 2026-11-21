@@ -53,6 +53,7 @@ import {
 } from '../lib/brewChoice';
 import type { Brewer, BrewProblem, Drink, DrinkCategory, Grinder, Guest, Mark, MethodKind, PrepTool, RememberKey, ServingUnit, Vessel, WaterProfile } from '../api/types';
 import { METHOD_KINDS } from '../lib/equipment';
+import { grinderCanDo, grinderChoices, grinderStartingPoint, startPointLabel } from '../lib/grinderStart';
 import { convertSize, defaultSize, formatSize, SERVING_UNITS, sizeFactor, type Size } from '../lib/servings';
 import AppHeader from '../components/AppHeader.vue';
 import BrewFields from '../components/BrewFields.vue';
@@ -634,8 +635,19 @@ const grindNote = computed(() => {
 
 // Grinders: pick from active ones, add inline, remember the last one per workspace.
 const NEW_GRINDER = '__new__';
-const activeGrinders = computed(() => grinders.value.filter((x) => !x.archivedAt));
+// The method being brewed: the recipe's brewer's, else the chosen coffee's.
+// Grinders that can't grind for it are left out (docs/api/grinders.md §3b).
+const brewKind = computed<MethodKind | null>(() => recipe.value?.brewer.kind ?? itemKind.value);
+const activeGrinders = computed(() => grinders.value.filter((x) => !x.archivedAt && grinderCanDo(x, brewKind.value)));
+// The picker also keeps the grinder already chosen (a repeat's, say).
+const grinderPicks = computed(() => grinderChoices(grinders.value, brewKind.value, draft.grinderId));
 const grinder = computed(() => grinders.value.find((x) => x.id === draft.grinderId) ?? null);
+// A grinder picked earlier that can't do the new method is let go, unless
+// it's the grinder of the brew being repeated.
+watch(brewKind, (kind) => {
+  const g = grinder.value;
+  if (g && !grinderCanDo(g, kind) && repeatGrind.value?.grinderId !== g.id) draft.grinderId = '';
+});
 // The last brew's choices, remembered per workspace on this device; which
 // ones is up to the person (Settings → Brew setup, lib/rememberSetup.ts).
 const savedKey = (what: Remembered) => `brewlog.${what}.${workspaces.current?.id ?? ''}`;
@@ -724,7 +736,15 @@ async function refreshGrind(): Promise<void> {
     grindSource.value = 'proposal';
     return;
   }
-  const choice = chooseGrind({ lastSetting: remembering('grind') ? (last?.grindSetting ?? null) : null, suggestion: usedSuggestion.value, grinderId, recipe: recipe.value });
+  const choice = chooseGrind({
+    lastSetting: remembering('grind') ? (last?.grindSetting ?? null) : null,
+    suggestion: usedSuggestion.value,
+    grinderId,
+    recipe: recipe.value,
+    grinder: grinder.value,
+    kind: brewKind.value,
+    style: recipe.value?.style?.brewsLike ?? null,
+  });
   draft.grind = choice.value;
   grindSource.value = choice.source;
   // The speed goes with the setting it came with (variable-speed grinders).
@@ -733,6 +753,12 @@ async function refreshGrind(): Promise<void> {
 }
 watch([recipeId, () => draft.grinderId], () => {
   if (draft.grinderId !== NEW_GRINDER) void refreshGrind();
+});
+// What the grinder's starting point was for: "cold brew", "espresso", "every method".
+const grinderStartFor = computed(() => {
+  const g = grinder.value;
+  const start = g ? grinderStartingPoint(g, brewKind.value, recipe.value?.style?.brewsLike ?? null) : null;
+  return startPointLabel(start?.point ?? null);
 });
 const grindPlaceholder = computed(() =>
   'e.g. 20',
@@ -1592,7 +1618,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           </label>
           <select id="grinder" v-model="draft.grinderId" @change="onGrinderChange">
             <option value="">No grinder</option>
-            <option v-for="g in activeGrinders" :key="g.id" :value="g.id">{{ g.name }}</option>
+            <option v-for="g in grinderPicks" :key="g.id" :value="g.id">{{ g.name }}{{ g.archivedAt ? ' (archived)' : '' }}</option>
             <option v-if="workspaces.canEdit" :value="NEW_GRINDER">+ Add a new grinder…</option>
           </select>
         </div>
@@ -1818,6 +1844,9 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
           <p v-else-if="grindSource === 'proposal'" class="muted small grind-hint">The grind proposed in AI chat for {{ grinder?.name }}. Adjust as you dial in.</p>
           <p v-else-if="grindSource === 'recipe'" class="muted small grind-hint">
             The recipe's approximate starting point for {{ grinder?.name }}. Adjust to taste; next time your own setting is used.
+          </p>
+          <p v-else-if="grindSource === 'grinder'" class="muted small grind-hint">
+            {{ grinder?.name }}'s starting point for {{ grinderStartFor }}. Adjust to taste; next time your own setting is used.
           </p>
         </template>
         <div v-if="grinder?.variableSpeed && show('brew.rpm')" class="field">

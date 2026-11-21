@@ -420,6 +420,13 @@ export const PROFILE_CONTROLS = ["none", "manual", "programmable"] as const;
 export type GrinderAdjustment = (typeof GRINDER_ADJUSTMENTS)[number];
 export type BurrType = (typeof BURR_TYPES)[number];
 export type GrinderPower = (typeof GRINDER_POWER)[number];
+// A grinder's starting point for a method (style null = all its styles) or
+// one of that method's styles (never "other").
+export interface GrinderStartingPoint {
+  method: MethodKind;
+  style: RecipeStyle | null;
+  setting: number;
+}
 export type Preinfusion = (typeof PREINFUSION_MODES)[number];
 export type ProfileControl = (typeof PROFILE_CONTROLS)[number];
 
@@ -549,6 +556,14 @@ export const grinders = mysqlTable(
     variableSpeed: boolean("variable_speed").default(false).notNull(),
     rpmMin: int("rpm_min"),
     rpmMax: int("rpm_max"),
+    // Starting points (docs/api/grinders.md §3b, "Starting points"): what a
+    // recipe's grind for this grinder is pre-filled with. A style's row wins
+    // over its method's, which wins over startingSetting. Recipes keep their
+    // own (recipeGrindSettings); these only fill them in.
+    startingSetting: decimal("starting_setting", { precision: 6, scale: 2, mode: "number" }),
+    startingPoints: jsonValue<GrinderStartingPoint[] | null>("starting_points"),
+    // Methods it can't grind for: hidden from those methods' grinder pickers.
+    unavailableMethods: jsonValue<MethodKind[] | null>("unavailable_methods"),
     archivedAt: timestamp("archived_at"), // null = active
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },

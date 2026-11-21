@@ -630,8 +630,9 @@ Building recipes: their steps, timings, target window and yield.
 
 ### 10. Grinder starting points and methods it can't do: review and merge
 
-- **Status:** in progress (built on branch `grinder-starting-points`,
-  commit `1d4ab02`, migration 0121; not merged into `dev`)
+- **Status:** done (branch `grinder-starting-points`, merged into `dev`
+  2026-11-20, migration 0136; roadmap: "Grinder starting points and
+  methods it can't do"). The open questions below stay for a follow-up.
 - **Why:** a recipe's grind starting point was typed by hand for every
   recipe and grinder, and every grinder showed in every picker, an
   espresso-only one included.
@@ -1021,8 +1022,7 @@ What the analysis worker sends to the LLM and what comes back.
 
 ### 22. Step changes in a recipe (cold bloom, staged temperatures)
 
-- **Status:** done on branch `experiment-cards` (not merged); move to
-  `roadmap.md` once it is. Decided approach: experiment cards in the AI
+- **Status:** done (branch `experiment-cards`, merged into `dev`). Decided approach: experiment cards in the AI
   chat. A `recipeChange` or `newRecipe` proposal carries `experiment: true`
   and the card shows an "Experiment" badge; the chat prompt gets the
   experiment research findings as ideas (`CHAT_EXPERIMENTS`). No new brew

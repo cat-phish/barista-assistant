@@ -121,6 +121,17 @@ describe('chooseGrind', () => {
     expect(chooseGrind({ lastSetting: null, suggestion: null, grinderId: 'ode', recipe })).toEqual({ value: '', source: 'none' });
     expect(chooseGrind({ lastSetting: null, suggestion: null, grinderId: '', recipe })).toEqual({ value: '', source: 'none' });
   });
+  it("falls back to the grinder's own starting point: its style's, its method's, then its general one", () => {
+    const grinder = { startingSetting: 20, startingPoints: [{ method: 'espresso' as const, style: null, setting: 8 }, { method: 'filter' as const, style: 'cold_brew' as const, setting: 30 }] };
+    const pick = (kind: 'filter' | 'espresso', style: 'cold_brew' | 'pour_over' | 'standard' | null) =>
+      chooseGrind({ lastSetting: null, suggestion: null, grinderId: 'ode', recipe, grinder, kind, style });
+    expect(pick('filter', 'cold_brew')).toEqual({ value: '30', source: 'grinder' });
+    expect(pick('filter', 'pour_over')).toEqual({ value: '20', source: 'grinder' });
+    expect(pick('espresso', 'standard')).toEqual({ value: '8', source: 'grinder' });
+    // The recipe's own starting point for the grinder comes first.
+    expect(chooseGrind({ lastSetting: null, suggestion: null, grinderId: 'c40', recipe, grinder, kind: 'filter', style: null })).toEqual({ value: '19', source: 'recipe' });
+    expect(chooseGrind({ lastSetting: null, suggestion: null, grinderId: 'ode', recipe, grinder: { startingSetting: null, startingPoints: null }, kind: 'filter', style: null }).source).toBe('none');
+  });
   it('keeps a setting of 0 and decimals', () => {
     expect(chooseGrind({ lastSetting: 0, suggestion: null, grinderId: 'c40' })).toEqual({ value: '0', source: 'last' });
     expect(chooseGrind({ lastSetting: 4.25, suggestion: null, grinderId: 'c40' }).value).toBe('4.25');

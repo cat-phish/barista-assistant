@@ -1,8 +1,9 @@
 // AI suggestions as the app shows them: an analysis's changes (AnalysisCard,
 // docs/api/analysis.md §8), and "Suggest parameters"' starting values for the
 // brew being set up (§8b).
-import { SUGGEST_SOURCES, type AlternativeKind, type GrindDelta, type ParameterSuggestion, type Recipe, type SuggestedAlternative, type SuggestedRoute, type SuggestSource } from '../api/types';
+import { SUGGEST_SOURCES, type AlternativeKind, type GrindDelta, type Grinder, type MethodKind, type ParameterSuggestion, type Recipe, type RecipeStyle, type SuggestedAlternative, type SuggestedRoute, type SuggestSource } from '../api/types';
 import { formatGrind } from './format';
+import { grinderStartingPoint } from './grinderStart';
 import type { ScaleField } from './scale';
 
 export const GRIND_LABELS: Record<GrindDelta, string> = {
@@ -149,24 +150,31 @@ export function suggestionFitsGrinder(p: StartingParameters, grinderId: string):
 }
 
 // 'repeat': taken from the brew being repeated (lib/repeatBrew.ts).
-export type GrindSource = 'last' | 'suggestion' | 'recipe' | 'repeat' | 'proposal' | 'none';
+// 'grinder': the grinder's own starting point (docs/api/grinders.md §3b).
+export type GrindSource = 'last' | 'suggestion' | 'recipe' | 'grinder' | 'repeat' | 'proposal' | 'none';
 
 // What to pre-fill the grind setting with when starting a brew:
 //   1. the suggested setting, when it was asked for this grinder,
 //   2. else the last setting used with this grinder and recipe,
 //   3. else the recipe's approximate starting point for this grinder,
-//   4. else nothing.
+//   4. else the grinder's starting point for the recipe's style or method,
+//   5. else nothing.
 // value is the text for the grind box.
 export function chooseGrind(opts: {
   lastSetting: number | null;
   suggestion: StartingParameters | null;
   grinderId: string;
   recipe?: Pick<Recipe, 'grindSettings'> | null;
+  grinder?: Pick<Grinder, 'startingSetting' | 'startingPoints'> | null;
+  kind?: MethodKind | null;
+  style?: RecipeStyle | null;
 }): { value: string; source: GrindSource } {
   const s = opts.suggestion;
   if (s && s.grindSetting !== null && opts.grinderId && suggestionFitsGrinder(s, opts.grinderId)) return { value: formatGrind(s.grindSetting), source: 'suggestion' };
   if (opts.lastSetting !== null) return { value: formatGrind(opts.lastSetting), source: 'last' };
   const start = opts.grinderId ? opts.recipe?.grindSettings.find((g) => g.grinderId === opts.grinderId) : undefined;
   if (start) return { value: formatGrind(start.setting), source: 'recipe' };
+  const own = opts.grinderId && opts.grinder ? grinderStartingPoint(opts.grinder, opts.kind ?? null, opts.style ?? null) : null;
+  if (own) return { value: formatGrind(own.setting), source: 'grinder' };
   return { value: '', source: 'none' };
 }
