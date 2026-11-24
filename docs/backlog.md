@@ -267,6 +267,13 @@ Recording a brew: what's measured, and how fast it is to log.
   - Plain arithmetic in the client; no AI.
 - **Size:** M
 - **Depends on:** nothing (water profiles are built).
+- **Open questions:**
+  - Making water from scratch, blending (tap with distilled 1:3), or both?
+  - Which minerals and concentrates to offer, and can people add their own
+    (ppm added per gram per litre)?
+  - Where it lives: Bar setup → Water, or as a note's calculator (notes
+    have calculators with inputs and formulas, see the roadmap)? A note
+    can already hold a fixed recipe; the open part is targets and minerals.
 
 ### 9. Bluetooth scales
 
@@ -281,6 +288,26 @@ Recording a brew: what's measured, and how fast it is to log.
     there) and Firefox have none; iOS is 44. Pairing opens the browser's
     device chooser and has to start from a tap; a scale granted before
     reconnects without it where the browser allows (`getDevices()`).
+  - **Reconnecting:** keep the `BluetoothDevice` from pairing for the
+    session; after a dropout (scale sleeps, out of range, turned off and
+    on) reconnect with `device.gatt.connect()` automatically, no tap. The
+    SPA keeps it across routes; a reload or the app being closed loses
+    it. On start, try `getDevices()` + `watchAdvertisements()` silently
+    and fall back to a one-tap **Connect scale** showing the remembered
+    scale's name. Last known (re-check when starting): `getDevices()` is behind
+    `chrome://flags/#enable-web-bluetooth-new-permissions-backend`, not
+    on by default on Android, so expect one tap per app launch.
+  - Web Bluetooth only works while the page is in the foreground; no
+    background logging.
+  - **Target device:** a 2019 Galaxy Tab A (SM-T290/T510 class) works:
+    BLE 4.2/5.0, Chrome on Android 11 (it must be updated from 9; Chrome
+    no longer supports 8/9), Wake Lock (Chrome 84+). Use Chrome, not
+    Firefox (no Web Bluetooth) or Samsung Internet (untested). It's slow
+    (2–3 GB RAM): weight notifications come at ~5–10 Hz, so buffer them
+    and redraw the live chart once per `requestAnimationFrame`, not per
+    notification. Low RAM also means Android may kill the PWA in the
+    background, which costs a reconnect tap. Android 11 will lose Chrome
+    support eventually; after that the tablet stops getting web features.
   - One adapter per brand behind a common interface (connect, weight
     updates, tare, start/stop the scale's own timer, disconnect). Each
     brand has its own, mostly undocumented, protocol (some drop the
@@ -304,13 +331,6 @@ Recording a brew: what's measured, and how fast it is to log.
   - Write adapters from published protocol notes and our own captures
     rather than copied code, so nothing blocks an App Store build (44,
     licensing).
-- **Open questions:**
-  - Making water from scratch, blending (tap with distilled 1:3), or both?
-  - Which minerals and concentrates to offer, and can people add their own
-    (ppm added per gram per litre)?
-  - Where it lives: Bar setup → Water, or as a note's calculator (notes
-    have calculators with inputs and formulas, see the roadmap)? A note
-    can already hold a fixed recipe; the open part is targets and minerals.
 
 ### 59. Repeat brews: the recipe's numbers or the ones logged
 
