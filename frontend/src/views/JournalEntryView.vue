@@ -372,47 +372,6 @@ const markRows = computed(() => {
         </div>
       </div>
 
-      <!-- Quick rating for a brew saved without one -->
-      <form v-if="!editing && unrated && canModify" class="card stack quick-rate" novalidate @submit.prevent="saveRating">
-        <h2>Rate this brew</h2>
-        <fieldset v-if="drinkTasting" class="tasting">
-          <legend>The brew <span class="muted">(if you tasted it on its own)</span></legend>
-          <RatingInput v-model="quick.rating" name="quick-rating" label="Brew rating" />
-          <FlavorWheel v-if="show('brew.flavors') || quick.flavors.length" v-model="quick.flavors" :saved="log.flavors" label="Brew flavors" />
-          <div class="field">
-            <label for="quick-notes">Brew notes</label>
-            <textarea id="quick-notes" v-model="quick.notes" rows="2" maxlength="5000" />
-          </div>
-        </fieldset>
-        <template v-else>
-          <RatingInput v-model="quick.rating" name="quick-rating" label="Rating" />
-          <FlavorWheel v-if="show('brew.flavors') || quick.flavors.length" v-model="quick.flavors" :saved="log.flavors" />
-          <div class="field">
-            <label for="quick-notes">Tasting notes</label>
-            <textarea id="quick-notes" v-model="quick.notes" rows="3" maxlength="5000" placeholder="e.g. Sweet, round, a bit flat at the end" />
-          </div>
-        </template>
-        <fieldset v-if="drinkTasting" class="tasting">
-          <legend>The drink</legend>
-          <RatingInput v-model="quick.drinkRating" name="quick-drink-rating" label="Drink rating" />
-          <div class="field">
-            <label for="quick-drink-notes">Drink notes</label>
-            <textarea id="quick-drink-notes" v-model="quick.drinkNotes" rows="2" maxlength="5000" />
-          </div>
-        </fieldset>
-        <p v-if="rateError" class="form-error" role="alert">{{ rateError }}</p>
-        <button class="btn btn-primary" type="submit" :disabled="rating || (quick.rating === null && quick.drinkRating === null)">
-          {{ rating ? 'Saving…' : 'Save rating' }}
-        </button>
-      </form>
-      <section v-else-if="justRated && !analysis && workspaces.canEdit && aiAvailable" class="card stack">
-        <p v-if="log.analysisDueAt">Rated, thanks. Your AI suggestion for next time is on its way.</p>
-        <template v-else>
-          <p>Rated, thanks. Want an AI suggestion for next time?</p>
-          <button v-if="aiState !== 'waiting'" class="btn btn-primary" type="button" @click="analyze(); justRated = false">Get AI suggestion</button>
-        </template>
-      </section>
-
       <!-- Details -->
       <section v-if="!editing" class="card stack">
         <dl class="details">
@@ -480,6 +439,47 @@ const markRows = computed(() => {
           <button class="btn btn-primary" type="submit" :disabled="saving">{{ saving ? 'Saving…' : finishing ? 'Finish brew' : 'Save changes' }}</button>
         </div>
       </form>
+
+      <!-- Quick rating for a brew saved without one -->
+      <form v-if="!editing && unrated && canModify" class="card stack quick-rate" novalidate @submit.prevent="saveRating">
+        <h2>Rate this brew</h2>
+        <fieldset v-if="drinkTasting" class="tasting">
+          <legend>The brew <span class="muted">(if you tasted it on its own)</span></legend>
+          <RatingInput v-model="quick.rating" name="quick-rating" label="Brew rating" />
+          <FlavorWheel v-if="show('brew.flavors') || quick.flavors.length" v-model="quick.flavors" :saved="log.flavors" label="Brew flavors" />
+          <div class="field">
+            <label for="quick-notes">Brew notes</label>
+            <textarea id="quick-notes" v-model="quick.notes" rows="2" maxlength="5000" />
+          </div>
+        </fieldset>
+        <template v-else>
+          <RatingInput v-model="quick.rating" name="quick-rating" label="Rating" />
+          <FlavorWheel v-if="show('brew.flavors') || quick.flavors.length" v-model="quick.flavors" :saved="log.flavors" />
+          <div class="field">
+            <label for="quick-notes">Tasting notes</label>
+            <textarea id="quick-notes" v-model="quick.notes" rows="3" maxlength="5000" placeholder="e.g. Sweet, round, a bit flat at the end" />
+          </div>
+        </template>
+        <fieldset v-if="drinkTasting" class="tasting">
+          <legend>The drink</legend>
+          <RatingInput v-model="quick.drinkRating" name="quick-drink-rating" label="Drink rating" />
+          <div class="field">
+            <label for="quick-drink-notes">Drink notes</label>
+            <textarea id="quick-drink-notes" v-model="quick.drinkNotes" rows="2" maxlength="5000" />
+          </div>
+        </fieldset>
+        <p v-if="rateError" class="form-error" role="alert">{{ rateError }}</p>
+        <button class="btn btn-primary" type="submit" :disabled="rating || (quick.rating === null && quick.drinkRating === null)">
+          {{ rating ? 'Saving…' : 'Save rating' }}
+        </button>
+      </form>
+      <section v-else-if="justRated && !analysis && workspaces.canEdit && aiAvailable" class="card stack">
+        <p v-if="log.analysisDueAt">Rated, thanks. Your AI suggestion for next time is on its way.</p>
+        <template v-else>
+          <p>Rated, thanks. Want an AI suggestion for next time?</p>
+          <button v-if="aiState !== 'waiting'" class="btn btn-primary" type="button" @click="analyze(); justRated = false">Get AI suggestion</button>
+        </template>
+      </section>
 
       <BatchServings v-if="isBatch && !log.steeping && !editing" :log="log" :can-modify-batch="canModify" :yield-estimate="batchEstimate" :start-serving="route.query.serve === '1'" :guests="guests" @updated="(l) => (log = l)" />
 
