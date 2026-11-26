@@ -1007,10 +1007,8 @@ async function save(): Promise<void> {
                 <label :for="`step-water-${i}`">
                   Pour to (g)<span v-if="stepRules(step.stepType, kind).water === 'required'" class="req" aria-hidden="true">*</span>
                 </label>
-                <div class="pour-row">
-                  <input :id="`step-water-${i}`" :aria-required="stepRules(step.stepType, kind).water === 'required'" v-model="step.water" inputmode="decimal" />
-                  <span v-if="amounts[i] != null" class="amount" :aria-label="`adds ${amounts[i]} grams`">+{{ formatGrams(amounts[i]!) }} g</span>
-                </div>
+                <input :id="`step-water-${i}`" :aria-required="stepRules(step.stepType, kind).water === 'required'" v-model="step.water" inputmode="decimal" />
+                <p v-if="amounts[i] != null" class="amount" :aria-label="`adds ${amounts[i]} grams`">+{{ formatGrams(amounts[i]!) }} g</p>
               </div>
               <template v-if="stepRules(step.stepType, kind).pressure !== 'none'">
                 <div class="field">
@@ -1359,16 +1357,9 @@ p {
 .pour-to {
   grid-column: 1 / -1;
 }
-.pour-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.pour-row input {
-  flex: 1;
-}
 .amount {
-  flex-shrink: 0;
+  margin: 0;
+  font-size: 0.85rem;
   font-weight: 600;
   color: var(--brand);
   font-variant-numeric: tabular-nums;
