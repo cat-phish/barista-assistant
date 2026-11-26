@@ -3094,3 +3094,28 @@ as a Suggest output. Contract: `api/chat.md` §12, `api/llm-contract.md`
   (`docs/research/cold-bloom-low-temp.md`, `agitation-pour-structure.md`).
 - **No new brew fields:** per-step values on a brew stay limited to
   `stepTempShiftC`.
+
+## Repeat brews restore the targets (built)
+
+Branch `feature/repeat-targets`, migration 0138 (backlog item 59). With
+Repeat brews copying dose and water, a repeat started from what the last brew
+logged, so a 252 g pour for a 250 g target was copied, overshot again, and
+crept up. Contract: `api/brew-logs.md` §6, `api/auth.md` §1 repeatKeeps
+`doseWater`, `api/llm-contract.md` §9.
+
+- **Targets on the brew:** `brew_logs` gains `target_dose_grams`,
+  `target_water_grams` and `target_ice_grams`, saved from the batch the
+  recipe or scale slider set (espresso: the shot's dose only). The actuals
+  stay the record of what went in.
+- **Repeats use the targets:** `repeatAmounts` (`lib/repeatBrew.ts`); an
+  older brew without targets falls back to the actuals.
+- **No recipe:** no batch to aim from, so a repeat's filled-in amounts are
+  saved as the target, whatever is typed over them (else the typed ones).
+  A deliberate change on a no-recipe repeat is kept as the actual, not the
+  target; a brew started without Repeat sets a new one (targets have no
+  edit field).
+- **Chosen over a tolerance snap or a per-recipe setting:** a repeat always
+  restores what that brew aimed for; no new setting.
+- **The AI sees both, always** (not switchable): the `targets` prompt
+  section says a gap is an overshoot, not a new plan, and to suggest going
+  over as the new target when it tasted better.

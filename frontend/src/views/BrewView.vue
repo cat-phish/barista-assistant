@@ -17,7 +17,7 @@ import AiRequestDialog from '../components/AiRequestDialog.vue';
 import RepeatBrewPicker from '../components/RepeatBrewPicker.vue';
 import FridgeCard from '../components/FridgeCard.vue';
 import RecapBanner from '../components/RecapBanner.vue';
-import { repeatLabel, repeatMissing, repeatPlan } from '../lib/repeatBrew';
+import { type Amounts, brewTargets, repeatAmounts, repeatLabel, repeatMissing, repeatPlan } from '../lib/repeatBrew';
 import { rememberedSize, rememberedTools, rememberKeyFor, stillActive, storedSize, storedTools, type Remembered } from '../lib/rememberSetup';
 import { grindersApi } from '../api/grinders';
 import { vesselsApi } from '../api/vessels';
@@ -1102,6 +1102,12 @@ function windowValues(): Pick<BrewLogInput, 'steepMinHours' | 'steepMaxHours' | 
   return { expectedFinishMinSec: timerFinish.value.min, expectedFinishMaxSec: timerFinish.value.max };
 }
 
+// No recipe: what a repeat filled in, or else what was typed (brewTargets).
+function plainTarget(values: Pick<BrewLogInput, 'actualDoseGrams' | 'actualWaterGrams' | 'actualIceGrams'>): Amounts | null {
+  if (recipe.value) return null;
+  return repeatFrom.value?.target ?? { dose: values.actualDoseGrams, water: values.actualWaterGrams, ice: values.actualIceGrams };
+}
+
 async function startSteep(): Promise<void> {
   submitted.value = true;
   if (windowError.value.steep) return;
@@ -1121,6 +1127,7 @@ async function startSteep(): Promise<void> {
       servingUnit: drink.value ? (madeSize.value?.unit ?? null) : null,
       utcOffsetMinutes: -new Date().getTimezoneOffset(),
       ...values,
+      ...brewTargets(batch.value, shot.value, plainTarget(values)),
       ...windowValues(),
       ...suggestionLink(),
       steeping: true,
@@ -1272,6 +1279,7 @@ async function save(): Promise<void> {
       // So the AI dates the brew by this device's calendar day, like freeze dates.
       utcOffsetMinutes: -new Date().getTimezoneOffset(),
       ...values,
+      ...brewTargets(batch.value, shot.value, plainTarget(values)), // what it aimed for; a repeat restores it
       stepTempShiftC: brewTempShift.value,
       ...windowValues(),
       ...suggestionLink(),
@@ -1386,7 +1394,9 @@ async function applyProposal(p: ChatBrewProposal): Promise<void> {
 // (docs/api/brew-logs.md, GET …/repeats), grouped as Settings → Brew setup says.
 const quickRepeats = ref<BrewLog[]>([]);
 const pickerOpen = ref(false);
-const repeatFrom = ref<{ log: BrewLog; missing: string[] } | null>(null);
+// target: a no-recipe repeat's filled-in amounts, saved as the new brew's
+// target (brewTargets), whatever is typed over them.
+const repeatFrom = ref<{ log: BrewLog; missing: string[]; target?: Amounts } | null>(null);
 const repeatError = ref('');
 // The repeated brew's notes, shown on the log form when you keep them as a reminder.
 const repeatNotes = computed(
@@ -1447,21 +1457,24 @@ async function applyRepeat(log: BrewLog): Promise<void> {
   } else startSize();
   // Filter: the brew's dose, water and ice (so the ratio and the ice are the
   // ones it had); espresso: its dose, with the shot weight at the recipe's ratio.
+  // The ones it aimed for, not what was poured (repeatAmounts).
+  const amounts = repeatAmounts(log);
   if (!kept.has('doseWater')) {
     resetBatch();
     sizeToBatch();
-  } else if (filterRecipe.value && log.actualWaterGrams !== null) {
-    const r = ratioWater(log.actualWaterGrams, log.actualIceGrams) / log.actualDoseGrams;
-    lead.value = { field: 'dose', text: formatGrams(log.actualDoseGrams) };
+  } else if (filterRecipe.value && amounts.water !== null) {
+    const r = ratioWater(amounts.water, amounts.ice) / amounts.dose;
+    lead.value = { field: 'dose', text: formatGrams(amounts.dose) };
     ratio.value = { text: formatRatio(r), value: r };
-    share.value = waterShare(log.actualWaterGrams, log.actualIceGrams);
+    share.value = waterShare(amounts.water, amounts.ice);
   } else if (shotRecipe.value) {
-    lead.value = { field: 'dose', text: formatGrams(log.actualDoseGrams) };
+    lead.value = { field: 'dose', text: formatGrams(amounts.dose) };
     ratio.value = null;
   } else {
-    draft.dose = formatGrams(log.actualDoseGrams);
-    draft.water = log.actualWaterGrams === null ? '' : formatGrams(log.actualWaterGrams);
-    draft.ice = log.actualIceGrams === null ? '' : formatGrams(log.actualIceGrams);
+    draft.dose = formatGrams(amounts.dose);
+    draft.water = amounts.water === null ? '' : formatGrams(amounts.water);
+    draft.ice = amounts.ice === null ? '' : formatGrams(amounts.ice);
+    if (repeatFrom.value) repeatFrom.value.target = amounts;
   }
   draft.temp = tempText(kept.has('temp') ? log.actualTempC : (recipe.value?.targetTempC ?? null), temperatureUnit.value);
   stepTempsFollow.value = kept.has('temp') ? log.stepTempShiftC !== null : (recipe.value?.stepTempsFollowBrew ?? false);

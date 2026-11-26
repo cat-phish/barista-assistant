@@ -235,7 +235,9 @@ clients convert what they show and what's typed (roadmap: Units and defaults).
     recipe, as for a new brew (what you're making and the brewer still come
     from the brew);
   - `size`: the drink size;
-  - `doseWater`: dose and water, and a flash chilled brew's ice;
+  - `doseWater`: dose and water, and a flash chilled brew's ice: the ones
+    it aimed for (`targetDoseGrams` …, `brew-logs.md` §6), so an overshoot
+    isn't copied, or what was logged on a brew without targets;
   - `temp`;
   - `grinder`;
   - `grind`: the setting and RPM, on the same grinder;

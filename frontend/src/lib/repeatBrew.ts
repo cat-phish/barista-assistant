@@ -7,6 +7,7 @@ import type { FieldKey } from './fields';
 import { batchSuffix } from './beans';
 import { encodeCategory, encodeDrink, encodeMethod, encodePlain, methodKey, NO_RECIPE } from './brewChoice';
 import { formatAdded } from './format';
+import type { Batch, Shot } from './scale';
 
 // What a repeat can copy besides what → brewer and the prep checklist,
 // which it always takes (Settings → Brew setup, docs/api/auth.md §1 repeatKeeps).
@@ -15,7 +16,7 @@ export const REPEAT_OPTIONS: Array<{ key: RepeatKeep; label: string; hint?: stri
   { key: 'bean', label: 'Bean', hint: 'The next bag of the same coffee if that one’s archived. Off: the bean setup starts with' },
   { key: 'recipe', label: 'Recipe', hint: 'Off: the brewer’s last recipe, as for a new brew' },
   { key: 'size', label: 'Drink size', hint: 'Off: the drink’s default size' },
-  { key: 'doseWater', label: 'Dose, water and ice', hint: 'Off: the recipe’s. Espresso keeps the recipe’s ratio either way' },
+  { key: 'doseWater', label: 'Dose, water and ice', hint: 'The amounts it aimed for, not what was poured. Off: the recipe’s. Espresso keeps the recipe’s ratio either way' },
   { key: 'temp', label: 'Water temperature', hint: 'Off: the recipe’s' },
   { key: 'grinder', label: 'Grinder', hint: 'Off: your last grinder, or the recipe’s default' },
   { key: 'grind', label: 'Grind setting and speed', hint: 'On the same grinder. Off: your last setting with it, as usual' },
@@ -174,4 +175,36 @@ export function repeatLabel(log: BrewLog, now: Date = new Date()): { made: strin
     bean: `${log.bean.beanName}${batchSuffix(log.bean)}`,
     when: formatAdded(log.timestamp, now),
   };
+}
+
+// What a brew aimed for, saved with it (docs/api/brew-logs.md §6): the batch
+// the recipe or scale slider set (filter), or the shot's dose (espresso),
+// before any overshoot. Without a recipe, `plain`: the amounts a repeat
+// filled in (the earlier brew's target, so a 252 g pour doesn't become the
+// next aim), else the ones typed. null `plain`: nothing to aim from.
+export interface Amounts {
+  dose: number | null;
+  water: number | null;
+  ice: number | null;
+}
+export function brewTargets(
+  batch: Batch | null,
+  shot: Shot | null,
+  plain: Amounts | null = null,
+): { targetDoseGrams: number | null; targetWaterGrams: number | null; targetIceGrams: number | null } {
+  if (batch) return { targetDoseGrams: batch.dose, targetWaterGrams: batch.water, targetIceGrams: batch.ice };
+  if (shot) return { targetDoseGrams: shot.dose, targetWaterGrams: null, targetIceGrams: null };
+  if (plain && plain.dose !== null) return { targetDoseGrams: plain.dose, targetWaterGrams: plain.water, targetIceGrams: plain.ice };
+  return { targetDoseGrams: null, targetWaterGrams: null, targetIceGrams: null };
+}
+
+// The dose, water and ice a repeat starts from (repeatKeeps doseWater,
+// docs/api/auth.md §1): the brew's targets, so a 252 g pour for a 250 g
+// target isn't copied and overshot again. Brews saved before targets were
+// (or with no recipe) fall back to what was logged.
+export function repeatAmounts(
+  log: Pick<BrewLog, 'actualDoseGrams' | 'actualWaterGrams' | 'actualIceGrams' | 'targetDoseGrams' | 'targetWaterGrams' | 'targetIceGrams'>,
+): { dose: number; water: number | null; ice: number | null } {
+  if (log.targetDoseGrams !== null) return { dose: log.targetDoseGrams, water: log.targetWaterGrams, ice: log.targetIceGrams };
+  return { dose: log.actualDoseGrams, water: log.actualWaterGrams, ice: log.actualIceGrams };
 }

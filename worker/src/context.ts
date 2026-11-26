@@ -100,6 +100,12 @@ export interface BrewSummary {
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso
   actualIceGrams: number | null; // flash chilled: ice in the server the hot water was brewed onto
+  // What it aimed for, before any overshoot (docs/api/brew-logs.md §6); null
+  // on older brews. Always sent: target vs actual is how
+  // the AI sees a pour that went over and how it rated (llm-contract.md §9).
+  targetDoseGrams: number | null;
+  targetWaterGrams: number | null; // null for espresso
+  targetIceGrams: number | null;
   actualYieldGrams: number | null; // measured beverage weight (shot weight for espresso; with the ice for flash chilled)
   brewRatio: number | null; // (water + ice) / dose; for espresso yield / dose
   tdsPercent: number | null; // refractometer reading
@@ -269,6 +275,9 @@ export function summarize(
     actualDoseGrams: brew.actualDoseGrams,
     actualWaterGrams: brew.actualWaterGrams,
     actualIceGrams: brew.actualIceGrams,
+    targetDoseGrams: brew.targetDoseGrams,
+    targetWaterGrams: brew.targetWaterGrams,
+    targetIceGrams: brew.targetIceGrams,
     actualYieldGrams: brew.actualYieldGrams,
     brewRatio: ratio(brew),
     tdsPercent: brew.tdsPercent,

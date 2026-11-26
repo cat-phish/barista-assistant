@@ -3,7 +3,7 @@ import type { Bean, BrewLog, Brewer, Drink, Grinder, Guest, Recipe, WaterProfile
 import { DEFAULT_PREFERENCES } from '../composables/usePreferences';
 import { FIELDS } from './fields';
 import type { RepeatButtonGroup, RepeatKeep } from '../api/types';
-import { REPEAT_FOR_FIELD, REPEAT_GROUP_OPTIONS, REPEAT_OPTIONS, repeatLabel, repeatMissing, repeatPlan, type RepeatSources } from './repeatBrew';
+import { brewTargets, REPEAT_FOR_FIELD, REPEAT_GROUP_OPTIONS, REPEAT_OPTIONS, repeatAmounts, repeatLabel, repeatMissing, repeatPlan, type RepeatSources } from './repeatBrew';
 
 const log = (over: Partial<BrewLog> = {}): BrewLog =>
   ({
@@ -144,5 +144,41 @@ describe('repeatPlan: who it was for', () => {
     expect(p.guestIds).toEqual(['sam']);
     expect(repeatMissing(p, new Set(['forWho']))).toEqual(["Ana is archived, so left out of who it's for."]);
     expect(repeatMissing(p, new Set())).toEqual([]);
+  });
+});
+
+describe('repeatAmounts: the targets, not what was poured', () => {
+  const amounts = { actualDoseGrams: 15, actualWaterGrams: 252, actualIceGrams: null };
+  it('a 252 g pour for a 250 g target repeats 250 g', () => {
+    expect(repeatAmounts({ ...amounts, targetDoseGrams: 15, targetWaterGrams: 250, targetIceGrams: null })).toEqual({ dose: 15, water: 250, ice: null });
+  });
+  it('flash chilled keeps its target ice', () => {
+    expect(repeatAmounts({ ...amounts, actualIceGrams: 102, targetDoseGrams: 20, targetWaterGrams: 160, targetIceGrams: 100 })).toEqual({ dose: 20, water: 160, ice: 100 });
+  });
+  it('espresso: the target dose, no water', () => {
+    expect(repeatAmounts({ actualDoseGrams: 18.2, actualWaterGrams: null, actualIceGrams: null, targetDoseGrams: 18, targetWaterGrams: null, targetIceGrams: null })).toEqual({ dose: 18, water: null, ice: null });
+  });
+  it('a brew saved without targets falls back to what was logged', () => {
+    expect(repeatAmounts({ ...amounts, targetDoseGrams: null, targetWaterGrams: null, targetIceGrams: null })).toEqual({ dose: 15, water: 252, ice: null });
+  });
+});
+
+describe('brewTargets: what a brew saves as its aim', () => {
+  const batch = { dose: 15, water: 250, ice: null, yield: 215, yieldOz: 7.3, yieldMl: 215, ratio: 16.67, factor: 1 };
+  it('filter: the batch', () => {
+    expect(brewTargets(batch, null)).toEqual({ targetDoseGrams: 15, targetWaterGrams: 250, targetIceGrams: null });
+  });
+  it('espresso: the shot dose only', () => {
+    expect(brewTargets(null, { dose: 18, yield: 36, ratio: 2 })).toEqual({ targetDoseGrams: 18, targetWaterGrams: null, targetIceGrams: null });
+  });
+  it('no recipe: nothing', () => {
+    expect(brewTargets(null, null)).toEqual({ targetDoseGrams: null, targetWaterGrams: null, targetIceGrams: null });
+  });
+  it('no recipe: a repeat’s filled-in amounts, or the typed ones', () => {
+    expect(brewTargets(null, null, { dose: 15, water: 250, ice: null })).toEqual({ targetDoseGrams: 15, targetWaterGrams: 250, targetIceGrams: null });
+    expect(brewTargets(null, null, { dose: null, water: 250, ice: null })).toEqual({ targetDoseGrams: null, targetWaterGrams: null, targetIceGrams: null });
+  });
+  it('a recipe’s batch wins over the plain amounts', () => {
+    expect(brewTargets(batch, null, { dose: 20, water: 300, ice: null })).toMatchObject({ targetDoseGrams: 15, targetWaterGrams: 250 });
   });
 });

@@ -338,3 +338,36 @@ describe("recipe styles", () => {
     expect((await owner.agent.patch(url).send({ styleId: null })).body.recipe.style).toBeNull();
   });
 });
+
+// What a brew aimed for, next to what went in (docs/api/brew-logs.md §6).
+describe("brew log targets", () => {
+  it("round-trip on POST, GET and PATCH; water and ice stay null for espresso", async () => {
+    const { owner, ws, v60, espresso } = await setup();
+    const bean = await newBean(owner, ws.id);
+    const recipes = `/api/workspaces/${ws.id}/recipes`;
+    const base = `/api/workspaces/${ws.id}/brew-logs`;
+    const pour = (await owner.agent.post(recipes).send({ name: "R", brewerId: v60, targetDoseGrams: 15, targetWaterGrams: 250 })).body.recipe.id as string;
+    const created = await owner.agent.post(base).send({
+      beanId: bean, recipeId: pour, actualDoseGrams: 15, actualWaterGrams: 252, actualTimeSec: 150,
+      targetDoseGrams: 15, targetWaterGrams: 250, targetIceGrams: null,
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.brewLog).toMatchObject({ actualWaterGrams: 252, targetDoseGrams: 15, targetWaterGrams: 250, targetIceGrams: null });
+    const id = created.body.brewLog.id as string;
+    expect((await owner.agent.get(`${base}/${id}`)).body.brewLog).toMatchObject({ targetWaterGrams: 250 });
+    expect((await owner.agent.patch(`${base}/${id}`).send({ targetWaterGrams: 255 })).body.brewLog).toMatchObject({ targetWaterGrams: 255 });
+
+    // Older clients send none: all null.
+    const plain = await owner.agent.post(base).send({ beanId: bean, recipeId: pour, actualDoseGrams: 15, actualWaterGrams: 250, actualTimeSec: 150 });
+    expect(plain.body.brewLog).toMatchObject({ targetDoseGrams: null, targetWaterGrams: null, targetIceGrams: null });
+
+    const shotRecipe = (await owner.agent.post(recipes).send(shot(espresso))).body.recipe.id as string;
+    const pull = { beanId: bean, recipeId: shotRecipe, actualDoseGrams: 18.2, actualYieldGrams: 37, actualTimeSec: 28, targetDoseGrams: 18 };
+    expect((await owner.agent.post(base).send({ ...pull, targetWaterGrams: 36 })).body.error).toMatch(/targetWaterGrams/);
+    expect((await owner.agent.post(base).send({ ...pull, targetIceGrams: 50 })).body.error).toMatch(/targetIceGrams/);
+    const ok = await owner.agent.post(base).send(pull);
+    expect(ok.status).toBe(201);
+    expect(ok.body.brewLog).toMatchObject({ targetDoseGrams: 18, targetWaterGrams: null });
+    expect((await owner.agent.patch(`${base}/${ok.body.brewLog.id}`).send({ targetWaterGrams: 36 })).status).toBe(400);
+  });
+});

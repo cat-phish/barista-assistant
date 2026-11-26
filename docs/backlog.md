@@ -24,7 +24,7 @@ and fix the references.
 
 **Contents**
 - A. Settings & configuration: 1–4
-- B. Brewing & logging: 5–9, 59
+- B. Brewing & logging: 5–9
 - Added last, not yet sorted into groups: 60–69 (60–63 beans, 64 AI, 65 Insights, 66 accounts, 67 brewing, 68–69 Insights)
 - C. Recipes: 10
 - D. AI suggestions: 11–15
@@ -331,28 +331,6 @@ Recording a brew: what's measured, and how fast it is to log.
   - Write adapters from published protocol notes and our own captures
     rather than copied code, so nothing blocks an App Store build (44,
     licensing).
-
-### 59. Repeat brews: the recipe's numbers or the ones logged
-
-- **Status:** idea (numbered last to avoid renumbering; belongs in B)
-- **Why:** with Repeat brews set to copy dose and water (the `doseWater`
-  option), a repeat starts from what the last brew logged, not from the
-  recipe. A small overshoot on water (say 252 g for a 250 g target) is
-  copied, overshot again, and copied again, so the number creeps up over
-  repeats.
-- **Approach:**
-  - Choose per repeat option or per recipe whether a repeat adopts the
-    recipe's standard parameters (water, dose, temperature, grind) or the
-    logged ones. A recipe-linked brew would default to the recipe's.
-  - Or keep copying the log but snap to the recipe's target when the
-    difference is within a tolerance (for example 2%), and keep the log
-    only when the person changed it on purpose.
-  - Show the choice on the repeat sheet (`frontend/src/lib/repeatBrew.ts`,
-    rule 6 and `docs/api/auth.md` §1 repeatKeeps).
-- **Size:** S
-- **Depends on:** nothing.
-- **Open questions:** a per-recipe setting, a tolerance, or one global
-  option? What about brews with no recipe?
 
 ### 60. Supplier's received date on beans
 

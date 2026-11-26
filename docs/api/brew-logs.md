@@ -25,6 +25,9 @@ created it and can't be changed.
   "actualDoseGrams": 15,
   "actualWaterGrams": 250,
   "actualIceGrams": null,
+  "targetDoseGrams": 15,
+  "targetWaterGrams": 250,
+  "targetIceGrams": null,
   "actualYieldGrams": 225,
   "vesselId": "uuid",
   "vesselWeightGrams": 312.5,
@@ -222,6 +225,16 @@ picked brews are sent.
     absent/`null` for espresso. A brew with ice takes **no TDS reading**:
     `tdsPercent` must be `null` when `actualIceGrams` is set (`400`), and it
     has no extraction yield.
+  - `targetDoseGrams`, `targetWaterGrams`, `targetIceGrams` (optional,
+    nullable, same limits as the actuals): what the brew **aimed for**, the
+    batch the recipe or scale slider set before any overshoot (a 250 g target
+    poured to 252 g sends 250 and 252). Repeating a brew restores these, not
+    the actuals, so an overshoot isn't copied into the next brew (auth.md §1,
+    repeatKeeps `doseWater`); the AI sees both (llm-contract.md §9). Without
+    a recipe the client sends the amounts a repeat filled in (the earlier
+    brew's target, whatever is typed over them), or else the typed ones.
+    `null` on brews logged before migration 0138.
+    Water and ice must be absent/`null` for espresso (`400`).
   - `marks` (optional, default `[]`): when things actually happened, recorded
     by the timer: `[{ "kind": "first_drop", "atSec": 7.4 }, { "kind":
     "step_end", "stepOrder": 1, "atSec": 52 }]`. `kind` is one of
@@ -417,7 +430,8 @@ picked brews are sent.
   (`[]` clears it). Sending `recipeId` also sets the log's brewer to that
   recipe's. The espresso rule is checked against the log as it is after the
   change, but only when the request sends `recipeId`, `actualWaterGrams`,
-  `actualIceGrams`, `actualYieldGrams` or `marks` (marks must also fit within
+  `actualIceGrams`, `targetWaterGrams`, `targetIceGrams`, `actualYieldGrams`
+  or `marks` (marks must also fit within
   `actualTimeSec`), and so is TDS with ice when it sends `actualIceGrams` or
   `tdsPercent`, so editing the notes of an old log whose recipe later moved to another
   brewer still works.

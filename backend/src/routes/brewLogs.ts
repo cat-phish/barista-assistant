@@ -176,6 +176,11 @@ const brewLogFields = {
   actualWaterGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
   // Flash chilled: ice in the server; null for espresso, and no TDS with it (iceError).
   actualIceGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
+  // What the brew aimed for (the batch before any overshoot); a repeat
+  // restores these. Water and ice null for espresso (espressoError).
+  targetDoseGrams: decimalSchema({ min: 0, max: 1000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
+  targetWaterGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
+  targetIceGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
   // Measured beverage weight (optional, except for espresso; docs/api/brew-logs.md §6).
   actualYieldGrams: decimalSchema({ min: 0, max: 10000, scale: 2, exclusiveMin: true, exclusiveMax: true }).nullable().optional(),
   // What the yield was weighed in, and the weight subtracted (vesselError).
@@ -339,6 +344,8 @@ function espressoError(
   log: {
     actualWaterGrams: number | null;
     actualIceGrams: number | null;
+    targetWaterGrams: number | null;
+    targetIceGrams: number | null;
     actualYieldGrams: number | null;
     actualTimeSec: number;
     marks: ReadonlyArray<{ kind: MarkKind; atSec: number }>;
@@ -349,6 +356,8 @@ function espressoError(
   if (kind === "espresso") {
     if (log.actualWaterGrams !== null) return "actualWaterGrams: must be null for an espresso brew";
     if (log.actualIceGrams !== null) return "actualIceGrams: must be null for an espresso brew";
+    if (log.targetWaterGrams !== null) return "targetWaterGrams: must be null for an espresso brew";
+    if (log.targetIceGrams !== null) return "targetIceGrams: must be null for an espresso brew";
     if (log.actualYieldGrams === null) return "actualYieldGrams: is required for an espresso brew (the shot weight)";
     return null;
   }
@@ -593,6 +602,9 @@ export async function loadBrewLogs(where: SQL | undefined, limit = 1, offset = 0
       actualDoseGrams: brewLogs.actualDoseGrams,
       actualWaterGrams: brewLogs.actualWaterGrams,
       actualIceGrams: brewLogs.actualIceGrams,
+      targetDoseGrams: brewLogs.targetDoseGrams,
+      targetWaterGrams: brewLogs.targetWaterGrams,
+      targetIceGrams: brewLogs.targetIceGrams,
       actualYieldGrams: brewLogs.actualYieldGrams,
       vesselId: brewLogs.vesselId,
       vesselWeightGrams: brewLogs.vesselWeightGrams,
@@ -917,6 +929,8 @@ brewLogsRouter.post("/", async (req: Request<WorkspaceParams>, res: Response<Cre
     const wrongForKind = espressoError(brewer?.kind ?? null, {
       actualWaterGrams: fields.actualWaterGrams ?? null,
       actualIceGrams: fields.actualIceGrams ?? null,
+      targetWaterGrams: fields.targetWaterGrams ?? null,
+      targetIceGrams: fields.targetIceGrams ?? null,
       actualYieldGrams: fields.actualYieldGrams ?? null,
       actualTimeSec: fields.actualTimeSec,
       marks,
@@ -984,6 +998,8 @@ brewLogsRouter.patch(
           groundWeightOutGrams: brewLogs.groundWeightOutGrams,
           actualWaterGrams: brewLogs.actualWaterGrams,
           actualIceGrams: brewLogs.actualIceGrams,
+          targetWaterGrams: brewLogs.targetWaterGrams,
+          targetIceGrams: brewLogs.targetIceGrams,
           actualYieldGrams: brewLogs.actualYieldGrams,
           vesselId: brewLogs.vesselId,
           vesselWeightGrams: brewLogs.vesselWeightGrams,
@@ -1023,13 +1039,15 @@ brewLogsRouter.patch(
         })() : {}),
         ...(newRecipe ? { recipeCopy: await recipeCopy(tx, fields.recipeId) } : {}),
       };
-      const touched = ["recipeId", "actualWaterGrams", "actualIceGrams", "actualYieldGrams", "marks", "actualTimeSec"];
+      const touched = ["recipeId", "actualWaterGrams", "actualIceGrams", "targetWaterGrams", "targetIceGrams", "actualYieldGrams", "marks", "actualTimeSec"];
       if (touched.some((key) => key in body)) {
         const after = { ...log, ...fields };
         const kind = (await recipeBrewer(tx, after.recipeId))?.kind ?? null;
         const wrongForKind = espressoError(kind, {
           actualWaterGrams: after.actualWaterGrams ?? null,
           actualIceGrams: after.actualIceGrams ?? null,
+          targetWaterGrams: after.targetWaterGrams ?? null,
+          targetIceGrams: after.targetIceGrams ?? null,
           actualYieldGrams: after.actualYieldGrams ?? null,
           actualTimeSec: after.actualTimeSec,
           marks:

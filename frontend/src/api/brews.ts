@@ -25,6 +25,9 @@ export interface BrewLogInput {
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso
   actualIceGrams: number | null; // flash chilled: ice in the server (no TDS with it)
+  targetDoseGrams?: number | null; // what it aimed for: the batch before any overshoot (§6)
+  targetWaterGrams?: number | null; // null for espresso
+  targetIceGrams?: number | null;
   actualYieldGrams: number | null; // net of the vessel, if weighed in one
   vesselId?: string | null; // what it was weighed in (§3g); with vesselWeightGrams
   vesselWeightGrams?: number | null; // the weight subtracted

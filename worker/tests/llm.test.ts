@@ -182,6 +182,11 @@ describe("what the AI is sent (docs/api/llm-contract.md §9)", () => {
     expect(promptSections(cold)).not.toContain("flashChilled");
     const iced = toLlmInput(context({ brew: { actualWaterGrams: 150, actualIceGrams: 100 } }));
     expect(promptSections(iced)).toContain("flashChilled");
+    // Targets next to the actuals: what it aimed for vs what was poured.
+    expect(promptSections(iced)).not.toContain("targets");
+    const overPoured = toLlmInput(context({ brew: { actualWaterGrams: 252, targetDoseGrams: 15, targetWaterGrams: 250, targetIceGrams: null } }));
+    expect(promptSections(overPoured)).toContain("targets");
+    expect((overPoured.brew as Record<string, unknown>).targetWaterGrams).toBe(250);
     // A hot concentrate served diluted; a diluted cold brew is the cold section's.
     const concentrate = toLlmInput(context({ brew: { dilutionRatio: 0.7, dilutedWith: "ice", tdsPercent: 3.1 } }));
     expect(promptSections(concentrate)).toEqual(expect.arrayContaining(["tds", "concentrate"]));

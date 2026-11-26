@@ -318,6 +318,17 @@ export const PROMPT_SECTION_TEXTS: readonly PromptSectionText[] = [
       "hot water as well as under-extraction.",
   },
   {
+    key: "targets",
+    label: "Targets and actuals",
+    prompts: ["analysis", "suggest"],
+    locked: false,
+    text:
+      "targetDoseGrams, targetWaterGrams and targetIceGrams are what the brew aimed for (the batch set before " +
+      "brewing); the actual amounts are what went in. A gap is a pour that went over or under, not a new plan, and " +
+      "the next brew starts from the targets again. Weigh the actuals when judging the cup. When a brew that went " +
+      "over or under its target tasted better, say so, and suggest it as the new target if the change is worth keeping.",
+  },
+  {
     key: "profile",
     label: "Brew profile",
     prompts: ["analysis", "suggest"],

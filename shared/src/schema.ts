@@ -1767,6 +1767,14 @@ export const brewLogs = mysqlTable("brew_logs", {
   // Flash chilled: ice in the server (g), as on the recipe. A brew with ice
   // takes no TDS reading (docs/api/brew-logs.md §6); null for espresso.
   actualIceGrams: decimal("actual_ice_grams", { precision: 6, scale: 2, mode: "number" }),
+  // What the brew aimed for: the batch the recipe or scale slider set, before
+  // any overshoot (docs/api/brew-logs.md §6). A repeat restores these, not the
+  // actuals; the AI sees both. No recipe: what a repeat filled in, or the
+  // typed amounts. null = older brews.
+  // Water and ice are null for espresso.
+  targetDoseGrams: decimal("target_dose_grams", { precision: 5, scale: 2, mode: "number" }),
+  targetWaterGrams: decimal("target_water_grams", { precision: 6, scale: 2, mode: "number" }),
+  targetIceGrams: decimal("target_ice_grams", { precision: 6, scale: 2, mode: "number" }),
   // Measured beverage weight. Optional, except for espresso (the shot
   // weight). Compared against the recipe's expected yield; with tdsPercent it
   // gives extraction yield.

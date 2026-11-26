@@ -819,6 +819,11 @@ export interface BrewLog {
   actualDoseGrams: number;
   actualWaterGrams: number | null; // null for espresso
   actualIceGrams: number | null; // flash chilled: ice in the server; no TDS with it (docs/api/brew-logs.md §6)
+  // What it aimed for, before any overshoot; a repeat restores these (§6).
+  // null on older brews; water and ice null for espresso.
+  targetDoseGrams: number | null;
+  targetWaterGrams: number | null;
+  targetIceGrams: number | null;
   actualYieldGrams: number | null; // measured beverage weight
   tdsPercent: number | null; // refractometer reading; extraction yield is worked out (lib/extraction.ts)
   actualTempC: number | null;
