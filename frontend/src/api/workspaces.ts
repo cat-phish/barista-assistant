@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { AiCheck, AiProvider } from './server';
+import type { AiCheck, AiFeature, AiOverrides, AiOverridesInput, AiProvider } from './server';
 import type { ResearchDraft, ResearchPut, Workspace, WorkspaceResearch, WorkspaceSettings, WorkspaceWithRole } from './types';
 
 // docs/api/workspaces.md §2d: who answers the workspace's AI jobs.
@@ -7,7 +7,7 @@ export interface AiConfig {
   available: boolean;
   source: 'workspace' | 'server' | 'env' | null;
   model: string | null;
-  own: { provider: AiProvider; keyLast4: string; model: string; visionModel: string | null; webModel: string | null } | null; // owners only
+  own: { provider: AiProvider; keyLast4: string; model: string; visionModel: string | null; webModel: string | null; overrides: AiOverrides } | null; // owners only
   canSaveKeys: boolean;
 }
 export interface AiConfigInput {
@@ -16,6 +16,7 @@ export interface AiConfigInput {
   model: string;
   visionModel?: string | null;
   webModel?: string | null;
+  overrides?: AiOverridesInput;
 }
 
 export const workspacesApi = {
@@ -27,8 +28,8 @@ export const workspacesApi = {
   setResearch: (id: string, body: ResearchPut) => api.put<WorkspaceResearch>(`/api/workspaces/${id}/research`, body),
   // Pasted text turned into draft findings by the workspace's AI (§1f, "Drafts"); nothing saved. 409 ai_not_configured, 429 ai_limit.
   researchDrafts: (id: string, text: string) => api.post<{ drafts: ResearchDraft[] }>(`/api/workspaces/${id}/research/draft`, { text }),
-  aiModels: (id: string) => api.post<AiCheck>(`/api/workspaces/${id}/ai-config/models`),
-  testAi: (id: string) => api.post<AiCheck>(`/api/workspaces/${id}/ai-config/test`),
+  aiModels: (id: string, feature?: AiFeature) => api.post<AiCheck>(`/api/workspaces/${id}/ai-config/models`, feature ? { feature } : {}),
+  testAi: (id: string, feature?: AiFeature) => api.post<AiCheck>(`/api/workspaces/${id}/ai-config/test`, feature ? { feature } : {}),
   list: () => api.get<{ workspaces: WorkspaceWithRole[] }>('/api/workspaces'),
   create: (name: string, slug: string) => api.post<{ workspace: Workspace }>('/api/workspaces', { name, slug }),
   // Owners only (docs/api/workspaces.md §2).

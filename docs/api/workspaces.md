@@ -218,15 +218,50 @@ Keys are AES-256-GCM encrypted under `AI_CONFIG_SECRET` (`shared/src/secrets.ts`
 kept in `workspace_ai_configs`, never sent back, and not in backups
 (`NOT_BACKED_UP`). Without that secret a key can't be saved (409).
 
+### Per feature
+
+A feature can have its own model, and its own key and provider
+(`AI_FEATURES` and `resolveFeature` in `@barista/shared/aiConfig`):
+
+| Feature | Jobs |
+|---|---|
+| `analysis` | brew analysis |
+| `suggest` | Suggest parameters |
+| `chat` | chat replies (photos too) and chat summaries |
+| `writing` | bean reviews, recap summaries |
+| `label` | reading label photos |
+| `web` | looking a bean up on the web |
+
+Other jobs (preference learning, research drafts) use the main. An override
+is `{ provider, apiKeyEncrypted, apiKeyLast4, model }`:
+
+- on the main provider, no key uses the main key, no model the feature's
+  usual model (main; for `label`/`web` the vision/web model);
+- on another provider, it needs its own key **and** model (400 otherwise);
+  one saved without them is ignored;
+- its model answers images too (chat with photos).
+
+The vision and web models stay the `label` and `web` models on the main
+provider. A workspace's overrides go to the providers' official addresses; the
+server's use its `baseUrl` only when on the server's provider. Overrides
+apply to saved keys only, not the worker's env. Kept in `overrides` (JSON) on
+`workspace_ai_configs`, or in the server's `ai` setting.
+
+In bodies, `overrides` is the whole map `{ [feature]: { provider, apiKey?,
+model? } }`: a feature left out has none, `apiKey` left out keeps the saved
+key (same provider), `null` drops it back to the main. Left out of the body
+altogether, saved ones that still stand with the provider are kept. Responses
+give `overrides` as `{ [feature]: { provider, keyLast4, model } }`.
+
 ### `GET /api/workspaces/:workspaceId/ai-config`
 
 Any member: `{ available, source: "workspace"|"server"|"env"|null, model,
 own, canSaveKeys }`. `own` is `{ provider, keyLast4, model, visionModel,
-webModel }` for owners with a key saved, otherwise `null`.
+webModel, overrides }` for owners with a key saved, otherwise `null`.
 
 ### `PUT /api/workspaces/:workspaceId/ai-config`
 
-Owners. Body `{ provider, apiKey?, model, visionModel?, webModel? }`. `apiKey`
+Owners. Body `{ provider, apiKey?, model, visionModel?, webModel?, overrides? }`. `apiKey`
 left out keeps the saved key; a different provider needs a new one. A blank
 vision model uses `model`, a blank web model the vision model. A `baseUrl` is
 refused (400): only the server's admin says where requests go.
@@ -236,7 +271,8 @@ refused (400): only the server's admin says where requests go.
 Owners, once a key is saved (409 otherwise). Both run on the worker with the
 saved key, so no key is ever in a job, and answer `{ ok, models, error }`,
 `error` being the provider's reason. Test sends a tiny request with the real
-analysis schema to the main model; vision and web aren't tried.
+analysis schema to the main model; vision and web aren't tried. Body
+`{ feature? }` uses that feature's key, provider and model instead.
 
 ### `DELETE /api/workspaces/:workspaceId/ai-config`
 

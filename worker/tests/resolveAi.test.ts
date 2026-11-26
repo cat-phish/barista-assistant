@@ -63,6 +63,61 @@ describe("resolveAi (docs/api/workspaces.md §2d)", () => {
     await expect(resolveAi(id)).rejects.toBeInstanceOf(UnrecoverableError);
   });
 
+  describe("per feature (§2d)", () => {
+    const enc = (k: string) => encryptSecret(k, SECRET);
+    const withOverrides = async (overrides: object) => {
+      const id = await workspaceWithKey("own-key", { visionModel: "eyes" });
+      await db.update(workspaceAiConfigs).set({ overrides }).where(eq(workspaceAiConfigs.workspaceId, id));
+      return id;
+    };
+
+    it("uses the main for a feature without one, and for jobs with no feature", async () => {
+      const id = await withOverrides({ suggest: { provider: "openai", apiKeyEncrypted: null, apiKeyLast4: null, model: "thinker" } });
+      expect((await resolveAi(id, "analysis")).models).toEqual({ main: "own", vision: "eyes", web: "eyes" });
+      expect((await resolveAi(id)).models.main).toBe("own");
+    });
+
+    it("same provider, no key: the main key with the feature's model, images too", async () => {
+      const id = await withOverrides({ chat: { provider: "openai", apiKeyEncrypted: null, apiKeyLast4: null, model: "talker" } });
+      const ai = await resolveAi(id, "chat");
+      expect([ai.apiKey, ai.models]).toEqual(["own-key", { main: "talker", vision: "talker", web: "talker" }]);
+    });
+
+    it("own key: that key, and another provider at its own address", async () => {
+      const id = await withOverrides({
+        suggest: { provider: "openai", apiKeyEncrypted: enc("sugg-key"), apiKeyLast4: "-key", model: null },
+        writing: { provider: "anthropic", apiKeyEncrypted: enc("ant-key"), apiKeyLast4: "-key", model: "claude-x" },
+      });
+      const sugg = await resolveAi(id, "suggest");
+      expect([sugg.apiKey, sugg.models.main]).toEqual(["sugg-key", "own"]);
+      const writing = await resolveAi(id, "writing");
+      expect([writing.provider, writing.apiKey, writing.models.main]).toEqual(["anthropic", "ant-key", "claude-x"]);
+      expect(writing.provider === "anthropic" && writing.anthropic.baseURL).toBe("https://api.anthropic.com");
+    });
+
+    it("ignores another provider without its own key", async () => {
+      const id = await withOverrides({ web: { provider: "anthropic", apiKeyEncrypted: null, apiKeyLast4: null, model: "claude-x" } });
+      const ai = await resolveAi(id, "web");
+      expect([ai.provider, ai.apiKey, ai.models.web]).toEqual(["openai", "own-key", "eyes"]);
+    });
+
+    it("server: its address for its provider only", async () => {
+      await serverAi({
+        apiKeyEncrypted: encryptSecret("server-key", SECRET),
+        baseUrl: "http://10.0.0.5:11434/v1",
+        model: "local",
+        overrides: {
+          chat: { provider: "openai", apiKeyEncrypted: null, apiKeyLast4: null, model: "local-chat" },
+          suggest: { provider: "anthropic", apiKeyEncrypted: encryptSecret("ant-key", SECRET), apiKeyLast4: "-key", model: "claude-x" },
+        },
+      });
+      const chat = await resolveAi(null, "chat");
+      expect([chat.apiKey, chat.models.main, chat.provider === "openai" && chat.openai.baseURL]).toEqual(["server-key", "local-chat", "http://10.0.0.5:11434/v1"]);
+      const sugg = await resolveAi(null, "suggest");
+      expect([sugg.provider, sugg.apiKey, sugg.provider === "anthropic" && sugg.anthropic.baseURL]).toEqual(["anthropic", "ant-key", "https://api.anthropic.com"]);
+    });
+  });
+
   it("publishes whether the env has AI, never the key", async () => {
     await publishEnvStatus();
     const [row] = await db.select().from(serverSettings).where(eq(serverSettings.key, AI_ENV_KEY));

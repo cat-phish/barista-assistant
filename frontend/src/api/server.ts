@@ -34,6 +34,30 @@ export interface ServerChat {
 
 export const AI_PROVIDERS = { openai: 'OpenAI or compatible', anthropic: 'Anthropic' } as const;
 export type AiProvider = keyof typeof AI_PROVIDERS;
+// Features with their own model, key and provider (docs/api/workspaces.md
+// §2d "Per feature"), as @barista/shared/aiConfig AI_FEATURES.
+export const AI_FEATURES = {
+  analysis: { label: 'Brew analysis', hint: 'Analyses of your brews.' },
+  suggest: { label: 'Suggest parameters', hint: 'Suggested parameters for a recipe or brew.' },
+  chat: { label: 'Chat', hint: 'The Chat tab and its summaries.' },
+  writing: { label: 'Reviews and recaps', hint: 'Bean reviews and recap summaries.' },
+  label: { label: 'Label photos', hint: 'Reads bean labels from photos.' },
+  web: { label: 'Web lookup', hint: 'Looks beans up on the web.' },
+} as const;
+export type AiFeature = keyof typeof AI_FEATURES;
+export interface AiOverride {
+  provider: AiProvider;
+  keyLast4: string | null; // its own key; null: the main one
+  model: string | null;
+}
+export type AiOverrides = Partial<Record<AiFeature, AiOverride>>;
+// apiKey left out keeps the saved one (same provider), null drops it.
+export interface AiOverrideInput {
+  provider: AiProvider;
+  apiKey?: string | null;
+  model: string | null;
+}
+export type AiOverridesInput = Partial<Record<AiFeature, AiOverrideInput>>;
 export interface AiCheck {
   ok: boolean;
   models: string[];
@@ -48,6 +72,7 @@ export interface ServerAi {
   model: string | null;
   visionModel: string | null;
   webModel: string | null;
+  overrides: AiOverrides;
   env: { configured: boolean; model: string | null };
   canSaveKeys: boolean;
 }
@@ -59,7 +84,9 @@ export interface ServerAiInput {
   model?: string | null;
   visionModel?: string | null;
   webModel?: string | null;
+  overrides?: AiOverridesInput;
 }
+const checkBody = (feature?: AiFeature) => (feature ? { feature } : {});
 
 export const serverApi = {
   chat: () => api.get<ServerChat>('/api/server/chat'),
@@ -70,8 +97,8 @@ export const serverApi = {
   ai: () => api.get<ServerAi>('/api/server/ai'),
   saveAi: (input: ServerAiInput) => api.put<ServerAi>('/api/server/ai', input),
   removeAi: () => api.delete<ServerAi>('/api/server/ai'),
-  aiModels: () => api.post<AiCheck>('/api/server/ai/models'),
-  testAi: () => api.post<AiCheck>('/api/server/ai/test'),
+  aiModels: (feature?: AiFeature) => api.post<AiCheck>('/api/server/ai/models', checkBody(feature)),
+  testAi: (feature?: AiFeature) => api.post<AiCheck>('/api/server/ai/test', checkBody(feature)),
   backups: () => api.get<ServerBackups>('/api/server/backups'),
   saveBackupSettings: (settings: BackupSettings) => api.put<ServerBackups>('/api/server/backups/settings', settings),
   backUpNow: () => api.post<{ queued: true }>('/api/server/backups/run'),

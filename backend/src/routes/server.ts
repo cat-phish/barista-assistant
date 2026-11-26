@@ -1,11 +1,11 @@
-import { AI_PROVIDERS, CHAT_PINNED_MAX, DEFAULT_SERVER_AI, nextMaxDaysSetAt, lastFour, type AiEnvStatus, type ServerAiConfig, type ServerChatLimits } from "@barista/shared/aiConfig";
+import { AI_PROVIDERS, CHAT_PINNED_MAX, DEFAULT_SERVER_AI, nextMaxDaysSetAt, lastFour, overridesView, type AiEnvStatus, type AiOverridesView, type ServerAiConfig, type ServerChatLimits } from "@barista/shared/aiConfig";
 import { encryptSecret } from "@barista/shared/secrets";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { eq } from "drizzle-orm";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
-import { aiKey } from "./aiConfig.js";
+import { aiKey, checkSchema, keptOverrides, mergeOverrides, overridesSchema } from "./aiConfig.js";
 import { sendAiCheck } from "../aiConfig.js";
 import { DB_BACKUP_FILE } from "@barista/shared/jobs";
 import { BACKUP_FREQUENCIES, users, type BackupSettings, type BackupStatus } from "@barista/shared/schema";
@@ -92,18 +92,20 @@ const serverAiSchema = z
     model: z.string().trim().min(1).max(100).nullable().optional(),
     visionModel: z.string().trim().min(1).max(100).nullable().optional(),
     webModel: z.string().trim().min(1).max(100).nullable().optional(),
+    overrides: overridesSchema.optional(),
   })
   .strict();
 
-export interface ServerAiResponse extends Omit<ServerAiConfig, "apiKeyEncrypted" | "apiKeyLast4"> {
+export interface ServerAiResponse extends Omit<ServerAiConfig, "apiKeyEncrypted" | "apiKeyLast4" | "overrides"> {
   keyLast4: string | null;
+  overrides: AiOverridesView;
   env: AiEnvStatus;
   canSaveKeys: boolean;
 }
 
 async function serverAiView(): Promise<ServerAiResponse> {
-  const [{ apiKeyEncrypted: _key, apiKeyLast4, ...rest }, env] = await Promise.all([getServerAi(), getAiEnvStatus()]);
-  return { ...rest, keyLast4: apiKeyLast4, env, canSaveKeys: config.aiConfigSecret !== null };
+  const [{ apiKeyEncrypted: _key, apiKeyLast4, overrides, ...rest }, env] = await Promise.all([getServerAi(), getAiEnvStatus()]);
+  return { ...rest, keyLast4: apiKeyLast4, overrides: overridesView(overrides), env, canSaveKeys: config.aiConfigSecret !== null };
 }
 
 serverRouter.get("/ai", async (_req: Request, res: Response<ServerAiResponse>) => {
@@ -123,6 +125,11 @@ serverRouter.put("/ai", async (req: Request, res: Response<ServerAiResponse>) =>
     sendError(res, 400, "Choose a model");
     return;
   }
+  const merged = body.overrides ? mergeOverrides(saved.overrides, body.overrides, body.provider, config.aiConfigSecret) : { value: keptOverrides(saved.overrides, body.provider) };
+  if ("error" in merged) {
+    sendError(res, merged.status, merged.error);
+    return;
+  }
   await saveServerAi({
     enabled: body.enabled,
     provider: body.provider,
@@ -132,6 +139,7 @@ serverRouter.put("/ai", async (req: Request, res: Response<ServerAiResponse>) =>
     model: body.model ?? null,
     visionModel: body.visionModel ?? null,
     webModel: body.webModel ?? null,
+    overrides: merged.value,
   });
   res.json(await serverAiView());
 });
@@ -144,12 +152,14 @@ serverRouter.delete("/ai", async (_req: Request, res: Response<ServerAiResponse>
 });
 
 for (const action of ["models", "test"] as const) {
-  serverRouter.post(`/ai/${action}`, async (_req: Request, res: Response) => {
+  serverRouter.post(`/ai/${action}`, async (req: Request, res: Response) => {
+    const body = parseBody(checkSchema, { body: req.body ?? {} }, res);
+    if (!body) return;
     if (!(await getServerAi()).apiKeyEncrypted) {
       sendError(res, 409, "Save a key first");
       return;
     }
-    await sendAiCheck(res, { workspaceId: null, action });
+    await sendAiCheck(res, { workspaceId: null, action, ...(body.feature ? { feature: body.feature } : {}) });
   });
 }
 

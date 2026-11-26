@@ -1588,6 +1588,8 @@ export const workspaceAiConfigs = mysqlTable("workspace_ai_configs", {
   model: varchar("model", { length: 100 }).notNull(),
   visionModel: varchar("vision_model", { length: 100 }),
   webModel: varchar("web_model", { length: 100 }),
+  // Per-feature model, key and provider (docs/api/workspaces.md §2d "Per feature"); null = none.
+  overrides: jsonValue<AiOverrides>("overrides"),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
 

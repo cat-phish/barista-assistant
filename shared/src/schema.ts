@@ -1,4 +1,4 @@
-import type { AiProvider, OwnChatLimits } from "./aiConfig.js";
+import type { AiOverrides, AiProvider, OwnChatLimits } from "./aiConfig.js";
 import { CHAT_PERIOD_BREWS_DEFAULT, type ChatPeriodSpec } from "./chatPeriod.js";
 import {
   mysqlTable,
@@ -2010,6 +2010,8 @@ export const workspaceAiConfigs = mysqlTable("workspace_ai_configs", {
   model: varchar("model", { length: 100 }).notNull(),
   visionModel: varchar("vision_model", { length: 100 }),
   webModel: varchar("web_model", { length: 100 }),
+  // Per-feature model, key and provider (§2d "Per feature"); null = none.
+  overrides: jsonValue<AiOverrides>("overrides"),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
 

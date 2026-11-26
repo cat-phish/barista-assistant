@@ -1,3 +1,4 @@
+import type { AiFeature } from "./aiConfig.js";
 import type { OwnFinding } from "./researchSettings.js";
 import type { BackupSettings, BlendType, CoffeeSpecies, DetailedRoastLevel, LabelWebContext, ParameterSuggestion, RoastLevel, RoastType } from "./schema.js";
 
@@ -67,6 +68,7 @@ export const AI_CHECK_JOB = "check";
 export interface AiCheckJobData {
   workspaceId: string | null;
   action: "models" | "test";
+  feature?: AiFeature; // that feature's key and model; absent: the main
 }
 export interface AiCheckResult {
   ok: boolean;

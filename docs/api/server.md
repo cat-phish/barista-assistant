@@ -108,11 +108,12 @@ a key by writing `ai_env` when it starts: the backend is never given that key.
 ### `GET /api/server/ai`
 
 `{ enabled, provider, keyLast4, baseUrl, model, visionModel, webModel,
-env: { configured, model }, canSaveKeys }`. The key itself is never sent.
+overrides, env: { configured, model }, canSaveKeys }` (`overrides`: per
+feature, `workspaces.md` §2d). The key itself is never sent.
 
 ### `PUT /api/server/ai`
 
-Body `{ enabled, provider, apiKey?, baseUrl?, model?, visionModel?, webModel? }`.
+Body `{ enabled, provider, apiKey?, baseUrl?, model?, visionModel?, webModel?, overrides? }`.
 `apiKey` left out keeps the saved key; a key needs a `model`. `enabled: false`
 stops this and the env's AI for every workspace without its own key.
 `baseUrl` points at a server compatible with the provider.

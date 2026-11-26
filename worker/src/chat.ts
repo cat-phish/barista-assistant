@@ -160,7 +160,7 @@ export async function processChatReply({ messageId, photos }: ChatJobData, publi
   let result: ChatResult = { status: "saved" };
   try {
     const messages = await db.select().from(aiChatMessages).where(eq(aiChatMessages.chatId, row.chat.id)).orderBy(asc(aiChatMessages.position));
-    const ai = await resolveAi(row.chat.workspaceId);
+    const ai = await resolveAi(row.chat.workspaceId, "chat");
     const custom = await promptFor(row.chat.userId, null);
     const attachments = attachedIn(messages, row.message.position, await attachmentLimit(row.chat.workspaceId));
     const attached = await loadAttachments(attachments, row.chat.workspaceId, await periodOwner(row.chat.userId));

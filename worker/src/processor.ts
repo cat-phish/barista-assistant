@@ -107,7 +107,7 @@ export async function processBrewAnalysis({ brewLogId, auto = false, note }: Bre
   }
 
   const custom = await promptFor(ws?.baristaId ?? null, note, ws?.workspaceId);
-  const ai = await resolveAi(ws?.workspaceId);
+  const ai = await resolveAi(ws?.workspaceId, "analysis");
   const analysis = await analyzeWithLlm(ai, context, hidden, custom);
 
   const analysisId = randomUUID();
@@ -142,7 +142,7 @@ export async function processParameterSuggestion({ suggestionId }: ParameterSugg
   if (!context) return { status: "skipped", reason: "bean no longer exists" };
 
   const custom = await promptFor(row.suggestion.requestedBy, row.suggestion.note, row.workspaceId);
-  const ai = await resolveAi(row.workspaceId);
+  const ai = await resolveAi(row.workspaceId, "suggest");
   const { suggestion } = await requestSuggestion(ai, context, hidden, custom);
   await db
     .update(parameterSuggestions)
@@ -173,7 +173,7 @@ export async function processBeanReview(data: BeanReviewJobData): Promise<BeanRe
   const ws = await beanWorkspace(data.beanId);
   const context = ws && (await loadBeanReviewContext(data));
   if (!context) return null;
-  const draft = await requestBeanReview(await resolveAi(ws!.workspaceId), context, ws!.hidden, await promptFor(data.requestedBy, data.note));
+  const draft = await requestBeanReview(await resolveAi(ws!.workspaceId, "writing"), context, ws!.hidden, await promptFor(data.requestedBy, data.note));
   return { ...draft, brewCount: context.brews.length };
 }
 

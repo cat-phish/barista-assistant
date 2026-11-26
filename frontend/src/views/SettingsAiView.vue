@@ -13,6 +13,7 @@ import { errorMessage } from '../api/client';
 import { AUTO_ANALYZE_DELAYS, MAX_CHAT_ATTACHMENTS, MAX_REVIEW_BREWS, MAX_SUGGEST_BREWS, SUGGEST_ALTERNATIVES, SUGGEST_SOURCES, type AlternativeKind, type AutoAnalyzeDelay, type Brewer, type LabelWebContext, type SuggestSource, type WorkspaceSettings } from '../api/types';
 import { brewersApi } from '../api/brewers';
 import { workspacesApi, type AiConfig } from '../api/workspaces';
+import type { AiFeature } from '../api/server';
 import AiKeyForm, { type AiKeyValues } from '../components/AiKeyForm.vue';
 import { refreshAiAvailable } from '../composables/useAiAvailable';
 import SettingsLayout from '../components/SettingsLayout.vue';
@@ -101,8 +102,8 @@ async function applyAiConfig(next: Promise<AiConfig>): Promise<void> {
 }
 const saveKey = ({ baseUrl: _serverOnly, ...values }: AiKeyValues) => applyAiConfig(workspacesApi.saveAiConfig(workspaceId.value, values));
 const removeKey = () => applyAiConfig(workspacesApi.removeAiConfig(workspaceId.value));
-const listModels = () => workspacesApi.aiModels(workspaceId.value);
-const testKey = () => workspacesApi.testAi(workspaceId.value);
+const listModels = (feature?: AiFeature) => workspacesApi.aiModels(workspaceId.value, feature);
+const testKey = (feature?: AiFeature) => workspacesApi.testAi(workspaceId.value, feature);
 
 // Bean reviews: the active brewers to start with, or all of them. With
 // unrated brews kept from the AI, rated only can't be turned off.

@@ -38,7 +38,7 @@ export async function processChatSummary({ chatId }: ChatSummaryJobData): Promis
         attached: m.attachments?.length ? m.attachments.map((a) => `${a.kind}: ${a.label}`) : undefined,
       })),
     };
-    const ai = await resolveAi(chat.workspaceId);
+    const ai = await resolveAi(chat.workspaceId, "chat");
     const { message } = await complete(ai, {
       model: ai.models.main,
       messages: [

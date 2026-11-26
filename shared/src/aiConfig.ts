@@ -4,6 +4,35 @@ export const AI_PROVIDERS = ["openai", "anthropic"] as const;
 export type AiProvider = (typeof AI_PROVIDERS)[number];
 export type AiSource = "workspace" | "server" | "env";
 
+// Features that can have their own model, and their own key and provider
+// (docs/api/workspaces.md §2d, "Per feature"). Jobs not listed use the main.
+export const AI_FEATURES = ["analysis", "suggest", "chat", "writing", "label", "web"] as const;
+export type AiFeature = (typeof AI_FEATURES)[number];
+// provider other than the default's: own key and model required.
+// Same provider: no key uses the default's, no model the default's model.
+export interface AiOverride {
+  provider: AiProvider;
+  apiKeyEncrypted: string | null;
+  apiKeyLast4: string | null;
+  model: string | null;
+}
+export type AiOverrides = Partial<Record<AiFeature, AiOverride>>;
+// What settings show of one: never the key.
+export interface AiOverrideView {
+  provider: AiProvider;
+  keyLast4: string | null;
+  model: string | null;
+}
+export type AiOverridesView = Partial<Record<AiFeature, AiOverrideView>>;
+export function overridesView(overrides: AiOverrides | null | undefined): AiOverridesView {
+  const out: AiOverridesView = {};
+  for (const f of AI_FEATURES) {
+    const o = overrides?.[f];
+    if (o) out[f] = { provider: o.provider, keyLast4: o.apiKeyLast4, model: o.model };
+  }
+  return out;
+}
+
 // The server's AI, in server_settings. enabled: offered to workspaces without
 // their own key, this config or else the worker's env. The base URL is the
 // server's alone: it decides where the worker sends requests.
@@ -16,9 +45,10 @@ export interface ServerAiConfig {
   model: string | null;
   visionModel: string | null;
   webModel: string | null;
+  overrides?: AiOverrides;
 }
 export const AI_SERVER_KEY = "ai";
-export const DEFAULT_SERVER_AI: ServerAiConfig = { enabled: true, provider: "openai", apiKeyEncrypted: null, apiKeyLast4: null, baseUrl: null, model: null, visionModel: null, webModel: null };
+export const DEFAULT_SERVER_AI: ServerAiConfig = { enabled: true, provider: "openai", apiKeyEncrypted: null, apiKeyLast4: null, baseUrl: null, model: null, visionModel: null, webModel: null, overrides: {} };
 
 // The worker's env, as it tells the backend when it starts (never the key:
 // the backend doesn't have it). No row yet: assume it's set, as it had to be.
@@ -40,6 +70,37 @@ export function aiSource(hasOwnKey: boolean, server: ServerAiConfig, envConfigur
 export function modelsFor(c: { model: string; visionModel: string | null; webModel: string | null }): { main: string; vision: string; web: string } {
   const vision = c.visionModel || c.model;
   return { main: c.model, vision, web: c.webModel || vision };
+}
+
+// Who answers one feature: the default (provider, key, models), or the
+// feature's override. An override that doesn't stand on its own (another
+// provider without its own key and model) is ignored. key is whatever the
+// caller holds (encrypted for saved configs).
+export interface FeatureAi<K> {
+  provider: AiProvider;
+  key: K;
+  ownKey: boolean; // the override's key, not the default's
+  models: { main: string; vision: string; web: string };
+}
+export function resolveFeature<K>(
+  base: { provider: AiProvider; key: K; model: string; visionModel: string | null; webModel: string | null },
+  override: { provider: AiProvider; key: K | null; model: string | null } | undefined,
+): FeatureAi<K> {
+  const models = modelsFor(base);
+  if (!override || !usableOverride(override, base.provider)) return { provider: base.provider, key: base.key, ownKey: false, models };
+  // One model for the feature, images included (chat with photos).
+  const m = override.model;
+  return {
+    provider: override.provider,
+    key: override.key ?? base.key,
+    ownKey: override.key !== null,
+    models: m ? { main: m, vision: m, web: m } : models,
+  };
+}
+export function usableOverride(o: { provider: AiProvider; key?: unknown; apiKeyEncrypted?: unknown; model: string | null }, defaultProvider: AiProvider): boolean {
+  if (o.provider === defaultProvider) return true;
+  const key = "key" in o ? o.key : o.apiKeyEncrypted;
+  return key != null && !!o.model;
 }
 
 export const lastFour = (key: string): string => key.slice(-4);

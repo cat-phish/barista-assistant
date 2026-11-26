@@ -69,7 +69,7 @@ export async function writeRecapSummary({ recapId }: RecapSummaryJobData): Promi
     return { status: "skipped", reason: "no brews" };
   }
   const custom = await promptFor(recap.userId, null);
-  const ai = await resolveAi(recap.workspaceId);
+  const ai = await resolveAi(recap.workspaceId, "writing");
   const { summary, usage } = await requestRecapSummary(ai, context, hidden, custom);
   await db
     .update(recaps)

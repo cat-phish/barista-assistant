@@ -5,7 +5,8 @@ import { withoutKey, type AiClient } from "./client.js";
 import { resolveAi, resolveServerAi } from "./resolve.js";
 
 // A tiny request with the real analysis schema, so a model that can't
-// return it shows up here rather than on a brew. Vision and web aren't tried.
+// return it shows up here rather than on a brew. Vision and web aren't tried
+// (a feature's own model is: it answers that feature).
 async function testModel(ai: AiClient): Promise<void> {
   const { message } = await complete(ai, {
     model: ai.models.main,
@@ -31,7 +32,7 @@ async function listModels(ai: AiClient): Promise<string[]> {
 export async function runAiCheck(data: AiCheckJobData): Promise<AiCheckResult> {
   let ai: AiClient | null = null;
   try {
-    ai = data.workspaceId ? await resolveAi(data.workspaceId) : await resolveServerAi();
+    ai = data.workspaceId ? await resolveAi(data.workspaceId, data.feature) : await resolveServerAi(data.feature);
     if (data.action === "models") return { ok: true, models: await listModels(ai), error: null };
     await testModel(ai);
     return { ok: true, models: [], error: null };

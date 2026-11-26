@@ -178,8 +178,8 @@ export function parseLabelMessage(message: LlmMessage, processes: readonly strin
 // one that didn't manage it this time.
 export async function readLabel(data: LabelReadJobData): Promise<LabelReadResult> {
   const { prompt } = await promptFor(data.requestedBy, null);
-  const ai = await resolveAi(data.workspaceId);
   if (data.lookUp) {
+    const ai = await resolveAi(data.workspaceId, "web");
     const fields = data.lookUp;
     const started = Date.now();
     try {
@@ -194,6 +194,7 @@ export async function readLabel(data: LabelReadJobData): Promise<LabelReadResult
       return { fields, web: null, webSources: [], webError };
     }
   }
+  const ai = await resolveAi(data.workspaceId, "label");
   const { message } = await complete(ai, buildLabelRequest(ai.models.vision, data, prompt));
   return { fields: parseLabelMessage(message, data.processes), web: null, webSources: [], webError: null };
 }

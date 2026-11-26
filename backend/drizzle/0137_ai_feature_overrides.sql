@@ -1,0 +1,1 @@
+ALTER TABLE `workspace_ai_configs` ADD COLUMN IF NOT EXISTS `overrides` json;

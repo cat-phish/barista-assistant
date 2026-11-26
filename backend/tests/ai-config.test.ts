@@ -80,6 +80,52 @@ describe("a workspace's AI (docs/api/workspaces.md §2d)", () => {
   });
 });
 
+describe("per feature (§2d)", () => {
+  const OTHER = "sk-ant-feature-key-z9y8";
+
+  it("saves overrides, keeps their keys, and never sends them back", async () => {
+    const res = await owner.agent.put(url()).send({
+      ...save,
+      apiKey: KEY,
+      overrides: { suggest: { provider: "openai", model: "gpt-think" }, chat: { provider: "anthropic", apiKey: OTHER, model: "claude-x" }, analysis: { provider: "openai" } },
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.own.overrides).toEqual({ suggest: { provider: "openai", keyLast4: null, model: "gpt-think" }, chat: { provider: "anthropic", keyLast4: "z9y8", model: "claude-x" } });
+    expect(JSON.stringify(res.body)).not.toContain(OTHER);
+    const [row] = await db.select().from(workspaceAiConfigs).where(eq(workspaceAiConfigs.workspaceId, ws));
+    expect(decryptSecret(row!.overrides!.chat!.apiKeyEncrypted!, SECRET)).toBe(OTHER);
+
+    // Sent again without its key: kept. Left out: gone.
+    const again = await owner.agent.put(url()).send({ ...save, overrides: { chat: { provider: "anthropic", model: "claude-y" } } });
+    expect(again.body.own.overrides).toEqual({ chat: { provider: "anthropic", keyLast4: "z9y8", model: "claude-y" } });
+    // No overrides in the body: the saved ones stay.
+    expect((await owner.agent.put(url()).send(save)).body.own.overrides).toEqual(again.body.own.overrides);
+  });
+
+  it("needs a key and a model for another provider", async () => {
+    await owner.agent.put(url()).send({ ...save, apiKey: KEY });
+    expect((await owner.agent.put(url()).send({ ...save, overrides: { chat: { provider: "anthropic", model: "claude-x" } } })).status).toBe(400);
+    expect((await owner.agent.put(url()).send({ ...save, overrides: { chat: { provider: "anthropic", apiKey: OTHER } } })).status).toBe(400);
+    // Dropping a key with null
+    await owner.agent.put(url()).send({ ...save, overrides: { suggest: { provider: "openai", apiKey: OTHER } } });
+    const res = await owner.agent.put(url()).send({ ...save, overrides: { suggest: { provider: "openai", apiKey: null, model: "m" } } });
+    expect(res.body.own.overrides).toEqual({ suggest: { provider: "openai", keyLast4: null, model: "m" } });
+  });
+
+  it("refuses an unknown feature", async () => {
+    expect((await owner.agent.put(url()).send({ ...save, apiKey: KEY, overrides: { nope: { provider: "openai", model: "m" } } })).status).toBe(400);
+  });
+
+  it("on the server too", async () => {
+    const admin = await newUser();
+    await setAdmin(admin.email, true);
+    const res = await admin.agent.put("/api/server/ai").send({ enabled: true, provider: "openai", apiKey: KEY, model: "llama", overrides: { web: { provider: "anthropic", apiKey: OTHER, model: "claude-x" } } });
+    expect(res.body.overrides).toEqual({ web: { provider: "anthropic", keyLast4: "z9y8", model: "claude-x" } });
+    expect(JSON.stringify(res.body)).not.toContain(OTHER);
+    expect((await admin.agent.get("/api/server/ai")).body.overrides).toEqual(res.body.overrides);
+  });
+});
+
 describe("the server's AI (docs/api/server.md §10b)", () => {
   let admin: TestUser;
   beforeEach(async () => {
@@ -141,6 +187,9 @@ describe("the model list and Test", () => {
     const res = await owner.agent.post(`${url()}/models`);
     expect(res.body).toEqual({ ok: true, models: ["m1"], error: null });
     expect(received).toEqual({ workspaceId: ws, action: "models" });
+    await owner.agent.post(`${url()}/test`).send({ feature: "suggest" });
+    expect(received).toEqual({ workspaceId: ws, action: "test", feature: "suggest" });
+    expect((await owner.agent.post(`${url()}/test`).send({ feature: "nope" })).status).toBe(400);
   });
 
   it("try the server's key for admins", async () => {
