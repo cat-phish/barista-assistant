@@ -7,6 +7,7 @@ import { computed, onUnmounted, ref, watch } from 'vue';
 import { errorMessage } from '../api/client';
 import { recapsApi, type RecapKey, type RecapSummary } from '../api/recaps';
 import { formatWhen } from '../lib/format';
+import { addDays, periodLabel } from '../lib/recapPeriods';
 import { useWorkspaceStore } from '../stores/workspace';
 
 const props = defineProps<{ recapKey: RecapKey; inProgress: boolean; hasBrews: boolean }>();
@@ -88,6 +89,13 @@ async function write(): Promise<void> {
 }
 
 const status = computed(() => recap.value?.status ?? 'none');
+// Written for the old week start (docs/api/recaps.md §11c, "After changing
+// the week start"): the days it covers, so it isn't taken for this week's.
+const oldWeek = computed(() =>
+  recap.value && props.recapKey.kind === 'weekly' && recap.value.periodStart !== props.recapKey.periodStart
+    ? periodLabel('weekly', { start: recap.value.periodStart, end: addDays(recap.value.periodStart, 6) })
+    : null,
+);
 watch(() => asking.value || status.value === 'pending', (b) => emit('busy', b), { immediate: true });
 const canWrite = computed(() => workspaces.canEdit && props.hasBrews && status.value !== 'pending');
 </script>
@@ -102,8 +110,9 @@ const canWrite = computed(() => workspaces.canEdit && props.hasBrews && status.v
       <ul v-if="recap.highlights.length" class="highlights">
         <li v-for="(h, i) in recap.highlights" :key="i">{{ h }}</li>
       </ul>
+      <p v-if="oldWeek" class="muted small">Written for {{ oldWeek }}, before your week start changed.</p>
       <p class="muted small">
-        Written {{ formatWhen(recap.updatedAt) }}<template v-if="canWrite"> · <button type="button" class="btn-link" :disabled="asking" @click="write">Rewrite</button></template>
+        Written {{ formatWhen(recap.updatedAt) }}<template v-if="canWrite"> · <button type="button" class="btn-link" :disabled="asking" @click="write">{{ oldWeek ? 'Write one for this week' : 'Rewrite' }}</button></template>
       </p>
     </template>
     <p v-else-if="status === 'pending'" class="muted">Writing the summary…</p>

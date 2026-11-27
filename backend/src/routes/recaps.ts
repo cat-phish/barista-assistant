@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, between, eq } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
-import { periodOf } from "@barista/shared/recapPeriods";
+import { addDays, periodOf } from "@barista/shared/recapPeriods";
 import { userPreferences, DEFAULT_WORKSPACE_SETTINGS, RECAP_ROW_KINDS, RECAP_SCOPES, recaps, users, withDefaults, workspaces, type RecapRow, type RecapScope } from "@barista/shared/schema";
 import { AI_COST, spendAi } from "../aiConfig.js";
 import { requireMembership, WRITE_ROLES } from "../auth/membership.js";
@@ -63,6 +63,28 @@ function todayIn(zone: string | null): string {
   }
 }
 
+// A week with no summary of its own, after the week start changed: the
+// summary written for the overlapping week under the old start day, the
+// closest one, returned with its own periodStart (docs/api/recaps.md §11c,
+// "After changing the week start").
+async function oldWeekSummary(workspaceId: string, userId: string, k: z.infer<typeof keySchema>): Promise<Row | undefined> {
+  const rows = await db
+    .select(COLUMNS)
+    .from(recaps)
+    .where(
+      and(
+        eq(recaps.workspaceId, workspaceId),
+        eq(recaps.userId, userId),
+        eq(recaps.kind, "weekly"),
+        eq(recaps.scope, k.scope),
+        eq(recaps.status, "done"),
+        between(recaps.periodStart, addDays(k.periodStart, -6), addDays(k.periodStart, 6)),
+      ),
+    );
+  const gap = (r: Row) => Math.abs(Date.parse(r.periodStart) - Date.parse(k.periodStart));
+  return rows.filter((r) => r.periodStart !== k.periodStart).sort((a, b) => gap(a) - gap(b) || a.periodStart.localeCompare(b.periodStart))[0];
+}
+
 export const recapsRouter = Router({ mergeParams: true });
 recapsRouter.use(requireAuth);
 
@@ -77,7 +99,12 @@ recapsRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<RecapR
     return;
   }
   const [row] = await db.select(COLUMNS).from(recaps).where(keyOf(workspaceId, userId, parsed.data));
-  res.json({ recap: row ? view(row) : null });
+  if (row && row.status !== "none") {
+    res.json({ recap: view(row) });
+    return;
+  }
+  const old = parsed.data.kind === "weekly" ? await oldWeekSummary(workspaceId, userId, parsed.data) : undefined;
+  res.json({ recap: old ? view(old) : row ? view(row) : null });
 });
 
 // Write (or rewrite) the summary: queued; 409 with no AI or the summary off.

@@ -45,6 +45,35 @@ describe("recap summaries", () => {
     expect((await owner.agent.post(base).send({ kind: "monthly", periodStart: "2026-10-01", scope: "all" })).status).toBe(202);
   });
 
+  it("a week with no summary falls back to the old week start's, closest first", async () => {
+    const owner = await newUser("owner");
+    const ws = (await newWorkspace(owner)).id;
+    const base = `/api/workspaces/${ws}/recaps`;
+    const userId = owner.id;
+    const row = (periodStart: string, status: "done" | "none" | "failed", scope: "mine" | "all" = "mine") =>
+      ({ id: crypto.randomUUID(), workspaceId: ws, userId, kind: "weekly" as const, periodStart, scope, status, summary: status === "done" ? `week of ${periodStart}` : null });
+    // Monday weeks written, then the start moved to Sunday.
+    await db.insert(schema.recaps).values([row("2026-11-02", "done"), row("2026-11-09", "done"), row("2026-10-26", "failed"), row("2026-11-16", "done", "all")]);
+    await owner.agent.patch("/api/auth/me/preferences").send({ weekStartsOn: 0 });
+    const get = async (periodStart: string, scope = "mine") => (await owner.agent.get(`${base}?kind=weekly&periodStart=${periodStart}&scope=${scope}`)).body.recap;
+    // Sunday 8 Nov: Monday 9 Nov is one day off, Monday 2 Nov six.
+    expect(await get("2026-11-08")).toMatchObject({ periodStart: "2026-11-09", summary: "week of 2026-11-09" });
+    // Sunday 1 Nov: only Monday 2 Nov is near and done (26 Oct failed).
+    expect(await get("2026-11-01")).toMatchObject({ periodStart: "2026-11-02" });
+    // Another scope's doesn't count; nothing near: null.
+    expect(await get("2026-11-15")).toMatchObject({ periodStart: "2026-11-09" });
+    expect(await get("2026-11-15", "all")).toMatchObject({ periodStart: "2026-11-16" });
+    expect(await get("2026-10-11")).toBeNull();
+    // Its own summary wins; a notification row of its own still falls back.
+    await db.insert(schema.recaps).values([row("2026-10-25", "none"), row("2026-11-22", "done"), row("2026-11-08", "none")]);
+    expect(await get("2026-11-08")).toMatchObject({ periodStart: "2026-11-09" });
+    // A notification row with nothing done near it: that row, as before.
+    expect(await get("2026-10-25")).toMatchObject({ periodStart: "2026-10-25", status: "none" });
+    expect(await get("2026-11-22")).toMatchObject({ periodStart: "2026-11-22" });
+    // Monthly never falls back.
+    expect((await owner.agent.get(`${base}?kind=monthly&periodStart=2026-11-01&scope=mine`)).body.recap).toBeNull();
+  });
+
   it("Your Year in Coffee's own summary: keyed by 1 January, once the year is out", async () => {
     const owner = await newUser("owner");
     const ws = (await newWorkspace(owner)).id;

@@ -351,6 +351,12 @@ stored: they're worked out from the brews each time.
 
   `status`: `none` (a row from a notification, no summary asked for),
   `pending`, `done` or `failed` (with `error`).
+- **After changing the week start:** a weekly period with no summary of
+  its own (no row, or `none`) returns the `done` weekly summary of the same
+  scope whose `periodStart` is within six days of it, the closest (the
+  earlier on a tie), with that `periodStart`. The card then says which
+  days it was written for and offers **Write one for this week**, which
+  writes the requested period's own summary (POST), shown from then on.
 
 ### `POST /api/workspaces/:workspaceId/recaps`
 
