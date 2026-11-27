@@ -24,6 +24,7 @@ import { batchStock, stockText } from '../lib/batch';
 import { formatTemp } from '../lib/units';
 import { usePreferences } from '../composables/usePreferences';
 import { useWorkspaceStore } from '../stores/workspace';
+import { useAuthStore } from '../stores/auth';
 
 const PAGE_SIZE = 20;
 
@@ -37,6 +38,7 @@ function aiBadge(log: BrewLog): { kind: 'due' | 'none'; label: string; title: st
 }
 
 const workspaces = useWorkspaceStore();
+const auth = useAuthStore();
 const { temperatureUnit, recipeRoastLevel } = usePreferences();
 // A cold brew batch's stock on its card (docs/api/brew-servings.md §6c).
 const stock = (log: BrewLog) => {
@@ -242,7 +244,8 @@ const cardProps = (id: string) =>
             <span v-if="log.tastingNotes || log.drinkTastingNotes" class="notes">{{ log.tastingNotes ?? log.drinkTastingNotes }}</span>
           </component>
           <!-- Beside the card link, not inside it: links can't nest. -->
-          <RouterLink v-if="workspaces.canEdit && !selection.selecting" class="btn-link small brew-again" :to="{ name: 'brew', query: { repeat: log.id } }">Brew again</RouterLink>
+          <!-- Brew again only on your own brews: Repeat a brew never offers anyone else's. -->
+          <RouterLink v-if="workspaces.canEdit && !selection.selecting && log.brewedBy?.id === auth.user?.id" class="btn-link small brew-again" :to="{ name: 'brew', query: { repeat: log.id } }">Brew again</RouterLink>
         </li>
       </ul>
       <button v-if="logs.length < total" class="btn btn-secondary" type="button" :disabled="loadingMore" @click="load(false)">

@@ -113,7 +113,8 @@
     (`FilterBar.vue`). A Clear/Reset filters button leaves it as it is. In
     the URL it's written only when off (`mine=0`), as Insights
     (`useStats.ts`), the Journal (`lib/journalFilters.ts`) and the chat
-    attach picker do.
+    attach picker do. Exception: Repeat a brew (its quick buttons and
+    "Pick a brew…") only ever shows your own brews, with no checkbox.
 14. **AI buttons only with a model:** anything that asks the AI (a button,
     a tab, a section such as Suggest parameters, Write summary, Fill in
     with AI, the Chat tab, a "Preview what's sent" link) shows only when

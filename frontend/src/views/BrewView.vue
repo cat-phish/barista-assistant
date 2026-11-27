@@ -314,7 +314,10 @@ onMounted(async () => {
   if (repeatId && !loadError.value) {
     await nextTick();
     try {
-      await applyRepeat((await brewLogsApi.get(ws, repeatId)).brewLog);
+      const { brewLog } = await brewLogsApi.get(ws, repeatId);
+      // Only your own brews repeat (the picker and buttons offer no others).
+      if (brewLog.brewedBy?.id === auth.user?.id) await applyRepeat(brewLog);
+      else repeatError.value = 'Only your own brews can be repeated.';
     } catch (err) {
       repeatError.value = `Couldn't load that brew to repeat: ${errorMessage(err)}`;
     }
@@ -1554,7 +1557,7 @@ const beanLabel = computed(() => (bean.value ? `${bean.value.roasterName} ${bean
         Filled from AI chat: {{ fromChat.title }}. Check it before you brew.
         <template v-for="m in fromChat.missing" :key="m"> {{ m }}</template>
       </p>
-      <RepeatBrewPicker :open="pickerOpen" :beans="beans" @close="pickerOpen = false" @pick="applyRepeat" />
+      <RepeatBrewPicker :open="pickerOpen" :beans="beans" :recipes="recipes" :brewers="brewers" @close="pickerOpen = false" @pick="applyRepeat" />
       <section class="card stack" aria-labelledby="brewing">
         <h2 id="brewing">What you're brewing</h2>
         <div class="field">

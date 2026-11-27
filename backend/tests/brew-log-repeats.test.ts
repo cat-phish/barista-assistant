@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { brewLogs } from "@barista/shared/schema";
 import { db } from "../src/db.js";
-import { newBean, newBrewLog, newUser, newWorkspace } from "./helpers.js";
+import { addMember, newBean, newBrewLog, newUser, newWorkspace } from "./helpers.js";
 
 // docs/api/brew-logs.md, GET …/brew-logs/repeats: the newest brew of each of
-// the last n different things brewed, over every brew.
+// the last n different things brewed, over the caller's own brews.
 describe("brew log repeats", () => {
   async function setup() {
     const owner = await newUser("owner");
@@ -70,6 +70,16 @@ describe("brew log repeats", () => {
     const found = await repeats("by=recipe");
     expect(found).toHaveLength(3);
     expect(found.slice(1)).toEqual([ids.strong, ids.kalita]);
+  });
+
+  it("only the caller's own brews, for owners too", async () => {
+    const { owner, ws, base, repeats, kenya, daily } = await setup();
+    const member = await newUser("member");
+    await addMember(owner, ws.id, member, "barista");
+    const theirs = await newBrewLog(member, ws.id, kenya, { recipeId: daily });
+    expect(await repeats("by=coffee&n=6")).not.toContain(theirs);
+    const res = await member.agent.get(`${base}/brew-logs/repeats?by=coffee&n=6`);
+    expect((res.body.brewLogs as Array<{ id: string }>).map((l) => l.id)).toEqual([theirs]);
   });
 
   it("rejects a bad query, and non-members", async () => {

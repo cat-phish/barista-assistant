@@ -837,8 +837,9 @@ finer", but every brew started from the recipe.
   with quick buttons for the latest brew of each of the last 3 things made
   (a drink, or a plain brew of a method, so a Latte and a straight shot
   differ; from the last 30 brews). **Pick a brew…** opens a dialog of
-  earlier brews, briefer than the journal, filterable by bean, 30 at a
-  time. Viewers don't get them.
+  your own earlier brews (never other members'), briefer than the journal,
+  filterable by bean, recipe and brewer (folded under Filters), 30 at a
+  time. The quick buttons also come from your own brews only. Viewers don't get them.
 - **What it fills** (`lib/repeatBrew.ts` `repeatPlan`, then `applyRepeat`):
   - bean;
   - what → drink/plain → brewer → recipe;

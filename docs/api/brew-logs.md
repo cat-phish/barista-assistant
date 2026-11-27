@@ -166,9 +166,9 @@ the brew's unnamed guests, so the split stays the same. Not sent to the AI.
 ## `GET /api/workspaces/:workspaceId/brew-logs/repeats`
 
 The brew page's quick repeat buttons: the newest brew of each of the last
-`n` different things brewed, searched over **every** brew in the workspace
-(everyone's, like the unfiltered list) and grouped in SQL, so only the
-picked brews are sent.
+`n` different things brewed, searched over **the caller's own** brews
+(Repeat a brew only ever offers your own; owners included) and grouped in
+SQL, so only the picked brews are sent.
 
 - **Auth Required:** `true` (any member)
 - **Query (all optional):** `by`, what makes two brews different (the

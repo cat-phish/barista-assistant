@@ -841,8 +841,8 @@ brewLogsRouter.get("/", async (req: Request<WorkspaceParams>, res: Response<Brew
   res.json({ brewLogs: rows, total: totals?.total ?? 0 });
 });
 
-// The newest brew of each of the last n different things brewed, over every
-// brew in the workspace (docs/api/brew-logs.md, GET …/brew-logs/repeats).
+// The newest brew of each of the last n different things brewed, over the
+// caller's own brews (docs/api/brew-logs.md, GET …/brew-logs/repeats).
 const repeatsQuerySchema = z.object({
   by: z.enum(REPEAT_BUTTON_GROUPS).default("made"),
   n: z.coerce.number().int().min(1).max(6).default(3),
@@ -863,7 +863,8 @@ function repeatGroupKey(by: RepeatButtonGroup): SQL {
 
 brewLogsRouter.get("/repeats", async (req: Request<WorkspaceParams>, res: Response<{ brewLogs: BrewLogDetails[] }>) => {
   const { workspaceId } = req.params;
-  if (!(await requireMembership(res, authedUserId(req), workspaceId))) return;
+  const userId = authedUserId(req);
+  if (!(await requireMembership(res, userId, workspaceId))) return;
   const query = parseQuery(repeatsQuerySchema, req, res);
   if (!query) return;
 
@@ -876,7 +877,7 @@ brewLogsRouter.get("/repeats", async (req: Request<WorkspaceParams>, res: Respon
     .from(brewLogs)
     .leftJoin(brewers, eq(brewers.id, brewLogs.brewerId))
     .leftJoin(beans, eq(beans.id, brewLogs.beanId))
-    .where(eq(brewLogs.workspaceId, workspaceId))
+    .where(and(eq(brewLogs.workspaceId, workspaceId), eq(brewLogs.userId, userId)))
     .as("ranked");
   const picked = await db
     .select({ id: ranked.id })

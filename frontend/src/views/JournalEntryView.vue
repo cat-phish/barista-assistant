@@ -421,7 +421,8 @@ const markRows = computed(() => {
         </p>
         <div v-if="workspaces.canEdit" class="actions">
           <button v-if="log.steeping && canModify" class="btn btn-primary" type="button" @click="startFinish">Finish</button>
-          <RouterLink class="btn-link" :to="{ name: 'brew', query: { repeat: log.id } }">Brew again</RouterLink>
+          <!-- Only your own brews: Repeat a brew never offers anyone else's. -->
+          <RouterLink v-if="log.brewedBy?.id === auth.user?.id" class="btn-link" :to="{ name: 'brew', query: { repeat: log.id } }">Brew again</RouterLink>
           <template v-if="canModify">
             <button class="btn-link" type="button" @click="startEdit">Edit</button>
             <button class="btn-link danger" type="button" @click="confirmingDelete = true">Delete</button>

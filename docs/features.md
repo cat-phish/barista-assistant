@@ -357,11 +357,12 @@ One **Recipes** section with three tabs: Recipes, Drinks, Ingredients.
   instead. The dose and the ratio move the shot weight; typing the shot
   weight keeps the dose and changes the ratio. The brew records its recipe's
   brewer, so the espresso machine comes with the recipe.
-- **Repeat a brew:** setup can be filled from an earlier brew: quick
+- **Repeat a brew:** setup can be filled from an earlier brew of your own: quick
   buttons for the latest brew of each of the last 3 things you made (a drink,
   or a plain brew of a method; each shows its recipe, bean and date),
-  **Pick a brew…** for any other, and **Brew
-  again** on every journal entry. It fills the bean (the newest bag of the
+  **Pick a brew…** for any other (filter by bean, recipe or brewer; only
+  your own brews, in both), and **Brew
+  again** on your own journal entries. It fills the bean (the newest bag of the
   same coffee if that one is archived), what you're making, brewer, recipe,
   drink size, dose and water (espresso: the dose, at the recipe's ratio),
   temperature, grinder, grind and RPM, and the water, and always ticks the
